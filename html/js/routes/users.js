@@ -4,6 +4,8 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
+loadPageTemplate('page-users', 'pages/users.html');
+
 routes.push({ path: '/users', name: 'users', component: {
   template: '#page-users',
   data() { return {

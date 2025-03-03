@@ -19,6 +19,8 @@ function debounce(fn, wait) {
 
 const MAX_OVERRIDE_NOTE_LENGTH = 150;
 
+loadPageTemplate('page-detection', 'pages/detection.html');
+
 routes.push({ path: '/detection/:id', name: 'detection', component: {
 	template: '#page-detection',
 	data() {

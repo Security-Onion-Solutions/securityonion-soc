@@ -1,0 +1,30 @@
+<v-container fluid data-aid="home_screen">
+	<v-row>
+		<v-col>
+			<h2 v-text="i18n.home"></h2>
+		</v-col>
+	</v-row>
+	<v-row>
+		<v-col cols="12" lg="6" class="mx-auto px-12" data-aid="overview_motd_display">
+			<div id="motd" class="markdown-body" v-html="formatMarkdown(motd)"></div>
+		</v-col>
+		<v-col cols="12" lg="6" class="mx-auto text-center" data-aid="sponsors_display">
+			<div v-html="i18n.sponsorsIntro" class="mb-6"></div>
+			<a :target="$root.target('sos')" href="https://securityonionsolutions.com/" class="text-decoration-none" data-aid="nav_sos">
+				<img v-if="!$vuetify.theme.current.dark" height="100" src="images/sos-logo.svg">
+				<img v-if="$vuetify.theme.current.dark" height="100" src="images/sos-logo-white.svg">
+			</a>
+			<v-list class="my-10 w-33 mx-auto">
+				<v-list-item :target="$root.target('sos')" href="https://securityonionsolutions.com/pro" data-aid="overview_pro">
+					<v-list-item-title v-text="i18n.pro"></v-list-item-title>
+				</v-list-item>
+				<v-list-item :target="$root.target('sos')" href="https://securityonionsolutions.com/hardware" data-aid="overview_appliances">
+					<v-list-item-title v-text="i18n.appliances"></v-list-item-title>
+				</v-list-item>
+				<v-list-item :target="$root.target('sos')" href="https://securityonionsolutions.com/support" data-aid="overview_support">
+					<v-list-item-title v-text="i18n.premiumSupport"></v-list-item-title>
+				</v-list-item>
+			</v-list>
+		</v-col>
+	</v-row>
+</v-container>

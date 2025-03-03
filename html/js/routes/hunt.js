@@ -15,6 +15,8 @@ const FILTER_EXCLUDE = 'EXCLUDE';
 const FILTER_EXACT = 'EXACT';
 const FILTER_DRILLDOWN = 'DRILLDOWN';
 
+loadPageTemplate('page-hunt', 'pages/hunt.html');
+
 const huntComponent = {
   template: '#page-hunt',
   data() { return {

@@ -9,6 +9,8 @@ const GridMemberUnaccepted = "unaccepted";
 const GridMemberRejected = "rejected";
 const GridMemberDenied = "denied";
 
+loadPageTemplate('page-gridmembers', 'pages/gridmembers.html');
+
 routes.push({ path: '/gridmembers', name: 'gridmembers', component: {
   template: '#page-gridmembers',
   data() { return {

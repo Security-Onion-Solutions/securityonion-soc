@@ -4,6 +4,8 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
+loadPageTemplate('page-settings', 'pages/settings.html');
+
 routes.push({ path: '/settings', name: 'settings', component: {
   template: '#page-settings',
   data() { return {
@@ -96,7 +98,7 @@ routes.push({ path: '/settings', name: 'settings', component: {
         if (this.$route.query.tab) {
           this.activeTab = this.$route.query.tab;
         }
-  
+
         var errorsMessage = null;
         if (response.data.ui.messages && response.data.ui.messages.length > 0) {
           const error = response.data.ui.messages.find(item => item.type == "error");
@@ -155,7 +157,7 @@ routes.push({ path: '/settings', name: 'settings', component: {
         script.setAttribute('referrerpolicy', this.webauthnForm.script.referrerpolicy);
         script.setAttribute('integrity', this.webauthnForm.script.integrity);
         script.setAttribute('nonce', this.webauthnForm.script.nonce);
-        script.setAttribute('src', this.webauthnForm.script.src); 
+        script.setAttribute('src', this.webauthnForm.script.src);
         document.body.appendChild(script);
       }
     },

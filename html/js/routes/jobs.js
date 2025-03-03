@@ -9,6 +9,8 @@ const JobStatusCompleted = 1;
 const JobStatusIncomplete = 2;
 const JobStatusDeleted = 3;
 
+loadPageTemplate('page-jobs', 'pages/jobs.html');
+
 routes.push({ path: '/jobs', name: 'jobs', component: {
   template: '#page-jobs',
   data() { return {

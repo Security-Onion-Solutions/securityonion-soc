@@ -1,0 +1,411 @@
+<v-container fluid data-aid="grid_config_screen">
+	<v-row>
+		<v-col cols="12" lg="3">
+			<h2 v-text="i18n.configTitle"></h2>
+		</v-col>
+		<v-col cols="12" lg="5">
+			<v-expansion-panels>
+				<v-expansion-panel>
+					<v-expansion-panel-title id="configOptionsHeader" expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up">{{i18n.options}}</v-expansion-panel-title>
+					<v-expansion-panel-text>
+						<v-switch id="option-advanced" :disabled="$root.loading" v-model="advanced" dense class="my-0" :label="i18n.settingsAdvanced" :hint="i18n.settingsAdvancedHelp" persistent-hint data-aid="config_option_advanced_toggle"></v-switch>
+						<v-btn id="option-synchronize" @click.stop="sync()" class="mt-6 mb-1" data-aid="config_option_synchronize_toggle">
+							{{ i18n.settingsSynchronize }}
+						</v-btn>
+						<div class="text-caption" v-text="i18n.settingsSynchronizeHelp"></div>
+					</v-expansion-panel-text>
+				</v-expansion-panel>
+			</v-expansion-panels>
+		</v-col>
+		<v-spacer></v-spacer>
+		<v-col cols="12" lg="2" align="end" data-aid="config_summary">
+			<h4 v-if="!$root.loading">{{ i18n.settingsCustomized }} {{ settingsCustomized }} / {{ settingsAvailable }} </h4>
+		</v-col>
+	</v-row>
+	<v-row>
+	</v-row>
+	<v-row>
+		<v-col cols="12" lg="4" :class="treeVisible ? 'd-block' : 'd-none'">
+			<v-container class="sticky-config">
+				<v-row>
+					<v-col>
+						<v-text-field variant="underlined" id="filter-input" :label="i18n.filter" v-model="search" clearable :hint="i18n.filterHelp" persistent-hint @click:clear="clearFilter()" @keydown.enter="applySearchFilter()" class="mb-3" data-aid="config_filter_input"></v-text-field>
+					</v-col>
+					<v-col>
+						<div class="mt-3 text-no-wrap overflow-x-hidden">
+							<v-btn variant="text" size="small" id="apply-search-button" icon @click="applySearchFilter()" :title="i18n.search" data-aid="config_apply_search_filter">
+								<v-icon class="theme-icon">fa-magnifying-glass</v-icon>
+							</v-btn>
+							<v-btn variant="text" size="small" id="expand-all-button" icon @click="expand()" :title="i18n.expandAll" data-aid="config_expand_all">
+								<v-icon class="theme-icon">fa-angles-down</v-icon>
+							</v-btn>
+							<v-btn variant="text" size="small" id="collapse-all-button" icon @click="collapse()" :title="i18n.collapseAll" data-aid="config_collapse_all">
+								<v-icon class="theme-icon">fa-angles-up</v-icon>
+							</v-btn>
+							<v-btn variant="text" size="small" id="show-modified-button" icon @click="expand(null, isSettingModified)" :title="i18n.settingIsModifiedHelp" data-aid="config_show_modified">
+								<v-icon color="primary">fa-pencil</v-icon>
+							</v-btn>
+							<v-btn variant="text" size="small" id="show-node-modified-button" icon @click="expand(null, isSettingModifiedPerNode)" :title="i18n.settingHasNodeValuesHelp" data-aid="config_show_node_modified">
+								<v-icon color="warning">fa-circle-nodes</v-icon>
+							</v-btn>
+						</div>
+					</v-col>
+				</v-row>
+
+			<!-- <v-treeview
+				id="config-tree"
+				:activated="active"
+				@update:activated="val => active = val"
+				:items="hierarchy"
+				:opened="open"
+				@update:opened="val => open = val"
+				:search="searchFilter"
+				:custom-filter="filter"
+				item-value="id"
+				activatable
+				color="primary"
+				open-on-click
+				transition
+				data-aid="config_tree"
+			>
+				<template #title="{item}">
+					<span :id="'config-item-' + item.id">{{ getSettingName(item) }}</span>
+					<v-icon v-if="isSettingModified(item)" class="ml-1" color="primary" :title="i18n.settingIsModified">fa-pencil</v-icon>
+					<v-icon v-if="isSettingModifiedPerNode(item)" class="ml-1" color="warning" :title="i18n.settingHasNodeValues">fa-circle-nodes</v-icon>
+				</template>
+			</v-treeview> -->
+				<tree-view id="config-tree" :items="hierarchy" :leaves="settings" :selected="active" @update:selected="val => active = val" :search="searchFilter"
+					:item-title="getSettingName" :setting-modified="isSettingModified" :setting-modified-per-node="isSettingModifiedPerNode" :i18n="i18n" data-aid="config_tree"></tree-view>
+			</v-container>
+		</v-col>
+		<v-divider vertical></v-divider>
+		<v-col cols="12" :lg="treeVisible ? 8 : 12">
+			<v-fade-transition mode="out-in" duration="100">
+				<div v-if="!selected" id="config-quick-links">
+					<v-alert v-text="i18n.settingSelect" type="info"></v-alert>
+					<div class="mt-4">
+						<p class="font-weight-bold">{{i18n.configQLGridTitle}}</p>
+						<ul>
+							<li>
+								{{i18n.configQLElasticsearchHeader}}
+								<ul>
+									<li>
+										<router-link data-aid="config_quicklink_es_warm" :to="{ name: 'config', query: {s: 'elasticsearch.index_settings.global_overrides.policy.phases.warm.min_age', x: 1}}">{{i18n.configQLElasticsearchWarm}}</router-link>
+									</li>
+									<li>
+										<router-link data-aid="config_quicklink_es_cold" :to="{ name: 'config', query: {s: 'elasticsearch.index_settings.global_overrides.policy.phases.cold.min_age', x: 1}}">{{i18n.configQLElasticsearchCold}}</router-link>
+									</li>
+									<li>
+										<router-link data-aid="config_quicklink_es_delete" :to="{ name: 'config', query: {s: 'elasticsearch.index_settings.global_overrides.policy.phases.delete.min_age', x: 1}}">{{i18n.configQLElasticsearchDelete}}</router-link>
+									</li>
+								</ul>
+							</li>
+							<li>
+								{{i18n.configQLNTPHeader}}
+								<ul>
+									<li>
+										<router-link data-aid="config_quicklink_ntp" :to="{ name: 'config', query: {s: 'ntp.config.servers'}}">{{i18n.configQLNTP}}</router-link>
+									</li>
+								</ul>
+							</li>
+							<li>
+								{{i18n.configQLFirewallHeader}}
+								<ul>
+									<li>
+										<router-link data-aid="config_quicklink_fw_analyst" :to="{name: 'config', query: {s: 'firewall.hostgroups.analyst'}}">{{i18n.configQLFirewallWebInterface}}</router-link>
+									</li>
+									<li>
+										<router-link data-aid="config_quicklink_fw_agent" :to="{name: 'config', query: {s: 'firewall.hostgroups.elastic_agent_endpoint'}}">{{i18n.configQLFirewallElastic}}</router-link>
+									</li>
+									<li>
+										<router-link data-aid="config_quicklink_fw_fleet" :to="{name: 'config', query: {s: 'firewall.hostgroups.fleet'}}">{{i18n.configQLFirewallFleet}}</router-link>
+									</li>
+									<li>
+										<router-link data-aid="config_quicklink_fw_idh" :to="{name: 'config', query: {s: 'firewall.hostgroups.idh'}}">{{i18n.configQLFirewallIDH}}</router-link>
+									</li>
+									<li>
+										<router-link data-aid="config_quicklink_fw_receiver" :to="{name: 'config', query: {s: 'firewall.hostgroups.receiver'}}">{{i18n.configQLFirewallReceiver}}</router-link>
+									</li>
+									<li>
+										<router-link data-aid="config_quicklink_fw_searchnode" :to="{name: 'config', query: {s: 'firewall.hostgroups.searchnode'}}">{{i18n.configQLFirewallSearch}}</router-link>
+									</li>
+									<li>
+										<router-link data-aid="config_quicklink_fw_sensor" :to="{name: 'config', query: {s: 'firewall.hostgroups.sensor'}}">{{i18n.configQLFirewallSensor}}</router-link>
+									</li>
+									<li>
+										<router-link data-aid="config_quicklink_fw_desktop" :to="{name: 'config', query: {s: 'firewall.hostgroups.desktop'}}">{{i18n.configQLFirewallDesktop}}</router-link>
+									</li>
+								</ul>
+							</li>
+						</ul>
+						<br/>
+						<p class="font-weight-bold">{{i18n.configQLAnalystTitle}}</p>
+						<ul>
+							<li>
+								{{i18n.configQLSigmaHeader}}
+								<ul>
+									<li>
+										<router-link data-aid="config_quicklink_sigma_rules" :to="{name: 'config', query: {s: 'soc.config.server.modules.elastalertengine.sigmaRulePackages'}}">{{i18n.configQLSigmaRuleset}}</router-link>
+									</li>
+								</ul>
+							</li>
+							<li>
+								{{i18n.configQLSuricataHeader}}
+								<ul>
+										<li>
+										<router-link data-aid="config_quicklink_suricata_home_net" :to="{name: 'config', query: {s: 'suricata.config.vars.address-groups.HOME_NET'}}">{{i18n.configQLHomeNet}}</router-link>
+									</li>
+									<li>
+										<router-link data-aid="config_quicklink_suricata_af_packet_threads" :to="{name: 'config', query: {s: 'suricata.config.af-packet.threads'}}">{{i18n.configQLSuricataThreads}}</router-link>
+									</li>
+									<li>
+										<router-link data-aid="config_quicklink_suricata_ruleset" :to="{name: 'config', query: {s: 'idstools.config.ruleset'}}">{{i18n.configQLNIDSRuleset}}</router-link>
+									</li>
+									<li>
+										<router-link data-aid="config_quicklink_suricata_oinkcode" :to="{name: 'config', query: {s: 'idstools.config.oinkcode'}}">{{i18n.configQLNIDSOinkCode}}</router-link>
+									</li>
+								</ul>
+							</li>
+							<li>
+								{{i18n.configQLZeekHeader}}
+								<ul>
+									<li>
+										<router-link data-aid="config_quicklink_zeek_homenet" :to="{name: 'config', query: {s: 'zeek.config.networks.HOME_NET'}}">{{i18n.configQLZeekHomeNet}}</router-link>
+									</li>
+									<li>
+										<router-link data-aid="config_quicklink_zeek_lb_procs" :to="{name: 'config', query: {s: 'zeek.config.node.lb_procs'}}">{{i18n.configQLZeekThreads}}</router-link>
+									</li>
+								</ul>
+							</li>
+							<li>
+								{{i18n.configQLBPFHeader}}
+								<ul>
+									<li>
+										<router-link data-aid="config_quicklink_steno" :to="{name: 'config', query: {s: 'bpf.pcap'}}">{{i18n.configQLPCAP}}</router-link>
+									</li>
+									<li>
+										<router-link data-aid="config_quicklink_suricata" :to="{name: 'config', query: {s: 'bpf.suricata'}}">{{i18n.configQLSuricata}}</router-link>
+									</li>
+									<li>
+										<router-link data-aid="config_quicklink_zeek" :to="{name: 'config', query: {s: 'bpf.zeek'}}">{{i18n.configQLZeek}}</router-link>
+									</li>
+								</ul>
+							</li>
+							<li>
+								{{i18n.configQLSOCHeader}}
+								<ul>
+									<li>
+										<router-link data-aid="config_quicklink_actions" :to="{name: 'config', query: {s: 'soc.config.actions'}}">{{i18n.configQLSOCActions}}</router-link>
+									</li>
+									<li>
+										<router-link data-aid="config_quicklink_alerts_queries" :to="{name: 'config', query: {s: 'soc.config.server.client.alerts.queries'}}">{{i18n.configQLSOCAlerts}}</router-link>
+									</li>
+									<li>
+										<router-link data-aid="config_quicklink_dashboard_queries" :to="{name: 'config', query: {s: 'soc.config.server.client.dashboards.queries'}}">{{i18n.configQLSOCDashboards}}</router-link>
+									</li>
+									<li>
+										<router-link data-aid="config_quicklink_hunt_queries" :to="{name: 'config', query: {s: 'soc.config.server.client.hunt.queries'}}">{{i18n.configQLSOCHunt}}</router-link>
+									</li>
+									<li>
+										<router-link data-aid="config_quicklink_reverse_lookup" :to="{name: 'config', query: {s: 'soc.config.server.client.enableReverseLookup'}}">{{i18n.configQLSOCDNS}}</router-link>
+									</li>
+								</ul>
+							</li>
+						</ul>
+					</div>
+				</div>
+				<v-card v-else :key="selected?.id" class="mx-auto config-setting" flat>
+					<v-card-text>
+						<div class="d-inline-flex mb-4 " style="width: 100%">
+							<span class="text-caption font-weight-thin" data-aid="config_breadcrumbs">
+								{{ getSettingBreadcrumbs(selected) }}
+								<v-btn icon variant="text" size="small" @click.stop="$root.copyToClipboard(getSettingBreadcrumbs(selected))" :title="i18n.copyToClipboard" data-aid="config_breadcrumb_copy">
+									<v-icon>fa-copy</v-icon>
+								</v-btn>
+							</span>
+							<v-spacer></v-spacer>
+							<span class="justify-end">
+								<v-btn icon variant="text" size="small" :title="i18n.toggleFullsizeHelp" @click="treeVisible = !treeVisible" data-aid="config_toggle_treeview">
+									<v-icon v-if="treeVisible">fa-up-right-and-down-left-from-center</v-icon>
+									<v-icon v-else color="primary">fa-down-left-and-up-right-to-center</v-icon>
+								</v-btn>
+								<v-btn icon variant="text" size="small" @click="active = []" data-aid="config_close_setting">
+									<v-icon>fa-times</v-icon>
+								</v-btn>
+							</span>
+						</div>
+						<div class="text-subtitle-1 mb-4" data-aid="config_item_help" >
+							<div class="markdown-body" v-html="formatMarkdown(getSettingDescription(selected))"></div>
+							<a v-if="selected.helpLink" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + selected.helpLink" style="text-decoration: none; cursor: 'pointer'" :title="i18n.settingHelp">
+								<v-icon color="info" class="mb-2">fa-circle-question</v-icon>
+							</a>
+						</div>
+						<div v-if="isReadOnly(selected)" :title="i18n.settingReadOnlyHelp" data-aid="config_item_readonly_warning">
+							<v-icon class="ma-2" color="warning">fa-ban</v-icon>
+							<span v-text="i18n.settingReadOnly"></span>
+						</div>
+						<v-container fluid>
+							<v-row v-if="selected.duplicates && !isReadOnly(selected) && advanced">
+								<v-col>
+									<v-btn id="config-toggle-duplicate-button" @click="toggleDuplicate(selected)" v-text="i18n.settingDuplicate" data-aid="config_item_show_duplicate"></v-btn>
+									<div v-if="showDuplicate" class="mt-2 mb-8 pl-8">
+										<div class="mb-4">{{ i18n.settingDuplicateHelp }}</div>
+										<v-form id="duplicate-id-form" v-model="duplicateIdValid">
+											<v-text-field id="duplicate-id-input" :rules="duplicate_id_rules" :label="i18n.settingDuplicateName" v-model="duplicateId" data-aid="config_item_duplicate_name_input"></v-text-field>
+											<v-btn id="config-create-duplicate-button" :disabled="!duplicateIdValid" @click="duplicate(selected)" v-text="i18n.settingDuplicateCreate" data-aid="config_item_create_duplicate"></v-btn>
+										</v-form>
+									</div>
+								</v-col>
+							</v-row>
+							<v-row v-if="!isReadOnly(selected) && selected.defaultAvailable">
+								<v-col>
+									<v-btn id="config-toggle-default-button" @click="showDefault = !showDefault" v-text="showDefault ? i18n.settingHideDefault : i18n.settingShowDefault" data-aid="config_item_show_default"></v-btn>
+									<div v-if="showDefault" class="mt-8 ml-8">
+										<v-chip v-if="isToggle(selected)" id="default-output" :color="$root.isTrue(selected.default) ? 'primary' : 'secondary'" data-aid="config_item_default_display">{{$root.isTrue(selected.value) ? i18n.enabled : i18n.disabled }}</v-chip>
+										<v-textarea v-else-if="isMultiline(selected)" id="default-output" variant="underlined" :label="i18n.settingDefault" v-model="selected.default" readonly class="config-editor" data-aid="config_item_default_display"></v-textarea>
+										<v-text-field v-else id="default-output" variant="underlined" :label="i18n.settingDefault" v-model="selected.default" readonly data-aid="config_item_default_display"></v-text-field>
+									</div>
+								</v-col>
+							</v-row>
+							<v-row v-if="selected.global || !selected.node">
+								<v-col>
+									<div v-if="!isReadOnly(selected)" class="mb-n1 text-right">
+										<v-btn id="setting-global-reset" icon variant="text" size="small" @click="remove(selected)" :title="i18n.settingResetHelp" :disabled="!isSettingModified(selected) || isPendingSave(selected)" data-aid="config_item_reset" >
+											<v-icon color="primary">fa-circle-arrow-left</v-icon>
+										</v-btn>
+										<v-btn id="setting-global-save" icon variant="text" size="small" @click="save(selected)" :disabled="!isPendingSave(selected)" :title="i18n.settingSaveHelp" data-aid="config_item_save">
+											<v-icon color="success">fa-check</v-icon>
+										</v-btn>
+										<v-btn id="setting-global-cancel" icon variant="text" size="small" @click="userCancel()" :disabled="!isPendingSave(selected)" :title="i18n.settingCancelHelp" data-aid="config_item_cancel">
+											<v-icon color="error">fa-xmark</v-icon>
+										</v-btn>
+									</div>
+									<v-expansion-panels v-if="hasUiElements(selected)" v-model="form.entriesExpanded">
+										<v-expansion-panel v-for="(entry, entryIdx) in form.entries" :key="entryIdx" @group:selected="edit(selected)" data-aid="config_item_entry_title">
+											<v-expansion-panel-title>
+												{{ entry._title }}
+												<v-chip v-if="!!entry._status" :color="entry._statusColor ? entry._statusColor : 'secondary'" variant="elevated" density="compact" rounted="xs" class="mx-4" v-text="entry._status"></v-chip>
+											</v-expansion-panel-title>
+											<v-expansion-panel-text>
+												<v-form v-model="uiElementsValid">
+													<div class="my-1" v-for="(element, elementIdx) in selected.uiElements" :key="elementIdx">
+														<v-textarea v-if="isMultiline(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" @update:model-value="markDirtyEntries" variant="outlined" :label="getElementLabel(element)" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="editing config-editor" :data-aid="'config_item_entry_' + element.field"></v-textarea>
+														<v-switch v-else-if="isToggle(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" inset @update:model-value="markDirtyEntries" variant="outlined" :label="getElementLabel(element)" :readonly="isUiElementReadonly(entry, element)" v-model="entry[element.field]" class="no-details" :data-aid="'config_item_entry_' + element.field"></v-switch>
+														<v-select v-else-if="isSelectList(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" :items="element.options" :multiple="hasMultipleValues(element)" inset @update:model-value="markDirtyEntries" :label="getElementLabel(element)" variant="outlined" :label="element.label" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="no-details" :data-aid="'config_item_entry_' + element.field"></v-select>
+														<v-text-field v-else :id="'setting-entry-' + entryIdx + '-input-' + element.field" @update:model-value="markDirtyEntries" variant="outlined" :label="getElementLabel(element)" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="editing" :data-aid="'config_item_entry_' + element.field"></v-text-field>
+													</div>
+												</v-form>
+												<p>* {{ i18n.requiredField }}</p>
+												<v-btn v-if="!isEntryEmpty(selected, entry)" id="'setting-element-' + entryIdx + '-delete-' + entry['field']" icon variant="text" size="small" @click="showClearEntryDialog(selected, entryIdx)" :title="i18n.settingDeleteEntryHelp" data-aid="config_item_delete_entry">
+													<v-icon color="error">fa-trash</v-icon>
+												</v-btn>
+											</v-expansion-panel-text>
+										</v-expansion-panel>
+									</v-expansion-panels>
+									<div v-else>
+										<div v-if="isToggle(selected)">
+											<div v-if="form.key != selected.id || isReadOnly(selected)">
+												<v-chip id="value-output" :color="$root.isTrue(selected.value) ? 'primary' : 'secondary'" append-icon="fa-pencil" @click="edit(selected)" data-aid="config_item_customize_slider_display">{{$root.isTrue(selected.value) ? i18n.enabled : i18n.disabled }}</v-chip>
+												<span class="setting_label mx-4">{{ i18n.settingGlobal }}</span>
+											</div>
+											<v-switch v-else id="value-input" :label="i18n.settingGlobal" true-value="true" v-model="form.value" class="editing config-editor no-details" data-aid="config_item_customize_slider_input"></v-switch>
+										</div>
+										<div v-else-if="isSelectList(selected)">
+											<div v-if="form.key != selected.id || isReadOnly(selected)">
+												<v-chip id="value-output" append-icon="fa-pencil" @click="edit(selected)" :data-aid="config_item_customize_select_display">{{selected.value}}</v-chip>
+												<span class="setting_label mx-4">{{ i18n.settingGlobal }}</span>
+											</div>
+											<v-select v-else id="value-input" :items="selected.options" :multiple="hasMultipleValues(selected)" :label="i18n.settingGlobal" v-model="form.value" :rules="buildInputRules(selected)" class="editing config-editor no-details" :data-aid="config_item_customize_select_input"></v-select>
+										</div>
+										<div v-else-if="isMultiline(selected)">
+											<v-textarea v-if="form.key != selected.id || isReadOnly(selected)" id="value-output" variant="outlined" :label="i18n.settingGlobal" @focus="edit(selected)" v-model="selected.value" readonly class="config-editor" data-aid="config_item_customize_multiline_display"></v-textarea>
+											<v-textarea v-else id="value-input" variant="outlined" :label="i18n.settingGlobal" v-model="form.value" class="editing config-editor" data-aid="config_item_customize_multiline_input"></v-textarea>
+										</div>
+										<div v-else>
+											<v-text-field v-if="form.key != selected.id || isReadOnly(selected)" id="value-output" variant="outlined" :label="i18n.settingGlobal" @focus="edit(selected)" v-model="selected.value" readonly :type="selected.sensitive ? 'password' : 'text'" data-aid="config_item_customize_singleline_display"></v-text-field>
+											<v-text-field v-else id="value-input" variant="outlined" :label="i18n.settingGlobal" v-model="form.value" class="editing"  @keydown.enter.prevent="save(selected)" data-aid="config_item_singleline_input"></v-text-field>
+										</div>
+									</div>
+								</v-col>
+							</v-row>
+							<v-row v-for="item in selected.nodeValues" :key="item[0]">
+								<v-col>
+									<div class="mb-n1 text-right">
+										<v-btn :id="'setting-node-reset-' + item[0]" icon variant="text" size="small" @click="remove(selected, item[0])" :title="i18n.settingRemoveHelp" :disabled="isPendingSave(selected, item[0])" data-aid="config_item_node_remove" >
+											<v-icon color="warning">fa-circle-xmark</v-icon>
+										</v-btn>
+										<v-btn :id="'setting-node-save-' + item[0]" icon variant="text" size="small" @click="save(selected, item[0])" :disabled="!isPendingSave(selected, item[0])" :title="i18n.settingSaveHelp" data-aid="config_item_node_save">
+											<v-icon color="success">fa-check</v-icon>
+										</v-btn>
+										<v-btn :id="'setting-node-cancel-' + item[0]" icon variant="text" size="small" @click="userCancel(true)" :disabled="!isPendingSave(selected, item[0])" :title="i18n.settingCancelHelp" data-aid="config_item_node_cancel">
+											<v-icon color="error">fa-xmark</v-icon>
+										</v-btn>
+									</div>
+									<div v-if="isToggle(selected)">
+										<div v-if="form.key != item[0] || isReadOnly(selected)">
+											<v-chip :id="'node-value-output-' + item[0]" :color="$root.isTrue(item[1]) ? 'primary' : 'secondary'" append-icon="fa-pencil" @click="edit(selected, item[0])" data-aid="config_item_customize_node_slider_display">{{$root.isTrue(item[1]) ? i18n.enabled : i18n.disabled }}</v-chip>
+											<span class="setting_label mx-4">{{ item[0] }}</span>
+										</div>
+										<v-switch v-else :id="'node-value-input-' + item[0]" :label="item[0]" true-value="true" v-model="form.value" class="editing config-editor no-details" data-aid="config_item_customize_node_slider_input"></v-switch>
+									</div>
+									<div v-else-if="isSelectList(selected)">
+										<div v-if="form.key != item[0] || isReadOnly(selected)">
+											<v-chip :id="'node-value-output-' + item[0]" append-icon="fa-pencil" @click="edit(selected, item[0])" :data-aid="config_item_customize_node_select_display">{{item[1]}}</v-chip>
+											<span class="setting_label mx-4">{{ item[0] }}</span>
+										</div>
+										<v-select v-else :id="'node-value-input-' + item[0]" :items="selected.options" :multiple="hasMultipleValues(selected)" :label="item[0]" v-model="form.value" :rules="buildInputRules(selected)" class="editing config-editor no-details" :data-aid="config_item_customize_node_select_input"></v-select>
+									</div>
+									<div v-else-if="isMultiline(selected)">
+										<v-textarea v-if="form.key != item[0] || isReadOnly(selected)" :id="'node-value-output-' + item[0]" variant="outlined" :label="item[0]" @focus="edit(selected, item[0])" v-model="item[1]" readonly class="config-editor" data-aid="config_item_customize_node_multiline_display"></v-textarea>
+										<v-textarea v-else :id="'node-value-input-' + item[0]" variant="outlined" :label="item[0]" v-model="form.value" class="editing config-editor" data-aid="config_item_customize_node_multiline_input"></v-textarea>
+									</div>
+									<div v-else>
+										<v-text-field v-if="form.key != item[0] || isReadOnly(selected)" :id="'node-value-output-' + item[0]" variant="outlined" :label="item[0]" @focus="edit(selected, item[0])" v-model="item[1]" readonly :type="selected.sensitive ? 'password' : 'text'" data-aid="config_item_customize_node_singleline_display"></v-text-field>
+										<v-text-field v-else :id="'node-value-input-' + item[0]" variant="outlined" :label="item[0]" v-model="form.value" class="editing"  @keydown.enter.prevent="save(selected, item[0])" data-aid="config_item_singleline_input"></v-text-field>
+									</div>
+								</v-col>
+							</v-row>
+						</v-container>
+						<span data-aid="config_item_customize_node_select">
+							<v-select v-if="(selected.node || !selected.global) && availableNodes.length > 0" variant="outlined" id="config-select-node" :label="i18n.settingSelectNode" :items="availableNodes" :title="i18n.settingSelectNodeHelp" @update:model-value="addNode(selected, $event)" v-model.sync="selectedNode"></v-select>
+						</span>
+					</v-card-text>
+				</v-card>
+			</v-fade-transition>
+		</v-col>
+	</v-row>
+	<v-dialog v-model="cancelDialog" persistent max-width="290" data-aid="config_cancel_dialog">
+		<v-card>
+			<v-card-title class="text-h5" v-text="i18n.settingConfirmCancel"></v-card-title>
+			<v-card-text v-text="i18n.settingConfirmCancelHelp"></v-card-text>
+			<v-card-actions>
+				<v-spacer></v-spacer>
+				<v-btn text id="config-discard-proceed-button" @click="cancel(true)" v-text="i18n.yes" data-aid="config_cancel_dialog_confirm"></v-btn>
+				<v-btn text id="config-discard-cancel-button" @click="retainChanges()" v-text="i18n.no" data-aid="config_cancel_dialog_abort"></v-btn>
+			</v-card-actions>
+		</v-card>
+	</v-dialog>
+	<v-dialog v-model="confirmResetDialog" persistent max-width="290" data-aid="config_confirm_reset_dialog">
+		<v-card>
+			<v-card-title class="text-h5" v-text="i18n.settingConfirmReset"></v-card-title>
+			<v-card-text v-text="i18n.settingConfirmResetHelp"></v-card-text>
+			<v-card-actions>
+				<v-spacer></v-spacer>
+				<v-btn variant="text" id="config-reset-proceed-button" @click="confirmRemove()" v-text="i18n.yes" data-aid="config_reset_dialog_confirm"></v-btn>
+				<v-btn variant="text" id="config-reset-cancel-button" @click="cancelRemove()" v-text="i18n.no" data-aid="config_reset_dialog_abort"></v-btn>
+			</v-card-actions>
+		</v-card>
+	</v-dialog>
+	<v-dialog v-model="confirmRemoveEntryDialog" persistent max-width="390" data-aid="config_confirm_remove_entry_dialog">
+		<v-card>
+			<v-card-title class="text-h5" v-text="i18n.settingConfirmRemove"></v-card-title>
+			<v-card-text v-if="confirmRemoveEntryMessage" v-text="confirmRemoveEntryMessage"></v-card-text>
+			<v-card-text v-text="i18n.settingConfirmRemoveHelp"></v-card-text>
+			<v-card-actions>
+				<v-spacer></v-spacer>
+				<v-btn variant="text" id="config-remove-entry-proceed-button" @click="confirmClearEntry()" v-text="i18n.yes" data-aid="config_remove_entry_dialog_confirm"></v-btn>
+				<v-btn variant="text" id="config-remove-entry-cancel-button" @click="cancelClearEntry()" v-text="i18n.no" data-aid="config_remove_entry_dialog_abort"></v-btn>
+			</v-card-actions>
+		</v-card>
+	</v-dialog>
+</v-container>

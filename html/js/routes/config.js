@@ -4,6 +4,8 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
+loadPageTemplate('page-config', 'pages/config.html');
+
 routes.push({
   path: '/config', name: 'config', component: {
     template: '#page-config',
@@ -398,7 +400,7 @@ routes.push({
               try {
                 this.form.entries = JSON.parse(setting.value);
               } catch(e) {
-                
+
               }
             }
           } else {
@@ -448,7 +450,7 @@ routes.push({
             }
           }
         }
-        if (!isArrayOfObjects) { 
+        if (!isArrayOfObjects) {
           if (setting.syntax.toLowerCase() == 'json') {
             value = JSON.stringify(tmpEntries);
           }
@@ -748,7 +750,7 @@ routes.push({
       this.$root.stopLoading();
     },
     edit(setting, nodeId) {
-      if (this.isReadOnly(setting)) { 
+      if (this.isReadOnly(setting)) {
         return;
       }
       setTimeout(() => {

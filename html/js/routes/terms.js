@@ -4,6 +4,8 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
+loadPageTemplate('page-terms', 'pages/terms.html');
+
 const termsComponent = {
   template: '#page-terms',
   data() { return {
