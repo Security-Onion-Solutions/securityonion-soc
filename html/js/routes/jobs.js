@@ -150,26 +150,31 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
             protocol = protocol.toLowerCase();
           }
 
-          let beginDate = ''
-          let endDate = '';
+          let filter = {
+            importId: importId,
+            protocol: protocol,
+            srcIp: srcIp,
+            srcPort: parseInt(srcPort),
+            dstIp: dstIp,
+            dstPort: parseInt(dstPort),
+          };
+
+          let beginDate;
+          let endDate;
           if (timeframe) {
             const [beginTime, endTime] = timeframe.split(' - ', 2);
             beginDate = moment(beginTime, this.i18n.timePickerFormat).format(this.i18n.timestampFormat);
             endDate = moment(endTime, this.i18n.timePickerFormat).format(this.i18n.timestampFormat);
           }
 
+          if (beginDate && endDate) {
+            filter.beginTime = beginDate;
+            filter.endTime = endDate;
+          }
+
           const response = await this.$root.papi.post('job/', {
             nodeId: sensorId,
-            filter: {
-              importId: importId,
-              protocol: protocol,
-              srcIp: srcIp,
-              srcPort: parseInt(srcPort),
-              dstIp: dstIp,
-              dstPort: parseInt(dstPort),
-              beginTime: beginDate,
-              endTime: endDate
-            }
+            filter: filter,
           });
           this.$root.populateUserDetails(response.data, "userId", "owner");
           this.jobs.push(response.data);
