@@ -10,7 +10,7 @@ let comp;
 
 beforeEach(() => {
   resetPapi();
-  comp = getComponent("Detection-Panel");
+  comp = getComponent("DetectionPanel");
   comp.detection = {
     id: 'test-123',
     publicId: '1000',

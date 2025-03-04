@@ -1,0 +1,194 @@
+<v-container fluid data-aid="grid_members_screen">
+	<v-row>
+		<v-col>
+			<v-container fluid>
+				<v-row>
+					<v-col cols="12">
+						<h2 v-text="i18n.gridMembers"></h2>
+						<v-list-subheader v-text="i18n.gridMembersHelp" class="my-12 my-lg-3 px-4"></v-list-subheader>
+					</v-col>
+				</v-row>
+			</v-container>
+		</v-col>
+	</v-row>
+	<v-row>
+		<v-col cols="12" lg="6">
+			<v-list class="mb-4 border subtle-border" :opened="['pending']">
+				<span v-text="i18n.gridMembersPending" class="ml-2"></span>
+				<v-list-subheader v-if="unaccepted.length == 0" v-text="i18n.none"></v-list-subheader>
+				<v-list-group id="gridmembers-pending" value="pending">
+					<v-list-item v-for="node in unaccepted" @click="show(node)" data-aid="gridmembers_review_unaccepted">
+						<template #prepend>
+							<v-icon :title="i18n.gridMembersPendingHelp">fa-circle-question</v-icon>
+						</template>
+						<div class="d-flex justify-space-between align-baseline">
+							<span :id="'pending-output-' + node.id">
+								{{ node.id }}
+							</span>
+							<v-btn :title="i18n.gridMemberShow" class="review theme-background-lighten-1" :id="'review-pending-button-' + node.id">
+								{{ i18n.review }}
+								<v-icon class="ml-1">fa-binoculars</v-icon>
+							</v-btn>
+						</div>
+					</v-list-item>
+				</v-list-group>
+			</v-list>
+
+			<v-list class="mb-4 border subtle-border" :opened="['denied']">
+				<span v-text="i18n.gridMembersDenied" class="ml-2"></span>
+				<v-list-subheader v-if="denied.length == 0" v-text="i18n.none"></v-list-subheader>
+				<v-list-group id="gridmembers-denied" value="denied">
+					<v-list-item v-for="node in denied" @click="show(node)" data-aid="gridmembers_review_denied">
+						<template #prepend>
+							<v-icon color="warning" :title="i18n.gridMembersDeniedHelp">fa-circle-minus</v-icon>
+						</template>
+						<div class="d-flex justify-space-between align-baseline">
+							<span :id="'denied-output-' + node.id">
+								{{ node.id }}
+							</span>
+							<v-btn :title="i18n.gridMemberShow" class="review theme-background-lighten-1" :id="'review-denied-button-' + node.id">
+								{{ i18n.review }}
+								<v-icon class="ml-1">fa-binoculars</v-icon>
+							</v-btn>
+						</div>
+					</v-list-item>
+				</v-list-group>
+			</v-list>
+
+			<v-list class="mb-4 border subtle-border" :opened="['rejected']">
+				<span v-text="i18n.gridMembersRejected" class="ml-2"></span>
+				<v-list-subheader v-if="rejected.length == 0" v-text="i18n.none"></v-list-subheader>
+				<v-list-group id="gridmembers-rejected" value="rejected">
+					<v-list-item v-for="node in rejected" @click="show(node)" data-aid="gridmembers_review_rejected">
+						<template #prepend>
+							<v-icon color="error" :title="i18n.gridMembersRejectedHelp">fa-circle-xmark</v-icon>
+						</template>
+						<div class="d-flex justify-space-between align-baseline">
+							<span :id="'rejected-output-' + node.id">
+								{{ node.id }}
+							</span>
+							<v-btn :title="i18n.gridMemberShow" class="review theme-background-lighten-1" id="'review-rejected-button-' + node.id">
+								{{ i18n.review }}
+								<v-icon class="ml-1">fa-binoculars</v-icon>
+							</v-btn>
+						</div>
+					</v-list-item>
+				</v-list-group>
+			</v-list>
+
+		</v-col>
+		<v-col cols="12" lg="6">
+			<v-list class="border subtle-border" :opened="['accepted']">
+				<span v-text="i18n.gridMembersAccepted" class="ml-2"></span>
+				<v-list-subheader v-if="accepted.length == 0" v-text="i18n.none"></v-list-subheader>
+				<v-list-group id="gridmembers-accepted" value="accepted">
+					<v-list-item v-for="node in accepted" @click="show(node)" data-aid="gridmembers_review_accepted">
+						<template #prepend>
+							<v-icon color="success" :title="i18n.gridMembersAcceptedHelp">fa-circle-check</v-icon>
+						</template>
+						<div class="d-flex justify-space-between align-baseline">
+							<span :id="'accepted-output-' + node.id">
+								{{ node.id }}
+							</span>
+							<v-btn :title="i18n.gridMemberShow" class="review theme-background-lighten-1" :id="'review-accepted-button-' + node.id">
+								{{ i18n.review }}
+								<v-icon class="ml-1">fa-binoculars</v-icon>
+							</v-btn>
+						</div>
+					</v-list-item>
+				</v-list-group>
+			</v-list>
+		</v-col>
+	</v-row>
+	<v-dialog v-model="dialog" max-width="600" data-aid="gridmember_dialog">
+		<v-card v-if="selected">
+			<v-card-title class="headline pb-0" v-text="i18n.gridMemberReviewTitle"></v-card-title>
+			<v-card-subtitle v-text="selected.id"></v-card-subtitle>
+			<v-container fluid>
+				<v-row class="my-0">
+					<v-col cols="4" class="pa-0">
+						<v-card-text class="font-weight-bold">
+							{{ i18n.name }}:
+						</v-card-text>
+					</v-col>
+					<v-col cols="8" class="pa-0">
+						<v-card-text>
+							{{ selected.name }}
+						</v-card-text>
+					</v-col>
+				</v-row>
+				<v-row class="my-0">
+					<v-col cols="4" class="pa-0">
+						<v-card-text class="font-weight-bold">
+							{{ i18n.role }}:
+						</v-card-text>
+					</v-col>
+					<v-col cols="8" class="pa-0">
+						<v-card-text>
+							{{ selected.role }}
+						</v-card-text>
+					</v-col>
+				</v-row>
+				<v-row class="my-0">
+					<v-col cols="4" class="pa-0">
+						<v-card-text class="font-weight-bold">
+							{{ i18n.fingerprint }}:
+						</v-card-text>
+					</v-col>
+					<v-col cols="8" class="pa-0">
+						<v-card-text>
+							{{ selected.fingerprint }}
+							<v-icon id="fingerprintCopyValue" class="mx-1" color="white" dense @click.stop="$root.copyToClipboard(selected.fingerprint)" :title="i18n.copyToClipboard">
+								fa-copy
+							</v-icon>
+						</v-card-text>
+					</v-col>
+				</v-row>
+				<v-row class="my-0">
+					<v-col cols="4" class="pa-0">
+						<v-card-text class="font-weight-bold">
+							{{ i18n.status }}:
+						</v-card-text>
+					</v-col>
+					<v-col cols="8" class="pa-0">
+						<v-card-text>
+							<v-chip variant="flat" :color="colorNodeStatus(selected.status)" v-text="i18n[selected.status]"></v-chip>
+						</v-card-text>
+					</v-col>
+				</v-row>
+				<v-row v-if="isUnaccepted(selected)">
+					<v-col>
+						<v-banner v-text="i18n.acceptingMinionsTakesTime"></v-banner>
+					</v-col>
+				</v-row>
+			</v-container>
+			<v-card-actions>
+				<v-spacer></v-spacer>
+				<v-btn id="gridmember-cancel"  @click.stop="hide()" v-text="i18n.cancel"></v-btn>
+				<v-btn id="gridmember-accept"  @click.stop="accept(selected)" v-if="isUnaccepted(selected)">
+					{{ i18n.accept }}
+					<v-icon right>fa-check</v-icon>
+				</v-btn>
+				<v-btn id="gridmember-reject" @click.stop="reject(selected)" v-if="isUnaccepted(selected)">
+					{{ i18n.reject }}
+					<v-icon right>fa-xmark</v-icon>
+				</v-btn>
+				<v-btn id="gridmember-remove"  @click.stop="confirmRemove()">
+					{{ i18n.delete }}
+					<v-icon class="mb-1 ml-2">fa-circle-xmark</v-icon>
+				</v-btn>
+			</v-card-actions>
+		</v-card>
+	</v-dialog>
+	<v-dialog v-model="confirmDeleteDialog" persistent max-width="575">
+		<v-card>
+			<v-card-title class="text-h5" v-text="i18n.gridMemberConfirmDelete"></v-card-title>
+			<v-card-text v-html="i18n.gridMemberConfirmDeleteHelp"></v-card-text>
+			<v-card-actions>
+				<v-spacer></v-spacer>
+				<v-btn text id="gridmember-confirm-delete-button" @click="remove(selected)" v-text="i18n.yes"></v-btn>
+				<v-btn text id="gridmember-confirm-cancel-button" @click="cancelRemove()" v-text="i18n.no"></v-btn>
+			</v-card-actions>
+		</v-card>
+	</v-dialog>
+</v-container>

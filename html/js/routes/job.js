@@ -4,6 +4,8 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
+loadPageTemplate('page-job', 'pages/job.html');
+
 routes.push({ path: '/job/:jobId', name: 'job', component: {
   template: '#page-job',
   data() { return {

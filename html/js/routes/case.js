@@ -14,6 +14,8 @@ const uriPathRegex = /^\/[\w,\s-]/;
 const hashRegex = /^[0-9a-fA-F]{32}$|^[0-9a-fA-F]{40}$|^[0-9a-fA-F]{64}$|^[0-9a-fA-F]{128}$/;
 const internalPrefix = "___";
 
+loadPageTemplate('page-case', 'pages/case.html');
+
 routes.push({ path: '/case/:id', name: 'case', component: {
   template: '#page-case',
   data() { return {

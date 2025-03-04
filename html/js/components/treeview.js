@@ -3,6 +3,8 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
+loadPageTemplate('component-treeview', 'pages/treeview.html');
+
 components.push({
 	name: "TreeView", component: {
 		props: {
