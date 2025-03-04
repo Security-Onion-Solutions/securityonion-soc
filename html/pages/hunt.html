@@ -514,11 +514,11 @@
 			v-if="highlightedDetection"
 			:detection="highlightedDetection"
 			:zone="zone"
-			:alertInfo="highlightedAlertInfo"
-			:ackColor="colorSeverity((highlightedAlertInfo?.item?.['event.severity_label'] || '') + '_' + isFilterToggleEnabled('acknowledged'))"
+			:alert-info="highlightedAlertInfo"
+			:ack-color="colorSeverity((highlightedAlertInfo?.item?.['event.severity_label'] || '') + '_' + isFilterToggleEnabled('acknowledged'))"
 			@close="highlightedDetection = highlightedAlertInfo = null;"
 			@ack="panelAck($event)"
-			@chooseCase="toggleEscalationMenu(...$event)"></detection-panel>
+			@choose-case="toggleEscalationMenu(...$event)"></detection-panel>
 			<v-expansion-panels v-else focusable v-model="openPanel" class="mt-2">
 				<v-expansion-panel>
 					<v-expansion-panel-title expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up" data-aid="detection_panel_overview_header">

@@ -29,12 +29,11 @@
 						<v-card-title>{{ i18n.defaults }}</v-card-title>
 						<v-card-text>
 							<div v-text="i18n.resetDefaultsHint"></div>
-							<p/>
+							<p></p>
 							<v-btn id="settingsResetDefaults" color="primary" :disabled="usingDefaults" v-text="i18n.resetDefaults" @click="resetDefaults"></v-btn>
 						</v-card-text>
 					</v-card>
 				</v-tabs-window-item>
-
 				<v-tabs-window-item value="profile" data-aid="user_settings_profile">
 					<v-alert class="mt-2" type="warning" icon="fa-shield-halved" variant="tonal" density="compact">
 						{{ i18n.profileInstructions }}
@@ -54,7 +53,6 @@
 						</v-card-text>
 					</v-card>
 				</v-tabs-window-item>
-
 				<v-tabs-window-item value="security" data-aid="user_settings_security">
 					<v-alert class="mt-2" type="warning" icon="fa-shield-halved" variant="tonal" density="compact">
 						{{ i18n.securityInstructions }}
@@ -151,7 +149,6 @@
 					</v-card>
 
 				</v-tabs-window-item>
-
 			</v-tabs-window>
 		</v-col>
 	</v-row>

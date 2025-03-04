@@ -266,7 +266,19 @@ global.mockShowError = function(logError = false) {
 // Import SO app modules
 ////////////////////////////////////
 require('./i18n.js');
+
+// stub Promise.all so it's synchronous
+const orig = Promise.all;
+Promise.all = () => {
+  return {
+    then: (f) => { f(); },
+  }
+};
+
 require('./app.js');
+
+// restore Promise.all
+Promise.all = orig;
 
 global.FEAT_TTR = 'ttr';
 global.JobStatusPending = 0;
