@@ -7,14 +7,17 @@
 package elastic
 
 import (
+	"cmp"
 	"context"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/elastic/go-elasticsearch/v8"
 
+	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	modmock "github.com/security-onion-solutions/securityonion-soc/server/modules/mock"
 	"github.com/security-onion-solutions/securityonion-soc/web"
@@ -160,6 +163,11 @@ func TestConvertFromElasticQueryTaskResults(t *testing.T) {
 	// Assert that the function returns the active queries without an error
 	assert.NoError(t, err)
 	assert.Len(t, tasks, 2)
+
+	slices.SortFunc(tasks,
+		func(a, b *model.QueryTask) int {
+			return cmp.Compare(a.TaskId, b.TaskId)
+		})
 
 	// Verify the contents of the returned query
 	assert.Equal(t, "12345", tasks[0].TaskId)
