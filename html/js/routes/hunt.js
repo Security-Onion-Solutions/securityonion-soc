@@ -235,6 +235,7 @@ const huntComponent = {
     'autohunt': 'saveLocalSettings',
     'autoRefreshInterval': 'resetRefreshTimer',
     'showDetailsPanel': 'saveLocalSettings',
+    'advanced': 'saveLocalSettings',
   },
   methods: {
     moment: moment,
@@ -2204,6 +2205,7 @@ const huntComponent = {
       this.saveSetting('relativeTimeUnit', this.relativeTimeUnit, this.params['relativeTimeUnit']);
       this.saveSetting('autohunt', this.autohunt, true);
       this.saveSetting('showDetailsPanel', this.showDetailsPanel, this.isCategory('alerts'));
+      this.saveSetting('advanced', this.advanced, false);
     },
     loadLocalSettings() {
       // Global settings
@@ -2224,6 +2226,7 @@ const huntComponent = {
       if (localStorage[prefix + '.relativeTimeUnit']) this.relativeTimeUnit = parseInt(localStorage[prefix + '.relativeTimeUnit']);
       if (localStorage[prefix + '.autohunt']) this.autohunt = localStorage[prefix + '.autohunt'] == 'true';
       if (localStorage[prefix + '.showDetailsPanel']) this.showDetailsPanel = localStorage[prefix + '.showDetailsPanel'] == 'true';
+      if (localStorage[prefix + '.advanced']) this.advanced = localStorage[prefix + '.advanced'] == 'true';
 
       if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
     },

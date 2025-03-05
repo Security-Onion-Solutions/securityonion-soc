@@ -74,7 +74,7 @@ const i18n = {
       addObservable: 'Add as new observable...',
       addSuccessful: 'Added successfully!',
       address: 'Address',
-      advanced: 'Temporarily enable advanced interface features',
+      advanced: 'Enable advanced interface features',
       ago: 'ago',
       aiGenSummary: 'AI-Generated Summary',
       aiSummaryStale: 'This AI summary was generated for a previous version of the detection and may not be accurate.',
