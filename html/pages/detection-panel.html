@@ -13,7 +13,7 @@
 				</h3>
 				<div class="contrast-bg pa-4">
 					<div class="header">{{i18n.summary}} <v-icon v-if="showAiSummary()" :title="i18n.aiGenSummary" class="unset-vertical-align" data-aid="detection_summary_ai_indicator">fa-flask</v-icon></div>
-					<div class="summary" data-aid="detection_panel_ai_summary_display" v-if="showAiSummary()">
+					<div class="summary hard-wrap" data-aid="detection_panel_ai_summary_display" v-if="showAiSummary()">
 						{{ detection.aiSummary }}
 						<div class="font-weight-thin mt-2" v-if="detection.isAiSummaryStale" data-aid="detection_panel_summary_stale">
 							({{ i18n.aiSummaryStale }})
