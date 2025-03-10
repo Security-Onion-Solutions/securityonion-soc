@@ -986,3 +986,9 @@ ul ul ul {
 [data-aid="grid_members_screen"] .v-btn.v-theme--light {
   background-color: rgb(var(--v-theme-drawer_background)) !important;
 }
+
+.hard-wrap {
+  word-break: break-word;
+  overflow-wrap: break-word;
+  hyphens: none;
+}
