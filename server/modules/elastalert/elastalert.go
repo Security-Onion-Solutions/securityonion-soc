@@ -1165,7 +1165,7 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 		if exists {
 			hasChanged := orig.Content != detect.Content
 			hasChanged = hasChanged || orig.Ruleset != detect.Ruleset
-			hasChanged = hasChanged || len(detect.Overrides) != 0
+			// hasChanged = hasChanged || len(detect.Overrides) != 0
 			hasChanged = hasChanged || !util.Equal(orig.SourceCreated, detect.SourceCreated)
 			hasChanged = hasChanged || !util.Equal(orig.SourceUpdated, detect.SourceUpdated)
 
