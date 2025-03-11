@@ -10,7 +10,9 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
+	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
@@ -28,7 +30,72 @@ func RegisterQueryRoutes(srv *Server, r chi.Router, prefix string) {
 
 	r.Route(prefix, func(r chi.Router) {
 		r.Get("/{operation}", h.getQuery)
+		r.Get("/active", h.getActiveQueries)
+
+		r.Post("/cancel/{queryId}", h.postCancelQuery)
 	})
+}
+
+// @Summary      Get Active Queries
+// @Description  Returns a list of active event/data queries within the grid. Users will only see their
+// @Description  queries unless they have privileged access to see active queries across all users.
+// @Description  Requires a Security Onion Pro license.
+// @Security     bearer[queries/read]
+// @Tags         Query
+// @Param        filter  query  bool  false  "If set to true the internal, child, uncancellable, and related queries will be filtered out of the results" example(true)
+// @Produce      application/json
+// @Success      200    {array}  model.QueryTask    "The list of active queries"
+// @Failure      401        "Request was not properly authenticated"
+// @Failure      403        "Insufficient permissions for this request"
+// @Failure      500        "Internal SOC error; review SOC logs"
+// @Router       /connect/query/active [get]
+func (h *QueryHandler) getActiveQueries(w http.ResponseWriter, r *http.Request) {
+	if !licensing.IsEnabled(licensing.FEAT_QRY) {
+		web.Respond(w, r, http.StatusBadRequest, errors.New("ERROR_LICENSE_INVALID"))
+		return
+	}
+	filter := strings.ToLower(r.URL.Query().Get("filter")) == "true"
+	results, err := h.server.Eventstore.GetActiveQueries(r.Context(), filter)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, results)
+}
+
+// @Summary      Cancel Active Query
+// @Description  Requests that the event storage system cancel a specific query identified by the provided input ID.
+// @Description  Note that not all queries can be cancelled.
+// @Description  Requires a Security Onion Pro license.
+// @Security     bearer[queries/delete]
+// @Tags         Query
+// @Param        queryId  path  string  true  "The unique query ID to cancel" example(jSliTqa12bOPhdW195TuuZ:321)
+// @Produce      application/json
+// @Success      200        "The query cancellation was submitted (may or may not actually get cancelled)"
+// @Failure      400        "Query could not be cancelled"
+// @Failure      404        "Query was not found"
+// @Failure      401        "Request was not properly authenticated"
+// @Failure      403        "Insufficient permissions for this request"
+// @Failure      500        "Internal SOC error; review SOC logs"
+// @Router       /connect/query/cancel/{queryId} [get]
+func (h *QueryHandler) postCancelQuery(w http.ResponseWriter, r *http.Request) {
+	if !licensing.IsEnabled(licensing.FEAT_QRY) {
+		web.Respond(w, r, http.StatusBadRequest, errors.New("ERROR_LICENSE_INVALID"))
+		return
+	}
+	queryId := chi.URLParam(r, "queryId")
+	err := h.server.Eventstore.CancelQuery(r.Context(), queryId)
+	if err != nil {
+		if err.Error() == "query not found" {
+			web.Respond(w, r, http.StatusNotFound, errors.New("ERROR_QUERY_NOT_FOUND"))
+		} else {
+			web.Respond(w, r, http.StatusBadRequest, err)
+		}
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, nil)
 }
 
 // @Summary      Build Query

@@ -266,7 +266,19 @@ global.mockShowError = function(logError = false) {
 // Import SO app modules
 ////////////////////////////////////
 require('./i18n.js');
+
+// stub Promise.all so it's synchronous
+const orig = Promise.all;
+Promise.all = () => {
+  return {
+    then: (f) => { f(); },
+  }
+};
+
 require('./app.js');
+
+// restore Promise.all
+Promise.all = orig;
 
 global.FEAT_TTR = 'ttr';
 global.JobStatusPending = 0;
@@ -277,13 +289,18 @@ global.JobStatusDeleted = 3;
 ////////////////////////////////////
 // Import external dependencies
 ////////////////////////////////////
-global.moment = require('./external/moment-2.30.1.min.js');
+
+// Mock moment dependency location so we can load moment-timezone properly
+jest.mock('moment', () => {
+  return require('./external/moment-2.30.1.min.js');
+}, { virtual: true });
+
+global.moment = require('./external/moment-timezone-with-data-0.5.45.min.js');
+
+moment.tz.setDefault('UTC');
+
 global.marked = require('./external/marked-15.0.6.min.js');
 global.DOMPurify = require('./external/purify-3.2.3.min.js');
 global.jsyaml = require('./external/js-yaml.4.1.0.min.js');
 global.LZString = require('./external/lz-string.1.5.0.min.js');
-
-// polyfill for out of date packages we can't import
-moment.tz = {
-	guess: () => 'Etc/UTC',
-}
+global.loadPageTemplate = jest.fn();

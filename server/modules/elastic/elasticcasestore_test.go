@@ -895,8 +895,8 @@ func TestCreateRelatedEvents(t *testing.T) {
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	store.server.Config = &config.ServerConfig{
-		ClientParams: config.ClientParameters{
-			AlertingParams: config.AlertParameters{
+		ClientParams: model.ClientParameters{
+			AlertingParams: model.AlertingParameters{
 				MaxBulkEscalateEvents: 100,
 			},
 		},
@@ -971,8 +971,8 @@ func TestCreateRelatedEventsAlreadyExists(t *testing.T) {
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	store.server.Config = &config.ServerConfig{
-		ClientParams: config.ClientParameters{
-			AlertingParams: config.AlertParameters{
+		ClientParams: model.ClientParameters{
+			AlertingParams: model.AlertingParameters{
 				MaxBulkEscalateEvents: 100,
 			},
 		},

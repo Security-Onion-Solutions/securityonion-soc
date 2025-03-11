@@ -20,6 +20,7 @@ import (
 	"github.com/apex/log"
 	"github.com/kennygrant/sanitize"
 	"github.com/security-onion-solutions/securityonion-soc/json"
+	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/packet"
@@ -108,8 +109,13 @@ func (datastore *FileDatastoreImpl) UpdateNode(ctx context.Context, newNode *mod
 			node.EpochTime = newNode.EpochTime
 			node.Role = newNode.Role
 			node.Description = newNode.Description
+			node.MgmtMac = newNode.MgmtMac
 			node.Address = newNode.Address
 			node.Version = newNode.Version
+
+			if node.IsManager() {
+				licensing.ValidateMgmtMac(node.MgmtMac)
+			}
 
 			// Ensure model parameters are updated
 			node.SetModel(newNode.Model)

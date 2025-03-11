@@ -4,6 +4,8 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
+loadPageTemplate('page-downloads', 'pages/downloads.html');
+
 routes.push({ path: '/downloads', name: 'downloads', component: {
   template: '#page-downloads',
   data() { return {

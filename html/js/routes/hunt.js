@@ -15,6 +15,8 @@ const FILTER_EXCLUDE = 'EXCLUDE';
 const FILTER_EXACT = 'EXACT';
 const FILTER_DRILLDOWN = 'DRILLDOWN';
 
+loadPageTemplate('page-hunt', 'pages/hunt.html');
+
 const huntComponent = {
   template: '#page-hunt',
   data() { return {
@@ -233,6 +235,7 @@ const huntComponent = {
     'autohunt': 'saveLocalSettings',
     'autoRefreshInterval': 'resetRefreshTimer',
     'showDetailsPanel': 'saveLocalSettings',
+    'advanced': 'saveLocalSettings',
   },
   methods: {
     moment: moment,
@@ -1292,6 +1295,10 @@ const huntComponent = {
     constructHeaders(fields) {
       var headers = [];
 
+      const customSorts = {
+        'event.severity_label': this.sortBySeverity,
+      };
+
       if (fields && fields.length > 0) {
         var i18n = this.i18n;
         fields.forEach((item) => {
@@ -1300,10 +1307,29 @@ const huntComponent = {
             title: i18n[i18nKey] ? i18n[i18nKey] : item,
             value: item,
           };
+
+          const sort = customSorts[item];
+          if (sort) {
+            header.sort = sort;
+          }
+
           headers.push(header);
         });
       }
       return headers;
+    },
+    sortBySeverity(a, b) {
+      // normalize
+      const na = (typeof a === 'string' ? a : String(a)).toLowerCase();
+      const nb = (typeof b === 'string' ? b : String(b)).toLowerCase();
+
+      // map
+      const levels = ['unknown', 'informational', 'low', 'medium', 'high', 'critical'];
+      const sevA = levels.findIndex(x => x === na);
+      const sevB = levels.findIndex(x => x === nb);
+
+      // compare
+      return sevA - sevB;
     },
     lookupSocId(data) {
       if (data && data.length == 36 && data.indexOf("-") == 8) {
@@ -1510,8 +1536,8 @@ const huntComponent = {
         // console.log("Excessive chart flapping detected; disabled chart resizing")
       }
     },
-    updateGroupBySort() {
-      if (this.groupBys.length > 0) {
+    updateGroupBySort(i) {
+      if (this.groupBys.length > 0 && i === 0 && this.groupBys[0].sortBy[0]) {
         this.groupBySortBy = this.groupBys[0].sortBy[0].key;
         this.groupBySortDesc = this.groupBys[0].sortBy[0].order === 'desc';
       }
@@ -1884,7 +1910,6 @@ const huntComponent = {
     setupDateRangePicker() {
       if (this.relativeTimeEnabled) return;
 
-      range = document.getElementById('huntdaterange');
       $('#huntdaterange').daterangepicker({
         ranges: this.$root.generateDatePickerPreselects(),
         timePicker: true,
@@ -2180,6 +2205,7 @@ const huntComponent = {
       this.saveSetting('relativeTimeUnit', this.relativeTimeUnit, this.params['relativeTimeUnit']);
       this.saveSetting('autohunt', this.autohunt, true);
       this.saveSetting('showDetailsPanel', this.showDetailsPanel, this.isCategory('alerts'));
+      this.saveSetting('advanced', this.advanced, false);
     },
     loadLocalSettings() {
       // Global settings
@@ -2200,6 +2226,7 @@ const huntComponent = {
       if (localStorage[prefix + '.relativeTimeUnit']) this.relativeTimeUnit = parseInt(localStorage[prefix + '.relativeTimeUnit']);
       if (localStorage[prefix + '.autohunt']) this.autohunt = localStorage[prefix + '.autohunt'] == 'true';
       if (localStorage[prefix + '.showDetailsPanel']) this.showDetailsPanel = localStorage[prefix + '.showDetailsPanel'] == 'true';
+      if (localStorage[prefix + '.advanced']) this.advanced = localStorage[prefix + '.advanced'] == 'true';
 
       if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
     },

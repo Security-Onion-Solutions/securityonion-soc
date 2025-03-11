@@ -796,3 +796,55 @@ test('showWarning', () => {
   expect(app.warning).toBe(true);
   expect(app.warningMessage.length).toBe(longString.length);
 });
+
+test('hasSubgrids', () => {
+  app.subgrids = null;
+  expect(app.hasSubgrids()).toBe(false);
+
+  app.subgrids = [];
+  expect(app.hasSubgrids()).toBe(false);
+
+  app.subgrids = [{}];
+  expect(app.hasSubgrids()).toBe(true);
+});
+
+test('adjustSubgridColVisibility', () => {
+  const origFn = app.updateColumnClass;
+  const headers = [
+    { title: 'Grid ID', value: 'gridId', align: 'd-none' },
+    { title: 'Other Column', value: 'other', align: 'd-none' },
+  ];
+  app.i18n = { gridId: 'Grid ID' };
+
+  app.hasSubgrids = jest.fn(() => true);
+  app.updateColumnClass = jest.fn();
+  app.adjustSubgridColVisibility(headers);
+
+  expect(app.updateColumnClass).toHaveBeenCalledWith(headers, 'Grid ID', true);
+
+  app.hasSubgrids = jest.fn(() => false);
+  app.updateColumnClass = jest.fn();
+  app.adjustSubgridColVisibility(headers);
+
+  expect(app.updateColumnClass).toHaveBeenCalledWith(headers, 'Grid ID', false);
+  app.updateColumnClass = origFn;
+});
+
+test('updateColumnClass', () => {
+  const headers = [
+    { title: 'Column 1', value: 'col1', align: 'd-none' },
+    { title: 'Column 2', value: 'col2', align: 'd-none' },
+  ];
+
+  app.updateColumnClass(headers, 'Column 1', true, 'd-md-table-cell');
+  expect(headers[0].align).toBe(' d-none d-md-table-cell');
+  expect(headers[1].align).toBe('d-none');
+
+  app.updateColumnClass(headers, 'Column 2', false, 'd-md-table-cell');
+  expect(headers[0].align).toBe(' d-none d-md-table-cell');
+  expect(headers[1].align).toBe(' d-none');
+
+  app.updateColumnClass(headers, 'NonExistentColumn', true, 'd-md-table-cell');
+  expect(headers[0].align).toBe(' d-none d-md-table-cell');
+  expect(headers[1].align).toBe(' d-none');
+});

@@ -110,7 +110,8 @@ func Respond(w http.ResponseWriter, r *http.Request, statusCode int, obj interfa
 
 		var unauthorizedError *model.Unauthorized
 		if errors.As(err, &unauthorizedError) {
-			statusCode = http.StatusUnauthorized
+			statusCode = http.StatusForbidden
+			err = errors.New("ERROR_PERMISSION_DENIED")
 		} else if statusCode < http.StatusBadRequest {
 			statusCode = http.StatusInternalServerError
 		} else if err.Error() == "Object not found" {

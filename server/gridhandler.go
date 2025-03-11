@@ -34,7 +34,7 @@ func RegisterGridRoutes(srv *Server, r chi.Router, prefix string) {
 // @Tags         Grid
 // @Security     bearer[nodes/read]
 // @Produce      json
-// @Success      200  {array}  model.Node            "The list of grid nodes"
+// @Success      200  {array}  model.Node            "The list of grid nodes or an empty list is insufficient permissions"
 // @Failure      401                                 "Request was not properly authenticated"
 // @Failure      403                                 "Insufficient permissions for this request"
 // @Failure      500                                 "Internal SOC error; review SOC logs"
@@ -43,6 +43,7 @@ func (h *GridHandler) getNodes(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	nodes := h.server.Datastore.GetNodes(ctx)
+	nodes = append(nodes, h.server.SubgridNodes...)
 
 	web.Respond(w, r, http.StatusOK, nodes)
 }

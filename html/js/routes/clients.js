@@ -6,6 +6,8 @@
 
 const NOTE_TRUNCATE_LEN = 50;
 
+loadPageTemplate('page-clients', 'pages/clients.html');
+
 routes.push({ path: '/clients', name: 'clients', component: {
   template: '#page-clients',
   data() { return {

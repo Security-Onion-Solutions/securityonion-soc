@@ -54,6 +54,7 @@ test('loadData', async () => {
       "description": "Nearby",
       "duplicates": undefined,
       "file": undefined,
+      "forcedType": undefined,
       "global": false,
       "helpLink": undefined,
       "id": "fake.setting.foo",
@@ -61,14 +62,18 @@ test('loadData', async () => {
       "name": "foo",
       "node": undefined,
       "nodeValues": m1,
+      "optionSeparator": undefined,
+      "options": undefined,
       "readonly": undefined,
       "readonlyUi": undefined,
       "regex": "True|False",
       "regexFailureMessage": "Wrong!",
+      "required": undefined,
       "sensitive": undefined,
       "syntax": undefined,
       "title": "Farout",
       "uiElements": undefined,
+      "uiElementsDeleteMessage": undefined,
       "value": null,
     },
     {
@@ -78,6 +83,7 @@ test('loadData', async () => {
       "description": "NADA",
       "duplicates": undefined,
       "file": undefined,
+      "forcedType": undefined,
       "global": undefined,
       "helpLink": undefined,
       "id": "car",
@@ -85,14 +91,18 @@ test('loadData', async () => {
       "name": "car",
       "node": false,
       "nodeValues": new Map(),
+      "optionSeparator": undefined,
+      "options": undefined,
       "readonly": undefined,
       "readonlyUi": undefined,
       "regex": undefined,
       "regexFailureMessage": undefined,
+      "required": undefined,
       "sensitive": undefined,
       "syntax": undefined,
       "title": "CCA",
       "uiElements": undefined,
+      "uiElementsDeleteMessage": undefined,
       "value": undefined,
     },
     {
@@ -102,6 +112,7 @@ test('loadData', async () => {
       "description": "Cocoa",
       "duplicates": undefined,
       "file": undefined,
+      "forcedType": undefined,
       "global": undefined,
       "helpLink": undefined,
       "id": "fake.setting.bar",
@@ -109,14 +120,18 @@ test('loadData', async () => {
       "name": "bar",
       "node": false,
       "nodeValues": new Map(),
+      "optionSeparator": undefined,
+      "options": undefined,
       "readonly": undefined,
       "readonlyUi": undefined,
       "regex": undefined,
       "regexFailureMessage": undefined,
+      "required": undefined,
       "sensitive": undefined,
       "syntax": undefined,
       "title": "Barley",
       "uiElements": undefined,
+      "uiElementsDeleteMessage": undefined,
       "value": undefined,
     }
   ];
@@ -133,6 +148,7 @@ test('loadData', async () => {
               "description": "Nearby",
               "duplicates": undefined,
               "file": undefined,
+              "forcedType": undefined,
               "global": false,
               "helpLink": undefined,
               "id": "fake.setting.foo",
@@ -140,14 +156,18 @@ test('loadData', async () => {
               "name": "foo",
               "node": undefined,
               "nodeValues": m1,
+              "optionSeparator": undefined,
+              "options": undefined,
               "readonly": undefined,
               "readonlyUi": undefined,
               "regex": "True|False",
               "regexFailureMessage": "Wrong!",
+              "required": undefined,
               "sensitive": undefined,
               "syntax": undefined,
               "title": "Farout",
               "uiElements": undefined,
+              "uiElementsDeleteMessage": undefined,
               "value": null
             },
             {
@@ -157,6 +177,7 @@ test('loadData', async () => {
               "description": "Cocoa",
               "duplicates": undefined,
               "file": undefined,
+              "forcedType": undefined,
               "global": undefined,
               "helpLink": undefined,
               "id": "fake.setting.bar",
@@ -164,14 +185,18 @@ test('loadData', async () => {
               "name": "bar",
               "node": false,
               "nodeValues": new Map(),
+              "optionSeparator": undefined,
+              "options": undefined,
               "readonly": undefined,
               "readonlyUi": undefined,
               "regex": undefined,
               "regexFailureMessage": undefined,
+              "required": undefined,
               "sensitive": undefined,
               "syntax": undefined,
               "title": "Barley",
               "uiElements": undefined,
+              "uiElementsDeleteMessage": undefined,
               "value": undefined
             }
           ],
@@ -189,6 +214,7 @@ test('loadData', async () => {
       "description": "NADA",
       "duplicates": undefined,
       "file": undefined,
+      "forcedType": undefined,
       "global": undefined,
       "helpLink": undefined,
       "id": "car",
@@ -196,14 +222,18 @@ test('loadData', async () => {
       "name": "car",
       "node": false,
       "nodeValues": new Map(),
+      "optionSeparator": undefined,
+      "options": undefined,
       "readonly": undefined,
       "readonlyUi": undefined,
       "regex": undefined,
       "regexFailureMessage": undefined,
+      "required": undefined,
       "sensitive": undefined,
       "syntax": undefined,
       "title": "CCA",
       "uiElements": undefined,
+      "uiElementsDeleteMessage": undefined,
       "value": undefined
     }
   ];
@@ -753,19 +783,19 @@ test('hasUiElements', () => {
 
 test('pack_unpack', () => {
   comp.form.value = "{}"
-  comp.form.entries = [{foo: 'bar', _title:'ignore'},{_title:'empty'}];
-  setting = {id: 'myid', uiElements:[{field: 'foo', label:'some fooness'}], syntax: 'json'}
+  comp.form.entries = [{foo: 'bar\ncar', _title:'ignore'},{_title:'empty'}];
+  setting = {id: 'myid', uiElements:[{field: 'foo', label:'some fooness', multiline: true, forcedType: "[]string"}], syntax: 'json'}
   comp.pack(setting);
-  expect(comp.form.value).toBe('[{"foo":"bar"}]')
+  expect(comp.form.value).toBe('[{"foo":["bar","car"]}]')
 
   comp.form.entries = null;
-  setting.value = '[{"foo":"bar"}]';
+  setting.value = '[{"foo":["bar", "car"]}]';
   comp.settings = [setting];
   comp.active = ['myid'];
   comp.unpack(setting);
   expect(comp.form.entries.length).toBe(2);
-  expect(comp.form.entries[0].foo).toBe('bar');
-  expect(comp.form.entries[0]._title).toBe('1. bar');
+  expect(comp.form.entries[0].foo).toBe('bar\ncar');
+  expect(comp.form.entries[0]._title).toBe('1. bar,car');
   expect(comp.form.entries[1]._title).toBe('+');
 });
 
@@ -827,14 +857,6 @@ test('pack_unpack_multiple_array_of_json', () => {
   expect(comp.form.entries[2]._title).toBe('+');
 });
 
-test('isEntryEmpty', () => {
-  entry = {id: '', foo:'', _title:'title'};
-  expect(comp.isEntryEmpty(entry)).toBe(true);
-
-  entry = {id: 'something', foo:'hi', _title:'title'};
-  expect(comp.isEntryEmpty(entry)).toBe(false);
-});
-
 test('generateEntryTitle', () => {
   entry = {id: 'something', foo:'hi'};
   comp.settings = [entry];
@@ -852,16 +874,164 @@ test('markDirtyEntries', () => {
   expect(comp.form.value.length).toBe(13);
 });
 
-test('clearEntry', () => {
+test('showClearEntryDialog', () => {
+  expect(comp.confirmRemoveEntryDialog).toBe(false);
+  const setting = {uiElementsDeleteMessage: 'hi'};
+  comp.showClearEntryDialog(setting, 2);
+  expect(comp.confirmRemoveEntryDialog).toBe(true);
+  expect(comp.confirmRemoveEntryMessage).toBe('hi');
+  expect(comp.confirmRemoveEntryIdx).toBe(2);
+});
+
+test('cancelClearEntry', () => {
+  comp.confirmRemoveEntryDialog = true;
+  comp.confirmRemoveEntryMessage = 'hi';
+  comp.confirmRemoveEntryIdx = 2;
+  comp.cancelClearEntry();
+  expect(comp.confirmRemoveEntryDialog).toBe(false);
+  expect(comp.confirmRemoveEntryMessage).toBe('');
+  expect(comp.confirmRemoveEntryIdx).toBe(0);
+});
+
+test('confirmClearEntry', () => {
   entry = {foo: 'bar', some: 'value', _title: 'title'};
   comp.form.value = 123;
-  comp.clearEntry(entry, 1);
+  comp.form.entries = [entry]
+  comp.confirmRemoveEntryIdx = 0;
+  comp.confirmClearEntry();
   expect(comp.form.value.length).toBe(13);
   expect(entry.foo).toBe('');
   expect(entry.some).toBe('');
-  expect(entry._title).toBe('2. ');
+  expect(entry._title).toBe('1. (pending deletion)');
 
   entry = {foo: 'bar', some: 'value', _title: '+'};
-  comp.clearEntry(entry, 1);
+  comp.confirmClearEntry(entry, 1);
   expect(entry._title).toBe('+');
+});
+
+test('createEmptyUiElementEntry', () => {
+  const setting = {
+    uiElements: [
+      { field: 'field1', default: 'default1' },
+      { field: 'field2' },
+      { field: 'field3', default: 'default3' },
+    ],
+  };
+
+  const emptyEntry = comp.createEmptyUiElementEntry(setting);
+
+  expect(emptyEntry._title).toBe('+');
+  expect(emptyEntry.field1).toBe('default1');
+  expect(emptyEntry.field3).toBe('default3');
+  expect(emptyEntry.field2).toBeUndefined();
+});
+
+test('getElementLabel', () => {
+  let element = { label: 'Test Label', required: false };
+  expect(comp.getElementLabel(element)).toBe('Test Label');
+
+  element = { label: 'Test Label', required: true };
+  expect(comp.getElementLabel(element)).toBe('Test Label *');
+});
+
+test('validateRegexMatch', () => {
+  let setting = { regex: '^test$', regexFailureMessage: 'Regex failed' };
+  expect(comp.validateRegexMatch(setting, 'test')).toBe(true);
+  expect(comp.validateRegexMatch(setting, 'fail')).toBe('Regex failed');
+
+  setting = { regex: '^test$' };
+  expect(comp.validateRegexMatch(setting, 'test')).toBe(true);
+  expect(comp.validateRegexMatch(setting, 'fail')).toBe(comp.i18n.settingValidationFailed);
+});
+
+test('buildInputRules', () => {
+  let setting = { required: false, regex: null };
+  expect(comp.buildInputRules(setting)).toEqual([]);
+
+  setting = { required: true, regex: null };
+  let rules = comp.buildInputRules(setting);
+  expect(rules.length).toBe(1);
+  expect(rules[0]('')).toBe('Required.');
+
+  setting = { required: false, regex: '^test$', regexFailureMessage: 'Regex failed' };
+  rules = comp.buildInputRules(setting);
+  expect(rules.length).toBe(1);
+  expect(rules[0]('test')).toBe(true);
+  expect(rules[0]('fail')).toBe('Regex failed');
+
+  setting = { required: true, regex: '^test$', regexFailureMessage: 'Regex failed' };
+  rules = comp.buildInputRules(setting);
+  expect(rules.length).toBe(2);
+  expect(rules[0]('')).toBe('Required.');
+  expect(rules[1]('test')).toBe(true);
+  expect(rules[1]('fail')).toBe('Regex failed');
+});
+
+test('isUiElementReadonly', () => {
+  let entry = { _title: '1' };
+  let setting = { readonly: false };
+  expect(comp.isUiElementReadonly(entry, setting)).toBe(false);
+
+  setting = { readonly: true };
+  expect(comp.isUiElementReadonly(entry, setting)).toBe(true);
+
+  entry = { _title: '+' };
+  setting = { readonly: true };
+  expect(comp.isUiElementReadonly(entry, setting)).toBe(false);
+});
+
+test('uiElementsHaveValidInputs', () => {
+  comp.form.entries = null;
+  let setting = { uiElements: [{}] };
+  expect(comp.uiElementsHaveValidInputs(setting)).toBe(true);
+
+  comp.form.entries = [{ valid: true }];
+  setting = { uiElements: [{field: "valid", default: true}] };
+  expect(comp.uiElementsHaveValidInputs(setting)).toBe(true);
+
+  comp.form.entries = [{ valid: true }];
+  setting = { uiElements: [{field: "valid", default: true}] };
+  comp.uiElementsValid = false;
+  expect(comp.uiElementsHaveValidInputs(setting)).toBe(true);
+
+  comp.form.entries = [{ valid: false }, { _title: '+' }];
+  setting = { uiElements: [{}] };
+  comp.uiElementsValid = false;
+  expect(comp.uiElementsHaveValidInputs(setting)).toBe(true);
+
+  comp.form.entries = [{ valid: false }, { _title: '+' }];
+  setting = { uiElements: [{}] };
+  comp.uiElementsValid = false;
+  comp.isEntryEmpty = jest.fn().mockReturnValue(false);
+  expect(comp.uiElementsHaveValidInputs(setting)).toBe(false);
+});
+
+test('isEntryEmpty', () => {
+  let setting = { uiElements: [{ field: 'foo', default: 'default' }] };
+  let entry = { foo: 'default', _title: 'title' };
+  expect(comp.isEntryEmpty(setting, entry)).toBe(true);
+
+  setting = { uiElements: [{ field: 'foo', default: 'default' }] };
+  entry = { foo: 'notDefault', _title: 'title' };
+  expect(comp.isEntryEmpty(setting, entry)).toBe(false);
+});
+
+test('convertMultilineElement', () => {
+  let element = { field: 'foo', multiline: true, forcedType: '[]string' };
+  let modifiedEntry = { foo: 'bar\ncar\n' };
+
+  comp.convertMultilineElement(element, modifiedEntry, false);
+  expect(modifiedEntry.foo).toEqual(['bar', 'car']);
+
+  comp.convertMultilineElement(element, modifiedEntry, true);
+  expect(modifiedEntry.foo).toBe('bar\ncar');
+
+  element = { field: 'foo', multiline: true, forcedType: '[]string' };
+  modifiedEntry = { foo: null };
+
+  comp.convertMultilineElement(element, modifiedEntry, false);
+  expect(modifiedEntry.foo).toEqual([]);
+
+  comp.convertMultilineElement(element, modifiedEntry, true);
+  expect(modifiedEntry.foo).toBe('');
 });

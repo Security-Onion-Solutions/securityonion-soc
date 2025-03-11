@@ -124,11 +124,11 @@ func TestRespond(t *testing.T) {
 			ExpectedType:   "application/json",
 		},
 		{
-			Name:         "Unauthorized - 401",
+			Name:         "Unauthorized - 403",
 			StatusCode:   http.StatusOK,
 			Obj:          &model.Unauthorized{},
-			ExpectedBody: []byte(`The request could not be processed.`),
-			ExpectedCode: http.StatusUnauthorized,
+			ExpectedBody: []byte(`ERROR_PERMISSION_DENIED`),
+			ExpectedCode: http.StatusForbidden,
 		},
 		{
 			Name:         "200 but Error",

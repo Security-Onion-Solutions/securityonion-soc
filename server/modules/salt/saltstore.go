@@ -506,6 +506,12 @@ func (store *Saltstore) updateSettingWithAnnotation(setting *model.Setting, anno
 			setting.Duplicates = value.(bool)
 		case "jinjaEscaped":
 			setting.JinjaEscaped = value.(bool)
+		case "options":
+			setting.Options = store.castToStringArray(value)
+		case "optionSeparator":
+			setting.OptionSeparator = value.(string)
+		case "required":
+			setting.Required = value.(bool)
 		case "uiElements":
 			tmpElements := value.([]interface{})
 			for _, tmp := range tmpElements {
@@ -517,6 +523,22 @@ func (store *Saltstore) updateSettingWithAnnotation(setting *model.Setting, anno
 							element.Field = value.(string)
 						case "label":
 							element.Label = value.(string)
+						case "forcedType":
+							element.ForcedType = value.(string)
+						case "multiline":
+							element.Multiline = value.(bool)
+						case "options":
+							element.Options = store.castToStringArray(value)
+						case "default":
+							element.Default = value
+						case "required":
+							element.Required = value.(bool)
+						case "readonly":
+							element.Readonly = value.(bool)
+						case "regex":
+							element.Regex = fmt.Sprintf("%v", value)
+						case "regexFailureMessage":
+							element.RegexFailureMessage = value.(string)
 						}
 					}
 					setting.UiElements = append(setting.UiElements, element)
@@ -524,8 +546,19 @@ func (store *Saltstore) updateSettingWithAnnotation(setting *model.Setting, anno
 					log.Error("Invalid annotation; cannot cast to map")
 				}
 			}
+		case "uiElementsDeleteMessage":
+			setting.UiElementsDeleteMessage = value.(string)
 		}
 	}
+}
+
+func (store *Saltstore) castToStringArray(value interface{}) []string {
+	values := make([]string, 0)
+	tmpArray := value.([]interface{})
+	for _, tmp := range tmpArray {
+		values = append(values, tmp.(string))
+	}
+	return values
 }
 
 func (store *Saltstore) relPathFromId(id string) string {
@@ -703,9 +736,18 @@ func (store *Saltstore) UpdateSetting(ctx context.Context, setting *model.Settin
 		if setting.SupportsJinja() {
 			setting.Value = syntax.EscapeJinja(setting.Value)
 		}
-		err = syntax.Validate(setting.Value, setting.Syntax)
-		if err != nil {
-			return err
+
+		if !strings.HasPrefix(setting.ForcedType, "[]") {
+			// Do not attempt to validate settings with array values, as those have \n separators and will be
+			// validated during the type alignment stage later in this update.
+			log.WithFields(log.Fields{
+				"settingSyntax": setting.Syntax,
+				"settingId":     setting.Id,
+			}).Debug("Preparing to validating setting")
+			err = syntax.Validate(setting.Value, setting.Syntax)
+			if err != nil {
+				return err
+			}
 		}
 	}
 

@@ -4,6 +4,8 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
+loadPageTemplate('page-config', 'pages/config.html');
+
 routes.push({
   path: '/config', name: 'config', component: {
     template: '#page-config',
@@ -45,6 +47,10 @@ routes.push({
         resetNodeId: null,
         confirmResetDialog: false,
         treeVisible: true,
+        uiElementsValid: false,
+        confirmRemoveEntryDialog: false,
+        confirmRemoveEntryMessage: "",
+        confirmRemoveEntryIdx: 0,
       }
     },
     mounted() {
@@ -198,6 +204,11 @@ routes.push({
         syntax: setting.syntax,
         duplicates: setting.duplicates,
         uiElements: setting.uiElements,
+        uiElementsDeleteMessage: setting.uiElementsDeleteMessage,
+        forcedType: setting.forcedType,
+        options: setting.options,
+        optionSeparator: setting.optionSeparator,
+        required: setting.required,
       };
       this.merge(created, setting);
       return created;
@@ -329,6 +340,16 @@ routes.push({
     isMultiline(setting) {
       return setting.multiline === true || (setting.advanced === true && !setting.description);
     },
+    isToggle(setting) {
+      return setting.forcedType == 'bool';
+    },
+    isSelectList(setting) {
+      return setting.options && setting.options.length > 0;
+    },
+    hasMultipleValues(setting) {
+      const hasArray = setting.forcedType != null && setting.forcedType.startsWith("[]");
+      return hasArray;
+    },
     isPendingSave(setting, nodeId) {
       if (this.form.key != null) {
         if (nodeId != null && this.form.key == nodeId) {
@@ -376,10 +397,14 @@ routes.push({
         if (setting.value && setting.value.trim().length > 0) {
           if (!isArrayOfObjects) {
             if (setting.syntax.toLowerCase() == 'json') {
-              this.form.entries = JSON.parse(setting.value);
+              try {
+                this.form.entries = JSON.parse(setting.value);
+              } catch(e) {
+
+              }
             }
           } else {
-            var objs = setting.value.split("\n");
+            var objs = setting.value.trim().split("\n");
             for (var idx = 0; idx < objs.length; idx++) {
               var obj = objs[idx];
               var entry = null;
@@ -391,23 +416,29 @@ routes.push({
           }
           for (let [idx, entry] of this.form.entries.entries()) {
             this.generateEntryTitle(entry, idx);
+            setting.uiElements.forEach((element) => {
+              this.convertMultilineElement(element, entry, true);
+            });
           }
         } else {
           this.form.entries = [];
         }
         // Add a blank entry so users can fill out new entries
-        this.form.entries.push({_title: "+"});
+        this.form.entries.push(this.createEmptyUiElementEntry(setting));
       }
     },
     pack(setting) {
       if (this.form.entries && this.hasUiElements(setting)) {
         var value = ""
         var tmpEntries = []
-        const isArrayOfObjects = setting.forcedType && setting.forcedType.startsWith("[]");
+        const isArrayOfObjects = setting.forcedType != null && setting.forcedType.startsWith("[]");
         for (let [idx, entry] of this.form.entries.entries()) {
           const tmpEntry = Object.assign({}, entry);
           delete tmpEntry._title;
-          if (!this.isEntryEmpty(tmpEntry)) {
+          if (!this.isEntryEmpty(setting, tmpEntry)) {
+            setting.uiElements.forEach((element) => {
+              this.convertMultilineElement(element, tmpEntry, false);
+            });
             tmpEntries.push(tmpEntry);
             if (isArrayOfObjects) {
               if (value.length > 0) {
@@ -419,7 +450,7 @@ routes.push({
             }
           }
         }
-        if (!isArrayOfObjects) { 
+        if (!isArrayOfObjects) {
           if (setting.syntax.toLowerCase() == 'json') {
             value = JSON.stringify(tmpEntries);
           }
@@ -427,16 +458,74 @@ routes.push({
         this.form.value = value;
       }
     },
-    isEntryEmpty(entry) {
+    createEmptyUiElementEntry(setting) {
+      const empty = {_title: "+"};
+      setting.uiElements.forEach((element) => {
+        if (element.default != null) {
+          empty[element.field] = element.default;
+        }
+      });
+      return empty;
+    },
+    getElementLabel(element) {
+      const suffix = element.required ? " *" : "";
+      return element.label + suffix;
+    },
+    validateRegexMatch(setting, value) {
+      const re = new RegExp(setting.regex);
+      if (!re.test(value)) {
+        return setting.regexFailureMessage ? setting.regexFailureMessage : this.i18n.settingValidationFailed;
+      }
+      return true
+    },
+    buildInputRules(setting) {
+      const rules = [];
+      if (setting.required) {
+        rules.push(value => !!value || this.$root.i18n.required);
+      }
+      if (setting.regex) {
+        rules.push(value => this.validateRegexMatch(setting, value));
+      }
+      return rules;
+    },
+    isUiElementReadonly(entry, setting) {
+      return setting.readonly === true && entry._title != "+";
+    },
+    uiElementsHaveValidInputs(setting) {
+      if (this.form.entries) {
+        const newEntry = this.form.entries[this.form.entries.length - 1];
+        if (setting.uiElements && !this.uiElementsValid && !this.isEntryEmpty(setting, newEntry)) {
+          return false;
+        }
+      }
+      return true;
+    },
+    isEntryEmpty(setting, entry) {
       var value = ""
       for (prop in entry) {
         if (prop != "_title") {
-          value += entry[prop];
+          var propValue = entry[prop];
+          for (var idx = 0; idx < setting.uiElements.length; idx++) {
+            const element = setting.uiElements[idx];
+            if (element.field == prop) {
+              if (element.default == propValue) {
+                propValue = "";
+              }
+              break
+            }
+          }
+          value += propValue;
         }
       }
       return value.trim().length == 0;
     },
-    clearEntry(entry, idx) {
+    cancelClearEntry() {
+      this.confirmRemoveEntryDialog = false;
+      this.confirmRemoveEntryIdx = 0;
+      this.confirmRemoveEntryMessage = "";
+    },
+    confirmClearEntry() {
+      const entry = this.form.entries[this.confirmRemoveEntryIdx];
       for (prop in entry) {
         if (prop != "_title") {
           entry[prop] = "";
@@ -444,11 +533,40 @@ routes.push({
       }
       if (entry._title != "+") {
         this.markDirtyEntries();
-        this.generateEntryTitle(entry, idx);
+        entry._title = this.generateIndexTitle(this.confirmRemoveEntryIdx, this.i18n.pendingDeletion);
       }
+      this.cancelClearEntry();
+    },
+    showClearEntryDialog(setting, idx) {
+      this.confirmRemoveEntryDialog = true;
+      this.confirmRemoveEntryMessage = setting.uiElementsDeleteMessage;
+      this.confirmRemoveEntryIdx = idx;
     },
     markDirtyEntries() {
       this.form.value = Date.now() + "";
+    },
+    convertMultilineElement(element, modifiedEntry, toString) {
+      if (modifiedEntry && this.hasMultipleValues(element) && this.isMultiline(element)) {
+        var value = modifiedEntry[element.field];
+
+        if (toString) {
+          if (value && value.join != null) {
+            value = value.join("\n");
+          } else {
+            value = ""
+          }
+        } else {
+          if (value && value.trim != null) {
+            value = value.trim().split("\n");
+          } else {
+            value = [];
+          }
+        }
+        modifiedEntry[element.field] = value;
+      }
+    },
+    generateIndexTitle(idx, title) {
+      return "" + (idx+1) + ". " + (title ? title : "");
     },
     generateEntryTitle(entry, idx) {
       const setting = this.findActiveSetting();
@@ -456,10 +574,7 @@ routes.push({
       if (setting && setting.uiElements && setting.uiElements.length > 0) {
         title = entry[setting.uiElements[0].field];
       }
-      entry._title = "" + (idx+1) + ". "
-      if (title) {
-         entry._title += title;
-      }
+      entry._title = this.generateIndexTitle(idx, title);
     },
     cancel(force) {
       var setting = this.findActiveSetting();
@@ -559,8 +674,19 @@ routes.push({
       }
 
       if (setting) {
+        if (this.form.value instanceof Array) {
+          this.form.value = this.form.value.join(setting.optionSeparator ? setting.optionSeparator : "\n");
+        }
         this.form.value = this.form.value.trim();
+        if (!this.uiElementsHaveValidInputs(setting)) {
+          this.$root.showWarning(this.i18n.settingIncomplete)
+          return;
+        }
         this.pack(setting);
+        if (setting.required && !this.form.value) {
+          this.$root.showError(this.i18n.settingValidationFailed);
+          return;
+        }
         if (setting.regex) {
           var test_values = [this.form.value];
           if (setting.multiline) {
@@ -591,7 +717,13 @@ routes.push({
           } else {
             setting.nodeValues.set(nodeId, this.form.value);
           }
-          this.cancel(true);
+
+          // Do not exit edit mode when working with UI Elements
+          if (!setting.uiElements) {
+            this.cancel(true);
+          } else {
+            this.unpack(setting);
+          }
 
           this.countCustomized();
 
@@ -618,18 +750,35 @@ routes.push({
       this.$root.stopLoading();
     },
     edit(setting, nodeId) {
-      setTimeout(() => {
-      if (nodeId) {
-        if ((this.form.key == nodeId) || !this.cancel()) return;
-        this.form.key = nodeId;
-        this.form.value = setting.nodeValues.get(nodeId);
-        this.$root.drawAttention('#setting-node-save-' + nodeId);
-      } else {
-        if ((this.form.key == setting.id) || !this.cancel()) return;
-        this.form.key = setting.id;
-        this.form.value = setting.value;
-        this.$root.drawAttention('#setting-global-save');
+      if (this.isReadOnly(setting)) {
+        return;
       }
+      setTimeout(() => {
+        if (nodeId) {
+          if ((this.form.key == nodeId) || !this.cancel()) return;
+          this.form.key = nodeId;
+          this.form.value = setting.nodeValues.get(nodeId);
+          this.$root.drawAttention('#setting-node-save-' + nodeId);
+        } else {
+          if ((this.form.key == setting.id) || !this.cancel()) return;
+          this.form.key = setting.id;
+          this.form.value = setting.value;
+          this.$root.drawAttention('#setting-global-save');
+        }
+
+        if (setting.options && this.hasMultipleValues(setting)) {
+          const sep = setting.optionSeparator ? setting.optionSeparator : "\n";
+          var val = this.form.value.trim();
+          if (val.endsWith(sep)) {
+            val = val.substring(0, val.length - sep.length - 1)
+          }
+          if (val.startsWith(sep)) {
+            val = val.substring(sep.length)
+          }
+          this.form.value = val.split(sep);
+        }
+
+        if (this.isToggle(setting)) return;
 
         // transfer caret position from non-edit element to edit element
         let selector = nodeId ? 'node-value-output-' + nodeId : 'value-output';

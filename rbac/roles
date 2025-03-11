@@ -26,3 +26,5 @@ job-admin:         analyst superuser
 job-user:          limited-analyst
 job-monitor:       auditor
 job-processor:     agent
+query-admin:       superuser
+query-monitor:     superuser

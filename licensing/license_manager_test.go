@@ -136,11 +136,15 @@ func TestListAvailableFeatures(tester *testing.T) {
 	idx += 1
 	assert.Equal(tester, ListAvailableFeatures()[idx], FEAT_ODC)
 	idx += 1
+	assert.Equal(tester, ListAvailableFeatures()[idx], FEAT_QRY)
+	idx += 1
 	assert.Equal(tester, ListAvailableFeatures()[idx], FEAT_STG)
 	idx += 1
 	assert.Equal(tester, ListAvailableFeatures()[idx], FEAT_TTR)
 	idx += 1
 	assert.Equal(tester, ListAvailableFeatures()[idx], FEAT_RPT)
+	idx += 1
+	assert.Equal(tester, ListAvailableFeatures()[idx], FEAT_VRT)
 	idx += 1
 	assert.Len(tester, ListAvailableFeatures(), idx)
 }
@@ -168,14 +172,14 @@ func TestGetLicenseKey(tester *testing.T) {
 	assert.Equal(tester, key.Nodes, 1)
 	assert.Equal(tester, key.SocUrl, "https://somewhere.invalid")
 	assert.Equal(tester, key.DataUrl, "https://another.place")
-	assert.Len(tester, key.Features, 9)
+	assert.Len(tester, key.Features, 11)
 
 	// Modify the returned object and make sure it doesn't affect the orig object
 	key.Users = 100
 	key.Features = append(key.Features, "foo")
 	assert.Equal(tester, GetLicenseKey().Users, 1)
-	assert.Len(tester, key.Features, 10)
-	assert.Len(tester, GetLicenseKey().Features, 9)
+	assert.Len(tester, key.Features, 12)
+	assert.Len(tester, GetLicenseKey().Features, 11)
 }
 
 func TestGetStatus(tester *testing.T) {
@@ -341,8 +345,10 @@ features:
 - lks
 - ntf
 - odc
+- qry
 - stg
 - ttr
+- vrt
 `
 
 	assert.Equal(tester, expected, string(contents))
@@ -358,4 +364,34 @@ func TestPillarMonitor_Fail(tester *testing.T) {
 
 	awaitPillarMonitor()
 	assert.Equal(tester, LICENSE_STATUS_INVALID, manager.status)
+}
+
+func TestValidateSubgridCount(tester *testing.T) {
+	defer setup()()
+
+	Init("")
+	manager.licenseKey.Subgrids = 0
+	assert.True(tester, ValidateSubgridCount(0))
+	assert.False(tester, ValidateSubgridCount(2))
+	manager.licenseKey.Subgrids = 2
+	assert.True(tester, ValidateSubgridCount(0))
+	manager.status = LICENSE_STATUS_ACTIVE
+	assert.True(tester, ValidateSubgridCount(0))
+	assert.True(tester, ValidateSubgridCount(1))
+	assert.True(tester, ValidateSubgridCount(2))
+	assert.False(tester, ValidateSubgridCount(3))
+}
+
+func TestValidateMgmtMac(tester *testing.T) {
+	defer setup()()
+
+	Init("")
+	manager.licenseKey.MgmtMac = " "
+	assert.True(tester, ValidateMgmtMac(""))
+	assert.True(tester, ValidateMgmtMac(" "))
+	manager.licenseKey.MgmtMac = "10:20:30:A0:B0:c0"
+	assert.True(tester, ValidateMgmtMac("10:20:30:A0:B0:C0"))
+	assert.True(tester, ValidateMgmtMac(" 10:20:30:a0:b0:C0 "))
+	assert.False(tester, ValidateMgmtMac(""))
+	assert.False(tester, ValidateMgmtMac("bar"))
 }

@@ -44,6 +44,7 @@ type Server struct {
 	Agent            *model.User
 	Context          context.Context
 	DetectionEngines map[model.EngineName]DetectionEngine
+	SubgridNodes     []*model.Node
 }
 
 func NewServer(cfg *config.ServerConfig, version string) *Server {
@@ -83,7 +84,7 @@ func (server *Server) Start() {
 		r.Use(web.Middleware(server.Host, false))
 		r.NotFound(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			log.WithFields(log.Fields{
-				"url":         r.URL,
+				"requestUrl":  r.URL.String(),
 				"requestId":   r.Context().Value(web.ContextKeyRequestId),
 				"requestorId": r.Context().Value(web.ContextKeyRequestorId),
 			}).Warn("404 Not Found")

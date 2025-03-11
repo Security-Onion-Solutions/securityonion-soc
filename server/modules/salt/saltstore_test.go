@@ -1117,6 +1117,7 @@ func TestUpdateSettingWithAnnotation(tester *testing.T) {
 	annotations["syntax"] = "yaml"
 	annotations["duplicates"] = true
 	annotations["jinjaEscaped"] = true
+	annotations["uiElementsDeleteMessage"] = "hi"
 
 	assert.False(tester, setting.Multiline)
 	salt.updateSettingWithAnnotation(setting, annotations)
@@ -1139,6 +1140,7 @@ func TestUpdateSettingWithAnnotation(tester *testing.T) {
 	assert.Equal(tester, "yaml", setting.Syntax)
 	assert.True(tester, setting.Duplicates)
 	assert.True(tester, setting.JinjaEscaped)
+	assert.Equal(tester, "hi", setting.UiElementsDeleteMessage)
 }
 
 func TestManageUser_AddUser(tester *testing.T) {
@@ -1329,9 +1331,24 @@ func TestReadSetting_UiElements(tester *testing.T) {
 	assert.NoError(tester, err)
 
 	setting := findSetting(settings, "myapp.ui_json", "")
-	assert.Equal(tester, 2, len(setting.UiElements))
+	assert.Equal(tester, 3, len(setting.UiElements))
 	assert.Equal(tester, "something", setting.UiElements[0].Field)
 	assert.Equal(tester, "something nice", setting.UiElements[0].Label)
+	assert.Equal(tester, "bool", setting.UiElements[0].ForcedType)
+	assert.Equal(tester, false, setting.UiElements[0].Multiline)
+	assert.Equal(tester, false, setting.UiElements[0].Required)
+	assert.Equal(tester, true, setting.UiElements[0].Readonly)
+
 	assert.Equal(tester, "another", setting.UiElements[1].Field)
 	assert.Equal(tester, "another thing", setting.UiElements[1].Label)
+	assert.Equal(tester, "red", setting.UiElements[1].Default)
+	assert.Equal(tester, "[]string", setting.UiElements[1].ForcedType)
+	assert.Equal(tester, []string{"blue", "red", "green"}, setting.UiElements[1].Options)
+
+	assert.Equal(tester, "one more", setting.UiElements[2].Field)
+	assert.Equal(tester, "But wait there's more", setting.UiElements[2].Label)
+	assert.Equal(tester, true, setting.UiElements[2].Required)
+	assert.Equal(tester, true, setting.UiElements[2].Multiline)
+	assert.Equal(tester, "^abc$", setting.UiElements[2].Regex)
+	assert.Equal(tester, "must conform", setting.UiElements[2].RegexFailureMessage)
 }

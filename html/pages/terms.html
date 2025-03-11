@@ -1,0 +1,207 @@
+<v-container fluid data-aid="terms_screen">
+	<v-row>
+		<v-col>
+			<h2 v-text="i18n.licensing"></h2>
+		</v-col>
+	</v-row>
+	<v-row>
+		<v-col>
+			<v-tabs v-model="tab">
+				<v-tab id="license_key" value="key" data-aid="terms_key_tab">
+					<v-icon class="mr-2">fa-key</v-icon>
+					{{ i18n.licenseKey }}
+				</v-tab>
+				<v-tab id="license_terms" value="terms" data-aid="terms_license_tab">
+					<v-icon class="mr-2">fa-file-lines</v-icon>
+					{{ i18n.licenseTerms }}
+				</v-tab>
+			</v-tabs>
+
+			<v-tabs-window v-model="tab">
+				<v-tabs-window-item value="key">
+					<v-card variant="outlined" class="my-2 pt-2 pb-10 subtle-border">
+						<v-card-title>
+							<span class="mr-2">
+								{{ i18n.licenseKey }}
+							</span>
+							<router-link v-if="$root.isUserAdmin()" :to="{ name: 'config', query: {s: 'soc.config.licenseKey'}}" style="text-decoration: none; cursor: 'pointer'">
+								<v-btn icon variant="text" size="small" data-aid="terms_license_edit">
+									<v-icon class="mx-2 theme-icon" :title="i18n.view">fa-pencil</v-icon>
+								</v-btn>
+							</router-link>
+						</v-card-title>
+						<v-card-text>
+							<v-container v-if="$root.licenseKey" fluid id="licenseDetails" class="float-left">
+								<v-row class="my-1">
+									<v-col cols="3" class="pa-1 text-right font-weight-bold">{{ i18n.licenseStatus }}:</v-col>
+									<v-col cols="9" class="px-1 py-0">
+										<v-chip density="compact" small :color="$root.colorLicenseStatus($root.licenseStatus)">
+											{{ $root.localizeMessage($root.licenseStatus) }}
+										</v-chip>
+									</v-col>
+								</v-row>
+								<v-row class="my-1">
+									<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.mgmtMac }}:</v-col>
+									<v-col cols="9" class="pa-1">
+										{{ $root.mgmtMac }}
+										<v-btn icon variant="text" class="mx-2" density="compact" size="small" @click="$root.copyToClipboard($root.mgmtMac)" data-aid="terms_license_copy_mac">
+											<v-icon>fa-copy</v-icon>
+										</v-btn>
+									</v-col>
+								</v-row>
+								<span v-if="$root.licenseKey && ($root.licenseStatus != LICENSE_STATUS_UNPROVISIONED && $root.licenseStatus != LICENSE_STATUS_INVALID)">
+									<v-row class="my-1">
+										<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.licenseId }}:</v-col>
+										<v-col cols="9" class="pa-1">{{ $root.licenseKey.id }}</v-col>
+									</v-row>
+									<v-row class="my-1">
+										<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.licenseName }}:</v-col>
+										<v-col cols="9" class="pa-1">{{ $root.licenseKey.name }}</v-col>
+									</v-row>
+									<v-row class="my-1">
+										<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.licensee }}:</v-col>
+										<v-col cols="9" class="pa-1">{{ $root.licenseKey.licensee }}</v-col>
+									</v-row>
+									<v-row class="my-1">
+										<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.licenseEffective }}:</v-col>
+										<v-col cols="9" class="pa-1">{{ formatDateTime($root.licenseKey.effective) }}</v-col>
+									</v-row>
+									<v-row class="my-1">
+										<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.licenseExpiration }}:</v-col>
+										<v-col cols="9" class="pa-1">{{ formatDateTime($root.licenseKey.expiration) }}</v-col>
+									</v-row>
+								</span>
+								<v-sheet v-else id="proFeatures" rounded="lg" class="marketing pa-4 ma-4" elevation="10">
+									<h3>You're missing out on some Pro features!</h3>
+									<ul class="my-2">
+										<li>OpenID Connect 3rd-party authentication</li>
+										<li>Disk encryption</li>
+										<li>FIPS OS compliance</li>
+										<li>STIG OS compliance</li>
+										<li>External notifications</li>
+										<li>Time tracking inside of Cases</li>
+										<li>Guaranteed Message Delivery</li>
+										<li>External API</li>
+										<li>Active Query Management</li>
+									</ul>
+									To learn more about these Pro features, please visit our website:
+									<a href="https://securityonion.com/pro">https://securityonion.com/pro</a>
+								</v-sheet>
+							</v-container>
+							<v-container v-if="$root.licenseKey && ($root.licenseStatus != LICENSE_STATUS_UNPROVISIONED && $root.licenseStatus != LICENSE_STATUS_INVALID)" fluid id="licenseDetails" class="float">
+								<v-row class="my-1">
+									<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.userLimit }}:</v-col>
+									<v-col v-if="$root.licenseKey.users > 0" cols="9" class="pa-1">{{ $root.licenseKey.users }}</v-col>
+									<v-col v-else cols="9" class="pa-1">{{ i18n.unlimited }}</v-col>
+								</v-row>
+								<v-row class="my-1">
+									<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.pinnedMac }}:</v-col>
+									<v-col v-if="$root.licenseKey.mgmtMac" cols="9" class="pa-1">{{ $root.licenseKey.mgmtMac }}</v-col>
+									<v-col v-else cols="9" class="pa-1">{{ i18n.unlocked }}</v-col>
+								</v-row>
+								<v-row class="my-1">
+									<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.nodeLimit }}:</v-col>
+									<v-col v-if="$root.licenseKey.nodes > 0" cols="9" class="pa-1">{{ $root.licenseKey.nodes }}</v-col>
+									<v-col v-else cols="9" class="pa-1">{{ i18n.unlimited }}</v-col>
+								</v-row>
+								<v-row class="my-1">
+									<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.subgridLimit }}:</v-col>
+									<v-col cols="9" class="pa-1">{{ $root.licenseKey.subgrids }}</v-col>
+								</v-row>
+								<v-row class="my-1">
+									<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.socUrl }}:</v-col>
+									<v-col v-if="$root.licenseKey.socUrl" cols="9" class="pa-1">{{ $root.licenseKey.socUrl }}</v-col>
+									<v-col v-else cols="9" class="pa-1">{{ i18n.unlocked }}</v-col>
+								</v-row>
+								<v-row class="my-1">
+									<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.dataUrl }}:</v-col>
+									<v-col v-if="$root.licenseKey.dataUrl" cols="9" class="pa-1">{{ $root.licenseKey.dataUrl }}</v-col>
+									<v-col v-else cols="9" class="pa-1">{{ i18n.unlocked }}</v-col>
+								</v-row>
+								<v-row class="my-1">
+									<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.features }}:</v-col>
+									<v-col v-if="$root.licenseKey.features" cols="9" class="pa-1">
+										<v-chip v-for="feature in $root.licenseKey.features" v-if="$root.localizeMessage(feature) != feature" small density="compact" class="ma-1">
+											{{ $root.localizeMessage(feature) }}
+										</v-chip>
+									</v-col>
+									<v-col v-else cols="9" class="pa-1">{{ i18n.all }}</v-col>
+								</v-row>
+							</v-container>
+					</v-card>
+				</v-tabs-window-item>
+
+				<v-tabs-window-item value="terms">
+					<v-card variant="outlined" class="my-4 subtle-border">
+						<v-card-text>
+							<div class="text-h5 mt-8 mb-3">
+								Elastic License 2.0 (ELv2) Terms
+							</div>
+
+							<div class="text-h6 mt-8 mb-3">
+								Acceptance
+							</div>
+							By using the software, you agree to all of the terms and conditions below.
+
+							<div class="text-h6 mt-8 mb-3">
+								Copyright License
+							</div>
+							The licensor grants you a non-exclusive, royalty-free, worldwide, non-sublicensable, non-transferable license to use, copy, distribute, make available, and prepare derivative works of the software, in each case subject to the limitations and conditions below.
+
+							<div class="text-h6 mt-8 mb-3">
+								Limitations
+							</div>
+							You may not provide the software to third parties as a hosted or managed service, where the service provides users with access to any substantial set of the features or functionality of the software.
+							<p class="mb-3"></p>
+							You may not move, change, disable, or circumvent the license key functionality in the software, and you may not remove or obscure any functionality in the software that is protected by the license key.
+							<p class="mb-3"></p>
+							You may not alter, remove, or obscure any licensing, copyright, or other notices of the licensor in the software. Any use of the licensor’s trademarks is subject to applicable law.
+
+							<div class="text-h6 mt-8 mb-3">
+								Patents
+							</div>
+							The licensor grants you a license, under any patent claims the licensor can license, or becomes able to license, to make, have made, use, sell, offer for sale, import and have imported the software, in each case subject to the limitations and conditions in this license. This license does not cover any patent claims that you cause to be infringed by modifications or additions to the software. If you or your company make any written claim that the software infringes or contributes to infringement of any patent, your patent license for the software granted under these terms ends immediately. If your company makes such a claim, your patent license ends immediately for work on behalf of your company.
+
+							<div class="text-h6 mt-8 mb-3">
+								Notices
+							</div>
+							You must ensure that anyone who gets a copy of any part of the software from you also gets a copy of these terms.
+							<p class="mb-3"></p>
+							If you modify the software, you must include in any modified copies of the software prominent notices stating that you have modified the software.
+
+							<div class="text-h6 mt-8 mb-3">
+								No Other Rights
+							</div>
+							These terms do not imply any licenses other than those expressly granted in these terms.
+
+							<div class="text-h6 mt-8 mb-3">
+								Termination
+							</div>
+							If you use the software in violation of these terms, such use is not licensed, and your licenses will automatically terminate. If the licensor provides you with a notice of your violation, and you cease all violation of this license no later than 30 days after you receive that notice, your licenses will be reinstated retroactively. However, if you violate these terms after such reinstatement, any additional violation of these terms will cause your licenses to terminate automatically and permanently.
+
+							<div class="text-h6 mt-8 mb-3">
+								No Liability
+							</div>
+							<b><i>As far as the law allows, the software comes as is, without any warranty or condition, and the licensor will not be liable to you for any damages arising out of these terms or the use or nature of the software, under any kind of legal claim.</i></b>
+
+							<div class="text-h6 mt-8 mb-3">
+								Definitions
+							</div>
+							The <b>licensor</b> is the entity offering these terms, and the <b>software</b> is the software the licensor makes available under these terms, including any portion of it.
+							<p class="mb-3"></p>
+							<b>you</b> refers to the individual or entity agreeing to these terms.
+							<p class="mb-3"></p>
+							<b>your company</b> is any legal entity, sole proprietorship, or other kind of organization that you work for, plus all organizations that have control over, are under the control of, or are under common control with that organization. <b>control</b> means ownership of substantially all the assets of an entity, or the power to direct its management and policies by vote, contract, or otherwise. Control can be direct or indirect.
+							<p class="mb-3"></p>
+							<b>your licenses</b> are all the licenses granted to you for the software under these terms.
+							<p class="mb-3"></p>
+							<b>use</b> means anything you do with the software requiring one of your licenses.
+							<p class="mb-3"></p>
+							<b>trademark</b> means trademarks, service marks, and similar rights.
+						</v-card-text>
+					</v-card>
+				</v-tabs-window-item>
+			</v-tabs-window>
+		</v-col>
+	</v-row>
+</v-container>

@@ -11,8 +11,28 @@ import (
 )
 
 type UiElement struct {
+	// (metadata) The field name to save this value as
 	Field string `json:"field" example:"some_key"`
+	// (metadata) The label to show on the UI
 	Label string `json:"label" example:"An Important Key"`
+	// (metadata) Indicates whether this setting's user interface display should allow the user to enter values onto multiple lines
+	Multiline bool `json:"multiline" example:"true"`
+	// (metadata) The type that the value will be converted to internally before applied to the component that uses it.
+	ForcedType string `json:"forcedType" example:"[]string"`
+	// (metadata) List of static values for a setting
+	Options []string `json:"options"`
+	// (metadata) For multi-select options, the separator string used to store them into a single string
+	OptionSeparator string `json:"optionSeparator"`
+	// (metadata) Default value for this UI element
+	Default interface{} `json:"default"`
+	// (metadata) If true this UI element must be specified by the user before it can be saved
+	Required bool `json:"required"`
+	// (metadata) If true this value cannot be changed after creation
+	Readonly bool `json:"readonly"`
+	// (metadata) An optional regular expression pattern that the value of this setting must match
+	Regex string `json:"regex" example:"^(true|false)$"`
+	// (metadata) The failure message to show on the user interface when the user enters a value that fails to match the regex.
+	RegexFailureMessage string `json:"regexFailureMessage" example:"Only true or false values are accepted"`
 }
 
 type Setting struct {
@@ -46,6 +66,8 @@ type Setting struct {
 	Regex string `json:"regex" example:"^(true|false)$"`
 	// (metadata) The failure message to show on the user interface when the user enters a value that fails to match the regex.
 	RegexFailureMessage string `json:"regexFailureMessage" example:"Only true or false values are accepted"`
+	// (metadata) If true this UI element must be specified by the user before it can be saved
+	Required bool `json:"required"`
 	// (metadata) Indicates whether the ID of this setting refers to a file on disk, in which case the changing the setting's value will replace the contents of the file on disk.
 	File bool `json:"file" example:"false"`
 	// (metadata) Indicates whether this setting should only be shown when the 'Show advanced settings' option is enabled in the user interface.
@@ -60,8 +82,14 @@ type Setting struct {
 	Duplicates bool `json:"duplicates" example:"false"`
 	// (metadata) Indicates whether the setting value allows Jinja2 escape characters. By default these are prohibited as a security precaution.
 	JinjaEscaped bool `json:"jinjaEscaped" example:"false"`
+	// (metadata) List of static values for a setting
+	Options []string `json:"options"`
+	// (metadata) For multi-select options, the separator string used to store them into a single string
+	OptionSeparator string `json:"optionSeparator"`
 	// (metadata) List of UiElement objects describing how the UI should present the field for input
 	UiElements []UiElement `json:"uiElements"`
+	// (metadata) Confirmation message to show when user clicks the delete button on a ui element. If omitted, no message will be shown.
+	UiElementsDeleteMessage string `json:"uiElementsDeleteMessage"`
 }
 
 func NewSetting(id string) *Setting {

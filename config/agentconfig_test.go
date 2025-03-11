@@ -28,4 +28,8 @@ func TestVerifyAgent(tester *testing.T) {
 	if assert.Nil(tester, err) {
 		assert.Equal(tester, 123, cfg.PollIntervalMs)
 	}
+
+	cfg.MgmtNic = "xyz/../../passwd"
+	err = cfg.Verify()
+	assert.ErrorContains(tester, err, "invalid characters")
 }

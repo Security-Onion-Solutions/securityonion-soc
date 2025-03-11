@@ -4,6 +4,8 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
+loadPageTemplate('page-job', 'pages/job.html');
+
 routes.push({ path: '/job/:jobId', name: 'job', component: {
   template: '#page-job',
   data() { return {
@@ -31,8 +33,7 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
     footerProps: { 'items-per-page-options': [10,50,250,1000] },
     count: 500,
     quickActionVisible: false,
-    quickActionX: 0,
-    quickActionY: 0,
+    quickActionTarget: [],
     quickActionEvent: null,
     quickActionField: "",
     quickActionValue: "",
@@ -103,8 +104,7 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
         this.quickActionEvent = event;
         this.quickActionField = field;
         this.quickActionValue = value;
-        this.quickActionX = domEvent.clientX;
-        this.quickActionY = domEvent.clientY;
+        this.quickActionTarget = [domEvent.clientX, domEvent.clientY];
         this.$nextTick(() => {
           this.quickActionVisible = true;
         });
