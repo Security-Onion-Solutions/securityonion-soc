@@ -996,3 +996,7 @@ ul ul ul {
 .pos-rel {
   position: relative;
 }
+
+.vert-divider {
+  margin-left: -4px;
+}
