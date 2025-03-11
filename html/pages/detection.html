@@ -253,7 +253,7 @@
 					<div v-if="newOverride != null">
 						<v-form ref="OverrideCreate" v-model="newOverrideValid">
 							<span data-aid="detection_new_override_type_select">
-								<v-select variant="underlined" id="new-override-type" v-model="newOverride.type" :items="getOverrideTypes()" persistent-hint :hint="i18n.type" @change="createOverrideTypeChange()"></v-select>
+								<v-select variant="underlined" id="new-override-type" v-model="newOverride.type" :items="getOverrideTypes()" persistent-hint :hint="i18n.type"></v-select>
 							</span>
 							<div v-if="!!newOverride.type && detect.engine === 'suricata'">
 								<v-text-field variant="underlined" v-if="newOverride.type === 'modify'" id="new-override-regex-edit" v-model="newOverride.regex" :rules="[rules.required]" persistent-hint :hint="i18n.regex" data-aid="detection_new_override_regex_input"></v-text-field>

@@ -36,6 +36,7 @@ components.push({
 				loading: false,
 				extractedSummary: '',
 				newOverride: null,
+				newOverrideValid: false,
 				overrideHeaders: {
 					'elastalert': [
 						{},
@@ -58,6 +59,7 @@ components.push({
 				rules: {
 					required: value => (value && value.length > 0) || this.$root.i18n.required,
 					number: value => (!isNaN(+value) && Number.isInteger(parseFloat(value))) || this.$root.i18n.required,
+					noteLengthLimit: value => (value.length <= MAX_OVERRIDE_NOTE_LENGTH) || this.$root.i18n.ruleMaxLen,
 					cidrFormat: value => (!value ||
 						/^!?\$[a-z_][a-z0-9_]*$/i.test(value) || // Suricata variable
 						/^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\/(3[0-2]|[12]\d|\d)$/.test(value) || // IPv4 CIDR
@@ -546,7 +548,7 @@ components.push({
 			},
 			closeDetectionPanel() {
 				this.emit('close');
-			}
+			},
 		},
 	}
 });

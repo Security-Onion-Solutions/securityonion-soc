@@ -1147,12 +1147,6 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 			return out;
 		},
-		createOverrideTypeChange() {
-			// reset the form, but we want the selected type to persist
-			const t = this.newOverride.type;
-			this.$refs.OverrideCreate.reset();
-			this.newOverride.type = t;
-		},
 		cancelNewOverride() {
 			this.$refs.OverrideCreate.reset();
 			this.newOverride = null;
