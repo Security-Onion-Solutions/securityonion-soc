@@ -273,7 +273,7 @@
 										<v-btn id="setting-global-reset" icon variant="text" size="small" @click="remove(selected)" :title="i18n.settingResetHelp" :disabled="!isSettingModified(selected) || isPendingSave(selected)" data-aid="config_item_reset" >
 											<v-icon color="primary">fa-circle-arrow-left</v-icon>
 										</v-btn>
-										<v-btn id="setting-global-save" icon variant="text" size="small" @click="save(selected)" :disabled="!isPendingSave(selected)" :title="i18n.settingSaveHelp" data-aid="config_item_save">
+										<v-btn id="setting-global-save" icon variant="text" size="small" @click="save(selected)" :key="form.value" :disabled="!isPendingSave(selected)" :title="i18n.settingSaveHelp" data-aid="config_item_save">
 											<v-icon color="success">fa-check</v-icon>
 										</v-btn>
 										<v-btn id="setting-global-cancel" icon variant="text" size="small" @click="userCancel()" :disabled="!isPendingSave(selected)" :title="i18n.settingCancelHelp" data-aid="config_item_cancel">
@@ -282,9 +282,17 @@
 									</div>
 									<v-expansion-panels v-if="hasUiElements(selected)" v-model="form.entriesExpanded">
 										<v-expansion-panel v-for="(entry, entryIdx) in form.entries" :key="entryIdx" @group:selected="edit(selected)" data-aid="config_item_entry_title">
-											<v-expansion-panel-title>
+											<v-expansion-panel-title hide-actions="true">
 												{{ entry._title }}
 												<v-chip v-if="!!entry._status" :color="entry._statusColor ? entry._statusColor : 'secondary'" variant="elevated" density="compact" rounted="xs" class="mx-4" v-text="entry._status"></v-chip>
+												<div v-if="entry._title != '+'" class="float-right ml-2">
+													<v-btn class="ma-1" size="small" rounded="sm" @click.stop="moveEntry(selected, entryIdx, true)" :disabled="!canMoveEntry(entryIdx, true)" data-aid="config_entry_move_up">
+														<v-icon>fa-arrow-up</v-icon>
+													</v-btn>
+													<v-btn class="ma-1" size="small" rounded="sm" @click.stop="moveEntry(selected, entryIdx, false)" :disabled="!canMoveEntry(entryIdx, false)" data-aid="config_entry_move_down">
+														<v-icon>fa-arrow-down</v-icon>
+													</v-btn>
+												</div>
 											</v-expansion-panel-title>
 											<v-expansion-panel-text>
 												<v-form v-model="uiElementsValid">
