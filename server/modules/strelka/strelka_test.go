@@ -183,6 +183,9 @@ strings:
 $my_text_string = "text here"
 $my_hex_string = { E2 34 A1 C8 23 FB }
 $badslashes = "\\var\\www\\html\\"
+/*
+Multiline comment
+*/
 $multilinehex = {
 46 DC EA D3 17 FE 45 D8 09 23
 EB 97 E4 95 64 10 D4 CD B2 C2
@@ -501,10 +504,7 @@ func TestParseRule(t *testing.T) {
 						`$my_text_string = "text here"`,
 						`$my_hex_string = { E2 34 A1 C8 23 FB }`,
 						`$badslashes = "\\var\\www\\html\\"`,
-						`$multilinehex = {`,
-						`46 DC EA D3 17 FE 45 D8 09 23`,
-						`EB 97 E4 95 64 10 D4 CD B2 C2`,
-						`}`,
+						"$multilinehex = {\n46 DC EA D3 17 FE 45 D8 09 23\nEB 97 E4 95 64 10 D4 CD B2 C2\n}",
 					},
 					Condition: `$my_text_string or $my_hex_string`,
 					Src:       WeirdRule,
