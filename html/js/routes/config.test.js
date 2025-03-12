@@ -1035,3 +1035,39 @@ test('convertMultilineElement', () => {
   comp.convertMultilineElement(element, modifiedEntry, true);
   expect(modifiedEntry.foo).toBe('');
 });
+
+test('canMoveEntry', () => {
+  comp.form.entries = [{_title: '1'}, {_title: '2'}, {_title: '+'}];
+  expect(comp.canMoveEntry(0, true)).toBe(false);
+  expect(comp.canMoveEntry(0, false)).toBe(true);
+  expect(comp.canMoveEntry(1, true)).toBe(true);
+  expect(comp.canMoveEntry(1, false)).toBe(false);
+  expect(comp.canMoveEntry(2, true)).toBe(true);
+  expect(comp.canMoveEntry(2, false)).toBe(false);
+
+  comp.form.entries = [{_title: '1'}, {_title: '2'}];
+  expect(comp.canMoveEntry(0, true)).toBe(false);
+  expect(comp.canMoveEntry(0, false)).toBe(true);
+  expect(comp.canMoveEntry(1, true)).toBe(true);
+  expect(comp.canMoveEntry(1, false)).toBe(false);
+});
+
+test('moveEntry', () => {
+  comp.form.entries = [{_title: '1'}, {_title: '2'}, {_title: '+'}];
+  comp.isPendingSave = jest.fn().mockReturnValue(false);
+  comp.editNow = jest.fn();
+  comp.generateEntryTitle = jest.fn();
+  comp.markDirtyEntries = jest.fn();
+
+  comp.moveEntry({}, 0, false);
+  expect(comp.isPendingSave).toHaveBeenCalledWith({});
+  expect(comp.editNow).toHaveBeenCalled();
+  expect(comp.generateEntryTitle).toHaveBeenCalledTimes(2);
+  expect(comp.markDirtyEntries).toHaveBeenCalled();
+  expect(comp.form.entries[0]._title).toBe('2');
+  expect(comp.form.entries[1]._title).toBe('1');
+
+  comp.moveEntry({}, 1, true);
+  expect(comp.form.entries[0]._title).toBe('1');
+  expect(comp.form.entries[1]._title).toBe('2');
+});
