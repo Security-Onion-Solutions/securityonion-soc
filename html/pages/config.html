@@ -273,7 +273,7 @@
 										<v-btn id="setting-global-reset" icon variant="text" size="small" @click="remove(selected)" :title="i18n.settingResetHelp" :disabled="!isSettingModified(selected) || isPendingSave(selected)" data-aid="config_item_reset" >
 											<v-icon color="primary">fa-circle-arrow-left</v-icon>
 										</v-btn>
-										<v-btn id="setting-global-save" icon variant="text" size="small" @click="save(selected)" :key="form.value" :disabled="!isPendingSave(selected)" :title="i18n.settingSaveHelp" data-aid="config_item_save">
+										<v-btn id="setting-global-save" icon variant="text" size="small" @click="save(selected)" :disabled="!isPendingSave(selected)" :title="i18n.settingSaveHelp" data-aid="config_item_save">
 											<v-icon color="success">fa-check</v-icon>
 										</v-btn>
 										<v-btn id="setting-global-cancel" icon variant="text" size="small" @click="userCancel()" :disabled="!isPendingSave(selected)" :title="i18n.settingCancelHelp" data-aid="config_item_cancel">
