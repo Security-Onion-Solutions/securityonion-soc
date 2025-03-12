@@ -852,6 +852,7 @@ func (e *StrelkaEngine) parseYaraRules(data []byte) ([]*YaraRule, error) {
 		if (curCommentType == '*' && last == '*' && r == '/') ||
 			(curCommentType == '/' && r == '\n') {
 			curCommentType = ' '
+			curQuotes = ' '
 
 			if last == '*' {
 				last = r
@@ -948,7 +949,7 @@ func (e *StrelkaEngine) parseYaraRules(data []byte) ([]*YaraRule, error) {
 				buffer.WriteRune(r)
 			}
 		case parseStateInSection:
-			if r == '\n' {
+			if r == '\n' && curQuotes != '}' {
 				buf := strings.TrimSpace(buffer.String())
 				if len(buf) != 0 && buf[len(buf)-1] == ':' && !strings.HasPrefix(buf, "for ") {
 					// found a header, new section
