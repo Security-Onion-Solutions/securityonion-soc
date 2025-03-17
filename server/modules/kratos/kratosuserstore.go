@@ -41,7 +41,12 @@ func (kratos *KratosUserstore) fetchUser(id string) (*KratosUser, error) {
 func (kratos *KratosUserstore) GetUserById(ctx context.Context, id string) (user *model.User, err error) {
 	logger := log.FromContext(ctx)
 
-	if err = kratos.server.CheckAuthorized(ctx, "read", "users"); err == nil {
+	if id != ctx.Value(web.ContextKeyRequestorId) {
+		// User is attempting to lookup info for another user; make sure user has permission to do so.
+		err = kratos.server.CheckAuthorized(ctx, "read", "users")
+	}
+
+	if err == nil {
 		logger.WithFields(log.Fields{
 			"userId":    id,
 			"requestId": ctx.Value(web.ContextKeyRequestId),
