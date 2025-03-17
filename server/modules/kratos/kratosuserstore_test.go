@@ -32,6 +32,20 @@ func TestUnauthorized(tester *testing.T) {
 	assert.Nil(tester, user)
 }
 
+func TestGetUserById_NotAuthorized(t *testing.T) {
+	fakeServer := server.NewFakeUnauthorizedServer()
+	userStore := NewKratosUserstore(fakeServer)
+
+	ctx := context.Background()
+	userID := "test-user-id"
+
+	user, err := userStore.GetUserById(ctx, userID)
+
+	assert.Error(t, err)
+	assert.Nil(t, user)
+	assert.Contains(t, err.Error(), "Subject 'fake-subject' is not authorized to perform operation 'read' on target 'users'")
+}
+
 func TestShouldNotPopulateUserDetails(t *testing.T) {
 	userStore := NewKratosUserstore(server.NewFakeUnauthorizedServer())
 	kratosUser := &KratosUser{
