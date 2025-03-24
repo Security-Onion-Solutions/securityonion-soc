@@ -754,49 +754,52 @@ routes.push({
         return;
       }
       setTimeout(() => {
-        if (nodeId) {
-          if ((this.form.key == nodeId) || !this.cancel()) return;
-          this.form.key = nodeId;
-          this.form.value = setting.nodeValues.get(nodeId);
-          this.$root.drawAttention('#setting-node-save-' + nodeId);
-        } else {
-          if ((this.form.key == setting.id) || !this.cancel()) return;
-          this.form.key = setting.id;
-          this.form.value = setting.value;
-          this.$root.drawAttention('#setting-global-save');
-        }
-
-        if (setting.options && this.hasMultipleValues(setting)) {
-          const sep = setting.optionSeparator ? setting.optionSeparator : "\n";
-          var val = this.form.value.trim();
-          if (val.endsWith(sep)) {
-            val = val.substring(0, val.length - sep.length - 1)
-          }
-          if (val.startsWith(sep)) {
-            val = val.substring(sep.length)
-          }
-          this.form.value = val.split(sep);
-        }
-
-        if (this.isToggle(setting)) return;
-
-        // transfer caret position from non-edit element to edit element
-        let selector = nodeId ? 'node-value-output-' + nodeId : 'value-output';
-        const before = document.getElementById(selector);
-        const scrollTop = before?.scrollTop || 0;
-        const selStart = before?.selectionStart || 0;
-        const selEnd = before?.selectionEnd || 0;
-        this.$nextTick(() => {
-          selector = nodeId ? 'node-value-input-' + nodeId : 'value-input';
-          const after = document.getElementById(selector);
-          if (after && typeof scrollTop !== 'undefined' &&
-            typeof selStart !== 'undefined' && typeof selEnd !== 'undefined') {
-            after.focus();
-            after.scrollTop = scrollTop;
-            after.setSelectionRange(selStart, selEnd);
-          }
-        });
+        this.editNow(setting, nodeId);
       }, 1);
+    },
+    editNow(setting, nodeId) {
+      if (nodeId) {
+        if ((this.form.key == nodeId) || !this.cancel()) return;
+        this.form.key = nodeId;
+        this.form.value = setting.nodeValues.get(nodeId);
+        this.$root.drawAttention('#setting-node-save-' + nodeId);
+      } else {
+        if ((this.form.key == setting.id) || !this.cancel()) return;
+        this.form.key = setting.id;
+        this.form.value = setting.value;
+        this.$root.drawAttention('#setting-global-save');
+      }
+
+      if (setting.options && this.hasMultipleValues(setting)) {
+        const sep = setting.optionSeparator ? setting.optionSeparator : "\n";
+        var val = this.form.value.trim();
+        if (val.endsWith(sep)) {
+          val = val.substring(0, val.length - sep.length - 1)
+        }
+        if (val.startsWith(sep)) {
+          val = val.substring(sep.length)
+        }
+        this.form.value = val.split(sep);
+      }
+
+      if (this.isToggle(setting)) return;
+
+      // transfer caret position from non-edit element to edit element
+      let selector = nodeId ? 'node-value-output-' + nodeId : 'value-output';
+      const before = document.getElementById(selector);
+      const scrollTop = before?.scrollTop || 0;
+      const selStart = before?.selectionStart || 0;
+      const selEnd = before?.selectionEnd || 0;
+      this.$nextTick(() => {
+        selector = nodeId ? 'node-value-input-' + nodeId : 'value-input';
+        const after = document.getElementById(selector);
+        if (after && typeof scrollTop !== 'undefined' &&
+          typeof selStart !== 'undefined' && typeof selEnd !== 'undefined') {
+          after.focus();
+          after.scrollTop = scrollTop;
+          after.setSelectionRange(selStart, selEnd);
+        }
+      });
     },
     addNode(setting, nodeId) {
       if (this.cancel() && setting && nodeId) {
@@ -848,6 +851,35 @@ routes.push({
         return true;
       }
       return false;
-    }
+    },
+    canMoveEntry(idx, up) {
+      var lastIdx = this.form.entries.length - 1;
+      if (this.form.entries[lastIdx]._title == "+") {
+        // The bottom entry is a + which means its for adding new entries. It cannot be moved
+        // and the item above it cannot be moved below it.
+        lastIdx -= 1;
+      }
+      if (up && idx == 0) {
+        // Top entry cannot be moved up
+        return false;
+      } else if (!up && idx >= lastIdx) {
+        // Bottom entry cannot be moved down
+        return false
+      }
+      return true
+    },
+    moveEntry(selected, oldIdx, up) {
+      if (!this.isPendingSave(selected)) {
+        this.editNow(selected);
+      }
+      const newIdx = oldIdx + (up ? -1 : 1);
+      const element1 = this.form.entries[oldIdx];
+      const element2 = this.form.entries[newIdx];
+      this.form.entries[oldIdx] = element2;
+      this.form.entries[newIdx] = element1;
+      this.generateEntryTitle(element1, newIdx);
+      this.generateEntryTitle(element2, oldIdx);
+      this.markDirtyEntries();
+    },
   }
 }});

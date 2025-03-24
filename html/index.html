@@ -44,7 +44,7 @@
           </div>
           <div id="license-indicator" v-else-if="isLicenseExpiringSoon()">
             <v-icon class="mr-2" color="warning">fa-key</v-icon>
-            <span v-text="i18n.licenseExpiringSoon" class="d-none d-md-inline" data-aid="license_expiring_notice"></span>
+            <span v-text="i18n.licenseExpiringSoon" class="d-none d-md-inline text-white" data-aid="license_expiring_notice"></span>
           </div>
           <v-spacer></v-spacer>
           <v-menu bottom left offset-y>
@@ -286,7 +286,7 @@
                 </template>
                 <v-list-item-title v-text="i18n.clients"></v-list-item-title>
               </v-list-item>
-              <v-list-item v-if="isLicensed('qry')" data-aid="nav_admin_active_queries" v-if="$root.isUserAdmin()" @click="" to="/queries">
+              <v-list-item v-if="isLicensed('qry') && $root.isUserAdmin()" data-aid="nav_admin_active_queries" @click="" to="/queries">
                 <template #prepend>
                   <v-icon>fa-clock</v-icon>
                 </template>
