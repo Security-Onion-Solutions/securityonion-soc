@@ -313,7 +313,7 @@
 									<div v-else>
 										<div v-if="isToggle(selected)">
 											<div v-if="form.key != selected.id || isReadOnly(selected)">
-												<v-chip id="value-output" :color="$root.isTrue(selected.value) ? 'primary' : 'secondary'" append-icon="fa-pencil" @click="edit(selected)" data-aid="config_item_customize_slider_display">{{$root.isTrue(selected.value) ? i18n.enabled : i18n.disabled }}</v-chip>
+												<v-chip id="value-output" :color="$root.isTrue(selected.value) ? 'primary' : ''" append-icon="fa-pencil" @click="edit(selected)" data-aid="config_item_customize_slider_display">{{$root.isTrue(selected.value) ? i18n.enabled : i18n.disabled }}</v-chip>
 												<span class="setting_label mx-4">{{ i18n.settingGlobal }}</span>
 											</div>
 											<v-switch v-else id="value-input" :label="i18n.settingGlobal" true-value="true" v-model="form.value" class="editing config-editor no-details" data-aid="config_item_customize_slider_input"></v-switch>
