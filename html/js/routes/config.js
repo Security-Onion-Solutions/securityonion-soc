@@ -676,7 +676,8 @@ routes.push({
       if (setting) {
         if (this.form.value instanceof Array) {
           this.form.value = this.form.value.join(setting.optionSeparator ? setting.optionSeparator : "\n");
-        }
+        } 
+        this.form.value = "" + this.form.value; // ensure string
         this.form.value = this.form.value.trim();
         if (!this.uiElementsHaveValidInputs(setting)) {
           this.$root.showWarning(this.i18n.settingIncomplete)

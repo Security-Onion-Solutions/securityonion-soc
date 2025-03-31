@@ -489,6 +489,16 @@ test('save', async () => {
   expect(mock).toHaveBeenCalledWith('config/', {"id": "s-id", "nodeId": "n2", "value": "test-value"});
 });
 
+test('saveBool', async () => {
+  setupSettings();
+  comp.form.value = true;
+  comp.form.key = "s-id";
+  var mock = mockPapi("put");
+  await comp.save(comp.settings[0], null);
+  expect(comp.settings[0].value).toBe("true")
+  expect(mock).toHaveBeenCalledWith('config/', {"id": "s-id", "nodeId": null, "value": "true"});
+});
+
 test('saveRegexFailure', async () => {
   comp.settings = [{
     id: 'test.id',
