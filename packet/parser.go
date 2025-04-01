@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/apex/log"
 	"github.com/google/gopacket"
@@ -112,6 +113,9 @@ func addBpf(bpf string, part string) string {
 
 func createBpf(filter *model.Filter) string {
 	query := filter.Protocol
+	if query == "icmp" && (strings.Contains(filter.SrcIp, ":") || strings.Contains(filter.DstIp, ":")) {
+		query = "icmp6"
+	}
 
 	if len(filter.SrcIp) > 0 {
 		query = addBpf(query, fmt.Sprintf("host %s", filter.SrcIp))
