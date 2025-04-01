@@ -17,6 +17,7 @@ config/read:      config-monitor
 config/write:     config-admin
 detections/read:  detection-monitor
 detections/write: detection-admin
+elasticsearch:proxy:execute: superuser # Add new permission for ES proxy
 events/read:      event-monitor
 events/write:     event-admin
 events/ack:       event-admin

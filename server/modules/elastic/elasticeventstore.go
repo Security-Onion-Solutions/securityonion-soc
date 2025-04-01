@@ -116,6 +116,12 @@ func (store *ElasticEventstore) Init(hostUrl string,
 	return err
 }
 
+// GetClient returns the underlying Elasticsearch client.
+// This is needed by handlers that require direct ES access, like the proxy.
+func (store *ElasticEventstore) GetClient() *elasticsearch.Client {
+	return store.esClient
+}
+
 func (store *ElasticEventstore) truncate(input string) string {
 	if len(input) > store.maxLogLength {
 		return input[:store.maxLogLength] + "..."

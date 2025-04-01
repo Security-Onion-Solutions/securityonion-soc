@@ -108,6 +108,7 @@ func (server *Server) Start() {
 		RegisterRolesRoutes(server, r, "/api/roles")
 		RegisterDetectionRoutes(server, r, "/api/detection")
 		RegisterUtilRoutes(server, r, "/api/util")
+		RegisterElasticsearchRoutes(server, r, "/api/v1/elasticsearch") // Register the new ES proxy route
 
 		server.Host.RegisterRouter("/api/", r)
 

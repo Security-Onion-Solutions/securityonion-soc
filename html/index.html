@@ -292,6 +292,12 @@
                 </template>
                 <v-list-item-title v-text="i18n.activeQueries"></v-list-item-title>
               </v-list-item>
+              <v-list-item data-aid="nav_admin_es_console" v-if="$root.isUserAdmin()" href="pages/elasticsearch_console.html">
+                <template #prepend>
+                  <v-icon>fa-terminal</v-icon> <!-- Added ES Console Link -->
+                </template>
+                <v-list-item-title>Elasticsearch Console</v-list-item-title>
+              </v-list-item>
               <v-list-item data-aid="nav_admin_members" v-if="$root.isUserAdmin()" @click="" to="/gridmembers">
                 <template #prepend>
                   <v-icon>fa-circle-nodes</v-icon>

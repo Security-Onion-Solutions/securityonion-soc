@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elasticsearch Console - Security Onion</title>
+    <!-- Link to existing CSS or add specific styles -->
+    <link rel="stylesheet" href="../css/app.css">
+    <style>
+        /* Add specific styles for the console page */
+        #es-console-container {
+            display: flex;
+            flex-direction: column;
+            height: calc(100vh - 100px); /* Adjust based on header/footer height */
+            padding: 15px;
+        }
+        #es-request, #es-response {
+            flex: 1;
+            font-family: monospace;
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 10px;
+            overflow: auto;
+            white-space: pre; /* Preserve whitespace */
+        }
+        #es-request {
+             min-height: 150px; /* Ensure request area is usable */
+             resize: vertical; /* Allow vertical resizing */
+        }
+        #es-response {
+            background-color: #f5f5f5;
+        }
+        #es-controls {
+            margin-bottom: 10px;
+        }
+        #es-controls button {
+            padding: 8px 15px;
+            cursor: pointer;
+        }
+        /* Basic editor styling */
+        textarea {
+            width: 100%;
+            box-sizing: border-box; /* Include padding and border in element's total width and height */
+        }
+    </style>
+</head>
+<body>
+    <!-- Placeholder for potential header/navigation inclusion -->
+    <h1>Elasticsearch Console</h1>
+
+    <div id="es-console-container">
+        <div id="es-controls">
+             <select id="es-method" name="method">
+                <option value="GET">GET</option>
+                <option value="POST" selected>POST</option>
+                <option value="PUT">PUT</option>
+                <option value="DELETE">DELETE</option>
+                <option value="HEAD">HEAD</option>
+            </select>
+            <input type="text" id="es-path" placeholder="/_search" style="width: 400px; padding: 8px;">
+            <button id="send-request-btn">Send Request</button>
+        </div>
+
+        <label for="es-request">Request Body:</label>
+        <textarea id="es-request" rows="10" placeholder="{&#10;  "query": {&#10;    "match_all": {}&#10;  }&#10;}"></textarea>
+
+        <label for="es-response">Response:</label>
+        <pre id="es-response">Response will appear here...</pre>
+    </div>
+
+    <!-- Link to JS file for functionality -->
+    <script src="../js/elasticsearch_console.js"></script>
+    <!-- Placeholder for potential footer inclusion -->
+</body>
+</html>
