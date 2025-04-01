@@ -382,8 +382,8 @@
 							</v-container>
 						</template>
 						<v-col cols="12" style="position: relative;">
-							<v-data-table ref="eventTable" :search="eventFilter" :sort-by="sortBy" @update:sort-by="val => sortBy = val" item-value="soc_id" :footer-props="footerProps" :data-aid="'events_table_' + category"
-								:items-per-page="itemsPerPage" must-sort :headers="eventHeaders" :items="eventData" :page.sync="eventPage" show-select :custom-sort="sortEvents" density="compact" @current-items="val => eventCurrentItems = val">
+							<v-data-table ref="eventTable" :search="eventFilter" :sort-by="sortBy" @update:sort-by="val => sortBy = val" item-value="soc_id" :items-per-page-options="itemsPerPageOptions" :data-aid="'events_table_' + category"
+								:items-per-page="itemsPerPage" must-sort :headers="eventHeaders" :items="eventData" v-model:page="eventPage" show-select :custom-sort="sortEvents" density="compact" @current-items="val => eventCurrentItems = val">
 								<template #top="data">
 									<!-- not-fancy way to access the current page of items:
 									https://stackoverflow.com/questions/76008941/vuetify-3-data-table-current-items

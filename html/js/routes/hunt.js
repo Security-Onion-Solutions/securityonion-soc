@@ -89,7 +89,7 @@ const huntComponent = {
     sortBy: [{ key: 'soc_timestamp', order: 'desc' }],
     sortDesc: true,
     itemsPerPage: 10,
-    footerProps: { 'items-per-page-options': [10,25,50,100,200,500,1000] },
+    itemsPerPageOptions: [10,25,50,100,200,500,1000],
 
     expandedHeaders: [
       { title: "key", value: "key" },

@@ -81,8 +81,8 @@
 					</v-card-actions>
 				</v-card>
 			</v-dialog>
-			<v-data-table :sort-by="sortBy" @update:sort-by="val => sortBy = val" :footer-props="footerProps" data-aid="clients_details"
-				:items-per-page.sync="itemsPerPage" must-sort :headers="headers" :items="clients" v-model:expanded="expanded">
+			<v-data-table :sort-by="sortBy" @update:sort-by="val => sortBy = val" :items-per-page-options="itemsPerPageOptions" data-aid="clients_details"
+				v-model:items-per-page="itemsPerPage" must-sort :headers="headers" :items="clients" v-model:expanded="expanded">
 				<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
 					<tr>
 						<template v-for="header in columns" :key="header.key">

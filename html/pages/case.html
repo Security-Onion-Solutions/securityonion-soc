@@ -318,8 +318,8 @@
 							</v-col>
 						</v-row>
 						<v-text-field v-model="associatedTable['attachments'].search" variant="underlined" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details class="mx-4" data-aid="case_attachments_filter_input"></v-text-field>
-						<v-data-table ref="attachmentsTable" must-sort :sort-by="associatedTable['attachments'].sortBy" :items-per-page.sync="associatedTable['attachments'].itemsPerPage"
-							:search="associatedTable['attachments'].search" :footer-props="associatedTable['attachments'].footerProps" :headers="associatedTable['attachments'].headers"
+						<v-data-table ref="attachmentsTable" must-sort :sort-by="associatedTable['attachments'].sortBy" v-model:items-per-page="associatedTable['attachments'].itemsPerPage"
+							:search="associatedTable['attachments'].search" :items-per-page-options="associatedTable['attachments'].itemsPerPageOptions" :headers="associatedTable['attachments'].headers"
 							:items="associations['attachments']" item-key="id" :loading="associatedTable['attachments'].loading" class="case-table">
 							<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
 								<tr>
@@ -613,8 +613,8 @@
 							</v-col>
 						</v-row>
 						<v-text-field variant="underlined" v-model="associatedTable['evidence'].search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="case_evidence_filter"></v-text-field>
-						<v-data-table ref="evidenceTable" :sort-by.sync="associatedTable['evidence'].sortBy" :items-per-page.sync="associatedTable['evidence'].itemsPerPage"
-							:search="associatedTable['evidence'].search" :footer-props="associatedTable['evidence'].footerProps" must-sort :headers="associatedTable['evidence'].headers"
+						<v-data-table ref="evidenceTable" v-model:sort-by="associatedTable['evidence'].sortBy" v-model:items-per-page="associatedTable['evidence'].itemsPerPage"
+							:search="associatedTable['evidence'].search" must-sort :items-per-page-options="associatedTable['evidence'].itemsPerPageOptions" :headers="associatedTable['evidence'].headers"
 							:items="associations['evidence']" item-key="id" :loading="associatedTable['evidence'].loading" class="case-table">
 							<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
 								<tr>
@@ -929,8 +929,8 @@
 							</v-col>
 						</v-row>
 						<v-text-field variant="underlined" v-model="associatedTable['events'].search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="case_events_filter"></v-text-field>
-						<v-data-table ref="eventsTable" :sort-by="associatedTable['events'].sortBy" :items-per-page.sync="associatedTable['events'].itemsPerPage"
-							:search="associatedTable['events'].search" :footer-props="associatedTable['events'].footerProps" must-sort :headers="associatedTable['events'].headers"
+						<v-data-table ref="eventsTable" :sort-by="associatedTable['events'].sortBy" v-model:items-per-page="associatedTable['events'].itemsPerPage"
+							:search="associatedTable['events'].search" :items-per-page-options="associatedTable['events'].itemsPerPageOptions" must-sort :headers="associatedTable['events'].headers"
 							:items="associations['events']" item-key="id" :loading="associatedTable['events'].loading" :expanded="associatedTable['events'].expanded" class="case-table">
 							<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
 								<tr>
@@ -1031,8 +1031,8 @@
 							</v-col>
 						</v-row>
 						<v-text-field variant="underlined" v-model="associatedTable['history'].search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="case_history_filter_input"></v-text-field>
-						<v-data-table id="history" ref="historyTable" :sort-by="associatedTable['history'].sortBy" :items-per-page.sync="associatedTable['history'].itemsPerPage"
-							:search="associatedTable['history'].search" :footer-props="associatedTable['history'].footerProps" must-sort :headers="associatedTable['history'].headers"
+						<v-data-table id="history" ref="historyTable" :sort-by="associatedTable['history'].sortBy" v-model:items-per-page="associatedTable['history'].itemsPerPage"
+							:search="associatedTable['history'].search" :items-per-page-options="associatedTable['history'].itemsPerPageOptions" must-sort :headers="associatedTable['history'].headers"
 							:items="associations['history']" item-key="id" :loading="associatedTable['history'].loading" :expanded="associatedTable['history'].expanded" class="case-table">
 							<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
 								<tr>
