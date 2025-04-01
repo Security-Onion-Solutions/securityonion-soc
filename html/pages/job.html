@@ -132,8 +132,8 @@
 					<v-icon class="theme-text">fa-download</v-icon>
 				</v-btn>
 			</v-toolbar>
-			<v-data-table ref="packetTable" :sort-by="sortBy" @update:sort-by="val => sortBy = val" :items-per-page.sync="itemsPerPage"
-				:search="search" :footer-props="footerProps" must-sort :headers="headers" :hide-default-header="!isOptionEnabled('packets')"
+			<v-data-table ref="packetTable" :sort-by="sortBy" @update:sort-by="val => sortBy = val" v-model:items-per-page="itemsPerPage"
+				:search="search" :items-per-page-options="itemsPerPageOptions" must-sort :headers="headers" :hide-default-header="!isOptionEnabled('packets')"
 				:items="packets" item-value="number" :loading="packetsLoading" :expanded="expanded" @update:expanded="val => expanded = val">
 				<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
 					<tr>

@@ -30,7 +30,7 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
     ],
     sortBy: [{ key: 'number', order: 'asc' }],
     itemsPerPage: 10,
-    footerProps: { 'items-per-page-options': [10,50,250,1000] },
+    itemsPerPageOptions: [10,50,250,1000],
     count: 500,
     quickActionVisible: false,
     quickActionTarget: [],

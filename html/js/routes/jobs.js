@@ -39,7 +39,7 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
       dstPort: null,
       timeframe: '',
     },
-    footerProps: { 'items-per-page-options': [10,50,250,1000] },
+    itemsPerPageOptions: [10,50,250,1000],
     kind: '',
   }},
   created() {

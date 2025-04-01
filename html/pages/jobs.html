@@ -12,7 +12,7 @@
 					<v-icon>fa-plus</v-icon>
 				</v-btn>
 			</v-toolbar>
-			<v-data-table :sort-by="sortBy" @update:sort-by="val => sortBy = val" :footer-props="footerProps" :items-per-page="itemsPerPage"
+			<v-data-table :sort-by="sortBy" @update:sort-by="val => sortBy = val" :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage"
 				must-sort :headers="headers" :items="jobs">
 				<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
 					<tr>
