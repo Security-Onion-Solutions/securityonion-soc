@@ -13,7 +13,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"strings"
 	"time"
 
 	"github.com/apex/log"
@@ -155,49 +154,4 @@ func (importer *Importer) CleanupJob(job *model.Job) {
 func (importer *Importer) GetDataEpoch() time.Time {
 	// Epoch not used for imported data, return current time
 	return time.Now()
-}
-
-func (importer *Importer) buildQuery(job *model.Job) string {
-	query := ""
-
-	if len(job.Filter.Protocol) > 0 {
-		filter := job.Filter.Protocol
-		if strings.HasPrefix(job.Filter.Protocol, model.PROTOCOL_ICMP) {
-			filter = "(icmp or icmp6)"
-		}
-
-		query = fmt.Sprintf("%s and %s", query, filter)
-	}
-
-	if len(job.Filter.SrcIp) > 0 {
-		if len(query) > 0 {
-			query = query + " and"
-		}
-		query = fmt.Sprintf("%s host %s", query, job.Filter.SrcIp)
-	}
-
-	if len(job.Filter.DstIp) > 0 {
-		if len(query) > 0 {
-			query = query + " and"
-		}
-		query = fmt.Sprintf("%s host %s", query, job.Filter.DstIp)
-	}
-
-	if !strings.HasPrefix(job.Filter.Protocol, model.PROTOCOL_ICMP) {
-		if job.Filter.SrcPort > 0 {
-			if len(query) > 0 {
-				query = query + " and"
-			}
-			query = fmt.Sprintf("%s port %d", query, job.Filter.SrcPort)
-		}
-
-		if job.Filter.DstPort > 0 {
-			if len(query) > 0 {
-				query = query + " and"
-			}
-			query = fmt.Sprintf("%s port %d", query, job.Filter.DstPort)
-		}
-	}
-
-	return query
 }
