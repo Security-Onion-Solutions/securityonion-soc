@@ -24,6 +24,9 @@ type Question struct {
 	Context       string
 	AnswerSources []string `yaml:"answer_sources"`
 	Query         string
-	OQL           string
 	Range         *string
+
+	// converted queries get their values stored here
+	OQL    string
+	Fields []string
 }
