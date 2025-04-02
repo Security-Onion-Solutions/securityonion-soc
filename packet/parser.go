@@ -80,7 +80,7 @@ func filterPacket(filter *model.Filter, packet gopacket.Packet) bool {
 func ParseRawPcap(filename string, maxCount int, filter *model.Filter) ([]gopacket.Packet, error) {
 	packets := make([]gopacket.Packet, 0)
 	currentCount := 0
-	err := parsePcapFile(filename, CreateBpf(filter), func(index int, pcapPacket gopacket.Packet) bool {
+	err := parsePcapFile(filename, CreateBpf(filter, true), func(index int, pcapPacket gopacket.Packet) bool {
 		if filterPacket(filter, pcapPacket) {
 			packets = append(packets, pcapPacket)
 			currentCount += 1
@@ -115,7 +115,7 @@ func AddBpf(bpf string, part string) string {
 
 }
 
-func CreateBpf(filter *model.Filter) string {
+func CreateBpf(filter *model.Filter, vlanEnabled bool) string {
 	query := filter.Protocol
 	if strings.HasPrefix(filter.Protocol, model.PROTOCOL_ICMP) {
 		query = "(icmp or icmp6)"
@@ -141,7 +141,7 @@ func CreateBpf(filter *model.Filter) string {
 	}
 
 	// Repeat the query but with vlan applied
-	if len(query) > 0 {
+	if vlanEnabled && len(query) > 0 {
 		query = fmt.Sprintf("(%s) or (vlan and %s)", query, query)
 	}
 

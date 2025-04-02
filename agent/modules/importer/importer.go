@@ -92,7 +92,7 @@ func (importer *Importer) ProcessJob(job *model.Job, reader io.ReadCloser) (io.R
 	} else {
 		job.FileExtension = "pcap"
 
-		query := packet.CreateBpf(job.Filter)
+		query := packet.CreateBpf(job.Filter, false)
 
 		pcapInputFilepath := fmt.Sprintf("%s/%s/pcap/data.pcap", importer.pcapInputPath, job.Filter.ImportId)
 		pcapOutputFilepath := fmt.Sprintf("%s/%d.%s", importer.pcapOutputPath, job.Id, job.FileExtension)

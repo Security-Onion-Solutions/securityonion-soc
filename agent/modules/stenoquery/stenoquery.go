@@ -176,7 +176,7 @@ func (steno *StenoQuery) CreateQuery(job *model.Job) string {
 	endTime := job.Filter.EndTime.Format(time.RFC3339)
 
 	query := fmt.Sprintf("before %s and after %s", endTime, beginTime)
-	filter := packet.CreateBpf(job.Filter)
+	filter := packet.CreateBpf(job.Filter, false)
 	if len(filter) > 0 {
 		filter = "(" + filter + ")"
 	}
