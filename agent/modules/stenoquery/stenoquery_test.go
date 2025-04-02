@@ -84,7 +84,7 @@ func TestCreateQueryIcmp(tester *testing.T) {
 
 	job.Filter.Protocol = model.PROTOCOL_ICMP
 	query = sq.CreateQuery(job)
-	expectedQuery = expectedQuery + " and icmp"
+	expectedQuery = expectedQuery + " and (icmp or icmp6)"
 	assert.Equal(tester, expectedQuery, query)
 
 	job.Filter.SrcIp = "1.2.3.4"

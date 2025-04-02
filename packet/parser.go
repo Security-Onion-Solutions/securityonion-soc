@@ -98,7 +98,7 @@ func ParseRawPcap(filename string, maxCount int, filter *model.Filter) ([]gopack
 	return packets, err
 }
 
-func addBpf(bpf string, part string) string {
+func AddBpf(bpf string, part string) string {
 	newBpf := bpf
 
 	if len(newBpf) > 0 {
@@ -111,10 +111,10 @@ func addBpf(bpf string, part string) string {
 
 }
 
-func createBpf(filter *model.Filter) string {
+func CreateBpf(filter *model.Filter) string {
 	query := filter.Protocol
-	if query == "icmp" && (strings.Contains(filter.SrcIp, ":") || strings.Contains(filter.DstIp, ":")) {
-		query = "icmp6"
+	if strings.HasPrefix(filter.Protocol, model.PROTOCOL_ICMP) {
+		query = "(icmp or icmp6)"
 	}
 
 	if len(filter.SrcIp) > 0 {
@@ -126,7 +126,7 @@ func createBpf(filter *model.Filter) string {
 	}
 
 	// Some legacy jobs won't have the protocol provided
-	if filter.Protocol != model.PROTOCOL_ICMP {
+	if !strings.HasPrefix(filter.Protocol, model.PROTOCOL_ICMP) {
 		if filter.SrcPort > 0 {
 			query = addBpf(query, fmt.Sprintf("port %d", filter.SrcPort))
 		}

@@ -13,6 +13,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/apex/log"
@@ -20,6 +21,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/agent"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
+	"github.com/security-onion-solutions/securityonion-soc/packet"
 )
 
 const DEFAULT_EXECUTABLE_PATH = "tcpdump"
@@ -91,7 +93,7 @@ func (importer *Importer) ProcessJob(job *model.Job, reader io.ReadCloser) (io.R
 	} else {
 		job.FileExtension = "pcap"
 
-		query := importer.buildQuery(job)
+		query := packet.CreateBpf(job.Filter)
 
 		pcapInputFilepath := fmt.Sprintf("%s/%s/pcap/data.pcap", importer.pcapInputPath, job.Filter.ImportId)
 		pcapOutputFilepath := fmt.Sprintf("%s/%d.%s", importer.pcapOutputPath, job.Id, job.FileExtension)
@@ -158,6 +160,15 @@ func (importer *Importer) GetDataEpoch() time.Time {
 func (importer *Importer) buildQuery(job *model.Job) string {
 	query := ""
 
+	if len(job.Filter.Protocol) > 0 {
+		filter := job.Filter.Protocol
+		if strings.HasPrefix(job.Filter.Protocol, model.PROTOCOL_ICMP) {
+			filter = "(icmp or icmp6)"
+		}
+
+		query = fmt.Sprintf("%s and %s", query, filter)
+	}
+
 	if len(job.Filter.SrcIp) > 0 {
 		if len(query) > 0 {
 			query = query + " and"
@@ -172,18 +183,20 @@ func (importer *Importer) buildQuery(job *model.Job) string {
 		query = fmt.Sprintf("%s host %s", query, job.Filter.DstIp)
 	}
 
-	if job.Filter.SrcPort > 0 {
-		if len(query) > 0 {
-			query = query + " and"
+	if !strings.HasPrefix(job.Filter.Protocol, model.PROTOCOL_ICMP) {
+		if job.Filter.SrcPort > 0 {
+			if len(query) > 0 {
+				query = query + " and"
+			}
+			query = fmt.Sprintf("%s port %d", query, job.Filter.SrcPort)
 		}
-		query = fmt.Sprintf("%s port %d", query, job.Filter.SrcPort)
-	}
 
-	if job.Filter.DstPort > 0 {
-		if len(query) > 0 {
-			query = query + " and"
+		if job.Filter.DstPort > 0 {
+			if len(query) > 0 {
+				query = query + " and"
+			}
+			query = fmt.Sprintf("%s port %d", query, job.Filter.DstPort)
 		}
-		query = fmt.Sprintf("%s port %d", query, job.Filter.DstPort)
 	}
 
 	return query

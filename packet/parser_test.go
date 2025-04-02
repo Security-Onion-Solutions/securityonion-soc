@@ -129,7 +129,7 @@ func TestCreateBpf(tester *testing.T) {
 	filter.DstPort = 34515 // will be ignored since Protocol = ICMP
 
 	actual := createBpf(filter)
-	expected := "(icmp and host 90.151.225.16 and host 192.168.10.128) or (vlan and icmp and host 90.151.225.16 and host 192.168.10.128)"
+	expected := "((icmp or icmp6) and host 90.151.225.16 and host 192.168.10.128) or (vlan and (icmp or icmp6) and host 90.151.225.16 and host 192.168.10.128)"
 	assert.Equal(tester, expected, actual)
 }
 
@@ -146,6 +146,6 @@ func TestCreateBpfIcmp6(tester *testing.T) {
 	filter.DstPort = 34515 // will be ignored since Protocol = ICMP
 
 	actual := createBpf(filter)
-	expected := "(icmp6 and host fe80::aa28:fadf:ab5a:bff7 and host fe80::17:b601:2ab3:4397) or (vlan and icmp6 and host fe80::aa28:fadf:ab5a:bff7 and host fe80::17:b601:2ab3:4397)"
+	expected := "((icmp or icmp6) and host fe80::aa28:fadf:ab5a:bff7 and host fe80::17:b601:2ab3:4397) or (vlan and (icmp or icmp6) and host fe80::aa28:fadf:ab5a:bff7 and host fe80::17:b601:2ab3:4397)"
 	assert.Equal(tester, expected, actual)
 }
