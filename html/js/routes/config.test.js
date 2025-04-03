@@ -1106,3 +1106,26 @@ test('moveEntryWrap', () => {
   expect(comp.form.entries[2]._title).toBe('3');
   expect(comp.form.entries[3]._title).toBe('+');
 });
+
+test('moveEntryWrapWithoutPlus', () => {
+  comp.form.entries = [{_title: '1'}, {_title: '2'}, {_title: '3'}];
+  comp.isPendingSave = jest.fn().mockReturnValue(false);
+  comp.editNow = jest.fn();
+  comp.generateEntryTitle = jest.fn();
+  comp.markDirtyEntries = jest.fn();
+
+  comp.moveEntry({}, 0, true);
+  expect(comp.isPendingSave).toHaveBeenCalledWith({});
+  expect(comp.editNow).toHaveBeenCalled();
+  expect(comp.generateEntryTitle).toHaveBeenCalledTimes(3);
+  expect(comp.markDirtyEntries).toHaveBeenCalled();
+
+  expect(comp.form.entries[0]._title).toBe('2');
+  expect(comp.form.entries[1]._title).toBe('3');
+  expect(comp.form.entries[2]._title).toBe('1');
+
+  comp.moveEntry({}, 2, false);
+  expect(comp.form.entries[0]._title).toBe('1');
+  expect(comp.form.entries[1]._title).toBe('2');
+  expect(comp.form.entries[2]._title).toBe('3');
+});
