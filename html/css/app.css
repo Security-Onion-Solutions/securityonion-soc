@@ -1004,3 +1004,7 @@ ul ul ul {
 .closer-prepend .v-input__prepend {
   margin-right: unset !important;
 }
+
+.v-messages__message {
+  max-height: 36px;
+}
