@@ -569,6 +569,7 @@ routes.push({
       return "" + (idx+1) + ". " + (title ? title : "");
     },
     generateEntryTitle(entry, idx) {
+      if (entry._title == "+") return;
       const setting = this.findActiveSetting();
       var title = null;
       if (setting && setting.uiElements && setting.uiElements.length > 0) {
@@ -854,32 +855,66 @@ routes.push({
       return false;
     },
     canMoveEntry(idx, up) {
-      var lastIdx = this.form.entries.length - 1;
-      if (this.form.entries[lastIdx]._title == "+") {
-        // The bottom entry is a + which means its for adding new entries. It cannot be moved
+      if (this.form.entries[idx]._title == "+" && idx == this.form.entries.length - 1) {
+        // The entry is a + which means its for adding new entries. It cannot be moved
         // and the item above it cannot be moved below it.
-        lastIdx -= 1;
-      }
-      if (up && idx == 0) {
-        // Top entry cannot be moved up
         return false;
-      } else if (!up && idx >= lastIdx) {
-        // Bottom entry cannot be moved down
-        return false
       }
-      return true
+      return true;
+    },
+    regenEntryTitles() {
+      for (var idx = 0; idx < this.form.entries.length; idx++) {
+        const entry = this.form.entries[idx];
+        this.generateEntryTitle(entry, idx);
+      }
     },
     moveEntry(selected, oldIdx, up) {
       if (!this.isPendingSave(selected)) {
         this.editNow(selected);
       }
-      const newIdx = oldIdx + (up ? -1 : 1);
-      const element1 = this.form.entries[oldIdx];
-      const element2 = this.form.entries[newIdx];
-      this.form.entries[oldIdx] = element2;
-      this.form.entries[newIdx] = element1;
-      this.generateEntryTitle(element1, newIdx);
-      this.generateEntryTitle(element2, oldIdx);
+      
+      var lastIdx = this.form.entries.length - 1;
+      if (this.form.entries[lastIdx]._title == "+") {
+        lastIdx -= 1;
+      }
+
+      if (up && oldIdx == 0) {
+        const topElement = this.form.entries.shift();
+        if (this.form.entries[this.form.entries.length - 1]._title == "+") {
+          // Bottom element is the + entry, pop it, add the other element, then add back the + entry
+          // which ensures the + entry is always at the bottom.
+          const addElement = this.form.entries.pop();
+          this.form.entries.push(topElement);
+          this.form.entries.push(addElement);
+        } else {
+          // Add the top element to the bottom of the list since there is no + entry
+          this.form.entries.push(topElement);
+        }
+        this.regenEntryTitles();
+      } else if (!up && oldIdx == lastIdx) {
+        const bottomElement = this.form.entries.pop();
+        if (bottomElement._title == "+") {
+          // Bottom element is the + entry, pop the second to last element, then add back the + entry
+          // which ensures the + entry is always at the bottom. Then insert the second element at
+          // the front of the list.
+          const otherElement = this.form.entries.pop();
+          this.form.entries.push(bottomElement);
+          this.form.entries.unshift(otherElement);
+        } else {
+          // Insert the bottom element add the front of the list since it's not a + entry
+          this.form.entries.unshift(bottomElement);
+        }
+        this.regenEntryTitles();
+      } else {
+        // Swap them
+        const newIdx = oldIdx + (up ? -1 : 1);
+        const element1 = this.form.entries[oldIdx];
+        const element2 = this.form.entries[newIdx];
+        this.form.entries[oldIdx] = element2;
+        this.form.entries[newIdx] = element1;
+        this.generateEntryTitle(element1, newIdx);
+        this.generateEntryTitle(element2, oldIdx);
+      }
       this.markDirtyEntries();
     },
   }
