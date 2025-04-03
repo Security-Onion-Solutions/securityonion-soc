@@ -21,6 +21,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/agent"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
+	"github.com/security-onion-solutions/securityonion-soc/packet"
 )
 
 const DEFAULT_EXECUTABLE_PATH = "stenoread"
@@ -175,29 +176,12 @@ func (steno *StenoQuery) CreateQuery(job *model.Job) string {
 	endTime := job.Filter.EndTime.Format(time.RFC3339)
 
 	query := fmt.Sprintf("before %s and after %s", endTime, beginTime)
-
-	if len(job.Filter.Protocol) > 0 {
-		query = fmt.Sprintf("%s and %s", query, job.Filter.Protocol)
+	filter := packet.CreateBpf(job.Filter, false)
+	if len(filter) > 0 {
+		filter = "(" + filter + ")"
 	}
 
-	if len(job.Filter.SrcIp) > 0 {
-		query = fmt.Sprintf("%s and host %s", query, job.Filter.SrcIp)
-	}
-
-	if len(job.Filter.DstIp) > 0 {
-		query = fmt.Sprintf("%s and host %s", query, job.Filter.DstIp)
-	}
-
-	// Some legacy jobs won't have the protocol provided
-	if job.Filter.Protocol != model.PROTOCOL_ICMP {
-		if job.Filter.SrcPort > 0 {
-			query = fmt.Sprintf("%s and port %d", query, job.Filter.SrcPort)
-		}
-
-		if job.Filter.DstPort > 0 {
-			query = fmt.Sprintf("%s and port %d", query, job.Filter.DstPort)
-		}
-	}
+	query = packet.AddBpf(query, filter)
 
 	return query
 }

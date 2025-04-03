@@ -48,28 +48,28 @@ func TestCreateQuery(tester *testing.T) {
 
 	job.Filter.Protocol = model.PROTOCOL_TCP
 	query = sq.CreateQuery(job)
-	expectedQuery = expectedQuery + " and tcp"
-	assert.Equal(tester, expectedQuery, query)
+	filter := "tcp"
+	assert.Equal(tester, expectedQuery+" and ("+filter+")", query)
 
 	job.Filter.SrcIp = "1.2.3.4"
 	query = sq.CreateQuery(job)
-	expectedQuery = expectedQuery + " and host " + job.Filter.SrcIp
-	assert.Equal(tester, expectedQuery, query)
+	filter += " and host " + job.Filter.SrcIp
+	assert.Equal(tester, expectedQuery+" and ("+filter+")", query)
 
 	job.Filter.DstIp = "1.2.1.2"
 	query = sq.CreateQuery(job)
-	expectedQuery = expectedQuery + " and host " + job.Filter.DstIp
-	assert.Equal(tester, expectedQuery, query)
+	filter += " and host " + job.Filter.DstIp
+	assert.Equal(tester, expectedQuery+" and ("+filter+")", query)
 
 	job.Filter.SrcPort = 123
 	query = sq.CreateQuery(job)
-	expectedQuery = expectedQuery + " and port " + strconv.Itoa(job.Filter.SrcPort)
-	assert.Equal(tester, expectedQuery, query)
+	filter += " and port " + strconv.Itoa(job.Filter.SrcPort)
+	assert.Equal(tester, expectedQuery+" and ("+filter+")", query)
 
 	job.Filter.DstPort = 123
 	query = sq.CreateQuery(job)
-	expectedQuery = expectedQuery + " and port " + strconv.Itoa(job.Filter.DstPort)
-	assert.Equal(tester, expectedQuery, query)
+	filter += " and port " + strconv.Itoa(job.Filter.DstPort)
+	assert.Equal(tester, expectedQuery+" and ("+filter+")", query)
 }
 
 func TestCreateQueryIcmp(tester *testing.T) {
@@ -84,24 +84,22 @@ func TestCreateQueryIcmp(tester *testing.T) {
 
 	job.Filter.Protocol = model.PROTOCOL_ICMP
 	query = sq.CreateQuery(job)
-	expectedQuery = expectedQuery + " and icmp"
-	assert.Equal(tester, expectedQuery, query)
+	filter := "(icmp or icmp6)"
+	assert.Equal(tester, expectedQuery+" and ("+filter+")", query)
 
 	job.Filter.SrcIp = "1.2.3.4"
 	query = sq.CreateQuery(job)
-	expectedQuery = expectedQuery + " and host " + job.Filter.SrcIp
-	assert.Equal(tester, expectedQuery, query)
+	filter += " and host " + job.Filter.SrcIp
+	assert.Equal(tester, expectedQuery+" and ("+filter+")", query)
 
 	job.Filter.DstIp = "1.2.1.2"
 	query = sq.CreateQuery(job)
-	expectedQuery = expectedQuery + " and host " + job.Filter.DstIp
-	assert.Equal(tester, expectedQuery, query)
+	filter += " and host " + job.Filter.DstIp
+	assert.Equal(tester, expectedQuery+" and ("+filter+")", query)
 
+	// Ports ignored with icmp
 	job.Filter.SrcPort = 123
-	query = sq.CreateQuery(job)
-	assert.Equal(tester, expectedQuery, query) // port ignored for icmp
-
 	job.Filter.DstPort = 123
 	query = sq.CreateQuery(job)
-	assert.Equal(tester, expectedQuery, query) // port ignored for icmp
+	assert.Equal(tester, expectedQuery+" and ("+filter+")", query)
 }
