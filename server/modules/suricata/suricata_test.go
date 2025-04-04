@@ -2422,6 +2422,172 @@ func TestSyncChanges(t *testing.T) {
 	assert.Equal(t, []string{"abc", "", "deleteme"}, workDocIds) // update has an id, create does not, delete does
 }
 
+func TestSyncModifiedByFilter(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+
+	detStore := servermock.NewMockDetectionstore(ctrl)
+	iom := mock.NewMockIOManager(ctrl)
+	bim := servermock.NewMockBulkIndexer(ctrl)
+	auditm := servermock.NewMockBulkIndexer(ctrl)
+	cfgStore := server.NewMemConfigStore([]*model.Setting{
+		{Id: "idstools.rules.local__rules"},
+		{Id: "idstools.sids.enabled", Value: SimpleRuleSID},
+		{Id: "idstools.sids.disabled"},
+		{Id: "idstools.sids.modify"},
+		{Id: "suricata.thresholding.sids__yaml"},
+		{Id: "idstools.config.ruleset", Value: "repo"},
+		{Id: "soc.config.server.modules.suricataengine.ignoredSidRanges"},
+	})
+
+	migrationChecked := false
+	checkMigration := func() {
+		migrationChecked = true
+	}
+
+	eng := &SuricataEngine{
+		srv: &server.Server{
+			Detectionstore: detStore,
+			Configstore:    cfgStore,
+			Context:        ctx,
+		},
+		isRunning:            true,
+		communityRulesFile:   "communityRulesFile",
+		rulesFingerprintFile: "rulesFingerprintFile",
+		checkMigrationsOnce:  sync.OnceFunc(checkMigration),
+		allRulesFile:         "allRulesFile",
+		SyncSchedulerParams: detections.SyncSchedulerParams{
+			StateFilePath: "stateFilePath",
+		},
+		IntegrityCheckerData: detections.IntegrityCheckerData{
+			IsRunning: true,
+		},
+		disableRegex:    []*regexp.Regexp{regexp.MustCompile(".")},
+		IOManager:       iom,
+		showAiSummaries: false,
+	}
+
+	logger := log.WithField("detectionEngine", "test-suricata")
+
+	workItems := []esutil.BulkIndexerItem{}
+	auditItems := []esutil.BulkIndexerItem{}
+
+	// readAndHash
+	iom.EXPECT().ReadFile("communityRulesFile").Return([]byte(SimpleRule), nil)
+	// syncCommunityDetections
+	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+		SimpleRuleSID: {
+			Auditable: model.Auditable{
+				Id:         "abc",
+				CreateTime: util.Ptr(time.Now()),
+			},
+			IsEnabled:     true,
+			Content:       SimpleRule,
+			Ruleset:       "repo",
+			SourceCreated: util.Ptr(time.Date(2010, 9, 23, 0, 0, 0, 0, time.UTC)),
+			SourceUpdated: util.Ptr(time.Date(2010, 9, 23, 0, 0, 0, 0, time.UTC)),
+		},
+	}, nil)
+	detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(bim, nil)
+	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), nil, nil).DoAndReturn(func(ctx context.Context, kind string, obj any, auditable *model.Auditable, isEdit bool, auditDocId *string, op *string) ([]byte, string, error) {
+		detect := obj.(*model.Detection)
+		assert.False(t, detect.IsEnabled)
+
+		return []byte("document"), "index", nil
+	})
+	bim.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
+		if item.OnSuccess != nil {
+			resp := esutil.BulkIndexerResponseItem{
+				DocumentID: "id",
+			}
+			item.OnSuccess(ctx, item, resp)
+		}
+
+		workItems = append(workItems, item)
+
+		return nil
+	})
+	bim.EXPECT().Close(gomock.Any()).Return(nil)
+	bim.EXPECT().Stats().Return(esutil.BulkIndexerStats{})
+	detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(auditm, nil)
+	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), util.Ptr("id"), gomock.Any()).Return([]byte("document"), "index", nil)
+	auditm.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
+		if item.OnSuccess != nil {
+			resp := esutil.BulkIndexerResponseItem{
+				DocumentID: "id",
+			}
+			item.OnSuccess(ctx, item, resp)
+		}
+
+		auditItems = append(auditItems, item)
+
+		return nil
+	})
+	auditm.EXPECT().Close(gomock.Any()).Return(nil)
+	auditm.EXPECT().Stats().Return(esutil.BulkIndexerStats{})
+
+	// WriteStateFile
+	iom.EXPECT().WriteFile("stateFilePath", gomock.Any(), fs.FileMode(0644)).Return(nil)
+	iom.EXPECT().WriteFile("rulesFingerprintFile", gomock.Any(), fs.FileMode(0644)).Return(nil)
+	// IntegrityCheck
+	iom.EXPECT().ReadFile("allRulesFile").Return([]byte(SimpleRule+"\n"+FlowbitsRuleA+"\n"+IgnoredSID), nil)
+	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+		"50000": nil,
+	}, nil)
+
+	err := eng.Sync(logger, true)
+	assert.NoError(t, err)
+
+	assert.True(t, eng.EngineState.Syncing) // stays true until the SyncScheduler resets it
+	assert.False(t, eng.EngineState.IntegrityFailure)
+	assert.False(t, eng.EngineState.Migrating)
+	assert.False(t, eng.EngineState.MigrationFailure)
+	assert.False(t, eng.EngineState.Importing)
+	assert.False(t, eng.EngineState.SyncFailure)
+	assert.True(t, migrationChecked)
+
+	allSettings, err := cfgStore.GetSettings(ctx, true)
+	assert.NoError(t, err)
+
+	enabled := settingByID(allSettings, "idstools.sids.enabled")
+	assert.NotNil(t, enabled)
+	assert.Equal(t, "", enabled.Value)
+
+	disabled := settingByID(allSettings, "idstools.sids.disabled")
+	assert.NotNil(t, disabled)
+	assert.Equal(t, SimpleRuleSID, disabled.Value)
+
+	modify := settingByID(allSettings, "idstools.sids.modify")
+	assert.NotNil(t, modify)
+	assert.Equal(t, "", modify.Value)
+
+	threshold := settingByID(allSettings, "suricata.thresholding.sids__yaml")
+	assert.NotNil(t, threshold)
+	assert.Equal(t, "{}\n", threshold.Value)
+
+	assert.Len(t, workItems, 1)
+	assert.Len(t, auditItems, 1)
+
+	workActions := lo.Map(workItems, func(item esutil.BulkIndexerItem, _ int) string {
+		return item.Action
+	})
+
+	auditActions := lo.Map(auditItems, func(item esutil.BulkIndexerItem, _ int) string {
+		return item.Action
+	})
+
+	assert.Equal(t, []string{"update"}, workActions)
+	assert.Equal(t, []string{"create"}, auditActions)
+
+	workDocIds := lo.Map(workItems, func(item esutil.BulkIndexerItem, _ int) string {
+		return item.DocumentID
+	})
+
+	assert.Equal(t, []string{"abc"}, workDocIds) // update has an id, create does not, delete does
+}
+
 func TestApplyFilters(t *testing.T) {
 	tests := []struct {
 		Name             string
@@ -2792,6 +2958,89 @@ func TestFilterOutSIDsInRanges(t *testing.T) {
 		t.Run(test.Name, func(t *testing.T) {
 			filtered := filterOutSIDsInRanges(test.Sids, test.Ranges)
 			assert.Equal(t, test.FilteredSids, filtered)
+		})
+	}
+}
+
+func TestApplyStatusRegexes(t *testing.T) {
+	tests := []struct {
+		Name           string
+		EnableRegex    []*regexp.Regexp
+		DisableRegex   []*regexp.Regexp
+		Input          *model.Detection
+		ExpectedResult bool
+		ExpectedStatus bool
+	}{
+		{
+			Name:           "No Regexes",
+			EnableRegex:    nil,
+			DisableRegex:   nil,
+			Input:          &model.Detection{IsEnabled: true},
+			ExpectedResult: false,
+			ExpectedStatus: true,
+		},
+		{
+			Name:           "Regexes Don't Apply (Start Disabled)",
+			EnableRegex:    []*regexp.Regexp{regexp.MustCompile("alert")},
+			DisableRegex:   []*regexp.Regexp{regexp.MustCompile("drop")},
+			Input:          &model.Detection{Content: "Hello World"},
+			ExpectedResult: false,
+			ExpectedStatus: false,
+		},
+		{
+			Name:           "Regexes Don't Apply (Start Enabled)",
+			EnableRegex:    []*regexp.Regexp{regexp.MustCompile("alert")},
+			DisableRegex:   []*regexp.Regexp{regexp.MustCompile("drop")},
+			Input:          &model.Detection{IsEnabled: true, Content: "Hello World"},
+			ExpectedResult: false,
+			ExpectedStatus: true,
+		},
+		{
+			Name:           "Regexes Apply But Do Not Alter (Start Disabled)",
+			EnableRegex:    []*regexp.Regexp{regexp.MustCompile("alert")},
+			DisableRegex:   []*regexp.Regexp{regexp.MustCompile("drop")},
+			Input:          &model.Detection{Content: "drop: something"},
+			ExpectedResult: false,
+			ExpectedStatus: false,
+		},
+		{
+			Name:           "Regexes Apply But Do Not Alter (Start Enabled)",
+			EnableRegex:    []*regexp.Regexp{regexp.MustCompile("alert")},
+			DisableRegex:   []*regexp.Regexp{regexp.MustCompile("drop")},
+			Input:          &model.Detection{IsEnabled: true, Content: "alert: something"},
+			ExpectedResult: false,
+			ExpectedStatus: true,
+		},
+		{
+			Name:           "Regexes Apply and Alter (Start Disabled)",
+			EnableRegex:    []*regexp.Regexp{regexp.MustCompile("alert")},
+			DisableRegex:   []*regexp.Regexp{regexp.MustCompile("drop")},
+			Input:          &model.Detection{Content: "alert: something"},
+			ExpectedResult: true,
+			ExpectedStatus: true,
+		},
+		{
+			Name:           "Regexes Apply and Alter (Start Enabled)",
+			EnableRegex:    []*regexp.Regexp{regexp.MustCompile("alert")},
+			DisableRegex:   []*regexp.Regexp{regexp.MustCompile("drop")},
+			Input:          &model.Detection{IsEnabled: true, Content: "drop: something"},
+			ExpectedResult: true,
+			ExpectedStatus: false,
+		},
+	}
+
+	e := SuricataEngine{}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			e.enableRegex = test.EnableRegex
+			e.disableRegex = test.DisableRegex
+
+			result := e.applyStatusRegexes(test.Input)
+
+			assert.Equal(t, test.ExpectedResult, result)
+			assert.Equal(t, test.ExpectedStatus, test.Input.IsEnabled)
 		})
 	}
 }
