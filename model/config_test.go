@@ -41,3 +41,20 @@ func TestIsValidSettingId(tester *testing.T) {
 	assert.False(tester, IsValidSettingId(" "))
 	assert.False(tester, IsValidSettingId("foo|bars"))
 }
+
+func TestSupportsJinja(tester *testing.T) {
+	setting := NewSetting("id")
+
+	// Appears to be a duplicated setting due to missing desc
+	assert.True(tester, setting.SupportsJinja())
+
+	setting.Description = "foo"
+	// Not a duplicate and not jinjaEscaped and not json
+	assert.False(tester, setting.SupportsJinja())
+
+	setting.JinjaEscaped = true
+	assert.True(tester, setting.SupportsJinja())
+
+	setting.Syntax = "json"
+	assert.False(tester, setting.SupportsJinja())
+}
