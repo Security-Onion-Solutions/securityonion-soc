@@ -546,23 +546,37 @@ routes.push({
       this.form.value = Date.now() + "";
     },
     convertMultilineElement(element, modifiedEntry, toString) {
-      if (modifiedEntry && this.hasMultipleValues(element) && this.isMultiline(element)) {
-        var value = modifiedEntry[element.field];
+      if (modifiedEntry) {
+        if (this.hasMultipleValues(element) && this.isMultiline(element)) {
+          var value = modifiedEntry[element.field];
 
-        if (toString) {
-          if (value && value.join != null) {
-            value = value.join("\n");
+          if (toString) {
+            if (value && value.join != null) {
+              value = value.join("\n");
+            } else {
+              value = ""
+            }
           } else {
-            value = ""
+            if (value && value.trim != null) {
+              value = value.trim().split("\n");
+            } else {
+              value = [];
+            }
           }
-        } else {
-          if (value && value.trim != null) {
-            value = value.trim().split("\n");
+          modifiedEntry[element.field] = value;
+        } else if (element.forcedType == "{}") { // This UI element needs converted to an object
+          var value = modifiedEntry[element.field];
+          if (toString) {
+            if (value != null) {
+              value = JSON.stringify(value)
+            }
           } else {
-            value = [];
+            if (value && value.trim().length > 0) {
+              value = JSON.parse(value)
+            }
           }
+          modifiedEntry[element.field] = value;
         }
-        modifiedEntry[element.field] = value;
       }
     },
     generateIndexTitle(idx, title) {
@@ -684,7 +698,12 @@ routes.push({
           this.$root.showWarning(this.i18n.settingIncomplete)
           return;
         }
-        this.pack(setting);
+        try {
+          this.pack(setting);
+        } catch (e) {
+          this.$root.showError(this.i18n.settingValidationFailed);
+          return;
+        }
         if (setting.required && !this.form.value) {
           this.$root.showError(this.i18n.settingValidationFailed);
           return;

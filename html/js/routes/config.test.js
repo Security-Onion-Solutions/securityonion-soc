@@ -1046,6 +1046,18 @@ test('convertMultilineElement', () => {
   expect(modifiedEntry.foo).toBe('');
 });
 
+test('convertMultilineElementWithJSONObject', () => {
+  let element = { field: 'foo', multiline: true, forcedType: '{}' };
+  let modifiedEntry = { foo: {"foo": "bar"} };
+
+  comp.convertMultilineElement(element, modifiedEntry, true);
+  expect(modifiedEntry.foo).toBe('{\"foo\":\"bar\"}');
+
+  comp.convertMultilineElement(element, modifiedEntry, false);
+  expect(modifiedEntry.foo).toStrictEqual({"foo": "bar"});
+
+});
+
 test('canMoveEntry', () => {
   comp.form.entries = [{_title: '1'}, {_title: '2'}, {_title: '+'}];
   expect(comp.canMoveEntry(0, true)).toBe(true);

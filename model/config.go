@@ -104,7 +104,8 @@ func (setting *Setting) SetId(id string) {
 
 func (setting *Setting) SupportsJinja() bool {
 	// Assume duplicated settings should support Jinja, since those lose their annotations.
-	return setting.JinjaEscaped || setting.IsDuplicatedSetting()
+	// Cannot assume JSON syntax settings support Jinja due to the similar syntax. Ex: {{
+	return setting.Syntax != "json" && (setting.JinjaEscaped || setting.IsDuplicatedSetting())
 }
 
 func (setting *Setting) IsDuplicatedSetting() bool {
