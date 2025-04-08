@@ -27,8 +27,6 @@ func RegisterJobLookupRoutes(srv *server.Server, store *ElasticEventstore, r chi
 	}
 
 	r.Route(prefix, func(r chi.Router) {
-		r.Use(web.Middleware(srv.Host, false))
-
 		r.Get("/", h.getJobLookup)
 	})
 }

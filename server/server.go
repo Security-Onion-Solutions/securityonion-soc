@@ -45,6 +45,7 @@ type Server struct {
 	Context          context.Context
 	DetectionEngines map[model.EngineName]DetectionEngine
 	SubgridNodes     []*model.Node
+	ApiRouter        *chi.Mux
 }
 
 func NewServer(cfg *config.ServerConfig, version string) *Server {
@@ -57,6 +58,17 @@ func NewServer(cfg *config.ServerConfig, version string) *Server {
 	server.initContext()
 
 	licensing.ValidateSocUrl(server.Config.BaseUrl)
+
+	server.ApiRouter = chi.NewMux()
+	server.ApiRouter.Use(web.Middleware(server.Host, false))
+	server.ApiRouter.NotFound(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.WithFields(log.Fields{
+			"requestUrl":  r.URL.String(),
+			"requestId":   r.Context().Value(web.ContextKeyRequestId),
+			"requestorId": r.Context().Value(web.ContextKeyRequestorId),
+		}).Warn("404 Not Found")
+		web.Respond(w, r, http.StatusNotFound, nil)
+	}))
 
 	return server
 }
@@ -79,37 +91,25 @@ func (server *Server) Start() {
 	} else {
 		log.Info("Starting server")
 
-		r := chi.NewMux()
+		RegisterCaseRoutes(server, server.ApiRouter, "/api/case")
+		RegisterEventRoutes(server, server.ApiRouter, "/api/events")
+		RegisterInfoRoutes(server, server.ApiRouter, "/api/info")
+		RegisterJobRoutes(server, server.ApiRouter, "/api/job")
+		RegisterJobsRoutes(server, server.ApiRouter, "/api/jobs")
+		RegisterPacketRoutes(server, server.ApiRouter, "/api/packets")
+		RegisterQueryRoutes(server, server.ApiRouter, "/api/query")
+		RegisterNodeRoutes(server, server.ApiRouter, "/api/node")
+		RegisterGridRoutes(server, server.ApiRouter, "/api/grid")
+		RegisterStreamRoutes(server, server.ApiRouter, "/api/stream")
+		RegisterUsersRoutes(server, server.ApiRouter, "/api/users")
+		RegisterClientsRoutes(server, server.ApiRouter, "/api/clients")
+		RegisterConfigRoutes(server, server.ApiRouter, "/api/config")
+		RegisterGridMemberRoutes(server, server.ApiRouter, "/api/gridmembers")
+		RegisterRolesRoutes(server, server.ApiRouter, "/api/roles")
+		RegisterDetectionRoutes(server, server.ApiRouter, "/api/detection")
+		RegisterUtilRoutes(server, server.ApiRouter, "/api/util")
 
-		r.Use(web.Middleware(server.Host, false))
-		r.NotFound(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			log.WithFields(log.Fields{
-				"requestUrl":  r.URL.String(),
-				"requestId":   r.Context().Value(web.ContextKeyRequestId),
-				"requestorId": r.Context().Value(web.ContextKeyRequestorId),
-			}).Warn("404 Not Found")
-			web.Respond(w, r, http.StatusNotFound, nil)
-		}))
-
-		RegisterCaseRoutes(server, r, "/api/case")
-		RegisterEventRoutes(server, r, "/api/events")
-		RegisterInfoRoutes(server, r, "/api/info")
-		RegisterJobRoutes(server, r, "/api/job")
-		RegisterJobsRoutes(server, r, "/api/jobs")
-		RegisterPacketRoutes(server, r, "/api/packets")
-		RegisterQueryRoutes(server, r, "/api/query")
-		RegisterNodeRoutes(server, r, "/api/node")
-		RegisterGridRoutes(server, r, "/api/grid")
-		RegisterStreamRoutes(server, r, "/api/stream")
-		RegisterUsersRoutes(server, r, "/api/users")
-		RegisterClientsRoutes(server, r, "/api/clients")
-		RegisterConfigRoutes(server, r, "/api/config")
-		RegisterGridMemberRoutes(server, r, "/api/gridmembers")
-		RegisterRolesRoutes(server, r, "/api/roles")
-		RegisterDetectionRoutes(server, r, "/api/detection")
-		RegisterUtilRoutes(server, r, "/api/util")
-
-		server.Host.RegisterRouter("/api/", r)
+		server.Host.RegisterRouter("/api/", server.ApiRouter)
 
 		server.Host.Start()
 	}

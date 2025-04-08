@@ -53,3 +53,13 @@ func TestElasticInit(tester *testing.T) {
 	err = elastic.Init(cfg)
 	assert.Equal(tester, licensing.LICENSE_STATUS_EXCEEDED, licensing.GetStatus())
 }
+
+func TestElasticStart(tester *testing.T) {
+	srv := server.NewFakeUnauthorizedServer()
+	elastic := NewElastic(srv)
+	cfg := make(module.ModuleConfig)
+	elastic.Init(cfg)
+	assert.Len(tester, srv.ApiRouter.Routes(), 0)
+	elastic.Start()
+	assert.Len(tester, srv.ApiRouter.Routes(), 1)
+}
