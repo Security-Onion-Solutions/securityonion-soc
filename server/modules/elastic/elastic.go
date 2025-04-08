@@ -13,6 +13,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 const DEFAULT_CASE_INDEX = "*:so-case"
@@ -122,13 +123,12 @@ func (elastic *Elastic) Init(cfg module.ModuleConfig) error {
 
 func (elastic *Elastic) Start() error {
 	r := chi.NewMux()
-	dep := chi.NewMux()
-
+	r.Use(web.Middleware(elastic.server.Host, false))
 	RegisterJobLookupRoutes(elastic.server, elastic.store, r, "/joblookup")
-	RegisterJobLookupRoutes(elastic.server, elastic.store, dep, "/securityonion/joblookup") // deprecated
-
 	elastic.server.Host.RegisterRouter("/joblookup", r)
-	elastic.server.Host.RegisterRouter("/securityonion/joblookup", dep) // deprecated
+
+	RegisterJobLookupRoutes(elastic.server, elastic.store, elastic.server.ApiRouter, "/api/joblookup")
+
 	return nil
 }
 
