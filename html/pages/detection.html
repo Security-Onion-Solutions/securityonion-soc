@@ -40,19 +40,19 @@
 			</div>
 			<v-tabs grow v-model="activeTab" class="full-width" v-else>
 				<v-tab id="detection_summaryTab" value="summary" :class="{ 'theme-primary': activeTab === 'summary' }" data-aid="detection_summary_tab">
-					<v-icon class="detection-tab-icon">fa-circle-nodes</v-icon>
+					<v-icon class="tab-icon">fa-circle-nodes</v-icon>
 					<div class="d-none d-lg-block">{{ i18n.overview }}</div>
 				</v-tab>
 				<v-tab id="detection_commentsTab" value="comments" :class="{ 'theme-primary': activeTab === 'comments' }" data-aid="detection_comments_tab">
-					<v-icon class="detection-tab-icon">fa-paperclip</v-icon>
+					<v-icon class="tab-icon">fa-paperclip</v-icon>
 					<div class="d-none d-lg-block">{{ i18n.detectionComments }}</div>
 				</v-tab>
 				<v-tab id="detection_signatureTab" value="source" :class="{ 'theme-primary': activeTab === 'source' }" data-aid="detection_source_tab">
-					<v-icon class="detection-tab-icon">fa-code</v-icon>
+					<v-icon class="tab-icon">fa-code</v-icon>
 					<div class="d-none d-lg-block">{{ i18n.detectionSource }}</div>
 				</v-tab>
 				<v-tab id="detection_tuningTab" value="tuning" :class="{ 'theme-primary': activeTab === 'tuning' }" data-aid="detection_tuning_tab">
-					<v-icon class="detection-tab-icon">fa-wrench</v-icon>
+					<v-icon class="tab-icon">fa-wrench</v-icon>
 					<div class="d-none d-lg-block">
 						{{ i18n.tuning }}
 						<span v-if="detect">
@@ -61,7 +61,7 @@
 					</div>
 				</v-tab>
 				<v-tab id="detection_historyTab" value="history" :class="{ 'theme-primary': activeTab === 'history' }" data-aid="detection_history_tab">
-					<v-icon class="detection-tab-icon">fa-history</v-icon>
+					<v-icon class="tab-icon">fa-history</v-icon>
 					<div class="d-none d-lg-block">{{ i18n.history }}</div>
 				</v-tab>
 			</v-tabs>

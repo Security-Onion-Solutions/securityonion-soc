@@ -172,6 +172,8 @@ const huntComponent = {
     maxEscalate: 100,
     chartResizeTracker: {},
     gridId: null,
+    activeTabs: {},
+    eventColumnWidth: 0,
   }},
   created() {
     this.$root.initializeCharts();
@@ -207,6 +209,7 @@ const huntComponent = {
     this.stopRefreshTimer();
     this.$root.unsubscribe('detections:bulkUpdate', this.bulkUpdateReport);
     this.$root.unsubscribe('related:bulkCreate', this.bulkUpdateReport);
+    window.removeEventListener('resize', this.calculateEventColumnWidth);
   },
   mounted() {
     this.$root.startLoading();
@@ -220,6 +223,8 @@ const huntComponent = {
     if (this.isCategory('alerts') || this.isCategory('hunt')) {
       this.$root.subscribe('related:bulkCreate', this.bulkUpdateReport);
     }
+
+    window.addEventListener('resize', this.calculateEventColumnWidth);
   },
   watch: {
     '$route': 'loadData',
@@ -587,7 +592,11 @@ const huntComponent = {
       } catch (error) {
         this.$root.showError(error);
       }
+
       this.$root.stopLoading();
+      this.$nextTick(() => {
+        this.calculateEventColumnWidth();
+      });
     },
     getPresets(kind) {
       if (this.presets && this.presets[kind]) {
@@ -2668,6 +2677,32 @@ const huntComponent = {
         // closing
         this.menuScrollPos = scrollContainer.scrollTop;
       }
+    },
+    calculateEventColumnWidth() {
+      this.eventColumnWidth = this.$refs?.eventColumn?.$el?.clientWidth || 0;
+      if (this.eventColumnWidth === 0) {
+        setTimeout(() => {
+          this.calculateEventColumnWidth();
+        }, 300);
+      }
+    },
+    async loadPlaybook(event) {
+      if (event.playbooks || event.playbookLoading) return;
+
+      event.playbookLoading = true;
+
+      const publicId = event?.['rule.uuid'];
+      if (!publicId) return;
+
+      const response = await this.$root.papi.get(`playbook/detection/${publicId}`);
+
+      console.log(response.data);
+
+      // replace variables here
+
+      event.playbooks = response.data;
+
+      delete event.playbookLoading;
     },
   }
 };

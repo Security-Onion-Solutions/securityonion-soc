@@ -646,7 +646,7 @@ td {
   vertical-align: middle;
 }
 
-.detection-tab-icon {
+.tab-icon {
   margin-right: 8px;
   vertical-align: baseline;
 }
@@ -1007,4 +1007,8 @@ ul ul ul {
 
 .v-messages__message {
   max-height: 36px;
+}
+
+.italic {
+  font-style: italic;
 }

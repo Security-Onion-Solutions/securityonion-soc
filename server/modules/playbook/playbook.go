@@ -126,6 +126,11 @@ func (pbm *PlaybookDiskManager) resetInterrupt() {
 func (pbm *PlaybookDiskManager) scheduler() {
 	wasSuccessful := false
 	var timer *time.Timer
+
+	firstRun := sync.OnceFunc(func() {
+		pbm.Interrupt(true)
+	})
+
 	for pbm.isRunning {
 		if wasSuccessful {
 			timer = time.NewTimer(time.Second * time.Duration(pbm.PlaybookImportFrequencySeconds))
@@ -135,6 +140,8 @@ func (pbm *PlaybookDiskManager) scheduler() {
 
 		force := false
 		pbm.resetInterrupt()
+
+		firstRun()
 
 		select {
 		case inter := <-pbm.InterruptChan:
@@ -247,32 +254,26 @@ func (pbm *PlaybookDiskManager) readPlaybooks(logger log.Interface) ([]*model.Pl
 	repoFolderName := path.Base(repo.Path)
 
 	targetDir := path.Join(pbm.playbookRepoPath, repoFolderName, pbm.playbookPathInRepo)
+	files := 0
+	playbooks := []*model.Playbook{}
 
-	entries, err := os.ReadDir(targetDir)
-	if err != nil {
-		return nil, err
-	}
-
-	logger.WithFields(log.Fields{
-		"playbookDir": targetDir,
-		"fileCount":   len(entries),
-	}).Info("reading playbooks")
-
-	playbooks := make([]*model.Playbook, 0, len(entries))
-
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-
-		ext := strings.ToLower(filepath.Ext(entry.Name()))
-		if ext != ".yaml" && ext != ".yml" {
-			continue
-		}
-
-		f, err := os.Open(path.Join(targetDir, entry.Name()))
+	err = filepath.Walk(targetDir, func(p string, info os.FileInfo, err error) error {
 		if err != nil {
-			return nil, err
+			return err
+		}
+
+		if info.IsDir() {
+			return nil
+		}
+
+		ext := strings.ToLower(filepath.Ext(info.Name()))
+		if ext != ".yaml" && ext != ".yml" {
+			return nil
+		}
+
+		f, err := os.Open(p)
+		if err != nil {
+			return err
 		}
 		defer f.Close()
 
@@ -280,11 +281,23 @@ func (pbm *PlaybookDiskManager) readPlaybooks(logger log.Interface) ([]*model.Pl
 
 		err = yaml.NewDecoder(f).Decode(pb)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		playbooks = append(playbooks, pb)
+		files++
+
+		return nil
+	})
+	if err != nil {
+		logger.WithError(err).WithField("playbookDir", targetDir).Error("unable to read playbooks")
+		return nil, err
 	}
+
+	logger.WithFields(log.Fields{
+		"playbookDir": targetDir,
+		"fileCount":   files,
+	}).Info("read playbooks")
 
 	return playbooks, nil
 }
@@ -332,7 +345,7 @@ func (pbm *PlaybookDiskManager) organizePlaybooks(logger log.Interface, playbook
 	pbm.PlaybooksByDetectionId = byDetId
 	pbm.PlaybooksByPlaybookId = byPBId
 
-	defer pbm.pbUpdateMutex.Unlock()
+	pbm.pbUpdateMutex.Unlock()
 
 	return nil
 }
