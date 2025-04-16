@@ -20,7 +20,7 @@ routes.push({ path: '/queries', name: 'queries', component: {
     ],
     sortBy: [{ key: 'elapsedMs', order: 'asc' }],
     itemsPerPage: 10,
-    footerProps: { 'items-per-page-options': [10,50,250,1000] },
+    itemsPerPageOptions: [10,50,250,1000],
     filterEnabled: true,
     cancelQueryTask: null,
     cancelQueryConfirmVisible: false,

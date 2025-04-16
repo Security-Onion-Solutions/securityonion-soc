@@ -25,8 +25,8 @@
 	<v-row>
 		<v-col>
 			<v-data-table :search="gridFilter" :sort-by="sortBy" @update:sort-by="val => sortBy = val"
-				data-aid="grid_list" :footer-props="footerProps" :expanded="expanded" @update:expanded="val => expanded = val"
-				:items-per-page.sync="itemsPerPage" must-sort :headers="headers" :items="nodes">
+				data-aid="grid_list" :items-per-page-options="itemsPerPageOptions" :expanded="expanded" @update:expanded="val => expanded = val"
+				v-model:items-per-page="itemsPerPage" must-sort :headers="headers" :items="nodes">
 				<template #top>
 					<v-container fluid>
 						<v-row>

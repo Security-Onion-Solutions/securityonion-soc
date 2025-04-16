@@ -39,7 +39,7 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
       dstPort: null,
       timeframe: '',
     },
-    footerProps: { 'items-per-page-options': [10,50,250,1000] },
+    itemsPerPageOptions: [10,50,250,1000],
     kind: '',
   }},
   created() {
@@ -93,8 +93,7 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
       this.form.srcPort = localStorage['settings.jobs.addJobForm.srcPort'];
       this.form.dstIp = localStorage['settings.jobs.addJobForm.dstIp'];
       this.form.dstPort = localStorage['settings.jobs.addJobForm.dstPort'];
-      this.form.beginTime = localStorage['settings.jobs.addJobForm.beginTime'];
-      this.form.endTime = localStorage['settings.jobs.addJobForm.endTime'];
+      this.form.timeframe = localStorage['settings.jobs.addJobForm.timeframe'];
     },
     updateJob(job) {
       for (var i = 0; i < this.jobs.length; i++) {
@@ -165,8 +164,8 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
           let endDate;
           if (timeframe) {
             const [beginTime, endTime] = timeframe.split(' - ', 2);
-            beginDate = moment(beginTime, this.i18n.timePickerFormat).format(this.i18n.timestampFormat);
-            endDate = moment(endTime, this.i18n.timePickerFormat).format(this.i18n.timestampFormat);
+            beginDate = moment(beginTime, this.i18n.timePickerFormat).format(/* ISO 8601 */);
+            endDate = moment(endTime, this.i18n.timePickerFormat).format(/* ISO 8601 */);
           }
 
           if (beginDate && endDate) {
@@ -246,6 +245,7 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
       const route = this;
       $('#jobtimeframe').on('apply.daterangepicker', function (ev, picker) {
         const value = picker.startDate.format(route.i18n.timePickerFormat) + ' - ' + picker.endDate.format(route.i18n.timePickerFormat)
+        route.form.timeframe = value;
         $(this).val(value);
       });
     },

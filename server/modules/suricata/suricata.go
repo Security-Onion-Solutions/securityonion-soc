@@ -1305,6 +1305,7 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 			hasChanged = hasChanged || len(detect.Overrides) != 0
 			hasChanged = hasChanged || !util.Equal(orig.SourceCreated, detect.SourceCreated)
 			hasChanged = hasChanged || !util.Equal(orig.SourceUpdated, detect.SourceUpdated)
+			hasChanged = hasChanged || modifiedByFilter
 
 			if hasChanged {
 				logger.WithFields(log.Fields{
@@ -1605,14 +1606,14 @@ func extractSID(rule string) *string {
 
 func (e *SuricataEngine) applyStatusRegexes(detect *model.Detection) (affectedByFilter bool) {
 	for _, enable := range e.enableRegex {
-		if enable.MatchString(detect.Content) {
+		if enable.MatchString(detect.Content) && !detect.IsEnabled {
 			detect.IsEnabled = true
 			return true
 		}
 	}
 
 	for _, disable := range e.disableRegex {
-		if disable.MatchString(detect.Content) {
+		if disable.MatchString(detect.Content) && detect.IsEnabled {
 			detect.IsEnabled = false
 			return true
 		}

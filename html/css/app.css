@@ -1000,3 +1000,11 @@ ul ul ul {
 .vert-divider {
   margin-left: -4px;
 }
+
+.closer-prepend .v-input__prepend {
+  margin-right: unset !important;
+}
+
+.v-messages__message {
+  max-height: 36px;
+}

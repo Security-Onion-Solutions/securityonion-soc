@@ -146,16 +146,19 @@
 							</span>
 						</template>
 					</v-text-field>
-					<v-text-field variant="underlined" :disabled="loading()" v-if="!relativeTimeEnabled && !isCategory('detections')" id="huntdaterange" @change="notifyInputsChanged" class="mx-2"
+					<v-text-field variant="underlined" :disabled="loading()" v-if="!relativeTimeEnabled && !isCategory('detections')" id="huntdaterange" @change="notifyInputsChanged" class="mx-2 closer-prepend"
 						v-model="dateRange" :hint="i18n.timePickerHelp" persistent-hint
-						prepend-inner-icon="fa-angle-down" @click:prepend-inner="showDateRangePicker" :data-aid="'absolute_time_' + category">
+						:data-aid="'absolute_time_' + category">
 						<template #prepend>
 							<v-btn v-if="!relativeTimeEnabled" icon variant="text" size="x-small" @click="showRelativeTime" id="show-relative-time" :data-aid="'relative_time_toggle_' + category">
 								<v-icon class="theme-icon">fa-calendar-alt</v-icon>
 							</v-btn>
+							<v-btn @click="showDateRangePicker()" icon variant="text" size="x-small">
+								<v-icon class="theme-icon">fa-angle-down</v-icon>
+							</v-btn>
 						</template>
 					</v-text-field>
-					<v-btn id="hunt" class="align-self-start" :disabled="loading()" :color="huntPending ? 'light-green accent-4' : (autoRefreshInterval ? 'secondary' : 'primary')" @click.stop="hunt" :data-aid="'run_query_' + category">
+					<v-btn id="hunt" class="align-self-start" :class="{'mt-4': !relativeTimeEnabled}" :disabled="loading()" :color="huntPending ? 'light-green accent-4' : (autoRefreshInterval ? 'secondary' : 'primary')" @click.stop="hunt" :data-aid="'run_query_' + category">
 						<span v-if="isCategory('hunt')" class="d-sm-none d-lg-inline pr-2" v-text="i18n.hunt"></span>
 						<span v-if="!isCategory('hunt')" class="d-sm-none d-lg-inline pr-2" v-text="i18n.refresh"></span>
 						<v-icon v-if="isCategory('hunt') && !autoRefreshInterval">fa-crosshairs</v-icon>
@@ -379,8 +382,8 @@
 							</v-container>
 						</template>
 						<v-col cols="12" style="position: relative;">
-							<v-data-table ref="eventTable" :search="eventFilter" :sort-by="sortBy" @update:sort-by="val => sortBy = val" item-value="soc_id" :footer-props="footerProps" :data-aid="'events_table_' + category"
-								:items-per-page="itemsPerPage" must-sort :headers="eventHeaders" :items="eventData" :page.sync="eventPage" show-select :custom-sort="sortEvents" density="compact" @current-items="val => eventCurrentItems = val">
+							<v-data-table ref="eventTable" :search="eventFilter" :sort-by="sortBy" @update:sort-by="val => sortBy = val" item-value="soc_id" :items-per-page-options="itemsPerPageOptions" :data-aid="'events_table_' + category"
+								:items-per-page="itemsPerPage" must-sort :headers="eventHeaders" :items="eventData" v-model:page="eventPage" show-select :custom-sort="sortEvents" density="compact" @current-items="val => eventCurrentItems = val">
 								<template #top="data">
 									<!-- not-fancy way to access the current page of items:
 									https://stackoverflow.com/questions/76008941/vuetify-3-data-table-current-items

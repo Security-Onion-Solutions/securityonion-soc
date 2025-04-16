@@ -576,8 +576,8 @@
 						</v-col>
 					</v-row>
 					<v-text-field variant="underlined" v-model="historyTableOpts.search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="detection_history_filter_input"></v-text-field>
-					<v-data-table ref="historyTable" :sort-by="historyTableOpts.sortBy" :items-per-page.sync="historyTableOpts.itemsPerPage"
-						:search="historyTableOpts.search" :footer-props="historyTableOpts.footerProps" must-sort :headers="historyTableOpts.headers"
+					<v-data-table ref="historyTable" :sort-by="historyTableOpts.sortBy" v-model:items-per-page="historyTableOpts.itemsPerPage"
+						:search="historyTableOpts.search" must-sort :headers="historyTableOpts.headers" :items-per-page-options="historyTableOpts.itemsPerPageOptions"
 						:items="history" item-key="id" :loading="historyTableOpts.loading" :expanded="historyTableOpts.expanded" class="history-table">
 						<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
 							<tr>
@@ -717,9 +717,8 @@
 											<v-col cols="8"><span class="case">{{ item.overrides.length }}</span></v-col>
 										</v-row>
 									</div>
-
-									<v-data-table v-if="detect.engine !== 'strelka' && item && item.overrides.length" ref="historyOverridesTable" :sort-by.sync="historyOverrideTableOpts[item.engine].sortBy" :sort-desc.sync="historyOverrideTableOpts[item.engine].sortDesc"
-										:items-per-page.sync="historyOverrideTableOpts[item.engine].itemsPerPage" :footer-props="historyOverrideTableOpts[item.engine].footerProps" must-sort :headers="historyOverrideTableOpts[item.engine].headers"
+									<v-data-table v-if="detect.engine !== 'strelka' && item && item.overrides.length" ref="historyOverridesTable" v-model:sort-by="historyOverrideTableOpts[item.engine].sortBy" v-model:sort-desc="historyOverrideTableOpts[item.engine].sortDesc"
+										v-model:items-per-page="historyOverrideTableOpts[item.engine].itemsPerPage" :items-per-page-options="historyOverrideTableOpts[item.engine].itemsPerPageOptions" must-sort :headers="historyOverrideTableOpts[item.engine].headers"
 										:items="item.overrides || []" item-value="updatedAt" :expanded="historyOverrideTableOpts[item.engine].expanded" class="history-override-table">
 										<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
 											<tr>

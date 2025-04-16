@@ -51,7 +51,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
     expanded: [],
     sortBy: [{ key: 'id', order: 'asc' }],
     itemsPerPage: 10,
-    footerProps: { 'items-per-page-options': [10,25,50,100,250,1000] },
+    itemsPerPageOptions: [10,25,50,100,250,1000],
     gridEps: 0,
     metricsEnabled: false,
     selectedNode: null,
