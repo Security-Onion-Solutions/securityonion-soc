@@ -33,6 +33,7 @@ const (
 	ContextKeyRunAsUsername     ContextKey = "ContextKeyRunAsUsername"     // string
 	ContextKeyRequestStart      ContextKey = "ContextKeyRequestStart"      // time.Time
 	ContextKeyRequestCSRFExempt ContextKey = "ContextKeyRequestCSRFExempt" // bool
+	ContextKeySubgridResponses  ContextKey = "ContextKeySubgridResponses"  // []*http.Response
 )
 
 type HostHandler interface {

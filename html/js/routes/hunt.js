@@ -171,6 +171,7 @@ const huntComponent = {
     menuScrollPos: 0,
     maxEscalate: 100,
     chartResizeTracker: {},
+    gridId: null,
   }},
   created() {
     this.$root.initializeCharts();
@@ -515,6 +516,8 @@ const huntComponent = {
         }
       }
 
+      this.gridId = this.$route.query.gridId;
+
       // Check for special params that force a re-route. This is needed when async functions will handle the hunt themselves.
       // So setting reroute=true tells the current thread not to perform the hunt, because the async thread will be doing it momentarily.
       var reRoute = false;
@@ -546,16 +549,20 @@ const huntComponent = {
         if (this.isCategory('detections')) {
           range = moment(0).format(this.i18n.timePickerFormat) + " - " + moment().format(this.i18n.timePickerFormat);
         }
-        let response = await this.$root.papi.get('events/', {
-          params: {
-            query: await this.getQuery(),
-            range: range,
-            format: this.i18n.timePickerSample,
-            zone: this.zone,
-            metricLimit: this.groupByLimit,
-            eventLimit: this.eventLimit
-          }
-        });
+        const params = {
+          query: await this.getQuery(),
+          range: range,
+          format: this.i18n.timePickerSample,
+          zone: this.zone,
+          metricLimit: this.groupByLimit,
+          eventLimit: this.eventLimit,
+        };
+
+        if (this.gridId && this.gridId.length > 0) {
+          params.gridId = this.gridId;
+        }
+
+        let response = await this.$root.papi.get('events/', { params: params });
 
         this.eventPage = 1;
         this.groupByPage = 1;
@@ -1055,6 +1062,10 @@ const huntComponent = {
 
       if (this.autoRefreshInterval > 0) {
         queryObj.ar = this.autoRefreshInterval;
+      }
+
+      if (this.gridId) {
+        queryObj.gridId = this.gridId;
       }
 
       return { path: this.category, query: queryObj };

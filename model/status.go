@@ -7,43 +7,60 @@
 package model
 
 type Status struct {
+	// The grid ID for this status update, can be '' for local grids
+	GridId     string            `json:"gridId" example:"my_subgrid_a"`
 	Grid       *GridStatus       `json:"grid"`
 	Alerts     *AlertsStatus     `json:"alerts"`
 	Detections *DetectionsStatus `json:"detections"`
 }
 
 type GridStatus struct {
-	TotalNodeCount          int `json:"totalNodeCount"`
-	UnhealthyNodeCount      int `json:"unhealthyNodeCount"`
-	AwaitingRebootNodeCount int `json:"awaitingRebootNodeCount"`
-	Eps                     int `json:"eps"`
+	// The total number of nodes that have checked-in to the grid manager since the manager SOC process was last restarted
+	TotalNodeCount int `json:"totalNodeCount" example:"4"`
+	// The number of nodes that not in a healthy state, typically due to a fault.
+	UnhealthyNodeCount int `json:"unhealthyNodeCount" example:"0"`
+	// The number of nodes that are awaiting reboot for kernel updates
+	AwaitingRebootNodeCount int `json:"awaitingRebootNodeCount" example:"1"`
+	// The current Events Per Second ingest rate for this grid
+	Eps int `json:"eps" example:"2311"`
 }
 
 type AlertsStatus struct {
-	NewCount int `json:"newCount"`
+	// The number of new alerts (currently unused)
+	NewCount int `json:"newCount" example:"132"`
 }
 
 type DetectionsStatus struct {
+	// The state of the ElastAlert 2 detection engine
 	ElastAlert *EngineState `json:"elastalert"`
-	Suricata   *EngineState `json:"suricata"`
-	Strelka    *EngineState `json:"strelka"`
+	// The state of the Suricata detection engine
+	Suricata *EngineState `json:"suricata"`
+	// The state of the Strelka detection engine
+	Strelka *EngineState `json:"strelka"`
 }
 
 type EngineState struct {
-	IntegrityFailure bool `json:"integrityFailure"`
-	Migrating        bool `json:"migrating"`
-	MigrationFailure bool `json:"migrationFailure"`
-	Importing        bool `json:"importing"`
-	Syncing          bool `json:"syncing"`
-	SyncFailure      bool `json:"syncFailure"`
+	// True if this engine has failed the detection integrity check. This indicates a mismatch between running detections and the backend detection store.
+	IntegrityFailure bool `json:"integrityFailure" example:"false"`
+	// True if the detections are being migrated from an older release.
+	Migrating bool `json:"migrating" example:"false"`
+	// True if there was a migration failure during the most recent migration attempt.
+	MigrationFailure bool `json:"migrationFailure" example:"false"`
+	// True if new detections are being imported into the engine.
+	Importing bool `json:"importing" example:"false"`
+	// True if the detection engine is syncing the backend detection store with the running detection process.
+	Syncing bool `json:"syncing" example:"true"`
+	// True if a failure occurred during the most recent sync attempt.
+	SyncFailure bool `json:"syncFailure" example:"false"`
 }
 
 func (state *EngineState) IsFailureState() bool {
 	return state.IntegrityFailure || state.MigrationFailure || state.SyncFailure
 }
 
-func NewStatus() *Status {
+func NewStatus(gridId string) *Status {
 	newStatus := &Status{
+		GridId: gridId,
 		Grid:   &GridStatus{},
 		Alerts: &AlertsStatus{},
 		Detections: &DetectionsStatus{

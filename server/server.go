@@ -44,8 +44,8 @@ type Server struct {
 	Agent            *model.User
 	Context          context.Context
 	DetectionEngines map[model.EngineName]DetectionEngine
-	SubgridNodes     []*model.Node
 	ApiRouter        *chi.Mux
+	Statusstore      Statusstore
 }
 
 func NewServer(cfg *config.ServerConfig, version string) *Server {
@@ -60,7 +60,7 @@ func NewServer(cfg *config.ServerConfig, version string) *Server {
 	licensing.ValidateSocUrl(server.Config.BaseUrl)
 
 	server.ApiRouter = chi.NewMux()
-	server.ApiRouter.Use(web.Middleware(server.Host, false))
+	server.ApiRouter.Use(web.Middleware(server.Host, false, server.Config.Subgrids))
 	server.ApiRouter.NotFound(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.WithFields(log.Fields{
 			"requestUrl":  r.URL.String(),

@@ -55,10 +55,10 @@ func TestRefreshGrid(tester *testing.T) {
 	status, _ := NewTestStatus()
 
 	status.refreshGrid(context.Background())
-	assert.Equal(tester, 2, status.currentStatus.Grid.UnhealthyNodeCount)
-	assert.Equal(tester, 3, status.currentStatus.Grid.TotalNodeCount)
-	assert.Equal(tester, 0, status.currentStatus.Grid.AwaitingRebootNodeCount)
-	assert.Equal(tester, 12, status.currentStatus.Grid.Eps)
+	assert.Equal(tester, 2, status.statusByGridId[model.LOCAL_GRID_ID].Grid.UnhealthyNodeCount)
+	assert.Equal(tester, 3, status.statusByGridId[model.LOCAL_GRID_ID].Grid.TotalNodeCount)
+	assert.Equal(tester, 0, status.statusByGridId[model.LOCAL_GRID_ID].Grid.AwaitingRebootNodeCount)
+	assert.Equal(tester, 12, status.statusByGridId[model.LOCAL_GRID_ID].Grid.Eps)
 }
 
 func TestRefreshGrid_SubgridNodes(t *testing.T) {
@@ -98,9 +98,8 @@ func TestRefreshGrid_SubgridNodes(t *testing.T) {
 
 	status.refreshGrid(context.Background())
 
-	// Assert that the subgrid nodes are included in the total node count
-	assert.Equal(t, 5, status.currentStatus.Grid.TotalNodeCount)     // 3 local + 2 subgrid
-	assert.Equal(t, 3, status.currentStatus.Grid.UnhealthyNodeCount) // 2 local + 1 subgrid
+	assert.Equal(t, 3, status.statusByGridId[model.LOCAL_GRID_ID].Grid.TotalNodeCount)
+	assert.Equal(t, 2, status.statusByGridId[model.LOCAL_GRID_ID].Grid.UnhealthyNodeCount)
 }
 
 func TestCheckDetectionEngineStatus(tester *testing.T) {

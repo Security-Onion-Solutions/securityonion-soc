@@ -725,7 +725,13 @@ func (h *DetectionHandler) BulkUpdateDetection(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	noTimeOutCtx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, ctx.Value(web.ContextKeyRunAsUsername).(string))
+	noTimeOutCtx := context.Background()
+	val := ctx.Value(web.ContextKeyRunAsUsername)
+	if val != nil {
+		if username, ok := val.(string); ok {
+			noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRunAsUsername, username)
+		}
+	}
 	noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRequestorId, ctx.Value(web.ContextKeyRequestorId).(string))
 
 	go h.bulkUpdateDetectionAsync(noTimeOutCtx, body, detects, logger)

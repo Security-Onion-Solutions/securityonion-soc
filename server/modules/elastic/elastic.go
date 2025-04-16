@@ -123,7 +123,7 @@ func (elastic *Elastic) Init(cfg module.ModuleConfig) error {
 
 func (elastic *Elastic) Start() error {
 	r := chi.NewMux()
-	r.Use(web.Middleware(elastic.server.Host, false))
+	r.Use(web.Middleware(elastic.server.Host, false, elastic.server.Config.Subgrids))
 	RegisterJobLookupRoutes(elastic.server, elastic.store, r, "/joblookup")
 	elastic.server.Host.RegisterRouter("/joblookup", r)
 

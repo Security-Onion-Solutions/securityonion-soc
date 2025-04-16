@@ -12,6 +12,7 @@ const NodeStatusOk = "ok";
 const NodeStatusPending = "pending";
 const NodeStatusRestart = "restart";
 const UNREALISTIC_AGE = 1700000000; // About 54 years
+const STALENESS_CHECK_INTERVAL_MS = 30000
 
 routes.push({ path: '/grid', name: 'grid', component: {
   template: '#page-grid',
@@ -43,7 +44,6 @@ routes.push({ path: '/grid', name: 'grid', component: {
       { title: this.$root.i18n.suricataLossAbbr, value: 'suriLossPct', align: ' d-none d-xl-table-cell', moreColumns: true, metricsEnabled: true },
       { title: this.$root.i18n.stenoLossAbbr, value: 'stenoLossPct', align: ' d-none d-xl-table-cell', moreColumns: true, metricsEnabled: true },
       { title: this.$root.i18n.pcapRetentionAbbr, value: 'pcapDays', align: ' d-none d-xl-table-cell', moreColumns: true, metricsEnabled: true },
-      { title: this.$root.i18n.dateUpdated, value: 'updateTime', align: ' d-none d-lg-table-cell' },
       { title: this.$root.i18n.uptime, value: 'uptimeSeconds', align: ' d-none d-lg-table-cell' },
       { title: this.$root.i18n.status, value: 'status' },
       { title: '', value: 'keywords', align: ' d-none' },
@@ -54,7 +54,6 @@ routes.push({ path: '/grid', name: 'grid', component: {
     footerProps: { 'items-per-page-options': [10,25,50,100,250,1000] },
     gridEps: 0,
     metricsEnabled: false,
-    selectedId: null,
     selectedNode: null,
     gridMemberTestConfirmDialog: false,
     gridMemberRestartConfirmDialog: false,
@@ -104,6 +103,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
       this.zone = moment.tz.guess();
 
       this.loadData();
+      setInterval(this.checkStaleness, STALENESS_CHECK_INTERVAL_MS);
     },
     async loadData() {
       this.$root.startLoading();
@@ -122,6 +122,21 @@ routes.push({ path: '/grid', name: 'grid', component: {
       this.$root.stopLoading();
       this.$root.subscribe("node", this.updateNode);
       this.$root.subscribe("status", this.updateStatus);
+    },
+    generateContainerLink(node, container) {
+      const link = {};
+      link.name = 'hunt';
+      link.query = {};
+      link.query.q = `tags:"${container.Name}" | groupby log.level | groupby event.action`;
+      link.query.t = moment().subtract(1, 'hours').format(this.i18n.timePickerFormat) + ' - ' + moment().format(this.i18n.timePickerFormat);
+      link.query.socExcludeToggle = false;
+      if (node.gridId) {
+        link.query.gridId = node.gridId;
+      }
+      return link;
+    },
+    checkStaleness() {
+      this.$forceUpdate();
     },
     areMetricsCurrent(node) {
       const lastUpdated = Date.parse(node["updateTime"]);
@@ -176,13 +191,15 @@ routes.push({ path: '/grid', name: 'grid', component: {
       }
     },
     updateNode(node) {
-      this.updateNodeDetails(node);
-      this.updateMetricsEnabled()
+      if (node.gridId == this.$root.selectedGridId) {
+        this.updateNodeDetails(node);
+        this.updateMetricsEnabled()
+      }
     },
     updateNodeDetails(node) {
       var found = false;
       for (var i = 0; i < this.nodes.length; i++) {
-        if (this.nodes[i].id == node.id) {
+        if (this.nodes[i].id == node.id && this.nodes[i].gridId == node.gridId) {
           const exp = this.isExpanded(this.nodes[i]);
           this.nodes[i] = this.formatNode(node);
           if (exp) {
@@ -205,17 +222,17 @@ routes.push({ path: '/grid', name: 'grid', component: {
       }
     },
     updateStatus(status) {
-      this.gridEps = status.grid.eps;
+      if (status.gridId == this.$root.selectedGridId) {
+        this.gridEps = status.grid.eps;
+      }
     },
-    showTestConfirm(id) {
-      this.selectedId = id;
+    showTestConfirm(node) {
+      this.selectedNode = node;
       this.gridMemberTestConfirmDialog = true;
     },
     hideTestConfirm() {
       this.gridMemberTestConfirmDialog = false;
-      const tmpId = this.selectedId;
-      this.selectedId = null;
-      return tmpId;
+      this.selectedNode = null;
     },
     canTest(node) {
       if (node['keywords'] && node['keywords'].indexOf("Sensor") != -1) {
@@ -227,21 +244,27 @@ routes.push({ path: '/grid', name: 'grid', component: {
       return this.canUploadPCAP(node) || this.canUploadEvtx(node);
     },
     canUploadPCAP(node) {
-      return !!node['keywords'] && (node['keywords'].indexOf("Sensor") != -1 || node['keywords'].indexOf("Import") != -1);
+      return !!node['keywords'] && // If keywords don't exist, return false
+        (node['keywords'].indexOf("Sensor") != -1 || node['keywords'].indexOf("Import") != -1) &&
+        node.role != 'so-heavynode'; // Heavy nodes do not support importing pcap
     },
     canUploadEvtx(node) {
       return !!node['keywords'] && node['keywords'].indexOf("Manager") != -1;
     },
+    getNodeName(node) {
+      return node.id + '_' + node.role.replace('so-', '');
+    },
     async gridMemberTest() {
-      const nodeId = this.hideTestConfirm().replace('_so-', '_');
+      const nodeId = this.getNodeName(this.selectedNode);
       this.$root.startLoading();
       try {
-        await this.$root.papi.post('gridmembers/' + nodeId + "/test");
+        await this.$root.papi.post('gridmembers/' + nodeId + "/test", null, {params: {gridId: this.selectedNode.gridId}});
         this.$root.showTip(this.i18n.gridMemberTestSuccess);
       } catch (error) {
           this.$root.showError(error);
       }
       this.$root.stopLoading();
+      this.hideTestConfirm()
     },
     showUploadConfirm(node) {
       this.selectedNode = node;
@@ -295,9 +318,9 @@ routes.push({ path: '/grid', name: 'grid', component: {
       const data = new FormData();
       data.append("attachment", this.uploadForm.attachment);
       headers = { 'Content-Type': 'multipart/form-data; boundary=' + data._boundary }
-      config = { 'headers': headers };
+      config = { headers: headers, params: {gridId: this.selectedNode.gridId} };
 
-      let nodeName = this.selectedNode.id + '_' + this.selectedNode.role.replace('so-', '');
+      let nodeName = this.getNodeName(this.selectedNode);
 
       try {
         await this.$root.papi.post(`gridmembers/${nodeName}/import`, data, config);
@@ -312,26 +335,25 @@ routes.push({ path: '/grid', name: 'grid', component: {
 
       this.hideUploadConfirm();
     },
-    showRestartConfirm(id) {
-      this.selectedId = id;
+    showRestartConfirm(node) {
+      this.selectedNode = node;
       this.gridMemberRestartConfirmDialog = true;
     },
     hideRestartConfirm() {
       this.gridMemberRestartConfirmDialog = false;
-      const tmpId = this.selectedId;
-      this.selectedId = null;
-      return tmpId;
+      this.selectedNode = null;
     },
     async gridMemberRestart() {
-      const nodeId = this.hideRestartConfirm().replace('_so-', '_');
+      const nodeId = this.getNodeName(this.selectedNode);
       this.$root.startLoading();
       try {
-        await this.$root.papi.post('gridmembers/' + nodeId + "/restart");
+        await this.$root.papi.post('gridmembers/' + nodeId + "/restart", null, {params: {gridId: this.selectedNode.gridId}});
         this.$root.showTip(this.i18n.gridMemberRestartSuccess);
       } catch (error) {
           this.$root.showError(error);
       }
       this.$root.stopLoading();
+      this.hideRestartConfirm();
     },
     hasContainer(item, container) {
       return item && item.containers && item.containers.find(function(x) {

@@ -47,6 +47,24 @@
             <span v-text="i18n.licenseExpiringSoon" class="d-none d-md-inline" data-aid="license_expiring_notice"></span>
           </div>
           <v-spacer></v-spacer>
+          <v-select v-if="hasSubgrids()"
+            id="subgrid-selector" 
+            :disabled="!subgridSelectorEnabled"
+            v-model="selectedGridId" 
+            :items="getAllGrids()" 
+            item-title="name" 
+            item-value="id" 
+            variant="outlined"
+            density="compact"
+            class="mt-6 mr-4 text-white"
+            max-width="200px"
+            :label="i18n.selectGrid"
+            :bg-color="selectedGridId ? 'blue-darken-4' : ''"
+            data-aid="main_subgrid_selector">
+            <template v-slot:item="{ props: itemProps, item }">
+              <v-list-item v-bind="itemProps" :base-color="getSubgridColor(item.raw.id)" :append-icon="getSubgridIcon(item.raw.id)"></v-list-item>
+            </template>
+          </v-select>
           <v-menu bottom left offset-y>
             <template #activator="{ props }">
               <v-btn icon v-bind="props" data-aid="nav_profile">
@@ -158,7 +176,7 @@
             <div class="warning-message" v-html="warningMessage"></div>
           </v-snackbar>
           <v-alert dismissible type="info" icon="fa-info" v-model="info" transition="scale-transition" v-html="infoMessage" data-aid="banner_info"></v-alert>
-          <v-snackbar id="tip" location="center top" rounded close :timeout="tipTimeout" v-model="tip" color="info" data-aid="banner_tip">
+          <v-snackbar id="tip" location="center top" rounded close :timeout="currentTipTimeout" v-model="tip" color="info" data-aid="banner_tip">
             <template #actions="{ attrs }">
               <v-btn icon variant="text" size="small" v-bind="attrs" @click="tip = false" data-aid="banner_tip_close">
                 <v-icon>fa-times</v-icon>
@@ -254,7 +272,7 @@
               <template #prepend>
                 <v-icon>fa-network-wired</v-icon>
               </template>
-              <template #append v-if="isGridUnhealthy()">
+              <template #append v-if="isUnhealthy()">
                 <v-icon color="warning">fa-exclamation</v-icon>
               </template>
               <v-list-item-title v-text="i18n.grid"></v-list-item-title>
