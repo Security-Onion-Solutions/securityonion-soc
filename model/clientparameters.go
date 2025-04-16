@@ -37,7 +37,6 @@ type ClientParameters struct {
 	CasesEnabled        bool                 `json:"casesEnabled"`
 	EnableReverseLookup bool                 `json:"enableReverseLookup"`
 	DetectionsEnabled   bool                 `json:"detectionsEnabled"`
-	RefreshIntervalMs   int                  `json:"refreshIntervalMs"`
 }
 
 func (config *ClientParameters) Verify() error {

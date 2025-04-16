@@ -193,7 +193,6 @@ $(document).ready(function () {
           gridInfo: {},
           selectedGridId: LOCAL_GRID_ID,
           subgridSelectorEnabled: false,
-          refreshIntervalMs: 30000,
           statusByGridId: {},
         }
       },
@@ -492,9 +491,6 @@ $(document).ready(function () {
                   }
                   if (this.parameters.tipTimeoutMs > 0) {
                     this.tipTimeout = this.parameters.tipTimeoutMs;
-                  }
-                  if (this.parameters.refreshIntervalMs > 0) {
-                    this.refreshIntervalMs = this.parameters.refreshIntervalMs;
                   }
                   if (this.parameters.tools && this.parameters.tools.length > 0) {
                     this.tools = this.parameters.tools;
