@@ -173,6 +173,7 @@ const huntComponent = {
     chartResizeTracker: {},
     gridId: null,
     activeTabs: {},
+    expandedEvents: [],
     eventColumnWidth: 0,
   }},
   created() {
@@ -378,6 +379,10 @@ const huntComponent = {
       this.selectAllState = false;
       this.selectAllIndeterminate = false;
       this.selectedCount = 0;
+
+      // reset playbooks tabs/expansion
+      this.activeTabs = {};
+      this.expandedEvents = [];
 
       var route = this;
       var onSuccess = function() {};
@@ -2696,13 +2701,152 @@ const huntComponent = {
 
       const response = await this.$root.papi.get(`playbook/detection/${publicId}`);
 
-      console.log(response.data);
+      const playbooks = response.data;
 
-      // replace variables here
+      this.queryVariableSubstitution(event, playbooks);
 
-      event.playbooks = response.data;
-
+      event.playbooks = playbooks;
       delete event.playbookLoading;
+
+      if (this.$root.isPro()) {
+        for (let pb of event.playbooks) {
+          for (let q of pb.Questions) {
+            await this.$nextTick();
+            await this.askQuestion(q, event);
+          }
+        }
+      }
+
+      console.log(event);
+    },
+    queryVariableSubstitution(event, playbooks) {
+      for (let pb of playbooks) {
+        for (let question of pb.Questions) {
+          let q = question.OQL;
+
+          for (let field in event) {
+            const value = event[field];
+            if (field.startsWith('event_data.')) {
+              field = field.replace('event_data.', '');
+            }
+
+            q = q.replaceAll(`{${field}}`, value);
+          }
+
+          question.FilledOQL = q;
+        }
+      }
+    },
+    async askQuestion(question, event) {
+      if (question.Range) {
+        const dateRange = this.buildQuestionRange(event, question.Range);
+
+        let response = await this.$root.papi.get('events/', {
+          params: {
+            query: question.FilledOQL,
+            range: dateRange,
+            format: this.i18n.timePickerSample,
+            zone: this.zone,
+            metricLimit: 5,
+            eventLimit: 5
+          }
+        });
+
+        if (this.isQuestionAggregate(question)) {
+          let biggest = '';
+          for (let field in response.data.metrics) {
+            if (field.length > biggest.length) biggest = field;
+          }
+          if (biggest) {
+            question.Answers = response.data.metrics[biggest];
+          } else {
+            // fallback, less than ideal
+            question.Answers = response.data.events;
+          }
+        } else {
+          question.Answers = response.data.events;
+        }
+      } else {
+        // no range specified means we can find the answer on the event
+        // but avoid making a circular reference
+        const dupe = JSON.parse(JSON.stringify(event));
+        question.Answers = [{ payload: dupe }];
+      }
+    },
+    buildQuestionRange(event, range) {
+      if (!range) {
+        return '';
+      }
+      const t = event?.['event_data.@timestamp'] || event?.['soc_timestamp'] || event?.['@timestamp'];
+
+      let plusMinus = false;
+      let lookingBack = false;
+
+      if (range.startsWith('+/-')) {
+        plusMinus = true;
+        range = range.substring(3);
+      } else if (range.startsWith('-')) {
+        lookingBack = true;
+        range = range.substring(1);
+      }
+
+      let unit = range[range.length - 1].toLowerCase();
+      range = range.substring(0, range.length - 1);
+
+      let value = parseInt(range);
+      if (isNaN(value)) {
+        console.error('Invalid range value:', range);
+        return;
+      }
+
+      unit = { d: 'days', h: 'hours', m: 'minutes', s: 'seconds' }[unit];
+      if (!unit) {
+        console.error('Invalid range unit:', range);
+        return;
+      }
+
+      let t1, t2;
+
+      if (plusMinus) {
+        t1 = moment(t).subtract(value, unit).format(this.i18n.timePickerFormat);
+        t2 = moment(t).add(value, unit).format(this.i18n.timePickerFormat);
+      } else if (lookingBack) {
+        t1 = moment(t).subtract(value, unit).format(this.i18n.timePickerFormat);
+        t2 = moment(t).format(this.i18n.timePickerFormat);
+      } else {
+        t1 = moment(t).format(this.i18n.timePickerFormat);
+        t2 = moment(t).add(value, unit).format(this.i18n.timePickerFormat);
+      }
+
+      return `${t1} - ${t2}`;
+    },
+    buildHuntQuestionParams(question, event) {
+      let payload = {
+        name: 'hunt',
+        query: {
+          q: question.FilledOQL,
+        },
+      };
+
+      if (question.Range) {
+        payload.query.t = this.buildQuestionRange(event, question.Range);
+      }
+
+      return payload;
+    },
+    isQuestionAggregate(question) {
+      if ('isAggregate' in question) return question.isAggregate;
+
+      const yaml = jsyaml.load(question.Query, { schema: jsyaml.FAILSAFE_SCHEMA });
+      question.isAggregate = typeof yaml.aggregation === 'string' && yaml.aggregation.toLowerCase() === 'true';
+      return question.isAggregate;
+    },
+    translateValue(value) {
+      if (typeof value === 'string' && value.startsWith('__')) {
+        return this.i18n[value];
+      }
+
+      return value;
     },
   }
 };

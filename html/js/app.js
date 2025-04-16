@@ -1524,6 +1524,9 @@ $(document).ready(function () {
             return new Date(a[field]) - new Date(b[field]);
           }
         },
+        isPro() {
+          return this.licenseStatus === LICENSE_STATUS_ACTIVE;
+        },
       },
       created() {
         this.log("Initializing application components");
