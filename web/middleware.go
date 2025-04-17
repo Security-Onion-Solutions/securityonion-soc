@@ -23,7 +23,7 @@ import (
 	"github.com/apex/log"
 )
 
-const ALL_GRIDS = "all"
+const ALL_GRIDS = "_all"
 
 func Middleware(host *Host, isWS bool, subgrids []*model.Subgrid) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -58,7 +58,7 @@ func Middleware(host *Host, isWS bool, subgrids []*model.Subgrid) func(http.Hand
 				}
 			}
 
-			// If a subgrid or all grids are being queried, send it to that subgrid(s)
+			// Proxy subgrid requests
 			gridId := strings.TrimSpace(r.URL.Query().Get("gridId"))
 			if len(gridId) > 0 {
 				ctx = context.WithValue(ctx, ContextKeySubgridResponses, make(map[string][]byte))
@@ -66,9 +66,8 @@ func Middleware(host *Host, isWS bool, subgrids []*model.Subgrid) func(http.Hand
 				proxySubgridRequest(subgrids, gridId, ctx, w, r)
 			}
 
-			// If there was no subgrid specified, or if all subgrids are being queried, then
-			// process the request locally
-			if len(gridId) == 0 || gridId == ALL_GRIDS {
+			// If there was no subgrid specified
+			if len(gridId) == 0 {
 				log.WithFields(log.Fields{
 					"requestId":   ctx.Value(ContextKeyRequestId),
 					"requestorId": ctx.Value(ContextKeyRequestorId),
@@ -247,7 +246,7 @@ func proxySubgridRequest(subgrids []*model.Subgrid, gridId string, ctx context.C
 	}
 
 	for _, grid := range subgrids {
-		if grid.Id == gridId || gridId == ALL_GRIDS {
+		if isSubgridSelected(grid, gridId) {
 			// Proxy the request down to the subgrid
 			subgridUrl, err := url.Parse(r.RequestURI)
 			if err != nil {
@@ -295,7 +294,7 @@ func proxySubgridRequest(subgrids []*model.Subgrid, gridId string, ctx context.C
 					"requestorId": ctx.Value(ContextKeyRequestorId),
 				}).Debug("Finished proxying request to subgrid")
 			}
-			if gridId != ALL_GRIDS {
+			if isOnlySubgridSelected(grid, gridId) {
 				Respond(w, r, resp.StatusCode, *resp)
 				return
 			} else if subgridResponsesById != nil {
@@ -308,10 +307,22 @@ func proxySubgridRequest(subgrids []*model.Subgrid, gridId string, ctx context.C
 		}
 	}
 
-	if gridId != ALL_GRIDS {
+	if len(subgridResponsesById) == 0 && !isLocalGridSelected(gridId) {
 		// Subgrid not found
 		err := errors.New("ERROR_SUBGRID_INVALID")
 		Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
+}
+
+func isLocalGridSelected(gridId string) bool {
+	return gridId == ALL_GRIDS
+}
+
+func isSubgridSelected(grid *model.Subgrid, gridId string) bool {
+	return isOnlySubgridSelected(grid, gridId) || gridId == ALL_GRIDS
+}
+
+func isOnlySubgridSelected(grid *model.Subgrid, gridId string) bool {
+	return grid.Id == gridId
 }

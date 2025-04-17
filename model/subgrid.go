@@ -24,7 +24,6 @@ import (
 
 const API_CLIENT_PREFIX = "socl_"
 const LOCAL_GRID_ID = ""
-const ALL_GRIDS = "all"
 
 type Subgrid struct {
 	// A unique, admin-assigned identifier string for this subgrid

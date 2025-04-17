@@ -21,7 +21,6 @@ const LICENSE_EXPIRES_SOON_DAYS = 45;
 
 const SUBGRID_DISABLED_ROUTES = ['home','settings'];
 const LOCAL_GRID_ID = ''
-const ALL_GRIDS = 'all'
 
 const USER_PASSWORD_LENGTH_MIN = 8;
 const USER_PASSWORD_LENGTH_MAX = 72;

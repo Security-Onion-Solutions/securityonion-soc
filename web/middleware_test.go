@@ -263,3 +263,24 @@ func TestProxySubgridRequest(tester *testing.T) {
 		})
 	}
 }
+
+func TestIsLocalGridSelected(t *testing.T) {
+	assert.True(t, isLocalGridSelected(ALL_GRIDS), "ALL_GRIDS should return true")
+	assert.False(t, isLocalGridSelected("some_other_grid"), "Any other grid ID should return false")
+}
+
+func TestIsSubgridSelected(t *testing.T) {
+	grid := &model.Subgrid{Id: "test-grid"}
+
+	assert.True(t, isSubgridSelected(grid, ALL_GRIDS), "ALL_GRIDS should return true")
+	assert.True(t, isSubgridSelected(grid, "test-grid"), "Matching grid ID should return true")
+	assert.False(t, isSubgridSelected(grid, "some_other_grid"), "Non-matching grid ID should return false")
+}
+
+func TestIsOnlySubgridSelected(t *testing.T) {
+	grid := &model.Subgrid{Id: "test-grid"}
+
+	assert.True(t, isOnlySubgridSelected(grid, "test-grid"), "Matching grid ID should return true")
+	assert.False(t, isOnlySubgridSelected(grid, ALL_GRIDS), "ALL_GRIDS should return false")
+	assert.False(t, isOnlySubgridSelected(grid, "some_other_grid"), "Non-matching grid ID should return false")
+}
