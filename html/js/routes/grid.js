@@ -75,12 +75,14 @@ routes.push({ path: '/grid', name: 'grid', component: {
     NodeStatusPending: NodeStatusPending,
     NodeStatusRestart: NodeStatusRestart,
     UNREALISTIC_AGE: UNREALISTIC_AGE,
+    stalenessInterval: null,
   }},
   created() {
   },
   unmounted() {
     this.$root.unsubscribe("node", this.updateNode);
     this.$root.unsubscribe("status", this.updateStatus);
+    clearInterval(this.stalenessInterval);
   },
   mounted() {
     this.$root.loadParameters("grid", this.initGrid);
@@ -103,7 +105,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
       this.zone = moment.tz.guess();
 
       this.loadData();
-      setInterval(this.checkStaleness, STALENESS_CHECK_INTERVAL_MS);
+      this.stalenessInterval = setInterval(this.checkStaleness, STALENESS_CHECK_INTERVAL_MS);
     },
     async loadData() {
       this.$root.startLoading();
