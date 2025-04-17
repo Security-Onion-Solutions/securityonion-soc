@@ -323,3 +323,22 @@ test('hasZeek', () => {
 	item = {containers: [{Name: 'so-something'}, {Name: 'so-nope'}, {Name: 'so-another'}]};
 	expect(comp.hasQueuestore(item)).toBe(false);
 });
+
+test('setInterval and clearInterval', () => {
+  jest.useFakeTimers();
+  const setIntervalSpy = jest.spyOn(window, 'setInterval');
+  const clearIntervalSpy = jest.spyOn(window, 'clearInterval');
+  const loadDataSpy = jest.spyOn(comp, 'loadData').mockImplementation(() => {});
+
+  comp.initGrid({});
+  expect(setIntervalSpy).toHaveBeenCalledTimes(1);
+  expect(setIntervalSpy).toHaveBeenCalledWith(comp.checkStaleness, 30000);
+
+  comp.unmounted();
+  expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
+  expect(clearIntervalSpy).toHaveBeenCalledWith(comp.stalenessInterval);
+
+  setIntervalSpy.mockRestore();
+  clearIntervalSpy.mockRestore();
+  loadDataSpy.mockRestore();
+});
