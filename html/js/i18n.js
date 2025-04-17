@@ -759,7 +759,6 @@ const i18n = {
       refreshCommentsHelp: 'Refresh to view all recently added comments for this case.',
       refreshObservablesHelp: 'Refresh to view all recently added observables for this case.',
       refreshEventsHelp: 'Refresh to view all recently escalated events for this case.',
-      refreshStatusError: 'Error encountered while refreshing grid status',
       regex: 'Regex',
       reject: 'Reject',
       rejected: 'Rejected',

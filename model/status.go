@@ -42,13 +42,13 @@ type DetectionsStatus struct {
 type EngineState struct {
 	// True if this engine has failed the detection integrity check. This indicates a mismatch between running detections and the backend detection store.
 	IntegrityFailure bool `json:"integrityFailure" example:"false"`
-	// True if the detections are being migrated from an older release.
+	// True if the detections are currently being migrated from an older release.
 	Migrating bool `json:"migrating" example:"false"`
 	// True if there was a migration failure during the most recent migration attempt.
 	MigrationFailure bool `json:"migrationFailure" example:"false"`
-	// True if new detections are being imported into the engine.
+	// True if new detections are currently being imported into the engine.
 	Importing bool `json:"importing" example:"false"`
-	// True if the detection engine is syncing the backend detection store with the running detection process.
+	// True if the detection engine is currently syncing the backend detection store with the running detection process.
 	Syncing bool `json:"syncing" example:"true"`
 	// True if a failure occurred during the most recent sync attempt.
 	SyncFailure bool `json:"syncFailure" example:"false"`
