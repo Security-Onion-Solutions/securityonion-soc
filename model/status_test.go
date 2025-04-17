@@ -13,10 +13,11 @@ import (
 )
 
 func TestIsFailureState(tester *testing.T) {
-	status := NewStatus()
+	status := NewStatus("test")
 	assert.False(tester, status.Detections.ElastAlert.IsFailureState())
 	assert.False(tester, status.Detections.Strelka.IsFailureState())
 	assert.False(tester, status.Detections.Suricata.IsFailureState())
+	assert.Equal(tester, status.GridId, "test")
 
 	status.Detections.ElastAlert.IntegrityFailure = true
 	status.Detections.Strelka.MigrationFailure = true

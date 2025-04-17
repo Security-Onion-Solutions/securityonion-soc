@@ -10,9 +10,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"reflect"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -20,7 +23,9 @@ import (
 	"github.com/apex/log"
 )
 
-func Middleware(host *Host, isWS bool) func(http.Handler) http.Handler {
+const ALL_GRIDS = "_all"
+
+func Middleware(host *Host, isWS bool, subgrids []*model.Subgrid) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Version", host.Version)
@@ -53,12 +58,23 @@ func Middleware(host *Host, isWS bool) func(http.Handler) http.Handler {
 				}
 			}
 
-			log.WithFields(log.Fields{
-				"requestId":   ctx.Value(ContextKeyRequestId),
-				"requestorId": ctx.Value(ContextKeyRequestorId),
-			}).Debug("Serving HTTP request")
+			// Proxy subgrid requests
+			gridId := strings.TrimSpace(r.URL.Query().Get("gridId"))
+			if len(gridId) > 0 {
+				ctx = context.WithValue(ctx, ContextKeySubgridResponses, make(map[string][]byte))
+				r = r.WithContext(ctx)
+				proxySubgridRequest(subgrids, gridId, ctx, w, r)
+			}
 
-			next.ServeHTTP(w, r)
+			// If there was no subgrid specified
+			if len(gridId) == 0 {
+				log.WithFields(log.Fields{
+					"requestId":   ctx.Value(ContextKeyRequestId),
+					"requestorId": ctx.Value(ContextKeyRequestorId),
+				}).Debug("Serving HTTP request")
+
+				next.ServeHTTP(w, r)
+			}
 		})
 	}
 }
@@ -132,6 +148,10 @@ func Respond(w http.ResponseWriter, r *http.Request, statusCode int, obj interfa
 			if w != nil {
 				_, _ = w.Write(data)
 			}
+		case http.Response:
+			w.Header().Set("Content-Type", data.Header.Get("Content-Type"))
+			w.WriteHeader(data.StatusCode)
+			io.Copy(w, data.Body)
 		default:
 			bytes, err := json.Marshal(obj)
 			if err != nil {
@@ -214,4 +234,95 @@ func isNil(i interface{}) bool {
 		return reflect.ValueOf(i).IsNil()
 	}
 	return false
+}
+
+func proxySubgridRequest(subgrids []*model.Subgrid, gridId string, ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	var subgridResponsesById map[string][]byte
+	subgridResponses := ctx.Value(ContextKeySubgridResponses)
+	if subgridResponses != nil {
+		if responseMap, ok := subgridResponses.(map[string][]byte); ok {
+			subgridResponsesById = responseMap
+		}
+	}
+
+	for _, grid := range subgrids {
+		if isSubgridSelected(grid, gridId) {
+			// Proxy the request down to the subgrid
+			subgridUrl, err := url.Parse(r.RequestURI)
+			if err != nil {
+				err := errors.New("ERROR_SUBGRID_URL_INVALID")
+				Respond(w, r, http.StatusBadRequest, err)
+				return
+			}
+			qry := subgridUrl.Query()
+			qry.Del("gridId")
+			qry.Add("assignedGridId", grid.Id)
+			subgridUrl.RawQuery = qry.Encode()
+			url := subgridUrl.Path
+			subgridUrl.Path = strings.Replace(url, "api/", "", 1)
+
+			headers := make(map[string]string)
+			contentTypes := r.Header.Values("Content-Type")
+			if len(contentTypes) > 0 {
+				headers["Content-Type"] = contentTypes[0]
+			}
+
+			log.WithFields(log.Fields{
+				"requestId":    ctx.Value(ContextKeyRequestId),
+				"requestorId":  ctx.Value(ContextKeyRequestorId),
+				"gridId":       grid.Id,
+				"subgridUrl":   subgridUrl.String(),
+				"proxyHeaders": headers,
+			}).Info("Proxying request to subgrid")
+			resp, err := grid.MakeApiCall(r.Method, subgridUrl.String(), r.Body, headers)
+			if err != nil {
+				log.WithError(err).WithFields(log.Fields{
+					"requestId":   ctx.Value(ContextKeyRequestId),
+					"requestorId": ctx.Value(ContextKeyRequestorId),
+					"gridId":      grid.Id,
+					"subgridUrl":  subgridUrl.String(),
+				}).Error("Failed to proxy request to subgrid")
+
+				if resp == nil {
+					err = errors.New("ERROR_SUBGRID_API_UNREACHABLE")
+					Respond(w, r, http.StatusBadGateway, err)
+					return
+				}
+			} else {
+				log.WithFields(log.Fields{
+					"requestId":   ctx.Value(ContextKeyRequestId),
+					"requestorId": ctx.Value(ContextKeyRequestorId),
+				}).Debug("Finished proxying request to subgrid")
+			}
+			if isOnlySubgridSelected(grid, gridId) {
+				Respond(w, r, resp.StatusCode, *resp)
+				return
+			} else if subgridResponsesById != nil {
+				bytes, err := io.ReadAll(resp.Body)
+				if err != nil {
+					// Store this grid's response in case it needs to be merged with the local grid response
+					subgridResponsesById[grid.Id] = bytes
+				}
+			}
+		}
+	}
+
+	if len(subgridResponsesById) == 0 && !isLocalGridSelected(gridId) {
+		// Subgrid not found
+		err := errors.New("ERROR_SUBGRID_INVALID")
+		Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+}
+
+func isLocalGridSelected(gridId string) bool {
+	return gridId == ALL_GRIDS
+}
+
+func isSubgridSelected(grid *model.Subgrid, gridId string) bool {
+	return isOnlySubgridSelected(grid, gridId) || gridId == ALL_GRIDS
+}
+
+func isOnlySubgridSelected(grid *model.Subgrid, gridId string) bool {
+	return grid.Id == gridId
 }

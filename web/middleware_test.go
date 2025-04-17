@@ -200,3 +200,87 @@ func compareJSON(jsn1 []byte, jsn2 []byte) (success bool, err error) {
 
 	return reflect.DeepEqual(one, two), nil
 }
+
+func TestProxySubgridRequest(tester *testing.T) {
+	// Create a mock subgrid
+	var subgrids []*model.Subgrid
+	subgrid := &model.Subgrid{
+		Id:         "test-subgrid",
+		ManagerUrl: "http://test-subgrid",
+	}
+	subgrids = append(subgrids, subgrid)
+
+	table := []struct {
+		Name         string
+		Subgrids     []*model.Subgrid
+		GridId       string
+		ExpectedBody []byte
+		ExpectedCode int
+	}{
+		{
+			Name:         "Nil subgrids",
+			Subgrids:     nil,
+			GridId:       `123`,
+			ExpectedBody: []byte(`ERROR_SUBGRID_INVALID`),
+			ExpectedCode: http.StatusBadRequest,
+		},
+		{
+			Name:         "Empty subgrids",
+			Subgrids:     make([]*model.Subgrid, 0),
+			GridId:       `123`,
+			ExpectedBody: []byte(`ERROR_SUBGRID_INVALID`),
+			ExpectedCode: http.StatusBadRequest,
+		},
+		{
+			Name:         "Matching subgrids",
+			Subgrids:     subgrids,
+			GridId:       `test-subgrid`,
+			ExpectedBody: []byte(`ERROR_SUBGRID_API_UNREACHABLE`),
+			ExpectedCode: http.StatusBadGateway,
+		},
+	}
+
+	for _, tt := range table {
+		tester.Run(tt.Name, func(t *testing.T) {
+			tt := tt
+			t.Parallel()
+
+			// Create a mock response writer
+			respWriter := &httptest.ResponseRecorder{
+				Body: &bytes.Buffer{},
+			}
+
+			ctx := context.Background()
+			ctx = context.WithValue(ctx, ContextKeyRequestStart, time.Now())
+			ctx = context.WithValue(ctx, ContextKeyRequestId, "x")
+
+			req := MustRequest(tester, http.MethodGet, "somewhere?gridId=123", nil)
+			req = req.WithContext(ctx)
+
+			proxySubgridRequest(tt.Subgrids, tt.GridId, ctx, respWriter, req)
+			assert.Equal(tester, tt.ExpectedCode, respWriter.Result().StatusCode)
+			assert.Equal(tester, tt.ExpectedBody, respWriter.Body.Bytes())
+		})
+	}
+}
+
+func TestIsLocalGridSelected(t *testing.T) {
+	assert.True(t, isLocalGridSelected(ALL_GRIDS), "ALL_GRIDS should return true")
+	assert.False(t, isLocalGridSelected("some_other_grid"), "Any other grid ID should return false")
+}
+
+func TestIsSubgridSelected(t *testing.T) {
+	grid := &model.Subgrid{Id: "test-grid"}
+
+	assert.True(t, isSubgridSelected(grid, ALL_GRIDS), "ALL_GRIDS should return true")
+	assert.True(t, isSubgridSelected(grid, "test-grid"), "Matching grid ID should return true")
+	assert.False(t, isSubgridSelected(grid, "some_other_grid"), "Non-matching grid ID should return false")
+}
+
+func TestIsOnlySubgridSelected(t *testing.T) {
+	grid := &model.Subgrid{Id: "test-grid"}
+
+	assert.True(t, isOnlySubgridSelected(grid, "test-grid"), "Matching grid ID should return true")
+	assert.False(t, isOnlySubgridSelected(grid, ALL_GRIDS), "ALL_GRIDS should return false")
+	assert.False(t, isOnlySubgridSelected(grid, "some_other_grid"), "Non-matching grid ID should return false")
+}

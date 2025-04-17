@@ -10,9 +10,16 @@ require('./grid.js');
 const comp = getComponent("grid");
 
 test('updateStatus', () => {
-	const status = { grid: { eps: 12 }};
+	const status = { gridId: 'abc', grid: { eps: 12 }};
 
 	expect(comp.gridEps).toBe(0);
+
+	// Update for an alternate (non-selected) grid
+	comp.updateStatus(status);
+	expect(comp.gridEps).toBe(0);
+
+	// Update for the selected grid
+	comp.$root.selectedGridId = 'abc';
 	comp.updateStatus(status);
 	expect(comp.gridEps).toBe(12);
 });
@@ -131,15 +138,16 @@ test('formatNode_MissingContainers', () => {
 
 test('testConfirmDialog', () => {
 	expect(comp.gridMemberTestConfirmDialog).toBe(false);
-	expect(comp.selectedId).toBe(null);
+	expect(comp.selectedNode).toBe(null);
 
-	comp.showTestConfirm('t2');
+	const testNode = { id: 't2', role: '', gridId: ''};
+	comp.showTestConfirm(testNode);
 	expect(comp.gridMemberTestConfirmDialog).toBe(true);
-	expect(comp.selectedId).toBe('t2');
+	expect(comp.selectedNode).toBe(testNode);
 
 	comp.hideTestConfirm();
 	expect(comp.gridMemberTestConfirmDialog).toBe(false);
-	expect(comp.selectedId).toBe(null);
+	expect(comp.selectedNode).toBe(null);
 });
 
 test('canTest', () => {
@@ -156,15 +164,16 @@ test('canTest', () => {
 
 test('testRestartConfirmDialog', () => {
 	expect(comp.gridMemberRestartConfirmDialog).toBe(false);
-	expect(comp.selectedId).toBe(null);
+	expect(comp.selectedNode).toBe(null);
 
-	comp.showRestartConfirm('t2');
+	const testNode = { id: 't2', role: '', gridId: ''};
+	comp.showRestartConfirm(testNode);
 	expect(comp.gridMemberRestartConfirmDialog).toBe(true);
-	expect(comp.selectedId).toBe('t2');
+	expect(comp.selectedNode).toStrictEqual(testNode);
 
 	comp.hideRestartConfirm();
 	expect(comp.gridMemberRestartConfirmDialog).toBe(false);
-	expect(comp.selectedId).toBe(null);
+	expect(comp.selectedNode).toBe(null);
 });
 
 test('testUploadDialog', () => {
@@ -224,6 +233,11 @@ test('canUpload', () => {
 	});
 });
 
+test('canNotUploadPCAPToHeavyNode', () => {
+	const node = { role: 'so-heavynode', keywords: 'Sensor' }
+	expect(comp.canUploadPCAP(node)).toBe(false);
+});
+
 test('canConfigureMaxUploadSize', () => {
 	const skip = comp.loadData;
 
@@ -249,17 +263,17 @@ test('canConfigureMaxUploadSize', () => {
 test('gridMemberTest', async () => {
 	resetPapi();
 	const mock = mockPapi("post");
-	comp.selectedId = 'fwd01_so-sensor';
+	comp.selectedNode = { id: 'fwd01', role: 'so-sensor', gridId: ''};
 	await comp.gridMemberTest();
-	expect(mock).toHaveBeenCalledWith('gridmembers/fwd01_sensor/test');
+	expect(mock).toHaveBeenCalledWith('gridmembers/fwd01_sensor/test', null, {params: { gridId: ''}});
 });
 
 test('gridMemberRestart', async () => {
 	resetPapi();
 	const mock = mockPapi("post");
-	comp.selectedId = 'fwd01_so-sensor';
+	comp.selectedNode = { id: 'fwd01', role: 'so-sensor', gridId: 'abc'};
 	await comp.gridMemberRestart();
-	expect(mock).toHaveBeenCalledWith('gridmembers/fwd01_sensor/restart');
+	expect(mock).toHaveBeenCalledWith('gridmembers/fwd01_sensor/restart', null, {params: { gridId: 'abc'}});
 });
 
 test('hasEventstore', () => {
@@ -308,4 +322,23 @@ test('hasZeek', () => {
 
 	item = {containers: [{Name: 'so-something'}, {Name: 'so-nope'}, {Name: 'so-another'}]};
 	expect(comp.hasQueuestore(item)).toBe(false);
+});
+
+test('setInterval and clearInterval', () => {
+  jest.useFakeTimers();
+  const setIntervalSpy = jest.spyOn(window, 'setInterval');
+  const clearIntervalSpy = jest.spyOn(window, 'clearInterval');
+  const loadDataSpy = jest.spyOn(comp, 'loadData').mockImplementation(() => {});
+
+  comp.initGrid({});
+  expect(setIntervalSpy).toHaveBeenCalledTimes(1);
+  expect(setIntervalSpy).toHaveBeenCalledWith(comp.checkStaleness, 30000);
+
+  comp.unmounted();
+  expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
+  expect(clearIntervalSpy).toHaveBeenCalledWith(comp.stalenessInterval);
+
+  setIntervalSpy.mockRestore();
+  clearIntervalSpy.mockRestore();
+  loadDataSpy.mockRestore();
 });

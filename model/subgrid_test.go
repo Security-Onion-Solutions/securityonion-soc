@@ -143,12 +143,13 @@ func TestSubgrid_makeApiCall(t *testing.T) {
 			TokenExpiration: time.Now().Add(time.Hour),
 		}
 
-		resp, err := grid.MakeApiCall(http.MethodGet, "/testpath", nil)
+		resp, err := grid.MakeApiCall(http.MethodGet, "/testpath", nil, nil)
 		if err != nil {
 			t.Errorf("makeApiCall() error = %v", err)
 		}
 
-		assert.Equal(t, `{"status": "ok"}`, string(resp))
+		bytes, _ := io.ReadAll(resp.Body)
+		assert.Equal(t, `{"status": "ok"}`, string(bytes))
 	})
 
 	t.Run("failed api call - refresh token fails", func(t *testing.T) {
@@ -158,7 +159,7 @@ func TestSubgrid_makeApiCall(t *testing.T) {
 			ClientSecret: "test-secret",
 		}
 
-		resp, err := grid.MakeApiCall(http.MethodGet, "/testpath", nil)
+		resp, err := grid.MakeApiCall(http.MethodGet, "/testpath", nil, nil)
 		if err == nil {
 			t.Errorf("Expected makeApiCall() to return error, got nil")
 		}
@@ -184,7 +185,7 @@ func TestSubgrid_makeApiCall(t *testing.T) {
 			TokenExpiration: time.Now().Add(time.Hour),
 		}
 
-		resp, err := grid.MakeApiCall(http.MethodGet, "/testpath", nil)
+		resp, err := grid.MakeApiCall(http.MethodGet, "/testpath", nil, nil)
 		if err == nil {
 			t.Errorf("Expected makeApiCall() to return error, got nil")
 		}
@@ -219,12 +220,13 @@ func TestSubgrid_makeApiCall(t *testing.T) {
 		}
 
 		requestBody := bytes.NewBuffer([]byte(`{"key":"value"}`))
-		resp, err := grid.MakeApiCall(http.MethodPost, "/testpath", requestBody)
+		resp, err := grid.MakeApiCall(http.MethodPost, "/testpath", requestBody, nil)
 		if err != nil {
 			t.Errorf("makeApiCall() error = %v", err)
 		}
 
-		assert.Equal(t, `{"status": "ok"}`, string(resp))
+		bytes, _ := io.ReadAll(resp.Body)
+		assert.Equal(t, `{"status": "ok"}`, string(bytes))
 	})
 }
 

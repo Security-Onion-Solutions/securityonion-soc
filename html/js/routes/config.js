@@ -51,6 +51,7 @@ routes.push({
         confirmRemoveEntryDialog: false,
         confirmRemoveEntryMessage: "",
         confirmRemoveEntryIdx: 0,
+        oldGridId: null,
       }
     },
     mounted() {
@@ -69,10 +70,22 @@ routes.push({
   },
   methods: {
     onRouteUpdate() {
-      this.processRouteParameters();
-      this.refreshTree();
+      if (this.processRouteParameters()) {
+        if (this.form.key) {
+          // Override the tip timeout duration due to this relatively complex messaging being displayed.
+          this.$root.showTip(this.i18n.settingChangeInProgress, 30000);
+        }
+        this.loadData();
+      } else {
+        this.refreshTree();
+      }
     },
     processRouteParameters() {
+      var forceDataReload = false;
+      if (this.$route.query.gridId != this.oldGridId) {
+        forceDataReload = true;
+        this.oldGridId = this.$route.query.gridId;
+      }
       if (this.$route.query.a == "1") {
         this.advanced = true;
       }
@@ -93,6 +106,8 @@ routes.push({
         this.search = this.$route.query.s;
       }
       this.applySearchFilter();
+
+      return forceDataReload;
     },
     findActiveSetting() {
       if (this.active.length > 0) {
@@ -391,6 +406,7 @@ routes.push({
       window.scrollTo(0,0);
     },
     unpack(setting) {
+      if (!setting) return;
       this.form.entries = []
       if (this.hasUiElements(setting)) {
         const isArrayOfObjects = setting.forcedType && setting.forcedType.startsWith("[]");
@@ -935,6 +951,9 @@ routes.push({
         this.generateEntryTitle(element2, oldIdx);
       }
       this.markDirtyEntries();
+    },
+    closeSetting() {
+      this.active = [];
     },
   }
 }});

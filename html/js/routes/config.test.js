@@ -707,7 +707,9 @@ test('processRouteParameters', () => {
   };
   comp.$nextTick = jest.fn();
 
-  comp.processRouteParameters();
+  // Local grid
+  comp.oldGridId = null;
+  expect(comp.processRouteParameters()).toBe(false);
 
   expect(comp.search).toBe('search');
   expect(comp.autoSelect).toBe('');
@@ -716,13 +718,15 @@ test('processRouteParameters', () => {
   expect(comp.advanced).toBe(false);
   expect(comp.$nextTick).toHaveBeenCalledTimes(0);
 
+  // Remote grid
   comp.search = '';
   comp.searchFilter = '';
   comp.$route.query = {
     e: '1',
+    gridId: 'my_grid',
   };
 
-  comp.processRouteParameters();
+  expect(comp.processRouteParameters()).toBe(true);
 
   expect(comp.search).toBe('');
   expect(comp.autoSelect).toBe('');

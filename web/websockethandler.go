@@ -33,7 +33,7 @@ func RegisterWebSocketRoutes(host *Host, r chi.Router) {
 	}
 
 	r.Group(func(r chi.Router) {
-		r.Use(Middleware(host, true))
+		r.Use(Middleware(host, true, nil))
 
 		r.Get("/ws", handler.Handle)
 	})

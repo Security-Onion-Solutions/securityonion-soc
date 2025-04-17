@@ -1500,7 +1500,7 @@ test('buildDetectionEngineHuntQuery', () => {
       SyncFailure: 'SyncFailure',
     }
   };
-  comp.$root.currentStatus = {
+  comp.$root.statusByGridId[''] = {
     detections: {
       elastalert: {
         syncFailure: 1,

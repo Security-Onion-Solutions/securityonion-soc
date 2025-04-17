@@ -221,7 +221,13 @@ func (h *CaseHandler) CreateEvents(w http.ResponseWriter, r *http.Request) {
 		relatedEvents = append(relatedEvents, related)
 	}
 
-	noTimeOutCtx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, ctx.Value(web.ContextKeyRunAsUsername).(string))
+	noTimeOutCtx := context.Background()
+	val := ctx.Value(web.ContextKeyRunAsUsername)
+	if val != nil {
+		if username, ok := val.(string); ok {
+			noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRunAsUsername, username)
+		}
+	}
 	noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRequestorId, ctx.Value(web.ContextKeyRequestorId).(string))
 	noTimeOutCtx = log.NewContext(noTimeOutCtx, log.FromContext(ctx))
 
