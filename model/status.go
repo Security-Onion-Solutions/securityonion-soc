@@ -17,7 +17,7 @@ type Status struct {
 type GridStatus struct {
 	// The total number of nodes that have checked-in to the grid manager since the manager SOC process was last restarted
 	TotalNodeCount int `json:"totalNodeCount" example:"4"`
-	// The number of nodes that not in a healthy state, typically due to a fault.
+	// The number of nodes that are not in a healthy state, typically due to a fault.
 	UnhealthyNodeCount int `json:"unhealthyNodeCount" example:"0"`
 	// The number of nodes that are awaiting reboot for kernel updates
 	AwaitingRebootNodeCount int `json:"awaitingRebootNodeCount" example:"1"`

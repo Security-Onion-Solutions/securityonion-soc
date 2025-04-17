@@ -14,7 +14,7 @@ test('updateStatus', () => {
 
 	expect(comp.gridEps).toBe(0);
 
-	// Update but for the an alternate grid
+	// Update for an alternate (non-selected) grid
 	comp.updateStatus(status);
 	expect(comp.gridEps).toBe(0);
 
