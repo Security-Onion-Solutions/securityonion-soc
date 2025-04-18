@@ -41,7 +41,7 @@ ARG WAZUH_VERSION=0.0.0
 RUN apt update -y && apt upgrade -y
 RUN apt install -y --no-install-recommends bash tzdata ca-certificates wget curl tcpdump unzip git gcc python3-dev libssl-dev && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
-RUN pip3 install sigma-cli pysigma-backend-elasticsearch pysigma-pipeline-windows --break-system-packages
+RUN pip3 install pysigma==0.11.20 sigma-cli==1.0.5 pysigma-backend-elasticsearch pysigma-pipeline-windows --break-system-packages
 RUN pip3 install yara-python==4.3.1
 RUN apt-get -y remove gcc python3-dev libssl-dev && apt-get -y autoremove
 
