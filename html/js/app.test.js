@@ -882,3 +882,28 @@ test('getSelectedGrid', () => {
   app.selectedGridId = 'g3';
   expect(app.getSelectedGrid()).toBe(undefined);
 });
+
+test('apiRequestCallback', () => {
+  req = {};
+  app.selectedGridId = '';
+
+  // Default case
+  var newReq = app.apiRequestCallback(req);
+  expect(newReq.params).toBe(undefined);
+
+  // Local grid specified in request
+  req.params = { gridId: '' };
+  var newReq = app.apiRequestCallback(req);
+  expect(newReq.params).toStrictEqual({});
+
+  // Remote grid specified in request
+  req.params = { gridId: 'abc' };
+  var newReq = app.apiRequestCallback(req);
+  expect(newReq.params).toStrictEqual({ gridId: 'abc' });
+
+  // Remote grid specified in selectedGridId
+  req = {}
+  app.selectedGridId = 'xyz';
+  var newReq = app.apiRequestCallback(req);
+  expect(newReq.params).toStrictEqual({ gridId: 'xyz' });
+});
