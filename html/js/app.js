@@ -1029,9 +1029,12 @@ $(document).ready(function () {
         apiRequestCallback(request) {
           if (this.selectedGridId && (!request.params || !('gridId' in request.params))) {
             if (!request.params) {
-              request.params = {}
+              request.params = {};
             }
             request.params["gridId"] = this.selectedGridId;
+          }
+          if (request.params && 'gridId' in request.params && request.params.gridId == LOCAL_GRID_ID) {
+            delete request.params.gridId;
           }
           return request;
         },
