@@ -338,6 +338,14 @@ routes.push({
       }
       return desc;
     },
+    getSettingLink(setting) {
+      var url = new URL(window.location.origin);
+      url.searchParams.set('s', setting.id);
+      url.searchParams.set('a', setting.advanced ? 1 : 0);
+      var link = url.toString();
+      link = link.replace(window.location.origin + '/', window.location.origin + '/#' + this.$route.path);
+      return link;
+    },
     getSettingBreadcrumbs(setting) {
       var breadcrumbs = setting.id.replaceAll(".", " > ");
       if (setting.title) {
