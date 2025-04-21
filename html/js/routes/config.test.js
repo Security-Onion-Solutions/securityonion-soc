@@ -1145,3 +1145,22 @@ test('moveEntryWrapWithoutPlus', () => {
   expect(comp.form.entries[1]._title).toBe('2');
   expect(comp.form.entries[2]._title).toBe('3');
 });
+
+test('getSettingLink', () => {
+  const setting = { id: 'test.setting', advanced: true };
+  global.window = Object.create(window);
+  const url = "https://example.com/#/config";
+  Object.defineProperty(window, 'location', {
+    value: {
+      href: url,
+      origin: "https://example.com",
+    }
+  });
+  comp.$route = { path: '/config' };
+  const link = comp.getSettingLink(setting);
+  expect(link).toBe('https://example.com/#/config?s=test.setting&a=1');
+
+  setting.advanced = false;
+  const link2 = comp.getSettingLink(setting);
+  expect(link2).toBe('https://example.com/#/config?s=test.setting&a=0');
+});

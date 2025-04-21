@@ -219,8 +219,11 @@
 						<div class="d-inline-flex mb-4 " style="width: 100%">
 							<span class="text-caption font-weight-thin" data-aid="config_breadcrumbs">
 								{{ getSettingBreadcrumbs(selected) }}
-								<v-btn icon variant="text" size="small" @click.stop="$root.copyToClipboard(getSettingBreadcrumbs(selected))" :title="i18n.copyToClipboard" data-aid="config_breadcrumb_copy">
+								<v-btn icon variant="text" size="small" @click.stop="$root.copyToClipboard(getSettingBreadcrumbs(selected))" :title="i18n.copyBreadcrumbToClipboard" data-aid="config_breadcrumb_copy">
 									<v-icon>fa-copy</v-icon>
+								</v-btn>
+								<v-btn icon variant="text" size="small" @click.stop="$root.copyToClipboard(getSettingLink(selected))" :title="i18n.copyLinkToClipboard" data-aid="config_breadcrumb_copy_link">
+									<v-icon>fa-link</v-icon>
 								</v-btn>
 							</span>
 							<v-spacer></v-spacer>
@@ -261,7 +264,7 @@
 								<v-col>
 									<v-btn id="config-toggle-default-button" @click="showDefault = !showDefault" v-text="showDefault ? i18n.settingHideDefault : i18n.settingShowDefault" data-aid="config_item_show_default"></v-btn>
 									<div v-if="showDefault" class="mt-8 ml-8">
-										<v-chip v-if="isToggle(selected)" id="default-output" :color="$root.isTrue(selected.default) ? 'primary' : 'secondary'" data-aid="config_item_default_display">{{$root.isTrue(selected.value) ? i18n.enabled : i18n.disabled }}</v-chip>
+										<v-chip v-if="isToggle(selected)" id="default-output" :color="$root.isTrue(selected.default) ? 'primary' : ''" data-aid="config_item_default_display">{{$root.isTrue(selected.default) ? i18n.enabled : i18n.disabled }}</v-chip>
 										<v-textarea v-else-if="isMultiline(selected)" id="default-output" variant="underlined" :label="i18n.settingDefault" v-model="selected.default" readonly class="config-editor" data-aid="config_item_default_display"></v-textarea>
 										<v-text-field v-else id="default-output" variant="underlined" :label="i18n.settingDefault" v-model="selected.default" readonly data-aid="config_item_default_display"></v-text-field>
 									</div>
