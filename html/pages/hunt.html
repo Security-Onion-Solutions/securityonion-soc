@@ -207,7 +207,7 @@
 					</div>
 				</v-expand-transition>
 			</v-col>
-			<v-col id="group-metrics" v-if="metricsEnabled" :data-aid="'groups_' + category">
+			<v-col ref="eventColumn" id="group-metrics" v-if="metricsEnabled" :data-aid="'groups_' + category">
 				<v-toolbar v-if="isAdvanced()" density="compact" variant="flat">
 					<v-toolbar-title>{{ i18n.groups }}</v-toolbar-title>
 					<v-spacer></v-spacer>
@@ -251,8 +251,8 @@
 											</div>
 										</div>
 										<v-data-table v-if="!group.chart_type" :id="'group-' + groupIdx" class="elevation-1"
-											:search="groupByFilter" density="compact"
-											:items-per-page-options="groupByFooters" :item-value="group.sortBy.key" :items-per-page="groupByItemsPerPage"
+											:search="groupByFilter" density="compact" v-model:expanded="expandedEvents"
+											:items-per-page-options="groupByFooters" item-value="rule.uuid" :items-per-page="groupByItemsPerPage"
 											@update:items-per-page="val => groupByItemsPerPage = val" :headers="group.headers"
 											:items="group.data" v-model:sort-by="group.sortBy" must-sort @update:sort-by="updateGroupBySort(groupIdx)"
 											:data-aid="'groups_table_' + category">
@@ -289,9 +289,13 @@
 													</template>
 												</tr>
 											</template>
-											<template v-if="!group.maximized" #item="{ item, index }">
+											<template v-if="!group.maximized" #item="{ item, index, isExpanded, toggleExpand, internalItem }">
 												<tr>
 													<td v-if="aggregationActionsEnabled">
+														<v-btn v-if="isCategory('alerts')" variant="text" icon size="x-small" @click="toggleExpand(internalItem); if (isExpanded) fetchNewestEvent(item)" class="theme-icon">
+															<v-icon v-if="isExpanded(internalItem)" :alt="i18n.eventExpand" :title="i18n.eventExpandHelp" :data-aid="'group_item_collapse_' + category">fa-angle-down</v-icon>
+															<v-icon v-else :alt="i18n.eventExpand" :title="i18n.eventExpandHelp" :data-aid="'group_item_expand_' + category">fa-angle-right</v-icon>
+														</v-btn>
 														<v-btn id="alertButton" v-if="ackEnabled && item['event.severity_label']" variant="text" size="x-small" icon
 															@click="ack(item, !isFilterToggleEnabled('acknowledged'), false, null, groupIdx)"
 															:color="colorSeverity(item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged'))"
@@ -323,6 +327,130 @@
 													</td>
 													<td v-for="field in group.headers.slice(getGroupByFieldStartIndex())" :key="field.value">
 														<div :id="'quickaction_' + category + '_' + field.value" class="quick-action-trigger d-inline-block" @click="toggleQuickAction($event, item, groupIdx, field.value, item[field.value])":data-aid="'groups_quickaction_' + category">{{ item[field.value] }}<span class="resolved-host" v-if="$root.pickHostname(item[field.value])"> - {{ $root.pickHostname(item[field.value]) }}</span></div>
+													</td>
+												</tr>
+											</template>
+											<template #expanded-row="{ columns, item, index }">
+												<tr>
+													<td :colspan="columns.length" class="px-0" :data-aid="'events_fields_' + category">
+														<div class="sticky-details" :style="applyEventColumnWidth('max-width')">
+															<v-tabs :height="isCategory('alerts') ? undefined : 0" v-model="activeTabs[index]" @update:model-value="if (activeTabs[index] === 'playbook') loadPlaybook(item.newest);">
+																<v-tab id="alerts_alertsDetailTab" value="alert" :class="{ 'theme-primary': activeTabs[index] === 'alert' }" :style="applyEventColumnWidth('width', 0.5)">
+																	<v-icon class="tab-icon">fa-bell</v-icon>
+																	<div class="d-none d-lg-block">Alert Details</div>
+																</v-tab>
+																<v-tab id="alerts_playbookTab" value="playbook" :class="{ 'theme-primary': activeTabs[index] === 'playbook' }" :style="applyEventColumnWidth('width', 0.5)">
+																	<v-icon class="tab-icon">fa-book</v-icon>
+																	<div class="d-none d-lg-block">Guided Analysis</div>
+																</v-tab>
+															</v-tabs>
+															<v-tabs-window v-model="activeTabs[index]">
+																<v-tabs-window-item value="alert">
+																	<v-data-table density="compact" hide-default-header hide-default-footer :headers="expandedHeaders" :items="getExpandedData(item.newest)" items-per-page="-1">
+																		<template #item="{ item: kvp }">
+																			<tr :data-aid="'events_field_' + category + '_' + kvp.key" class="pt-3">
+																				<td class="expansion">
+																					<div class="d-inline-block semi-transparent">
+																						<v-btn :id="'groupby_' + kvp.key" :disabled="!canQuery(kvp.key)" variant="text" size="x-small" icon :to="buildGroupByNewRoute(kvp.key)" :data-aid="'events_field_groupby_toggle_' + category" class="remove-overlay">
+																							<v-icon :alt="i18n.groupNew" :title="i18n.groupNewHelp" class="theme-text">fa-layer-group</v-icon>
+																						</v-btn>
+																						<v-btn :id="'col_toggle_' + kvp.key" variant="text" size="x-small" icon @click="toggleColumnHeader(kvp.key)" :data-aid="'events_field_header_toggle_' + category">
+																							<v-icon :alt="i18n.addColumnHeader" :color="isColumnHeader(kvp.key) ? 'info' : ''" :title="i18n.addColumnHeaderHelp">fa-table-columns</v-icon>
+																						</v-btn>
+																					</div>
+																					<div :id="'events_fields_' + category + '_' + kvp.key" class="d-inline-block expansion va-middle" v-text="kvp.key" :data-aid="'events_field_name_' + category"></div>
+																				</td>
+																				<td class="expansion va-middle" :data-aid="'events_field_value_' + category">
+																					<div class="quick-action-trigger d-inline-block expansion hardwrap" @click="toggleQuickAction($event, item, -1, kvp.key, kvp.value)">{{kvp.key.endsWith('detection.author') ? $root.tryLocalize(kvp.value) : kvp.value}}<span class="resolved-host" v-if="$root.pickHostname(kvp.value)"> - {{ $root.pickHostname(kvp.value) }}</span></div>
+																				</td>
+																			</tr>
+																		</template>
+																	</v-data-table>
+																</v-tabs-window-item>
+																<v-tabs-window-item value="playbook">
+																	<template v-if="item.newest.playbooks">
+																		<template v-for="playbook in item.newest.playbooks">
+																			<v-expansion-panels variant="accordion" multiple static="true">
+																				<v-expansion-panel v-for="question in playbook.Questions">
+																					<v-expansion-panel-title class="italic ws-normal spacious-lines" #default="{ expanded }">
+																						<v-icon class="theme-icon mx-4">
+																							<template v-if="expanded">fa-angle-down</template>
+																							<template v-else>fa-angle-right</template>
+																						</v-icon>
+																						{{question.Question}}
+																					</v-expansion-panel-title>
+																					<v-expansion-panel-text class="pl-13 ws-normal" :style="applyEventColumnWidth('max-width', 1, -24)">
+																						<div class="italic bold">Context</div>
+																						<div class="italic">{{question.Context}}</div>
+																						<br/>
+																						<v-row no-gutters class="mb-5">
+																							<v-col cols="auto">
+																								<v-btn icon size="small" variant="text" :href="$router.resolve(buildHuntQuestionParams(question, item)).href" target="_blank" class="cursor-pointer">
+																									<v-icon>fa-crosshairs</v-icon>
+																								</v-btn>
+																							</v-col>
+																							<v-col style="align-content: center;">
+																								{{question.FilledOQL}}
+																							</v-col>
+																						</v-row>
+																						<template v-if="question.Answers">
+																							<span class="italic bold">Instant Insight</span>
+																							<table v-if="question.isAggregate" class="simple-table">
+																								<thead>
+																									<tr>
+																										<th v-for="field in question.Fields" :key="field">
+																											{{ field.replaceAll('event_data.', '') }}
+																										</th>
+																										<th>
+																											Count
+																										</th>
+																									</tr>
+																								</thead>
+																								<tbody>
+																									<tr v-for="agg in question.Answers">
+																										<td v-for="value in agg.keys">
+																											{{ translateValue(value) }}
+																										</td>
+																										<td class="text-right">
+																											{{ agg.value }}
+																										</td>
+																									</tr>
+																								</tbody>
+																							</table>
+																							<table v-else class="simple-table">
+																								<thead>
+																									<tr>
+																										<th>
+																											{{ i18n.timestamp }}
+																										</th>
+																										<th v-for="field in question.Fields" :key="field">
+																											{{ field.replaceAll('event_data.', '') }}
+																										</th>
+																									</tr>
+																								</thead>
+																								<tbody>
+																									<tr v-for="answer in question.Answers" :key="answer.id">
+																										<td>
+																											{{ formatTimestamp(getEventField(answer.payload, 'event_data.@timestamp')) }}
+																										</td>
+																										<td v-for="field in question.Fields" :key="field">
+																											{{ translateValue(getEventField(answer.payload, field)) }}
+																										</td>
+																									</tr>
+																								</tbody>
+																							</table>
+																						</template>
+																					</v-expansion-panel-text>
+																				</v-expansion-panel>
+																			</v-expansion-panels>
+																		</template>
+																	</template>
+																	<template v-else>
+																		<v-progress-circular indeterminate :size="50" color="primary" class="my-6" :style="applyEventColumnWidth('margin-left', 0.5, -25)"></v-progress-circular>
+																	</template>
+																</v-tabs-window-item>
+															</v-tabs-window>
+														</div>
 													</td>
 												</tr>
 											</template>
@@ -478,13 +606,13 @@
 								<template #expanded-row="{ columns, item, index }">
 									<tr>
 										<td :colspan="columns.length" class="px-0" :data-aid="'events_fields_' + category">
-											<div class="sticky-details" :style="{ 'max-width': eventColumnWidth + 'px' }">
-												<v-tabs v-model="activeTabs[index]" @update:model-value="if (activeTabs[index] === 'playbook') loadPlaybook(item);">
-													<v-tab id="alerts_alertsDetailTab" value="alert" :class="{ 'theme-primary': activeTabs[index] === 'alert' }" :style="{ width: (eventColumnWidth/2) + 'px' }">
+											<div class="sticky-details" :style="applyEventColumnWidth('max-width')">
+												<v-tabs :height="isCategory('alerts') ? undefined : 0" v-model="activeTabs[index]" @update:model-value="if (activeTabs[index] === 'playbook') loadPlaybook(item);">
+													<v-tab id="alerts_alertsDetailTab" value="alert" :class="{ 'theme-primary': activeTabs[index] === 'alert' }" :style="applyEventColumnWidth('width', 0.5)">
 														<v-icon class="tab-icon">fa-bell</v-icon>
 														<div class="d-none d-lg-block">Alert Details</div>
 													</v-tab>
-													<v-tab id="alerts_playbookTab" value="playbook" :class="{ 'theme-primary': activeTabs[index] === 'playbook' }" :style="{ width: (eventColumnWidth/2) + 'px' }">
+													<v-tab id="alerts_playbookTab" value="playbook" :class="{ 'theme-primary': activeTabs[index] === 'playbook' }" :style="applyEventColumnWidth('width', 0.5)">
 														<v-icon class="tab-icon">fa-book</v-icon>
 														<div class="d-none d-lg-block">Guided Analysis</div>
 													</v-tab>
@@ -524,13 +652,13 @@
 																			</v-icon>
 																			{{question.Question}}
 																		</v-expansion-panel-title>
-																		<v-expansion-panel-text class="pl-13 ws-normal" :style="{ 'max-width': (eventColumnWidth - 24) + 'px' }">
+																		<v-expansion-panel-text class="pl-13 ws-normal" :style="applyEventColumnWidth('max-width', 1, -24)">
 																			<div class="italic bold">Context</div>
 																			<div class="italic">{{question.Context}}</div>
 																			<br/>
 																			<v-row no-gutters class="mb-5">
 																				<v-col cols="auto">
-																					<v-btn icon size="small" variant="text" :to="buildHuntQuestionParams(question, item)">
+																					<v-btn icon size="small" variant="text" :href="$router.resolve(buildHuntQuestionParams(question, item)).href" target="_blank" class="cursor-pointer">
 																						<v-icon>fa-crosshairs</v-icon>
 																					</v-btn>
 																				</v-col>
@@ -539,7 +667,7 @@
 																				</v-col>
 																			</v-row>
 																			<template v-if="question.Answers">
-																				Quick Answers:
+																				<span class="italic bold">Instant Insight</span>
 																				<table v-if="question.isAggregate" class="simple-table">
 																					<thead>
 																						<tr>
@@ -554,10 +682,10 @@
 																					<tbody>
 																						<tr v-for="agg in question.Answers">
 																							<td v-for="value in agg.keys">
-																								{{ value }}
+																								{{ translateValue(value) }}
 																							</td>
 																							<td class="text-right">
-																								{{ translateValue(agg.value) }}
+																								{{ agg.value }}
 																							</td>
 																						</tr>
 																					</tbody>
@@ -565,6 +693,9 @@
 																				<table v-else class="simple-table">
 																					<thead>
 																						<tr>
+																							<th>
+																								{{ i18n.timestamp }}
+																							</th>
 																							<th v-for="field in question.Fields" :key="field">
 																								{{ field.replaceAll('event_data.', '') }}
 																							</th>
@@ -572,8 +703,11 @@
 																					</thead>
 																					<tbody>
 																						<tr v-for="answer in question.Answers" :key="answer.id">
+																							<td>
+																								{{ formatTimestamp(getEventField(answer.payload, 'event_data.@timestamp')) }}
+																							</td>
 																							<td v-for="field in question.Fields" :key="field">
-																								{{ translateValue(answer.payload[field]) }}
+																								{{ translateValue(getEventField(answer.payload, field)) }}
 																							</td>
 																						</tr>
 																					</tbody>
@@ -585,7 +719,7 @@
 															</template>
 														</template>
 														<template v-else>
-															<v-progress-circular indeterminate :size="50" color="primary" class="my-6" :style="{ 'margin-left': (eventColumnWidth/2-25) + 'px' }"></v-progress-circular>
+															<v-progress-circular indeterminate :size="50" color="primary" class="my-6" :style="applyEventColumnWidth('margin-left', 0.5, -25)"></v-progress-circular>
 														</template>
 													</v-tabs-window-item>
 												</v-tabs-window>

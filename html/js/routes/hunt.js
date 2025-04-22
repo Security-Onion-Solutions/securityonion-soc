@@ -210,7 +210,10 @@ const huntComponent = {
     this.stopRefreshTimer();
     this.$root.unsubscribe('detections:bulkUpdate', this.bulkUpdateReport);
     this.$root.unsubscribe('related:bulkCreate', this.bulkUpdateReport);
-    window.removeEventListener('resize', this.calculateEventColumnWidth);
+
+    if (this.isCategory('alerts')) {
+      window.removeEventListener('resize', this.calculateEventColumnWidth);
+    }
   },
   mounted() {
     this.$root.startLoading();
@@ -225,7 +228,9 @@ const huntComponent = {
       this.$root.subscribe('related:bulkCreate', this.bulkUpdateReport);
     }
 
-    window.addEventListener('resize', this.calculateEventColumnWidth);
+    if (this.isCategory('alerts')) {
+      window.addEventListener('resize', this.calculateEventColumnWidth);
+    }
   },
   watch: {
     '$route': 'loadData',
@@ -599,9 +604,12 @@ const huntComponent = {
       }
 
       this.$root.stopLoading();
-      this.$nextTick(() => {
-        this.calculateEventColumnWidth();
-      });
+
+      if (this.isCategory('alerts')) {
+        this.$nextTick(() => {
+          this.calculateEventColumnWidth();
+        });
+      }
     },
     getPresets(kind) {
       if (this.presets && this.presets[kind]) {
@@ -1154,8 +1162,9 @@ const huntComponent = {
       return this.buildGroupOptionRoute(groupIdx, removals, '');
     },
     countDrilldown(event) {
-      if ( (Object.keys(event).length == 2 && Object.keys(event)[0] == "count") || (Object.keys(event).length == 5 && Object.keys(event)[0] == "count" && Object.keys(event)[1] == "rule.name" && Object.keys(event)[2] == "event.module" && Object.keys(event)[3] == "event.severity_label" && Object.keys(event)[4] == "rule.uuid") ) {
-        this.filterRouteDrilldown = this.buildFilterRoute(Object.keys(event)[1], event[Object.keys(event)[1]], FILTER_DRILLDOWN);
+      const keys = Object.keys(event).filter(field => field != 'newest');
+      if ( (keys.length == 2 && keys[0] == "count") || (keys.length == 5 && keys[0] == "count" && keys[1] == "rule.name" && keys[2] == "event.module" && keys[3] == "event.severity_label" && keys[4] == "rule.uuid") ) {
+        this.filterRouteDrilldown = this.buildFilterRoute(keys[1], event[keys[1]], FILTER_DRILLDOWN);
         this.$router.push(this.filterRouteDrilldown);
       }
     },
@@ -1578,12 +1587,7 @@ const huntComponent = {
 
         const multiSelect = this.isMultiSelect();
         events.forEach((event, index) => {
-          var record = event.payload;
-          record.soc_id = event.id;
-          record.soc_score = event.score;
-          record.soc_type = event.type;
-          record.soc_timestamp = event.timestamp;
-          record.soc_source = event.source;
+          var record = route.extractSocValues(event);
           route.lookupSocIds(record);
 
           if (multiSelect) {
@@ -2726,11 +2730,13 @@ const huntComponent = {
 
           for (let field in event) {
             const value = event[field];
-            if (field.startsWith('event_data.')) {
-              field = field.replace('event_data.', '');
-            }
 
             q = q.replaceAll(`{${field}}`, value);
+
+            if (field.startsWith('event_data.')) {
+              let short = field.replace('event_data.', '');
+              q = q.replaceAll(`{${short}}`, value);
+            }
           }
 
           question.FilledOQL = q;
@@ -2739,32 +2745,38 @@ const huntComponent = {
     },
     async askQuestion(question, event) {
       if (question.Range) {
-        const dateRange = this.buildQuestionRange(event, question.Range);
+        try {
+          const dateRange = this.buildQuestionRange(event, question.Range);
 
-        let response = await this.$root.papi.get('events/', {
-          params: {
-            query: question.FilledOQL,
-            range: dateRange,
-            format: this.i18n.timePickerSample,
-            zone: this.zone,
-            metricLimit: 5,
-            eventLimit: 5
-          }
-        });
+          let response = await this.$root.papi.get('events/', {
+            params: {
+              query: question.FilledOQL,
+              range: dateRange,
+              format: this.i18n.timePickerSample,
+              zone: this.zone,
+              metricLimit: 5,
+              eventLimit: 5
+            }
+          });
 
-        if (this.isQuestionAggregate(question)) {
-          let biggest = '';
-          for (let field in response.data.metrics) {
-            if (field.length > biggest.length) biggest = field;
-          }
-          if (biggest) {
-            question.Answers = response.data.metrics[biggest];
+          if (this.isQuestionAggregate(question)) {
+            let biggest = '';
+            for (let field in response.data.metrics) {
+              if (field.length > biggest.length) biggest = field;
+            }
+            if (biggest) {
+              question.Answers = this.sortAggregateEvents(response.data.metrics[biggest]);
+            } else {
+              // fallback, less than ideal
+              question.Answers = response.data.events;
+            }
           } else {
-            // fallback, less than ideal
             question.Answers = response.data.events;
           }
-        } else {
-          question.Answers = response.data.events;
+        } catch (e) {
+          console.error('Error asking question:', e);
+          console.log('question', question);
+          console.log('event', event);
         }
       } else {
         // no range specified means we can find the answer on the event
@@ -2772,6 +2784,15 @@ const huntComponent = {
         const dupe = JSON.parse(JSON.stringify(event));
         question.Answers = [{ payload: dupe }];
       }
+    },
+    sortAggregateEvents(events) {
+      events = events.sort((a, b) => b.value - a.value);
+
+      if (events.length > 5) {
+        events = events.slice(0, 5);
+      }
+
+      return events;
     },
     buildQuestionRange(event, range) {
       if (!range) {
@@ -2848,6 +2869,88 @@ const huntComponent = {
 
       return value;
     },
+    async fetchNewestEvent(item) {
+      if (item.newest) return;
+
+      let parts = [];
+
+      for (let field in item) {
+        if (field.startsWith('event_data.')) {
+          field = field.replace('event_data.', '');
+        }
+
+        if (field.toLowerCase() === 'count') continue;
+
+        if (item[field] && item[field].length > 0) {
+          parts.push(`${field}:"${item[field]}"`);
+        }
+      }
+
+      const q = parts.join(' AND ') + `| sortby event_data.@timestamp`;
+
+      let params = {
+        query: q,
+        range: this.dateRange,
+        format: this.i18n.timePickerSample,
+        zone: this.zone,
+        metricLimit: 0,
+        eventLimit: 1
+      };
+
+      if (this.gridId && this.gridId.length > 0) {
+        params.gridId = this.gridId;
+      }
+
+      let response = await this.$root.papi.get('events/', { params });
+      if (response.data.events.length === 0) {
+        this.$root.showWarning('No events found');
+        return;
+      }
+
+      item.newest = this.extractSocValues(response.data.events[0]);
+    },
+    extractSocValues(event) {
+      var record = event.payload;
+      record.soc_id = event.id;
+      record.soc_score = event.score;
+      record.soc_type = event.type;
+      record.soc_timestamp = event.timestamp;
+      record.soc_source = event.source;
+
+      return record;
+    },
+    getEventField(event, field) {
+      if (field in event) {
+        return event[field];
+      }
+
+      let edField = 'event_data.' + field;
+      if (edField in event) {
+        return event[edField];
+      }
+
+      if (field.startsWith('event_data.')) {
+        let shortened = field.substring(11);
+        if (shortened in event) {
+          return event[shortened];
+        }
+      }
+
+      return '';
+    },
+    applyEventColumnWidth(style, factor, offset) {
+      debugger;
+      if (!this.isCategory('alerts')) return {};
+
+      if (!factor) factor = 1;
+      if (!offset) offset = 0;
+
+      let ret = {};
+
+      ret[style] = (this.eventColumnWidth * factor + offset) + 'px';
+
+      return ret;
+    }
   }
 };
 

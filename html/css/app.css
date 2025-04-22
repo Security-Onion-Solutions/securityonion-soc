@@ -1034,10 +1034,19 @@ ul ul ul {
   border-collapse: collapse;
   table-layout: fixed;
   border: 1px solid rgba(var(--v-theme-text), 0.12);
-  margin: 8px;
+  margin: 8px 0px;
 }
 
 .simple-table th, .simple-table td {
+  cursor: default;
   border: 1px solid rgba(var(--v-theme-text), 0.12);
-  padding: 6px;
+  padding: 10px;
+}
+
+.simple-table td {
+  font-weight: bolder;
+}
+
+.cursor-pointer {
+  cursor: pointer;
 }
