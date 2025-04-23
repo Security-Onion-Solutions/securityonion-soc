@@ -1050,3 +1050,8 @@ ul ul ul {
 .cursor-pointer {
   cursor: pointer;
 }
+
+.text-normal {
+  font-weight: unset !important;
+  font-style: unset !important;
+}

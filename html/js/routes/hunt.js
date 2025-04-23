@@ -2721,7 +2721,7 @@ const huntComponent = {
         }
       }
 
-      console.log(event);
+      console.log(event); // remove eventually
     },
     queryVariableSubstitution(event, playbooks) {
       for (let pb of playbooks) {
@@ -2939,8 +2939,7 @@ const huntComponent = {
       return '';
     },
     applyEventColumnWidth(style, factor, offset) {
-      debugger;
-      if (!this.isCategory('alerts')) return {};
+      if (!this.isCategory('alerts') || !style) return {};
 
       if (!factor) factor = 1;
       if (!offset) offset = 0;

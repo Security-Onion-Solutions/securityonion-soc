@@ -415,6 +415,11 @@
 																											{{ agg.value }}
 																										</td>
 																									</tr>
+																									<tr v-if="question.Answers && question.Answers.length === 0">
+																										<td colspan="100%" class="text-center">
+																											No Data
+																										</td>
+																									</tr>
 																								</tbody>
 																							</table>
 																							<table v-else class="simple-table">
@@ -430,11 +435,16 @@
 																								</thead>
 																								<tbody>
 																									<tr v-for="answer in question.Answers" :key="answer.id">
-																										<td>
+																										<td class="text-normal">
 																											{{ formatTimestamp(getEventField(answer.payload, 'event_data.@timestamp')) }}
 																										</td>
 																										<td v-for="field in question.Fields" :key="field">
 																											{{ translateValue(getEventField(answer.payload, field)) }}
+																										</td>
+																									</tr>
+																									<tr v-if="question.Answers && question.Answers.length === 0">
+																										<td colspan="100%" class="text-center">
+																											No Data
 																										</td>
 																									</tr>
 																								</tbody>
@@ -688,6 +698,11 @@
 																								{{ agg.value }}
 																							</td>
 																						</tr>
+																						<tr v-if="question.Answers && question.Answers.length === 0">
+																							<td colspan="100%" class="text-center">
+																								No Data
+																							</td>
+																						</tr>
 																					</tbody>
 																				</table>
 																				<table v-else class="simple-table">
@@ -703,11 +718,16 @@
 																					</thead>
 																					<tbody>
 																						<tr v-for="answer in question.Answers" :key="answer.id">
-																							<td>
+																							<td class="text-normal">
 																								{{ formatTimestamp(getEventField(answer.payload, 'event_data.@timestamp')) }}
 																							</td>
 																							<td v-for="field in question.Fields" :key="field">
 																								{{ translateValue(getEventField(answer.payload, field)) }}
+																							</td>
+																						</tr>
+																						<tr v-if="question.Answers && question.Answers.length === 0">
+																							<td colspan="100%" class="text-center">
+																								No Data
 																							</td>
 																						</tr>
 																					</tbody>
