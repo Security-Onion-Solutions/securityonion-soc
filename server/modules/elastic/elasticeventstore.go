@@ -181,17 +181,12 @@ func unmapElasticField(fieldDefs map[string]*FieldDefinition, field string) stri
 	return field
 }
 
-func (store *ElasticEventstore) EventSearch(ctx context.Context, critera *model.EventSearchCriteria) (*model.EventSearchResults, error) {
+func (store *ElasticEventstore) Search(ctx context.Context, criteria *model.EventSearchCriteria) (*model.EventSearchResults, error) {
 	err := store.server.CheckAuthorized(ctx, "read", "events")
 	if err != nil {
 		return nil, err
 	}
 
-	return store.Search(ctx, critera)
-}
-
-func (store *ElasticEventstore) Search(ctx context.Context, criteria *model.EventSearchCriteria) (*model.EventSearchResults, error) {
-	var err error
 	results := model.NewEventSearchResults()
 
 	store.refreshCache(ctx)
@@ -213,6 +208,11 @@ func (store *ElasticEventstore) Search(ctx context.Context, criteria *model.Even
 }
 
 func (store *ElasticEventstore) MSearch(ctx context.Context, criteria []*model.EventMSearchCriteria) (results *model.EventMSearchResults, err error) {
+	err = store.server.CheckAuthorized(ctx, "read", "events")
+	if err != nil {
+		return nil, err
+	}
+
 	results = model.NewEventMSearchResults()
 
 	buf := bytes.Buffer{}
