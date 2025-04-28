@@ -371,17 +371,17 @@
 																	<template v-if="item.newest.playbooks">
 																		<template v-for="playbook in item.newest.playbooks">
 																			<v-expansion-panels variant="accordion" multiple static="true">
-																				<v-expansion-panel v-for="question in playbook.Questions">
+																				<v-expansion-panel v-for="question in playbook.questions">
 																					<v-expansion-panel-title class="italic ws-normal spacious-lines" #default="{ expanded }">
 																						<v-icon class="theme-icon mx-4">
 																							<template v-if="expanded">fa-angle-down</template>
 																							<template v-else>fa-angle-right</template>
 																						</v-icon>
-																						{{question.Question}}
+																						{{question.question}}
 																					</v-expansion-panel-title>
 																					<v-expansion-panel-text class="pl-13 ws-normal" :style="applyEventColumnWidth('max-width', 1, -24)">
 																						<div class="italic bold">Context</div>
-																						<div class="italic">{{question.Context}}</div>
+																						<div class="italic">{{question.context}}</div>
 																						<br/>
 																						<v-row no-gutters class="mb-5">
 																							<v-col cols="auto">
@@ -390,15 +390,15 @@
 																								</v-btn>
 																							</v-col>
 																							<v-col style="align-content: center;">
-																								{{question.FilledOQL}}
+																								{{question.filledOQL}}
 																							</v-col>
 																						</v-row>
-																						<template v-if="question.Answers">
+																						<template v-if="question.answers">
 																							<span class="italic bold">Instant Insight</span>
 																							<table v-if="question.isAggregate" class="simple-table">
 																								<thead>
 																									<tr>
-																										<th v-for="field in question.Fields" :key="field">
+																										<th v-for="field in question.fields" :key="field">
 																											{{ field.replaceAll('event_data.', '') }}
 																										</th>
 																										<th>
@@ -407,7 +407,7 @@
 																									</tr>
 																								</thead>
 																								<tbody>
-																									<tr v-for="agg in question.Answers">
+																									<tr v-for="agg in question.answers">
 																										<td v-for="value in agg.keys">
 																											{{ translateValue(value) }}
 																										</td>
@@ -415,7 +415,7 @@
 																											{{ agg.value }}
 																										</td>
 																									</tr>
-																									<tr v-if="question.Answers && question.Answers.length === 0">
+																									<tr v-if="question.answers && question.answers.length === 0">
 																										<td colspan="100%" class="text-center">
 																											No Data
 																										</td>
@@ -428,21 +428,21 @@
 																										<th>
 																											{{ i18n.timestamp }}
 																										</th>
-																										<th v-for="field in question.Fields" :key="field">
+																										<th v-for="field in question.fields" :key="field">
 																											{{ field.replaceAll('event_data.', '') }}
 																										</th>
 																									</tr>
 																								</thead>
 																								<tbody>
-																									<tr v-for="answer in question.Answers" :key="answer.id">
+																									<tr v-for="answer in question.answers" :key="answer.id">
 																										<td class="text-normal">
 																											{{ formatTimestamp(getEventField(answer.payload, 'event_data.@timestamp')) }}
 																										</td>
-																										<td v-for="field in question.Fields" :key="field">
+																										<td v-for="field in question.fields" :key="field">
 																											{{ translateValue(getEventField(answer.payload, field)) }}
 																										</td>
 																									</tr>
-																									<tr v-if="question.Answers && question.Answers.length === 0">
+																									<tr v-if="question.answers && question.answers.length === 0">
 																										<td colspan="100%" class="text-center">
 																											No Data
 																										</td>
@@ -654,17 +654,17 @@
 														<template v-if="item.playbooks">
 															<template v-for="playbook in item.playbooks">
 																<v-expansion-panels variant="accordion" multiple static="true">
-																	<v-expansion-panel v-for="question in playbook.Questions">
+																	<v-expansion-panel v-for="question in playbook.questions">
 																		<v-expansion-panel-title class="italic ws-normal spacious-lines" #default="{ expanded }">
 																			<v-icon class="theme-icon mx-4">
 																				<template v-if="expanded">fa-angle-down</template>
 																				<template v-else>fa-angle-right</template>
 																			</v-icon>
-																			{{question.Question}}
+																			{{question.question}}
 																		</v-expansion-panel-title>
 																		<v-expansion-panel-text class="pl-13 ws-normal" :style="applyEventColumnWidth('max-width', 1, -24)">
 																			<div class="italic bold">Context</div>
-																			<div class="italic">{{question.Context}}</div>
+																			<div class="italic">{{question.context}}</div>
 																			<br/>
 																			<v-row no-gutters class="mb-5">
 																				<v-col cols="auto">
@@ -673,15 +673,15 @@
 																					</v-btn>
 																				</v-col>
 																				<v-col style="align-content: center;">
-																					{{question.FilledOQL}}
+																					{{question.filledOQL}}
 																				</v-col>
 																			</v-row>
-																			<template v-if="question.Answers">
+																			<template v-if="question.answers">
 																				<span class="italic bold">Instant Insight</span>
 																				<table v-if="question.isAggregate" class="simple-table">
 																					<thead>
 																						<tr>
-																							<th v-for="field in question.Fields" :key="field">
+																							<th v-for="field in question.fields" :key="field">
 																								{{ field.replaceAll('event_data.', '') }}
 																							</th>
 																							<th>
@@ -690,7 +690,7 @@
 																						</tr>
 																					</thead>
 																					<tbody>
-																						<tr v-for="agg in question.Answers">
+																						<tr v-for="agg in question.answers">
 																							<td v-for="value in agg.keys">
 																								{{ translateValue(value) }}
 																							</td>
@@ -698,7 +698,7 @@
 																								{{ agg.value }}
 																							</td>
 																						</tr>
-																						<tr v-if="question.Answers && question.Answers.length === 0">
+																						<tr v-if="question.answers && question.answers.length === 0">
 																							<td colspan="100%" class="text-center">
 																								No Data
 																							</td>
@@ -711,21 +711,21 @@
 																							<th>
 																								{{ i18n.timestamp }}
 																							</th>
-																							<th v-for="field in question.Fields" :key="field">
+																							<th v-for="field in question.fields" :key="field">
 																								{{ field.replaceAll('event_data.', '') }}
 																							</th>
 																						</tr>
 																					</thead>
 																					<tbody>
-																						<tr v-for="answer in question.Answers" :key="answer.id">
+																						<tr v-for="answer in question.answers" :key="answer.id">
 																							<td class="text-normal">
 																								{{ formatTimestamp(getEventField(answer.payload, 'event_data.@timestamp')) }}
 																							</td>
-																							<td v-for="field in question.Fields" :key="field">
+																							<td v-for="field in question.fields" :key="field">
 																								{{ translateValue(getEventField(answer.payload, field)) }}
 																							</td>
 																						</tr>
-																						<tr v-if="question.Answers && question.Answers.length === 0">
+																						<tr v-if="question.answers && question.answers.length === 0">
 																							<td colspan="100%" class="text-center">
 																								No Data
 																							</td>

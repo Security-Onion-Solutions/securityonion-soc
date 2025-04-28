@@ -29,6 +29,7 @@ func RegisterPlaybookRoutes(srv *Server, r chi.Router, prefix string) {
 	r.Route(prefix, func(r chi.Router) {
 		r.Get("/{id}", h.GetPlaybook)
 		r.Get("/detection/{id}", h.GetPlaybooksForDetection)
+		r.Post("/convert", h.ConvertPlaybook)
 	})
 }
 
@@ -40,6 +41,7 @@ func (h *PlaybookHandler) GetPlaybook(w http.ResponseWriter, r *http.Request) {
 	if playbookId == "" {
 		logger.Error("playbook id required")
 		web.Respond(w, r, http.StatusBadRequest, nil)
+
 		return
 	}
 
@@ -82,4 +84,28 @@ func (h *PlaybookHandler) GetPlaybooksForDetection(w http.ResponseWriter, r *htt
 	}
 
 	web.Respond(w, r, http.StatusOK, pbs)
+}
+
+func (h *PlaybookHandler) ConvertPlaybook(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	logger := log.FromContext(ctx)
+
+	queries := []string{}
+	err := web.ReadJson(r, &queries)
+	if err != nil {
+		logger.WithError(err).Error("unable to read queries")
+		web.Respond(w, r, http.StatusBadRequest, err)
+
+		return
+	}
+
+	pbConverted, err := h.server.Playbookstore.ConvertQuestions(ctx, queries)
+	if err != nil {
+		logger.WithError(err).Error("unable to convert playbook")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, pbConverted)
 }

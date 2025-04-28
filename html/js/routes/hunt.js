@@ -2709,12 +2709,14 @@ const huntComponent = {
 
       this.queryVariableSubstitution(event, playbooks);
 
+      await this.convertPlaybookQueries(playbooks)
+
       event.playbooks = playbooks;
       delete event.playbookLoading;
 
       if (this.$root.isPro()) {
         for (let pb of event.playbooks) {
-          for (let q of pb.Questions) {
+          for (let q of pb.questions) {
             await this.$nextTick();
             await this.askQuestion(q, event);
           }
@@ -2725,8 +2727,8 @@ const huntComponent = {
     },
     queryVariableSubstitution(event, playbooks) {
       for (let pb of playbooks) {
-        for (let question of pb.Questions) {
-          let q = question.OQL;
+        for (let question of pb.questions) {
+          let q = question.query;
 
           for (let field in event) {
             const value = event[field];
@@ -2739,18 +2741,37 @@ const huntComponent = {
             }
           }
 
-          question.FilledOQL = q;
+          question.filledQuery = q;
+        }
+      }
+    },
+    async convertPlaybookQueries(playbooks) {
+      let queries = [];
+      for (let pb of playbooks) {
+        for (let question of pb.questions) {
+          queries.push(question.filledQuery);
+        }
+      }
+
+      let response = await this.$root.papi.post('playbook/convert', queries);
+
+      let index = 0;
+      for (let pb of playbooks) {
+        for (let question of pb.questions) {
+          question.filledOQL = response.data[index].query;
+          question.fields = response.data[index].fields;
+          index++;
         }
       }
     },
     async askQuestion(question, event) {
-      if (question.Range) {
+      if (question.range) {
         try {
-          const dateRange = this.buildQuestionRange(event, question.Range);
+          const dateRange = this.buildQuestionRange(event, question.range);
 
           let response = await this.$root.papi.get('events/', {
             params: {
-              query: question.FilledOQL,
+              query: question.filledOQL,
               range: dateRange,
               format: this.i18n.timePickerSample,
               zone: this.zone,
@@ -2765,13 +2786,13 @@ const huntComponent = {
               if (field.length > biggest.length) biggest = field;
             }
             if (biggest) {
-              question.Answers = this.sortAggregateEvents(response.data.metrics[biggest]);
+              question.answers = this.sortAggregateEvents(response.data.metrics[biggest]);
             } else {
               // fallback, less than ideal
-              question.Answers = response.data.events;
+              question.answers = response.data.events;
             }
           } else {
-            question.Answers = response.data.events;
+            question.answers = response.data.events;
           }
         } catch (e) {
           console.error('Error asking question:', e);
@@ -2782,7 +2803,7 @@ const huntComponent = {
         // no range specified means we can find the answer on the event
         // but avoid making a circular reference
         const dupe = JSON.parse(JSON.stringify(event));
-        question.Answers = [{ payload: dupe }];
+        question.answers = [{ payload: dupe }];
       }
     },
     sortAggregateEvents(events) {
@@ -2845,12 +2866,12 @@ const huntComponent = {
       let payload = {
         name: 'hunt',
         query: {
-          q: question.FilledOQL,
+          q: question.filledOQL,
         },
       };
 
-      if (question.Range) {
-        payload.query.t = this.buildQuestionRange(event, question.Range);
+      if (question.range) {
+        payload.query.t = this.buildQuestionRange(event, question.range);
       }
 
       return payload;
@@ -2858,8 +2879,9 @@ const huntComponent = {
     isQuestionAggregate(question) {
       if ('isAggregate' in question) return question.isAggregate;
 
-      const yaml = jsyaml.load(question.Query, { schema: jsyaml.FAILSAFE_SCHEMA });
+      const yaml = jsyaml.load(question.query, { schema: jsyaml.FAILSAFE_SCHEMA });
       question.isAggregate = typeof yaml.aggregation === 'string' && yaml.aggregation.toLowerCase() === 'true';
+
       return question.isAggregate;
     },
     translateValue(value) {

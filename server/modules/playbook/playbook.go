@@ -6,6 +6,7 @@
 package playbook
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -34,7 +35,7 @@ const (
 	DEFAULT_PLAYBOOK_IMPORT_FREQUENCY_SECONDS = 24 * 60 * 60
 	DEFAULT_PLAYBOOK_IMPORT_ERROR_SECONDS     = 10 * 60
 	DEFAULT_PLAYBOOK_REPO                     = "https://github.com/Security-Onion-Solutions/securityonion-resources"
-	DEFAULT_PLAYBOOK_REPO_BRANCH              = "dev"
+	DEFAULT_PLAYBOOK_REPO_BRANCH              = "playbook-stable"
 	DEFAULT_PLAYBOOK_REPO_PATH                = "/opt/sensoroni/playbooks"
 	DEFAULT_PLAYBOOK_PATH_IN_REPO             = "playbook/dev"
 )
@@ -214,24 +215,6 @@ func (pbm *PlaybookDiskManager) LoadPlaybooks(logger log.Interface) error {
 
 	start = time.Now()
 
-	for _, pb := range playbooks {
-		if !pbm.isRunning {
-			return detections.ErrModuleStopped
-		}
-
-		err = pbm.ConvertQueries(logger, pb)
-		if err != nil {
-			logger.WithError(err).WithField("playbookId", pb.Id).Error("unable to convert queries")
-			continue
-		}
-	}
-
-	logger.WithFields(log.Fields{
-		"duration": time.Since(start).Seconds(),
-	}).Info("converted playbook queries")
-
-	start = time.Now()
-
 	err = pbm.organizePlaybooks(logger, playbooks)
 	if err != nil {
 		logger.WithError(err).Error("unable to organize playbooks")
@@ -379,21 +362,15 @@ func (pbm *PlaybookDiskManager) GetPlaybookById(id string) (*model.Playbook, err
 	return pb, nil
 }
 
-type conversionResponse struct {
-	Query  string
-	Fields []string
-}
-
-func (pbm *PlaybookDiskManager) ConvertQueries(logger log.Interface, pb *model.Playbook) (err error) {
-	queries := lo.Map(pb.Questions, func(question *model.Question, _ int) string {
-		return question.Query
-	})
+func (pbm *PlaybookDiskManager) ConvertQuestions(ctx context.Context, queries []string) ([]*model.ConvertedQuery, error) {
 	args := []string{"convert", "-t", "security_onion", "-p", "/opt/sensoroni/sigma_final_pipeline.yaml", "-p", "/opt/sensoroni/sigma_so_pipeline.yaml", "-p", "windows-logsources", "-p", "ecs_windows", "--disable-pipeline-check", "/dev/stdin"}
 
 	cmd := exec.CommandContext(pbm.srv.Context, "sigma", args...)
 	cmd.Stdin = strings.NewReader(strings.Join(queries, "\n---\n"))
 
 	raw, code, runtime, err := pbm.ExecCommand(cmd)
+
+	logger := log.FromContext(ctx)
 
 	logger.WithFields(log.Fields{
 		"sigmaConvertCode":     code,
@@ -404,7 +381,7 @@ func (pbm *PlaybookDiskManager) ConvertQueries(logger log.Interface, pb *model.P
 	}).Info("executing sigma cli")
 
 	if err != nil {
-		return fmt.Errorf("problem with sigma cli: %w", err)
+		return nil, fmt.Errorf("problem with sigma cli: %w", err)
 	}
 
 	oql := string(raw)
@@ -423,17 +400,18 @@ func (pbm *PlaybookDiskManager) ConvertQueries(logger log.Interface, pb *model.P
 		return len(line) > 0
 	})
 
-	for i, line := range lines {
-		cr := conversionResponse{}
+	output := make([]*model.ConvertedQuery, 0, len(lines))
 
-		err = json.Unmarshal([]byte(line), &cr)
+	for _, line := range lines {
+		cq := &model.ConvertedQuery{}
+
+		err = json.Unmarshal([]byte(line), &cq)
 		if err != nil {
-			return fmt.Errorf("problem unmarshalling sigma cli output: %w", err)
+			return nil, fmt.Errorf("problem unmarshalling sigma cli output: %w", err)
 		}
 
-		pb.Questions[i].OQL = cr.Query
-		pb.Questions[i].Fields = cr.Fields
+		output = append(output, cq)
 	}
 
-	return nil
+	return output, nil
 }
