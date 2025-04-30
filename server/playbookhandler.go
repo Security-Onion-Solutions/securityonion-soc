@@ -8,9 +8,11 @@ package server
 import (
 	"net/http"
 
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/web"
+
 	"github.com/apex/log"
 	"github.com/go-chi/chi/v5"
-	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type PlaybookHandler struct {
@@ -75,12 +77,32 @@ func (h *PlaybookHandler) GetPlaybooksForDetection(w http.ResponseWriter, r *htt
 		return
 	}
 
+	eng, ok := h.server.DetectionEngines[det.Engine]
+	if ok {
+		err = eng.ExtractDetails(det)
+		if err != nil {
+			logger.WithError(err).WithFields(log.Fields{
+				"detectionEngine":   det.Engine,
+				"detectionPublicId": publicId,
+			}).Error("unable to extract details from detection")
+		}
+	} else {
+		logger.WithFields(log.Fields{
+			"detectionEngine":   det.Engine,
+			"detectionPublicId": publicId,
+		}).Error("retrieved detection with unsupported engine")
+	}
+
 	pbs, err := h.server.Playbookstore.GetPlaybooksForDetection(det.PublicID, det.Category, det.Engine)
 	if err != nil {
 		logger.WithError(err).Error("unable to get playbooks for detection")
 		web.Respond(w, r, http.StatusInternalServerError, err)
 
 		return
+	}
+
+	if len(pbs) == 0 {
+		pbs = []*model.Playbook{}
 	}
 
 	web.Respond(w, r, http.StatusOK, pbs)
@@ -99,12 +121,16 @@ func (h *PlaybookHandler) ConvertPlaybook(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	pbConverted, err := h.server.Playbookstore.ConvertQuestions(ctx, queries)
-	if err != nil {
-		logger.WithError(err).Error("unable to convert playbook")
-		web.Respond(w, r, http.StatusInternalServerError, err)
+	pbConverted := []*model.ConvertedQuery{}
 
-		return
+	if len(queries) != 0 {
+		pbConverted, err = h.server.Playbookstore.ConvertQuestions(ctx, queries)
+		if err != nil {
+			logger.WithError(err).Error("unable to convert playbook")
+			web.Respond(w, r, http.StatusInternalServerError, err)
+
+			return
+		}
 	}
 
 	web.Respond(w, r, http.StatusOK, pbConverted)

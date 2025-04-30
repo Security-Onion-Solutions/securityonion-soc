@@ -369,8 +369,8 @@
 																</v-tabs-window-item>
 																<v-tabs-window-item value="playbook">
 																	<template v-if="item.newest.playbooks">
-																		<template v-for="playbook in item.newest.playbooks">
-																			<v-expansion-panels variant="accordion" multiple static="true">
+																		<v-expansion-panels variant="accordion" multiple static="true">
+																			<template v-for="playbook in item.newest.playbooks">
 																				<v-expansion-panel v-for="question in playbook.questions">
 																					<v-expansion-panel-title class="italic ws-normal spacious-lines" #default="{ expanded }">
 																						<v-icon class="theme-icon mx-4">
@@ -452,8 +452,8 @@
 																						</template>
 																					</v-expansion-panel-text>
 																				</v-expansion-panel>
-																			</v-expansion-panels>
-																		</template>
+																			</template>
+																		</v-expansion-panels>
 																	</template>
 																	<template v-else>
 																		<v-progress-circular indeterminate :size="50" color="primary" class="my-6" :style="applyEventColumnWidth('margin-left', 0.5, -25)"></v-progress-circular>
@@ -652,8 +652,8 @@
 													</v-tabs-window-item>
 													<v-tabs-window-item value="playbook">
 														<template v-if="item.playbooks">
-															<template v-for="playbook in item.playbooks">
-																<v-expansion-panels variant="accordion" multiple static="true">
+															<v-expansion-panels variant="accordion" multiple static="true">
+																<template v-for="playbook in item.playbooks">
 																	<v-expansion-panel v-for="question in playbook.questions">
 																		<v-expansion-panel-title class="italic ws-normal spacious-lines" #default="{ expanded }">
 																			<v-icon class="theme-icon mx-4">
@@ -735,8 +735,8 @@
 																			</template>
 																		</v-expansion-panel-text>
 																	</v-expansion-panel>
-																</v-expansion-panels>
-															</template>
+																</template>
+															</v-expansion-panels>
 														</template>
 														<template v-else>
 															<v-progress-circular indeterminate :size="50" color="primary" class="my-6" :style="applyEventColumnWidth('margin-left', 0.5, -25)"></v-progress-circular>

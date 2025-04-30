@@ -363,14 +363,14 @@ func (pbm *PlaybookDiskManager) GetPlaybookById(id string) (*model.Playbook, err
 }
 
 func (pbm *PlaybookDiskManager) ConvertQuestions(ctx context.Context, queries []string) ([]*model.ConvertedQuery, error) {
+	logger := log.FromContext(ctx)
+
 	args := []string{"convert", "-t", "security_onion", "-p", "/opt/sensoroni/sigma_final_pipeline.yaml", "-p", "/opt/sensoroni/sigma_so_pipeline.yaml", "-p", "windows-logsources", "-p", "ecs_windows", "--disable-pipeline-check", "/dev/stdin"}
 
 	cmd := exec.CommandContext(pbm.srv.Context, "sigma", args...)
 	cmd.Stdin = strings.NewReader(strings.Join(queries, "\n---\n"))
 
 	raw, code, runtime, err := pbm.ExecCommand(cmd)
-
-	logger := log.FromContext(ctx)
 
 	logger.WithFields(log.Fields{
 		"sigmaConvertCode":     code,

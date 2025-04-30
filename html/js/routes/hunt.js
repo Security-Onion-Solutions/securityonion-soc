@@ -2746,12 +2746,9 @@ const huntComponent = {
       }
     },
     async convertPlaybookQueries(playbooks) {
-      let queries = [];
-      for (let pb of playbooks) {
-        for (let question of pb.questions) {
-          queries.push(question.filledQuery);
-        }
-      }
+      let queries = playbooks.map((pb) => pb.questions.map((q) => q.filledQuery)).flat();
+
+      if (queries.length === 0) return;
 
       let response = await this.$root.papi.post('playbook/convert', queries);
 
