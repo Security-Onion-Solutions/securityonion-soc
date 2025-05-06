@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/server"
 	modmock "github.com/security-onion-solutions/securityonion-soc/server/modules/mock"
 
 	"github.com/stretchr/testify/assert"
@@ -776,4 +777,157 @@ func TestAddUpdateScript(t *testing.T) {
 	store.addUpdateScripts(criteria, timeNow, true, true)
 	assert.Len(t, criteria.UpdateScripts, 1)
 	assert.Contains(t, criteria.UpdateScripts[0], "esc_bool = true")
+}
+
+func TestSearchPermissionsAuthorized(t *testing.T) {
+	srv := server.NewFakeAuthorizedServer(nil)
+
+	client, transport := modmock.NewMockClient(t)
+	store := &ElasticEventstore{
+		esClient: client,
+		server:   srv,
+	}
+
+	// refresh cache
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(`{
+		"took" : 70,
+		"timed_out" : false,
+		"_shards" : {
+			"total" : 1,
+			"successful" : 1,
+			"skipped" : 0,
+			"failed" : 0
+		},
+		"_clusters" : {
+			"total" : 1,
+			"successful" : 1,
+			"skipped" : 0
+		},
+		"hits" : {
+			"total" : {
+				"value" : 3,
+				"relation" : "eq"
+			},
+			"max_score" : 4.279684,
+			"hits" : []
+		}
+	}`)),
+	}, nil)
+
+	// search
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(`{
+		"took" : 70,
+		"timed_out" : false,
+		"_shards" : {
+			"total" : 1,
+			"successful" : 1,
+			"skipped" : 0,
+			"failed" : 0
+		},
+		"_clusters" : {
+			"total" : 1,
+			"successful" : 1,
+			"skipped" : 0
+		},
+		"hits" : {
+			"total" : {
+				"value" : 3,
+				"relation" : "eq"
+			},
+			"max_score" : 4.279684,
+			"hits" : []
+		}
+	}`)),
+	}, nil)
+
+	criteria := model.NewEventSearchCriteria()
+	err := criteria.Populate("_id:*", "2020-01-02T12:13:14Z - 2020-01-02T13:13:14Z", time.RFC3339, "America/New_York", "0", "0")
+	assert.NoError(t, err)
+
+	results, err := store.Search(srv.Context, criteria)
+	assert.NoError(t, err)
+	assert.NotNil(t, results)
+
+	// msearch
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(`{
+		"took" : 70,
+		"timed_out" : false,
+		"_shards" : {
+			"total" : 1,
+			"successful" : 1,
+			"skipped" : 0,
+			"failed" : 0
+		},
+		"_clusters" : {
+			"total" : 1,
+			"successful" : 1,
+			"skipped" : 0
+		},
+		"hits" : {
+			"total" : {
+				"value" : 3,
+				"relation" : "eq"
+			},
+			"max_score" : 4.279684,
+			"hits" : []
+		}
+	}`)),
+	}, nil)
+
+	criteria2 := model.NewEventMSearchCriteria()
+	err = criteria2.Populate("myIndex", "_id:*")
+	assert.NoError(t, err)
+
+	results2, err := store.MSearch(srv.Context, []*model.EventMSearchCriteria{criteria2})
+	assert.NoError(t, err)
+	assert.NotNil(t, results2)
+}
+
+func TestSearchPermissionsUnauthorized(t *testing.T) {
+	srv := server.NewFakeUnauthorizedServer()
+
+	client, _ := modmock.NewMockClient(t)
+	store := &ElasticEventstore{
+		esClient: client,
+		server:   srv,
+	}
+
+	criteria := model.NewEventSearchCriteria()
+	err := criteria.Populate("_id:*", "2020-01-02T12:13:14Z - 2020-01-02T13:13:14Z", time.RFC3339, "America/New_York", "0", "0")
+	assert.NoError(t, err)
+
+	results, err := store.Search(srv.Context, criteria)
+	assert.Error(t, err)
+	unauth := err.(*model.Unauthorized)
+	assert.Equal(t, "fake-subject", unauth.Subject)
+	assert.Equal(t, "read", unauth.Operation)
+	assert.Equal(t, "events", unauth.Target)
+	assert.Nil(t, results)
+
+	criteria2 := model.NewEventMSearchCriteria()
+	err = criteria2.Populate("myIndex", "_id:*")
+	assert.NoError(t, err)
+
+	results2, err := store.MSearch(srv.Context, []*model.EventMSearchCriteria{criteria2})
+	assert.Error(t, err)
+	unauth = err.(*model.Unauthorized)
+	assert.Equal(t, "fake-subject", unauth.Subject)
+	assert.Equal(t, "read", unauth.Operation)
+	assert.Equal(t, "events", unauth.Target)
+	assert.Nil(t, results2)
 }
