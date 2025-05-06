@@ -24,6 +24,11 @@
 	</v-row>
 	<v-row>
 		<v-col>
+			<v-toolbar class="elevation-0 theme-background-lighten-1">
+				<v-btn variant="flat" color="primary" @click.stop="loadData()" id="grid-refresh-button" class="ml-3" data-aid="grid_refresh_button">
+					<v-icon>fa-sync</v-icon>
+				</v-btn>
+			</v-toolbar>
 			<v-data-table :search="gridFilter" :sort-by="sortBy" @update:sort-by="val => sortBy = val"
 				data-aid="grid_list" :items-per-page-options="itemsPerPageOptions" :expanded="expanded" @update:expanded="val => expanded = val"
 				v-model:items-per-page="itemsPerPage" must-sort :headers="headers" :items="nodes">

@@ -188,6 +188,8 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
       try {
         if (job) {
           await this.$root.papi.delete('job/' + job.id);
+          // Filter out the deleted job from the local array
+          this.jobs = this.jobs.filter((j) => j.id != job.id);
         }
       } catch (error) {
          this.$root.showError(error);

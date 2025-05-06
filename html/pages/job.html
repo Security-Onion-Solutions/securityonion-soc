@@ -98,6 +98,9 @@
 		<v-col>
 			<v-alert :value="true" color="info" icon="fa-info">
 				{{ i18n.jobInProgress }}
+				<v-btn variant="flat" color="primary" @click.stop="loadData()" id="job-refresh-button" class="ml-3" data-aid="job_refresh_button">
+					<v-icon>fa-sync</v-icon>
+				</v-btn>
 			</v-alert>
 		</v-col>
 	</v-row>

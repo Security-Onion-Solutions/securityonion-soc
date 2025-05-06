@@ -187,12 +187,6 @@ func extractSuricataTechniques(rules map[string]*model.Detection, logger *log.En
 			// Extract base technique ID by splitting on '.' and taking the first part
 			baseTechniqueID := strings.Split(techniqueID, ".")[0]
 			techniques[baseTechniqueID] = struct{}{}
-			logger.WithFields(log.Fields{
-				"nav_rule.uuid":    rule.PublicID,
-				"nav_technique_id": baseTechniqueID,
-			}).Debug("extracted technique ID from Suricata rule")
-		} else {
-			logger.WithField("nav_rule.uuid", rule.PublicID).Debug("no technique ID found in rule")
 		}
 	}
 

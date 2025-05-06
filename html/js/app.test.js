@@ -883,6 +883,84 @@ test('getSelectedGrid', () => {
   expect(app.getSelectedGrid()).toBe(undefined);
 });
 
+describe('formatActionContent', () => {
+  const app = global.getApp();
+  const mockEvent = {
+    soc_id: 'event123',
+    'source.ip': '192.168.1.100',
+    'destination.port': 80,
+  };
+
+  beforeEach(() => {
+    // Reset selectedGridId before each test if necessary
+    app.selectedGridId = 'localGrid';
+  });
+
+  test('should return null if content is null or undefined', () => {
+    expect(app.formatActionContent(null, mockEvent, 'someField', 'someValue')).toBeNull();
+    expect(app.formatActionContent(undefined, mockEvent, 'someField', 'someValue')).toBeNull();
+  });
+
+  test('should replace standard placeholders', () => {
+    const content = 'Event: {eventId}, Field: {field}, Value: {value}, Grid: {gridId}';
+    const expected = 'Event: event123, Field: srcIP, Value: 1.2.3.4, Grid: localGrid';
+    expect(app.formatActionContent(content, mockEvent, 'srcIP', '1.2.3.4')).toBe(expected);
+  });
+
+  test('should replace eventJson placeholder', () => {
+    const content = 'Event JSON: {eventJson}';
+    const expected = `Event JSON: ${JSON.stringify(mockEvent)}`;
+    expect(app.formatActionContent(content, mockEvent, 'someField', 'someValue')).toBe(expected);
+  });
+
+  test('should replace dynamic field placeholders', () => {
+    const content = 'Source IP: {:source.ip}, Dest Port: {:destination.port}';
+    const expected = 'Source IP: 192.168.1.100, Dest Port: 80';
+    expect(app.formatActionContent(content, mockEvent, 'someField', 'someValue')).toBe(expected);
+  });
+
+  test('should handle URI encoding correctly (uriEncode=true by default)', () => {
+    const content = 'Value: {value}, Dynamic: {:source.ip}';
+    const mockEventWithSpace = { soc_id: 'event123', 'source.ip': '10.0.0.1 10.0.0.2' };
+    const expected = 'Value: space%20value, Dynamic: 10.0.0.1%2010.0.0.2';
+    expect(app.formatActionContent(content, mockEventWithSpace, 'field', 'space value')).toBe(expected);
+  });
+
+  test('should handle URI encoding correctly (uriEncode=false)', () => {
+    const content = 'Value: {value}, Dynamic: {:source.ip}';
+    const mockEventWithSpace = { soc_id: 'event123', 'source.ip': '10.0.0.1 10.0.0.2' };
+    const expected = 'Value: space value, Dynamic: 10.0.0.1 10.0.0.2';
+    expect(app.formatActionContent(content, mockEventWithSpace, 'field', 'space value', false)).toBe(expected);
+  });
+
+  test('should handle missing dynamic fields gracefully', () => {
+    const content = 'Source IP: {:source.ip}, Missing Field: {:non.existent.field}';
+    const expected = 'Source IP: 192.168.1.100, Missing Field: {:non.existent.field}';
+    expect(app.formatActionContent(content, mockEvent, 'someField', 'someValue')).toBe(expected);
+  });
+
+  test('should handle content with no placeholders', () => {
+    const content = 'This is a static string.';
+    expect(app.formatActionContent(content, mockEvent, 'someField', 'someValue')).toBe(content);
+  });
+
+  test('should handle various data types for values', () => {
+    const content = 'Value: {value}, Dynamic Num: {:destination.port}';
+    const expected = 'Value: 12345, Dynamic Num: 80';
+    expect(app.formatActionContent(content, mockEvent, 'field', 12345)).toBe(expected);
+
+    const expectedBool = 'Value: true, Dynamic Num: 80';
+    expect(app.formatActionContent(content, mockEvent, 'field', true)).toBe(expectedBool);
+  });
+
+  test('should use selectedGridId from app instance', () => {
+    app.selectedGridId = 'customGrid123';
+    const content = 'Grid: {gridId}';
+    const expected = 'Grid: customGrid123';
+    expect(app.formatActionContent(content, mockEvent, 'field', 'value')).toBe(expected);
+  });
+});
+
 test('apiRequestCallback', () => {
   req = {};
   app.selectedGridId = '';
