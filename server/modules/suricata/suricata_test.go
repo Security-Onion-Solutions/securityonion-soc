@@ -495,17 +495,19 @@ func TestParse(t *testing.T) {
 			},
 			ExpectedDetections: []*model.Detection{
 				{
-					Author:    ruleset,
-					PublicID:  SimpleRuleSID,
-					Title:     `GPL ATTACK_RESPONSE id check returned root`,
-					Category:  `GPL ATTACK_RESPONSE`,
-					Severity:  model.SeverityUnknown,
-					Content:   SimpleRule,
-					IsEnabled: true,
-					Engine:    model.EngineNameSuricata,
-					Language:  model.SigLangSuricata,
-					Ruleset:   ruleset,
-					License:   "Unknown",
+					Author:        ruleset,
+					PublicID:      SimpleRuleSID,
+					Title:         `GPL ATTACK_RESPONSE id check returned root`,
+					Category:      `GPL ATTACK_RESPONSE`,
+					Severity:      model.SeverityUnknown,
+					Content:       SimpleRule,
+					IsEnabled:     true,
+					Engine:        model.EngineNameSuricata,
+					Language:      model.SigLangSuricata,
+					Ruleset:       ruleset,
+					License:       "Unknown",
+					SourceCreated: util.Ptr(time.Date(2010, 9, 23, 0, 0, 0, 0, time.UTC)),
+					SourceUpdated: util.Ptr(time.Date(2010, 9, 23, 0, 0, 0, 0, time.UTC)),
 				},
 				{
 					Author:   ruleset,
@@ -1811,17 +1813,19 @@ func TestReadCustomRulesets(t *testing.T) {
 				{
 					PublicID: SimpleRuleSID,
 
-					Title:       "GPL ATTACK_RESPONSE id check returned root",
-					Severity:    model.SeverityUnknown,
-					Author:      "ruleset",
-					Category:    "GPL ATTACK_RESPONSE",
-					Content:     "alert http any any -> any any (msg:\"GPL ATTACK_RESPONSE id check returned root\"; content:\"uid=0|28|root|29|\"; classtype:bad-unknown; sid:10000; rev:7; metadata:created_at 2010_09_23, updated_at 2010_09_23;)",
-					IsEnabled:   true,
-					IsCommunity: true,
-					Engine:      model.EngineNameSuricata,
-					Language:    model.SigLangSuricata,
-					Ruleset:     "ruleset",
-					License:     "DRL",
+					Title:         "GPL ATTACK_RESPONSE id check returned root",
+					Severity:      model.SeverityUnknown,
+					Author:        "ruleset",
+					Category:      "GPL ATTACK_RESPONSE",
+					Content:       "alert http any any -> any any (msg:\"GPL ATTACK_RESPONSE id check returned root\"; content:\"uid=0|28|root|29|\"; classtype:bad-unknown; sid:10000; rev:7; metadata:created_at 2010_09_23, updated_at 2010_09_23;)",
+					IsEnabled:     true,
+					IsCommunity:   true,
+					Engine:        model.EngineNameSuricata,
+					Language:      model.SigLangSuricata,
+					Ruleset:       "ruleset",
+					License:       "DRL",
+					SourceCreated: util.Ptr(time.Date(2010, 9, 23, 0, 0, 0, 0, time.UTC)),
+					SourceUpdated: util.Ptr(time.Date(2010, 9, 23, 0, 0, 0, 0, time.UTC)),
 				},
 			},
 		},
@@ -1843,17 +1847,19 @@ func TestReadCustomRulesets(t *testing.T) {
 				{
 					PublicID: SimpleRuleSID,
 
-					Title:       "GPL ATTACK_RESPONSE id check returned root",
-					Severity:    model.SeverityUnknown,
-					Author:      "ruleset",
-					Category:    "GPL ATTACK_RESPONSE",
-					Content:     "alert http any any -> any any (msg:\"GPL ATTACK_RESPONSE id check returned root\"; content:\"uid=0|28|root|29|\"; classtype:bad-unknown; sid:10000; rev:7; metadata:created_at 2010_09_23, updated_at 2010_09_23;)",
-					IsEnabled:   true,
-					IsCommunity: true,
-					Engine:      model.EngineNameSuricata,
-					Language:    model.SigLangSuricata,
-					Ruleset:     "ruleset",
-					License:     "DRL",
+					Title:         "GPL ATTACK_RESPONSE id check returned root",
+					Severity:      model.SeverityUnknown,
+					Author:        "ruleset",
+					Category:      "GPL ATTACK_RESPONSE",
+					Content:       "alert http any any -> any any (msg:\"GPL ATTACK_RESPONSE id check returned root\"; content:\"uid=0|28|root|29|\"; classtype:bad-unknown; sid:10000; rev:7; metadata:created_at 2010_09_23, updated_at 2010_09_23;)",
+					IsEnabled:     true,
+					IsCommunity:   true,
+					Engine:        model.EngineNameSuricata,
+					Language:      model.SigLangSuricata,
+					Ruleset:       "ruleset",
+					License:       "DRL",
+					SourceCreated: util.Ptr(time.Date(2010, 9, 23, 0, 0, 0, 0, time.UTC)),
+					SourceUpdated: util.Ptr(time.Date(2010, 9, 23, 0, 0, 0, 0, time.UTC)),
 				},
 			},
 		},
@@ -2586,6 +2592,128 @@ func TestSyncModifiedByFilter(t *testing.T) {
 	})
 
 	assert.Equal(t, []string{"abc"}, workDocIds) // update has an id, create does not, delete does
+}
+
+func TestSyncUnchangedOverrides(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+
+	detStore := servermock.NewMockDetectionstore(ctrl)
+	iom := mock.NewMockIOManager(ctrl)
+	bim := servermock.NewMockBulkIndexer(ctrl)
+	cfgStore := server.NewMemConfigStore([]*model.Setting{
+		{Id: "idstools.rules.local__rules", Value: SimpleRule},
+		{Id: "idstools.sids.enabled", Value: SimpleRuleSID},
+		{Id: "idstools.sids.disabled"},
+		{Id: "idstools.sids.modify", Value: SimpleRuleSID + ` "rev:1" "rev:2"`},
+		{Id: "suricata.thresholding.sids__yaml"},
+		{Id: "idstools.config.ruleset", Value: "repo"},
+		{Id: "soc.config.server.modules.suricataengine.ignoredSidRanges"},
+	})
+
+	migrationChecked := false
+	checkMigration := func() {
+		migrationChecked = true
+	}
+
+	eng := &SuricataEngine{
+		srv: &server.Server{
+			Detectionstore: detStore,
+			Configstore:    cfgStore,
+			Context:        ctx,
+		},
+		isRunning:            true,
+		communityRulesFile:   "communityRulesFile",
+		rulesFingerprintFile: "rulesFingerprintFile",
+		checkMigrationsOnce:  sync.OnceFunc(checkMigration),
+		allRulesFile:         "allRulesFile",
+		SyncSchedulerParams: detections.SyncSchedulerParams{
+			StateFilePath: "stateFilePath",
+		},
+		IntegrityCheckerData: detections.IntegrityCheckerData{
+			IsRunning: true,
+		},
+		IOManager:       iom,
+		showAiSummaries: false,
+	}
+
+	logger := log.WithField("detectionEngine", "test-suricata")
+
+	workItems := []esutil.BulkIndexerItem{}
+
+	// readAndHash
+	iom.EXPECT().ReadFile("communityRulesFile").Return([]byte(SimpleRule), nil)
+	// syncCommunityDetections
+	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+		SimpleRuleSID: {
+			Auditable: model.Auditable{
+				Id:         "abc",
+				CreateTime: util.Ptr(time.Now()),
+			},
+			IsEnabled:     true,
+			Content:       SimpleRule,
+			Ruleset:       "repo",
+			SourceCreated: util.Ptr(time.Date(2010, 9, 23, 0, 0, 0, 0, time.UTC)),
+			SourceUpdated: util.Ptr(time.Date(2010, 9, 23, 0, 0, 0, 0, time.UTC)),
+			Overrides: []*model.Override{
+				{
+					IsEnabled: true,
+					Type:      "modify",
+					OverrideParameters: model.OverrideParameters{
+						Regex: util.Ptr("rev:1"),
+						Value: util.Ptr("rev:2"),
+					},
+				},
+			},
+		},
+	}, nil)
+	detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(bim, nil)
+	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), nil, nil).Return([]byte("document"), "index", nil)
+	bim.EXPECT().Close(gomock.Any()).Return(nil)
+	bim.EXPECT().Stats().Return(esutil.BulkIndexerStats{})
+
+	// WriteStateFile
+	iom.EXPECT().WriteFile("stateFilePath", gomock.Any(), fs.FileMode(0644)).Return(nil)
+	iom.EXPECT().WriteFile("rulesFingerprintFile", gomock.Any(), fs.FileMode(0644)).Return(nil)
+	// IntegrityCheck
+	iom.EXPECT().ReadFile("allRulesFile").Return([]byte(SimpleRule), nil)
+	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+		SimpleRuleSID: nil,
+	}, nil)
+
+	err := eng.Sync(logger, true)
+	assert.NoError(t, err)
+
+	assert.True(t, eng.EngineState.Syncing) // stays true until the SyncScheduler resets it
+	assert.False(t, eng.EngineState.IntegrityFailure)
+	assert.False(t, eng.EngineState.Migrating)
+	assert.False(t, eng.EngineState.MigrationFailure)
+	assert.False(t, eng.EngineState.Importing)
+	assert.False(t, eng.EngineState.SyncFailure)
+	assert.True(t, migrationChecked)
+
+	allSettings, err := cfgStore.GetSettings(ctx, true)
+	assert.NoError(t, err)
+
+	enabled := settingByID(allSettings, "idstools.sids.enabled")
+	assert.NotNil(t, enabled)
+	assert.Equal(t, SimpleRuleSID, enabled.Value)
+
+	disabled := settingByID(allSettings, "idstools.sids.disabled")
+	assert.NotNil(t, disabled)
+	assert.Equal(t, "", disabled.Value)
+
+	modify := settingByID(allSettings, "idstools.sids.modify")
+	assert.NotNil(t, modify)
+	assert.Equal(t, `10000 "rev:1" "rev:2"`, modify.Value)
+
+	threshold := settingByID(allSettings, "suricata.thresholding.sids__yaml")
+	assert.NotNil(t, threshold)
+	assert.Equal(t, "{}\n", threshold.Value)
+
+	assert.Len(t, workItems, 0)
 }
 
 func TestApplyFilters(t *testing.T) {

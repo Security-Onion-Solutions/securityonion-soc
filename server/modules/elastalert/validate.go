@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 	"gopkg.in/yaml.v3"
 )
 
@@ -62,6 +63,7 @@ type SigmaRule struct {
 	Level          *SigmaLevel            `yaml:"level"`
 	License        *string                `yaml:"license,omitempty"`
 	Rest           map[string]interface{} `yaml:",inline"`
+	OriginalSource string                 `yaml:"-"`
 }
 
 type LogSource struct {
@@ -128,6 +130,8 @@ func ParseElastAlertRule(data []byte) (*SigmaRule, error) {
 		return nil, err
 	}
 
+	rule.OriginalSource = string(data)
+
 	return rule, nil
 }
 
@@ -182,7 +186,13 @@ func (r *SigmaRule) ToDetection(ruleset string, license string, isCommunity bool
 		}
 	}
 
-	content, _ := yaml.Marshal(r)
+	var content []byte
+
+	if len(r.OriginalSource) > 0 {
+		content = []byte(r.OriginalSource)
+	} else {
+		content, _ = yaml.Marshal(r)
+	}
 
 	author := "unknown"
 	if r.Author != nil {
@@ -200,6 +210,22 @@ func (r *SigmaRule) ToDetection(ruleset string, license string, isCommunity bool
 		Language:    model.SigLangSigma,
 		Ruleset:     ruleset,
 		License:     license,
+	}
+
+	formats := []string{"2006-01-02", "2006/01/02", "2006_01_02"}
+
+	if r.Date != nil {
+		t, err := detections.ParseDate(*r.Date, formats)
+		if err == nil {
+			det.SourceCreated = &t
+		}
+	}
+
+	if r.Modified != nil {
+		t, err := detections.ParseDate(*r.Modified, formats)
+		if err == nil {
+			det.SourceUpdated = &t
+		}
 	}
 
 	if r.Description != nil {
