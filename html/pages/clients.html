@@ -17,6 +17,9 @@
 				<v-btn variant="flat" id="download-ca-crt-button" class="action ml-3" color="secondary" href="/so-ca.crt" :title="i18n.caCrtHelp" data-aid="clients_download_ca">
 					<v-icon>fa-download</v-icon>
 				</v-btn>
+				<v-btn variant="flat" color="secondary" @click.stop="loadData()" id="clients-refresh-button" class="ml-3" data-aid="clients_refresh_button">
+					<v-icon>fa-sync</v-icon>
+				</v-btn>
 			</v-toolbar>
 			<v-dialog v-model="dialog" persistent width="800px" data-aid="clients_create_dialog">
 				<v-card>

@@ -7,10 +7,13 @@
 	</v-row>
 	<v-row>
 		<v-col>
-			<v-toolbar v-if="isKind('pcap')" class="elevation-0" fixed>
+			<v-toolbar v-if="isKind('pcap')" class="elevation-0 theme-background-lighten-1" fixed>
 				<v-btn variant="flat" color="primary" @click.stop="openNewJobDialog" id="add-pcap-job-button" class="ml-3" data-aid="jobs_create_new">
 					<v-icon>fa-plus</v-icon>
 				</v-btn>
+				<v-btn variant="flat" color="secondary" @click.stop="loadData()" id="jobs-refresh-button" class="ml-3" data-aid="jobs_refresh_button">
+					<v-icon>fa-sync</v-icon>
+				</v-btn>		  
 			</v-toolbar>
 			<v-data-table :sort-by="sortBy" @update:sort-by="val => sortBy = val" :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage"
 				must-sort :headers="headers" :items="jobs">

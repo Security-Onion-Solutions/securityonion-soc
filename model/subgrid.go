@@ -92,6 +92,9 @@ func (grid *Subgrid) getHttpsClient() *http.Client {
 	}
 
 	client := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
 		Transport: &http.Transport{
 			TLSClientConfig: tlsConfig,
 		},

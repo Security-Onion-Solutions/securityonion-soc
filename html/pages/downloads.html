@@ -7,8 +7,8 @@
 	<v-row>
 		<v-col>
 			<h3 class="my-2" v-text="i18n.downloadsElasticAgent" id="download-elasticagent"></h3>
-			<v-alert v-if="remoteAgentSupported" id="firewallTip" type="info" v-html="i18n.downloadsFirewallTip" data-aid="downloads_fw_tip"></v-alert>
-			<v-alert v-else type="error" id="agentUnavailable" v-html="i18n.downloadsAgentUnavailable" data-aid="downloads_agent_unavailable"></v-alert>
+			<v-alert v-if="remoteAgentSupported && !$root.selectedGridId" id="firewallTip" type="info" v-html="i18n.downloadsFirewallTip" data-aid="downloads_fw_tip"></v-alert>
+			<v-alert v-else type="warning" id="agentUnavailable" v-html="i18n.downloadsAgentUnavailable" data-aid="downloads_agent_unavailable"></v-alert>
 			<ul id="installer-list" class="ml-5 mt-3">
 				<li><a :href="getBaseUrl() + '/packages/so-elastic-agent_windows_amd64'" download="so-elastic-agent_windows_amd64.exe" data-aid="downloads_windows_agent">Windows x86_64 Installer (EXE)</a></li>
 				<li><a :href="getBaseUrl() + '/packages/so-elastic-agent_windows_amd64_msi'" download="so-elastic-agent_windows_amd64.msi" data-aid="downloads_windows_agent_msi">Windows x86_64 Installer (MSI)</a></li>

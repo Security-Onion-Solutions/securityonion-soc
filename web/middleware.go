@@ -294,6 +294,11 @@ func proxySubgridRequest(subgrids []*model.Subgrid, gridId string, ctx context.C
 					"requestorId": ctx.Value(ContextKeyRequestorId),
 				}).Debug("Finished proxying request to subgrid")
 			}
+
+			if checkForRedirect(ctx, w, r, resp) {
+				return
+			}
+
 			if isOnlySubgridSelected(grid, gridId) {
 				Respond(w, r, resp.StatusCode, *resp)
 				return
@@ -325,4 +330,19 @@ func isSubgridSelected(grid *model.Subgrid, gridId string) bool {
 
 func isOnlySubgridSelected(grid *model.Subgrid, gridId string) bool {
 	return grid.Id == gridId
+}
+
+func checkForRedirect(ctx context.Context, w http.ResponseWriter, r *http.Request, resp *http.Response) bool {
+	// If the subgrid response includes a redirect, honor it. Currently only used for joblookup.
+	redir := resp.Header.Get("location")
+	if len(redir) > 0 {
+		log.WithFields(log.Fields{
+			"requestId":   ctx.Value(ContextKeyRequestId),
+			"requestorId": ctx.Value(ContextKeyRequestorId),
+			"redirectUrl": redir,
+		}).Info("Subgrid requests a redirect")
+		http.Redirect(w, r, redir, resp.StatusCode)
+		return true
+	}
+	return false
 }

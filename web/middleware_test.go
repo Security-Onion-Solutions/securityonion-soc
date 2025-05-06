@@ -284,3 +284,50 @@ func TestIsOnlySubgridSelected(t *testing.T) {
 	assert.False(t, isOnlySubgridSelected(grid, ALL_GRIDS), "ALL_GRIDS should return false")
 	assert.False(t, isOnlySubgridSelected(grid, "some_other_grid"), "Non-matching grid ID should return false")
 }
+
+func TestCheckForRedirect(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, ContextKeyRequestId, "test-req-id")
+	ctx = context.WithValue(ctx, ContextKeyRequestorId, "test-user")
+
+	// Scenario 1: Redirect header is present
+	t.Run("RedirectPresent", func(t *testing.T) {
+		t.Parallel()
+
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/api/some/path", nil)
+		resp := &http.Response{
+			StatusCode: http.StatusFound, // 302
+			Header:     make(http.Header),
+		}
+		redirectURL := "/new/location"
+		resp.Header.Set("Location", redirectURL)
+
+		redirected := checkForRedirect(ctx, w, r, resp)
+
+		assert.True(t, redirected, "Expected checkForRedirect to return true when location header is present")
+		assert.Equal(t, http.StatusFound, w.Code, "Expected status code to be StatusFound (302)")
+		assert.Equal(t, redirectURL, w.Header().Get("Location"), "Expected Location header in response writer to match")
+	})
+
+	// Scenario 2: Redirect header is not present
+	t.Run("RedirectNotPresent", func(t *testing.T) {
+		t.Parallel()
+
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/api/some/path", nil)
+		resp := &http.Response{
+			StatusCode: http.StatusOK, // 200
+			Header:     make(http.Header),
+		}
+
+		redirected := checkForRedirect(ctx, w, r, resp)
+
+		assert.False(t, redirected, "Expected checkForRedirect to return false when location header is absent")
+		// Recorder should not have been written to in this case, so Code remains 0 (default)
+		// and headers remain empty. We don't need explicit asserts for that unless we want
+		// to be extra sure, but asserting the return value is the primary goal.
+	})
+}
