@@ -37,6 +37,7 @@ import (
 const (
 	SimpleRuleSID    = "10000"
 	SimpleRule       = `alert http any any -> any any (msg:"GPL ATTACK_RESPONSE id check returned root"; content:"uid=0|28|root|29|"; classtype:bad-unknown; sid:10000; rev:7; metadata:created_at 2010_09_23, updated_at 2010_09_23;)`
+	SimpleRule2      = `alert http any any -> any any (msg:"GPL ATTACK_RESPONSE id check returned root"; content:"uid=0|28|root|29|"; classtype:bad-unknown; sid:10000; rev:7; metadata:created_at 2010_09_23, updated_at 2025_05_03;)`
 	FlowbitsRuleASID = "50000"
 	FlowbitsRuleA    = `alert http any any -> any any ( msg:"RULE A"; flow: established,to_server; http.method; content:"POST"; http.content_type; content:"x-www-form-urlencoded"; flowbits: set, test; sid:50000;)`
 	FlowbitsRuleBSID = "60000"
@@ -1028,7 +1029,7 @@ func TestSyncCommunitySuricata(t *testing.T) {
 				{
 					Auditable:   model.Auditable{Id: "1"},
 					PublicID:    SimpleRuleSID,
-					Content:     SimpleRule,
+					Content:     SimpleRule2,
 					IsEnabled:   false,
 					IsCommunity: true,
 				},

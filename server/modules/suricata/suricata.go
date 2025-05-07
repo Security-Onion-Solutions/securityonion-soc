@@ -1327,8 +1327,6 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 		if exists {
 			hasChanged := orig.Content != detect.Content
 			hasChanged = hasChanged || orig.Ruleset != detect.Ruleset
-			hasChanged = hasChanged || !util.Equal(orig.SourceCreated, detect.SourceCreated)
-			hasChanged = hasChanged || !util.Equal(orig.SourceUpdated, detect.SourceUpdated)
 			hasChanged = hasChanged || modifiedByFilter
 
 			if hasChanged {
