@@ -133,7 +133,7 @@ func (r *YaraRule) ToDetection(license string, ruleset string, isCommunity bool)
 
 	if r.Meta.Date != nil {
 		t, err := detections.ParseDate(*r.Meta.Date, formats)
-		if err != nil {
+		if err == nil {
 			det.SourceCreated = &t
 		}
 	}
