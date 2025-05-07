@@ -86,6 +86,7 @@ private rule MetadataExample {
 	meta:
 		author = "John Doe"
 		date = "2023-12-27"
+		date_modified = "2024-05-06"
 		version = "1.0"
 		reference = "http://somewhere.invalid"
 		description = "Example Rule"
@@ -400,6 +401,7 @@ func TestParseRule(t *testing.T) {
 						Reference:   util.Ptr("http://somewhere.invalid"),
 						Description: util.Ptr("Example Rule"),
 						Rest: map[string]string{
+							"date_modified":   "2024-05-06",
 							"my_identifier_1": "Some string data",
 							"my_identifier_2": "24",
 							"my_identifier_3": "true",
@@ -633,17 +635,19 @@ func TestToDetection(t *testing.T) {
 	e := &StrelkaEngine{}
 
 	expected := &model.Detection{
-		Engine:      model.EngineNameStrelka,
-		Language:    model.SigLangYara,
-		PublicID:    "MetadataExample",
-		Author:      "John Doe",
-		Title:       "MetadataExample",
-		Description: "Example Rule",
-		Content:     BasicRuleWMeta,
-		Severity:    model.SeverityUnknown,
-		IsCommunity: true,
-		Ruleset:     "ruleset",
-		License:     "license",
+		Engine:        model.EngineNameStrelka,
+		Language:      model.SigLangYara,
+		PublicID:      "MetadataExample",
+		Author:        "John Doe",
+		Title:         "MetadataExample",
+		Description:   "Example Rule",
+		Content:       BasicRuleWMeta,
+		Severity:      model.SeverityUnknown,
+		IsCommunity:   true,
+		Ruleset:       "ruleset",
+		License:       "license",
+		SourceCreated: util.Ptr(time.Date(2023, 12, 27, 0, 0, 0, 0, time.UTC)),
+		SourceUpdated: util.Ptr(time.Date(2024, 5, 6, 0, 0, 0, 0, time.UTC)),
 	}
 
 	rules, err := e.parseYaraRules([]byte(BasicRuleWMeta))

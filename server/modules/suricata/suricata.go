@@ -759,6 +759,7 @@ func (e *SuricataEngine) ParseRules(content string, ruleset string) ([]*model.De
 
 		category := checkAndExtractCategory(title)
 
+		var srcCreated, srcUpdated *time.Time
 		severity := model.SeverityUnknown // TODO: Default severity?
 
 		md := parsed.ParseMetaData()
@@ -778,20 +779,44 @@ func (e *SuricataEngine) ParseRules(content string, ruleset string) ([]*model.De
 					severity = model.SeverityCritical
 				}
 			}
+
+			formats := []string{"2006-01-02", "2006/01/02", "2006_01_02"}
+
+			sourceCreated, ok := lo.Find(md, func(m *MetaData) bool {
+				return strings.EqualFold(m.Key, "created_at")
+			})
+			if ok {
+				t, err := detections.ParseDate(sourceCreated.Value, formats)
+				if err == nil {
+					srcCreated = &t
+				}
+			}
+
+			sourceUpdated, ok := lo.Find(md, func(m *MetaData) bool {
+				return strings.EqualFold(m.Key, "updated_at")
+			})
+			if ok {
+				t, err := detections.ParseDate(sourceUpdated.Value, formats)
+				if err == nil {
+					srcUpdated = &t
+				}
+			}
 		}
 
 		d := &model.Detection{
-			IsEnabled: !wasCommented,
-			Author:    ruleset,
-			Category:  category,
-			PublicID:  sid,
-			Title:     title,
-			Severity:  severity,
-			Content:   line,
-			Engine:    model.EngineNameSuricata,
-			Language:  model.SigLangSuricata,
-			Ruleset:   ruleset,
-			License:   lookupLicense(ruleset),
+			IsEnabled:     !wasCommented,
+			Author:        ruleset,
+			Category:      category,
+			PublicID:      sid,
+			Title:         title,
+			Severity:      severity,
+			Content:       line,
+			Engine:        model.EngineNameSuricata,
+			Language:      model.SigLangSuricata,
+			Ruleset:       ruleset,
+			License:       lookupLicense(ruleset),
+			SourceCreated: srcCreated,
+			SourceUpdated: srcUpdated,
 		}
 
 		dets = append(dets, d)
@@ -1302,9 +1327,6 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 		if exists {
 			hasChanged := orig.Content != detect.Content
 			hasChanged = hasChanged || orig.Ruleset != detect.Ruleset
-			hasChanged = hasChanged || len(detect.Overrides) != 0
-			hasChanged = hasChanged || !util.Equal(orig.SourceCreated, detect.SourceCreated)
-			hasChanged = hasChanged || !util.Equal(orig.SourceUpdated, detect.SourceUpdated)
 			hasChanged = hasChanged || modifiedByFilter
 
 			if hasChanged {
