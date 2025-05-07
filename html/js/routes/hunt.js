@@ -2722,8 +2722,6 @@ const huntComponent = {
           }
         }
       }
-
-      console.log(event); // remove eventually
     },
     queryVariableSubstitution(event, playbooks) {
       for (let pb of playbooks) {
@@ -2765,10 +2763,14 @@ const huntComponent = {
       if (question.range) {
         try {
           const dateRange = this.buildQuestionRange(event, question.range);
+          let query = question.filledOQL;
+          if (!this.isQuestionAggregate(question)) {
+            query = query + `| sortby @timestamp`;
+          }
 
           let response = await this.$root.papi.get('events/', {
             params: {
-              query: question.filledOQL,
+              query: query,
               range: dateRange,
               format: this.i18n.timePickerSample,
               zone: this.zone,
@@ -2792,9 +2794,9 @@ const huntComponent = {
             question.answers = response.data.events;
           }
         } catch (e) {
+          question.error = true;
+          question.answers = [];
           console.error('Error asking question:', e);
-          console.log('question', question);
-          console.log('event', event);
         }
       } else {
         // no range specified means we can find the answer on the event

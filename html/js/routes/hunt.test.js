@@ -1671,3 +1671,80 @@ test('sortBySeverity', () => {
     expect(result).toBe(expected);
   });
 });
+
+test('countDrilldown', () => {
+  comp.filterRouteDrilldown = null;
+
+  let event = {};
+  event.count = 10;
+
+  comp.countDrilldown(event);
+  expect(comp.$router.length).toBe(0);
+  expect(comp.filterRouteDrilldown).toBe(null);
+
+  event.a = 'a';
+
+  let expected = {
+    path: '',
+    query: {
+      el: 100,
+      filterField: 'a',
+      filterMode: 'DRILLDOWN',
+      filterValue: 'a',
+      gl: 10,
+      q: '',
+      rt: 24,
+      rtu: 'hours',
+      z: ''
+    }
+  };
+
+  comp.countDrilldown(event);
+  expect(comp.$router.length).toBe(1);
+  expect(comp.filterRouteDrilldown).toEqual(expected);
+  expect(comp.$router[0]).toStrictEqual(expected);
+
+  comp.$router = [];
+  comp.filterRouteDrilldown = null;
+
+  event.b = 'b';
+
+  comp.countDrilldown(event);
+  expect(comp.$router.length).toBe(0);
+  expect(comp.filterRouteDrilldown).toBe(null);
+
+  event = {};
+  event.count = 10;
+  event["rule.name"] = 'rule_name';
+  event["event.module"] = 'event_module';
+  event["event.severity_label"] = 'event_severity_label';
+  event["rule.uuid"] = 'rule_uuid';
+
+  expected = {
+    path: "",
+    query: {
+      el: 100,
+      filterField: "rule.name",
+      filterMode: "DRILLDOWN",
+      filterValue: "rule_name",
+      gl: 10,
+      q: "",
+      rt: 24,
+      rtu: "hours",
+      z: ""
+    }
+  };
+
+  comp.countDrilldown(event);
+  expect(comp.$router.length).toBe(1);
+  expect(comp.filterRouteDrilldown).toEqual(expected);
+
+  comp.$router = [];
+  comp.filterRouteDrilldown = null;
+
+  event.a = 10;
+
+  comp.countDrilldown(event);
+  expect(comp.$router.length).toBe(0);
+  expect(comp.filterRouteDrilldown).toBe(null);
+});

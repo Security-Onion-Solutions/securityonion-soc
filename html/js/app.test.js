@@ -697,7 +697,7 @@ test('isAttentionNeeded', () => {
       unhealthyNodeCount: 0,
     },
   };
-  
+
   expect(app.isAttentionNeeded()).toBe(false);
 
   // Attention when unable to connect to server
@@ -984,4 +984,25 @@ test('apiRequestCallback', () => {
   app.selectedGridId = 'xyz';
   var newReq = app.apiRequestCallback(req);
   expect(newReq.params).toStrictEqual({ gridId: 'xyz' });
+});
+
+test('isPro', () => {
+  app.licenseStatus = null;
+  expect(app.isPro()).toBe(false);
+  app.licenseStatus = 'unprovisioned';
+  expect(app.isPro()).toBe(false);
+  app.licenseStatus = 'pending';
+  expect(app.isPro()).toBe(false);
+  app.licenseStatus = 'invalid';
+  expect(app.isPro()).toBe(false);
+  app.licenseStatus = 'expired';
+  expect(app.isPro()).toBe(false);
+  app.licenseStatus = 'exceeded';
+  expect(app.isPro()).toBe(false);
+  app.licenseStatus = 'unlicensed';
+  expect(app.isPro()).toBe(false);
+  app.licenseStatus = 'something else';
+  expect(app.isPro()).toBe(false);
+  app.licenseStatus = 'active';
+  expect(app.isPro()).toBe(true);
 });

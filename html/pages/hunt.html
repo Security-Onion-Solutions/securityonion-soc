@@ -382,7 +382,7 @@
 																					<v-expansion-panel-text class="pl-13 ws-normal" :style="applyEventColumnWidth('max-width', 1, -24)">
 																						<div class="italic bold">Context</div>
 																						<div class="italic">{{question.context}}</div>
-																						<br/>
+																						<div class="italic my-4">Date Range: {{question.range || 'Event'}}</div>
 																						<v-row no-gutters class="mb-5">
 																							<v-col cols="auto">
 																								<v-btn icon size="small" variant="text" :href="$router.resolve(buildHuntQuestionParams(question, item)).href" target="_blank" class="cursor-pointer">
@@ -394,30 +394,36 @@
 																							</v-col>
 																						</v-row>
 																						<template v-if="question.answers">
-																							<span class="italic bold">Instant Insight</span>
+																							<span class="italic bold">
+																								Instant Insight (max 5 results)
+																							</span>
+																							<br/>
+																							<span class="italic">
+																								Original event happened at {{ formatTimestamp(getEventField(item.newest, 'event_data.@timestamp')) }}
+																							</span>
 																							<table v-if="question.isAggregate" class="simple-table">
 																								<thead>
 																									<tr>
-																										<th v-for="field in question.fields" :key="field">
-																											{{ field.replaceAll('event_data.', '') }}
-																										</th>
 																										<th>
 																											Count
+																										</th>
+																										<th v-for="field in question.fields" :key="field">
+																											{{ field.replaceAll('event_data.', '') }}
 																										</th>
 																									</tr>
 																								</thead>
 																								<tbody>
 																									<tr v-for="agg in question.answers">
-																										<td v-for="value in agg.keys">
-																											{{ translateValue(value) }}
-																										</td>
 																										<td class="text-right">
 																											{{ agg.value }}
+																										</td>
+																										<td v-for="value in agg.keys">
+																											{{ translateValue(value) }}
 																										</td>
 																									</tr>
 																									<tr v-if="question.answers && question.answers.length === 0">
 																										<td colspan="100%" class="text-center">
-																											No Data
+																											{{ question.error ? 'Error' : 'No Data' }}
 																										</td>
 																									</tr>
 																								</tbody>
@@ -444,7 +450,7 @@
 																									</tr>
 																									<tr v-if="question.answers && question.answers.length === 0">
 																										<td colspan="100%" class="text-center">
-																											No Data
+																											{{ question.error ? 'Error' : 'No Data' }}
 																										</td>
 																									</tr>
 																								</tbody>
@@ -665,7 +671,7 @@
 																		<v-expansion-panel-text class="pl-13 ws-normal" :style="applyEventColumnWidth('max-width', 1, -24)">
 																			<div class="italic bold">Context</div>
 																			<div class="italic">{{question.context}}</div>
-																			<br/>
+																			<div class="italic my-4">Date Range: {{question.range || 'Event'}}</div>
 																			<v-row no-gutters class="mb-5">
 																				<v-col cols="auto">
 																					<v-btn icon size="small" variant="text" :href="$router.resolve(buildHuntQuestionParams(question, item)).href" target="_blank" class="cursor-pointer">
@@ -677,30 +683,30 @@
 																				</v-col>
 																			</v-row>
 																			<template v-if="question.answers">
-																				<span class="italic bold">Instant Insight</span>
+																				<span class="italic bold">Instant Insight (max 5 results)</span>
 																				<table v-if="question.isAggregate" class="simple-table">
 																					<thead>
 																						<tr>
-																							<th v-for="field in question.fields" :key="field">
-																								{{ field.replaceAll('event_data.', '') }}
-																							</th>
 																							<th>
 																								Count
+																							</th>
+																							<th v-for="field in question.fields" :key="field">
+																								{{ field.replaceAll('event_data.', '') }}
 																							</th>
 																						</tr>
 																					</thead>
 																					<tbody>
 																						<tr v-for="agg in question.answers">
-																							<td v-for="value in agg.keys">
-																								{{ translateValue(value) }}
-																							</td>
 																							<td class="text-right">
 																								{{ agg.value }}
+																							</td>
+																							<td v-for="value in agg.keys">
+																								{{ translateValue(value) }}
 																							</td>
 																						</tr>
 																						<tr v-if="question.answers && question.answers.length === 0">
 																							<td colspan="100%" class="text-center">
-																								No Data
+																								{{ question.error ? 'Error' : 'No Data' }}
 																							</td>
 																						</tr>
 																					</tbody>
@@ -727,7 +733,7 @@
 																						</tr>
 																						<tr v-if="question.answers && question.answers.length === 0">
 																							<td colspan="100%" class="text-center">
-																								No Data
+																								{{ question.error ? 'Error' : 'No Data' }}
 																							</td>
 																						</tr>
 																					</tbody>
