@@ -18,6 +18,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -125,7 +126,7 @@ func TestCheckEnabledSigmaRule(t *testing.T) {
 
 func TestElastAlertModule(t *testing.T) {
 	srv := &server.Server{
-		DetectionEngines: map[model.EngineName]server.DetectionEngine{},
+		DetectionEngines: sync.Map{}, // map[model.EngineName]server.DetectionEngine{},
 	}
 	mod := NewElastAlertEngine(srv)
 
@@ -145,8 +146,16 @@ func TestElastAlertModule(t *testing.T) {
 	err = mod.Stop()
 	assert.NoError(t, err)
 
-	assert.Equal(t, 1, len(srv.DetectionEngines))
-	assert.Same(t, mod, srv.DetectionEngines[model.EngineNameElastAlert])
+	count := 0
+	srv.DetectionEngines.Range(func(_, _ any) bool {
+		count++
+		return true
+	})
+	assert.Equal(t, 1, count)
+
+	m, ok := srv.DetectionEngines.Load(model.EngineNameElastAlert)
+	assert.True(t, ok)
+	assert.Same(t, mod, m)
 }
 
 func TestParseSigmaPackages(t *testing.T) {
@@ -1379,11 +1388,11 @@ sofilter_hosts:
 			mockIO := mock.NewMockIOManager(ctrl)
 
 			mod := NewElastAlertEngine(&server.Server{
-				DetectionEngines: map[model.EngineName]server.DetectionEngine{},
+				DetectionEngines: sync.Map{}, // map[model.EngineName]server.DetectionEngine{},
 			})
 
 			mod.IOManager = mockIO
-			mod.srv.DetectionEngines[model.EngineNameElastAlert] = mod
+			mod.srv.DetectionEngines.Store(model.EngineNameElastAlert, mod)
 
 			if test.InitMock != nil {
 				test.InitMock(mod, mockIO)

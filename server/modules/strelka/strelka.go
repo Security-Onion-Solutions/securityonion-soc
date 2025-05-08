@@ -148,7 +148,7 @@ func (e *StrelkaEngine) Init(config module.ModuleConfig) (err error) {
 }
 
 func (e *StrelkaEngine) Start() error {
-	e.srv.DetectionEngines[model.EngineNameStrelka] = e
+	e.srv.DetectionEngines.Store(model.EngineNameStrelka, e)
 	e.isRunning = true
 
 	// start long running processes

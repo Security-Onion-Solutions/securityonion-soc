@@ -178,7 +178,7 @@ func (e *SuricataEngine) Init(config module.ModuleConfig) (err error) {
 }
 
 func (e *SuricataEngine) Start() error {
-	e.srv.DetectionEngines[model.EngineNameSuricata] = e
+	e.srv.DetectionEngines.Store(model.EngineNameSuricata, e)
 	e.isRunning = true
 	e.IntegrityCheckerData.IsRunning = true
 
