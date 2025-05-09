@@ -385,7 +385,7 @@
 																						<div class="italic my-4">Date Range: {{question.range || 'Event'}}</div>
 																						<v-row no-gutters class="mb-5">
 																							<v-col cols="auto">
-																								<v-btn icon size="small" variant="text" :href="$router.resolve(buildHuntQuestionParams(question, item)).href" target="_blank" class="cursor-pointer">
+																								<v-btn icon size="small" variant="text" :href="$router.resolve(buildHuntQuestionParams(question, item.newest)).href" target="_blank" class="cursor-pointer">
 																									<v-icon>fa-crosshairs</v-icon>
 																								</v-btn>
 																							</v-col>
@@ -399,7 +399,7 @@
 																							</span>
 																							<br/>
 																							<span class="italic">
-																								Original event happened at {{ formatTimestamp(getEventField(item.newest, 'event_data.@timestamp')) }}
+																								Original event happened at {{ formatTimestamp(getEventTimestamp(item.newest)) }}
 																							</span>
 																							<table v-if="question.isAggregate" class="simple-table">
 																								<thead>
@@ -683,7 +683,13 @@
 																				</v-col>
 																			</v-row>
 																			<template v-if="question.answers">
-																				<span class="italic bold">Instant Insight (max 5 results)</span>
+																				<span class="italic bold">
+																					Instant Insight (max 5 results)
+																				</span>
+																				<br/>
+																				<span class="italic">
+																					Original event happened at {{ formatTimestamp(getEventTimestamp(item.newest)) }}
+																				</span>
 																				<table v-if="question.isAggregate" class="simple-table">
 																					<thead>
 																						<tr>

@@ -2818,7 +2818,8 @@ const huntComponent = {
       if (!range) {
         return '';
       }
-      const t = event?.['event_data.@timestamp'] || event?.['soc_timestamp'] || event?.['@timestamp'];
+
+      let t = this.getEventTimestamp(event);
 
       let plusMinus = false;
       let lookingBack = false;
@@ -2837,29 +2838,32 @@ const huntComponent = {
       let value = parseInt(range);
       if (isNaN(value)) {
         console.error('Invalid range value:', range);
-        return;
+        return '';
       }
 
       unit = { d: 'days', h: 'hours', m: 'minutes', s: 'seconds' }[unit];
       if (!unit) {
         console.error('Invalid range unit:', range);
-        return;
+        return '';
       }
 
       let t1, t2;
 
       if (plusMinus) {
-        t1 = moment(t).subtract(value, unit).format(this.i18n.timePickerFormat);
-        t2 = moment(t).add(value, unit).format(this.i18n.timePickerFormat);
+        t1 = moment.tz(t, this.zone).subtract(value, unit).format(this.i18n.timePickerFormat);
+        t2 = moment.tz(t, this.zone).add(value, unit).format(this.i18n.timePickerFormat);
       } else if (lookingBack) {
-        t1 = moment(t).subtract(value, unit).format(this.i18n.timePickerFormat);
-        t2 = moment(t).format(this.i18n.timePickerFormat);
+        t1 = moment.tz(t, this.zone).subtract(value, unit).format(this.i18n.timePickerFormat);
+        t2 = moment.tz(t, this.zone).format(this.i18n.timePickerFormat);
       } else {
-        t1 = moment(t).format(this.i18n.timePickerFormat);
-        t2 = moment(t).add(value, unit).format(this.i18n.timePickerFormat);
+        t1 = moment.tz(t, this.zone).format(this.i18n.timePickerFormat);
+        t2 = moment.tz(t, this.zone).add(value, unit).format(this.i18n.timePickerFormat);
       }
 
       return `${t1} - ${t2}`;
+    },
+    getEventTimestamp(event) {
+      return event?.['event_data.@timestamp'] || event?.['@timestamp'] || event?.['soc_timestamp']
     },
     buildHuntQuestionParams(question, event) {
       let payload = {
@@ -2945,17 +2949,18 @@ const huntComponent = {
         return event[field];
       }
 
-      let edField = 'event_data.' + field;
-      if (edField in event) {
-        return event[edField];
-      }
-
-      if (field.startsWith('event_data.')) {
-        let shortened = field.substring(11);
-        if (shortened in event) {
-          return event[shortened];
-        }
-      }
+      // check with/without event_data
+      // let edField = 'event_data.' + field;
+      // if (edField in event) {
+      //   return event[edField];
+      // }
+      //
+      // if (field.startsWith('event_data.')) {
+      //   let shortened = field.substring(11);
+      //   if (shortened in event) {
+      //     return event[shortened];
+      //   }
+      // }
 
       return '';
     },

@@ -1748,3 +1748,107 @@ test('countDrilldown', () => {
   expect(comp.$router.length).toBe(0);
   expect(comp.filterRouteDrilldown).toBe(null);
 });
+
+test('extractSocValues', () => {
+  let obj = {
+    payload: {
+      a: 1,
+      b: 2,
+      c: 3,
+    },
+    id: 'abc',
+    score: 0.947,
+    type: 'type',
+    timestamp: 'now',
+    source: 'network',
+  };
+
+  const expected = {
+    a: 1,
+    b: 2,
+    c: 3,
+    soc_id: 'abc',
+    soc_score: 0.947,
+    soc_type: 'type',
+    soc_timestamp: 'now',
+    soc_source: 'network',
+  };
+
+  let actual = comp.extractSocValues(obj);
+
+  expect(actual).toStrictEqual(expected);
+});
+
+test('getEventField', () => {
+  let event = {
+    a: 1,
+    timestamp: 'now',
+    'event_data.a': 2,
+    'event_data.b': 3,
+  };
+
+  const a = comp.getEventField(event, 'a');
+  const eventdataA = comp.getEventField(event, 'event_data.a');
+  const b = comp.getEventField(event, 'b');
+  const timestamp = comp.getEventField(event, 'timestamp');
+
+  expect(a).toBe(1);
+  expect(eventdataA).toBe(2);
+  expect(b).toBe('');
+  expect(timestamp).toBe('now');
+});
+
+test('applyEventColumnWidth', () => {
+  comp.eventColumnWidth = 100;
+
+  // empty because of category
+  const empty = comp.applyEventColumnWidth('width');
+  expect(empty).toStrictEqual({});
+
+  // empty because of no 'style' param
+  comp.category = 'alerts';
+
+  const emptyAgain = comp.applyEventColumnWidth();
+  expect(emptyAgain).toStrictEqual({});
+
+  const maxWidth = comp.applyEventColumnWidth('max-width');
+  expect(maxWidth).toStrictEqual({ 'max-width': '100px' });
+
+  const multiplier = comp.applyEventColumnWidth('width', 1.5);
+  expect(multiplier).toStrictEqual({ width: '150px' });
+
+  const offset = comp.applyEventColumnWidth('margin-left', 1, -20);
+  expect(offset).toStrictEqual({ 'margin-left': '80px' });
+
+  const both = comp.applyEventColumnWidth('whatever', 1.1, 20);
+  expect(both).toStrictEqual({ whatever: '130px' });
+});
+
+test('buildQuestionRange', () => {
+  const event = {
+    '@timestamp': '2023-10-01T12:00:00Z',
+  };
+
+  comp.zone = 'America/Denver';
+
+  let range = comp.buildQuestionRange(event, '+/-30d');
+  expect(range).toBe('2023/09/01 06:00:00 AM - 2023/10/31 06:00:00 AM');
+
+  range = comp.buildQuestionRange(event, '-15m');
+  expect(range).toBe('2023/10/01 05:45:00 AM - 2023/10/01 06:00:00 AM');
+
+  range = comp.buildQuestionRange(event, '2h');
+  expect(range).toBe('2023/10/01 06:00:00 AM - 2023/10/01 08:00:00 AM');
+
+  range = comp.buildQuestionRange(event, '+/-60s');
+  expect(range).toBe('2023/10/01 05:59:00 AM - 2023/10/01 06:01:00 AM');
+
+  range = comp.buildQuestionRange(event, '');
+  expect(range).toBe('');
+
+  range = comp.buildQuestionRange(event, 'X');
+  expect(range).toBe('');
+
+  range = comp.buildQuestionRange(event, '10p');
+  expect(range).toBe('');
+});
