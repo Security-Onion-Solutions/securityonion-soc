@@ -23,6 +23,7 @@ import (
 )
 
 const API_CLIENT_PREFIX = "socl_"
+const LOCAL_GRID_ID = ""
 
 type Subgrid struct {
 	// A unique, admin-assigned identifier string for this subgrid
@@ -91,6 +92,9 @@ func (grid *Subgrid) getHttpsClient() *http.Client {
 	}
 
 	client := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
 		Transport: &http.Transport{
 			TLSClientConfig: tlsConfig,
 		},
@@ -154,7 +158,7 @@ func (grid *Subgrid) refreshAccessToken() error {
 	return nil
 }
 
-func (grid *Subgrid) MakeApiCall(method string, url string, body io.Reader) ([]byte, error) {
+func (grid *Subgrid) MakeApiCall(method string, url string, body io.Reader, headers map[string]string) (*http.Response, error) {
 	if err := grid.refreshAccessToken(); err != nil {
 		return nil, fmt.Errorf("failed to refresh access token: %v", err)
 	}
@@ -168,6 +172,9 @@ func (grid *Subgrid) MakeApiCall(method string, url string, body io.Reader) ([]b
 	}
 
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", grid.AccessToken))
+	for key, value := range headers {
+		req.Header.Add(key, value)
+	}
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -178,11 +185,16 @@ func (grid *Subgrid) MakeApiCall(method string, url string, body io.Reader) ([]b
 		return nil, fmt.Errorf("API call failed with status code: %d", resp.StatusCode)
 	}
 
-	return io.ReadAll(resp.Body)
+	return resp, nil
 }
 
 func (grid *Subgrid) GetGridNodes() ([]*Node, error) {
-	bytes, err := grid.MakeApiCall("GET", "/grid", nil)
+	resp, err := grid.MakeApiCall("GET", "/grid?assignedGridId="+grid.Id, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	bytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -193,9 +205,25 @@ func (grid *Subgrid) GetGridNodes() ([]*Node, error) {
 		return nil, err
 	}
 
-	for _, node := range nodes {
-		node.GridId = grid.Id
+	return nodes, nil
+}
+
+func (grid *Subgrid) GetGridStatus() (*Status, error) {
+	resp, err := grid.MakeApiCall("GET", "/grid/status?assignedGridId="+grid.Id, nil, nil)
+	if err != nil {
+		return nil, err
 	}
 
-	return nodes, nil
+	bytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var status Status
+	err = socjson.LoadJson(bytes, &status)
+	if err != nil {
+		return nil, err
+	}
+
+	return &status, nil
 }

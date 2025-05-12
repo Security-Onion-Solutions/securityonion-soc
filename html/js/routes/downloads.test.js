@@ -32,3 +32,21 @@ test('updateNode', () => {
     comp.updateNode({ role: 'so-managersearch'});
     expect(comp.remoteAgentSupported).toBe(true);
 });
+
+test('getBaseUrl', () => {
+    comp.$root.selectedGridId = null;
+    comp.$root.getSelectedGrid = jest.fn(() => null);
+    expect(comp.getBaseUrl()).toBe("");
+
+    comp.$root.selectedGridId = "test-grid";
+    comp.$root.getSelectedGrid = jest.fn(() => null);
+    expect(comp.getBaseUrl()).toBe("");
+
+    comp.$root.selectedGridId = "test-grid";
+    comp.$root.getSelectedGrid = jest.fn(() => ({ managerUrl: ""}));
+    expect(comp.getBaseUrl()).toBe("");
+
+    comp.$root.selectedGridId = "test-grid";
+    comp.$root.getSelectedGrid = jest.fn(() => ({ managerUrl: "http://test-grid.local" }));
+    expect(comp.getBaseUrl()).toBe("http://test-grid.local");
+});

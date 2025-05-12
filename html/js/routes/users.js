@@ -44,7 +44,7 @@ routes.push({ path: '/users', name: 'users', component: {
       name: value => !value || value.length < 100 || this.$root.i18n.ruleMaxLen,
       note: value => !value || value.length < 100 || this.$root.i18n.ruleMaxLen,
     },
-    footerProps: { 'items-per-page-options': [10,50,250,1000] },
+    itemsPerPageOptions: [10,50,250,1000],
     expanded: [],
     roles: [],
   }},

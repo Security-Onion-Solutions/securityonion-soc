@@ -26,5 +26,14 @@ routes.push({ path: '/downloads', name: 'downloads', component: {
         this.remoteAgentSupported = false;
       }
     },
+    getBaseUrl() {
+      if (this.$root.selectedGridId) {
+        const grid = this.$root.getSelectedGrid()
+        if (grid) {
+          return grid.managerUrl;
+        }
+      }
+      return ''
+    },
   }
 }});

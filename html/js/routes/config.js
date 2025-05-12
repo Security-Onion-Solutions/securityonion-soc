@@ -51,6 +51,7 @@ routes.push({
         confirmRemoveEntryDialog: false,
         confirmRemoveEntryMessage: "",
         confirmRemoveEntryIdx: 0,
+        oldGridId: null,
       }
     },
     mounted() {
@@ -69,10 +70,22 @@ routes.push({
   },
   methods: {
     onRouteUpdate() {
-      this.processRouteParameters();
-      this.refreshTree();
+      if (this.processRouteParameters()) {
+        if (this.form.key) {
+          // Override the tip timeout duration due to this relatively complex messaging being displayed.
+          this.$root.showTip(this.i18n.settingChangeInProgress, 30000);
+        }
+        this.loadData();
+      } else {
+        this.refreshTree();
+      }
     },
     processRouteParameters() {
+      var forceDataReload = false;
+      if (this.$route.query.gridId != this.oldGridId) {
+        forceDataReload = true;
+        this.oldGridId = this.$route.query.gridId;
+      }
       if (this.$route.query.a == "1") {
         this.advanced = true;
       }
@@ -93,6 +106,8 @@ routes.push({
         this.search = this.$route.query.s;
       }
       this.applySearchFilter();
+
+      return forceDataReload;
     },
     findActiveSetting() {
       if (this.active.length > 0) {
@@ -323,6 +338,14 @@ routes.push({
       }
       return desc;
     },
+    getSettingLink(setting) {
+      var url = new URL(window.location.origin);
+      url.searchParams.set('s', setting.id);
+      url.searchParams.set('a', setting.advanced ? 1 : 0);
+      var link = url.toString();
+      link = link.replace(window.location.origin + '/', window.location.origin + '/#' + this.$route.path);
+      return link;
+    },
     getSettingBreadcrumbs(setting) {
       var breadcrumbs = setting.id.replaceAll(".", " > ");
       if (setting.title) {
@@ -391,6 +414,7 @@ routes.push({
       window.scrollTo(0,0);
     },
     unpack(setting) {
+      if (!setting) return;
       this.form.entries = []
       if (this.hasUiElements(setting)) {
         const isArrayOfObjects = setting.forcedType && setting.forcedType.startsWith("[]");
@@ -546,29 +570,44 @@ routes.push({
       this.form.value = Date.now() + "";
     },
     convertMultilineElement(element, modifiedEntry, toString) {
-      if (modifiedEntry && this.hasMultipleValues(element) && this.isMultiline(element)) {
-        var value = modifiedEntry[element.field];
+      if (modifiedEntry) {
+        if (this.hasMultipleValues(element) && this.isMultiline(element)) {
+          var value = modifiedEntry[element.field];
 
-        if (toString) {
-          if (value && value.join != null) {
-            value = value.join("\n");
+          if (toString) {
+            if (value && value.join != null) {
+              value = value.join("\n");
+            } else {
+              value = ""
+            }
           } else {
-            value = ""
+            if (value && value.trim != null) {
+              value = value.trim().split("\n");
+            } else {
+              value = [];
+            }
           }
-        } else {
-          if (value && value.trim != null) {
-            value = value.trim().split("\n");
+          modifiedEntry[element.field] = value;
+        } else if (element.forcedType == "{}") { // This UI element needs converted to an object
+          var value = modifiedEntry[element.field];
+          if (toString) {
+            if (value != null) {
+              value = JSON.stringify(value)
+            }
           } else {
-            value = [];
+            if (value && value.trim().length > 0) {
+              value = JSON.parse(value)
+            }
           }
+          modifiedEntry[element.field] = value;
         }
-        modifiedEntry[element.field] = value;
       }
     },
     generateIndexTitle(idx, title) {
       return "" + (idx+1) + ". " + (title ? title : "");
     },
     generateEntryTitle(entry, idx) {
+      if (entry._title == "+") return;
       const setting = this.findActiveSetting();
       var title = null;
       if (setting && setting.uiElements && setting.uiElements.length > 0) {
@@ -683,7 +722,12 @@ routes.push({
           this.$root.showWarning(this.i18n.settingIncomplete)
           return;
         }
-        this.pack(setting);
+        try {
+          this.pack(setting);
+        } catch (e) {
+          this.$root.showError(this.i18n.settingValidationFailed);
+          return;
+        }
         if (setting.required && !this.form.value) {
           this.$root.showError(this.i18n.settingValidationFailed);
           return;
@@ -854,33 +898,70 @@ routes.push({
       return false;
     },
     canMoveEntry(idx, up) {
-      var lastIdx = this.form.entries.length - 1;
-      if (this.form.entries[lastIdx]._title == "+") {
-        // The bottom entry is a + which means its for adding new entries. It cannot be moved
+      if (this.form.entries[idx]._title == "+" && idx == this.form.entries.length - 1) {
+        // The entry is a + which means its for adding new entries. It cannot be moved
         // and the item above it cannot be moved below it.
-        lastIdx -= 1;
-      }
-      if (up && idx == 0) {
-        // Top entry cannot be moved up
         return false;
-      } else if (!up && idx >= lastIdx) {
-        // Bottom entry cannot be moved down
-        return false
       }
-      return true
+      return true;
+    },
+    regenEntryTitles() {
+      for (var idx = 0; idx < this.form.entries.length; idx++) {
+        const entry = this.form.entries[idx];
+        this.generateEntryTitle(entry, idx);
+      }
     },
     moveEntry(selected, oldIdx, up) {
       if (!this.isPendingSave(selected)) {
         this.editNow(selected);
       }
-      const newIdx = oldIdx + (up ? -1 : 1);
-      const element1 = this.form.entries[oldIdx];
-      const element2 = this.form.entries[newIdx];
-      this.form.entries[oldIdx] = element2;
-      this.form.entries[newIdx] = element1;
-      this.generateEntryTitle(element1, newIdx);
-      this.generateEntryTitle(element2, oldIdx);
+      
+      var lastIdx = this.form.entries.length - 1;
+      if (this.form.entries[lastIdx]._title == "+") {
+        lastIdx -= 1;
+      }
+
+      if (up && oldIdx == 0) {
+        const topElement = this.form.entries.shift();
+        if (this.form.entries[this.form.entries.length - 1]._title == "+") {
+          // Bottom element is the + entry, pop it, add the other element, then add back the + entry
+          // which ensures the + entry is always at the bottom.
+          const addElement = this.form.entries.pop();
+          this.form.entries.push(topElement);
+          this.form.entries.push(addElement);
+        } else {
+          // Add the top element to the bottom of the list since there is no + entry
+          this.form.entries.push(topElement);
+        }
+        this.regenEntryTitles();
+      } else if (!up && oldIdx == lastIdx) {
+        const bottomElement = this.form.entries.pop();
+        if (bottomElement._title == "+") {
+          // Bottom element is the + entry, pop the second to last element, then add back the + entry
+          // which ensures the + entry is always at the bottom. Then insert the second element at
+          // the front of the list.
+          const otherElement = this.form.entries.pop();
+          this.form.entries.push(bottomElement);
+          this.form.entries.unshift(otherElement);
+        } else {
+          // Insert the bottom element add the front of the list since it's not a + entry
+          this.form.entries.unshift(bottomElement);
+        }
+        this.regenEntryTitles();
+      } else {
+        // Swap them
+        const newIdx = oldIdx + (up ? -1 : 1);
+        const element1 = this.form.entries[oldIdx];
+        const element2 = this.form.entries[newIdx];
+        this.form.entries[oldIdx] = element2;
+        this.form.entries[newIdx] = element1;
+        this.generateEntryTitle(element1, newIdx);
+        this.generateEntryTitle(element2, oldIdx);
+      }
       this.markDirtyEntries();
+    },
+    closeSetting() {
+      this.active = [];
     },
   }
 }});

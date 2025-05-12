@@ -27,6 +27,9 @@
 				<v-btn variant="flat" id="add-user-button" class="action ml-3" color="blue" @click.stop="showAdd()" data-aid="users_create_new">
 					<v-icon>fa-plus</v-icon>
 				</v-btn>
+				<v-btn variant="flat" color="secondary" @click.stop="loadData()" id="users-refresh-button" class="ml-3" data-aid="users_refresh_button">
+					<v-icon>fa-sync</v-icon>
+				</v-btn>
 			</v-toolbar>
 			<v-dialog v-model="dialog" persistent width="800px" data-aid="users_create_dialog">
 				<v-card>
@@ -69,8 +72,8 @@
 					</v-card-actions>
 				</v-card>
 			</v-dialog>
-			<v-data-table :sort-by="sortBy" @update:sort-by="val => sortBy = val" :footer-props="footerProps" data-aid="users_details"
-				:items-per-page.sync="itemsPerPage" must-sort :headers="headers" :items="users" v-model:expanded="expanded">
+			<v-data-table :sort-by="sortBy" @update:sort-by="val => sortBy = val" :items-per-page-options="itemsPerPageOptions" data-aid="users_details"
+				v-model:items-per-page="itemsPerPage" must-sort :headers="headers" :items="users" v-model:expanded="expanded">
 				<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
 					<tr>
 						<template v-for="header in columns" :key="header.key">

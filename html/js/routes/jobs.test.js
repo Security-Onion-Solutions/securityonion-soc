@@ -46,6 +46,21 @@ test('addJob', async () => {
 	expect(comp.jobs).toEqual(['addJobResponse']);
 });
 
+test('deleteJob', async () => {
+	resetPapi();
+	const mock = mockPapi('delete');
+	const jobToDelete = { id: 'job123', name: 'Test Job' };
+	const otherJob = { id: 'job456', name: 'Another Job' };
+	comp.jobs = [jobToDelete, otherJob];
+
+	await comp.deleteJob(jobToDelete);
+
+	expect(mock).toHaveBeenCalledTimes(1);
+	expect(mock).toHaveBeenCalledWith('job/job123');
+	expect(comp.jobs).toEqual([otherJob]); // Only the other job should remain
+	expect(comp.jobs).not.toContain(jobToDelete);
+});
+
 test('addJob - minimal', async () => {
 	resetPapi();
 	const mock = mockPapi('post', { data: 'addJobResponse' });

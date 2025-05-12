@@ -13,6 +13,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 const DEFAULT_CASE_INDEX = "*:so-case"
@@ -81,7 +82,7 @@ func (elastic *Elastic) Init(cfg module.ModuleConfig) error {
 		elastic.server.Eventstore = elastic.store
 		if casesEnabled {
 			if elastic.server.Casestore != nil {
-				err = errors.New("Multiple case modules cannot be enabled concurrently")
+				return errors.New("Multiple case modules cannot be enabled concurrently")
 			} else {
 				caseIndex := module.GetStringDefault(cfg, "caseIndex", DEFAULT_CASE_INDEX)
 				auditIndex := module.GetStringDefault(cfg, "auditIndex", DEFAULT_CASE_AUDIT_INDEX)
@@ -91,14 +92,15 @@ func (elastic *Elastic) Init(cfg module.ModuleConfig) error {
 				bulkIndexerWorkerCount := module.GetIntDefault(cfg, "bulkIndexerWorkerCount", -1)
 
 				err = casestore.Init(caseIndex, auditIndex, maxCaseAssociations, schemaPrefix, commonObservables, bulkIndexerWorkerCount)
-				if err == nil {
-					elastic.server.Casestore = casestore
+				if err != nil {
+					return err
 				}
+				elastic.server.Casestore = casestore
 			}
 		}
 		if detectionsEnabled {
 			if elastic.server.Detectionstore != nil {
-				err = errors.New("Multiple detection modules cannot be enabled concurrently")
+				return errors.New("Multiple detection modules cannot be enabled concurrently")
 			} else {
 				detIndex := module.GetStringDefault(cfg, "detectionIndex", DEFAULT_DETECTION_INDEX)
 				detAuditIndex := module.GetStringDefault(cfg, "detectionAuditIndex", DEFAULT_DETECTION_AUDIT_INDEX)
@@ -108,27 +110,29 @@ func (elastic *Elastic) Init(cfg module.ModuleConfig) error {
 				bulkIndexerWorkerCount := module.GetIntDefault(cfg, "bulkIndexerWorkerCount", -1)
 
 				err = detstore.Init(detIndex, detAuditIndex, maxDetAssociations, schemaPrefix, bulkIndexerWorkerCount)
-				if err == nil {
-					elastic.server.Detectionstore = detstore
+				if err != nil {
+					return err
 				}
+				elastic.server.Detectionstore = detstore
 			}
 		}
 	}
 
 	licensing.ValidateDataUrl(host)
 
+	// Register routes in same thread as server init to avoid multi-threading issues
+	// with Chi route registration.
+	r := chi.NewMux()
+	r.Use(web.Middleware(elastic.server.Host, false, elastic.server.Config.Subgrids))
+	RegisterJobLookupRoutes(elastic.server, elastic.store, r, "/joblookup")
+	elastic.server.Host.RegisterRouter("/joblookup", r)
+
+	RegisterJobLookupRoutes(elastic.server, elastic.store, elastic.server.ApiRouter, "/api/joblookup")
+
 	return err
 }
 
 func (elastic *Elastic) Start() error {
-	r := chi.NewMux()
-	dep := chi.NewMux()
-
-	RegisterJobLookupRoutes(elastic.server, elastic.store, r, "/joblookup")
-	RegisterJobLookupRoutes(elastic.server, elastic.store, dep, "/securityonion/joblookup") // deprecated
-
-	elastic.server.Host.RegisterRouter("/joblookup", r)
-	elastic.server.Host.RegisterRouter("/securityonion/joblookup", dep) // deprecated
 	return nil
 }
 

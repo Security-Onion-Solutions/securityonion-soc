@@ -88,6 +88,7 @@ func TestNewServer(tester *testing.T) {
 	srv := NewServer(cfg, "")
 	assert.NotNil(tester, srv.Host)
 	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
+	assert.NotNil(tester, srv.ApiRouter)
 }
 
 func TestNewServer_SocUrlExceeded(tester *testing.T) {

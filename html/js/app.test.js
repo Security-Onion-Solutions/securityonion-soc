@@ -5,7 +5,6 @@
 // Elastic License 2.0.
 
 require('./test_common.js');
-require('./test_common.js');
 
 const app = global.getApp();
 
@@ -170,6 +169,8 @@ test('isMyUser', () => {
 });
 
 test('loadServerSettings', async () => {
+  app.subgrids = [];
+  app.gridInfo = {};
   const fakeInfo = {
     srvToken: 'xyz',
     version: 'myVersion',
@@ -196,7 +197,7 @@ test('loadServerSettings', async () => {
   const mock = mockPapi("get", {data: fakeInfo});
   const showErrorMock = mockShowError(true);
   await app.loadServerSettings();
-  expect(mock).toHaveBeenCalledWith('info');
+  expect(mock).toHaveBeenCalledWith('info', {"params": {"gridId": ""}});
   expect(showErrorMock).toHaveBeenCalledTimes(0);
   expect(app.version).toBe('myVersion');
   expect(app.license).toBe('myLicense');
@@ -213,6 +214,7 @@ test('loadServerSettings', async () => {
   expect(app.casesEnabled).toBe(true);
   expect(app.detectionsEnabled).toBe(true);
   expect(app.papi.defaults.headers.common['X-Srv-Token']).toBe('xyz');
+  expect(app.gridInfo['']).toBe(fakeInfo);
 });
 
 test('localizeMessage', () => {
@@ -502,8 +504,9 @@ test('correctCasing', () => {
   expect(app.correctCasing('yArA')).toBe('YARA');
 });
 
-function verifyEngineFailureStates(e1f1, e1f2, e1f3, e2f1, e2f2, e2f3, e3f1, e3f2, e3f3, expected) {
-  app.currentStatus = { detections: {
+function verifyEngineFailureStates(gridId, e1f1, e1f2, e1f3, e2f1, e2f2, e2f3, e3f1, e3f2, e3f3, expected) {
+  app.statusByGridId = {};
+  app.statusByGridId[gridId] = { detections: {
     elastalert: {
       integrityFailure: e1f1,
       syncFailure: e1f2,
@@ -525,35 +528,39 @@ function verifyEngineFailureStates(e1f1, e1f2, e1f3, e2f1, e2f2, e2f3, e3f1, e3f
 
 test('isDetectionsUnhealthy', () => {
   // Unhealthy
-  verifyEngineFailureStates(true, false, false, true, false, false, true, false, false, true);
-  verifyEngineFailureStates(false, true, false, false, true, false, false, true, false, true);
-  verifyEngineFailureStates(false, false, true, false, false, true, false, false, true, true);
-  verifyEngineFailureStates(true, true, false, true, true, false, true, true, false, true);
-  verifyEngineFailureStates(false, true, true, false, true, true, false, true, true, true);
-  verifyEngineFailureStates(true, false, true, true, false, true, true, false, true, true);
-  verifyEngineFailureStates(true, true, true, true, true, true, true, true, true, true);
-  verifyEngineFailureStates(true, true, true, true, true, true, true, true, true, true);
-  verifyEngineFailureStates(false, false, true, true, true, true, true, true, true, true);
-  verifyEngineFailureStates(false, false, false, true, true, true, true, true, true, true);
-  verifyEngineFailureStates(false, false, false, false, true, true, true, true, true, true);
-  verifyEngineFailureStates(false, false, false, false, false, true, true, true, true, true);
-  verifyEngineFailureStates(false, false, false, false, false, false, true, true, true, true);
-  verifyEngineFailureStates(false, false, false, false, false, false, false, true, true, true);
-  verifyEngineFailureStates(false, false, false, false, false, false, false, false, true, true);
+  verifyEngineFailureStates('', true, false, false, true, false, false, true, false, false, true);
+  verifyEngineFailureStates('', false, true, false, false, true, false, false, true, false, true);
+  verifyEngineFailureStates('', false, false, true, false, false, true, false, false, true, true);
+  verifyEngineFailureStates('', true, true, false, true, true, false, true, true, false, true);
+  verifyEngineFailureStates('', false, true, true, false, true, true, false, true, true, true);
+  verifyEngineFailureStates('', true, false, true, true, false, true, true, false, true, true);
+  verifyEngineFailureStates('', true, true, true, true, true, true, true, true, true, true);
+  verifyEngineFailureStates('', true, true, true, true, true, true, true, true, true, true);
+  verifyEngineFailureStates('', false, false, true, true, true, true, true, true, true, true);
+  verifyEngineFailureStates('', false, false, false, true, true, true, true, true, true, true);
+  verifyEngineFailureStates('', false, false, false, false, true, true, true, true, true, true);
+  verifyEngineFailureStates('', false, false, false, false, false, true, true, true, true, true);
+  verifyEngineFailureStates('', false, false, false, false, false, false, true, true, true, true);
+  verifyEngineFailureStates('', false, false, false, false, false, false, false, true, true, true);
+  verifyEngineFailureStates('', false, false, false, false, false, false, false, false, true, true);
+
+  // Remote grid unhealthy
+  verifyEngineFailureStates('remote', false, false, false, false, false, false, false, false, true, true);
 
   // Healthy
-  verifyEngineFailureStates(false, false, false, false, false, false, false, false, false, false);
+  verifyEngineFailureStates('', false, false, false, false, false, false, false, false, false, false);
 
   // Neither Unhealthy nor Healthy
-  app.currentStatus.detections.elastalert.migrating = true
-  app.currentStatus.detections.strelka.importing = true
-  app.currentStatus.detections.suricata.syncing = true
+  app.statusByGridId[''].detections.elastalert.migrating = true
+  app.statusByGridId[''].detections.strelka.importing = true
+  app.statusByGridId[''].detections.suricata.syncing = true
   expect(app.isDetectionsUnhealthy()).toBe(false);
 });
 
 test('isDetectionsUpdating', () => {
+  app.statusByGridId = {};
   // Unhealthy
-  app.currentStatus = { detections: {
+  app.statusByGridId[''] = { detections: {
     elastalert: {
       integrityFailure: true,
     },
@@ -567,57 +574,57 @@ test('isDetectionsUpdating', () => {
   expect(app.isDetectionsUpdating()).toBe(false);
 
   // All healthy
-  app.currentStatus.detections.elastalert.integrityFailure = false;
+  app.statusByGridId[''].detections.elastalert.integrityFailure = false;
   expect(app.isDetectionsUpdating()).toBe(false);
-  app.currentStatus.detections.strelka.integrityFailure = false;
+  app.statusByGridId[''].detections.strelka.integrityFailure = false;
   expect(app.isDetectionsUpdating()).toBe(false);
-  app.currentStatus.detections.suricata.integrityFailure = false;
+  app.statusByGridId[''].detections.suricata.integrityFailure = false;
   expect(app.isDetectionsUpdating()).toBe(false);
 
   // Suricata migrating
-  app.currentStatus.detections.suricata.migrating = true;
+  app.statusByGridId[''].detections.suricata.migrating = true;
   expect(app.isDetectionsUpdating()).toBe(true);
-  app.currentStatus.detections.suricata.migrating = false;
+  app.statusByGridId[''].detections.suricata.migrating = false;
 
   // Strelka migrating
-  app.currentStatus.detections.strelka.migrating = true;
+  app.statusByGridId[''].detections.strelka.migrating = true;
   expect(app.isDetectionsUpdating()).toBe(true);
-  app.currentStatus.detections.strelka.migrating = false;
+  app.statusByGridId[''].detections.strelka.migrating = false;
 
   // ElastAlert migrating
-  app.currentStatus.detections.elastalert.migrating = true;
+  app.statusByGridId[''].detections.elastalert.migrating = true;
   expect(app.isDetectionsUpdating()).toBe(true);
-  app.currentStatus.detections.elastalert.migrating = false;
+  app.statusByGridId[''].detections.elastalert.migrating = false;
 
   // Suricata importing
-  app.currentStatus.detections.suricata.importing = true;
+  app.statusByGridId[''].detections.suricata.importing = true;
   expect(app.isDetectionsUpdating()).toBe(true);
-  app.currentStatus.detections.suricata.importing = false;
+  app.statusByGridId[''].detections.suricata.importing = false;
 
   // Strelka importing
-  app.currentStatus.detections.strelka.importing = true;
+  app.statusByGridId[''].detections.strelka.importing = true;
   expect(app.isDetectionsUpdating()).toBe(true);
-  app.currentStatus.detections.strelka.importing = false;
+  app.statusByGridId[''].detections.strelka.importing = false;
 
   // ElastAlert importing
-  app.currentStatus.detections.elastalert.importing = true;
+  app.statusByGridId[''].detections.elastalert.importing = true;
   expect(app.isDetectionsUpdating()).toBe(true);
-  app.currentStatus.detections.elastalert.importing = false;
+  app.statusByGridId[''].detections.elastalert.importing = false;
 
   // Suricata syncing
-  app.currentStatus.detections.suricata.syncing = true;
+  app.statusByGridId[''].detections.suricata.syncing = true;
   expect(app.isDetectionsUpdating()).toBe(true);
-  app.currentStatus.detections.suricata.syncing = false;
+  app.statusByGridId[''].detections.suricata.syncing = false;
 
   // Strelka syncing
-  app.currentStatus.detections.strelka.syncing = true;
+  app.statusByGridId[''].detections.strelka.syncing = true;
   expect(app.isDetectionsUpdating()).toBe(true);
-  app.currentStatus.detections.strelka.syncing = false;
+  app.statusByGridId[''].detections.strelka.syncing = false;
 
   // ElastAlert syncing
-  app.currentStatus.detections.elastalert.syncing = true;
+  app.statusByGridId[''].detections.elastalert.syncing = true;
   expect(app.isDetectionsUpdating()).toBe(true);
-  app.currentStatus.detections.elastalert.syncing = false;
+  app.statusByGridId[''].detections.elastalert.syncing = false;
 });
 
 test('getDetectionEngines', () => {
@@ -626,45 +633,46 @@ test('getDetectionEngines', () => {
 
 test('getDetectionEngineStatusClass', () => {
   expect(app.getDetectionEngineStatusClass('unknown')).toBe('text-normal');
-  app.currentStatus = { detections: { strelka: { syncing: true }}};
+  app.statusByGridId[''] = { detections: { strelka: { syncing: true }}};
   expect(app.getDetectionEngineStatusClass('strelka')).toBe('text-normal');
-  app.currentStatus = { detections: { strelka: { migrationFailure: true, syncFailure: true }}};
+  app.statusByGridId[''] = { detections: { strelka: { migrationFailure: true, syncFailure: true }}};
   expect(app.getDetectionEngineStatusClass('strelka')).toBe('text-warning');
-  app.currentStatus = { detections: { strelka: { syncFailure: true, integrityFailure: true }}};
+  app.statusByGridId[''] = { detections: { strelka: { syncFailure: true, integrityFailure: true }}};
   expect(app.getDetectionEngineStatusClass('strelka')).toBe('text-warning');
-  app.currentStatus = { detections: { strelka: { integrityFailure: true, syncing: true }}};
+  app.statusByGridId[''] = { detections: { strelka: { integrityFailure: true, syncing: true }}};
   expect(app.getDetectionEngineStatusClass('strelka')).toBe('text-warning');
-  app.currentStatus = { detections: { strelka: { migrating: true, integrityFailure: true }}};
+  app.statusByGridId[''] = { detections: { strelka: { migrating: true, integrityFailure: true }}};
   expect(app.getDetectionEngineStatusClass('strelka')).toBe('text-normal');
-  app.currentStatus = { detections: { strelka: { importing: true, migrating: true }}};
+  app.statusByGridId[''] = { detections: { strelka: { importing: true, migrating: true }}};
   expect(app.getDetectionEngineStatusClass('strelka')).toBe('text-normal');
-  app.currentStatus = { detections: { strelka: { importing: false }}};
+  app.statusByGridId[''] = { detections: { strelka: { importing: false }}};
   expect(app.getDetectionEngineStatusClass('strelka')).toBe('text-success');
 });
 
 test('getDetectionEngineStatus', () => {
   expect(app.getDetectionEngineStatus('unknown')).toBe('Unknown');
-  app.currentStatus = { detections: { strelka: { syncing: true }}};
+  app.statusByGridId[''] = { detections: { strelka: { syncing: true }}};
   expect(app.getDetectionEngineStatus('strelka')).toBe('Syncing');
-  app.currentStatus = { detections: { strelka: { migrationFailure: true, syncFailure: true }}};
+  app.statusByGridId[''] = { detections: { strelka: { migrationFailure: true, syncFailure: true }}};
   expect(app.getDetectionEngineStatus('strelka')).toBe('MigrationFailure');
-  app.currentStatus = { detections: { strelka: { syncFailure: true, integrityFailure: true }}};
+  app.statusByGridId[''] = { detections: { strelka: { syncFailure: true, integrityFailure: true }}};
   expect(app.getDetectionEngineStatus('strelka')).toBe('IntegrityFailure');
-  app.currentStatus = { detections: { strelka: { syncFailure: true, integrityFailure: false }}};
+  app.statusByGridId[''] = { detections: { strelka: { syncFailure: true, integrityFailure: false }}};
   expect(app.getDetectionEngineStatus('strelka')).toBe('SyncFailure');
-  app.currentStatus = { detections: { strelka: { migrating: true, importing: true, syncing: true, integrityFailure: true }}};
+  app.statusByGridId[''] = { detections: { strelka: { migrating: true, importing: true, syncing: true, integrityFailure: true }}};
   expect(app.getDetectionEngineStatus('strelka')).toBe('Migrating');
-  app.currentStatus = { detections: { strelka: { importing: true, migrating: false, syncing: true }}};
+  app.statusByGridId[''] = { detections: { strelka: { importing: true, migrating: false, syncing: true }}};
   expect(app.getDetectionEngineStatus('strelka')).toBe('Importing');
-  app.currentStatus = { detections: { strelka: { importing: true, migrating: false, syncing: false }}};
+  app.statusByGridId[''] = { detections: { strelka: { importing: true, migrating: false, syncing: false }}};
   expect(app.getDetectionEngineStatus('strelka')).toBe('ImportPending');
-  app.currentStatus = { detections: { strelka: { importing: false }}};
+  app.statusByGridId[''] = { detections: { strelka: { importing: false }}};
   expect(app.getDetectionEngineStatus('strelka')).toBe('Healthy');
 });
 
 test('isAttentionNeeded', () => {
-  app.connected =  true;
-  app.currentStatus = {
+  app.connected = true;
+  app.statusByGridId = {};
+  app.statusByGridId[''] = {
     detections: {
       elastalert: {
         integrityFailure: false,
@@ -689,6 +697,7 @@ test('isAttentionNeeded', () => {
       unhealthyNodeCount: 0,
     },
   };
+  
   expect(app.isAttentionNeeded()).toBe(false);
 
   // Attention when unable to connect to server
@@ -697,19 +706,19 @@ test('isAttentionNeeded', () => {
   app.connected = true;
 
   // Attention when unhealthy grid count > 0
-  app.currentStatus.grid.unhealthyNodeCount = 1
+  app.statusByGridId[''].grid.unhealthyNodeCount = 1
   expect(app.isAttentionNeeded()).toBe(true);
-  app.currentStatus.grid.unhealthyNodeCount = 0
+  app.statusByGridId[''].grid.unhealthyNodeCount = 0
 
   // Attention when new alert count > 0
-  app.currentStatus.alerts.newCount = 1
+  app.statusByGridId[''].alerts.newCount = 1
   expect(app.isAttentionNeeded()).toBe(true);
-  app.currentStatus.alerts.newCount = 0
+  app.statusByGridId[''].alerts.newCount = 0
 
   // Attention when detections engines unhealthy
-  app.currentStatus.detections.elastalert.syncFailure = true;
+  app.statusByGridId[''].detections.elastalert.syncFailure = true;
   expect(app.isAttentionNeeded()).toBe(true);
-  app.currentStatus.detections.elastalert.syncFailure = false;
+  app.statusByGridId[''].detections.elastalert.syncFailure = false;
 
   // Back to normal
   expect(app.isAttentionNeeded()).toBe(false);
@@ -847,4 +856,132 @@ test('updateColumnClass', () => {
   app.updateColumnClass(headers, 'NonExistentColumn', true, 'd-md-table-cell');
   expect(headers[0].align).toBe(' d-none d-md-table-cell');
   expect(headers[1].align).toBe(' d-none');
+});
+
+test('loadGridInfo', async () => {
+  resetPapi();
+  const mock = mockPapi("get", {data: {foo:1}});
+
+  app.gridInfo = {};
+  app.subgrids = [{id: 'g1'}];
+  app.loadSubgridInfo();
+
+  await app.loadSubgridInfo();
+  expect(mock).toHaveBeenCalledWith('info', { params: { gridId: 'g1' }});
+  expect(app.gridInfo['g1']).toStrictEqual({foo:1});
+});
+
+test('getSelectedGrid', () => {
+  app.subgrids = [{id: 'g1', name: 'Grid 1'}, {id: 'g2', name: 'Grid 2'}];
+  app.selectedGridId = 'g1';
+  expect(app.getSelectedGrid()).toStrictEqual({id: 'g1', name: 'Grid 1'});
+
+  app.selectedGridId = 'g2';
+  expect(app.getSelectedGrid()).toStrictEqual({id: 'g2', name: 'Grid 2'});
+
+  app.selectedGridId = 'g3';
+  expect(app.getSelectedGrid()).toBe(undefined);
+});
+
+describe('formatActionContent', () => {
+  const app = global.getApp();
+  const mockEvent = {
+    soc_id: 'event123',
+    'source.ip': '192.168.1.100',
+    'destination.port': 80,
+  };
+
+  beforeEach(() => {
+    // Reset selectedGridId before each test if necessary
+    app.selectedGridId = 'localGrid';
+  });
+
+  test('should return null if content is null or undefined', () => {
+    expect(app.formatActionContent(null, mockEvent, 'someField', 'someValue')).toBeNull();
+    expect(app.formatActionContent(undefined, mockEvent, 'someField', 'someValue')).toBeNull();
+  });
+
+  test('should replace standard placeholders', () => {
+    const content = 'Event: {eventId}, Field: {field}, Value: {value}, Grid: {gridId}';
+    const expected = 'Event: event123, Field: srcIP, Value: 1.2.3.4, Grid: localGrid';
+    expect(app.formatActionContent(content, mockEvent, 'srcIP', '1.2.3.4')).toBe(expected);
+  });
+
+  test('should replace eventJson placeholder', () => {
+    const content = 'Event JSON: {eventJson}';
+    const expected = `Event JSON: ${JSON.stringify(mockEvent)}`;
+    expect(app.formatActionContent(content, mockEvent, 'someField', 'someValue')).toBe(expected);
+  });
+
+  test('should replace dynamic field placeholders', () => {
+    const content = 'Source IP: {:source.ip}, Dest Port: {:destination.port}';
+    const expected = 'Source IP: 192.168.1.100, Dest Port: 80';
+    expect(app.formatActionContent(content, mockEvent, 'someField', 'someValue')).toBe(expected);
+  });
+
+  test('should handle URI encoding correctly (uriEncode=true by default)', () => {
+    const content = 'Value: {value}, Dynamic: {:source.ip}';
+    const mockEventWithSpace = { soc_id: 'event123', 'source.ip': '10.0.0.1 10.0.0.2' };
+    const expected = 'Value: space%20value, Dynamic: 10.0.0.1%2010.0.0.2';
+    expect(app.formatActionContent(content, mockEventWithSpace, 'field', 'space value')).toBe(expected);
+  });
+
+  test('should handle URI encoding correctly (uriEncode=false)', () => {
+    const content = 'Value: {value}, Dynamic: {:source.ip}';
+    const mockEventWithSpace = { soc_id: 'event123', 'source.ip': '10.0.0.1 10.0.0.2' };
+    const expected = 'Value: space value, Dynamic: 10.0.0.1 10.0.0.2';
+    expect(app.formatActionContent(content, mockEventWithSpace, 'field', 'space value', false)).toBe(expected);
+  });
+
+  test('should handle missing dynamic fields gracefully', () => {
+    const content = 'Source IP: {:source.ip}, Missing Field: {:non.existent.field}';
+    const expected = 'Source IP: 192.168.1.100, Missing Field: {:non.existent.field}';
+    expect(app.formatActionContent(content, mockEvent, 'someField', 'someValue')).toBe(expected);
+  });
+
+  test('should handle content with no placeholders', () => {
+    const content = 'This is a static string.';
+    expect(app.formatActionContent(content, mockEvent, 'someField', 'someValue')).toBe(content);
+  });
+
+  test('should handle various data types for values', () => {
+    const content = 'Value: {value}, Dynamic Num: {:destination.port}';
+    const expected = 'Value: 12345, Dynamic Num: 80';
+    expect(app.formatActionContent(content, mockEvent, 'field', 12345)).toBe(expected);
+
+    const expectedBool = 'Value: true, Dynamic Num: 80';
+    expect(app.formatActionContent(content, mockEvent, 'field', true)).toBe(expectedBool);
+  });
+
+  test('should use selectedGridId from app instance', () => {
+    app.selectedGridId = 'customGrid123';
+    const content = 'Grid: {gridId}';
+    const expected = 'Grid: customGrid123';
+    expect(app.formatActionContent(content, mockEvent, 'field', 'value')).toBe(expected);
+  });
+});
+
+test('apiRequestCallback', () => {
+  req = {};
+  app.selectedGridId = '';
+
+  // Default case
+  var newReq = app.apiRequestCallback(req);
+  expect(newReq.params).toBe(undefined);
+
+  // Local grid specified in request
+  req.params = { gridId: '' };
+  var newReq = app.apiRequestCallback(req);
+  expect(newReq.params).toStrictEqual({});
+
+  // Remote grid specified in request
+  req.params = { gridId: 'abc' };
+  var newReq = app.apiRequestCallback(req);
+  expect(newReq.params).toStrictEqual({ gridId: 'abc' });
+
+  // Remote grid specified in selectedGridId
+  req = {}
+  app.selectedGridId = 'xyz';
+  var newReq = app.apiRequestCallback(req);
+  expect(newReq.params).toStrictEqual({ gridId: 'xyz' });
 });

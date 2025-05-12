@@ -200,3 +200,134 @@ func compareJSON(jsn1 []byte, jsn2 []byte) (success bool, err error) {
 
 	return reflect.DeepEqual(one, two), nil
 }
+
+func TestProxySubgridRequest(tester *testing.T) {
+	// Create a mock subgrid
+	var subgrids []*model.Subgrid
+	subgrid := &model.Subgrid{
+		Id:         "test-subgrid",
+		ManagerUrl: "http://test-subgrid",
+	}
+	subgrids = append(subgrids, subgrid)
+
+	table := []struct {
+		Name         string
+		Subgrids     []*model.Subgrid
+		GridId       string
+		ExpectedBody []byte
+		ExpectedCode int
+	}{
+		{
+			Name:         "Nil subgrids",
+			Subgrids:     nil,
+			GridId:       `123`,
+			ExpectedBody: []byte(`ERROR_SUBGRID_INVALID`),
+			ExpectedCode: http.StatusBadRequest,
+		},
+		{
+			Name:         "Empty subgrids",
+			Subgrids:     make([]*model.Subgrid, 0),
+			GridId:       `123`,
+			ExpectedBody: []byte(`ERROR_SUBGRID_INVALID`),
+			ExpectedCode: http.StatusBadRequest,
+		},
+		{
+			Name:         "Matching subgrids",
+			Subgrids:     subgrids,
+			GridId:       `test-subgrid`,
+			ExpectedBody: []byte(`ERROR_SUBGRID_API_UNREACHABLE`),
+			ExpectedCode: http.StatusBadGateway,
+		},
+	}
+
+	for _, tt := range table {
+		tester.Run(tt.Name, func(t *testing.T) {
+			tt := tt
+			t.Parallel()
+
+			// Create a mock response writer
+			respWriter := &httptest.ResponseRecorder{
+				Body: &bytes.Buffer{},
+			}
+
+			ctx := context.Background()
+			ctx = context.WithValue(ctx, ContextKeyRequestStart, time.Now())
+			ctx = context.WithValue(ctx, ContextKeyRequestId, "x")
+
+			req := MustRequest(tester, http.MethodGet, "somewhere?gridId=123", nil)
+			req = req.WithContext(ctx)
+
+			proxySubgridRequest(tt.Subgrids, tt.GridId, ctx, respWriter, req)
+			assert.Equal(tester, tt.ExpectedCode, respWriter.Result().StatusCode)
+			assert.Equal(tester, tt.ExpectedBody, respWriter.Body.Bytes())
+		})
+	}
+}
+
+func TestIsLocalGridSelected(t *testing.T) {
+	assert.True(t, isLocalGridSelected(ALL_GRIDS), "ALL_GRIDS should return true")
+	assert.False(t, isLocalGridSelected("some_other_grid"), "Any other grid ID should return false")
+}
+
+func TestIsSubgridSelected(t *testing.T) {
+	grid := &model.Subgrid{Id: "test-grid"}
+
+	assert.True(t, isSubgridSelected(grid, ALL_GRIDS), "ALL_GRIDS should return true")
+	assert.True(t, isSubgridSelected(grid, "test-grid"), "Matching grid ID should return true")
+	assert.False(t, isSubgridSelected(grid, "some_other_grid"), "Non-matching grid ID should return false")
+}
+
+func TestIsOnlySubgridSelected(t *testing.T) {
+	grid := &model.Subgrid{Id: "test-grid"}
+
+	assert.True(t, isOnlySubgridSelected(grid, "test-grid"), "Matching grid ID should return true")
+	assert.False(t, isOnlySubgridSelected(grid, ALL_GRIDS), "ALL_GRIDS should return false")
+	assert.False(t, isOnlySubgridSelected(grid, "some_other_grid"), "Non-matching grid ID should return false")
+}
+
+func TestCheckForRedirect(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, ContextKeyRequestId, "test-req-id")
+	ctx = context.WithValue(ctx, ContextKeyRequestorId, "test-user")
+
+	// Scenario 1: Redirect header is present
+	t.Run("RedirectPresent", func(t *testing.T) {
+		t.Parallel()
+
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/api/some/path", nil)
+		resp := &http.Response{
+			StatusCode: http.StatusFound, // 302
+			Header:     make(http.Header),
+		}
+		redirectURL := "/new/location"
+		resp.Header.Set("Location", redirectURL)
+
+		redirected := checkForRedirect(ctx, w, r, resp)
+
+		assert.True(t, redirected, "Expected checkForRedirect to return true when location header is present")
+		assert.Equal(t, http.StatusFound, w.Code, "Expected status code to be StatusFound (302)")
+		assert.Equal(t, redirectURL, w.Header().Get("Location"), "Expected Location header in response writer to match")
+	})
+
+	// Scenario 2: Redirect header is not present
+	t.Run("RedirectNotPresent", func(t *testing.T) {
+		t.Parallel()
+
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/api/some/path", nil)
+		resp := &http.Response{
+			StatusCode: http.StatusOK, // 200
+			Header:     make(http.Header),
+		}
+
+		redirected := checkForRedirect(ctx, w, r, resp)
+
+		assert.False(t, redirected, "Expected checkForRedirect to return false when location header is absent")
+		// Recorder should not have been written to in this case, so Code remains 0 (default)
+		// and headers remain empty. We don't need explicit asserts for that unless we want
+		// to be extra sure, but asserting the return value is the primary goal.
+	})
+}

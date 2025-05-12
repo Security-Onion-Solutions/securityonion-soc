@@ -1085,6 +1085,8 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 	for _, det := range community {
 		toDelete[det.PublicID] = struct{}{}
 
+		e.ExtractDetails(det)
+
 		path, ok := existing[det.PublicID]
 		if ok {
 			index[det.PublicID] = path
@@ -1165,9 +1167,6 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 		if exists {
 			hasChanged := orig.Content != detect.Content
 			hasChanged = hasChanged || orig.Ruleset != detect.Ruleset
-			hasChanged = hasChanged || len(detect.Overrides) != 0
-			hasChanged = hasChanged || !util.Equal(orig.SourceCreated, detect.SourceCreated)
-			hasChanged = hasChanged || !util.Equal(orig.SourceUpdated, detect.SourceUpdated)
 
 			if hasChanged {
 				logger.WithFields(log.Fields{
@@ -1662,6 +1661,7 @@ func (e *ElastAlertEngine) DuplicateDetection(ctx context.Context, detection *mo
 		return nil, err
 	}
 
+	rule.OriginalSource = ""
 	rule.Title += " (copy)"
 	rule.ID = &id
 

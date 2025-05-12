@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/apex/log"
 	"github.com/go-chi/chi/v5"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/web"
@@ -27,8 +28,6 @@ func RegisterJobLookupRoutes(srv *server.Server, store *ElasticEventstore, r chi
 	}
 
 	r.Route(prefix, func(r chi.Router) {
-		r.Use(web.Middleware(srv.Host, false))
-
 		r.Get("/", h.getJobLookup)
 	})
 }
@@ -73,7 +72,13 @@ func (h *JobLookupHandler) getJobLookup(w http.ResponseWriter, r *http.Request) 
 	h.server.Host.Broadcast("job", "jobs", job)
 
 	redirectUrl := h.server.Config.BaseUrl + "#/job/" + strconv.Itoa(job.Id)
-	http.Redirect(w, r, redirectUrl, http.StatusFound)
 
-	web.Respond(nil, r, http.StatusOK, nil)
+	assignedGridId := r.URL.Query().Get("assignedGridId")
+	if len(assignedGridId) > 0 {
+		log.WithFields(log.Fields{
+			"assignedGridId": assignedGridId,
+		}).Debug("Using relative redirect for subgrid joblookup")
+		redirectUrl = "/#/job/" + strconv.Itoa(job.Id) + "?gridId=" + assignedGridId
+	}
+	http.Redirect(w, r, redirectUrl, http.StatusFound)
 }

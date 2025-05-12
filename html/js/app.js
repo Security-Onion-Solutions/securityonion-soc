@@ -19,6 +19,9 @@ const LICENSE_STATUS_UNPROVISIONED = "unprovisioned";
 
 const LICENSE_EXPIRES_SOON_DAYS = 45;
 
+const SUBGRID_DISABLED_ROUTES = ['home','settings'];
+const LOCAL_GRID_ID = ''
+
 const USER_PASSWORD_LENGTH_MIN = 8;
 const USER_PASSWORD_LENGTH_MAX = 72;
 const USER_PASSWORD_INVALID_RX = /["'$&!]/;
@@ -143,6 +146,7 @@ $(document).ready(function () {
           infoMessage: "",
           tipMessage: "",
           tipTimeout: 6000,
+          currentTipTimeout: 6000,
           warningTimeout: 30000,
           errorTimeout: 120000,
           toolbar: null,
@@ -167,11 +171,9 @@ $(document).ready(function () {
           casesEnabled: false,
           detectionsEnabled: false,
           subtitle: '',
-          currentStatus: null,
           connected: false,
           reconnecting: false,
           users: [],
-          usersLoadedDate: null,
           cacheRefreshIntervalMs: 300000,
           loadServerSettingsTime: 0,
           user: null,
@@ -186,12 +188,18 @@ $(document).ready(function () {
           ip2host: {},
           securitySettingsAlreadyChecked: false,
           forceUserOtp: false,
-          subgrids: null,
+          subgrids: [],
+          gridInfo: {},
+          selectedGridId: LOCAL_GRID_ID,
+          subgridSelectorEnabled: false,
+          statusByGridId: {},
         }
       },
       watch: {
         '$vuetify.theme.current.dark': 'saveTheme',
         'toolbar': 'saveToolbar',
+        '$route': 'onLocationUpdated',
+        'selectedGridId': 'onGridSelected',
       },
       methods: {
         getMetricsUrl() {
@@ -209,6 +217,27 @@ $(document).ready(function () {
           }
           return def;
         },
+        onGridSelected() {
+          const params = { ...this.$route.query };
+          params.gridId = this.selectedGridId;
+          this.$router.push({ path: this.$route.path, query: params });
+        },
+        checkSubgridSelectorEnabled(loc) {
+          if (SUBGRID_DISABLED_ROUTES.includes(loc.name)) {
+            this.selectedGridId = LOCAL_GRID_ID;
+            this.subgridSelectorEnabled = false;
+          } else {
+            this.subgridSelectorEnabled = true;
+          }
+          return this.subgridSelectorEnabled;
+        },
+        onLocationUpdated(newLocation, oldLocation) {
+          if (!this.checkSubgridSelectorEnabled(newLocation)) return;
+          const gridId = newLocation.query['gridId'];
+          if (gridId) {
+            this.selectedGridId = gridId;
+          }
+        },
         formatActionContent(content, event, field, value, uriEncode = true) {
           if (!content) return null;
 
@@ -216,6 +245,7 @@ $(document).ready(function () {
           content = this.replaceActionVar(content, "field", field, uriEncode)
           content = this.replaceActionVar(content, "value", value, uriEncode)
           content = this.replaceActionVar(content, "eventJson", JSON.stringify(event))
+          content = this.replaceActionVar(content, "gridId", this.selectedGridId, uriEncode)
 
           const fields = this.getDynamicActionFieldNames(content);
           const route = this;
@@ -409,7 +439,8 @@ $(document).ready(function () {
             if (now - this.loadServerSettingsTime > this.cacheRefreshIntervalMs) {
               this.loadServerSettingsTime = now;
               try {
-                const response = await this.papi.get('info');
+                // Do not allow subgrid override for this API call.
+                const response = await this.papi.get('info', {params: { gridId: LOCAL_GRID_ID}});
                 if (response) {
                   this.papi.defaults.headers.common['X-Srv-Token'] = response.data.srvToken;
                   this.version = response.data.version;
@@ -504,6 +535,9 @@ $(document).ready(function () {
                         break;
                       }
                   });
+
+                  await this.loadSubgridInfo();
+                  this.gridInfo[LOCAL_GRID_ID] = response.data;
                 }
               } catch (error) {
                 if (!background) {
@@ -516,6 +550,19 @@ $(document).ready(function () {
               }
             }
           }
+        },
+        async loadSubgridInfo() {
+          if (!this.subgrids) return;
+          for (var idx = 0; idx < this.subgrids.length; idx++) {
+            const grid = this.subgrids[idx];
+            const gridResponse = await this.papi.get('info', {params: { gridId: grid.id}});
+            if (gridResponse) {
+              this.gridInfo[grid.id] = gridResponse.data;
+            }
+          }
+        },
+        getSelectedGridInfo() {
+          return this.gridInfo[this.selectedGridId];
         },
         checkUserSecuritySettings(infoResponse) {
           // Only force OTP on initial login, otherwise risk user losing data
@@ -736,8 +783,14 @@ $(document).ready(function () {
           if (value == "critical_false") return "red darken-4";
           return "secondary";
         },
+        isNodeInSubgrid(node) {
+          return node.gridId != null && node.gridId.trim().length > 0;
+        },
         hasSubgrids() {
           return this.subgrids != null && this.subgrids.length > 0;
+        },
+        getSelectedGrid() {
+          return this.subgrids.find((grid) => { return grid.id == this.selectedGridId });
         },
         adjustSubgridColVisibility(headers, size = "d-sm-table-cell") {
           this.updateColumnClass(headers, this.i18n.gridId, this.hasSubgrids());
@@ -828,13 +881,18 @@ $(document).ready(function () {
           this.info = true;
           this.infoMessage = msg;
         },
-        showTip(msg) {
+        showTip(msg, timeout) {
           this.error = false;
           this.warning = false;
           this.info = false;
 
           this.tip = true;
           this.tipMessage = msg;
+          if (timeout) {
+            this.currentTipTimeout = timeout;
+          } else {
+            this.currentTipTimeout = this.tipTimeout;
+          }
         },
         startLoading() {
           this.loading = true;
@@ -969,6 +1027,21 @@ $(document).ready(function () {
           }
           return response;
         },
+        apiRequestCallback(request) {
+          if (this.selectedGridId && (!request.params || !('gridId' in request.params))) {
+            if (!request.params) {
+              request.params = {};
+            }
+            request.params["gridId"] = this.selectedGridId;
+          }
+          if (request.params && 'gridId' in request.params && request.params.gridId == LOCAL_GRID_ID) {
+            delete request.params.gridId;
+          }
+          return request;
+        },
+        apiRequestFailedCallback(error) {
+          return error;
+        },
         apiSuccessCallback(response) {
           return this.checkForUnauthorized(response);
         },
@@ -981,6 +1054,7 @@ $(document).ready(function () {
             baseURL: baseUrl,
             timeout: this.connectionTimeout
           });
+          ax.interceptors.request.use(this.apiRequestCallback, this.apiRequestFailedCallback);
           ax.interceptors.response.use(this.apiSuccessCallback, this.apiFailureCallback);
           return ax;
         },
@@ -1089,6 +1163,14 @@ $(document).ready(function () {
           }
           return value;
         },
+        getAllGrids() {
+          const grids = [{id: LOCAL_GRID_ID, name: this.i18n.gridLocal}];
+          this.subgrids.forEach((grid) => {
+            grid.name = grid.id;
+            grids.push(grid);
+          });
+          return grids;
+        },
         getAvatar(user) {
           if (user && user.length > 0) {
             return user.charAt(0).toLocaleUpperCase();
@@ -1099,19 +1181,37 @@ $(document).ready(function () {
           const users = await this.getUsers();
           return users.filter(user => user.status != 'locked');
         },
+        async getAllUsers() {
+          const allUsers = [];
+          const allGrids = this.getAllGrids();
+          for (idx in allGrids) {
+            const grid = allGrids[idx];
+            try {
+              const response = await this.papi.get('users/', { params: { gridId: grid.id }});
+              allUsers.push(...response.data);
+            } catch (error) {
+              this.showError(error);
+            }
+          }
+          if (allUsers) {
+            this.users = allUsers;
+          }
+          return this.users;
+        },
         async getUsers() {
+          // Returns selected subgrid's users
           try {
             const response = await this.papi.get('users/');
-            this.users = response.data;
+            return response.data;
           } catch (error) {
             this.showError(error);
           }
-          return this.users;
+          return [];
         },
         async getUserById(id) {
           const nowTime = new Date().time;
           if (this.users.length == 0 || (nowTime - this.usersLoadedTime > this.cacheRefreshIntervalMs)) {
-            await this.getUsers();
+            await this.getAllUsers();
             this.usersLoadedTime = nowTime;
           }
           return this.getUserByIdViaCache(id);
@@ -1167,7 +1267,7 @@ $(document).ready(function () {
         },
         updateStatus(status) {
           if (status) {
-            this.currentStatus = status;
+            this.statusByGridId[status.gridId] = status;
           }
           this.setFavicon();
           this.updateTitle();
@@ -1186,65 +1286,131 @@ $(document).ready(function () {
           return "text-normal";
         },
         getDetectionEngineStatus(engine) {
-          if (!this.currentStatus || !this.currentStatus.detections || !this.currentStatus.detections[engine]) {
+          const status = this.getCurrentStatus();
+          if (!status || !status.detections || !status.detections[engine]) {
             return "Unknown";
           }
 
-          const status = this.currentStatus.detections[engine];
+          const engineStatus = this.statusByGridId[this.selectedGridId].detections[engine];
 
           // Order is important in this if/else block. Certain status should take priority. For example,
           // If a sync failure and integrity failure both occurred then show the integrity failure, because
           // if it got to the integrity check then the sync finished but the integrity check failed.
-          if (status.migrating) {
+          if (engineStatus.migrating) {
             return "Migrating";
-          } else if (status.importing && status.syncing) {
+          } else if (engineStatus.importing && engineStatus.syncing) {
             return "Importing";
-          } else if (status.migrationFailure) {
+          } else if (engineStatus.migrationFailure) {
             return "MigrationFailure";
-          } else if (status.integrityFailure) {
+          } else if (engineStatus.integrityFailure) {
             return "IntegrityFailure";
-          } else if (status.syncFailure) {
+          } else if (engineStatus.syncFailure) {
             return "SyncFailure";
-          } else if (status.importing && !status.syncing) {
+          } else if (engineStatus.importing && !engineStatus.syncing) {
             return "ImportPending";
-          } else if (status.syncing) {
+          } else if (engineStatus.syncing) {
             return "Syncing";
           }
           return "Healthy";
         },
+        getCurrentStatus() {
+          return this.statusByGridId[this.selectedGridId];
+        },
+        getSubgridIcon(gridId) {
+          if (this.isGridAttentionNeeded(gridId)) {
+            return 'fa-exclamation';
+          } else if (this.isGridDetectionsUpdating(gridId)) {
+            return 'fa-hourglass-half';
+          }
+          return '';
+        },
+        getSubgridColor(gridId) {
+          if (this.isGridAttentionNeeded(gridId)) {
+            return 'warning';
+          }
+          return '';
+        },
+        isGridDetectionsUnhealthy(gridId) {
+          const status = this.statusByGridId[gridId];
+          if (status != null && status.detections != null &&
+            ( status.detections.elastalert.integrityFailure ||
+              status.detections.suricata.integrityFailure ||
+              status.detections.strelka.integrityFailure ||
+              status.detections.elastalert.syncFailure ||
+              status.detections.suricata.syncFailure ||
+              status.detections.strelka.syncFailure ||
+              status.detections.elastalert.migrationFailure ||
+              status.detections.suricata.migrationFailure ||
+              status.detections.strelka.migrationFailure )) {
+            return true;
+          }
+          return false;
+        },
         isDetectionsUnhealthy() {
-          return this.currentStatus != null && this.currentStatus.detections != null &&
-            ( this.currentStatus.detections.elastalert.integrityFailure ||
-              this.currentStatus.detections.suricata.integrityFailure ||
-              this.currentStatus.detections.strelka.integrityFailure ||
-              this.currentStatus.detections.elastalert.syncFailure ||
-              this.currentStatus.detections.suricata.syncFailure ||
-              this.currentStatus.detections.strelka.syncFailure ||
-              this.currentStatus.detections.elastalert.migrationFailure ||
-              this.currentStatus.detections.suricata.migrationFailure ||
-              this.currentStatus.detections.strelka.migrationFailure );
+          for (gridId in this.statusByGridId) {
+            if (this.isGridDetectionsUnhealthy(gridId)) {
+              return true;
+            }
+          }
+          return false;
+        },
+        isGridDetectionsUpdating(gridId) {
+          const status = this.statusByGridId[gridId];
+          return status != null && status.detections != null &&
+            !this.isGridDetectionsUnhealthy(gridId) &&
+            ( status.detections.elastalert.importing === true ||
+              status.detections.elastalert.migrating === true ||
+              status.detections.elastalert.syncing === true ||
+              status.detections.strelka.importing === true ||
+              status.detections.strelka.migrating === true ||
+              status.detections.strelka.syncing === true ||
+              status.detections.suricata.importing === true ||
+              status.detections.suricata.migrating === true ||
+              status.detections.suricata.syncing === true );
         },
         isDetectionsUpdating() {
-          return this.currentStatus != null && this.currentStatus.detections != null &&
-            !this.isDetectionsUnhealthy() &&
-            ( this.currentStatus.detections.elastalert.importing === true ||
-              this.currentStatus.detections.elastalert.migrating === true ||
-              this.currentStatus.detections.elastalert.syncing === true ||
-              this.currentStatus.detections.strelka.importing === true ||
-              this.currentStatus.detections.strelka.migrating === true ||
-              this.currentStatus.detections.strelka.syncing === true ||
-              this.currentStatus.detections.suricata.importing === true ||
-              this.currentStatus.detections.suricata.migrating === true ||
-              this.currentStatus.detections.suricata.syncing === true );
+          for (gridId in this.statusByGridId) {
+            if (this.isGridDetectionsUpdating(gridId)) {
+              return true;
+            }
+          }
+          return false;
         },
-        isGridUnhealthy() {
-          return this.currentStatus && this.currentStatus.grid.unhealthyNodeCount > 0
+        isGridUnhealthy(gridId) {
+          const status = this.statusByGridId[gridId];
+          if (status && status.grid && status.grid.unhealthyNodeCount > 0) {
+            return true;
+          }
+          return false;
+        },
+        isUnhealthy() {
+          for (gridId in this.statusByGridId) {
+            if (this.isGridUnhealthy(gridId)) {
+              return true;
+            }
+          }
+          return false;
+        },
+        isNewGridAlert(gridId) {
+          const status = this.statusByGridId[gridId];
+          if (status && status.alerts && status.alerts.newCount  > 0) {
+            return true;
+          }
+          return false;
         },
         isNewAlert() {
-          return this.currentStatus && this.currentStatus.alerts.newCount  > 0
+          for (gridId in this.statusByGridId) {
+            if (this.isNewGridAlert(gridId)) {
+              return true;
+            }
+          }
+          return false;
+        },
+        isGridAttentionNeeded(gridId) {
+          return this.isNewGridAlert(gridId) || this.isGridUnhealthy(gridId) || this.isGridDetectionsUnhealthy(gridId);
         },
         isAttentionNeeded() {
-          return this.isNewAlert() || this.isGridUnhealthy() || this.isDetectionsUnhealthy() || !this.connected || this.reconnecting;
+          return this.isNewAlert() || this.isUnhealthy() || this.isDetectionsUnhealthy() || !this.connected || this.reconnecting;
         },
         isMaximized() {
           return this.maximizedTarget != null;
@@ -1298,7 +1464,9 @@ $(document).ready(function () {
           if (ips.length) {
             ips.forEach(ip => this.ip2host[ip] = []);
             const route = this;
-            this.papi.put('util/reverse-lookup', ips).then(response => {
+
+            // Do not use subgrid ID for this API call.
+            this.papi.put('util/reverse-lookup', ips, {params: { gridId: LOCAL_GRID_ID}}).then(response => {
               for (let entry in response.data) {
                 let existing = this.ip2host[entry];
                 if (!existing) {
@@ -1390,6 +1558,10 @@ $(document).ready(function () {
         this.loadServerSettings(false);
         this.loadLocalSettings();
         $('#app')[0].style.display = "block";
+
+        router.isReady().then(() => {
+          this.onLocationUpdated(this.$route, null);
+        });
       },
     };
 

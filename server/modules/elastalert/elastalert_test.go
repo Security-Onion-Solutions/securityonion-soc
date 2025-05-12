@@ -1000,18 +1000,20 @@ level: high
 	}
 
 	expected := &model.Detection{
-		Author:      "Corey Ogburn",
-		PublicID:    "00000000-0000-0000-0000-00000000",
-		Title:       "Always Alert",
-		Severity:    model.SeverityHigh,
-		Content:     data,
-		Description: "Always Alerts",
-		Product:     "windows",
-		IsCommunity: true,
-		Engine:      model.EngineNameElastAlert,
-		Language:    model.SigLangSigma,
-		Ruleset:     "all_rules",
-		License:     model.LicenseDRL,
+		Author:        "Corey Ogburn",
+		PublicID:      "00000000-0000-0000-0000-00000000",
+		Title:         "Always Alert",
+		Severity:      model.SeverityHigh,
+		Content:       data,
+		Description:   "Always Alerts",
+		Product:       "windows",
+		IsCommunity:   true,
+		Engine:        model.EngineNameElastAlert,
+		Language:      model.SigLangSigma,
+		Ruleset:       "all_rules",
+		License:       model.LicenseDRL,
+		SourceCreated: util.Ptr(time.Date(2023, 11, 3, 0, 0, 0, 0, time.UTC)),
+		SourceUpdated: util.Ptr(time.Date(2023, 11, 3, 0, 0, 0, 0, time.UTC)),
 	}
 
 	dets, errMap := engine.parseZipRules(pkgZips)
@@ -1068,19 +1070,20 @@ license: Elastic-2.0
 	}
 
 	expected := &model.Detection{
-		Author:      "Security Onion Solutions",
-		PublicID:    "bf86ef21-41e6-417b-9a05-b9ea6bf28a38",
-		Title:       "Security Onion - SOC Login Failure",
-		Severity:    model.SeverityHigh,
-		Content:     data,
-		Description: "Detects when a user fails to login to the Security Onion Console (Web UI). Review associated logs for target username and source IP.",
-		IsCommunity: true,
-		Product:     "kratos",
-		Service:     "audit",
-		Engine:      model.EngineNameElastAlert,
-		Language:    model.SigLangSigma,
-		Ruleset:     "repo-path",
-		License:     model.LicenseDRL,
+		Author:        "Security Onion Solutions",
+		PublicID:      "bf86ef21-41e6-417b-9a05-b9ea6bf28a38",
+		Title:         "Security Onion - SOC Login Failure",
+		Severity:      model.SeverityHigh,
+		Content:       data,
+		Description:   "Detects when a user fails to login to the Security Onion Console (Web UI). Review associated logs for target username and source IP.",
+		IsCommunity:   true,
+		Product:       "kratos",
+		Service:       "audit",
+		Engine:        model.EngineNameElastAlert,
+		Language:      model.SigLangSigma,
+		Ruleset:       "repo-path",
+		License:       model.LicenseDRL,
+		SourceCreated: util.Ptr(time.Date(2024, 3, 6, 0, 0, 0, 0, time.UTC)),
 	}
 
 	dets, errMap := engine.parseRepoRules(repos)
@@ -1178,24 +1181,24 @@ id: bcc6f179-11cd-4111-a9a6-0fab68515cf7
 status: experimental
 description: Detects process execution patterns related to Griffon malware as reported by Kaspersky
 references:
-  - https://securelist.com/fin7-5-the-infamous-cybercrime-rig-fin7-continues-its-activities/90703/
+    - https://securelist.com/fin7-5-the-infamous-cybercrime-rig-fin7-continues-its-activities/90703/
 author: Nasreddine Bencherchali (Nextron Systems)
 date: 2023/03/09
 tags:
-  - attack.execution
-  - detection.emerging_threats
+    - attack.execution
+    - detection.emerging_threats
 logsource:
-  category: process_creation
-  product: windows
+    category: process_creation
+    product: windows
 detection:
-  selection:
-    CommandLine|contains|all:
-      - '\local\temp\'
-      - '//b /e:jscript'
-      - '.txt'
-  condition: selection
+    selection:
+        CommandLine|contains|all:
+            - '\local\temp\'
+            - '//b /e:jscript'
+            - '.txt'
+    condition: selection
 falsepositives:
-  - Unlikely
+    - Unlikely
 level: critical`
 	SimpleRuleNoId = `title: Griffon Malware Attack Pattern
 status: experimental
@@ -1578,7 +1581,7 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 	}, nil)
 	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo", nil).Return(false, false, false)
 	// check for changes before sync
-	iom.EXPECT().ReadFile("rulesFingerprintFile").Return([]byte(`{"core+": "c6OTI9nTQxGEeeNkSZZB9+OESMNvfMXrb+XLtMiVhf0="}`), nil)
+	iom.EXPECT().ReadFile("rulesFingerprintFile").Return([]byte(`{"core+": "GwJvQmt07Ma9kvq2D8bpbQfXW+IRe0nN4fITj9Ghxis="}`), nil)
 	// WriteStateFile
 	iom.EXPECT().WriteFile("stateFilePath", gomock.Any(), fs.FileMode(0644)).Return(nil)
 	// IntegrityCheck
@@ -1839,6 +1842,153 @@ func TestSyncChanges(t *testing.T) {
 	})
 
 	assert.Equal(t, []string{"abc", "", "deleteme"}, workDocIds) // update has an id, create does not, delete does
+}
+
+func TestSyncUnchangedOverrides(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	buf := bytes.NewBuffer([]byte{})
+
+	writer := zip.NewWriter(buf)
+	sr, err := writer.Create("rules/simple_rule.yml")
+	assert.NoError(t, err)
+
+	_, err = sr.Write([]byte(SimpleRule))
+	assert.NoError(t, err)
+
+	assert.NoError(t, writer.Close())
+
+	detStore := servermock.NewMockDetectionstore(ctrl)
+	iom := mock.NewMockIOManager(ctrl)
+	bim := servermock.NewMockBulkIndexer(ctrl)
+
+	eng := &ElastAlertEngine{
+		srv: &server.Server{
+			Context:        context.Background(),
+			Detectionstore: detStore,
+		},
+		isRunning:                     true,
+		sigmaPipelineFinal:            "sigmaPipelineFinal",
+		sigmaPipelineSO:               "sigmaPipelineSO",
+		sigmaPipelinesFingerprintFile: "sigmaPipelinesFingerprintFile",
+		sigmaRulePackages:             []string{"core+"},
+		sigmaPackageDownloadTemplate:  "https://github.com/SigmaHQ/sigma/releases/latest/download/sigma_%s.zip",
+		reposFolder:                   "repos",
+		rulesFingerprintFile:          "rulesFingerprintFile",
+		elastAlertRulesFolder:         "elastAlertRulesFolder",
+		rulesRepos: []*model.RuleRepo{
+			{
+				Repo:      "https://github.com/user/repo",
+				Community: true,
+			},
+		},
+		SyncSchedulerParams: detections.SyncSchedulerParams{
+			StateFilePath: "stateFilePath",
+		},
+		IntegrityCheckerData: detections.IntegrityCheckerData{
+			IsRunning: true,
+		},
+		IOManager:       iom,
+		showAiSummaries: false,
+	}
+
+	logger := log.WithField("detectionEngine", "test-elastalert")
+
+	workItems := []esutil.BulkIndexerItem{}
+
+	// checkSigmaPipelines
+	iom.EXPECT().ReadFile("sigmaPipelineFinal").Return([]byte("data"), nil)
+	iom.EXPECT().ReadFile("sigmaPipelineSO").Return([]byte("data"), nil)
+	iom.EXPECT().ReadFile("sigmaPipelinesFingerprintFile").Return([]byte("a different hash"), nil)
+	// downloadSigmaPackages
+	iom.EXPECT().MakeRequest(gomock.Any()).Return(&http.Response{
+		StatusCode: 200,
+		Body:       io.NopCloser(buf),
+	}, nil)
+	// UpdateRepos
+	iom.EXPECT().ReadDir("repos").Return([]fs.DirEntry{
+		&handmock.MockDirEntry{
+			Filename: "repo",
+			Dir:      true,
+		},
+	}, nil)
+	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo", nil).Return(false, false, false)
+	// parseRepoRules
+	iom.EXPECT().WalkDir("repos/repo", gomock.Any()).DoAndReturn(func(path string, fn fs.WalkDirFunc) error {
+		files := []fs.DirEntry{
+			&handmock.MockDirEntry{
+				Filename: "rules/123.yml",
+			},
+		}
+
+		for _, file := range files {
+			err := fn(file.Name(), file, nil)
+			assert.NoError(t, err)
+		}
+
+		return nil
+	})
+	iom.EXPECT().ReadFile("rules/123.yml").Return([]byte(SimpleRule), nil)
+	// syncCommunityDetections
+	iom.EXPECT().ReadDir("elastAlertRulesFolder").Return([]fs.DirEntry{
+		&handmock.MockDirEntry{
+			Filename: SimpleRuleSID + ".yml",
+		},
+	}, nil) // IndexExistingRules
+	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+		SimpleRuleSID: {
+			Auditable: model.Auditable{
+				Id:         "abc",
+				CreateTime: util.Ptr(time.Now()),
+			},
+			PublicID:  SimpleRuleSID,
+			IsEnabled: true,
+			Content:   SimpleRule,
+			Ruleset:   "core+",
+			Overrides: []*model.Override{
+				{
+					Type:      model.OverrideTypeCustomFilter,
+					IsEnabled: true,
+					OverrideParameters: model.OverrideParameters{
+						CustomFilter: util.Ptr(`x: y`),
+					},
+				},
+			},
+		},
+	}, nil)
+	detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(bim, nil)
+	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), nil, nil).Return([]byte("document"), "index", nil)
+	bim.EXPECT().Close(gomock.Any()).Return(nil)
+	bim.EXPECT().Stats().Return(esutil.BulkIndexerStats{})
+	iom.EXPECT().ExecCommand(gomock.Any()).Return([]byte("\n[query]"), 0, time.Duration(time.Second), nil) // sigmaToElastAlert
+	iom.EXPECT().WriteFile("elastAlertRulesFolder/bcc6f179-11cd-4111-a9a6-0fab68515cf7.yml", gomock.Any(), fs.FileMode(0644)).Return(nil)
+	// SyncLocalDetections
+	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(nil, nil)
+	iom.EXPECT().ReadDir("elastAlertRulesFolder").Return([]fs.DirEntry{
+		&handmock.MockDirEntry{
+			Filename: SimpleRuleSID + ".yml",
+		},
+	}, nil) // IndexExistingRules
+	iom.EXPECT().WriteFile("stateFilePath", gomock.Any(), fs.FileMode(0644)).Return(nil)        // WriteStateFile
+	iom.EXPECT().WriteFile("rulesFingerprintFile", gomock.Any(), fs.FileMode(0644)).Return(nil) // WriteFingerprintFile
+	// regenNeeded
+	iom.EXPECT().WriteFile("sigmaPipelinesFingerprintFile", gomock.Any(), fs.FileMode(0644)).Return(nil)
+	// IntegrityCheck
+	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+		SimpleRuleSID: nil,
+	}, nil)
+
+	err = eng.Sync(logger, true)
+	assert.NoError(t, err)
+
+	assert.False(t, eng.EngineState.IntegrityFailure)
+	assert.False(t, eng.EngineState.Migrating)
+	assert.False(t, eng.EngineState.MigrationFailure)
+	assert.False(t, eng.EngineState.Importing)
+	assert.False(t, eng.EngineState.SyncFailure)
+
+	assert.Len(t, workItems, 0)
 }
 
 func TestLoadAndMergeAuxiliaryData(t *testing.T) {

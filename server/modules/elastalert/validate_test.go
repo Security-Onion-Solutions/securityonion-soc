@@ -8,6 +8,7 @@ package elastalert
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -274,24 +275,28 @@ func TestToDetection(t *testing.T) {
 					Service:  util.Ptr("test-service"),
 				},
 				Detection: SigmaDetection{},
+				Date:      util.Ptr("2023-10-01"),
+				Modified:  util.Ptr("2023-10-02"),
 			},
 			ruleset:   "test-ruleset",
 			license:   "test-license",
 			community: true,
 			expected: &model.Detection{
-				Title:       "Test Rule",
-				PublicID:    "custom-id",
-				Author:      "test author",
-				Engine:      model.EngineNameElastAlert,
-				Severity:    model.SeverityHigh,
-				Description: "test description",
-				Category:    "test-category",
-				Product:     "test-product",
-				Service:     "test-service",
-				IsCommunity: true,
-				Language:    model.SigLangSigma,
-				Ruleset:     "test-ruleset",
-				License:     "test-license",
+				Title:         "Test Rule",
+				PublicID:      "custom-id",
+				Author:        "test author",
+				Engine:        model.EngineNameElastAlert,
+				Severity:      model.SeverityHigh,
+				Description:   "test description",
+				Category:      "test-category",
+				Product:       "test-product",
+				Service:       "test-service",
+				IsCommunity:   true,
+				Language:      model.SigLangSigma,
+				Ruleset:       "test-ruleset",
+				License:       "test-license",
+				SourceCreated: util.Ptr(time.Date(2023, 10, 1, 0, 0, 0, 0, time.UTC)),
+				SourceUpdated: util.Ptr(time.Date(2023, 10, 2, 0, 0, 0, 0, time.UTC)),
 			},
 		},
 		{

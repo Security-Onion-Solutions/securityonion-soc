@@ -707,7 +707,9 @@ test('processRouteParameters', () => {
   };
   comp.$nextTick = jest.fn();
 
-  comp.processRouteParameters();
+  // Local grid
+  comp.oldGridId = null;
+  expect(comp.processRouteParameters()).toBe(false);
 
   expect(comp.search).toBe('search');
   expect(comp.autoSelect).toBe('');
@@ -716,13 +718,15 @@ test('processRouteParameters', () => {
   expect(comp.advanced).toBe(false);
   expect(comp.$nextTick).toHaveBeenCalledTimes(0);
 
+  // Remote grid
   comp.search = '';
   comp.searchFilter = '';
   comp.$route.query = {
     e: '1',
+    gridId: 'my_grid',
   };
 
-  comp.processRouteParameters();
+  expect(comp.processRouteParameters()).toBe(true);
 
   expect(comp.search).toBe('');
   expect(comp.autoSelect).toBe('');
@@ -1046,20 +1050,32 @@ test('convertMultilineElement', () => {
   expect(modifiedEntry.foo).toBe('');
 });
 
+test('convertMultilineElementWithJSONObject', () => {
+  let element = { field: 'foo', multiline: true, forcedType: '{}' };
+  let modifiedEntry = { foo: {"foo": "bar"} };
+
+  comp.convertMultilineElement(element, modifiedEntry, true);
+  expect(modifiedEntry.foo).toBe('{\"foo\":\"bar\"}');
+
+  comp.convertMultilineElement(element, modifiedEntry, false);
+  expect(modifiedEntry.foo).toStrictEqual({"foo": "bar"});
+
+});
+
 test('canMoveEntry', () => {
   comp.form.entries = [{_title: '1'}, {_title: '2'}, {_title: '+'}];
-  expect(comp.canMoveEntry(0, true)).toBe(false);
+  expect(comp.canMoveEntry(0, true)).toBe(true);
   expect(comp.canMoveEntry(0, false)).toBe(true);
   expect(comp.canMoveEntry(1, true)).toBe(true);
-  expect(comp.canMoveEntry(1, false)).toBe(false);
-  expect(comp.canMoveEntry(2, true)).toBe(true);
+  expect(comp.canMoveEntry(1, false)).toBe(true);
+  expect(comp.canMoveEntry(2, true)).toBe(false);
   expect(comp.canMoveEntry(2, false)).toBe(false);
 
   comp.form.entries = [{_title: '1'}, {_title: '2'}];
-  expect(comp.canMoveEntry(0, true)).toBe(false);
+  expect(comp.canMoveEntry(0, true)).toBe(true);
   expect(comp.canMoveEntry(0, false)).toBe(true);
   expect(comp.canMoveEntry(1, true)).toBe(true);
-  expect(comp.canMoveEntry(1, false)).toBe(false);
+  expect(comp.canMoveEntry(1, false)).toBe(true);
 });
 
 test('moveEntry', () => {
@@ -1080,4 +1096,71 @@ test('moveEntry', () => {
   comp.moveEntry({}, 1, true);
   expect(comp.form.entries[0]._title).toBe('1');
   expect(comp.form.entries[1]._title).toBe('2');
+});
+
+test('moveEntryWrap', () => {
+  comp.form.entries = [{_title: '1'}, {_title: '2'}, {_title: '3'}, {_title: '+'}];
+  comp.isPendingSave = jest.fn().mockReturnValue(false);
+  comp.editNow = jest.fn();
+  comp.generateEntryTitle = jest.fn();
+  comp.markDirtyEntries = jest.fn();
+
+  comp.moveEntry({}, 0, true);
+  expect(comp.isPendingSave).toHaveBeenCalledWith({});
+  expect(comp.editNow).toHaveBeenCalled();
+  expect(comp.generateEntryTitle).toHaveBeenCalledTimes(4);
+  expect(comp.markDirtyEntries).toHaveBeenCalled();
+
+  expect(comp.form.entries[0]._title).toBe('2');
+  expect(comp.form.entries[1]._title).toBe('3');
+  expect(comp.form.entries[2]._title).toBe('1');
+  expect(comp.form.entries[3]._title).toBe('+');
+
+  comp.moveEntry({}, 2, false);
+  expect(comp.form.entries[0]._title).toBe('1');
+  expect(comp.form.entries[1]._title).toBe('2');
+  expect(comp.form.entries[2]._title).toBe('3');
+  expect(comp.form.entries[3]._title).toBe('+');
+});
+
+test('moveEntryWrapWithoutPlus', () => {
+  comp.form.entries = [{_title: '1'}, {_title: '2'}, {_title: '3'}];
+  comp.isPendingSave = jest.fn().mockReturnValue(false);
+  comp.editNow = jest.fn();
+  comp.generateEntryTitle = jest.fn();
+  comp.markDirtyEntries = jest.fn();
+
+  comp.moveEntry({}, 0, true);
+  expect(comp.isPendingSave).toHaveBeenCalledWith({});
+  expect(comp.editNow).toHaveBeenCalled();
+  expect(comp.generateEntryTitle).toHaveBeenCalledTimes(3);
+  expect(comp.markDirtyEntries).toHaveBeenCalled();
+
+  expect(comp.form.entries[0]._title).toBe('2');
+  expect(comp.form.entries[1]._title).toBe('3');
+  expect(comp.form.entries[2]._title).toBe('1');
+
+  comp.moveEntry({}, 2, false);
+  expect(comp.form.entries[0]._title).toBe('1');
+  expect(comp.form.entries[1]._title).toBe('2');
+  expect(comp.form.entries[2]._title).toBe('3');
+});
+
+test('getSettingLink', () => {
+  const setting = { id: 'test.setting', advanced: true };
+  global.window = Object.create(window);
+  const url = "https://example.com/#/config";
+  Object.defineProperty(window, 'location', {
+    value: {
+      href: url,
+      origin: "https://example.com",
+    }
+  });
+  comp.$route = { path: '/config' };
+  const link = comp.getSettingLink(setting);
+  expect(link).toBe('https://example.com/#/config?s=test.setting&a=1');
+
+  setting.advanced = false;
+  const link2 = comp.getSettingLink(setting);
+  expect(link2).toBe('https://example.com/#/config?s=test.setting&a=0');
 });

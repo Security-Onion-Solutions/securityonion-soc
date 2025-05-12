@@ -28,14 +28,17 @@ type SoStatus struct {
 	running            bool
 	refreshIntervalMs  int
 	offlineThresholdMs int
-	currentStatus      *model.Status
+	statusByGridId     map[string]*model.Status
 	ctx                context.Context
 }
 
 func NewSoStatus(srv *server.Server) *SoStatus {
-	return &SoStatus{
-		server: srv,
+	status := &SoStatus{
+		server:         srv,
+		statusByGridId: make(map[string]*model.Status),
 	}
+	srv.Statusstore = status
+	return status
 }
 
 func (status *SoStatus) PrerequisiteModules() []string {
@@ -50,7 +53,7 @@ func (status *SoStatus) Init(cfg module.ModuleConfig) error {
 	status.config = cfg
 	status.refreshIntervalMs = module.GetIntDefault(cfg, "refreshIntervalMs", DEFAULT_REFRESH_INTERVAL_MS)
 	status.offlineThresholdMs = module.GetIntDefault(cfg, "offlineThresholdMs", DEFAULT_OFFLINE_THRESHOLD_MS)
-	status.currentStatus = model.NewStatus()
+	status.statusByGridId[model.LOCAL_GRID_ID] = model.NewStatus(model.LOCAL_GRID_ID)
 	status.ctx = status.newServerContext()
 	return nil
 }
@@ -91,7 +94,9 @@ func (status *SoStatus) Refresh(ctx context.Context) {
 	logger.Debug("Updating grid status")
 	status.refreshGrid(ctx)
 	status.refreshDetections(ctx)
-	status.server.Host.Broadcast("status", "nodes", status.currentStatus)
+
+	localGridStatus := status.statusByGridId[model.LOCAL_GRID_ID]
+	status.server.Host.Broadcast("status", "nodes", localGridStatus)
 }
 
 func (status *SoStatus) refreshGrid(ctx context.Context) {
@@ -100,13 +105,11 @@ func (status *SoStatus) refreshGrid(ctx context.Context) {
 	unhealthyNodes := 0
 	nonCriticalNodes := 0
 	awaitingRebootCount := 0
-	allNodes := make([]*model.Node, 0, 0)
 
 	// Process local grid nodes.
 	localNodes := status.server.Datastore.GetNodes(ctx)
 	if status.server.Metrics != nil {
 		for _, node := range localNodes {
-			allNodes = append(allNodes, node)
 			staleMs := int(time.Since(node.UpdateTime) / time.Millisecond)
 			if staleMs > status.offlineThresholdMs {
 				if node.ConnectionStatus != model.NodeStatusFault {
@@ -119,93 +122,100 @@ func (status *SoStatus) refreshGrid(ctx context.Context) {
 				}
 			}
 
-			if status.server.Metrics.UpdateNodeMetrics(ctx, node) {
+			updated := status.server.Metrics.UpdateNodeMetrics(ctx, node)
+			logger.WithFields(log.Fields{
+				"Id":               node.Id,
+				"processStatus":    node.ProcessStatus,
+				"raidStatus":       node.RaidStatus,
+				"connectionStatus": node.ConnectionStatus,
+				"nonCriticalNode":  node.NonCriticalNode,
+				"overallStatus":    node.Status,
+				"updated":          updated,
+			}).Debug("Node Status")
+
+			if updated {
 				status.server.Host.Broadcast("node", "nodes", node)
 			}
+
 			if node.NonCriticalNode {
 				nonCriticalNodes++
 			}
+
+			if node.Status != model.NodeStatusOk && node.Status != model.NodeStatusRestart && !node.NonCriticalNode {
+				unhealthyNodes++
+			}
+
+			if node.OsNeedsRestart == 1 {
+				awaitingRebootCount++
+			}
+
 		}
-		status.currentStatus.Grid.Eps = status.server.Metrics.GetGridEps(ctx)
+
+		localGridStatus := status.statusByGridId[model.LOCAL_GRID_ID]
+		if localGridStatus.Grid.UnhealthyNodeCount == 0 && unhealthyNodes > 0 {
+			logger.WithFields(log.Fields{
+				"unhealthyNodes": unhealthyNodes,
+				"totalNodes":     len(localNodes),
+			}).Warn("Grid has entered an unhealthy state")
+		} else if localGridStatus.Grid.UnhealthyNodeCount > 0 && unhealthyNodes == 0 {
+			logger.WithFields(log.Fields{
+				"unhealthyNodes": unhealthyNodes,
+				"totalNodes":     len(localNodes),
+			}).Info("Grid has returned to a healthy state")
+		}
+		localGridStatus.Grid.UnhealthyNodeCount = unhealthyNodes
+		if localGridStatus.Grid.AwaitingRebootNodeCount == 0 && awaitingRebootCount > 0 {
+			logger.WithFields(log.Fields{
+				"awaitingRebootCount": awaitingRebootCount,
+				"totalNodes":          len(localNodes),
+			}).Info("Grid nodes are awaiting reboot")
+		}
+		localGridStatus.Grid.AwaitingRebootNodeCount = awaitingRebootCount
+		localGridStatus.Grid.TotalNodeCount = len(localNodes)
+
+		localGridStatus.Grid.Eps = status.server.Metrics.GetGridEps(ctx)
 	}
 	licensing.ValidateNodeCount(len(localNodes) - nonCriticalNodes)
 	licensing.ValidateSubgridCount(len(status.server.Config.Subgrids))
 
-	// Collect subgrid nodes from remote subgrids
-	subgridNodes := make([]*model.Node, 0, 0)
+	// Collect subgrid nodes and status from remote subgrids
 	for _, subgrid := range status.server.Config.Subgrids {
 		log.WithField("subgridId", subgrid.Id).Info("fetching subgrid status")
 		subnodes, err := subgrid.GetGridNodes()
 		if err != nil {
+			log.WithField("subgridId", subgrid.Id).WithError(err).Error("failed to fetch subgrid nodes, skipping subgrid")
+		} else {
+			for _, node := range subnodes {
+				status.server.Host.Broadcast("node", "nodes", node)
+			}
+		}
+
+		subgridStatus, err := subgrid.GetGridStatus()
+		if err != nil {
 			log.WithField("subgridId", subgrid.Id).WithError(err).Error("failed to fetch subgrid status, skipping subgrid")
-			continue
-		}
-		subgridNodes = append(subgridNodes, subnodes...)
-	}
-	status.server.SubgridNodes = subgridNodes
-	allNodes = append(allNodes, subgridNodes...)
-
-	for _, node := range allNodes {
-		updated := false
-
-		logger.WithFields(log.Fields{
-			"Id":               node.Id,
-			"processStatus":    node.ProcessStatus,
-			"raidStatus":       node.RaidStatus,
-			"connectionStatus": node.ConnectionStatus,
-			"nonCriticalNode":  node.NonCriticalNode,
-			"overallStatus":    node.Status,
-			"updated":          updated,
-		}).Debug("Node Status")
-
-		if updated {
-			status.server.Host.Broadcast("node", "nodes", node)
-		}
-
-		if node.Status != model.NodeStatusOk && node.Status != model.NodeStatusRestart && !node.NonCriticalNode {
-			unhealthyNodes++
-		}
-
-		if node.OsNeedsRestart == 1 {
-			awaitingRebootCount++
+		} else {
+			status.statusByGridId[subgrid.Id] = subgridStatus
+			status.server.Host.Broadcast("status", "nodes", subgridStatus)
 		}
 	}
-	if status.currentStatus.Grid.UnhealthyNodeCount == 0 && unhealthyNodes > 0 {
-		logger.WithFields(log.Fields{
-			"unhealthyNodes": unhealthyNodes,
-			"totalNodes":     len(allNodes),
-		}).Warn("Grid has entered an unhealthy state")
-	} else if status.currentStatus.Grid.UnhealthyNodeCount > 0 && unhealthyNodes == 0 {
-		logger.WithFields(log.Fields{
-			"unhealthyNodes": unhealthyNodes,
-			"totalNodes":     len(allNodes),
-		}).Info("Grid has returned to a healthy state")
-	}
-	status.currentStatus.Grid.UnhealthyNodeCount = unhealthyNodes
-	if status.currentStatus.Grid.AwaitingRebootNodeCount == 0 && awaitingRebootCount > 0 {
-		logger.WithFields(log.Fields{
-			"awaitingRebootCount": awaitingRebootCount,
-			"totalNodes":          len(allNodes),
-		}).Info("Grid nodes are awaiting reboot")
-	}
-	status.currentStatus.Grid.AwaitingRebootNodeCount = awaitingRebootCount
-	status.currentStatus.Grid.TotalNodeCount = len(allNodes)
 }
 
 func (status *SoStatus) refreshDetections(ctx context.Context) {
+	localGridStatus := status.statusByGridId[model.LOCAL_GRID_ID]
+
 	if _, exists := status.server.DetectionEngines[model.EngineNameElastAlert]; exists {
-		status.currentStatus.Detections.ElastAlert = status.checkDetectionEngineStatus("ElastAlert2",
-			status.currentStatus.Detections.ElastAlert,
+		localGridStatus.Detections.ElastAlert = status.checkDetectionEngineStatus("ElastAlert2",
+			localGridStatus.Detections.ElastAlert,
 			status.server.DetectionEngines[model.EngineNameElastAlert].GetState())
 	}
 	if _, exists := status.server.DetectionEngines[model.EngineNameSuricata]; exists {
-		status.currentStatus.Detections.Suricata = status.checkDetectionEngineStatus("Suricata",
-			status.currentStatus.Detections.Suricata,
+		localGridStatus.Detections.Suricata = status.checkDetectionEngineStatus("Suricata",
+			localGridStatus.Detections.Suricata,
 			status.server.DetectionEngines[model.EngineNameSuricata].GetState())
 	}
 	if _, exists := status.server.DetectionEngines[model.EngineNameStrelka]; exists {
-		status.currentStatus.Detections.Strelka = status.checkDetectionEngineStatus("Strelka",
-			status.currentStatus.Detections.Strelka,
+		localGridStatus.Detections.Strelka = status.checkDetectionEngineStatus("Strelka",
+			localGridStatus.Detections.Strelka,
 			status.server.DetectionEngines[model.EngineNameStrelka].GetState())
 	}
 }
@@ -234,4 +244,13 @@ func (status *SoStatus) checkDetectionEngineStatus(engineName string, oldState *
 	}
 
 	return newState
+}
+
+func (status *SoStatus) GetStatusSummary(ctx context.Context) (*model.Status, error) {
+	if err := status.server.CheckAuthorized(ctx, "read", "grid"); err != nil {
+		return nil, err
+	}
+
+	localGridStatus := status.statusByGridId[model.LOCAL_GRID_ID]
+	return localGridStatus, nil
 }

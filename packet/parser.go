@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/apex/log"
 	"github.com/google/gopacket"
@@ -79,7 +80,7 @@ func filterPacket(filter *model.Filter, packet gopacket.Packet) bool {
 func ParseRawPcap(filename string, maxCount int, filter *model.Filter) ([]gopacket.Packet, error) {
 	packets := make([]gopacket.Packet, 0)
 	currentCount := 0
-	err := parsePcapFile(filename, createBpf(filter), func(index int, pcapPacket gopacket.Packet) bool {
+	err := parsePcapFile(filename, CreateBpf(filter, true), func(index int, pcapPacket gopacket.Packet) bool {
 		if filterPacket(filter, pcapPacket) {
 			packets = append(packets, pcapPacket)
 			currentCount += 1
@@ -97,7 +98,11 @@ func ParseRawPcap(filename string, maxCount int, filter *model.Filter) ([]gopack
 	return packets, err
 }
 
-func addBpf(bpf string, part string) string {
+func AddBpf(bpf string, part string) string {
+	if len(part) == 0 {
+		return bpf
+	}
+
 	newBpf := bpf
 
 	if len(newBpf) > 0 {
@@ -110,30 +115,33 @@ func addBpf(bpf string, part string) string {
 
 }
 
-func createBpf(filter *model.Filter) string {
+func CreateBpf(filter *model.Filter, vlanEnabled bool) string {
 	query := filter.Protocol
+	if strings.HasPrefix(filter.Protocol, model.PROTOCOL_ICMP) {
+		query = "(icmp or icmp6)"
+	}
 
 	if len(filter.SrcIp) > 0 {
-		query = addBpf(query, fmt.Sprintf("host %s", filter.SrcIp))
+		query = AddBpf(query, fmt.Sprintf("host %s", filter.SrcIp))
 	}
 
 	if len(filter.DstIp) > 0 {
-		query = addBpf(query, fmt.Sprintf("host %s", filter.DstIp))
+		query = AddBpf(query, fmt.Sprintf("host %s", filter.DstIp))
 	}
 
 	// Some legacy jobs won't have the protocol provided
-	if filter.Protocol != model.PROTOCOL_ICMP {
+	if !strings.HasPrefix(filter.Protocol, model.PROTOCOL_ICMP) {
 		if filter.SrcPort > 0 {
-			query = addBpf(query, fmt.Sprintf("port %d", filter.SrcPort))
+			query = AddBpf(query, fmt.Sprintf("port %d", filter.SrcPort))
 		}
 
 		if filter.DstPort > 0 {
-			query = addBpf(query, fmt.Sprintf("port %d", filter.DstPort))
+			query = AddBpf(query, fmt.Sprintf("port %d", filter.DstPort))
 		}
 	}
 
 	// Repeat the query but with vlan applied
-	if len(query) > 0 {
+	if vlanEnabled && len(query) > 0 {
 		query = fmt.Sprintf("(%s) or (vlan and %s)", query, query)
 	}
 

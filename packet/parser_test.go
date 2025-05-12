@@ -116,6 +116,12 @@ func TestParseAndStreamIcmp(tester *testing.T) {
 	assert.Equal(tester, pcap_length, size)
 }
 
+func TestAddBpf(tester *testing.T) {
+	assert.Equal(tester, "a and b", AddBpf("a", "b"))
+	assert.Equal(tester, "a", AddBpf("a", ""))
+	assert.Equal(tester, "b", AddBpf("", "b"))
+}
+
 func TestCreateBpf(tester *testing.T) {
 	filter := model.NewFilter()
 	startTime, _ := time.Parse(time.RFC3339, "2024-02-12T00:00:00Z")
@@ -128,7 +134,28 @@ func TestCreateBpf(tester *testing.T) {
 	filter.DstIp = "192.168.10.128"
 	filter.DstPort = 34515 // will be ignored since Protocol = ICMP
 
-	actual := createBpf(filter)
-	expected := "(icmp and host 90.151.225.16 and host 192.168.10.128) or (vlan and icmp and host 90.151.225.16 and host 192.168.10.128)"
+	actual := CreateBpf(filter, true)
+	expected := "((icmp or icmp6) and host 90.151.225.16 and host 192.168.10.128) or (vlan and (icmp or icmp6) and host 90.151.225.16 and host 192.168.10.128)"
+	assert.Equal(tester, expected, actual)
+
+	actual = CreateBpf(filter, false)
+	expected = "(icmp or icmp6) and host 90.151.225.16 and host 192.168.10.128"
+	assert.Equal(tester, expected, actual)
+}
+
+func TestCreateBpfIcmp6(tester *testing.T) {
+	filter := model.NewFilter()
+	startTime, _ := time.Parse(time.RFC3339, "2024-02-12T00:00:00Z")
+	filter.BeginTime = startTime
+	endTime, _ := time.Parse(time.RFC3339, "2024-02-12T23:59:59Z")
+	filter.EndTime = endTime
+	filter.Protocol = model.PROTOCOL_ICMP
+	filter.SrcIp = "fe80::aa28:fadf:ab5a:bff7"
+	filter.SrcPort = 19 // will be ignored since Protocol = ICMP
+	filter.DstIp = "fe80::17:b601:2ab3:4397"
+	filter.DstPort = 34515 // will be ignored since Protocol = ICMP
+
+	actual := CreateBpf(filter, true)
+	expected := "((icmp or icmp6) and host fe80::aa28:fadf:ab5a:bff7 and host fe80::17:b601:2ab3:4397) or (vlan and (icmp or icmp6) and host fe80::aa28:fadf:ab5a:bff7 and host fe80::17:b601:2ab3:4397)"
 	assert.Equal(tester, expected, actual)
 }

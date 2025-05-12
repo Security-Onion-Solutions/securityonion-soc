@@ -39,7 +39,7 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
       dstPort: null,
       timeframe: '',
     },
-    footerProps: { 'items-per-page-options': [10,50,250,1000] },
+    itemsPerPageOptions: [10,50,250,1000],
     kind: '',
   }},
   created() {
@@ -188,6 +188,8 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
       try {
         if (job) {
           await this.$root.papi.delete('job/' + job.id);
+          // Filter out the deleted job from the local array
+          this.jobs = this.jobs.filter((j) => j.id != job.id);
         }
       } catch (error) {
          this.$root.showError(error);

@@ -20,6 +20,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/agent"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
+	"github.com/security-onion-solutions/securityonion-soc/packet"
 )
 
 const DEFAULT_EXECUTABLE_PATH = "tcpdump"
@@ -91,7 +92,7 @@ func (importer *Importer) ProcessJob(job *model.Job, reader io.ReadCloser) (io.R
 	} else {
 		job.FileExtension = "pcap"
 
-		query := importer.buildQuery(job)
+		query := packet.CreateBpf(job.Filter, false)
 
 		pcapInputFilepath := fmt.Sprintf("%s/%s/pcap/data.pcap", importer.pcapInputPath, job.Filter.ImportId)
 		pcapOutputFilepath := fmt.Sprintf("%s/%d.%s", importer.pcapOutputPath, job.Id, job.FileExtension)
@@ -153,38 +154,4 @@ func (importer *Importer) CleanupJob(job *model.Job) {
 func (importer *Importer) GetDataEpoch() time.Time {
 	// Epoch not used for imported data, return current time
 	return time.Now()
-}
-
-func (importer *Importer) buildQuery(job *model.Job) string {
-	query := ""
-
-	if len(job.Filter.SrcIp) > 0 {
-		if len(query) > 0 {
-			query = query + " and"
-		}
-		query = fmt.Sprintf("%s host %s", query, job.Filter.SrcIp)
-	}
-
-	if len(job.Filter.DstIp) > 0 {
-		if len(query) > 0 {
-			query = query + " and"
-		}
-		query = fmt.Sprintf("%s host %s", query, job.Filter.DstIp)
-	}
-
-	if job.Filter.SrcPort > 0 {
-		if len(query) > 0 {
-			query = query + " and"
-		}
-		query = fmt.Sprintf("%s port %d", query, job.Filter.SrcPort)
-	}
-
-	if job.Filter.DstPort > 0 {
-		if len(query) > 0 {
-			query = query + " and"
-		}
-		query = fmt.Sprintf("%s port %d", query, job.Filter.DstPort)
-	}
-
-	return query
 }
