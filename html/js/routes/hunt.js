@@ -246,7 +246,7 @@ const huntComponent = {
     'relativeTimeUnit': 'saveLocalSettings',
     'autohunt': 'saveLocalSettings',
     'autoRefreshInterval': 'resetRefreshTimer',
-    'showDetailsPanel': 'saveLocalSettings',
+    'showDetailsPanel': 'toggleShowDetailsPanel',
     'advanced': 'saveLocalSettings',
   },
   methods: {
@@ -1863,9 +1863,10 @@ const huntComponent = {
       return this.isCategory('detections');
     },
     getExpandedData(data) {
+      const ignored = ['_isSelected', 'playbooks'];
       var records = [];
-      for (key in data) {
-        if (key === '_isSelected') {
+      for (let key in data) {
+        if (ignored.includes(key)) {
           continue;
         }
 
@@ -2219,6 +2220,11 @@ const huntComponent = {
     },
     saveTimezone() {
       localStorage['timezone'] = this.zone;
+    },
+    async toggleShowDetailsPanel() {
+      this.saveLocalSettings();
+      await this.$nextTick();
+      this.calculateEventColumnWidth();
     },
     saveLocalSettings() {
       this.saveSetting('groupBySortBy', this.groupBySortBy, 'count');
@@ -2709,7 +2715,7 @@ const huntComponent = {
 
       this.queryVariableSubstitution(event, playbooks);
 
-      await this.convertPlaybookQueries(playbooks)
+      await this.convertPlaybookQueries(playbooks);
 
       event.playbooks = playbooks;
       delete event.playbookLoading;
@@ -2765,7 +2771,7 @@ const huntComponent = {
           const dateRange = this.buildQuestionRange(event, question.range);
           let query = question.filledOQL;
           if (!this.isQuestionAggregate(question)) {
-            query = query + `| sortby @timestamp`;
+            query = query + ` | sortby @timestamp`;
           }
 
           let response = await this.$root.papi.get('events/', {
@@ -2804,6 +2810,23 @@ const huntComponent = {
         const dupe = JSON.parse(JSON.stringify(event));
         question.answers = [{ payload: dupe }];
       }
+
+      let ips = [];
+      for (let answer of question.answers) {
+        if (answer.payload) {
+          for (let v of Object.values(answer.payload)) {
+            if (v && typeof v === 'string') {
+              ips.push(v);
+            }
+          }
+        } else if (answer.keys) {
+          for (let key of answer.keys) {
+            ips.push(key);
+          }
+        }
+      }
+
+      this.$root.batchLookup(ips, this);
     },
     sortAggregateEvents(events) {
       events = events.sort((a, b) => b.value - a.value);
@@ -2863,7 +2886,7 @@ const huntComponent = {
       return `${t1} - ${t2}`;
     },
     getEventTimestamp(event) {
-      return event?.['event_data.@timestamp'] || event?.['@timestamp'] || event?.['soc_timestamp']
+      return event?.['event_data.@timestamp'] || event?.['@timestamp'] || event?.['soc_timestamp'] || '';
     },
     buildHuntQuestionParams(question, event) {
       let payload = {
@@ -2964,18 +2987,6 @@ const huntComponent = {
 
       return '';
     },
-    applyEventColumnWidth(style, factor, offset) {
-      if (!this.isCategory('alerts') || !style) return {};
-
-      if (!factor) factor = 1;
-      if (!offset) offset = 0;
-
-      let ret = {};
-
-      ret[style] = (this.eventColumnWidth * factor + offset) + 'px';
-
-      return ret;
-    }
   }
 };
 

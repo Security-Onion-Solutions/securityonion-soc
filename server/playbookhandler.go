@@ -35,6 +35,15 @@ func RegisterPlaybookRoutes(srv *Server, r chi.Router, prefix string) {
 	})
 }
 
+// @Summary      Get Playbook
+// @Description  Retrieves playbooks given an internal playbook ID.
+// @Tags         Playbooks
+// @Param        id  path  string  true         "The playbook ID to retrieve" example(6F64990A-ACDA-40B6-AB71-134C073013B5)
+// @Success      200  {object}  model.Playbook  "The playbook was successfully retrieved"
+// @Failure      401                            "Request was not properly authenticated"
+// @Failure      404                            "Playbook not found"
+// @Failure      500                            "Internal SOC error; review SOC logs"
+// @Router       /connect/playbook/{id} [get]
 func (h *PlaybookHandler) GetPlaybook(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
@@ -58,6 +67,15 @@ func (h *PlaybookHandler) GetPlaybook(w http.ResponseWriter, r *http.Request) {
 	web.Respond(w, r, http.StatusOK, pb)
 }
 
+// @Summary      Get Playbook
+// @Description  Retrieves playbooks that apply to the indicated detection.
+// @Tags         Playbooks
+// @Param        id  path  string  true        "The public Id for the detection" example(6F64990A-ACDA-40B6-AB71-134C073013B5)
+// @Success      200  {array}  model.Playbook  "The playbook was successfully retrieved"
+// @Failure      401                           "Request was not properly authenticated"
+// @Failure      404                           "Playbook not found"
+// @Failure      500                           "Internal SOC error; review SOC logs"
+// @Router       /connect/playbook/detection/{id} [get]
 func (h *PlaybookHandler) GetPlaybooksForDetection(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
@@ -108,6 +126,14 @@ func (h *PlaybookHandler) GetPlaybooksForDetection(w http.ResponseWriter, r *htt
 	web.Respond(w, r, http.StatusOK, pbs)
 }
 
+// @Summary      Get Playbook
+// @Description  Converts the questions of a playbook from Sigma to OQL.
+// @Tags         Playbooks
+// @Param        request body	[]string  true         "The variable substituted Sigma queries to convert"
+// @Success      200  {array}  model.ConvertedQuery  "The playbook was successfully retrieved"
+// @Failure      401                                 "Request was not properly authenticated"
+// @Failure      500                                 "Internal SOC error; review SOC logs"
+// @Router       /connect/playbook/convert [post]
 func (h *PlaybookHandler) ConvertPlaybook(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
