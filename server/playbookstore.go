@@ -13,8 +13,8 @@ import (
 
 type Playbookstore interface {
 	Interrupt(force bool)
-	GetPlaybooksForDetection(detectId string, detectCategory string, detectEngine model.EngineName) ([]*model.Playbook, error)
-	GetPlaybookById(id string) (*model.Playbook, error)
+	GetPlaybooksForDetection(ctx context.Context, detectId string, detectCategory string, detectEngine model.EngineName) ([]*model.Playbook, error)
+	GetPlaybookById(ctx context.Context, id string) (*model.Playbook, error)
 	ConvertQuestions(ctx context.Context, queries []string) ([]*model.ConvertedQuery, error)
 }
 

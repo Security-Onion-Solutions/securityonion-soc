@@ -219,8 +219,8 @@ func (pdm *PlaybookDiskManager) LoadPlaybooks(logger log.Interface) error {
 	}
 
 	logger.WithFields(log.Fields{
-		"duration":      time.Since(start).Seconds(),
-		"playbookCount": len(playbooks),
+		"readPlaybookDuration": time.Since(start).Seconds(),
+		"playbookCount":        len(playbooks),
 	}).Info("read playbooks")
 
 	start = time.Now()
@@ -232,7 +232,7 @@ func (pdm *PlaybookDiskManager) LoadPlaybooks(logger log.Interface) error {
 	}
 
 	logger.WithFields(log.Fields{
-		"duration": time.Since(start).Seconds(),
+		"organizePlaybookDuration": time.Since(start).Seconds(),
 	}).Info("organized playbooks")
 
 	return nil
@@ -351,7 +351,9 @@ func (pdm *PlaybookDiskManager) organizePlaybooks(logger log.Interface, playbook
 	return nil
 }
 
-func (pdm *PlaybookDiskManager) GetPlaybooksForDetection(publicId string, detectCategory string, detectEngine model.EngineName) ([]*model.Playbook, error) {
+func (pdm *PlaybookDiskManager) GetPlaybooksForDetection(ctx context.Context, publicId string, detectCategory string, detectEngine model.EngineName) ([]*model.Playbook, error) {
+	logger := log.FromContext(ctx)
+
 	pdm.pbUpdateMutex.RLock()
 	defer pdm.pbUpdateMutex.RUnlock()
 
@@ -365,14 +367,40 @@ func (pdm *PlaybookDiskManager) GetPlaybooksForDetection(publicId string, detect
 		results = pdm.PlaybooksByEngine[string(detectEngine)]
 	}
 
+	ids := make([]string, 0, len(results))
+	for _, pb := range results {
+		ids = append(ids, pb.Id)
+	}
+
+	logger.WithFields(log.Fields{
+		"playbookCount":  len(results),
+		"publicId":       publicId,
+		"detectCategory": detectCategory,
+		"detectEngine":   detectEngine,
+		"playbookIds":    ids,
+	}).Info("retrieving playbooks for detection")
+
 	return results, nil
 }
 
-func (pdm *PlaybookDiskManager) GetPlaybookById(id string) (*model.Playbook, error) {
+func (pdm *PlaybookDiskManager) GetPlaybookById(ctx context.Context, id string) (pb *model.Playbook, err error) {
+	logger := log.FromContext(ctx)
+	defer func() {
+		l := logger.WithField("playbookId", id)
+		if err != nil {
+			l.WithError(err)
+			l.Error("error getting playbook by id")
+		} else {
+			l.Info("successfully retrieved playbook by id")
+		}
+	}()
+
 	pdm.pbUpdateMutex.RLock()
 	defer pdm.pbUpdateMutex.RUnlock()
 
-	pb, ok := pdm.PlaybooksByPlaybookId[id]
+	var ok bool
+	pb, ok = pdm.PlaybooksByPlaybookId[id]
+
 	if !ok {
 		return nil, nil
 	}

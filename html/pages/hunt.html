@@ -380,7 +380,7 @@
 																						{{question.question}}
 																					</v-expansion-panel-title>
 																					<v-expansion-panel-text class="pl-13 ws-normal">
-																						<div class="italic bold">{{i18n.context}}</div>
+																						<div class="font-weight-bold font-italic">{{i18n.context}}</div>
 																						<div class="italic">{{question.context}}</div>
 																						<div class="italic my-4">{{i18n.dateRange}}: {{question.range || i18n.event}}</div>
 																						<v-row no-gutters class="mb-5">
@@ -394,12 +394,12 @@
 																							</v-col>
 																						</v-row>
 																						<template v-if="question.answers">
-																							<span class="italic bold">
+																							<span class="font-weight-bold font-italic">
 																								{{ i18n.instantInsight }}
 																							</span>
 																							<br/>
 																							<span class="italic">
-																								{{ i18n.eventHappenedAt }} {{ formatTimestamp(getEventTimestamp(item.newest)) }}
+																								{{ i18n.eventOccurredAt }} {{ formatTimestamp(getEventTimestamp(item.newest)) }}
 																							</span>
 																							<table v-if="question.isAggregate" class="simple-table">
 																								<thead>
@@ -669,7 +669,7 @@
 																			{{question.question}}
 																		</v-expansion-panel-title>
 																		<v-expansion-panel-text class="pl-13 ws-normal">
-																			<div class="italic bold">{{i18n.context}}</div>
+																			<div class="font-weight-bold font-italic">{{i18n.context}}</div>
 																			<div class="italic">{{question.context}}</div>
 																			<div class="italic my-4">{{i18n.dateRange}}: {{question.range || i18n.event}}</div>
 																			<v-row no-gutters class="mb-5">
@@ -683,12 +683,12 @@
 																				</v-col>
 																			</v-row>
 																			<template v-if="question.answers">
-																				<span class="italic bold">
+																				<span class="font-weight-bold font-italic">
 																					{{i18n.instantInsight}}
 																				</span>
 																				<br/>
 																				<span class="italic">
-																					{{i18n.eventHappenedAt}} {{ formatTimestamp(getEventTimestamp(item)) }}
+																					{{i18n.eventOccurredAt}} {{ formatTimestamp(getEventTimestamp(item)) }}
 																				</span>
 																				<table v-if="question.isAggregate" class="simple-table">
 																					<thead>

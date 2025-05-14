@@ -2720,7 +2720,7 @@ const huntComponent = {
       event.playbooks = playbooks;
       delete event.playbookLoading;
 
-      if (this.$root.isPro()) {
+      if (this.$root.isLicensed(FEAT_IIS)) {
         for (let pb of event.playbooks) {
           for (let q of pb.questions) {
             await this.$nextTick();

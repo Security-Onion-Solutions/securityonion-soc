@@ -9,6 +9,7 @@ const components = [];
 const templatePromises = [];
 
 const FEAT_TTR = 'ttr';
+const FEAT_IIS = 'iis';
 
 const LICENSE_STATUS_ACTIVE = "active";
 const LICENSE_STATUS_EXCEEDED = "exceeded";
@@ -1523,9 +1524,6 @@ $(document).ready(function () {
           return (a, b) => {
             return new Date(a[field]) - new Date(b[field]);
           }
-        },
-        isPro() {
-          return this.licenseStatus === LICENSE_STATUS_ACTIVE;
         },
       },
       created() {

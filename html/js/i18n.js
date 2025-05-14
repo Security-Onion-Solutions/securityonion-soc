@@ -435,7 +435,7 @@ const i18n = {
       eventCaseTitle: 'Event Escalation from SOC',
       eventExpandHelp: 'Show all event fields',
       eventFetchTook: 'The backend data fetch took ',
-      eventHappenedAt: 'Original event happened at',
+      eventOccurredAt: 'Original event occurred at',
       eventLookupFailed: 'The event lookup could not be completed.',
       eventRoundTripTook: 'The total round trip took ',
       eventstoreStatus: 'Elasticsearch Status',
