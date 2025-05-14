@@ -9,8 +9,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"net/url"
-	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
@@ -69,83 +69,83 @@ func NewPlaybookDiskManager(srv *server.Server) *PlaybookDiskManager {
 	}
 }
 
-func (pbm *PlaybookDiskManager) PrerequisiteModules() []string {
+func (pdm *PlaybookDiskManager) PrerequisiteModules() []string {
 	return nil
 }
 
-func (pbm *PlaybookDiskManager) Init(config module.ModuleConfig) (err error) {
-	pbm.InterruptChan = make(chan bool, 1)
+func (pdm *PlaybookDiskManager) Init(config module.ModuleConfig) (err error) {
+	pdm.InterruptChan = make(chan bool, 1)
 
-	pbm.autoUpdateEnabled = module.GetBoolDefault(config, "autoUpdateEnabled", DEFAULT_AUTO_UPDATE_ENABLED)
-	pbm.PlaybookImportFrequencySeconds = module.GetIntDefault(config, "playbookImportFrequencySeconds", DEFAULT_PLAYBOOK_IMPORT_FREQUENCY_SECONDS)
-	pbm.PlaybookImportErrorSeconds = module.GetIntDefault(config, "playbookImportErrorSeconds", DEFAULT_PLAYBOOK_IMPORT_ERROR_SECONDS)
-	pbm.playbookRepoUrl = module.GetStringDefault(config, "playbookRepoUrl", DEFAULT_PLAYBOOK_REPO)
-	pbm.playbookRepoBranch = module.GetStringDefault(config, "playbookRepoBranch", DEFAULT_PLAYBOOK_REPO_BRANCH)
-	pbm.playbookRepoPath = module.GetStringDefault(config, "playbookRepoPath", DEFAULT_PLAYBOOK_REPO_PATH)
-	pbm.playbookPathInRepo = module.GetStringDefault(config, "playbookPathInRepo", DEFAULT_PLAYBOOK_PATH_IN_REPO)
-
-	return nil
-}
-
-func (pbm *PlaybookDiskManager) Start() error {
-	pbm.srv.Playbookstore = pbm
-	pbm.isRunning = true
-
-	go pbm.scheduler()
+	pdm.autoUpdateEnabled = module.GetBoolDefault(config, "autoUpdateEnabled", DEFAULT_AUTO_UPDATE_ENABLED)
+	pdm.PlaybookImportFrequencySeconds = module.GetIntDefault(config, "playbookImportFrequencySeconds", DEFAULT_PLAYBOOK_IMPORT_FREQUENCY_SECONDS)
+	pdm.PlaybookImportErrorSeconds = module.GetIntDefault(config, "playbookImportErrorSeconds", DEFAULT_PLAYBOOK_IMPORT_ERROR_SECONDS)
+	pdm.playbookRepoUrl = module.GetStringDefault(config, "playbookRepoUrl", DEFAULT_PLAYBOOK_REPO)
+	pdm.playbookRepoBranch = module.GetStringDefault(config, "playbookRepoBranch", DEFAULT_PLAYBOOK_REPO_BRANCH)
+	pdm.playbookRepoPath = module.GetStringDefault(config, "playbookRepoPath", DEFAULT_PLAYBOOK_REPO_PATH)
+	pdm.playbookPathInRepo = module.GetStringDefault(config, "playbookPathInRepo", DEFAULT_PLAYBOOK_PATH_IN_REPO)
 
 	return nil
 }
 
-func (pbm *PlaybookDiskManager) Stop() error {
-	pbm.isRunning = false
+func (pdm *PlaybookDiskManager) Start() error {
+	pdm.srv.Playbookstore = pdm
+	pdm.isRunning = true
+
+	go pdm.scheduler()
 
 	return nil
 }
 
-func (pbm *PlaybookDiskManager) IsRunning() bool {
-	return pbm.isRunning
+func (pdm *PlaybookDiskManager) Stop() error {
+	pdm.isRunning = false
+
+	return nil
 }
 
-func (pbm *PlaybookDiskManager) Interrupt(force bool) {
-	pbm.interm.Lock()
-	defer pbm.interm.Unlock()
+func (pdm *PlaybookDiskManager) IsRunning() bool {
+	return pdm.isRunning
+}
 
-	if len(pbm.InterruptChan) == 0 {
-		pbm.InterruptChan <- force
+func (pdm *PlaybookDiskManager) Interrupt(force bool) {
+	pdm.interm.Lock()
+	defer pdm.interm.Unlock()
+
+	if len(pdm.InterruptChan) == 0 {
+		pdm.InterruptChan <- force
 	}
 }
 
-func (pbm *PlaybookDiskManager) resetInterrupt() {
-	pbm.interm.Lock()
-	defer pbm.interm.Unlock()
+func (pdm *PlaybookDiskManager) resetInterrupt() {
+	pdm.interm.Lock()
+	defer pdm.interm.Unlock()
 
-	if len(pbm.InterruptChan) != 0 {
-		<-pbm.InterruptChan
+	if len(pdm.InterruptChan) != 0 {
+		<-pdm.InterruptChan
 	}
 }
 
-func (pbm *PlaybookDiskManager) scheduler() {
+func (pdm *PlaybookDiskManager) scheduler() {
 	wasSuccessful := false
 	var timer *time.Timer
 
 	firstRun := sync.OnceFunc(func() {
-		pbm.Interrupt(true)
+		pdm.Interrupt(true)
 	})
 
-	for pbm.isRunning {
+	for pdm.isRunning {
 		if wasSuccessful {
-			timer = time.NewTimer(time.Second * time.Duration(pbm.PlaybookImportFrequencySeconds))
+			timer = time.NewTimer(time.Second * time.Duration(pdm.PlaybookImportFrequencySeconds))
 		} else {
-			timer = time.NewTimer(time.Second * time.Duration(pbm.PlaybookImportErrorSeconds))
+			timer = time.NewTimer(time.Second * time.Duration(pdm.PlaybookImportErrorSeconds))
 		}
 
 		force := false
-		pbm.resetInterrupt()
+		pdm.resetInterrupt()
 
 		firstRun()
 
 		select {
-		case inter := <-pbm.InterruptChan:
+		case inter := <-pdm.InterruptChan:
 			force = inter
 		case <-timer.C:
 		}
@@ -156,17 +156,27 @@ func (pbm *PlaybookDiskManager) scheduler() {
 			"syncId": syncId,
 		})
 
-		anythingNew, err := pbm.UpdateRepoOnDisk()
+		if !pdm.isRunning {
+			logger.Info("playbook disk manager stopped")
+			return
+		}
+
+		anythingNew, err := pdm.UpdateRepoOnDisk()
 		if err != nil {
 			logger.WithError(err).Error("unable to update playbook repo")
 			wasSuccessful = false
 			continue
 		}
 
+		if !pdm.isRunning {
+			logger.Info("playbook disk manager stopped")
+			return
+		}
+
 		if anythingNew || force {
 			start := time.Now()
 
-			err = pbm.LoadPlaybooks(logger)
+			err = pdm.LoadPlaybooks(logger)
 			if err != nil {
 				logger.WithError(err).Error("unable to load playbooks")
 				wasSuccessful = false
@@ -181,13 +191,13 @@ func (pbm *PlaybookDiskManager) scheduler() {
 	}
 }
 
-func (pbm *PlaybookDiskManager) UpdateRepoOnDisk() (anythingNew bool, err error) {
-	_, anythingNew, err = detections.UpdateRepos(&pbm.isRunning, pbm.playbookRepoPath, []*model.RuleRepo{
+func (pdm *PlaybookDiskManager) UpdateRepoOnDisk() (anythingNew bool, err error) {
+	_, anythingNew, err = detections.UpdateRepos(&pdm.isRunning, pdm.playbookRepoPath, []*model.RuleRepo{
 		{
-			Repo:   pbm.playbookRepoUrl,
-			Branch: util.Ptr(pbm.playbookRepoBranch),
+			Repo:   pdm.playbookRepoUrl,
+			Branch: util.Ptr(pdm.playbookRepoBranch),
 		},
-	}, pbm.IOManager)
+	}, pdm.IOManager)
 
 	if err != nil {
 		return false, err
@@ -196,15 +206,15 @@ func (pbm *PlaybookDiskManager) UpdateRepoOnDisk() (anythingNew bool, err error)
 	return anythingNew, nil
 }
 
-func (pbm *PlaybookDiskManager) LoadPlaybooks(logger log.Interface) error {
+func (pdm *PlaybookDiskManager) LoadPlaybooks(logger log.Interface) error {
 	start := time.Now()
-	playbooks, err := pbm.readPlaybooks(logger)
+	playbooks, err := pdm.readPlaybooks(logger)
 	if err != nil {
 		logger.WithError(err).Error("unable to read playbooks")
 		return err
 	}
 
-	if !pbm.isRunning {
+	if !pdm.isRunning {
 		return detections.ErrModuleStopped
 	}
 
@@ -215,7 +225,7 @@ func (pbm *PlaybookDiskManager) LoadPlaybooks(logger log.Interface) error {
 
 	start = time.Now()
 
-	err = pbm.organizePlaybooks(logger, playbooks)
+	err = pdm.organizePlaybooks(logger, playbooks)
 	if err != nil {
 		logger.WithError(err).Error("unable to organize playbooks")
 		return err
@@ -228,19 +238,24 @@ func (pbm *PlaybookDiskManager) LoadPlaybooks(logger log.Interface) error {
 	return nil
 }
 
-func (pbm *PlaybookDiskManager) readPlaybooks(logger log.Interface) ([]*model.Playbook, error) {
-	repo, err := url.Parse(pbm.playbookRepoUrl)
+func (pdm *PlaybookDiskManager) readPlaybooks(logger log.Interface) ([]*model.Playbook, error) {
+	repo, err := url.Parse(pdm.playbookRepoUrl)
 	if err != nil {
 		return nil, err
 	}
 
 	repoFolderName := path.Base(repo.Path)
 
-	targetDir := path.Join(pbm.playbookRepoPath, repoFolderName, pbm.playbookPathInRepo)
+	targetDir := path.Join(pdm.playbookRepoPath, repoFolderName, pdm.playbookPathInRepo)
 	files := 0
 	playbooks := []*model.Playbook{}
 
-	err = filepath.Walk(targetDir, func(p string, info os.FileInfo, err error) error {
+	err = pdm.IOManager.WalkDir(targetDir, func(p string, dir fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		info, err := dir.Info()
 		if err != nil {
 			return err
 		}
@@ -254,15 +269,14 @@ func (pbm *PlaybookDiskManager) readPlaybooks(logger log.Interface) ([]*model.Pl
 			return nil
 		}
 
-		f, err := os.Open(p)
+		contents, err := pdm.ReadFile(p)
 		if err != nil {
 			return err
 		}
-		defer f.Close()
 
 		pb := &model.Playbook{}
 
-		err = yaml.NewDecoder(f).Decode(pb)
+		err = yaml.Unmarshal(contents, pb)
 		if err != nil {
 			return err
 		}
@@ -285,7 +299,7 @@ func (pbm *PlaybookDiskManager) readPlaybooks(logger log.Interface) ([]*model.Pl
 	return playbooks, nil
 }
 
-func (pbm *PlaybookDiskManager) organizePlaybooks(logger log.Interface, playbooks []*model.Playbook) error {
+func (pdm *PlaybookDiskManager) organizePlaybooks(logger log.Interface, playbooks []*model.Playbook) error {
 	byDetId := make(map[string][]*model.Playbook)
 	byPBId := make(map[string]*model.Playbook)
 	byCategory := make(map[string][]*model.Playbook)
@@ -293,11 +307,13 @@ func (pbm *PlaybookDiskManager) organizePlaybooks(logger log.Interface, playbook
 
 	for _, pb := range playbooks {
 		if pb.DetectionId != "" {
-			byDetId[pb.DetectionId] = append(byDetId[pb.DetectionId], pb)
+			key := strings.ToLower(pb.DetectionId)
+			byDetId[key] = append(byDetId[key], pb)
 		}
 
 		if pb.DetectionCategory != "" {
-			byCategory[pb.DetectionCategory] = append(byCategory[pb.DetectionCategory], pb)
+			key := strings.ToLower(pb.DetectionCategory)
+			byCategory[key] = append(byCategory[key], pb)
 		}
 
 		if pb.DetectionId == "" && pb.DetectionCategory == "" {
@@ -313,48 +329,50 @@ func (pbm *PlaybookDiskManager) organizePlaybooks(logger log.Interface, playbook
 			}
 		}
 
-		_, ok := byPBId[pb.Id]
+		key := strings.ToLower(pb.Id)
+
+		_, ok := byPBId[key]
 		if ok {
-			logger.WithField("playbookId", pb.Id).Warn("duplicate playbook id")
+			logger.WithField("playbookId", key).Warn("duplicate playbook id")
 		}
 
-		byPBId[pb.Id] = pb
+		byPBId[key] = pb
 	}
 
-	pbm.pbUpdateMutex.Lock()
+	pdm.pbUpdateMutex.Lock()
 
-	pbm.PlaybooksByEngine = byEngine
-	pbm.PlaybooksByCategory = byCategory
-	pbm.PlaybooksByDetectionId = byDetId
-	pbm.PlaybooksByPlaybookId = byPBId
+	pdm.PlaybooksByEngine = byEngine
+	pdm.PlaybooksByCategory = byCategory
+	pdm.PlaybooksByDetectionId = byDetId
+	pdm.PlaybooksByPlaybookId = byPBId
 
-	pbm.pbUpdateMutex.Unlock()
+	pdm.pbUpdateMutex.Unlock()
 
 	return nil
 }
 
-func (pbm *PlaybookDiskManager) GetPlaybooksForDetection(publicId string, detectCategory string, detectEngine model.EngineName) ([]*model.Playbook, error) {
-	pbm.pbUpdateMutex.RLock()
-	defer pbm.pbUpdateMutex.RUnlock()
+func (pdm *PlaybookDiskManager) GetPlaybooksForDetection(publicId string, detectCategory string, detectEngine model.EngineName) ([]*model.Playbook, error) {
+	pdm.pbUpdateMutex.RLock()
+	defer pdm.pbUpdateMutex.RUnlock()
 
-	forId := pbm.PlaybooksByDetectionId[publicId]
-	forCategory := pbm.PlaybooksByCategory[detectCategory]
+	forId := pdm.PlaybooksByDetectionId[publicId]
+	forCategory := pdm.PlaybooksByCategory[detectCategory]
 
 	results := append([]*model.Playbook{}, forId...)
 	results = append(results, forCategory...)
 
 	if len(results) == 0 {
-		results = pbm.PlaybooksByEngine[string(detectEngine)]
+		results = pdm.PlaybooksByEngine[string(detectEngine)]
 	}
 
 	return results, nil
 }
 
-func (pbm *PlaybookDiskManager) GetPlaybookById(id string) (*model.Playbook, error) {
-	pbm.pbUpdateMutex.RLock()
-	defer pbm.pbUpdateMutex.RUnlock()
+func (pdm *PlaybookDiskManager) GetPlaybookById(id string) (*model.Playbook, error) {
+	pdm.pbUpdateMutex.RLock()
+	defer pdm.pbUpdateMutex.RUnlock()
 
-	pb, ok := pbm.PlaybooksByPlaybookId[id]
+	pb, ok := pdm.PlaybooksByPlaybookId[id]
 	if !ok {
 		return nil, nil
 	}
@@ -362,15 +380,15 @@ func (pbm *PlaybookDiskManager) GetPlaybookById(id string) (*model.Playbook, err
 	return pb, nil
 }
 
-func (pbm *PlaybookDiskManager) ConvertQuestions(ctx context.Context, queries []string) ([]*model.ConvertedQuery, error) {
+func (pdm *PlaybookDiskManager) ConvertQuestions(ctx context.Context, queries []string) ([]*model.ConvertedQuery, error) {
 	logger := log.FromContext(ctx)
 
 	args := []string{"convert", "-t", "security_onion", "-p", "/opt/sensoroni/sigma_final_pipeline.yaml", "-p", "/opt/sensoroni/sigma_so_pipeline.yaml", "-p", "windows-logsources", "-p", "ecs_windows", "--disable-pipeline-check", "/dev/stdin"}
 
-	cmd := exec.CommandContext(pbm.srv.Context, "sigma", args...)
+	cmd := exec.CommandContext(pdm.srv.Context, "sigma", args...)
 	cmd.Stdin = strings.NewReader(strings.Join(queries, "\n---\n"))
 
-	raw, code, runtime, err := pbm.ExecCommand(cmd)
+	raw, code, runtime, err := pdm.ExecCommand(cmd)
 
 	logger.WithFields(log.Fields{
 		"sigmaConvertCode":     code,
