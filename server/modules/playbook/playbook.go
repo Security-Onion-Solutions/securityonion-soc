@@ -7,10 +7,11 @@ package playbook
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/fs"
-	"net/url"
 	"os/exec"
 	"path"
 	"path/filepath"
@@ -239,18 +240,14 @@ func (pdm *PlaybookDiskManager) LoadPlaybooks(logger log.Interface) error {
 }
 
 func (pdm *PlaybookDiskManager) readPlaybooks(logger log.Interface) ([]*model.Playbook, error) {
-	repo, err := url.Parse(pdm.playbookRepoUrl)
-	if err != nil {
-		return nil, err
-	}
-
-	repoFolderName := path.Base(repo.Path)
+	h := sha256.Sum256([]byte(pdm.playbookRepoUrl))
+	repoFolderName := hex.EncodeToString(h[:])
 
 	targetDir := path.Join(pdm.playbookRepoPath, repoFolderName, pdm.playbookPathInRepo)
 	files := 0
 	playbooks := []*model.Playbook{}
 
-	err = pdm.IOManager.WalkDir(targetDir, func(p string, dir fs.DirEntry, err error) error {
+	err := pdm.IOManager.WalkDir(targetDir, func(p string, dir fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
