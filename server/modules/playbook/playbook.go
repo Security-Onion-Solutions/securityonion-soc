@@ -276,7 +276,7 @@ func (pdm *PlaybookDiskManager) readPlaybooks(logger log.Interface) ([]*model.Pl
 
 		pb := &model.Playbook{}
 
-		err = yaml.Unmarshal(contents, pb)
+		err = yaml.Unmarshal(contents, &pb)
 		if err != nil {
 			return err
 		}

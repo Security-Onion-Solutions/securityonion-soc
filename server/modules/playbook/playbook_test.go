@@ -35,8 +35,8 @@ detection_category: ''
 detection_type: nids
 contributors:
   - SecurityOnionSolutions
-created: 3/12/2025
-modified: 3/13/2025
+date: 2025-3-12
+modified: 2025-3-13
 questions:
   - question: 'What specifically does the alert describe?'
     context: 'Review the Detection description and signature to understand what the detection is trying to expose.'
@@ -568,42 +568,50 @@ func TestGetPlaybooksForDetection(t *testing.T) {
 		PlaybooksByDetectionId: map[string][]*model.Playbook{
 			"1182f3b3-e716-4efa-99ab-d2685d04360f": {
 				&model.Playbook{
-					Id: "6f64990a-acda-40b6-ab71-134c073013b5",
+					Auditable: model.Auditable{
+						Id: "6f64990a-acda-40b6-ab71-134c073013b5",
+					},
 				},
 			},
 		},
 		PlaybooksByCategory: map[string][]*model.Playbook{
 			"process_creation": {
 				&model.Playbook{
-					Id: "4f1db62f-cb41-41fb-8af3-11a67585b5db",
+					Auditable: model.Auditable{
+						Id: "4f1db62f-cb41-41fb-8af3-11a67585b5db",
+					},
 				},
 			},
 		},
 		PlaybooksByEngine: map[string][]*model.Playbook{
 			"suricata": {
 				&model.Playbook{
-					Id: "1dfe7517-f105-454f-ae96-f2280c09e4b2",
+					Auditable: model.Auditable{
+						Id: "1dfe7517-f105-454f-ae96-f2280c09e4b2",
+					},
 				},
 			},
 		},
 	}
 
-	playbooks, err := pdm.GetPlaybooksForDetection("1182f3b3-e716-4efa-99ab-d2685d04360f", "web_request", "sigma")
+	ctx := context.Background()
+
+	playbooks, err := pdm.GetPlaybooksForDetection(ctx, "1182f3b3-e716-4efa-99ab-d2685d04360f", "web_request", "sigma")
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(playbooks))
 	assert.Equal(t, "6f64990a-acda-40b6-ab71-134c073013b5", playbooks[0].Id)
 
-	playbooks, err = pdm.GetPlaybooksForDetection("abc", "process_creation", "sigma")
+	playbooks, err = pdm.GetPlaybooksForDetection(ctx, "abc", "process_creation", "sigma")
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(playbooks))
 	assert.Equal(t, "4f1db62f-cb41-41fb-8af3-11a67585b5db", playbooks[0].Id)
 
-	playbooks, err = pdm.GetPlaybooksForDetection("abc", "network_access", "suricata")
+	playbooks, err = pdm.GetPlaybooksForDetection(ctx, "abc", "network_access", "suricata")
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(playbooks))
 	assert.Equal(t, "1dfe7517-f105-454f-ae96-f2280c09e4b2", playbooks[0].Id)
 
-	playbooks, err = pdm.GetPlaybooksForDetection("1182f3b3-e716-4efa-99ab-d2685d04360f", "process_creation", "suricata")
+	playbooks, err = pdm.GetPlaybooksForDetection(ctx, "1182f3b3-e716-4efa-99ab-d2685d04360f", "process_creation", "suricata")
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(playbooks))
 	assert.Equal(t, "6f64990a-acda-40b6-ab71-134c073013b5", playbooks[0].Id)
@@ -614,30 +622,38 @@ func TestGetPlaybookById(t *testing.T) {
 	pdm := PlaybookDiskManager{
 		PlaybooksByPlaybookId: map[string]*model.Playbook{
 			"1182f3b3-e716-4efa-99ab-d2685d04360f": {
-				Id: "1182f3b3-e716-4efa-99ab-d2685d04360f",
+				Auditable: model.Auditable{
+					Id: "1182f3b3-e716-4efa-99ab-d2685d04360f",
+				},
 			},
 			"4f1db62f-cb41-41fb-8af3-11a67585b5db": {
-				Id: "4f1db62f-cb41-41fb-8af3-11a67585b5db",
+				Auditable: model.Auditable{
+					Id: "4f1db62f-cb41-41fb-8af3-11a67585b5db",
+				},
 			},
 			"1dfe7517-f105-454f-ae96-f2280c09e4b2": {
-				Id: "1dfe7517-f105-454f-ae96-f2280c09e4b2",
+				Auditable: model.Auditable{
+					Id: "1dfe7517-f105-454f-ae96-f2280c09e4b2",
+				},
 			},
 		},
 	}
 
-	playbook, err := pdm.GetPlaybookById("1182f3b3-e716-4efa-99ab-d2685d04360f")
+	ctx := context.Background()
+
+	playbook, err := pdm.GetPlaybookById(ctx, "1182f3b3-e716-4efa-99ab-d2685d04360f")
 	assert.NoError(t, err)
 	assert.Equal(t, "1182f3b3-e716-4efa-99ab-d2685d04360f", playbook.Id)
 
-	playbook, err = pdm.GetPlaybookById("4f1db62f-cb41-41fb-8af3-11a67585b5db")
+	playbook, err = pdm.GetPlaybookById(ctx, "4f1db62f-cb41-41fb-8af3-11a67585b5db")
 	assert.NoError(t, err)
 	assert.Equal(t, "4f1db62f-cb41-41fb-8af3-11a67585b5db", playbook.Id)
 
-	playbook, err = pdm.GetPlaybookById("1dfe7517-f105-454f-ae96-f2280c09e4b2")
+	playbook, err = pdm.GetPlaybookById(ctx, "1dfe7517-f105-454f-ae96-f2280c09e4b2")
 	assert.NoError(t, err)
 	assert.Equal(t, "1dfe7517-f105-454f-ae96-f2280c09e4b2", playbook.Id)
 
-	playbook, err = pdm.GetPlaybookById("nonexistent")
+	playbook, err = pdm.GetPlaybookById(ctx, "nonexistent")
 	assert.NoError(t, err)
 	assert.Nil(t, playbook)
 }

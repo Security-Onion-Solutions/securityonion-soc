@@ -130,6 +130,8 @@ func TestListAvailableFeatures(tester *testing.T) {
 	idx += 1
 	assert.Equal(tester, ListAvailableFeatures()[idx], FEAT_GMD)
 	idx += 1
+	assert.Equal(tester, ListAvailableFeatures()[idx], FEAT_IIS)
+	idx += 1
 	assert.Equal(tester, ListAvailableFeatures()[idx], FEAT_LKS)
 	idx += 1
 	assert.Equal(tester, ListAvailableFeatures()[idx], FEAT_NTF)
@@ -172,14 +174,14 @@ func TestGetLicenseKey(tester *testing.T) {
 	assert.Equal(tester, key.Nodes, 1)
 	assert.Equal(tester, key.SocUrl, "https://somewhere.invalid")
 	assert.Equal(tester, key.DataUrl, "https://another.place")
-	assert.Len(tester, key.Features, 11)
+	assert.Len(tester, key.Features, 12)
 
 	// Modify the returned object and make sure it doesn't affect the orig object
 	key.Users = 100
 	key.Features = append(key.Features, "foo")
 	assert.Equal(tester, GetLicenseKey().Users, 1)
-	assert.Len(tester, key.Features, 12)
-	assert.Len(tester, GetLicenseKey().Features, 11)
+	assert.Len(tester, key.Features, 13)
+	assert.Len(tester, GetLicenseKey().Features, 12)
 }
 
 func TestGetStatus(tester *testing.T) {
