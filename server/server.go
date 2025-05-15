@@ -43,6 +43,7 @@ type Server struct {
 	Authorizer       rbac.Authorizer
 	Agent            *model.User
 	Context          context.Context
+	Playbookstore    Playbookstore
 	DetectionEngines map[model.EngineName]DetectionEngine
 	ApiRouter        *chi.Mux
 	Statusstore      Statusstore
@@ -107,6 +108,7 @@ func (server *Server) Start() {
 		RegisterGridMemberRoutes(server, server.ApiRouter, "/api/gridmembers")
 		RegisterRolesRoutes(server, server.ApiRouter, "/api/roles")
 		RegisterDetectionRoutes(server, server.ApiRouter, "/api/detection")
+		RegisterPlaybookRoutes(server, server.ApiRouter, "/api/playbook")
 		RegisterUtilRoutes(server, server.ApiRouter, "/api/util")
 
 		server.Host.RegisterRouter("/api/", server.ApiRouter)

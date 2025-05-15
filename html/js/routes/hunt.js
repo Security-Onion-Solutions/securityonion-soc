@@ -172,6 +172,9 @@ const huntComponent = {
     maxEscalate: 100,
     chartResizeTracker: {},
     gridId: null,
+    activeTabs: {},
+    expandedEvents: [],
+    eventColumnWidth: 0,
   }},
   created() {
     this.$root.initializeCharts();
@@ -207,6 +210,10 @@ const huntComponent = {
     this.stopRefreshTimer();
     this.$root.unsubscribe('detections:bulkUpdate', this.bulkUpdateReport);
     this.$root.unsubscribe('related:bulkCreate', this.bulkUpdateReport);
+
+    if (this.isCategory('alerts')) {
+      window.removeEventListener('resize', this.calculateEventColumnWidth);
+    }
   },
   mounted() {
     this.$root.startLoading();
@@ -219,6 +226,10 @@ const huntComponent = {
 
     if (this.isCategory('alerts') || this.isCategory('hunt')) {
       this.$root.subscribe('related:bulkCreate', this.bulkUpdateReport);
+    }
+
+    if (this.isCategory('alerts')) {
+      window.addEventListener('resize', this.calculateEventColumnWidth);
     }
   },
   watch: {
@@ -235,7 +246,7 @@ const huntComponent = {
     'relativeTimeUnit': 'saveLocalSettings',
     'autohunt': 'saveLocalSettings',
     'autoRefreshInterval': 'resetRefreshTimer',
-    'showDetailsPanel': 'saveLocalSettings',
+    'showDetailsPanel': 'toggleShowDetailsPanel',
     'advanced': 'saveLocalSettings',
   },
   methods: {
@@ -373,6 +384,10 @@ const huntComponent = {
       this.selectAllState = false;
       this.selectAllIndeterminate = false;
       this.selectedCount = 0;
+
+      // reset playbooks tabs/expansion
+      this.activeTabs = {};
+      this.expandedEvents = [];
 
       var route = this;
       var onSuccess = function() {};
@@ -587,7 +602,14 @@ const huntComponent = {
       } catch (error) {
         this.$root.showError(error);
       }
+
       this.$root.stopLoading();
+
+      if (this.isCategory('alerts')) {
+        this.$nextTick(() => {
+          this.calculateEventColumnWidth();
+        });
+      }
     },
     getPresets(kind) {
       if (this.presets && this.presets[kind]) {
@@ -1140,8 +1162,9 @@ const huntComponent = {
       return this.buildGroupOptionRoute(groupIdx, removals, '');
     },
     countDrilldown(event) {
-      if ( (Object.keys(event).length == 2 && Object.keys(event)[0] == "count") || (Object.keys(event).length == 5 && Object.keys(event)[0] == "count" && Object.keys(event)[1] == "rule.name" && Object.keys(event)[2] == "event.module" && Object.keys(event)[3] == "event.severity_label" && Object.keys(event)[4] == "rule.uuid") ) {
-        this.filterRouteDrilldown = this.buildFilterRoute(Object.keys(event)[1], event[Object.keys(event)[1]], FILTER_DRILLDOWN);
+      const keys = Object.keys(event).filter(field => field != 'newest');
+      if ( (keys.length == 2 && keys[0] == "count") || (keys.length == 5 && keys[0] == "count" && keys[1] == "rule.name" && keys[2] == "event.module" && keys[3] == "event.severity_label" && keys[4] == "rule.uuid") ) {
+        this.filterRouteDrilldown = this.buildFilterRoute(keys[1], event[keys[1]], FILTER_DRILLDOWN);
         this.$router.push(this.filterRouteDrilldown);
       }
     },
@@ -1564,12 +1587,7 @@ const huntComponent = {
 
         const multiSelect = this.isMultiSelect();
         events.forEach((event, index) => {
-          var record = event.payload;
-          record.soc_id = event.id;
-          record.soc_score = event.score;
-          record.soc_type = event.type;
-          record.soc_timestamp = event.timestamp;
-          record.soc_source = event.source;
+          var record = route.extractSocValues(event);
           route.lookupSocIds(record);
 
           if (multiSelect) {
@@ -1845,9 +1863,10 @@ const huntComponent = {
       return this.isCategory('detections');
     },
     getExpandedData(data) {
+      const ignored = ['_isSelected', 'playbooks'];
       var records = [];
-      for (key in data) {
-        if (key === '_isSelected') {
+      for (let key in data) {
+        if (ignored.includes(key)) {
           continue;
         }
 
@@ -2201,6 +2220,11 @@ const huntComponent = {
     },
     saveTimezone() {
       localStorage['timezone'] = this.zone;
+    },
+    async toggleShowDetailsPanel() {
+      this.saveLocalSettings();
+      await this.$nextTick();
+      this.calculateEventColumnWidth();
     },
     saveLocalSettings() {
       this.saveSetting('groupBySortBy', this.groupBySortBy, 'count');
@@ -2668,6 +2692,300 @@ const huntComponent = {
         // closing
         this.menuScrollPos = scrollContainer.scrollTop;
       }
+    },
+    calculateEventColumnWidth() {
+      this.eventColumnWidth = this.$refs?.eventColumn?.$el?.clientWidth || 0;
+      if (this.eventColumnWidth === 0) {
+        setTimeout(() => {
+          this.calculateEventColumnWidth();
+        }, 300);
+      }
+    },
+    async loadPlaybook(event) {
+      if (event.playbooks || event.playbookLoading) return;
+
+      event.playbookLoading = true;
+
+      const publicId = event?.['rule.uuid'];
+      if (!publicId) return;
+
+      const response = await this.$root.papi.get(`playbook/detection/${publicId}`);
+
+      const playbooks = response.data;
+
+      this.queryVariableSubstitution(event, playbooks);
+
+      await this.convertPlaybookQueries(playbooks);
+
+      event.playbooks = playbooks;
+      delete event.playbookLoading;
+
+      if (this.$root.isLicensed(FEAT_IIS)) {
+        for (let pb of event.playbooks) {
+          for (let q of pb.questions) {
+            await this.$nextTick();
+            await this.askQuestion(q, event);
+          }
+        }
+      }
+    },
+    queryVariableSubstitution(event, playbooks) {
+      for (let pb of playbooks) {
+        for (let question of pb.questions) {
+          let q = question.query;
+
+          for (let field in event) {
+            const value = event[field];
+
+            q = q.replaceAll(`{${field}}`, value);
+
+            if (field.startsWith('event_data.')) {
+              let short = field.replace('event_data.', '');
+              q = q.replaceAll(`{${short}}`, value);
+            }
+          }
+
+          question.filledQuery = q;
+        }
+      }
+    },
+    async convertPlaybookQueries(playbooks) {
+      let queries = playbooks.map((pb) => pb.questions.map((q) => q.filledQuery)).flat();
+
+      if (queries.length === 0) return;
+
+      let response = await this.$root.papi.post('playbook/convert', queries);
+
+      let index = 0;
+      for (let pb of playbooks) {
+        for (let question of pb.questions) {
+          question.filledOQL = response.data[index].query;
+          question.fields = response.data[index].fields;
+          index++;
+        }
+      }
+    },
+    async askQuestion(question, event) {
+      if (question.range) {
+        try {
+          const dateRange = this.buildQuestionRange(event, question.range);
+          let query = question.filledOQL;
+          if (!this.isQuestionAggregate(question)) {
+            query = query + ` | sortby @timestamp`;
+          }
+
+          let response = await this.$root.papi.get('events/', {
+            params: {
+              query: query,
+              range: dateRange,
+              format: this.i18n.timePickerSample,
+              zone: this.zone,
+              metricLimit: 5,
+              eventLimit: 5
+            }
+          });
+
+          if (this.isQuestionAggregate(question)) {
+            let biggest = '';
+            for (let field in response.data.metrics) {
+              if (field.length > biggest.length) biggest = field;
+            }
+            if (biggest) {
+              question.answers = this.sortAggregateEvents(response.data.metrics[biggest]);
+            } else {
+              // fallback, less than ideal
+              question.answers = response.data.events;
+            }
+          } else {
+            question.answers = response.data.events;
+          }
+        } catch (e) {
+          question.error = true;
+          question.answers = [];
+          console.error('Error asking question:', e);
+        }
+      } else {
+        // no range specified means we can find the answer on the event
+        // but avoid making a circular reference
+        const dupe = JSON.parse(JSON.stringify(event));
+        question.answers = [{ payload: dupe }];
+      }
+
+      let ips = [];
+      for (let answer of question.answers) {
+        if (answer.payload) {
+          for (let v of Object.values(answer.payload)) {
+            if (v && typeof v === 'string') {
+              ips.push(v);
+            }
+          }
+        } else if (answer.keys) {
+          for (let key of answer.keys) {
+            ips.push(key);
+          }
+        }
+      }
+
+      this.$root.batchLookup(ips, this);
+    },
+    sortAggregateEvents(events) {
+      events = events.sort((a, b) => b.value - a.value);
+
+      if (events.length > 5) {
+        events = events.slice(0, 5);
+      }
+
+      return events;
+    },
+    buildQuestionRange(event, range) {
+      if (!range) {
+        return '';
+      }
+
+      let t = this.getEventTimestamp(event);
+
+      let plusMinus = false;
+      let lookingBack = false;
+
+      if (range.startsWith('+/-')) {
+        plusMinus = true;
+        range = range.substring(3);
+      } else if (range.startsWith('-')) {
+        lookingBack = true;
+        range = range.substring(1);
+      }
+
+      let unit = range[range.length - 1].toLowerCase();
+      range = range.substring(0, range.length - 1);
+
+      let value = parseInt(range);
+      if (isNaN(value)) {
+        console.error('Invalid range value:', range);
+        return '';
+      }
+
+      unit = { d: 'days', h: 'hours', m: 'minutes', s: 'seconds' }[unit];
+      if (!unit) {
+        console.error('Invalid range unit:', range);
+        return '';
+      }
+
+      let t1, t2;
+
+      if (plusMinus) {
+        t1 = moment.tz(t, this.zone).subtract(value, unit).format(this.i18n.timePickerFormat);
+        t2 = moment.tz(t, this.zone).add(value, unit).format(this.i18n.timePickerFormat);
+      } else if (lookingBack) {
+        t1 = moment.tz(t, this.zone).subtract(value, unit).format(this.i18n.timePickerFormat);
+        t2 = moment.tz(t, this.zone).format(this.i18n.timePickerFormat);
+      } else {
+        t1 = moment.tz(t, this.zone).format(this.i18n.timePickerFormat);
+        t2 = moment.tz(t, this.zone).add(value, unit).format(this.i18n.timePickerFormat);
+      }
+
+      return `${t1} - ${t2}`;
+    },
+    getEventTimestamp(event) {
+      return event?.['event_data.@timestamp'] || event?.['@timestamp'] || event?.['soc_timestamp'] || '';
+    },
+    buildHuntQuestionParams(question, event) {
+      let payload = {
+        name: 'hunt',
+        query: {
+          q: question.filledOQL,
+        },
+      };
+
+      if (question.range) {
+        payload.query.t = this.buildQuestionRange(event, question.range);
+      }
+
+      return payload;
+    },
+    isQuestionAggregate(question) {
+      if ('isAggregate' in question) return question.isAggregate;
+
+      const yaml = jsyaml.load(question.query, { schema: jsyaml.FAILSAFE_SCHEMA });
+      question.isAggregate = typeof yaml.aggregation === 'string' && yaml.aggregation.toLowerCase() === 'true';
+
+      return question.isAggregate;
+    },
+    translateValue(value) {
+      if (typeof value === 'string' && value.startsWith('__')) {
+        return this.i18n[value];
+      }
+
+      return value;
+    },
+    async fetchNewestEvent(item) {
+      if (item.newest) return;
+
+      let parts = [];
+
+      for (let field in item) {
+        if (field.startsWith('event_data.')) {
+          field = field.replace('event_data.', '');
+        }
+
+        if (field.toLowerCase() === 'count') continue;
+
+        if (item[field] && item[field].length > 0) {
+          parts.push(`${field}:"${item[field]}"`);
+        }
+      }
+
+      const q = parts.join(' AND ') + `| sortby event_data.@timestamp`;
+
+      let params = {
+        query: q,
+        range: this.dateRange,
+        format: this.i18n.timePickerSample,
+        zone: this.zone,
+        metricLimit: 0,
+        eventLimit: 1
+      };
+
+      if (this.gridId && this.gridId.length > 0) {
+        params.gridId = this.gridId;
+      }
+
+      let response = await this.$root.papi.get('events/', { params });
+      if (response.data.events.length === 0) {
+        this.$root.showWarning('No events found');
+        return;
+      }
+
+      item.newest = this.extractSocValues(response.data.events[0]);
+    },
+    extractSocValues(event) {
+      var record = event.payload;
+      record.soc_id = event.id;
+      record.soc_score = event.score;
+      record.soc_type = event.type;
+      record.soc_timestamp = event.timestamp;
+      record.soc_source = event.source;
+
+      return record;
+    },
+    getEventField(event, field) {
+      if (field in event) {
+        return event[field];
+      }
+
+      // check with/without event_data
+      // let edField = 'event_data.' + field;
+      // if (edField in event) {
+      //   return event[edField];
+      // }
+      //
+      // if (field.startsWith('event_data.')) {
+      //   let shortened = field.substring(11);
+      //   if (shortened in event) {
+      //     return event[shortened];
+      //   }
+      // }
+
+      return '';
     },
   }
 };

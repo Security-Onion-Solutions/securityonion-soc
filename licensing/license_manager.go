@@ -42,6 +42,7 @@ const LICENSE_STATUS_UNPROVISIONED = "unprovisioned"
 const FEAT_API = "api"
 const FEAT_FPS = "fps"
 const FEAT_GMD = "gmd"
+const FEAT_IIS = "iis"
 const FEAT_LKS = "lks"
 const FEAT_NTF = "ntf"
 const FEAT_ODC = "odc"
@@ -187,6 +188,7 @@ func CreateAvailableFeatureList() []string {
 	available = append(available, FEAT_API)
 	available = append(available, FEAT_FPS)
 	available = append(available, FEAT_GMD)
+	available = append(available, FEAT_IIS)
 	available = append(available, FEAT_LKS)
 	available = append(available, FEAT_NTF)
 	available = append(available, FEAT_ODC)

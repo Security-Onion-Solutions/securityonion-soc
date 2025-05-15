@@ -1671,3 +1671,293 @@ test('sortBySeverity', () => {
     expect(result).toBe(expected);
   });
 });
+
+test('countDrilldown', () => {
+  comp.filterRouteDrilldown = null;
+
+  let event = {};
+  event.count = 10;
+
+  comp.countDrilldown(event);
+  expect(comp.$router.length).toBe(0);
+  expect(comp.filterRouteDrilldown).toBe(null);
+
+  event.a = 'a';
+
+  let expected = {
+    path: '',
+    query: {
+      el: 100,
+      filterField: 'a',
+      filterMode: 'DRILLDOWN',
+      filterValue: 'a',
+      gl: 10,
+      q: '',
+      rt: 24,
+      rtu: 'hours',
+      z: ''
+    }
+  };
+
+  comp.countDrilldown(event);
+  expect(comp.$router.length).toBe(1);
+  expect(comp.filterRouteDrilldown).toEqual(expected);
+  expect(comp.$router[0]).toStrictEqual(expected);
+
+  comp.$router = [];
+  comp.filterRouteDrilldown = null;
+
+  event.b = 'b';
+
+  comp.countDrilldown(event);
+  expect(comp.$router.length).toBe(0);
+  expect(comp.filterRouteDrilldown).toBe(null);
+
+  event = {};
+  event.count = 10;
+  event["rule.name"] = 'rule_name';
+  event["event.module"] = 'event_module';
+  event["event.severity_label"] = 'event_severity_label';
+  event["rule.uuid"] = 'rule_uuid';
+
+  expected = {
+    path: "",
+    query: {
+      el: 100,
+      filterField: "rule.name",
+      filterMode: "DRILLDOWN",
+      filterValue: "rule_name",
+      gl: 10,
+      q: "",
+      rt: 24,
+      rtu: "hours",
+      z: ""
+    }
+  };
+
+  comp.countDrilldown(event);
+  expect(comp.$router.length).toBe(1);
+  expect(comp.filterRouteDrilldown).toEqual(expected);
+
+  comp.$router = [];
+  comp.filterRouteDrilldown = null;
+
+  event.a = 10;
+
+  comp.countDrilldown(event);
+  expect(comp.$router.length).toBe(0);
+  expect(comp.filterRouteDrilldown).toBe(null);
+});
+
+test('extractSocValues', () => {
+  let obj = {
+    payload: {
+      a: 1,
+      b: 2,
+      c: 3,
+    },
+    id: 'abc',
+    score: 0.947,
+    type: 'type',
+    timestamp: 'now',
+    source: 'network',
+  };
+
+  const expected = {
+    a: 1,
+    b: 2,
+    c: 3,
+    soc_id: 'abc',
+    soc_score: 0.947,
+    soc_type: 'type',
+    soc_timestamp: 'now',
+    soc_source: 'network',
+  };
+
+  let actual = comp.extractSocValues(obj);
+
+  expect(actual).toStrictEqual(expected);
+});
+
+test('getEventField', () => {
+  let event = {
+    a: 1,
+    timestamp: 'now',
+    'event_data.a': 2,
+    'event_data.b': 3,
+  };
+
+  const a = comp.getEventField(event, 'a');
+  const eventdataA = comp.getEventField(event, 'event_data.a');
+  const b = comp.getEventField(event, 'b');
+  const timestamp = comp.getEventField(event, 'timestamp');
+
+  expect(a).toBe(1);
+  expect(eventdataA).toBe(2);
+  expect(b).toBe('');
+  expect(timestamp).toBe('now');
+});
+
+test('buildQuestionRange', () => {
+  const event = {
+    '@timestamp': '2023-10-01T12:00:00Z',
+  };
+
+  comp.zone = 'America/Denver';
+
+  let range = comp.buildQuestionRange(event, '+/-30d');
+  expect(range).toBe('2023/09/01 06:00:00 AM - 2023/10/31 06:00:00 AM');
+
+  range = comp.buildQuestionRange(event, '-15m');
+  expect(range).toBe('2023/10/01 05:45:00 AM - 2023/10/01 06:00:00 AM');
+
+  range = comp.buildQuestionRange(event, '2h');
+  expect(range).toBe('2023/10/01 06:00:00 AM - 2023/10/01 08:00:00 AM');
+
+  range = comp.buildQuestionRange(event, '+/-60s');
+  expect(range).toBe('2023/10/01 05:59:00 AM - 2023/10/01 06:01:00 AM');
+
+  range = comp.buildQuestionRange(event, '');
+  expect(range).toBe('');
+
+  range = comp.buildQuestionRange(event, 'X');
+  expect(range).toBe('');
+
+  range = comp.buildQuestionRange(event, '10p');
+  expect(range).toBe('');
+});
+
+test('sortAggregateEvents', () => {
+  let tests = [
+    [
+      { expectedPos: 1, value: 2 },
+      { expectedPos: 2, value: 1 },
+      { expectedPos: 0, value: 3 },
+    ],
+    [
+      { expectedPos: 2, value: 40 },
+      { expectedPos: 3, value: 30 },
+      { expectedPos: 0, value: 60 },
+      { value: 10 },
+      { expectedPos: 1, value: 50 },
+      { expectedPos: 4, value: 20 },
+    ],
+    [
+      { expectedPos: 0, value: 0 },
+    ],
+  ];
+
+  for (let events of tests) {
+    const sortedEvents = comp.sortAggregateEvents(events);
+
+    if (events.length >= 5) {
+      expect(sortedEvents.length).toBe(5);
+    } else {
+      expect(sortedEvents.length).toBe(events.length);
+    }
+
+    for (let i = 0; i < sortedEvents.length; i++) {
+      expect(sortedEvents[i].expectedPos).toBe(i);
+    }
+  }
+});
+
+test('askQuestion', async () => {
+  comp.$root.enableReverseLookup = true;
+  comp.zone = "Etc/UTC";
+
+  let question = {};
+  let event = {
+    field: 'present',
+    func: function() {}, // not present
+  };
+
+  await comp.askQuestion(question, event);
+
+  expect(question.answers.length).toBe(1);
+  expect('field' in question.answers[0].payload).toBe(true);
+  expect('func' in question.answers[0].payload).toBe(false);
+
+  const mock1 = mockPapi('get', {
+    data: {
+      metrics: {
+        biggest: [
+          {
+            payload: {
+              name: 'metric event',
+              ip: '1.1.1.1',
+            },
+          },
+        ],
+      },
+    },
+  });
+
+  const mock2 = mockPapi('put', {
+    then: function () { },
+  });
+
+  question = {
+    range: '-30d',
+    filledOQL: 'OQL Query',
+    isAggregate: true,
+  };
+  event = {
+    'soc_timestamp': '2023-10-01T12:00:00Z',
+  };
+
+  debugger;
+  await comp.askQuestion(question, event);
+
+  expect(question.answers.length).toBe(1);
+  expect(question.answers[0].payload.name).toBe('metric event');
+  expect('error' in question).toBe(false);
+
+  expect(mock1).toHaveBeenCalledTimes(1);
+  expect(mock1).toHaveBeenCalledWith('events/', {
+    params: {
+      query: 'OQL Query',
+      range: '2023/09/01 12:00:00 PM - 2023/10/01 12:00:00 PM',
+      format: '2006/01/02 3:04:05 PM',
+      zone: 'Etc/UTC',
+      metricLimit: 5,
+      eventLimit: 5,
+    },
+  });
+
+  expect(mock2).toHaveBeenCalledTimes(1);
+  expect(mock2).toHaveBeenCalledWith('util/reverse-lookup', ['1.1.1.1'], {params: {gridId: ''}});
+
+  resetPapi();
+  const mock3 = mockPapi('get', null, new Error('something went wrong'));
+
+  question = {
+    range: '-30d',
+    filledOQL: 'OQL Query',
+    isAggregate: false,
+  };
+  event = {
+    'soc_timestamp': '2023-10-01T12:00:00Z',
+  };
+
+  await comp.askQuestion(question, event);
+
+  expect(question.answers.length).toBe(0);
+  expect('error' in question).toBe(true);
+  expect(question.error).toBe(true);
+
+  expect(mock3).toHaveBeenCalledTimes(1);
+  expect(mock3).toHaveBeenCalledWith('events/', {
+    params: {
+      query: 'OQL Query | sortby @timestamp',
+      range: '2023/09/01 12:00:00 PM - 2023/10/01 12:00:00 PM',
+      format: '2006/01/02 3:04:05 PM',
+      zone: 'Etc/UTC',
+      metricLimit: 5,
+      eventLimit: 5,
+    },
+  });
+
+  comp.$root.enableReverseLookup = false;
+  resetPapi();
+});

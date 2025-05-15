@@ -697,7 +697,7 @@ test('isAttentionNeeded', () => {
       unhealthyNodeCount: 0,
     },
   };
-  
+
   expect(app.isAttentionNeeded()).toBe(false);
 
   // Attention when unable to connect to server

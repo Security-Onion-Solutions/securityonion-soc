@@ -646,7 +646,7 @@ td {
   vertical-align: middle;
 }
 
-.detection-tab-icon {
+.tab-icon {
   margin-right: 8px;
   vertical-align: baseline;
 }
@@ -1007,4 +1007,40 @@ ul ul ul {
 
 .v-messages__message {
   max-height: 36px;
+}
+
+.ws-normal {
+  white-space: normal;
+}
+
+.spacious-lines {
+  line-height: 1.5;
+}
+
+.simple-table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  border: 1px solid rgba(var(--v-theme-text), 0.12);
+  margin-top: 8px;
+  margin-bottom: 8px;
+  padding-right: 8px;
+}
+
+.simple-table th, .simple-table td {
+  cursor: default;
+  border: 1px solid rgba(var(--v-theme-text), 0.12);
+  padding: 10px;
+}
+
+.simple-table td {
+  font-weight: bolder;
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.text-normal {
+  font-weight: unset !important;
+  font-style: unset !important;
 }
