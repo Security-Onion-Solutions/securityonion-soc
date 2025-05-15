@@ -596,22 +596,22 @@ func TestGetPlaybooksForDetection(t *testing.T) {
 
 	ctx := context.Background()
 
-	playbooks, err := pdm.GetPlaybooksForDetection(ctx, "1182f3b3-e716-4efa-99ab-d2685d04360f", "web_request", "sigma")
+	playbooks, err := pdm.GetPlaybooksForDetection(ctx, "1182f3b3-e716-4efa-99ab-d2685d04360f", "web_request", model.EngineNameElastAlert)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(playbooks))
 	assert.Equal(t, "6f64990a-acda-40b6-ab71-134c073013b5", playbooks[0].Id)
 
-	playbooks, err = pdm.GetPlaybooksForDetection(ctx, "abc", "process_creation", "sigma")
+	playbooks, err = pdm.GetPlaybooksForDetection(ctx, "abc", "process_creation", model.EngineNameElastAlert)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(playbooks))
 	assert.Equal(t, "4f1db62f-cb41-41fb-8af3-11a67585b5db", playbooks[0].Id)
 
-	playbooks, err = pdm.GetPlaybooksForDetection(ctx, "abc", "network_access", "suricata")
+	playbooks, err = pdm.GetPlaybooksForDetection(ctx, "abc", "network_access", model.EngineNameSuricata)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(playbooks))
 	assert.Equal(t, "1dfe7517-f105-454f-ae96-f2280c09e4b2", playbooks[0].Id)
 
-	playbooks, err = pdm.GetPlaybooksForDetection(ctx, "1182f3b3-e716-4efa-99ab-d2685d04360f", "process_creation", "suricata")
+	playbooks, err = pdm.GetPlaybooksForDetection(ctx, "1182F3B3-E716-4EFA-99AB-D2685D04360F", "PROCESS_CREATION", model.EngineNameSuricata)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(playbooks))
 	assert.Equal(t, "6f64990a-acda-40b6-ab71-134c073013b5", playbooks[0].Id)
