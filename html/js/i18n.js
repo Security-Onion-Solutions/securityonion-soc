@@ -449,6 +449,7 @@ const i18n = {
       expandHelp: 'Expand and show detailed data',
       expired: 'Expired',
       extract: 'Extract',
+      iis: 'Instant Insight (Playbooks)',
       incomplete: 'Incomplete',
       invalidHours: 'Hours are not valid. Ex: 1.5',
       ipVar: 'IP/Var',

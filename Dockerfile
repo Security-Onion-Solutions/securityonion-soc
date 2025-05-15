@@ -46,6 +46,7 @@ ADD dep/pysigma_backend_securityonion-0.1.0-py3-none-any.whl /tmp
 RUN pip3 install /tmp/pysigma_backend_securityonion-0.1.0-py3-none-any.whl
 RUN pip3 install yara-python==4.3.1
 RUN apt-get -y remove gcc python3-dev libssl-dev && apt-get -y autoremove
+RUN rm /tmp/pysigma_backend_securityonion-0.1.0-py3-none-any.whl
 
 RUN update-ca-certificates
 RUN addgroup --gid "$GID" socore
