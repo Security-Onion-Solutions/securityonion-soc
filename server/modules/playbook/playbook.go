@@ -354,6 +354,9 @@ func (pdm *PlaybookDiskManager) organizePlaybooks(logger log.Interface, playbook
 func (pdm *PlaybookDiskManager) GetPlaybooksForDetection(ctx context.Context, publicId string, detectCategory string, detectEngine model.EngineName) ([]*model.Playbook, error) {
 	logger := log.FromContext(ctx)
 
+	publicId = strings.ToLower(publicId)
+	detectCategory = strings.ToLower(detectCategory)
+
 	pdm.pbUpdateMutex.RLock()
 	defer pdm.pbUpdateMutex.RUnlock()
 
