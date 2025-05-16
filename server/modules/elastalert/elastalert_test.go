@@ -1584,11 +1584,11 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 	// UpdateRepos
 	iom.EXPECT().ReadDir("repos").Return([]fs.DirEntry{
 		&handmock.MockDirEntry{
-			Filename: "repo",
+			Filename: "b719fba9ee6de8ff3c66a089489f99c1bc6d18d009240dc02218b826ee04db4c",
 			Dir:      true,
 		},
 	}, nil)
-	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo", nil).Return(false, false, false)
+	iom.EXPECT().PullRepo(gomock.Any(), "repos/b719fba9ee6de8ff3c66a089489f99c1bc6d18d009240dc02218b826ee04db4c", nil).Return(false, false, false)
 	// check for changes before sync
 	iom.EXPECT().ReadFile("rulesFingerprintFile").Return([]byte(`{"core+": "GwJvQmt07Ma9kvq2D8bpbQfXW+IRe0nN4fITj9Ghxis="}`), nil)
 	// WriteStateFile
@@ -1712,13 +1712,13 @@ func TestSyncChanges(t *testing.T) {
 	// UpdateRepos
 	iom.EXPECT().ReadDir("repos").Return([]fs.DirEntry{
 		&handmock.MockDirEntry{
-			Filename: "repo",
+			Filename: "b719fba9ee6de8ff3c66a089489f99c1bc6d18d009240dc02218b826ee04db4c",
 			Dir:      true,
 		},
 	}, nil)
-	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo", nil).Return(false, false, false)
+	iom.EXPECT().PullRepo(gomock.Any(), "repos/b719fba9ee6de8ff3c66a089489f99c1bc6d18d009240dc02218b826ee04db4c", nil).Return(false, false, false)
 	// parseRepoRules
-	iom.EXPECT().WalkDir("repos/repo", gomock.Any()).DoAndReturn(func(path string, fn fs.WalkDirFunc) error {
+	iom.EXPECT().WalkDir("repos/b719fba9ee6de8ff3c66a089489f99c1bc6d18d009240dc02218b826ee04db4c", gomock.Any()).DoAndReturn(func(path string, fn fs.WalkDirFunc) error {
 		files := []fs.DirEntry{
 			&handmock.MockDirEntry{
 				Filename: "rules/123.yml",
@@ -1918,13 +1918,13 @@ func TestSyncUnchangedOverrides(t *testing.T) {
 	// UpdateRepos
 	iom.EXPECT().ReadDir("repos").Return([]fs.DirEntry{
 		&handmock.MockDirEntry{
-			Filename: "repo",
+			Filename: "b719fba9ee6de8ff3c66a089489f99c1bc6d18d009240dc02218b826ee04db4c",
 			Dir:      true,
 		},
 	}, nil)
-	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo", nil).Return(false, false, false)
+	iom.EXPECT().PullRepo(gomock.Any(), "repos/b719fba9ee6de8ff3c66a089489f99c1bc6d18d009240dc02218b826ee04db4c", nil).Return(false, false, false)
 	// parseRepoRules
-	iom.EXPECT().WalkDir("repos/repo", gomock.Any()).DoAndReturn(func(path string, fn fs.WalkDirFunc) error {
+	iom.EXPECT().WalkDir("repos/b719fba9ee6de8ff3c66a089489f99c1bc6d18d009240dc02218b826ee04db4c", gomock.Any()).DoAndReturn(func(path string, fn fs.WalkDirFunc) error {
 		files := []fs.DirEntry{
 			&handmock.MockDirEntry{
 				Filename: "rules/123.yml",

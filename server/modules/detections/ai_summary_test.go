@@ -35,7 +35,7 @@ func TestRefreshAiSummaries(t *testing.T) {
 
 	// No calls to iom.PullRepo/iom.CloneRepo should be made
 	loader.EXPECT().IsAirgapped().Return(true)
-	iom.EXPECT().ReadFile("baseRepoFolder/repo1/detections-ai/sigma_summaries.yaml").Return([]byte(summaries), nil)
+	iom.EXPECT().ReadFile("baseRepoFolder/873c64018dc10d5a0658a4b3905e1cf4f31c8349418abc6bf40b1bc8c019df41/detections-ai/sigma_summaries.yaml").Return([]byte(summaries), nil)
 	loader.EXPECT().LoadAuxiliaryData(gomock.Any()).DoAndReturn(func(sums []*model.AiSummary) error {
 		expected := []*model.AiSummary{
 			{
@@ -89,8 +89,8 @@ func TestRefreshAiSummaries(t *testing.T) {
 	// non-Airgapped test
 	loader.EXPECT().IsAirgapped().Return(false)
 	iom.EXPECT().ReadDir("baseRepoFolder").Return([]fs.DirEntry{}, nil)
-	iom.EXPECT().CloneRepo(gomock.Any(), "baseRepoFolder/repo2", repo, &branch).Return(nil)
-	iom.EXPECT().ReadFile("baseRepoFolder/repo2/detections-ai/sigma_summaries.yaml").Return([]byte(summaries), nil)
+	iom.EXPECT().CloneRepo(gomock.Any(), "baseRepoFolder/bf8fb6b1214693731c049b7b1b2822c7831a4bcfd5530e24ddb5e7153ca54c4e", repo, &branch).Return(nil)
+	iom.EXPECT().ReadFile("baseRepoFolder/bf8fb6b1214693731c049b7b1b2822c7831a4bcfd5530e24ddb5e7153ca54c4e/detections-ai/sigma_summaries.yaml").Return([]byte(summaries), nil)
 	loader.EXPECT().LoadAuxiliaryData(gomock.Any()).DoAndReturn(func(sums []*model.AiSummary) error {
 		expected := []*model.AiSummary{
 			{
