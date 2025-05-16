@@ -95,8 +95,10 @@ func (h *PlaybookHandler) GetPlaybooksForDetection(w http.ResponseWriter, r *htt
 		return
 	}
 
-	eng, ok := h.server.DetectionEngines[det.Engine]
+	engInt, ok := h.server.DetectionEngines.Load(det.Engine)
 	if ok {
+		eng := engInt.(DetectionEngine)
+
 		err = eng.ExtractDetails(det)
 		if err != nil {
 			logger.WithError(err).WithFields(log.Fields{
