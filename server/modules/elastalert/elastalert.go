@@ -314,7 +314,7 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 }
 
 func (e *ElastAlertEngine) Start() error {
-	e.srv.DetectionEngines[model.EngineNameElastAlert] = e
+	e.srv.DetectionEngines.Store(model.EngineNameElastAlert, e)
 	e.isRunning = true
 	e.IntegrityCheckerData.IsRunning = true
 

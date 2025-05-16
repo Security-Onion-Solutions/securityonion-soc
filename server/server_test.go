@@ -8,12 +8,12 @@ package server_test
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
-	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/rbac"
 	. "github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/mock"
@@ -53,7 +53,7 @@ func NewMockServer(t *testing.T, ctrl *gomock.Controller, cfg *config.ServerConf
 		Authorizer:       &rbac.FakeAuthorizer{},
 		Agent:            nil,
 		Context:          context.Background(),
-		DetectionEngines: map[model.EngineName]DetectionEngine{},
+		DetectionEngines: sync.Map{}, // map[model.EngineName]DetectionEngine{},
 	}
 
 	return srv

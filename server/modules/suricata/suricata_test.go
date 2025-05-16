@@ -59,7 +59,7 @@ func emptySettings() []*model.Setting {
 
 func TestSuricataModule(t *testing.T) {
 	srv := &server.Server{
-		DetectionEngines: map[model.EngineName]server.DetectionEngine{},
+		DetectionEngines: sync.Map{}, // map[model.EngineName]server.DetectionEngine{},
 	}
 	mod := NewSuricataEngine(srv)
 
@@ -79,8 +79,16 @@ func TestSuricataModule(t *testing.T) {
 	err = mod.Stop()
 	assert.NoError(t, err)
 
-	assert.Equal(t, 1, len(srv.DetectionEngines))
-	assert.Same(t, mod, srv.DetectionEngines[model.EngineNameSuricata])
+	count := 0
+	srv.DetectionEngines.Range(func(k, v interface{}) bool {
+		count++
+		return true
+	})
+	assert.Equal(t, 1, count)
+
+	m, ok := srv.DetectionEngines.Load(model.EngineNameSuricata)
+	assert.True(t, ok)
+	assert.Same(t, mod, m)
 }
 
 func TestSettingByID(t *testing.T) {
@@ -875,9 +883,9 @@ func TestSyncLocalSuricata(t *testing.T) {
 			mCfgStore := server.NewMemConfigStore(test.InitialSettings)
 			mod := NewSuricataEngine(&server.Server{
 				Configstore:      mCfgStore,
-				DetectionEngines: map[model.EngineName]server.DetectionEngine{},
+				DetectionEngines: sync.Map{}, // map[model.EngineName]server.DetectionEngine{},
 			})
-			mod.srv.DetectionEngines[model.EngineNameSuricata] = mod
+			mod.srv.DetectionEngines.Store(model.EngineNameSuricata, mod)
 
 			mod.isRunning = true
 
@@ -1099,10 +1107,10 @@ func TestSyncCommunitySuricata(t *testing.T) {
 			mCfgStore := server.NewMemConfigStore(test.InitialSettings)
 			mod := NewSuricataEngine(&server.Server{
 				Configstore:      mCfgStore,
-				DetectionEngines: map[model.EngineName]server.DetectionEngine{},
+				DetectionEngines: sync.Map{}, // map[model.EngineName]server.DetectionEngine{},
 				Detectionstore:   detStore,
 			})
-			mod.srv.DetectionEngines[model.EngineNameSuricata] = mod
+			mod.srv.DetectionEngines.Store(model.EngineNameSuricata, mod)
 
 			mod.isRunning = true
 

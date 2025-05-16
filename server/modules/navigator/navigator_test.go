@@ -11,6 +11,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -78,7 +79,7 @@ func setupTest(t *testing.T) *testSetup {
 
 	srv := &server.Server{
 		Context:          context.Background(),
-		DetectionEngines: map[model.EngineName]server.DetectionEngine{},
+		DetectionEngines: sync.Map{}, // map[model.EngineName]server.DetectionEngine{},
 		Detectionstore:   mockDetectionstore,
 		Eventstore:       fakeEventstore,
 	}

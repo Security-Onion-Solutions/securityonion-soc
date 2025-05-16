@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -231,7 +232,7 @@ rule ExtractableRule {
 
 func TestStrelkaModule(t *testing.T) {
 	srv := &server.Server{
-		DetectionEngines: map[model.EngineName]server.DetectionEngine{},
+		DetectionEngines: sync.Map{}, // map[model.EngineName]server.DetectionEngine{},
 	}
 	mod := NewStrelkaEngine(srv)
 
@@ -251,8 +252,16 @@ func TestStrelkaModule(t *testing.T) {
 	err = mod.Stop()
 	assert.NoError(t, err)
 
-	assert.Equal(t, 1, len(srv.DetectionEngines))
-	assert.Same(t, mod, srv.DetectionEngines[model.EngineNameStrelka])
+	count := 0
+	srv.DetectionEngines.Range(func(_, _ any) bool {
+		count++
+		return true
+	})
+	assert.Equal(t, 1, count)
+
+	m, ok := srv.DetectionEngines.Load(model.EngineNameStrelka)
+	assert.True(t, ok)
+	assert.Same(t, mod, m)
 }
 
 func TestCheckAutoEnabledYaraRule(t *testing.T) {
@@ -340,11 +349,11 @@ func TestSyncStrelka(t *testing.T) {
 			iom := mock.NewMockIOManager(ctrl)
 
 			mod := NewStrelkaEngine(&server.Server{
-				DetectionEngines: map[model.EngineName]server.DetectionEngine{},
+				DetectionEngines: sync.Map{}, // map[model.EngineName]server.DetectionEngine{},
 				Detectionstore:   mockDetStore,
 			})
 			mod.isRunning = true
-			mod.srv.DetectionEngines[model.EngineNameSuricata] = mod
+			mod.srv.DetectionEngines.Store(model.EngineNameSuricata, mod)
 			mod.IOManager = iom
 
 			mod.compileYaraPythonScriptPath = "compileYaraPythonScriptPath"

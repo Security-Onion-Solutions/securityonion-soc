@@ -121,13 +121,15 @@ func (h *DetectionHandler) GetDetection(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	eng, ok := h.server.DetectionEngines[detect.Engine]
+	engInt, ok := h.server.DetectionEngines.Load(detect.Engine)
 	if !ok {
 		logger.WithFields(log.Fields{
 			"detectionEngine":   detect.Engine,
 			"detectionPublicId": detectId,
 		}).Error("retrieved detection with unsupported engine")
 	} else {
+		eng := engInt.(DetectionEngine)
+
 		err = eng.MergeAuxiliaryData(detect)
 		if err != nil {
 			logger.WithError(err).WithFields(log.Fields{
@@ -173,13 +175,15 @@ func (h *DetectionHandler) GetByPublicId(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	eng, ok := h.server.DetectionEngines[detect.Engine]
+	engInt, ok := h.server.DetectionEngines.Load(detect.Engine)
 	if !ok {
 		logger.WithFields(log.Fields{
 			"detectionEngine":   detect.Engine,
 			"detectionPublicId": publicId,
 		}).Error("retrieved detection with unsupported engine")
 	} else {
+		eng := engInt.(DetectionEngine)
+
 		err = eng.MergeAuxiliaryData(detect)
 		if err != nil {
 			logger.WithError(err).WithFields(log.Fields{
@@ -245,11 +249,13 @@ func (h *DetectionHandler) CreateDetection(w http.ResponseWriter, r *http.Reques
 		detect.Engine = model.EngineNameSuricata
 	}
 
-	engine, ok := h.server.DetectionEngines[detect.Engine]
+	engInt, ok := h.server.DetectionEngines.Load(detect.Engine)
 	if !ok {
 		web.Respond(w, r, http.StatusBadRequest, errors.New("unsupported engine"))
 		return
 	}
+
+	engine := engInt.(DetectionEngine)
 
 	_, err = engine.ValidateRule(detect.Content)
 	if err != nil {
@@ -368,11 +374,13 @@ func (h *DetectionHandler) DuplicateDetection(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	eng, ok := h.server.DetectionEngines[detect.Engine]
+	engInt, ok := h.server.DetectionEngines.Load(detect.Engine)
 	if !ok {
 		web.Respond(w, r, http.StatusBadRequest, errors.New("unsupported engine"))
 		return
 	}
+
+	eng := engInt.(DetectionEngine)
 
 	dupe, err := eng.DuplicateDetection(ctx, detect)
 	if err != nil {
@@ -422,11 +430,13 @@ func (h *DetectionHandler) UpdateDetection(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	eng, ok := h.server.DetectionEngines[detect.Engine]
+	engInt, ok := h.server.DetectionEngines.Load(detect.Engine)
 	if !ok {
 		web.Respond(w, r, http.StatusBadRequest, errors.New("unsupported engine"))
 		return
 	}
+
+	eng := engInt.(DetectionEngine)
 
 	_, err = eng.ValidateRule(detect.Content)
 	if err != nil {
@@ -808,7 +818,7 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 		detect := detects[i]
 		id := detect.Id
 
-		engine, ok := h.server.DetectionEngines[detect.Engine]
+		engineInt, ok := h.server.DetectionEngines.Load(detect.Engine)
 		if !ok {
 			logger.WithFields(log.Fields{
 				"publicId": detect.PublicID,
@@ -818,6 +828,8 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 
 			continue
 		}
+
+		engine := engineInt.(DetectionEngine)
 
 		if !body.Delete {
 			detect.IsEnabled = body.NewStatus
@@ -1004,19 +1016,26 @@ func syncLocalDetections(ctx context.Context, srv *Server, detections []*model.D
 		byEngine[detect.Engine] = append(byEngine[detect.Engine], detect)
 	}
 
-	for name, engine := range srv.DetectionEngines {
+	srv.DetectionEngines.Range(func(n, engineInt interface{}) bool {
+		name := n.(model.EngineName)
+		engine := engineInt.(DetectionEngine)
+
 		if len(byEngine[name]) != 0 {
-			eMap, err := engine.SyncLocalDetections(ctx, byEngine[name])
+			var eMap map[string]string
+
+			eMap, err = engine.SyncLocalDetections(ctx, byEngine[name])
 			for sid, e := range eMap {
 				errMap[sid] = e
 			}
 			if err != nil {
-				return errMap, err
+				return false
 			}
 		}
-	}
 
-	return errMap, nil
+		return true
+	})
+
+	return errMap, err
 }
 
 // @Summary      Create Detection Comment
@@ -1211,7 +1230,10 @@ func (h *DetectionHandler) ConvertContent(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	eaQuery, err := h.server.DetectionEngines[model.EngineNameElastAlert].ConvertRule(ctx, det)
+	engInt, _ := h.server.DetectionEngines.Load(model.EngineNameElastAlert)
+	eng := engInt.(DetectionEngine)
+
+	eaQuery, err := eng.ConvertRule(ctx, det)
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
@@ -1247,15 +1269,20 @@ func (h *DetectionHandler) SyncEngineDetections(w http.ResponseWriter, r *http.R
 	fullUpgrade := typ == "full"
 
 	if engine == "all" {
-		for _, engine := range h.server.DetectionEngines {
-			engine.InterruptSync(fullUpgrade, true)
-		}
+		h.server.DetectionEngines.Range(func(_, engineInt interface{}) bool {
+			eng := engineInt.(DetectionEngine)
+			eng.InterruptSync(fullUpgrade, true)
+
+			return true
+		})
 	} else {
-		engine, ok := h.server.DetectionEngines[model.EngineName(engine)]
+		engInt, ok := h.server.DetectionEngines.Load(model.EngineName(engine))
 		if !ok {
 			web.Respond(w, r, http.StatusBadRequest, errors.New("unknown engine"))
 			return
 		}
+
+		engine := engInt.(DetectionEngine)
 
 		engine.InterruptSync(fullUpgrade, true)
 	}
@@ -1280,11 +1307,13 @@ func (h *DetectionHandler) GenPublicId(w http.ResponseWriter, r *http.Request) {
 
 	engine := chi.URLParam(r, "engine")
 
-	eng, ok := h.server.DetectionEngines[model.EngineName(engine)]
+	engInt, ok := h.server.DetectionEngines.Load(model.EngineName(engine))
 	if !ok {
 		web.Respond(w, r, http.StatusBadRequest, errors.New("unsupported engine"))
 		return
 	}
+
+	eng := engInt.(DetectionEngine)
 
 	id, err := eng.GenerateUnusedPublicId(ctx)
 	if err != nil {

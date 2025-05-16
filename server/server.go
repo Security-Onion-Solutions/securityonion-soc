@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os/exec"
 	"strings"
+	"sync"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/security-onion-solutions/securityonion-soc/config"
@@ -44,7 +45,7 @@ type Server struct {
 	Agent            *model.User
 	Context          context.Context
 	Playbookstore    Playbookstore
-	DetectionEngines map[model.EngineName]DetectionEngine
+	DetectionEngines sync.Map // map[model.EngineName]DetectionEngine
 	ApiRouter        *chi.Mux
 	Statusstore      Statusstore
 }
@@ -54,7 +55,7 @@ func NewServer(cfg *config.ServerConfig, version string) *Server {
 		Config:           cfg,
 		Host:             web.NewHost(cfg.BindAddress, cfg.HtmlDir, cfg.IdleConnectionTimeoutMs, version, cfg.SrvKeyBytes),
 		stoppedChan:      make(chan bool, 1),
-		DetectionEngines: map[model.EngineName]DetectionEngine{},
+		DetectionEngines: sync.Map{},
 	}
 	server.initContext()
 

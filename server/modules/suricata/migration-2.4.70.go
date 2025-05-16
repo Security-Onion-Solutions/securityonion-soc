@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/server"
 
 	"github.com/apex/log"
 	"gopkg.in/yaml.v3"
@@ -117,7 +118,10 @@ func (e *SuricataEngine) Migration2470(statePath string) error {
 	}
 
 	// sync suricata
-	errMap, err := e.srv.DetectionEngines[model.EngineNameSuricata].SyncLocalDetections(ctx, dirtyDets)
+	engInt, _ := e.srv.DetectionEngines.Load(model.EngineNameSuricata)
+	eng := engInt.(server.DetectionEngine)
+
+	errMap, err := eng.SyncLocalDetections(ctx, dirtyDets)
 	if err != nil {
 		return err
 	}
