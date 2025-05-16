@@ -509,20 +509,20 @@ func TestScheduler(t *testing.T) {
 	}
 
 	iom.EXPECT().ReadDir(pdm.playbookRepoPath).Return(nil, nil)
-	iom.EXPECT().CloneRepo(gomock.Any(), "/tmp/playbooks/repo", pdm.playbookRepoUrl, util.Ptr(pdm.playbookRepoBranch)).Return(nil)
+	iom.EXPECT().CloneRepo(gomock.Any(), "/tmp/playbooks/213223d988fe94c66416393b51671aa9f3b96eb06bc771e5d9435b29edf9e47e", pdm.playbookRepoUrl, util.Ptr(pdm.playbookRepoBranch)).Return(nil)
 
-	iom.EXPECT().WalkDir("/tmp/playbooks/repo", gomock.Any()).DoAndReturn(func(path string, fn func(p string, dir fs.DirEntry, err error) error) error {
-		err := fn("/tmp/playbooks/repo/playbook1.yaml", &handmock.MockDirEntry{
+	iom.EXPECT().WalkDir("/tmp/playbooks/213223d988fe94c66416393b51671aa9f3b96eb06bc771e5d9435b29edf9e47e", gomock.Any()).DoAndReturn(func(path string, fn func(p string, dir fs.DirEntry, err error) error) error {
+		err := fn("/tmp/playbooks/213223d988fe94c66416393b51671aa9f3b96eb06bc771e5d9435b29edf9e47e/playbook1.yaml", &handmock.MockDirEntry{
 			Filename: "playbook1.yaml",
 		}, nil)
 		assert.NoError(t, err)
 
-		err = fn("/tmp/playbooks/repo/playbook2.yaml", &handmock.MockDirEntry{
+		err = fn("/tmp/playbooks/213223d988fe94c66416393b51671aa9f3b96eb06bc771e5d9435b29edf9e47e/playbook2.yaml", &handmock.MockDirEntry{
 			Filename: "playbook2.yaml",
 		}, nil)
 		assert.NoError(t, err)
 
-		err = fn("/tmp/playbooks/repo/playbook3.yaml", &handmock.MockDirEntry{
+		err = fn("/tmp/playbooks/213223d988fe94c66416393b51671aa9f3b96eb06bc771e5d9435b29edf9e47e/playbook3.yaml", &handmock.MockDirEntry{
 			Filename: "playbook3.yaml",
 		}, nil)
 		assert.NoError(t, err)
@@ -530,9 +530,9 @@ func TestScheduler(t *testing.T) {
 		return nil
 	})
 
-	iom.EXPECT().ReadFile("/tmp/playbooks/repo/playbook1.yaml").Return([]byte(SuricataPlaybook), nil)
-	iom.EXPECT().ReadFile("/tmp/playbooks/repo/playbook2.yaml").Return([]byte(HistoryFileDeletionPlaybook), nil)
-	iom.EXPECT().ReadFile("/tmp/playbooks/repo/playbook3.yaml").Return([]byte(ProcessCreationPlaybook), nil)
+	iom.EXPECT().ReadFile("/tmp/playbooks/213223d988fe94c66416393b51671aa9f3b96eb06bc771e5d9435b29edf9e47e/playbook1.yaml").Return([]byte(SuricataPlaybook), nil)
+	iom.EXPECT().ReadFile("/tmp/playbooks/213223d988fe94c66416393b51671aa9f3b96eb06bc771e5d9435b29edf9e47e/playbook2.yaml").Return([]byte(HistoryFileDeletionPlaybook), nil)
+	iom.EXPECT().ReadFile("/tmp/playbooks/213223d988fe94c66416393b51671aa9f3b96eb06bc771e5d9435b29edf9e47e/playbook3.yaml").Return([]byte(ProcessCreationPlaybook), nil)
 
 	iom.EXPECT().ReadDir(pdm.playbookRepoPath).DoAndReturn(func(path string) ([]fs.DirEntry, error) {
 		pdm.isRunning = false
