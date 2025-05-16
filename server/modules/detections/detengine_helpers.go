@@ -7,12 +7,11 @@ package detections
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -127,10 +126,14 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 			return nil, false, ErrModuleStopped
 		}
 
-		h := sha256.Sum256([]byte(repo.Repo))
+		parser, err := url.Parse(repo.Repo)
+		if err != nil {
+			log.WithError(err).WithField("repoUrl", repo.Repo).Error("Failed to parse repo URL, doing nothing with it")
+			continue
+		}
 
-		folderName := hex.EncodeToString(h[:])
-		repoPath := filepath.Join(baseRepoFolder, folderName)
+		_, lastFolder := path.Split(parser.Path)
+		repoPath := filepath.Join(baseRepoFolder, lastFolder)
 
 		dirty := &RepoOnDisk{
 			Repo: repo,
@@ -140,7 +143,7 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 		reclone := false
 		skipRepo := false
 
-		_, ok := existingRepos[folderName]
+		_, ok := existingRepos[lastFolder]
 		if ok {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
 			defer cancel()
@@ -158,7 +161,7 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 				anythingNew = true
 			}
 
-			delete(existingRepos, folderName)
+			delete(existingRepos, lastFolder)
 		}
 
 		if reclone {

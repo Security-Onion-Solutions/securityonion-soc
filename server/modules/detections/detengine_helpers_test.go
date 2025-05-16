@@ -347,17 +347,17 @@ func TestUpdateRepos(t *testing.T) {
 	iom := mock.NewMockIOManager(ctrl)
 	iom.EXPECT().ReadDir("baseRepoFolder").Return([]fs.DirEntry{
 		&handmock.MockDirEntry{
-			Filename: "9f9f0b566520a18e7754f06a0e5359cfa390726dbc0cf8383aad2d88b9f5db07",
+			Filename: "repo1",
 			Dir:      true,
 		},
 		&handmock.MockDirEntry{
-			Filename: "8adef80777f0755badbefb8313d1cdd93fc3c3fd50a4bebf0de289b5a3a93bac",
+			Filename: "repo3",
 			Dir:      true,
 		},
 	}, nil)
-	iom.EXPECT().PullRepo(gomock.Any(), "baseRepoFolder/9f9f0b566520a18e7754f06a0e5359cfa390726dbc0cf8383aad2d88b9f5db07", nil).Return(false, false, false)
-	iom.EXPECT().CloneRepo(gomock.Any(), "baseRepoFolder/bf8fb6b1214693731c049b7b1b2822c7831a4bcfd5530e24ddb5e7153ca54c4e", "http://github.com/user/repo2", &branch).Return(nil)
-	iom.EXPECT().RemoveAll("baseRepoFolder/8adef80777f0755badbefb8313d1cdd93fc3c3fd50a4bebf0de289b5a3a93bac").Return(nil)
+	iom.EXPECT().PullRepo(gomock.Any(), "baseRepoFolder/repo1", nil).Return(false, false, false)
+	iom.EXPECT().CloneRepo(gomock.Any(), "baseRepoFolder/repo2", "http://github.com/user/repo2", &branch).Return(nil)
+	iom.EXPECT().RemoveAll("baseRepoFolder/repo3").Return(nil)
 
 	isRunning := true
 
@@ -376,11 +376,11 @@ func TestUpdateRepos(t *testing.T) {
 	assert.Len(t, allRepos, len(repos))
 	assert.Equal(t, &RepoOnDisk{
 		Repo: repos[0],
-		Path: "baseRepoFolder/9f9f0b566520a18e7754f06a0e5359cfa390726dbc0cf8383aad2d88b9f5db07",
+		Path: "baseRepoFolder/repo1",
 	}, allRepos[0])
 	assert.Equal(t, &RepoOnDisk{
 		Repo:        repos[1],
-		Path:        "baseRepoFolder/bf8fb6b1214693731c049b7b1b2822c7831a4bcfd5530e24ddb5e7153ca54c4e",
+		Path:        "baseRepoFolder/repo2",
 		WasModified: true,
 	}, allRepos[1])
 	assert.True(t, anythingNew)
@@ -395,15 +395,15 @@ func TestUpdateReposFailToClone(t *testing.T) {
 	iom := mock.NewMockIOManager(ctrl)
 	iom.EXPECT().ReadDir("baseRepoFolder").Return([]fs.DirEntry{
 		&handmock.MockDirEntry{
-			Filename: "9f9f0b566520a18e7754f06a0e5359cfa390726dbc0cf8383aad2d88b9f5db07",
+			Filename: "repo1",
 			Dir:      true,
 		},
 		&handmock.MockDirEntry{
-			Filename: "8adef80777f0755badbefb8313d1cdd93fc3c3fd50a4bebf0de289b5a3a93bac",
+			Filename: "repo3",
 			Dir:      true,
 		},
 	}, nil)
-	iom.EXPECT().CloneRepo(gomock.Any(), "baseRepoFolder/bf8fb6b1214693731c049b7b1b2822c7831a4bcfd5530e24ddb5e7153ca54c4e", "http://github.com/user/repo2", &branch).Return(errors.New("unexpected error"))
+	iom.EXPECT().CloneRepo(gomock.Any(), "baseRepoFolder/repo2", "http://github.com/user/repo2", &branch).Return(errors.New("unexpected error"))
 
 	isRunning := true
 
@@ -432,13 +432,13 @@ func TestUpdateReposAllowedRepoErrors(t *testing.T) {
 	iom := mock.NewMockIOManager(ctrl)
 	iom.EXPECT().ReadDir("baseRepoFolder").Return([]fs.DirEntry{
 		&handmock.MockDirEntry{
-			Filename: "9f9f0b566520a18e7754f06a0e5359cfa390726dbc0cf8383aad2d88b9f5db07",
+			Filename: "repo1",
 			Dir:      true,
 		},
 	}, nil)
-	iom.EXPECT().PullRepo(gomock.Any(), "baseRepoFolder/9f9f0b566520a18e7754f06a0e5359cfa390726dbc0cf8383aad2d88b9f5db07", &branch).Return(true, false, false)
-	iom.EXPECT().CloneRepo(gomock.Any(), "baseRepoFolder/bf8fb6b1214693731c049b7b1b2822c7831a4bcfd5530e24ddb5e7153ca54c4e", "http://github.com/user/repo2", nil).Return(transport.ErrEmptyRemoteRepository)
-	iom.EXPECT().CloneRepo(gomock.Any(), "baseRepoFolder/accd1a60dae04a7debe8cb75b0744a0cc62a10a280e8bf1badfa0eaa803d0955", "file:///nsm/rules/repo3", nil).Return(transport.ErrRepositoryNotFound)
+	iom.EXPECT().PullRepo(gomock.Any(), "baseRepoFolder/repo1", &branch).Return(true, false, false)
+	iom.EXPECT().CloneRepo(gomock.Any(), "baseRepoFolder/repo2", "http://github.com/user/repo2", nil).Return(transport.ErrEmptyRemoteRepository)
+	iom.EXPECT().CloneRepo(gomock.Any(), "baseRepoFolder/repo3", "file:///nsm/rules/repo3", nil).Return(transport.ErrRepositoryNotFound)
 
 	isRunning := true
 
@@ -460,7 +460,7 @@ func TestUpdateReposAllowedRepoErrors(t *testing.T) {
 	assert.Len(t, allRepos, 1)
 	assert.Equal(t, &RepoOnDisk{
 		Repo:        repos[0],
-		Path:        "baseRepoFolder/9f9f0b566520a18e7754f06a0e5359cfa390726dbc0cf8383aad2d88b9f5db07",
+		Path:        "baseRepoFolder/repo1",
 		WasModified: true,
 	}, allRepos[0])
 	assert.True(t, anythingNew)
@@ -476,12 +476,12 @@ func TestUpdateReposRepoRemoteGoneError(t *testing.T) {
 	// 1. repo has been cloned before and exists on disk
 	iom.EXPECT().ReadDir("baseRepoFolder").Return([]fs.DirEntry{
 		&handmock.MockDirEntry{
-			Filename: "9f9f0b566520a18e7754f06a0e5359cfa390726dbc0cf8383aad2d88b9f5db07",
+			Filename: "repo1",
 			Dir:      true,
 		},
 	}, nil)
 	// 2. the remote repository no longer exists
-	iom.EXPECT().PullRepo(gomock.Any(), "baseRepoFolder/9f9f0b566520a18e7754f06a0e5359cfa390726dbc0cf8383aad2d88b9f5db07", &branch).Return(false, false, true)
+	iom.EXPECT().PullRepo(gomock.Any(), "baseRepoFolder/repo1", &branch).Return(false, false, true)
 	// 3. We DO NOT delete the repo for recloning, we do not process other repos in the config's list
 
 	isRunning := true

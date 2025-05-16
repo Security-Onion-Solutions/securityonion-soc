@@ -1,10 +1,10 @@
 package detections
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
+	"net/url"
+	"path"
 	"path/filepath"
 	"sync"
 	"time"
@@ -44,19 +44,23 @@ func RefreshAiSummaries(eng AiLoader, lang model.SigLanguage, isRunning *bool, a
 		logger.Debug("skipping AI summary update because airgap is enabled")
 	}
 
-	h := sha256.Sum256([]byte(aiRepoUrl))
-	lastFolder := hex.EncodeToString(h[:])
-	repoPath := filepath.Join(aiRepoPath, lastFolder)
-
-	sums, err := readAiSummary(isRunning, repoPath, lang, logger, iom)
+	parser, err := url.Parse(aiRepoUrl)
 	if err != nil {
-		logger.WithError(err).WithField("repoPath", repoPath).Error("unable to read AI summaries")
+		log.WithError(err).WithField("aiRepoUrl", aiRepoUrl).Error("failed to parse repo URL, doing nothing with it")
 	} else {
-		err = eng.LoadAuxiliaryData(sums)
+		_, lastFolder := path.Split(parser.Path)
+		repoPath := filepath.Join(aiRepoPath, lastFolder)
+
+		sums, err := readAiSummary(isRunning, repoPath, lang, logger, iom)
 		if err != nil {
-			logger.WithError(err).Error("unable to load AI summaries")
+			logger.WithError(err).WithField("repoPath", repoPath).Error("unable to read AI summaries")
 		} else {
-			logger.Info("successfully loaded AI summaries")
+			err = eng.LoadAuxiliaryData(sums)
+			if err != nil {
+				logger.WithError(err).Error("unable to load AI summaries")
+			} else {
+				logger.Info("successfully loaded AI summaries")
+			}
 		}
 	}
 
