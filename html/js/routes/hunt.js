@@ -2754,10 +2754,10 @@ const huntComponent = {
               
               if (lineWithVar !== -1) {
                 // Get the field being set (e.g., src_ip or dst_ip)
-                const match = lines[lineWithVar].match(/\s*(?:-\s*)?(\w+(?:\.\w+)*(?:\|\w+)*):(?:\s*|$)/);
+                const match = lines[lineWithVar].match(/^(\s*)(?:-\s*)?(\w+(?:\.\w+)*(?:\|\w+)*):(?:\s*|$)/);
                 if (match) {
-                  const field = match[1];
-                  const indent = lines[lineWithVar].match(/^\s*/)[0];
+                  const indent = match[1];
+                  const field = match[2];
                   const originalLine = lines[lineWithVar];
                   const hasDash = originalLine.trim().startsWith('-');
                   const prefix = hasDash ? '- ' : '';
