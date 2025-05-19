@@ -1962,8 +1962,7 @@ test('askQuestion', async () => {
   resetPapi();
 });
 
-describe('queryVariableSubstitution', () => {
-  test('handles simple variable substitution', () => {
+test('queryVariableSubstitution - handles simple variable substitution', () => {
     const event = {
       'host.name': 'test-host',
       'source.ip': '192.168.1.1'
@@ -1980,7 +1979,7 @@ describe('queryVariableSubstitution', () => {
     );
   });
 
-  test('handles array fields with proper indentation', () => {
+test('queryVariableSubstitution - handles array fields with proper indentation', () => {
     const event = {
       'network.private_ip': ['192.168.1.1', '10.0.0.1'],
       'network.public_ip': ['203.0.113.1']
@@ -1997,7 +1996,7 @@ describe('queryVariableSubstitution', () => {
     );
   });
 
-  test('handles missing fields with NODATA', () => {
+test('queryVariableSubstitution - handles missing fields with NODATA', () => {
     const event = {
       'host.name': 'test-host'
     };
@@ -2013,7 +2012,7 @@ describe('queryVariableSubstitution', () => {
     );
   });
 
-  test('handles array fields with dashes', () => {
+test('queryVariableSubstitution - handles array fields with dashes', () => {
     const event = {
       'network.private_ip': ['192.168.1.1', '10.0.0.1']
     };
@@ -2029,7 +2028,7 @@ describe('queryVariableSubstitution', () => {
     );
   });
 
-  test('handles real-world query format', () => {
+test('queryVariableSubstitution - handles real-world query format', () => {
     const event = {
       'network.private_ip': ['192.168.1.1', '10.0.0.1'],
       'dns.query_name': 'malicious.com',
@@ -2084,4 +2083,3 @@ fields:
     - dns.response.code_name`
     );
   });
-});
