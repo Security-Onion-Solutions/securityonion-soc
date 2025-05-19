@@ -11,11 +11,12 @@ import (
 )
 
 type RuleRepo struct {
-	Repo      string
-	Branch    *string
-	License   string
-	Folder    *string
-	Community bool
+	Repo        string
+	Branch      *string
+	License     string
+	Folder      *string
+	Community   bool
+	RulesetName string
 }
 
 func GetReposDefault(cfg map[string]interface{}, field string, dflt []*RuleRepo) ([]*RuleRepo, error) {
@@ -64,10 +65,13 @@ func GetReposDefault(cfg map[string]interface{}, field string, dflt []*RuleRepo)
 			}
 		}
 
+		rulesetName, _ := obj["rulesetName"].(string)
+
 		r := &RuleRepo{
-			Repo:      repo,
-			License:   license,
-			Community: isCommunity,
+			Repo:        repo,
+			License:     license,
+			Community:   isCommunity,
+			RulesetName: rulesetName,
 		}
 
 		folder, ok := obj["folder"].(string)
