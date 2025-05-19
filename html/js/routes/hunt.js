@@ -2729,26 +2729,57 @@ const huntComponent = {
         }
       }
     },
+
     queryVariableSubstitution(event, playbooks) {
+      // Fields that require special array handling
+      const arrayFields = ['network.private_ip', 'network.public_ip', 'related.ip'];
+
       for (let pb of playbooks) {
         for (let question of pb.questions) {
           let q = question.query;
-
-          for (let field in event) {
-            const value = event[field];
-
-            q = q.replaceAll(`{${field}}`, value);
-
-            if (field.startsWith('event_data.')) {
-              let short = field.replace('event_data.', '');
-              q = q.replaceAll(`{${short}}`, value);
+          
+          // Find all variables in the query using regex
+          const variables = q.match(/\{([^}]+)\}/g) || [];
+          
+          // Process each variable
+          for (const variable of variables) {
+            const fieldName = variable.slice(1, -1); // Remove { and }
+            let value = event[fieldName] || 'NODATA';
+            
+            // Special handling for array fields
+            if (arrayFields.includes(fieldName) && Array.isArray(value)) {
+              // Find the line containing the variable
+              const lines = q.split('\n');
+              const lineWithVar = lines.findIndex(line => line.includes(variable));
+              
+              if (lineWithVar !== -1) {
+                // Get the field being set (e.g., src_ip or dst_ip)
+                const match = lines[lineWithVar].match(/^(\s*)(?:-\s*)?(\w+(?:\.\w+)*(?:\|\w+)*):(?:\s*|$)/);
+                if (match) {
+                  const indent = match[1];
+                  const field = match[2];
+                  const originalLine = lines[lineWithVar];
+                  const hasDash = originalLine.trim().startsWith('-');
+                  const prefix = hasDash ? '- ' : '';
+                  const replacement = `${indent}${prefix}${field}:\n${value.map(ip => `${indent}    - ${ip}`).join('\n')}`;
+                  
+                  // Replace the entire line
+                  lines[lineWithVar] = replacement;
+                  q = lines.join('\n');
+                  continue;
+                }
+              }
             }
+            
+            // Default replacement if not handled as special case
+            q = q.replaceAll(variable, value);
           }
-
+          
           question.filledQuery = q;
         }
       }
     },
+
     async convertPlaybookQueries(playbooks) {
       let queries = playbooks.map((pb) => pb.questions.map((q) => q.filledQuery)).flat();
 
