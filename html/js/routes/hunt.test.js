@@ -1961,3 +1961,127 @@ test('askQuestion', async () => {
   comp.$root.enableReverseLookup = false;
   resetPapi();
 });
+
+describe('queryVariableSubstitution', () => {
+  test('handles simple variable substitution', () => {
+    const event = {
+      'host.name': 'test-host',
+      'source.ip': '192.168.1.1'
+    };
+    const playbooks = [{
+      questions: [{
+        query: 'hostname: {host.name}\nsource_ip: {source.ip}'
+      }]
+    }];
+
+    comp.queryVariableSubstitution(event, playbooks);
+    expect(playbooks[0].questions[0].filledQuery).toBe(
+      'hostname: test-host\nsource_ip: 192.168.1.1'
+    );
+  });
+
+  test('handles array fields with proper indentation', () => {
+    const event = {
+      'network.private_ip': ['192.168.1.1', '10.0.0.1'],
+      'network.public_ip': ['203.0.113.1']
+    };
+    const playbooks = [{
+      questions: [{
+        query: '    private_ips: {network.private_ip}\n    public_ips: {network.public_ip}'
+      }]
+    }];
+
+    comp.queryVariableSubstitution(event, playbooks);
+    expect(playbooks[0].questions[0].filledQuery).toBe(
+      '    private_ips:\n        - 192.168.1.1\n        - 10.0.0.1\n    public_ips:\n        - 203.0.113.1'
+    );
+  });
+
+  test('handles missing fields with NODATA', () => {
+    const event = {
+      'host.name': 'test-host'
+    };
+    const playbooks = [{
+      questions: [{
+        query: 'hostname: {host.name}\nip: {missing.field}'
+      }]
+    }];
+
+    comp.queryVariableSubstitution(event, playbooks);
+    expect(playbooks[0].questions[0].filledQuery).toBe(
+      'hostname: test-host\nip: NODATA'
+    );
+  });
+
+  test('handles array fields with dashes', () => {
+    const event = {
+      'network.private_ip': ['192.168.1.1', '10.0.0.1']
+    };
+    const playbooks = [{
+      questions: [{
+        query: '    - private_ips: {network.private_ip}'
+      }]
+    }];
+
+    comp.queryVariableSubstitution(event, playbooks);
+    expect(playbooks[0].questions[0].filledQuery).toBe(
+      '    - private_ips:\n        - 192.168.1.1\n        - 10.0.0.1'
+    );
+  });
+
+  test('handles real-world query format', () => {
+    const event = {
+      'network.private_ip': ['192.168.1.1', '10.0.0.1'],
+      'dns.query_name': 'malicious.com',
+      'network.public_ip': ['203.0.113.1'],
+      'related.ip': ['203.0.113.1', '192.168.1.2'],
+    };
+    const playbooks = [{
+      questions: [{
+        query: `aggregation: false
+logsource:
+  category: network
+  service: dns
+detection:
+    selection:
+       - src_ip: '{network.private_ip}'
+       - dns.query.name|contains: '{dns.query_name}'
+       - dns.resolved_ip: '{network.public_ip}'
+    filter:
+      dst_ip: '{related.ip}'
+    condition: selection and filter
+fields:
+    - dns.query.name
+    - dns.query.type_name
+    - dns.resolved_ip
+    - dns.response.code_name`
+      }]
+    }];
+
+    comp.queryVariableSubstitution(event, playbooks);
+    expect(playbooks[0].questions[0].filledQuery).toBe(
+      `aggregation: false
+logsource:
+  category: network
+  service: dns
+detection:
+    selection:
+       - src_ip:
+           - 192.168.1.1
+           - 10.0.0.1
+       - dns.query.name|contains: 'malicious.com'
+       - dns.resolved_ip:
+           - 203.0.113.1
+    filter:
+      dst_ip:
+          - 203.0.113.1
+          - 192.168.1.2
+    condition: selection and filter
+fields:
+    - dns.query.name
+    - dns.query.type_name
+    - dns.resolved_ip
+    - dns.response.code_name`
+    );
+  });
+});
