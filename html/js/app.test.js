@@ -860,15 +860,23 @@ test('updateColumnClass', () => {
 
 test('loadGridInfo', async () => {
   resetPapi();
-  const mock = mockPapi("get", {data: {foo:1}});
+  var idx = 0;
+  const mock = jest.fn((req, data) => {
+    idx++;
+    if (data['params']['gridId'] == 'g1') {
+      throw Error("something");
+    }
+    return {data: {foo:idx}};
+  });
+  app.papi.get = mock;
 
   app.gridInfo = {};
-  app.subgrids = [{id: 'g1'}];
-  app.loadSubgridInfo();
-
+  app.subgrids = [{id: 'g1'},{id: 'g2'}];
   await app.loadSubgridInfo();
   expect(mock).toHaveBeenCalledWith('info', { params: { gridId: 'g1' }});
-  expect(app.gridInfo['g1']).toStrictEqual({foo:1});
+  expect(mock).toHaveBeenCalledWith('info', { params: { gridId: 'g2' }});
+  expect(app.gridInfo['g1']).toBeUndefined();
+  expect(app.gridInfo['g2']).toStrictEqual({foo:2});
 });
 
 test('getSelectedGrid', () => {
