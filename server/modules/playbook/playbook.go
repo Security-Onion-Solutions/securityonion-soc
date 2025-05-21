@@ -263,8 +263,8 @@ func (pdm *PlaybookDiskManager) readPlaybooks(logger log.Interface) ([]*model.Pl
 		if err != nil {
 			// we can't process this file, but keep walking the dir
 			logger.WithError(err).WithFields(log.Fields{
-				"playbookDir": targetDir,
-				"path":        p,
+				"playbookDir":  targetDir,
+				"playbookPath": p,
 			}).Warn("error while walking playbook directory")
 			return nil
 		}
@@ -273,9 +273,9 @@ func (pdm *PlaybookDiskManager) readPlaybooks(logger log.Interface) ([]*model.Pl
 		if err != nil {
 			// we can't process this file, but keep walking the dir
 			logger.WithError(err).WithFields(log.Fields{
-				"playbookDir": targetDir,
-				"path":        p,
-				"dirEntry":    dir,
+				"playbookDir":  targetDir,
+				"playbookPath": p,
+				"dirEntry":     dir,
 			}).Warn("error while walking playbook directory")
 			return nil
 		}
@@ -293,8 +293,8 @@ func (pdm *PlaybookDiskManager) readPlaybooks(logger log.Interface) ([]*model.Pl
 		if err != nil {
 			// we can't process this file, but keep walking the dir
 			logger.WithError(err).WithFields(log.Fields{
-				"playbookDir": targetDir,
-				"path":        p,
+				"playbookDir":  targetDir,
+				"playbookPath": p,
 			}).Warn("unable to read file while walking playbook directory")
 			return nil
 		}
@@ -305,8 +305,8 @@ func (pdm *PlaybookDiskManager) readPlaybooks(logger log.Interface) ([]*model.Pl
 		if err != nil {
 			// we can't process this file, but keep walking the dir
 			logger.WithError(err).WithFields(log.Fields{
-				"playbookDir": targetDir,
-				"path":        p,
+				"playbookDir":  targetDir,
+				"playbookPath": p,
 			}).Warn("unable to unmarshal playbook")
 			return nil
 		}
