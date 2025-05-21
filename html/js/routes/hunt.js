@@ -712,10 +712,14 @@ const huntComponent = {
 
       this.$root.startLoading();
       try {
-        var docEvent = item;
+        var docEvent = {};
         if (item["soc_id"]) {
-          // Strip away everything else for optimization
-          docEvent = { "soc_id": item["soc_id"] };
+          // only send necessary fields
+          docEvent["soc_id"] = item["soc_id"];
+        } else {
+          for (let field of Object.keys(item)) {
+            if (field !== 'newest') docEvent[field] = item[field]
+          }
         }
         var isAlert = ('rule.name' in item || 'event.severity_label' in item);
         if (escalate) {
