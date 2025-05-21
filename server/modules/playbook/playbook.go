@@ -138,7 +138,7 @@ func (pdm *PlaybookDiskManager) scheduler() {
 	var timer *time.Timer
 
 	firstRun := sync.OnceFunc(func() {
-		pdm.Interrupt(pdm.srv.Context, true)
+		_ = pdm.Interrupt(pdm.srv.Context, true)
 	})
 
 	for pdm.isRunning {
@@ -261,12 +261,23 @@ func (pdm *PlaybookDiskManager) readPlaybooks(logger log.Interface) ([]*model.Pl
 
 	err = pdm.IOManager.WalkDir(targetDir, func(p string, dir fs.DirEntry, err error) error {
 		if err != nil {
-			return err
+			// we can't process this file, but keep walking the dir
+			logger.WithError(err).WithFields(log.Fields{
+				"playbookDir": targetDir,
+				"path":        p,
+			}).Warn("error while walking playbook directory")
+			return nil
 		}
 
 		info, err := dir.Info()
 		if err != nil {
-			return err
+			// we can't process this file, but keep walking the dir
+			logger.WithError(err).WithFields(log.Fields{
+				"playbookDir": targetDir,
+				"path":        p,
+				"dirEntry":    dir,
+			}).Warn("error while walking playbook directory")
+			return nil
 		}
 
 		if info.IsDir() {
@@ -280,14 +291,24 @@ func (pdm *PlaybookDiskManager) readPlaybooks(logger log.Interface) ([]*model.Pl
 
 		contents, err := pdm.ReadFile(p)
 		if err != nil {
-			return err
+			// we can't process this file, but keep walking the dir
+			logger.WithError(err).WithFields(log.Fields{
+				"playbookDir": targetDir,
+				"path":        p,
+			}).Warn("unable to read file while walking playbook directory")
+			return nil
 		}
 
 		pb := &model.Playbook{}
 
 		err = yaml.Unmarshal(contents, &pb)
 		if err != nil {
-			return err
+			// we can't process this file, but keep walking the dir
+			logger.WithError(err).WithFields(log.Fields{
+				"playbookDir": targetDir,
+				"path":        p,
+			}).Warn("unable to unmarshal playbook")
+			return nil
 		}
 
 		playbooks = append(playbooks, pb)

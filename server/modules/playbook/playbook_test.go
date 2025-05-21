@@ -7,6 +7,7 @@ package playbook
 
 import (
 	"context"
+	"errors"
 	"io"
 	"io/fs"
 	"os/exec"
@@ -20,6 +21,8 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 
+	"github.com/apex/log"
+	"github.com/apex/log/handlers/memory"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 )
@@ -693,4 +696,48 @@ func TestConvertQuestions(t *testing.T) {
 	assert.Equal(t, "b", converted[0].Fields[1])
 	assert.Equal(t, "b", converted[1].Fields[0])
 	assert.Equal(t, "c", converted[1].Fields[1])
+}
+
+func TestReadPlaybooks(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	iom := mock.NewMockIOManager(ctrl)
+	pdm := PlaybookDiskManager{
+		playbookRepoUrl:    "http://github.com/user/repo",
+		playbookPathInRepo: "playbooks/dev",
+		playbookRepoPath:   "/tmp/playbooks",
+		IOManager:          iom,
+	}
+
+	iom.EXPECT().WalkDir("/tmp/playbooks/repo/playbooks/dev", gomock.Any()).DoAndReturn(func(path string, fn func(p string, dir fs.DirEntry, err error) error) error {
+		err := fn("does not exist", &handmock.MockDirEntry{}, errors.New("something went wrong"))
+		assert.NoError(t, err)
+
+		err = fn("bad info", &handmock.BadMockDirEntry{ErrorStr: "something went wrong"}, nil)
+		assert.NoError(t, err)
+
+		iom.EXPECT().ReadFile("cannot be read").Return(nil, errors.New("something went wrong"))
+		err = fn("cannot be read", &handmock.MockDirEntry{Filename: "a.yml"}, nil)
+		assert.NoError(t, err)
+
+		iom.EXPECT().ReadFile("unmarshal error").Return([]byte("&"), nil)
+		err = fn("unmarshal error", &handmock.MockDirEntry{Filename: "a.yml"}, nil)
+		assert.NoError(t, err)
+
+		iom.EXPECT().ReadFile("success").Return([]byte("id: x"), nil)
+		err = fn("success", &handmock.MockDirEntry{Filename: "a.yml"}, nil)
+		assert.NoError(t, err)
+
+		return nil
+	})
+
+	h := memory.New()
+	lg := &log.Logger{Handler: h, Level: log.DebugLevel}
+	logger := lg.WithField("test", true)
+
+	pbs, err := pdm.readPlaybooks(logger)
+	assert.NoError(t, err)
+	assert.Len(t, pbs, 1)
+	assert.Equal(t, "x", pbs[0].Id)
 }
