@@ -503,7 +503,7 @@ func TestScheduler(t *testing.T) {
 		playbookRepoPath:   "/tmp/playbooks",
 		playbookRepoUrl:    "https://github.com/playbooks/repo",
 		playbookRepoBranch: "dev",
-		InterruptChan:      make(chan bool, 1),
+		interruptChan:      make(chan bool, 1),
 		isRunning:          true,
 		IOManager:          iom,
 	}
@@ -565,6 +565,7 @@ func TestScheduler(t *testing.T) {
 
 func TestGetPlaybooksForDetection(t *testing.T) {
 	pdm := PlaybookDiskManager{
+		srv: server.NewFakeAuthorizedServer(nil),
 		PlaybooksByDetectionId: map[string][]*model.Playbook{
 			"1182f3b3-e716-4efa-99ab-d2685d04360f": {
 				&model.Playbook{
@@ -620,6 +621,7 @@ func TestGetPlaybooksForDetection(t *testing.T) {
 
 func TestGetPlaybookById(t *testing.T) {
 	pdm := PlaybookDiskManager{
+		srv: server.NewFakeAuthorizedServer(nil),
 		PlaybooksByPlaybookId: map[string]*model.Playbook{
 			"1182f3b3-e716-4efa-99ab-d2685d04360f": {
 				Auditable: model.Auditable{
@@ -664,9 +666,7 @@ func TestConvertQuestions(t *testing.T) {
 
 	iom := mock.NewMockIOManager(ctrl)
 	pdm := PlaybookDiskManager{
-		srv: &server.Server{
-			Context: context.Background(),
-		},
+		srv:       server.NewFakeAuthorizedServer(nil),
 		IOManager: iom,
 	}
 

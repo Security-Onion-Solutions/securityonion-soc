@@ -48,6 +48,12 @@ func (h *PlaybookHandler) GetPlaybook(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
 
+	err := h.server.CheckAuthorized(ctx, "read", "playbooks")
+	if err != nil {
+		web.Respond(w, r, http.StatusUnauthorized, err)
+		return
+	}
+
 	playbookId := chi.URLParam(r, "id")
 	if playbookId == "" {
 		logger.Error("playbook id required")
@@ -79,6 +85,12 @@ func (h *PlaybookHandler) GetPlaybook(w http.ResponseWriter, r *http.Request) {
 func (h *PlaybookHandler) GetPlaybooksForDetection(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
+
+	err := h.server.CheckAuthorized(ctx, "read", "playbooks")
+	if err != nil {
+		web.Respond(w, r, http.StatusUnauthorized, err)
+		return
+	}
 
 	publicId := chi.URLParam(r, "id")
 	if publicId == "" {
@@ -140,8 +152,14 @@ func (h *PlaybookHandler) ConvertPlaybook(w http.ResponseWriter, r *http.Request
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
 
+	err := h.server.CheckAuthorized(ctx, "read", "playbooks")
+	if err != nil {
+		web.Respond(w, r, http.StatusUnauthorized, err)
+		return
+	}
+
 	queries := []string{}
-	err := web.ReadJson(r, &queries)
+	err = web.ReadJson(r, &queries)
 	if err != nil {
 		logger.WithError(err).Error("unable to read queries")
 		web.Respond(w, r, http.StatusBadRequest, err)

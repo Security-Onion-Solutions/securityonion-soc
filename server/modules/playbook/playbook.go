@@ -40,6 +40,8 @@ const (
 	DEFAULT_PLAYBOOK_PATH_IN_REPO             = "playbook/dev"
 )
 
+var ErrBadPermissions = fmt.Errorf("playbooks module not authorized to read playbooks")
+
 type PlaybookDiskManager struct {
 	srv                            *server.Server
 	isRunning                      bool
@@ -50,9 +52,9 @@ type PlaybookDiskManager struct {
 	autoUpdateEnabled              bool
 	pbUpdateMutex                  sync.RWMutex
 	interm                         sync.Mutex
-	InterruptChan                  chan bool
-	PlaybookImportFrequencySeconds int
-	PlaybookImportErrorSeconds     int
+	interruptChan                  chan bool
+	playbookImportFrequencySeconds int
+	playbookImportErrorSeconds     int
 
 	PlaybooksByDetectionId map[string][]*model.Playbook
 	PlaybooksByCategory    map[string][]*model.Playbook
@@ -74,11 +76,11 @@ func (pdm *PlaybookDiskManager) PrerequisiteModules() []string {
 }
 
 func (pdm *PlaybookDiskManager) Init(config module.ModuleConfig) (err error) {
-	pdm.InterruptChan = make(chan bool, 1)
+	pdm.interruptChan = make(chan bool, 1)
 
 	pdm.autoUpdateEnabled = module.GetBoolDefault(config, "autoUpdateEnabled", DEFAULT_AUTO_UPDATE_ENABLED)
-	pdm.PlaybookImportFrequencySeconds = module.GetIntDefault(config, "playbookImportFrequencySeconds", DEFAULT_PLAYBOOK_IMPORT_FREQUENCY_SECONDS)
-	pdm.PlaybookImportErrorSeconds = module.GetIntDefault(config, "playbookImportErrorSeconds", DEFAULT_PLAYBOOK_IMPORT_ERROR_SECONDS)
+	pdm.playbookImportFrequencySeconds = module.GetIntDefault(config, "playbookImportFrequencySeconds", DEFAULT_PLAYBOOK_IMPORT_FREQUENCY_SECONDS)
+	pdm.playbookImportErrorSeconds = module.GetIntDefault(config, "playbookImportErrorSeconds", DEFAULT_PLAYBOOK_IMPORT_ERROR_SECONDS)
 	pdm.playbookRepoUrl = module.GetStringDefault(config, "playbookRepoUrl", DEFAULT_PLAYBOOK_REPO)
 	pdm.playbookRepoBranch = module.GetStringDefault(config, "playbookRepoBranch", DEFAULT_PLAYBOOK_REPO_BRANCH)
 	pdm.playbookRepoPath = module.GetStringDefault(config, "playbookRepoPath", DEFAULT_PLAYBOOK_REPO_PATH)
@@ -106,21 +108,28 @@ func (pdm *PlaybookDiskManager) IsRunning() bool {
 	return pdm.isRunning
 }
 
-func (pdm *PlaybookDiskManager) Interrupt(force bool) {
+func (pdm *PlaybookDiskManager) Interrupt(ctx context.Context, force bool) error {
+	err := pdm.srv.CheckAuthorized(ctx, "read", "playbooks")
+	if err != nil {
+		return err
+	}
+
 	pdm.interm.Lock()
 	defer pdm.interm.Unlock()
 
-	if len(pdm.InterruptChan) == 0 {
-		pdm.InterruptChan <- force
+	if len(pdm.interruptChan) == 0 {
+		pdm.interruptChan <- force
 	}
+
+	return nil
 }
 
 func (pdm *PlaybookDiskManager) resetInterrupt() {
 	pdm.interm.Lock()
 	defer pdm.interm.Unlock()
 
-	if len(pdm.InterruptChan) != 0 {
-		<-pdm.InterruptChan
+	if len(pdm.interruptChan) != 0 {
+		<-pdm.interruptChan
 	}
 }
 
@@ -129,14 +138,14 @@ func (pdm *PlaybookDiskManager) scheduler() {
 	var timer *time.Timer
 
 	firstRun := sync.OnceFunc(func() {
-		pdm.Interrupt(true)
+		pdm.Interrupt(pdm.srv.Context, true)
 	})
 
 	for pdm.isRunning {
 		if wasSuccessful {
-			timer = time.NewTimer(time.Second * time.Duration(pdm.PlaybookImportFrequencySeconds))
+			timer = time.NewTimer(time.Second * time.Duration(pdm.playbookImportFrequencySeconds))
 		} else {
-			timer = time.NewTimer(time.Second * time.Duration(pdm.PlaybookImportErrorSeconds))
+			timer = time.NewTimer(time.Second * time.Duration(pdm.playbookImportErrorSeconds))
 		}
 
 		force := false
@@ -145,7 +154,7 @@ func (pdm *PlaybookDiskManager) scheduler() {
 		firstRun()
 
 		select {
-		case inter := <-pdm.InterruptChan:
+		case inter := <-pdm.interruptChan:
 			force = inter
 		case <-timer.C:
 		}
@@ -354,6 +363,11 @@ func (pdm *PlaybookDiskManager) organizePlaybooks(logger log.Interface, playbook
 func (pdm *PlaybookDiskManager) GetPlaybooksForDetection(ctx context.Context, publicId string, detectCategory string, detectEngine model.EngineName) ([]*model.Playbook, error) {
 	logger := log.FromContext(ctx)
 
+	err := pdm.srv.CheckAuthorized(ctx, "read", "playbooks")
+	if err != nil {
+		return nil, err
+	}
+
 	publicId = strings.ToLower(publicId)
 	detectCategory = strings.ToLower(detectCategory)
 
@@ -388,6 +402,12 @@ func (pdm *PlaybookDiskManager) GetPlaybooksForDetection(ctx context.Context, pu
 
 func (pdm *PlaybookDiskManager) GetPlaybookById(ctx context.Context, id string) (pb *model.Playbook, err error) {
 	logger := log.FromContext(ctx)
+
+	err = pdm.srv.CheckAuthorized(ctx, "read", "playbooks")
+	if err != nil {
+		return nil, err
+	}
+
 	defer func() {
 		l := logger.WithField("playbookId", id)
 		if err != nil {
@@ -413,6 +433,11 @@ func (pdm *PlaybookDiskManager) GetPlaybookById(ctx context.Context, id string) 
 
 func (pdm *PlaybookDiskManager) ConvertQuestions(ctx context.Context, queries []string) ([]*model.ConvertedQuery, error) {
 	logger := log.FromContext(ctx)
+
+	err := pdm.srv.CheckAuthorized(ctx, "read", "playbooks")
+	if err != nil {
+		return nil, err
+	}
 
 	args := []string{"convert", "-t", "security_onion", "-p", "/opt/sensoroni/sigma_final_pipeline.yaml", "-p", "/opt/sensoroni/sigma_so_pipeline.yaml", "-p", "windows-logsources", "-p", "ecs_windows", "--disable-pipeline-check", "/dev/stdin"}
 
