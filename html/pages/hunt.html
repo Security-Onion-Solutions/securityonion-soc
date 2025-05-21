@@ -622,7 +622,7 @@
 								<template #expanded-row="{ columns, item, index }">
 									<tr>
 										<td :colspan="columns.length" class="px-0" :data-aid="'events_fields_' + category">
-											<div :style="{ 'max-width': this.eventColumnWidth + 'px' }">
+											<div>
 												<v-tabs :height="isCategory('alerts') ? undefined : 0" v-model="activeTabs[index]" @update:model-value="if (activeTabs[index] === 'playbook') loadPlaybook(item);">
 													<v-tab id="alerts_alertsDetailTab" value="alert" :class="{ 'theme-primary': activeTabs[index] === 'alert' }" :style="{ 'width': (this.eventColumnWidth / 2) + 'px' }">
 														<v-icon class="tab-icon">fa-bell</v-icon>
