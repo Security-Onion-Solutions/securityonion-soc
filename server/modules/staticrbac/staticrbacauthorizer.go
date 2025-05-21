@@ -51,6 +51,9 @@ func (impl *StaticRbacAuthorizer) Init(userFiles []string, roleFiles []string, s
 		return errors.New("scanIntervalMs must be a positive integer")
 	}
 	impl.scanIntervalMs = scanIntervalMs
+
+	impl.Reload()
+
 	return nil
 }
 

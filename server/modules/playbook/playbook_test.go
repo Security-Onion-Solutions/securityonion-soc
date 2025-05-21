@@ -500,11 +500,10 @@ func TestScheduler(t *testing.T) {
 
 	iom := mock.NewMockIOManager(ctrl)
 	pdm := PlaybookDiskManager{
-		srv:                server.NewFakeAuthorizedServer(nil),
 		playbookRepoPath:   "/tmp/playbooks",
 		playbookRepoUrl:    "https://github.com/playbooks/repo",
 		playbookRepoBranch: "dev",
-		InterruptChan:      make(chan bool, 1),
+		interruptChan:      make(chan bool, 1),
 		isRunning:          true,
 		IOManager:          iom,
 	}
@@ -693,22 +692,4 @@ func TestConvertQuestions(t *testing.T) {
 	assert.Equal(t, "b", converted[0].Fields[1])
 	assert.Equal(t, "b", converted[1].Fields[0])
 	assert.Equal(t, "c", converted[1].Fields[1])
-}
-
-func TestCheckPermissions(t *testing.T) {
-	pdm := NewPlaybookDiskManager(server.NewFakeAuthorizedServer(nil))
-	pdm.isRunning = true
-
-	err := pdm.checkPermissions(0)
-	assert.NoError(t, err)
-
-	pdm = NewPlaybookDiskManager(server.NewFakeUnauthorizedServer())
-	pdm.isRunning = true
-
-	dur := time.Millisecond * 500
-	begin := time.Now()
-	err = pdm.checkPermissions(dur)
-	assert.Error(t, err)
-	assert.Equal(t, ErrBadPermissions, err)
-	assert.GreaterOrEqual(t, time.Since(begin), dur)
 }
