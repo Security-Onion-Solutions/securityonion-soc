@@ -500,6 +500,7 @@ func TestScheduler(t *testing.T) {
 
 	iom := mock.NewMockIOManager(ctrl)
 	pdm := PlaybookDiskManager{
+		srv:                server.NewFakeAuthorizedServer(nil),
 		playbookRepoPath:   "/tmp/playbooks",
 		playbookRepoUrl:    "https://github.com/playbooks/repo",
 		playbookRepoBranch: "dev",
@@ -565,6 +566,7 @@ func TestScheduler(t *testing.T) {
 
 func TestGetPlaybooksForDetection(t *testing.T) {
 	pdm := PlaybookDiskManager{
+		srv: server.NewFakeAuthorizedServer(nil),
 		PlaybooksByDetectionId: map[string][]*model.Playbook{
 			"1182f3b3-e716-4efa-99ab-d2685d04360f": {
 				&model.Playbook{
@@ -620,6 +622,7 @@ func TestGetPlaybooksForDetection(t *testing.T) {
 
 func TestGetPlaybookById(t *testing.T) {
 	pdm := PlaybookDiskManager{
+		srv: server.NewFakeAuthorizedServer(nil),
 		PlaybooksByPlaybookId: map[string]*model.Playbook{
 			"1182f3b3-e716-4efa-99ab-d2685d04360f": {
 				Auditable: model.Auditable{
@@ -664,9 +667,7 @@ func TestConvertQuestions(t *testing.T) {
 
 	iom := mock.NewMockIOManager(ctrl)
 	pdm := PlaybookDiskManager{
-		srv: &server.Server{
-			Context: context.Background(),
-		},
+		srv:       server.NewFakeAuthorizedServer(nil),
 		IOManager: iom,
 	}
 
@@ -692,4 +693,22 @@ func TestConvertQuestions(t *testing.T) {
 	assert.Equal(t, "b", converted[0].Fields[1])
 	assert.Equal(t, "b", converted[1].Fields[0])
 	assert.Equal(t, "c", converted[1].Fields[1])
+}
+
+func TestCheckPermissions(t *testing.T) {
+	pdm := NewPlaybookDiskManager(server.NewFakeAuthorizedServer(nil))
+	pdm.isRunning = true
+
+	err := pdm.checkPermissions(0)
+	assert.NoError(t, err)
+
+	pdm = NewPlaybookDiskManager(server.NewFakeUnauthorizedServer())
+	pdm.isRunning = true
+
+	dur := time.Millisecond * 500
+	begin := time.Now()
+	err = pdm.checkPermissions(dur)
+	assert.Error(t, err)
+	assert.Equal(t, ErrBadPermissions, err)
+	assert.GreaterOrEqual(t, time.Since(begin), dur)
 }

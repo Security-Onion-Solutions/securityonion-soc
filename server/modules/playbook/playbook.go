@@ -40,6 +40,8 @@ const (
 	DEFAULT_PLAYBOOK_PATH_IN_REPO             = "playbook/dev"
 )
 
+var ErrBadPermissions = fmt.Errorf("playbooks module not authorized to read playbooks")
+
 type PlaybookDiskManager struct {
 	srv                            *server.Server
 	isRunning                      bool
@@ -106,13 +108,20 @@ func (pdm *PlaybookDiskManager) IsRunning() bool {
 	return pdm.isRunning
 }
 
-func (pdm *PlaybookDiskManager) Interrupt(force bool) {
+func (pdm *PlaybookDiskManager) Interrupt(ctx context.Context, force bool) error {
+	err := pdm.srv.CheckAuthorized(ctx, "read", "playbooks")
+	if err != nil {
+		return err
+	}
+
 	pdm.interm.Lock()
 	defer pdm.interm.Unlock()
 
 	if len(pdm.InterruptChan) == 0 {
 		pdm.InterruptChan <- force
 	}
+
+	return nil
 }
 
 func (pdm *PlaybookDiskManager) resetInterrupt() {
@@ -128,8 +137,16 @@ func (pdm *PlaybookDiskManager) scheduler() {
 	wasSuccessful := false
 	var timer *time.Timer
 
+	err := pdm.checkPermissions(time.Second * 15)
+	if err != nil {
+		log.WithError(err).Error("playbooks module not authorized to read playbooks, stopping module")
+		pdm.Stop()
+
+		return
+	}
+
 	firstRun := sync.OnceFunc(func() {
-		pdm.Interrupt(true)
+		_ = pdm.Interrupt(pdm.srv.Context, true)
 	})
 
 	for pdm.isRunning {
@@ -189,6 +206,24 @@ func (pdm *PlaybookDiskManager) scheduler() {
 			wasSuccessful = true
 		}
 	}
+}
+
+func (pdm *PlaybookDiskManager) checkPermissions(wait time.Duration) error {
+	begin := time.Now()
+	for pdm.isRunning {
+		err := pdm.srv.CheckAuthorized(pdm.srv.Context, "read", "playbooks")
+		if err == nil {
+			break
+		}
+
+		if time.Since(begin) > wait {
+			return ErrBadPermissions
+		}
+
+		time.Sleep(time.Millisecond * 200)
+	}
+
+	return nil
 }
 
 func (pdm *PlaybookDiskManager) UpdateRepoOnDisk() (anythingNew bool, err error) {
@@ -354,6 +389,11 @@ func (pdm *PlaybookDiskManager) organizePlaybooks(logger log.Interface, playbook
 func (pdm *PlaybookDiskManager) GetPlaybooksForDetection(ctx context.Context, publicId string, detectCategory string, detectEngine model.EngineName) ([]*model.Playbook, error) {
 	logger := log.FromContext(ctx)
 
+	err := pdm.srv.CheckAuthorized(ctx, "read", "playbooks")
+	if err != nil {
+		return nil, err
+	}
+
 	publicId = strings.ToLower(publicId)
 	detectCategory = strings.ToLower(detectCategory)
 
@@ -388,6 +428,12 @@ func (pdm *PlaybookDiskManager) GetPlaybooksForDetection(ctx context.Context, pu
 
 func (pdm *PlaybookDiskManager) GetPlaybookById(ctx context.Context, id string) (pb *model.Playbook, err error) {
 	logger := log.FromContext(ctx)
+
+	err = pdm.srv.CheckAuthorized(ctx, "read", "playbooks")
+	if err != nil {
+		return nil, err
+	}
+
 	defer func() {
 		l := logger.WithField("playbookId", id)
 		if err != nil {
@@ -413,6 +459,11 @@ func (pdm *PlaybookDiskManager) GetPlaybookById(ctx context.Context, id string) 
 
 func (pdm *PlaybookDiskManager) ConvertQuestions(ctx context.Context, queries []string) ([]*model.ConvertedQuery, error) {
 	logger := log.FromContext(ctx)
+
+	err := pdm.srv.CheckAuthorized(ctx, "read", "playbooks")
+	if err != nil {
+		return nil, err
+	}
 
 	args := []string{"convert", "-t", "security_onion", "-p", "/opt/sensoroni/sigma_final_pipeline.yaml", "-p", "/opt/sensoroni/sigma_so_pipeline.yaml", "-p", "windows-logsources", "-p", "ecs_windows", "--disable-pipeline-check", "/dev/stdin"}
 
