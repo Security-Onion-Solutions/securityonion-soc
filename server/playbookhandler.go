@@ -7,12 +7,15 @@ package server
 
 import (
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
 	"github.com/go-chi/chi/v5"
+	"gopkg.in/yaml.v3"
 )
 
 type PlaybookHandler struct {
@@ -77,10 +80,13 @@ func (h *PlaybookHandler) GetPlaybook(w http.ResponseWriter, r *http.Request) {
 // @Description  Retrieves playbooks that apply to the indicated detection.
 // @Tags         Playbooks
 // @Param        id  path  string  true        "The public Id for the detection" example(6F64990A-ACDA-40B6-AB71-134C073013B5)
+// @Param        raw query bool    false       "If true, return the playbook in raw YAML format"
 // @Success      200  {array}  model.Playbook  "The playbook was successfully retrieved"
 // @Failure      401                           "Request was not properly authenticated"
-// @Failure      404                           "Playbook not found"
+// @Failure      404                           "Detection not found"
 // @Failure      500                           "Internal SOC error; review SOC logs"
+// @Produce      application/json
+// @Produce      application/x-yaml
 // @Router       /connect/playbook/detection/{id} [get]
 func (h *PlaybookHandler) GetPlaybooksForDetection(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -99,11 +105,19 @@ func (h *PlaybookHandler) GetPlaybooksForDetection(w http.ResponseWriter, r *htt
 		return
 	}
 
+	raw := r.URL.Query().Get("raw")
+	rawResponse, _ := strconv.ParseBool(raw)
+
 	det, err := h.server.Detectionstore.GetDetectionByPublicId(ctx, publicId)
 	if err != nil {
 		logger.WithError(err).Error("unable to get detection")
 		web.Respond(w, r, http.StatusInternalServerError, err)
 
+		return
+	}
+
+	if det == nil {
+		web.Respond(w, r, http.StatusNotFound, nil)
 		return
 	}
 
@@ -135,6 +149,25 @@ func (h *PlaybookHandler) GetPlaybooksForDetection(w http.ResponseWriter, r *htt
 
 	if len(pbs) == 0 {
 		pbs = []*model.Playbook{}
+	}
+
+	if rawResponse {
+		parts := make([]string, 0, len(pbs))
+		for _, pb := range pbs {
+			rawOutput, err := yaml.Marshal(pb)
+			if err != nil {
+				logger.WithError(err).Error("unable to marshal playbooks")
+				web.Respond(w, r, http.StatusInternalServerError, err)
+
+				return
+			}
+			parts = append(parts, strings.TrimSpace(string(rawOutput)))
+		}
+
+		w.Header().Set("Content-Type", "application/x-yaml")
+
+		web.Respond(w, r, http.StatusOK, strings.Join(parts, "\n---\n"))
+		return
 	}
 
 	web.Respond(w, r, http.StatusOK, pbs)

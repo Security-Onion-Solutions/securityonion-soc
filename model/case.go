@@ -27,15 +27,15 @@ type Auditable struct {
 	// The ID assigned to this object by the server. This is a read-only field.
 	Id string `json:"id,omitempty" yaml:"id" example:"PdFc-JIBLkNJ8-bDfz47"`
 	// The date and time that this object was created. This is a read-only field.
-	CreateTime *time.Time `json:"createTime" example:"2024-11-14T15:03:22Z"`
+	CreateTime *time.Time `json:"createTime" yaml:"-" example:"2024-11-14T15:03:22Z"`
 	// The date and time that this object was last modified. This is a read-only field.
-	UpdateTime *time.Time `json:"updateTime,omitempty" example:"2024-11-14T15:33:02Z"`
+	UpdateTime *time.Time `json:"updateTime,omitempty" yaml:"-" example:"2024-11-14T15:33:02Z"`
 	// The user ID (or API client ID) that initiated this event. This is a read-only field.
-	UserId string `json:"userId" example:"socl_my_new_client"`
+	UserId string `json:"userId" yaml:"-" example:"socl_my_new_client"`
 	// The kind of object. This is a read-only field.
 	Kind string `json:"kind,omitempty" yaml:"type" example:"case"`
 	// The operation that was applied to the object. This is a read-only field.
-	Operation string `json:"operation,omitempty" example:"create"`
+	Operation string `json:"operation,omitempty" yaml:"-" example:"create"`
 }
 
 type Case struct {

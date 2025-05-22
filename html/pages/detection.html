@@ -60,6 +60,15 @@
 						</span>
 					</div>
 				</v-tab>
+				<v-tab id="detection_playbookTab" value="playbook" :class="{ 'theme-primary': activeTab === 'playbook' }" data-aid="detection_playbook_tab">
+					<v-icon class="tab-icon">fa-book</v-icon>
+					<div class="d-none d-lg-block">
+						{{ i18n.playbooks }}
+						<span v-if="playbookCount !== -1">
+							({{ playbookCount }})
+						</span>
+					</div>
+				</v-tab>
 				<v-tab id="detection_historyTab" value="history" :class="{ 'theme-primary': activeTab === 'history' }" data-aid="detection_history_tab">
 					<v-icon class="tab-icon">fa-history</v-icon>
 					<div class="d-none d-lg-block">{{ i18n.history }}</div>
@@ -564,6 +573,13 @@
 							</tr>
 						</template>
 					</v-data-table>
+				</v-tabs-window-item>
+				<v-tabs-window-item value="playbook" data-aid="detection_playbook">
+					<v-col class="contrast-bg rounded rounded-md pa-4">
+						<span data-aid="detection_source_input">
+							<prism-editor class="prism" :highlight="playbookHighlighter" v-model="joinedPlaybookSource" readonly></prism-editor>
+						</span>
+					</v-col>
 				</v-tabs-window-item>
 				<v-tabs-window-item value="history" data-aid="detection_history">
 					<v-row>

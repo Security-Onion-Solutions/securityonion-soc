@@ -742,6 +742,7 @@ const i18n = {
       pcapRetentionAbbr: 'PCAP Avail',
       pending: 'Pending',
       pendingDeletion: '(pending deletion)',
+      playbooks: 'Playbooks',
       premiumSupport: 'Premium Support',
       pro: 'Security Onion Pro',
       product: 'Security Onion',
