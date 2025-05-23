@@ -537,8 +537,8 @@ $(document).ready(function () {
                       }
                   });
 
-                  await this.loadSubgridInfo();
                   this.gridInfo[LOCAL_GRID_ID] = response.data;
+                  await this.loadSubgridInfo();
                 }
               } catch (error) {
                 if (!background) {
@@ -554,12 +554,20 @@ $(document).ready(function () {
         },
         async loadSubgridInfo() {
           if (!this.subgrids) return;
+          var deferredError;
           for (var idx = 0; idx < this.subgrids.length; idx++) {
             const grid = this.subgrids[idx];
-            const gridResponse = await this.papi.get('info', {params: { gridId: grid.id}});
-            if (gridResponse) {
-              this.gridInfo[grid.id] = gridResponse.data;
+            try {
+              const gridResponse = await this.papi.get('info', {params: { gridId: grid.id}});
+              if (gridResponse) {
+                this.gridInfo[grid.id] = gridResponse.data;
+              }
+            } catch (error) {
+              deferredError = error
             }
+          }
+          if (deferredError) {
+            throw deferredError;
           }
         },
         getSelectedGridInfo() {
