@@ -508,6 +508,11 @@ func (store *ElasticDetectionstore) GetDetection(ctx context.Context, detectId s
 }
 
 func (store *ElasticDetectionstore) GetDetectionByPublicId(ctx context.Context, publicId string) (detect *model.Detection, err error) {
+	err = store.server.CheckAuthorized(ctx, "read", "detections")
+	if err != nil {
+		return nil, err
+	}
+
 	err = store.validatePublicId(publicId, "publicId")
 	if err != nil {
 		return nil, err
