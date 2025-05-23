@@ -41,6 +41,7 @@ func RegisterPlaybookRoutes(srv *Server, r chi.Router, prefix string) {
 // @Summary      Get Playbook
 // @Description  Retrieves playbooks given an internal playbook ID.
 // @Tags         Playbooks
+// @Security     [playbooks/read]
 // @Param        id  path  string  true         "The playbook ID to retrieve" example(6F64990A-ACDA-40B6-AB71-134C073013B5)
 // @Success      200  {object}  model.Playbook  "The playbook was successfully retrieved"
 // @Failure      401                            "Request was not properly authenticated"
@@ -79,6 +80,7 @@ func (h *PlaybookHandler) GetPlaybook(w http.ResponseWriter, r *http.Request) {
 // @Summary      Get Playbook
 // @Description  Retrieves playbooks that apply to the indicated detection.
 // @Tags         Playbooks
+// @Security     [playbooks/read]
 // @Param        id  path  string  true        "The public Id for the detection" example(6F64990A-ACDA-40B6-AB71-134C073013B5)
 // @Param        raw query bool    false       "If true, return the playbook in raw YAML format"
 // @Success      200  {array}  model.Playbook  "The playbook was successfully retrieved"
@@ -176,6 +178,7 @@ func (h *PlaybookHandler) GetPlaybooksForDetection(w http.ResponseWriter, r *htt
 // @Summary      Get Playbook
 // @Description  Converts the questions of a playbook from Sigma to OQL.
 // @Tags         Playbooks
+// @Security     [playbooks/read]
 // @Param        request body	[]string  true         "The variable substituted Sigma queries to convert"
 // @Success      200  {array}  model.ConvertedQuery  "The playbook was successfully retrieved"
 // @Failure      401                                 "Request was not properly authenticated"

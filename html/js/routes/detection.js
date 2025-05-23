@@ -594,7 +594,6 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			if (showLoadingIndicator) this.$root.startLoading();
 			try {
 				const response = await this.$root.papi.get(`playbook/detection/${this.detect.publicId}?raw=true`);
-				debugger;
 				if (response && response.data) {
 					this.joinedPlaybookSource = response.data;
 					this.playbookCount = this.joinedPlaybookSource.split('\n---\n').length;
