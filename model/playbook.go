@@ -8,9 +8,9 @@ package model
 import "time"
 
 type Playbook struct {
-	Auditable `yaml:",inline"`
 	// The name of the playbook.
-	Name string `json:"name" example:"Sample Playbook"`
+	Name      string `json:"name" example:"Sample Playbook"`
+	Auditable `yaml:",inline"`
 	// The description of the playbook.
 	Description string `json:"description" example:"This is a sample playbook"`
 	// The date the playbook was created.
@@ -34,12 +34,12 @@ type Question struct {
 	Question string `json:"question" example:"What is the source IP address of the alert?"`
 	// Some context to be provided to the user. This describes why the answer might be useful.
 	Context string `json:"context" example:"Knowing if the attack comes from inside or outside the network can help determine if this is a false positive or a real attack."`
+	// An indicator for what time range the query should be limited to in order to find the answer.
+	Range *string `json:"range" yaml:",omitempty" example:"+/-3d"`
 	// Where the answer to this question can be found.
 	AnswerSources []string `yaml:"answer_sources" json:"answer_sources"`
 	// A raw YAML Sigma query that can be used to find the answer to this question. May contain variables that will be replaced with values from the alert.
 	Query string `json:"query"`
-	// An indicator for what time range the query should be limited to in order to find the answer.
-	Range *string `json:"range" example:"+/-3d"`
 }
 
 type ConvertedQuery struct {

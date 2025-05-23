@@ -283,7 +283,6 @@ $(document).ready(function () {
             }
           })
           .catch((error) => {
-            console.error('Unable to perform background action: ' + error);
             var link = action.backgroundFailureLinkFormatted;
             if (link) {
               link = route.replaceActionVar(link, "error", error.message, true)
@@ -298,7 +297,7 @@ $(document).ready(function () {
           try {
             content = btoa(content);
           } catch (e) {
-            console.error("Failed to base64 encode content: " + e);
+            console.log("Failed to base64 encode content: " + e);
           }
           return content;
         },
@@ -308,7 +307,7 @@ $(document).ready(function () {
               content = content.replace(/\\/g, "\\\\");
               content = content.replace(/\"/g, "\\\"");
             } catch (e) {
-              console.error("Failed to escape content: " + e);
+              console.log("Failed to escape content: " + e);
             }
           }
           return content
@@ -319,7 +318,7 @@ $(document).ready(function () {
             try {
               content = content.replace(/,/g, "\" OR process.entity_id:\"");
             } catch (e) {
-              console.error("Failed to set process ancestors for content: " + e);
+              console.log("Failed to set process ancestors for content: " + e);
             }
           }
           return content

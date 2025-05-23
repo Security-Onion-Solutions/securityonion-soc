@@ -1906,7 +1906,6 @@ test('askQuestion', async () => {
     'soc_timestamp': '2023-10-01T12:00:00Z',
   };
 
-  debugger;
   await comp.askQuestion(question, event);
 
   expect(question.answers.length).toBe(1);

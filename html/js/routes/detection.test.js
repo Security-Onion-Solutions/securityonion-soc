@@ -1310,3 +1310,19 @@ test('pickValue', () => {
 	val = comp.pickValue(obj, opt);
 	expect(val).toBe('Track');
 });
+
+test('loadPlaybooks', async () => {
+	const rawDocs = 'A\n---\nB\n---\nC';
+	const mock = mockPapi('get', { data: rawDocs });
+
+	comp.detect = { publicId: 'public' };
+	
+	await comp.loadPlaybooks();
+
+	expect(comp.playbookCount).toBe(3);
+	expect(comp.joinedPlaybookSource).toBe(rawDocs);
+	expect(mock).toHaveBeenCalledTimes(1);
+	expect(mock).toHaveBeenCalledWith('playbook/detection/public?raw=true');
+
+	resetPapi();
+});
