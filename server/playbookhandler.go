@@ -38,7 +38,7 @@ func RegisterPlaybookRoutes(srv *Server, r chi.Router, prefix string) {
 	})
 }
 
-// @Summary      Get Playbook
+// @Summary      Get Playbook by ID
 // @Description  Retrieves playbooks given an internal playbook ID.
 // @Tags         Playbooks
 // @Security     bearer[playbooks/read]
@@ -77,7 +77,7 @@ func (h *PlaybookHandler) GetPlaybook(w http.ResponseWriter, r *http.Request) {
 	web.Respond(w, r, http.StatusOK, pb)
 }
 
-// @Summary      Get Playbook
+// @Summary      Get Playbook For Detection
 // @Description  Retrieves playbooks that apply to the indicated detection.
 // @Tags         Playbooks
 // @Security     bearer[playbooks/read, detections/read, events/read]
@@ -187,12 +187,12 @@ func (h *PlaybookHandler) GetPlaybooksForDetection(w http.ResponseWriter, r *htt
 	web.Respond(w, r, http.StatusOK, pbs)
 }
 
-// @Summary      Get Playbook
+// @Summary      Convert Playbook Questions
 // @Description  Converts the questions of a playbook from Sigma to OQL.
 // @Tags         Playbooks
 // @Security     bearer[playbooks/read]
 // @Param        request body	[]string  true         "The variable substituted Sigma queries to convert"
-// @Success      200  {array}  model.ConvertedQuery  "The playbook was successfully retrieved"
+// @Success      200  {array}  model.ConvertedQuery  "The queries were successfully converted"
 // @Failure      401                                 "Request was not properly authenticated"
 // @Failure      500                                 "Internal SOC error; review SOC logs"
 // @Router       /connect/playbook/convert [post]
