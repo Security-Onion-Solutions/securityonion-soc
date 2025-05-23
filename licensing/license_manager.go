@@ -20,6 +20,7 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/pem"
 	"io"
 	"math/rand"
@@ -67,6 +68,7 @@ rdA93ynlX+ihg6jL0iS4uFEV9YveqajjOyi3DYyUFCjFAgMBAAE=
 
 const LICENSE_PILLAR_FILENAME = "/opt/so/saltstack/local/pillar/soc/license.sls"
 
+var revKeys = ""
 var pillarFilename = LICENSE_PILLAR_FILENAME
 var pillarMonitorCount = 0
 
@@ -182,6 +184,21 @@ func verify(key string) (*LicenseKey, error) {
 	return license, rsa.VerifyPKCS1v15(pubKey, crypto.SHA256, hash[:], sigBytes)
 }
 
+func isKeyIdAccepted(id string) bool {
+	revKeyMap := make(map[string]bool)
+	for _, key := range strings.Split(revKeys, ",") {
+		revKeyMap[key] = true
+	}
+
+	hash := sha256.Sum256([]byte(id))
+	hashb := hex.EncodeToString(hash[:])
+	if _, exists := revKeyMap[hashb]; exists {
+		return false
+	}
+
+	return true
+}
+
 func CreateAvailableFeatureList() []string {
 	available := make([]string, 0)
 	available = append(available, FEAT_API)
@@ -210,7 +227,10 @@ func Init(key string) {
 			log.WithError(err).Error("failed to verify license key")
 			status = LICENSE_STATUS_INVALID
 		} else {
-			if license.Effective.After(time.Now()) {
+			if !isKeyIdAccepted(license.Id) {
+				log.WithField("revKeyId", license.Id).Error("license ID is not accepted")
+				status = LICENSE_STATUS_INVALID
+			} else if license.Effective.After(time.Now()) {
 				log.WithField("effective", license.Effective).Error("license is not yet effective")
 				status = LICENSE_STATUS_PENDING
 			} else if license.Expiration.Before(time.Now()) {

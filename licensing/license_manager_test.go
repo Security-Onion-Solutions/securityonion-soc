@@ -395,3 +395,18 @@ func TestValidateMgmtMac(tester *testing.T) {
 	assert.False(tester, ValidateMgmtMac(""))
 	assert.False(tester, ValidateMgmtMac("bar"))
 }
+
+func TestIsKeyAccepted(tester *testing.T) {
+	defer func() { revKeys = "" }()
+	revKeys = "abc,71dd9dcf4e217067ec5b169d5a1745860b09b74bb8d623d3dd13b8272c31ce68,def"
+	assert.True(tester, isKeyIdAccepted("test"))
+	assert.True(tester, isKeyIdAccepted("fake"))
+	assert.False(tester, isKeyIdAccepted("fake-001"))
+}
+
+func TestInitRevKey(tester *testing.T) {
+	defer func() { revKeys = "" }()
+	revKeys = "abc,71dd9dcf4e217067ec5b169d5a1745860b09b74bb8d623d3dd13b8272c31ce68,def"
+	Init(EXPIRED_KEY)
+	assert.Equal(tester, LICENSE_STATUS_INVALID, GetStatus())
+}

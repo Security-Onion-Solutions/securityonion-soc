@@ -7,6 +7,7 @@
 FROM ghcr.io/security-onion-solutions/golang:1.24.0-alpine as builder
 ARG VERSION=0.0.0
 ARG ALT_BRANCH=dev
+ARG REVKEYS=
 RUN apk update && apk add libpcap-dev bash git musl-dev gcc npm python3 py3-pip py3-virtualenv python3-dev openssl-dev linux-headers
 COPY . /build
 WORKDIR /build
