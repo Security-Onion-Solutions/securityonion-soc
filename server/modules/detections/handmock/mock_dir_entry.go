@@ -6,6 +6,7 @@
 package handmock
 
 import (
+	"errors"
 	"io/fs"
 	"time"
 )
@@ -46,4 +47,27 @@ func (mde *MockDirEntry) Sys() any {
 
 func (mde *MockDirEntry) Info() (fs.FileInfo, error) {
 	return mde, nil
+}
+
+type BadMockDirEntry struct {
+	Filename string
+	Dir      bool
+	FMode    fs.FileMode
+	ErrorStr string
+}
+
+func (bmde *BadMockDirEntry) Name() string {
+	return bmde.Filename
+}
+
+func (bmde *BadMockDirEntry) IsDir() bool {
+	return bmde.Dir
+}
+
+func (bmde *BadMockDirEntry) Type() fs.FileMode {
+	return bmde.FMode
+}
+
+func (bmde *BadMockDirEntry) Info() (fs.FileInfo, error) {
+	return nil, errors.New(bmde.ErrorStr)
 }

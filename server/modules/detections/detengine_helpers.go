@@ -97,6 +97,7 @@ func WriteStateFile(iom IOManager, path string) {
 type RepoOnDisk struct {
 	Repo        *model.RuleRepo
 	Path        string
+	RulesetName string
 	WasModified bool
 }
 
@@ -126,24 +127,30 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 			return nil, false, ErrModuleStopped
 		}
 
-		parser, err := url.Parse(repo.Repo)
-		if err != nil {
-			log.WithError(err).WithField("repoUrl", repo.Repo).Error("Failed to parse repo URL, doing nothing with it")
-			continue
+		folderName := repo.RulesetName
+
+		if folderName == "" {
+			parser, err := url.Parse(repo.Repo)
+			if err != nil {
+				log.WithError(err).WithField("repoUrl", repo.Repo).Error("Failed to parse repo URL, doing nothing with it")
+				continue
+			}
+
+			_, folderName = path.Split(parser.Path)
 		}
 
-		_, lastFolder := path.Split(parser.Path)
-		repoPath := filepath.Join(baseRepoFolder, lastFolder)
+		repoPath := filepath.Join(baseRepoFolder, folderName)
 
 		dirty := &RepoOnDisk{
-			Repo: repo,
-			Path: repoPath,
+			Repo:        repo,
+			Path:        repoPath,
+			RulesetName: folderName,
 		}
 
 		reclone := false
 		skipRepo := false
 
-		_, ok := existingRepos[lastFolder]
+		_, ok := existingRepos[folderName]
 		if ok {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
 			defer cancel()
@@ -161,7 +168,7 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 				anythingNew = true
 			}
 
-			delete(existingRepos, lastFolder)
+			delete(existingRepos, folderName)
 		}
 
 		if reclone {

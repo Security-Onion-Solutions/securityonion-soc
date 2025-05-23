@@ -15,8 +15,10 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -148,7 +150,7 @@ func (e *StrelkaEngine) Init(config module.ModuleConfig) (err error) {
 }
 
 func (e *StrelkaEngine) Start() error {
-	e.srv.DetectionEngines[model.EngineNameStrelka] = e
+	e.srv.DetectionEngines.Store(model.EngineNameStrelka, e)
 	e.isRunning = true
 
 	// start long running processes
@@ -414,6 +416,16 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 			baseDir = filepath.Join(baseDir, *repo.Repo.Folder)
 		}
 
+		ruleset := repo.RulesetName
+		if ruleset == "" {
+			parser, err := url.Parse(repo.Repo.Repo)
+			if err == nil {
+				_, ruleset = path.Split(parser.Path)
+			} else {
+				ruleset = repo.Repo.Repo
+			}
+		}
+
 		err = e.WalkDir(baseDir, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				logger.WithError(err).WithField("repoPath", path).Error("failed to walk path")
@@ -446,7 +458,7 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 			}
 
 			for _, rule := range parsed {
-				det := rule.ToDetection(repo.Repo.License, filepath.Base(repo.Path), repo.Repo.Community)
+				det := rule.ToDetection(repo.Repo.License, ruleset, repo.Repo.Community)
 				detects = append(detects, det)
 			}
 

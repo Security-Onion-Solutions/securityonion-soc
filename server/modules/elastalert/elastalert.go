@@ -19,8 +19,10 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -314,7 +316,7 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 }
 
 func (e *ElastAlertEngine) Start() error {
-	e.srv.DetectionEngines[model.EngineNameElastAlert] = e
+	e.srv.DetectionEngines.Store(model.EngineNameElastAlert, e)
 	e.isRunning = true
 	e.IntegrityCheckerData.IsRunning = true
 
@@ -1021,6 +1023,16 @@ func (e *ElastAlertEngine) parseRepoRules(allRepos []*detections.RepoOnDisk) (de
 			baseDir = filepath.Join(baseDir, *repo.Repo.Folder)
 		}
 
+		ruleset := repo.RulesetName
+		if ruleset == "" {
+			parser, err := url.Parse(repo.Repo.Repo)
+			if err == nil {
+				_, ruleset = path.Split(parser.Path)
+			} else {
+				ruleset = repo.Repo.Repo
+			}
+		}
+
 		err := e.WalkDir(baseDir, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				log.WithError(err).WithField("repoPath", path).Error("Failed to walk path")
@@ -1051,8 +1063,6 @@ func (e *ElastAlertEngine) parseRepoRules(allRepos []*detections.RepoOnDisk) (de
 				errMap[path] = err
 				return nil
 			}
-
-			ruleset := filepath.Base(repo.Path)
 
 			det := rule.ToDetection(ruleset, repo.Repo.License, repo.Repo.Community)
 

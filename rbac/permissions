@@ -38,6 +38,9 @@ roles/write:      user-admin
 users/read:       user-monitor
 users/write:      user-admin
 users/delete:     user-admin
+playbooks/read:   playbook-monitor
+playbooks/write:  playbook-admin
+playbooks/delete: playbook-admin
 
 # Define low-level permission set inheritence relationships
 # Syntax      => roleB: roleA
@@ -54,3 +57,5 @@ job-user:          job-admin
 node-monitor:      node-admin
 query-monitor:     query-admin
 user-monitor:      user-admin
+playbook-monitor:  playbook-admin
+detections-monitor: playbook-monitor
