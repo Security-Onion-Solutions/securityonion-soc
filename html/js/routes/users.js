@@ -41,6 +41,7 @@ routes.push({ path: '/users', name: 'users', component: {
       maxpasslen: value => (!value || value.length <= USER_PASSWORD_LENGTH_MAX) || this.$root.i18n.ruleMaxLen,
       badpasschs: value => (!value || !value.match(USER_PASSWORD_INVALID_RX)) || this.$root.i18n.rulePassBadChars,
       email: value => !value || value.length < 100 || this.$root.i18n.ruleMaxLen,
+      lowercase: value => !value || value.toLowerCase() == value || this.$root.i18n.lowercaseRequired,
       name: value => !value || value.length < 100 || this.$root.i18n.ruleMaxLen,
       note: value => !value || value.length < 100 || this.$root.i18n.ruleMaxLen,
     },
