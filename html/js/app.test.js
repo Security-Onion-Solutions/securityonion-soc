@@ -872,7 +872,8 @@ test('loadGridInfo', async () => {
 
   app.gridInfo = {};
   app.subgrids = [{id: 'g1'},{id: 'g2'}];
-  await app.loadSubgridInfo();
+  await expect(() => app.loadSubgridInfo()).rejects.toThrow(Error);
+
   expect(mock).toHaveBeenCalledWith('info', { params: { gridId: 'g1' }});
   expect(mock).toHaveBeenCalledWith('info', { params: { gridId: 'g2' }});
   expect(app.gridInfo['g1']).toBeUndefined();
