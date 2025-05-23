@@ -80,7 +80,7 @@ func (h *PlaybookHandler) GetPlaybook(w http.ResponseWriter, r *http.Request) {
 // @Summary      Get Playbook
 // @Description  Retrieves playbooks that apply to the indicated detection.
 // @Tags         Playbooks
-// @Security     bearer[playbooks/read, detections/read]
+// @Security     bearer[playbooks/read, detections/read, events/read]
 // @Param        id  path  string  true        "The public Id for the detection" example(6F64990A-ACDA-40B6-AB71-134C073013B5)
 // @Param        raw query bool    false       "If true, return the playbook in raw YAML format"
 // @Success      200  {array}  model.Playbook  "The playbook was successfully retrieved"
@@ -101,6 +101,12 @@ func (h *PlaybookHandler) GetPlaybooksForDetection(w http.ResponseWriter, r *htt
 	}
 
 	err = h.server.CheckAuthorized(ctx, "read", "detections")
+	if err != nil {
+		web.Respond(w, r, http.StatusUnauthorized, err)
+		return
+	}
+
+	err = h.server.CheckAuthorized(ctx, "read", "events")
 	if err != nil {
 		web.Respond(w, r, http.StatusUnauthorized, err)
 		return

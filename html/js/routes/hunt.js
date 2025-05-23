@@ -2837,7 +2837,6 @@ const huntComponent = {
         } catch (e) {
           question.error = true;
           question.answers = [];
-          console.error('Error asking question:', e);
         }
       } else {
         // no range specified means we can find the answer on the event
@@ -2895,13 +2894,11 @@ const huntComponent = {
 
       let value = parseInt(range);
       if (isNaN(value)) {
-        console.error('Invalid range value:', range);
         return '';
       }
 
       unit = { d: 'days', h: 'hours', m: 'minutes', s: 'seconds' }[unit];
       if (!unit) {
-        console.error('Invalid range unit:', range);
         return '';
       }
 
