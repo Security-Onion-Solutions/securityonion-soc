@@ -641,6 +641,7 @@ const i18n = {
       loginTitle: 'Login to Security Onion',
       logout: 'Logout',
       logoutFailure: 'Unable to initiate logout. Ensure server is accessible.',
+      lowercaseRequired: 'Values must be all lower case.',
       manualSyncFull: 'Full Update',
       manualSyncUpdate: 'Differential Update',
       manualSyncHint: 'Select an engine to synchronize',
