@@ -12,7 +12,6 @@ global.$ = function(doc) {
 };
 global.document.ready = function(fn) { fn(); };
 global.window.scrollTo = jest.fn();
-global.location = { hash: "" };
 ////////////////////////////////////
 // Mock Vue Internals (not exported)
 ////////////////////////////////////
