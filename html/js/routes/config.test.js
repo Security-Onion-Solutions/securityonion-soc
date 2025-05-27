@@ -1148,14 +1148,7 @@ test('moveEntryWrapWithoutPlus', () => {
 
 test('getSettingLink', () => {
   const setting = { id: 'test.setting', advanced: true };
-  global.window = Object.create(window);
-  const url = "https://example.com/#/config";
-  Object.defineProperty(window, 'location', {
-    value: {
-      href: url,
-      origin: "https://example.com",
-    }
-  });
+
   comp.$route = { path: '/config' };
   const link = comp.getSettingLink(setting);
   expect(link).toBe('https://example.com/#/config?s=test.setting&a=1');

@@ -1054,13 +1054,13 @@ test('addToCase', () => {
   comp.addToCase(false);
 
   expect(window.open).toHaveBeenCalledTimes(1);
-  expect(window.open).toHaveBeenCalledWith('http://localhost/#/case/create?type=evidence&value=test', '_self');
+  expect(window.open).toHaveBeenCalledWith('https://example.com/#/case/create?type=evidence&value=test', '_self');
   expect(comp.addToCaseDialogVisible).toBe(false);
 
   comp.addToCase(true)
 
   expect(window.open).toHaveBeenCalledTimes(2);
-  expect(window.open).toHaveBeenCalledWith('http://localhost/#/case/create?type=evidence&value=test', '_blank');
+  expect(window.open).toHaveBeenCalledWith('https://example.com/#/case/create?type=evidence&value=test', '_blank');
   expect(comp.addToCaseDialogVisible).toBe(false);
 
   comp.selectedMruCase = { id: '1', title: 'Case 1' };
@@ -1068,7 +1068,7 @@ test('addToCase', () => {
   comp.addToCase(true);
 
   expect(window.open).toHaveBeenCalledTimes(3);
-  expect(window.open).toHaveBeenCalledWith('http://localhost/#/case/1?type=evidence&value=test', '1');
+  expect(window.open).toHaveBeenCalledWith('https://example.com/#/case/1?type=evidence&value=test', '1');
   expect(comp.addToCaseDialogVisible).toBe(false);
 
   window.open = origOpen;

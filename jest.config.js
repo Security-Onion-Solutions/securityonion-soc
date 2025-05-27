@@ -141,7 +141,9 @@ module.exports = {
   testEnvironment: "jsdom",
 
   // Options that will be passed to the testEnvironment
-  // testEnvironmentOptions: {},
+  testEnvironmentOptions: {
+    url: "https://example.com",
+  },
 
   // Adds a location field to test results
   // testLocationInResults: false,
