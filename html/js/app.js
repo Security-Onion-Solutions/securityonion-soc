@@ -1532,6 +1532,11 @@ $(document).ready(function () {
             return new Date(a[field]) - new Date(b[field]);
           }
         },
+        dateToRange(d) {
+          const before = moment(d).subtract(1, 'second').format(this.i18n.timePickerFormat);
+          const after = moment(d).add(1, 'second').format(this.i18n.timePickerFormat);
+          return `${before} - ${after}`;
+        }
       },
       created() {
         this.log("Initializing application components");
@@ -1544,7 +1549,7 @@ $(document).ready(function () {
       mounted() {
         this.setFavicon();
 
-        const filters = {
+        const universalFuncs = {
           formatUTCDate: this.formatUTCDate,
           formatDateTime: this.formatDateTime,
           formatDuration: this.formatDuration,
@@ -1555,11 +1560,12 @@ $(document).ready(function () {
           formatMarkdown: this.formatMarkdown,
           formatTimestamp: this.formatTimestamp,
           colorSeverity: this.colorSeverity,
+          dateToRange: this.dateToRange,
         };
 
-        // Register filters globally
-        Object.keys(filters).forEach(key => {
-          app.config.globalProperties[key] = filters[key];
+        // Register these functions globally
+        Object.keys(universalFuncs).forEach(key => {
+          app.config.globalProperties[key] = universalFuncs[key];
         });
 
         window.matchMedia('(prefers-color-scheme: dark)').addListener(() => this.setFavicon());
