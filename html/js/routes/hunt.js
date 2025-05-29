@@ -385,15 +385,10 @@ const huntComponent = {
       this.selectAllIndeterminate = false;
       this.selectedCount = 0;
 
-      // reset playbooks tabs/expansion
-      this.activeTabs = {};
-      this.expandedEvents = [];
-
-      var route = this;
-      var onSuccess = function() {};
-      var onFail = function() {
+      var onSuccess = () => {};
+      var onFail = () => {
         // When navigating to the same URL, simply refresh data
-        route.loadData();
+        this.loadData();
       };
       if (this.relativeTimeEnabled) {
         this.dateRange = '';
@@ -517,6 +512,15 @@ const huntComponent = {
         this.autoRefreshEnabled = false;
         this.autoRefreshInterval = 0;
       }
+      if (this.$route.query.tab) {
+        this.activeTabs[0] = this.$route.query.tab;
+      }
+      if (this.$route.query.expand) {
+        const items = this.$route.query.expand.split('|');
+        for (let item of items) {
+          this.expandedEvents.push(item);
+        }
+      }
       if (Array.isArray(this.filterToggles)) {
         for (const q in this.$route.query) {
           this.filterToggles.forEach(toggle => {
@@ -577,6 +581,11 @@ const huntComponent = {
           params.gridId = this.gridId;
         }
 
+        if (this.loaded) {
+          this.activeTabs = {};
+          this.expandedEvents = [];
+        }
+
         let response = await this.$root.papi.get('events/', { params: params });
 
         this.eventPage = 1;
@@ -596,6 +605,14 @@ const huntComponent = {
         }
         this.loaded = true;
         this.addMRUQuery(this.query);
+
+        if (this.activeTabs[0] === 'playbook') {
+          // this should only happen when the user is opening a
+          // playbook for a specific alert from another page
+          for (let item of this.eventData) {
+            this.loadPlaybook(item);
+          }
+        }
 
         var subtitle = this.isAdvanced() ? this.query : this.queryName;
         this.$root.setSubtitle(this.i18n[this.category] + " - " + subtitle);
@@ -2930,6 +2947,8 @@ const huntComponent = {
 
       if (question.range) {
         payload.query.t = this.buildQuestionRange(event, question.range);
+      } else {
+        payload.query.t = this.dateToRange(this.getEventTimestamp(event));
       }
 
       return payload;
@@ -3019,6 +3038,11 @@ const huntComponent = {
 
       return '';
     },
+    dateToRange(d) {
+      const before = moment(d).subtract(1, 'second').format(this.i18n.timePickerFormat);
+      const after = moment(d).add(1, 'second').format(this.i18n.timePickerFormat);
+      return `${before} - ${after}`;
+    }
   }
 };
 

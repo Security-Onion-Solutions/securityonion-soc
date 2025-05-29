@@ -1087,6 +1087,11 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       }
 
       return obj;
+    },
+    dateToRange(d) {
+      const before = moment(d).subtract(1, 'second').format(this.i18n.timePickerFormat);
+      const after = moment(d).add(1, 'second').format(this.i18n.timePickerFormat);
+      return `${before} - ${after}`;
     }
   }
 }});
