@@ -1150,7 +1150,7 @@ func TestSyncChanges(t *testing.T) {
 	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
 		"dummy": {
 			Auditable: model.Auditable{
-				Id:         "abc",
+				Id:         "09e98cc8-9df7-4891-ba16-9e1e14fd8cf6",
 				CreateTime: util.Ptr(time.Now()),
 			},
 			PublicID:  "dummy",
@@ -1158,7 +1158,7 @@ func TestSyncChanges(t *testing.T) {
 		},
 		"delete": {
 			Auditable: model.Auditable{
-				Id: "deleteme",
+				Id: "e59b4d9a-1f2f-4dc5-b5e4-77c962292c74",
 			},
 			PublicID: "delete",
 		},
@@ -1186,7 +1186,7 @@ func TestSyncChanges(t *testing.T) {
 	bim.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
 		if item.OnSuccess != nil {
 			resp := esutil.BulkIndexerResponseItem{
-				DocumentID: "id",
+				DocumentID: item.DocumentID,
 			}
 			item.OnSuccess(ctx, item, resp)
 		}
@@ -1285,7 +1285,7 @@ func TestSyncChanges(t *testing.T) {
 		return item.DocumentID
 	})
 
-	assert.Equal(t, []string{"abc", "", "deleteme"}, workDocIds) // update has an id, create does not, delete does
+	assert.Equal(t, []string{"09e98cc8-9df7-4891-ba16-9e1e14fd8cf6", "4a9dae8e-383f-41c5-b426-b458c1b453bc", "e59b4d9a-1f2f-4dc5-b5e4-77c962292c74"}, workDocIds) // update has an id, create does not, delete does
 }
 
 func TestLoadAndMergeAuxiliaryData(t *testing.T) {

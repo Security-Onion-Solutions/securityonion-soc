@@ -526,6 +526,7 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 			detect.Overrides = orig.Overrides
 			detect.CreateTime = orig.CreateTime
 		} else {
+			detect.Id = util.ToUUID(detect.PublicID)
 			detect.CreateTime = util.Ptr(time.Now())
 			checkRulesetEnabled(e, detect)
 		}
@@ -607,9 +608,10 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 			}).Info("creating new YARA detection")
 
 			err = bulk.Add(e.srv.Context, esutil.BulkIndexerItem{
-				Index:  index,
-				Action: "create",
-				Body:   bytes.NewReader(document),
+				Index:      index,
+				Action:     "create",
+				DocumentID: detect.Id,
+				Body:       bytes.NewReader(document),
 				OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
 					auditMut.Lock()
 					defer auditMut.Unlock()

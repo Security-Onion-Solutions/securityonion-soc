@@ -6,6 +6,7 @@
 package util
 
 import (
+	"regexp"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -150,4 +151,34 @@ func TestCompare(t *testing.T) {
 	assert.False(t, ComparePtrs(z, o))
 	assert.False(t, ComparePtrs(o, z))
 	assert.False(t, ComparePtrs(x, z))
+}
+
+func TestToUUID(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"", "b51e85a6-fc67-48f5-b83e-6e6dd3e13d01"},
+		{"test", "21399f9a-a347-4ff4-b94b-7286b575aada"},
+		{"example", "2b9a9ab7-92d6-48ce-bac9-a94603dc33ff"},
+	}
+
+	for _, test := range tests {
+		got := ToUUID(test.input)
+		assert.Equal(t, test.expected, got)
+	}
+}
+
+func TestToUUID_FormatCheck(t *testing.T) {
+	uuid := ToUUID("format-check")
+	matched, err := regexp.MatchString(`^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-b[a-f0-9]{3}-[a-f0-9]{12}$`, uuid)
+	assert.NoError(t, err)
+	assert.True(t, matched)
+}
+
+func TestToUUID_ConsistencyCheck(t *testing.T) {
+	got := ToUUID("repeat-test")
+	for i := 0; i < 1000; i++ {
+		assert.Equal(t, got, ToUUID("repeat-test"))
+	}
 }

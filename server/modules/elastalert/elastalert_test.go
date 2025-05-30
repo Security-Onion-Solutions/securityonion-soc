@@ -1749,7 +1749,7 @@ func TestSyncChanges(t *testing.T) {
 	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
 		SimpleRuleSID: {
 			Auditable: model.Auditable{
-				Id:         "abc",
+				Id:         "9e7087bd-61f3-4a8c-baf2-16a53ddbc188",
 				CreateTime: util.Ptr(time.Now()),
 			},
 			PublicID:  SimpleRuleSID,
@@ -1757,7 +1757,7 @@ func TestSyncChanges(t *testing.T) {
 		},
 		"00000000-0000-0000-0000-000000000000": {
 			Auditable: model.Auditable{
-				Id: "deleteme",
+				Id: "48f3cde9-f9ed-44f9-bb62-9e545a9bdb39",
 			},
 			PublicID: "00000000-0000-0000-0000-000000000000",
 		},
@@ -1767,7 +1767,7 @@ func TestSyncChanges(t *testing.T) {
 	bim.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
 		if item.OnSuccess != nil {
 			resp := esutil.BulkIndexerResponseItem{
-				DocumentID: "id",
+				DocumentID: item.DocumentID,
 			}
 			item.OnSuccess(ctx, item, resp)
 		}
@@ -1850,7 +1850,7 @@ func TestSyncChanges(t *testing.T) {
 		return item.DocumentID
 	})
 
-	assert.Equal(t, []string{"abc", "", "deleteme"}, workDocIds) // update has an id, create does not, delete does
+	assert.Equal(t, []string{"9e7087bd-61f3-4a8c-baf2-16a53ddbc188", "47bd3bbf-3c67-42c7-b70b-6b76bb5cf04f", "48f3cde9-f9ed-44f9-bb62-9e545a9bdb39"}, workDocIds)
 }
 
 func TestSyncUnchangedOverrides(t *testing.T) {

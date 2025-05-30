@@ -2332,23 +2332,23 @@ func TestSyncChanges(t *testing.T) {
 	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
 		SimpleRuleSID: {
 			Auditable: model.Auditable{
-				Id:         "abc",
+				Id:         "9e466416-2d7a-4ab3-b798-7f6b0cff3660",
 				CreateTime: util.Ptr(time.Now()),
 			},
 			IsEnabled: true,
 		},
 		"99999": {
 			Auditable: model.Auditable{
-				Id: "deleteme",
+				Id: "88de5ebe-1c13-4818-b397-d4c3afaa32d8",
 			},
 		}, // to be deleted
 	}, nil)
 	detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(bim, nil)
-	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), nil, nil).Return([]byte("document"), "index", nil).Times(3)
+	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), nil).Return([]byte("document"), "index", nil).Times(3)
 	bim.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
 		if item.OnSuccess != nil {
 			resp := esutil.BulkIndexerResponseItem{
-				DocumentID: "id",
+				DocumentID: item.DocumentID,
 			}
 			item.OnSuccess(ctx, item, resp)
 		}
@@ -2360,7 +2360,7 @@ func TestSyncChanges(t *testing.T) {
 	bim.EXPECT().Close(gomock.Any()).Return(nil)
 	bim.EXPECT().Stats().Return(esutil.BulkIndexerStats{})
 	detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(auditm, nil)
-	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), util.Ptr("id"), gomock.Any()).Return([]byte("document"), "index", nil).Times(3)
+	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return([]byte("document"), "index", nil).Times(3)
 	auditm.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
 		if item.OnSuccess != nil {
 			resp := esutil.BulkIndexerResponseItem{
@@ -2434,7 +2434,7 @@ func TestSyncChanges(t *testing.T) {
 		return item.DocumentID
 	})
 
-	assert.Equal(t, []string{"abc", "", "deleteme"}, workDocIds) // update has an id, create does not, delete does
+	assert.Equal(t, []string{"9e466416-2d7a-4ab3-b798-7f6b0cff3660", "67c2c34e-de94-42c3-b67f-a687a2a3cf98", "88de5ebe-1c13-4818-b397-d4c3afaa32d8"}, workDocIds)
 }
 
 func TestSyncModifiedByFilter(t *testing.T) {
