@@ -292,7 +292,7 @@
 											<template v-if="!group.maximized" #item="{ item, index, isExpanded, toggleExpand, internalItem }">
 												<tr>
 													<td v-if="aggregationActionsEnabled">
-														<v-btn v-if="isCategory('alerts')" variant="text" icon size="x-small" @click="toggleExpand(internalItem); if (isExpanded) fetchNewestEvent(item)" class="theme-icon">
+														<v-btn id="expandEvent" v-if="isCategory('alerts')" variant="text" icon size="x-small" @click="toggleExpand(internalItem); if (isExpanded) fetchNewestEvent(item)" class="theme-icon">
 															<v-icon v-if="isExpanded(internalItem)" :alt="i18n.eventExpand" :title="i18n.eventExpandHelp" :data-aid="'group_item_collapse_' + category">fa-angle-down</v-icon>
 															<v-icon v-else :alt="i18n.eventExpand" :title="i18n.eventExpandHelp" :data-aid="'group_item_expand_' + category">fa-angle-right</v-icon>
 														</v-btn>
@@ -528,7 +528,7 @@
 						<v-col ref="eventColumn" cols="12" style="position: relative;">
 							<v-data-table ref="eventTable" :search="eventFilter" :sort-by="sortBy" @update:sort-by="val => sortBy = val" item-value="soc_id" :items-per-page-options="itemsPerPageOptions" :data-aid="'events_table_' + category"
 								:items-per-page="itemsPerPage" must-sort :headers="eventHeaders" :items="eventData" v-model:page="eventPage" show-select :custom-sort="sortEvents" density="compact" @current-items="val => eventCurrentItems = val"
-								:expanded.sync="expandedEvents">
+								v-model:expanded="expandedEvents">
 								<template #top="data">
 									<!-- not-fancy way to access the current page of items:
 									https://stackoverflow.com/questions/76008941/vuetify-3-data-table-current-items

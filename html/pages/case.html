@@ -955,8 +955,12 @@
 											<v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_events_collapse">fa-angle-down</v-icon>
 											<v-icon v-else :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_events_expand">fa-angle-right</v-icon>
 										</v-btn>
-										<router-link class="no-underline" :to="{ name: 'hunt', query: {q: buildHuntQuery(item)}}" :title="i18n.huntForEvent" v-if="item.fields['soc_id']" data-aid="case_events_hunt">
+										<router-link class="no-underline" :to="{ name: 'hunt', query: { q: buildHuntQuery(item) } }" :title="i18n.huntForEvent" v-if="item.fields['soc_id']" data-aid="case_events_hunt">
 											<v-icon :title="i18n.huntForEvent" class="theme-text">fa-crosshairs</v-icon>
+										</router-link>
+										<router-link class="no-underline mx-2" :to="{ name: 'alerts', query: { q: '_id:' + item.fields.soc_id, escalated: true, acknowledged: true, t: dateToRange(item.fields['@timestamp']), tab: 'playbook', expand: item.fields.soc_id } }"
+											target="_blank" :title="i18n.playbooksPivot" v-if="item.fields.tags.includes('alert')" data-aid="case_events_playbook">
+											<v-icon :title="i18n.playbooksPivot" class="theme-text">fa-book</v-icon>
 										</router-link>
 									</td>
 									<td class="associated" data-aid="case_events_timestamp_display">{{ formatTimestamp(item.fields["soc_timestamp"]) }}</td>

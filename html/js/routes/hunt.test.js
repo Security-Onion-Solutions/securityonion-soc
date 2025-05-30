@@ -2028,15 +2028,15 @@ test('queryVariableSubstitution - handles array fields with dashes', () => {
   });
 
 test('queryVariableSubstitution - handles real-world query format', () => {
-    const event = {
-      'network.private_ip': ['192.168.1.1', '10.0.0.1'],
-      'dns.query_name': 'malicious.com',
-      'network.public_ip': ['203.0.113.1'],
-      'related.ip': ['203.0.113.1', '192.168.1.2'],
-    };
-    const playbooks = [{
-      questions: [{
-        query: `aggregation: false
+  const event = {
+    'network.private_ip': ['192.168.1.1', '10.0.0.1'],
+    'dns.query_name': 'malicious.com',
+    'network.public_ip': ['203.0.113.1'],
+    'related.ip': ['203.0.113.1', '192.168.1.2'],
+  };
+  const playbooks = [{
+    questions: [{
+      query: `aggregation: false
 logsource:
   category: network
   service: dns
@@ -2053,12 +2053,12 @@ fields:
     - dns.query.type_name
     - dns.resolved_ip
     - dns.response.code_name`
-      }]
-    }];
+    }]
+  }];
 
-    comp.queryVariableSubstitution(event, playbooks);
-    expect(playbooks[0].questions[0].filledQuery).toBe(
-      `aggregation: false
+  comp.queryVariableSubstitution(event, playbooks);
+  expect(playbooks[0].questions[0].filledQuery).toBe(
+    `aggregation: false
 logsource:
   category: network
   service: dns
@@ -2080,5 +2080,5 @@ fields:
     - dns.query.type_name
     - dns.resolved_ip
     - dns.response.code_name`
-    );
-  });
+  );
+});
