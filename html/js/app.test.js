@@ -1014,6 +1014,14 @@ test('dateToRange', () => {
       input: new Date('2025-05-29T16:26:04.226Z'),
       output: '2025/05/29 04:26:03 PM - 2025/05/29 04:26:05 PM',
     },
+    {
+      input: 'x',
+      output: 'Invalid date - Invalid date'
+    },
+    {
+      input: null,
+      output: 'Invalid date - Invalid date',
+    },
   ];
 
   for (let t of tests) {
