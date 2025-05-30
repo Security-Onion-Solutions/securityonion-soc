@@ -4,7 +4,7 @@
 # https://securityonion.net/license; you may not use this file except in compliance with the
 # Elastic License 2.0.
 
-FROM ghcr.io/security-onion-solutions/golang:1.24.0-alpine as builder
+FROM ghcr.io/security-onion-solutions/golang:1.24.3-alpine as builder
 ARG VERSION=0.0.0
 ARG ALT_BRANCH=dev
 ARG REVKEYS=
@@ -31,7 +31,7 @@ RUN npm install jest jest-environment-jsdom --global
 RUN ./build.sh "$VERSION"
 
 
-FROM ghcr.io/security-onion-solutions/python:3.13.0-slim
+FROM ghcr.io/security-onion-solutions/python:3.13.3-slim
 
 ARG UID=939
 ARG GID=939
