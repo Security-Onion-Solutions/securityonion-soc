@@ -1024,8 +1024,14 @@ test('dateToRange', () => {
     },
   ];
 
+  const orig = console.warn;
+  console.warn = jest.fn();
+
   for (let t of tests) {
     const out = app.dateToRange(t.input);
     expect(out).toBe(t.output);
   }
+
+  expect(console.warn).toHaveBeenCalledTimes(1);
+  console.warn = orig;
 });
