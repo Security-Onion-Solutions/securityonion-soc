@@ -743,6 +743,7 @@ const i18n = {
       pending: 'Pending',
       pendingDeletion: '(pending deletion)',
       playbooks: 'Playbooks',
+      playbooksPivot: 'Pivot to Playbooks in Alerts',
       premiumSupport: 'Premium Support',
       pro: 'Security Onion Pro',
       product: 'Security Onion',

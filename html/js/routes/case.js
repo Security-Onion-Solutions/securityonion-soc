@@ -1087,7 +1087,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       }
 
       return obj;
-    }
+    },
   }
 }});
 

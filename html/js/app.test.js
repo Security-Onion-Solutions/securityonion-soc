@@ -994,3 +994,38 @@ test('apiRequestCallback', () => {
   var newReq = app.apiRequestCallback(req);
   expect(newReq.params).toStrictEqual({ gridId: 'xyz' });
 });
+
+test('dateToRange', () => {
+  app.i18n.timePickerFormat = 'YYYY/MM/DD hh:mm:ss A';
+  const tests = [
+    {
+      input: 0,
+      output: '1969/12/31 11:59:59 PM - 1970/01/01 12:00:01 AM',
+    },
+    {
+      input: new Date(0),
+      output: '1969/12/31 11:59:59 PM - 1970/01/01 12:00:01 AM',
+    },
+    {
+      input: '2025-05-29T16:26:04.226Z',
+      output: '2025/05/29 04:26:03 PM - 2025/05/29 04:26:05 PM',
+    },
+    {
+      input: new Date('2025-05-29T16:26:04.226Z'),
+      output: '2025/05/29 04:26:03 PM - 2025/05/29 04:26:05 PM',
+    },
+    {
+      input: 'x',
+      output: 'Invalid date - Invalid date'
+    },
+    {
+      input: null,
+      output: 'Invalid date - Invalid date',
+    },
+  ];
+
+  for (let t of tests) {
+    const out = app.dateToRange(t.input);
+    expect(out).toBe(t.output);
+  }
+});
