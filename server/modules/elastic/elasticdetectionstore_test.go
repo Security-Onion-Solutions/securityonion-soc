@@ -416,12 +416,15 @@ func TestCreateDetectionValid(t *testing.T) {
 
 	fakeStore.SearchResults = []*model.EventSearchResults{
 		{
+			TotalEvents: 0,
+		},
+		{
 			TotalEvents: 1,
 			Events: []*model.EventRecord{
 				{
 					Payload: map[string]interface{}{
 						"so_detection.userId":      "myRequestorId",
-						"so_detection.publicId":    "",
+						"so_detection.publicId":    "201234",
 						"so_detection.title":       "myTitle",
 						"so_detection.severity":    "low",
 						"so_detection.author":      "Jane Doe",
@@ -444,6 +447,7 @@ func TestCreateDetectionValid(t *testing.T) {
 						},
 						"so_kind": "detection",
 					},
+					Id: "fa7e7b78-b2ad-4345-b390-39fa0b0b505c",
 				},
 			},
 		},
@@ -458,6 +462,7 @@ func TestCreateDetectionValid(t *testing.T) {
 		Severity:    "low",
 		Author:      "Jane Doe",
 		Description: "myDescription",
+		PublicID:    "201234",
 		Content:     "myContent",
 		IsEnabled:   true,
 		IsReporting: true,
@@ -471,6 +476,9 @@ func TestCreateDetectionValid(t *testing.T) {
 		},
 		Tags: []string{"myTag"},
 	}
+	detWithId := util.Copy(det)
+	detWithId.Id = "fa7e7b78-b2ad-4345-b390-39fa0b0b505c"
+	detWithId.UserId = "myRequestorId"
 
 	body1 := `{"result":"created", "_id":"ABC123"}`
 	body2 := `{"result":"created", "_id":"DEF456"}`
@@ -494,14 +502,14 @@ func TestCreateDetectionValid(t *testing.T) {
 	assert.NotNil(t, postDet.Overrides[0].CreatedAt)
 	assert.NotNil(t, postDet.Overrides[0].UpdatedAt)
 	assert.Equal(t, "detection", postDet.Kind)
-	det.CreateTime = nil
+	detWithId.CreateTime = nil
 	postDet.CreateTime = nil
 	postDet.UpdateTime = nil
 	postDet.Kind = ""
 	postDet.Overrides = nil
-	det.Overrides = nil
+	detWithId.Overrides = nil
 
-	assert.Equal(t, det, postDet)
+	assert.Equal(t, detWithId, postDet)
 
 	reqs := mocktrans.GetRequests()
 
@@ -514,7 +522,7 @@ func TestCreateDetectionValid(t *testing.T) {
 	assert.NotNil(t, reqDet.Overrides[0].UpdatedAt)
 	reqDet.CreateTime = nil
 	reqDet.Overrides = nil
-	assert.Equal(t, det, reqDet)
+	assert.Equal(t, detWithId, reqDet)
 
 	body, err := io.ReadAll(reqs[1].Body)
 	assert.NoError(t, err)
@@ -533,7 +541,7 @@ func TestCreateDetectionValid(t *testing.T) {
 	reqDet.CreateTime = nil
 	reqDet.Overrides = nil
 
-	assert.Equal(t, det, reqDet)
+	assert.Equal(t, detWithId, reqDet)
 
 	kind := gjson.Get(string(body), "so_kind").Str
 	assert.Equal(t, "detection", kind)

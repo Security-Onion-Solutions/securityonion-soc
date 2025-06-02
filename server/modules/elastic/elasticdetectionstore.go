@@ -444,9 +444,13 @@ func (store *ElasticDetectionstore) DetectionScroll(ctx context.Context, criteri
 func (store *ElasticDetectionstore) prepareForSave(ctx context.Context, obj *model.Auditable) string {
 	obj.UserId, _ = ctx.Value(web.ContextKeyRequestorId).(string)
 
+	hasOpOverride := modcontext.ReadOverrideOperation(ctx) != nil
+
 	// Don't waste space by saving the these values which are already part of ES documents
 	id := obj.Id
-	obj.Id = ""
+	if !hasOpOverride {
+		obj.Id = ""
+	}
 	obj.UpdateTime = nil
 
 	return id
