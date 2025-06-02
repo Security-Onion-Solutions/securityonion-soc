@@ -2985,7 +2985,7 @@ const huntComponent = {
         }
       }
 
-      const q = parts.join(' AND ') + `| sortby event_data.@timestamp`;
+      const q = parts.join(' AND ') + `| sortby @timestamp`;
 
       let params = {
         query: q,
