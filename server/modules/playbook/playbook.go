@@ -395,8 +395,8 @@ func (pdm *PlaybookDiskManager) GetPlaybooksForDetection(ctx context.Context, pu
 		path, ok := pdm.playbooksOnDisk[id]
 		if !ok {
 			logger.WithFields(log.Fields{
-				"publicId":   publicId,
-				"playbookId": id,
+				"detectionPublicId": publicId,
+				"playbookId":        id,
 			}).Warn("referenced playbook is not known to be on disk")
 			continue
 		}
@@ -404,9 +404,9 @@ func (pdm *PlaybookDiskManager) GetPlaybooksForDetection(ctx context.Context, pu
 		raw, err := pdm.ReadFile(path)
 		if err != nil {
 			logger.WithFields(log.Fields{
-				"publicId":     publicId,
-				"playbookId":   id,
-				"playbookPath": path,
+				"detectionPublicId": publicId,
+				"playbookId":        id,
+				"playbookPath":      path,
 			}).Error("unable to read playbook from disk")
 			continue
 		}
@@ -426,11 +426,11 @@ func (pdm *PlaybookDiskManager) GetPlaybooksForDetection(ctx context.Context, pu
 	}
 
 	logger.WithFields(log.Fields{
-		"playbookCount":  len(pbs),
-		"publicId":       publicId,
-		"detectCategory": detectCategory,
-		"detectEngine":   detectEngine,
-		"playbookIds":    results,
+		"playbookCount":     len(pbs),
+		"detectionPublicId": publicId,
+		"detectCategory":    detectCategory,
+		"detectEngine":      detectEngine,
+		"playbookIds":       results,
 	}).Info("retrieving playbooks for detection")
 
 	return pbs, nil
