@@ -56,10 +56,10 @@ type PlaybookDiskManager struct {
 	playbookImportFrequencySeconds int
 	playbookImportErrorSeconds     int
 
-	PlaybooksByDetectionId map[string][]*model.Playbook
-	PlaybooksByCategory    map[string][]*model.Playbook
-	PlaybooksByEngine      map[string][]*model.Playbook
-	PlaybooksByPlaybookId  map[string]*model.Playbook
+	PlaybooksByDetectionId map[string][]string
+	PlaybooksByCategory    map[string][]string
+	PlaybooksByEngine      map[string][]string
+	playbooksOnDisk        map[string]string
 
 	detections.IOManager
 }
@@ -232,22 +232,15 @@ func (pdm *PlaybookDiskManager) LoadPlaybooks(logger log.Interface) error {
 		"playbookCount":        len(playbooks),
 	}).Info("read playbooks")
 
-	start = time.Now()
-
-	err = pdm.organizePlaybooks(logger, playbooks)
-	if err != nil {
-		logger.WithError(err).Error("unable to organize playbooks")
-		return err
-	}
-
-	logger.WithFields(log.Fields{
-		"organizePlaybookDuration": time.Since(start).Seconds(),
-	}).Info("organized playbooks")
-
 	return nil
 }
 
 func (pdm *PlaybookDiskManager) readPlaybooks(logger log.Interface) ([]*model.Playbook, error) {
+	byDetId := make(map[string][]string)
+	onDisk := make(map[string]string)
+	byCategory := make(map[string][]string)
+	byEngine := make(map[string][]string)
+
 	repo, err := url.Parse(pdm.playbookRepoUrl)
 	if err != nil {
 		return nil, err
@@ -260,6 +253,10 @@ func (pdm *PlaybookDiskManager) readPlaybooks(logger log.Interface) ([]*model.Pl
 	playbooks := []*model.Playbook{}
 
 	err = pdm.IOManager.WalkDir(targetDir, func(p string, dir fs.DirEntry, err error) error {
+		if !pdm.isRunning {
+			return detections.ErrModuleStopped
+		}
+
 		if err != nil {
 			// we can't process this file, but keep walking the dir
 			logger.WithError(err).WithFields(log.Fields{
@@ -311,8 +308,39 @@ func (pdm *PlaybookDiskManager) readPlaybooks(logger log.Interface) ([]*model.Pl
 			return nil
 		}
 
+		id := strings.ToLower(pb.Id)
 		playbooks = append(playbooks, pb)
 		files++
+
+		if pb.DetectionId != "" {
+			detId := strings.ToLower(pb.DetectionId)
+			byDetId[detId] = append(byDetId[detId], id)
+		}
+
+		if pb.DetectionCategory != "" {
+			category := strings.ToLower(pb.DetectionCategory)
+			byCategory[category] = append(byCategory[category], id)
+		}
+
+		if pb.DetectionId == "" && pb.DetectionCategory == "" {
+			switch strings.ToLower(pb.DetectionType) {
+			case "sigma":
+				byEngine[string(model.EngineNameElastAlert)] = append(byEngine[string(model.EngineNameElastAlert)], id)
+			case "strelka":
+				byEngine[string(model.EngineNameStrelka)] = append(byEngine[string(model.EngineNameStrelka)], id)
+			case "nids":
+				byEngine[string(model.EngineNameSuricata)] = append(byEngine[string(model.EngineNameSuricata)], id)
+			default:
+				logger.Warn("unexpected playbook detection_type: " + pb.DetectionType)
+			}
+		}
+
+		_, ok := onDisk[id]
+		if ok {
+			logger.WithField("playbookId", id).Warn("duplicate playbook id")
+		}
+
+		onDisk[id] = p
 
 		return nil
 	})
@@ -326,59 +354,16 @@ func (pdm *PlaybookDiskManager) readPlaybooks(logger log.Interface) ([]*model.Pl
 		"fileCount":   files,
 	}).Info("read playbooks")
 
-	return playbooks, nil
-}
-
-func (pdm *PlaybookDiskManager) organizePlaybooks(logger log.Interface, playbooks []*model.Playbook) error {
-	byDetId := make(map[string][]*model.Playbook)
-	byPBId := make(map[string]*model.Playbook)
-	byCategory := make(map[string][]*model.Playbook)
-	byEngine := make(map[string][]*model.Playbook)
-
-	for _, pb := range playbooks {
-		if pb.DetectionId != "" {
-			key := strings.ToLower(pb.DetectionId)
-			byDetId[key] = append(byDetId[key], pb)
-		}
-
-		if pb.DetectionCategory != "" {
-			key := strings.ToLower(pb.DetectionCategory)
-			byCategory[key] = append(byCategory[key], pb)
-		}
-
-		if pb.DetectionId == "" && pb.DetectionCategory == "" {
-			switch strings.ToLower(pb.DetectionType) {
-			case "sigma":
-				byEngine[string(model.EngineNameElastAlert)] = append(byEngine[string(model.EngineNameElastAlert)], pb)
-			case "strelka":
-				byEngine[string(model.EngineNameStrelka)] = append(byEngine[string(model.EngineNameStrelka)], pb)
-			case "nids":
-				byEngine[string(model.EngineNameSuricata)] = append(byEngine[string(model.EngineNameSuricata)], pb)
-			default:
-				logger.Warn("unexpected playbook detection_type: " + pb.DetectionType)
-			}
-		}
-
-		key := strings.ToLower(pb.Id)
-
-		_, ok := byPBId[key]
-		if ok {
-			logger.WithField("playbookId", key).Warn("duplicate playbook id")
-		}
-
-		byPBId[key] = pb
-	}
-
 	pdm.pbUpdateMutex.Lock()
 
 	pdm.PlaybooksByEngine = byEngine
 	pdm.PlaybooksByCategory = byCategory
 	pdm.PlaybooksByDetectionId = byDetId
-	pdm.PlaybooksByPlaybookId = byPBId
+	pdm.playbooksOnDisk = onDisk
 
 	pdm.pbUpdateMutex.Unlock()
 
-	return nil
+	return playbooks, nil
 }
 
 func (pdm *PlaybookDiskManager) GetPlaybooksForDetection(ctx context.Context, publicId string, detectCategory string, detectEngine model.EngineName) ([]*model.Playbook, error) {
@@ -398,27 +383,57 @@ func (pdm *PlaybookDiskManager) GetPlaybooksForDetection(ctx context.Context, pu
 	forId := pdm.PlaybooksByDetectionId[publicId]
 	forCategory := pdm.PlaybooksByCategory[detectCategory]
 
-	results := append([]*model.Playbook{}, forId...)
+	results := append([]string{}, forId...)
 	results = append(results, forCategory...)
 
 	if len(results) == 0 {
 		results = pdm.PlaybooksByEngine[string(detectEngine)]
 	}
 
-	ids := make([]string, 0, len(results))
-	for _, pb := range results {
-		ids = append(ids, pb.Id)
+	pbs := make([]*model.Playbook, 0, len(results))
+	for _, id := range results {
+		path, ok := pdm.playbooksOnDisk[id]
+		if !ok {
+			logger.WithFields(log.Fields{
+				"publicId":   publicId,
+				"playbookId": id,
+			}).Warn("referenced playbook is not known to be on disk")
+			continue
+		}
+
+		raw, err := pdm.ReadFile(path)
+		if err != nil {
+			logger.WithFields(log.Fields{
+				"publicId":     publicId,
+				"playbookId":   id,
+				"playbookPath": path,
+			}).Error("unable to read playbook from disk")
+			continue
+		}
+
+		pb := &model.Playbook{}
+
+		err = yaml.Unmarshal(raw, &pb)
+		if err != nil {
+			logger.WithError(err).WithFields(log.Fields{
+				"playbookId":   id,
+				"playbookPath": path,
+			}).Error("unable to parse playbook from disk")
+			continue
+		}
+
+		pbs = append(pbs, pb)
 	}
 
 	logger.WithFields(log.Fields{
-		"playbookCount":  len(results),
+		"playbookCount":  len(pbs),
 		"publicId":       publicId,
 		"detectCategory": detectCategory,
 		"detectEngine":   detectEngine,
-		"playbookIds":    ids,
+		"playbookIds":    results,
 	}).Info("retrieving playbooks for detection")
 
-	return results, nil
+	return pbs, nil
 }
 
 func (pdm *PlaybookDiskManager) GetPlaybookById(ctx context.Context, id string) (pb *model.Playbook, err error) {
@@ -442,11 +457,32 @@ func (pdm *PlaybookDiskManager) GetPlaybookById(ctx context.Context, id string) 
 	pdm.pbUpdateMutex.RLock()
 	defer pdm.pbUpdateMutex.RUnlock()
 
-	var ok bool
-	pb, ok = pdm.PlaybooksByPlaybookId[id]
+	path, ok := pdm.playbooksOnDisk[id]
 
 	if !ok {
 		return nil, nil
+	}
+
+	raw, err := pdm.ReadFile(path)
+	if err != nil {
+		logger.WithError(err).WithFields(log.Fields{
+			"playbookPath": path,
+			"playbookId":   id,
+		}).Error("unable to read playbook off disk")
+
+		return nil, err
+	}
+
+	pb = &model.Playbook{}
+
+	err = yaml.Unmarshal(raw, &pb)
+	if err != nil {
+		logger.WithError(err).WithFields(log.Fields{
+			"playbookPath": path,
+			"playbookId":   id,
+		}).Error("unable to parse playbook from disk")
+
+		return nil, err
 	}
 
 	return pb, nil

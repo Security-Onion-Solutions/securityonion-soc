@@ -555,67 +555,65 @@ func TestScheduler(t *testing.T) {
 
 	assert.Equal(t, 1, len(pdm.PlaybooksByCategory))
 	assert.Equal(t, 1, len(pdm.PlaybooksByCategory["process_creation"]))
-	assert.Equal(t, "4f1db62f-cb41-41fb-8af3-11a67585b5db", pdm.PlaybooksByCategory["process_creation"][0].Id)
+	assert.Equal(t, "4f1db62f-cb41-41fb-8af3-11a67585b5db", pdm.PlaybooksByCategory["process_creation"][0])
 
 	assert.Equal(t, 1, len(pdm.PlaybooksByEngine))
 	assert.Equal(t, 1, len(pdm.PlaybooksByEngine["suricata"]))
-	assert.Equal(t, "1dfe7517-f105-454f-ae96-f2280c09e4b2", pdm.PlaybooksByEngine["suricata"][0].Id)
+	assert.Equal(t, "1dfe7517-f105-454f-ae96-f2280c09e4b2", pdm.PlaybooksByEngine["suricata"][0])
 
-	assert.Equal(t, 3, len(pdm.PlaybooksByPlaybookId))
-	assert.NotNil(t, pdm.PlaybooksByPlaybookId["1dfe7517-f105-454f-ae96-f2280c09e4b2"])
-	assert.NotNil(t, pdm.PlaybooksByPlaybookId["6f64990a-acda-40b6-ab71-134c073013b5"])
-	assert.NotNil(t, pdm.PlaybooksByPlaybookId["4f1db62f-cb41-41fb-8af3-11a67585b5db"])
+	assert.Equal(t, 3, len(pdm.playbooksOnDisk))
+	assert.Equal(t, "/tmp/playbooks/repo/playbook1.yaml", pdm.playbooksOnDisk["1dfe7517-f105-454f-ae96-f2280c09e4b2"])
+	assert.Equal(t, "/tmp/playbooks/repo/playbook2.yaml", pdm.playbooksOnDisk["6f64990a-acda-40b6-ab71-134c073013b5"])
+	assert.Equal(t, "/tmp/playbooks/repo/playbook3.yaml", pdm.playbooksOnDisk["4f1db62f-cb41-41fb-8af3-11a67585b5db"])
 }
 
 func TestGetPlaybooksForDetection(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	iom := mock.NewMockIOManager(ctrl)
+
 	pdm := PlaybookDiskManager{
 		srv: server.NewFakeAuthorizedServer(nil),
-		PlaybooksByDetectionId: map[string][]*model.Playbook{
-			"1182f3b3-e716-4efa-99ab-d2685d04360f": {
-				&model.Playbook{
-					Auditable: model.Auditable{
-						Id: "6f64990a-acda-40b6-ab71-134c073013b5",
-					},
-				},
-			},
+		PlaybooksByDetectionId: map[string][]string{
+			"1182f3b3-e716-4efa-99ab-d2685d04360f": {"6f64990a-acda-40b6-ab71-134c073013b5"},
 		},
-		PlaybooksByCategory: map[string][]*model.Playbook{
-			"process_creation": {
-				&model.Playbook{
-					Auditable: model.Auditable{
-						Id: "4f1db62f-cb41-41fb-8af3-11a67585b5db",
-					},
-				},
-			},
+		PlaybooksByCategory: map[string][]string{
+			"process_creation": {"4f1db62f-cb41-41fb-8af3-11a67585b5db"},
 		},
-		PlaybooksByEngine: map[string][]*model.Playbook{
-			"suricata": {
-				&model.Playbook{
-					Auditable: model.Auditable{
-						Id: "1dfe7517-f105-454f-ae96-f2280c09e4b2",
-					},
-				},
-			},
+		PlaybooksByEngine: map[string][]string{
+			"suricata": {"1dfe7517-f105-454f-ae96-f2280c09e4b2"},
 		},
+		playbooksOnDisk: map[string]string{
+			"6f64990a-acda-40b6-ab71-134c073013b5": "/path/6f6",
+			"4f1db62f-cb41-41fb-8af3-11a67585b5db": "/path/4f1",
+			"1dfe7517-f105-454f-ae96-f2280c09e4b2": "/path/1df",
+		},
+		IOManager: iom,
 	}
 
 	ctx := context.Background()
 
+	iom.EXPECT().ReadFile("/path/6f6").Return([]byte("id: 6f64990a-acda-40b6-ab71-134c073013b5"), nil)
 	playbooks, err := pdm.GetPlaybooksForDetection(ctx, "1182f3b3-e716-4efa-99ab-d2685d04360f", "web_request", model.EngineNameElastAlert)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(playbooks))
 	assert.Equal(t, "6f64990a-acda-40b6-ab71-134c073013b5", playbooks[0].Id)
 
+	iom.EXPECT().ReadFile("/path/4f1").Return([]byte("id: 4f1db62f-cb41-41fb-8af3-11a67585b5db"), nil)
 	playbooks, err = pdm.GetPlaybooksForDetection(ctx, "abc", "process_creation", model.EngineNameElastAlert)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(playbooks))
 	assert.Equal(t, "4f1db62f-cb41-41fb-8af3-11a67585b5db", playbooks[0].Id)
 
+	iom.EXPECT().ReadFile("/path/1df").Return([]byte("id: 1dfe7517-f105-454f-ae96-f2280c09e4b2"), nil)
 	playbooks, err = pdm.GetPlaybooksForDetection(ctx, "abc", "network_access", model.EngineNameSuricata)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(playbooks))
 	assert.Equal(t, "1dfe7517-f105-454f-ae96-f2280c09e4b2", playbooks[0].Id)
 
+	iom.EXPECT().ReadFile("/path/6f6").Return([]byte("id: 6f64990a-acda-40b6-ab71-134c073013b5"), nil)
+	iom.EXPECT().ReadFile("/path/4f1").Return([]byte("id: 4f1db62f-cb41-41fb-8af3-11a67585b5db"), nil)
 	playbooks, err = pdm.GetPlaybooksForDetection(ctx, "1182F3B3-E716-4EFA-99AB-D2685D04360F", "PROCESS_CREATION", model.EngineNameSuricata)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(playbooks))
@@ -624,37 +622,33 @@ func TestGetPlaybooksForDetection(t *testing.T) {
 }
 
 func TestGetPlaybookById(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	iom := mock.NewMockIOManager(ctrl)
 	pdm := PlaybookDiskManager{
 		srv: server.NewFakeAuthorizedServer(nil),
-		PlaybooksByPlaybookId: map[string]*model.Playbook{
-			"1182f3b3-e716-4efa-99ab-d2685d04360f": {
-				Auditable: model.Auditable{
-					Id: "1182f3b3-e716-4efa-99ab-d2685d04360f",
-				},
-			},
-			"4f1db62f-cb41-41fb-8af3-11a67585b5db": {
-				Auditable: model.Auditable{
-					Id: "4f1db62f-cb41-41fb-8af3-11a67585b5db",
-				},
-			},
-			"1dfe7517-f105-454f-ae96-f2280c09e4b2": {
-				Auditable: model.Auditable{
-					Id: "1dfe7517-f105-454f-ae96-f2280c09e4b2",
-				},
-			},
+		playbooksOnDisk: map[string]string{
+			"1182f3b3-e716-4efa-99ab-d2685d04360f": "/path/118",
+			"4f1db62f-cb41-41fb-8af3-11a67585b5db": "/path/4f1",
+			"1dfe7517-f105-454f-ae96-f2280c09e4b2": "/path/1df",
 		},
+		IOManager: iom,
 	}
 
 	ctx := context.Background()
 
+	iom.EXPECT().ReadFile("/path/118").Return([]byte("id: 1182f3b3-e716-4efa-99ab-d2685d04360f"), nil)
 	playbook, err := pdm.GetPlaybookById(ctx, "1182f3b3-e716-4efa-99ab-d2685d04360f")
 	assert.NoError(t, err)
 	assert.Equal(t, "1182f3b3-e716-4efa-99ab-d2685d04360f", playbook.Id)
 
+	iom.EXPECT().ReadFile("/path/4f1").Return([]byte("id: 4f1db62f-cb41-41fb-8af3-11a67585b5db"), nil)
 	playbook, err = pdm.GetPlaybookById(ctx, "4f1db62f-cb41-41fb-8af3-11a67585b5db")
 	assert.NoError(t, err)
 	assert.Equal(t, "4f1db62f-cb41-41fb-8af3-11a67585b5db", playbook.Id)
 
+	iom.EXPECT().ReadFile("/path/1df").Return([]byte("id: 1dfe7517-f105-454f-ae96-f2280c09e4b2"), nil)
 	playbook, err = pdm.GetPlaybookById(ctx, "1dfe7517-f105-454f-ae96-f2280c09e4b2")
 	assert.NoError(t, err)
 	assert.Equal(t, "1dfe7517-f105-454f-ae96-f2280c09e4b2", playbook.Id)
@@ -704,6 +698,7 @@ func TestReadPlaybooks(t *testing.T) {
 
 	iom := mock.NewMockIOManager(ctrl)
 	pdm := PlaybookDiskManager{
+		isRunning:          true,
 		playbookRepoUrl:    "http://github.com/user/repo",
 		playbookPathInRepo: "playbooks/dev",
 		playbookRepoPath:   "/tmp/playbooks",
@@ -740,4 +735,7 @@ func TestReadPlaybooks(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, pbs, 1)
 	assert.Equal(t, "x", pbs[0].Id)
+
+	assert.Equal(t, 1, len(pdm.playbooksOnDisk))
+	assert.Equal(t, "success", pdm.playbooksOnDisk["x"])
 }
