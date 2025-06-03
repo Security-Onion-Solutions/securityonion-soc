@@ -34,10 +34,10 @@ const (
 	DEFAULT_AUTO_UPDATE_ENABLED               = false
 	DEFAULT_PLAYBOOK_IMPORT_FREQUENCY_SECONDS = 24 * 60 * 60
 	DEFAULT_PLAYBOOK_IMPORT_ERROR_SECONDS     = 10 * 60
-	DEFAULT_PLAYBOOK_REPO                     = "https://github.com/Security-Onion-Solutions/securityonion-resources"
-	DEFAULT_PLAYBOOK_REPO_BRANCH              = "playbook-stable"
+	DEFAULT_PLAYBOOK_REPO                     = "https://github.com/Security-Onion-Solutions/securityonion-resources-playbooks"
+	DEFAULT_PLAYBOOK_REPO_BRANCH              = "main"
 	DEFAULT_PLAYBOOK_REPO_PATH                = "/opt/sensoroni/playbooks"
-	DEFAULT_PLAYBOOK_PATH_IN_REPO             = "playbook/dev"
+	DEFAULT_PLAYBOOK_PATH_IN_REPO             = "securityonion-normalized"
 )
 
 var ErrBadPermissions = fmt.Errorf("playbooks module not authorized to read playbooks")
