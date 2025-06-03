@@ -1030,6 +1030,9 @@ ul ul ul {
   cursor: default;
   border: 1px solid rgba(var(--v-theme-text), 0.12);
   padding: 10px;
+  max-width: 20vw;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .simple-table td {
