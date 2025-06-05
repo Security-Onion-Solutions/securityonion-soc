@@ -1293,7 +1293,12 @@ const huntComponent = {
         this.quickActionEvent = event;
         this.quickActionField = field;
         this.quickActionValue = value;
-        this.quickActionTarget = [domEvent.clientX, domEvent.clientY];
+        if (domEvent.type === 'keydown') {
+          const rect = domEvent.currentTarget.getBoundingClientRect();
+          this.quickActionTarget = [rect.left, rect.top];
+        } else {
+          this.quickActionTarget = [domEvent.clientX, domEvent.clientY];
+        }
         this.$nextTick(async () => {
           this.quickActionVisible = true;
 
