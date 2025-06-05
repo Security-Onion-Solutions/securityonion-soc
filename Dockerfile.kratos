@@ -24,6 +24,18 @@ WORKDIR /go/src/github.com/$OWNER/kratos
 
 RUN git checkout $VERSION
 
+# Inject username logging for failed login attempts
+RUN FUNC_LINE=$(grep -n "func.*handleLoginError" selfservice/strategy/password/login.go | cut -d: -f1) && \
+    if [ -z "$FUNC_LINE" ]; then echo "ERROR: Could not find handleLoginError function!" && exit 1; fi && \
+    BRACE_LINE=$(sed -n "${FUNC_LINE},\$p" selfservice/strategy/password/login.go | grep -n "{" | head -1 | cut -d: -f1) && \
+    INJECT_LINE=$((FUNC_LINE + BRACE_LINE - 1)) && \
+    sed -i "${INJECT_LINE}a\\	identifier := stringsx.Coalesce(payload.Identifier, payload.LegacyIdentifier)" selfservice/strategy/password/login.go && \
+    sed -i "$((INJECT_LINE + 1))a\\	if identifier != \"\" { s.d.Logger().WithField(\"identifier\", identifier).Warn(\"Failed login attempt\") }" selfservice/strategy/password/login.go
+
+# Verify the modification was successful
+RUN grep -q "Failed login attempt" selfservice/strategy/password/login.go || \
+    (echo "ERROR: Logging injection failed - pattern not found!" && exit 1)
+
 ENV GO111MODULE on
 ENV CGO_ENABLED 1
 ENV CGO_CPPFLAGS -DSQLITE_DEFAULT_FILE_PERMISSIONS=0600
