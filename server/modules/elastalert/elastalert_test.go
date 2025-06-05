@@ -14,6 +14,7 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"os"
 	"os/exec"
 	"slices"
 	"sort"
@@ -1702,6 +1703,7 @@ func TestSyncChanges(t *testing.T) {
 
 	// checkSigmaPipelines
 	iom.EXPECT().ReadFile("sigmaPipelineFinal").Return([]byte("data"), nil)
+	iom.EXPECT().ReadFile("rulesFingerprintFile").Return(nil, os.ErrNotExist)
 	iom.EXPECT().ReadFile("sigmaPipelineSO").Return([]byte("data"), nil)
 	iom.EXPECT().ReadFile("sigmaPipelinesFingerprintFile").Return([]byte("a different hash"), nil)
 	// downloadSigmaPackages
@@ -1908,6 +1910,7 @@ func TestSyncUnchangedOverrides(t *testing.T) {
 
 	// checkSigmaPipelines
 	iom.EXPECT().ReadFile("sigmaPipelineFinal").Return([]byte("data"), nil)
+	iom.EXPECT().ReadFile("rulesFingerprintFile").Return(nil, os.ErrNotExist)
 	iom.EXPECT().ReadFile("sigmaPipelineSO").Return([]byte("data"), nil)
 	iom.EXPECT().ReadFile("sigmaPipelinesFingerprintFile").Return([]byte("a different hash"), nil)
 	// downloadSigmaPackages
@@ -1996,6 +1999,107 @@ func TestSyncUnchangedOverrides(t *testing.T) {
 	assert.False(t, eng.EngineState.MigrationFailure)
 	assert.False(t, eng.EngineState.Importing)
 	assert.False(t, eng.EngineState.SyncFailure)
+
+	assert.Len(t, workItems, 0)
+}
+
+func TestSyncStateFileNoCommunity(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	buf := bytes.NewBuffer([]byte{})
+
+	writer := zip.NewWriter(buf)
+	sr, err := writer.Create("rules/simple_rule.yml")
+	assert.NoError(t, err)
+
+	_, err = sr.Write([]byte(SimpleRule))
+	assert.NoError(t, err)
+
+	assert.NoError(t, writer.Close())
+
+	detStore := servermock.NewMockDetectionstore(ctrl)
+	iom := mock.NewMockIOManager(ctrl)
+	// bim := servermock.NewMockBulkIndexer(ctrl)
+
+	eng := &ElastAlertEngine{
+		srv: &server.Server{
+			Context:        context.Background(),
+			Detectionstore: detStore,
+		},
+		isRunning:                     true,
+		sigmaPipelineFinal:            "sigmaPipelineFinal",
+		sigmaPipelineSO:               "sigmaPipelineSO",
+		sigmaPipelinesFingerprintFile: "sigmaPipelinesFingerprintFile",
+		sigmaRulePackages:             []string{"core+"},
+		sigmaPackageDownloadTemplate:  "https://github.com/SigmaHQ/sigma/releases/latest/download/sigma_%s.zip",
+		reposFolder:                   "repos",
+		rulesFingerprintFile:          "rulesFingerprintFile",
+		elastAlertRulesFolder:         "elastAlertRulesFolder",
+		rulesRepos: []*model.RuleRepo{
+			{
+				Repo:      "https://github.com/user/repo",
+				Community: true,
+			},
+		},
+		SyncSchedulerParams: detections.SyncSchedulerParams{
+			StateFilePath: "stateFilePath",
+		},
+		IntegrityCheckerData: detections.IntegrityCheckerData{
+			IsRunning: true,
+		},
+		IOManager:       iom,
+		showAiSummaries: false,
+	}
+
+	logger := log.WithField("detectionEngine", "test-elastalert")
+
+	workItems := []esutil.BulkIndexerItem{}
+
+	// checkSigmaPipelines
+	iom.EXPECT().ReadFile("sigmaPipelineFinal").Return([]byte("data"), nil)
+	iom.EXPECT().ReadFile("sigmaPipelineSO").Return([]byte("data"), nil)
+	iom.EXPECT().ReadFile("sigmaPipelinesFingerprintFile").Return([]byte("a different hash"), nil)
+	iom.EXPECT().ReadFile("rulesFingerprintFile").Return([]byte("something"), nil)
+	// downloadSigmaPackages
+	iom.EXPECT().MakeRequest(gomock.Any()).Return(&http.Response{
+		StatusCode: 200,
+		Body:       io.NopCloser(buf),
+	}, nil)
+	// UpdateRepos
+	iom.EXPECT().ReadDir("repos").Return([]fs.DirEntry{
+		&handmock.MockDirEntry{
+			Filename: "repo",
+			Dir:      true,
+		},
+	}, nil)
+	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo", nil).Return(false, false, false)
+	// parseRepoRules
+	iom.EXPECT().WalkDir("repos/repo", gomock.Any()).DoAndReturn(func(path string, fn fs.WalkDirFunc) error {
+		files := []fs.DirEntry{
+			&handmock.MockDirEntry{
+				Filename: "rules/123.yml",
+			},
+		}
+
+		for _, file := range files {
+			err := fn(file.Name(), file, nil)
+			assert.NoError(t, err)
+		}
+
+		return nil
+	})
+	iom.EXPECT().ReadFile("rules/123.yml").Return([]byte(SimpleRule), nil)
+	// syncCommunityDetections
+	iom.EXPECT().ReadDir("elastAlertRulesFolder").Return([]fs.DirEntry{
+		&handmock.MockDirEntry{
+			Filename: SimpleRuleSID + ".yml",
+		},
+	}, nil) // IndexExistingRules
+	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{}, nil)
+
+	err = eng.Sync(logger, true)
+	assert.Equal(t, detections.ErrStateFileNoCommunity, err)
 
 	assert.Len(t, workItems, 0)
 }

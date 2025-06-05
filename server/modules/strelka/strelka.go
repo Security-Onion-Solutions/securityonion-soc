@@ -375,6 +375,10 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 		return detections.ErrModuleStopped
 	}
 
+	state, _ := detections.ReadStateFile(e.IOManager, e.StateFilePath)
+
+	hasFP := state != nil && *state != 0
+
 	communityDetections, err := e.srv.Detectionstore.GetAllDetections(e.srv.Context, model.WithEngine(model.EngineNameStrelka), model.WithCommunity(true))
 	if err != nil {
 		logger.WithError(err).Error("failed to get all community SIDs")
@@ -387,6 +391,23 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 		}
 
 		return detections.ErrSyncFailed
+	}
+
+	if hasFP && len(communityDetections) == 0 {
+		// Two conflicting facts appear to be true:
+		// 1) We have imported rules before, the fingerprint file exists
+		// 2) There are 0 imported community rules
+		// This lines up perfectly with the weird glitch of double-imported
+		// detections we've been tracking. Mark the sync as a failure.
+
+		if e.notify {
+			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+				Engine: model.EngineNameStrelka,
+				Status: "error",
+			})
+		}
+
+		return detections.ErrStateFileNoCommunity
 	}
 
 	if !e.isRunning {
@@ -664,7 +685,7 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 
 		if e.notify {
 			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-				Engine: model.EngineNameElastAlert,
+				Engine: model.EngineNameStrelka,
 				Status: "error",
 			})
 		}
@@ -1239,7 +1260,7 @@ func (e *StrelkaEngine) IntegrityCheck(canInterrupt bool, logger *log.Entry) (de
 
 	if logger == nil {
 		logger = log.WithFields(log.Fields{
-			"detectionEngine": model.EngineNameSuricata,
+			"detectionEngine": model.EngineNameStrelka,
 		})
 	}
 
