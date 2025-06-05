@@ -40,7 +40,7 @@ type GetterByPublicId interface {
 //go:generate mockgen -destination mock/mock_iomanager.go -package mock . IOManager
 
 func DetermineWaitTime(iom IOManager, path string, importFrequency time.Duration) (*uint64, time.Duration) {
-	lastImport, err := readStateFile(iom, path)
+	lastImport, err := ReadStateFile(iom, path)
 	if err != nil {
 		log.WithError(err).Error("unable to read state file, deleting it")
 
@@ -66,7 +66,7 @@ func DetermineWaitTime(iom IOManager, path string, importFrequency time.Duration
 	return lastImport, timerDur
 }
 
-func readStateFile(iom IOManager, path string) (lastImport *uint64, err error) {
+func ReadStateFile(iom IOManager, path string) (lastImport *uint64, err error) {
 	raw, err := iom.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {

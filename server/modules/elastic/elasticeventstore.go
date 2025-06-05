@@ -316,6 +316,16 @@ func (store *ElasticEventstore) Scroll(ctx context.Context, criteria *model.Even
 			return finalResults, err
 		}
 
+		if len(finalResults.Events) == 0 && strings.Contains(query, "so_detection.engine") {
+			// only 2 actions call this Scroll function: GetAllDetections used in
+			// DetectionEngine Syncs, and Bulk Updates of Detections. If the query
+			// contains a condition for the engine, then it's a GetAllDetections call
+			logger.WithFields(log.Fields{
+				"scrollQuery":      query,
+				"fullJsonResponse": json,
+			}).Info("scrolled for 0 results")
+		}
+
 		logger.WithFields(log.Fields{
 			"batchNum": batchNum,
 			"hitCount": len(finalResults.Events),

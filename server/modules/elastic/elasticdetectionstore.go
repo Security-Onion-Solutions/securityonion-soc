@@ -191,6 +191,7 @@ func (store *ElasticDetectionstore) save(ctx context.Context, obj interface{}, k
 	}
 
 	skipAudit := modcontext.ReadSkipAudit(ctx)
+	overrideOp := modcontext.ReadOverrideOperation(ctx)
 
 	document := ConvertObjectToDocumentMap(kind, obj, store.schemaPrefix)
 	document[store.schemaPrefix+"kind"] = kind
@@ -199,10 +200,14 @@ func (store *ElasticDetectionstore) save(ctx context.Context, obj interface{}, k
 	if err == nil && !skipAudit {
 		document[store.schemaPrefix+AUDIT_DOC_ID] = results.DocumentId
 
-		if id == "" {
-			document[store.schemaPrefix+"operation"] = "create"
+		if overrideOp != nil {
+			document[store.schemaPrefix+"operation"] = *overrideOp
 		} else {
-			document[store.schemaPrefix+"operation"] = "update"
+			if id == "" {
+				document[store.schemaPrefix+"operation"] = "create"
+			} else {
+				document[store.schemaPrefix+"operation"] = "update"
+			}
 		}
 
 		_, err = store.Index(ctx, store.auditIndex, document, "")
@@ -439,9 +444,13 @@ func (store *ElasticDetectionstore) DetectionScroll(ctx context.Context, criteri
 func (store *ElasticDetectionstore) prepareForSave(ctx context.Context, obj *model.Auditable) string {
 	obj.UserId, _ = ctx.Value(web.ContextKeyRequestorId).(string)
 
+	hasOpOverride := modcontext.ReadOverrideOperation(ctx) != nil
+
 	// Don't waste space by saving the these values which are already part of ES documents
 	id := obj.Id
-	obj.Id = ""
+	if !hasOpOverride {
+		obj.Id = ""
+	}
 	obj.UpdateTime = nil
 
 	return id
@@ -468,21 +477,22 @@ func (store *ElasticDetectionstore) CreateDetection(ctx context.Context, detect 
 		return nil, errors.New("Unexpected ID found in new comment")
 	}
 
-	if detect.PublicID != "" {
-		duplicates, err := store.getAll(ctx, fmt.Sprintf(`_index:"%s" AND %skind:"%s" AND %sdetection.publicId:"%s" AND %sdetection.engine:"%s"`, store.index, store.schemaPrefix, "detection", store.schemaPrefix, detect.PublicID, store.schemaPrefix, detect.Engine), 1)
-		if err != nil {
-			return nil, err
-		}
+	duplicates, err := store.getAll(ctx, fmt.Sprintf(`_index:"%s" AND %skind:"%s" AND %sdetection.publicId:"%s" AND %sdetection.engine:"%s"`, store.index, store.schemaPrefix, "detection", store.schemaPrefix, detect.PublicID, store.schemaPrefix, detect.Engine), 1)
+	if err != nil {
+		return nil, err
+	}
 
-		if len(duplicates) > 0 {
-			return nil, errors.New("publicId already exists for this engine")
-		}
+	if len(duplicates) > 0 {
+		return nil, errors.New("publicId already exists for this engine")
 	}
 
 	now := time.Now()
 	detect.CreateTime = &now
+	detect.Id = util.ToUUID(detect.PublicID)
 
 	var results *model.EventIndexResults
+
+	ctx = modcontext.WriteOverrideOperation(ctx, "create")
 
 	results, err = store.save(ctx, detect, "detection", store.prepareForSave(ctx, &detect.Auditable))
 	if err == nil {

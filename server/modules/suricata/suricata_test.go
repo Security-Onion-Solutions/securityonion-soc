@@ -912,6 +912,7 @@ func TestSyncCommunitySuricata(t *testing.T) {
 	table := []struct {
 		Name             string
 		InitialSettings  []*model.Setting
+		HasFP            bool
 		Detections       []*model.Detection // Content (Valid Rule), PublicID, IsEnabled
 		ChangedByUser    bool
 		InitMock         func(*servermock.MockDetectionstore)
@@ -1110,6 +1111,7 @@ func TestSyncCommunitySuricata(t *testing.T) {
 				DetectionEngines: sync.Map{}, // map[model.EngineName]server.DetectionEngine{},
 				Detectionstore:   detStore,
 			})
+			mod.rulesFingerprintFile = "rulesFingerprintFile"
 			mod.srv.DetectionEngines.Store(model.EngineNameSuricata, mod)
 
 			mod.isRunning = true
@@ -1120,7 +1122,7 @@ func TestSyncCommunitySuricata(t *testing.T) {
 				}
 			}
 
-			errMap, err := mod.syncCommunityDetections(ctx, nil, test.Detections, false, test.InitialSettings)
+			errMap, err := mod.syncCommunityDetections(ctx, nil, test.Detections, test.HasFP, false, test.InitialSettings)
 
 			assert.Equal(t, test.ExpectedErr, err)
 			assert.Equal(t, test.ExpectedErrMap, errMap)
@@ -2328,27 +2330,28 @@ func TestSyncChanges(t *testing.T) {
 
 	// readAndHash
 	iom.EXPECT().ReadFile("communityRulesFile").Return([]byte(SimpleRule+"\n"+FlowbitsRuleA), nil)
+	iom.EXPECT().ReadFile("rulesFingerprintFile").Return(nil, os.ErrNotExist)
 	// syncCommunityDetections
 	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
 		SimpleRuleSID: {
 			Auditable: model.Auditable{
-				Id:         "abc",
+				Id:         "9e466416-2d7a-4ab3-b798-7f6b0cff3660",
 				CreateTime: util.Ptr(time.Now()),
 			},
 			IsEnabled: true,
 		},
 		"99999": {
 			Auditable: model.Auditable{
-				Id: "deleteme",
+				Id: "88de5ebe-1c13-4818-b397-d4c3afaa32d8",
 			},
 		}, // to be deleted
 	}, nil)
 	detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(bim, nil)
-	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), nil, nil).Return([]byte("document"), "index", nil).Times(3)
+	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), nil).Return([]byte("document"), "index", nil).Times(3)
 	bim.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
 		if item.OnSuccess != nil {
 			resp := esutil.BulkIndexerResponseItem{
-				DocumentID: "id",
+				DocumentID: item.DocumentID,
 			}
 			item.OnSuccess(ctx, item, resp)
 		}
@@ -2360,7 +2363,7 @@ func TestSyncChanges(t *testing.T) {
 	bim.EXPECT().Close(gomock.Any()).Return(nil)
 	bim.EXPECT().Stats().Return(esutil.BulkIndexerStats{})
 	detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(auditm, nil)
-	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), util.Ptr("id"), gomock.Any()).Return([]byte("document"), "index", nil).Times(3)
+	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return([]byte("document"), "index", nil).Times(3)
 	auditm.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
 		if item.OnSuccess != nil {
 			resp := esutil.BulkIndexerResponseItem{
@@ -2434,7 +2437,7 @@ func TestSyncChanges(t *testing.T) {
 		return item.DocumentID
 	})
 
-	assert.Equal(t, []string{"abc", "", "deleteme"}, workDocIds) // update has an id, create does not, delete does
+	assert.Equal(t, []string{"9e466416-2d7a-4ab3-b798-7f6b0cff3660", "67c2c34e-de94-42c3-b67f-a687a2a3cf98", "88de5ebe-1c13-4818-b397-d4c3afaa32d8"}, workDocIds)
 }
 
 func TestSyncModifiedByFilter(t *testing.T) {
@@ -2491,6 +2494,7 @@ func TestSyncModifiedByFilter(t *testing.T) {
 
 	// readAndHash
 	iom.EXPECT().ReadFile("communityRulesFile").Return([]byte(SimpleRule), nil)
+	iom.EXPECT().ReadFile("rulesFingerprintFile").Return(nil, os.ErrNotExist)
 	// syncCommunityDetections
 	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
 		SimpleRuleSID: {
@@ -2654,6 +2658,7 @@ func TestSyncUnchangedOverrides(t *testing.T) {
 
 	// readAndHash
 	iom.EXPECT().ReadFile("communityRulesFile").Return([]byte(SimpleRule), nil)
+	iom.EXPECT().ReadFile("rulesFingerprintFile").Return(nil, os.ErrNotExist)
 	// syncCommunityDetections
 	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
 		SimpleRuleSID: {
@@ -2723,6 +2728,65 @@ func TestSyncUnchangedOverrides(t *testing.T) {
 	assert.Equal(t, "{}\n", threshold.Value)
 
 	assert.Len(t, workItems, 0)
+}
+
+func TestSyncStateFileNoCommunity(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	migrationChecked := false
+	checkMigration := func() {
+		migrationChecked = true
+	}
+
+	ctx := context.Background()
+
+	detStore := servermock.NewMockDetectionstore(ctrl)
+	iom := mock.NewMockIOManager(ctrl)
+	cfgStore := server.NewMemConfigStore([]*model.Setting{
+		{Id: "idstools.rules.local__rules", Value: SimpleRule},
+		{Id: "idstools.sids.enabled", Value: SimpleRuleSID},
+		{Id: "idstools.sids.disabled"},
+		{Id: "idstools.sids.modify", Value: SimpleRuleSID + ` "rev:1" "rev:2"`},
+		{Id: "suricata.thresholding.sids__yaml"},
+		{Id: "idstools.config.ruleset", Value: "repo"},
+		{Id: "soc.config.server.modules.suricataengine.ignoredSidRanges"},
+	})
+
+	eng := &SuricataEngine{
+		srv: &server.Server{
+			Detectionstore: detStore,
+			Configstore:    cfgStore,
+			Context:        ctx,
+		},
+		isRunning:            true,
+		communityRulesFile:   "communityRulesFile",
+		rulesFingerprintFile: "rulesFingerprintFile",
+		allRulesFile:         "allRulesFile",
+		checkMigrationsOnce:  sync.OnceFunc(checkMigration),
+		SyncSchedulerParams: detections.SyncSchedulerParams{
+			StateFilePath: "stateFilePath",
+		},
+		IntegrityCheckerData: detections.IntegrityCheckerData{
+			IsRunning: true,
+		},
+		IOManager:       iom,
+		showAiSummaries: false,
+	}
+
+	logger := log.WithField("detectionEngine", "test-suricata")
+
+	// readAndHash
+	iom.EXPECT().ReadFile("communityRulesFile").Return([]byte(SimpleRule), nil)
+	iom.EXPECT().ReadFile("rulesFingerprintFile").Return([]byte("1000"), nil)
+	// syncCommunityDetections
+	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{}, nil)
+
+	err := eng.Sync(logger, true)
+	assert.Equal(t, detections.ErrStateFileNoCommunity, err)
+
+	// migration requires that GetAllDetections actually returns all detections
+	assert.False(t, migrationChecked)
 }
 
 func TestApplyFilters(t *testing.T) {

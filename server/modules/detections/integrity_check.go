@@ -16,6 +16,7 @@ import (
 
 var ErrIntCheckerStopped = fmt.Errorf("integrity checker has stopped running")
 var ErrIntCheckFailed = fmt.Errorf("integrity check failed; discrepancies found")
+var ErrStateFileNoCommunity = fmt.Errorf("state file present but 0 community rules found")
 
 type IntegrityChecked interface {
 	IntegrityCheck(bool, *log.Entry) ([]string, []string, error)

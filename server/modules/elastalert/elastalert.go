@@ -699,16 +699,18 @@ func (e *ElastAlertEngine) Sync(logger *log.Entry, forceSync bool) error {
 		zipHashes[pkg] = base64.StdEncoding.EncodeToString(h[:])
 	}
 
+	// if we're not forcing a sync, check to see if anything has changed
+	// if nothing has changed, the sync is finished
+	raw, err := e.ReadFile(e.rulesFingerprintFile)
+	if err != nil && !os.IsNotExist(err) {
+		logger.WithError(err).WithField("fingerprintPath", e.rulesFingerprintFile).Error("unable to read rules fingerprint file")
+
+		return detections.ErrSyncFailed
+	}
+
+	fingerprintFilePresent := len(raw) != 0
+
 	if !forceSync {
-		// if we're not forcing a sync, check to see if anything has changed
-		// if nothing has changed, the sync is finished
-		raw, err := e.ReadFile(e.rulesFingerprintFile)
-		if err != nil && !os.IsNotExist(err) {
-			logger.WithError(err).WithField("fingerprintPath", e.rulesFingerprintFile).Error("unable to read rules fingerprint file")
-
-			return detections.ErrSyncFailed
-		}
-
 		oldHashes := map[string]string{}
 
 		err = json.Unmarshal(raw, &oldHashes)
@@ -776,10 +778,12 @@ func (e *ElastAlertEngine) Sync(logger *log.Entry, forceSync bool) error {
 
 	detects = detections.DeduplicateByPublicId(detects)
 
-	errMap, err = e.syncCommunityDetections(e.srv.Context, logger, detects)
+	errMap, err = e.syncCommunityDetections(e.srv.Context, logger, detects, fingerprintFilePresent)
 	if err != nil {
 		if errors.Is(err, detections.ErrModuleStopped) {
 			logger.Info("incomplete sync of elastalert community detections due to module stopping")
+			return err
+		} else if errors.Is(err, detections.ErrStateFileNoCommunity) {
 			return err
 		}
 
@@ -1079,7 +1083,7 @@ func (e *ElastAlertEngine) parseRepoRules(allRepos []*detections.RepoOnDisk) (de
 	return detects, errMap
 }
 
-func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *log.Entry, detects []*model.Detection) (errMap map[string]error, err error) {
+func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *log.Entry, detects []*model.Detection, fingerprintFilePresent bool) (errMap map[string]error, err error) {
 	existing, err := e.IndexExistingRules()
 	if err != nil {
 		return nil, err
@@ -1088,6 +1092,23 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 	community, err := e.srv.Detectionstore.GetAllDetections(ctx, model.WithEngine(model.EngineNameElastAlert), model.WithCommunity(true))
 	if err != nil {
 		return nil, err
+	}
+
+	if fingerprintFilePresent && len(community) == 0 {
+		// Two conflicting facts appear to be true:
+		// 1) We have imported rules before, the fingerprint file exists
+		// 2) There are 0 imported community rules
+		// This lines up perfectly with the weird glitch of double-imported
+		// detections we've been tracking. Mark the sync as a failure.
+
+		if e.notify {
+			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+				Engine: model.EngineNameElastAlert,
+				Status: "error",
+			})
+		}
+
+		return nil, detections.ErrStateFileNoCommunity
 	}
 
 	index := map[string]string{}
@@ -1158,6 +1179,7 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 			detect.Overrides = orig.Overrides
 			detect.CreateTime = orig.CreateTime
 		} else {
+			detect.Id = util.ToUUID(detect.PublicID)
 			detect.CreateTime = util.Ptr(time.Now())
 			checkRulesetEnabled(e, detect)
 		}
@@ -1240,9 +1262,10 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 			}).Info("creating new Sigma detection")
 
 			err = bulk.Add(ctx, esutil.BulkIndexerItem{
-				Index:  index,
-				Action: "create",
-				Body:   bytes.NewReader(document),
+				Index:      index,
+				Action:     "create",
+				DocumentID: detect.Id,
+				Body:       bytes.NewReader(document),
 				OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
 					auditMut.Lock()
 					defer auditMut.Unlock()
@@ -2035,7 +2058,7 @@ func (e *ElastAlertEngine) IntegrityCheck(canInterrupt bool, logger *log.Entry) 
 
 	if logger == nil {
 		logger = log.WithFields(log.Fields{
-			"detectionEngine": model.EngineNameSuricata,
+			"detectionEngine": model.EngineNameElastAlert,
 		})
 	}
 
