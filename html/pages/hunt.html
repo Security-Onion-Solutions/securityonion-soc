@@ -292,23 +292,23 @@
 											<template v-if="!group.maximized" #item="{ item, index, isExpanded, toggleExpand, internalItem }">
 												<tr>
 													<td v-if="aggregationActionsEnabled">
-														<v-btn id="expandEvent" v-if="isCategory('alerts')" variant="text" icon size="x-small" @click="toggleExpand(internalItem); if (isExpanded) fetchNewestEvent(item)" class="theme-icon" :aria-label="'expand row ' + (isExpanded(internalItem) ? 'expanded' : '')">
+														<v-btn id="expandEvent" v-if="isCategory('alerts')" variant="text" icon size="x-small" @click="toggleExpand(internalItem); if (isExpanded) fetchNewestEvent(item)" class="theme-icon" :aria-label="i18n.expandRow + (isExpanded(internalItem) ? ' ' + i18n.expanded : '')">
 															<v-icon v-if="isExpanded(internalItem)" :alt="i18n.eventExpand" :title="i18n.eventExpandHelp" :data-aid="'group_item_collapse_' + category">fa-angle-down</v-icon>
 															<v-icon v-else :alt="i18n.eventExpand" :title="i18n.eventExpandHelp" :data-aid="'group_item_expand_' + category">fa-angle-right</v-icon>
 														</v-btn>
 														<v-btn id="alertButton" v-if="ackEnabled && item['event.severity_label']" variant="text" size="x-small" icon
 															@click="ack(item, !isFilterToggleEnabled('acknowledged'), false, null, groupIdx)"
 															:color="colorSeverity(item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged'))"
-															:data-aid="'groups_ack_' + category" aria-label="acknowledge">
+															:data-aid="'groups_ack_' + category" :aria-label="i18n.acknowledge">
 															<v-icon :title="isFilterToggleEnabled('acknowledged') ? i18n.alertUndoAcknowledge : i18n.alertAcknowledge">fa-bell</v-icon>
 														</v-btn>
 														<v-btn id="escalateButton" v-if="escalateEnabled" variant="text" size="x-small" icon
 															@click="toggleEscalationMenu($event, item, groupIdx)"
 															:color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'secondary' : 'primary'"
-															:data-aid="'groups_escalate_' + category" aria-label="escalate">
+															:data-aid="'groups_escalate_' + category" :aria-label="i18n.escalate">
 															<v-icon :title="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate">fa-exclamation-triangle</v-icon>
 														</v-btn>
-														<v-btn id="infoButton" v-if="item['rule.uuid'] && showDetailsPanel" variant="text" size="x-small" icon @click="highlightDetection(item['rule.uuid'], item, groupIdx)" :aria-label="'display info' + (highlightedDetection && highlightedDetection.publicId === item['rule.uuid'] ? ' displayed' : '')">
+														<v-btn id="infoButton" v-if="item['rule.uuid'] && showDetailsPanel" variant="text" size="x-small" icon @click="highlightDetection(item['rule.uuid'], item, groupIdx)" :aria-label="i18n.displayInfo + (highlightedDetection && highlightedDetection.publicId === item['rule.uuid'] ? ' ' + i18n.displayed : '')">
 															<v-icon v-if="highlightedDetection && highlightedDetection.publicId === item['rule.uuid']" color="success">fa-thumbtack</v-icon>
 															<v-icon v-else>fa-info</v-icon>
 														</v-btn>
@@ -579,23 +579,23 @@
 								<template #item="{ item, index, isExpanded, toggleExpand, internalItem }">
 									<tr :data-aid="'events_item_' + category">
 										<td>
-											<v-btn id="expandEvent" variant="text" icon size="x-small" @click="toggleExpand(internalItem)" class="theme-icon" :aria-label="'expand row ' + (isExpanded(internalItem) ? 'expanded' : '')">
+											<v-btn id="expandEvent" variant="text" icon size="x-small" @click="toggleExpand(internalItem)" class="theme-icon" :aria-label="i18n.expandRow + (isExpanded(internalItem) ? ' ' + i18n.expanded : '')">
 												<v-icon v-if="isExpanded(internalItem)" :alt="i18n.eventExpand" :title="i18n.eventExpandHelp" :data-aid="'events_item_collapse_' + category">fa-angle-down</v-icon>
 												<v-icon v-else :alt="i18n.eventExpand" :title="i18n.eventExpandHelp" :data-aid="'events_item_expand_' + category">fa-angle-right</v-icon>
 											</v-btn>
 											<v-btn id="alertButton" v-if="ackEnabled && item['event.severity_label']" variant="text" icon size="x-small"
 												:data-aid="'events_ack_' + category"
 												@click="ack(item, !isFilterToggleEnabled('acknowledged'), false, null, -1)"
-												:color="colorSeverity(item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged'))" aria-label="acknowledge">
+												:color="colorSeverity(item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged'))" :aria-label="i18n.acknowledge">
 												<v-icon :title="isFilterToggleEnabled('acknowledged') ? i18n.alertUndoAcknowledge : i18n.alertAcknowledge">fa-bell</v-icon>
 											</v-btn>
 											<v-btn id="escalateButton" v-if="escalateEnabled" variant="text" icon size="x-small"
 												@click="toggleEscalationMenu($event, item, -1)"
 												:data-aid="'events_escalate_' + category"
-												:color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'secondary' : 'primary'" aria-label="escalate">
+												:color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'secondary' : 'primary'" :aria-label="i18n.escalate">
 												<v-icon :title="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate">fa-exclamation-triangle</v-icon>
 											</v-btn>
-											<v-btn id="infoButton" v-if="item['rule.uuid'] && showDetailsPanel" variant="text" size="x-small" icon @click="highlightDetection(item['rule.uuid'], item, groupIdx)" :title="i18n.openInPanel" :aria-label="'display info' + (highlightedDetection && highlightedDetection.publicId === item['rule.uuid'] ? ' displayed' : '')">
+											<v-btn id="infoButton" v-if="item['rule.uuid'] && showDetailsPanel" variant="text" size="x-small" icon @click="highlightDetection(item['rule.uuid'], item, groupIdx)" :title="i18n.openInPanel" :aria-label="i18n.displayInfo + (highlightedDetection && highlightedDetection.publicId === item['rule.uuid'] ? ' ' + i18n.displayed : '')">
 												<v-icon v-if="highlightedDetection && highlightedDetection.publicId === item['rule.uuid']" color="success">fa-thumbtack</v-icon>
 												<v-icon v-else>fa-info</v-icon>
 											</v-btn>
