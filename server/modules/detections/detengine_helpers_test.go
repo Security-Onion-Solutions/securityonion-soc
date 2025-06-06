@@ -363,7 +363,7 @@ func TestUpdateRepos(t *testing.T) {
 
 	repos := []*model.RuleRepo{
 		{
-			Repo:        "http://github.com/user/repo",
+			Repo:        "http://github.com/user/repo/",
 			RulesetName: "sigma-rules",
 		},
 		{
@@ -441,7 +441,7 @@ func TestUpdateReposAllowedRepoErrors(t *testing.T) {
 	}, nil)
 	iom.EXPECT().PullRepo(gomock.Any(), "baseRepoFolder/repo1", &branch).Return(true, false, false)
 	iom.EXPECT().CloneRepo(gomock.Any(), "baseRepoFolder/repo2", "http://github.com/user/repo2", nil).Return(transport.ErrEmptyRemoteRepository)
-	iom.EXPECT().CloneRepo(gomock.Any(), "baseRepoFolder/repo3", "file:///nsm/rules/repo3", nil).Return(transport.ErrRepositoryNotFound)
+	iom.EXPECT().CloneRepo(gomock.Any(), "baseRepoFolder/repo3", "file:///nsm/rules/repo3/", nil).Return(transport.ErrRepositoryNotFound)
 
 	isRunning := true
 
@@ -454,7 +454,7 @@ func TestUpdateReposAllowedRepoErrors(t *testing.T) {
 			Repo: "http://github.com/user/repo2",
 		},
 		{
-			Repo: "file:///nsm/rules/repo3",
+			Repo: "file:///nsm/rules/repo3/",
 		},
 	}
 
