@@ -504,6 +504,7 @@ func TestScheduler(t *testing.T) {
 	iom := mock.NewMockIOManager(ctrl)
 	pdm := PlaybookDiskManager{
 		srv:                server.NewFakeAuthorizedServer(nil),
+		autoUpdateEnabled:  true,
 		playbookRepoPath:   "/tmp/playbooks",
 		playbookRepoUrl:    "https://github.com/playbooks/repo",
 		playbookRepoBranch: "dev",
