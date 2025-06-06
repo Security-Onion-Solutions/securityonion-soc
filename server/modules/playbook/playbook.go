@@ -388,7 +388,25 @@ func (pdm *PlaybookDiskManager) GetPlaybooksForDetection(ctx context.Context, pu
 	defer pdm.pbUpdateMutex.RUnlock()
 
 	forId := pdm.PlaybooksByDetectionId[publicId]
-	forCategory := pdm.PlaybooksByCategory[detectCategory]
+	forCategory := []string{}
+
+	// First try exact match
+	if matches := pdm.PlaybooksByCategory[detectCategory]; len(matches) > 0 {
+		forCategory = append(forCategory, matches...)
+	}
+
+	// For NIDS engine, try matching base category without prefix
+	if detectEngine == model.EngineNameSuricata && detectCategory != "" {
+		// Split category into parts (e.g. "ET SCAN" -> ["ET", "SCAN"])
+		parts := strings.Fields(detectCategory)
+		if len(parts) > 1 {
+			// Last part is the base category (e.g. "SCAN")
+			baseCategory := strings.ToLower(parts[len(parts)-1])
+			if matches := pdm.PlaybooksByCategory[baseCategory]; len(matches) > 0 {
+				forCategory = append(forCategory, matches...)
+			}
+		}
+	}
 
 	results := append([]string{}, forId...)
 	results = append(results, forCategory...)
