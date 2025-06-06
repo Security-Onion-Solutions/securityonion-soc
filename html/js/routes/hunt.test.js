@@ -2082,3 +2082,67 @@ fields:
     - dns.response.code_name`
   );
 });
+
+test('fetchNewestEvent', async () => {
+  const eventSearch = mockPapi('get', { data: { events: [{ id: '100', payload: { a: 1, b: "2", c: true } }] } });
+  
+  comp.filterToggles = [
+    {
+      name: 'acknowledged',
+      enabled: false,
+    },
+    {
+      name: 'escalated',
+      enabled: false,
+    },
+  ];
+  comp.dateRange = 'x - y';
+  comp.zone = 'zone';
+
+  var item = {
+    a: 1,
+    b: "2",
+    'event_data.c': true,
+    count: 10,
+  };
+
+  await comp.fetchNewestEvent(item);
+
+  expect(item.newest.soc_id).toBe('100');
+  
+  expect(eventSearch).toHaveBeenCalledTimes(1);
+  expect(eventSearch).toHaveBeenCalledWith('events/', {
+    params: {
+      query: 'a:"1" AND b:"2" AND c:"true" AND NOT event.acknowledged:true AND NOT event.escalated:true | sortby @timestamp',
+      range: 'x - y',
+      format: comp.i18n.timePickerSample,
+      zone: 'zone',
+      eventLimit: 1,
+      metricLimit: 0,
+    }
+  });
+
+  comp.filterToggles[0].enabled = true;
+  comp.filterToggles[1].enabled = true;
+  delete item.newest;
+  resetPapi();
+  const eventSearch2 = mockPapi('get', { data: { events: [{ id: '100', payload: { a: 1, b: "2", c: true } }] } });
+
+  await comp.fetchNewestEvent(item);
+
+  expect(item.newest.soc_id).toBe('100');
+  
+  expect(eventSearch2).toHaveBeenCalledTimes(1);
+  expect(eventSearch2).toHaveBeenCalledWith('events/', {
+    params: {
+      query: 'a:"1" AND b:"2" AND c:"true" AND event.acknowledged:true AND event.escalated:true | sortby @timestamp',
+      range: 'x - y',
+      format: comp.i18n.timePickerSample,
+      zone: 'zone',
+      eventLimit: 1,
+      metricLimit: 0,
+    }
+  });
+
+  resetPapi();
+});

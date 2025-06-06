@@ -2979,18 +2979,31 @@ const huntComponent = {
       let parts = [];
 
       for (let field in item) {
+        let label = field;
         if (field.startsWith('event_data.')) {
-          field = field.replace('event_data.', '');
+          label = field.replace('event_data.', '');
         }
 
-        if (field.toLowerCase() === 'count') continue;
+        if (label.toLowerCase() === 'count') continue;
 
-        if (item[field] && item[field].length > 0) {
-          parts.push(`${field}:"${item[field]}"`);
+        if (item[field] && !Array.isArray(item[field])) {
+          parts.push(`${label}:"${item[field]}"`);
         }
       }
 
-      const q = parts.join(' AND ') + `| sortby @timestamp`;
+      if (this.isFilterToggleEnabled('acknowledged')) {
+        parts.push('event.acknowledged:true');
+      } else {
+        parts.push('NOT event.acknowledged:true');
+      }
+
+      if (this.isFilterToggleEnabled('escalated')) {
+        parts.push('event.escalated:true');
+      } else {
+        parts.push('NOT event.escalated:true');
+      }
+
+      const q = parts.join(' AND ') + ` | sortby @timestamp`;
 
       let params = {
         query: q,
