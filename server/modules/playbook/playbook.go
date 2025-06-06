@@ -397,9 +397,25 @@ func (pdm *PlaybookDiskManager) GetPlaybooksForDetection(ctx context.Context, pu
 	forId := pdm.PlaybooksByDetectionId[publicId]
 	forCategory := []string{}
 
-	// First try exact match
+	// First try exact match, filtered by detection type for engine consistency
 	if matches := pdm.PlaybooksByCategory[detectCategory]; len(matches) > 0 {
-		forCategory = append(forCategory, matches...)
+		expectedType := ""
+		switch detectEngine {
+		case model.EngineNameSuricata:
+			expectedType = "nids"
+		case model.EngineNameElastAlert:
+			expectedType = "sigma"
+		case model.EngineNameStrelka:
+			expectedType = "strelka"
+		}
+
+		for _, playbookId := range matches {
+			playbookType, ok := pdm.playbookTypes[playbookId]
+			if !ok || playbookType == expectedType {
+				// Include playbooks with matching type or no type specified
+				forCategory = append(forCategory, playbookId)
+			}
+		}
 	}
 
 	// For NIDS engine, try matching base category without prefix
