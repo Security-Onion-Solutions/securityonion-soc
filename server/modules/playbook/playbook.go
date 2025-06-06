@@ -60,6 +60,7 @@ type PlaybookDiskManager struct {
 	PlaybooksByCategory    map[string][]string
 	PlaybooksByEngine      map[string][]string
 	playbooksOnDisk        map[string]string
+	playbookTypes          map[string]string // Maps playbook ID to detection type
 
 	detections.IOManager
 }
@@ -247,6 +248,7 @@ func (pdm *PlaybookDiskManager) readPlaybooks(logger log.Interface) ([]*model.Pl
 	onDisk := make(map[string]string)
 	byCategory := make(map[string][]string)
 	byEngine := make(map[string][]string)
+	types := make(map[string]string)
 
 	repo, err := url.Parse(pdm.playbookRepoUrl)
 	if err != nil {
@@ -319,6 +321,10 @@ func (pdm *PlaybookDiskManager) readPlaybooks(logger log.Interface) ([]*model.Pl
 		playbooks = append(playbooks, pb)
 		files++
 
+		if pb.DetectionType != "" {
+			types[id] = strings.ToLower(pb.DetectionType)
+		}
+
 		if pb.DetectionId != "" {
 			detId := strings.ToLower(pb.DetectionId)
 			byDetId[detId] = append(byDetId[detId], id)
@@ -367,6 +373,7 @@ func (pdm *PlaybookDiskManager) readPlaybooks(logger log.Interface) ([]*model.Pl
 	pdm.PlaybooksByCategory = byCategory
 	pdm.PlaybooksByDetectionId = byDetId
 	pdm.playbooksOnDisk = onDisk
+	pdm.playbookTypes = types
 
 	pdm.pbUpdateMutex.Unlock()
 
@@ -403,7 +410,13 @@ func (pdm *PlaybookDiskManager) GetPlaybooksForDetection(ctx context.Context, pu
 			// Last part is the base category (e.g. "SCAN")
 			baseCategory := strings.ToLower(parts[len(parts)-1])
 			if matches := pdm.PlaybooksByCategory[baseCategory]; len(matches) > 0 {
-				forCategory = append(forCategory, matches...)
+				// Filter matches to only include NIDS playbooks
+				for _, playbookId := range matches {
+					playbookType, ok := pdm.playbookTypes[playbookId]
+					if ok && playbookType == "nids" {
+						forCategory = append(forCategory, playbookId)
+					}
+				}
 			}
 		}
 	}

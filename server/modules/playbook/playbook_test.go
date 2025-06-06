@@ -740,3 +740,77 @@ func TestReadPlaybooks(t *testing.T) {
 	assert.Equal(t, 1, len(pdm.playbooksOnDisk))
 	assert.Equal(t, "success", pdm.playbooksOnDisk["x"])
 }
+
+func TestGetPlaybooksForDetection_BaseCategoryMatching(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	iom := mock.NewMockIOManager(ctrl)
+
+	pdm := PlaybookDiskManager{
+		srv: server.NewFakeAuthorizedServer(nil),
+		PlaybooksByDetectionId: map[string][]string{},
+		PlaybooksByCategory: map[string][]string{
+			"scan": {"scan-playbook", "sigma-scan-playbook"},
+			"et scan": {"et-scan-playbook"},
+			"sql": {"sql-playbook"},
+		},
+		PlaybooksByEngine: map[string][]string{},
+		playbooksOnDisk: map[string]string{
+			"scan-playbook": "/path/scan",
+			"sigma-scan-playbook": "/path/sigma-scan",
+			"et-scan-playbook": "/path/et-scan",
+			"sql-playbook": "/path/sql",
+		},
+		playbookTypes: map[string]string{
+			"scan-playbook": "nids",
+			"sigma-scan-playbook": "sigma",
+			"et-scan-playbook": "nids",
+			"sql-playbook": "nids",
+		},
+		IOManager: iom,
+	}
+
+	ctx := context.Background()
+
+	// Set up expectations for all possible file reads
+	iom.EXPECT().ReadFile("/path/et-scan").Return([]byte("id: et-scan-playbook"), nil).AnyTimes()
+	iom.EXPECT().ReadFile("/path/scan").Return([]byte("id: scan-playbook"), nil).AnyTimes()
+	iom.EXPECT().ReadFile("/path/sigma-scan").Return([]byte("id: sigma-scan-playbook"), nil).AnyTimes()
+	iom.EXPECT().ReadFile("/path/sql").Return([]byte("id: sql-playbook"), nil).AnyTimes()
+
+	// Test case 1: NIDS engine with "ET SCAN" category should match both "et scan" and NIDS "scan" (but not Sigma "scan")
+	playbooks, err := pdm.GetPlaybooksForDetection(ctx, "", "ET SCAN", model.EngineNameSuricata)
+	assert.NoError(t, err)
+	assert.Equal(t, 2, len(playbooks))
+	assert.Equal(t, "et-scan-playbook", playbooks[0].Id)
+	assert.Equal(t, "scan-playbook", playbooks[1].Id)
+
+	// Test case 2: NIDS engine with "GPL SQL" category should match "sql"
+	playbooks, err = pdm.GetPlaybooksForDetection(ctx, "", "GPL SQL", model.EngineNameSuricata)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(playbooks))
+	assert.Equal(t, "sql-playbook", playbooks[0].Id)
+
+	// Test case 3: Non-NIDS engine should not do base category matching (but still does exact match)
+	playbooks, err = pdm.GetPlaybooksForDetection(ctx, "", "ET SCAN", model.EngineNameElastAlert)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(playbooks))
+	assert.Equal(t, "et-scan-playbook", playbooks[0].Id)
+
+	// Test case 4: Single word category should not do base category matching
+	playbooks, err = pdm.GetPlaybooksForDetection(ctx, "", "scan", model.EngineNameSuricata)
+	assert.NoError(t, err)
+	assert.Equal(t, 2, len(playbooks))
+	// Should get both NIDS and Sigma playbooks for exact match
+	assert.Contains(t, []string{playbooks[0].Id, playbooks[1].Id}, "scan-playbook")
+	assert.Contains(t, []string{playbooks[0].Id, playbooks[1].Id}, "sigma-scan-playbook")
+
+	// Test case 5: Verify Sigma detection gets the Sigma playbook for "scan" category
+	playbooks, err = pdm.GetPlaybooksForDetection(ctx, "", "scan", model.EngineNameElastAlert)
+	assert.NoError(t, err)
+	assert.Equal(t, 2, len(playbooks))
+	// Should get both playbooks since this is an exact match
+	assert.Contains(t, []string{playbooks[0].Id, playbooks[1].Id}, "scan-playbook")
+	assert.Contains(t, []string{playbooks[0].Id, playbooks[1].Id}, "sigma-scan-playbook")
+}
