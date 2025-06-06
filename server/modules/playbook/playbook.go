@@ -406,7 +406,7 @@ func (pdm *PlaybookDiskManager) GetPlaybooksForDetection(ctx context.Context, pu
 		case model.EngineNameElastAlert:
 			expectedType = "sigma"
 		case model.EngineNameStrelka:
-			expectedType = "strelka"
+			expectedType = "yara"
 		}
 
 		for _, playbookId := range matches {
