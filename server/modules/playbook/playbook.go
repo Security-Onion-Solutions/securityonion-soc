@@ -170,11 +170,18 @@ func (pdm *PlaybookDiskManager) scheduler() {
 			return
 		}
 
-		anythingNew, err := pdm.UpdateRepoOnDisk()
-		if err != nil {
-			logger.WithError(err).Error("unable to update playbook repo")
-			wasSuccessful = false
-			continue
+		var anythingNew bool
+
+		if pdm.autoUpdateEnabled {
+			var err error
+			anythingNew, err = pdm.UpdateRepoOnDisk()
+			if err != nil {
+				logger.WithError(err).Error("unable to update playbook repo")
+				wasSuccessful = false
+				continue
+			}
+		} else {
+			logger.Info("autoUpdateEnabled is disabled, skipping updating playbooks")
 		}
 
 		if !pdm.isRunning {
@@ -185,7 +192,7 @@ func (pdm *PlaybookDiskManager) scheduler() {
 		if anythingNew || force {
 			start := time.Now()
 
-			err = pdm.LoadPlaybooks(logger)
+			err := pdm.LoadPlaybooks(logger)
 			if err != nil {
 				logger.WithError(err).Error("unable to load playbooks")
 				wasSuccessful = false

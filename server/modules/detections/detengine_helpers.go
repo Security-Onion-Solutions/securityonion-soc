@@ -130,7 +130,10 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 		folderName := repo.RulesetName
 
 		if folderName == "" {
-			parser, err := url.Parse(repo.Repo)
+			cleanedPath := repo.Repo
+			cleanedPath = strings.TrimRight(cleanedPath, string(os.PathSeparator))
+
+			parser, err := url.Parse(cleanedPath)
 			if err != nil {
 				log.WithError(err).WithField("repoUrl", repo.Repo).Error("Failed to parse repo URL, doing nothing with it")
 				continue
