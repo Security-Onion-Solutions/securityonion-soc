@@ -127,6 +127,12 @@ routes.push({ path: '/:pathMatch(.*)*', name: 'login', component: {
           const error = flow.data.ui.messages.find(item => item.type == "error");
           if (error && error.text) {
             this.$root.showWarning(this.i18n.loginInvalid);
+          } else {
+            const info = flow.data.ui.messages.find(item => item.type == "info");
+            if (info && info.text && info.text.indexOf("email is already used") != -1) {
+              this.$root.showWarning(this.i18n.oidcEmailExists);
+            }
+  
           }
         }
       } catch (error) {

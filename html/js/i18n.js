@@ -701,6 +701,7 @@ const i18n = {
       odc: 'Open ID Connect',
       of: 'of',
       oidc: 'Open ID Connect (OIDC)',
+      oidcEmailExists: 'The OIDC email is already in use by a local user account. Login as the local user and then link the OIDC account to the local account.',
       oidcHelp: 'Single Sign-On via an external identity provider has been enabled for SOC. Authentication settings, such as password changes, should be performed in the external identity system unless the Security Onion administrators have enabled local password logins concurrently with SSO.',
       oidcLinked: 'OIDC Linked',
       oidcLink: 'Link with ',
