@@ -903,6 +903,26 @@ const huntComponent = {
       }
       return 'queryName'
     },
+    isComplexQuery(query) {
+      // Test for a query containing opening parenthesis outside of a double quoted value string.
+      var quoting = false;
+      var escaping = false;
+      for (var idx = 0; idx < query.length; idx++) {
+        var ch = query[idx];
+        if (ch == '"' && !escaping) {
+          quoting = !quoting;
+        } else if (ch == '(' && !quoting) {
+          return true;
+        }
+
+        if (ch == '\\') {
+          escaping = !escaping;
+        } else {
+          escaping = false;
+        }
+      }
+      return false;
+    },
     obtainQueryDetails() {
       this.queryAltered = false;
       this.queryName = "";
@@ -958,12 +978,14 @@ const huntComponent = {
             }
           }
           this.queryName = matchingQueryName;
-          this.querySearch.split(" AND ").forEach(function(item, index) {
-            item = item.trim();
-            if (item.length > 0 && item != "*") {
-              route.queryFilters.push(item);
-            }
-          });
+          if (!route.isComplexQuery(this.querySearch)) {
+            this.querySearch.split(" AND ").forEach(function(item, index) {
+              item = item.trim();
+              if (item.length > 0 && item != "*") {
+                route.queryFilters.push(item);
+              }
+            });
+          }
         }
 
         if (segments.length > 1) {
