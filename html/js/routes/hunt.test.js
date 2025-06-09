@@ -781,6 +781,18 @@ test('obtainQueryDetails_trickyEscapeSequence', () => {
   expect(comp.querySortBys).toStrictEqual([]);
 });
 
+test('obtainQueryDetails_complex', () => {
+  comp.query = `process.working_directory:"C:\\\\Windows\\\\system32\\\\" OR (some:thing) | groupby host.name`;
+  comp.obtainQueryDetails();
+  expect(comp.queryName).toBe("Custom");
+  expect(comp.querySearch).toBe(`process.working_directory:"C:\\\\Windows\\\\system32\\\\" OR (some:thing)`);
+  expect(comp.queryRemainder).toBe("| groupby host.name");
+  expect(comp.queryFilters).toStrictEqual([]);
+  expect(comp.queryGroupBys).toStrictEqual([["host.name"]]);
+  expect(comp.queryGroupByOptions).toStrictEqual([[]]);
+  expect(comp.querySortBys).toStrictEqual([]);
+});
+
 test('query string filterToggles', () => {
   comp.$route = { path: "hunt", query: { socExcludeToggle: false } };
   comp.filterToggles = [{
@@ -2145,4 +2157,18 @@ test('fetchNewestEvent', async () => {
   });
 
   resetPapi();
+});
+
+test('isComplexQuery', () => {
+  expect(comp.isComplexQuery('')).toBe(false);
+  expect(comp.isComplexQuery('*')).toBe(false);
+  expect(comp.isComplexQuery('foo:bar')).toBe(false);
+  expect(comp.isComplexQuery('foo:"bar"')).toBe(false);
+  expect(comp.isComplexQuery('foo:"bar \"car\""')).toBe(false);
+  expect(comp.isComplexQuery('foo:bar AND cat:dog')).toBe(false);
+  expect(comp.isComplexQuery('foo:bar AND qry:"(cat:dog OR fish:bowl)"')).toBe(false);
+  expect(comp.isComplexQuery('foo:bar AND qry:"this is a \"test\" (cat:dog OR fish:bowl)"')).toBe(false);
+  expect(comp.isComplexQuery('foo:bar AND (cat:dog OR fish:bowl)')).toBe(true);
+  expect(comp.isComplexQuery('foo:bar AND cat:(dog OR fish)')).toBe(true);
+  expect(comp.isComplexQuery('foo:bar AND ((cat:(dog OR fish) OR some:thing))')).toBe(true);
 });
