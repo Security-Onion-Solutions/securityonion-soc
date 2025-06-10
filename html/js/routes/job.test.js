@@ -42,7 +42,7 @@ test('transcriptCyberChef_testing', () => {
 
     // Test
     comp.transcriptCyberChef();
-    expect(mockedOpen).toBeCalledWith(path, '_self');
+    expect(mockedOpen).toHaveBeenCalledWith(path, '_self');
 
     // Cleanup
     window.open = originalOpen;
