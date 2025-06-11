@@ -38,7 +38,7 @@ detection_category: ''
 detection_type: nids
 contributors:
   - SecurityOnionSolutions
-date: 2025-3-12
+created: 2025-3-12
 modified: 2025-3-13
 questions:
   - question: 'What specifically does the alert describe?'
@@ -232,7 +232,7 @@ detection_category: ''
 detection_type: 'sigma'
 contributors:
   - 'SecurityOnionSolutions'
-date: 2025-04-21
+created: 2025-04-21
 modified: 2025-04-21
 questions:
   - question: 'What was the full command line that triggered the alert?'
@@ -361,7 +361,7 @@ detection_category: 'process_creation'
 detection_type: 'sigma'
 contributors:
   - 'SecurityOnionSolutions'
-date: 2025-04-04
+created: 2025-04-04
 questions:
   - question: 'What was the exact process execution that triggered the alert?'
     context: 'Understanding the complete command line and process details provides crucial context about the activity.'
