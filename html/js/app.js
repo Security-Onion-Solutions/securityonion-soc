@@ -9,7 +9,6 @@ const components = [];
 const templatePromises = [];
 
 const FEAT_TTR = 'ttr';
-const FEAT_IIS = 'iis';
 
 const LICENSE_STATUS_ACTIVE = "active";
 const LICENSE_STATUS_EXCEEDED = "exceeded";
