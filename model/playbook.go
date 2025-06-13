@@ -14,7 +14,7 @@ type Playbook struct {
 	// The description of the playbook.
 	Description string `json:"description" example:"This is a sample playbook"`
 	// The date the playbook was created.
-	SourceCreated time.Time `json:"date" yaml:"date" example:"2023-10-01T12:00:00Z"`
+	SourceCreated time.Time `json:"created" yaml:"created" example:"2023-10-01T12:00:00Z"`
 	// The date the playbook was last modified.
 	SourceUpdated *time.Time `json:"modified,omitempty" yaml:"modified,omitempty" example:"2023-10-01T12:00:00Z"`
 	// The specific Detection's public Id. May be empty if not specific to any 1 detection.
