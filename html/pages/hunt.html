@@ -369,7 +369,17 @@
 																</v-tabs-window-item>
 																<v-tabs-window-item value="playbook">
 																	<template v-if="item.newest.playbooks">
-																		<v-expansion-panels variant="accordion" multiple static="true">
+																		<div class="playbook-toolbar">
+																			<span class="ml-9">
+																				<v-btn variant="text" size="small" icon @click="toggleAllQuestions(item.newest.playbooks, index, false)">
+																					<v-icon>fa-window-minimize</v-icon>
+																				</v-btn>
+																				<v-btn variant="text" size="small" icon @click="toggleAllQuestions(item.newest.playbooks, index, true)">
+																					<v-icon>fa-window-maximize</v-icon>
+																				</v-btn>
+																			</span>
+																		</div>
+																		<v-expansion-panels @update:model-value="expandedPlaybookQuestions[index] = $event" :model-value="expandedPlaybookQuestions[index]" variant="accordion" multiple static="true">
 																			<template v-for="playbook in item.newest.playbooks">
 																				<v-expansion-panel v-for="question in playbook.questions">
 																					<v-expansion-panel-title class="italic ws-normal spacious-lines" #default="{ expanded }">

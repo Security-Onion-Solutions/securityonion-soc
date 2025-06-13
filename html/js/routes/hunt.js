@@ -175,6 +175,7 @@ const huntComponent = {
     activeTabs: {},
     expandedEvents: [],
     eventColumnWidth: 0,
+    expandedPlaybookQuestions: {},
   }},
   created() {
     this.$root.initializeCharts();
@@ -3075,6 +3076,20 @@ const huntComponent = {
       // }
 
       return '';
+    },
+    toggleAllQuestions(playbooks, index, expand) {
+      let count = 0;
+      if (!Array.isArray(this.expandedPlaybookQuestions[index]) || !expand) this.expandedPlaybookQuestions[index] = [];
+      if (expand) {
+        for (let pb of playbooks) {
+          for (const _ of pb.questions) {
+            if (!this.expandedPlaybookQuestions[index].includes(count)) {
+              this.expandedPlaybookQuestions[index].push(count);
+            }
+            count++;
+          }
+        }
+      }
     },
   }
 };
