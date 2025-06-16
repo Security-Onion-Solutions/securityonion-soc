@@ -746,6 +746,7 @@ const i18n = {
       pcapRetentionAbbr: 'PCAP Avail',
       pending: 'Pending',
       pendingDeletion: '(pending deletion)',
+      playbookFetchErr: 'Error fetching playbooks',
       playbooks: 'Playbooks',
       playbooksPivot: 'Pivot to Playbooks in Alerts',
       premiumSupport: 'Premium Support',

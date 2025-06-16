@@ -335,13 +335,21 @@
 													<td :colspan="columns.length" class="px-0" :data-aid="'events_fields_' + category">
 														<div>
 															<v-tabs :height="isCategory('alerts') ? undefined : 0" v-model="activeTabs[index]" @update:model-value="if (activeTabs[index] === 'playbook') loadPlaybook(item.newest);">
-																<v-tab id="alerts_alertsDetailTab" value="alert" :class="{ 'theme-primary': activeTabs[index] === 'alert' }" :style="{ 'width': (eventColumnWidth * 0.5) + 'px' }">
+																<v-tab id="alerts_alertsDetailTab" value="alert" :class="{ 'theme-primary': activeTabs[index] === 'alert' }" :style="{ 'width': (eventColumnWidth * 0.5 - 28) + 'px' }" data-aid="alerts_agg_alertDetailsTab">
 																	<v-icon class="tab-icon">fa-bell</v-icon>
 																	<div class="d-none d-lg-block">{{i18n.alertDetails}}</div>
 																</v-tab>
-																<v-tab id="alerts_playbookTab" value="playbook" :class="{ 'theme-primary': activeTabs[index] === 'playbook' }" :style="{ 'width': (eventColumnWidth * 0.5) + 'px' }">
+																<v-tab id="alerts_playbookTab" value="playbook" :class="{ 'theme-primary': activeTabs[index] === 'playbook' }" :style="{ 'width': (eventColumnWidth * 0.5 - 28) + 'px' }" data-aid="alerts_agg_playbookTab">
 																	<v-icon class="tab-icon">fa-book</v-icon>
 																	<div class="d-none d-lg-block">{{i18n.guidedAnalysis}}</div>
+																	<template #append>
+																		<v-btn class="ml-9" variant="text" size="small" icon @click="toggleAllQuestions(item, index, false)" aria-label="collapse all" data-aid="alerts_agg_playbooks_collapseAll">
+																			<v-icon>fa-window-minimize</v-icon>
+																		</v-btn>
+																		<v-btn variant="text" size="small" icon @click="toggleAllQuestions(item, index, true)" aria-label="expand all" data-aid="alerts_agg_playbooks_expandAll">
+																			<v-icon>fa-window-maximize</v-icon>
+																		</v-btn>
+																	</template>
 																</v-tab>
 															</v-tabs>
 															<v-tabs-window v-model="activeTabs[index]">
@@ -369,16 +377,6 @@
 																</v-tabs-window-item>
 																<v-tabs-window-item value="playbook">
 																	<template v-if="item.newest.playbooks">
-																		<div class="playbook-toolbar">
-																			<span class="ml-9">
-																				<v-btn variant="text" size="small" icon @click="toggleAllQuestions(item.newest.playbooks, index, false)">
-																					<v-icon>fa-window-minimize</v-icon>
-																				</v-btn>
-																				<v-btn variant="text" size="small" icon @click="toggleAllQuestions(item.newest.playbooks, index, true)">
-																					<v-icon>fa-window-maximize</v-icon>
-																				</v-btn>
-																			</span>
-																		</div>
 																		<v-expansion-panels @update:model-value="expandedPlaybookQuestions[index] = $event" :model-value="expandedPlaybookQuestions[index]" variant="accordion" multiple static="true">
 																			<template v-for="playbook in item.newest.playbooks">
 																				<v-expansion-panel v-for="question in playbook.questions">
@@ -470,6 +468,11 @@
 																				</v-expansion-panel>
 																			</template>
 																		</v-expansion-panels>
+																	</template>
+																	<template v-else-if="item.newest.playbookErr">
+																		<span class="my-6 inline" :style="{ 'margin-left': (this.eventColumnWidth / 2 - 75) + 'px' }">
+																			{{i18n.playbookFetchErr}}
+																		</span>
 																	</template>
 																	<template v-else>
 																		<v-progress-circular indeterminate :size="50" color="primary" class="my-6" :style="{ 'margin-left': (this.eventColumnWidth / 2 - 25) + 'px'}" data-aid="playbook_grouped_loading_circle"></v-progress-circular>
@@ -634,13 +637,21 @@
 										<td :colspan="columns.length" class="px-0" :data-aid="'events_fields_' + category">
 											<div>
 												<v-tabs :height="isCategory('alerts') ? undefined : 0" v-model="activeTabs[index]" @update:model-value="if (activeTabs[index] === 'playbook') loadPlaybook(item);">
-													<v-tab id="alerts_alertsDetailTab" value="alert" :class="{ 'theme-primary': activeTabs[index] === 'alert' }" :style="{ 'width': (this.eventColumnWidth / 2) + 'px' }">
+													<v-tab id="alerts_alertsDetailTab" value="alert" :class="{ 'theme-primary': activeTabs[index] === 'alert' }" :style="{ 'width': (this.eventColumnWidth / 2) + 'px' }" data-aid="alerts_alertDetailsTab">
 														<v-icon class="tab-icon">fa-bell</v-icon>
 														<div class="d-none d-lg-block">{{i18n.alertDetails}}</div>
 													</v-tab>
-													<v-tab id="alerts_playbookTab" value="playbook" :class="{ 'theme-primary': activeTabs[index] === 'playbook' }" :style="{ 'width': (this.eventColumnWidth / 2) + 'px' }">
+													<v-tab id="alerts_playbookTab" value="playbook" :class="{ 'theme-primary': activeTabs[index] === 'playbook' }" :style="{ 'width': (this.eventColumnWidth / 2) + 'px' }" data-aid="alerts_playbookTab">
 														<v-icon class="tab-icon">fa-book</v-icon>
 														<div class="d-none d-lg-block">{{i18n.guidedAnalysis}}</div>
+														<template #append>
+															<v-btn class="ml-9" variant="text" size="small" icon @click="toggleAllQuestions(item, index, false)" aria-label="collapse all" data-aid="alerts_playbooks_collapseAll">
+																<v-icon>fa-window-minimize</v-icon>
+															</v-btn>
+															<v-btn variant="text" size="small" icon @click="toggleAllQuestions(item, index, true)" aria-label="expand all" data-aid="alerts_playbooks_expandAll">
+																<v-icon>fa-window-maximize</v-icon>
+															</v-btn>
+														</template>
 													</v-tab>
 												</v-tabs>
 												<v-tabs-window v-model="activeTabs[index]">
@@ -668,7 +679,7 @@
 													</v-tabs-window-item>
 													<v-tabs-window-item value="playbook">
 														<template v-if="item.playbooks">
-															<v-expansion-panels variant="accordion" multiple static="true">
+															<v-expansion-panels @update:model-value="expandedPlaybookQuestions[index] = $event" :model-value="expandedPlaybookQuestions[index]" variant="accordion" multiple static="true">
 																<template v-for="playbook in item.playbooks">
 																	<v-expansion-panel v-for="question in playbook.questions">
 																		<v-expansion-panel-title class="italic ws-normal spacious-lines" #default="{ expanded }">
@@ -759,6 +770,11 @@
 																	</v-expansion-panel>
 																</template>
 															</v-expansion-panels>
+														</template>
+														<template v-else-if="item.playbookErr">
+															<span class="my-6 inline" :style="{ 'margin-left': (this.eventColumnWidth / 2 - 75) + 'px' }">
+																{{i18n.playbookFetchErr}}
+															</span>
 														</template>
 														<template v-else>
 															<v-progress-circular indeterminate :size="50" color="primary" class="my-6" :style="{ 'margin-left': (this.eventColumnWidth / 2 - 25) + 'px' }" data-aid="playbook_loading_circle"></v-progress-circular>
