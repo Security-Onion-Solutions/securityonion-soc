@@ -1051,8 +1051,3 @@ ul ul ul {
   font-weight: unset !important;
   font-style: unset !important;
 }
-
-.playbook-toolbar {
-  min-height: 40px;
-  background-color: rgb(var(--v-theme-background-lighten-1)) !important;
-}
