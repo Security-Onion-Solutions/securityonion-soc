@@ -175,6 +175,7 @@ const huntComponent = {
     activeTabs: {},
     expandedEvents: [],
     eventColumnWidth: 0,
+    expandedPlaybookQuestions: {},
   }},
   created() {
     this.$root.initializeCharts();
@@ -384,6 +385,7 @@ const huntComponent = {
       this.selectAllState = false;
       this.selectAllIndeterminate = false;
       this.selectedCount = 0;
+      this.expandedPlaybookQuestions = {};
 
       var onSuccess = () => {};
       var onFail = () => {
@@ -2757,25 +2759,36 @@ const huntComponent = {
       const publicId = event?.['rule.uuid'];
       if (!publicId) return;
 
-      const response = await this.$root.papi.get(`playbook/detection/${publicId}`);
+      let playbooks;
+      let pbErr = false;
 
-      const playbooks = response.data;
+      try {
+        const response = await this.$root.papi.get(`playbook/detection/${publicId}`);
 
-      this.queryVariableSubstitution(event, playbooks);
+        playbooks = response.data;
+      } catch (e) {
+        pbErr = true;
+        playbooks = null;
+      }
 
-      await this.convertPlaybookQueries(playbooks);
+      if (playbooks) {
+        this.queryVariableSubstitution(event, playbooks);
+        await this.convertPlaybookQueries(playbooks);
+      }
 
       event.playbooks = playbooks;
+      event.playbookErr = pbErr;
       delete event.playbookLoading;
 
-      for (let pb of event.playbooks) {
-        for (let q of pb.questions) {
-          await this.$nextTick();
-          await this.askQuestion(q, event);
+      if (playbooks) {
+        for (let pb of event.playbooks) {
+          for (let q of pb.questions) {
+            await this.$nextTick();
+            await this.askQuestion(q, event);
+          }
         }
       }
     },
-
     queryVariableSubstitution(event, playbooks) {
       // Fields that require special array handling
       const arrayFields = ['network.private_ip', 'network.public_ip', 'related.ip'];
@@ -3075,6 +3088,33 @@ const huntComponent = {
       // }
 
       return '';
+    },
+    toggleAllQuestions(event, index, expand) {
+      if (event.playbookErr) return;
+
+      event = (event || {}).newest || event;
+
+      if (event.playbookLoading || !('playbooks' in event)) {
+        setTimeout(() => {
+          this.toggleAllQuestions(event, index, expand);
+        }, 100)
+        return;
+      }
+
+      if (event.playbooks) {
+        let count = 0;
+        if (!Array.isArray(this.expandedPlaybookQuestions[index]) || !expand) this.expandedPlaybookQuestions[index] = [];
+        if (expand) {
+          for (let i = 0; i < event.playbooks.length; i++) {
+            for (let j = 0; j < event.playbooks[i].questions.length; j++) {
+              if (!this.expandedPlaybookQuestions[index].includes(count)) {
+                this.expandedPlaybookQuestions[index].push(count);
+              }
+              count++;
+            }
+          }
+        }
+      }
     },
   }
 };

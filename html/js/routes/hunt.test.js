@@ -2172,3 +2172,107 @@ test('isComplexQuery', () => {
   expect(comp.isComplexQuery('foo:bar AND cat:(dog OR fish)')).toBe(true);
   expect(comp.isComplexQuery('foo:bar AND ((cat:(dog OR fish) OR some:thing))')).toBe(true);
 });
+
+test('toggleAllQuestions', () => {
+  let event = {
+    playbooks: [
+      {
+        questions: [{}, {}, {}],
+      },
+      {
+        questions: [{}],
+      },
+      {
+        questions: [{}, {}],
+      },
+    ],
+  };
+  let index = 0;
+  let expand = true;
+  comp.expandedPlaybookQuestions = {};
+
+  // expand
+  comp.toggleAllQuestions(event, index, expand);
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [0, 1, 2, 3, 4, 5] });
+
+  // expand a different index
+  index = 1;
+  comp.toggleAllQuestions(event, index, expand);
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [0, 1, 2, 3, 4, 5], 1: [0, 1, 2, 3, 4, 5] });
+
+  // collapse non-existing index
+  index = 2;
+  expand = false;
+  comp.toggleAllQuestions(event, index, expand);
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [0, 1, 2, 3, 4, 5], 1: [0, 1, 2, 3, 4, 5], 2: [] });
+
+  // collapse existing, expanded index
+  index = 0;
+  comp.toggleAllQuestions(event, index, expand);
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [], 1: [0, 1, 2, 3, 4, 5], 2: [] });
+
+  // expand existing, partially expanded
+  comp.expandedPlaybookQuestions[0] = [2, 4];
+  expand = true;
+  comp.toggleAllQuestions(event, index, expand);
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [] });
+
+  // no changes when expanding an already expanded group, even if out of order
+  comp.toggleAllQuestions(event, index, expand);
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [] });
+
+  // no change when collapsing an already collapsed group
+  index = 2;
+  expand = false;
+  comp.toggleAllQuestions(event, index, expand);
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [] });
+
+  // handle aggregate event
+  let aggEvent = {
+    newest: event,
+  };
+
+  expand = true;
+  comp.toggleAllQuestions(aggEvent, index, expand);
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [0, 1, 2, 3, 4, 5] });
+
+  // handle event that doesn't have playbooks yet
+  const _setTimeout = global.setTimeout;
+  const setTimeoutMock = jest.fn();
+  global.setTimeout = setTimeoutMock;
+
+  let emptyEvent = {};
+  index = 0;
+  expand = true;
+
+  comp.toggleAllQuestions(emptyEvent, index, expand);
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [0, 1, 2, 3, 4, 5] });
+  expect(setTimeoutMock).toHaveBeenCalledTimes(1);
+
+  // handle agg event that doesn't have playbooks yet
+  aggEvent.newest = emptyEvent;
+  setTimeoutMock.mockClear();
+  
+  comp.toggleAllQuestions(aggEvent, index, expand);
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [0, 1, 2, 3, 4, 5] });
+  expect(setTimeoutMock).toHaveBeenCalledTimes(1);
+  
+  // handle event that's loading playbooks
+  emptyEvent.playbookLoading = true;
+  emptyEvent.playbooks = null;
+  setTimeoutMock.mockClear();
+  
+  comp.toggleAllQuestions(emptyEvent, index, expand);
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [0, 1, 2, 3, 4, 5] });
+  expect(setTimeoutMock).toHaveBeenCalledTimes(1);
+
+  // handle agg event that's loading playbooks
+  aggEvent.newest = emptyEvent;
+  setTimeoutMock.mockClear();
+  
+  comp.toggleAllQuestions(aggEvent, index, expand);
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [0, 1, 2, 3, 4, 5] });
+  expect(setTimeoutMock).toHaveBeenCalledTimes(1);
+
+  global.setTimeout = _setTimeout;
+});
