@@ -2276,3 +2276,65 @@ test('toggleAllQuestions', () => {
 
   global.setTimeout = _setTimeout;
 });
+
+test('loadPlaybook', async () => {
+  let event = {
+    'rule.uuid': '123',
+  };
+
+  const playbooks = [{ id: '1', questions: [] }, { id: '2', questions: [] }];
+
+  let papiMock = mockPapi('get', { data: playbooks });
+
+  await comp.loadPlaybook(event);
+
+  expect(papiMock).toHaveBeenCalledWith('playbook/detection/123');
+  expect(event.playbooks).toStrictEqual(playbooks);
+  expect(event.playbookLoading).toBe(undefined);
+  expect(event.playbookErr).toBe(false);
+
+  resetPapi();
+  papiMock = mockPapi('get', null, 'error');
+
+  event = {
+    'rule.uuid': '456',
+  };
+
+  comp.loadPlaybook(event);
+
+  expect(papiMock).toHaveBeenCalledWith('playbook/detection/456');
+  expect(papiMock).toHaveBeenCalledTimes(1);
+  expect(event.playbookErr).toBe(true);
+  expect(event.playbooks).toBe(null);
+
+  event = {};
+
+  comp.loadPlaybook(event);
+
+  expect(event.playbookErr).toBe(true);
+
+  papiMock.mockClear();
+
+  event = { playbooks: '' };
+
+  comp.loadPlaybook(event);
+  expect(event.playbookErr).toBe(undefined);
+  expect(event.playbookLoading).toBe(undefined);
+  expect(papiMock).toHaveBeenCalledTimes(0);
+
+  event = { playbookLoading: '' };
+
+  comp.loadPlaybook(event);
+  expect(event.playbooks).toBe(undefined);
+  expect(event.playbookErr).toBe(undefined);
+  expect(papiMock).toHaveBeenCalledTimes(0);
+
+  event = { playbookErr: true };
+
+  comp.loadPlaybook(event);
+  expect(event.playbooks).toBe(undefined);
+  expect(event.playbookLoading).toBe(undefined);
+  expect(papiMock).toHaveBeenCalledTimes(0);
+
+  resetPapi();
+});

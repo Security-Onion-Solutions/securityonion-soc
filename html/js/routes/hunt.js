@@ -2752,12 +2752,15 @@ const huntComponent = {
       }
     },
     async loadPlaybook(event) {
-      if (event.playbooks || event.playbookLoading) return;
+      if ('playbooks' in event || 'playbookLoading' in event || 'playbookErr' in event) return;
+      
+      const publicId = event?.['rule.uuid'];
+      if (!publicId) {
+        event.playbookErr = true;
+        return;
+      }
 
       event.playbookLoading = true;
-
-      const publicId = event?.['rule.uuid'];
-      if (!publicId) return;
 
       let playbooks;
       let pbErr = false;
