@@ -5,7 +5,7 @@ go 1.24
 require (
 	github.com/apex/log v1.9.0
 	github.com/elastic/go-elasticsearch/v8 v8.18.0
-	github.com/go-chi/chi/v5 v5.2.1
+	github.com/go-chi/chi/v5 v5.2.2
 	github.com/google/gopacket v1.1.19
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
