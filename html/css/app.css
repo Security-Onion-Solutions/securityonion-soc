@@ -696,6 +696,10 @@ td {
   margin-top: 16px;
 }
 
+.ops-header::before {
+  content: "\200b";
+}
+
 .ops-value::after {
   content: "\00a0";
 }
