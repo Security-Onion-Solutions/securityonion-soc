@@ -1055,3 +1055,11 @@ ul ul ul {
   font-weight: unset !important;
   font-style: unset !important;
 }
+
+.playbook-ai-warning {
+  height: 54px;
+  padding-left: 24px;
+  background-color: rgb(var(--v-theme-background-lighten-1));
+  display: flex;
+  align-items: center;
+}
