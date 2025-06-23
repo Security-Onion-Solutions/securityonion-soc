@@ -1059,7 +1059,10 @@ ul ul ul {
 .playbook-ai-warning {
   height: 54px;
   padding-left: 24px;
-  background-color: rgb(var(--v-theme-background-lighten-1));
   display: flex;
   align-items: center;
+}
+
+.center-self-flex {
+  justify-self: center;
 }

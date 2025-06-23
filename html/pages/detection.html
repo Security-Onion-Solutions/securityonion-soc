@@ -576,6 +576,10 @@
 				</v-tabs-window-item>
 				<v-tabs-window-item value="playbook" data-aid="detection_playbook">
 					<v-col class="contrast-bg rounded rounded-md pa-4">
+						<div class="playbook-ai-warning center-self-flex">
+							<v-icon class="mr-3">fa-flask</v-icon>
+							<span v-html="i18n.detectionPlaybooksAi"></span>
+						</div>
 						<span data-aid="detection_source_input">
 							<prism-editor class="prism" :highlight="playbookHighlighter" v-model="joinedPlaybookSource" readonly></prism-editor>
 						</span>
