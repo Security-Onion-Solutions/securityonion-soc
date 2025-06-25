@@ -203,20 +203,25 @@ func (status *SoStatus) refreshGrid(ctx context.Context) {
 func (status *SoStatus) refreshDetections(ctx context.Context) {
 	localGridStatus := status.statusByGridId[model.LOCAL_GRID_ID]
 
-	if _, exists := status.server.DetectionEngines[model.EngineNameElastAlert]; exists {
+	eng, exists := status.server.DetectionEngines.Load(model.EngineNameElastAlert)
+	if exists {
 		localGridStatus.Detections.ElastAlert = status.checkDetectionEngineStatus("ElastAlert2",
 			localGridStatus.Detections.ElastAlert,
-			status.server.DetectionEngines[model.EngineNameElastAlert].GetState())
+			eng.(server.DetectionEngine).GetState())
 	}
-	if _, exists := status.server.DetectionEngines[model.EngineNameSuricata]; exists {
+
+	eng, exists = status.server.DetectionEngines.Load(model.EngineNameSuricata)
+	if exists {
 		localGridStatus.Detections.Suricata = status.checkDetectionEngineStatus("Suricata",
 			localGridStatus.Detections.Suricata,
-			status.server.DetectionEngines[model.EngineNameSuricata].GetState())
+			eng.(server.DetectionEngine).GetState())
 	}
-	if _, exists := status.server.DetectionEngines[model.EngineNameStrelka]; exists {
+
+	eng, exists = status.server.DetectionEngines.Load(model.EngineNameStrelka)
+	if exists {
 		localGridStatus.Detections.Strelka = status.checkDetectionEngineStatus("Strelka",
 			localGridStatus.Detections.Strelka,
-			status.server.DetectionEngines[model.EngineNameStrelka].GetState())
+			eng.(server.DetectionEngine).GetState())
 	}
 }
 

@@ -187,6 +187,8 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			},
 			showUnreviewedAiSummaries: false,
 			MAX_OVERRIDE_NOTE_LENGTH: MAX_OVERRIDE_NOTE_LENGTH,
+			joinedPlaybookSource: '',
+			playbookCount: -1,
 	}},
 	created() {
 		this.$root.initializeEditor();
@@ -280,6 +282,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			this.extractLogic();
 			this.loadHistory();
 			this.loadComments();
+			this.loadPlaybooks();
 		},
 		extractSummary() {
 			switch (this.detect.engine) {
@@ -368,12 +371,12 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		},
 		isValidUrl(urlString) {
 	  	var urlPattern = new RegExp('^(https?:\\/\\/)?'+ // validate protocol
-		'((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|'+ // validate domain name
-		'((\\d{1,3}\\.){3}\\d{1,3}))'+ // validate OR ip (v4) address
-		'(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*'+ // validate port and path
-		'(\\?[;&a-z\\d%_.~+=-]*)?'+ // validate query string
-		'(\\#[-a-z\\d_]*)?$','i'); // validate fragment locator
-	  return !!urlPattern.test(urlString);
+			'((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|'+ // validate domain name
+			'((\\d{1,3}\\.){3}\\d{1,3}))'+ // validate OR ip (v4) address
+			'(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*'+ // validate port and path
+			'(\\?[;&a-z\\d%_.~+=-]*)?'+ // validate query string
+			'(\\#[-a-z\\d_]*)?$','i'); // validate fragment locator
+			return !!urlPattern.test(urlString);
 		},
 		fixProtocol(url) {
 			if (!url.startsWith('http://') && !url.startsWith('https://')) {
@@ -586,6 +589,20 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			}
 
 			this.changedOverrideKeys[historyID] = overrideRetList;
+		},
+		async loadPlaybooks(showLoadingIndicator = false) {
+			if (showLoadingIndicator) this.$root.startLoading();
+			try {
+				const response = await this.$root.papi.get(`playbook/detection/${this.detect.publicId}?raw=true`);
+				if (response && response.data) {
+					this.joinedPlaybookSource = response.data;
+					this.playbookCount = this.joinedPlaybookSource.split('\n---\n').length;
+				}
+			} catch (error) {
+				this.$root.showError(error);
+			} finally {
+				if (showLoadingIndicator) this.$root.stopLoading();
+			}
 		},
 		getDefaultPreset(preset) {
 			if (this.presets) {
@@ -1444,6 +1461,9 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			}
 
 			return Prism.highlight(code, grammar, language);
+		},
+		playbookHighlighter(code) {
+			return Prism.highlight(code, Prism.languages.yaml, 'yaml');
 		},
 		checkChangedKey(id, key) {
 			return this.changedKeys[id]?.includes(key);

@@ -347,7 +347,7 @@ func TestUpdateRepos(t *testing.T) {
 	iom := mock.NewMockIOManager(ctrl)
 	iom.EXPECT().ReadDir("baseRepoFolder").Return([]fs.DirEntry{
 		&handmock.MockDirEntry{
-			Filename: "repo1",
+			Filename: "sigma-rules",
 			Dir:      true,
 		},
 		&handmock.MockDirEntry{
@@ -355,18 +355,19 @@ func TestUpdateRepos(t *testing.T) {
 			Dir:      true,
 		},
 	}, nil)
-	iom.EXPECT().PullRepo(gomock.Any(), "baseRepoFolder/repo1", nil).Return(false, false, false)
-	iom.EXPECT().CloneRepo(gomock.Any(), "baseRepoFolder/repo2", "http://github.com/user/repo2", &branch).Return(nil)
+	iom.EXPECT().PullRepo(gomock.Any(), "baseRepoFolder/sigma-rules", nil).Return(false, false, false)
+	iom.EXPECT().CloneRepo(gomock.Any(), "baseRepoFolder/repo", "http://github.com/user/repo", &branch).Return(nil)
 	iom.EXPECT().RemoveAll("baseRepoFolder/repo3").Return(nil)
 
 	isRunning := true
 
 	repos := []*model.RuleRepo{
 		{
-			Repo: "http://github.com/user/repo1",
+			Repo:        "http://github.com/user/repo/",
+			RulesetName: "sigma-rules",
 		},
 		{
-			Repo:   "http://github.com/user/repo2",
+			Repo:   "http://github.com/user/repo",
 			Branch: &branch,
 		},
 	}
@@ -375,12 +376,14 @@ func TestUpdateRepos(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, allRepos, len(repos))
 	assert.Equal(t, &RepoOnDisk{
-		Repo: repos[0],
-		Path: "baseRepoFolder/repo1",
+		Repo:        repos[0],
+		Path:        "baseRepoFolder/sigma-rules",
+		RulesetName: "sigma-rules",
 	}, allRepos[0])
 	assert.Equal(t, &RepoOnDisk{
 		Repo:        repos[1],
-		Path:        "baseRepoFolder/repo2",
+		Path:        "baseRepoFolder/repo",
+		RulesetName: "repo",
 		WasModified: true,
 	}, allRepos[1])
 	assert.True(t, anythingNew)
@@ -438,7 +441,7 @@ func TestUpdateReposAllowedRepoErrors(t *testing.T) {
 	}, nil)
 	iom.EXPECT().PullRepo(gomock.Any(), "baseRepoFolder/repo1", &branch).Return(true, false, false)
 	iom.EXPECT().CloneRepo(gomock.Any(), "baseRepoFolder/repo2", "http://github.com/user/repo2", nil).Return(transport.ErrEmptyRemoteRepository)
-	iom.EXPECT().CloneRepo(gomock.Any(), "baseRepoFolder/repo3", "file:///nsm/rules/repo3", nil).Return(transport.ErrRepositoryNotFound)
+	iom.EXPECT().CloneRepo(gomock.Any(), "baseRepoFolder/repo3", "file:///nsm/rules/repo3/", nil).Return(transport.ErrRepositoryNotFound)
 
 	isRunning := true
 
@@ -451,7 +454,7 @@ func TestUpdateReposAllowedRepoErrors(t *testing.T) {
 			Repo: "http://github.com/user/repo2",
 		},
 		{
-			Repo: "file:///nsm/rules/repo3",
+			Repo: "file:///nsm/rules/repo3/",
 		},
 	}
 
@@ -461,6 +464,7 @@ func TestUpdateReposAllowedRepoErrors(t *testing.T) {
 	assert.Equal(t, &RepoOnDisk{
 		Repo:        repos[0],
 		Path:        "baseRepoFolder/repo1",
+		RulesetName: "repo1",
 		WasModified: true,
 	}, allRepos[0])
 	assert.True(t, anythingNew)

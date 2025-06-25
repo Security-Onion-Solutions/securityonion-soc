@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -231,7 +232,7 @@ rule ExtractableRule {
 
 func TestStrelkaModule(t *testing.T) {
 	srv := &server.Server{
-		DetectionEngines: map[model.EngineName]server.DetectionEngine{},
+		DetectionEngines: sync.Map{}, // map[model.EngineName]server.DetectionEngine{},
 	}
 	mod := NewStrelkaEngine(srv)
 
@@ -251,8 +252,16 @@ func TestStrelkaModule(t *testing.T) {
 	err = mod.Stop()
 	assert.NoError(t, err)
 
-	assert.Equal(t, 1, len(srv.DetectionEngines))
-	assert.Same(t, mod, srv.DetectionEngines[model.EngineNameStrelka])
+	count := 0
+	srv.DetectionEngines.Range(func(_, _ any) bool {
+		count++
+		return true
+	})
+	assert.Equal(t, 1, count)
+
+	m, ok := srv.DetectionEngines.Load(model.EngineNameStrelka)
+	assert.True(t, ok)
+	assert.Same(t, mod, m)
 }
 
 func TestCheckAutoEnabledYaraRule(t *testing.T) {
@@ -340,11 +349,11 @@ func TestSyncStrelka(t *testing.T) {
 			iom := mock.NewMockIOManager(ctrl)
 
 			mod := NewStrelkaEngine(&server.Server{
-				DetectionEngines: map[model.EngineName]server.DetectionEngine{},
+				DetectionEngines: sync.Map{}, // map[model.EngineName]server.DetectionEngine{},
 				Detectionstore:   mockDetStore,
 			})
 			mod.isRunning = true
-			mod.srv.DetectionEngines[model.EngineNameSuricata] = mod
+			mod.srv.DetectionEngines.Store(model.EngineNameSuricata, mod)
 			mod.IOManager = iom
 
 			mod.compileYaraPythonScriptPath = "compileYaraPythonScriptPath"
@@ -1138,10 +1147,11 @@ func TestSyncChanges(t *testing.T) {
 	}, nil)
 	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo", nil).Return(true, false, false)
 	// Sync
+	iom.EXPECT().ReadFile("stateFilePath").Return(nil, os.ErrNotExist)
 	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
 		"dummy": {
 			Auditable: model.Auditable{
-				Id:         "abc",
+				Id:         "09e98cc8-9df7-4891-ba16-9e1e14fd8cf6",
 				CreateTime: util.Ptr(time.Now()),
 			},
 			PublicID:  "dummy",
@@ -1149,7 +1159,7 @@ func TestSyncChanges(t *testing.T) {
 		},
 		"delete": {
 			Auditable: model.Auditable{
-				Id: "deleteme",
+				Id: "e59b4d9a-1f2f-4dc5-b5e4-77c962292c74",
 			},
 			PublicID: "delete",
 		},
@@ -1177,7 +1187,7 @@ func TestSyncChanges(t *testing.T) {
 	bim.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
 		if item.OnSuccess != nil {
 			resp := esutil.BulkIndexerResponseItem{
-				DocumentID: "id",
+				DocumentID: item.DocumentID,
 			}
 			item.OnSuccess(ctx, item, resp)
 		}
@@ -1276,7 +1286,60 @@ func TestSyncChanges(t *testing.T) {
 		return item.DocumentID
 	})
 
-	assert.Equal(t, []string{"abc", "", "deleteme"}, workDocIds) // update has an id, create does not, delete does
+	assert.Equal(t, []string{"09e98cc8-9df7-4891-ba16-9e1e14fd8cf6", "4a9dae8e-383f-41c5-b426-b458c1b453bc", "e59b4d9a-1f2f-4dc5-b5e4-77c962292c74"}, workDocIds) // update has an id, create does not, delete does
+}
+
+func TestSyncStateFileNoCommunity(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+
+	detStore := servermock.NewMockDetectionstore(ctrl)
+	iom := mock.NewMockIOManager(ctrl)
+
+	eng := &StrelkaEngine{
+		srv: &server.Server{
+			Detectionstore: detStore,
+			Context:        ctx,
+		},
+		isRunning:   true,
+		reposFolder: "repos",
+		rulesRepos: []*model.RuleRepo{
+			{
+				Repo:      "https://github.com/user/repo",
+				Community: true,
+			},
+		},
+		autoEnabledYaraRules:        []string{"repo"},
+		yaraRulesFolder:             "yaraRulesFolder",
+		compileYaraPythonScriptPath: "compile_yara.py",
+		SyncSchedulerParams: detections.SyncSchedulerParams{
+			StateFilePath: "stateFilePath",
+		},
+		IntegrityCheckerData: detections.IntegrityCheckerData{
+			IsRunning: true,
+		},
+		IOManager:       iom,
+		showAiSummaries: false,
+	}
+
+	logger := log.WithField("detectionEngine", "test-strelka")
+
+	// UpdateRepos
+	iom.EXPECT().ReadDir("repos").Return([]fs.DirEntry{
+		&handmock.MockDirEntry{
+			Filename: "repo",
+			Dir:      true,
+		},
+	}, nil)
+	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo", nil).Return(true, false, false)
+	// Sync
+	iom.EXPECT().ReadFile("stateFilePath").Return([]byte("1000"), nil)
+	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{}, nil)
+
+	err := eng.Sync(logger, true)
+	assert.Equal(t, detections.ErrStateFileNoCommunity, err)
 }
 
 func TestLoadAndMergeAuxiliaryData(t *testing.T) {

@@ -5,7 +5,12 @@
 
 package util
 
-import "strings"
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"strings"
+)
 
 func Unquote(value string) string {
 	if strings.HasPrefix(value, `"`) && strings.HasSuffix(value, `"`) {
@@ -47,4 +52,27 @@ func ComparePtrs[T comparable](a, b *T) bool {
 	}
 
 	return *a == *b
+}
+
+func ToUUID(s string) string {
+	// Convert a string to a UUID deterministically
+
+	// hash the string, get 32 bytes
+	hash := sha256.Sum256([]byte(s))
+
+	// 32 bytes => 16 bytes
+	for i := 0; i < 16; i++ {
+		hash[i] = hash[i] ^ hash[16+i]
+	}
+	h := hash[:16]
+
+	// 16 bytes => 15 bytes
+	h[0] = h[0] ^ h[15]
+	h = h[:15]
+
+	// 15 bytes => 30 hex chars
+	hx := hex.EncodeToString(h)
+
+	// 00000000-0000-4000-b000-000000000000
+	return fmt.Sprintf("%s-%s-4%s-b%s-%s", hx[:8], hx[8:12], hx[12:15], hx[15:18], hx[18:])
 }

@@ -398,7 +398,7 @@ func TestHandlerGetDetection(t *testing.T) {
 				mDetStore.EXPECT().GetDetection(gomock.Any(), "12345").Return(det, nil)
 
 				eng := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameSuricata] = eng
+				srv.DetectionEngines.Store(model.EngineNameSuricata, eng)
 
 				eng.EXPECT().MergeAuxiliaryData(det).Return(nil)
 			},
@@ -463,7 +463,7 @@ func TestHandlerGetDetection(t *testing.T) {
 				mDetStore.EXPECT().GetDetection(gomock.Any(), "12345").Return(det, nil)
 
 				eng := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameSuricata] = eng
+				srv.DetectionEngines.Store(model.EngineNameSuricata, eng)
 
 				eng.EXPECT().MergeAuxiliaryData(det).Return(errors.New("failed to merge"))
 			},
@@ -558,7 +558,7 @@ func TestHandlerGetByPublicId(t *testing.T) {
 				mDetStore.EXPECT().GetDetectionByPublicId(gomock.Any(), "12345").Return(det, nil)
 
 				eng := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameSuricata] = eng
+				srv.DetectionEngines.Store(model.EngineNameSuricata, eng)
 
 				eng.EXPECT().MergeAuxiliaryData(det).Return(nil)
 			},
@@ -634,7 +634,7 @@ func TestHandlerGetByPublicId(t *testing.T) {
 				mDetStore.EXPECT().GetDetectionByPublicId(gomock.Any(), "12345").Return(det, nil)
 
 				eng := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameSuricata] = eng
+				srv.DetectionEngines.Store(model.EngineNameSuricata, eng)
 
 				eng.EXPECT().MergeAuxiliaryData(det).Return(errors.New("failed to merge"))
 			},
@@ -726,7 +726,7 @@ func TestHandlerCreateDetection(t *testing.T) {
 				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
 
 				eng := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameElastAlert] = eng
+				srv.DetectionEngines.Store(model.EngineNameElastAlert, eng)
 
 				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
 				eng.EXPECT().ExtractDetails(gomock.Any()).Return(nil)
@@ -809,7 +809,7 @@ func TestHandlerCreateDetection(t *testing.T) {
 			ReqBody: []byte(`{"language":"suricata","content":"test"}`),
 			InitMock: func(srv *Server, ctrl *gomock.Controller) {
 				eng := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameSuricata] = eng
+				srv.DetectionEngines.Store(model.EngineNameSuricata, eng)
 
 				eng.EXPECT().ValidateRule(gomock.Any()).Return("", errors.New("something went wrong"))
 			},
@@ -829,7 +829,7 @@ func TestHandlerCreateDetection(t *testing.T) {
 				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
 
 				eng := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameStrelka] = eng
+				srv.DetectionEngines.Store(model.EngineNameStrelka, eng)
 
 				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
 				eng.EXPECT().ExtractDetails(gomock.Any()).Return(nil)
@@ -877,7 +877,7 @@ func TestHandlerCreateDetection(t *testing.T) {
 			ReqBody: []byte(`{"language":"sigma","content":"test"}`),
 			InitMock: func(srv *Server, ctrl *gomock.Controller) {
 				eng := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameElastAlert] = eng
+				srv.DetectionEngines.Store(model.EngineNameElastAlert, eng)
 
 				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
 				eng.EXPECT().ExtractDetails(gomock.Any()).Return(errors.New("rule does not contain a public Id"))
@@ -891,7 +891,7 @@ func TestHandlerCreateDetection(t *testing.T) {
 			ReqBody: []byte(`{"language":"sigma","content":"test"}`),
 			InitMock: func(srv *Server, ctrl *gomock.Controller) {
 				eng := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameElastAlert] = eng
+				srv.DetectionEngines.Store(model.EngineNameElastAlert, eng)
 
 				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
 				eng.EXPECT().ExtractDetails(gomock.Any()).Return(errors.New("something went wrong"))
@@ -911,7 +911,7 @@ func TestHandlerCreateDetection(t *testing.T) {
 				mUserStore := srv.Userstore.(*servermock.MockUserstore)
 
 				eng := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameElastAlert] = eng
+				srv.DetectionEngines.Store(model.EngineNameElastAlert, eng)
 
 				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
 				eng.EXPECT().ExtractDetails(gomock.Any()).Return(nil)
@@ -1108,7 +1108,7 @@ func TestHandlerDuplicateDetection(t *testing.T) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 
 				eng := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameElastAlert] = eng
+				srv.DetectionEngines.Store(model.EngineNameElastAlert, eng)
 
 				orig := &model.Detection{
 					PublicID: "Original",
@@ -1170,7 +1170,7 @@ func TestHandlerDuplicateDetection(t *testing.T) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 
 				eng := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameElastAlert] = eng
+				srv.DetectionEngines.Store(model.EngineNameElastAlert, eng)
 
 				orig := &model.Detection{
 					PublicID: "Original",
@@ -1194,7 +1194,7 @@ func TestHandlerDuplicateDetection(t *testing.T) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 
 				eng := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameElastAlert] = eng
+				srv.DetectionEngines.Store(model.EngineNameElastAlert, eng)
 
 				orig := &model.Detection{
 					PublicID: "Original",
@@ -1295,7 +1295,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
 
 				eng := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameElastAlert] = eng
+				srv.DetectionEngines.Store(model.EngineNameElastAlert, eng)
 
 				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
 				eng.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
@@ -1353,7 +1353,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
 
 				eng := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameElastAlert] = eng
+				srv.DetectionEngines.Store(model.EngineNameElastAlert, eng)
 
 				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
 				eng.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
@@ -1433,7 +1433,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 			ReqBody: []byte(`{"engine":"suricata","content":"test"}`),
 			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
 				eng := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameSuricata] = eng
+				srv.DetectionEngines.Store(model.EngineNameSuricata, eng)
 
 				eng.EXPECT().ValidateRule(gomock.Any()).Return("", errors.New("something went wrong"))
 			},
@@ -1451,7 +1451,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 
 				eng := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameStrelka] = eng
+				srv.DetectionEngines.Store(model.EngineNameStrelka, eng)
 
 				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
 				eng.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
@@ -1472,7 +1472,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 
 				eng := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameStrelka] = eng
+				srv.DetectionEngines.Store(model.EngineNameStrelka, eng)
 
 				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
 				eng.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
@@ -1497,7 +1497,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 			ReqBody: []byte(`{"engine":"strelka","content":"test"}`),
 			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
 				eng := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameStrelka] = eng
+				srv.DetectionEngines.Store(model.EngineNameStrelka, eng)
 
 				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
 				eng.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
@@ -1515,7 +1515,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 			ReqBody: []byte(`{"engine":"strelka","content":"test"}`),
 			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
 				eng := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameStrelka] = eng
+				srv.DetectionEngines.Store(model.EngineNameStrelka, eng)
 
 				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
 				eng.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
@@ -1536,7 +1536,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 
 				eng := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameStrelka] = eng
+				srv.DetectionEngines.Store(model.EngineNameStrelka, eng)
 
 				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
 				eng.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
@@ -1559,7 +1559,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 
 				eng := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameStrelka] = eng
+				srv.DetectionEngines.Store(model.EngineNameStrelka, eng)
 
 				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
 				eng.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
@@ -1584,7 +1584,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 
 				eng := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameStrelka] = eng
+				srv.DetectionEngines.Store(model.EngineNameStrelka, eng)
 
 				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
 				eng.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
@@ -1610,7 +1610,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
 
 				eng := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameStrelka] = eng
+				srv.DetectionEngines.Store(model.EngineNameStrelka, eng)
 
 				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
 				eng.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
@@ -1658,7 +1658,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
 
 				eng := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameStrelka] = eng
+				srv.DetectionEngines.Store(model.EngineNameStrelka, eng)
 
 				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
 				eng.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
@@ -1697,7 +1697,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
 
 				eng := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameStrelka] = eng
+				srv.DetectionEngines.Store(model.EngineNameStrelka, eng)
 
 				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
 				eng.EXPECT().ApplyFilters(gomock.Any()).DoAndReturn(func(det *model.Detection) (bool, error) {
@@ -1733,7 +1733,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
 
 				eng := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameStrelka] = eng
+				srv.DetectionEngines.Store(model.EngineNameStrelka, eng)
 
 				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
 				eng.EXPECT().ApplyFilters(gomock.Any()).DoAndReturn(func(det *model.Detection) (bool, error) {
@@ -1978,7 +1978,7 @@ func TestHandlerDeleteDetection(t *testing.T) {
 				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
 
 				eng := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameElastAlert] = eng
+				srv.DetectionEngines.Store(model.EngineNameElastAlert, eng)
 
 				orig := &model.Detection{
 					PublicID: "Original",
@@ -2069,7 +2069,7 @@ func TestHandlerDeleteDetection(t *testing.T) {
 				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
 
 				eng := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameElastAlert] = eng
+				srv.DetectionEngines.Store(model.EngineNameElastAlert, eng)
 
 				mDetStore.EXPECT().GetDetection(gomock.Any(), "12345").Return(&model.Detection{}, nil)
 
@@ -2093,7 +2093,7 @@ func TestHandlerDeleteDetection(t *testing.T) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 
 				eng := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameElastAlert] = eng
+				srv.DetectionEngines.Store(model.EngineNameElastAlert, eng)
 
 				mDetStore.EXPECT().GetDetection(gomock.Any(), "12345").Return(&model.Detection{}, nil)
 
@@ -2188,13 +2188,13 @@ func TestHandlerBulkUpdateDetection(t *testing.T) {
 				mHostAuth := srv.Host.Authorizer.(*rbac.FakeAuthorizer)
 
 				engElastAlert := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameElastAlert] = engElastAlert
+				srv.DetectionEngines.Store(model.EngineNameElastAlert, engElastAlert)
 
 				engSuricata := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameSuricata] = engSuricata
+				srv.DetectionEngines.Store(model.EngineNameSuricata, engSuricata)
 
 				engStrelka := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameStrelka] = engStrelka
+				srv.DetectionEngines.Store(model.EngineNameStrelka, engStrelka)
 
 				mAuth.Authorized = true
 
@@ -2345,13 +2345,14 @@ func TestHandlerBulkUpdateDetection(t *testing.T) {
 				mHostAuth := srv.Host.Authorizer.(*rbac.FakeAuthorizer)
 
 				engElastAlert := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameElastAlert] = engElastAlert
+				// srv.DetectionEngines[model.EngineNameElastAlert] = engElastAlert
+				srv.DetectionEngines.Store(model.EngineNameElastAlert, engElastAlert)
 
 				engSuricata := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameSuricata] = engSuricata
+				srv.DetectionEngines.Store(model.EngineNameSuricata, engSuricata)
 
 				engStrelka := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameStrelka] = engStrelka
+				srv.DetectionEngines.Store(model.EngineNameStrelka, engStrelka)
 
 				mAuth.Authorized = true
 
@@ -3329,7 +3330,7 @@ func TestHandlerConvertContent(t *testing.T) {
 			ReqBody: []byte(`{"content": "sigma goes here", "engine": "elastalert"}`),
 			InitMock: func(srv *Server, ctrl *gomock.Controller) {
 				eng := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameElastAlert] = eng
+				srv.DetectionEngines.Store(model.EngineNameElastAlert, eng)
 
 				eng.EXPECT().ConvertRule(gomock.Any(), &model.Detection{Content: "sigma goes here", Engine: model.EngineNameElastAlert}).Return("converted query", nil)
 			},
@@ -3369,7 +3370,7 @@ func TestHandlerConvertContent(t *testing.T) {
 			ReqBody: []byte(`{"language": "sigma", "content": "sigma goes here"}`),
 			InitMock: func(srv *Server, ctrl *gomock.Controller) {
 				eng := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameElastAlert] = eng
+				srv.DetectionEngines.Store(model.EngineNameElastAlert, eng)
 
 				eng.EXPECT().ConvertRule(gomock.Any(), &model.Detection{Content: "sigma goes here", Language: model.SigLangSigma}).Return("converted query", nil)
 			},
@@ -3386,7 +3387,7 @@ func TestHandlerConvertContent(t *testing.T) {
 			ReqBody: []byte(`{"engine": "elastalert", "content": "sigma goes here"}`),
 			InitMock: func(srv *Server, ctrl *gomock.Controller) {
 				eng := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameElastAlert] = eng
+				srv.DetectionEngines.Store(model.EngineNameElastAlert, eng)
 
 				eng.EXPECT().ConvertRule(gomock.Any(), &model.Detection{Content: "sigma goes here", Engine: model.EngineNameElastAlert}).Return("", errors.New("something went wrong"))
 			},
@@ -3473,7 +3474,7 @@ func TestHandlerSyncEngineDetections(t *testing.T) {
 				mAuth.Authorized = true
 
 				eng := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameElastAlert] = eng
+				srv.DetectionEngines.Store(model.EngineNameElastAlert, eng)
 
 				eng.EXPECT().InterruptSync(true, true)
 			},
@@ -3492,17 +3493,17 @@ func TestHandlerSyncEngineDetections(t *testing.T) {
 				mAuth.Authorized = true
 
 				engElastAlert := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameElastAlert] = engElastAlert
+				srv.DetectionEngines.Store(model.EngineNameElastAlert, engElastAlert)
 
 				engSuricata := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameSuricata] = engSuricata
+				srv.DetectionEngines.Store(model.EngineNameSuricata, engSuricata)
 
 				engStrelka := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameStrelka] = engStrelka
+				srv.DetectionEngines.Store(model.EngineNameStrelka, engStrelka)
 
 				// all means all
 				engWhatever := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines["whatever"] = engWhatever
+				srv.DetectionEngines.Store(model.EngineName("whatever"), engWhatever)
 
 				engElastAlert.EXPECT().InterruptSync(false, true)
 				engSuricata.EXPECT().InterruptSync(false, true)
@@ -3616,7 +3617,7 @@ func TestHandlerGenPublicId(t *testing.T) {
 			Engine: string(model.EngineNameElastAlert),
 			InitMock: func(srv *Server, ctrl *gomock.Controller) {
 				eng := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameElastAlert] = eng
+				srv.DetectionEngines.Store(model.EngineNameElastAlert, eng)
 
 				eng.EXPECT().GenerateUnusedPublicId(gomock.Any()).Return("unused-public-id", nil)
 			},
@@ -3644,7 +3645,7 @@ func TestHandlerGenPublicId(t *testing.T) {
 			Engine: string(model.EngineNameStrelka),
 			InitMock: func(srv *Server, ctrl *gomock.Controller) {
 				eng := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameStrelka] = eng
+				srv.DetectionEngines.Store(model.EngineNameStrelka, eng)
 
 				eng.EXPECT().GenerateUnusedPublicId(gomock.Any()).Return("", errors.New("not implemented"))
 			},
@@ -3658,7 +3659,7 @@ func TestHandlerGenPublicId(t *testing.T) {
 			Engine: string(model.EngineNameStrelka),
 			InitMock: func(srv *Server, ctrl *gomock.Controller) {
 				eng := servermock.NewMockDetectionEngine(ctrl)
-				srv.DetectionEngines[model.EngineNameStrelka] = eng
+				srv.DetectionEngines.Store(model.EngineNameStrelka, eng)
 
 				eng.EXPECT().GenerateUnusedPublicId(gomock.Any()).Return("", errors.New("something went wrong"))
 			},

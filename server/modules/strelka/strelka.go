@@ -15,8 +15,10 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -148,7 +150,7 @@ func (e *StrelkaEngine) Init(config module.ModuleConfig) (err error) {
 }
 
 func (e *StrelkaEngine) Start() error {
-	e.srv.DetectionEngines[model.EngineNameStrelka] = e
+	e.srv.DetectionEngines.Store(model.EngineNameStrelka, e)
 	e.isRunning = true
 
 	// start long running processes
@@ -373,6 +375,10 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 		return detections.ErrModuleStopped
 	}
 
+	state, _ := detections.ReadStateFile(e.IOManager, e.StateFilePath)
+
+	hasFP := state != nil && *state != 0
+
 	communityDetections, err := e.srv.Detectionstore.GetAllDetections(e.srv.Context, model.WithEngine(model.EngineNameStrelka), model.WithCommunity(true))
 	if err != nil {
 		logger.WithError(err).Error("failed to get all community SIDs")
@@ -385,6 +391,23 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 		}
 
 		return detections.ErrSyncFailed
+	}
+
+	if hasFP && len(communityDetections) == 0 {
+		// Two conflicting facts appear to be true:
+		// 1) We have imported rules before, the fingerprint file exists
+		// 2) There are 0 imported community rules
+		// This lines up perfectly with the weird glitch of double-imported
+		// detections we've been tracking. Mark the sync as a failure.
+
+		if e.notify {
+			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+				Engine: model.EngineNameStrelka,
+				Status: "error",
+			})
+		}
+
+		return detections.ErrStateFileNoCommunity
 	}
 
 	if !e.isRunning {
@@ -412,6 +435,16 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 		baseDir := repo.Path
 		if repo.Repo.Folder != nil {
 			baseDir = filepath.Join(baseDir, *repo.Repo.Folder)
+		}
+
+		ruleset := repo.RulesetName
+		if ruleset == "" {
+			parser, err := url.Parse(repo.Repo.Repo)
+			if err == nil {
+				_, ruleset = path.Split(parser.Path)
+			} else {
+				ruleset = repo.Repo.Repo
+			}
 		}
 
 		err = e.WalkDir(baseDir, func(path string, d fs.DirEntry, err error) error {
@@ -446,7 +479,7 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 			}
 
 			for _, rule := range parsed {
-				det := rule.ToDetection(repo.Repo.License, filepath.Base(repo.Path), repo.Repo.Community)
+				det := rule.ToDetection(repo.Repo.License, ruleset, repo.Repo.Community)
 				detects = append(detects, det)
 			}
 
@@ -514,6 +547,7 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 			detect.Overrides = orig.Overrides
 			detect.CreateTime = orig.CreateTime
 		} else {
+			detect.Id = util.ToUUID(detect.PublicID)
 			detect.CreateTime = util.Ptr(time.Now())
 			checkRulesetEnabled(e, detect)
 		}
@@ -595,9 +629,10 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 			}).Info("creating new YARA detection")
 
 			err = bulk.Add(e.srv.Context, esutil.BulkIndexerItem{
-				Index:  index,
-				Action: "create",
-				Body:   bytes.NewReader(document),
+				Index:      index,
+				Action:     "create",
+				DocumentID: detect.Id,
+				Body:       bytes.NewReader(document),
 				OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
 					auditMut.Lock()
 					defer auditMut.Unlock()
@@ -650,7 +685,7 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 
 		if e.notify {
 			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-				Engine: model.EngineNameElastAlert,
+				Engine: model.EngineNameStrelka,
 				Status: "error",
 			})
 		}
@@ -1225,7 +1260,7 @@ func (e *StrelkaEngine) IntegrityCheck(canInterrupt bool, logger *log.Entry) (de
 
 	if logger == nil {
 		logger = log.WithFields(log.Fields{
-			"detectionEngine": model.EngineNameSuricata,
+			"detectionEngine": model.EngineNameStrelka,
 		})
 	}
 

@@ -646,7 +646,7 @@ td {
   vertical-align: middle;
 }
 
-.detection-tab-icon {
+.tab-icon {
   margin-right: 8px;
   vertical-align: baseline;
 }
@@ -694,6 +694,10 @@ td {
 .ops-header {
   font-weight: bold;
   margin-top: 16px;
+}
+
+.ops-header::before {
+  content: "\200b";
 }
 
 .ops-value::after {
@@ -1007,4 +1011,58 @@ ul ul ul {
 
 .v-messages__message {
   max-height: 36px;
+}
+
+.ws-normal {
+  white-space: normal;
+}
+
+.spacious-lines {
+  line-height: 1.5;
+}
+
+.simple-table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  border: 1px solid rgba(var(--v-theme-text), 0.12);
+  margin-top: 8px;
+  margin-bottom: 8px;
+  padding-right: 8px;
+}
+
+.simple-table th, .simple-table td {
+  cursor: default;
+  border: 1px solid rgba(var(--v-theme-text), 0.12);
+  padding: 10px;
+  white-space: normal;
+}
+
+.simple-table td {
+  font-weight: bolder;
+  white-space: nowrap;
+}
+
+.simple-table td:last-child {
+  white-space: normal !important;
+  word-break: break-all;
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.text-normal {
+  font-weight: unset !important;
+  font-style: unset !important;
+}
+
+.playbook-ai-warning {
+  height: 54px;
+  padding-left: 24px;
+  display: flex;
+  align-items: center;
+}
+
+.center-self-flex {
+  justify-self: center;
 }

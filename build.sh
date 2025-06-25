@@ -22,4 +22,4 @@ echo "Running GO unit tests..."
 go test ./...
 
 echo "Building application..."
-go build -a -ldflags "-X main.BuildVersion=$version -X main.BuildTime=$now -extldflags '-static'" -tags netgo -installsuffix netgo cmd/sensoroni.go
+go build -a -ldflags "-X main.BuildVersion=$version -X main.BuildTime=$now -X github.com/security-onion-solutions/securityonion-soc/licensing.revKeys=$REVKEYS -extldflags '-static'" -tags netgo -installsuffix netgo cmd/sensoroni.go

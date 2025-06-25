@@ -178,7 +178,7 @@ func (e *SuricataEngine) Init(config module.ModuleConfig) (err error) {
 }
 
 func (e *SuricataEngine) Start() error {
-	e.srv.DetectionEngines[model.EngineNameSuricata] = e
+	e.srv.DetectionEngines.Store(model.EngineNameSuricata, e)
 	e.isRunning = true
 	e.IntegrityCheckerData.IsRunning = true
 
@@ -360,7 +360,7 @@ func (e *SuricataEngine) Sync(logger *log.Entry, forceSync bool) error {
 	if detections.CheckWriteNoRead(e.srv.Context, e.srv.Detectionstore, e.writeNoRead) {
 		if e.notify {
 			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-				Engine: model.EngineNameStrelka,
+				Engine: model.EngineNameSuricata,
 				Status: "error",
 			})
 		}
@@ -408,13 +408,13 @@ func (e *SuricataEngine) Sync(logger *log.Entry, forceSync bool) error {
 		return detections.ErrSyncFailed
 	}
 
-	if !forceSync {
-		fingerprint, haveFP, err := e.readFingerprint(e.rulesFingerprintFile)
-		if err != nil {
-			logger.WithError(err).Error("unable to read rules fingerprint file")
-			return detections.ErrSyncFailed
-		}
+	fingerprint, haveFP, err := e.readFingerprint(e.rulesFingerprintFile)
+	if err != nil {
+		logger.WithError(err).Error("unable to read rules fingerprint file")
+		return detections.ErrSyncFailed
+	}
 
+	if !forceSync {
 		if haveFP && strings.EqualFold(*fingerprint, hash) {
 			// if we have a fingerprint and the hashes are equal, there's nothing to do
 			logger.Info("community rule sync found no changes")
@@ -501,10 +501,12 @@ func (e *SuricataEngine) Sync(logger *log.Entry, forceSync bool) error {
 
 	commDetections = detections.DeduplicateByPublicId(commDetections)
 
-	errMap, err := e.syncCommunityDetections(e.srv.Context, logger, commDetections, true, allSettings)
+	errMap, err := e.syncCommunityDetections(e.srv.Context, logger, commDetections, haveFP, true, allSettings)
 	if err != nil {
 		if errors.Is(err, detections.ErrModuleStopped) {
 			logger.Info("incomplete sync of suricata community detections due to module stopping")
+			return err
+		} else if errors.Is(err, detections.ErrStateFileNoCommunity) {
 			return err
 		}
 
@@ -853,7 +855,9 @@ func (e *SuricataEngine) SyncLocalDetections(ctx context.Context, detects []*mod
 	errMap = map[string]string{} // map[sid]error
 
 	if len(communityDets) != 0 {
-		eMap, err := e.syncCommunityDetections(ctx, nil, communityDets, false, allSettings)
+		_, haveFP, _ := e.readFingerprint(e.rulesFingerprintFile)
+
+		eMap, err := e.syncCommunityDetections(ctx, nil, communityDets, haveFP, false, allSettings)
 		if err != nil {
 			return eMap, err
 		}
@@ -1169,7 +1173,7 @@ func removeFromIndex(lines []string, index map[string]int, sid string) {
 	}
 }
 
-func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *log.Entry, detects []*model.Detection, deleteUnreferenced bool, allSettings []*model.Setting) (errMap map[string]string, err error) {
+func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *log.Entry, detects []*model.Detection, fingerprintFilePresent bool, deleteUnreferenced bool, allSettings []*model.Setting) (errMap map[string]string, err error) {
 	defer func() {
 		if len(errMap) == 0 {
 			errMap = nil
@@ -1228,6 +1232,23 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 		return nil, err
 	}
 
+	if fingerprintFilePresent && len(commSIDs) == 0 {
+		// Two conflicting facts appear to be true:
+		// 1) We have imported rules before, the fingerprint file exists
+		// 2) There are 0 imported community rules
+		// This lines up perfectly with the weird glitch of double-imported
+		// detections we've been tracking. Mark the sync as a failure.
+
+		if e.notify {
+			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+				Engine: model.EngineNameSuricata,
+				Status: "error",
+			})
+		}
+
+		return nil, detections.ErrStateFileNoCommunity
+	}
+
 	toDelete := map[string]struct{}{}
 	for sid := range commSIDs {
 		toDelete[sid] = struct{}{}
@@ -1277,6 +1298,7 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 			detect.Overrides = orig.Overrides
 			detect.CreateTime = orig.CreateTime
 		} else {
+			detect.Id = util.ToUUID(detect.PublicID)
 			detect.CreateTime = util.Ptr(time.Now())
 		}
 
@@ -1389,9 +1411,10 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 			}).Info("creating new Suricata detection")
 
 			err = bulk.Add(ctx, esutil.BulkIndexerItem{
-				Index:  index,
-				Action: "create",
-				Body:   bytes.NewReader(document),
+				Index:      index,
+				Action:     "create",
+				DocumentID: detect.Id,
+				Body:       bytes.NewReader(document),
 				OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
 					auditMut.Lock()
 					defer auditMut.Unlock()

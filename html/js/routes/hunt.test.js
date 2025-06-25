@@ -781,6 +781,18 @@ test('obtainQueryDetails_trickyEscapeSequence', () => {
   expect(comp.querySortBys).toStrictEqual([]);
 });
 
+test('obtainQueryDetails_complex', () => {
+  comp.query = `process.working_directory:"C:\\\\Windows\\\\system32\\\\" OR (some:thing) | groupby host.name`;
+  comp.obtainQueryDetails();
+  expect(comp.queryName).toBe("Custom");
+  expect(comp.querySearch).toBe(`process.working_directory:"C:\\\\Windows\\\\system32\\\\" OR (some:thing)`);
+  expect(comp.queryRemainder).toBe("| groupby host.name");
+  expect(comp.queryFilters).toStrictEqual([]);
+  expect(comp.queryGroupBys).toStrictEqual([["host.name"]]);
+  expect(comp.queryGroupByOptions).toStrictEqual([[]]);
+  expect(comp.querySortBys).toStrictEqual([]);
+});
+
 test('query string filterToggles', () => {
   comp.$route = { path: "hunt", query: { socExcludeToggle: false } };
   comp.filterToggles = [{
@@ -1054,13 +1066,13 @@ test('addToCase', () => {
   comp.addToCase(false);
 
   expect(window.open).toHaveBeenCalledTimes(1);
-  expect(window.open).toHaveBeenCalledWith('http://localhost/#/case/create?type=evidence&value=test', '_self');
+  expect(window.open).toHaveBeenCalledWith('https://example.com/#/case/create?type=evidence&value=test', '_self');
   expect(comp.addToCaseDialogVisible).toBe(false);
 
   comp.addToCase(true)
 
   expect(window.open).toHaveBeenCalledTimes(2);
-  expect(window.open).toHaveBeenCalledWith('http://localhost/#/case/create?type=evidence&value=test', '_blank');
+  expect(window.open).toHaveBeenCalledWith('https://example.com/#/case/create?type=evidence&value=test', '_blank');
   expect(comp.addToCaseDialogVisible).toBe(false);
 
   comp.selectedMruCase = { id: '1', title: 'Case 1' };
@@ -1068,7 +1080,7 @@ test('addToCase', () => {
   comp.addToCase(true);
 
   expect(window.open).toHaveBeenCalledTimes(3);
-  expect(window.open).toHaveBeenCalledWith('http://localhost/#/case/1?type=evidence&value=test', '1');
+  expect(window.open).toHaveBeenCalledWith('https://example.com/#/case/1?type=evidence&value=test', '1');
   expect(comp.addToCaseDialogVisible).toBe(false);
 
   window.open = origOpen;
@@ -1670,4 +1682,659 @@ test('sortBySeverity', () => {
     const result = comp.sortBySeverity(A, B);
     expect(result).toBe(expected);
   });
+});
+
+test('countDrilldown', () => {
+  comp.filterRouteDrilldown = null;
+
+  let event = {};
+  event.count = 10;
+
+  comp.countDrilldown(event);
+  expect(comp.$router.length).toBe(0);
+  expect(comp.filterRouteDrilldown).toBe(null);
+
+  event.a = 'a';
+
+  let expected = {
+    path: '',
+    query: {
+      el: 100,
+      filterField: 'a',
+      filterMode: 'DRILLDOWN',
+      filterValue: 'a',
+      gl: 10,
+      q: '',
+      rt: 24,
+      rtu: 'hours',
+      z: ''
+    }
+  };
+
+  comp.countDrilldown(event);
+  expect(comp.$router.length).toBe(1);
+  expect(comp.filterRouteDrilldown).toEqual(expected);
+  expect(comp.$router[0]).toStrictEqual(expected);
+
+  comp.$router = [];
+  comp.filterRouteDrilldown = null;
+
+  event.b = 'b';
+
+  comp.countDrilldown(event);
+  expect(comp.$router.length).toBe(0);
+  expect(comp.filterRouteDrilldown).toBe(null);
+
+  event = {};
+  event.count = 10;
+  event["rule.name"] = 'rule_name';
+  event["event.module"] = 'event_module';
+  event["event.severity_label"] = 'event_severity_label';
+  event["rule.uuid"] = 'rule_uuid';
+
+  expected = {
+    path: "",
+    query: {
+      el: 100,
+      filterField: "rule.name",
+      filterMode: "DRILLDOWN",
+      filterValue: "rule_name",
+      gl: 10,
+      q: "",
+      rt: 24,
+      rtu: "hours",
+      z: ""
+    }
+  };
+
+  comp.countDrilldown(event);
+  expect(comp.$router.length).toBe(1);
+  expect(comp.filterRouteDrilldown).toEqual(expected);
+
+  comp.$router = [];
+  comp.filterRouteDrilldown = null;
+
+  event.a = 10;
+
+  comp.countDrilldown(event);
+  expect(comp.$router.length).toBe(0);
+  expect(comp.filterRouteDrilldown).toBe(null);
+});
+
+test('extractSocValues', () => {
+  let obj = {
+    payload: {
+      a: 1,
+      b: 2,
+      c: 3,
+    },
+    id: 'abc',
+    score: 0.947,
+    type: 'type',
+    timestamp: 'now',
+    source: 'network',
+  };
+
+  const expected = {
+    a: 1,
+    b: 2,
+    c: 3,
+    soc_id: 'abc',
+    soc_score: 0.947,
+    soc_type: 'type',
+    soc_timestamp: 'now',
+    soc_source: 'network',
+  };
+
+  let actual = comp.extractSocValues(obj);
+
+  expect(actual).toStrictEqual(expected);
+});
+
+test('getEventField', () => {
+  let event = {
+    a: 1,
+    timestamp: 'now',
+    'event_data.a': 2,
+    'event_data.b': 3,
+  };
+
+  const a = comp.getEventField(event, 'a');
+  const eventdataA = comp.getEventField(event, 'event_data.a');
+  const b = comp.getEventField(event, 'b');
+  const timestamp = comp.getEventField(event, 'timestamp');
+
+  expect(a).toBe(1);
+  expect(eventdataA).toBe(2);
+  expect(b).toBe('');
+  expect(timestamp).toBe('now');
+});
+
+test('buildQuestionRange', () => {
+  const event = {
+    '@timestamp': '2023-10-01T12:00:00Z',
+  };
+
+  comp.zone = 'America/Denver';
+
+  let range = comp.buildQuestionRange(event, '+/-30d');
+  expect(range).toBe('2023/09/01 06:00:00 AM - 2023/10/31 06:00:00 AM');
+
+  range = comp.buildQuestionRange(event, '-15m');
+  expect(range).toBe('2023/10/01 05:45:00 AM - 2023/10/01 06:00:00 AM');
+
+  range = comp.buildQuestionRange(event, '2h');
+  expect(range).toBe('2023/10/01 06:00:00 AM - 2023/10/01 08:00:00 AM');
+
+  range = comp.buildQuestionRange(event, '+/-60s');
+  expect(range).toBe('2023/10/01 05:59:00 AM - 2023/10/01 06:01:00 AM');
+
+  range = comp.buildQuestionRange(event, '');
+  expect(range).toBe('');
+
+  range = comp.buildQuestionRange(event, 'X');
+  expect(range).toBe('');
+
+  range = comp.buildQuestionRange(event, '10p');
+  expect(range).toBe('');
+});
+
+test('sortAggregateEvents', () => {
+  let tests = [
+    [
+      { expectedPos: 1, value: 2 },
+      { expectedPos: 2, value: 1 },
+      { expectedPos: 0, value: 3 },
+    ],
+    [
+      { expectedPos: 2, value: 40 },
+      { expectedPos: 3, value: 30 },
+      { expectedPos: 0, value: 60 },
+      { value: 10 },
+      { expectedPos: 1, value: 50 },
+      { expectedPos: 4, value: 20 },
+    ],
+    [
+      { expectedPos: 0, value: 0 },
+    ],
+  ];
+
+  for (let events of tests) {
+    const sortedEvents = comp.sortAggregateEvents(events);
+
+    if (events.length >= 5) {
+      expect(sortedEvents.length).toBe(5);
+    } else {
+      expect(sortedEvents.length).toBe(events.length);
+    }
+
+    for (let i = 0; i < sortedEvents.length; i++) {
+      expect(sortedEvents[i].expectedPos).toBe(i);
+    }
+  }
+});
+
+test('askQuestion', async () => {
+  comp.$root.enableReverseLookup = true;
+  comp.zone = "Etc/UTC";
+
+  let question = {};
+  let event = {
+    field: 'present',
+    func: function() {}, // not present
+  };
+
+  await comp.askQuestion(question, event);
+
+  expect(question.answers.length).toBe(1);
+  expect('field' in question.answers[0].payload).toBe(true);
+  expect('func' in question.answers[0].payload).toBe(false);
+
+  const mock1 = mockPapi('get', {
+    data: {
+      metrics: {
+        biggest: [
+          {
+            payload: {
+              name: 'metric event',
+              ip: '1.1.1.1',
+            },
+          },
+        ],
+      },
+    },
+  });
+
+  const mock2 = mockPapi('put', {
+    then: function () { },
+  });
+
+  question = {
+    range: '-30d',
+    filledOQL: 'OQL Query',
+    isAggregate: true,
+  };
+  event = {
+    'soc_timestamp': '2023-10-01T12:00:00Z',
+  };
+
+  await comp.askQuestion(question, event);
+
+  expect(question.answers.length).toBe(1);
+  expect(question.answers[0].payload.name).toBe('metric event');
+  expect('error' in question).toBe(false);
+
+  expect(mock1).toHaveBeenCalledTimes(1);
+  expect(mock1).toHaveBeenCalledWith('events/', {
+    params: {
+      query: 'OQL Query',
+      range: '2023/09/01 12:00:00 PM - 2023/10/01 12:00:00 PM',
+      format: '2006/01/02 3:04:05 PM',
+      zone: 'Etc/UTC',
+      metricLimit: 5,
+      eventLimit: 5,
+    },
+  });
+
+  expect(mock2).toHaveBeenCalledTimes(1);
+  expect(mock2).toHaveBeenCalledWith('util/reverse-lookup', ['1.1.1.1'], {params: {gridId: ''}});
+
+  resetPapi();
+  const mock3 = mockPapi('get', null, new Error('something went wrong'));
+
+  question = {
+    range: '-30d',
+    filledOQL: 'OQL Query',
+    isAggregate: false,
+  };
+  event = {
+    'soc_timestamp': '2023-10-01T12:00:00Z',
+  };
+
+  await comp.askQuestion(question, event);
+
+  expect(question.answers.length).toBe(0);
+  expect('error' in question).toBe(true);
+  expect(question.error).toBe(true);
+
+  expect(mock3).toHaveBeenCalledTimes(1);
+  expect(mock3).toHaveBeenCalledWith('events/', {
+    params: {
+      query: 'OQL Query | sortby @timestamp',
+      range: '2023/09/01 12:00:00 PM - 2023/10/01 12:00:00 PM',
+      format: '2006/01/02 3:04:05 PM',
+      zone: 'Etc/UTC',
+      metricLimit: 5,
+      eventLimit: 5,
+    },
+  });
+
+  comp.$root.enableReverseLookup = false;
+  resetPapi();
+});
+
+test('queryVariableSubstitution - handles simple variable substitution', () => {
+    const event = {
+      'host.name': 'test-host',
+      'source.ip': '192.168.1.1'
+    };
+    const playbooks = [{
+      questions: [{
+        query: 'hostname: {host.name}\nsource_ip: {source.ip}'
+      }]
+    }];
+
+    comp.queryVariableSubstitution(event, playbooks);
+    expect(playbooks[0].questions[0].filledQuery).toBe(
+      'hostname: test-host\nsource_ip: 192.168.1.1'
+    );
+  });
+
+test('queryVariableSubstitution - handles array fields with proper indentation', () => {
+    const event = {
+      'network.private_ip': ['192.168.1.1', '10.0.0.1'],
+      'network.public_ip': ['203.0.113.1']
+    };
+    const playbooks = [{
+      questions: [{
+        query: '    private_ips: {network.private_ip}\n    public_ips: {network.public_ip}'
+      }]
+    }];
+
+    comp.queryVariableSubstitution(event, playbooks);
+    expect(playbooks[0].questions[0].filledQuery).toBe(
+      '    private_ips:\n        - 192.168.1.1\n        - 10.0.0.1\n    public_ips:\n        - 203.0.113.1'
+    );
+  });
+
+test('queryVariableSubstitution - handles missing fields with NODATA', () => {
+    const event = {
+      'host.name': 'test-host'
+    };
+    const playbooks = [{
+      questions: [{
+        query: 'hostname: {host.name}\nip: {missing.field}'
+      }]
+    }];
+
+    comp.queryVariableSubstitution(event, playbooks);
+    expect(playbooks[0].questions[0].filledQuery).toBe(
+      'hostname: test-host\nip: NODATA'
+    );
+  });
+
+test('queryVariableSubstitution - handles array fields with dashes', () => {
+    const event = {
+      'network.private_ip': ['192.168.1.1', '10.0.0.1']
+    };
+    const playbooks = [{
+      questions: [{
+        query: '    - private_ips: {network.private_ip}'
+      }]
+    }];
+
+    comp.queryVariableSubstitution(event, playbooks);
+    expect(playbooks[0].questions[0].filledQuery).toBe(
+      '    - private_ips:\n        - 192.168.1.1\n        - 10.0.0.1'
+    );
+  });
+
+test('queryVariableSubstitution - handles real-world query format', () => {
+  const event = {
+    'network.private_ip': ['192.168.1.1', '10.0.0.1'],
+    'dns.query_name': 'malicious.com',
+    'network.public_ip': ['203.0.113.1'],
+    'related.ip': ['203.0.113.1', '192.168.1.2'],
+  };
+  const playbooks = [{
+    questions: [{
+      query: `aggregation: false
+logsource:
+  category: network
+  service: dns
+detection:
+    selection:
+       - src_ip: '{network.private_ip}'
+       - dns.query.name|contains: '{dns.query_name}'
+       - dns.resolved_ip: '{network.public_ip}'
+    filter:
+      dst_ip: '{related.ip}'
+    condition: selection and filter
+fields:
+    - dns.query.name
+    - dns.query.type_name
+    - dns.resolved_ip
+    - dns.response.code_name`
+    }]
+  }];
+
+  comp.queryVariableSubstitution(event, playbooks);
+  expect(playbooks[0].questions[0].filledQuery).toBe(
+    `aggregation: false
+logsource:
+  category: network
+  service: dns
+detection:
+    selection:
+       - src_ip:
+           - 192.168.1.1
+           - 10.0.0.1
+       - dns.query.name|contains: 'malicious.com'
+       - dns.resolved_ip:
+           - 203.0.113.1
+    filter:
+      dst_ip:
+          - 203.0.113.1
+          - 192.168.1.2
+    condition: selection and filter
+fields:
+    - dns.query.name
+    - dns.query.type_name
+    - dns.resolved_ip
+    - dns.response.code_name`
+  );
+});
+
+test('fetchNewestEvent', async () => {
+  const eventSearch = mockPapi('get', { data: { events: [{ id: '100', payload: { a: 1, b: "2", c: true } }] } });
+  
+  comp.filterToggles = [
+    {
+      name: 'acknowledged',
+      enabled: false,
+    },
+    {
+      name: 'escalated',
+      enabled: false,
+    },
+  ];
+  comp.dateRange = 'x - y';
+  comp.zone = 'zone';
+
+  var item = {
+    a: 1,
+    b: "2",
+    'event_data.c': true,
+    count: 10,
+  };
+
+  await comp.fetchNewestEvent(item);
+
+  expect(item.newest.soc_id).toBe('100');
+  
+  expect(eventSearch).toHaveBeenCalledTimes(1);
+  expect(eventSearch).toHaveBeenCalledWith('events/', {
+    params: {
+      query: 'a:"1" AND b:"2" AND c:"true" AND NOT event.acknowledged:true AND NOT event.escalated:true | sortby @timestamp',
+      range: 'x - y',
+      format: comp.i18n.timePickerSample,
+      zone: 'zone',
+      eventLimit: 1,
+      metricLimit: 0,
+    }
+  });
+
+  comp.filterToggles[0].enabled = true;
+  comp.filterToggles[1].enabled = true;
+  delete item.newest;
+  resetPapi();
+  const eventSearch2 = mockPapi('get', { data: { events: [{ id: '100', payload: { a: 1, b: "2", c: true } }] } });
+
+  await comp.fetchNewestEvent(item);
+
+  expect(item.newest.soc_id).toBe('100');
+  
+  expect(eventSearch2).toHaveBeenCalledTimes(1);
+  expect(eventSearch2).toHaveBeenCalledWith('events/', {
+    params: {
+      query: 'a:"1" AND b:"2" AND c:"true" AND event.acknowledged:true AND event.escalated:true | sortby @timestamp',
+      range: 'x - y',
+      format: comp.i18n.timePickerSample,
+      zone: 'zone',
+      eventLimit: 1,
+      metricLimit: 0,
+    }
+  });
+
+  resetPapi();
+});
+
+test('isComplexQuery', () => {
+  expect(comp.isComplexQuery('')).toBe(false);
+  expect(comp.isComplexQuery('*')).toBe(false);
+  expect(comp.isComplexQuery('foo:bar')).toBe(false);
+  expect(comp.isComplexQuery('foo:"bar"')).toBe(false);
+  expect(comp.isComplexQuery('foo:"bar \"car\""')).toBe(false);
+  expect(comp.isComplexQuery('foo:bar AND cat:dog')).toBe(false);
+  expect(comp.isComplexQuery('foo:bar AND qry:"(cat:dog OR fish:bowl)"')).toBe(false);
+  expect(comp.isComplexQuery('foo:bar AND qry:"this is a \"test\" (cat:dog OR fish:bowl)"')).toBe(false);
+  expect(comp.isComplexQuery('foo:bar AND (cat:dog OR fish:bowl)')).toBe(true);
+  expect(comp.isComplexQuery('foo:bar AND cat:(dog OR fish)')).toBe(true);
+  expect(comp.isComplexQuery('foo:bar AND ((cat:(dog OR fish) OR some:thing))')).toBe(true);
+});
+
+test('toggleAllQuestions', () => {
+  let event = {
+    playbooks: [
+      {
+        questions: [{}, {}, {}],
+      },
+      {
+        questions: [{}],
+      },
+      {
+        questions: [{}, {}],
+      },
+    ],
+  };
+  let index = 0;
+  let expand = true;
+  comp.expandedPlaybookQuestions = {};
+
+  // expand
+  comp.toggleAllQuestions(event, index, expand);
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [0, 1, 2, 3, 4, 5] });
+
+  // expand a different index
+  index = 1;
+  comp.toggleAllQuestions(event, index, expand);
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [0, 1, 2, 3, 4, 5], 1: [0, 1, 2, 3, 4, 5] });
+
+  // collapse non-existing index
+  index = 2;
+  expand = false;
+  comp.toggleAllQuestions(event, index, expand);
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [0, 1, 2, 3, 4, 5], 1: [0, 1, 2, 3, 4, 5], 2: [] });
+
+  // collapse existing, expanded index
+  index = 0;
+  comp.toggleAllQuestions(event, index, expand);
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [], 1: [0, 1, 2, 3, 4, 5], 2: [] });
+
+  // expand existing, partially expanded
+  comp.expandedPlaybookQuestions[0] = [2, 4];
+  expand = true;
+  comp.toggleAllQuestions(event, index, expand);
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [] });
+
+  // no changes when expanding an already expanded group, even if out of order
+  comp.toggleAllQuestions(event, index, expand);
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [] });
+
+  // no change when collapsing an already collapsed group
+  index = 2;
+  expand = false;
+  comp.toggleAllQuestions(event, index, expand);
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [] });
+
+  // handle aggregate event
+  let aggEvent = {
+    newest: event,
+  };
+
+  expand = true;
+  comp.toggleAllQuestions(aggEvent, index, expand);
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [0, 1, 2, 3, 4, 5] });
+
+  // handle event that doesn't have playbooks yet
+  const _setTimeout = global.setTimeout;
+  const setTimeoutMock = jest.fn();
+  global.setTimeout = setTimeoutMock;
+
+  let emptyEvent = {};
+  index = 0;
+  expand = true;
+
+  comp.toggleAllQuestions(emptyEvent, index, expand);
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [0, 1, 2, 3, 4, 5] });
+  expect(setTimeoutMock).toHaveBeenCalledTimes(1);
+
+  // handle agg event that doesn't have playbooks yet
+  aggEvent.newest = emptyEvent;
+  setTimeoutMock.mockClear();
+  
+  comp.toggleAllQuestions(aggEvent, index, expand);
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [0, 1, 2, 3, 4, 5] });
+  expect(setTimeoutMock).toHaveBeenCalledTimes(1);
+  
+  // handle event that's loading playbooks
+  emptyEvent.playbookLoading = true;
+  emptyEvent.playbooks = null;
+  setTimeoutMock.mockClear();
+  
+  comp.toggleAllQuestions(emptyEvent, index, expand);
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [0, 1, 2, 3, 4, 5] });
+  expect(setTimeoutMock).toHaveBeenCalledTimes(1);
+
+  // handle agg event that's loading playbooks
+  aggEvent.newest = emptyEvent;
+  setTimeoutMock.mockClear();
+  
+  comp.toggleAllQuestions(aggEvent, index, expand);
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [0, 1, 2, 3, 4, 5] });
+  expect(setTimeoutMock).toHaveBeenCalledTimes(1);
+
+  global.setTimeout = _setTimeout;
+});
+
+test('loadPlaybook', async () => {
+  let event = {
+    'rule.uuid': '123',
+  };
+
+  const playbooks = [{ id: '1', questions: [] }, { id: '2', questions: [] }];
+
+  let papiMock = mockPapi('get', { data: playbooks });
+
+  await comp.loadPlaybook(event);
+
+  expect(papiMock).toHaveBeenCalledWith('playbook/detection/123');
+  expect(event.playbooks).toStrictEqual(playbooks);
+  expect(event.playbookLoading).toBe(undefined);
+  expect(event.playbookErr).toBe(false);
+
+  resetPapi();
+  papiMock = mockPapi('get', null, 'error');
+
+  event = {
+    'rule.uuid': '456',
+  };
+
+  comp.loadPlaybook(event);
+
+  expect(papiMock).toHaveBeenCalledWith('playbook/detection/456');
+  expect(papiMock).toHaveBeenCalledTimes(1);
+  expect(event.playbookErr).toBe(true);
+  expect(event.playbooks).toBe(null);
+
+  event = {};
+
+  comp.loadPlaybook(event);
+
+  expect(event.playbookErr).toBe(true);
+
+  papiMock.mockClear();
+
+  event = { playbooks: '' };
+
+  comp.loadPlaybook(event);
+  expect(event.playbookErr).toBe(undefined);
+  expect(event.playbookLoading).toBe(undefined);
+  expect(papiMock).toHaveBeenCalledTimes(0);
+
+  event = { playbookLoading: '' };
+
+  comp.loadPlaybook(event);
+  expect(event.playbooks).toBe(undefined);
+  expect(event.playbookErr).toBe(undefined);
+  expect(papiMock).toHaveBeenCalledTimes(0);
+
+  event = { playbookErr: true };
+
+  comp.loadPlaybook(event);
+  expect(event.playbooks).toBe(undefined);
+  expect(event.playbookLoading).toBe(undefined);
+  expect(papiMock).toHaveBeenCalledTimes(0);
+
+  resetPapi();
 });

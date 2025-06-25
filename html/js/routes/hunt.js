@@ -172,6 +172,10 @@ const huntComponent = {
     maxEscalate: 100,
     chartResizeTracker: {},
     gridId: null,
+    activeTabs: {},
+    expandedEvents: [],
+    eventColumnWidth: 0,
+    expandedPlaybookQuestions: {},
   }},
   created() {
     this.$root.initializeCharts();
@@ -207,6 +211,10 @@ const huntComponent = {
     this.stopRefreshTimer();
     this.$root.unsubscribe('detections:bulkUpdate', this.bulkUpdateReport);
     this.$root.unsubscribe('related:bulkCreate', this.bulkUpdateReport);
+
+    if (this.isCategory('alerts')) {
+      window.removeEventListener('resize', this.calculateEventColumnWidth);
+    }
   },
   mounted() {
     this.$root.startLoading();
@@ -219,6 +227,10 @@ const huntComponent = {
 
     if (this.isCategory('alerts') || this.isCategory('hunt')) {
       this.$root.subscribe('related:bulkCreate', this.bulkUpdateReport);
+    }
+
+    if (this.isCategory('alerts')) {
+      window.addEventListener('resize', this.calculateEventColumnWidth);
     }
   },
   watch: {
@@ -235,7 +247,7 @@ const huntComponent = {
     'relativeTimeUnit': 'saveLocalSettings',
     'autohunt': 'saveLocalSettings',
     'autoRefreshInterval': 'resetRefreshTimer',
-    'showDetailsPanel': 'saveLocalSettings',
+    'showDetailsPanel': 'toggleShowDetailsPanel',
     'advanced': 'saveLocalSettings',
   },
   methods: {
@@ -373,12 +385,12 @@ const huntComponent = {
       this.selectAllState = false;
       this.selectAllIndeterminate = false;
       this.selectedCount = 0;
+      this.expandedPlaybookQuestions = {};
 
-      var route = this;
-      var onSuccess = function() {};
-      var onFail = function() {
+      var onSuccess = () => {};
+      var onFail = () => {
         // When navigating to the same URL, simply refresh data
-        route.loadData();
+        this.loadData();
       };
       if (this.relativeTimeEnabled) {
         this.dateRange = '';
@@ -502,6 +514,15 @@ const huntComponent = {
         this.autoRefreshEnabled = false;
         this.autoRefreshInterval = 0;
       }
+      if (this.$route.query.tab) {
+        this.activeTabs[0] = this.$route.query.tab;
+      }
+      if (this.$route.query.expand) {
+        const items = this.$route.query.expand.split('|');
+        for (let item of items) {
+          this.expandedEvents.push(item);
+        }
+      }
       if (Array.isArray(this.filterToggles)) {
         for (const q in this.$route.query) {
           this.filterToggles.forEach(toggle => {
@@ -562,6 +583,11 @@ const huntComponent = {
           params.gridId = this.gridId;
         }
 
+        if (this.loaded) {
+          this.activeTabs = {};
+          this.expandedEvents = [];
+        }
+
         let response = await this.$root.papi.get('events/', { params: params });
 
         this.eventPage = 1;
@@ -582,12 +608,27 @@ const huntComponent = {
         this.loaded = true;
         this.addMRUQuery(this.query);
 
+        if (this.activeTabs[0] === 'playbook') {
+          // this should only happen when the user is opening a
+          // playbook for a specific alert from another page
+          for (let item of this.eventData) {
+            this.loadPlaybook(item);
+          }
+        }
+
         var subtitle = this.isAdvanced() ? this.query : this.queryName;
         this.$root.setSubtitle(this.i18n[this.category] + " - " + subtitle);
       } catch (error) {
         this.$root.showError(error);
       }
+
       this.$root.stopLoading();
+
+      if (this.isCategory('alerts')) {
+        this.$nextTick(() => {
+          this.calculateEventColumnWidth();
+        });
+      }
     },
     getPresets(kind) {
       if (this.presets && this.presets[kind]) {
@@ -690,10 +731,14 @@ const huntComponent = {
 
       this.$root.startLoading();
       try {
-        var docEvent = item;
+        var docEvent = {};
         if (item["soc_id"]) {
-          // Strip away everything else for optimization
-          docEvent = { "soc_id": item["soc_id"] };
+          // only send necessary fields
+          docEvent["soc_id"] = item["soc_id"];
+        } else {
+          for (let field of Object.keys(item)) {
+            if (field !== 'newest') docEvent[field] = item[field]
+          }
         }
         var isAlert = ('rule.name' in item || 'event.severity_label' in item);
         if (escalate) {
@@ -860,6 +905,26 @@ const huntComponent = {
       }
       return 'queryName'
     },
+    isComplexQuery(query) {
+      // Test for a query containing opening parenthesis outside of a double quoted value string.
+      var quoting = false;
+      var escaping = false;
+      for (var idx = 0; idx < query.length; idx++) {
+        var ch = query[idx];
+        if (ch == '"' && !escaping) {
+          quoting = !quoting;
+        } else if (ch == '(' && !quoting) {
+          return true;
+        }
+
+        if (ch == '\\') {
+          escaping = !escaping;
+        } else {
+          escaping = false;
+        }
+      }
+      return false;
+    },
     obtainQueryDetails() {
       this.queryAltered = false;
       this.queryName = "";
@@ -915,12 +980,14 @@ const huntComponent = {
             }
           }
           this.queryName = matchingQueryName;
-          this.querySearch.split(" AND ").forEach(function(item, index) {
-            item = item.trim();
-            if (item.length > 0 && item != "*") {
-              route.queryFilters.push(item);
-            }
-          });
+          if (!route.isComplexQuery(this.querySearch)) {
+            this.querySearch.split(" AND ").forEach(function(item, index) {
+              item = item.trim();
+              if (item.length > 0 && item != "*") {
+                route.queryFilters.push(item);
+              }
+            });
+          }
         }
 
         if (segments.length > 1) {
@@ -1140,8 +1207,9 @@ const huntComponent = {
       return this.buildGroupOptionRoute(groupIdx, removals, '');
     },
     countDrilldown(event) {
-      if ( (Object.keys(event).length == 2 && Object.keys(event)[0] == "count") || (Object.keys(event).length == 5 && Object.keys(event)[0] == "count" && Object.keys(event)[1] == "rule.name" && Object.keys(event)[2] == "event.module" && Object.keys(event)[3] == "event.severity_label" && Object.keys(event)[4] == "rule.uuid") ) {
-        this.filterRouteDrilldown = this.buildFilterRoute(Object.keys(event)[1], event[Object.keys(event)[1]], FILTER_DRILLDOWN);
+      const keys = Object.keys(event).filter(field => field != 'newest');
+      if ( (keys.length == 2 && keys[0] == "count") || (keys.length == 5 && keys[0] == "count" && keys[1] == "rule.name" && keys[2] == "event.module" && keys[3] == "event.severity_label" && keys[4] == "rule.uuid") ) {
+        this.filterRouteDrilldown = this.buildFilterRoute(keys[1], event[keys[1]], FILTER_DRILLDOWN);
         this.$router.push(this.filterRouteDrilldown);
       }
     },
@@ -1249,7 +1317,12 @@ const huntComponent = {
         this.quickActionEvent = event;
         this.quickActionField = field;
         this.quickActionValue = value;
-        this.quickActionTarget = [domEvent.clientX, domEvent.clientY];
+        if (domEvent.type === 'keydown') {
+          const rect = domEvent.currentTarget.getBoundingClientRect();
+          this.quickActionTarget = [rect.left, rect.top];
+        } else {
+          this.quickActionTarget = [domEvent.clientX, domEvent.clientY];
+        }
         this.$nextTick(async () => {
           this.quickActionVisible = true;
 
@@ -1564,12 +1637,7 @@ const huntComponent = {
 
         const multiSelect = this.isMultiSelect();
         events.forEach((event, index) => {
-          var record = event.payload;
-          record.soc_id = event.id;
-          record.soc_score = event.score;
-          record.soc_type = event.type;
-          record.soc_timestamp = event.timestamp;
-          record.soc_source = event.source;
+          var record = route.extractSocValues(event);
           route.lookupSocIds(record);
 
           if (multiSelect) {
@@ -1845,9 +1913,10 @@ const huntComponent = {
       return this.isCategory('detections');
     },
     getExpandedData(data) {
+      const ignored = ['_isSelected', 'playbooks'];
       var records = [];
-      for (key in data) {
-        if (key === '_isSelected') {
+      for (let key in data) {
+        if (ignored.includes(key)) {
           continue;
         }
 
@@ -2201,6 +2270,11 @@ const huntComponent = {
     },
     saveTimezone() {
       localStorage['timezone'] = this.zone;
+    },
+    async toggleShowDetailsPanel() {
+      this.saveLocalSettings();
+      await this.$nextTick();
+      this.calculateEventColumnWidth();
     },
     saveLocalSettings() {
       this.saveSetting('groupBySortBy', this.groupBySortBy, 'count');
@@ -2667,6 +2741,382 @@ const huntComponent = {
       } else {
         // closing
         this.menuScrollPos = scrollContainer.scrollTop;
+      }
+    },
+    calculateEventColumnWidth() {
+      this.eventColumnWidth = this.$refs?.eventColumn?.$el?.clientWidth || 0;
+      if (this.eventColumnWidth === 0) {
+        setTimeout(() => {
+          this.calculateEventColumnWidth();
+        }, 300);
+      }
+    },
+    async loadPlaybook(event) {
+      if ('playbooks' in event || 'playbookLoading' in event || 'playbookErr' in event) return;
+      
+      const publicId = event?.['rule.uuid'];
+      if (!publicId) {
+        event.playbookErr = true;
+        return;
+      }
+
+      event.playbookLoading = true;
+
+      let playbooks;
+      let pbErr = false;
+
+      try {
+        const response = await this.$root.papi.get(`playbook/detection/${publicId}`);
+
+        playbooks = response.data;
+      } catch (e) {
+        pbErr = true;
+        playbooks = null;
+      }
+
+      if (playbooks) {
+        this.queryVariableSubstitution(event, playbooks);
+        await this.convertPlaybookQueries(playbooks);
+      }
+
+      event.playbooks = playbooks;
+      event.playbookErr = pbErr;
+      delete event.playbookLoading;
+
+      if (playbooks) {
+        for (let pb of event.playbooks) {
+          for (let q of pb.questions) {
+            await this.$nextTick();
+            await this.askQuestion(q, event);
+          }
+        }
+      }
+    },
+    queryVariableSubstitution(event, playbooks) {
+      // Fields that require special array handling
+      const arrayFields = ['network.private_ip', 'network.public_ip', 'related.ip'];
+
+      for (let pb of playbooks) {
+        for (let question of pb.questions) {
+          let q = question.query;
+          
+          // Find all variables in the query using regex
+          const variables = q.match(/\{([^}]+)\}/g) || [];
+          
+          // Process each variable
+          for (const variable of variables) {
+            const fieldName = variable.slice(1, -1); // Remove { and }
+            let value = event[fieldName] || 'NODATA';
+            
+            // Special handling for array fields
+            if (arrayFields.includes(fieldName) && Array.isArray(value)) {
+              // Find the line containing the variable
+              const lines = q.split('\n');
+              const lineWithVar = lines.findIndex(line => line.includes(variable));
+              
+              if (lineWithVar !== -1) {
+                // Get the field being set (e.g., src_ip or dst_ip)
+                const match = lines[lineWithVar].match(/^(\s*)(?:-\s*)?(\w+(?:\.\w+)*(?:\|\w+)*):(?:\s*|$)/);
+                if (match) {
+                  const indent = match[1];
+                  const field = match[2];
+                  const originalLine = lines[lineWithVar];
+                  const hasDash = originalLine.trim().startsWith('-');
+                  const prefix = hasDash ? '- ' : '';
+                  const replacement = `${indent}${prefix}${field}:\n${value.map(ip => `${indent}    - ${ip}`).join('\n')}`;
+                  
+                  // Replace the entire line
+                  lines[lineWithVar] = replacement;
+                  q = lines.join('\n');
+                  continue;
+                }
+              }
+            }
+            
+            // Default replacement if not handled as special case
+            q = q.replaceAll(variable, value);
+          }
+          
+          question.filledQuery = q;
+        }
+      }
+    },
+
+    async convertPlaybookQueries(playbooks) {
+      let queries = playbooks.map((pb) => pb.questions.map((q) => q.filledQuery)).flat();
+
+      if (queries.length === 0) return;
+
+      let response = await this.$root.papi.post('playbook/convert', queries);
+
+      let index = 0;
+      for (let pb of playbooks) {
+        for (let question of pb.questions) {
+          question.filledOQL = response.data[index].query;
+          question.fields = response.data[index].fields;
+          index++;
+        }
+      }
+    },
+    async askQuestion(question, event) {
+      if (question.range) {
+        try {
+          const dateRange = this.buildQuestionRange(event, question.range);
+          let query = question.filledOQL;
+          if (!this.isQuestionAggregate(question)) {
+            query = query + ` | sortby @timestamp`;
+          }
+
+          let response = await this.$root.papi.get('events/', {
+            params: {
+              query: query,
+              range: dateRange,
+              format: this.i18n.timePickerSample,
+              zone: this.zone,
+              metricLimit: 5,
+              eventLimit: 5
+            }
+          });
+
+          if (this.isQuestionAggregate(question)) {
+            let biggest = '';
+            for (let field in response.data.metrics) {
+              if (field.length > biggest.length) biggest = field;
+            }
+            if (biggest) {
+              question.answers = this.sortAggregateEvents(response.data.metrics[biggest]);
+            } else {
+              // fallback, less than ideal
+              question.answers = response.data.events;
+            }
+          } else {
+            question.answers = response.data.events;
+          }
+        } catch (e) {
+          question.error = true;
+          question.answers = [];
+        }
+      } else {
+        // no range specified means we can find the answer on the event
+        // but avoid making a circular reference
+        const dupe = JSON.parse(JSON.stringify(event));
+        question.answers = [{ payload: dupe }];
+      }
+
+      let ips = [];
+      for (let answer of question.answers) {
+        if (answer.payload) {
+          for (let v of Object.values(answer.payload)) {
+            if (v && typeof v === 'string') {
+              ips.push(v);
+            }
+          }
+        } else if (answer.keys) {
+          for (let key of answer.keys) {
+            ips.push(key);
+          }
+        }
+      }
+
+      this.$root.batchLookup(ips, this);
+    },
+    sortAggregateEvents(events) {
+      events = events.sort((a, b) => b.value - a.value);
+
+      if (events.length > 5) {
+        events = events.slice(0, 5);
+      }
+
+      return events;
+    },
+    buildQuestionRange(event, range) {
+      if (!range) {
+        return '';
+      }
+
+      let t = this.getEventTimestamp(event);
+
+      let plusMinus = false;
+      let lookingBack = false;
+
+      if (range.startsWith('+/-')) {
+        plusMinus = true;
+        range = range.substring(3);
+      } else if (range.startsWith('-')) {
+        lookingBack = true;
+        range = range.substring(1);
+      }
+
+      let unit = range[range.length - 1].toLowerCase();
+      range = range.substring(0, range.length - 1);
+
+      let value = parseInt(range);
+      if (isNaN(value)) {
+        return '';
+      }
+
+      unit = { d: 'days', h: 'hours', m: 'minutes', s: 'seconds' }[unit];
+      if (!unit) {
+        return '';
+      }
+
+      let t1, t2;
+
+      if (plusMinus) {
+        t1 = moment.tz(t, this.zone).subtract(value, unit).format(this.i18n.timePickerFormat);
+        t2 = moment.tz(t, this.zone).add(value, unit).format(this.i18n.timePickerFormat);
+      } else if (lookingBack) {
+        t1 = moment.tz(t, this.zone).subtract(value, unit).format(this.i18n.timePickerFormat);
+        t2 = moment.tz(t, this.zone).format(this.i18n.timePickerFormat);
+      } else {
+        t1 = moment.tz(t, this.zone).format(this.i18n.timePickerFormat);
+        t2 = moment.tz(t, this.zone).add(value, unit).format(this.i18n.timePickerFormat);
+      }
+
+      return `${t1} - ${t2}`;
+    },
+    getEventTimestamp(event) {
+      return event?.['event_data.@timestamp'] || event?.['@timestamp'] || event?.['soc_timestamp'] || '';
+    },
+    buildHuntQuestionParams(question, event) {
+      let payload = {
+        name: 'hunt',
+        query: {
+          q: question.filledOQL,
+        },
+      };
+
+      if (question.range) {
+        payload.query.t = this.buildQuestionRange(event, question.range);
+      } else {
+        payload.query.t = this.dateToRange(this.getEventTimestamp(event));
+      }
+
+      return payload;
+    },
+    isQuestionAggregate(question) {
+      if ('isAggregate' in question) return question.isAggregate;
+
+      const yaml = jsyaml.load(question.query, { schema: jsyaml.FAILSAFE_SCHEMA });
+      question.isAggregate = typeof yaml.aggregation === 'string' && yaml.aggregation.toLowerCase() === 'true';
+
+      return question.isAggregate;
+    },
+    translateValue(value) {
+      if (typeof value === 'string' && value.startsWith('__')) {
+        return this.i18n[value];
+      }
+
+      return value;
+    },
+    async fetchNewestEvent(item) {
+      if (item.newest) return;
+
+      let parts = [];
+
+      for (let field in item) {
+        let label = field;
+        if (field.startsWith('event_data.')) {
+          label = field.replace('event_data.', '');
+        }
+
+        if (label.toLowerCase() === 'count') continue;
+
+        if (item[field] && !Array.isArray(item[field])) {
+          parts.push(`${label}:"${item[field]}"`);
+        }
+      }
+
+      if (this.isFilterToggleEnabled('acknowledged')) {
+        parts.push('event.acknowledged:true');
+      } else {
+        parts.push('NOT event.acknowledged:true');
+      }
+
+      if (this.isFilterToggleEnabled('escalated')) {
+        parts.push('event.escalated:true');
+      } else {
+        parts.push('NOT event.escalated:true');
+      }
+
+      const q = parts.join(' AND ') + ` | sortby @timestamp`;
+
+      let params = {
+        query: q,
+        range: this.dateRange,
+        format: this.i18n.timePickerSample,
+        zone: this.zone,
+        metricLimit: 0,
+        eventLimit: 1
+      };
+
+      if (this.gridId && this.gridId.length > 0) {
+        params.gridId = this.gridId;
+      }
+
+      let response = await this.$root.papi.get('events/', { params });
+      if (response.data.events.length === 0) {
+        this.$root.showWarning('No events found');
+        return;
+      }
+
+      item.newest = this.extractSocValues(response.data.events[0]);
+    },
+    extractSocValues(event) {
+      var record = event.payload;
+      record.soc_id = event.id;
+      record.soc_score = event.score;
+      record.soc_type = event.type;
+      record.soc_timestamp = event.timestamp;
+      record.soc_source = event.source;
+
+      return record;
+    },
+    getEventField(event, field) {
+      if (field in event) {
+        return event[field];
+      }
+
+      // check with/without event_data
+      // let edField = 'event_data.' + field;
+      // if (edField in event) {
+      //   return event[edField];
+      // }
+      //
+      // if (field.startsWith('event_data.')) {
+      //   let shortened = field.substring(11);
+      //   if (shortened in event) {
+      //     return event[shortened];
+      //   }
+      // }
+
+      return '';
+    },
+    toggleAllQuestions(event, index, expand) {
+      if (event.playbookErr) return;
+
+      event = (event || {}).newest || event;
+
+      if (event.playbookLoading || !('playbooks' in event)) {
+        setTimeout(() => {
+          this.toggleAllQuestions(event, index, expand);
+        }, 100)
+        return;
+      }
+
+      if (event.playbooks) {
+        let count = 0;
+        if (!Array.isArray(this.expandedPlaybookQuestions[index]) || !expand) this.expandedPlaybookQuestions[index] = [];
+        if (expand) {
+          for (let i = 0; i < event.playbooks.length; i++) {
+            for (let j = 0; j < event.playbooks[i].questions.length; j++) {
+              if (!this.expandedPlaybookQuestions[index].includes(count)) {
+                this.expandedPlaybookQuestions[index].push(count);
+              }
+              count++;
+            }
+          }
+        }
       }
     },
   }

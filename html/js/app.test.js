@@ -697,7 +697,7 @@ test('isAttentionNeeded', () => {
       unhealthyNodeCount: 0,
     },
   };
-  
+
   expect(app.isAttentionNeeded()).toBe(false);
 
   // Attention when unable to connect to server
@@ -860,15 +860,24 @@ test('updateColumnClass', () => {
 
 test('loadGridInfo', async () => {
   resetPapi();
-  const mock = mockPapi("get", {data: {foo:1}});
+  var idx = 0;
+  const mock = jest.fn((req, data) => {
+    idx++;
+    if (data['params']['gridId'] == 'g1') {
+      throw Error("something");
+    }
+    return {data: {foo:idx}};
+  });
+  app.papi.get = mock;
 
   app.gridInfo = {};
-  app.subgrids = [{id: 'g1'}];
-  app.loadSubgridInfo();
+  app.subgrids = [{id: 'g1'},{id: 'g2'}];
+  await expect(() => app.loadSubgridInfo()).rejects.toThrow(Error);
 
-  await app.loadSubgridInfo();
   expect(mock).toHaveBeenCalledWith('info', { params: { gridId: 'g1' }});
-  expect(app.gridInfo['g1']).toStrictEqual({foo:1});
+  expect(mock).toHaveBeenCalledWith('info', { params: { gridId: 'g2' }});
+  expect(app.gridInfo['g1']).toBeUndefined();
+  expect(app.gridInfo['g2']).toStrictEqual({foo:2});
 });
 
 test('getSelectedGrid', () => {
@@ -984,4 +993,45 @@ test('apiRequestCallback', () => {
   app.selectedGridId = 'xyz';
   var newReq = app.apiRequestCallback(req);
   expect(newReq.params).toStrictEqual({ gridId: 'xyz' });
+});
+
+test('dateToRange', () => {
+  app.i18n.timePickerFormat = 'YYYY/MM/DD hh:mm:ss A';
+  const tests = [
+    {
+      input: 0,
+      output: '1969/12/31 11:59:59 PM - 1970/01/01 12:00:01 AM',
+    },
+    {
+      input: new Date(0),
+      output: '1969/12/31 11:59:59 PM - 1970/01/01 12:00:01 AM',
+    },
+    {
+      input: '2025-05-29T16:26:04.226Z',
+      output: '2025/05/29 04:26:03 PM - 2025/05/29 04:26:05 PM',
+    },
+    {
+      input: new Date('2025-05-29T16:26:04.226Z'),
+      output: '2025/05/29 04:26:03 PM - 2025/05/29 04:26:05 PM',
+    },
+    {
+      input: 'x',
+      output: 'Invalid date - Invalid date'
+    },
+    {
+      input: null,
+      output: 'Invalid date - Invalid date',
+    },
+  ];
+
+  const orig = console.warn;
+  console.warn = jest.fn();
+
+  for (let t of tests) {
+    const out = app.dateToRange(t.input);
+    expect(out).toBe(t.output);
+  }
+
+  expect(console.warn).toHaveBeenCalledTimes(1);
+  console.warn = orig;
 });

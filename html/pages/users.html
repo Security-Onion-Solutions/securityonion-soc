@@ -38,7 +38,7 @@
 						<v-container grid-list-sm class="pa-4">
 							<v-row>
 								<v-col xs12>
-									<v-text-field variant="underlined" id="email-input" v-model="form.email" :placeholder="i18n.email" :autofocus="true" :rules="[rules.required,rules.email]" data-aid="users_create_dialog_email"></v-text-field>
+									<v-text-field variant="underlined" id="email-input" v-model="form.email" :placeholder="i18n.email" :autofocus="true" :rules="[rules.required,rules.email,rules.lowercase]" data-aid="users_create_dialog_email"></v-text-field>
 									<v-text-field variant="underlined" id="password-input" v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'" data-aid="users_create_dialog_password"
 										@click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'"
 										:rules="[rules.required, rules.maxpasslen, rules.minpasslen, rules.badpasschs]"></v-text-field>

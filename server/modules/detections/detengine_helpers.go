@@ -40,7 +40,7 @@ type GetterByPublicId interface {
 //go:generate mockgen -destination mock/mock_iomanager.go -package mock . IOManager
 
 func DetermineWaitTime(iom IOManager, path string, importFrequency time.Duration) (*uint64, time.Duration) {
-	lastImport, err := readStateFile(iom, path)
+	lastImport, err := ReadStateFile(iom, path)
 	if err != nil {
 		log.WithError(err).Error("unable to read state file, deleting it")
 
@@ -66,7 +66,7 @@ func DetermineWaitTime(iom IOManager, path string, importFrequency time.Duration
 	return lastImport, timerDur
 }
 
-func readStateFile(iom IOManager, path string) (lastImport *uint64, err error) {
+func ReadStateFile(iom IOManager, path string) (lastImport *uint64, err error) {
 	raw, err := iom.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -97,6 +97,7 @@ func WriteStateFile(iom IOManager, path string) {
 type RepoOnDisk struct {
 	Repo        *model.RuleRepo
 	Path        string
+	RulesetName string
 	WasModified bool
 }
 
@@ -126,24 +127,33 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 			return nil, false, ErrModuleStopped
 		}
 
-		parser, err := url.Parse(repo.Repo)
-		if err != nil {
-			log.WithError(err).WithField("repoUrl", repo.Repo).Error("Failed to parse repo URL, doing nothing with it")
-			continue
+		folderName := repo.RulesetName
+
+		if folderName == "" {
+			cleanedPath := repo.Repo
+			cleanedPath = strings.TrimRight(cleanedPath, string(os.PathSeparator))
+
+			parser, err := url.Parse(cleanedPath)
+			if err != nil {
+				log.WithError(err).WithField("repoUrl", repo.Repo).Error("Failed to parse repo URL, doing nothing with it")
+				continue
+			}
+
+			_, folderName = path.Split(parser.Path)
 		}
 
-		_, lastFolder := path.Split(parser.Path)
-		repoPath := filepath.Join(baseRepoFolder, lastFolder)
+		repoPath := filepath.Join(baseRepoFolder, folderName)
 
 		dirty := &RepoOnDisk{
-			Repo: repo,
-			Path: repoPath,
+			Repo:        repo,
+			Path:        repoPath,
+			RulesetName: folderName,
 		}
 
 		reclone := false
 		skipRepo := false
 
-		_, ok := existingRepos[lastFolder]
+		_, ok := existingRepos[folderName]
 		if ok {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
 			defer cancel()
@@ -161,7 +171,7 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 				anythingNew = true
 			}
 
-			delete(existingRepos, lastFolder)
+			delete(existingRepos, folderName)
 		}
 
 		if reclone {

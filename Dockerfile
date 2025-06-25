@@ -4,9 +4,10 @@
 # https://securityonion.net/license; you may not use this file except in compliance with the
 # Elastic License 2.0.
 
-FROM ghcr.io/security-onion-solutions/golang:1.24.0-alpine as builder
+FROM ghcr.io/security-onion-solutions/golang:1.24.3-alpine as builder
 ARG VERSION=0.0.0
 ARG ALT_BRANCH=dev
+ARG REVKEYS=
 RUN apk update && apk add libpcap-dev bash git musl-dev gcc npm python3 py3-pip py3-virtualenv python3-dev openssl-dev linux-headers
 COPY . /build
 WORKDIR /build
@@ -30,7 +31,7 @@ RUN npm install jest jest-environment-jsdom --global
 RUN ./build.sh "$VERSION"
 
 
-FROM ghcr.io/security-onion-solutions/python:3.13.0-slim
+FROM ghcr.io/security-onion-solutions/python:3.13.3-slim
 
 ARG UID=939
 ARG GID=939
@@ -42,8 +43,11 @@ RUN apt update -y && apt upgrade -y
 RUN apt install -y --no-install-recommends bash tzdata ca-certificates wget curl tcpdump unzip git gcc python3-dev libssl-dev && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 RUN pip3 install pysigma==0.11.20 sigma-cli==1.0.5 pysigma-backend-elasticsearch pysigma-pipeline-windows --break-system-packages
+ADD dep/pysigma_backend_securityonion-0.1.0-py3-none-any.whl /tmp
+RUN pip3 install /tmp/pysigma_backend_securityonion-0.1.0-py3-none-any.whl
 RUN pip3 install yara-python==4.3.1
 RUN apt-get -y remove gcc python3-dev libssl-dev && apt-get -y autoremove
+RUN rm /tmp/pysigma_backend_securityonion-0.1.0-py3-none-any.whl
 
 RUN update-ca-certificates
 RUN addgroup --gid "$GID" socore

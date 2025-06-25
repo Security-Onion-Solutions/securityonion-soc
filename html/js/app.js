@@ -282,7 +282,6 @@ $(document).ready(function () {
             }
           })
           .catch((error) => {
-            console.error('Unable to perform background action: ' + error);
             var link = action.backgroundFailureLinkFormatted;
             if (link) {
               link = route.replaceActionVar(link, "error", error.message, true)
@@ -297,7 +296,7 @@ $(document).ready(function () {
           try {
             content = btoa(content);
           } catch (e) {
-            console.error("Failed to base64 encode content: " + e);
+            console.log("Failed to base64 encode content: " + e);
           }
           return content;
         },
@@ -307,7 +306,7 @@ $(document).ready(function () {
               content = content.replace(/\\/g, "\\\\");
               content = content.replace(/\"/g, "\\\"");
             } catch (e) {
-              console.error("Failed to escape content: " + e);
+              console.log("Failed to escape content: " + e);
             }
           }
           return content
@@ -318,7 +317,7 @@ $(document).ready(function () {
             try {
               content = content.replace(/,/g, "\" OR process.entity_id:\"");
             } catch (e) {
-              console.error("Failed to set process ancestors for content: " + e);
+              console.log("Failed to set process ancestors for content: " + e);
             }
           }
           return content
@@ -536,8 +535,8 @@ $(document).ready(function () {
                       }
                   });
 
-                  await this.loadSubgridInfo();
                   this.gridInfo[LOCAL_GRID_ID] = response.data;
+                  await this.loadSubgridInfo();
                 }
               } catch (error) {
                 if (!background) {
@@ -553,12 +552,20 @@ $(document).ready(function () {
         },
         async loadSubgridInfo() {
           if (!this.subgrids) return;
+          var deferredError;
           for (var idx = 0; idx < this.subgrids.length; idx++) {
             const grid = this.subgrids[idx];
-            const gridResponse = await this.papi.get('info', {params: { gridId: grid.id}});
-            if (gridResponse) {
-              this.gridInfo[grid.id] = gridResponse.data;
+            try {
+              const gridResponse = await this.papi.get('info', {params: { gridId: grid.id}});
+              if (gridResponse) {
+                this.gridInfo[grid.id] = gridResponse.data;
+              }
+            } catch (error) {
+              deferredError = error
             }
+          }
+          if (deferredError) {
+            throw deferredError;
           }
         },
         getSelectedGridInfo() {
@@ -1524,6 +1531,11 @@ $(document).ready(function () {
             return new Date(a[field]) - new Date(b[field]);
           }
         },
+        dateToRange(d) {
+          const before = moment(d).subtract(1, 'second').format(this.i18n.timePickerFormat);
+          const after = moment(d).add(1, 'second').format(this.i18n.timePickerFormat);
+          return `${before} - ${after}`;
+        }
       },
       created() {
         this.log("Initializing application components");
@@ -1536,7 +1548,7 @@ $(document).ready(function () {
       mounted() {
         this.setFavicon();
 
-        const filters = {
+        const universalFuncs = {
           formatUTCDate: this.formatUTCDate,
           formatDateTime: this.formatDateTime,
           formatDuration: this.formatDuration,
@@ -1547,11 +1559,12 @@ $(document).ready(function () {
           formatMarkdown: this.formatMarkdown,
           formatTimestamp: this.formatTimestamp,
           colorSeverity: this.colorSeverity,
+          dateToRange: this.dateToRange,
         };
 
-        // Register filters globally
-        Object.keys(filters).forEach(key => {
-          app.config.globalProperties[key] = filters[key];
+        // Register these functions globally
+        Object.keys(universalFuncs).forEach(key => {
+          app.config.globalProperties[key] = universalFuncs[key];
         });
 
         window.matchMedia('(prefers-color-scheme: dark)').addListener(() => this.setFavicon());
