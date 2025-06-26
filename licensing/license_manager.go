@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -20,6 +20,7 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/pem"
 	"io"
 	"math/rand"
@@ -39,10 +40,17 @@ const LICENSE_STATUS_INVALID = "invalid"
 const LICENSE_STATUS_PENDING = "pending"
 const LICENSE_STATUS_UNPROVISIONED = "unprovisioned"
 
-const FEAT_FIPS = "fips"
-const FEAT_OIDC = "oidc"
-const FEAT_STIG = "stig"
-const FEAT_TIMETRACKING = "timetracking"
+const FEAT_API = "api"
+const FEAT_FPS = "fps"
+const FEAT_GMD = "gmd"
+const FEAT_LKS = "lks"
+const FEAT_NTF = "ntf"
+const FEAT_ODC = "odc"
+const FEAT_QRY = "qry"
+const FEAT_STG = "stg"
+const FEAT_TTR = "ttr"
+const FEAT_RPT = "rpt"
+const FEAT_VRT = "vrt"
 
 const PUBLIC_KEY = `
 -----BEGIN PUBLIC KEY-----
@@ -60,6 +68,7 @@ rdA93ynlX+ihg6jL0iS4uFEV9YveqajjOyi3DYyUFCjFAgMBAAE=
 
 const LICENSE_PILLAR_FILENAME = "/opt/so/saltstack/local/pillar/soc/license.sls"
 
+var revKeys = ""
 var pillarFilename = LICENSE_PILLAR_FILENAME
 var pillarMonitorCount = 0
 
@@ -74,16 +83,30 @@ type licenseManager struct {
 }
 
 type LicenseKey struct {
-	Effective  time.Time `json:"effective"`
-	Expiration time.Time `json:"expiration"`
-	Name       string    `json:"name"`
-	Id         string    `json:"id"`
-	Licensee   string    `json:"licensee"`
-	Features   []string  `json:"features"`
-	Users      int       `json:"users"`
-	Nodes      int       `json:"nodes"`
-	SocUrl     string    `json:"socUrl"`
-	DataUrl    string    `json:"dataUrl"`
+	// The date and time when this license key becomes effective
+	Effective time.Time `json:"effective" example:"2024-08-22T00:00:00Z"`
+	// The date and time when this license key expires
+	Expiration time.Time `json:"expiration" example:"2025-08-22T23:59:59Z"`
+	// The name of the license key.
+	Name string `json:"name" example:"Security Onion Pro"`
+	// The unique ID for this license key
+	Id string `json:"id" example:"acme_corp_20240822"`
+	// The name of the organization to which this license key was issued
+	Licensee string `json:"licensee" example:"Acme Corp"`
+	// The features included with this license key
+	Features []string `json:"features" example:"NTF"`
+	// The count of users supported by this license key; 0 = unlimited
+	Users int `json:"users" example:"0"`
+	// The count of critical grid nodes supported by this license key; 0 = unlimited
+	Nodes int `json:"nodes" example:"5"`
+	// The base URL required to be used by this license key
+	SocUrl string `json:"socUrl" example:"acme-so-manager"`
+	// The backend data event storage hostname required to be used by this license key
+	DataUrl string `json:"dataUrl" example:""`
+	// The maximum allowed count of suboordinate grids managed by this grid
+	Subgrids int `json:"subgrids,omitempty" example:"2"`
+	// The management NIC MAC address pinned to this license
+	MgmtMac string `json:"mgmtMac,omitempty" example:"10:20:30:A0:B0:C0"`
 }
 
 type SignedLicenseKey struct {
@@ -161,12 +184,34 @@ func verify(key string) (*LicenseKey, error) {
 	return license, rsa.VerifyPKCS1v15(pubKey, crypto.SHA256, hash[:], sigBytes)
 }
 
+func isKeyIdAccepted(id string) bool {
+	revKeyMap := make(map[string]bool)
+	for _, key := range strings.Split(revKeys, ",") {
+		revKeyMap[key] = true
+	}
+
+	hash := sha256.Sum256([]byte(id))
+	hashb := hex.EncodeToString(hash[:])
+	if _, exists := revKeyMap[hashb]; exists {
+		return false
+	}
+
+	return true
+}
+
 func CreateAvailableFeatureList() []string {
-	available := make([]string, 0, 0)
-	available = append(available, FEAT_FIPS)
-	available = append(available, FEAT_OIDC)
-	available = append(available, FEAT_STIG)
-	available = append(available, FEAT_TIMETRACKING)
+	available := make([]string, 0)
+	available = append(available, FEAT_API)
+	available = append(available, FEAT_FPS)
+	available = append(available, FEAT_GMD)
+	available = append(available, FEAT_LKS)
+	available = append(available, FEAT_NTF)
+	available = append(available, FEAT_ODC)
+	available = append(available, FEAT_QRY)
+	available = append(available, FEAT_STG)
+	available = append(available, FEAT_TTR)
+	available = append(available, FEAT_RPT)
+	available = append(available, FEAT_VRT)
 	return available
 }
 
@@ -182,7 +227,10 @@ func Init(key string) {
 			log.WithError(err).Error("failed to verify license key")
 			status = LICENSE_STATUS_INVALID
 		} else {
-			if license.Effective.After(time.Now()) {
+			if !isKeyIdAccepted(license.Id) {
+				log.WithField("revKeyId", license.Id).Error("license ID is not accepted")
+				status = LICENSE_STATUS_INVALID
+			} else if license.Effective.After(time.Now()) {
 				log.WithField("effective", license.Effective).Error("license is not yet effective")
 				status = LICENSE_STATUS_PENDING
 			} else if license.Expiration.Before(time.Now()) {
@@ -213,6 +261,7 @@ func Test(feat string, users int, nodes int, socUrl string, dataUrl string) {
 		licenseKey.Features = features
 	}
 
+	licenseKey.Id = "test"
 	licenseKey.Users = users
 	licenseKey.Nodes = nodes
 	licenseKey.SocUrl = socUrl
@@ -246,15 +295,17 @@ func createManager(status string, available []string, licenseKey *LicenseKey, st
 	go startPillarMonitor()
 
 	log.WithFields(log.Fields{
-		"status":     manager.status,
-		"available":  manager.available,
-		"features":   manager.licenseKey.Features,
-		"effective":  manager.licenseKey.Effective,
-		"expiration": manager.licenseKey.Expiration,
-		"users":      manager.licenseKey.Users,
-		"nodes":      manager.licenseKey.Nodes,
-		"socUrl":     manager.licenseKey.SocUrl,
-		"dataUrl":    manager.licenseKey.DataUrl,
+		"licenseStatus":     manager.status,
+		"licenseAvailable":  manager.available,
+		"licenseFeatures":   manager.licenseKey.Features,
+		"licenseEffective":  manager.licenseKey.Effective,
+		"licenseExpiration": manager.licenseKey.Expiration,
+		"licenseUsers":      manager.licenseKey.Users,
+		"licenseNodes":      manager.licenseKey.Nodes,
+		"licenseSocUrl":     manager.licenseKey.SocUrl,
+		"licenseDataUrl":    manager.licenseKey.DataUrl,
+		"licenseSubgrids":   manager.licenseKey.Subgrids,
+		"licenseMgmtMac":    manager.licenseKey.MgmtMac,
 	}).Info("Initialized license manager")
 }
 
@@ -311,6 +362,10 @@ func startEffectiveMonitor() {
 }
 
 func startPillarMonitor() {
+	if manager == nil {
+		log.Error("Unable to start pillar monitor due to uninitialized manager")
+		return
+	}
 	log.Info("Starting pillar monitor")
 
 	contents := `
@@ -327,6 +382,7 @@ func startPillarMonitor() {
 
 # This file is generated by Security Onion and contains a list of license-enabled features.
 `
+	contents += "license_id: " + GetId() + "\n"
 	features := ListEnabledFeatures()
 	if manager.status == LICENSE_STATUS_ACTIVE {
 		contents += "features:\n"
@@ -385,8 +441,8 @@ func stopMonitor() {
 			}
 			time.Sleep(100)
 		}
+		manager.status = LICENSE_STATUS_INVALID
 	}
-	manager = nil
 }
 
 func IsEnabled(feat string) bool {
@@ -419,7 +475,7 @@ func ListAvailableFeatures() []string {
 
 func ListEnabledFeatures() []string {
 	enabled := make([]string, 0, 0)
-	if manager == nil {
+	if manager == nil || manager.status == LICENSE_STATUS_UNPROVISIONED {
 		return enabled
 	}
 
@@ -500,13 +556,9 @@ func checkExceeded(limit string, ok bool) bool {
 	}
 
 	if len(manager.limits) > 0 {
-		if manager.status == LICENSE_STATUS_ACTIVE {
-			manager.status = LICENSE_STATUS_EXCEEDED
-		}
-	} else {
-		if manager.status == LICENSE_STATUS_EXCEEDED {
-			manager.status = LICENSE_STATUS_ACTIVE
-		}
+		manager.status = LICENSE_STATUS_EXCEEDED
+	} else if manager.status == LICENSE_STATUS_EXCEEDED {
+		log.Info("license is no longer exceeded; restart SOC to re-initialize the license, or re-apply the license key")
 	}
 
 	return ok
@@ -542,4 +594,32 @@ func ValidateDataUrl(url string) bool {
 	}
 	ok := manager.licenseKey.DataUrl == "" || strings.EqualFold(manager.licenseKey.DataUrl, url)
 	return checkExceeded("dataUrl", ok)
+}
+
+func ValidateFeature(feature string, detected bool) bool {
+	if manager == nil || !detected {
+		return true
+	}
+	ok := IsEnabled(feature)
+	return checkExceeded("feature_"+feature, ok)
+}
+
+func ValidateSubgridCount(count int) bool {
+	if manager == nil || count == 0 {
+		return true
+	}
+	ok := manager.status == LICENSE_STATUS_ACTIVE && manager.licenseKey.Subgrids >= count
+	return checkExceeded("subgrids", ok)
+}
+
+func ValidateMgmtMac(mac string) bool {
+	if manager == nil {
+		return true
+	}
+	expected := strings.TrimSpace(manager.licenseKey.MgmtMac)
+	expected = strings.ToUpper(expected)
+	actual := strings.TrimSpace(mac)
+	actual = strings.ToUpper(actual)
+	ok := expected == "" || strings.EqualFold(expected, actual)
+	return checkExceeded("mgmtMac", ok)
 }

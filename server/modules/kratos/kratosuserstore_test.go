@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -10,7 +10,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/stretchr/testify/assert"
 )
@@ -24,14 +23,52 @@ func TestUserstoreInit(tester *testing.T) {
 func TestUnauthorized(tester *testing.T) {
 	userStore := NewKratosUserstore(server.NewFakeUnauthorizedServer())
 
-	_, err := userStore.GetUsers(context.Background())
-	ensureUnauthorized(tester, err)
+	users, err := userStore.GetUsers(context.Background())
+	assert.Nil(tester, err)
+	assert.Len(tester, users, 0)
 
-	_, err = userStore.GetUser(context.Background(), "some-id")
-	ensureUnauthorized(tester, err)
+	user, err := userStore.GetUser(context.Background(), "some-id")
+	assert.Nil(tester, err)
+	assert.Nil(tester, user)
 }
 
-func ensureUnauthorized(tester *testing.T, err error) {
-	var authErr *model.Unauthorized
-	assert.ErrorAs(tester, err, &authErr)
+func TestGetUserById_NotAuthorized(t *testing.T) {
+	fakeServer := server.NewFakeUnauthorizedServer()
+	userStore := NewKratosUserstore(fakeServer)
+
+	ctx := context.Background()
+	userID := "test-user-id"
+
+	user, err := userStore.GetUserById(ctx, userID)
+
+	assert.Error(t, err)
+	assert.Nil(t, user)
+	assert.Contains(t, err.Error(), "Subject 'fake-subject' is not authorized to perform operation 'read' on target 'users'")
+}
+
+func TestShouldNotPopulateUserDetails(t *testing.T) {
+	userStore := NewKratosUserstore(server.NewFakeUnauthorizedServer())
+	kratosUser := &KratosUser{
+		Id: "id0",
+	}
+	actual := userStore.shouldPopulateUserDetails(context.Background(), kratosUser, "id1")
+	assert.False(t, actual)
+}
+
+func TestShouldPopulateUserDetailsSelf(t *testing.T) {
+	userStore := NewKratosUserstore(server.NewFakeUnauthorizedServer())
+	kratosUser := &KratosUser{
+		Id: "id0",
+	}
+	actual := userStore.shouldPopulateUserDetails(context.Background(), kratosUser, "id0")
+	assert.True(t, actual)
+}
+
+func TestShouldPopulateUserDetailsAdmin(t *testing.T) {
+	userStore := NewKratosUserstore(server.NewFakeAuthorizedServer(nil))
+	kratosUser := &KratosUser{
+		Id: "id0",
+	}
+	actual := userStore.shouldPopulateUserDetails(context.Background(), kratosUser, "id1")
+	assert.True(t, actual)
 }

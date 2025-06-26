@@ -1,5 +1,5 @@
 # Copyright 2019 Jason Ertel (github.com/jertel).
-# Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+# Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 # or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 # https://securityonion.net/license; you may not use this file except in compliance with the
 # Elastic License 2.0.
@@ -10,13 +10,18 @@
 
 cases/read:       case-monitor
 cases/write:      case-admin
+clients/read:     client-monitor
+clients/write:    client-admin
+clients/delete:   client-admin
 config/read:      config-monitor
 config/write:     config-admin
+detections/read:  detection-monitor
+detections/write: detection-admin
 events/read:      event-monitor
 events/write:     event-admin
 events/ack:       event-admin
-grid/read:				grid-monitor
-grid/write:				grid-admin
+grid/read:        grid-monitor
+grid/write:       grid-admin
 jobs/read:        job-monitor
 jobs/pivot:       job-user
 jobs/write:       job-admin
@@ -24,22 +29,33 @@ jobs/delete:      job-admin
 jobs/process:     job-processor
 nodes/read:       node-monitor
 nodes/write:      node-admin
+permissions/read: client-monitor
+permissions/write: client-admin
+queries/read:     query-monitor
+queries/delete:   query-admin
 roles/read:       user-monitor
 roles/write:      user-admin
 users/read:       user-monitor
 users/write:      user-admin
 users/delete:     user-admin
-
+playbooks/read:   playbook-monitor
+playbooks/write:  playbook-admin
+playbooks/delete: playbook-admin
 
 # Define low-level permission set inheritence relationships
 # Syntax      => roleB: roleA
 # Explanation => roleA inherits all of roleB's permissions
 
-case-monitor:     case-admin
-config-monitor:		config-admin
-event-monitor:    event-admin
-grid-monitor:			grid-admin
-job-monitor:      job-admin
-job-user:         job-admin
-node-monitor:     node-admin
-user-monitor:     user-admin
+client-monitor:    client-admin
+case-monitor:      case-admin
+config-monitor:    config-admin
+detection-monitor: detection-admin
+event-monitor:     event-admin
+grid-monitor:      grid-admin
+job-monitor:       job-admin
+job-user:          job-admin
+node-monitor:      node-admin
+query-monitor:     query-admin
+user-monitor:      user-admin
+playbook-monitor:  playbook-admin
+detections-monitor: playbook-monitor

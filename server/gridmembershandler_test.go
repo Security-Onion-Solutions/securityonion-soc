@@ -1,3 +1,8 @@
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
+// https://securityonion.net/license; you may not use this file except in compliance with the
+// Elastic License 2.0.
+
 package server
 
 import (
@@ -9,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
@@ -21,7 +26,7 @@ type rejectAuthorizer struct{}
 func (auth *rejectAuthorizer) CheckContextOperationAuthorized(ctx context.Context, operation string, target string) error {
 	return model.NewUnauthorized("", operation, target)
 }
-func (auth *rejectAuthorizer) CheckUserOperationAuthorized(user *model.User, operation string, target string) error {
+func (auth *rejectAuthorizer) CheckUserOperationAuthorized(userId string, operation string, target string) error {
 	return model.NewUnauthorized("", operation, target)
 }
 
@@ -63,6 +68,6 @@ func TestImportAuth(t *testing.T) {
 
 	h.postImport(w, r)
 
-	assert.Equal(t, 401, w.Code)
-	assert.Equal(t, web.GENERIC_ERROR_MESSAGE, w.Body.String())
+	assert.Equal(t, 403, w.Code)
+	assert.Equal(t, "ERROR_PERMISSION_DENIED", w.Body.String())
 }

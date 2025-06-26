@@ -1,3 +1,8 @@
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
+// https://securityonion.net/license; you may not use this file except in compliance with the
+// Elastic License 2.0.
+
 package web
 
 import (
@@ -13,7 +18,7 @@ import (
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 
-	"github.com/tj/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 type TestHandler struct {
@@ -33,7 +38,7 @@ func TestValidateRequest(tester *testing.T) {
 	testKey := []byte("some key")
 	testExpirationSeconds := 60
 
-	host := NewHost("http://some.where", "mydir", 1000, "1.2.3", testKey, "exemptId")
+	host := NewHost("http://some.where", "mydir", 1000, "1.2.3", testKey)
 
 	ctx := context.WithValue(context.Background(), ContextKeyRequestorId, "foo")
 
@@ -44,38 +49,39 @@ func TestValidateRequest(tester *testing.T) {
 
 	// Test POST, with exempt ID - no validate
 	request = MustRequest(tester, http.MethodPost, "somewhere", nil)
-	ctx = context.WithValue(context.Background(), ContextKeyRequestorId, "exemptId")
+	ctx = context.WithValue(context.Background(), ContextKeyRequestCSRFExempt, true)
 	err = validateRequest(ctx, host, request)
 	assert.NoError(tester, err)
 
 	// Test DELETE - fail since missing token in req header
 	request = MustRequest(tester, http.MethodDelete, "somewhere", nil)
-	ctx = context.WithValue(context.Background(), ContextKeyRequestorId, "nonExemptId")
+	ctx = context.WithValue(context.Background(), ContextKeyRequestCSRFExempt, false)
 	err = validateRequest(ctx, host, request)
 	assert.EqualError(tester, err, "Missing SRV token on request")
 
 	// Test PUT - fail since missing token in req header
 	request = MustRequest(tester, http.MethodPut, "somewhere", nil)
-	ctx = context.WithValue(context.Background(), ContextKeyRequestorId, "nonExemptId")
+	ctx = context.WithValue(context.Background(), ContextKeyRequestCSRFExempt, false)
 	err = validateRequest(ctx, host, request)
 	assert.EqualError(tester, err, "Missing SRV token on request")
 
 	// Test POST - fail since missing token in req header
 	request = MustRequest(tester, http.MethodPost, "somewhere", nil)
-	ctx = context.WithValue(context.Background(), ContextKeyRequestorId, "nonExemptId")
+	ctx = context.WithValue(context.Background(), ContextKeyRequestCSRFExempt, false)
 	err = validateRequest(ctx, host, request)
 	assert.EqualError(tester, err, "Missing SRV token on request")
 
 	// Test PATCH - fail since missing token in req header
 	request = MustRequest(tester, http.MethodPatch, "somewhere", nil)
-	ctx = context.WithValue(context.Background(), ContextKeyRequestorId, "nonExemptId")
+	ctx = context.WithValue(context.Background(), ContextKeyRequestCSRFExempt, false)
 	err = validateRequest(ctx, host, request)
 	assert.EqualError(tester, err, "Missing SRV token on request")
 
 	// Test POST - fail due to bad token
 	request = MustRequest(tester, http.MethodPost, "somewhere", nil)
 	request.Header.Set("x-srv-token", "e30K")
-	ctx = context.WithValue(context.Background(), ContextKeyRequestorId, "nonExemptId")
+	ctx = context.WithValue(context.Background(), ContextKeyRequestCSRFExempt, false)
+	ctx = context.WithValue(ctx, ContextKeyRequestorId, "123")
 	err = validateRequest(ctx, host, request)
 	assert.EqualError(tester, err, "SRV token HMAC failed validation")
 
@@ -83,7 +89,8 @@ func TestValidateRequest(tester *testing.T) {
 	request = MustRequest(tester, http.MethodPost, "somewhere", nil)
 	token, _ := model.GenerateSrvToken(testKey, "nonExemptId", testExpirationSeconds)
 	request.Header.Set("x-srv-token", token)
-	ctx = context.WithValue(context.Background(), ContextKeyRequestorId, "nonExemptId")
+	ctx = context.WithValue(context.Background(), ContextKeyRequestCSRFExempt, false)
+	ctx = context.WithValue(ctx, ContextKeyRequestorId, "nonExemptId")
 	err = validateRequest(ctx, host, request)
 	assert.NoError(tester, err)
 }
@@ -105,6 +112,7 @@ func TestRespond(t *testing.T) {
 		ExpectBodyJSON bool
 		ExpectedBody   []byte
 		ExpectedCode   int
+		ExpectedType   string
 	}{
 		{
 			Name:           "Sunny Day - 200",
@@ -113,19 +121,20 @@ func TestRespond(t *testing.T) {
 			ExpectBodyJSON: true,
 			ExpectedBody:   []byte(`{"foo":"bar","baz":"qux"}`),
 			ExpectedCode:   http.StatusOK,
+			ExpectedType:   "application/json",
 		},
 		{
-			Name:         "Unauthorized - 401",
+			Name:         "Unauthorized - 403",
 			StatusCode:   http.StatusOK,
 			Obj:          &model.Unauthorized{},
-			ExpectedBody: []byte(`The request could not be processed. Contact a server admin for assistance with reviewing error details in SOC logs.`),
-			ExpectedCode: http.StatusUnauthorized,
+			ExpectedBody: []byte(`ERROR_PERMISSION_DENIED`),
+			ExpectedCode: http.StatusForbidden,
 		},
 		{
 			Name:         "200 but Error",
 			StatusCode:   http.StatusOK,
 			Obj:          io.EOF,
-			ExpectedBody: []byte(`The request could not be processed. Contact a server admin for assistance with reviewing error details in SOC logs.`),
+			ExpectedBody: []byte(`The request could not be processed.`),
 			ExpectedCode: http.StatusInternalServerError,
 		},
 		{
@@ -134,12 +143,13 @@ func TestRespond(t *testing.T) {
 			Obj:          []byte{1, 2, 3},
 			ExpectedBody: []byte{1, 2, 3},
 			ExpectedCode: http.StatusOK,
+			ExpectedType: "application/octet-stream",
 		},
 		{
 			Name:         "Error Writing - 500",
 			StatusCode:   http.StatusOK,
 			Obj:          circle,
-			ExpectedBody: []byte(`The request could not be processed. Contact a server admin for assistance with reviewing error details in SOC logs.`),
+			ExpectedBody: []byte(`The request could not be processed.`),
 			ExpectedCode: http.StatusInternalServerError,
 		},
 	}
@@ -147,7 +157,6 @@ func TestRespond(t *testing.T) {
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, ContextKeyRequestStart, time.Now())
 	ctx = context.WithValue(ctx, ContextKeyRequestId, "x")
-	ctx = context.WithValue(ctx, ContextKeyRequestor, "x")
 
 	for _, tt := range table {
 		t.Run(tt.Name, func(t *testing.T) {
@@ -173,6 +182,10 @@ func TestRespond(t *testing.T) {
 			} else {
 				assert.Equal(t, tt.ExpectedBody, w.Body.Bytes())
 			}
+
+			if tt.ExpectedType != "" {
+				assert.Equal(t, []string{tt.ExpectedType}, w.Result().Header["Content-Type"])
+			}
 		})
 	}
 }
@@ -182,8 +195,139 @@ func compareJSON(jsn1 []byte, jsn2 []byte) (success bool, err error) {
 	var two interface{}
 
 	// this is guarded by prettyPrint
-	json.Unmarshal(jsn1, &one)
-	json.Unmarshal(jsn2, &two)
+	_ = json.Unmarshal(jsn1, &one)
+	_ = json.Unmarshal(jsn2, &two)
 
 	return reflect.DeepEqual(one, two), nil
+}
+
+func TestProxySubgridRequest(tester *testing.T) {
+	// Create a mock subgrid
+	var subgrids []*model.Subgrid
+	subgrid := &model.Subgrid{
+		Id:         "test-subgrid",
+		ManagerUrl: "http://test-subgrid",
+	}
+	subgrids = append(subgrids, subgrid)
+
+	table := []struct {
+		Name         string
+		Subgrids     []*model.Subgrid
+		GridId       string
+		ExpectedBody []byte
+		ExpectedCode int
+	}{
+		{
+			Name:         "Nil subgrids",
+			Subgrids:     nil,
+			GridId:       `123`,
+			ExpectedBody: []byte(`ERROR_SUBGRID_INVALID`),
+			ExpectedCode: http.StatusBadRequest,
+		},
+		{
+			Name:         "Empty subgrids",
+			Subgrids:     make([]*model.Subgrid, 0),
+			GridId:       `123`,
+			ExpectedBody: []byte(`ERROR_SUBGRID_INVALID`),
+			ExpectedCode: http.StatusBadRequest,
+		},
+		{
+			Name:         "Matching subgrids",
+			Subgrids:     subgrids,
+			GridId:       `test-subgrid`,
+			ExpectedBody: []byte(`ERROR_SUBGRID_API_UNREACHABLE`),
+			ExpectedCode: http.StatusBadGateway,
+		},
+	}
+
+	for _, tt := range table {
+		tester.Run(tt.Name, func(t *testing.T) {
+			tt := tt
+			t.Parallel()
+
+			// Create a mock response writer
+			respWriter := &httptest.ResponseRecorder{
+				Body: &bytes.Buffer{},
+			}
+
+			ctx := context.Background()
+			ctx = context.WithValue(ctx, ContextKeyRequestStart, time.Now())
+			ctx = context.WithValue(ctx, ContextKeyRequestId, "x")
+
+			req := MustRequest(tester, http.MethodGet, "somewhere?gridId=123", nil)
+			req = req.WithContext(ctx)
+
+			proxySubgridRequest(tt.Subgrids, tt.GridId, ctx, respWriter, req)
+			assert.Equal(tester, tt.ExpectedCode, respWriter.Result().StatusCode)
+			assert.Equal(tester, tt.ExpectedBody, respWriter.Body.Bytes())
+		})
+	}
+}
+
+func TestIsLocalGridSelected(t *testing.T) {
+	assert.True(t, isLocalGridSelected(ALL_GRIDS), "ALL_GRIDS should return true")
+	assert.False(t, isLocalGridSelected("some_other_grid"), "Any other grid ID should return false")
+}
+
+func TestIsSubgridSelected(t *testing.T) {
+	grid := &model.Subgrid{Id: "test-grid"}
+
+	assert.True(t, isSubgridSelected(grid, ALL_GRIDS), "ALL_GRIDS should return true")
+	assert.True(t, isSubgridSelected(grid, "test-grid"), "Matching grid ID should return true")
+	assert.False(t, isSubgridSelected(grid, "some_other_grid"), "Non-matching grid ID should return false")
+}
+
+func TestIsOnlySubgridSelected(t *testing.T) {
+	grid := &model.Subgrid{Id: "test-grid"}
+
+	assert.True(t, isOnlySubgridSelected(grid, "test-grid"), "Matching grid ID should return true")
+	assert.False(t, isOnlySubgridSelected(grid, ALL_GRIDS), "ALL_GRIDS should return false")
+	assert.False(t, isOnlySubgridSelected(grid, "some_other_grid"), "Non-matching grid ID should return false")
+}
+
+func TestCheckForRedirect(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, ContextKeyRequestId, "test-req-id")
+	ctx = context.WithValue(ctx, ContextKeyRequestorId, "test-user")
+
+	// Scenario 1: Redirect header is present
+	t.Run("RedirectPresent", func(t *testing.T) {
+		t.Parallel()
+
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/api/some/path", nil)
+		resp := &http.Response{
+			StatusCode: http.StatusFound, // 302
+			Header:     make(http.Header),
+		}
+		redirectURL := "/new/location"
+		resp.Header.Set("Location", redirectURL)
+
+		redirected := checkForRedirect(ctx, w, r, resp)
+
+		assert.True(t, redirected, "Expected checkForRedirect to return true when location header is present")
+		assert.Equal(t, http.StatusFound, w.Code, "Expected status code to be StatusFound (302)")
+		assert.Equal(t, redirectURL, w.Header().Get("Location"), "Expected Location header in response writer to match")
+	})
+
+	// Scenario 2: Redirect header is not present
+	t.Run("RedirectNotPresent", func(t *testing.T) {
+		t.Parallel()
+
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/api/some/path", nil)
+		resp := &http.Response{
+			StatusCode: http.StatusOK, // 200
+			Header:     make(http.Header),
+		}
+
+		redirected := checkForRedirect(ctx, w, r, resp)
+
+		assert.False(t, redirected, "Expected checkForRedirect to return false when location header is absent")
+		// Recorder should not have been written to in this case, so Code remains 0 (default)
+		// and headers remain empty. We don't need explicit asserts for that unless we want
+		// to be extra sure, but asserting the return value is the primary goal.
+	})
 }

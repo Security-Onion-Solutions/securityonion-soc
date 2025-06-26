@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -21,7 +21,7 @@ func prepareTest(tester *testing.T, email string, id string) (*StaticRbacAuthori
 	user := model.NewUser()
 	user.Email = email
 	user.Id = id
-	ctx = context.WithValue(ctx, web.ContextKeyRequestor, user)
+	ctx = context.WithValue(ctx, web.ContextKeyRequestorId, id)
 
 	auth := NewStaticRbacAuthorizer(server.NewFakeAuthorizedServer(nil))
 	userFiles := []string{"rbac_users.test"}
@@ -44,21 +44,9 @@ func TestCheckContextOperationAuthorized_EmptyContext(tester *testing.T) {
 	assert.Error(tester, err, "Expected error due to missing context data")
 }
 
-func TestCheckContextOperationAuthorized_Collision(tester *testing.T) {
-	ctx := context.Background()
-	user := model.NewUser()
-	user.Email = "mytarget/myop"
-	user.Id = "a1-id"
-	ctx = context.WithValue(ctx, web.ContextKeyRequestor, user)
-
-	auth := NewStaticRbacAuthorizer(server.NewFakeAuthorizedServer(nil))
-	err := auth.CheckContextOperationAuthorized(ctx, "myop", "mytarget")
-	assert.Error(tester, err)
-}
-
 func TestCheckContextOperationAuthorized_Fail(tester *testing.T) {
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, web.ContextKeyRequestor, model.NewUser())
+	ctx = context.WithValue(ctx, web.ContextKeyRequestorId, "someId")
 
 	auth := NewStaticRbacAuthorizer(server.NewFakeAuthorizedServer(nil))
 	err := auth.CheckContextOperationAuthorized(ctx, "myop", "mytarget")
@@ -136,14 +124,14 @@ func TestGetAssignments_Self(tester *testing.T) {
 	assert.ElementsMatch(tester, expectedRoles, roleMap[auth.identifyUser(user)])
 }
 
-func TestPopulateUserRoles(tester *testing.T) {
+func TestGetRolesForAuthId(tester *testing.T) {
 	auth, ctx, user := prepareTest(tester, "some@one.invalid", "a1-id")
 
-	err := auth.PopulateUserRoles(ctx, user)
+	err, roles := auth.GetRolesForAuthId(ctx, user.Id)
 	assert.NoError(tester, err)
 
 	var expectedRoles = [...]string{"user"}
-	assert.ElementsMatch(tester, expectedRoles, user.Roles)
+	assert.ElementsMatch(tester, expectedRoles, roles)
 }
 
 func TestAddRemoveRole(tester *testing.T) {

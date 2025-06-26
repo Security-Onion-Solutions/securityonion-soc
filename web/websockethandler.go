@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -11,10 +11,9 @@ import (
 	"net/http"
 
 	"github.com/apex/log"
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 	"github.com/security-onion-solutions/securityonion-soc/json"
-	"github.com/security-onion-solutions/securityonion-soc/model"
 )
 
 type WebSocketHandler struct {
@@ -34,7 +33,7 @@ func RegisterWebSocketRoutes(host *Host, r chi.Router) {
 	}
 
 	r.Group(func(r chi.Router) {
-		r.Use(Middleware(host, true))
+		r.Use(Middleware(host, true, nil))
 
 		r.Get("/ws", handler.Handle)
 	})
@@ -42,14 +41,13 @@ func RegisterWebSocketRoutes(host *Host, r chi.Router) {
 
 func (webSocketHandler *WebSocketHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	logger := log.FromContext(ctx)
 
 	ip := GetSourceIp(r)
 
-	var user *model.User
-	var ok bool
-	user, ok = ctx.Value(ContextKeyRequestor).(*model.User)
+	userId, ok := ctx.Value(ContextKeyRequestorId).(string)
 	if !ok {
-		log.WithFields(log.Fields{
+		logger.WithFields(log.Fields{
 			"messageRemoteAddr": r.RemoteAddr,
 			"messageSourceIp":   ip,
 			"messagePath":       r.URL.Path,
@@ -62,7 +60,7 @@ func (webSocketHandler *WebSocketHandler) Handle(w http.ResponseWriter, r *http.
 	upgrader := websocket.Upgrader{}
 	connection, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.WithError(err).WithFields(log.Fields{
+		logger.WithError(err).WithFields(log.Fields{
 			"messageRemoteAddr": r.RemoteAddr,
 			"messageSourceIp":   ip,
 			"messagePath":       r.URL.Path,
@@ -72,13 +70,13 @@ func (webSocketHandler *WebSocketHandler) Handle(w http.ResponseWriter, r *http.
 		return
 	}
 
-	log.WithFields(log.Fields{
+	logger.WithFields(log.Fields{
 		"messageRemoteAddr": r.RemoteAddr,
 		"messageSourceIp":   ip,
 		"messagePath":       r.URL.Path,
 	}).Info("WebSocket connected")
 
-	conn := webSocketHandler.Host.AddConnection(user, connection, ip)
+	conn := webSocketHandler.Host.AddConnection(userId, connection, ip)
 
 	defer connection.Close()
 	for {
@@ -86,7 +84,7 @@ func (webSocketHandler *WebSocketHandler) Handle(w http.ResponseWriter, r *http.
 		if err != nil {
 			break
 		}
-		log.WithFields(log.Fields{
+		logger.WithFields(log.Fields{
 			"messageRemoteAddr": r.RemoteAddr,
 			"messageSourceIp":   ip,
 			"messagePath":       r.URL.Path,
@@ -98,7 +96,7 @@ func (webSocketHandler *WebSocketHandler) Handle(w http.ResponseWriter, r *http.
 		json.LoadJson(messageBytes, msg)
 		webSocketHandler.handleMessage(msg, conn)
 	}
-	log.WithFields(log.Fields{
+	logger.WithFields(log.Fields{
 		"messageRemoteAddr": r.RemoteAddr,
 		"messageSourceIp":   ip,
 		"messagePath":       r.URL.Path,

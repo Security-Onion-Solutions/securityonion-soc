@@ -1,0 +1,234 @@
+<v-container fluid @click="jobClickHandler()" data-aid="job_screen">
+	<v-row>
+		<v-col>
+			<h2>{{ i18n.viewJob }}</h2>
+		</v-col>
+	</v-row>
+	<v-row>
+		<v-col>
+			<v-expansion-panels>
+				<v-expansion-panel data-aid="job_expand_filter">
+					<v-expansion-panel-title id="job-details" expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up">
+						<v-chip label class="mx-2">
+							<v-icon class="mb-1 mr-2">fa-hashtag</v-icon>
+							<span id="jobDetailsId">{{ job.id }}</span>
+						</v-chip>
+						<v-chip label class="mx-2">
+							<v-icon class="mb-1 mr-2">fa-ethernet</v-icon>
+							<span id="jobDetailsSensorId">{{ job.nodeId }}</span>
+						</v-chip>
+						<v-chip v-if="job.filter" label class="mx-2">
+							<v-icon class="mb-1 mr-2">fa-file-export</v-icon>
+							<span id="jobDetailsSrc">{{ job.filter.srcIp }}<span v-if="job.filter.srcPort != 0">:{{ job.filter.srcPort }}</span><span class="resolved-host" v-if="$root.pickHostname(job.filter.srcIp)"> - {{ $root.pickHostname(job.filter.srcIp) }}</span></span>
+						</v-chip>
+						<v-chip v-if="job.filter" label class="mx-2">
+							<v-icon class="mb-1 mr-2">fa-file-import</v-icon>
+							<span id="jobDetailsDst">{{ job.filter.dstIp }}<span v-if="job.filter.dstPort != 0">:{{ job.filter.dstPort }}</span><span class="resolved-host" v-if="$root.pickHostname(job.filter.dstIp)"> - {{ $root.pickHostname(job.filter.dstIp) }}</span></span>
+						</v-chip>
+					</v-expansion-panel-title>
+					<v-expansion-panel-text>
+						<v-container fluid grid-list-sm class="pa-4">
+							<v-row>
+								<v-col>
+									<div>
+										<span class="filter label">{{ i18n.job }}:</span>
+										<span class="filter value">{{ job.id }}</span>
+									</div>
+									<div>
+										<span class="filter label">{{ i18n.owner }}:</span>
+										<span class="filter value">{{ job.owner }}</span>
+									</div>
+									<div>
+										<span class="filter label">{{ i18n.sensorId }}:</span>
+										<span class="filter value">{{ job.nodeId }}</span>
+									</div>
+									<div>
+										<span class="filter label">{{ i18n.importId }}:</span>
+										<span v-if="job.filter" class="filter value">{{ job.filter.importId }}&nbsp;</span>
+									</div>
+									<div>
+										<span class="filter label">{{ i18n.protocol }}:</span>
+										<span v-if="job.filter" class="filter value">{{ job.filter.protocol }}&nbsp;</span>
+									</div>
+									<div>
+										<span class="filter label">{{ i18n.srcIp }}:</span>
+										<span v-if="job.filter" class="filter value">{{ job.filter.srcIp }}&nbsp;<span class="resolved-host" v-if="$root.pickHostname(job.filter.srcIp)"> - {{ $root.pickHostname(job.filter.srcIp) }}</span></span>
+									</div>
+									<div>
+										<span class="filter label">{{ i18n.srcPort }}:</span>
+										<span v-if="job.filter" class="filter value">{{ job.filter.srcPort }}&nbsp;</span>
+									</div>
+									<div>
+										<span class="filter label">{{ i18n.dstIp }}:</span>
+										<span v-if="job.filter" class="filter value">{{ job.filter.dstIp }}&nbsp;<span class="resolved-host" v-if="$root.pickHostname(job.filter.dstIp)"> - {{ $root.pickHostname(job.filter.dstIp) }}</span></span>
+									</div>
+									<div>
+										<span class="filter label">{{ i18n.dstPort }}:</span>
+										<span v-if="job.filter" class="filter value">{{ job.filter.dstPort }}&nbsp;</span>
+									</div>
+									<div>
+										<span class="filter label">{{ i18n.dateQueued }}:</span>
+										<span class="filter value">{{ formatDateTime(job.createTime)}}&nbsp;</span>
+									</div>
+									<div>
+										<span class="filter label">{{ i18n.dateCompleted }}:</span>
+										<span class="filter value">{{ formatDateTime(job.completeTime)}}&nbsp;</span>
+									</div>
+									<div>
+										<span class="filter label">{{ i18n.dateFailed }}:</span>
+										<span class="filter value">{{ formatDateTime(job.failTime)}}&nbsp;</span>
+									</div>
+									<div>
+										<span class="filter label">{{ i18n.beginTime }}:</span>
+										<span v-if="job.filter" class="filter value">{{ formatTimestamp(job.filter.beginTime) }}&nbsp;</span>
+									</div>
+									<div>
+										<span class="filter label">{{ i18n.endTime }}:</span>
+										<span v-if="job.filter" class="filter value">{{ formatTimestamp(job.filter.endTime) }}&nbsp;</span>
+									</div>
+								</v-col>
+							</v-row>
+						</v-container>
+					</v-expansion-panel-text>
+				</v-expansion-panel>
+			</v-expansion-panels>
+		</v-col>
+	</v-row>
+	<v-row v-if="job.status == 0" row data-aid="job_details_pending">
+		<v-col>
+			<v-alert :value="true" color="info" icon="fa-info">
+				{{ i18n.jobInProgress }}
+				<v-btn variant="flat" color="primary" @click.stop="loadData()" id="job-refresh-button" class="ml-3" data-aid="job_refresh_button">
+					<v-icon>fa-sync</v-icon>
+				</v-btn>
+			</v-alert>
+		</v-col>
+	</v-row>
+	<v-row v-if="job.status == 1" data-aid="job_details_completed">
+		<v-col>
+			<v-toolbar fixed class="elevation-0 pl-5">
+				<v-text-field variant="underlined" density="compact" v-model="search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="job_details_filter"></v-text-field>
+				<v-spacer></v-spacer>
+				<v-btn-toggle v-model="packetOptions" class="transparent" multiple>
+					<v-btn value="packets" icon :title="i18n.packetStreamHelp" text @click="captureLayoutAsStream()" data-aid="job_details_stream_toggle">
+						<v-icon>fa-list</v-icon>
+					</v-btn>
+					<v-btn value="hex" :title="i18n.hexHelp" text data-aid="job_details_hex_toggle">
+						{{ i18n.hex }}
+					</v-btn>
+					<v-btn value="unwrap" :title="i18n.unwrapHelp" text @click="toggleWrap" data-aid="job_details_unwrap_toggle">
+						<v-icon>fa-envelope-open-text</v-icon>
+					</v-btn>
+				</v-btn-toggle>
+				<v-spacer></v-spacer>
+				<v-btn icon @click="expandPackets(false)" :title="i18n.collapseHelp" text data-aid="job_details_collapse_all_packets">
+					<v-icon>fa-window-minimize</v-icon>
+				</v-btn>
+				<v-btn icon @click="expandPackets(true)" :title="i18n.expandHelp" text data-aid="job_details_expand_all_packets">
+					<v-icon>fa-window-maximize</v-icon>
+				</v-btn>
+				<v-spacer></v-spacer>
+				<v-btn text icon @click="transcriptCyberChef()" :title="i18n.transcriptCyberChefHelp" data-aid="job_details_cyberchef">
+					<v-icon>fas fa-bread-slice</v-icon>
+				</v-btn>
+				<v-btn text plain icon :href="downloadUrl()" download :title="i18n.downloadPackets" data-aid="job_details_download" class="no-link">
+					<v-icon class="theme-text">fa-download</v-icon>
+				</v-btn>
+			</v-toolbar>
+			<v-data-table ref="packetTable" :sort-by="sortBy" @update:sort-by="val => sortBy = val" v-model:items-per-page="itemsPerPage"
+				:search="search" :items-per-page-options="itemsPerPageOptions" must-sort :headers="headers" :hide-default-header="!isOptionEnabled('packets')"
+				:items="packets" item-value="number" :loading="packetsLoading" :expanded="expanded" @update:expanded="val => expanded = val">
+				<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
+					<tr>
+						<template v-for="header in columns" :key="header.key">
+							<th :class="{'is-sorted': isSorted(header)}" :data-aid="'job_packet_table_header_' + header?.value?.toLowerCase()">
+								<span @click="toggleSort(header)">
+									{{ header.title }}
+								</span>
+								<template v-if="isSorted(header)">
+									<v-icon>
+										{{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down'}}
+									</v-icon>
+								</template>
+							</th>
+						</template>
+					</tr>
+				</template>
+				<template #item="{ item, toggleExpand, internalItem }">
+					<tr @click="toggleExpand(internalItem)" v-if="isOptionEnabled('packets')" data-aid="job_details_expand_packet">
+						<td v-text="item.number"></td>
+						<td>{{ formatTimestamp(item.timestamp) }}</td>
+						<td><v-chip density="compact" :color="colorType(item.type)" data-aid="job_details_packet_type">{{ item.type }}</v-chip></td>
+						<td>{{ item.srcIp }}<span class="resolved-host" v-if="$root.pickHostname(item.srcIp)"> - {{ $root.pickHostname(item.srcIp) }}</span></td>
+						<td>{{ item.srcPort }}</td>
+						<td>{{ item.dstIp }}<span class="resolved-host" v-if="$root.pickHostname(item.dstIp)"> - {{ $root.pickHostname(item.dstIp) }}</span></td>
+						<td>{{ item.dstPort }}</td>
+						<td>
+							<template v-for="flag in item.flags" :key="flag">
+								<v-chip density="compact" :color="colorFlag(flag)" data-aid="job_details_packet_flag">{{ flag }}</v-chip>
+							</template>
+						</td>
+						<td>{{ item.length }}</td>
+					</tr>
+				</template>
+				<template #expanded-row="{ item }">
+					<tr v-if="isOptionEnabled('packets') || item.payloadOffset > 0" data-aid="job_details_packet_bytes">
+						<td :colspan="getPacketColumnSpan()" :class="getPacketClass(item)">
+							<pre class="hardwrap">{{ formatPacketView(item) }}</pre>
+						</td>
+					</tr>
+				</template>
+				<template #no-data>
+					<v-alert :value="true" color="info" icon="fa-info" data-aid="job_details_no_results">
+						{{ i18n.noSearchResults }}
+					</v-alert>
+				</template>
+			</v-data-table>
+			<div class="text-xs-center pt-2">
+					<v-btn v-text="i18n.loadMore" @click="loadPackets()" data-aid="job_details_load_more"></v-btn>
+			</div>
+		</v-col>
+	</v-row>
+	<v-row v-if="job.status == 2" data-aid="job_details_incomplete">
+		<v-col>
+			<v-alert :value="true" color="info" icon="fa-exclamation-triangle">
+				{{ i18n.jobIncomplete }}
+				<hr>
+				{{ formatDateTime(job.failTime) }}
+				<br>
+				{{ i18n.attempt }} {{ job.failCount }}: {{ job.failure }}
+			</v-alert>
+		</v-col>
+	</v-row>
+	<v-menu v-model="quickActionVisible" :target="quickActionTarget" data-aid="job_details_context_menu" class="text-white remove-spacer">
+		<v-list id="job-common-action" class="v-theme--dark" color="secondary">
+			<v-list-item id="actionCopyValue" density="compact" @click="$root.copyToClipboard(quickActionValue)" data-aid="job_details_context_menu_copy">
+				<template #prepend>
+					<v-icon color="white">fa-copy</v-icon>
+				</template>
+				<v-list-item-title class="text-white">
+					{{ i18n.copyToClipboard }}
+				</v-list-item-title>
+			</v-list-item>
+		</v-list>
+		<v-list id="job-quick-action" class="v-theme--dark" color="secondary">
+			<template #activator>
+				<v-icon color="white">fa-external-link-alt</v-icon>
+				<v-list-item-title class="text-white">
+					{{ i18n.quickActions }}
+				</v-list-item-title>
+			</template>
+			<template v-for="action in actions" :key="action.link">
+				<v-list-item density="compact" class="custom-quick-action-button" v-if="action.enabled" :href="action.background ? '' : action.linkFormatted"
+					:target="$root.target(action.target)" @click="$root.performAction($event, action)" :data-aid="'job_details_context_menu_action' + action.name">
+					<template #prepend>
+						<v-icon :alt="action.name" color="white">{{ action.icon }}</v-icon>
+					</template>
+					<v-list-item-title class="text-white" :title="$root.localizeMessage(action.description)">
+						{{ $root.localizeMessage(action.name) }}
+					</v-list-item-title>
+				</v-list-item>
+			</template>
+		</v-list>
+	</v-menu>
+</v-container>

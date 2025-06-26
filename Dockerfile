@@ -1,30 +1,37 @@
 # Copyright 2019 Jason Ertel (github.com/jertel).
-# Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+# Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 # or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 # https://securityonion.net/license; you may not use this file except in compliance with the
 # Elastic License 2.0.
 
-FROM ghcr.io/security-onion-solutions/golang:1.20.1-alpine as builder
+FROM ghcr.io/security-onion-solutions/golang:1.24.3-alpine as builder
 ARG VERSION=0.0.0
-RUN apk update && apk add libpcap-dev bash git musl-dev gcc npm python3 py3-pip py3-virtualenv
+ARG ALT_BRANCH=dev
+ARG REVKEYS=
+RUN apk update && apk add libpcap-dev bash git musl-dev gcc npm python3 py3-pip py3-virtualenv python3-dev openssl-dev linux-headers
 COPY . /build
 WORKDIR /build
 RUN if [ "$VERSION" != "0.0.0" ]; then mkdir gitdocs && cd gitdocs && \
 	git clone --no-single-branch --depth 50 https://github.com/Security-Onion-Solutions/securityonion-docs.git . && \
-	git checkout --force origin/$(echo $VERSION | cut -d'.' -f1,2) && \
+	git checkout --force origin/${ALT_BRANCH} && \
 	git clean -d -f -f && \
 	sed -i "s|'display_github': True|'display_github': False|g" conf.py && \
 	python3 -mvirtualenv /tmp/virtualenv && \
-	/tmp/virtualenv/bin/python -m pip install --upgrade --no-cache-dir pip "setuptools<58.3.0" && \
-	/tmp/virtualenv/bin/python -m pip install --upgrade --no-cache-dir pillow "mock==1.0.1" "alabaster>=0.7,<0.8,!=0.7.5" "commonmark==0.9.1" "recommonmark==0.5.0" "sphinx<2" "sphinx-rtd-theme<0.5" "readthedocs-sphinx-ext<2.2" "jinja2<3.1.0" && \
 	/tmp/virtualenv/bin/python -m pip install --exists-action=w --no-cache-dir -r requirements.txt && \
 	for i in /tmp/virtualenv/lib/python*/site-packages/sphinx_rtd_theme/versions.html; do echo > $i; done && \
+	mkdir -p specs && \
+	cd .. && \
+	go install github.com/swaggo/swag/v2/cmd/swag@latest && \
+	swag init -g server/server.go --md docs/api --v3.1 -ot yaml -o gitdocs/specs && \
+	cd gitdocs && \
+	mv specs/swagger.yaml specs/openapi.yaml && \
 	/tmp/virtualenv/bin/python -m sphinx -T -E -b html -d _build/doctrees -D language=en . _build/html; \
 	else mkdir -p gitdocs/_build/html; fi
 RUN npm install jest jest-environment-jsdom --global
 RUN ./build.sh "$VERSION"
 
-FROM ghcr.io/security-onion-solutions/python:3-slim
+
+FROM ghcr.io/security-onion-solutions/python:3.13.3-slim
 
 ARG UID=939
 ARG GID=939
@@ -32,7 +39,17 @@ ARG VERSION=0.0.0
 ARG ELASTIC_VERSION=0.0.0
 ARG WAZUH_VERSION=0.0.0
 
-RUN apt update -y && apt install -y bash tzdata ca-certificates wget curl tcpdump unzip && update-ca-certificates
+RUN apt update -y && apt upgrade -y
+RUN apt install -y --no-install-recommends bash tzdata ca-certificates wget curl tcpdump unzip git gcc python3-dev libssl-dev && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+RUN pip3 install pysigma==0.11.20 sigma-cli==1.0.5 pysigma-backend-elasticsearch pysigma-pipeline-windows --break-system-packages
+ADD dep/pysigma_backend_securityonion-0.1.0-py3-none-any.whl /tmp
+RUN pip3 install /tmp/pysigma_backend_securityonion-0.1.0-py3-none-any.whl
+RUN pip3 install yara-python==4.3.1
+RUN apt-get -y remove gcc python3-dev libssl-dev && apt-get -y autoremove
+RUN rm /tmp/pysigma_backend_securityonion-0.1.0-py3-none-any.whl
+
+RUN update-ca-certificates
 RUN addgroup --gid "$GID" socore
 RUN adduser --disabled-password --uid "$UID" --ingroup socore --gecos '' socore
 RUN mkdir -p /opt/sensoroni/jobs && chown socore:socore /opt/sensoroni/jobs

@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -7,50 +7,68 @@
 package elastic
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
+	"strings"
+	"sync"
 	"time"
 
-	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
+
+	"github.com/apex/log"
+	"github.com/elastic/go-elasticsearch/v8"
+	"github.com/elastic/go-elasticsearch/v8/esutil"
 )
 
 const AUDIT_DOC_ID = "audit_doc_id"
 const SHORT_STRING_MAX = 100
+const MAX_AUTHOR_LENGTH = 250
 const LONG_STRING_MAX = 1000000
 const MAX_ARRAY_ELEMENTS = 50
 
 type ElasticCasestore struct {
-	server            *server.Server
-	index             string
-	auditIndex        string
-	maxAssociations   int
-	schemaPrefix      string
-	commonObservables []string
-	observables       Observables
+	server                 *server.Server
+	esClient               *elasticsearch.Client
+	index                  string
+	auditIndex             string
+	maxAssociations        int
+	schemaPrefix           string
+	commonObservables      []string
+	observables            Observables
+	bulkIndexerWorkerCount int
 }
 
-func NewElasticCasestore(srv *server.Server) *ElasticCasestore {
+func NewElasticCasestore(srv *server.Server, client *elasticsearch.Client) *ElasticCasestore {
 	return &ElasticCasestore{
 		server:      srv,
+		esClient:    client,
 		observables: NewObservables(),
 	}
 }
 
 func (store *ElasticCasestore) Init(index string, auditIndex string, maxAssociations int, schemaPrefix string,
-	commonObservables []string) error {
+	commonObservables []string, bulkIndexerWorkerCount int) error {
 
 	store.index = index
 	store.auditIndex = auditIndex
 	store.maxAssociations = maxAssociations
 	store.schemaPrefix = schemaPrefix
 	store.commonObservables = commonObservables
+	if bulkIndexerWorkerCount > 0 {
+		store.bulkIndexerWorkerCount = bulkIndexerWorkerCount
+	} else {
+		store.bulkIndexerWorkerCount = runtime.NumCPU()
+	}
 	return nil
 }
 
@@ -83,7 +101,7 @@ func (store *ElasticCasestore) validateStringArray(array []string, maxLen int, m
 	var err error
 	length := len(array)
 	if length > maxElements {
-		err = errors.New(fmt.Sprintf("Field 'Tags' contains excessive elements (%d/%d)", length, maxElements))
+		err = errors.New(fmt.Sprintf("Field '%s' contains excessive elements (%d/%d)", label, length, maxElements))
 	} else {
 		for idx, tag := range array {
 			err = store.validateString(tag, maxLen, fmt.Sprintf("tag[%d]", idx))
@@ -98,7 +116,7 @@ func (store *ElasticCasestore) validateStringArray(array []string, maxLen int, m
 func (store *ElasticCasestore) validateCase(socCase *model.Case) error {
 	var err error
 
-	if err == nil && socCase.Id != "" {
+	if socCase.Id != "" {
 		err = store.validateId(socCase.Id, "caseId")
 	}
 	if err == nil && socCase.UserId != "" {
@@ -150,7 +168,7 @@ func (store *ElasticCasestore) validateCase(socCase *model.Case) error {
 func (store *ElasticCasestore) validateRelatedEvent(event *model.RelatedEvent) error {
 	var err error
 
-	if err == nil && event.Id != "" {
+	if event.Id != "" {
 		err = store.validateId(event.Id, "relatedEventId")
 	}
 	if err == nil && event.CaseId != "" {
@@ -174,7 +192,7 @@ func (store *ElasticCasestore) validateRelatedEvent(event *model.RelatedEvent) e
 func (store *ElasticCasestore) validateComment(comment *model.Comment) error {
 	var err error
 
-	if err == nil && comment.Id != "" {
+	if comment.Id != "" {
 		err = store.validateId(comment.Id, "commentId")
 	}
 	if err == nil && comment.CaseId != "" {
@@ -198,7 +216,7 @@ func (store *ElasticCasestore) validateComment(comment *model.Comment) error {
 func (store *ElasticCasestore) validateArtifact(artifact *model.Artifact) error {
 	var err error
 
-	if err == nil && artifact.Id != "" {
+	if artifact.Id != "" {
 		err = store.validateId(artifact.Id, "artifactId")
 	}
 	if err == nil && artifact.UserId != "" {
@@ -255,7 +273,7 @@ func (store *ElasticCasestore) validateArtifact(artifact *model.Artifact) error 
 func (store *ElasticCasestore) validateArtifactStream(artifactstream *model.ArtifactStream) error {
 	var err error
 
-	if err == nil && artifactstream.Id != "" {
+	if artifactstream.Id != "" {
 		err = store.validateId(artifactstream.Id, "artifactStreamId")
 	}
 	if err == nil && artifactstream.UserId != "" {
@@ -284,12 +302,11 @@ func (store *ElasticCasestore) prepareForSave(ctx context.Context, obj *model.Au
 	return id
 }
 
-func (store *ElasticCasestore) save(ctx context.Context, obj interface{}, kind string, id string) (*model.EventIndexResults, error) {
-	var results *model.EventIndexResults
-	var err error
+func (store *ElasticCasestore) save(ctx context.Context, obj interface{}, kind string, id string) (results *model.EventIndexResults, err error) {
+	logger := log.FromContext(ctx)
 
 	if err = store.server.CheckAuthorized(ctx, "write", "cases"); err == nil {
-		document := convertObjectToDocumentMap(kind, obj, store.schemaPrefix)
+		document := ConvertObjectToDocumentMap(kind, obj, store.schemaPrefix)
 		document[store.schemaPrefix+"kind"] = kind
 		results, err = store.server.Eventstore.Index(ctx, store.index, document, id)
 		if err == nil {
@@ -301,7 +318,7 @@ func (store *ElasticCasestore) save(ctx context.Context, obj interface{}, kind s
 			}
 			_, err = store.server.Eventstore.Index(ctx, store.auditIndex, document, "")
 			if err != nil {
-				log.WithFields(log.Fields{
+				logger.WithFields(log.Fields{
 					"documentId": results.DocumentId,
 					"kind":       kind,
 				}).WithError(err).Error("Object indexed successfully however audit record failed to index")
@@ -312,19 +329,19 @@ func (store *ElasticCasestore) save(ctx context.Context, obj interface{}, kind s
 	return results, err
 }
 
-func (store *ElasticCasestore) delete(ctx context.Context, obj interface{}, kind string, id string) error {
-	var err error
+func (store *ElasticCasestore) delete(ctx context.Context, obj interface{}, kind string, id string) (err error) {
+	logger := log.FromContext(ctx)
 
 	if err = store.server.CheckAuthorized(ctx, "write", "cases"); err == nil {
 		err = store.server.Eventstore.Delete(ctx, store.index, id)
 		if err == nil {
-			document := convertObjectToDocumentMap(kind, obj, store.schemaPrefix)
+			document := ConvertObjectToDocumentMap(kind, obj, store.schemaPrefix)
 			document[store.schemaPrefix+AUDIT_DOC_ID] = id
 			document[store.schemaPrefix+"kind"] = kind
 			document[store.schemaPrefix+"operation"] = "delete"
 			_, err = store.server.Eventstore.Index(ctx, store.auditIndex, document, "")
 			if err != nil {
-				log.WithFields(log.Fields{
+				logger.WithFields(log.Fields{
 					"documentId": id,
 					"kind":       kind,
 				}).WithError(err).Error("Object deleted successfully however audit record failed to index")
@@ -347,9 +364,8 @@ func (store *ElasticCasestore) get(ctx context.Context, id string, kind string) 
 	return nil, err
 }
 
-func (store *ElasticCasestore) getAll(ctx context.Context, query string, max int) ([]interface{}, error) {
-	var err error
-	var objects []interface{}
+func (store *ElasticCasestore) getAll(ctx context.Context, query string, max int) (objects []interface{}, err error) {
+	logger := log.FromContext(ctx)
 
 	if err = store.server.CheckAuthorized(ctx, "read", "cases"); err == nil {
 		criteria := model.NewEventSearchCriteria()
@@ -376,7 +392,7 @@ func (store *ElasticCasestore) getAll(ctx context.Context, query string, max int
 					if err == nil {
 						objects = append(objects, obj)
 					} else {
-						log.WithField("event", event).WithError(err).Error("Unable to convert case object")
+						logger.WithField("event", event).WithError(err).Error("Unable to convert case object")
 					}
 				}
 			}
@@ -465,52 +481,245 @@ func (store *ElasticCasestore) GetCaseHistory(ctx context.Context, caseId string
 	return history, err
 }
 
-func (store *ElasticCasestore) CreateRelatedEvent(ctx context.Context, event *model.RelatedEvent) (*model.RelatedEvent, error) {
-	var err error
+func (store *ElasticCasestore) CreateRelatedEvents(ctx context.Context, events []*model.RelatedEvent) (int, map[string]error, error) {
+	errMap := map[string]error{}
+	logger := log.FromContext(ctx)
+	totalCreated := 0
 
-	err = store.validateRelatedEvent(event)
-	if err == nil {
+	maxBulkEscalateEvents := store.server.Config.ClientParams.AlertingParams.MaxBulkEscalateEvents
+
+	eventsByCase := map[string][]*model.RelatedEvent{}
+
+	// validate events and group by case
+	for _, event := range events {
+		eventId, _ := event.Fields["soc_id"].(string)
+
+		err := store.validateRelatedEvent(event)
+		if err != nil {
+			errMap[eventId] = err
+			continue
+		}
+
 		if event.Id != "" {
-			return nil, errors.New("Unexpected ID found in new related event")
+			errMap[eventId] = errors.New("Unexpected ID found in new related event")
+			continue // next event
 		} else if event.CaseId == "" {
-			return nil, errors.New("Missing Case ID in new related event")
-		} else {
-			_, err = store.GetCase(ctx, event.CaseId)
-			if err == nil {
-				var newId string
-				if value, ok := event.Fields["soc_id"]; ok {
-					newId = value.(string)
-					var existingEvents []*model.RelatedEvent
-					existingEvents, err = store.GetRelatedEvents(ctx, event.CaseId)
-					for _, existingEvent := range existingEvents {
-						if value, ok := existingEvent.Fields["soc_id"]; ok {
-							existingId := value.(string)
-							if existingId == newId {
-								err = errors.New("ERROR_CASE_EVENT_ALREADY_ATTACHED")
-								break
-							}
-						}
-					}
+			errMap[eventId] = errors.New("Missing Case ID in new related event")
+			continue // next event
+		}
+
+		if len(eventsByCase[event.CaseId]) < maxBulkEscalateEvents {
+			eventsByCase[event.CaseId] = append(eventsByCase[event.CaseId], event)
+		}
+	}
+
+	for caseId, events := range eventsByCase {
+		var created, audited int
+
+		if len(events) == 0 {
+			delete(eventsByCase, caseId)
+			continue // next case
+		}
+
+		// does the case exist?
+		_, err := store.GetCase(ctx, caseId)
+		if err != nil {
+			delete(eventsByCase, caseId)
+
+			for _, event := range events {
+				id, _ := event.Fields["soc_id"].(string)
+				errMap[id] = err
+			}
+
+			continue // next case
+		}
+
+		// get existing related events, check if events have already been attached
+		existingEvents, err := store.GetRelatedEvents(ctx, caseId)
+		if err != nil {
+			for _, event := range events {
+				id, _ := event.Fields["soc_id"].(string)
+				errMap[id] = err
+			}
+			continue // try next case
+		}
+
+		// check if events have already been attached
+		setOfExisting := map[string]struct{}{}
+		for _, existingEvent := range existingEvents {
+			value, ok := existingEvent.Fields["soc_id"]
+			if ok {
+				existingId := value.(string)
+				setOfExisting[existingId] = struct{}{}
+			}
+		}
+
+		createAudit := []model.AuditInfo{}
+		auditMut := sync.Mutex{}
+		errMut := sync.Mutex{}
+
+		bulk, err := store.BuildBulkIndexer(ctx, logger)
+		if err != nil {
+			return totalCreated, errMap, err
+		}
+
+		// bulk insert events
+		for _, event := range events {
+			eventId, ok := event.Fields["soc_id"].(string)
+
+			if ok {
+				_, ok := setOfExisting[eventId]
+				if ok {
+					errMap[eventId] = errors.New("ERROR_CASE_EVENT_ALREADY_ATTACHED")
+
+					continue // next event
 				}
-				if err == nil {
-					var results *model.EventIndexResults
-					results, err = store.save(ctx, event, "related", store.prepareForSave(ctx, &event.Auditable))
-					if err == nil {
-						// Read object back to get new modify date, etc
-						event, err = store.GetRelatedEvent(ctx, results.DocumentId)
-						if err == nil {
-							// Extraction is a nice-to-have, and failures should not prevent an analyst
-							// from completing their work if some Elastic field mapping conflict
-							// arose. The function itself will log relevant details.
-							store.ExtractCommonObservables(ctx, event)
-						}
+			}
+
+			document, index, err := store.ConvertObjectToDocument(ctx, "related", event, &event.Auditable, false, nil, nil)
+			if err != nil {
+				errMap[eventId] = err
+				continue // next event
+			}
+
+			work := esutil.BulkIndexerItem{
+				Index:  index,
+				Action: "create",
+				Body:   bytes.NewReader(document),
+				OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
+					auditMut.Lock()
+					defer auditMut.Unlock()
+
+					created++
+
+					createAudit = append(createAudit, model.AuditInfo{
+						DocId:  resp.DocumentID,
+						Op:     "create",
+						Object: event,
+					})
+				},
+				OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
+					errMut.Lock()
+					defer errMut.Unlock()
+
+					if err != nil {
+						errMap[resp.DocumentID] = err
+					} else {
+						errMap[resp.DocumentID] = errors.New(resp.Error.Reason)
+					}
+				},
+			}
+
+			err = bulk.Add(ctx, work)
+			if err != nil {
+				errMap[eventId] = err
+				continue
+			}
+		}
+
+		err = bulk.Close(ctx)
+		if err != nil {
+			logger.WithError(err).WithField("caseId", caseId).Error("unable to close bulk indexer for adding related events to case")
+			continue // next case
+		}
+
+		// audit bulk indexer
+		bulk, err = store.BuildBulkIndexer(ctx, logger)
+		if err != nil {
+			return totalCreated, errMap, err
+		}
+
+		// bulk insert audit records
+		for _, audit := range createAudit {
+			event := audit.Object.(*model.RelatedEvent)
+			eventId, _ := event.Fields["soc_id"].(string)
+
+			document, index, err := store.ConvertObjectToDocument(ctx, "related", audit.Object, &event.Auditable, false, &audit.DocId, &audit.Op)
+			if err != nil {
+				errMap[eventId] = err
+				continue // next audit
+			}
+
+			err = bulk.Add(ctx, esutil.BulkIndexerItem{
+				Index:  index,
+				Action: "create",
+				Body:   bytes.NewReader(document),
+				OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
+					auditMut.Lock()
+					defer auditMut.Unlock()
+
+					audited++
+				},
+				OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
+					errMut.Lock()
+					defer errMut.Unlock()
+
+					if err != nil {
+						errMap[resp.DocumentID] = fmt.Errorf("AUDIT: %s", err.Error())
+					} else {
+						errMap[resp.DocumentID] = fmt.Errorf("AUDIT: %s", resp.Error.Reason)
+					}
+				},
+			})
+			if err != nil {
+				errMap[eventId] = err
+				continue // next audit
+			}
+		}
+
+		err = bulk.Close(ctx)
+		if err != nil {
+			logger.WithError(err).Error("unable to close bulk indexer for adding audit events for related events added to case")
+			continue // next case
+		}
+
+		// extract observables, don't error out if it fails
+		existingArtifacts, _ := store.GetArtifacts(ctx, caseId, "evidence", "")
+		existingValueMap := make(map[string]bool)
+		for _, artifact := range existingArtifacts {
+			existingValueMap[artifact.Value] = true
+		}
+
+		for _, event := range events {
+			for _, obs := range store.commonObservables {
+				value, exists := event.Fields[obs]
+				if exists {
+					valueStr := fmt.Sprintf("%v", value)
+					if len(valueStr) == 0 || existingValueMap[valueStr] {
+						continue
+					}
+
+					artifact := model.NewArtifact()
+					artifact.CaseId = event.CaseId
+					artifact.Value = valueStr
+					artifact.ArtifactType = string(store.observables.GetType(artifact.Value))
+					artifact.GroupType = "evidence"
+
+					existingValueMap[valueStr] = true
+
+					_, err := store.CreateArtifact(ctx, artifact)
+					if err != nil {
+						logger.WithFields(log.Fields{
+							"key":          obs,
+							"caseId":       event.CaseId,
+							"artifactType": artifact.ArtifactType,
+						}).WithError(err).Warn("automated observable extraction failed")
 					}
 				}
 			}
 		}
+
+		totalCreated += created
+
+		logger.WithFields(log.Fields{
+			"caseId":  caseId,
+			"created": created,
+			"audited": audited,
+			"errMap":  util.TruncateMap(errMap, 5),
+		}).Info("related events added to case")
 	}
 
-	return event, err
+	return totalCreated, errMap, nil
 }
 
 func (store *ElasticCasestore) GetRelatedEvent(ctx context.Context, id string) (*model.RelatedEvent, error) {
@@ -788,12 +997,14 @@ func (store *ElasticCasestore) UpdateArtifact(ctx context.Context, artifact *mod
 }
 
 func (store *ElasticCasestore) DeleteArtifact(ctx context.Context, id string) error {
+	logger := log.FromContext(ctx)
+
 	artifact, err := store.GetArtifact(ctx, id)
 	if err == nil {
 		if len(artifact.StreamId) > 0 {
 			err = store.DeleteArtifactStream(ctx, artifact.StreamId)
 			if err != nil {
-				log.WithError(err).WithFields(log.Fields{
+				logger.WithError(err).WithFields(log.Fields{
 					"artifactStreamId": artifact.StreamId,
 					"artifactId":       artifact.Id,
 				}).Error("Unable to delete artifact stream; proceeding with artifact deletion anyway")
@@ -810,7 +1021,7 @@ func (store *ElasticCasestore) DeleteArtifact(ctx context.Context, id string) er
 			for _, job := range jobs {
 				job, err := store.server.Datastore.DeleteJob(ctx, job.Id)
 				if err != nil {
-					log.WithError(err).WithFields(log.Fields{
+					logger.WithError(err).WithFields(log.Fields{
 						"artifactId": artifact.Id,
 						"jobId":      job.Id,
 					}).Error("Unable to delete analyze job; continuing")
@@ -868,6 +1079,8 @@ func (store *ElasticCasestore) DeleteArtifactStream(ctx context.Context, id stri
 }
 
 func (store *ElasticCasestore) ExtractCommonObservables(ctx context.Context, event *model.RelatedEvent) error {
+	logger := log.FromContext(ctx)
+
 	existingArtifacts, _ := store.GetArtifacts(ctx, event.CaseId, "evidence", "")
 	existingValueMap := make(map[string]bool)
 	for _, artifact := range existingArtifacts {
@@ -876,7 +1089,7 @@ func (store *ElasticCasestore) ExtractCommonObservables(ctx context.Context, eve
 
 	for key, value := range event.Fields {
 		valueStr := fmt.Sprintf("%v", value)
-		if len(valueStr) == 0 || existingValueMap[valueStr] == true {
+		if len(valueStr) == 0 || existingValueMap[valueStr] {
 			continue
 		}
 		for _, obs := range store.commonObservables {
@@ -888,7 +1101,7 @@ func (store *ElasticCasestore) ExtractCommonObservables(ctx context.Context, eve
 				artifact.GroupType = "evidence"
 				_, err := store.CreateArtifact(ctx, artifact)
 				if err != nil {
-					log.WithFields(log.Fields{
+					logger.WithFields(log.Fields{
 						"key":          key,
 						"caseId":       event.CaseId,
 						"artifactType": artifact.ArtifactType,
@@ -899,4 +1112,56 @@ func (store *ElasticCasestore) ExtractCommonObservables(ctx context.Context, eve
 		}
 	}
 	return nil
+}
+
+func (store *ElasticCasestore) BuildBulkIndexer(ctx context.Context, logger log.Interface) (esutil.BulkIndexer, error) {
+	bulk, err := esutil.NewBulkIndexer(esutil.BulkIndexerConfig{
+		Client:     store.esClient,
+		Refresh:    "wait_for",
+		NumWorkers: store.bulkIndexerWorkerCount,
+		OnError: func(ctx context.Context, err error) {
+			logger.WithError(err).Error("error during bulk import")
+		},
+	})
+
+	return bulk, err
+}
+
+func (store *ElasticCasestore) ConvertObjectToDocument(ctx context.Context, kind string, obj any, auditable *model.Auditable, isEdit bool, auditDocId *string, op *string) (doc []byte, index string, err error) {
+	if auditDocId == nil {
+		index = store.index
+	} else {
+		index = store.auditIndex
+	}
+
+	index = strings.TrimPrefix(index, "*:")
+
+	id := auditable.Id
+	updateTime := auditable.UpdateTime
+
+	defer func() {
+		auditable.Id = id
+		auditable.UpdateTime = updateTime
+	}()
+
+	store.prepareForSave(ctx, auditable)
+	document := ConvertObjectToDocumentMap(kind, obj, store.schemaPrefix)
+
+	document[store.schemaPrefix+"kind"] = kind
+	if auditDocId != nil {
+		document[store.schemaPrefix+AUDIT_DOC_ID] = *auditDocId
+		if op != nil {
+			document[store.schemaPrefix+"operation"] = *op
+		}
+	}
+
+	if isEdit {
+		document = map[string]interface{}{
+			"doc": document,
+		}
+	}
+
+	rawDoc, err := json.Marshal(document)
+
+	return rawDoc, index, err
 }

@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -12,9 +12,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestString(tester *testing.T) {
+func TestStringId(tester *testing.T) {
 	setting := NewSetting("MyId")
 	assert.Equal(tester, "MyId", setting.Id)
+	assert.False(tester, setting.Advanced)
 }
 
 func TestIsValidMinionId(tester *testing.T) {
@@ -39,4 +40,21 @@ func TestIsValidSettingId(tester *testing.T) {
 	assert.False(tester, IsValidSettingId("Foo bar"))
 	assert.False(tester, IsValidSettingId(" "))
 	assert.False(tester, IsValidSettingId("foo|bars"))
+}
+
+func TestSupportsJinja(tester *testing.T) {
+	setting := NewSetting("id")
+
+	// Appears to be a duplicated setting due to missing desc
+	assert.True(tester, setting.SupportsJinja())
+
+	setting.Description = "foo"
+	// Not a duplicate and not jinjaEscaped and not json
+	assert.False(tester, setting.SupportsJinja())
+
+	setting.JinjaEscaped = true
+	assert.True(tester, setting.SupportsJinja())
+
+	setting.Syntax = "json"
+	assert.False(tester, setting.SupportsJinja())
 }

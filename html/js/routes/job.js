@@ -1,8 +1,10 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
+
+loadPageTemplate('page-job', 'pages/job.html');
 
 routes.push({ path: '/job/:jobId', name: 'job', component: {
   template: '#page-job',
@@ -16,42 +18,37 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
     packetOptions: ['packets', 'hex', 'unwrap'],
     packets: [],
     headers: [
-      { text: this.$root.i18n.number, value: 'number' },
-      { text: this.$root.i18n.timestamp, value: 'timestamp' },
-      { text: this.$root.i18n.type, value: 'type' },
-      { text: this.$root.i18n.srcIp, value: 'srcIp' },
-      { text: this.$root.i18n.srcPort, value: 'srcPort' },
-      { text: this.$root.i18n.dstIp, value: 'dstIp' },
-      { text: this.$root.i18n.dstPort, value: 'dstPort' },
-      { text: this.$root.i18n.flags, value: 'flags' },
-      { text: this.$root.i18n.length, value: 'length' },
+      { title: this.$root.i18n.number, value: 'number' },
+      { title: this.$root.i18n.timestamp, value: 'timestamp' },
+      { title: this.$root.i18n.type, value: 'type' },
+      { title: this.$root.i18n.srcIp, value: 'srcIp' },
+      { title: this.$root.i18n.srcPort, value: 'srcPort' },
+      { title: this.$root.i18n.dstIp, value: 'dstIp' },
+      { title: this.$root.i18n.dstPort, value: 'dstPort' },
+      { title: this.$root.i18n.flags, value: 'flags' },
+      { title: this.$root.i18n.length, value: 'length' },
     ],
-    sortBy: 'number',
-    sortDesc: false,
+    sortBy: [{ key: 'number', order: 'asc' }],
     itemsPerPage: 10,
-    footerProps: { 'items-per-page-options': [10,50,250,1000] },
+    itemsPerPageOptions: [10,50,250,1000],
     count: 500,
     quickActionVisible: false,
-    quickActionX: 0,
-    quickActionY: 0,
+    quickActionTarget: [],
     quickActionEvent: null,
     quickActionField: "",
     quickActionValue: "",
     actions: [],
   }},
   created() {
-    Vue.filter('formatPacketView', this.formatPacketView);
-    Vue.filter('colorType', this.colorType);
-    Vue.filter('colorFlag', this.colorFlag);
   },
   mounted() {
     this.loadData();
     this.$root.loadParameters('job', this.initActions);
   },
-  beforeDestroy() {
+  beforeUnmount() {
     this.$root.setSubtitle("");
   },
-  destroyed() {
+  unmounted() {
     this.$root.unsubscribe("job", this.updateJob);
   },
   watch: {
@@ -60,7 +57,6 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
     'packetOptions': 'saveLocalSettings',
     'expandAll': 'saveLocalSettings',
     'sortBy': 'saveLocalSettings',
-    'sortDesc': 'saveLocalSettings',
     'itemsPerPage': 'saveLocalSettings',
   },
   methods: {
@@ -108,8 +104,7 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
         this.quickActionEvent = event;
         this.quickActionField = field;
         this.quickActionValue = value;
-        this.quickActionX = domEvent.clientX;
-        this.quickActionY = domEvent.clientY;
+        this.quickActionTarget = [domEvent.clientX, domEvent.clientY];
         this.$nextTick(() => {
           this.quickActionVisible = true;
         });
@@ -127,21 +122,12 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
       }
       return "packet " + cls;
     },
-    expandRow(row) {
-      for (var i = 0; i < this.expanded.length; i++) {
-        if (this.expanded[i] == row) {
-          this.expanded.splice(i, 1);
-          return;
-        }
-      }
-      this.expanded.push(row);
-    },
     expandPackets(enabled) {
       this.expandAll = enabled;
-      this.expanded = [];
+      this.expanded.length = 0;
       if (enabled) {
         for (var i = 0; i < this.packets.length; i++) {
-          this.expandRow(this.packets[i]);
+          this.expanded.push(this.packets[i].number);
         }
       } else {
         this.enableOption('packets');
@@ -163,11 +149,10 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
       return this.packetOptions.indexOf(option) != -1;
     },
     captureLayoutAsStream() {
-      if (!this.isOptionEnabled('packets')) return;
+      if (this.isOptionEnabled('packets')) return;
 
       this.expandPackets(true);
-      this.sortBy = 'number';
-      this.sortDesc = false;
+      this.sortBy = [{ key: 'number', order: 'asc' }];
     },
     packetsUpdated() {
       if (this.expandAll) {
@@ -201,10 +186,12 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
       setTimeout(function() { route.loadPackets(unwrap); }, 0); // run async to this event
     },
     async loadPackets(unwrap) {
+      if (!this.job || !this.job.id) return;
+
       this.packetsLoading = true;
       try {
         const response = await this.$root.papi.get('packets', { params: {
-          jobId: this.$route.params.jobId,
+          jobId: this.job.id,
           offset: this.packets.length,
           count: this.count,
           unwrap: unwrap
@@ -258,8 +245,8 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
       if (!this.packetsLoading) {
         localStorage['settings.job.packetOptions'] = this.packetOptions;
         localStorage['settings.job.expandAll'] = this.expandAll;
-        localStorage['settings.job.sortBy'] = this.sortBy;
-        localStorage['settings.job.sortDesc'] = this.sortDesc;
+        localStorage['settings.job.sortBy'] = this.sortBy[0].key;
+        localStorage['settings.job.sortDesc'] = this.sortBy[0].order;
         localStorage['settings.job.itemsPerPage'] = this.itemsPerPage;
       }
     },
@@ -270,8 +257,8 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
           this.packetOptions = options.split(",");
         }
         this.expandAll = localStorage['settings.job.expandAll'] == "true";
-        this.sortBy = localStorage['settings.job.sortBy'];
-        this.sortDesc = localStorage['settings.job.sortDesc'] == "true";
+        this.sortBy[0].key = localStorage['settings.job.sortBy'];
+        this.sortBy[0].order = localStorage['settings.job.sortDesc'];
         this.itemsPerPage = parseInt(localStorage['settings.job.itemsPerPage']);
       }
     },
@@ -285,8 +272,8 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
       this.job = job;
     },
     colorType(type) {
-      if (type.startsWith("ICMP")) return "error";
-      if (type.startsWith("DHCP")) return "warning";
+      if (type.startsWith("ICMP")) return "cyan";
+      if (type.startsWith("DHCP")) return "teal lighten-2";
       if (type.startsWith("ARP")) return "secondary";
       if (type.startsWith("DNS")) return "accent";
       if (type.startsWith("TCP")) return "primary";

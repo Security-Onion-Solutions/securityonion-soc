@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -21,6 +21,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/agent"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
+	"github.com/security-onion-solutions/securityonion-soc/packet"
 )
 
 const DEFAULT_EXECUTABLE_PATH = "stenoread"
@@ -134,9 +135,31 @@ func (steno *StenoQuery) ProcessJob(job *model.Job, reader io.ReadCloser) (io.Re
 		}).Debug("Executed stenoread")
 		if err == nil {
 			var file *os.File
+			var info os.FileInfo
 			file, err = os.Open(pcapFilepath)
 			if err == nil {
-				reader = file
+				info, err = os.Stat(pcapFilepath)
+				if err != nil {
+					log.WithError(err).WithFields(log.Fields{
+						"pcapPath": pcapFilepath,
+					}).Error("Failed to collect output file stats")
+				} else {
+					size := int(info.Size())
+					log.WithFields(log.Fields{
+						"pcapPath":  pcapFilepath,
+						"pcapBytes": size,
+					}).Debug("Found matching packets")
+					if job.Size > size {
+						log.Warn("Discarding Stenographer job output since existing job already has more content from another processor")
+					} else {
+						job.Size = size
+						reader = file
+						log.WithFields(log.Fields{
+							"pcapStreamErr":  err,
+							"pcapStreamSize": size,
+						}).Debug("Finished processing PCAP via Stenographer")
+					}
+				}
 			}
 		}
 	}
@@ -153,22 +176,12 @@ func (steno *StenoQuery) CreateQuery(job *model.Job) string {
 	endTime := job.Filter.EndTime.Format(time.RFC3339)
 
 	query := fmt.Sprintf("before %s and after %s", endTime, beginTime)
-
-	if len(job.Filter.SrcIp) > 0 {
-		query = fmt.Sprintf("%s and host %s", query, job.Filter.SrcIp)
+	filter := packet.CreateBpf(job.Filter, false)
+	if len(filter) > 0 {
+		filter = "(" + filter + ")"
 	}
 
-	if len(job.Filter.DstIp) > 0 {
-		query = fmt.Sprintf("%s and host %s", query, job.Filter.DstIp)
-	}
-
-	if job.Filter.SrcPort > 0 {
-		query = fmt.Sprintf("%s and port %d", query, job.Filter.SrcPort)
-	}
-
-	if job.Filter.DstPort > 0 {
-		query = fmt.Sprintf("%s and port %d", query, job.Filter.DstPort)
-	}
+	query = packet.AddBpf(query, filter)
 
 	return query
 }

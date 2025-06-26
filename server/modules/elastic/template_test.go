@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -13,12 +13,13 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/web"
+
 	"github.com/stretchr/testify/assert"
 )
 
 func TestApplyTemplate(tester *testing.T) {
-	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, nil)
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil), nil)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, nil, -1)
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")

@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -35,28 +34,4 @@ func TestDataLag(tester *testing.T) {
 
 func validateQuery(tester *testing.T, actual string, expected string) {
 	assert.Equal(tester, expected, actual)
-}
-
-func TestBuildQuery(tester *testing.T) {
-	importer := NewImporter(nil)
-	job := model.NewJob()
-
-	query := importer.buildQuery(job)
-	validateQuery(tester, query, "")
-
-	job.Filter.SrcIp = "1.2.3.4"
-	query = importer.buildQuery(job)
-	validateQuery(tester, query, " host 1.2.3.4")
-
-	job.Filter.DstIp = "4.3.2.1"
-	query = importer.buildQuery(job)
-	validateQuery(tester, query, " host 1.2.3.4 and host 4.3.2.1")
-
-	job.Filter.DstPort = 53
-	query = importer.buildQuery(job)
-	validateQuery(tester, query, " host 1.2.3.4 and host 4.3.2.1 and port 53")
-
-	job.Filter.SrcPort = 33
-	query = importer.buildQuery(job)
-	validateQuery(tester, query, " host 1.2.3.4 and host 4.3.2.1 and port 33 and port 53")
 }

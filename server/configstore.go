@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -13,7 +13,7 @@ import (
 )
 
 type Configstore interface {
-	GetSettings(ctx context.Context) ([]*model.Setting, error)
+	GetSettings(ctx context.Context, advanced bool) ([]*model.Setting, error)
 	UpdateSetting(ctx context.Context, setting *model.Setting, remove bool) error
 	SyncSettings(ctx context.Context) error
 }

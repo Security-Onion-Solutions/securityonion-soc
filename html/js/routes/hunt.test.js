@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -133,73 +133,98 @@ test('saveTimezone', () => {
 
 test('removeFilter', () => {
   comp.query = "abc def | groupby foo bar*";
-  comp.removeFilter('def')
+  comp.$router.resolve = jest.fn();
+  let toggle = false;
+  comp.$router.resolve.mockImplementation(() => {
+    toggle = !toggle;
+    return { fullPath: toggle ? 'A' : 'B' };
+  });
+
+  comp.removeFilter('def');
   expect(comp.query).toBe("abc  | groupby foo bar*");
 
-  comp.removeFilter('abc')
+  comp.removeFilter('abc');
   expect(comp.query).toBe("* | groupby foo bar*");
 
   // no-op
-  comp.removeFilter('*')
+  comp.removeFilter('*');
   expect(comp.query).toBe("* | groupby foo bar*");
 });
 
 test('removeGroupBy', () => {
   comp.query = "abc | groupby foo bar*";
-  comp.queryGroupBys = [['foo','bar*']];
-  comp.removeGroupBy(0, 0)
+  comp.queryGroupBys = [['foo', 'bar*']];
+  comp.$router.resolve = jest.fn();
+  let toggle = false;
+  comp.$router.resolve.mockImplementation(() => {
+    toggle = !toggle;
+    return { fullPath: toggle ? 'A' : 'B' };
+  });
+
+  comp.removeGroupBy(0, 0);
   expect(comp.query).toBe("abc | groupby bar*");
 
   comp.query = "abc | groupby foo bar*";
-  comp.queryGroupBys = [['foo','bar*']];
-  comp.removeGroupBy(0, 1)
+  comp.queryGroupBys = [['foo', 'bar*']];
+  comp.removeGroupBy(0, 1);
   expect(comp.query).toBe("abc | groupby foo");
 
   comp.query = "abc | groupby bar*";
   comp.queryGroupBys = [['bar*']];
-  comp.removeGroupBy(0, 0)
+  comp.removeGroupBy(0, 0);
   expect(comp.query).toBe("abc");
 
   // no-op
   comp.query = "abc";
   comp.queryGroupBys = [];
-  comp.removeGroupBy(0, 0)
+  comp.removeGroupBy(0, 0);
   expect(comp.query).toBe("abc");
 
   comp.query = "abc | groupby foo bar* | groupby a b";
-  comp.queryGroupBys = [['foo','bar*'],['a','b']];
-  comp.removeGroupBy(1, 1)
+  comp.queryGroupBys = [['foo', 'bar*'], ['a', 'b']];
+  comp.removeGroupBy(1, 1);
   expect(comp.query).toBe("abc | groupby foo bar* | groupby a");
 
   // Remove entire group
   comp.query = "abc | groupby foo bar* | groupby a b";
   comp.queryGroupBys = [['foo','bar*'],['a','b']];
-  comp.removeGroupBy(1, -1)
+  comp.removeGroupBy(1, -1);
   expect(comp.query).toBe("abc | groupby foo bar*");
+
+  expect(comp.$router.resolve).toHaveBeenCalledTimes(10);
 });
 
 test('removeSortBy', () => {
   comp.query = "abc | sortby foo bar^";
-  comp.removeSortBy('foo')
+  comp.$router.resolve = jest.fn();
+  let toggle = false;
+  comp.$router.resolve.mockImplementation(() => {
+    toggle = !toggle;
+    return { fullPath: toggle ? 'A' : 'B' };
+  });
+
+  comp.removeSortBy('foo');
   expect(comp.query).toBe("abc | sortby bar^");
 
-  comp.removeSortBy('bar^')
+  comp.removeSortBy('bar^');
   expect(comp.query).toBe("abc");
 
   // no-op
-  comp.removeSortBy('bar^')
+  comp.removeSortBy('bar^');
   expect(comp.query).toBe("abc");
 
   comp.query = "abc | sortby foo bar^ | groupby xyz";
-  comp.removeSortBy('foo')
+  comp.removeSortBy('foo');
   expect(comp.query).toBe("abc | sortby bar^ | groupby xyz");
 
-  comp.removeSortBy('bar^')
+  comp.removeSortBy('bar^');
   expect(comp.query).toBe("abc | groupby xyz");
 
   // no-op
-  comp.removeSortBy('bar^')
+  comp.removeSortBy('bar^');
   expect(comp.query).toBe("abc | groupby xyz");
+
+  expect(comp.$router.resolve).toHaveBeenCalledTimes(12);
 });
 
 test('formatCaseSummary', () => {
@@ -218,12 +243,11 @@ test('formatSafeString', () => {
 
 test('toggleEscalationMenu', () => {
   comp.escalateRelatedEventsEnabled = true;
-  const domEvent = {clientX: 12, clientY: 34};
+  const domEvent = {target: 'target'};
   const event = {id:"33",foo:"bar"};
   comp.$nextTick = function(fn) { fn(); };
   comp.toggleEscalationMenu(domEvent, event, 2);
-  expect(comp.escalationMenuX).toBe(12);
-  expect(comp.escalationMenuY).toBe(34);
+  expect(comp.escalationMenuTarget).toBe('target');
   expect(comp.escalationItem).toBe(event);
   expect(comp.escalationGroupIdx).toBe(2);
   expect(comp.escalationMenuVisible).toBe(true);
@@ -386,26 +410,24 @@ test('populateGroupByTables', () => {
   expect(comp.groupBys[0].data[0].count).toBe(23);
   expect(comp.groupBys[0].data[0].foo).toBe('moo');
   expect(comp.groupBys[0].data[0].bar).toBe('mar');
-  expect(comp.groupBys[0].headers).toStrictEqual([{text: 'Count', value:'count'}, {text: 'foo', value: 'foo'}, {text: 'bar', value: 'bar'}]);
+  expect(comp.groupBys[0].headers).toStrictEqual([{title: 'Count', value:'count'}, {title: 'foo', value: 'foo'}, {title: 'bar', value: 'bar'}]);
   expect(comp.groupBys[0].chart_metrics).toStrictEqual([{value: 23, keys:['moo, mar']}]);
-  expect(comp.groupBys[0].sortBy).toBe('foo');
-  expect(comp.groupBys[0].sortDesc).toBe(false);
+  expect(comp.groupBys[0].sortBy).toStrictEqual([{ key: "foo", order: "asc" }]);
   expect(comp.groupBys[0].maximized).toBe(false);
   expect(comp.groupBys[1].title).toBe("car");
   expect(comp.groupBys[1].fields.length).toBe(1);
   expect(comp.groupBys[1].data[0].count).toBe(9);
   expect(comp.groupBys[1].data[0].car).toBe('mis');
-  expect(comp.groupBys[1].headers).toStrictEqual([{text: 'Count', value:'count'}, {text: 'car', value: 'car'}]);
+  expect(comp.groupBys[1].headers).toStrictEqual([{title: 'Count', value:'count'}, {title: 'car', value: 'car'}]);
   expect(comp.groupBys[1].chart_metrics).toStrictEqual([{value: 9, keys:['mis']}]);
-  expect(comp.groupBys[1].sortBy).toBe('count');
-  expect(comp.groupBys[1].sortDesc).toBe(true);
+  expect(comp.groupBys[1].sortBy).toStrictEqual([{ key: "count", order: "desc" }]);
   expect(comp.groupBys[1].maximized).toBe(true);
 
   // Now include action column
   comp.aggregationActionsEnabled = true;
   result = comp.populateGroupByTables(metrics);
-  expect(comp.groupBys[0].headers).toStrictEqual([{text: '', value: ''}, {text: 'Count', value:'count'}, {text: 'foo', value: 'foo'}, {text: 'bar', value: 'bar'}]);
-  expect(comp.groupBys[1].headers).toStrictEqual([{text: '', value: ''}, {text: 'Count', value:'count'}, {text: 'car', value: 'car'}]);
+  expect(comp.groupBys[0].headers).toStrictEqual([{title: '', value: ''}, {title: 'Count', value:'count'}, {title: 'foo', value: 'foo'}, {title: 'bar', value: 'bar'}]);
+  expect(comp.groupBys[1].headers).toStrictEqual([{title: '', value: ''}, {title: 'Count', value:'count'}, {title: 'car', value: 'car'}]);
 });
 
 test('displayTable', () => {
@@ -489,6 +511,7 @@ test('setupPieChart', () => {
   expect(options).toStrictEqual({
       responsive: true,
       maintainAspectRatio: false,
+      onResize: comp.debounceChartResize,
       plugins: {
         legend: {
           display: true,
@@ -530,6 +553,7 @@ test('setupSankeyChart', () => {
   expect(options).toStrictEqual({
       responsive: true,
       maintainAspectRatio: false,
+      onResize: comp.debounceChartResize,
       plugins: {
         legend: {
           display: false,
@@ -700,6 +724,8 @@ test('obtainQueryDetails_blank', () => {
   comp.query = ""
   comp.obtainQueryDetails();
   expect(comp.queryName).toBe("");
+  expect(comp.querySearch).toBe("");
+  expect(comp.queryRemainder).toBe("");
   expect(comp.queryFilters).toStrictEqual([]);
   expect(comp.queryGroupBys).toStrictEqual([]);
   expect(comp.queryGroupByOptions).toStrictEqual([]);
@@ -710,26 +736,33 @@ test('obtainQueryDetails_queryOnly', () => {
   comp.query = "foo: bar AND x:1"
   comp.obtainQueryDetails();
   expect(comp.queryName).toBe("Custom");
+  expect(comp.querySearch).toBe("foo: bar AND x:1");
+  expect(comp.queryRemainder).toBe("");
   expect(comp.queryFilters).toStrictEqual(["foo: bar", "x:1"]);
   expect(comp.queryGroupBys).toStrictEqual([]);
   expect(comp.queryGroupByOptions).toStrictEqual([]);
   expect(comp.querySortBys).toStrictEqual([]);
 });
 
-test('obtainQueryDetails_queryGroupedOptionsSorted', () => {
-  comp.query = "foo: bar AND x:1 | groupby -opt1 z | groupby -optB r^ | sortby y"
+test('obtainQueryDetails_queryGroupedOptionsTableSorted', () => {
+  comp.query = "foo: bar AND x:1 | groupby -opt1 z | groupby -optB r^ | sortby y | table x y z"
   comp.obtainQueryDetails();
   expect(comp.queryName).toBe("Custom");
+  expect(comp.querySearch).toBe("foo: bar AND x:1");
+  expect(comp.queryRemainder).toBe("| groupby -opt1 z | groupby -optB r^ | sortby y | table x y z");
   expect(comp.queryFilters).toStrictEqual(["foo: bar", "x:1"]);
   expect(comp.queryGroupBys).toStrictEqual([["z"], ["r^"]]);
   expect(comp.queryGroupByOptions).toStrictEqual([["opt1"], ["optB"]]);
   expect(comp.querySortBys).toStrictEqual(["y"]);
+  expect(comp.queryTableFields).toStrictEqual(["x", "y", "z"]);
 });
 
 test('obtainQueryDetails_queryGroupedFilterPipe', () => {
   comp.query = "foo: bar AND x:\"with | this\" | groupby z"
   comp.obtainQueryDetails();
   expect(comp.queryName).toBe("Custom");
+  expect(comp.querySearch).toBe("foo: bar AND x:\"with | this\"");
+  expect(comp.queryRemainder).toBe("| groupby z");
   expect(comp.queryFilters).toStrictEqual(["foo: bar", "x:\"with | this\""]);
   expect(comp.queryGroupBys).toStrictEqual([["z"]]);
   expect(comp.queryGroupByOptions).toStrictEqual([[]]);
@@ -740,7 +773,21 @@ test('obtainQueryDetails_trickyEscapeSequence', () => {
   comp.query = `process.working_directory:"C:\\\\Windows\\\\system32\\\\" | groupby host.name`;
   comp.obtainQueryDetails();
   expect(comp.queryName).toBe("Custom");
+  expect(comp.querySearch).toBe(`process.working_directory:"C:\\\\Windows\\\\system32\\\\"`);
+  expect(comp.queryRemainder).toBe("| groupby host.name");
   expect(comp.queryFilters).toStrictEqual([`process.working_directory:"C:\\\\Windows\\\\system32\\\\"`]);
+  expect(comp.queryGroupBys).toStrictEqual([["host.name"]]);
+  expect(comp.queryGroupByOptions).toStrictEqual([[]]);
+  expect(comp.querySortBys).toStrictEqual([]);
+});
+
+test('obtainQueryDetails_complex', () => {
+  comp.query = `process.working_directory:"C:\\\\Windows\\\\system32\\\\" OR (some:thing) | groupby host.name`;
+  comp.obtainQueryDetails();
+  expect(comp.queryName).toBe("Custom");
+  expect(comp.querySearch).toBe(`process.working_directory:"C:\\\\Windows\\\\system32\\\\" OR (some:thing)`);
+  expect(comp.queryRemainder).toBe("| groupby host.name");
+  expect(comp.queryFilters).toStrictEqual([]);
   expect(comp.queryGroupBys).toStrictEqual([["host.name"]]);
   expect(comp.queryGroupByOptions).toStrictEqual([[]]);
   expect(comp.querySortBys).toStrictEqual([]);
@@ -814,7 +861,7 @@ test('getRelativeTimeUnits', () => {
 
 test('setRelativeTimeUnits', () => {
   for (let i = 0; i < comp.relativeTimeUnits.length; i++) {
-    comp.setRelativeTimeUnits(comp.relativeTimeUnits[i].text);
+    comp.setRelativeTimeUnits(comp.relativeTimeUnits[i].title);
     expect(comp.relativeTimeUnit).toBe(comp.relativeTimeUnits[i].value);
   }
 
@@ -822,7 +869,7 @@ test('setRelativeTimeUnits', () => {
   expect(comp.relativeTimeUnit).toBe(30);
 });
 
-test('relative query string', () => {
+test('relative query string', async () => {
   comp.$route = { path: "hunt", query: { rt: 24, rtu: 'hours' } };
   comp.parseUrlParameters();
 
@@ -838,10 +885,17 @@ test('relative query string', () => {
   expect(comp.relativeTimeValue).toBe(10);
 
   comp.$route = { path: "hunt", query: { rt: 24, rtu: 'hours', t: '2021/07/03 01:01:57 PM - 2023/07/03 01:01:57 PM' } };
+  const orig = comp.setupDateRangePicker;
+  comp.setupDateRangePicker = jest.fn();
+
   comp.parseUrlParameters();
+  await new Promise(resolve => setTimeout(resolve, 20)); // Let setTimeouts resolve
 
   expect(comp.relativeTimeEnabled).toBe(false);
   expect(comp.dateRange).toBe('2021/07/03 01:01:57 PM - 2023/07/03 01:01:57 PM');
+  expect(comp.setupDateRangePicker).toHaveBeenCalled();
+
+  comp.setupDateRangePicker = orig;
 });
 
 test('autoRefresh query string', () => {
@@ -923,16 +977,21 @@ test('huntBetween', () => {
 
 test('filterVisibleFields', () => {
   comp.eventFields = {
-    ':module:dataset': 'a',
-    '::dataset': 'b',
-    ':module:': 'c',
-    'default': 'default',
+    ':module:dataset': ['a'],
+    '::dataset': ['b'],
+    ':module:': ['c'],
+    'default': ['default'],
+    ':X:Y': ['this', 'that', 'the_other'],
   };
 
-  expect(comp.filterVisibleFields('module', 'module.dataset', [])).toEqual('a');
-  expect(comp.filterVisibleFields('', 'module.dataset', [])).toEqual('b');
-  expect(comp.filterVisibleFields('module', 'otherData', [])).toEqual('c');
-  expect(comp.filterVisibleFields('A', 'B', [])).toEqual('default');
+  expect(comp.filterVisibleFields('module', 'module.dataset', [])).toEqual(['a']);
+  expect(comp.filterVisibleFields('', 'module.dataset', [])).toEqual(['b']);
+  expect(comp.filterVisibleFields('module', 'otherData', [])).toEqual(['c']);
+  expect(comp.filterVisibleFields('A', 'B', [])).toEqual(['default']);
+  // if a field begins with `so_XYZ.fields.`, the resulting fields should also begin with `so_XYZ.fields.`
+  expect(comp.filterVisibleFields('X', '', ['so_whatever.timestamp'])).toEqual(['default']);
+  expect(comp.filterVisibleFields('', 'Y', ['so_whatever.fields.timestamp'])).toEqual(['so_whatever.fields.default']);
+  expect(comp.filterVisibleFields('X', 'Y', ['so_foobar.fields.message'])).toEqual(['so_foobar.fields.this', 'so_foobar.fields.that', 'so_foobar.fields.the_other']);
 });
 
 test('handleChartClick', () => {
@@ -949,7 +1008,7 @@ test('handleChartClick', () => {
 
   expect(result).toBe(true);
   expect(comp.toggleQuickAction).toHaveBeenCalledTimes(1);
-  expect(comp.toggleQuickAction).toHaveBeenCalledWith(null, {}, 'MyField', 'value');
+  expect(comp.toggleQuickAction).toHaveBeenCalledWith(null, {}, 2, 'MyField', 'value');
 
   comp.toggleQuickAction = orig;
 });
@@ -963,7 +1022,7 @@ test('performAction', () => {
   let result = comp.performAction(undefined, action);
 
   expect(mock).toHaveBeenCalledTimes(0);
-  expect(result).toBe(false);
+  expect(result).toBe(true); // true means allow the href property to navigate
 
   action.jsCall = 'testFunc';
 
@@ -971,7 +1030,7 @@ test('performAction', () => {
 
   expect(mock).toHaveBeenCalledTimes(1);
   expect(mock).toHaveBeenCalledWith(action);
-  expect(result).toBe(true);
+  expect(result).toBe(false);
 
   delete comp.testFunc;
 });
@@ -986,7 +1045,7 @@ test('openAddToCaseDialog', () => {
   comp.openAddToCaseDialog();
 
   expect(comp.addToCaseDialogVisible).toBe(true);
-  expect(comp.mruCases).toEqual([{ value: 'New Case', text: comp.i18n.createNewCase }, { value: { id: "1", title: 'Case 1' }, text: 'Case 1' }, { value: { id: "2", title: 'Case 2' }, text: 'Case 2' }]);
+  expect(comp.mruCases).toEqual([{ value: 'New Case', title: comp.i18n.createNewCase }, { value: { id: "1", title: 'Case 1' }, title: 'Case 1' }, { value: { id: "2", title: 'Case 2' }, title: 'Case 2' }]);
   expect(comp.selectedMruCase).toBe('New Case');
   expect(comp.$refs.evidence.resetValidation).toHaveBeenCalledTimes(1);
 });
@@ -1007,13 +1066,13 @@ test('addToCase', () => {
   comp.addToCase(false);
 
   expect(window.open).toHaveBeenCalledTimes(1);
-  expect(window.open).toHaveBeenCalledWith('http://localhost/#/case/create?type=evidence&value=test', '_self');
+  expect(window.open).toHaveBeenCalledWith('https://example.com/#/case/create?type=evidence&value=test', '_self');
   expect(comp.addToCaseDialogVisible).toBe(false);
 
   comp.addToCase(true)
 
   expect(window.open).toHaveBeenCalledTimes(2);
-  expect(window.open).toHaveBeenCalledWith('http://localhost/#/case/create?type=evidence&value=test', '_blank');
+  expect(window.open).toHaveBeenCalledWith('https://example.com/#/case/create?type=evidence&value=test', '_blank');
   expect(comp.addToCaseDialogVisible).toBe(false);
 
   comp.selectedMruCase = { id: '1', title: 'Case 1' };
@@ -1021,8 +1080,1261 @@ test('addToCase', () => {
   comp.addToCase(true);
 
   expect(window.open).toHaveBeenCalledTimes(3);
-  expect(window.open).toHaveBeenCalledWith('http://localhost/#/case/1?type=evidence&value=test', '1');
+  expect(window.open).toHaveBeenCalledWith('https://example.com/#/case/1?type=evidence&value=test', '1');
   expect(comp.addToCaseDialogVisible).toBe(false);
 
   window.open = origOpen;
+});
+
+test('populateEventHeaders', () => {
+  const defs = ["x", "y"];
+  comp.populateEventHeaders(defs);
+  expect(comp.eventHeaders).toStrictEqual([{title:'x', value:'x'},{title:'y', value: 'y'}]);
+
+  comp.queryTableFields = ['b', 'c'];
+  comp.populateEventHeaders(defs);
+  expect(comp.eventHeaders).toStrictEqual([{ title: 'b', value: 'b' }, { title: 'c', value: 'c' }]);
+
+  comp.queryTableFields = ['a', 'b', 'so_detection.isEnabled', 'c'];
+  comp.populateEventHeaders(defs);
+  expect(comp.eventHeaders).toStrictEqual([{ title: 'a', value: 'a' }, { title: 'b', value: 'b' }, { title: 'Enabled', value: 'so_detection.isEnabled' }, { title: 'c', value: 'c' }]);
+
+  comp.category = 'detections';
+  comp.populateEventHeaders(defs);
+  expect(comp.eventHeaders).toStrictEqual([{ title: 'a', value: 'a' }, { title: 'b', value: 'b' }, { title: 'Enabled', value: 'so_detection.isEnabled'}, { title: 'Overrides', value: 'override_count' }, { title: 'c', value: 'c' }]);
+});
+
+test('repopulateEventHeaders', () => {
+  comp.queryTableFields = ["b", "c"];
+  comp.query = 'foo: bar| table old';
+  expect(comp.$router.length).toBe(0);
+  expect(comp.disableRouteLoad).toBe(false);
+  comp.repopulateEventHeaders();
+  expect(comp.disableRouteLoad).toBe(true);
+  expect(comp.eventHeaders).toStrictEqual([{"title":"b", "value":"b"},{"title":"c", "value": "c"}]);
+  expect(comp.query).toBe('foo: bar | table b c');
+  expect(comp.$router.length).toBe(1);
+});
+
+test('toggleColumnHeader', () => {
+  expect(comp.eventHeaders).toStrictEqual([]);
+  comp.toggleColumnHeader('x');
+  expect(comp.eventHeaders).toStrictEqual([{value:'x', title:'x'}]);
+  comp.toggleColumnHeader('x');
+  expect(comp.eventHeaders).toStrictEqual([]);
+  comp.toggleColumnHeader('x');
+  expect(comp.eventHeaders).toStrictEqual([{value:'x', title:'x'}]);
+  comp.toggleColumnHeader('y');
+  expect(comp.eventHeaders).toStrictEqual([{value:'x', title:'x'},{value:'y', title:'y'}]);
+  comp.toggleColumnHeader('x');
+  expect(comp.eventHeaders).toStrictEqual([{value:'y', title:'y'}]);
+});
+
+test('moveColumnHeader', () => {
+  comp.moveColumnHeader('x', true);
+  expect(comp.queryTableFields).toStrictEqual([]);
+
+  comp.queryTableFields = ['x', 'y', 'z'];
+  comp.moveColumnHeader('x', true);
+  expect(comp.queryTableFields).toStrictEqual(['x', 'y', 'z']);
+
+  comp.moveColumnHeader('x', false);
+  expect(comp.queryTableFields).toStrictEqual(['y', 'x', 'z']);
+
+  comp.moveColumnHeader('x', false);
+  expect(comp.queryTableFields).toStrictEqual(['y', 'z', 'x']);
+
+  // double check that repopulateEventHeaders was invoked
+  expect(comp.eventHeaders).toStrictEqual([{"title":"y", "value":"y"},{"title":"z", "value":"z"},{"title":"x", "value": "x"}]);
+
+  comp.moveColumnHeader('x', false);
+  expect(comp.queryTableFields).toStrictEqual(['y', 'z', 'x']);
+
+  comp.moveColumnHeader('x', true);
+  expect(comp.queryTableFields).toStrictEqual(['y', 'x', 'z']);
+
+  comp.moveColumnHeader('x', true);
+  expect(comp.queryTableFields).toStrictEqual(['x', 'y', 'z']);
+
+  // double check that repopulateEventHeaders was invoked
+  expect(comp.eventHeaders).toStrictEqual([{"title":"x", "value":"x"},{"title":"y", "value":"y"},{"title":"z", "value": "z"}]);
+});
+
+test('updateBulkSelector', () => {
+  const selected = { _isSelected: true };
+  const unselected = { _isSelected: false };
+
+  comp.totalEvents = 2;
+
+  expect(comp.selectedCount).toBe(0);
+  expect(comp.selectAllState).toBe(false);
+  expect(comp.selectAllIndeterminate).toBe(false);
+
+  comp.updateBulkSelector(selected);
+
+  expect(comp.selectedCount).toBe(1);
+  expect(comp.selectAllState).toBe(false);
+  expect(comp.selectAllIndeterminate).toBe(true);
+
+  comp.updateBulkSelector(selected);
+
+  expect(comp.selectedCount).toBe(2);
+  expect(comp.selectAllState).toBe(true);
+  expect(comp.selectAllIndeterminate).toBe(false);
+
+  comp.updateBulkSelector(unselected);
+
+  expect(comp.selectedCount).toBe(1);
+  expect(comp.selectAllState).toBe(false);
+  expect(comp.selectAllIndeterminate).toBe(true);
+
+  comp.updateBulkSelector(unselected);
+
+  expect(comp.selectedCount).toBe(0);
+  expect(comp.selectAllState).toBe(false);
+  expect(comp.selectAllIndeterminate).toBe(false);
+});
+
+test('toggleSelectAll', () => {
+  comp.totalEvents = 11;
+  comp.eventData = [];
+  comp.eventCurrentItems = [];
+
+  for (let i = 0; i < comp.totalEvents; i++) {
+    let obj = { _isSelected: i === 0 };
+    comp.eventData.push(obj);
+    if (comp.eventCurrentItems.length < 10) {
+      comp.eventCurrentItems.push(obj);
+    }
+  }
+
+  comp.selectAllState = 'indeterminate';
+  comp.countSelected();
+
+  expect(comp.selectedCount).toBe(1);
+  expect(comp.isPageSelected()).toBe(false);
+
+  // the comp has 11 eventData, the first 10 are in eventCurrentItems
+  // eventData[0] is the only one selected
+
+  // some selected => none selected
+  comp.toggleSelectAll();
+
+  expect(comp.selectAllState).toBe(false);
+  expect(comp.selectAllIndeterminate).toBe(false);
+  expect(comp.selectedCount).toBe(0);
+  expect(comp.eventData[0]._isSelected).toBe(false);
+  comp.countSelected();
+  expect(comp.selectedCount).toBe(0);
+  expect(comp.isPageSelected()).toBe(false);
+
+  // none selected => page selected
+  comp.toggleSelectAll();
+
+  expect(comp.selectAllState).toBe(false);
+  expect(comp.selectAllIndeterminate).toBe(true);
+  expect(comp.selectedCount).toBe(10);
+  expect(comp.eventData[10]._isSelected).toBe(false);
+  comp.countSelected();
+  expect(comp.selectedCount).toBe(10);
+  expect(comp.isPageSelected()).toBe(true);
+
+  // page selected => all selected
+  comp.selectAllEvents(true, true);
+
+  expect(comp.selectAllState).toBe(true);
+  expect(comp.selectAllIndeterminate).toBe(false);
+  expect(comp.selectedCount).toBe(11);
+  expect(comp.eventData[10]._isSelected).toBe(true);
+  comp.countSelected();
+  expect(comp.selectedCount).toBe(11);
+  expect(comp.isPageSelected()).toBe(true);
+
+  // all selected => none selected
+  comp.toggleSelectAll();
+
+  expect(comp.selectAllState).toBe(false);
+  expect(comp.selectAllIndeterminate).toBe(false);
+  expect(comp.selectedCount).toBe(0);
+  comp.countSelected();
+  expect(comp.selectedCount).toBe(0);
+  expect(comp.isPageSelected()).toBe(false);
+});
+
+test('bulkAction - delete - pre-confirm', async () => {
+  comp.selectedAction = 'delete';
+  comp.selectedCount = 2;
+
+  await comp.bulkAction();
+
+  expect(comp.showBulkDeleteConfirmDialog).toBe(true);
+  expect(comp.selectedCount).toBe(2);
+  expect(comp.$root.tip).toBe(false);
+});
+
+test('bulkAction - enable', async () => {
+  comp.selectedAction = 'enable';
+  comp.selectedCount = 2;
+  comp.selectAllIndeterminate = true;
+  comp.eventData = [{ _isSelected: true, soc_id: "1" }, { _isSelected: false, soc_id: "2" }, { _isSelected: true, soc_id: "3" }];
+  comp.hunt = jest.fn();
+  const mock = resetPapi().mockPapi('post', { data: { count: 2 }, }, null);
+
+  await comp.bulkAction(true);
+
+  expect(comp.showBulkDeleteConfirmDialog).toBe(false);
+  expect(comp.selectAllState).toBe(false);
+  expect(comp.selectedCount).toBe(0);
+  expect(mock).toHaveBeenCalledTimes(1);
+  expect(mock).toHaveBeenCalledWith('detection/bulk/enable', { ids: ["1", "3"] });
+  expect(comp.hunt).toHaveBeenCalledTimes(1);
+  expect(comp.hunt).toHaveBeenCalledWith(false);
+  expect(comp.$root.tip).toBe(true);
+  expect(comp.$root.tipMessage).toBe('Updating 2 detections. This may take awhile.');
+});
+
+test('bulkAction - disable', async () => {
+  comp.selectedAction = 'disable';
+  comp.selectedCount = 2;
+  comp.selectAllIndeterminate = true;
+  comp.eventData = [{ _isSelected: true, soc_id: "1" }, { _isSelected: false, soc_id: "2" }, { _isSelected: true, soc_id: "3" }];
+  comp.hunt = jest.fn();
+  const mock = resetPapi().mockPapi('post', { data: { count: 2 } }, null);
+
+  await comp.bulkAction(true);
+
+  expect(comp.showBulkDeleteConfirmDialog).toBe(false);
+  expect(comp.selectAllState).toBe(false);
+  expect(comp.selectedCount).toBe(0);
+  expect(mock).toHaveBeenCalledTimes(1);
+  expect(mock).toHaveBeenCalledWith('detection/bulk/disable', { ids: ["1", "3"] });
+  expect(comp.hunt).toHaveBeenCalledTimes(1);
+  expect(comp.hunt).toHaveBeenCalledWith(false);
+  expect(comp.$root.tip).toBe(true);
+  expect(comp.$root.tipMessage).toBe('Updating 2 detections. This may take awhile.');
+});
+
+test('bulkAction - delete - confirm - success', async () => {
+  comp.selectedAction = 'delete';
+  comp.showBulkDeleteConfirmDialog = true;
+  comp.selectedCount = 2;
+  comp.selectAllIndeterminate = true;
+  comp.eventData = [{ _isSelected: true, soc_id: "1" }, { _isSelected: false, soc_id: "2" }, { _isSelected: true, soc_id: "3" }];
+  comp.hunt = jest.fn();
+  const mock = resetPapi().mockPapi('post', { data: { count: 2 } }, null);
+
+  await comp.bulkAction(true);
+
+  expect(comp.showBulkDeleteConfirmDialog).toBe(false);
+  expect(comp.selectAllState).toBe(false);
+  expect(comp.selectedCount).toBe(0);
+  expect(mock).toHaveBeenCalledTimes(1);
+  expect(mock).toHaveBeenCalledWith('detection/bulk/delete', { ids: ["1", "3"] });
+  expect(comp.hunt).toHaveBeenCalledTimes(1);
+  expect(comp.hunt).toHaveBeenCalledWith(false);
+  expect(comp.$root.tip).toBe(true);
+  expect(comp.$root.tipMessage).toBe('Deleting 2 detections. This may take awhile.');
+});
+
+test('bulkAction - delete - confirm - failure', async () => {
+  comp.selectedAction = 'delete';
+  comp.showBulkDeleteConfirmDialog = true;
+  comp.selectedCount = 2;
+  comp.selectAllIndeterminate = true;
+  comp.eventData = [{ _isSelected: true, soc_id: "1" }, { _isSelected: false, soc_id: "2" }, { _isSelected: true, soc_id: "3" }];
+  const err = { response: { data: "ERROR_BULK_COMMUNITY" } }
+  const mock = resetPapi().mockPapi('post', null, err);
+
+  await comp.bulkAction(true);
+
+  expect(comp.showBulkDeleteConfirmDialog).toBe(false);
+  expect(comp.selectAllState).toBe(false);
+  expect(comp.selectAllIndeterminate).toBe(true);
+  expect(comp.selectedCount).toBe(2);
+  expect(mock).toHaveBeenCalledTimes(1);
+  expect(mock).toHaveBeenCalledWith('detection/bulk/delete', { ids: ["1", "3"] });
+  expect(comp.$root.error).toBe(true);
+  expect(comp.$root.errorMessage).toBe(comp.i18n.ERROR_BULK_COMMUNITY);
+});
+
+test('reconstructQuery', () => {
+  comp.query = "bar: 'hi' | groupby x"
+  comp.obtainQueryDetails();
+  comp.reconstructQuery();
+  comp.querySearch = "foo: 1"
+
+  // Advanced mode and showFullQuery false so should reconstruct query using new custom filter
+  comp.advanced = true;
+  comp.showFullQuery = false;
+  comp.$router.resolve = jest.fn();
+  comp.$router.resolve.mockReturnValueOnce({ fullPath: 'A' });
+  comp.$router.resolve.mockReturnValueOnce({ fullPath: 'B' });
+  comp.queryModified();
+  expect(comp.query).toBe("foo: 1 | groupby x");
+
+  expect(comp.$router.resolve).toHaveBeenCalledTimes(2);
+});
+
+test('queryModified', () => {
+  comp.$root.loading = true; // prevent any notification logic from running
+  comp.query = "bar: 'hi' | groupby x"
+  comp.obtainQueryDetails();
+  comp.querySearch = "foo: 1"
+
+  // Basic mode, should not reconstruct query
+  comp.queryModified();
+  expect(comp.query).toBe("bar: 'hi' | groupby x");
+
+  // Advanced mode, but showFullQuery is true so should not reconstruct query
+  comp.advanced = true;
+  comp.showFullQuery = true;
+  comp.queryModified();
+  expect(comp.query).toBe("bar: 'hi' | groupby x");
+
+  // Advanced mode and showFullQuery false so should reconstruct query using new custom filter
+  comp.advanced = true;
+  comp.showFullQuery = false;
+  comp.queryModified();
+  expect(comp.query).toBe("foo: 1 | groupby x");
+});
+
+test('getDisplayedQueryVar', () => {
+  expect(comp.getDisplayedQueryVar()).toBe('queryName');
+
+  comp.advanced = true;
+  comp.showFullQuery = true;
+  expect(comp.getDisplayedQueryVar()).toBe('query');
+
+  comp.advanced = true;
+  comp.showFullQuery = false;
+  expect(comp.getDisplayedQueryVar()).toBe('querySearch');
+});
+
+test('bulkUpdateReport - error', () => {
+  let stats = {
+    error: 1,
+  };
+
+  comp.bulkUpdateReport(stats)
+
+  expect(comp.$root.error).toBe(true);
+  expect(comp.$root.errorMessage).toBe('1 error(s) arose during a bulk operation. Please check the SOC logs for more information.');
+});
+
+test('bulkUpdateReport - update success', () => {
+  let stats = {
+    time: 10,
+    filtered: 0,
+    verb: 'update',
+    modified: 2,
+    total: 2,
+  };
+
+  comp.bulkUpdateReport(stats)
+
+  expect(comp.$root.info).toBe(true);
+  expect(comp.$root.infoMessage).toBe('Bulk update successfully updated 2 of 2 events. (10s)');
+});
+
+test('bulkUpdateReport - delete success', () => {
+  let stats = {
+    time: 1000,
+    filtered: 0,
+    verb: 'delete',
+    modified: 200,
+    total: 200,
+  };
+
+  comp.bulkUpdateReport(stats)
+
+  expect(comp.$root.info).toBe(true);
+  expect(comp.$root.infoMessage).toBe('Bulk delete successfully deleted 200 of 200 events. (16m 40s)');
+});
+
+test('bulkUpdateReport - filtered success', () => {
+  let stats = {
+    time: 200,
+    filtered: 1,
+    verb: 'update',
+    modified: 20,
+    total: 20,
+  };
+
+  comp.bulkUpdateReport(stats)
+
+  expect(comp.$root.warning).toBe(true);
+  expect(comp.$root.warningMessage).toBe('Bulk update successfully updated 20 of 20 events. However, the statuses of 1 of the updated detections are controlled by the current regex filter settings and were reverted. <a href="/#/config?s=soc.config.server.modules.suricataengine" data-aid="warning_bulk_update_configure_filters">Click here to configure those filters.</a> (3m 20s)'
+);
+});
+
+test('toggleQuickAction - Tune Detection, Yara => Source Tab, Other Engines => Tuning Tab', async () => {
+  comp.category = 'alerts';
+  comp.escalationMenuVisible = comp.quickActionVisible = false;
+  let event = { "rule.uuid": 'id' }
+  let det = { id: 'onionId', engine: 'elastalert' };
+
+  resetPapi().mockPapi('get', { data: det }, null);
+
+  await comp.toggleQuickAction({}, event, -1, null, null);
+  await new Promise(resolve => setTimeout(resolve, 0)); // Let promises resolve
+  expect(comp.quickActionDetId).toBe('onionId');
+  expect(comp.tuneDetectionTabTarget).toBe('tuning');
+  expect(comp.highlightedDetection)
+
+  resetPapi().mockPapi('get', { data: { id: 'onionId', engine: 'suricata' } }, null);
+  comp.highlightedAlertInfo = comp.highlightedDetection = null;
+
+  await comp.toggleQuickAction({}, event, -1, null, null);
+  await new Promise(resolve => setTimeout(resolve, 0)); // Let promises resolve
+  expect(comp.quickActionDetId).toBe('onionId');
+  expect(comp.tuneDetectionTabTarget).toBe('tuning');
+
+  resetPapi().mockPapi('get', { data: { id: 'onionId', engine: 'strelka' } }, null);
+  comp.highlightedAlertInfo = comp.highlightedDetection = null;
+
+  await comp.toggleQuickAction({}, event, -1, null, null);
+  await new Promise(resolve => setTimeout(resolve, 0)); // Let promises resolve
+  expect(comp.quickActionDetId).toBe('onionId');
+  expect(comp.tuneDetectionTabTarget).toBe('source');
+});
+
+test('buildDetectionEngineHuntQuery', () => {
+  comp.detectionEngineStatusQueries = {
+    elastalert: {
+      default: 'default',
+      IntegrityFailure: 'IntegrityFailure',
+    },
+    suricata: {
+      default: 'default',
+      Healthy: 'Healthy',
+    },
+    strelka: {
+      SyncFailure: 'SyncFailure',
+    }
+  };
+  comp.$root.statusByGridId[''] = {
+    detections: {
+      elastalert: {
+        syncFailure: 1,
+      },
+      suricata: {}, // Healthy
+      strelka: {
+        syncing: 1,
+      },
+    }
+  };
+
+  // miss, fallback to default
+  let query = comp.buildDetectionEngineHuntQuery('elastalert');
+  expect(query).toBe('default');
+
+  // hit
+  query = comp.buildDetectionEngineHuntQuery('suricata');
+  expect(query).toBe('Healthy');
+
+  // miss, no default specified, fallback to simple query
+  query = comp.buildDetectionEngineHuntQuery('strelka');
+  expect(query).toBe(`tags:so-soc AND strelka | groupby log.level | groupby event.action | groupby soc.fields.error`);
+});
+
+test('lookupFieldValue', () => {
+  const record = {
+    'so_foobar.fields.that': 'bar',
+    'this': 10,
+    'that': 'foo',
+    'so_foobar.fields.message': 100,
+  };
+
+  expect(comp.lookupFieldValue(record, 'this')).toBe(10);
+  expect(comp.lookupFieldValue(record, 'that')).toBe('foo');
+  expect(comp.lookupFieldValue(record, 'message')).toBe(100);
+});
+
+test('debounceChartResize', () => {
+  const chart = {
+    options: {
+      responsive: true
+    }
+  };
+  comp.chartResizeTracker = {};
+
+  // Initial call
+  comp.debounceChartResize(chart, { width: 100 });
+  expect(comp.chartResizeTracker[chart].length).toBe(1);
+  expect(comp.chartResizeTracker[chart][0].size.width).toBe(100);
+
+  // Second call with same size
+  comp.debounceChartResize(chart, { width: 100 });
+  expect(comp.chartResizeTracker[chart].length).toBe(2);
+
+  // Simulate flapping
+  for (let i = 0; i < 20; i++) {
+    comp.debounceChartResize(chart, { width: 100 + (i % 2 === 0 ? 1 : -1) });
+  }
+  expect(chart.options.responsive).toBe(false);
+});
+
+test('debounceChartResize - no flapping', () => {
+  const chart = {
+    options: {
+      responsive: true
+    }
+  };
+  comp.chartResizeTracker = {};
+
+  // Initial call
+  comp.debounceChartResize(chart, { width: 100 });
+  expect(comp.chartResizeTracker[chart].length).toBe(1);
+  expect(comp.chartResizeTracker[chart][0].size.width).toBe(100);
+  expect(chart.options.responsive).toBe(true);
+
+  comp.debounceChartResize(chart, { width: 101 });
+  expect(chart.options.responsive).toBe(true);
+
+  comp.debounceChartResize(chart, { width: 101 });
+  expect(chart.options.responsive).toBe(true);
+
+  comp.debounceChartResize(chart, { width: 151 });
+  expect(comp.chartResizeTracker[chart].length).toBe(4);
+  expect(chart.options.responsive).toBe(true);
+});
+
+test('sortBySeverity', () => {
+  const tests = [
+    { A: 'CRITICAL', B: 'CRITICAL', expected: 0 },
+    { A: 'critical', B: 'high', expected: 1 },
+    { A: 'critical', B: 'medium', expected: 2 },
+    { A: 'critical', B: 'low', expected: 3 },
+    { A: 'critical', B: 'informational', expected: 4 },
+    { A: 'critical', B: 'unknown', expected: 5 },
+    { A: 'critical', B: 'foobar', expected: 6 },
+
+    { A: 'high', B: 'high', expected: 0 },
+    { A: 'high', B: 'medium', expected: 1 },
+    { A: 'high', B: 'low', expected: 2 },
+    { A: 'high', B: 'informational', expected: 3 },
+    { A: 'high', B: 'unknown', expected: 4 },
+    { A: 'high', B: 'foobar', expected: 5 },
+
+    { A: 'medium', B: 'medium', expected: 0 },
+    { A: 'medium', B: 'low', expected: 1 },
+    { A: 'medium', B: 'informational', expected: 2 },
+    { A: 'medium', B: 'unknown', expected: 3 },
+    { A: 'medium', B: 'foobar', expected: 4 },
+
+    { A: 'low', B: 'low', expected: 0 },
+    { A: 'low', B: 'informational', expected: 1 },
+    { A: 'low', B: 'unknown', expected: 2},
+    { A: 'low', B: 'foobar', expected: 3 },
+
+    { A: 'unknown', B: 'unknown', expected: 0 },
+    { A: 'unknown', B: 'foobar', expected: 1 },
+
+    { A: 'foobar', B: 'asdf', expected: 0 },
+    { A: 'foobar', B: 'unknown', expected: -1 },
+    { A: 'foobar', B: 'informational', expected: -2 },
+    { A: 'foobar', B: 'low', expected: -3 },
+    { A: 'foobar', B: 'medium', expected: -4 },
+    { A: 'foobar', B: 'high', expected: -5 },
+    { A: 'foobar', B: 'critical', expected: -6 },
+
+    { A: 'critical', B: 'critical', expected: 0 },
+    { A: 'high', B: 'critical', expected: -1 },
+    { A: 'medium', B: 'critical', expected: -2 },
+    { A: 'low', B: 'critical', expected: -3 },
+    { A: 'informational', B: 'critical', expected: -4 },
+    { A: 'unknown', B: 'critical', expected: -5 },
+    { A: 'foobar', B: 'critical', expected: -6 },
+
+    { A: 'high', B: 'high', expected: 0 },
+    { A: 'medium', B: 'high', expected: -1 },
+    { A: 'low', B: 'high', expected: -2 },
+    { A: 'informational', B: 'high', expected: -3 },
+    { A: 'unknown', B: 'high', expected: -4 },
+    { A: 'foobar', B: 'high', expected: -5 },
+
+    { A: 'medium', B: 'medium', expected: 0 },
+    { A: 'low', B: 'medium', expected: -1 },
+    { A: 'informational', B: 'medium', expected: -2 },
+    { A: 'unknown', B: 'medium', expected: -3 },
+    { A: 'foobar', B: 'medium', expected: -4 },
+
+    { A: 'low', B: 'low', expected: 0 },
+    { A: 'informational', B: 'low', expected: -1 },
+    { A: 'unknown', B: 'low', expected: -2},
+    { A: 'foobar', B: 'low', expected: -3 },
+
+    { A: 'unknown', B: 'unknown', expected: 0 },
+    { A: 'foobar', B: 'unknown', expected: -1 },
+
+    { A: 'asdf', B: 'foobar', expected: 0 },
+    { A: 'unknown', B: 'foobar', expected: 1 },
+    { A: 'informational', B: 'foobar', expected: 2 },
+    { A: 'low', B: 'foobar', expected: 3 },
+    { A: 'medium', B: 'foobar', expected: 4 },
+    { A: 'high', B: 'foobar', expected: 5 },
+    { A: 'critical', B: 'foobar', expected: 6 },
+
+    { A: 6, B: 10, expected: 0 },
+  ];
+
+  tests.forEach(({ A, B, expected }) => {
+    const result = comp.sortBySeverity(A, B);
+    expect(result).toBe(expected);
+  });
+});
+
+test('countDrilldown', () => {
+  comp.filterRouteDrilldown = null;
+
+  let event = {};
+  event.count = 10;
+
+  comp.countDrilldown(event);
+  expect(comp.$router.length).toBe(0);
+  expect(comp.filterRouteDrilldown).toBe(null);
+
+  event.a = 'a';
+
+  let expected = {
+    path: '',
+    query: {
+      el: 100,
+      filterField: 'a',
+      filterMode: 'DRILLDOWN',
+      filterValue: 'a',
+      gl: 10,
+      q: '',
+      rt: 24,
+      rtu: 'hours',
+      z: ''
+    }
+  };
+
+  comp.countDrilldown(event);
+  expect(comp.$router.length).toBe(1);
+  expect(comp.filterRouteDrilldown).toEqual(expected);
+  expect(comp.$router[0]).toStrictEqual(expected);
+
+  comp.$router = [];
+  comp.filterRouteDrilldown = null;
+
+  event.b = 'b';
+
+  comp.countDrilldown(event);
+  expect(comp.$router.length).toBe(0);
+  expect(comp.filterRouteDrilldown).toBe(null);
+
+  event = {};
+  event.count = 10;
+  event["rule.name"] = 'rule_name';
+  event["event.module"] = 'event_module';
+  event["event.severity_label"] = 'event_severity_label';
+  event["rule.uuid"] = 'rule_uuid';
+
+  expected = {
+    path: "",
+    query: {
+      el: 100,
+      filterField: "rule.name",
+      filterMode: "DRILLDOWN",
+      filterValue: "rule_name",
+      gl: 10,
+      q: "",
+      rt: 24,
+      rtu: "hours",
+      z: ""
+    }
+  };
+
+  comp.countDrilldown(event);
+  expect(comp.$router.length).toBe(1);
+  expect(comp.filterRouteDrilldown).toEqual(expected);
+
+  comp.$router = [];
+  comp.filterRouteDrilldown = null;
+
+  event.a = 10;
+
+  comp.countDrilldown(event);
+  expect(comp.$router.length).toBe(0);
+  expect(comp.filterRouteDrilldown).toBe(null);
+});
+
+test('extractSocValues', () => {
+  let obj = {
+    payload: {
+      a: 1,
+      b: 2,
+      c: 3,
+    },
+    id: 'abc',
+    score: 0.947,
+    type: 'type',
+    timestamp: 'now',
+    source: 'network',
+  };
+
+  const expected = {
+    a: 1,
+    b: 2,
+    c: 3,
+    soc_id: 'abc',
+    soc_score: 0.947,
+    soc_type: 'type',
+    soc_timestamp: 'now',
+    soc_source: 'network',
+  };
+
+  let actual = comp.extractSocValues(obj);
+
+  expect(actual).toStrictEqual(expected);
+});
+
+test('getEventField', () => {
+  let event = {
+    a: 1,
+    timestamp: 'now',
+    'event_data.a': 2,
+    'event_data.b': 3,
+  };
+
+  const a = comp.getEventField(event, 'a');
+  const eventdataA = comp.getEventField(event, 'event_data.a');
+  const b = comp.getEventField(event, 'b');
+  const timestamp = comp.getEventField(event, 'timestamp');
+
+  expect(a).toBe(1);
+  expect(eventdataA).toBe(2);
+  expect(b).toBe('');
+  expect(timestamp).toBe('now');
+});
+
+test('buildQuestionRange', () => {
+  const event = {
+    '@timestamp': '2023-10-01T12:00:00Z',
+  };
+
+  comp.zone = 'America/Denver';
+
+  let range = comp.buildQuestionRange(event, '+/-30d');
+  expect(range).toBe('2023/09/01 06:00:00 AM - 2023/10/31 06:00:00 AM');
+
+  range = comp.buildQuestionRange(event, '-15m');
+  expect(range).toBe('2023/10/01 05:45:00 AM - 2023/10/01 06:00:00 AM');
+
+  range = comp.buildQuestionRange(event, '2h');
+  expect(range).toBe('2023/10/01 06:00:00 AM - 2023/10/01 08:00:00 AM');
+
+  range = comp.buildQuestionRange(event, '+/-60s');
+  expect(range).toBe('2023/10/01 05:59:00 AM - 2023/10/01 06:01:00 AM');
+
+  range = comp.buildQuestionRange(event, '');
+  expect(range).toBe('');
+
+  range = comp.buildQuestionRange(event, 'X');
+  expect(range).toBe('');
+
+  range = comp.buildQuestionRange(event, '10p');
+  expect(range).toBe('');
+});
+
+test('sortAggregateEvents', () => {
+  let tests = [
+    [
+      { expectedPos: 1, value: 2 },
+      { expectedPos: 2, value: 1 },
+      { expectedPos: 0, value: 3 },
+    ],
+    [
+      { expectedPos: 2, value: 40 },
+      { expectedPos: 3, value: 30 },
+      { expectedPos: 0, value: 60 },
+      { value: 10 },
+      { expectedPos: 1, value: 50 },
+      { expectedPos: 4, value: 20 },
+    ],
+    [
+      { expectedPos: 0, value: 0 },
+    ],
+  ];
+
+  for (let events of tests) {
+    const sortedEvents = comp.sortAggregateEvents(events);
+
+    if (events.length >= 5) {
+      expect(sortedEvents.length).toBe(5);
+    } else {
+      expect(sortedEvents.length).toBe(events.length);
+    }
+
+    for (let i = 0; i < sortedEvents.length; i++) {
+      expect(sortedEvents[i].expectedPos).toBe(i);
+    }
+  }
+});
+
+test('askQuestion', async () => {
+  comp.$root.enableReverseLookup = true;
+  comp.zone = "Etc/UTC";
+
+  let question = {};
+  let event = {
+    field: 'present',
+    func: function() {}, // not present
+  };
+
+  await comp.askQuestion(question, event);
+
+  expect(question.answers.length).toBe(1);
+  expect('field' in question.answers[0].payload).toBe(true);
+  expect('func' in question.answers[0].payload).toBe(false);
+
+  const mock1 = mockPapi('get', {
+    data: {
+      metrics: {
+        biggest: [
+          {
+            payload: {
+              name: 'metric event',
+              ip: '1.1.1.1',
+            },
+          },
+        ],
+      },
+    },
+  });
+
+  const mock2 = mockPapi('put', {
+    then: function () { },
+  });
+
+  question = {
+    range: '-30d',
+    filledOQL: 'OQL Query',
+    isAggregate: true,
+  };
+  event = {
+    'soc_timestamp': '2023-10-01T12:00:00Z',
+  };
+
+  await comp.askQuestion(question, event);
+
+  expect(question.answers.length).toBe(1);
+  expect(question.answers[0].payload.name).toBe('metric event');
+  expect('error' in question).toBe(false);
+
+  expect(mock1).toHaveBeenCalledTimes(1);
+  expect(mock1).toHaveBeenCalledWith('events/', {
+    params: {
+      query: 'OQL Query',
+      range: '2023/09/01 12:00:00 PM - 2023/10/01 12:00:00 PM',
+      format: '2006/01/02 3:04:05 PM',
+      zone: 'Etc/UTC',
+      metricLimit: 5,
+      eventLimit: 5,
+    },
+  });
+
+  expect(mock2).toHaveBeenCalledTimes(1);
+  expect(mock2).toHaveBeenCalledWith('util/reverse-lookup', ['1.1.1.1'], {params: {gridId: ''}});
+
+  resetPapi();
+  const mock3 = mockPapi('get', null, new Error('something went wrong'));
+
+  question = {
+    range: '-30d',
+    filledOQL: 'OQL Query',
+    isAggregate: false,
+  };
+  event = {
+    'soc_timestamp': '2023-10-01T12:00:00Z',
+  };
+
+  await comp.askQuestion(question, event);
+
+  expect(question.answers.length).toBe(0);
+  expect('error' in question).toBe(true);
+  expect(question.error).toBe(true);
+
+  expect(mock3).toHaveBeenCalledTimes(1);
+  expect(mock3).toHaveBeenCalledWith('events/', {
+    params: {
+      query: 'OQL Query | sortby @timestamp',
+      range: '2023/09/01 12:00:00 PM - 2023/10/01 12:00:00 PM',
+      format: '2006/01/02 3:04:05 PM',
+      zone: 'Etc/UTC',
+      metricLimit: 5,
+      eventLimit: 5,
+    },
+  });
+
+  comp.$root.enableReverseLookup = false;
+  resetPapi();
+});
+
+test('queryVariableSubstitution - handles simple variable substitution', () => {
+    const event = {
+      'host.name': 'test-host',
+      'source.ip': '192.168.1.1'
+    };
+    const playbooks = [{
+      questions: [{
+        query: 'hostname: {host.name}\nsource_ip: {source.ip}'
+      }]
+    }];
+
+    comp.queryVariableSubstitution(event, playbooks);
+    expect(playbooks[0].questions[0].filledQuery).toBe(
+      'hostname: test-host\nsource_ip: 192.168.1.1'
+    );
+  });
+
+test('queryVariableSubstitution - handles array fields with proper indentation', () => {
+    const event = {
+      'network.private_ip': ['192.168.1.1', '10.0.0.1'],
+      'network.public_ip': ['203.0.113.1']
+    };
+    const playbooks = [{
+      questions: [{
+        query: '    private_ips: {network.private_ip}\n    public_ips: {network.public_ip}'
+      }]
+    }];
+
+    comp.queryVariableSubstitution(event, playbooks);
+    expect(playbooks[0].questions[0].filledQuery).toBe(
+      '    private_ips:\n        - 192.168.1.1\n        - 10.0.0.1\n    public_ips:\n        - 203.0.113.1'
+    );
+  });
+
+test('queryVariableSubstitution - handles missing fields with NODATA', () => {
+    const event = {
+      'host.name': 'test-host'
+    };
+    const playbooks = [{
+      questions: [{
+        query: 'hostname: {host.name}\nip: {missing.field}'
+      }]
+    }];
+
+    comp.queryVariableSubstitution(event, playbooks);
+    expect(playbooks[0].questions[0].filledQuery).toBe(
+      'hostname: test-host\nip: NODATA'
+    );
+  });
+
+test('queryVariableSubstitution - handles array fields with dashes', () => {
+    const event = {
+      'network.private_ip': ['192.168.1.1', '10.0.0.1']
+    };
+    const playbooks = [{
+      questions: [{
+        query: '    - private_ips: {network.private_ip}'
+      }]
+    }];
+
+    comp.queryVariableSubstitution(event, playbooks);
+    expect(playbooks[0].questions[0].filledQuery).toBe(
+      '    - private_ips:\n        - 192.168.1.1\n        - 10.0.0.1'
+    );
+  });
+
+test('queryVariableSubstitution - handles real-world query format', () => {
+  const event = {
+    'network.private_ip': ['192.168.1.1', '10.0.0.1'],
+    'dns.query_name': 'malicious.com',
+    'network.public_ip': ['203.0.113.1'],
+    'related.ip': ['203.0.113.1', '192.168.1.2'],
+  };
+  const playbooks = [{
+    questions: [{
+      query: `aggregation: false
+logsource:
+  category: network
+  service: dns
+detection:
+    selection:
+       - src_ip: '{network.private_ip}'
+       - dns.query.name|contains: '{dns.query_name}'
+       - dns.resolved_ip: '{network.public_ip}'
+    filter:
+      dst_ip: '{related.ip}'
+    condition: selection and filter
+fields:
+    - dns.query.name
+    - dns.query.type_name
+    - dns.resolved_ip
+    - dns.response.code_name`
+    }]
+  }];
+
+  comp.queryVariableSubstitution(event, playbooks);
+  expect(playbooks[0].questions[0].filledQuery).toBe(
+    `aggregation: false
+logsource:
+  category: network
+  service: dns
+detection:
+    selection:
+       - src_ip:
+           - 192.168.1.1
+           - 10.0.0.1
+       - dns.query.name|contains: 'malicious.com'
+       - dns.resolved_ip:
+           - 203.0.113.1
+    filter:
+      dst_ip:
+          - 203.0.113.1
+          - 192.168.1.2
+    condition: selection and filter
+fields:
+    - dns.query.name
+    - dns.query.type_name
+    - dns.resolved_ip
+    - dns.response.code_name`
+  );
+});
+
+test('fetchNewestEvent', async () => {
+  const eventSearch = mockPapi('get', { data: { events: [{ id: '100', payload: { a: 1, b: "2", c: true } }] } });
+  
+  comp.filterToggles = [
+    {
+      name: 'acknowledged',
+      enabled: false,
+    },
+    {
+      name: 'escalated',
+      enabled: false,
+    },
+  ];
+  comp.dateRange = 'x - y';
+  comp.zone = 'zone';
+
+  var item = {
+    a: 1,
+    b: "2",
+    'event_data.c': true,
+    count: 10,
+  };
+
+  await comp.fetchNewestEvent(item);
+
+  expect(item.newest.soc_id).toBe('100');
+  
+  expect(eventSearch).toHaveBeenCalledTimes(1);
+  expect(eventSearch).toHaveBeenCalledWith('events/', {
+    params: {
+      query: 'a:"1" AND b:"2" AND c:"true" AND NOT event.acknowledged:true AND NOT event.escalated:true | sortby @timestamp',
+      range: 'x - y',
+      format: comp.i18n.timePickerSample,
+      zone: 'zone',
+      eventLimit: 1,
+      metricLimit: 0,
+    }
+  });
+
+  comp.filterToggles[0].enabled = true;
+  comp.filterToggles[1].enabled = true;
+  delete item.newest;
+  resetPapi();
+  const eventSearch2 = mockPapi('get', { data: { events: [{ id: '100', payload: { a: 1, b: "2", c: true } }] } });
+
+  await comp.fetchNewestEvent(item);
+
+  expect(item.newest.soc_id).toBe('100');
+  
+  expect(eventSearch2).toHaveBeenCalledTimes(1);
+  expect(eventSearch2).toHaveBeenCalledWith('events/', {
+    params: {
+      query: 'a:"1" AND b:"2" AND c:"true" AND event.acknowledged:true AND event.escalated:true | sortby @timestamp',
+      range: 'x - y',
+      format: comp.i18n.timePickerSample,
+      zone: 'zone',
+      eventLimit: 1,
+      metricLimit: 0,
+    }
+  });
+
+  resetPapi();
+});
+
+test('isComplexQuery', () => {
+  expect(comp.isComplexQuery('')).toBe(false);
+  expect(comp.isComplexQuery('*')).toBe(false);
+  expect(comp.isComplexQuery('foo:bar')).toBe(false);
+  expect(comp.isComplexQuery('foo:"bar"')).toBe(false);
+  expect(comp.isComplexQuery('foo:"bar \"car\""')).toBe(false);
+  expect(comp.isComplexQuery('foo:bar AND cat:dog')).toBe(false);
+  expect(comp.isComplexQuery('foo:bar AND qry:"(cat:dog OR fish:bowl)"')).toBe(false);
+  expect(comp.isComplexQuery('foo:bar AND qry:"this is a \"test\" (cat:dog OR fish:bowl)"')).toBe(false);
+  expect(comp.isComplexQuery('foo:bar AND (cat:dog OR fish:bowl)')).toBe(true);
+  expect(comp.isComplexQuery('foo:bar AND cat:(dog OR fish)')).toBe(true);
+  expect(comp.isComplexQuery('foo:bar AND ((cat:(dog OR fish) OR some:thing))')).toBe(true);
+});
+
+test('toggleAllQuestions', () => {
+  let event = {
+    playbooks: [
+      {
+        questions: [{}, {}, {}],
+      },
+      {
+        questions: [{}],
+      },
+      {
+        questions: [{}, {}],
+      },
+    ],
+  };
+  let index = 0;
+  let expand = true;
+  comp.expandedPlaybookQuestions = {};
+
+  // expand
+  comp.toggleAllQuestions(event, index, expand);
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [0, 1, 2, 3, 4, 5] });
+
+  // expand a different index
+  index = 1;
+  comp.toggleAllQuestions(event, index, expand);
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [0, 1, 2, 3, 4, 5], 1: [0, 1, 2, 3, 4, 5] });
+
+  // collapse non-existing index
+  index = 2;
+  expand = false;
+  comp.toggleAllQuestions(event, index, expand);
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [0, 1, 2, 3, 4, 5], 1: [0, 1, 2, 3, 4, 5], 2: [] });
+
+  // collapse existing, expanded index
+  index = 0;
+  comp.toggleAllQuestions(event, index, expand);
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [], 1: [0, 1, 2, 3, 4, 5], 2: [] });
+
+  // expand existing, partially expanded
+  comp.expandedPlaybookQuestions[0] = [2, 4];
+  expand = true;
+  comp.toggleAllQuestions(event, index, expand);
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [] });
+
+  // no changes when expanding an already expanded group, even if out of order
+  comp.toggleAllQuestions(event, index, expand);
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [] });
+
+  // no change when collapsing an already collapsed group
+  index = 2;
+  expand = false;
+  comp.toggleAllQuestions(event, index, expand);
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [] });
+
+  // handle aggregate event
+  let aggEvent = {
+    newest: event,
+  };
+
+  expand = true;
+  comp.toggleAllQuestions(aggEvent, index, expand);
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [0, 1, 2, 3, 4, 5] });
+
+  // handle event that doesn't have playbooks yet
+  const _setTimeout = global.setTimeout;
+  const setTimeoutMock = jest.fn();
+  global.setTimeout = setTimeoutMock;
+
+  let emptyEvent = {};
+  index = 0;
+  expand = true;
+
+  comp.toggleAllQuestions(emptyEvent, index, expand);
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [0, 1, 2, 3, 4, 5] });
+  expect(setTimeoutMock).toHaveBeenCalledTimes(1);
+
+  // handle agg event that doesn't have playbooks yet
+  aggEvent.newest = emptyEvent;
+  setTimeoutMock.mockClear();
+  
+  comp.toggleAllQuestions(aggEvent, index, expand);
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [0, 1, 2, 3, 4, 5] });
+  expect(setTimeoutMock).toHaveBeenCalledTimes(1);
+  
+  // handle event that's loading playbooks
+  emptyEvent.playbookLoading = true;
+  emptyEvent.playbooks = null;
+  setTimeoutMock.mockClear();
+  
+  comp.toggleAllQuestions(emptyEvent, index, expand);
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [0, 1, 2, 3, 4, 5] });
+  expect(setTimeoutMock).toHaveBeenCalledTimes(1);
+
+  // handle agg event that's loading playbooks
+  aggEvent.newest = emptyEvent;
+  setTimeoutMock.mockClear();
+  
+  comp.toggleAllQuestions(aggEvent, index, expand);
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [0, 1, 2, 3, 4, 5] });
+  expect(setTimeoutMock).toHaveBeenCalledTimes(1);
+
+  global.setTimeout = _setTimeout;
+});
+
+test('loadPlaybook', async () => {
+  let event = {
+    'rule.uuid': '123',
+  };
+
+  const playbooks = [{ id: '1', questions: [] }, { id: '2', questions: [] }];
+
+  let papiMock = mockPapi('get', { data: playbooks });
+
+  await comp.loadPlaybook(event);
+
+  expect(papiMock).toHaveBeenCalledWith('playbook/detection/123');
+  expect(event.playbooks).toStrictEqual(playbooks);
+  expect(event.playbookLoading).toBe(undefined);
+  expect(event.playbookErr).toBe(false);
+
+  resetPapi();
+  papiMock = mockPapi('get', null, 'error');
+
+  event = {
+    'rule.uuid': '456',
+  };
+
+  comp.loadPlaybook(event);
+
+  expect(papiMock).toHaveBeenCalledWith('playbook/detection/456');
+  expect(papiMock).toHaveBeenCalledTimes(1);
+  expect(event.playbookErr).toBe(true);
+  expect(event.playbooks).toBe(null);
+
+  event = {};
+
+  comp.loadPlaybook(event);
+
+  expect(event.playbookErr).toBe(true);
+
+  papiMock.mockClear();
+
+  event = { playbooks: '' };
+
+  comp.loadPlaybook(event);
+  expect(event.playbookErr).toBe(undefined);
+  expect(event.playbookLoading).toBe(undefined);
+  expect(papiMock).toHaveBeenCalledTimes(0);
+
+  event = { playbookLoading: '' };
+
+  comp.loadPlaybook(event);
+  expect(event.playbooks).toBe(undefined);
+  expect(event.playbookErr).toBe(undefined);
+  expect(papiMock).toHaveBeenCalledTimes(0);
+
+  event = { playbookErr: true };
+
+  comp.loadPlaybook(event);
+  expect(event.playbooks).toBe(undefined);
+  expect(event.playbookLoading).toBe(undefined);
+  expect(papiMock).toHaveBeenCalledTimes(0);
+
+  resetPapi();
 });

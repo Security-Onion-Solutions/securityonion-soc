@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -17,12 +17,24 @@ func TestGetString(tester *testing.T) {
 	_, err := GetString(options, "MyKey")
 	assert.Error(tester, err)
 
-	options["MyKey"] = "MyValue"
+	options["MyKey"] = "MyValue [SO_JINJA_SL_START] foo [SO_JINJA_SL_END]"
 	actual, err := GetString(options, "MyKey")
 	if assert.Nil(tester, err) {
-		assert.Equal(tester, "MyValue", actual)
+		assert.Equal(tester, "MyValue {{ foo }}", actual)
 	}
+}
 
+func TestGetStringFromArray(tester *testing.T) {
+	options := make(map[string]interface{})
+	_, err := GetString(options, "MyKey")
+	assert.Error(tester, err)
+
+	arr := []string{"MyValue", "Another"}
+	options["MyKey"] = arr
+	actual, err := GetString(options, "MyKey")
+	if assert.Nil(tester, err) {
+		assert.Equal(tester, "MyValue\nAnother", actual)
+	}
 }
 
 func TestGetStringDefault(tester *testing.T) {
@@ -79,7 +91,7 @@ func TestGetStringArray(tester *testing.T) {
 	options := make(map[string]interface{})
 	_, err := GetStringArray(options, "MyKey")
 	assert.Error(tester, err)
-	array := make([]interface{}, 2, 2)
+	array := make([]interface{}, 2)
 	array[0] = "MyValue1"
 	array[1] = "MyValue2"
 	options["MyKey"] = array
@@ -95,11 +107,22 @@ func TestGetStringArrayDefault(tester *testing.T) {
 	actual := GetStringArrayDefault(options, "MyKey", make([]string, 0, 0))
 	assert.Len(tester, actual, 0)
 
-	array := make([]interface{}, 2, 2)
+	array := make([]interface{}, 2)
 	array[0] = "MyValue1"
 	array[1] = "MyValue2"
 	options["MyKey"] = array
 	actual = GetStringArrayDefault(options, "MyKey", make([]string, 0, 0))
 	assert.Equal(tester, "MyValue1", actual[0])
 	assert.Equal(tester, "MyValue2", actual[1])
+}
+
+func TestGetStringArrayFromString(tester *testing.T) {
+	options := make(map[string]interface{})
+	_, err := GetStringArray(options, "MyKey")
+	assert.Error(tester, err)
+	options["MyKey"] = "single_line"
+	actual, err := GetStringArray(options, "MyKey")
+	if assert.Nil(tester, err) {
+		assert.Equal(tester, "single_line", actual[0])
+	}
 }

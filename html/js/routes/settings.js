@@ -1,8 +1,10 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
+
+loadPageTemplate('page-settings', 'pages/settings.html');
 
 routes.push({ path: '/settings', name: 'settings', component: {
   template: '#page-settings',
@@ -16,6 +18,7 @@ routes.push({ path: '/settings', name: 'settings', component: {
     showPassword: false,
     usingDefaults: false,
     csrfToken: null,
+    activeTab: '',
     profileForm: {
       valid: false,
       email: null,
@@ -92,6 +95,9 @@ routes.push({ path: '/settings', name: 'settings', component: {
         this.extractTotpData(response);
         this.extractWebauthnData(response);
         this.extractOidcData(response);
+        if (this.$route.query.tab) {
+          this.activeTab = this.$route.query.tab;
+        }
 
         var errorsMessage = null;
         if (response.data.ui.messages && response.data.ui.messages.length > 0) {
@@ -128,6 +134,11 @@ routes.push({ path: '/settings', name: 'settings', component: {
         this.totpForm.secret = response.data.ui.nodes.find(item => item.attributes && item.attributes.id == 'totp_secret_key' && item.attributes.text).attributes.text.text;
       }
       this.unlink_totp_available = response.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'totp_unlink') != null;
+
+      // Check if we can unlock the rest of the app
+      if (this.unlink_totp_available) {
+        this.$root.forceUserOtp = false;
+      }
     },
     extractWebauthnData(response) {
       if (response.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'webauthn_register_trigger')) {
@@ -146,7 +157,7 @@ routes.push({ path: '/settings', name: 'settings', component: {
         script.setAttribute('referrerpolicy', this.webauthnForm.script.referrerpolicy);
         script.setAttribute('integrity', this.webauthnForm.script.integrity);
         script.setAttribute('nonce', this.webauthnForm.script.nonce);
-        script.setAttribute('src', this.webauthnForm.script.src); 
+        script.setAttribute('src', this.webauthnForm.script.src);
         document.body.appendChild(script);
       }
     },

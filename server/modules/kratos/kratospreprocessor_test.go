@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -45,6 +45,21 @@ func TestPreprocess(tester *testing.T) {
       }
     ]`
 	userstore.client.MockStringResponse(kratosUsersResponseJson, 200, nil)
+	kratosUserResponseJson := `
+	{
+		"credentials": {},
+		"id": "112233",
+		"recovery_addresses": [],
+		"state": "active",
+		"traits": {
+			"email": "",
+			"firstname": "",
+			"lastname": "",
+			"note": ""
+		},
+		"verifiable_addresses": []
+	}`
+	userstore.client.MockStringResponse(kratosUserResponseJson, 200, nil)
 
 	handler := NewKratosPreprocessor(userstore)
 	request, _ := http.NewRequest("GET", "", nil)
@@ -57,10 +72,7 @@ func TestPreprocess(tester *testing.T) {
 		assert.NotNil(tester, ctx)
 	}
 
-	requestor := ctx.Value(web.ContextKeyRequestor)
-	assert.NotNil(tester, requestor)
-
-	actualId := requestor.(*model.User).Id
+	actualId := ctx.Value(web.ContextKeyRequestorId)
 	assert.Equal(tester, expectedId, actualId)
 
 	requestorId := ctx.Value(web.ContextKeyRequestorId)

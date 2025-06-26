@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -9,10 +9,11 @@ package elastic
 import (
 	"errors"
 
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 const DEFAULT_CASE_INDEX = "*:so-case"
@@ -28,6 +29,10 @@ const DEFAULT_ASYNC_THRESHOLD = 10
 const DEFAULT_INTERVALS = 25
 const DEFAULT_MAX_LOG_LENGTH = 1024
 const DEFAULT_CASE_SCHEMA_PREFIX = "so_"
+const DEFAULT_DETECTION_INDEX = "*:so-detection"
+const DEFAULT_DETECTION_AUDIT_INDEX = "*:so-detectionhistory"
+const DEFAULT_DETECTION_ASSOCIATIONS_MAX = 1000
+const DEFAULT_DETECTION_SCHEMA_PREFIX = "so_"
 
 type Elastic struct {
 	config module.ModuleConfig
@@ -67,41 +72,67 @@ func (elastic *Elastic) Init(cfg module.ModuleConfig) error {
 	intervals := module.GetIntDefault(cfg, "intervals", DEFAULT_INTERVALS)
 	maxLogLength := module.GetIntDefault(cfg, "maxLogLength", DEFAULT_MAX_LOG_LENGTH)
 	casesEnabled := module.GetBoolDefault(cfg, "casesEnabled", true)
+	lookupTunnelParent := module.GetBoolDefault(cfg, "lookupTunnelParent", true)
+	detectionsEnabled := module.GetBoolDefault(cfg, "detectionsEnabled", true)
+	maxScrollSize := module.GetIntDefault(cfg, "maxScrollSize", 10000)
 	err := elastic.store.Init(host, remoteHosts, username, password, verifyCert, timeShiftMs, defaultDurationMs,
-		esSearchOffsetMs, timeoutMs, cacheMs, index, asyncThreshold, intervals, maxLogLength)
+		esSearchOffsetMs, timeoutMs, cacheMs, index, asyncThreshold, intervals, maxLogLength, lookupTunnelParent,
+		maxScrollSize)
 	if err == nil && elastic.server != nil {
 		elastic.server.Eventstore = elastic.store
 		if casesEnabled {
 			if elastic.server.Casestore != nil {
-				err = errors.New("Multiple case modules cannot be enabled concurrently")
+				return errors.New("Multiple case modules cannot be enabled concurrently")
 			} else {
 				caseIndex := module.GetStringDefault(cfg, "caseIndex", DEFAULT_CASE_INDEX)
 				auditIndex := module.GetStringDefault(cfg, "auditIndex", DEFAULT_CASE_AUDIT_INDEX)
 				maxCaseAssociations := module.GetIntDefault(cfg, "maxCaseAssociations", DEFAULT_CASE_ASSOCIATIONS_MAX)
 				schemaPrefix := module.GetStringDefault(cfg, "schemaPrefix", DEFAULT_CASE_SCHEMA_PREFIX)
-				casestore := NewElasticCasestore(elastic.server)
-				err = casestore.Init(caseIndex, auditIndex, maxCaseAssociations, schemaPrefix, commonObservables)
-				if err == nil {
-					elastic.server.Casestore = casestore
+				casestore := NewElasticCasestore(elastic.server, elastic.store.esClient)
+				bulkIndexerWorkerCount := module.GetIntDefault(cfg, "bulkIndexerWorkerCount", -1)
+
+				err = casestore.Init(caseIndex, auditIndex, maxCaseAssociations, schemaPrefix, commonObservables, bulkIndexerWorkerCount)
+				if err != nil {
+					return err
 				}
+				elastic.server.Casestore = casestore
+			}
+		}
+		if detectionsEnabled {
+			if elastic.server.Detectionstore != nil {
+				return errors.New("Multiple detection modules cannot be enabled concurrently")
+			} else {
+				detIndex := module.GetStringDefault(cfg, "detectionIndex", DEFAULT_DETECTION_INDEX)
+				detAuditIndex := module.GetStringDefault(cfg, "detectionAuditIndex", DEFAULT_DETECTION_AUDIT_INDEX)
+				maxDetAssociations := module.GetIntDefault(cfg, "maxDetectionAssociations", DEFAULT_DETECTION_ASSOCIATIONS_MAX)
+				schemaPrefix := module.GetStringDefault(cfg, "schemaPrefix", DEFAULT_DETECTION_SCHEMA_PREFIX)
+				detstore := NewElasticDetectionstore(elastic.server, elastic.store.esClient, maxLogLength)
+				bulkIndexerWorkerCount := module.GetIntDefault(cfg, "bulkIndexerWorkerCount", -1)
+
+				err = detstore.Init(detIndex, detAuditIndex, maxDetAssociations, schemaPrefix, bulkIndexerWorkerCount)
+				if err != nil {
+					return err
+				}
+				elastic.server.Detectionstore = detstore
 			}
 		}
 	}
 
 	licensing.ValidateDataUrl(host)
 
+	// Register routes in same thread as server init to avoid multi-threading issues
+	// with Chi route registration.
+	r := chi.NewMux()
+	r.Use(web.Middleware(elastic.server.Host, false, elastic.server.Config.Subgrids))
+	RegisterJobLookupRoutes(elastic.server, elastic.store, r, "/joblookup")
+	elastic.server.Host.RegisterRouter("/joblookup", r)
+
+	RegisterJobLookupRoutes(elastic.server, elastic.store, elastic.server.ApiRouter, "/api/joblookup")
+
 	return err
 }
 
 func (elastic *Elastic) Start() error {
-	r := chi.NewMux()
-	dep := chi.NewMux()
-
-	RegisterJobLookupRoutes(elastic.server, elastic.store, r, "/joblookup")
-	RegisterJobLookupRoutes(elastic.server, elastic.store, dep, "/securityonion/joblookup") // deprecated
-
-	elastic.server.Host.RegisterRouter("/joblookup", r)
-	elastic.server.Host.RegisterRouter("/securityonion/joblookup", dep) // deprecated
 	return nil
 }
 

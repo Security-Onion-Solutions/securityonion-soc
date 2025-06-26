@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -9,7 +9,10 @@ package agent
 import (
 	"errors"
 	"io"
+	"os"
+	"os/exec"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -38,12 +41,27 @@ func NewJobManager(agent *Agent) *JobManager {
 	mgr.node.Address = agent.Config.Address
 	mgr.node.Version = agent.Version
 	mgr.node.Model = agent.Config.Model
+	mgr.node.MgmtMac = mgr.lookupMgmtMac(agent.Config.MgmtNic)
 
 	return mgr
 }
 
+func (mgr *JobManager) lookupMgmtMac(nic string) string {
+	filename := "/sys/class/net/" + nic + "/address"
+	mac, err := os.ReadFile(filename)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"mgmtNic":     nic,
+			"macFilename": filename,
+		}).WithError(err).Error("Failed to open MAC address file for NIC")
+		return "missing"
+	}
+	return strings.TrimSpace(string(mac))
+}
+
 func (mgr *JobManager) Start() {
 	mgr.running = true
+	mgr.updateOnlineTime("/nsm/pcapout")
 	for mgr.running {
 		mgr.updateDataEpoch()
 		job, err := mgr.PollPendingJobs()
@@ -98,14 +116,14 @@ func (mgr *JobManager) ProcessJob(job *model.Job) (io.ReadCloser, error) {
 	defer mgr.lock.RUnlock()
 	var reader io.ReadCloser
 	var err error
+
+	job.Size = 0
 	for _, processor := range mgr.jobProcessors {
 		reader, err = processor.ProcessJob(job, reader)
-		if err != nil {
-			log.WithError(err).WithFields(log.Fields{
-				"jobId": job.Id,
-			}).Error("Failed to process job; job processing aborted")
-			break
-		}
+	}
+	if err != nil && reader != nil {
+		// Don't fail all processors if at least one provided some data.
+		err = nil
 	}
 	return reader, err
 }
@@ -114,6 +132,28 @@ func (mgr *JobManager) CleanupJob(job *model.Job) {
 	for _, processor := range mgr.jobProcessors {
 		processor.CleanupJob(job)
 	}
+}
+
+func (mgr *JobManager) updateOnlineTime(src string) {
+	cmd := exec.Command("stat", src, "-c", "%W")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		log.WithFields(log.Fields{"statSrcFile": src, "statOutput": out}).WithError(err).Error("unable to run stat against original dir")
+		return
+	}
+	log.WithFields(log.Fields{
+		"statSrcFile":  src,
+		"statOutput":   out,
+		"statExitCode": cmd.ProcessState.ExitCode(),
+	}).Debug("ran stat against original dir")
+	secondsSinceEpochStr := strings.TrimSpace(string(out))
+	secondsSinceEpoch, parseerr := strconv.ParseInt(secondsSinceEpochStr, 10, 64)
+	if parseerr != nil {
+		log.WithField("statOutput", secondsSinceEpochStr).WithError(parseerr).Error("unable to convert stat output to number")
+		return
+	}
+	mgr.node.OnlineTime = time.Unix(int64(secondsSinceEpoch), 0)
+	log.WithField("onlineTime", mgr.node.OnlineTime).Info("Updated online time (node installation time)")
 }
 
 func (mgr *JobManager) updateDataEpoch() {

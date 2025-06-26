@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -232,4 +232,33 @@ test('shouldExtractOidcData', () => {
 
   expect(comp.oidc.length).toBe(1);
   expect(comp.oidc[0]).toBe('SSO');
+});
+
+test('shouldDetectOIDCExistingLocalAccount', async () => {
+  const identifier = {attributes: {name: 'csrf_token', value: 'some_identifier'}};
+  const oidcMethod = {group: 'oidc', type: 'input', attributes: {value: 'SSO'}};
+  const nodes = [identifier, oidcMethod];
+  
+  const msg = {text: "that email is already used by another account.", type: 'info'};
+  const messages = [msg];
+  const response = {data: {ui: {messages: messages, nodes: nodes}}};
+
+  // Mock MOTD response
+  const _createApi = comp.$root.createApi;
+  const createApiMock = jest.fn().mockReturnValue({
+    get: () => { return { data: '' } },
+  });
+  
+  // Mock Auth response
+  const authApiMock = mockAuthApi("get", response);
+  comp.$root.createApi = createApiMock;
+
+  await comp.loadData();
+
+  expect(authApiMock).toHaveBeenCalledTimes(1);
+  expect(authApiMock).toHaveBeenCalledWith('login/flows?id=null');
+  expect(createApiMock).toHaveBeenCalledTimes(1);
+  expect(comp.$root.warningMessage).toBe(comp.i18n.oidcEmailExists);
+
+  comp.$root.createApi = _createApi;
 });

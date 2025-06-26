@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -20,3 +20,5 @@ type Userstore interface {
 	GetUsers(ctx context.Context) ([]*model.User, error)
 	GetUserById(ctx context.Context, id string) (*model.User, error)
 }
+
+//go:generate mockgen -destination mock/mock_userstore.go -package mock . Userstore

@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -18,21 +18,22 @@ import (
 	"time"
 
 	"github.com/apex/log"
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
-	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/rbac"
 )
 
-const GENERIC_ERROR_MESSAGE = "The request could not be processed. Contact a server admin for assistance with reviewing error details in SOC logs."
+const GENERIC_ERROR_MESSAGE = "The request could not be processed."
 
 type ContextKey string
 
 const (
-	ContextKeyRequestId    ContextKey = "ContextKeyRequestId"    // string
-	ContextKeyRequestorId  ContextKey = "ContextKeyRequestorId"  // string
-	ContextKeyRequestor    ContextKey = "ContextKeyRequestor"    // *model.User
-	ContextKeyRequestStart ContextKey = "ContextKeyRequestStart" // time.Time
+	ContextKeyRequestId         ContextKey = "ContextKeyRequestId"         // string
+	ContextKeyRequestorId       ContextKey = "ContextKeyRequestorId"       // string
+	ContextKeyRunAsUsername     ContextKey = "ContextKeyRunAsUsername"     // string
+	ContextKeyRequestStart      ContextKey = "ContextKeyRequestStart"      // time.Time
+	ContextKeyRequestCSRFExempt ContextKey = "ContextKeyRequestCSRFExempt" // bool
+	ContextKeySubgridResponses  ContextKey = "ContextKeySubgridResponses"  // []*http.Response
 )
 
 type HostHandler interface {
@@ -56,10 +57,9 @@ type Host struct {
 	lock                    sync.Mutex
 	Authorizer              rbac.Authorizer
 	SrvKey                  []byte
-	SrvExemptId             string
 }
 
-func NewHost(address string, htmlDir string, timeoutMs int, version string, srvKey []byte, srvExemptId string) *Host {
+func NewHost(address string, htmlDir string, timeoutMs int, version string, srvKey []byte) *Host {
 	host := &Host{
 		preprocessors:           make([]Preprocessor, 0),
 		running:                 false,
@@ -68,7 +68,6 @@ func NewHost(address string, htmlDir string, timeoutMs int, version string, srvK
 		idleConnectionTimeoutMs: timeoutMs,
 		Version:                 version,
 		SrvKey:                  srvKey,
-		SrvExemptId:             srvExemptId,
 	}
 	err := host.AddPreprocessor(NewBasePreprocessor())
 	if err != nil {
@@ -127,11 +126,11 @@ func (host *Host) IsRunning() bool {
 	return host.running
 }
 
-func (host *Host) AddConnection(user *model.User, wsConn *websocket.Conn, ip string) *Connection {
+func (host *Host) AddConnection(userId string, wsConn *websocket.Conn, ip string) *Connection {
 	host.lock.Lock()
 	defer host.lock.Unlock()
 
-	conn := NewConnection(user, wsConn, ip)
+	conn := NewConnection(userId, wsConn, ip)
 	host.connections = append(host.connections, conn)
 	log.WithField("Connections", len(host.connections)).Debug("Added WebSocket connection")
 	return conn
@@ -158,7 +157,7 @@ func (host *Host) Broadcast(kind string, reqPermission string, obj interface{}) 
 		Object: obj,
 	}
 	for _, connection := range host.connections {
-		if err := host.Authorizer.CheckUserOperationAuthorized(connection.user, "read", reqPermission); err == nil {
+		if err := host.Authorizer.CheckUserOperationAuthorized(connection.userId, "read", reqPermission); err == nil {
 			log.WithFields(log.Fields{
 				"messageKind": kind,
 				// "remoteAddr": connection.websocket.RemoteAddr().String(),
@@ -180,7 +179,7 @@ func (host *Host) pruneConnections() {
 
 	activeConnections := make([]*Connection, 0)
 	for _, connection := range host.connections {
-		durationSinceLastPing := int(time.Now().Sub(connection.lastPingTime).Milliseconds())
+		durationSinceLastPing := int(time.Since(connection.lastPingTime).Milliseconds())
 		if durationSinceLastPing < host.idleConnectionTimeoutMs {
 			activeConnections = append(activeConnections, connection)
 		} else if connection.websocket != nil {

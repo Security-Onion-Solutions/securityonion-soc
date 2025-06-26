@@ -1,3 +1,8 @@
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
+// https://securityonion.net/license; you may not use this file except in compliance with the
+// Elastic License 2.0.
+
 package agent
 
 import (
@@ -5,6 +10,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -45,10 +51,14 @@ func (jp *idJobProcessor) GetDataEpoch() time.Time {
 }
 
 // panicProcessor is a JobProcessor that always returns an error.
-type panicProcessor struct{}
+type panicProcessor struct {
+	processCount int
+	errorString  string
+}
 
 func (jp *panicProcessor) ProcessJob(job *model.Job, reader io.ReadCloser) (io.ReadCloser, error) {
-	return reader, errors.New("panic")
+	jp.processCount++
+	return reader, errors.New(jp.errorString)
 }
 
 func (jp *panicProcessor) CleanupJob(*model.Job) {}
@@ -63,7 +73,7 @@ func TestProcessJob(t *testing.T) {
 	jm := &JobManager{}
 
 	jm.AddJobProcessor(&idJobProcessor{})
-	jm.AddJobProcessor(&panicProcessor{})
+	jm.AddJobProcessor(&panicProcessor{errorString: "panic"})
 
 	// prep model
 	job := &model.Job{
@@ -78,7 +88,27 @@ func TestProcessJob(t *testing.T) {
 	assert.NoError(t, rerr)
 
 	assert.Equal(t, "101", string(data))
-	assert.ErrorContains(t, err, "panic")
+	assert.Nil(t, err)
+}
+
+func TestProcessJobContinuesIfNoDataAvailable(t *testing.T) {
+	// prep test object
+	jm := &JobManager{}
+
+	proc := panicProcessor{errorString: "No data available"}
+	jm.AddJobProcessor(&proc)
+	jm.AddJobProcessor(&proc)
+
+	// prep model
+	job := &model.Job{
+		Id: 101,
+	}
+
+	// test
+	_, err := jm.ProcessJob(job)
+
+	assert.Equal(t, 2, proc.processCount)
+	assert.ErrorContains(t, err, "No data available")
 }
 
 func TestUpdateDataEpoch(t *testing.T) {
@@ -97,6 +127,23 @@ func TestUpdateDataEpoch(t *testing.T) {
 
 	// verify
 	assert.Equal(t, jm.node.EpochTime, panicProc.GetDataEpoch())
+}
+
+func TestOnlineTime(t *testing.T) {
+	t.Skip("Skipping due to docker build base image not having the correct version of stat tool")
+	// prep test object
+	jm := &JobManager{
+		node: &model.Node{},
+	}
+
+	tmpFile, _ := os.CreateTemp("", "jobmanager_online_time.tmp")
+
+	// test
+	jm.updateOnlineTime(tmpFile.Name())
+	defer os.Remove(tmpFile.Name())
+
+	// verify
+	assert.GreaterOrEqual(t, jm.node.OnlineTime, time.Now().Add(time.Second*(-2)))
 }
 
 type ClientAuthMock struct{}
@@ -131,4 +178,11 @@ func TestNoJobReady(t *testing.T) {
 	// verify
 	assert.NoError(t, err)
 	assert.Nil(t, job)
+}
+
+func TestLookupMgmtMac(t *testing.T) {
+	nic := "xyz"
+	jm := &JobManager{}
+	mac := jm.lookupMgmtMac(nic)
+	assert.Equal(t, "missing", mac)
 }

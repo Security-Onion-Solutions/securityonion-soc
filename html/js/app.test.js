@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -20,6 +20,12 @@ test('base64encode', () => {
   expect(app.base64encode('hello')).toBe('aGVsbG8=');
 });
 
+test('processAncestors', () => {
+  expect(app.processAncestors([])).toBe('');
+  expect(app.processAncestors(['asdf1'])).toBe('asdf1');
+  expect(app.processAncestors(['asdf1','asdf2','asdf3'])).toBe('asdf1\" OR process.entity_id:\"asdf2\" OR process.entity_id:\"asdf3');
+});
+
 test('replaceActionVar', () => {
   expect(app.replaceActionVar('test here', 'foo', 'bar', true)).toBe('test here');
   expect(app.replaceActionVar('test {bar} here', 'foo', 'bar', true)).toBe('test {bar} here');
@@ -30,13 +36,11 @@ test('replaceActionVar', () => {
   expect(app.replaceActionVar('test {foo|escape} here', 'foo', 'sand "bar\\bad"', true)).toBe('test sand%20%5C%22bar%5C%5Cbad%5C%22 here');
   expect(app.replaceActionVar('test {foo|escape|base64} here', 'foo', 'sand "bar\\bad"', false)).toBe('test c2FuZCBcImJhclxcYmFkXCI= here');
   expect(app.replaceActionVar('test {foo|escape|base64} here', 'foo', 'sand "bar\\bad"', true)).toBe('test c2FuZCBcImJhclxcYmFkXCI%3D here');
+  expect(app.replaceActionVar('test {foo|processAncestors} here', 'foo', '', true)).toBe('test  here');
+  expect(app.replaceActionVar('test {foo|processAncestors} here', 'foo', 'bar', true)).toBe('test bar here');
+  expect(app.replaceActionVar('test {foo|processAncestors} here', 'foo', ['asdf1','asdf2','asdf3'], true)).toBe('test asdf1%22%20OR%20process.entity_id%3A%22asdf2%22%20OR%20process.entity_id%3A%22asdf3 here');
   expect(app.replaceActionVar('test {foo} here', 'foo', null, true)).toBe('test {foo} here');
   expect(app.replaceActionVar('test {foo} here', 'foo', undefined, true)).toBe('test {foo} here');
-});
-
-test('base64encode', () => {
-  expect(app.base64encode('')).toBe('');
-  expect(app.base64encode('hello')).toBe('aGVsbG8=');
 });
 
 test('formatMarkdown', () => {
@@ -53,6 +57,25 @@ test('formatHours', () => {
   expect(app.formatHours(1)).toBe("1.00");
   expect(app.formatHours(1.0)).toBe("1.00");
   expect(app.formatHours(10.14)).toBe("10.14");
+});
+
+test('formatDecimals', () => {
+  expect(app.formatDecimal1(null)).toBe("0.0");
+  expect(app.formatDecimal2(null)).toBe("0.00");
+  expect(app.formatDecimal1(undefined)).toBe("0.0");
+  expect(app.formatDecimal2(undefined)).toBe("0.00");
+  expect(app.formatDecimal1("")).toBe("0.0");
+  expect(app.formatDecimal2("")).toBe("0.00");
+  expect(app.formatDecimal1(0)).toBe("0.0");
+  expect(app.formatDecimal2(0)).toBe("0.00");
+  expect(app.formatDecimal1(10.1445)).toBe("10.1");
+  expect(app.formatDecimal2(10.1445)).toBe("10.14");
+});
+
+test('formatCount', () => {
+  expect(app.formatCount(null)).toBe("0");
+  expect(app.formatCount(123)).toBe("123");
+  expect(app.formatCount(1234)).toBe("1,234");
 });
 
 test('formatStringArray', () => {
@@ -91,7 +114,7 @@ test('populateUserDetailsNonEmptyNoUser', async () => {
   app.users = [{id:'111',email:'hi@there.net'}];
   app.usersLoadedTime = new Date().time;
   await app.populateUserDetails(obj, "userId", "owner")
-  expect(obj.owner).toBe(undefined);
+  expect(obj.owner).toBe("123");
 });
 
 test('populateUserDetails', async () => {
@@ -100,6 +123,28 @@ test('populateUserDetails', async () => {
   app.usersLoadedTime = new Date().time;
   await app.populateUserDetails(obj, "userId", "owner")
   expect(obj.owner).toBe('hi@there.net');
+
+  delete obj.owner;
+  obj.owner = global.Vue.ref(null);
+
+  await app.populateUserDetails(obj, "userId", "owner")
+  expect(obj.owner.value).toBe('hi@there.net');
+});
+
+test('populateUserDetailsSystem', async () => {
+  const obj = {userId:'00000000-0000-0000-0000-000000000000'};
+  app.users = [{id:'123',email:'hi@there.net'}];
+  app.usersLoadedTime = new Date().time;
+  await app.populateUserDetails(obj, "userId", "owner")
+  expect(obj.owner).toBe(app.i18n.systemUser);
+});
+
+test('populateUserDetailsAgent', async () => {
+  const obj = {userId:'agent'};
+  app.users = [{id:'123',email:'hi@there.net'}];
+  app.usersLoadedTime = new Date().time;
+  await app.populateUserDetails(obj, "userId", "owner")
+  expect(obj.owner).toBe(app.i18n.systemUser);
 });
 
 test('isUserAdmin', async () => {
@@ -124,6 +169,8 @@ test('isMyUser', () => {
 });
 
 test('loadServerSettings', async () => {
+  app.subgrids = [];
+  app.gridInfo = {};
   const fakeInfo = {
     srvToken: 'xyz',
     version: 'myVersion',
@@ -135,26 +182,26 @@ test('loadServerSettings', async () => {
       tipTimeoutMs: 222,
       tools: [{"name": "tool1"},{"name": "tool2"}],
       inactiveTools: ['tool2'],
-      casesEnabled: true
+      casesEnabled: true,
+      detectionsEnabled: true,
     },
     elasticVersion: 'myElasticVersion',
-    wazuhVersion: 'myWazuhVersion',
     timezones: ['UTC'],
     userId: 'myUserId'
   };
 
   expect(app.casesEnabled).toBe(false);
+  expect(app.detectionsEnabled).toBe(false);
   const getElementByIdMock = global.document.getElementById = jest.fn().mockReturnValueOnce(true);
   resetPapi();
   const mock = mockPapi("get", {data: fakeInfo});
   const showErrorMock = mockShowError(true);
   await app.loadServerSettings();
-  expect(mock).toHaveBeenCalledWith('info');
+  expect(mock).toHaveBeenCalledWith('info', {"params": {"gridId": ""}});
   expect(showErrorMock).toHaveBeenCalledTimes(0);
   expect(app.version).toBe('myVersion');
   expect(app.license).toBe('myLicense');
   expect(app.elasticVersion).toBe('myElasticVersion');
-  expect(app.wazuhVersion).toBe('myWazuhVersion');
   expect(app.timezones[0]).toBe('UTC');
   expect(app.wsConnectionTimeout).toBe(456);
   expect(app.connectionTimeout).toBe(123);
@@ -165,7 +212,9 @@ test('loadServerSettings', async () => {
   expect(app.tools[1].name).toBe('tool2');
   expect(app.tools[1].enabled).toBe(false);
   expect(app.casesEnabled).toBe(true);
+  expect(app.detectionsEnabled).toBe(true);
   expect(app.papi.defaults.headers.common['X-Srv-Token']).toBe('xyz');
+  expect(app.gridInfo['']).toBe(fakeInfo);
 });
 
 test('localizeMessage', () => {
@@ -349,7 +398,7 @@ test('colorLicenseStatus', () => {
   expect(app.colorLicenseStatus('foo')).toBe('info');
   expect(app.colorLicenseStatus(null)).toBe('info');
   expect(app.colorLicenseStatus("active")).toBe('success');
-  expect(app.colorLicenseStatus("exceeded")).toBe('warning');
+  expect(app.colorLicenseStatus("exceeded")).toBe('error');
   expect(app.colorLicenseStatus("expired")).toBe('warning');
   expect(app.colorLicenseStatus("invalid")).toBe('error');
   expect(app.colorLicenseStatus("pending")).toBe('warning');
@@ -444,4 +493,545 @@ test('checkForUnauthorized', () => {
   testCheckForUnauthorized('/foo/', {}, null, false);
   testCheckForUnauthorized('/login/banner.md', {}, '/blah', false);
   testCheckForUnauthorized('/auth/self-service/login/browser', {}, '/blah', true);
+});
+
+test('correctCasing', () => {
+  expect(app.correctCasing('')).toBe('');
+  expect(app.correctCasing('foo')).toBe('foo');
+  expect(app.correctCasing('FOO')).toBe('FOO');
+  expect(app.correctCasing('yara')).toBe('YARA');
+  expect(app.correctCasing('Yara')).toBe('YARA');
+  expect(app.correctCasing('yArA')).toBe('YARA');
+});
+
+function verifyEngineFailureStates(gridId, e1f1, e1f2, e1f3, e2f1, e2f2, e2f3, e3f1, e3f2, e3f3, expected) {
+  app.statusByGridId = {};
+  app.statusByGridId[gridId] = { detections: {
+    elastalert: {
+      integrityFailure: e1f1,
+      syncFailure: e1f2,
+      migrationFailure: e1f3,
+    },
+    strelka: {
+      integrityFailure: e2f1,
+      syncFailure: e2f2,
+      migrationFailure: e2f3,
+    },
+    suricata: {
+      integrityFailure: e3f1,
+      syncFailure: e3f2,
+      migrationFailure: e3f3,
+    },
+  }}
+  expect(app.isDetectionsUnhealthy()).toBe(expected);
+}
+
+test('isDetectionsUnhealthy', () => {
+  // Unhealthy
+  verifyEngineFailureStates('', true, false, false, true, false, false, true, false, false, true);
+  verifyEngineFailureStates('', false, true, false, false, true, false, false, true, false, true);
+  verifyEngineFailureStates('', false, false, true, false, false, true, false, false, true, true);
+  verifyEngineFailureStates('', true, true, false, true, true, false, true, true, false, true);
+  verifyEngineFailureStates('', false, true, true, false, true, true, false, true, true, true);
+  verifyEngineFailureStates('', true, false, true, true, false, true, true, false, true, true);
+  verifyEngineFailureStates('', true, true, true, true, true, true, true, true, true, true);
+  verifyEngineFailureStates('', true, true, true, true, true, true, true, true, true, true);
+  verifyEngineFailureStates('', false, false, true, true, true, true, true, true, true, true);
+  verifyEngineFailureStates('', false, false, false, true, true, true, true, true, true, true);
+  verifyEngineFailureStates('', false, false, false, false, true, true, true, true, true, true);
+  verifyEngineFailureStates('', false, false, false, false, false, true, true, true, true, true);
+  verifyEngineFailureStates('', false, false, false, false, false, false, true, true, true, true);
+  verifyEngineFailureStates('', false, false, false, false, false, false, false, true, true, true);
+  verifyEngineFailureStates('', false, false, false, false, false, false, false, false, true, true);
+
+  // Remote grid unhealthy
+  verifyEngineFailureStates('remote', false, false, false, false, false, false, false, false, true, true);
+
+  // Healthy
+  verifyEngineFailureStates('', false, false, false, false, false, false, false, false, false, false);
+
+  // Neither Unhealthy nor Healthy
+  app.statusByGridId[''].detections.elastalert.migrating = true
+  app.statusByGridId[''].detections.strelka.importing = true
+  app.statusByGridId[''].detections.suricata.syncing = true
+  expect(app.isDetectionsUnhealthy()).toBe(false);
+});
+
+test('isDetectionsUpdating', () => {
+  app.statusByGridId = {};
+  // Unhealthy
+  app.statusByGridId[''] = { detections: {
+    elastalert: {
+      integrityFailure: true,
+    },
+    strelka: {
+      integrityFailure: true,
+    },
+    suricata: {
+      integrityFailure: true,
+    },
+  }};
+  expect(app.isDetectionsUpdating()).toBe(false);
+
+  // All healthy
+  app.statusByGridId[''].detections.elastalert.integrityFailure = false;
+  expect(app.isDetectionsUpdating()).toBe(false);
+  app.statusByGridId[''].detections.strelka.integrityFailure = false;
+  expect(app.isDetectionsUpdating()).toBe(false);
+  app.statusByGridId[''].detections.suricata.integrityFailure = false;
+  expect(app.isDetectionsUpdating()).toBe(false);
+
+  // Suricata migrating
+  app.statusByGridId[''].detections.suricata.migrating = true;
+  expect(app.isDetectionsUpdating()).toBe(true);
+  app.statusByGridId[''].detections.suricata.migrating = false;
+
+  // Strelka migrating
+  app.statusByGridId[''].detections.strelka.migrating = true;
+  expect(app.isDetectionsUpdating()).toBe(true);
+  app.statusByGridId[''].detections.strelka.migrating = false;
+
+  // ElastAlert migrating
+  app.statusByGridId[''].detections.elastalert.migrating = true;
+  expect(app.isDetectionsUpdating()).toBe(true);
+  app.statusByGridId[''].detections.elastalert.migrating = false;
+
+  // Suricata importing
+  app.statusByGridId[''].detections.suricata.importing = true;
+  expect(app.isDetectionsUpdating()).toBe(true);
+  app.statusByGridId[''].detections.suricata.importing = false;
+
+  // Strelka importing
+  app.statusByGridId[''].detections.strelka.importing = true;
+  expect(app.isDetectionsUpdating()).toBe(true);
+  app.statusByGridId[''].detections.strelka.importing = false;
+
+  // ElastAlert importing
+  app.statusByGridId[''].detections.elastalert.importing = true;
+  expect(app.isDetectionsUpdating()).toBe(true);
+  app.statusByGridId[''].detections.elastalert.importing = false;
+
+  // Suricata syncing
+  app.statusByGridId[''].detections.suricata.syncing = true;
+  expect(app.isDetectionsUpdating()).toBe(true);
+  app.statusByGridId[''].detections.suricata.syncing = false;
+
+  // Strelka syncing
+  app.statusByGridId[''].detections.strelka.syncing = true;
+  expect(app.isDetectionsUpdating()).toBe(true);
+  app.statusByGridId[''].detections.strelka.syncing = false;
+
+  // ElastAlert syncing
+  app.statusByGridId[''].detections.elastalert.syncing = true;
+  expect(app.isDetectionsUpdating()).toBe(true);
+  app.statusByGridId[''].detections.elastalert.syncing = false;
+});
+
+test('getDetectionEngines', () => {
+  expect(app.getDetectionEngines()).toStrictEqual(['elastalert', 'strelka', 'suricata']);
+});
+
+test('getDetectionEngineStatusClass', () => {
+  expect(app.getDetectionEngineStatusClass('unknown')).toBe('text-normal');
+  app.statusByGridId[''] = { detections: { strelka: { syncing: true }}};
+  expect(app.getDetectionEngineStatusClass('strelka')).toBe('text-normal');
+  app.statusByGridId[''] = { detections: { strelka: { migrationFailure: true, syncFailure: true }}};
+  expect(app.getDetectionEngineStatusClass('strelka')).toBe('text-warning');
+  app.statusByGridId[''] = { detections: { strelka: { syncFailure: true, integrityFailure: true }}};
+  expect(app.getDetectionEngineStatusClass('strelka')).toBe('text-warning');
+  app.statusByGridId[''] = { detections: { strelka: { integrityFailure: true, syncing: true }}};
+  expect(app.getDetectionEngineStatusClass('strelka')).toBe('text-warning');
+  app.statusByGridId[''] = { detections: { strelka: { migrating: true, integrityFailure: true }}};
+  expect(app.getDetectionEngineStatusClass('strelka')).toBe('text-normal');
+  app.statusByGridId[''] = { detections: { strelka: { importing: true, migrating: true }}};
+  expect(app.getDetectionEngineStatusClass('strelka')).toBe('text-normal');
+  app.statusByGridId[''] = { detections: { strelka: { importing: false }}};
+  expect(app.getDetectionEngineStatusClass('strelka')).toBe('text-success');
+});
+
+test('getDetectionEngineStatus', () => {
+  expect(app.getDetectionEngineStatus('unknown')).toBe('Unknown');
+  app.statusByGridId[''] = { detections: { strelka: { syncing: true }}};
+  expect(app.getDetectionEngineStatus('strelka')).toBe('Syncing');
+  app.statusByGridId[''] = { detections: { strelka: { migrationFailure: true, syncFailure: true }}};
+  expect(app.getDetectionEngineStatus('strelka')).toBe('MigrationFailure');
+  app.statusByGridId[''] = { detections: { strelka: { syncFailure: true, integrityFailure: true }}};
+  expect(app.getDetectionEngineStatus('strelka')).toBe('IntegrityFailure');
+  app.statusByGridId[''] = { detections: { strelka: { syncFailure: true, integrityFailure: false }}};
+  expect(app.getDetectionEngineStatus('strelka')).toBe('SyncFailure');
+  app.statusByGridId[''] = { detections: { strelka: { migrating: true, importing: true, syncing: true, integrityFailure: true }}};
+  expect(app.getDetectionEngineStatus('strelka')).toBe('Migrating');
+  app.statusByGridId[''] = { detections: { strelka: { importing: true, migrating: false, syncing: true }}};
+  expect(app.getDetectionEngineStatus('strelka')).toBe('Importing');
+  app.statusByGridId[''] = { detections: { strelka: { importing: true, migrating: false, syncing: false }}};
+  expect(app.getDetectionEngineStatus('strelka')).toBe('ImportPending');
+  app.statusByGridId[''] = { detections: { strelka: { importing: false }}};
+  expect(app.getDetectionEngineStatus('strelka')).toBe('Healthy');
+});
+
+test('isAttentionNeeded', () => {
+  app.connected = true;
+  app.statusByGridId = {};
+  app.statusByGridId[''] = {
+    detections: {
+      elastalert: {
+        integrityFailure: false,
+        syncFailure: false,
+        migrationFailure: false,
+      },
+      strelka: {
+        integrityFailure: false,
+        syncFailure: false,
+        migrationFailure: false,
+      },
+      suricata: {
+        integrityFailure: false,
+        syncFailure: false,
+        migrationFailure: false,
+      },
+    },
+    alerts: {
+      newCount: 0,
+    },
+    grid: {
+      unhealthyNodeCount: 0,
+    },
+  };
+
+  expect(app.isAttentionNeeded()).toBe(false);
+
+  // Attention when unable to connect to server
+  app.connected = false;
+  expect(app.isAttentionNeeded()).toBe(true);
+  app.connected = true;
+
+  // Attention when unhealthy grid count > 0
+  app.statusByGridId[''].grid.unhealthyNodeCount = 1
+  expect(app.isAttentionNeeded()).toBe(true);
+  app.statusByGridId[''].grid.unhealthyNodeCount = 0
+
+  // Attention when new alert count > 0
+  app.statusByGridId[''].alerts.newCount = 1
+  expect(app.isAttentionNeeded()).toBe(true);
+  app.statusByGridId[''].alerts.newCount = 0
+
+  // Attention when detections engines unhealthy
+  app.statusByGridId[''].detections.elastalert.syncFailure = true;
+  expect(app.isAttentionNeeded()).toBe(true);
+  app.statusByGridId[''].detections.elastalert.syncFailure = false;
+
+  // Back to normal
+  expect(app.isAttentionNeeded()).toBe(false);
+})
+
+test('dateAwareSort', () => {
+  let items = [
+    { string: 'May 28, 2024 2:00:00 PM', createTime: 'May 28, 2024 2:00:00 PM', dateOrder: 4 },
+    { string: 'May 28, 2024 10:00:00 AM', createTime: 'May 28, 2024 10:00:00 AM', dateOrder: 0 },
+    { string: 'May 28, 2024 11:00:00 AM', createTime: 'May 28, 2024 11:00:00 AM', dateOrder: 1 },
+    { string: 'May 28, 2024 1:00:00 PM', createTime: 'May 28, 2024 1:00:00 PM', dateOrder: 3 },
+    { string: 'May 28, 2024 12:00:00 PM', createTime: 'May 28, 2024 12:00:00 PM', dateOrder: 2 },
+  ];
+
+  const byCreateTime = app.dateAwareCompare('createTime');
+
+  items.sort(byCreateTime);
+
+  for (let i = 0; i < items.length; i++) {
+    expect(items[i].dateOrder).toBe(i);
+  }
+
+  items.sort((a, b) => byCreateTime(b, a));
+
+  for (let i = 0; i < items.length; i++) {
+    expect(items[i].dateOrder).toBe(items.length - 1 - i);
+  }
+});
+
+test('licenseExpiringSoon', () => {
+  const date = new Date();
+  app.licenseKey = { expiration: date.toISOString() };
+  expect(app.isLicenseExpiringSoon()).toBe(true);
+
+  app.licenseKey = { expiration: "2024-01-01T01:01:01Z" };
+  expect(app.isLicenseExpiringSoon()).toBe(true);
+
+  app.licenseKey = { expiration: "2054-01-01T01:01:01Z" };
+  expect(app.isLicenseExpiringSoon()).toBe(false);
+});
+
+test('checkUserSecuritySettings', () => {
+  app.securitySettingsAlreadyChecked = false;
+  app.forceUserOtp = false;
+  const data = { forceUserOtp: false };
+  app.checkUserSecuritySettings(data);
+  expect(app.securitySettingsAlreadyChecked).toBe(true);
+  expect(app.forceUserOtp).toBe(false);
+  expect(location.hash).toBe("");
+
+  data.forceUserOtp = true;
+  app.checkUserSecuritySettings(data);
+  expect(app.securitySettingsAlreadyChecked).toBe(true);
+  expect(app.forceUserOtp).toBe(false);
+  expect(location.hash).toBe("");
+
+  app.securitySettingsAlreadyChecked = false;
+  app.checkUserSecuritySettings(data);
+  expect(app.securitySettingsAlreadyChecked).toBe(false);
+  expect(app.forceUserOtp).toBe(true);
+  expect(location.hash).toBe("#/settings?tab=security");
+
+  location.hash = "#/settings?alreadyhere";
+  app.securitySettingsAlreadyChecked = false;
+  app.checkUserSecuritySettings(data);
+  expect(app.securitySettingsAlreadyChecked).toBe(false);
+  expect(app.forceUserOtp).toBe(true);
+  expect(location.hash).toBe("#/settings?alreadyhere");
+});
+
+test('showWarning', () => {
+  var longString = 'x';
+  for (var i = 0; i < 8; i++) {
+    longString += longString;
+  }
+
+  app.showWarning(longString);
+
+  expect(app.warning).toBe(true);
+  expect(app.warningMessage.length).toBe(203); // truncate to 200, add "..."
+
+  app.showWarning(longString, true);
+
+  expect(app.warning).toBe(true);
+  expect(app.warningMessage.length).toBe(longString.length);
+});
+
+test('hasSubgrids', () => {
+  app.subgrids = null;
+  expect(app.hasSubgrids()).toBe(false);
+
+  app.subgrids = [];
+  expect(app.hasSubgrids()).toBe(false);
+
+  app.subgrids = [{}];
+  expect(app.hasSubgrids()).toBe(true);
+});
+
+test('adjustSubgridColVisibility', () => {
+  const origFn = app.updateColumnClass;
+  const headers = [
+    { title: 'Grid ID', value: 'gridId', align: 'd-none' },
+    { title: 'Other Column', value: 'other', align: 'd-none' },
+  ];
+  app.i18n = { gridId: 'Grid ID' };
+
+  app.hasSubgrids = jest.fn(() => true);
+  app.updateColumnClass = jest.fn();
+  app.adjustSubgridColVisibility(headers);
+
+  expect(app.updateColumnClass).toHaveBeenCalledWith(headers, 'Grid ID', true);
+
+  app.hasSubgrids = jest.fn(() => false);
+  app.updateColumnClass = jest.fn();
+  app.adjustSubgridColVisibility(headers);
+
+  expect(app.updateColumnClass).toHaveBeenCalledWith(headers, 'Grid ID', false);
+  app.updateColumnClass = origFn;
+});
+
+test('updateColumnClass', () => {
+  const headers = [
+    { title: 'Column 1', value: 'col1', align: 'd-none' },
+    { title: 'Column 2', value: 'col2', align: 'd-none' },
+  ];
+
+  app.updateColumnClass(headers, 'Column 1', true, 'd-md-table-cell');
+  expect(headers[0].align).toBe(' d-none d-md-table-cell');
+  expect(headers[1].align).toBe('d-none');
+
+  app.updateColumnClass(headers, 'Column 2', false, 'd-md-table-cell');
+  expect(headers[0].align).toBe(' d-none d-md-table-cell');
+  expect(headers[1].align).toBe(' d-none');
+
+  app.updateColumnClass(headers, 'NonExistentColumn', true, 'd-md-table-cell');
+  expect(headers[0].align).toBe(' d-none d-md-table-cell');
+  expect(headers[1].align).toBe(' d-none');
+});
+
+test('loadGridInfo', async () => {
+  resetPapi();
+  var idx = 0;
+  const mock = jest.fn((req, data) => {
+    idx++;
+    if (data['params']['gridId'] == 'g1') {
+      throw Error("something");
+    }
+    return {data: {foo:idx}};
+  });
+  app.papi.get = mock;
+
+  app.gridInfo = {};
+  app.subgrids = [{id: 'g1'},{id: 'g2'}];
+  await expect(() => app.loadSubgridInfo()).rejects.toThrow(Error);
+
+  expect(mock).toHaveBeenCalledWith('info', { params: { gridId: 'g1' }});
+  expect(mock).toHaveBeenCalledWith('info', { params: { gridId: 'g2' }});
+  expect(app.gridInfo['g1']).toBeUndefined();
+  expect(app.gridInfo['g2']).toStrictEqual({foo:2});
+});
+
+test('getSelectedGrid', () => {
+  app.subgrids = [{id: 'g1', name: 'Grid 1'}, {id: 'g2', name: 'Grid 2'}];
+  app.selectedGridId = 'g1';
+  expect(app.getSelectedGrid()).toStrictEqual({id: 'g1', name: 'Grid 1'});
+
+  app.selectedGridId = 'g2';
+  expect(app.getSelectedGrid()).toStrictEqual({id: 'g2', name: 'Grid 2'});
+
+  app.selectedGridId = 'g3';
+  expect(app.getSelectedGrid()).toBe(undefined);
+});
+
+describe('formatActionContent', () => {
+  const app = global.getApp();
+  const mockEvent = {
+    soc_id: 'event123',
+    'source.ip': '192.168.1.100',
+    'destination.port': 80,
+  };
+
+  beforeEach(() => {
+    // Reset selectedGridId before each test if necessary
+    app.selectedGridId = 'localGrid';
+  });
+
+  test('should return null if content is null or undefined', () => {
+    expect(app.formatActionContent(null, mockEvent, 'someField', 'someValue')).toBeNull();
+    expect(app.formatActionContent(undefined, mockEvent, 'someField', 'someValue')).toBeNull();
+  });
+
+  test('should replace standard placeholders', () => {
+    const content = 'Event: {eventId}, Field: {field}, Value: {value}, Grid: {gridId}';
+    const expected = 'Event: event123, Field: srcIP, Value: 1.2.3.4, Grid: localGrid';
+    expect(app.formatActionContent(content, mockEvent, 'srcIP', '1.2.3.4')).toBe(expected);
+  });
+
+  test('should replace eventJson placeholder', () => {
+    const content = 'Event JSON: {eventJson}';
+    const expected = `Event JSON: ${JSON.stringify(mockEvent)}`;
+    expect(app.formatActionContent(content, mockEvent, 'someField', 'someValue')).toBe(expected);
+  });
+
+  test('should replace dynamic field placeholders', () => {
+    const content = 'Source IP: {:source.ip}, Dest Port: {:destination.port}';
+    const expected = 'Source IP: 192.168.1.100, Dest Port: 80';
+    expect(app.formatActionContent(content, mockEvent, 'someField', 'someValue')).toBe(expected);
+  });
+
+  test('should handle URI encoding correctly (uriEncode=true by default)', () => {
+    const content = 'Value: {value}, Dynamic: {:source.ip}';
+    const mockEventWithSpace = { soc_id: 'event123', 'source.ip': '10.0.0.1 10.0.0.2' };
+    const expected = 'Value: space%20value, Dynamic: 10.0.0.1%2010.0.0.2';
+    expect(app.formatActionContent(content, mockEventWithSpace, 'field', 'space value')).toBe(expected);
+  });
+
+  test('should handle URI encoding correctly (uriEncode=false)', () => {
+    const content = 'Value: {value}, Dynamic: {:source.ip}';
+    const mockEventWithSpace = { soc_id: 'event123', 'source.ip': '10.0.0.1 10.0.0.2' };
+    const expected = 'Value: space value, Dynamic: 10.0.0.1 10.0.0.2';
+    expect(app.formatActionContent(content, mockEventWithSpace, 'field', 'space value', false)).toBe(expected);
+  });
+
+  test('should handle missing dynamic fields gracefully', () => {
+    const content = 'Source IP: {:source.ip}, Missing Field: {:non.existent.field}';
+    const expected = 'Source IP: 192.168.1.100, Missing Field: {:non.existent.field}';
+    expect(app.formatActionContent(content, mockEvent, 'someField', 'someValue')).toBe(expected);
+  });
+
+  test('should handle content with no placeholders', () => {
+    const content = 'This is a static string.';
+    expect(app.formatActionContent(content, mockEvent, 'someField', 'someValue')).toBe(content);
+  });
+
+  test('should handle various data types for values', () => {
+    const content = 'Value: {value}, Dynamic Num: {:destination.port}';
+    const expected = 'Value: 12345, Dynamic Num: 80';
+    expect(app.formatActionContent(content, mockEvent, 'field', 12345)).toBe(expected);
+
+    const expectedBool = 'Value: true, Dynamic Num: 80';
+    expect(app.formatActionContent(content, mockEvent, 'field', true)).toBe(expectedBool);
+  });
+
+  test('should use selectedGridId from app instance', () => {
+    app.selectedGridId = 'customGrid123';
+    const content = 'Grid: {gridId}';
+    const expected = 'Grid: customGrid123';
+    expect(app.formatActionContent(content, mockEvent, 'field', 'value')).toBe(expected);
+  });
+});
+
+test('apiRequestCallback', () => {
+  req = {};
+  app.selectedGridId = '';
+
+  // Default case
+  var newReq = app.apiRequestCallback(req);
+  expect(newReq.params).toBe(undefined);
+
+  // Local grid specified in request
+  req.params = { gridId: '' };
+  var newReq = app.apiRequestCallback(req);
+  expect(newReq.params).toStrictEqual({});
+
+  // Remote grid specified in request
+  req.params = { gridId: 'abc' };
+  var newReq = app.apiRequestCallback(req);
+  expect(newReq.params).toStrictEqual({ gridId: 'abc' });
+
+  // Remote grid specified in selectedGridId
+  req = {}
+  app.selectedGridId = 'xyz';
+  var newReq = app.apiRequestCallback(req);
+  expect(newReq.params).toStrictEqual({ gridId: 'xyz' });
+});
+
+test('dateToRange', () => {
+  app.i18n.timePickerFormat = 'YYYY/MM/DD hh:mm:ss A';
+  const tests = [
+    {
+      input: 0,
+      output: '1969/12/31 11:59:59 PM - 1970/01/01 12:00:01 AM',
+    },
+    {
+      input: new Date(0),
+      output: '1969/12/31 11:59:59 PM - 1970/01/01 12:00:01 AM',
+    },
+    {
+      input: '2025-05-29T16:26:04.226Z',
+      output: '2025/05/29 04:26:03 PM - 2025/05/29 04:26:05 PM',
+    },
+    {
+      input: new Date('2025-05-29T16:26:04.226Z'),
+      output: '2025/05/29 04:26:03 PM - 2025/05/29 04:26:05 PM',
+    },
+    {
+      input: 'x',
+      output: 'Invalid date - Invalid date'
+    },
+    {
+      input: null,
+      output: 'Invalid date - Invalid date',
+    },
+  ];
+
+  const orig = console.warn;
+  console.warn = jest.fn();
+
+  for (let t of tests) {
+    const out = app.dateToRange(t.input);
+    expect(out).toBe(t.output);
+  }
+
+  expect(console.warn).toHaveBeenCalledTimes(1);
+  console.warn = orig;
 });

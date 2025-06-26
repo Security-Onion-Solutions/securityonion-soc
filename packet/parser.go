@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -7,8 +7,12 @@
 package packet
 
 import (
+	"bytes"
 	"encoding/base64"
+	"fmt"
+	"io"
 	"os"
+	"strings"
 
 	"github.com/apex/log"
 	"github.com/google/gopacket"
@@ -31,7 +35,7 @@ var SupportedLayerTypes = [...]gopacket.LayerType{
 
 func ParsePcap(filename string, offset int, count int, unwrap bool) ([]*model.Packet, error) {
 	packets := make([]*model.Packet, 0)
-	parsePcapFile(filename, func(index int, pcapPacket gopacket.Packet) bool {
+	parsePcapFile(filename, "", func(index int, pcapPacket gopacket.Packet) bool {
 		if index >= offset {
 			packet := model.NewPacket(index)
 			parseData(pcapPacket, packet, unwrap)
@@ -40,6 +44,108 @@ func ParsePcap(filename string, offset int, count int, unwrap bool) ([]*model.Pa
 		return len(packets) < count
 	})
 	return packets, nil
+}
+
+func ToStream(packets []gopacket.Packet) (io.ReadCloser, int, error) {
+	var snaplen uint32 = 65536
+	var full bytes.Buffer
+
+	writer := pcapgo.NewWriter(&full)
+	writer.WriteFileHeader(snaplen, layers.LinkTypeEthernet)
+
+	opts := gopacket.SerializeOptions{}
+
+	buf := gopacket.NewSerializeBuffer()
+	for _, packet := range packets {
+		buf.Clear()
+		err := gopacket.SerializePacket(buf, opts, packet)
+		if err != nil {
+			return nil, 0, err
+		}
+		writer.WritePacket(packet.Metadata().CaptureInfo, buf.Bytes())
+	}
+	return io.NopCloser(bytes.NewReader(full.Bytes())), full.Len(), nil
+}
+
+func filterPacket(filter *model.Filter, packet gopacket.Packet) bool {
+	timestamp := packet.Metadata().Timestamp
+	if (!filter.BeginTime.IsZero() && filter.BeginTime.After(timestamp)) ||
+		(!filter.EndTime.IsZero() && filter.EndTime.Before(timestamp)) {
+		return false
+	}
+
+	return true
+}
+
+func ParseRawPcap(filename string, maxCount int, filter *model.Filter) ([]gopacket.Packet, error) {
+	packets := make([]gopacket.Packet, 0)
+	currentCount := 0
+	err := parsePcapFile(filename, CreateBpf(filter, true), func(index int, pcapPacket gopacket.Packet) bool {
+		if filterPacket(filter, pcapPacket) {
+			packets = append(packets, pcapPacket)
+			currentCount += 1
+		}
+
+		return currentCount < maxCount
+	})
+
+	if currentCount == maxCount {
+		log.WithFields(log.Fields{
+			"packetCount": len(packets),
+		}).Warn("Exceeded packet capture limit for job; returned PCAP will be truncated")
+	}
+
+	return packets, err
+}
+
+func AddBpf(bpf string, part string) string {
+	if len(part) == 0 {
+		return bpf
+	}
+
+	newBpf := bpf
+
+	if len(newBpf) > 0 {
+		newBpf = newBpf + " and "
+	}
+
+	newBpf = newBpf + part
+
+	return newBpf
+
+}
+
+func CreateBpf(filter *model.Filter, vlanEnabled bool) string {
+	query := filter.Protocol
+	if strings.HasPrefix(filter.Protocol, model.PROTOCOL_ICMP) {
+		query = "(icmp or icmp6)"
+	}
+
+	if len(filter.SrcIp) > 0 {
+		query = AddBpf(query, fmt.Sprintf("host %s", filter.SrcIp))
+	}
+
+	if len(filter.DstIp) > 0 {
+		query = AddBpf(query, fmt.Sprintf("host %s", filter.DstIp))
+	}
+
+	// Some legacy jobs won't have the protocol provided
+	if !strings.HasPrefix(filter.Protocol, model.PROTOCOL_ICMP) {
+		if filter.SrcPort > 0 {
+			query = AddBpf(query, fmt.Sprintf("port %d", filter.SrcPort))
+		}
+
+		if filter.DstPort > 0 {
+			query = AddBpf(query, fmt.Sprintf("port %d", filter.DstPort))
+		}
+	}
+
+	// Repeat the query but with vlan applied
+	if vlanEnabled && len(query) > 0 {
+		query = fmt.Sprintf("(%s) or (vlan and %s)", query, query)
+	}
+
+	return query
 }
 
 func UnwrapPcap(filename string, unwrappedFilename string) bool {
@@ -56,7 +162,7 @@ func UnwrapPcap(filename string, unwrappedFilename string) bool {
 				log.WithError(err).WithField("unwrappedFilename", unwrappedFilename).Error("Unable to write unwrapped file header")
 			} else {
 				defer unwrappedFile.Close()
-				err = parsePcapFile(filename, func(index int, pcapPacket gopacket.Packet) bool {
+				err = parsePcapFile(filename, "", func(index int, pcapPacket gopacket.Packet) bool {
 					newPacket := unwrapVxlanPacket(pcapPacket, nil)
 					err = writer.WritePacket(newPacket.Metadata().CaptureInfo, newPacket.Data())
 					if err != nil {
@@ -85,13 +191,21 @@ func UnwrapPcap(filename string, unwrappedFilename string) bool {
 
 }
 
-func parsePcapFile(filename string, handler func(int, gopacket.Packet) bool) error {
+func parsePcapFile(filename string, bpf string, handler func(int, gopacket.Packet) bool) error {
 	handle, err := pcap.OpenOffline(filename)
 	if err == nil {
 		defer handle.Close()
+		if bpf != "" {
+			err = handle.SetBPFFilter(bpf)
+			if err != nil {
+				log.WithError(err).WithField("pcapBpf", bpf).Error("Invalid BPF")
+				return err
+			}
+		}
 		packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 		packetSource.DecodeOptions.Lazy = true
 		packetSource.DecodeOptions.NoCopy = true
+		packetSource.DecodeOptions.SkipDecodeRecovery = true
 		index := 0
 		for pcapPacket := range packetSource.Packets() {
 			if pcapPacket != nil {

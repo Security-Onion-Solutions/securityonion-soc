@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -15,6 +15,8 @@ const FILTER_EXCLUDE = 'EXCLUDE';
 const FILTER_EXACT = 'EXACT';
 const FILTER_DRILLDOWN = 'DRILLDOWN';
 
+loadPageTemplate('page-hunt', 'pages/hunt.html');
+
 const huntComponent = {
   template: '#page-hunt',
   data() { return {
@@ -22,7 +24,10 @@ const huntComponent = {
     params: null,
     category: '',
     advanced: false,
+    queryAltered: false,
     query: '',
+    querySearch: '',
+    queryRemainder: '',
     queries: [],
     queryBaseFilter: "",
     queryName: '',
@@ -30,6 +35,8 @@ const huntComponent = {
     queryGroupBys: [],
     queryGroupByOptions: [],
     querySortBys: [],
+    queryTableFields: [],
+    queryTableOptions: [],
     eventFields: {},
     dateRange: '',
     relativeTimeEnabled: true,
@@ -40,7 +47,6 @@ const huntComponent = {
     autoRefreshIntervals: [],
     autoRefreshTimer: null,
     loaded: false,
-    expanded: [],
     chartHeight: 200,
     zone: '',
     huntPending: false,
@@ -66,7 +72,7 @@ const huntComponent = {
     groupByLimit: 10,
     groupByFilter: '',
     groupByItemsPerPage: 10,
-    groupByFooters: { 'items-per-page-options': [10,25,50,100,200,500] },
+    groupByFooters: [10,25,50,100,200,500],
     groupByPage: 1,
     groupBySortBy: 'count',
     groupBySortDesc: true,
@@ -80,14 +86,14 @@ const huntComponent = {
     eventFilter: '',
     eventHeaders: [],
     eventPage: 1,
-    sortBy: 'soc_timestamp',
+    sortBy: [{ key: 'soc_timestamp', order: 'desc' }],
     sortDesc: true,
     itemsPerPage: 10,
-    footerProps: { 'items-per-page-options': [10,25,50,100,200,500,1000] },
+    itemsPerPageOptions: [10,25,50,100,200,500,1000],
 
     expandedHeaders: [
-      { text: "key", value: "key" },
-      { text: "value", value: "value" }
+      { title: "key", value: "key" },
+      { title: "value", value: "value" }
     ],
 
     totalEvents: 0,
@@ -97,6 +103,7 @@ const huntComponent = {
     mruCases: [],
 
     autohunt: true,
+    showFullQuery: true,
 
     filterRouteInclude: "",
     filterRouteExclude: "",
@@ -109,15 +116,13 @@ const huntComponent = {
     groupByRoute: "",
     groupByNewRoute: "",
     quickActionVisible: false,
-    quickActionX: 0,
-    quickActionY: 0,
+    quickActionTarget: null,
     quickActionEvent: null,
     quickActionField: "",
     quickActionValue: "",
     quickActionIsNumeric: false,
     escalationMenuVisible: false,
-    escalationMenuX: 0,
-    escalationMenuY: 0,
+    escalationMenuTarget: null,
     escalationItem: null,
     escalationGroupIdx: -1,
     escalateRelatedEventsEnabled: false,
@@ -131,51 +136,102 @@ const huntComponent = {
     betweenEndEquals: false,
     betweenError: '',
     equalityOperators: [
-      { text: '<', value: false },
-      { text: '≤', value: true }
+      { title: '<', value: false },
+      { title: '≤', value: true }
     ],
     addToCaseDialogVisible: false,
     mruCases: [],
     selectedMruCase: null,
+    disableRouteLoad: false,
+    selectAllState: false,
+    selectAllIndeterminate: false,
+    selectedCount: 0,
+    selectedAction: 'enable',
+    bulkActions: [
+      { title: this.$root.i18n.enable, value: 'enable' },
+      { title: this.$root.i18n.disable, value: 'disable' },
+      { title: this.$root.i18n.delete, value: 'delete' },
+    ],
+    quickActionDetId: null,
+    presets: {},
+    manualSyncTargetEngine: null,
+    showBulkDeleteConfirmDialog: false,
+    tuneDetectionTabTarget: null,
+    eventCurrentItems: [],
+    detectionEngineStatusQueries: {},
+    highlightedDetection: null,
+    highlightedAlertInfo: null,
+    showDetailsPanel: true,
+    openPanel: [0],
+    quickActionsOpen: [],
+    escalatingDetectionEvents: false,
+    showAckManyDialog: false,
+    ackManyArgs: [],
+    ackManyVerb: '',
+    menuScrollPos: 0,
+    maxEscalate: 100,
+    chartResizeTracker: {},
+    gridId: null,
+    activeTabs: {},
+    expandedEvents: [],
+    eventColumnWidth: 0,
+    expandedPlaybookQuestions: {},
   }},
   created() {
     this.$root.initializeCharts();
     this.relativeTimeUnits = [
-      { text: this.i18n.seconds, value: RELATIVE_TIME_SECONDS },
-      { text: this.i18n.minutes, value: RELATIVE_TIME_MINUTES },
-      { text: this.i18n.hours, value: RELATIVE_TIME_HOURS },
-      { text: this.i18n.days, value: RELATIVE_TIME_DAYS },
-      { text: this.i18n.weeks, value: RELATIVE_TIME_WEEKS },
-      { text: this.i18n.months, value: RELATIVE_TIME_MONTHS }
+      { title: this.i18n.seconds, value: RELATIVE_TIME_SECONDS },
+      { title: this.i18n.minutes, value: RELATIVE_TIME_MINUTES },
+      { title: this.i18n.hours, value: RELATIVE_TIME_HOURS },
+      { title: this.i18n.days, value: RELATIVE_TIME_DAYS },
+      { title: this.i18n.weeks, value: RELATIVE_TIME_WEEKS },
+      { title: this.i18n.months, value: RELATIVE_TIME_MONTHS }
     ];
     this.autoRefreshIntervals = [
-      { text: this.i18n.interval0s, value: 0 },
-      { text: this.i18n.interval5s, value: 5 },
-      { text: this.i18n.interval10s, value: 10 },
-      { text: this.i18n.interval15s, value: 15 },
-      { text: this.i18n.interval30s, value: 30 },
-      { text: this.i18n.interval1m, value: 60 },
-      { text: this.i18n.interval2m, value: 120 },
-      { text: this.i18n.interval5m, value: 300 },
-      { text: this.i18n.interval10m, value: 600 },
-      { text: this.i18n.interval15m, value: 900 },
-      { text: this.i18n.interval30m, value: 1800 },
-      { text: this.i18n.interval1h, value: 3600 },
-      { text: this.i18n.interval2h, value: 7200 },
-      { text: this.i18n.interval5h, value: 18000 },
-      { text: this.i18n.interval10h, value: 36000 },
-      { text: this.i18n.interval24h, value: 86400 },
+      { title: this.i18n.interval0s, value: 0 },
+      { title: this.i18n.interval5s, value: 5 },
+      { title: this.i18n.interval10s, value: 10 },
+      { title: this.i18n.interval15s, value: 15 },
+      { title: this.i18n.interval30s, value: 30 },
+      { title: this.i18n.interval1m, value: 60 },
+      { title: this.i18n.interval2m, value: 120 },
+      { title: this.i18n.interval5m, value: 300 },
+      { title: this.i18n.interval10m, value: 600 },
+      { title: this.i18n.interval15m, value: 900 },
+      { title: this.i18n.interval30m, value: 1800 },
+      { title: this.i18n.interval1h, value: 3600 },
+      { title: this.i18n.interval2h, value: 7200 },
+      { title: this.i18n.interval5h, value: 18000 },
+      { title: this.i18n.interval10h, value: 36000 },
+      { title: this.i18n.interval24h, value: 86400 },
     ];
-    Vue.filter('colorSeverity', this.colorSeverity);
   },
-  beforeDestroy() {
+  beforeUnmount() {
     this.$root.setSubtitle("");
     this.stopRefreshTimer();
+    this.$root.unsubscribe('detections:bulkUpdate', this.bulkUpdateReport);
+    this.$root.unsubscribe('related:bulkCreate', this.bulkUpdateReport);
+
+    if (this.isCategory('alerts')) {
+      window.removeEventListener('resize', this.calculateEventColumnWidth);
+    }
   },
   mounted() {
     this.$root.startLoading();
     this.category = this.$route.path.replace("/", "");
     this.$root.loadParameters(this.category, this.initHunt);
+
+    if (this.isCategory('detections')) {
+      this.$root.subscribe('detections:bulkUpdate', this.bulkUpdateReport);
+    }
+
+    if (this.isCategory('alerts') || this.isCategory('hunt')) {
+      this.$root.subscribe('related:bulkCreate', this.bulkUpdateReport);
+    }
+
+    if (this.isCategory('alerts')) {
+      window.addEventListener('resize', this.calculateEventColumnWidth);
+    }
   },
   watch: {
     '$route': 'loadData',
@@ -191,8 +247,11 @@ const huntComponent = {
     'relativeTimeUnit': 'saveLocalSettings',
     'autohunt': 'saveLocalSettings',
     'autoRefreshInterval': 'resetRefreshTimer',
+    'showDetailsPanel': 'toggleShowDetailsPanel',
+    'advanced': 'saveLocalSettings',
   },
   methods: {
+    moment: moment,
     isAdvanced() {
       return this.advanced;
     },
@@ -229,15 +288,29 @@ const huntComponent = {
       this.chartLabelMaxLength = params["chartLabelMaxLength"]
       this.chartLabelOtherLimit = params["chartLabelOtherLimit"]
       this.chartLabelFieldSeparator = params["chartLabelFieldSeparator"]
+      this.presets = params["presets"];
+      this.manualSyncTargetEngine = this.getPresets("manualSync")[0];
+      this.maxEscalate = params["maxBulkEscalateEvents"];
+      if (params["detectionEngineStatusQueries"]) {
+        try {
+          this.detectionEngineStatusQueries = jsyaml.load(params["detectionEngineStatusQueries"], { schema: jsyaml.FAILSAFE_SCHEMA })
+        } catch {
+          this.detectionEngineStatusQueries = {};
+        }
+      }
       if (this.queries != null && this.queries.length > 0) {
         this.query = this.queries[0].query;
       }
-      this.actions = params["actions"];
+      this.actions = params["actions"] || [];
       this.zone = moment.tz.guess();
 
       this.loadLocalSettings();
       if (this.mruQueries.length > 0 && this.isAdvanced()) {
         this.query = this.mruQueries[0];
+      }
+
+      if (!this.isCategory('alerts')) {
+        this.showDetailsPanel = false;
       }
 
       if (this.$route.query.t) {
@@ -257,10 +330,28 @@ const huntComponent = {
       }
     },
     applyQuerySubstitutions(queries) {
-      queries.forEach(query => {
-        query.query = query.query.replace(/\{myId\}/g, this.$root.user.id);
-      });
-      return queries;
+      if (Array.isArray(queries)) {
+        queries.forEach(query => {
+          query.query = query.query.replace(/\{myId\}/g, this.$root.user.id);
+        });
+
+        return queries;
+      } else {
+        return [];
+      }
+    },
+    reconstructQuery() {
+      if (this.isAdvanced() && !this.showFullQuery) {
+        this.query = this.querySearch + " " + this.queryRemainder;
+      }
+    },
+    submitQuery() {
+      this.reconstructQuery();
+      this.hunt();
+    },
+    queryModified() {
+      this.reconstructQuery();
+      return this.notifyInputsChanged();
     },
     notifyInputsChanged(replaceHistory = false) {
       var hunted = false;
@@ -291,27 +382,38 @@ const huntComponent = {
     },
     hunt(replaceHistory = false) {
       this.huntPending = false;
-      var route = this;
-      var onSuccess = function() {};
-      var onFail = function() {
+      this.selectAllState = false;
+      this.selectAllIndeterminate = false;
+      this.selectedCount = 0;
+      this.expandedPlaybookQuestions = {};
+
+      var onSuccess = () => {};
+      var onFail = () => {
         // When navigating to the same URL, simply refresh data
-        route.loadData();
+        this.loadData();
       };
       if (this.relativeTimeEnabled) {
         this.dateRange = '';
         this.dateRange = this.getStartDate().format(this.i18n.timePickerFormat) + " - " + this.getEndDate().format(this.i18n.timePickerFormat);
       }
-      if (replaceHistory === true) {
-        this.$router.replace(this.buildCurrentRoute(), onSuccess, onFail);
+
+      const targetRoute = this.$router.resolve(this.buildCurrentRoute());
+      const currentRoute = this.$router.resolve(this.$router.currentRoute.value);
+
+      if (currentRoute.fullPath === targetRoute.fullPath) {
+        this.loadData();
       } else {
-        this.$router.push(this.buildCurrentRoute(), onSuccess, onFail);
+        if (replaceHistory === true) {
+          this.$router.replace(targetRoute, onSuccess, onFail);
+        } else {
+          this.$router.push(targetRoute);
+        }
       }
+
       this.resetRefreshTimer();
 
-      if (document.activeElement) {
-        // Release focus to avoid clicking away causing a second hunt
-        document.activeElement.blur();
-      }
+      this.selectAllState = false;
+      this.selectedCount = 0;
     },
     stopRefreshTimer() {
       if (this.autoRefreshTimer) {
@@ -335,19 +437,21 @@ const huntComponent = {
         q = this.queryBaseFilter;
       }
 
-      for (var i = 0; i < this.filterToggles.length; i++) {
-        filter = this.filterToggles[i];
+      if (Array.isArray(this.filterToggles)) {
+        for (var i = 0; i < this.filterToggles.length; i++) {
+          filter = this.filterToggles[i];
 
-        if (filter.enabled) {
-          if (q.length > 0) {
-            q = q + " AND ";
+          if (filter.enabled) {
+            if (q.length > 0) {
+              q = q + " AND ";
+            }
+            q = q + filter.filter;
+          } else if (filter.exclusive) {
+            if (q.length > 0) {
+              q = q + " AND ";
+            }
+            q = q + "NOT " + filter.filter;
           }
-          q = q + filter.filter;
-        } else if (filter.exclusive) {
-          if (q.length > 0) {
-            q = q + " AND ";
-          }
-          q = q + "NOT " + filter.filter;
         }
       }
 
@@ -410,8 +514,33 @@ const huntComponent = {
         this.autoRefreshEnabled = false;
         this.autoRefreshInterval = 0;
       }
+      if (this.$route.query.tab) {
+        this.activeTabs[0] = this.$route.query.tab;
+      }
+      if (this.$route.query.expand) {
+        const items = this.$route.query.expand.split('|');
+        for (let item of items) {
+          this.expandedEvents.push(item);
+        }
+      }
+      if (Array.isArray(this.filterToggles)) {
+        for (const q in this.$route.query) {
+          this.filterToggles.forEach(toggle => {
+            if (toggle.name === q) {
+              let enabled = this.$route.query[q];
+              if (typeof enabled === 'string') {
+                enabled = enabled.toLowerCase() === 'true';
+              }
+              toggle.enabled = enabled;
+            }
+          });
+        }
+      }
 
-      // Check for special params that force a re-route
+      this.gridId = this.$route.query.gridId;
+
+      // Check for special params that force a re-route. This is needed when async functions will handle the hunt themselves.
+      // So setting reroute=true tells the current thread not to perform the hunt, because the async thread will be doing it momentarily.
       var reRoute = false;
       if (this.$route.query.filterValue) {
         this.filterQuery(this.$route.query.filterField, this.$route.query.filterValue, this.$route.query.filterMode, undefined, this.$route.query.scalar === 'true');
@@ -421,25 +550,13 @@ const huntComponent = {
         this.groupQuery(this.$route.query.groupByField, this.$route.query.groupByGroup);
         reRoute = true;
       }
-      for (const q in this.$route.query) {
-        this.filterToggles.forEach(toggle => {
-          if (toggle.name === q) {
-            const orig = toggle.enabled;
-            let enabled = this.$route.query[q];
-            if (typeof enabled === 'string') {
-              enabled = enabled.toLowerCase() === 'true';
-            }
-            toggle.enabled = enabled;
-            if (orig !== toggle.enabled) {
-              reRoute = true;
-            }
-          }
-        });
-      }
       if (reRoute) return false;
+
       return true;
     },
     async loadData() {
+      if (this.disableRouteLoad) return;
+
       if (!this.parseUrlParameters()) return;
 
       this.$root.startLoading();
@@ -449,14 +566,29 @@ const huntComponent = {
         // This must occur before the following await, so that Vue flushes the old groupby DOM renders
         this.groupBys.splice(0);
 
-        const response = await this.$root.papi.get('events/', { params: {
+        let range = this.dateRange;
+        if (this.isCategory('detections')) {
+          range = moment(0).format(this.i18n.timePickerFormat) + " - " + moment().format(this.i18n.timePickerFormat);
+        }
+        const params = {
           query: await this.getQuery(),
-          range: this.dateRange,
+          range: range,
           format: this.i18n.timePickerSample,
           zone: this.zone,
           metricLimit: this.groupByLimit,
-          eventLimit: this.eventLimit
-        }});
+          eventLimit: this.eventLimit,
+        };
+
+        if (this.gridId && this.gridId.length > 0) {
+          params.gridId = this.gridId;
+        }
+
+        if (this.loaded) {
+          this.activeTabs = {};
+          this.expandedEvents = [];
+        }
+
+        let response = await this.$root.papi.get('events/', { params: params });
 
         this.eventPage = 1;
         this.groupByPage = 1;
@@ -474,15 +606,36 @@ const huntComponent = {
           this.populateChart(this.bottomChartData, response.data.metrics["bottom"]);
         }
         this.loaded = true;
-        this.expanded = [];
         this.addMRUQuery(this.query);
+
+        if (this.activeTabs[0] === 'playbook') {
+          // this should only happen when the user is opening a
+          // playbook for a specific alert from another page
+          for (let item of this.eventData) {
+            this.loadPlaybook(item);
+          }
+        }
 
         var subtitle = this.isAdvanced() ? this.query : this.queryName;
         this.$root.setSubtitle(this.i18n[this.category] + " - " + subtitle);
       } catch (error) {
         this.$root.showError(error);
       }
+
       this.$root.stopLoading();
+
+      if (this.isCategory('alerts')) {
+        this.$nextTick(() => {
+          this.calculateEventColumnWidth();
+        });
+      }
+    },
+    getPresets(kind) {
+      if (this.presets && this.presets[kind]) {
+        return this.presets[kind].labels;
+      }
+
+      return [];
     },
     async filterQuery(field, value, filterMode, notify = true, scalar = false) {
       try {
@@ -556,13 +709,36 @@ const huntComponent = {
         template: template,
       };
     },
-    async ack(event, item, idx, acknowledge, escalate, caseId, groupIdx) {
+    panelAck(args) {
+      args[1] = !this.isFilterToggleEnabled('acknowledged');
+      this.ack(...args);
+    },
+    async ack(item, acknowledge, escalate, caseId, groupIdx, detectionRelated = false, skipDialog = false) {
+      if (detectionRelated && !skipDialog) {
+        if (escalate) {
+          this.ackManyVerb = this.i18n.escalate.toLowerCase();
+        } else {
+          this.ackManyVerb = acknowledge ? this.i18n.acknowledge : this.i18n.acknowledgeUndo;
+        }
+
+        this.ackManyArgs = [item, acknowledge, escalate, caseId, groupIdx, detectionRelated, true];
+        this.showAckManyDialog = true;
+
+        return;
+      } else {
+        this.closeAckManyDialog();
+      }
+
       this.$root.startLoading();
       try {
-        var docEvent = item;
+        var docEvent = {};
         if (item["soc_id"]) {
-          // Strip away everything else for optimization
-          docEvent = { "soc_id": item["soc_id"] };
+          // only send necessary fields
+          docEvent["soc_id"] = item["soc_id"];
+        } else {
+          for (let field of Object.keys(item)) {
+            if (field !== 'newest') docEvent[field] = item[field]
+          }
         }
         var isAlert = ('rule.name' in item || 'event.severity_label' in item);
         if (escalate) {
@@ -576,20 +752,46 @@ const huntComponent = {
 
           // Attach the event to the case
           if (caseId && this.escalateRelatedEventsEnabled) {
-            const response = await this.$root.papi.post('case/events', {
+            let payload = {
               fields: item,
               caseId: caseId,
-            });
+              acknowledged: this.isFilterToggleEnabled('acknowledged'),
+              escalated: this.isFilterToggleEnabled('escalated'),
+              dateRange: this.dateRange,
+              dateRangeFormat: this.i18n.timePickerSample,
+              timezone: this.zone,
+            };
+
+            if (detectionRelated) {
+              payload.fields = {
+                'rule.uuid': item["rule.uuid"],
+              };
+            }
+
+            await this.$root.papi.post('case/events', payload);
           }
         }
         if (isAlert) {
-          for (let prop in docEvent) {
-            docEvent[prop] = this.subMissing(docEvent[prop]);
+          let searchFilter;
+          let eventFilter;
+
+          if (!detectionRelated) {
+            for (let prop in docEvent) {
+              docEvent[prop] = this.subMissing(docEvent[prop]);
+            }
+
+            eventFilter = docEvent;
+            searchFilter = await this.getQuery();
+          } else {
+            searchFilter = (acknowledge ? 'NOT ' : '') + 'event.acknowledged:true AND tags:alert';
+            eventFilter = {
+              'rule.uuid': item["rule.uuid"],
+            };
           }
 
           const response = await this.$root.papi.post('events/ack', {
-            searchFilter: await this.getQuery(),
-            eventFilter: docEvent,
+            searchFilter: searchFilter,
+            eventFilter: eventFilter,
             dateRange: this.dateRange,
             dateRangeFormat: this.i18n.timePickerSample,
             timezone: this.zone,
@@ -601,31 +803,44 @@ const huntComponent = {
           }
         }
         if (this.isCategory('alerts')) {
-          if (item["count"] && item["count"] > 1) {
+          if ((item["count"] && item["count"] > 1) || detectionRelated) {
             this.$root.showTip(escalate ? this.i18n.escalatedMultipleTip : (acknowledge ? this.i18n.ackMultipleTip : this.i18n.ackUndoMultipleTip));
           } else {
             this.$root.showTip(escalate ? this.i18n.escalatedSingleTip : (acknowledge ? this.i18n.ackSingleTip : this.i18n.ackUndoSingleTip));
           }
+
           var data;
-          if (item["count"] && groupIdx >= 0) {
+          if (item["count"] && groupIdx >= 0 && this.groupBys?.[groupIdx]?.data) {
             data = this.groupBys[groupIdx].data;
           } else {
             data = this.eventData;
           }
-          this.removeDataItemFromView(data, item);
+
+          this.removeDataItemFromView(data, item, detectionRelated);
         } else if (escalate) {
           this.$root.showTip(this.i18n.escalatedEventTip);
           item['event.escalated'] = true;
+        }
+
+
+        if (this.highlightedAlertInfo) {
+          const inGroup = this.highlightedAlertInfo.groupIndex === -1
+
+          if ((!inGroup && item === this.highlightedAlertInfo.item) ||
+              (inGroup && this.highlightedDetection.publicId === item["rule.uuid"])) {
+            this.highlightedDetection = null;
+            this.highlightedAlertInfo = null;
+          }
         }
       } catch (error) {
         this.$root.showError(error);
       }
       this.$root.stopLoading();
     },
-    removeDataItemFromView(data, item) {
+    removeDataItemFromView(data, item, detectionRelated) {
       for (var j = 0; j < data.length; j++) {
-        if (data[j] == item) {
-          Vue.delete(data, j);
+        if (data[j] == item || (detectionRelated && data[j]["rule.uuid"] === item["rule.uuid"])) {
+          data.splice(j, 1);
           if (item["count"]) {
             this.totalEvents -= item["count"];
           } else {
@@ -634,7 +849,10 @@ const huntComponent = {
           if (this.totalEvents < 0) {
             this.totalEvents = 0;
           }
-          break;
+          if (!detectionRelated) {
+            break;
+          }
+          j--;
         }
       }
     },
@@ -677,11 +895,46 @@ const huntComponent = {
       }
       return item;
     },
+    getDisplayedQueryVar() {
+      if (this.isAdvanced()) {
+        if (this.showFullQuery) {
+          return 'query'
+        } else {
+          return 'querySearch'
+        }
+      }
+      return 'queryName'
+    },
+    isComplexQuery(query) {
+      // Test for a query containing opening parenthesis outside of a double quoted value string.
+      var quoting = false;
+      var escaping = false;
+      for (var idx = 0; idx < query.length; idx++) {
+        var ch = query[idx];
+        if (ch == '"' && !escaping) {
+          quoting = !quoting;
+        } else if (ch == '(' && !quoting) {
+          return true;
+        }
+
+        if (ch == '\\') {
+          escaping = !escaping;
+        } else {
+          escaping = false;
+        }
+      }
+      return false;
+    },
     obtainQueryDetails() {
+      this.queryAltered = false;
       this.queryName = "";
+      this.querySearch = "";
+      this.queryRemainder = "";
       this.queryFilters = [];
       this.queryGroupBys = [];
       this.queryGroupByOptions = [];
+      this.queryTableFields = [];
+      this.queryTableOptions = [];
       this.querySortBys = [];
       var route = this;
       if (this.query) {
@@ -715,7 +968,11 @@ const huntComponent = {
         }
 
         if (segments.length > 0) {
-          var search = segments[0].trim();
+          this.querySearch = segments[0].trim();
+          if (segments.length > 1) {
+            // Used for reconstructing full query from simplified filter-only view
+            this.queryRemainder = this.query.substring(segmentDelimIdx);
+          }
           var matchingQueryName = this.i18n.custom;
           for (var i = 0; i < this.queries.length; i++) {
             if (this.query == this.queries[i].query) {
@@ -723,12 +980,14 @@ const huntComponent = {
             }
           }
           this.queryName = matchingQueryName;
-          search.split(" AND ").forEach(function(item, index) {
-            item = item.trim();
-            if (item.length > 0 && item != "*") {
-              route.queryFilters.push(item);
-            }
-          });
+          if (!route.isComplexQuery(this.querySearch)) {
+            this.querySearch.split(" AND ").forEach(function(item, index) {
+              item = item.trim();
+              if (item.length > 0 && item != "*") {
+                route.queryFilters.push(item);
+              }
+            });
+          }
         }
 
         if (segments.length > 1) {
@@ -750,6 +1009,23 @@ const huntComponent = {
               });
               route.queryGroupBys.push(fields);
               route.queryGroupByOptions.push(options);
+            }
+            if (segment.indexOf("table") == 0) {
+              var fields = [];
+              var options = [];
+              segment.split(" ").forEach(function(item, index) {
+                // Skip empty fields and segment options (they start with a hyphen)
+                if (item[0] == "-") {
+                  options.push(item.substring(1));
+                } else if (index > 0 && item.trim().length > 0) {
+                  if (item.split("\"").length % 2 == 1) {
+                    // Will currently skip quoted items with spaces.
+                    fields.push(item);
+                  }
+                }
+              });
+              route.queryTableFields = fields;
+              route.queryTableOptions = options;
             }
             if (segment.indexOf("sortby") == 0) {
               segment.split(" ").forEach(function(item, index) {
@@ -855,6 +1131,10 @@ const huntComponent = {
         queryObj.ar = this.autoRefreshInterval;
       }
 
+      if (this.gridId) {
+        queryObj.gridId = this.gridId;
+      }
+
       return { path: this.category, query: queryObj };
     },
     buildFilterRoute(filterField, filterValue, filterMode, scalar) {
@@ -927,35 +1207,59 @@ const huntComponent = {
       return this.buildGroupOptionRoute(groupIdx, removals, '');
     },
     countDrilldown(event) {
-      if ( (Object.keys(event).length == 2 && Object.keys(event)[0] == "count") || (Object.keys(event).length == 4 && Object.keys(event)[0] == "count" && Object.keys(event)[1] == "rule.name" && Object.keys(event)[2] == "event.module" && Object.keys(event)[3] == "event.severity_label") ) {
-        this.filterRouteDrilldown = this.buildFilterRoute(Object.keys(event)[1], event[Object.keys(event)[1]], FILTER_DRILLDOWN);
+      const keys = Object.keys(event).filter(field => field != 'newest');
+      if ( (keys.length == 2 && keys[0] == "count") || (keys.length == 5 && keys[0] == "count" && keys[1] == "rule.name" && keys[2] == "event.module" && keys[3] == "event.severity_label" && keys[4] == "rule.uuid") ) {
+        this.filterRouteDrilldown = this.buildFilterRoute(keys[1], event[keys[1]], FILTER_DRILLDOWN);
         this.$router.push(this.filterRouteDrilldown);
       }
     },
-    toggleEscalationMenu(domEvent, event, groupIdx) {
+    toggleEscalationMenu(domEvent, event, groupIdx, detectionRelated = false) {
       if (!this.escalateRelatedEventsEnabled) {
-        this.ack(domEvent, event, 0, true, true, null, groupIdx);
+        this.ack(event, true, true, null, groupIdx);
         return;
       }
 
       if (!domEvent || this.quickActionVisible || this.escalationMenuVisible) {
         this.quickActionVisible = false;
         this.escalationMenuVisible = false;
+        this.escalatingDetectionEvents = false;
         return;
       }
-      this.escalationMenuX = domEvent.clientX;
-      this.escalationMenuY = domEvent.clientY;
+      this.escalationMenuTarget = domEvent.target;
       this.escalationItem = event;
       this.escalationGroupIdx = groupIdx;
       this.$nextTick(() => {
+        this.escalatingDetectionEvents = detectionRelated;
         this.escalationMenuVisible = true;
       });
     },
-    toggleQuickAction(domEvent, event, field, value) {
-      if (!domEvent || this.quickActionVisible || this.escalationMenuVisible) {
+    async toggleQuickAction(domEvent, event, groupIdx, field, value) {
+      if (!domEvent || this.quickActionVisible || this.escalationMenuVisible || window?.getSelection()?.type === 'Range') {
         this.quickActionVisible = false;
         this.escalationMenuVisible = false;
         return;
+      }
+
+      if (this.isCategory('alerts')) {
+        const id = event["rule.uuid"];
+        this.quickActionDetId = null;
+        this.tuneDetectionTabTarget = null;
+
+        const getData = (response) => {
+          const det = response?.data || this.highlightedDetection;
+
+          this.quickActionDetId = det.id;
+          this.tuneDetectionTabTarget = 'tuning';
+          if (det.engine === 'strelka') {
+            this.tuneDetectionTabTarget = 'source';
+          }
+        };
+
+        if (id && !this.highlightedDetection) {
+          this.highlightDetection(id, event, groupIdx).then(getData);
+        } else {
+          this.$root.papi.get(`detection/public/${id}`).then(getData);
+        }
       }
 
       this.quickActionIsNumeric = this.isNumeric(value);
@@ -1013,14 +1317,31 @@ const huntComponent = {
         this.quickActionEvent = event;
         this.quickActionField = field;
         this.quickActionValue = value;
-        this.quickActionX = domEvent.native && domEvent.native.clientX ? domEvent.native.clientX : domEvent.clientX;
-        this.quickActionY = domEvent.native && domEvent.native.clientY ? domEvent.native.clientY : domEvent.clientY;
-        this.$nextTick(() => {
+        if (domEvent.type === 'keydown') {
+          const rect = domEvent.currentTarget.getBoundingClientRect();
+          this.quickActionTarget = [rect.left, rect.top];
+        } else {
+          this.quickActionTarget = [domEvent.clientX, domEvent.clientY];
+        }
+        this.$nextTick(async () => {
           this.quickActionVisible = true;
+
+          // displaying the menu is resetting the "open" array, so we need to un-reset it
+          const openCache = this.quickActionsOpen;
+          await this.$nextTick();
+          this.quickActionsOpen = openCache;
         });
       }
     },
     filterVisibleFields(eventModule, eventDataset, fields) {
+      let relatedFields = '';
+      for (const field of fields) {
+        const match = field.match(/so_[^.]*\.fields./);
+        if (match) {
+          relatedFields = match[0];
+          break;
+        }
+      }
       if (this.eventFields) {
         var filteredFields = null;
         if (eventDataset) {
@@ -1042,6 +1363,9 @@ const huntComponent = {
         }
         if (filteredFields && filteredFields.length > 0) {
           fields = filteredFields;
+          if (relatedFields) {
+            fields = fields.map(f => relatedFields + f);
+          }
         }
       }
       return fields;
@@ -1054,16 +1378,42 @@ const huntComponent = {
     },
     constructHeaders(fields) {
       var headers = [];
-      var i18n = this.i18n;
-      fields.forEach(function(item, index) {
-        var i18nKey = "field_" + item;
-        var header = {
-          text: i18n[i18nKey] ? i18n[i18nKey] : item,
-          value: item,
-        };
-        headers.push(header);
-      });
+
+      const customSorts = {
+        'event.severity_label': this.sortBySeverity,
+      };
+
+      if (fields && fields.length > 0) {
+        var i18n = this.i18n;
+        fields.forEach((item) => {
+          var i18nKey = "field_" + item;
+          var header = {
+            title: i18n[i18nKey] ? i18n[i18nKey] : item,
+            value: item,
+          };
+
+          const sort = customSorts[item];
+          if (sort) {
+            header.sort = sort;
+          }
+
+          headers.push(header);
+        });
+      }
       return headers;
+    },
+    sortBySeverity(a, b) {
+      // normalize
+      const na = (typeof a === 'string' ? a : String(a)).toLowerCase();
+      const nb = (typeof b === 'string' ? b : String(b)).toLowerCase();
+
+      // map
+      const levels = ['unknown', 'informational', 'low', 'medium', 'high', 'critical'];
+      const sevA = levels.findIndex(x => x === na);
+      const sevB = levels.findIndex(x => x === nb);
+
+      // compare
+      return sevA - sevB;
     },
     lookupSocId(data) {
       if (data && data.length == 36 && data.indexOf("-") == 8) {
@@ -1163,11 +1513,9 @@ const huntComponent = {
           group.chart_metrics = this.constructChartMetrics(metrics[key]);
 
           // Preserve group-by sort settings only for first group. Useful for non-advanced views.
-          group.sortBy = 'count';
-          group.sortDesc = true;
+          group.sortBy = [{ key: 'count', order: 'desc' }];
           if (this.groupBys.length == 0 && this.groupBySortBy) {
-            group.sortBy = this.groupBySortBy;
-            group.sortDesc = this.groupBySortDesc;
+            group.sortBy = [{key: this.groupBySortBy, order: this.groupBySortDesc ? 'desc' : 'asc'}];
           }
 
           this.groupBys.push(group);
@@ -1191,14 +1539,91 @@ const huntComponent = {
             });
           }
         }
+
         return true;
       }
       return false;
     },
-    updateGroupBySort() {
-      if (this.groupBys.length > 0) {
-        this.groupBySortBy = this.groupBys[0].sortBy;
-        this.groupBySortDesc = this.groupBys[0].sortDesc;
+    debounceChartResize(chart, size) {
+      const MAX_RESIZE_METRIC_COUNT = 20;
+      const MAX_RESIZE_METRIC_AGE = 1000; // milliseconds
+      const MAX_RESIZE_METRIC_FLAPS = 1;
+
+      if (!chart.options.responsive) return;
+
+      const now = Date.now();
+
+      // Get this chart's resize metric history, or create a new history
+      var data = this.chartResizeTracker[chart];
+      if (!data) {
+        data = [];
+        this.chartResizeTracker[chart] = data;
+      }
+
+      // Determine how many metrics are expired
+      var pruneCount = 0;
+      for (var idx = 0; idx < data.length; idx++) {
+        var metric = data[idx];
+        if (metric.time < now - MAX_RESIZE_METRIC_AGE) {
+          pruneCount = idx + 1;
+        } else {
+          break
+        }
+      }
+
+      // Remove expired metrics
+      for (var idx = 0; idx < pruneCount; idx++) {
+        data.shift();
+      }
+
+      var newResizeMetric = {
+        size: size,
+        time: now,
+      }
+
+      data.push(newResizeMetric);
+
+      // Limit the number of metrics in history
+      if (data.length > MAX_RESIZE_METRIC_COUNT) {
+        data.shift();
+      }
+
+      // Review the metric history and determine if the chart size is flapping
+      var flapCount = 0;
+      var prevDirection = 0;
+      for (var idx = 0; idx < data.length; idx++) {
+        var prev = data[idx];
+        if (idx < data.length - 1) {
+          var next = data[idx + 1];
+          var nextDirection = 0;
+          if (next.size.width > prev.size.width) {
+            nextDirection = 1;
+          } else if (next.size.width < prev.size.width) {
+            nextDirection = -1;
+          }
+
+          if (prevDirection != 0 && nextDirection != 0) {
+            if (nextDirection != prevDirection) {
+              flapCount++;
+            }
+          }
+          if (nextDirection != 0) {
+            prevDirection = nextDirection;
+          }
+        }
+      }
+      if (flapCount > MAX_RESIZE_METRIC_FLAPS) {
+        chart.options.responsive = false;
+        // for (var idx = 0; idx < data.length; idx++) {
+        //   console.log(idx + " -> " + data[idx].size.width)
+        // }
+        // console.log("Excessive chart flapping detected; disabled chart resizing")
+      }
+    },
+    updateGroupBySort(i) {
+      if (this.groupBys.length > 0 && i === 0 && this.groupBys[0].sortBy[0]) {
+        this.groupBySortBy = this.groupBys[0].sortBy[0].key;
+        this.groupBySortDesc = this.groupBys[0].sortBy[0].order === 'desc';
       }
     },
     populateEventTable(events) {
@@ -1210,30 +1635,30 @@ const huntComponent = {
       if (events != null && events.length > 0) {
         let batch = [];
 
-        events.forEach(function(event, index) {
-          var record = event.payload;
-          record.soc_id = event.id;
-          record.soc_score = event.score;
-          record.soc_type = event.type;
-          record.soc_timestamp = event.timestamp;
-          record.soc_source = event.source;
+        const multiSelect = this.isMultiSelect();
+        events.forEach((event, index) => {
+          var record = route.extractSocValues(event);
           route.lookupSocIds(record);
+
+          if (multiSelect) {
+            record._isSelected = false;
+          }
+
           records.push(record);
 
           for (const key in record) {
             batch.push(record[key]);
           }
 
-          var currentModule = record["event.module"];
-          var currentDataset = record["event.dataset"];
-          if (eventModule == null && currentModule) {
-            eventModule = currentModule.toLowerCase();
-            if (currentDataset) {
-              eventDataset = currentDataset.toLowerCase();
+          if (!eventModule) {
+            var currentModule = this.lookupFieldValue(record, "event.module");
+            var currentDataset = this.lookupFieldValue(record, "event.dataset");
+            if (eventModule == null && currentModule) {
+              eventModule = currentModule.toLowerCase();
+              if (currentDataset) {
+                eventDataset = currentDataset.toLowerCase();
+              }
             }
-          } else if (eventModule != currentModule || eventDataset != currentDataset) {
-            // A variety of events returned in this query, can't show event-specific fields
-            inconsistentEvents = true;
           }
         });
 
@@ -1243,12 +1668,139 @@ const huntComponent = {
           fields.push(key);
         }
       }
-      this.eventHeaders = this.constructHeaders(this.filterVisibleFields(eventModule, eventDataset, fields));
+
+      this.populateEventHeaders(this.filterVisibleFields(eventModule, eventDataset, fields));
       this.eventData = records;
+    },
+    lookupFieldValue(record, field) {
+      if (field in record) {
+        return record[field];
+      }
+
+      for (const key in record) {
+        if (key.endsWith(".fields." + field)) {
+          return record[key];
+        }
+      }
+
+      return '';
+    },
+    populateEventHeaders(defaultFields) {
+      var fields = defaultFields;
+      if (this.queryTableFields.length > 0) {
+        fields = this.queryTableFields;
+      }
+
+      let headers = this.constructHeaders(fields);
+
+      if (this.isCategory('detections')) {
+        const enabledCol = headers.findIndex(h => h.value === 'so_detection.isEnabled');
+        const overrideHeader = { title: this.i18n.overrides, value: 'override_count' };
+
+        if (enabledCol > -1) {
+          headers = [...headers.slice(0, enabledCol+1), overrideHeader, ...headers.slice(enabledCol+1)];
+        } else {
+          headers.push(overrideHeader);
+        }
+      }
+
+      this.eventHeaders = headers;
+    },
+    repopulateEventHeaders() {
+      this.populateEventHeaders();
+
+      // This is a UI interaction so update the query and route to reflect the new table segment
+      var segments = this.query.split("|");
+      var newQuery = segments[0];
+      for (var i = 1; i < segments.length; i++) {
+        if (segments[i].trim().indexOf("table") == 0) {
+          continue;
+        }
+        newQuery = newQuery.trim() + " | " + segments[i].trim();
+      }
+      if (this.queryTableFields.length > 0) {
+        newQuery = newQuery + " | table " + this.queryTableFields.join(" ");
+      }
+
+      this.updateActiveQuery(newQuery);
+    },
+    updateActiveQuery(newQuery) {
+      var route = this.buildCurrentRoute();
+      route.query.q = newQuery;
+
+      this.disableRouteLoad = true;
+      this.$router.push(route);
+      this.query = newQuery;
+      const thisRoute = this;
+      setTimeout(function() { thisRoute.disableRouteLoad = false; }, 100);
+    },
+    toggleColumnHeader(field) {
+      if (!this.isColumnHeader(field)) {
+        this.addColumnHeader(field);
+      } else {
+        this.removeColumnHeader(field);
+      }
+    },
+    populateQueryTableFields() {
+      if (this.queryTableFields.length == 0) {
+        // Pre-populate with the default field headers already in eventHeaders (from populateEventTable)
+        for (const idx in this.eventHeaders) {
+          const field = this.eventHeaders[idx].value;
+          this.queryTableFields.push(field);
+        }
+      }
+    },
+    moveColumnHeader(field, left) {
+      this.populateQueryTableFields();
+      for (var idx = -1; idx < this.queryTableFields.length; idx++) {
+        const currentField = this.queryTableFields[idx];
+        if (field == currentField) {
+          break;
+        }
+      }
+
+      if (idx > -1) {
+        if (left) {
+          if (idx > 0) {
+            var tmpFields = this.queryTableFields.slice(0, idx - 1);
+            tmpFields.push(field);
+            tmpFields = tmpFields.concat(this.queryTableFields.slice(idx - 1, idx));
+            this.queryTableFields = tmpFields.concat(this.queryTableFields.slice(idx + 1));
+          }
+        } else {
+          if (idx < this.queryTableFields.length - 1) {
+            var tmpFields = this.queryTableFields.slice(0, idx);
+            tmpFields = tmpFields.concat(this.queryTableFields.slice(idx + 1, idx + 2));
+            tmpFields.push(field);
+            this.queryTableFields = tmpFields.concat(this.queryTableFields.slice(idx + 2));
+          }
+        }
+      }
+      this.repopulateEventHeaders(); // no defaults fields will be supplied since we know they aren't going to be used.
+    },
+    addColumnHeader(field) {
+      this.populateQueryTableFields();
+      this.queryTableFields.push(field);
+      this.repopulateEventHeaders(); // no defaults fields will be supplied since we know they aren't going to be used.
+    },
+    removeColumnHeader(field) {
+      this.populateQueryTableFields();
+      this.queryTableFields = this.queryTableFields.filter(item => item != field);
+
+      // do not revert back to the predefined headers if this was the last column that was just removed. Otherwise
+      // users would get frustrated if they're trying to remove all the columns to then add their own.
+      this.repopulateEventHeaders(); // no defaults fields provided
+    },
+    isColumnHeader(field) {
+      return this.eventHeaders.find((item) => {
+        if (item.value == field) {
+          return true;
+        }
+      }) != null;
     },
     displayTable(group, groupIdx) {
       group.chart_type = "";
-      Vue.set(this.groupBys, groupIdx, group);
+      this.groupBys[groupIdx] = group;
     },
     displayPieChart(group, groupIdx) {
       group.chart_type = "pie";
@@ -1257,7 +1809,7 @@ const huntComponent = {
       this.setupPieChart(group.chart_options, group.chart_data, group.title);
       this.applyLegendOption(group, groupIdx);
       this.populateChart(group.chart_data, group.chart_metrics);
-      Vue.set(this.groupBys, groupIdx, group);
+      this.groupBys[groupIdx] = group;
     },
     displayBarChart(group, groupIdx) {
       group.chart_type = "bar";
@@ -1266,7 +1818,7 @@ const huntComponent = {
       this.setupBarChart(group.chart_options, group.chart_data, group.title, groupIdx);
       this.applyLegendOption(group, groupIdx);
       this.populateChart(group.chart_data, group.chart_metrics);
-      Vue.set(this.groupBys, groupIdx, group);
+      this.groupBys[groupIdx] = group;
     },
     displaySankeyChart(group, groupIdx) {
       if (!this.isGroupSankeyCapable(group)) {
@@ -1333,7 +1885,7 @@ const huntComponent = {
 
       group.chart_data.datasets[0].data = data;
       group.chart_data.flowMax = flowMax;
-      Vue.set(this.groupBys, groupIdx, group);
+      this.groupBys[groupIdx] = group;
     },
     isGroupSankeyCapable(group, groupIdx) {
       return group.fields != undefined && group.fields.length >= 2;
@@ -1347,6 +1899,7 @@ const huntComponent = {
       }
     },
     populateChart(chart, data) {
+      chart.key++;
       chart.labels = [];
       chart.datasets[0].data = [];
       if (!data) return;
@@ -1355,30 +1908,22 @@ const huntComponent = {
         chart.labels.push(route.$root.truncate(route.localizeValue(route.lookupSocId(item.keys[0])), route.chartLabelMaxLength));
         chart.datasets[0].data.push(item.value);
       });
-      if (chart.obj) {
-        setTimeout(function() { chart.obj.renderChart(chart.obj.chartdata, chart.obj.options); }, 100);
-      }
     },
-    expand(item) {
-      if (this.isExpanded(item)) {
-        this.expanded = [];
-      } else {
-        this.expanded = [item];
-      }
+    isMultiSelect() {
+      return this.isCategory('detections');
     },
-    isExpanded(item) {
-      return (this.expanded.length > 0 && this.expanded[0] == item);
-    },
-    getExpandedData() {
-      var records = []
-      if (this.expanded.length > 0) {
-        var data = this.expanded[0];
-        for (key in data) {
-          var record = {};
-          record.key = key;
-          record.value = data[key];
-          records.push(record);
+    getExpandedData(data) {
+      const ignored = ['_isSelected', 'playbooks'];
+      var records = [];
+      for (let key in data) {
+        if (ignored.includes(key)) {
+          continue;
         }
+
+        records.push({
+          key: key,
+          value: data[key],
+        });
       }
       return records;
     },
@@ -1445,7 +1990,6 @@ const huntComponent = {
     setupDateRangePicker() {
       if (this.relativeTimeEnabled) return;
 
-      range = document.getElementById('huntdaterange');
       $('#huntdaterange').daterangepicker({
         ranges: this.$root.generateDatePickerPreselects(),
         timePicker: true,
@@ -1475,12 +2019,17 @@ const huntComponent = {
       this.setupBarChart(this.topChartOptions, this.topChartData, this.i18n.chartTitleTop);
       this.setupTimelineChart(this.timelineChartOptions, this.timelineChartData, this.i18n.chartTitleTimeline);
       this.setupBarChart(this.bottomChartOptions, this.bottomChartData, this.i18n.chartTitleBottom);
+
+      this.topChartData.key = 0;
+      this.timelineChartData.key = 0;
+      this.bottomChartData.key = 0;
     },
     setupBarChart(options, data, title, groupIdx) {
       var fontColor = this.$root.getColor("#888888", -40);
       var dataColor = this.$root.getColor("primary");
       var gridColor = this.$root.getColor("#888888", 65);
       options.onClick = this.handleChartClick(groupIdx);
+      options.onResize = this.debounceChartResize;
       options.responsive = true;
       options.maintainAspectRatio = false;
       options.plugins = {
@@ -1493,7 +2042,7 @@ const huntComponent = {
         }
       };
       options.scales = {
-        yAxes: {
+        y: {
           grid: {
             color: gridColor,
           },
@@ -1503,7 +2052,7 @@ const huntComponent = {
             precision: 0,
           }
         },
-        xAxes: {
+        x: {
           gridLines: {
             color: gridColor,
           },
@@ -1526,9 +2075,10 @@ const huntComponent = {
     setupTimelineChart(options, data, title) {
       this.setupBarChart(options, data, title);
       options.onClick = null;
-      options.scales.xAxes.type = 'timeseries';
+      options.scales.x.type = 'timeseries';
     },
     setupPieChart(options, data, title) {
+      options.onResize = this.debounceChartResize;
       options.responsive = true;
       options.maintainAspectRatio = false;
       options.plugins = {
@@ -1563,6 +2113,7 @@ const huntComponent = {
     },
     setupSankeyChart(options, data, title) {
       const route = this;
+      options.onResize = this.debounceChartResize;
       options.responsive = true;
       options.maintainAspectRatio = false;
       options.plugins = {
@@ -1579,9 +2130,10 @@ const huntComponent = {
       data.datasets = [{
         data: [],
         label: this.i18n.field_count,
-        color: this.$root.$vuetify && this.$root.$vuetify.theme.dark ? 'white' : 'black',
+        color: this.$root.$vuetify && this.$root.$vuetify.theme.current.dark ? 'white' : 'black',
         colorFrom: c => route.getSankeyColor('from', 'out', c, data.flowMax),
         colorTo: c => route.getSankeyColor('to', 'in', c, data.flowMax),
+        size: 'max',
       }];
     },
     getSankeyColor(tag, dir, source, max) {
@@ -1634,7 +2186,7 @@ const huntComponent = {
           if (clickedValue && clickedValue.length > 0) {
             if (this.canQuery(clickedValue)) {
               var chartGroupByField = this.groupBys[groupIdx].fields[0];
-              this.toggleQuickAction(e, {}, chartGroupByField, clickedValue);
+              this.toggleQuickAction(e, {}, groupIdx, chartGroupByField, clickedValue);
             }
           }
           return true;
@@ -1665,13 +2217,6 @@ const huntComponent = {
         this.eventLimit = this.itemsPerPage;
       }
       this.saveLocalSettings();
-    },
-    colorSeverity(value) {
-      if (value == "low_false") return "yellow";
-      if (value == "medium_false") return "amber darken-1";
-      if (value == "high_false") return "red darken-1";
-      if (value == "critical_false") return "red darken-4";
-      return "secondary";
     },
     lookupAlertSeverityScore(sev) {
       if (sev.toLowerCase) {
@@ -1726,19 +2271,26 @@ const huntComponent = {
     saveTimezone() {
       localStorage['timezone'] = this.zone;
     },
+    async toggleShowDetailsPanel() {
+      this.saveLocalSettings();
+      await this.$nextTick();
+      this.calculateEventColumnWidth();
+    },
     saveLocalSettings() {
       this.saveSetting('groupBySortBy', this.groupBySortBy, 'count');
       this.saveSetting('groupBySortDesc', this.groupBySortDesc, true);
       this.saveSetting('groupByItemsPerPage', this.groupByItemsPerPage, this.params['groupItemsPerPage']);
       this.saveSetting('groupByLimit', this.groupByLimit, this.params['groupFetchLimit']);
-      this.saveSetting('sortBy', this.sortBy, 'timestamp');
-      this.saveSetting('sortDesc', this.sortDesc, true);
+      this.saveSetting('sortBy', this.sortBy[0].key, 'timestamp');
+      this.saveSetting('sortDesc', this.sortBy[0].order, 'desc');
       this.saveSetting('itemsPerPage', this.itemsPerPage, this.params['eventItemsPerPage']);
       this.saveSetting('eventLimit', this.eventLimit, this.params['eventFetchLimit']);
       this.saveSetting('mruQueries', JSON.stringify(this.mruQueries), '[]');
       this.saveSetting('relativeTimeValue', this.relativeTimeValue, this.params['relativeTimeValue']);
       this.saveSetting('relativeTimeUnit', this.relativeTimeUnit, this.params['relativeTimeUnit']);
       this.saveSetting('autohunt', this.autohunt, true);
+      this.saveSetting('showDetailsPanel', this.showDetailsPanel, this.isCategory('alerts'));
+      this.saveSetting('advanced', this.advanced, false);
     },
     loadLocalSettings() {
       // Global settings
@@ -1750,14 +2302,16 @@ const huntComponent = {
       if (localStorage[prefix + '.groupBySortDesc']) this.groupBySortDesc = localStorage[prefix + '.groupBySortDesc'] == "true";
       if (localStorage[prefix + '.groupByItemsPerPage']) this.groupByItemsPerPage = parseInt(localStorage[prefix + '.groupByItemsPerPage']);
       if (localStorage[prefix + '.groupByLimit']) this.groupByLimit = parseInt(localStorage[prefix + '.groupByLimit']);
-      if (localStorage[prefix + '.sortBy']) this.sortBy = localStorage[prefix + '.sortBy'];
-      if (localStorage[prefix + '.sortDesc']) this.sortDesc = localStorage[prefix + '.sortDesc'] == "true";
+      if (localStorage[prefix + '.sortBy']) this.sortBy[0].key = localStorage[prefix + '.sortBy'];
+      if (localStorage[prefix + '.sortDesc']) this.sortBy[0].order = localStorage[prefix + '.sortDesc'];
       if (localStorage[prefix + '.itemsPerPage']) this.itemsPerPage = parseInt(localStorage[prefix + '.itemsPerPage']);
       if (localStorage[prefix + '.eventLimit']) this.eventLimit = parseInt(localStorage[prefix + '.eventLimit']);
       if (localStorage[prefix + '.mruQueries']) this.mruQueries = JSON.parse(localStorage[prefix + '.mruQueries']);
       if (localStorage[prefix + '.relativeTimeValue']) this.relativeTimeValue = parseInt(localStorage[prefix + '.relativeTimeValue']);
       if (localStorage[prefix + '.relativeTimeUnit']) this.relativeTimeUnit = parseInt(localStorage[prefix + '.relativeTimeUnit']);
       if (localStorage[prefix + '.autohunt']) this.autohunt = localStorage[prefix + '.autohunt'] == 'true';
+      if (localStorage[prefix + '.showDetailsPanel']) this.showDetailsPanel = localStorage[prefix + '.showDetailsPanel'] == 'true';
+      if (localStorage[prefix + '.advanced']) this.advanced = localStorage[prefix + '.advanced'] == 'true';
 
       if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
     },
@@ -1783,7 +2337,7 @@ const huntComponent = {
 
       this.relativeTimeUnits.forEach((unit) => {
         if (unit.value == this.relativeTimeUnit) {
-          text = unit.text;
+          text = unit.title;
           return false;
         }
       });
@@ -1794,7 +2348,7 @@ const huntComponent = {
       let value = 30;
 
       this.relativeTimeUnits.forEach((unit) => {
-        if (unit.text.toLowerCase() == m.toLowerCase()) {
+        if (unit.title.toLowerCase() == m.toLowerCase()) {
           value = unit.value;
           return false;
         }
@@ -1850,12 +2404,19 @@ const huntComponent = {
       this.$router.push(this.buildFilterRoute(this.quickActionField, range, FILTER_INCLUDE, true));
     },
     performAction($event, action) {
+      let shouldNavigate = true;
+
       if (action && action.jsCall && this[action.jsCall]) {
+        // no need to navigate, made JS call instead
         this[action.jsCall](action);
-        return true;
+        shouldNavigate = false;
       }
 
-      return false;
+      this.$root.performAction($event, action);
+
+      this.quickActionVisible = false;
+
+      return shouldNavigate;
     },
     async openAddToCaseDialog() {
       // this function is meant to be called by performAction($event, action)
@@ -1867,7 +2428,7 @@ const huntComponent = {
 
       this.mruCases = [
         {
-          text: this.i18n.createNewCase,
+          title: this.i18n.createNewCase,
           value: 'New Case',
         }
       ];
@@ -1878,7 +2439,7 @@ const huntComponent = {
         const cases = JSON.parse(rawMRU);
         for (let i = 0; i < cases.length; i++) {
           this.mruCases.push({
-            text: cases[i].title,
+            title: cases[i].title,
             value: cases[i],
           });
         }
@@ -1912,7 +2473,652 @@ const huntComponent = {
       }
 
       window.open(url, target);
-    }
+    },
+    updateBulkSelector(item) {
+      if (item._isSelected) {
+        this.selectedCount = Math.min(this.selectedCount + 1, this.totalEvents);
+      } else {
+        this.selectedCount = Math.max(this.selectedCount - 1, 0);
+      }
+
+      switch (this.selectedCount) {
+        case 0:
+          this.selectAllState = false;
+          this.selectAllIndeterminate = false;
+          break;
+        case this.totalEvents:
+          this.selectAllState = true;
+          this.selectAllIndeterminate = false;
+          break;
+        default:
+          this.selectAllState = false;
+          this.selectAllIndeterminate = true;
+          break;
+      }
+    },
+    toggleSelectAll() {
+      if (this.selectAllIndeterminate) {
+        this.selectAllState = false;
+        this.selectAllIndeterminate = false;
+        this.selectAllEvents(false);
+        this.selectedCount = 0;
+      } else {
+        if (this.selectAllState) {
+          this.selectAllState = false;
+          this.selectAllIndeterminate = false;
+          this.selectAllEvents(false);
+        } else {
+          this.selectAllState = false;
+          this.selectAllIndeterminate = true;
+          this.selectCurrentPage(true);
+        }
+      }
+    },
+    selectAllEvents(selection = true, ALL = false) {
+      for (let i = 0; i < this.eventData.length; i++) {
+        if (this.eventData[i]._isSelected !== selection) {
+          this.eventData[i]._isSelected = selection;
+          if (selection) {
+            this.selectedCount++;
+          } else {
+            this.selectedCount--;
+          }
+        }
+      }
+
+      this.selectedCount = Math.max(Math.min(this.selectedCount, this.totalEvents), 0);
+
+      if (ALL && selection) {
+        this.selectAllState = true;
+        this.selectAllIndeterminate = false;
+      }
+    },
+    selectCurrentPage(selection = true) {
+      this.eventCurrentItems.forEach((item) => {
+        if (item._isSelected !== selection) {
+          item._isSelected = selection;
+          if (selection) {
+            this.selectedCount++;
+          } else {
+            this.selectedCount--;
+          }
+        }
+      });
+
+      this.selectedCount = Math.max(Math.min(this.selectedCount, this.totalEvents), 0);
+    },
+    isPageSelected() {
+      return this.eventCurrentItems.every((item) => item._isSelected);
+    },
+    countSelected() {
+      let count = 0;
+      for (let i = 0; i < this.eventData.length; i++) {
+        if (this.eventData[i]._isSelected) {
+          count++;
+        }
+      }
+
+      this.selectedCount = count;
+    },
+    async bulkAction(confirmed) {
+      let payload = {};
+
+      if (this.selectedAction === 'delete' && !confirmed) {
+        this.showBulkDeleteConfirmDialog = true;
+        return;
+      }
+
+      this.showBulkDeleteConfirmDialog = false;
+
+      this.$root.startLoading();
+
+      if (this.selectAllState) {
+        payload.query = this.query;
+      } else if (this.selectAllIndeterminate) {
+        let ids = [];
+        for (let i = 0; i < this.eventData.length; i++) {
+          if (this.eventData[i]._isSelected) {
+            ids.push(this.eventData[i].soc_id);
+          }
+        }
+
+        payload.ids = ids;
+      } else {
+        return;
+      }
+
+      try {
+        const request = await this.$root.papi.post('detection/bulk/' + this.selectedAction, payload);
+
+        let msg = this.i18n.bulkActionStarted;
+        if (this.selectedAction === 'delete') {
+          msg = this.i18n.bulkActionDeleteStarted;
+        }
+
+        msg = msg.replace('{total}', request.data.count.toLocaleString());
+
+        this.$root.showTip(msg);
+
+        this.selectAllState = false;
+        this.selectedCount = 0;
+        this.hunt(false);
+      } catch (e) {
+        this.$root.showError(e);
+      } finally {
+        this.$root.stopLoading();
+      }
+    },
+    bulkDeleteDialogCancel() {
+      this.showBulkDeleteConfirmDialog = false;
+    },
+    bulkUpdateReport(stats) {
+      if (stats.error > 0) {
+        let msg = this.i18n.bulkError.replace('{error}', stats.error.toLocaleString());
+        this.$root.showError(msg);
+      } else {
+        let seconds = Math.floor(stats.time);
+        let hours = Math.floor(seconds / 3600);
+        seconds %= 3600;
+        let minutes = Math.floor(seconds / 60);
+        seconds = Math.floor(seconds % 60);
+
+        let t = '';
+
+        if (hours > 0) {
+          t += hours + 'h ';
+        }
+
+        if (minutes > 0 || t.length > 0) {
+          if (t.length > 0) {
+            minutes = `0${minutes}`;
+          }
+
+          t += minutes + 'm ';
+        }
+
+        t += seconds.toFixed(0) + 's';
+
+        if (stats.filtered) {
+          let msg = this.i18n.bulkSuccessFiltered;
+          msg = msg.replaceAll('{filtered}', stats.filtered.toLocaleString());
+          msg = msg.replaceAll('{modified}', stats.modified.toLocaleString());
+          msg = msg.replaceAll('{total}', stats.total.toLocaleString());
+          msg = msg.replaceAll('{time}', t);
+
+          this.$root.showWarning(msg, true);
+        } else {
+          let msg;
+          switch (stats.verb) {
+            case 'delete':
+              msg = this.i18n.bulkSuccessDelete;
+              break;
+            case 'update':
+              msg = this.i18n.bulkSuccessUpdate;
+              break;
+            case 'create':
+              msg = this.i18n.bulkSuccessCreate;
+          }
+
+          msg = msg.replaceAll('{modified}', stats.modified.toLocaleString());
+          msg = msg.replaceAll('{total}', stats.total.toLocaleString());
+          msg = msg.replaceAll('{time}', t);
+
+          this.$root.showInfo(msg, true);
+        }
+      }
+    },
+    startManualSync(engine, type) {
+      if (!engine) {
+        this.$root.showTip(this.i18n.engineSelect);
+        return;
+      }
+      try {
+        this.$root.papi.post(`detection/sync/${engine}/${type}`);
+
+        let msg = this.i18n.startSyncFull;
+        if (type !== 'full') {
+          msg = this.i18n.startSyncUpdate;
+        }
+
+        msg = msg.replace("{engine}", engine);
+        this.$root.showTip(msg);
+      } catch (e) {
+        this.$root.showError(e);
+      }
+    },
+    buildDetectionEngineHuntQuery(engine) {
+      const status = this.$root.getDetectionEngineStatus(engine);
+
+      let query = `tags:so-soc AND ` + engine + ` | groupby log.level | groupby event.action | groupby soc.fields.error`;
+
+      if (this.detectionEngineStatusQueries?.[engine]?.default) {
+        query = this.detectionEngineStatusQueries[engine].default;
+      }
+
+      if (this.detectionEngineStatusQueries?.[engine]?.[status]) {
+        query = this.detectionEngineStatusQueries[engine][status];
+      }
+
+      return query;
+    },
+    huntQueryWidth() {
+      return this.$refs.huntQueryInput?.$el?.clientWidth || 0;
+    },
+    async highlightDetection(publicId, event, groupIdx) {
+      if (this.highlightedAlertInfo?.item === event) {
+        return;
+      }
+
+      if (this.highlightedDetection?.publicId !== publicId) {
+        this.highlightedDetection = null;
+
+        const response = await this.$root.papi.get(`detection/public/${publicId}`);
+
+        this.highlightedDetection = response.data;
+      }
+
+      this.highlightedAlertInfo = {
+        item: event,
+        groupIndex: typeof groupIdx === 'number' ? groupIdx : -1,
+      };
+    },
+    closeAckManyDialog() {
+      this.showAckManyDialog = false;
+      this.ackManyArgs = [];
+    },
+    async saveMenuScrollPos(isOpen, target) {
+      if (isOpen) {
+        // target doesn't exist yet, wait for it to be added to DOM
+        await this.$nextTick();
+      }
+
+      const scrollContainer = document.querySelector(target);
+      if (!scrollContainer) return;
+
+      if (isOpen) {
+        // opening
+        scrollContainer.scrollTop = this.menuScrollPos;
+      } else {
+        // closing
+        this.menuScrollPos = scrollContainer.scrollTop;
+      }
+    },
+    calculateEventColumnWidth() {
+      this.eventColumnWidth = this.$refs?.eventColumn?.$el?.clientWidth || 0;
+      if (this.eventColumnWidth === 0) {
+        setTimeout(() => {
+          this.calculateEventColumnWidth();
+        }, 300);
+      }
+    },
+    async loadPlaybook(event) {
+      if ('playbooks' in event || 'playbookLoading' in event || 'playbookErr' in event) return;
+      
+      const publicId = event?.['rule.uuid'];
+      if (!publicId) {
+        event.playbookErr = true;
+        return;
+      }
+
+      event.playbookLoading = true;
+
+      let playbooks;
+      let pbErr = false;
+
+      try {
+        const response = await this.$root.papi.get(`playbook/detection/${publicId}`);
+
+        playbooks = response.data;
+      } catch (e) {
+        pbErr = true;
+        playbooks = null;
+      }
+
+      if (playbooks) {
+        this.queryVariableSubstitution(event, playbooks);
+        await this.convertPlaybookQueries(playbooks);
+      }
+
+      event.playbooks = playbooks;
+      event.playbookErr = pbErr;
+      delete event.playbookLoading;
+
+      if (playbooks) {
+        for (let pb of event.playbooks) {
+          for (let q of pb.questions) {
+            await this.$nextTick();
+            await this.askQuestion(q, event);
+          }
+        }
+      }
+    },
+    queryVariableSubstitution(event, playbooks) {
+      // Fields that require special array handling
+      const arrayFields = ['network.private_ip', 'network.public_ip', 'related.ip'];
+
+      for (let pb of playbooks) {
+        for (let question of pb.questions) {
+          let q = question.query;
+          
+          // Find all variables in the query using regex
+          const variables = q.match(/\{([^}]+)\}/g) || [];
+          
+          // Process each variable
+          for (const variable of variables) {
+            const fieldName = variable.slice(1, -1); // Remove { and }
+            let value = event[fieldName] || 'NODATA';
+            
+            // Special handling for array fields
+            if (arrayFields.includes(fieldName) && Array.isArray(value)) {
+              // Find the line containing the variable
+              const lines = q.split('\n');
+              const lineWithVar = lines.findIndex(line => line.includes(variable));
+              
+              if (lineWithVar !== -1) {
+                // Get the field being set (e.g., src_ip or dst_ip)
+                const match = lines[lineWithVar].match(/^(\s*)(?:-\s*)?(\w+(?:\.\w+)*(?:\|\w+)*):(?:\s*|$)/);
+                if (match) {
+                  const indent = match[1];
+                  const field = match[2];
+                  const originalLine = lines[lineWithVar];
+                  const hasDash = originalLine.trim().startsWith('-');
+                  const prefix = hasDash ? '- ' : '';
+                  const replacement = `${indent}${prefix}${field}:\n${value.map(ip => `${indent}    - ${ip}`).join('\n')}`;
+                  
+                  // Replace the entire line
+                  lines[lineWithVar] = replacement;
+                  q = lines.join('\n');
+                  continue;
+                }
+              }
+            }
+            
+            // Default replacement if not handled as special case
+            q = q.replaceAll(variable, value);
+          }
+          
+          question.filledQuery = q;
+        }
+      }
+    },
+
+    async convertPlaybookQueries(playbooks) {
+      let queries = playbooks.map((pb) => pb.questions.map((q) => q.filledQuery)).flat();
+
+      if (queries.length === 0) return;
+
+      let response = await this.$root.papi.post('playbook/convert', queries);
+
+      let index = 0;
+      for (let pb of playbooks) {
+        for (let question of pb.questions) {
+          question.filledOQL = response.data[index].query;
+          question.fields = response.data[index].fields;
+          index++;
+        }
+      }
+    },
+    async askQuestion(question, event) {
+      if (question.range) {
+        try {
+          const dateRange = this.buildQuestionRange(event, question.range);
+          let query = question.filledOQL;
+          if (!this.isQuestionAggregate(question)) {
+            query = query + ` | sortby @timestamp`;
+          }
+
+          let response = await this.$root.papi.get('events/', {
+            params: {
+              query: query,
+              range: dateRange,
+              format: this.i18n.timePickerSample,
+              zone: this.zone,
+              metricLimit: 5,
+              eventLimit: 5
+            }
+          });
+
+          if (this.isQuestionAggregate(question)) {
+            let biggest = '';
+            for (let field in response.data.metrics) {
+              if (field.length > biggest.length) biggest = field;
+            }
+            if (biggest) {
+              question.answers = this.sortAggregateEvents(response.data.metrics[biggest]);
+            } else {
+              // fallback, less than ideal
+              question.answers = response.data.events;
+            }
+          } else {
+            question.answers = response.data.events;
+          }
+        } catch (e) {
+          question.error = true;
+          question.answers = [];
+        }
+      } else {
+        // no range specified means we can find the answer on the event
+        // but avoid making a circular reference
+        const dupe = JSON.parse(JSON.stringify(event));
+        question.answers = [{ payload: dupe }];
+      }
+
+      let ips = [];
+      for (let answer of question.answers) {
+        if (answer.payload) {
+          for (let v of Object.values(answer.payload)) {
+            if (v && typeof v === 'string') {
+              ips.push(v);
+            }
+          }
+        } else if (answer.keys) {
+          for (let key of answer.keys) {
+            ips.push(key);
+          }
+        }
+      }
+
+      this.$root.batchLookup(ips, this);
+    },
+    sortAggregateEvents(events) {
+      events = events.sort((a, b) => b.value - a.value);
+
+      if (events.length > 5) {
+        events = events.slice(0, 5);
+      }
+
+      return events;
+    },
+    buildQuestionRange(event, range) {
+      if (!range) {
+        return '';
+      }
+
+      let t = this.getEventTimestamp(event);
+
+      let plusMinus = false;
+      let lookingBack = false;
+
+      if (range.startsWith('+/-')) {
+        plusMinus = true;
+        range = range.substring(3);
+      } else if (range.startsWith('-')) {
+        lookingBack = true;
+        range = range.substring(1);
+      }
+
+      let unit = range[range.length - 1].toLowerCase();
+      range = range.substring(0, range.length - 1);
+
+      let value = parseInt(range);
+      if (isNaN(value)) {
+        return '';
+      }
+
+      unit = { d: 'days', h: 'hours', m: 'minutes', s: 'seconds' }[unit];
+      if (!unit) {
+        return '';
+      }
+
+      let t1, t2;
+
+      if (plusMinus) {
+        t1 = moment.tz(t, this.zone).subtract(value, unit).format(this.i18n.timePickerFormat);
+        t2 = moment.tz(t, this.zone).add(value, unit).format(this.i18n.timePickerFormat);
+      } else if (lookingBack) {
+        t1 = moment.tz(t, this.zone).subtract(value, unit).format(this.i18n.timePickerFormat);
+        t2 = moment.tz(t, this.zone).format(this.i18n.timePickerFormat);
+      } else {
+        t1 = moment.tz(t, this.zone).format(this.i18n.timePickerFormat);
+        t2 = moment.tz(t, this.zone).add(value, unit).format(this.i18n.timePickerFormat);
+      }
+
+      return `${t1} - ${t2}`;
+    },
+    getEventTimestamp(event) {
+      return event?.['event_data.@timestamp'] || event?.['@timestamp'] || event?.['soc_timestamp'] || '';
+    },
+    buildHuntQuestionParams(question, event) {
+      let payload = {
+        name: 'hunt',
+        query: {
+          q: question.filledOQL,
+        },
+      };
+
+      if (question.range) {
+        payload.query.t = this.buildQuestionRange(event, question.range);
+      } else {
+        payload.query.t = this.dateToRange(this.getEventTimestamp(event));
+      }
+
+      return payload;
+    },
+    isQuestionAggregate(question) {
+      if ('isAggregate' in question) return question.isAggregate;
+
+      const yaml = jsyaml.load(question.query, { schema: jsyaml.FAILSAFE_SCHEMA });
+      question.isAggregate = typeof yaml.aggregation === 'string' && yaml.aggregation.toLowerCase() === 'true';
+
+      return question.isAggregate;
+    },
+    translateValue(value) {
+      if (typeof value === 'string' && value.startsWith('__')) {
+        return this.i18n[value];
+      }
+
+      return value;
+    },
+    async fetchNewestEvent(item) {
+      if (item.newest) return;
+
+      let parts = [];
+
+      for (let field in item) {
+        let label = field;
+        if (field.startsWith('event_data.')) {
+          label = field.replace('event_data.', '');
+        }
+
+        if (label.toLowerCase() === 'count') continue;
+
+        if (item[field] && !Array.isArray(item[field])) {
+          parts.push(`${label}:"${item[field]}"`);
+        }
+      }
+
+      if (this.isFilterToggleEnabled('acknowledged')) {
+        parts.push('event.acknowledged:true');
+      } else {
+        parts.push('NOT event.acknowledged:true');
+      }
+
+      if (this.isFilterToggleEnabled('escalated')) {
+        parts.push('event.escalated:true');
+      } else {
+        parts.push('NOT event.escalated:true');
+      }
+
+      const q = parts.join(' AND ') + ` | sortby @timestamp`;
+
+      let params = {
+        query: q,
+        range: this.dateRange,
+        format: this.i18n.timePickerSample,
+        zone: this.zone,
+        metricLimit: 0,
+        eventLimit: 1
+      };
+
+      if (this.gridId && this.gridId.length > 0) {
+        params.gridId = this.gridId;
+      }
+
+      let response = await this.$root.papi.get('events/', { params });
+      if (response.data.events.length === 0) {
+        this.$root.showWarning('No events found');
+        return;
+      }
+
+      item.newest = this.extractSocValues(response.data.events[0]);
+    },
+    extractSocValues(event) {
+      var record = event.payload;
+      record.soc_id = event.id;
+      record.soc_score = event.score;
+      record.soc_type = event.type;
+      record.soc_timestamp = event.timestamp;
+      record.soc_source = event.source;
+
+      return record;
+    },
+    getEventField(event, field) {
+      if (field in event) {
+        return event[field];
+      }
+
+      // check with/without event_data
+      // let edField = 'event_data.' + field;
+      // if (edField in event) {
+      //   return event[edField];
+      // }
+      //
+      // if (field.startsWith('event_data.')) {
+      //   let shortened = field.substring(11);
+      //   if (shortened in event) {
+      //     return event[shortened];
+      //   }
+      // }
+
+      return '';
+    },
+    toggleAllQuestions(event, index, expand) {
+      if (event.playbookErr) return;
+
+      event = (event || {}).newest || event;
+
+      if (event.playbookLoading || !('playbooks' in event)) {
+        setTimeout(() => {
+          this.toggleAllQuestions(event, index, expand);
+        }, 100)
+        return;
+      }
+
+      if (event.playbooks) {
+        let count = 0;
+        if (!Array.isArray(this.expandedPlaybookQuestions[index]) || !expand) this.expandedPlaybookQuestions[index] = [];
+        if (expand) {
+          for (let i = 0; i < event.playbooks.length; i++) {
+            for (let j = 0; j < event.playbooks[i].questions.length; j++) {
+              if (!this.expandedPlaybookQuestions[index].includes(count)) {
+                this.expandedPlaybookQuestions[index].push(count);
+              }
+              count++;
+            }
+          }
+        }
+      }
+    },
   }
 };
 
@@ -1926,3 +3132,6 @@ routes.push({ path: '/cases', name: 'cases', component: casesComponent});
 
 const dashboardsComponent = Object.assign({}, huntComponent);
 routes.push({ path: '/dashboards', name: 'dashboards', component: dashboardsComponent});
+
+const detectionsComponent = Object.assign({}, huntComponent);
+routes.push({ path: '/detections', name: 'detections', component: detectionsComponent });

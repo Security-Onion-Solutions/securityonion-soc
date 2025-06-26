@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -9,11 +9,11 @@ require('./config.js');
 
 global.GridMemberAccepted = "accepted";
 
-const a = { 
-  category: 'general', 
-  id: 'fake.setting.foo', 
-  description: 'Nearby', 
-  title: 'Farout', 
+const a = {
+  category: 'general',
+  id: 'fake.setting.foo',
+  description: 'Nearby',
+  title: 'Farout',
   nodeValues: new Map(),
   regex: "True|False",
   regexFailureMessage: "Wrong!",
@@ -41,7 +41,7 @@ test('loadData', async () => {
   comp.settings = [];
   await comp.loadData();
   expect(loadmock).toHaveBeenCalledWith('gridmembers/');
-  expect(mock).toHaveBeenCalledWith('config/');
+  expect(mock).toHaveBeenCalledWith('config/', {params: { advanced: false }});
 
   expect(comp.nodes).toBe(loaddata);
 
@@ -50,9 +50,11 @@ test('loadData', async () => {
   const expectedSettings = [{
       "advanced": undefined,
       "default": null,
-      "defaultAvailable": false, 
+      "defaultAvailable": false,
       "description": "Nearby",
+      "duplicates": undefined,
       "file": undefined,
+      "forcedType": undefined,
       "global": false,
       "helpLink": undefined,
       "id": "fake.setting.foo",
@@ -60,20 +62,28 @@ test('loadData', async () => {
       "name": "foo",
       "node": undefined,
       "nodeValues": m1,
+      "optionSeparator": undefined,
+      "options": undefined,
       "readonly": undefined,
+      "readonlyUi": undefined,
       "regex": "True|False",
       "regexFailureMessage": "Wrong!",
+      "required": undefined,
       "sensitive": undefined,
       "syntax": undefined,
       "title": "Farout",
+      "uiElements": undefined,
+      "uiElementsDeleteMessage": undefined,
       "value": null,
     },
     {
       "advanced": undefined,
       "default": undefined,
-      "defaultAvailable": undefined, 
+      "defaultAvailable": undefined,
       "description": "NADA",
+      "duplicates": undefined,
       "file": undefined,
+      "forcedType": undefined,
       "global": undefined,
       "helpLink": undefined,
       "id": "car",
@@ -81,20 +91,28 @@ test('loadData', async () => {
       "name": "car",
       "node": false,
       "nodeValues": new Map(),
+      "optionSeparator": undefined,
+      "options": undefined,
       "readonly": undefined,
+      "readonlyUi": undefined,
       "regex": undefined,
       "regexFailureMessage": undefined,
+      "required": undefined,
       "sensitive": undefined,
       "syntax": undefined,
       "title": "CCA",
+      "uiElements": undefined,
+      "uiElementsDeleteMessage": undefined,
       "value": undefined,
     },
     {
       "advanced": undefined,
       "default": undefined,
-      "defaultAvailable": undefined, 
+      "defaultAvailable": undefined,
       "description": "Cocoa",
+      "duplicates": undefined,
       "file": undefined,
+      "forcedType": undefined,
       "global": undefined,
       "helpLink": undefined,
       "id": "fake.setting.bar",
@@ -102,12 +120,18 @@ test('loadData', async () => {
       "name": "bar",
       "node": false,
       "nodeValues": new Map(),
+      "optionSeparator": undefined,
+      "options": undefined,
       "readonly": undefined,
+      "readonlyUi": undefined,
       "regex": undefined,
       "regexFailureMessage": undefined,
+      "required": undefined,
       "sensitive": undefined,
       "syntax": undefined,
       "title": "Barley",
+      "uiElements": undefined,
+      "uiElementsDeleteMessage": undefined,
       "value": undefined,
     }
   ];
@@ -119,73 +143,97 @@ test('loadData', async () => {
           "children": [
             {
               "advanced": undefined,
-              "default": null, 
-              "defaultAvailable": false, 
-              "description": "Nearby", 
+              "default": null,
+              "defaultAvailable": false,
+              "description": "Nearby",
+              "duplicates": undefined,
               "file": undefined,
-              "global": false, 
+              "forcedType": undefined,
+              "global": false,
               "helpLink": undefined,
-              "id": "fake.setting.foo", 
-              "multiline": undefined, 
-              "name": "foo", 
-              "node": undefined, 
-              "nodeValues": m1, 
-              "readonly": undefined, 
+              "id": "fake.setting.foo",
+              "multiline": undefined,
+              "name": "foo",
+              "node": undefined,
+              "nodeValues": m1,
+              "optionSeparator": undefined,
+              "options": undefined,
+              "readonly": undefined,
+              "readonlyUi": undefined,
               "regex": "True|False",
               "regexFailureMessage": "Wrong!",
-              "sensitive": undefined, 
+              "required": undefined,
+              "sensitive": undefined,
               "syntax": undefined,
-              "title": "Farout", 
+              "title": "Farout",
+              "uiElements": undefined,
+              "uiElementsDeleteMessage": undefined,
               "value": null
-            }, 
+            },
             {
               "advanced": undefined,
               "default": undefined,
-              "defaultAvailable": undefined, 
-              "description": "Cocoa", 
+              "defaultAvailable": undefined,
+              "description": "Cocoa",
+              "duplicates": undefined,
               "file": undefined,
-              "global": undefined, 
+              "forcedType": undefined,
+              "global": undefined,
               "helpLink": undefined,
-              "id": "fake.setting.bar", 
-              "multiline": undefined, 
-              "name": "bar", 
-              "node": false, 
-              "nodeValues": new Map(), 
-              "readonly": undefined, 
+              "id": "fake.setting.bar",
+              "multiline": undefined,
+              "name": "bar",
+              "node": false,
+              "nodeValues": new Map(),
+              "optionSeparator": undefined,
+              "options": undefined,
+              "readonly": undefined,
+              "readonlyUi": undefined,
               "regex": undefined,
               "regexFailureMessage": undefined,
-              "sensitive": undefined, 
+              "required": undefined,
+              "sensitive": undefined,
               "syntax": undefined,
-              "title": "Barley", 
+              "title": "Barley",
+              "uiElements": undefined,
+              "uiElementsDeleteMessage": undefined,
               "value": undefined
             }
-          ], 
-          "id": "fake.setting", 
+          ],
+          "id": "fake.setting",
           "name": "setting"
         }
-      ], 
-      "id": "fake", 
+      ],
+      "id": "fake",
       "name": "fake"
-    }, 
+    },
     {
       "advanced": undefined,
       "default": undefined,
-      "defaultAvailable": undefined, 
-      "description": "NADA", 
+      "defaultAvailable": undefined,
+      "description": "NADA",
+      "duplicates": undefined,
       "file": undefined,
-      "global": undefined, 
+      "forcedType": undefined,
+      "global": undefined,
       "helpLink": undefined,
-      "id": "car", 
-      "multiline": undefined, 
-      "name": "car", 
-      "node": false, 
-      "nodeValues": new Map(), 
-      "readonly": undefined, 
+      "id": "car",
+      "multiline": undefined,
+      "name": "car",
+      "node": false,
+      "nodeValues": new Map(),
+      "optionSeparator": undefined,
+      "options": undefined,
+      "readonly": undefined,
+      "readonlyUi": undefined,
       "regex": undefined,
       "regexFailureMessage": undefined,
-      "sensitive": undefined, 
+      "required": undefined,
+      "sensitive": undefined,
       "syntax": undefined,
-      "title": "CCA", 
+      "title": "CCA",
+      "uiElements": undefined,
+      "uiElementsDeleteMessage": undefined,
       "value": undefined
     }
   ];
@@ -194,8 +242,8 @@ test('loadData', async () => {
 });
 
 test('getSettingName', () => {
-  expect(comp.getSettingName({id:"fake.setting.foo", name: 'fake'})).toBe("Fake Setting Translated");
-  expect(comp.getSettingName({id:"fake.setting.untranslated", name: "Untranslated Name"})).toBe("Untranslated Name");
+  expect(comp.getSettingName({id:"fake.setting.foo", title: 'fake'})).toBe("Fake Setting Translated");
+  expect(comp.getSettingName({id:"fake.setting.untranslated", title: "Untranslated Name"})).toBe("Untranslated Name");
   expect(comp.getSettingName({id:"fake.setting.untranslated"})).toBe(undefined);
 });
 
@@ -216,20 +264,23 @@ test('findActiveSetting', () => {
 
 test('clearFilter', () => {
   comp.search = "foo";
+  comp.searchFilter = "foo";
   comp.clearFilter();
   expect(comp.search).toBe("");
+  expect(comp.searchFilter).toBe("");
 });
 
 test('filter', () => {
   a.nodeValues['mia-test-001'] = 'hi';
   a.value = 'a1';
-  expect(comp.filter(a, 'foO')).toBe(true);
-  expect(comp.filter(a, 'bY')).toBe(true);
-  expect(comp.filter(a, 'OUt')).toBe(true);
-  expect(comp.filter(a, 'A1')).toBe(true);
-  expect(comp.filter(a, 'FaROut')).toBe(true);
-  expect(comp.filter(a, 'bar')).toBe(false);
-  expect(comp.filter(a)).toBe(true);
+  let ii = { raw: a };
+  expect(comp.filter(a.id, 'foO', ii)).toBe(true);
+  expect(comp.filter(a.id, 'bY', ii)).toBe(true);
+  expect(comp.filter(a.id, 'OUt', ii)).toBe(true);
+  expect(comp.filter(a.id, 'A1', ii)).toBe(true);
+  expect(comp.filter(a.id, 'FaROut', ii)).toBe(true);
+  expect(comp.filter(a.id, 'bar', ii)).toBe(false);
+  expect(comp.filter(a.id, null, ii)).toBe(true);
 });
 
 test('isMultiline', () => {
@@ -237,6 +288,14 @@ test('isMultiline', () => {
   expect(comp.isMultiline(setting)).toBe(false);
 
   setting.multiline = true;
+  expect(comp.isMultiline(setting)).toBe(true);
+
+  setting.multiline = false;
+  expect(comp.isMultiline(setting)).toBe(false);
+
+  setting.multiline = false;
+  setting.advanced = true;
+  setting.description = "";
   expect(comp.isMultiline(setting)).toBe(true);
 });
 
@@ -246,7 +305,7 @@ test('isPendingSave', () => {
   const values = new Map();
   values.set('bar', '123');
   const setting = { id: 'foo', value: "something", nodeValues: values};
-  
+
   // Form key is null, nothing pending
   var nodeId = null;
   expect(comp.isPendingSave(setting, nodeId)).toBe(false);
@@ -282,7 +341,7 @@ test('reset', () => {
 
 setupSettings = () => {
   comp.cancelDialog = true;
-  comp.nodes = [{id: "n1", status: GridMemberAccepted }, {id: "n1a", status: GridMemberAccepted }, 
+  comp.nodes = [{id: "n1", status: GridMemberAccepted }, {id: "n1a", status: GridMemberAccepted },
                 {id: "n2", name: "node2", role: "standalone", status: "accepted" }, {id:"n3", status: "pending" }];
 
   const nodeValues = new Map();
@@ -300,16 +359,20 @@ setupSettings = () => {
 };
 
 test('selectSetting', () => {
+  comp.form.entriesExpanded = 12;
   setupSettings();
 
   comp.selectSetting();
 
   expect(comp.activeBackup).toStrictEqual(["s-id"]);
-  expect(comp.availableNodes).toStrictEqual([{text: "node2 (standalone)", value: "n2"}]);
+  expect(comp.availableNodes).toStrictEqual([{title: "node2 (standalone)", value: "n2"}]);
   expect(comp.cancelDialog).toBe(false);
+  expect(comp.confirmResetDialog).toBe(false);
+  expect(comp.form.entriesExpanded).toBeNull();
 });
 
 test('cancel', () => {
+  comp.form.entriesExpanded = 12;
   comp.active = ["cancel-id"];
   comp.settings = [{id: "cancel-id", value: "abc"}];
   comp.form.value = "123";
@@ -328,28 +391,69 @@ test('cancel', () => {
   comp.cancel(false);
   expect(comp.cancelDialog).toBe(true);
   expect(comp.form.key).toBe("cancel-id");
+  expect(comp.form.entriesExpanded).toBe(12);
 });
 
-test('remove', async () => {
+test('userCancel', () => {
+  comp.form.entriesExpanded = 12;
+  comp.userCancel();
+  expect(comp.form.entriesExpanded).toBeNull();
+});
+
+test('remove', () => {
+  expect(comp.confirmResetDialog).toBe(false);
+  expect(comp.resetSetting).toBe(null);
+  expect(comp.resetNodeId).toBe(null);
+  comp.resetNodeId = "foo"
+  comp.resetSetting = "bar"
+  comp.confirmResetDialog = true
+  comp.remove("bar", "foo");
+  expect(comp.confirmResetDialog).toBe(true);
+  expect(comp.resetSetting).toBe("bar");
+  expect(comp.resetNodeId).toBe("foo");
+});
+
+test('cancelReset', () => {
+  expect(comp.confirmResetDialog).toBe(false);
+  expect(comp.resetSetting).toBe(null);
+  expect(comp.resetNodeId).toBe(null);
+  comp.resetNodeId = "foo"
+  comp.resetSetting = "bar"
+  comp.confirmResetDialog = true
+  comp.cancelRemove("bar", "foo");
+  expect(comp.confirmResetDialog).toBe(false);
+  expect(comp.resetSetting).toBe(null);
+  expect(comp.resetNodeId).toBe(null);
+});
+
+test('confirmRemove', async () => {
   setupSettings();
 
   // No-op path
+  comp.remove(comp.settings[0], "nonexisting");
   var mock = mockPapi("delete");
-  await comp.remove(comp.settings[0], "nonexisting");
+  await comp.confirmRemove();
   var expectedNodeValues = new Map();
   expectedNodeValues.set("n1", "123");
   expectedNodeValues.set("n1a", "abc");
   expect(comp.settings[0].nodeValues).toStrictEqual(expectedNodeValues);
+  expect(comp.resetSetting).toBe(null);
+  expect(comp.resetNodeId).toBe(null);
+  expect(comp.confirmResetDialog).toBe(false);
   expect(comp.cancelDialog).toBe(false);
   expect(comp.form.key).toBe(null);
   expect(mock).toHaveBeenCalledWith('config/', { params: {"id": "s-id", "minion": "nonexisting" }});
 
   // Good path
+  comp.remove(comp.settings[0], "n1");
   mock = mockPapi("delete");
-  await comp.remove(comp.settings[0], "n1");
+  await comp.confirmRemove();
   expectedNodeValues = new Map();
   expectedNodeValues.set("n1a", "abc");
   expect(comp.settings[0].nodeValues).toStrictEqual(expectedNodeValues);
+  expect(comp.resetSetting).toBe(null);
+  expect(comp.resetNodeId).toBe(null);
+  expect(comp.confirmResetDialog).toBe(false);
   expect(comp.cancelDialog).toBe(false);
   expect(comp.form.key).toBe(null);
   expect(mock).toHaveBeenCalledWith('config/', { params: {"id": "s-id", "minion": "n1" }});
@@ -383,6 +487,16 @@ test('save', async () => {
   expect(comp.cancelDialog).toBe(false);
   expect(comp.form.key).toBe(null);
   expect(mock).toHaveBeenCalledWith('config/', {"id": "s-id", "nodeId": "n2", "value": "test-value"});
+});
+
+test('saveBool', async () => {
+  setupSettings();
+  comp.form.value = true;
+  comp.form.key = "s-id";
+  var mock = mockPapi("put");
+  await comp.save(comp.settings[0], null);
+  expect(comp.settings[0].value).toBe("true")
+  expect(mock).toHaveBeenCalledWith('config/', {"id": "s-id", "nodeId": null, "value": "true"});
 });
 
 test('saveRegexFailure', async () => {
@@ -450,13 +564,14 @@ test('saveRegexValidMultiline', async () => {
   expect(mock).toHaveBeenCalledWith('config/', {"id": "test.id", "nodeId": null, "value": "123\n456"});
 });
 
-test('edit', () => {
+test('edit', async () => {
   // Global edit, nothing pending
   setupSettings();
   comp.cancelDialog = false;
   comp.form.value = null;
   comp.form.key = null;
   comp.edit(comp.settings[0], null);
+  await new Promise(resolve => setTimeout(resolve, 2));
   expect(comp.form.key).toBe("s-id");
   expect(comp.form.value).toBe("orig-value");
   expect(comp.cancelDialog).toBe(false);
@@ -468,6 +583,7 @@ test('edit', () => {
   comp.form.key = "s-id2";
   comp.activeBackup = ["s-id2"];
   comp.edit(comp.settings[0], null);
+  await new Promise(resolve => setTimeout(resolve, 2));
   expect(comp.form.key).toBe("s-id2");
   expect(comp.form.value).toBe("touched-value");
   expect(comp.cancelDialog).toBe(true);
@@ -477,6 +593,7 @@ test('edit', () => {
   comp.form.value = null;
   comp.form.key = null;
   comp.edit(comp.settings[0], "n1");
+  await new Promise(resolve => setTimeout(resolve, 2));
   expect(comp.form.key).toBe("n1");
   expect(comp.form.value).toBe("123");
   expect(comp.cancelDialog).toBe(false);
@@ -486,6 +603,7 @@ test('edit', () => {
   comp.form.value = "touched-value";
   comp.form.key = "n2";
   comp.edit(comp.settings[0], "n1");
+  await new Promise(resolve => setTimeout(resolve, 2));
   expect(comp.form.key).toBe("n2");
   expect(comp.form.value).toBe("touched-value");
   expect(comp.cancelDialog).toBe(true);
@@ -508,7 +626,7 @@ test('addNode', () => {
   expect(comp.settings[0].nodeValues.get('n2')).toBe(undefined);
   expect(comp.form.key).toBe("n1");
   expect(comp.form.value).toBe("touched-value");
-  expect(comp.cancelDialog).toBe(true);  
+  expect(comp.cancelDialog).toBe(true);
 });
 
 test('addToNode_Malformed', () => {
@@ -516,4 +634,526 @@ test('addToNode_Malformed', () => {
     comp.addToNode({name: 'test'}, {}, ['parent'], {name: 'test'});
   };
   expect(closure).toThrow("Setting name 'test' conflicts with another similarly named setting");
+});
+
+test('toggleDuplicate', () => {
+  const setting = {
+    id: "a.b.c",
+    name: "c",
+    duplicates: true,
+  }
+  expect(comp.showDuplicate).toBe(false)
+  comp.toggleDuplicate(setting)
+  expect(comp.duplicateId).toBe("c_dup");
+  expect(comp.showDuplicate).toBe(true)
+});
+
+test('duplicate', () => {
+  const setting = {
+    id: "a.b.c",
+    name: "c",
+    duplicates: true,
+  }
+  const setting2 = {
+    id: "a.b.c",
+    name: "c",
+    duplicates: true,
+  }
+
+  Vue = {
+    toRaw: jest.fn().mockReturnValueOnce(setting),
+  };
+  global.structuredClone = jest.fn().mockReturnValueOnce(setting2);
+
+  comp.settings = [setting];
+  comp.duplicateId = "foo"
+  expect(comp.settings.length).toBe(1);
+
+  comp.duplicate(setting);
+  expect(comp.settings.length).toBe(2);
+  expect(comp.settings[1].id).toBe("a.b.foo");
+  expect(comp.settings[1].name).toBe("foo");
+});
+
+test('applySearchFilter', () => {
+  comp.search = "foo";
+  comp.searchFilter = "";
+  comp.applySearchFilter();
+  expect(comp.searchFilter).toBe(comp.search);
+  comp.clearFilter();
+  expect(comp.search).toBe("");
+  expect(comp.searchFilter).toBe("");
+});
+
+test('isReadOnly', () => {
+  const setting = {
+    id: "a1",
+    readonly: false,
+    readonlyUi: false,
+  };
+  expect(comp.isReadOnly(setting)).toBe(false);
+  setting.readonly = true;
+  expect(comp.isReadOnly(setting)).toBe(true);
+  setting.readonly = false;
+  setting.readonlyUi = true;
+  expect(comp.isReadOnly(setting)).toBe(true);
+  setting.readonly = true;
+  expect(comp.isReadOnly(setting)).toBe(true);
+});
+
+test('processRouteParameters', () => {
+  comp.$route.query = {
+    f: 'search',
+  };
+  comp.$nextTick = jest.fn();
+
+  // Local grid
+  comp.oldGridId = null;
+  expect(comp.processRouteParameters()).toBe(false);
+
+  expect(comp.search).toBe('search');
+  expect(comp.autoSelect).toBe('');
+  expect(comp.autoExpand).toBe(false);
+  expect(comp.searchFilter).toBe('search');
+  expect(comp.advanced).toBe(false);
+  expect(comp.$nextTick).toHaveBeenCalledTimes(0);
+
+  // Remote grid
+  comp.search = '';
+  comp.searchFilter = '';
+  comp.$route.query = {
+    e: '1',
+    gridId: 'my_grid',
+  };
+
+  expect(comp.processRouteParameters()).toBe(true);
+
+  expect(comp.search).toBe('');
+  expect(comp.autoSelect).toBe('');
+  expect(comp.autoExpand).toBe(true);
+  expect(comp.searchFilter).toBe('');
+  expect(comp.advanced).toBe(false);
+  expect(comp.$nextTick).toHaveBeenCalledTimes(0);
+
+  comp.autoExpand = false;
+  comp.$route.query = {
+    a: '1',
+  };
+
+  comp.processRouteParameters();
+
+  expect(comp.search).toBe('');
+  expect(comp.autoSelect).toBe('');
+  expect(comp.autoExpand).toBe(false);
+  expect(comp.searchFilter).toBe('');
+  expect(comp.advanced).toBe(true);
+  expect(comp.$nextTick).toHaveBeenCalledTimes(0);
+
+  comp.advanced = false
+  comp.$route.query = {
+    a: '1',
+    e: '1',
+    f: 'search',
+  };
+
+  comp.processRouteParameters();
+
+  expect(comp.search).toBe('search');
+  expect(comp.autoSelect).toBe('');
+  expect(comp.autoExpand).toBe(true);
+  expect(comp.searchFilter).toBe('search');
+  expect(comp.advanced).toBe(true);
+  expect(comp.$nextTick).toHaveBeenCalledTimes(1);
+});
+
+test('getSettingBreadcrumbs', () => {
+  setting = { id: "foo.bar.car", advanced: false };
+  expect(comp.getSettingBreadcrumbs(setting)).toBe("foo > bar > car");
+
+  setting = { id: "foo.bar.car", advanced: false, title: "Carbine" };
+  expect(comp.getSettingBreadcrumbs(setting)).toBe("foo > bar > Carbine");
+
+  setting = { id: "foo.bar.car", advanced: true };
+  expect(comp.getSettingBreadcrumbs(setting)).toBe("foo > bar > car [adv]");
+
+});
+
+test('hasUiElements', () => {
+  setting = {};
+  expect(comp.hasUiElements(setting)).toBe(false);
+
+  setting = { uiElements: [] };
+  expect(comp.hasUiElements(setting)).toBe(false);
+
+  setting = { uiElements: [{}] };
+  expect(comp.hasUiElements(setting)).toBe(false);
+
+  setting = { syntax: 'json' };
+  expect(comp.hasUiElements(setting)).toBe(false);
+
+  setting = { uiElements: [{}], syntax: 'json' };
+  expect(comp.hasUiElements(setting)).toBe(true);
+});
+
+test('pack_unpack', () => {
+  comp.form.value = "{}"
+  comp.form.entries = [{foo: 'bar\ncar', _title:'ignore'},{_title:'empty'}];
+  setting = {id: 'myid', uiElements:[{field: 'foo', label:'some fooness', multiline: true, forcedType: "[]string"}], syntax: 'json'}
+  comp.pack(setting);
+  expect(comp.form.value).toBe('[{"foo":["bar","car"]}]')
+
+  comp.form.entries = null;
+  setting.value = '[{"foo":["bar", "car"]}]';
+  comp.settings = [setting];
+  comp.active = ['myid'];
+  comp.unpack(setting);
+  expect(comp.form.entries.length).toBe(2);
+  expect(comp.form.entries[0].foo).toBe('bar\ncar');
+  expect(comp.form.entries[0]._title).toBe('1. bar,car');
+  expect(comp.form.entries[1]._title).toBe('+');
+});
+
+test('pack_unpack_multiple', () => {
+  comp.form.value = "{}"
+  comp.form.entries = [{foo: 'bar', _title:'ignore'},{_title:'empty'},{foo: 'bar2', _title:'ignore2'},{_title:'empty2'}];
+  setting = {id: 'myid', uiElements:[{field: 'foo', label:'some fooness'}], syntax: 'json'}
+  comp.pack(setting);
+  expect(comp.form.value).toBe('[{"foo":"bar"},{"foo":"bar2"}]')
+
+  comp.form.entries = null;
+  setting.value = '[{"foo":"bar"},{"foo":"bar2"}]';
+  comp.settings = [setting];
+  comp.active = ['myid'];
+  comp.unpack(setting);
+  expect(comp.form.entries.length).toBe(3);
+  expect(comp.form.entries[0].foo).toBe('bar');
+  expect(comp.form.entries[0]._title).toBe('1. bar');
+  expect(comp.form.entries[1].foo).toBe('bar2');
+  expect(comp.form.entries[1]._title).toBe('2. bar2');
+  expect(comp.form.entries[2]._title).toBe('+');
+});
+
+test('pack_unpack_array_of_json', () => {
+  comp.form.value = "{}"
+  comp.form.entries = [{foo: 'bar', _title:'ignore'},{_title:'empty'}];
+  setting = {id: 'myid', forcedType: "[]{}", uiElements:[{field: 'foo', label:'some fooness'}], syntax: 'json'}
+  comp.pack(setting);
+  expect(comp.form.value).toBe('{"foo":"bar"}')
+
+  comp.form.entries = null;
+  setting.value = '{"foo":"bar"}';
+  comp.settings = [setting];
+  comp.active = ['myid'];
+  comp.unpack(setting);
+  expect(comp.form.entries.length).toBe(2);
+  expect(comp.form.entries[0].foo).toBe('bar');
+  expect(comp.form.entries[0]._title).toBe('1. bar');
+  expect(comp.form.entries[1]._title).toBe('+');
+});
+
+test('pack_unpack_multiple_array_of_json', () => {
+  comp.form.value = "{}"
+  comp.form.entries = [{foo: 'bar', _title:'ignore'},{_title:'empty'},{foo: 'bar2', _title:'ignore2'},{_title:'empty2'}];
+  setting = {id: 'myid', forcedType: "[]{}", uiElements:[{field: 'foo', label:'some fooness'}], syntax: 'json'}
+  comp.pack(setting);
+  expect(comp.form.value).toBe('{"foo":"bar"}\n{"foo":"bar2"}')
+
+  comp.form.entries = null;
+  setting.value = '{"foo":"bar"}\n{"foo":"bar2"}';
+  comp.settings = [setting];
+  comp.active = ['myid'];
+  comp.unpack(setting);
+  expect(comp.form.entries.length).toBe(3);
+  expect(comp.form.entries[0].foo).toBe('bar');
+  expect(comp.form.entries[0]._title).toBe('1. bar');
+  expect(comp.form.entries[1].foo).toBe('bar2');
+  expect(comp.form.entries[1]._title).toBe('2. bar2');
+  expect(comp.form.entries[2]._title).toBe('+');
+});
+
+test('generateEntryTitle', () => {
+  entry = {id: 'something', foo:'hi'};
+  comp.settings = [entry];
+  comp.active = [entry.id];
+  comp.generateEntryTitle(entry, 1);
+  expect(entry._title).toBe('2. ');
+  entry.uiElements = [{field: 'foo'}];
+  comp.generateEntryTitle(entry, 1);
+  expect(entry._title).toBe('2. hi');
+});
+
+test('markDirtyEntries', () => {
+  comp.form.value = 123;
+  comp.markDirtyEntries();
+  expect(comp.form.value.length).toBe(13);
+});
+
+test('showClearEntryDialog', () => {
+  expect(comp.confirmRemoveEntryDialog).toBe(false);
+  const setting = {uiElementsDeleteMessage: 'hi'};
+  comp.showClearEntryDialog(setting, 2);
+  expect(comp.confirmRemoveEntryDialog).toBe(true);
+  expect(comp.confirmRemoveEntryMessage).toBe('hi');
+  expect(comp.confirmRemoveEntryIdx).toBe(2);
+});
+
+test('cancelClearEntry', () => {
+  comp.confirmRemoveEntryDialog = true;
+  comp.confirmRemoveEntryMessage = 'hi';
+  comp.confirmRemoveEntryIdx = 2;
+  comp.cancelClearEntry();
+  expect(comp.confirmRemoveEntryDialog).toBe(false);
+  expect(comp.confirmRemoveEntryMessage).toBe('');
+  expect(comp.confirmRemoveEntryIdx).toBe(0);
+});
+
+test('confirmClearEntry', () => {
+  entry = {foo: 'bar', some: 'value', _title: 'title'};
+  comp.form.value = 123;
+  comp.form.entries = [entry]
+  comp.confirmRemoveEntryIdx = 0;
+  comp.confirmClearEntry();
+  expect(comp.form.value.length).toBe(13);
+  expect(entry.foo).toBe('');
+  expect(entry.some).toBe('');
+  expect(entry._title).toBe('1. (pending deletion)');
+
+  entry = {foo: 'bar', some: 'value', _title: '+'};
+  comp.confirmClearEntry(entry, 1);
+  expect(entry._title).toBe('+');
+});
+
+test('createEmptyUiElementEntry', () => {
+  const setting = {
+    uiElements: [
+      { field: 'field1', default: 'default1' },
+      { field: 'field2' },
+      { field: 'field3', default: 'default3' },
+    ],
+  };
+
+  const emptyEntry = comp.createEmptyUiElementEntry(setting);
+
+  expect(emptyEntry._title).toBe('+');
+  expect(emptyEntry.field1).toBe('default1');
+  expect(emptyEntry.field3).toBe('default3');
+  expect(emptyEntry.field2).toBeUndefined();
+});
+
+test('getElementLabel', () => {
+  let element = { label: 'Test Label', required: false };
+  expect(comp.getElementLabel(element)).toBe('Test Label');
+
+  element = { label: 'Test Label', required: true };
+  expect(comp.getElementLabel(element)).toBe('Test Label *');
+});
+
+test('validateRegexMatch', () => {
+  let setting = { regex: '^test$', regexFailureMessage: 'Regex failed' };
+  expect(comp.validateRegexMatch(setting, 'test')).toBe(true);
+  expect(comp.validateRegexMatch(setting, 'fail')).toBe('Regex failed');
+
+  setting = { regex: '^test$' };
+  expect(comp.validateRegexMatch(setting, 'test')).toBe(true);
+  expect(comp.validateRegexMatch(setting, 'fail')).toBe(comp.i18n.settingValidationFailed);
+});
+
+test('buildInputRules', () => {
+  let setting = { required: false, regex: null };
+  expect(comp.buildInputRules(setting)).toEqual([]);
+
+  setting = { required: true, regex: null };
+  let rules = comp.buildInputRules(setting);
+  expect(rules.length).toBe(1);
+  expect(rules[0]('')).toBe('Required.');
+
+  setting = { required: false, regex: '^test$', regexFailureMessage: 'Regex failed' };
+  rules = comp.buildInputRules(setting);
+  expect(rules.length).toBe(1);
+  expect(rules[0]('test')).toBe(true);
+  expect(rules[0]('fail')).toBe('Regex failed');
+
+  setting = { required: true, regex: '^test$', regexFailureMessage: 'Regex failed' };
+  rules = comp.buildInputRules(setting);
+  expect(rules.length).toBe(2);
+  expect(rules[0]('')).toBe('Required.');
+  expect(rules[1]('test')).toBe(true);
+  expect(rules[1]('fail')).toBe('Regex failed');
+});
+
+test('isUiElementReadonly', () => {
+  let entry = { _title: '1' };
+  let setting = { readonly: false };
+  expect(comp.isUiElementReadonly(entry, setting)).toBe(false);
+
+  setting = { readonly: true };
+  expect(comp.isUiElementReadonly(entry, setting)).toBe(true);
+
+  entry = { _title: '+' };
+  setting = { readonly: true };
+  expect(comp.isUiElementReadonly(entry, setting)).toBe(false);
+});
+
+test('uiElementsHaveValidInputs', () => {
+  comp.form.entries = null;
+  let setting = { uiElements: [{}] };
+  expect(comp.uiElementsHaveValidInputs(setting)).toBe(true);
+
+  comp.form.entries = [{ valid: true }];
+  setting = { uiElements: [{field: "valid", default: true}] };
+  expect(comp.uiElementsHaveValidInputs(setting)).toBe(true);
+
+  comp.form.entries = [{ valid: true }];
+  setting = { uiElements: [{field: "valid", default: true}] };
+  comp.uiElementsValid = false;
+  expect(comp.uiElementsHaveValidInputs(setting)).toBe(true);
+
+  comp.form.entries = [{ valid: false }, { _title: '+' }];
+  setting = { uiElements: [{}] };
+  comp.uiElementsValid = false;
+  expect(comp.uiElementsHaveValidInputs(setting)).toBe(true);
+
+  comp.form.entries = [{ valid: false }, { _title: '+' }];
+  setting = { uiElements: [{}] };
+  comp.uiElementsValid = false;
+  comp.isEntryEmpty = jest.fn().mockReturnValue(false);
+  expect(comp.uiElementsHaveValidInputs(setting)).toBe(false);
+});
+
+test('isEntryEmpty', () => {
+  let setting = { uiElements: [{ field: 'foo', default: 'default' }] };
+  let entry = { foo: 'default', _title: 'title' };
+  expect(comp.isEntryEmpty(setting, entry)).toBe(true);
+
+  setting = { uiElements: [{ field: 'foo', default: 'default' }] };
+  entry = { foo: 'notDefault', _title: 'title' };
+  expect(comp.isEntryEmpty(setting, entry)).toBe(false);
+});
+
+test('convertMultilineElement', () => {
+  let element = { field: 'foo', multiline: true, forcedType: '[]string' };
+  let modifiedEntry = { foo: 'bar\ncar\n' };
+
+  comp.convertMultilineElement(element, modifiedEntry, false);
+  expect(modifiedEntry.foo).toEqual(['bar', 'car']);
+
+  comp.convertMultilineElement(element, modifiedEntry, true);
+  expect(modifiedEntry.foo).toBe('bar\ncar');
+
+  element = { field: 'foo', multiline: true, forcedType: '[]string' };
+  modifiedEntry = { foo: null };
+
+  comp.convertMultilineElement(element, modifiedEntry, false);
+  expect(modifiedEntry.foo).toEqual([]);
+
+  comp.convertMultilineElement(element, modifiedEntry, true);
+  expect(modifiedEntry.foo).toBe('');
+});
+
+test('convertMultilineElementWithJSONObject', () => {
+  let element = { field: 'foo', multiline: true, forcedType: '{}' };
+  let modifiedEntry = { foo: {"foo": "bar"} };
+
+  comp.convertMultilineElement(element, modifiedEntry, true);
+  expect(modifiedEntry.foo).toBe('{\"foo\":\"bar\"}');
+
+  comp.convertMultilineElement(element, modifiedEntry, false);
+  expect(modifiedEntry.foo).toStrictEqual({"foo": "bar"});
+
+});
+
+test('canMoveEntry', () => {
+  comp.form.entries = [{_title: '1'}, {_title: '2'}, {_title: '+'}];
+  expect(comp.canMoveEntry(0, true)).toBe(true);
+  expect(comp.canMoveEntry(0, false)).toBe(true);
+  expect(comp.canMoveEntry(1, true)).toBe(true);
+  expect(comp.canMoveEntry(1, false)).toBe(true);
+  expect(comp.canMoveEntry(2, true)).toBe(false);
+  expect(comp.canMoveEntry(2, false)).toBe(false);
+
+  comp.form.entries = [{_title: '1'}, {_title: '2'}];
+  expect(comp.canMoveEntry(0, true)).toBe(true);
+  expect(comp.canMoveEntry(0, false)).toBe(true);
+  expect(comp.canMoveEntry(1, true)).toBe(true);
+  expect(comp.canMoveEntry(1, false)).toBe(true);
+});
+
+test('moveEntry', () => {
+  comp.form.entries = [{_title: '1'}, {_title: '2'}, {_title: '+'}];
+  comp.isPendingSave = jest.fn().mockReturnValue(false);
+  comp.editNow = jest.fn();
+  comp.generateEntryTitle = jest.fn();
+  comp.markDirtyEntries = jest.fn();
+
+  comp.moveEntry({}, 0, false);
+  expect(comp.isPendingSave).toHaveBeenCalledWith({});
+  expect(comp.editNow).toHaveBeenCalled();
+  expect(comp.generateEntryTitle).toHaveBeenCalledTimes(2);
+  expect(comp.markDirtyEntries).toHaveBeenCalled();
+  expect(comp.form.entries[0]._title).toBe('2');
+  expect(comp.form.entries[1]._title).toBe('1');
+
+  comp.moveEntry({}, 1, true);
+  expect(comp.form.entries[0]._title).toBe('1');
+  expect(comp.form.entries[1]._title).toBe('2');
+});
+
+test('moveEntryWrap', () => {
+  comp.form.entries = [{_title: '1'}, {_title: '2'}, {_title: '3'}, {_title: '+'}];
+  comp.isPendingSave = jest.fn().mockReturnValue(false);
+  comp.editNow = jest.fn();
+  comp.generateEntryTitle = jest.fn();
+  comp.markDirtyEntries = jest.fn();
+
+  comp.moveEntry({}, 0, true);
+  expect(comp.isPendingSave).toHaveBeenCalledWith({});
+  expect(comp.editNow).toHaveBeenCalled();
+  expect(comp.generateEntryTitle).toHaveBeenCalledTimes(4);
+  expect(comp.markDirtyEntries).toHaveBeenCalled();
+
+  expect(comp.form.entries[0]._title).toBe('2');
+  expect(comp.form.entries[1]._title).toBe('3');
+  expect(comp.form.entries[2]._title).toBe('1');
+  expect(comp.form.entries[3]._title).toBe('+');
+
+  comp.moveEntry({}, 2, false);
+  expect(comp.form.entries[0]._title).toBe('1');
+  expect(comp.form.entries[1]._title).toBe('2');
+  expect(comp.form.entries[2]._title).toBe('3');
+  expect(comp.form.entries[3]._title).toBe('+');
+});
+
+test('moveEntryWrapWithoutPlus', () => {
+  comp.form.entries = [{_title: '1'}, {_title: '2'}, {_title: '3'}];
+  comp.isPendingSave = jest.fn().mockReturnValue(false);
+  comp.editNow = jest.fn();
+  comp.generateEntryTitle = jest.fn();
+  comp.markDirtyEntries = jest.fn();
+
+  comp.moveEntry({}, 0, true);
+  expect(comp.isPendingSave).toHaveBeenCalledWith({});
+  expect(comp.editNow).toHaveBeenCalled();
+  expect(comp.generateEntryTitle).toHaveBeenCalledTimes(3);
+  expect(comp.markDirtyEntries).toHaveBeenCalled();
+
+  expect(comp.form.entries[0]._title).toBe('2');
+  expect(comp.form.entries[1]._title).toBe('3');
+  expect(comp.form.entries[2]._title).toBe('1');
+
+  comp.moveEntry({}, 2, false);
+  expect(comp.form.entries[0]._title).toBe('1');
+  expect(comp.form.entries[1]._title).toBe('2');
+  expect(comp.form.entries[2]._title).toBe('3');
+});
+
+test('getSettingLink', () => {
+  const setting = { id: 'test.setting', advanced: true };
+
+  comp.$route = { path: '/config' };
+  const link = comp.getSettingLink(setting);
+  expect(link).toBe('https://example.com/#/config?s=test.setting&a=1');
+
+  setting.advanced = false;
+  const link2 = comp.getSettingLink(setting);
+  expect(link2).toBe('https://example.com/#/config?s=test.setting&a=0');
 });

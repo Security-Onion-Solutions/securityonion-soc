@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -10,24 +10,29 @@ import (
 	"testing"
 
 	"github.com/security-onion-solutions/securityonion-soc/module"
+	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestBuildModuleMap(tester *testing.T) {
-	mm := BuildModuleMap(nil)
-	findModule(tester, mm, "elastic")
-	findModule(tester, mm, "elasticcases")
-	findModule(tester, mm, "filedatastore")
-	findModule(tester, mm, "salt")
-	findModule(tester, mm, "httpcase")
-	findModule(tester, mm, "kratos")
-	findModule(tester, mm, "influxdb")
-	findModule(tester, mm, "sostatus")
-	findModule(tester, mm, "statickeyauth")
-	findModule(tester, mm, "thehive")
+func TestBuildModuleMap(t *testing.T) {
+	mm := BuildModuleMap(&server.Server{})
+	findModule(t, mm, "elastic")
+	findModule(t, mm, "elasticcases")
+	findModule(t, mm, "filedatastore")
+	findModule(t, mm, "salt")
+	findModule(t, mm, "httpcase")
+	findModule(t, mm, "kratos")
+	findModule(t, mm, "navigator")
+	findModule(t, mm, "influxdb")
+	findModule(t, mm, "sostatus")
+	findModule(t, mm, "statickeyauth")
+	findModule(t, mm, "thehive")
+	findModule(t, mm, "suricataengine")
+	findModule(t, mm, "elastalertengine")
+	findModule(t, mm, "strelkaengine")
 }
 
-func findModule(tester *testing.T, mm map[string]module.Module, module string) {
+func findModule(t *testing.T, mm map[string]module.Module, module string) {
 	_, ok := mm[module]
-	assert.True(tester, ok)
+	assert.True(t, ok)
 }

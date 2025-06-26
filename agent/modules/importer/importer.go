@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -20,6 +20,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/agent"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
+	"github.com/security-onion-solutions/securityonion-soc/packet"
 )
 
 const DEFAULT_EXECUTABLE_PATH = "tcpdump"
@@ -91,7 +92,7 @@ func (importer *Importer) ProcessJob(job *model.Job, reader io.ReadCloser) (io.R
 	} else {
 		job.FileExtension = "pcap"
 
-		query := importer.buildQuery(job)
+		query := packet.CreateBpf(job.Filter, false)
 
 		pcapInputFilepath := fmt.Sprintf("%s/%s/pcap/data.pcap", importer.pcapInputPath, job.Filter.ImportId)
 		pcapOutputFilepath := fmt.Sprintf("%s/%d.%s", importer.pcapOutputPath, job.Id, job.FileExtension)
@@ -113,9 +114,32 @@ func (importer *Importer) ProcessJob(job *model.Job, reader io.ReadCloser) (io.R
 		}).Debug("Executed tcpdump")
 		if err == nil {
 			var file *os.File
+			var info os.FileInfo
 			file, err = os.Open(pcapOutputFilepath)
 			if err == nil {
-				reader = file
+				info, err = os.Stat(pcapOutputFilepath)
+				if err != nil {
+					log.WithError(err).WithFields(log.Fields{
+						"pcapPath": pcapOutputFilepath,
+					}).Error("Failed to collect output file stats")
+				} else {
+					size := int(info.Size())
+					log.WithFields(log.Fields{
+						"pcapPath": pcapOutputFilepath,
+						"pcapSize": size,
+						"jobSize":  job.Size,
+					}).Debug("Found matching packets")
+					if job.Size > size {
+						log.Warn("Discarding Importer job output since existing job already has more content from another processor")
+					} else {
+						job.Size = size
+						reader = file
+						log.WithFields(log.Fields{
+							"pcapStreamErr":  err,
+							"pcapStreamSize": size,
+						}).Debug("Finished processing PCAP via Importer")
+					}
+				}
 			}
 		}
 	}
@@ -130,38 +154,4 @@ func (importer *Importer) CleanupJob(job *model.Job) {
 func (importer *Importer) GetDataEpoch() time.Time {
 	// Epoch not used for imported data, return current time
 	return time.Now()
-}
-
-func (importer *Importer) buildQuery(job *model.Job) string {
-	query := ""
-
-	if len(job.Filter.SrcIp) > 0 {
-		if len(query) > 0 {
-			query = query + " and"
-		}
-		query = fmt.Sprintf("%s host %s", query, job.Filter.SrcIp)
-	}
-
-	if len(job.Filter.DstIp) > 0 {
-		if len(query) > 0 {
-			query = query + " and"
-		}
-		query = fmt.Sprintf("%s host %s", query, job.Filter.DstIp)
-	}
-
-	if job.Filter.SrcPort > 0 {
-		if len(query) > 0 {
-			query = query + " and"
-		}
-		query = fmt.Sprintf("%s port %d", query, job.Filter.SrcPort)
-	}
-
-	if job.Filter.DstPort > 0 {
-		if len(query) > 0 {
-			query = query + " and"
-		}
-		query = fmt.Sprintf("%s port %d", query, job.Filter.DstPort)
-	}
-
-	return query
 }

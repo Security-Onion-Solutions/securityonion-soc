@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -12,18 +12,20 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/json"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/salt/options"
 	"github.com/security-onion-solutions/securityonion-soc/syntax"
 	"github.com/security-onion-solutions/securityonion-soc/web"
+
+	"github.com/apex/log"
 	"gopkg.in/yaml.v3"
 )
 
@@ -53,19 +55,21 @@ func (store *Saltstore) Init(timeoutMs int, longRelayTimeoutMs int, saltstackDir
 }
 
 func (store *Saltstore) execCommand(ctx context.Context, args map[string]string) (string, error) {
+	logger := log.FromContext(ctx)
+
 	reqId := ctx.Value(web.ContextKeyRequestId).(string)
 	cmd := args["command"]
 	id := reqId + "_" + cmd
 	args["command_id"] = id
 
 	filename := filepath.Join(store.queueDir, id)
-	log.WithFields(log.Fields{
+	logger.WithFields(log.Fields{
 		"filename": filename,
 	}).Info("Executing command via salt relay")
 
 	err := json.WriteJsonFile(filename, args)
 	if err != nil {
-		log.WithFields(log.Fields{
+		logger.WithFields(log.Fields{
 			"filename": filename,
 		}).WithError(err).Error("Unable to write to file")
 
@@ -73,7 +77,7 @@ func (store *Saltstore) execCommand(ctx context.Context, args map[string]string)
 	}
 
 	responseFilename := filename + ".response"
-	log.WithFields(log.Fields{
+	logger.WithFields(log.Fields{
 		"responseFilename": responseFilename,
 		"timeoutMs":        store.timeoutMs,
 	}).Info("Waiting for response")
@@ -92,7 +96,7 @@ func (store *Saltstore) execCommand(ctx context.Context, args map[string]string)
 			var data []byte
 			data, err = os.ReadFile(responseFilename)
 			if err != nil {
-				log.WithFields(log.Fields{
+				logger.WithFields(log.Fields{
 					"filename": responseFilename,
 				}).WithError(err).Error("Failed to read file")
 			} else {
@@ -112,7 +116,7 @@ func (store *Saltstore) execCommand(ctx context.Context, args map[string]string)
 		return "", errors.New("ERROR_SALT_RELAY_DOWN")
 	}
 
-	log.WithFields(log.Fields{
+	logger.WithFields(log.Fields{
 		"filename": responseFilename,
 		"response": response,
 	}).Debug("Finished reading response")
@@ -129,13 +133,15 @@ func (store *Saltstore) GetSetting(settings []*model.Setting, id string) *model.
 	return nil
 }
 
-func (store *Saltstore) GetSettings(ctx context.Context) ([]*model.Setting, error) {
+func (store *Saltstore) GetSettings(ctx context.Context, advanced bool) ([]*model.Setting, error) {
+	logger := log.FromContext(ctx)
+
 	var err error
 	if err = store.server.CheckAuthorized(ctx, "read", "config"); err != nil {
 		return nil, err
 	}
 
-	settings := make([]*model.Setting, 0, 0)
+	settings := make([]*model.Setting, 0)
 
 	// Parse the default values first.
 	err = filepath.Walk(store.saltstackDir+"/default", func(path string, info os.FileInfo, err error) error {
@@ -149,7 +155,7 @@ func (store *Saltstore) GetSettings(ctx context.Context) ([]*model.Setting, erro
 
 		if store.bypassErrors {
 			if err != nil {
-				log.WithField("path", path).WithError(err).Warn("Bypassing error while parsing defaults")
+				logger.WithField("path", path).WithError(err).Warn("Bypassing error while parsing defaults")
 			}
 			return nil
 		}
@@ -196,7 +202,7 @@ func (store *Saltstore) GetSettings(ctx context.Context) ([]*model.Setting, erro
 
 			if store.bypassErrors {
 				if err != nil {
-					log.WithField("path", path).WithError(err).Warn("Bypassing error while parsing local pillars")
+					logger.WithField("path", path).WithError(err).Warn("Bypassing error while parsing local pillars")
 				}
 				return nil
 			}
@@ -217,7 +223,7 @@ func (store *Saltstore) GetSettings(ctx context.Context) ([]*model.Setting, erro
 
 			if store.bypassErrors {
 				if err != nil {
-					log.WithField("path", path).WithError(err).Warn("Bypassing error while parsing annotations")
+					logger.WithField("path", path).WithError(err).Warn("Bypassing error while parsing annotations")
 				}
 				return nil
 			}
@@ -225,7 +231,32 @@ func (store *Saltstore) GetSettings(ctx context.Context) ([]*model.Setting, erro
 		})
 	}
 
-	return store.sortSettings(settings), err
+	store.postProcess(settings)
+
+	return store.sortSettings(store.filter(settings, advanced)), err
+}
+
+func (store *Saltstore) postProcess(settings []*model.Setting) {
+	for _, setting := range settings {
+		// Mark all settings missing descriptions as advanced
+		if len(setting.Description) == 0 {
+			setting.Advanced = true
+		}
+
+		if setting.SupportsJinja() {
+			setting.Value = syntax.UnescapeJinja(setting.Value)
+		}
+	}
+}
+
+func (store *Saltstore) filter(settings []*model.Setting, advanced bool) []*model.Setting {
+	if advanced {
+		// No need to filter anything, caller wants everything
+		return settings
+	}
+	return slices.DeleteFunc(settings, func(setting *model.Setting) bool {
+		return setting.Advanced
+	})
 }
 
 func (store *Saltstore) sortSettings(settings []*model.Setting) []*model.Setting {
@@ -343,7 +374,7 @@ func (store *Saltstore) recursivelyParseSettings(
 			merged := false
 			if minion == "" {
 				for _, existing := range settings {
-					if existing.Id == newId {
+					if existing.Id == newId && existing.NodeId == "" {
 						existing.Value = newValue
 						if existing.Multiline != multiline {
 							log.WithFields(log.Fields{
@@ -417,7 +448,6 @@ func (store *Saltstore) recursivelyParseAnnotations(
 			}
 		default:
 			foundAnnotation = true
-			break
 		}
 	}
 	return settings, foundAnnotation
@@ -432,6 +462,8 @@ func (store *Saltstore) updateSettingWithAnnotation(setting *model.Setting, anno
 			setting.Description = fmt.Sprintf("%v", value)
 		case "readonly":
 			setting.Readonly = value.(bool)
+		case "readonlyUi":
+			setting.ReadonlyUi = value.(bool)
 		case "global":
 			setting.Global = value.(bool)
 		case "multiline":
@@ -470,8 +502,63 @@ func (store *Saltstore) updateSettingWithAnnotation(setting *model.Setting, anno
 					setting.Value = setting.Default
 				}
 			}
+		case "duplicates":
+			setting.Duplicates = value.(bool)
+		case "jinjaEscaped":
+			setting.JinjaEscaped = value.(bool)
+		case "options":
+			setting.Options = store.castToStringArray(value)
+		case "optionSeparator":
+			setting.OptionSeparator = value.(string)
+		case "required":
+			setting.Required = value.(bool)
+		case "uiElements":
+			tmpElements := value.([]interface{})
+			for _, tmp := range tmpElements {
+				if tmpMap, ok := tmp.(map[string]interface{}); ok {
+					var element model.UiElement
+					for key, value := range tmpMap {
+						switch key {
+						case "field":
+							element.Field = value.(string)
+						case "label":
+							element.Label = value.(string)
+						case "forcedType":
+							element.ForcedType = value.(string)
+						case "multiline":
+							element.Multiline = value.(bool)
+						case "options":
+							element.Options = store.castToStringArray(value)
+						case "default":
+							element.Default = value
+						case "required":
+							element.Required = value.(bool)
+						case "readonly":
+							element.Readonly = value.(bool)
+						case "regex":
+							element.Regex = fmt.Sprintf("%v", value)
+						case "regexFailureMessage":
+							element.RegexFailureMessage = value.(string)
+						}
+					}
+					setting.UiElements = append(setting.UiElements, element)
+				} else {
+					log.Error("Invalid annotation; cannot cast to map")
+				}
+			}
+		case "uiElementsDeleteMessage":
+			setting.UiElementsDeleteMessage = value.(string)
 		}
 	}
+}
+
+func (store *Saltstore) castToStringArray(value interface{}) []string {
+	values := make([]string, 0)
+	tmpArray := value.([]interface{})
+	for _, tmp := range tmpArray {
+		values = append(values, tmp.(string))
+	}
+	return values
 }
 
 func (store *Saltstore) relPathFromId(id string) string {
@@ -608,8 +695,9 @@ func (store *Saltstore) deleteSetting(mapped map[string]interface{}, sections []
 	return empty, err
 }
 
-func (store *Saltstore) UpdateSetting(ctx context.Context, setting *model.Setting, remove bool) error {
-	var err error
+func (store *Saltstore) UpdateSetting(ctx context.Context, setting *model.Setting, remove bool) (err error) {
+	logger := log.FromContext(ctx)
+
 	if err = store.server.CheckAuthorized(ctx, "write", "config"); err != nil {
 		return err
 	}
@@ -620,13 +708,15 @@ func (store *Saltstore) UpdateSetting(ctx context.Context, setting *model.Settin
 		return errors.New("Invalid setting id: " + setting.Id)
 	}
 
-	settings, err := store.GetSettings(ctx)
+	// always pull advanced settings on update since incoming setting may not be properly flagged as advanced
+	advanced := true
+	settings, err := store.GetSettings(ctx, advanced)
 	if err != nil {
 		return err
 	} else {
 		settingDef := store.GetSetting(settings, setting.Id)
 		if settingDef == nil {
-			log.WithFields(log.Fields{
+			logger.WithFields(log.Fields{
 				"settingId": setting.Id,
 			}).Info("Setting definition not found; assuming new, undefined setting")
 		} else {
@@ -638,13 +728,26 @@ func (store *Saltstore) UpdateSetting(ctx context.Context, setting *model.Settin
 			setting.Default = settingDef.Default
 			setting.DefaultAvailable = settingDef.DefaultAvailable
 			setting.File = settingDef.File
+			setting.JinjaEscaped = settingDef.JinjaEscaped
 		}
 	}
 
 	if !remove {
-		err = syntax.Validate(setting.Value, setting.Syntax)
-		if err != nil {
-			return err
+		if setting.SupportsJinja() {
+			setting.Value = syntax.EscapeJinja(setting.Value)
+		}
+
+		if !strings.HasPrefix(setting.ForcedType, "[]") {
+			// Do not attempt to validate settings with array values, as those have \n separators and will be
+			// validated during the type alignment stage later in this update.
+			log.WithFields(log.Fields{
+				"settingSyntax": setting.Syntax,
+				"settingId":     setting.Id,
+			}).Debug("Preparing to validating setting")
+			err = syntax.Validate(setting.Value, setting.Syntax)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -656,24 +759,33 @@ func (store *Saltstore) UpdateSetting(ctx context.Context, setting *model.Settin
 			path = fmt.Sprintf("%s/local/pillar/minions/adv_%s.sls", store.saltstackDir, setting.NodeId)
 		}
 
-		log.WithFields(log.Fields{
-			"settingId": setting.Id,
-			"minionId":  setting.NodeId,
-			"path":      path,
-			"length":    len(setting.Value),
+		logger.WithFields(log.Fields{
+			"settingId":     setting.Id,
+			"minionId":      setting.NodeId,
+			"settingPath":   path,
+			"settingLength": len(setting.Value),
 		}).Info("Updating advanced settings to new value")
 		os.WriteFile(path, []byte(setting.Value), 0600)
 
 	} else if setting.File {
 		path := fmt.Sprintf("%s/local/salt/%s", store.saltstackDir, store.relPathFromId(setting.Id))
+		if !remove {
+			logger.WithFields(log.Fields{
+				"settingId":     setting.Id,
+				"settingPath":   path,
+				"settingLength": len(setting.Value),
+			}).Info("Updating custom file setting to new value")
 
-		log.WithFields(log.Fields{
-			"settingId": setting.Id,
-			"path":      path,
-			"length":    len(setting.Value),
-		}).Info("Updating custom file setting to new value")
+			err = os.WriteFile(path, []byte(setting.Value), 0600)
+		} else {
+			logger.WithFields(log.Fields{
+				"settingId":     setting.Id,
+				"settingPath":   path,
+				"settingLength": len(setting.Value),
+			}).Info("Deleting custom file")
 
-		err = os.WriteFile(path, []byte(setting.Value), 0600)
+			err = os.Remove(path)
+		}
 	} else {
 		var path string
 		if setting.NodeId == "" {
@@ -686,16 +798,16 @@ func (store *Saltstore) UpdateSetting(ctx context.Context, setting *model.Settin
 		mapped, err = store.parseYaml(path)
 		if err == nil {
 			if !remove {
-				log.WithFields(log.Fields{
-					"settingId": setting.Id,
-					"path":      path,
-					"length":    len(setting.Value),
+				logger.WithFields(log.Fields{
+					"settingId":     setting.Id,
+					"settingPath":   path,
+					"settingLength": len(setting.Value),
 				}).Info("Updating setting to new value")
 				err = store.updateSetting(mapped, sections, setting)
 			} else {
-				log.WithFields(log.Fields{
-					"settingId": setting.Id,
-					"path":      path,
+				logger.WithFields(log.Fields{
+					"settingId":   setting.Id,
+					"settingPath": path,
 				}).Info("Deleting setting")
 				_, err = store.deleteSetting(mapped, sections)
 			}
@@ -713,7 +825,7 @@ func (store *Saltstore) alignInt64List(newValue string) ([]int64, error) {
 	var newList []int64
 	if len(newValue) > 0 {
 		tmp := strings.Split(newValue, "\n")
-		newList = make([]int64, 0, 0)
+		newList = make([]int64, 0)
 		for _, str := range tmp {
 			i, err := strconv.ParseInt(str, 10, 64)
 			if err != nil {
@@ -729,7 +841,7 @@ func (store *Saltstore) alignBoolList(newValue string) ([]bool, error) {
 	var newList []bool
 	if len(newValue) > 0 {
 		tmp := strings.Split(newValue, "\n")
-		newList = make([]bool, 0, 0)
+		newList = make([]bool, 0)
 		for _, str := range tmp {
 			b, err := strconv.ParseBool(str)
 			if err != nil {
@@ -745,7 +857,7 @@ func (store *Saltstore) alignFloat64List(newValue string) ([]float64, error) {
 	var newList []float64
 	if len(newValue) > 0 {
 		tmp := strings.Split(newValue, "\n")
-		newList = make([]float64, 0, 0)
+		newList = make([]float64, 0)
 		for _, str := range tmp {
 			f, err := strconv.ParseFloat(str, 64)
 			if err != nil {
@@ -761,9 +873,9 @@ func (store *Saltstore) alignListList(newValue string) ([][]interface{}, error) 
 	var newList [][]interface{}
 	if len(newValue) > 0 {
 		tmp := strings.Split(newValue, "\n")
-		newList = make([][]interface{}, 0, 0)
+		newList = make([][]interface{}, 0)
 		for _, str := range tmp {
-			l := make([]interface{}, 0, 0)
+			l := make([]interface{}, 0)
 			err := json.LoadJson([]byte(str), &l)
 			if err != nil {
 				return nil, err
@@ -778,7 +890,7 @@ func (store *Saltstore) alignMapList(newValue string) ([]map[string]interface{},
 	var newList []map[string]interface{}
 	if len(newValue) > 0 {
 		tmp := strings.Split(newValue, "\n")
-		newList = make([]map[string]interface{}, 0, 0)
+		newList = make([]map[string]interface{}, 0)
 		for _, str := range tmp {
 			m := make(map[string]interface{})
 			err := json.LoadJson([]byte(str), &m)
@@ -817,7 +929,7 @@ func (store *Saltstore) alignBestGuess(newValue string) interface{} {
 		}
 	}
 	if strings.HasPrefix(newValue, "[") && strings.HasSuffix(newValue, "]") {
-		tmp := make([]interface{}, 0, 0)
+		tmp := make([]interface{}, 0)
 		err := json.LoadJson([]byte(newValue), &tmp)
 		if err == nil {
 			return tmp
@@ -940,7 +1052,7 @@ func getMembersFromJson(err error, output []byte) ([]*model.GridMember, error) {
 		response := &ListResponse{}
 		err = json.LoadJson(output, response)
 		if err == nil {
-			members = make([]*model.GridMember, 0, 0)
+			members = make([]*model.GridMember, 0)
 			for id, fingerprint := range response.Accepted {
 				members = append(members, model.NewGridMember(id, model.GridMemberAccepted, fingerprint))
 			}

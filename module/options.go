@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -8,24 +8,40 @@ package module
 
 import (
 	"errors"
+
+	"github.com/security-onion-solutions/securityonion-soc/syntax"
 )
 
 func GetString(options map[string]interface{}, key string) (string, error) {
 	var err error
 	var value string
 	if gen, ok := options[key]; ok {
-		value = gen.(string)
+		switch v := gen.(type) {
+		case []string:
+			sep := ""
+			for _, line := range v {
+				value = value + sep + line
+				sep = "\n"
+			}
+		case []interface{}:
+			sep := ""
+			for _, iface := range v {
+				value = value + sep + iface.(string)
+				sep = "\n"
+			}
+		case interface{}:
+			value = gen.(string)
+		}
 	} else {
 		err = errors.New("Required option is missing: " + key + " (string)")
 	}
+	value = syntax.UnescapeJinja(value)
 	return value, err
 }
 
 func GetStringDefault(options map[string]interface{}, key string, dflt string) string {
-	var value string
-	if gen, ok := options[key]; ok {
-		value = gen.(string)
-	} else {
+	value, err := GetString(options, key)
+	if err != nil {
 		value = dflt
 	}
 	return value
@@ -78,8 +94,13 @@ func GetStringArray(options map[string]interface{}, key string) ([]string, error
 	var value []string
 	if gen, ok := options[key]; ok {
 		value = make([]string, 0)
-		for _, iface := range gen.([]interface{}) {
-			value = append(value, iface.(string))
+		switch gen.(type) {
+		case []interface{}:
+			for _, iface := range gen.([]interface{}) {
+				value = append(value, iface.(string))
+			}
+		case interface{}:
+			value = append(value, gen.(string))
 		}
 	} else {
 		err = errors.New("Required option is missing: " + key + " ([]string)")

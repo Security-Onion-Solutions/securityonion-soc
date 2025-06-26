@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -58,8 +58,8 @@ func (auth *StaticKeyAuthImpl) Preprocess(ctx context.Context, req *http.Request
 	} else {
 		// Remote agents will assume the role of this server until the implementation
 		// is enhanced to support unique agent keys and roles.
-		ctx = context.WithValue(ctx, web.ContextKeyRequestor, auth.server.Agent)
 		ctx = context.WithValue(ctx, web.ContextKeyRequestorId, auth.server.Agent.Id)
+		ctx = context.WithValue(ctx, web.ContextKeyRequestCSRFExempt, true)
 	}
 	return ctx, statusCode, err
 }
@@ -71,10 +71,12 @@ func (auth *StaticKeyAuthImpl) IsAuthorized(ctx context.Context, request *http.R
 }
 
 func (auth *StaticKeyAuthImpl) validateAuthorization(ctx context.Context, key string, ipStr string) bool {
+	logger := log.FromContext(ctx)
+
 	// If API key has been provided, it must match
-	if len(key) > 0 {
+	if len(key) > 0 && !strings.HasPrefix(key, "Bearer ") {
 		isApiKeyAccepted := auth.validateApiKey(key)
-		log.WithFields(log.Fields{
+		logger.WithFields(log.Fields{
 			"isApiKeyAccepted": isApiKeyAccepted,
 			"requestId":        ctx.Value(web.ContextKeyRequestId),
 		}).Debug("Authorization check via API key")
@@ -94,7 +96,7 @@ func (auth *StaticKeyAuthImpl) validateAuthorization(ctx context.Context, key st
 	}
 	remoteIp := net.ParseIP(ipStr)
 	isAnonymousIp := auth.anonymousNetwork.Contains(remoteIp)
-	log.WithFields(log.Fields{
+	logger.WithFields(log.Fields{
 		"anonymousNetwork": auth.anonymousNetwork,
 		"remoteIp":         remoteIp,
 		"ipStr":            ipStr,
@@ -106,7 +108,7 @@ func (auth *StaticKeyAuthImpl) validateAuthorization(ctx context.Context, key st
 
 func (auth *StaticKeyAuthImpl) validateApiKey(key string) bool {
 	pieces := strings.Split(key, " ")
-	if pieces != nil && len(pieces) > 0 {
+	if len(pieces) > 0 {
 		key = pieces[len(pieces)-1]
 	}
 	return key == auth.apiKey

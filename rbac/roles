@@ -1,5 +1,5 @@
 # Copyright 2019 Jason Ertel (github.com/jertel).
-# Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+# Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 # or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 # https://securityonion.net/license; you may not use this file except in compliance with the
 # Elastic License 2.0.
@@ -8,17 +8,25 @@
 # Syntax      => roleX: roleY roleZ
 # Explanation => roleY and roleZ are granted permissions of roleX
 
-case-monitor:     auditor limited-auditor
-case-admin:       analyst limited-analyst superuser
-config-admin:     superuser
-event-admin:      analyst limited-analyst superuser
-event-monitor:    auditor limited-auditor
-grid-admin:				superuser
-node-admin:       agent
-node-monitor:     analyst limited-analyst auditor limited-auditor superuser
-user-admin:       superuser
-user-monitor:     analyst auditor
-job-admin:        analyst superuser
-job-user:         limited-analyst
-job-monitor:      auditor
-job-processor:    agent
+case-monitor:      auditor limited-auditor
+case-admin:        analyst limited-analyst superuser
+client-monitor:    auditor
+client-admin:      superuser
+config-admin:      superuser
+detection-monitor: limited-analyst auditor limited-auditor
+detection-admin:   agent analyst superuser
+event-admin:       analyst limited-analyst superuser
+event-monitor:     auditor limited-auditor
+grid-admin:        superuser
+node-admin:        agent
+node-monitor:      analyst limited-analyst auditor limited-auditor superuser
+user-admin:        superuser
+user-monitor:      analyst auditor
+job-admin:         analyst superuser
+job-user:          limited-analyst
+job-monitor:       auditor
+job-processor:     agent
+query-admin:       superuser
+query-monitor:     superuser
+playbook-admin:    superuser
+playbook-monitor:  limited-analyst auditor limited-auditor

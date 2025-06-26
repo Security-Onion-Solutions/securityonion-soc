@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -8,6 +8,8 @@ const GridMemberAccepted = "accepted";
 const GridMemberUnaccepted = "unaccepted";
 const GridMemberRejected = "rejected";
 const GridMemberDenied = "denied";
+
+loadPageTemplate('page-gridmembers', 'pages/gridmembers.html');
 
 routes.push({ path: '/gridmembers', name: 'gridmembers', component: {
   template: '#page-gridmembers',
@@ -24,9 +26,12 @@ routes.push({ path: '/gridmembers', name: 'gridmembers', component: {
     rules: {
       required: value => !!value || this.$root.i18n.required,
     },
+    GridMemberAccepted: GridMemberAccepted,
+    GridMemberUnaccepted: GridMemberUnaccepted,
+    GridMemberRejected: GridMemberRejected,
+    GridMemberDenied: GridMemberDenied,
   }},
-  created() { 
-    Vue.filter('colorNodeStatus', this.colorNodeStatus);
+  created() {
   },
   mounted() {
     this.$root.loadParameters("gridmembers", this.initGrid);

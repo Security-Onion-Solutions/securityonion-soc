@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -10,56 +10,108 @@ require('./grid.js');
 const comp = getComponent("grid");
 
 test('updateStatus', () => {
-  const status = { grid: { eps: 12 }};
+	const status = { gridId: 'abc', grid: { eps: 12 }};
 
-  expect(comp.gridEps).toBe(0);
-  comp.updateStatus(status);
-  expect(comp.gridEps).toBe(12);
+	expect(comp.gridEps).toBe(0);
+
+	// Update for an alternate (non-selected) grid
+	comp.updateStatus(status);
+	expect(comp.gridEps).toBe(0);
+
+	// Update for the selected grid
+	comp.$root.selectedGridId = 'abc';
+	comp.updateStatus(status);
+	expect(comp.gridEps).toBe(12);
 });
 
 test('updateMetricsEnabled', () => {
 	testUpdateMetricsEnabled(true, false, true);
 	testUpdateMetricsEnabled(false, false, false);
 	testUpdateMetricsEnabled(true, true, true);
+	testUpdateMetricsEnabled(true, false, true, true);
+	testUpdateMetricsEnabled(false, false, false, false);
+	testUpdateMetricsEnabled(true, true, true, true);
 });
 
-function testUpdateMetricsEnabled(node1MetricsEnabled, node2MetricsEnabled, expectedMetricsEnabled) {
+function testUpdateMetricsEnabled(node1MetricsEnabled, node2MetricsEnabled, expectedMetricsEnabled, moreColumnsEnabled) {
 	const node1 = { metricsEnabled: node1MetricsEnabled };
 	const node2 = { metricsEnabled: node2MetricsEnabled };
 	comp.nodes = [node1, node2];
+	comp.moreColumns = moreColumnsEnabled;
 
 	comp.updateMetricsEnabled();
 
 	expect(comp.metricsEnabled).toBe(expectedMetricsEnabled);
 
-  const epsColumn = comp.headers.find(function(item) {
-    return item.text == comp.i18n.eps;
-  });
-
-  if (!expectedMetricsEnabled) {
-		expect(epsColumn.align).toBe(' d-none');
-	} else {
-		expect(epsColumn.align).toBe(' d-none d-lg-table-cell');
+	const validateColumn = (label, size, moreCols) => {
+		const trans = comp.i18n[label];
+		const column = comp.headers.find(function(item) {
+			return item.title == trans;
+		});
+		if (!expectedMetricsEnabled || (moreCols && !moreColumnsEnabled)) {
+			expect(column.align).toBe(' d-none');
+		} else {
+			expect(column.align).toBe(' d-none d-' + size + '-table-cell');
+		}
 	}
+
+	validateColumn('eps', 'lg', false);
+	validateColumn('memUsageAbbr', 'xl', false);
+	validateColumn('diskUsageRootAbbr', 'xl', false);
+	validateColumn('diskUsageNsmAbbr', 'xl', false);
+	validateColumn('cpuUsageAbbr', 'xl', false);
+	validateColumn('trafficManInAbbr', 'xl', false);
+	validateColumn('trafficManOutAbbr', 'xl', false);
+	validateColumn('trafficMonInAbbr', 'xl', true);
+	validateColumn('trafficMonInDropsAbbr', 'xl', true);
+	validateColumn('captureLossAbbr', 'xl', true);
+	validateColumn('zeekLossAbbr', 'xl', true);
+	validateColumn('suricataLossAbbr', 'xl', true);
+	validateColumn('stenoLossAbbr', 'xl', true);
+	validateColumn('pcapRetentionAbbr', 'xl', true);
 }
 
 test('colorNodeStatus', () => {
-  expect(comp.colorNodeStatus("ok")).toBe("success");
-  expect(comp.colorNodeStatus("fault")).toBe("error");
-  expect(comp.colorNodeStatus("fault", true)).toBe("warning");
-  expect(comp.colorNodeStatus("unknown")).toBe("warning");
-  expect(comp.colorNodeStatus("unknown", true)).toBe("warning");
+	expect(comp.colorNodeStatus("ok")).toBe("success");
+	expect(comp.colorNodeStatus("fault")).toBe("error");
+	expect(comp.colorNodeStatus("fault", true)).toBe("warning");
+	expect(comp.colorNodeStatus("unknown")).toBe("warning");
+	expect(comp.colorNodeStatus("pending")).toBe("warning");
+	expect(comp.colorNodeStatus("pending", true)).toBe("warning");
+	expect(comp.colorNodeStatus("unknown", true)).toBe("warning");
+	expect(comp.colorNodeStatus("restart", false)).toBe("info");
+	expect(comp.colorNodeStatus("restart", true)).toBe("info");
+});
+
+test('colorContainerDetails', () => {
+	expect(comp.colorContainerDetails("Up 2 hours")).toBe("normal");
+	expect(comp.colorContainerDetails("Up 3 minutes")).toBe("info");
+	expect(comp.colorContainerDetails("Up 5 seconds", true)).toBe("warning");
+	expect(comp.colorContainerDetails("Up Less than a second", true)).toBe("warning");
+});
+
+test('formatLinearColor', () => {
+	expect(comp.formatLinearColor(0, 1, 2, 3)).toBe("success");
+	expect(comp.formatLinearColor(0.99, 1, 2, 3)).toBe("success");
+	expect(comp.formatLinearColor(1.0, 1, 2, 3)).toBe("info");
+	expect(comp.formatLinearColor(1.99, 1, 2, 3)).toBe("info");
+	expect(comp.formatLinearColor(2.0, 1, 2, 3)).toBe("warning");
+	expect(comp.formatLinearColor(2.99, 1, 2, 3)).toBe("warning");
+	expect(comp.formatLinearColor(3.0, 1, 2, 3)).toBe("error");
+	expect(comp.formatLinearColor(5, 1, 2, 3)).toBe("error");
 });
 
 test('iconNodeStatus', () => {
 	expect(comp.iconNodeStatus("fault")).toBe("fa-triangle-exclamation");
-  expect(comp.iconNodeStatus("ok")).toBe("fa-circle-check");
-  expect(comp.iconNodeStatus("other")).toBe("fa-circle-question");
+	expect(comp.iconNodeStatus("pending")).toBe("fa-circle-exclamation");
+	expect(comp.iconNodeStatus("ok")).toBe("fa-circle-check");
+	expect(comp.iconNodeStatus("other")).toBe("fa-circle-question");
+	expect(comp.iconNodeStatus("restart")).toBe("fa-circle-info");
 });
 
 test('colorContainerStatus', () => {
-	expect(comp.colorContainerStatus("running")).toBe("green");
-  expect(comp.colorContainerStatus("broken")).toBe("error");
+	expect(comp.colorContainerStatus("running")).toBe("success");
+	expect(comp.colorContainerStatus("broken")).toBe("error");
 });
 
 test('formatNode', () => {
@@ -86,15 +138,16 @@ test('formatNode_MissingContainers', () => {
 
 test('testConfirmDialog', () => {
 	expect(comp.gridMemberTestConfirmDialog).toBe(false);
-	expect(comp.selectedId).toBe(null);
+	expect(comp.selectedNode).toBe(null);
 
-	comp.showTestConfirm('t2');
+	const testNode = { id: 't2', role: '', gridId: ''};
+	comp.showTestConfirm(testNode);
 	expect(comp.gridMemberTestConfirmDialog).toBe(true);
-	expect(comp.selectedId).toBe('t2');
+	expect(comp.selectedNode).toBe(testNode);
 
 	comp.hideTestConfirm();
 	expect(comp.gridMemberTestConfirmDialog).toBe(false);
-	expect(comp.selectedId).toBe(null);
+	expect(comp.selectedNode).toBe(null);
 });
 
 test('canTest', () => {
@@ -106,6 +159,21 @@ test('canTest', () => {
 
 	node['keywords'] = "Foo Sensor Bar";
 	expect(comp.canTest(node)).toBe(true);
+});
+
+
+test('testRestartConfirmDialog', () => {
+	expect(comp.gridMemberRestartConfirmDialog).toBe(false);
+	expect(comp.selectedNode).toBe(null);
+
+	const testNode = { id: 't2', role: '', gridId: ''};
+	comp.showRestartConfirm(testNode);
+	expect(comp.gridMemberRestartConfirmDialog).toBe(true);
+	expect(comp.selectedNode).toStrictEqual(testNode);
+
+	comp.hideRestartConfirm();
+	expect(comp.gridMemberRestartConfirmDialog).toBe(false);
+	expect(comp.selectedNode).toBe(null);
 });
 
 test('testUploadDialog', () => {
@@ -165,6 +233,11 @@ test('canUpload', () => {
 	});
 });
 
+test('canNotUploadPCAPToHeavyNode', () => {
+	const node = { role: 'so-heavynode', keywords: 'Sensor' }
+	expect(comp.canUploadPCAP(node)).toBe(false);
+});
+
 test('canConfigureMaxUploadSize', () => {
 	const skip = comp.loadData;
 
@@ -190,7 +263,82 @@ test('canConfigureMaxUploadSize', () => {
 test('gridMemberTest', async () => {
 	resetPapi();
 	const mock = mockPapi("post");
-	comp.selectedId = 'fwd01_so-sensor';
+	comp.selectedNode = { id: 'fwd01', role: 'so-sensor', gridId: ''};
 	await comp.gridMemberTest();
-	expect(mock).toHaveBeenCalledWith('gridmembers/fwd01_sensor/test');
+	expect(mock).toHaveBeenCalledWith('gridmembers/fwd01_sensor/test', null, {params: { gridId: ''}});
+});
+
+test('gridMemberRestart', async () => {
+	resetPapi();
+	const mock = mockPapi("post");
+	comp.selectedNode = { id: 'fwd01', role: 'so-sensor', gridId: 'abc'};
+	await comp.gridMemberRestart();
+	expect(mock).toHaveBeenCalledWith('gridmembers/fwd01_sensor/restart', null, {params: { gridId: 'abc'}});
+});
+
+test('hasEventstore', () => {
+	var item = {containers: [{Name: 'so-something'}, {Name: 'so-elasticsearch'}, {Name: 'so-another'}]};
+	expect(comp.hasEventstore(item)).toBe(true);
+
+	item = {containers: [{Name: 'so-something'}, {Name: 'so-nope'}, {Name: 'so-another'}]};
+	expect(comp.hasEventstore(item)).toBe(false);
+});
+
+test('hasMetricstore', () => {
+	var item = {containers: [{Name: 'so-something'}, {Name: 'so-influxdb'}, {Name: 'so-another'}]};
+	expect(comp.hasMetricstore(item)).toBe(true);
+
+	item = {containers: [{Name: 'so-something'}, {Name: 'so-nope'}, {Name: 'so-another'}]};
+	expect(comp.hasMetricstore(item)).toBe(false);
+});
+
+test('hasQueuestore', () => {
+	var item = {containers: [{Name: 'so-something'}, {Name: 'so-redis'}, {Name: 'so-another'}]};
+	expect(comp.hasQueuestore(item)).toBe(true);
+
+	item = {containers: [{Name: 'so-something'}, {Name: 'so-nope'}, {Name: 'so-another'}]};
+	expect(comp.hasQueuestore(item)).toBe(false);
+});
+
+test('hasSteno', () => {
+	var item = {containers: [{Name: 'so-something'}, {Name: 'so-steno'}, {Name: 'so-another'}]};
+	expect(comp.hasSteno(item)).toBe(true);
+
+	item = {containers: [{Name: 'so-something'}, {Name: 'so-nope'}, {Name: 'so-another'}]};
+	expect(comp.hasQueuestore(item)).toBe(false);
+});
+
+test('hasSuri', () => {
+	var item = {containers: [{Name: 'so-something'}, {Name: 'so-suricata'}, {Name: 'so-another'}]};
+	expect(comp.hasSuri(item)).toBe(true);
+
+	item = {containers: [{Name: 'so-something'}, {Name: 'so-nope'}, {Name: 'so-another'}]};
+	expect(comp.hasQueuestore(item)).toBe(false);
+});
+
+test('hasZeek', () => {
+	var item = {containers: [{Name: 'so-something'}, {Name: 'so-zeek'}, {Name: 'so-another'}]};
+	expect(comp.hasZeek(item)).toBe(true);
+
+	item = {containers: [{Name: 'so-something'}, {Name: 'so-nope'}, {Name: 'so-another'}]};
+	expect(comp.hasQueuestore(item)).toBe(false);
+});
+
+test('setInterval and clearInterval', () => {
+  jest.useFakeTimers();
+  const setIntervalSpy = jest.spyOn(window, 'setInterval');
+  const clearIntervalSpy = jest.spyOn(window, 'clearInterval');
+  const loadDataSpy = jest.spyOn(comp, 'loadData').mockImplementation(() => {});
+
+  comp.initGrid({});
+  expect(setIntervalSpy).toHaveBeenCalledTimes(1);
+  expect(setIntervalSpy).toHaveBeenCalledWith(comp.checkStaleness, 30000);
+
+  comp.unmounted();
+  expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
+  expect(clearIntervalSpy).toHaveBeenCalledWith(comp.stalenessInterval);
+
+  setIntervalSpy.mockRestore();
+  clearIntervalSpy.mockRestore();
+  loadDataSpy.mockRestore();
 });

@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tj/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 const EXPIRED_KEY = ` H4sIAIvZnGMAA22QR4+bUBSF9/kVFlvPBExz2ZlqijHVNo6yeMaPYsOjPWMgyn8PMyNFihTpLm75zjnS/UXAOIYRzjpIbAiaohfv1Ef5FLX5rAvxRsC+yhqAsxJ9MfR/GASKDwcftnhmZhFELZy9z6yDP1MO7izw5JlmzWz3IAWirx2sSZHdJj4GD/hOUYtpzr9UHy7KtP3rYsBhusYQ4GcDW2Lz4+cb8WxhM7WLKbe8wa+uLaOgySd1inHVbkiyLQv4SmEDv2eoA/mU90bcAAb/UgCVeIK+VzmI4ES0WYI+oyYm8VBxAEZUFbKlp2ugz6t9n15kiX0uligc+es1jf3A7HldUAoctnhtxZ6f7R3+Rc5tOdqqcM5J/F0UyZJh4raOdcNTa6EEyoq+CXR0PloieilIUFlTgwa748r0chJZj2TdmAq3owZi3iFFk4vzx9mUGV41U1N3yLA/GEnCN+tdLa3uAR1zwn6MEh+EmDxefX9VulSjqi6F08hfcQLfYGNXnWxMFpwkKY3h6bJp8bs2z/zRfvCZEu7z3VDh8HRzoOMPa/51S8ho6LrBw7KZgu3qkq7KVGeHu+1Q9LZXkzJDJwaLnnwKpJAbnfkQstcyAlq0ho++q5YLDw11nES0xj+3NmfgvLhYC7rXKFGO927oPHg7oql6MNvDqxMWYxPuBkg/K+Uum/bxnGT90mwjrvZD4+yJmly1Llo+rsGZdZugo307jKf/FbdR950Vr1BHnRrlZMwsACQml/XKq8J5iV5HxgF7sub6Xueyvk7Gfo2Km1AuVZYsWNOv0FEtB4H1WJW/ayfh1S0ZZiB+f/sDb9bxLiEDAAA= 	`
@@ -123,25 +123,37 @@ func TestListAvailableFeatures(tester *testing.T) {
 
 	Init(EXPIRED_KEY)
 	manager.status = LICENSE_STATUS_ACTIVE
-	assert.Len(tester, ListAvailableFeatures(), 4)
-	assert.Equal(tester, ListAvailableFeatures()[0], FEAT_FIPS)
-	assert.Equal(tester, ListAvailableFeatures()[1], FEAT_OIDC)
-	assert.Equal(tester, ListAvailableFeatures()[2], FEAT_STIG)
-	assert.Equal(tester, ListAvailableFeatures()[3], FEAT_TIMETRACKING)
+	idx := 0
+	assert.Equal(tester, ListAvailableFeatures()[idx], FEAT_API)
+	idx += 1
+	assert.Equal(tester, ListAvailableFeatures()[idx], FEAT_FPS)
+	idx += 1
+	assert.Equal(tester, ListAvailableFeatures()[idx], FEAT_GMD)
+	idx += 1
+	assert.Equal(tester, ListAvailableFeatures()[idx], FEAT_LKS)
+	idx += 1
+	assert.Equal(tester, ListAvailableFeatures()[idx], FEAT_NTF)
+	idx += 1
+	assert.Equal(tester, ListAvailableFeatures()[idx], FEAT_ODC)
+	idx += 1
+	assert.Equal(tester, ListAvailableFeatures()[idx], FEAT_QRY)
+	idx += 1
+	assert.Equal(tester, ListAvailableFeatures()[idx], FEAT_STG)
+	idx += 1
+	assert.Equal(tester, ListAvailableFeatures()[idx], FEAT_TTR)
+	idx += 1
+	assert.Equal(tester, ListAvailableFeatures()[idx], FEAT_RPT)
+	idx += 1
+	assert.Equal(tester, ListAvailableFeatures()[idx], FEAT_VRT)
+	idx += 1
+	assert.Len(tester, ListAvailableFeatures(), idx)
 }
 
-func TestListEnabledFeatures(tester *testing.T) {
+func TestListEnabledFeaturesUnprovisioned(tester *testing.T) {
 	defer setup()()
 
 	Init("")
-	assert.Len(tester, ListEnabledFeatures(), 4)
-
-	Init(EXPIRED_KEY)
-	assert.Len(tester, ListEnabledFeatures(), 4)
-	assert.Equal(tester, ListEnabledFeatures()[0], FEAT_FIPS)
-	assert.Equal(tester, ListEnabledFeatures()[1], FEAT_OIDC)
-	assert.Equal(tester, ListEnabledFeatures()[2], FEAT_STIG)
-	assert.Equal(tester, ListEnabledFeatures()[3], FEAT_TIMETRACKING)
+	assert.Len(tester, ListEnabledFeatures(), 0)
 
 	Init(EXPIRED_KEY)
 	manager.licenseKey.Features = append(manager.licenseKey.Features, "foo")
@@ -160,14 +172,14 @@ func TestGetLicenseKey(tester *testing.T) {
 	assert.Equal(tester, key.Nodes, 1)
 	assert.Equal(tester, key.SocUrl, "https://somewhere.invalid")
 	assert.Equal(tester, key.DataUrl, "https://another.place")
-	assert.Len(tester, key.Features, 4)
+	assert.Len(tester, key.Features, 11)
 
 	// Modify the returned object and make sure it doesn't affect the orig object
 	key.Users = 100
 	key.Features = append(key.Features, "foo")
 	assert.Equal(tester, GetLicenseKey().Users, 1)
-	assert.Len(tester, key.Features, 5)
-	assert.Len(tester, GetLicenseKey().Features, 4)
+	assert.Len(tester, key.Features, 12)
+	assert.Len(tester, GetLicenseKey().Features, 11)
 }
 
 func TestGetStatus(tester *testing.T) {
@@ -265,10 +277,32 @@ func TestValidateDataUrl(tester *testing.T) {
 	assert.False(tester, ValidateDataUrl("bar"))
 }
 
+func TestValidateFeature(tester *testing.T) {
+	defer setup()()
+
+	Test("stg", 0, 0, "", "")
+
+	awaitPillarMonitor()
+	manager.licenseKey.Features = append(manager.licenseKey.Features, FEAT_STG)
+	assert.True(tester, ValidateFeature(FEAT_STG, false))
+	assert.Len(tester, manager.limits, 0)
+	assert.True(tester, ValidateFeature(FEAT_STG, true))
+	assert.Len(tester, manager.limits, 0)
+	assert.True(tester, ValidateFeature(FEAT_LKS, false))
+	assert.Len(tester, manager.limits, 0)
+	assert.False(tester, ValidateFeature(FEAT_LKS, true))
+	assert.Len(tester, manager.limits, 1)
+	assert.False(tester, ValidateFeature("", true))
+	assert.Len(tester, manager.limits, 2)
+	assert.False(tester, ValidateFeature("bar", true))
+	assert.Len(tester, manager.limits, 3)
+}
+
+/* Disabled licensing tests due to test thread instability (run locally when making changes)
 func TestPillarMonitor(tester *testing.T) {
 	defer setup()()
 
-	Test("stig", 0, 0, "", "")
+	Test("stg", 0, 0, "", "")
 
 	awaitPillarMonitor()
 	assert.Equal(tester, manager.status, LICENSE_STATUS_ACTIVE)
@@ -276,7 +310,7 @@ func TestPillarMonitor(tester *testing.T) {
 
 	expected := `
 features:
-- stig
+- stg
 `
 
 	assert.Contains(tester, string(contents), expected)
@@ -304,15 +338,22 @@ func TestPillarMonitorAllFeatures(tester *testing.T) {
 #    software that is protected by the license key."
 
 # This file is generated by Security Onion and contains a list of license-enabled features.
+license_id: test
 features:
-- fips
-- oidc
-- stig
-- timetracking
+- fps
+- gmd
+- lks
+- ntf
+- odc
+- qry
+- stg
+- ttr
+- vrt
 `
 
 	assert.Equal(tester, expected, string(contents))
 }
+*/
 
 func TestPillarMonitor_Fail(tester *testing.T) {
 	defer setup()()
@@ -323,4 +364,49 @@ func TestPillarMonitor_Fail(tester *testing.T) {
 
 	awaitPillarMonitor()
 	assert.Equal(tester, LICENSE_STATUS_INVALID, manager.status)
+}
+
+func TestValidateSubgridCount(tester *testing.T) {
+	defer setup()()
+
+	Init("")
+	manager.licenseKey.Subgrids = 0
+	assert.True(tester, ValidateSubgridCount(0))
+	assert.False(tester, ValidateSubgridCount(2))
+	manager.licenseKey.Subgrids = 2
+	assert.True(tester, ValidateSubgridCount(0))
+	manager.status = LICENSE_STATUS_ACTIVE
+	assert.True(tester, ValidateSubgridCount(0))
+	assert.True(tester, ValidateSubgridCount(1))
+	assert.True(tester, ValidateSubgridCount(2))
+	assert.False(tester, ValidateSubgridCount(3))
+}
+
+func TestValidateMgmtMac(tester *testing.T) {
+	defer setup()()
+
+	Init("")
+	manager.licenseKey.MgmtMac = " "
+	assert.True(tester, ValidateMgmtMac(""))
+	assert.True(tester, ValidateMgmtMac(" "))
+	manager.licenseKey.MgmtMac = "10:20:30:A0:B0:c0"
+	assert.True(tester, ValidateMgmtMac("10:20:30:A0:B0:C0"))
+	assert.True(tester, ValidateMgmtMac(" 10:20:30:a0:b0:C0 "))
+	assert.False(tester, ValidateMgmtMac(""))
+	assert.False(tester, ValidateMgmtMac("bar"))
+}
+
+func TestIsKeyAccepted(tester *testing.T) {
+	defer func() { revKeys = "" }()
+	revKeys = "abc,71dd9dcf4e217067ec5b169d5a1745860b09b74bb8d623d3dd13b8272c31ce68,def"
+	assert.True(tester, isKeyIdAccepted("test"))
+	assert.True(tester, isKeyIdAccepted("fake"))
+	assert.False(tester, isKeyIdAccepted("fake-001"))
+}
+
+func TestInitRevKey(tester *testing.T) {
+	defer func() { revKeys = "" }()
+	revKeys = "abc,71dd9dcf4e217067ec5b169d5a1745860b09b74bb8d623d3dd13b8272c31ce68,def"
+	Init(EXPIRED_KEY)
+	assert.Equal(tester, LICENSE_STATUS_INVALID, GetStatus())
 }

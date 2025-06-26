@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/stretchr/testify/assert"
@@ -113,3 +114,81 @@ func TestGetFailedEvents(tester *testing.T) {
 	assert.Equal(tester, 2, metrics.getFailedEvents("zoo"))
 	assert.Equal(tester, 0, metrics.getFailedEvents("missing"))
 }
+
+func TestGetEventstoreStatus(tester *testing.T) {
+	metrics := NewInfluxDBMetrics(server.NewFakeAuthorizedServer(nil))
+	metrics.lastEventstoreUpdateTime = time.Now()
+	metrics.eventstoreStatus["foo"] = "green"
+	metrics.eventstoreStatus["bar"] = "red"
+	metrics.eventstoreStatus["zoo"] = "yellow"
+
+	assert.Equal(tester, "ok", metrics.getEventstoreStatus("foo"))
+	assert.Equal(tester, "fault", metrics.getEventstoreStatus("bar"))
+	assert.Equal(tester, "pending", metrics.getEventstoreStatus("zoo"))
+	assert.Equal(tester, "unknown", metrics.getEventstoreStatus("missing"))
+}
+
+func TestGetOsNeedsRestart(tester *testing.T) {
+	metrics := NewInfluxDBMetrics(server.NewFakeAuthorizedServer(nil))
+	metrics.lastOsUpdateTime = time.Now()
+	metrics.osNeedsRestart["foo"] = 0
+	metrics.osNeedsRestart["bar"] = 1
+
+	assert.Equal(tester, 0, metrics.getOsNeedsRestart("foo"))
+	assert.Equal(tester, 1, metrics.getOsNeedsRestart("bar"))
+	assert.Equal(tester, 0, metrics.getOsNeedsRestart("missing"))
+}
+
+func updateNodeMetricsFeature(tester *testing.T, featureId string, metrics *InfluxDBMetrics, expectedStatus string) {
+	licensing.Test(featureId, 0, 0, "", "")
+	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
+
+	node1 := model.NewNode("id1")
+	node2 := model.NewNode("id2")
+	node3 := model.NewNode("id3")
+
+	metrics.UpdateNodeMetrics(context.Background(), node3)
+	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
+	metrics.UpdateNodeMetrics(context.Background(), node2)
+	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
+	metrics.UpdateNodeMetrics(context.Background(), node1)
+	assert.Equal(tester, expectedStatus, licensing.GetStatus())
+}
+
+/* Disabled licensing tests due to test thread instability (run locally when making changes)
+func TestUpdateNodeMetricsLksFeatures(tester *testing.T) {
+	metrics := NewInfluxDBMetrics(server.NewFakeAuthorizedServer(nil))
+	metrics.lastOsUpdateTime = time.Now()
+	metrics.lastProcessUpdateTime = time.Now()
+	metrics.cacheExpirationMs = 99999
+	metrics.lksEnabled = make(map[string]int)
+	metrics.lksEnabled["id1"] = 1
+	metrics.lksEnabled["id2"] = 0
+	updateNodeMetricsFeature(tester, "odc", metrics, licensing.LICENSE_STATUS_EXCEEDED)
+	updateNodeMetricsFeature(tester, "lks", metrics, licensing.LICENSE_STATUS_ACTIVE)
+}
+
+func TestUpdateNodeMetricsFpsFeatures(tester *testing.T) {
+	metrics := NewInfluxDBMetrics(server.NewFakeAuthorizedServer(nil))
+	metrics.lastOsUpdateTime = time.Now()
+	metrics.lastProcessUpdateTime = time.Now()
+	metrics.cacheExpirationMs = 99999
+	metrics.fpsEnabled = make(map[string]int)
+	metrics.fpsEnabled["id1"] = 1
+	metrics.fpsEnabled["id2"] = 0
+	updateNodeMetricsFeature(tester, "odc", metrics, licensing.LICENSE_STATUS_EXCEEDED)
+	updateNodeMetricsFeature(tester, "fps", metrics, licensing.LICENSE_STATUS_ACTIVE)
+}
+
+func TestUpdateNodeMetricsGmdFeatures(tester *testing.T) {
+	metrics := NewInfluxDBMetrics(server.NewFakeAuthorizedServer(nil))
+	metrics.lastOsUpdateTime = time.Now()
+	metrics.lastProcessUpdateTime = time.Now()
+	metrics.cacheExpirationMs = 99999
+	metrics.processJson = make(map[string]string)
+	metrics.processJson["id1"] = `{"containers":[{"Name":"so-kafka", "Status":"running"}]}`
+	metrics.processJson["id2"] = `{"containers":[{"Name":"so-kafka", "Status":"stopped"}]}`
+	updateNodeMetricsFeature(tester, "odc", metrics, licensing.LICENSE_STATUS_EXCEEDED)
+	updateNodeMetricsFeature(tester, "gmd", metrics, licensing.LICENSE_STATUS_ACTIVE)
+}
+*/

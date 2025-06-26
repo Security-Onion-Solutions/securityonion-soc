@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -16,12 +16,12 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"unicode"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
+	"github.com/kennygrant/sanitize"
 	"github.com/samber/lo"
 )
 
@@ -55,6 +55,18 @@ func (h *GridMembersHandler) gridMembersEnabled(next http.Handler) http.Handler 
 	})
 }
 
+// @Summary      Get Grid Members
+// @Description  Retrieves the complete list of all machine members associated, in some capacity, with this grid. A grid member is not necessarily an official grid node.
+// @Description  For example, this list includes members that are not yet accepted into the grid, as well as members that have been rejected from joining the grid.
+// @Tags         Grid
+// @Security     bearer[grid/read]
+// @Produce      json
+// @Success      200  {array}  model.GridMember		 "The list of grid members"
+// @Failure      401                                 "Request was not properly authenticated"
+// @Failure      403                                 "Insufficient permissions for this request"
+// @Failure      405                                 "Grid member module has not been enabled on the server"
+// @Failure      500                                 "Internal SOC error; review SOC logs"
+// @Router       /connect/gridmembers/ [get]
 func (h *GridMembersHandler) getGridMembers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -67,6 +79,21 @@ func (h *GridMembersHandler) getGridMembers(w http.ResponseWriter, r *http.Reque
 	web.Respond(w, r, http.StatusOK, members)
 }
 
+// @Summary      Import Data
+// @Description  Imports the data from the given file. This is commonly used for importing PCAP and EVTX data directly into the node.
+// @Description  The max file size defaults to 25MB unless customized in the server configuration.
+// @Description.markdown import_data
+// @Tags         Grid
+// @Security     bearer[events/write]
+// @Accept       mpfd
+// @Param        id path string true "The full node ID (name_role) into which this data will be imported" example(manager_standalone)
+// @Param        attachment formData file true "The raw file data to import. This request must use multipart/form-data content type and the body must include one form part containing form-data content named 'attachment' with a filename attribute, a Content-Type header representing the file stream MIME type, and then the associated raw data stream."
+// @Success      202                                 "The data upload succeeded and the import has started"
+// @Failure      401                                 "Request was not properly authenticated"
+// @Failure      403                                 "Insufficient permissions for this request"
+// @Failure      405                                 "Grid member module has not been enabled on the server"
+// @Failure      500                                 "Internal SOC error; review SOC logs"
+// @Router       /connect/gridmembers/{id}/import [post]
 func (h *GridMembersHandler) postImport(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -165,7 +192,7 @@ func (h *GridMembersHandler) postImport(w http.ResponseWriter, r *http.Request) 
 	}
 
 	filename := path.Base(header.Filename)
-	filename = sanitize(filename)
+	filename = sanitize.Name(filename)
 
 	targetFile := filepath.Join(targetDir, filename)
 
@@ -242,6 +269,19 @@ func (h *GridMembersHandler) postImport(w http.ResponseWriter, r *http.Request) 
 	}()
 }
 
+// @Summary      Manage Grid Member
+// @Description  Manages a grid member by performing the specified operation.
+// @Description.markdown manage_grid_member
+// @Tags         Grid
+// @Security     bearer[grid/write]
+// @Param        id path string true "The grid member ID to be managed" example(so_standalone)
+// @Param        operation path string true "The operation to perform: add, reject, delete, test, restart" example(reject)
+// @Success      200                                 "The operation was executed successfully"
+// @Failure      401                                 "Request was not properly authenticated"
+// @Failure      403                                 "Insufficient permissions for this request"
+// @Failure      405                                 "Grid member module has not been enabled on the server"
+// @Failure      500                                 "Internal SOC error; review SOC logs"
+// @Router       /connect/gridmembers/{id}/{operation} [post]
 func (h *GridMembersHandler) postManageMembers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -252,7 +292,7 @@ func (h *GridMembersHandler) postManageMembers(w http.ResponseWriter, r *http.Re
 	}
 
 	op := chi.URLParam(r, "operation")
-	if op != "add" && op != "reject" && op != "delete" && op != "test" {
+	if op != "add" && op != "reject" && op != "delete" && op != "test" && op != "restart" {
 		web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid operation"))
 		return
 	}
@@ -309,15 +349,4 @@ func canUploadEvtx(node string) bool {
 	}
 
 	return lo.Contains(keywords, "manager")
-}
-
-func sanitize(filename string) string {
-	return string(lo.Map([]rune(filename), func(r rune, _ int) rune {
-		switch {
-		case strings.ContainsRune(`._-`, r), unicode.IsLetter(r), unicode.IsDigit(r):
-			return r
-		}
-
-		return '_'
-	}))
 }

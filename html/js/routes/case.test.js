@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -193,7 +193,7 @@ test('createCase', async () => {
 
   expect(mock).toHaveBeenCalledWith('case/', params);
   expect(showErrorMock).toHaveBeenCalledTimes(0);
-  expect(comp.$router.replace).toHaveBeenCalledWith({ name: 'case', params: { id: fakeCase.id }});
+  expect(comp.$router.replace).toHaveBeenCalledWith({ name: 'case', params: { id: fakeCase.id }, query: {} });
   expect(comp.$root.loading).toBe(false);
 });
 
@@ -1022,4 +1022,30 @@ test('sumHours', () => {
     { hours: 4.1 },
     ];
   expect(comp.sumHours()).toBe(5.3);
+});
+
+test('huntCase', () => {
+  comp.caseObj.id = 'myCaseId';
+  comp.associations.events = [
+    {
+      fields: {
+        soc_timestamp: '2025-02-03T21:31:02.140Z',
+      },
+    }
+  ];
+  let navObj = comp.huntCase();
+  expect(navObj.name).toBe('hunt');
+  expect(navObj.query.caseExcludeToggle).toBe('false');
+  expect(navObj.query.q).toBe('so_related.caseId:"myCaseId" AND NOT _exists_:"so_audit_doc_id" | groupby so_related.fields.event.module | groupby so_related.fields.event.dataset');
+  const parts = navObj.query.t.split('-');
+  expect(new Date(parts[0])).not.toBeNaN();
+  expect(new Date(parts[1])).not.toBeNaN();
+
+  comp.caseObj.id = 'myOtherCaseId';
+  comp.associations.events = [];
+  navObj = comp.huntCase();
+  expect(navObj.name).toBe('hunt');
+  expect(navObj.query.caseExcludeToggle).toBe('false');
+  expect(navObj.query.q).toBe('so_related.caseId:"myOtherCaseId" AND NOT _exists_:"so_audit_doc_id" | groupby so_related.fields.event.module | groupby so_related.fields.event.dataset');
+  expect(Boolean(navObj.query.t)).toBe(false);
 });

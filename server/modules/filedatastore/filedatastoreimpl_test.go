@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -23,16 +23,14 @@ const ANOTHER_USER_ID = "124"
 const JOB_DIR = "/tmp/sensoroni.jobs"
 
 func newContext() context.Context {
-	user := model.NewUser()
-	user.Id = MY_USER_ID
-	return context.WithValue(context.Background(), web.ContextKeyRequestor, user)
+	return context.WithValue(context.Background(), web.ContextKeyRequestorId, MY_USER_ID)
 }
 
 func cleanup() {
 	os.RemoveAll(JOB_DIR)
 }
 
-func createDatastore(authorized bool) (*FileDatastoreImpl, error) {
+func createDatastore(authorized bool, jobFileContents []byte) (*FileDatastoreImpl, error) {
 	cleanup()
 
 	var srv *server.Server
@@ -45,6 +43,10 @@ func createDatastore(authorized bool) (*FileDatastoreImpl, error) {
 	cfg := make(module.ModuleConfig)
 	cfg["jobDir"] = JOB_DIR
 	os.MkdirAll(JOB_DIR, 0777)
+
+	if len(jobFileContents) > 0 {
+		os.WriteFile(JOB_DIR+"/test.json", jobFileContents, 0644)
+	}
 	err := ds.Init(cfg)
 	node := ds.CreateNode(newContext(), "foo")
 	node.Role = "rolo"
@@ -56,14 +58,27 @@ func createDatastore(authorized bool) (*FileDatastoreImpl, error) {
 
 func TestFileDatastoreInit(tester *testing.T) {
 	defer cleanup()
-	ds, err := createDatastore(true)
+	ds, err := createDatastore(true, []byte(""))
 	assert.NoError(tester, err)
 	assert.Equal(tester, DEFAULT_RETRY_FAILURE_INTERVAL_MS, ds.retryFailureIntervalMs)
 }
 
+func TestFileDatastoreInitCorruptFile(tester *testing.T) {
+	defer cleanup()
+	ds, err := createDatastore(true, []byte("garbage"))
+	assert.NoError(tester, err)
+	assert.Equal(tester, DEFAULT_RETRY_FAILURE_INTERVAL_MS, ds.retryFailureIntervalMs)
+}
+
+func TestFileDatastoreInitGoodFile(tester *testing.T) {
+	defer cleanup()
+	ds, err := createDatastore(true, []byte("{}"))
+	assert.NoError(tester, err)
+	assert.Equal(tester, DEFAULT_RETRY_FAILURE_INTERVAL_MS, ds.retryFailureIntervalMs)
+}
 func TestNodes(tester *testing.T) {
 	defer cleanup()
-	ds, _ := createDatastore(true)
+	ds, _ := createDatastore(true, []byte(""))
 	nodes := ds.GetNodes(newContext())
 	if assert.Len(tester, nodes, 1) {
 		assert.Equal(tester, "foo", nodes[0].Id)
@@ -82,7 +97,7 @@ func TestNodes(tester *testing.T) {
 
 func TestJobs(tester *testing.T) {
 	defer cleanup()
-	ds, _ := createDatastore(true)
+	ds, _ := createDatastore(true, []byte(""))
 
 	// Test adding a job
 	job := ds.CreateJob(newContext())
@@ -129,7 +144,7 @@ func TestJobs(tester *testing.T) {
 
 func TestJobAddUnauthorized(tester *testing.T) {
 	defer cleanup()
-	ds, _ := createDatastore(false)
+	ds, _ := createDatastore(false, []byte(""))
 
 	// Test adding a job
 	job := ds.CreateJob(newContext())
@@ -141,7 +156,7 @@ func TestJobAddUnauthorized(tester *testing.T) {
 
 func TestJobAdd(tester *testing.T) {
 	defer cleanup()
-	ds, _ := createDatastore(true)
+	ds, _ := createDatastore(true, []byte(""))
 	assert.Len(tester, ds.jobsById, 0)
 
 	// Test adding a job
@@ -157,7 +172,7 @@ func TestJobAdd(tester *testing.T) {
 
 func TestJobAddPivotUnauthorized(tester *testing.T) {
 	defer cleanup()
-	ds, _ := createDatastore(false)
+	ds, _ := createDatastore(false, []byte(""))
 
 	// Test adding an arbitrary job
 	job := ds.CreateJob(newContext())
@@ -169,7 +184,7 @@ func TestJobAddPivotUnauthorized(tester *testing.T) {
 
 func TestJobAddPivot(tester *testing.T) {
 	defer cleanup()
-	ds, _ := createDatastore(true)
+	ds, _ := createDatastore(true, []byte(""))
 	assert.Len(tester, ds.jobsById, 0)
 
 	// Test adding a pivot job (requires different permission)
@@ -185,7 +200,7 @@ func TestJobAddPivot(tester *testing.T) {
 
 func TestJobReadAuthorization(tester *testing.T) {
 	defer cleanup()
-	ds, _ := createDatastore(false)
+	ds, _ := createDatastore(false, []byte(""))
 
 	myJobId := 10001
 	anotherJobId := 10002
@@ -214,7 +229,7 @@ func TestJobReadAuthorization(tester *testing.T) {
 
 func TestJobDeleteAuthorization(tester *testing.T) {
 	defer cleanup()
-	ds, _ := createDatastore(false)
+	ds, _ := createDatastore(false, []byte(""))
 
 	myJobId := 10001
 	anotherJobId := 10002
@@ -244,14 +259,14 @@ func TestJobDeleteAuthorization(tester *testing.T) {
 
 func TestGetStreamFilename(tester *testing.T) {
 	defer cleanup()
-	ds, _ := createDatastore(false)
+	ds, _ := createDatastore(false, []byte(""))
 	filename := ds.getStreamFilename(ds.CreateJob(newContext()))
 	assert.Equal(tester, "/tmp/sensoroni.jobs/1001.bin", filename)
 }
 
 func TestUpdateInelegible(tester *testing.T) {
 	defer cleanup()
-	ds, _ := createDatastore(false)
+	ds, _ := createDatastore(false, []byte(""))
 
 	job := ds.CreateJob(newContext())
 	job.UserId = MY_USER_ID
@@ -264,7 +279,7 @@ func TestUpdateInelegible(tester *testing.T) {
 
 func TestUpdatePreserveData(tester *testing.T) {
 	defer cleanup()
-	ds, _ := createDatastore(true)
+	ds, _ := createDatastore(true, []byte(""))
 
 	job := ds.CreateJob(newContext())
 	job.UserId = MY_USER_ID
@@ -285,7 +300,7 @@ func TestUpdatePreserveData(tester *testing.T) {
 
 func TestFilterMatches(tester *testing.T) {
 	defer cleanup()
-	ds, _ := createDatastore(true)
+	ds, _ := createDatastore(true, []byte(""))
 
 	params := make(map[string]interface{})
 	jobParams := make(map[string]interface{})

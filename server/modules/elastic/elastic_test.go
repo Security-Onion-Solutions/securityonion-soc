@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -7,6 +7,7 @@
 package elastic
 
 import (
+	"net/http"
 	"testing"
 	"time"
 
@@ -16,7 +17,12 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func cleanup() {
+	http.DefaultServeMux = http.NewServeMux() // Reset default http mux to avoid conflicts with other tests
+}
+
 func TestElasticInit(tester *testing.T) {
+	defer cleanup()
 	srv := server.NewFakeUnauthorizedServer()
 	elastic := NewElastic(srv)
 	cfg := make(module.ModuleConfig)
@@ -37,18 +43,47 @@ func TestElasticInit(tester *testing.T) {
 	assert.Equal(tester, DEFAULT_INDEX, elastic.store.index)
 	assert.Equal(tester, DEFAULT_INTERVALS, elastic.store.intervals)
 	assert.Equal(tester, DEFAULT_MAX_LOG_LENGTH, elastic.store.maxLogLength)
+	assert.Equal(tester, true, elastic.store.lookupTunnelParent)
 
 	// Ensure casestore has been setup
 	assert.NotNil(tester, srv.Casestore)
+}
 
-	// Ensure failure it attempting to init when a casestore is already setup
+func TestElasticInitFailure(tester *testing.T) {
+	defer cleanup()
+	srv := server.NewFakeUnauthorizedServer()
+	elastic := NewElastic(srv)
+	cfg := make(module.ModuleConfig)
+
+	// Ensure failure if attempting to init when a casestore is already setup
+	elastic.server.Casestore = &ElasticCasestore{}
+
 	licensing.Test("foo", 0, 0, "", "")
-	err = elastic.Init(cfg)
+	err := elastic.Init(cfg)
 	assert.Error(tester, err)
 	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
+}
+
+func TestElasticInitLicenseExceeded(tester *testing.T) {
+	defer cleanup()
+	srv := server.NewFakeUnauthorizedServer()
+	elastic := NewElastic(srv)
+	cfg := make(module.ModuleConfig)
 
 	// Ensure license is exceeded due to mismatched elastic URL (blank vs foo)
 	licensing.Test("foo", 0, 0, "", "foo")
-	err = elastic.Init(cfg)
+	elastic.Init(cfg)
 	assert.Equal(tester, licensing.LICENSE_STATUS_EXCEEDED, licensing.GetStatus())
+}
+
+func TestElasticStart(tester *testing.T) {
+	defer cleanup()
+	srv := server.NewFakeUnauthorizedServer()
+	elastic := NewElastic(srv)
+	cfg := make(module.ModuleConfig)
+	assert.Len(tester, srv.ApiRouter.Routes(), 0)
+	elastic.Init(cfg)
+	assert.Len(tester, srv.ApiRouter.Routes(), 1)
+	elastic.Start()
+	assert.Len(tester, srv.ApiRouter.Routes(), 1)
 }

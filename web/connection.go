@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -10,21 +10,20 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/security-onion-solutions/securityonion-soc/model"
 )
 
 type Connection struct {
 	websocket    *websocket.Conn
 	lastPingTime time.Time
 	ip           string
-	user         *model.User
+	userId       string
 }
 
-func NewConnection(user *model.User, wsConn *websocket.Conn, ip string) *Connection {
+func NewConnection(userId string, wsConn *websocket.Conn, ip string) *Connection {
 	conn := &Connection{
 		websocket: wsConn,
 		ip:        ip,
-		user:      user,
+		userId:    userId,
 	}
 	conn.UpdatePingTime()
 	return conn
