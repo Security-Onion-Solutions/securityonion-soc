@@ -1057,8 +1057,8 @@ license: Elastic-2.0
 
 	repos := []*detections.RepoOnDisk{
 		{
-			Repo: &model.RuleRepo{
-				Repo:      "github.com/repo-user/repo-path",
+			Repo: &model.Repo{
+				RepoUrl:   "github.com/repo-user/repo-path",
 				License:   "DRL",
 				Community: true,
 			},
@@ -1554,9 +1554,9 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 		reposFolder:                   "repos",
 		rulesFingerprintFile:          "rulesFingerprintFile",
 		elastAlertRulesFolder:         "elastAlertRulesFolder",
-		rulesRepos: []*model.RuleRepo{
+		rulesRepos: []*model.Repo{
 			{
-				Repo:      "https://github.com/user/repo",
+				RepoUrl:   "https://github.com/user/repo",
 				Community: true,
 			},
 		},
@@ -1680,9 +1680,9 @@ func TestSyncChanges(t *testing.T) {
 		reposFolder:                   "repos",
 		rulesFingerprintFile:          "rulesFingerprintFile",
 		elastAlertRulesFolder:         "elastAlertRulesFolder",
-		rulesRepos: []*model.RuleRepo{
+		rulesRepos: []*model.Repo{
 			{
-				Repo:      "https://github.com/user/repo",
+				RepoUrl:   "https://github.com/user/repo",
 				Community: true,
 			},
 		},
@@ -1888,9 +1888,9 @@ func TestSyncUnchangedOverrides(t *testing.T) {
 		reposFolder:                   "repos",
 		rulesFingerprintFile:          "rulesFingerprintFile",
 		elastAlertRulesFolder:         "elastAlertRulesFolder",
-		rulesRepos: []*model.RuleRepo{
+		rulesRepos: []*model.Repo{
 			{
-				Repo:      "https://github.com/user/repo",
+				RepoUrl:   "https://github.com/user/repo",
 				Community: true,
 			},
 		},
@@ -2036,9 +2036,9 @@ func TestSyncStateFileNoCommunity(t *testing.T) {
 		reposFolder:                   "repos",
 		rulesFingerprintFile:          "rulesFingerprintFile",
 		elastAlertRulesFolder:         "elastAlertRulesFolder",
-		rulesRepos: []*model.RuleRepo{
+		rulesRepos: []*model.Repo{
 			{
-				Repo:      "https://github.com/user/repo",
+				RepoUrl:   "https://github.com/user/repo",
 				Community: true,
 			},
 		},

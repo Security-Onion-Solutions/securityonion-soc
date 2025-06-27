@@ -95,13 +95,13 @@ func WriteStateFile(iom IOManager, path string) {
 }
 
 type RepoOnDisk struct {
-	Repo        *model.RuleRepo
+	Repo        *model.Repo
 	Path        string
 	RulesetName string
 	WasModified bool
 }
 
-func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.RuleRepo, iom IOManager) (allRepos []*RepoOnDisk, anythingNew bool, err error) {
+func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Repo, iom IOManager) (allRepos []*RepoOnDisk, anythingNew bool, err error) {
 	allRepos = make([]*RepoOnDisk, 0, len(rulesRepos))
 
 	// read existing repos
@@ -130,12 +130,12 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 		folderName := repo.RulesetName
 
 		if folderName == "" {
-			cleanedPath := repo.Repo
+			cleanedPath := repo.RepoUrl
 			cleanedPath = strings.TrimRight(cleanedPath, string(os.PathSeparator))
 
 			parser, err := url.Parse(cleanedPath)
 			if err != nil {
-				log.WithError(err).WithField("repoUrl", repo.Repo).Error("Failed to parse repo URL, doing nothing with it")
+				log.WithError(err).WithField("repoUrl", repo.RepoUrl).Error("Failed to parse repo URL, doing nothing with it")
 				continue
 			}
 
@@ -189,7 +189,7 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
 			defer cancel()
 
-			err = iom.CloneRepo(ctx, repoPath, repo.Repo, repo.Branch)
+			err = iom.CloneRepo(ctx, repoPath, repo.RepoUrl, repo.Branch)
 			if err != nil {
 				if errors.Is(err, transport.ErrRepositoryNotFound) {
 					log.WithField("repoPath", repoPath).Warn("repo not found, skipping")
