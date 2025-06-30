@@ -361,14 +361,14 @@ func TestUpdateRepos(t *testing.T) {
 
 	isRunning := true
 
-	repos := []*model.RuleRepo{
+	repos := []*model.Repo{
 		{
-			Repo:        "http://github.com/user/repo/",
+			RepoUrl:     "http://github.com/user/repo/",
 			RulesetName: "sigma-rules",
 		},
 		{
-			Repo:   "http://github.com/user/repo",
-			Branch: &branch,
+			RepoUrl: "http://github.com/user/repo",
+			Branch:  &branch,
 		},
 	}
 
@@ -410,13 +410,13 @@ func TestUpdateReposFailToClone(t *testing.T) {
 
 	isRunning := true
 
-	repos := []*model.RuleRepo{
+	repos := []*model.Repo{
 		{
-			Repo:   "http://github.com/user/repo2",
-			Branch: &branch,
+			RepoUrl: "http://github.com/user/repo2",
+			Branch:  &branch,
 		},
 		{
-			Repo: "http://github.com/user/repo1",
+			RepoUrl: "http://github.com/user/repo1",
 		},
 	}
 
@@ -445,16 +445,16 @@ func TestUpdateReposAllowedRepoErrors(t *testing.T) {
 
 	isRunning := true
 
-	repos := []*model.RuleRepo{
+	repos := []*model.Repo{
 		{
-			Repo:   "http://github.com/user/repo1",
-			Branch: &branch,
+			RepoUrl: "http://github.com/user/repo1",
+			Branch:  &branch,
 		},
 		{
-			Repo: "http://github.com/user/repo2",
+			RepoUrl: "http://github.com/user/repo2",
 		},
 		{
-			Repo: "file:///nsm/rules/repo3/",
+			RepoUrl: "file:///nsm/rules/repo3/",
 		},
 	}
 
@@ -490,13 +490,13 @@ func TestUpdateReposRepoRemoteGoneError(t *testing.T) {
 
 	isRunning := true
 
-	repos := []*model.RuleRepo{
+	repos := []*model.Repo{
 		{
-			Repo:   "http://github.com/user/repo1",
-			Branch: &branch,
+			RepoUrl: "http://github.com/user/repo1",
+			Branch:  &branch,
 		},
 		{
-			Repo: "http://github.com/user/repo2",
+			RepoUrl: "http://github.com/user/repo2",
 		},
 	}
 

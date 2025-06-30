@@ -1018,9 +1018,9 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 		},
 		isRunning:   true,
 		reposFolder: "repos",
-		rulesRepos: []*model.RuleRepo{
+		rulesRepos: []*model.Repo{
 			{
-				Repo:      "https://github.com/user/repo",
+				RepoUrl:   "https://github.com/user/repo",
 				Community: true,
 			},
 		},
@@ -1114,9 +1114,9 @@ func TestSyncChanges(t *testing.T) {
 		},
 		isRunning:   true,
 		reposFolder: "repos",
-		rulesRepos: []*model.RuleRepo{
+		rulesRepos: []*model.Repo{
 			{
-				Repo:      "https://github.com/user/repo",
+				RepoUrl:   "https://github.com/user/repo",
 				Community: true,
 			},
 		},
@@ -1305,9 +1305,9 @@ func TestSyncStateFileNoCommunity(t *testing.T) {
 		},
 		isRunning:   true,
 		reposFolder: "repos",
-		rulesRepos: []*model.RuleRepo{
+		rulesRepos: []*model.Repo{
 			{
-				Repo:      "https://github.com/user/repo",
+				RepoUrl:   "https://github.com/user/repo",
 				Community: true,
 			},
 		},
