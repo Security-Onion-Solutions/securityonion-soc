@@ -252,7 +252,7 @@
 										</div>
 										<v-data-table v-if="!group.chart_type" :id="'group-' + groupIdx" class="elevation-1"
 											:search="groupByFilter" density="compact" v-model:expanded="expandedEvents"
-											:items-per-page-options="groupByFooters" item-value="rule.uuid" :items-per-page="groupByItemsPerPage"
+											:items-per-page-options="groupByFooters" :items-per-page="groupByItemsPerPage"
 											@update:items-per-page="val => groupByItemsPerPage = val" :headers="group.headers"
 											:items="group.data" v-model:sort-by="group.sortBy" must-sort @update:sort-by="updateGroupBySort(groupIdx)"
 											:data-aid="'groups_table_' + category">
