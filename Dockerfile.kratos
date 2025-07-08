@@ -24,6 +24,13 @@ WORKDIR /go/src/github.com/$OWNER/kratos
 
 RUN git checkout $VERSION
 
+# Inject user.name (identifier) into the login error log
+RUN sed -i '/WithField("login_flow", f\.ToLoggerField())/a\\n\t// Extract identifier if available\n\tif f != nil && f.UI != nil {\n\t\tif identifierNode := f.UI.Nodes.Find("identifier"); identifierNode != nil {\n\t\t\tif identifier, ok := identifierNode.GetValue().(string); ok && identifier != "" {\n\t\t\t\tlogger = logger.WithField("user.name", identifier)\n\t\t\t}\n\t\t}\n\t}' selfservice/flow/login/error.go
+
+# Verify the sed command was successful
+RUN grep -q "Extract identifier if available" selfservice/flow/login/error.go || \
+(echo "ERROR: Identifier logging injection failed - pattern not found!" && exit 1)
+
 ENV GO111MODULE on
 ENV CGO_ENABLED 1
 ENV CGO_CPPFLAGS -DSQLITE_DEFAULT_FILE_PERMISSIONS=0600
