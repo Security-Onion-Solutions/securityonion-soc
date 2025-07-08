@@ -244,6 +244,12 @@
               </template>
               <v-list-item-title v-text="i18n.hunt"></v-list-item-title>
             </v-list-item>
+            <v-list-item data-aid="nav_chat" @click="" to="/chat">
+              <template #prepend>
+                <v-icon>fa-comments</v-icon>
+              </template>
+              <v-list-item-title v-text="i18n.chat"></v-list-item-title>
+            </v-list-item>
             <v-list-item data-aid="nav_cases" @click="" to="/cases" v-if="casesEnabled">
               <template #prepend>
                 <v-icon>fa-briefcase</v-icon>
@@ -374,6 +380,7 @@
     <script src="js/routes/config.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/downloads.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/home.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/chat.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/hunt.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/jobs.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/job.js?v=VERSION_PLACEHOLDER"></script>

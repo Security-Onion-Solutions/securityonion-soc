@@ -1,0 +1,153 @@
+<v-container fluid data-aid="chat_screen">
+	<v-row>
+		<v-col>
+			<h2 v-text="i18n.chat"></h2>
+		</v-col>
+	</v-row>
+	<v-row>
+		<v-col cols="12" lg="8" class="mx-auto">
+			<v-card class="chat-container" height="600">
+				<v-card-title class="py-3 d-flex align-center">
+					<v-icon class="mr-2">fa-comments</v-icon>
+					<span class="flex-grow-1">{{ i18n.chatTitle }}</span>
+					<v-btn icon variant="text" size="small" @click="showHistoryDialog = true" :title="i18n.chatHistory || 'Chat History'" data-aid="chat_history_button">
+						<v-icon size="small">fa-history</v-icon>
+					</v-btn>
+				</v-card-title>
+				<v-divider></v-divider>
+				<v-card-text class="chat-messages pa-0" style="height: 460px; overflow-y: auto;">
+					<div class="pa-4">
+						<div v-for="(message, index) in messages" :key="index" class="message-item mb-3">
+							<div class="d-flex align-start">
+								<v-avatar size="32" class="mr-3" :color="message.role === 'user' ? 'primary' : 'secondary'">
+									<v-icon class="text-white" size="small">{{ message.role === 'user' ? 'fa-user' : 'fa-robot' }}</v-icon>
+								</v-avatar>
+								<div class="flex-grow-1">
+									<div class="d-flex align-center mb-1">
+										<span class="font-weight-medium text-body-2 mr-2">{{ message.role === 'user' ? 'You' : 'AI Assistant' }}</span>
+										<span class="text-caption text-medium-emphasis">{{ formatTimestamp(message.timestamp) }}</span>
+									</div>
+									<div class="text-body-2" v-html="formatMarkdown(message.content)"></div>
+								</div>
+							</div>
+						</div>
+						<div v-if="messages.length === 0" class="text-center text-medium-emphasis py-8">
+							<v-icon size="48" class="mb-4">fa-robot</v-icon>
+							<div>{{ i18n.chatEmpty }}</div>
+						</div>
+						<div v-if="isTyping" class="message-item mb-3">
+							<div class="d-flex align-start">
+								<v-avatar size="32" class="mr-3" color="secondary">
+									<v-icon class="text-white" size="small">fa-robot</v-icon>
+								</v-avatar>
+								<div class="flex-grow-1">
+									<div class="d-flex align-center mb-1">
+										<span class="font-weight-medium text-body-2 mr-2">AI Assistant</span>
+										<span class="text-caption text-medium-emphasis">typing...</span>
+									</div>
+									<div class="text-body-2">
+										<v-progress-linear indeterminate color="secondary" height="2"></v-progress-linear>
+										<span class="text-caption text-medium-emphasis">Thinking...</span>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+				</v-card-text>
+				<v-divider></v-divider>
+				<v-card-actions class="pa-4 d-flex align-center">
+					<v-text-field
+						v-model="newMessage"
+						:placeholder="i18n.chatPlaceholder"
+						variant="outlined"
+						density="compact"
+						hide-details
+						class="flex-grow-1 mr-3"
+						@keyup.enter="sendMessage"
+						:disabled="isTyping"
+						data-aid="chat_input"
+						style="min-width: 0;"
+					></v-text-field>
+					<v-btn
+						color="primary"
+						:disabled="!newMessage.trim() || isTyping"
+						@click="sendMessage"
+						data-aid="chat_send"
+						class="flex-shrink-0"
+					>
+						<v-icon>{{ isTyping ? 'fa-hourglass-half' : 'fa-paper-plane' }}</v-icon>
+					</v-btn>
+				</v-card-actions>
+			</v-card>
+		</v-col>
+	</v-row>
+
+	<!-- Credits Box - Bottom Right -->
+	<v-row>
+		<v-col cols="12" class="d-flex justify-end">
+			<v-card
+				class="credits-box"
+				style="min-width: 180px;"
+				elevation="2"
+				data-aid="credits_box"
+			>
+				<v-card-text class="pa-3">
+					<div class="text-body-1 font-weight-medium mb-2">{{ i18n.credits }}</div>
+					<div>
+						<span class="text-medium-emphasis">{{ i18n.creditsRemaining }}:</span>
+						<div class="text-body-1 font-weight-medium" :class="creditsRemaining <= 5000 ? 'text-error' : 'text-primary'">
+							{{ formatCount(creditsRemaining) }}
+						</div>
+					</div>
+				</v-card-text>
+			</v-card>
+		</v-col>
+	</v-row>
+
+	<!-- Chat History Dialog -->
+	<v-dialog v-model="showHistoryDialog" max-width="600px" data-aid="chat_history_dialog">
+		<v-card>
+			<v-card-title class="py-3">
+				<v-icon class="mr-2">fa-history</v-icon>
+				{{ i18n.chatHistory }}
+				<v-spacer></v-spacer>
+			</v-card-title>
+			<v-divider></v-divider>
+			<v-card-text class="pa-0" style="max-height: 400px; overflow-y: auto;">
+				<v-list v-if="chatHistory.length > 0">
+					<v-list-item
+						v-for="chat in chatHistory"
+						:key="chat.id"
+						@click="loadChat(chat)"
+						:class="{ 'bg-primary': chat.id === currentChatId }"
+						data-aid="chat_history_item"
+					>
+						<v-list-item-title class="text-wrap">{{ chat.title }}</v-list-item-title>
+						<v-list-item-subtitle>{{ formatChatDate(chat.lastUpdated) }}</v-list-item-subtitle>
+						<template #append>
+							<v-btn icon variant="text" size="small" @click.stop="deleteChat(chat.id)" data-aid="chat_history_delete">
+								<v-icon size="small" color="error">fa-trash</v-icon>
+							</v-btn>
+						</template>
+					</v-list-item>
+				</v-list>
+				<div v-else class="text-center text-medium-emphasis py-8">
+					<v-icon size="48" class="mb-4">fa-history</v-icon>
+					<div>{{ i18n.chatNoHistory }}</div>
+				</div>
+			</v-card-text>
+			<v-divider></v-divider>
+			<v-card-actions>
+				<v-btn @click="startNewChat" color="primary" data-aid="chat_history_new">
+					<v-icon class="mr-2">fa-plus</v-icon>
+					{{ i18n.chatNewChat }}
+				</v-btn>
+				<v-spacer></v-spacer>
+				<v-btn @click="showHistoryDialog = false" data-aid="chat_history_close">
+					{{ i18n.close }}
+				</v-btn>
+			</v-card-actions>
+		</v-card>
+	</v-dialog>
+
+</v-container>
