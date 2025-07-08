@@ -252,7 +252,7 @@
 										</div>
 										<v-data-table v-if="!group.chart_type" :id="'group-' + groupIdx" class="elevation-1"
 											:search="groupByFilter" density="compact" v-model:expanded="expandedEvents"
-											:items-per-page-options="groupByFooters" :items-per-page="groupByItemsPerPage"
+											:items-per-page-options="groupByFooters" item-value="_index" :items-per-page="groupByItemsPerPage"
 											@update:items-per-page="val => groupByItemsPerPage = val" :headers="group.headers"
 											:items="group.data" v-model:sort-by="group.sortBy" must-sort @update:sort-by="updateGroupBySort(groupIdx)"
 											:data-aid="'groups_table_' + category">
@@ -334,12 +334,12 @@
 												<tr>
 													<td :colspan="columns.length" class="px-0" :data-aid="'events_fields_' + category">
 														<div>
-															<v-tabs :height="isCategory('alerts') ? undefined : 0" v-model="activeTabs[index]" @update:model-value="if (activeTabs[index] === 'playbook') loadPlaybook(item.newest);">
-																<v-tab id="alerts_alertsDetailTab" value="alert" :class="{ 'theme-primary': activeTabs[index] === 'alert' }" :style="{ 'width': (eventColumnWidth * 0.5 - 28) + 'px' }" data-aid="alerts_agg_alertDetailsTab">
+															<v-tabs :height="isCategory('alerts') ? undefined : 0" v-model="activeTabs[item._index]" @update:model-value="if (activeTabs[item._index] === 'playbook') loadPlaybook(item.newest);">
+																<v-tab id="alerts_alertsDetailTab" value="alert" :class="{ 'theme-primary': activeTabs[item._index] === 'alert' }" :style="{ 'width': (eventColumnWidth * 0.5 - 28) + 'px' }" data-aid="alerts_agg_alertDetailsTab">
 																	<v-icon class="tab-icon">fa-bell</v-icon>
 																	<div class="d-none d-lg-block">{{i18n.alertDetails}}</div>
 																</v-tab>
-																<v-tab id="alerts_playbookTab" value="playbook" :class="{ 'theme-primary': activeTabs[index] === 'playbook' }" :style="{ 'width': (eventColumnWidth * 0.5 - 28) + 'px' }" data-aid="alerts_agg_playbookTab">
+																<v-tab id="alerts_playbookTab" value="playbook" :class="{ 'theme-primary': activeTabs[item._index] === 'playbook' }" :style="{ 'width': (eventColumnWidth * 0.5 - 28) + 'px' }" data-aid="alerts_agg_playbookTab">
 																	<v-icon class="tab-icon">fa-book</v-icon>
 																	<div class="d-none d-lg-block">{{i18n.guidedAnalysis}}</div>
 																	<template #append>
@@ -352,7 +352,7 @@
 																	</template>
 																</v-tab>
 															</v-tabs>
-															<v-tabs-window v-model="activeTabs[index]">
+															<v-tabs-window v-model="activeTabs[item._index]">
 																<v-tabs-window-item value="alert">
 																	<v-data-table density="compact" hide-default-header hide-default-footer :headers="expandedHeaders" :items="getExpandedData(item.newest)" items-per-page="-1">
 																		<template #item="{ item: kvp }">
@@ -640,12 +640,12 @@
 									<tr>
 										<td :colspan="columns.length" class="px-0" :data-aid="'events_fields_' + category">
 											<div>
-												<v-tabs :height="isCategory('alerts') ? undefined : 0" v-model="activeTabs[index]" @update:model-value="if (activeTabs[index] === 'playbook') loadPlaybook(item);">
-													<v-tab id="alerts_alertsDetailTab" value="alert" :class="{ 'theme-primary': activeTabs[index] === 'alert' }" :style="{ 'width': (this.eventColumnWidth / 2) + 'px' }" data-aid="alerts_alertDetailsTab">
+												<v-tabs :height="isCategory('alerts') ? undefined : 0" v-model="activeTabs[item._index]" @update:model-value="if (activeTabs[item._index] === 'playbook') loadPlaybook(item);">
+													<v-tab id="alerts_alertsDetailTab" value="alert" :class="{ 'theme-primary': activeTabs[item._index] === 'alert' }" :style="{ 'width': (this.eventColumnWidth / 2) + 'px' }" data-aid="alerts_alertDetailsTab">
 														<v-icon class="tab-icon">fa-bell</v-icon>
 														<div class="d-none d-lg-block">{{i18n.alertDetails}}</div>
 													</v-tab>
-													<v-tab id="alerts_playbookTab" value="playbook" :class="{ 'theme-primary': activeTabs[index] === 'playbook' }" :style="{ 'width': (this.eventColumnWidth / 2) + 'px' }" data-aid="alerts_playbookTab">
+													<v-tab id="alerts_playbookTab" value="playbook" :class="{ 'theme-primary': activeTabs[item._index] === 'playbook' }" :style="{ 'width': (this.eventColumnWidth / 2) + 'px' }" data-aid="alerts_playbookTab">
 														<v-icon class="tab-icon">fa-book</v-icon>
 														<div class="d-none d-lg-block">{{i18n.guidedAnalysis}}</div>
 														<template #append>
@@ -658,7 +658,7 @@
 														</template>
 													</v-tab>
 												</v-tabs>
-												<v-tabs-window v-model="activeTabs[index]">
+												<v-tabs-window v-model="activeTabs[item._index]">
 													<v-tabs-window-item value="alert">
 														<v-data-table density="compact" hide-default-header hide-default-footer :headers="expandedHeaders" :items="getExpandedData(item)" items-per-page="-1">
 															<template #item="{ item: kvp }">

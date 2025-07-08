@@ -737,7 +737,7 @@ const huntComponent = {
           docEvent["soc_id"] = item["soc_id"];
         } else {
           for (let field of Object.keys(item)) {
-            if (field !== 'newest') docEvent[field] = item[field]
+            if (field !== 'newest' && !field.startsWith('_')) docEvent[field] = item[field]
           }
         }
         var isAlert = ('rule.name' in item || 'event.severity_label' in item);
@@ -1207,7 +1207,7 @@ const huntComponent = {
       return this.buildGroupOptionRoute(groupIdx, removals, '');
     },
     countDrilldown(event) {
-      const keys = Object.keys(event).filter(field => field != 'newest');
+      const keys = Object.keys(event).filter(field => field != 'newest' && !field.startsWith('_'));
       if ( (keys.length == 2 && keys[0] == "count") || (keys.length == 5 && keys[0] == "count" && keys[1] == "rule.name" && keys[2] == "event.module" && keys[3] == "event.severity_label" && keys[4] == "rule.uuid") ) {
         this.filterRouteDrilldown = this.buildFilterRoute(keys[1], event[keys[1]], FILTER_DRILLDOWN);
         this.$router.push(this.filterRouteDrilldown);
@@ -1438,6 +1438,7 @@ const huntComponent = {
       data.forEach(function(row, index) {
         var record = {
           count: row.value,
+          _index: index,
         };
         fields.forEach(function(field, index) {
           record[field] = route.localizeValue(row.keys[index]);
@@ -1643,6 +1644,8 @@ const huntComponent = {
           if (multiSelect) {
             record._isSelected = false;
           }
+
+          record._index = index;
 
           records.push(record);
 
@@ -3016,6 +3019,7 @@ const huntComponent = {
 
       for (let field in item) {
         let label = field;
+        if (field.startsWith('_')) continue;
         if (field.startsWith('event_data.')) {
           label = field.replace('event_data.', '');
         }
