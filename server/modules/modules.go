@@ -9,6 +9,7 @@ package modules
 import (
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/assistant"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/elastalert"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/elastic"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/elasticcases"
@@ -47,6 +48,7 @@ func BuildModuleMap(srv *server.Server) map[string]module.Module {
 	moduleMap["strelkaengine"] = strelka.NewStrelkaEngine(srv)
 	moduleMap["navigator"] = navigator.NewNavigator(srv)
 	moduleMap["playbook"] = playbook.NewPlaybookDiskManager(srv)
+	moduleMap["assistant"] = assistant.NewAssistantManager(srv)
 
 	return moduleMap
 }
