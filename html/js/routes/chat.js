@@ -18,12 +18,14 @@ routes.push({ path: '/chat', name: 'chat', component: {
     chatHistory: [],
     currentChatId: null,
     showHistoryDialog: false,
-    creditsRemaining: 45000000,
+    creditsRemaining: 0,
+    apiEndpoint: 'https://onionai-dev.securityonion.net',
+    apiKey: 'sk-d0c3b7d7-b5c9-45c5-bcca-0ecb50bda59e',
   }},
-  created() {
+  async created() {
     this.loadChatHistory();
     this.loadStoredChats();
-    this.loadCredits();
+    await this.loadCredits();
     this.connectToChat();
   },
   beforeUnmount() {
@@ -65,16 +67,31 @@ routes.push({ path: '/chat', name: 'chat', component: {
         console.log('Failed to save chat history:', error);
       }
     },
-    loadCredits() {
+    async loadCredits() {
       try {
-        const stored = localStorage.getItem('so-chat-credits');
-        if (stored) {
-          const credits = JSON.parse(stored);
-          this.creditsRemaining = credits.remaining || 100;
+        const response = await axios.get(`${this.apiEndpoint}/balance`, {
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (response.data) {
+          this.creditsRemaining = response.data.balance || 0;
         }
       } catch (error) {
-        console.log('Failed to load credits:', error);
-        this.creditsRemaining = 100;
+        console.error('Error loading credits from API:', error);
+        // Fallback to localStorage if API fails
+        try {
+          const stored = localStorage.getItem('so-chat-credits');
+          if (stored) {
+            const credits = JSON.parse(stored);
+            this.creditsRemaining = credits.remaining || 0;
+          }
+        } catch (storageError) {
+          console.log('Failed to load credits from storage:', storageError);
+          this.creditsRemaining = 0;
+        }
       }
     },
     saveCredits() {
@@ -85,12 +102,6 @@ routes.push({ path: '/chat', name: 'chat', component: {
         localStorage.setItem('so-chat-credits', JSON.stringify(credits));
       } catch (error) {
         console.log('Failed to save credits:', error);
-      }
-    },
-    deductCredit() {
-      if (this.creditsRemaining > 0) {
-        this.creditsRemaining -= 1000;
-        this.saveCredits();
       }
     },
     saveCurrentChat() {
@@ -169,6 +180,12 @@ routes.push({ path: '/chat', name: 'chat', component: {
     async sendMessage() {
       if (!this.newMessage.trim()) return;
       
+      // Check if user has credits
+      if (this.creditsRemaining <= 0) {
+        this.$root.showError('Insufficient credits. Please contact your administrator to purchase more credits.');
+        return;
+      }
+      
       const userMessage = {
         role: 'user',
         content: this.newMessage.trim(),
@@ -185,9 +202,8 @@ routes.push({ path: '/chat', name: 'chat', component: {
       this.isTyping = true;
       
       try {
-        // In a real implementation, this would send the message to an AI service
-        // For now, we'll simulate an AI response
-        await this.simulateAIResponse(messageText);
+        // Call the actual AI API
+        await this.callAIAPI(messageText);
         
         // Auto-save chat after each exchange
         this.saveCurrentChat();
@@ -196,41 +212,50 @@ routes.push({ path: '/chat', name: 'chat', component: {
         this.isTyping = false;
       }
     },
-    async simulateAIResponse(userMessage) {
-      // Simulate AI processing time
-      await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
-      
-      let aiResponse = '';
-      
-      // Simple response logic based on user input
-      const lowerMessage = userMessage.toLowerCase();
-      
-      if (lowerMessage.includes('hello') || lowerMessage.includes('hi')) {
-        aiResponse = 'Hello! I\'m here to help you with Security Onion. What would you like to know?';
-      } else if (lowerMessage.includes('alert') || lowerMessage.includes('detection')) {
-        aiResponse = 'I can help you with alerts and detections in Security Onion. You can view alerts in the Alerts section, create custom detections, or tune existing ones. What specific aspect would you like to explore?';
-      } else if (lowerMessage.includes('hunt') || lowerMessage.includes('search')) {
-        aiResponse = 'The Hunt interface allows you to search through your security data using OQL (Onion Query Language). You can filter by time ranges, specific fields, and create complex queries. Would you like help with a specific hunt query?';
-      } else if (lowerMessage.includes('case') || lowerMessage.includes('incident')) {
-        aiResponse = 'Cases in Security Onion help you manage security incidents. You can escalate alerts to cases, add observables, comments, and track investigation progress. Do you need help with case management?';
-      } else if (lowerMessage.includes('dashboard') || lowerMessage.includes('metric')) {
-        aiResponse = 'Dashboards provide visual insights into your security data. You can view pre-built dashboards or create custom ones. The metrics show system health, alert trends, and network activity. What metrics are you interested in?';
-      } else if (lowerMessage.includes('help') || lowerMessage.includes('how')) {
-        aiResponse = 'I can assist you with various Security Onion features including:\n\n• **Alerts & Detections** - Managing and tuning security alerts\n• **Hunt** - Searching and analyzing security data\n• **Cases** - Incident response and case management\n• **Dashboards** - Monitoring and metrics\n• **Grid Management** - System administration\n\nWhat would you like to learn more about?';
-      } else {
-        aiResponse = 'I understand you\'re asking about: "' + userMessage + '"\n\nI\'m here to help with Security Onion questions. Could you provide more specific details about what you\'d like to know? I can assist with alerts, hunting, cases, dashboards, and system administration.';
+    async callAIAPI(userMessage) {
+      try {
+        const response = await axios.post(`${this.apiEndpoint}/chat`, {
+          message: userMessage,
+          conversation_history: this.messages.slice(-10) // Send last 10 messages for context
+        }, {
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (response.data && response.data.response) {
+          const assistantMessage = {
+            role: 'assistant',
+            content: response.data.response,
+            timestamp: new Date().toISOString()
+          };
+          
+          this.isTyping = false;
+          this.messages.push(assistantMessage);
+          this.scrollToBottom();
+          
+          // Update credits from API after successful response
+          await this.loadCredits();
+        } else {
+          throw new Error('Invalid response format from AI API');
+        }
+      } catch (error) {
+        this.isTyping = false;
+        console.error('AI API Error:', error);
+        
+        // Show user-friendly error message
+        const errorMessage = {
+          role: 'assistant',
+          content: 'I apologize, but I\'m having trouble connecting to the AI service right now. Please try again in a moment.',
+          timestamp: new Date().toISOString()
+        };
+        this.messages.push(errorMessage);
+        this.scrollToBottom();
+        
+        // Show error to user
+        this.$root.showError('Failed to get AI response: ' + (error.response?.data?.error || error.message));
       }
-      
-      const assistantMessage = {
-        role: 'assistant',
-        content: aiResponse,
-        timestamp: new Date().toISOString()
-      };
-      
-      this.isTyping = false;
-      this.messages.push(assistantMessage);
-      this.deductCredit(); // Deduct credit for successful AI response
-      this.scrollToBottom();
     },
     handleAIResponse(response) {
       // Handle real AI responses when implemented
