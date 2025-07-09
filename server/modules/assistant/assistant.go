@@ -98,6 +98,7 @@ func (am *AssistantCoordinator) Chat(ctx context.Context, msg string) (*model.Ch
 	}
 
 	u.Path = path.Join(u.Path, "/api/chat")
+	endpoint := u.String()
 
 	var buf bytes.Buffer
 
@@ -107,9 +108,9 @@ func (am *AssistantCoordinator) Chat(ctx context.Context, msg string) (*model.Ch
 		return nil, err
 	}
 
-	httpReq, err := http.NewRequest(http.MethodPost, u.String(), &buf)
+	httpReq, err := http.NewRequest(http.MethodPost, endpoint, &buf)
 	if err != nil {
-		logger.WithError(err).Error("unable to make request object")
+		logger.WithError(err).WithField("apiEndpoint", endpoint).Error("unable to make request object")
 
 		return nil, err
 	}
@@ -138,6 +139,55 @@ func (am *AssistantCoordinator) Chat(ctx context.Context, msg string) (*model.Ch
 	err = json.Unmarshal(resBody, response)
 	if err != nil {
 		logger.WithError(err).WithField("rawChatResponseBody", string(resBody)).Error("unable to unmarhsal JSON response")
+		return nil, err
+	}
+
+	return response, nil
+}
+
+func (am *AssistantCoordinator) Balance(ctx context.Context) (*model.BalanceResponse, error) {
+	logger := log.FromContext(ctx)
+
+	u, err := url.Parse(am.apiUrl)
+	if err != nil {
+		logger.WithError(err).WithField("apiUrl", am.apiUrl).Error("unable to parse apiUrl")
+
+		return nil, err
+	}
+
+	u.Path = path.Join(u.Path, "/api/balance")
+	endpoint := u.String()
+
+	httpReq, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	if err != nil {
+		logger.WithError(err).Error("unable to make request object")
+
+		return nil, err
+	}
+
+	httpReq.Header.Add("Authorization", fmt.Sprintf("Bearer %s", am.apiKey))
+
+	res, err := am.MakeRequest(httpReq)
+	if err != nil {
+		logger.WithError(err).WithField("apiEndpoint", endpoint).Error("unable to execute request")
+
+		return nil, err
+	}
+
+	resBody, err := io.ReadAll(res.Body)
+	if err != nil {
+		logger.WithError(err).Error("unable to read response body")
+
+		return nil, err
+	}
+
+	logger.WithField("rawBalanceResponseBody", string(resBody)).Debug("balance response received")
+
+	response := &model.BalanceResponse{}
+
+	err = json.Unmarshal(resBody, response)
+	if err != nil {
+		logger.WithError(err).WithField("rawBalanceResponseBody", string(resBody)).Error("unable to unmarhsal JSON response")
 		return nil, err
 	}
 

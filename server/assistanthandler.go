@@ -28,11 +28,12 @@ func RegisterAssistantRoutes(srv *Server, r chi.Router, prefix string) {
 	h := NewAssistantHandler(srv)
 
 	r.Route(prefix, func(r chi.Router) {
-		r.Post("/convert", h.ChatHandler)
+		r.Post("/chat", h.PostChat)
+		r.Get("/balance", h.GetBalance)
 	})
 }
 
-func (h *AssistantHandler) ChatHandler(w http.ResponseWriter, r *http.Request) {
+func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
 
@@ -50,6 +51,21 @@ func (h *AssistantHandler) ChatHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response, err := h.server.AssistantManager.Chat(ctx, tb.Msg)
+	if err != nil {
+		logger.WithError(err).Error("unable to chat with assistant")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, response)
+}
+
+func (h *AssistantHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	logger := log.FromContext(ctx)
+
+	response, err := h.server.AssistantManager.Balance(ctx)
 	if err != nil {
 		logger.WithError(err).Error("unable to chat with assistant")
 		web.Respond(w, r, http.StatusInternalServerError, err)
