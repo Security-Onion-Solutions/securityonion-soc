@@ -26,10 +26,6 @@ routes.push({ path: '/chat', name: 'chat', component: {
     await this.loadCredits();
     this.connectToChat();
   },
-  beforeUnmount() {
-    this.disconnectFromChat();
-    this.saveCurrentChat();
-  },
   watch: {
   },
   methods: {
@@ -74,26 +70,6 @@ routes.push({ path: '/chat', name: 'chat', component: {
       } catch (error) {
         console.error('Error loading credits from API:', error);
         // Fallback to localStorage if API fails
-        try {
-          const stored = localStorage.getItem('so-chat-credits');
-          if (stored) {
-            const credits = JSON.parse(stored);
-            this.creditsRemaining = credits.remaining || 0;
-          }
-        } catch (storageError) {
-          console.log('Failed to load credits from storage:', storageError);
-          this.creditsRemaining = 0;
-        }
-      }
-    },
-    saveCredits() {
-      try {
-        const credits = {
-          remaining: this.creditsRemaining,
-        };
-        localStorage.setItem('so-chat-credits', JSON.stringify(credits));
-      } catch (error) {
-        console.log('Failed to save credits:', error);
       }
     },
     saveCurrentChat() {
@@ -160,15 +136,6 @@ routes.push({ path: '/chat', name: 'chat', component: {
       this.loadChatHistory(); // Reset to welcome message
       this.showHistoryDialog = false;
     },
-    connectToChat() {
-      // In a real implementation, this would establish a connection to the AI service
-      this.connected = true;
-      this.$root.subscribe('ai-response', this.handleAIResponse);
-    },
-    disconnectFromChat() {
-      this.connected = false;
-      this.$root.unsubscribe('ai-response', this.handleAIResponse);
-    },
     async sendMessage() {
       if (!this.newMessage.trim()) return;
       
@@ -206,20 +173,14 @@ routes.push({ path: '/chat', name: 'chat', component: {
     },
     async callAIAPI(userMessage) {
       try {
-        const response = await axios.post(`${this.apiEndpoint}/chat`, {
-          message: userMessage,
-          conversation_history: this.messages.slice(-10) // Send last 10 messages for context
-        }, {
-          headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
-            'Content-Type': 'application/json'
-          }
+        const response = await this.$root.papi.post('/assistant/chat', {
+          msg: userMessage,
         });
         
-        if (response.data && response.data.response) {
+        if (response.data) {
           const assistantMessage = {
             role: 'assistant',
-            content: response.data.response,
+            content: response.data.Content[0].text,
             timestamp: new Date().toISOString()
           };
           
