@@ -19,8 +19,6 @@ routes.push({ path: '/chat', name: 'chat', component: {
     currentChatId: null,
     showHistoryDialog: false,
     creditsRemaining: 0,
-    apiEndpoint: 'https://onionai-dev.securityonion.net',
-    apiKey: 'sk-d0c3b7d7-b5c9-45c5-bcca-0ecb50bda59e',
   }},
   async created() {
     this.loadChatHistory();
@@ -69,13 +67,7 @@ routes.push({ path: '/chat', name: 'chat', component: {
     },
     async loadCredits() {
       try {
-        const response = await axios.get(`${this.apiEndpoint}/balance`, {
-          headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        
+        const response = await this.$root.papi.get('/assistant/balance');
         if (response.data) {
           this.creditsRemaining = response.data.balance || 0;
         }

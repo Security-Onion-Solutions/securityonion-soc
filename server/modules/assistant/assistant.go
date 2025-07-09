@@ -6,9 +6,21 @@
 package assistant
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"path"
+
+	"github.com/apex/log"
+	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 const (
@@ -62,4 +74,122 @@ func (am *AssistantCoordinator) Stop() error {
 
 func (am *AssistantCoordinator) IsRunning() bool {
 	return am.isRunning
+}
+
+func (am *AssistantCoordinator) Chat(ctx context.Context, msg string) (*model.ChatResponse, error) {
+	logger := log.FromContext(ctx)
+	userID := ctx.Value(web.ContextKeyRequestorId).(string)
+
+	req := &model.ChatRequest{
+		Messages: []*model.ChatMessage{
+			{
+				Role:    "user",
+				Content: msg,
+			},
+		},
+		UserUUID: userID,
+	}
+
+	u, err := url.Parse(am.apiUrl)
+	if err != nil {
+		logger.WithError(err).WithField("apiUrl", am.apiUrl).Error("unable to parse apiUrl")
+
+		return nil, err
+	}
+
+	u.Path = path.Join(u.Path, "/api/chat")
+	endpoint := u.String()
+
+	var buf bytes.Buffer
+
+	err = json.NewEncoder(&buf).Encode(req)
+	if err != nil {
+		logger.WithError(err).WithField("chatrequest", req).Error("unable to encode ChatRequest")
+		return nil, err
+	}
+
+	httpReq, err := http.NewRequest(http.MethodPost, endpoint, &buf)
+	if err != nil {
+		logger.WithError(err).WithField("apiEndpoint", endpoint).Error("unable to make request object")
+
+		return nil, err
+	}
+
+	httpReq.Header.Add("Content-Type", "application/json")
+	httpReq.Header.Add("Authorization", fmt.Sprintf("Bearer %s", am.apiKey))
+
+	res, err := am.MakeRequest(httpReq)
+	if err != nil {
+		logger.WithError(err).Error("unable to execute request")
+
+		return nil, err
+	}
+
+	resBody, err := io.ReadAll(res.Body)
+	if err != nil {
+		logger.WithError(err).Error("unable to read response body")
+
+		return nil, err
+	}
+
+	logger.WithField("rawChatResponseBody", string(resBody)).Debug("chat response received")
+
+	response := &model.ChatResponse{}
+
+	err = json.Unmarshal(resBody, response)
+	if err != nil {
+		logger.WithError(err).WithField("rawChatResponseBody", string(resBody)).Error("unable to unmarhsal JSON response")
+		return nil, err
+	}
+
+	return response, nil
+}
+
+func (am *AssistantCoordinator) Balance(ctx context.Context) (*model.BalanceResponse, error) {
+	logger := log.FromContext(ctx)
+
+	u, err := url.Parse(am.apiUrl)
+	if err != nil {
+		logger.WithError(err).WithField("apiUrl", am.apiUrl).Error("unable to parse apiUrl")
+
+		return nil, err
+	}
+
+	u.Path = path.Join(u.Path, "/api/balance")
+	endpoint := u.String()
+
+	httpReq, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	if err != nil {
+		logger.WithError(err).Error("unable to make request object")
+
+		return nil, err
+	}
+
+	httpReq.Header.Add("Authorization", fmt.Sprintf("Bearer %s", am.apiKey))
+
+	res, err := am.MakeRequest(httpReq)
+	if err != nil {
+		logger.WithError(err).WithField("apiEndpoint", endpoint).Error("unable to execute request")
+
+		return nil, err
+	}
+
+	resBody, err := io.ReadAll(res.Body)
+	if err != nil {
+		logger.WithError(err).Error("unable to read response body")
+
+		return nil, err
+	}
+
+	logger.WithField("rawBalanceResponseBody", string(resBody)).Debug("balance response received")
+
+	response := &model.BalanceResponse{}
+
+	err = json.Unmarshal(resBody, response)
+	if err != nil {
+		logger.WithError(err).WithField("rawBalanceResponseBody", string(resBody)).Error("unable to unmarhsal JSON response")
+		return nil, err
+	}
+
+	return response, nil
 }
