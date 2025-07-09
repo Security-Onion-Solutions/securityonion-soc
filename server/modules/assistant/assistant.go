@@ -42,7 +42,7 @@ type AssistantCoordinator struct {
 func NewAssistantManager(srv *server.Server) *AssistantCoordinator {
 	return &AssistantCoordinator{
 		srv:       srv,
-		IOManager: &detections.ResourceManager{},
+		IOManager: &detections.ResourceManager{Config: srv.Config},
 	}
 }
 
