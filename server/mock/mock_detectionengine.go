@@ -5,6 +5,7 @@
 //
 //	mockgen -destination mock/mock_detectionengine.go -package mock . DetectionEngine
 //
+
 // Package mock is a generated GoMock package.
 package mock
 
@@ -20,6 +21,7 @@ import (
 type MockDetectionEngine struct {
 	ctrl     *gomock.Controller
 	recorder *MockDetectionEngineMockRecorder
+	isgomock struct{}
 }
 
 // MockDetectionEngineMockRecorder is the mock recorder for MockDetectionEngine.
@@ -40,77 +42,77 @@ func (m *MockDetectionEngine) EXPECT() *MockDetectionEngineMockRecorder {
 }
 
 // ApplyFilters mocks base method.
-func (m *MockDetectionEngine) ApplyFilters(arg0 *model.Detection) (bool, error) {
+func (m *MockDetectionEngine) ApplyFilters(detect *model.Detection) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ApplyFilters", arg0)
+	ret := m.ctrl.Call(m, "ApplyFilters", detect)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ApplyFilters indicates an expected call of ApplyFilters.
-func (mr *MockDetectionEngineMockRecorder) ApplyFilters(arg0 any) *gomock.Call {
+func (mr *MockDetectionEngineMockRecorder) ApplyFilters(detect any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ApplyFilters", reflect.TypeOf((*MockDetectionEngine)(nil).ApplyFilters), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ApplyFilters", reflect.TypeOf((*MockDetectionEngine)(nil).ApplyFilters), detect)
 }
 
 // ConvertRule mocks base method.
-func (m *MockDetectionEngine) ConvertRule(arg0 context.Context, arg1 *model.Detection) (string, error) {
+func (m *MockDetectionEngine) ConvertRule(ctx context.Context, detect *model.Detection) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ConvertRule", arg0, arg1)
+	ret := m.ctrl.Call(m, "ConvertRule", ctx, detect)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ConvertRule indicates an expected call of ConvertRule.
-func (mr *MockDetectionEngineMockRecorder) ConvertRule(arg0, arg1 any) *gomock.Call {
+func (mr *MockDetectionEngineMockRecorder) ConvertRule(ctx, detect any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConvertRule", reflect.TypeOf((*MockDetectionEngine)(nil).ConvertRule), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConvertRule", reflect.TypeOf((*MockDetectionEngine)(nil).ConvertRule), ctx, detect)
 }
 
 // DuplicateDetection mocks base method.
-func (m *MockDetectionEngine) DuplicateDetection(arg0 context.Context, arg1 *model.Detection) (*model.Detection, error) {
+func (m *MockDetectionEngine) DuplicateDetection(ctx context.Context, detection *model.Detection) (*model.Detection, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DuplicateDetection", arg0, arg1)
+	ret := m.ctrl.Call(m, "DuplicateDetection", ctx, detection)
 	ret0, _ := ret[0].(*model.Detection)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // DuplicateDetection indicates an expected call of DuplicateDetection.
-func (mr *MockDetectionEngineMockRecorder) DuplicateDetection(arg0, arg1 any) *gomock.Call {
+func (mr *MockDetectionEngineMockRecorder) DuplicateDetection(ctx, detection any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DuplicateDetection", reflect.TypeOf((*MockDetectionEngine)(nil).DuplicateDetection), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DuplicateDetection", reflect.TypeOf((*MockDetectionEngine)(nil).DuplicateDetection), ctx, detection)
 }
 
 // ExtractDetails mocks base method.
-func (m *MockDetectionEngine) ExtractDetails(arg0 *model.Detection) error {
+func (m *MockDetectionEngine) ExtractDetails(detect *model.Detection) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ExtractDetails", arg0)
+	ret := m.ctrl.Call(m, "ExtractDetails", detect)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ExtractDetails indicates an expected call of ExtractDetails.
-func (mr *MockDetectionEngineMockRecorder) ExtractDetails(arg0 any) *gomock.Call {
+func (mr *MockDetectionEngineMockRecorder) ExtractDetails(detect any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExtractDetails", reflect.TypeOf((*MockDetectionEngine)(nil).ExtractDetails), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExtractDetails", reflect.TypeOf((*MockDetectionEngine)(nil).ExtractDetails), detect)
 }
 
 // GenerateUnusedPublicId mocks base method.
-func (m *MockDetectionEngine) GenerateUnusedPublicId(arg0 context.Context) (string, error) {
+func (m *MockDetectionEngine) GenerateUnusedPublicId(ctx context.Context) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GenerateUnusedPublicId", arg0)
+	ret := m.ctrl.Call(m, "GenerateUnusedPublicId", ctx)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GenerateUnusedPublicId indicates an expected call of GenerateUnusedPublicId.
-func (mr *MockDetectionEngineMockRecorder) GenerateUnusedPublicId(arg0 any) *gomock.Call {
+func (mr *MockDetectionEngineMockRecorder) GenerateUnusedPublicId(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateUnusedPublicId", reflect.TypeOf((*MockDetectionEngine)(nil).GenerateUnusedPublicId), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateUnusedPublicId", reflect.TypeOf((*MockDetectionEngine)(nil).GenerateUnusedPublicId), ctx)
 }
 
 // GetState mocks base method.
@@ -128,57 +130,57 @@ func (mr *MockDetectionEngineMockRecorder) GetState() *gomock.Call {
 }
 
 // InterruptSync mocks base method.
-func (m *MockDetectionEngine) InterruptSync(arg0, arg1 bool) {
+func (m *MockDetectionEngine) InterruptSync(forceFull, notify bool) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "InterruptSync", arg0, arg1)
+	m.ctrl.Call(m, "InterruptSync", forceFull, notify)
 }
 
 // InterruptSync indicates an expected call of InterruptSync.
-func (mr *MockDetectionEngineMockRecorder) InterruptSync(arg0, arg1 any) *gomock.Call {
+func (mr *MockDetectionEngineMockRecorder) InterruptSync(forceFull, notify any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InterruptSync", reflect.TypeOf((*MockDetectionEngine)(nil).InterruptSync), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InterruptSync", reflect.TypeOf((*MockDetectionEngine)(nil).InterruptSync), forceFull, notify)
 }
 
 // MergeAuxiliaryData mocks base method.
-func (m *MockDetectionEngine) MergeAuxiliaryData(arg0 *model.Detection) error {
+func (m *MockDetectionEngine) MergeAuxiliaryData(detect *model.Detection) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MergeAuxiliaryData", arg0)
+	ret := m.ctrl.Call(m, "MergeAuxiliaryData", detect)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // MergeAuxiliaryData indicates an expected call of MergeAuxiliaryData.
-func (mr *MockDetectionEngineMockRecorder) MergeAuxiliaryData(arg0 any) *gomock.Call {
+func (mr *MockDetectionEngineMockRecorder) MergeAuxiliaryData(detect any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MergeAuxiliaryData", reflect.TypeOf((*MockDetectionEngine)(nil).MergeAuxiliaryData), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MergeAuxiliaryData", reflect.TypeOf((*MockDetectionEngine)(nil).MergeAuxiliaryData), detect)
 }
 
 // SyncLocalDetections mocks base method.
-func (m *MockDetectionEngine) SyncLocalDetections(arg0 context.Context, arg1 []*model.Detection) (map[string]string, error) {
+func (m *MockDetectionEngine) SyncLocalDetections(ctx context.Context, detections []*model.Detection) (map[string]string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SyncLocalDetections", arg0, arg1)
+	ret := m.ctrl.Call(m, "SyncLocalDetections", ctx, detections)
 	ret0, _ := ret[0].(map[string]string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // SyncLocalDetections indicates an expected call of SyncLocalDetections.
-func (mr *MockDetectionEngineMockRecorder) SyncLocalDetections(arg0, arg1 any) *gomock.Call {
+func (mr *MockDetectionEngineMockRecorder) SyncLocalDetections(ctx, detections any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncLocalDetections", reflect.TypeOf((*MockDetectionEngine)(nil).SyncLocalDetections), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncLocalDetections", reflect.TypeOf((*MockDetectionEngine)(nil).SyncLocalDetections), ctx, detections)
 }
 
 // ValidateRule mocks base method.
-func (m *MockDetectionEngine) ValidateRule(arg0 string) (string, error) {
+func (m *MockDetectionEngine) ValidateRule(rule string) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ValidateRule", arg0)
+	ret := m.ctrl.Call(m, "ValidateRule", rule)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ValidateRule indicates an expected call of ValidateRule.
-func (mr *MockDetectionEngineMockRecorder) ValidateRule(arg0 any) *gomock.Call {
+func (mr *MockDetectionEngineMockRecorder) ValidateRule(rule any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateRule", reflect.TypeOf((*MockDetectionEngine)(nil).ValidateRule), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateRule", reflect.TypeOf((*MockDetectionEngine)(nil).ValidateRule), rule)
 }

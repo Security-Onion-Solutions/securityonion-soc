@@ -5,6 +5,7 @@
 //
 //	mockgen -destination mock/mock_playbookstore.go -package mock . Playbookstore
 //
+
 // Package mock is a generated GoMock package.
 package mock
 
@@ -20,6 +21,7 @@ import (
 type MockPlaybookstore struct {
 	ctrl     *gomock.Controller
 	recorder *MockPlaybookstoreMockRecorder
+	isgomock struct{}
 }
 
 // MockPlaybookstoreMockRecorder is the mock recorder for MockPlaybookstore.
@@ -40,60 +42,60 @@ func (m *MockPlaybookstore) EXPECT() *MockPlaybookstoreMockRecorder {
 }
 
 // ConvertQuestions mocks base method.
-func (m *MockPlaybookstore) ConvertQuestions(arg0 context.Context, arg1 []string) ([]*model.ConvertedQuery, error) {
+func (m *MockPlaybookstore) ConvertQuestions(ctx context.Context, queries []string) ([]*model.ConvertedQuery, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ConvertQuestions", arg0, arg1)
+	ret := m.ctrl.Call(m, "ConvertQuestions", ctx, queries)
 	ret0, _ := ret[0].([]*model.ConvertedQuery)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ConvertQuestions indicates an expected call of ConvertQuestions.
-func (mr *MockPlaybookstoreMockRecorder) ConvertQuestions(arg0, arg1 any) *gomock.Call {
+func (mr *MockPlaybookstoreMockRecorder) ConvertQuestions(ctx, queries any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConvertQuestions", reflect.TypeOf((*MockPlaybookstore)(nil).ConvertQuestions), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConvertQuestions", reflect.TypeOf((*MockPlaybookstore)(nil).ConvertQuestions), ctx, queries)
 }
 
 // GetPlaybookById mocks base method.
-func (m *MockPlaybookstore) GetPlaybookById(arg0 context.Context, arg1 string) (*model.Playbook, error) {
+func (m *MockPlaybookstore) GetPlaybookById(ctx context.Context, id string) (*model.Playbook, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPlaybookById", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetPlaybookById", ctx, id)
 	ret0, _ := ret[0].(*model.Playbook)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetPlaybookById indicates an expected call of GetPlaybookById.
-func (mr *MockPlaybookstoreMockRecorder) GetPlaybookById(arg0, arg1 any) *gomock.Call {
+func (mr *MockPlaybookstoreMockRecorder) GetPlaybookById(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPlaybookById", reflect.TypeOf((*MockPlaybookstore)(nil).GetPlaybookById), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPlaybookById", reflect.TypeOf((*MockPlaybookstore)(nil).GetPlaybookById), ctx, id)
 }
 
 // GetPlaybooksForDetection mocks base method.
-func (m *MockPlaybookstore) GetPlaybooksForDetection(arg0 context.Context, arg1, arg2 string, arg3 model.EngineName) ([]*model.Playbook, error) {
+func (m *MockPlaybookstore) GetPlaybooksForDetection(ctx context.Context, detectId, detectCategory string, detectEngine model.EngineName) ([]*model.Playbook, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPlaybooksForDetection", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "GetPlaybooksForDetection", ctx, detectId, detectCategory, detectEngine)
 	ret0, _ := ret[0].([]*model.Playbook)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetPlaybooksForDetection indicates an expected call of GetPlaybooksForDetection.
-func (mr *MockPlaybookstoreMockRecorder) GetPlaybooksForDetection(arg0, arg1, arg2, arg3 any) *gomock.Call {
+func (mr *MockPlaybookstoreMockRecorder) GetPlaybooksForDetection(ctx, detectId, detectCategory, detectEngine any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPlaybooksForDetection", reflect.TypeOf((*MockPlaybookstore)(nil).GetPlaybooksForDetection), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPlaybooksForDetection", reflect.TypeOf((*MockPlaybookstore)(nil).GetPlaybooksForDetection), ctx, detectId, detectCategory, detectEngine)
 }
 
 // Interrupt mocks base method.
-func (m *MockPlaybookstore) Interrupt(arg0 context.Context, arg1 bool) error {
+func (m *MockPlaybookstore) Interrupt(ctx context.Context, force bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Interrupt", arg0, arg1)
+	ret := m.ctrl.Call(m, "Interrupt", ctx, force)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Interrupt indicates an expected call of Interrupt.
-func (mr *MockPlaybookstoreMockRecorder) Interrupt(arg0, arg1 any) *gomock.Call {
+func (mr *MockPlaybookstoreMockRecorder) Interrupt(ctx, force any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Interrupt", reflect.TypeOf((*MockPlaybookstore)(nil).Interrupt), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Interrupt", reflect.TypeOf((*MockPlaybookstore)(nil).Interrupt), ctx, force)
 }

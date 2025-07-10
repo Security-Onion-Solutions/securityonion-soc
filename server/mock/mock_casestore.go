@@ -5,6 +5,7 @@
 //
 //	mockgen -destination mock/mock_casestore.go -package mock . Casestore
 //
+
 // Package mock is a generated GoMock package.
 package mock
 
@@ -22,6 +23,7 @@ import (
 type MockCasestore struct {
 	ctrl     *gomock.Controller
 	recorder *MockCasestoreMockRecorder
+	isgomock struct{}
 }
 
 // MockCasestoreMockRecorder is the mock recorder for MockCasestore.
@@ -42,24 +44,24 @@ func (m *MockCasestore) EXPECT() *MockCasestoreMockRecorder {
 }
 
 // BuildBulkIndexer mocks base method.
-func (m *MockCasestore) BuildBulkIndexer(arg0 context.Context, arg1 log.Interface) (esutil.BulkIndexer, error) {
+func (m *MockCasestore) BuildBulkIndexer(ctx context.Context, logger log.Interface) (esutil.BulkIndexer, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BuildBulkIndexer", arg0, arg1)
+	ret := m.ctrl.Call(m, "BuildBulkIndexer", ctx, logger)
 	ret0, _ := ret[0].(esutil.BulkIndexer)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // BuildBulkIndexer indicates an expected call of BuildBulkIndexer.
-func (mr *MockCasestoreMockRecorder) BuildBulkIndexer(arg0, arg1 any) *gomock.Call {
+func (mr *MockCasestoreMockRecorder) BuildBulkIndexer(ctx, logger any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildBulkIndexer", reflect.TypeOf((*MockCasestore)(nil).BuildBulkIndexer), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildBulkIndexer", reflect.TypeOf((*MockCasestore)(nil).BuildBulkIndexer), ctx, logger)
 }
 
 // ConvertObjectToDocument mocks base method.
-func (m *MockCasestore) ConvertObjectToDocument(arg0 context.Context, arg1 string, arg2 any, arg3 *model.Auditable, arg4 bool, arg5, arg6 *string) ([]byte, string, error) {
+func (m *MockCasestore) ConvertObjectToDocument(ctx context.Context, kind string, obj any, auditable *model.Auditable, isEdit bool, auditDocId, op *string) ([]byte, string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ConvertObjectToDocument", arg0, arg1, arg2, arg3, arg4, arg5, arg6)
+	ret := m.ctrl.Call(m, "ConvertObjectToDocument", ctx, kind, obj, auditable, isEdit, auditDocId, op)
 	ret0, _ := ret[0].([]byte)
 	ret1, _ := ret[1].(string)
 	ret2, _ := ret[2].(error)
@@ -67,75 +69,75 @@ func (m *MockCasestore) ConvertObjectToDocument(arg0 context.Context, arg1 strin
 }
 
 // ConvertObjectToDocument indicates an expected call of ConvertObjectToDocument.
-func (mr *MockCasestoreMockRecorder) ConvertObjectToDocument(arg0, arg1, arg2, arg3, arg4, arg5, arg6 any) *gomock.Call {
+func (mr *MockCasestoreMockRecorder) ConvertObjectToDocument(ctx, kind, obj, auditable, isEdit, auditDocId, op any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConvertObjectToDocument", reflect.TypeOf((*MockCasestore)(nil).ConvertObjectToDocument), arg0, arg1, arg2, arg3, arg4, arg5, arg6)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConvertObjectToDocument", reflect.TypeOf((*MockCasestore)(nil).ConvertObjectToDocument), ctx, kind, obj, auditable, isEdit, auditDocId, op)
 }
 
 // Create mocks base method.
-func (m *MockCasestore) Create(arg0 context.Context, arg1 *model.Case) (*model.Case, error) {
+func (m *MockCasestore) Create(ctx context.Context, newCase *model.Case) (*model.Case, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Create", arg0, arg1)
+	ret := m.ctrl.Call(m, "Create", ctx, newCase)
 	ret0, _ := ret[0].(*model.Case)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Create indicates an expected call of Create.
-func (mr *MockCasestoreMockRecorder) Create(arg0, arg1 any) *gomock.Call {
+func (mr *MockCasestoreMockRecorder) Create(ctx, newCase any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockCasestore)(nil).Create), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockCasestore)(nil).Create), ctx, newCase)
 }
 
 // CreateArtifact mocks base method.
-func (m *MockCasestore) CreateArtifact(arg0 context.Context, arg1 *model.Artifact) (*model.Artifact, error) {
+func (m *MockCasestore) CreateArtifact(ctx context.Context, artifact *model.Artifact) (*model.Artifact, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateArtifact", arg0, arg1)
+	ret := m.ctrl.Call(m, "CreateArtifact", ctx, artifact)
 	ret0, _ := ret[0].(*model.Artifact)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CreateArtifact indicates an expected call of CreateArtifact.
-func (mr *MockCasestoreMockRecorder) CreateArtifact(arg0, arg1 any) *gomock.Call {
+func (mr *MockCasestoreMockRecorder) CreateArtifact(ctx, artifact any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateArtifact", reflect.TypeOf((*MockCasestore)(nil).CreateArtifact), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateArtifact", reflect.TypeOf((*MockCasestore)(nil).CreateArtifact), ctx, artifact)
 }
 
 // CreateArtifactStream mocks base method.
-func (m *MockCasestore) CreateArtifactStream(arg0 context.Context, arg1 *model.ArtifactStream) (string, error) {
+func (m *MockCasestore) CreateArtifactStream(ctx context.Context, artifactstream *model.ArtifactStream) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateArtifactStream", arg0, arg1)
+	ret := m.ctrl.Call(m, "CreateArtifactStream", ctx, artifactstream)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CreateArtifactStream indicates an expected call of CreateArtifactStream.
-func (mr *MockCasestoreMockRecorder) CreateArtifactStream(arg0, arg1 any) *gomock.Call {
+func (mr *MockCasestoreMockRecorder) CreateArtifactStream(ctx, artifactstream any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateArtifactStream", reflect.TypeOf((*MockCasestore)(nil).CreateArtifactStream), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateArtifactStream", reflect.TypeOf((*MockCasestore)(nil).CreateArtifactStream), ctx, artifactstream)
 }
 
 // CreateComment mocks base method.
-func (m *MockCasestore) CreateComment(arg0 context.Context, arg1 *model.Comment) (*model.Comment, error) {
+func (m *MockCasestore) CreateComment(ctx context.Context, newComment *model.Comment) (*model.Comment, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateComment", arg0, arg1)
+	ret := m.ctrl.Call(m, "CreateComment", ctx, newComment)
 	ret0, _ := ret[0].(*model.Comment)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CreateComment indicates an expected call of CreateComment.
-func (mr *MockCasestoreMockRecorder) CreateComment(arg0, arg1 any) *gomock.Call {
+func (mr *MockCasestoreMockRecorder) CreateComment(ctx, newComment any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateComment", reflect.TypeOf((*MockCasestore)(nil).CreateComment), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateComment", reflect.TypeOf((*MockCasestore)(nil).CreateComment), ctx, newComment)
 }
 
 // CreateRelatedEvents mocks base method.
-func (m *MockCasestore) CreateRelatedEvents(arg0 context.Context, arg1 []*model.RelatedEvent) (int, map[string]error, error) {
+func (m *MockCasestore) CreateRelatedEvents(ctx context.Context, events []*model.RelatedEvent) (int, map[string]error, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateRelatedEvents", arg0, arg1)
+	ret := m.ctrl.Call(m, "CreateRelatedEvents", ctx, events)
 	ret0, _ := ret[0].(int)
 	ret1, _ := ret[1].(map[string]error)
 	ret2, _ := ret[2].(error)
@@ -143,243 +145,243 @@ func (m *MockCasestore) CreateRelatedEvents(arg0 context.Context, arg1 []*model.
 }
 
 // CreateRelatedEvents indicates an expected call of CreateRelatedEvents.
-func (mr *MockCasestoreMockRecorder) CreateRelatedEvents(arg0, arg1 any) *gomock.Call {
+func (mr *MockCasestoreMockRecorder) CreateRelatedEvents(ctx, events any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateRelatedEvents", reflect.TypeOf((*MockCasestore)(nil).CreateRelatedEvents), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateRelatedEvents", reflect.TypeOf((*MockCasestore)(nil).CreateRelatedEvents), ctx, events)
 }
 
 // DeleteArtifact mocks base method.
-func (m *MockCasestore) DeleteArtifact(arg0 context.Context, arg1 string) error {
+func (m *MockCasestore) DeleteArtifact(ctx context.Context, id string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteArtifact", arg0, arg1)
+	ret := m.ctrl.Call(m, "DeleteArtifact", ctx, id)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteArtifact indicates an expected call of DeleteArtifact.
-func (mr *MockCasestoreMockRecorder) DeleteArtifact(arg0, arg1 any) *gomock.Call {
+func (mr *MockCasestoreMockRecorder) DeleteArtifact(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteArtifact", reflect.TypeOf((*MockCasestore)(nil).DeleteArtifact), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteArtifact", reflect.TypeOf((*MockCasestore)(nil).DeleteArtifact), ctx, id)
 }
 
 // DeleteArtifactStream mocks base method.
-func (m *MockCasestore) DeleteArtifactStream(arg0 context.Context, arg1 string) error {
+func (m *MockCasestore) DeleteArtifactStream(ctx context.Context, id string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteArtifactStream", arg0, arg1)
+	ret := m.ctrl.Call(m, "DeleteArtifactStream", ctx, id)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteArtifactStream indicates an expected call of DeleteArtifactStream.
-func (mr *MockCasestoreMockRecorder) DeleteArtifactStream(arg0, arg1 any) *gomock.Call {
+func (mr *MockCasestoreMockRecorder) DeleteArtifactStream(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteArtifactStream", reflect.TypeOf((*MockCasestore)(nil).DeleteArtifactStream), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteArtifactStream", reflect.TypeOf((*MockCasestore)(nil).DeleteArtifactStream), ctx, id)
 }
 
 // DeleteComment mocks base method.
-func (m *MockCasestore) DeleteComment(arg0 context.Context, arg1 string) error {
+func (m *MockCasestore) DeleteComment(ctx context.Context, id string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteComment", arg0, arg1)
+	ret := m.ctrl.Call(m, "DeleteComment", ctx, id)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteComment indicates an expected call of DeleteComment.
-func (mr *MockCasestoreMockRecorder) DeleteComment(arg0, arg1 any) *gomock.Call {
+func (mr *MockCasestoreMockRecorder) DeleteComment(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteComment", reflect.TypeOf((*MockCasestore)(nil).DeleteComment), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteComment", reflect.TypeOf((*MockCasestore)(nil).DeleteComment), ctx, id)
 }
 
 // DeleteRelatedEvent mocks base method.
-func (m *MockCasestore) DeleteRelatedEvent(arg0 context.Context, arg1 string) error {
+func (m *MockCasestore) DeleteRelatedEvent(ctx context.Context, id string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteRelatedEvent", arg0, arg1)
+	ret := m.ctrl.Call(m, "DeleteRelatedEvent", ctx, id)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteRelatedEvent indicates an expected call of DeleteRelatedEvent.
-func (mr *MockCasestoreMockRecorder) DeleteRelatedEvent(arg0, arg1 any) *gomock.Call {
+func (mr *MockCasestoreMockRecorder) DeleteRelatedEvent(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteRelatedEvent", reflect.TypeOf((*MockCasestore)(nil).DeleteRelatedEvent), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteRelatedEvent", reflect.TypeOf((*MockCasestore)(nil).DeleteRelatedEvent), ctx, id)
 }
 
 // GetArtifact mocks base method.
-func (m *MockCasestore) GetArtifact(arg0 context.Context, arg1 string) (*model.Artifact, error) {
+func (m *MockCasestore) GetArtifact(ctx context.Context, id string) (*model.Artifact, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetArtifact", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetArtifact", ctx, id)
 	ret0, _ := ret[0].(*model.Artifact)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetArtifact indicates an expected call of GetArtifact.
-func (mr *MockCasestoreMockRecorder) GetArtifact(arg0, arg1 any) *gomock.Call {
+func (mr *MockCasestoreMockRecorder) GetArtifact(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetArtifact", reflect.TypeOf((*MockCasestore)(nil).GetArtifact), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetArtifact", reflect.TypeOf((*MockCasestore)(nil).GetArtifact), ctx, id)
 }
 
 // GetArtifactStream mocks base method.
-func (m *MockCasestore) GetArtifactStream(arg0 context.Context, arg1 string) (*model.ArtifactStream, error) {
+func (m *MockCasestore) GetArtifactStream(ctx context.Context, id string) (*model.ArtifactStream, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetArtifactStream", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetArtifactStream", ctx, id)
 	ret0, _ := ret[0].(*model.ArtifactStream)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetArtifactStream indicates an expected call of GetArtifactStream.
-func (mr *MockCasestoreMockRecorder) GetArtifactStream(arg0, arg1 any) *gomock.Call {
+func (mr *MockCasestoreMockRecorder) GetArtifactStream(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetArtifactStream", reflect.TypeOf((*MockCasestore)(nil).GetArtifactStream), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetArtifactStream", reflect.TypeOf((*MockCasestore)(nil).GetArtifactStream), ctx, id)
 }
 
 // GetArtifacts mocks base method.
-func (m *MockCasestore) GetArtifacts(arg0 context.Context, arg1, arg2, arg3 string) ([]*model.Artifact, error) {
+func (m *MockCasestore) GetArtifacts(ctx context.Context, caseId, groupType, groupId string) ([]*model.Artifact, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetArtifacts", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "GetArtifacts", ctx, caseId, groupType, groupId)
 	ret0, _ := ret[0].([]*model.Artifact)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetArtifacts indicates an expected call of GetArtifacts.
-func (mr *MockCasestoreMockRecorder) GetArtifacts(arg0, arg1, arg2, arg3 any) *gomock.Call {
+func (mr *MockCasestoreMockRecorder) GetArtifacts(ctx, caseId, groupType, groupId any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetArtifacts", reflect.TypeOf((*MockCasestore)(nil).GetArtifacts), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetArtifacts", reflect.TypeOf((*MockCasestore)(nil).GetArtifacts), ctx, caseId, groupType, groupId)
 }
 
 // GetCase mocks base method.
-func (m *MockCasestore) GetCase(arg0 context.Context, arg1 string) (*model.Case, error) {
+func (m *MockCasestore) GetCase(ctx context.Context, caseId string) (*model.Case, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetCase", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetCase", ctx, caseId)
 	ret0, _ := ret[0].(*model.Case)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetCase indicates an expected call of GetCase.
-func (mr *MockCasestoreMockRecorder) GetCase(arg0, arg1 any) *gomock.Call {
+func (mr *MockCasestoreMockRecorder) GetCase(ctx, caseId any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCase", reflect.TypeOf((*MockCasestore)(nil).GetCase), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCase", reflect.TypeOf((*MockCasestore)(nil).GetCase), ctx, caseId)
 }
 
 // GetCaseHistory mocks base method.
-func (m *MockCasestore) GetCaseHistory(arg0 context.Context, arg1 string) ([]any, error) {
+func (m *MockCasestore) GetCaseHistory(ctx context.Context, caseId string) ([]any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetCaseHistory", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetCaseHistory", ctx, caseId)
 	ret0, _ := ret[0].([]any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetCaseHistory indicates an expected call of GetCaseHistory.
-func (mr *MockCasestoreMockRecorder) GetCaseHistory(arg0, arg1 any) *gomock.Call {
+func (mr *MockCasestoreMockRecorder) GetCaseHistory(ctx, caseId any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCaseHistory", reflect.TypeOf((*MockCasestore)(nil).GetCaseHistory), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCaseHistory", reflect.TypeOf((*MockCasestore)(nil).GetCaseHistory), ctx, caseId)
 }
 
 // GetComment mocks base method.
-func (m *MockCasestore) GetComment(arg0 context.Context, arg1 string) (*model.Comment, error) {
+func (m *MockCasestore) GetComment(ctx context.Context, commentId string) (*model.Comment, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetComment", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetComment", ctx, commentId)
 	ret0, _ := ret[0].(*model.Comment)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetComment indicates an expected call of GetComment.
-func (mr *MockCasestoreMockRecorder) GetComment(arg0, arg1 any) *gomock.Call {
+func (mr *MockCasestoreMockRecorder) GetComment(ctx, commentId any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetComment", reflect.TypeOf((*MockCasestore)(nil).GetComment), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetComment", reflect.TypeOf((*MockCasestore)(nil).GetComment), ctx, commentId)
 }
 
 // GetComments mocks base method.
-func (m *MockCasestore) GetComments(arg0 context.Context, arg1 string) ([]*model.Comment, error) {
+func (m *MockCasestore) GetComments(ctx context.Context, caseId string) ([]*model.Comment, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetComments", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetComments", ctx, caseId)
 	ret0, _ := ret[0].([]*model.Comment)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetComments indicates an expected call of GetComments.
-func (mr *MockCasestoreMockRecorder) GetComments(arg0, arg1 any) *gomock.Call {
+func (mr *MockCasestoreMockRecorder) GetComments(ctx, caseId any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetComments", reflect.TypeOf((*MockCasestore)(nil).GetComments), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetComments", reflect.TypeOf((*MockCasestore)(nil).GetComments), ctx, caseId)
 }
 
 // GetRelatedEvent mocks base method.
-func (m *MockCasestore) GetRelatedEvent(arg0 context.Context, arg1 string) (*model.RelatedEvent, error) {
+func (m *MockCasestore) GetRelatedEvent(ctx context.Context, id string) (*model.RelatedEvent, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetRelatedEvent", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetRelatedEvent", ctx, id)
 	ret0, _ := ret[0].(*model.RelatedEvent)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetRelatedEvent indicates an expected call of GetRelatedEvent.
-func (mr *MockCasestoreMockRecorder) GetRelatedEvent(arg0, arg1 any) *gomock.Call {
+func (mr *MockCasestoreMockRecorder) GetRelatedEvent(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRelatedEvent", reflect.TypeOf((*MockCasestore)(nil).GetRelatedEvent), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRelatedEvent", reflect.TypeOf((*MockCasestore)(nil).GetRelatedEvent), ctx, id)
 }
 
 // GetRelatedEvents mocks base method.
-func (m *MockCasestore) GetRelatedEvents(arg0 context.Context, arg1 string) ([]*model.RelatedEvent, error) {
+func (m *MockCasestore) GetRelatedEvents(ctx context.Context, caseId string) ([]*model.RelatedEvent, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetRelatedEvents", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetRelatedEvents", ctx, caseId)
 	ret0, _ := ret[0].([]*model.RelatedEvent)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetRelatedEvents indicates an expected call of GetRelatedEvents.
-func (mr *MockCasestoreMockRecorder) GetRelatedEvents(arg0, arg1 any) *gomock.Call {
+func (mr *MockCasestoreMockRecorder) GetRelatedEvents(ctx, caseId any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRelatedEvents", reflect.TypeOf((*MockCasestore)(nil).GetRelatedEvents), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRelatedEvents", reflect.TypeOf((*MockCasestore)(nil).GetRelatedEvents), ctx, caseId)
 }
 
 // Update mocks base method.
-func (m *MockCasestore) Update(arg0 context.Context, arg1 *model.Case) (*model.Case, error) {
+func (m *MockCasestore) Update(ctx context.Context, socCase *model.Case) (*model.Case, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Update", arg0, arg1)
+	ret := m.ctrl.Call(m, "Update", ctx, socCase)
 	ret0, _ := ret[0].(*model.Case)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Update indicates an expected call of Update.
-func (mr *MockCasestoreMockRecorder) Update(arg0, arg1 any) *gomock.Call {
+func (mr *MockCasestoreMockRecorder) Update(ctx, socCase any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockCasestore)(nil).Update), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockCasestore)(nil).Update), ctx, socCase)
 }
 
 // UpdateArtifact mocks base method.
-func (m *MockCasestore) UpdateArtifact(arg0 context.Context, arg1 *model.Artifact) (*model.Artifact, error) {
+func (m *MockCasestore) UpdateArtifact(ctx context.Context, artifact *model.Artifact) (*model.Artifact, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateArtifact", arg0, arg1)
+	ret := m.ctrl.Call(m, "UpdateArtifact", ctx, artifact)
 	ret0, _ := ret[0].(*model.Artifact)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // UpdateArtifact indicates an expected call of UpdateArtifact.
-func (mr *MockCasestoreMockRecorder) UpdateArtifact(arg0, arg1 any) *gomock.Call {
+func (mr *MockCasestoreMockRecorder) UpdateArtifact(ctx, artifact any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateArtifact", reflect.TypeOf((*MockCasestore)(nil).UpdateArtifact), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateArtifact", reflect.TypeOf((*MockCasestore)(nil).UpdateArtifact), ctx, artifact)
 }
 
 // UpdateComment mocks base method.
-func (m *MockCasestore) UpdateComment(arg0 context.Context, arg1 *model.Comment) (*model.Comment, error) {
+func (m *MockCasestore) UpdateComment(ctx context.Context, comment *model.Comment) (*model.Comment, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateComment", arg0, arg1)
+	ret := m.ctrl.Call(m, "UpdateComment", ctx, comment)
 	ret0, _ := ret[0].(*model.Comment)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // UpdateComment indicates an expected call of UpdateComment.
-func (mr *MockCasestoreMockRecorder) UpdateComment(arg0, arg1 any) *gomock.Call {
+func (mr *MockCasestoreMockRecorder) UpdateComment(ctx, comment any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateComment", reflect.TypeOf((*MockCasestore)(nil).UpdateComment), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateComment", reflect.TypeOf((*MockCasestore)(nil).UpdateComment), ctx, comment)
 }

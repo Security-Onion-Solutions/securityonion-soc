@@ -5,6 +5,7 @@
 //
 //	mockgen -destination mock/mock_ailoader.go -package mock . AiLoader
 //
+
 // Package mock is a generated GoMock package.
 package mock
 
@@ -19,6 +20,7 @@ import (
 type MockAiLoader struct {
 	ctrl     *gomock.Controller
 	recorder *MockAiLoaderMockRecorder
+	isgomock struct{}
 }
 
 // MockAiLoaderMockRecorder is the mock recorder for MockAiLoader.
@@ -53,15 +55,15 @@ func (mr *MockAiLoaderMockRecorder) IsAirgapped() *gomock.Call {
 }
 
 // LoadAuxiliaryData mocks base method.
-func (m *MockAiLoader) LoadAuxiliaryData(arg0 []*model.AiSummary) error {
+func (m *MockAiLoader) LoadAuxiliaryData(summaries []*model.AiSummary) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LoadAuxiliaryData", arg0)
+	ret := m.ctrl.Call(m, "LoadAuxiliaryData", summaries)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // LoadAuxiliaryData indicates an expected call of LoadAuxiliaryData.
-func (mr *MockAiLoaderMockRecorder) LoadAuxiliaryData(arg0 any) *gomock.Call {
+func (mr *MockAiLoaderMockRecorder) LoadAuxiliaryData(summaries any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadAuxiliaryData", reflect.TypeOf((*MockAiLoader)(nil).LoadAuxiliaryData), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadAuxiliaryData", reflect.TypeOf((*MockAiLoader)(nil).LoadAuxiliaryData), summaries)
 }

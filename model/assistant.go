@@ -23,14 +23,14 @@ type ChatMessage struct {
 }
 
 type ChatResponse struct {
-	ID           string `json:"id"`
-	Type         string `json:"type"`
-	Role         string `json:"role"`
-	Model        string `json:"model"`
-	Content      []*ChatResponseContent
-	StopReason   string      `json:"stop_reason"`
-	StopSequence string      `json:"stop_sequence"`
-	Usage        *UsageStats `json:"usage"`
+	ID           string                 `json:"id"`
+	Type         string                 `json:"type"`
+	Role         string                 `json:"role"`
+	Model        string                 `json:"model"`
+	Content      []*ChatResponseContent `json:"content"`
+	StopReason   string                 `json:"stop_reason"`
+	StopSequence string                 `json:"stop_sequence"`
+	Usage        *UsageStats            `json:"usage"`
 }
 
 type ChatResponseContent struct {
