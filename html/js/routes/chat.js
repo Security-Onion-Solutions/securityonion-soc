@@ -173,8 +173,15 @@ routes.push({ path: '/chat', name: 'chat', component: {
     },
     async callAIAPI(userMessage) {
       try {
+        // Prepare message history (exclude the current user message that was just added)
+        const messageHistory = this.messages.slice(0, -1).map(msg => ({
+          role: msg.role,
+          content: msg.content
+        }));
+
         const response = await this.$root.papi.post('/assistant/chat', {
           msg: userMessage,
+          messages: messageHistory,
         });
         
         if (response.data) {
