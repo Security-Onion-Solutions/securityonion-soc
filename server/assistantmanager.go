@@ -8,5 +8,6 @@ import (
 
 type AssistantManager interface {
 	Chat(context.Context, string) (*model.ChatResponse, error)
+	ChatWithHistory(context.Context, []*model.ChatMessage) (*model.ChatResponse, error)
 	Balance(context.Context) (*model.BalanceResponse, error)
 }

@@ -11,6 +11,7 @@ import (
 
 	"github.com/apex/log"
 	"github.com/go-chi/chi/v5"
+	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
@@ -38,7 +39,8 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	logger := log.FromContext(ctx)
 
 	type TempBody struct {
-		Msg string `json:"msg"`
+		Msg      string               `json:"msg"`
+		Messages []*model.ChatMessage `json:"messages,omitempty"`
 	}
 
 	tb := &TempBody{}
@@ -50,7 +52,25 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := h.server.AssistantManager.Chat(ctx, tb.Msg)
+	// Use provided messages if available, otherwise create from current message
+	var messages []*model.ChatMessage
+	if len(tb.Messages) > 0 {
+		// Add the new user message to the existing conversation
+		messages = append(tb.Messages, &model.ChatMessage{
+			Role:    "user",
+			Content: tb.Msg,
+		})
+	} else {
+		// Fallback to single message for backward compatibility
+		messages = []*model.ChatMessage{
+			{
+				Role:    "user",
+				Content: tb.Msg,
+			},
+		}
+	}
+
+	response, err := h.server.AssistantManager.ChatWithHistory(ctx, messages)
 	if err != nil {
 		logger.WithError(err).Error("unable to chat with assistant")
 		web.Respond(w, r, http.StatusInternalServerError, err)

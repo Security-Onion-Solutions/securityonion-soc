@@ -77,16 +77,21 @@ func (am *AssistantCoordinator) IsRunning() bool {
 }
 
 func (am *AssistantCoordinator) Chat(ctx context.Context, msg string) (*model.ChatResponse, error) {
+	messages := []*model.ChatMessage{
+		{
+			Role:    "user",
+			Content: msg,
+		},
+	}
+	return am.ChatWithHistory(ctx, messages)
+}
+
+func (am *AssistantCoordinator) ChatWithHistory(ctx context.Context, messages []*model.ChatMessage) (*model.ChatResponse, error) {
 	logger := log.FromContext(ctx)
 	userID := ctx.Value(web.ContextKeyRequestorId).(string)
 
 	req := &model.ChatRequest{
-		Messages: []*model.ChatMessage{
-			{
-				Role:    "user",
-				Content: msg,
-			},
-		},
+		Messages: messages,
 		UserUUID: userID,
 	}
 
