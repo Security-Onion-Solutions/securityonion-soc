@@ -13,7 +13,6 @@ routes.push({ path: '/chat', name: 'chat', component: {
     messages: [],
     newMessage: '',
     username: this.$root.username || 'User',
-    connected: false,
     isTyping: false,
     chatHistory: [],
     currentChatId: null,
@@ -25,7 +24,6 @@ routes.push({ path: '/chat', name: 'chat', component: {
     this.loadStoredChats();
     this.restoreLastActiveChat();
     await this.loadCredits();
-    this.connectToChat();
   },
   beforeUnmount() {
     // Save current chat state when navigating away from the chat page
@@ -226,7 +224,7 @@ routes.push({ path: '/chat', name: 'chat', component: {
         if (response.data) {
           const assistantMessage = {
             role: 'assistant',
-            content: response.data.Content[0].text,
+            content: response.data.content[0].text,
             timestamp: new Date().toISOString()
           };
           
