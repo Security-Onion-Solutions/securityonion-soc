@@ -95,7 +95,7 @@
 					<div class="text-body-1 font-weight-medium mb-2">{{ i18n.credits }}</div>
 					<div>
 						<span class="text-medium-emphasis">{{ i18n.creditsRemaining }}:</span>
-						<div class="text-body-1 font-weight-medium" :class="creditsRemaining <= 5000 ? 'text-error' : 'text-primary'">
+						<div class="text-body-1 font-weight-medium" :class="creditsRemaining <= 50000 ? 'text-error' : 'text-primary'">
 							{{ formatCount(creditsRemaining) }}
 						</div>
 					</div>
