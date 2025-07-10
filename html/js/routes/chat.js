@@ -23,8 +23,13 @@ routes.push({ path: '/chat', name: 'chat', component: {
   async created() {
     this.loadChatHistory();
     this.loadStoredChats();
+    this.restoreLastActiveChat();
     await this.loadCredits();
     this.connectToChat();
+  },
+  beforeUnmount() {
+    // Save current chat state when navigating away from the chat page
+    this.saveCurrentChat();
   },
   watch: {
   },
@@ -60,6 +65,37 @@ routes.push({ path: '/chat', name: 'chat', component: {
       } catch (error) {
         console.log('Failed to save chat history:', error);
       }
+    },
+    saveCurrentChatId() {
+      try {
+        if (this.currentChatId) {
+          localStorage.setItem('so-current-chat-id', this.currentChatId);
+        } else {
+          localStorage.removeItem('so-current-chat-id');
+        }
+      } catch (error) {
+        console.log('Failed to save current chat ID:', error);
+      }
+    },
+    loadCurrentChatId() {
+      try {
+        return localStorage.getItem('so-current-chat-id');
+      } catch (error) {
+        console.log('Failed to load current chat ID:', error);
+        return null;
+      }
+    },
+    restoreLastActiveChat() {
+      const lastChatId = this.loadCurrentChatId();
+      if (lastChatId && this.chatHistory.length > 0) {
+        const lastChat = this.chatHistory.find(chat => chat.id === lastChatId);
+        if (lastChat) {
+          this.messages = [...lastChat.messages];
+          this.currentChatId = lastChat.id;
+          return;
+        }
+      }
+      // If no valid last chat found, keep the default welcome message
     },
     async loadCredits() {
       try {
@@ -98,6 +134,7 @@ routes.push({ path: '/chat', name: 'chat', component: {
       
       this.currentChatId = chatData.id;
       this.saveStoredChats();
+      this.saveCurrentChatId();
     },
     generateChatId() {
       return 'chat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
@@ -118,6 +155,7 @@ routes.push({ path: '/chat', name: 'chat', component: {
       this.saveCurrentChat(); // Save current chat before switching
       this.messages = [...chat.messages];
       this.currentChatId = chat.id;
+      this.saveCurrentChatId();
       this.showHistoryDialog = false;
       this.scrollToBottom();
     },
@@ -133,6 +171,7 @@ routes.push({ path: '/chat', name: 'chat', component: {
     startNewChat() {
       this.saveCurrentChat(); // Save current chat before starting new one
       this.currentChatId = null;
+      this.saveCurrentChatId(); // Clear the saved current chat ID
       this.loadChatHistory(); // Reset to welcome message
       this.showHistoryDialog = false;
     },
