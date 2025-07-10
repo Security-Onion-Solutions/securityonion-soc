@@ -5,6 +5,7 @@
 //
 //	mockgen -destination mock/mock_detaileddetectionengine.go -package mock . DetailedDetectionEngine
 //
+
 // Package mock is a generated GoMock package.
 package mock
 
@@ -12,6 +13,7 @@ import (
 	context "context"
 	fs "io/fs"
 	http "net/http"
+	os "os"
 	exec "os/exec"
 	reflect "reflect"
 	time "time"
@@ -24,6 +26,7 @@ import (
 type MockDetailedDetectionEngine struct {
 	ctrl     *gomock.Controller
 	recorder *MockDetailedDetectionEngineMockRecorder
+	isgomock struct{}
 }
 
 // MockDetailedDetectionEngineMockRecorder is the mock recorder for MockDetailedDetectionEngine.
@@ -44,37 +47,37 @@ func (m *MockDetailedDetectionEngine) EXPECT() *MockDetailedDetectionEngineMockR
 }
 
 // CloneRepo mocks base method.
-func (m *MockDetailedDetectionEngine) CloneRepo(arg0 context.Context, arg1, arg2 string, arg3 *string) error {
+func (m *MockDetailedDetectionEngine) CloneRepo(ctx context.Context, path, repo string, branch *string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CloneRepo", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "CloneRepo", ctx, path, repo, branch)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // CloneRepo indicates an expected call of CloneRepo.
-func (mr *MockDetailedDetectionEngineMockRecorder) CloneRepo(arg0, arg1, arg2, arg3 any) *gomock.Call {
+func (mr *MockDetailedDetectionEngineMockRecorder) CloneRepo(ctx, path, repo, branch any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CloneRepo", reflect.TypeOf((*MockDetailedDetectionEngine)(nil).CloneRepo), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CloneRepo", reflect.TypeOf((*MockDetailedDetectionEngine)(nil).CloneRepo), ctx, path, repo, branch)
 }
 
 // DeleteFile mocks base method.
-func (m *MockDetailedDetectionEngine) DeleteFile(arg0 string) error {
+func (m *MockDetailedDetectionEngine) DeleteFile(path string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteFile", arg0)
+	ret := m.ctrl.Call(m, "DeleteFile", path)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteFile indicates an expected call of DeleteFile.
-func (mr *MockDetailedDetectionEngineMockRecorder) DeleteFile(arg0 any) *gomock.Call {
+func (mr *MockDetailedDetectionEngineMockRecorder) DeleteFile(path any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteFile", reflect.TypeOf((*MockDetailedDetectionEngine)(nil).DeleteFile), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteFile", reflect.TypeOf((*MockDetailedDetectionEngine)(nil).DeleteFile), path)
 }
 
 // ExecCommand mocks base method.
-func (m *MockDetailedDetectionEngine) ExecCommand(arg0 *exec.Cmd) ([]byte, int, time.Duration, error) {
+func (m *MockDetailedDetectionEngine) ExecCommand(cmd *exec.Cmd) ([]byte, int, time.Duration, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ExecCommand", arg0)
+	ret := m.ctrl.Call(m, "ExecCommand", cmd)
 	ret0, _ := ret[0].([]byte)
 	ret1, _ := ret[1].(int)
 	ret2, _ := ret[2].(time.Duration)
@@ -83,9 +86,9 @@ func (m *MockDetailedDetectionEngine) ExecCommand(arg0 *exec.Cmd) ([]byte, int, 
 }
 
 // ExecCommand indicates an expected call of ExecCommand.
-func (mr *MockDetailedDetectionEngineMockRecorder) ExecCommand(arg0 any) *gomock.Call {
+func (mr *MockDetailedDetectionEngineMockRecorder) ExecCommand(cmd any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecCommand", reflect.TypeOf((*MockDetailedDetectionEngine)(nil).ExecCommand), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecCommand", reflect.TypeOf((*MockDetailedDetectionEngine)(nil).ExecCommand), cmd)
 }
 
 // MakeRequest mocks base method.
@@ -116,9 +119,9 @@ func (mr *MockDetailedDetectionEngineMockRecorder) PauseIntegrityChecker() *gomo
 }
 
 // PullRepo mocks base method.
-func (m *MockDetailedDetectionEngine) PullRepo(arg0 context.Context, arg1 string, arg2 *string) (bool, bool, bool) {
+func (m *MockDetailedDetectionEngine) PullRepo(ctx context.Context, path string, branch *string) (bool, bool, bool) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PullRepo", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "PullRepo", ctx, path, branch)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(bool)
 	ret2, _ := ret[2].(bool)
@@ -126,53 +129,53 @@ func (m *MockDetailedDetectionEngine) PullRepo(arg0 context.Context, arg1 string
 }
 
 // PullRepo indicates an expected call of PullRepo.
-func (mr *MockDetailedDetectionEngineMockRecorder) PullRepo(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockDetailedDetectionEngineMockRecorder) PullRepo(ctx, path, branch any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PullRepo", reflect.TypeOf((*MockDetailedDetectionEngine)(nil).PullRepo), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PullRepo", reflect.TypeOf((*MockDetailedDetectionEngine)(nil).PullRepo), ctx, path, branch)
 }
 
 // ReadDir mocks base method.
-func (m *MockDetailedDetectionEngine) ReadDir(arg0 string) ([]fs.DirEntry, error) {
+func (m *MockDetailedDetectionEngine) ReadDir(path string) ([]os.DirEntry, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ReadDir", arg0)
-	ret0, _ := ret[0].([]fs.DirEntry)
+	ret := m.ctrl.Call(m, "ReadDir", path)
+	ret0, _ := ret[0].([]os.DirEntry)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ReadDir indicates an expected call of ReadDir.
-func (mr *MockDetailedDetectionEngineMockRecorder) ReadDir(arg0 any) *gomock.Call {
+func (mr *MockDetailedDetectionEngineMockRecorder) ReadDir(path any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadDir", reflect.TypeOf((*MockDetailedDetectionEngine)(nil).ReadDir), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadDir", reflect.TypeOf((*MockDetailedDetectionEngine)(nil).ReadDir), path)
 }
 
 // ReadFile mocks base method.
-func (m *MockDetailedDetectionEngine) ReadFile(arg0 string) ([]byte, error) {
+func (m *MockDetailedDetectionEngine) ReadFile(path string) ([]byte, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ReadFile", arg0)
+	ret := m.ctrl.Call(m, "ReadFile", path)
 	ret0, _ := ret[0].([]byte)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ReadFile indicates an expected call of ReadFile.
-func (mr *MockDetailedDetectionEngineMockRecorder) ReadFile(arg0 any) *gomock.Call {
+func (mr *MockDetailedDetectionEngineMockRecorder) ReadFile(path any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadFile", reflect.TypeOf((*MockDetailedDetectionEngine)(nil).ReadFile), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadFile", reflect.TypeOf((*MockDetailedDetectionEngine)(nil).ReadFile), path)
 }
 
 // RemoveAll mocks base method.
-func (m *MockDetailedDetectionEngine) RemoveAll(arg0 string) error {
+func (m *MockDetailedDetectionEngine) RemoveAll(path string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RemoveAll", arg0)
+	ret := m.ctrl.Call(m, "RemoveAll", path)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // RemoveAll indicates an expected call of RemoveAll.
-func (mr *MockDetailedDetectionEngineMockRecorder) RemoveAll(arg0 any) *gomock.Call {
+func (mr *MockDetailedDetectionEngineMockRecorder) RemoveAll(path any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveAll", reflect.TypeOf((*MockDetailedDetectionEngine)(nil).RemoveAll), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveAll", reflect.TypeOf((*MockDetailedDetectionEngine)(nil).RemoveAll), path)
 }
 
 // ResumeIntegrityChecker mocks base method.
@@ -202,29 +205,29 @@ func (mr *MockDetailedDetectionEngineMockRecorder) Sync(arg0, arg1 any) *gomock.
 }
 
 // WalkDir mocks base method.
-func (m *MockDetailedDetectionEngine) WalkDir(arg0 string, arg1 fs.WalkDirFunc) error {
+func (m *MockDetailedDetectionEngine) WalkDir(root string, fn fs.WalkDirFunc) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WalkDir", arg0, arg1)
+	ret := m.ctrl.Call(m, "WalkDir", root, fn)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // WalkDir indicates an expected call of WalkDir.
-func (mr *MockDetailedDetectionEngineMockRecorder) WalkDir(arg0, arg1 any) *gomock.Call {
+func (mr *MockDetailedDetectionEngineMockRecorder) WalkDir(root, fn any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WalkDir", reflect.TypeOf((*MockDetailedDetectionEngine)(nil).WalkDir), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WalkDir", reflect.TypeOf((*MockDetailedDetectionEngine)(nil).WalkDir), root, fn)
 }
 
 // WriteFile mocks base method.
-func (m *MockDetailedDetectionEngine) WriteFile(arg0 string, arg1 []byte, arg2 fs.FileMode) error {
+func (m *MockDetailedDetectionEngine) WriteFile(path string, contents []byte, perm fs.FileMode) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WriteFile", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "WriteFile", path, contents, perm)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // WriteFile indicates an expected call of WriteFile.
-func (mr *MockDetailedDetectionEngineMockRecorder) WriteFile(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockDetailedDetectionEngineMockRecorder) WriteFile(path, contents, perm any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WriteFile", reflect.TypeOf((*MockDetailedDetectionEngine)(nil).WriteFile), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WriteFile", reflect.TypeOf((*MockDetailedDetectionEngine)(nil).WriteFile), path, contents, perm)
 }

@@ -5,6 +5,7 @@
 //
 //	mockgen -destination mock/mock_adminclientstore.go -package mock . AdminClientstore
 //
+
 // Package mock is a generated GoMock package.
 package mock
 
@@ -20,6 +21,7 @@ import (
 type MockAdminClientstore struct {
 	ctrl     *gomock.Controller
 	recorder *MockAdminClientstoreMockRecorder
+	isgomock struct{}
 }
 
 // MockAdminClientstoreMockRecorder is the mock recorder for MockAdminClientstore.
@@ -40,87 +42,87 @@ func (m *MockAdminClientstore) EXPECT() *MockAdminClientstoreMockRecorder {
 }
 
 // AddClient mocks base method.
-func (m *MockAdminClientstore) AddClient(arg0 context.Context, arg1 *model.Client) (*model.Client, error) {
+func (m *MockAdminClientstore) AddClient(ctx context.Context, client *model.Client) (*model.Client, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddClient", arg0, arg1)
+	ret := m.ctrl.Call(m, "AddClient", ctx, client)
 	ret0, _ := ret[0].(*model.Client)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // AddClient indicates an expected call of AddClient.
-func (mr *MockAdminClientstoreMockRecorder) AddClient(arg0, arg1 any) *gomock.Call {
+func (mr *MockAdminClientstoreMockRecorder) AddClient(ctx, client any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddClient", reflect.TypeOf((*MockAdminClientstore)(nil).AddClient), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddClient", reflect.TypeOf((*MockAdminClientstore)(nil).AddClient), ctx, client)
 }
 
 // AddClientPermission mocks base method.
-func (m *MockAdminClientstore) AddClientPermission(arg0 context.Context, arg1, arg2 string) error {
+func (m *MockAdminClientstore) AddClientPermission(ctx context.Context, id, perm string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddClientPermission", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "AddClientPermission", ctx, id, perm)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddClientPermission indicates an expected call of AddClientPermission.
-func (mr *MockAdminClientstoreMockRecorder) AddClientPermission(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockAdminClientstoreMockRecorder) AddClientPermission(ctx, id, perm any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddClientPermission", reflect.TypeOf((*MockAdminClientstore)(nil).AddClientPermission), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddClientPermission", reflect.TypeOf((*MockAdminClientstore)(nil).AddClientPermission), ctx, id, perm)
 }
 
 // DeleteClient mocks base method.
-func (m *MockAdminClientstore) DeleteClient(arg0 context.Context, arg1 string) error {
+func (m *MockAdminClientstore) DeleteClient(ctx context.Context, id string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteClient", arg0, arg1)
+	ret := m.ctrl.Call(m, "DeleteClient", ctx, id)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteClient indicates an expected call of DeleteClient.
-func (mr *MockAdminClientstoreMockRecorder) DeleteClient(arg0, arg1 any) *gomock.Call {
+func (mr *MockAdminClientstoreMockRecorder) DeleteClient(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteClient", reflect.TypeOf((*MockAdminClientstore)(nil).DeleteClient), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteClient", reflect.TypeOf((*MockAdminClientstore)(nil).DeleteClient), ctx, id)
 }
 
 // DeleteClientPermission mocks base method.
-func (m *MockAdminClientstore) DeleteClientPermission(arg0 context.Context, arg1, arg2 string) error {
+func (m *MockAdminClientstore) DeleteClientPermission(ctx context.Context, id, perm string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteClientPermission", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "DeleteClientPermission", ctx, id, perm)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteClientPermission indicates an expected call of DeleteClientPermission.
-func (mr *MockAdminClientstoreMockRecorder) DeleteClientPermission(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockAdminClientstoreMockRecorder) DeleteClientPermission(ctx, id, perm any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteClientPermission", reflect.TypeOf((*MockAdminClientstore)(nil).DeleteClientPermission), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteClientPermission", reflect.TypeOf((*MockAdminClientstore)(nil).DeleteClientPermission), ctx, id, perm)
 }
 
 // GenerateSecret mocks base method.
-func (m *MockAdminClientstore) GenerateSecret(arg0 context.Context, arg1 string) (*model.Client, error) {
+func (m *MockAdminClientstore) GenerateSecret(ct context.Context, id string) (*model.Client, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GenerateSecret", arg0, arg1)
+	ret := m.ctrl.Call(m, "GenerateSecret", ct, id)
 	ret0, _ := ret[0].(*model.Client)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GenerateSecret indicates an expected call of GenerateSecret.
-func (mr *MockAdminClientstoreMockRecorder) GenerateSecret(arg0, arg1 any) *gomock.Call {
+func (mr *MockAdminClientstoreMockRecorder) GenerateSecret(ct, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateSecret", reflect.TypeOf((*MockAdminClientstore)(nil).GenerateSecret), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateSecret", reflect.TypeOf((*MockAdminClientstore)(nil).GenerateSecret), ct, id)
 }
 
 // UpdateClient mocks base method.
-func (m *MockAdminClientstore) UpdateClient(arg0 context.Context, arg1 *model.Client) error {
+func (m *MockAdminClientstore) UpdateClient(ctx context.Context, client *model.Client) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateClient", arg0, arg1)
+	ret := m.ctrl.Call(m, "UpdateClient", ctx, client)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // UpdateClient indicates an expected call of UpdateClient.
-func (mr *MockAdminClientstoreMockRecorder) UpdateClient(arg0, arg1 any) *gomock.Call {
+func (mr *MockAdminClientstoreMockRecorder) UpdateClient(ctx, client any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateClient", reflect.TypeOf((*MockAdminClientstore)(nil).UpdateClient), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateClient", reflect.TypeOf((*MockAdminClientstore)(nil).UpdateClient), ctx, client)
 }

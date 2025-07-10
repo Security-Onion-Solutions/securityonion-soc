@@ -15,12 +15,13 @@ import (
 	"net/url"
 	"path"
 
-	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 	"github.com/security-onion-solutions/securityonion-soc/web"
+
+	"github.com/apex/log"
 )
 
 const (
@@ -76,17 +77,7 @@ func (am *AssistantCoordinator) IsRunning() bool {
 	return am.isRunning
 }
 
-func (am *AssistantCoordinator) Chat(ctx context.Context, msg string) (*model.ChatResponse, error) {
-	messages := []*model.ChatMessage{
-		{
-			Role:    "user",
-			Content: msg,
-		},
-	}
-	return am.ChatWithHistory(ctx, messages)
-}
-
-func (am *AssistantCoordinator) ChatWithHistory(ctx context.Context, messages []*model.ChatMessage) (*model.ChatResponse, error) {
+func (am *AssistantCoordinator) Chat(ctx context.Context, messages []*model.ChatMessage) (*model.ChatResponse, error) {
 	logger := log.FromContext(ctx)
 	userID := ctx.Value(web.ContextKeyRequestorId).(string)
 
@@ -129,6 +120,7 @@ func (am *AssistantCoordinator) ChatWithHistory(ctx context.Context, messages []
 
 		return nil, err
 	}
+	defer res.Body.Close()
 
 	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
@@ -148,6 +140,54 @@ func (am *AssistantCoordinator) ChatWithHistory(ctx context.Context, messages []
 	}
 
 	return response, nil
+}
+
+func (am *AssistantCoordinator) ChatStream(ctx context.Context, messages []*model.ChatMessage) (*http.Response, error) {
+	logger := log.FromContext(ctx)
+	userID := ctx.Value(web.ContextKeyRequestorId).(string)
+
+	req := &model.ChatRequest{
+		Messages: messages,
+		UserUUID: userID,
+	}
+
+	u, err := url.Parse(am.apiUrl)
+	if err != nil {
+		logger.WithError(err).WithField("apiUrl", am.apiUrl).Error("unable to parse apiUrl")
+
+		return nil, err
+	}
+
+	u.Path = path.Join(u.Path, "/api/chat")
+	endpoint := u.String()
+
+	var buf bytes.Buffer
+
+	err = json.NewEncoder(&buf).Encode(req)
+	if err != nil {
+		logger.WithError(err).WithField("chatrequest", req).Error("unable to encode ChatRequest")
+		return nil, err
+	}
+
+	httpReq, err := http.NewRequest(http.MethodPost, endpoint, &buf)
+	if err != nil {
+		logger.WithError(err).WithField("apiEndpoint", endpoint).Error("unable to make request object")
+
+		return nil, err
+	}
+
+	httpReq.Header.Add("Content-Type", "application/json")
+	httpReq.Header.Add("Authorization", fmt.Sprintf("Bearer %s", am.apiKey))
+	httpReq.Header.Add("Accept", "text/event-stream")
+
+	res, err := am.MakeRequest(httpReq)
+	if err != nil {
+		logger.WithError(err).Error("unable to execute request")
+
+		return nil, err
+	}
+
+	return res, nil
 }
 
 func (am *AssistantCoordinator) Balance(ctx context.Context) (*model.BalanceResponse, error) {

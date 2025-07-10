@@ -15,38 +15,20 @@ import (
 	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/server/mock"
 	"github.com/security-onion-solutions/securityonion-soc/web"
+
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 )
 
-type mockAssistantManager struct {
-	lastMessages []*model.ChatMessage
-}
-
-func (m *mockAssistantManager) Chat(ctx context.Context, msg string) (*model.ChatResponse, error) {
-	return &model.ChatResponse{
-		Content: []*model.ChatResponseContent{
-			{Type: "text", Text: "Mock response"},
-		},
-	}, nil
-}
-
-func (m *mockAssistantManager) ChatWithHistory(ctx context.Context, messages []*model.ChatMessage) (*model.ChatResponse, error) {
-	m.lastMessages = messages
-	return &model.ChatResponse{
-		Content: []*model.ChatResponseContent{
-			{Type: "text", Text: "Mock response with history"},
-		},
-	}, nil
-}
-
-func (m *mockAssistantManager) Balance(ctx context.Context) (*model.BalanceResponse, error) {
-	return &model.BalanceResponse{Balance: 100.0}, nil
-}
-
-func TestPostChatWithHistory(t *testing.T) {
+func TestPostChat(t *testing.T) {
 	// Create mock server
 	srv := &Server{}
-	mockManager := &mockAssistantManager{}
+	ctrl := gomock.NewController(t)
+	mockManager := mock.NewMockAssistantManager(ctrl)
+	defer ctrl.Finish()
+
 	srv.AssistantManager = mockManager
 
 	handler := NewAssistantHandler(srv)
@@ -73,36 +55,45 @@ func TestPostChatWithHistory(t *testing.T) {
 
 	w := httptest.NewRecorder()
 
+	// Set up mock expectations
+	var capturedMessages []*model.ChatMessage
+	mockManager.EXPECT().Chat(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, messages []*model.ChatMessage) (*model.ChatResponse, error) {
+			capturedMessages = messages
+			return &model.ChatResponse{
+				Content: []*model.ChatResponseContent{
+					{Type: "text", Text: "Mock response with history"},
+				},
+			}, nil
+		},
+	)
+
 	// Execute the handler
 	handler.PostChat(w, req)
 
 	// Verify response
-	if w.Code != http.StatusOK {
-		t.Errorf("Expected status 200, got %d", w.Code)
-	}
+	assert.Equal(t, http.StatusOK, w.Code)
 
 	// Verify that the mock received the correct number of messages
 	expectedMessageCount := 4 // 3 from history + 1 new user message
-	if len(mockManager.lastMessages) != expectedMessageCount {
-		t.Errorf("Expected %d messages, got %d", expectedMessageCount, len(mockManager.lastMessages))
-	}
+	assert.Len(t, capturedMessages, expectedMessageCount)
 
 	// Verify the last message is the new user message
-	lastMessage := mockManager.lastMessages[len(mockManager.lastMessages)-1]
-	if lastMessage.Role != "user" || lastMessage.Content != "What is my current balance?" {
-		t.Errorf("Last message should be the new user message, got: %+v", lastMessage)
-	}
+	lastMessage := capturedMessages[len(capturedMessages)-1]
+	assert.Equal(t, "user", lastMessage.Role)
+	assert.Equal(t, "What is my current balance?", lastMessage.Content)
 
 	// Verify history is preserved
-	if mockManager.lastMessages[0].Role != "assistant" {
-		t.Errorf("First message should be from assistant, got: %+v", mockManager.lastMessages[0])
-	}
+	assert.Equal(t, "assistant", capturedMessages[0].Role)
 }
 
 func TestPostChatWithoutHistory(t *testing.T) {
 	// Create mock server
 	srv := &Server{}
-	mockManager := &mockAssistantManager{}
+	ctrl := gomock.NewController(t)
+	mockManager := mock.NewMockAssistantManager(ctrl)
+	defer ctrl.Finish()
+
 	srv.AssistantManager = mockManager
 
 	handler := NewAssistantHandler(srv)
@@ -124,22 +115,30 @@ func TestPostChatWithoutHistory(t *testing.T) {
 
 	w := httptest.NewRecorder()
 
+	// Set up mock expectations
+	var capturedMessages []*model.ChatMessage
+	mockManager.EXPECT().Chat(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, messages []*model.ChatMessage) (*model.ChatResponse, error) {
+			capturedMessages = messages
+			return &model.ChatResponse{
+				Content: []*model.ChatResponseContent{
+					{Type: "text", Text: "Mock response"},
+				},
+			}, nil
+		},
+	)
+
 	// Execute the handler
 	handler.PostChat(w, req)
 
 	// Verify response
-	if w.Code != http.StatusOK {
-		t.Errorf("Expected status 200, got %d", w.Code)
-	}
+	assert.Equal(t, http.StatusOK, w.Code)
 
 	// Verify that the mock received exactly 1 message (backward compatibility)
 	expectedMessageCount := 1
-	if len(mockManager.lastMessages) != expectedMessageCount {
-		t.Errorf("Expected %d messages, got %d", expectedMessageCount, len(mockManager.lastMessages))
-	}
+	assert.Len(t, capturedMessages, expectedMessageCount)
 
 	// Verify the message content
-	if mockManager.lastMessages[0].Role != "user" || mockManager.lastMessages[0].Content != "Hello" {
-		t.Errorf("Message should be the user message, got: %+v", mockManager.lastMessages[0])
-	}
+	assert.Equal(t, "user", capturedMessages[0].Role)
+	assert.Equal(t, "Hello", capturedMessages[0].Content)
 }
