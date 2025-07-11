@@ -15,6 +15,7 @@ type ChatRequest struct {
 	StopSequences []string       `json:"stop_sequences,omitempty"`
 	System        string         `json:"system,omitempty"`
 	UserUUID      string         `json:"user_uuid,omitempty"`
+	Stream        bool           `json:"stream,omitempty"`
 }
 
 type ChatMessage struct {

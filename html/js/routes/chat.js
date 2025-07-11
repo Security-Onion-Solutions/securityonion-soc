@@ -216,27 +216,104 @@ routes.push({ path: '/chat', name: 'chat', component: {
           content: msg.content
         }));
 
-        const response = await this.$root.papi.post('/assistant/chat', {
-          msg: userMessage,
-          messages: messageHistory,
+        let response = await fetch('/api/assistant/chat', {
+          method: 'POST',
+          headers: {
+            'X-Srv-Token': this.$root.papi.defaults.headers.common['X-Srv-Token'],
+            'Accept': 'text/event-stream'
+          },
+          body: JSON.stringify({
+            msg: userMessage,
+            messages: messageHistory,
+          })
         });
-        
-        if (response.data) {
-          const assistantMessage = {
-            role: 'assistant',
-            content: response.data.content[0].text,
-            timestamp: new Date().toISOString()
-          };
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+
+        console.log("reading messages...");
+        let output = 0;
+        let assistantMessage = null;
+        let chunks = [];
+        let partial = false;
+
+        while (true) {
+          // read in more messages
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          // parse the text, watch for bytes that span updates
+          let data = decoder.decode(value, { stream: true });
           
-          this.isTyping = false;
-          this.messages.push(assistantMessage);
-          this.scrollToBottom();
+          // cleanup the data, split messages apart, remove SSE label, filter out empty lines
+          const newChunks = data.split('\n\n').filter(d => d && d.startsWith('data:')).map(d => (d.startsWith("data: ") ? d.slice(6) : d));
           
-          // Update credits from API after successful response
-          await this.loadCredits();
-        } else {
-          throw new Error('Invalid response format from AI API');
+          // if the last read had partial data, prepend it to the new data and process it again
+          if (partial) {
+            newChunks[0] = chunks[0] + newChunks[0]
+            partial = false;
+          }
+
+          chunks = newChunks;
+          console.log(chunks);
+          
+          // process each chunk
+          for (let i = 0; i < chunks.length; i++) {
+            if (chunks[i] === '[DONE]') {
+              // DONE done
+              assistantMessage = null;
+              continue;
+            }
+
+            // attempt to parse chunk
+            let c;
+            try {
+              c = JSON.parse(chunks[i]);
+            } catch {
+              // probably incomplete JSON, consolidate and save for next read
+              partial = true;
+              chunks = [chunks.join('')];
+              console.log('partial found');
+
+              break;
+            }
+
+            // handle chunk by type
+            switch (c.type) {
+              case 'message_start':
+                this.isTyping = false;
+
+                assistantMessage = {
+                  role: 'assistant',
+                  content: Vue.ref(''), // MUST be ref
+                  timestamp: new Date().toISOString()
+                };
+
+                this.messages.push(assistantMessage);
+                this.scrollToBottom();
+                
+                break;
+              case 'content_block_delta':
+                if (assistantMessage && c.delta.type === 'text_delta') {
+                  // update the ref's value
+                  assistantMessage.content.value += c.delta.text;
+                  this.scrollToBottom();
+                }
+
+                break;
+              case 'message_stop':
+                assistantMessage = null;
+                break;
+            }
+          }
+
+          // done processing received chunks, update UI then read more
+          await this.$nextTick();
+          output++;
         }
+        
+        // Update credits from API after successful response
+        await this.loadCredits();
       } catch (error) {
         this.isTyping = false;
         console.error('AI API Error:', error);

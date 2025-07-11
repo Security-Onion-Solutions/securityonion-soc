@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
@@ -114,11 +115,14 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	// Stream response back to client as quickly as it comes in
 	var n, total int
 	buf := make([]byte, 1024)
+	entireResponse := []byte{}
+	last := time.Now()
 
 	for {
 		n, err = response.Body.Read(buf)
 		if n > 0 {
 			total += n
+			entireResponse = append(entireResponse, buf[:n]...)
 
 			_, writeErr := w.Write(buf[:n])
 			if writeErr != nil {
@@ -128,15 +132,22 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 
 			flusher.Flush()
 
+			since := time.Since(last)
+			last = time.Now()
+
 			logger.WithFields(log.Fields{
 				"mostRecentBufferSize": n,
 				"totalTransferred":     total,
+				"timeSinceLastChunk":   since.String(),
 			}).Debug("streaming AI response")
 		}
 		if err != nil {
 			break // EOF or error, exit loop
 		}
 	}
+
+	logger.WithField("entireResponse", string(entireResponse)).Debug("entire response streamed")
+
 	if err != io.EOF {
 		logger.WithError(err).Error("problem while streaming response")
 		return

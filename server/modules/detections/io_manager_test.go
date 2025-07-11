@@ -78,7 +78,7 @@ func TestBuildHttpClient(t *testing.T) {
 			resman.Config.AdditionalCA = test.RootCA
 			resman.Config.InsecureSkipVerify = test.InsecureSkipVerify
 
-			client := resman.buildHttpClient()
+			client := resman.buildHttpClient(false)
 			transport := client.Transport.(*http.Transport)
 
 			if test.ExpectEmptyTransport {

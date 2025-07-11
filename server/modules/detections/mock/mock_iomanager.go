@@ -91,18 +91,18 @@ func (mr *MockIOManagerMockRecorder) ExecCommand(cmd any) *gomock.Call {
 }
 
 // MakeRequest mocks base method.
-func (m *MockIOManager) MakeRequest(arg0 *http.Request) (*http.Response, error) {
+func (m *MockIOManager) MakeRequest(arg0 *http.Request, arg1 bool) (*http.Response, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MakeRequest", arg0)
+	ret := m.ctrl.Call(m, "MakeRequest", arg0, arg1)
 	ret0, _ := ret[0].(*http.Response)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // MakeRequest indicates an expected call of MakeRequest.
-func (mr *MockIOManagerMockRecorder) MakeRequest(arg0 any) *gomock.Call {
+func (mr *MockIOManagerMockRecorder) MakeRequest(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MakeRequest", reflect.TypeOf((*MockIOManager)(nil).MakeRequest), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MakeRequest", reflect.TypeOf((*MockIOManager)(nil).MakeRequest), arg0, arg1)
 }
 
 // PullRepo mocks base method.
