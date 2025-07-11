@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -112,9 +111,9 @@ func (am *AssistantCoordinator) Chat(ctx context.Context, messages []*model.Chat
 	}
 
 	httpReq.Header.Add("Content-Type", "application/json")
-	httpReq.Header.Add("Authorization", fmt.Sprintf("Bearer %s", am.apiKey))
+	httpReq.Header.Add("x-api-key", am.apiKey)
 
-	res, err := am.MakeRequest(httpReq)
+	res, err := am.MakeRequest(httpReq, false)
 	if err != nil {
 		logger.WithError(err).Error("unable to execute request")
 
@@ -149,6 +148,7 @@ func (am *AssistantCoordinator) ChatStream(ctx context.Context, messages []*mode
 	req := &model.ChatRequest{
 		Messages: messages,
 		UserUUID: userID,
+		Stream:   true,
 	}
 
 	u, err := url.Parse(am.apiUrl)
@@ -177,10 +177,10 @@ func (am *AssistantCoordinator) ChatStream(ctx context.Context, messages []*mode
 	}
 
 	httpReq.Header.Add("Content-Type", "application/json")
-	httpReq.Header.Add("Authorization", fmt.Sprintf("Bearer %s", am.apiKey))
+	httpReq.Header.Add("x-api-key", am.apiKey)
 	httpReq.Header.Add("Accept", "text/event-stream")
 
-	res, err := am.MakeRequest(httpReq)
+	res, err := am.MakeRequest(httpReq, true)
 	if err != nil {
 		logger.WithError(err).Error("unable to execute request")
 
@@ -210,9 +210,9 @@ func (am *AssistantCoordinator) Balance(ctx context.Context) (*model.BalanceResp
 		return nil, err
 	}
 
-	httpReq.Header.Add("Authorization", fmt.Sprintf("Bearer %s", am.apiKey))
+	httpReq.Header.Add("x-api-key", am.apiKey)
 
-	res, err := am.MakeRequest(httpReq)
+	res, err := am.MakeRequest(httpReq, false)
 	if err != nil {
 		logger.WithError(err).WithField("apiEndpoint", endpoint).Error("unable to execute request")
 

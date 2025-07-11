@@ -1114,14 +1114,14 @@ func TestDownloadSigmaPackages(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		// can't use mock's Times(x) because the first response's body
 		// closing will result in remaining requests getting 0 data
-		iom.EXPECT().MakeRequest(gomock.Any()).Return(&http.Response{
+		iom.EXPECT().MakeRequest(gomock.Any(), false).Return(&http.Response{
 			StatusCode:    http.StatusOK,
 			Body:          io.NopCloser(strings.NewReader(body)),
 			ContentLength: int64(len(body)),
 		}, nil)
 	}
 
-	iom.EXPECT().MakeRequest(gomock.Any()).Return(&http.Response{
+	iom.EXPECT().MakeRequest(gomock.Any(), false).Return(&http.Response{
 		StatusCode: http.StatusNotFound,
 	}, nil)
 
@@ -1578,7 +1578,7 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 	iom.EXPECT().ReadFile("sigmaPipelineSO").Return([]byte("data"), nil)
 	iom.EXPECT().ReadFile("sigmaPipelinesFingerprintFile").Return([]byte("3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7-3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7"), nil)
 	// downloadSigmaPackages
-	iom.EXPECT().MakeRequest(gomock.Any()).Return(&http.Response{
+	iom.EXPECT().MakeRequest(gomock.Any(), false).Return(&http.Response{
 		StatusCode: 200,
 		Body:       io.NopCloser(buf),
 	}, nil)
@@ -1707,7 +1707,7 @@ func TestSyncChanges(t *testing.T) {
 	iom.EXPECT().ReadFile("sigmaPipelineSO").Return([]byte("data"), nil)
 	iom.EXPECT().ReadFile("sigmaPipelinesFingerprintFile").Return([]byte("a different hash"), nil)
 	// downloadSigmaPackages
-	iom.EXPECT().MakeRequest(gomock.Any()).Return(&http.Response{
+	iom.EXPECT().MakeRequest(gomock.Any(), false).Return(&http.Response{
 		StatusCode: 200,
 		Body:       io.NopCloser(buf),
 	}, nil)
@@ -1914,7 +1914,7 @@ func TestSyncUnchangedOverrides(t *testing.T) {
 	iom.EXPECT().ReadFile("sigmaPipelineSO").Return([]byte("data"), nil)
 	iom.EXPECT().ReadFile("sigmaPipelinesFingerprintFile").Return([]byte("a different hash"), nil)
 	// downloadSigmaPackages
-	iom.EXPECT().MakeRequest(gomock.Any()).Return(&http.Response{
+	iom.EXPECT().MakeRequest(gomock.Any(), false).Return(&http.Response{
 		StatusCode: 200,
 		Body:       io.NopCloser(buf),
 	}, nil)
@@ -2062,7 +2062,7 @@ func TestSyncStateFileNoCommunity(t *testing.T) {
 	iom.EXPECT().ReadFile("sigmaPipelinesFingerprintFile").Return([]byte("a different hash"), nil)
 	iom.EXPECT().ReadFile("rulesFingerprintFile").Return([]byte("something"), nil)
 	// downloadSigmaPackages
-	iom.EXPECT().MakeRequest(gomock.Any()).Return(&http.Response{
+	iom.EXPECT().MakeRequest(gomock.Any(), false).Return(&http.Response{
 		StatusCode: 200,
 		Body:       io.NopCloser(buf),
 	}, nil)

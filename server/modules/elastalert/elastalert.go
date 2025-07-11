@@ -31,7 +31,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/elastic/go-elasticsearch/v8/esutil"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
@@ -41,6 +40,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
+	"github.com/elastic/go-elasticsearch/v8/esutil"
 	"github.com/google/uuid"
 	"github.com/kennygrant/sanitize"
 	"github.com/samber/lo"
@@ -1554,7 +1554,7 @@ func (e *ElastAlertEngine) downloadSigmaPackages() (zipData map[string][]byte, e
 			continue
 		}
 
-		resp, err := e.MakeRequest(req)
+		resp, err := e.MakeRequest(req, false)
 		if err != nil {
 			errMap[pkg] = err
 			continue

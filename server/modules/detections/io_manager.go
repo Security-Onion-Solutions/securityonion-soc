@@ -34,7 +34,7 @@ type IOManager interface {
 	DeleteFile(path string) error
 	ReadDir(path string) ([]os.DirEntry, error)
 	RemoveAll(path string) error
-	MakeRequest(*http.Request) (*http.Response, error)
+	MakeRequest(*http.Request, bool) (*http.Response, error)
 	ExecCommand(cmd *exec.Cmd) ([]byte, int, time.Duration, error)
 	WalkDir(root string, fn fs.WalkDirFunc) error
 	CloneRepo(ctx context.Context, path string, repo string, branch *string) (err error)
@@ -42,8 +42,9 @@ type IOManager interface {
 }
 
 type ResourceManager struct {
-	Config  *config.ServerConfig
-	_client *http.Client
+	Config           *config.ServerConfig
+	_client          *http.Client
+	_streamingClient *http.Client
 }
 
 func (_ *ResourceManager) ReadFile(path string) ([]byte, error) {
@@ -66,17 +67,29 @@ func (_ *ResourceManager) RemoveAll(path string) error {
 	return os.RemoveAll(path)
 }
 
-func (resman *ResourceManager) MakeRequest(req *http.Request) (*http.Response, error) {
-	if resman._client == nil {
-		// cache for reuse, the config values can't change without a server restart
-		resman._client = resman.buildHttpClient()
+func (resman *ResourceManager) MakeRequest(req *http.Request, streaming bool) (*http.Response, error) {
+	var client *http.Client
+	if streaming {
+		if resman._streamingClient == nil {
+			resman._streamingClient = resman.buildHttpClient(true)
+		}
+
+		client = resman._streamingClient
+	} else {
+		if resman._client == nil {
+			resman._client = resman.buildHttpClient(streaming)
+		}
+
+		client = resman._client
 	}
 
-	return resman._client.Do(req)
+	return client.Do(req)
 }
 
-func (resman *ResourceManager) buildHttpClient() *http.Client {
-	transport := &http.Transport{}
+func (resman *ResourceManager) buildHttpClient(disableCompression bool) *http.Client {
+	transport := &http.Transport{
+		DisableCompression: disableCompression,
+	}
 
 	if resman.Config.Proxy != "" {
 		p, err := url.Parse(resman.Config.Proxy)
