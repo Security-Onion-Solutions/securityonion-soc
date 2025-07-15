@@ -9,14 +9,17 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
 	"path"
 
+	"github.com/google/uuid"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	modcontext "github.com/security-onion-solutions/securityonion-soc/server/modules/context"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
@@ -29,12 +32,18 @@ const (
 	DEFAULT_MODEL  = "claude-sonnet"
 )
 
+var (
+	ErrToolNotFound = errors.New("tool not found")
+)
+
 type AssistantCoordinator struct {
 	srv       *server.Server
 	apiKey    string
 	apiUrl    string
 	model     string
 	isRunning bool
+
+	FunctionLibrary map[string]Tool
 
 	detections.IOManager
 }
@@ -46,37 +55,38 @@ func NewAssistantManager(srv *server.Server) *AssistantCoordinator {
 	}
 }
 
-func (am *AssistantCoordinator) PrerequisiteModules() []string {
+func (ac *AssistantCoordinator) PrerequisiteModules() []string {
 	return nil
 }
 
-func (am *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
-	am.srv.AssistantManager = am
+func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
+	ac.srv.AssistantManager = ac
+	ac.FunctionLibrary = knownTools
 
-	am.apiKey = module.GetStringDefault(config, "apiKey", DEFAULT_APIKEY)
-	am.apiUrl = module.GetStringDefault(config, "apiUrl", DEFAULT_APIURL)
-	am.model = module.GetStringDefault(config, "model", DEFAULT_MODEL)
-
-	return nil
-}
-
-func (am *AssistantCoordinator) Start() error {
-	am.isRunning = true
+	ac.apiKey = module.GetStringDefault(config, "apiKey", DEFAULT_APIKEY)
+	ac.apiUrl = module.GetStringDefault(config, "apiUrl", DEFAULT_APIURL)
+	ac.model = module.GetStringDefault(config, "model", DEFAULT_MODEL)
 
 	return nil
 }
 
-func (am *AssistantCoordinator) Stop() error {
-	am.isRunning = false
+func (ac *AssistantCoordinator) Start() error {
+	ac.isRunning = true
 
 	return nil
 }
 
-func (am *AssistantCoordinator) IsRunning() bool {
-	return am.isRunning
+func (ac *AssistantCoordinator) Stop() error {
+	ac.isRunning = false
+
+	return nil
 }
 
-func (am *AssistantCoordinator) Chat(ctx context.Context, messages []*model.ChatMessage) (*model.ChatResponse, error) {
+func (ac *AssistantCoordinator) IsRunning() bool {
+	return ac.isRunning
+}
+
+func (ac *AssistantCoordinator) Chat(ctx context.Context, messages []*model.ChatMessage) (*model.ChatResponse, error) {
 	logger := log.FromContext(ctx)
 	userID := ctx.Value(web.ContextKeyRequestorId).(string)
 
@@ -85,9 +95,9 @@ func (am *AssistantCoordinator) Chat(ctx context.Context, messages []*model.Chat
 		UserUUID: userID,
 	}
 
-	u, err := url.Parse(am.apiUrl)
+	u, err := url.Parse(ac.apiUrl)
 	if err != nil {
-		logger.WithError(err).WithField("apiUrl", am.apiUrl).Error("unable to parse apiUrl")
+		logger.WithError(err).WithField("apiUrl", ac.apiUrl).Error("unable to parse apiUrl")
 
 		return nil, err
 	}
@@ -111,9 +121,9 @@ func (am *AssistantCoordinator) Chat(ctx context.Context, messages []*model.Chat
 	}
 
 	httpReq.Header.Add("Content-Type", "application/json")
-	httpReq.Header.Add("x-api-key", am.apiKey)
+	httpReq.Header.Add("x-api-key", ac.apiKey)
 
-	res, err := am.MakeRequest(httpReq, false)
+	res, err := ac.MakeRequest(httpReq, false)
 	if err != nil {
 		logger.WithError(err).Error("unable to execute request")
 
@@ -141,7 +151,7 @@ func (am *AssistantCoordinator) Chat(ctx context.Context, messages []*model.Chat
 	return response, nil
 }
 
-func (am *AssistantCoordinator) ChatStream(ctx context.Context, messages []*model.ChatMessage) (*http.Response, error) {
+func (ac *AssistantCoordinator) ChatStream(ctx context.Context, messages []*model.ChatMessage) (*http.Response, error) {
 	logger := log.FromContext(ctx)
 	userID := ctx.Value(web.ContextKeyRequestorId).(string)
 
@@ -151,9 +161,9 @@ func (am *AssistantCoordinator) ChatStream(ctx context.Context, messages []*mode
 		Stream:   true,
 	}
 
-	u, err := url.Parse(am.apiUrl)
+	u, err := url.Parse(ac.apiUrl)
 	if err != nil {
-		logger.WithError(err).WithField("apiUrl", am.apiUrl).Error("unable to parse apiUrl")
+		logger.WithError(err).WithField("apiUrl", ac.apiUrl).Error("unable to parse apiUrl")
 
 		return nil, err
 	}
@@ -177,10 +187,10 @@ func (am *AssistantCoordinator) ChatStream(ctx context.Context, messages []*mode
 	}
 
 	httpReq.Header.Add("Content-Type", "application/json")
-	httpReq.Header.Add("x-api-key", am.apiKey)
+	httpReq.Header.Add("x-api-key", ac.apiKey)
 	httpReq.Header.Add("Accept", "text/event-stream")
 
-	res, err := am.MakeRequest(httpReq, true)
+	res, err := ac.MakeRequest(httpReq, true)
 	if err != nil {
 		logger.WithError(err).Error("unable to execute request")
 
@@ -190,12 +200,47 @@ func (am *AssistantCoordinator) ChatStream(ctx context.Context, messages []*mode
 	return res, nil
 }
 
-func (am *AssistantCoordinator) Balance(ctx context.Context) (*model.BalanceResponse, error) {
+func (ac *AssistantCoordinator) ExecuteTool(ctx context.Context, toolName string, params string) (*model.ToolResult, error) {
+
+	logger := log.FromContext(ctx).WithFields(log.Fields{
+		"toolName":  toolName,
+		"toolUseId": uuid.New().String(),
+	})
+
+	tool, ok := ac.FunctionLibrary[toolName]
+	if !ok {
+		logger.Error("tool not found")
+		return nil, ErrToolNotFound
+	}
+
+	assistantCtx := modcontext.WriteIsAssistant(ctx, true)
+	assistantCtx = log.NewContext(assistantCtx, logger)
+
+	userID := ctx.Value(web.ContextKeyRequestorId).(string)
+	logger.WithFields(log.Fields{
+		"toolName": toolName,
+		"userId":   userID,
+	}).Info("executing tool for assistant")
+
+	result, err := tool.Execute(assistantCtx, ac.srv, params)
+	if err != nil {
+		logger.WithError(err).Error("error executing tool")
+		return nil, err
+	}
+
+	logger.WithFields(log.Fields{
+		"result": result,
+	}).Info("tool executed successfully")
+
+	return result, nil
+}
+
+func (ac *AssistantCoordinator) Balance(ctx context.Context) (*model.BalanceResponse, error) {
 	logger := log.FromContext(ctx)
 
-	u, err := url.Parse(am.apiUrl)
+	u, err := url.Parse(ac.apiUrl)
 	if err != nil {
-		logger.WithError(err).WithField("apiUrl", am.apiUrl).Error("unable to parse apiUrl")
+		logger.WithError(err).WithField("apiUrl", ac.apiUrl).Error("unable to parse apiUrl")
 
 		return nil, err
 	}
@@ -210,9 +255,9 @@ func (am *AssistantCoordinator) Balance(ctx context.Context) (*model.BalanceResp
 		return nil, err
 	}
 
-	httpReq.Header.Add("x-api-key", am.apiKey)
+	httpReq.Header.Add("x-api-key", ac.apiKey)
 
-	res, err := am.MakeRequest(httpReq, false)
+	res, err := ac.MakeRequest(httpReq, false)
 	if err != nil {
 		logger.WithError(err).WithField("apiEndpoint", endpoint).Error("unable to execute request")
 

@@ -86,3 +86,18 @@ func (mr *MockAssistantManagerMockRecorder) ChatStream(ctx, messages any) *gomoc
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChatStream", reflect.TypeOf((*MockAssistantManager)(nil).ChatStream), ctx, messages)
 }
+
+// ExecuteTool mocks base method.
+func (m *MockAssistantManager) ExecuteTool(ctx context.Context, toolName, params string) (*model.ToolResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ExecuteTool", ctx, toolName, params)
+	ret0, _ := ret[0].(*model.ToolResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ExecuteTool indicates an expected call of ExecuteTool.
+func (mr *MockAssistantManagerMockRecorder) ExecuteTool(ctx, toolName, params any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecuteTool", reflect.TypeOf((*MockAssistantManager)(nil).ExecuteTool), ctx, toolName, params)
+}
