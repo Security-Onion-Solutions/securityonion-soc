@@ -283,6 +283,12 @@
               </template>
               <v-list-item-title v-text="i18n.downloads"></v-list-item-title>
             </v-list-item>
+            <v-list-item  v-if="isLicensed('rpt')" @click="" to="/reports" data-aid="nav_reports">
+              <template #prepend>
+                <v-icon>fa-print</v-icon>
+              </template>
+              <v-list-item-title v-text="i18n.reports"></v-list-item-title>
+            </v-list-item>
             <v-list-group data-aid="nav_admin">
               <template #activator="{ props }">
                 <v-list-item v-bind="props">

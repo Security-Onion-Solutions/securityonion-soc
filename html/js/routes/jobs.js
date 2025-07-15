@@ -11,7 +11,7 @@ const JobStatusDeleted = 3;
 
 loadPageTemplate('page-jobs', 'pages/jobs.html');
 
-routes.push({ path: '/jobs', name: 'jobs', component: {
+const jobsComponent = {
   template: '#page-jobs',
   data() { return {
     i18n: this.$root.i18n,
@@ -22,6 +22,15 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
       { title: this.$root.i18n.dateQueued, value: 'createTime' },
       { title: this.$root.i18n.dateCompleted, value: 'completeTime' },
       { title: this.$root.i18n.sensorId, value: 'sensorId' },
+      { title: this.$root.i18n.status, value: 'status' },
+      { title: this.$root.i18n.actions },
+    ],
+    reportHeaders: [
+      { title: this.$root.i18n.id, value: 'id' },
+      { title: this.$root.i18n.owner, value: 'owner' },
+      { title: this.$root.i18n.dateQueued, value: 'createTime' },
+      { title: this.$root.i18n.dateCompleted, value: 'completeTime' },
+      { title: this.$root.i18n.description, value: 'description' },
       { title: this.$root.i18n.status, value: 'status' },
       { title: this.$root.i18n.actions },
     ],
@@ -57,9 +66,7 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
     async loadData() {
       this.$root.startLoading();
       try {
-        if (this.$route.query.k) {
-          this.kind = this.$route.query.k;
-        }
+        this.kind = this.$route.path.replace("/", "");
         const response = await this.$root.papi.get('jobs', { params: { kind: this.kind }});
         this.jobs = response.data;
         this.loadUserDetails();
@@ -251,5 +258,62 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
         $(this).val(value);
       });
     },
+    isComplete(job) {
+      return job.status == JobStatusCompleted;
+    },
+    downloadUrl(job) {
+      return this.$root.apiUrl + "stream?jobId=" + job.id;
+    },
+    isViewable() {
+      switch(this.kind) {
+        case 'reports':
+          return false;
+      }
+      return true;
+    },
+    isDownloadable(job) {
+      switch(this.kind) {
+        case 'reports':
+          return true
+      }
+      return false;
+    },
+    isDownloadReady(job) {
+      return this.isComplete(job) && job.size > 0;
+    },
+    canCreate() {
+      switch(this.kind) {
+        case 'reports':
+          return false;
+      }
+      return true;
+    },
+    isSensorJob() {
+      switch(this.kind) {
+        case 'reports':
+          return false;
+      }
+      return true;
+    },
+    getHeaders() {
+      switch(this.kind) {
+        case 'reports':
+          return this.reportHeaders;
+      }
+      return this.headers;        
+    },
+    getDescription(job) {
+      switch(this.kind) {
+        case 'reports':
+          return this.i18n[job.filter.parameters.type] + " " + job.filter.parameters.id + " [" + job.fileExtension + "]";
+      }
+      return job.filter.parameters;
+    },
   }
-}});
+};
+
+const pcapComponent = Object.assign({}, jobsComponent);
+routes.push({path: '/jobs', name: 'jobs', component: pcapComponent });
+
+const reportsComponent = Object.assign({}, jobsComponent);
+routes.push({ path: '/reports', name: 'reports', component: reportsComponent});

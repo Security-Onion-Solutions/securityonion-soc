@@ -86,6 +86,7 @@ func (mgr *JobManager) Start() {
 			if err == nil {
 				job.Complete()
 			} else {
+				log.WithError(err).WithField("jobId", job.Id).Error("Job failed")
 				job.Fail(err)
 			}
 			mgr.CleanupJob(job)
@@ -124,6 +125,9 @@ func (mgr *JobManager) ProcessJob(job *model.Job) (io.ReadCloser, error) {
 	if err != nil && reader != nil {
 		// Don't fail all processors if at least one provided some data.
 		err = nil
+	}
+	if err == nil && reader == nil && len(job.Results) == 0 {
+		err = errors.New("no job processor provider a result")
 	}
 	return reader, err
 }

@@ -346,3 +346,16 @@ func TestFilterMatches(tester *testing.T) {
 	jobParams["foo"] = jobNested
 	assert.False(tester, ds.filterParameterMatches(params, jobParams))
 }
+
+func TestGetMimeTypeForFileExtension(tester *testing.T) {
+	ds, _ := createDatastore(true, []byte(""))
+
+	// Test known extensions
+	assert.Equal(tester, "vnd.tcpdump.pcap", ds.getMimeTypeForFileExtension("pcap"))
+	assert.Equal(tester, "application/pdf", ds.getMimeTypeForFileExtension("pdf"))
+
+	// Test unknown extension (should default to octet-stream)
+	assert.Equal(tester, "application/octet-stream", ds.getMimeTypeForFileExtension("txt"))
+	assert.Equal(tester, "application/octet-stream", ds.getMimeTypeForFileExtension("jpg"))
+	assert.Equal(tester, "application/octet-stream", ds.getMimeTypeForFileExtension(""))
+}

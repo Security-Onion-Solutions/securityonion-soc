@@ -83,3 +83,115 @@ test('addJob - minimal', async () => {
 
 	expect(comp.jobs).toEqual(['addJobResponse']);
 });
+
+test('isComplete', () => {
+	// Test with JobStatusCompleted
+	expect(comp.isComplete({ status: 1 })).toBe(true);
+
+	// Test with other statuses
+	expect(comp.isComplete({ status: 0 })).toBe(false);
+	expect(comp.isComplete({ status: 2 })).toBe(false);
+	expect(comp.isComplete({ status: 3 })).toBe(false);
+	expect(comp.isComplete({ status: 99 })).toBe(false);
+	expect(comp.isComplete({})).toBe(false);
+});
+
+test('downloadUrl', () => {
+	comp.$root = { apiUrl: 'http://localhost:8000/' };
+	const job = { id: 'testJob123' };
+	expect(comp.downloadUrl(job)).toBe('http://localhost:8000/stream?jobId=testJob123');
+
+	const anotherJob = { id: 'anotherJob456' };
+	expect(comp.downloadUrl(anotherJob)).toBe('http://localhost:8000/stream?jobId=anotherJob456');
+});
+
+test('isViewable', () => {
+	comp.kind = '';
+	expect(comp.isViewable()).toBe(true);
+	comp.kind = 'pcap';
+	expect(comp.isViewable()).toBe(true);
+	comp.kind = 'reports';
+	expect(comp.isViewable()).toBe(false);
+});
+
+test('isDownloadable', () => {
+	comp.kind = '';
+	expect(comp.isDownloadable()).toBe(false);
+	comp.kind = 'pcap';
+	expect(comp.isDownloadable()).toBe(false);
+	comp.kind = 'reports';
+	expect(comp.isDownloadable()).toBe(true);
+});
+
+test('isDownloadReady', () => {
+	// Test when job is complete and size > 0
+	expect(comp.isDownloadReady({ status: 1, size: 100 })).toBe(true);
+
+	// Test when job is complete but size is 0
+	expect(comp.isDownloadReady({ status: 1, size: 0 })).toBe(false);
+
+	// Test when job is not complete but size > 0
+	expect(comp.isDownloadReady({ status: 0, size: 100 })).toBe(false);
+
+	// Test when job is not complete and size is 0
+	expect(comp.isDownloadReady({ status: 0, size: 0 })).toBe(false);
+});
+
+test('canCreate', () => {
+	comp.kind = '';
+	expect(comp.canCreate()).toBe(true);
+	comp.kind = 'pcap';
+	expect(comp.canCreate()).toBe(true);
+	comp.kind = 'reports';
+	expect(comp.canCreate()).toBe(false);
+});
+
+test('isSensorJob', () => {
+	comp.kind = '';
+	expect(comp.isSensorJob()).toBe(true);
+	comp.kind = 'pcap';
+	expect(comp.isSensorJob()).toBe(true);
+	comp.kind = 'reports';
+	expect(comp.isSensorJob()).toBe(false);
+});
+
+test('getHeaders', () => {
+	const originalHeaders = [{ title: 'ID', value: 'id' }];
+	const originalReportHeaders = [{ title: 'Report ID', value: 'id' }];
+
+	comp.headers = originalHeaders;
+	comp.reportHeaders = originalReportHeaders;
+
+	comp.kind = '';
+	expect(comp.getHeaders()).toEqual(originalHeaders);
+
+	comp.kind = 'pcap';
+	expect(comp.getHeaders()).toEqual(originalHeaders);
+
+	comp.kind = 'reports';
+	expect(comp.getHeaders()).toEqual(originalReportHeaders);
+});
+
+test('getDescription', () => {
+	comp.i18n = {
+		"pcap": "PCAP",
+		"zeek": "Zeek"
+	};
+
+	// Test for kind != 'reports'
+	comp.kind = '';
+	let job1 = { filter: { parameters: { someParam: 'value' } } };
+	expect(comp.getDescription(job1)).toEqual({ someParam: 'value' });
+
+	comp.kind = 'pcap';
+	let job2 = { filter: { parameters: { anotherParam: 'anotherValue' } } };
+	expect(comp.getDescription(job2)).toEqual({ anotherParam: 'anotherValue' });
+
+	// Test for kind == 'reports'
+	comp.kind = 'reports';
+	let job3 = { filter: { parameters: { type: 'pcap', id: '123' } }, fileExtension: 'pcap' };
+	expect(comp.getDescription(job3)).toBe('PCAP 123 [pcap]');
+
+	let job4 = { filter: { parameters: { type: 'zeek', id: '456' } }, fileExtension: 'log' };
+	expect(comp.getDescription(job4)).toBe('Zeek 456 [log]');
+});

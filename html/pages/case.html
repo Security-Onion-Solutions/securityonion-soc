@@ -1,4 +1,9 @@
 <v-container fluid data-aid="case_screen">
+	<v-toolbar v-if="$root.isLicensed(FEAT_RPT)" class="elevation-0 theme-background-lighten-1" fixed>
+		<v-btn :title="i18n.exportCaseHelp" class="ml-3" variant="flat" color="secondary" @click.stop="exportCase" id="export-case-button" data-aid="case_export">
+			<v-icon>fa-file-export</v-icon>
+		</v-btn>
+	</v-toolbar>
 	<div class="mx-sm-12 mx-lg-6 mt-2 mb-6 mb-md-1" data-aid="case_title_input">
 		<div tabindex="0" class="case detail-field clicktoedit d-flex align-start pa-2" v-if="!isEdit('case-title')"
 			@click="startEdit('case-title-input', caseObj.title, 'case-title', 'title', modifyCase)" @keypress.space.prevent="startEdit('case-title-input', caseObj.title, 'case-title', 'title', modifyCase)">
@@ -540,6 +545,9 @@
 									</v-btn>
 									<v-btn class="mx-2" :title="i18n.refreshObservablesHelp" variant="flat" color="secondary" @click.stop="reloadAssociation('evidence', true)" id="refresh-observables-button" data-aid="case_evidence_refresh">
 										<v-icon>fa-sync</v-icon>
+									</v-btn>
+									<v-btn :title="i18n.exportEvidenceHelp" variant="flat" color="secondary" @click.stop="exportEvidence" id="export-evidence-button" data-aid="case_evidence_export">
+										<v-icon>fa-file-export</v-icon>
 									</v-btn>
 								</v-toolbar>
 							</v-col>

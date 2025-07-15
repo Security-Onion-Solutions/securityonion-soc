@@ -583,8 +583,16 @@ td {
     font-family: Consolas,Monaco,Lucida Console,Liberation Mono,DejaVu Sans Mono,Bitstream Vera Sans Mono,Courier New, monospace;
 }
 
-#licenseDetails {
+.licenseDetails {
+  flex: 1; /* Allow items to grow and shrink */
+  min-width: 40em;
   max-width: 40em;
+}
+
+.licenseDetailsWrapper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px; /* Add some spacing between the items */
 }
 
 .v-alert.info a {
@@ -1066,3 +1074,4 @@ ul ul ul {
 .center-self-flex {
   justify-self: center;
 }
+

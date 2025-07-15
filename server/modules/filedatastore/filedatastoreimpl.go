@@ -457,7 +457,7 @@ func (datastore *FileDatastoreImpl) GetPackets(ctx context.Context, jobId int, o
 	return packets, err
 }
 
-func (datastore *FileDatastoreImpl) SavePacketStream(ctx context.Context, jobId int, reader io.ReadCloser) (err error) {
+func (datastore *FileDatastoreImpl) SaveJobStream(ctx context.Context, jobId int, reader io.ReadCloser) (err error) {
 	logger := log.FromContext(ctx)
 
 	if err = datastore.server.CheckAuthorized(ctx, "process", "jobs"); err == nil {
@@ -471,12 +471,12 @@ func (datastore *FileDatastoreImpl) SavePacketStream(ctx context.Context, jobId 
 					count, err = io.Copy(file, reader)
 				}
 				if err != nil {
-					logger.WithError(err).WithField("jobId", jobId).Error("Failed to write packet stream to file")
+					logger.WithError(err).WithField("jobId", jobId).Error("Failed to write job stream to file")
 				} else {
 					logger.WithFields(log.Fields{
 						"bytes": count,
 						"jobId": jobId,
-					}).Info("Saved packet stream to file")
+					}).Info("Saved job stream to file")
 				}
 			} else {
 				err = errors.New("Job is ineligible for processing")
@@ -488,7 +488,7 @@ func (datastore *FileDatastoreImpl) SavePacketStream(ctx context.Context, jobId 
 	return err
 }
 
-func (datastore *FileDatastoreImpl) GetPacketStream(ctx context.Context, jobId int, unwrap bool) (reader io.ReadCloser, filename string, length int64, err error) {
+func (datastore *FileDatastoreImpl) GetJobStream(ctx context.Context, jobId int, unwrap bool) (reader io.ReadCloser, filename string, length int64, mimeType string, err error) {
 	logger := log.FromContext(ctx)
 
 	job := datastore.GetJob(ctx, jobId)
@@ -499,14 +499,18 @@ func (datastore *FileDatastoreImpl) GetPacketStream(ctx context.Context, jobId i
 				var file *os.File
 				file, err = os.Open(datastore.getModifiedStreamFilename(job, unwrap))
 				if err != nil {
-					logger.WithError(err).WithField("jobId", job.Id).Error("Failed to open packet stream")
+					logger.WithError(err).WithField("jobId", job.Id).Error("Failed to open job stream")
 				} else {
 					reader = file
 					info, err := file.Stat()
 					length = info.Size()
+
+					mimeType = datastore.getMimeTypeForFileExtension(job.FileExtension)
+
 					logger.WithFields(log.Fields{
 						"streamSize":     length,
 						"streamFilename": info.Name(),
+						"mimeType":       mimeType,
 					}).Info("Streaming file")
 					if err != nil {
 						logger.WithError(err).WithField("jobId", job.Id).Error("Failed to open file stats")
@@ -520,7 +524,20 @@ func (datastore *FileDatastoreImpl) GetPacketStream(ctx context.Context, jobId i
 		err = errors.New("Job not found")
 	}
 
-	return reader, filename, length, err
+	return reader, filename, length, mimeType, err
+}
+
+func (datastore *FileDatastoreImpl) getMimeTypeForFileExtension(extension string) string {
+	var mimeType string
+	switch extension {
+	case "pcap":
+		mimeType = "vnd.tcpdump.pcap"
+	case "pdf":
+		mimeType = "application/pdf"
+	default:
+		mimeType = "application/octet-stream"
+	}
+	return mimeType
 }
 
 func (datastore *FileDatastoreImpl) getStreamFilename(job *model.Job) string {

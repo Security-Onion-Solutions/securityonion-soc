@@ -9,6 +9,7 @@ const components = [];
 const templatePromises = [];
 
 const FEAT_TTR = 'ttr';
+const FEAT_RPT = 'rpt';
 
 const LICENSE_STATUS_ACTIVE = "active";
 const LICENSE_STATUS_EXCEEDED = "exceeded";
@@ -193,6 +194,7 @@ $(document).ready(function () {
           selectedGridId: LOCAL_GRID_ID,
           subgridSelectorEnabled: false,
           statusByGridId: {},
+          exportNodeId: null,
         }
       },
       watch: {
@@ -468,6 +470,7 @@ $(document).ready(function () {
                   this.timezones = response.data.timezones;
                   this.enableReverseLookup = response.data.parameters.enableReverseLookup;
                   this.subgrids = response.data.subgrids;
+                  this.exportNodeId = response.data.parameters.exportNodeId;
 
                   this.user = await this.getUserById(response.data.userId);
                   if (this.user) {
@@ -569,7 +572,8 @@ $(document).ready(function () {
           }
         },
         getSelectedGridInfo() {
-          return this.gridInfo[this.selectedGridId];
+          const gridInfo = this.gridInfo[this.selectedGridId];
+          return gridInfo;
         },
         checkUserSecuritySettings(infoResponse) {
           // Only force OTP on initial login, otherwise risk user losing data
@@ -1535,7 +1539,25 @@ $(document).ready(function () {
           const before = moment(d).subtract(1, 'second').format(this.i18n.timePickerFormat);
           const after = moment(d).add(1, 'second').format(this.i18n.timePickerFormat);
           return `${before} - ${after}`;
-        }
+        },
+        async export(params) {
+          this.startLoading();
+          try {
+            const response = await this.papi.post('job/', {
+              kind: 'reports',
+              nodeId: this.exportNodeId,
+              filter: {
+                parameters: params
+              }
+            });
+            if (response && response.data) {
+              this.showTip(this.i18n.exportJobEnqueued);
+            }
+          } catch (error) {
+            this.showError(error);
+          }
+          this.stopLoading();
+        },
       },
       created() {
         this.log("Initializing application components");

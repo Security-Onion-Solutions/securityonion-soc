@@ -31,114 +31,118 @@
 							</router-link>
 						</v-card-title>
 						<v-card-text>
-							<v-container v-if="$root.getSelectedGridInfo() && $root.getSelectedGridInfo().licenseKey" fluid id="licenseDetails" class="float-left">
-								<v-row class="my-1">
-									<v-col cols="3" class="pa-1 text-right font-weight-bold">{{ i18n.licenseStatus }}:</v-col>
-									<v-col cols="9" class="px-1 py-0">
-										<v-chip density="compact" small :color="$root.colorLicenseStatus($root.getSelectedGridInfo().licenseStatus)">
-											{{ $root.localizeMessage($root.getSelectedGridInfo().licenseStatus) }}
-										</v-chip>
-									</v-col>
-								</v-row>
-								<v-row class="my-1">
-									<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.mgmtMac }}:</v-col>
-									<v-col cols="9" class="pa-1">
-										{{ $root.getSelectedGridInfo().mgmtMac }}
-										<v-btn v-if="$root.getSelectedGridInfo().mgmtMac" icon variant="text" class="mx-2" density="compact" size="small" @click="$root.copyToClipboard($root.getSelectedGridInfo().mgmtMac)" data-aid="terms_license_copy_mac">
-											<v-icon>fa-copy</v-icon>
-										</v-btn>
-									</v-col>
-								</v-row>
-								<span v-if="$root.getSelectedGridInfo().licenseKey && ($root.getSelectedGridInfo().licenseStatus != LICENSE_STATUS_UNPROVISIONED && $root.getSelectedGridInfo().licenseStatus != LICENSE_STATUS_INVALID)">
+							<div v-if="$root.getSelectedGridInfo()" class="licenseDetailsWrapper">
+								<v-container fluid id="licenseDetails1" class="licenseDetails">
+									<div v-if="$root.getSelectedGridInfo().licenseKey && ($root.getSelectedGridInfo().licenseStatus != LICENSE_STATUS_UNPROVISIONED && $root.getSelectedGridInfo().licenseStatus != LICENSE_STATUS_INVALID)">
+										<v-row class="my-1">
+											<v-col cols="3" class="pa-1 text-right font-weight-bold">{{ i18n.licenseStatus }}:</v-col>
+											<v-col cols="9" class="px-1 py-0">
+												<v-chip density="compact" small :color="$root.colorLicenseStatus($root.getSelectedGridInfo().licenseStatus)">
+													{{ $root.localizeMessage($root.getSelectedGridInfo().licenseStatus) }}
+												</v-chip>
+											</v-col>
+										</v-row>
+										<v-row class="my-1">
+											<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.mgmtMac }}:</v-col>
+											<v-col cols="9" class="pa-1">
+												{{ $root.getSelectedGridInfo().mgmtMac }}
+												<v-btn v-if="$root.getSelectedGridInfo().mgmtMac" icon variant="text" class="mx-2" density="compact" size="small" @click="$root.copyToClipboard($root.getSelectedGridInfo().mgmtMac)" data-aid="terms_license_copy_mac">
+													<v-icon>fa-copy</v-icon>
+												</v-btn>
+											</v-col>
+										</v-row>
+										<span>
+											<v-row class="my-1">
+												<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.licenseId }}:</v-col>
+												<v-col cols="9" class="pa-1">{{ $root.getSelectedGridInfo().licenseKey.id }}</v-col>
+											</v-row>
+											<v-row class="my-1">
+												<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.licenseName }}:</v-col>
+												<v-col cols="9" class="pa-1">{{ $root.getSelectedGridInfo().licenseKey.name }}</v-col>
+											</v-row>
+											<v-row class="my-1">
+												<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.licensee }}:</v-col>
+												<v-col cols="9" class="pa-1">{{ $root.getSelectedGridInfo().licenseKey.licensee }}</v-col>
+											</v-row>
+											<v-row class="my-1">
+												<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.licenseEffective }}:</v-col>
+												<v-col cols="9" class="pa-1">{{ formatDateTime($root.getSelectedGridInfo().licenseKey.effective) }}</v-col>
+											</v-row>
+											<v-row class="my-1">
+												<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.licenseExpiration }}:</v-col>
+												<v-col cols="9" class="pa-1">{{ formatDateTime($root.getSelectedGridInfo().licenseKey.expiration) }}</v-col>
+											</v-row>
+										</span>
+									</div>
+									<v-sheet v-else id="proFeatures" rounded="lg" class="marketing pa-4 ma-4" elevation="10">
+										<h3>You're missing out on some Pro features!</h3>
+										<ul class="my-2">
+											<li>OpenID Connect 3rd-party authentication</li>
+											<li>Disk encryption</li>
+											<li>FIPS OS compliance</li>
+											<li>STIG OS compliance</li>
+											<li>External notifications</li>
+											<li>Time tracking inside of Cases</li>
+											<li>Guaranteed Message Delivery</li>
+											<li>External API</li>
+											<li>Active Query Management</li>
+											<li>Manager of Managers*</li>
+											<li>AI/LLM MCP Server</li>
+											<li>Splunk App†</li>
+										</ul>
+										To learn more about these Pro features, please visit our website:
+										<a href="https://securityonion.com/pro">https://securityonion.com/pro</a>
+										<p class="mt-2">
+											* Additional licensing requirements may apply
+											<br/>
+											† Security Onion Solutions does not provide support for this feature
+										</p>
+									</v-sheet>
+								</v-container>
+								<v-container v-if="$root.getSelectedGridInfo().licenseKey && ($root.getSelectedGridInfo().licenseStatus != LICENSE_STATUS_UNPROVISIONED && $root.getSelectedGridInfo().licenseStatus != LICENSE_STATUS_INVALID)" fluid id="licenseDetails2" class="licenseDetails">
 									<v-row class="my-1">
-										<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.licenseId }}:</v-col>
-										<v-col cols="9" class="pa-1">{{ $root.getSelectedGridInfo().licenseKey.id }}</v-col>
+										<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.userLimit }}:</v-col>
+										<v-col v-if="$root.getSelectedGridInfo().licenseKey.users > 0" cols="9" class="pa-1">{{ $root.getSelectedGridInfo().licenseKey.users }}</v-col>
+										<v-col v-else cols="9" class="pa-1">{{ i18n.unlimited }}</v-col>
 									</v-row>
 									<v-row class="my-1">
-										<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.licenseName }}:</v-col>
-										<v-col cols="9" class="pa-1">{{ $root.getSelectedGridInfo().licenseKey.name }}</v-col>
+										<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.pinnedMac }}:</v-col>
+										<v-col v-if="$root.getSelectedGridInfo().licenseKey.mgmtMac" cols="9" class="pa-1">{{ $root.getSelectedGridInfo().licenseKey.mgmtMac }}</v-col>
+										<v-col v-else cols="9" class="pa-1">{{ i18n.unlocked }}</v-col>
 									</v-row>
 									<v-row class="my-1">
-										<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.licensee }}:</v-col>
-										<v-col cols="9" class="pa-1">{{ $root.getSelectedGridInfo().licenseKey.licensee }}</v-col>
+										<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.nodeLimit }}:</v-col>
+										<v-col v-if="$root.getSelectedGridInfo().licenseKey.nodes > 0" cols="9" class="pa-1">{{ $root.getSelectedGridInfo().licenseKey.nodes }}</v-col>
+										<v-col v-else cols="9" class="pa-1">{{ i18n.unlimited }}</v-col>
 									</v-row>
 									<v-row class="my-1">
-										<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.licenseEffective }}:</v-col>
-										<v-col cols="9" class="pa-1">{{ formatDateTime($root.getSelectedGridInfo().licenseKey.effective) }}</v-col>
+										<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.subgridLimit }}:</v-col>
+										<v-col cols="9" class="pa-1">{{ $root.getSelectedGridInfo().licenseKey.subgrids }}</v-col>
 									</v-row>
 									<v-row class="my-1">
-										<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.licenseExpiration }}:</v-col>
-										<v-col cols="9" class="pa-1">{{ formatDateTime($root.getSelectedGridInfo().licenseKey.expiration) }}</v-col>
+										<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.socUrl }}:</v-col>
+										<v-col v-if="$root.getSelectedGridInfo().licenseKey.socUrl" cols="9" class="pa-1">{{ $root.getSelectedGridInfo().licenseKey.socUrl }}</v-col>
+										<v-col v-else cols="9" class="pa-1">{{ i18n.unlocked }}</v-col>
 									</v-row>
-								</span>
-								<v-sheet v-else id="proFeatures" rounded="lg" class="marketing pa-4 ma-4" elevation="10">
-									<h3>You're missing out on some Pro features!</h3>
-									<ul class="my-2">
-										<li>OpenID Connect 3rd-party authentication</li>
-										<li>Disk encryption</li>
-										<li>FIPS OS compliance</li>
-										<li>STIG OS compliance</li>
-										<li>External notifications</li>
-										<li>Time tracking inside of Cases</li>
-										<li>Guaranteed Message Delivery</li>
-										<li>External API</li>
-										<li>Active Query Management</li>
-										<li>Manager of Managers*</li>
-										<li>AI/LLM MCP Server</li>
-										<li>Splunk App†</li>
-									</ul>
-									To learn more about these Pro features, please visit our website:
-									<a href="https://securityonion.com/pro">https://securityonion.com/pro</a>
-									<p class="mt-2">
-										* Additional licensing requirements may apply
-										<br/>
-										† Security Onion Solutions does not provide support for this feature
-									</p>
-								</v-sheet>
-							</v-container>
-							<v-container v-if="$root.getSelectedGridInfo() && $root.getSelectedGridInfo().licenseKey && ($root.getSelectedGridInfo().licenseStatus != LICENSE_STATUS_UNPROVISIONED && $root.getSelectedGridInfo().licenseStatus != LICENSE_STATUS_INVALID)" fluid id="licenseDetails" class="float">
-								<v-row class="my-1">
-									<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.userLimit }}:</v-col>
-									<v-col v-if="$root.getSelectedGridInfo().licenseKey.users > 0" cols="9" class="pa-1">{{ $root.getSelectedGridInfo().licenseKey.users }}</v-col>
-									<v-col v-else cols="9" class="pa-1">{{ i18n.unlimited }}</v-col>
-								</v-row>
-								<v-row class="my-1">
-									<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.pinnedMac }}:</v-col>
-									<v-col v-if="$root.getSelectedGridInfo().licenseKey.mgmtMac" cols="9" class="pa-1">{{ $root.getSelectedGridInfo().licenseKey.mgmtMac }}</v-col>
-									<v-col v-else cols="9" class="pa-1">{{ i18n.unlocked }}</v-col>
-								</v-row>
-								<v-row class="my-1">
-									<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.nodeLimit }}:</v-col>
-									<v-col v-if="$root.getSelectedGridInfo().licenseKey.nodes > 0" cols="9" class="pa-1">{{ $root.getSelectedGridInfo().licenseKey.nodes }}</v-col>
-									<v-col v-else cols="9" class="pa-1">{{ i18n.unlimited }}</v-col>
-								</v-row>
-								<v-row class="my-1">
-									<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.subgridLimit }}:</v-col>
-									<v-col cols="9" class="pa-1">{{ $root.getSelectedGridInfo().licenseKey.subgrids }}</v-col>
-								</v-row>
-								<v-row class="my-1">
-									<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.socUrl }}:</v-col>
-									<v-col v-if="$root.getSelectedGridInfo().licenseKey.socUrl" cols="9" class="pa-1">{{ $root.getSelectedGridInfo().licenseKey.socUrl }}</v-col>
-									<v-col v-else cols="9" class="pa-1">{{ i18n.unlocked }}</v-col>
-								</v-row>
-								<v-row class="my-1">
-									<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.dataUrl }}:</v-col>
-									<v-col v-if="$root.getSelectedGridInfo().licenseKey.dataUrl" cols="9" class="pa-1">{{ $root.getSelectedGridInfo().licenseKey.dataUrl }}</v-col>
-									<v-col v-else cols="9" class="pa-1">{{ i18n.unlocked }}</v-col>
-								</v-row>
-								<v-row class="my-1">
-									<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.features }}:</v-col>
-									<v-col v-if="$root.getSelectedGridInfo().licenseKey.features" cols="9" class="pa-1">
-										<v-chip v-for="feature in $root.getSelectedGridInfo().licenseKey.features" v-if="$root.localizeMessage(feature) != feature" small density="compact" class="ma-1">
-											{{ $root.localizeMessage(feature) }}
-										</v-chip>
-									</v-col>
-									<v-col v-else cols="9" class="pa-1">{{ i18n.all }}</v-col>
-								</v-row>
-							</v-container>
+									<v-row class="my-1">
+										<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.dataUrl }}:</v-col>
+										<v-col v-if="$root.getSelectedGridInfo().licenseKey.dataUrl" cols="9" class="pa-1">{{ $root.getSelectedGridInfo().licenseKey.dataUrl }}</v-col>
+										<v-col v-else cols="9" class="pa-1">{{ i18n.unlocked }}</v-col>
+									</v-row>
+									<v-row class="my-1">
+										<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.features }}:</v-col>
+										<v-col v-if="$root.getSelectedGridInfo().licenseKey.features" cols="9" class="pa-1">
+											<v-chip v-for="feature in $root.getSelectedGridInfo().licenseKey.features" v-if="$root.localizeMessage(feature) != feature" small density="compact" class="ma-1">
+												{{ $root.localizeMessage(feature) }}
+											</v-chip>
+										</v-col>
+										<v-col v-else cols="9" class="pa-1">{{ i18n.all }}</v-col>
+									</v-row>
+								</v-container>
+							</div>
+						</v-card-text>
 					</v-card>
 				</v-tabs-window-item>
-
 				<v-tabs-window-item value="terms">
 					<v-card variant="outlined" class="my-4 subtle-border">
 						<v-card-text>

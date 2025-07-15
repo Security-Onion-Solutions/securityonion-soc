@@ -1046,6 +1046,12 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     loadLocalSettings() {
       if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
     },
+    async exportCase() {
+      this.$root.export({
+              type: 'case',
+              id: this.caseObj.id,
+            });
+    },
     huntCase() {
       let earliest;
       for (let event of this.associations.events) {
