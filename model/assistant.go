@@ -47,8 +47,9 @@ type UsageStats struct {
 }
 
 type BalanceResponse struct {
-	CompanyID        string  `json:"company_id"`
-	Balance          float64 `json:"balance"`
-	AvailableBalance float64 `json:"available_balance"`
-	ReservedBalance  float64 `json:"reserved_balance"`
+	APIKey    string  `json:"api_key"`
+	KEYID     string  `json:"key_id"`
+	CompanyID string  `json:"company_id"`
+	Status    string  `json:"status"`
+	Balance   float64 `json:"balance"`
 }
