@@ -9,8 +9,8 @@ type ChatRequest struct {
 	Messages      []*ChatMessage `json:"messages"`
 	Model         string         `json:"model,omitempty"`
 	MaxTokens     int            `json:"max_tokens,omitempty"`
-	Temperature   float32        `json:"temperature,omitempty"`
-	TopP          float32        `json:"top_p"`
+	Temperature   float64        `json:"temperature,omitempty"`
+	TopP          float64        `json:"top_p"`
 	TopK          int            `json:"top_k"`
 	StopSequences []string       `json:"stop_sequences,omitempty"`
 	System        string         `json:"system,omitempty"`
@@ -47,9 +47,9 @@ type UsageStats struct {
 }
 
 type BalanceResponse struct {
-	APIKey    string  `json:"api_key"`
-	KEYID     string  `json:"key_id"`
-	CompanyID string  `json:"company_id"`
+	ApiKey    string  `json:"api_key"`
+	KeyId     string  `json:"key_id"`
+	CompanyId string  `json:"company_id"`
 	Status    string  `json:"status"`
 	Balance   float64 `json:"balance"`
 }
