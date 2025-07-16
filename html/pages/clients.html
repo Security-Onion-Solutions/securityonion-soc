@@ -55,7 +55,7 @@
 					</v-card-actions>
 				</v-card>
 			</v-dialog>
-			<v-dialog v-model="showCredentialsDialog" persistent max-width="390" data-aid="clients_credentials_dialog">
+			<v-dialog v-model="showCredentialsDialog" persistent max-width="450" data-aid="clients_credentials_dialog">
 				<v-card>
 					<v-card-title class="headline" v-text="i18n.clientCredentialsTitle"></v-card-title>
 					<v-card-text v-text="i18n.clientCredentialsHelp"></v-card-text>
@@ -78,6 +78,7 @@
 						</div>
 					</v-card-text>
 					<v-card-text v-text="i18n.clientCredentialsFooter"></v-card-text>
+					<v-card-text class="font-italic" v-text="i18n.clientCredentialsReminder"></v-card-text>
 					<v-card-actions>
 						<v-spacer></v-spacer>
 						<v-btn id="clients-credentials-dismiss-button" text @click.stop="dismissCredentials()" v-text="i18n.close" data-aid="clients_credentials_dialog_dismiss"></v-btn>
