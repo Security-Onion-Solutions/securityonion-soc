@@ -201,6 +201,7 @@ const i18n = {
       clientCheckHydraEnabled: 'Failed to fetch client list. Verify Security Onion Pro license key is valid and ensure Hydra config setting is enabled.',
       clientCredentialsTitle: 'API Client Credentials',
       clientCredentialsHelp: 'Copy the following API client credentials for use in your integration project.',
+      clientCredentialsReminder: 'Note that new API clients have no permissions; in the underlying screen choose the permissions desired for this API client.',
       clientCredentialsFooter: 'After closing this popup the secret will no longer be viewable. Generate a new secret in the event that this secret is compromised, lost, or if the client needs to be temporarily disabled.',
       clientDeleted: 'API client removed',
       clientId: 'Client ID',
