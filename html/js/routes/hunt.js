@@ -176,6 +176,12 @@ const huntComponent = {
     expandedEvents: [],
     eventColumnWidth: 0,
     expandedPlaybookQuestions: {},
+    
+    // AI Investigation tracking
+    aiInvestigations: {}, // Maps alert ID to investigation results
+    showAIInvestigationDialog: false,
+    selectedAIInvestigation: null,
+    aiInvestigatedFilter: false, // Client-side filter for AI investigated alerts
   }},
   created() {
     this.$root.initializeCharts();
@@ -305,6 +311,7 @@ const huntComponent = {
       this.zone = moment.tz.guess();
 
       this.loadLocalSettings();
+      this.loadAIInvestigations();
       if (this.mruQueries.length > 0 && this.isAdvanced()) {
         this.query = this.mruQueries[0];
       }
@@ -1474,6 +1481,21 @@ const huntComponent = {
       var idx = 0;
       this.groupBys = [];
       while (this.populateGroupByTable(metrics, idx++)) {};
+      
+      // Apply any existing AI investigation results to the loaded group data
+      this.applyAIInvestigationsToEvents();
+      
+      // Apply AI investigated filter if enabled
+      if (this.aiInvestigatedFilter) {
+        this.groupBys.forEach(group => {
+          if (group.data && group.data.length > 0) {
+            group.data = group.data.filter(item => {
+              const alertId = item['rule.uuid'] || item.soc_id;
+              return alertId && this.aiInvestigations[alertId];
+            });
+          }
+        });
+      }
     },
     populateGroupByTable(metrics, groupIdx) {
       const route = this;
@@ -1674,6 +1696,17 @@ const huntComponent = {
 
       this.populateEventHeaders(this.filterVisibleFields(eventModule, eventDataset, fields));
       this.eventData = records;
+      
+      // Apply any existing AI investigation results to the loaded events
+      this.applyAIInvestigationsToEvents();
+      
+      // Apply AI investigated filter if enabled
+      if (this.aiInvestigatedFilter) {
+        this.eventData = this.eventData.filter(item => {
+          const alertId = item['rule.uuid'] || item.soc_id;
+          return alertId && this.aiInvestigations[alertId];
+        });
+      }
     },
     lookupFieldValue(record, field) {
       if (field in record) {
@@ -2317,6 +2350,57 @@ const huntComponent = {
       if (localStorage[prefix + '.advanced']) this.advanced = localStorage[prefix + '.advanced'] == 'true';
 
       if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
+    },
+    
+    saveAIInvestigations() {
+      // Save AI investigation results to localStorage
+      try {
+        localStorage['aiInvestigations'] = JSON.stringify(this.aiInvestigations);
+      } catch (error) {
+        console.error('Failed to save AI investigations to localStorage:', error);
+      }
+    },
+    
+    loadAIInvestigations() {
+      // Load AI investigation results from localStorage
+      try {
+        if (localStorage['aiInvestigations']) {
+          this.aiInvestigations = JSON.parse(localStorage['aiInvestigations']);
+        }
+      } catch (error) {
+        console.error('Failed to load AI investigations from localStorage:', error);
+        this.aiInvestigations = {};
+      }
+    },
+    
+    applyAIInvestigationsToEvents() {
+      // Apply loaded AI investigation results to current event data
+      if (this.eventData && this.eventData.length > 0) {
+        this.eventData.forEach(item => {
+          const alertId = item['rule.uuid'] || item.soc_id;
+          if (alertId && this.aiInvestigations[alertId]) {
+            const investigation = this.aiInvestigations[alertId];
+            item._aiInvestigationStatus = 'completed';
+            item._aiInvestigationResult = investigation;
+          }
+        });
+      }
+      
+      // Also apply to grouped data
+      if (this.groupBys && this.groupBys.length > 0) {
+        this.groupBys.forEach(group => {
+          if (group.data && group.data.length > 0) {
+            group.data.forEach(item => {
+              const alertId = item['rule.uuid'] || item.soc_id;
+              if (alertId && this.aiInvestigations[alertId]) {
+                const investigation = this.aiInvestigations[alertId];
+                item._aiInvestigationStatus = 'completed';
+                item._aiInvestigationResult = investigation;
+              }
+            });
+          }
+        });
+      }
     },
     toggleShowSection(item) {
       if (this.isExpandedSection(item)) {
@@ -3149,7 +3233,177 @@ const huntComponent = {
       }
 
       return 'no-data';
-    }
+    },
+    // AI Investigation methods
+    startAIInvestigation(event, item, groupIdx) {
+      const alertId = item['rule.uuid'] || item.soc_id;
+      if (!alertId) {
+        this.$root.showError(this.i18n.aiInvestigationUnableToIdentify);
+        return;
+      }
+      
+      // If investigation is completed, show results
+      if (item._aiInvestigationStatus === 'completed' && item._aiInvestigationResult) {
+        this.selectedAIInvestigation = item._aiInvestigationResult;
+        this.showAIInvestigationDialog = true;
+        return;
+      }
+      
+      // Prevent multiple investigations for the same alert
+      if (item._aiInvestigationStatus === 'investigating') {
+        return;
+      }
+      
+      // Set investigation status to investigating
+      item._aiInvestigationStatus = 'investigating';
+      
+      // Call the AI investigation API
+      this.performAIInvestigation(alertId, item, groupIdx);
+    },
+    
+    async performAIInvestigation(alertId, item, groupIdx) {
+      try {
+        // Prepare the alert data for investigation
+        const alertData = {
+          alertId: alertId,
+          ruleUuid: item['rule.uuid'],
+          ruleName: item['rule.name'],
+          severity: item['event.severity_label'],
+          timestamp: item['soc_timestamp'] || item['@timestamp'],
+          sourceIp: item['source.ip'],
+          destIp: item['destination.ip'],
+          eventModule: item['event.module'],
+          eventDataset: item['event.dataset'],
+          message: item['message'],
+          alertRule: item['rule.rule'],
+          // Include other relevant fields
+          ...item
+        };
+        
+        // Create investigation message
+        const investigationMsg = `Please investigate the following Security Onion alert systematically:
+
+Alert ID: ${alertData.alertId || 'Unknown'}
+Title: ${alertData.ruleName || 'Unknown'}
+Severity: ${alertData.severity || 'Unknown'}
+Rule: ${alertData.alertRule || 'Unknown'}
+
+INVESTIGATION STEPS:
+
+1. First, fetch the complete alert details:
+`+"```mcp-tool-use\n"+`{"tool": "query_events", "arguments": {"query": "tags:alert AND log.id.uid:${alertData.alertId || 'Unknown'}", "limit": 1}}`+"\n```\n\n"+`
+2. After getting the alert, extract the rule.uuid from the alert data and use it to get the playbook questions:
+`+"```mcp-tool-use\n"+`{"tool": "get_playbook_questions", "arguments": {"alert_id": "RULE_UUID_HERE"}}`+"\n```\n\n"+`
+3. Answer each playbook question by:
+   - Running the suggested queries provided in the playbook
+   - Analyzing the results
+   - Drawing conclusions based on the evidence
+
+4. Search for related activity using queries like:
+   - Additional alerts from the same source IP
+   - Other connections to/from the involved IPs
+   - Related activity in the suggested time windows
+
+After completing your investigation and answering all playbook questions, provide your findings in the following JSON format:
+{
+  "verdict": "malicious|suspicious|benign|unknown",
+  "confidence": 0-100,
+  "severity": "critical|high|medium|low",
+  "summary": "brief summary of the alert",
+  "details": "detailed analysis",
+  "findings": ["finding 1", "finding 2"],
+  "recommendations": ["recommendation 1", "recommendation 2"],
+  "mitre_tactics": ["tactic1", "tactic2"],
+  "mitre_techniques": ["technique1", "technique2"],
+  "iocs": [
+    {"type": "ip", "value": "1.2.3.4", "direction": "source|destination"},
+    {"type": "domain", "value": "example.com"}
+  ]
+}`;
+
+        // Call the assistant API
+        const response = await this.$root.papi.post('/assistant/chat', {
+          msg: investigationMsg,
+          messages: []
+        });
+        
+        if (response.data && response.data.content && response.data.content.length > 0) {
+          const investigationResult = {
+            alertId: alertId,
+            result: response.data.content[0].text,
+            timestamp: new Date().toISOString(),
+            confidence: this.extractConfidence(response.data.content[0].text),
+            assessment: this.extractAssessment(response.data.content[0].text)
+          };
+          
+          // Store the investigation result
+          this.aiInvestigations[alertId] = investigationResult;
+          item._aiInvestigationStatus = 'completed';
+          item._aiInvestigationResult = investigationResult;
+          
+          // Save to localStorage for persistence
+          this.saveAIInvestigations();
+          
+          this.$root.showTip(this.i18n.aiInvestigationCompleted);
+        } else {
+          throw new Error('No response from AI assistant');
+        }
+        
+      } catch (error) {
+        console.error('AI Investigation failed:', error);
+        item._aiInvestigationStatus = 'error';
+        this.$root.showError(this.i18n.aiInvestigationFailed + ': ' + (error.message || this.i18n.unknownError));
+      }
+    },
+    
+    extractConfidence(text) {
+      // Try to extract confidence percentage from the AI response
+      const confidenceMatch = text.match(/(\d+)%/);
+      return confidenceMatch ? parseInt(confidenceMatch[1]) : 50;
+    },
+    
+    extractAssessment(text) {
+      // Try to extract true/false positive assessment
+      const lowerText = text.toLowerCase();
+      if (lowerText.includes('true positive') || lowerText.includes('likely malicious')) {
+        return 'true_positive';
+      } else if (lowerText.includes('false positive') || lowerText.includes('likely benign')) {
+        return 'false_positive';
+      }
+      return 'uncertain';
+    },
+    
+    getAIInvestigationButtonColor(item) {
+      switch (item._aiInvestigationStatus) {
+        case 'investigating':
+          return 'primary';
+        case 'completed':
+          if (item._aiInvestigationResult) {
+            return item._aiInvestigationResult.assessment === 'true_positive' ? 'red darken-1' :
+                   item._aiInvestigationResult.assessment === 'false_positive' ? 'yellow' : 'amber darken-1';
+          }
+          return 'secondary';
+        case 'error':
+          return 'red darken-1';
+        default:
+          return 'pink-lighten-2';
+      }
+    },
+    
+    getAIInvestigationTooltip(item) {
+      if (item._aiInvestigationResult) {
+        const result = item._aiInvestigationResult;
+        const assessmentText = result.assessment === 'true_positive' ? this.i18n.aiTruePositive :
+                              result.assessment === 'false_positive' ? this.i18n.aiFalsePositive : this.i18n.aiUncertain;
+        return `${this.i18n.aiAssessment}: ${assessmentText} (${result.confidence}% ${this.i18n.aiConfidence}) - ${this.i18n.clickToViewDetails}`;
+      }
+      return `${this.i18n.aiInvestigationCompleted} - ${this.i18n.clickToViewResults}`;
+    },
+    
+    closeAIInvestigationDialog() {
+      this.showAIInvestigationDialog = false;
+      this.selectedAIInvestigation = null;
+    },
   }
 };
 
