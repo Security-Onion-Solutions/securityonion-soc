@@ -58,18 +58,23 @@ func (mr *MockAssistantManagerMockRecorder) Balance(arg0 any) *gomock.Call {
 }
 
 // Chat mocks base method.
-func (m *MockAssistantManager) Chat(arg0 context.Context, arg1 []*model.ChatMessage) (*model.ChatResponse, error) {
+func (m *MockAssistantManager) Chat(arg0 context.Context, arg1 []*model.ChatMessage, arg2 ...model.ChatOpt) (*model.ChatResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Chat", arg0, arg1)
+	varargs := []any{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Chat", varargs...)
 	ret0, _ := ret[0].(*model.ChatResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Chat indicates an expected call of Chat.
-func (mr *MockAssistantManagerMockRecorder) Chat(arg0, arg1 any) *gomock.Call {
+func (mr *MockAssistantManagerMockRecorder) Chat(arg0, arg1 any, arg2 ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Chat", reflect.TypeOf((*MockAssistantManager)(nil).Chat), arg0, arg1)
+	varargs := append([]any{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Chat", reflect.TypeOf((*MockAssistantManager)(nil).Chat), varargs...)
 }
 
 // ChatStream mocks base method.

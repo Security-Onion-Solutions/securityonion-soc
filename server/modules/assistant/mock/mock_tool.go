@@ -86,10 +86,10 @@ func (mr *MockToolMockRecorder) GetName() *gomock.Call {
 }
 
 // GetSchema mocks base method.
-func (m *MockTool) GetSchema() string {
+func (m *MockTool) GetSchema() model.JSONSchema {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetSchema")
-	ret0, _ := ret[0].(string)
+	ret0, _ := ret[0].(model.JSONSchema)
 	return ret0
 }
 

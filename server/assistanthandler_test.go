@@ -58,7 +58,8 @@ func TestPostChat(t *testing.T) {
 	// Set up mock expectations
 	var capturedMessages []*model.ChatMessage
 	mockManager.EXPECT().Chat(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, messages []*model.ChatMessage) (*model.ChatResponse, error) {
+		func(ctx context.Context, messages []*model.ChatMessage, opts ...model.ChatOpt) (*model.ChatResponse, error) {
+			assert.Len(t, opts, 0)
 			capturedMessages = messages
 			return &model.ChatResponse{
 				Content: []*model.ChatResponseContent{
@@ -118,7 +119,8 @@ func TestPostChatWithoutHistory(t *testing.T) {
 	// Set up mock expectations
 	var capturedMessages []*model.ChatMessage
 	mockManager.EXPECT().Chat(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, messages []*model.ChatMessage) (*model.ChatResponse, error) {
+		func(ctx context.Context, messages []*model.ChatMessage, opts ...model.ChatOpt) (*model.ChatResponse, error) {
+			assert.Len(t, opts, 0)
 			capturedMessages = messages
 			return &model.ChatResponse{
 				Content: []*model.ChatResponseContent{

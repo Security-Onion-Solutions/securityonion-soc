@@ -5,22 +5,27 @@
 
 package model
 
+import "encoding/json"
+
 type ChatRequest struct {
-	Messages      []*ChatMessage `json:"messages"`
-	Model         string         `json:"model,omitempty"`
-	MaxTokens     int            `json:"max_tokens,omitempty"`
-	Temperature   float64        `json:"temperature,omitempty"`
-	TopP          float64        `json:"top_p"`
-	TopK          int            `json:"top_k"`
-	StopSequences []string       `json:"stop_sequences,omitempty"`
-	System        string         `json:"system,omitempty"`
-	UserUUID      string         `json:"user_uuid,omitempty"`
-	Stream        bool           `json:"stream,omitempty"`
+	Messages      []*ChatMessage  `json:"messages"`
+	Model         string          `json:"model,omitempty"`
+	MaxTokens     int             `json:"max_tokens,omitempty"`
+	Temperature   float64         `json:"temperature,omitempty"`
+	TopP          float64         `json:"top_p"`
+	TopK          int             `json:"top_k"`
+	StopSequences []string        `json:"stop_sequences,omitempty"`
+	System        string          `json:"system,omitempty"`
+	UserUUID      string          `json:"user_uuid,omitempty"`
+	Stream        bool            `json:"stream,omitempty"`
+	ToolConfig    json.RawMessage `json:"toolConfig,omitempty"`
 }
 
 type ChatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role       string          `json:"role"`
+	Content    string          `json:"content,omitempty"`
+	ToolUseID  string          `json:"tool_use_id,omitempty"`
+	ToolResult json.RawMessage `json:"tool_result,omitempty"`
 }
 
 type ChatResponse struct {
@@ -35,8 +40,11 @@ type ChatResponse struct {
 }
 
 type ChatResponseContent struct {
-	Type string `json:"type"`
-	Text string `json:"text"`
+	Type  string          `json:"type"`
+	Text  string          `json:"text,omitempty"`
+	ID    string          `json:"id,omitempty"`
+	Name  string          `json:"name,omitempty"`
+	Input json.RawMessage `json:"input,omitempty"`
 }
 
 type UsageStats struct {
@@ -52,4 +60,28 @@ type BalanceResponse struct {
 	CompanyId string  `json:"company_id"`
 	Status    string  `json:"status"`
 	Balance   float64 `json:"balance"`
+}
+
+type ChatOpt func(*ChatConfig)
+
+type ChatConfig struct {
+	AutoExecuteTools bool
+}
+
+func WithAutoExecuteTools(autoExecute bool) ChatOpt {
+	return func(config *ChatConfig) {
+		config.AutoExecuteTools = autoExecute
+	}
+}
+
+func ApplyChatOpts(opts ...ChatOpt) *ChatConfig {
+	config := &ChatConfig{
+		AutoExecuteTools: false, // Default to false
+	}
+
+	for _, opt := range opts {
+		opt(config)
+	}
+
+	return config
 }

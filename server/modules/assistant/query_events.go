@@ -36,54 +36,51 @@ func (t *QueryEventsTool) GetName() string {
 }
 
 func (t *QueryEventsTool) GetDescription() string {
-	return `- Execute OQL queries to retrieve Security Onion events
-- **CRITICAL**: Understanding when to use groupby_field:
-  - Use ` + "`groupby_field`" + ` when asked for: "top", "most frequent", "most common", "by count", "statistics", "summary"
-  - Do NOT use ` + "`groupby_field`" + ` when asked for: "latest", "recent", "show me", "list", "details"
-- Parameters:
-  - ` + "`query`" + ` or ` + "`oql_query`" + `: The OQL query string
-  - ` + "`groupby_field`" + `: Field to group/aggregate by (REQUIRED for frequency analysis)
-  - ` + "`start_time`" + `, ` + "`end_time`" + `: Time range (e.g., "-24h", "now")
-  - ` + "`limit`" + `: Maximum results to return
-- Examples for GROUPED queries (frequency/statistics):
-  - **"Show me the top 5 alerts"**: ` + "`" + `{"query": "tags:alert", "groupby_field": "rule.name", "limit": 5, "start_time": "-24h", "end_time": "now"}` + "`" + `
-  - **"What are the most common alert types?"**: ` + "`" + `{"query": "tags:alert", "groupby_field": "rule.name", "limit": 10}` + "`" + `
-  - **"Top source IPs by connection count"**: ` + "`" + `{"query": "tags:conn", "groupby_field": "source.ip", "limit": 10}` + "`" + `
-  - **"Most frequent DNS queries"**: ` + "`" + `{"query": "tags:dns", "groupby_field": "dns.query.name", "limit": 20}` + "`" + `
-- Examples for NON-GROUPED queries (individual events):
-  - **"Show me the latest 5 alerts"**: ` + "`" + `{"query": "tags:alert", "limit": 5}` + "`" + `
-  - **"List recent SSH connections"**: ` + "`" + `{"query": "tags:ssh", "limit": 10}` + "`" + `
-  - **"Show alert details for ID X"**: ` + "`" + `{"query": "tags:alert AND log.id.uid:\"X\"", "limit": 1}` + "`"
+	return "- Execute OQL queries to retrieve Security Onion events\n" +
+  "- **CRITICAL**: Understanding when to use groupby_field:\n" +
+  "  - Use `groupby_field` when asked for: \"top\", \"most frequent\", \"most common\", \"by count\", \"statistics\", \"summary\"\n" +
+  "  - Do NOT use `groupby_field` when asked for: \"latest\", \"recent\", \"show me\", \"list\", \"details\"\n" +
+  "- Examples for GROUPED queries (frequency/statistics):\n" +
+  "  - **\"Show me the top 5 alerts\"**: `{\"query\": \"tags:alert\", \"groupby_field\": \"rule.name\", \"limit\": 5, \"start_time\": \"-24h\", \"end_time\": \"now\"}`\n" +
+  "  - **\"What are the most common alert types?\"**: `{\"query\": \"tags:alert\", \"groupby_field\": \"rule.name\", \"limit\": 10}`\n" +
+  "  - **\"Top source IPs by connection count\"**: `{\"query\": \"tags:conn\", \"groupby_field\": \"source.ip\", \"limit\": 10}`\n" +
+  "  - **\"Most frequent DNS queries\"**: `{\"query\": \"tags:dns\", \"groupby_field\": \"dns.query.name\", \"limit\": 20}`\n" +
+  "- Examples for NON-GROUPED queries (individual events):\n" +
+  "  - **\"Show me the latest 5 alerts\"**: `{\"query\": \"tags:alert\", \"limit\": 5}`\n" +
+  "  - **\"List recent SSH connections\"**: `{\"query\": \"tags:ssh\", \"limit\": 10}`\n" +
+  "  - **\"Show alert details for ID X\"**: `{\"query\": \"tags:alert AND log.id.uid:\\\"X\\\"\", \"limit\": 1}`"
 }
 
-func (t *QueryEventsTool) GetSchema() string {
-	return `{
-		"type": "object",
-		"properties": {
-			"oql_query": {
-				"type": "string",
-				"description": "The OQL query string to execute"
+func (t *QueryEventsTool) GetSchema() model.JSONSchema {
+	return model.JSONSchema{
+		Json: &model.ToolSchema{
+			Type: "object",
+			Properties: map[string]model.ToolSchemaProperty{
+				"oql_query": {
+					Type:        "string",
+					Description: "The OQL query string to execute",
+				},
+				"start_time": {
+					Type:        "string",
+					Description: "Optional start time for the query range (e.g., \"-1h\", \"2023-10-26 10:00:00\")",
+				},
+				"end_time": {
+					Type:        "string",
+					Description: "Optional end time for the query range (e.g., \"now\", \"2023-10-26 12:00:00\")",
+				},
+				"limit": {
+					Type:        "integer",
+					Description: "The maximum number of events to return",
+					Default:     100,
+				},
+				"groupby_field": {
+					Type:        "string",
+					Description: "Optional OQL field name to group results by",
+				},
 			},
-			"start_time": {
-				"type": "string",
-				"description": "Optional start time for the query range (e.g., \"-1h\", \"2023-10-26 10:00:00\")"
-			},
-			"end_time": {
-				"type": "string",
-				"description": "Optional end time for the query range (e.g., \"now\", \"2023-10-26 12:00:00\")"
-			},
-			"limit": {
-				"type": "integer",
-				"description": "The maximum number of events to return",
-				"default": 100
-			},
-			"groupby_field": {
-				"type": "string",
-				"description": "Optional OQL field name to group results by"
-			}
+			Required: []string{"oql_query"},
 		},
-		"required": ["oql_query"]
-	}`
+	}
 }
 
 type queryEventsArgs struct {
