@@ -13,7 +13,7 @@ import (
 )
 
 type AssistantManager interface {
-	Chat(context.Context, []*model.ChatMessage) (*model.ChatResponse, error)
+	Chat(context.Context, []*model.ChatMessage, ...model.ChatOpt) (*model.ChatResponse, error)
 	ChatStream(ctx context.Context, messages []*model.ChatMessage) (*http.Response, error)
 	ExecuteTool(ctx context.Context, toolName string, params string) (*model.ToolResult, error)
 	Balance(context.Context) (*model.BalanceResponse, error)

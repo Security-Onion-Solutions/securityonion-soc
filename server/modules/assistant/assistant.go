@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"sort"
 
 	"github.com/google/uuid"
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -44,6 +45,7 @@ type AssistantCoordinator struct {
 	isRunning bool
 
 	FunctionLibrary map[string]Tool
+	toolConfig      json.RawMessage
 
 	detections.IOManager
 }
@@ -67,7 +69,45 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 	ac.apiUrl = module.GetStringDefault(config, "apiUrl", DEFAULT_APIURL)
 	ac.model = module.GetStringDefault(config, "model", DEFAULT_MODEL)
 
-	return nil
+	ac.toolConfig, err = buildToolConfig(ac.FunctionLibrary)
+
+	return err
+}
+
+func buildToolConfig(functions map[string]Tool) (json.RawMessage, error) {
+	keys := []string{}
+	for key := range functions {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	toolSpecs := make([]*model.ToolSpec, 0, len(keys))
+
+	for _, key := range keys {
+		tool := functions[key]
+
+		toolSpecs = append(toolSpecs, &model.ToolSpec{
+			Spec: model.ToolDefinition{
+				Name:        tool.GetName(),
+				Description: tool.GetDescription(),
+				InputSchema: tool.GetSchema(),
+			},
+		})
+	}
+
+	tc := &model.ToolConfig{
+		Tools: toolSpecs,
+		ToolChoice: map[string]any{
+			"auto": map[string]any{},
+		},
+	}
+
+	result, err := json.Marshal(tc)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
 func (ac *AssistantCoordinator) Start() error {
@@ -86,13 +126,15 @@ func (ac *AssistantCoordinator) IsRunning() bool {
 	return ac.isRunning
 }
 
-func (ac *AssistantCoordinator) Chat(ctx context.Context, messages []*model.ChatMessage) (*model.ChatResponse, error) {
+func (ac *AssistantCoordinator) Chat(ctx context.Context, messages []*model.ChatMessage, opts ...model.ChatOpt) (*model.ChatResponse, error) {
 	logger := log.FromContext(ctx)
 	userID := ctx.Value(web.ContextKeyRequestorId).(string)
+	config := model.ApplyChatOpts(opts...)
 
 	req := &model.ChatRequest{
-		Messages: messages,
-		UserUUID: userID,
+		Messages:   messages,
+		UserUUID:   userID,
+		ToolConfig: ac.toolConfig,
 	}
 
 	u, err := url.Parse(ac.apiUrl)
@@ -148,6 +190,37 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, messages []*model.Chat
 		return nil, err
 	}
 
+	// Check if Claude made any tool use requests and handle based on config
+	if config.AutoExecuteTools {
+		for _, content := range response.Content {
+			if content.Type == "tool_use" {
+				// Execute the tool and add result back to conversation
+				result, err := ac.ExecuteTool(ctx, content.Name, string(content.Input))
+				if err != nil {
+					logger.WithError(err).WithField("toolName", content.Name).Error("failed to execute tool")
+					continue
+				}
+
+				// Create tool result message to add to conversation history
+				toolResultJSON, _ := json.Marshal(result.Result)
+				toolResultMessage := &model.ChatMessage{
+					Role:       "user",
+					ToolUseID:  content.ID,
+					ToolResult: toolResultJSON,
+				}
+
+				// Note: This would typically be added to the messages array for the next request
+				// The calling code should handle appending this to the conversation
+				logger.WithFields(log.Fields{
+					"toolName":      content.Name,
+					"toolId":        content.ID,
+					"toolResult":    string(toolResultJSON),
+					"resultMessage": toolResultMessage,
+				}).Info("tool executed successfully for chat response")
+			}
+		}
+	}
+
 	return response, nil
 }
 
@@ -156,9 +229,10 @@ func (ac *AssistantCoordinator) ChatStream(ctx context.Context, messages []*mode
 	userID := ctx.Value(web.ContextKeyRequestorId).(string)
 
 	req := &model.ChatRequest{
-		Messages: messages,
-		UserUUID: userID,
-		Stream:   true,
+		Messages:   messages,
+		UserUUID:   userID,
+		Stream:     true,
+		ToolConfig: ac.toolConfig,
 	}
 
 	u, err := url.Parse(ac.apiUrl)

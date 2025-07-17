@@ -15,7 +15,7 @@ import (
 type Tool interface {
 	GetName() string
 	GetDescription() string
-	GetSchema() string
+	GetSchema() model.JSONSchema
 	Execute(context.Context, *server.Server, string) (*model.ToolResult, error)
 }
 
