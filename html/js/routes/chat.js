@@ -270,12 +270,75 @@ routes.push({ path: '/chat', name: 'chat', component: {
             try {
               c = JSON.parse(chunks[i]);
             } catch {
-              // probably incomplete JSON, consolidate and save for next read
-              partial = true;
-              chunks = [chunks.join('')];
-              console.log('partial found');
-
-              break;
+              // Handle partial JSON or multiple concatenated JSON objects
+              const chunk = chunks[i];
+              
+              // Try to split concatenated JSON objects by finding complete JSON boundaries
+              const splitChunks = [];
+              let currentChunk = '';
+              let braceCount = 0;
+              let inString = false;
+              let escaped = false;
+              
+              for (let j = 0; j < chunk.length; j++) {
+                const char = chunk[j];
+                currentChunk += char;
+                
+                if (escaped) {
+                  escaped = false;
+                  continue;
+                }
+                
+                if (char === '\\') {
+                  escaped = true;
+                  continue;
+                }
+                
+                if (char === '"') {
+                  inString = !inString;
+                  continue;
+                }
+                
+                if (!inString) {
+                  if (char === '{') {
+                    braceCount++;
+                  } else if (char === '}') {
+                    braceCount--;
+                    if (braceCount === 0) {
+                      // Complete JSON object found
+                      splitChunks.push(currentChunk);
+                      currentChunk = '';
+                    }
+                  }
+                }
+              }
+              
+              // If we found complete JSON objects, process them first
+              if (splitChunks.length > 0) {
+                // We successfully split concatenated JSON objects, reprocess them
+                chunks.splice(i, 1, ...splitChunks);
+                i--; // Reprocess from current position
+                
+                // If there's remaining partial content, save it for next read
+                if (currentChunk.trim()) {
+                  partial = true;
+                  chunks.push(currentChunk);
+                  console.log('partial found');
+                }
+                continue;
+              } else if (currentChunk.trim()) {
+                // No complete JSON found, treat entire chunk as partial
+                partial = true;
+                chunks = [currentChunk];
+                console.log('partial found');
+                break;
+              } else {
+                // Fallback: treat as partial
+                partial = true;
+                chunks = [chunk];
+                console.log('partial found');
+                break;
+              }
             }
 
             // handle chunk by type
