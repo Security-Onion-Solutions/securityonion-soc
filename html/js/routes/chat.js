@@ -99,7 +99,7 @@ routes.push({ path: '/chat', name: 'chat', component: {
       try {
         const response = await this.$root.papi.get('/assistant/balance');
         if (response.data) {
-          this.creditsRemaining = response.data.balance || 0;
+          this.creditsRemaining = response.data.credit_balance || 0;
         }
       } catch (error) {
         console.error('Error loading credits from API:', error);
