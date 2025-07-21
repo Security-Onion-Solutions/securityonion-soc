@@ -1111,6 +1111,20 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 		return nil, detections.ErrStateFileNoCommunity
 	}
 
+	containsLocal := lo.SomeBy(detects, func(d *model.Detection) bool {
+		return !d.IsCommunity
+	})
+
+	local := map[string]*model.Detection{} // map[publicID]*model.Detection
+	if containsLocal {
+		logger.Info("syncing non-Community rules")
+		// only fetch local lookup if we have local rules to process
+		local, err = e.srv.Detectionstore.GetAllDetections(ctx, model.WithEngine(model.EngineNameElastAlert), model.WithCommunity(false))
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	index := map[string]string{}
 	toDelete := map[string]struct{}{} // map[publicID]struct{}
 	for _, det := range community {
@@ -1149,6 +1163,17 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 
 		if !e.isRunning {
 			return nil, detections.ErrModuleStopped
+		}
+
+		if !detect.IsCommunity {
+			_, isLocal := local[detect.PublicID]
+			if isLocal {
+				logger.WithFields(log.Fields{
+					"rule.uuid": detect.PublicID,
+				}).Info("ignoring non-Community rule that has already been inserted")
+
+				continue
+			}
 		}
 
 		delete(toDelete, detect.PublicID)
