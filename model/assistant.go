@@ -59,7 +59,7 @@ type BalanceResponse struct {
 	KeyId     string  `json:"key_id"`
 	CompanyId string  `json:"company_id"`
 	Status    string  `json:"status"`
-	Balance   float64 `json:"balance"`
+	Balance   float64 `json:"credit_balance"`
 }
 
 type ChatOpt func(*ChatConfig)
