@@ -202,21 +202,34 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, messages []*model.Chat
 				}
 
 				// Create tool result message to add to conversation history
-				toolResultJSON, _ := json.Marshal(result.Result)
-				toolResultMessage := &model.ChatMessage{
-					Role:       "user",
-					ToolUseID:  content.ID,
-					ToolResult: toolResultJSON,
+				toolResultJSON, err := json.Marshal(result.Result)
+				if err != nil {
+					logger.WithError(err).WithField("toolResult", result.Result).Error("failed to marshal tool result")
+					continue
 				}
 
 				// Note: This would typically be added to the messages array for the next request
 				// The calling code should handle appending this to the conversation
 				logger.WithFields(log.Fields{
-					"toolName":      content.Name,
-					"toolId":        content.ID,
-					"toolResult":    string(toolResultJSON),
-					"resultMessage": toolResultMessage,
+					"toolName":   content.Name,
+					"toolId":     content.ID,
+					"toolResult": string(toolResultJSON),
 				}).Info("tool executed successfully for chat response")
+
+				// append to message history and recurse to send the tool result back with context
+				messages = append(messages, &model.ChatMessage{
+					Role:       "user",
+					ToolUseID:  content.ID,
+					ToolResult: toolResultJSON,
+				})
+
+				toolResponse, err := ac.Chat(ctx, messages, model.WithAutoExecuteTools(true))
+				if err != nil {
+					logger.WithError(err).Error("failed to chat with assistant after tool execution")
+					return nil, err
+				}
+
+				response = toolResponse
 			}
 		}
 	}
