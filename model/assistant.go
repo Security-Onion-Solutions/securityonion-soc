@@ -28,6 +28,66 @@ type ChatMessage struct {
 	ToolResult json.RawMessage `json:"tool_result,omitempty"`
 }
 
+func (cm *ChatMessage) MarshalJSON() ([]byte, error) {
+	if len(cm.ToolResult) > 0 {
+		return json.Marshal(struct {
+			Role    string      `json:"role"`
+			Content interface{} `json:"content"`
+		}{
+			Role: cm.Role,
+			Content: []map[string]interface{}{
+				{
+					"type":        "tool_result",
+					"tool_use_id": cm.ToolUseID,
+					"content":     cm.ToolResult,
+				},
+			},
+		})
+	}
+
+	return json.Marshal(struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	}{
+		Role:    cm.Role,
+		Content: cm.Content,
+	})
+}
+
+func (cm *ChatMessage) UnmarshalJSON(data []byte) error {
+	var temp struct {
+		Role    string      `json:"role"`
+		Content interface{} `json:"content"`
+	}
+
+	if err := json.Unmarshal(data, &temp); err != nil {
+		return err
+	}
+
+	cm.Role = temp.Role
+
+	switch content := temp.Content.(type) {
+	case string:
+		cm.Content = content
+	case []interface{}:
+		if len(content) > 0 {
+			if toolResult, ok := content[0].(map[string]interface{}); ok {
+				if toolType, exists := toolResult["type"]; exists && toolType == "tool_result" {
+					if toolUseID, exists := toolResult["tool_use_id"].(string); exists {
+						cm.ToolUseID = toolUseID
+					}
+					if toolContent, exists := toolResult["content"]; exists {
+						toolContentBytes, _ := json.Marshal(toolContent)
+						cm.ToolResult = json.RawMessage(toolContentBytes)
+					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
 type ChatResponse struct {
 	ID           string                 `json:"id"`
 	Type         string                 `json:"type"`
