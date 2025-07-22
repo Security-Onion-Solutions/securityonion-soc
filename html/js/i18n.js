@@ -241,7 +241,7 @@ const i18n = {
       chatNewChat: 'New Chat',
       chatNoHistory: 'No recent chats',
       credits: 'Credits',
-      creditsRemaining: 'Remaining',
+      creditsRemaining: 'Credits Remaining',
       close: 'Close',
       collapse: 'Collapse',
       collapseAll: 'Collapse All',
