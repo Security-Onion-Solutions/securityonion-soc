@@ -154,7 +154,6 @@ routes.push({ path: '/chat', name: 'chat', component: {
       this.messages = [...chat.messages];
       this.currentChatId = chat.id;
       this.saveCurrentChatId();
-      this.showHistoryDialog = false;
       this.scrollToBottom();
     },
     deleteChat(chatId) {
@@ -171,7 +170,6 @@ routes.push({ path: '/chat', name: 'chat', component: {
       this.currentChatId = null;
       this.saveCurrentChatId(); // Clear the saved current chat ID
       this.loadChatHistory(); // Reset to welcome message
-      this.showHistoryDialog = false;
     },
     async sendMessage() {
       if (!this.newMessage.trim()) return;
@@ -236,6 +234,7 @@ routes.push({ path: '/chat', name: 'chat', component: {
         let assistantMessage = null;
         let chunks = [];
         let partial = false;
+        let messageUsage = null;
 
         while (true) {
           // read in more messages
@@ -349,8 +348,15 @@ routes.push({ path: '/chat', name: 'chat', component: {
                 assistantMessage = {
                   role: 'assistant',
                   content: Vue.ref(''), // MUST be ref
-                  timestamp: new Date().toISOString()
+                  timestamp: new Date().toISOString(),
+                  usage: Vue.ref(null)
                 };
+
+                // Sometimes usage comes in message_start
+                if (c.message && c.message.usage) {
+                  messageUsage = c.message.usage;
+                  console.log('Usage found in message_start:', messageUsage);
+                }
 
                 this.messages.push(assistantMessage);
                 this.scrollToBottom();
@@ -365,7 +371,40 @@ routes.push({ path: '/chat', name: 'chat', component: {
 
                 break;
               case 'message_stop':
+                // Store usage information with the message if available
+                if (assistantMessage && messageUsage) {
+                  console.log('Setting usage on message:', messageUsage);
+                  // Set the ref's value
+                  assistantMessage.usage.value = messageUsage;
+                  console.log('Message after setting usage:', assistantMessage);
+                  this.$forceUpdate();
+                } else {
+                  console.log('No usage to set - assistantMessage:', !!assistantMessage, 'messageUsage:', messageUsage);
+                }
                 assistantMessage = null;
+                messageUsage = null;
+                break;
+              case 'message_delta':
+                // Handle usage information if present
+                if (c.usage) {
+                  messageUsage = c.usage;
+                  console.log('Usage found in message_delta:', messageUsage);
+                }
+                break;
+              case 'content_block_stop':
+                // Sometimes usage comes here
+                if (c.usage) {
+                  messageUsage = c.usage;
+                  console.log('Usage found in content_block_stop:', messageUsage);
+                }
+                break;
+              default:
+                // Log any unhandled event types that might contain usage
+                if (c.usage) {
+                  messageUsage = c.usage;
+                  console.log('Usage found in unhandled event type:', c.type, messageUsage);
+                }
+                console.log('Unhandled event type:', c.type, c);
                 break;
             }
           }
