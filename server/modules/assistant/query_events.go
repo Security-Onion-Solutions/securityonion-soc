@@ -8,7 +8,6 @@ package assistant
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -18,10 +17,6 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/web"
-)
-
-var (
-	ErrNoEvents = errors.New("no events found")
 )
 
 func init() {
@@ -224,7 +219,8 @@ func (t *QueryEventsTool) Execute(ctx context.Context, server *server.Server, pa
 		events := searchResults.Events
 
 		if len(events) == 0 {
-			return nil, ErrNoEvents
+			result.Result = "No events found"
+			return result, nil
 		}
 
 		logger.WithField("eventsFound", len(events)).Info("query executed successfully")
