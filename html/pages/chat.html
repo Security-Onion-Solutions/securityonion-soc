@@ -31,6 +31,70 @@
 										<span class="text-caption text-primary" v-if="message.usage && message.usage.credits">{{ message.usage.credits }} credits</span>
 									</div>
 									<div class="text-body-2" :key="message.content" v-html="formatMarkdown(message.content)"></div>
+									
+									<!-- Tool Use Display -->
+									<div v-if="message.toolUses && message.toolUses.length > 0" class="mt-3">
+										<div v-for="toolUse in message.toolUses" :key="toolUse.id" class="tool-use-card mb-2">
+											<v-card variant="outlined" class="pa-3">
+												<div class="d-flex align-center mb-2">
+													<v-icon :color="getToolStatusColor(toolUse.status)" class="mr-2" size="small">
+														{{ getToolStatusIcon(toolUse.status) }}
+													</v-icon>
+													<span class="font-weight-medium text-body-2">{{ toolUse.name }}</span>
+													<v-spacer></v-spacer>
+													<v-chip :color="getToolStatusColor(toolUse.status)" size="x-small" variant="flat">
+														{{ toolUse.status }}
+													</v-chip>
+												</div>
+												
+												<!-- Tool Parameters -->
+												<div v-if="Object.keys(toolUse.input).length > 0" class="mb-2">
+													<div class="text-caption text-medium-emphasis mb-1">Parameters:</div>
+													<v-code class="text-caption">{{ JSON.stringify(toolUse.input, null, 2) }}</v-code>
+												</div>
+												
+												<!-- Tool Approval Buttons -->
+												<div v-if="toolUse.status === 'pending_approval'" class="mb-2">
+													<div class="text-caption text-medium-emphasis mb-1">This tool wants to execute. Do you approve?</div>
+													<div class="d-flex tool-approval-buttons">
+														<v-btn
+															color="success"
+															size="small"
+															variant="flat"
+															@click="approveTool(toolUse)"
+															data-aid="approve_tool"
+														>
+															<v-icon size="small" class="mr-1">fa-check</v-icon>
+															Approve
+														</v-btn>
+														<v-btn
+															color="error"
+															size="small"
+															variant="flat"
+															@click="rejectTool(toolUse)"
+															data-aid="reject_tool"
+														>
+															<v-icon size="small" class="mr-1">fa-times</v-icon>
+															Reject
+														</v-btn>
+													</div>
+												</div>
+												
+												<!-- Tool results now appear as separate chat messages -->
+												
+												<!-- Tool Error -->
+												<div v-if="(toolUse.status === 'error' || toolUse.status === 'rejected') && toolUse.error" class="mb-2">
+													<div class="text-caption text-medium-emphasis mb-1">{{ toolUse.status === 'rejected' ? 'Rejected:' : 'Error:' }}</div>
+													<div class="text-error text-body-2">{{ toolUse.error }}</div>
+												</div>
+												
+												<!-- Execution Time -->
+												<div v-if="toolUse.completedAt" class="text-caption text-medium-emphasis">
+													Completed: {{ formatTimestamp(toolUse.completedAt) }}
+												</div>
+											</v-card>
+										</div>
+									</div>
 								</div>
 							</div>
 						</div>
