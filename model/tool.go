@@ -10,6 +10,11 @@ import (
 	"time"
 )
 
+type ToolRequest struct {
+	History []*ChatMessage  `json:"history"`
+	Params  json.RawMessage `json:"params"`
+}
+
 type ToolResult struct {
 	ToolName       string
 	Parameters     any
@@ -57,10 +62,10 @@ func (tc ToolChoice) MarshalJSON() ([]byte, error) {
 	if tc.Type == "" {
 		return []byte("null"), nil
 	}
-	
+
 	result := map[string]any{
 		tc.Type: map[string]any{},
 	}
-	
+
 	return json.Marshal(result)
 }
