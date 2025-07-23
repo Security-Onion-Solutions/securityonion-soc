@@ -37,18 +37,18 @@ func (t *QueryEventsTool) GetName() string {
 
 func (t *QueryEventsTool) GetDescription() string {
 	return "- Execute OQL queries to retrieve Security Onion events\n" +
-  "- **CRITICAL**: Understanding when to use groupby_field:\n" +
-  "  - Use `groupby_field` when asked for: \"top\", \"most frequent\", \"most common\", \"by count\", \"statistics\", \"summary\"\n" +
-  "  - Do NOT use `groupby_field` when asked for: \"latest\", \"recent\", \"show me\", \"list\", \"details\"\n" +
-  "- Examples for GROUPED queries (frequency/statistics):\n" +
-  "  - **\"Show me the top 5 alerts\"**: `{\"query\": \"tags:alert\", \"groupby_field\": \"rule.name\", \"limit\": 5, \"start_time\": \"-24h\", \"end_time\": \"now\"}`\n" +
-  "  - **\"What are the most common alert types?\"**: `{\"query\": \"tags:alert\", \"groupby_field\": \"rule.name\", \"limit\": 10}`\n" +
-  "  - **\"Top source IPs by connection count\"**: `{\"query\": \"tags:conn\", \"groupby_field\": \"source.ip\", \"limit\": 10}`\n" +
-  "  - **\"Most frequent DNS queries\"**: `{\"query\": \"tags:dns\", \"groupby_field\": \"dns.query.name\", \"limit\": 20}`\n" +
-  "- Examples for NON-GROUPED queries (individual events):\n" +
-  "  - **\"Show me the latest 5 alerts\"**: `{\"query\": \"tags:alert\", \"limit\": 5}`\n" +
-  "  - **\"List recent SSH connections\"**: `{\"query\": \"tags:ssh\", \"limit\": 10}`\n" +
-  "  - **\"Show alert details for ID X\"**: `{\"query\": \"tags:alert AND log.id.uid:\\\"X\\\"\", \"limit\": 1}`"
+		"- **CRITICAL**: Understanding when to use groupby_field:\n" +
+		"  - Use `groupby_field` when asked for: \"top\", \"most frequent\", \"most common\", \"by count\", \"statistics\", \"summary\"\n" +
+		"  - Do NOT use `groupby_field` when asked for: \"latest\", \"recent\", \"show me\", \"list\", \"details\"\n" +
+		"- Examples for GROUPED queries (frequency/statistics):\n" +
+		"  - **\"Show me the top 5 alerts\"**: `{\"query\": \"tags:alert\", \"groupby_field\": \"rule.name\", \"limit\": 5, \"start_time\": \"-24h\", \"end_time\": \"now\"}`\n" +
+		"  - **\"What are the most common alert types?\"**: `{\"query\": \"tags:alert\", \"groupby_field\": \"rule.name\", \"limit\": 10}`\n" +
+		"  - **\"Top source IPs by connection count\"**: `{\"query\": \"tags:conn\", \"groupby_field\": \"source.ip\", \"limit\": 10}`\n" +
+		"  - **\"Most frequent DNS queries\"**: `{\"query\": \"tags:dns\", \"groupby_field\": \"dns.query.name\", \"limit\": 20}`\n" +
+		"- Examples for NON-GROUPED queries (individual events):\n" +
+		"  - **\"Show me the latest 5 alerts\"**: `{\"query\": \"tags:alert\", \"limit\": 5}`\n" +
+		"  - **\"List recent SSH connections\"**: `{\"query\": \"tags:ssh\", \"limit\": 10}`\n" +
+		"  - **\"Show alert details for ID X\"**: `{\"query\": \"tags:alert AND log.id.uid:\\\"X\\\"\", \"limit\": 1}`"
 }
 
 func (t *QueryEventsTool) GetSchema() model.JSONSchema {
@@ -120,8 +120,8 @@ func (t *QueryEventsTool) Execute(ctx context.Context, server *server.Server, pa
 	result.Parameters = args
 
 	var metricLimit, eventLimit int
-	var query string
 	zone := "UTC"
+	query := args.OQLQuery
 
 	if args.Query != "" && args.OQLQuery == "" {
 		query = args.Query
