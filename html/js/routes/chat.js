@@ -531,52 +531,191 @@ routes.push({ path: '/chat', name: 'chat', component: {
       try {
         console.log('Executing tool:', toolUse.name, 'with params:', toolUse.input);
         
+        // Prepare message history for the tool request
+        const messageHistory = this.messages.map(msg => {
+          return {
+            role: msg.role,
+            content: typeof msg.content === 'object' && msg.content.value !== undefined ? msg.content.value : msg.content
+          };
+        });
+        
+        // Create ToolRequest object with history and params
+        const toolRequest = {
+          history: messageHistory,
+          params: toolUse.input
+        };
+        
+        // Use streaming for tool results
         const response = await fetch(`/api/assistant/tool/${toolUse.name}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-Srv-Token': this.$root.papi.defaults.headers.common['X-Srv-Token']
+            'X-Srv-Token': this.$root.papi.defaults.headers.common['X-Srv-Token'],
+            'Accept': 'text/event-stream'
           },
-          body: JSON.stringify(toolUse.input)
+          body: JSON.stringify(toolRequest)
         });
 
         if (!response.ok) {
           throw new Error(`Tool execution failed: ${response.statusText}`);
         }
 
-        const result = await response.json();
-        
-        // Update tool use status
+        // Update tool status to completed (tool execution itself is done)
         toolUse.status = 'completed';
-        toolUse.result = result;
         toolUse.completedAt = new Date().toISOString();
-        
-        console.log('Tool execution completed:', toolUse.name, result);
-        
-        // Extract the text content from the result
-        const resultText = this.formatToolResult(result);
-        
-        if (resultText) {
-          // Add the tool result as a new assistant message in the chat
-          const toolResultMessage = {
-            role: 'assistant',
-            content: resultText,
-            timestamp: new Date().toISOString(),
-            isToolResult: true,
-            toolName: toolUse.name,
-            toolId: toolUse.id
-          };
+
+        // Stream the AI's response to the tool result
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+
+        console.log("Streaming tool result response...");
+        let assistantMessage = null;
+        let chunks = [];
+        let partial = false;
+        let messageUsage = null;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          let data = decoder.decode(value, { stream: true });
           
-          this.messages.push(toolResultMessage);
+          const newChunks = data.split('\n\n').filter(d => d && d.startsWith('data:')).map(d => (d.startsWith("data: ") ? d.slice(6) : d));
+          
+          if (partial) {
+            newChunks[0] = chunks[0] + newChunks[0]
+            partial = false;
+          }
+
+          chunks = newChunks;
+          console.log('Tool result chunks:', chunks);
+          
+          for (let i = 0; i < chunks.length; i++) {
+            if (chunks[i] === '[DONE]') {
+              assistantMessage = null;
+              continue;
+            }
+
+            let c;
+            try {
+              c = JSON.parse(chunks[i]);
+            } catch {
+              // Handle partial JSON similar to callAIAPI
+              const chunk = chunks[i];
+              const splitChunks = [];
+              let currentChunk = '';
+              let braceCount = 0;
+              let inString = false;
+              let escaped = false;
+              
+              for (let j = 0; j < chunk.length; j++) {
+                const char = chunk[j];
+                currentChunk += char;
+                
+                if (escaped) {
+                  escaped = false;
+                  continue;
+                }
+                
+                if (char === '\\') {
+                  escaped = true;
+                  continue;
+                }
+                
+                if (char === '"') {
+                  inString = !inString;
+                  continue;
+                }
+                
+                if (!inString) {
+                  if (char === '{') {
+                    braceCount++;
+                  } else if (char === '}') {
+                    braceCount--;
+                    if (braceCount === 0) {
+                      splitChunks.push(currentChunk);
+                      currentChunk = '';
+                    }
+                  }
+                }
+              }
+              
+              if (splitChunks.length > 0) {
+                chunks.splice(i, 1, ...splitChunks);
+                i--;
+                
+                if (currentChunk.trim()) {
+                  partial = true;
+                  chunks.push(currentChunk);
+                }
+                continue;
+              } else if (currentChunk.trim()) {
+                partial = true;
+                chunks = [currentChunk];
+                break;
+              } else {
+                partial = true;
+                chunks = [chunk];
+                break;
+              }
+            }
+
+            // Handle streaming chunks for tool result response
+            switch (c.type) {
+              case 'message_start':
+                assistantMessage = {
+                  role: 'assistant',
+                  content: Vue.ref(''),
+                  timestamp: new Date().toISOString(),
+                  usage: Vue.ref(null),
+                  isToolResult: true,
+                  toolName: toolUse.name,
+                  toolId: toolUse.id
+                };
+
+                if (c.message && c.message.usage) {
+                  messageUsage = c.message.usage;
+                }
+
+                this.messages.push(assistantMessage);
+                this.scrollToBottom();
+                break;
+
+              case 'content_block_delta':
+                if (assistantMessage && c.delta.type === 'text_delta') {
+                  assistantMessage.content.value += c.delta.text;
+                  this.scrollToBottom();
+                }
+                break;
+
+              case 'message_stop':
+                if (assistantMessage && messageUsage) {
+                  assistantMessage.usage.value = messageUsage;
+                  this.$forceUpdate();
+                }
+                assistantMessage = null;
+                messageUsage = null;
+                break;
+
+              case 'message_delta':
+                if (c.usage) {
+                  messageUsage = c.usage;
+                }
+                break;
+
+              default:
+                if (c.usage) {
+                  messageUsage = c.usage;
+                }
+                break;
+            }
+          }
+
+          await this.$nextTick();
         }
         
-        // Store the tool result for potential follow-up
-        this.pendingToolResults.set(toolUse.id, {
-          tool_use_id: toolUse.id,
-          tool_result: result
-        });
-        
-        this.scrollToBottom();
+        // Update credits after tool execution
+        await this.loadCredits();
         
       } catch (error) {
         console.error('Tool execution error:', error);
@@ -586,18 +725,19 @@ routes.push({ path: '/chat', name: 'chat', component: {
         toolUse.error = error.message;
         toolUse.completedAt = new Date().toISOString();
         
+        // Add error message to chat
+        const errorMessage = {
+          role: 'assistant',
+          content: `Error executing tool "${toolUse.name}": ${error.message}`,
+          timestamp: new Date().toISOString(),
+          isToolResult: true,
+          toolName: toolUse.name,
+          toolId: toolUse.id
+        };
+        
+        this.messages.push(errorMessage);
         this.scrollToBottom();
       }
-    },
-    formatToolResult(result) {
-      if (!result) return '';
-      
-      // Extract result.content[0].text for markdown display
-      if (result && result.content && Array.isArray(result.content) && result.content.length > 0) {
-        return result.content[0].text || '';
-      }
-      
-      return '';
     },
     getToolStatusIcon(status) {
       switch (status) {
