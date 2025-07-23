@@ -18,6 +18,8 @@ routes.push({ path: '/chat', name: 'chat', component: {
     currentChatId: null,
     showHistoryDialog: false,
     creditsRemaining: 0,
+    executingTools: new Map(), // Track tool executions by ID
+    pendingToolResults: new Map(), // Store tool results waiting to be sent back
   }},
   async created() {
     this.loadChatHistory();
@@ -209,10 +211,12 @@ routes.push({ path: '/chat', name: 'chat', component: {
     async callAIAPI(userMessage) {
       try {
         // Prepare message history (exclude the current user message that was just added)
-        const messageHistory = this.messages.slice(0, -1).map(msg => ({
-          role: msg.role,
-          content: msg.content
-        }));
+        const messageHistory = this.messages.slice(0, -1).map(msg => {
+          return {
+            role: msg.role,
+            content: typeof msg.content === 'object' && msg.content.value !== undefined ? msg.content.value : msg.content
+          };
+        });
 
         let response = await fetch('/api/assistant/chat', {
           method: 'POST',
@@ -349,7 +353,8 @@ routes.push({ path: '/chat', name: 'chat', component: {
                   role: 'assistant',
                   content: Vue.ref(''), // MUST be ref
                   timestamp: new Date().toISOString(),
-                  usage: Vue.ref(null)
+                  usage: Vue.ref(null),
+                  toolUses: Vue.ref([]) // Track tool uses in this message
                 };
 
                 // Sometimes usage comes in message_start
@@ -362,11 +367,46 @@ routes.push({ path: '/chat', name: 'chat', component: {
                 this.scrollToBottom();
                 
                 break;
+              case 'content_block_start':
+                // Handle tool use blocks
+                if (c.content_block && c.content_block.type === 'tool_use') {
+                  const toolUse = {
+                    id: c.content_block.id,
+                    name: c.content_block.name,
+                    input: c.content_block.input || {},
+                    inputJson: '', // Accumulate input JSON from deltas
+                    status: 'preparing', // Start as preparing, not executing
+                    result: null,
+                    error: null,
+                    timestamp: new Date().toISOString(),
+                    blockIndex: c.index, // Store the block index for tracking
+                    approved: null // null = pending, true = approved, false = rejected
+                  };
+                  
+                  if (assistantMessage) {
+                    assistantMessage.toolUses.value.push(toolUse);
+                    this.executingTools.set(toolUse.id, toolUse);
+                    // Also track by block index for delta updates
+                    this.executingTools.set(`block_${c.index}`, toolUse);
+                    console.log('Tool use started:', toolUse);
+                    this.scrollToBottom();
+                  }
+                }
+                break;
               case 'content_block_delta':
                 if (assistantMessage && c.delta.type === 'text_delta') {
                   // update the ref's value
                   assistantMessage.content.value += c.delta.text;
                   this.scrollToBottom();
+                } else if (c.delta.type === 'input_json_delta') {
+                  // Handle tool input updates - accumulate the JSON
+                  const toolUse = this.executingTools.get(`block_${c.index}`);
+                  if (toolUse) {
+                    toolUse.inputJson += c.delta.partial_json;
+                    toolUse.status = 'preparing';
+                    console.log('Tool input delta accumulated:', toolUse.inputJson);
+                    this.scrollToBottom();
+                  }
                 }
 
                 break;
@@ -392,6 +432,27 @@ routes.push({ path: '/chat', name: 'chat', component: {
                 }
                 break;
               case 'content_block_stop':
+                // Handle tool input completion - wait for user approval
+                const toolUse = this.executingTools.get(`block_${c.index}`);
+                if (toolUse && toolUse.status === 'preparing') {
+                  try {
+                    // Parse the accumulated JSON input
+                    if (toolUse.inputJson) {
+                      toolUse.input = JSON.parse(toolUse.inputJson);
+                      console.log('Tool input complete:', toolUse.input);
+                    }
+                    
+                    // Set status to pending approval instead of executing
+                    toolUse.status = 'pending_approval';
+                    toolUse.approved = null;
+                  } catch (error) {
+                    console.error('Failed to parse tool input JSON:', error, toolUse.inputJson);
+                    toolUse.status = 'error';
+                    toolUse.error = 'Failed to parse tool input: ' + error.message;
+                  }
+                  this.scrollToBottom();
+                }
+                
                 // Sometimes usage comes here
                 if (c.usage) {
                   messageUsage = c.usage;
@@ -465,6 +526,132 @@ routes.push({ path: '/chat', name: 'chat', component: {
     },
     formatCount(count) {
       return this.$root.formatCount(count);
+    },
+    async executeTool(toolUse) {
+      try {
+        console.log('Executing tool:', toolUse.name, 'with params:', toolUse.input);
+        
+        const response = await fetch(`/api/assistant/tool/${toolUse.name}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Srv-Token': this.$root.papi.defaults.headers.common['X-Srv-Token']
+          },
+          body: JSON.stringify(toolUse.input)
+        });
+
+        if (!response.ok) {
+          throw new Error(`Tool execution failed: ${response.statusText}`);
+        }
+
+        const result = await response.json();
+        
+        // Update tool use status
+        toolUse.status = 'completed';
+        toolUse.result = result;
+        toolUse.completedAt = new Date().toISOString();
+        
+        console.log('Tool execution completed:', toolUse.name, result);
+        
+        // Extract the text content from the result
+        const resultText = this.formatToolResult(result);
+        
+        if (resultText) {
+          // Add the tool result as a new assistant message in the chat
+          const toolResultMessage = {
+            role: 'assistant',
+            content: resultText,
+            timestamp: new Date().toISOString(),
+            isToolResult: true,
+            toolName: toolUse.name,
+            toolId: toolUse.id
+          };
+          
+          this.messages.push(toolResultMessage);
+        }
+        
+        // Store the tool result for potential follow-up
+        this.pendingToolResults.set(toolUse.id, {
+          tool_use_id: toolUse.id,
+          tool_result: result
+        });
+        
+        this.scrollToBottom();
+        
+      } catch (error) {
+        console.error('Tool execution error:', error);
+        
+        // Update tool use status with error
+        toolUse.status = 'error';
+        toolUse.error = error.message;
+        toolUse.completedAt = new Date().toISOString();
+        
+        this.scrollToBottom();
+      }
+    },
+    formatToolResult(result) {
+      if (!result) return '';
+      
+      // Extract result.content[0].text for markdown display
+      if (result && result.content && Array.isArray(result.content) && result.content.length > 0) {
+        return result.content[0].text || '';
+      }
+      
+      return '';
+    },
+    getToolStatusIcon(status) {
+      switch (status) {
+        case 'preparing': return 'fa-cog';
+        case 'pending_approval': return 'fa-question-circle';
+        case 'executing': return 'fa-hourglass-half';
+        case 'completed': return 'fa-check-circle';
+        case 'error': return 'fa-exclamation-triangle';
+        case 'rejected': return 'fa-times-circle';
+        default: return 'fa-question-circle';
+      }
+    },
+    getToolStatusColor(status) {
+      switch (status) {
+        case 'preparing': return 'info';
+        case 'pending_approval': return 'warning';
+        case 'executing': return 'warning';
+        case 'completed': return 'success';
+        case 'error': return 'error';
+        case 'rejected': return 'error';
+        default: return 'info';
+      }
+    },
+    async approveTool(toolUse) {
+      try {
+        toolUse.approved = true;
+        toolUse.status = 'executing';
+        console.log('Tool approved by user:', toolUse.name);
+        await this.executeTool(toolUse);
+      } catch (error) {
+        console.error('Error approving tool:', error);
+        toolUse.status = 'error';
+        toolUse.error = 'Failed to execute approved tool: ' + error.message;
+      }
+      this.scrollToBottom();
+    },
+    rejectTool(toolUse) {
+      toolUse.approved = false;
+      toolUse.status = 'rejected';
+      toolUse.error = 'Tool execution rejected by user';
+      console.log('Tool rejected by user:', toolUse.name);
+      
+      // Add a message indicating the tool was rejected
+      const rejectionMessage = {
+        role: 'assistant',
+        content: `Tool execution for "${toolUse.name}" was rejected by the user.`,
+        timestamp: new Date().toISOString(),
+        isToolResult: true,
+        toolName: toolUse.name,
+        toolId: toolUse.id
+      };
+      
+      this.messages.push(rejectionMessage);
+      this.scrollToBottom();
     }
   }
 }});

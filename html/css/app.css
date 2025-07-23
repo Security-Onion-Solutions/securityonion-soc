@@ -1180,6 +1180,92 @@ ul ul ul {
   opacity: 0.7;
 }
 
+/* Tool Use Styling */
+.tool-use-card {
+  border-left: 3px solid rgb(var(--v-theme-primary));
+  margin-top: 8px;
+}
+
+.tool-result {
+  max-height: 300px;
+  overflow-y: auto;
+  background-color: rgba(var(--v-theme-surface-variant), 0.1);
+  border-radius: 4px;
+  padding: 8px;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.tool-result pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.tool-use-card .v-card {
+  background-color: rgba(var(--v-theme-surface), 0.8);
+  border: 1px solid rgba(var(--v-theme-outline), 0.2);
+}
+
+.tool-use-card .v-chip {
+  font-size: 10px;
+  height: 20px;
+}
+
+/* Chat message styling improvements */
+.message-item {
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Tool execution status indicators */
+.tool-executing, .tool-preparing {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.6; }
+  100% { opacity: 1; }
+}
+
+/* Tool preparing status - slower pulse */
+.tool-preparing {
+  animation: preparePulse 2s ease-in-out infinite;
+}
+
+@keyframes preparePulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.8; }
+  100% { opacity: 1; }
+}
+
+/* Tool approval buttons */
+.tool-approval-buttons {
+  gap: 8px;
+}
+
+.tool-approval-buttons .v-btn {
+  min-width: 80px;
+}
+
+/* Pending approval status animation */
+.tool-pending-approval {
+  animation: pendingPulse 2s ease-in-out infinite;
+  border-left-color: rgb(var(--v-theme-warning)) !important;
+}
+
+@keyframes pendingPulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.7; }
+  100% { opacity: 1; }
+}
+
 /* Responsive adjustments for chat layout */
 @media (max-width: 1264px) {
   .chat-history-sidebar {
