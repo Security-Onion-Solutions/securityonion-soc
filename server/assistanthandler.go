@@ -123,25 +123,17 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 	streaming := strings.EqualFold(accept, "text/event-stream")
 
 	toolName := chi.URLParam(r, "name")
+	toolReq := &model.ToolRequest{}
 
-	body, err := io.ReadAll(r.Body)
+	err := json.NewDecoder(r.Body).Decode(&toolReq)
 	if err != nil {
-		logger.WithError(err).Error("unable to read request body")
+		logger.WithError(err).Error("unable to decode request body")
 		web.Respond(w, r, http.StatusBadRequest, err)
 
 		return
 	}
 
-	var checker any
-	err = json.Unmarshal(body, &checker)
-	if err != nil {
-		logger.WithError(err).Error("request body must be valid JSON")
-		web.Respond(w, r, http.StatusBadRequest, err)
-
-		return
-	}
-
-	result, err := h.server.AssistantManager.ExecuteTool(ctx, toolName, string(body))
+	result, err := h.server.AssistantManager.ExecuteTool(ctx, toolName, string(toolReq.Params))
 	if err != nil {
 		logger.WithError(err).Error("unable to execute tool")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -157,12 +149,10 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	msgs := []*model.ChatMessage{
-		{
-			Role:    "user", // claude doesn't support roles other than "model" and "user"
-			Content: string(content),
-		},
-	}
+	msgs := append(toolReq.History, &model.ChatMessage{
+		Role:    "user",
+		Content: string(content),
+	})
 
 	if !streaming {
 		response, err := h.server.AssistantManager.Chat(ctx, msgs)
