@@ -510,6 +510,9 @@
 							<v-container fluid>
 								<v-row>
 									<v-col cols="4">
+										<v-btn :title="i18n.exportEventsHelp" class="mt-3" variant="icon" @click.stop="exportEvents" id="export-events-button" data-aid="events_export">
+											<v-icon>fa-file-export</v-icon>
+										</v-btn>
 										<template v-if="isCategory('detections') && (selectAllState || selectAllIndeterminate)">
 											<div>
 												{{ i18n.selected }}: {{ (selectAllState === true ? totalEvents : selectedCount).toLocaleString() }}

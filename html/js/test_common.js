@@ -107,6 +107,7 @@ global.Vue.createApp = function(obj) {
 
   app.i18n = global.i18n.getLocalizedTranslations('en-US');
 
+
   return app;
 };
 global.Vue.ref = ref;
@@ -280,6 +281,7 @@ require('./app.js');
 Promise.all = orig;
 
 global.FEAT_TTR = 'ttr';
+global.FEAT_RPT = 'rpt';
 global.JobStatusPending = 0;
 global.JobStatusCompleted = 1;
 global.JobStatusIncomplete = 2;

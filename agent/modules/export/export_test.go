@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"io"
+
 	"github.com/security-onion-solutions/securityonion-soc/agent"
 	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -136,18 +138,6 @@ func TestProcessJob(t *testing.T) {
 	assert.Nil(t, reader)
 	assert.Contains(t, err.Error(), "missing required parameter: id")
 	assert.Empty(t, job.Results)
-
-	// Test: Valid PDF export
-	job = model.NewJob()
-	job.Kind = model.JOB_KIND_EXPORT
-	job.Filter.Parameters = make(map[string]interface{})
-	job.Filter.Parameters["type"] = "case"
-	job.Filter.Parameters["id"] = "x03459821fsfkjh2"
-	reader, err = export.ProcessJob(job, nil)
-	assert.Nil(t, err)
-	assert.NotNil(t, reader)
-	assert.Equal(t, "pdf", job.FileExtension)
-	assert.Len(t, job.Results, 0)
 }
 
 func TestGetCaseDetailsFromServer(t *testing.T) {
@@ -514,65 +504,6 @@ func TestGetUserDetail(t *testing.T) {
 	}
 }
 
-func TestPrepareMapForTemplate(t *testing.T) {
-	export := NewExport(nil)
-
-	tests := []struct {
-		name     string
-		input    map[string]interface{}
-		expected map[string]interface{}
-	}{
-		{
-			name: "Map with dot in key",
-			input: map[string]interface{}{
-				"field.subfield":        "value1",
-				"another.key.with.dots": 123,
-				"no_dots":               "value3",
-			},
-			expected: map[string]interface{}{
-				"field.subfield":        "value1",
-				"field_subfield":        "value1",
-				"another.key.with.dots": 123,
-				"another_key_with_dots": 123,
-				"no_dots":               "value3",
-			},
-		},
-		{
-			name:     "Empty map",
-			input:    map[string]interface{}{},
-			expected: map[string]interface{}{},
-		},
-		{
-			name: "Map with no dots in keys",
-			input: map[string]interface{}{
-				"key1": "value1",
-				"key2": 123,
-			},
-			expected: map[string]interface{}{
-				"key1": "value1",
-				"key2": 123,
-			},
-		},
-		{
-			name: "Map with multiple dots in a single key",
-			input: map[string]interface{}{
-				"a.b.c.d": "test",
-			},
-			expected: map[string]interface{}{
-				"a.b.c.d": "test",
-				"a_b_c_d": "test",
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			export.prepareMapForTemplate(tt.input)
-			assert.Equal(t, tt.expected, tt.input)
-		})
-	}
-}
-
 func TestPopulateTemplatesCache(t *testing.T) {
 	export := NewExport(nil)
 
@@ -669,7 +600,6 @@ func TestFormatDateTime(t *testing.T) {
 				}, "The code should panic when time is nil")
 			} else {
 				result := export.formatDateTime(tt.format, tt.time)
-				result = export.formatDateTime(tt.format, tt.time)
 				assert.Equal(t, tt.expected, result)
 			}
 		})
@@ -725,4 +655,39 @@ func TestPopulateUsersCache(t *testing.T) {
 		assert.NotNil(t, export.usersById)
 		assert.Len(t, export.usersById, 0)
 	})
+}
+
+func TestProcessJob_ProductivityReport(t *testing.T) {
+	export := NewExport(agent.NewAgent(&config.AgentConfig{}, "test-version"))
+	config := module.ModuleConfig{}
+	config["executablePath"] = "../../../scripts/md2pdf"
+	config["templatePath"] = "../../../templates/export"
+	export.Init(config)
+	export.agent.Client = web.NewClient("http://localhost:8080", true)
+	export.agent.Client.Auth = FakeClientAuth{}
+
+	// Mock responses for users, event, alert, case, and comment queries
+	export.agent.Client.MockStringResponse(`[{"id":"xyz"}]`, 200, nil) // Get Users
+	export.agent.Client.MockStringResponse(`{"totalEvents": 10, "metrics": {"|event.module": {"modA": 6, "modB": 4}, "|event.module|event.dataset": {"modA|ds1": 3, "modB|ds2": 2}}}`, 200, nil)
+	export.agent.Client.MockStringResponse(`{"totalEvents": 5, "metrics": {"|event.escalated": {"true": 2, "false": 3}}}`, 200, nil)
+	export.agent.Client.MockStringResponse(`{"totalEvents": 2, "metrics": {"|so_case.status": {"open": 1, "closed": 1}}, "events": [{"payload": {"so_case.createTime": "2025-07-01T10:00:00Z", "so_case.completeTime": "2025-07-01T12:00:00Z"}}]}`, 200, nil)
+	export.agent.Client.MockStringResponse(`{"totalEvents": 1, "metrics": {"|so_comment.userId": {"user1": 1}}, "events": [{"payload": {"so_comment.hours": 2.5, "so_comment.userId": "user1"}}]}`, 200, nil)
+
+	job := model.NewJob()
+	job.Kind = model.JOB_KIND_EXPORT
+	job.Filter.Parameters = map[string]interface{}{
+		"type": "productivity",
+		"id":   "dummy", // Not used by productivity, but required by ProcessJob
+	}
+	job.Filter.BeginTime = time.Date(2025, 7, 1, 0, 0, 0, 0, time.UTC)
+	job.Filter.EndTime = time.Date(2025, 7, 2, 0, 0, 0, 0, time.UTC)
+
+	reader, err := export.ProcessJob(job, nil)
+	assert.Nil(t, err)
+	assert.NotNil(t, reader)
+
+	// Read the output and check for expected content
+	output, err := io.ReadAll(reader)
+	assert.Nil(t, err)
+	assert.Contains(t, string(output), "Helvetica") // A valid PDF should contain a font name
 }

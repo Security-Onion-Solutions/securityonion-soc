@@ -156,6 +156,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     analyzeJobs: {},
     // constants
     FEAT_TTR: FEAT_TTR,
+    FEAT_RPT: FEAT_RPT,
     JobStatusPending: JobStatusPending,
     JobStatusCompleted: JobStatusCompleted,
     JobStatusIncomplete: JobStatusIncomplete,

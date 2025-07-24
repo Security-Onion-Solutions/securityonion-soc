@@ -7,6 +7,7 @@
 package export
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
@@ -184,4 +185,85 @@ func TestSortRelatedEvent(t *testing.T) {
 		sortedList := export.sortRelatedEvents("fields:id", "desc", list)
 		assert.Equal(t, expected, sortedList)
 	})
+}
+
+func TestSortMetrics(t *testing.T) {
+	export := &Export{}
+
+	// Helper function to convert [10]string to []interface{}
+	convertToIfaceSlice := func(arr [10]string) []interface{} {
+		ifaceSlice := make([]interface{}, len(arr))
+		for i, v := range arr {
+			ifaceSlice[i] = v
+		}
+		return ifaceSlice
+	}
+
+	metrics := []*model.EventMetric{
+		{Keys: convertToIfaceSlice([10]string{"b", "x", "", "", "", "", "", "", "", ""}), Value: 2},
+		{Keys: convertToIfaceSlice([10]string{"a", "y", "", "", "", "", "", "", "", ""}), Value: 3},
+		{Keys: convertToIfaceSlice([10]string{"c", "z", "", "", "", "", "", "", "", ""}), Value: 1},
+	}
+
+	tests := []struct {
+		field    string
+		dir      string
+		expected []*model.EventMetric
+	}{
+		{
+			field: "key0",
+			dir:   "asc",
+			expected: []*model.EventMetric{
+				metrics[1], // "a"
+				metrics[0], // "b"
+				metrics[2], // "c"
+			},
+		},
+		{
+			field: "key0",
+			dir:   "desc",
+			expected: []*model.EventMetric{
+				metrics[2], // "c"
+				metrics[0], // "b"
+				metrics[1], // "a"
+			},
+		},
+		{
+			field: "key1",
+			dir:   "asc",
+			expected: []*model.EventMetric{
+				metrics[0], // "x"
+				metrics[1], // "y"
+				metrics[2], // "z"
+			},
+		},
+		{
+			field: "value",
+			dir:   "asc",
+			expected: []*model.EventMetric{
+				metrics[2], // 1
+				metrics[0], // 2
+				metrics[1], // 3
+			},
+		},
+		{
+			field: "value",
+			dir:   "desc",
+			expected: []*model.EventMetric{
+				metrics[1], // 3
+				metrics[0], // 2
+				metrics[2], // 1
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		// Copy metrics to avoid in-place sorting affecting other tests
+		input := make([]*model.EventMetric, len(metrics))
+		copy(input, metrics)
+		result := export.sortMetrics(tt.field, tt.dir, input)
+		if !reflect.DeepEqual(result, tt.expected) {
+			t.Errorf("sortMetrics(%q, %q) = %v, want %v", tt.field, tt.dir, result, tt.expected)
+		}
+	}
 }

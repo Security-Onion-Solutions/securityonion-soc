@@ -34,6 +34,9 @@ const jobsComponent = {
       { title: this.$root.i18n.status, value: 'status' },
       { title: this.$root.i18n.actions },
     ],
+    rules: {
+      required: value => !!value || this.$root.i18n.required,
+    },
     sortBy: [{ key: 'id', order: 'asc' }],
     itemsPerPage: 10,
     dialog: false,
@@ -46,10 +49,14 @@ const jobsComponent = {
       srcPort: null,
       dstIp: null,
       dstPort: null,
+      type: null,
       timeframe: '',
     },
     itemsPerPageOptions: [10,50,250,1000],
     kind: '',
+    reportTypes: [
+      { title: this.$root.i18n.reportProductivity, value: 'productivity' },
+    ]
   }},
   created() {
     this.loadData();
@@ -100,7 +107,7 @@ const jobsComponent = {
       this.form.srcPort = localStorage['settings.jobs.addJobForm.srcPort'];
       this.form.dstIp = localStorage['settings.jobs.addJobForm.dstIp'];
       this.form.dstPort = localStorage['settings.jobs.addJobForm.dstPort'];
-      this.form.timeframe = localStorage['settings.jobs.addJobForm.timeframe'];
+      this.form.timeframe = localStorage['settings.jobs.addJobForm.' + this.kind + '.timeframe'];
     },
     updateJob(job) {
       for (var i = 0; i < this.jobs.length; i++) {
@@ -116,9 +123,18 @@ const jobsComponent = {
       }
     },
     submitAddJob(event) {
-      this.addJob(this.form.sensorId, this.form.importId, this.form.protocol, this.form.srcIp, this.form.srcPort, this.form.dstIp, this.form.dstPort, this.form.timeframe);
+      switch (this.kind) {
+        case 'reports':
+          this.addExportJob();
+          break;
+        default:
+          this.addJob(this.form.sensorId, this.form.importId, this.form.protocol, this.form.srcIp, this.form.srcPort, this.form.dstIp, this.form.dstPort, this.form.timeframe);
+      }
       this.dialog = false;
       this.saveAddJobForm();
+
+      // Auto refresh the job list after a short delay
+      setTimeout(this.loadData, 500);
     },
     saveAddJobForm() {
       if (this.form.sensorId) localStorage['settings.jobs.addJobForm.sensorId'] = this.form.sensorId;
@@ -128,7 +144,7 @@ const jobsComponent = {
       if (this.form.srcPort) localStorage['settings.jobs.addJobForm.srcPort'] = this.form.srcPort;
       if (this.form.dstIp) localStorage['settings.jobs.addJobForm.dstIp'] = this.form.dstIp;
       if (this.form.dstPort) localStorage['settings.jobs.addJobForm.dstPort'] = this.form.dstPort;
-      if (this.form.timeframe) localStorage['settings.jobs.addJobForm.timeframe'] = this.form.timeframe;
+      if (this.form.timeframe) localStorage['settings.jobs.addJobForm.' + this.kind + '.timeframe'] = this.form.timeframe;
     },
     clearAddJobForm() {
       this.form.sensorId = null;
@@ -140,14 +156,28 @@ const jobsComponent = {
       this.form.dstPort = null;
       this.form.timeframe = '';
       $('#jobtimeframe').val('');
-      localStorage.removeItem('settings.jobs.addJobForm.sensorId');
-      localStorage.removeItem('settings.jobs.addJobForm.importId');
-      localStorage.removeItem('settings.jobs.addJobForm.protocol');
-      localStorage.removeItem('settings.jobs.addJobForm.srcIp');
-      localStorage.removeItem('settings.jobs.addJobForm.srcPort');
-      localStorage.removeItem('settings.jobs.addJobForm.dstIp');
-      localStorage.removeItem('settings.jobs.addJobForm.dstPort');
-      localStorage.removeItem('settings.jobs.addJobForm.timeframe');
+      if (this.isKind("pcap")) {
+        localStorage.removeItem('settings.jobs.addJobForm.sensorId');
+        localStorage.removeItem('settings.jobs.addJobForm.importId');
+        localStorage.removeItem('settings.jobs.addJobForm.protocol');
+        localStorage.removeItem('settings.jobs.addJobForm.srcIp');
+        localStorage.removeItem('settings.jobs.addJobForm.srcPort');
+        localStorage.removeItem('settings.jobs.addJobForm.dstIp');
+        localStorage.removeItem('settings.jobs.addJobForm.dstPort');
+      }
+      localStorage.removeItem('settings.jobs.addJobForm.' + this.kind + '.timeframe');
+    },
+    addExportJob() {
+      let beginDate;
+      let endDate;
+      if (this.form.timeframe) {
+        const [beginTime, endTime] = this.form.timeframe.split(' - ', 2);
+        beginDate = moment(beginTime, this.i18n.timePickerFormat).format(/* ISO 8601 */);
+        endDate = moment(endTime, this.i18n.timePickerFormat).format(/* ISO 8601 */);
+      }
+      this.$root.export({
+        type: this.form.type,
+      }, beginDate, endDate);
     },
     async addJob(sensorId, importId, protocol, srcIp, srcPort, dstIp, dstPort, timeframe) {
       try {
@@ -225,7 +255,7 @@ const jobsComponent = {
       return color;
     },
     isKind(kind) {
-      if (this.kind == '' && kind == 'pcap') {
+      if ((this.kind == '' || this.kind == 'jobs') && kind == 'pcap') {
         return true;
       }
       return this.kind == kind;
@@ -284,7 +314,7 @@ const jobsComponent = {
     canCreate() {
       switch(this.kind) {
         case 'reports':
-          return false;
+          return true;
       }
       return true;
     },
@@ -303,11 +333,25 @@ const jobsComponent = {
       return this.headers;        
     },
     getDescription(job) {
+      var desc = "";
       switch(this.kind) {
         case 'reports':
-          return this.i18n[job.filter.parameters.type] + " " + job.filter.parameters.id + " [" + job.fileExtension + "]";
+          desc = this.$root.localizeMessage(job.filter.parameters.type);
+          if (job.filter.parameters.id) {
+            desc += " " + job.filter.parameters.id
+          } else if (job.filter.beginTime != '0001-01-01T00:00:00Z' && job.filter.endTime != '0001-01-01T00:00:00Z') {
+            var start = moment(job.filter.beginTime).format(this.i18n.dateFormat);
+            var end = moment(job.filter.endTime).format(this.i18n.dateFormat);
+            desc += " " + start + " - " + end;
+          }
+          if (job.fileExtension != "bin") {
+            desc += " [" + this.$root.localizeMessage(job.fileExtension) + "]";
+          }
+          break;
+        default:
+          desc = JSON.stringify(job.filter.parameters);
       }
-      return job.filter.parameters;
+      return desc;
     },
   }
 };

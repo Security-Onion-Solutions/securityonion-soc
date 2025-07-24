@@ -137,7 +137,11 @@ type EventMetric struct {
 	// The field or fields (compound key) associated with this metric. Commonly referenced as "buckets".
 	Keys []interface{} `json:"keys" example:"23.1.45.212,54.3.1.120"`
 	// The computed metric value
-	Value int `json:"value" example:"55"`
+	Value float64 `json:"value" example:"55"`
+
+	// Calculated fields for reporting
+	Ratio      float64
+	Percentage float64
 }
 
 type EventRecord struct {

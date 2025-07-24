@@ -1,5 +1,5 @@
-CASE REPORT
-===========
+SECURITY ONION CASE REPORT
+==========================
 
 ## Case Details
 
@@ -35,7 +35,7 @@ CASE REPORT
 
 **Assignee:** {{getUserDetail "email" .Case.AssigneeId}}
 
-**Hours Logged:** {{.TotalHours}}
+**Hours Logged:** {{ formatNumber "%.2f" "en" .TotalHours}}
 
 ## Comments
 
@@ -46,7 +46,7 @@ CASE REPORT
 
 **Author:** {{getUserDetail "email" .UserId}}
 
-**Hours Logged:** {{.Hours}}
+**Hours Logged:** {{ formatNumber "%.2f" "en" .Hours}}
 
 {{.Description}}
 
@@ -90,7 +90,7 @@ CASE REPORT
 
 **Filename:** {{.Value}}
 
-**Size:** {{.StreamLen}}
+**Size:** {{ formatNumber "%.0d" "en" .StreamLen}} bytes
 
 **SHA256:** {{.Sha256}}
 

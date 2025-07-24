@@ -9,7 +9,6 @@ package export
 import (
 	"bytes"
 	"fmt"
-	"path/filepath"
 
 	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -17,9 +16,9 @@ import (
 
 const CASE_REPORT_TEMPLATE_NAME = "case_report.md"
 
-func (export *Export) getCaseDetailsFromServer(caseId string) (*TemplateInput, error) {
+func (export *Export) getCaseDetailsFromServer(caseId string) (*CaseTemplateInput, error) {
 
-	caseTemplateInput := &TemplateInput{}
+	caseTemplateInput := &CaseTemplateInput{}
 
 	// Get case data
 	_, err := export.agent.Client.SendAuthorizedObject("GET", fmt.Sprintf("/api/case/%s", caseId), nil, &caseTemplateInput.Case)
@@ -70,7 +69,9 @@ func (export *Export) getCaseDetailsFromServer(caseId string) (*TemplateInput, e
 	for _, event := range caseTemplateInput.RelatedEvents {
 		if len(event.Fields) > 0 {
 			// Prepare the map for template rendering (removing periods to make subfields referenceable, etc)
-			export.prepareMapForTemplate(event.Fields)
+			for key, value := range event.Fields {
+				event.Fields[export.prepareKeyForTemplate(key)] = value
+			}
 
 			// Extract the detection rule if this an alert event
 			if tags, ok := event.Fields["tags"]; ok {
@@ -117,7 +118,7 @@ func (export *Export) getCaseDetailsFromServer(caseId string) (*TemplateInput, e
 	return caseTemplateInput, nil
 }
 
-type TemplateInput struct {
+type CaseTemplateInput struct {
 	Case          *model.Case
 	Comments      []*model.Comment
 	Attachments   []*model.Artifact
@@ -142,6 +143,5 @@ func (export *Export) generateCaseReport(caseId string) ([]byte, error) {
 }
 
 func (export *Export) getCaseExportParams(templatePath string) []string {
-	path := filepath.Join(templatePath, CASE_REPORT_TEMPLATE_NAME)
-	return export.getParamsFromTemplate(path, "pdf_param", "pdf_params")
+	return export.getPdfExportParams(templatePath, CASE_REPORT_TEMPLATE_NAME)
 }

@@ -630,6 +630,12 @@ const huntComponent = {
         });
       }
     },
+    async exportEvents() {
+      this.$root.export({
+              type: 'tabular',
+              query: this.getQuery(),
+            }, this.getStartDate().format(), this.getEndDate().format());
+    },
     getPresets(kind) {
       if (this.presets && this.presets[kind]) {
         return this.presets[kind].labels;

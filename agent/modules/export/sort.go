@@ -212,6 +212,43 @@ func (export *Export) sortDetections(field string, dir string, list []*model.Det
 	return list
 }
 
+func (export *Export) sortMetrics(field string, dir string, list []*model.EventMetric) []*model.EventMetric {
+	sort.Slice(list, func(i, j int) bool {
+		a := list[i]
+		b := list[j]
+		if a == nil || b == nil {
+			return false
+		}
+		switch strings.ToLower(field) {
+		case "key0":
+			return export.compareWithDir(a.Keys[0], b.Keys[0], dir)
+		case "key1":
+			return export.compareWithDir(a.Keys[1], b.Keys[1], dir)
+		case "key2":
+			return export.compareWithDir(a.Keys[2], b.Keys[2], dir)
+		case "key3":
+			return export.compareWithDir(a.Keys[3], b.Keys[3], dir)
+		case "key4":
+			return export.compareWithDir(a.Keys[4], b.Keys[4], dir)
+		case "key5":
+			return export.compareWithDir(a.Keys[5], b.Keys[5], dir)
+		case "key6":
+			return export.compareWithDir(a.Keys[6], b.Keys[6], dir)
+		case "key7":
+			return export.compareWithDir(a.Keys[7], b.Keys[7], dir)
+		case "key8":
+			return export.compareWithDir(a.Keys[8], b.Keys[8], dir)
+		case "key9":
+			return export.compareWithDir(a.Keys[9], b.Keys[9], dir)
+		case "value", "count", "size":
+			return export.compareWithDir(a.Value, b.Value, dir)
+		default:
+			return false
+		}
+	})
+	return list
+}
+
 func (export *Export) compareWithDir(a interface{}, b interface{}, dir string) bool {
 	result := export.compare(a, b)
 	if dir == "asc" {

@@ -1540,13 +1540,15 @@ $(document).ready(function () {
           const after = moment(d).add(1, 'second').format(this.i18n.timePickerFormat);
           return `${before} - ${after}`;
         },
-        async export(params) {
+        async export(params, beginDate, endDate) {
           this.startLoading();
           try {
             const response = await this.papi.post('job/', {
               kind: 'reports',
               nodeId: this.exportNodeId,
               filter: {
+                beginTime: beginDate,
+                endTime: endDate,
                 parameters: params
               }
             });

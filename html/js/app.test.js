@@ -1117,4 +1117,52 @@ describe('export', () => {
     expect(mockShowError).not.toHaveBeenCalled();
     expect(mockStopLoading).toHaveBeenCalledTimes(1);
   });
+
+  test('should enqueue an export job with date params', async () => {
+    const mockParams = { query: 'test' };
+    const beginDate = '2025-07-01T00:00:00Z';
+    const endDate = '2025-07-24T23:59:59Z';
+    const mockResponse = { data: { jobId: '456' } };
+    const papiPostMock = mockPapi('post', mockResponse);
+
+    await app.export(mockParams, beginDate, endDate);
+
+    expect(mockStartLoading).toHaveBeenCalledTimes(1);
+    expect(papiPostMock).toHaveBeenCalledWith('job/', {
+      kind: 'reports',
+      nodeId: 'testNodeId',
+      filter: {
+        beginTime: beginDate,
+        endTime: endDate,
+        parameters: mockParams
+      }
+    });
+    expect(mockShowTip).toHaveBeenCalledWith('Export job enqueued.');
+    expect(mockShowError).not.toHaveBeenCalled();
+    expect(mockStopLoading).toHaveBeenCalledTimes(1);
+  });
+
+  test('should handle export job failure with date params', async () => {
+    const mockParams = { query: 'test' };
+    const beginDate = '2025-07-01T00:00:00Z';
+    const endDate = '2025-07-24T23:59:59Z';
+    const mockError = new Error('Export failed');
+    const papiPostMock = mockPapi('post', Promise.reject(mockError));
+
+    await app.export(mockParams, beginDate, endDate);
+
+    expect(mockStartLoading).toHaveBeenCalledTimes(1);
+    expect(papiPostMock).toHaveBeenCalledWith('job/', {
+      kind: 'reports',
+      nodeId: 'testNodeId',
+      filter: {
+        beginTime: beginDate,
+        endTime: endDate,
+        parameters: mockParams
+      }
+    });
+    expect(mockShowTip).not.toHaveBeenCalled();
+    expect(mockShowError).toHaveBeenCalledWith(mockError);
+    expect(mockStopLoading).toHaveBeenCalledTimes(1);
+  });
 });

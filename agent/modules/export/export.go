@@ -11,7 +11,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"text/template"
 	"time"
@@ -20,6 +22,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/agent"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
+	"golang.org/x/text/message"
 )
 
 const DEFAULT_EXECUTABLE_PATH = "scripts/md2pdf"
@@ -102,11 +105,6 @@ func (export *Export) ProcessJob(job *model.Job, reader io.ReadCloser) (io.ReadC
 		return reader, errors.New("missing required parameter: type")
 	}
 
-	exportId, ok := job.Filter.Parameters["id"].(string)
-	if !ok {
-		return reader, errors.New("missing required parameter: id")
-	}
-
 	export.populateCache()
 
 	if export.templates == nil {
@@ -114,7 +112,34 @@ func (export *Export) ProcessJob(job *model.Job, reader io.ReadCloser) (io.ReadC
 	}
 
 	// Generate export content
-	if exportType == "case" {
+	switch exportType {
+	// case "tabular":
+	// 	query, ok := job.Filter.Parameters["query"].(string)
+	// 	if !ok {
+	// 		return reader, errors.New("missing required parameter: query")
+	// 	}
+
+	// 	// Generate report content
+	// 	content, err := export.generateTabularReport(query, job.Filter)
+	// 	if err != nil {
+	// 		return reader, fmt.Errorf("failed to generate tabular report data: %v", err)
+	// 	}
+	// 	csvReader, size, err := export.convertToCsv(job.Id, content)
+	// 	if err != nil {
+	// 		return reader, fmt.Errorf("failed to generate CSV: %v", err)
+	// 	}
+
+	// 	job.Size = size
+	// 	job.FileExtension = "csv"
+
+	// 	// Return content as reader
+	// 	return io.NopCloser(csvReader), nil
+	case "case":
+		exportId, ok := job.Filter.Parameters["id"].(string)
+		if !ok {
+			return reader, errors.New("missing required parameter: id")
+		}
+
 		// Generate report content
 		content, err := export.generateCaseReport(exportId)
 		if err != nil {
@@ -122,6 +147,24 @@ func (export *Export) ProcessJob(job *model.Job, reader io.ReadCloser) (io.ReadC
 		}
 
 		params := export.getCaseExportParams(export.templatePath)
+		pdfReader, size, err := export.convertMdToPdf(job.Id, content, params)
+		if err != nil {
+			return reader, fmt.Errorf("failed to generate PDF: %v", err)
+		}
+
+		job.Size = size
+		job.FileExtension = "pdf"
+
+		// Return content as reader
+		return io.NopCloser(pdfReader), nil
+	case "productivity":
+		// Generate report content
+		content, err := export.generateProductivityReport(job)
+		if err != nil {
+			return reader, fmt.Errorf("failed to generate productivity report markdown: %v", err)
+		}
+
+		params := export.getProductivityExportParams(export.templatePath)
 		pdfReader, size, err := export.convertMdToPdf(job.Id, content, params)
 		if err != nil {
 			return reader, fmt.Errorf("failed to generate PDF: %v", err)
@@ -178,6 +221,8 @@ func (export *Export) populateTemplatesCache() {
 		"sortRelatedEvents": export.sortRelatedEvents,
 		"sortArtifacts":     export.sortArtifacts,
 		"sortDetections":    export.sortDetections,
+		"sortMetrics":       export.sortMetrics,
+		"formatNumber":      export.formatNumber,
 	})
 
 	var err error
@@ -188,6 +233,11 @@ func (export *Export) populateTemplatesCache() {
 	}
 
 	log.WithField("templateNames", export.templates.DefinedTemplates()).Info("Loaded export templates")
+}
+
+func (export *Export) formatNumber(format string, language string, value interface{}) string {
+	printer := message.NewPrinter(message.MatchLanguage(language))
+	return printer.Sprintf(format, value)
 }
 
 func (export *Export) formatDateTime(format string, t *time.Time) string {
@@ -218,11 +268,8 @@ func (export *Export) getUserDetail(attr string, userId string) string {
 	return userId
 }
 
-func (export *Export) prepareMapForTemplate(fields map[string]interface{}) {
-	for key, value := range fields {
-		newKey := strings.ReplaceAll(key, ".", "_")
-		fields[newKey] = value
-	}
+func (export *Export) prepareKeyForTemplate(key string) string {
+	return strings.ReplaceAll(key, ".", "_")
 }
 
 /* getParamsFromTemplate retrieves parameters from a template file.
@@ -274,11 +321,79 @@ func (export *Export) getParamsFromTemplate(filepath string, param string, param
 	return args
 }
 
+func (export *Export) getPdfExportParams(templatePath string, templateName string) []string {
+	path := filepath.Join(templatePath, templateName)
+	return export.getParamsFromTemplate(path, "pdf_param", "pdf_params")
+}
+
 func (export *Export) CleanupJob(job *model.Job) {
 }
 
 func (export *Export) GetDataEpoch() time.Time {
 	return time.Now()
+}
+
+func (export *Export) queryEventData(query string, filter *model.Filter, metricLimit int, eventLimit int, results *model.EventSearchResults) (bool, error) {
+	if filter.EndTime.IsZero() || filter.EndTime.Before(filter.BeginTime) {
+		log.WithFields(log.Fields{
+			"beginTime": filter.BeginTime,
+			"endTime":   filter.EndTime,
+		}).Info("Invalid time range for event query; defaulting to all time")
+		filter.EndTime = time.Date(2999, 12, 31, 23, 59, 59, 0, time.UTC)
+	}
+	stdDateTimeFormat := "2006-01-02 3:04:05 PM"
+	timerange := filter.BeginTime.Format(stdDateTimeFormat) + " - " + filter.EndTime.Format(stdDateTimeFormat)
+	uri := fmt.Sprintf("/api/events/?query=%s&range=%s&format=%s&zone=%s&metricLimit=%d&eventLimit=%d",
+		url.QueryEscape(query),
+		url.QueryEscape(timerange),
+		url.QueryEscape(stdDateTimeFormat),
+		"UTC",
+		metricLimit,
+		eventLimit,
+	)
+
+	exists, reqerr := export.agent.Client.SendAuthorizedObject("GET", uri, nil, results)
+	if exists && reqerr == nil {
+		for key, value := range results.Metrics {
+			results.Metrics[export.prepareKeyForTemplate(key)] = value
+		}
+	}
+
+	return exists, reqerr
+}
+
+func (export *Export) addMetric(metrics []*model.EventMetric, keys []interface{}, value float64) []*model.EventMetric {
+	for _, metric := range metrics {
+		existingKeys := fmt.Sprintf("%v", metric.Keys)
+		keysStr := fmt.Sprintf("%v", keys)
+
+		if len(metric.Keys) == len(keys) && existingKeys == keysStr {
+			metric.Value += value
+			return metrics
+		}
+	}
+	// If not found, add a new metric
+	newMetric := &model.EventMetric{
+		Keys:  keys,
+		Value: value,
+	}
+	return append(metrics, newMetric)
+}
+
+func (export *Export) expandMetrics(metrics []*model.EventMetric) []*model.EventMetric {
+	total := 0.0
+	for _, metric := range metrics {
+		total += metric.Value
+	}
+	return export.expandMetricsWithTotal(metrics, total)
+}
+
+func (export *Export) expandMetricsWithTotal(metrics []*model.EventMetric, actualTotal float64) []*model.EventMetric {
+	for _, metric := range metrics {
+		metric.Ratio = metric.Value / actualTotal
+		metric.Percentage = metric.Ratio * 100.0
+	}
+	return metrics
 }
 
 func stripTrailingSlash(path string) string {
