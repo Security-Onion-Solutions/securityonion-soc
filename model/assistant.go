@@ -21,6 +21,24 @@ type ChatRequest struct {
 	ToolConfig    json.RawMessage `json:"toolConfig,omitempty"`
 }
 
+type StoredChatMessage struct {
+	Auditable
+	ConversationId string          `json:"conversation_id"`
+	Role           string          `json:"role"`
+	Content        string          `json:"content"`
+	ToolUseID      string          `json:"tool_use_id"`
+	ToolResult     json.RawMessage `json:"tool_result"`
+}
+
+func (scm *StoredChatMessage) ToChatMessage() *ChatMessage {
+	return &ChatMessage{
+		Role:       scm.Role,
+		Content:    scm.Content,
+		ToolUseID:  scm.ToolUseID,
+		ToolResult: scm.ToolResult,
+	}
+}
+
 type ChatMessage struct {
 	Role       string          `json:"role"`
 	Content    string          `json:"content,omitempty"`
@@ -86,6 +104,16 @@ func (cm *ChatMessage) UnmarshalJSON(data []byte) error {
 	}
 
 	return nil
+}
+
+func (cm *ChatMessage) PrepareForStorage(convId string) *StoredChatMessage {
+	return &StoredChatMessage{
+		ConversationId: convId,
+		Role:           cm.Role,
+		Content:        cm.Content,
+		ToolUseID:      cm.ToolUseID,
+		ToolResult:     cm.ToolResult,
+	}
 }
 
 type ChatResponse struct {
