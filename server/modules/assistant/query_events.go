@@ -251,6 +251,7 @@ func (t *QueryEventsTool) Execute(ctx context.Context, server *server.Server, pa
 func filterEvents(events []*model.EventRecord) []map[string]any {
 	// Default fields from Python implementation
 	defaultFields := []string{
+		"_id",
 		"@timestamp",
 		"client.name",
 		"destination.ip", "destination.port",

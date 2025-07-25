@@ -37,6 +37,7 @@ type Server struct {
 	Eventstore       Eventstore
 	Casestore        Casestore
 	Detectionstore   Detectionstore
+	Assistantstore   Assistantstore
 	Configstore      Configstore
 	GridMembersstore GridMembersstore
 	Metrics          Metrics

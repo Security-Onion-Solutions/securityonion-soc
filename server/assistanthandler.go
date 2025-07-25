@@ -18,6 +18,7 @@ import (
 
 	"github.com/apex/log"
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 )
 
 type AssistantHandler struct {
@@ -45,11 +46,12 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	logger := log.FromContext(ctx)
 
 	accept := strings.TrimSpace(r.Header.Get("Accept"))
-	streaming := strings.EqualFold(accept, "text/event-stream")
+	streaming := false // strings.EqualFold(accept, "text/event-stream")
 
 	type TempBody struct {
-		Msg      string               `json:"msg"`
-		Messages []*model.ChatMessage `json:"messages,omitempty"`
+		Msg            string               `json:"msg"`
+		Messages       []*model.ChatMessage `json:"messages"`
+		ConversationId string               `json:"conversationId"`
 	}
 
 	tb := &TempBody{}
@@ -61,23 +63,25 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Use provided messages if available, otherwise create from current message
-	var messages []*model.ChatMessage
-	if len(tb.Messages) > 0 {
-		// Add the new user message to the existing conversation
-		messages = append(tb.Messages, &model.ChatMessage{
-			Role:    "user",
-			Content: tb.Msg,
-		})
-	} else {
-		// Fallback to single message for backward compatibility
-		messages = []*model.ChatMessage{
-			{
-				Role:    "user",
-				Content: tb.Msg,
-			},
-		}
+	if tb.ConversationId == "" {
+		tb.ConversationId = uuid.NewString()
 	}
+
+	newMsg := &model.ChatMessage{
+		Role:    "user",
+		Content: tb.Msg,
+	}
+
+	err = h.server.Assistantstore.SaveChat(ctx, newMsg.PrepareForStorage(tb.ConversationId))
+	if err != nil {
+		logger.WithError(err).Error("unable to save chat message")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+
+		return
+	}
+
+	// Use provided messages if available, otherwise create from current message
+	messages := append(tb.Messages, newMsg)
 
 	_, ok := w.(http.Flusher)
 	if streaming && !ok {
@@ -149,10 +153,12 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	msgs := append(toolReq.History, &model.ChatMessage{
+	toolMsg := &model.ChatMessage{
 		Role:    "user",
 		Content: string(content),
-	})
+	}
+
+	msgs := append(toolReq.History, toolMsg)
 
 	if !streaming {
 		response, err := h.server.AssistantManager.Chat(ctx, msgs)
