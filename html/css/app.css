@@ -1066,3 +1066,15 @@ ul ul ul {
 .center-self-flex {
   justify-self: center;
 }
+
+.has-answers {
+  border-left: 3px solid #2196F3;
+}
+
+.no-data {
+  border-left: 3px solid #FF9800;
+}
+
+.has-error {
+  border-left: 3px solid #FF0000;
+}
