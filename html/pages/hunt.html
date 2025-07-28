@@ -334,7 +334,7 @@
 												<tr>
 													<td :colspan="columns.length" class="px-0" :data-aid="'events_fields_' + category">
 														<div>
-															<v-tabs :height="isCategory('alerts') ? undefined : 0" v-model="activeTabs[item._index]" @update:model-value="if (activeTabs[item._index] === 'playbook') loadPlaybook(item.newest);">
+															<v-tabs :height="isCategory('alerts') ? undefined : 0" v-model="activeTabs[item._index]" @update:model-value="if (activeTabs[item._index] === 'playbook') loadPlaybook(item.newest, item._index);">
 																<v-tab id="alerts_alertsDetailTab" value="alert" :class="{ 'theme-primary': activeTabs[item._index] === 'alert' }" :style="{ 'width': (eventColumnWidth * 0.5 - 28) + 'px' }" data-aid="alerts_agg_alertDetailsTab">
 																	<v-icon class="tab-icon">fa-bell</v-icon>
 																	<div class="d-none d-lg-block">{{i18n.alertDetails}}</div>
@@ -343,10 +343,10 @@
 																	<v-icon class="tab-icon">fa-book</v-icon>
 																	<div class="d-none d-lg-block">{{i18n.guidedAnalysis}}</div>
 																	<template #append>
-																		<v-btn class="ml-9" variant="text" size="small" icon @click="toggleAllQuestions(item, index, false)" aria-label="collapse all" data-aid="alerts_agg_playbooks_collapseAll">
+																		<v-btn class="ml-9" variant="text" size="small" icon @click="toggleAllQuestions(item, item._index, false)" aria-label="collapse all" data-aid="alerts_agg_playbooks_collapseAll">
 																			<v-icon>fa-window-minimize</v-icon>
 																		</v-btn>
-																		<v-btn variant="text" size="small" icon @click="toggleAllQuestions(item, index, true)" aria-label="expand all" data-aid="alerts_agg_playbooks_expandAll">
+																		<v-btn variant="text" size="small" icon @click="toggleAllQuestions(item, item._index, true)" aria-label="expand all" data-aid="alerts_agg_playbooks_expandAll">
 																			<v-icon>fa-window-maximize</v-icon>
 																		</v-btn>
 																	</template>
@@ -381,96 +381,94 @@
 																			<v-icon class="mr-3" data-aid="playbook_grouped_ai_indicator">fa-flask</v-icon>
 																			<span v-html="i18n.playbooksAi"  data-aid="playbook_grouped_ai_text"></span>
 																		</div>
-																		<v-expansion-panels @update:model-value="expandedPlaybookQuestions[index] = $event" :model-value="expandedPlaybookQuestions[index]" variant="accordion" multiple static="true">
-																			<template v-for="playbook in item.newest.playbooks">
-																				<v-expansion-panel v-for="question in playbook.questions">
-																					<v-expansion-panel-title class="italic ws-normal spacious-lines" #default="{ expanded }">
-																						<v-icon class="theme-icon mx-4" data-aid="playbook_grouped_question_title">
-																							<template v-if="expanded">fa-angle-down</template>
-																							<template v-else>fa-angle-right</template>
-																						</v-icon>
-																						{{question.question}}
-																					</v-expansion-panel-title>
-																					<v-expansion-panel-text class="pl-13 ws-normal">
-																						<div class="font-weight-bold font-italic" data-aid="playbook_grouped_question_context_label">{{i18n.context}}</div>
-																						<div class="italic" data-aid="playbook_grouped_question_context">{{question.context}}</div>
-																						<div class="italic my-4" data-aid="playbook_grouped_question_daterange">{{i18n.dateRange}}: {{question.range || i18n.event}}</div>
-																						<v-row no-gutters class="mb-5">
-																							<v-col cols="auto">
-																								<v-btn id="hunt-question" icon size="small" variant="text" :href="$router.resolve(buildHuntQuestionParams(question, item.newest)).href" target="_blank" class="cursor-pointer" data-aid="playbook_grouped_hunt_question">
-																									<v-icon>fa-crosshairs</v-icon>
-																								</v-btn>
-																							</v-col>
-																							<v-col style="align-content: center;" data-aid="playbook_grouped_question_query">
-																								{{ question.filledOQL }}
-																							</v-col>
-																						</v-row>
-																						<template v-if="question.answers">
-																							<span class="font-weight-bold font-italic">
-																								{{ i18n.instantInsight }}
-																							</span>
-																							<br/>
-																							<span class="italic" data-aid="playbook_grouped_event_timestamp">
-																								{{ i18n.eventOccurredAt }} {{ formatTimestamp(getEventTimestamp(item.newest)) }}
-																							</span>
-																							<table v-if="question.isAggregate" class="simple-table">
-																								<thead>
-																									<tr>
-																										<th data-aid="playbook_grouped_instantinsights_aggregate_header_count">
-																											{{ i18n.count }}
-																										</th>
-																										<th v-for="field in question.fields" :key="field" :data-aid="'playbook_grouped_instantinsights_aggregate_header_' + field">
-																											{{ field }}
-																										</th>
-																									</tr>
-																								</thead>
-																								<tbody>
-																									<tr v-for="agg in question.answers">
-																										<td class="text-right" data-aid="playbook_grouped_instantinsights_aggregate_answer_count">
-																											{{ agg.value }}
-																										</td>
-																										<td v-for="value in agg.keys" data-aid="playbook_grouped_instantinsights_aggregate_answer">
-																											{{ translateValue(value) }}<span class="resolved-host" v-if="$root.pickHostname(value)"> - {{ $root.pickHostname(value) }}</span>
-																										</td>
-																									</tr>
-																									<tr v-if="question.answers && question.answers.length === 0">
-																										<td colspan="100%" class="text-center" data-aid="playbook_grouped_instantinsights_aggregate_nodata">
-																											{{ question.error ? i18n.error : i18n.noData }}
-																										</td>
-																									</tr>
-																								</tbody>
-																							</table>
-																							<table v-else class="simple-table">
-																								<thead>
-																									<tr>
-																										<th data-aid="playbook_grouped_instantinsights_header_timestamp">
-																											{{ i18n.timestamp }}
-																										</th>
-																										<th v-for="field in question.fields" :key="field" :data-aid="'playbook_grouped_instantinsights_header_' + field">
-																											{{ field }}
-																										</th>
-																									</tr>
-																								</thead>
-																								<tbody>
-																									<tr v-for="answer in question.answers" :key="answer.id">
-																										<td class="text-normal" data-aid="playbook_grouped_instantinsights_result_timestamp">
-																											{{ formatTimestamp(getEventTimestamp(answer.payload)) }}
-																										</td>
-																										<td v-for="field in question.fields" :key="field" data-aid="playbook_grouped_instantinsights_result">
-																											{{ translateValue(getEventField(answer.payload, field)) }}<span class="resolved-host" v-if="$root.pickHostname(getEventField(answer.payload, field))"> - {{ $root.pickHostname(getEventField(answer.payload, field)) }}</span>
-																										</td>
-																									</tr>
-																									<tr v-if="question.answers && question.answers.length === 0">
-																										<td colspan="100%" class="text-center" data-aid="playbook_grouped_instantinsights_nodata">
-																											{{ question.error ? i18n.error : i18n.noData }}
-																										</td>
-																									</tr>
-																								</tbody>
-																							</table>
-																						</template>
-																					</v-expansion-panel-text>
-																				</v-expansion-panel>
-																			</template>
+																		<v-expansion-panels @update:model-value="expandedPlaybookQuestions[item._index] = $event" :model-value="expandedPlaybookQuestions[item._index]" variant="accordion" multiple static="true">
+																			<v-expansion-panel v-for="question in item.newest.questions">
+																				<v-expansion-panel-title :class="['italic', 'ws-normal', 'spacious-lines', 'font-weight-bold', pickQuestionColor(question)]" #default="{ expanded }">
+																					<v-icon class="theme-icon mx-4" data-aid="playbook_grouped_question_title">
+																						<template v-if="expanded">fa-angle-down</template>
+																						<template v-else>fa-angle-right</template>
+																					</v-icon>
+																					{{question.question}}
+																				</v-expansion-panel-title>
+																				<v-expansion-panel-text class="pl-13 ws-normal">
+																					<div class="font-weight-bold font-italic" data-aid="playbook_grouped_question_context_label">{{i18n.context}}</div>
+																					<div class="italic" data-aid="playbook_grouped_question_context">{{question.context}}</div>
+																					<div class="italic my-4" data-aid="playbook_grouped_question_daterange">{{i18n.dateRange}}: {{question.range || i18n.event}}</div>
+																					<v-row no-gutters class="mb-5">
+																						<v-col cols="auto">
+																							<v-btn id="hunt-question" icon size="small" variant="text" :href="$router.resolve(buildHuntQuestionParams(question, item.newest)).href" target="_blank" class="cursor-pointer" data-aid="playbook_grouped_hunt_question">
+																								<v-icon>fa-crosshairs</v-icon>
+																							</v-btn>
+																						</v-col>
+																						<v-col style="align-content: center;" data-aid="playbook_grouped_question_query">
+																							{{ question.filledOQL }}
+																						</v-col>
+																					</v-row>
+																					<template v-if="question.answers">
+																						<span class="font-weight-bold font-italic">
+																							{{ i18n.instantInsight }}
+																						</span>
+																						<br/>
+																						<span class="italic" data-aid="playbook_grouped_event_timestamp">
+																							{{ i18n.eventOccurredAt }} {{ formatTimestamp(getEventTimestamp(item.newest)) }}
+																						</span>
+																						<table v-if="question.isAggregate" class="simple-table">
+																							<thead>
+																								<tr>
+																									<th data-aid="playbook_grouped_instantinsights_aggregate_header_count">
+																										{{ i18n.count }}
+																									</th>
+																									<th v-for="field in question.fields" :key="field" :data-aid="'playbook_grouped_instantinsights_aggregate_header_' + field">
+																										{{ field }}
+																									</th>
+																								</tr>
+																							</thead>
+																							<tbody>
+																								<tr v-for="agg in question.answers">
+																									<td class="text-right" data-aid="playbook_grouped_instantinsights_aggregate_answer_count">
+																										{{ agg.value }}
+																									</td>
+																									<td v-for="value in agg.keys" data-aid="playbook_grouped_instantinsights_aggregate_answer">
+																										{{ translateValue(value) }}<span class="resolved-host" v-if="$root.pickHostname(value)"> - {{ $root.pickHostname(value) }}</span>
+																									</td>
+																								</tr>
+																								<tr v-if="question.answers && question.answers.length === 0">
+																									<td colspan="100%" class="text-center" data-aid="playbook_grouped_instantinsights_aggregate_nodata">
+																										{{ question.error ? i18n.error : i18n.noData }}
+																									</td>
+																								</tr>
+																							</tbody>
+																						</table>
+																						<table v-else class="simple-table">
+																							<thead>
+																								<tr>
+																									<th data-aid="playbook_grouped_instantinsights_header_timestamp">
+																										{{ i18n.timestamp }}
+																									</th>
+																									<th v-for="field in question.fields" :key="field" :data-aid="'playbook_grouped_instantinsights_header_' + field">
+																										{{ field }}
+																									</th>
+																								</tr>
+																							</thead>
+																							<tbody>
+																								<tr v-for="answer in question.answers" :key="answer.id">
+																									<td class="text-normal" data-aid="playbook_grouped_instantinsights_result_timestamp">
+																										{{ formatTimestamp(getEventTimestamp(answer.payload)) }}
+																									</td>
+																									<td v-for="field in question.fields" :key="field" data-aid="playbook_grouped_instantinsights_result">
+																										{{ translateValue(getEventField(answer.payload, field)) }}<span class="resolved-host" v-if="$root.pickHostname(getEventField(answer.payload, field))"> - {{ $root.pickHostname(getEventField(answer.payload, field)) }}</span>
+																									</td>
+																								</tr>
+																								<tr v-if="question.answers && question.answers.length === 0">
+																									<td colspan="100%" class="text-center" data-aid="playbook_grouped_instantinsights_nodata">
+																										{{ question.error ? i18n.error : i18n.noData }}
+																									</td>
+																								</tr>
+																							</tbody>
+																						</table>
+																					</template>
+																				</v-expansion-panel-text>
+																			</v-expansion-panel>
 																		</v-expansion-panels>
 																	</template>
 																	<template v-else-if="item.newest.playbookErr">
@@ -640,7 +638,7 @@
 									<tr>
 										<td :colspan="columns.length" class="px-0" :data-aid="'events_fields_' + category">
 											<div>
-												<v-tabs :height="isCategory('alerts') ? undefined : 0" v-model="activeTabs[item._index]" @update:model-value="if (activeTabs[item._index] === 'playbook') loadPlaybook(item);">
+												<v-tabs :height="isCategory('alerts') ? undefined : 0" v-model="activeTabs[item._index]" @update:model-value="if (activeTabs[item._index] === 'playbook') loadPlaybook(item, item._index);">
 													<v-tab id="alerts_alertsDetailTab" value="alert" :class="{ 'theme-primary': activeTabs[item._index] === 'alert' }" :style="{ 'width': (this.eventColumnWidth / 2) + 'px' }" data-aid="alerts_alertDetailsTab">
 														<v-icon class="tab-icon">fa-bell</v-icon>
 														<div class="d-none d-lg-block">{{i18n.alertDetails}}</div>
@@ -649,10 +647,10 @@
 														<v-icon class="tab-icon">fa-book</v-icon>
 														<div class="d-none d-lg-block">{{i18n.guidedAnalysis}}</div>
 														<template #append>
-															<v-btn class="ml-9" variant="text" size="small" icon @click="toggleAllQuestions(item, index, false)" aria-label="collapse all" data-aid="alerts_playbooks_collapseAll">
+															<v-btn class="ml-9" variant="text" size="small" icon @click="toggleAllQuestions(item, item._index, false)" aria-label="collapse all" data-aid="alerts_playbooks_collapseAll">
 																<v-icon>fa-window-minimize</v-icon>
 															</v-btn>
-															<v-btn variant="text" size="small" icon @click="toggleAllQuestions(item, index, true)" aria-label="expand all" data-aid="alerts_playbooks_expandAll">
+															<v-btn variant="text" size="small" icon @click="toggleAllQuestions(item, item._index, true)" aria-label="expand all" data-aid="alerts_playbooks_expandAll">
 																<v-icon>fa-window-maximize</v-icon>
 															</v-btn>
 														</template>
@@ -687,96 +685,94 @@
 																<v-icon class="mr-3" data-aid="playbook_ai_indicator">fa-flask</v-icon>
 																<span v-html="i18n.playbooksAi" data-aid="playbook_ai_text"></span>
 															</div>
-															<v-expansion-panels @update:model-value="expandedPlaybookQuestions[index] = $event" :model-value="expandedPlaybookQuestions[index]" variant="accordion" multiple static="true">
-																<template v-for="playbook in item.playbooks">
-																	<v-expansion-panel v-for="question in playbook.questions">
-																		<v-expansion-panel-title class="italic ws-normal spacious-lines" #default="{ expanded }">
-																			<v-icon class="theme-icon mx-4" data-aid="playbook_question_title">
-																				<template v-if="expanded">fa-angle-down</template>
-																				<template v-else>fa-angle-right</template>
-																			</v-icon>
-																			{{question.question}}
-																		</v-expansion-panel-title>
-																		<v-expansion-panel-text class="pl-13 ws-normal">
-																			<div class="font-weight-bold font-italic" data-aid="playbook_question_context_label">{{i18n.context}}</div>
-																			<div class="italic" data-aid="playbook_question_context">{{question.context}}</div>
-																			<div class="italic my-4" data-aid="playbook_question_daterange">{{i18n.dateRange}}: {{question.range || i18n.event}}</div>
-																			<v-row no-gutters class="mb-5">
-																				<v-col cols="auto">
-																					<v-btn id="hunt-question" icon size="small" variant="text" :href="$router.resolve(buildHuntQuestionParams(question, item)).href" target="_blank" class="cursor-pointer" data-aid="playbook_hunt_question">
-																						<v-icon>fa-crosshairs</v-icon>
-																					</v-btn>
-																				</v-col>
-																				<v-col style="align-content: center;" data-aid="playbook_question_query">
-																					{{question.filledOQL}}
-																				</v-col>
-																			</v-row>
-																			<template v-if="question.answers">
-																				<span class="font-weight-bold font-italic">
-																					{{i18n.instantInsight}}
-																				</span>
-																				<br/>
-																				<span class="italic" data-aid="playbook_event_timestamp">
-																					{{i18n.eventOccurredAt}} {{ formatTimestamp(getEventTimestamp(item)) }}
-																				</span>
-																				<table v-if="question.isAggregate" class="simple-table">
-																					<thead>
-																						<tr>
-																							<th data-aid="playbook_instantinsights_aggregate_header_count">
-																								{{ i18n.count }}
-																							</th>
-																							<th v-for="field in question.fields" :key="field" :data-aid="'playbook_instantinsights_aggregate_header_' + field">
-																								{{ field }}
-																							</th>
-																						</tr>
-																					</thead>
-																					<tbody>
-																						<tr v-for="agg in question.answers">
-																							<td class="text-right" data-aid="playbook_instantinsights_aggregate_answer_count">
-																								{{ agg.value }}
-																							</td>
-																							<td v-for="value in agg.keys" data-aid="playbook_instantinsights_aggregate_answer">
-																								{{ translateValue(value) }}<span class="resolved-host" v-if="$root.pickHostname(value)"> - {{ $root.pickHostname(value) }}</span>
-																							</td>
-																						</tr>
-																						<tr v-if="question.answers && question.answers.length === 0">
-																							<td colspan="100%" class="text-center" data-aid="playbook_instantinsights_aggregate_nodata">
-																								{{ question.error ? i18n.error : i18n.noData }}
-																							</td>
-																						</tr>
-																					</tbody>
-																				</table>
-																				<table v-else class="simple-table">
-																					<thead>
-																						<tr>
-																							<th data-aid="playbook_instantinsights_header_timestamp">
-																								{{ i18n.timestamp }}
-																							</th>
-																							<th v-for="field in question.fields" :key="field" :data-aid="'playbook_instantinsights_header_' + field">
-																								{{ field }}
-																							</th>
-																						</tr>
-																					</thead>
-																					<tbody>
-																						<tr v-for="answer in question.answers" :key="answer.id">
-																							<td class="text-normal" data-aid="playbook_instantinsights_result_timestamp">
-																								{{ formatTimestamp(getEventTimestamp(answer.payload)) }}
-																							</td>
-																							<td v-for="field in question.fields" :key="field" data-aid="playbook_instantinsights_result">
-																								{{ translateValue(getEventField(answer.payload, field)) }}<span class="resolved-host" v-if="$root.pickHostname(getEventField(answer.payload, field))"> - {{ $root.pickHostname(getEventField(answer.payload, field)) }}</span>
-																							</td>
-																						</tr>
-																						<tr v-if="question.answers && question.answers.length === 0">
-																							<td colspan="100%" class="text-center" data-aid="playbook_instantinsights_nodata">
-																								{{ question.error ? i18n.error : i18n.noData }}
-																							</td>
-																						</tr>
-																					</tbody>
-																				</table>
-																			</template>
-																		</v-expansion-panel-text>
-																	</v-expansion-panel>
-																</template>
+															<v-expansion-panels @update:model-value="expandedPlaybookQuestions[item._index] = $event" :model-value="expandedPlaybookQuestions[item._index]" variant="accordion" multiple static="true">
+																<v-expansion-panel v-for="question in item.questions">
+																	<v-expansion-panel-title :class="['italic', 'ws-normal', 'spacious-lines', 'font-weight-bold', pickQuestionColor(question)]" #default="{ expanded }">
+																		<v-icon class="theme-icon mx-4" data-aid="playbook_question_title">
+																			<template v-if="expanded">fa-angle-down</template>
+																			<template v-else>fa-angle-right</template>
+																		</v-icon>
+																		{{question.question}}
+																	</v-expansion-panel-title>
+																	<v-expansion-panel-text class="pl-13 ws-normal">
+																		<div class="font-weight-bold font-italic" data-aid="playbook_question_context_label">{{i18n.context}}</div>
+																		<div class="italic" data-aid="playbook_question_context">{{question.context}}</div>
+																		<div class="italic my-4" data-aid="playbook_question_daterange">{{i18n.dateRange}}: {{question.range || i18n.event}}</div>
+																		<v-row no-gutters class="mb-5">
+																			<v-col cols="auto">
+																				<v-btn id="hunt-question" icon size="small" variant="text" :href="$router.resolve(buildHuntQuestionParams(question, item)).href" target="_blank" class="cursor-pointer" data-aid="playbook_hunt_question">
+																					<v-icon>fa-crosshairs</v-icon>
+																				</v-btn>
+																			</v-col>
+																			<v-col style="align-content: center;" data-aid="playbook_question_query">
+																				{{question.filledOQL}}
+																			</v-col>
+																		</v-row>
+																		<template v-if="question.answers">
+																			<span class="font-weight-bold font-italic">
+																				{{i18n.instantInsight}}
+																			</span>
+																			<br/>
+																			<span class="italic" data-aid="playbook_event_timestamp">
+																				{{i18n.eventOccurredAt}} {{ formatTimestamp(getEventTimestamp(item)) }}
+																			</span>
+																			<table v-if="question.isAggregate" class="simple-table">
+																				<thead>
+																					<tr>
+																						<th data-aid="playbook_instantinsights_aggregate_header_count">
+																							{{ i18n.count }}
+																						</th>
+																						<th v-for="field in question.fields" :key="field" :data-aid="'playbook_instantinsights_aggregate_header_' + field">
+																							{{ field }}
+																						</th>
+																					</tr>
+																				</thead>
+																				<tbody>
+																					<tr v-for="agg in question.answers">
+																						<td class="text-right" data-aid="playbook_instantinsights_aggregate_answer_count">
+																							{{ agg.value }}
+																						</td>
+																						<td v-for="value in agg.keys" data-aid="playbook_instantinsights_aggregate_answer">
+																							{{ translateValue(value) }}<span class="resolved-host" v-if="$root.pickHostname(value)"> - {{ $root.pickHostname(value) }}</span>
+																						</td>
+																					</tr>
+																					<tr v-if="question.answers && question.answers.length === 0">
+																						<td colspan="100%" class="text-center" data-aid="playbook_instantinsights_aggregate_nodata">
+																							{{ question.error ? i18n.error : i18n.noData }}
+																						</td>
+																					</tr>
+																				</tbody>
+																			</table>
+																			<table v-else class="simple-table">
+																				<thead>
+																					<tr>
+																						<th data-aid="playbook_instantinsights_header_timestamp">
+																							{{ i18n.timestamp }}
+																						</th>
+																						<th v-for="field in question.fields" :key="field" :data-aid="'playbook_instantinsights_header_' + field">
+																							{{ field }}
+																						</th>
+																					</tr>
+																				</thead>
+																				<tbody>
+																					<tr v-for="answer in question.answers" :key="answer.id">
+																						<td class="text-normal" data-aid="playbook_instantinsights_result_timestamp">
+																							{{ formatTimestamp(getEventTimestamp(answer.payload)) }}
+																						</td>
+																						<td v-for="field in question.fields" :key="field" data-aid="playbook_instantinsights_result">
+																							{{ translateValue(getEventField(answer.payload, field)) }}<span class="resolved-host" v-if="$root.pickHostname(getEventField(answer.payload, field))"> - {{ $root.pickHostname(getEventField(answer.payload, field)) }}</span>
+																						</td>
+																					</tr>
+																					<tr v-if="question.answers && question.answers.length === 0">
+																						<td colspan="100%" class="text-center" data-aid="playbook_instantinsights_nodata">
+																							{{ question.error ? i18n.error : i18n.noData }}
+																						</td>
+																					</tr>
+																				</tbody>
+																			</table>
+																		</template>
+																	</v-expansion-panel-text>
+																</v-expansion-panel>
 															</v-expansion-panels>
 														</template>
 														<template v-else-if="item.playbookErr">

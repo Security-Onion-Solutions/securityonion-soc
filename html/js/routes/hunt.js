@@ -2754,7 +2754,7 @@ const huntComponent = {
         }, 300);
       }
     },
-    async loadPlaybook(event) {
+    async loadPlaybook(event, index) {
       if ('playbooks' in event || 'playbookLoading' in event || 'playbookErr' in event) return;
       
       const publicId = event?.['rule.uuid'];
@@ -2787,11 +2787,31 @@ const huntComponent = {
       delete event.playbookLoading;
 
       if (playbooks) {
+        // answer the questions and
+        // stable sort them by results
+        let good = []; // has answers
+        let bad = [];  // no answers
+        let ugly = []; // error
         for (let pb of event.playbooks) {
           for (let q of pb.questions) {
             await this.$nextTick();
             await this.askQuestion(q, event);
+
+            if (q.error) {
+              ugly.push(q);
+            } else if (q.answers.length > 0) {
+              good.push(q);
+            } else {
+              bad.push(q);
+            }
           }
+        }
+
+        event.questions = [...good, ...bad, ...ugly];
+
+        this.expandedPlaybookQuestions[index] = [];
+        for (let i = 0; i < good.length; i++) {
+          this.expandedPlaybookQuestions[index].push(i);
         }
       }
     },
@@ -3101,28 +3121,35 @@ const huntComponent = {
 
       event = (event || {}).newest || event;
 
-      if (event.playbookLoading || !('playbooks' in event)) {
+      if (event.playbookLoading || !('questions' in event)) {
         setTimeout(() => {
           this.toggleAllQuestions(event, index, expand);
         }, 100)
         return;
       }
 
-      if (event.playbooks) {
-        let count = 0;
+      if (event.questions) {
         if (!Array.isArray(this.expandedPlaybookQuestions[index]) || !expand) this.expandedPlaybookQuestions[index] = [];
         if (expand) {
-          for (let i = 0; i < event.playbooks.length; i++) {
-            for (let j = 0; j < event.playbooks[i].questions.length; j++) {
-              if (!this.expandedPlaybookQuestions[index].includes(count)) {
-                this.expandedPlaybookQuestions[index].push(count);
-              }
-              count++;
+          for (let i = 0; i < event.questions.length; i++) {
+            if (!this.expandedPlaybookQuestions[index].includes(i)) {
+              this.expandedPlaybookQuestions[index].push(i);
             }
           }
         }
       }
     },
+    pickQuestionColor(question) {
+      if (question.error) {
+        return 'has-error';
+      }
+
+      if (question.answers && question.answers.length > 0) {
+        return 'has-answers';
+      }
+
+      return 'no-data';
+    }
   }
 };
 

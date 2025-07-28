@@ -2175,17 +2175,7 @@ test('isComplexQuery', () => {
 
 test('toggleAllQuestions', () => {
   let event = {
-    playbooks: [
-      {
-        questions: [{}, {}, {}],
-      },
-      {
-        questions: [{}],
-      },
-      {
-        questions: [{}, {}],
-      },
-    ],
+    questions: [{}, {}, {}]
   };
   let index = 0;
   let expand = true;
@@ -2193,39 +2183,39 @@ test('toggleAllQuestions', () => {
 
   // expand
   comp.toggleAllQuestions(event, index, expand);
-  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [0, 1, 2, 3, 4, 5] });
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [0, 1, 2] });
 
   // expand a different index
   index = 1;
   comp.toggleAllQuestions(event, index, expand);
-  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [0, 1, 2, 3, 4, 5], 1: [0, 1, 2, 3, 4, 5] });
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [0, 1, 2], 1: [0, 1, 2] });
 
   // collapse non-existing index
   index = 2;
   expand = false;
   comp.toggleAllQuestions(event, index, expand);
-  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [0, 1, 2, 3, 4, 5], 1: [0, 1, 2, 3, 4, 5], 2: [] });
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [0, 1, 2], 1: [0, 1, 2], 2: [] });
 
   // collapse existing, expanded index
   index = 0;
   comp.toggleAllQuestions(event, index, expand);
-  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [], 1: [0, 1, 2, 3, 4, 5], 2: [] });
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [], 1: [0, 1, 2], 2: [] });
 
   // expand existing, partially expanded
-  comp.expandedPlaybookQuestions[0] = [2, 4];
+  comp.expandedPlaybookQuestions[0] = [1];
   expand = true;
   comp.toggleAllQuestions(event, index, expand);
-  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [] });
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [1, 0, 2], 1: [0, 1, 2], 2: [] });
 
   // no changes when expanding an already expanded group, even if out of order
   comp.toggleAllQuestions(event, index, expand);
-  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [] });
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [1, 0, 2], 1: [0, 1, 2], 2: [] });
 
   // no change when collapsing an already collapsed group
   index = 2;
   expand = false;
   comp.toggleAllQuestions(event, index, expand);
-  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [] });
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [1, 0, 2], 1: [0, 1, 2], 2: [] });
 
   // handle aggregate event
   let aggEvent = {
@@ -2234,7 +2224,7 @@ test('toggleAllQuestions', () => {
 
   expand = true;
   comp.toggleAllQuestions(aggEvent, index, expand);
-  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [0, 1, 2, 3, 4, 5] });
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [1, 0, 2], 1: [0, 1, 2], 2: [0, 1, 2] });
 
   // handle event that doesn't have playbooks yet
   const _setTimeout = global.setTimeout;
@@ -2246,7 +2236,7 @@ test('toggleAllQuestions', () => {
   expand = true;
 
   comp.toggleAllQuestions(emptyEvent, index, expand);
-  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [0, 1, 2, 3, 4, 5] });
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [1, 0, 2], 1: [0, 1, 2], 2: [0, 1, 2] });
   expect(setTimeoutMock).toHaveBeenCalledTimes(1);
 
   // handle agg event that doesn't have playbooks yet
@@ -2254,7 +2244,7 @@ test('toggleAllQuestions', () => {
   setTimeoutMock.mockClear();
   
   comp.toggleAllQuestions(aggEvent, index, expand);
-  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [0, 1, 2, 3, 4, 5] });
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [1, 0, 2], 1: [0, 1, 2], 2: [0, 1, 2] });
   expect(setTimeoutMock).toHaveBeenCalledTimes(1);
   
   // handle event that's loading playbooks
@@ -2263,7 +2253,7 @@ test('toggleAllQuestions', () => {
   setTimeoutMock.mockClear();
   
   comp.toggleAllQuestions(emptyEvent, index, expand);
-  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [0, 1, 2, 3, 4, 5] });
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [1, 0, 2], 1: [0, 1, 2], 2: [0, 1, 2] });
   expect(setTimeoutMock).toHaveBeenCalledTimes(1);
 
   // handle agg event that's loading playbooks
@@ -2271,7 +2261,7 @@ test('toggleAllQuestions', () => {
   setTimeoutMock.mockClear();
   
   comp.toggleAllQuestions(aggEvent, index, expand);
-  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [0, 1, 2, 3, 4, 5] });
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [1, 0, 2], 1: [0, 1, 2], 2: [0, 1, 2] });
   expect(setTimeoutMock).toHaveBeenCalledTimes(1);
 
   global.setTimeout = _setTimeout;
@@ -2286,7 +2276,7 @@ test('loadPlaybook', async () => {
 
   let papiMock = mockPapi('get', { data: playbooks });
 
-  await comp.loadPlaybook(event);
+  await comp.loadPlaybook(event, 0);
 
   expect(papiMock).toHaveBeenCalledWith('playbook/detection/123');
   expect(event.playbooks).toStrictEqual(playbooks);
@@ -2300,7 +2290,7 @@ test('loadPlaybook', async () => {
     'rule.uuid': '456',
   };
 
-  comp.loadPlaybook(event);
+  comp.loadPlaybook(event, 0);
 
   expect(papiMock).toHaveBeenCalledWith('playbook/detection/456');
   expect(papiMock).toHaveBeenCalledTimes(1);
@@ -2309,7 +2299,7 @@ test('loadPlaybook', async () => {
 
   event = {};
 
-  comp.loadPlaybook(event);
+  comp.loadPlaybook(event, 0);
 
   expect(event.playbookErr).toBe(true);
 
@@ -2317,24 +2307,75 @@ test('loadPlaybook', async () => {
 
   event = { playbooks: '' };
 
-  comp.loadPlaybook(event);
+  comp.loadPlaybook(event, 0);
   expect(event.playbookErr).toBe(undefined);
   expect(event.playbookLoading).toBe(undefined);
   expect(papiMock).toHaveBeenCalledTimes(0);
 
   event = { playbookLoading: '' };
 
-  comp.loadPlaybook(event);
+  comp.loadPlaybook(event, 0);
   expect(event.playbooks).toBe(undefined);
   expect(event.playbookErr).toBe(undefined);
   expect(papiMock).toHaveBeenCalledTimes(0);
 
   event = { playbookErr: true };
 
-  comp.loadPlaybook(event);
+  comp.loadPlaybook(event, 0);
   expect(event.playbooks).toBe(undefined);
   expect(event.playbookLoading).toBe(undefined);
   expect(papiMock).toHaveBeenCalledTimes(0);
 
   resetPapi();
+});
+
+test('pickQuestionColor', () => {
+  let question = {
+    error: true,
+  };
+
+  let c = comp.pickQuestionColor(question);
+  expect(c).toBe('has-error');
+
+  question = {
+    error: false,
+  };
+
+  c = comp.pickQuestionColor(question);
+  expect(c).toBe('no-data');
+
+  question = {}
+
+  c = comp.pickQuestionColor(question);
+  expect(c).toBe('no-data');
+
+  question = {
+    answers: [],
+  };
+
+  c = comp.pickQuestionColor(question);
+  expect(c).toBe('no-data');
+
+  question = {
+    answers: [{}],
+  };
+
+  c = comp.pickQuestionColor(question);
+  expect(c).toBe('has-answers');
+
+  question = {
+    answers: [{}],
+    error: false,
+  };
+
+  c = comp.pickQuestionColor(question);
+  expect(c).toBe('has-answers');
+
+  question = {
+    answers: [{}],
+    error: true,
+  };
+
+  c = comp.pickQuestionColor(question);
+  expect(c).toBe('has-error');
 });
