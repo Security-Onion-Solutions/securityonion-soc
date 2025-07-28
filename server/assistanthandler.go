@@ -46,7 +46,7 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	logger := log.FromContext(ctx)
 
 	accept := strings.TrimSpace(r.Header.Get("Accept"))
-	streaming := false // strings.EqualFold(accept, "text/event-stream")
+	streaming := strings.EqualFold(accept, "text/event-stream")
 
 	type TempBody struct {
 		Msg            string               `json:"msg"`
