@@ -1068,13 +1068,13 @@ ul ul ul {
 }
 
 .has-answers {
-  border-left: 3px solid #2196F3;
+  border-left: 3px solid rgb(var(--v-theme-info));
 }
 
 .no-data {
-  border-left: 3px solid #FF9800;
+  border-left: 3px solid rgb(var(--v-theme-warning));
 }
 
 .has-error {
-  border-left: 3px solid #FF0000;
+  border-left: 3px solid rgb(var(--v-theme-error));
 }
