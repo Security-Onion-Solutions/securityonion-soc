@@ -223,6 +223,12 @@
               </template>
               <v-list-item-title v-text="i18n.home"></v-list-item-title>
             </v-list-item>
+            <v-list-item data-aid="nav_chat" @click="" to="/chat">
+              <template #prepend>
+                <v-icon>fa-comments</v-icon>
+              </template>
+              <v-list-item-title v-text="i18n.chat"></v-list-item-title>
+            </v-list-item>
             <v-list-item data-aid="nav_alerts" @click="" to="/alerts">
               <template #prepend>
                 <v-icon>fa-bell</v-icon>
@@ -243,12 +249,6 @@
                 <v-icon>fa-crosshairs</v-icon>
               </template>
               <v-list-item-title v-text="i18n.hunt"></v-list-item-title>
-            </v-list-item>
-            <v-list-item data-aid="nav_chat" @click="" to="/chat">
-              <template #prepend>
-                <v-icon>fa-comments</v-icon>
-              </template>
-              <v-list-item-title v-text="i18n.chat"></v-list-item-title>
             </v-list-item>
             <v-list-item data-aid="nav_cases" @click="" to="/cases" v-if="casesEnabled">
               <template #prepend>

@@ -233,7 +233,7 @@ const i18n = {
       clientsSynchronize: 'Synchronize API Clients',
       clientsSynchronizeHelp: 'Synchronize API clients with storage backend. This can take several minutes to complete.',
       clientsSynchronized: 'API client synchronization successful.',
-      chat: 'Chat',
+      chat: 'Onion AI',
       chatTitle: 'Security Onion AI Assistant',
       chatEmpty: 'No messages yet. Start the conversation!',
       chatPlaceholder: 'Type your message...',

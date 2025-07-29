@@ -3,6 +3,16 @@
 		<v-col cols="12" lg="3">
 			<h2 v-text="i18n.chat"></h2>
 		</v-col>
+		<v-col cols="12" lg="5">
+			<v-expansion-panels>
+				<v-expansion-panel data-aid="chat_options">
+					<v-expansion-panel-title id="chatOptionsHeader" expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up">{{i18n.options}}</v-expansion-panel-title>
+					<v-expansion-panel-text>
+						<!-- Options content will be added here -->
+					</v-expansion-panel-text>
+				</v-expansion-panel>
+			</v-expansion-panels>
+		</v-col>
 		<v-spacer></v-spacer>
 		<v-col cols="12" lg="2" align="end">
 			<h4 :data-aid="'credits_remaining_' + 'chat'">{{ i18n.creditsRemaining }}: <span :class="creditsRemaining <= 50000 ? 'text-error' : 'text-primary'">{{ formatCount(creditsRemaining) }}</span></h4>
@@ -26,7 +36,7 @@
 								</v-avatar>
 								<div class="flex-grow-1">
 									<div class="d-flex align-center mb-1">
-										<span class="font-weight-medium text-body-2 mr-2">{{ message.role === 'user' ? 'You' : 'AI Assistant' }}</span>
+										<span class="font-weight-medium text-body-2 mr-2">{{ message.role === 'user' ? 'You' : i18n.chat }}</span>
 										<span class="text-caption text-medium-emphasis mr-2">{{ formatTimestamp(message.timestamp) }}</span>
 										<span class="text-caption text-primary" v-if="message.usage && message.usage.credits">{{ message.usage.credits }} credits</span>
 									</div>
@@ -129,6 +139,8 @@
 						variant="outlined"
 						density="compact"
 						hide-details
+						autocomplete="off"
+						spellcheck="false"
 						class="chat-input flex-grow-1 mr-3"
 						@keyup.enter="sendMessage"
 						:disabled="isTyping"
@@ -153,7 +165,7 @@
 				<v-card-title class="py-3 d-flex align-center">
 					<v-icon class="mr-2">fa-history</v-icon>
 					<span class="flex-grow-1">{{ i18n.chatHistory || 'Recent Chats' }}</span>
-					<v-btn icon variant="text" size="small" @click="startNewChat" :title="i18n.chatNewChat || 'New Chat'" data-aid="chat_new_button">
+					<v-btn icon variant="text" size="x-small" @click="startNewChat" :title="i18n.chatNewChat || 'New Chat'" data-aid="chat_new_button">
 						<v-icon size="small">fa-plus</v-icon>
 					</v-btn>
 				</v-card-title>
