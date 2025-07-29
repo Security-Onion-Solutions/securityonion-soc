@@ -8,7 +8,7 @@ package model
 import "encoding/json"
 
 type ChatRequest struct {
-	Messages      []*ChatMessage  `json:"messages"`
+	Messages      []*Message      `json:"messages"`
 	Model         string          `json:"model,omitempty"`
 	MaxTokens     int             `json:"max_tokens,omitempty"`
 	Temperature   float64         `json:"temperature,omitempty"`
@@ -21,68 +21,101 @@ type ChatRequest struct {
 	ToolConfig    json.RawMessage `json:"toolConfig,omitempty"`
 }
 
-type StoredChatMessage struct {
+type StoredMessage struct {
 	Auditable
-	ConversationId string          `json:"conversation_id"`
-	Role           string          `json:"role"`
-	Content        string          `json:"content"`
-	ToolUseID      string          `json:"tool_use_id"`
-	ToolResult     json.RawMessage `json:"tool_result"`
+	SessionId string   `json:"session_id"`
+	Message   *Message `json:"message"`
 }
 
-func (scm *StoredChatMessage) ToChatMessage() *ChatMessage {
-	return &ChatMessage{
-		Role:       scm.Role,
-		Content:    scm.Content,
-		ToolUseID:  scm.ToolUseID,
-		ToolResult: scm.ToolResult,
-	}
+type Message struct {
+	Id           string         `json:"id"`
+	Type         string         `json:"type"`
+	Role         string         `json:"role"`
+	Model        string         `json:"model"`
+	Content      []ContentBlock `json:"content"`
+	StopReason   *string        `json:"stop_reason,omitempty"`
+	StopSequence *string        `json:"stop_sequence,omitempty"`
+	Usage        *Usage         `json:"usage,omitempty"`
 }
 
-type ChatMessage struct {
-	Role       string          `json:"role"`
+type ContentBlock struct {
+	Type       string          `json:"type"`
+	Id         string          `json:"id,omitempty"`
+	Name       string          `json:"name,omitempty"`
+	Input      string          `json:"-"`
 	Content    string          `json:"content,omitempty"`
-	ToolUseID  string          `json:"tool_use_id,omitempty"`
+	Text       string          `json:"text,omitempty"`
 	ToolResult json.RawMessage `json:"tool_result,omitempty"`
+	ToolUseID  string          `json:"tool_use_id,omitempty"`
 }
 
-func (cm *ChatMessage) MarshalJSON() ([]byte, error) {
-	if len(cm.ToolResult) > 0 {
+type Usage struct {
+	InputTokens  int `json:"input_tokens"`
+	OutputTokens int `json:"output_tokens"`
+	Credits      int `json:"credits"`
+}
+
+func (cb *ContentBlock) MarshalJSON() ([]byte, error) {
+	if len(cb.ToolResult) > 0 {
 		return json.Marshal(struct {
-			Role    string      `json:"role"`
-			Content interface{} `json:"content"`
+			Type    string `json:"type"`
+			Id      string `json:"id,omitempty"`
+			Name    string `json:"name,omitempty"`
+			Content any    `json:"content,omitempty"`
+			Text    string `json:"text,omitempty"`
 		}{
-			Role: cm.Role,
+			Type: cb.Type,
+			Id:   cb.Id,
+			Name: cb.Name,
+			Text: cb.Text,
 			Content: []map[string]interface{}{
 				{
 					"type":        "tool_result",
-					"tool_use_id": cm.ToolUseID,
-					"content":     cm.ToolResult,
+					"tool_use_id": cb.ToolUseID,
+					"content":     cb.ToolResult,
 				},
 			},
 		})
 	}
 
 	return json.Marshal(struct {
-		Role    string `json:"role"`
-		Content string `json:"content"`
+		Type    string `json:"type"`
+		Id      string `json:"id,omitempty"`
+		Name    string `json:"name,omitempty"`
+		Content string `json:"content,omitempty"`
+		Text    string `json:"text,omitempty"`
 	}{
-		Role:    cm.Role,
-		Content: cm.Content,
+		Type:    cb.Type,
+		Id:      cb.Id,
+		Name:    cb.Name,
+		Content: cb.Content,
+		Text:    cb.Text,
 	})
 }
 
-func (cm *ChatMessage) UnmarshalJSON(data []byte) error {
+func (cm *ContentBlock) UnmarshalJSON(data []byte) error {
 	var temp struct {
-		Role    string      `json:"role"`
-		Content interface{} `json:"content"`
+		Type       string          `json:"type"`
+		Id         string          `json:"id,omitempty"`
+		Name       string          `json:"name,omitempty"`
+		Input      string          `json:"-"`
+		Content    any             `json:"content,omitempty"`
+		Text       string          `json:"text,omitempty"`
+		ToolResult json.RawMessage `json:"tool_result,omitempty"`
+		ToolUseID  string          `json:"tool_use_id,omitempty"`
 	}
 
 	if err := json.Unmarshal(data, &temp); err != nil {
 		return err
 	}
 
-	cm.Role = temp.Role
+	cm.Type = temp.Type
+	cm.Id = temp.Id
+	cm.Name = temp.Name
+	cm.Input = temp.Input
+	cm.Text = temp.Text
+	cm.ToolResult = temp.ToolResult
+	cm.ToolUseID = temp.ToolUseID
 
 	switch content := temp.Content.(type) {
 	case string:
@@ -106,41 +139,40 @@ func (cm *ChatMessage) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (cm *ChatMessage) PrepareForStorage(convId string) *StoredChatMessage {
-	return &StoredChatMessage{
-		ConversationId: convId,
-		Role:           cm.Role,
-		Content:        cm.Content,
-		ToolUseID:      cm.ToolUseID,
-		ToolResult:     cm.ToolResult,
+type SimpleMessage struct {
+	Role       string          `json:"role"`
+	Content    string          `json:"content,omitempty"`
+	ToolUseID  string          `json:"tool_use_id,omitempty"`
+	ToolResult json.RawMessage `json:"tool_result,omitempty"`
+}
+
+func (sm *SimpleMessage) ToMessage() *Message {
+	msg := &Message{
+		Role:    sm.Role,
+		Content: []ContentBlock{},
 	}
+
+	if sm.ToolUseID != "" {
+		msg.Content = append(msg.Content, ContentBlock{
+			Type:       "tool_use",
+			ToolUseID:  sm.ToolUseID,
+			ToolResult: sm.ToolResult,
+		})
+	} else {
+		msg.Content = append(msg.Content, ContentBlock{
+			Type: "text",
+			Text: sm.Content,
+		})
+	}
+
+	return msg
 }
 
-type ChatResponse struct {
-	ID           string                 `json:"id"`
-	Type         string                 `json:"type"`
-	Role         string                 `json:"role"`
-	Model        string                 `json:"model"`
-	Content      []*ChatResponseContent `json:"content"`
-	StopReason   string                 `json:"stop_reason"`
-	StopSequence string                 `json:"stop_sequence"`
-	Usage        *UsageStats            `json:"usage"`
-}
-
-type ChatResponseContent struct {
-	Type  string          `json:"type"`
-	Text  string          `json:"text,omitempty"`
-	ID    string          `json:"id,omitempty"`
-	Name  string          `json:"name,omitempty"`
-	Input json.RawMessage `json:"input,omitempty"`
-}
-
-type UsageStats struct {
-	InputTokens              int `json:"input_tokens"`
-	CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
-	CacheReadInputTokens     int `json:"cache_read_input_tokens"`
-	OutputTokens             int `json:"output_tokens"`
-	Credits                  int `json:"credits"`
+func (cm *Message) PrepareForStorage(sessionId string) *StoredMessage {
+	return &StoredMessage{
+		SessionId: sessionId,
+		Message:   cm,
+	}
 }
 
 type BalanceResponse struct {

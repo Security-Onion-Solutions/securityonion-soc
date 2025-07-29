@@ -2251,7 +2251,7 @@ func TestSyncLocalNew(t *testing.T) {
 	iom.EXPECT().ReadFile("sigmaPipelineSO").Return([]byte("data"), nil)
 	iom.EXPECT().ReadFile("sigmaPipelinesFingerprintFile").Return([]byte("a different hash"), nil)
 	// downloadSigmaPackages
-	iom.EXPECT().MakeRequest(gomock.Any()).Return(&http.Response{
+	iom.EXPECT().MakeRequest(gomock.Any(), false).Return(&http.Response{
 		StatusCode: 200,
 		Body:       io.NopCloser(buf),
 	}, nil)
@@ -2430,7 +2430,7 @@ func TestSyncLocalExisting(t *testing.T) {
 	iom.EXPECT().ReadFile("sigmaPipelineSO").Return([]byte("data"), nil)
 	iom.EXPECT().ReadFile("sigmaPipelinesFingerprintFile").Return([]byte("a different hash"), nil)
 	// downloadSigmaPackages
-	iom.EXPECT().MakeRequest(gomock.Any()).Return(&http.Response{
+	iom.EXPECT().MakeRequest(gomock.Any(), false).Return(&http.Response{
 		StatusCode: 200,
 		Body:       io.NopCloser(buf),
 	}, nil)

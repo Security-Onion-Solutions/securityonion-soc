@@ -56,14 +56,19 @@ func TestPostChat(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	// Set up mock expectations
-	var capturedMessages []*model.ChatMessage
+	var capturedMessages []*model.SimpleMessage
 	mockManager.EXPECT().Chat(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, messages []*model.ChatMessage, opts ...model.ChatOpt) (*model.ChatResponse, error) {
+		func(ctx context.Context, messages []*model.SimpleMessage, opts ...model.ChatOpt) (*model.Message, error) {
 			assert.Len(t, opts, 0)
 			capturedMessages = messages
-			return &model.ChatResponse{
-				Content: []*model.ChatResponseContent{
-					{Type: "text", Text: "Mock response with history"},
+
+			return &model.Message{
+				Role: "assistant",
+				Content: []model.ContentBlock{
+					{
+						Type: "text",
+						Text: "Mock response with history",
+					},
 				},
 			}, nil
 		},
@@ -117,14 +122,19 @@ func TestPostChatWithoutHistory(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	// Set up mock expectations
-	var capturedMessages []*model.ChatMessage
+	var capturedMessages []*model.SimpleMessage
 	mockManager.EXPECT().Chat(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, messages []*model.ChatMessage, opts ...model.ChatOpt) (*model.ChatResponse, error) {
+		func(ctx context.Context, messages []*model.SimpleMessage, opts ...model.ChatOpt) (*model.Message, error) {
 			assert.Len(t, opts, 0)
 			capturedMessages = messages
-			return &model.ChatResponse{
-				Content: []*model.ChatResponseContent{
-					{Type: "text", Text: "Mock response"},
+
+			return &model.Message{
+				Role: "assistant",
+				Content: []model.ContentBlock{
+					{
+						Type: "text",
+						Text: "Mock response",
+					},
 				},
 			}, nil
 		},

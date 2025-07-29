@@ -113,7 +113,7 @@ func TestQueryEventsTool_Execute(t *testing.T) {
 				Events:  []*model.EventRecord{},
 				Metrics: make(map[string][]*model.EventMetric),
 			},
-			expectedError: true,
+			expectedResult: "No events found",
 		},
 	}
 

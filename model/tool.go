@@ -11,8 +11,10 @@ import (
 )
 
 type ToolRequest struct {
-	History []*ChatMessage  `json:"history"`
-	Params  json.RawMessage `json:"params"`
+	History   []*Message      `json:"history"`
+	SessionId string          `json:"sessionId"`
+	ToolUseId string          `json:"toolUseId"`
+	Params    json.RawMessage `json:"params"`
 }
 
 type ToolResult struct {

@@ -126,7 +126,7 @@ func (ac *AssistantCoordinator) IsRunning() bool {
 	return ac.isRunning
 }
 
-func (ac *AssistantCoordinator) Chat(ctx context.Context, messages []*model.ChatMessage, opts ...model.ChatOpt) (*model.ChatResponse, error) {
+func (ac *AssistantCoordinator) Chat(ctx context.Context, messages []*model.Message, opts ...model.ChatOpt) (*model.Message, error) {
 	logger := log.FromContext(ctx)
 	userID := ctx.Value(web.ContextKeyRequestorId).(string)
 	config := model.ApplyChatOpts(opts...)
@@ -182,7 +182,7 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, messages []*model.Chat
 
 	logger.WithField("rawChatResponseBody", string(resBody)).Debug("chat response received")
 
-	response := &model.ChatResponse{}
+	response := &model.Message{}
 
 	err = json.Unmarshal(resBody, response)
 	if err != nil {
@@ -212,15 +212,22 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, messages []*model.Chat
 				// The calling code should handle appending this to the conversation
 				logger.WithFields(log.Fields{
 					"toolName":   content.Name,
-					"toolId":     content.ID,
+					"toolId":     content.Id,
 					"toolResult": string(toolResultJSON),
 				}).Info("tool executed successfully for chat response")
 
 				// append to message history and recurse to send the tool result back with context
-				messages = append(messages, &model.ChatMessage{
-					Role:       "user",
-					ToolUseID:  content.ID,
-					ToolResult: toolResultJSON,
+				messages = append(messages, &model.Message{
+					Role: "user",
+					Content: []model.ContentBlock{
+						{
+							Type:       "tool_result",
+							Id:         content.Id,
+							Name:       content.Name,
+							ToolUseID:  content.ToolUseID,
+							ToolResult: json.RawMessage(toolResultJSON),
+						},
+					},
 				})
 
 				toolResponse, err := ac.Chat(ctx, messages, model.WithAutoExecuteTools(true))
@@ -237,7 +244,7 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, messages []*model.Chat
 	return response, nil
 }
 
-func (ac *AssistantCoordinator) ChatStream(ctx context.Context, messages []*model.ChatMessage) (*http.Response, error) {
+func (ac *AssistantCoordinator) ChatStream(ctx context.Context, messages []*model.Message) (*http.Response, error) {
 	logger := log.FromContext(ctx)
 	userID := ctx.Value(web.ContextKeyRequestorId).(string)
 
