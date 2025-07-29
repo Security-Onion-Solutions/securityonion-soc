@@ -1266,6 +1266,15 @@ ul ul ul {
   100% { opacity: 1; }
 }
 
+/* Avatar icon centering fix */
+.v-avatar .v-icon {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
 /* Responsive adjustments for chat layout */
 @media (max-width: 1264px) {
   .chat-history-sidebar {
