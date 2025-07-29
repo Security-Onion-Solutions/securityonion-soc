@@ -198,17 +198,22 @@ func (store *ElasticAssistantstore) validateId(id string, label string) error {
 	return err
 }
 
-func (store *ElasticAssistantstore) validateChat(chat *model.StoredChatMessage) error {
-	err := store.validateId(chat.ConversationId, "ConversationId")
+func (store *ElasticAssistantstore) validateChat(chat *model.StoredMessage) error {
+	err := store.validateId(chat.SessionId, "SessionId")
 
-	if err != nil && len(chat.Content) == 0 && chat.ToolUseID == "" {
-		return fmt.Errorf("chat message must have content or tool use ID")
+	for _, cb := range chat.Message.Content {
+		if cb.Type == "text" && cb.Text == "" {
+			return fmt.Errorf("content block of type 'text' must have non-empty text")
+		}
+		if cb.Type == "tool_result" && (cb.ToolUseID == "" || cb.ToolResult == nil) {
+			return fmt.Errorf("content block of type 'tool_result' must have non-empty tool use ID and tool result")
+		}
 	}
 
 	return err
 }
 
-func (store *ElasticAssistantstore) SaveChat(ctx context.Context, chat *model.StoredChatMessage) error {
+func (store *ElasticAssistantstore) SaveChat(ctx context.Context, chat *model.StoredMessage) error {
 	err := store.validateChat(chat)
 	if err != nil {
 		return err
@@ -221,10 +226,10 @@ func (store *ElasticAssistantstore) SaveChat(ctx context.Context, chat *model.St
 	return err
 }
 
-func (store *ElasticAssistantstore) GetChatHistory(ctx context.Context, conversationId string) ([]*model.StoredChatMessage, error) {
+func (store *ElasticAssistantstore) GetChatHistory(ctx context.Context, conversationId string) ([]*model.StoredMessage, error) {
 	return nil, nil
 }
 
-func (store *ElasticAssistantstore) GetPreviousConversations(ctx context.Context) ([]*model.StoredChatMessage, error) {
+func (store *ElasticAssistantstore) GetPreviousConversations(ctx context.Context) ([]*model.StoredMessage, error) {
 	return nil, nil
 }
