@@ -212,21 +212,29 @@ routes.push({ path: '/chat', name: 'chat', component: {
       try {
         // Prepare message history (exclude the current user message that was just added)
         const messageHistory = this.messages.slice(0, -1).map(msg => {
+          const contentText = typeof msg.content === 'object' && msg.content.value !== undefined ? msg.content.value : msg.content;
           return {
             role: msg.role,
-            content: typeof msg.content === 'object' && msg.content.value !== undefined ? msg.content.value : msg.content
+            content: [
+              {
+                type: "text",
+                text: contentText
+              }
+            ]
           };
         });
 
         let response = await fetch('/api/assistant/chat', {
           method: 'POST',
           headers: {
+            'Content-Type': 'application/json',
             'X-Srv-Token': this.$root.papi.defaults.headers.common['X-Srv-Token'],
             'Accept': 'text/event-stream'
           },
           body: JSON.stringify({
             msg: userMessage,
             messages: messageHistory,
+            sessionId: this.currentChatId || this.generateChatId()
           })
         });
 
@@ -533,15 +541,23 @@ routes.push({ path: '/chat', name: 'chat', component: {
         
         // Prepare message history for the tool request
         const messageHistory = this.messages.map(msg => {
+          const contentText = typeof msg.content === 'object' && msg.content.value !== undefined ? msg.content.value : msg.content;
           return {
             role: msg.role,
-            content: typeof msg.content === 'object' && msg.content.value !== undefined ? msg.content.value : msg.content
+            content: [
+              {
+                type: "text",
+                text: contentText
+              }
+            ]
           };
         });
         
         // Create ToolRequest object with history and params
         const toolRequest = {
           history: messageHistory,
+          sessionId: this.currentChatId || this.generateChatId(),
+          toolUseId: toolUse.id,
           params: toolUse.input
         };
         
