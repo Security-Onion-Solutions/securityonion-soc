@@ -244,6 +244,145 @@ func (store *ElasticAssistantstore) GetChatHistory(ctx context.Context, conversa
 	return nil, nil
 }
 
-func (store *ElasticAssistantstore) GetPreviousConversations(ctx context.Context) ([]*model.StoredMessage, error) {
-	return nil, nil
+func (store *ElasticAssistantstore) GetPreviousConversations(ctx context.Context, userId string) ([]*model.StoredMessage, error) {
+	logger := log.FromContext(ctx)
+
+	// Build Elasticsearch query to get the first message of each session for the user
+	query := map[string]any{
+		"size": 0, // Only want aggregation results, not documents
+		"query": map[string]any{
+			"bool": map[string]any{
+				"must": []any{
+					map[string]any{
+						"term": map[string]any{
+							store.schemaPrefix + "chat.userId.keyword": userId,
+						},
+					},
+					map[string]any{
+						"term": map[string]any{
+							store.schemaPrefix + "kind": "chat",
+						},
+					},
+				},
+			},
+		},
+		"aggs": map[string]any{
+			"sessions": map[string]any{
+				"terms": map[string]any{
+					"field": store.schemaPrefix + "chat.sessionId.keyword",
+					"size":  10000,
+				},
+				"aggs": map[string]any{
+					"first_message": map[string]any{
+						"top_hits": map[string]any{
+							"sort": []any{
+								map[string]any{
+									"@timestamp": map[string]any{
+										"order": "asc",
+									},
+								},
+							},
+							"size": 1,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Convert query to JSON
+	queryJSON, err := json.Marshal(query)
+	if err != nil {
+		logger.WithError(err).Error("Failed to marshal Elasticsearch query")
+		return nil, err
+	}
+
+	logger.WithFields(log.Fields{
+		"query":     store.truncate(string(queryJSON)),
+		"requestId": ctx.Value(web.ContextKeyRequestId),
+	}).Debug("Searching for first messages of each session")
+
+	// Execute search
+	res, err := store.esClient.Search(
+		store.esClient.Search.WithContext(ctx),
+		store.esClient.Search.WithIndex(store.index),
+		store.esClient.Search.WithBody(strings.NewReader(string(queryJSON))),
+		store.esClient.Search.WithTrackTotalHits(true),
+		store.esClient.Search.WithPretty(),
+		store.esClient.Search.WithIgnoreUnavailable(true),
+	)
+	if err != nil {
+		logger.WithError(err).Error("Failed to execute Elasticsearch search")
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	// Read response
+	responseJSON, err := readJsonFromResponse(res)
+	if err != nil {
+		logger.WithError(err).Error("Failed to read Elasticsearch response")
+		return nil, err
+	}
+
+	logger.WithFields(log.Fields{
+		"response":  store.truncate(responseJSON),
+		"requestId": ctx.Value(web.ContextKeyRequestId),
+	}).Debug("Received Elasticsearch response")
+
+	// Parse response
+	var response map[string]interface{}
+	if err := json.Unmarshal([]byte(responseJSON), &response); err != nil {
+		logger.WithError(err).Error("Failed to unmarshal Elasticsearch response")
+		return nil, err
+	}
+
+	// Extract first messages from aggregation
+	messages := []*model.StoredMessage{}
+	if aggregations, ok := response["aggregations"].(map[string]interface{}); ok {
+		if sessions, ok := aggregations["sessions"].(map[string]interface{}); ok {
+			if buckets, ok := sessions["buckets"].([]interface{}); ok {
+				for _, bucketObj := range buckets {
+					if bucket, ok := bucketObj.(map[string]interface{}); ok {
+						if firstMessage, ok := bucket["first_message"].(map[string]interface{}); ok {
+							if hits, ok := firstMessage["hits"].(map[string]interface{}); ok {
+								if hitsArray, ok := hits["hits"].([]interface{}); ok && len(hitsArray) > 0 {
+									if hit, ok := hitsArray[0].(map[string]interface{}); ok {
+										if source, ok := hit["_source"].(map[string]interface{}); ok {
+											if chat, ok := source[store.schemaPrefix+"chat"].(map[string]interface{}); ok {
+												// Convert the source to a StoredMessage
+												sourceJSON, err := json.Marshal(chat)
+												if err != nil {
+													logger.WithError(err).Error("Failed to marshal message source")
+													continue
+												}
+
+												var message model.StoredMessage
+												if err := json.Unmarshal(sourceJSON, &message); err != nil {
+													logger.WithError(err).Error("Failed to unmarshal StoredMessage")
+													continue
+												}
+
+												message.Auditable.Kind = source[store.schemaPrefix+"kind"].(string)
+												message.Auditable.Id = hit["_id"].(string)
+
+												messages = append(messages, &message)
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	logger.WithFields(log.Fields{
+		"messageCount": len(messages),
+		"userId":       userId,
+		"requestId":    ctx.Value(web.ContextKeyRequestId),
+	}).Debug("Found first messages for sessions")
+
+	return messages, nil
 }
