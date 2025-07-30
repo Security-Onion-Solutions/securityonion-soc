@@ -77,19 +77,39 @@ func (cb *ContentBlock) MarshalJSON() ([]byte, error) {
 			},
 		})
 	}
-
+	if cb.ToolUseID != "" {
+		// return json.Marshal(struct {
+		// 	Type    string `json:"type"`
+		// 	Id      string `json:"id,omitempty"`
+		// 	Name    string `json:"name,omitempty"`
+		// 	Content any    `json:"content,omitempty"`
+		// 	Text    string `json:"text,omitempty"`
+		// }{
+		// 	Type: cb.Type,
+		// 	Id:   cb.Id,
+		// 	Name: cb.Name,
+		// 	Content: map[string]any{
+		// 		"type": "text",
+		// 		"text": cb.Content,
+		// 	},
+		// 	Text: cb.Text,
+		// })
+		return json.Marshal(cb.Content)
+	}
 	return json.Marshal(struct {
-		Type    string `json:"type"`
-		Id      string `json:"id,omitempty"`
-		Name    string `json:"name,omitempty"`
-		Content string `json:"content,omitempty"`
-		Text    string `json:"text,omitempty"`
+		Type      string `json:"type"`
+		Id        string `json:"id,omitempty"`
+		Name      string `json:"name,omitempty"`
+		Content   string `json:"content,omitempty"`
+		ToolUseID string `json:"tool_use_id,omitempty"`
+		Text      string `json:"text,omitempty"`
 	}{
-		Type:    cb.Type,
-		Id:      cb.Id,
-		Name:    cb.Name,
-		Content: cb.Content,
-		Text:    cb.Text,
+		Type:      cb.Type,
+		Id:        cb.Id,
+		Name:      cb.Name,
+		Content:   cb.Content,
+		ToolUseID: cb.ToolUseID,
+		Text:      cb.Text,
 	})
 }
 

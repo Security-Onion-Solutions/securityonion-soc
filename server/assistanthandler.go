@@ -189,11 +189,11 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	err = h.server.Assistantstore.SaveChat(ctx, toolMsg.PrepareForStorage(toolReq.SessionId))
-	if err != nil {
-		logger.WithError(err).Error("unable to save tool result message")
-		return
-	}
+	// err = h.server.Assistantstore.SaveChat(ctx, toolMsg.PrepareForStorage(toolReq.SessionId))
+	// if err != nil {
+	// 	logger.WithError(err).Error("unable to save tool result message")
+	// 	return
+	// }
 
 	msgs := append(toolReq.History, toolMsg)
 
