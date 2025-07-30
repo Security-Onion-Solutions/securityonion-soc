@@ -6,7 +6,7 @@
 
 loadPageTemplate('page-chat', 'pages/chat.html');
 
-routes.push({ path: '/chat', name: 'chat', component: {
+routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
   template: '#page-chat',
   data() { return {
     i18n: this.$root.i18n,
@@ -24,7 +24,7 @@ routes.push({ path: '/chat', name: 'chat', component: {
   async created() {
     this.loadChatHistory();
     this.loadStoredChats();
-    this.restoreLastActiveChat();
+    this.handleRouteSessionId();
     await this.loadCredits();
   },
   beforeUnmount() {
@@ -32,6 +32,12 @@ routes.push({ path: '/chat', name: 'chat', component: {
     this.saveCurrentChat();
   },
   watch: {
+    '$route'(to, from) {
+      // Handle session ID changes from URL
+      if (to.params.sessionId !== from.params.sessionId) {
+        this.handleRouteSessionId();
+      }
+    }
   },
   methods: {
     async loadChatHistory() {
@@ -85,6 +91,27 @@ routes.push({ path: '/chat', name: 'chat', component: {
         return null;
       }
     },
+    handleRouteSessionId() {
+      const urlSessionId = this.$route.params.sessionId;
+      
+      if (urlSessionId) {
+        // Load chat from URL session ID
+        const chat = this.chatHistory.find(chat => chat.id === urlSessionId);
+        if (chat) {
+          this.messages = [...chat.messages];
+          this.currentChatId = chat.id;
+          this.saveCurrentChatId();
+        } else {
+          // Session ID in URL doesn't exist, start new chat with this ID
+          this.currentChatId = urlSessionId;
+          this.saveCurrentChatId();
+          // Keep the default welcome message
+        }
+      } else {
+        // No session ID in URL, restore last active chat
+        this.restoreLastActiveChat();
+      }
+    },
     restoreLastActiveChat() {
       const lastChatId = this.loadCurrentChatId();
       if (lastChatId && this.chatHistory.length > 0) {
@@ -92,6 +119,8 @@ routes.push({ path: '/chat', name: 'chat', component: {
         if (lastChat) {
           this.messages = [...lastChat.messages];
           this.currentChatId = lastChat.id;
+          // Update URL to reflect the current session
+          this.updateUrlWithSessionId(lastChat.id);
           return;
         }
       }
@@ -156,6 +185,7 @@ routes.push({ path: '/chat', name: 'chat', component: {
       this.messages = [...chat.messages];
       this.currentChatId = chat.id;
       this.saveCurrentChatId();
+      this.updateUrlWithSessionId(chat.id);
       this.scrollToBottom();
     },
     deleteChat(chatId) {
@@ -172,6 +202,14 @@ routes.push({ path: '/chat', name: 'chat', component: {
       this.currentChatId = null;
       this.saveCurrentChatId(); // Clear the saved current chat ID
       this.loadChatHistory(); // Reset to welcome message
+      // Navigate to chat without session ID
+      this.$router.push({ name: 'chat' });
+    },
+    updateUrlWithSessionId(sessionId) {
+      // Only update URL if it's different from current
+      if (this.$route.params.sessionId !== sessionId) {
+        this.$router.replace({ name: 'chat', params: { sessionId: sessionId } });
+      }
     },
     async sendMessage() {
       if (!this.newMessage.trim()) return;
@@ -203,6 +241,11 @@ routes.push({ path: '/chat', name: 'chat', component: {
         
         // Auto-save chat after each exchange
         this.saveCurrentChat();
+        
+        // Update URL with session ID if not already set
+        if (this.currentChatId && !this.$route.params.sessionId) {
+          this.updateUrlWithSessionId(this.currentChatId);
+        }
       } catch (error) {
         this.$root.showError('Failed to get AI response: ' + error.message);
         this.isTyping = false;
