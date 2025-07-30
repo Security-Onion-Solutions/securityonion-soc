@@ -27,9 +27,11 @@ func TestPostChat(t *testing.T) {
 	srv := &Server{}
 	ctrl := gomock.NewController(t)
 	mockManager := mock.NewMockAssistantManager(ctrl)
+	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
 	defer ctrl.Finish()
 
 	srv.AssistantManager = mockManager
+	srv.Assistantstore = mockAssistantStore
 
 	handler := NewAssistantHandler(srv)
 
@@ -56,15 +58,15 @@ func TestPostChat(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	// Set up mock expectations
-	var capturedMessages []*model.SimpleMessage
+	var capturedMessages []*model.Message
 	mockManager.EXPECT().Chat(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, messages []*model.SimpleMessage, opts ...model.ChatOpt) (*model.Message, error) {
+		func(ctx context.Context, messages []*model.Message, opts ...model.ChatOpt) (*model.Message, error) {
 			assert.Len(t, opts, 0)
 			capturedMessages = messages
 
 			return &model.Message{
 				Role: "assistant",
-				Content: []model.ContentBlock{
+				ContentBlocks: []model.ContentBlock{
 					{
 						Type: "text",
 						Text: "Mock response with history",
@@ -73,6 +75,8 @@ func TestPostChat(t *testing.T) {
 			}, nil
 		},
 	)
+
+	mockAssistantStore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil).Times(2)
 
 	// Execute the handler
 	handler.PostChat(w, req)
@@ -87,7 +91,7 @@ func TestPostChat(t *testing.T) {
 	// Verify the last message is the new user message
 	lastMessage := capturedMessages[len(capturedMessages)-1]
 	assert.Equal(t, "user", lastMessage.Role)
-	assert.Equal(t, "What is my current balance?", lastMessage.Content)
+	assert.Equal(t, "What is my current balance?", lastMessage.ContentBlocks[0].Text)
 
 	// Verify history is preserved
 	assert.Equal(t, "assistant", capturedMessages[0].Role)
@@ -98,9 +102,11 @@ func TestPostChatWithoutHistory(t *testing.T) {
 	srv := &Server{}
 	ctrl := gomock.NewController(t)
 	mockManager := mock.NewMockAssistantManager(ctrl)
+	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
 	defer ctrl.Finish()
 
 	srv.AssistantManager = mockManager
+	srv.Assistantstore = mockAssistantStore
 
 	handler := NewAssistantHandler(srv)
 
@@ -122,15 +128,15 @@ func TestPostChatWithoutHistory(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	// Set up mock expectations
-	var capturedMessages []*model.SimpleMessage
+	var capturedMessages []*model.Message
 	mockManager.EXPECT().Chat(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, messages []*model.SimpleMessage, opts ...model.ChatOpt) (*model.Message, error) {
+		func(ctx context.Context, messages []*model.Message, opts ...model.ChatOpt) (*model.Message, error) {
 			assert.Len(t, opts, 0)
 			capturedMessages = messages
 
 			return &model.Message{
 				Role: "assistant",
-				Content: []model.ContentBlock{
+				ContentBlocks: []model.ContentBlock{
 					{
 						Type: "text",
 						Text: "Mock response",
@@ -139,6 +145,8 @@ func TestPostChatWithoutHistory(t *testing.T) {
 			}, nil
 		},
 	)
+
+	mockAssistantStore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil).Times(2)
 
 	// Execute the handler
 	handler.PostChat(w, req)
@@ -152,5 +160,5 @@ func TestPostChatWithoutHistory(t *testing.T) {
 
 	// Verify the message content
 	assert.Equal(t, "user", capturedMessages[0].Role)
-	assert.Equal(t, "Hello", capturedMessages[0].Content)
+	assert.Equal(t, "Hello", capturedMessages[0].ContentBlocks[0].Text)
 }
