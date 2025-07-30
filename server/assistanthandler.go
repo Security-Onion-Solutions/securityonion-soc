@@ -179,21 +179,15 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 	}
 
 	toolMsg := &model.Message{
-		Role: "user",
-		Content: []model.ContentBlock{
-			{
-				Type:      "tool_result",
-				ToolUseID: toolReq.ToolUseId,
-				Content:   string(content),
-			},
-		},
+		Role:    "user",
+		Content: string(content),
 	}
 
-	// err = h.server.Assistantstore.SaveChat(ctx, toolMsg.PrepareForStorage(toolReq.SessionId))
-	// if err != nil {
-	// 	logger.WithError(err).Error("unable to save tool result message")
-	// 	return
-	// }
+	err = h.server.Assistantstore.SaveChat(ctx, toolMsg.PrepareForStorage(toolReq.SessionId))
+	if err != nil {
+		logger.WithError(err).Error("unable to save tool result message")
+		return
+	}
 
 	msgs := append(toolReq.History, toolMsg)
 
@@ -356,25 +350,25 @@ func unstreamResponse(rawResponse string) (*model.Message, error) {
 		case "message_start":
 			if sm.Message != nil {
 				message = sm.Message
-				if len(message.Content) == 0 {
+				if len(message.Content.([]model.ContentBlock)) == 0 {
 					message.Content = []model.ContentBlock{{}}
 				}
 			}
 		case "content_block_start":
-			for sm.Index >= len(message.Content) {
-				message.Content = append(message.Content, model.ContentBlock{})
+			for sm.Index >= len(message.Content.([]model.ContentBlock)) {
+				message.Content = append(message.Content.([]model.ContentBlock), model.ContentBlock{})
 			}
 
 			if sm.ContentBlock != nil {
-				message.Content[sm.Index] = *sm.ContentBlock
+				message.Content.([]model.ContentBlock)[sm.Index] = *sm.ContentBlock
 			}
 		case "content_block_delta":
 			if sm.Delta != nil {
 				switch sm.Delta.Type {
 				case "text_delta":
-					message.Content[sm.Index].Content += sm.Delta.Text
+					message.Content.([]model.ContentBlock)[sm.Index].Content += sm.Delta.Text
 				case "input_json_delta":
-					message.Content[sm.Index].Input += *sm.Delta.PartialJson
+					message.Content.([]model.ContentBlock)[sm.Index].Input += *sm.Delta.PartialJson
 				}
 			}
 		case "message_delta":
