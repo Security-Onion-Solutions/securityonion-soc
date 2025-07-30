@@ -71,7 +71,7 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 
 	newMsg := &model.Message{
 		Role: "user",
-		Content: []model.ContentBlock{
+		ContentBlocks: []model.ContentBlock{
 			{
 				Type: "text",
 				Text: tb.Msg,
@@ -104,13 +104,13 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		web.Respond(w, r, http.StatusOK, response)
-
 		err = h.server.Assistantstore.SaveChat(ctx, response.PrepareForStorage(tb.SessionId))
 		if err != nil {
 			logger.WithError(err).Error("unable to save chat message")
 			return
 		}
+
+		web.Respond(w, r, http.StatusOK, response)
 
 		return
 	}
@@ -131,17 +131,28 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	msg, err := unstreamResponse(string(entireResponse))
-	if err != nil {
-		logger.WithError(err).Error("error unstreaming response")
-		return
+	noTimeOutCtx := context.Background()
+	val := ctx.Value(web.ContextKeyRunAsUsername)
+	if val != nil {
+		if username, ok := val.(string); ok {
+			noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRunAsUsername, username)
+		}
 	}
+	noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRequestorId, ctx.Value(web.ContextKeyRequestorId).(string))
 
-	err = h.server.Assistantstore.SaveChat(ctx, msg.PrepareForStorage(tb.SessionId))
-	if err != nil {
-		logger.WithError(err).Error("unable to save chat message")
-		return
-	}
+	go func() {
+		msg, err := unstreamResponse(string(entireResponse))
+		if err != nil {
+			logger.WithError(err).Error("error unstreaming response")
+			return
+		}
+
+		err = h.server.Assistantstore.SaveChat(noTimeOutCtx, msg.PrepareForStorage(tb.SessionId))
+		if err != nil {
+			logger.WithError(err).Error("unable to save chat message")
+			return
+		}
+	}()
 }
 
 func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
@@ -179,8 +190,8 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 	}
 
 	toolMsg := &model.Message{
-		Role:    "user",
-		Content: string(content),
+		Role:       "user",
+		ContentStr: string(content),
 	}
 
 	err = h.server.Assistantstore.SaveChat(ctx, toolMsg.PrepareForStorage(toolReq.SessionId))
@@ -226,17 +237,28 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	msg, err := unstreamResponse(string(entireResponse))
-	if err != nil {
-		logger.WithError(err).Error("error unstreaming response")
-		return
+	noTimeOutCtx := context.Background()
+	val := ctx.Value(web.ContextKeyRunAsUsername)
+	if val != nil {
+		if username, ok := val.(string); ok {
+			noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRunAsUsername, username)
+		}
 	}
+	noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRequestorId, ctx.Value(web.ContextKeyRequestorId).(string))
 
-	err = h.server.Assistantstore.SaveChat(ctx, msg.PrepareForStorage(toolReq.SessionId))
-	if err != nil {
-		logger.WithError(err).Error("unable to save chat message")
-		return
-	}
+	go func() {
+		msg, err := unstreamResponse(string(entireResponse))
+		if err != nil {
+			logger.WithError(err).Error("error unstreaming response")
+			return
+		}
+
+		err = h.server.Assistantstore.SaveChat(noTimeOutCtx, msg.PrepareForStorage(toolReq.SessionId))
+		if err != nil {
+			logger.WithError(err).Error("unable to save chat message")
+			return
+		}
+	}()
 }
 
 func (h *AssistantHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
@@ -339,6 +361,10 @@ func unstreamResponse(rawResponse string) (*model.Message, error) {
 	var message *model.Message
 
 	for _, msg := range dataMsgs {
+		if strings.TrimSpace(msg.Data) == "[DONE]" {
+			break
+		}
+
 		var sm StreamingMessage
 		err := json.Unmarshal([]byte(msg.Data), &sm)
 		if err != nil {
@@ -350,25 +376,25 @@ func unstreamResponse(rawResponse string) (*model.Message, error) {
 		case "message_start":
 			if sm.Message != nil {
 				message = sm.Message
-				if len(message.Content.([]model.ContentBlock)) == 0 {
-					message.Content = []model.ContentBlock{{}}
+				if len(message.ContentBlocks) == 0 {
+					message.ContentBlocks = []model.ContentBlock{{}}
 				}
 			}
 		case "content_block_start":
-			for sm.Index >= len(message.Content.([]model.ContentBlock)) {
-				message.Content = append(message.Content.([]model.ContentBlock), model.ContentBlock{})
+			for sm.Index >= len(message.ContentBlocks) {
+				message.ContentBlocks = append(message.ContentBlocks, model.ContentBlock{})
 			}
 
 			if sm.ContentBlock != nil {
-				message.Content.([]model.ContentBlock)[sm.Index] = *sm.ContentBlock
+				message.ContentBlocks[sm.Index] = *sm.ContentBlock
 			}
 		case "content_block_delta":
 			if sm.Delta != nil {
 				switch sm.Delta.Type {
 				case "text_delta":
-					message.Content.([]model.ContentBlock)[sm.Index].Content += sm.Delta.Text
+					message.ContentBlocks[sm.Index].Content += sm.Delta.Text
 				case "input_json_delta":
-					message.Content.([]model.ContentBlock)[sm.Index].Input += *sm.Delta.PartialJson
+					message.ContentBlocks[sm.Index].Input += *sm.Delta.PartialJson
 				}
 			}
 		case "message_delta":
