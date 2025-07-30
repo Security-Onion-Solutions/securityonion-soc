@@ -15,7 +15,7 @@ import (
 type Assistantstore interface {
 	SaveChat(ctx context.Context, chat *model.StoredMessage) error
 	GetChatHistory(ctx context.Context, conversationId string) ([]*model.StoredMessage, error)
-	GetPreviousConversations(ctx context.Context) ([]*model.StoredMessage, error)
+	GetPreviousConversations(ctx context.Context, userId string) ([]*model.StoredMessage, error)
 }
 
 //go:generate mockgen -destination mock/mock_assistantstore.go -package mock . Assistantstore

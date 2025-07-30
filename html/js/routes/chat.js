@@ -26,6 +26,7 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
     this.loadStoredChats();
     this.handleRouteSessionId();
     await this.loadCredits();
+    await this.loadHistory();
   },
   beforeUnmount() {
     // Save current chat state when navigating away from the chat page
@@ -916,6 +917,10 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
       
       this.messages.push(rejectionMessage);
       this.scrollToBottom();
+    },
+    async loadHistory() {
+      const response = await this.$root.papi.get('/assistant/sessions')
+      console.log(response);
     }
   }
 }});

@@ -40,6 +40,7 @@ func RegisterAssistantRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Post("/chat", h.PostChat)
 		r.Post("/tool/{name}", h.PostTool)
 		r.Get("/balance", h.GetBalance)
+		r.Get("/sessions", h.GetSessions)
 	})
 }
 
@@ -274,6 +275,23 @@ func (h *AssistantHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 	}
 
 	web.Respond(w, r, http.StatusOK, response)
+}
+
+func (h *AssistantHandler) GetSessions(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	logger := log.FromContext(ctx)
+
+	userId := ctx.Value(web.ContextKeyRequestorId).(string)
+
+	sessions, err := h.server.Assistantstore.GetPreviousConversations(ctx, userId)
+	if err != nil {
+		logger.WithError(err).Error("unable to get previous conversations")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, sessions)
 }
 
 func streamResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, response *http.Response) (entireResponse []byte, err error) {
