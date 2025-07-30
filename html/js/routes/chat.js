@@ -668,6 +668,7 @@ routes.push({ path: '/chat', name: 'chat', component: {
                   content: Vue.ref(''),
                   timestamp: new Date().toISOString(),
                   usage: Vue.ref(null),
+                  toolUses: Vue.ref([]), // Track tool uses in this response too
                   isToolResult: true,
                   toolName: toolUse.name,
                   toolId: toolUse.id
@@ -681,10 +682,74 @@ routes.push({ path: '/chat', name: 'chat', component: {
                 this.scrollToBottom();
                 break;
 
+              case 'content_block_start':
+                // Handle tool use blocks in the response after tool execution
+                if (c.content_block && c.content_block.type === 'tool_use') {
+                  const newToolUse = {
+                    id: c.content_block.id,
+                    name: c.content_block.name,
+                    input: c.content_block.input || {},
+                    inputJson: '', // Accumulate input JSON from deltas
+                    status: 'preparing',
+                    result: null,
+                    error: null,
+                    timestamp: new Date().toISOString(),
+                    blockIndex: c.index,
+                    approved: null
+                  };
+                  
+                  if (assistantMessage) {
+                    assistantMessage.toolUses.value.push(newToolUse);
+                    this.executingTools.set(newToolUse.id, newToolUse);
+                    this.executingTools.set(`block_${c.index}`, newToolUse);
+                    console.log('Chained tool use started:', newToolUse);
+                    this.scrollToBottom();
+                  }
+                }
+                break;
+
               case 'content_block_delta':
                 if (assistantMessage && c.delta.type === 'text_delta') {
                   assistantMessage.content.value += c.delta.text;
                   this.scrollToBottom();
+                } else if (c.delta.type === 'input_json_delta') {
+                  // Handle tool input updates for chained tools
+                  const chainedToolUse = this.executingTools.get(`block_${c.index}`);
+                  if (chainedToolUse) {
+                    chainedToolUse.inputJson += c.delta.partial_json;
+                    chainedToolUse.status = 'preparing';
+                    console.log('Chained tool input delta accumulated:', chainedToolUse.inputJson);
+                    this.scrollToBottom();
+                  }
+                }
+                break;
+
+              case 'content_block_stop':
+                // Handle tool input completion for chained tools
+                const chainedToolUse = this.executingTools.get(`block_${c.index}`);
+                if (chainedToolUse && chainedToolUse.status === 'preparing') {
+                  try {
+                    // Parse the accumulated JSON input
+                    if (chainedToolUse.inputJson) {
+                      chainedToolUse.input = JSON.parse(chainedToolUse.inputJson);
+                      console.log('Chained tool input complete:', chainedToolUse.input);
+                    }
+                    
+                    // Set status to pending approval
+                    chainedToolUse.status = 'pending_approval';
+                    chainedToolUse.approved = null;
+                  } catch (error) {
+                    console.error('Failed to parse chained tool input JSON:', error, chainedToolUse.inputJson);
+                    chainedToolUse.status = 'error';
+                    chainedToolUse.error = 'Failed to parse tool input: ' + error.message;
+                  }
+                  this.scrollToBottom();
+                }
+                
+                // Sometimes usage comes here
+                if (c.usage) {
+                  messageUsage = c.usage;
+                  console.log('Usage found in content_block_stop:', messageUsage);
                 }
                 break;
 
