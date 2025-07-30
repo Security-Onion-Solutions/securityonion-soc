@@ -28,14 +28,14 @@ type StoredMessage struct {
 }
 
 type Message struct {
-	Id           string         `json:"id"`
-	Type         string         `json:"type"`
-	Role         string         `json:"role"`
-	Model        string         `json:"model"`
-	Content      []ContentBlock `json:"content"`
-	StopReason   *string        `json:"stop_reason,omitempty"`
-	StopSequence *string        `json:"stop_sequence,omitempty"`
-	Usage        *Usage         `json:"usage,omitempty"`
+	Id           string  `json:"id"`
+	Type         string  `json:"type"`
+	Role         string  `json:"role"`
+	Model        string  `json:"model"`
+	Content      any     `json:"content"` // string | []ContentBlock
+	StopReason   *string `json:"stop_reason,omitempty"`
+	StopSequence *string `json:"stop_sequence,omitempty"`
+	Usage        *Usage  `json:"usage,omitempty"`
 }
 
 type ContentBlock struct {
@@ -173,13 +173,15 @@ func (sm *SimpleMessage) ToMessage() *Message {
 	}
 
 	if sm.ToolUseID != "" {
-		msg.Content = append(msg.Content, ContentBlock{
-			Type:       "tool_use",
-			ToolUseID:  sm.ToolUseID,
-			ToolResult: sm.ToolResult,
-		})
+		msg.Content = []ContentBlock{
+			{
+				Type:       "tool_use",
+				ToolUseID:  sm.ToolUseID,
+				ToolResult: sm.ToolResult,
+			},
+		}
 	} else {
-		msg.Content = append(msg.Content, ContentBlock{
+		msg.Content = append(msg.Content.([]ContentBlock), ContentBlock{
 			Type: "text",
 			Text: sm.Content,
 		})

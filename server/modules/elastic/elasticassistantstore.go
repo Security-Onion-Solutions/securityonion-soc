@@ -201,12 +201,24 @@ func (store *ElasticAssistantstore) validateId(id string, label string) error {
 func (store *ElasticAssistantstore) validateChat(chat *model.StoredMessage) error {
 	err := store.validateId(chat.SessionId, "SessionId")
 
-	for _, cb := range chat.Message.Content {
-		if cb.Type == "text" && cb.Text == "" {
-			return fmt.Errorf("content block of type 'text' must have non-empty text")
-		}
-		if cb.Type == "tool_result" && (cb.ToolUseID == "" || cb.ToolResult == nil) {
-			return fmt.Errorf("content block of type 'tool_result' must have non-empty tool use ID and tool result")
+	if err == nil {
+		switch chat.Message.Content.(type) {
+		case []model.ContentBlock:
+
+			for _, cb := range chat.Message.Content.([]model.ContentBlock) {
+				if cb.Type == "text" && cb.Text == "" {
+					err = fmt.Errorf("content block of type 'text' must have non-empty text")
+				}
+				if cb.Type == "tool_result" && (cb.ToolUseID == "" || cb.ToolResult == nil) {
+					err = fmt.Errorf("content block of type 'tool_result' must have non-empty tool use ID and tool result")
+				}
+			}
+		case string:
+			if chat.Message.Content == "" {
+				err = fmt.Errorf("content must not be empty")
+			}
+		default:
+			err = fmt.Errorf("unsupported content type: %T", chat.Message.Content)
 		}
 	}
 

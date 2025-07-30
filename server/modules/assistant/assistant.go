@@ -192,7 +192,7 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, messages []*model.Mess
 
 	// Check if Claude made any tool use requests and handle based on config
 	if config.AutoExecuteTools {
-		for _, content := range response.Content {
+		for _, content := range response.Content.([]model.ContentBlock) {
 			if content.Type == "tool_use" {
 				// Execute the tool and add result back to conversation
 				result, err := ac.ExecuteTool(ctx, content.Name, string(content.Input))
