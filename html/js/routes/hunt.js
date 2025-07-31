@@ -178,9 +178,7 @@ const huntComponent = {
     expandedPlaybookQuestions: {},
     
     // AI Investigation tracking
-    aiInvestigations: {}, // Maps alert ID to investigation results
-    showAIInvestigationDialog: false,
-    selectedAIInvestigation: null,
+    aiInvestigations: {}, // Maps alert ID to investigation results and chat session IDs
     aiInvestigatedFilter: false, // Client-side filter for AI investigated alerts
   }},
   created() {
@@ -3269,10 +3267,10 @@ const huntComponent = {
         return;
       }
       
-      // If investigation is completed, show results
-      if (item._aiInvestigationStatus === 'completed' && item._aiInvestigationResult) {
-        this.selectedAIInvestigation = item._aiInvestigationResult;
-        this.showAIInvestigationDialog = true;
+      // If investigation is completed, navigate to existing chat session
+      if (item._aiInvestigationStatus === 'completed' && item._aiInvestigationResult && item._aiInvestigationResult.chatSessionId) {
+        const chatUrl = `${window.location.origin}/#/chat/${item._aiInvestigationResult.chatSessionId}`;
+        window.open(chatUrl, '_blank');
         return;
       }
       
@@ -3281,133 +3279,111 @@ const huntComponent = {
         return;
       }
       
+      // Generate a unique chat session ID for this investigation
+      const chatSessionId = 'investigation_' + alertId + '_' + Date.now();
+      
       // Set investigation status to investigating
       item._aiInvestigationStatus = 'investigating';
       
-      // Call the AI investigation API
-      this.performAIInvestigation(alertId, item, groupIdx);
+      // Store the chat session ID with the investigation
+      if (!this.aiInvestigations[alertId]) {
+        this.aiInvestigations[alertId] = {};
+      }
+      this.aiInvestigations[alertId].chatSessionId = chatSessionId;
+      this.aiInvestigations[alertId].status = 'investigating';
+      this.aiInvestigations[alertId].alertId = alertId;
+      this.aiInvestigations[alertId].timestamp = new Date().toISOString();
+      this.saveAIInvestigations();
+      
+      // Create the investigation prompt with alert data
+      const investigationPrompt = this.generateInvestigationPrompt(item);
+      
+      // Store the investigation prompt in localStorage to avoid URL encoding issues
+      const investigationData = {
+        alertId: alertId,
+        prompt: investigationPrompt,
+        timestamp: new Date().toISOString()
+      };
+      localStorage.setItem(`investigation_${chatSessionId}`, JSON.stringify(investigationData));
+      
+      // Open chat in new tab with investigation session ID
+      const chatUrl = `${window.location.origin}/#/chat/${chatSessionId}?investigation=true&alertId=${encodeURIComponent(alertId)}`;
+      window.open(chatUrl, '_blank');
     },
     
-    async performAIInvestigation(alertId, item, groupIdx) {
-      try {
-        // Prepare the alert data for investigation
-        const alertData = {
-          alertId: alertId,
-          ruleUuid: item['rule.uuid'],
-          ruleName: item['rule.name'],
-          severity: item['event.severity_label'],
-          timestamp: item['soc_timestamp'] || item['@timestamp'],
-          sourceIp: item['source.ip'],
-          destIp: item['destination.ip'],
-          eventModule: item['event.module'],
-          eventDataset: item['event.dataset'],
-          message: item['message'],
-          alertRule: item['rule.rule'],
-          // Include other relevant fields
-          ...item
-        };
-        
-        // Create investigation message
-        const investigationMsg = `Please investigate the following Security Onion alert systematically:
+    generateInvestigationPrompt(item) {
+      const alertId = item['rule.uuid'] || item.soc_id;
+      
+      // Prepare the alert data for investigation
+      const alertData = {
+        alertId: alertId,
+        ruleUuid: item['rule.uuid'],
+        ruleName: item['rule.name'],
+        severity: item['event.severity_label'],
+        timestamp: item['soc_timestamp'] || item['@timestamp'],
+        sourceIp: item['source.ip'],
+        destIp: item['destination.ip'],
+        eventModule: item['event.module'],
+        eventDataset: item['event.dataset'],
+        message: item['message'],
+        alertRule: item['rule.rule']
+      };
+      
+      // Create investigation message
+      const investigationMsg = `Please investigate the following Security Onion alert systematically:
 
 Alert ID: ${alertData.alertId || 'Unknown'}
 Title: ${alertData.ruleName || 'Unknown'}
 Severity: ${alertData.severity || 'Unknown'}
 Rule: ${alertData.alertRule || 'Unknown'}
+Source IP: ${alertData.sourceIp || 'Unknown'}
+Destination IP: ${alertData.destIp || 'Unknown'}
+Timestamp: ${alertData.timestamp || 'Unknown'}
 
 INVESTIGATION STEPS:
 
-1. First, fetch the complete alert details:
-`+"```mcp-tool-use\n"+`{"tool": "query_events", "arguments": {"query": "tags:alert AND log.id.uid:${alertData.alertId || 'Unknown'}", "limit": 1}}`+"\n```\n\n"+`
-2. After getting the alert, extract the rule.uuid from the alert data and use it to get the playbook questions:
-`+"```mcp-tool-use\n"+`{"tool": "get_playbook_questions", "arguments": {"alert_id": "RULE_UUID_HERE"}}`+"\n```\n\n"+`
+1. First, fetch the complete alert details using the alert ID:
+   - Query for the specific alert to get full context
+   - Extract all relevant fields and metadata
+
+2. Get the playbook questions for this alert type:
+   - Use the rule UUID to retrieve investigation playbook
+   - Follow the structured investigation questions
+
 3. Answer each playbook question by:
    - Running the suggested queries provided in the playbook
-   - Analyzing the results
-   - Drawing conclusions based on the evidence
+   - Analyzing the results thoroughly
+   - Drawing evidence-based conclusions
 
-4. Search for related activity using queries like:
+4. Search for related activity:
    - Additional alerts from the same source IP
    - Other connections to/from the involved IPs
-   - Related activity in the suggested time windows
+   - Related activity in suggested time windows
+   - Pattern analysis across similar events
 
-After completing your investigation and answering all playbook questions, provide your findings in the following JSON format:
-{
-  "verdict": "malicious|suspicious|benign|unknown",
-  "confidence": 0-100,
-  "severity": "critical|high|medium|low",
-  "summary": "brief summary of the alert",
-  "details": "detailed analysis",
-  "findings": ["finding 1", "finding 2"],
-  "recommendations": ["recommendation 1", "recommendation 2"],
-  "mitre_tactics": ["tactic1", "tactic2"],
-  "mitre_techniques": ["technique1", "technique2"],
-  "iocs": [
-    {"type": "ip", "value": "1.2.3.4", "direction": "source|destination"},
-    {"type": "domain", "value": "example.com"}
-  ]
-}`;
+5. Provide a comprehensive assessment including:
+   - Verdict (malicious/suspicious/benign/unknown)
+   - Confidence level (0-100%)
+   - Detailed findings and evidence
+   - Recommended actions
+   - MITRE ATT&CK mapping if applicable
 
-        // Call the assistant API
-        const response = await this.$root.papi.post('/assistant/chat', {
-          msg: investigationMsg,
-          messages: []
-        });
-        
-        if (response.data && response.data.content && response.data.content.length > 0) {
-          const investigationResult = {
-            alertId: alertId,
-            result: response.data.content[0].text,
-            timestamp: new Date().toISOString(),
-            confidence: this.extractConfidence(response.data.content[0].text),
-            assessment: this.extractAssessment(response.data.content[0].text)
-          };
-          
-          // Store the investigation result
-          this.aiInvestigations[alertId] = investigationResult;
-          item._aiInvestigationStatus = 'completed';
-          item._aiInvestigationResult = investigationResult;
-          
-          // Save to localStorage for persistence
-          this.saveAIInvestigations();
-          
-          this.$root.showTip(this.i18n.aiInvestigationCompleted);
-        } else {
-          throw new Error('No response from AI assistant');
-        }
-        
-      } catch (error) {
-        console.error('AI Investigation failed:', error);
-        item._aiInvestigationStatus = 'error';
-        this.$root.showError(this.i18n.aiInvestigationFailed + ': ' + (error.message || this.i18n.unknownError));
-      }
-    },
-    
-    extractConfidence(text) {
-      // Try to extract confidence percentage from the AI response
-      const confidenceMatch = text.match(/(\d+)%/);
-      return confidenceMatch ? parseInt(confidenceMatch[1]) : 50;
-    },
-    
-    extractAssessment(text) {
-      // Try to extract true/false positive assessment
-      const lowerText = text.toLowerCase();
-      if (lowerText.includes('true positive') || lowerText.includes('likely malicious')) {
-        return 'true_positive';
-      } else if (lowerText.includes('false positive') || lowerText.includes('likely benign')) {
-        return 'false_positive';
-      }
-      return 'uncertain';
+Please begin the investigation now.`;
+
+      return investigationMsg;
     },
     
     getAIInvestigationButtonColor(item) {
+      const alertId = item['rule.uuid'] || item.soc_id;
+      const investigation = this.aiInvestigations[alertId];
+      
       switch (item._aiInvestigationStatus) {
         case 'investigating':
           return 'primary';
         case 'completed':
-          if (item._aiInvestigationResult) {
-            return item._aiInvestigationResult.assessment === 'true_positive' ? 'red darken-1' :
-                   item._aiInvestigationResult.assessment === 'false_positive' ? 'yellow' : 'amber darken-1';
+          if (investigation && investigation.assessment) {
+            return investigation.assessment === 'true_positive' ? 'red darken-1' :
+                   investigation.assessment === 'false_positive' ? 'green darken-1' : 'amber darken-1';
           }
           return 'secondary';
         case 'error':
@@ -3418,19 +3394,23 @@ After completing your investigation and answering all playbook questions, provid
     },
     
     getAIInvestigationTooltip(item) {
-      if (item._aiInvestigationResult) {
-        const result = item._aiInvestigationResult;
-        const assessmentText = result.assessment === 'true_positive' ? this.i18n.aiTruePositive :
-                              result.assessment === 'false_positive' ? this.i18n.aiFalsePositive : this.i18n.aiUncertain;
-        return `${this.i18n.aiAssessment}: ${assessmentText} (${result.confidence}% ${this.i18n.aiConfidence}) - ${this.i18n.clickToViewDetails}`;
+      const alertId = item['rule.uuid'] || item.soc_id;
+      const investigation = this.aiInvestigations[alertId];
+      
+      if (item._aiInvestigationStatus === 'completed' && investigation) {
+        if (investigation.assessment) {
+          const assessmentText = investigation.assessment === 'true_positive' ? this.i18n.aiTruePositive :
+                                investigation.assessment === 'false_positive' ? this.i18n.aiFalsePositive : this.i18n.aiUncertain;
+          const confidence = investigation.confidence || 'Unknown';
+          return `${this.i18n.aiAssessment}: ${assessmentText} (${confidence}% ${this.i18n.aiConfidence}) - ${this.i18n.clickToOpenChat}`;
+        }
+        return `${this.i18n.aiInvestigationCompleted} - ${this.i18n.clickToOpenChat}`;
+      } else if (item._aiInvestigationStatus === 'investigating') {
+        return `${this.i18n.aiInvestigationInProgress} - ${this.i18n.clickToOpenChat}`;
       }
-      return `${this.i18n.aiInvestigationCompleted} - ${this.i18n.clickToViewResults}`;
+      return `${this.i18n.startAIInvestigation}`;
     },
     
-    closeAIInvestigationDialog() {
-      this.showAIInvestigationDialog = false;
-      this.selectedAIInvestigation = null;
-    },
   }
 };
 
