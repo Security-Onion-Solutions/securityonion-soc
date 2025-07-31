@@ -106,7 +106,37 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
           // Session ID in URL doesn't exist, start new chat with this ID
           this.currentChatId = urlSessionId;
           this.saveCurrentChatId();
-          // Keep the default welcome message
+          
+          // Check if this is an investigation session
+          const isInvestigation = this.$route.query.investigation === 'true';
+          const alertId = this.$route.query.alertId;
+          
+          if (isInvestigation && alertId) {
+            // Try to get investigation data from localStorage
+            const investigationKey = `investigation_${urlSessionId}`;
+            const investigationDataStr = localStorage.getItem(investigationKey);
+            
+            if (investigationDataStr) {
+              try {
+                const investigationData = JSON.parse(investigationDataStr);
+                console.log('Found investigation data for session:', urlSessionId);
+                // This is a new investigation session, start with investigation prompt
+                this.$nextTick(() => {
+                  this.startInvestigationSession(investigationData.alertId, investigationData.prompt);
+                });
+                // Clean up the localStorage after use
+                localStorage.removeItem(investigationKey);
+              } catch (error) {
+                console.error('Failed to parse investigation data:', error);
+              }
+            } else {
+              console.warn('Investigation session detected but no data found in localStorage for key:', investigationKey);
+              // List all localStorage keys for debugging
+              console.log('Available localStorage keys:', Object.keys(localStorage));
+            }
+          } else {
+            // Keep the default welcome message
+          }
         }
       } else {
         // No session ID in URL, restore last active chat
@@ -917,6 +947,60 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
       
       this.messages.push(rejectionMessage);
       this.scrollToBottom();
+    },
+    async startInvestigationSession(alertId, investigationPrompt) {
+      console.log('Starting investigation session for alert:', alertId);
+      console.log('Investigation prompt length:', investigationPrompt.length);
+      
+      // Replace the welcome message with an investigation-specific welcome
+      this.messages = [
+        {
+          role: 'assistant',
+          content: `Hello! I'm starting an AI investigation for alert ID: ${alertId}. I'll analyze this alert systematically and ask for your approval before using any tools. Let me begin the investigation now.`,
+          timestamp: new Date().toISOString(),
+          isInvestigationStart: true,
+          alertId: alertId
+        }
+      ];
+      
+      // Wait for the UI to update
+      await this.$nextTick();
+      
+      // Set the investigation prompt directly (no decoding needed)
+      this.newMessage = investigationPrompt;
+      
+      // Wait for the UI to update again
+      await this.$nextTick();
+      
+      // Send the message after a delay to ensure everything is ready
+      setTimeout(async () => {
+        console.log('About to send message, length:', this.newMessage.length);
+        if (this.newMessage && this.newMessage.trim()) {
+          try {
+            await this.sendMessage();
+            console.log('Investigation message sent successfully');
+          } catch (error) {
+            console.error('Failed to send investigation message:', error);
+          }
+        } else {
+          console.error('No message to send');
+        }
+      }, 2000);
+    },
+    updateInvestigationStatus(alertId, status, assessment = null, confidence = null) {
+      // Update the investigation status in localStorage so hunt page can reflect changes
+      try {
+        const aiInvestigations = JSON.parse(localStorage.getItem('aiInvestigations') || '{}');
+        if (aiInvestigations[alertId]) {
+          aiInvestigations[alertId].status = status;
+          if (assessment) aiInvestigations[alertId].assessment = assessment;
+          if (confidence) aiInvestigations[alertId].confidence = confidence;
+          aiInvestigations[alertId].lastUpdated = new Date().toISOString();
+          localStorage.setItem('aiInvestigations', JSON.stringify(aiInvestigations));
+        }
+      } catch (error) {
+        console.error('Failed to update investigation status:', error);
+      }
     },
     async loadHistory() {
       const response = await this.$root.papi.get('/assistant/sessions')
