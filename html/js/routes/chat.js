@@ -1004,7 +1004,9 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
     },
     async loadHistory() {
       const response = await this.$root.papi.get('/assistant/sessions')
-      console.log(response);
+      const sessionId = response.data[0].sessionId;
+      const response2 = await this.$root.papi.get(`/assistant/sessions/${sessionId}`);
+      console.log(response2);
     }
   }
 }});

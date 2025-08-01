@@ -41,6 +41,7 @@ func RegisterAssistantRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Post("/tool/{name}", h.PostTool)
 		r.Get("/balance", h.GetBalance)
 		r.Get("/sessions", h.GetSessions)
+		r.Get("/sessions/{sessionId}", h.GetSessionHistory)
 	})
 }
 
@@ -292,6 +293,29 @@ func (h *AssistantHandler) GetSessions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	web.Respond(w, r, http.StatusOK, sessions)
+}
+
+func (h *AssistantHandler) GetSessionHistory(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	logger := log.FromContext(ctx)
+
+	sessionId := chi.URLParam(r, "sessionId")
+	if sessionId == "" {
+		logger.Error("sessionId is required")
+		web.Respond(w, r, http.StatusBadRequest, "sessionId is required")
+
+		return
+	}
+
+	history, err := h.server.Assistantstore.GetChatHistory(ctx, sessionId)
+	if err != nil {
+		logger.WithError(err).Error("unable to get chat history for session")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, history)
 }
 
 func streamResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, response *http.Response) (entireResponse []byte, err error) {

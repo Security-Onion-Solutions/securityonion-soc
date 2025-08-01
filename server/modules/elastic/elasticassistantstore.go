@@ -45,7 +45,7 @@ func (store *ElasticAssistantstore) Init(index string, schemaPrefix string) erro
 	return nil
 }
 
-func (store *ElasticAssistantstore) save(ctx context.Context, obj interface{}, kind string, id string) (*model.EventIndexResults, error) {
+func (store *ElasticAssistantstore) save(ctx context.Context, obj any, kind string, id string) (*model.EventIndexResults, error) {
 	// if err := store.server.CheckAuthorized(ctx, "write", "detections"); err != nil {
 	// 	return nil, err
 	// }
@@ -58,7 +58,7 @@ func (store *ElasticAssistantstore) save(ctx context.Context, obj interface{}, k
 	return results, err
 }
 
-func (store *ElasticAssistantstore) indexDoc(ctx context.Context, index string, document map[string]interface{}, id string) (*model.EventIndexResults, error) {
+func (store *ElasticAssistantstore) indexDoc(ctx context.Context, index string, document map[string]any, id string) (*model.EventIndexResults, error) {
 	logger := log.FromContext(ctx)
 
 	results := model.NewEventIndexResults()
@@ -162,7 +162,7 @@ func (store *ElasticAssistantstore) ConvertObjectToDocument(ctx context.Context,
 	}
 
 	if isEdit {
-		document = map[string]interface{}{
+		document = map[string]any{
 			"doc": document,
 		}
 	}
@@ -240,8 +240,121 @@ func (store *ElasticAssistantstore) SaveChat(ctx context.Context, chat *model.St
 	return err
 }
 
-func (store *ElasticAssistantstore) GetChatHistory(ctx context.Context, conversationId string) ([]*model.StoredMessage, error) {
-	return nil, nil
+func (store *ElasticAssistantstore) GetChatHistory(ctx context.Context, sessionId string) ([]*model.StoredMessage, error) {
+	logger := log.FromContext(ctx)
+
+	// Build Elasticsearch query to get all messages for the session
+	query := map[string]any{
+		"query": map[string]any{
+			"bool": map[string]any{
+				"must": []any{
+					map[string]any{
+						"term": map[string]any{
+							store.schemaPrefix + "chat.sessionId": sessionId,
+						},
+					},
+					map[string]any{
+						"term": map[string]any{
+							store.schemaPrefix + "kind": "chat",
+						},
+					},
+				},
+			},
+		},
+		"sort": []any{
+			map[string]any{
+				"@timestamp": map[string]any{
+					"order": "asc",
+				},
+			},
+		},
+		"size": 10000, // Get all messages for the session
+	}
+
+	// Convert query to JSON
+	queryJSON, err := json.Marshal(query)
+	if err != nil {
+		logger.WithError(err).Error("Failed to marshal Elasticsearch query")
+		return nil, err
+	}
+
+	logger.WithFields(log.Fields{
+		"query":     store.truncate(string(queryJSON)),
+		"sessionId": sessionId,
+		"requestId": ctx.Value(web.ContextKeyRequestId),
+	}).Debug("Searching for chat history")
+
+	// Execute search
+	res, err := store.esClient.Search(
+		store.esClient.Search.WithContext(ctx),
+		store.esClient.Search.WithIndex(store.index),
+		store.esClient.Search.WithBody(strings.NewReader(string(queryJSON))),
+	)
+	if err != nil {
+		logger.WithError(err).Error("Failed to execute Elasticsearch search")
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	// Read response
+	responseJSON, err := readJsonFromResponse(res)
+	if err != nil {
+		logger.WithError(err).Error("Failed to read Elasticsearch response")
+		return nil, err
+	}
+
+	logger.WithFields(log.Fields{
+		"response":  store.truncate(responseJSON),
+		"sessionId": sessionId,
+		"requestId": ctx.Value(web.ContextKeyRequestId),
+	}).Debug("Received Elasticsearch response")
+
+	// Parse response
+	var response map[string]any
+	if err := json.Unmarshal([]byte(responseJSON), &response); err != nil {
+		logger.WithError(err).Error("Failed to unmarshal Elasticsearch response")
+		return nil, err
+	}
+
+	// Extract messages from hits
+	messages := []*model.StoredMessage{}
+	if hits, ok := response["hits"].(map[string]any); ok {
+		if hitsArray, ok := hits["hits"].([]any); ok {
+			for _, hitObj := range hitsArray {
+				if hit, ok := hitObj.(map[string]any); ok {
+					if source, ok := hit["_source"].(map[string]any); ok {
+						if chat, ok := source[store.schemaPrefix+"chat"].(map[string]any); ok {
+							// Convert the source to a StoredMessage
+							sourceJSON, err := json.Marshal(chat)
+							if err != nil {
+								logger.WithError(err).Error("Failed to marshal message source")
+								continue
+							}
+
+							var message model.StoredMessage
+							if err := json.Unmarshal(sourceJSON, &message); err != nil {
+								logger.WithError(err).Error("Failed to unmarshal StoredMessage")
+								continue
+							}
+
+							message.Auditable.Kind = source[store.schemaPrefix+"kind"].(string)
+							message.Auditable.Id = hit["_id"].(string)
+
+							messages = append(messages, &message)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	logger.WithFields(log.Fields{
+		"messageCount": len(messages),
+		"sessionId":    sessionId,
+		"requestId":    ctx.Value(web.ContextKeyRequestId),
+	}).Debug("Found chat history messages")
+
+	return messages, nil
 }
 
 func (store *ElasticAssistantstore) GetPreviousConversations(ctx context.Context, userId string) ([]*model.StoredMessage, error) {
@@ -255,7 +368,7 @@ func (store *ElasticAssistantstore) GetPreviousConversations(ctx context.Context
 				"must": []any{
 					map[string]any{
 						"term": map[string]any{
-							store.schemaPrefix + "chat.userId.keyword": userId,
+							store.schemaPrefix + "chat.userId": userId,
 						},
 					},
 					map[string]any{
@@ -269,7 +382,7 @@ func (store *ElasticAssistantstore) GetPreviousConversations(ctx context.Context
 		"aggs": map[string]any{
 			"sessions": map[string]any{
 				"terms": map[string]any{
-					"field": store.schemaPrefix + "chat.sessionId.keyword",
+					"field": store.schemaPrefix + "chat.sessionId",
 					"size":  10000,
 				},
 				"aggs": map[string]any{
@@ -307,9 +420,6 @@ func (store *ElasticAssistantstore) GetPreviousConversations(ctx context.Context
 		store.esClient.Search.WithContext(ctx),
 		store.esClient.Search.WithIndex(store.index),
 		store.esClient.Search.WithBody(strings.NewReader(string(queryJSON))),
-		store.esClient.Search.WithTrackTotalHits(true),
-		store.esClient.Search.WithPretty(),
-		store.esClient.Search.WithIgnoreUnavailable(true),
 	)
 	if err != nil {
 		logger.WithError(err).Error("Failed to execute Elasticsearch search")
@@ -330,7 +440,7 @@ func (store *ElasticAssistantstore) GetPreviousConversations(ctx context.Context
 	}).Debug("Received Elasticsearch response")
 
 	// Parse response
-	var response map[string]interface{}
+	var response map[string]any
 	if err := json.Unmarshal([]byte(responseJSON), &response); err != nil {
 		logger.WithError(err).Error("Failed to unmarshal Elasticsearch response")
 		return nil, err
@@ -338,17 +448,17 @@ func (store *ElasticAssistantstore) GetPreviousConversations(ctx context.Context
 
 	// Extract first messages from aggregation
 	messages := []*model.StoredMessage{}
-	if aggregations, ok := response["aggregations"].(map[string]interface{}); ok {
-		if sessions, ok := aggregations["sessions"].(map[string]interface{}); ok {
-			if buckets, ok := sessions["buckets"].([]interface{}); ok {
+	if aggregations, ok := response["aggregations"].(map[string]any); ok {
+		if sessions, ok := aggregations["sessions"].(map[string]any); ok {
+			if buckets, ok := sessions["buckets"].([]any); ok {
 				for _, bucketObj := range buckets {
-					if bucket, ok := bucketObj.(map[string]interface{}); ok {
-						if firstMessage, ok := bucket["first_message"].(map[string]interface{}); ok {
-							if hits, ok := firstMessage["hits"].(map[string]interface{}); ok {
-								if hitsArray, ok := hits["hits"].([]interface{}); ok && len(hitsArray) > 0 {
-									if hit, ok := hitsArray[0].(map[string]interface{}); ok {
-										if source, ok := hit["_source"].(map[string]interface{}); ok {
-											if chat, ok := source[store.schemaPrefix+"chat"].(map[string]interface{}); ok {
+					if bucket, ok := bucketObj.(map[string]any); ok {
+						if firstMessage, ok := bucket["first_message"].(map[string]any); ok {
+							if hits, ok := firstMessage["hits"].(map[string]any); ok {
+								if hitsArray, ok := hits["hits"].([]any); ok && len(hitsArray) > 0 {
+									if hit, ok := hitsArray[0].(map[string]any); ok {
+										if source, ok := hit["_source"].(map[string]any); ok {
+											if chat, ok := source[store.schemaPrefix+"chat"].(map[string]any); ok {
 												// Convert the source to a StoredMessage
 												sourceJSON, err := json.Marshal(chat)
 												if err != nil {
