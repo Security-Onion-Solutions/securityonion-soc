@@ -10,8 +10,8 @@ import (
 	"strconv"
 )
 
-type RuleRepo struct {
-	Repo        string
+type Repo struct {
+	RepoUrl     string `json:"repo"`
 	Branch      *string
 	License     string
 	Folder      *string
@@ -19,7 +19,7 @@ type RuleRepo struct {
 	RulesetName string
 }
 
-func GetReposDefault(cfg map[string]interface{}, field string, dflt []*RuleRepo) ([]*RuleRepo, error) {
+func GetReposDefault(cfg map[string]interface{}, field string, licenseRequired bool, dflt []*Repo) ([]*Repo, error) {
 	cfgInter, ok := cfg[field]
 	if !ok {
 		// config doesn't have any rulesRepos, no error, return defaults
@@ -31,7 +31,7 @@ func GetReposDefault(cfg map[string]interface{}, field string, dflt []*RuleRepo)
 		return nil, fmt.Errorf(`top level config value "%s" is not an array of objects`, field)
 	}
 
-	repos := make([]*RuleRepo, 0, len(repoMaps))
+	repos := make([]*Repo, 0, len(repoMaps))
 
 	for _, repoMap := range repoMaps {
 		obj, ok := repoMap.(map[string]interface{})
@@ -45,7 +45,7 @@ func GetReposDefault(cfg map[string]interface{}, field string, dflt []*RuleRepo)
 		}
 
 		license, ok := obj["license"].(string)
-		if !ok {
+		if !ok && licenseRequired {
 			return nil, fmt.Errorf(`missing "license" from "%s" entry`, field)
 		}
 
@@ -67,8 +67,8 @@ func GetReposDefault(cfg map[string]interface{}, field string, dflt []*RuleRepo)
 
 		rulesetName, _ := obj["rulesetName"].(string)
 
-		r := &RuleRepo{
-			Repo:        repo,
+		r := &Repo{
+			RepoUrl:     repo,
 			License:     license,
 			Community:   isCommunity,
 			RulesetName: rulesetName,

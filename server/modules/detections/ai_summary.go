@@ -86,10 +86,10 @@ func updateAiRepo(isRunning *bool, baseRepoFolder string, repoUrl string, branch
 		branchPtr = &branch
 	}
 
-	_, _, err := UpdateRepos(isRunning, baseRepoFolder, []*model.RuleRepo{
+	_, _, err := UpdateRepos(isRunning, baseRepoFolder, []*model.Repo{
 		{
-			Repo:   repoUrl,
-			Branch: branchPtr,
+			RepoUrl: repoUrl,
+			Branch:  branchPtr,
 		},
 	}, iom)
 

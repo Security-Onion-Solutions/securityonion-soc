@@ -16,9 +16,9 @@ import (
 func TestGetRepos(t *testing.T) {
 	t.Parallel()
 
-	dflt := []*RuleRepo{
+	dflt := []*Repo{
 		{
-			Repo:    "https://github.com/Security-Onion-Solutions/securityonion-resources",
+			RepoUrl: "https://github.com/Security-Onion-Solutions/securityonion-resources",
 			License: "DRL",
 		},
 	}
@@ -26,7 +26,7 @@ func TestGetRepos(t *testing.T) {
 	table := []struct {
 		Name     string
 		Config   map[string]interface{}
-		Expected []*RuleRepo
+		Expected []*Repo
 		Error    *string
 	}{
 		{
@@ -56,24 +56,24 @@ func TestGetRepos(t *testing.T) {
 					},
 				},
 			},
-			Expected: []*RuleRepo{
+			Expected: []*Repo{
 				{
-					Repo:      "repo1",
+					RepoUrl:   "repo1",
 					License:   "MIT",
 					Community: true,
 				},
 				{
-					Repo:    "repo2",
+					RepoUrl: "repo2",
 					License: "GPL2",
 					Folder:  util.Ptr("sigma/stable"),
 				},
 				{
-					Repo:      "repo3",
+					RepoUrl:   "repo3",
 					License:   "DRL",
 					Community: true,
 				},
 				{
-					Repo:    "repo4",
+					RepoUrl: "repo4",
 					License: "DRL",
 				},
 			},
@@ -128,7 +128,7 @@ func TestGetRepos(t *testing.T) {
 		t.Run(test.Name, func(t *testing.T) {
 			t.Parallel()
 
-			repos, err := GetReposDefault(test.Config, "rulesRepos", dflt)
+			repos, err := GetReposDefault(test.Config, "rulesRepos", true, dflt)
 			if test.Error == nil {
 				assert.NoError(t, err)
 			} else {
