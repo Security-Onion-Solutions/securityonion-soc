@@ -16,17 +16,16 @@ import (
 )
 
 const PRODUCTIVITY_REPORT_TEMPLATE_NAME = "productivity_report.md"
-const METRIC_LIMIT = 10000
-const EVENT_LIMIT = 10000
-const NO_EVENTS = 0
-const SECONDS_PER_HOUR = 3600.0
 
 func (export *Export) getProductivityDetailsFromServer(job *model.Job) (*ProductivityTemplateInput, error) {
 	var err error
 
+	eventLimit := export.getEventLimit(job)
+	metricLimit := export.getMetricLimit(job)
+
 	eventResults := &model.EventSearchResults{}
 	eventQuery := `_index:"*:logs-*" AND NOT tags:alert | groupby event.module, event.dataset`
-	_, err = export.queryEventData(eventQuery, job.Filter, METRIC_LIMIT, NO_EVENTS, eventResults)
+	_, err = export.queryEventData(eventQuery, job.Filter, metricLimit, NO_EVENTS, eventResults)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"jobId": job.Id,
@@ -56,7 +55,7 @@ func (export *Export) getProductivityDetailsFromServer(job *model.Job) (*Product
 
 	alertResults := &model.EventSearchResults{}
 	alertQuery := `tags:alert | groupby event.escalated | groupby event.acknowledged, event.escalated | groupby event.module, event.severity_label | groupby event.severity_label, event.acknowledged, event.escalated | groupby rule.category | groupby rule.ruleset`
-	_, err = export.queryEventData(alertQuery, job.Filter, METRIC_LIMIT, NO_EVENTS, alertResults)
+	_, err = export.queryEventData(alertQuery, job.Filter, metricLimit, NO_EVENTS, alertResults)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"jobId": job.Id,
@@ -97,7 +96,7 @@ func (export *Export) getProductivityDetailsFromServer(job *model.Job) (*Product
 
 	caseResults := &model.EventSearchResults{}
 	caseQuery := `_index: "*:so-case" AND so_kind: case | groupby so_case.status | groupby so_case.status, so_case.assigneeId | groupby so_case.assigneeId | groupby so_case.severity | groupby so_case.priority | groupby so_case.tlp | groupby so_case.pap | groupby so_case.category | groupby so_case.tags`
-	_, err = export.queryEventData(caseQuery, job.Filter, METRIC_LIMIT, EVENT_LIMIT, caseResults)
+	_, err = export.queryEventData(caseQuery, job.Filter, metricLimit, eventLimit, caseResults)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"jobId": job.Id,
@@ -169,7 +168,7 @@ func (export *Export) getProductivityDetailsFromServer(job *model.Job) (*Product
 
 	commentResults := &model.EventSearchResults{}
 	commentQuery := `_index: "*:so-case" AND so_kind: comment | groupby so_comment.userId`
-	_, err = export.queryEventData(commentQuery, job.Filter, METRIC_LIMIT, EVENT_LIMIT, commentResults)
+	_, err = export.queryEventData(commentQuery, job.Filter, metricLimit, eventLimit, commentResults)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"jobId": job.Id,
@@ -190,7 +189,7 @@ func (export *Export) getProductivityDetailsFromServer(job *model.Job) (*Product
 		}
 	}
 
-	if len(commentResults.Events) == EVENT_LIMIT {
+	if len(commentResults.Events) == eventLimit {
 		templateInput.Error = "Additional comment data may have been excluded due to reporting data limits"
 	}
 

@@ -691,3 +691,416 @@ func TestProcessJob_ProductivityReport(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Contains(t, string(output), "Helvetica") // A valid PDF should contain a font name
 }
+
+func TestProcessJob_TabularReport(t *testing.T) {
+	export := NewExport(agent.NewAgent(&config.AgentConfig{}, "test-version"))
+	config := module.ModuleConfig{}
+	config["executablePath"] = "../../../scripts/md2pdf" // Not used for tabular, but part of standard config
+	config["templatePath"] = "../../../templates/export" // Not used for tabular, but part of standard config
+	export.Init(config)
+	export.agent.Client = web.NewClient("http://localhost:8080", true)
+	export.agent.Client.Auth = FakeClientAuth{}
+
+	// Test case 1: Tabular export for events (no group parameter)
+	t.Run("TabularEventsExport", func(t *testing.T) {
+		export.agent.Client.MockStringResponse(`[{"id":"xyz"}]`, 200, nil) // Get Users
+
+		mockEventsJson := `{
+			"totalEvents": 2,
+			"events": [
+				{
+					"id": "event1",
+					"timestamp": "2025-07-01T10:00:00Z",
+					"payload": {
+						"field1": "value1",
+						"field2": 123
+					}
+				},
+				{
+					"id": "event2",
+					"timestamp": "2025-07-01T11:00:00Z",
+					"payload": {
+						"field1": "valueA",
+						"field3": true
+					}
+				}
+			]
+		}`
+		export.agent.Client.MockStringResponse(mockEventsJson, 200, nil)
+
+		job := model.NewJob()
+		job.Kind = model.JOB_KIND_EXPORT
+		job.Filter.Parameters = map[string]interface{}{
+			"type":  "tabular",
+			"id":    "dummy", // Required by ProcessJob, but not used by tabular
+			"query": "some query string",
+		}
+		job.Filter.BeginTime = time.Date(2025, 7, 1, 0, 0, 0, 0, time.UTC)
+		job.Filter.EndTime = time.Date(2025, 7, 2, 0, 0, 0, 0, time.UTC)
+
+		reader, err := export.ProcessJob(job, nil)
+		assert.Nil(t, err)
+		assert.NotNil(t, reader)
+
+		output, err := io.ReadAll(reader)
+		assert.Nil(t, err)
+
+		expectedCsv := `field1,field2,field3,soc_id,soc_score,soc_type,soc_timestamp,soc_source
+value1,123,,event1,0,,2025-07-01T10:00:00Z,
+valueA,,true,event2,0,,2025-07-01T11:00:00Z,
+`
+		assert.Equal(t, expectedCsv, string(output))
+	})
+
+	// Test case 2: Tabular export for metrics (with group parameter)
+	t.Run("TabularMetricsExport", func(t *testing.T) {
+		mockMetricsJson := `{
+			"totalEvents": 15,
+			"metrics": {
+				"groupby_0|event.module": [
+					{"value": 10, "keys": ["moduleA"]},
+					{"value": 5, "keys": ["moduleB"]}
+				]
+			}
+		}`
+		export.agent.Client.MockStringResponse(mockMetricsJson, 200, nil)
+
+		job := model.NewJob()
+		job.Kind = model.JOB_KIND_EXPORT
+		job.Filter.Parameters = map[string]interface{}{
+			"type":  "tabular",
+			"id":    "dummy",
+			"query": "some query string",
+			"group": "groupby_0|event.module",
+		}
+		job.Filter.BeginTime = time.Date(2025, 7, 1, 0, 0, 0, 0, time.UTC)
+		job.Filter.EndTime = time.Date(2025, 7, 2, 0, 0, 0, 0, time.UTC)
+
+		reader, err := export.ProcessJob(job, nil)
+		assert.Nil(t, err)
+		assert.NotNil(t, reader)
+
+		output, err := io.ReadAll(reader)
+		assert.Nil(t, err)
+
+		expectedCsv := `count,event.module
+10,moduleA
+5,moduleB
+`
+		assert.Equal(t, expectedCsv, string(output))
+	})
+
+	// Test case 3: Missing query parameter
+	t.Run("MissingQueryParameter", func(t *testing.T) {
+		job := model.NewJob()
+		job.Kind = model.JOB_KIND_EXPORT
+		job.Filter.Parameters = map[string]interface{}{
+			"type": "tabular",
+			"id":   "dummy",
+		}
+
+		reader, err := export.ProcessJob(job, nil)
+		assert.Error(t, err)
+		assert.Nil(t, reader)
+		assert.Contains(t, err.Error(), "query parameter is missing or empty")
+	})
+
+	// Test case 4: API call fails for tabular events
+	t.Run("APIFailTabularEvents", func(t *testing.T) {
+		export.agent.Client.MockStringResponse("", 500, assert.AnError) // Simulate error
+		job := model.NewJob()
+		job.Kind = model.JOB_KIND_EXPORT
+		job.Filter.Parameters = map[string]interface{}{
+			"type":  "tabular",
+			"id":    "dummy",
+			"query": "failing query",
+		}
+
+		reader, err := export.ProcessJob(job, nil)
+		assert.Error(t, err)
+		assert.Nil(t, reader)
+		assert.Contains(t, err.Error(), "failed to generate tabular data")
+	})
+
+	// Test case 5: API call fails for tabular metrics
+	t.Run("APIFailTabularMetrics", func(t *testing.T) {
+		export.agent.Client.MockStringResponse("", 500, assert.AnError) // Simulate error
+		job := model.NewJob()
+		job.Kind = model.JOB_KIND_EXPORT
+		job.Filter.Parameters = map[string]interface{}{
+			"type":  "tabular",
+			"id":    "dummy",
+			"query": "failing query",
+			"group": "event.module",
+		}
+
+		reader, err := export.ProcessJob(job, nil)
+		assert.Error(t, err)
+		assert.Nil(t, reader)
+		assert.Contains(t, err.Error(), "failed to generate tabular data")
+	})
+}
+
+func TestGetMetricLimit(t *testing.T) {
+	tests := []struct {
+		name              string
+		paramMetricLimit  interface{}
+		exportMetricLimit int
+		expected          int
+	}{
+		{
+			name:              "Parameter exists and is valid",
+			paramMetricLimit:  100,
+			exportMetricLimit: 500,
+			expected:          100,
+		},
+		{
+			name:              "Parameter exists but is zero",
+			paramMetricLimit:  0,
+			exportMetricLimit: 500,
+			expected:          500,
+		},
+		{
+			name:              "Parameter exists but is negative",
+			paramMetricLimit:  -10,
+			exportMetricLimit: 500,
+			expected:          500,
+		},
+		{
+			name:              "Parameter exists but is not an int",
+			paramMetricLimit:  "invalid",
+			exportMetricLimit: 500,
+			expected:          500,
+		},
+		{
+			name:              "Parameter does not exist, export limit is valid",
+			paramMetricLimit:  nil,
+			exportMetricLimit: 500,
+			expected:          500,
+		},
+		{
+			name:              "Parameter does not exist, export limit is zero",
+			paramMetricLimit:  nil,
+			exportMetricLimit: 0,
+			expected:          DEFAULT_METRIC_LIMIT,
+		},
+		{
+			name:              "Parameter does not exist, export limit is negative",
+			paramMetricLimit:  nil,
+			exportMetricLimit: -10,
+			expected:          DEFAULT_METRIC_LIMIT,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			export := NewExport(nil)
+			export.exportMetricLimit = tt.exportMetricLimit
+			job := model.NewJob()
+			job.Filter.Parameters = make(map[string]interface{})
+			if tt.paramMetricLimit != nil {
+				job.Filter.Parameters["metricLimit"] = tt.paramMetricLimit
+			}
+
+			result := export.getMetricLimit(job)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestGetEventLimit(t *testing.T) {
+	tests := []struct {
+		name             string
+		paramEventLimit  interface{}
+		exportEventLimit int
+		expected         int
+	}{
+		{
+			name:             "Parameter exists and is valid",
+			paramEventLimit:  200,
+			exportEventLimit: 600,
+			expected:         200,
+		},
+		{
+			name:             "Parameter exists but is zero",
+			paramEventLimit:  0,
+			exportEventLimit: 600,
+			expected:         600,
+		},
+		{
+			name:             "Parameter exists but is negative",
+			paramEventLimit:  -20,
+			exportEventLimit: 600,
+			expected:         600,
+		},
+		{
+			name:             "Parameter exists but is not an int",
+			paramEventLimit:  "invalid",
+			exportEventLimit: 600,
+			expected:         600,
+		},
+		{
+			name:             "Parameter does not exist, export limit is valid",
+			paramEventLimit:  nil,
+			exportEventLimit: 600,
+			expected:         600,
+		},
+		{
+			name:             "Parameter does not exist, export limit is zero",
+			paramEventLimit:  nil,
+			exportEventLimit: 0,
+			expected:         DEFAULT_EVENT_LIMIT,
+		},
+		{
+			name:             "Parameter does not exist, export limit is negative",
+			paramEventLimit:  nil,
+			exportEventLimit: -20,
+			expected:         DEFAULT_EVENT_LIMIT,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			export := NewExport(nil)
+			export.exportEventLimit = tt.exportEventLimit
+			job := model.NewJob()
+			job.Filter.Parameters = make(map[string]interface{})
+			if tt.paramEventLimit != nil {
+				job.Filter.Parameters["eventLimit"] = tt.paramEventLimit
+			}
+
+			result := export.getEventLimit(job)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestConvertToString(t *testing.T) {
+	export := NewExport(nil) // convertToString doesn't depend on agent or client
+
+	tests := []struct {
+		name     string
+		input    interface{}
+		expected string
+	}{
+		{
+			name:     "nil input",
+			input:    nil,
+			expected: "",
+		},
+		{
+			name:     "int input",
+			input:    123,
+			expected: "123",
+		},
+		{
+			name:     "float64 input",
+			input:    123.456,
+			expected: "123.456000",
+		},
+		{
+			name:     "bool true input",
+			input:    true,
+			expected: "true",
+		},
+		{
+			name:     "bool false input",
+			input:    false,
+			expected: "false",
+		},
+		{
+			name:     "string input",
+			input:    "hello world",
+			expected: "hello world",
+		},
+		{
+			name:     "time.Time input",
+			input:    time.Date(2025, time.July, 30, 10, 30, 0, 0, time.UTC),
+			expected: "2025-07-30 10:30:00",
+		},
+		{
+			name:     "slice of strings",
+			input:    []string{"a", "b", "c"},
+			expected: "[a b c]",
+		},
+		{
+			name:     "map input",
+			input:    map[string]int{"key": 1},
+			expected: "map[key:1]",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := export.convertToString(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestConvertToCsv(t *testing.T) {
+	export := NewExport(nil) // convertToCsv doesn't depend on agent or client
+
+	tests := []struct {
+		name        string
+		records     [][]string
+		expected    string
+		expectError bool
+	}{
+		{
+			name: "simple records",
+			records: [][]string{
+				{"header1", "header2"},
+				{"value1", "value2"},
+				{"value3", "value4"},
+			},
+			expected:    "header1,header2\nvalue1,value2\nvalue3,value4\n",
+			expectError: false,
+		},
+		{
+			name: "records with commas and quotes",
+			records: [][]string{
+				{"Name", "Address"},
+				{"John Doe", "123 Main St, Anytown"},
+				{"Jane \"The Great\" Smith", "456 Oak Ave"},
+			},
+			expected:    "Name,Address\nJohn Doe,\"123 Main St, Anytown\"\n\"Jane \"\"The Great\"\" Smith\",456 Oak Ave\n",
+			expectError: false,
+		},
+		{
+			name:        "empty records",
+			records:     [][]string{},
+			expected:    "",
+			expectError: false,
+		},
+		{
+			name: "records with empty strings",
+			records: [][]string{
+				{"A", "B"},
+				{"", "val2"},
+				{"val3", ""},
+			},
+			expected:    "A,B\n,val2\nval3,\n",
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reader, size, err := export.convertToCsv(tt.records)
+			if tt.expectError {
+				assert.Error(t, err)
+				assert.Nil(t, reader)
+				assert.Zero(t, size)
+			} else {
+				assert.Nil(t, err)
+				assert.NotNil(t, reader)
+
+				output, readErr := io.ReadAll(reader)
+				assert.Nil(t, readErr)
+				assert.Equal(t, tt.expected, string(output))
+				assert.Equal(t, len(tt.expected), size)
+			}
+		})
+	}
+}

@@ -630,11 +630,19 @@ const huntComponent = {
         });
       }
     },
+    async exportMetrics(group, groupIdx) {
+      this.$root.export({
+          type: 'tabular',
+          query: await this.getQuery(),
+          group: group.key,
+          groupIdx: groupIdx,
+        }, this.getStartDate().format(), this.getEndDate().format());
+    },
     async exportEvents() {
       this.$root.export({
-              type: 'tabular',
-              query: this.getQuery(),
-            }, this.getStartDate().format(), this.getEndDate().format());
+          type: 'tabular',
+          query: await this.getQuery(),
+        }, this.getStartDate().format(), this.getEndDate().format());
     },
     getPresets(kind) {
       if (this.presets && this.presets[kind]) {
@@ -1489,6 +1497,7 @@ const huntComponent = {
           fields.shift();
 
           // Group objects have the following attributes:
+          // key:           Unique key for the group, such as "groupby_0|field1|field2|field3"
           // title:         Chart title
           // fields:        Array of field names in the group, starting with an empty string (for the action
           //                buttons column, and then the 'count', followed by the actual field names.
@@ -1508,6 +1517,7 @@ const huntComponent = {
           // sortDesc:      True if the optional sort should be in descending order.
           // maximized:     True if this group view has been maximized.
           var group = {};
+          group.key = key;
           group.title = fields.join(this.chartLabelFieldSeparator);
           group.fields = [...fields];
           group.data = this.constructGroupByRows(fields, metrics[key])

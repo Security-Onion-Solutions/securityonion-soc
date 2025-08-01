@@ -31,6 +31,11 @@ const DEFAULT_SYNTAX_PATH = "syntax_files"
 const DEFAULT_TEMPLATE_PATH = "templates/export"
 const DEFAULT_TIMEOUT_MS = 1200000
 const DEFAULT_CACHE_REFRESH_INTERVAL_MS = 10000
+const DEFAULT_METRIC_LIMIT = 10000
+const DEFAULT_EVENT_LIMIT = 10000
+
+const NO_EVENTS = 0
+const SECONDS_PER_HOUR = 3600.0
 
 type Export struct {
 	config                 module.ModuleConfig
@@ -44,6 +49,8 @@ type Export struct {
 	usersById              map[string]*model.User
 	lastRefreshTime        time.Time
 	cacheRefreshIntervalMs int // in milliseconds
+	exportMetricLimit      int
+	exportEventLimit       int
 }
 
 func NewExport(agt *agent.Agent) *Export {
@@ -65,6 +72,8 @@ func (export *Export) Init(cfg module.ModuleConfig) error {
 	export.syntaxPath = stripTrailingSlash(module.GetStringDefault(cfg, "syntaxPath", DEFAULT_SYNTAX_PATH))
 	export.templatePath = stripTrailingSlash(module.GetStringDefault(cfg, "templatePath", DEFAULT_TEMPLATE_PATH))
 	export.cacheRefreshIntervalMs = module.GetIntDefault(cfg, "cacheRefreshIntervalMs", DEFAULT_CACHE_REFRESH_INTERVAL_MS)
+	export.exportMetricLimit = module.GetIntDefault(cfg, "exportMetricLimit", DEFAULT_METRIC_LIMIT)
+	export.exportEventLimit = module.GetIntDefault(cfg, "exportEventLimit", DEFAULT_EVENT_LIMIT)
 
 	if err == nil && export.agent == nil {
 		err = errors.New("unable to invoke JobMgr.AddJobProcessor due to nil agent")
@@ -113,27 +122,22 @@ func (export *Export) ProcessJob(job *model.Job, reader io.ReadCloser) (io.ReadC
 
 	// Generate export content
 	switch exportType {
-	// case "tabular":
-	// 	query, ok := job.Filter.Parameters["query"].(string)
-	// 	if !ok {
-	// 		return reader, errors.New("missing required parameter: query")
-	// 	}
+	case "tabular":
+		records, err := export.getTabularData(job)
+		if err != nil {
+			return reader, fmt.Errorf("failed to generate tabular data: %v", err)
+		}
 
-	// 	// Generate report content
-	// 	content, err := export.generateTabularReport(query, job.Filter)
-	// 	if err != nil {
-	// 		return reader, fmt.Errorf("failed to generate tabular report data: %v", err)
-	// 	}
-	// 	csvReader, size, err := export.convertToCsv(job.Id, content)
-	// 	if err != nil {
-	// 		return reader, fmt.Errorf("failed to generate CSV: %v", err)
-	// 	}
+		csvReader, size, err := export.convertToCsv(records)
+		if err != nil {
+			return reader, fmt.Errorf("failed to generate CSV: %v", err)
+		}
 
-	// 	job.Size = size
-	// 	job.FileExtension = "csv"
+		job.Size = size
+		job.FileExtension = "csv"
 
-	// 	// Return content as reader
-	// 	return io.NopCloser(csvReader), nil
+		// Return content as reader
+		return io.NopCloser(csvReader), nil
 	case "case":
 		exportId, ok := job.Filter.Parameters["id"].(string)
 		if !ok {
@@ -401,4 +405,38 @@ func stripTrailingSlash(path string) string {
 		return path[:len(path)-1]
 	}
 	return path
+}
+
+func (export *Export) getMetricLimit(job *model.Job) int {
+	if limit, exists := job.Filter.Parameters["metricLimit"]; exists {
+		if limitInt, ok := limit.(int); ok && limitInt > 0 {
+			return limitInt
+		}
+		log.WithFields(log.Fields{
+			"exportMetricLimit": limit,
+			"jobId":             job.Id,
+		}).Warn("Invalid metricLimit parameter; using default")
+	}
+
+	if export.exportMetricLimit > 0 {
+		return export.exportMetricLimit
+	}
+	return DEFAULT_METRIC_LIMIT
+}
+
+func (export *Export) getEventLimit(job *model.Job) int {
+	if limit, exists := job.Filter.Parameters["eventLimit"]; exists {
+		if limitInt, ok := limit.(int); ok && limitInt > 0 {
+			return limitInt
+		}
+		log.WithFields(log.Fields{
+			"exportEventLimit": limit,
+			"jobId":            job.Id,
+		}).Warn("Invalid eventLimit parameter; using default")
+	}
+
+	if export.exportEventLimit > 0 {
+		return export.exportEventLimit
+	}
+	return DEFAULT_EVENT_LIMIT
 }

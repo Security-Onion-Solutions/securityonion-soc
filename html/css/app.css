@@ -42,6 +42,7 @@
   background-color: rgb(var(--v-theme-drawer_background)) !important;
 }
 
+
 .v-toolbar-title {
   flex: unset !important;
 }
@@ -1075,3 +1076,35 @@ ul ul ul {
   justify-self: center;
 }
 
+@media print {
+  .no-print,
+  .v-navigation-drawer, 
+  .v-app-bar, 
+  .v-btn, 
+  .router-link-active, 
+  .v-input__details, 
+  .v-data-table-footer__items-per-page,
+  .v-chip__close,
+  .v-checkbox,
+  .v-menu,
+  .v-snackbar,
+  .v-alert,
+  .v-toolbar,
+  .new-comment
+  {
+    display:none;
+  }
+
+  .v-main {
+    --v-layout-left: 0px !important;
+  }
+
+  textarea,
+  .v-table__wrapper,
+  .v-input,
+  .markdown-body
+  pre
+  {
+    overflow: hidden !important;
+  }
+}

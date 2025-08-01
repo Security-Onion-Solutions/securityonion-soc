@@ -182,7 +182,7 @@
                 <v-icon>fa-times</v-icon>
               </v-btn>
             </template>
-            {{ tipMessage }}
+            <div v-html="tipMessage" class="tip-message"></div>
           </v-snackbar>
           <router-view id="main-view"></router-view>
         </v-main>
@@ -200,7 +200,7 @@
           <span class="text-no-wrap d-md-none" data-aid="copyright_display">
             &copy; {{ new Date().getFullYear() }}
             <a class="footer mx-1" :target="$root.target('sos')" href="https://securityonionsolutions.com/" data-aid="nav_sos">
-              SOS
+              Security Onion
             </a>
           </span>
           <v-spacer></v-spacer>
