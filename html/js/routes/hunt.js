@@ -3037,6 +3037,13 @@ const huntComponent = {
 
       let parts = [];
 
+      if (this.queryBaseFilter) parts.push(this.queryBaseFilter);
+
+      this.obtainQueryDetails();
+      if (this.querySearch) {
+        parts.push(`(${this.querySearch})`);
+      }
+
       for (let field in item) {
         let label = field;
         if (field.startsWith('_')) continue;
