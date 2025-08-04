@@ -2382,3 +2382,54 @@ test('pickQuestionColor', () => {
   c = comp.pickQuestionColor(question);
   expect(c).toBe('has-error');
 });
+
+test('getExpandedData', () => {
+  let obj = {};
+
+  let data = comp.getExpandedData(obj);
+  expect(data).toStrictEqual([]);
+
+  obj = {
+    A: 1,
+    B: 2,
+    C: 3,
+  };
+
+  data = comp.getExpandedData(obj);
+
+  // sort data by key for deterministic check
+  data.sort((a, b) => a.key.localeCompare(b.key));
+
+  expect(data).toStrictEqual([
+    { key: 'A', value: 1 },
+    { key: 'B', value: 2 },
+    { key: 'C', value: 3 },
+  ]);
+
+  obj = {
+    C: 'six',
+    _row_idx_: -1,
+    B: 'five',
+    _isSelected: false,
+    playbooks: null,
+    A: 'four',
+  };
+
+  data = comp.getExpandedData(obj);
+  data.sort((a, b) => a.key.localeCompare(b.key));
+
+  expect(data).toStrictEqual([
+    { key: 'A', value: 'four' },
+    { key: 'B', value: 'five' },
+    { key: 'C', value: 'six' },
+  ]);
+
+  obj = {
+    _row_idx_: 10,
+    _isSelected: true,
+    playbooks: [{}],
+  };
+
+  data = comp.getExpandedData(obj);
+  expect(data).toStrictEqual([]);
+});
