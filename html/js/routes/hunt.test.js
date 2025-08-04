@@ -2408,7 +2408,7 @@ test('getExpandedData', () => {
 
   obj = {
     C: 'six',
-    _index: -1,
+    _row_idx_: -1,
     B: 'five',
     _isSelected: false,
     playbooks: null,
@@ -2425,7 +2425,7 @@ test('getExpandedData', () => {
   ]);
 
   obj = {
-    _index: 10,
+    _row_idx_: 10,
     _isSelected: true,
     playbooks: [{}],
   };

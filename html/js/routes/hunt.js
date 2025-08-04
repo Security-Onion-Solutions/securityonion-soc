@@ -1438,7 +1438,7 @@ const huntComponent = {
       data.forEach(function(row, index) {
         var record = {
           count: row.value,
-          _index: index,
+          _row_idx_: index,
         };
         fields.forEach(function(field, index) {
           record[field] = route.localizeValue(row.keys[index]);
@@ -1645,7 +1645,7 @@ const huntComponent = {
             record._isSelected = false;
           }
 
-          record._index = index;
+          record._row_idx_ = index;
 
           records.push(record);
 
@@ -1916,7 +1916,7 @@ const huntComponent = {
       return this.isCategory('detections');
     },
     getExpandedData(data) {
-      const ignored = ['_isSelected', 'playbooks', '_index'];
+      const ignored = ['_isSelected', 'playbooks', '_row_idx_'];
       var records = [];
       for (let key in data) {
         if (ignored.includes(key)) {

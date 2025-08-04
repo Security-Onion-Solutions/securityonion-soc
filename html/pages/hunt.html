@@ -252,7 +252,7 @@
 										</div>
 										<v-data-table v-if="!group.chart_type" :id="'group-' + groupIdx" class="elevation-1"
 											:search="groupByFilter" density="compact" v-model:expanded="expandedEvents"
-											:items-per-page-options="groupByFooters" item-value="_index" :items-per-page="groupByItemsPerPage"
+											:items-per-page-options="groupByFooters" item-value="_row_idx_" :items-per-page="groupByItemsPerPage"
 											@update:items-per-page="val => groupByItemsPerPage = val" :headers="group.headers"
 											:items="group.data" v-model:sort-by="group.sortBy" must-sort @update:sort-by="updateGroupBySort(groupIdx)"
 											:data-aid="'groups_table_' + category">
@@ -334,25 +334,25 @@
 												<tr>
 													<td :colspan="columns.length" class="px-0" :data-aid="'events_fields_' + category">
 														<div>
-															<v-tabs :height="isCategory('alerts') ? undefined : 0" v-model="activeTabs[item._index]" @update:model-value="if (activeTabs[item._index] === 'playbook') loadPlaybook(item.newest, item._index);">
-																<v-tab id="alerts_alertsDetailTab" value="alert" :class="{ 'theme-primary': activeTabs[item._index] === 'alert' }" :style="{ 'width': (eventColumnWidth * 0.5 - 28) + 'px' }" data-aid="alerts_agg_alertDetailsTab">
+															<v-tabs :height="isCategory('alerts') ? undefined : 0" v-model="activeTabs[item._row_idx_]" @update:model-value="if (activeTabs[item._row_idx_] === 'playbook') loadPlaybook(item.newest, item._row_idx_);">
+																<v-tab id="alerts_alertsDetailTab" value="alert" :class="{ 'theme-primary': activeTabs[item._row_idx_] === 'alert' }" :style="{ 'width': (eventColumnWidth * 0.5 - 28) + 'px' }" data-aid="alerts_agg_alertDetailsTab">
 																	<v-icon class="tab-icon">fa-bell</v-icon>
 																	<div class="d-none d-lg-block">{{i18n.alertDetails}}</div>
 																</v-tab>
-																<v-tab id="alerts_playbookTab" value="playbook" :class="{ 'theme-primary': activeTabs[item._index] === 'playbook' }" :style="{ 'width': (eventColumnWidth * 0.5 - 28) + 'px' }" data-aid="alerts_agg_playbookTab">
+																<v-tab id="alerts_playbookTab" value="playbook" :class="{ 'theme-primary': activeTabs[item._row_idx_] === 'playbook' }" :style="{ 'width': (eventColumnWidth * 0.5 - 28) + 'px' }" data-aid="alerts_agg_playbookTab">
 																	<v-icon class="tab-icon">fa-book</v-icon>
 																	<div class="d-none d-lg-block">{{i18n.guidedAnalysis}}</div>
 																	<template #append>
-																		<v-btn class="ml-9" variant="text" size="small" icon @click="toggleAllQuestions(item, item._index, false)" aria-label="collapse all" data-aid="alerts_agg_playbooks_collapseAll">
+																		<v-btn class="ml-9" variant="text" size="small" icon @click="toggleAllQuestions(item, item._row_idx_, false)" aria-label="collapse all" data-aid="alerts_agg_playbooks_collapseAll">
 																			<v-icon>fa-window-minimize</v-icon>
 																		</v-btn>
-																		<v-btn variant="text" size="small" icon @click="toggleAllQuestions(item, item._index, true)" aria-label="expand all" data-aid="alerts_agg_playbooks_expandAll">
+																		<v-btn variant="text" size="small" icon @click="toggleAllQuestions(item, item._row_idx_, true)" aria-label="expand all" data-aid="alerts_agg_playbooks_expandAll">
 																			<v-icon>fa-window-maximize</v-icon>
 																		</v-btn>
 																	</template>
 																</v-tab>
 															</v-tabs>
-															<v-tabs-window v-model="activeTabs[item._index]">
+															<v-tabs-window v-model="activeTabs[item._row_idx_]">
 																<v-tabs-window-item value="alert">
 																	<v-data-table density="compact" hide-default-header hide-default-footer :headers="expandedHeaders" :items="getExpandedData(item.newest)" items-per-page="-1">
 																		<template #item="{ item: kvp }">
@@ -381,7 +381,7 @@
 																			<v-icon class="mr-3" data-aid="playbook_grouped_ai_indicator">fa-flask</v-icon>
 																			<span v-html="i18n.playbooksAi"  data-aid="playbook_grouped_ai_text"></span>
 																		</div>
-																		<v-expansion-panels @update:model-value="expandedPlaybookQuestions[item._index] = $event" :model-value="expandedPlaybookQuestions[item._index]" variant="accordion" multiple static="true">
+																		<v-expansion-panels @update:model-value="expandedPlaybookQuestions[item._row_idx_] = $event" :model-value="expandedPlaybookQuestions[item._row_idx_]" variant="accordion" multiple static="true">
 																			<v-expansion-panel v-for="question in item.newest.questions">
 																				<v-expansion-panel-title :class="['italic', 'ws-normal', 'spacious-lines', 'font-weight-bold', pickQuestionColor(question)]" #default="{ expanded }">
 																					<v-icon class="theme-icon mx-4" data-aid="playbook_grouped_question_title">
@@ -638,25 +638,25 @@
 									<tr>
 										<td :colspan="columns.length" class="px-0" :data-aid="'events_fields_' + category">
 											<div>
-												<v-tabs :height="isCategory('alerts') ? undefined : 0" v-model="activeTabs[item._index]" @update:model-value="if (activeTabs[item._index] === 'playbook') loadPlaybook(item, item._index);">
-													<v-tab id="alerts_alertsDetailTab" value="alert" :class="{ 'theme-primary': activeTabs[item._index] === 'alert' }" :style="{ 'width': (this.eventColumnWidth / 2) + 'px' }" data-aid="alerts_alertDetailsTab">
+												<v-tabs :height="isCategory('alerts') ? undefined : 0" v-model="activeTabs[item._row_idx_]" @update:model-value="if (activeTabs[item._row_idx_] === 'playbook') loadPlaybook(item, item._row_idx_);">
+													<v-tab id="alerts_alertsDetailTab" value="alert" :class="{ 'theme-primary': activeTabs[item._row_idx_] === 'alert' }" :style="{ 'width': (this.eventColumnWidth / 2) + 'px' }" data-aid="alerts_alertDetailsTab">
 														<v-icon class="tab-icon">fa-bell</v-icon>
 														<div class="d-none d-lg-block">{{i18n.alertDetails}}</div>
 													</v-tab>
-													<v-tab id="alerts_playbookTab" value="playbook" :class="{ 'theme-primary': activeTabs[item._index] === 'playbook' }" :style="{ 'width': (this.eventColumnWidth / 2) + 'px' }" data-aid="alerts_playbookTab">
+													<v-tab id="alerts_playbookTab" value="playbook" :class="{ 'theme-primary': activeTabs[item._row_idx_] === 'playbook' }" :style="{ 'width': (this.eventColumnWidth / 2) + 'px' }" data-aid="alerts_playbookTab">
 														<v-icon class="tab-icon">fa-book</v-icon>
 														<div class="d-none d-lg-block">{{i18n.guidedAnalysis}}</div>
 														<template #append>
-															<v-btn class="ml-9" variant="text" size="small" icon @click="toggleAllQuestions(item, item._index, false)" aria-label="collapse all" data-aid="alerts_playbooks_collapseAll">
+															<v-btn class="ml-9" variant="text" size="small" icon @click="toggleAllQuestions(item, item._row_idx_, false)" aria-label="collapse all" data-aid="alerts_playbooks_collapseAll">
 																<v-icon>fa-window-minimize</v-icon>
 															</v-btn>
-															<v-btn variant="text" size="small" icon @click="toggleAllQuestions(item, item._index, true)" aria-label="expand all" data-aid="alerts_playbooks_expandAll">
+															<v-btn variant="text" size="small" icon @click="toggleAllQuestions(item, item._row_idx_, true)" aria-label="expand all" data-aid="alerts_playbooks_expandAll">
 																<v-icon>fa-window-maximize</v-icon>
 															</v-btn>
 														</template>
 													</v-tab>
 												</v-tabs>
-												<v-tabs-window v-model="activeTabs[item._index]">
+												<v-tabs-window v-model="activeTabs[item._row_idx_]">
 													<v-tabs-window-item value="alert">
 														<v-data-table density="compact" hide-default-header hide-default-footer :headers="expandedHeaders" :items="getExpandedData(item)" items-per-page="-1">
 															<template #item="{ item: kvp }">
@@ -685,7 +685,7 @@
 																<v-icon class="mr-3" data-aid="playbook_ai_indicator">fa-flask</v-icon>
 																<span v-html="i18n.playbooksAi" data-aid="playbook_ai_text"></span>
 															</div>
-															<v-expansion-panels @update:model-value="expandedPlaybookQuestions[item._index] = $event" :model-value="expandedPlaybookQuestions[item._index]" variant="accordion" multiple static="true">
+															<v-expansion-panels @update:model-value="expandedPlaybookQuestions[item._row_idx_] = $event" :model-value="expandedPlaybookQuestions[item._row_idx_]" variant="accordion" multiple static="true">
 																<v-expansion-panel v-for="question in item.questions">
 																	<v-expansion-panel-title :class="['italic', 'ws-normal', 'spacious-lines', 'font-weight-bold', pickQuestionColor(question)]" #default="{ expanded }">
 																		<v-icon class="theme-icon mx-4" data-aid="playbook_question_title">
