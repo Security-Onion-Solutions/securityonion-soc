@@ -1916,7 +1916,7 @@ const huntComponent = {
       return this.isCategory('detections');
     },
     getExpandedData(data) {
-      const ignored = ['_isSelected', 'playbooks'];
+      const ignored = ['_isSelected', 'playbooks', '_index'];
       var records = [];
       for (let key in data) {
         if (ignored.includes(key)) {
