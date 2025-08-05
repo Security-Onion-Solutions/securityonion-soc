@@ -23,14 +23,13 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
   }},
   async created() {
     this.loadChatHistory();
-    this.loadStoredChats();
-    this.handleRouteSessionId();
+    await this.loadStoredChats();
+    await this.handleRouteSessionId();
     await this.loadCredits();
-    await this.loadHistory();
   },
   beforeUnmount() {
-    // Save current chat state when navigating away from the chat page
-    this.saveCurrentChat();
+    // Backend automatically saves chats, just save current chat ID
+    this.saveCurrentChatId();
   },
   watch: {
     '$route'(to, from) {
@@ -55,23 +54,30 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
         this.$root.showError(error);
       }
     },
-    loadStoredChats() {
+    async loadStoredChats() {
       try {
-        const stored = localStorage.getItem('so-chat-history');
-        if (stored) {
-          this.chatHistory = JSON.parse(stored);
+        const response = await this.$root.papi.get('/assistant/sessions');
+        if (response.data && Array.isArray(response.data)) {
+          // Convert backend format to frontend format
+          this.chatHistory = response.data.map(session => ({
+            id: session.sessionId,
+            title: this.generateTitleFromMessage(session),
+            messages: [], // Will be loaded when session is opened
+            timestamp: session.createTime || new Date().toISOString(),
+            lastUpdated: session.createTime || new Date().toISOString()
+          }));
+        } else {
+          this.chatHistory = [];
         }
       } catch (error) {
-        console.log('Failed to load chat history:', error);
+        console.log('Failed to load chat history from backend:', error);
+        // Fallback to empty array if backend is unavailable
         this.chatHistory = [];
       }
     },
+    // No longer needed - backend handles persistence
     saveStoredChats() {
-      try {
-        localStorage.setItem('so-chat-history', JSON.stringify(this.chatHistory));
-      } catch (error) {
-        console.log('Failed to save chat history:', error);
-      }
+      // Backend automatically saves chats, no action needed
     },
     saveCurrentChatId() {
       try {
@@ -92,17 +98,15 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
         return null;
       }
     },
-    handleRouteSessionId() {
+    async handleRouteSessionId() {
       const urlSessionId = this.$route.params.sessionId;
       
       if (urlSessionId) {
-        // Load chat from URL session ID
-        const chat = this.chatHistory.find(chat => chat.id === urlSessionId);
-        if (chat) {
-          this.messages = [...chat.messages];
-          this.currentChatId = chat.id;
-          this.saveCurrentChatId();
-        } else {
+        // Try to load chat from backend first
+        try {
+          await this.loadChatFromBackend(urlSessionId);
+        } catch (error) {
+          console.log('Session not found in backend, starting new session:', urlSessionId);
           // Session ID in URL doesn't exist, start new chat with this ID
           this.currentChatId = urlSessionId;
           this.saveCurrentChatId();
@@ -140,19 +144,19 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
         }
       } else {
         // No session ID in URL, restore last active chat
-        this.restoreLastActiveChat();
+        await this.restoreLastActiveChat();
       }
     },
-    restoreLastActiveChat() {
+    async restoreLastActiveChat() {
       const lastChatId = this.loadCurrentChatId();
       if (lastChatId && this.chatHistory.length > 0) {
-        const lastChat = this.chatHistory.find(chat => chat.id === lastChatId);
-        if (lastChat) {
-          this.messages = [...lastChat.messages];
-          this.currentChatId = lastChat.id;
+        try {
+          await this.loadChatFromBackend(lastChatId);
           // Update URL to reflect the current session
-          this.updateUrlWithSessionId(lastChat.id);
+          this.updateUrlWithSessionId(lastChatId);
           return;
+        } catch (error) {
+          console.log('Failed to restore last active chat:', error);
         }
       }
       // If no valid last chat found, keep the default welcome message
@@ -168,33 +172,18 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
         // Fallback to localStorage if API fails
       }
     },
-    saveCurrentChat() {
+    async saveCurrentChat() {
       if (this.messages.length <= 1) return; // Don't save if only welcome message
       
-      const chatTitle = this.generateChatTitle();
-      const chatData = {
-        id: this.currentChatId || this.generateChatId(),
-        title: chatTitle,
-        messages: [...this.messages],
-        timestamp: new Date().toISOString(),
-        lastUpdated: new Date().toISOString()
-      };
-      
-      const existingIndex = this.chatHistory.findIndex(chat => chat.id === chatData.id);
-      if (existingIndex >= 0) {
-        this.chatHistory[existingIndex] = chatData;
-      } else {
-        this.chatHistory.unshift(chatData);
+      // Backend automatically saves chats through the API calls
+      // Just update the current chat ID
+      if (!this.currentChatId) {
+        this.currentChatId = this.generateChatId();
       }
-      
-      // Keep only the last 5 chats
-      if (this.chatHistory.length > 5) {
-        this.chatHistory = this.chatHistory.slice(0, 5);
-      }
-      
-      this.currentChatId = chatData.id;
-      this.saveStoredChats();
       this.saveCurrentChatId();
+      
+      // Refresh the chat history to reflect any changes
+      await this.loadStoredChats();
     },
     generateChatId() {
       return 'chat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
@@ -211,25 +200,29 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
       }
       return 'New Chat - ' + new Date().toLocaleDateString();
     },
-    loadChat(chat) {
-      this.saveCurrentChat(); // Save current chat before switching
-      this.messages = [...chat.messages];
-      this.currentChatId = chat.id;
-      this.saveCurrentChatId();
-      this.updateUrlWithSessionId(chat.id);
-      this.scrollToBottom();
+    async loadChat(chat) {
+      await this.saveCurrentChat(); // Save current chat before switching
+      try {
+        await this.loadChatFromBackend(chat.id);
+        this.updateUrlWithSessionId(chat.id);
+        this.scrollToBottom();
+      } catch (error) {
+        console.error('Failed to load chat:', error);
+        this.$root.showError('Failed to load chat: ' + error.message);
+      }
     },
-    deleteChat(chatId) {
+    async deleteChat(chatId) {
+      // Note: Backend doesn't have a delete endpoint, so we just remove from local history
+      // The chat will still exist in Elasticsearch but won't be shown in the UI
       this.chatHistory = this.chatHistory.filter(chat => chat.id !== chatId);
-      this.saveStoredChats();
       
       // If we deleted the current chat, start a new one
       if (this.currentChatId === chatId) {
         this.startNewChat();
       }
     },
-    startNewChat() {
-      this.saveCurrentChat(); // Save current chat before starting new one
+    async startNewChat() {
+      await this.saveCurrentChat(); // Save current chat before starting new one
       this.currentChatId = null;
       this.saveCurrentChatId(); // Clear the saved current chat ID
       this.loadChatHistory(); // Reset to welcome message
@@ -270,13 +263,13 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
         // Call the actual AI API
         await this.callAIAPI(messageText);
         
-        // Auto-save chat after each exchange
-        this.saveCurrentChat();
-        
         // Update URL with session ID if not already set
         if (this.currentChatId && !this.$route.params.sessionId) {
           this.updateUrlWithSessionId(this.currentChatId);
         }
+        
+        // Refresh chat history to show the latest session
+        await this.loadStoredChats();
       } catch (error) {
         this.$root.showError('Failed to get AI response: ' + error.message);
         this.isTyping = false;
@@ -308,7 +301,7 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
           body: JSON.stringify({
             msg: userMessage,
             messages: messageHistory,
-            sessionId: this.currentChatId || this.generateChatId()
+            sessionId: this.currentChatId || (this.currentChatId = this.generateChatId())
           })
         });
 
@@ -628,9 +621,15 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
         });
         
         // Create ToolRequest object with history and params
+        // Ensure we use the same session ID, don't generate a new one
+        if (!this.currentChatId) {
+          this.currentChatId = this.generateChatId();
+          this.saveCurrentChatId();
+        }
+        
         const toolRequest = {
           history: messageHistory,
-          sessionId: this.currentChatId || this.generateChatId(),
+          sessionId: this.currentChatId,
           toolUseId: toolUse.id,
           params: toolUse.input
         };
@@ -1002,11 +1001,110 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
         console.error('Failed to update investigation status:', error);
       }
     },
-    async loadHistory() {
-      const response = await this.$root.papi.get('/assistant/sessions')
-      const sessionId = response.data[0].sessionId;
-      const response2 = await this.$root.papi.get(`/assistant/sessions/${sessionId}`);
-      console.log(response2);
+    // Helper method to generate title from a session/message
+    generateTitleFromMessage(session) {
+      if (session && session.message) {
+        // Handle different message formats
+        let content = '';
+        if (session.message.contentStr) {
+          content = session.message.contentStr;
+        } else if (session.message.contentBlocks && session.message.contentBlocks.length > 0) {
+          const textBlock = session.message.contentBlocks.find(block => block.type === 'text');
+          if (textBlock) {
+            content = textBlock.text;
+          }
+        }
+        
+        if (content) {
+          let title = content.substring(0, 50);
+          if (content.length > 50) {
+            title += '...';
+          }
+          return title;
+        }
+      }
+      return 'New Chat - ' + new Date().toLocaleDateString();
+    },
+
+    // Helper method to load a specific chat from backend
+    async loadChatFromBackend(sessionId) {
+      try {
+        const response = await this.$root.papi.get(`/assistant/sessions/${sessionId}`);
+        if (response.data && Array.isArray(response.data)) {
+          // Convert backend messages to frontend format
+          this.messages = this.convertBackendMessagesToFrontend(response.data);
+          this.currentChatId = sessionId;
+          this.saveCurrentChatId();
+        } else {
+          throw new Error('No chat history found for session');
+        }
+      } catch (error) {
+        console.error('Failed to load chat from backend:', error);
+        // If session doesn't exist, start with welcome message
+        if (error.response && error.response.status === 404) {
+          this.loadChatHistory(); // Reset to welcome message
+          this.currentChatId = sessionId;
+          this.saveCurrentChatId();
+        } else {
+          throw error;
+        }
+      }
+    },
+
+    // Helper method to convert backend message format to frontend format
+    convertBackendMessagesToFrontend(backendMessages) {
+      return backendMessages.map(msg => {
+        const frontendMsg = {
+          role: msg.message.role,
+          timestamp: msg.createTime || new Date().toISOString()
+        };
+
+        // Handle different content formats
+        if (msg.message.contentStr) {
+          frontendMsg.content = msg.message.contentStr;
+        } else if (msg.message.contentBlocks && msg.message.contentBlocks.length > 0) {
+          // For now, just extract text from content blocks
+          if (frontendMsg.role === 'user') {
+            const textBlocks = msg.message.contentBlocks.filter(block => block.type === 'text');
+            if (textBlocks.length > 0) {
+              frontendMsg.content = textBlocks.map(block => block.text).join('\n');
+            } else {
+              frontendMsg.content = 'Complex message with tools/attachments';
+            }
+          } else if (frontendMsg.role === 'assistant') {
+            const textBlocks = msg.message.contentBlocks.filter(block => block.type === '');
+            if (textBlocks.length > 0) {
+              frontendMsg.content = textBlocks.map(block => block.content).join('\n');
+            } else {
+              frontendMsg.content = 'Complex message with tools/attachments';
+            }
+          }
+            
+          // Handle tool uses if present
+          const toolBlocks = msg.message.contentBlocks.filter(block => block.type === 'tool_use');
+          if (toolBlocks.length > 0) {
+            frontendMsg.toolUses = Vue.ref(toolBlocks.map(block => ({
+              id: block.id || 'unknown',
+              name: block.name || 'unknown',
+              input: block.input || {}, // Ensure input is always an object, never null/undefined
+              status: 'completed', // Assume completed since it's from history
+              result: null,
+              error: null,
+              timestamp: msg.createTime || new Date().toISOString(),
+              approved: true
+            })));
+          }
+        } else {
+          frontendMsg.content = 'Empty message';
+        }
+
+        // Handle usage information if present
+        if (msg.message.usage) {
+          frontendMsg.usage = Vue.ref(msg.message.usage);
+        }
+
+        return frontendMsg;
+      });
     }
   }
 }});
