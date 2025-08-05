@@ -1088,6 +1088,11 @@ ul ul ul {
   border-left: 3px solid rgb(var(--v-theme-error));
 }
 
+#topChart, #bottomChart, #timelineChart {
+  height: 207px !important;
+  width: 100% !important;
+}
+
 @media print {
   .no-print,
   .v-navigation-drawer, 

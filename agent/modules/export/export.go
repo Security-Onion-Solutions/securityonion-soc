@@ -75,9 +75,9 @@ func (export *Export) Init(cfg module.ModuleConfig) error {
 	export.exportMetricLimit = module.GetIntDefault(cfg, "exportMetricLimit", DEFAULT_METRIC_LIMIT)
 	export.exportEventLimit = module.GetIntDefault(cfg, "exportEventLimit", DEFAULT_EVENT_LIMIT)
 
-	if err == nil && export.agent == nil {
+	if export.agent == nil {
 		err = errors.New("unable to invoke JobMgr.AddJobProcessor due to nil agent")
-	} else if err == nil {
+	} else {
 		export.agent.JobMgr.AddJobProcessor(export)
 	}
 	return err
@@ -169,6 +169,30 @@ func (export *Export) ProcessJob(job *model.Job, reader io.ReadCloser) (io.ReadC
 		}
 
 		params := export.getProductivityExportParams(export.templatePath)
+		pdfReader, size, err := export.convertMdToPdf(job.Id, content, params)
+		if err != nil {
+			return reader, fmt.Errorf("failed to generate PDF: %v", err)
+		}
+
+		job.Size = size
+		job.FileExtension = "pdf"
+
+		// Return content as reader
+		return io.NopCloser(pdfReader), nil
+	case "generic":
+		templateName := export.getGenericTemplateName(job)
+		if templateName == "" {
+			return reader, fmt.Errorf("missing required parameter: template for export type %s", exportType)
+		}
+
+		// Generate report content
+		content, err := export.generateGenericReport(job, templateName)
+		if err != nil {
+			return reader, fmt.Errorf("failed to generate generic report markdown: %v", err)
+		}
+
+		params := export.getPdfExportParams(export.templatePath, templateName)
+
 		pdfReader, size, err := export.convertMdToPdf(job.Id, content, params)
 		if err != nil {
 			return reader, fmt.Errorf("failed to generate PDF: %v", err)
@@ -282,8 +306,8 @@ func (export *Export) prepareKeyForTemplate(key string) string {
  * It returns a slice of strings containing the parameters.
  *
  * @param filepath: The path to the template file
- * @param param:  Tag indicating that the line contains a single parameter (e.g., "pdf_param")
- * @param params: Tag indicating that the line contains multiple parameters (e.g., "pdf_params")
+ * @param param:  Tag indicating that the line contains a single parameter (e.g., "pdf_param:")
+ * @param params: Tag indicating that the line contains multiple parameters (e.g., "pdf_params:")
  */
 func (export *Export) getParamsFromTemplate(filepath string, param string, params string) []string {
 	if len(params) == 0 && len(param) == 0 {
@@ -306,17 +330,20 @@ func (export *Export) getParamsFromTemplate(filepath string, param string, param
 		return []string{}
 	}
 
+	param = "/* " + param
+	params = "/* " + params
+
 	args := make([]string, 0)
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := scanner.Text()
-		if len(params) > 0 && strings.Contains(line, "/*") && strings.Contains(line, params+":") && strings.Contains(line, "*/") {
-			startIdx := strings.Index(line, params+":") + len(params) + 1
+		if len(params) > 0 && strings.Contains(line, params) && strings.Contains(line, "*/") {
+			startIdx := strings.Index(line, params) + len(params)
 			endIdx := startIdx + strings.Index(line[startIdx:], "*/")
 			line = strings.TrimSpace(line[startIdx:endIdx])
 			args = append(args, strings.Fields(line)...)
-		} else if len(param) > 0 && strings.Contains(line, "/*") && strings.Contains(line, param+":") && strings.Contains(line, "*/") {
-			startIdx := strings.Index(line, param+":") + len(param) + 1
+		} else if len(param) > 0 && strings.Contains(line, param) && strings.Contains(line, "*/") {
+			startIdx := strings.Index(line, param) + len(param)
 			endIdx := startIdx + strings.Index(line[startIdx:], "*/")
 			line = strings.TrimSpace(line[startIdx:endIdx])
 			args = append(args, line)
@@ -327,7 +354,7 @@ func (export *Export) getParamsFromTemplate(filepath string, param string, param
 
 func (export *Export) getPdfExportParams(templatePath string, templateName string) []string {
 	path := filepath.Join(templatePath, templateName)
-	return export.getParamsFromTemplate(path, "pdf_param", "pdf_params")
+	return export.getParamsFromTemplate(path, "pdf_param:", "pdf_params:")
 }
 
 func (export *Export) CleanupJob(job *model.Job) {

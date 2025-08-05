@@ -103,7 +103,7 @@
 										</p>
 									</v-sheet>
 								</v-container>
-								<v-container v-if="$root.getSelectedGridInfo() && $root.getSelectedGridInfo().licenseKey && ($root.getSelectedGridInfo().licenseStatus != LICENSE_STATUS_UNPROVISIONED && $root.getSelectedGridInfo().licenseStatus != LICENSE_STATUS_INVALID)" fluid id="licenseDetails" class="float">
+								<v-container v-if="$root.getSelectedGridInfo().licenseKey && ($root.getSelectedGridInfo().licenseStatus != LICENSE_STATUS_UNPROVISIONED && $root.getSelectedGridInfo().licenseStatus != LICENSE_STATUS_INVALID)" fluid id="licenseDetails2" class="licenseDetails">
 									<v-row class="my-1">
 										<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.userLimit }}:</v-col>
 										<v-col v-if="$root.getSelectedGridInfo().licenseKey.users > 0" cols="9" class="pa-1">{{ $root.getSelectedGridInfo().licenseKey.users }}</v-col>
