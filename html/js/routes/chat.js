@@ -453,6 +453,7 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
                     status: 'preparing', // Start as preparing, not executing
                     result: null,
                     error: null,
+                    rawResult: null, // Will store the raw tool result
                     timestamp: new Date().toISOString(),
                     blockIndex: c.index, // Store the block index for tracking
                     approved: null // null = pending, true = approved, false = rejected
@@ -662,6 +663,7 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
         let chunks = [];
         let partial = false;
         let messageUsage = null;
+        let capturedRawResult = null; // Capture the raw tool result
 
         while (true) {
           const { done, value } = await reader.read();
@@ -782,6 +784,7 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
                     status: 'preparing',
                     result: null,
                     error: null,
+                    rawResult: null, // Will store the raw tool result
                     timestamp: new Date().toISOString(),
                     blockIndex: c.index,
                     approved: null
@@ -867,6 +870,30 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
 
           await this.$nextTick();
         }
+        
+        // After streaming is complete, check if we need to capture the raw result
+        // The raw result will be in the next message that gets saved to backend
+        // We'll capture it by monitoring the messages array for new tool result messages
+        setTimeout(async () => {
+          try {
+            // Reload the chat history to get the raw result that was just saved
+            const response = await this.$root.papi.get(`/assistant/sessions/${this.currentChatId}`);
+            if (response.data && Array.isArray(response.data)) {
+              // Find the last tool result message for this tool
+              for (let i = response.data.length - 1; i >= 0; i--) {
+                const msg = response.data[i];
+                if (msg.message.role === 'user' && msg.message.contentStr && !msg.message.contentBlocks) {
+                  // This is a tool result - associate it with our tool use
+                  toolUse.rawResult = msg.message.contentStr;
+                  console.log('Captured raw tool result:', toolUse.rawResult);
+                  break;
+                }
+              }
+            }
+          } catch (error) {
+            console.log('Could not capture raw tool result:', error);
+          }
+        }, 1000); // Wait 1 second for the backend to save the result
         
         // Update credits after tool execution
         await this.loadCredits();
@@ -1053,7 +1080,27 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
 
     // Helper method to convert backend message format to frontend format
     convertBackendMessagesToFrontend(backendMessages) {
-      return backendMessages.map(msg => {
+      const processedMessages = [];
+      
+      for (let i = 0; i < backendMessages.length; i++) {
+        const msg = backendMessages[i];
+        
+        // Check if this is a tool result message (user role with contentStr)
+        if (msg.message.role === 'user' && msg.message.contentStr && !msg.message.contentBlocks) {
+          // This is a tool result - find the previous assistant message with tool uses
+          const prevMessage = processedMessages[processedMessages.length - 1];
+          if (prevMessage && prevMessage.role === 'assistant' && prevMessage.toolUses) {
+            // Add the raw result to the last tool use in the previous message
+            const toolUses = prevMessage.toolUses.value;
+            if (toolUses.length > 0) {
+              const lastToolUse = toolUses[toolUses.length - 1];
+              lastToolUse.rawResult = msg.message.contentStr;
+            }
+          }
+          // Skip adding this message to the processed messages (filter it out)
+          continue;
+        }
+        
         const frontendMsg = {
           role: msg.message.role,
           timestamp: msg.createTime || new Date().toISOString()
@@ -1090,6 +1137,7 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
               status: 'completed', // Assume completed since it's from history
               result: null,
               error: null,
+              rawResult: null, // Will be populated by subsequent tool result message
               timestamp: msg.createTime || new Date().toISOString(),
               approved: true
             })));
@@ -1103,8 +1151,10 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
           frontendMsg.usage = Vue.ref(msg.message.usage);
         }
 
-        return frontendMsg;
-      });
+        processedMessages.push(frontendMsg);
+      }
+      
+      return processedMessages;
     }
   }
 }});

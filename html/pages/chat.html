@@ -90,7 +90,19 @@
 													</div>
 												</div>
 												
-												<!-- Tool results now appear as separate chat messages -->
+												<!-- Raw Tool Result Dropdown -->
+												<div v-if="toolUse.rawResult && toolUse.status === 'completed'" class="mb-2">
+													<v-expansion-panels variant="accordion" class="tool-result-expansion">
+														<v-expansion-panel>
+															<v-expansion-panel-title class="text-caption" expand-icon="fa-angle-down" collapse-icon="fa-angle-up">
+																Raw Tool Result
+															</v-expansion-panel-title>
+															<v-expansion-panel-text>
+																<v-code class="text-caption d-block" style="white-space: pre-wrap; max-height: 300px; overflow-y: auto;">{{ toolUse.rawResult }}</v-code>
+															</v-expansion-panel-text>
+														</v-expansion-panel>
+													</v-expansion-panels>
+												</div>
 												
 												<!-- Tool Error -->
 												<div v-if="(toolUse.status === 'error' || toolUse.status === 'rejected') && toolUse.error" class="mb-2">
