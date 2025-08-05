@@ -5,7 +5,10 @@
 
 package model
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"time"
+)
 
 type ChatRequest struct {
 	Messages      []*Message      `json:"messages"`
@@ -23,8 +26,10 @@ type ChatRequest struct {
 
 type StoredMessage struct {
 	Auditable
-	SessionId string   `json:"session_id"`
-	Message   *Message `json:"message"`
+	DeletedAt *time.Time `json:"deletedAt,omitempty"`
+	Tags      []string   `json:"tags,omitempty"`
+	SessionId string     `json:"session_id"`
+	Message   *Message   `json:"message"`
 }
 
 type saveableMessage struct {
@@ -43,10 +48,14 @@ func (sm *StoredMessage) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Auditable
 		SessionId string          `json:"sessionId"`
+		DeletedAt *time.Time      `json:"deletedAt,omitempty"`
+		Tags      []string        `json:"tags,omitempty"`
 		Message   saveableMessage `json:"message"`
 	}{
 		Auditable: sm.Auditable,
 		SessionId: sm.SessionId,
+		DeletedAt: sm.DeletedAt,
+		Tags:      sm.Tags,
 		Message: saveableMessage{
 			Id:            sm.Message.Id,
 			Type:          sm.Message.Type,
@@ -65,6 +74,8 @@ func (sm *StoredMessage) UnmarshalJSON(data []byte) error {
 	var temp struct {
 		Auditable
 		SessionId string          `json:"sessionId"`
+		DeletedAt *time.Time      `json:"deletedAt,omitempty"`
+		Tags      []string        `json:"tags,omitempty"`
 		Message   saveableMessage `json:"message"`
 	}
 	if err := json.Unmarshal(data, &temp); err != nil {
@@ -73,6 +84,8 @@ func (sm *StoredMessage) UnmarshalJSON(data []byte) error {
 
 	sm.Auditable = temp.Auditable
 	sm.SessionId = temp.SessionId
+	sm.DeletedAt = temp.DeletedAt
+	sm.Tags = temp.Tags
 	sm.Message = &Message{
 		Id:            temp.Message.Id,
 		Type:          temp.Message.Type,
@@ -183,7 +196,7 @@ type ContentBlock struct {
 	Type       string          `json:"type"`
 	Id         string          `json:"id,omitempty"`
 	Name       string          `json:"name,omitempty"`
-	Input      string          `json:"-"`
+	Input      string          `json:"input,omitempty"`
 	Content    string          `json:"content,omitempty"`
 	Text       string          `json:"text,omitempty"`
 	ToolResult json.RawMessage `json:"tool_result,omitempty"`
@@ -245,7 +258,7 @@ func (cm *ContentBlock) UnmarshalJSON(data []byte) error {
 		Type       string          `json:"type"`
 		Id         string          `json:"id,omitempty"`
 		Name       string          `json:"name,omitempty"`
-		Input      string          `json:"-"`
+		Input      string          `json:"input,omitempty"`
 		Content    any             `json:"content,omitempty"`
 		Text       string          `json:"text,omitempty"`
 		ToolResult json.RawMessage `json:"tool_result,omitempty"`
