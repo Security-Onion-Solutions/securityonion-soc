@@ -42,6 +42,7 @@ func RegisterAssistantRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Get("/balance", h.GetBalance)
 		r.Get("/sessions", h.GetSessions)
 		r.Get("/sessions/{sessionId}", h.GetSessionHistory)
+		r.Delete("/sessions/{sessionId}", h.DeleteSession)
 	})
 }
 
@@ -316,6 +317,30 @@ func (h *AssistantHandler) GetSessionHistory(w http.ResponseWriter, r *http.Requ
 	}
 
 	web.Respond(w, r, http.StatusOK, history)
+}
+
+func (h *AssistantHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	logger := log.FromContext(ctx)
+
+	sessionId := chi.URLParam(r, "sessionId")
+	if sessionId == "" {
+		logger.Error("sessionId is required")
+		web.Respond(w, r, http.StatusBadRequest, "sessionId is required")
+
+		return
+	}
+
+	err := h.server.Assistantstore.DeleteSession(ctx, sessionId)
+
+	if err != nil {
+		logger.WithError(err).Error("unable to delete session")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+
+		return
+	}
+
+	web.Respond(w, r, http.StatusNoContent, nil)
 }
 
 func streamResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, response *http.Response) (entireResponse []byte, err error) {
