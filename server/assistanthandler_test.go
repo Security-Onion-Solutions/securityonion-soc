@@ -16,6 +16,7 @@ import (
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server/mock"
+	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/stretchr/testify/assert"
@@ -161,4 +162,76 @@ func TestPostChatWithoutHistory(t *testing.T) {
 	// Verify the message content
 	assert.Equal(t, "user", capturedMessages[0].Role)
 	assert.Equal(t, "Hello", capturedMessages[0].ContentBlocks[0].Text)
+}
+
+func TestUnstreamResponse(t *testing.T) {
+	data := `data: {"type":"message_start","message":{"id":"assistant","type":"message","role":"assistant","content":[],"model":"us.anthropic.claude-sonnet-4-20250514-v1:0","stop_reason":null,"stop_sequence":null}}
+
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"I'll get"}}
+
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" your 5 newest alerts for you"}}
+
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":". Since you're"}}
+
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" asking for the \"newest\" alerts, I'll query"}}
+
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" for recent individual alert"}}
+
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" events without grouping."}}
+
+data: {"type":"content_block_stop","index":0}
+
+data: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"tooluse_9xXi7Q0YQG-LjR-ezEZYqQ","name":"query_events","input":{}}}
+
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":""}}
+
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"oql_query"}}
+
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"\": \"tags:"}}
+
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"ale"}}
+
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"rt\""}}
+
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":", \"limit\""}}
+
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":": 5}"}}
+
+data: {"type":"content_block_stop","index":1}
+
+data: {"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null}}
+
+data: {"type":"message_delta","usage":{"input_tokens":3031,"output_tokens":111,"credits":3586}}
+
+data: {"type":"message_stop"}
+
+data: [DONE]`
+
+	msg, err := unstreamResponse(data)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, msg)
+	assert.Equal(t, model.Message{
+		Id:    "assistant",
+		Type:  "message",
+		Role:  "assistant",
+		Model: "us.anthropic.claude-sonnet-4-20250514-v1:0",
+		ContentBlocks: []model.ContentBlock{
+			{
+				Content: `I'll get your 5 newest alerts for you. Since you're asking for the "newest" alerts, I'll query for recent individual alert events without grouping.`,
+			},
+			{
+				Type:  "tool_use",
+				Id:    "tooluse_9xXi7Q0YQG-LjR-ezEZYqQ",
+				Name:  "query_events",
+				Input: "{\"oql_query\": \"tags:alert\", \"limit\": 5}",
+			},
+		},
+		StopReason: util.Ptr("tool_use"),
+		Usage: &model.Usage{
+			InputTokens:  3031,
+			OutputTokens: 111,
+			Credits:      3586,
+		},
+	}, *msg)
 }

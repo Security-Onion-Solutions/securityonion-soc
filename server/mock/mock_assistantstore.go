@@ -41,46 +41,60 @@ func (m *MockAssistantstore) EXPECT() *MockAssistantstoreMockRecorder {
 	return m.recorder
 }
 
-// GetChatHistory mocks base method.
-func (m *MockAssistantstore) GetChatHistory(ctx context.Context, conversationId string) ([]*model.StoredMessage, error) {
+// DeleteSession mocks base method.
+func (m *MockAssistantstore) DeleteSession(arg0 context.Context, arg1 string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetChatHistory", ctx, conversationId)
+	ret := m.ctrl.Call(m, "DeleteSession", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteSession indicates an expected call of DeleteSession.
+func (mr *MockAssistantstoreMockRecorder) DeleteSession(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSession", reflect.TypeOf((*MockAssistantstore)(nil).DeleteSession), arg0, arg1)
+}
+
+// GetChatHistory mocks base method.
+func (m *MockAssistantstore) GetChatHistory(arg0 context.Context, arg1 string) ([]*model.StoredMessage, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetChatHistory", arg0, arg1)
 	ret0, _ := ret[0].([]*model.StoredMessage)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetChatHistory indicates an expected call of GetChatHistory.
-func (mr *MockAssistantstoreMockRecorder) GetChatHistory(ctx, conversationId any) *gomock.Call {
+func (mr *MockAssistantstoreMockRecorder) GetChatHistory(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetChatHistory", reflect.TypeOf((*MockAssistantstore)(nil).GetChatHistory), ctx, conversationId)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetChatHistory", reflect.TypeOf((*MockAssistantstore)(nil).GetChatHistory), arg0, arg1)
 }
 
 // GetPreviousConversations mocks base method.
-func (m *MockAssistantstore) GetPreviousConversations(ctx context.Context, userId string) ([]*model.StoredMessage, error) {
+func (m *MockAssistantstore) GetPreviousConversations(arg0 context.Context, arg1 string) ([]*model.StoredMessage, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPreviousConversations", ctx, userId)
+	ret := m.ctrl.Call(m, "GetPreviousConversations", arg0, arg1)
 	ret0, _ := ret[0].([]*model.StoredMessage)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetPreviousConversations indicates an expected call of GetPreviousConversations.
-func (mr *MockAssistantstoreMockRecorder) GetPreviousConversations(ctx, userId any) *gomock.Call {
+func (mr *MockAssistantstoreMockRecorder) GetPreviousConversations(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPreviousConversations", reflect.TypeOf((*MockAssistantstore)(nil).GetPreviousConversations), ctx, userId)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPreviousConversations", reflect.TypeOf((*MockAssistantstore)(nil).GetPreviousConversations), arg0, arg1)
 }
 
 // SaveChat mocks base method.
-func (m *MockAssistantstore) SaveChat(ctx context.Context, chat *model.StoredMessage) error {
+func (m *MockAssistantstore) SaveChat(arg0 context.Context, arg1 *model.StoredMessage) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SaveChat", ctx, chat)
+	ret := m.ctrl.Call(m, "SaveChat", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SaveChat indicates an expected call of SaveChat.
-func (mr *MockAssistantstoreMockRecorder) SaveChat(ctx, chat any) *gomock.Call {
+func (mr *MockAssistantstoreMockRecorder) SaveChat(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveChat", reflect.TypeOf((*MockAssistantstore)(nil).SaveChat), ctx, chat)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveChat", reflect.TypeOf((*MockAssistantstore)(nil).SaveChat), arg0, arg1)
 }

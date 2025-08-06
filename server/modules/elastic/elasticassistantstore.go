@@ -99,7 +99,7 @@ func (store *ElasticAssistantstore) indexDocument(ctx context.Context, index str
 
 	res, err := store.esClient.Index(index,
 		strings.NewReader(document),
-		store.esClient.Index.WithRefresh("true"),
+		store.esClient.Index.WithRefresh("wait_for"),
 		store.esClient.Index.WithDocumentID(id),
 		store.esClient.Index.WithContext(ctx),
 	)
