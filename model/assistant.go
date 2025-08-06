@@ -258,7 +258,7 @@ func (cm *ContentBlock) UnmarshalJSON(data []byte) error {
 		Type       string          `json:"type"`
 		Id         string          `json:"id,omitempty"`
 		Name       string          `json:"name,omitempty"`
-		Input      string          `json:"input,omitempty"`
+		Input      any             `json:"input,omitempty"`
 		Content    any             `json:"content,omitempty"`
 		Text       string          `json:"text,omitempty"`
 		ToolResult json.RawMessage `json:"tool_result,omitempty"`
@@ -272,10 +272,16 @@ func (cm *ContentBlock) UnmarshalJSON(data []byte) error {
 	cm.Type = temp.Type
 	cm.Id = temp.Id
 	cm.Name = temp.Name
-	cm.Input = temp.Input
 	cm.Text = temp.Text
 	cm.ToolResult = temp.ToolResult
 	cm.ToolUseID = temp.ToolUseID
+
+	switch input := temp.Input.(type) {
+	case string:
+		cm.Input = input
+	default:
+		cm.Input = ""
+	}
 
 	switch content := temp.Content.(type) {
 	case string:
