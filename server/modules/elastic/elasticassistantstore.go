@@ -99,7 +99,7 @@ func (store *ElasticAssistantstore) indexDocument(ctx context.Context, index str
 
 	res, err := store.esClient.Index(index,
 		strings.NewReader(document),
-		store.esClient.Index.WithRefresh("wait_for"),
+		store.esClient.Index.WithRefresh("true"),
 		store.esClient.Index.WithDocumentID(id),
 		store.esClient.Index.WithContext(ctx),
 	)
@@ -361,6 +361,9 @@ func (store *ElasticAssistantstore) GetPreviousConversations(ctx context.Context
 	logger := log.FromContext(ctx)
 
 	// Build Elasticsearch query to get the first message of each session for the user
+	// This 3 step query will first select the first message of every session,
+	// then it will check if it's been deleted, and finally it will filter out sessions
+	// where the first message was deleted.
 	query := map[string]any{
 		"size": 0, // Only want aggregation results, not documents
 		"query": map[string]any{
@@ -377,13 +380,6 @@ func (store *ElasticAssistantstore) GetPreviousConversations(ctx context.Context
 						},
 					},
 				},
-				"must_not": []any{
-					map[string]any{
-						"exists": map[string]any{
-							"field": store.schemaPrefix + "chat.deletedAt",
-						},
-					},
-				},
 			},
 		},
 		"aggs": map[string]any{
@@ -393,6 +389,7 @@ func (store *ElasticAssistantstore) GetPreviousConversations(ctx context.Context
 					"size":  10000,
 				},
 				"aggs": map[string]any{
+					// 1. Find the absolute first message for each session
 					"first_message": map[string]any{
 						"top_hits": map[string]any{
 							"sort": []any{
@@ -403,6 +400,27 @@ func (store *ElasticAssistantstore) GetPreviousConversations(ctx context.Context
 								},
 							},
 							"size": 1,
+						},
+					},
+					// 2. Check if this absolute first message has the 'deletedAt' field
+					"is_first_message_deleted_check": map[string]any{
+						"filter": map[string]any{
+							"exists": map[string]any{
+								"field": store.schemaPrefix + "chat.deletedAt",
+							},
+						},
+						// We don't need a sub-aggregation here, just the count of documents that pass this filter.
+						// If the first message has deletedAt, this filter will match 1 document.
+						// If it doesn't, this filter will match 0 documents.
+					},
+					// 3. Filter the session buckets: only keep sessions where the first message was NOT deleted
+					"filter_valid_sessions": map[string]any{
+						"bucket_selector": map[string]any{
+							"buckets_path": map[string]any{
+								// Reference the count of documents that passed the 'is_first_message_deleted_check' filter
+								"deleted_count": "is_first_message_deleted_check._count",
+							},
+							"script": "params.deleted_count == 0", // Keep the bucket if the count of deleted first messages is 0
 						},
 					},
 				},
