@@ -212,13 +212,26 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
       }
     },
     async deleteChat(chatId) {
-      // Note: Backend doesn't have a delete endpoint, so we just remove from local history
-      // The chat will still exist in Elasticsearch but won't be shown in the UI
-      this.chatHistory = this.chatHistory.filter(chat => chat.id !== chatId);
-      
-      // If we deleted the current chat, start a new one
-      if (this.currentChatId === chatId) {
-        this.startNewChat();
+      try {
+        // Call the backend DELETE endpoint to remove the session
+        await this.$root.papi.delete(`/assistant/sessions/${chatId}`);
+        
+        // Remove from local history after successful backend deletion
+        this.chatHistory = this.chatHistory.filter(chat => chat.id !== chatId);
+        
+        // If we deleted the current chat, start a new one
+        if (this.currentChatId === chatId) {
+          this.currentChatId = null;
+          this.saveCurrentChatId(); // Clear the saved current chat ID
+          this.loadChatHistory(); // Reset to welcome message
+          // Navigate to chat without session ID
+          this.$router.push({ name: 'chat' });
+        }
+        
+        console.log('Chat deleted successfully:', chatId);
+      } catch (error) {
+        console.error('Failed to delete chat:', error);
+        this.$root.showError('Failed to delete chat: ' + (error.response?.data?.error || error.message));
       }
     },
     async startNewChat() {
@@ -244,6 +257,20 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
         return;
       }
       
+      // Generate session ID and update URL BEFORE starting the API call
+      // This prevents the URL update from interrupting ongoing tool execution
+      if (!this.currentChatId) {
+        this.currentChatId = this.generateChatId();
+        this.saveCurrentChatId();
+      }
+      
+      // Update URL with session ID if not already set - do this BEFORE the API call
+      if (this.currentChatId && !this.$route.params.sessionId) {
+        this.updateUrlWithSessionId(this.currentChatId);
+        // Wait for the route change to complete before proceeding
+        await this.$nextTick();
+      }
+      
       const userMessage = {
         role: 'user',
         content: this.newMessage.trim(),
@@ -260,13 +287,8 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
       this.isTyping = true;
       
       try {
-        // Call the actual AI API
+        // Call the actual AI API - session ID is already set
         await this.callAIAPI(messageText);
-        
-        // Update URL with session ID if not already set
-        if (this.currentChatId && !this.$route.params.sessionId) {
-          this.updateUrlWithSessionId(this.currentChatId);
-        }
         
         // Refresh chat history to show the latest session
         await this.loadStoredChats();
@@ -301,7 +323,7 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
           body: JSON.stringify({
             msg: userMessage,
             messages: messageHistory,
-            sessionId: this.currentChatId || (this.currentChatId = this.generateChatId())
+            sessionId: this.currentChatId
           })
         });
 
@@ -622,12 +644,7 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
         });
         
         // Create ToolRequest object with history and params
-        // Ensure we use the same session ID, don't generate a new one
-        if (!this.currentChatId) {
-          this.currentChatId = this.generateChatId();
-          this.saveCurrentChatId();
-        }
-        
+        // Session ID should already be set by sendMessage()
         const toolRequest = {
           history: messageHistory,
           sessionId: this.currentChatId,
