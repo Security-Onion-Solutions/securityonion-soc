@@ -238,6 +238,12 @@
               </template>
               <v-list-item-title v-text="i18n.alerts"></v-list-item-title>
             </v-list-item>
+            <v-list-item data-aid="nav_simple_alerts" @click="" to="/simple-alerts">
+              <template #prepend>
+                <v-icon>fa-bell-concierge</v-icon>
+              </template>
+              <v-list-item-title>Simple Alerts</v-list-item-title>
+            </v-list-item>
             <v-list-item data-aid="nav_dashboards" @click="" to="/dashboards">
               <template #prepend>
                 <v-icon>fa-chart-pie</v-icon>
@@ -375,6 +381,9 @@
     <script src="js/app.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/components/treeview.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/components/detection-panel.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/components/AlertCard.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/components/AlertFilter.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/components/AlertActions.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/case.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/clients.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/config.js?v=VERSION_PLACEHOLDER"></script>
@@ -391,6 +400,7 @@
     <script src="js/routes/users.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/detection.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/queries.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/simplealerts.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/custom.js?v=VERSION_PLACEHOLDER"></script>
   </body>
 </html>

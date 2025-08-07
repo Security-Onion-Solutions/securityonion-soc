@@ -1,0 +1,191 @@
+<!-- Copyright 2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+     or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
+     https://securityonion.net/license; you may not use this file except in compliance with the
+     Elastic License 2.0. -->
+
+<div>
+  <!-- Alert Filters -->
+  <v-card class="mb-4">
+    <v-card-text>
+      <v-row dense>
+        <v-col cols="12" sm="4" md="3">
+          <v-select
+            v-model="filterSeverity"
+            :items="severityOptions"
+            label="Severity"
+            density="compact"
+            variant="outlined"
+            hide-details
+            @update:model-value="loadAlerts"
+          ></v-select>
+        </v-col>
+        
+        <v-col cols="12" sm="4" md="3">
+          <v-select
+            v-model="filterStatus"
+            :items="statusOptions"
+            label="Status"
+            density="compact"
+            variant="outlined"
+            hide-details
+            @update:model-value="loadAlerts"
+          ></v-select>
+        </v-col>
+        
+        <v-col cols="12" sm="4" md="3">
+          <v-select
+            v-model="filterTimeRange"
+            :items="timeRangeOptions"
+            label="Time Range"
+            density="compact"
+            variant="outlined"
+            hide-details
+            @update:model-value="loadAlerts"
+          ></v-select>
+        </v-col>
+        
+        <v-col cols="12" md="3" class="d-flex align-center">
+          <v-btn
+            color="primary"
+            variant="flat"
+            block
+            @click="loadAlerts"
+            prepend-icon="fa-sync"
+          >
+            Refresh
+          </v-btn>
+        </v-col>
+      </v-row>
+    </v-card-text>
+  </v-card>
+
+  <!-- Alert Stats -->
+  <v-row class="mb-4">
+    <v-col cols="12" sm="3">
+      <v-card>
+        <v-card-text class="text-center">
+          <div class="text-h6">{{ unacknowledgedAlerts.length }}</div>
+          <div class="text-caption">{{ getStatusLabel() }}</div>
+        </v-card-text>
+      </v-card>
+    </v-col>
+    <v-col cols="12" sm="3">
+      <v-card>
+        <v-card-text class="text-center">
+          <div class="text-h6 error--text">{{ highSeverityCount }}</div>
+          <div class="text-caption">High Severity</div>
+        </v-card-text>
+      </v-card>
+    </v-col>
+    <v-col cols="12" sm="3">
+      <v-card>
+        <v-card-text class="text-center">
+          <div class="text-h6 warning--text">{{ mediumSeverityCount }}</div>
+          <div class="text-caption">Medium Severity</div>
+        </v-card-text>
+      </v-card>
+    </v-col>
+    <v-col cols="12" sm="3">
+      <v-card>
+        <v-card-text class="text-center">
+          <div class="text-h6 info--text">{{ lowSeverityCount }}</div>
+          <div class="text-caption">Low Severity</div>
+        </v-card-text>
+      </v-card>
+    </v-col>
+  </v-row>
+
+  <!-- Alert List -->
+  <v-card>
+    <v-card-title>
+      <span>Alerts</span>
+      <span class="text-caption ml-2" v-if="!loading">(Showing {{ alerts.length }} of {{ totalAlerts }})</span>
+      <v-spacer></v-spacer>
+      <v-btn
+        color="primary"
+        variant="outlined"
+        size="small"
+        @click="switchToExpertMode"
+        prepend-icon="fa-rocket"
+      >
+        Expert Mode
+      </v-btn>
+    </v-card-title>
+    <v-card-text>
+      <div v-if="loading" class="text-center py-4">
+        <v-progress-circular indeterminate color="primary"></v-progress-circular>
+      </div>
+      <div v-else-if="alerts.length === 0" class="text-center py-4">
+        <v-icon size="48" class="mb-4">fa-check-circle</v-icon>
+        <div>No alerts found</div>
+      </div>
+      <v-row v-else>
+        <v-col cols="12" v-for="alert in alerts" :key="alert.id">
+          <alert-card
+            :alert="alert"
+            @acknowledge="acknowledgeAlert"
+            @escalate="escalateAlert"
+            @dismiss="dismissAlert"
+          ></alert-card>
+        </v-col>
+      </v-row>
+    </v-card-text>
+    <v-card-actions v-if="hasMore">
+      <v-spacer></v-spacer>
+      <v-btn
+        color="primary"
+        variant="text"
+        @click="loadMore"
+        :loading="loadingMore"
+      >
+        Load More
+      </v-btn>
+      <v-spacer></v-spacer>
+    </v-card-actions>
+  </v-card>
+
+  <!-- Actions Dialog -->
+  <v-dialog v-model="actionDialog" max-width="500">
+    <v-card>
+      <v-card-title>{{ actionTitle }}</v-card-title>
+      <v-card-text>
+        <div v-if="actionType === 'escalate'">
+          <v-text-field
+            v-model="caseTitle"
+            label="Case Title"
+            outlined
+            dense
+            :rules="[v => !!v || 'Title is required']"
+          ></v-text-field>
+          <v-textarea
+            v-model="caseDescription"
+            label="Case Description"
+            outlined
+            dense
+            rows="3"
+          ></v-textarea>
+        </div>
+        <div v-else>
+          Are you sure you want to {{ actionType }} this alert?
+        </div>
+      </v-card-text>
+      <v-card-actions>
+        <v-spacer></v-spacer>
+        <v-btn
+          variant="text"
+          @click="actionDialog = false"
+        >
+          Cancel
+        </v-btn>
+        <v-btn
+          color="primary"
+          variant="flat"
+          @click="confirmAction"
+          :loading="actionLoading"
+        >
+          Confirm
+        </v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
+</div>

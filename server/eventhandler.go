@@ -31,6 +31,7 @@ func RegisterEventRoutes(srv *Server, r chi.Router, prefix string) {
 
 		r.Get("/", h.getEvent)
 		r.Post("/ack", h.postAck)
+		r.Put("/{id}/status", h.putEventStatus)
 	})
 }
 
@@ -90,6 +91,13 @@ func (h *EventHandler) getEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check if simple view is requested
+	if r.Form.Get("view") == "simple" {
+		simplifiedResults := h.simplifyEventResults(results)
+		web.Respond(w, r, http.StatusOK, simplifiedResults)
+		return
+	}
+
 	web.Respond(w, r, http.StatusOK, results)
 }
 
@@ -106,6 +114,88 @@ func (h *EventHandler) getEvent(w http.ResponseWriter, r *http.Request) {
 // @Failure      405         "The event module is not loaded on the server"
 // @Failure      500         "Internal SOC error; review SOC logs"
 // @Router       /connect/events/ack [post]
+func (h *EventHandler) simplifyEventResults(results *model.EventSearchResults) *model.EventSearchResults {
+	simplified := &model.EventSearchResults{
+		EventResults: results.EventResults,
+		Criteria:     results.Criteria,
+		TotalEvents:  results.TotalEvents,
+		Events:       make([]*model.EventRecord, len(results.Events)),
+		Metrics:      results.Metrics,
+	}
+
+	// Extract only essential fields for each event
+	for i, event := range results.Events {
+		simplifiedEvent := &model.EventRecord{
+			Source:    event.Source,
+			Time:      event.Time,
+			Timestamp: event.Timestamp,
+			Id:        event.Id,
+			Type:      event.Type,
+			Score:     event.Score,
+			Payload:   make(map[string]interface{}),
+			Sort:      event.Sort,
+		}
+
+		// Extract only essential fields from payload
+		if event.Payload != nil {
+			// Rule information
+			if ruleName, exists := event.Payload["rule.name"]; exists {
+				simplifiedEvent.Payload["rule.name"] = ruleName
+			}
+			if ruleUuid, exists := event.Payload["rule.uuid"]; exists {
+				simplifiedEvent.Payload["rule.uuid"] = ruleUuid
+			}
+
+			// Severity
+			if severity, exists := event.Payload["event.severity"]; exists {
+				simplifiedEvent.Payload["event.severity"] = severity
+			}
+			if severityLabel, exists := event.Payload["event.severity_label"]; exists {
+				simplifiedEvent.Payload["event.severity_label"] = severityLabel
+			}
+
+			// Source and destination
+			if srcIP, exists := event.Payload["source.ip"]; exists {
+				simplifiedEvent.Payload["source.ip"] = srcIP
+			}
+			if srcPort, exists := event.Payload["source.port"]; exists {
+				simplifiedEvent.Payload["source.port"] = srcPort
+			}
+			if dstIP, exists := event.Payload["destination.ip"]; exists {
+				simplifiedEvent.Payload["destination.ip"] = dstIP
+			}
+			if dstPort, exists := event.Payload["destination.port"]; exists {
+				simplifiedEvent.Payload["destination.port"] = dstPort
+			}
+
+			// Module and category
+			if module, exists := event.Payload["event.module"]; exists {
+				simplifiedEvent.Payload["event.module"] = module
+			}
+			if category, exists := event.Payload["event.category"]; exists {
+				simplifiedEvent.Payload["event.category"] = category
+			}
+
+			// Status fields
+			if acknowledged, exists := event.Payload["event.acknowledged"]; exists {
+				simplifiedEvent.Payload["event.acknowledged"] = acknowledged
+			}
+			if escalated, exists := event.Payload["event.escalated"]; exists {
+				simplifiedEvent.Payload["event.escalated"] = escalated
+			}
+
+			// Timestamp
+			if timestamp, exists := event.Payload["@timestamp"]; exists {
+				simplifiedEvent.Payload["@timestamp"] = timestamp
+			}
+		}
+
+		simplified.Events[i] = simplifiedEvent
+	}
+
+	return simplified
+}
+
 func (h *EventHandler) postAck(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -120,6 +210,64 @@ func (h *EventHandler) postAck(w http.ResponseWriter, r *http.Request) {
 	results, err := h.server.Eventstore.Acknowledge(ctx, ackCriteria)
 	if err != nil {
 		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, results)
+}
+
+// @Summary      Update Event Status
+// @Description  Updates the status of a specific event
+// @Security     bearer[events/write]
+// @Tags         Events
+// @Param        id   path      string  true  "Event ID"
+// @Param        status  body  object  true  "Status update" example({"status": "acknowledged"})
+// @Accept       json
+// @Produce      json
+// @Success      200  {object}  model.EventUpdateResults   "Event successfully updated"
+// @Failure      400         "The provided input object or parameters are malformed or invalid"
+// @Failure      401         "Request was not properly authenticated"
+// @Failure      405         "The event module is not loaded on the server"
+// @Failure      500         "Internal SOC error; review SOC logs"
+// @Router       /api/events/{id}/status [put]
+func (h *EventHandler) putEventStatus(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	eventId := chi.URLParam(r, "id")
+
+	var statusUpdate struct {
+		Status string `json:"status"`
+	}
+
+	err := json.NewDecoder(r.Body).Decode(&statusUpdate)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	// Validate status
+	if statusUpdate.Status != "acknowledged" && statusUpdate.Status != "dismissed" && statusUpdate.Status != "escalated" {
+		web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid status. Must be 'acknowledged', 'dismissed', or 'escalated'"))
+		return
+	}
+
+	// Create update criteria for this specific event
+	updateCriteria := model.NewEventUpdateCriteria()
+	updateCriteria.RawQuery = "_id:\"" + eventId + "\""
+
+	// Add the appropriate update script based on status
+	switch statusUpdate.Status {
+	case "acknowledged":
+		updateCriteria.AddUpdateScript("ctx._source['event.acknowledged'] = true")
+	case "dismissed":
+		updateCriteria.AddUpdateScript("ctx._source['event.dismissed'] = true")
+	case "escalated":
+		updateCriteria.AddUpdateScript("ctx._source['event.escalated'] = true")
+	}
+
+	// Perform the update
+	results, err := h.server.Eventstore.Update(ctx, updateCriteria)
+	if err != nil {
+		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
