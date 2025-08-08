@@ -58,14 +58,14 @@ func (mr *MockAssistantManagerMockRecorder) Balance(arg0 any) *gomock.Call {
 }
 
 // Chat mocks base method.
-func (m *MockAssistantManager) Chat(arg0 context.Context, arg1 []*model.Message, arg2 ...model.ChatOpt) (*model.Message, error) {
+func (m *MockAssistantManager) Chat(arg0 context.Context, arg1 []*model.Message, arg2 ...model.ChatOpt) ([]*model.Message, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{arg0, arg1}
 	for _, a := range arg2 {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Chat", varargs...)
-	ret0, _ := ret[0].(*model.Message)
+	ret0, _ := ret[0].([]*model.Message)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -93,10 +93,10 @@ func (mr *MockAssistantManagerMockRecorder) ChatStream(ctx, messages any) *gomoc
 }
 
 // ExecuteTool mocks base method.
-func (m *MockAssistantManager) ExecuteTool(ctx context.Context, toolName, params string) (*model.ToolResult, error) {
+func (m *MockAssistantManager) ExecuteTool(ctx context.Context, toolName, params string) (*model.ToolResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ExecuteTool", ctx, toolName, params)
-	ret0, _ := ret[0].(*model.ToolResult)
+	ret0, _ := ret[0].(*model.ToolResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

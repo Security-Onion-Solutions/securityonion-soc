@@ -299,20 +299,6 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
     },
     async callAIAPI(userMessage) {
       try {
-        // Prepare message history (exclude the current user message that was just added)
-        const messageHistory = this.messages.slice(0, -1).map(msg => {
-          const contentText = typeof msg.content === 'object' && msg.content.value !== undefined ? msg.content.value : msg.content;
-          return {
-            role: msg.role,
-            content: [
-              {
-                type: "text",
-                text: contentText
-              }
-            ]
-          };
-        });
-
         let response = await fetch('/api/assistant/chat', {
           method: 'POST',
           headers: {
@@ -322,7 +308,6 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
           },
           body: JSON.stringify({
             msg: userMessage,
-            messages: messageHistory,
             sessionId: this.currentChatId
           })
         });
@@ -629,24 +614,9 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
       try {
         console.log('Executing tool:', toolUse.name, 'with params:', toolUse.input);
         
-        // Prepare message history for the tool request
-        const messageHistory = this.messages.map(msg => {
-          const contentText = typeof msg.content === 'object' && msg.content.value !== undefined ? msg.content.value : msg.content;
-          return {
-            role: msg.role,
-            content: [
-              {
-                type: "text",
-                text: contentText
-              }
-            ]
-          };
-        });
-        
         // Create ToolRequest object with history and params
         // Session ID should already be set by sendMessage()
         const toolRequest = {
-          history: messageHistory,
           sessionId: this.currentChatId,
           toolUseId: toolUse.id,
           params: toolUse.input

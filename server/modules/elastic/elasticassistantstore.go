@@ -209,9 +209,6 @@ func (store *ElasticAssistantstore) validateChat(chat *model.StoredMessage) erro
 				if cb.Type == "text" && cb.Text == "" {
 					err = fmt.Errorf("content block of type 'text' must have non-empty text")
 				}
-				if cb.Type == "tool_result" && (cb.ToolUseID == "" || cb.ToolResult == nil) {
-					err = fmt.Errorf("content block of type 'tool_result' must have non-empty tool use ID and tool result")
-				}
 			}
 		}
 

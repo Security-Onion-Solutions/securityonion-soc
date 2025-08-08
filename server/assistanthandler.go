@@ -54,9 +54,8 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	streaming := strings.EqualFold(accept, "text/event-stream")
 
 	type TempBody struct {
-		Msg       string           `json:"msg"`
-		Messages  []*model.Message `json:"messages"`
-		SessionId string           `json:"sessionId"`
+		Msg       string `json:"msg"`
+		SessionId string `json:"sessionId"`
 	}
 
 	tb := &TempBody{}
@@ -82,7 +81,20 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	err = h.server.Assistantstore.SaveChat(ctx, newMsg.PrepareForStorage(tb.SessionId))
+	stored, err := h.server.Assistantstore.GetChatHistory(ctx, tb.SessionId)
+	if err != nil {
+		logger.WithError(err).Error("unable to get chat history")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+
+		return
+	}
+
+	messages := make([]*model.Message, 0, len(stored))
+	for _, msg := range stored {
+		messages = append(messages, msg.Message)
+	}
+
+	err = h.server.Assistantstore.SaveChat(ctx, newMsg.PrepareForStorage(tb.SessionId, nil))
 	if err != nil {
 		logger.WithError(err).Error("unable to save chat message")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -90,8 +102,7 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// use provided messages for now, eventually look up history by session ID
-	messages := append(tb.Messages, newMsg)
+	messages = append(messages, newMsg)
 
 	_, ok := w.(http.Flusher)
 	if streaming && !ok {
@@ -107,10 +118,12 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		err = h.server.Assistantstore.SaveChat(ctx, response.PrepareForStorage(tb.SessionId))
-		if err != nil {
-			logger.WithError(err).Error("unable to save chat message")
-			return
+		for _, msg := range response {
+			err = h.server.Assistantstore.SaveChat(ctx, msg.PrepareForStorage(tb.SessionId, nil))
+			if err != nil {
+				logger.WithError(err).Error("unable to save chat message")
+				return
+			}
 		}
 
 		web.Respond(w, r, http.StatusOK, response)
@@ -150,10 +163,12 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		err = h.server.Assistantstore.SaveChat(noTimeOutCtx, msg.PrepareForStorage(tb.SessionId))
-		if err != nil {
-			logger.WithError(err).Error("unable to save chat message")
-			return
+		if msg != nil {
+			err = h.server.Assistantstore.SaveChat(noTimeOutCtx, msg.PrepareForStorage(tb.SessionId, nil))
+			if err != nil {
+				logger.WithError(err).Error("unable to save chat message")
+				return
+			}
 		}
 	}()
 }
@@ -179,12 +194,9 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 	result, err := h.server.AssistantManager.ExecuteTool(ctx, toolName, string(toolReq.Params))
 	if err != nil {
 		logger.WithError(err).Error("unable to execute tool")
-		web.Respond(w, r, http.StatusInternalServerError, err)
-
-		return
 	}
 
-	content, err := json.Marshal(result.Result)
+	encoded, err := json.Marshal(result.Result)
 	if err != nil {
 		logger.WithError(err).Error("unable to marshal tool result")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -193,20 +205,39 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 	}
 
 	toolMsg := &model.Message{
-		Role:       "user",
-		ContentStr: string(content),
+		Id:   uuid.NewString(),
+		Role: "user",
+		ContentBlocks: []model.ContentBlock{
+			{
+				Type: "text",
+				Text: fmt.Sprintf("ToolUseId: %s, Result: %s", toolReq.ToolUseId, string(encoded)),
+			},
+		},
 	}
 
-	err = h.server.Assistantstore.SaveChat(ctx, toolMsg.PrepareForStorage(toolReq.SessionId))
+	stored, err := h.server.Assistantstore.GetChatHistory(ctx, toolReq.SessionId)
+	if err != nil {
+		logger.WithError(err).Error("unable to get chat history")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+
+		return
+	}
+
+	messages := make([]*model.Message, 0, len(stored))
+	for _, msg := range stored {
+		messages = append(messages, msg.Message)
+	}
+
+	err = h.server.Assistantstore.SaveChat(ctx, toolMsg.PrepareForStorage(toolReq.SessionId, []string{"tool_result"}))
 	if err != nil {
 		logger.WithError(err).Error("unable to save tool result message")
 		return
 	}
 
-	msgs := append(toolReq.History, toolMsg)
+	messages = append(messages, toolMsg)
 
 	if !streaming {
-		response, err := h.server.AssistantManager.Chat(ctx, msgs)
+		response, err := h.server.AssistantManager.Chat(ctx, messages)
 		if err != nil {
 			logger.WithError(err).Error("unable to chat with assistant after tool execution")
 			web.Respond(w, r, http.StatusInternalServerError, err)
@@ -216,15 +247,18 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 
 		web.Respond(w, r, http.StatusOK, response)
 
-		err = h.server.Assistantstore.SaveChat(ctx, response.PrepareForStorage(toolReq.SessionId))
-		if err != nil {
-			logger.WithError(err).Error("unable to save tool result response message")
-			return
+		for _, msg := range response {
+			err = h.server.Assistantstore.SaveChat(ctx, msg.PrepareForStorage(toolReq.SessionId, nil))
+			if err != nil {
+				logger.WithError(err).Error("unable to save tool result response message")
+				return
+			}
 		}
+
 		return
 	}
 
-	response, err := h.server.AssistantManager.ChatStream(ctx, msgs)
+	response, err := h.server.AssistantManager.ChatStream(ctx, messages)
 	if err != nil {
 		logger.WithError(err).Error("unable to chat (stream) with assistant after tool execution")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -256,10 +290,12 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		err = h.server.Assistantstore.SaveChat(noTimeOutCtx, msg.PrepareForStorage(toolReq.SessionId))
-		if err != nil {
-			logger.WithError(err).Error("unable to save chat message")
-			return
+		if msg != nil {
+			err = h.server.Assistantstore.SaveChat(noTimeOutCtx, msg.PrepareForStorage(toolReq.SessionId, nil))
+			if err != nil {
+				logger.WithError(err).Error("unable to save chat message")
+				return
+			}
 		}
 	}()
 }
@@ -453,16 +489,29 @@ func unstreamResponse(rawResponse string) (*model.Message, error) {
 			}
 
 			if sm.ContentBlock != nil {
+				if string(sm.ContentBlock.Input) == "{}" {
+					sm.ContentBlock.Input = json.RawMessage("")
+				}
 				message.ContentBlocks[sm.Index] = *sm.ContentBlock
 			}
 		case "content_block_delta":
 			if sm.Delta != nil {
 				switch sm.Delta.Type {
 				case "text_delta":
-					message.ContentBlocks[sm.Index].Content += sm.Delta.Text
+					if message.ContentBlocks[sm.Index].Content == nil {
+						message.ContentBlocks[sm.Index].Content = ""
+					}
+
+					message.ContentBlocks[sm.Index].Content = message.ContentBlocks[sm.Index].Content.(string) + sm.Delta.Text
 				case "input_json_delta":
-					message.ContentBlocks[sm.Index].Input += *sm.Delta.PartialJson
+					message.ContentBlocks[sm.Index].Input = json.RawMessage(string(message.ContentBlocks[sm.Index].Input) + *sm.Delta.PartialJson)
 				}
+			}
+		case "content_block_stop":
+			if message.ContentBlocks[sm.Index].Type == "" {
+				message.ContentBlocks[sm.Index].Type = "text"
+				message.ContentBlocks[sm.Index].Text = message.ContentBlocks[sm.Index].Content.(string)
+				message.ContentBlocks[sm.Index].Content = nil
 			}
 		case "message_delta":
 			if sm.Usage != nil {

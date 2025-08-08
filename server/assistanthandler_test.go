@@ -36,14 +36,11 @@ func TestPostChat(t *testing.T) {
 
 	handler := NewAssistantHandler(srv)
 
-	// Test data with message history
+	// Test data with sessionId (history is now looked up by sessionId)
+	sessionId := "test-session-123"
 	requestBody := map[string]interface{}{
-		"msg": "What is my current balance?",
-		"messages": []map[string]string{
-			{"role": "assistant", "content": "Hello! I'm your AI Assistant for Security Onion. How can I help you today?"},
-			{"role": "user", "content": "Hello, I need help with my account"},
-			{"role": "assistant", "content": "I'd be happy to help you with your account. What specific information do you need?"},
-		},
+		"msg":       "What is my current balance?",
+		"sessionId": sessionId,
 	}
 
 	jsonBody, _ := json.Marshal(requestBody)
@@ -58,14 +55,44 @@ func TestPostChat(t *testing.T) {
 
 	w := httptest.NewRecorder()
 
+	// Mock the history lookup to return previous messages
+	mockHistoryMessages := []*model.StoredMessage{
+		{
+			SessionId: sessionId,
+			Message: &model.Message{
+				Role: "user",
+				ContentBlocks: []model.ContentBlock{
+					{
+						Type: "text",
+						Text: "Hello, I need help with my account",
+					},
+				},
+			},
+		},
+		{
+			SessionId: sessionId,
+			Message: &model.Message{
+				Role: "assistant",
+				ContentBlocks: []model.ContentBlock{
+					{
+						Type: "text",
+						Text: "I'd be happy to help you with your account. What specific information do you need?",
+					},
+				},
+			},
+		},
+	}
+
+	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return(mockHistoryMessages, nil)
+
 	// Set up mock expectations
 	var capturedMessages []*model.Message
 	mockManager.EXPECT().Chat(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, messages []*model.Message, opts ...model.ChatOpt) (*model.Message, error) {
+		func(ctx context.Context, messages []*model.Message, opts ...model.ChatOpt) ([]*model.Message, error) {
 			assert.Len(t, opts, 0)
 			capturedMessages = messages
 
-			return &model.Message{
+			return []*model.Message{{
 				Role: "assistant",
 				ContentBlocks: []model.ContentBlock{
 					{
@@ -73,7 +100,7 @@ func TestPostChat(t *testing.T) {
 						Text: "Mock response with history",
 					},
 				},
-			}, nil
+			}}, nil
 		},
 	)
 
@@ -86,7 +113,7 @@ func TestPostChat(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	// Verify that the mock received the correct number of messages
-	expectedMessageCount := 4 // 3 from history + 1 new user message
+	expectedMessageCount := 3 // 2 from history + 1 new user message
 	assert.Len(t, capturedMessages, expectedMessageCount)
 
 	// Verify the last message is the new user message
@@ -94,8 +121,9 @@ func TestPostChat(t *testing.T) {
 	assert.Equal(t, "user", lastMessage.Role)
 	assert.Equal(t, "What is my current balance?", lastMessage.ContentBlocks[0].Text)
 
-	// Verify history is preserved
-	assert.Equal(t, "assistant", capturedMessages[0].Role)
+	// Verify history is preserved - first message should be user from history
+	assert.Equal(t, "user", capturedMessages[0].Role)
+	assert.Equal(t, "Hello, I need help with my account", capturedMessages[0].ContentBlocks[0].Text)
 }
 
 func TestPostChatWithoutHistory(t *testing.T) {
@@ -111,7 +139,7 @@ func TestPostChatWithoutHistory(t *testing.T) {
 
 	handler := NewAssistantHandler(srv)
 
-	// Test data without message history (backward compatibility)
+	// Test data without sessionId (new session)
 	requestBody := map[string]interface{}{
 		"msg": "Hello",
 	}
@@ -128,14 +156,17 @@ func TestPostChatWithoutHistory(t *testing.T) {
 
 	w := httptest.NewRecorder()
 
+	// Mock GetChatHistory to return empty history for new session (will generate new sessionId)
+	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{}, nil)
+
 	// Set up mock expectations
 	var capturedMessages []*model.Message
 	mockManager.EXPECT().Chat(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, messages []*model.Message, opts ...model.ChatOpt) (*model.Message, error) {
+		func(ctx context.Context, messages []*model.Message, opts ...model.ChatOpt) ([]*model.Message, error) {
 			assert.Len(t, opts, 0)
 			capturedMessages = messages
 
-			return &model.Message{
+			return []*model.Message{{
 				Role: "assistant",
 				ContentBlocks: []model.ContentBlock{
 					{
@@ -143,7 +174,7 @@ func TestPostChatWithoutHistory(t *testing.T) {
 						Text: "Mock response",
 					},
 				},
-			}, nil
+			}}, nil
 		},
 	)
 
@@ -155,7 +186,7 @@ func TestPostChatWithoutHistory(t *testing.T) {
 	// Verify response
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	// Verify that the mock received exactly 1 message (backward compatibility)
+	// Verify that the mock received exactly 1 message (new session with no history)
 	expectedMessageCount := 1
 	assert.Len(t, capturedMessages, expectedMessageCount)
 
@@ -212,10 +243,8 @@ data: [DONE]`
 	assert.NoError(t, err)
 	assert.NotNil(t, msg)
 	assert.Equal(t, model.Message{
-		Id:    "assistant",
-		Type:  "message",
-		Role:  "assistant",
-		Model: "us.anthropic.claude-sonnet-4-20250514-v1:0",
+		Id:   "assistant",
+		Role: "assistant",
 		ContentBlocks: []model.ContentBlock{
 			{
 				Content: `I'll get your 5 newest alerts for you. Since you're asking for the "newest" alerts, I'll query for recent individual alert events without grouping.`,
@@ -224,7 +253,7 @@ data: [DONE]`
 				Type:  "tool_use",
 				Id:    "tooluse_9xXi7Q0YQG-LjR-ezEZYqQ",
 				Name:  "query_events",
-				Input: "{\"oql_query\": \"tags:alert\", \"limit\": 5}",
+				Input: json.RawMessage(`{"oql_query": "tags:alert", "limit": 5}`),
 			},
 		},
 		StopReason: util.Ptr("tool_use"),

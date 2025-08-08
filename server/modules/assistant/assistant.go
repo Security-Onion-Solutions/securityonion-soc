@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -126,15 +127,19 @@ func (ac *AssistantCoordinator) IsRunning() bool {
 	return ac.isRunning
 }
 
-func (ac *AssistantCoordinator) Chat(ctx context.Context, messages []*model.Message, opts ...model.ChatOpt) (*model.Message, error) {
+func (ac *AssistantCoordinator) Chat(ctx context.Context, messages []*model.Message, opts ...model.ChatOpt) ([]*model.Message, error) {
 	logger := log.FromContext(ctx)
 	userID := ctx.Value(web.ContextKeyRequestorId).(string)
 	config := model.ApplyChatOpts(opts...)
 
+	msgs := cleanupMessages(messages)
+
 	req := &model.ChatRequest{
-		Messages:   messages,
-		UserUUID:   userID,
+		Messages:   msgs,
 		ToolConfig: ac.toolConfig,
+		Metadata: model.MetaData{
+			UserId: userID,
+		},
 	}
 
 	u, err := url.Parse(ac.apiUrl)
@@ -190,6 +195,8 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, messages []*model.Mess
 		return nil, err
 	}
 
+	newMessages := []*model.Message{response}
+
 	// Check if Claude made any tool use requests and handle based on config
 	if config.AutoExecuteTools {
 		for _, content := range response.ContentBlocks {
@@ -212,23 +219,31 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, messages []*model.Mess
 				// The calling code should handle appending this to the conversation
 				logger.WithFields(log.Fields{
 					"toolName":   content.Name,
-					"toolId":     content.Id,
+					"toolUseId":  content.Id,
 					"toolResult": string(toolResultJSON),
 				}).Info("tool executed successfully for chat response")
 
-				// append to message history and recurse to send the tool result back with context
-				messages = append(messages, &model.Message{
+				toolMsg := &model.Message{
+					Id:   uuid.NewString(),
 					Role: "user",
 					ContentBlocks: []model.ContentBlock{
 						{
-							Type:       "tool_result",
-							Id:         content.Id,
-							Name:       content.Name,
-							ToolUseID:  content.ToolUseID,
-							ToolResult: json.RawMessage(toolResultJSON),
+							Type: "text",
+							Text: fmt.Sprintf("ToolUseId: %s, Result: %s", content.Id, string(toolResultJSON)),
 						},
 					},
-				})
+				}
+
+				newMessages = append(newMessages, toolMsg)
+
+				err = ac.srv.Assistantstore.SaveChat(ctx, toolMsg.PrepareForStorage("", []string{"tool_result"}))
+				if err != nil {
+					logger.WithError(err).Error("unable to save tool result message")
+					return nil, err
+				}
+
+				// append to message history and recurse to send the tool result back with context
+				messages = append(messages, toolMsg)
 
 				toolResponse, err := ac.Chat(ctx, messages, model.WithAutoExecuteTools(true))
 				if err != nil {
@@ -236,23 +251,28 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, messages []*model.Mess
 					return nil, err
 				}
 
-				response = toolResponse
+				newMessages = append(newMessages, toolResponse...)
 			}
 		}
 	}
 
-	return response, nil
+	return newMessages, nil
 }
 
 func (ac *AssistantCoordinator) ChatStream(ctx context.Context, messages []*model.Message) (*http.Response, error) {
 	logger := log.FromContext(ctx)
 	userID := ctx.Value(web.ContextKeyRequestorId).(string)
 
+	// copy and modify
+	msgs := cleanupMessages(messages)
+
 	req := &model.ChatRequest{
-		Messages:   messages,
-		UserUUID:   userID,
+		Messages:   msgs,
 		Stream:     true,
 		ToolConfig: ac.toolConfig,
+		Metadata: model.MetaData{
+			UserId: userID,
+		},
 	}
 
 	u, err := url.Parse(ac.apiUrl)
@@ -272,7 +292,7 @@ func (ac *AssistantCoordinator) ChatStream(ctx context.Context, messages []*mode
 		logger.WithError(err).WithField("chatrequest", req).Error("unable to encode ChatRequest")
 		return nil, err
 	}
-	logger.Info(buf.String())
+	logger.WithField("body", buf.String()).Info("outgoing chat request body")
 	httpReq, err := http.NewRequest(http.MethodPost, endpoint, &buf)
 	if err != nil {
 		logger.WithError(err).WithField("apiEndpoint", endpoint).Error("unable to make request object")
@@ -294,8 +314,7 @@ func (ac *AssistantCoordinator) ChatStream(ctx context.Context, messages []*mode
 	return res, nil
 }
 
-func (ac *AssistantCoordinator) ExecuteTool(ctx context.Context, toolName string, params string) (*model.ToolResult, error) {
-
+func (ac *AssistantCoordinator) ExecuteTool(ctx context.Context, toolName string, params string) (*model.ToolResponse, error) {
 	logger := log.FromContext(ctx).WithFields(log.Fields{
 		"toolName":  toolName,
 		"toolUseId": uuid.New().String(),
@@ -376,4 +395,17 @@ func (ac *AssistantCoordinator) Balance(ctx context.Context) (*model.BalanceResp
 	}
 
 	return response, nil
+}
+
+func cleanupMessages(messages []*model.Message) []*model.Message {
+	msgs := make([]*model.Message, 0, len(messages))
+	for _, msg := range messages {
+		m := *msg
+		m.StopReason = nil
+		m.StopSequence = nil
+		m.Usage = nil
+		msgs = append(msgs, &m)
+	}
+
+	return msgs
 }

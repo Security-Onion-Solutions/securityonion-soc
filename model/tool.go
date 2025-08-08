@@ -11,13 +11,12 @@ import (
 )
 
 type ToolRequest struct {
-	History   []*Message      `json:"history"`
 	SessionId string          `json:"sessionId"`
 	ToolUseId string          `json:"toolUseId"`
 	Params    json.RawMessage `json:"params"`
 }
 
-type ToolResult struct {
+type ToolResponse struct {
 	ToolName       string
 	Parameters     any
 	Result         any

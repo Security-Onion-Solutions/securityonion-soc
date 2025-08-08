@@ -43,10 +43,10 @@ func (m *MockTool) EXPECT() *MockToolMockRecorder {
 }
 
 // Execute mocks base method.
-func (m *MockTool) Execute(arg0 context.Context, arg1 *server.Server, arg2 string) (*model.ToolResult, error) {
+func (m *MockTool) Execute(arg0 context.Context, arg1 *server.Server, arg2 string) (*model.ToolResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Execute", arg0, arg1, arg2)
-	ret0, _ := ret[0].(*model.ToolResult)
+	ret0, _ := ret[0].(*model.ToolResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

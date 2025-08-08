@@ -16,7 +16,7 @@ type Tool interface {
 	GetName() string
 	GetDescription() string
 	GetSchema() model.JSONSchema
-	Execute(context.Context, *server.Server, string) (*model.ToolResult, error)
+	Execute(context.Context, *server.Server, string) (*model.ToolResponse, error)
 }
 
 //go:generate mockgen -destination mock/mock_tool.go -package mock . Tool

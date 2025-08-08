@@ -87,7 +87,7 @@ type queryEventsArgs struct {
 	GroupByField *string `json:"groupby_field,omitempty"`
 }
 
-func (t *QueryEventsTool) Execute(ctx context.Context, server *server.Server, params string) (result *model.ToolResult, err error) {
+func (t *QueryEventsTool) Execute(ctx context.Context, server *server.Server, params string) (result *model.ToolResponse, err error) {
 	logger := log.FromContext(ctx)
 
 	logger.WithField("toolParameters", params).Info("running tool for assistant")
@@ -95,7 +95,7 @@ func (t *QueryEventsTool) Execute(ctx context.Context, server *server.Server, pa
 	userId := ctx.Value(web.ContextKeyRequestorId).(string)
 
 	args := &queryEventsArgs{}
-	result = &model.ToolResult{
+	result = &model.ToolResponse{
 		ToolName:       t.GetName(),
 		OnBehalfOfUser: userId,
 	}
