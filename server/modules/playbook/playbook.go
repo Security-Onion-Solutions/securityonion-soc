@@ -558,10 +558,42 @@ func (pdm *PlaybookDiskManager) ConvertQuestions(ctx context.Context, queries []
 		return nil, err
 	}
 
+	// Log the input queries for debugging
+	logger.WithFields(log.Fields{
+		"queryCount": len(queries),
+		"queries":    queries,
+	}).Debug("converting playbook queries")
+
+	// Validate that queries are valid YAML
+	validQueries := []string{}
+	for i, query := range queries {
+		query = strings.TrimSpace(query)
+		if query == "" {
+			continue
+		}
+		
+		// Check if this looks like a valid Sigma rule structure
+		if !strings.Contains(query, "logsource:") && !strings.Contains(query, "detection:") {
+			logger.WithFields(log.Fields{
+				"queryIndex": i,
+				"query":      query,
+			}).Warn("skipping invalid query - missing required Sigma structure")
+			continue
+		}
+		
+		validQueries = append(validQueries, query)
+	}
+
+	if len(validQueries) == 0 {
+		logger.Warn("no valid queries to convert")
+		// Return empty results instead of error to allow frontend to continue
+		return []*model.ConvertedQuery{}, nil
+	}
+
 	args := []string{"convert", "-t", "security_onion", "-p", "/opt/sensoroni/sigma_final_pipeline.yaml", "-p", "/opt/sensoroni/sigma_so_pipeline.yaml", "-p", "windows-logsources", "-p", "ecs_windows", "--disable-pipeline-check", "/dev/stdin"}
 
 	cmd := exec.CommandContext(pdm.srv.Context, "sigma", args...)
-	cmd.Stdin = strings.NewReader(strings.Join(queries, "\n---\n"))
+	cmd.Stdin = strings.NewReader(strings.Join(validQueries, "\n---\n"))
 
 	raw, code, runtime, err := pdm.ExecCommand(cmd)
 
@@ -574,7 +606,13 @@ func (pdm *PlaybookDiskManager) ConvertQuestions(ctx context.Context, queries []
 	}).Info("executing sigma cli")
 
 	if err != nil {
-		return nil, fmt.Errorf("problem with sigma cli: %w", err)
+		// Log more details about the error
+		logger.WithFields(log.Fields{
+			"sigmaError":  err.Error(),
+			"sigmaOutput": string(raw),
+			"exitCode":    code,
+		}).Error("sigma conversion failed")
+		return nil, fmt.Errorf("problem with sigma cli (exit code %d): %w", code, err)
 	}
 
 	oql := string(raw)
@@ -604,6 +642,23 @@ func (pdm *PlaybookDiskManager) ConvertQuestions(ctx context.Context, queries []
 		}
 
 		output = append(output, cq)
+	}
+
+	// If we had to skip some queries, we need to pad the output to match the original query count
+	// This ensures the frontend can map results back to the correct questions
+	if len(output) < len(queries) {
+		logger.WithFields(log.Fields{
+			"originalCount": len(queries),
+			"convertedCount": len(output),
+		}).Warn("some queries could not be converted, padding output")
+		
+		// Pad with empty results
+		for i := len(output); i < len(queries); i++ {
+			output = append(output, &model.ConvertedQuery{
+				Query: "",
+				Fields: []string{},
+			})
+		}
 	}
 
 	return output, nil

@@ -89,7 +89,19 @@ export default {
           
           // Special handling for array fields
           if (arrayFields.includes(fieldName) && Array.isArray(value)) {
-            // Find the line containing the variable
+            // For Sigma queries with |expand operator, we need to handle arrays differently
+            // Look for patterns like: src_ip|expand: '%private_ip%'
+            const expandPattern = new RegExp(`(\\w+(?:\\.\\w+)*)\\|expand:\\s*['"]?%${fieldName.replace('.', '\\.')}%['"]?`, 'g');
+            
+            if (q.match(expandPattern)) {
+              // Replace the expand pattern with a proper list
+              q = q.replace(expandPattern, (match, field) => {
+                return value.map(ip => `${field}: '${ip}'`).join('\n                - ');
+              });
+              continue;
+            }
+            
+            // Original handling for non-expand patterns
             const lines = q.split('\n');
             const lineWithVar = lines.findIndex(line => line.includes(variable));
             
@@ -157,42 +169,54 @@ export default {
     }
   },
   async askQuestion(question, event) {
-    if (question.range && question.filledOQL) {
-      try {
-        const dateRange = this.buildQuestionRange(event, question.range);
-        let query = question.filledOQL;
-        if (!this.isQuestionAggregate(question)) {
-          query = query + ` | sortby @timestamp`;
-        }
-
-        let response = await this.$root.papi.get('events/', {
-          params: {
-            query: query,
-            range: dateRange,
-            format: this.i18n.timePickerSample,
-            zone: this.zone,
-            metricLimit: 5,
-            eventLimit: 5
+    if (question.range) {
+      // Check if we have a converted OQL query
+      if (question.filledOQL) {
+        try {
+          const dateRange = this.buildQuestionRange(event, question.range);
+          let query = question.filledOQL;
+          if (!this.isQuestionAggregate(question)) {
+            query = query + ` | sortby @timestamp`;
           }
-        });
 
-        if (this.isQuestionAggregate(question)) {
-          let biggest = '';
-          for (let field in response.data.metrics) {
-            if (field.length > biggest.length) biggest = field;
-          }
-          if (biggest) {
-            question.answers = this.sortAggregateEvents(response.data.metrics[biggest]);
+          let response = await this.$root.papi.get('events/', {
+            params: {
+              query: query,
+              range: dateRange,
+              format: this.i18n.timePickerSample,
+              zone: this.zone,
+              metricLimit: 5,
+              eventLimit: 5
+            }
+          });
+
+          if (this.isQuestionAggregate(question)) {
+            let biggest = '';
+            for (let field in response.data.metrics) {
+              if (field.length > biggest.length) biggest = field;
+            }
+            if (biggest) {
+              question.answers = this.sortAggregateEvents(response.data.metrics[biggest]);
+            } else {
+              // fallback, less than ideal
+              question.answers = response.data.events;
+            }
           } else {
-            // fallback, less than ideal
             question.answers = response.data.events;
           }
-        } else {
-          question.answers = response.data.events;
+        } catch (e) {
+          console.error('Failed to execute playbook query:', e);
+          question.error = true;
+          question.answers = [];
+          // Add error message to help with debugging
+          question.errorMessage = 'Failed to execute query: ' + (e.response?.data?.error || e.message);
         }
-      } catch (e) {
+      } else {
+        // No OQL query available (conversion failed)
+        console.warn('Playbook question has no OQL query - conversion may have failed:', question);
         question.error = true;
         question.answers = [];
+        question.errorMessage = 'Query conversion failed - please check server logs';
       }
     } else {
       // no range specified means we can find the answer on the event

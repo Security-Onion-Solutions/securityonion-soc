@@ -453,7 +453,11 @@
 																								</tr>
 																								<tr v-if="question.answers && question.answers.length === 0">
 																									<td colspan="100%" class="text-center" data-aid="playbook_grouped_instantinsights_aggregate_nodata">
-																										{{ question.error ? i18n.error : i18n.noData }}
+																										<span v-if="question.error">
+																											{{ i18n.error }}
+																											<span v-if="question.errorMessage" class="text-caption d-block text-error">{{ question.errorMessage }}</span>
+																										</span>
+																										<span v-else>{{ i18n.noData }}</span>
 																									</td>
 																								</tr>
 																							</tbody>
@@ -480,7 +484,11 @@
 																								</tr>
 																								<tr v-if="question.answers && question.answers.length === 0">
 																									<td colspan="100%" class="text-center" data-aid="playbook_grouped_instantinsights_nodata">
-																										{{ question.error ? i18n.error : i18n.noData }}
+																										<span v-if="question.error">
+																											{{ i18n.error }}
+																											<span v-if="question.errorMessage" class="text-caption d-block text-error">{{ question.errorMessage }}</span>
+																										</span>
+																										<span v-else>{{ i18n.noData }}</span>
 																									</td>
 																								</tr>
 																							</tbody>
@@ -767,7 +775,11 @@
 																					</tr>
 																					<tr v-if="question.answers && question.answers.length === 0">
 																						<td colspan="100%" class="text-center" data-aid="playbook_instantinsights_aggregate_nodata">
-																							{{ question.error ? i18n.error : i18n.noData }}
+																							<span v-if="question.error">
+																								{{ i18n.error }}
+																								<span v-if="question.errorMessage" class="text-caption d-block text-error">{{ question.errorMessage }}</span>
+																							</span>
+																							<span v-else>{{ i18n.noData }}</span>
 																						</td>
 																					</tr>
 																				</tbody>
@@ -794,7 +806,11 @@
 																					</tr>
 																					<tr v-if="question.answers && question.answers.length === 0">
 																						<td colspan="100%" class="text-center" data-aid="playbook_instantinsights_nodata">
-																							{{ question.error ? i18n.error : i18n.noData }}
+																							<span v-if="question.error">
+																								{{ i18n.error }}
+																								<span v-if="question.errorMessage" class="text-caption d-block text-error">{{ question.errorMessage }}</span>
+																							</span>
+																							<span v-else>{{ i18n.noData }}</span>
 																						</td>
 																					</tr>
 																				</tbody>
