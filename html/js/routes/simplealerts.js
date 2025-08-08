@@ -37,6 +37,10 @@ const simpleAlertsComponent = {
       caseTitle: '',
       caseDescription: '',
       
+      // Details dialog
+      detailsDialog: false,
+      selectedAlertDetails: null,
+      
       // Filter options
       severityOptions: [
         { value: 'all', title: 'All Severities' },
@@ -427,6 +431,57 @@ const simpleAlertsComponent = {
         case 'all': return 'Total Alerts';
         default: return 'Alerts';
       }
+    },
+    
+    async showAlertDetails(alert) {
+      // First, check if we need to fetch the full alert details
+      this.selectedAlertDetails = alert;
+      
+      try {
+        // Fetch the full alert with all fields using the regular view (not simple)
+        const params = new URLSearchParams({
+          query: `_id:"${alert.id}"`,
+          range: this.getDateRange(),
+          format: '2006/01/02 3:04:05 PM',
+          zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          metricLimit: '0',
+          eventLimit: '1'
+          // Note: NOT using view=simple here to get all fields
+        });
+        
+        const response = await this.$root.papi.get('events/?' + params.toString());
+        
+        if (response && response.data && response.data.events && response.data.events.length > 0) {
+          const fullEvent = response.data.events[0];
+          // Merge the full data with our simplified alert
+          this.selectedAlertDetails = {
+            ...alert,
+            rawData: fullEvent.payload || {}
+          };
+        }
+      } catch (error) {
+        console.error('Failed to fetch full alert details:', error);
+        // Still show the dialog with what we have
+        this.selectedAlertDetails = {
+          ...alert,
+          rawData: {}
+        };
+      }
+      
+      this.detailsDialog = true;
+    },
+    
+    getSeverityColor(severityLabel) {
+      const severity = (severityLabel || '').toLowerCase();
+      if (severity.includes('high') || severity.includes('critical')) return 'error';
+      if (severity.includes('medium')) return 'warning';
+      return 'info';
+    },
+    
+    getHuntUrl(alert) {
+      if (!alert) return '#/hunt';
+      const query = `_id:"${alert.id}"`;
+      return `#/hunt?q=${encodeURIComponent(query)}`;
     }
   }
 };

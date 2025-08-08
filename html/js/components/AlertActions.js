@@ -16,7 +16,7 @@ components.push({
             color="info"
             size="small"
             variant="flat"
-            @click="$emit('acknowledge')"
+            @click.stop="$emit('acknowledge')"
             :disabled="isProcessing"
           >
             <v-icon size="small">fa-check</v-icon>
@@ -33,7 +33,7 @@ components.push({
             color="warning"
             size="small"
             variant="flat"
-            @click="$emit('escalate')"
+            @click.stop="$emit('escalate')"
             :disabled="isProcessing"
           >
             <v-icon size="small">fa-briefcase</v-icon>
@@ -50,7 +50,7 @@ components.push({
             color="secondary"
             size="small"
             variant="outlined"
-            @click="$emit('dismiss')"
+            @click.stop="$emit('dismiss')"
             :disabled="isProcessing"
           >
             <v-icon size="small">fa-xmark</v-icon>

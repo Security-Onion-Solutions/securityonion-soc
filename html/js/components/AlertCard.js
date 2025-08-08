@@ -13,6 +13,8 @@ components.push({
       :elevation="isHovered ? 8 : 2"
       @mouseenter="isHovered = true"
       @mouseleave="isHovered = false"
+      @click="$emit('click', alert)"
+      style="cursor: pointer"
     >
       <v-card-text>
         <v-row align="center">
