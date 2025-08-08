@@ -2,6 +2,7 @@ version.json
 config.json
 sensoroni.log
 sensoroni
+soc
 jobs/
 logs/
 nsm/
