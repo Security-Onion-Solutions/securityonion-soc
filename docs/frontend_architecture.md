@@ -88,7 +88,7 @@ Routes are defined in individual files within `html/js/routes/`:
 #### Key Routes
 - **Home** (`/`): Dashboard and message of the day display
 - **Job** (`/job/:jobId`): Packet analysis and job details
-- **Hunt** (`/hunt`): Security event hunting interface
+- **Hunt** (`/hunt`): Security event hunting interface (modularized architecture)
 - **Cases** (`/cases`): Case management system
 - **Detections** (`/detections`): Detection rule management
 - **Grid** (`/grid`): Grid member monitoring
@@ -162,6 +162,42 @@ app.component(component.name, component.component);
 3. API calls through the global `$root.papi` Axios instance
 4. Event publishing for real-time updates
 5. WebSocket subscription for status changes
+
+## Hunt Module Architecture
+
+### Modular Design
+The Hunt module (`html/js/routes/hunt.js`) has been refactored from a single large file (3402 lines) into a modular architecture with separate ES6 modules for better maintainability:
+
+#### Module Structure
+- **actions.js**: Event actions (acknowledge, escalate, bulk operations)
+- **ai.js**: AI-powered investigation features
+- **charts.js**: Data visualization and charting logic
+- **dataHandlers.js**: Data processing and transformation
+- **localStorage.js**: Local storage management for user preferences
+- **methods.js**: Core hunt functionality and business logic
+- **playbook.js**: Security playbook integration
+- **query.js**: Query building and parsing
+- **routing.js**: URL routing and state management
+- **ui.js**: User interface helpers and utilities
+
+#### Build Process
+The ES6 modules are bundled for browser compatibility:
+1. **Source modules**: Individual ES6 files with import/export syntax
+2. **Build script**: `build-hunt.js` concatenates and transforms modules
+3. **Bundle output**: `hunt-bundled.js` contains all modules in a browser-compatible format
+4. **Integration**: The main hunt.js imports from the bundled file
+
+#### Module Communication
+- Modules export their methods as default objects
+- The bundled file re-exports all module methods
+- Hunt.js spreads imported methods into the Vue component
+- Shared state is managed through the Vue component's data properties
+
+#### Testing Architecture
+- Tests import from the bundled module for consistency
+- Each module has its own test file (e.g., `actions.test.js`)
+- 86 tests across 9 test suites ensure functionality
+- Mock setup uses the bundled module structure
 
 ## Backend API Integration
 
