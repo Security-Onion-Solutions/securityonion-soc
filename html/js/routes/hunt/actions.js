@@ -52,6 +52,8 @@ export default {
     this.menuTop = domEvent.clientY;
     this.menuLeft = domEvent.clientX;
     this.quickActionGroupIdx = groupIdx;
+    // Set the target to the coordinates for proper positioning
+    this.quickActionTarget = [domEvent.clientX, domEvent.clientY];
     this.quickActionVisible = true;
   },
   buildCase(item) {
