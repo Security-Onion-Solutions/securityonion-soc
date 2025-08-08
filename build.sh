@@ -10,6 +10,9 @@ now=`date -u +%Y-%m-%dT%H:%M:%S`
 
 set -e
 
+echo "Bundling hunt modules..."
+node build-hunt.js
+
 echo "Running JS unit tests..."
 jest test --config jest.config.js
 

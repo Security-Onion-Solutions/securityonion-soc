@@ -5,25 +5,34 @@
 // Elastic License 2.0.
 
 
-import huntData from './routes/hunt/data.js';
-import huntMethods from './routes/hunt/methods.js';
-import huntActions from './routes/hunt/actions.js';
-import huntCharts from './routes/hunt/charts.js';
+// Wait for modules to be loaded
+(function() {
+  // Poll for modules to be available
+  function initHuntComponent() {
+    if (!window.huntModules) {
+      setTimeout(initHuntComponent, 10);
+      return;
+    }
 
-loadPageTemplate('page-hunt', 'pages/hunt.html');
+    const huntData = window.huntModules.data;
+    const huntMethods = window.huntModules.methods;
+    const huntActions = window.huntModules.actions;
+    const huntCharts = window.huntModules.charts;
 
-const huntComponent = {
-  template: '#page-hunt',
-  data() {
-   const data = huntData;
-   data.i18n = this.$root.i18n;
-   data.bulkActions = [
-     { title: this.$root.i18n.enable, value: 'enable' },
-     { title: this.$root.i18n.disable, value: 'disable' },
-     { title: this.$root.i18n.delete, value: 'delete' },
-   ];
-   return data;
- },
+    loadPageTemplate('page-hunt', 'pages/hunt.html');
+
+    const huntComponent = {
+      template: '#page-hunt',
+      data() {
+       const data = huntData;
+       data.i18n = this.$root.i18n;
+       data.bulkActions = [
+         { title: this.$root.i18n.enable, value: 'enable' },
+         { title: this.$root.i18n.disable, value: 'disable' },
+         { title: this.$root.i18n.delete, value: 'delete' },
+       ];
+       return data;
+     },
   created() {
     this.$root.initializeCharts();
     this.initializeTimeAndIntervals();
@@ -76,19 +85,24 @@ const huntComponent = {
     ...huntMethods,
     ...huntActions,
     ...huntCharts,
+      }
+    };
+
+    routes.push({ path: '/hunt', name: 'hunt', component: huntComponent});
+
+    const alertsComponent = Object.assign({}, huntComponent);
+    routes.push({ path: '/alerts', name: 'alerts', component: alertsComponent});
+
+    const casesComponent = Object.assign({}, huntComponent);
+    routes.push({ path: '/cases', name: 'cases', component: casesComponent});
+
+    const dashboardsComponent = Object.assign({}, huntComponent);
+    routes.push({ path: '/dashboards', name: 'dashboards', component: dashboardsComponent});
+
+    const detectionsComponent = Object.assign({}, huntComponent);
+    routes.push({ path: '/detections', name: 'detections', component: detectionsComponent });
   }
-};
 
-routes.push({ path: '/hunt', name: 'hunt', component: huntComponent});
-
-const alertsComponent = Object.assign({}, huntComponent);
-routes.push({ path: '/alerts', name: 'alerts', component: alertsComponent});
-
-const casesComponent = Object.assign({}, huntComponent);
-routes.push({ path: '/cases', name: 'cases', component: casesComponent});
-
-const dashboardsComponent = Object.assign({}, huntComponent);
-routes.push({ path: '/dashboards', name: 'dashboards', component: dashboardsComponent});
-
-const detectionsComponent = Object.assign({}, huntComponent);
-routes.push({ path: '/detections', name: 'detections', component: detectionsComponent });
+  // Start initialization
+  initHuntComponent();
+})();

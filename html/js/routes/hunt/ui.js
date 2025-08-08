@@ -4,6 +4,13 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
+const RELATIVE_TIME_SECONDS = 10;
+const RELATIVE_TIME_MINUTES = 20;
+const RELATIVE_TIME_HOURS   = 30;
+const RELATIVE_TIME_DAYS    = 40;
+const RELATIVE_TIME_WEEKS   = 50;
+const RELATIVE_TIME_MONTHS  = 60;
+
 export default {
   updateBulkSelector(item) {
     if (item._isSelected) {
@@ -237,5 +244,100 @@ export default {
 
   huntQueryWidth() {
     return this.$refs.huntQueryInput?.$el?.clientWidth || 0;
+  },
+
+  hideDateRangePicker() {
+    if (this.relativeTimeEnabled) return;
+    this.dateRange = $('#huntdaterange')[0].value;
+    this.notifyInputsChanged();
+  },
+
+  getEndDate() {
+    if (this.dateRange != '') {
+      var pieces = this.dateRange.split(" - ");
+      if (pieces.length == 2) {
+        return moment(pieces[1], this.i18n.timePickerFormat);
+      }
+    }
+    return moment();
+  },
+
+  getStartDate() {
+    if (this.dateRange != '') {
+      var pieces = this.dateRange.split(" - ");
+      if (pieces.length == 2) {
+        return moment(pieces[0], this.i18n.timePickerFormat);
+      }
+    }
+    var unit = "hour";
+    switch (this.relativeTimeUnit) {
+      case RELATIVE_TIME_SECONDS: unit = "seconds"; break;
+      case RELATIVE_TIME_MINUTES: unit = "minutes"; break;
+      case RELATIVE_TIME_HOURS: unit = "hours"; break;
+      case RELATIVE_TIME_DAYS: unit = "days"; break;
+      case RELATIVE_TIME_WEEKS: unit = "weeks"; break;
+      case RELATIVE_TIME_MONTHS: unit = "months"; break;
+    }
+    return moment().subtract(this.relativeTimeValue, unit);
+  },
+
+  setupDateRangePicker() {
+    if (this.relativeTimeEnabled) return;
+
+    $('#huntdaterange').daterangepicker({
+      ranges: this.$root.generateDatePickerPreselects(),
+      timePicker: true,
+      timePickerSeconds: true,
+      endDate: this.getEndDate(),
+      startDate: this.getStartDate(),
+      locale: {
+        format: this.i18n.timePickerFormat
+      }
+    });
+    var route = this;
+    if (route.dateRange == '') {
+      route.dateRange = $('#huntdaterange')[0].value;
+    }
+    $('#huntdaterange').on('hide.daterangepicker', function(ev, picker) {
+      route.hideDateRangePicker();
+    });
+  },
+
+  showAbsoluteTime() {
+    this.relativeTimeEnabled = false;
+    setTimeout(this.setupDateRangePicker, 10);
+  },
+
+  showRelativeTime() {
+    this.relativeTimeEnabled = true;
+  },
+
+  toggleShowSection(item) {
+    if (this.isExpandedSection(item)) {
+      this.collapsedSections.push(item);
+    } else {
+      this.collapsedSections.splice(this.collapsedSections.indexOf(item), 1);
+    }
+  },
+
+  isExpandedSection(item) {
+    return (this.collapsedSections.indexOf(item) == -1);
+  },
+
+  subMissing(value) {
+    if (value === this.i18n.__missing__) {
+      return '__missing__';
+    }
+
+    return value;
+  },
+
+  calculateEventColumnWidth() {
+    this.eventColumnWidth = this.$refs?.eventColumn?.$el?.clientWidth || 0;
+    if (this.eventColumnWidth === 0) {
+      setTimeout(() => {
+        this.calculateEventColumnWidth();
+      }, 300);
+    }
   },
 };

@@ -4,7 +4,8 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
-import { chartMethods } from './charts.js';
+require('../../test_common.js');
+const { chartMethods } = require('../hunt-bundled.js');
 
 let comp;
 
@@ -13,15 +14,24 @@ beforeEach(() => {
     ...chartMethods,
     i18n: {
       __missing__: '*Missing',
+      count: 'Count',
+      field_count: 'Count',
     },
     $root: {
         debounce: (fn) => fn,
+        getColor: jest.fn((color, adjust) => {
+          // Simple mock that returns color strings
+          if (color === 'primary') return 'rgba(77, 201, 246, 1)';
+          if (color === '#888888' && adjust === -40) return '#555555';
+          if (color === '#888888' && adjust === 65) return '#dddddd';
+          return color;
+        }),
     },
     queryGroupByOptions: [],
     groupBys: [],
     toggleQuickAction: jest.fn(),
-    debounceChartResize: jest.fn(),
     chartResizeTracker: {},
+    canQuery: jest.fn(() => true),
   };
 });
 
@@ -240,21 +250,18 @@ test('isGroupSankeyCapable', () => {
 });
 
 test('handleChartClick', () => {
-  let metrics = { "groupby_2|MyField": [] };
   let groupIdx = 2;
   comp.queryGroupByOptions = [[], [], ["bar"]]
-  comp.populateGroupByTable = jest.fn().mockReturnValue(true);
   comp.groupBys[2] = {
-      chart_options: {
-          onClick: () => {}
-      }
+    fields: ['MyField']
   };
 
+  // Get the click handler function
+  const clickHandler = comp.handleChartClick(groupIdx);
+  
+  // Call the click handler with mock data
+  clickHandler(null, [{ index: 0 }], { data: {labels: ['value']} });
 
-  const result = comp.populateGroupByTable(metrics, groupIdx);
-  comp.groupBys[2].chart_options.onClick(null, [{ index: 0 }], { data: {labels: ['value']} });
-
-  expect(result).toBe(true);
   expect(comp.toggleQuickAction).toHaveBeenCalledTimes(1);
   expect(comp.toggleQuickAction).toHaveBeenCalledWith(null, {}, 2, 'MyField', 'value');
 });

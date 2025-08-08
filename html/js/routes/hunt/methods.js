@@ -35,7 +35,7 @@ export default {
   ...aiMethods,
   ...uiMethods,
   ...localStorageMethods,
-  moment: moment,
+  moment: typeof moment !== 'undefined' ? moment : { tz: { guess: () => 'UTC' } },
   isAdvanced() {
     return this.advanced;
   },
@@ -44,6 +44,9 @@ export default {
   },
   isCategory(testCategory) {
     return testCategory == this.category;
+  },
+  isMultiSelect() {
+    return this.isCategory('detections');
   },
   loading() {
     return this.$root.loading;
@@ -192,5 +195,41 @@ export default {
   huntQuery(query) {
     this.query = query;
     this.hunt();
+  },
+
+  getFilterToggle(name) {
+    for (var i = 0; i < this.filterToggles.length; i++) {
+      var filter = this.filterToggles[i];
+      if (filter.name == name) {
+        return filter;
+      }
+    }
+    return null;
+  },
+
+  isFilterToggleEnabled(name) {
+    var toggle = this.getFilterToggle(name);
+    if (toggle) {
+      return toggle.enabled;
+    }
+    return false;
+  },
+
+  filterToggled(event, filterToggle) {
+    if (filterToggle.enabled && filterToggle.enablesToggles) {
+      filterToggle.enablesToggles.forEach((name) => {
+        var toggle = this.getFilterToggle(name)
+        if (toggle) {
+          toggle.enabled = true;
+        }
+      });
+    } else if (!filterToggle.enabled && filterToggle.disablesToggles) {
+      filterToggle.disablesToggles.forEach((name) => {
+        var toggle = this.getFilterToggle(name)
+        if (toggle) {
+          toggle.enabled = false;
+        }
+      });
+    }
   },
 };

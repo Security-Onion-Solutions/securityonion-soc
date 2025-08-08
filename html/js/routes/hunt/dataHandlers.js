@@ -491,5 +491,21 @@ export default {
     }
 
     item.newest = this.extractSocValues(response.data.events[0]);
+  },
+
+  lookupGroupByMetricKey(metrics, groupIdx, longest) {
+    var desiredKey = null;
+    for (const key in metrics) {
+      if (key.startsWith("groupby_" + groupIdx +"|")) {
+        if (desiredKey == null) {
+          desiredKey = key;
+        } else if (longest && key.length > desiredKey.length) {
+          desiredKey = key;
+        } else if (!longest && key.length < desiredKey.length) {
+          desiredKey = key;
+        }
+      }
+    }
+    return desiredKey;
   }
 };

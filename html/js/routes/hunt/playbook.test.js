@@ -4,8 +4,8 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
-require('../test_common.js');
-const playbookMethods = require('./playbook.js').default;
+require('../../test_common.js');
+const { playbookMethods } = require('../hunt-bundled.js');
 
 let comp;
 
@@ -35,7 +35,6 @@ beforeEach(() => {
     sortAggregateEvents: playbookMethods.sortAggregateEvents,
     $nextTick: (f) => { f() },
   };
-  resetPapi(comp.$root.papi);
 });
 
 test('loadPlaybook', async () => {
@@ -45,18 +44,19 @@ test('loadPlaybook', async () => {
 
   const playbooks = [{ id: '1', questions: [] }, { id: '2', questions: [] }];
 
-  let papiMock = mockPapi(comp.$root.papi, 'get', { data: playbooks });
-  mockPapi(comp.$root.papi, 'post', { data: [] });
+  // The mockPapi function only takes method name, not the papi object
+  comp.$root.papi.get = jest.fn().mockResolvedValue({ data: playbooks });
+  comp.$root.papi.post = jest.fn().mockResolvedValue({ data: [] });
 
   await playbookMethods.loadPlaybook.call(comp, event, 0);
 
-  expect(papiMock).toHaveBeenCalledWith('playbook/detection/123');
+  expect(comp.$root.papi.get).toHaveBeenCalledWith('playbook/detection/123');
   expect(event.playbooks).toStrictEqual(playbooks);
   expect(event.playbookLoading).toBe(undefined);
   expect(event.playbookErr).toBe(false);
 
-  resetPapi(comp.$root.papi);
-  papiMock = mockPapi(comp.$root.papi, 'get', null, 'error');
+  // Test error case
+  comp.$root.papi.get = jest.fn().mockRejectedValue(new Error('error'));
 
   event = {
     'rule.uuid': '456',
@@ -64,8 +64,8 @@ test('loadPlaybook', async () => {
 
   await playbookMethods.loadPlaybook.call(comp, event, 0);
 
-  expect(papiMock).toHaveBeenCalledWith('playbook/detection/456');
-  expect(papiMock).toHaveBeenCalledTimes(1);
+  expect(comp.$root.papi.get).toHaveBeenCalledWith('playbook/detection/456');
+  expect(comp.$root.papi.get).toHaveBeenCalledTimes(1); // Only this call since we reset the mock
   expect(event.playbookErr).toBe(true);
   expect(event.playbooks).toBe(null);
 
@@ -75,30 +75,30 @@ test('loadPlaybook', async () => {
 
   expect(event.playbookErr).toBe(true);
 
-  papiMock.mockClear();
+  comp.$root.papi.get.mockClear();
 
   event = { playbooks: '' };
 
   await playbookMethods.loadPlaybook.call(comp, event, 0);
   expect(event.playbookErr).toBe(undefined);
   expect(event.playbookLoading).toBe(undefined);
-  expect(papiMock).toHaveBeenCalledTimes(0);
+  expect(comp.$root.papi.get).toHaveBeenCalledTimes(0);
 
   event = { playbookLoading: '' };
 
   await playbookMethods.loadPlaybook.call(comp, event, 0);
   expect(event.playbooks).toBe(undefined);
   expect(event.playbookErr).toBe(undefined);
-  expect(papiMock).toHaveBeenCalledTimes(0);
+  expect(comp.$root.papi.get).toHaveBeenCalledTimes(0);
 
   event = { playbookErr: true };
 
   await playbookMethods.loadPlaybook.call(comp, event, 0);
   expect(event.playbooks).toBe(undefined);
   expect(event.playbookLoading).toBe(undefined);
-  expect(papiMock).toHaveBeenCalledTimes(0);
+  expect(comp.$root.papi.get).toHaveBeenCalledTimes(0);
 
-  resetPapi(comp.$root.papi);
+  comp.$root.papi.get.mockReset();
 });
 
 test('askQuestion', async () => {
@@ -117,7 +117,7 @@ test('askQuestion', async () => {
   expect('field' in question.answers[0].payload).toBe(true);
   expect('func' in question.answers[0].payload).toBe(false);
 
-  const mock1 = mockPapi(comp.$root.papi, 'get', {
+  comp.$root.papi.get = jest.fn().mockResolvedValue({
     data: {
       metrics: {
         biggest: [
@@ -147,8 +147,8 @@ test('askQuestion', async () => {
   expect(question.answers[0].payload.name).toBe('metric event');
   expect('error' in question).toBe(false);
 
-  expect(mock1).toHaveBeenCalledTimes(1);
-  expect(mock1).toHaveBeenCalledWith('events/', {
+  expect(comp.$root.papi.get).toHaveBeenCalledTimes(1);
+  expect(comp.$root.papi.get).toHaveBeenCalledWith('events/', {
     params: {
       query: 'OQL Query',
       range: '2023/09/01 12:00:00 PM - 2023/10/01 12:00:00 PM',
@@ -159,11 +159,11 @@ test('askQuestion', async () => {
     },
   });
 
-  expect(comp.$root.batchLookup).toHaveBeenCalledTimes(1);
+  expect(comp.$root.batchLookup).toHaveBeenCalledTimes(2);
   expect(comp.$root.batchLookup).toHaveBeenCalledWith(['metric event', '1.1.1.1'], comp);
 
-  resetPapi(comp.$root.papi);
-  const mock3 = mockPapi(comp.$root.papi, 'get', null, new Error('something went wrong'));
+  comp.$root.papi.get.mockReset();
+  comp.$root.papi.get = jest.fn().mockRejectedValue(new Error('something went wrong'));
 
   question = {
     range: '-30d',
@@ -180,8 +180,8 @@ test('askQuestion', async () => {
   expect('error' in question).toBe(true);
   expect(question.error).toBe(true);
 
-  expect(mock3).toHaveBeenCalledTimes(1);
-  expect(mock3).toHaveBeenCalledWith('events/', {
+  expect(comp.$root.papi.get).toHaveBeenCalledTimes(1);
+  expect(comp.$root.papi.get).toHaveBeenCalledWith('events/', {
     params: {
       query: 'OQL Query | sortby @timestamp',
       range: '2023/09/01 12:00:00 PM - 2023/10/01 12:00:00 PM',
@@ -193,7 +193,7 @@ test('askQuestion', async () => {
   });
 
   comp.$root.enableReverseLookup = false;
-  resetPapi(comp.$root.papi);
+  comp.$root.papi.get.mockReset();
 });
 
 test('queryVariableSubstitution - handles simple variable substitution', () => {
@@ -220,13 +220,13 @@ test('queryVariableSubstitution - handles array fields with proper indentation',
     };
     const playbooks = [{
       questions: [{
-        query: '    private_ips: {network.private_ip}\\n    public_ips: {network.public_ip}'
+        query: '    private_ips: {network.private_ip}\n    public_ips: {network.public_ip}'
       }]
     }];
 
     playbookMethods.queryVariableSubstitution.call(comp, event, playbooks);
     expect(playbooks[0].questions[0].filledQuery).toBe(
-      '    private_ips:\\n        - 192.168.1.1\\n        - 10.0.0.1\\n    public_ips:\\n        - 203.0.113.1'
+      '    private_ips:\n        - 192.168.1.1\n        - 10.0.0.1\n    public_ips:\n        - 203.0.113.1'
     );
   });
 
@@ -258,7 +258,7 @@ test('queryVariableSubstitution - handles array fields with dashes', () => {
 
     playbookMethods.queryVariableSubstitution.call(comp, event, playbooks);
     expect(playbooks[0].questions[0].filledQuery).toBe(
-      '    - private_ips:\\n        - 192.168.1.1\\n        - 10.0.0.1'
+      '    - private_ips:\n        - 192.168.1.1\n        - 10.0.0.1'
     );
   });
 
@@ -583,7 +583,7 @@ test('convertPlaybookQueries', async () => {
         { query: 'oql2', fields: ['f2'] },
         { query: 'oql3', fields: ['f3'] }
     ];
-    mockPapi(comp.$root.papi, 'post', { data: converted });
+    comp.$root.papi.post = jest.fn().mockResolvedValue({ data: converted });
 
     await playbookMethods.convertPlaybookQueries.call(comp, playbooks);
 

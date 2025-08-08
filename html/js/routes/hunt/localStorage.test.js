@@ -4,7 +4,8 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
-import localStorageMethods from './localStorage.js';
+require('../../test_common.js');
+const { localStorageMethods } = require('../hunt-bundled.js');
 
 describe('localStorage', () => {
   let mockThis;
@@ -43,6 +44,8 @@ describe('localStorage', () => {
 
   test('saveTimezone', () => {
     mockThis.zone = 'Foo/Bar';
+    // Add saveSetting method to mockThis since saveTimezone calls it
+    mockThis.saveSetting = localStorageMethods.saveSetting.bind(mockThis);
     localStorageMethods.saveTimezone.call(mockThis);
     const settings = JSON.parse(localStorage['testCategorySettings']);
     expect(settings.timezone).toBe('Foo/Bar');

@@ -3,7 +3,8 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
-import aiMethods from './ai.js';
+require('../../test_common.js');
+const { aiMethods } = require('../hunt-bundled.js');
 
 describe('ai.js', () => {
   let mockThis;
@@ -34,18 +35,18 @@ describe('ai.js', () => {
     const localStorageMock = (() => {
       let store = {};
       return {
-        getItem(key) {
+        getItem: jest.fn((key) => {
           return store[key] || null;
-        },
-        setItem(key, value) {
+        }),
+        setItem: jest.fn((key, value) => {
           store[key] = value.toString();
-        },
-        clear() {
+        }),
+        clear: jest.fn(() => {
           store = {};
-        },
-        removeItem(key) {
+        }),
+        removeItem: jest.fn((key) => {
           delete store[key];
-        }
+        })
       };
     })();
     Object.defineProperty(window, 'localStorage', { value: localStorageMock });
@@ -89,7 +90,7 @@ describe('ai.js', () => {
     expect(mockThis.aiInvestigations['alert-1'].status).toBe('investigating');
     expect(mockThis.aiInvestigations['alert-1'].chatSessionId).toContain('investigation_alert-1_');
     expect(window.localStorage.setItem).toHaveBeenCalledWith(expect.stringContaining('investigation_investigation_alert-1_'), expect.any(String));
-    expect(window.open).toHaveBeenCalledWith(expect.stringContaining('/#/chat/investigation_alert-1_'), '_blank');
+    expect(window.open).toHaveBeenCalledWith(`${window.location.origin}/#/chat/investigation_alert-1_1234567890?investigation=true&alertId=alert-1`, '_blank');
     
     dateNowSpy.mockRestore();
   });
@@ -104,7 +105,7 @@ describe('ai.js', () => {
 
     aiMethods.startAIInvestigation.call(mockThis, {}, item, 0);
 
-    expect(window.open).toHaveBeenCalledWith('http://localhost/#/chat/chat-123', '_blank');
+    expect(window.open).toHaveBeenCalledWith(`${window.location.origin}/#/chat/chat-123`, '_blank');
   });
 
   test('getAIInvestigationButtonColor', () => {
