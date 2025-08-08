@@ -238,7 +238,7 @@
               </template>
               <v-list-item-title v-text="i18n.alerts"></v-list-item-title>
             </v-list-item>
-            <v-list-item data-aid="nav_simple_alerts" @click="" to="/simple-alerts">
+            <v-list-item v-if="showSimpleAlerts" data-aid="nav_simple_alerts" @click="" to="/simple-alerts">
               <template #prepend>
                 <v-icon>fa-bell-concierge</v-icon>
               </template>

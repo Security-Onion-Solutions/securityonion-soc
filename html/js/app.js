@@ -150,6 +150,7 @@ $(document).ready(function () {
           warningTimeout: 30000,
           errorTimeout: 120000,
           toolbar: null,
+          showSimpleAlerts: false,
           wsUrl: (location.protocol == 'https:' ? 'wss://' : 'ws://') + location.host + location.pathname + 'ws',
           apiUrl: location.origin + location.pathname + 'api/',
           authUrl: '/auth/self-service/',
@@ -916,9 +917,17 @@ $(document).ready(function () {
         saveTheme() {
           localStorage['settings.app.dark'] = this.$vuetify.theme.current.dark;
         },
+        saveSimpleAlerts() {
+          localStorage['settings.app.showSimpleAlerts'] = this.showSimpleAlerts;
+        },
         saveLocalSettings() {
           this.saveTheme();
           this.saveToolbar();
+          this.saveSimpleAlerts();
+        },
+        toggleSimpleAlerts() {
+          this.showSimpleAlerts = !this.showSimpleAlerts;
+          this.saveSimpleAlerts();
         },
         loadLocalSettings() {
           if (localStorage['settings.app.dark'] != undefined) {
@@ -927,6 +936,15 @@ $(document).ready(function () {
           }
           if (localStorage['settings.app.navbar'] != undefined) {
             this.toolbar = localStorage['settings.app.navbar'] == "true";
+          }
+          if (localStorage['settings.app.showSimpleAlerts'] != undefined) {
+            this.showSimpleAlerts = localStorage['settings.app.showSimpleAlerts'] == "true";
+          }
+          // Check URL parameter for enabling simple alerts
+          const urlParams = new URLSearchParams(window.location.search);
+          if (urlParams.get('simple-alerts') === 'true') {
+            this.showSimpleAlerts = true;
+            localStorage['settings.app.showSimpleAlerts'] = 'true';
           }
         },
         updateEditorTheme() {
@@ -1570,6 +1588,16 @@ $(document).ready(function () {
         window.matchMedia('(prefers-color-scheme: dark)').addListener(() => this.setFavicon());
         this.loadServerSettings(false);
         this.loadLocalSettings();
+        
+        // Add keyboard shortcut for toggling Simple Alerts (Ctrl+Shift+S)
+        document.addEventListener('keydown', (event) => {
+          if (event.ctrlKey && event.shiftKey && event.key === 'S') {
+            event.preventDefault();
+            this.toggleSimpleAlerts();
+            this.showTip(this.showSimpleAlerts ? 'Simple Alerts enabled' : 'Simple Alerts disabled');
+          }
+        });
+        
         $('#app')[0].style.display = "block";
 
         router.isReady().then(() => {

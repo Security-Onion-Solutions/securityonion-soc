@@ -3,6 +3,12 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
+// Simple Alerts Interface - Hidden by default
+// To enable Simple Alerts:
+// 1. Navigate to the app with ?simple-alerts=true in the URL (one-time enable)
+// 2. Press Ctrl+Shift+S keyboard shortcut to toggle on/off
+// 3. Once enabled, it will persist in localStorage
+
 loadPageTemplate('page-simple-alerts', 'pages/alerts.html');
 const simpleAlertsComponent = {
   template: '#page-simple-alerts',
