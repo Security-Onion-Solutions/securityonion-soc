@@ -199,59 +199,63 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, messages []*model.Mess
 
 	// Check if Claude made any tool use requests and handle based on config
 	if config.AutoExecuteTools {
-		for _, content := range response.ContentBlocks {
-			if content.Type == "tool_use" {
-				// Execute the tool and add result back to conversation
-				result, err := ac.ExecuteTool(ctx, content.Name, string(content.Input))
-				if err != nil {
-					logger.WithError(err).WithField("toolName", content.Name).Error("failed to execute tool")
-					continue
-				}
+		responses := []*model.Message{response}
+		for i := 0; i < len(responses); i++ {
+			for _, content := range responses[i].ContentBlocks {
+				if content.Type == "tool_use" {
+					// Execute the tool and add result back to conversation
+					result, err := ac.ExecuteTool(ctx, content.Name, string(content.Input))
+					if err != nil {
+						logger.WithError(err).WithField("toolName", content.Name).Error("failed to execute tool")
+						continue
+					}
 
-				// Create tool result message to add to conversation history
-				toolResultJSON, err := json.Marshal(result.Result)
-				if err != nil {
-					logger.WithError(err).WithField("toolResult", result.Result).Error("failed to marshal tool result")
-					continue
-				}
+					// Create tool result message to add to conversation history
+					toolResultJSON, err := json.Marshal(result.Result)
+					if err != nil {
+						logger.WithError(err).WithField("toolResult", result.Result).Error("failed to marshal tool result")
+						continue
+					}
 
-				// Note: This would typically be added to the messages array for the next request
-				// The calling code should handle appending this to the conversation
-				logger.WithFields(log.Fields{
-					"toolName":   content.Name,
-					"toolUseId":  content.Id,
-					"toolResult": string(toolResultJSON),
-				}).Info("tool executed successfully for chat response")
+					// Note: This would typically be added to the messages array for the next request
+					// The calling code should handle appending this to the conversation
+					logger.WithFields(log.Fields{
+						"toolName":   content.Name,
+						"toolUseId":  content.Id,
+						"toolResult": string(toolResultJSON),
+					}).Info("tool executed successfully for chat response")
 
-				toolMsg := &model.Message{
-					Id:   uuid.NewString(),
-					Role: "user",
-					ContentBlocks: []model.ContentBlock{
-						{
-							Type: "text",
-							Text: fmt.Sprintf("ToolUseId: %s, Result: %s", content.Id, string(toolResultJSON)),
+					toolMsg := &model.Message{
+						Id:   uuid.NewString(),
+						Role: "user",
+						ContentBlocks: []model.ContentBlock{
+							{
+								Type: "text",
+								Text: fmt.Sprintf("ToolUseId: %s, Result: %s", content.Id, string(toolResultJSON)),
+							},
 						},
-					},
+					}
+
+					newMessages = append(newMessages, toolMsg)
+
+					err = ac.srv.Assistantstore.SaveChat(ctx, toolMsg.PrepareForStorage("", []string{"tool_result"}))
+					if err != nil {
+						logger.WithError(err).Error("unable to save tool result message")
+						return nil, err
+					}
+
+					// append to message history and recurse to send the tool result back with context
+					messages = append(messages, toolMsg)
+
+					toolResponse, err := ac.Chat(ctx, messages, model.WithAutoExecuteTools(true))
+					if err != nil {
+						logger.WithError(err).Error("failed to chat with assistant after tool execution")
+						return nil, err
+					}
+
+					newMessages = append(newMessages, toolResponse...)
+					responses = append(responses, toolResponse...)
 				}
-
-				newMessages = append(newMessages, toolMsg)
-
-				err = ac.srv.Assistantstore.SaveChat(ctx, toolMsg.PrepareForStorage("", []string{"tool_result"}))
-				if err != nil {
-					logger.WithError(err).Error("unable to save tool result message")
-					return nil, err
-				}
-
-				// append to message history and recurse to send the tool result back with context
-				messages = append(messages, toolMsg)
-
-				toolResponse, err := ac.Chat(ctx, messages, model.WithAutoExecuteTools(true))
-				if err != nil {
-					logger.WithError(err).Error("failed to chat with assistant after tool execution")
-					return nil, err
-				}
-
-				newMessages = append(newMessages, toolResponse...)
 			}
 		}
 	}
