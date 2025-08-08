@@ -5,6 +5,55 @@
 // Elastic License 2.0.
 
 export default {
+  toggleQuickAction(domEvent, event, groupIdx, field, value) {
+    if (!domEvent || this.quickActionVisible || this.escalationMenuVisible || window?.getSelection()?.type === 'Range') {
+      this.quickActionVisible = false;
+      this.escalationMenuVisible = false;
+      return;
+    }
+
+    if (this.isCategory('alerts')) {
+      const id = event["rule.uuid"];
+      this.quickActionDetId = null;
+      this.tuneDetectionTabTarget = null;
+
+      let oldHighlight = this.highlightedDetection?.publicId;
+      this.highlightedDetection = null;
+
+      // don't slow down the UI with this call
+      if (id) {
+        this.$root.papi.get(`detection/public/${id}`).then(response => {
+          this.quickActionDetId = response.data.id;
+
+          if (!oldHighlight || response.data?.publicId !== oldHighlight) {
+            this.highlightedDetection = response.data;
+            this.highlightedAlertInfo = {
+              item: event,
+              groupIndex: typeof groupIdx === 'number' ? groupIdx : -1,
+            };
+          }
+
+          this.tuneDetectionTabTarget = 'tuning';
+          if (response.data.engine === 'strelka') {
+            this.tuneDetectionTabTarget = 'source';
+          }
+        }).catch(err => {
+          console.error('Failed to load detection:', err);
+        });
+      }
+    }
+
+    this.quickActionEvent = event;
+    this.quickActionField = field;
+    this.quickActionValue = value;
+    this.quickActionType = null;
+    this.escalationMenuItem = null;
+    this.escalatedEscalator = false;
+    this.menuTop = domEvent.clientY;
+    this.menuLeft = domEvent.clientX;
+    this.quickActionGroupIdx = groupIdx;
+    this.quickActionVisible = true;
+  },
   buildCase(item) {
     var title = 'rule.name' in item && item['rule.name'] ? '' + item['rule.name'] : null;
     if (!title) {
