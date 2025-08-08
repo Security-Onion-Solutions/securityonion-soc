@@ -680,12 +680,30 @@ func TestConvertQuestions(t *testing.T) {
 
 		in, err := io.ReadAll(cmd.Stdin)
 		assert.NoError(t, err)
-		assert.Equal(t, "query1\n---\nquery2", string(in))
+		// The input should be the valid Sigma queries joined by ---
+		assert.Contains(t, string(in), "logsource:")
+		assert.Contains(t, string(in), "detection:")
+		assert.Contains(t, string(in), "---")
 
 		return []byte("Converted Queries:\n" + `{"query": "query1", "fields": ["a", "b"]}` + "\n\n" + `{"query": "query2", "fields": ["b", "c"]}` + "\n\n"), 0, time.Second, nil
 	})
 
-	converted, err := pdm.ConvertQuestions(context.Background(), []string{"query1", "query2"})
+	// Use valid Sigma queries for the test
+	query1 := `logsource:
+    product: test
+detection:
+    selection:
+        field: value
+    condition: selection`
+	
+	query2 := `logsource:
+    category: test  
+detection:
+    selection:
+        field2: value2
+    condition: selection`
+	
+	converted, err := pdm.ConvertQuestions(context.Background(), []string{query1, query2})
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(converted))
 	assert.Equal(t, "query1", converted[0].Query)

@@ -125,7 +125,20 @@ export default {
           }
           
           // Default replacement if not handled as special case
-          q = q.replaceAll(variable, value);
+          // Preserve quotes around the value to maintain valid YAML
+          if (typeof value === 'string') {
+            // Check if the variable is already quoted in the query
+            const quotedPattern = new RegExp(`['"]${variable.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['"]`, 'g');
+            if (q.match(quotedPattern)) {
+              // Replace quoted version, preserving the quotes
+              q = q.replace(quotedPattern, `'${value}'`);
+            } else {
+              // Simple replacement
+              q = q.replaceAll(variable, value);
+            }
+          } else {
+            q = q.replaceAll(variable, value);
+          }
         }
         
         question.filledQuery = q;
@@ -137,6 +150,10 @@ export default {
     let queries = playbooks.map((pb) => pb.questions.map((q) => q.filledQuery)).flat();
 
     if (queries.length === 0) return;
+
+    // Debug: Log the queries being sent
+    console.log('Sending queries to convert:', queries);
+    console.log('First query example:', queries[0]);
 
     try {
       let response = await this.$root.papi.post('playbook/convert', queries);
@@ -153,6 +170,8 @@ export default {
             question.fields = response.data[index].fields;
           } else {
             console.warn(`No conversion data for question at index ${index}`);
+            question.filledOQL = '';
+            question.fields = [];
           }
           index++;
         }

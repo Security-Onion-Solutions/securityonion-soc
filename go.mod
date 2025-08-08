@@ -20,6 +20,7 @@ require (
 )
 
 require (
+	github.com/GiGurra/sse-parser v0.0.5
 	github.com/eapache/go-resiliency v1.7.0
 	github.com/go-git/go-git/v5 v5.16.0
 	github.com/hashicorp/go-multierror v1.1.1
@@ -32,7 +33,6 @@ require (
 
 require (
 	dario.cat/mergo v1.0.2 // indirect
-	github.com/GiGurra/sse-parser v0.0.5 // indirect
 	github.com/KyleBanks/depth v1.2.1 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/ProtonMail/go-crypto v1.3.0 // indirect

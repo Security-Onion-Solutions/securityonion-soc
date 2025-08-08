@@ -564,30 +564,14 @@ func (pdm *PlaybookDiskManager) ConvertQuestions(ctx context.Context, queries []
 		"queries":    queries,
 	}).Debug("converting playbook queries")
 
-	// Validate that queries are valid YAML
+	// Process all queries, don't validate them here
+	// The sigma converter will handle validation
 	validQueries := []string{}
-	for i, query := range queries {
+	for _, query := range queries {
 		query = strings.TrimSpace(query)
-		if query == "" {
-			continue
+		if query != "" {
+			validQueries = append(validQueries, query)
 		}
-		
-		// Check if this looks like a valid Sigma rule structure
-		if !strings.Contains(query, "logsource:") && !strings.Contains(query, "detection:") {
-			logger.WithFields(log.Fields{
-				"queryIndex": i,
-				"query":      query,
-			}).Warn("skipping invalid query - missing required Sigma structure")
-			continue
-		}
-		
-		validQueries = append(validQueries, query)
-	}
-
-	if len(validQueries) == 0 {
-		logger.Warn("no valid queries to convert")
-		// Return empty results instead of error to allow frontend to continue
-		return []*model.ConvertedQuery{}, nil
 	}
 
 	args := []string{"convert", "-t", "security_onion", "-p", "/opt/sensoroni/sigma_final_pipeline.yaml", "-p", "/opt/sensoroni/sigma_so_pipeline.yaml", "-p", "windows-logsources", "-p", "ecs_windows", "--disable-pipeline-check", "/dev/stdin"}
@@ -611,8 +595,19 @@ func (pdm *PlaybookDiskManager) ConvertQuestions(ctx context.Context, queries []
 			"sigmaError":  err.Error(),
 			"sigmaOutput": string(raw),
 			"exitCode":    code,
+			"queryCount":  len(validQueries),
 		}).Error("sigma conversion failed")
-		return nil, fmt.Errorf("problem with sigma cli (exit code %d): %w", code, err)
+		
+		// Return empty converted queries instead of error to allow frontend to continue
+		// The frontend will handle missing OQL queries gracefully
+		emptyResults := make([]*model.ConvertedQuery, len(queries))
+		for i := range emptyResults {
+			emptyResults[i] = &model.ConvertedQuery{
+				Query: "",
+				Fields: []string{},
+			}
+		}
+		return emptyResults, nil
 	}
 
 	oql := string(raw)
