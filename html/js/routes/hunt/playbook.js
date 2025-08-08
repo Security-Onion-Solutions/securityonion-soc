@@ -121,14 +121,33 @@ export default {
 
     if (queries.length === 0) return;
 
-    let response = await this.$root.papi.post('playbook/convert', queries);
+    try {
+      let response = await this.$root.papi.post('playbook/convert', queries);
+      if (!response || !response.data) {
+        console.error('Invalid response from playbook/convert API');
+        return;
+      }
 
-    let index = 0;
-    for (let pb of playbooks) {
-      for (let question of pb.questions) {
-        question.filledOQL = response.data[index].query;
-        question.fields = response.data[index].fields;
-        index++;
+      let index = 0;
+      for (let pb of playbooks) {
+        for (let question of pb.questions) {
+          if (response.data[index]) {
+            question.filledOQL = response.data[index].query;
+            question.fields = response.data[index].fields;
+          } else {
+            console.warn(`No conversion data for question at index ${index}`);
+          }
+          index++;
+        }
+      }
+    } catch (error) {
+      console.error('Error converting playbook queries:', error);
+      // Set default values to prevent further errors
+      for (let pb of playbooks) {
+        for (let question of pb.questions) {
+          question.filledOQL = question.filledQuery || '';
+          question.fields = [];
+        }
       }
     }
   },
