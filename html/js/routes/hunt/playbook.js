@@ -30,7 +30,12 @@ export default {
 
     if (playbooks) {
       this.queryVariableSubstitution(event, playbooks);
-      await this.convertPlaybookQueries(playbooks);
+      try {
+        await this.convertPlaybookQueries(playbooks);
+      } catch (error) {
+        console.error('Failed to convert playbook queries, continuing with basic data:', error);
+        // Continue with playbooks even if conversion fails
+      }
     }
 
     event.playbooks = playbooks;
@@ -152,7 +157,7 @@ export default {
     }
   },
   async askQuestion(question, event) {
-    if (question.range) {
+    if (question.range && question.filledOQL) {
       try {
         const dateRange = this.buildQuestionRange(event, question.range);
         let query = question.filledOQL;
