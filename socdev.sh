@@ -132,8 +132,7 @@ if [ ! -d $TMP_DIR/so/conf ]; then
     run_on_mgr sudo chmod -R g+rw /opt/so/state
     sshfs -o direct_io $SSH_ARGS $SSH_USER@$MANAGER_IP:/opt/so $TMP_DIR/so
     echo "✓ Mounted remote server /opt/so to local $TMP_DIR/so"
-    #sshfs -o direct_io $SSH_ARGS $SSH_USER@$MANAGER_IP:/opt/sensoroni $TMP_DIR/sensoroni
-    #echo "✓ Mounted remote server /opt/sensoroni to local /opt/sensoroni"
+
     run_on_mgr "sudo chmod g+w /nsm/soc/uploads"
     sshfs -o direct_io $SSH_ARGS $SSH_USER@$MANAGER_IP:/nsm $nsmDir
     echo "✓ Mounted remote server /nsm to local $nsmDir"
