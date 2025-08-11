@@ -2,7 +2,7 @@
 
 ## Project Purpose
 
-SecurityOnion SOC (Security Operations Center) is a distributed security analysis platform designed to coordinate jobs across multiple sensor nodes. The system enables centralized management of security detection rules and job processing, allowing for scalable threat hunting and analysis operations across a security grid.
+SecurityOnion SOC (Security Onion Console) is a distributed security analysis platform designed to coordinate jobs across multiple sensor nodes. The system enables centralized management of security detection rules and job processing, allowing for scalable threat hunting and analysis operations across a security grid.
 
 ## Primary Technologies
 

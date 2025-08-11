@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Security Onion SOC (Security Operations Center) backend is designed as a distributed system with two primary components: **Server** and **Agent**. These components work together to provide security monitoring, analysis, and response capabilities across a grid of security sensors.
+The Security Onion SOC (Security Onion Console) backend is designed as a distributed system with two primary components: **Server** and **Agent**. These components work together to provide security monitoring, analysis, and response capabilities across a grid of security sensors.
 
 ## Server Component
 

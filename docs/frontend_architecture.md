@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Security Onion SOC (Security Operations Center) frontend is a modern web application built using Vue 3 and Vuetify 3 components. It provides a comprehensive interface for security analysts to hunt for threats, manage cases, analyze detections, and monitor grid members. The frontend follows a single-page application (SPA) architecture with client-side routing.
+The Security Onion SOC (Security Onion Console) frontend is a modern web application built using Vue 3 and Vuetify 3 components. It provides a comprehensive interface for security analysts to hunt for threats, manage cases, analyze detections, and monitor grid members. The frontend follows a single-page application (SPA) architecture with client-side routing.
 
 ## Technologies Used
 
