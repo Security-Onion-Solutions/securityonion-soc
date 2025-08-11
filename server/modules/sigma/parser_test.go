@@ -191,7 +191,7 @@ func TestValidateRule(t *testing.T) {
 				},
 			},
 			wantErr: true,
-			errMsg:  "rule missing required field: title",
+			errMsg:  "validation error for field 'title': field is required",
 		},
 		{
 			name: "invalid level",
@@ -209,7 +209,7 @@ func TestValidateRule(t *testing.T) {
 				},
 			},
 			wantErr: true,
-			errMsg:  "invalid rule level: invalid",
+			errMsg:  "validation error for field 'level': invalid value: invalid",
 		},
 	}
 

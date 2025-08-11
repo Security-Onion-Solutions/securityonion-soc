@@ -274,47 +274,29 @@ func isKnownLogSourceField(field string) bool {
 // ValidateRule performs basic validation on a parsed rule
 func ValidateRule(rule *Rule) error {
 	if rule.Title == "" {
-		return fmt.Errorf("rule missing required field: title")
+		return ErrorUtil.NewValidationError("title", "field is required")
 	}
 
 	if rule.ID == "" {
-		return fmt.Errorf("rule missing required field: id")
+		return ErrorUtil.NewValidationError("id", "field is required")
 	}
 
 	if rule.Detection.Condition == "" {
-		return fmt.Errorf("rule missing detection condition")
+		return ErrorUtil.NewValidationError("detection.condition", "field is required")
 	}
 
 	if len(rule.Detection.Selections) == 0 {
-		return fmt.Errorf("rule has no detection selections")
+		return ErrorUtil.NewValidationError("detection.selections", "at least one selection is required")
 	}
 
 	// Validate level if present
-	if rule.Level != "" {
-		validLevels := map[string]bool{
-			LevelInformational: true,
-			LevelLow:           true,
-			LevelMedium:        true,
-			LevelHigh:          true,
-			LevelCritical:      true,
-		}
-		if !validLevels[rule.Level] {
-			return fmt.Errorf("invalid rule level: %s", rule.Level)
-		}
+	if !ValidationUtil.IsValidLevel(rule.Level) {
+		return ErrorUtil.NewValidationError("level", fmt.Sprintf("invalid value: %s", rule.Level))
 	}
 
 	// Validate status if present
-	if rule.Status != "" {
-		validStatuses := map[string]bool{
-			StatusStable:       true,
-			StatusTest:         true,
-			StatusExperimental: true,
-			StatusDeprecated:   true,
-			StatusUnsupported:  true,
-		}
-		if !validStatuses[rule.Status] {
-			return fmt.Errorf("invalid rule status: %s", rule.Status)
-		}
+	if !ValidationUtil.IsValidStatus(rule.Status) {
+		return ErrorUtil.NewValidationError("status", fmt.Sprintf("invalid value: %s", rule.Status))
 	}
 
 	return nil

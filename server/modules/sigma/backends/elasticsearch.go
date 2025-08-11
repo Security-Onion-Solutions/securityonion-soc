@@ -7,7 +7,6 @@ package backends
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/sigma"
@@ -175,9 +174,18 @@ func (v *eqlVisitor) VisitSelection(node *sigma.SelectionNode) error {
 func (v *eqlVisitor) VisitOneOf(node *sigma.OneOfNode) error {
 	// Find all selections matching the pattern
 	matchingSelections := make([]string, 0)
-	for name := range v.selections {
-		if sigma.MatchesPattern(name, node.Pattern) {
+	
+	// Special case: "them" means all selections
+	if node.Pattern == "them" {
+		for name := range v.selections {
 			matchingSelections = append(matchingSelections, name)
+		}
+	} else {
+		// Regular pattern matching
+		for name := range v.selections {
+			if sigma.MatchesPattern(name, node.Pattern) {
+				matchingSelections = append(matchingSelections, name)
+			}
 		}
 	}
 
@@ -207,9 +215,18 @@ func (v *eqlVisitor) VisitOneOf(node *sigma.OneOfNode) error {
 func (v *eqlVisitor) VisitAllOf(node *sigma.AllOfNode) error {
 	// Find all selections matching the pattern
 	matchingSelections := make([]string, 0)
-	for name := range v.selections {
-		if sigma.MatchesPattern(name, node.Pattern) {
+	
+	// Special case: "them" means all selections
+	if node.Pattern == "them" {
+		for name := range v.selections {
 			matchingSelections = append(matchingSelections, name)
+		}
+	} else {
+		// Regular pattern matching
+		for name := range v.selections {
+			if sigma.MatchesPattern(name, node.Pattern) {
+				matchingSelections = append(matchingSelections, name)
+			}
 		}
 	}
 
@@ -238,8 +255,32 @@ func (v *eqlVisitor) VisitAllOf(node *sigma.AllOfNode) error {
 
 func (v *eqlVisitor) VisitThem(node *sigma.ThemNode) error {
 	// "them" means all selections
-	allNode := &sigma.AllOfNode{Pattern: "*"}
-	return v.VisitAllOf(allNode)
+	allSelections := make([]string, 0, len(v.selections))
+	for name := range v.selections {
+		allSelections = append(allSelections, name)
+	}
+
+	if len(allSelections) == 0 {
+		return fmt.Errorf("no selections available for 'them'")
+	}
+
+	// Convert to AND of all selections
+	parts := make([]string, 0, len(allSelections))
+	for _, name := range allSelections {
+		selNode := &sigma.SelectionNode{Name: name}
+		selVisitor := &eqlVisitor{
+			backend:    v.backend,
+			selections: v.selections,
+			rule:       v.rule,
+		}
+		if err := selNode.Accept(selVisitor); err != nil {
+			return err
+		}
+		parts = append(parts, selVisitor.result)
+	}
+
+	v.result = "(" + strings.Join(parts, " and ") + ")"
+	return nil
 }
 
 // convertSelectionItem converts a single selection item to EQL
@@ -274,9 +315,9 @@ func (e *ElasticsearchBackend) convertSelectionItem(item sigma.SelectionItem) (s
 // convertEquals converts equality comparisons
 func (e *ElasticsearchBackend) convertEquals(field string, values []interface{}, negated bool) (string, error) {
 	if len(values) == 1 {
-		valueStr, err := e.formatValue(values[0])
+		valueStr, err := sigma.StringUtil.FormatValue(values[0])
 		if err != nil {
-			return "", err
+			return "", sigma.ErrorUtil.NewConversionError("elasticsearch", "format value", err)
 		}
 		op := "=="
 		if negated {
@@ -288,9 +329,9 @@ func (e *ElasticsearchBackend) convertEquals(field string, values []interface{},
 	// Multiple values - use IN
 	valueStrs := make([]string, 0, len(values))
 	for _, v := range values {
-		str, err := e.formatValue(v)
+		str, err := sigma.StringUtil.FormatValue(v)
 		if err != nil {
-			return "", err
+			return "", sigma.ErrorUtil.NewConversionError("elasticsearch", "format value", err)
 		}
 		valueStrs = append(valueStrs, str)
 	}
@@ -303,68 +344,47 @@ func (e *ElasticsearchBackend) convertEquals(field string, values []interface{},
 
 // convertContains converts contains comparisons
 func (e *ElasticsearchBackend) convertContains(field string, values []interface{}, negated bool) (string, error) {
-	parts := make([]string, 0, len(values))
-	for _, v := range values {
-		str, ok := v.(string)
-		if !ok {
-			return "", fmt.Errorf("contains modifier requires string value")
-		}
-		escaped := e.escapeWildcard(str)
-		if negated {
-			parts = append(parts, fmt.Sprintf("%s not like \"*%s*\"", field, escaped))
-		} else {
-			parts = append(parts, fmt.Sprintf("%s like \"*%s*\"", field, escaped))
-		}
+	negationPrefix := ""
+	if negated {
+		negationPrefix = "not"
 	}
-
-	if len(parts) == 1 {
-		return parts[0], nil
+	
+	parts, err := sigma.QueryUtil.BuildLikeComparison(field, values, "*%s*", negationPrefix)
+	if err != nil {
+		return "", sigma.ErrorUtil.NewConversionError("elasticsearch", "contains conversion", err)
 	}
-	return "(" + strings.Join(parts, " or ") + ")", nil
+	
+	return sigma.QueryUtil.CombineExpressions(parts, "or"), nil
 }
 
 // convertStartsWith converts startswith comparisons
 func (e *ElasticsearchBackend) convertStartsWith(field string, values []interface{}, negated bool) (string, error) {
-	parts := make([]string, 0, len(values))
-	for _, v := range values {
-		str, ok := v.(string)
-		if !ok {
-			return "", fmt.Errorf("startswith modifier requires string value")
-		}
-		escaped := e.escapeWildcard(str)
-		if negated {
-			parts = append(parts, fmt.Sprintf("%s not like \"%s*\"", field, escaped))
-		} else {
-			parts = append(parts, fmt.Sprintf("%s like \"%s*\"", field, escaped))
-		}
+	negationPrefix := ""
+	if negated {
+		negationPrefix = "not"
 	}
-
-	if len(parts) == 1 {
-		return parts[0], nil
+	
+	parts, err := sigma.QueryUtil.BuildLikeComparison(field, values, "%s*", negationPrefix)
+	if err != nil {
+		return "", sigma.ErrorUtil.NewConversionError("elasticsearch", "startswith conversion", err)
 	}
-	return "(" + strings.Join(parts, " or ") + ")", nil
+	
+	return sigma.QueryUtil.CombineExpressions(parts, "or"), nil
 }
 
 // convertEndsWith converts endswith comparisons
 func (e *ElasticsearchBackend) convertEndsWith(field string, values []interface{}, negated bool) (string, error) {
-	parts := make([]string, 0, len(values))
-	for _, v := range values {
-		str, ok := v.(string)
-		if !ok {
-			return "", fmt.Errorf("endswith modifier requires string value")
-		}
-		escaped := e.escapeWildcard(str)
-		if negated {
-			parts = append(parts, fmt.Sprintf("%s not like \"*%s\"", field, escaped))
-		} else {
-			parts = append(parts, fmt.Sprintf("%s like \"*%s\"", field, escaped))
-		}
+	negationPrefix := ""
+	if negated {
+		negationPrefix = "not"
 	}
-
-	if len(parts) == 1 {
-		return parts[0], nil
+	
+	parts, err := sigma.QueryUtil.BuildLikeComparison(field, values, "*%s", negationPrefix)
+	if err != nil {
+		return "", sigma.ErrorUtil.NewConversionError("elasticsearch", "endswith conversion", err)
 	}
-	return "(" + strings.Join(parts, " or ") + ")", nil
+	
+	return sigma.QueryUtil.CombineExpressions(parts, "or"), nil
 }
 
 // convertRegex converts regex comparisons
@@ -409,47 +429,6 @@ func (e *ElasticsearchBackend) convertCIDR(field string, values []interface{}, n
 	return "(" + strings.Join(parts, " or ") + ")", nil
 }
 
-// formatValue formats a value for EQL
-func (e *ElasticsearchBackend) formatValue(value interface{}) (string, error) {
-	switch v := value.(type) {
-	case string:
-		// Handle wildcards
-		if strings.Contains(v, "*") || strings.Contains(v, "?") {
-			escaped := e.escapeWildcard(v)
-			return fmt.Sprintf("\"%s\"", escaped), nil
-		}
-		// Regular string
-		return fmt.Sprintf("\"%s\"", e.escapeString(v)), nil
-	case int, int32, int64, uint, uint32, uint64:
-		return fmt.Sprintf("%d", v), nil
-	case float32, float64:
-		return fmt.Sprintf("%f", v), nil
-	case bool:
-		return strconv.FormatBool(v), nil
-	case nil:
-		return "null", nil
-	default:
-		// Try to convert to string
-		return fmt.Sprintf("\"%v\"", v), nil
-	}
-}
-
-// escapeString escapes special characters in strings
-func (e *ElasticsearchBackend) escapeString(s string) string {
-	s = strings.ReplaceAll(s, "\\", "\\\\")
-	s = strings.ReplaceAll(s, "\"", "\\\"")
-	s = strings.ReplaceAll(s, "\n", "\\n")
-	s = strings.ReplaceAll(s, "\r", "\\r")
-	s = strings.ReplaceAll(s, "\t", "\\t")
-	return s
-}
-
-// escapeWildcard escapes wildcards for LIKE queries
-func (e *ElasticsearchBackend) escapeWildcard(s string) string {
-	s = e.escapeString(s)
-	// Don't escape * and ? as they are wildcards
-	return s
-}
 
 // getEventType determines the EQL event type based on logsource
 func (e *ElasticsearchBackend) getEventType(logsource sigma.LogSource) string {
