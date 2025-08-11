@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/security-onion-solutions/securityonion-soc/server/modules/sigma"
+	sigma "github.com/security-onion-solutions/securityonion-soc/server/modules/sigma"
 )
 
 // ElasticsearchBackend converts Sigma rules to Elasticsearch Query Language (EQL)

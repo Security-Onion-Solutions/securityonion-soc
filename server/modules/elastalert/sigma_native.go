@@ -18,8 +18,9 @@ import (
 
 // sigmaToElastAlertNative converts Sigma rules using native Go implementation
 func (e *ElastAlertEngine) sigmaToElastAlertNative(ctx context.Context, det *model.Detection) (string, error) {
-	// Check if native converter is enabled (can be controlled by config)
-	useNative := e.srv.Config.GetBool("elastalert.useNativeSigmaConverter")
+	// For now, always use native converter in development
+	// TODO: Add proper configuration flag when config system supports it
+	useNative := true
 	if !useNative {
 		// Fall back to Python implementation
 		return e.sigmaToElastAlert(ctx, det)
@@ -44,10 +45,12 @@ func (e *ElastAlertEngine) sigmaToElastAlertNative(ctx context.Context, det *mod
 	
 	if err != nil {
 		// If native converter fails, optionally fall back to Python
-		if e.srv.Config.GetBool("elastalert.fallbackToPython") {
-			log.WithError(err).Warn("Native sigma converter failed, falling back to Python")
-			return e.sigmaToElastAlert(ctx, det)
-		}
+		// TODO: Add fallback logic when config system supports it
+		// For now, just return the error
+		// if e.srv.Config.GetBool("elastalert.fallbackToPython") {
+		// 	log.WithError(err).Warn("Native sigma converter failed, falling back to Python")
+		// 	return e.sigmaToElastAlert(ctx, det)
+		// }
 		return "", fmt.Errorf("native sigma converter failed: %w", err)
 	}
 	
@@ -56,11 +59,13 @@ func (e *ElastAlertEngine) sigmaToElastAlertNative(ctx context.Context, det *mod
 
 // EnableNativeSigmaConverter enables the native Go Sigma converter
 func (e *ElastAlertEngine) EnableNativeSigmaConverter() {
+	// TODO: Implement when config system supports dynamic settings
 	// This can be called during initialization to enable native converter
-	e.srv.Config.Set("elastalert.useNativeSigmaConverter", true)
+	// e.srv.Config.Set("elastalert.useNativeSigmaConverter", true)
 }
 
 // SetNativeSigmaConverterFallback sets whether to fall back to Python on failure
 func (e *ElastAlertEngine) SetNativeSigmaConverterFallback(enabled bool) {
-	e.srv.Config.Set("elastalert.fallbackToPython", enabled)
+	// TODO: Implement when config system supports dynamic settings
+	// e.srv.Config.Set("elastalert.fallbackToPython", enabled)
 }
