@@ -19,3 +19,12 @@ __pycache__
 __debug_bin*
 .venv
 html/so-ca.crt
+
+# Development files
+socdev-docker.sh
+socdev-hybrid.sh
+Dockerfile.dev
+docker-compose.dev.yml
+soc.dev.json
+soc.docker.json
+/tmp/socdev/

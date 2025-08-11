@@ -260,6 +260,18 @@ If issues arise, rollback to Python converter:
    INFO executing sigma cli sigmaConvertCommand="sigma convert..."
    ```
 
+## Recent Improvements
+
+### Code Quality Enhancements (Latest)
+- **Centralized Utility Functions**: Extracted ~40% of duplicated code into reusable utilities
+  - `StringUtils`: Unified string escaping and formatting
+  - `QueryUtils`: Consistent query building and expression handling
+  - `ValidationUtils`: Centralized field and value validation
+  - `ErrorUtils`: Standardized error messaging
+- **Improved Error Handling**: Better error context and consistency
+- **Reduced Code Duplication**: Cleaner, more maintainable codebase
+- **Development Build Support**: Faster iteration with build-dev.sh
+
 ## Future Enhancements
 
 ### Planned Features
