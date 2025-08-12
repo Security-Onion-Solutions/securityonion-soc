@@ -18,15 +18,15 @@ import (
 
 // sigmaToElastAlertNative converts Sigma rules using native Go implementation
 func (e *ElastAlertEngine) sigmaToElastAlertNative(ctx context.Context, det *model.Detection) (string, error) {
-	// For now, always use native converter in development
-	// TODO: Add proper configuration flag when config system supports it
-	useNative := true
-	if !useNative {
-		// Fall back to Python implementation
-		return e.sigmaToElastAlert(ctx, det)
-	}
-
 	startTime := time.Now()
+	
+	// Log input for debugging
+	log.WithFields(log.Fields{
+		"detectionId":     det.PublicID,
+		"detectionEngine": det.Engine,
+		"contentLength":   len(det.Content),
+		"overridesCount":  len(det.Overrides),
+	}).Debug("converting sigma rule with native converter")
 	
 	// Use the native converter
 	query, err := sigma.ConvertDetectionToEQL(ctx, det, []string{
@@ -36,36 +36,22 @@ func (e *ElastAlertEngine) sigmaToElastAlertNative(ctx context.Context, det *mod
 	
 	runtime := time.Since(startTime)
 	
-	log.WithFields(log.Fields{
+	// Always log the result
+	logFields := log.Fields{
 		"sigmaConvertNative":   true,
-		"sigmaConvertOutput":   query,
 		"sigmaConvertExecTime": runtime.Seconds(),
-		"sigmaConvertError":    err,
-	}).Info("executing native sigma converter")
+	}
 	
 	if err != nil {
-		// If native converter fails, optionally fall back to Python
-		// TODO: Add fallback logic when config system supports it
-		// For now, just return the error
-		// if e.srv.Config.GetBool("elastalert.fallbackToPython") {
-		// 	log.WithError(err).Warn("Native sigma converter failed, falling back to Python")
-		// 	return e.sigmaToElastAlert(ctx, det)
-		// }
+		logFields["sigmaConvertError"] = err.Error()
+		log.WithFields(logFields).Error("native sigma converter failed")
 		return "", fmt.Errorf("native sigma converter failed: %w", err)
 	}
+	
+	logFields["sigmaConvertOutput"] = query
+	logFields["sigmaConvertOutputLen"] = len(query)
+	log.WithFields(logFields).Info("native sigma converter succeeded")
 	
 	return query, nil
 }
 
-// EnableNativeSigmaConverter enables the native Go Sigma converter
-func (e *ElastAlertEngine) EnableNativeSigmaConverter() {
-	// TODO: Implement when config system supports dynamic settings
-	// This can be called during initialization to enable native converter
-	// e.srv.Config.Set("elastalert.useNativeSigmaConverter", true)
-}
-
-// SetNativeSigmaConverterFallback sets whether to fall back to Python on failure
-func (e *ElastAlertEngine) SetNativeSigmaConverterFallback(enabled bool) {
-	// TODO: Implement when config system supports dynamic settings
-	// e.srv.Config.Set("elastalert.fallbackToPython", enabled)
-}

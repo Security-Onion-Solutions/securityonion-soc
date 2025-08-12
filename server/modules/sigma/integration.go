@@ -16,6 +16,14 @@ import (
 
 // ConvertDetectionToEQL converts a SecurityOnion detection with Sigma content to EQL
 func ConvertDetectionToEQL(ctx context.Context, det *model.Detection, pipelineFiles []string) (string, error) {
+	// Validate input
+	if det == nil {
+		return "", fmt.Errorf("detection is nil")
+	}
+	if det.Content == "" {
+		return "", fmt.Errorf("detection content is empty")
+	}
+
 	// Parse the Sigma rule
 	rule, err := ParseRule([]byte(det.Content))
 	if err != nil {
@@ -38,7 +46,7 @@ func ConvertDetectionToEQL(ctx context.Context, det *model.Detection, pipelineFi
 	// Get the EQL converter
 	converter, err := GetConverter("eql")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get EQL converter: %w", err)
 	}
 
 	// Convert to EQL

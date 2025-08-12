@@ -7,10 +7,8 @@ package playbook
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io/fs"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -20,11 +18,11 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/sigma"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 
 	"github.com/apex/log"
 	"github.com/google/uuid"
-	"github.com/samber/lo"
 	"gopkg.in/yaml.v3"
 )
 
@@ -558,53 +556,39 @@ func (pdm *PlaybookDiskManager) ConvertQuestions(ctx context.Context, queries []
 		return nil, err
 	}
 
-	args := []string{"convert", "-t", "security_onion", "-p", "/opt/sensoroni/sigma_final_pipeline.yaml", "-p", "/opt/sensoroni/sigma_so_pipeline.yaml", "-p", "windows-logsources", "-p", "ecs_windows", "--disable-pipeline-check", "/dev/stdin"}
-
-	cmd := exec.CommandContext(pdm.srv.Context, "sigma", args...)
-	cmd.Stdin = strings.NewReader(strings.Join(queries, "\n---\n"))
-
-	raw, code, runtime, err := pdm.ExecCommand(cmd)
-
+	startTime := time.Now()
+	
+	// Use the native Go Sigma converter
+	pipelineFiles := []string{
+		"/opt/sensoroni/sigma_final_pipeline.yaml",
+		"/opt/sensoroni/sigma_so_pipeline.yaml",
+	}
+	
+	// Log input for debugging
 	logger.WithFields(log.Fields{
-		"sigmaConvertCode":     code,
-		"sigmaConvertOutput":   string(raw),
-		"sigmaConvertCommand":  cmd.String(),
+		"queryCount":     len(queries),
+		"pipelineFiles":  pipelineFiles,
+	}).Debug("converting playbook queries with native converter")
+	
+	// Use the native sigma converter directly
+	results, err := sigma.ConvertPlaybookQueries(ctx, queries, pipelineFiles)
+	
+	runtime := time.Since(startTime)
+	
+	// Log the result
+	logFields := log.Fields{
+		"sigmaConvertNative":   true,
 		"sigmaConvertExecTime": runtime.Seconds(),
-		"sigmaConvertError":    err,
-	}).Info("executing sigma cli")
-
+		"resultCount":          len(results),
+	}
+	
 	if err != nil {
-		return nil, fmt.Errorf("problem with sigma cli: %w", err)
+		logFields["sigmaConvertError"] = err.Error()
+		logger.WithFields(logFields).Error("native sigma converter failed")
+		return nil, fmt.Errorf("native sigma converter failed: %w", err)
 	}
-
-	oql := string(raw)
-
-	firstLine := strings.Index(string(raw), "\n")
-	if firstLine != -1 {
-		oql = oql[firstLine+1:]
-	}
-
-	oql = strings.TrimSpace(oql)
-
-	lines := strings.Split(oql, "\n")
-
-	// filter out blank lines
-	lines = lo.Filter(lines, func(line string, _ int) bool {
-		return len(line) > 0
-	})
-
-	output := make([]*model.ConvertedQuery, 0, len(lines))
-
-	for _, line := range lines {
-		cq := &model.ConvertedQuery{}
-
-		err = json.Unmarshal([]byte(line), &cq)
-		if err != nil {
-			return nil, fmt.Errorf("problem unmarshalling sigma cli output: %w", err)
-		}
-
-		output = append(output, cq)
-	}
-
-	return output, nil
+	
+	logger.WithFields(logFields).Info("native sigma converter succeeded")
+	
+	return results, nil
 }
