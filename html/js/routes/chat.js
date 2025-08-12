@@ -869,9 +869,21 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
               // Find the last tool result message for this tool
               for (let i = response.data.length - 1; i >= 0; i--) {
                 const msg = response.data[i];
-                if (msg.message.role === 'user' && msg.message.contentStr && !msg.message.contentBlocks) {
+                if (msg.tags && msg.tags.includes('tool_result')) {
+                  let rawResult = null;
+                  const textBlock = msg.message.contentBlocks.find(block => block.type === 'text');
+                  if (textBlock && textBlock.text) {
+                    // Parse the tool result format: "ToolUseId: tooluse_QdvZoVlXQNm0PBuqFuqRmA, Result: [actual_result_data]"
+                    const toolResultText = textBlock.text;
+                    const toolUseIdMatch = toolResultText.match(/ToolUseId:\s*([^,]+)/);
+                    const resultMatch = toolResultText.match(/Result:\s*(.+)$/s);
+                    
+                    if (toolUseIdMatch && resultMatch) {
+                      rawResult = resultMatch[1].trim();
+                    }
+                  }
                   // This is a tool result - associate it with our tool use
-                  toolUse.rawResult = msg.message.contentStr;
+                  toolUse.rawResult = rawResult;
                   console.log('Captured raw tool result:', toolUse.rawResult);
                   break;
                 }
@@ -1072,7 +1084,49 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
       for (let i = 0; i < backendMessages.length; i++) {
         const msg = backendMessages[i];
         
-        // Check if this is a tool result message (user role with contentStr)
+        // Check if this is a tool result message (new format with tags)
+        if (msg.tags && msg.tags.includes('tool_result')) {
+          // This is a tool result message - extract the result data
+          let rawResult = null;
+          let toolUseId = null;
+          
+          if (msg.message.contentBlocks && msg.message.contentBlocks.length > 0) {
+            const textBlock = msg.message.contentBlocks.find(block => block.type === 'text');
+            if (textBlock && textBlock.text) {
+              // Parse the tool result format: "ToolUseId: tooluse_QdvZoVlXQNm0PBuqFuqRmA, Result: [actual_result_data]"
+              const toolResultText = textBlock.text;
+              const toolUseIdMatch = toolResultText.match(/ToolUseId:\s*([^,]+)/);
+              const resultMatch = toolResultText.match(/Result:\s*(.+)$/s);
+              
+              if (toolUseIdMatch && resultMatch) {
+                toolUseId = toolUseIdMatch[1].trim();
+                rawResult = resultMatch[1].trim();
+              }
+            }
+          }
+          
+          // Find the assistant message with the matching tool use and add the raw result
+          if (toolUseId && rawResult) {
+            // Look backwards through processed messages to find the tool use
+            for (let j = processedMessages.length - 1; j >= 0; j--) {
+              const processedMsg = processedMessages[j];
+              if (processedMsg.role === 'assistant' && processedMsg.toolUses) {
+                const toolUses = processedMsg.toolUses.value;
+                const matchingToolUse = toolUses.find(tool => tool.id === toolUseId);
+                if (matchingToolUse) {
+                  matchingToolUse.rawResult = rawResult;
+                  console.log('Associated raw tool result with tool use:', toolUseId);
+                  break;
+                }
+              }
+            }
+          }
+          
+          // Skip adding this message to the processed messages (filter it out)
+          continue;
+        }
+        
+        // Check if this is a tool result message (old format - user role with contentStr)
         if (msg.message.role === 'user' && msg.message.contentStr && !msg.message.contentBlocks) {
           // This is a tool result - find the previous assistant message with tool uses
           const prevMessage = processedMessages[processedMessages.length - 1];
@@ -1106,9 +1160,9 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
               frontendMsg.content = 'Complex message with tools/attachments';
             }
           } else if (frontendMsg.role === 'assistant') {
-            const textBlocks = msg.message.contentBlocks.filter(block => block.type === '');
+            const textBlocks = msg.message.contentBlocks.filter(block => block.type === 'text');
             if (textBlocks.length > 0) {
-              frontendMsg.content = textBlocks.map(block => block.content).join('\n');
+              frontendMsg.content = textBlocks.map(block => block.text).join('\n');
             } else {
               frontendMsg.content = 'Complex message with tools/attachments';
             }

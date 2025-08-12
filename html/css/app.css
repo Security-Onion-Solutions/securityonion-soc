@@ -1282,3 +1282,25 @@ ul ul ul {
     margin-top: 16px;
   }
 }
+
+/* Tool result expansion panel width fix */
+.tool-result-expansion {
+  width: 100%;
+}
+
+.tool-result-expansion .v-expansion-panel {
+  width: 100%;
+}
+
+.tool-result-expansion .v-expansion-panel-text {
+  width: 100%;
+  overflow: hidden;
+}
+
+.tool-result-expansion .v-code {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box;
+  overflow-x: auto;
+  word-break: break-all;
+}
