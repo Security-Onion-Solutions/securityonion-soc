@@ -160,19 +160,25 @@ func prepareOverrideForSigma(override *model.Override) (map[string]interface{}, 
 
 // ConvertPlaybookQueries converts multiple Sigma queries to SecurityOnion format (OQL)
 func ConvertPlaybookQueries(ctx context.Context, queries []string, pipelineFiles []string) ([]*model.ConvertedQuery, error) {
-	// For playbooks, OQL is the original Sigma query itself, not converted to EQL
-	// The Python backend with "-t security_onion" was returning the Sigma query as-is
-	
+	// Load pipelines
+	pipelines := make([]Pipeline, 0)
+	// TODO: Implement pipeline loading from files
+
+	// Get the Security Onion converter - this should output OQL
+	converter, err := GetConverter("security_onion")
+	if err != nil {
+		return nil, fmt.Errorf("security_onion converter not available: %w", err)
+	}
+
 	results := make([]*model.ConvertedQuery, 0, len(queries))
 	
 	for i, query := range queries {
 		// Playbook queries are often partial Sigma rules without metadata
-		// We need to parse them to extract fields if specified
+		// We need to wrap them in a minimal valid Sigma rule structure
 		var rule *Rule
-		var fields []string
 		
 		// First try parsing as-is
-		rule, err := ParseRule([]byte(query))
+		rule, err = ParseRule([]byte(query))
 		if err != nil {
 			// If parsing fails due to missing metadata, wrap the query
 			if strings.Contains(err.Error(), "missing required field: title") {
@@ -184,63 +190,45 @@ description: Auto-generated wrapper for playbook query
 				
 				rule, err = ParseRule([]byte(wrappedQuery))
 				if err != nil {
-					// If still fails, just use the original query
-					// Some playbook queries might not be full Sigma rules
-					fields = extractFieldsFromQuery(query)
-				} else {
-					fields = rule.Fields
+					// If still fails, return error
+					results = append(results, &model.ConvertedQuery{
+						Query: fmt.Sprintf("ERROR: %s", err.Error()),
+					})
+					continue
 				}
 			} else {
-				// Other parsing error - still try to extract fields
-				fields = extractFieldsFromQuery(query)
+				// Other parsing error
+				results = append(results, &model.ConvertedQuery{
+					Query: fmt.Sprintf("ERROR: %s", err.Error()),
+				})
+				continue
 			}
-		} else {
-			// Successfully parsed - get fields from rule
-			fields = rule.Fields
 		}
 
-		// For OQL, return the original Sigma query
+		// Convert the rule to OQL
+		converted, err := converter.Convert(rule, pipelines)
+		if err != nil {
+			results = append(results, &model.ConvertedQuery{
+				Query: fmt.Sprintf("ERROR: %s", err.Error()),
+			})
+			continue
+		}
+
+		// For playbooks, we need to return the query in OQL format (JSON)
+		// The converter returns EQL, but we need to wrap it in JSON
 		result := &model.ConvertedQuery{
-			Query: strings.TrimSpace(query),
+			Query: converted,
 		}
 
-		// Add fields if found
-		if len(fields) > 0 {
-			result.Fields = fields
+		// Extract fields if specified in the rule
+		if len(rule.Fields) > 0 {
+			result.Fields = rule.Fields
 		}
 
 		results = append(results, result)
 	}
 
 	return results, nil
-}
-
-// extractFieldsFromQuery attempts to extract fields from a Sigma query string
-func extractFieldsFromQuery(query string) []string {
-	fields := []string{}
-	lines := strings.Split(query, "\n")
-	inFields := false
-	
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "fields:" {
-			inFields = true
-			continue
-		}
-		if inFields {
-			if strings.HasPrefix(trimmed, "-") {
-				field := strings.TrimSpace(strings.TrimPrefix(trimmed, "-"))
-				if field != "" {
-					fields = append(fields, field)
-				}
-			} else if !strings.HasPrefix(line, " ") && !strings.HasPrefix(line, "\t") {
-				// End of fields section
-				break
-			}
-		}
-	}
-	
-	return fields
 }
 
 // generateTempID generates a temporary ID for wrapped queries
