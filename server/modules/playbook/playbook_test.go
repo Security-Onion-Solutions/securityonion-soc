@@ -17,6 +17,7 @@ import (
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/handmock"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
@@ -503,18 +504,22 @@ func TestScheduler(t *testing.T) {
 
 	iom := mock.NewMockIOManager(ctrl)
 	pdm := PlaybookDiskManager{
-		srv:                server.NewFakeAuthorizedServer(nil),
-		autoUpdateEnabled:  true,
-		playbookRepoPath:   "/tmp/playbooks",
-		playbookRepoUrl:    "https://github.com/playbooks/repo",
-		playbookRepoBranch: "dev",
-		interruptChan:      make(chan bool, 1),
-		isRunning:          true,
-		IOManager:          iom,
+		srv:               server.NewFakeAuthorizedServer(nil),
+		autoUpdateEnabled: true,
+		playbookRepoPath:  "/tmp/playbooks",
+		playbookRepos: []*model.Repo{
+			{
+				RepoUrl: "https://github.com/playbooks/repo",
+				Branch:  util.Ptr("dev"),
+			},
+		},
+		interruptChan: make(chan bool, 1),
+		isRunning:     true,
+		IOManager:     iom,
 	}
 
 	iom.EXPECT().ReadDir(pdm.playbookRepoPath).Return(nil, nil)
-	iom.EXPECT().CloneRepo(gomock.Any(), "/tmp/playbooks/repo", pdm.playbookRepoUrl, util.Ptr(pdm.playbookRepoBranch)).Return(nil)
+	iom.EXPECT().CloneRepo(gomock.Any(), "/tmp/playbooks/repo", pdm.playbookRepos[0].RepoUrl, pdm.playbookRepos[0].Branch).Return(nil)
 
 	iom.EXPECT().WalkDir("/tmp/playbooks/repo", gomock.Any()).DoAndReturn(func(path string, fn func(p string, dir fs.DirEntry, err error) error) error {
 		err := fn("/tmp/playbooks/repo/playbook1.yaml", &handmock.MockDirEntry{
@@ -699,11 +704,25 @@ func TestReadPlaybooks(t *testing.T) {
 
 	iom := mock.NewMockIOManager(ctrl)
 	pdm := PlaybookDiskManager{
-		isRunning:          true,
-		playbookRepoUrl:    "http://github.com/user/repo",
-		playbookPathInRepo: "playbooks/dev",
-		playbookRepoPath:   "/tmp/playbooks",
-		IOManager:          iom,
+		isRunning:        true,
+		playbookRepoPath: "/tmp/playbooks",
+		IOManager:        iom,
+	}
+
+	repos := []*detections.RepoOnDisk{
+		{
+			Repo: &model.Repo{
+				RepoUrl: "http://github.com/user/repo",
+				Folder:  util.Ptr("playbooks/dev"),
+			},
+			Path: "/tmp/playbooks/repo",
+		},
+		{
+			Repo: &model.Repo{
+				RepoUrl: "file:///playbooks/myRepo",
+			},
+			Path: "/tmp/playbooks/myRepo",
+		},
 	}
 
 	iom.EXPECT().WalkDir("/tmp/playbooks/repo/playbooks/dev", gomock.Any()).DoAndReturn(func(path string, fn func(p string, dir fs.DirEntry, err error) error) error {
@@ -721,8 +740,20 @@ func TestReadPlaybooks(t *testing.T) {
 		err = fn("unmarshal error", &handmock.MockDirEntry{Filename: "a.yml"}, nil)
 		assert.NoError(t, err)
 
-		iom.EXPECT().ReadFile("success").Return([]byte("id: x"), nil)
+		iom.EXPECT().ReadFile("success").Return([]byte("id: repo1-pb1"), nil)
 		err = fn("success", &handmock.MockDirEntry{Filename: "a.yml"}, nil)
+		assert.NoError(t, err)
+
+		return nil
+	})
+
+	iom.EXPECT().WalkDir("/tmp/playbooks/myRepo", gomock.Any()).DoAndReturn(func(path string, fn func(p string, dir fs.DirEntry, err error) error) error {
+		iom.EXPECT().ReadFile("repo2-playbook1.yaml").Return([]byte("id: repo2-pb1"), nil)
+		err := fn("repo2-playbook1.yaml", &handmock.MockDirEntry{Filename: "repo2-playbook1.yaml"}, nil)
+		assert.NoError(t, err)
+
+		iom.EXPECT().ReadFile("repo2-playbook2.yaml").Return([]byte("id: repo2-pb2"), nil)
+		err = fn("repo2-playbook2.yaml", &handmock.MockDirEntry{Filename: "repo2-playbook2.yaml"}, nil)
 		assert.NoError(t, err)
 
 		return nil
@@ -732,13 +763,23 @@ func TestReadPlaybooks(t *testing.T) {
 	lg := &log.Logger{Handler: h, Level: log.DebugLevel}
 	logger := lg.WithField("test", true)
 
-	pbs, err := pdm.readPlaybooks(logger)
+	pbs, err := pdm.readPlaybooks(logger, repos)
 	assert.NoError(t, err)
-	assert.Len(t, pbs, 1)
-	assert.Equal(t, "x", pbs[0].Id)
+	assert.Len(t, pbs, 3)
 
-	assert.Equal(t, 1, len(pdm.playbooksOnDisk))
-	assert.Equal(t, "success", pdm.playbooksOnDisk["x"])
+	// Verify playbooks from both repos are loaded
+	playbookIds := make([]string, len(pbs))
+	for i, pb := range pbs {
+		playbookIds[i] = pb.Id
+	}
+	assert.Contains(t, playbookIds, "repo1-pb1")
+	assert.Contains(t, playbookIds, "repo2-pb1")
+	assert.Contains(t, playbookIds, "repo2-pb2")
+
+	assert.Equal(t, 3, len(pdm.playbooksOnDisk))
+	assert.Equal(t, "success", pdm.playbooksOnDisk["repo1-pb1"])
+	assert.Equal(t, "repo2-playbook1.yaml", pdm.playbooksOnDisk["repo2-pb1"])
+	assert.Equal(t, "repo2-playbook2.yaml", pdm.playbooksOnDisk["repo2-pb2"])
 }
 
 func TestGetPlaybooksForDetection_BaseCategoryMatching(t *testing.T) {
@@ -748,27 +789,27 @@ func TestGetPlaybooksForDetection_BaseCategoryMatching(t *testing.T) {
 	iom := mock.NewMockIOManager(ctrl)
 
 	pdm := PlaybookDiskManager{
-		srv: server.NewFakeAuthorizedServer(nil),
+		srv:                    server.NewFakeAuthorizedServer(nil),
 		PlaybooksByDetectionId: map[string][]string{},
 		PlaybooksByCategory: map[string][]string{
-			"scan": {"scan-playbook", "sigma-scan-playbook"},
+			"scan":    {"scan-playbook", "sigma-scan-playbook"},
 			"et scan": {"et-scan-playbook"},
-			"sql": {"sql-playbook"},
+			"sql":     {"sql-playbook"},
 			"generic": {"generic-playbook"},
 		},
 		PlaybooksByEngine: map[string][]string{},
 		playbooksOnDisk: map[string]string{
-			"scan-playbook": "/path/scan",
+			"scan-playbook":       "/path/scan",
 			"sigma-scan-playbook": "/path/sigma-scan",
-			"et-scan-playbook": "/path/et-scan",
-			"sql-playbook": "/path/sql",
-			"generic-playbook": "/path/generic",
+			"et-scan-playbook":    "/path/et-scan",
+			"sql-playbook":        "/path/sql",
+			"generic-playbook":    "/path/generic",
 		},
 		playbookTypes: map[string]string{
-			"scan-playbook": "nids",
+			"scan-playbook":       "nids",
 			"sigma-scan-playbook": "sigma",
-			"et-scan-playbook": "nids",
-			"sql-playbook": "nids",
+			"et-scan-playbook":    "nids",
+			"sql-playbook":        "nids",
 			// generic-playbook has no type - should match any engine
 		},
 		IOManager: iom,

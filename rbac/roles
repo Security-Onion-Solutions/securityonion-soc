@@ -28,5 +28,5 @@ job-monitor:       auditor
 job-processor:     agent
 query-admin:       superuser
 query-monitor:     superuser
-playbook-admin:    superuser
+playbook-admin:    superuser analyst
 playbook-monitor:  limited-analyst auditor limited-auditor

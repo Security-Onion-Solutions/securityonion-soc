@@ -1066,3 +1066,15 @@ ul ul ul {
 .center-self-flex {
   justify-self: center;
 }
+
+.has-answers {
+  border-left: 3px solid rgb(var(--v-theme-info));
+}
+
+.no-data {
+  border-left: 3px solid rgb(var(--v-theme-warning));
+}
+
+.has-error {
+  border-left: 3px solid rgb(var(--v-theme-error));
+}

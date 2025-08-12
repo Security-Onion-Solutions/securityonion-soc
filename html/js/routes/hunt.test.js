@@ -2108,6 +2108,7 @@ test('fetchNewestEvent', async () => {
       enabled: false,
     },
   ];
+  comp.queryBaseFilter = 'tags:alert';
   comp.dateRange = 'x - y';
   comp.zone = 'zone';
 
@@ -2125,7 +2126,7 @@ test('fetchNewestEvent', async () => {
   expect(eventSearch).toHaveBeenCalledTimes(1);
   expect(eventSearch).toHaveBeenCalledWith('events/', {
     params: {
-      query: 'a:"1" AND b:"2" AND c:"true" AND NOT event.acknowledged:true AND NOT event.escalated:true | sortby @timestamp',
+      query: 'tags:alert AND a:"1" AND b:"2" AND c:"true" AND NOT event.acknowledged:true AND NOT event.escalated:true | sortby @timestamp',
       range: 'x - y',
       format: comp.i18n.timePickerSample,
       zone: 'zone',
@@ -2136,6 +2137,8 @@ test('fetchNewestEvent', async () => {
 
   comp.filterToggles[0].enabled = true;
   comp.filterToggles[1].enabled = true;
+  comp.queryBaseFilter = '';
+  comp.query = '* AND source.ip:10.67.100.14 | groupby rule.name';
   delete item.newest;
   resetPapi();
   const eventSearch2 = mockPapi('get', { data: { events: [{ id: '100', payload: { a: 1, b: "2", c: true } }] } });
@@ -2147,7 +2150,7 @@ test('fetchNewestEvent', async () => {
   expect(eventSearch2).toHaveBeenCalledTimes(1);
   expect(eventSearch2).toHaveBeenCalledWith('events/', {
     params: {
-      query: 'a:"1" AND b:"2" AND c:"true" AND event.acknowledged:true AND event.escalated:true | sortby @timestamp',
+      query: '(* AND source.ip:10.67.100.14) AND a:"1" AND b:"2" AND c:"true" AND event.acknowledged:true AND event.escalated:true | sortby @timestamp',
       range: 'x - y',
       format: comp.i18n.timePickerSample,
       zone: 'zone',
@@ -2175,17 +2178,7 @@ test('isComplexQuery', () => {
 
 test('toggleAllQuestions', () => {
   let event = {
-    playbooks: [
-      {
-        questions: [{}, {}, {}],
-      },
-      {
-        questions: [{}],
-      },
-      {
-        questions: [{}, {}],
-      },
-    ],
+    questions: [{}, {}, {}]
   };
   let index = 0;
   let expand = true;
@@ -2193,39 +2186,39 @@ test('toggleAllQuestions', () => {
 
   // expand
   comp.toggleAllQuestions(event, index, expand);
-  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [0, 1, 2, 3, 4, 5] });
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [0, 1, 2] });
 
   // expand a different index
   index = 1;
   comp.toggleAllQuestions(event, index, expand);
-  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [0, 1, 2, 3, 4, 5], 1: [0, 1, 2, 3, 4, 5] });
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [0, 1, 2], 1: [0, 1, 2] });
 
   // collapse non-existing index
   index = 2;
   expand = false;
   comp.toggleAllQuestions(event, index, expand);
-  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [0, 1, 2, 3, 4, 5], 1: [0, 1, 2, 3, 4, 5], 2: [] });
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [0, 1, 2], 1: [0, 1, 2], 2: [] });
 
   // collapse existing, expanded index
   index = 0;
   comp.toggleAllQuestions(event, index, expand);
-  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [], 1: [0, 1, 2, 3, 4, 5], 2: [] });
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [], 1: [0, 1, 2], 2: [] });
 
   // expand existing, partially expanded
-  comp.expandedPlaybookQuestions[0] = [2, 4];
+  comp.expandedPlaybookQuestions[0] = [1];
   expand = true;
   comp.toggleAllQuestions(event, index, expand);
-  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [] });
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [1, 0, 2], 1: [0, 1, 2], 2: [] });
 
   // no changes when expanding an already expanded group, even if out of order
   comp.toggleAllQuestions(event, index, expand);
-  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [] });
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [1, 0, 2], 1: [0, 1, 2], 2: [] });
 
   // no change when collapsing an already collapsed group
   index = 2;
   expand = false;
   comp.toggleAllQuestions(event, index, expand);
-  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [] });
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [1, 0, 2], 1: [0, 1, 2], 2: [] });
 
   // handle aggregate event
   let aggEvent = {
@@ -2234,7 +2227,7 @@ test('toggleAllQuestions', () => {
 
   expand = true;
   comp.toggleAllQuestions(aggEvent, index, expand);
-  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [0, 1, 2, 3, 4, 5] });
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [1, 0, 2], 1: [0, 1, 2], 2: [0, 1, 2] });
 
   // handle event that doesn't have playbooks yet
   const _setTimeout = global.setTimeout;
@@ -2246,7 +2239,7 @@ test('toggleAllQuestions', () => {
   expand = true;
 
   comp.toggleAllQuestions(emptyEvent, index, expand);
-  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [0, 1, 2, 3, 4, 5] });
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [1, 0, 2], 1: [0, 1, 2], 2: [0, 1, 2] });
   expect(setTimeoutMock).toHaveBeenCalledTimes(1);
 
   // handle agg event that doesn't have playbooks yet
@@ -2254,7 +2247,7 @@ test('toggleAllQuestions', () => {
   setTimeoutMock.mockClear();
   
   comp.toggleAllQuestions(aggEvent, index, expand);
-  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [0, 1, 2, 3, 4, 5] });
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [1, 0, 2], 1: [0, 1, 2], 2: [0, 1, 2] });
   expect(setTimeoutMock).toHaveBeenCalledTimes(1);
   
   // handle event that's loading playbooks
@@ -2263,7 +2256,7 @@ test('toggleAllQuestions', () => {
   setTimeoutMock.mockClear();
   
   comp.toggleAllQuestions(emptyEvent, index, expand);
-  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [0, 1, 2, 3, 4, 5] });
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [1, 0, 2], 1: [0, 1, 2], 2: [0, 1, 2] });
   expect(setTimeoutMock).toHaveBeenCalledTimes(1);
 
   // handle agg event that's loading playbooks
@@ -2271,7 +2264,7 @@ test('toggleAllQuestions', () => {
   setTimeoutMock.mockClear();
   
   comp.toggleAllQuestions(aggEvent, index, expand);
-  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [2, 4, 0, 1, 3, 5], 1: [0, 1, 2, 3, 4, 5], 2: [0, 1, 2, 3, 4, 5] });
+  expect(comp.expandedPlaybookQuestions).toStrictEqual({ 0: [1, 0, 2], 1: [0, 1, 2], 2: [0, 1, 2] });
   expect(setTimeoutMock).toHaveBeenCalledTimes(1);
 
   global.setTimeout = _setTimeout;
@@ -2286,7 +2279,7 @@ test('loadPlaybook', async () => {
 
   let papiMock = mockPapi('get', { data: playbooks });
 
-  await comp.loadPlaybook(event);
+  await comp.loadPlaybook(event, 0);
 
   expect(papiMock).toHaveBeenCalledWith('playbook/detection/123');
   expect(event.playbooks).toStrictEqual(playbooks);
@@ -2300,7 +2293,7 @@ test('loadPlaybook', async () => {
     'rule.uuid': '456',
   };
 
-  comp.loadPlaybook(event);
+  comp.loadPlaybook(event, 0);
 
   expect(papiMock).toHaveBeenCalledWith('playbook/detection/456');
   expect(papiMock).toHaveBeenCalledTimes(1);
@@ -2309,7 +2302,7 @@ test('loadPlaybook', async () => {
 
   event = {};
 
-  comp.loadPlaybook(event);
+  comp.loadPlaybook(event, 0);
 
   expect(event.playbookErr).toBe(true);
 
@@ -2317,24 +2310,126 @@ test('loadPlaybook', async () => {
 
   event = { playbooks: '' };
 
-  comp.loadPlaybook(event);
+  comp.loadPlaybook(event, 0);
   expect(event.playbookErr).toBe(undefined);
   expect(event.playbookLoading).toBe(undefined);
   expect(papiMock).toHaveBeenCalledTimes(0);
 
   event = { playbookLoading: '' };
 
-  comp.loadPlaybook(event);
+  comp.loadPlaybook(event, 0);
   expect(event.playbooks).toBe(undefined);
   expect(event.playbookErr).toBe(undefined);
   expect(papiMock).toHaveBeenCalledTimes(0);
 
   event = { playbookErr: true };
 
-  comp.loadPlaybook(event);
+  comp.loadPlaybook(event, 0);
   expect(event.playbooks).toBe(undefined);
   expect(event.playbookLoading).toBe(undefined);
   expect(papiMock).toHaveBeenCalledTimes(0);
 
   resetPapi();
+});
+
+test('pickQuestionColor', () => {
+  let question = {
+    error: true,
+  };
+
+  let c = comp.pickQuestionColor(question);
+  expect(c).toBe('has-error');
+
+  question = {
+    error: false,
+  };
+
+  c = comp.pickQuestionColor(question);
+  expect(c).toBe('no-data');
+
+  question = {}
+
+  c = comp.pickQuestionColor(question);
+  expect(c).toBe('no-data');
+
+  question = {
+    answers: [],
+  };
+
+  c = comp.pickQuestionColor(question);
+  expect(c).toBe('no-data');
+
+  question = {
+    answers: [{}],
+  };
+
+  c = comp.pickQuestionColor(question);
+  expect(c).toBe('has-answers');
+
+  question = {
+    answers: [{}],
+    error: false,
+  };
+
+  c = comp.pickQuestionColor(question);
+  expect(c).toBe('has-answers');
+
+  question = {
+    answers: [{}],
+    error: true,
+  };
+
+  c = comp.pickQuestionColor(question);
+  expect(c).toBe('has-error');
+});
+
+test('getExpandedData', () => {
+  let obj = {};
+
+  let data = comp.getExpandedData(obj);
+  expect(data).toStrictEqual([]);
+
+  obj = {
+    A: 1,
+    B: 2,
+    C: 3,
+  };
+
+  data = comp.getExpandedData(obj);
+
+  // sort data by key for deterministic check
+  data.sort((a, b) => a.key.localeCompare(b.key));
+
+  expect(data).toStrictEqual([
+    { key: 'A', value: 1 },
+    { key: 'B', value: 2 },
+    { key: 'C', value: 3 },
+  ]);
+
+  obj = {
+    C: 'six',
+    _row_idx_: -1,
+    B: 'five',
+    _isSelected: false,
+    playbooks: null,
+    A: 'four',
+  };
+
+  data = comp.getExpandedData(obj);
+  data.sort((a, b) => a.key.localeCompare(b.key));
+
+  expect(data).toStrictEqual([
+    { key: 'A', value: 'four' },
+    { key: 'B', value: 'five' },
+    { key: 'C', value: 'six' },
+  ]);
+
+  obj = {
+    _row_idx_: 10,
+    _isSelected: true,
+    playbooks: [{}],
+  };
+
+  data = comp.getExpandedData(obj);
+  expect(data).toStrictEqual([]);
 });
