@@ -639,7 +639,7 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
 
         // Update tool status to completed (tool execution itself is done)
         toolUse.status = 'completed';
-        toolUse.completedAt = new Date().toISOString();
+        //toolUse.completedAt = new Date().toISOString();
 
         // Stream the AI's response to the tool result
         const reader = response.body.getReader();
@@ -884,6 +884,7 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
                   }
                   // This is a tool result - associate it with our tool use
                   toolUse.rawResult = rawResult;
+                  toolUse.completedAt = msg.createTime;
                   console.log('Captured raw tool result:', toolUse.rawResult);
                   break;
                 }
@@ -903,7 +904,7 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
         // Update tool use status with error
         toolUse.status = 'error';
         toolUse.error = error.message;
-        toolUse.completedAt = new Date().toISOString();
+        //toolUse.completedAt = new Date().toISOString();
         
         // Add error message to chat
         const errorMessage = {
@@ -1115,6 +1116,7 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
                 const matchingToolUse = toolUses.find(tool => tool.id === toolUseId);
                 if (matchingToolUse) {
                   matchingToolUse.rawResult = rawResult;
+                  matchingToolUse.completedAt = msg.createTime;
                   console.log('Associated raw tool result with tool use:', toolUseId);
                   break;
                 }
