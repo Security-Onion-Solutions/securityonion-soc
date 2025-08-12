@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"gopkg.in/yaml.v3"
@@ -157,37 +158,54 @@ func prepareOverrideForSigma(override *model.Override) (map[string]interface{}, 
 	return result, nil
 }
 
-// ConvertPlaybookQueries converts multiple Sigma queries to SecurityOnion format
+// ConvertPlaybookQueries converts multiple Sigma queries to SecurityOnion format (OQL)
 func ConvertPlaybookQueries(ctx context.Context, queries []string, pipelineFiles []string) ([]*model.ConvertedQuery, error) {
 	// Load pipelines
 	pipelines := make([]Pipeline, 0)
 	// TODO: Implement pipeline loading from files
 
-	// Get the Security Onion converter
+	// Get the Security Onion converter - this should output OQL
 	converter, err := GetConverter("security_onion")
 	if err != nil {
-		// Fall back to EQL if SO converter not available
-		converter, err = GetConverter("eql")
-		if err != nil {
-			return nil, err
-		}
+		return nil, fmt.Errorf("security_onion converter not available: %w", err)
 	}
 
 	results := make([]*model.ConvertedQuery, 0, len(queries))
 	
 	for i, query := range queries {
-		// Parse the query as a Sigma rule
-		rule, err := ParseRule([]byte(query))
+		// Playbook queries are often partial Sigma rules without metadata
+		// We need to wrap them in a minimal valid Sigma rule structure
+		var rule *Rule
+		
+		// First try parsing as-is
+		rule, err = ParseRule([]byte(query))
 		if err != nil {
-			// If parsing fails, add error result
-			// Note: ConvertedQuery doesn't have Error field, so we encode it in the query
-			results = append(results, &model.ConvertedQuery{
-				Query: fmt.Sprintf("ERROR: %s", err.Error()),
-			})
-			continue
+			// If parsing fails due to missing metadata, wrap the query
+			if strings.Contains(err.Error(), "missing required field: title") {
+				// Create a minimal wrapper with required metadata
+				wrappedQuery := fmt.Sprintf(`title: Playbook Query %d
+id: %s
+description: Auto-generated wrapper for playbook query
+%s`, i+1, generateTempID(), query)
+				
+				rule, err = ParseRule([]byte(wrappedQuery))
+				if err != nil {
+					// If still fails, return error
+					results = append(results, &model.ConvertedQuery{
+						Query: fmt.Sprintf("ERROR: %s", err.Error()),
+					})
+					continue
+				}
+			} else {
+				// Other parsing error
+				results = append(results, &model.ConvertedQuery{
+					Query: fmt.Sprintf("ERROR: %s", err.Error()),
+				})
+				continue
+			}
 		}
 
-		// Convert the rule
+		// Convert the rule to OQL
 		converted, err := converter.Convert(rule, pipelines)
 		if err != nil {
 			results = append(results, &model.ConvertedQuery{
@@ -196,25 +214,24 @@ func ConvertPlaybookQueries(ctx context.Context, queries []string, pipelineFiles
 			continue
 		}
 
-		// Create result
-		// Note: ConvertedQuery only has Query field in the model
+		// For playbooks, we need to return the query in OQL format (JSON)
+		// The converter returns EQL, but we need to wrap it in JSON
 		result := &model.ConvertedQuery{
 			Query: converted,
 		}
 
-		// Since ConvertedQuery doesn't have Title/ID fields, we'll encode them in the query
-		// as a comment if they exist
-		if rule.Title != "" || rule.ID != "" {
-			commentPrefix := fmt.Sprintf("# Rule: %s", rule.Title)
-			if rule.ID != "" {
-				commentPrefix += fmt.Sprintf(" (ID: %s)", rule.ID)
-			}
-			result.Query = commentPrefix + "\n" + result.Query
+		// Extract fields if specified in the rule
+		if len(rule.Fields) > 0 {
+			result.Fields = rule.Fields
 		}
 
 		results = append(results, result)
-		_ = i // Use the index to avoid unused variable warning
 	}
 
 	return results, nil
+}
+
+// generateTempID generates a temporary ID for wrapped queries
+func generateTempID() string {
+	return fmt.Sprintf("temp-%d", time.Now().UnixNano())
 }
