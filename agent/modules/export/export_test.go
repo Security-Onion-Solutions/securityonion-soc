@@ -128,15 +128,16 @@ func TestProcessJob(t *testing.T) {
 	assert.Contains(t, err.Error(), "missing required parameter: type")
 	assert.Empty(t, job.Results)
 
-	// Test: Missing id parameter
+	// Test: Missing templates
 	job = model.NewJob()
 	job.Kind = model.JOB_KIND_EXPORT
 	job.Filter.Parameters = make(map[string]interface{})
 	job.Filter.Parameters["type"] = "case"
+	job.Filter.Parameters["id"] = "case1"
 	reader, err = export.ProcessJob(job, nil)
 	assert.Error(t, err)
 	assert.Nil(t, reader)
-	assert.Contains(t, err.Error(), "missing required parameter: id")
+	assert.Contains(t, err.Error(), "failed to load templates for export")
 	assert.Empty(t, job.Results)
 }
 
@@ -514,12 +515,17 @@ func TestPopulateTemplatesCache(t *testing.T) {
 
 	export.templatePath = tmpDir
 
+	// Create custom template directory
+	customDir := tmpDir + "/custom"
+	err = os.MkdirAll(customDir, 0755)
+	assert.Nil(t, err)
+
 	// Test case 1: Valid templates
 	t.Run("ValidTemplates", func(t *testing.T) {
 		// Create dummy template files
-		err = os.WriteFile(tmpDir+"/template1.md", []byte("Template 1 content"), 0644)
+		err = os.WriteFile(customDir+"/template1.md", []byte("Template 1 content"), 0644)
 		assert.Nil(t, err)
-		err = os.WriteFile(tmpDir+"/template2.md", []byte("Template 2 content"), 0644)
+		err = os.WriteFile(customDir+"/template2.md", []byte("Template 2 content"), 0644)
 		assert.Nil(t, err)
 
 		export.populateTemplatesCache()
@@ -659,19 +665,36 @@ func TestPopulateUsersCache(t *testing.T) {
 
 func TestProcessJob_ProductivityReport(t *testing.T) {
 	export := NewExport(agent.NewAgent(&config.AgentConfig{}, "test-version"))
+
+	// Create a temporary directory for test templates
+	tmpDir, err := os.MkdirTemp("", "export_templates_test")
+	assert.Nil(t, err)
+	defer os.RemoveAll(tmpDir) // Clean up after tests
+
+	export.templatePath = tmpDir
+
+	// Create custom template directory
+	stdDir := tmpDir + "/standard"
+	err = os.MkdirAll(stdDir, 0755)
+	assert.Nil(t, err)
+
+	// Create fake productivity report
+	err = os.WriteFile(stdDir+"/productivity_report.md", []byte("Template 1 content"), 0644)
+	assert.Nil(t, err)
+
 	config := module.ModuleConfig{}
 	config["executablePath"] = "../../../scripts/md2pdf"
-	config["templatePath"] = "../../../templates/export"
+	config["templatePath"] = tmpDir
 	export.Init(config)
 	export.agent.Client = web.NewClient("http://localhost:8080", true)
 	export.agent.Client.Auth = FakeClientAuth{}
 
 	// Mock responses for users, event, alert, case, and comment queries
 	export.agent.Client.MockStringResponse(`[{"id":"xyz"}]`, 200, nil) // Get Users
-	export.agent.Client.MockStringResponse(`{"totalEvents": 10, "metrics": {"|event.module": {"modA": 6, "modB": 4}, "|event.module|event.dataset": {"modA|ds1": 3, "modB|ds2": 2}}}`, 200, nil)
-	export.agent.Client.MockStringResponse(`{"totalEvents": 5, "metrics": {"|event.escalated": {"true": 2, "false": 3}}}`, 200, nil)
-	export.agent.Client.MockStringResponse(`{"totalEvents": 2, "metrics": {"|so_case.status": {"open": 1, "closed": 1}}, "events": [{"payload": {"so_case.createTime": "2025-07-01T10:00:00Z", "so_case.completeTime": "2025-07-01T12:00:00Z"}}]}`, 200, nil)
-	export.agent.Client.MockStringResponse(`{"totalEvents": 1, "metrics": {"|so_comment.userId": {"user1": 1}}, "events": [{"payload": {"so_comment.hours": 2.5, "so_comment.userId": "user1"}}]}`, 200, nil)
+	export.agent.Client.MockStringResponse(`{"totalEvents": 10, "metrics": {"|event.module": [{"keys":["modA"], "value": 6}, {"keys":["modB"], "value": 4}]}, "|event.module|event.dataset": {"modA|ds1": 3, "modB|ds2": 2}}}`, 200, nil)
+	export.agent.Client.MockStringResponse(`{"totalEvents": 5, "metrics": {"|event.escalated": [{"keys":["true"], "value": 2}, {"keys":["false"], "value": 3}]}}`, 200, nil)
+	export.agent.Client.MockStringResponse(`{"totalEvents": 2, "metrics": {"|so_case.status": [{"keys":["open"], "value": 1}, {"keys":["closed"], "value": 1}]}, "events": [{"payload": {"so_case.createTime": "2025-07-01T10:00:00Z", "so_case.completeTime": "2025-07-01T12:00:00Z"}}]}`, 200, nil)
+	export.agent.Client.MockStringResponse(`{"totalEvents": 1, "metrics": {"|so_comment.userId": [{"keys": ["user1"], "value": 1}]}, "events": [{"payload": {"so_comment.hours": 2.5, "so_comment.userId": "user1"}}]}`, 200, nil)
 
 	job := model.NewJob()
 	job.Kind = model.JOB_KIND_EXPORT
@@ -694,9 +717,26 @@ func TestProcessJob_ProductivityReport(t *testing.T) {
 
 func TestProcessJob_TabularReport(t *testing.T) {
 	export := NewExport(agent.NewAgent(&config.AgentConfig{}, "test-version"))
+
+	// Create a temporary directory for test templates
+	tmpDir, err := os.MkdirTemp("", "export_templates_test")
+	assert.Nil(t, err)
+	defer os.RemoveAll(tmpDir) // Clean up after tests
+
+	export.templatePath = tmpDir
+
+	// Create custom template directory
+	stdDir := tmpDir + "/standard"
+	err = os.MkdirAll(stdDir, 0755)
+	assert.Nil(t, err)
+
+	// Create fake productivity report
+	err = os.WriteFile(stdDir+"/unused_report.md", []byte("Template 1 content"), 0644)
+	assert.Nil(t, err)
+
 	config := module.ModuleConfig{}
 	config["executablePath"] = "../../../scripts/md2pdf" // Not used for tabular, but part of standard config
-	config["templatePath"] = "../../../templates/export" // Not used for tabular, but part of standard config
+	config["templatePath"] = tmpDir                      // Not used for tabular, but must have at least one template during cache refresh
 	export.Init(config)
 	export.agent.Client = web.NewClient("http://localhost:8080", true)
 	export.agent.Client.Auth = FakeClientAuth{}
@@ -1101,6 +1141,403 @@ func TestConvertToCsv(t *testing.T) {
 				assert.Equal(t, tt.expected, string(output))
 				assert.Equal(t, len(tt.expected), size)
 			}
+		})
+	}
+}
+
+func TestProcessJob_GenericReport(t *testing.T) {
+	export := NewExport(agent.NewAgent(&config.AgentConfig{}, "test-version"))
+	config := module.ModuleConfig{}
+	config["executablePath"] = "../../../scripts/md2pdf"
+	config["templatePath"] = "../../../templates/export"
+	export.Init(config)
+	export.agent.Client = web.NewClient("http://localhost:8080", true)
+	export.agent.Client.Auth = FakeClientAuth{}
+
+	// Create a temporary directory for test templates
+	tmpDir, err := os.MkdirTemp("", "export_generic_test")
+	assert.Nil(t, err)
+	defer os.RemoveAll(tmpDir)
+
+	// Create custom template directory
+	customDir := tmpDir + "/custom"
+	err = os.MkdirAll(customDir, 0755)
+	assert.Nil(t, err)
+
+	export.templatePath = tmpDir
+
+	t.Run("ValidGenericReport", func(t *testing.T) {
+		// Create a test template with query options
+		templateContent := `Custom Report
+=============
+
+/* query.alerts.oql = event.module:suricata AND tags:alert */
+/* query.alerts.metricLimit = 50 */
+/* query.alerts.eventLimit = 100 */
+
+Total Alerts: {{ .Results.alerts.TotalEvents }}
+
+{{ range $key, $value := .Results.alerts.Metrics }}
+{{ $key }}: {{ $value }}
+{{ end }}
+`
+		templatePath := customDir + "/test_report.md"
+		err = os.WriteFile(templatePath, []byte(templateContent), 0644)
+		assert.Nil(t, err)
+
+		// Mock responses for users and the alert query
+		export.agent.Client.MockStringResponse(`[{"id":"xyz"}]`, 200, nil) // Get Users
+		export.agent.Client.MockStringResponse(`{"totalEvents": 25, "metrics": {"|event.module": {"suricata": 25}, "|event.severity": {"high": 10, "medium": 15}}}`, 200, nil)
+
+		// Populate templates cache
+		export.populateTemplatesCache()
+
+		job := model.NewJob()
+		job.Kind = model.JOB_KIND_EXPORT
+		job.Filter.Parameters = map[string]interface{}{
+			"type": "test_report",
+			"id":   "dummy",
+		}
+		job.Filter.BeginTime = time.Date(2025, 7, 1, 0, 0, 0, 0, time.UTC)
+		job.Filter.EndTime = time.Date(2025, 7, 2, 0, 0, 0, 0, time.UTC)
+
+		reader, err := export.ProcessJob(job, nil)
+		assert.Nil(t, err)
+		assert.NotNil(t, reader)
+
+		// Read the output and check for expected content
+		output, err := io.ReadAll(reader)
+		assert.Nil(t, err)
+		assert.Contains(t, string(output), "Helvetica") // A valid PDF should contain a font name
+	})
+
+	t.Run("InvalidTemplateType", func(t *testing.T) {
+		job := model.NewJob()
+		job.Kind = model.JOB_KIND_EXPORT
+		job.Filter.Parameters = map[string]interface{}{
+			"type": "invalid/template",
+			"id":   "dummy",
+		}
+
+		reader, err := export.ProcessJob(job, nil)
+		assert.Error(t, err)
+		assert.Nil(t, reader)
+		assert.Contains(t, err.Error(), "invalid template type")
+	})
+
+	t.Run("MissingTemplate", func(t *testing.T) {
+		job := model.NewJob()
+		job.Kind = model.JOB_KIND_EXPORT
+		job.Filter.Parameters = map[string]interface{}{
+			"type": "",
+			"id":   "dummy",
+		}
+
+		reader, err := export.ProcessJob(job, nil)
+		assert.Error(t, err)
+		assert.Nil(t, reader)
+		assert.Contains(t, err.Error(), "missing required parameter: template")
+	})
+}
+
+func TestGenerateGenericReport(t *testing.T) {
+	export := NewExport(agent.NewAgent(&config.AgentConfig{}, "test-version"))
+	export.agent.Client = web.NewClient("http://localhost:8080", true)
+	export.agent.Client.Auth = FakeClientAuth{}
+
+	// Create a temporary directory for test templates
+	tmpDir, err := os.MkdirTemp("", "generic_report_test")
+	assert.Nil(t, err)
+	defer os.RemoveAll(tmpDir)
+
+	// Create custom template directory
+	customDir := tmpDir + "/custom"
+	err = os.MkdirAll(customDir, 0755)
+	assert.Nil(t, err)
+
+	export.templatePath = tmpDir
+
+	tests := []struct {
+		name            string
+		templateContent string
+		templateName    string
+		mockResponse    string
+		expectError     bool
+		expectNilResult bool
+	}{
+		{
+			name: "Valid template with single query",
+			templateContent: `Test Report
+============
+
+/* query.events.oql = * */
+/* query.events.metricLimit = 100 */
+
+Total: {{ .Results.events.TotalEvents }}`,
+			templateName:    "single_query.md",
+			mockResponse:    `{"totalEvents": 10, "metrics": {"|event.module": [{"keys": ["test"], "value": 10}]}}`,
+			expectError:     false,
+			expectNilResult: false,
+		},
+		{
+			name: "Template with multiple queries",
+			templateContent: `Multi Query Report
+=================
+
+/* query.alerts.oql = tags:alert */
+/* query.events.oql = * */
+/* query.alerts.eventLimit = 50 */
+
+Alerts: {{ .Results.alerts.TotalEvents }}
+Events: {{ .Results.events.TotalEvents }}`,
+			templateName:    "multi_query.md",
+			mockResponse:    `{"totalEvents": 5, "metrics": {}}`,
+			expectError:     false,
+			expectNilResult: false,
+		},
+		{
+			name: "Template with no query options",
+			templateContent: `No Queries Report
+================
+
+This template has no query options.`,
+			templateName:    "no_queries.md",
+			mockResponse:    "",
+			expectError:     false,
+			expectNilResult: true,
+		},
+		{
+			name: "Template with invalid query format",
+			templateContent: `Invalid Format Report
+====================
+
+/* query.invalid = missing equals */
+/* query.valid.oql = * */`,
+			templateName:    "invalid_format.md",
+			mockResponse:    `{"totalEvents": 1, "metrics": {}}`,
+			expectError:     false,
+			expectNilResult: false,
+		},
+		{
+			name: "Template with invalid attribute",
+			templateContent: `Invalid Attribute Report
+=======================
+
+/* query.test.invalidattr = value */
+/* query.test.oql = * */`,
+			templateName:    "invalid_attr.md",
+			mockResponse:    `{"totalEvents": 1, "metrics": {}}`,
+			expectError:     false,
+			expectNilResult: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create template file
+			templatePath := customDir + "/" + tt.templateName
+			err = os.WriteFile(templatePath, []byte(tt.templateContent), 0644)
+			assert.Nil(t, err)
+
+			// Mock response if needed
+			if tt.mockResponse != "" {
+				export.agent.Client.MockStringResponse(tt.mockResponse, 200, nil) // Query response
+				export.agent.Client.MockStringResponse(tt.mockResponse, 200, nil) // Query response
+			}
+
+			// Populate templates cache
+			export.populateTemplatesCache()
+
+			job := model.NewJob()
+			job.Id = 1
+			job.Filter.BeginTime = time.Date(2025, 7, 1, 0, 0, 0, 0, time.UTC)
+			job.Filter.EndTime = time.Date(2025, 7, 2, 0, 0, 0, 0, time.UTC)
+
+			result, err := export.generateGenericReport(job, tt.templateName)
+
+			if tt.expectError {
+				assert.Error(t, err)
+				assert.Nil(t, result)
+			} else if tt.expectNilResult {
+				assert.Nil(t, err)
+				assert.Nil(t, result)
+			} else {
+				assert.Nil(t, err)
+				assert.NotNil(t, result)
+				assert.Greater(t, len(result), 0)
+			}
+		})
+	}
+}
+
+func TestGetGenericDetailsFromServer(t *testing.T) {
+	export := NewExport(agent.NewAgent(&config.AgentConfig{}, "test-version"))
+	export.agent.Client = web.NewClient("http://localhost:8080", true)
+	export.agent.Client.Auth = FakeClientAuth{}
+
+	t.Run("ValidQueries", func(t *testing.T) {
+		// Mock successful responses
+		export.agent.Client.MockStringResponse(`{"totalEvents": 10, "metrics": {"|event.module": [{"keys": ["suricata"], "value": 10}]}, "events": [{"payload": {"field1": "value1"}}]}`, 200, nil)
+		export.agent.Client.MockStringResponse(`{"totalEvents": 5, "metrics": {"|event.severity": [{"keys": ["high"], "value": 5}]}, "events": []}`, 200, nil)
+
+		queries := map[string]*CustomQuery{
+			"alerts": {
+				Oql:         "tags:alert",
+				MetricLimit: 100,
+				EventLimit:  50,
+			},
+			"events": {
+				Oql:         "*",
+				MetricLimit: 200,
+				EventLimit:  100,
+			},
+		}
+
+		job := model.NewJob()
+		job.Id = 1
+		job.Filter.BeginTime = time.Date(2025, 7, 1, 0, 0, 0, 0, time.UTC)
+		job.Filter.EndTime = time.Date(2025, 7, 2, 0, 0, 0, 0, time.UTC)
+
+		result, err := export.getGenericDetailsFromServer(job, queries)
+		assert.Nil(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, 2, len(result.Results))
+		assert.Equal(t, 10, result.Results["alerts"].TotalEvents)
+		assert.Equal(t, 5, result.Results["events"].TotalEvents)
+		assert.Equal(t, job.Filter.BeginTime, result.BeginDate)
+		assert.Equal(t, job.Filter.EndTime, result.EndDate)
+	})
+
+	t.Run("EmptyOQLQuery", func(t *testing.T) {
+		queries := map[string]*CustomQuery{
+			"empty": {
+				Oql:         "",
+				MetricLimit: 100,
+				EventLimit:  50,
+			},
+			"valid": {
+				Oql:         "*",
+				MetricLimit: 100,
+				EventLimit:  50,
+			},
+		}
+
+		export.agent.Client.MockStringResponse(`{"totalEvents": 1, "metrics": {}}`, 200, nil)
+
+		job := model.NewJob()
+		job.Id = 1
+		job.Filter.BeginTime = time.Date(2025, 7, 1, 0, 0, 0, 0, time.UTC)
+		job.Filter.EndTime = time.Date(2025, 7, 2, 0, 0, 0, 0, time.UTC)
+
+		result, err := export.getGenericDetailsFromServer(job, queries)
+		assert.Nil(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, 1, len(result.Results)) // Only valid query should be processed
+		assert.NotNil(t, result.Results["valid"])
+		assert.Nil(t, result.Results["empty"])
+	})
+
+	t.Run("QueryError", func(t *testing.T) {
+		export.agent.Client.MockStringResponse(`[{"id":"xyz"}]`, 200, nil) // Users
+		export.agent.Client.MockStringResponse("", 500, assert.AnError)    // Query fails
+
+		queries := map[string]*CustomQuery{
+			"failing": {
+				Oql:         "invalid query",
+				MetricLimit: 100,
+				EventLimit:  50,
+			},
+		}
+
+		job := model.NewJob()
+		job.Id = 1
+
+		result, err := export.getGenericDetailsFromServer(job, queries)
+		assert.Error(t, err)
+		assert.Nil(t, result)
+	})
+}
+
+func TestParseJobParameterInt(t *testing.T) {
+	export := NewExport(nil)
+
+	tests := []struct {
+		name       string
+		paramName  string
+		paramValue interface{}
+		expected   int
+		valid      bool
+	}{
+		{
+			name:       "Valid int parameter",
+			paramName:  "testParam",
+			paramValue: 100,
+			expected:   100,
+			valid:      true,
+		},
+		{
+			name:       "Valid string parameter",
+			paramName:  "testParam",
+			paramValue: "200",
+			expected:   200,
+			valid:      true,
+		},
+		{
+			name:       "Zero int parameter",
+			paramName:  "testParam",
+			paramValue: 0,
+			expected:   0,
+			valid:      false,
+		},
+		{
+			name:       "Negative int parameter",
+			paramName:  "testParam",
+			paramValue: -50,
+			expected:   0,
+			valid:      false,
+		},
+		{
+			name:       "Invalid string parameter",
+			paramName:  "testParam",
+			paramValue: "invalid",
+			expected:   0,
+			valid:      false,
+		},
+		{
+			name:       "Empty string parameter",
+			paramName:  "testParam",
+			paramValue: "",
+			expected:   0,
+			valid:      false,
+		},
+		{
+			name:       "Float parameter",
+			paramName:  "testParam",
+			paramValue: 100.5,
+			expected:   0,
+			valid:      false,
+		},
+		{
+			name:       "Parameter not present",
+			paramName:  "missingParam",
+			paramValue: nil,
+			expected:   0,
+			valid:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			job := model.NewJob()
+			job.Filter.Parameters = make(map[string]interface{})
+
+			if tt.paramValue != nil {
+				job.Filter.Parameters[tt.paramName] = tt.paramValue
+			}
+
+			result, valid := export.parseJobParameterInt(job, tt.paramName)
+			assert.Equal(t, tt.expected, result)
+			assert.Equal(t, tt.valid, valid)
 		})
 	}
 }

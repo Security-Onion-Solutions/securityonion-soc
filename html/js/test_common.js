@@ -280,8 +280,6 @@ require('./app.js');
 // restore Promise.all
 Promise.all = orig;
 
-global.FEAT_TTR = 'ttr';
-global.FEAT_RPT = 'rpt';
 global.JobStatusPending = 0;
 global.JobStatusCompleted = 1;
 global.JobStatusIncomplete = 2;

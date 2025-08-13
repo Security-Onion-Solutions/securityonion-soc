@@ -54,7 +54,7 @@ const jobsComponent = {
     },
     itemsPerPageOptions: [10,50,250,1000],
     kind: '',
-    reportTypes: [
+    standardReportTypes: [
       { title: this.$root.i18n.reportProductivity, value: 'productivity' },
     ]
   }},
@@ -83,6 +83,16 @@ const jobsComponent = {
       }
       this.$root.stopLoading();
       this.$root.subscribe("job", this.updateJob);
+    },
+    getReportTypes() {
+      let types = [];
+      types = types.concat(this.standardReportTypes);
+
+      for (const key in this.$root.getCustomReports()) {
+        types.push({ title: this.$root.getCustomReports()[key], value: key });
+      }
+      
+      return types;
     },
     loadUserDetails() {
       for (var i = 0; i < this.jobs.length; i++) {
@@ -314,7 +324,7 @@ const jobsComponent = {
     canCreate() {
       switch(this.kind) {
         case 'reports':
-          return true;
+          return this.$root.isLicensed(this.$root.FEAT_RPT);
       }
       return true;
     },

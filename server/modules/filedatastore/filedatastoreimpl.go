@@ -152,6 +152,11 @@ func (datastore *FileDatastoreImpl) GetNextJob(ctx context.Context, nodeId strin
 			if job.Status != model.JobStatusCompleted &&
 				(nextJob == nil || job.CreateTime.Before(nextJob.CreateTime)) &&
 				(job.Status != model.JobStatusIncomplete || retryTime.Before(now)) {
+
+				if job.Kind == "reports" && !licensing.IsEnabled(licensing.FEAT_RPT) {
+					continue
+				}
+
 				nextJob = job
 			}
 		}

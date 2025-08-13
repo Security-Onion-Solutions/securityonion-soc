@@ -636,12 +636,14 @@ const huntComponent = {
           query: await this.getQuery(),
           group: group.key,
           groupIdx: groupIdx,
+          timezone: this.zone,
         }, this.getStartDate().format(), this.getEndDate().format());
     },
     async exportEvents() {
       this.$root.export({
           type: 'tabular',
           query: await this.getQuery(),
+          timezone: this.zone,
         }, this.getStartDate().format(), this.getEndDate().format());
     },
     getPresets(kind) {

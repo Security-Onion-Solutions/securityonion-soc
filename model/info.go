@@ -33,6 +33,8 @@ type Info struct {
 	ForceUserOtp bool `json:"forceUserOtp"`
 	// The MAC address assigned to the management interface.
 	MgmtMac string `json:"mgmtMac" example:"11:22:33:AA:BB:CC"`
+	// The list of custom reports configured for this grid. The key is the filename and the value is the report title.
+	CustomReports map[string]string `json:"customReports"`
 	// The list of subordinate grids configured for this grid.
 	Subgrids []*Subgrid `json:"subgrids"`
 }

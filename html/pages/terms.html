@@ -33,7 +33,7 @@
 						<v-card-text>
 							<div v-if="$root.getSelectedGridInfo()" class="licenseDetailsWrapper">
 								<v-container fluid id="licenseDetails1" class="licenseDetails">
-									<div v-if="$root.getSelectedGridInfo().licenseKey && ($root.getSelectedGridInfo().licenseStatus != LICENSE_STATUS_UNPROVISIONED && $root.getSelectedGridInfo().licenseStatus != LICENSE_STATUS_INVALID)">
+									<div>
 										<v-row class="my-1">
 											<v-col cols="3" class="pa-1 text-right font-weight-bold">{{ i18n.licenseStatus }}:</v-col>
 											<v-col cols="9" class="px-1 py-0">
@@ -51,7 +51,7 @@
 												</v-btn>
 											</v-col>
 										</v-row>
-										<span>
+										<span v-if="$root.getSelectedGridInfo().licenseKey && ($root.getSelectedGridInfo().licenseStatus != LICENSE_STATUS_UNPROVISIONED && $root.getSelectedGridInfo().licenseStatus != LICENSE_STATUS_INVALID)">
 											<v-row class="my-1">
 												<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.licenseId }}:</v-col>
 												<v-col cols="9" class="pa-1">{{ $root.getSelectedGridInfo().licenseKey.id }}</v-col>
@@ -73,35 +73,35 @@
 												<v-col cols="9" class="pa-1">{{ formatDateTime($root.getSelectedGridInfo().licenseKey.expiration) }}</v-col>
 											</v-row>
 										</span>
+										<v-sheet v-else id="proFeatures" rounded="lg" class="marketing pa-4 ma-4" elevation="10">
+											<h3>You're missing out on some Pro features!</h3>
+											<ul class="my-2">
+												<li>OpenID Connect 3rd-party authentication</li>
+												<li>Disk encryption</li>
+												<li>FIPS OS compliance</li>
+												<li>STIG OS compliance</li>
+												<li>External notifications</li>
+												<li>Time tracking inside of Cases</li>
+												<li>Guaranteed Message Delivery</li>
+												<li>External API</li>
+												<li>Active Query Management</li>
+												<li>Reporting & CSV Exports</li>
+												<li>AI/LLM MCP Server</li>
+												<li>Manager of Managers*</li>
+												<li>Splunk App†</li>
+												<li>Hardware Virtualization‡</li>
+											</ul>
+											To learn more about these Pro features, please visit our website:
+											<a href="https://securityonion.com/pro">https://securityonion.com/pro</a>
+											<p class="mt-2">
+												* Additional licensing requirements may apply
+												<br/>
+												† Security Onion Solutions does not provide support for this feature
+												<br/>
+												‡ Available on select server hardware
+											</p>
+										</v-sheet>
 									</div>
-									<v-sheet v-else id="proFeatures" rounded="lg" class="marketing pa-4 ma-4" elevation="10">
-										<h3>You're missing out on some Pro features!</h3>
-										<ul class="my-2">
-											<li>OpenID Connect 3rd-party authentication</li>
-											<li>Disk encryption</li>
-											<li>FIPS OS compliance</li>
-											<li>STIG OS compliance</li>
-											<li>External notifications</li>
-											<li>Time tracking inside of Cases</li>
-											<li>Guaranteed Message Delivery</li>
-											<li>External API</li>
-											<li>Active Query Management</li>
-											<li>Reporting</li>
-											<li>AI/LLM MCP Server</li>
-											<li>Manager of Managers*</li>
-											<li>Splunk App†</li>
-											<li>Hardware Virtualization‡</li>
-										</ul>
-										To learn more about these Pro features, please visit our website:
-										<a href="https://securityonion.com/pro">https://securityonion.com/pro</a>
-										<p class="mt-2">
-											* Additional licensing requirements may apply
-											<br/>
-											† Security Onion Solutions does not provide support for this feature
-											<br/>
-											‡ Available on select server hardware
-										</p>
-									</v-sheet>
 								</v-container>
 								<v-container v-if="$root.getSelectedGridInfo().licenseKey && ($root.getSelectedGridInfo().licenseStatus != LICENSE_STATUS_UNPROVISIONED && $root.getSelectedGridInfo().licenseStatus != LICENSE_STATUS_INVALID)" fluid id="licenseDetails2" class="licenseDetails">
 									<v-row class="my-1">

@@ -1,5 +1,5 @@
 <v-container fluid data-aid="case_screen">
-	<v-toolbar v-if="$root.isLicensed(FEAT_RPT)" class="elevation-0 theme-background-lighten-1" fixed>
+	<v-toolbar v-if="$root.isLicensed($root.FEAT_RPT)" class="elevation-0 theme-background-lighten-1" fixed>
 		<v-btn :title="i18n.exportCaseHelp" class="ml-3" variant="flat" color="secondary" @click.stop="exportCase" id="export-case-button" data-aid="case_export">
 			<v-icon>fa-file-export</v-icon>
 		</v-btn>
@@ -125,7 +125,7 @@
 														</div>
 													</div>
 
-													<div v-if="$root.isLicensed(FEAT_TTR)">
+													<div v-if="$root.isLicensed($root.FEAT_TTR)">
 														<div v-if="!isEdit(`comment-hours-${index}`)" class="case d-block comment-body mt-2" data-aid="case_comment_hours_display">
 															<div class="ml-2 mb-2 clicktoedit" @click="startEdit('comment-hours-input', comment.hours, `comment-hours-${index}`, 'hours', modifyAssociation, ['comments', comment], false)" @keypress.space.prevent="startEdit('comment-hours-input', comment.hours, `comment-hours-${index}`, 'hours', modifyAssociation, ['comments', comment], false)">
 																<div :id="`comment-hours-${index}`">
@@ -214,7 +214,7 @@
 											<div class="mx-2">
 												<v-form ref="comments" v-model="associatedForms['comments'].valid" @submit.prevent>
 													<v-textarea id="comment-input" variant="outlined" hide-details="auto" rows="5" v-model="associatedForms['comments'].description" :rules="[rules.required]" class="mb-1" persistent-hint :hint="i18n.commentDescriptionHelp" data-aid="case_new_comment_input"></v-textarea>
-													<v-row v-if="$root.isLicensed(FEAT_TTR)">
+													<v-row v-if="$root.isLicensed($root.FEAT_TTR)">
 														<v-col cols="4">
 															<v-text-field id="comment-hours-input" variant="outlined" v-model="associatedForms['comments'].hours" class="mb-1" persistent-hint :hint="i18n.commentHoursHelp" :rules="[rules.hours]" data-aid="case_new_comment_hours_input"></v-text-field>
 														</v-col>
@@ -1191,7 +1191,7 @@
 													<v-col cols="8"><span class="case">{{ item.description }}</span></v-col>
 												</v-row>
 											</div>
-											<div v-if="$root.isLicensed(FEAT_TTR)">
+											<div v-if="$root.isLicensed($root.FEAT_TTR)">
 												<v-row no-gutters class="py-1 case tabular-row">
 													<v-col cols="4"><span class="case tabular-label">{{ i18n.commentHours }}:</span></v-col>
 													<v-col cols="8"><span class="case">{{ item.hours }}</span></v-col>
@@ -1386,7 +1386,7 @@
 												</div>
 											</v-col>
 										</v-row>
-										<v-row v-if="$root.isLicensed(FEAT_TTR)">
+										<v-row v-if="$root.isLicensed($root.FEAT_TTR)">
 											<v-col cols="12">
 												<div>
 													<div class="font-weight-bold">{{ i18n.caseHours }}: </div>

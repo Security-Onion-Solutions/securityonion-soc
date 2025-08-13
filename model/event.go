@@ -76,10 +76,10 @@ type EventSearchCriteria struct {
 	// The end of the search time range, in the requestor's timezone
 	EndTime time.Time `example:"2024-12-04T14:31:35-05:00"`
 	// The UTC date and time when the search request was submitted
-	CreateTime  time.Time `example:"2024-12-04T19:31:42.73865332Z"`
-	ParsedQuery *Query
-	SortFields  []*SortCriteria
-	SearchAfter []interface{}
+	CreateTime  time.Time       `example:"2024-12-04T19:31:42.73865332Z"`
+	ParsedQuery *Query          `json:"-"`
+	SortFields  []*SortCriteria `json:"-"`
+	SearchAfter []interface{}   `json:"-"`
 }
 
 func (criteria *EventSearchCriteria) initSearchCriteria() {

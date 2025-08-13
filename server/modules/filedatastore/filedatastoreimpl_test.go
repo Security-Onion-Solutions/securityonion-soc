@@ -95,6 +95,35 @@ func TestNodes(tester *testing.T) {
 	assert.Nil(tester, job)
 }
 
+func TestNormalJobPending(tester *testing.T) {
+	defer cleanup()
+	ds, _ := createDatastore(true, []byte(""))
+	testJob := model.Job{
+		Kind:   "test",
+		NodeId: "foo",
+		Id:     1,
+	}
+	ds.addJob(&testJob)
+
+	job := ds.GetNextJob(newContext(), "foo")
+	assert.NotNil(tester, job)
+	assert.Equal(tester, job.Id, 1)
+}
+
+func TestReportJobPendingWithoutLicense(tester *testing.T) {
+	defer cleanup()
+	ds, _ := createDatastore(true, []byte(""))
+	testJob := model.Job{
+		Kind:   "reports",
+		NodeId: "foo",
+		Id:     1,
+	}
+	ds.addJob(&testJob)
+
+	job := ds.GetNextJob(newContext(), "foo")
+	assert.Nil(tester, job)
+}
+
 func TestJobs(tester *testing.T) {
 	defer cleanup()
 	ds, _ := createDatastore(true, []byte(""))

@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"text/template"
 	"time"
@@ -28,7 +29,7 @@ import (
 const DEFAULT_EXECUTABLE_PATH = "scripts/md2pdf"
 const DEFAULT_TMP_PATH = "/tmp"
 const DEFAULT_SYNTAX_PATH = "syntax_files"
-const DEFAULT_TEMPLATE_PATH = "templates/export"
+const DEFAULT_TEMPLATE_PATH = "/opt/sensoroni/templates/reports"
 const DEFAULT_TIMEOUT_MS = 1200000
 const DEFAULT_CACHE_REFRESH_INTERVAL_MS = 10000
 const DEFAULT_METRIC_LIMIT = 10000
@@ -179,10 +180,12 @@ func (export *Export) ProcessJob(job *model.Job, reader io.ReadCloser) (io.ReadC
 
 		// Return content as reader
 		return io.NopCloser(pdfReader), nil
-	case "generic":
-		templateName := export.getGenericTemplateName(job)
+	default:
+		templateName := exportType
 		if templateName == "" {
 			return reader, fmt.Errorf("missing required parameter: template for export type %s", exportType)
+		} else if strings.Contains(templateName, "/") {
+			return reader, fmt.Errorf("invalid template type %s", exportType)
 		}
 
 		// Generate report content
@@ -191,7 +194,7 @@ func (export *Export) ProcessJob(job *model.Job, reader io.ReadCloser) (io.ReadC
 			return reader, fmt.Errorf("failed to generate generic report markdown: %v", err)
 		}
 
-		params := export.getPdfExportParams(export.templatePath, templateName)
+		params := export.getPdfExportParams(filepath.Join(export.templatePath, "custom"), templateName)
 
 		pdfReader, size, err := export.convertMdToPdf(job.Id, content, params)
 		if err != nil {
@@ -237,7 +240,9 @@ func (export *Export) populateUsersCache() {
 }
 
 func (export *Export) populateTemplatesCache() {
-	log.Info("Refreshing templates cache for export module")
+	log.WithFields(log.Fields{
+		"templatePath": export.templatePath,
+	}).Info("Refreshing templates cache for export module")
 	master := template.New("export").Funcs(template.FuncMap{
 		"getUserDetail":     export.getUserDetail,
 		"formatDateTime":    export.formatDateTime,
@@ -254,7 +259,7 @@ func (export *Export) populateTemplatesCache() {
 	})
 
 	var err error
-	export.templates, err = master.ParseGlob(export.templatePath + "/*.md")
+	export.templates, err = master.ParseGlob(export.templatePath + "/**/*.md")
 	if err != nil {
 		log.WithError(err).Error("Failed to parse templates during export cache refresh")
 		return
@@ -330,8 +335,12 @@ func (export *Export) getParamsFromTemplate(filepath string, param string, param
 		return []string{}
 	}
 
-	param = "/* " + param
-	params = "/* " + params
+	if len(param) > 0 {
+		param = "/* " + param
+	}
+	if len(params) > 0 {
+		params = "/* " + params
+	}
 
 	args := make([]string, 0)
 	scanner := bufio.NewScanner(file)
@@ -365,10 +374,15 @@ func (export *Export) GetDataEpoch() time.Time {
 }
 
 func (export *Export) queryEventData(query string, filter *model.Filter, metricLimit int, eventLimit int, results *model.EventSearchResults) (bool, error) {
+	timezone := "UTC"
+	if zone, ok := filter.Parameters["timezone"]; ok {
+		timezone = zone.(string)
+	}
 	if filter.EndTime.IsZero() || filter.EndTime.Before(filter.BeginTime) {
 		log.WithFields(log.Fields{
 			"beginTime": filter.BeginTime,
 			"endTime":   filter.EndTime,
+			"timezone":  timezone,
 		}).Info("Invalid time range for event query; defaulting to all time")
 		filter.EndTime = time.Date(2999, 12, 31, 23, 59, 59, 0, time.UTC)
 	}
@@ -378,7 +392,7 @@ func (export *Export) queryEventData(query string, filter *model.Filter, metricL
 		url.QueryEscape(query),
 		url.QueryEscape(timerange),
 		url.QueryEscape(stdDateTimeFormat),
-		"UTC",
+		timezone,
 		metricLimit,
 		eventLimit,
 	)
@@ -386,7 +400,8 @@ func (export *Export) queryEventData(query string, filter *model.Filter, metricL
 	exists, reqerr := export.agent.Client.SendAuthorizedObject("GET", uri, nil, results)
 	if exists && reqerr == nil {
 		for key, value := range results.Metrics {
-			results.Metrics[export.prepareKeyForTemplate(key)] = value
+			newKey := export.prepareKeyForTemplate(key)
+			results.Metrics[newKey] = value
 		}
 	}
 
@@ -435,16 +450,9 @@ func stripTrailingSlash(path string) string {
 }
 
 func (export *Export) getMetricLimit(job *model.Job) int {
-	if limit, exists := job.Filter.Parameters["metricLimit"]; exists {
-		if limitInt, ok := limit.(int); ok && limitInt > 0 {
-			return limitInt
-		}
-		log.WithFields(log.Fields{
-			"exportMetricLimit": limit,
-			"jobId":             job.Id,
-		}).Warn("Invalid metricLimit parameter; using default")
+	if value, valid := export.parseJobParameterInt(job, "metricLimit"); valid {
+		return value
 	}
-
 	if export.exportMetricLimit > 0 {
 		return export.exportMetricLimit
 	}
@@ -452,18 +460,30 @@ func (export *Export) getMetricLimit(job *model.Job) int {
 }
 
 func (export *Export) getEventLimit(job *model.Job) int {
-	if limit, exists := job.Filter.Parameters["eventLimit"]; exists {
-		if limitInt, ok := limit.(int); ok && limitInt > 0 {
-			return limitInt
-		}
-		log.WithFields(log.Fields{
-			"exportEventLimit": limit,
-			"jobId":            job.Id,
-		}).Warn("Invalid eventLimit parameter; using default")
+	if value, valid := export.parseJobParameterInt(job, "eventLimit"); valid {
+		return value
 	}
-
 	if export.exportEventLimit > 0 {
 		return export.exportEventLimit
 	}
 	return DEFAULT_EVENT_LIMIT
+}
+
+func (export *Export) parseJobParameterInt(job *model.Job, paramName string) (int, bool) {
+	if limit, exists := job.Filter.Parameters[paramName]; exists {
+		if limitInt, ok := limit.(int); ok && limitInt > 0 {
+			return limitInt, true
+		}
+		if limitStr, ok := limit.(string); ok && limitStr != "" {
+			val, err := strconv.Atoi(limitStr)
+			if err == nil {
+				return val, true
+			}
+		}
+		log.WithFields(log.Fields{
+			"specifiedIntValue": limit,
+			"jobId":             job.Id,
+		}).Warn("Invalid integer job parameter")
+	}
+	return 0, false
 }

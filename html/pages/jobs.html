@@ -78,7 +78,7 @@
 									<v-text-field v-if="isKind('pcap')" variant="underlined" v-model="form.srcPort" :placeholder="i18n.srcPort" persistent-hint :hint="i18n.srcPortHelp" data-aid="jobs_create_dialog_src_port"></v-text-field>
 									<v-text-field v-if="isKind('pcap')" variant="underlined" v-model="form.dstIp" :placeholder="i18n.dstIp" persistent-hint :hint="i18n.dstIpHelp" data-aid="jobs_create_dialog_dst_ip"></v-text-field>
 									<v-text-field v-if="isKind('pcap')" variant="underlined" v-model="form.dstPort" :placeholder="i18n.dstPort" persistent-hint :hint="i18n.dstPortHelp" data-aid="jobs_create_dialog_dst_port"></v-text-field>
-									<v-select v-if="isKind('reports')" :items="reportTypes" v-model="form.type" :rules="[rules.required]" :placeholder="i18n.reportTypePlaceholder" persistent-hint :hint="i18n.reportTypeHelp" data-aid="jobs_create_dialog_kind"></v-select>
+									<v-select v-if="isKind('reports')" :items="getReportTypes()" v-model="form.type" :rules="[rules.required]" :placeholder="i18n.reportTypePlaceholder" persistent-hint :hint="i18n.reportTypeHelp" data-aid="jobs_create_dialog_kind"></v-select>
 									<v-text-field id="jobtimeframe" variant="underlined" v-model="form.timeframe" :placeholder="i18n.timeFrame" persistent-hint :hint="i18n.timeFrameHelp" data-aid="jobs_create_dialog_timeframe"></v-text-field>
 								</v-col>
 							</v-row>

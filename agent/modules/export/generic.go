@@ -20,8 +20,7 @@ func (export *Export) getGenericDetailsFromServer(job *model.Job, queries map[st
 	var err error
 
 	templateInput := &GenericTemplateInput{
-		BeginDate: job.Filter.BeginTime,
-		EndDate:   job.Filter.EndTime,
+		Results: make(map[string]*model.EventSearchResults),
 	}
 
 	for name, query := range queries {
@@ -45,12 +44,23 @@ func (export *Export) getGenericDetailsFromServer(job *model.Job, queries map[st
 		}
 
 		for metric, value := range eventResults.Metrics {
-			metric := strings.ReplaceAll(metric, "|", "_")
+			metric = strings.ReplaceAll(metric, "|", "_")
 			value = export.expandMetricsWithTotal(value, float64(eventResults.TotalEvents))
-			templateInput.Results[name].Metrics[metric] = value
+			eventResults.Metrics[metric] = value
 		}
+
+		for _, event := range eventResults.Events {
+			for field, value := range event.Payload {
+				event.Payload[export.prepareKeyForTemplate(field)] = value
+			}
+		}
+
 		templateInput.Results[name] = eventResults
 	}
+
+	// Assign after queryEventData since that function can adjust input filter times to more sane values
+	templateInput.BeginDate = job.Filter.BeginTime
+	templateInput.EndDate = job.Filter.EndTime
 
 	return templateInput, nil
 }
@@ -70,21 +80,30 @@ type GenericTemplateInput struct {
 }
 
 func (export *Export) generateGenericReport(job *model.Job, templateName string) ([]byte, error) {
-	templatePath := export.templatePath + "/" + templateName + ".md"
-	query_options := export.getParamsFromTemplate(templatePath, "query.", "")
+	templatePath := export.templatePath + "/custom/" + templateName
+	queryOptions := export.getParamsFromTemplate(templatePath, "query.", "")
 
-	var queries map[string]*CustomQuery
-	for _, query_option := range query_options {
-		pieces := strings.SplitN(query_option, "=", 2)
+	queries := make(map[string]*CustomQuery)
+	for _, queryOption := range queryOptions {
+
+		pieces := strings.SplitN(queryOption, "=", 2)
 		if len(pieces) != 2 {
 			log.WithFields(log.Fields{
 				"jobId":             job.Id,
-				"customQueryOption": query_option,
+				"customQueryOption": queryOption,
 			}).Warn("invalid query option format, expected 'key = value'")
 			continue
 		}
 		key := strings.TrimSpace(pieces[0])
 		value := strings.TrimSpace(pieces[1])
+
+		log.WithFields(log.Fields{
+			"templatePath":      templatePath,
+			"customReportJobId": job.Id,
+			"queryOption":       queryOption,
+			"customQueryKey":    key,
+			"customQueryValue":  value,
+		}).Debug("Discovered query option")
 
 		// Now split apart the key into the query name and the query attribute
 		keyParts := strings.SplitN(key, ".", 2)
@@ -103,7 +122,7 @@ func (export *Export) generateGenericReport(job *model.Job, templateName string)
 				query.Oql = value
 			} else {
 				queries[queryName] = &CustomQuery{
-					Oql:         queryAttribute,
+					Oql:         value,
 					MetricLimit: export.getMetricLimit(job),
 					EventLimit:  export.getEventLimit(job),
 				}
@@ -113,7 +132,7 @@ func (export *Export) generateGenericReport(job *model.Job, templateName string)
 			if err != nil {
 				log.WithFields(log.Fields{
 					"jobId":             job.Id,
-					"customQueryOption": query_option,
+					"customQueryOption": queryOption,
 				}).WithError(err).Warn("failed to parse metric limit from query option")
 				continue
 			}
@@ -131,7 +150,7 @@ func (export *Export) generateGenericReport(job *model.Job, templateName string)
 			if err != nil {
 				log.WithFields(log.Fields{
 					"jobId":             job.Id,
-					"customQueryOption": query_option,
+					"customQueryOption": queryOption,
 				}).WithError(err).Warn("failed to parse event limit from query option")
 				continue
 			}
@@ -171,11 +190,4 @@ func (export *Export) generateGenericReport(job *model.Job, templateName string)
 	err = export.templates.ExecuteTemplate(&buf, templateName, templateInput)
 
 	return buf.Bytes(), err
-}
-
-func (export *Export) getGenericTemplateName(job *model.Job) string {
-	if templateName, exists := job.Filter.Parameters["template"]; exists {
-		return templateName.(string)
-	}
-	return ""
 }

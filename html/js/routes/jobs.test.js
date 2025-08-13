@@ -145,7 +145,7 @@ test('canCreate', () => {
 	comp.kind = 'pcap';
 	expect(comp.canCreate()).toBe(true);
 	comp.kind = 'reports';
-	expect(comp.canCreate()).toBe(true);
+	expect(comp.canCreate()).toBe(false); // no license
 });
 
 test('isSensorJob', () => {
@@ -535,4 +535,63 @@ describe('clearAddJobForm', () => {
 		expect(localStorageMock.removeItem).not.toHaveBeenCalledWith('settings.jobs.addJobForm.dstPort');
 		expect(localStorageMock.removeItem).toHaveBeenCalledWith('settings.jobs.addJobForm.reports.timeframe');
 	});
+});
+
+test('getReportTypes', () => {
+	// Mock the standardReportTypes
+	comp.standardReportTypes = [
+		{ title: 'Productivity Report', value: 'productivity' }
+	];
+
+	// Test with no custom reports
+	comp.$root.getCustomReports = jest.fn(() => ({}));
+	
+	let result = comp.getReportTypes();
+	expect(result).toEqual([
+		{ title: 'Productivity Report', value: 'productivity' }
+	]);
+	expect(comp.$root.getCustomReports).toHaveBeenCalled();
+
+	// Test with custom reports
+	comp.$root.getCustomReports = jest.fn(() => ({
+		'custom_report1.md': 'Security Incident Report',
+		'monthly_summary.md': 'Monthly Analysis Summary',
+		'threat_intel.md': 'Threat Intelligence Report'
+	}));
+
+	result = comp.getReportTypes();
+	expect(result).toEqual([
+		{ title: 'Productivity Report', value: 'productivity' },
+		{ title: 'Security Incident Report', value: 'custom_report1.md' },
+		{ title: 'Monthly Analysis Summary', value: 'monthly_summary.md' },
+		{ title: 'Threat Intelligence Report', value: 'threat_intel.md' }
+	]);
+	expect(comp.$root.getCustomReports).toHaveBeenCalled();
+
+	// Test with empty standard reports and custom reports
+	comp.standardReportTypes = [];
+	comp.$root.getCustomReports = jest.fn(() => ({
+		'single_custom.md': 'Single Custom Report'
+	}));
+
+	result = comp.getReportTypes();
+	expect(result).toEqual([
+		{ title: 'Single Custom Report', value: 'single_custom.md' }
+	]);
+
+	// Test with multiple standard reports and custom reports
+	comp.standardReportTypes = [
+		{ title: 'Productivity Report', value: 'productivity' },
+		{ title: 'Case Report', value: 'case' }
+	];
+	comp.$root.getCustomReports = jest.fn(() => ({
+		'weekly_report.md': 'Weekly Status Report'
+	}));
+
+	result = comp.getReportTypes();
+	expect(result).toEqual([
+		{ title: 'Productivity Report', value: 'productivity' },
+		{ title: 'Case Report', value: 'case' },
+		{ title: 'Weekly Status Report', value: 'weekly_report.md' }
+	]);
 });

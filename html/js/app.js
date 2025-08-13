@@ -8,9 +8,6 @@ const routes = [];
 const components = [];
 const templatePromises = [];
 
-const FEAT_TTR = 'ttr';
-const FEAT_RPT = 'rpt';
-
 const LICENSE_STATUS_ACTIVE = "active";
 const LICENSE_STATUS_EXCEEDED = "exceeded";
 const LICENSE_STATUS_EXPIRED = "expired";
@@ -195,6 +192,9 @@ $(document).ready(function () {
           subgridSelectorEnabled: false,
           statusByGridId: {},
           exportNodeId: null,
+          customReports: {},
+          FEAT_RPT: 'rpt',
+          FEAT_TTR: 'ttr',
         }
       },
       watch: {
@@ -471,6 +471,7 @@ $(document).ready(function () {
                   this.enableReverseLookup = response.data.parameters.enableReverseLookup;
                   this.subgrids = response.data.subgrids;
                   this.exportNodeId = response.data.parameters.exportNodeId;
+                  this.customReports = response.data.customReports;
 
                   this.user = await this.getUserById(response.data.userId);
                   if (this.user) {
@@ -574,6 +575,9 @@ $(document).ready(function () {
         getSelectedGridInfo() {
           const gridInfo = this.gridInfo[this.selectedGridId];
           return gridInfo;
+        },
+        getCustomReports() {
+          return this.customReports || {};
         },
         checkUserSecuritySettings(infoResponse) {
           // Only force OTP on initial login, otherwise risk user losing data
