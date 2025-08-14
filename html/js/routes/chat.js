@@ -20,6 +20,7 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
     creditsRemaining: 0,
     executingTools: new Map(), // Track tool executions by ID
     pendingToolResults: new Map(), // Store tool results waiting to be sent back
+    contextLength: 0, // Track total context length
   }},
   async created() {
     this.loadChatHistory();
@@ -40,6 +41,28 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
     }
   },
   methods: {
+    // Calculate context length from usage data (input_tokens + output_tokens)
+    calculateContextFromUsage(usage) {
+      if (!usage) return 0;
+      const inputTokens = usage.input_tokens || 0;
+      const outputTokens = usage.output_tokens || 0;
+      return inputTokens + outputTokens;
+    },
+    
+    // Update the total context length
+    updateContextLength(usage) {
+      if (usage) {
+        const messageContext = this.calculateContextFromUsage(usage);
+        this.contextLength += messageContext;
+        console.log('Updated context length:', this.contextLength, 'Added:', messageContext);
+      }
+    },
+    
+    // Reset context length (for new chats)
+    resetContextLength() {
+      this.contextLength = 0;
+    },
+    
     async loadChatHistory() {
       try {
         // Initialize with a welcome message from the AI Assistant
@@ -50,6 +73,8 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
             timestamp: new Date().toISOString()
           }
         ];
+        // Reset context length for new chat
+        this.resetContextLength();
       } catch (error) {
         this.$root.showError(error);
       }
@@ -237,7 +262,7 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
       await this.saveCurrentChat(); // Save current chat before starting new one
       this.currentChatId = null;
       this.saveCurrentChatId(); // Clear the saved current chat ID
-      this.loadChatHistory(); // Reset to welcome message
+      this.loadChatHistory(); // Reset to welcome message (also resets context length)
       // Navigate to chat without session ID
       this.$router.push({ name: 'chat' });
     },
@@ -498,6 +523,8 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
                   console.log('Setting usage on message:', messageUsage);
                   // Set the ref's value
                   assistantMessage.usage.value = messageUsage;
+                  // Update context length
+                  this.updateContextLength(messageUsage);
                   console.log('Message after setting usage:', assistantMessage);
                   this.$forceUpdate();
                 } else {
@@ -833,6 +860,8 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
               case 'message_stop':
                 if (assistantMessage && messageUsage) {
                   assistantMessage.usage.value = messageUsage;
+                  // Update context length for tool result messages too
+                  this.updateContextLength(messageUsage);
                   this.$forceUpdate();
                 }
                 assistantMessage = null;
@@ -1078,6 +1107,8 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
     // Helper method to convert backend message format to frontend format
     convertBackendMessagesToFrontend(backendMessages) {
       const processedMessages = [];
+      // Reset context length when loading from backend
+      this.resetContextLength();
       
       for (let i = 0; i < backendMessages.length; i++) {
         const msg = backendMessages[i];
@@ -1189,12 +1220,21 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
         // Handle usage information if present
         if (msg.message.usage) {
           frontendMsg.usage = Vue.ref(msg.message.usage);
+          // Update context length for loaded messages
+          this.updateContextLength(msg.message.usage);
         }
 
         processedMessages.push(frontendMsg);
       }
       
       return processedMessages;
+    },
+
+    getContextColor(value) {
+      if (value < 100000) return "text-green";
+      if (value < 150000) return "text-yellow";
+      if (value < 200000) return "text-amber darken-1";
+      return "text-red darken-1";
     }
   }
 }});

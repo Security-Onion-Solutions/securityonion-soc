@@ -3369,7 +3369,7 @@ const huntComponent = {
       };
       
       // Create investigation message
-      const investigationMsg = `Please investigate the following Security Onion alert systematically:
+      const investigationMsg = `Investigate the following Security Onion alert systematically:
 
 SOC ID: ${alertData.socId || 'Unknown'}
 Rule UUID: ${alertData.ruleUuid || 'Unknown'}
@@ -3382,7 +3382,7 @@ Timestamp: ${alertData.timestamp || 'Unknown'}
 
 INVESTIGATION STEPS:
 
-1. First, fetch the complete alert details using the SOC ID:
+1. First, fetch the complete alert details using the SOC ID (_id):
    - Query for the specific alert to get full context
    - Extract all relevant fields and metadata
 
