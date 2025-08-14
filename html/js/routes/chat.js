@@ -100,7 +100,6 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
     },
     async handleRouteSessionId() {
       const urlSessionId = this.$route.params.sessionId;
-      
       if (urlSessionId) {
         // Try to load chat from backend first
         try {
@@ -113,9 +112,9 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
           
           // Check if this is an investigation session
           const isInvestigation = this.$route.query.investigation === 'true';
-          const alertId = this.$route.query.alertId;
+          const socId = this.$route.query.socId;
           
-          if (isInvestigation && alertId) {
+          if (isInvestigation && socId) {
             // Try to get investigation data from localStorage
             const investigationKey = `investigation_${urlSessionId}`;
             const investigationDataStr = localStorage.getItem(investigationKey);
@@ -126,7 +125,7 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
                 console.log('Found investigation data for session:', urlSessionId);
                 // This is a new investigation session, start with investigation prompt
                 this.$nextTick(() => {
-                  this.startInvestigationSession(investigationData.alertId, investigationData.prompt);
+                  this.startInvestigationSession(investigationData.socId, investigationData.prompt);
                 });
                 // Clean up the localStorage after use
                 localStorage.removeItem(investigationKey);
@@ -972,18 +971,18 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
       this.messages.push(rejectionMessage);
       this.scrollToBottom();
     },
-    async startInvestigationSession(alertId, investigationPrompt) {
-      console.log('Starting investigation session for alert:', alertId);
+    async startInvestigationSession(socId, investigationPrompt) {
+      console.log('Starting investigation session for SOC ID:', socId);
       console.log('Investigation prompt length:', investigationPrompt.length);
       
       // Replace the welcome message with an investigation-specific welcome
       this.messages = [
         {
           role: 'assistant',
-          content: `Hello! I'm starting an AI investigation for alert ID: ${alertId}. I'll analyze this alert systematically and ask for your approval before using any tools. Let me begin the investigation now.`,
+          content: `Hello! I'm starting an AI investigation for SOC ID: ${socId}. I'll analyze this alert systematically and ask for your approval before using any tools. Let me begin the investigation now.`,
           timestamp: new Date().toISOString(),
           isInvestigationStart: true,
-          alertId: alertId
+          socId: socId
         }
       ];
       
@@ -1055,7 +1054,7 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
     async loadChatFromBackend(sessionId) {
       try {
         const response = await this.$root.papi.get(`/assistant/sessions/${sessionId}`);
-        if (response.data && Array.isArray(response.data)) {
+        if (response.data && Array.isArray(response.data) && response.data.length > 0) {
           // Convert backend messages to frontend format
           this.messages = this.convertBackendMessagesToFrontend(response.data);
           this.currentChatId = sessionId;

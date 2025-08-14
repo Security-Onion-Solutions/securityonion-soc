@@ -180,6 +180,7 @@ const huntComponent = {
     // AI Investigation tracking
     aiInvestigations: {}, // Maps alert ID to investigation results and chat session IDs
     aiInvestigatedFilter: false, // Client-side filter for AI investigated alerts
+    investigationSessions: [], // Store investigation sessions from backend
   }},
   created() {
     this.$root.initializeCharts();
@@ -268,7 +269,7 @@ const huntComponent = {
     loading() {
       return this.$root.loading;
     },
-    initHunt(params) {
+    async initHunt(params) {
       this.params = params;
       this.groupByItemsPerPage = params["groupItemsPerPage"];
       this.groupByLimit = params["groupFetchLimit"];
@@ -309,7 +310,7 @@ const huntComponent = {
       this.zone = moment.tz.guess();
 
       this.loadLocalSettings();
-      this.loadAIInvestigations();
+      await this.loadInvestigationSessions();
       if (this.mruQueries.length > 0 && this.isAdvanced()) {
         this.query = this.mruQueries[0];
       }
@@ -1506,8 +1507,8 @@ const huntComponent = {
         this.groupBys.forEach(group => {
           if (group.data && group.data.length > 0) {
             group.data = group.data.filter(item => {
-              const alertId = item['rule.uuid'] || item.soc_id;
-              return alertId && this.aiInvestigations[alertId];
+              const socId = item.soc_id;
+              return socId && this.aiInvestigations[socId];
             });
           }
         });
@@ -1721,8 +1722,8 @@ const huntComponent = {
       // Apply AI investigated filter if enabled
       if (this.aiInvestigatedFilter) {
         this.eventData = this.eventData.filter(item => {
-          const alertId = item['rule.uuid'] || item.soc_id;
-          return alertId && this.aiInvestigations[alertId];
+          const socId = item.soc_id;
+          return socId && this.aiInvestigations[socId];
         });
       }
     },
@@ -2370,23 +2371,35 @@ const huntComponent = {
       if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
     },
     
-    saveAIInvestigations() {
-      // Save AI investigation results to localStorage
+    async loadInvestigationSessions() {
+      // Load investigation sessions from backend
       try {
-        localStorage['aiInvestigations'] = JSON.stringify(this.aiInvestigations);
-      } catch (error) {
-        console.error('Failed to save AI investigations to localStorage:', error);
-      }
-    },
-    
-    loadAIInvestigations() {
-      // Load AI investigation results from localStorage
-      try {
-        if (localStorage['aiInvestigations']) {
-          this.aiInvestigations = JSON.parse(localStorage['aiInvestigations']);
+        const response = await this.$root.papi.get('/assistant/sessions');
+        if (response.data && Array.isArray(response.data)) {
+          // Filter sessions that start with 'investigation_'
+          this.investigationSessions = response.data.filter(session =>
+            session.sessionId && session.sessionId.startsWith('investigation_')
+          );
+          
+          // Update aiInvestigations based on session data, keyed by soc_id
+          this.aiInvestigations = {};
+          this.investigationSessions.forEach(session => {
+            // Extract soc_id from session ID: investigation_{soc_id}_{timestamp}
+            const parts = session.sessionId.split('_');
+            if (parts.length >= 3) {
+              const socId = parts.slice(1, -1).join('_'); // Handle soc_ids that might contain underscores
+              this.aiInvestigations[socId] = {
+                chatSessionId: session.sessionId,
+                status: 'completed', // Assume completed if session exists
+                socId: socId,
+                timestamp: session.createTime || new Date().toISOString()
+              };
+            }
+          });
         }
       } catch (error) {
-        console.error('Failed to load AI investigations from localStorage:', error);
+        console.error('Failed to load investigation sessions from backend:', error);
+        this.investigationSessions = [];
         this.aiInvestigations = {};
       }
     },
@@ -2395,31 +2408,43 @@ const huntComponent = {
       // Apply loaded AI investigation results to current event data
       if (this.eventData && this.eventData.length > 0) {
         this.eventData.forEach(item => {
-          const alertId = item['rule.uuid'] || item.soc_id;
-          if (alertId && this.aiInvestigations[alertId]) {
-            const investigation = this.aiInvestigations[alertId];
+          const socId = item.soc_id;
+          if (socId && this.aiInvestigations[socId]) {
+            const investigation = this.aiInvestigations[socId];
             item._aiInvestigationStatus = 'completed';
             item._aiInvestigationResult = investigation;
           }
         });
       }
       
-      // Also apply to grouped data
+      // Also apply to grouped data - for groups, use a simplified approach
       if (this.groupBys && this.groupBys.length > 0) {
         this.groupBys.forEach(group => {
           if (group.data && group.data.length > 0) {
             group.data.forEach(item => {
-              const alertId = item['rule.uuid'] || item.soc_id;
-              if (alertId && this.aiInvestigations[alertId]) {
-                const investigation = this.aiInvestigations[alertId];
-                item._aiInvestigationStatus = 'completed';
-                item._aiInvestigationResult = investigation;
+              // For grouped alerts (count > 1), we'll show brain icon by default
+              // When clicked, it will fetch the newest event and create an investigation for that specific alert
+              // This avoids expensive queries to determine if any alert in the group has been investigated
+              if (item.count && item.count > 1) {
+                // Don't mark grouped alerts as investigated to avoid expensive lookups
+                // The user can still investigate by clicking the brain icon
+                item._aiInvestigationStatus = null;
+                item._aiInvestigationResult = null;
+              } else {
+                // For individual alerts, check by soc_id as before
+                const socId = item.soc_id;
+                if (socId && this.aiInvestigations[socId]) {
+                  const investigation = this.aiInvestigations[socId];
+                  item._aiInvestigationStatus = 'completed';
+                  item._aiInvestigationResult = investigation;
+                }
               }
             });
           }
         });
       }
     },
+    
     toggleShowSection(item) {
       if (this.isExpandedSection(item)) {
         this.collapsedSections.push(item);
@@ -3260,64 +3285,78 @@ const huntComponent = {
       return 'no-data';
     },
     // AI Investigation methods
-    startAIInvestigation(event, item, groupIdx) {
-      const alertId = item['rule.uuid'] || item.soc_id;
-      if (!alertId) {
+    async startAIInvestigation(event, item, groupIdx) {
+      let targetItem = item;
+      
+      // Check if this is a grouped alert (has count > 1)
+      if (item.count && item.count > 1) {
+        // For grouped alerts, fetch the newest event to get the most recent alert's soc_id
+        try {
+          await this.fetchNewestEvent(item);
+          if (item.newest) {
+            targetItem = item.newest;
+          } else {
+            this.$root.showError(this.i18n.aiInvestigationUnableToFetchNewest);
+            return;
+          }
+        } catch (error) {
+          this.$root.showError(this.i18n.aiInvestigationUnableToFetchNewest);
+          return;
+        }
+      }
+      
+      const socId = targetItem.soc_id;
+      if (!socId) {
         this.$root.showError(this.i18n.aiInvestigationUnableToIdentify);
         return;
       }
       
-      // If investigation is completed, navigate to existing chat session
-      if (item._aiInvestigationStatus === 'completed' && item._aiInvestigationResult && item._aiInvestigationResult.chatSessionId) {
-        const chatUrl = `${window.location.origin}/#/chat/${item._aiInvestigationResult.chatSessionId}`;
+      // Check if investigation already exists for this specific soc_id
+      const existingInvestigation = this.aiInvestigations[socId];
+      if (existingInvestigation && existingInvestigation.chatSessionId) {
+        // Navigate to existing chat session
+        const chatUrl = `${window.location.origin}/#/chat/${existingInvestigation.chatSessionId}`;
         window.open(chatUrl, '_blank');
         return;
       }
       
-      // Prevent multiple investigations for the same alert
-      if (item._aiInvestigationStatus === 'investigating') {
-        return;
-      }
+      // Generate a unique chat session ID for this investigation using soc_id
+      const chatSessionId = 'investigation_' + socId + '_' + Date.now();
       
-      // Generate a unique chat session ID for this investigation
-      const chatSessionId = 'investigation_' + alertId + '_' + Date.now();
-      
-      // Set investigation status to investigating
-      item._aiInvestigationStatus = 'investigating';
-      
-      // Store the chat session ID with the investigation
-      if (!this.aiInvestigations[alertId]) {
-        this.aiInvestigations[alertId] = {};
-      }
-      this.aiInvestigations[alertId].chatSessionId = chatSessionId;
-      this.aiInvestigations[alertId].status = 'investigating';
-      this.aiInvestigations[alertId].alertId = alertId;
-      this.aiInvestigations[alertId].timestamp = new Date().toISOString();
-      this.saveAIInvestigations();
+      // Update local tracking using soc_id as key
+      this.aiInvestigations[socId] = {
+        chatSessionId: chatSessionId,
+        status: 'investigating',
+        socId: socId,
+        alertId: targetItem['rule.uuid'], // Keep rule.uuid as alertId for reference
+        timestamp: new Date().toISOString()
+      };
       
       // Create the investigation prompt with alert data
-      const investigationPrompt = this.generateInvestigationPrompt(item);
+      const investigationPrompt = this.generateInvestigationPrompt(targetItem);
       
       // Store the investigation prompt in localStorage to avoid URL encoding issues
       const investigationData = {
-        alertId: alertId,
+        socId: socId,
+        alertId: targetItem['rule.uuid'],
         prompt: investigationPrompt,
         timestamp: new Date().toISOString()
       };
       localStorage.setItem(`investigation_${chatSessionId}`, JSON.stringify(investigationData));
       
-      // Open chat in new tab with investigation session ID
-      const chatUrl = `${window.location.origin}/#/chat/${chatSessionId}?investigation=true&alertId=${encodeURIComponent(alertId)}`;
+      // Navigate to chat page with investigation session ID
+      const chatUrl = `${window.location.origin}/#/chat/${chatSessionId}?investigation=true&socId=${encodeURIComponent(socId)}`;
       window.open(chatUrl, '_blank');
     },
     
     generateInvestigationPrompt(item) {
-      const alertId = item['rule.uuid'] || item.soc_id;
+      const socId = item.soc_id;
+      const ruleUuid = item['rule.uuid'];
       
       // Prepare the alert data for investigation
       const alertData = {
-        alertId: alertId,
-        ruleUuid: item['rule.uuid'],
+        socId: socId,
+        ruleUuid: ruleUuid,
         ruleName: item['rule.name'],
         severity: item['event.severity_label'],
         timestamp: item['soc_timestamp'] || item['@timestamp'],
@@ -3332,7 +3371,8 @@ const huntComponent = {
       // Create investigation message
       const investigationMsg = `Please investigate the following Security Onion alert systematically:
 
-Alert ID: ${alertData.alertId || 'Unknown'}
+SOC ID: ${alertData.socId || 'Unknown'}
+Rule UUID: ${alertData.ruleUuid || 'Unknown'}
 Title: ${alertData.ruleName || 'Unknown'}
 Severity: ${alertData.severity || 'Unknown'}
 Rule: ${alertData.alertRule || 'Unknown'}
@@ -3342,7 +3382,7 @@ Timestamp: ${alertData.timestamp || 'Unknown'}
 
 INVESTIGATION STEPS:
 
-1. First, fetch the complete alert details using the alert ID:
+1. First, fetch the complete alert details using the SOC ID:
    - Query for the specific alert to get full context
    - Extract all relevant fields and metadata
 
@@ -3374,30 +3414,65 @@ Please begin the investigation now.`;
     },
     
     getAIInvestigationButtonColor(item) {
-      const alertId = item['rule.uuid'] || item.soc_id;
-      const investigation = this.aiInvestigations[alertId];
-      
-      switch (item._aiInvestigationStatus) {
-        case 'investigating':
-          return 'primary';
-        case 'completed':
+      // For grouped alerts, check if the group has been marked as investigated
+      if (item.count && item.count > 1) {
+        // For grouped alerts, check if any investigation exists
+        if (item._aiInvestigationStatus === 'completed') {
+          // Use the representative investigation result if available
+          const investigation = item._aiInvestigationResult;
           if (investigation && investigation.assessment) {
             return investigation.assessment === 'true_positive' ? 'red darken-1' :
                    investigation.assessment === 'false_positive' ? 'green darken-1' : 'amber darken-1';
           }
-          return 'secondary';
-        case 'error':
-          return 'red darken-1';
-        default:
-          return 'pink-lighten-2';
+          return 'secondary'; // Default robot color for investigated groups
+        }
+        // Not investigated - show brain
+        return 'pink-lighten-2';
       }
+      
+      // For individual alerts, use soc_id as before
+      const socId = item.soc_id;
+      const investigation = this.aiInvestigations[socId];
+      
+      // Only two states: investigated (robot) or not investigated (brain)
+      if (investigation && investigation.chatSessionId) {
+        // Investigated - show robot with assessment-based color if available
+        if (investigation.assessment) {
+          return investigation.assessment === 'true_positive' ? 'red darken-1' :
+                 investigation.assessment === 'false_positive' ? 'green darken-1' : 'amber darken-1';
+        }
+        return 'secondary'; // Default robot color
+      }
+      
+      // Not investigated - show brain
+      return 'pink-lighten-2';
     },
     
     getAIInvestigationTooltip(item) {
-      const alertId = item['rule.uuid'] || item.soc_id;
-      const investigation = this.aiInvestigations[alertId];
+      // For grouped alerts, check if the group has been marked as investigated
+      if (item.count && item.count > 1) {
+        if (item._aiInvestigationStatus === 'completed') {
+          // Use the representative investigation result if available
+          const investigation = item._aiInvestigationResult;
+          if (investigation && investigation.assessment) {
+            const assessmentText = investigation.assessment === 'true_positive' ? this.i18n.aiTruePositive :
+                                  investigation.assessment === 'false_positive' ? this.i18n.aiFalsePositive : this.i18n.aiUncertain;
+            const confidence = investigation.confidence || 'Unknown';
+            return `${this.i18n.aiAssessment}: ${assessmentText} (${confidence}% ${this.i18n.aiConfidence}) - ${this.i18n.clickToStartGroupInvestigation}`;
+          }
+          return `${this.i18n.aiInvestigationCompleted} - ${this.i18n.clickToStartGroupInvestigation}`;
+        }
+        // Not investigated
+        return `${this.i18n.startAIInvestigationForGroup}`;
+      }
       
-      if (item._aiInvestigationStatus === 'completed' && investigation) {
+      // For individual alerts, use soc_id as before
+      const socId = item.soc_id;
+      const investigation = this.aiInvestigations[socId];
+      
+      // Only two states: investigated or not investigated
+      if (investigation && investigation.chatSessionId) {
+        // Investigated - show assessment info if available
         if (investigation.assessment) {
           const assessmentText = investigation.assessment === 'true_positive' ? this.i18n.aiTruePositive :
                                 investigation.assessment === 'false_positive' ? this.i18n.aiFalsePositive : this.i18n.aiUncertain;
@@ -3405,9 +3480,9 @@ Please begin the investigation now.`;
           return `${this.i18n.aiAssessment}: ${assessmentText} (${confidence}% ${this.i18n.aiConfidence}) - ${this.i18n.clickToOpenChat}`;
         }
         return `${this.i18n.aiInvestigationCompleted} - ${this.i18n.clickToOpenChat}`;
-      } else if (item._aiInvestigationStatus === 'investigating') {
-        return `${this.i18n.aiInvestigationInProgress} - ${this.i18n.clickToOpenChat}`;
       }
+      
+      // Not investigated
       return `${this.i18n.startAIInvestigation}`;
     },
     
