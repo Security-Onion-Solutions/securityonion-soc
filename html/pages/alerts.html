@@ -190,142 +190,485 @@
     </v-card>
   </v-dialog>
 
-  <!-- Alert Details Dialog -->
-  <v-dialog v-model="detailsDialog" max-width="900" scrollable>
-    <v-card>
-      <v-card-title class="d-flex align-center">
-        <span>Alert Details</span>
-        <v-spacer></v-spacer>
-        <v-btn
-          icon
-          variant="text"
-          @click="detailsDialog = false"
-        >
-          <v-icon>fa-xmark</v-icon>
-        </v-btn>
+  <!-- Modernized Alert Details Dialog -->
+  <v-dialog 
+    v-model="detailsDialog" 
+    max-width="1400"
+    width="90%"
+    transition="dialog-transition"
+    eager
+    scrollable
+  >
+    <v-card class="d-flex flex-column" style="height: 85vh; display: flex; flex-direction: column;">
+      <!-- Header -->
+      <v-card-title 
+        class="px-6 py-4 primary flex-grow-0"
+      >
+        <div class="d-flex align-center justify-space-between w-100">
+          <div class="d-flex align-center">
+            <v-btn
+              icon
+              variant="text"
+              color="white"
+              @click="detailsDialog = false"
+              class="mr-3"
+            >
+              <v-icon>fa-arrow-left</v-icon>
+            </v-btn>
+            <div>
+              <div class="text-h5 font-weight-bold">{{ selectedAlertDetails?.ruleName || 'Alert Details' }}</div>
+              <div class="text-caption mt-1" style="opacity: 0.9;">
+                <v-icon size="x-small" class="mr-1">fa-clock</v-icon>
+                {{ selectedAlertDetails ? new Date(selectedAlertDetails.timestamp).toLocaleString() : '' }}
+              </div>
+            </div>
+          </div>
+          <div class="d-flex align-center">
+            <v-btn
+              variant="outlined"
+              color="white"
+              size="small"
+              class="mr-2"
+              @click="copyAlertId"
+            >
+              <v-icon start size="small">fa-copy</v-icon>
+              Copy ID
+            </v-btn>
+            <v-btn
+              :href="getHuntUrl(selectedAlertDetails)"
+              target="_blank"
+              color="white"
+              size="small"
+            >
+              <v-icon start size="small">fa-crosshairs</v-icon>
+              Hunt
+            </v-btn>
+          </div>
+        </div>
       </v-card-title>
-      <v-divider></v-divider>
-      <v-card-text v-if="selectedAlertDetails">
-        <!-- Alert Header Info -->
-        <v-row class="mb-4">
-          <v-col cols="12">
-            <div class="d-flex align-center mb-2">
-              <v-chip
-                :color="getSeverityColor(selectedAlertDetails.severityLabel)"
-                size="small"
-                class="mr-2"
+      
+      <!-- Metadata Chips Bar -->
+      <div class="px-6 py-3 bg-grey-darken-3" style="flex-shrink: 0; overflow: hidden;" v-if="selectedAlertDetails">
+        <div class="d-flex align-center ga-2" style="flex-wrap: wrap;">
+          <v-chip
+            :color="getSeverityColor(selectedAlertDetails.severityLabel)"
+            size="small"
+            label
+            class="font-weight-bold"
+          >
+            <v-icon start size="x-small">fa-exclamation-triangle</v-icon>
+            {{ selectedAlertDetails.severityLabel?.toUpperCase() }}
+          </v-chip>
+          <v-chip
+            v-if="selectedAlertDetails.module"
+            size="small"
+            label
+            variant="outlined"
+          >
+            <v-icon start size="x-small">fa-puzzle-piece</v-icon>
+            {{ selectedAlertDetails.module }}
+          </v-chip>
+          <v-chip
+            v-if="selectedAlertDetails.category"
+            size="small"
+            label
+            variant="outlined"
+          >
+            <v-icon start size="x-small">fa-tag</v-icon>
+            {{ selectedAlertDetails.category }}
+          </v-chip>
+          <v-chip
+            v-if="selectedAlertDetails.acknowledged"
+            color="success"
+            size="small"
+            label
+            variant="tonal"
+          >
+            <v-icon start size="x-small">fa-check</v-icon>
+            Acknowledged
+          </v-chip>
+          <v-chip
+            v-if="selectedAlertDetails.escalated"
+            color="warning"
+            size="small"
+            label
+            variant="tonal"
+          >
+            <v-icon start size="x-small">fa-briefcase</v-icon>
+            Escalated
+          </v-chip>
+        </div>
+      </div>
+      
+      <!-- Main Content Area - Single Scrollable Page -->
+      <v-card-text class="flex-grow-1 pa-0" style="overflow-y: auto; flex: 1;" v-if="selectedAlertDetails">
+        <v-container fluid class="pa-6">
+              <!-- AI Summary Card (Rule Description) -->
+              <v-card 
+                v-if="selectedAlertDetails.aiSummary" 
+                class="mb-6 elevation-2"
               >
-                {{ selectedAlertDetails.severityLabel }}
-              </v-chip>
-              <v-chip
-                v-if="selectedAlertDetails.acknowledged"
-                color="info"
-                variant="outlined"
-                size="small"
-                class="mr-2"
-              >
-                <v-icon start size="x-small">fa-check</v-icon>
-                Acknowledged
-              </v-chip>
-              <v-chip
-                v-if="selectedAlertDetails.escalated"
-                color="warning"
-                variant="outlined"
-                size="small"
-                class="mr-2"
-              >
-                <v-icon start size="x-small">fa-briefcase</v-icon>
-                Escalated
-              </v-chip>
-            </div>
-            <h3 class="text-h6">{{ selectedAlertDetails.ruleName }}</h3>
-            <div class="text-caption text--secondary">
-              <v-icon size="x-small">fa-clock</v-icon>
-              {{ new Date(selectedAlertDetails.timestamp).toLocaleString() }}
-            </div>
-          </v-col>
-        </v-row>
+                  <v-card-title class="d-flex align-center">
+                    <v-icon start color="primary">fa-robot</v-icon>
+                    Rule Description
+                  </v-card-title>
+                  <v-card-text>
+                    <div class="text-body-1" style="line-height: 1.8;">
+                      {{ selectedAlertDetails.aiSummary }}
+                    </div>
+                    <div v-if="selectedAlertDetails.detection && selectedAlertDetails.detection.references" class="mt-4">
+                      <div class="text-subtitle-2 mb-2">References:</div>
+                      <div v-for="ref in selectedAlertDetails.detection.references" :key="ref" class="mb-1">
+                        <a :href="ref" target="_blank" class="text-decoration-none">
+                          <v-icon size="x-small" class="mr-1">fa-external-link-alt</v-icon>
+                          {{ ref }}
+                        </a>
+                      </div>
+                    </div>
+                  </v-card-text>
+              </v-card>
 
-        <!-- Network Information -->
-        <v-row class="mb-4">
-          <v-col cols="12" md="6">
-            <v-card variant="outlined">
-              <v-card-title class="text-subtitle-2">Source</v-card-title>
-              <v-card-text>
-                <div><strong>IP:</strong> {{ selectedAlertDetails.sourceIp || 'N/A' }}</div>
-                <div><strong>Port:</strong> {{ selectedAlertDetails.sourcePort || 'N/A' }}</div>
-              </v-card-text>
-            </v-card>
-          </v-col>
-          <v-col cols="12" md="6">
-            <v-card variant="outlined">
-              <v-card-title class="text-subtitle-2">Destination</v-card-title>
-              <v-card-text>
-                <div><strong>IP:</strong> {{ selectedAlertDetails.destIp || 'N/A' }}</div>
-                <div><strong>Port:</strong> {{ selectedAlertDetails.destPort || 'N/A' }}</div>
-              </v-card-text>
-            </v-card>
-          </v-col>
-        </v-row>
-
-        <!-- Alert Metadata -->
-        <v-row class="mb-4">
-          <v-col cols="12">
-            <v-card variant="outlined">
-              <v-card-title class="text-subtitle-2">Alert Information</v-card-title>
-              <v-card-text>
-                <v-row>
-                  <v-col cols="12" md="6">
-                    <div><strong>Alert ID:</strong> {{ selectedAlertDetails.id }}</div>
-                    <div><strong>Module:</strong> {{ selectedAlertDetails.module || 'N/A' }}</div>
-                    <div><strong>Category:</strong> {{ selectedAlertDetails.category || 'N/A' }}</div>
-                  </v-col>
-                  <v-col cols="12" md="6">
-                    <div><strong>Rule UUID:</strong> {{ selectedAlertDetails.ruleUuid || 'N/A' }}</div>
-                    <div><strong>Severity:</strong> {{ selectedAlertDetails.severity }} ({{ selectedAlertDetails.severityLabel }})</div>
-                  </v-col>
-                </v-row>
-              </v-card-text>
-            </v-card>
-          </v-col>
-        </v-row>
-
-        <!-- All Fields (Raw Data) -->
-        <v-row>
-          <v-col cols="12">
-            <v-expansion-panels>
-              <v-expansion-panel>
-                <v-expansion-panel-title>
-                  <v-icon class="mr-2">fa-code</v-icon>
-                  All Event Fields
-                </v-expansion-panel-title>
-                <v-expansion-panel-text>
-                  <pre style="overflow-x: auto; font-size: 12px;">{{ JSON.stringify(selectedAlertDetails.rawData, null, 2) }}</pre>
-                </v-expansion-panel-text>
-              </v-expansion-panel>
-            </v-expansion-panels>
-          </v-col>
-        </v-row>
+              <!-- Alert Details -->
+              <v-card class="mb-6 elevation-2">
+                <v-card-title class="text-h6">
+                  <v-icon start size="small">fa-info-circle</v-icon>
+                  Alert Details
+                </v-card-title>
+                <v-card-text>
+                  <!-- Network Information for Suricata/Network-based alerts -->
+                  <div v-if="selectedAlertDetails.sourceIp || selectedAlertDetails.destIp">
+                    <div class="d-flex align-center flex-wrap ga-2">
+                      <!-- Source chip -->
+                      <v-chip 
+                        size="small" 
+                        variant="outlined"
+                        color="primary"
+                      >
+                        <v-icon start size="x-small">fa-desktop</v-icon>
+                        <span class="font-weight-medium">Source:</span>
+                        <span class="ml-1 font-mono">
+                          {{ selectedAlertDetails.sourceIp || 'N/A' }}<span v-if="selectedAlertDetails.sourcePort">:{{ selectedAlertDetails.sourcePort }}</span>
+                        </span>
+                      </v-chip>
+                      
+                      <!-- Arrow indicator -->
+                      <v-icon size="small" color="grey">fa-arrow-right</v-icon>
+                      
+                      <!-- Destination chip -->
+                      <v-chip 
+                        size="small" 
+                        variant="outlined"
+                        color="info"
+                      >
+                        <v-icon start size="x-small">fa-server</v-icon>
+                        <span class="font-weight-medium">Dest:</span>
+                        <span class="ml-1 font-mono">
+                          {{ selectedAlertDetails.destIp || 'N/A' }}<span v-if="selectedAlertDetails.destPort">:{{ selectedAlertDetails.destPort }}</span>
+                        </span>
+                      </v-chip>
+                      
+                      <!-- Protocol and metadata chips -->
+                      <v-chip v-if="selectedAlertDetails.rawData && selectedAlertDetails.rawData['network.protocol']" size="small" variant="tonal" color="primary">
+                        {{ selectedAlertDetails.rawData['network.protocol'] }}
+                      </v-chip>
+                      <v-chip v-if="selectedAlertDetails.rawData && selectedAlertDetails.rawData['network.transport']" size="small" variant="tonal">
+                        {{ selectedAlertDetails.rawData['network.transport'] }}
+                      </v-chip>
+                      <v-chip v-if="selectedAlertDetails.rawData && selectedAlertDetails.rawData['network.bytes']" size="small" variant="tonal">
+                        {{ selectedAlertDetails.rawData['network.bytes'] }} bytes
+                      </v-chip>
+                    </div>
+                    
+                    <!-- MAC addresses if available -->
+                    <div v-if="(selectedAlertDetails.rawData && selectedAlertDetails.rawData['source.mac']) || (selectedAlertDetails.rawData && selectedAlertDetails.rawData['destination.mac'])" class="mt-2">
+                      <div class="d-flex flex-wrap ga-2">
+                        <v-chip v-if="selectedAlertDetails.rawData['source.mac']" size="x-small" variant="text" density="compact">
+                          <v-icon start size="x-small">fa-ethernet</v-icon>
+                          Source MAC: {{ selectedAlertDetails.rawData['source.mac'] }}
+                        </v-chip>
+                        <v-chip v-if="selectedAlertDetails.rawData['destination.mac']" size="x-small" variant="text" density="compact">
+                          <v-icon start size="x-small">fa-ethernet</v-icon>
+                          Dest MAC: {{ selectedAlertDetails.rawData['destination.mac'] }}
+                        </v-chip>
+                      </div>
+                    </div>
+                    
+                    <!-- Network Data Decoded for Suricata -->
+                    <div v-if="selectedAlertDetails.module === 'suricata' && selectedAlertDetails.rawData && selectedAlertDetails.rawData['network.data.decoded']" class="mt-4">
+                      <v-divider class="mb-3"></v-divider>
+                      <div class="text-subtitle-2 text--secondary mb-2">Network Data (Decoded)</div>
+                      <pre class="pa-3" style="background-color: rgba(0,0,0,0.03); border: 1px solid rgba(0,0,0,0.12); border-radius: 4px; overflow-x: auto; font-size: 12px; font-family: 'Roboto Mono', monospace; max-height: 200px; overflow-y: auto;">{{ selectedAlertDetails.rawData['network.data.decoded'] }}</pre>
+                    </div>
+                    
+                    <!-- Decoded Network Data if available -->
+                    <div v-if="selectedAlertDetails.rawData && (selectedAlertDetails.rawData['http.request.method'] || selectedAlertDetails.rawData['dns.question.name'] || selectedAlertDetails.rawData['tls.server_name'])" class="mt-3">
+                      <v-divider class="mb-3"></v-divider>
+                      <div class="text-subtitle-2 text--secondary mb-2">Decoded Data</div>
+                      
+                      <!-- HTTP Data -->
+                      <div v-if="selectedAlertDetails.rawData['http.request.method']" class="mb-2">
+                        <v-chip size="small" color="primary" variant="tonal" class="mr-2">HTTP</v-chip>
+                        <span class="font-weight-medium">{{ selectedAlertDetails.rawData['http.request.method'] }}</span>
+                        <span v-if="selectedAlertDetails.rawData['url.path']" class="ml-2">{{ selectedAlertDetails.rawData['url.path'] }}</span>
+                        <div v-if="selectedAlertDetails.rawData['http.request.body.content']" class="text-caption mt-1">
+                          Body: {{ selectedAlertDetails.rawData['http.request.body.content'].substring(0, 200) }}...
+                        </div>
+                      </div>
+                      
+                      <!-- DNS Data -->
+                      <div v-if="selectedAlertDetails.rawData['dns.question.name']" class="mb-2">
+                        <v-chip size="small" color="secondary" variant="tonal" class="mr-2">DNS</v-chip>
+                        <span>Query: {{ selectedAlertDetails.rawData['dns.question.name'] }}</span>
+                        <span v-if="selectedAlertDetails.rawData['dns.question.type']" class="ml-2">({{ selectedAlertDetails.rawData['dns.question.type'] }})</span>
+                      </div>
+                      
+                      <!-- TLS Data -->
+                      <div v-if="selectedAlertDetails.rawData['tls.server_name']" class="mb-2">
+                        <v-chip size="small" color="info" variant="tonal" class="mr-2">TLS</v-chip>
+                        <span>Server: {{ selectedAlertDetails.rawData['tls.server_name'] }}</span>
+                        <span v-if="selectedAlertDetails.rawData['tls.version']" class="ml-2">({{ selectedAlertDetails.rawData['tls.version'] }})</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <!-- Non-network alert details -->
+                  <div v-else>
+                    <div class="text-body-2">
+                      <v-row dense>
+                        <v-col cols="12" sm="6" v-if="selectedAlertDetails.rawData && selectedAlertDetails.rawData['host.name']">
+                          <div class="text-subtitle-2 text--secondary mb-1">Host</div>
+                          <div>{{ selectedAlertDetails.rawData['host.name'] }}</div>
+                        </v-col>
+                        <v-col cols="12" sm="6" v-if="selectedAlertDetails.rawData && selectedAlertDetails.rawData['user.name']">
+                          <div class="text-subtitle-2 text--secondary mb-1">User</div>
+                          <div>{{ selectedAlertDetails.rawData['user.name'] }}</div>
+                        </v-col>
+                        <v-col cols="12" v-if="selectedAlertDetails.rawData && selectedAlertDetails.rawData['process.name']">
+                          <div class="text-subtitle-2 text--secondary mb-1">Process</div>
+                          <div>{{ selectedAlertDetails.rawData['process.name'] }} (PID: {{ selectedAlertDetails.rawData['process.pid'] }})</div>
+                        </v-col>
+                        <v-col cols="12" v-if="selectedAlertDetails.rawData && selectedAlertDetails.rawData['file.path']">
+                          <div class="text-subtitle-2 text--secondary mb-1">File</div>
+                          <div class="text-truncate">{{ selectedAlertDetails.rawData['file.path'] }}</div>
+                        </v-col>
+                      </v-row>
+                    </div>
+                  </div>
+                </v-card-text>
+              </v-card>
+              
+              <!-- Guided Analysis Section -->
+              <div class="mt-8 mb-6">
+                <div class="text-h5 font-weight-bold mb-4 d-flex align-center">
+                  <v-icon start size="large" color="primary">fa-compass</v-icon>
+                  Guided Analysis
+                </div>
+              <!-- Loading State with Skeleton -->
+              <div v-if="selectedAlertDetails.playbookLoading">
+                <v-card class="mb-6 elevation-3" color="primary" variant="tonal">
+                  <v-card-text>
+                    <div class="d-flex align-center justify-space-between">
+                      <div>
+                        <div class="text-h6 font-weight-bold">
+                          <v-icon start>fa-magnifying-glass-chart</v-icon>
+                          Running Analysis Queries...
+                        </div>
+                        <div class="text-body-2 mt-1">
+                          <v-progress-linear indeterminate color="white" height="2" class="mt-2"></v-progress-linear>
+                        </div>
+                      </div>
+                    </div>
+                  </v-card-text>
+                </v-card>
+                
+                <!-- Skeleton Loaders for Questions -->
+                <v-skeleton-loader
+                  v-for="i in 3"
+                  :key="i"
+                  type="article"
+                  class="mb-3"
+                  boilerplate
+                ></v-skeleton-loader>
+              </div>
+              
+              <!-- Error State -->
+              <v-alert v-else-if="selectedAlertDetails.playbookError" type="error" variant="tonal" class="ma-4">
+                <div class="text-h6">Unable to load guided analysis</div>
+                <div class="text-caption">Please try refreshing or contact support if the problem persists.</div>
+              </v-alert>
+              
+              <!-- Analysis Results -->
+              <div v-else-if="selectedAlertDetails.playbooks && selectedAlertDetails.playbooks.length > 0">
+                <!-- Summary Header -->
+                <v-card class="mb-6 elevation-3" color="primary" variant="tonal">
+                  <v-card-text>
+                    <div class="d-flex align-center justify-space-between">
+                      <div>
+                        <div class="text-h6 font-weight-bold">
+                          <v-icon start>fa-magnifying-glass-chart</v-icon>
+                          Guided Analysis Results
+                        </div>
+                        <div class="text-body-2 mt-1">
+                          {{ selectedAlertDetails.playbooks[0].sortedQuestions?.length || 0 }} queries executed
+                        </div>
+                      </div>
+                      <div class="text-center">
+                        <div class="text-h3 font-weight-bold">
+                          {{ selectedAlertDetails.playbooks[0].sortedQuestions?.filter(q => q.answers && q.answers.length > 0).length || 0 }}
+                        </div>
+                        <div class="text-caption">Insights Found</div>
+                      </div>
+                    </div>
+                  </v-card-text>
+                </v-card>
+                <!-- Analysis Questions -->
+                <v-expansion-panels variant="accordion" :model-value="expandedQuestions" class="mb-4">
+                  <template v-for="playbook in selectedAlertDetails.playbooks">
+                    <v-expansion-panel 
+                      v-for="(question, idx) in (playbook.sortedQuestions || playbook.questions)" 
+                      :key="idx"
+                      :value="idx"
+                    >
+                      <v-expansion-panel-title 
+                        :class="[
+                          'font-weight-medium',
+                          question.error ? 'text-error' : 
+                          (question.answers && question.answers.length > 0) ? 'text-success' : 
+                          'text--secondary'
+                        ]"
+                      >
+                        <v-icon 
+                          size="small" 
+                          class="mr-2"
+                          :color="getQuestionColor(question)"
+                        >
+                          {{ question.error ? 'fa-exclamation-triangle' : 
+                             (question.answers && question.answers.length > 0) ? 'fa-check-circle' : 
+                             'fa-circle' }}
+                        </v-icon>
+                        {{ question.question }}
+                        <span v-if="question.answers && question.answers.length > 0" class="ml-2 text-caption">
+                          ({{ question.answers.length }} result{{ question.answers.length > 1 ? 's' : '' }})
+                        </span>
+                      </v-expansion-panel-title>
+                      <v-expansion-panel-text>
+                        <div v-if="question.context" class="mb-3">
+                          <div class="text-caption font-weight-bold">Context:</div>
+                          <div class="text-body-2">{{ question.context }}</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                          <div class="text-caption font-weight-bold">Query:</div>
+                          <div class="text-body-2 font-mono" style="background-color: rgba(0,0,0,0.05); padding: 8px; border-radius: 4px; overflow-x: auto;">
+                            {{ question.filledOQL || question.filledQuery }}
+                          </div>
+                        </div>
+                        
+                        <div v-if="question.range" class="mb-3">
+                          <div class="text-caption font-weight-bold">Date Range:</div>
+                          <div class="text-body-2">{{ question.range }}</div>
+                        </div>
+                        
+                        <!-- Display Results/Answers -->
+                        <div v-if="question.answers && question.answers.length > 0" class="mb-3">
+                          <div class="text-caption font-weight-bold mb-2">Instant Insights:</div>
+                          <v-card variant="outlined" class="pa-2">
+                            <div v-for="(answer, aIdx) in question.answers.slice(0, 5)" :key="aIdx" class="mb-2">
+                              <!-- For aggregate results -->
+                              <div v-if="answer.keys" class="d-flex justify-space-between">
+                                <span class="font-mono">{{ answer.keys.join(', ') }}</span>
+                                <v-chip size="x-small" color="primary">{{ answer.value }}</v-chip>
+                              </div>
+                              <!-- For event results -->
+                              <div v-else-if="answer.payload" class="text-caption">
+                                <div v-if="answer.payload['source.ip'] || answer.payload['destination.ip']">
+                                  {{ answer.payload['source.ip'] || '' }} → {{ answer.payload['destination.ip'] || '' }}
+                                </div>
+                                <div v-else>
+                                  {{ Object.entries(answer.payload).slice(0, 3).map(([k,v]) => `${k}: ${v}`).join(', ') }}
+                                  <span v-if="Object.keys(answer.payload).length > 3">...</span>
+                                </div>
+                              </div>
+                            </div>
+                            <div v-if="question.answers.length > 5" class="text-caption text--secondary">
+                              ... and {{ question.answers.length - 5 }} more
+                            </div>
+                          </v-card>
+                        </div>
+                        
+                        <!-- Error Message -->
+                        <div v-else-if="question.error" class="mb-3">
+                          <v-alert type="error" variant="outlined" density="compact">
+                            {{ question.errorMessage || 'Failed to execute query' }}
+                          </v-alert>
+                        </div>
+                        
+                        <!-- No Results -->
+                        <div v-else class="mb-3">
+                          <div class="text-caption text--secondary">No results found for this query</div>
+                        </div>
+                        
+                        <v-btn
+                          size="small"
+                          variant="outlined"
+                          color="primary"
+                          :href="getHuntUrlForQuestion(question)"
+                          target="_blank"
+                          :disabled="!question.filledOQL"
+                        >
+                          <v-icon start size="small">fa-crosshairs</v-icon>
+                          Hunt This Query
+                        </v-btn>
+                      </v-expansion-panel-text>
+                    </v-expansion-panel>
+                  </template>
+                </v-expansion-panels>
+              </div>
+              
+              <!-- No Playbook Data -->
+              <div v-else class="text-center py-12">
+                <v-icon size="64" color="grey" class="mb-4">fa-compass</v-icon>
+                <div class="text-h6 text--secondary">No Guided Analysis Available</div>
+                <div class="text-caption">This alert type does not have associated playbook queries.</div>
+              </div>
+              
+              <!-- Event Details Section -->
+              <div class="mt-8">
+                <div class="text-h5 font-weight-bold mb-4 d-flex align-center">
+                  <v-icon start size="large" color="primary">fa-database</v-icon>
+                  Event Details
+                </div>
+                <v-expansion-panels variant="accordion">
+                  <v-expansion-panel>
+                    <v-expansion-panel-title>
+                      <div class="d-flex align-center justify-space-between w-100 pr-4">
+                        <div class="d-flex align-center">
+                          <v-icon start size="small">fa-code</v-icon>
+                          <span class="font-weight-medium">Full Event Payload</span>
+                          <v-chip size="x-small" class="ml-3" variant="tonal">
+                            {{ Object.keys(selectedAlertDetails.rawData || {}).length }} fields
+                          </v-chip>
+                        </div>
+                      </div>
+                    </v-expansion-panel-title>
+                    <v-expansion-panel-text>
+                      <div class="d-flex justify-end mb-2">
+                        <v-btn
+                          size="small"
+                          variant="text"
+                          @click="copyRawData"
+                        >
+                          <v-icon start size="small">fa-copy</v-icon>
+                          Copy JSON
+                        </v-btn>
+                      </div>
+                      <pre class="pa-4" style="background-color: rgba(0,0,0,0.03); border: 1px solid rgba(0,0,0,0.12); border-radius: 4px; overflow-x: auto; font-size: 13px; line-height: 1.5; font-family: 'Roboto Mono', monospace;">{{ JSON.stringify(selectedAlertDetails.rawData, null, 2) }}</pre>
+                    </v-expansion-panel-text>
+                  </v-expansion-panel>
+                </v-expansion-panels>
+              </div>
+        </v-container>
       </v-card-text>
-      <v-divider></v-divider>
-      <v-card-actions>
-        <v-spacer></v-spacer>
-        <v-btn
-          color="primary"
-          variant="text"
-          :href="getHuntUrl(selectedAlertDetails)"
-          target="_blank"
-        >
-          <v-icon start>fa-magnifying-glass</v-icon>
-          View in Hunt
-        </v-btn>
-        <v-btn
-          variant="text"
-          @click="detailsDialog = false"
-        >
-          Close
-        </v-btn>
-      </v-card-actions>
     </v-card>
   </v-dialog>
 </div>

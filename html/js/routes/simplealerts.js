@@ -46,6 +46,7 @@ const simpleAlertsComponent = {
       // Details dialog
       detailsDialog: false,
       selectedAlertDetails: null,
+      expandedQuestions: [],
       
       // Filter options
       severityOptions: [
@@ -243,7 +244,9 @@ const simpleAlertsComponent = {
         category: event.payload['event.category'],
         acknowledged: event.payload['event.acknowledged'] || false,
         escalated: event.payload['event.escalated'] || false,
-        dismissed: event.payload['event.dismissed'] || false
+        dismissed: event.payload['event.dismissed'] || false,
+        // Store the entire payload for potential AI summary extraction
+        payload: event.payload
       }));
     },
     
@@ -440,7 +443,7 @@ const simpleAlertsComponent = {
     },
     
     async showAlertDetails(alert) {
-      // First, check if we need to fetch the full alert details
+      // First, set the selected alert details
       this.selectedAlertDetails = alert;
       
       try {
@@ -462,15 +465,136 @@ const simpleAlertsComponent = {
           // Merge the full data with our simplified alert
           this.selectedAlertDetails = {
             ...alert,
-            rawData: fullEvent.payload || {}
+            rawData: fullEvent.payload || {},
+            aiSummary: null,
+            playbooks: null,
+            playbookLoading: false,
+            playbookError: false
           };
+          
+          // Check for AI summary in the full event payload (usually not present)
+          if (fullEvent.payload) {
+            // Check various possible field names for AI summary
+            const aiSummary = fullEvent.payload['ai.summary'] || 
+                             fullEvent.payload['detection.ai_summary'] ||
+                             fullEvent.payload['rule.ai_summary'] ||
+                             fullEvent.payload['ai_summary'];
+            
+            if (aiSummary) {
+              this.selectedAlertDetails.aiSummary = aiSummary;
+            }
+          }
+          
+          // If no AI summary in payload, fetch from detection API using the public endpoint
+          // For Suricata rules, the ruleUuid is the signature ID (sid) which serves as the PublicId
+          if (!this.selectedAlertDetails.aiSummary && alert.ruleUuid) {
+            try {
+              // Use the /detection/public/{publicid} endpoint for numeric Suricata SIDs
+              const detectionResponse = await this.$root.papi.get(`/detection/public/${alert.ruleUuid}`);
+              
+              if (detectionResponse && detectionResponse.data) {
+                // Check for AI summary in the detection response
+                // The field name could be aiSummary, AiSummary, or nested in aiFields
+                const detection = detectionResponse.data;
+                
+                // Log the detection structure to understand field names
+                console.log('Detection response:', detection);
+                
+                // Try various possible field paths for AI summary
+                let aiSummary = detection.aiSummary || 
+                               detection.AiSummary ||
+                               detection.ai_summary ||
+                               detection.summary ||
+                               detection.description;
+                
+                // Check nested structures
+                if (!aiSummary && detection.aiFields) {
+                  aiSummary = detection.aiFields.aiSummary || 
+                             detection.aiFields.AiSummary ||
+                             detection.aiFields.summary ||
+                             detection.aiFields.description;
+                }
+                
+                // Check if it's in a details or content field
+                if (!aiSummary && detection.details) {
+                  aiSummary = detection.details.aiSummary || 
+                             detection.details.summary ||
+                             detection.details.description;
+                }
+                
+                // If we found a summary, use it
+                if (aiSummary) {
+                  // If it's an object, try to extract the text
+                  if (typeof aiSummary === 'object' && aiSummary !== null) {
+                    aiSummary = aiSummary.text || aiSummary.content || aiSummary.description || JSON.stringify(aiSummary);
+                  }
+                  
+                  this.selectedAlertDetails.aiSummary = aiSummary;
+                  console.log('Found AI summary:', aiSummary);
+                }
+                
+                // Also store the full detection for additional context
+                this.selectedAlertDetails.detection = detection;
+              }
+            } catch (detectionError) {
+              // Silently ignore 404s - not all rules have detections
+              if (detectionError.response && detectionError.response.status !== 404) {
+                console.warn(`Failed to fetch detection for rule ${alert.ruleUuid}:`, detectionError);
+              }
+            }
+          }
+          
+          // Fetch playbook/guided analysis data
+          if (alert.ruleUuid) {
+            this.selectedAlertDetails.playbookLoading = true;
+            try {
+              const playbookResponse = await this.$root.papi.get(`/playbook/detection/${alert.ruleUuid}`);
+              
+              if (playbookResponse && playbookResponse.data) {
+                const playbooks = playbookResponse.data;
+                
+                // Process playbook questions - variable substitution
+                for (let pb of playbooks) {
+                  for (let question of pb.questions) {
+                    // Simple query variable substitution
+                    let query = question.query;
+                    
+                    // Replace variables with values from the event
+                    const variables = query.match(/\{([^}]+)\}/g) || [];
+                    for (const variable of variables) {
+                      const fieldName = variable.slice(1, -1); // Remove { and }
+                      const value = this.selectedAlertDetails.rawData[fieldName] || 'NODATA';
+                      query = query.replace(variable, value);
+                    }
+                    
+                    question.filledQuery = query;
+                  }
+                }
+                
+                // Convert queries from Sigma/other formats to OQL
+                await this.convertPlaybookQueries(playbooks);
+                
+                // Execute queries and get answers
+                await this.executePlaybookQueries(playbooks, fullEvent);
+                
+                this.selectedAlertDetails.playbooks = playbooks;
+                this.selectedAlertDetails.playbookError = false;
+              }
+            } catch (playbookError) {
+              console.log('Failed to fetch playbook:', playbookError);
+              this.selectedAlertDetails.playbookError = true;
+            } finally {
+              this.selectedAlertDetails.playbookLoading = false;
+            }
+          }
         }
       } catch (error) {
         console.error('Failed to fetch full alert details:', error);
         // Still show the dialog with what we have
         this.selectedAlertDetails = {
           ...alert,
-          rawData: {}
+          rawData: {},
+          aiSummary: null
         };
       }
       
@@ -488,6 +612,249 @@ const simpleAlertsComponent = {
       if (!alert) return '#/hunt';
       const query = `_id:"${alert.id}"`;
       return `#/hunt?q=${encodeURIComponent(query)}`;
+    },
+    
+    getHuntUrlForQuestion(question) {
+      if (!question || !question.filledOQL) return '#/hunt';
+      // Use the OQL query for hunting
+      return `#/hunt?q=${encodeURIComponent(question.filledOQL)}`;
+    },
+    
+    async convertPlaybookQueries(playbooks) {
+      const queries = playbooks.map(pb => pb.questions.map(q => q.filledQuery)).flat();
+      
+      if (queries.length === 0) return;
+      
+      try {
+        const response = await this.$root.papi.post('playbook/convert', queries);
+        if (!response || !response.data) {
+          console.error('Invalid response from playbook/convert API');
+          return;
+        }
+        
+        let index = 0;
+        for (let pb of playbooks) {
+          for (let question of pb.questions) {
+            if (response.data[index]) {
+              question.filledOQL = response.data[index].query;
+              question.fields = response.data[index].fields;
+            } else {
+              question.filledOQL = '';
+              question.fields = [];
+            }
+            index++;
+          }
+        }
+      } catch (error) {
+        console.error('Error converting playbook queries:', error);
+        // Set default values
+        for (let pb of playbooks) {
+          for (let question of pb.questions) {
+            question.filledOQL = question.filledQuery || '';
+            question.fields = [];
+          }
+        }
+      }
+    },
+    
+    async executePlaybookQueries(playbooks, event) {
+      for (let pb of playbooks) {
+        for (let question of pb.questions) {
+          await this.askQuestion(question, event);
+        }
+      }
+      
+      // Sort questions by results
+      let good = [];  // has answers
+      let bad = [];   // no answers  
+      let ugly = [];  // error
+      
+      for (let pb of playbooks) {
+        for (let q of pb.questions) {
+          if (q.error) {
+            ugly.push(q);
+          } else if (q.answers && q.answers.length > 0) {
+            good.push(q);
+          } else {
+            bad.push(q);
+          }
+        }
+      }
+      
+      // Replace questions with sorted array
+      if (playbooks.length > 0) {
+        playbooks[0].sortedQuestions = [...good, ...bad, ...ugly];
+        playbooks[0].hasResults = good.length > 0;
+        
+        // Auto-expand questions with results
+        this.expandedQuestions = [];
+        for (let i = 0; i < good.length; i++) {
+          this.expandedQuestions.push(i);
+        }
+      }
+    },
+    
+    async askQuestion(question, event) {
+      if (question.range) {
+        // Query with a time range
+        if (question.filledOQL) {
+          try {
+            const dateRange = this.buildQuestionRange(event, question.range);
+            let query = question.filledOQL;
+            
+            // Check if aggregate query
+            const isAggregate = query.includes('| groupby') || query.includes('| metrics');
+            if (!isAggregate) {
+              query = query + ' | sortby @timestamp';
+            }
+            
+            const response = await this.$root.papi.get('events/', {
+              params: {
+                query: query,
+                range: dateRange,
+                format: '2006/01/02 3:04:05 PM',
+                zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                metricLimit: 5,
+                eventLimit: 5
+              }
+            });
+            
+            if (isAggregate && response.data.metrics) {
+              // Handle aggregate results
+              let biggest = '';
+              for (let field in response.data.metrics) {
+                if (field.length > biggest.length) biggest = field;
+              }
+              if (biggest) {
+                question.answers = this.sortAggregateEvents(response.data.metrics[biggest]);
+              } else {
+                question.answers = response.data.events || [];
+              }
+            } else {
+              question.answers = response.data.events || [];
+            }
+          } catch (e) {
+            console.error('Failed to execute playbook query:', e);
+            question.error = true;
+            question.answers = [];
+            question.errorMessage = e.response?.data?.error || e.message;
+          }
+        } else {
+          question.error = true;
+          question.answers = [];
+          question.errorMessage = 'Query conversion failed';
+        }
+      } else {
+        // No range - answer is in the event itself
+        const dupe = JSON.parse(JSON.stringify(event.payload || {}));
+        question.answers = [{ payload: dupe }];
+      }
+    },
+    
+    buildQuestionRange(event, range) {
+      if (!range) return '';
+      
+      // Get event timestamp
+      const timestamp = event.timestamp;
+      if (!timestamp) return '';
+      
+      const t = new Date(timestamp);
+      
+      let plusMinus = false;
+      let lookingBack = false;
+      
+      if (range.startsWith('+/-')) {
+        plusMinus = true;
+        range = range.substring(3);
+      } else if (range.startsWith('-')) {
+        lookingBack = true;
+        range = range.substring(1);
+      }
+      
+      const unit = range[range.length - 1].toLowerCase();
+      range = range.substring(0, range.length - 1);
+      
+      const value = parseInt(range);
+      if (isNaN(value)) return '';
+      
+      const unitMap = { d: 'days', h: 'hours', m: 'minutes', s: 'seconds' };
+      const unitName = unitMap[unit];
+      if (!unitName) return '';
+      
+      // Calculate date range
+      let startDate, endDate;
+      const msMap = {
+        days: 24 * 60 * 60 * 1000,
+        hours: 60 * 60 * 1000,
+        minutes: 60 * 1000,
+        seconds: 1000
+      };
+      
+      const ms = value * msMap[unitName];
+      
+      if (plusMinus) {
+        startDate = new Date(t.getTime() - ms);
+        endDate = new Date(t.getTime() + ms);
+      } else if (lookingBack) {
+        startDate = new Date(t.getTime() - ms);
+        endDate = t;
+      } else {
+        startDate = t;
+        endDate = new Date(t.getTime() + ms);
+      }
+      
+      // Format dates
+      const format = (date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        let hours = date.getHours();
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        const seconds = String(date.getSeconds()).padStart(2, '0');
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12 || 12;
+        
+        return `${year}/${month}/${day} ${hours}:${minutes}:${seconds} ${ampm}`;
+      };
+      
+      return `${format(startDate)} - ${format(endDate)}`;
+    },
+    
+    sortAggregateEvents(events) {
+      events = events.sort((a, b) => b.value - a.value);
+      if (events.length > 5) {
+        events = events.slice(0, 5);
+      }
+      return events;
+    },
+    
+    getQuestionColor(question) {
+      if (question.error) return 'error';
+      if (question.answers && question.answers.length > 0) return 'success';
+      return 'default';
+    },
+    
+    async copyAlertId() {
+      if (!this.selectedAlertDetails) return;
+      
+      try {
+        await navigator.clipboard.writeText(this.selectedAlertDetails.id);
+        this.$root.showTip('Alert ID copied to clipboard');
+      } catch (error) {
+        this.$root.showError('Failed to copy Alert ID');
+      }
+    },
+    
+    async copyRawData() {
+      if (!this.selectedAlertDetails || !this.selectedAlertDetails.rawData) return;
+      
+      try {
+        const jsonStr = JSON.stringify(this.selectedAlertDetails.rawData, null, 2);
+        await navigator.clipboard.writeText(jsonStr);
+        this.$root.showTip('Raw data copied to clipboard');
+      } catch (error) {
+        this.$root.showError('Failed to copy raw data');
+      }
     }
   }
 };
