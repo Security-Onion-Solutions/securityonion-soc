@@ -55,6 +55,9 @@ const simpleAlertsComponent = {
       pcapData: null,
       pcapError: null,
       pcapMonitorInterval: null,
+      pcapPackets: [],
+      pcapPacketsLoading: false,
+      expandedPackets: [],
       
       // Grouping
       groupAlerts: true,  // Default to grouped view
@@ -1070,12 +1073,14 @@ const simpleAlertsComponent = {
               // Store PCAP data
               this.pcapData = {
                 id: this.pcapJobId,
-                packets: job.completedBytes || 0,
                 bytes: job.completedBytes || 0,
                 sensor: job.nodeId,
                 filter: job.filter,
                 downloadUrl: this.$root.apiUrl + `stream?jobId=${this.pcapJobId}&ext=pcap`
               };
+              
+              // Load packet details
+              this.loadPcapPackets();
               
               this.$root.showTip('PCAP capture completed');
             } else if (job.status === 2 || job.status === 3) {
@@ -1083,7 +1088,14 @@ const simpleAlertsComponent = {
               clearInterval(this.pcapMonitorInterval);
               this.pcapMonitorInterval = null;
               this.pcapLoading = false;
-              this.pcapError = job.failure || 'PCAP job failed';
+              
+              // Check for common error messages
+              let errorMessage = job.failure || 'PCAP job failed';
+              if (errorMessage.includes('No data available')) {
+                errorMessage = 'PCAP data is no longer available (may have rolled off due to retention policy)';
+              }
+              
+              this.pcapError = errorMessage;
               this.$root.showError('PCAP capture failed: ' + this.pcapError);
             }
           }
@@ -1122,12 +1134,129 @@ const simpleAlertsComponent = {
       this.pcapData = null;
       this.pcapError = null;
       this.pcapLoading = false;
+      this.pcapPackets = [];
+      this.pcapPacketsLoading = false;
+      this.expandedPackets = [];
     },
     
     downloadPcap() {
       if (this.pcapData && this.pcapData.downloadUrl) {
         window.open(this.pcapData.downloadUrl, '_blank');
       }
+    },
+    
+    async loadPcapPackets() {
+      if (!this.pcapJobId) return;
+      
+      console.log('Loading PCAP packets for job:', this.pcapJobId);
+      this.pcapPacketsLoading = true;
+      try {
+        const response = await this.$root.papi.get('packets', {
+          params: {
+            jobId: this.pcapJobId,
+            offset: this.pcapPackets.length,
+            count: 100,
+            unwrap: false
+          }
+        });
+        
+        console.log('PCAP packets response:', response);
+        
+        if (response && response.data && response.data.length > 0) {
+          // Prepare IPs for batch lookup
+          const batch = [];
+          for (let i = 0; i < response.data.length; i++) {
+            const pkt = response.data[i];
+            batch.push(pkt.dstIp);
+            batch.push(pkt.srcIp);
+          }
+          
+          this.pcapPackets = this.pcapPackets.concat(response.data);
+          console.log('Loaded', response.data.length, 'packets. Total:', this.pcapPackets.length);
+          this.$root.batchLookup(batch, this);
+        } else {
+          console.log('No packets in response');
+        }
+      } catch (error) {
+        console.error('Failed to load PCAP packets:', error);
+        // Silently fail if packets can't be loaded
+      }
+      this.pcapPacketsLoading = false;
+    },
+    
+    formatPacketTimestamp(timestamp) {
+      if (!timestamp) return '';
+      const date = new Date(timestamp);
+      return date.toLocaleString();
+    },
+    
+    getPacketTypeColor(type) {
+      if (!type) return '';
+      if (type.startsWith("ICMP")) return "cyan";
+      if (type.startsWith("DHCP")) return "teal-lighten-2";
+      if (type.startsWith("ARP")) return "secondary";
+      if (type.startsWith("DNS")) return "accent";
+      if (type.startsWith("TCP")) return "primary";
+      if (type.startsWith("UDP")) return "success";
+      return "";
+    },
+    
+    getPacketFlagColor(flag) {
+      if (flag === "SYN") return "success";
+      if (flag === "PSH") return "primary";
+      if (flag === "RST") return "error";
+      if (flag === "FIN") return "warning";
+      if (flag === "VXLAN") return "accent";
+      return "";
+    },
+    
+    togglePacket(packetNumber) {
+      const index = this.expandedPackets.indexOf(packetNumber);
+      if (index > -1) {
+        this.expandedPackets.splice(index, 1);
+      } else {
+        this.expandedPackets.push(packetNumber);
+      }
+    },
+    
+    isPacketExpanded(packetNumber) {
+      return this.expandedPackets.includes(packetNumber);
+    },
+    
+    formatPacketPayload(packet) {
+      if (!packet.payload) return 'No payload data';
+      
+      try {
+        const bytes = atob(packet.payload);
+        // Show as hex view
+        return this.formatHexView(bytes);
+      } catch (e) {
+        return 'Error decoding payload';
+      }
+    },
+    
+    formatHexView(bytes) {
+      let hex = '';
+      let ascii = '';
+      let result = '';
+      
+      for (let i = 0; i < bytes.length; i++) {
+        const byte = bytes.charCodeAt(i);
+        hex += byte.toString(16).padStart(2, '0') + ' ';
+        ascii += (byte >= 32 && byte <= 126) ? bytes.charAt(i) : '.';
+        
+        if ((i + 1) % 16 === 0 || i === bytes.length - 1) {
+          // Pad hex to align ASCII
+          while (hex.length < 48) {
+            hex += '   ';
+          }
+          result += hex + ' |' + ascii + '|\n';
+          hex = '';
+          ascii = '';
+        }
+      }
+      
+      return result;
     },
     
     getSubGroups(group) {
