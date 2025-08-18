@@ -207,8 +207,6 @@ func (export *Export) ProcessJob(job *model.Job, reader io.ReadCloser) (io.ReadC
 		// Return content as reader
 		return io.NopCloser(pdfReader), nil
 	}
-
-	return nil, fmt.Errorf("unsupported report type: %s", exportType)
 }
 
 func (export *Export) populateCache() {

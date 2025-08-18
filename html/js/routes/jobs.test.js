@@ -402,7 +402,7 @@ describe('addExportJob', () => {
 		comp.form.timeframe = '';
 		comp.addExportJob();
 		expect(mockExport).toHaveBeenCalledWith(
-			{ type: 'productivity' },
+			{ description: 'Productivity Report', type: 'productivity' },
 			undefined,
 			undefined
 		);
@@ -415,7 +415,7 @@ describe('addExportJob', () => {
 		expect(mockMoment).toHaveBeenCalledWith('2025/07/24 12:00:00 AM', 'YYYY/MM/DD hh:mm:ss A');
 		expect(mockMoment).toHaveBeenCalledWith('2025/07/25 11:59:59 PM', 'YYYY/MM/DD hh:mm:ss A');
 		expect(mockExport).toHaveBeenCalledWith(
-			{ type: 'productivity' },
+			{ description: 'Productivity Report', type: 'productivity' },
 			'2025-07-24T12:00:00Z',
 			'2025-07-24T12:00:00Z'
 		);

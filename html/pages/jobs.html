@@ -48,9 +48,10 @@
 						</td>
 						<td>{{ item.owner }}</td>
 						<td>{{ formatTimestamp(item.createTime) }}</td>
-						<td>{{ formatTimestamp(item.completeTime) }}</td>
+						<td v-if="isSensorJob()">{{ formatTimestamp(item.completeTime) }}</td>
 						<td v-if="isSensorJob()" v-text="item.nodeId"></td>
 						<td v-else-if="isDownloadable()" v-text="getDescription(item)"></td>
+						<td v-if="isDownloadable()">{{ formatCount(formatDecimal1(item.size / 1000)) }} KB</td>
 						<td><v-chip density="compact" :color="colorJobStatus(item)" data-aid="jobs_status">{{ formatJobStatus(item) }}</v-chip></td>
 						<td>
 							<router-link v-if="isViewable()" :to="{ name: 'job', params: {jobId: item.id}}" style="text-decoration: none; cursor: 'pointer'" data-aid="jobs_open">

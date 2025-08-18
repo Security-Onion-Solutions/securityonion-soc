@@ -29,8 +29,8 @@ const jobsComponent = {
       { title: this.$root.i18n.id, value: 'id' },
       { title: this.$root.i18n.owner, value: 'owner' },
       { title: this.$root.i18n.dateQueued, value: 'createTime' },
-      { title: this.$root.i18n.dateCompleted, value: 'completeTime' },
       { title: this.$root.i18n.description, value: 'description' },
+      { title: this.$root.i18n.filesize, value: 'size' },
       { title: this.$root.i18n.status, value: 'status' },
       { title: this.$root.i18n.actions },
     ],
@@ -83,6 +83,16 @@ const jobsComponent = {
       }
       this.$root.stopLoading();
       this.$root.subscribe("job", this.updateJob);
+    },
+    getReportDescription(type) {
+      const types = this.getReportTypes();
+      for (var idx = 0; idx < types.length; idx++) {
+        const reportType = types[idx];
+        if (reportType.value == type) {
+          return reportType.title;
+        }
+      }
+      return type;
     },
     getReportTypes() {
       let types = [];
@@ -187,6 +197,7 @@ const jobsComponent = {
       }
       this.$root.export({
         type: this.form.type,
+        description: this.getReportDescription(this.form.type),
       }, beginDate, endDate);
     },
     async addJob(sensorId, importId, protocol, srcIp, srcPort, dstIp, dstPort, timeframe) {
@@ -346,13 +357,17 @@ const jobsComponent = {
       var desc = "";
       switch(this.kind) {
         case 'reports':
-          desc = this.$root.localizeMessage(job.filter.parameters.type);
+          if (job.filter.parameters.description) {
+            desc = job.filter.parameters.description;
+          } else {
+            desc = this.$root.localizeMessage(job.filter.parameters.type);
+          }
           if (job.filter.parameters.id) {
             desc += " " + job.filter.parameters.id
           } else if (job.filter.beginTime != '0001-01-01T00:00:00Z' && job.filter.endTime != '0001-01-01T00:00:00Z') {
             var start = moment(job.filter.beginTime).format(this.i18n.dateFormat);
             var end = moment(job.filter.endTime).format(this.i18n.dateFormat);
-            desc += " " + start + " - " + end;
+            desc += ": " + start + " - " + end;
           }
           if (job.fileExtension != "bin") {
             desc += " [" + this.$root.localizeMessage(job.fileExtension) + "]";
