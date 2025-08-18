@@ -48,6 +48,20 @@ const simpleAlertsComponent = {
       selectedAlertDetails: null,
       expandedQuestions: [],
       
+      // PCAP
+      pcapLoading: false,
+      pcapJobId: null,
+      pcapJobStatus: null,
+      pcapData: null,
+      pcapError: null,
+      pcapMonitorInterval: null,
+      
+      // Grouping
+      groupAlerts: true,  // Default to grouped view
+      alertGroups: [],
+      expandedGroups: [],
+      expandedSubGroups: {},  // Track expanded state of sub-groups
+      
       // Filter options
       severityOptions: [
         { value: 'all', title: 'All Severities' },
@@ -82,10 +96,78 @@ const simpleAlertsComponent = {
     },
     lowSeverityCount() {
       return this.totalLowSeverity;
+    },
+    processedAlerts() {
+      if (!this.groupAlerts) {
+        return this.alerts;
+      }
+      
+      // Group alerts
+      const groups = new Map();
+      
+      this.alerts.forEach(alert => {
+        let groupKey;
+        
+        if (alert.module === 'suricata' && alert.sourceIp && alert.destIp) {
+          // For Suricata alerts, group by source and destination IPs (ignoring ports)
+          groupKey = `${alert.ruleName}::${alert.sourceIp}->${alert.destIp}`;
+        } else {
+          // For other alerts, just group by rule name
+          groupKey = alert.ruleName;
+        }
+        
+        if (!groups.has(groupKey)) {
+          groups.set(groupKey, {
+            key: groupKey,
+            ruleName: alert.ruleName,
+            sourceIp: alert.sourceIp,
+            destIp: alert.destIp,
+            module: alert.module,
+            severityLabel: alert.severityLabel,
+            category: alert.category,
+            firstSeen: alert.timestamp,
+            lastSeen: alert.timestamp,
+            alerts: [],
+            count: 0
+          });
+        }
+        
+        const group = groups.get(groupKey);
+        group.alerts.push(alert);
+        group.count++;
+        
+        // Update first and last seen timestamps
+        if (alert.timestamp < group.firstSeen) {
+          group.firstSeen = alert.timestamp;
+        }
+        if (alert.timestamp > group.lastSeen) {
+          group.lastSeen = alert.timestamp;
+        }
+        
+        // Use highest severity in group
+        if (this.getSeverityLevel(alert) === 'high' && group.severityLabel !== 'high') {
+          group.severityLabel = alert.severityLabel;
+        } else if (this.getSeverityLevel(alert) === 'medium' && group.severityLabel === 'low') {
+          group.severityLabel = alert.severityLabel;
+        }
+      });
+      
+      // Convert to array and sort by count
+      this.alertGroups = Array.from(groups.values()).sort((a, b) => b.count - a.count);
+      
+      return this.alertGroups;
     }
   },
   mounted() {
     this.loadAlerts();
+  },
+  watch: {
+    detailsDialog(newVal) {
+      if (!newVal) {
+        // Clear PCAP data when dialog closes
+        this.clearPcapData();
+      }
+    }
   },
   methods: {
     async loadAlerts() {
@@ -855,6 +937,236 @@ const simpleAlertsComponent = {
       } catch (error) {
         this.$root.showError('Failed to copy raw data');
       }
+    },
+    
+    toggleGrouping() {
+      this.groupAlerts = !this.groupAlerts;
+      if (this.groupAlerts) {
+        // Reset expanded states
+        this.expandedGroups = [];
+        this.expandedSubGroups = {};
+      }
+    },
+    
+    toggleGroup(index) {
+      const idx = this.expandedGroups.indexOf(index);
+      if (idx > -1) {
+        this.expandedGroups.splice(idx, 1);
+      } else {
+        this.expandedGroups.push(index);
+      }
+    },
+    
+    isGroupExpanded(index) {
+      return this.expandedGroups.includes(index);
+    },
+    
+    toggleSubGroup(groupKey, subGroupKey) {
+      if (!this.expandedSubGroups[groupKey]) {
+        this.$set(this.expandedSubGroups, groupKey, []);
+      }
+      const idx = this.expandedSubGroups[groupKey].indexOf(subGroupKey);
+      if (idx > -1) {
+        this.expandedSubGroups[groupKey].splice(idx, 1);
+      } else {
+        this.expandedSubGroups[groupKey].push(subGroupKey);
+      }
+    },
+    
+    isSubGroupExpanded(groupKey, subGroupKey) {
+      return this.expandedSubGroups[groupKey] && this.expandedSubGroups[groupKey].includes(subGroupKey);
+    },
+    
+    getGroupSummary(group) {
+      if (group.module === 'suricata' && group.sourceIp && group.destIp) {
+        return `${group.sourceIp} → ${group.destIp}`;
+      }
+      return `${group.count} occurrence${group.count > 1 ? 's' : ''}`;
+    },
+    
+    async requestPcap() {
+      if (!this.selectedAlertDetails || !this.selectedAlertDetails.sourceIp || !this.selectedAlertDetails.destIp) {
+        this.$root.showError('Cannot request PCAP: Missing network information');
+        return;
+      }
+      
+      this.pcapLoading = true;
+      this.pcapError = null;
+      this.pcapData = null;
+      
+      try {
+        // Parse timestamp and create time window
+        const alertTime = new Date(this.selectedAlertDetails.timestamp);
+        const beginTime = new Date(alertTime.getTime() - 30000); // 30 seconds before
+        const endTime = new Date(alertTime.getTime() + 30000); // 30 seconds after
+        
+        // Build PCAP filter based on alert details
+        const filter = {
+          beginTime: beginTime.toISOString(),
+          endTime: endTime.toISOString(),
+          srcIp: this.selectedAlertDetails.sourceIp,
+          dstIp: this.selectedAlertDetails.destIp
+        };
+        
+        // Add ports if available
+        if (this.selectedAlertDetails.sourcePort) {
+          filter.srcPort = parseInt(this.selectedAlertDetails.sourcePort);
+        }
+        if (this.selectedAlertDetails.destPort) {
+          filter.dstPort = parseInt(this.selectedAlertDetails.destPort);
+        }
+        
+        // Build job request
+        const jobRequest = {
+          nodeId: this.selectedAlertDetails.rawData?.['observer.name'] || this.selectedAlertDetails.rawData?.['agent.name'] || '',
+          filter: filter
+        };
+        
+        console.log('Requesting PCAP job with params:', jobRequest);
+        
+        // Request PCAP job
+        const response = await this.$root.papi.post('job/', jobRequest);
+        
+        if (response && response.data && response.data.id) {
+          this.pcapJobId = response.data.id;
+          this.pcapJobStatus = 0; // JobStatusPending
+          
+          // Start monitoring the job
+          this.monitorPcapJob();
+        } else {
+          throw new Error('Failed to create PCAP job');
+        }
+      } catch (error) {
+        console.error('PCAP request failed:', error);
+        this.pcapError = error.message || 'Failed to request PCAP';
+        this.pcapLoading = false;
+        this.$root.showError('Failed to request PCAP: ' + this.pcapError);
+      }
+    },
+    
+    async monitorPcapJob() {
+      if (!this.pcapJobId) return;
+      
+      // Clear any existing interval
+      if (this.pcapMonitorInterval) {
+        clearInterval(this.pcapMonitorInterval);
+      }
+      
+      // Check job status every 2 seconds
+      this.pcapMonitorInterval = setInterval(async () => {
+        try {
+          const response = await this.$root.papi.get(`job/${this.pcapJobId}`);
+          
+          if (response && response.data) {
+            const job = response.data;
+            this.pcapJobStatus = job.status;
+            
+            // Check if job is complete (status = 1 = JobStatusCompleted)
+            if (job.status === 1) {
+              clearInterval(this.pcapMonitorInterval);
+              this.pcapMonitorInterval = null;
+              this.pcapLoading = false;
+              
+              // Store PCAP data
+              this.pcapData = {
+                id: this.pcapJobId,
+                packets: job.completedBytes || 0,
+                bytes: job.completedBytes || 0,
+                sensor: job.nodeId,
+                filter: job.filter,
+                downloadUrl: this.$root.apiUrl + `stream?jobId=${this.pcapJobId}&ext=pcap`
+              };
+              
+              this.$root.showTip('PCAP capture completed');
+            } else if (job.status === 2 || job.status === 3) {
+              // JobStatusIncomplete = 2, JobStatusDeleted = 3
+              clearInterval(this.pcapMonitorInterval);
+              this.pcapMonitorInterval = null;
+              this.pcapLoading = false;
+              this.pcapError = job.failure || 'PCAP job failed';
+              this.$root.showError('PCAP capture failed: ' + this.pcapError);
+            }
+          }
+        } catch (error) {
+          console.error('Failed to check PCAP job status:', error);
+          // Continue monitoring unless it's a 404
+          if (error.response && error.response.status === 404) {
+            clearInterval(this.pcapMonitorInterval);
+            this.pcapMonitorInterval = null;
+            this.pcapLoading = false;
+            this.pcapError = 'PCAP job not found';
+          }
+        }
+      }, 2000);
+    },
+    
+    downloadPcap() {
+      if (!this.pcapData || !this.pcapData.downloadUrl) return;
+      
+      // Create a download link
+      const link = document.createElement('a');
+      link.href = this.pcapData.downloadUrl;
+      link.download = `alert_${this.selectedAlertDetails.id}_${Date.now()}.pcap`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    },
+    
+    clearPcapData() {
+      // Clear PCAP state when dialog closes
+      if (this.pcapMonitorInterval) {
+        clearInterval(this.pcapMonitorInterval);
+      }
+      this.pcapJobId = null;
+      this.pcapJobStatus = null;
+      this.pcapData = null;
+      this.pcapError = null;
+      this.pcapLoading = false;
+    },
+    
+    downloadPcap() {
+      if (this.pcapData && this.pcapData.downloadUrl) {
+        window.open(this.pcapData.downloadUrl, '_blank');
+      }
+    },
+    
+    getSubGroups(group) {
+      // Sub-group alerts by source and destination IPs (ignoring ports)
+      const subGroups = new Map();
+      
+      group.alerts.forEach(alert => {
+        const subKey = `${alert.sourceIp || 'unknown'} → ${alert.destIp || 'unknown'}`;
+        
+        if (!subGroups.has(subKey)) {
+          subGroups.set(subKey, {
+            key: subKey,
+            sourceIp: alert.sourceIp,
+            destIp: alert.destIp,
+            alerts: [],
+            count: 0,
+            ports: new Set() // Track unique port combinations
+          });
+        }
+        
+        const subGroup = subGroups.get(subKey);
+        subGroup.alerts.push(alert);
+        subGroup.count++;
+        
+        // Track unique port combinations
+        if (alert.sourcePort || alert.destPort) {
+          subGroup.ports.add(`${alert.sourcePort || '*'}:${alert.destPort || '*'}`);
+        }
+      });
+      
+      // Convert to array and sort by count
+      const groups = Array.from(subGroups.values()).sort((a, b) => b.count - a.count);
+      
+      // Convert ports Set to array for display
+      groups.forEach(g => {
+        g.uniquePorts = Array.from(g.ports);
+      });
+      
+      return groups;
     }
   }
 };

@@ -99,8 +99,21 @@
   <v-card>
     <v-card-title>
       <span>Alerts</span>
-      <span class="text-caption ml-2" v-if="!loading">(Showing {{ alerts.length }} of {{ totalAlerts }})</span>
+      <span class="text-caption ml-2" v-if="!loading">
+        <span v-if="groupAlerts">({{ alertGroups.length }} groups, {{ alerts.length }} total)</span>
+        <span v-else>(Showing {{ alerts.length }} of {{ totalAlerts }})</span>
+      </span>
       <v-spacer></v-spacer>
+      <v-btn
+        :color="groupAlerts ? 'primary' : 'default'"
+        :variant="groupAlerts ? 'flat' : 'outlined'"
+        size="small"
+        @click="toggleGrouping"
+        prepend-icon="fa-layer-group"
+        class="mr-2"
+      >
+        Group Alerts
+      </v-btn>
       <v-btn
         color="primary"
         variant="outlined"
@@ -119,8 +132,116 @@
         <v-icon size="48" class="mb-4">fa-check-circle</v-icon>
         <div>No alerts found</div>
       </div>
+      
+      <!-- Grouped View -->
+      <div v-else-if="groupAlerts">
+        <v-expansion-panels
+          v-model="expandedGroups"
+          multiple
+          variant="accordion"
+        >
+          <v-expansion-panel
+            v-for="(group, groupIndex) in processedAlerts"
+            :key="group.key"
+          >
+            <v-expansion-panel-title>
+              <div class="d-flex align-center justify-space-between w-100 pr-4">
+                <div class="d-flex align-center ga-3">
+                  <!-- Group Count Badge -->
+                  <v-avatar 
+                    size="32" 
+                    :color="getSeverityColor(group.severityLabel)"
+                    variant="tonal"
+                  >
+                    <span class="font-weight-bold">{{ group.count }}</span>
+                  </v-avatar>
+                  
+                  <!-- Group Info -->
+                  <div>
+                    <div class="font-weight-medium">{{ group.ruleName }}</div>
+                    <div class="text-caption text--secondary">
+                      {{ getGroupSummary(group) }}
+                      <v-chip size="x-small" class="ml-2" variant="tonal">
+                        {{ new Date(group.firstSeen).toLocaleTimeString() }} - {{ new Date(group.lastSeen).toLocaleTimeString() }}
+                      </v-chip>
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- Severity Chip -->
+                <v-chip
+                  :color="getSeverityColor(group.severityLabel)"
+                  size="small"
+                  variant="tonal"
+                >
+                  {{ group.severityLabel }}
+                </v-chip>
+              </div>
+            </v-expansion-panel-title>
+            <v-expansion-panel-text>
+              <!-- Nested Sub-groups by Source/Destination -->
+              <v-expansion-panels 
+                variant="accordion"
+                class="elevation-0"
+              >
+                <v-expansion-panel
+                  v-for="subGroup in getSubGroups(group)"
+                  :key="subGroup.key"
+                  class="mb-2"
+                >
+                  <v-expansion-panel-title class="pa-3 bg-grey-darken-3">
+                    <div class="d-flex align-center justify-space-between w-100 pr-4">
+                      <div class="d-flex align-center ga-3">
+                        <v-avatar size="24" color="primary" variant="tonal">
+                          <span class="text-caption font-weight-bold">{{ subGroup.count }}</span>
+                        </v-avatar>
+                        <div>
+                          <div class="d-flex align-center">
+                            <v-chip size="small" variant="outlined" class="mr-2">
+                              <v-icon start size="x-small">fa-desktop</v-icon>
+                              {{ subGroup.sourceIp || 'Unknown' }}
+                            </v-chip>
+                            <v-icon size="x-small" class="mx-1">fa-arrow-right</v-icon>
+                            <v-chip size="small" variant="outlined">
+                              <v-icon start size="x-small">fa-server</v-icon>
+                              {{ subGroup.destIp || 'Unknown' }}
+                            </v-chip>
+                          </div>
+                          <div class="text-caption text--secondary mt-1">
+                            {{ subGroup.count }} alert{{ subGroup.count > 1 ? 's' : '' }}
+                            <span v-if="subGroup.uniquePorts && subGroup.uniquePorts.length > 0">
+                              • {{ subGroup.uniquePorts.length }} unique port combination{{ subGroup.uniquePorts.length > 1 ? 's' : '' }}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </v-expansion-panel-title>
+                  
+                  <v-expansion-panel-text>
+                    <!-- Individual alerts -->
+                    <v-row class="pa-2">
+                      <v-col cols="12" v-for="alert in subGroup.alerts" :key="alert.id">
+                        <alert-card
+                          :alert="alert"
+                          @acknowledge="acknowledgeAlert"
+                          @escalate="escalateAlert"
+                          @dismiss="dismissAlert"
+                          @click="showAlertDetails"
+                        ></alert-card>
+                      </v-col>
+                    </v-row>
+                  </v-expansion-panel-text>
+                </v-expansion-panel>
+              </v-expansion-panels>
+            </v-expansion-panel-text>
+          </v-expansion-panel>
+        </v-expansion-panels>
+      </div>
+      
+      <!-- Ungrouped View -->
       <v-row v-else>
-        <v-col cols="12" v-for="alert in alerts" :key="alert.id">
+        <v-col cols="12" v-for="alert in processedAlerts" :key="alert.id">
           <alert-card
             :alert="alert"
             @acknowledge="acknowledgeAlert"
@@ -224,6 +345,18 @@
             </div>
           </div>
           <div class="d-flex align-center">
+            <v-btn
+              variant="outlined"
+              color="white"
+              size="small"
+              class="mr-2"
+              @click="requestPcap"
+              :loading="pcapLoading"
+              :disabled="!selectedAlertDetails || !selectedAlertDetails.sourceIp || !selectedAlertDetails.destIp"
+            >
+              <v-icon start size="small">fa-download</v-icon>
+              PCAP
+            </v-btn>
             <v-btn
               variant="outlined"
               color="white"
@@ -427,6 +560,68 @@
                         <v-chip size="small" color="info" variant="tonal" class="mr-2">TLS</v-chip>
                         <span>Server: {{ selectedAlertDetails.rawData['tls.server_name'] }}</span>
                         <span v-if="selectedAlertDetails.rawData['tls.version']" class="ml-2">({{ selectedAlertDetails.rawData['tls.version'] }})</span>
+                      </div>
+                    </div>
+                    
+                    <!-- PCAP Section -->
+                    <div v-if="pcapLoading || pcapData || pcapError" class="mt-4">
+                      <v-divider class="mb-3"></v-divider>
+                      <div class="text-subtitle-2 text--secondary mb-2">
+                        <v-icon start size="small">fa-download</v-icon>
+                        PCAP Capture
+                      </div>
+                      
+                      <!-- Loading State -->
+                      <div v-if="pcapLoading" class="pa-3 bg-primary-lighten-5 rounded">
+                        <div class="d-flex align-center">
+                          <v-progress-circular
+                            indeterminate
+                            size="20"
+                            width="2"
+                            color="primary"
+                            class="mr-3"
+                          ></v-progress-circular>
+                          <div>
+                            <div class="font-weight-medium">Requesting PCAP...</div>
+                            <div class="text-caption">Job ID: {{ pcapJobId || 'Pending' }} • Status: {{ pcapJobStatus === 0 ? 'Pending' : pcapJobStatus === 1 ? 'Completed' : pcapJobStatus === 2 ? 'Incomplete' : 'Processing' }}</div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <!-- Error State -->
+                      <v-alert v-else-if="pcapError" type="error" variant="tonal" density="compact">
+                        {{ pcapError }}
+                      </v-alert>
+                      
+                      <!-- Success State -->
+                      <div v-else-if="pcapData" class="pa-3 bg-success-lighten-5 rounded">
+                        <div class="d-flex align-center justify-space-between">
+                          <div>
+                            <div class="font-weight-medium text-success">
+                              <v-icon start size="small">fa-check-circle</v-icon>
+                              PCAP Captured Successfully
+                            </div>
+                            <div class="text-caption mt-1">
+                              <v-chip size="x-small" variant="tonal" class="mr-2">
+                                {{ pcapData.packets }} packets
+                              </v-chip>
+                              <v-chip size="x-small" variant="tonal" class="mr-2">
+                                {{ pcapData.bytes }} bytes
+                              </v-chip>
+                              <v-chip size="x-small" variant="tonal" v-if="pcapData.sensor">
+                                Sensor: {{ pcapData.sensor }}
+                              </v-chip>
+                            </div>
+                          </div>
+                          <v-btn
+                            color="primary"
+                            size="small"
+                            @click="downloadPcap"
+                          >
+                            <v-icon start size="small">fa-download</v-icon>
+                            Download PCAP
+                          </v-btn>
+                        </div>
                       </div>
                     </div>
                   </div>
