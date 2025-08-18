@@ -556,7 +556,6 @@ test('getEventTimestamp', () => {
 });
 
 test('isQuestionAggregate', () => {
-    const jsyaml = require('js-yaml');
     let question = { isAggregate: true };
     expect(playbookMethods.isQuestionAggregate(question)).toBe(true);
 

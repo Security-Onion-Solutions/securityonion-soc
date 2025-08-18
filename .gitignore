@@ -22,6 +22,7 @@ __debug_bin*
 html/so-ca.crt
 
 socdev.sh
+mikebuild.sh
 
 # Generated bundle files
 html/js/routes/hunt-bundled.js
