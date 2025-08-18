@@ -2108,6 +2108,7 @@ test('fetchNewestEvent', async () => {
       enabled: false,
     },
   ];
+  comp.queryBaseFilter = 'tags:alert';
   comp.dateRange = 'x - y';
   comp.zone = 'zone';
 
@@ -2125,7 +2126,7 @@ test('fetchNewestEvent', async () => {
   expect(eventSearch).toHaveBeenCalledTimes(1);
   expect(eventSearch).toHaveBeenCalledWith('events/', {
     params: {
-      query: 'a:"1" AND b:"2" AND c:"true" AND NOT event.acknowledged:true AND NOT event.escalated:true | sortby @timestamp',
+      query: 'tags:alert AND a:"1" AND b:"2" AND c:"true" AND NOT event.acknowledged:true AND NOT event.escalated:true | sortby @timestamp',
       range: 'x - y',
       format: comp.i18n.timePickerSample,
       zone: 'zone',
@@ -2136,6 +2137,8 @@ test('fetchNewestEvent', async () => {
 
   comp.filterToggles[0].enabled = true;
   comp.filterToggles[1].enabled = true;
+  comp.queryBaseFilter = '';
+  comp.query = '* AND source.ip:10.67.100.14 | groupby rule.name';
   delete item.newest;
   resetPapi();
   const eventSearch2 = mockPapi('get', { data: { events: [{ id: '100', payload: { a: 1, b: "2", c: true } }] } });
@@ -2147,7 +2150,7 @@ test('fetchNewestEvent', async () => {
   expect(eventSearch2).toHaveBeenCalledTimes(1);
   expect(eventSearch2).toHaveBeenCalledWith('events/', {
     params: {
-      query: 'a:"1" AND b:"2" AND c:"true" AND event.acknowledged:true AND event.escalated:true | sortby @timestamp',
+      query: '(* AND source.ip:10.67.100.14) AND a:"1" AND b:"2" AND c:"true" AND event.acknowledged:true AND event.escalated:true | sortby @timestamp',
       range: 'x - y',
       format: comp.i18n.timePickerSample,
       zone: 'zone',
@@ -2378,4 +2381,55 @@ test('pickQuestionColor', () => {
 
   c = comp.pickQuestionColor(question);
   expect(c).toBe('has-error');
+});
+
+test('getExpandedData', () => {
+  let obj = {};
+
+  let data = comp.getExpandedData(obj);
+  expect(data).toStrictEqual([]);
+
+  obj = {
+    A: 1,
+    B: 2,
+    C: 3,
+  };
+
+  data = comp.getExpandedData(obj);
+
+  // sort data by key for deterministic check
+  data.sort((a, b) => a.key.localeCompare(b.key));
+
+  expect(data).toStrictEqual([
+    { key: 'A', value: 1 },
+    { key: 'B', value: 2 },
+    { key: 'C', value: 3 },
+  ]);
+
+  obj = {
+    C: 'six',
+    _row_idx_: -1,
+    B: 'five',
+    _isSelected: false,
+    playbooks: null,
+    A: 'four',
+  };
+
+  data = comp.getExpandedData(obj);
+  data.sort((a, b) => a.key.localeCompare(b.key));
+
+  expect(data).toStrictEqual([
+    { key: 'A', value: 'four' },
+    { key: 'B', value: 'five' },
+    { key: 'C', value: 'six' },
+  ]);
+
+  obj = {
+    _row_idx_: 10,
+    _isSelected: true,
+    playbooks: [{}],
+  };
+
+  data = comp.getExpandedData(obj);
+  expect(data).toStrictEqual([]);
 });
