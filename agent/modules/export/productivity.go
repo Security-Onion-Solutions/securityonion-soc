@@ -259,5 +259,5 @@ func (export *Export) generateProductivityReport(job *model.Job) ([]byte, error)
 }
 
 func (export *Export) getProductivityExportParams(templatePath string) []string {
-	return export.getPdfExportParams(templatePath, PRODUCTIVITY_REPORT_TEMPLATE_NAME)
+	return export.getPdfExportParams(templatePath+"/standard", PRODUCTIVITY_REPORT_TEMPLATE_NAME)
 }

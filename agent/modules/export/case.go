@@ -143,5 +143,5 @@ func (export *Export) generateCaseReport(caseId string) ([]byte, error) {
 }
 
 func (export *Export) getCaseExportParams(templatePath string) []string {
-	return export.getPdfExportParams(templatePath, CASE_REPORT_TEMPLATE_NAME)
+	return export.getPdfExportParams(templatePath+"/standard", CASE_REPORT_TEMPLATE_NAME)
 }

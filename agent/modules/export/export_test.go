@@ -1,7 +1,6 @@
 package export
 
 import (
-	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -683,7 +682,6 @@ func TestProcessJob_ProductivityReport(t *testing.T) {
 	err = os.WriteFile(stdDir+"/productivity_report.md", []byte("Template 1 content"), 0644)
 	assert.Nil(t, err)
 
-	fmt.Printf("Current working directory: %s\n", os.Getenv("PWD"))
 	config := module.ModuleConfig{}
 	config["executablePath"] = "../../../scripts/md2pdf"
 	config["templatePath"] = tmpDir
