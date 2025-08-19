@@ -981,23 +981,16 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
       }
       this.scrollToBottom();
     },
-    rejectTool(toolUse) {
+    async rejectTool(toolUse) {
       toolUse.approved = false;
       toolUse.status = 'rejected';
       toolUse.error = 'Tool execution rejected by user';
       console.log('Tool rejected by user:', toolUse.name);
       
       // Add a message indicating the tool was rejected
-      const rejectionMessage = {
-        role: 'assistant',
-        content: `Tool execution for "${toolUse.name}" was rejected by the user.`,
-        timestamp: new Date().toISOString(),
-        isToolResult: true,
-        toolName: toolUse.name,
-        toolId: toolUse.id
-      };
-      
-      this.messages.push(rejectionMessage);
+      const rejectionMessage = `Tool execution for "${toolUse.name}" was rejected by the user.`;
+      await this.callAIAPI(rejectionMessage);
+
       this.scrollToBottom();
     },
     async startInvestigationSession(socId, investigationPrompt) {
@@ -1110,7 +1103,15 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
       // Reset context length when loading from backend
       this.resetContextLength();
       
+      let skip_next = false;
+
       for (let i = 0; i < backendMessages.length; i++) {
+        
+        if (skip_next) {
+          skip_next = false;
+          continue
+        }
+        
         const msg = backendMessages[i];
         
         // Check if this is a tool result message (new format with tags)
@@ -1201,17 +1202,37 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
           // Handle tool uses if present
           const toolBlocks = msg.message.contentBlocks.filter(block => block.type === 'tool_use');
           if (toolBlocks.length > 0) {
-            frontendMsg.toolUses = Vue.ref(toolBlocks.map(block => ({
-              id: block.id || 'unknown',
-              name: block.name || 'unknown',
-              input: block.input || {}, // Ensure input is always an object, never null/undefined
-              status: 'completed', // Assume completed since it's from history
-              result: null,
-              error: null,
-              rawResult: null, // Will be populated by subsequent tool result message
-              timestamp: msg.createTime || new Date().toISOString(),
-              approved: true
-            })));
+
+            if (i < backendMessages.length - 1 && (!backendMessages[i + 1].tags || !backendMessages[i + 1].tags.includes('tool_result'))) {
+              const nextMessage = backendMessages[i + 1];
+              if (nextMessage.message.contentBlocks[0].text.includes('rejected by the user')) {
+                frontendMsg.toolUses = Vue.ref(toolBlocks.map(block => ({
+                  id: block.id || 'unknown',
+                  name: block.name || 'unknown',
+                  input: block.input || {}, // Ensure input is always an object, never null/undefined
+                  status: 'rejected',
+                  result: null,
+                  error: 'Tool execution rejected by user',
+                  rawResult: null,
+                  timestamp: msg.createTime || new Date().toISOString(),
+                  approved: false
+                })));
+                skip_next = true;
+              }
+            } else {
+
+              frontendMsg.toolUses = Vue.ref(toolBlocks.map(block => ({
+                id: block.id || 'unknown',
+                name: block.name || 'unknown',
+                input: block.input || {}, // Ensure input is always an object, never null/undefined
+                status: 'completed', // Assume completed since it's from history
+                result: null,
+                error: null,
+                rawResult: null, // Will be populated by subsequent tool result message
+                timestamp: msg.createTime || new Date().toISOString(),
+                approved: true
+              })));
+            }
           }
         } else {
           frontendMsg.content = 'Empty message';
