@@ -74,6 +74,9 @@ const jobsComponent = {
       this.$root.startLoading();
       try {
         this.kind = this.$route.path.replace("/", "");
+        if (this.kind == 'jobs') {
+          this.kind = 'pcap';
+        }
         const response = await this.$root.papi.get('jobs', { params: { kind: this.kind }});
         this.jobs = response.data;
         this.loadUserDetails();
