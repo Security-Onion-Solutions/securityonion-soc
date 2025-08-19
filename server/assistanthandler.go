@@ -191,17 +191,22 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.server.AssistantManager.ExecuteTool(ctx, toolName, string(toolReq.Params))
-	if err != nil {
-		logger.WithError(err).Error("unable to execute tool")
+	result, toolErr := h.server.AssistantManager.ExecuteTool(ctx, toolName, string(toolReq.Params))
+	if toolErr != nil {
+		logger.WithError(toolErr).Error("unable to execute tool")
 	}
 
-	encoded, err := json.Marshal(result.Result)
-	if err != nil {
-		logger.WithError(err).Error("unable to marshal tool result")
-		web.Respond(w, r, http.StatusInternalServerError, err)
+	encoded := []byte("<nil>")
 
-		return
+	if result != nil {
+		encoded, err = json.Marshal(result.Result)
+		if err != nil {
+			logger.WithError(err).WithField("toolResult", result.Result).Error("unable to marshal tool result")
+
+			if toolErr == nil {
+				toolErr = err
+			}
+		}
 	}
 
 	toolMsg := &model.Message{
@@ -210,9 +215,15 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 		ContentBlocks: []model.ContentBlock{
 			{
 				Type: "text",
-				Text: fmt.Sprintf("ToolUseId: %s, Result: %s", toolReq.ToolUseId, string(encoded)),
+				Text: fmt.Sprintf("ToolUseId: %s, Error: %v, Result: %s", toolReq.ToolUseId, toolErr, string(encoded)),
 			},
 		},
+	}
+
+	err = h.server.Assistantstore.SaveChat(ctx, toolMsg.PrepareForStorage(toolReq.SessionId, []string{"tool_result"}))
+	if err != nil {
+		logger.WithError(err).Error("unable to save tool result message")
+		return
 	}
 
 	stored, err := h.server.Assistantstore.GetChatHistory(ctx, toolReq.SessionId)
@@ -226,12 +237,6 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 	messages := make([]*model.Message, 0, len(stored))
 	for _, msg := range stored {
 		messages = append(messages, msg.Message)
-	}
-
-	err = h.server.Assistantstore.SaveChat(ctx, toolMsg.PrepareForStorage(toolReq.SessionId, []string{"tool_result"}))
-	if err != nil {
-		logger.WithError(err).Error("unable to save tool result message")
-		return
 	}
 
 	messages = append(messages, toolMsg)
