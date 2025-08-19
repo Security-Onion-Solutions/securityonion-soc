@@ -920,6 +920,8 @@ const i18n = {
       'so-heavynode-keywords': 'Elastic, Elasticsearch, Forward, Ingest, Search, Sensor, Sensoroni, Stenographer',
       'so-helix': 'Helix',
       'so-helix-keywords': 'Helix, Sensor, Sensoroni, Stenographer',
+      'so-hypervisor': 'Hypervisor',
+      'so-hypervisor-keywords': 'Hypervisor, Virtualization, VM, KVM, Vx',
       'so-idh': 'Intrusion Detection Honeypot',
       'so-idh-keywords': 'IDH, Intrusion, Detection, Honeypot',
       'so-import': 'Import',

@@ -443,6 +443,10 @@ test('fetchNewestEvent', async () => {
       enabled: false,
     },
   ];
+  comp.queryBaseFilter = 'tags:alert';
+  comp.obtainQueryDetails = jest.fn(() => {
+    comp.querySearch = '';
+  });
   comp.dateRange = 'x - y';
   comp.zone = 'zone';
 
@@ -460,7 +464,7 @@ test('fetchNewestEvent', async () => {
   expect(eventSearch).toHaveBeenCalledTimes(1);
   expect(eventSearch).toHaveBeenCalledWith('events/', {
     params: {
-      query: 'a:"1" AND b:"2" AND c:"true" AND NOT event.acknowledged:true AND NOT event.escalated:true | sortby @timestamp',
+      query: 'tags:alert AND a:"1" AND b:"2" AND c:"true" AND NOT event.acknowledged:true AND NOT event.escalated:true | sortby @timestamp',
       range: 'x - y',
       format: comp.i18n.timePickerSample,
       zone: 'zone',
@@ -471,6 +475,11 @@ test('fetchNewestEvent', async () => {
 
   comp.filterToggles[0].enabled = true;
   comp.filterToggles[1].enabled = true;
+  comp.queryBaseFilter = '';
+  comp.query = '* AND source.ip:10.67.100.14 | groupby rule.name';
+  comp.obtainQueryDetails = jest.fn(() => {
+    comp.querySearch = '* AND source.ip:10.67.100.14';
+  });
   delete item.newest;
   // Reset and recreate mock
   comp.$root.papi.get.mockReset();
@@ -483,7 +492,7 @@ test('fetchNewestEvent', async () => {
   expect(comp.$root.papi.get).toHaveBeenCalledTimes(1);
   expect(comp.$root.papi.get).toHaveBeenCalledWith('events/', {
     params: {
-      query: 'a:"1" AND b:"2" AND c:"true" AND event.acknowledged:true AND event.escalated:true | sortby @timestamp',
+      query: '(* AND source.ip:10.67.100.14) AND a:"1" AND b:"2" AND c:"true" AND event.acknowledged:true AND event.escalated:true | sortby @timestamp',
       range: 'x - y',
       format: comp.i18n.timePickerSample,
       zone: 'zone',
