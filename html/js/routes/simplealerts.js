@@ -64,6 +64,14 @@ const simpleAlertsComponent = {
       alertGroups: [],
       expandedGroups: [],
       expandedSubGroups: {},  // Track expanded state of sub-groups
+      subGroupDisplayLimit: 50, // Limit alerts shown per sub-group for performance
+      subGroupLoadMore: {}, // Track which sub-groups have "load more" active
+      
+      // Selection state
+      selectedAlerts: new Set(), // Individual alert IDs
+      selectedSubGroups: new Set(), // Sub-group keys (source->dest combinations)
+      selectedGroups: new Set(), // Top-level group keys (rule names)
+      selectionMode: false, // Toggle selection mode
       
       // Filter options
       severityOptions: [
@@ -100,38 +108,56 @@ const simpleAlertsComponent = {
     lowSeverityCount() {
       return this.totalLowSeverity;
     },
+    selectedCount() {
+      // Calculate total selected alerts
+      let count = this.selectedAlerts.size;
+      
+      // Add alerts from selected subgroups
+      this.alertGroups.forEach(group => {
+        const subGroups = this.getSubGroups(group);
+        subGroups.forEach(subGroup => {
+          if (this.selectedSubGroups.has(subGroup.key)) {
+            count += subGroup.alerts.filter(a => !this.selectedAlerts.has(a.id)).length;
+          }
+        });
+      });
+      
+      // Add alerts from selected groups
+      this.selectedGroups.forEach(groupKey => {
+        const group = this.alertGroups.find(g => g.key === groupKey);
+        if (group) {
+          count += group.alerts.filter(a => !this.isAlertSelected(a.id)).length;
+        }
+      });
+      
+      return count;
+    },
+    hasSelection() {
+      return this.selectedAlerts.size > 0 || this.selectedSubGroups.size > 0 || this.selectedGroups.size > 0;
+    },
     processedAlerts() {
       if (!this.groupAlerts) {
         return this.alerts;
       }
       
-      // Group alerts
+      // Group alerts by rule name only at the top level
       const groups = new Map();
       
       this.alerts.forEach(alert => {
-        let groupKey;
-        
-        if (alert.module === 'suricata' && alert.sourceIp && alert.destIp) {
-          // For Suricata alerts, group by source and destination IPs (ignoring ports)
-          groupKey = `${alert.ruleName}::${alert.sourceIp}->${alert.destIp}`;
-        } else {
-          // For other alerts, just group by rule name
-          groupKey = alert.ruleName;
-        }
+        const groupKey = alert.ruleName;
         
         if (!groups.has(groupKey)) {
           groups.set(groupKey, {
             key: groupKey,
             ruleName: alert.ruleName,
-            sourceIp: alert.sourceIp,
-            destIp: alert.destIp,
             module: alert.module,
             severityLabel: alert.severityLabel,
             category: alert.category,
             firstSeen: alert.timestamp,
             lastSeen: alert.timestamp,
             alerts: [],
-            count: 0
+            count: 0,
+            subGroups: new Map() // Track IP-based subgroups
           });
         }
         
@@ -189,13 +215,17 @@ const simpleAlertsComponent = {
           timeRange: this.filterTimeRange
         });
         
+        // When grouping is enabled, fetch more alerts to ensure proper grouping
+        // Otherwise use the default limit for performance
+        const effectiveLimit = this.groupAlerts ? '10000' : this.eventLimit.toString();
+        
         const params = new URLSearchParams({
           query: query,
           range: dateRange,
           format: '2006/01/02 3:04:05 PM',
           zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           metricLimit: '10',
-          eventLimit: this.eventLimit.toString(),
+          eventLimit: effectiveLimit,
           view: 'simple' // Use simplified view
         });
         
@@ -358,12 +388,6 @@ const simpleAlertsComponent = {
       this.actionDialog = true;
     },
     
-    dismissAlert(alert) {
-      this.selectedAlert = alert;
-      this.actionType = 'dismiss';
-      this.actionTitle = 'Dismiss Alert';
-      this.actionDialog = true;
-    },
     
     async confirmAction() {
       if (!this.selectedAlert) return;
@@ -371,8 +395,32 @@ const simpleAlertsComponent = {
       this.actionLoading = true;
       
       try {
-        if (this.actionType === 'escalate') {
-          // Create a case
+        if (this.actionType === 'escalate-bulk') {
+          // Bulk escalate
+          const alertIds = this.getSelectedAlertIds();
+          
+          // Create a case with multiple alerts
+          const caseData = {
+            title: this.caseTitle,
+            description: this.caseDescription,
+            severity: 'high', // Default to high for bulk escalations
+            status: 'new',
+            events: alertIds
+          };
+          
+          await this.$root.papi.post('case', caseData);
+          
+          // Update all alert statuses
+          const batchSize = 50;
+          for (let i = 0; i < alertIds.length; i += batchSize) {
+            const batch = alertIds.slice(i, i + batchSize);
+            await Promise.all(batch.map(id => this.updateAlertStatus(id, 'escalated')));
+          }
+          
+          this.$root.showTip(`${alertIds.length} alert${alertIds.length > 1 ? 's' : ''} escalated to case`);
+          this.clearSelection();
+        } else if (this.actionType === 'escalate') {
+          // Single escalate
           const caseData = {
             title: this.caseTitle,
             description: this.caseDescription,
@@ -385,16 +433,17 @@ const simpleAlertsComponent = {
           
           // Update alert status
           await this.updateAlertStatus(this.selectedAlert.id, 'escalated');
-        } else {
+          this.$root.showTip(`Alert escalated successfully`);
+        } else if (this.actionType === 'acknowledge') {
           // Update alert status
-          await this.updateAlertStatus(this.selectedAlert.id, this.actionType === 'acknowledge' ? 'acknowledged' : 'dismissed');
+          await this.updateAlertStatus(this.selectedAlert.id, 'acknowledged');
+          this.$root.showTip(`Alert acknowledged successfully`);
         }
         
         // Refresh the list
         await this.loadAlerts();
         
         this.actionDialog = false;
-        this.$root.showTip(`Alert ${this.actionType}d successfully`);
       } catch (error) {
         this.$root.showError(error);
       } finally {
@@ -949,6 +998,8 @@ const simpleAlertsComponent = {
         this.expandedGroups = [];
         this.expandedSubGroups = {};
       }
+      // Reload alerts with appropriate limit based on grouping state
+      this.loadAlerts();
     },
     
     toggleGroup(index) {
@@ -971,9 +1022,50 @@ const simpleAlertsComponent = {
       const idx = this.expandedSubGroups[groupKey].indexOf(subGroupKey);
       if (idx > -1) {
         this.expandedSubGroups[groupKey].splice(idx, 1);
+        // Clean up load more state when collapsing
+        if (this.subGroupLoadMore[subGroupKey]) {
+          delete this.subGroupLoadMore[subGroupKey];
+        }
       } else {
         this.expandedSubGroups[groupKey].push(subGroupKey);
       }
+    },
+    
+    getDisplayedAlerts(subGroup) {
+      // Sort alerts by timestamp (most recent first) for better visibility
+      const sortedAlerts = [...subGroup.alerts].sort((a, b) => {
+        return new Date(b.timestamp) - new Date(a.timestamp);
+      });
+      
+      // Return limited alerts for display unless "load more" is active
+      const showAll = this.subGroupLoadMore[subGroup.key];
+      if (showAll || sortedAlerts.length <= this.subGroupDisplayLimit) {
+        return sortedAlerts;
+      }
+      return sortedAlerts.slice(0, this.subGroupDisplayLimit);
+    },
+    
+    toggleLoadMore(subGroup) {
+      if (this.subGroupLoadMore[subGroup.key]) {
+        // Collapse back to limited view
+        this.$delete(this.subGroupLoadMore, subGroup.key);
+      } else {
+        // Show all alerts
+        this.$set(this.subGroupLoadMore, subGroup.key, true);
+      }
+    },
+    
+    shouldShowLoadMore(subGroup) {
+      return subGroup.alerts.length > this.subGroupDisplayLimit;
+    },
+    
+    getLoadMoreText(subGroup) {
+      const isExpanded = this.subGroupLoadMore[subGroup.key];
+      const remaining = subGroup.alerts.length - this.subGroupDisplayLimit;
+      if (isExpanded) {
+        return `Show less (collapse to ${this.subGroupDisplayLimit})`;
+      }
+      return `Load ${remaining} more alerts`;
     },
     
     isSubGroupExpanded(groupKey, subGroupKey) {
@@ -981,10 +1073,18 @@ const simpleAlertsComponent = {
     },
     
     getGroupSummary(group) {
-      if (group.module === 'suricata' && group.sourceIp && group.destIp) {
-        return `${group.sourceIp} → ${group.destIp}`;
+      // Get unique source/destination combinations count
+      const uniqueCombos = new Set();
+      group.alerts.forEach(alert => {
+        if (alert.sourceIp && alert.destIp) {
+          uniqueCombos.add(`${alert.sourceIp}->${alert.destIp}`);
+        }
+      });
+      
+      if (uniqueCombos.size > 0) {
+        return `${group.count} event${group.count > 1 ? 's' : ''} across ${uniqueCombos.size} unique connection${uniqueCombos.size > 1 ? 's' : ''}`;
       }
-      return `${group.count} occurrence${group.count > 1 ? 's' : ''}`;
+      return `${group.count} event${group.count > 1 ? 's' : ''}`;
     },
     
     async requestPcap() {
@@ -1259,31 +1359,238 @@ const simpleAlertsComponent = {
       return result;
     },
     
+    // Selection methods
+    toggleSelectionMode() {
+      this.selectionMode = !this.selectionMode;
+      if (!this.selectionMode) {
+        this.clearSelection();
+      }
+    },
+    
+    clearSelection() {
+      this.selectedAlerts.clear();
+      this.selectedSubGroups.clear();
+      this.selectedGroups.clear();
+      this.$forceUpdate();
+    },
+    
+    selectAll() {
+      if (this.groupAlerts) {
+        // Select all groups
+        this.alertGroups.forEach(group => {
+          this.selectedGroups.add(group.key);
+        });
+      } else {
+        // Select all visible alerts
+        this.alerts.forEach(alert => {
+          this.selectedAlerts.add(alert.id);
+        });
+      }
+      this.$forceUpdate();
+    },
+    
+    toggleGroupSelection(group) {
+      if (this.selectedGroups.has(group.key)) {
+        this.selectedGroups.delete(group.key);
+        // Also deselect all subgroups and alerts in this group
+        const subGroups = this.getSubGroups(group);
+        subGroups.forEach(subGroup => {
+          this.selectedSubGroups.delete(subGroup.key);
+          subGroup.alerts.forEach(alert => {
+            this.selectedAlerts.delete(alert.id);
+          });
+        });
+      } else {
+        this.selectedGroups.add(group.key);
+      }
+      this.$forceUpdate();
+    },
+    
+    toggleSubGroupSelection(subGroup) {
+      const key = subGroup.key;
+      if (this.selectedSubGroups.has(key)) {
+        this.selectedSubGroups.delete(key);
+        // Also deselect all alerts in this subgroup
+        subGroup.alerts.forEach(alert => {
+          this.selectedAlerts.delete(alert.id);
+        });
+      } else {
+        this.selectedSubGroups.add(key);
+      }
+      this.$forceUpdate();
+    },
+    
+    toggleAlertSelection(alert) {
+      if (this.selectedAlerts.has(alert.id)) {
+        this.selectedAlerts.delete(alert.id);
+      } else {
+        this.selectedAlerts.add(alert.id);
+      }
+      this.$forceUpdate();
+    },
+    
+    isGroupSelected(group) {
+      return this.selectedGroups.has(group.key);
+    },
+    
+    isSubGroupSelected(subGroup) {
+      return this.selectedSubGroups.has(subGroup.key);
+    },
+    
+    isAlertSelected(alertId) {
+      // Check if alert is individually selected
+      if (this.selectedAlerts.has(alertId)) {
+        return true;
+      }
+      
+      // Check if alert's subgroup or group is selected
+      const alert = this.alerts.find(a => a.id === alertId);
+      if (!alert) return false;
+      
+      // Check if parent group is selected
+      if (this.selectedGroups.has(alert.ruleName)) {
+        return true;
+      }
+      
+      // Check if parent subgroup is selected
+      const subGroupKey = `${alert.sourceIp || 'unknown'} → ${alert.destIp || 'unknown'}`;
+      if (this.selectedSubGroups.has(subGroupKey)) {
+        return true;
+      }
+      
+      return false;
+    },
+    
+    getSelectedAlertIds() {
+      const alertIds = new Set(this.selectedAlerts);
+      
+      // Add alerts from selected subgroups
+      this.alertGroups.forEach(group => {
+        const subGroups = this.getSubGroups(group);
+        subGroups.forEach(subGroup => {
+          if (this.selectedSubGroups.has(subGroup.key)) {
+            subGroup.alerts.forEach(alert => {
+              alertIds.add(alert.id);
+            });
+          }
+        });
+      });
+      
+      // Add alerts from selected groups
+      this.selectedGroups.forEach(groupKey => {
+        const group = this.alertGroups.find(g => g.key === groupKey);
+        if (group) {
+          group.alerts.forEach(alert => {
+            alertIds.add(alert.id);
+          });
+        }
+      });
+      
+      return Array.from(alertIds);
+    },
+    
+    async bulkAcknowledge() {
+      const alertIds = this.getSelectedAlertIds();
+      if (alertIds.length === 0) return;
+      
+      this.actionLoading = true;
+      try {
+        // Process alerts in batches
+        const batchSize = 50;
+        for (let i = 0; i < alertIds.length; i += batchSize) {
+          const batch = alertIds.slice(i, i + batchSize);
+          await Promise.all(batch.map(id => this.updateAlertStatus(id, 'acknowledged')));
+        }
+        
+        this.$root.showTip(`${alertIds.length} alert${alertIds.length > 1 ? 's' : ''} acknowledged`);
+        this.clearSelection();
+        await this.loadAlerts();
+      } catch (error) {
+        this.$root.showError(error);
+      } finally {
+        this.actionLoading = false;
+      }
+    },
+    
+    async bulkEscalate() {
+      const alertIds = this.getSelectedAlertIds();
+      if (alertIds.length === 0) return;
+      
+      // Show escalate dialog for bulk operation
+      this.selectedAlert = { id: 'bulk', ruleName: `${alertIds.length} alerts` };
+      this.actionType = 'escalate-bulk';
+      this.actionTitle = `Escalate ${alertIds.length} Alerts to Case`;
+      this.caseTitle = `Bulk Escalation: ${alertIds.length} alerts`;
+      this.caseDescription = `Escalating ${alertIds.length} related alerts`;
+      this.actionDialog = true;
+    },
+    
+    
     getSubGroups(group) {
       // Sub-group alerts by source and destination IPs (ignoring ports)
       const subGroups = new Map();
       
       group.alerts.forEach(alert => {
-        const subKey = `${alert.sourceIp || 'unknown'} → ${alert.destIp || 'unknown'}`;
-        
-        if (!subGroups.has(subKey)) {
-          subGroups.set(subKey, {
-            key: subKey,
-            sourceIp: alert.sourceIp,
-            destIp: alert.destIp,
-            alerts: [],
-            count: 0,
-            ports: new Set() // Track unique port combinations
-          });
-        }
-        
-        const subGroup = subGroups.get(subKey);
-        subGroup.alerts.push(alert);
-        subGroup.count++;
-        
-        // Track unique port combinations
-        if (alert.sourcePort || alert.destPort) {
-          subGroup.ports.add(`${alert.sourcePort || '*'}:${alert.destPort || '*'}`);
+        // Only create subgroups if there are IPs to group by
+        if (alert.sourceIp || alert.destIp) {
+          const subKey = `${alert.sourceIp || 'unknown'} → ${alert.destIp || 'unknown'}`;
+          
+          if (!subGroups.has(subKey)) {
+            subGroups.set(subKey, {
+              key: subKey,
+              sourceIp: alert.sourceIp,
+              destIp: alert.destIp,
+              alerts: [],
+              count: 0,
+              ports: new Set(), // Track unique port combinations
+              firstSeen: alert.timestamp,
+              lastSeen: alert.timestamp
+            });
+          }
+          
+          const subGroup = subGroups.get(subKey);
+          subGroup.alerts.push(alert);
+          subGroup.count++;
+          
+          // Update timestamps
+          if (alert.timestamp < subGroup.firstSeen) {
+            subGroup.firstSeen = alert.timestamp;
+          }
+          if (alert.timestamp > subGroup.lastSeen) {
+            subGroup.lastSeen = alert.timestamp;
+          }
+          
+          // Track unique port combinations
+          if (alert.sourcePort || alert.destPort) {
+            subGroup.ports.add(`${alert.sourcePort || '*'}:${alert.destPort || '*'}`);
+          }
+        } else {
+          // For alerts without IPs, create a single "no network data" group
+          const subKey = 'no-network-data';
+          
+          if (!subGroups.has(subKey)) {
+            subGroups.set(subKey, {
+              key: subKey,
+              sourceIp: null,
+              destIp: null,
+              alerts: [],
+              count: 0,
+              firstSeen: alert.timestamp,
+              lastSeen: alert.timestamp
+            });
+          }
+          
+          const subGroup = subGroups.get(subKey);
+          subGroup.alerts.push(alert);
+          subGroup.count++;
+          
+          // Update timestamps
+          if (alert.timestamp < subGroup.firstSeen) {
+            subGroup.firstSeen = alert.timestamp;
+          }
+          if (alert.timestamp > subGroup.lastSeen) {
+            subGroup.lastSeen = alert.timestamp;
+          }
         }
       });
       
@@ -1292,7 +1599,9 @@ const simpleAlertsComponent = {
       
       // Convert ports Set to array for display
       groups.forEach(g => {
-        g.uniquePorts = Array.from(g.ports);
+        if (g.ports) {
+          g.uniquePorts = Array.from(g.ports);
+        }
       });
       
       return groups;

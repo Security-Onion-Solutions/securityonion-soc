@@ -97,13 +97,75 @@
 
   <!-- Alert List -->
   <v-card>
+    <!-- Bulk Action Toolbar -->
+    <v-toolbar 
+      v-if="selectionMode && hasSelection"
+      color="primary"
+      density="compact"
+      flat
+    >
+      <v-toolbar-title class="text-body-1">
+        {{ selectedCount }} selected
+      </v-toolbar-title>
+      <v-spacer></v-spacer>
+      <v-btn
+        variant="text"
+        size="small"
+        @click="selectAll"
+        class="mr-2"
+      >
+        Select All
+      </v-btn>
+      <v-btn
+        variant="text"
+        size="small"
+        @click="clearSelection"
+        class="mr-4"
+      >
+        Clear Selection
+      </v-btn>
+      <v-divider vertical class="mx-2"></v-divider>
+      <v-btn
+        color="white"
+        variant="tonal"
+        size="small"
+        @click="bulkAcknowledge"
+        :loading="actionLoading"
+        prepend-icon="fa-check"
+        class="mr-2"
+      >
+        Acknowledge
+      </v-btn>
+      <v-btn
+        color="white"
+        variant="tonal"
+        size="small"
+        @click="bulkEscalate"
+        :loading="actionLoading"
+        prepend-icon="fa-briefcase"
+        class="mr-2"
+      >
+        Escalate
+      </v-btn>
+    </v-toolbar>
+    
     <v-card-title>
       <span>Alerts</span>
       <span class="text-caption ml-2" v-if="!loading">
-        <span v-if="groupAlerts">({{ alertGroups.length }} groups, {{ alerts.length }} total)</span>
+        <span v-if="groupAlerts">({{ alertGroups.length }} unique alerts from {{ alerts.length }} total events)</span>
         <span v-else>(Showing {{ alerts.length }} of {{ totalAlerts }})</span>
       </span>
       <v-spacer></v-spacer>
+      <v-btn
+        :color="selectionMode ? 'success' : 'default'"
+        :variant="selectionMode ? 'flat' : 'outlined'"
+        size="small"
+        @click="toggleSelectionMode"
+        prepend-icon="fa-check-square"
+        class="mr-2"
+      >
+        {{ selectionMode ? 'Exit Selection' : 'Select' }}
+      </v-btn>
       <v-btn
         :color="groupAlerts ? 'primary' : 'default'"
         :variant="groupAlerts ? 'flat' : 'outlined'"
@@ -147,6 +209,16 @@
             <v-expansion-panel-title>
               <div class="d-flex align-center justify-space-between w-100 pr-4">
                 <div class="d-flex align-center ga-3">
+                  <!-- Selection Checkbox for entire group -->
+                  <v-checkbox
+                    v-if="selectionMode"
+                    :model-value="isGroupSelected(group)"
+                    @update:model-value="toggleGroupSelection(group)"
+                    @click.stop
+                    density="compact"
+                    hide-details
+                    class="mr-2"
+                  ></v-checkbox>
                   <!-- Group Count Badge -->
                   <v-avatar 
                     size="32" 
@@ -161,21 +233,26 @@
                     <div class="font-weight-medium">{{ group.ruleName }}</div>
                     <div class="text-caption text--secondary">
                       {{ getGroupSummary(group) }}
-                      <v-chip size="x-small" class="ml-2" variant="tonal">
-                        {{ new Date(group.firstSeen).toLocaleTimeString() }} - {{ new Date(group.lastSeen).toLocaleTimeString() }}
-                      </v-chip>
                     </div>
                   </div>
                 </div>
                 
-                <!-- Severity Chip -->
-                <v-chip
-                  :color="getSeverityColor(group.severityLabel)"
-                  size="small"
-                  variant="tonal"
-                >
-                  {{ group.severityLabel }}
-                </v-chip>
+                <div class="d-flex align-center ga-2">
+                  <!-- Time Range Chip -->
+                  <v-chip size="x-small" variant="tonal">
+                    <v-icon start size="x-small">fa-clock</v-icon>
+                    {{ new Date(group.firstSeen).toLocaleTimeString() }} - {{ new Date(group.lastSeen).toLocaleTimeString() }}
+                  </v-chip>
+                  
+                  <!-- Severity Chip -->
+                  <v-chip
+                    :color="getSeverityColor(group.severityLabel)"
+                    size="small"
+                    variant="tonal"
+                  >
+                    {{ group.severityLabel }}
+                  </v-chip>
+                </div>
               </div>
             </v-expansion-panel-title>
             <v-expansion-panel-text>
@@ -192,11 +269,21 @@
                   <v-expansion-panel-title class="pa-3 bg-grey-darken-3">
                     <div class="d-flex align-center justify-space-between w-100 pr-4">
                       <div class="d-flex align-center ga-3">
+                        <!-- Selection Checkbox -->
+                        <v-checkbox
+                          v-if="selectionMode"
+                          :model-value="isSubGroupSelected(subGroup)"
+                          @update:model-value="toggleSubGroupSelection(subGroup)"
+                          @click.stop
+                          density="compact"
+                          hide-details
+                          class="mr-2"
+                        ></v-checkbox>
                         <v-avatar size="24" color="primary" variant="tonal">
                           <span class="text-caption font-weight-bold">{{ subGroup.count }}</span>
                         </v-avatar>
                         <div>
-                          <div class="d-flex align-center">
+                          <div class="d-flex align-center" v-if="subGroup.sourceIp || subGroup.destIp">
                             <v-chip size="small" variant="outlined" class="mr-2">
                               <v-icon start size="x-small">fa-desktop</v-icon>
                               {{ subGroup.sourceIp || 'Unknown' }}
@@ -207,10 +294,19 @@
                               {{ subGroup.destIp || 'Unknown' }}
                             </v-chip>
                           </div>
+                          <div v-else class="text-body-2">
+                            Non-network alerts
+                          </div>
                           <div class="text-caption text--secondary mt-1">
-                            {{ subGroup.count }} alert{{ subGroup.count > 1 ? 's' : '' }}
+                            {{ subGroup.count }} event{{ subGroup.count > 1 ? 's' : '' }}
+                            <span v-if="subGroup.count > subGroupDisplayLimit" class="warning--text">
+                              (showing {{ Math.min(subGroup.count, subGroupDisplayLimit) }})
+                            </span>
                             <span v-if="subGroup.uniquePorts && subGroup.uniquePorts.length > 0">
-                              • {{ subGroup.uniquePorts.length }} unique port combination{{ subGroup.uniquePorts.length > 1 ? 's' : '' }}
+                              • {{ subGroup.uniquePorts.length }} unique port{{ subGroup.uniquePorts.length > 1 ? 's' : '' }}
+                            </span>
+                            <span v-if="subGroup.firstSeen && subGroup.lastSeen">
+                              • {{ new Date(subGroup.firstSeen).toLocaleTimeString() }} - {{ new Date(subGroup.lastSeen).toLocaleTimeString() }}
                             </span>
                           </div>
                         </div>
@@ -219,18 +315,56 @@
                   </v-expansion-panel-title>
                   
                   <v-expansion-panel-text>
-                    <!-- Individual alerts -->
+                    <!-- Performance notice for large groups -->
+                    <v-alert 
+                      v-if="subGroup.alerts.length > 100 && !subGroupLoadMore[subGroup.key]"
+                      type="info"
+                      variant="tonal"
+                      density="compact"
+                      class="ma-2 mb-3"
+                    >
+                      <div class="d-flex align-center justify-space-between">
+                        <div>
+                          <div class="font-weight-medium">Large alert group</div>
+                          <div class="text-caption">Showing first {{ subGroupDisplayLimit }} of {{ subGroup.alerts.length }} alerts for performance</div>
+                        </div>
+                        <v-btn
+                          size="small"
+                          variant="outlined"
+                          @click="toggleLoadMore(subGroup)"
+                        >
+                          Show All
+                        </v-btn>
+                      </div>
+                    </v-alert>
+                    
+                    <!-- Individual alerts (limited for performance) -->
                     <v-row class="pa-2">
-                      <v-col cols="12" v-for="alert in subGroup.alerts" :key="alert.id">
+                      <v-col cols="12" v-for="alert in getDisplayedAlerts(subGroup)" :key="alert.id">
                         <alert-card
                           :alert="alert"
+                          :selection-mode="selectionMode"
+                          :selected="isAlertSelected(alert.id)"
                           @acknowledge="acknowledgeAlert"
                           @escalate="escalateAlert"
-                          @dismiss="dismissAlert"
                           @click="showAlertDetails"
+                          @select="toggleAlertSelection"
                         ></alert-card>
                       </v-col>
                     </v-row>
+                    
+                    <!-- Load More button -->
+                    <div v-if="shouldShowLoadMore(subGroup)" class="text-center pa-3">
+                      <v-btn
+                        variant="outlined"
+                        color="primary"
+                        @click="toggleLoadMore(subGroup)"
+                        block
+                      >
+                        <v-icon start>{{ subGroupLoadMore[subGroup.key] ? 'fa-chevron-up' : 'fa-chevron-down' }}</v-icon>
+                        {{ getLoadMoreText(subGroup) }}
+                      </v-btn>
+                    </div>
                   </v-expansion-panel-text>
                 </v-expansion-panel>
               </v-expansion-panels>
@@ -244,15 +378,17 @@
         <v-col cols="12" v-for="alert in processedAlerts" :key="alert.id">
           <alert-card
             :alert="alert"
+            :selection-mode="selectionMode"
+            :selected="isAlertSelected(alert.id)"
             @acknowledge="acknowledgeAlert"
             @escalate="escalateAlert"
-            @dismiss="dismissAlert"
             @click="showAlertDetails"
+            @select="toggleAlertSelection"
           ></alert-card>
         </v-col>
       </v-row>
     </v-card-text>
-    <v-card-actions v-if="hasMore">
+    <v-card-actions v-if="hasMore && !groupAlerts">
       <v-spacer></v-spacer>
       <v-btn
         color="primary"

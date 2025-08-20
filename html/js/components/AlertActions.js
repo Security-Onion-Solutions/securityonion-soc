@@ -9,7 +9,7 @@ components.push({
   component: {
   template: `
     <div class="d-flex flex-wrap justify-end ga-2">
-      <v-tooltip location="top" v-if="!alert.acknowledged && !alert.escalated && !alert.dismissed">
+      <v-tooltip location="top" v-if="!alert.acknowledged && !alert.escalated">
         <template v-slot:activator="{ props }">
           <v-btn
             v-bind="props"
@@ -41,23 +41,6 @@ components.push({
           </v-btn>
         </template>
         <span>Create a case from this alert</span>
-      </v-tooltip>
-      
-      <v-tooltip location="top" v-if="!alert.dismissed && !alert.escalated">
-        <template v-slot:activator="{ props }">
-          <v-btn
-            v-bind="props"
-            color="secondary"
-            size="small"
-            variant="outlined"
-            @click.stop="$emit('dismiss')"
-            :disabled="isProcessing"
-          >
-            <v-icon size="small">fa-xmark</v-icon>
-            <span class="ml-1 d-none d-md-inline">Dismiss</span>
-          </v-btn>
-        </template>
-        <span>Dismiss this alert</span>
       </v-tooltip>
       
       <v-tooltip location="top">

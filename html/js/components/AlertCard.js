@@ -13,12 +13,21 @@ components.push({
       :elevation="isHovered ? 8 : 2"
       @mouseenter="isHovered = true"
       @mouseleave="isHovered = false"
-      @click="$emit('click', alert)"
+      @click="handleClick"
       style="cursor: pointer"
     >
       <v-card-text>
         <v-row align="center">
-          <v-col cols="12" md="8">
+          <v-col cols="auto" v-if="selectionMode">
+            <v-checkbox
+              :model-value="selected"
+              @update:model-value="$emit('select', alert)"
+              @click.stop
+              density="compact"
+              hide-details
+            ></v-checkbox>
+          </v-col>
+          <v-col :cols="selectionMode ? '' : '12'" :md="selectionMode ? '7' : '8'">
             <!-- Alert Header -->
             <div class="d-flex align-center mb-2">
               <v-chip
@@ -44,19 +53,9 @@ components.push({
                 color="warning"
                 variant="outlined"
                 size="small"
-                class="mr-2"
               >
                 <v-icon start size="x-small">fa-briefcase</v-icon>
                 Escalated
-              </v-chip>
-              <v-chip
-                v-if="alert.dismissed"
-                color="secondary"
-                variant="outlined"
-                size="small"
-              >
-                <v-icon start size="x-small">fa-xmark</v-icon>
-                Dismissed
               </v-chip>
             </div>
             
@@ -86,7 +85,6 @@ components.push({
               :alert="alert"
               @acknowledge="$emit('acknowledge', alert)"
               @escalate="$emit('escalate', alert)"
-              @dismiss="$emit('dismiss', alert)"
             ></alert-actions>
           </v-col>
         </v-row>
@@ -97,6 +95,14 @@ components.push({
     alert: {
       type: Object,
       required: true
+    },
+    selectionMode: {
+      type: Boolean,
+      default: false
+    },
+    selected: {
+      type: Boolean,
+      default: false
     }
   },
   data() {
@@ -109,8 +115,7 @@ components.push({
       return {
         'mb-3': true,
         'alert-acknowledged': this.alert.acknowledged,
-        'alert-escalated': this.alert.escalated,
-        'alert-dismissed': this.alert.dismissed
+        'alert-escalated': this.alert.escalated
       };
     },
     severityColor() {
@@ -124,6 +129,11 @@ components.push({
     }
   },
   methods: {
+    handleClick() {
+      // Always emit click for showing details
+      // Selection is handled by the checkbox itself
+      this.$emit('click', this.alert);
+    },
     formatNetworkInfo() {
       const src = this.alert.sourceIp ? 
         `${this.alert.sourceIp}${this.alert.sourcePort ? ':' + this.alert.sourcePort : ''}` : 
@@ -165,9 +175,6 @@ if (!document.getElementById('alert-card-styles')) {
     }
     .alert-escalated {
       border-left: 4px solid var(--v-warning-base);
-    }
-    .alert-dismissed {
-      opacity: 0.6;
     }
   `;
   document.head.appendChild(style);
