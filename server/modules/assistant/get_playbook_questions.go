@@ -29,7 +29,7 @@ func (t *GetPlaybookQuestionsTool) GetName() string {
 }
 
 func (t *GetPlaybookQuestionsTool) GetDescription() string {
-	return "Get playbook questions for a given alert/detection to guide investigation"
+	return "Get playbook questions for a given alert to guide investigation"
 }
 
 func (t *GetPlaybookQuestionsTool) GetSchema() model.JSONSchema {
@@ -39,7 +39,7 @@ func (t *GetPlaybookQuestionsTool) GetSchema() model.JSONSchema {
 			Properties: map[string]model.ToolSchemaProperty{
 				"alert_id": {
 					Type:        "string",
-					Description: "The alert/detection ID (event.id or rule.uuid)",
+					Description: "The alert ID (event.id, log.id.uid, or soc_id)",
 				},
 				"playbook_index": {
 					Type:        "integer",
@@ -84,10 +84,12 @@ func (t *GetPlaybookQuestionsTool) Execute(ctx context.Context, srv *server.Serv
 	result.Parameters = args
 
 	// go get playbooks
-	query := fmt.Sprintf(`rule.uuid:"%[1]s" OR log.id.uid:"%[1]s"`, args.AlertID)
+	query := fmt.Sprintf(`log.id.uid:"%[1]s" OR event.id:"%[1]s" OR _id:"%[1]s"`, args.AlertID)
 	criteria := model.NewEventSearchCriteria()
 
-	err = criteria.Populate(query, "", "", "", "0", "1")
+	dateRange := "1970-01-01T00:00:00Z - " + time.Now().Format(time.RFC3339)
+
+	err = criteria.Populate(query, dateRange, time.RFC3339, "", "0", "1")
 	if err != nil {
 		return nil, err
 	}
@@ -144,6 +146,8 @@ func (t *GetPlaybookQuestionsTool) Execute(ctx context.Context, srv *server.Serv
 		playbooks = playbooks[*args.PlaybookIndex : *args.PlaybookIndex+1]
 	}
 
+	err = srv.Playbookstore.ExecutePlaybookSearches(ctx, event, playbooks)
+
 	result.Result = simplifyPlaybooks(playbooks)
 
 	return result, nil
@@ -152,46 +156,50 @@ func (t *GetPlaybookQuestionsTool) Execute(ctx context.Context, srv *server.Serv
 type SimplePlaybook struct {
 	Name              string            `json:"name"`
 	Description       string            `json:"description"`
-	SourceCreated     time.Time         `json:"created" yaml:"created"`
-	SourceUpdated     *time.Time        `json:"modified,omitempty" yaml:"modified,omitempty"`
-	DetectionId       string            `json:"detection_id"`
-	DetectionCategory string            `json:"detection_category"`
-	DetectionType     string            `json:"detection_type"`
-	Contributors      []string          `json:"contributors"`
+	SourceCreated     time.Time         `json:"created,omitempty"`
+	SourceUpdated     *time.Time        `json:"modified,omitempty"`
+	DetectionId       string            `json:"detection_id,omitempty"`
+	DetectionCategory string            `json:"detection_category,omitempty"`
+	DetectionType     string            `json:"detection_type,omitempty"`
+	Contributors      []string          `json:"contributors,omitempty"`
 	Questions         []*SimpleQuestion `json:"questions"`
 }
 
 type SimpleQuestion struct {
-	Question      string   `json:"question"`
-	Context       string   `json:"context"`
-	Range         *string  `json:"range"`
-	AnswerSources []string `yaml:"answer_sources"`
+	Question     string  `json:"question"`
+	Context      string  `json:"context"`
+	Range        *string `json:"range,omitempty"`
+	QueryResults any     `json:"queryResults"`
 }
 
 func simplifyPlaybooks(playbooks []*model.Playbook) []*SimplePlaybook {
-	simplePlaybooks := make([]*SimplePlaybook, len(playbooks))
-	for i, pb := range playbooks {
-		simpleQuestions := make([]*SimpleQuestion, len(pb.Questions))
-		for j, q := range pb.Questions {
-			simpleQuestions[j] = &SimpleQuestion{
-				Question:      q.Question,
-				Context:       q.Context,
-				Range:         q.Range,
-				AnswerSources: q.AnswerSources,
+	simplePlaybooks := make([]*SimplePlaybook, 0, len(playbooks))
+	for _, pb := range playbooks {
+		simpleQuestions := make([]*SimpleQuestion, 0, len(pb.Questions))
+
+		for _, q := range pb.Questions {
+			if len(q.QueryResults) != 0 {
+				simpleQuestions = append(simpleQuestions, &SimpleQuestion{
+					Question:     q.Question,
+					Context:      q.Context,
+					Range:        q.Range,
+					QueryResults: filterEvents(q.QueryResults),
+				})
 			}
 		}
 
-		simplePlaybooks[i] = &SimplePlaybook{
-			Name:              pb.Name,
-			Description:       pb.Description,
-			SourceCreated:     pb.SourceCreated,
-			SourceUpdated:     pb.SourceUpdated,
-			DetectionId:       pb.DetectionId,
-			DetectionCategory: pb.DetectionCategory,
-			DetectionType:     pb.DetectionType,
-			Contributors:      pb.Contributors,
-			Questions:         simpleQuestions,
-		}
+		simplePlaybooks = append(simplePlaybooks, &SimplePlaybook{
+			Name:        pb.Name,
+			Description: pb.Description,
+			// SourceCreated:     pb.SourceCreated,
+			// SourceUpdated:     pb.SourceUpdated,
+			// DetectionId:       pb.DetectionId,
+			// DetectionCategory: pb.DetectionCategory,
+			// DetectionType:     pb.DetectionType,
+			// Contributors:      pb.Contributors,
+			Questions: simpleQuestions,
+		})
 	}
+
 	return simplePlaybooks
 }

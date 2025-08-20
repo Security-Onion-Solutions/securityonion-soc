@@ -12,6 +12,8 @@ import (
 	"io/fs"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -607,4 +609,273 @@ func (pdm *PlaybookDiskManager) ConvertQuestions(ctx context.Context, queries []
 	}
 
 	return output, nil
+}
+
+func (pdm *PlaybookDiskManager) ExecutePlaybookSearches(ctx context.Context, event *model.EventRecord, pbs []*model.Playbook) error {
+	logger := log.FromContext(ctx)
+
+	err := pdm.srv.CheckAuthorized(ctx, "read", "playbooks")
+	if err != nil {
+		return err
+	}
+
+	pdm.queryVariableSubstitution(event, pbs)
+
+	for _, pb := range pbs {
+		filled := lo.Map(pb.Questions, func(q *model.Question, _ int) string {
+			return q.FilledQuery
+		})
+
+		converted, err := pdm.ConvertQuestions(ctx, filled)
+		if err != nil {
+			logger.WithError(err).WithFields(log.Fields{"playbookId": pb.Id, "eventId": event.Id}).Warn("unable to convert questions")
+			return err
+		}
+
+		for i := 0; i < len(pb.Questions); i++ {
+			if pb.Questions[i].Range == nil {
+				pb.Questions[i].QueryResults = []*model.EventRecord{event}
+			} else {
+				dateRange := buildQuestionRange(event, *pb.Questions[i].Range, "UTC")
+
+				criteria := model.NewEventSearchCriteria()
+
+				err = criteria.Populate(converted[i].Query, dateRange, time.RFC3339, "", "0", "5")
+				if err != nil {
+					logger.WithError(err).WithFields(log.Fields{"playbookId": pb.Id, "eventId": event.Id}).Warn("unable to populate search criteria")
+					return err
+				}
+
+				searchResults, err := pdm.srv.Eventstore.Search(ctx, criteria)
+				if err != nil {
+					logger.WithError(err).WithFields(log.Fields{"playbookId": pb.Id, "eventId": event.Id}).Warn("unable to execute search")
+					return err
+				}
+
+				pb.Questions[i].QueryResults = searchResults.Events
+			}
+		}
+	}
+
+	return nil
+}
+
+// queryVariableSubstitution substitutes variables in playbook queries with values from the provided event data
+func (pdm *PlaybookDiskManager) queryVariableSubstitution(event *model.EventRecord, playbooks []*model.Playbook) {
+	// Fields that require special array handling
+	arrayFields := []string{"network.private_ip", "network.public_ip", "related.ip"}
+
+	// Convert arrayFields to a map for faster lookup
+	arrayFieldsMap := make(map[string]bool)
+	for _, field := range arrayFields {
+		arrayFieldsMap[field] = true
+	}
+
+	// Regex to find variables in the format {variable}
+	varRegex := regexp.MustCompile(`\{([^}]+)\}`)
+
+	for _, pb := range playbooks {
+		for _, question := range pb.Questions {
+			q := question.Query
+
+			// Find all variables in the query
+			matches := varRegex.FindAllStringSubmatch(q, -1)
+
+			for _, match := range matches {
+				if len(match) < 2 {
+					continue
+				}
+
+				variable := match[0]  // Full match including braces: {fieldName}
+				fieldName := match[1] // Just the field name: fieldName
+
+				// Get value from event payload, default to "NODATA" if not found
+				var value interface{} = "NODATA"
+				if eventValue, exists := event.Payload[fieldName]; exists {
+					value = eventValue
+				}
+
+				// Check if this field requires special array handling
+				if arrayFieldsMap[fieldName] {
+					if valueSlice, ok := value.([]interface{}); ok {
+						// Find the line containing the variable
+						lines := strings.Split(q, "\n")
+						for i, line := range lines {
+							if strings.Contains(line, variable) {
+								// Match field assignment pattern: field: or - field:
+								fieldRegex := regexp.MustCompile(`^(\s*)(?:-\s*)?(\w+(?:\.\w+)*(?:\|\w+)*):(?:\s*|$)`)
+								fieldMatch := fieldRegex.FindStringSubmatch(line)
+
+								if len(fieldMatch) >= 3 {
+									indent := fieldMatch[1]
+									field := fieldMatch[2]
+									hasDash := strings.Contains(fieldMatch[0], "- ")
+
+									var prefix string
+									if hasDash {
+										prefix = "- "
+									}
+
+									// Build replacement with array values
+									var arrayValues []string
+									for _, item := range valueSlice {
+										if str, ok := item.(string); ok {
+											arrayValues = append(arrayValues, fmt.Sprintf("%s    - %s", indent, str))
+										}
+									}
+
+									replacement := fmt.Sprintf("%s%s%s:\n%s", indent, prefix, field, strings.Join(arrayValues, "\n"))
+									lines[i] = replacement
+									q = strings.Join(lines, "\n")
+									break
+								}
+							}
+						}
+						continue
+					}
+				}
+
+				// Default replacement for non-array fields
+				var valueStr string
+				switch v := value.(type) {
+				case string:
+					valueStr = v
+				case []interface{}:
+					// Convert array to comma-separated string for non-special fields
+					var strItems []string
+					for _, item := range v {
+						if str, ok := item.(string); ok {
+							strItems = append(strItems, str)
+						}
+					}
+					valueStr = strings.Join(strItems, ",")
+				default:
+					valueStr = fmt.Sprintf("%v", v)
+				}
+
+				q = strings.ReplaceAll(q, variable, valueStr)
+			}
+
+			question.FilledQuery = q
+		}
+	}
+}
+
+// BuildQuestionRange builds a date range string for a question based on event timestamp and range specification
+// Range format examples: "+/-3d", "-1h", "30m", "2s"
+// Returns a formatted date range string like "2024/01/01 12:00:00 PM - 2024/01/01 01:00:00 PM"
+func buildQuestionRange(event *model.EventRecord, rangeStr string, timezone string) string {
+	if rangeStr == "" {
+		return ""
+	}
+
+	// Get event timestamp
+	eventTime := getEventTimestamp(event)
+	if eventTime.IsZero() {
+		return ""
+	}
+
+	// Load timezone
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		loc = time.UTC
+	}
+
+	eventTime = eventTime.In(loc)
+
+	// Parse range specification
+	plusMinus := false
+	lookingBack := false
+
+	if strings.HasPrefix(rangeStr, "+/-") {
+		plusMinus = true
+		rangeStr = rangeStr[3:]
+	} else if strings.HasPrefix(rangeStr, "-") {
+		lookingBack = true
+		rangeStr = rangeStr[1:]
+	}
+
+	if len(rangeStr) < 2 {
+		return ""
+	}
+
+	// Extract unit and value
+	unit := strings.ToLower(rangeStr[len(rangeStr)-1:])
+	valueStr := rangeStr[:len(rangeStr)-1]
+
+	value, err := strconv.Atoi(valueStr)
+	if err != nil {
+		return ""
+	}
+
+	// Convert unit to time.Duration
+	var duration time.Duration
+	switch unit {
+	case "d":
+		duration = time.Duration(value) * 24 * time.Hour
+	case "h":
+		duration = time.Duration(value) * time.Hour
+	case "m":
+		duration = time.Duration(value) * time.Minute
+	case "s":
+		duration = time.Duration(value) * time.Second
+	default:
+		return ""
+	}
+
+	// Calculate time range
+	var t1, t2 time.Time
+	timeFormat := time.RFC3339
+
+	if plusMinus {
+		t1 = eventTime.Add(-duration)
+		t2 = eventTime.Add(duration)
+	} else if lookingBack {
+		t1 = eventTime.Add(-duration)
+		t2 = eventTime
+	} else {
+		t1 = eventTime
+		t2 = eventTime.Add(duration)
+	}
+
+	return fmt.Sprintf("%s - %s", t1.Format(timeFormat), t2.Format(timeFormat))
+}
+
+// getEventTimestamp extracts the timestamp from an event record
+// Mirrors the JavaScript getEventTimestamp function logic
+func getEventTimestamp(event *model.EventRecord) time.Time {
+	// Try different timestamp fields in order of preference
+	timestampFields := []string{
+		"event_data.@timestamp",
+		"@timestamp",
+		"soc_timestamp",
+	}
+
+	for _, field := range timestampFields {
+		if value, exists := event.Payload[field]; exists {
+			if timeStr, ok := value.(string); ok && timeStr != "" {
+				// Try parsing various time formats
+				formats := []string{
+					time.RFC3339,
+					time.RFC3339Nano,
+					"2006-01-02T15:04:05.000Z",
+					"2006-01-02T15:04:05Z",
+					"2006-01-02 15:04:05",
+				}
+
+				for _, format := range formats {
+					if t, err := time.Parse(format, timeStr); err == nil {
+						return t
+					}
+				}
+			}
+		}
+	}
+
+	// Fallback to event's Time field if available
+	if !event.Time.IsZero() {
+		return event.Time
+	}
+
+	return time.Time{}
 }

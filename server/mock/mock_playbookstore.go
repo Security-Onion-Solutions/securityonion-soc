@@ -56,6 +56,20 @@ func (mr *MockPlaybookstoreMockRecorder) ConvertQuestions(ctx, queries any) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConvertQuestions", reflect.TypeOf((*MockPlaybookstore)(nil).ConvertQuestions), ctx, queries)
 }
 
+// ExecutePlaybookSearches mocks base method.
+func (m *MockPlaybookstore) ExecutePlaybookSearches(ctx context.Context, event *model.EventRecord, pbs []*model.Playbook) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ExecutePlaybookSearches", ctx, event, pbs)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ExecutePlaybookSearches indicates an expected call of ExecutePlaybookSearches.
+func (mr *MockPlaybookstoreMockRecorder) ExecutePlaybookSearches(ctx, event, pbs any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecutePlaybookSearches", reflect.TypeOf((*MockPlaybookstore)(nil).ExecutePlaybookSearches), ctx, event, pbs)
+}
+
 // GetPlaybookById mocks base method.
 func (m *MockPlaybookstore) GetPlaybookById(ctx context.Context, id string) (*model.Playbook, error) {
 	m.ctrl.T.Helper()

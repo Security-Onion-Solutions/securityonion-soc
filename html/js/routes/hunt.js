@@ -3390,18 +3390,7 @@ INVESTIGATION STEPS:
    - Use the rule UUID to retrieve investigation playbook
    - Follow the structured investigation questions
 
-3. Answer each playbook question by:
-   - Running the suggested queries provided in the playbook
-   - Analyzing the results thoroughly
-   - Drawing evidence-based conclusions
-
-4. Search for related activity:
-   - Additional alerts from the same source IP
-   - Other connections to/from the involved IPs
-   - Related activity in suggested time windows
-   - Pattern analysis across similar events
-
-5. Provide a comprehensive assessment including:
+3. Provide a comprehensive assessment including:
    - Verdict (malicious/suspicious/benign/unknown)
    - Confidence level (0-100%)
    - Detailed findings and evidence

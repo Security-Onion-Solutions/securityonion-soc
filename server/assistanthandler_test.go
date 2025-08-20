@@ -247,7 +247,8 @@ data: [DONE]`
 		Role: "assistant",
 		ContentBlocks: []model.ContentBlock{
 			{
-				Content: `I'll get your 5 newest alerts for you. Since you're asking for the "newest" alerts, I'll query for recent individual alert events without grouping.`,
+				Type: "text",
+				Text: `I'll get your 5 newest alerts for you. Since you're asking for the "newest" alerts, I'll query for recent individual alert events without grouping.`,
 			},
 			{
 				Type:  "tool_use",
