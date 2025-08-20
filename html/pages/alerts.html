@@ -781,33 +781,65 @@
                   <!-- Network Information for Suricata/Network-based alerts -->
                   <div v-if="selectedAlertDetails.sourceIp || selectedAlertDetails.destIp">
                     <div class="d-flex align-center flex-wrap ga-2">
-                      <!-- Source chip -->
+                      <!-- Source chip with tooltip -->
+                      <v-tooltip location="top" v-if="selectedAlertDetails.sourceIp">
+                        <template v-slot:activator="{ props }">
+                          <v-chip 
+                            v-bind="props"
+                            size="small" 
+                            variant="outlined"
+                            color="primary"
+                          >
+                            <v-icon start size="x-small">fa-desktop</v-icon>
+                            <span class="font-weight-medium">Source:</span>
+                            <span class="ml-1 font-mono">
+                              {{ selectedAlertDetails.sourceIp || 'N/A' }}<span v-if="selectedAlertDetails.sourcePort">:{{ selectedAlertDetails.sourcePort }}</span>
+                            </span>
+                          </v-chip>
+                        </template>
+                        <div style="white-space: pre-line;">{{ formatGeoInfo(selectedAlertDetails.sourceGeo, selectedAlertDetails.sourceIp) }}</div>
+                      </v-tooltip>
                       <v-chip 
+                        v-else
                         size="small" 
                         variant="outlined"
                         color="primary"
                       >
                         <v-icon start size="x-small">fa-desktop</v-icon>
                         <span class="font-weight-medium">Source:</span>
-                        <span class="ml-1 font-mono">
-                          {{ selectedAlertDetails.sourceIp || 'N/A' }}<span v-if="selectedAlertDetails.sourcePort">:{{ selectedAlertDetails.sourcePort }}</span>
-                        </span>
+                        <span class="ml-1 font-mono">N/A</span>
                       </v-chip>
                       
                       <!-- Arrow indicator -->
                       <v-icon size="small" color="grey">fa-arrow-right</v-icon>
                       
-                      <!-- Destination chip -->
+                      <!-- Destination chip with tooltip -->
+                      <v-tooltip location="top" v-if="selectedAlertDetails.destIp">
+                        <template v-slot:activator="{ props }">
+                          <v-chip 
+                            v-bind="props"
+                            size="small" 
+                            variant="outlined"
+                            color="info"
+                          >
+                            <v-icon start size="x-small">fa-server</v-icon>
+                            <span class="font-weight-medium">Dest:</span>
+                            <span class="ml-1 font-mono">
+                              {{ selectedAlertDetails.destIp || 'N/A' }}<span v-if="selectedAlertDetails.destPort">:{{ selectedAlertDetails.destPort }}</span>
+                            </span>
+                          </v-chip>
+                        </template>
+                        <div style="white-space: pre-line;">{{ formatGeoInfo(selectedAlertDetails.destGeo, selectedAlertDetails.destIp) }}</div>
+                      </v-tooltip>
                       <v-chip 
+                        v-else
                         size="small" 
                         variant="outlined"
                         color="info"
                       >
                         <v-icon start size="x-small">fa-server</v-icon>
                         <span class="font-weight-medium">Dest:</span>
-                        <span class="ml-1 font-mono">
-                          {{ selectedAlertDetails.destIp || 'N/A' }}<span v-if="selectedAlertDetails.destPort">:{{ selectedAlertDetails.destPort }}</span>
-                        </span>
+                        <span class="ml-1 font-mono">N/A</span>
                       </v-chip>
                       
                       <!-- Protocol and metadata chips -->

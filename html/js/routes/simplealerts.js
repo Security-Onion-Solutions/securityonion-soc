@@ -433,7 +433,6 @@ const simpleAlertsComponent = {
             categoriesSet.add(ruleCategory);
           }
         }
-        
         return {
           id: event.id,
           timestamp: event.timestamp,
@@ -444,8 +443,10 @@ const simpleAlertsComponent = {
           severityLabel: data['event.severity_label'] || 'unknown',
           sourceIp: data['source.ip'],
           sourcePort: data['source.port'],
+          sourceGeo: null,  // Geo data not available in simple view
           destIp: data['destination.ip'],
           destPort: data['destination.port'],
+          destGeo: null,  // Geo data not available in simple view
           module: data['event.module'],
           category: data['event.category'],
           'rule.category': ruleCategory,
@@ -894,11 +895,32 @@ const simpleAlertsComponent = {
         
         if (response && response.data && response.data.events && response.data.events.length > 0) {
           const fullEvent = response.data.events[0];
+          const fullData = fullEvent.payload || fullEvent;
+          
+          // Extract geo data from the full event
+          const sourceGeo = {
+            country: fullData['source.geo.country_name'],
+            city: fullData['source.geo.city_name'],
+            regionCode: fullData['source.geo.region_iso_code'],
+            regionName: fullData['source.geo.region_name'],
+            asOrg: fullData['source.as.organization.name']
+          };
+          
+          const destGeo = {
+            country: fullData['destination.geo.country_name'],
+            city: fullData['destination.geo.city_name'],
+            regionCode: fullData['destination.geo.region_iso_code'],
+            regionName: fullData['destination.geo.region_name'],
+            asOrg: fullData['destination.as.organization.name']
+          };
+          
           // Merge the full data with our simplified alert
           this.selectedAlertDetails = {
             ...alert,
             rawData: fullEvent.payload || {},
             ruleText: fullEvent.payload?.['rule.rule'] || fullEvent['rule.rule'] || alert.ruleText || '',
+            sourceGeo: sourceGeo,
+            destGeo: destGeo,
             aiSummary: null,
             playbooks: null,
             playbookLoading: false,
@@ -1375,6 +1397,75 @@ const simpleAlertsComponent = {
         return `Show less (collapse to ${this.subGroupDisplayLimit})`;
       }
       return `Load ${remaining} more alerts`;
+    },
+    
+    isPrivateIP(ip) {
+      if (!ip) return false;
+      
+      // Check for RFC1918 private addresses
+      const parts = ip.split('.');
+      if (parts.length !== 4) return false;
+      
+      const first = parseInt(parts[0]);
+      const second = parseInt(parts[1]);
+      
+      // 10.0.0.0/8
+      if (first === 10) return true;
+      
+      // 172.16.0.0/12
+      if (first === 172 && second >= 16 && second <= 31) return true;
+      
+      // 192.168.0.0/16
+      if (first === 192 && second === 168) return true;
+      
+      // 127.0.0.0/8 (localhost)
+      if (first === 127) return true;
+      
+      return false;
+    },
+    
+    formatGeoInfo(geo, ip) {
+      // Check if it's a private IP first
+      if (this.isPrivateIP(ip)) {
+        return 'Private Network (RFC1918)';
+      }
+      
+      // If geo is null or empty, return a message
+      if (!geo || (!geo.country && !geo.city && !geo.asOrg && !geo.regionCode)) {
+        return 'Geo data not available\n(View details for location info)';
+      }
+      
+      const parts = [];
+      
+      // Show city, region ISO code, country
+      if (geo.city) parts.push(geo.city);
+      if (geo.regionCode) {
+        parts.push(geo.regionCode);
+      } else if (geo.regionName) {
+        parts.push(geo.regionName);
+      }
+      if (geo.country) parts.push(geo.country);
+      
+      let location = parts.length > 0 ? parts.join(', ') : '';
+      
+      // Show AS organization on a separate line if available
+      if (geo.asOrg) {
+        if (location) {
+          location += '\n';
+        }
+        location += `AS: ${geo.asOrg}`;
+      }
+      
+      return location || 'Geo data not available\n(View details for location info)';
+    },
+    
+    getIpGeoInfo(alert, ipType) {
+      if (ipType === 'source') {
+        return alert.sourceGeo;
+      } else if (ipType === 'dest') {
+        return alert.destGeo;
+      }
+      return null;
     },
     
     isSubGroupExpanded(groupKey, subGroupKey) {
@@ -2119,6 +2210,8 @@ const simpleAlertsComponent = {
               key: subKey,
               sourceIp: alert.sourceIp,
               destIp: alert.destIp,
+              sourceGeo: alert.sourceGeo,
+              destGeo: alert.destGeo,
               alerts: [],
               count: 0,
               ports: new Set(), // Track unique port combinations
