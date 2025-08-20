@@ -33,6 +33,7 @@ const simpleAlertsComponent = {
       filterSeverity: 'all',
       filterStatus: 'active',
       filterTimeRange: '24h',
+      filterCategory: 'all',
       
       // Action dialog
       actionDialog: false,
@@ -48,6 +49,7 @@ const simpleAlertsComponent = {
       // Details dialog
       detailsDialog: false,
       selectedAlertDetails: null,
+      showDetailedRule: false,
       expandedQuestions: [],
       
       // PCAP
@@ -66,6 +68,7 @@ const simpleAlertsComponent = {
       alertGroups: [],
       expandedGroups: [],
       expandedSubGroups: {},  // Track expanded state of sub-groups
+      expandedGroupRules: {},  // Track expanded state of rule text
       subGroupDisplayLimit: 50, // Limit alerts shown per sub-group for performance
       subGroupLoadMore: {}, // Track which sub-groups have "load more" active
       
@@ -78,6 +81,16 @@ const simpleAlertsComponent = {
       // Rule management
       disablingRules: {}, // Track which rules are being disabled
       suppressLoading: {}, // Track which suppressions are in progress
+      
+      // Sort options
+      sortBy: 'count', // Default sort by count
+      sortOptions: [
+        { value: 'count', title: 'Alert Count' },
+        { value: 'category', title: 'Category' },
+        { value: 'severity', title: 'Severity' },
+        { value: 'ruleName', title: 'Rule Name' },
+        { value: 'timestamp', title: 'Most Recent' }
+      ],
       
       // Filter options
       severityOptions: [
@@ -92,6 +105,7 @@ const simpleAlertsComponent = {
         { value: 'acknowledged', title: 'Acknowledged' },
         { value: 'escalated', title: 'Escalated' }
       ],
+      categoryOptions: [],
       timeRangeOptions: [
         { value: '1h', title: 'Last Hour' },
         { value: '24h', title: 'Last 24 Hours' },
@@ -142,23 +156,33 @@ const simpleAlertsComponent = {
       return this.selectedAlerts.size > 0 || this.selectedSubGroups.size > 0 || this.selectedGroups.size > 0;
     },
     processedAlerts() {
+      // Apply category filter first
+      let filteredAlerts = this.alerts;
+      if (this.filterCategory !== 'all') {
+        filteredAlerts = this.alerts.filter(alert => 
+          alert['rule.category'] === this.filterCategory
+        );
+      }
+      
       if (!this.groupAlerts) {
-        return this.alerts;
+        return filteredAlerts;
       }
       
       // Group alerts by rule name only at the top level
       const groups = new Map();
       
-      this.alerts.forEach(alert => {
+      filteredAlerts.forEach(alert => {
         const groupKey = alert.ruleName;
         
         if (!groups.has(groupKey)) {
           groups.set(groupKey, {
             key: groupKey,
             ruleName: alert.ruleName,
+            ruleText: alert.ruleText,
             module: alert.module,
             severityLabel: alert.severityLabel,
             category: alert.category,
+            'rule.category': alert['rule.category'],
             firstSeen: alert.timestamp,
             lastSeen: alert.timestamp,
             alerts: [],
@@ -187,10 +211,42 @@ const simpleAlertsComponent = {
         }
       });
       
-      // Convert to array, filter out empty groups, and sort by count
+      // Convert to array, filter out empty groups, and sort based on selected option
       this.alertGroups = Array.from(groups.values())
         .filter(group => group.count > 0)  // Remove groups with no alerts
-        .sort((a, b) => b.count - a.count);
+        .sort((a, b) => {
+          switch (this.sortBy) {
+            case 'category':
+              // Sort by category alphabetically, then by count
+              if (a['rule.category'] === b['rule.category']) {
+                return b.count - a.count;
+              }
+              return (a['rule.category'] || '').localeCompare(b['rule.category'] || '');
+            
+            case 'severity':
+              // Sort by severity (high > medium > low)
+              const severityOrder = { 'high': 3, 'critical': 3, 'medium': 2, 'low': 1 };
+              const aLevel = severityOrder[this.getSeverityLevel(a)] || 0;
+              const bLevel = severityOrder[this.getSeverityLevel(b)] || 0;
+              if (aLevel === bLevel) {
+                return b.count - a.count;
+              }
+              return bLevel - aLevel;
+            
+            case 'ruleName':
+              // Sort by rule name alphabetically
+              return a.ruleName.localeCompare(b.ruleName);
+            
+            case 'timestamp':
+              // Sort by most recent activity
+              return new Date(b.lastSeen) - new Date(a.lastSeen);
+            
+            case 'count':
+            default:
+              // Sort by count (default)
+              return b.count - a.count;
+          }
+        });
       
       return this.alertGroups;
     }
@@ -352,25 +408,63 @@ const simpleAlertsComponent = {
     },
     
     processAlerts(events) {
-      return events.map(event => ({
-        id: event.id,
-        timestamp: event.timestamp,
-        ruleName: event.payload['rule.name'] || 'Unknown Rule',
-        ruleUuid: event.payload['rule.uuid'],
-        severity: event.payload['event.severity'],
-        severityLabel: event.payload['event.severity_label'] || 'unknown',
-        sourceIp: event.payload['source.ip'],
-        sourcePort: event.payload['source.port'],
-        destIp: event.payload['destination.ip'],
-        destPort: event.payload['destination.port'],
-        module: event.payload['event.module'],
-        category: event.payload['event.category'],
-        acknowledged: event.payload['event.acknowledged'] || false,
-        escalated: event.payload['event.escalated'] || false,
-        dismissed: event.payload['event.dismissed'] || false,
-        // Store the entire payload for potential AI summary extraction
-        payload: event.payload
-      }));
+      const categoriesSet = new Set();
+      
+      const processedAlerts = events.map(event => {
+        // The API returns the event with fields at the root level, not in event.payload
+        // Check if we have a payload object or if fields are at root level
+        const data = event.payload || event;
+        
+        const ruleName = data['rule.name'] || 'Unknown Rule';
+        
+        // Extract category from rule name
+        // Common patterns:
+        // "ET MALWARE ..." -> "MALWARE"
+        // "ET TROJAN ..." -> "TROJAN"  
+        // "ET DNS ..." -> "DNS"
+        // "ET POLICY ..." -> "POLICY"
+        // "GPL ATTACK_RESPONSE ..." -> "ATTACK_RESPONSE"
+        let ruleCategory = '';
+        if (ruleName) {
+          // Match patterns like "ET CATEGORY" or "GPL CATEGORY"
+          const match = ruleName.match(/^(?:ET|GPL|SURICATA)\s+([A-Z_]+)/);
+          if (match) {
+            ruleCategory = match[1];
+            categoriesSet.add(ruleCategory);
+          }
+        }
+        
+        return {
+          id: event.id,
+          timestamp: event.timestamp,
+          ruleName: ruleName,
+          ruleUuid: data['rule.uuid'],
+          ruleText: data['rule.rule'] || data['rule.text'] || '',
+          severity: data['event.severity'],
+          severityLabel: data['event.severity_label'] || 'unknown',
+          sourceIp: data['source.ip'],
+          sourcePort: data['source.port'],
+          destIp: data['destination.ip'],
+          destPort: data['destination.port'],
+          module: data['event.module'],
+          category: data['event.category'],
+          'rule.category': ruleCategory,
+          acknowledged: data['event.acknowledged'] || false,
+          escalated: data['event.escalated'] || false,
+          dismissed: data['event.dismissed'] || false,
+          // Store the entire payload for potential AI summary extraction
+          payload: data
+        };
+      });
+      
+      // Update category options based on found categories
+      const sortedCategories = Array.from(categoriesSet).sort();
+      this.categoryOptions = [
+        { value: 'all', title: 'All Categories' },
+        ...sortedCategories.map(cat => ({ value: cat, title: cat }))
+      ];
+      
+      return processedAlerts;
     },
     
     getSeverityLevel(alert) {
@@ -745,18 +839,6 @@ const simpleAlertsComponent = {
       }
     },
     
-    switchToExpertMode() {
-      // Switch to the alerts page (which uses the hunt component)
-      this.$router.push({
-        name: 'alerts',
-        query: {
-          q: this.buildQuery(),
-          rt: this.filterTimeRange === '1h' ? 1 : this.filterTimeRange === '24h' ? 24 : this.filterTimeRange === '7d' ? 7 * 24 : 30 * 24,
-          rtu: 'hours'
-        }
-      });
-    },
-    
     updateTimeRange(value) {
       console.log('updateTimeRange called with:', value);
       this.filterTimeRange = value;
@@ -773,6 +855,12 @@ const simpleAlertsComponent = {
       this.loadAlerts();
     },
     
+    updateSort(value) {
+      this.sortBy = value;
+      // No need to reload alerts, just re-sort the existing data
+      // The computed property will handle the re-sorting automatically
+    },
+    
     getStatusLabel() {
       switch (this.filterStatus) {
         case 'active': return 'Active Alerts';
@@ -784,6 +872,9 @@ const simpleAlertsComponent = {
     },
     
     async showAlertDetails(alert) {
+      // Reset show rule state
+      this.showDetailedRule = false;
+      
       // First, set the selected alert details
       this.selectedAlertDetails = alert;
       
@@ -807,6 +898,7 @@ const simpleAlertsComponent = {
           this.selectedAlertDetails = {
             ...alert,
             rawData: fullEvent.payload || {},
+            ruleText: fullEvent.payload?.['rule.rule'] || fullEvent['rule.rule'] || alert.ruleText || '',
             aiSummary: null,
             playbooks: null,
             playbookLoading: false,
@@ -1259,6 +1351,16 @@ const simpleAlertsComponent = {
       } else {
         // Show all alerts
         this.$set(this.subGroupLoadMore, subGroup.key, true);
+      }
+    },
+    
+    toggleGroupRule(group) {
+      if (this.expandedGroupRules[group.key]) {
+        // Hide rule text
+        this.$delete(this.expandedGroupRules, group.key);
+      } else {
+        // Show rule text
+        this.$set(this.expandedGroupRules, group.key, true);
       }
     },
     

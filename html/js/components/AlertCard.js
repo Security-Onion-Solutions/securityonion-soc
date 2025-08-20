@@ -31,6 +31,16 @@ components.push({
             <!-- Alert Header -->
             <div class="d-flex align-center mb-2">
               <v-chip
+                v-if="alert['rule.category']"
+                size="small"
+                variant="outlined"
+                color="blue-grey"
+                class="mr-2"
+              >
+                <v-icon start size="x-small">fa-tag</v-icon>
+                {{ alert['rule.category'] }}
+              </v-chip>
+              <v-chip
                 :color="severityColor"
                 :text-color="severityTextColor"
                 size="small"
