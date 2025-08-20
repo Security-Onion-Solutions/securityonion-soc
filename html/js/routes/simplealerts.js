@@ -40,6 +40,8 @@ const simpleAlertsComponent = {
       actionTitle: '',
       actionLoading: false,
       selectedAlert: null,
+      selectedGroup: null,
+      selectedSubGroup: null,
       caseTitle: '',
       caseDescription: '',
       
@@ -72,6 +74,10 @@ const simpleAlertsComponent = {
       selectedSubGroups: new Set(), // Sub-group keys (source->dest combinations)
       selectedGroups: new Set(), // Top-level group keys (rule names)
       selectionMode: false, // Toggle selection mode
+      
+      // Rule management
+      disablingRules: {}, // Track which rules are being disabled
+      suppressLoading: {}, // Track which suppressions are in progress
       
       // Filter options
       severityOptions: [
@@ -181,8 +187,10 @@ const simpleAlertsComponent = {
         }
       });
       
-      // Convert to array and sort by count
-      this.alertGroups = Array.from(groups.values()).sort((a, b) => b.count - a.count);
+      // Convert to array, filter out empty groups, and sort by count
+      this.alertGroups = Array.from(groups.values())
+        .filter(group => group.count > 0)  // Remove groups with no alerts
+        .sort((a, b) => b.count - a.count);
       
       return this.alertGroups;
     }
@@ -372,11 +380,15 @@ const simpleAlertsComponent = {
       return 'low';
     },
     
-    acknowledgeAlert(alert) {
-      this.selectedAlert = alert;
-      this.actionType = 'acknowledge';
-      this.actionTitle = 'Acknowledge Alert';
-      this.actionDialog = true;
+    async acknowledgeAlert(alert) {
+      // Directly acknowledge single alert without dialog
+      try {
+        await this.updateAlertStatuses([alert.id], 'acknowledged');
+        this.$root.showTip('Alert acknowledged');
+        await this.loadAlerts();
+      } catch (error) {
+        this.$root.showError(`Failed to acknowledge alert: ${error.message}`);
+      }
     },
     
     escalateAlert(alert) {
@@ -395,7 +407,100 @@ const simpleAlertsComponent = {
       this.actionLoading = true;
       
       try {
-        if (this.actionType === 'escalate-bulk') {
+        if (this.actionType === 'acknowledge-group') {
+          // Group acknowledge
+          const group = this.selectedGroup;
+          
+          // For group acknowledgment, use rule name filter instead of individual IDs
+          // This ensures we get ALL alerts matching the rule, not just the loaded ones
+          const searchFilter = `tags:alert AND rule.name:"${group.ruleName}" AND NOT event.acknowledged:true AND NOT event.escalated:true`;
+          const eventFilter = { 'tags': 'alert' };
+          
+          const response = await this.$root.papi.post('events/ack', {
+            searchFilter: searchFilter,
+            eventFilter: eventFilter,
+            dateRange: this.getDateRange(),
+            dateRangeFormat: '2006/01/02 3:04:05 PM',
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            acknowledge: true,
+            escalate: false
+          });
+          
+          this.$root.showTip(`All alerts acknowledged for "${group.ruleName}"`);
+          // Don't clear selectedGroup here - we need it for expansion restoration below
+        } else if (this.actionType === 'acknowledge-subgroup') {
+          // SubGroup acknowledge
+          const group = this.selectedGroup;
+          const subGroup = this.selectedSubGroup;
+          
+          // For subgroup acknowledgment, use rule name + IP filter instead of individual IDs
+          let searchFilter = `tags:alert AND rule.name:"${group.ruleName}" AND NOT event.acknowledged:true AND NOT event.escalated:true`;
+          
+          // Add source IP filter if present
+          if (subGroup.sourceIp && subGroup.sourceIp !== 'unknown') {
+            searchFilter += ` AND source.ip:"${subGroup.sourceIp}"`;
+          }
+          
+          // Add dest IP filter if present  
+          if (subGroup.destIp && subGroup.destIp !== 'unknown') {
+            searchFilter += ` AND destination.ip:"${subGroup.destIp}"`;
+          }
+          
+          const eventFilter = { 'tags': 'alert' };
+          
+          const response = await this.$root.papi.post('events/ack', {
+            searchFilter: searchFilter,
+            eventFilter: eventFilter,
+            dateRange: this.getDateRange(),
+            dateRangeFormat: '2006/01/02 3:04:05 PM',
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            acknowledge: true,
+            escalate: false
+          });
+          
+          this.$root.showTip(`All "${group.ruleName}" alerts acknowledged for ${subGroup.sourceIp} → ${subGroup.destIp}`);
+          // Don't clear selectedGroup here - we need it for expansion restoration below
+        } else if (this.actionType === 'escalate-subgroup') {
+          // SubGroup escalate
+          const alertIds = this.selectedSubGroup.alerts.map(a => a.id);
+          
+          // Create a case with all subgroup alerts
+          const caseData = {
+            title: this.caseTitle,
+            description: this.caseDescription,
+            severity: this.selectedAlert.severityLabel || 'high',
+            status: 'new',
+            events: alertIds
+          };
+          
+          await this.$root.papi.post('case', caseData);
+          
+          // Update all alert statuses using bulk API
+          await this.updateAlertStatuses(alertIds, 'escalated');
+          
+          this.$root.showTip(`${alertIds.length} "${group.ruleName}" alerts escalated to case for ${this.selectedSubGroup.sourceIp} → ${this.selectedSubGroup.destIp}`);
+          // Don't clear selectedSubGroup here - cleared later
+        } else if (this.actionType === 'escalate-group') {
+          // Group escalate
+          const alertIds = this.selectedGroup.alerts.map(a => a.id);
+          
+          // Create a case with all group alerts
+          const caseData = {
+            title: this.caseTitle,
+            description: this.caseDescription,
+            severity: this.selectedGroup.severityLabel || 'high',
+            status: 'new',
+            events: alertIds
+          };
+          
+          await this.$root.papi.post('case', caseData);
+          
+          // Update all alert statuses using bulk API
+          await this.updateAlertStatuses(alertIds, 'escalated');
+          
+          this.$root.showTip(`${alertIds.length} alerts escalated to case for "${this.selectedGroup.ruleName}"`);
+          // Don't clear selectedGroup here - cleared later
+        } else if (this.actionType === 'escalate-bulk') {
           // Bulk escalate
           const alertIds = this.getSelectedAlertIds();
           
@@ -410,12 +515,8 @@ const simpleAlertsComponent = {
           
           await this.$root.papi.post('case', caseData);
           
-          // Update all alert statuses
-          const batchSize = 50;
-          for (let i = 0; i < alertIds.length; i += batchSize) {
-            const batch = alertIds.slice(i, i + batchSize);
-            await Promise.all(batch.map(id => this.updateAlertStatus(id, 'escalated')));
-          }
+          // Update all alert statuses using bulk API
+          await this.updateAlertStatuses(alertIds, 'escalated');
           
           this.$root.showTip(`${alertIds.length} alert${alertIds.length > 1 ? 's' : ''} escalated to case`);
           this.clearSelection();
@@ -432,18 +533,94 @@ const simpleAlertsComponent = {
           await this.$root.papi.post('case', caseData);
           
           // Update alert status
-          await this.updateAlertStatus(this.selectedAlert.id, 'escalated');
+          await this.updateAlertStatuses([this.selectedAlert.id], 'escalated');
           this.$root.showTip(`Alert escalated successfully`);
         } else if (this.actionType === 'acknowledge') {
           // Update alert status
-          await this.updateAlertStatus(this.selectedAlert.id, 'acknowledged');
+          await this.updateAlertStatuses([this.selectedAlert.id], 'acknowledged');
           this.$root.showTip(`Alert acknowledged successfully`);
         }
         
-        // Refresh the list
+        // Store expansion states before reload (only for subgroup operations)
+        // MUST do this BEFORE clearing selections
+        let expandedGroupKey = null;
+        let expandedSubGroupIndices = [];
+        
+        // Store which group was expanded for any operation that has context
+        if (this.selectedGroup) {
+          expandedGroupKey = this.selectedGroup.key;
+          
+          // Get currently expanded subgroup indices
+          if (this.expandedSubGroups[this.selectedGroup.key] && Array.isArray(this.expandedSubGroups[this.selectedGroup.key])) {
+            // Store the current expanded indices
+            expandedSubGroupIndices = [...this.expandedSubGroups[this.selectedGroup.key]];
+          }
+        } else if (this.actionType === 'acknowledge' || this.actionType === 'escalate') {
+          // For individual alert actions, find which group/subgroup it belongs to
+          // by looking at the currently expanded panels
+          if (this.expandedGroups.length > 0) {
+            const expandedGroupIndex = this.expandedGroups[this.expandedGroups.length - 1]; // Get the last expanded group
+            if (this.alertGroups[expandedGroupIndex]) {
+              expandedGroupKey = this.alertGroups[expandedGroupIndex].key;
+              
+              // Get currently expanded subgroup indices
+              if (this.expandedSubGroups[expandedGroupKey] && Array.isArray(this.expandedSubGroups[expandedGroupKey])) {
+                expandedSubGroupIndices = [...this.expandedSubGroups[expandedGroupKey]];
+              }
+            }
+          }
+        }
+        
+        // Clear selections and refresh the list
+        this.selectedGroup = null;
+        this.selectedSubGroup = null;
+        this.selectedAlert = null;
+        
+        // Close dialog first to give visual feedback
+        this.actionDialog = false;
+        
+        // Clear expansion states to prevent wrong panels from being expanded
+        this.expandedGroups = [];
+        this.expandedSubGroups = {};
+        this.subGroupLoadMore = {};
+        
+        // Force a fresh reload of alerts
+        this.alerts = [];  // Clear current alerts to force UI update
         await this.loadAlerts();
         
-        this.actionDialog = false;
+        // Re-expand the group and subgroups if they still exist
+        if (expandedGroupKey) {
+          // Wait for Vue to update the DOM
+          await this.$nextTick();
+          
+          // Find the group by key in the new data
+          const groupIndex = this.alertGroups.findIndex(g => g.key === expandedGroupKey);
+          
+          if (groupIndex !== -1) {
+            // Re-expand the group if it still exists
+            this.expandedGroups.push(groupIndex);
+            
+            // Get the new subgroups for this group
+            const newGroup = this.alertGroups[groupIndex];
+            const newSubGroups = this.getSubGroups(newGroup);
+            
+            // Restore previously expanded subgroups if any
+            // Don't auto-expand all subgroups, just restore what was expanded before
+            if (expandedSubGroupIndices.length > 0) {
+              // Only restore the indices that were previously expanded
+              // These indices might have shifted if we removed a subgroup
+              // In Vue 3, use direct assignment instead of $set
+              this.expandedSubGroups[expandedGroupKey] = expandedSubGroupIndices;
+              
+              // Force update to ensure Vue picks up the change
+              await this.$nextTick();
+            }
+            // If no subgroups were expanded before, leave them all collapsed
+            // The user can see the list of IP pairs and expand them as needed
+          }
+          // If groupIndex is -1, the group no longer exists (all alerts acknowledged)
+          // so we don't need to do anything - it will simply not appear in the UI
+        }
       } catch (error) {
         this.$root.showError(error);
       } finally {
@@ -451,8 +628,38 @@ const simpleAlertsComponent = {
       }
     },
     
-    async updateAlertStatus(alertId, status) {
-      await this.$root.papi.put(`events/${alertId}/status`, { status });
+    async updateAlertStatuses(alertIds, status) {
+      // Use the bulk acknowledge endpoint for updating statuses
+      if (!alertIds || alertIds.length === 0) return;
+      
+      const acknowledge = (status === 'acknowledged');
+      const escalate = (status === 'escalated');
+      
+      let searchFilter;
+      let eventFilter = {};
+      
+      if (alertIds.length === 1) {
+        // Single ID - use eventFilter with wildcard search
+        searchFilter = '*';
+        eventFilter['_id'] = alertIds[0];
+      } else {
+        // Multiple IDs - use OR logic in search filter
+        // But we still need a minimal eventFilter (API requirement)
+        searchFilter = alertIds.map(id => `_id:"${id}"`).join(' OR ');
+        eventFilter = { 'tags': 'alert' }; // Minimal filter to satisfy API requirement
+      }
+      
+      const response = await this.$root.papi.post('events/ack', {
+        searchFilter: searchFilter,
+        eventFilter: eventFilter,
+        dateRange: this.getDateRange(),
+        dateRangeFormat: '2006/01/02 3:04:05 PM',
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        acknowledge: acknowledge,
+        escalate: escalate
+      });
+      
+      return response;
     },
     
     async loadStatistics() {
@@ -1495,12 +1702,8 @@ const simpleAlertsComponent = {
       
       this.actionLoading = true;
       try {
-        // Process alerts in batches
-        const batchSize = 50;
-        for (let i = 0; i < alertIds.length; i += batchSize) {
-          const batch = alertIds.slice(i, i + batchSize);
-          await Promise.all(batch.map(id => this.updateAlertStatus(id, 'acknowledged')));
-        }
+        // Use bulk API for all alerts at once
+        await this.updateAlertStatuses(alertIds, 'acknowledged');
         
         this.$root.showTip(`${alertIds.length} alert${alertIds.length > 1 ? 's' : ''} acknowledged`);
         this.clearSelection();
@@ -1525,6 +1728,280 @@ const simpleAlertsComponent = {
       this.actionDialog = true;
     },
     
+    
+    async acknowledgeGroup(group) {
+      // Show confirmation dialog
+      this.selectedAlert = { 
+        id: 'group-' + group.key, 
+        ruleName: group.ruleName
+      };
+      this.selectedGroup = group;
+      this.actionType = 'acknowledge-group';
+      this.actionTitle = `Acknowledge ${group.count} Alerts`;
+      this.caseTitle = ''; // Not needed for acknowledge
+      this.caseDescription = `Acknowledge all ${group.count} alerts for "${group.ruleName}"?`;
+      this.actionDialog = true;
+    },
+    
+    async escalateGroup(group) {
+      // Set up for escalation
+      this.selectedAlert = { 
+        id: 'group-' + group.key, 
+        ruleName: group.ruleName,
+        severityLabel: group.severityLabel 
+      };
+      this.actionType = 'escalate-group';
+      this.actionTitle = `Escalate ${group.count} Alerts to Case`;
+      this.caseTitle = `${group.ruleName} - ${group.count} alerts`;
+      this.caseDescription = `Escalating ${group.count} alerts for rule: ${group.ruleName}`;
+      
+      // Store the group for later use in confirmAction
+      this.selectedGroup = group;
+      
+      this.actionDialog = true;
+    },
+    
+    async acknowledgeSubGroup(group, subGroup) {
+      // Show confirmation dialog
+      this.selectedAlert = { 
+        id: 'subgroup-' + subGroup.key, 
+        ruleName: group.ruleName
+      };
+      this.selectedGroup = group;
+      this.selectedSubGroup = subGroup;
+      this.actionType = 'acknowledge-subgroup';
+      this.actionTitle = `Acknowledge ${subGroup.count} Alerts`;
+      this.caseTitle = ''; // Not needed for acknowledge
+      this.caseDescription = `Acknowledge all ${subGroup.count} "${group.ruleName}" alerts for ${subGroup.sourceIp} → ${subGroup.destIp}?`;
+      this.actionDialog = true;
+    },
+    
+    async escalateSubGroup(group, subGroup) {
+      // Set up for escalation
+      this.selectedAlert = { 
+        id: 'subgroup-' + subGroup.key, 
+        ruleName: group.ruleName,
+        severityLabel: group.severityLabel 
+      };
+      this.actionType = 'escalate-subgroup';
+      this.actionTitle = `Escalate ${subGroup.count} Alerts to Case`;
+      this.caseTitle = `${group.ruleName}: ${subGroup.sourceIp} → ${subGroup.destIp}`;
+      this.caseDescription = `Escalating ${subGroup.count} "${group.ruleName}" alerts for connection ${subGroup.sourceIp} → ${subGroup.destIp}`;
+      
+      // Store the subgroup for later use in confirmAction
+      this.selectedSubGroup = subGroup;
+      this.selectedGroup = group;
+      
+      this.actionDialog = true;
+    },
+    
+    async suppressBySource(group, subGroup) {
+      const sourceIp = subGroup.sourceIp;
+      if (!sourceIp) {
+        this.$root.showError('No source IP to suppress');
+        return;
+      }
+      
+      // Get the rule ID from the first alert
+      const firstAlert = subGroup.alerts[0];
+      if (!firstAlert || !firstAlert.ruleUuid) {
+        this.$root.showError('Cannot suppress: Rule ID not found');
+        return;
+      }
+      
+      const ruleId = firstAlert.ruleUuid;
+      const ruleName = group.ruleName;
+      
+      if (!confirm(`Create a suppression for rule "${ruleName}" from source IP ${sourceIp}?\n\nThis will prevent alerts from this source IP for this specific rule.`)) {
+        return;
+      }
+      
+      this.$set(this.suppressLoading, subGroup.key, true);
+      
+      try {
+        // Create a tuning/suppression for this rule and source IP
+        const suppressionData = {
+          ruleId: ruleId,
+          type: 'suppress',
+          conditions: {
+            sourceIp: sourceIp
+          },
+          comment: `Suppression created from Simple Alerts view on ${new Date().toISOString()}`
+        };
+        
+        await this.$root.papi.post('detection/tuning', suppressionData);
+        
+        this.$root.showTip(`Suppression created for "${ruleName}" from source ${sourceIp}`);
+        await this.loadAlerts();
+      } catch (error) {
+        console.error('Failed to create suppression:', error);
+        this.$root.showError(`Failed to create suppression: ${error.message || 'Unknown error'}`);
+      } finally {
+        this.$delete(this.suppressLoading, subGroup.key);
+      }
+    },
+    
+    async suppressByDest(group, subGroup) {
+      const destIp = subGroup.destIp;
+      if (!destIp) {
+        this.$root.showError('No destination IP to suppress');
+        return;
+      }
+      
+      // Get the rule ID from the first alert
+      const firstAlert = subGroup.alerts[0];
+      if (!firstAlert || !firstAlert.ruleUuid) {
+        this.$root.showError('Cannot suppress: Rule ID not found');
+        return;
+      }
+      
+      const ruleId = firstAlert.ruleUuid;
+      const ruleName = group.ruleName;
+      
+      if (!confirm(`Create a suppression for rule "${ruleName}" to destination IP ${destIp}?\n\nThis will prevent alerts to this destination IP for this specific rule.`)) {
+        return;
+      }
+      
+      this.$set(this.suppressLoading, subGroup.key, true);
+      
+      try {
+        // Create a tuning/suppression for this rule and destination IP
+        const suppressionData = {
+          ruleId: ruleId,
+          type: 'suppress',
+          conditions: {
+            destIp: destIp
+          },
+          comment: `Suppression created from Simple Alerts view on ${new Date().toISOString()}`
+        };
+        
+        await this.$root.papi.post('detection/tuning', suppressionData);
+        
+        this.$root.showTip(`Suppression created for "${ruleName}" to destination ${destIp}`);
+        await this.loadAlerts();
+      } catch (error) {
+        console.error('Failed to create suppression:', error);
+        this.$root.showError(`Failed to create suppression: ${error.message || 'Unknown error'}`);
+      } finally {
+        this.$delete(this.suppressLoading, subGroup.key);
+      }
+    },
+    
+    tuneRuleForPair(group, subGroup) {
+      // Get the rule UUID/PublicId from the first alert
+      const firstAlert = subGroup.alerts[0];
+      if (!firstAlert || !firstAlert.ruleUuid) {
+        this.$root.showError('Cannot tune rule: Rule ID not found');
+        return;
+      }
+      
+      const ruleId = firstAlert.ruleUuid;
+      
+      // Navigate to detections page with the rule ID and pre-filled source/dest for tuning
+      this.$router.push({
+        name: 'detections',
+        query: {
+          action: 'tune',
+          publicId: ruleId,
+          sourceIp: subGroup.sourceIp,
+          destIp: subGroup.destIp
+        }
+      });
+    },
+    
+    tuneRule(group) {
+      // Get the rule UUID/PublicId from the first alert in the group
+      const firstAlert = group.alerts[0];
+      if (!firstAlert || !firstAlert.ruleUuid) {
+        this.$root.showError('Cannot tune rule: Rule ID not found');
+        return;
+      }
+      
+      const ruleId = firstAlert.ruleUuid;
+      
+      // Navigate to detections page with the rule ID to tune it
+      // This will open the tuning interface for this specific rule
+      this.$router.push({
+        name: 'detections',
+        query: {
+          action: 'tune',
+          publicId: ruleId
+        }
+      });
+    },
+    
+    viewInDetections(group) {
+      // Get the rule UUID/PublicId from the first alert in the group
+      const firstAlert = group.alerts[0];
+      if (!firstAlert || !firstAlert.ruleUuid) {
+        this.$root.showError('Cannot view rule: Rule ID not found');
+        return;
+      }
+      
+      const ruleId = firstAlert.ruleUuid;
+      
+      // Navigate to detections page filtered to show this specific rule
+      this.$router.push({
+        name: 'detections',
+        query: {
+          search: ruleId
+        }
+      });
+    },
+    
+    async disableRule(group) {
+      // Get the rule UUID/PublicId from the first alert in the group
+      const firstAlert = group.alerts[0];
+      if (!firstAlert || !firstAlert.ruleUuid) {
+        this.$root.showError('Cannot disable rule: Rule ID not found');
+        return;
+      }
+      
+      const ruleId = firstAlert.ruleUuid;
+      const ruleName = group.ruleName;
+      
+      // Confirm with user
+      if (!confirm(`Are you sure you want to disable the rule "${ruleName}"?\n\nThis will prevent new alerts from being generated for this rule. Existing alerts will remain.\n\nRule ID: ${ruleId}`)) {
+        return;
+      }
+      
+      // Track loading state
+      this.$set(this.disablingRules, group.key, true);
+      
+      try {
+        // Call the detection API to disable the rule
+        // The API expects the public ID (for Suricata, this is the SID)
+        const response = await this.$root.papi.put(`detection/public/${ruleId}`, {
+          isEnabled: false,
+          // Optional: Add a comment about why it was disabled
+          comment: `Disabled from Simple Alerts view on ${new Date().toISOString()}`
+        });
+        
+        if (response && response.data) {
+          this.$root.showTip(`Rule "${ruleName}" has been disabled successfully`);
+          
+          // Optionally refresh the alerts to reflect the change
+          // Though existing alerts will remain, this might update any UI state
+          await this.loadAlerts();
+        } else {
+          throw new Error('Failed to disable rule - no response from server');
+        }
+      } catch (error) {
+        console.error('Failed to disable rule:', error);
+        
+        // Check if it's a 404 (rule not found in detections)
+        if (error.response && error.response.status === 404) {
+          this.$root.showError(`Cannot disable rule: Detection rule not found in the system (ID: ${ruleId})`);
+        } else if (error.response && error.response.status === 403) {
+          this.$root.showError('Permission denied: You do not have permission to disable detection rules');
+        } else {
+          this.$root.showError(`Failed to disable rule: ${error.message || 'Unknown error'}`);
+        }
+      } finally {
+        // Clear loading state
+        this.$delete(this.disablingRules, group.key);
+      }
+    },
     
     getSubGroups(group) {
       // Sub-group alerts by source and destination IPs (ignoring ports)

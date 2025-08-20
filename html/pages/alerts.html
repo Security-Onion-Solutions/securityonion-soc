@@ -238,12 +238,6 @@
                 </div>
                 
                 <div class="d-flex align-center ga-2">
-                  <!-- Time Range Chip -->
-                  <v-chip size="x-small" variant="tonal">
-                    <v-icon start size="x-small">fa-clock</v-icon>
-                    {{ new Date(group.firstSeen).toLocaleTimeString() }} - {{ new Date(group.lastSeen).toLocaleTimeString() }}
-                  </v-chip>
-                  
                   <!-- Severity Chip -->
                   <v-chip
                     :color="getSeverityColor(group.severityLabel)"
@@ -252,23 +246,86 @@
                   >
                     {{ group.severityLabel }}
                   </v-chip>
+                  
+                  <!-- Time Range Chip -->
+                  <v-chip size="x-small" variant="tonal">
+                    <v-icon start size="x-small">fa-clock</v-icon>
+                    {{ new Date(group.firstSeen).toLocaleTimeString() }} - {{ new Date(group.lastSeen).toLocaleTimeString() }}
+                  </v-chip>
+                  
+                  <!-- Actions Dropdown -->
+                  <v-menu v-if="!selectionMode">
+                    <template v-slot:activator="{ props }">
+                      <v-btn
+                        v-bind="props"
+                        size="x-small"
+                        variant="outlined"
+                        @click.stop
+                      >
+                        <v-icon start size="x-small">fa-ellipsis-v</v-icon>
+                        Actions
+                        <v-icon end size="x-small">fa-chevron-down</v-icon>
+                      </v-btn>
+                    </template>
+                    <v-list density="compact">
+                      <v-list-item
+                        @click="acknowledgeGroup(group)"
+                        :disabled="actionLoading"
+                      >
+                        <template v-slot:prepend>
+                          <v-icon size="small" color="success">fa-check</v-icon>
+                        </template>
+                        <v-list-item-title>Acknowledge All ({{ group.count }})</v-list-item-title>
+                      </v-list-item>
+                      <v-list-item
+                        @click="escalateGroup(group)"
+                        :disabled="actionLoading"
+                      >
+                        <template v-slot:prepend>
+                          <v-icon size="small" color="warning">fa-briefcase</v-icon>
+                        </template>
+                        <v-list-item-title>Escalate All ({{ group.count }})</v-list-item-title>
+                      </v-list-item>
+                      <v-divider class="my-1"></v-divider>
+                      <v-list-item
+                        @click="viewInDetections(group)"
+                      >
+                        <template v-slot:prepend>
+                          <v-icon size="small" color="info">fa-shield</v-icon>
+                        </template>
+                        <v-list-item-title>View in Detections</v-list-item-title>
+                      </v-list-item>
+                      <v-list-item
+                        @click="disableRule(group)"
+                        :disabled="disablingRules[group.key]"
+                      >
+                        <template v-slot:prepend>
+                          <v-icon size="small" color="error">fa-ban</v-icon>
+                        </template>
+                        <v-list-item-title>Disable Rule</v-list-item-title>
+                      </v-list-item>
+                    </v-list>
+                  </v-menu>
                 </div>
               </div>
             </v-expansion-panel-title>
             <v-expansion-panel-text>
               <!-- Nested Sub-groups by Source/Destination -->
               <v-expansion-panels 
+                v-model="expandedSubGroups[group.key]"
                 variant="accordion"
+                multiple
                 class="elevation-0"
               >
                 <v-expansion-panel
-                  v-for="subGroup in getSubGroups(group)"
+                  v-for="(subGroup, subIndex) in getSubGroups(group)"
                   :key="subGroup.key"
+                  :value="subIndex"
                   class="mb-2"
                 >
                   <v-expansion-panel-title class="pa-3 bg-grey-darken-3">
                     <div class="d-flex align-center justify-space-between w-100 pr-4">
-                      <div class="d-flex align-center ga-3">
+                      <div class="d-flex align-center ga-3 flex-grow-1">
                         <!-- Selection Checkbox -->
                         <v-checkbox
                           v-if="selectionMode"
@@ -282,7 +339,7 @@
                         <v-avatar size="24" color="primary" variant="tonal">
                           <span class="text-caption font-weight-bold">{{ subGroup.count }}</span>
                         </v-avatar>
-                        <div>
+                        <div class="flex-grow-1">
                           <div class="d-flex align-center" v-if="subGroup.sourceIp || subGroup.destIp">
                             <v-chip size="small" variant="outlined" class="mr-2">
                               <v-icon start size="x-small">fa-desktop</v-icon>
@@ -311,6 +368,69 @@
                           </div>
                         </div>
                       </div>
+                      <!-- Actions Dropdown for SubGroup -->
+                      <v-menu v-if="!selectionMode && (subGroup.sourceIp || subGroup.destIp)">
+                        <template v-slot:activator="{ props }">
+                          <v-btn
+                            v-bind="props"
+                            size="x-small"
+                            variant="text"
+                            icon
+                            @click.stop
+                          >
+                            <v-icon size="small">fa-ellipsis-v</v-icon>
+                          </v-btn>
+                        </template>
+                        <v-list density="compact">
+                          <v-list-item
+                            @click="acknowledgeSubGroup(group, subGroup)"
+                            :disabled="actionLoading"
+                          >
+                            <template v-slot:prepend>
+                              <v-icon size="small" color="success">fa-check</v-icon>
+                            </template>
+                            <v-list-item-title>Acknowledge All ({{ subGroup.count }})</v-list-item-title>
+                          </v-list-item>
+                          <v-list-item
+                            @click="escalateSubGroup(group, subGroup)"
+                            :disabled="actionLoading"
+                          >
+                            <template v-slot:prepend>
+                              <v-icon size="small" color="warning">fa-briefcase</v-icon>
+                            </template>
+                            <v-list-item-title>Escalate All ({{ subGroup.count }})</v-list-item-title>
+                          </v-list-item>
+                          <v-divider class="my-1"></v-divider>
+                          <v-list-item
+                            @click="suppressBySource(group, subGroup)"
+                            :disabled="suppressLoading[subGroup.key]"
+                            v-if="subGroup.sourceIp"
+                          >
+                            <template v-slot:prepend>
+                              <v-icon size="small" color="info">fa-ban</v-icon>
+                            </template>
+                            <v-list-item-title>Suppress by Source ({{ subGroup.sourceIp }})</v-list-item-title>
+                          </v-list-item>
+                          <v-list-item
+                            @click="suppressByDest(group, subGroup)"
+                            :disabled="suppressLoading[subGroup.key]"
+                            v-if="subGroup.destIp"
+                          >
+                            <template v-slot:prepend>
+                              <v-icon size="small" color="info">fa-ban</v-icon>
+                            </template>
+                            <v-list-item-title>Suppress by Dest ({{ subGroup.destIp }})</v-list-item-title>
+                          </v-list-item>
+                          <v-list-item
+                            @click="tuneRuleForPair(group, subGroup)"
+                          >
+                            <template v-slot:prepend>
+                              <v-icon size="small" color="primary">fa-sliders</v-icon>
+                            </template>
+                            <v-list-item-title>Tune Rule</v-list-item-title>
+                          </v-list-item>
+                        </v-list>
+                      </v-menu>
                     </div>
                   </v-expansion-panel-title>
                   
@@ -407,7 +527,7 @@
     <v-card>
       <v-card-title>{{ actionTitle }}</v-card-title>
       <v-card-text>
-        <div v-if="actionType === 'escalate'">
+        <div v-if="actionType && actionType.includes('escalate')">
           <v-text-field
             v-model="caseTitle"
             label="Case Title"
@@ -424,7 +544,7 @@
           ></v-textarea>
         </div>
         <div v-else>
-          Are you sure you want to {{ actionType }} this alert?
+          {{ caseDescription || `Are you sure you want to ${actionType} this alert?` }}
         </div>
       </v-card-text>
       <v-card-actions>
