@@ -2425,7 +2425,7 @@ const huntComponent = {
               // For grouped alerts (count > 1), we'll show brain icon by default
               // When clicked, it will fetch the newest event and create an investigation for that specific alert
               // This avoids expensive queries to determine if any alert in the group has been investigated
-              if (item.count && item.count > 1) {
+              if (item.count) {
                 // Don't mark grouped alerts as investigated to avoid expensive lookups
                 // The user can still investigate by clicking the brain icon
                 item._aiInvestigationStatus = null;
@@ -3289,7 +3289,7 @@ const huntComponent = {
       let targetItem = item;
       
       // Check if this is a grouped alert (has count > 1)
-      if (item.count && item.count > 1) {
+      if (item.count) {
         // For grouped alerts, fetch the newest event to get the most recent alert's soc_id
         try {
           await this.fetchNewestEvent(item);
@@ -3415,17 +3415,17 @@ Please begin the investigation now.`;
     
     getAIInvestigationButtonColor(item) {
       // For grouped alerts, check if the group has been marked as investigated
-      if (item.count && item.count > 1) {
+      if (item.count) {
         // For grouped alerts, check if any investigation exists
-        if (item._aiInvestigationStatus === 'completed') {
-          // Use the representative investigation result if available
-          const investigation = item._aiInvestigationResult;
-          if (investigation && investigation.assessment) {
-            return investigation.assessment === 'true_positive' ? 'red darken-1' :
-                   investigation.assessment === 'false_positive' ? 'green darken-1' : 'amber darken-1';
-          }
-          return 'secondary'; // Default robot color for investigated groups
-        }
+        // if (item._aiInvestigationStatus === 'completed') {
+        //   // Use the representative investigation result if available
+        //   const investigation = item._aiInvestigationResult;
+        //   if (investigation && investigation.assessment) {
+        //     return investigation.assessment === 'true_positive' ? 'red darken-1' :
+        //            investigation.assessment === 'false_positive' ? 'green darken-1' : 'amber darken-1';
+        //   }
+        //   return 'secondary'; // Default robot color for investigated groups
+        // }
         // Not investigated - show brain
         return 'pink-lighten-2';
       }
@@ -3437,10 +3437,10 @@ Please begin the investigation now.`;
       // Only two states: investigated (robot) or not investigated (brain)
       if (investigation && investigation.chatSessionId) {
         // Investigated - show robot with assessment-based color if available
-        if (investigation.assessment) {
-          return investigation.assessment === 'true_positive' ? 'red darken-1' :
-                 investigation.assessment === 'false_positive' ? 'green darken-1' : 'amber darken-1';
-        }
+        // if (investigation.assessment) {
+        //   return investigation.assessment === 'true_positive' ? 'red darken-1' :
+        //          investigation.assessment === 'false_positive' ? 'green darken-1' : 'amber darken-1';
+        // }
         return 'secondary'; // Default robot color
       }
       
@@ -3450,40 +3450,53 @@ Please begin the investigation now.`;
     
     getAIInvestigationTooltip(item) {
       // For grouped alerts, check if the group has been marked as investigated
-      if (item.count && item.count > 1) {
-        if (item._aiInvestigationStatus === 'completed') {
-          // Use the representative investigation result if available
-          const investigation = item._aiInvestigationResult;
-          if (investigation && investigation.assessment) {
-            const assessmentText = investigation.assessment === 'true_positive' ? this.i18n.aiTruePositive :
-                                  investigation.assessment === 'false_positive' ? this.i18n.aiFalsePositive : this.i18n.aiUncertain;
-            const confidence = investigation.confidence || 'Unknown';
-            return `${this.i18n.aiAssessment}: ${assessmentText} (${confidence}% ${this.i18n.aiConfidence}) - ${this.i18n.clickToStartGroupInvestigation}`;
-          }
-          return `${this.i18n.aiInvestigationCompleted} - ${this.i18n.clickToStartGroupInvestigation}`;
-        }
-        // Not investigated
-        return `${this.i18n.startAIInvestigationForGroup}`;
-      }
+      // if (item.count) {
+      //   if (item._aiInvestigationStatus === 'completed') {
+      //     // Use the representative investigation result if available
+      //     const investigation = item._aiInvestigationResult;
+      //     if (investigation && investigation.assessment) {
+      //       const assessmentText = investigation.assessment === 'true_positive' ? this.i18n.aiTruePositive :
+      //                             investigation.assessment === 'false_positive' ? this.i18n.aiFalsePositive : this.i18n.aiUncertain;
+      //       const confidence = investigation.confidence || 'Unknown';
+      //       return `${this.i18n.aiAssessment}: ${assessmentText} (${confidence}% ${this.i18n.aiConfidence}) - ${this.i18n.clickToStartGroupInvestigation}`;
+      //     }
+      //     return `${this.i18n.aiInvestigationCompleted} - ${this.i18n.clickToStartGroupInvestigation}`;
+      //   }
+      //   // Not investigated
+      //   return `${this.i18n.startAIInvestigationForGroup}`;
+      // }
       
-      // For individual alerts, use soc_id as before
+      // // For individual alerts, use soc_id as before
+      // const socId = item.soc_id;
+      // const investigation = this.aiInvestigations[socId];
+      
+      // // Only two states: investigated or not investigated
+      // if (investigation && investigation.chatSessionId) {
+      //   // Investigated - show assessment info if available
+      //   if (investigation.assessment) {
+      //     const assessmentText = investigation.assessment === 'true_positive' ? this.i18n.aiTruePositive :
+      //                           investigation.assessment === 'false_positive' ? this.i18n.aiFalsePositive : this.i18n.aiUncertain;
+      //     const confidence = investigation.confidence || 'Unknown';
+      //     return `${this.i18n.aiAssessment}: ${assessmentText} (${confidence}% ${this.i18n.aiConfidence}) - ${this.i18n.clickToOpenChat}`;
+      //   }
+      //   return `${this.i18n.aiInvestigationCompleted} - ${this.i18n.clickToOpenChat}`;
+      // }
+      
+      // // Not investigated
+      // return `${this.i18n.startAIInvestigation}`;
+      if (item.count) {
+        return this.i18n.aiInvestigateMostRecent;
+      }
+
       const socId = item.soc_id;
       const investigation = this.aiInvestigations[socId];
-      
-      // Only two states: investigated or not investigated
+
       if (investigation && investigation.chatSessionId) {
-        // Investigated - show assessment info if available
-        if (investigation.assessment) {
-          const assessmentText = investigation.assessment === 'true_positive' ? this.i18n.aiTruePositive :
-                                investigation.assessment === 'false_positive' ? this.i18n.aiFalsePositive : this.i18n.aiUncertain;
-          const confidence = investigation.confidence || 'Unknown';
-          return `${this.i18n.aiAssessment}: ${assessmentText} (${confidence}% ${this.i18n.aiConfidence}) - ${this.i18n.clickToOpenChat}`;
-        }
-        return `${this.i18n.aiInvestigationCompleted} - ${this.i18n.clickToOpenChat}`;
+        return this.i18n.aiInvestigated;
       }
-      
-      // Not investigated
-      return `${this.i18n.startAIInvestigation}`;
+
+      return this.i18n.aiInvestigate;
+
     },
     
   }

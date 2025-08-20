@@ -663,8 +663,8 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
           throw new Error(`Tool execution failed: ${response.statusText}`);
         }
 
-        // Update tool status to completed (tool execution itself is done)
-        toolUse.status = 'completed';
+        // Update tool status to executing
+        toolUse.status = 'executing';
 
         // Stream the AI's response to the tool result
         const reader = response.body.getReader();
@@ -898,20 +898,29 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
                 const msg = response.data[i];
                 if (msg.tags && msg.tags.includes('tool_result')) {
                   let rawResult = null;
+                  let toolError = null;
                   const textBlock = msg.message.contentBlocks.find(block => block.type === 'text');
                   if (textBlock && textBlock.text) {
                     // Parse the tool result format: "ToolUseId: tooluse_QdvZoVlXQNm0PBuqFuqRmA, Result: [actual_result_data]"
                     const toolResultText = textBlock.text;
                     const toolUseIdMatch = toolResultText.match(/ToolUseId:\s*([^,]+)/);
                     const resultMatch = toolResultText.match(/Result:\s*(.+)$/s);
+                    const errorMatch = toolResultText.match(/Error:\s*([^,]+)/);
                     
-                    if (toolUseIdMatch && resultMatch) {
+                    if (toolUseIdMatch && resultMatch && errorMatch) {
                       rawResult = resultMatch[1].trim();
+                      toolError = errorMatch[1].trim();
                     }
                   }
                   // This is a tool result - associate it with our tool use
                   toolUse.rawResult = rawResult;
                   toolUse.completedAt = msg.createTime;
+                  if (toolError != "<nil>") {
+                    toolUse.error = toolError;
+                    toolUse.status = "error";
+                  } else {
+                    toolUse.status = "completed";
+                  }
                   console.log('Captured raw tool result:', toolUse.rawResult);
                   break;
                 }
@@ -1119,6 +1128,7 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
           // This is a tool result message - extract the result data
           let rawResult = null;
           let toolUseId = null;
+          let toolError = null;
           
           if (msg.message.contentBlocks && msg.message.contentBlocks.length > 0) {
             const textBlock = msg.message.contentBlocks.find(block => block.type === 'text');
@@ -1127,16 +1137,18 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
               const toolResultText = textBlock.text;
               const toolUseIdMatch = toolResultText.match(/ToolUseId:\s*([^,]+)/);
               const resultMatch = toolResultText.match(/Result:\s*(.+)$/s);
+              const errorMatch = toolResultText.match(/Error:\s*([^,]+)/);
               
-              if (toolUseIdMatch && resultMatch) {
+              if (toolUseIdMatch && resultMatch && errorMatch) {
                 toolUseId = toolUseIdMatch[1].trim();
                 rawResult = resultMatch[1].trim();
+                toolError = errorMatch[1].trim();
               }
             }
           }
           
           // Find the assistant message with the matching tool use and add the raw result
-          if (toolUseId && rawResult) {
+          if (toolUseId && rawResult && toolError) {
             // Look backwards through processed messages to find the tool use
             for (let j = processedMessages.length - 1; j >= 0; j--) {
               const processedMsg = processedMessages[j];
@@ -1146,6 +1158,10 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
                 if (matchingToolUse) {
                   matchingToolUse.rawResult = rawResult;
                   matchingToolUse.completedAt = msg.createTime;
+                  if (toolError != "<nil>") {
+                    matchingToolUse.error = toolError;
+                    matchingToolUse.status = "error";
+                  }
                   console.log('Associated raw tool result with tool use:', toolUseId);
                   break;
                 }
