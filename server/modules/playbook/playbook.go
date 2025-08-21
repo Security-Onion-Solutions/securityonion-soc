@@ -619,7 +619,7 @@ func (pdm *PlaybookDiskManager) ExecutePlaybookSearches(ctx context.Context, eve
 		return err
 	}
 
-	pdm.queryVariableSubstitution(event, pbs)
+	queryVariableSubstitution(event, pbs)
 
 	for _, pb := range pbs {
 		filled := lo.Map(pb.Questions, func(q *model.Question, _ int) string {
@@ -661,7 +661,7 @@ func (pdm *PlaybookDiskManager) ExecutePlaybookSearches(ctx context.Context, eve
 }
 
 // queryVariableSubstitution substitutes variables in playbook queries with values from the provided event data
-func (pdm *PlaybookDiskManager) queryVariableSubstitution(event *model.EventRecord, playbooks []*model.Playbook) {
+func queryVariableSubstitution(event *model.EventRecord, playbooks []*model.Playbook) {
 	// Fields that require special array handling
 	arrayFields := []string{"network.private_ip", "network.public_ip", "related.ip"}
 

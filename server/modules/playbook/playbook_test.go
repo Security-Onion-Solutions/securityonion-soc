@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"os/exec"
@@ -1323,10 +1324,8 @@ detection:
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			pdm := PlaybookDiskManager{}
-
 			// Execute variable substitution
-			pdm.queryVariableSubstitution(tc.event, tc.playbooks)
+			queryVariableSubstitution(tc.event, tc.playbooks)
 
 			// Verify results
 			for _, pb := range tc.playbooks {
@@ -1337,6 +1336,395 @@ detection:
 				actualQuery := pb.Questions[0].FilledQuery
 
 				assert.Equal(t, expectedQuery, actualQuery, "Filled query mismatch for playbook %s", pb.Id)
+			}
+		})
+	}
+}
+
+func TestGetEventTimestamp(t *testing.T) {
+	testCases := []struct {
+		name          string
+		event         *model.EventRecord
+		expectedTime  time.Time
+		shouldBeEmpty bool
+	}{
+		{
+			name: "event with @timestamp field",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": "2024-01-15T14:30:45.123Z",
+					"source.ip":  "10.0.0.1",
+				},
+			},
+			expectedTime: time.Date(2024, 1, 15, 14, 30, 45, 123000000, time.UTC),
+		},
+		{
+			name: "event with event_data.@timestamp field (higher priority)",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"event_data.@timestamp": "2024-01-15T14:30:45.123Z",
+					"@timestamp":            "2024-01-15T12:00:00.000Z",
+					"soc_timestamp":         "2024-01-15T10:00:00.000Z",
+				},
+			},
+			expectedTime: time.Date(2024, 1, 15, 14, 30, 45, 123000000, time.UTC),
+		},
+		{
+			name: "event with soc_timestamp field",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"soc_timestamp": "2024-01-15T14:30:45Z",
+					"source.ip":     "10.0.0.1",
+				},
+			},
+			expectedTime: time.Date(2024, 1, 15, 14, 30, 45, 0, time.UTC),
+		},
+		{
+			name: "event with RFC3339Nano format",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": "2024-01-15T14:30:45.123456789Z",
+				},
+			},
+			expectedTime: time.Date(2024, 1, 15, 14, 30, 45, 123456789, time.UTC),
+		},
+		{
+			name: "event with custom format '2006-01-02T15:04:05.000Z'",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": "2024-01-15T14:30:45.123Z",
+				},
+			},
+			expectedTime: time.Date(2024, 1, 15, 14, 30, 45, 123000000, time.UTC),
+		},
+		{
+			name: "event with simple format '2006-01-02T15:04:05Z'",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": "2024-01-15T14:30:45Z",
+				},
+			},
+			expectedTime: time.Date(2024, 1, 15, 14, 30, 45, 0, time.UTC),
+		},
+		{
+			name: "event with format '2006-01-02 15:04:05'",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": "2024-01-15 14:30:45",
+				},
+			},
+			expectedTime: time.Date(2024, 1, 15, 14, 30, 45, 0, time.UTC),
+		},
+		{
+			name: "fallback to event.Time field",
+			event: &model.EventRecord{
+				Time: time.Date(2024, 1, 15, 14, 30, 45, 0, time.UTC),
+				Payload: map[string]any{
+					"source.ip": "10.0.0.1",
+				},
+			},
+			expectedTime: time.Date(2024, 1, 15, 14, 30, 45, 0, time.UTC),
+		},
+		{
+			name: "prefer payload timestamp over event.Time",
+			event: &model.EventRecord{
+				Time: time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC),
+				Payload: map[string]any{
+					"@timestamp": "2024-01-15T14:30:45Z",
+				},
+			},
+			expectedTime: time.Date(2024, 1, 15, 14, 30, 45, 0, time.UTC),
+		},
+		{
+			name: "empty timestamp field",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": "",
+					"source.ip":  "10.0.0.1",
+				},
+			},
+			shouldBeEmpty: true,
+		},
+		{
+			name: "non-string timestamp field",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": 1234567890,
+					"source.ip":  "10.0.0.1",
+				},
+			},
+			shouldBeEmpty: true,
+		},
+		{
+			name: "invalid timestamp format",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": "invalid-time-format",
+				},
+			},
+			shouldBeEmpty: true,
+		},
+		{
+			name: "no timestamp fields and empty event.Time",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"source.ip": "10.0.0.1",
+				},
+			},
+			shouldBeEmpty: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := getEventTimestamp(tc.event)
+
+			if tc.shouldBeEmpty {
+				assert.True(t, result.IsZero(), "Expected zero time")
+			} else {
+				assert.Equal(t, tc.expectedTime.UTC(), result.UTC(), "Timestamp mismatch")
+			}
+		})
+	}
+}
+
+func TestBuildQuestionRange(t *testing.T) {
+	// Fixed timestamp for testing
+	fixedTime := time.Date(2024, 1, 15, 14, 30, 45, 0, time.UTC)
+
+	testCases := []struct {
+		name           string
+		event          *model.EventRecord
+		rangeStr       string
+		timezone       string
+		expectedResult string
+		shouldBeEmpty  bool
+	}{
+		{
+			name: "empty range string",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": fixedTime.Format(time.RFC3339),
+				},
+			},
+			rangeStr:      "",
+			timezone:      "UTC",
+			shouldBeEmpty: true,
+		},
+		{
+			name: "event with zero timestamp",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"source.ip": "10.0.0.1",
+				},
+			},
+			rangeStr:      "1h",
+			timezone:      "UTC",
+			shouldBeEmpty: true,
+		},
+		{
+			name: "plus/minus range - 1 hour",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": fixedTime.Format(time.RFC3339),
+				},
+			},
+			rangeStr: "+/-1h",
+			timezone: "UTC",
+			expectedResult: fmt.Sprintf("%s - %s",
+				fixedTime.Add(-1*time.Hour).Format(time.RFC3339),
+				fixedTime.Add(1*time.Hour).Format(time.RFC3339)),
+		},
+		{
+			name: "plus/minus range - 30 minutes",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": fixedTime.Format(time.RFC3339),
+				},
+			},
+			rangeStr: "+/-30m",
+			timezone: "UTC",
+			expectedResult: fmt.Sprintf("%s - %s",
+				fixedTime.Add(-30*time.Minute).Format(time.RFC3339),
+				fixedTime.Add(30*time.Minute).Format(time.RFC3339)),
+		},
+		{
+			name: "plus/minus range - 2 days",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": fixedTime.Format(time.RFC3339),
+				},
+			},
+			rangeStr: "+/-2d",
+			timezone: "UTC",
+			expectedResult: fmt.Sprintf("%s - %s",
+				fixedTime.Add(-48*time.Hour).Format(time.RFC3339),
+				fixedTime.Add(48*time.Hour).Format(time.RFC3339)),
+		},
+		{
+			name: "looking back range - 2 hours",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": fixedTime.Format(time.RFC3339),
+				},
+			},
+			rangeStr: "-2h",
+			timezone: "UTC",
+			expectedResult: fmt.Sprintf("%s - %s",
+				fixedTime.Add(-2*time.Hour).Format(time.RFC3339),
+				fixedTime.Format(time.RFC3339)),
+		},
+		{
+			name: "looking back range - 15 minutes",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": fixedTime.Format(time.RFC3339),
+				},
+			},
+			rangeStr: "-15m",
+			timezone: "UTC",
+			expectedResult: fmt.Sprintf("%s - %s",
+				fixedTime.Add(-15*time.Minute).Format(time.RFC3339),
+				fixedTime.Format(time.RFC3339)),
+		},
+		{
+			name: "forward range - 3 hours",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": fixedTime.Format(time.RFC3339),
+				},
+			},
+			rangeStr: "3h",
+			timezone: "UTC",
+			expectedResult: fmt.Sprintf("%s - %s",
+				fixedTime.Format(time.RFC3339),
+				fixedTime.Add(3*time.Hour).Format(time.RFC3339)),
+		},
+		{
+			name: "forward range - 45 seconds",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": fixedTime.Format(time.RFC3339),
+				},
+			},
+			rangeStr: "45s",
+			timezone: "UTC",
+			expectedResult: fmt.Sprintf("%s - %s",
+				fixedTime.Format(time.RFC3339),
+				fixedTime.Add(45*time.Second).Format(time.RFC3339)),
+		},
+		{
+			name: "timezone conversion - EST",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": fixedTime.Format(time.RFC3339),
+				},
+			},
+			rangeStr: "+/-1h",
+			timezone: "America/New_York",
+			expectedResult: func() string {
+				loc, _ := time.LoadLocation("America/New_York")
+				localTime := fixedTime.In(loc)
+				return fmt.Sprintf("%s - %s",
+					localTime.Add(-1*time.Hour).Format(time.RFC3339),
+					localTime.Add(1*time.Hour).Format(time.RFC3339))
+			}(),
+		},
+		{
+			name: "invalid timezone falls back to UTC",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": fixedTime.Format(time.RFC3339),
+				},
+			},
+			rangeStr: "+/-1h",
+			timezone: "Invalid/Timezone",
+			expectedResult: fmt.Sprintf("%s - %s",
+				fixedTime.Add(-1*time.Hour).Format(time.RFC3339),
+				fixedTime.Add(1*time.Hour).Format(time.RFC3339)),
+		},
+		{
+			name: "range too short",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": fixedTime.Format(time.RFC3339),
+				},
+			},
+			rangeStr:      "h",
+			timezone:      "UTC",
+			shouldBeEmpty: true,
+		},
+		{
+			name: "invalid unit",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": fixedTime.Format(time.RFC3339),
+				},
+			},
+			rangeStr:      "1x",
+			timezone:      "UTC",
+			shouldBeEmpty: true,
+		},
+		{
+			name: "invalid number",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": fixedTime.Format(time.RFC3339),
+				},
+			},
+			rangeStr:      "abch",
+			timezone:      "UTC",
+			shouldBeEmpty: true,
+		},
+		{
+			name: "zero value",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": fixedTime.Format(time.RFC3339),
+				},
+			},
+			rangeStr: "0h",
+			timezone: "UTC",
+			expectedResult: fmt.Sprintf("%s - %s",
+				fixedTime.Format(time.RFC3339),
+				fixedTime.Format(time.RFC3339)),
+		},
+		{
+			name: "large value",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": fixedTime.Format(time.RFC3339),
+				},
+			},
+			rangeStr: "999d",
+			timezone: "UTC",
+			expectedResult: fmt.Sprintf("%s - %s",
+				fixedTime.Format(time.RFC3339),
+				fixedTime.Add(999*24*time.Hour).Format(time.RFC3339)),
+		},
+		{
+			name: "case insensitive units",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": fixedTime.Format(time.RFC3339),
+				},
+			},
+			rangeStr: "1H",
+			timezone: "UTC",
+			expectedResult: fmt.Sprintf("%s - %s",
+				fixedTime.Format(time.RFC3339),
+				fixedTime.Add(1*time.Hour).Format(time.RFC3339)),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := buildQuestionRange(tc.event, tc.rangeStr, tc.timezone)
+
+			if tc.shouldBeEmpty {
+				assert.Empty(t, result, "Expected empty result")
+			} else {
+				assert.Equal(t, tc.expectedResult, result, "Range mismatch")
 			}
 		})
 	}

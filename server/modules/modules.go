@@ -48,7 +48,7 @@ func BuildModuleMap(srv *server.Server) map[string]module.Module {
 	moduleMap["strelkaengine"] = strelka.NewStrelkaEngine(srv)
 	moduleMap["navigator"] = navigator.NewNavigator(srv)
 	moduleMap["playbook"] = playbook.NewPlaybookDiskManager(srv)
-	moduleMap["assistant"] = assistant.NewAssistantManager(srv)
+	moduleMap["assistant"] = assistant.NewAssistantCoordinator(srv)
 
 	return moduleMap
 }

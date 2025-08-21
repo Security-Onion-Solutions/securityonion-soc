@@ -51,7 +51,7 @@ type AssistantCoordinator struct {
 	detections.IOManager
 }
 
-func NewAssistantManager(srv *server.Server) *AssistantCoordinator {
+func NewAssistantCoordinator(srv *server.Server) *AssistantCoordinator {
 	return &AssistantCoordinator{
 		srv:       srv,
 		IOManager: &detections.ResourceManager{Config: srv.Config},
