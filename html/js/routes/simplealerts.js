@@ -2491,50 +2491,73 @@ const simpleAlertsComponent = {
         let response;
         
         if (isLikelyHostBased) {
-          // Use aggregation query for host-based alerts
-          const agentAggQuery = {
-            query: query,
-            range: dateRange,
-            format: '2006/01/02 3:04:05 PM', 
-            zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            view: 'simple',
-            eventLimit: '0', // Don't need events, just aggregations
-            aggregationType: 'terms',
-            aggregationField: 'agent.name',
-            metricLimit: '100' // Get top 100 agents
-          };
+          console.log(`Detected host-based rule: ${group.ruleName}, trying agent.name aggregation`);
           
-          const agentResponse = await this.$root.papi.get('events/?' + new URLSearchParams(agentAggQuery).toString());
+          // Try multiple possible field names for the agent
+          const agentFields = ['agent.name', 'observer.name', 'host.name'];
+          let subGroups = [];
           
-          if (agentResponse && agentResponse.data && agentResponse.data.metrics) {
-            const subGroups = [];
+          for (const field of agentFields) {
+            // Use aggregation query for host-based alerts
+            const agentAggQuery = {
+              query: query,
+              range: dateRange,
+              format: '2006/01/02 3:04:05 PM', 
+              zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+              view: 'simple',
+              eventLimit: '0', // Don't need events, just aggregations
+              aggregationType: 'terms',
+              aggregationField: field,
+              metricLimit: '100' // Get top 100 agents
+            };
             
-            for (const metric of agentResponse.data.metrics) {
-              const agentName = metric.keys[0] || 'unknown-agent';
-              const count = metric.count || 0;
+            console.log(`Trying aggregation on field: ${field}`);
+            const agentResponse = await this.$root.papi.get('events/?' + new URLSearchParams(agentAggQuery).toString());
+            
+            if (agentResponse && agentResponse.data && agentResponse.data.metrics && agentResponse.data.metrics.length > 0) {
+              console.log(`Found ${agentResponse.data.metrics.length} results for field ${field}`);
               
-              subGroups.push({
-                key: `Agent: ${agentName}`,
-                sourceIp: agentName,
-                destIp: 'endpoint',
-                count: count,
-                loadedCount: 0,
-                trueCount: count,
-                displayCount: this.formatCompactNumber(count),
-                alerts: [],
-                alertsLoaded: false,
-                loadingAlerts: false,
-                isHostBased: true,
-                agentName: agentName
-              });
+              for (const metric of agentResponse.data.metrics) {
+                const agentName = metric.keys[0] || 'unknown-agent';
+                const count = metric.count || 0;
+                
+                // Check if we already have this agent
+                const existingAgent = subGroups.find(sg => sg.agentName === agentName);
+                if (!existingAgent) {
+                  subGroups.push({
+                    key: `Agent: ${agentName}`,
+                    sourceIp: agentName,
+                    destIp: 'endpoint',
+                    count: count,
+                    loadedCount: 0,
+                    trueCount: count,
+                    displayCount: this.formatCompactNumber(count),
+                    alerts: [],
+                    alertsLoaded: false,
+                    loadingAlerts: false,
+                    isHostBased: true,
+                    agentName: agentName,
+                    agentField: field // Store which field we used
+                  });
+                }
+              }
+              
+              // If we found results, stop trying other fields
+              if (subGroups.length > 0) {
+                break;
+              }
             }
-            
+          }
+          
+          if (subGroups.length > 0) {
             // Sort by count
             group.subGroups = subGroups.sort((a, b) => b.count - a.count);
             group.subGroupsLoaded = true;
             
             console.log(`Loaded ${subGroups.length} agents for host-based rule "${group.ruleName}"`);
             return group.subGroups;
+          } else {
+            console.log(`No agent aggregations found, falling back to event loading`);
           }
         }
         
@@ -2749,12 +2772,16 @@ const simpleAlertsComponent = {
         
         // Check if this is a host-based subgroup
         if (subGroup.isHostBased || subGroup.key.startsWith('Agent:')) {
-          // For host-based alerts, filter by agent.name
-          if (subGroup.agentName) {
-            query += ` AND agent.name:"${subGroup.agentName}"`;
+          // For host-based alerts, filter by the appropriate agent field
+          if (subGroup.agentName && subGroup.agentField) {
+            // Use the field that was successful during aggregation
+            query += ` AND ${subGroup.agentField}:"${subGroup.agentName}"`;
+          } else if (subGroup.agentName) {
+            // Try agent.name first, then observer.name, then host.name
+            query += ` AND (agent.name:"${subGroup.agentName}" OR observer.name:"${subGroup.agentName}" OR host.name:"${subGroup.agentName}")`;
           } else if (subGroup.sourceIp && subGroup.sourceIp !== 'unknown' && subGroup.sourceIp !== 'endpoint') {
             // sourceIp might contain the agent name for host-based alerts
-            query += ` AND agent.name:"${subGroup.sourceIp}"`;
+            query += ` AND (agent.name:"${subGroup.sourceIp}" OR observer.name:"${subGroup.sourceIp}" OR host.name:"${subGroup.sourceIp}")`;
           }
         } else {
           // For network-based alerts, add IP filters
