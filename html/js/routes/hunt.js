@@ -3387,7 +3387,7 @@ INVESTIGATION STEPS:
    - Extract all relevant fields and metadata
 
 2. Get the playbook questions for this alert type:
-   - Use the rule UUID to retrieve investigation playbook
+   - Use the SOC ID (_id) to retrieve investigation playbook
    - Follow the structured investigation questions
 
 3. Provide a comprehensive assessment including:

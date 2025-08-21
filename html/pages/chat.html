@@ -8,7 +8,17 @@
 				<v-expansion-panel data-aid="chat_options">
 					<v-expansion-panel-title id="chatOptionsHeader" expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up">{{i18n.options}}</v-expansion-panel-title>
 					<v-expansion-panel-text>
-						<!-- Options content will be added here -->
+						<span data-aid="chat_increase_max_context_threshold_toggle">
+							<v-switch
+								id="increase-max-context-threshold"
+								v-model="increaseMaxContextThreshold"
+								density="compact"
+								hide-details
+								class="my-0"
+								:label="i18n.increaseMaxContextThreshold || 'Increase max context threshold (greater credit cost)'"
+								color="primary">
+							</v-switch>
+						</span>
 					</v-expansion-panel-text>
 				</v-expansion-panel>
 			</v-expansion-panels>

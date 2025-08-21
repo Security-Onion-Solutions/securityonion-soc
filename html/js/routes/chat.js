@@ -21,8 +21,10 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
     executingTools: new Map(), // Track tool executions by ID
     pendingToolResults: new Map(), // Store tool results waiting to be sent back
     contextLength: 0, // Track total context length
+    increaseMaxContextThreshold: false, // Toggle for max context threshold
   }},
   async created() {
+    this.loadContextThresholdSetting();
     this.loadChatHistory();
     await this.loadStoredChats();
     await this.handleRouteSessionId();
@@ -38,6 +40,9 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
       if (to.params.sessionId !== from.params.sessionId) {
         this.handleRouteSessionId();
       }
+    },
+    'increaseMaxContextThreshold'() {
+      this.saveContextThresholdSetting();
     }
   },
   methods: {
@@ -274,6 +279,14 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
     },
     async sendMessage() {
       if (!this.newMessage.trim()) return;
+      
+      // Check if context length has reached the limit
+      const maxContextLength = this.increaseMaxContextThreshold ? 1000000 : 200000;
+      if (this.contextLength >= maxContextLength) {
+        const formattedLimit = this.formatCount(maxContextLength);
+        this.$root.showError(`Context length limit reached (${formattedLimit}+ tokens). Please start a new chat to continue.`);
+        return;
+      }
       
       // Check if user has credits
       if (this.creditsRemaining <= 0) {
@@ -979,6 +992,14 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
     },
     async approveTool(toolUse) {
       try {
+        // // Check if context length has reached the limit
+        // if (this.contextLength >= 200000) {
+        //   this.$root.showError('Context length limit reached (200,000+ tokens). Cannot approve tool use. Please start a new chat to continue.');
+        //   toolUse.status = 'error';
+        //   toolUse.error = 'Context length limit reached - tool approval blocked';
+        //   return;
+        // }
+        
         toolUse.approved = true;
         toolUse.status = 'executing';
         console.log('Tool approved by user:', toolUse.name);
@@ -1268,10 +1289,35 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
     },
 
     getContextColor(value) {
-      if (value < 100000) return "text-green";
-      if (value < 150000) return "text-yellow";
-      if (value < 200000) return "text-amber darken-1";
+      const maxContextLength = this.increaseMaxContextThreshold ? 1000000 : 200000;
+      const threshold1 = maxContextLength * 0.5;  // 50% of max
+      const threshold2 = maxContextLength * 0.75; // 75% of max
+      const threshold3 = maxContextLength; // 100% of max
+      
+      if (value < threshold1) return "text-green";
+      if (value < threshold2) return "text-yellow";
+      if (value < threshold3) return "text-amber darken-1";
       return "text-red darken-1";
+    },
+    
+    // Save and load settings for the context threshold toggle
+    saveContextThresholdSetting() {
+      try {
+        localStorage.setItem('so-chat-increase-max-context-threshold', this.increaseMaxContextThreshold.toString());
+      } catch (error) {
+        console.log('Failed to save context threshold setting:', error);
+      }
+    },
+    
+    loadContextThresholdSetting() {
+      try {
+        const saved = localStorage.getItem('so-chat-increase-max-context-threshold');
+        if (saved !== null) {
+          this.increaseMaxContextThreshold = saved === 'true';
+        }
+      } catch (error) {
+        console.log('Failed to load context threshold setting:', error);
+      }
     }
   }
 }});

@@ -608,6 +608,7 @@ const i18n = {
       idMismatchErr: "The Id in this Sigma rule must match the detection's public Id.",
       importId: 'Import ID',
       importIdHelp: 'UUID value that is output from so-import-pcap. Only needed for imported PCAPs.',
+      increaseMaxContextThreshold: "Increase max context threshold (greater credit cost)",
       index: "Index",
       instantInsight: 'Instant Insight (max 5 results)',
       interval0s: "Never",
