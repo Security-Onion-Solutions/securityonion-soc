@@ -77,6 +77,7 @@ const i18n = {
       advanced: 'Enable advanced interface features',
       ago: 'ago',
       aiGenSummary: 'AI-Generated Summary',
+      aiInvestigatedToggle: 'Investigated',
       aiInvestigated: 'View Investigation',
       aiInvestigate: 'Investigate',
       aiInvestigateMostRecent: 'Investigate most recent',
