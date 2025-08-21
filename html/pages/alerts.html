@@ -87,7 +87,7 @@
     <v-col cols="12" sm="3">
       <v-card>
         <v-card-text class="text-center">
-          <div class="text-h6">{{ unacknowledgedAlerts.length }}</div>
+          <div class="text-h6">{{ totalActiveAlerts || unacknowledgedAlerts.length }}</div>
           <div class="text-caption">{{ getStatusLabel() }}</div>
         </v-card-text>
       </v-card>
@@ -95,7 +95,7 @@
     <v-col cols="12" sm="3">
       <v-card>
         <v-card-text class="text-center">
-          <div class="text-h6 error--text">{{ highSeverityCount }}</div>
+          <div class="text-h6 error--text">{{ totalHighSeverity || highSeverityCount }}</div>
           <div class="text-caption">High Severity</div>
         </v-card-text>
       </v-card>
@@ -103,7 +103,7 @@
     <v-col cols="12" sm="3">
       <v-card>
         <v-card-text class="text-center">
-          <div class="text-h6 warning--text">{{ mediumSeverityCount }}</div>
+          <div class="text-h6 warning--text">{{ totalMediumSeverity || mediumSeverityCount }}</div>
           <div class="text-caption">Medium Severity</div>
         </v-card-text>
       </v-card>
@@ -111,7 +111,7 @@
     <v-col cols="12" sm="3">
       <v-card>
         <v-card-text class="text-center">
-          <div class="text-h6 info--text">{{ lowSeverityCount }}</div>
+          <div class="text-h6 info--text">{{ totalLowSeverity || lowSeverityCount }}</div>
           <div class="text-caption">Low Severity</div>
         </v-card-text>
       </v-card>
@@ -175,7 +175,7 @@
     <v-card-title>
       <span>Alerts</span>
       <span class="text-caption ml-2" v-if="!loading">
-        <span v-if="groupAlerts">({{ alertGroups.length }} unique alerts from {{ alerts.length }} total events)</span>
+        <span v-if="groupAlerts">({{ alertGroups.length }} unique rules from {{ totalAlerts }} total events)</span>
         <span v-else>(Showing {{ alerts.length }} of {{ totalAlerts }})</span>
       </span>
       <v-spacer></v-spacer>
@@ -204,7 +204,7 @@
       <div v-if="loading" class="text-center py-4">
         <v-progress-circular indeterminate color="primary"></v-progress-circular>
       </div>
-      <div v-else-if="alerts.length === 0" class="text-center py-4">
+      <div v-else-if="(groupAlerts && alertGroups.length === 0) || (!groupAlerts && alerts.length === 0)" class="text-center py-4">
         <v-icon size="48" class="mb-4">fa-check-circle</v-icon>
         <div>No alerts found</div>
       </div>
@@ -234,13 +234,25 @@
                     class="mr-2"
                   ></v-checkbox>
                   <!-- Group Count Badge -->
-                  <v-avatar 
-                    size="32" 
-                    :color="getSeverityColor(group.severityLabel)"
-                    variant="tonal"
-                  >
-                    <span class="font-weight-bold">{{ group.count }}</span>
-                  </v-avatar>
+                  <v-tooltip location="top">
+                    <template v-slot:activator="{ props }">
+                      <v-chip
+                        v-bind="props"
+                        :color="getSeverityColor(group.severityLabel)"
+                        variant="tonal"
+                        size="small"
+                        class="font-weight-bold"
+                      >
+                        {{ formatCompactNumber(group.displayCount || group.count) }}
+                      </v-chip>
+                    </template>
+                    <span>
+                      {{ (group.displayCount || group.count).toLocaleString() }} total alerts
+                      <span v-if="group.hasMore">
+                        <br>Showing {{ group.loadedCount }} of {{ group.trueCount }}
+                      </span>
+                    </span>
+                  </v-tooltip>
                   
                   <!-- Group Info -->
                   <div>
@@ -335,8 +347,20 @@
               </div>
             </v-expansion-panel-title>
             <v-expansion-panel-text>
+              <!-- Loading state for IP pairs -->
+              <div v-if="group.loadingSubGroups" class="text-center pa-4">
+                <v-progress-circular
+                  indeterminate
+                  size="24"
+                  width="2"
+                  color="primary"
+                ></v-progress-circular>
+                <div class="text-caption mt-2">Loading IP pairs...</div>
+              </div>
+              
               <!-- Nested Sub-groups by Source/Destination -->
               <v-expansion-panels 
+                v-else
                 v-model="expandedSubGroups[group.key]"
                 variant="accordion"
                 multiple
@@ -347,6 +371,7 @@
                   :key="subGroup.key"
                   :value="subIndex"
                   class="mb-2"
+                  @group:selected="() => loadAlertsForSubGroup(group, subGroup)"
                 >
                   <v-expansion-panel-title class="pa-3 bg-grey-darken-3">
                     <div class="d-flex align-center justify-space-between w-100 pr-4">
@@ -361,19 +386,32 @@
                           hide-details
                           class="mr-2"
                         ></v-checkbox>
-                        <v-avatar size="24" color="primary" variant="tonal">
-                          <span class="text-caption font-weight-bold">{{ subGroup.count }}</span>
-                        </v-avatar>
+                        <v-tooltip location="top">
+                          <template v-slot:activator="{ props }">
+                            <v-chip
+                              v-bind="props"
+                              color="primary"
+                              variant="tonal"
+                              size="x-small"
+                              class="font-weight-bold"
+                            >
+                              {{ formatCompactNumber(subGroup.trueCount || subGroup.count) }}
+                            </v-chip>
+                          </template>
+                          <span>{{ (subGroup.trueCount || subGroup.count).toLocaleString() }} total alerts</span>
+                        </v-tooltip>
                         <div class="flex-grow-1">
                           <div class="d-flex align-center" v-if="subGroup.sourceIp || subGroup.destIp">
                             <v-chip size="small" variant="outlined" class="mr-2">
                               <v-icon start size="x-small">fa-desktop</v-icon>
                               {{ subGroup.sourceIp || 'Unknown' }}
+                              <span v-if="$root.pickHostname(subGroup.sourceIp)" class="ml-1 text-caption">({{ $root.pickHostname(subGroup.sourceIp) }})</span>
                             </v-chip>
                             <v-icon size="x-small" class="mx-1">fa-arrow-right</v-icon>
                             <v-chip size="small" variant="outlined">
                               <v-icon start size="x-small">fa-server</v-icon>
                               {{ subGroup.destIp || 'Unknown' }}
+                              <span v-if="$root.pickHostname(subGroup.destIp)" class="ml-1 text-caption">({{ $root.pickHostname(subGroup.destIp) }})</span>
                             </v-chip>
                           </div>
                           <div v-else class="text-body-2">
@@ -460,9 +498,20 @@
                   </v-expansion-panel-title>
                   
                   <v-expansion-panel-text>
+                    <!-- Loading state for alerts -->
+                    <div v-if="subGroup.loadingAlerts" class="text-center pa-4">
+                      <v-progress-circular
+                        indeterminate
+                        size="24"
+                        width="2"
+                        color="primary"
+                      ></v-progress-circular>
+                      <div class="text-caption mt-2">Loading alerts...</div>
+                    </div>
+                    
                     <!-- Performance notice for large groups -->
                     <v-alert 
-                      v-if="subGroup.alerts.length > 100 && !subGroupLoadMore[subGroup.key]"
+                      v-else-if="subGroup.alerts && subGroup.alerts.length > 100 && !subGroupLoadMore[subGroup.key]"
                       type="info"
                       variant="tonal"
                       density="compact"
@@ -484,7 +533,7 @@
                     </v-alert>
                     
                     <!-- Individual alerts (limited for performance) -->
-                    <v-row class="pa-2">
+                    <v-row v-if="subGroup.alerts" class="pa-2">
                       <v-col cols="12" v-for="alert in getDisplayedAlerts(subGroup)" :key="alert.id">
                         <alert-card
                           :alert="alert"
@@ -607,25 +656,31 @@
         class="px-6 py-4 primary flex-grow-0"
       >
         <div class="d-flex align-center justify-space-between w-100">
-          <div class="d-flex align-center">
+          <div class="d-flex align-center" style="min-width: 0; flex: 1;">
             <v-btn
               icon
               variant="text"
               color="white"
               @click="detailsDialog = false"
               class="mr-3"
+              style="flex-shrink: 0;"
             >
               <v-icon>fa-arrow-left</v-icon>
             </v-btn>
-            <div>
-              <div class="text-h5 font-weight-bold">{{ selectedAlertDetails?.ruleName || 'Alert Details' }}</div>
+            <div style="min-width: 0; overflow: hidden;">
+              <v-tooltip location="bottom" :disabled="!selectedAlertDetails || selectedAlertDetails.ruleName.length <= 80">
+                <template v-slot:activator="{ props }">
+                  <div v-bind="props" class="text-h5 font-weight-bold text-truncate">{{ selectedAlertDetails?.ruleName || 'Alert Details' }}</div>
+                </template>
+                <span style="white-space: pre-wrap; word-break: break-word;">{{ selectedAlertDetails?.ruleName }}</span>
+              </v-tooltip>
               <div class="text-caption mt-1" style="opacity: 0.9;">
                 <v-icon size="x-small" class="mr-1">fa-clock</v-icon>
                 {{ selectedAlertDetails ? new Date(selectedAlertDetails.timestamp).toLocaleString() : '' }}
               </div>
             </div>
           </div>
-          <div class="d-flex align-center">
+          <div class="d-flex align-center" style="flex-shrink: 0;">
             <v-tooltip location="bottom">
               <template v-slot:activator="{ props }">
                 <v-btn
@@ -794,6 +849,7 @@
                             <span class="font-weight-medium">Source:</span>
                             <span class="ml-1 font-mono">
                               {{ selectedAlertDetails.sourceIp || 'N/A' }}<span v-if="selectedAlertDetails.sourcePort">:{{ selectedAlertDetails.sourcePort }}</span>
+                              <span v-if="$root.pickHostname(selectedAlertDetails.sourceIp)" class="ml-1 text-caption">({{ $root.pickHostname(selectedAlertDetails.sourceIp) }})</span>
                             </span>
                           </v-chip>
                         </template>
@@ -826,6 +882,7 @@
                             <span class="font-weight-medium">Dest:</span>
                             <span class="ml-1 font-mono">
                               {{ selectedAlertDetails.destIp || 'N/A' }}<span v-if="selectedAlertDetails.destPort">:{{ selectedAlertDetails.destPort }}</span>
+                              <span v-if="$root.pickHostname(selectedAlertDetails.destIp)" class="ml-1 text-caption">({{ $root.pickHostname(selectedAlertDetails.destIp) }})</span>
                             </span>
                           </v-chip>
                         </template>

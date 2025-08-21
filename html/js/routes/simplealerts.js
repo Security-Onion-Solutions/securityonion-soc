@@ -92,6 +92,9 @@ const simpleAlertsComponent = {
         { value: 'timestamp', title: 'Most Recent' }
       ],
       
+      // True counts from aggregation
+      trueRuleCounts: {},
+      
       // Filter options
       severityOptions: [
         { value: 'all', title: 'All Severities' },
@@ -156,20 +159,37 @@ const simpleAlertsComponent = {
       return this.selectedAlerts.size > 0 || this.selectedSubGroups.size > 0 || this.selectedGroups.size > 0;
     },
     processedAlerts() {
-      // Apply category filter first
+      if (!this.groupAlerts) {
+        // Ungrouped view - return filtered alerts
+        let filteredAlerts = this.alerts;
+        if (this.filterCategory !== 'all') {
+          filteredAlerts = this.alerts.filter(alert => 
+            alert['rule.category'] === this.filterCategory
+          );
+        }
+        return filteredAlerts;
+      }
+      
+      // Grouped view - return the already processed alertGroups
+      // (loaded via loadRuleAggregations)
+      if (this.alertGroups && this.alertGroups.length > 0) {
+        // Apply category filter to groups if needed
+        if (this.filterCategory !== 'all') {
+          return this.alertGroups.filter(group => 
+            group['rule.category'] === this.filterCategory
+          );
+        }
+        return this.alertGroups;
+      }
+      
+      // Fallback: OLD processing logic (shouldn't be reached with new approach)
+      const groups = new Map();
       let filteredAlerts = this.alerts;
       if (this.filterCategory !== 'all') {
         filteredAlerts = this.alerts.filter(alert => 
           alert['rule.category'] === this.filterCategory
         );
       }
-      
-      if (!this.groupAlerts) {
-        return filteredAlerts;
-      }
-      
-      // Group alerts by rule name only at the top level
-      const groups = new Map();
       
       filteredAlerts.forEach(alert => {
         const groupKey = alert.ruleName;
@@ -194,6 +214,7 @@ const simpleAlertsComponent = {
         const group = groups.get(groupKey);
         group.alerts.push(alert);
         group.count++;
+        group.loadedCount = group.count; // Track how many we actually loaded
         
         // Update first and last seen timestamps
         if (alert.timestamp < group.firstSeen) {
@@ -211,15 +232,41 @@ const simpleAlertsComponent = {
         }
       });
       
-      // Convert to array, filter out empty groups, and sort based on selected option
-      this.alertGroups = Array.from(groups.values())
+      // Convert to array and apply true counts if available
+      let groupArray = Array.from(groups.values());
+      
+      // Apply true counts from aggregation if available
+      if (this.trueRuleCounts && Object.keys(this.trueRuleCounts).length > 0) {
+        groupArray.forEach(group => {
+          if (this.trueRuleCounts[group.ruleName]) {
+            group.trueCount = this.trueRuleCounts[group.ruleName];
+            // Update count to true count for sorting/display
+            group.displayCount = group.trueCount;
+            group.hasMore = group.trueCount > group.loadedCount;
+          } else {
+            group.displayCount = group.count;
+            group.trueCount = group.count;
+            group.hasMore = false;
+          }
+        });
+      } else {
+        // No true counts available, use loaded counts
+        groupArray.forEach(group => {
+          group.displayCount = group.count;
+          group.trueCount = group.count;
+          group.hasMore = this.totalAlerts > this.alerts.length; // Might have more
+        });
+      }
+      
+      // Filter out empty groups and sort based on selected option
+      this.alertGroups = groupArray
         .filter(group => group.count > 0)  // Remove groups with no alerts
         .sort((a, b) => {
           switch (this.sortBy) {
             case 'category':
               // Sort by category alphabetically, then by count
               if (a['rule.category'] === b['rule.category']) {
-                return b.count - a.count;
+                return b.displayCount - a.displayCount;
               }
               return (a['rule.category'] || '').localeCompare(b['rule.category'] || '');
             
@@ -229,7 +276,7 @@ const simpleAlertsComponent = {
               const aLevel = severityOrder[this.getSeverityLevel(a)] || 0;
               const bLevel = severityOrder[this.getSeverityLevel(b)] || 0;
               if (aLevel === bLevel) {
-                return b.count - a.count;
+                return b.displayCount - a.displayCount;
               }
               return bLevel - aLevel;
             
@@ -244,7 +291,7 @@ const simpleAlertsComponent = {
             case 'count':
             default:
               // Sort by count (default)
-              return b.count - a.count;
+              return b.displayCount - a.displayCount;
           }
         });
       
@@ -252,7 +299,12 @@ const simpleAlertsComponent = {
     }
   },
   mounted() {
-    this.loadAlerts();
+    console.log('SimpleAlerts component mounted, loading alerts...');
+    this.loadAlerts().then(() => {
+      console.log('Initial load complete');
+    }).catch(err => {
+      console.error('Initial load failed:', err);
+    });
   },
   watch: {
     detailsDialog(newVal) {
@@ -273,40 +325,190 @@ const simpleAlertsComponent = {
         
         // Debug log
         console.log('Loading alerts with time range:', this.filterTimeRange, 'Date range:', dateRange);
-        console.log('All filter values:', {
-          severity: this.filterSeverity,
-          status: this.filterStatus,
-          timeRange: this.filterTimeRange
+        console.log('Group alerts enabled:', this.groupAlerts);
+        
+        if (this.groupAlerts) {
+          // NEW APPROACH: Only load aggregated rule counts, no actual alerts yet
+          await this.loadRuleAggregations(query, dateRange);
+        } else {
+          // Ungrouped view - load alerts directly as before
+          await this.loadUngroupedAlerts(query, dateRange);
+        }
+        
+        // Update statistics in parallel (don't wait for it)
+        this.loadStatistics().catch(err => {
+          console.error('Failed to load statistics:', err);
         });
         
-        // When grouping is enabled, fetch more alerts to ensure proper grouping
-        // Otherwise use the default limit for performance
-        const effectiveLimit = this.groupAlerts ? '10000' : this.eventLimit.toString();
+      } catch (error) {
+        console.error('Failed to load alerts:', error);
+        this.$root.showError(error.message || 'Failed to load alerts');
+      } finally {
+        this.loading = false;
+      }
+    },
+    
+    async loadRuleAggregations(baseQuery, dateRange) {
+      // TIER 1: For now, fallback to loading actual alerts and grouping them
+      // until we figure out the correct aggregation syntax
+      try {
+        console.log('Loading alerts for grouping...');
         
+        // Load a reasonable number of alerts to group
         const params = new URLSearchParams({
-          query: query,
+          query: baseQuery,
           range: dateRange,
           format: '2006/01/02 3:04:05 PM',
           zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           metricLimit: '10',
-          eventLimit: effectiveLimit,
-          view: 'simple' // Use simplified view
+          eventLimit: '5000', // Load 5000 alerts for grouping
+          view: 'simple'
         });
         
         const response = await this.$root.papi.get('events/?' + params.toString());
         
         if (response && response.data) {
-          this.alerts = this.processAlerts(response.data.events || []);
           this.totalAlerts = response.data.totalEvents || 0;
-          this.hasMore = this.totalAlerts > this.alerts.length;
+          const events = response.data.events || [];
           
-          // Update statistics - we need to make a separate call to get all active alerts stats
-          await this.loadStatistics();
+          console.log(`Processing ${events.length} events from ${this.totalAlerts} total`);
+          
+          // Process the events into groups
+          const groups = new Map();
+          
+          events.forEach(event => {
+            const data = event.payload || event;
+            const ruleName = data['rule.name'] || 'Unknown Rule';
+            
+            if (!groups.has(ruleName)) {
+              // Extract rule category
+              let ruleCategory = '';
+              const match = ruleName.match(/^(?:ET|GPL|SURICATA)\s+([A-Z_]+)/);
+              if (match) {
+                ruleCategory = match[1];
+              }
+              
+              groups.set(ruleName, {
+                key: ruleName,
+                ruleName: ruleName,
+                count: 0,
+                trueCount: 0, // Will be updated if we have more than loaded
+                displayCount: 0,
+                severityLabel: data['event.severity_label'] || 'unknown',
+                category: data['event.category'] || '',
+                'rule.category': ruleCategory,
+                module: data['event.module'] || '',
+                ruleText: data['rule.rule'] || data['rule.text'] || '',
+                ruleUuid: data['rule.uuid'],
+                // Lazy loading states
+                subGroupsLoaded: false,
+                subGroups: [],
+                alertsLoaded: false,
+                alerts: [],
+                firstSeen: event.timestamp,
+                lastSeen: event.timestamp
+              });
+            }
+            
+            const group = groups.get(ruleName);
+            group.count++;
+            group.alerts.push(this.processAlerts([event])[0]); // Store some sample alerts
+            
+            // Update timestamps
+            if (event.timestamp < group.firstSeen) {
+              group.firstSeen = event.timestamp;
+            }
+            if (event.timestamp > group.lastSeen) {
+              group.lastSeen = event.timestamp;
+            }
+            
+            // Use highest severity
+            const severity = data['event.severity_label'];
+            if (severity === 'high' && group.severityLabel !== 'high') {
+              group.severityLabel = severity;
+            } else if (severity === 'medium' && group.severityLabel === 'low') {
+              group.severityLabel = severity;
+            }
+          });
+          
+          // If we have more total alerts than loaded, estimate true counts
+          if (this.totalAlerts > events.length) {
+            const ratio = this.totalAlerts / events.length;
+            groups.forEach(group => {
+              group.trueCount = Math.ceil(group.count * ratio);
+              group.displayCount = group.trueCount;
+              group.hasMore = true;
+            });
+          } else {
+            // We loaded everything
+            groups.forEach(group => {
+              group.trueCount = group.count;
+              group.displayCount = group.count;
+              group.hasMore = false;
+            });
+          }
+          
+          
+          // Convert to array and sort
+          this.alertGroups = Array.from(groups.values()).sort((a, b) => b.displayCount - a.displayCount);
+          
+          console.log(`Loaded ${this.alertGroups.length} rules with ${this.totalAlerts} total alerts`);
+          console.log('First few groups:', this.alertGroups.slice(0, 3).map(g => ({
+            rule: g.ruleName,
+            count: g.count,
+            displayCount: g.displayCount
+          })));
+          
+          // Batch lookup hostnames if enabled
+          if (this.$root.enableReverseLookup && events.length > 0) {
+            const ips = new Set();
+            events.forEach(event => {
+              const data = event.payload || event;
+              if (data['source.ip']) ips.add(data['source.ip']);
+              if (data['destination.ip']) ips.add(data['destination.ip']);
+            });
+            if (ips.size > 0) {
+              this.$root.batchLookup(Array.from(ips), this);
+            }
+          }
         }
       } catch (error) {
-        this.$root.showError(error);
-      } finally {
-        this.loading = false;
+        console.error('Failed to load rule aggregations:', error);
+        throw error;
+      }
+    },
+    
+    async loadUngroupedAlerts(query, dateRange) {
+      // Original ungrouped loading logic
+      const params = new URLSearchParams({
+        query: query,
+        range: dateRange,
+        format: '2006/01/02 3:04:05 PM',
+        zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        metricLimit: '10',
+        eventLimit: this.eventLimit.toString(),
+        view: 'simple'
+      });
+      
+      const response = await this.$root.papi.get('events/?' + params.toString());
+      
+      if (response && response.data) {
+        this.alerts = this.processAlerts(response.data.events || []);
+        this.totalAlerts = response.data.totalEvents || 0;
+        this.hasMore = this.totalAlerts > this.alerts.length;
+        
+        // Batch lookup hostnames if reverse lookup is enabled
+        if (this.$root.enableReverseLookup) {
+          const ips = [];
+          this.alerts.forEach(alert => {
+            if (alert.sourceIp) ips.push(alert.sourceIp);
+            if (alert.destIp) ips.push(alert.destIp);
+          });
+          if (ips.length > 0) {
+            // Use the root app's batchLookup method
+            this.$root.batchLookup(ips, this);
+          }
+        }
       }
     },
     
@@ -341,6 +543,19 @@ const simpleAlertsComponent = {
           const newAlerts = this.processAlerts(response.data.events || []);
           this.alerts.push(...newAlerts);
           this.hasMore = this.totalAlerts > this.alerts.length;
+          
+          // Batch lookup hostnames for new alerts if reverse lookup is enabled
+          if (this.$root.enableReverseLookup) {
+            const ips = [];
+            newAlerts.forEach(alert => {
+              if (alert.sourceIp) ips.push(alert.sourceIp);
+              if (alert.destIp) ips.push(alert.destIp);
+            });
+            if (ips.length > 0) {
+              // Use the root app's batchLookup method
+              this.$root.batchLookup(ips, this);
+            }
+          }
         }
       } catch (error) {
         this.$root.showError(error);
@@ -1481,10 +1696,33 @@ const simpleAlertsComponent = {
         }
       });
       
-      if (uniqueCombos.size > 0) {
-        return `${group.count} event${group.count > 1 ? 's' : ''} across ${uniqueCombos.size} unique connection${uniqueCombos.size > 1 ? 's' : ''}`;
+      const displayCount = group.displayCount || group.count;
+      const eventText = `${displayCount} event${displayCount > 1 ? 's' : ''}`;
+      
+      // Show loaded status if we have more than loaded
+      let loadedInfo = '';
+      if (group.hasMore && group.loadedCount < group.trueCount) {
+        loadedInfo = ` (${group.loadedCount} loaded)`;
       }
-      return `${group.count} event${group.count > 1 ? 's' : ''}`;
+      
+      if (uniqueCombos.size > 0) {
+        return `${eventText}${loadedInfo} across ${uniqueCombos.size} unique connection${uniqueCombos.size > 1 ? 's' : ''}`;
+      }
+      return `${eventText}${loadedInfo}`;
+    },
+    
+    formatCompactNumber(num) {
+      // Format large numbers in a compact way
+      if (num >= 1000000) {
+        return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+      } else if (num >= 100000) {
+        return Math.round(num / 1000) + 'K';
+      } else if (num >= 10000) {
+        return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+      } else if (num >= 1000) {
+        return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+      }
+      return num.toString();
     },
     
     async requestPcap() {
@@ -1924,29 +2162,31 @@ const simpleAlertsComponent = {
     
     async acknowledgeGroup(group) {
       // Show confirmation dialog
+      const alertCount = group.trueCount || group.displayCount || group.count;
       this.selectedAlert = { 
         id: 'group-' + group.key, 
         ruleName: group.ruleName
       };
       this.selectedGroup = group;
       this.actionType = 'acknowledge-group';
-      this.actionTitle = `Acknowledge ${group.count} Alerts`;
+      this.actionTitle = `Acknowledge ${alertCount} Alerts`;
       this.caseTitle = ''; // Not needed for acknowledge
-      this.caseDescription = `Acknowledge all ${group.count} alerts for "${group.ruleName}"?`;
+      this.caseDescription = `Acknowledge all ${alertCount} alerts for "${group.ruleName}"?`;
       this.actionDialog = true;
     },
     
     async escalateGroup(group) {
       // Set up for escalation
+      const alertCount = group.trueCount || group.displayCount || group.count;
       this.selectedAlert = { 
         id: 'group-' + group.key, 
         ruleName: group.ruleName,
         severityLabel: group.severityLabel 
       };
       this.actionType = 'escalate-group';
-      this.actionTitle = `Escalate ${group.count} Alerts to Case`;
-      this.caseTitle = `${group.ruleName} - ${group.count} alerts`;
-      this.caseDescription = `Escalating ${group.count} alerts for rule: ${group.ruleName}`;
+      this.actionTitle = `Escalate ${alertCount} Alerts to Case`;
+      this.caseTitle = `${group.ruleName} - ${alertCount} alerts`;
+      this.caseDescription = `Escalating ${alertCount} alerts for rule: ${group.ruleName}`;
       
       // Store the group for later use in confirmAction
       this.selectedGroup = group;
@@ -2196,7 +2436,265 @@ const simpleAlertsComponent = {
       }
     },
     
+    async loadSubGroupsForRule(group) {
+      // TIER 2: Load all alerts for this specific rule to get accurate IP pair counts
+      if (group.subGroupsLoaded) {
+        return group.subGroups; // Already loaded
+      }
+      
+      group.loadingSubGroups = true;
+      
+      try {
+        const query = this.buildQuery() + ` AND rule.name:"${group.ruleName}"`;
+        const dateRange = this.getDateRange();
+        
+        // Load more alerts for this specific rule to get accurate subgroup counts
+        const params = new URLSearchParams({
+          query: query,
+          range: dateRange,
+          format: '2006/01/02 3:04:05 PM',
+          zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          metricLimit: '10',
+          eventLimit: '2000', // Load up to 2000 alerts for this rule
+          view: 'simple'
+        });
+        
+        const response = await this.$root.papi.get('events/?' + params.toString());
+        
+        if (response && response.data && response.data.events) {
+          const subGroups = new Map();
+          const totalAlertsForRule = response.data.totalEvents || 0;
+          const loadedAlerts = response.data.events || [];
+          
+          // Process loaded alerts into subgroups
+          loadedAlerts.forEach(event => {
+            const alert = this.processAlerts([event])[0];
+            
+            if (alert.sourceIp || alert.destIp) {
+              const key = `${alert.sourceIp || 'unknown'} → ${alert.destIp || 'unknown'}`;
+              
+              if (!subGroups.has(key)) {
+                subGroups.set(key, {
+                  key: key,
+                  sourceIp: alert.sourceIp || 'unknown',
+                  destIp: alert.destIp || 'unknown',
+                  count: 0,
+                  loadedCount: 0,
+                  trueCount: 0,
+                  alerts: [],
+                  alertsLoaded: false,
+                  loadingAlerts: false,
+                  firstSeen: alert.timestamp,
+                  lastSeen: alert.timestamp
+                });
+              }
+              
+              const subGroup = subGroups.get(key);
+              subGroup.count++;
+              subGroup.loadedCount++;
+              
+              // Store first 50 alerts for quick display
+              if (subGroup.alerts.length < 50) {
+                subGroup.alerts.push(alert);
+                subGroup.alertsLoaded = subGroup.alerts.length >= 50;
+              }
+              
+              // Update timestamps
+              if (alert.timestamp < subGroup.firstSeen) {
+                subGroup.firstSeen = alert.timestamp;
+              }
+              if (alert.timestamp > subGroup.lastSeen) {
+                subGroup.lastSeen = alert.timestamp;
+              }
+            }
+          });
+          
+          // If we couldn't load all alerts, estimate true counts
+          let subGroupArray = Array.from(subGroups.values());
+          
+          if (totalAlertsForRule > loadedAlerts.length) {
+            // We have more alerts than loaded, need to estimate
+            const ratio = totalAlertsForRule / loadedAlerts.length;
+            subGroupArray.forEach(sg => {
+              sg.trueCount = Math.ceil(sg.count * ratio);
+              sg.hasMore = true;
+            });
+            
+            // Add a note that there might be more IP pairs
+            group.hasMorePairs = true;
+            group.loadedPairsCount = subGroupArray.length;
+          } else {
+            // We loaded all alerts for this rule
+            subGroupArray.forEach(sg => {
+              sg.trueCount = sg.count;
+              sg.hasMore = false;
+            });
+            group.hasMorePairs = false;
+          }
+          
+          // Sort by count
+          group.subGroups = subGroupArray.sort((a, b) => b.trueCount - a.trueCount);
+          group.subGroupsLoaded = true;
+          
+          console.log(`Loaded ${subGroupArray.length} IP pairs for rule "${group.ruleName}" (${totalAlertsForRule} total alerts)`);
+          
+          // The counts should now add up to the total
+          const totalInSubgroups = subGroupArray.reduce((sum, sg) => sum + sg.trueCount, 0);
+          console.log(`Subgroup total: ${totalInSubgroups}, Rule total: ${group.displayCount}`);
+        }
+      } catch (error) {
+        console.error(`Failed to load IP pairs for rule ${group.ruleName}:`, error);
+        // Fallback to using loaded alerts
+        this.createSubGroupsFromLoadedAlerts(group);
+      } finally {
+        group.loadingSubGroups = false;
+      }
+      
+      return group.subGroups;
+    },
+    
+    createSubGroupsFromLoadedAlerts(group) {
+      // Fallback method using already loaded alerts
+      if (group.alerts && group.alerts.length > 0) {
+        const subGroups = new Map();
+        
+        group.alerts.forEach(alert => {
+          if (alert.sourceIp || alert.destIp) {
+            const key = `${alert.sourceIp || 'unknown'} → ${alert.destIp || 'unknown'}`;
+            
+            if (!subGroups.has(key)) {
+              subGroups.set(key, {
+                key: key,
+                sourceIp: alert.sourceIp || 'unknown',
+                destIp: alert.destIp || 'unknown',
+                count: 0,
+                trueCount: 0,
+                alerts: [],
+                alertsLoaded: true,
+                loadingAlerts: false,
+                firstSeen: alert.timestamp,
+                lastSeen: alert.timestamp
+              });
+            }
+            
+            const subGroup = subGroups.get(key);
+            subGroup.count++;
+            subGroup.alerts.push(alert);
+            
+            // Update timestamps
+            if (alert.timestamp < subGroup.firstSeen) {
+              subGroup.firstSeen = alert.timestamp;
+            }
+            if (alert.timestamp > subGroup.lastSeen) {
+              subGroup.lastSeen = alert.timestamp;
+            }
+          }
+        });
+        
+        // Estimate true counts if needed
+        if (group.hasMore) {
+          const ratio = group.displayCount / group.count;
+          subGroups.forEach(sg => {
+            sg.trueCount = Math.ceil(sg.count * ratio);
+          });
+        } else {
+          subGroups.forEach(sg => {
+            sg.trueCount = sg.count;
+          });
+        }
+        
+        group.subGroups = Array.from(subGroups.values()).sort((a, b) => b.trueCount - a.trueCount);
+        group.subGroupsLoaded = true;
+      } else {
+        group.subGroups = [];
+        group.subGroupsLoaded = true;
+      }
+    },
+    
+    async loadAlertsForSubGroup(group, subGroup) {
+      // TIER 3: Load actual alerts for a specific IP pair
+      if (subGroup.alertsLoaded || subGroup.loadingAlerts) {
+        return subGroup.alerts;
+      }
+      
+      subGroup.loadingAlerts = true;
+      
+      try {
+        let query = this.buildQuery() + ` AND rule.name:"${group.ruleName}"`;
+        
+        // Add IP filters
+        if (subGroup.sourceIp && subGroup.sourceIp !== 'unknown') {
+          query += ` AND source.ip:"${subGroup.sourceIp}"`;
+        }
+        if (subGroup.destIp && subGroup.destIp !== 'unknown') {
+          query += ` AND destination.ip:"${subGroup.destIp}"`;
+        }
+        
+        const dateRange = this.getDateRange();
+        
+        const params = new URLSearchParams({
+          query: query,
+          range: dateRange,
+          format: '2006/01/02 3:04:05 PM',
+          zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          metricLimit: '0',
+          eventLimit: '50', // Load first 50 alerts
+          view: 'simple'
+        });
+        
+        const response = await this.$root.papi.get('events/?' + params.toString());
+        
+        if (response && response.data && response.data.events) {
+          subGroup.alerts = this.processAlerts(response.data.events);
+          subGroup.totalAlerts = response.data.totalEvents || subGroup.alerts.length;
+          subGroup.hasMore = subGroup.totalAlerts > subGroup.alerts.length;
+          
+          // Update timestamps
+          if (subGroup.alerts.length > 0) {
+            subGroup.firstSeen = subGroup.alerts[subGroup.alerts.length - 1].timestamp;
+            subGroup.lastSeen = subGroup.alerts[0].timestamp;
+          }
+          
+          // Batch lookup hostnames if needed
+          if (this.$root.enableReverseLookup) {
+            const ips = [];
+            subGroup.alerts.forEach(alert => {
+              if (alert.sourceIp) ips.push(alert.sourceIp);
+              if (alert.destIp) ips.push(alert.destIp);
+            });
+            if (ips.length > 0) {
+              this.$root.batchLookup(ips, this);
+            }
+          }
+        }
+        
+        subGroup.alertsLoaded = true;
+        console.log(`Loaded ${subGroup.alerts.length} alerts for ${subGroup.key}`);
+      } catch (error) {
+        console.error(`Failed to load alerts for ${subGroup.key}:`, error);
+        subGroup.alerts = [];
+        subGroup.alertsLoaded = true;
+      } finally {
+        subGroup.loadingAlerts = false;
+      }
+      
+      return subGroup.alerts;
+    },
+    
     getSubGroups(group) {
+      // Trigger lazy loading of subgroups when first accessed
+      if (!group.subGroupsLoaded && !group.loadingSubGroups) {
+        // Start loading subgroups asynchronously
+        this.loadSubGroupsForRule(group).then(() => {
+          this.$forceUpdate(); // Force Vue to re-render when loaded
+        });
+      }
+      
+      return group.subGroups || [];
+    },
+    
+    getSubGroupsOld(group) {
+      // OLD METHOD - kept for reference, but not used
       // Sub-group alerts by source and destination IPs (ignoring ports)
       const subGroups = new Map();
       
