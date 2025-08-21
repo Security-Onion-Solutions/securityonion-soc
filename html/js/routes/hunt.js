@@ -3481,7 +3481,7 @@ Please begin the investigation now.`;
       const investigation = this.aiInvestigations[socId];
 
       if (investigation && investigation.chatSessionId) {
-        return this.i18n.aiInvestigated;
+        return this.i18n.aiInvestigateView;
       }
 
       return this.i18n.aiInvestigate;

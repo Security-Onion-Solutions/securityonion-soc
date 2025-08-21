@@ -32,7 +32,7 @@
 										v-model="aiInvestigatedFilter"
 										density="compact" hide-details class="my-0"
 										@update:model-value="notifyInputsChanged()"
-										:label="i18n.aiInvestigatedToggle" color="primary"></v-switch>
+										:label="i18n.aiInvestigated" color="primary"></v-switch>
 								</span>
 								<span data-aid="show_detection_panel">
 									<v-switch v-if="isCategory('alerts')" id="detection-panel-toggle" :disabled="loading()" v-model="showDetailsPanel" density="compact" hide-details class="my-0" :label="i18n.showDetailsPanel"></v-switch>
