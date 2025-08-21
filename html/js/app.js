@@ -135,6 +135,7 @@ $(document).ready(function () {
           theme: Vuetify.useTheme(),
           i18n: i18n.getLocalizedTranslations(navigator.language),
           loading: false,
+          loadingCancelCallback: null,
           error: false,
           warning: false,
           info: false,
@@ -878,6 +879,10 @@ $(document).ready(function () {
           return localized;
         },
         showError(msg) {
+          if (msg.name == "CanceledError") {
+            this.showTip(this.i18n.requestCancelled);
+            return;
+          }
           this.error = true;
           this.errorMessage = this.localizeMessage(msg);
           if (this.debug && msg && msg.stack) {
@@ -909,11 +914,12 @@ $(document).ready(function () {
             this.currentTipTimeout = this.tipTimeout;
           }
         },
-        startLoading() {
+        startLoading(cancelCallback = null) {
           this.loading = true;
           this.error = false;
           this.warning = false;
           this.info = false;
+          this.loadingCancelCallback = cancelCallback;
         },
         stopLoading() {
           this.loading = false;
@@ -1067,7 +1073,7 @@ $(document).ready(function () {
         createApi(baseUrl) {
           const ax = axios.create({
             baseURL: baseUrl,
-            timeout: this.connectionTimeout
+            timeout: this.connectionTimeout,
           });
           ax.interceptors.request.use(this.apiRequestCallback, this.apiRequestFailedCallback);
           ax.interceptors.response.use(this.apiSuccessCallback, this.apiFailureCallback);

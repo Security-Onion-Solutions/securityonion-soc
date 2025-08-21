@@ -800,6 +800,7 @@ const i18n = {
       reportProductivity: 'Productivity Report',
       reportTypePlaceholder: 'Choose a report',
       reportTypeHelp: 'Select the type of report to generate',
+      requestCancelled: 'The request was cancelled by user.',
       required: 'Required.',
       requiredField: 'Required field',
       reset: 'Reset',

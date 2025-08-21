@@ -559,7 +559,10 @@ const huntComponent = {
 
       if (!this.parseUrlParameters()) return;
 
-      this.$root.startLoading();
+      const abortController = new AbortController();
+      this.$root.startLoading(() => {
+        abortController.abort();
+      });
       try {
         this.obtainQueryDetails();
 
@@ -588,7 +591,7 @@ const huntComponent = {
           this.expandedEvents = [];
         }
 
-        let response = await this.$root.papi.get('events/', { params: params });
+        let response = await this.$root.papi.get('events/', { params: params, signal: abortController.signal });
 
         this.eventPage = 1;
         this.groupByPage = 1;

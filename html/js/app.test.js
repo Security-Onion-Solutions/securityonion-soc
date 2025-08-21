@@ -1165,4 +1165,21 @@ describe('export', () => {
     expect(mockShowError).toHaveBeenCalledWith(mockError);
     expect(mockStopLoading).toHaveBeenCalledTimes(1);
   });
+
+  test('should use tip if cancelled error', () => {
+    const oldShowError = app.showError;
+    const oldShowTip = app.showTip;
+    app.showError = origShowError;
+    try {
+      const mockShowTip = jest.fn();
+      app.showTip = mockShowTip;
+      err = new Object();
+      err.name = "CanceledError";
+      app.showError(err);
+      expect(mockShowTip).toHaveBeenCalledWith(app.i18n.requestCancelled);
+    } finally {
+      app.showTip = oldShowTip;
+      app.showError = oldShowError;
+    } 
+  });
 });

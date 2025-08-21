@@ -258,6 +258,7 @@ global.mockAuthApi = function(method = "get", mockedResponse, error) {
 
 global.mockShowError = function(logError = false) {
   const mock = jest.fn().mockImplementation(err => { if (logError) console.log(err.stack ? err.stack : err) });
+  if (!global.origShowError) global.origShowError = app.showError;
   app.showError = mock;
   return mock;
 }
