@@ -72,10 +72,10 @@ components.push({
             <!-- Rule Name -->
             <div class="text-h6 mb-1">{{ alert.ruleName }}</div>
             
-            <!-- Network Info -->
+            <!-- Network Info or Host Info -->
             <div class="text-body-2 mb-2">
-              <v-icon size="small" class="mr-1">fa-network-wired</v-icon>
-              {{ formatNetworkInfo() }}
+              <v-icon size="small" class="mr-1">{{ getInfoIcon() }}</v-icon>
+              {{ formatConnectionInfo() }}
             </div>
             
             <!-- Metadata -->
@@ -144,13 +144,55 @@ components.push({
       // Selection is handled by the checkbox itself
       this.$emit('click', this.alert);
     },
+    getInfoIcon() {
+      // Check if this is a host-based alert (YARA/Sigma/OSSEC)
+      if (this.isHostBasedAlert()) {
+        return 'fa-laptop';
+      }
+      return 'fa-network-wired';
+    },
+    isHostBasedAlert() {
+      // Check multiple indicators for host-based alerts
+      return this.alert.isHostBased || 
+             (!this.alert.sourceIp && !this.alert.destIp) ||
+             (this.alert.module === 'yara' || this.alert.module === 'sigma' || this.alert.module === 'ossec');
+    },
+    formatConnectionInfo() {
+      // For host-based alerts, show agent and host info
+      if (this.isHostBasedAlert()) {
+        const agentName = this.alert.rawData?.['agent.name'] || this.alert.rawData?.['observer.name'] || 'Unknown Agent';
+        const hostName = this.alert.rawData?.['host.name'] || '';
+        
+        if (hostName) {
+          return `Agent: ${agentName} • Host: ${hostName}`;
+        }
+        return `Agent: ${agentName}`;
+      }
+      
+      // For network alerts, show source → destination
+      return this.formatNetworkInfo();
+    },
     formatNetworkInfo() {
-      const src = this.alert.sourceIp ? 
+      let src = this.alert.sourceIp ? 
         `${this.alert.sourceIp}${this.alert.sourcePort ? ':' + this.alert.sourcePort : ''}` : 
         'Unknown';
-      const dst = this.alert.destIp ? 
+      let dst = this.alert.destIp ? 
         `${this.alert.destIp}${this.alert.destPort ? ':' + this.alert.destPort : ''}` : 
         'Unknown';
+      
+      // Add hostnames if reverse lookup is enabled
+      if (this.$root.enableReverseLookup) {
+        const srcHostname = this.$root.pickHostname(this.alert.sourceIp);
+        const dstHostname = this.$root.pickHostname(this.alert.destIp);
+        
+        if (srcHostname) {
+          src += ` (${srcHostname})`;
+        }
+        if (dstHostname) {
+          dst += ` (${dstHostname})`;
+        }
+      }
+      
       return `${src} → ${dst}`;
     },
     

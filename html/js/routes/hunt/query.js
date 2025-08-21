@@ -10,6 +10,56 @@ const FILTER_EXACT = 'EXACT';
 const FILTER_DRILLDOWN = 'DRILLDOWN';
 
 export default {
+  notifyInputsChanged(replaceHistory = false) {
+    var hunted = false;
+    this.toggleQuickAction();
+    if (!this.loading()) {
+      if (this.shouldAutohunt()) {
+        this.hunt(replaceHistory);
+        hunted = true;
+      } else {
+        this.$root.drawAttention('#hunt');
+        this.huntPending = true;
+      }
+    }
+    return hunted;
+  },
+  async filterQuery(field, value, filterMode, notify = true, scalar = false) {
+    try {
+      const valueType = typeof value;
+      if (valueType == "boolean" || valueType == "number" || valueType == "bigint") {
+        scalar = true;
+      }
+      const response = await this.$root.papi.get('query/filtered', { params: {
+        query: this.query,
+        field: filterMode == FILTER_EXACT ? "" : field,
+        value: value,
+        scalar: scalar,
+        mode: filterMode,
+      }});
+      this.query = response.data;
+      if (notify) {
+        this.notifyInputsChanged(true);
+      }
+    } catch (error) {
+      this.$root.showError(error);
+    }
+  },
+  async groupQuery(field, group, notify = true) {
+    try {
+      const response = await this.$root.papi.get('query/grouped', { params: {
+        query: this.query,
+        field: field,
+        group: group,
+      }});
+      this.query = response.data;
+      if (notify) {
+        this.notifyInputsChanged(true);
+      }
+    } catch (error) {
+      this.$root.showError(error);
+    }
+  },
   applyQuerySubstitutions(queries) {
     if (Array.isArray(queries)) {
       queries.forEach(query => {

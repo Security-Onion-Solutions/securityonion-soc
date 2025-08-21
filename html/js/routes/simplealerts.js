@@ -648,6 +648,13 @@ const simpleAlertsComponent = {
             categoriesSet.add(ruleCategory);
           }
         }
+        const sourceIp = data['source.ip'];
+        const destIp = data['destination.ip'];
+        const module = data['event.module'];
+        
+        // Determine if this is a host-based alert
+        const isHostBased = !sourceIp && !destIp;
+        
         return {
           id: event.id,
           timestamp: event.timestamp,
@@ -656,18 +663,21 @@ const simpleAlertsComponent = {
           ruleText: data['rule.rule'] || data['rule.text'] || '',
           severity: data['event.severity'],
           severityLabel: data['event.severity_label'] || 'unknown',
-          sourceIp: data['source.ip'],
+          sourceIp: sourceIp,
           sourcePort: data['source.port'],
           sourceGeo: null,  // Geo data not available in simple view
-          destIp: data['destination.ip'],
+          destIp: destIp,
           destPort: data['destination.port'],
           destGeo: null,  // Geo data not available in simple view
-          module: data['event.module'],
+          module: module,
           category: data['event.category'],
           'rule.category': ruleCategory,
           acknowledged: data['event.acknowledged'] || false,
           escalated: data['event.escalated'] || false,
           dismissed: data['event.dismissed'] || false,
+          isHostBased: isHostBased,
+          // Store raw data for accessing agent.name, host.name, etc
+          rawData: data,
           // Store the entire payload for potential AI summary extraction
           payload: data
         };
@@ -706,7 +716,18 @@ const simpleAlertsComponent = {
       this.actionType = 'escalate';
       this.actionTitle = 'Escalate to Case';
       this.caseTitle = `Alert: ${alert.ruleName}`;
-      this.caseDescription = `Alert from ${alert.sourceIp} to ${alert.destIp}`;
+      
+      // Create appropriate description based on alert type
+      if (alert.isHostBased) {
+        const agentName = alert.rawData?.['agent.name'] || alert.rawData?.['observer.name'] || 'Unknown Agent';
+        const hostName = alert.rawData?.['host.name'] || '';
+        this.caseDescription = hostName ? 
+          `Host-based alert on ${hostName} (Agent: ${agentName})` : 
+          `Host-based alert from Agent: ${agentName}`;
+      } else {
+        this.caseDescription = `Alert from ${alert.sourceIp || 'unknown'} to ${alert.destIp || 'unknown'}`;
+      }
+      
       this.actionDialog = true;
     },
     
@@ -1280,8 +1301,21 @@ const simpleAlertsComponent = {
     
     getHuntUrl(alert) {
       if (!alert) return '#/hunt';
+      
+      // Create a time range around the alert (e.g., 1 hour before and after)
+      const alertTime = new Date(alert.timestamp);
+      const startTime = new Date(alertTime.getTime() - 60 * 60 * 1000); // 1 hour before
+      const endTime = new Date(alertTime.getTime() + 60 * 60 * 1000);   // 1 hour after
+      
+      // Format dates for the hunt page (ISO format)
+      const start = startTime.toISOString();
+      const end = endTime.toISOString();
+      
+      // Search by alert ID
       const query = `_id:"${alert.id}"`;
-      return `#/hunt?q=${encodeURIComponent(query)}`;
+      
+      // Include time range in the URL
+      return `#/hunt?q=${encodeURIComponent(query)}&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&t=custom`;
     },
     
     getHuntUrlForQuestion(question) {
@@ -2448,7 +2482,63 @@ const simpleAlertsComponent = {
         const query = this.buildQuery() + ` AND rule.name:"${group.ruleName}"`;
         const dateRange = this.getDateRange();
         
-        // Load more alerts for this specific rule to get accurate subgroup counts
+        // First, check if this is likely a host-based rule by checking the first alert
+        const isLikelyHostBased = group.alerts && group.alerts[0] && 
+                                  (!group.alerts[0].sourceIp && !group.alerts[0].destIp);
+        
+        // For host-based alerts, we need to aggregate by agent.name
+        // For network alerts, we load events to group by IP pairs
+        let response;
+        
+        if (isLikelyHostBased) {
+          // Use aggregation query for host-based alerts
+          const agentAggQuery = {
+            query: query,
+            range: dateRange,
+            format: '2006/01/02 3:04:05 PM', 
+            zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            view: 'simple',
+            eventLimit: '0', // Don't need events, just aggregations
+            aggregationType: 'terms',
+            aggregationField: 'agent.name',
+            metricLimit: '100' // Get top 100 agents
+          };
+          
+          const agentResponse = await this.$root.papi.get('events/?' + new URLSearchParams(agentAggQuery).toString());
+          
+          if (agentResponse && agentResponse.data && agentResponse.data.metrics) {
+            const subGroups = [];
+            
+            for (const metric of agentResponse.data.metrics) {
+              const agentName = metric.keys[0] || 'unknown-agent';
+              const count = metric.count || 0;
+              
+              subGroups.push({
+                key: `Agent: ${agentName}`,
+                sourceIp: agentName,
+                destIp: 'endpoint',
+                count: count,
+                loadedCount: 0,
+                trueCount: count,
+                displayCount: this.formatCompactNumber(count),
+                alerts: [],
+                alertsLoaded: false,
+                loadingAlerts: false,
+                isHostBased: true,
+                agentName: agentName
+              });
+            }
+            
+            // Sort by count
+            group.subGroups = subGroups.sort((a, b) => b.count - a.count);
+            group.subGroupsLoaded = true;
+            
+            console.log(`Loaded ${subGroups.length} agents for host-based rule "${group.ruleName}"`);
+            return group.subGroups;
+          }
+        }
+        
+        // For network-based alerts, use the existing logic
         const params = new URLSearchParams({
           query: query,
           range: dateRange,
@@ -2459,7 +2549,7 @@ const simpleAlertsComponent = {
           view: 'simple'
         });
         
-        const response = await this.$root.papi.get('events/?' + params.toString());
+        response = await this.$root.papi.get('events/?' + params.toString());
         
         if (response && response.data && response.data.events) {
           const subGroups = new Map();
@@ -2470,42 +2560,60 @@ const simpleAlertsComponent = {
           loadedAlerts.forEach(event => {
             const alert = this.processAlerts([event])[0];
             
-            if (alert.sourceIp || alert.destIp) {
-              const key = `${alert.sourceIp || 'unknown'} → ${alert.destIp || 'unknown'}`;
+            // Determine grouping key based on alert type
+            let key;
+            let sourceIp = alert.sourceIp || null;
+            let destIp = alert.destIp || null;
+            
+            // For YARA/Sigma/host-based alerts without IPs, group by agent.name
+            if (!sourceIp && !destIp) {
+              // Always try to get agent name for any alert without IPs
+              const agentName = alert.rawData?.['agent.name'] || alert.rawData?.['observer.name'] || 'unknown-agent';
+              const hostname = alert.rawData?.['host.name'] || '';
               
-              if (!subGroups.has(key)) {
-                subGroups.set(key, {
-                  key: key,
-                  sourceIp: alert.sourceIp || 'unknown',
-                  destIp: alert.destIp || 'unknown',
-                  count: 0,
-                  loadedCount: 0,
-                  trueCount: 0,
-                  alerts: [],
-                  alertsLoaded: false,
-                  loadingAlerts: false,
-                  firstSeen: alert.timestamp,
-                  lastSeen: alert.timestamp
-                });
-              }
-              
-              const subGroup = subGroups.get(key);
-              subGroup.count++;
-              subGroup.loadedCount++;
-              
-              // Store first 50 alerts for quick display
-              if (subGroup.alerts.length < 50) {
-                subGroup.alerts.push(alert);
-                subGroup.alertsLoaded = subGroup.alerts.length >= 50;
-              }
-              
-              // Update timestamps
-              if (alert.timestamp < subGroup.firstSeen) {
-                subGroup.firstSeen = alert.timestamp;
-              }
-              if (alert.timestamp > subGroup.lastSeen) {
-                subGroup.lastSeen = alert.timestamp;
-              }
+              // For any alert without IPs, group by agent
+              key = `Agent: ${agentName}`;
+              // Store these for display purposes
+              sourceIp = agentName;
+              destIp = hostname || 'endpoint';
+            } else {
+              // Network-based alerts with IPs
+              key = `${sourceIp || 'unknown'} → ${destIp || 'unknown'}`;
+            }
+            
+            if (!subGroups.has(key)) {
+              subGroups.set(key, {
+                key: key,
+                sourceIp: sourceIp || 'unknown',
+                destIp: destIp || 'unknown',
+                count: 0,
+                loadedCount: 0,
+                trueCount: 0,
+                alerts: [],
+                alertsLoaded: false,
+                loadingAlerts: false,
+                firstSeen: alert.timestamp,
+                lastSeen: alert.timestamp,
+                isHostBased: !alert.sourceIp && !alert.destIp // Flag for host-based alerts
+              });
+            }
+            
+            const subGroup = subGroups.get(key);
+            subGroup.count++;
+            subGroup.loadedCount++;
+            
+            // Store first 50 alerts for quick display
+            if (subGroup.alerts.length < 50) {
+              subGroup.alerts.push(alert);
+              subGroup.alertsLoaded = subGroup.alerts.length >= 50;
+            }
+            
+            // Update timestamps
+            if (alert.timestamp < subGroup.firstSeen) {
+              subGroup.firstSeen = alert.timestamp;
+            }
+            if (alert.timestamp > subGroup.lastSeen) {
+              subGroup.lastSeen = alert.timestamp;
             }
           });
           
@@ -2559,35 +2667,52 @@ const simpleAlertsComponent = {
         const subGroups = new Map();
         
         group.alerts.forEach(alert => {
-          if (alert.sourceIp || alert.destIp) {
-            const key = `${alert.sourceIp || 'unknown'} → ${alert.destIp || 'unknown'}`;
+          // Determine grouping key based on alert type
+          let key;
+          let sourceIp = alert.sourceIp || null;
+          let destIp = alert.destIp || null;
+          
+          // For YARA/Sigma/host-based alerts without IPs, group by agent.name
+          if (!sourceIp && !destIp) {
+            // Always try to get agent name for any alert without IPs
+            const agentName = alert.rawData?.['agent.name'] || alert.rawData?.['observer.name'] || 'unknown-agent';
+            const hostname = alert.rawData?.['host.name'] || '';
             
-            if (!subGroups.has(key)) {
-              subGroups.set(key, {
-                key: key,
-                sourceIp: alert.sourceIp || 'unknown',
-                destIp: alert.destIp || 'unknown',
-                count: 0,
-                trueCount: 0,
-                alerts: [],
-                alertsLoaded: true,
-                loadingAlerts: false,
-                firstSeen: alert.timestamp,
-                lastSeen: alert.timestamp
-              });
-            }
-            
-            const subGroup = subGroups.get(key);
-            subGroup.count++;
-            subGroup.alerts.push(alert);
-            
-            // Update timestamps
-            if (alert.timestamp < subGroup.firstSeen) {
-              subGroup.firstSeen = alert.timestamp;
-            }
-            if (alert.timestamp > subGroup.lastSeen) {
-              subGroup.lastSeen = alert.timestamp;
-            }
+            // For any alert without IPs, group by agent
+            key = `Agent: ${agentName}`;
+            // Store these for display purposes
+            sourceIp = agentName;
+            destIp = hostname || 'endpoint';
+          } else {
+            key = `${sourceIp || 'unknown'} → ${destIp || 'unknown'}`;
+          }
+          
+          if (!subGroups.has(key)) {
+            subGroups.set(key, {
+              key: key,
+              sourceIp: sourceIp || 'unknown',
+              destIp: destIp || 'unknown',
+              count: 0,
+              trueCount: 0,
+              alerts: [],
+              alertsLoaded: true,
+              loadingAlerts: false,
+              firstSeen: alert.timestamp,
+              lastSeen: alert.timestamp,
+              isHostBased: !alert.sourceIp && !alert.destIp
+            });
+          }
+          
+          const subGroup = subGroups.get(key);
+          subGroup.count++;
+          subGroup.alerts.push(alert);
+          
+          // Update timestamps
+          if (alert.timestamp < subGroup.firstSeen) {
+            subGroup.firstSeen = alert.timestamp;
+          }
+          if (alert.timestamp > subGroup.lastSeen) {
+            subGroup.lastSeen = alert.timestamp;
           }
         });
         
@@ -2612,7 +2737,7 @@ const simpleAlertsComponent = {
     },
     
     async loadAlertsForSubGroup(group, subGroup) {
-      // TIER 3: Load actual alerts for a specific IP pair
+      // TIER 3: Load actual alerts for a specific IP pair or agent
       if (subGroup.alertsLoaded || subGroup.loadingAlerts) {
         return subGroup.alerts;
       }
@@ -2622,12 +2747,23 @@ const simpleAlertsComponent = {
       try {
         let query = this.buildQuery() + ` AND rule.name:"${group.ruleName}"`;
         
-        // Add IP filters
-        if (subGroup.sourceIp && subGroup.sourceIp !== 'unknown') {
-          query += ` AND source.ip:"${subGroup.sourceIp}"`;
-        }
-        if (subGroup.destIp && subGroup.destIp !== 'unknown') {
-          query += ` AND destination.ip:"${subGroup.destIp}"`;
+        // Check if this is a host-based subgroup
+        if (subGroup.isHostBased || subGroup.key.startsWith('Agent:')) {
+          // For host-based alerts, filter by agent.name
+          if (subGroup.agentName) {
+            query += ` AND agent.name:"${subGroup.agentName}"`;
+          } else if (subGroup.sourceIp && subGroup.sourceIp !== 'unknown' && subGroup.sourceIp !== 'endpoint') {
+            // sourceIp might contain the agent name for host-based alerts
+            query += ` AND agent.name:"${subGroup.sourceIp}"`;
+          }
+        } else {
+          // For network-based alerts, add IP filters
+          if (subGroup.sourceIp && subGroup.sourceIp !== 'unknown') {
+            query += ` AND source.ip:"${subGroup.sourceIp}"`;
+          }
+          if (subGroup.destIp && subGroup.destIp !== 'unknown') {
+            query += ` AND destination.ip:"${subGroup.destIp}"`;
+          }
         }
         
         const dateRange = this.getDateRange();

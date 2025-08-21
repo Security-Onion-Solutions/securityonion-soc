@@ -150,6 +150,22 @@ td.expansion:last-child {
   display: none;
 }
 
+/* Fix for quick action menu click issues */
+.v-overlay__content #hunt-quick-action {
+  z-index: 9999 !important;
+  pointer-events: auto !important;
+}
+
+.v-overlay__content #hunt-quick-action .v-list-item {
+  cursor: pointer !important;
+  pointer-events: auto !important;
+}
+
+.v-overlay__content #hunt-quick-action .v-list-item--disabled {
+  pointer-events: none !important;
+  opacity: 0.5;
+}
+
 .tiny-icon {
   font-size: 14px !important;
 }

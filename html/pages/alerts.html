@@ -401,7 +401,18 @@
                           <span>{{ (subGroup.trueCount || subGroup.count).toLocaleString() }} total alerts</span>
                         </v-tooltip>
                         <div class="flex-grow-1">
-                          <div class="d-flex align-center" v-if="subGroup.sourceIp || subGroup.destIp">
+                          <!-- Host-based alerts (YARA/Sigma/OSSEC) -->
+                          <div v-if="subGroup.isHostBased || subGroup.key.startsWith('Agent:')" class="d-flex align-center">
+                            <v-chip size="small" variant="outlined" color="primary">
+                              <v-icon start size="x-small">fa-laptop</v-icon>
+                              {{ subGroup.key }}
+                            </v-chip>
+                            <span v-if="subGroup.destIp && subGroup.destIp !== 'endpoint'" class="ml-2 text-caption text--secondary">
+                              ({{ subGroup.destIp }})
+                            </span>
+                          </div>
+                          <!-- Network-based alerts -->
+                          <div v-else-if="subGroup.sourceIp || subGroup.destIp" class="d-flex align-center">
                             <v-chip size="small" variant="outlined" class="mr-2">
                               <v-icon start size="x-small">fa-desktop</v-icon>
                               {{ subGroup.sourceIp || 'Unknown' }}
@@ -414,8 +425,9 @@
                               <span v-if="$root.pickHostname(subGroup.destIp)" class="ml-1 text-caption">({{ $root.pickHostname(subGroup.destIp) }})</span>
                             </v-chip>
                           </div>
+                          <!-- Fallback for unknown alert types -->
                           <div v-else class="text-body-2">
-                            Non-network alerts
+                            {{ subGroup.key }}
                           </div>
                           <div class="text-caption text--secondary mt-1">
                             {{ subGroup.count }} event{{ subGroup.count > 1 ? 's' : '' }}
@@ -680,15 +692,70 @@
               </div>
             </div>
           </div>
-          <div class="d-flex align-center" style="flex-shrink: 0;">
+        </div>
+      </v-card-title>
+      
+      <!-- Metadata Chips Bar -->
+      <div class="px-6 py-3 bg-grey-darken-3" style="flex-shrink: 0; overflow: hidden;" v-if="selectedAlertDetails">
+        <div class="d-flex align-center justify-space-between">
+          <div class="d-flex align-center ga-2" style="flex-wrap: wrap; flex: 1;">
+            <v-chip
+              :color="getSeverityColor(selectedAlertDetails.severityLabel)"
+              size="small"
+              label
+              class="font-weight-bold"
+            >
+              <v-icon start size="x-small">fa-exclamation-triangle</v-icon>
+              {{ selectedAlertDetails.severityLabel?.toUpperCase() }}
+            </v-chip>
+            <v-chip
+              v-if="selectedAlertDetails.module"
+              size="small"
+              label
+              variant="outlined"
+            >
+              <v-icon start size="x-small">fa-puzzle-piece</v-icon>
+              {{ selectedAlertDetails.module }}
+            </v-chip>
+            <v-chip
+              v-if="selectedAlertDetails.category"
+              size="small"
+              label
+              variant="outlined"
+            >
+              <v-icon start size="x-small">fa-tag</v-icon>
+              {{ selectedAlertDetails.category }}
+            </v-chip>
+            <v-chip
+              v-if="selectedAlertDetails.acknowledged"
+              color="success"
+              size="small"
+              label
+              variant="tonal"
+            >
+              <v-icon start size="x-small">fa-check</v-icon>
+              Acknowledged
+            </v-chip>
+            <v-chip
+              v-if="selectedAlertDetails.escalated"
+              color="warning"
+              size="small"
+              label
+              variant="tonal"
+            >
+              <v-icon start size="x-small">fa-briefcase</v-icon>
+              Escalated
+            </v-chip>
+          </div>
+          
+          <!-- Action buttons -->
+          <div class="d-flex align-center ga-2" style="flex-shrink: 0;">
             <v-tooltip location="bottom">
               <template v-slot:activator="{ props }">
                 <v-btn
                   v-bind="props"
                   variant="outlined"
-                  color="white"
                   size="small"
-                  class="mr-2"
                   @click="requestPcap"
                   :loading="pcapLoading"
                   :disabled="!selectedAlertDetails || !selectedAlertDetails.sourceIp || !selectedAlertDetails.destIp"
@@ -701,9 +768,7 @@
             </v-tooltip>
             <v-btn
               variant="outlined"
-              color="white"
               size="small"
-              class="mr-2"
               @click="copyAlertId"
             >
               <v-icon start size="small">fa-copy</v-icon>
@@ -712,66 +777,13 @@
             <v-btn
               :href="getHuntUrl(selectedAlertDetails)"
               target="_blank"
-              color="white"
+              variant="outlined"
               size="small"
             >
               <v-icon start size="small">fa-crosshairs</v-icon>
               Hunt
             </v-btn>
           </div>
-        </div>
-      </v-card-title>
-      
-      <!-- Metadata Chips Bar -->
-      <div class="px-6 py-3 bg-grey-darken-3" style="flex-shrink: 0; overflow: hidden;" v-if="selectedAlertDetails">
-        <div class="d-flex align-center ga-2" style="flex-wrap: wrap;">
-          <v-chip
-            :color="getSeverityColor(selectedAlertDetails.severityLabel)"
-            size="small"
-            label
-            class="font-weight-bold"
-          >
-            <v-icon start size="x-small">fa-exclamation-triangle</v-icon>
-            {{ selectedAlertDetails.severityLabel?.toUpperCase() }}
-          </v-chip>
-          <v-chip
-            v-if="selectedAlertDetails.module"
-            size="small"
-            label
-            variant="outlined"
-          >
-            <v-icon start size="x-small">fa-puzzle-piece</v-icon>
-            {{ selectedAlertDetails.module }}
-          </v-chip>
-          <v-chip
-            v-if="selectedAlertDetails.category"
-            size="small"
-            label
-            variant="outlined"
-          >
-            <v-icon start size="x-small">fa-tag</v-icon>
-            {{ selectedAlertDetails.category }}
-          </v-chip>
-          <v-chip
-            v-if="selectedAlertDetails.acknowledged"
-            color="success"
-            size="small"
-            label
-            variant="tonal"
-          >
-            <v-icon start size="x-small">fa-check</v-icon>
-            Acknowledged
-          </v-chip>
-          <v-chip
-            v-if="selectedAlertDetails.escalated"
-            color="warning"
-            size="small"
-            label
-            variant="tonal"
-          >
-            <v-icon start size="x-small">fa-briefcase</v-icon>
-            Escalated
-          </v-chip>
         </div>
       </div>
       

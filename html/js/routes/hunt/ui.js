@@ -12,6 +12,23 @@ const RELATIVE_TIME_WEEKS   = 50;
 const RELATIVE_TIME_MONTHS  = 60;
 
 export default {
+  async saveMenuScrollPos(isOpen, target) {
+    if (isOpen) {
+      // target doesn't exist yet, wait for it to be added to DOM
+      await this.$nextTick();
+    }
+
+    const scrollContainer = document.querySelector(target);
+    if (!scrollContainer) return;
+
+    if (isOpen) {
+      // opening
+      scrollContainer.scrollTop = this.menuScrollPos;
+    } else {
+      // closing
+      this.menuScrollPos = scrollContainer.scrollTop;
+    }
+  },
   updateBulkSelector(item) {
     if (item._isSelected) {
       this.selectedCount = Math.min(this.selectedCount + 1, this.totalEvents);

@@ -870,7 +870,7 @@
 			</v-expansion-panels>
 		</v-col>
 	</v-row>
-	<v-menu v-model="quickActionVisible" :target="quickActionTarget" :data-aid="'context_menu_' + category">
+	<v-menu v-model="quickActionVisible" :target="quickActionTarget" :data-aid="'context_menu_' + category" :close-on-content-click="true" :z-index="9999">
 		<div class="d-flex">
 			<v-list id="hunt-quick-action" v-model:opened="quickActionsOpen" class="v-theme--dark">
 				<v-list-item density="compact" id="actionFilterInclude" :to="filterRouteInclude" v-bind:title.attr="i18n.filterIncludeHelp" :data-aid="'context_menu_filter_include_' + category" active-class="">

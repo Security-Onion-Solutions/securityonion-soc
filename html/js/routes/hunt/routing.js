@@ -129,7 +129,7 @@ export default {
     return route;
   },
   buildGroupByRoute(field) {
-    route = this.buildCurrentRoute()
+    const route = this.buildCurrentRoute();
     route.query.groupByField = field;
 
     const groups = (this.query || '').replaceAll(/\s/g, '').match(/\|groupby/gi);
@@ -142,7 +142,7 @@ export default {
     return route;
   },
   buildGroupByNewRoute(field) {
-    route = this.buildCurrentRoute()
+    const route = this.buildCurrentRoute();
     route.query.groupByField = field;
     route.query.groupByGroup = -1;
     return route;
@@ -189,6 +189,15 @@ export default {
     if ( (keys.length == 2 && keys[0] == "count") || (keys.length == 5 && keys[0] == "count" && keys[1] == "rule.name" && keys[2] == "event.module" && keys[3] == "event.severity_label" && keys[4] == "rule.uuid") ) {
       this.filterRouteDrilldown = this.buildFilterRoute(keys[1], event[keys[1]], FILTER_DRILLDOWN);
       this.$router.push(this.filterRouteDrilldown);
+    }
+  },
+  updateFilterRoutes() {
+    // Update filter routes when quickActionField or quickActionValue changes
+    if (this.quickActionField && this.quickActionValue !== undefined && this.quickActionValue !== null) {
+      this.filterRouteInclude = this.buildFilterRoute(this.quickActionField, this.quickActionValue, FILTER_INCLUDE);
+      this.filterRouteExclude = this.buildFilterRoute(this.quickActionField, this.quickActionValue, FILTER_EXCLUDE);
+      this.filterRouteExact = this.buildFilterRoute(this.quickActionField, this.quickActionValue, FILTER_EXACT);
+      this.filterRouteDrilldown = this.buildFilterRoute(this.quickActionField, this.quickActionValue, FILTER_DRILLDOWN);
     }
   }
 };

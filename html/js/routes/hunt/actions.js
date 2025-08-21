@@ -54,6 +54,50 @@ export default {
     this.quickActionGroupIdx = groupIdx;
     // Set the target to the coordinates for proper positioning
     this.quickActionTarget = [domEvent.clientX, domEvent.clientY];
+    
+    // Update filter routes for the menu items
+    this.quickActionIsNumeric = this.isNumeric(value);
+    if (this.quickActionIsNumeric) {
+      this.filterRouteLessThan = this.buildFilterRoute(field, "<" + value, 'INCLUDE', true);
+      this.filterRouteLessThanEqual = this.buildFilterRoute(field, "<=" + value, 'INCLUDE', true);
+      this.filterRouteGreaterThan = this.buildFilterRoute(field, ">" + value, 'INCLUDE', true);
+      this.filterRouteGreaterThanEqual = this.buildFilterRoute(field, ">=" + value, 'INCLUDE', true);
+      this.betweenStart = '';
+      this.betweenEnd = '';
+      this.betweenStartEquals = false;
+      this.betweenEndEquals = false;
+    }
+
+    if (value != null && this.canQuery(field)) {
+      this.filterRouteInclude = this.buildFilterRoute(field, value, 'INCLUDE');
+      this.filterRouteExclude = this.buildFilterRoute(field, value, 'EXCLUDE');
+      this.filterRouteExact = this.buildFilterRoute(field, value, 'EXACT');
+      this.filterRouteDrilldown = this.buildFilterRoute(field, value, 'DRILLDOWN');
+      this.groupByRoute = this.buildGroupByRoute(field);
+      this.groupByNewRoute = this.buildGroupByNewRoute(field);
+
+      var route = this;
+      this.actions.forEach(function(action, index) {
+        action.enabled = true;
+
+        if (action.categories && action.categories.indexOf(route.category) == -1) {
+          action.enabled = false;
+        }
+
+        if (action.enabled && !action.jsCall) {
+          var link = route.$root.findEligibleActionLinkForEvent(action, event);
+          if (link) {
+            action.linkFormatted = route.$root.formatActionContent(link, event, field, value, true);
+            action.bodyFormatted = route.$root.formatActionContent(action.body, event, field, value, action.encodeBody);
+            action.backgroundSuccessLinkFormatted = route.$root.formatActionContent(action.backgroundSuccessLink, event, field, value, true);
+            action.backgroundFailureLinkFormatted = route.$root.formatActionContent(action.backgroundFailureLink, event, field, value, true);
+          } else {
+            action.enabled = false;
+          }
+        }
+      });
+    }
+    
     this.quickActionVisible = true;
   },
   buildCase(item) {
