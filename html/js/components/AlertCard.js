@@ -160,8 +160,29 @@ components.push({
     formatConnectionInfo() {
       // For host-based alerts, show agent and host info
       if (this.isHostBasedAlert()) {
-        const agentName = this.alert.rawData?.['agent.name'] || this.alert.rawData?.['observer.name'] || 'Unknown Agent';
-        const hostName = this.alert.rawData?.['host.name'] || '';
+        // Check both flattened and event_data nested fields
+        const agentName = this.alert.rawData?.['agent.name'] || 
+                         this.alert.rawData?.['observer.name'] || 
+                         this.alert.rawData?.['event_data.agent.name'] ||
+                         this.alert.rawData?.['event_data.observer.name'] ||
+                         'Unknown Agent';
+        const hostName = this.alert.rawData?.['host.name'] || 
+                        this.alert.rawData?.['event_data.host.name'] ||
+                        '';
+        
+        // For YARA/Strelka alerts, show file info if available
+        if (this.alert.module === 'strelka' || this.alert.module === 'yara') {
+          const fileName = this.alert.rawData?.['file.name'];
+          const fileHash = this.alert.rawData?.['hash.md5'] || this.alert.rawData?.['hash.sha256'];
+          
+          if (fileName) {
+            // Extract just the filename from the path
+            const shortName = fileName.split('/').pop();
+            return `Agent: ${agentName} • File: ${shortName}`;
+          } else if (fileHash) {
+            return `Agent: ${agentName} • Hash: ${fileHash.substring(0, 12)}...`;
+          }
+        }
         
         if (hostName) {
           return `Agent: ${agentName} • Host: ${hostName}`;

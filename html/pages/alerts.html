@@ -1155,7 +1155,283 @@
                   
                   <!-- Non-network alert details -->
                   <div v-else>
-                    <div class="text-body-2">
+                    <!-- YARA/Strelka specific details -->
+                    <div v-if="selectedAlertDetails.module === 'strelka' || selectedAlertDetails.module === 'yara'" class="text-body-2">
+                      <!-- File Information -->
+                      <div v-if="selectedAlertDetails.rawData && selectedAlertDetails.rawData['file.name']" class="mb-3">
+                        <div class="text-subtitle-2 text--secondary mb-1">File Analysis</div>
+                        <div class="d-flex flex-wrap ga-2">
+                          <v-chip size="small" variant="tonal">
+                            <v-icon start size="x-small">fa-file</v-icon>
+                            {{ selectedAlertDetails.rawData['file.name'].split('/').pop() }}
+                          </v-chip>
+                          <v-chip v-if="selectedAlertDetails.rawData['file.size']" size="small" variant="tonal">
+                            <v-icon start size="x-small">fa-weight</v-icon>
+                            {{ (selectedAlertDetails.rawData['file.size'] / 1024).toFixed(1) }} KB
+                          </v-chip>
+                          <v-chip v-if="selectedAlertDetails.rawData['file.mime_type']" size="small" variant="tonal">
+                            <v-icon start size="x-small">fa-tag</v-icon>
+                            {{ Array.isArray(selectedAlertDetails.rawData['file.mime_type']) ? selectedAlertDetails.rawData['file.mime_type'][0] : selectedAlertDetails.rawData['file.mime_type'] }}
+                          </v-chip>
+                          <v-chip v-if="selectedAlertDetails.rawData['scan.entropy.entropy']" size="small" :color="selectedAlertDetails.rawData['scan.entropy.entropy'] > 7 ? 'warning' : 'default'" variant="tonal">
+                            <v-icon start size="x-small">fa-chart-line</v-icon>
+                            Entropy: {{ selectedAlertDetails.rawData['scan.entropy.entropy'].toFixed(2) }}
+                          </v-chip>
+                        </div>
+                      </div>
+                      
+                      <!-- File Hashes -->
+                      <div v-if="selectedAlertDetails.rawData && (selectedAlertDetails.rawData['hash.md5'] || selectedAlertDetails.rawData['hash.sha256'])" class="mb-3">
+                        <div class="text-subtitle-2 text--secondary mb-1">File Hashes</div>
+                        <div class="d-flex flex-column ga-1">
+                          <div v-if="selectedAlertDetails.rawData['hash.md5']" class="d-flex align-center">
+                            <span class="text-caption font-weight-medium mr-2" style="width: 60px;">MD5:</span>
+                            <code class="text-caption">{{ selectedAlertDetails.rawData['hash.md5'] }}</code>
+                          </div>
+                          <div v-if="selectedAlertDetails.rawData['hash.sha1']" class="d-flex align-center">
+                            <span class="text-caption font-weight-medium mr-2" style="width: 60px;">SHA1:</span>
+                            <code class="text-caption">{{ selectedAlertDetails.rawData['hash.sha1'] }}</code>
+                          </div>
+                          <div v-if="selectedAlertDetails.rawData['hash.sha256']" class="d-flex align-center">
+                            <span class="text-caption font-weight-medium mr-2" style="width: 60px;">SHA256:</span>
+                            <code class="text-caption" style="word-break: break-all;">{{ selectedAlertDetails.rawData['hash.sha256'] }}</code>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <!-- PE File Information (for executables) -->
+                      <div v-if="selectedAlertDetails.rawData && selectedAlertDetails.rawData['scan.pe.compile_time']" class="mb-3">
+                        <div class="text-subtitle-2 text--secondary mb-1">PE Analysis</div>
+                        <div class="d-flex flex-wrap ga-2">
+                          <v-chip size="small" variant="tonal">
+                            <v-icon start size="x-small">fa-calendar</v-icon>
+                            Compiled: {{ new Date(selectedAlertDetails.rawData['scan.pe.compile_time']).toLocaleDateString() }}
+                          </v-chip>
+                          <v-chip v-if="selectedAlertDetails.rawData['scan.pe.file_info.original_filename']" size="small" variant="tonal">
+                            <v-icon start size="x-small">fa-tag</v-icon>
+                            {{ selectedAlertDetails.rawData['scan.pe.file_info.original_filename'] }}
+                          </v-chip>
+                          <v-chip v-if="selectedAlertDetails.rawData['scan.pe.file_info.company_name']" size="small" variant="tonal">
+                            <v-icon start size="x-small">fa-building</v-icon>
+                            {{ selectedAlertDetails.rawData['scan.pe.file_info.company_name'] }}
+                          </v-chip>
+                          <v-chip v-if="selectedAlertDetails.rawData['scan.pe.imphash']" size="small" variant="tonal">
+                            <v-icon start size="x-small">fa-fingerprint</v-icon>
+                            ImpHash: {{ selectedAlertDetails.rawData['scan.pe.imphash'].substring(0, 12) }}...
+                          </v-chip>
+                        </div>
+                        
+                        <!-- Imported Libraries -->
+                        <div v-if="selectedAlertDetails.rawData['scan.pe.symbols.libraries'] && selectedAlertDetails.rawData['scan.pe.symbols.libraries'].length > 0" class="mt-2">
+                          <div class="text-caption text--secondary">Imported Libraries:</div>
+                          <div class="d-flex flex-wrap ga-1 mt-1">
+                            <v-chip v-for="lib in selectedAlertDetails.rawData['scan.pe.symbols.libraries']" :key="lib" size="x-small" variant="outlined">
+                              {{ lib }}
+                            </v-chip>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <!-- YARA Rule Information -->
+                      <div v-if="selectedAlertDetails.rawData && selectedAlertDetails.rawData['rule.description']" class="mb-3">
+                        <div class="text-subtitle-2 text--secondary mb-1">Detection Details</div>
+                        <v-alert type="warning" variant="tonal" density="compact">
+                          <div class="font-weight-medium">{{ selectedAlertDetails.rawData['rule.description'] }}</div>
+                          <div v-if="selectedAlertDetails.rawData['rule.author']" class="text-caption mt-1">
+                            Author: {{ selectedAlertDetails.rawData['rule.author'] }}
+                          </div>
+                          <div v-if="selectedAlertDetails.rawData['rule.reference']" class="text-caption">
+                            Reference: <a :href="selectedAlertDetails.rawData['rule.reference']" target="_blank">{{ selectedAlertDetails.rawData['rule.reference'] }}</a>
+                          </div>
+                        </v-alert>
+                      </div>
+                    </div>
+                    
+                    <!-- Sigma specific details -->
+                    <div v-else-if="selectedAlertDetails.module === 'sigma'" class="text-body-2">
+                      <!-- Authentication Event Details (for auth events) -->
+                      <div v-if="selectedAlertDetails.rawData && (selectedAlertDetails.rawData['event_data.event.action'] || selectedAlertDetails.rawData['event.action'])" class="mb-3">
+                        <div class="text-subtitle-2 text--secondary mb-1">Event Details</div>
+                        <div class="d-flex flex-wrap ga-2">
+                          <v-chip v-if="selectedAlertDetails.rawData['event_data.event.action'] || selectedAlertDetails.rawData['event.action']" 
+                                  size="small" 
+                                  :color="(selectedAlertDetails.rawData['event_data.event.outcome'] || selectedAlertDetails.rawData['event.outcome']) === 'failure' ? 'error' : 'success'"
+                                  variant="tonal">
+                            <v-icon start size="x-small">{{ (selectedAlertDetails.rawData['event_data.event.outcome'] || selectedAlertDetails.rawData['event.outcome']) === 'failure' ? 'fa-times-circle' : 'fa-check-circle' }}</v-icon>
+                            {{ selectedAlertDetails.rawData['event_data.event.action'] || selectedAlertDetails.rawData['event.action'] }}
+                            {{ selectedAlertDetails.rawData['event_data.event.outcome'] || selectedAlertDetails.rawData['event.outcome'] ? ` - ${selectedAlertDetails.rawData['event_data.event.outcome'] || selectedAlertDetails.rawData['event.outcome']}` : '' }}
+                          </v-chip>
+                          <v-chip v-if="selectedAlertDetails.rawData['event_data.source.ip'] || selectedAlertDetails.rawData['source.ip']" size="small" variant="tonal">
+                            <v-icon start size="x-small">fa-globe</v-icon>
+                            From: {{ selectedAlertDetails.rawData['event_data.source.ip'] || selectedAlertDetails.rawData['source.ip'] }}
+                          </v-chip>
+                          <v-chip v-if="selectedAlertDetails.rawData['event_data.system.auth.ssh.event'] || selectedAlertDetails.rawData['system.auth.ssh.event']" size="small" variant="tonal" color="warning">
+                            SSH: {{ selectedAlertDetails.rawData['event_data.system.auth.ssh.event'] || selectedAlertDetails.rawData['system.auth.ssh.event'] }}
+                          </v-chip>
+                        </div>
+                      </div>
+                      
+                      <!-- Process Information -->
+                      <div v-if="selectedAlertDetails.rawData && (selectedAlertDetails.rawData['process.name'] || selectedAlertDetails.rawData['process.executable'] || selectedAlertDetails.rawData['process.command_line'] || selectedAlertDetails.rawData['event_data.process.name'])" class="mb-3">
+                        <div class="text-subtitle-2 text--secondary mb-1">Process Activity</div>
+                        <div class="d-flex flex-column ga-2">
+                          <div v-if="selectedAlertDetails.rawData['process.name'] || selectedAlertDetails.rawData['event_data.process.name']" class="d-flex align-center">
+                            <v-chip size="small" variant="tonal">
+                              <v-icon start size="x-small">fa-cog</v-icon>
+                              {{ selectedAlertDetails.rawData['process.name'] || selectedAlertDetails.rawData['event_data.process.name'] }}
+                            </v-chip>
+                            <span v-if="selectedAlertDetails.rawData['process.pid'] || selectedAlertDetails.rawData['event_data.log.syslog.procid']" class="ml-2 text-caption">(PID: {{ selectedAlertDetails.rawData['process.pid'] || selectedAlertDetails.rawData['event_data.log.syslog.procid'] }})</span>
+                          </div>
+                          <div v-if="selectedAlertDetails.rawData['process.executable']" class="text-caption">
+                            <span class="font-weight-medium">Path:</span> {{ selectedAlertDetails.rawData['process.executable'] }}
+                          </div>
+                          <div v-if="selectedAlertDetails.rawData['process.command_line']" class="text-caption">
+                            <span class="font-weight-medium">Command:</span>
+                            <code class="ml-1">{{ selectedAlertDetails.rawData['process.command_line'] }}</code>
+                          </div>
+                          <div v-if="selectedAlertDetails.rawData['process.parent.name']" class="text-caption">
+                            <span class="font-weight-medium">Parent:</span> {{ selectedAlertDetails.rawData['process.parent.name'] }}
+                            <span v-if="selectedAlertDetails.rawData['process.parent.pid']"> (PID: {{ selectedAlertDetails.rawData['process.parent.pid'] }})</span>
+                          </div>
+                          <div v-if="selectedAlertDetails.rawData['process.parent.command_line']" class="text-caption">
+                            <span class="font-weight-medium">Parent Cmd:</span>
+                            <code class="ml-1">{{ selectedAlertDetails.rawData['process.parent.command_line'] }}</code>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <!-- User Context -->
+                      <div v-if="selectedAlertDetails.rawData && (selectedAlertDetails.rawData['user.name'] || selectedAlertDetails.rawData['user.domain'] || selectedAlertDetails.rawData['event_data.user.name'])" class="mb-3">
+                        <div class="text-subtitle-2 text--secondary mb-1">User Context</div>
+                        <div class="d-flex flex-wrap ga-2">
+                          <v-chip size="small" variant="tonal">
+                            <v-icon start size="x-small">fa-user</v-icon>
+                            {{ (selectedAlertDetails.rawData['user.domain'] || selectedAlertDetails.rawData['event_data.user.domain']) ? (selectedAlertDetails.rawData['user.domain'] || selectedAlertDetails.rawData['event_data.user.domain']) + '\\' : '' }}{{ selectedAlertDetails.rawData['user.name'] || selectedAlertDetails.rawData['event_data.user.name'] || 'Unknown' }}
+                          </v-chip>
+                          <v-chip v-if="selectedAlertDetails.rawData['user.id'] || selectedAlertDetails.rawData['event_data.user.id']" size="small" variant="tonal">
+                            ID: {{ selectedAlertDetails.rawData['user.id'] || selectedAlertDetails.rawData['event_data.user.id'] }}
+                          </v-chip>
+                        </div>
+                      </div>
+                      
+                      <!-- File/Registry Operations -->
+                      <div v-if="selectedAlertDetails.rawData && (selectedAlertDetails.rawData['file.path'] || selectedAlertDetails.rawData['registry.key'] || selectedAlertDetails.rawData['registry.path'])" class="mb-3">
+                        <div class="text-subtitle-2 text--secondary mb-1">Target Details</div>
+                        <div class="d-flex flex-column ga-1">
+                          <div v-if="selectedAlertDetails.rawData['file.path']" class="text-caption">
+                            <v-icon size="x-small" class="mr-1">fa-file</v-icon>
+                            <span class="font-weight-medium">File:</span> {{ selectedAlertDetails.rawData['file.path'] }}
+                          </div>
+                          <div v-if="selectedAlertDetails.rawData['file.hash.md5']" class="text-caption ml-3">
+                            <span class="font-weight-medium">MD5:</span> {{ selectedAlertDetails.rawData['file.hash.md5'] }}
+                          </div>
+                          <div v-if="selectedAlertDetails.rawData['registry.key'] || selectedAlertDetails.rawData['registry.path']" class="text-caption">
+                            <v-icon size="x-small" class="mr-1">fa-database</v-icon>
+                            <span class="font-weight-medium">Registry:</span> {{ selectedAlertDetails.rawData['registry.path'] || selectedAlertDetails.rawData['registry.key'] }}
+                          </div>
+                          <div v-if="selectedAlertDetails.rawData['registry.value']" class="text-caption ml-3">
+                            <span class="font-weight-medium">Value:</span> {{ selectedAlertDetails.rawData['registry.value'] }}
+                          </div>
+                          <div v-if="selectedAlertDetails.rawData['registry.data']" class="text-caption ml-3">
+                            <span class="font-weight-medium">Data:</span> {{ selectedAlertDetails.rawData['registry.data'] }}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <!-- Network Activity (for network-related Sigma rules) -->
+                      <div v-if="selectedAlertDetails.rawData && (selectedAlertDetails.rawData['destination.ip'] || selectedAlertDetails.rawData['destination.port'] || selectedAlertDetails.rawData['dns.question.name'])" class="mb-3">
+                        <div class="text-subtitle-2 text--secondary mb-1">Network Activity</div>
+                        <div class="d-flex flex-wrap ga-2">
+                          <v-chip v-if="selectedAlertDetails.rawData['destination.ip']" size="small" variant="tonal">
+                            <v-icon start size="x-small">fa-globe</v-icon>
+                            {{ selectedAlertDetails.rawData['destination.ip'] }}:{{ selectedAlertDetails.rawData['destination.port'] || '*' }}
+                          </v-chip>
+                          <v-chip v-if="selectedAlertDetails.rawData['dns.question.name']" size="small" variant="tonal">
+                            <v-icon start size="x-small">fa-search</v-icon>
+                            DNS: {{ selectedAlertDetails.rawData['dns.question.name'] }}
+                          </v-chip>
+                        </div>
+                      </div>
+                      
+                      <!-- Log Source Information -->
+                      <div v-if="selectedAlertDetails.rawData && (selectedAlertDetails.rawData['event_data.log.file.path'] || selectedAlertDetails.rawData['log.file.path'] || selectedAlertDetails.rawData['event_data.event.dataset'])" class="mb-3">
+                        <div class="text-subtitle-2 text--secondary mb-1">Log Source</div>
+                        <div class="d-flex flex-wrap ga-2">
+                          <v-chip v-if="selectedAlertDetails.rawData['event_data.log.file.path'] || selectedAlertDetails.rawData['log.file.path']" size="small" variant="tonal">
+                            <v-icon start size="x-small">fa-file-alt</v-icon>
+                            {{ selectedAlertDetails.rawData['event_data.log.file.path'] || selectedAlertDetails.rawData['log.file.path'] }}
+                          </v-chip>
+                          <v-chip v-if="selectedAlertDetails.rawData['event_data.event.dataset'] || selectedAlertDetails.rawData['event.dataset']" size="small" variant="tonal">
+                            <v-icon start size="x-small">fa-database</v-icon>
+                            {{ selectedAlertDetails.rawData['event_data.event.dataset'] || selectedAlertDetails.rawData['event.dataset'] }}
+                          </v-chip>
+                          <v-chip v-if="selectedAlertDetails.rawData['event_data.log.syslog.appname'] || selectedAlertDetails.rawData['log.syslog.appname']" size="small" variant="tonal">
+                            <v-icon start size="x-small">fa-server</v-icon>
+                            {{ selectedAlertDetails.rawData['event_data.log.syslog.appname'] || selectedAlertDetails.rawData['log.syslog.appname'] }}
+                          </v-chip>
+                        </div>
+                      </div>
+                      
+                      <!-- Windows Event Details -->
+                      <div v-if="selectedAlertDetails.rawData && (selectedAlertDetails.rawData['winlog.event_id'] || selectedAlertDetails.rawData['winlog.channel'])" class="mb-3">
+                        <div class="text-subtitle-2 text--secondary mb-1">Windows Event</div>
+                        <div class="d-flex flex-wrap ga-2">
+                          <v-chip v-if="selectedAlertDetails.rawData['winlog.event_id']" size="small" variant="tonal">
+                            Event ID: {{ selectedAlertDetails.rawData['winlog.event_id'] }}
+                          </v-chip>
+                          <v-chip v-if="selectedAlertDetails.rawData['winlog.channel']" size="small" variant="tonal">
+                            {{ selectedAlertDetails.rawData['winlog.channel'] }}
+                          </v-chip>
+                          <v-chip v-if="selectedAlertDetails.rawData['winlog.provider_name']" size="small" variant="tonal">
+                            {{ selectedAlertDetails.rawData['winlog.provider_name'] }}
+                          </v-chip>
+                        </div>
+                      </div>
+                      
+                      <!-- Host Information -->
+                      <div v-if="selectedAlertDetails.rawData && (selectedAlertDetails.rawData['event_data.host.name'] || selectedAlertDetails.rawData['event_data.host.os.name'] || selectedAlertDetails.rawData['event_data.agent.name'])" class="mb-3">
+                        <div class="text-subtitle-2 text--secondary mb-1">Host Information</div>
+                        <div class="d-flex flex-wrap ga-2">
+                          <v-chip v-if="selectedAlertDetails.rawData['event_data.agent.name'] || selectedAlertDetails.rawData['agent.name']" size="small" variant="tonal">
+                            <v-icon start size="x-small">fa-server</v-icon>
+                            Agent: {{ selectedAlertDetails.rawData['event_data.agent.name'] || selectedAlertDetails.rawData['agent.name'] }}
+                          </v-chip>
+                          <v-chip v-if="selectedAlertDetails.rawData['event_data.host.name'] || selectedAlertDetails.rawData['host.name']" size="small" variant="tonal">
+                            <v-icon start size="x-small">fa-desktop</v-icon>
+                            Host: {{ selectedAlertDetails.rawData['event_data.host.name'] || selectedAlertDetails.rawData['host.name'] }}
+                          </v-chip>
+                          <v-chip v-if="selectedAlertDetails.rawData['event_data.host.os.name'] || selectedAlertDetails.rawData['host.os.name']" size="small" variant="tonal">
+                            <v-icon start size="x-small">fa-linux</v-icon>
+                            {{ selectedAlertDetails.rawData['event_data.host.os.name'] || selectedAlertDetails.rawData['host.os.name'] }}
+                            {{ (selectedAlertDetails.rawData['event_data.host.os.version'] || selectedAlertDetails.rawData['host.os.version']) ? ` ${selectedAlertDetails.rawData['event_data.host.os.version'] || selectedAlertDetails.rawData['host.os.version']}` : '' }}
+                          </v-chip>
+                        </div>
+                        <div v-if="(selectedAlertDetails.rawData['event_data.host.ip'] || selectedAlertDetails.rawData['host.ip']) && Array.isArray(selectedAlertDetails.rawData['event_data.host.ip'] || selectedAlertDetails.rawData['host.ip'])" class="text-caption mt-2">
+                          <span class="font-weight-medium">Host IPs:</span>
+                          <span class="ml-1">{{ (selectedAlertDetails.rawData['event_data.host.ip'] || selectedAlertDetails.rawData['host.ip']).slice(0, 3).join(', ') }}{{ (selectedAlertDetails.rawData['event_data.host.ip'] || selectedAlertDetails.rawData['host.ip']).length > 3 ? ` ... (+${(selectedAlertDetails.rawData['event_data.host.ip'] || selectedAlertDetails.rawData['host.ip']).length - 3} more)` : '' }}</span>
+                        </div>
+                      </div>
+                      
+                      <!-- Sigma Rule Information -->
+                      <div v-if="selectedAlertDetails.rawData && selectedAlertDetails.rawData['rule.description']" class="mb-3">
+                        <div class="text-subtitle-2 text--secondary mb-1">Detection Details</div>
+                        <v-alert type="warning" variant="tonal" density="compact">
+                          <div class="font-weight-medium">{{ selectedAlertDetails.rawData['rule.description'] }}</div>
+                          <div v-if="selectedAlertDetails.rawData['rule.author']" class="text-caption mt-1">
+                            Author: {{ selectedAlertDetails.rawData['rule.author'] }}
+                          </div>
+                          <div v-if="selectedAlertDetails.rawData['rule.reference']" class="text-caption">
+                            Reference: <a :href="selectedAlertDetails.rawData['rule.reference']" target="_blank">{{ selectedAlertDetails.rawData['rule.reference'] }}</a>
+                          </div>
+                          <div v-if="selectedAlertDetails.rawData['rule.tags']" class="text-caption mt-1">
+                            Tags: {{ Array.isArray(selectedAlertDetails.rawData['rule.tags']) ? selectedAlertDetails.rawData['rule.tags'].join(', ') : selectedAlertDetails.rawData['rule.tags'] }}
+                          </div>
+                        </v-alert>
+                      </div>
+                    </div>
+                    
+                    <!-- Generic host-based alert details -->
+                    <div v-else class="text-body-2">
                       <v-row dense>
                         <v-col cols="12" sm="6" v-if="selectedAlertDetails.rawData && selectedAlertDetails.rawData['host.name']">
                           <div class="text-subtitle-2 text--secondary mb-1">Host</div>

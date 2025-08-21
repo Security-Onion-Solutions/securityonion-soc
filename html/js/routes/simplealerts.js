@@ -362,7 +362,7 @@ const simpleAlertsComponent = {
           zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           metricLimit: '10',
           eventLimit: '5000', // Load 5000 alerts for grouping
-          view: 'simple'
+          view: 'simple' // Keep simple view for initial aggregation (performance)
         });
         
         const response = await this.$root.papi.get('events/?' + params.toString());
@@ -480,15 +480,23 @@ const simpleAlertsComponent = {
     
     async loadUngroupedAlerts(query, dateRange) {
       // Original ungrouped loading logic
-      const params = new URLSearchParams({
+      // Use 'simple' view for network alerts, but not for host-based alerts
+      const queryParams = {
         query: query,
         range: dateRange,
         format: '2006/01/02 3:04:05 PM',
         zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         metricLimit: '10',
-        eventLimit: this.eventLimit.toString(),
-        view: 'simple'
-      });
+        eventLimit: this.eventLimit.toString()
+      };
+      
+      // Only use simple view if we're sure we're loading network alerts
+      // Check if query excludes network fields
+      if (!query.includes('NOT source.ip:*') && !query.includes('yara') && !query.includes('sigma') && !query.includes('ossec')) {
+        queryParams.view = 'simple';
+      }
+      
+      const params = new URLSearchParams(queryParams);
       
       const response = await this.$root.papi.get('events/?' + params.toString());
       
@@ -523,15 +531,21 @@ const simpleAlertsComponent = {
         const lastAlert = this.alerts[this.alerts.length - 1];
         const searchAfter = lastAlert ? [lastAlert.timestamp] : null;
         
-        const params = new URLSearchParams({
+        const queryParams = {
           query: query,
           range: dateRange,
           format: '2006/01/02 3:04:05 PM',
           zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           metricLimit: '10',
-          eventLimit: this.eventLimit.toString(),
-          view: 'simple'
-        });
+          eventLimit: this.eventLimit.toString()
+        };
+        
+        // Only use simple view for network alerts
+        if (!query.includes('NOT source.ip:*') && !query.includes('yara') && !query.includes('sigma') && !query.includes('ossec')) {
+          queryParams.view = 'simple';
+        }
+        
+        const params = new URLSearchParams(queryParams);
         
         if (searchAfter) {
           params.append('searchAfter', JSON.stringify(searchAfter));
@@ -626,9 +640,42 @@ const simpleAlertsComponent = {
       const categoriesSet = new Set();
       
       const processedAlerts = events.map(event => {
-        // The API returns the event with fields at the root level, not in event.payload
-        // Check if we have a payload object or if fields are at root level
-        const data = event.payload || event;
+        // The API returns data differently based on view mode
+        // Simple view: fields at root level
+        // Full view: fields in event.fields object
+        let data = event.payload || event;
+        
+        // If we have event.fields (full view), merge it with root data
+        if (event.fields) {
+          data = { ...data, ...event.fields };
+        }
+        
+        // For Sigma alerts, fields might be nested under event_data
+        if (event.event_data) {
+          // Flatten event_data fields to root level
+          Object.keys(event.event_data).forEach(key => {
+            data[key] = event.event_data[key];
+          });
+        }
+        
+        // Also check if data has event_data nested
+        if (data.event_data) {
+          // Flatten nested event_data to root level
+          Object.keys(data.event_data).forEach(key => {
+            data[key] = data.event_data[key];
+          });
+        }
+        
+        // Debug first event to see structure
+        if (events.indexOf(event) === 0 && !data['source.ip'] && !data['destination.ip']) {
+          console.log('First host-based event - full data:', data);
+          console.log('Module:', data['event.module']);
+          if (data['event.module'] === 'sigma') {
+            console.log('Sigma alert fields:', Object.keys(data).filter(k => 
+              k.includes('process') || k.includes('user') || k.includes('file') || 
+              k.includes('registry') || k.includes('command') || k.includes('parent')).sort());
+          }
+        }
         
         const ruleName = data['rule.name'] || 'Unknown Rule';
         
@@ -719,8 +766,15 @@ const simpleAlertsComponent = {
       
       // Create appropriate description based on alert type
       if (alert.isHostBased) {
-        const agentName = alert.rawData?.['agent.name'] || alert.rawData?.['observer.name'] || 'Unknown Agent';
-        const hostName = alert.rawData?.['host.name'] || '';
+        // Check both flattened and event_data nested fields
+        const agentName = alert.rawData?.['agent.name'] || 
+                         alert.rawData?.['observer.name'] || 
+                         alert.rawData?.['event_data.agent.name'] ||
+                         alert.rawData?.['event_data.observer.name'] ||
+                         'Unknown Agent';
+        const hostName = alert.rawData?.['host.name'] || 
+                        alert.rawData?.['event_data.host.name'] ||
+                        '';
         this.caseDescription = hostName ? 
           `Host-based alert on ${hostName} (Agent: ${agentName})` : 
           `Host-based alert from Agent: ${agentName}`;
@@ -1302,8 +1356,23 @@ const simpleAlertsComponent = {
     getHuntUrl(alert) {
       if (!alert) return '#/hunt';
       
+      // Validate timestamp
+      if (!alert.timestamp) {
+        // If no timestamp, just search by ID without time range
+        const query = `_id:"${alert.id}"`;
+        return `#/hunt?q=${encodeURIComponent(query)}`;
+      }
+      
       // Create a time range around the alert (e.g., 1 hour before and after)
       const alertTime = new Date(alert.timestamp);
+      
+      // Check if the date is valid
+      if (isNaN(alertTime.getTime())) {
+        // Invalid date, search without time range
+        const query = `_id:"${alert.id}"`;
+        return `#/hunt?q=${encodeURIComponent(query)}`;
+      }
+      
       const startTime = new Date(alertTime.getTime() - 60 * 60 * 1000); // 1 hour before
       const endTime = new Date(alertTime.getTime() + 60 * 60 * 1000);   // 1 hour after
       
@@ -2494,7 +2563,15 @@ const simpleAlertsComponent = {
           console.log(`Detected host-based rule: ${group.ruleName}, trying agent.name aggregation`);
           
           // Try multiple possible field names for the agent
-          const agentFields = ['agent.name', 'observer.name', 'host.name'];
+          // Sigma alerts often have fields under event_data prefix
+          const agentFields = [
+            'agent.name', 
+            'observer.name', 
+            'host.name',
+            'event_data.agent.name',
+            'event_data.observer.name',
+            'event_data.host.name'
+          ];
           let subGroups = [];
           
           for (const field of agentFields) {
@@ -2504,7 +2581,7 @@ const simpleAlertsComponent = {
               range: dateRange,
               format: '2006/01/02 3:04:05 PM', 
               zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-              view: 'simple',
+              // Don't use 'simple' view for host-based alerts
               eventLimit: '0', // Don't need events, just aggregations
               aggregationType: 'terms',
               aggregationField: field,
@@ -2557,19 +2634,21 @@ const simpleAlertsComponent = {
             console.log(`Loaded ${subGroups.length} agents for host-based rule "${group.ruleName}"`);
             return group.subGroups;
           } else {
-            console.log(`No agent aggregations found, falling back to event loading`);
+            console.log(`No agent aggregations found, falling back to event loading for rule: ${group.ruleName}`);
+            // Fall through to the regular event loading below
           }
         }
         
-        // For network-based alerts, use the existing logic
+        // For network-based alerts OR when aggregation failed, use event loading
+        // Don't use 'simple' view for host-based alerts as it lacks agent fields
         const params = new URLSearchParams({
           query: query,
           range: dateRange,
           format: '2006/01/02 3:04:05 PM',
           zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           metricLimit: '10',
-          eventLimit: '2000', // Load up to 2000 alerts for this rule
-          view: 'simple'
+          eventLimit: '10000' // Increased limit to ensure we get all alerts for proper grouping
+          // Note: NOT using view: 'simple' to get all fields including agent/observer
         });
         
         response = await this.$root.papi.get('events/?' + params.toString());
@@ -2590,9 +2669,23 @@ const simpleAlertsComponent = {
             
             // For YARA/Sigma/host-based alerts without IPs, group by agent.name
             if (!sourceIp && !destIp) {
+              // Debug: log what fields are available
+              console.log(`Host-based alert detected. Available fields:`, Object.keys(alert.rawData || {}).filter(k => k.includes('agent') || k.includes('observer') || k.includes('host')));
+              
               // Always try to get agent name for any alert without IPs
-              const agentName = alert.rawData?.['agent.name'] || alert.rawData?.['observer.name'] || 'unknown-agent';
-              const hostname = alert.rawData?.['host.name'] || '';
+              // Check both flattened and event_data nested fields
+              const agentName = alert.rawData?.['agent.name'] || 
+                               alert.rawData?.['observer.name'] || 
+                               alert.rawData?.['event_data.agent.name'] ||
+                               alert.rawData?.['event_data.observer.name'] ||
+                               alert.rawData?.['event_data.host.name'] ||
+                               'unknown-agent';
+                               
+              const hostname = alert.rawData?.['host.name'] || 
+                              alert.rawData?.['event_data.host.name'] || 
+                              '';
+              
+              console.log(`Agent name found: ${agentName}, Host name: ${hostname}`);
               
               // For any alert without IPs, group by agent
               key = `Agent: ${agentName}`;
@@ -2698,8 +2791,17 @@ const simpleAlertsComponent = {
           // For YARA/Sigma/host-based alerts without IPs, group by agent.name
           if (!sourceIp && !destIp) {
             // Always try to get agent name for any alert without IPs
-            const agentName = alert.rawData?.['agent.name'] || alert.rawData?.['observer.name'] || 'unknown-agent';
-            const hostname = alert.rawData?.['host.name'] || '';
+            // Check both flattened and event_data nested fields
+            const agentName = alert.rawData?.['agent.name'] || 
+                             alert.rawData?.['observer.name'] || 
+                             alert.rawData?.['event_data.agent.name'] ||
+                             alert.rawData?.['event_data.observer.name'] ||
+                             alert.rawData?.['event_data.host.name'] ||
+                             'unknown-agent';
+                             
+            const hostname = alert.rawData?.['host.name'] || 
+                            alert.rawData?.['event_data.host.name'] || 
+                            '';
             
             // For any alert without IPs, group by agent
             key = `Agent: ${agentName}`;
@@ -2773,15 +2875,18 @@ const simpleAlertsComponent = {
         // Check if this is a host-based subgroup
         if (subGroup.isHostBased || subGroup.key.startsWith('Agent:')) {
           // For host-based alerts, filter by the appropriate agent field
-          if (subGroup.agentName && subGroup.agentField) {
+          if (subGroup.agentField && subGroup.agentName) {
             // Use the field that was successful during aggregation
             query += ` AND ${subGroup.agentField}:"${subGroup.agentName}"`;
-          } else if (subGroup.agentName) {
-            // Try agent.name first, then observer.name, then host.name
-            query += ` AND (agent.name:"${subGroup.agentName}" OR observer.name:"${subGroup.agentName}" OR host.name:"${subGroup.agentName}")`;
+            console.log(`Using field ${subGroup.agentField} to filter for agent: ${subGroup.agentName}`);
+          } else if (subGroup.agentName && subGroup.agentName !== 'unknown-agent') {
+            // Default to event_data.agent.name for Sigma alerts
+            query += ` AND event_data.agent.name:"${subGroup.agentName}"`;
+            console.log(`Using event_data.agent.name to filter for agent: ${subGroup.agentName}`);
           } else if (subGroup.sourceIp && subGroup.sourceIp !== 'unknown' && subGroup.sourceIp !== 'endpoint') {
-            // sourceIp might contain the agent name for host-based alerts
-            query += ` AND (agent.name:"${subGroup.sourceIp}" OR observer.name:"${subGroup.sourceIp}" OR host.name:"${subGroup.sourceIp}")`;
+            // sourceIp might contain the agent name for host-based alerts  
+            query += ` AND event_data.agent.name:"${subGroup.sourceIp}"`;
+            console.log(`Using event_data.agent.name to filter for sourceIp as agent: ${subGroup.sourceIp}`);
           }
         } else {
           // For network-based alerts, add IP filters
@@ -2795,15 +2900,22 @@ const simpleAlertsComponent = {
         
         const dateRange = this.getDateRange();
         
-        const params = new URLSearchParams({
+        // Don't use 'simple' view for host-based alerts as it lacks agent fields
+        const queryParams = {
           query: query,
           range: dateRange,
           format: '2006/01/02 3:04:05 PM',
           zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           metricLimit: '0',
-          eventLimit: '50', // Load first 50 alerts
-          view: 'simple'
-        });
+          eventLimit: '50' // Load first 50 alerts
+        };
+        
+        // Only use simple view for network-based alerts (much faster for high volumes)
+        if (!subGroup.isHostBased && !subGroup.key.startsWith('Agent:')) {
+          queryParams.view = 'simple';
+        }
+        
+        const params = new URLSearchParams(queryParams);
         
         const response = await this.$root.papi.get('events/?' + params.toString());
         
