@@ -37,6 +37,7 @@ type ClientParameters struct {
 	CasesEnabled        bool                 `json:"casesEnabled"`
 	EnableReverseLookup bool                 `json:"enableReverseLookup"`
 	DetectionsEnabled   bool                 `json:"detectionsEnabled"`
+	ExportNodeId        string               `json:"exportNodeId"`
 }
 
 func (config *ClientParameters) Verify() error {

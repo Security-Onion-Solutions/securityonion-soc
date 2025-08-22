@@ -80,6 +80,7 @@ func main() {
 			if err == nil {
 				go agt.Start()
 			} else {
+				log.WithError(err).Error("Failed to launch agent modules, agent will not start")
 				agt = nil
 			}
 		}

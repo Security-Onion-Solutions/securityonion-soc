@@ -4,7 +4,7 @@
 			<h2 v-text="i18n.grid"></h2>
 		</v-col>
 		<v-col cols="5">
-			<v-expansion-panels>
+			<v-expansion-panels class="no-print">
 				<v-expansion-panel data-aid="grid_options">
 					<v-expansion-panel-title id="gridOptionsHeader" expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up">{{i18n.options}}</v-expansion-panel-title>
 					<v-expansion-panel-text>
@@ -33,7 +33,7 @@
 				data-aid="grid_list" :items-per-page-options="itemsPerPageOptions" :expanded="expanded" @update:expanded="val => expanded = val"
 				v-model:items-per-page="itemsPerPage" must-sort :headers="headers" :items="nodes">
 				<template #top>
-					<v-container fluid>
+					<v-container fluid class="no-print">
 						<v-row>
 							<v-col lg="6" class="d-none d-lg-block">
 							</v-col>

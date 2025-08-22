@@ -73,19 +73,20 @@ func (h *StreamHandler) getStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	unwrap, err := strconv.ParseBool(r.URL.Query().Get("unwrap"))
+	unwrapStr := r.URL.Query().Get("unwrap")
+	unwrap, err := strconv.ParseBool(unwrapStr)
 	if err != nil {
-		web.Respond(w, r, http.StatusBadRequest, err)
-		return
+		logger.WithFields(log.Fields{
+			"jobId":     jobId,
+			"unwrapStr": unwrapStr,
+		}).Info("Unwrap parameter is not a valid boolean, defaulting to false")
 	}
 
-	reader, filename, length, err := h.server.Datastore.GetPacketStream(ctx, int(jobId), unwrap)
-	if err != nil {
+	reader, filename, length, mimeType, err := h.server.Datastore.GetJobStream(ctx, int(jobId), unwrap)
+	if err != nil || reader == nil {
 		web.Respond(w, r, http.StatusNotFound, err)
 		return
 	}
-
-	defer reader.Close()
 
 	extension := r.URL.Query().Get("ext")
 	if len(extension) > 0 {
@@ -101,7 +102,7 @@ func (h *StreamHandler) getStream(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "vnd.tcpdump.pcap")
+	w.Header().Set("Content-Type", mimeType)
 	w.Header().Set("Content-Length", strconv.FormatInt(length, 10))
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="%s"`, filename))
 	w.Header().Set("Content-Transfer-Encoding", "binary")
@@ -152,7 +153,7 @@ func (h *StreamHandler) postStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = h.server.Datastore.SavePacketStream(ctx, int(jobId), r.Body)
+	err = h.server.Datastore.SaveJobStream(ctx, int(jobId), r.Body)
 	if err != nil {
 		if err.Error() == "Job not found" {
 			web.Respond(w, r, http.StatusNotFound, err)

@@ -18,6 +18,9 @@ const JobStatusDeleted = 3
 
 const DEFAULT_JOB_KIND = "pcap"
 
+// Job kind for exporting data to different formats (pdf, csv, etc)
+const JOB_KIND_EXPORT = "reports"
+
 type JobResult struct {
 	// The ID or name of the result; varies depending on the job processor
 	Id string `json:"id" example:"malwarebazaar"`

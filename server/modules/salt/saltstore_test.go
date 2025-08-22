@@ -425,6 +425,23 @@ func TestUpdateSetting_OverrideWithJinjaEscaped(tester *testing.T) {
 	assert.Equal(tester, "new setting {{foo}} {# comment #} {% multiline %}\n", new_setting.Value)
 }
 
+func TestUpdateSetting_FileWithJinja(tester *testing.T) {
+	defer Cleanup()
+	salt := NewTestSalt()
+
+	// Add new setting
+	setting := model.NewSetting("myapp.foo__txt")
+	setting.Value = "new setting {{foo}} {# comment #} {% multiline %}"
+	err := salt.UpdateSetting(ctx(), setting, false)
+	assert.NoError(tester, err)
+
+	settings, get_err := salt.GetSettings(ctx(), true)
+	assert.NoError(tester, get_err)
+
+	new_setting := findSetting(settings, "myapp.foo__txt", "")
+	assert.Equal(tester, "new setting {{foo}} {# comment #} {% multiline %}", new_setting.Value)
+}
+
 func TestUpdateSetting_AddGlobal(tester *testing.T) {
 	defer Cleanup()
 	salt := NewTestSalt()

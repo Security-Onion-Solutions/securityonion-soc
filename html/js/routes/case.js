@@ -155,7 +155,6 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     analyzerNodeId: null,
     analyzeJobs: {},
     // constants
-    FEAT_TTR: FEAT_TTR,
     JobStatusPending: JobStatusPending,
     JobStatusCompleted: JobStatusCompleted,
     JobStatusIncomplete: JobStatusIncomplete,
@@ -1045,6 +1044,12 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     },
     loadLocalSettings() {
       if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
+    },
+    async exportCase() {
+      this.$root.export({
+              type: 'case',
+              id: this.caseObj.id,
+            });
     },
     huntCase() {
       let earliest;

@@ -78,7 +78,7 @@ func TestCancelQuery(t *testing.T) {
 				"description" : "indices[test], types[test], search_type[QUERY_THEN_FETCH], source[{\"query\":...}]",
 				"start_time_in_millis" : 1483478610008,
 				"running_time_in_nanos" : 13991383,
-				"cancellable" : true
+				"cancelable" : true
 				}
 			}
 			}
@@ -129,7 +129,7 @@ func TestConvertFromElasticQueryTaskResults(t *testing.T) {
 				"ip": "127.0.0.1",
 				"tasks": {
 					"12345": {
-						"cancellable": true,
+						"cancelable": true,
 						"action": "indices:data/read/search",
 						"type": "transport",
 						"start_time_in_millis": 1678886400000,
@@ -137,7 +137,7 @@ func TestConvertFromElasticQueryTaskResults(t *testing.T) {
 						"parent_task_id": ""
 					},
 					"67890": {
-						"cancellable": false,
+						"cancelable": false,
 						"action": "cluster:monitor/tasks/lists",
 						"type": "persistent",
 						"start_time_in_millis": 1678886400000,
@@ -171,12 +171,12 @@ func TestConvertFromElasticQueryTaskResults(t *testing.T) {
 
 	// Verify the contents of the returned query
 	assert.Equal(t, "12345", tasks[0].TaskId)
-	assert.Equal(t, true, tasks[0].Cancellable)
+	assert.Equal(t, true, tasks[0].Cancelable)
 	assert.Equal(t, "transport (indices:data/read/search)", tasks[0].Details)
 	assert.Equal(t, "myGrid", tasks[0].GridId)
 
 	assert.Equal(t, "67890", tasks[1].TaskId)
-	assert.Equal(t, false, tasks[1].Cancellable)
+	assert.Equal(t, false, tasks[1].Cancelable)
 	assert.Equal(t, "persistent (cluster:monitor/tasks/lists)", tasks[1].Details)
 	assert.Equal(t, "myGrid", tasks[1].GridId)
 }
@@ -196,7 +196,7 @@ func TestConvertFromElasticQueryTaskResultsError(t *testing.T) {
 				"ip": "127.0.0.1",
 				"tasks": {
 					"12345": {
-						"cancellable": true,
+						"cancelable": true,
 						"action": "indices:data/read/search",
 						"type": "transport",
 						"start_time_in_millis": "invalid",
@@ -234,7 +234,7 @@ func TestGetActiveQueries(t *testing.T) {
 				"ip": "127.0.0.1",
 				"tasks": {
 					"12345": {
-						"cancellable": true,
+						"cancelable": true,
 						"action": "indices:data/read/search",
 						"type": "transport",
 						"start_time_in_millis": 1678886400000,
@@ -267,7 +267,7 @@ func TestGetActiveQueries(t *testing.T) {
 
 	// Verify the contents of the returned query
 	assert.Equal(t, "12345", tasks[0].TaskId)
-	assert.Equal(t, true, tasks[0].Cancellable)
+	assert.Equal(t, true, tasks[0].Cancelable)
 	assert.Equal(t, "transport (indices:data/read/search)", tasks[0].Details)
 	assert.Equal(t, "", tasks[0].GridId)
 }
