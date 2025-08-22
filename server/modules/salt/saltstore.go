@@ -741,9 +741,10 @@ func (store *Saltstore) UpdateSetting(ctx context.Context, setting *model.Settin
 			setting.Value = syntax.EscapeJinja(setting.Value)
 		}
 
-		if !strings.HasPrefix(setting.ForcedType, "[]") {
+		if !strings.HasPrefix(setting.ForcedType, "[]") && !setting.File {
 			// Do not attempt to validate settings with array values, as those have \n separators and will be
 			// validated during the type alignment stage later in this update.
+			// Files can be excluded since the salt state for those files can disable Jinja rendering if needed.
 			log.WithFields(log.Fields{
 				"settingSyntax": setting.Syntax,
 				"settingId":     setting.Id,
