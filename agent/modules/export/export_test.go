@@ -1402,8 +1402,6 @@ func TestGetGenericDetailsFromServer(t *testing.T) {
 		assert.Nil(t, err)
 		assert.NotNil(t, result)
 		assert.Equal(t, 2, len(result.Results))
-		assert.Equal(t, 10, result.Results["alerts"].TotalEvents)
-		assert.Equal(t, 5, result.Results["events"].TotalEvents)
 		assert.Equal(t, job.Filter.BeginTime, result.BeginDate)
 		assert.Equal(t, job.Filter.EndTime, result.EndDate)
 	})

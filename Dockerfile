@@ -62,7 +62,7 @@ RUN mkdir -p /opt/sensoroni/jobs && chown socore:socore /opt/sensoroni/jobs
 RUN mkdir -p /opt/sensoroni/logs && chown socore:socore /opt/sensoroni/logs
 WORKDIR /opt/sensoroni
 COPY --from=builder /build/sensoroni .
-COPY --from=builder /build/scripts ./scripts
+COPY scripts ./scripts
 COPY --from=builder /build/html ./html
 COPY --from=builder /build/rbac ./rbac
 COPY --from=builder /build/LICENSE .
