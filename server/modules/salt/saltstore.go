@@ -724,6 +724,10 @@ func (store *Saltstore) UpdateSetting(ctx context.Context, setting *model.Settin
 				return errors.New("Unable to modify or remove a readonly setting")
 			}
 			setting.Syntax = settingDef.Syntax
+			setting.Description = settingDef.Description
+			setting.Title = settingDef.Title
+			setting.Multiline = settingDef.Multiline
+			setting.Advanced = settingDef.Advanced
 			setting.ForcedType = settingDef.ForcedType
 			setting.Default = settingDef.Default
 			setting.DefaultAvailable = settingDef.DefaultAvailable
@@ -733,14 +737,7 @@ func (store *Saltstore) UpdateSetting(ctx context.Context, setting *model.Settin
 	}
 
 	if !remove {
-		log.WithFields(log.Fields{
-			"settingSyntax":       setting.Syntax,
-			"settingJinjaEscaped": setting.JinjaEscaped,
-			"settingDuplicated":   setting.IsDuplicatedSetting(),
-			"settingId":           setting.Id,
-		}).Info("******************************")
 		if setting.SupportsJinja() {
-			log.Error("SUPPORTS JINJA!")
 			setting.Value = syntax.EscapeJinja(setting.Value)
 		}
 
