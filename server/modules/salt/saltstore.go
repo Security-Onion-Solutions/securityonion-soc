@@ -733,7 +733,14 @@ func (store *Saltstore) UpdateSetting(ctx context.Context, setting *model.Settin
 	}
 
 	if !remove {
+		log.WithFields(log.Fields{
+			"settingSyntax":       setting.Syntax,
+			"settingJinjaEscaped": setting.JinjaEscaped,
+			"settingDuplicated":   setting.IsDuplicatedSetting(),
+			"settingId":           setting.Id,
+		}).Info("******************************")
 		if setting.SupportsJinja() {
+			log.Error("SUPPORTS JINJA!")
 			setting.Value = syntax.EscapeJinja(setting.Value)
 		}
 
