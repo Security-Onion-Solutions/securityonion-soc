@@ -880,7 +880,7 @@ $(document).ready(function () {
         },
         showError(msg) {
           if (msg.name == "CanceledError") {
-            this.showTip(this.i18n.requestCancelled);
+            this.showTip(this.i18n.requestCanceled);
             return;
           }
           this.error = true;

@@ -178,7 +178,7 @@ func TestGetActiveQueries(t *testing.T) {
 			"details": "test query 1",
 			"startTime": "0001-01-01T00:00:00Z",
 			"elapsedMs": 0,
-			"cancellable": false
+			"cancelable": false
 		},
 		{
 			"gridId": "",
@@ -186,7 +186,7 @@ func TestGetActiveQueries(t *testing.T) {
 			"details": "test query 2",
 			"startTime": "0001-01-01T00:00:00Z",
 			"elapsedMs": 0,
-			"cancellable": false
+			"cancelable": false
 		}
 	]`
 	assert.JSONEq(t, expected, w.Body.String())

@@ -52,7 +52,7 @@
           <td>{{ item.details }}</td>
           <td :title="formatDateTime(item.startTime)">{{ formatDuration(item.elapsedMs / 1000) }}</td>
           <td>
-              <v-icon v-if="item.cancellable" class="mr-2" :title="i18n.cancel" @click.stop="showCancelQueryConfirm(item)" data-aid="queries_cancel">fa-times-circle</v-icon>
+              <v-icon v-if="item.cancelable" class="mr-2" :title="i18n.cancel" @click.stop="showCancelQueryConfirm(item)" data-aid="queries_cancel">fa-times-circle</v-icon>
           </td>
         </tr>
       </template>

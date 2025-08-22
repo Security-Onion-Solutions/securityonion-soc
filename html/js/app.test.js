@@ -1166,7 +1166,7 @@ describe('export', () => {
     expect(mockStopLoading).toHaveBeenCalledTimes(1);
   });
 
-  test('should use tip if cancelled error', () => {
+  test('should use tip if canceled error', () => {
     const oldShowError = app.showError;
     const oldShowTip = app.showTip;
     app.showError = origShowError;
@@ -1176,7 +1176,7 @@ describe('export', () => {
       err = new Object();
       err.name = "CanceledError";
       app.showError(err);
-      expect(mockShowTip).toHaveBeenCalledWith(app.i18n.requestCancelled);
+      expect(mockShowTip).toHaveBeenCalledWith(app.i18n.requestCanceled);
     } finally {
       app.showTip = oldShowTip;
       app.showError = oldShowError;

@@ -42,7 +42,7 @@ func RegisterQueryRoutes(srv *Server, r chi.Router, prefix string) {
 // @Description  Requires a Security Onion Pro license.
 // @Security     bearer[queries/read]
 // @Tags         Query
-// @Param        filter  query  bool  false  "If set to true the internal, child, uncancellable, and related queries will be filtered out of the results" example(true)
+// @Param        filter  query  bool  false  "If set to true the internal, child, uncancelable, and related queries will be filtered out of the results" example(true)
 // @Produce      application/json
 // @Success      200    {array}  model.QueryTask    "The list of active queries"
 // @Failure      401        "Request was not properly authenticated"
@@ -66,14 +66,14 @@ func (h *QueryHandler) getActiveQueries(w http.ResponseWriter, r *http.Request) 
 
 // @Summary      Cancel Active Query
 // @Description  Requests that the event storage system cancel a specific query identified by the provided input ID.
-// @Description  Note that not all queries can be cancelled.
+// @Description  Note that not all queries can be canceled.
 // @Description  Requires a Security Onion Pro license.
 // @Security     bearer[queries/delete]
 // @Tags         Query
 // @Param        queryId  path  string  true  "The unique query ID to cancel" example(jSliTqa12bOPhdW195TuuZ:321)
 // @Produce      application/json
-// @Success      200        "The query cancellation was submitted (may or may not actually get cancelled)"
-// @Failure      400        "Query could not be cancelled"
+// @Success      200        "The query cancelation was submitted (may or may not actually get canceled)"
+// @Failure      400        "Query could not be canceled"
 // @Failure      404        "Query was not found"
 // @Failure      401        "Request was not properly authenticated"
 // @Failure      403        "Insufficient permissions for this request"
