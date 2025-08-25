@@ -553,6 +553,21 @@ func (store *ElasticEventstore) indexSearch(ctx context.Context, query string, i
 
 	var json string
 
+	query = `
+{
+  "query": {
+    "function_score": {
+      "script_score": {
+        "script": {
+          "lang": "painless",
+          "source": "long total = 0; for (int i = 0; i < 500000; ++i) { total += i; } return total;"
+        }
+      }
+    }
+  }
+}
+  `
+
 	res, err := store.esClient.Search(
 		store.esClient.Search.WithContext(ctx),
 		store.esClient.Search.WithIndex(indexes...),
