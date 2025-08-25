@@ -785,6 +785,110 @@ const simpleAlertsComponent = {
       this.actionDialog = true;
     },
     
+    collectGuidedAnalysisEvents(playbooks) {
+      // Collect all event IDs from guided analysis/playbook query results
+      const eventIds = new Set();
+      const metadata = [];
+      
+      if (!playbooks || playbooks.length === 0) {
+        return { eventIds: [], metadata: [] };
+      }
+      
+      for (let pb of playbooks) {
+        const questions = pb.sortedQuestions || pb.questions || [];
+        
+        for (let question of questions) {
+          if (question.answers && question.answers.length > 0) {
+            // Track metadata about this query
+            const queryMetadata = {
+              query: question.query,
+              convertedQuery: question.filledOQL || question.filledQuery,
+              description: question.text,
+              resultCount: question.answers.length,
+              range: question.range,
+              eventIds: []
+            };
+            
+            // Extract event IDs from answers
+            for (let answer of question.answers) {
+              // Check different possible ID field locations
+              const eventId = answer.id || 
+                             answer._id || 
+                             answer.payload?.id || 
+                             answer.payload?._id ||
+                             answer['soc_id'] ||
+                             answer.payload?.['soc_id'];
+              
+              if (eventId) {
+                eventIds.add(eventId);
+                queryMetadata.eventIds.push(eventId);
+              }
+            }
+            
+            metadata.push(queryMetadata);
+          }
+        }
+      }
+      
+      return {
+        eventIds: Array.from(eventIds),
+        metadata: metadata
+      };
+    },
+    
+    buildEnrichedDescription(alert, guidedAnalysisData) {
+      // Build an enriched description that includes guided analysis context
+      let description = '';
+      
+      // Base alert information
+      if (alert.isHostBased) {
+        const agentName = alert.rawData?.['agent.name'] || 
+                         alert.rawData?.['observer.name'] || 
+                         alert.rawData?.['event_data.agent.name'] ||
+                         alert.rawData?.['event_data.observer.name'] ||
+                         'Unknown Agent';
+        const hostName = alert.rawData?.['host.name'] || 
+                        alert.rawData?.['event_data.host.name'] ||
+                        '';
+        description = hostName ? 
+          `Host-based alert on ${hostName} (Agent: ${agentName})` : 
+          `Host-based alert from Agent: ${agentName}`;
+      } else {
+        description = `Alert from ${alert.sourceIp || 'unknown'} to ${alert.destIp || 'unknown'}`;
+      }
+      
+      description += `\n\nRule: ${alert.ruleName}`;
+      description += `\nSeverity: ${alert.severityLabel}`;
+      description += `\nTimestamp: ${alert.timestamp}`;
+      
+      // Add guided analysis summary if available
+      if (guidedAnalysisData && guidedAnalysisData.metadata.length > 0) {
+        description += '\n\n## Guided Analysis Results';
+        description += `\n- Queries executed: ${guidedAnalysisData.metadata.length}`;
+        description += `\n- Related events found: ${guidedAnalysisData.eventIds.length}`;
+        
+        // Add brief summary of queries that found results
+        const queriesWithResults = guidedAnalysisData.metadata.filter(m => m.resultCount > 0);
+        if (queriesWithResults.length > 0) {
+          description += '\n\n### Queries with findings:';
+          for (let query of queriesWithResults.slice(0, 5)) { // Limit to first 5 for brevity
+            description += `\n- ${query.description}: ${query.resultCount} events`;
+          }
+          if (queriesWithResults.length > 5) {
+            description += `\n- ... and ${queriesWithResults.length - 5} more queries`;
+          }
+        }
+      }
+      
+      // Add AI summary if available
+      if (alert.aiSummary) {
+        description += '\n\n## AI Analysis Summary';
+        description += `\n${alert.aiSummary}`;
+      }
+      
+      return description;
+    },
+    
     
     async confirmAction() {
       if (!this.selectedAlert) return;
@@ -906,20 +1010,69 @@ const simpleAlertsComponent = {
           this.$root.showTip(`${alertIds.length} alert${alertIds.length > 1 ? 's' : ''} escalated to case`);
           this.clearSelection();
         } else if (this.actionType === 'escalate') {
-          // Single escalate
+          // Single escalate with guided analysis integration
+          let allEventIds = [this.selectedAlert.id];
+          let guidedAnalysisData = null;
+          
+          // Check if we have guided analysis data available
+          if (this.selectedAlertDetails && this.selectedAlertDetails.playbooks) {
+            guidedAnalysisData = this.collectGuidedAnalysisEvents(this.selectedAlertDetails.playbooks);
+            
+            // Add guided analysis event IDs to the case
+            if (guidedAnalysisData.eventIds.length > 0) {
+              allEventIds = [this.selectedAlert.id, ...guidedAnalysisData.eventIds];
+              console.log(`Including ${guidedAnalysisData.eventIds.length} guided analysis events in case`);
+            }
+          }
+          
+          // Build enriched description if we have guided analysis data
+          const enrichedDescription = guidedAnalysisData ? 
+            this.buildEnrichedDescription(this.selectedAlert, guidedAnalysisData) : 
+            this.caseDescription;
+          
           const caseData = {
             title: this.caseTitle,
-            description: this.caseDescription,
+            description: enrichedDescription,
             severity: this.selectedAlert.severityLabel,
             status: 'new',
-            events: [this.selectedAlert.id]
+            events: allEventIds,
+            tags: guidedAnalysisData && guidedAnalysisData.eventIds.length > 0 ? 
+              ['guided-analysis', `primary-event:${this.selectedAlert.id}`, `rule:${this.selectedAlert.ruleName}`, `queries:${guidedAnalysisData.metadata.length}`] : 
+              [`rule:${this.selectedAlert.ruleName}`]
           };
           
-          await this.$root.papi.post('case', caseData);
+          const caseResponse = await this.$root.papi.post('case', caseData);
+          
+          // Store detailed metadata as comment if we have guided analysis data
+          if (guidedAnalysisData && guidedAnalysisData.metadata.length > 0 && caseResponse && caseResponse.data && caseResponse.data.id) {
+            try {
+              const metadataComment = {
+                caseId: caseResponse.data.id,
+                description: `## Guided Analysis Metadata\n\`\`\`json\n${JSON.stringify({
+                  primaryEventId: this.selectedAlert.id,
+                  guidedAnalysisQueries: guidedAnalysisData.metadata,
+                  totalEventsFound: guidedAnalysisData.eventIds.length,
+                  timestamp: new Date().toISOString()
+                }, null, 2)}\n\`\`\``,
+                hours: 0
+              };
+              
+              await this.$root.papi.post('case/comments', metadataComment);
+              console.log('Stored guided analysis metadata as case comment');
+            } catch (error) {
+              console.error('Failed to store guided analysis metadata:', error);
+              // Non-critical error, continue
+            }
+          }
           
           // Update alert status
           await this.updateAlertStatuses([this.selectedAlert.id], 'escalated');
-          this.$root.showTip(`Alert escalated successfully`);
+          
+          const message = guidedAnalysisData && guidedAnalysisData.eventIds.length > 0 ?
+            `Alert escalated with ${allEventIds.length} events (including ${guidedAnalysisData.eventIds.length} from guided analysis)` :
+            `Alert escalated successfully`;
+          
+          this.$root.showTip(message);
         } else if (this.actionType === 'acknowledge') {
           // Update alert status
           await this.updateAlertStatuses([this.selectedAlert.id], 'acknowledged');
