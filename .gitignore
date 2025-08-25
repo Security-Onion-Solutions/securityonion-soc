@@ -26,3 +26,6 @@ mikebuild.sh
 
 # Generated bundle files
 html/js/routes/hunt-bundled.js
+
+# Project-specific documentation for AI assistants
+CLAUDE.md

@@ -21,6 +21,8 @@ routes.push({ path: '/case/:id', name: 'case', component: {
   data() { return {
     i18n: this.$root.i18n,
     caseObj: {},
+    guidedAnalysisMetadata: null,
+    hasGuidedAnalysis: false,
     associations: {
       comments: [],
       attachments: [],
@@ -271,6 +273,8 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       this.reloadAssociation("evidence");
       this.reloadAssociation("events");
       this.reloadAssociation("history");
+      
+      // Don't use setTimeout - wait for comments to actually load
     },
     async reloadAssociation(association, showLoadingIndicator = false) {
       if (showLoadingIndicator) this.$root.startLoading();
@@ -308,6 +312,15 @@ routes.push({ path: '/case/:id', name: 'case', component: {
           }
 
           this.$root.batchLookup(batch, this);
+        }
+        
+        // After loading comments, check for guided analysis metadata
+        if (association === 'comments' && this.hasGuidedAnalysis) {
+          const metadata = this.extractGuidedAnalysisFromComments();
+          if (metadata) {
+            this.guidedAnalysisMetadata = {...this.guidedAnalysisMetadata, ...metadata};
+            console.log('Extracted guided analysis metadata from comments:', metadata);
+          }
         }
       } catch (error) {
         this.$root.showError(error);
@@ -489,6 +502,51 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       this.addMRUCaseObj(caseObj);
       this.$root.setSubtitle(this.i18n.case + " - " + caseObj.title);
       this.caseObj = caseObj;
+      
+      // Check if this case has guided analysis
+      this.checkForGuidedAnalysis();
+    },
+    
+    checkForGuidedAnalysis() {
+      // Check if case has guided-analysis tag
+      if (this.caseObj.tags && this.caseObj.tags.includes('guided-analysis')) {
+        this.hasGuidedAnalysis = true;
+        
+        // Extract metadata from tags
+        const primaryEventTag = this.caseObj.tags.find(t => t.startsWith('primary-event:'));
+        const ruleTag = this.caseObj.tags.find(t => t.startsWith('rule:'));
+        const queriesTag = this.caseObj.tags.find(t => t.startsWith('queries:'));
+        
+        if (primaryEventTag || ruleTag || queriesTag) {
+          this.guidedAnalysisMetadata = {
+            primaryEventId: primaryEventTag ? primaryEventTag.split(':')[1] : null,
+            ruleName: ruleTag ? ruleTag.substring(5) : null,
+            queryCount: queriesTag ? parseInt(queriesTag.split(':')[1]) : 0
+          };
+        }
+      }
+    },
+    
+    extractGuidedAnalysisFromComments() {
+      // Look for guided analysis metadata in comments
+      if (!this.associations.comments || this.associations.comments.length === 0) {
+        return null;
+      }
+      
+      for (let comment of this.associations.comments) {
+        if (comment.description && comment.description.includes('## Guided Analysis Metadata')) {
+          // Extract JSON from markdown code block
+          const jsonMatch = comment.description.match(/```json\n([\s\S]*?)\n```/);
+          if (jsonMatch) {
+            try {
+              return JSON.parse(jsonMatch[1]);
+            } catch (e) {
+              console.error('Failed to parse guided analysis metadata:', e);
+            }
+          }
+        }
+      }
+      return null;
     },
 
     prepareModifyForm(obj) {

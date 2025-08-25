@@ -25,6 +25,24 @@
 			<div class="d-block d-md-none">
 				<h2>{{ i18n.description }}</h2>
 			</div>
+			
+			<!-- Guided Analysis Indicator -->
+			<div v-if="hasGuidedAnalysis" class="mb-3">
+				<v-alert type="info" variant="tonal" density="compact" class="mb-3">
+					<div class="d-flex align-center">
+						<v-icon class="mr-2">fa-magic</v-icon>
+						<strong>Guided Analysis Case</strong>
+						<v-spacer></v-spacer>
+						<v-chip v-if="guidedAnalysisMetadata && guidedAnalysisMetadata.queryCount" size="small" color="primary">
+							{{ guidedAnalysisMetadata.queryCount }} queries executed
+						</v-chip>
+					</div>
+					<div v-if="guidedAnalysisMetadata && guidedAnalysisMetadata.ruleName" class="mt-2 text-body-2">
+						Rule: {{ guidedAnalysisMetadata.ruleName }}
+					</div>
+				</v-alert>
+			</div>
+			
 			<div class="mb-6 mb-md-3">
 				<div tabindex="0" class="clicktoedit d-flex align-start pa-2" v-if="!isEdit('case-description')" @click="startEdit('case-desc-input',  caseObj.description, 'case-description', 'description', modifyCase, [], true)"
 					@keypress.space.prevent="startEdit('case-desc-input',  caseObj.description, 'case-description', 'description', modifyCase, [], true)">
@@ -56,6 +74,10 @@
 					<v-tab id="case_commentsTab" value="comments" :class="{ 'theme-primary': activeTab === 'comments'}" data-aid="case_comments_tab">
 						<v-icon class="mr-2">fa-comments</v-icon>
 						<div class="d-none d-lg-block">{{ i18n.comments }}</div>
+					</v-tab>
+					<v-tab v-if="hasGuidedAnalysis" id="case_analysisTab" value="analysis" :class="{ 'theme-primary': activeTab === 'analysis'}" data-aid="case_analysis_tab">
+						<v-icon class="mr-2">fa-magic</v-icon>
+						<div class="d-none d-lg-block">Analysis</div>
 					</v-tab>
 					<v-tab id="case_attachmentTab" value="attachments" :class="{ 'theme-primary': activeTab === 'attachments'}" data-aid="case_attachments_tab">
 						<v-icon class="mr-2">fa-paperclip</v-icon>
@@ -232,6 +254,100 @@
 								</div>
 							</v-col>
 						</div>
+					</v-tabs-window-item>
+
+					<!-- Guided Analysis Tab -->
+					<v-tabs-window-item v-if="hasGuidedAnalysis" value="analysis" data-aid="case_analysis">
+						<v-row>
+							<v-col>
+								<div class="pa-4">
+									<h3 class="mb-4">
+										<v-icon class="mr-2">fa-magic</v-icon>
+										Guided Analysis Details
+									</h3>
+									
+									<div v-if="guidedAnalysisMetadata">
+										<!-- Summary Section -->
+										<v-card class="mb-4" variant="outlined">
+											<v-card-title class="text-h6">
+												<v-icon class="mr-2" size="small">fa-info-circle</v-icon>
+												Analysis Summary
+											</v-card-title>
+											<v-card-text>
+												<v-row>
+													<v-col cols="12" md="4">
+														<div class="text-body-2 text-medium-emphasis">Primary Event</div>
+														<div class="text-body-1">{{ guidedAnalysisMetadata.primaryEventId || 'N/A' }}</div>
+													</v-col>
+													<v-col cols="12" md="4">
+														<div class="text-body-2 text-medium-emphasis">Detection Rule</div>
+														<div class="text-body-1">{{ guidedAnalysisMetadata.ruleName || 'N/A' }}</div>
+													</v-col>
+													<v-col cols="12" md="4">
+														<div class="text-body-2 text-medium-emphasis">Queries Executed</div>
+														<div class="text-body-1">{{ guidedAnalysisMetadata.queryCount || 0 }}</div>
+													</v-col>
+												</v-row>
+												
+												<div v-if="guidedAnalysisMetadata.totalEventsFound" class="mt-3">
+													<div class="text-body-2 text-medium-emphasis">Total Related Events</div>
+													<div class="text-h6 primary--text">{{ guidedAnalysisMetadata.totalEventsFound }}</div>
+												</div>
+											</v-card-text>
+										</v-card>
+										
+										<!-- Query Results Section -->
+										<v-card v-if="guidedAnalysisMetadata.guidedAnalysisQueries && guidedAnalysisMetadata.guidedAnalysisQueries.length > 0" variant="outlined">
+											<v-card-title class="text-h6">
+												<v-icon class="mr-2" size="small">fa-search</v-icon>
+												Query Results
+											</v-card-title>
+											<v-card-text>
+												<v-expansion-panels variant="accordion">
+													<v-expansion-panel v-for="(query, index) in guidedAnalysisMetadata.guidedAnalysisQueries" :key="index">
+														<v-expansion-panel-title>
+															<div class="d-flex align-center justify-space-between" style="width: 100%;">
+																<span class="text-body-2">{{ query.description }}</span>
+																<v-chip size="small" :color="query.resultCount > 0 ? 'success' : 'default'" class="mr-4">
+																	{{ query.resultCount }} events
+																</v-chip>
+															</div>
+														</v-expansion-panel-title>
+														<v-expansion-panel-text>
+															<div class="pa-2">
+																<div class="text-body-2 mb-2">
+																	<strong>Query:</strong>
+																	<code class="d-block mt-1 pa-2 grey lighten-4">{{ query.convertedQuery || query.query }}</code>
+																</div>
+																<div v-if="query.range" class="text-body-2 mb-2">
+																	<strong>Time Range:</strong> {{ query.range }}
+																</div>
+																<div v-if="query.eventIds && query.eventIds.length > 0" class="text-body-2">
+																	<strong>Event IDs:</strong>
+																	<div class="mt-1" style="max-height: 150px; overflow-y: auto;">
+																		<v-chip v-for="eventId in query.eventIds.slice(0, 10)" :key="eventId" size="x-small" class="ma-1">
+																			{{ eventId }}
+																		</v-chip>
+																		<span v-if="query.eventIds.length > 10" class="text-body-2 ml-2">
+																			... and {{ query.eventIds.length - 10 }} more
+																		</span>
+																	</div>
+																</div>
+															</div>
+														</v-expansion-panel-text>
+													</v-expansion-panel>
+												</v-expansion-panels>
+											</v-card-text>
+										</v-card>
+									</div>
+									
+									<!-- No metadata fallback -->
+									<v-alert v-else type="info" variant="tonal">
+										Guided analysis metadata is being loaded. Check the comments section for detailed analysis data.
+									</v-alert>
+								</div>
+							</v-col>
+						</v-row>
 					</v-tabs-window-item>
 
 					<v-tabs-window-item value="attachments" data-aid="case_attachments">

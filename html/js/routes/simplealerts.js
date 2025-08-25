@@ -703,7 +703,7 @@ const simpleAlertsComponent = {
         const isHostBased = !sourceIp && !destIp;
         
         return {
-          id: event.id,
+          id: data['soc_id'] || event.id,  // Prefer soc_id if available
           timestamp: event.timestamp,
           ruleName: ruleName,
           ruleUuid: data['rule.uuid'],
@@ -758,7 +758,11 @@ const simpleAlertsComponent = {
       }
     },
     
-    escalateAlert(alert) {
+    async escalateAlert(alert) {
+      console.log('Escalating alert:', alert);
+      console.log('Alert has ruleUuid:', alert.ruleUuid);
+      console.log('Current selectedAlertDetails:', this.selectedAlertDetails);
+      
       this.selectedAlert = alert;
       this.actionType = 'escalate';
       this.actionTitle = 'Escalate to Case';
@@ -782,22 +786,319 @@ const simpleAlertsComponent = {
         this.caseDescription = `Alert from ${alert.sourceIp || 'unknown'} to ${alert.destIp || 'unknown'}`;
       }
       
-      this.actionDialog = true;
+      // Check if we need to load guided analysis for this alert
+      if (alert.ruleUuid && (!this.selectedAlertDetails || this.selectedAlertDetails.id !== alert.id || !this.selectedAlertDetails.playbooks)) {
+        console.log('Loading guided analysis for escalation for rule UUID:', alert.ruleUuid);
+        this.actionDialog = true;
+        this.actionLoading = true;
+        
+        try {
+          // Load the guided analysis in the background
+          await this.loadGuidedAnalysisForAlert(alert);
+          this.actionLoading = false;
+          console.log('Guided analysis loaded, playbooks:', this.selectedAlertDetails?.playbooks);
+        } catch (error) {
+          console.error('Failed to load guided analysis:', error);
+          this.actionLoading = false;
+          // Continue with escalation without guided analysis
+        }
+      } else {
+        if (!alert.ruleUuid) {
+          console.log('Alert does not have ruleUuid, cannot load guided analysis');
+        } else if (this.selectedAlertDetails && this.selectedAlertDetails.id === alert.id && this.selectedAlertDetails.playbooks) {
+          console.log('Guided analysis already loaded for this alert');
+        }
+        this.actionDialog = true;
+      }
+    },
+    
+    async loadGuidedAnalysisForAlert(alert) {
+      // Load guided analysis/playbook data for an alert without opening the detail popup
+      if (!alert.ruleUuid) {
+        return;
+      }
+      
+      console.log('Loading guided analysis for alert ID:', alert.id, 'Rule UUID:', alert.ruleUuid);
+      
+      try {
+        // Try multiple search approaches - same logic as showAlertDetails
+        let queries = [];
+        
+        // For IDs that look like Elasticsearch document IDs (alphanumeric without underscores)
+        // Try _id first, which is what most alerts use
+        if (alert.id && alert.id.match(/^[a-zA-Z0-9]+$/)) {
+          queries.push(`_id:"${alert.id}"`);
+          queries.push(`soc_id:"${alert.id}"`);
+        } else if (alert.id && alert.id.includes('_')) {
+          // IDs with underscores are typically soc_id format
+          queries.push(`soc_id:"${alert.id}"`);
+          queries.push(`_id:"${alert.id}"`);
+        } else {
+          // Default fallback - try both
+          queries.push(`_id:"${alert.id}"`);
+          queries.push(`soc_id:"${alert.id}"`);
+        }
+        
+        let eventResponse = null;
+        
+        // Try each query until we find the event
+        for (const query of queries) {
+          console.log('Trying search with query:', query);
+          
+          const params = new URLSearchParams({
+            query: query,
+            range: this.getDateRange(),
+            format: '2006/01/02 3:04:05 PM',
+            zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            metricLimit: '0',
+            eventLimit: '1'
+          });
+          
+          const response = await this.$root.papi.get('events/?' + params.toString());
+          
+          if (response && response.data && response.data.events && response.data.events.length > 0) {
+            eventResponse = response;
+            
+            // Log which field type successfully found the event
+            if (query.startsWith('_id:')) {
+              console.log('✅ [GuidedAnalysis] Successfully found event using _id field');
+              console.log('   Alert ID format:', alert.id);
+              console.log('   Full query:', query);
+            } else if (query.startsWith('soc_id:')) {
+              console.log('✅ [GuidedAnalysis] Successfully found event using soc_id field');
+              console.log('   Alert ID format:', alert.id);
+              console.log('   Full query:', query);
+            }
+            break;
+          } else {
+            // Log failed attempts for debugging
+            if (query.startsWith('_id:')) {
+              console.log('❌ [GuidedAnalysis] No event found with _id field:', alert.id);
+            } else if (query.startsWith('soc_id:')) {
+              console.log('❌ [GuidedAnalysis] No event found with soc_id field:', alert.id);
+            }
+          }
+        }
+        
+        if (!eventResponse || !eventResponse.data || !eventResponse.data.events || eventResponse.data.events.length === 0) {
+          console.error('Could not fetch full event details for alert after trying queries:', queries);
+          console.error('Alert ID:', alert.id);
+          
+          // Try alternative: Just use the alert data we have
+          console.log('Attempting to load playbook without full event details');
+          console.log('Available alert data for substitution:', alert.rawData);
+          
+          // Still try to load the playbook even without full event details
+          const playbookResponse = await this.$root.papi.get(`/playbook/detection/${alert.ruleUuid}`);
+          
+          if (playbookResponse && playbookResponse.data) {
+            const playbooks = playbookResponse.data;
+            
+            // Process playbook questions with limited data
+            for (let pb of playbooks) {
+              for (let question of pb.questions) {
+                // Use alert.rawData if available for variable substitution
+                let filledQuery = question.query;
+                let hasUnresolvedVariables = false;
+                
+                // Support both {{variable}} and {variable} syntax
+                const variablePatterns = [
+                  /\{\{([^}]+)\}\}/g,  // {{variable}}
+                  /\{([^}]+)\}/g        // {variable}
+                ];
+                
+                for (const pattern of variablePatterns) {
+                  let match;
+                  pattern.lastIndex = 0; // Reset regex
+                  
+                  while ((match = pattern.exec(question.query)) !== null) {
+                    const variable = match[1].trim();
+                    // Try multiple locations for the value, including source/destination IPs
+                    let value = alert.rawData?.[variable] || 
+                                alert[variable] ||
+                                alert.rawData?.[`event.${variable}`] ||
+                                alert[`event.${variable}`];
+                    
+                    // Special mappings for common fields
+                    if (!value) {
+                      if (variable === 'source.ip' && alert.sourceIp) {
+                        value = alert.sourceIp;
+                      } else if (variable === 'destination.ip' && alert.destIp) {
+                        value = alert.destIp;
+                      } else if (variable === 'soc_id' && alert.id) {
+                        value = alert.id;
+                      } else if (variable === '_id' && alert.id) {
+                        value = alert.id;
+                      }
+                    }
+                    
+                    if (value) {
+                      filledQuery = filledQuery.replace(match[0], value);
+                    } else {
+                      console.warn(`Variable ${variable} not found in alert data - marking query as incomplete`);
+                      hasUnresolvedVariables = true;
+                    }
+                  }
+                }
+                
+                // Only set filledQuery if all variables were resolved
+                if (!hasUnresolvedVariables) {
+                  question.filledQuery = filledQuery;
+                } else {
+                  question.filledQuery = null; // Mark as unresolvable
+                  question.skipExecution = true; // Flag to skip execution
+                }
+              }
+            }
+            
+            // Initialize selectedAlertDetails if needed
+            if (!this.selectedAlertDetails || this.selectedAlertDetails.id !== alert.id) {
+              this.selectedAlertDetails = {
+                ...alert,
+                playbooks: null,
+                playbookLoading: true,
+                playbookError: false
+              };
+            }
+            
+            // Convert and execute queries with limited event data
+            await this.convertPlaybookQueries(playbooks);
+            
+            // Create a minimal event object for query execution
+            const minimalEvent = {
+              id: alert.id,
+              timestamp: alert.timestamp,
+              payload: alert.rawData || {}
+            };
+            
+            await this.executePlaybookQueries(playbooks, minimalEvent);
+            
+            this.selectedAlertDetails.playbooks = playbooks;
+            this.selectedAlertDetails.playbookError = false;
+            this.selectedAlertDetails.playbookLoading = false;
+            
+            console.log('Guided analysis loaded with limited data');
+          }
+          
+          return;
+        }
+        
+        const fullEvent = eventResponse.data.events[0];
+        
+        // Initialize selectedAlertDetails if needed
+        if (!this.selectedAlertDetails || this.selectedAlertDetails.id !== alert.id) {
+          this.selectedAlertDetails = {
+            ...alert,
+            playbooks: null,
+            playbookLoading: true,
+            playbookError: false
+          };
+        }
+        
+        // Fetch playbook/guided analysis data
+        const playbookResponse = await this.$root.papi.get(`/playbook/detection/${alert.ruleUuid}`);
+        
+        if (playbookResponse && playbookResponse.data) {
+          const playbooks = playbookResponse.data;
+          
+          // Process playbook questions - variable substitution
+          for (let pb of playbooks) {
+            for (let question of pb.questions) {
+              // Attempt to substitute any variables in the query
+              let filledQuery = question.query;
+              let hasUnresolvedVariables = false;
+              
+              // Support both {{variable}} and {variable} syntax
+              const variablePatterns = [
+                /\{\{([^}]+)\}\}/g,  // {{variable}}
+                /\{([^}]+)\}/g        // {variable}
+              ];
+              
+              for (const pattern of variablePatterns) {
+                let match;
+                pattern.lastIndex = 0; // Reset regex
+                
+                while ((match = pattern.exec(question.query)) !== null) {
+                  const variable = match[1].trim();
+                  // Try multiple locations for the value
+                  let value = fullEvent.payload?.[variable] || 
+                              fullEvent[variable] ||
+                              alert.rawData?.[variable] ||
+                              alert[variable];
+                  
+                  // Special mappings for common fields
+                  if (!value) {
+                    if (variable === 'source.ip' && alert.sourceIp) {
+                      value = alert.sourceIp;
+                    } else if (variable === 'destination.ip' && alert.destIp) {
+                      value = alert.destIp;
+                    } else if (variable === 'soc_id' && (fullEvent.id || alert.id)) {
+                      value = fullEvent.id || alert.id;
+                    } else if (variable === '_id' && (fullEvent.id || alert.id)) {
+                      value = fullEvent.id || alert.id;
+                    }
+                  }
+                  
+                  if (value) {
+                    filledQuery = filledQuery.replace(match[0], value);
+                  } else {
+                    console.warn(`Variable ${variable} not found in event data - marking query as incomplete`);
+                    hasUnresolvedVariables = true;
+                  }
+                }
+              }
+              
+              // Only set filledQuery if all variables were resolved
+              if (!hasUnresolvedVariables) {
+                question.filledQuery = filledQuery;
+              } else {
+                question.filledQuery = null; // Mark as unresolvable
+                question.skipExecution = true; // Flag to skip execution
+              }
+            }
+          }
+          
+          // Convert queries to OQL format
+          await this.convertPlaybookQueries(playbooks);
+          
+          // Execute queries and get answers
+          await this.executePlaybookQueries(playbooks, fullEvent);
+          
+          this.selectedAlertDetails.playbooks = playbooks;
+          this.selectedAlertDetails.playbookError = false;
+          this.selectedAlertDetails.playbookLoading = false;
+          
+          console.log('Guided analysis loaded successfully for escalation');
+        }
+      } catch (error) {
+        console.error('Failed to load guided analysis:', error);
+        if (this.selectedAlertDetails) {
+          this.selectedAlertDetails.playbookError = true;
+          this.selectedAlertDetails.playbookLoading = false;
+        }
+      }
     },
     
     collectGuidedAnalysisEvents(playbooks) {
       // Collect all event IDs from guided analysis/playbook query results
       const eventIds = new Set();
       const metadata = [];
+      let skippedQueries = 0;
       
       if (!playbooks || playbooks.length === 0) {
-        return { eventIds: [], metadata: [] };
+        return { eventIds: [], metadata: [], skippedQueries: 0 };
       }
       
       for (let pb of playbooks) {
         const questions = pb.sortedQuestions || pb.questions || [];
         
         for (let question of questions) {
+          // Track skipped queries
+          if (question.skipExecution || question.error === 'Unresolved variables' || question.error === 'Query could not be prepared') {
+            skippedQueries++;
+            continue;
+          }
+          
           if (question.answers && question.answers.length > 0) {
             // Track metadata about this query
             const queryMetadata = {
@@ -811,17 +1112,23 @@ const simpleAlertsComponent = {
             
             // Extract event IDs from answers
             for (let answer of question.answers) {
-              // Check different possible ID field locations
-              const eventId = answer.id || 
-                             answer._id || 
-                             answer.payload?.id || 
-                             answer.payload?._id ||
-                             answer['soc_id'] ||
-                             answer.payload?.['soc_id'];
+              // The answer is the event object, look for soc_id in the payload
+              let eventId = null;
+              
+              if (answer.payload) {
+                // Event data is in payload
+                eventId = answer.payload['soc_id'] || answer.payload.soc_id;
+              } else {
+                // Event data might be directly in answer
+                eventId = answer['soc_id'] || answer.soc_id || answer.id || answer._id;
+              }
               
               if (eventId) {
                 eventIds.add(eventId);
                 queryMetadata.eventIds.push(eventId);
+                console.log(`Found event ID from guided analysis: ${eventId}`);
+              } else {
+                console.log('Could not extract event ID from answer:', answer);
               }
             }
             
@@ -832,8 +1139,70 @@ const simpleAlertsComponent = {
       
       return {
         eventIds: Array.from(eventIds),
-        metadata: metadata
+        metadata: metadata,
+        skippedQueries: skippedQueries
       };
+    },
+    
+    async attachEventsToCase(caseId, eventIds) {
+      // Helper function to attach events to a case
+      if (!caseId || !eventIds || eventIds.length === 0) {
+        console.log('No events to attach to case');
+        return;
+      }
+      
+      console.log(`Attempting to attach ${eventIds.length} events to case ${caseId}:`, eventIds);
+      
+      try {
+        let attachedCount = 0;
+        let failedCount = 0;
+        
+        // Process events one by one for better error handling
+        for (const eventId of eventIds) {
+          if (!eventId) {
+            console.warn('Skipping null/undefined event ID');
+            continue;
+          }
+          
+          try {
+            const attachPayload = {
+              caseId: caseId,
+              fields: {
+                'soc_id': eventId
+              },
+              acknowledged: false,
+              escalated: false,  // Don't mark as escalated since we want to search for all matching events
+              dateRange: this.getDateRange(),
+              dateRangeFormat: '2006/01/02 3:04:05 PM',
+              timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            };
+            
+            console.log(`Attaching event ${eventId} with payload:`, attachPayload);
+            const response = await this.$root.papi.post('case/events', attachPayload);
+            
+            if (response && response.data) {
+              console.log(`Response for event ${eventId}:`, response.data);
+              attachedCount++;
+            }
+          } catch (eventError) {
+            console.error(`Failed to attach event ${eventId}:`, eventError);
+            if (eventError.response) {
+              console.error('Error response:', eventError.response.data);
+            }
+            failedCount++;
+            // Continue with other events
+          }
+        }
+        
+        console.log(`Event attachment complete: ${attachedCount} succeeded, ${failedCount} failed out of ${eventIds.length} total`);
+        
+        if (attachedCount > 0) {
+          this.$root.showTip(`Attached ${attachedCount} events to case`);
+        }
+      } catch (error) {
+        console.error('Failed to attach events to case:', error);
+        // Non-critical error, continue
+      }
     },
     
     buildEnrichedDescription(alert, guidedAnalysisData) {
@@ -862,21 +1231,26 @@ const simpleAlertsComponent = {
       description += `\nTimestamp: ${alert.timestamp}`;
       
       // Add guided analysis summary if available
-      if (guidedAnalysisData && guidedAnalysisData.metadata.length > 0) {
-        description += '\n\n## Guided Analysis Results';
-        description += `\n- Queries executed: ${guidedAnalysisData.metadata.length}`;
-        description += `\n- Related events found: ${guidedAnalysisData.eventIds.length}`;
-        
-        // Add brief summary of queries that found results
-        const queriesWithResults = guidedAnalysisData.metadata.filter(m => m.resultCount > 0);
-        if (queriesWithResults.length > 0) {
-          description += '\n\n### Queries with findings:';
-          for (let query of queriesWithResults.slice(0, 5)) { // Limit to first 5 for brevity
-            description += `\n- ${query.description}: ${query.resultCount} events`;
+      if (guidedAnalysisData) {
+        if (guidedAnalysisData.metadata.length > 0) {
+          description += '\n\n## Guided Analysis Results';
+          description += `\n- Queries executed: ${guidedAnalysisData.metadata.length}`;
+          description += `\n- Related events found: ${guidedAnalysisData.eventIds.length}`;
+          
+          // Add brief summary of queries that found results
+          const queriesWithResults = guidedAnalysisData.metadata.filter(m => m.resultCount > 0);
+          if (queriesWithResults.length > 0) {
+            description += '\n\n### Queries with findings:';
+            for (let query of queriesWithResults.slice(0, 5)) { // Limit to first 5 for brevity
+              description += `\n- ${query.description}: ${query.resultCount} events`;
+            }
+            if (queriesWithResults.length > 5) {
+              description += `\n- ... and ${queriesWithResults.length - 5} more queries`;
+            }
           }
-          if (queriesWithResults.length > 5) {
-            description += `\n- ... and ${queriesWithResults.length - 5} more queries`;
-          }
+        } else if (guidedAnalysisData.skippedQueries > 0) {
+          description += '\n\n## Guided Analysis';
+          description += `\nNote: ${guidedAnalysisData.skippedQueries} queries could not be executed due to missing field data.`;
         }
       }
       
@@ -962,7 +1336,12 @@ const simpleAlertsComponent = {
             events: alertIds
           };
           
-          await this.$root.papi.post('case', caseData);
+          const caseResponse = await this.$root.papi.post('case', caseData);
+          
+          // Attach events to the case
+          if (caseResponse && caseResponse.data && caseResponse.data.id) {
+            await this.attachEventsToCase(caseResponse.data.id, alertIds);
+          }
           
           // Update all alert statuses using bulk API
           await this.updateAlertStatuses(alertIds, 'escalated');
@@ -982,7 +1361,12 @@ const simpleAlertsComponent = {
             events: alertIds
           };
           
-          await this.$root.papi.post('case', caseData);
+          const caseResponse = await this.$root.papi.post('case', caseData);
+          
+          // Attach events to the case
+          if (caseResponse && caseResponse.data && caseResponse.data.id) {
+            await this.attachEventsToCase(caseResponse.data.id, alertIds);
+          }
           
           // Update all alert statuses using bulk API
           await this.updateAlertStatuses(alertIds, 'escalated');
@@ -1002,7 +1386,12 @@ const simpleAlertsComponent = {
             events: alertIds
           };
           
-          await this.$root.papi.post('case', caseData);
+          const caseResponse = await this.$root.papi.post('case', caseData);
+          
+          // Attach events to the case
+          if (caseResponse && caseResponse.data && caseResponse.data.id) {
+            await this.attachEventsToCase(caseResponse.data.id, alertIds);
+          }
           
           // Update all alert statuses using bulk API
           await this.updateAlertStatuses(alertIds, 'escalated');
@@ -1011,17 +1400,35 @@ const simpleAlertsComponent = {
           this.clearSelection();
         } else if (this.actionType === 'escalate') {
           // Single escalate with guided analysis integration
+          console.log('Confirming escalation for alert:', this.selectedAlert);
+          console.log('selectedAlertDetails:', this.selectedAlertDetails);
+          
           let allEventIds = [this.selectedAlert.id];
           let guidedAnalysisData = null;
           
           // Check if we have guided analysis data available
           if (this.selectedAlertDetails && this.selectedAlertDetails.playbooks) {
+            console.log('Found playbooks, collecting guided analysis events');
             guidedAnalysisData = this.collectGuidedAnalysisEvents(this.selectedAlertDetails.playbooks);
+            console.log('Guided analysis data collected:', guidedAnalysisData);
             
             // Add guided analysis event IDs to the case
             if (guidedAnalysisData.eventIds.length > 0) {
-              allEventIds = [this.selectedAlert.id, ...guidedAnalysisData.eventIds];
-              console.log(`Including ${guidedAnalysisData.eventIds.length} guided analysis events in case`);
+              // Ensure we don't duplicate the primary alert ID
+              const uniqueEventIds = new Set([this.selectedAlert.id]);
+              guidedAnalysisData.eventIds.forEach(id => uniqueEventIds.add(id));
+              allEventIds = Array.from(uniqueEventIds);
+              console.log(`Including ${allEventIds.length} total events in case (primary + ${guidedAnalysisData.eventIds.length} from guided analysis)`);
+              console.log('Event IDs to attach:', allEventIds);
+            } else {
+              console.log('No event IDs found in guided analysis results');
+            }
+          } else {
+            console.log('No guided analysis data available for this alert');
+            if (!this.selectedAlertDetails) {
+              console.log('selectedAlertDetails is null/undefined');
+            } else if (!this.selectedAlertDetails.playbooks) {
+              console.log('selectedAlertDetails.playbooks is null/undefined');
             }
           }
           
@@ -1035,13 +1442,17 @@ const simpleAlertsComponent = {
             description: enrichedDescription,
             severity: this.selectedAlert.severityLabel,
             status: 'new',
-            events: allEventIds,
             tags: guidedAnalysisData && guidedAnalysisData.eventIds.length > 0 ? 
               ['guided-analysis', `primary-event:${this.selectedAlert.id}`, `rule:${this.selectedAlert.ruleName}`, `queries:${guidedAnalysisData.metadata.length}`] : 
               [`rule:${this.selectedAlert.ruleName}`]
           };
           
           const caseResponse = await this.$root.papi.post('case', caseData);
+          
+          // Attach events to the case using the helper function
+          if (caseResponse && caseResponse.data && caseResponse.data.id) {
+            await this.attachEventsToCase(caseResponse.data.id, allEventIds);
+          }
           
           // Store detailed metadata as comment if we have guided analysis data
           if (guidedAnalysisData && guidedAnalysisData.metadata.length > 0 && caseResponse && caseResponse.data && caseResponse.data.id) {
@@ -1316,25 +1727,90 @@ const simpleAlertsComponent = {
     },
     
     async showAlertDetails(alert) {
+      console.log('showAlertDetails called with alert:', alert);
       // Reset show rule state
       this.showDetailedRule = false;
       
       // First, set the selected alert details
       this.selectedAlertDetails = alert;
+      console.log('Initial selectedAlertDetails set to:', this.selectedAlertDetails);
       
       try {
-        // Fetch the full alert with all fields using the regular view (not simple)
-        const params = new URLSearchParams({
-          query: `_id:"${alert.id}"`,
-          range: this.getDateRange(),
-          format: '2006/01/02 3:04:05 PM',
-          zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          metricLimit: '0',
-          eventLimit: '1'
-          // Note: NOT using view=simple here to get all fields
-        });
+        // Try multiple search approaches - first try _id, then soc_id as fallback
+        let queries = [];
         
-        const response = await this.$root.papi.get('events/?' + params.toString());
+        // For IDs that look like Elasticsearch document IDs (alphanumeric without underscores)
+        // Try _id first, which is what most alerts use
+        if (alert.id && alert.id.match(/^[a-zA-Z0-9]+$/)) {
+          queries.push(`_id:"${alert.id}"`);
+          queries.push(`soc_id:"${alert.id}"`);
+        } else if (alert.id && alert.id.includes('_')) {
+          // IDs with underscores are typically soc_id format
+          queries.push(`soc_id:"${alert.id}"`);
+          queries.push(`_id:"${alert.id}"`);
+        } else {
+          // Default fallback - try both
+          queries.push(`_id:"${alert.id}"`);
+          queries.push(`soc_id:"${alert.id}"`);
+        }
+        
+        let response = null;
+        let successfulQuery = null;
+        
+        // Try each query until we find the event
+        for (const query of queries) {
+          console.log('Trying search with query:', query);
+          
+          const params = new URLSearchParams({
+            query: query,
+            range: this.getDateRange(),
+            format: '2006/01/02 3:04:05 PM',
+            zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            metricLimit: '0',
+            eventLimit: '1'
+            // Note: NOT using view=simple here to get all fields
+          });
+          
+          const searchResponse = await this.$root.papi.get('events/?' + params.toString());
+          
+          if (searchResponse && searchResponse.data && searchResponse.data.events && searchResponse.data.events.length > 0) {
+            response = searchResponse;
+            successfulQuery = query;
+            
+            // Log which field type successfully found the event
+            if (query.startsWith('_id:')) {
+              console.log('✅ Successfully found event using _id field');
+              console.log('   Alert ID format:', alert.id);
+              console.log('   Full query:', query);
+            } else if (query.startsWith('soc_id:')) {
+              console.log('✅ Successfully found event using soc_id field');
+              console.log('   Alert ID format:', alert.id);
+              console.log('   Full query:', query);
+            }
+            break;
+          } else {
+            // Log failed attempts for debugging
+            if (query.startsWith('_id:')) {
+              console.log('❌ No event found with _id field:', alert.id);
+            } else if (query.startsWith('soc_id:')) {
+              console.log('❌ No event found with soc_id field:', alert.id);
+            }
+          }
+        }
+        
+        // Log summary for documentation
+        if (successfulQuery) {
+          console.log('===========================================');
+          console.log('📝 SEARCH PATTERN DOCUMENTATION:');
+          console.log('   ID Pattern:', alert.id);
+          console.log('   ID Format:', alert.id.match(/^[a-zA-Z0-9]+$/) ? 'Alphanumeric (no underscores)' : 
+                                     alert.id.includes('_') ? 'Contains underscores' : 'Other format');
+          console.log('   Successful Field:', successfulQuery.startsWith('_id:') ? '_id' : 'soc_id');
+          console.log('   Successful Query:', successfulQuery);
+          console.log('===========================================');
+        }
+        
+        console.log('Final event search response:', response?.data);
         
         if (response && response.data && response.data.events && response.data.events.length > 0) {
           const fullEvent = response.data.events[0];
@@ -1457,12 +1933,25 @@ const simpleAlertsComponent = {
                     // Simple query variable substitution
                     let query = question.query;
                     
-                    // Replace variables with values from the event
-                    const variables = query.match(/\{([^}]+)\}/g) || [];
-                    for (const variable of variables) {
-                      const fieldName = variable.slice(1, -1); // Remove { and }
-                      const value = this.selectedAlertDetails.rawData[fieldName] || 'NODATA';
-                      query = query.replace(variable, value);
+                    // Support both {{variable}} and {variable} syntax
+                    const variablePatterns = [
+                      /\{\{([^}]+)\}\}/g,  // {{variable}}
+                      /\{([^}]+)\}/g        // {variable}
+                    ];
+                    
+                    for (const pattern of variablePatterns) {
+                      let match;
+                      pattern.lastIndex = 0; // Reset regex
+                      
+                      while ((match = pattern.exec(question.query)) !== null) {
+                        const fieldName = match[1].trim();
+                        // Try to find the value in multiple places
+                        const value = this.selectedAlertDetails.rawData?.[fieldName] || 
+                                    this.selectedAlertDetails[fieldName] ||
+                                    fullData[fieldName] ||
+                                    'NODATA';
+                        query = query.replace(match[0], value);
+                      }
                     }
                     
                     question.filledQuery = query;
@@ -1485,6 +1974,24 @@ const simpleAlertsComponent = {
               this.selectedAlertDetails.playbookLoading = false;
             }
           }
+        } else {
+          console.warn('No event found after trying queries:', queries);
+          console.log('Using basic alert data without enrichment');
+          console.log('Alert object available fields:', Object.keys(alert));
+          
+          // Still set up the dialog with what we have
+          // Make sure to preserve all the alert data we do have
+          this.selectedAlertDetails = {
+            ...alert,
+            rawData: alert.rawData || alert || {},
+            ruleText: alert.ruleText || '',
+            sourceGeo: null,
+            destGeo: null,
+            aiSummary: null,
+            playbooks: null,
+            playbookLoading: false,
+            playbookError: false
+          };
         }
       } catch (error) {
         console.error('Failed to fetch full alert details:', error);
@@ -1496,6 +2003,8 @@ const simpleAlertsComponent = {
         };
       }
       
+      console.log('Final selectedAlertDetails before opening dialog:', this.selectedAlertDetails);
+      console.log('Opening details dialog...');
       this.detailsDialog = true;
     },
     
@@ -1512,7 +2021,7 @@ const simpleAlertsComponent = {
       // Validate timestamp
       if (!alert.timestamp) {
         // If no timestamp, just search by ID without time range
-        const query = `_id:"${alert.id}"`;
+        const query = `soc_id:"${alert.id}"`;
         return `#/hunt?q=${encodeURIComponent(query)}`;
       }
       
@@ -1522,7 +2031,7 @@ const simpleAlertsComponent = {
       // Check if the date is valid
       if (isNaN(alertTime.getTime())) {
         // Invalid date, search without time range
-        const query = `_id:"${alert.id}"`;
+        const query = `soc_id:"${alert.id}"`;
         return `#/hunt?q=${encodeURIComponent(query)}`;
       }
       
@@ -1534,7 +2043,7 @@ const simpleAlertsComponent = {
       const end = endTime.toISOString();
       
       // Search by alert ID
-      const query = `_id:"${alert.id}"`;
+      const query = `soc_id:"${alert.id}"`;
       
       // Include time range in the URL
       return `#/hunt?q=${encodeURIComponent(query)}&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&t=custom`;
@@ -1586,6 +2095,12 @@ const simpleAlertsComponent = {
     async executePlaybookQueries(playbooks, event) {
       for (let pb of playbooks) {
         for (let question of pb.questions) {
+          // Skip questions that couldn't be resolved
+          if (question.skipExecution) {
+            console.log('Skipping question due to unresolved variables:', question.description);
+            question.error = 'Unresolved variables';
+            continue;
+          }
           await this.askQuestion(question, event);
         }
       }
@@ -1621,6 +2136,13 @@ const simpleAlertsComponent = {
     },
     
     async askQuestion(question, event) {
+      // Skip if no filled query available
+      if (!question.filledOQL) {
+        console.log('Skipping question - no OQL query available:', question.description);
+        question.error = 'Query could not be prepared';
+        return;
+      }
+      
       if (question.range) {
         // Query with a time range
         if (question.filledOQL) {

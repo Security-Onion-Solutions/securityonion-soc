@@ -3,7 +3,7 @@
      https://securityonion.net/license; you may not use this file except in compliance with the
      Elastic License 2.0. -->
 
-<div>
+<div id="page-simple-alerts">
   <!-- Alert Filters -->
   <v-card class="mb-4">
     <v-card-text>
@@ -613,7 +613,15 @@
     <v-card>
       <v-card-title>{{ actionTitle }}</v-card-title>
       <v-card-text>
-        <div v-if="actionType && actionType.includes('escalate')">
+        <div v-if="actionLoading && actionType === 'escalate'">
+          <v-progress-linear indeterminate color="primary" class="mb-3"></v-progress-linear>
+          <div class="text-center">
+            <v-icon class="mb-2">fa-magic</v-icon>
+            <div>Loading guided analysis data...</div>
+            <div class="text-caption">This may take a few moments</div>
+          </div>
+        </div>
+        <div v-else-if="actionType && actionType.includes('escalate')">
           <v-text-field
             v-model="caseTitle"
             label="Case Title"
@@ -628,6 +636,12 @@
             dense
             rows="3"
           ></v-textarea>
+          <div v-if="selectedAlertDetails && selectedAlertDetails.playbooks" class="mt-2">
+            <v-chip size="small" color="success">
+              <v-icon start size="small">fa-check</v-icon>
+              Guided analysis loaded
+            </v-chip>
+          </div>
         </div>
         <div v-else>
           {{ caseDescription || `Are you sure you want to ${actionType} this alert?` }}
@@ -680,7 +694,7 @@
               <v-icon>fa-arrow-left</v-icon>
             </v-btn>
             <div style="min-width: 0; overflow: hidden;">
-              <v-tooltip location="bottom" :disabled="!selectedAlertDetails || selectedAlertDetails.ruleName.length <= 80">
+              <v-tooltip location="bottom" :disabled="!selectedAlertDetails || !selectedAlertDetails.ruleName || selectedAlertDetails.ruleName.length <= 80">
                 <template v-slot:activator="{ props }">
                   <div v-bind="props" class="text-h5 font-weight-bold text-truncate">{{ selectedAlertDetails?.ruleName || 'Alert Details' }}</div>
                 </template>
@@ -782,6 +796,26 @@
             >
               <v-icon start size="small">fa-crosshairs</v-icon>
               Hunt
+            </v-btn>
+            <v-btn
+              v-if="!selectedAlertDetails.acknowledged"
+              @click="acknowledgeAlert(selectedAlertDetails); detailsDialog = false"
+              variant="outlined"
+              size="small"
+              color="success"
+            >
+              <v-icon start size="small">fa-check</v-icon>
+              Acknowledge
+            </v-btn>
+            <v-btn
+              v-if="!selectedAlertDetails.escalated"
+              @click="escalateAlert(selectedAlertDetails); detailsDialog = false"
+              variant="outlined"
+              size="small"
+              color="warning"
+            >
+              <v-icon start size="small">fa-arrow-up</v-icon>
+              Escalate
             </v-btn>
           </div>
         </div>
