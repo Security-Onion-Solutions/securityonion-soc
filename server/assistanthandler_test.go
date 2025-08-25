@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/rbac"
 	"github.com/security-onion-solutions/securityonion-soc/server/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
@@ -25,7 +26,9 @@ import (
 
 func TestPostChat(t *testing.T) {
 	// Create mock server
-	srv := &Server{}
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
 	ctrl := gomock.NewController(t)
 	mockManager := mock.NewMockAssistantManager(ctrl)
 	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
@@ -128,7 +131,9 @@ func TestPostChat(t *testing.T) {
 
 func TestPostChatWithoutHistory(t *testing.T) {
 	// Create mock server
-	srv := &Server{}
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
 	ctrl := gomock.NewController(t)
 	mockManager := mock.NewMockAssistantManager(ctrl)
 	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
@@ -193,6 +198,78 @@ func TestPostChatWithoutHistory(t *testing.T) {
 	// Verify the message content
 	assert.Equal(t, "user", capturedMessages[0].Role)
 	assert.Equal(t, "Hello", capturedMessages[0].ContentBlocks[0].Text)
+}
+
+func TestPostChatUnauthorized(t *testing.T) {
+	// Create mock server with unauthorized user
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: false},
+	}
+	ctrl := gomock.NewController(t)
+	mockManager := mock.NewMockAssistantManager(ctrl)
+	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
+	defer ctrl.Finish()
+
+	srv.AssistantManager = mockManager
+	srv.Assistantstore = mockAssistantStore
+
+	handler := NewAssistantHandler(srv)
+
+	// Test data
+	requestBody := map[string]any{
+		"msg": "Hello",
+	}
+
+	jsonBody, _ := json.Marshal(requestBody)
+	req := httptest.NewRequest("POST", "/assistant/chat", bytes.NewBuffer(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	// Add required context values
+	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "test-user-123")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	ctx = context.WithValue(ctx, web.ContextKeyRequestId, "test-request-123")
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+
+	// Execute the handler
+	handler.PostChat(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func TestGetBalance(t *testing.T) {
+	// Create mock server
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockManager := mock.NewMockAssistantManager(ctrl)
+	defer ctrl.Finish()
+
+	srv.AssistantManager = mockManager
+
+	handler := NewAssistantHandler(srv)
+
+	req := httptest.NewRequest("GET", "/assistant/balance", nil)
+
+	// Add required context values
+	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "test-user-123")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	ctx = context.WithValue(ctx, web.ContextKeyRequestId, "test-request-123")
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+
+	// Set up mock expectations
+	mockManager.EXPECT().Balance(gomock.Any()).Return(&model.BalanceResponse{Balance: 10000}, nil)
+
+	// Execute the handler
+	handler.GetBalance(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusOK, w.Code)
 }
 
 func TestUnstreamResponse(t *testing.T) {

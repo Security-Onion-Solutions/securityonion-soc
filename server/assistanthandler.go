@@ -46,9 +46,28 @@ func RegisterAssistantRoutes(srv *Server, r chi.Router, prefix string) {
 	})
 }
 
+// @Summary      Send Chat Message
+// @Description  Send a message to the AI assistant and receive a response. Supports both streaming (SSE) and non-streaming responses.
+// @Tags         Assistant
+// @Security     bearer[assistant/write_authored]
+// @Param        request  body  object{msg=string,sessionId=string} true "Chat message object with message text and optional session ID"
+// @Accept       json
+// @Produce      json,text/event-stream
+// @Success      200  {array}   model.Message "AI assistant response messages"
+// @Failure      400           "The provided input object or parameters are malformed or invalid"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /api/assistant/chat [post]
 func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
+
+	err := h.server.CheckAuthorized(ctx, "write_authored", "assistant")
+	if err != nil {
+		web.Respond(w, r, http.StatusUnauthorized, err)
+		return
+	}
 
 	accept := strings.TrimSpace(r.Header.Get("Accept"))
 	streaming := strings.EqualFold(accept, "text/event-stream")
@@ -59,7 +78,7 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tb := &TempBody{}
-	err := json.NewDecoder(r.Body).Decode(tb)
+	err = json.NewDecoder(r.Body).Decode(tb)
 	if err != nil {
 		logger.WithError(err).Error("unable to decode request body")
 		web.Respond(w, r, http.StatusBadRequest, err)
@@ -173,9 +192,29 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	}()
 }
 
+// @Summary      Execute Tool
+// @Description  Execute a tool on behalf of the assistant and continue the conversation with the result.
+// @Tags         Assistant
+// @Security     bearer[assistant/write_authored]
+// @Param        name     path  string              true  "Name of the tool to execute"
+// @Param        request  body  model.ToolRequest   true  "Tool execution request containing session ID, tool use ID, and parameters"
+// @Accept       json
+// @Produce      json,text/event-stream
+// @Success      200  {array}   model.Message "AI assistant response messages after tool execution"
+// @Failure      400           "The provided input object or parameters are malformed or invalid"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /api/assistant/tool/{name} [post]
 func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
+
+	err := h.server.CheckAuthorized(ctx, "write_authored", "assistant")
+	if err != nil {
+		web.Respond(w, r, http.StatusUnauthorized, err)
+		return
+	}
 
 	accept := strings.TrimSpace(r.Header.Get("Accept"))
 	streaming := strings.EqualFold(accept, "text/event-stream")
@@ -183,7 +222,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 	toolName := chi.URLParam(r, "name")
 	toolReq := &model.ToolRequest{}
 
-	err := json.NewDecoder(r.Body).Decode(&toolReq)
+	err = json.NewDecoder(r.Body).Decode(&toolReq)
 	if err != nil {
 		logger.WithError(err).Error("unable to decode request body")
 		web.Respond(w, r, http.StatusBadRequest, err)
@@ -305,9 +344,25 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 	}()
 }
 
+// @Summary      Get Assistant Balance
+// @Description  Retrieve the current balance/usage information for the AI assistant.
+// @Tags         Assistant
+// @Security     bearer[assistant/read_authored]
+// @Produce      json
+// @Success      200  {object}  model.Usage "Current assistant balance and usage information"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /api/assistant/balance [get]
 func (h *AssistantHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
+
+	err := h.server.CheckAuthorized(ctx, "read_authored", "assistant")
+	if err != nil {
+		web.Respond(w, r, http.StatusUnauthorized, err)
+		return
+	}
 
 	response, err := h.server.AssistantManager.Balance(ctx)
 	if err != nil {
@@ -320,9 +375,25 @@ func (h *AssistantHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 	web.Respond(w, r, http.StatusOK, response)
 }
 
+// @Summary      Get Assistant Sessions
+// @Description  Retrieve a list of all previous chat sessions for the authenticated user.
+// @Tags         Assistant
+// @Security     bearer[assistant/read_authored]
+// @Produce      json
+// @Success      200  {array}   model.StoredMessage "List of previous conversation sessions"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /api/assistant/sessions [get]
 func (h *AssistantHandler) GetSessions(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
+
+	err := h.server.CheckAuthorized(ctx, "read_authored", "assistant")
+	if err != nil {
+		web.Respond(w, r, http.StatusUnauthorized, err)
+		return
+	}
 
 	userId := ctx.Value(web.ContextKeyRequestorId).(string)
 
@@ -337,9 +408,27 @@ func (h *AssistantHandler) GetSessions(w http.ResponseWriter, r *http.Request) {
 	web.Respond(w, r, http.StatusOK, sessions)
 }
 
+// @Summary      Get Session History
+// @Description  Retrieve the complete chat history for a specific session.
+// @Tags         Assistant
+// @Security     bearer[assistant/read_authored]
+// @Param        sessionId  path  string  true  "Session ID to retrieve history for"
+// @Produce      json
+// @Success      200  {array}   model.StoredMessage "Complete chat history for the session"
+// @Failure      400           "The provided session ID is invalid or missing"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /api/assistant/sessions/{sessionId} [get]
 func (h *AssistantHandler) GetSessionHistory(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
+
+	err := h.server.CheckAuthorized(ctx, "read_authored", "assistant")
+	if err != nil {
+		web.Respond(w, r, http.StatusUnauthorized, err)
+		return
+	}
 
 	sessionId := chi.URLParam(r, "sessionId")
 	if sessionId == "" {
@@ -360,9 +449,26 @@ func (h *AssistantHandler) GetSessionHistory(w http.ResponseWriter, r *http.Requ
 	web.Respond(w, r, http.StatusOK, history)
 }
 
+// @Summary      Delete Session
+// @Description  Delete a specific chat session and all its associated messages.
+// @Tags         Assistant
+// @Security     bearer[assistant/delete_authored]
+// @Param        sessionId  path  string  true  "Session ID to delete"
+// @Success      204           "Session successfully deleted"
+// @Failure      400           "The provided session ID is invalid or missing"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /api/assistant/sessions/{sessionId} [delete]
 func (h *AssistantHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
+
+	err := h.server.CheckAuthorized(ctx, "delete_authored", "assistant")
+	if err != nil {
+		web.Respond(w, r, http.StatusUnauthorized, err)
+		return
+	}
 
 	sessionId := chi.URLParam(r, "sessionId")
 	if sessionId == "" {
@@ -372,7 +478,7 @@ func (h *AssistantHandler) DeleteSession(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	err := h.server.Assistantstore.DeleteSession(ctx, sessionId)
+	err = h.server.Assistantstore.DeleteSession(ctx, sessionId)
 
 	if err != nil {
 		logger.WithError(err).Error("unable to delete session")

@@ -51,6 +51,7 @@ const FEAT_STG = "stg"
 const FEAT_TTR = "ttr"
 const FEAT_RPT = "rpt"
 const FEAT_VRT = "vrt"
+const FEAT_OAI = "oai"
 
 const PUBLIC_KEY = `
 -----BEGIN PUBLIC KEY-----
@@ -119,7 +120,7 @@ var manager *licenseManager
 
 func newLicenseManager() *licenseManager {
 	return &licenseManager{
-		available: make([]string, 0, 0),
+		available: make([]string, 0),
 		limits:    make(map[string]bool),
 	}
 }
@@ -212,6 +213,7 @@ func CreateAvailableFeatureList() []string {
 	available = append(available, FEAT_TTR)
 	available = append(available, FEAT_RPT)
 	available = append(available, FEAT_VRT)
+	available = append(available, FEAT_OAI)
 	return available
 }
 
@@ -256,7 +258,7 @@ func Test(feat string, users int, nodes int, socUrl string, dataUrl string) {
 	licenseKey.Expiration = time.Now().Add(time.Minute * 1)
 
 	if len(feat) > 0 {
-		features := make([]string, 0, 0)
+		features := make([]string, 0)
 		features = append(features, feat)
 		licenseKey.Features = features
 	}
@@ -311,7 +313,7 @@ func createManager(status string, available []string, licenseKey *LicenseKey, st
 
 func startExpirationMonitor() {
 	if manager.licenseKey.Expiration.After(time.Now()) {
-		duration := manager.licenseKey.Expiration.Sub(time.Now())
+		duration := time.Until(manager.licenseKey.Expiration)
 		if manager.expirationTimer != nil {
 			log.Error("Expiration timer is already running; aborting thread")
 			return
@@ -329,7 +331,7 @@ func startExpirationMonitor() {
 
 func startEffectiveMonitor() {
 	if manager.licenseKey.Effective.After(time.Now()) {
-		duration := manager.licenseKey.Effective.Sub(time.Now())
+		duration := time.Until(manager.licenseKey.Effective)
 		if manager.effectiveTimer != nil {
 			log.Error("Effective timer is already running; aborting thread")
 			return
@@ -439,7 +441,7 @@ func stopMonitor() {
 				log.Info("stopped all license monitors")
 				break
 			}
-			time.Sleep(100)
+			time.Sleep(100 * time.Nanosecond)
 		}
 		manager.status = LICENSE_STATUS_INVALID
 	}
@@ -463,7 +465,7 @@ func IsEnabled(feat string) bool {
 }
 
 func ListAvailableFeatures() []string {
-	available := make([]string, 0, 0)
+	available := make([]string, 0)
 	if manager == nil || manager.status != LICENSE_STATUS_ACTIVE {
 		return available
 	}
@@ -474,7 +476,7 @@ func ListAvailableFeatures() []string {
 }
 
 func ListEnabledFeatures() []string {
-	enabled := make([]string, 0, 0)
+	enabled := make([]string, 0)
 	if manager == nil || manager.status == LICENSE_STATUS_UNPROVISIONED {
 		return enabled
 	}
