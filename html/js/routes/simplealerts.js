@@ -1080,13 +1080,15 @@ const simpleAlertsComponent = {
     },
     
     collectGuidedAnalysisEvents(playbooks) {
-      // Collect all event IDs from guided analysis/playbook query results
+      // Collect all events from guided analysis/playbook query results
+      // We need full event data, not just IDs, so the backend can copy them to the case index
+      const events = [];
       const eventIds = new Set();
       const metadata = [];
       let skippedQueries = 0;
       
       if (!playbooks || playbooks.length === 0) {
-        return { eventIds: [], metadata: [], skippedQueries: 0 };
+        return { events: [], eventIds: [], metadata: [], skippedQueries: 0 };
       }
       
       for (let pb of playbooks) {
@@ -1104,31 +1106,74 @@ const simpleAlertsComponent = {
             const queryMetadata = {
               query: question.query,
               convertedQuery: question.filledOQL || question.filledQuery,
-              description: question.text,
+              description: question.text || question.question,
+              question: question.question,
               resultCount: question.answers.length,
               range: question.range,
-              eventIds: []
+              eventIds: [],
+              events: []  // Store sample events for display
             };
             
-            // Extract event IDs from answers
+            // Extract full event data from answers
             for (let answer of question.answers) {
-              // The answer is the event object, look for soc_id in the payload
+              console.log('Processing playbook answer:', answer);
+              
+              // The answer is the event object, we need the full payload
+              let eventData = null;
               let eventId = null;
               
-              if (answer.payload) {
-                // Event data is in payload
-                eventId = answer.payload['soc_id'] || answer.payload.soc_id;
+              // Events from the API have structure: { id: "...", payload: {...} }
+              // The 'id' field is the document ID that we need for attachment
+              if (answer.id) {
+                // This is a full event object from the API
+                eventId = answer.id;
+                eventData = answer.payload || answer;
+                console.log(`Found event with id field: ${eventId}`);
+              } else if (answer.payload) {
+                // Event data is nested in payload, but no ID at root
+                eventData = answer.payload;
+                // Look for ID in the payload
+                eventId = answer.payload['soc_id'] || answer.payload.soc_id || answer.payload._id || answer.payload['_id'];
+                console.log(`Found event with payload, extracted ID: ${eventId}`);
               } else {
                 // Event data might be directly in answer
-                eventId = answer['soc_id'] || answer.soc_id || answer.id || answer._id;
+                eventData = answer;
+                eventId = answer['soc_id'] || answer.soc_id || answer._id || answer['_id'];
+                console.log(`Found event without wrapper, extracted ID: ${eventId}`);
               }
               
               if (eventId) {
                 eventIds.add(eventId);
+                events.push({
+                  id: eventId,
+                  data: eventData
+                });
                 queryMetadata.eventIds.push(eventId);
-                console.log(`Found event ID from guided analysis: ${eventId}`);
+                
+                // Store first 3 events for display in Analysis tab
+                if (queryMetadata.events.length < 3) {
+                  // Store key fields for display
+                  const displayEvent = {
+                    id: eventId,
+                    '@timestamp': eventData['@timestamp'] || eventData.timestamp,
+                    'source.ip': eventData['source.ip'],
+                    'destination.ip': eventData['destination.ip'],
+                    'rule.name': eventData['rule.name'],
+                    'event.module': eventData['event.module'],
+                    'event.dataset': eventData['event.dataset'],
+                    'message': eventData.message,
+                    // Store full data but limit display
+                    _full: eventData
+                  };
+                  queryMetadata.events.push(displayEvent);
+                }
+                
+                console.log(`✅ Added event ID to collection: ${eventId}`);
               } else {
-                console.log('Could not extract event ID from answer:', answer);
+                console.warn('❌ Could not extract event ID from answer. Keys available:', Object.keys(answer));
+                if (answer.payload) {
+                  console.warn('   Payload keys:', Object.keys(answer.payload).slice(0, 10));
+                }
               }
             }
             
@@ -1138,10 +1183,84 @@ const simpleAlertsComponent = {
       }
       
       return {
+        events: events,
         eventIds: Array.from(eventIds),
         metadata: metadata,
         skippedQueries: skippedQueries
       };
+    },
+    
+    async attachGuidedAnalysisEventsToCase(caseId, guidedAnalysisData) {
+      // Attach guided analysis events to a case
+      if (!caseId || !guidedAnalysisData || !guidedAnalysisData.eventIds || guidedAnalysisData.eventIds.length === 0) {
+        console.log('No guided analysis events to attach to case');
+        return;
+      }
+      
+      console.log(`Attempting to attach ${guidedAnalysisData.eventIds.length} guided analysis events to case ${caseId}`);
+      console.log('Event IDs to attach:', guidedAnalysisData.eventIds);
+      
+      try {
+        const batchPayload = {
+          caseId: caseId,
+          fields: {},
+          acknowledged: false,
+          escalated: false,
+          dateRange: this.getDateRange(),
+          dateRangeFormat: '2006/01/02 3:04:05 PM',
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        };
+        
+        // Process each event ID
+        let totalAttached = 0;
+        let failedCount = 0;
+        
+        for (const eventId of guidedAnalysisData.eventIds) {
+          if (!eventId) {
+            console.warn('Skipping null/undefined event ID');
+            continue;
+          }
+          
+          try {
+            // The backend CreateEvents function checks for soc_id first, then uses _id
+            // Since these are event IDs from search results, they're likely _id values
+            // Try with soc_id field first (which the backend converts to _id search)
+            const payload = {
+              ...batchPayload,
+              fields: { 'soc_id': eventId }  // Backend will search for _id:"eventId"
+            };
+            
+            console.log(`Attaching guided analysis event with ID: ${eventId}`);
+            const response = await this.$root.papi.post('case/events', payload);
+            
+            if (response && response.data) {
+              const count = response.data.count || 0;
+              totalAttached += count;
+              console.log(`Attached ${count} events for ID ${eventId}`);
+              
+              if (count === 0) {
+                console.warn(`No events found for ID ${eventId} - may have rolled off or ID mismatch`);
+              }
+            }
+          } catch (err) {
+            console.error(`Failed to attach guided analysis event ${eventId}:`, err);
+            if (err.response && err.response.data) {
+              console.error('Error details:', err.response.data);
+            }
+            failedCount++;
+          }
+        }
+        
+        console.log(`Guided analysis attachment complete: ${totalAttached} events attached, ${failedCount} failures`);
+        
+        if (totalAttached > 0) {
+          this.$root.showTip(`Attached ${totalAttached} guided analysis events to case`);
+        } else if (failedCount > 0) {
+          this.$root.showWarning('Some guided analysis events could not be attached to the case');
+        }
+      } catch (error) {
+        console.error('Failed to attach guided analysis events:', error);
+      }
     },
     
     async attachEventsToCase(caseId, eventIds) {
@@ -1243,6 +1362,11 @@ const simpleAlertsComponent = {
             description += '\n\n### Queries with findings:';
             for (let query of queriesWithResults.slice(0, 5)) { // Limit to first 5 for brevity
               description += `\n- ${query.description}: ${query.resultCount} events`;
+              if (query.eventIds && query.eventIds.length > 0) {
+                const displayIds = query.eventIds.slice(0, 2).map(id => id.substring(0, 8) + '...').join(', ');
+                const moreCount = query.eventIds.length > 2 ? ` (+${query.eventIds.length - 2} more)` : '';
+                description += `\n  IDs: ${displayIds}${moreCount}`;
+              }
             }
             if (queriesWithResults.length > 5) {
               description += `\n- ... and ${queriesWithResults.length - 5} more queries`;
@@ -1403,7 +1527,6 @@ const simpleAlertsComponent = {
           console.log('Confirming escalation for alert:', this.selectedAlert);
           console.log('selectedAlertDetails:', this.selectedAlertDetails);
           
-          let allEventIds = [this.selectedAlert.id];
           let guidedAnalysisData = null;
           
           // Check if we have guided analysis data available
@@ -1412,14 +1535,9 @@ const simpleAlertsComponent = {
             guidedAnalysisData = this.collectGuidedAnalysisEvents(this.selectedAlertDetails.playbooks);
             console.log('Guided analysis data collected:', guidedAnalysisData);
             
-            // Add guided analysis event IDs to the case
             if (guidedAnalysisData.eventIds.length > 0) {
-              // Ensure we don't duplicate the primary alert ID
-              const uniqueEventIds = new Set([this.selectedAlert.id]);
-              guidedAnalysisData.eventIds.forEach(id => uniqueEventIds.add(id));
-              allEventIds = Array.from(uniqueEventIds);
-              console.log(`Including ${allEventIds.length} total events in case (primary + ${guidedAnalysisData.eventIds.length} from guided analysis)`);
-              console.log('Event IDs to attach:', allEventIds);
+              console.log(`Found ${guidedAnalysisData.eventIds.length} events from guided analysis`);
+              console.log('Guided analysis event IDs:', guidedAnalysisData.eventIds);
             } else {
               console.log('No event IDs found in guided analysis results');
             }
@@ -1449,9 +1567,16 @@ const simpleAlertsComponent = {
           
           const caseResponse = await this.$root.papi.post('case', caseData);
           
-          // Attach events to the case using the helper function
+          // Attach events to the case
           if (caseResponse && caseResponse.data && caseResponse.data.id) {
-            await this.attachEventsToCase(caseResponse.data.id, allEventIds);
+            // First attach the primary alert
+            await this.attachEventsToCase(caseResponse.data.id, [this.selectedAlert.id]);
+            
+            // Then attach guided analysis events if we have them
+            if (guidedAnalysisData && guidedAnalysisData.eventIds.length > 0) {
+              console.log('Attaching guided analysis events to case');
+              await this.attachGuidedAnalysisEventsToCase(caseResponse.data.id, guidedAnalysisData);
+            }
           }
           
           // Store detailed metadata as comment if we have guided analysis data
@@ -1480,7 +1605,7 @@ const simpleAlertsComponent = {
           await this.updateAlertStatuses([this.selectedAlert.id], 'escalated');
           
           const message = guidedAnalysisData && guidedAnalysisData.eventIds.length > 0 ?
-            `Alert escalated with ${allEventIds.length} events (including ${guidedAnalysisData.eventIds.length} from guided analysis)` :
+            `Alert escalated with ${guidedAnalysisData.eventIds.length + 1} events (primary alert + ${guidedAnalysisData.eventIds.length} from guided analysis)` :
             `Alert escalated successfully`;
           
           this.$root.showTip(message);

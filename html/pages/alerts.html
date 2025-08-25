@@ -553,7 +553,7 @@
                           :selected="isAlertSelected(alert.id)"
                           @acknowledge="acknowledgeAlert"
                           @escalate="escalateAlert"
-                          @click="showAlertDetails"
+                          @click="showAlertDetails(alert)"
                           @select="toggleAlertSelection"
                         ></alert-card>
                       </v-col>
@@ -588,7 +588,7 @@
             :selected="isAlertSelected(alert.id)"
             @acknowledge="acknowledgeAlert"
             @escalate="escalateAlert"
-            @click="showAlertDetails"
+            @click="showAlertDetails(alert)"
             @select="toggleAlertSelection"
           ></alert-card>
         </v-col>

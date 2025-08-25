@@ -307,7 +307,10 @@
 													<v-expansion-panel v-for="(query, index) in guidedAnalysisMetadata.guidedAnalysisQueries" :key="index">
 														<v-expansion-panel-title>
 															<div class="d-flex align-center justify-space-between" style="width: 100%;">
-																<span class="text-body-2">{{ query.description }}</span>
+																<div class="d-flex flex-column align-start">
+																	<span class="text-body-2 font-weight-medium">{{ query.question || query.description || 'Query' }}</span>
+																	<span v-if="query.description && query.description !== query.question" class="text-caption text-medium-emphasis">{{ query.description }}</span>
+																</div>
 																<v-chip size="small" :color="query.resultCount > 0 ? 'success' : 'default'" class="mr-4">
 																	{{ query.resultCount }} events
 																</v-chip>
@@ -323,14 +326,102 @@
 																	<strong>Time Range:</strong> {{ query.range }}
 																</div>
 																<div v-if="query.eventIds && query.eventIds.length > 0" class="text-body-2">
-																	<strong>Event IDs:</strong>
-																	<div class="mt-1" style="max-height: 150px; overflow-y: auto;">
-																		<v-chip v-for="eventId in query.eventIds.slice(0, 10)" :key="eventId" size="x-small" class="ma-1">
-																			{{ eventId }}
-																		</v-chip>
-																		<span v-if="query.eventIds.length > 10" class="text-body-2 ml-2">
-																			... and {{ query.eventIds.length - 10 }} more
-																		</span>
+																	<strong>Related Events ({{ query.eventIds.length }}):</strong>
+																	<div class="mt-2">
+																		<!-- Show actual event results if available -->
+																		<div v-if="query.events && query.events.length > 0" class="mb-3">
+																			<div class="text-caption text-medium-emphasis mb-2">Sample Events:</div>
+																			<v-expansion-panels variant="accordion" class="mb-2">
+																				<v-expansion-panel v-for="(event, eventIdx) in query.events.slice(0, 3)" :key="'event-' + eventIdx">
+																					<v-expansion-panel-title class="py-2">
+																						<div class="d-flex align-center justify-space-between" style="width: 100%;">
+																							<div class="d-flex align-center">
+																								<v-icon size="x-small" class="mr-2">fa-file-alt</v-icon>
+																								<div class="d-flex flex-column">
+																									<span class="text-caption">
+																										{{ event['@timestamp'] || event.timestamp || 'Event ' + (eventIdx + 1) }}
+																									</span>
+																									<span class="text-caption text-medium-emphasis">
+																										{{ event['rule.name'] || event['event.module'] || 
+																										   (event['source.ip'] && event['destination.ip'] ? 
+																										    event['source.ip'] + ' → ' + event['destination.ip'] : 
+																										    'Event Details') }}
+																									</span>
+																								</div>
+																							</div>
+																							<v-btn
+																								icon
+																								size="x-small"
+																								variant="text"
+																								@click.stop="activeTab = 'events'; eventSearchFilter = event.id"
+																								title="View in Events tab"
+																							>
+																								<v-icon size="x-small">fa-external-link-alt</v-icon>
+																							</v-btn>
+																						</div>
+																					</v-expansion-panel-title>
+																					<v-expansion-panel-text>
+																						<div class="pa-2">
+																							<!-- Show key fields first -->
+																							<div v-if="event._full" class="mb-2">
+																								<div v-if="event['source.ip'] || event['destination.ip']" class="text-caption mb-1">
+																									<strong>Network:</strong> 
+																									{{ event['source.ip'] || 'N/A' }} → {{ event['destination.ip'] || 'N/A' }}
+																								</div>
+																								<div v-if="event['rule.name']" class="text-caption mb-1">
+																									<strong>Rule:</strong> {{ event['rule.name'] }}
+																								</div>
+																								<div v-if="event.message" class="text-caption mb-1">
+																									<strong>Message:</strong> {{ event.message }}
+																								</div>
+																							</div>
+																							
+																							<!-- Full JSON -->
+																							<v-divider class="my-2"></v-divider>
+																							<div class="text-caption text-medium-emphasis mb-1">Full Event Data:</div>
+																							<div style="max-height: 300px; overflow-y: auto;">
+																								<pre class="text-caption" style="font-family: monospace; white-space: pre-wrap; word-break: break-all;">{{ JSON.stringify(event._full || event, null, 2) }}</pre>
+																							</div>
+																						</div>
+																					</v-expansion-panel-text>
+																				</v-expansion-panel>
+																			</v-expansion-panels>
+																		</div>
+																		
+																		<!-- Event ID links to case Events tab -->
+																		<v-list density="compact" class="pa-0">
+																			<v-list-item v-for="(eventId, idx) in query.eventIds.slice(0, 5)" :key="eventId" class="px-0">
+																				<v-list-item-title>
+																					<div class="d-flex align-center">
+																						<v-icon size="x-small" class="mr-2">fa-link</v-icon>
+																						<a @click="activeTab = 'events'; eventSearchFilter = eventId" class="text-decoration-none" style="cursor: pointer;">
+																							{{ eventId.substring(0, 12) }}...
+																						</a>
+																						<v-btn
+																							icon
+																							size="x-small"
+																							variant="text"
+																							class="ml-2"
+																							@click="$root.copyToClipboard(eventId)"
+																							:title="'Copy ID: ' + eventId"
+																						>
+																							<v-icon size="x-small">fa-copy</v-icon>
+																						</v-btn>
+																					</div>
+																				</v-list-item-title>
+																			</v-list-item>
+																		</v-list>
+																		<v-btn 
+																			v-if="query.eventIds.length > 5"
+																			size="small"
+																			variant="text"
+																			color="primary"
+																			class="mt-2"
+																			@click="activeTab = 'events'"
+																		>
+																			View all {{ query.eventIds.length }} events in Events tab
+																			<v-icon end size="small">fa-arrow-right</v-icon>
+																		</v-btn>
 																	</div>
 																</div>
 															</div>
