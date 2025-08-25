@@ -129,7 +129,7 @@ func TestConvertFromElasticQueryTaskResults(t *testing.T) {
 				"ip": "127.0.0.1",
 				"tasks": {
 					"12345": {
-						"cancelable": true,
+						"cancellable": true,
 						"action": "indices:data/read/search",
 						"type": "transport",
 						"start_time_in_millis": 1678886400000,
@@ -137,7 +137,7 @@ func TestConvertFromElasticQueryTaskResults(t *testing.T) {
 						"parent_task_id": ""
 					},
 					"67890": {
-						"cancelable": false,
+						"cancellable": false,
 						"action": "cluster:monitor/tasks/lists",
 						"type": "persistent",
 						"start_time_in_millis": 1678886400000,
@@ -196,7 +196,7 @@ func TestConvertFromElasticQueryTaskResultsError(t *testing.T) {
 				"ip": "127.0.0.1",
 				"tasks": {
 					"12345": {
-						"cancelable": true,
+						"cancellable": true,
 						"action": "indices:data/read/search",
 						"type": "transport",
 						"start_time_in_millis": "invalid",
@@ -234,7 +234,7 @@ func TestGetActiveQueries(t *testing.T) {
 				"ip": "127.0.0.1",
 				"tasks": {
 					"12345": {
-						"cancelable": true,
+						"cancellable": true,
 						"action": "indices:data/read/search",
 						"type": "transport",
 						"start_time_in_millis": 1678886400000,

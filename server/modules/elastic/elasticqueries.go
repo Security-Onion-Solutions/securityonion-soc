@@ -87,7 +87,7 @@ func (store *ElasticEventstore) getActiveQueries(ctx context.Context, filter boo
 }
 
 type ElasticTask struct {
-	Cancelable   bool   `json:"cancelable"`
+	Cancelable   bool   `json:"cancellable"`
 	Action       string `json:"action"`
 	Type         string `json:"type"`
 	StartTime    int64  `json:"start_time_in_millis"`
