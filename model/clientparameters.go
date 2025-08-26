@@ -174,6 +174,7 @@ type AlertingParameters struct {
 }
 
 type AssistantParameters struct {
+	EnabledInSoc        bool   `json:"enabledInSoc"`
 	InvestigationPrompt string `json:"investigationPrompt"`
 }
 

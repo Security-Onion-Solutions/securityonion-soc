@@ -80,7 +80,7 @@ type licenseManager struct {
 	expirationTimer *time.Timer
 	effectiveTimer  *time.Timer
 	pillarTimer     *time.Timer
-	licenseKey      *LicenseKey
+	licenseKey      *SignedLicenseKey
 }
 
 type LicenseKey struct {
@@ -134,7 +134,7 @@ func getPublicKey() (*rsa.PublicKey, error) {
 	return anyKey.(*rsa.PublicKey), nil
 }
 
-func parseLicense(key string) (*LicenseKey, []byte, []byte, error) {
+func parseLicense(key string) (*SignedLicenseKey, []byte, []byte, error) {
 	decodedKey, decodeErr := base64.StdEncoding.DecodeString(strings.TrimSpace(key))
 	if decodeErr != nil {
 		return nil, nil, nil, decodeErr
@@ -167,10 +167,10 @@ func parseLicense(key string) (*LicenseKey, []byte, []byte, error) {
 		return nil, nil, nil, decodeErr
 	}
 
-	return hashableKey, messageBytes, sigBytes, nil
+	return originalKey, messageBytes, sigBytes, nil
 }
 
-func verify(key string) (*LicenseKey, error) {
+func verify(key string) (*SignedLicenseKey, error) {
 	pubKey, keyErr := getPublicKey()
 	if keyErr != nil {
 		return nil, keyErr
@@ -221,7 +221,7 @@ func Init(key string) {
 	available := CreateAvailableFeatureList()
 
 	status := LICENSE_STATUS_UNPROVISIONED
-	licenseKey := &LicenseKey{}
+	licenseKey := &SignedLicenseKey{}
 
 	if key != "" {
 		license, err := verify(key)
@@ -254,7 +254,7 @@ func Test(feat string, users int, nodes int, socUrl string, dataUrl string) {
 	available := CreateAvailableFeatureList()
 
 	pillarFilename = "/tmp/soc_test_pillar_monitor.sls"
-	licenseKey := &LicenseKey{}
+	licenseKey := &SignedLicenseKey{}
 	licenseKey.Expiration = time.Now().Add(time.Minute * 1)
 
 	if len(feat) > 0 {
@@ -278,7 +278,7 @@ func Shutdown() {
 	stopMonitor()
 }
 
-func createManager(status string, available []string, licenseKey *LicenseKey, startMonitors bool) {
+func createManager(status string, available []string, signedLicenseKey *SignedLicenseKey, startMonitors bool) {
 	mutex.Lock()
 	defer mutex.Unlock()
 
@@ -287,7 +287,7 @@ func createManager(status string, available []string, licenseKey *LicenseKey, st
 	manager = newLicenseManager()
 	manager.status = status
 	manager.available = available
-	manager.licenseKey = licenseKey
+	manager.licenseKey = signedLicenseKey
 
 	if (status == LICENSE_STATUS_ACTIVE || status == LICENSE_STATUS_PENDING) && startMonitors {
 		go startExpirationMonitor()
@@ -490,7 +490,7 @@ func ListEnabledFeatures() []string {
 	return enabled
 }
 
-func GetLicenseKey() *LicenseKey {
+func GetLicenseKey() *SignedLicenseKey {
 	if manager == nil {
 		return nil
 	}

@@ -21,7 +21,7 @@ type ChatRequest struct {
 	System        string          `json:"system,omitempty"`
 	Stream        bool            `json:"stream,omitempty"`
 	ToolConfig    json.RawMessage `json:"toolConfig,omitempty"`
-	Metadata      MetaData        `json:"metadata,omitempty"`
+	Metadata      MetaData        `json:"metadata"`
 }
 
 type MetaData struct {

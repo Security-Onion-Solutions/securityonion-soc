@@ -8,6 +8,8 @@ package assistant
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,6 +20,7 @@ import (
 	"sort"
 
 	"github.com/google/uuid"
+	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -66,13 +69,21 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 	ac.srv.AssistantManager = ac
 	ac.FunctionLibrary = knownTools
 
-	ac.apiKey = module.GetStringDefault(config, "apiKey", DEFAULT_APIKEY)
 	ac.apiUrl = module.GetStringDefault(config, "apiUrl", DEFAULT_APIURL)
 	ac.model = module.GetStringDefault(config, "model", DEFAULT_MODEL)
 
 	ac.toolConfig, err = buildToolConfig(ac.FunctionLibrary)
 
+	ac.apiKey = buildApiKey()
+
 	return err
+}
+
+func buildApiKey() string {
+	key := licensing.GetLicenseKey()
+	hash := sha256.Sum256([]byte(key.Signature))
+
+	return fmt.Sprintf("sk-%s", hex.EncodeToString(hash[:]))
 }
 
 func buildToolConfig(functions map[string]Tool) (json.RawMessage, error) {
