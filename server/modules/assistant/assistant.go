@@ -148,9 +148,7 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, messages []*model.Mess
 	req := &model.ChatRequest{
 		Messages:   msgs,
 		ToolConfig: ac.toolConfig,
-		Metadata: model.MetaData{
-			UserId: userID,
-		},
+		UserId:     userID,
 	}
 
 	u, err := url.Parse(ac.apiUrl)
@@ -285,9 +283,7 @@ func (ac *AssistantCoordinator) ChatStream(ctx context.Context, messages []*mode
 		Messages:   msgs,
 		Stream:     true,
 		ToolConfig: ac.toolConfig,
-		Metadata: model.MetaData{
-			UserId: userID,
-		},
+		UserId:     userID,
 	}
 
 	u, err := url.Parse(ac.apiUrl)
