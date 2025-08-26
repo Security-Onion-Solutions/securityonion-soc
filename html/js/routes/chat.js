@@ -1256,7 +1256,8 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
                 })));
                 skip_next = true;
               }
-            } else {
+            // Using "else if" instead of "else" prevents tool uses that haven't beeen interacted with from appearing as completed after refreshing
+            } else if (i < backendMessages.length - 1) {
 
               frontendMsg.toolUses = Vue.ref(toolBlocks.map(block => ({
                 id: block.id || 'unknown',

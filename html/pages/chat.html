@@ -43,7 +43,8 @@
 						<div v-for="(message, index) in messages" :key="index" class="message-item mb-3">
 							<div class="d-flex align-start">
 								<v-avatar size="32" class="mr-3" :color="message.role === 'user' ? 'primary' : 'secondary'">
-									<v-icon class="text-white" size="small">{{ message.role === 'user' ? 'fa-user' : 'fa-robot' }}</v-icon>
+									<v-icon v-if="message.role === 'user'" class="text-white" size="small">fa-user</v-icon>
+									<img v-else src="images/favicon/onion.png" alt="Assistant" style="width: 24px; height: 24px;">
 								</v-avatar>
 								<div class="flex-grow-1">
 									<div class="d-flex align-center mb-1">
@@ -132,13 +133,13 @@
 							</div>
 						</div>
 						<div v-if="messages.length === 0" class="text-center text-medium-emphasis py-8">
-							<v-icon size="48" class="mb-4">fa-robot</v-icon>
+							<img src="images/favicon/onion.png" alt="Assistant" style="width: 24px; height: 24px;" class="mb-4">
 							<div>{{ i18n.chatEmpty }}</div>
 						</div>
 						<div v-if="isTyping" class="message-item mb-3">
 							<div class="d-flex align-start">
 								<v-avatar size="32" class="mr-3" color="secondary">
-									<v-icon class="text-white" size="small">fa-robot</v-icon>
+									<img src="images/favicon/onion.png" alt="Assistant" style="width: 24px; height: 24px;">
 								</v-avatar>
 								<div class="flex-grow-1">
 									<div class="d-flex align-center mb-1">
