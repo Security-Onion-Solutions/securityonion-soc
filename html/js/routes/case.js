@@ -23,6 +23,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     caseObj: {},
     guidedAnalysisMetadata: null,
     hasGuidedAnalysis: false,
+    fab: false,
     associations: {
       comments: [],
       attachments: [],
@@ -187,7 +188,69 @@ routes.push({ path: '/case/:id', name: 'case', component: {
   watch: {
     '$route': 'loadData',
   },
+  computed: {
+    visibleCommentsCount() {
+      if (!this.associations.comments) return 0;
+      return this.associations.comments.filter(comment => {
+        if (!comment || !comment.description) return true;
+        // Exclude metadata comments
+        return !(comment.description.includes('## Guided Analysis Metadata') || 
+                (comment.description.includes('```json') && comment.description.includes('guidedAnalysisQueries')));
+      }).length;
+    }
+  },
   methods: {
+    getStatusIcon(status) {
+      if (!status) return 'fa-question-circle';
+      const statusIcons = {
+        'new': 'fa-plus-circle',
+        'open': 'fa-folder-open',
+        'in progress': 'fa-spinner',
+        'closed': 'fa-check-circle',
+        'resolved': 'fa-check-double'
+      };
+      return statusIcons[status.toLowerCase()] || 'fa-question-circle';
+    },
+    getSeverityIcon(severity) {
+      if (!severity) return 'fa-info-circle';
+      const severityIcons = {
+        'critical': 'fa-exclamation-triangle',
+        'high': 'fa-exclamation-circle',
+        'medium': 'fa-minus-circle',
+        'low': 'fa-info-circle',
+        'info': 'fa-info'
+      };
+      return severityIcons[severity.toLowerCase()] || 'fa-info-circle';
+    },
+    formatRelativeTime(timestamp) {
+      if (!timestamp) return '';
+      const date = new Date(timestamp);
+      const now = new Date();
+      const diff = now - date;
+      
+      const seconds = Math.floor(diff / 1000);
+      const minutes = Math.floor(seconds / 60);
+      const hours = Math.floor(minutes / 60);
+      const days = Math.floor(hours / 24);
+      
+      if (days > 0) return `${days} day${days > 1 ? 's' : ''} ago`;
+      if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+      if (minutes > 0) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+      return 'just now';
+    },
+    getTimeElapsed(timestamp) {
+      if (!timestamp) return '0d';
+      const date = new Date(timestamp);
+      const now = new Date();
+      const diff = now - date;
+      
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      
+      if (days > 0) return `${days}d`;
+      if (hours > 0) return `${hours}h`;
+      return '<1h';
+    },
     async initCase(params) {
       if (this.$route.params.id === 'create') {
         await this.createCase();
@@ -369,6 +432,15 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     },
     shouldRenderAssociationRecord(association, obj, index) {
       var render = true;
+      
+      // Hide guided analysis metadata comments
+      if (association === 'comments' && obj && obj.description) {
+        if (obj.description.includes('## Guided Analysis Metadata') || 
+            obj.description.includes('```json') && obj.description.includes('guidedAnalysisQueries')) {
+          return false;
+        }
+      }
+      
       if (!this.associatedTable[association].showAll && this.renderAbbreviatedCount) {
         const count = this.associations[association] ? this.associations[association].length : 0;
         const lowerCutoff = Math.floor(this.renderAbbreviatedCount / 2);
@@ -818,6 +890,73 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     },
     isAdding(association) {
       return this.addingAssociation == association;
+    },
+    showAssignDialog() {
+      // TODO: Implement user assignment dialog
+      console.log('Show assign user dialog');
+      this.fab = false;
+    },
+    showEscalateDialog() {
+      // TODO: Implement case escalation dialog
+      console.log('Show escalate case dialog');
+      this.fab = false;
+    },
+    getCommentColor(comment) {
+      // Generate consistent color based on user name
+      const colors = ['primary', 'secondary', 'success', 'warning', 'info', 'error'];
+      const name = comment.userId || comment.userName || 'unknown';
+      let hash = 0;
+      for (let i = 0; i < name.length; i++) {
+        hash = name.charCodeAt(i) + ((hash << 5) - hash);
+      }
+      return colors[Math.abs(hash) % colors.length];
+    },
+    getProgressPercentage() {
+      const milestones = this.getProgressMilestones();
+      if (!milestones || milestones.length === 0) return 0;
+      const completed = milestones.filter(m => m.completed).length;
+      return Math.round((completed / milestones.length) * 100);
+    },
+    getProgressMilestones() {
+      const milestones = [
+        {
+          id: 'created',
+          title: 'Case Created',
+          completed: true,
+          time: this.caseObj.createTime
+        },
+        {
+          id: 'assigned',
+          title: 'Assigned to Analyst',
+          completed: !!this.caseObj.assigneeId,
+          time: this.caseObj.assignTime
+        },
+        {
+          id: 'events',
+          title: 'Events Attached',
+          completed: this.associations.events?.length > 0,
+          time: this.associations.events?.[0]?.createTime
+        },
+        {
+          id: 'evidence',
+          title: 'Evidence Collected',
+          completed: this.associations.evidence?.length > 0,
+          time: this.associations.evidence?.[0]?.createTime
+        },
+        {
+          id: 'analysis',
+          title: 'Analysis Completed',
+          completed: this.hasGuidedAnalysis || this.associations.comments?.length > 2,
+          time: this.guidedAnalysisMetadata?.timestamp
+        },
+        {
+          id: 'resolved',
+          title: 'Case Resolved',
+          completed: this.caseObj.status === 'closed',
+          time: this.caseObj.completeTime
+        }
+      ];
+      return milestones;
     },
     mapArtifactTypeFromValue(value) {
       var artifactType = null;

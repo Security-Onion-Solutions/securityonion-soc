@@ -1,25 +1,113 @@
-<v-container fluid data-aid="case_screen">
-	<div class="mx-sm-12 mx-lg-6 mt-2 mb-6 mb-md-1" data-aid="case_title_input">
-		<div tabindex="0" class="case detail-field clicktoedit d-flex align-start pa-2" v-if="!isEdit('case-title')"
-			@click="startEdit('case-title-input', caseObj.title, 'case-title', 'title', modifyCase)" @keypress.space.prevent="startEdit('case-title-input', caseObj.title, 'case-title', 'title', modifyCase)">
-			<h2 id="case-title" class="rounded">{{ caseObj.title }}</h2>
-		</div>
-		<div class="d-flex flex-column" v-if="isEdit('case-title')">
-			<div class="mb-2">
-				<v-form v-model="editForm.valid" @submit.prevent>
-					<v-text-field id="case-title-input" hide-details="auto" variant="outlined" v-model="editForm.val" :rules="[rules.required]" persistent-hint :hint="i18n.caseTitleHelp"></v-text-field>
-				</v-form>
+<v-container fluid data-aid="case_screen" class="case-modern-layout">
+	<!-- Modern Hero Card -->
+	<div class="case-hero-card">
+		<div class="case-hero-content">
+			<div class="d-flex justify-space-between align-start flex-wrap">
+				<div class="flex-grow-1">
+					<!-- Editable Title -->
+					<div v-if="!isEdit('case-title')" @click="startEdit('case-title-input', caseObj.title, 'case-title', 'title', modifyCase)" 
+						 class="case-hero-title clicktoedit" style="cursor: pointer;">
+						{{ caseObj.title }}
+						<v-icon size="small" class="ml-2 opacity-70">fa-edit</v-icon>
+					</div>
+					<div v-else class="mb-3">
+						<v-form v-model="editForm.valid" @submit.prevent>
+							<v-text-field 
+								id="case-title-input" 
+								v-model="editForm.val" 
+								:rules="[rules.required]"
+								variant="solo"
+								density="compact"
+								bg-color="white"
+								hide-details
+								autofocus
+							></v-text-field>
+						</v-form>
+						<div class="d-flex gap-2 mt-2">
+							<v-btn size="small" variant="tonal" color="white" @click="stopEdit()">Cancel</v-btn>
+							<v-btn size="small" variant="flat" color="white" :disabled="!editForm.valid" @click="stopEdit(true)">Save</v-btn>
+						</div>
+					</div>
+					
+					<!-- Case Metadata -->
+					<div class="case-hero-meta">
+						Case #{{ caseObj.id }} • Created {{ formatRelativeTime(caseObj.createTime) }} by {{ caseObj.owner }}
+					</div>
+				</div>
+				
+				<!-- Status and Severity Badges -->
+				<div class="case-hero-badges">
+					<div class="status-badge" :class="'status-' + (caseObj.status || 'unknown').toLowerCase().replace(' ', '-')">
+						<v-icon size="small">{{ getStatusIcon(caseObj.status) }}</v-icon>
+						{{ caseObj.status || 'Loading...' }}
+					</div>
+					<div class="severity-badge" :class="(caseObj.severity || 'medium').toLowerCase()">
+						<v-icon size="small">{{ getSeverityIcon(caseObj.severity) }}</v-icon>
+						{{ caseObj.severity || 'medium' }}
+					</div>
+					<div v-if="hasGuidedAnalysis" class="status-badge" style="background: rgba(255,255,255,0.2);">
+						<v-icon size="small">fa-magic</v-icon>
+						Guided Analysis
+					</div>
+				</div>
 			</div>
-			<div class="d-inline-flex justify-end">
-				<v-btn variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit()" data-aid="case_title_cancel">
-					{{ i18n.cancel }}
-				</v-btn>
-				<v-btn :disabled="!editForm.valid" variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit(true)" data-aid="case_title_save">
-					{{ i18n.save }}
-				</v-btn>
+			
+			<!-- Quick Stats Grid -->
+			<div class="case-stats-grid">
+				<div class="case-stat-card">
+					<div class="case-stat-value">{{ associations.events?.length || 0 }}</div>
+					<div class="case-stat-label">Events</div>
+				</div>
+				<div class="case-stat-card">
+					<div class="case-stat-value">{{ visibleCommentsCount }}</div>
+					<div class="case-stat-label">Comments</div>
+				</div>
+				<div class="case-stat-card">
+					<div class="case-stat-value">{{ associations.attachments?.length || 0 }}</div>
+					<div class="case-stat-label">Attachments</div>
+				</div>
+				<div class="case-stat-card">
+					<div class="case-stat-value">{{ getTimeElapsed(caseObj.createTime) }}</div>
+					<div class="case-stat-label">Age</div>
+				</div>
 			</div>
 		</div>
 	</div>
+	
+	<!-- Investigation Progress Card -->
+	<div class="progress-card mx-sm-8 mx-md-12 mx-lg-4 mb-4" v-if="caseObj.status !== 'closed'">
+		<div class="progress-card-header">
+			<h3 class="progress-title">
+				<v-icon size="small" class="mr-2">fa-tasks</v-icon>
+				Investigation Progress
+			</h3>
+			<span class="progress-percentage">{{ getProgressPercentage() }}%</span>
+		</div>
+		<v-progress-linear
+			:model-value="getProgressPercentage()"
+			color="primary"
+			height="8"
+			rounded
+			class="mb-4"
+		></v-progress-linear>
+		<div class="progress-milestones">
+			<div v-for="milestone in getProgressMilestones()" :key="milestone.id" class="milestone-item">
+				<v-icon 
+					size="small"
+					:color="milestone.completed ? 'success' : 'grey'"
+				>
+					{{ milestone.completed ? 'fa-check-circle' : 'fa-circle' }}
+				</v-icon>
+				<span class="milestone-label" :class="{ 'completed': milestone.completed }">
+					{{ milestone.title }}
+				</span>
+				<span class="milestone-time" v-if="milestone.time">
+					{{ formatRelativeTime(milestone.time) }}
+				</span>
+			</div>
+		</div>
+	</div>
+	
 	<v-row class="mx-sm-8 mx-md-12 mx-lg-4 flex-column flex-md-row">
 		<v-col cols="12" md="9" class="case main" order="2" order-md="1" data-aid="case_description_input">
 			<div class="d-block d-md-none">
@@ -69,33 +157,42 @@
 					</div>
 				</div>
 			</div>
-			<v-row>
-				<v-tabs grow v-model="activeTab" class="full-width">
-					<v-tab id="case_commentsTab" value="comments" :class="{ 'theme-primary': activeTab === 'comments'}" data-aid="case_comments_tab">
-						<v-icon class="mr-2">fa-comments</v-icon>
-						<div class="d-none d-lg-block">{{ i18n.comments }}</div>
+			<!-- Modern Tabs Navigation -->
+			<div class="case-tabs-modern mb-4">
+				<v-tabs v-model="activeTab" center-active show-arrows>
+					<v-tab id="case_commentsTab" value="comments" data-aid="case_comments_tab">
+						<v-icon size="small" class="mr-2">fa-comments</v-icon>
+						<span>{{ i18n.comments }}</span>
+						<span v-if="visibleCommentsCount > 0" class="tab-badge">{{ visibleCommentsCount }}</span>
 					</v-tab>
-					<v-tab v-if="hasGuidedAnalysis" id="case_analysisTab" value="analysis" :class="{ 'theme-primary': activeTab === 'analysis'}" data-aid="case_analysis_tab">
-						<v-icon class="mr-2">fa-magic</v-icon>
-						<div class="d-none d-lg-block">Analysis</div>
+					<v-tab v-if="hasGuidedAnalysis" id="case_analysisTab" value="analysis" data-aid="case_analysis_tab">
+						<v-icon size="small" class="mr-2">fa-magic</v-icon>
+						<span>Analysis</span>
+						<span v-if="guidedAnalysisMetadata?.queryCount" class="tab-badge">{{ guidedAnalysisMetadata.queryCount }}</span>
 					</v-tab>
-					<v-tab id="case_attachmentTab" value="attachments" :class="{ 'theme-primary': activeTab === 'attachments'}" data-aid="case_attachments_tab">
-						<v-icon class="mr-2">fa-paperclip</v-icon>
-						<div class="d-none d-lg-block">{{ i18n.attachments }}</div>
+					<v-tab id="case_attachmentTab" value="attachments" data-aid="case_attachments_tab">
+						<v-icon size="small" class="mr-2">fa-paperclip</v-icon>
+						<span>{{ i18n.attachments }}</span>
+						<span v-if="associations.attachments?.length" class="tab-badge">{{ associations.attachments.length }}</span>
 					</v-tab>
-					<v-tab id="case_evidenceTab" value="evidence" :class="{ 'theme-primary': activeTab === 'evidence'}" data-aid="case_evidence_tab">
-						<v-icon class="mr-2">fa-eye</v-icon>
-						<div class="d-none d-lg-block">{{ i18n.evidence }}</div>
+					<v-tab id="case_evidenceTab" value="evidence" data-aid="case_evidence_tab">
+						<v-icon size="small" class="mr-2">fa-eye</v-icon>
+						<span>{{ i18n.evidence }}</span>
+						<span v-if="associations.evidence?.length" class="tab-badge">{{ associations.evidence.length }}</span>
 					</v-tab>
-					<v-tab id="case_eventsTab" value="events" :class="{ 'theme-primary': activeTab === 'events'}" data-aid="case_events_tab">
-						<v-icon class="mr-2">fa-link</v-icon>
-						<div class="d-none d-lg-block">{{ i18n.events }}</div>
+					<v-tab id="case_eventsTab" value="events" data-aid="case_events_tab">
+						<v-icon size="small" class="mr-2">fa-link</v-icon>
+						<span>{{ i18n.events }}</span>
+						<span v-if="associations.events?.length" class="tab-badge">{{ associations.events.length }}</span>
 					</v-tab>
-					<v-tab id="case_historyTab" value="history" :class="{ 'theme-primary': activeTab === 'history'}" data-aid="case_history_tab">
-						<v-icon class="mr-2">fa-history</v-icon>
-						<div class="d-none d-lg-block">{{ i18n.history }}</div>
+					<v-tab id="case_historyTab" value="history" data-aid="case_history_tab">
+						<v-icon size="small" class="mr-2">fa-history</v-icon>
+						<span>{{ i18n.history }}</span>
 					</v-tab>
 				</v-tabs>
+			</div>
+			
+			<v-row>
 
 				<v-tabs-window v-model="activeTab" class="full-width">
 					<v-tabs-window-item value="comments" data-aid="case_comments">
@@ -111,13 +208,19 @@
 								</v-toolbar>
 							</v-col>
 						</v-row>
-						<div id="comment-list">
+						<div id="comment-list" class="comments-timeline">
 							<template v-for="(comment, index) in associations.comments">
-								<div class="mb-8" v-if="shouldRenderAssociationRecord('comments', comment, index)">
-									<div class="d-flex flex-column align-start my-4">
-										<v-col class="d-flex flex-column align-start pt-2 pt-md-0">
-											<div class="mt-1 mt-md-3 pt-1 pb-2 px-2 contrast-bg rounded rounded-md full-width">
-												<div class="d-flex flex-column align-start">
+								<div class="comment-item mb-6" v-if="shouldRenderAssociationRecord('comments', comment, index)">
+									<div class="comment-bubble">
+										<v-avatar size="40" :color="getCommentColor(comment)" class="comment-avatar">
+											<span class="text-white font-weight-medium">{{ $root.getAvatar(comment.userId || comment.userName) }}</span>
+										</v-avatar>
+										<div class="comment-content">
+											<div class="comment-header">
+												<span class="comment-author">{{ comment.userId || comment.userName }}</span>
+												<span class="comment-time">{{ formatRelativeTime(comment.createTime) }}</span>
+											</div>
+											<div class="comment-body-wrapper">
 													<div v-if="!isEdit(`comment-${index}`)" class="case d-block comment-body mt-2" data-aid="case_comment_display">
 														<div class="mb-2">
 															<div :id="`comment-${index}`" class="markdown-body" v-html="formatMarkdown(comment.description)"></div>
@@ -1138,7 +1241,7 @@
 						<v-text-field variant="underlined" v-model="associatedTable['events'].search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="case_events_filter"></v-text-field>
 						<v-data-table ref="eventsTable" :sort-by="associatedTable['events'].sortBy" v-model:items-per-page="associatedTable['events'].itemsPerPage"
 							:search="associatedTable['events'].search" :items-per-page-options="associatedTable['events'].itemsPerPageOptions" must-sort :headers="associatedTable['events'].headers"
-							:items="associations['events']" item-key="id" :loading="associatedTable['events'].loading" :expanded="associatedTable['events'].expanded" class="case-table">
+							:items="associations['events']" item-key="id" :loading="associatedTable['events'].loading" :expanded="associatedTable['events'].expanded" class="case-table modern-data-table">
 							<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
 								<tr>
 									<template v-for="header in columns" :key="header.key">
@@ -1806,4 +1909,56 @@
 			</v-row>
 		</v-col>
 	</v-row>
+
+	<!-- Floating Action Button -->
+	<v-speed-dial
+		v-model="fab"
+		location="bottom end"
+		transition="scale-transition"
+		class="case-fab"
+		data-aid="case_fab"
+	>
+		<template v-slot:activator="{ props: activatorProps }">
+			<v-fab
+				v-bind="activatorProps"
+				size="large"
+				color="primary"
+				icon="fa-plus"
+				data-aid="case_fab_activator"
+			/>
+		</template>
+
+		<v-btn 
+			key="1"
+			icon="fa-comment-dots"
+			color="green"
+			@click="enableAdding('comments')"
+			:title="i18n.addComment"
+			data-aid="case_fab_comment"
+		/>
+		<v-btn
+			key="2"
+			icon="fa-paperclip"
+			color="blue"
+			@click="enableAdding('attachments')"
+			:title="i18n.addAttachment"
+			data-aid="case_fab_attachment"
+		/>
+		<v-btn
+			key="3"
+			icon="fa-user-plus"
+			color="orange"
+			@click="showAssignDialog()"
+			:title="i18n.assignUser"
+			data-aid="case_fab_assign"
+		/>
+		<v-btn
+			key="4"
+			icon="fa-level-up-alt"
+			color="red"
+			@click="showEscalateDialog()"
+			:title="i18n.escalate"
+			data-aid="case_fab_escalate"
+		/>
+	</v-speed-dial>
 </v-container>
