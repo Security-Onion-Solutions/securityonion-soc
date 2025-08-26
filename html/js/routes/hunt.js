@@ -3323,7 +3323,7 @@ const huntComponent = {
       const existingInvestigation = this.aiInvestigations[socId];
       if (existingInvestigation && existingInvestigation.chatSessionId) {
         // Navigate to existing chat session
-        const chatUrl = `${window.location.origin}/#/chat/${existingInvestigation.chatSessionId}`;
+        const chatUrl = `${window.location.origin}/#/assistant/${existingInvestigation.chatSessionId}`;
         window.open(chatUrl, '_blank');
         return;
       }
@@ -3353,7 +3353,7 @@ const huntComponent = {
       localStorage.setItem(`investigation_${chatSessionId}`, JSON.stringify(investigationData));
 
       // Navigate to chat page with investigation session ID
-      const chatUrl = `${window.location.origin}/#/chat/${chatSessionId}?investigation=true&socId=${encodeURIComponent(socId)}`;
+      const chatUrl = `${window.location.origin}/#/assistant/${chatSessionId}?investigation=true&socId=${encodeURIComponent(socId)}`;
       window.open(chatUrl, '_blank');
     },
 

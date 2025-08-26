@@ -4,10 +4,10 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
-loadPageTemplate('page-chat', 'pages/chat.html');
+loadPageTemplate('page-assistant', 'pages/assistant.html');
 
-routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
-  template: '#page-chat',
+routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
+  template: '#page-assistant',
   data() { return {
     i18n: this.$root.i18n,
     messages: [],
@@ -254,7 +254,7 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
           this.saveCurrentChatId(); // Clear the saved current chat ID
           this.loadChatHistory(); // Reset to welcome message
           // Navigate to chat without session ID
-          this.$router.push({ name: 'chat' });
+          this.$router.push({ name: 'assistant' });
         }
         
         console.log('Chat deleted successfully:', chatId);
@@ -269,12 +269,12 @@ routes.push({ path: '/chat/:sessionId?', name: 'chat', component: {
       this.saveCurrentChatId(); // Clear the saved current chat ID
       this.loadChatHistory(); // Reset to welcome message (also resets context length)
       // Navigate to chat without session ID
-      this.$router.push({ name: 'chat' });
+      this.$router.push({ name: 'assistant' });
     },
     updateUrlWithSessionId(sessionId) {
       // Only update URL if it's different from current
       if (this.$route.params.sessionId !== sessionId) {
-        this.$router.replace({ name: 'chat', params: { sessionId: sessionId } });
+        this.$router.replace({ name: 'assistant', params: { sessionId: sessionId } });
       }
     },
     async sendMessage() {

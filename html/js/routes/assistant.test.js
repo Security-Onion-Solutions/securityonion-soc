@@ -8,7 +8,7 @@ const { TextEncoder, TextDecoder } = require('util');
 Object.assign(global, { TextDecoder, TextEncoder });
 
 require('../test_common.js');
-require('./chat.js');
+require('./assistant.js');
 
 // Mock data
 const fakeSessionId = 'chat_1234567890_abcdef123';
@@ -81,7 +81,7 @@ let mockLocalStorage;
 let originalConsole;
 
 beforeEach(() => {
-  comp = getComponent("chat");
+  comp = getComponent("assistant");
   resetPapi();
   
   // Mock console methods to suppress error messages during testing
@@ -353,7 +353,7 @@ test('deleteChat success', async () => {
   expect(comp.currentChatId).toBe(null);
   expect(comp.saveCurrentChatId).toHaveBeenCalled();
   expect(comp.loadChatHistory).toHaveBeenCalled();
-  expect(comp.$router.push).toHaveBeenCalledWith({ name: 'chat' });
+  expect(comp.$router.push).toHaveBeenCalledWith({ name: 'assistant' });
 });
 
 test('deleteChat handles error', async () => {
@@ -378,7 +378,7 @@ test('startNewChat', async () => {
   expect(comp.currentChatId).toBe(null);
   expect(comp.saveCurrentChatId).toHaveBeenCalled();
   expect(comp.loadChatHistory).toHaveBeenCalled();
-  expect(comp.$router.push).toHaveBeenCalledWith({ name: 'chat' });
+  expect(comp.$router.push).toHaveBeenCalledWith({ name: 'assistant' });
 });
 
 test('updateUrlWithSessionId updates route', () => {
@@ -388,7 +388,7 @@ test('updateUrlWithSessionId updates route', () => {
   comp.updateUrlWithSessionId(sessionId);
   
   expect(comp.$router.replace).toHaveBeenCalledWith({ 
-    name: 'chat', 
+    name: 'assistant', 
     params: { sessionId: sessionId } 
   });
 });
