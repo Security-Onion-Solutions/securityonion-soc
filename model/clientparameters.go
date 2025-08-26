@@ -37,6 +37,8 @@ type ClientParameters struct {
 	CasesEnabled       bool                 `json:"casesEnabled"`
 	DetectionsEnabled  bool                 `json:"detectionsEnabled"`
 	ExportNodeId       string               `json:"exportNodeId"`
+	AssistantParams     AssistantParameters  `json:"assistant"`
+	EnableReverseLookup bool                 `json:"enableReverseLookup"`
 }
 
 func (config *ClientParameters) Verify() error {
@@ -169,6 +171,10 @@ func (params *HuntingParameters) combineDeprecatedLinkIntoLinks() {
 type AlertingParameters struct {
 	HuntingParameters
 	MaxBulkEscalateEvents int `json:"maxBulkEscalateEvents"`
+}
+
+type AssistantParameters struct {
+	InvestigationPrompt string `json:"investigationPrompt"`
 }
 
 type PresetParameters struct {
