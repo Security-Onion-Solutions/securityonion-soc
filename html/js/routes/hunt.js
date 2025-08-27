@@ -3377,35 +3377,7 @@ const huntComponent = {
       };
 
       // Create investigation message
-      const investigationMsg = `Investigate the following Security Onion alert systematically:
-
-SOC ID: ${alertData.socId || 'Unknown'}
-Rule UUID: ${alertData.ruleUuid || 'Unknown'}
-Title: ${alertData.ruleName || 'Unknown'}
-Severity: ${alertData.severity || 'Unknown'}
-Rule: ${alertData.alertRule || 'Unknown'}
-Source IP: ${alertData.sourceIp || 'Unknown'}
-Destination IP: ${alertData.destIp || 'Unknown'}
-Timestamp: ${alertData.timestamp || 'Unknown'}
-
-INVESTIGATION STEPS:
-
-1. First, fetch the complete alert details using the SOC ID (_id):
-   - Query for the specific alert to get full context
-   - Extract all relevant fields and metadata
-
-2. Get the playbook questions for this alert type:
-   - Use the SOC ID (_id) to retrieve investigation playbook
-   - Follow the structured investigation questions
-
-3. Provide a comprehensive assessment including:
-   - Verdict (malicious/suspicious/benign/unknown)
-   - Confidence level (0-100%)
-   - Detailed findings and evidence
-   - Recommended actions
-   - MITRE ATT&CK mapping if applicable
-
-Please begin the investigation now.`;
+      const investigationMsg = `Investigate the Security Onion alert with SOC ID ${alertData.socId || 'Unknown'} systematically.`;
 
       return investigationMsg;
     },
