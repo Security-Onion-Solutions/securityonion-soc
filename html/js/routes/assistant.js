@@ -1027,19 +1027,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       console.log('Starting investigation session for SOC ID:', socId);
       console.log('Investigation prompt length:', investigationPrompt.length);
       
-      // Replace the welcome message with an investigation-specific welcome
-      this.messages = [
-        {
-          role: 'assistant',
-          content: `Hello! I'm starting an AI investigation for SOC ID: ${socId}. I'll analyze this alert systematically and ask for your approval before using any tools. Let me begin the investigation now.`,
-          timestamp: new Date().toISOString(),
-          isInvestigationStart: true,
-          socId: socId
-        }
-      ];
-      
-      // Wait for the UI to update
-      await this.$nextTick();
+      // Clear the welcome message for investigations (similar to normal chats)
+      this.messages = [];
       
       // Set the investigation prompt directly (no decoding needed)
       this.newMessage = investigationPrompt;
