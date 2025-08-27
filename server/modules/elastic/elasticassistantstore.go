@@ -387,6 +387,13 @@ func (store *ElasticAssistantstore) GetSessions(ctx context.Context, userId stri
 						},
 					},
 				},
+				"must_not": []any{
+					map[string]any{
+						"exists": map[string]any{
+							"field": store.schemaPrefix + "session.deleteTime",
+						},
+					},
+				},
 			},
 		},
 		"sort": []any{
@@ -491,7 +498,7 @@ func (store *ElasticAssistantstore) getSessionById(ctx context.Context, sessionI
 				"must": []any{
 					map[string]any{
 						"term": map[string]any{
-							store.schemaPrefix + "session.sessionId": sessionId,
+							store.schemaPrefix + "session.id": sessionId,
 						},
 					},
 					map[string]any{
