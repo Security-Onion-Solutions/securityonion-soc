@@ -108,6 +108,23 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if len(stored) == 0 {
+		// create new session
+		session := &model.AssistantSession{
+			Auditable: model.Auditable{
+				Id: tb.SessionId,
+			},
+			Title: tb.Msg,
+		}
+		err = h.server.Assistantstore.CreateSession(ctx, session)
+		if err != nil {
+			logger.WithError(err).Error("unable to create session")
+			web.Respond(w, r, http.StatusInternalServerError, err)
+
+			return
+		}
+	}
+
 	messages := make([]*model.Message, 0, len(stored))
 	for _, msg := range stored {
 		messages = append(messages, msg.Message)
@@ -397,7 +414,7 @@ func (h *AssistantHandler) GetSessions(w http.ResponseWriter, r *http.Request) {
 
 	userId := ctx.Value(web.ContextKeyRequestorId).(string)
 
-	sessions, err := h.server.Assistantstore.GetPreviousConversations(ctx, userId)
+	sessions, err := h.server.Assistantstore.GetSessions(ctx, userId)
 	if err != nil {
 		logger.WithError(err).Error("unable to get previous conversations")
 		web.Respond(w, r, http.StatusInternalServerError, err)

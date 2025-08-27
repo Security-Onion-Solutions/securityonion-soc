@@ -33,12 +33,9 @@ const fakeChatHistory = [
 ];
 const fakeBackendSessions = [
   {
-    sessionId: 'chat_1234567890_abcdef123',
+    id: 'chat_1234567890_abcdef123',
     createTime: '2025-01-01T12:00:00.000Z',
-    message: {
-      role: 'user',
-      contentStr: 'Test message content'
-    }
+    title: 'Test message content'
   }
 ];
 const fakeBackendMessages = [
@@ -1475,11 +1472,9 @@ test('formatCount delegates to root', () => {
 });
 
 // Backend message conversion tests
-test('generateTitleFromMessage with contentStr', () => {
+test('generateTitleFromMessage', () => {
   const session = {
-    message: {
-      contentStr: 'This is a test message that should be truncated'
-    }
+    title: 'This is a test message that should be truncated'
   };
   
   const title = comp.generateTitleFromMessage(session);
@@ -1487,11 +1482,9 @@ test('generateTitleFromMessage with contentStr', () => {
   expect(title).toBe('This is a test message that should be truncated');
 });
 
-test('generateTitleFromMessage with long contentStr', () => {
+test('generateTitleFromMessage with long title', () => {
   const session = {
-    message: {
-      contentStr: 'This is a very long test message that should definitely be truncated because it exceeds the fifty character limit'
-    }
+    title: 'This is a very long test message that should definitely be truncated because it exceeds the fifty character limit'
   };
   
   const title = comp.generateTitleFromMessage(session);
@@ -1499,24 +1492,8 @@ test('generateTitleFromMessage with long contentStr', () => {
   expect(title).toBe('This is a very long test message that should defin...');
 });
 
-test('generateTitleFromMessage with contentBlocks', () => {
+test('generateTitleFromMessage with no title', () => {
   const session = {
-    message: {
-      contentBlocks: [
-        { type: 'text', text: 'Text block message' },
-        { type: 'other', content: 'Other content' }
-      ]
-    }
-  };
-  
-  const title = comp.generateTitleFromMessage(session);
-  
-  expect(title).toBe('Text block message');
-});
-
-test('generateTitleFromMessage with no content', () => {
-  const session = {
-    message: {}
   };
   
   const title = comp.generateTitleFromMessage(session);

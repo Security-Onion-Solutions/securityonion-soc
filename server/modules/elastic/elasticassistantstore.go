@@ -25,7 +25,8 @@ import (
 type ElasticAssistantstore struct {
 	server       *server.Server
 	esClient     *elasticsearch.Client
-	index        string
+	chatIndex    string
+	sessionIndex string
 	schemaPrefix string
 	maxLogLength int
 }
@@ -38,14 +39,15 @@ func NewElasticAssistantstore(srv *server.Server, client *elasticsearch.Client, 
 	}
 }
 
-func (store *ElasticAssistantstore) Init(index string, schemaPrefix string) error {
-	store.index = index
+func (store *ElasticAssistantstore) Init(chatIndex string, sessionIndex string, schemaPrefix string) error {
+	store.chatIndex = chatIndex
+	store.sessionIndex = sessionIndex
 	store.schemaPrefix = schemaPrefix
 
 	return nil
 }
 
-func (store *ElasticAssistantstore) save(ctx context.Context, obj any, kind string, id string) (*model.EventIndexResults, error) {
+func (store *ElasticAssistantstore) save(ctx context.Context, obj any, index string, kind string, id string) (*model.EventIndexResults, error) {
 	// if err := store.server.CheckAuthorized(ctx, "write", "detections"); err != nil {
 	// 	return nil, err
 	// }
@@ -53,7 +55,7 @@ func (store *ElasticAssistantstore) save(ctx context.Context, obj any, kind stri
 	document := ConvertObjectToDocumentMap(kind, obj, store.schemaPrefix)
 	document[store.schemaPrefix+"kind"] = kind
 
-	results, err := store.indexDoc(ctx, store.index, document, id)
+	results, err := store.indexDoc(ctx, index, document, id)
 
 	return results, err
 }
@@ -224,6 +226,19 @@ func (store *ElasticAssistantstore) validateChat(chat *model.StoredMessage) erro
 	return err
 }
 
+func (store *ElasticAssistantstore) validateSession(session *model.AssistantSession) error {
+	err := store.validateId(session.Id, "SessionId")
+	if err != nil {
+		return err
+	}
+
+	if session.Title == "" {
+		return fmt.Errorf("Title is too short")
+	}
+
+	return nil
+}
+
 func (store *ElasticAssistantstore) SaveChat(ctx context.Context, chat *model.StoredMessage) error {
 	err := store.validateChat(chat)
 	if err != nil {
@@ -232,7 +247,7 @@ func (store *ElasticAssistantstore) SaveChat(ctx context.Context, chat *model.St
 
 	chat.CreateTime = util.Ptr(time.Now())
 
-	_, err = store.save(ctx, chat, "chat", store.prepareForSave(ctx, &chat.Auditable))
+	_, err = store.save(ctx, chat, store.chatIndex, "chat", store.prepareForSave(ctx, &chat.Auditable))
 
 	return err
 }
@@ -284,7 +299,7 @@ func (store *ElasticAssistantstore) GetChatHistory(ctx context.Context, sessionI
 	// Execute search
 	res, err := store.esClient.Search(
 		store.esClient.Search.WithContext(ctx),
-		store.esClient.Search.WithIndex(store.index),
+		store.esClient.Search.WithIndex(store.chatIndex),
 		store.esClient.Search.WithBody(strings.NewReader(string(queryJSON))),
 	)
 	if err != nil {
@@ -354,75 +369,34 @@ func (store *ElasticAssistantstore) GetChatHistory(ctx context.Context, sessionI
 	return messages, nil
 }
 
-func (store *ElasticAssistantstore) GetPreviousConversations(ctx context.Context, userId string) ([]*model.StoredMessage, error) {
+func (store *ElasticAssistantstore) GetSessions(ctx context.Context, userId string) ([]*model.AssistantSession, error) {
 	logger := log.FromContext(ctx)
 
-	// Build Elasticsearch query to get the first message of each session for the user
-	// This 3 step query will first select the first message of every session,
-	// then it will check if it's been deleted, and finally it will filter out sessions
-	// where the first message was deleted.
 	query := map[string]any{
-		"size": 0, // Only want aggregation results, not documents
 		"query": map[string]any{
 			"bool": map[string]any{
 				"must": []any{
 					map[string]any{
 						"term": map[string]any{
-							store.schemaPrefix + "chat.userId": userId,
+							store.schemaPrefix + "session.userId": userId,
 						},
 					},
 					map[string]any{
 						"term": map[string]any{
-							store.schemaPrefix + "kind": "chat",
+							store.schemaPrefix + "kind": "session",
 						},
 					},
 				},
 			},
 		},
-		"aggs": map[string]any{
-			"sessions": map[string]any{
-				"terms": map[string]any{
-					"field": store.schemaPrefix + "chat.sessionId",
-					"size":  10000,
-				},
-				"aggs": map[string]any{
-					// 1. Find the absolute first message for each session
-					"first_message": map[string]any{
-						"top_hits": map[string]any{
-							"sort": []any{
-								map[string]any{
-									"@timestamp": map[string]any{
-										"order": "asc",
-									},
-								},
-							},
-							"size": 1,
-						},
-					},
-					// 2. Check if this absolute first message has the 'deletedAt' field
-					"is_first_message_deleted_check": map[string]any{
-						"filter": map[string]any{
-							"exists": map[string]any{
-								"field": store.schemaPrefix + "chat.deletedAt",
-							},
-						},
-						// We don't need a sub-aggregation here, just the count of documents that pass this filter.
-						// If the first message has deletedAt, this filter will match 1 document.
-						// If it doesn't, this filter will match 0 documents.
-					},
-					// 3. Filter the session buckets: only keep sessions where the first message was NOT deleted
-					"filter_valid_sessions": map[string]any{
-						"bucket_selector": map[string]any{
-							"buckets_path": map[string]any{
-								// Reference the count of documents that passed the 'is_first_message_deleted_check' filter
-								"deleted_count": "is_first_message_deleted_check._count",
-							},
-							"script": "params.deleted_count == 0", // Keep the bucket if the count of deleted first messages is 0
-						},
-					},
+		"sort": []any{
+			map[string]any{
+				"@timestamp": map[string]any{
+					"order": "asc",
 				},
 			},
 		},
+		"size": 10000,
 	}
 
 	// Convert query to JSON
@@ -440,7 +414,113 @@ func (store *ElasticAssistantstore) GetPreviousConversations(ctx context.Context
 	// Execute search
 	res, err := store.esClient.Search(
 		store.esClient.Search.WithContext(ctx),
-		store.esClient.Search.WithIndex(store.index),
+		store.esClient.Search.WithIndex(store.sessionIndex),
+		store.esClient.Search.WithBody(strings.NewReader(string(queryJSON))),
+	)
+	if err != nil {
+		logger.WithError(err).Error("Failed to execute Elasticsearch search")
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	// Read response
+	responseJSON, err := readJsonFromResponse(res)
+	if err != nil {
+		logger.WithError(err).Error("Failed to read Elasticsearch response")
+		return nil, err
+	}
+
+	logger.WithFields(log.Fields{
+		"response":  store.truncate(responseJSON),
+		"requestId": ctx.Value(web.ContextKeyRequestId),
+	}).Debug("Received Elasticsearch response")
+
+	// Parse response
+	var response map[string]any
+	if err := json.Unmarshal([]byte(responseJSON), &response); err != nil {
+		logger.WithError(err).Error("Failed to unmarshal Elasticsearch response")
+		return nil, err
+	}
+
+	sessions := []*model.AssistantSession{}
+	if hits, ok := response["hits"].(map[string]any); ok {
+		if hitsArray, ok := hits["hits"].([]any); ok {
+			for _, hitObj := range hitsArray {
+				if hit, ok := hitObj.(map[string]any); ok {
+					if source, ok := hit["_source"].(map[string]any); ok {
+						if sess, ok := source[store.schemaPrefix+"session"].(map[string]any); ok {
+							// Convert the source to an AssistantSession
+							sourceJSON, err := json.Marshal(sess)
+							if err != nil {
+								logger.WithError(err).Error("Failed to marshal session source")
+								continue
+							}
+
+							var session model.AssistantSession
+							if err := json.Unmarshal(sourceJSON, &session); err != nil {
+								logger.WithError(err).Error("Failed to unmarshal AssistantSession")
+								continue
+							}
+
+							session.Auditable.Kind = source[store.schemaPrefix+"kind"].(string)
+							session.Auditable.Id = hit["_id"].(string)
+
+							sessions = append(sessions, &session)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	logger.WithFields(log.Fields{
+		"sessionCount": len(sessions),
+		"userId":       userId,
+		"requestId":    ctx.Value(web.ContextKeyRequestId),
+	}).Debug("Found first messages for sessions")
+
+	return sessions, nil
+}
+
+func (store *ElasticAssistantstore) getSessionById(ctx context.Context, sessionId string) (*model.AssistantSession, error) {
+	logger := log.FromContext(ctx)
+
+	query := map[string]any{
+		"query": map[string]any{
+			"bool": map[string]any{
+				"must": []any{
+					map[string]any{
+						"term": map[string]any{
+							store.schemaPrefix + "session.sessionId": sessionId,
+						},
+					},
+					map[string]any{
+						"term": map[string]any{
+							store.schemaPrefix + "kind": "session",
+						},
+					},
+				},
+			},
+		},
+		"size": 1,
+	}
+
+	// Convert query to JSON
+	queryJSON, err := json.Marshal(query)
+	if err != nil {
+		logger.WithError(err).Error("Failed to marshal Elasticsearch query")
+		return nil, err
+	}
+
+	logger.WithFields(log.Fields{
+		"query":     store.truncate(string(queryJSON)),
+		"requestId": ctx.Value(web.ContextKeyRequestId),
+	}).Debug("Searching for first messages of each session")
+
+	// Execute search
+	res, err := store.esClient.Search(
+		store.esClient.Search.WithContext(ctx),
+		store.esClient.Search.WithIndex(store.sessionIndex),
 		store.esClient.Search.WithBody(strings.NewReader(string(queryJSON))),
 	)
 	if err != nil {
@@ -469,40 +549,27 @@ func (store *ElasticAssistantstore) GetPreviousConversations(ctx context.Context
 	}
 
 	// Extract first messages from aggregation
-	messages := []*model.StoredMessage{}
-	if aggregations, ok := response["aggregations"].(map[string]any); ok {
-		if sessions, ok := aggregations["sessions"].(map[string]any); ok {
-			if buckets, ok := sessions["buckets"].([]any); ok {
-				for _, bucketObj := range buckets {
-					if bucket, ok := bucketObj.(map[string]any); ok {
-						if firstMessage, ok := bucket["first_message"].(map[string]any); ok {
-							if hits, ok := firstMessage["hits"].(map[string]any); ok {
-								if hitsArray, ok := hits["hits"].([]any); ok && len(hitsArray) > 0 {
-									if hit, ok := hitsArray[0].(map[string]any); ok {
-										if source, ok := hit["_source"].(map[string]any); ok {
-											if chat, ok := source[store.schemaPrefix+"chat"].(map[string]any); ok {
-												// Convert the source to a StoredMessage
-												sourceJSON, err := json.Marshal(chat)
-												if err != nil {
-													logger.WithError(err).Error("Failed to marshal message source")
-													continue
-												}
-
-												var message model.StoredMessage
-												if err := json.Unmarshal(sourceJSON, &message); err != nil {
-													logger.WithError(err).Error("Failed to unmarshal StoredMessage")
-													continue
-												}
-
-												message.Auditable.Kind = source[store.schemaPrefix+"kind"].(string)
-												message.Auditable.Id = hit["_id"].(string)
-
-												messages = append(messages, &message)
-											}
-										}
-									}
-								}
+	result := &model.AssistantSession{}
+	if hits, ok := response["hits"].(map[string]any); ok {
+		if hitsArray, ok := hits["hits"].([]any); ok {
+			for _, hitObj := range hitsArray {
+				if hit, ok := hitObj.(map[string]any); ok {
+					if source, ok := hit["_source"].(map[string]any); ok {
+						if sess, ok := source[store.schemaPrefix+"session"].(map[string]any); ok {
+							// Convert the source to an AssistantSession
+							sourceJSON, err := json.Marshal(sess)
+							if err != nil {
+								logger.WithError(err).Error("Failed to marshal session source")
+								continue
 							}
+
+							if err := json.Unmarshal(sourceJSON, &result); err != nil {
+								logger.WithError(err).Error("Failed to unmarshal AssistantSession")
+								continue
+							}
+
+							result.Auditable.Kind = source[store.schemaPrefix+"kind"].(string)
+							result.Auditable.Id = hit["_id"].(string)
 						}
 					}
 				}
@@ -511,160 +578,55 @@ func (store *ElasticAssistantstore) GetPreviousConversations(ctx context.Context
 	}
 
 	logger.WithFields(log.Fields{
-		"messageCount": len(messages),
-		"userId":       userId,
-		"requestId":    ctx.Value(web.ContextKeyRequestId),
-	}).Debug("Found first messages for sessions")
+		"requestId": ctx.Value(web.ContextKeyRequestId),
+	}).Debug("found session")
 
-	return messages, nil
+	return result, nil
+}
+
+func (store *ElasticAssistantstore) CreateSession(ctx context.Context, session *model.AssistantSession) error {
+	err := store.validateSession(session)
+	if err != nil {
+		return err
+	}
+
+	session.CreateTime = util.Ptr(time.Now())
+
+	keepIdCtx := modcontext.WriteOverrideOperation(ctx, "create")
+
+	_, err = store.save(ctx, session, store.sessionIndex, "session", store.prepareForSave(keepIdCtx, &session.Auditable))
+
+	return err
 }
 
 func (store *ElasticAssistantstore) DeleteSession(ctx context.Context, sessionId string) error {
 	logger := log.FromContext(ctx)
 
-	// First, query for the first message of the session
-	query := map[string]any{
-		"query": map[string]any{
-			"bool": map[string]any{
-				"must": []any{
-					map[string]any{
-						"term": map[string]any{
-							store.schemaPrefix + "chat.sessionId": sessionId,
-						},
-					},
-					map[string]any{
-						"term": map[string]any{
-							store.schemaPrefix + "kind": "chat",
-						},
-					},
-				},
-			},
-		},
-		"sort": []any{
-			map[string]any{
-				"@timestamp": map[string]any{
-					"order": "asc",
-				},
-			},
-		},
-		"size": 1, // Only get the first message
-	}
-
-	// Convert query to JSON
-	queryJSON, err := json.Marshal(query)
+	session, err := store.getSessionById(ctx, sessionId)
 	if err != nil {
-		logger.WithError(err).Error("Failed to marshal Elasticsearch query for session deletion")
 		return err
-	}
-
-	logger.WithFields(log.Fields{
-		"query":     store.truncate(string(queryJSON)),
-		"sessionId": sessionId,
-		"requestId": ctx.Value(web.ContextKeyRequestId),
-	}).Debug("Searching for first message of session to delete")
-
-	// Execute search
-	res, err := store.esClient.Search(
-		store.esClient.Search.WithContext(ctx),
-		store.esClient.Search.WithIndex(store.index),
-		store.esClient.Search.WithBody(strings.NewReader(string(queryJSON))),
-	)
-	if err != nil {
-		logger.WithError(err).Error("Failed to execute Elasticsearch search for session deletion")
-		return err
-	}
-	defer res.Body.Close()
-
-	// Read response
-	responseJSON, err := readJsonFromResponse(res)
-	if err != nil {
-		logger.WithError(err).Error("Failed to read Elasticsearch response for session deletion")
-		return err
-	}
-
-	logger.WithFields(log.Fields{
-		"response":  store.truncate(responseJSON),
-		"sessionId": sessionId,
-		"requestId": ctx.Value(web.ContextKeyRequestId),
-	}).Debug("Received Elasticsearch response for session deletion")
-
-	// Parse response
-	var response map[string]any
-	if err := json.Unmarshal([]byte(responseJSON), &response); err != nil {
-		logger.WithError(err).Error("Failed to unmarshal Elasticsearch response for session deletion")
-		return err
-	}
-
-	// Extract first message from hits and parse into StoredMessage
-	var message *model.StoredMessage
-	if hits, ok := response["hits"].(map[string]any); ok {
-		if hitsArray, ok := hits["hits"].([]any); ok {
-			if len(hitsArray) == 0 {
-				logger.WithField("sessionId", sessionId).Warn("No messages found for session")
-				return fmt.Errorf("no messages found for session %s", sessionId)
-			}
-
-			if hit, ok := hitsArray[0].(map[string]any); ok {
-				if source, ok := hit["_source"].(map[string]any); ok {
-					if chat, ok := source[store.schemaPrefix+"chat"].(map[string]any); ok {
-						// Convert the source to a StoredMessage (same pattern as GetChatHistory)
-						sourceJSON, err := json.Marshal(chat)
-						if err != nil {
-							logger.WithError(err).Error("Failed to marshal message source")
-							return err
-						}
-
-						message = &model.StoredMessage{}
-						if err := json.Unmarshal(sourceJSON, message); err != nil {
-							logger.WithError(err).Error("Failed to unmarshal StoredMessage")
-							return err
-						}
-
-						message.Auditable.Kind = source[store.schemaPrefix+"kind"].(string)
-						message.Auditable.Id = hit["_id"].(string)
-
-						// Check if deletedAt is already set
-						if message.DeletedAt != nil && !message.DeletedAt.IsZero() {
-							logger.WithFields(log.Fields{
-								"sessionId": sessionId,
-								"messageId": message.Auditable.Id,
-								"deletedAt": message.DeletedAt,
-							}).Debug("Session already marked as deleted")
-							return nil
-						}
-					}
-				}
-			}
-		}
-	}
-
-	if message == nil {
-		logger.WithField("sessionId", sessionId).Error("Failed to extract first message for session deletion")
-		return fmt.Errorf("failed to find first message for session %s", sessionId)
 	}
 
 	// Set DeletedAt timestamp on the message
 	now := time.Now()
-	message.DeletedAt = &now
+	session.DeleteTime = &now
 
 	logger.WithFields(log.Fields{
-		"messageId": message.Auditable.Id,
 		"sessionId": sessionId,
 		"requestId": ctx.Value(web.ContextKeyRequestId),
 	}).Debug("Setting deletedAt timestamp and saving message")
 
 	// Use save() method to reindex the document (same pattern as UpdateDetection)
-	_, err = store.save(ctx, message, "chat", message.Auditable.Id)
+	_, err = store.save(ctx, session, store.sessionIndex, "session", session.Auditable.Id)
 	if err != nil {
 		logger.WithError(err).Error("Failed to save updated message for session deletion")
 		return err
 	}
 
 	logger.WithFields(log.Fields{
-		"messageId": message.Auditable.Id,
 		"sessionId": sessionId,
 		"requestId": ctx.Value(web.ContextKeyRequestId),
-	}).Debug("Successfully updated first message with deletedAt timestamp")
+	}).Debug("successfully deleted session")
 
 	return nil
 }

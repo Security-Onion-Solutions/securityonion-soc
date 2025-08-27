@@ -163,6 +163,7 @@ func TestPostChatWithoutHistory(t *testing.T) {
 
 	// Mock GetChatHistory to return empty history for new session (will generate new sessionId)
 	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{}, nil)
+	mockAssistantStore.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil)
 
 	// Set up mock expectations
 	var capturedMessages []*model.Message

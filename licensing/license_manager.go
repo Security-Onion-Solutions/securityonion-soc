@@ -221,7 +221,7 @@ func Init(key string) {
 	available := CreateAvailableFeatureList()
 
 	status := LICENSE_STATUS_UNPROVISIONED
-	licenseKey := &SignedLicenseKey{}
+	licenseKey := &SignedLicenseKey{LicenseKey: &LicenseKey{}}
 
 	if key != "" {
 		license, err := verify(key)
@@ -254,7 +254,7 @@ func Test(feat string, users int, nodes int, socUrl string, dataUrl string) {
 	available := CreateAvailableFeatureList()
 
 	pillarFilename = "/tmp/soc_test_pillar_monitor.sls"
-	licenseKey := &SignedLicenseKey{}
+	licenseKey := &SignedLicenseKey{LicenseKey: &LicenseKey{}}
 	licenseKey.Expiration = time.Now().Add(time.Minute * 1)
 
 	if len(feat) > 0 {
@@ -494,9 +494,13 @@ func GetLicenseKey() *SignedLicenseKey {
 	if manager == nil {
 		return nil
 	}
-	copy := *manager.licenseKey
-	copy.Features = ListEnabledFeatures()
-	return &copy
+	key := *(manager.licenseKey.LicenseKey)
+	ret := SignedLicenseKey{
+		LicenseKey: &key,
+		Signature:  manager.licenseKey.Signature,
+	}
+	ret.Features = ListEnabledFeatures()
+	return &ret
 }
 
 func GetStatus() string {

@@ -34,7 +34,8 @@ const (
 	DEFAULT_DETECTION_AUDIT_INDEX      = "*:so-detectionhistory"
 	DEFAULT_DETECTION_ASSOCIATIONS_MAX = 1000
 	DEFAULT_DETECTION_SCHEMA_PREFIX    = "so_"
-	DEFAULT_ASSISTANT_INDEX            = "*:so-assistant"
+	DEFAULT_ASSISTANT_CHAT_INDEX       = "*:so-assistant-chat"
+	DEFAULT_ASSISTANT_SESSION_INDEX    = "*:so-assistant-session"
 	DEFAULT_ASSISTANT_SCHEMA_PREFIX    = "so_"
 )
 
@@ -125,11 +126,12 @@ func (elastic *Elastic) Init(cfg module.ModuleConfig) error {
 			if elastic.server.Assistantstore != nil {
 				return errors.New("Multiple assistant modules cannot be enabled concurrently")
 			} else {
-				assistIndex := module.GetStringDefault(cfg, "assistantIndex", DEFAULT_ASSISTANT_INDEX)
+				assistChatIndex := module.GetStringDefault(cfg, "assistantChatIndex", DEFAULT_ASSISTANT_CHAT_INDEX)
+				assistSessionIndex := module.GetStringDefault(cfg, "assistantSessionIndex", DEFAULT_ASSISTANT_SESSION_INDEX)
 				schemaPrefix := module.GetStringDefault(cfg, "schemaPrefix", DEFAULT_ASSISTANT_SCHEMA_PREFIX)
 				assiststore := NewElasticAssistantstore(elastic.server, elastic.store.esClient, maxLogLength)
 
-				err = assiststore.Init(assistIndex, schemaPrefix)
+				err = assiststore.Init(assistChatIndex, assistSessionIndex, schemaPrefix)
 				if err != nil {
 					return err
 				}

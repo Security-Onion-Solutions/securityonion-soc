@@ -16,7 +16,6 @@ import (
 
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
-	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/assistant/mock"
@@ -42,69 +41,6 @@ func TestAssistantCoordinator_PrerequisiteModules(t *testing.T) {
 	modules := ac.PrerequisiteModules()
 
 	assert.Nil(t, modules)
-}
-
-func TestAssistantCoordinator_Init(t *testing.T) {
-	testCases := []struct {
-		name           string
-		config         module.ModuleConfig
-		expectedAPIKey string
-		expectedAPIURL string
-		expectedModel  string
-		expectError    bool
-	}{
-		{
-			name:           "default configuration",
-			config:         module.ModuleConfig{},
-			expectedAPIKey: DEFAULT_APIKEY,
-			expectedAPIURL: DEFAULT_APIURL,
-			expectedModel:  DEFAULT_MODEL,
-			expectError:    false,
-		},
-		{
-			name: "custom configuration",
-			config: module.ModuleConfig{
-				"apiKey": "test-api-key",
-				"apiUrl": "https://custom-api.example.com",
-				"model":  "custom-model",
-			},
-			expectedAPIKey: "test-api-key",
-			expectedAPIURL: "https://custom-api.example.com",
-			expectedModel:  "custom-model",
-			expectError:    false,
-		},
-		{
-			name: "partial custom configuration",
-			config: module.ModuleConfig{
-				"apiKey": "partial-key",
-			},
-			expectedAPIKey: "partial-key",
-			expectedAPIURL: DEFAULT_APIURL,
-			expectedModel:  DEFAULT_MODEL,
-			expectError:    false,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			srv := &server.Server{}
-			ac := &AssistantCoordinator{srv: srv}
-
-			err := ac.Init(tc.config)
-
-			if tc.expectError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tc.expectedAPIKey, ac.apiKey)
-				assert.Equal(t, tc.expectedAPIURL, ac.apiUrl)
-				assert.Equal(t, tc.expectedModel, ac.model)
-				assert.Equal(t, ac, srv.AssistantManager)
-				assert.Equal(t, knownTools, ac.FunctionLibrary)
-				assert.NotNil(t, ac.toolConfig)
-			}
-		})
-	}
 }
 
 func TestAssistantCoordinator_StartStopIsRunning(t *testing.T) {

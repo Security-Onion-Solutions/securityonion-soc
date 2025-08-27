@@ -90,7 +90,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         if (response.data && Array.isArray(response.data)) {
           // Convert backend format to frontend format
           this.chatHistory = response.data.map(session => ({
-            id: session.sessionId,
+            id: session.id,
             title: this.generateTitleFromMessage(session),
             messages: [], // Will be loaded when session is opened
             timestamp: session.createTime || new Date().toISOString(),
@@ -1068,18 +1068,9 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     // Helper method to generate title from a session/message
     generateTitleFromMessage(session) {
-      if (session && session.message) {
+      if (session && session.title) {
         // Handle different message formats
-        let content = '';
-        if (session.message.contentStr) {
-          content = session.message.contentStr;
-        } else if (session.message.contentBlocks && session.message.contentBlocks.length > 0) {
-          const textBlock = session.message.contentBlocks.find(block => block.type === 'text');
-          if (textBlock) {
-            content = textBlock.text;
-          }
-        }
-        
+        let content = session.title;
         if (content) {
           let title = content.substring(0, 50);
           if (content.length > 50) {
