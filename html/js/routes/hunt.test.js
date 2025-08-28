@@ -16,6 +16,39 @@ beforeEach(() => {
   comp.created();
 });
 
+test('hunt sets dateRange to epoch for detections', () => {
+  comp.isCategory = cat => cat === 'detections';
+  comp.relativeTimeEnabled = false;
+  comp.dateRange = '';
+  comp.$router.resolve = jest.fn();
+  comp.$router.resolve.mockReturnValue({ fullPath: 'mock-path' });
+  comp.loadData = jest.fn();
+  
+  comp.hunt();
+
+  const expectedStart = moment(0).format(comp.i18n.timePickerFormat);
+  const expectedEnd = moment().format(comp.i18n.timePickerFormat);
+  expect(comp.dateRange).toBe(`${expectedStart} - ${expectedEnd}`);
+  expect(comp.loadData).toHaveBeenCalledTimes(1);
+  expect(comp.$router.resolve).toHaveBeenCalledTimes(2);
+});
+
+test('hunt does not set dateRange to epoch for non-detections category', () => {
+  comp.isCategory = cat => cat === 'alerts';
+  comp.relativeTimeEnabled = false;
+  const existingDateRange = '2023/01/01 12:00:00 PM - 2023/01/02 12:00:00 PM';
+  comp.dateRange = existingDateRange;
+  comp.$router.resolve = jest.fn();
+  comp.$router.resolve.mockReturnValue({ fullPath: 'mock-path' });
+  comp.loadData = jest.fn();
+  
+  comp.hunt();
+
+  expect(comp.dateRange).toBe(existingDateRange);
+  expect(comp.loadData).toHaveBeenCalledTimes(1);
+  expect(comp.$router.resolve).toHaveBeenCalledTimes(2);
+});
+
 test('localizeValue', () => {
   expect(comp.localizeValue('foo')).toBe('foo');
   expect(comp.localizeValue('__missing__')).toBe('*Missing');
