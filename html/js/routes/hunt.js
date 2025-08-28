@@ -392,7 +392,9 @@ const huntComponent = {
         // When navigating to the same URL, simply refresh data
         this.loadData();
       };
-      if (this.relativeTimeEnabled) {
+      if (this.isCategory('detections')) {
+        this.dateRange = moment(0).format(this.i18n.timePickerFormat) + " - " + moment().format(this.i18n.timePickerFormat);
+      } else if (this.relativeTimeEnabled) {
         this.dateRange = '';
         this.dateRange = this.getStartDate().format(this.i18n.timePickerFormat) + " - " + this.getEndDate().format(this.i18n.timePickerFormat);
       }
@@ -570,9 +572,6 @@ const huntComponent = {
         this.groupBys.splice(0);
 
         let range = this.dateRange;
-        if (this.isCategory('detections')) {
-          range = moment(0).format(this.i18n.timePickerFormat) + " - " + moment().format(this.i18n.timePickerFormat);
-        }
         const params = {
           query: await this.getQuery(),
           range: range,
