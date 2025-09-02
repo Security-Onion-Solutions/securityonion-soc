@@ -47,6 +47,7 @@ type ServerConfig struct {
 	SrvExpSeconds           int                    `json:"srvExpSeconds"`
 	Subgrids                []*model.Subgrid       `json:"subgrids"`
 	CustomReportsPath       string                 `json:"customReportsPath"`
+	EnableReverseLookup     bool                   `json:"enableReverseLookup"`
 	SrvKeyBytes             []byte
 }
 

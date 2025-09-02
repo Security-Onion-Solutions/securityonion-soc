@@ -183,7 +183,6 @@ $(document).ready(function () {
           maximizedCancelFn: null,
           licenseKey: null,
           licenseStatus: null,
-          enableReverseLookup: false,
           ip2host: {},
           securitySettingsAlreadyChecked: false,
           forceUserOtp: false,
@@ -469,7 +468,6 @@ $(document).ready(function () {
                   this.parameters = response.data.parameters;
                   this.elasticVersion = response.data.elasticVersion;
                   this.timezones = response.data.timezones;
-                  this.enableReverseLookup = response.data.parameters.enableReverseLookup;
                   this.subgrids = response.data.subgrids;
                   this.exportNodeId = response.data.parameters.exportNodeId;
                   this.customReports = response.data.customReports;
@@ -1477,12 +1475,9 @@ $(document).ready(function () {
           }
         },
         batchLookup(ips, comp) {
-          if (!this.enableReverseLookup) {
-            return;
-          }
-
           ips = ips.filter(ip => (this.isIPv4(ip) || this.isIPv6(ip)) && !this.ip2host[ip]);
           if (ips.length) {
+            ips = [...new Set(ips)];
             ips.forEach(ip => this.ip2host[ip] = []);
             const route = this;
 
@@ -1526,10 +1521,6 @@ $(document).ready(function () {
           return b === true || ("" + b).toLowerCase() == "true";
         },
         pickHostname(ip) {
-          if (!this.enableReverseLookup) {
-            return '';
-          }
-
           const arr = this.ip2host[ip];
           if (arr && arr.length) {
             const names = this.ip2host[ip].filter(host => host != ip);
