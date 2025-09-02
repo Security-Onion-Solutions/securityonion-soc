@@ -25,7 +25,7 @@
 										@update:model-value="filterToggled($event, toggle); notifyInputsChanged()"
 										:label="$root.localizeMessage(toggle.name)" color="primary"></v-switch>
 								</span>
-								<span v-if="isCategory('alerts')" :data-aid="'ai_investigated_toggle_' + category">
+								<span v-if="investigateEnabled" :data-aid="'ai_investigated_toggle_' + category">
 									<v-switch
 										id="aiInvestigatedToggle"
 										:disabled="loading()"
@@ -323,7 +323,7 @@
 															:data-aid="'groups_escalate_' + category" :aria-label="i18n.escalate">
 															<v-icon :title="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate">fa-exclamation-triangle</v-icon>
 														</v-btn>
-														<v-btn id="aiInvestigateButton" v-if="isCategory('alerts') && item['rule.uuid']" variant="text" size="x-small" icon
+														<v-btn id="aiInvestigateButton" v-if="investigateEnabled && item['rule.uuid']" variant="text" size="x-small" icon
 															@click="startAIInvestigation($event, item, groupIdx)"
 															:disabled="item._aiInvestigationStatus === 'investigating'"
 															:color="getAIInvestigationButtonColor(item)"
@@ -638,7 +638,7 @@
 												:color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'secondary' : 'primary'" :aria-label="i18n.escalate">
 												<v-icon :title="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate">fa-exclamation-triangle</v-icon>
 											</v-btn>
-											<v-btn id="aiInvestigateButton" v-if="isCategory('alerts') && item['rule.uuid']" variant="text" icon size="x-small"
+											<v-btn id="aiInvestigateButton" v-if="investigateEnabled && item['rule.uuid']" variant="text" icon size="x-small"
 												@click="startAIInvestigation($event, item, -1)"
 												:disabled="item._aiInvestigationStatus === 'investigating'"
 												:color="getAIInvestigationButtonColor(item)"

@@ -53,6 +53,8 @@ const huntComponent = {
       huntPending: false,
       ackEnabled: false,
       escalateEnabled: false,
+      investigateEnabled: false,
+      investigationMsg: '',
       viewEnabled: false,
       createLink: '',
       collapsedSections: [],
@@ -271,6 +273,11 @@ const huntComponent = {
     loading() {
       return this.$root.loading;
     },
+    initAssistant(params) {
+      console.log("assistant", params);
+      this.assistantEnabled = params["enabledInSoc"];
+      this.investigationMsg = params["investigationPrompt"];
+    },
     async initHunt(params) {
       this.params = params;
       this.groupByItemsPerPage = params["groupItemsPerPage"];
@@ -329,6 +336,12 @@ const huntComponent = {
       }
 
       this.setupCharts();
+
+      if (this.isCategory('alerts')) {
+        this.$root.loadParameters('assistant', this.initAssistant);
+        this.investigateEnabled = this.$root.isLicensed('oai') && this.assistantEnabled;
+      }
+
       this.$root.stopLoading();
 
       if (!this.parseUrlParameters()) return;
@@ -3377,7 +3390,9 @@ const huntComponent = {
       };
 
       // Create investigation message
-      const investigationMsg = `Investigate the Security Onion alert with SOC ID ${alertData.socId || 'Unknown'} systematically.`;
+      //const investigationMsg = `Investigate the Security Onion alert with SOC ID ${alertData.socId || 'Unknown'} systematically.`;
+
+      const investigationMsg = this.investigationMsg.replaceAll("{socid}", alertData.socId || 'Unknown');
 
       return investigationMsg;
     },

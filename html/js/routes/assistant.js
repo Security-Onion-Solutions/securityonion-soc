@@ -22,6 +22,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     pendingToolResults: new Map(), // Store tool results waiting to be sent back
     contextLength: 0, // Track total context length
     increaseMaxContextThreshold: false, // Toggle for max context threshold
+    assistantEnabled: false,
   }},
   async created() {
     this.loadContextThresholdSetting();
@@ -33,6 +34,9 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
   beforeUnmount() {
     // Backend automatically saves chats, just save current chat ID
     this.saveCurrentChatId();
+  },
+  mounted() {
+    this.$root.loadParameters('assistant', this.initAssistant);
   },
   watch: {
     '$route'(to, from) {
@@ -46,6 +50,12 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     }
   },
   methods: {
+
+    initAssistant(params) {
+      console.log("assistant", params);
+      this.assistantEnabled = params["enabledInSoc"] && this.$root.isLicensed('oai');
+    },
+    
     // Calculate context length from usage data (input_tokens + output_tokens)
     calculateContextFromUsage(usage) {
       if (!usage) return 0;
@@ -280,6 +290,11 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     async sendMessage() {
       if (!this.newMessage.trim()) return;
       
+      if (!this.assistantEnabled) {
+        this.$root.showError('Onion AI is not enabled or is otherwise unavailable.');
+        return;
+      }
+
       // Check if context length has reached the limit
       const maxContextLength = this.increaseMaxContextThreshold ? 1000000 : 200000;
       if (this.contextLength >= maxContextLength) {
