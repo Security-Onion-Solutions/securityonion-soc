@@ -32,9 +32,7 @@ import (
 )
 
 const (
-	DEFAULT_APIKEY = ""
-	DEFAULT_APIURL = "https://b7cdq33i55t73bzisq7gplzd340mvxgo.lambda-url.us-east-2.on.aws/"
-	DEFAULT_MODEL  = "claude-sonnet"
+	DEFAULT_APIURL = "https://onionai.securityonion.net/"
 )
 
 var (
@@ -45,7 +43,6 @@ type AssistantCoordinator struct {
 	srv       *server.Server
 	apiKey    string
 	apiUrl    string
-	model     string
 	isRunning bool
 
 	FunctionLibrary map[string]Tool
@@ -70,7 +67,6 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 	ac.FunctionLibrary = knownTools
 
 	ac.apiUrl = module.GetStringDefault(config, "apiUrl", DEFAULT_APIURL)
-	ac.model = module.GetStringDefault(config, "model", DEFAULT_MODEL)
 
 	ac.toolConfig, err = buildToolConfig(ac.FunctionLibrary)
 
