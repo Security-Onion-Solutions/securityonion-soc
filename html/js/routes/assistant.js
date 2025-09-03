@@ -363,21 +363,20 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     async callAIAPI(userMessage) {
       try {
-        let response = await fetch('/api/assistant/chat', {
-          method: 'POST',
+        const response = await this.$root.papi.post('/assistant/chat', {
+          msg: userMessage,
+          sessionId: this.currentChatId,
+        },
+        {
           headers: {
-            'Content-Type': 'application/json',
-            'X-Srv-Token': this.$root.papi.defaults.headers.common['X-Srv-Token'],
             'Accept': 'text/event-stream'
           },
-          body: JSON.stringify({
-            msg: userMessage,
-            sessionId: this.currentChatId
-          })
+          responseType: 'stream',
+          adapter: 'fetch',
         });
 
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder('utf-8');
+        const stream = response.data;
+        const reader = stream.pipeThrough(new TextDecoderStream()).getReader();
 
         console.log("reading messages...");
         let output = 0;
@@ -390,12 +389,9 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           // read in more messages
           const { done, value } = await reader.read();
           if (done) break;
-
-          // parse the text, watch for bytes that span updates
-          let data = decoder.decode(value, { stream: true });
           
           // cleanup the data, split messages apart, remove SSE label, filter out empty lines
-          const newChunks = data.split('\n\n').filter(d => d.trim()).map(d => (d.startsWith("data: ") ? d.slice(6) : d));
+          const newChunks = value.split('\n\n').filter(d => d.trim()).map(d => (d.startsWith("data: ") ? d.slice(6) : d));
           
           // if the last read had partial data, prepend it to the new data and process it again
           if (partial) {
@@ -689,26 +685,20 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         };
         
         // Use streaming for tool results
-        const response = await fetch(`/api/assistant/tool/${toolUse.name}`, {
-          method: 'POST',
+        const response = await this.$root.papi.post(`/assistant/tool/${toolUse.name}`, toolRequest, {
           headers: {
-            'Content-Type': 'application/json',
-            'X-Srv-Token': this.$root.papi.defaults.headers.common['X-Srv-Token'],
             'Accept': 'text/event-stream'
           },
-          body: JSON.stringify(toolRequest)
+          responseType: 'stream',
+          adapter: 'fetch',
         });
-
-        if (!response.ok) {
-          throw new Error(`Tool execution failed: ${response.statusText}`);
-        }
 
         // Update tool status to executing
         toolUse.status = 'executing';
 
         // Stream the AI's response to the tool result
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder('utf-8');
+        const stream = response.data;
+        const reader = stream.pipeThrough(new TextDecoderStream()).getReader();
 
         console.log("Streaming tool result response...");
         let assistantMessage = null;
@@ -720,10 +710,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-
-          let data = decoder.decode(value, { stream: true });
           
-          const newChunks = data.split('\n\n').filter(d => d.trim()).map(d => (d.startsWith("data: ") ? d.slice(6) : d));
+          const newChunks = value.split('\n\n').filter(d => d.trim()).map(d => (d.startsWith("data: ") ? d.slice(6) : d));
           
           if (partial) {
             newChunks[0] = chunks[0] + newChunks[0]

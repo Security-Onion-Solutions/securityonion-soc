@@ -271,6 +271,7 @@ test('restoreLastActiveChat success', async () => {
   comp.chatHistory = fakeChatHistory;
   comp.loadChatFromBackend = jest.fn().mockResolvedValue();
   comp.updateUrlWithSessionId = jest.fn();
+  comp.restoreLastActive = true;
   
   await comp.restoreLastActiveChat();
   
@@ -282,6 +283,7 @@ test('restoreLastActiveChat handles error', async () => {
   comp.loadCurrentChatId = jest.fn().mockReturnValue(fakeSessionId);
   comp.chatHistory = fakeChatHistory;
   comp.loadChatFromBackend = jest.fn().mockRejectedValue(new Error('Load failed'));
+  comp.restoreLastActive = true;
   
   await comp.restoreLastActiveChat();
   
@@ -404,6 +406,7 @@ test('sendMessage with insufficient credits', async () => {
   const showErrorMock = mockShowError();
   comp.newMessage = 'Test message';
   comp.creditsRemaining = 0;
+  comp.assistantEnabled = true;
   
   await comp.sendMessage();
   
@@ -430,6 +433,7 @@ test('sendMessage creates session ID and updates URL', async () => {
   comp.callAIAPI = jest.fn().mockResolvedValue();
   comp.loadStoredChats = jest.fn().mockResolvedValue();
   comp.scrollToBottom = jest.fn();
+  comp.assistantEnabled = true;
   
   await comp.sendMessage();
   
@@ -453,6 +457,7 @@ test('sendMessage handles API error', async () => {
   comp.currentChatId = fakeSessionId;
   comp.callAIAPI = jest.fn().mockRejectedValue(new Error('API failed'));
   comp.scrollToBottom = jest.fn();
+  comp.assistantEnabled = true;
   
   await comp.sendMessage();
   
@@ -526,33 +531,33 @@ test('executeTool makes correct API request', async () => {
   
   // Mock fetch to return a successful response
   const mockResponse = {
-    ok: true,
-    body: {
-      getReader: jest.fn().mockReturnValue({
-        read: jest.fn()
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode('data: [DONE]\n\n') })
-          .mockResolvedValueOnce({ done: true })
-      })
+    data: {
+      pipeThrough: jest.fn().mockReturnValue({
+        getReader: jest.fn().mockReturnValue({
+          read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
+            .mockResolvedValueOnce({ done: true })
+        }),
+      }),
     }
   };
-  global.fetch.mockResolvedValue(mockResponse);
+  const mockPost = mockPapi('post', mockResponse);
   comp.loadCredits = jest.fn().mockResolvedValue();
-  comp.$root.papi.get = jest.fn().mockResolvedValue({ data: [] });
+  mockPapi('get', { data: [] });
   
   await comp.executeTool(toolUse);
   
-  expect(global.fetch).toHaveBeenCalledWith('/api/assistant/tool/query_events', {
-    method: 'POST',
+  expect(mockPost).toHaveBeenCalledWith('/assistant/tool/query_events', {
+    sessionId: fakeSessionId,
+    toolUseId: toolUse.id,
+    params: toolUse.input  
+  },
+  {
+    adapter: 'fetch',
     headers: {
-      'Content-Type': 'application/json',
-      'X-Srv-Token': comp.$root.papi.defaults.headers.common['X-Srv-Token'],
-      'Accept': 'text/event-stream'
+      'Accept': 'text/event-stream',
     },
-    body: JSON.stringify({
-      sessionId: fakeSessionId,
-      toolUseId: toolUse.id,
-      params: toolUse.input
-    })
+    responseType: 'stream',
   });
   expect(toolUse.status).toBe('executing');
 });
@@ -561,8 +566,8 @@ test('executeTool handles fetch error', async () => {
   const toolUse = { ...fakeToolUse };
   comp.currentChatId = fakeSessionId;
   comp.scrollToBottom = jest.fn();
-  
-  global.fetch.mockRejectedValue(new Error('Network error'));
+
+  mockPapi('post', null, new Error('Network error'));
   
   await comp.executeTool(toolUse);
   
@@ -581,11 +586,7 @@ test('executeTool handles non-ok response', async () => {
   comp.currentChatId = fakeSessionId;
   comp.scrollToBottom = jest.fn();
   
-  const mockResponse = {
-    ok: false,
-    statusText: 'Internal Server Error'
-  };
-  global.fetch.mockResolvedValue(mockResponse);
+  mockPapi('post', null, new Error('Tool execution failed: Internal Server Error'));
   
   await comp.executeTool(toolUse);
   
@@ -635,7 +636,7 @@ test('executeTool processes content_block_delta with text', async () => {
   comp.currentChatId = fakeSessionId;
   comp.scrollToBottom = jest.fn();
   comp.loadCredits = jest.fn().mockResolvedValue();
-  comp.$root.papi.get = jest.fn().mockResolvedValue({ data: [] });
+  mockPapi('get', { data: [] });
   
   const messageStartData = JSON.stringify({ type: 'message_start' });
   const textDeltaData = JSON.stringify({
@@ -645,17 +646,20 @@ test('executeTool processes content_block_delta with text', async () => {
   
   const mockResponse = {
     ok: true,
-    body: {
-      getReader: jest.fn().mockReturnValue({
-        read: jest.fn()
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(`data: ${messageStartData}\n\n`) })
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(`data: ${textDeltaData}\n\n`) })
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode('data: [DONE]\n\n') })
-          .mockResolvedValueOnce({ done: true })
-      })
+    data: {
+      pipeThrough: jest.fn().mockReturnValue({
+        getReader: jest.fn().mockReturnValue({
+          read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: `data: ${messageStartData}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: `data: ${textDeltaData}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
+            .mockResolvedValueOnce({ done: true })
+        })
+      }),
     }
   };
-  global.fetch.mockResolvedValue(mockResponse);
+  // global.fetch.mockResolvedValue(mockResponse);
+  mockPapi('post', mockResponse);
   
   await comp.executeTool(toolUse);
   
@@ -669,7 +673,7 @@ test('executeTool processes message_stop with usage', async () => {
   comp.currentChatId = fakeSessionId;
   comp.scrollToBottom = jest.fn();
   comp.loadCredits = jest.fn().mockResolvedValue();
-  comp.$root.papi.get = jest.fn().mockResolvedValue({ data: [] });
+  mockPapi('get', { data: [] });
   comp.updateContextLength = jest.fn();
   comp.$forceUpdate = jest.fn();
   
@@ -682,18 +686,21 @@ test('executeTool processes message_stop with usage', async () => {
   
   const mockResponse = {
     ok: true,
-    body: {
-      getReader: jest.fn().mockReturnValue({
-        read: jest.fn()
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(`data: ${messageStartData}\n\n`) })
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(`data: ${messageDeltaData}\n\n`) })
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(`data: ${messageStopData}\n\n`) })
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode('data: [DONE]\n\n') })
-          .mockResolvedValueOnce({ done: true })
+    data: {
+      pipeThrough: jest.fn().mockReturnValue({
+        getReader: jest.fn().mockReturnValue({
+          read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: `data: ${messageStartData}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: `data: ${messageDeltaData}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: `data: ${messageStopData}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
+            .mockResolvedValueOnce({ done: true })
+        })
       })
     }
   };
-  global.fetch.mockResolvedValue(mockResponse);
+  
+  mockPapi('post', mockResponse);
   
   await comp.executeTool(toolUse);
   
@@ -708,7 +715,7 @@ test('executeTool handles chained tool use in response', async () => {
   comp.currentChatId = fakeSessionId;
   comp.scrollToBottom = jest.fn();
   comp.loadCredits = jest.fn().mockResolvedValue();
-  comp.$root.papi.get = jest.fn().mockResolvedValue({ data: [] });
+  mockPapi('get', { data: [] });
   comp.executingTools = new Map();
   
   const messageStartData = JSON.stringify({ type: 'message_start' });
@@ -725,17 +732,19 @@ test('executeTool handles chained tool use in response', async () => {
   
   const mockResponse = {
     ok: true,
-    body: {
-      getReader: jest.fn().mockReturnValue({
-        read: jest.fn()
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(`data: ${messageStartData}\n\n`) })
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(`data: ${contentBlockStartData}\n\n`) })
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode('data: [DONE]\n\n') })
-          .mockResolvedValueOnce({ done: true })
+    data: {
+      pipeThrough: jest.fn().mockReturnValue({
+        getReader: jest.fn().mockReturnValue({
+          read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: `data: ${messageStartData}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: `data: ${contentBlockStartData}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
+            .mockResolvedValueOnce({ done: true })
+        })
       })
     }
   };
-  global.fetch.mockResolvedValue(mockResponse);
+  mockPapi('post', mockResponse);
   
   await comp.executeTool(toolUse);
   
@@ -749,6 +758,9 @@ test('executeTool handles chained tool use in response', async () => {
 });
 
 test('executeTool captures raw tool result from backend', async () => {
+  // wait out any setTimeouts from previous tests
+  await new Promise(resolve => setTimeout(resolve, 1100));
+
   const toolUse = { ...fakeToolUse };
   comp.currentChatId = fakeSessionId;
   comp.scrollToBottom = jest.fn();
@@ -771,19 +783,21 @@ test('executeTool captures raw tool result from backend', async () => {
       }
     ]
   };
-  comp.$root.papi.get = jest.fn().mockResolvedValue(backendResponse);
+  mockPapi('get', backendResponse);
   
   const mockResponse = {
     ok: true,
-    body: {
-      getReader: jest.fn().mockReturnValue({
-        read: jest.fn()
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode('data: [DONE]\n\n') })
-          .mockResolvedValueOnce({ done: true })
+    data: {
+      pipeThrough: jest.fn().mockReturnValue({
+        getReader: jest.fn().mockReturnValue({
+          read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
+            .mockResolvedValueOnce({ done: true })
+        })
       })
     }
   };
-  global.fetch.mockResolvedValue(mockResponse);
+  mockPapi('post', mockResponse);
   
   await comp.executeTool(toolUse);
   
@@ -818,20 +832,22 @@ test('executeTool handles tool result with error', async () => {
       }
     ]
   };
-  comp.$root.papi.get = jest.fn().mockResolvedValue(backendResponse);
+  mockPapi('get', backendResponse)
   
   const mockResponse = {
     ok: true,
-    body: {
-      getReader: jest.fn().mockReturnValue({
-        read: jest.fn()
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode('data: [DONE]\n\n') })
-          .mockResolvedValueOnce({ done: true })
+    data: {
+      pipeThrough: jest.fn().mockReturnValue({
+        getReader: jest.fn().mockReturnValue({
+          read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
+            .mockResolvedValueOnce({ done: true })
+        })
       })
     }
   };
-  global.fetch.mockResolvedValue(mockResponse);
-  
+  mockPapi('post', mockResponse);
+
   await comp.executeTool(toolUse);
   
   // Wait for the setTimeout to complete
@@ -878,19 +894,21 @@ test('executeTool updates credits after execution', async () => {
   comp.currentChatId = fakeSessionId;
   comp.scrollToBottom = jest.fn();
   comp.loadCredits = jest.fn().mockResolvedValue();
-  comp.$root.papi.get = jest.fn().mockResolvedValue({ data: [] });
+  mockPapi('get', { data: [] });
   
   const mockResponse = {
     ok: true,
-    body: {
-      getReader: jest.fn().mockReturnValue({
-        read: jest.fn()
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode('data: [DONE]\n\n') })
-          .mockResolvedValueOnce({ done: true })
+    data: {
+      pipeThrough: jest.fn().mockReturnValue({
+        getReader: jest.fn().mockReturnValue({
+          read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
+            .mockResolvedValueOnce({ done: true })
+        })
       })
     }
   };
-  global.fetch.mockResolvedValue(mockResponse);
+  mockPapi('post', mockResponse);
   
   await comp.executeTool(toolUse);
   
@@ -904,30 +922,30 @@ test('callAIAPI makes correct API request', async () => {
   // Mock fetch to return a successful response
   const mockResponse = {
     ok: true,
-    body: {
-      getReader: jest.fn().mockReturnValue({
-        read: jest.fn()
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode('data: [DONE]\n\n') })
-          .mockResolvedValueOnce({ done: true })
+    data: {
+      pipeThrough: jest.fn().mockReturnValue({
+        getReader: jest.fn().mockReturnValue({
+          read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
+            .mockResolvedValueOnce({ done: true })
+        })
       })
     }
   };
-  global.fetch.mockResolvedValue(mockResponse);
+  const mockPost = mockPapi('post', mockResponse);
   comp.loadCredits = jest.fn().mockResolvedValue();
   
   await comp.callAIAPI('Test message');
   
-  expect(global.fetch).toHaveBeenCalledWith('/api/assistant/chat', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Srv-Token': comp.$root.papi.defaults.headers.common['X-Srv-Token'],
-      'Accept': 'text/event-stream'
-    },
-    body: JSON.stringify({
+  expect(mockPost).toHaveBeenCalledWith('/assistant/chat', {
       msg: 'Test message',
       sessionId: fakeSessionId
-    })
+  }, {
+    adapter: 'fetch',
+    headers: {
+      'Accept': 'text/event-stream'
+    },
+    responseType: 'stream'
   });
   expect(comp.loadCredits).toHaveBeenCalled();
 });
@@ -959,16 +977,18 @@ test('callAIAPI processes message_start event', async () => {
   
   const mockResponse = {
     ok: true,
-    body: {
-      getReader: jest.fn().mockReturnValue({
-        read: jest.fn()
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(`data: ${messageStartData}\n\n`) })
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode('data: [DONE]\n\n') })
-          .mockResolvedValueOnce({ done: true })
+    data: {
+      pipeThrough: jest.fn().mockReturnValue({
+        getReader: jest.fn().mockReturnValue({
+          read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: `data: ${messageStartData}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
+            .mockResolvedValueOnce({ done: true })
+        })
       })
     }
   };
-  global.fetch.mockResolvedValue(mockResponse);
+  mockPapi('post', mockResponse);
   
   await comp.callAIAPI('Test message');
   
@@ -1001,17 +1021,19 @@ test('callAIAPI processes content_block_start with tool_use', async () => {
   
   const mockResponse = {
     ok: true,
-    body: {
-      getReader: jest.fn().mockReturnValue({
-        read: jest.fn()
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(`data: ${messageStartData}\n\n`) })
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(`data: ${contentBlockStartData}\n\n`) })
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode('data: [DONE]\n\n') })
-          .mockResolvedValueOnce({ done: true })
+    data: {
+      pipeThrough: jest.fn().mockReturnValue({
+        getReader: jest.fn().mockReturnValue({
+          read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: `data: ${messageStartData}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: `data: ${contentBlockStartData}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
+            .mockResolvedValueOnce({ done: true })
+        })
       })
     }
   };
-  global.fetch.mockResolvedValue(mockResponse);
+  mockPapi('post', mockResponse);
   
   await comp.callAIAPI('Test message');
   
@@ -1042,18 +1064,20 @@ test('callAIAPI processes content_block_delta with text_delta', async () => {
   
   const mockResponse = {
     ok: true,
-    body: {
-      getReader: jest.fn().mockReturnValue({
-        read: jest.fn()
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(`data: ${messageStartData}\n\n`) })
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(`data: ${textDeltaData1}\n\n`) })
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(`data: ${textDeltaData2}\n\n`) })
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode('data: [DONE]\n\n') })
-          .mockResolvedValueOnce({ done: true })
+    data: {
+      pipeThrough: jest.fn().mockReturnValue({
+        getReader: jest.fn().mockReturnValue({
+          read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: `data: ${messageStartData}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: `data: ${textDeltaData1}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: `data: ${textDeltaData2}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
+            .mockResolvedValueOnce({ done: true })
+        })
       })
     }
   };
-  global.fetch.mockResolvedValue(mockResponse);
+  mockPapi('post', mockResponse);
   
   await comp.callAIAPI('Test message');
   
@@ -1087,19 +1111,21 @@ test('callAIAPI processes content_block_delta with input_json_delta', async () =
   
   const mockResponse = {
     ok: true,
-    body: {
-      getReader: jest.fn().mockReturnValue({
-        read: jest.fn()
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(`data: ${messageStartData}\n\n`) })
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(`data: ${contentBlockStartData}\n\n`) })
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(`data: ${inputJsonDelta1}\n\n`) })
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(`data: ${inputJsonDelta2}\n\n`) })
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode('data: [DONE]\n\n') })
-          .mockResolvedValueOnce({ done: true })
+    data: {
+      pipeThrough: jest.fn().mockReturnValue({
+        getReader: jest.fn().mockReturnValue({
+          read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: `data: ${messageStartData}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: `data: ${contentBlockStartData}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: `data: ${inputJsonDelta1}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: `data: ${inputJsonDelta2}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
+            .mockResolvedValueOnce({ done: true })
+        })
       })
     }
   };
-  global.fetch.mockResolvedValue(mockResponse);
+  mockPapi('post', mockResponse);
   
   await comp.callAIAPI('Test message');
   
@@ -1134,19 +1160,21 @@ test('callAIAPI processes content_block_stop event', async () => {
   
   const mockResponse = {
     ok: true,
-    body: {
-      getReader: jest.fn().mockReturnValue({
-        read: jest.fn()
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(`data: ${messageStartData}\n\n`) })
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(`data: ${contentBlockStartData}\n\n`) })
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(`data: ${inputJsonDelta}\n\n`) })
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(`data: ${contentBlockStopData}\n\n`) })
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode('data: [DONE]\n\n') })
-          .mockResolvedValueOnce({ done: true })
+    data: {
+      pipeThrough: jest.fn().mockReturnValue({
+        getReader: jest.fn().mockReturnValue({
+          read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: `data: ${messageStartData}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: `data: ${contentBlockStartData}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: `data: ${inputJsonDelta}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: `data: ${contentBlockStopData}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
+            .mockResolvedValueOnce({ done: true })
+        })
       })
     }
   };
-  global.fetch.mockResolvedValue(mockResponse);
+  mockPapi('post', mockResponse);
   
   await comp.callAIAPI('Test message');
   
@@ -1181,19 +1209,21 @@ test('callAIAPI handles content_block_stop with invalid JSON', async () => {
   
   const mockResponse = {
     ok: true,
-    body: {
-      getReader: jest.fn().mockReturnValue({
-        read: jest.fn()
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(`data: ${messageStartData}\n\n`) })
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(`data: ${contentBlockStartData}\n\n`) })
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(`data: ${inputJsonDelta}\n\n`) })
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(`data: ${contentBlockStopData}\n\n`) })
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode('data: [DONE]\n\n') })
-          .mockResolvedValueOnce({ done: true })
+    data: {
+      pipeThrough: jest.fn().mockReturnValue({
+        getReader: jest.fn().mockReturnValue({
+          read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: `data: ${messageStartData}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: `data: ${contentBlockStartData}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: `data: ${inputJsonDelta}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: `data: ${contentBlockStopData}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
+            .mockResolvedValueOnce({ done: true })
+        })
       })
     }
   };
-  global.fetch.mockResolvedValue(mockResponse);
+  mockPapi('post', mockResponse);
   
   await comp.callAIAPI('Test message');
   
@@ -1219,18 +1249,20 @@ test('callAIAPI processes message_stop with usage', async () => {
   
   const mockResponse = {
     ok: true,
-    body: {
-      getReader: jest.fn().mockReturnValue({
-        read: jest.fn()
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(`data: ${messageStartData}\n\n`) })
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(`data: ${messageDeltaData}\n\n`) })
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(`data: ${messageStopData}\n\n`) })
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode('data: [DONE]\n\n') })
-          .mockResolvedValueOnce({ done: true })
+    data: {
+      pipeThrough: jest.fn().mockReturnValue({
+        getReader: jest.fn().mockReturnValue({
+          read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: `data: ${messageStartData}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: `data: ${messageDeltaData}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: `data: ${messageStopData}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
+            .mockResolvedValueOnce({ done: true })
+        })
       })
     }
   };
-  global.fetch.mockResolvedValue(mockResponse);
+  mockPapi('post', mockResponse);
   
   await comp.callAIAPI('Test message');
   
@@ -1256,18 +1288,20 @@ test('callAIAPI processes message_delta with usage', async () => {
   
   const mockResponse = {
     ok: true,
-    body: {
-      getReader: jest.fn().mockReturnValue({
-        read: jest.fn()
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(`data: ${messageStartData}\n\n`) })
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(`data: ${messageDeltaData}\n\n`) })
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(`data: ${messageStopData}\n\n`) })
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode('data: [DONE]\n\n') })
-          .mockResolvedValueOnce({ done: true })
+    data: {
+      pipeThrough: jest.fn().mockReturnValue({
+        getReader: jest.fn().mockReturnValue({
+          read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: `data: ${messageStartData}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: `data: ${messageDeltaData}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: `data: ${messageStopData}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
+            .mockResolvedValueOnce({ done: true })
+        })
       })
     }
   };
-  global.fetch.mockResolvedValue(mockResponse);
+  mockPapi('post', mockResponse);
   
   await comp.callAIAPI('Test message');
   
@@ -1316,16 +1350,18 @@ test('callAIAPI handles concatenated JSON objects', async () => {
   
   const mockResponse = {
     ok: true,
-    body: {
-      getReader: jest.fn().mockReturnValue({
-        read: jest.fn()
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(`data: ${concatenatedJson}\n\n`) })
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode('data: [DONE]\n\n') })
-          .mockResolvedValueOnce({ done: true })
+    data: {
+      pipeThrough: jest.fn().mockReturnValue({
+        getReader: jest.fn().mockReturnValue({
+          read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: `data: ${concatenatedJson}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
+            .mockResolvedValueOnce({ done: true })
+        })
       })
     }
   };
-  global.fetch.mockResolvedValue(mockResponse);
+  mockPapi('post', mockResponse);
   
   await comp.callAIAPI('Test message');
   
@@ -1350,18 +1386,20 @@ test('callAIAPI handles unhandled event types with usage', async () => {
   
   const mockResponse = {
     ok: true,
-    body: {
-      getReader: jest.fn().mockReturnValue({
-        read: jest.fn()
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(`data: ${messageStartData}\n\n`) })
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(`data: ${unknownEventData}\n\n`) })
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(`data: ${messageStopData}\n\n`) })
-          .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode('data: [DONE]\n\n') })
-          .mockResolvedValueOnce({ done: true })
+    data: {
+      pipeThrough: jest.fn().mockReturnValue({
+        getReader: jest.fn().mockReturnValue({
+          read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: `data: ${messageStartData}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: `data: ${unknownEventData}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: `data: ${messageStopData}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
+            .mockResolvedValueOnce({ done: true })
+        })
       })
     }
   };
-  global.fetch.mockResolvedValue(mockResponse);
+  mockPapi('post', mockResponse);
   
   await comp.callAIAPI('Test message');
   

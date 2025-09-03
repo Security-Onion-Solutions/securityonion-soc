@@ -122,6 +122,8 @@ global.VueRouter = {
   createWebHashHistory: () => { },
 };
 
+global.TextDecoderStream = class { };
+
 ////////////////////////////////////
 // Test Helper Functions
 ////////////////////////////////////
