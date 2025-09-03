@@ -839,6 +839,7 @@ const i18n = {
       restartMinionHelp: 'Reboot this node',
       restartRequired: '(awaiting reboot)',
       restartRequiredHelp: 'This node is waiting to be rebooted, typically after a kernel update; click to reboot now',
+      restoreLastActive: 'Automatically restore last active chat session',
       results: 'Results',
       review: 'Review',
       role: 'Role',

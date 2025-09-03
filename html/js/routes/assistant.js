@@ -22,10 +22,12 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     pendingToolResults: new Map(), // Store tool results waiting to be sent back
     contextLength: 0, // Track total context length
     increaseMaxContextThreshold: false, // Toggle for max context threshold
+    restoreLastActive: false, // Toggle to restore last active chat
     assistantEnabled: false,
   }},
   async created() {
     this.loadContextThresholdSetting();
+    this.loadLastActiveSetting();
     this.loadChatHistory();
     await this.loadStoredChats();
     await this.handleRouteSessionId();
@@ -47,6 +49,9 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     'increaseMaxContextThreshold'() {
       this.saveContextThresholdSetting();
+    },
+    'restoreLastActive' () {
+      this.saveLastActiveSetting();
     }
   },
   methods: {
@@ -187,6 +192,9 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }
     },
     async restoreLastActiveChat() {
+      if (!this.restoreLastActive) {
+        return;
+      }
       const lastChatId = this.loadCurrentChatId();
       if (lastChatId && this.chatHistory.length > 0) {
         try {
@@ -329,6 +337,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         timestamp: new Date().toISOString()
       };
       
+      if (this.messages.length == 1) {
+        this.messages = [];
+      }
+
       // Add user message to chat
       this.messages.push(userMessage);
       const messageText = this.newMessage.trim();
@@ -383,7 +395,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           let data = decoder.decode(value, { stream: true });
           
           // cleanup the data, split messages apart, remove SSE label, filter out empty lines
-          const newChunks = data.split('\n\n').filter(d => d && d.startsWith('data:')).map(d => (d.startsWith("data: ") ? d.slice(6) : d));
+          const newChunks = data.split('\n\n').filter(d => d.trim()).map(d => (d.startsWith("data: ") ? d.slice(6) : d));
           
           // if the last read had partial data, prepend it to the new data and process it again
           if (partial) {
@@ -460,20 +472,20 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
                 if (currentChunk.trim()) {
                   partial = true;
                   chunks.push(currentChunk);
-                  console.log('partial found');
+                  console.log('partial found - case 1', chunks);
                 }
                 continue;
               } else if (currentChunk.trim()) {
                 // No complete JSON found, treat entire chunk as partial
                 partial = true;
                 chunks = [currentChunk];
-                console.log('partial found');
+                console.log('partial found - case 2', chunks);
                 break;
               } else {
                 // Fallback: treat as partial
                 partial = true;
                 chunks = [chunk];
-                console.log('partial found');
+                console.log('partial found - case 3', chunks);
                 break;
               }
             }
@@ -711,7 +723,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
 
           let data = decoder.decode(value, { stream: true });
           
-          const newChunks = data.split('\n\n').filter(d => d && d.startsWith('data:')).map(d => (d.startsWith("data: ") ? d.slice(6) : d));
+          const newChunks = data.split('\n\n').filter(d => d.trim()).map(d => (d.startsWith("data: ") ? d.slice(6) : d));
           
           if (partial) {
             newChunks[0] = chunks[0] + newChunks[0]
@@ -778,15 +790,18 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
                 if (currentChunk.trim()) {
                   partial = true;
                   chunks.push(currentChunk);
+                  console.log('partial found - case 1', chunks);
                 }
                 continue;
               } else if (currentChunk.trim()) {
                 partial = true;
                 chunks = [currentChunk];
+                console.log('partial found - case 2', chunks);
                 break;
               } else {
                 partial = true;
                 chunks = [chunk];
+                console.log('partial found - case 3', chunks);
                 break;
               }
             }
@@ -1313,6 +1328,26 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         }
       } catch (error) {
         console.log('Failed to load context threshold setting:', error);
+      }
+    },
+
+    // Save and load settings for the context threshold toggle
+    saveLastActiveSetting() {
+      try {
+        localStorage.setItem('so-chat-restore-last-active', this.restoreLastActive.toString());
+      } catch (error) {
+        console.log('Failed to save restore last active setting:', error);
+      }
+    },
+    
+    loadLastActiveSetting() {
+      try {
+        const saved = localStorage.getItem('so-chat-restore-last-active');
+        if (saved !== null) {
+          this.restoreLastActive = saved === 'true';
+        }
+      } catch (error) {
+        console.log('Failed to load restore last active setting:', error);
       }
     }
   }

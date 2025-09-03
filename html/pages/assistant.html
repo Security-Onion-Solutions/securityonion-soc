@@ -1,4 +1,4 @@
-<v-container fluid data-aid="assistant_screen">
+<v-container v-if="assistantEnabled" fluid data-aid="assistant_screen">
 	<v-row>
 		<v-col cols="12" lg="3">
 			<h2 v-text="i18n.chat"></h2>
@@ -16,6 +16,17 @@
 								hide-details
 								class="my-0"
 								:label="i18n.increaseMaxContextThreshold || 'Increase max context threshold from 200K to 1M (greater credit cost)'"
+								color="primary">
+							</v-switch>
+						</span>
+						<span data-aid="chat_restore_last_active_toggle">
+							<v-switch
+								id="restore-last-active"
+								v-model="restoreLastActive"
+								density="compact"
+								hide-details
+								class="my-0"
+								:label="i18n.restoreLastActive || 'Automatically restore last active chat session'"
 								color="primary">
 							</v-switch>
 						</span>
@@ -221,4 +232,14 @@
 		</v-col>
 	</v-row>
 	
+</v-container>
+
+<v-container v-else fluid data-aid="feature_unavailable">
+	<div style="
+		align-items: center;
+		margin: 0;
+		display: flex;
+		min-height: 50vh;
+		justify-content: center;
+	">This feature is unavailable.</div>
 </v-container>

@@ -2399,18 +2399,18 @@ const huntComponent = {
         if (response.data && Array.isArray(response.data)) {
           // Filter sessions that start with 'investigation_'
           this.investigationSessions = response.data.filter(session =>
-            session.sessionId && session.sessionId.startsWith('investigation_')
+            session.id && session.id.startsWith('investigation_')
           );
 
           // Update aiInvestigations based on session data, keyed by soc_id
           this.aiInvestigations = {};
           this.investigationSessions.forEach(session => {
             // Extract soc_id from session ID: investigation_{soc_id}_{timestamp}
-            const parts = session.sessionId.split('_');
+            const parts = session.id.split('_');
             if (parts.length >= 3) {
               const socId = parts.slice(1, -1).join('_'); // Handle soc_ids that might contain underscores
               this.aiInvestigations[socId] = {
-                chatSessionId: session.sessionId,
+                chatSessionId: session.id,
                 status: 'completed', // Assume completed if session exists
                 socId: socId,
                 timestamp: session.createTime || new Date().toISOString()
