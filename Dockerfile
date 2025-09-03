@@ -10,6 +10,12 @@ ARG ALT_BRANCH=dev
 ARG REVKEYS=
 RUN apk update && apk add libpcap-dev bash git musl-dev gcc npm python3 py3-pip py3-virtualenv python3-dev openssl-dev linux-headers
 COPY . /build
+
+# Mock md2pdf script for testing
+RUN echo "#!/bin/sh" > /build/scripts/md2pdf && \
+	echo "echo 'Helvetica' > /tmp/0.pdf" >> /build/scripts/md2pdf && \
+	chmod u+x /build/scripts/md2pdf
+
 WORKDIR /build
 RUN if [ "$VERSION" != "0.0.0" ]; then mkdir gitdocs && cd gitdocs && \
 	git clone --no-single-branch --depth 50 https://github.com/Security-Onion-Solutions/securityonion-docs.git . && \
@@ -56,7 +62,7 @@ RUN mkdir -p /opt/sensoroni/jobs && chown socore:socore /opt/sensoroni/jobs
 RUN mkdir -p /opt/sensoroni/logs && chown socore:socore /opt/sensoroni/logs
 WORKDIR /opt/sensoroni
 COPY --from=builder /build/sensoroni .
-COPY --from=builder /build/scripts ./scripts
+COPY scripts ./scripts
 COPY --from=builder /build/html ./html
 COPY --from=builder /build/rbac ./rbac
 COPY --from=builder /build/LICENSE .

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"regexp"
 
+	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
@@ -54,6 +55,11 @@ func RegisterClientsRoutes(srv *Server, r chi.Router, prefix string) {
 // @Failure      500                                 "Internal SOC error; review SOC logs"
 // @Router       /connect/clients/ [get]
 func (h *ClientsHandler) getClients(w http.ResponseWriter, r *http.Request) {
+	if !licensing.IsEnabled(licensing.FEAT_API) {
+		web.Respond(w, r, http.StatusBadRequest, "ERROR_LICENSE_INVALID")
+		return
+	}
+
 	ctx := r.Context()
 
 	clients, err := h.server.Clientstore.GetClients(ctx)
@@ -77,6 +83,11 @@ func (h *ClientsHandler) getClients(w http.ResponseWriter, r *http.Request) {
 // @Failure      500                                 "Internal SOC error; review SOC logs"
 // @Router       /connect/clients/ [post]
 func (h *ClientsHandler) postClient(w http.ResponseWriter, r *http.Request) {
+	if !licensing.IsEnabled(licensing.FEAT_API) {
+		web.Respond(w, r, http.StatusBadRequest, "ERROR_LICENSE_INVALID")
+		return
+	}
+
 	ctx := r.Context()
 
 	client := model.NewClient()
@@ -116,6 +127,11 @@ func (h *ClientsHandler) postClient(w http.ResponseWriter, r *http.Request) {
 // @Failure      500                         "Internal SOC error; review SOC logs"
 // @Router       /connect/clients/{id}/permission/{perm} [post]
 func (h *ClientsHandler) postAddPermission(w http.ResponseWriter, r *http.Request) {
+	if !licensing.IsEnabled(licensing.FEAT_API) {
+		web.Respond(w, r, http.StatusBadRequest, "ERROR_LICENSE_INVALID")
+		return
+	}
+
 	ctx := r.Context()
 
 	id := chi.URLParam(r, "id")
@@ -157,6 +173,11 @@ func (h *ClientsHandler) postAddPermission(w http.ResponseWriter, r *http.Reques
 // @Failure      500                                 "Internal SOC error; review SOC logs"
 // @Router       /connect/clients/{id}/secret/ [put]
 func (h *ClientsHandler) putGeneratedSecret(w http.ResponseWriter, r *http.Request) {
+	if !licensing.IsEnabled(licensing.FEAT_API) {
+		web.Respond(w, r, http.StatusBadRequest, "ERROR_LICENSE_INVALID")
+		return
+	}
+
 	ctx := r.Context()
 
 	id := chi.URLParam(r, "id")
@@ -187,6 +208,11 @@ func (h *ClientsHandler) putGeneratedSecret(w http.ResponseWriter, r *http.Reque
 // @Failure      500                                 "Internal SOC error; review SOC logs"
 // @Router       /connect/clients/{id} [put]
 func (h *ClientsHandler) putClient(w http.ResponseWriter, r *http.Request) {
+	if !licensing.IsEnabled(licensing.FEAT_API) {
+		web.Respond(w, r, http.StatusBadRequest, "ERROR_LICENSE_INVALID")
+		return
+	}
+
 	ctx := r.Context()
 
 	id := chi.URLParam(r, "id")
@@ -230,6 +256,11 @@ func (h *ClientsHandler) putClient(w http.ResponseWriter, r *http.Request) {
 // @Failure      500                         "Internal SOC error; review SOC logs"
 // @Router       /connect/clients/{id}/ [delete]
 func (h *ClientsHandler) deleteClient(w http.ResponseWriter, r *http.Request) {
+	if !licensing.IsEnabled(licensing.FEAT_API) {
+		web.Respond(w, r, http.StatusBadRequest, "ERROR_LICENSE_INVALID")
+		return
+	}
+
 	ctx := r.Context()
 
 	id := chi.URLParam(r, "id")
@@ -261,6 +292,11 @@ func (h *ClientsHandler) deleteClient(w http.ResponseWriter, r *http.Request) {
 // @Failure      500                         "Internal SOC error; review SOC logs"
 // @Router       /connect/clients/{id}/permission/{perm} [delete]
 func (h *ClientsHandler) deleteClientPermission(w http.ResponseWriter, r *http.Request) {
+	if !licensing.IsEnabled(licensing.FEAT_API) {
+		web.Respond(w, r, http.StatusBadRequest, "ERROR_LICENSE_INVALID")
+		return
+	}
+
 	ctx := r.Context()
 
 	id := chi.URLParam(r, "id")

@@ -23,8 +23,8 @@ type QueryTask struct {
 	StartTime time.Time `json:"startTime" example:"2024-10-06T19:29:39.332211Z"`
 	// Elapsed runtime of this task
 	ElapsedMs int64 `json:"elapsedMs" example:"100023"`
-	// True if this task can be cancelled
-	Cancellable bool `json:"cancellable" example:"true"`
+	// True if this task can be canceled
+	Cancelable bool `json:"cancelable" example:"true"`
 	// Internally used elasticsearch client
 	EsClient *elasticsearch.Client `json:"-"`
 }

@@ -158,12 +158,12 @@ func (impl *FakeDatastore) GetPackets(ctx context.Context, jobId int, offset int
 	return impl.packets, nil
 }
 
-func (impl *FakeDatastore) SavePacketStream(ctx context.Context, jobId int, reader io.ReadCloser) error {
+func (impl *FakeDatastore) SaveJobStream(ctx context.Context, jobId int, reader io.ReadCloser) error {
 	return nil
 }
 
-func (impl *FakeDatastore) GetPacketStream(ctx context.Context, jobId int, unwrap bool) (io.ReadCloser, string, int64, error) {
-	return nil, "", 0, nil
+func (impl *FakeDatastore) GetJobStream(ctx context.Context, jobId int, unwrap bool) (io.ReadCloser, string, int64, string, error) {
+	return nil, "", 0, "", nil
 }
 
 type FakeMetrics struct {

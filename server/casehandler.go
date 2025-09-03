@@ -751,7 +751,8 @@ func (h *CaseHandler) getTask(w http.ResponseWriter, r *http.Request) {
 // @Description  If the case does not exist, this method will respond with a 200 status and an empty list.
 // @Tags         Cases
 // @Security     bearer[cases/read, events/read]
-// @Param        id  path  string  true  "The case ID to use for searching all artifacts"
+// @Param        groupType  path  string  true  "The type of artifacts to retrieve [attachments, evidence]" example(attachments)
+// @Param        id  query string  true  "The case ID to use for searching all artifacts"
 // @Produce      json
 // @Success      200  {array}   model.Artifact   "The array of artifacts, or an empty array if no matching artifacts found"
 // @Failure      400       "The provided input object or parameters are malformed or invalid"
@@ -759,7 +760,7 @@ func (h *CaseHandler) getTask(w http.ResponseWriter, r *http.Request) {
 // @Failure      403       "Insufficient permissions for this request"
 // @Failure      405       "Case module not configured on server"
 // @Failure      500       "Internal SOC error; review SOC logs"
-// @Router       /connect/case/artifacts/{id} [get]
+// @Router       /connect/case/artifacts/{groupType}/{groupId}/{id} [get]
 func (h *CaseHandler) getArtifact(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 

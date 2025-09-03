@@ -24,6 +24,7 @@ func TestVerifyServer(tester *testing.T) {
 		assert.Equal(tester, DEFAULT_SRV_EXP_SECONDS, cfg.SrvExpSeconds)
 		assert.False(tester, cfg.DeveloperEnabled)
 		assert.Equal(tester, REQUIRED_SRV_KEY_LENGTH, len(cfg.SrvKeyBytes))
+		assert.Equal(tester, DEFAULT_CUSTOM_REPORTS_PATH, cfg.CustomReportsPath)
 	}
 
 	cfg.BindAddress = "http://some.where"

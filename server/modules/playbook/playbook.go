@@ -10,9 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
-	"net/url"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -34,10 +32,17 @@ const (
 	DEFAULT_AUTO_UPDATE_ENABLED               = false
 	DEFAULT_PLAYBOOK_IMPORT_FREQUENCY_SECONDS = 24 * 60 * 60
 	DEFAULT_PLAYBOOK_IMPORT_ERROR_SECONDS     = 10 * 60
-	DEFAULT_PLAYBOOK_REPO                     = "https://github.com/Security-Onion-Solutions/securityonion-resources-playbooks"
-	DEFAULT_PLAYBOOK_REPO_BRANCH              = "main"
 	DEFAULT_PLAYBOOK_REPO_PATH                = "/opt/sensoroni/playbooks"
-	DEFAULT_PLAYBOOK_PATH_IN_REPO             = "securityonion-normalized"
+)
+
+var ( // treat as constant
+	DEFAULT_PLAYBOOK_REPOS = []*model.Repo{
+		{
+			RepoUrl: "https://github.com/Security-Onion-Solutions/securityonion-resources-playbooks",
+			Branch:  util.Ptr("main"),
+			Folder:  util.Ptr("securityonion-normalized"),
+		},
+	}
 )
 
 var ErrBadPermissions = fmt.Errorf("playbooks module not authorized to read playbooks")
@@ -45,10 +50,8 @@ var ErrBadPermissions = fmt.Errorf("playbooks module not authorized to read play
 type PlaybookDiskManager struct {
 	srv                            *server.Server
 	isRunning                      bool
-	playbookRepoUrl                string
-	playbookRepoBranch             string
+	playbookRepos                  []*model.Repo
 	playbookRepoPath               string
-	playbookPathInRepo             string
 	autoUpdateEnabled              bool
 	pbUpdateMutex                  sync.RWMutex
 	interm                         sync.Mutex
@@ -82,10 +85,12 @@ func (pdm *PlaybookDiskManager) Init(config module.ModuleConfig) (err error) {
 	pdm.autoUpdateEnabled = module.GetBoolDefault(config, "autoUpdateEnabled", DEFAULT_AUTO_UPDATE_ENABLED)
 	pdm.playbookImportFrequencySeconds = module.GetIntDefault(config, "playbookImportFrequencySeconds", DEFAULT_PLAYBOOK_IMPORT_FREQUENCY_SECONDS)
 	pdm.playbookImportErrorSeconds = module.GetIntDefault(config, "playbookImportErrorSeconds", DEFAULT_PLAYBOOK_IMPORT_ERROR_SECONDS)
-	pdm.playbookRepoUrl = module.GetStringDefault(config, "playbookRepoUrl", DEFAULT_PLAYBOOK_REPO)
-	pdm.playbookRepoBranch = module.GetStringDefault(config, "playbookRepoBranch", DEFAULT_PLAYBOOK_REPO_BRANCH)
 	pdm.playbookRepoPath = module.GetStringDefault(config, "playbookRepoPath", DEFAULT_PLAYBOOK_REPO_PATH)
-	pdm.playbookPathInRepo = module.GetStringDefault(config, "playbookPathInRepo", DEFAULT_PLAYBOOK_PATH_IN_REPO)
+
+	pdm.playbookRepos, err = model.GetReposDefault(config, "playbookRepos", false, DEFAULT_PLAYBOOK_REPOS)
+	if err != nil {
+		return fmt.Errorf("unable to parse Playbooks playbookRepos: %w", err)
+	}
 
 	return nil
 }
@@ -172,10 +177,11 @@ func (pdm *PlaybookDiskManager) scheduler() {
 		}
 
 		var anythingNew bool
+		var repos []*detections.RepoOnDisk
 
 		if pdm.autoUpdateEnabled {
 			var err error
-			anythingNew, err = pdm.UpdateRepoOnDisk()
+			repos, anythingNew, err = pdm.updateReposOnDisk()
 			if err != nil {
 				logger.WithError(err).Error("unable to update playbook repo")
 				wasSuccessful = false
@@ -193,7 +199,7 @@ func (pdm *PlaybookDiskManager) scheduler() {
 		if anythingNew || force {
 			start := time.Now()
 
-			err := pdm.LoadPlaybooks(logger)
+			err := pdm.LoadPlaybooks(logger, repos)
 			if err != nil {
 				logger.WithError(err).Error("unable to load playbooks")
 				wasSuccessful = false
@@ -208,24 +214,19 @@ func (pdm *PlaybookDiskManager) scheduler() {
 	}
 }
 
-func (pdm *PlaybookDiskManager) UpdateRepoOnDisk() (anythingNew bool, err error) {
-	_, anythingNew, err = detections.UpdateRepos(&pdm.isRunning, pdm.playbookRepoPath, []*model.RuleRepo{
-		{
-			Repo:   pdm.playbookRepoUrl,
-			Branch: util.Ptr(pdm.playbookRepoBranch),
-		},
-	}, pdm.IOManager)
+func (pdm *PlaybookDiskManager) updateReposOnDisk() (repos []*detections.RepoOnDisk, anythingNew bool, err error) {
+	repos, anythingNew, err = detections.UpdateRepos(&pdm.isRunning, pdm.playbookRepoPath, pdm.playbookRepos, pdm.IOManager)
 
 	if err != nil {
-		return false, err
+		return nil, false, err
 	}
 
-	return anythingNew, nil
+	return repos, anythingNew, nil
 }
 
-func (pdm *PlaybookDiskManager) LoadPlaybooks(logger log.Interface) error {
+func (pdm *PlaybookDiskManager) LoadPlaybooks(logger log.Interface, repos []*detections.RepoOnDisk) error {
 	start := time.Now()
-	playbooks, err := pdm.readPlaybooks(logger)
+	playbooks, err := pdm.readPlaybooks(logger, repos)
 	if err != nil {
 		logger.WithError(err).Error("unable to read playbooks")
 		return err
@@ -243,128 +244,135 @@ func (pdm *PlaybookDiskManager) LoadPlaybooks(logger log.Interface) error {
 	return nil
 }
 
-func (pdm *PlaybookDiskManager) readPlaybooks(logger log.Interface) ([]*model.Playbook, error) {
+func (pdm *PlaybookDiskManager) readPlaybooks(logger log.Interface, repos []*detections.RepoOnDisk) ([]*model.Playbook, error) {
 	byDetId := make(map[string][]string)
 	onDisk := make(map[string]string)
 	byCategory := make(map[string][]string)
 	byEngine := make(map[string][]string)
 	types := make(map[string]string)
 
-	repo, err := url.Parse(pdm.playbookRepoUrl)
-	if err != nil {
-		return nil, err
-	}
-
-	repoFolderName := path.Base(repo.Path)
-
-	targetDir := path.Join(pdm.playbookRepoPath, repoFolderName, pdm.playbookPathInRepo)
-	files := 0
+	total := 0
 	playbooks := []*model.Playbook{}
 
-	err = pdm.IOManager.WalkDir(targetDir, func(p string, dir fs.DirEntry, err error) error {
-		if !pdm.isRunning {
-			return detections.ErrModuleStopped
+	for _, pbRepo := range repos {
+		files := 0
+		targetDir := pbRepo.Path
+
+		if pbRepo.Repo.Folder != nil {
+			targetDir = filepath.Join(targetDir, *pbRepo.Repo.Folder)
 		}
 
-		if err != nil {
-			// we can't process this file, but keep walking the dir
-			logger.WithError(err).WithFields(log.Fields{
-				"playbookDir":  targetDir,
-				"playbookPath": p,
-			}).Warn("error while walking playbook directory")
-			return nil
-		}
-
-		info, err := dir.Info()
-		if err != nil {
-			// we can't process this file, but keep walking the dir
-			logger.WithError(err).WithFields(log.Fields{
-				"playbookDir":  targetDir,
-				"playbookPath": p,
-				"dirEntry":     dir,
-			}).Warn("error while walking playbook directory")
-			return nil
-		}
-
-		if info.IsDir() {
-			return nil
-		}
-
-		ext := strings.ToLower(filepath.Ext(info.Name()))
-		if ext != ".yaml" && ext != ".yml" {
-			return nil
-		}
-
-		contents, err := pdm.ReadFile(p)
-		if err != nil {
-			// we can't process this file, but keep walking the dir
-			logger.WithError(err).WithFields(log.Fields{
-				"playbookDir":  targetDir,
-				"playbookPath": p,
-			}).Warn("unable to read file while walking playbook directory")
-			return nil
-		}
-
-		pb := &model.Playbook{}
-
-		err = yaml.Unmarshal(contents, &pb)
-		if err != nil {
-			// we can't process this file, but keep walking the dir
-			logger.WithError(err).WithFields(log.Fields{
-				"playbookDir":  targetDir,
-				"playbookPath": p,
-			}).Warn("unable to unmarshal playbook")
-			return nil
-		}
-
-		id := strings.ToLower(pb.Id)
-		playbooks = append(playbooks, pb)
-		files++
-
-		if pb.DetectionType != "" {
-			types[id] = strings.ToLower(pb.DetectionType)
-		}
-
-		if pb.DetectionId != "" {
-			detId := strings.ToLower(pb.DetectionId)
-			byDetId[detId] = append(byDetId[detId], id)
-		}
-
-		if pb.DetectionCategory != "" {
-			category := strings.ToLower(pb.DetectionCategory)
-			byCategory[category] = append(byCategory[category], id)
-		}
-
-		if pb.DetectionId == "" && pb.DetectionCategory == "" {
-			switch strings.ToLower(pb.DetectionType) {
-			case "sigma":
-				byEngine[string(model.EngineNameElastAlert)] = append(byEngine[string(model.EngineNameElastAlert)], id)
-			case "strelka":
-				byEngine[string(model.EngineNameStrelka)] = append(byEngine[string(model.EngineNameStrelka)], id)
-			case "nids":
-				byEngine[string(model.EngineNameSuricata)] = append(byEngine[string(model.EngineNameSuricata)], id)
-			default:
-				logger.Warn("unexpected playbook detection_type: " + pb.DetectionType)
+		err := pdm.IOManager.WalkDir(targetDir, func(p string, dir fs.DirEntry, err error) error {
+			if !pdm.isRunning {
+				return detections.ErrModuleStopped
 			}
+
+			if err != nil {
+				// we can't process this file, but keep walking the dir
+				logger.WithError(err).WithFields(log.Fields{
+					"playbookDir":  targetDir,
+					"playbookPath": p,
+				}).Warn("error while walking playbook directory")
+				return nil
+			}
+
+			info, err := dir.Info()
+			if err != nil {
+				// we can't process this file, but keep walking the dir
+				logger.WithError(err).WithFields(log.Fields{
+					"playbookDir":  targetDir,
+					"playbookPath": p,
+					"dirEntry":     dir,
+				}).Warn("error while walking playbook directory")
+				return nil
+			}
+
+			if info.IsDir() {
+				return nil
+			}
+
+			ext := strings.ToLower(filepath.Ext(info.Name()))
+			if ext != ".yaml" && ext != ".yml" {
+				return nil
+			}
+
+			contents, err := pdm.ReadFile(p)
+			if err != nil {
+				// we can't process this file, but keep walking the dir
+				logger.WithError(err).WithFields(log.Fields{
+					"playbookDir":  targetDir,
+					"playbookPath": p,
+				}).Warn("unable to read file while walking playbook directory")
+				return nil
+			}
+
+			pb := &model.Playbook{}
+
+			err = yaml.Unmarshal(contents, &pb)
+			if err != nil {
+				// we can't process this file, but keep walking the dir
+				logger.WithError(err).WithFields(log.Fields{
+					"playbookDir":  targetDir,
+					"playbookPath": p,
+				}).Warn("unable to unmarshal playbook")
+				return nil
+			}
+
+			id := strings.ToLower(pb.Id)
+			playbooks = append(playbooks, pb)
+			files++
+
+			if pb.DetectionType != "" {
+				types[id] = strings.ToLower(pb.DetectionType)
+			}
+
+			if pb.DetectionId != "" {
+				detId := strings.ToLower(pb.DetectionId)
+				byDetId[detId] = append(byDetId[detId], id)
+			}
+
+			if pb.DetectionCategory != "" {
+				category := strings.ToLower(pb.DetectionCategory)
+				byCategory[category] = append(byCategory[category], id)
+			}
+
+			if pb.DetectionId == "" && pb.DetectionCategory == "" {
+				switch strings.ToLower(pb.DetectionType) {
+				case "sigma":
+					byEngine[string(model.EngineNameElastAlert)] = append(byEngine[string(model.EngineNameElastAlert)], id)
+				case "strelka":
+					byEngine[string(model.EngineNameStrelka)] = append(byEngine[string(model.EngineNameStrelka)], id)
+				case "nids":
+					byEngine[string(model.EngineNameSuricata)] = append(byEngine[string(model.EngineNameSuricata)], id)
+				default:
+					logger.Warn("unexpected playbook detection_type: " + pb.DetectionType)
+				}
+			}
+
+			_, ok := onDisk[id]
+			if ok {
+				logger.WithField("playbookId", id).Warn("duplicate playbook id")
+			}
+
+			onDisk[id] = p
+
+			return nil
+		})
+		if err != nil {
+			logger.WithError(err).WithField("playbookDir", targetDir).Error("unable to read playbooks")
+			return nil, err
 		}
 
-		_, ok := onDisk[id]
-		if ok {
-			logger.WithField("playbookId", id).Warn("duplicate playbook id")
-		}
+		logger.WithFields(log.Fields{
+			"playbookDir":     targetDir,
+			"playbooksLoaded": files,
+		}).Info("read playbooks")
 
-		onDisk[id] = p
-
-		return nil
-	})
-	if err != nil {
-		logger.WithError(err).WithField("playbookDir", targetDir).Error("unable to read playbooks")
-		return nil, err
+		total += files
 	}
 
 	logger.WithFields(log.Fields{
-		"playbookDir": targetDir,
-		"fileCount":   files,
+		"fileCount": total,
 	}).Info("read playbooks")
 
 	pdm.pbUpdateMutex.Lock()

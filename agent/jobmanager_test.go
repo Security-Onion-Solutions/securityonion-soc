@@ -58,7 +58,11 @@ type panicProcessor struct {
 
 func (jp *panicProcessor) ProcessJob(job *model.Job, reader io.ReadCloser) (io.ReadCloser, error) {
 	jp.processCount++
-	return reader, errors.New(jp.errorString)
+	var err error
+	if jp.errorString != "" {
+		err = errors.New(jp.errorString)
+	}
+	return reader, err
 }
 
 func (jp *panicProcessor) CleanupJob(*model.Job) {}
@@ -109,6 +113,25 @@ func TestProcessJobContinuesIfNoDataAvailable(t *testing.T) {
 
 	assert.Equal(t, 2, proc.processCount)
 	assert.ErrorContains(t, err, "No data available")
+}
+
+func TestProcessJobErrorsIfNoOutput(t *testing.T) {
+	// prep test object
+	jm := &JobManager{}
+
+	proc := panicProcessor{}
+	jm.AddJobProcessor(&proc)
+
+	// prep model
+	job := &model.Job{
+		Id: 101,
+	}
+
+	// test
+	_, err := jm.ProcessJob(job)
+
+	assert.Equal(t, 1, proc.processCount)
+	assert.ErrorContains(t, err, "no job processor provider a result")
 }
 
 func TestUpdateDataEpoch(t *testing.T) {

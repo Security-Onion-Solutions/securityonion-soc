@@ -70,7 +70,7 @@ type StrelkaEngine struct {
 	yaraRulesFolder                string
 	reposFolder                    string
 	autoEnabledYaraRules           []string
-	rulesRepos                     []*model.RuleRepo
+	rulesRepos                     []*model.Repo
 	compileYaraPythonScriptPath    string
 	notify                         bool
 	writeNoRead                    *string
@@ -129,9 +129,9 @@ func (e *StrelkaEngine) Init(config module.ModuleConfig) (err error) {
 	e.IntegrityCheckerData.FrequencySeconds = module.GetIntDefault(config, "integrityCheckFrequencySeconds", DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS)
 	e.autoUpdateEnabled = module.GetBoolDefault(config, "autoUpdateEnabled", DEFAULT_AUTO_UPDATE_ENABLED)
 
-	e.rulesRepos, err = model.GetReposDefault(config, "rulesRepos", []*model.RuleRepo{
+	e.rulesRepos, err = model.GetReposDefault(config, "rulesRepos", true, []*model.Repo{
 		{
-			Repo:    "https://github.com/Security-Onion-Solutions/securityonion-yara",
+			RepoUrl: "https://github.com/Security-Onion-Solutions/securityonion-yara",
 			License: "DRL",
 		},
 	})
@@ -439,11 +439,11 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 
 		ruleset := repo.RulesetName
 		if ruleset == "" {
-			parser, err := url.Parse(repo.Repo.Repo)
+			parser, err := url.Parse(repo.Repo.RepoUrl)
 			if err == nil {
 				_, ruleset = path.Split(parser.Path)
 			} else {
-				ruleset = repo.Repo.Repo
+				ruleset = repo.Repo.RepoUrl
 			}
 		}
 

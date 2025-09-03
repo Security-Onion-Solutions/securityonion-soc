@@ -79,7 +79,14 @@ func (client *Client) SendObject(method string, path string, obj interface{}, re
 				}).Debug("Response")
 				err = errors.New("Request did not complete successfully (" + strconv.Itoa(resp.StatusCode) + "): " + resp.Status)
 			} else if returnedObj != nil && resp.Body != nil {
-				err = json.NewDecoder(resp.Body).Decode(returnedObj)
+				var b []byte
+				b, err = io.ReadAll(resp.Body)
+				if err == nil && len(b) > 0 {
+					// Uncomment the following lines to log the response body for dev troubleshooting only
+					// 	body := string(b)
+					// 	log.WithField("body", body).Debug("Received response")
+				}
+				err = json.NewDecoder(bytes.NewReader(b)).Decode(returnedObj)
 				if err == nil {
 					objectAvailable = true
 				} else if err == io.EOF {

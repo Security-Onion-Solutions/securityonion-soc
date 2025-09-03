@@ -80,9 +80,9 @@ type RuleCriteria struct {
 }
 
 var ( // treat as constant
-	DEFAULT_RULES_REPOS = []*model.RuleRepo{
+	DEFAULT_RULES_REPOS = []*model.Repo{
 		{
-			Repo:    "https://github.com/Security-Onion-Solutions/securityonion-resources",
+			RepoUrl: "https://github.com/Security-Onion-Solutions/securityonion-resources",
 			License: "DRL",
 			Folder:  util.Ptr("sigma/stable"),
 		},
@@ -119,7 +119,7 @@ type ElastAlertEngine struct {
 	highSeverityAlerterParams          string
 	criticalSeverityAlerters           []string
 	criticalSeverityAlerterParams      string
-	rulesRepos                         []*model.RuleRepo
+	rulesRepos                         []*model.Repo
 	reposFolder                        string
 	isRunning                          bool
 	interm                             sync.Mutex
@@ -294,7 +294,7 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.parseSigmaPackages(pkgs)
 
 	e.reposFolder = module.GetStringDefault(config, "reposFolder", DEFAULT_REPOS_FOLDER)
-	e.rulesRepos, err = model.GetReposDefault(config, "rulesRepos", DEFAULT_RULES_REPOS)
+	e.rulesRepos, err = model.GetReposDefault(config, "rulesRepos", true, DEFAULT_RULES_REPOS)
 	if err != nil {
 		return fmt.Errorf("unable to parse ElastAlert's rulesRepos: %w", err)
 	}
@@ -1029,11 +1029,11 @@ func (e *ElastAlertEngine) parseRepoRules(allRepos []*detections.RepoOnDisk) (de
 
 		ruleset := repo.RulesetName
 		if ruleset == "" {
-			parser, err := url.Parse(repo.Repo.Repo)
+			parser, err := url.Parse(repo.Repo.RepoUrl)
 			if err == nil {
 				_, ruleset = path.Split(parser.Path)
 			} else {
-				ruleset = repo.Repo.Repo
+				ruleset = repo.Repo.RepoUrl
 			}
 		}
 
@@ -1111,6 +1111,20 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 		return nil, detections.ErrStateFileNoCommunity
 	}
 
+	containsLocal := lo.SomeBy(detects, func(d *model.Detection) bool {
+		return !d.IsCommunity
+	})
+
+	local := map[string]*model.Detection{} // map[publicID]*model.Detection
+	if containsLocal {
+		logger.Info("syncing non-Community rules")
+		// only fetch local lookup if we have local rules to process
+		local, err = e.srv.Detectionstore.GetAllDetections(ctx, model.WithEngine(model.EngineNameElastAlert), model.WithCommunity(false))
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	index := map[string]string{}
 	toDelete := map[string]struct{}{} // map[publicID]struct{}
 	for _, det := range community {
@@ -1149,6 +1163,17 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 
 		if !e.isRunning {
 			return nil, detections.ErrModuleStopped
+		}
+
+		if !detect.IsCommunity {
+			_, isLocal := local[detect.PublicID]
+			if isLocal {
+				logger.WithFields(log.Fields{
+					"rule.uuid": detect.PublicID,
+				}).Info("ignoring non-Community rule that has already been inserted")
+
+				continue
+			}
 		}
 
 		delete(toDelete, detect.PublicID)

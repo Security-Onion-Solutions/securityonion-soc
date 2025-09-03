@@ -22,6 +22,7 @@ const DEFAULT_IDLE_CONNECTION_TIMEOUT_MS = 300000
 const DEFAULT_MAX_UPLOAD_SIZE_BYTES = 26214400
 const DEFAULT_SRV_EXP_SECONDS = 600
 const REQUIRED_SRV_KEY_LENGTH = 64
+const DEFAULT_CUSTOM_REPORTS_PATH = "/opt/sensoroni/templates/reports/custom"
 
 type ServerConfig struct {
 	AirgapEnabled           bool                   `json:"airgapEnabled"`
@@ -45,6 +46,8 @@ type ServerConfig struct {
 	SrvKey                  string                 `json:"srvKey"`
 	SrvExpSeconds           int                    `json:"srvExpSeconds"`
 	Subgrids                []*model.Subgrid       `json:"subgrids"`
+	CustomReportsPath       string                 `json:"customReportsPath"`
+	EnableReverseLookup     bool                   `json:"enableReverseLookup"`
 	SrvKeyBytes             []byte
 }
 
@@ -76,6 +79,9 @@ func (config *ServerConfig) Verify() error {
 	}
 	if config.SrvExpSeconds <= 0 {
 		config.SrvExpSeconds = DEFAULT_SRV_EXP_SECONDS
+	}
+	if config.CustomReportsPath == "" {
+		config.CustomReportsPath = DEFAULT_CUSTOM_REPORTS_PATH
 	}
 
 	keyLen := len(config.SrvKey)

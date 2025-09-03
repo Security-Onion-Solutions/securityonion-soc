@@ -353,7 +353,7 @@ func parseAggregation(name string, aggObj interface{}, keys []interface{}, resul
 			metric := &model.EventMetric{}
 			count := bucket["doc_count"]
 			if count != nil {
-				metric.Value = int(count.(float64))
+				metric.Value = count.(float64)
 				key := bucket["key_as_string"]
 				if key == nil {
 					key = bucket["key"]

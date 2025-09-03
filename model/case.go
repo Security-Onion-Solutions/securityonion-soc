@@ -149,7 +149,7 @@ type Artifact struct {
 	GroupId string `json:"groupId" example:""`
 	// The artifact type as set by the server. This is an internal, read-only field.
 	ArtifactType string `json:"artifactType" example:"ip" validate:"required"`
-	// The value of this artifact. Essentially this is the content of the artifact itself, such as an IP address, a hostname, a stream of file bytes, etc.
+	// The value of this artifact. Essentially this is the content of the artifact itself, such as an IP address, a hostname, a filename, etc.
 	Value string `json:"value" example:"1.2.3.4" validate:"required"`
 	// The mime type of the artifact stream. This field is determined by the server upon file upload and is read-only.
 	MimeType string `json:"mimeType" example:"application/json"`

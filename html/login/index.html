@@ -93,7 +93,7 @@
                 <v-card-subtitle class="py-4" v-text="i18n.totp"></v-card-subtitle>
                 <v-card-text>
                   <div class="mb-4">{{ i18n.totpCodeHelp }}</div>
-                  <v-otp-input id="totp" autocomplete="off" v-model="form.totpCode" :length="totpCodeLength" @finish="submitTotp" data-aid="login_totp_input"></v-otp-input>
+                  <v-otp-input id="totp" autofocus="true" autocomplete="off" v-model="form.totpCode" :length="totpCodeLength" @finish="submitTotp" data-aid="login_totp_input"></v-otp-input>
                   <v-text-field name="totp_code" id="totp_code" v-model="form.totpCode" class="d-none"></v-text-field>
                   <v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
                   <v-text-field name="method" value="totp" class="d-none"></v-text-field>

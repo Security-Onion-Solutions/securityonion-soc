@@ -311,6 +311,7 @@ var roleKeywords = map[string][]string{ // role => capabilities
 	"fleet":         {"fleet"},
 	"heavynode":     {"elastic", "elasticsearch", "forward", "ingest", "search", "sensor", "sensoroni", "stenographer"},
 	"helix":         {"helix", "sensor", "sensoroni", "stenographer"},
+	"hypervisor":    {"hypervisor", "virtualization"},
 	"idh":           {"idh", "intrusion", "detection", "honeypot"},
 	"import":        {"import", "manager", "master", "soc", "web"},
 	"managersearch": {"elastic", "elasticsearch", "ingest", "manager", "master", "search", "soc", "web"},

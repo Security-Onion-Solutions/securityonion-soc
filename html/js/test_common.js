@@ -107,6 +107,7 @@ global.Vue.createApp = function(obj) {
 
   app.i18n = global.i18n.getLocalizedTranslations('en-US');
 
+
   return app;
 };
 global.Vue.ref = ref;
@@ -257,6 +258,7 @@ global.mockAuthApi = function(method = "get", mockedResponse, error) {
 
 global.mockShowError = function(logError = false) {
   const mock = jest.fn().mockImplementation(err => { if (logError) console.log(err.stack ? err.stack : err) });
+  if (!global.origShowError) global.origShowError = app.showError;
   app.showError = mock;
   return mock;
 }
@@ -279,7 +281,6 @@ require('./app.js');
 // restore Promise.all
 Promise.all = orig;
 
-global.FEAT_TTR = 'ttr';
 global.JobStatusPending = 0;
 global.JobStatusCompleted = 1;
 global.JobStatusIncomplete = 2;
