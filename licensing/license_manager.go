@@ -494,9 +494,9 @@ func GetLicenseKey() *SignedLicenseKey {
 	if manager == nil {
 		return nil
 	}
-	key := *(manager.licenseKey.LicenseKey)
+	keyCopy := *(manager.licenseKey.LicenseKey)
 	ret := SignedLicenseKey{
-		LicenseKey: &key,
+		LicenseKey: &keyCopy,
 		Signature:  manager.licenseKey.Signature,
 	}
 	ret.Features = ListEnabledFeatures()
