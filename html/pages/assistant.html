@@ -208,7 +208,7 @@
 				<v-card-text class="chat-history-content pa-0">
 					<v-list v-if="chatHistory.length > 0">
 						<v-list-item
-							v-for="chat in chatHistory"
+							v-for="chat in chatHistory.slice().reverse()"
 							:key="chat.id"
 							@click="loadChat(chat)"
 							:class="{ 'bg-primary': chat.id === currentChatId }"
