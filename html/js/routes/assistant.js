@@ -12,14 +12,11 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     i18n: this.$root.i18n,
     messages: [],
     newMessage: '',
-    username: this.$root.username || 'User',
     isTyping: false,
     chatHistory: [],
     currentChatId: null,
-    showHistoryDialog: false,
     creditsRemaining: 0,
     executingTools: new Map(), // Track tool executions by ID
-    pendingToolResults: new Map(), // Store tool results waiting to be sent back
     contextLength: 0, // Track total context length
     increaseMaxContextThreshold: false, // Toggle for max context threshold
     restoreLastActive: false, // Toggle to restore last active chat
@@ -78,11 +75,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }
     },
     
-    // Reset context length (for new chats)
-    resetContextLength() {
-      this.contextLength = 0;
-    },
-    
     async loadChatHistory() {
       try {
         // Initialize with a welcome message from the AI Assistant
@@ -94,7 +86,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           }
         ];
         // Reset context length for new chat
-        this.resetContextLength();
+        this.contextLength = 0;
       } catch (error) {
         this.$root.showError(error);
       }
@@ -119,10 +111,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         // Fallback to empty array if backend is unavailable
         this.chatHistory = [];
       }
-    },
-    // No longer needed - backend handles persistence
-    saveStoredChats() {
-      // Backend automatically saves chats, no action needed
     },
     saveCurrentChatId() {
       try {
@@ -234,18 +222,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     generateChatId() {
       return 'chat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-    },
-    generateChatTitle() {
-      // Generate title from first user message
-      const firstUserMessage = this.messages.find(m => m.role === 'user');
-      if (firstUserMessage) {
-        let title = firstUserMessage.content.substring(0, 50);
-        if (firstUserMessage.content.length > 50) {
-          title += '...';
-        }
-        return title;
-      }
-      return 'New Chat - ' + new Date().toLocaleDateString();
     },
     async loadChat(chat) {
       await this.saveCurrentChat(); // Save current chat before switching
@@ -1010,14 +986,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     async approveTool(toolUse) {
       try {
-        // // Check if context length has reached the limit
-        // if (this.contextLength >= 200000) {
-        //   this.$root.showError('Context length limit reached (200,000+ tokens). Cannot approve tool use. Please start a new chat to continue.');
-        //   toolUse.status = 'error';
-        //   toolUse.error = 'Context length limit reached - tool approval blocked';
-        //   return;
-        // }
-        
         toolUse.approved = true;
         toolUse.status = 'executing';
         console.log('Tool approved by user:', toolUse.name);
@@ -1129,7 +1097,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     convertBackendMessagesToFrontend(backendMessages) {
       const processedMessages = [];
       // Reset context length when loading from backend
-      this.resetContextLength();
+      this.contextLength = 0;
       
       let skip_next = false;
 

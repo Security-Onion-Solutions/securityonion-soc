@@ -5,10 +5,10 @@
 		</v-col>
 		<v-col cols="12" lg="5">
 			<v-expansion-panels>
-				<v-expansion-panel data-aid="chat_options">
+				<v-expansion-panel data-aid="assistant_options">
 					<v-expansion-panel-title id="chatOptionsHeader" expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up">{{i18n.options}}</v-expansion-panel-title>
 					<v-expansion-panel-text>
-						<span data-aid="chat_increase_max_context_threshold_toggle">
+						<span data-aid="assistant_increase_max_context_threshold_toggle">
 							<v-switch
 								id="increase-max-context-threshold"
 								v-model="increaseMaxContextThreshold"
@@ -19,7 +19,7 @@
 								color="primary">
 							</v-switch>
 						</span>
-						<span data-aid="chat_restore_last_active_toggle">
+						<span data-aid="assistant_restore_last_active_toggle">
 							<v-switch
 								id="restore-last-active"
 								v-model="restoreLastActive"
@@ -96,7 +96,7 @@
 															size="small"
 															variant="flat"
 															@click="approveTool(toolUse)"
-															data-aid="tool_use_approve"
+															data-aid="assistant_tool_use_approve"
 														>
 															<v-icon size="small" class="mr-1">fa-check</v-icon>
 															{{ i18n.approve }}
@@ -107,7 +107,7 @@
 															size="small"
 															variant="flat"
 															@click="rejectTool(toolUse)"
-															data-aid="tool_use_reject"
+															data-aid="assistant_tool_use_reject"
 														>
 															<v-icon size="small" class="mr-1">fa-times</v-icon>
 															{{ i18n.reject }}
@@ -182,14 +182,14 @@
 						class="chat-input flex-grow-1 mr-3"
 						@keyup.enter="sendMessage"
 						:disabled="isTyping"
-						data-aid="chat_input"
+						data-aid="assistant_chat_input"
 					></v-text-field>
 					<v-btn
 						id="chat-send-button"
 						color="primary"
 						:disabled="!newMessage.trim() || isTyping"
 						@click="sendMessage"
-						data-aid="chat_send"
+						data-aid="assistant_chat_send"
 						class="flex-shrink-0"
 					>
 						<v-icon>{{ isTyping ? 'fa-hourglass-half' : 'fa-paper-plane' }}</v-icon>
@@ -204,7 +204,7 @@
 				<v-card-title id="chat-history-header" class="py-3 d-flex align-center">
 					<v-icon class="mr-2">fa-history</v-icon>
 					<span class="flex-grow-1">{{ i18n.chatHistory }}</span>
-					<v-btn id="chat-new-button" icon variant="text" size="x-small" @click="startNewChat" :title="i18n.chatNewChat" data-aid="chat_history_create">
+					<v-btn id="chat-new-button" icon variant="text" size="x-small" @click="startNewChat" :title="i18n.chatNewChat" data-aid="assistant_chat_history_create">
 						<v-icon size="small">fa-plus</v-icon>
 					</v-btn>
 				</v-card-title>
@@ -216,12 +216,12 @@
 							:key="chat.id"
 							@click="loadChat(chat)"
 							:class="{ 'bg-primary': chat.id === currentChatId }"
-							data-aid="chat_history_item"
+							data-aid="assistant_chat_history_item"
 						>
 							<v-list-item-title class="text-wrap">{{ chat.title }}</v-list-item-title>
 							<v-list-item-subtitle>{{ formatChatDate(chat.lastUpdated) }}</v-list-item-subtitle>
 							<template #append>
-								<v-btn id="chat-delete-button" icon variant="text" size="small" @click.stop="deleteChat(chat.id)" data-aid="chat_history_delete">
+								<v-btn id="chat-delete-button" icon variant="text" size="small" @click.stop="deleteChat(chat.id)" data-aid="assistant_chat_history_delete">
 									<v-icon size="small" color="error">fa-trash</v-icon>
 								</v-btn>
 							</template>
