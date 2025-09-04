@@ -36,7 +36,7 @@
 		</v-col>
 		<v-spacer></v-spacer>
 		<v-col cols="12" lg="2" align="end">
-			<h4 :data-aid="'credits_remaining_' + 'chat'">{{ i18n.creditsRemaining }}: <span :class="creditsRemaining <= 500000 ? 'text-error' : 'text-primary'">{{ formatCount(creditsRemaining) }}</span></h4>
+			<h4 :data-aid="assistant_credits_remaining">{{ i18n.creditsRemaining }}: <span :class="creditsRemaining <= 500000 ? 'text-error' : 'text-primary'">{{ formatCount(creditsRemaining) }}</span></h4>
 		</v-col>
 	</v-row>
 	<v-row>
@@ -96,7 +96,7 @@
 															size="small"
 															variant="flat"
 															@click="approveTool(toolUse)"
-															data-aid="approve_tool"
+															data-aid="tool_use_approve"
 														>
 															<v-icon size="small" class="mr-1">fa-check</v-icon>
 															{{ i18n.approve }}
@@ -107,7 +107,7 @@
 															size="small"
 															variant="flat"
 															@click="rejectTool(toolUse)"
-															data-aid="reject_tool"
+															data-aid="tool_use_reject"
 														>
 															<v-icon size="small" class="mr-1">fa-times</v-icon>
 															{{ i18n.reject }}
@@ -204,7 +204,7 @@
 				<v-card-title id="chat-history-header" class="py-3 d-flex align-center">
 					<v-icon class="mr-2">fa-history</v-icon>
 					<span class="flex-grow-1">{{ i18n.chatHistory }}</span>
-					<v-btn id="chat-new-button" icon variant="text" size="x-small" @click="startNewChat" :title="i18n.chatNewChat" data-aid="chat_new_button">
+					<v-btn id="chat-new-button" icon variant="text" size="x-small" @click="startNewChat" :title="i18n.chatNewChat" data-aid="chat_history_create">
 						<v-icon size="small">fa-plus</v-icon>
 					</v-btn>
 				</v-card-title>
@@ -238,7 +238,7 @@
 	
 </v-container>
 
-<v-container v-else fluid data-aid="feature_unavailable">
+<v-container v-else fluid data-aid="assistant_unavailable">
 	<div style="
 		align-items: center;
 		margin: 0;
