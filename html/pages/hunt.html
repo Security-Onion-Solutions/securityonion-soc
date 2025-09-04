@@ -324,7 +324,7 @@
 															<v-icon :title="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate">fa-exclamation-triangle</v-icon>
 														</v-btn>
 														<v-btn id="aiInvestigateButton" v-if="investigateEnabled && item['rule.uuid']" variant="text" size="x-small" icon
-															@click="startAIInvestigation($event, item, groupIdx)"
+															@click="startAIInvestigation(item)"
 															:disabled="item._aiInvestigationStatus === 'investigating'"
 															:color="getAIInvestigationButtonColor(item)"
 															:data-aid="'groups_ai_investigate_' + category" :aria-label="'AI Investigation'"
@@ -639,7 +639,7 @@
 												<v-icon :title="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate">fa-exclamation-triangle</v-icon>
 											</v-btn>
 											<v-btn id="aiInvestigateButton" v-if="investigateEnabled && item['rule.uuid']" variant="text" icon size="x-small"
-												@click="startAIInvestigation($event, item, -1)"
+												@click="startAIInvestigation(item)"
 												:disabled="item._aiInvestigationStatus === 'investigating'"
 												:color="getAIInvestigationButtonColor(item)"
 												:data-aid="'events_ai_investigate_' + category" :aria-label="'AI Investigation'"
