@@ -47,15 +47,15 @@ func TestQueryEventsTool_Execute(t *testing.T) {
 				Events: []*model.EventRecord{},
 				Metrics: map[string][]*model.EventMetric{
 					"groupby_rule.name": {
-						{Keys: []any{[]any{"ET SCAN Port 0 Traffic"}}, Value: 25.0},
-						{Keys: []any{[]any{"ET MALWARE Suspicious"}}, Value: 15.0},
+						{Keys: []any{[]any{"ET SCAN Port 0 Traffic"}}, Value: 25},
+						{Keys: []any{[]any{"ET MALWARE Suspicious"}}, Value: 15},
 					},
 				},
 				TotalEvents: 40,
 			},
 			expectedResult: []map[string]any{
-				{"rule.name": "ET SCAN Port 0 Traffic", "count": 25.0},
-				{"rule.name": "ET MALWARE Suspicious", "count": 15.0},
+				{"rule.name": "ET SCAN Port 0 Traffic", "count": 25},
+				{"rule.name": "ET MALWARE Suspicious", "count": 15},
 			},
 		},
 		{

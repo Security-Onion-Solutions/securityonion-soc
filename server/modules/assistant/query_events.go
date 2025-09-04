@@ -208,7 +208,7 @@ func (t *QueryEventsTool) Execute(ctx context.Context, server *server.Server, pa
 
 			simplifiedResults = append(simplifiedResults, map[string]any{
 				*args.GroupByField: key,
-				"count":            g.Value,
+				"count":            int(g.Value),
 			})
 		}
 
