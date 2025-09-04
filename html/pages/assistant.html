@@ -221,7 +221,7 @@
 							<v-list-item-title class="text-wrap">{{ chat.title }}</v-list-item-title>
 							<v-list-item-subtitle>{{ formatChatDate(chat.lastUpdated) }}</v-list-item-subtitle>
 							<template #append>
-								<v-btn id="chat-delete-button" icon variant="text" size="small" @click.stop="deleteChat(chat.id)" data-aid="assistant_chat_history_delete">
+								<v-btn id="chat-delete-button" icon variant="text" size="small" @click.stop="deleteChat(chat.sessionId)" data-aid="assistant_chat_history_delete">
 									<v-icon size="small" color="error">fa-trash</v-icon>
 								</v-btn>
 							</template>

@@ -111,10 +111,8 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	if len(stored) == 0 {
 		// create new session
 		session := &model.AssistantSession{
-			Auditable: model.Auditable{
-				Id: tb.SessionId,
-			},
-			Title: tb.Msg,
+			SessionId: tb.SessionId,
+			Title:     tb.Msg,
 		}
 		err = h.server.Assistantstore.CreateSession(ctx, session)
 		if err != nil {

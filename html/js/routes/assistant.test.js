@@ -24,7 +24,7 @@ const fakeAssistantMessage = {
 };
 const fakeChatHistory = [
   {
-    id: 'chat_1234567890_abcdef123',
+    sessionId: 'chat_1234567890_abcdef123',
     title: 'Test Chat Session',
     messages: [],
     timestamp: '2025-01-01T12:00:00.000Z',
@@ -33,7 +33,7 @@ const fakeChatHistory = [
 ];
 const fakeBackendSessions = [
   {
-    id: 'chat_1234567890_abcdef123',
+    sessionId: 'chat_1234567890_abcdef123',
     createTime: '2025-01-01T12:00:00.000Z',
     title: 'Test message content'
   }
@@ -185,7 +185,7 @@ test('loadStoredChats success', async () => {
   
   expect(mock).toHaveBeenCalledWith('/assistant/sessions');
   expect(comp.chatHistory).toHaveLength(1);
-  expect(comp.chatHistory[0].id).toBe(fakeSessionId);
+  expect(comp.chatHistory[0].sessionId).toBe(fakeSessionId);
   expect(comp.chatHistory[0].title).toContain('Test message content');
 });
 
@@ -321,8 +321,8 @@ test('loadChat switches to existing chat', async () => {
   await comp.loadChat(chat);
   
   expect(comp.saveCurrentChat).toHaveBeenCalled();
-  expect(comp.loadChatFromBackend).toHaveBeenCalledWith(chat.id);
-  expect(comp.updateUrlWithSessionId).toHaveBeenCalledWith(chat.id);
+  expect(comp.loadChatFromBackend).toHaveBeenCalledWith(chat.sessionId);
+  expect(comp.updateUrlWithSessionId).toHaveBeenCalledWith(chat.sessionId);
   expect(comp.scrollToBottom).toHaveBeenCalled();
 });
 

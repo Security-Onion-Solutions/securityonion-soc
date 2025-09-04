@@ -47,7 +47,7 @@ func (store *ElasticAssistantstore) Init(chatIndex string, sessionIndex string, 
 	return nil
 }
 
-func (store *ElasticAssistantstore) save(ctx context.Context, obj any, index string, kind string, id string) (*model.EventIndexResults, error) {
+func (store *ElasticAssistantstore) save(ctx context.Context, obj any, index string, kind string) (*model.EventIndexResults, error) {
 	// if err := store.server.CheckAuthorized(ctx, "write", "detections"); err != nil {
 	// 	return nil, err
 	// }
@@ -55,12 +55,12 @@ func (store *ElasticAssistantstore) save(ctx context.Context, obj any, index str
 	document := ConvertObjectToDocumentMap(kind, obj, store.schemaPrefix)
 	document[store.schemaPrefix+"kind"] = kind
 
-	results, err := store.indexDoc(ctx, index, document, id)
+	results, err := store.indexDoc(ctx, index, document)
 
 	return results, err
 }
 
-func (store *ElasticAssistantstore) indexDoc(ctx context.Context, index string, document map[string]any, id string) (*model.EventIndexResults, error) {
+func (store *ElasticAssistantstore) indexDoc(ctx context.Context, index string, document map[string]any) (*model.EventIndexResults, error) {
 	logger := log.FromContext(ctx)
 
 	results := model.NewEventIndexResults()
@@ -70,7 +70,7 @@ func (store *ElasticAssistantstore) indexDoc(ctx context.Context, index string, 
 		var response string
 
 		logger.Debug("Sending index request to primary Elasticsearch client")
-		response, err = store.indexDocument(ctx, store.disableCrossClusterIndex(index), request, id)
+		response, err = store.indexDocument(ctx, store.disableCrossClusterIndex(index), request)
 		if err == nil {
 			err = convertFromElasticIndexResults(response, results)
 			if err != nil {
@@ -84,7 +84,7 @@ func (store *ElasticAssistantstore) indexDoc(ctx context.Context, index string, 
 	return results, err
 }
 
-func (store *ElasticAssistantstore) indexDocument(ctx context.Context, index string, document string, id string) (string, error) {
+func (store *ElasticAssistantstore) indexDocument(ctx context.Context, index string, document string) (string, error) {
 	logger := log.FromContext(ctx)
 
 	// err := store.server.CheckAuthorized(ctx, "write", "detections")
@@ -94,7 +94,6 @@ func (store *ElasticAssistantstore) indexDocument(ctx context.Context, index str
 
 	logger.WithFields(log.Fields{
 		"documentIndex": index,
-		"documentId":    id,
 		"document":      store.truncate(document),
 		"requestId":     ctx.Value(web.ContextKeyRequestId),
 	}).Debug("Adding document to Elasticsearch")
@@ -102,7 +101,6 @@ func (store *ElasticAssistantstore) indexDocument(ctx context.Context, index str
 	res, err := store.esClient.Index(index,
 		strings.NewReader(document),
 		store.esClient.Index.WithRefresh("true"),
-		store.esClient.Index.WithDocumentID(id),
 		store.esClient.Index.WithContext(ctx),
 	)
 
@@ -227,7 +225,7 @@ func (store *ElasticAssistantstore) validateChat(chat *model.StoredMessage) erro
 }
 
 func (store *ElasticAssistantstore) validateSession(session *model.AssistantSession) error {
-	err := store.validateId(session.Id, "SessionId")
+	err := store.validateId(session.SessionId, "SessionId")
 	if err != nil {
 		return err
 	}
@@ -246,8 +244,9 @@ func (store *ElasticAssistantstore) SaveChat(ctx context.Context, chat *model.St
 	}
 
 	chat.CreateTime = util.Ptr(time.Now())
+	store.prepareForSave(ctx, &chat.Auditable)
 
-	_, err = store.save(ctx, chat, store.chatIndex, "chat", store.prepareForSave(ctx, &chat.Auditable))
+	_, err = store.save(ctx, chat, store.chatIndex, "chat")
 
 	return err
 }
@@ -489,108 +488,6 @@ func (store *ElasticAssistantstore) GetSessions(ctx context.Context, userId stri
 	return sessions, nil
 }
 
-func (store *ElasticAssistantstore) getSessionById(ctx context.Context, sessionId string) (*model.AssistantSession, error) {
-	logger := log.FromContext(ctx)
-
-	query := map[string]any{
-		"query": map[string]any{
-			"bool": map[string]any{
-				"must": []any{
-					map[string]any{
-						"term": map[string]any{
-							store.schemaPrefix + "session.id": sessionId,
-						},
-					},
-					map[string]any{
-						"term": map[string]any{
-							store.schemaPrefix + "kind": "session",
-						},
-					},
-				},
-			},
-		},
-		"size": 1,
-	}
-
-	// Convert query to JSON
-	queryJSON, err := json.Marshal(query)
-	if err != nil {
-		logger.WithError(err).Error("Failed to marshal Elasticsearch query")
-		return nil, err
-	}
-
-	logger.WithFields(log.Fields{
-		"query":     store.truncate(string(queryJSON)),
-		"requestId": ctx.Value(web.ContextKeyRequestId),
-	}).Debug("Searching for first messages of each session")
-
-	// Execute search
-	res, err := store.esClient.Search(
-		store.esClient.Search.WithContext(ctx),
-		store.esClient.Search.WithIndex(store.sessionIndex),
-		store.esClient.Search.WithBody(strings.NewReader(string(queryJSON))),
-	)
-	if err != nil {
-		logger.WithError(err).Error("Failed to execute Elasticsearch search")
-		return nil, err
-	}
-	defer res.Body.Close()
-
-	// Read response
-	responseJSON, err := readJsonFromResponse(res)
-	if err != nil {
-		logger.WithError(err).Error("Failed to read Elasticsearch response")
-		return nil, err
-	}
-
-	logger.WithFields(log.Fields{
-		"response":  store.truncate(responseJSON),
-		"requestId": ctx.Value(web.ContextKeyRequestId),
-	}).Debug("Received Elasticsearch response")
-
-	// Parse response
-	var response map[string]any
-	if err := json.Unmarshal([]byte(responseJSON), &response); err != nil {
-		logger.WithError(err).Error("Failed to unmarshal Elasticsearch response")
-		return nil, err
-	}
-
-	// Extract first messages from aggregation
-	result := &model.AssistantSession{}
-	if hits, ok := response["hits"].(map[string]any); ok {
-		if hitsArray, ok := hits["hits"].([]any); ok {
-			for _, hitObj := range hitsArray {
-				if hit, ok := hitObj.(map[string]any); ok {
-					if source, ok := hit["_source"].(map[string]any); ok {
-						if sess, ok := source[store.schemaPrefix+"session"].(map[string]any); ok {
-							// Convert the source to an AssistantSession
-							sourceJSON, err := json.Marshal(sess)
-							if err != nil {
-								logger.WithError(err).Error("Failed to marshal session source")
-								continue
-							}
-
-							if err := json.Unmarshal(sourceJSON, &result); err != nil {
-								logger.WithError(err).Error("Failed to unmarshal AssistantSession")
-								continue
-							}
-
-							result.Auditable.Kind = source[store.schemaPrefix+"kind"].(string)
-							result.Auditable.Id = hit["_id"].(string)
-						}
-					}
-				}
-			}
-		}
-	}
-
-	logger.WithFields(log.Fields{
-		"requestId": ctx.Value(web.ContextKeyRequestId),
-	}).Debug("found session")
-
-	return result, nil
-}
-
 func (store *ElasticAssistantstore) CreateSession(ctx context.Context, session *model.AssistantSession) error {
 	err := store.validateSession(session)
 	if err != nil {
@@ -598,10 +495,9 @@ func (store *ElasticAssistantstore) CreateSession(ctx context.Context, session *
 	}
 
 	session.CreateTime = util.Ptr(time.Now())
+	store.prepareForSave(ctx, &session.Auditable)
 
-	keepIdCtx := modcontext.WriteOverrideOperation(ctx, "create")
-
-	_, err = store.save(ctx, session, store.sessionIndex, "session", store.prepareForSave(keepIdCtx, &session.Auditable))
+	_, err = store.save(ctx, session, store.sessionIndex, "session")
 
 	return err
 }
@@ -609,26 +505,50 @@ func (store *ElasticAssistantstore) CreateSession(ctx context.Context, session *
 func (store *ElasticAssistantstore) DeleteSession(ctx context.Context, sessionId string) error {
 	logger := log.FromContext(ctx)
 
-	session, err := store.getSessionById(ctx, sessionId)
-	if err != nil {
-		return err
+	now := time.Now()
+	nowStr := now.Format(time.RFC3339)
+
+	// Build UpdateByQuery request to mark session as deleted
+	query := map[string]any{
+		"query": map[string]any{
+			"term": map[string]any{
+				store.schemaPrefix + "session.sessionId": sessionId,
+			},
+		},
+		"script": map[string]any{
+			"source": "ctx._source." + store.schemaPrefix + "session.deleteTime = params.deleteTime;",
+			"lang":   "painless",
+			"params": map[string]any{
+				"deleteTime": nowStr,
+			},
+		},
 	}
 
-	// Set DeletedAt timestamp on the message
-	now := time.Now()
-	session.DeleteTime = &now
+	// Convert query to JSON
+	queryJSON, err := json.Marshal(query)
+	if err != nil {
+		logger.WithError(err).Error("Failed to marshal UpdateByQuery request")
+		return err
+	}
 
 	logger.WithFields(log.Fields{
 		"sessionId": sessionId,
 		"requestId": ctx.Value(web.ContextKeyRequestId),
-	}).Debug("Setting deletedAt timestamp and saving message")
+	}).Debug("Marking session as deleted using UpdateByQuery")
 
-	// Use save() method to reindex the document (same pattern as UpdateDetection)
-	_, err = store.save(ctx, session, store.sessionIndex, "session", session.Auditable.Id)
+	// Execute UpdateByQuery to mark the session as deleted
+	res, err := store.esClient.UpdateByQuery(
+		[]string{store.disableCrossClusterIndex(store.sessionIndex)},
+		store.esClient.UpdateByQuery.WithContext(ctx),
+		store.esClient.UpdateByQuery.WithBody(strings.NewReader(string(queryJSON))),
+		store.esClient.UpdateByQuery.WithRefresh(true),
+		store.esClient.UpdateByQuery.WithWaitForCompletion(true),
+	)
 	if err != nil {
-		logger.WithError(err).Error("Failed to save updated message for session deletion")
+		logger.WithError(err).Error("Failed to mark session as deleted")
 		return err
 	}
+	defer res.Body.Close()
 
 	logger.WithFields(log.Fields{
 		"sessionId": sessionId,

@@ -97,7 +97,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         if (response.data && Array.isArray(response.data)) {
           // Convert backend format to frontend format
           this.chatHistory = response.data.map(session => ({
-            id: session.id,
+            sessionId: session.sessionId,
             title: this.generateTitleFromMessage(session),
             messages: [], // Will be loaded when session is opened
             timestamp: session.createTime || new Date().toISOString(),
@@ -226,8 +226,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     async loadChat(chat) {
       await this.saveCurrentChat(); // Save current chat before switching
       try {
-        await this.loadChatFromBackend(chat.id);
-        this.updateUrlWithSessionId(chat.id);
+        await this.loadChatFromBackend(chat.sessionId);
+        this.updateUrlWithSessionId(chat.sessionId);
         this.scrollToBottom();
       } catch (error) {
         console.error('Failed to load chat:', error);
@@ -240,7 +240,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         await this.$root.papi.delete(`/assistant/sessions/${chatId}`);
         
         // Remove from local history after successful backend deletion
-        this.chatHistory = this.chatHistory.filter(chat => chat.id !== chatId);
+        this.chatHistory = this.chatHistory.filter(chat => chat.sessionId !== chatId);
         
         // If we deleted the current chat, start a new one
         if (this.currentChatId === chatId) {
