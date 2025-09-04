@@ -48,10 +48,6 @@ func (store *ElasticAssistantstore) Init(chatIndex string, sessionIndex string, 
 }
 
 func (store *ElasticAssistantstore) save(ctx context.Context, obj any, index string, kind string) (*model.EventIndexResults, error) {
-	// if err := store.server.CheckAuthorized(ctx, "write", "detections"); err != nil {
-	// 	return nil, err
-	// }
-
 	document := ConvertObjectToDocumentMap(kind, obj, store.schemaPrefix)
 	document[store.schemaPrefix+"kind"] = kind
 
@@ -86,11 +82,6 @@ func (store *ElasticAssistantstore) indexDoc(ctx context.Context, index string, 
 
 func (store *ElasticAssistantstore) indexDocument(ctx context.Context, index string, document string) (string, error) {
 	logger := log.FromContext(ctx)
-
-	// err := store.server.CheckAuthorized(ctx, "write", "detections")
-	// if err != nil {
-	// 	return "", err
-	// }
 
 	logger.WithFields(log.Fields{
 		"documentIndex": index,
@@ -133,43 +124,6 @@ func (store *ElasticAssistantstore) disableCrossClusterIndex(index string) strin
 		index = pieces[1]
 	}
 	return index
-}
-
-func (store *ElasticAssistantstore) ConvertObjectToDocument(ctx context.Context, kind string, obj any, auditable *model.Auditable, isEdit bool, auditDocId *string, op *string) (doc []byte, index string, err error) {
-	if auditDocId == nil {
-		index = "so-detection"
-	} else {
-		index = "so-detectionhistory"
-	}
-
-	id := auditable.Id
-	updateTime := auditable.UpdateTime
-
-	defer func() {
-		auditable.Id = id
-		auditable.UpdateTime = updateTime
-	}()
-
-	store.prepareForSave(ctx, auditable)
-	document := ConvertObjectToDocumentMap(kind, obj, store.schemaPrefix)
-
-	document[store.schemaPrefix+"kind"] = kind
-	if auditDocId != nil {
-		document[store.schemaPrefix+AUDIT_DOC_ID] = *auditDocId
-		if op != nil {
-			document[store.schemaPrefix+"operation"] = *op
-		}
-	}
-
-	if isEdit {
-		document = map[string]any{
-			"doc": document,
-		}
-	}
-
-	rawDoc, err := json.Marshal(document)
-
-	return rawDoc, index, err
 }
 
 func (store *ElasticAssistantstore) prepareForSave(ctx context.Context, obj *model.Auditable) string {
@@ -238,6 +192,10 @@ func (store *ElasticAssistantstore) validateSession(session *model.AssistantSess
 }
 
 func (store *ElasticAssistantstore) SaveChat(ctx context.Context, chat *model.StoredMessage) error {
+	if err := store.server.CheckAuthorized(ctx, "write_authored", "assistant"); err != nil {
+		return err
+	}
+
 	err := store.validateChat(chat)
 	if err != nil {
 		return err
@@ -252,6 +210,10 @@ func (store *ElasticAssistantstore) SaveChat(ctx context.Context, chat *model.St
 }
 
 func (store *ElasticAssistantstore) GetChatHistory(ctx context.Context, sessionId string) ([]*model.StoredMessage, error) {
+	if err := store.server.CheckAuthorized(ctx, "read_authored", "assistant"); err != nil {
+		return nil, err
+	}
+
 	logger := log.FromContext(ctx)
 
 	// Build Elasticsearch query to get all messages for the session
@@ -369,6 +331,10 @@ func (store *ElasticAssistantstore) GetChatHistory(ctx context.Context, sessionI
 }
 
 func (store *ElasticAssistantstore) GetSessions(ctx context.Context, userId string) ([]*model.AssistantSession, error) {
+	if err := store.server.CheckAuthorized(ctx, "read_authored", "assistant"); err != nil {
+		return nil, err
+	}
+
 	logger := log.FromContext(ctx)
 
 	query := map[string]any{
@@ -489,6 +455,10 @@ func (store *ElasticAssistantstore) GetSessions(ctx context.Context, userId stri
 }
 
 func (store *ElasticAssistantstore) CreateSession(ctx context.Context, session *model.AssistantSession) error {
+	if err := store.server.CheckAuthorized(ctx, "write_authored", "assistant"); err != nil {
+		return err
+	}
+
 	err := store.validateSession(session)
 	if err != nil {
 		return err
@@ -503,6 +473,10 @@ func (store *ElasticAssistantstore) CreateSession(ctx context.Context, session *
 }
 
 func (store *ElasticAssistantstore) DeleteSession(ctx context.Context, sessionId string) error {
+	if err := store.server.CheckAuthorized(ctx, "delete_authored", "assistant"); err != nil {
+		return err
+	}
+
 	logger := log.FromContext(ctx)
 
 	now := time.Now()
