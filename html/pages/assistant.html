@@ -36,7 +36,7 @@
 		</v-col>
 		<v-spacer></v-spacer>
 		<v-col cols="12" lg="2" align="end">
-			<h4 :data-aid="assistant_credits_remaining">{{ i18n.creditsRemaining }}: <span :class="creditsRemaining <= 500000 ? 'text-error' : 'text-primary'">{{ formatCount(creditsRemaining) }}</span></h4>
+			<h4 :data-aid="assistant_credits_remaining">{{ i18n.creditsRemaining }}: <span :class="creditsRemaining <= lowBalanceColorAlert ? 'text-error' : 'text-primary'">{{ formatCount(creditsRemaining) }}</span></h4>
 		</v-col>
 	</v-row>
 	<v-row>

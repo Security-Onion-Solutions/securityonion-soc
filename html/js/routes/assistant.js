@@ -21,6 +21,12 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     increaseMaxContextThreshold: false, // Toggle for max context threshold
     restoreLastActive: false, // Toggle to restore last active chat
     assistantEnabled: false,
+    contextLimitSmall: 200000,
+    contextLimitLarge: 1000000,
+    thresholdColorRatioLow: 0.5,
+    thresholdColorRatioMed: 0.75,
+    thresholdColorRatioMax: 1,
+    lowBalanceColorAlert: 500000,
   }},
   async created() {
     this.loadContextThresholdSetting();
@@ -56,6 +62,12 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     initAssistant(params) {
       console.log("assistant", params);
       this.assistantEnabled = params["enabledInSoc"] && this.$root.isLicensed('oai');
+      this.contextLimitSmall = params["contextLimitSmall"];
+      this.contextLimitLarge = params["contextLimitLarge"];
+      this.thresholdColorRatioLow = params["thresholdColorRatioLow"];
+      this.thresholdColorRatioMed = params["thresholdColorRatioMed"];
+      this.thresholdColorRatioMax = params["thresholdColorRatioMax"];
+      this.lowBalanceColorAlert = params["lowBalanceColorAlert"];
     },
     
     // Calculate context length from usage data (input_tokens + output_tokens)
@@ -1256,10 +1268,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
 
     getContextColor(value) {
-      const maxContextLength = this.increaseMaxContextThreshold ? 1000000 : 200000;
-      const threshold1 = maxContextLength * 0.5;  // 50% of max
-      const threshold2 = maxContextLength * 0.75; // 75% of max
-      const threshold3 = maxContextLength; // 100% of max
+      const maxContextLength = this.increaseMaxContextThreshold ? this.contextLimitLarge : this.contextLimitSmall;
+      const threshold1 = maxContextLength * this.thresholdColorRatioLow;
+      const threshold2 = maxContextLength * this.thresholdColorRatioMed;
+      const threshold3 = maxContextLength * this.thresholdColorRatioMax;
       
       if (value < threshold1) return "text-green";
       if (value < threshold2) return "text-yellow";
