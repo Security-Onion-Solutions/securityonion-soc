@@ -225,7 +225,7 @@
               </template>
               <v-list-item-title v-text="i18n.home"></v-list-item-title>
             </v-list-item>
-            <v-list-item v-if="isLicensed('oai')" data-aid="nav_assistant" @click="" to="/assistant">
+            <v-list-item v-if="isLicensed(FEAT_OAI) && parameters.assistant.enabledInSoc" data-aid="nav_assistant" @click="" to="/assistant">
               <template #prepend>
                 <v-icon>fa-brain</v-icon>
               </template>

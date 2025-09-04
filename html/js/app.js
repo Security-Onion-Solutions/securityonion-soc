@@ -8,9 +8,6 @@ const routes = [];
 const components = [];
 const templatePromises = [];
 
-const FEAT_TTR = 'ttr';
-const FEAT_OAI = 'oai';
-
 const LICENSE_STATUS_ACTIVE = "active";
 const LICENSE_STATUS_EXCEEDED = "exceeded";
 const LICENSE_STATUS_EXPIRED = "expired";
@@ -198,6 +195,7 @@ $(document).ready(function () {
           customReports: {},
           FEAT_RPT: 'rpt',
           FEAT_TTR: 'ttr',
+          FEAT_OAI: 'oai',
         }
       },
       watch: {
