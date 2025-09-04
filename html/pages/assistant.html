@@ -15,7 +15,7 @@
 								density="compact"
 								hide-details
 								class="my-0"
-								:label="i18n.increaseMaxContextThreshold || 'Increase max context threshold from 200K to 1M (greater credit cost)'"
+								:label="i18n.increaseMaxContextThreshold"
 								color="primary">
 							</v-switch>
 						</span>
@@ -26,7 +26,7 @@
 								density="compact"
 								hide-details
 								class="my-0"
-								:label="i18n.restoreLastActive || 'Automatically restore last active chat session'"
+								:label="i18n.restoreLastActive"
 								color="primary">
 							</v-switch>
 						</span>
@@ -59,9 +59,9 @@
 								</v-avatar>
 								<div class="flex-grow-1">
 									<div id="message-header" class="d-flex align-center mb-1">
-										<span class="font-weight-medium text-body-2 mr-2">{{ message.role === 'user' ? 'You' : i18n.chat }}</span>
+										<span class="font-weight-medium text-body-2 mr-2">{{ message.role === 'user' ? i18n.you : i18n.chat }}</span>
 										<span class="text-caption text-medium-emphasis mr-2">{{ formatTimestamp(message.timestamp) }}</span>
-										<span class="text-caption text-primary" v-if="message.usage && message.usage.credits">{{ message.usage.credits }} credits</span>
+										<span class="text-caption text-primary" v-if="message.usage && message.usage.credits">{{ message.usage.credits }} {{ i18n.creditsLowercase }}</span>
 									</div>
 									<div id="message-content" class="text-body-2" :key="message.content" v-html="formatMarkdown(message.content)"></div>
 									
@@ -82,13 +82,13 @@
 												
 												<!-- Tool Parameters -->
 												<div v-if="Object.keys(toolUse.input).length > 0" class="mb-2">
-													<div class="text-caption text-medium-emphasis mb-1">Parameters:</div>
+													<div class="text-caption text-medium-emphasis mb-1">{{ i18n.parameters }}:</div>
 													<v-code class="text-caption">{{ JSON.stringify(toolUse.input, null, 2) }}</v-code>
 												</div>
 												
 												<!-- Tool Approval Buttons -->
 												<div v-if="toolUse.status === 'pending_approval'" class="mb-2">
-													<div class="text-caption text-medium-emphasis mb-1">This tool wants to execute. Do you approve?</div>
+													<div class="text-caption text-medium-emphasis mb-1">{{ i18n.toolExecuteQuestion }}</div>
 													<div id="tool-approval-buttons" class="d-flex tool-approval-buttons">
 														<v-btn
 															id="approve-tool-button"
@@ -99,7 +99,7 @@
 															data-aid="approve_tool"
 														>
 															<v-icon size="small" class="mr-1">fa-check</v-icon>
-															Approve
+															{{ i18n.approve }}
 														</v-btn>
 														<v-btn
 															id="reject-tool-button"
@@ -110,7 +110,7 @@
 															data-aid="reject_tool"
 														>
 															<v-icon size="small" class="mr-1">fa-times</v-icon>
-															Reject
+															{{ i18n.reject }}
 														</v-btn>
 													</div>
 												</div>
@@ -120,7 +120,7 @@
 													<v-expansion-panels id="tool-result-expansion" variant="accordion" class="tool-result-expansion">
 														<v-expansion-panel id="tool-result-panel">
 															<v-expansion-panel-title id="tool-result-header" class="text-caption" expand-icon="fa-angle-down" collapse-icon="fa-angle-up">
-																Raw Tool Result
+																{{ i18n.rawToolResult }}
 															</v-expansion-panel-title>
 															<v-expansion-panel-text id="tool-result-content">
 																<v-code id="tool-result-code" class="text-caption d-block" style="white-space: pre-wrap; max-height: 300px; overflow-y: auto; width: 100%; max-width: 100%; overflow-x: auto;">{{ toolUse.rawResult }}</v-code>
@@ -137,7 +137,7 @@
 												
 												<!-- Execution Time -->
 												<div v-if="toolUse.completedAt" class="text-caption text-medium-emphasis">
-													Completed: {{ formatTimestamp(toolUse.completedAt) }}
+													{{ i18n.completed }}: {{ formatTimestamp(toolUse.completedAt) }}
 												</div>
 											</v-card>
 										</div>
@@ -156,12 +156,12 @@
 								</v-avatar>
 								<div class="flex-grow-1">
 									<div class="d-flex align-center mb-1">
-										<span class="font-weight-medium text-body-2 mr-2">AI Assistant</span>
-										<span class="text-caption text-medium-emphasis">typing...</span>
+										<span class="font-weight-medium text-body-2 mr-2">{{ i18n.chat }}</span>
+										<span class="text-caption text-medium-emphasis">{{ i18n.typing }}...</span>
 									</div>
 									<div class="text-body-2">
 										<v-progress-linear indeterminate color="secondary" height="2"></v-progress-linear>
-										<span class="text-caption text-medium-emphasis">Thinking...</span>
+										<span class="text-caption text-medium-emphasis">{{ i18n.thinking }}...</span>
 									</div>
 								</div>
 							</div>
@@ -203,8 +203,8 @@
 			<v-card id="chat-history-sidebar" class="chat-history-sidebar">
 				<v-card-title id="chat-history-header" class="py-3 d-flex align-center">
 					<v-icon class="mr-2">fa-history</v-icon>
-					<span class="flex-grow-1">{{ i18n.chatHistory || 'Recent Chats' }}</span>
-					<v-btn id="chat-new-button" icon variant="text" size="x-small" @click="startNewChat" :title="i18n.chatNewChat || 'New Chat'" data-aid="chat_new_button">
+					<span class="flex-grow-1">{{ i18n.chatHistory }}</span>
+					<v-btn id="chat-new-button" icon variant="text" size="x-small" @click="startNewChat" :title="i18n.chatNewChat" data-aid="chat_new_button">
 						<v-icon size="small">fa-plus</v-icon>
 					</v-btn>
 				</v-card-title>
@@ -229,7 +229,7 @@
 					</v-list>
 					<div id="chat-history-empty" v-else class="text-center text-medium-emphasis py-8">
 						<v-icon size="48" class="mb-4">fa-history</v-icon>
-						<div>{{ i18n.chatNoHistory || 'No chat history' }}</div>
+						<div>{{ i18n.chatNoHistory }}</div>
 					</div>
 				</v-card-text>
 			</v-card>
@@ -245,5 +245,5 @@
 		display: flex;
 		min-height: 50vh;
 		justify-content: center;
-	">This feature is unavailable.</div>
+	">{{ i18n.featureUnavailable }}</div>
 </v-container>
