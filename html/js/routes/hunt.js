@@ -274,7 +274,6 @@ const huntComponent = {
       return this.$root.loading;
     },
     initAssistant(params) {
-      console.log("assistant", params);
       this.assistantEnabled = params["enabledInSoc"];
       this.investigationMsg = params["investigationPrompt"];
     },
@@ -2419,7 +2418,7 @@ const huntComponent = {
           });
         }
       } catch (error) {
-        console.error('Failed to load investigation sessions from backend:', error);
+        this.$root.showError(this.i18n.aiInvestigationCouldNotLoad + ': ' + error.message);
         this.investigationSessions = [];
         this.aiInvestigations = {};
       }
@@ -3321,7 +3320,7 @@ const huntComponent = {
             return;
           }
         } catch (error) {
-          this.$root.showError(this.i18n.aiInvestigationUnableToFetchNewest);
+          this.$root.showError(this.i18n.aiInvestigationUnableToFetchNewest + ': ' + error.message);
           return;
         }
       }

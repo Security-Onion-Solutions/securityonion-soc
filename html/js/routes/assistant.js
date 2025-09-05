@@ -60,7 +60,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
   methods: {
 
     initAssistant(params) {
-      console.log("assistant", params);
       this.assistantEnabled = params["enabledInSoc"] && this.$root.isLicensed('oai');
       this.contextLimitSmall = params["contextLimitSmall"];
       this.contextLimitLarge = params["contextLimitLarge"];
@@ -83,7 +82,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       if (usage) {
         const messageContext = this.calculateContextFromUsage(usage);
         this.contextLength += messageContext;
-        console.log('Updated context length:', this.contextLength, 'Added:', messageContext);
       }
     },
     
@@ -93,7 +91,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         this.messages = [
           {
             role: 'assistant',
-            content: 'Hello! I\'m your AI Assistant for Security Onion. How can I help you today?',
+            content: this.i18n.assistantWelcomeMessage,
             timestamp: new Date().toISOString()
           }
         ];
@@ -119,29 +117,21 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           this.chatHistory = [];
         }
       } catch (error) {
-        console.log('Failed to load chat history from backend:', error);
+        this.$root.showError(this.i18n.assistantUnableToLoadHistory + ': ' + error.message);
+
         // Fallback to empty array if backend is unavailable
         this.chatHistory = [];
       }
     },
     saveCurrentChatId() {
-      try {
-        if (this.currentChatId) {
-          localStorage.setItem('so-current-chat-id', this.currentChatId);
-        } else {
-          localStorage.removeItem('so-current-chat-id');
-        }
-      } catch (error) {
-        console.log('Failed to save current chat ID:', error);
+      if (this.currentChatId) {
+        localStorage.setItem('so-current-chat-id', this.currentChatId);
+      } else {
+        localStorage.removeItem('so-current-chat-id');
       }
     },
     loadCurrentChatId() {
-      try {
-        return localStorage.getItem('so-current-chat-id');
-      } catch (error) {
-        console.log('Failed to load current chat ID:', error);
-        return null;
-      }
+      return localStorage.getItem('so-current-chat-id');
     },
     async handleRouteSessionId() {
       const urlSessionId = this.$route.params.sessionId;
@@ -150,7 +140,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         try {
           await this.loadChatFromBackend(urlSessionId);
         } catch (error) {
-          console.log('Session not found in backend, starting new session:', urlSessionId);
           // Session ID in URL doesn't exist, start new chat with this ID
           this.currentChatId = urlSessionId;
           this.saveCurrentChatId();
@@ -167,7 +156,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
             if (investigationDataStr) {
               try {
                 const investigationData = JSON.parse(investigationDataStr);
-                console.log('Found investigation data for session:', urlSessionId);
                 // This is a new investigation session, start with investigation prompt
                 this.$nextTick(() => {
                   this.startInvestigationSession(investigationData.socId, investigationData.prompt);
@@ -175,15 +163,9 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
                 // Clean up the localStorage after use
                 localStorage.removeItem(investigationKey);
               } catch (error) {
-                console.error('Failed to parse investigation data:', error);
+                this.$root.showError(this.i18n.assistantUnableToParseInvestigation + ': ' + error.message);
               }
-            } else {
-              console.warn('Investigation session detected but no data found in localStorage for key:', investigationKey);
-              // List all localStorage keys for debugging
-              console.log('Available localStorage keys:', Object.keys(localStorage));
             }
-          } else {
-            // Keep the default welcome message
           }
         }
       } else {
@@ -203,7 +185,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           this.updateUrlWithSessionId(lastChatId);
           return;
         } catch (error) {
-          console.log('Failed to restore last active chat:', error);
+          this.$root.showError(this.i18n.assistantUnableToRestoreLastActive + ': ' + error.message);
         }
       }
       // If no valid last chat found, keep the default welcome message
@@ -215,8 +197,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           this.creditsRemaining = response.data.credit_balance || 0;
         }
       } catch (error) {
-        console.error('Error loading credits from API:', error);
-        // Fallback to localStorage if API fails
+        this.$root.showError(this.i18n.assistantUnableToLoadCredits + ': ' + error.message);
       }
     },
     async saveCurrentChat() {
@@ -242,8 +223,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         this.updateUrlWithSessionId(chat.sessionId);
         this.scrollToBottom();
       } catch (error) {
-        console.error('Failed to load chat:', error);
-        this.$root.showError('Failed to load chat: ' + error.message);
+        this.$root.showError(this.i18n.assistantUnableToLoadChat + ': ' + error.message);
       }
     },
     async deleteChat(chatId) {
@@ -263,10 +243,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           this.$router.push({ name: 'assistant' });
         }
         
-        console.log('Chat deleted successfully:', chatId);
       } catch (error) {
-        console.error('Failed to delete chat:', error);
-        this.$root.showError('Failed to delete chat: ' + (error.response?.data?.error || error.message));
+        this.$root.showError(this.i18n.assistantUnableToDeleteChat + ': ' + (error.response?.data?.error || error.message));
       }
     },
     async startNewChat() {
@@ -287,12 +265,12 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       if (!this.newMessage.trim()) return;
       
       if (!this.assistantEnabled) {
-        this.$root.showError('Onion AI is not enabled or is otherwise unavailable.');
+        this.$root.showError(this.i18n.assistantNotAvailable);
         return;
       }
 
       // Check if context length has reached the limit
-      const maxContextLength = this.increaseMaxContextThreshold ? 1000000 : 200000;
+      const maxContextLength = this.increaseMaxContextThreshold ? this.contextLimitLarge : this.contextLimitSmall;
       if (this.contextLength >= maxContextLength) {
         const formattedLimit = this.formatCount(maxContextLength);
         this.$root.showError(`Context length limit reached (${formattedLimit}+ tokens). Please start a new chat to continue.`);
@@ -301,7 +279,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       
       // Check if user has credits
       if (this.creditsRemaining <= 0) {
-        this.$root.showError('Insufficient credits. Please contact your administrator to purchase more credits.');
+        this.$root.showError(this.i18n.assistantOutOfCredits);
         return;
       }
       
@@ -345,7 +323,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         // Refresh chat history to show the latest session
         await this.loadStoredChats();
       } catch (error) {
-        this.$root.showError('Failed to get AI response: ' + error.message);
+        this.$root.showError(this.i18n.assistantNoResponse + ': ' + error.message);
         this.isTyping = false;
       }
     },
@@ -366,7 +344,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         const stream = response.data;
         const reader = stream.pipeThrough(new TextDecoderStream()).getReader();
 
-        console.log("reading messages...");
         let output = 0;
         let assistantMessage = null;
         let chunks = [];
@@ -388,7 +365,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           }
 
           chunks = newChunks;
-          console.log(chunks);
           
           // process each chunk
           for (let i = 0; i < chunks.length; i++) {
@@ -456,20 +432,17 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
                 if (currentChunk.trim()) {
                   partial = true;
                   chunks.push(currentChunk);
-                  console.log('partial found - case 1', chunks);
                 }
                 continue;
               } else if (currentChunk.trim()) {
                 // No complete JSON found, treat entire chunk as partial
                 partial = true;
                 chunks = [currentChunk];
-                console.log('partial found - case 2', chunks);
                 break;
               } else {
                 // Fallback: treat as partial
                 partial = true;
                 chunks = [chunk];
-                console.log('partial found - case 3', chunks);
                 break;
               }
             }
@@ -490,7 +463,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
                 // Sometimes usage comes in message_start
                 if (c.message && c.message.usage) {
                   messageUsage = c.message.usage;
-                  console.log('Usage found in message_start:', messageUsage);
                 }
 
                 this.messages.push(assistantMessage);
@@ -519,7 +491,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
                     this.executingTools.set(toolUse.id, toolUse);
                     // Also track by block index for delta updates
                     this.executingTools.set(`block_${c.index}`, toolUse);
-                    console.log('Tool use started:', toolUse);
                     this.scrollToBottom();
                   }
                 }
@@ -535,7 +506,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
                   if (toolUse) {
                     toolUse.inputJson += c.delta.partial_json;
                     toolUse.status = 'preparing';
-                    console.log('Tool input delta accumulated:', toolUse.inputJson);
                     this.scrollToBottom();
                   }
                 }
@@ -544,16 +514,13 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
               case 'message_stop':
                 // Store usage information with the message if available
                 if (assistantMessage && messageUsage) {
-                  console.log('Setting usage on message:', messageUsage);
                   // Set the ref's value
                   assistantMessage.usage.value = messageUsage;
                   // Update context length
                   this.updateContextLength(messageUsage);
-                  console.log('Message after setting usage:', assistantMessage);
                   this.$forceUpdate();
-                } else {
-                  console.log('No usage to set - assistantMessage:', !!assistantMessage, 'messageUsage:', messageUsage);
                 }
+
                 assistantMessage = null;
                 messageUsage = null;
                 break;
@@ -561,7 +528,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
                 // Handle usage information if present
                 if (c.usage) {
                   messageUsage = c.usage;
-                  console.log('Usage found in message_delta:', messageUsage);
                 }
                 break;
               case 'content_block_stop':
@@ -572,14 +538,12 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
                     // Parse the accumulated JSON input
                     if (toolUse.inputJson) {
                       toolUse.input = JSON.parse(toolUse.inputJson);
-                      console.log('Tool input complete:', toolUse.input);
                     }
                     
                     // Set status to pending approval instead of executing
                     toolUse.status = 'pending_approval';
                     toolUse.approved = null;
                   } catch (error) {
-                    console.error('Failed to parse tool input JSON:', error, toolUse.inputJson);
                     toolUse.status = 'error';
                     toolUse.error = 'Failed to parse tool input: ' + error.message;
                   }
@@ -589,16 +553,13 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
                 // Sometimes usage comes here
                 if (c.usage) {
                   messageUsage = c.usage;
-                  console.log('Usage found in content_block_stop:', messageUsage);
                 }
                 break;
               default:
                 // Log any unhandled event types that might contain usage
                 if (c.usage) {
                   messageUsage = c.usage;
-                  console.log('Usage found in unhandled event type:', c.type, messageUsage);
                 }
-                console.log('Unhandled event type:', c.type, c);
                 break;
             }
           }
@@ -612,19 +573,18 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         await this.loadCredits();
       } catch (error) {
         this.isTyping = false;
-        console.error('AI API Error:', error);
         
         // Show user-friendly error message
         const errorMessage = {
           role: 'assistant',
-          content: 'I apologize, but I\'m having trouble connecting to the AI service right now. Please try again in a moment.',
+          content: this.i18n.assistantErrorMessage,
           timestamp: new Date().toISOString()
         };
         this.messages.push(errorMessage);
         this.scrollToBottom();
         
         // Show error to user
-        this.$root.showError('Failed to get AI response: ' + (error.response?.data?.error || error.message));
+        this.$root.showError(this.i18n.assistantNoResponse + ': ' + (error.response?.data?.error || error.message));
       }
     },
     handleAIResponse(response) {
@@ -662,7 +622,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     async executeTool(toolUse) {
       try {
-        console.log('Executing tool:', toolUse.name, 'with params:', toolUse.input);
         
         // Create ToolRequest object with history and params
         // Session ID should already be set by sendMessage()
@@ -688,12 +647,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         const stream = response.data;
         const reader = stream.pipeThrough(new TextDecoderStream()).getReader();
 
-        console.log("Streaming tool result response...");
         let assistantMessage = null;
         let chunks = [];
         let partial = false;
         let messageUsage = null;
-        let capturedRawResult = null; // Capture the raw tool result
 
         while (true) {
           const { done, value } = await reader.read();
@@ -707,7 +664,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           }
 
           chunks = newChunks;
-          console.log('Tool result chunks:', chunks);
           
           for (let i = 0; i < chunks.length; i++) {
             if (chunks[i] === '[DONE]') {
@@ -766,18 +722,15 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
                 if (currentChunk.trim()) {
                   partial = true;
                   chunks.push(currentChunk);
-                  console.log('partial found - case 1', chunks);
                 }
                 continue;
               } else if (currentChunk.trim()) {
                 partial = true;
                 chunks = [currentChunk];
-                console.log('partial found - case 2', chunks);
                 break;
               } else {
                 partial = true;
                 chunks = [chunk];
-                console.log('partial found - case 3', chunks);
                 break;
               }
             }
@@ -825,7 +778,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
                     assistantMessage.toolUses.value.push(newToolUse);
                     this.executingTools.set(newToolUse.id, newToolUse);
                     this.executingTools.set(`block_${c.index}`, newToolUse);
-                    console.log('Chained tool use started:', newToolUse);
                     this.scrollToBottom();
                   }
                 }
@@ -841,7 +793,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
                   if (chainedToolUse) {
                     chainedToolUse.inputJson += c.delta.partial_json;
                     chainedToolUse.status = 'preparing';
-                    console.log('Chained tool input delta accumulated:', chainedToolUse.inputJson);
                     this.scrollToBottom();
                   }
                 }
@@ -855,14 +806,12 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
                     // Parse the accumulated JSON input
                     if (chainedToolUse.inputJson) {
                       chainedToolUse.input = JSON.parse(chainedToolUse.inputJson);
-                      console.log('Chained tool input complete:', chainedToolUse.input);
                     }
                     
                     // Set status to pending approval
                     chainedToolUse.status = 'pending_approval';
                     chainedToolUse.approved = null;
                   } catch (error) {
-                    console.error('Failed to parse chained tool input JSON:', error, chainedToolUse.inputJson);
                     chainedToolUse.status = 'error';
                     chainedToolUse.error = 'Failed to parse tool input: ' + error.message;
                   }
@@ -872,7 +821,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
                 // Sometimes usage comes here
                 if (c.usage) {
                   messageUsage = c.usage;
-                  console.log('Usage found in content_block_stop:', messageUsage);
                 }
                 break;
 
@@ -940,13 +888,12 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
                   } else {
                     toolUse.status = "completed";
                   }
-                  console.log('Captured raw tool result:', toolUse.rawResult);
                   break;
                 }
               }
             }
           } catch (error) {
-            console.log('Could not capture raw tool result:', error);
+            this.$root.showError(this.i18n.assistantNoRawToolResult + ': ' + error.message);
           }
         }, 1000); // Wait 1 second for the backend to save the result
         
@@ -954,8 +901,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         await this.loadCredits();
         
       } catch (error) {
-        console.error('Tool execution error:', error);
-        
         // Update tool use status with error
         toolUse.status = 'error';
         toolUse.error = error.message;
@@ -1000,10 +945,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       try {
         toolUse.approved = true;
         toolUse.status = 'executing';
-        console.log('Tool approved by user:', toolUse.name);
         await this.executeTool(toolUse);
       } catch (error) {
-        console.error('Error approving tool:', error);
         toolUse.status = 'error';
         toolUse.error = 'Failed to execute approved tool: ' + error.message;
       }
@@ -1013,7 +956,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       toolUse.approved = false;
       toolUse.status = 'rejected';
       toolUse.error = 'Tool execution rejected by user';
-      console.log('Tool rejected by user:', toolUse.name);
       
       // Add a message indicating the tool was rejected
       const rejectionMessage = `Tool execution for "${toolUse.name}" was rejected by the user.`;
@@ -1022,8 +964,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.scrollToBottom();
     },
     async startInvestigationSession(socId, investigationPrompt) {
-      console.log('Starting investigation session for SOC ID:', socId);
-      console.log('Investigation prompt length:', investigationPrompt.length);
       
       // Clear the welcome message for investigations (similar to normal chats)
       this.messages = [];
@@ -1036,33 +976,14 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       
       // Send the message after a delay to ensure everything is ready
       setTimeout(async () => {
-        console.log('About to send message, length:', this.newMessage.length);
         if (this.newMessage && this.newMessage.trim()) {
           try {
             await this.sendMessage();
-            console.log('Investigation message sent successfully');
           } catch (error) {
-            console.error('Failed to send investigation message:', error);
+            this.$root.showError(this.i18n.assistantUnableToInvestigate + ': ' + error.message);
           }
-        } else {
-          console.error('No message to send');
         }
       }, 2000);
-    },
-    updateInvestigationStatus(alertId, status, assessment = null, confidence = null) {
-      // Update the investigation status in localStorage so hunt page can reflect changes
-      try {
-        const aiInvestigations = JSON.parse(localStorage.getItem('aiInvestigations') || '{}');
-        if (aiInvestigations[alertId]) {
-          aiInvestigations[alertId].status = status;
-          if (assessment) aiInvestigations[alertId].assessment = assessment;
-          if (confidence) aiInvestigations[alertId].confidence = confidence;
-          aiInvestigations[alertId].lastUpdated = new Date().toISOString();
-          localStorage.setItem('aiInvestigations', JSON.stringify(aiInvestigations));
-        }
-      } catch (error) {
-        console.error('Failed to update investigation status:', error);
-      }
     },
     // Helper method to generate title from a session/message
     generateTitleFromMessage(session) {
@@ -1093,7 +1014,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           throw new Error('No chat history found for session');
         }
       } catch (error) {
-        console.error('Failed to load chat from backend:', error);
         // If session doesn't exist, start with welcome message
         if (error.response && error.response.status === 404) {
           this.loadChatHistory(); // Reset to welcome message
@@ -1161,7 +1081,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
                     matchingToolUse.error = toolError;
                     matchingToolUse.status = "error";
                   }
-                  console.log('Associated raw tool result with tool use:', toolUseId);
                   break;
                 }
               }
@@ -1284,7 +1203,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       try {
         localStorage.setItem('so-chat-increase-max-context-threshold', this.increaseMaxContextThreshold.toString());
       } catch (error) {
-        console.log('Failed to save context threshold setting:', error);
+        this.$root.showError(this.i18n.assistantSaveContextError + ': ' + error.message);
       }
     },
     
@@ -1295,7 +1214,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           this.increaseMaxContextThreshold = saved === 'true';
         }
       } catch (error) {
-        console.log('Failed to load context threshold setting:', error);
+        this.$root.showError(this.i18n.assistantLoadContextError + ': ' + error.message);
       }
     },
 
@@ -1304,7 +1223,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       try {
         localStorage.setItem('so-chat-restore-last-active', this.restoreLastActive.toString());
       } catch (error) {
-        console.log('Failed to save restore last active setting:', error);
+        this.$root.showError(this.i18n.assistantSaveRecentError + ': ' + error.message);
       }
     },
     
@@ -1315,7 +1234,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           this.restoreLastActive = saved === 'true';
         }
       } catch (error) {
-        console.log('Failed to load restore last active setting:', error);
+        this.$root.showError(this.i18n.assistantLoadRecentError + ': ' + error.message);
       }
     }
   }
