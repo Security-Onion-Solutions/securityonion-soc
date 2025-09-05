@@ -146,9 +146,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           
           // Check if this is an investigation session
           const isInvestigation = this.$route.query.investigation === 'true';
-          const socId = this.$route.query.socId;
           
-          if (isInvestigation && socId) {
+          if (isInvestigation) {
             // Try to get investigation data from localStorage
             const investigationKey = `investigation_${urlSessionId}`;
             const investigationDataStr = localStorage.getItem(investigationKey);

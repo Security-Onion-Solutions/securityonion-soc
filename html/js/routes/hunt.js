@@ -3334,9 +3334,11 @@ const huntComponent = {
       // Check if investigation already exists for this specific soc_id
       const existingInvestigation = this.aiInvestigations[socId];
       if (existingInvestigation && existingInvestigation.chatSessionId) {
-        // Navigate to existing chat session
-        const chatUrl = `${window.location.origin}/#/assistant/${existingInvestigation.chatSessionId}`;
-        window.open(chatUrl, '_blank');
+        // Navigate to existing chat session using Vue Router
+        this.$router.push({
+          name: 'assistant',
+          params: { sessionId: existingInvestigation.chatSessionId }
+        })
         return;
       }
 
@@ -3364,9 +3366,8 @@ const huntComponent = {
       };
       localStorage.setItem(`investigation_${chatSessionId}`, JSON.stringify(investigationData));
 
-      // Navigate to chat page with investigation session ID
-      const chatUrl = `${window.location.origin}/#/assistant/${chatSessionId}?investigation=true&socId=${encodeURIComponent(socId)}`;
-      window.open(chatUrl, '_blank');
+      // Navigate to chat page with investigation session ID using Vue Router
+      this.$router.push(`/assistant/${chatSessionId}?investigation=true`);
     },
 
     generateInvestigationPrompt(item) {
