@@ -102,6 +102,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }
     },
     async loadStoredChats() {
+      this.$root.startLoading();
       try {
         const response = await this.$root.papi.get('/assistant/sessions');
         if (response.data && Array.isArray(response.data)) {
@@ -121,6 +122,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
 
         // Fallback to empty array if backend is unavailable
         this.chatHistory = [];
+      } finally {
+        this.$root.stopLoading();
       }
     },
     saveCurrentChatId() {
@@ -137,6 +140,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       const urlSessionId = this.$route.params.sessionId;
       if (urlSessionId) {
         // Try to load chat from backend first
+        this.$root.startLoading();
         try {
           await this.loadChatFromBackend(urlSessionId);
         } catch (error) {
@@ -166,6 +170,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
               }
             }
           }
+        } finally {
+          this.$root.stopLoading();
         }
       } else {
         // No session ID in URL, restore last active chat
@@ -178,6 +184,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }
       const lastChatId = this.loadCurrentChatId();
       if (lastChatId && this.chatHistory.length > 0) {
+        this.$root.startLoading();
         try {
           await this.loadChatFromBackend(lastChatId);
           // Update URL to reflect the current session
@@ -185,6 +192,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           return;
         } catch (error) {
           this.$root.showError(this.i18n.assistantUnableToRestoreLastActive + ': ' + error.message);
+        } finally {
+          this.$root.stopLoading();
         }
       }
       // If no valid last chat found, keep the default welcome message
@@ -217,12 +226,15 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     async loadChat(chat) {
       await this.saveCurrentChat(); // Save current chat before switching
+      this.$root.startLoading();
       try {
         await this.loadChatFromBackend(chat.sessionId);
         this.updateUrlWithSessionId(chat.sessionId);
         this.scrollToBottom();
       } catch (error) {
         this.$root.showError(this.i18n.assistantUnableToLoadChat + ': ' + error.message);
+      } finally {
+        this.$root.stopLoading();
       }
     },
     async deleteChat(chatId) {
