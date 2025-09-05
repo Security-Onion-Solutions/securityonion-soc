@@ -3406,7 +3406,7 @@ const huntComponent = {
         alertRule: item['rule.rule']
       };
 
-      const investigationMsg = this.investigationMsg.replaceAll("{socid}", alertData.socId || 'Unknown');
+      const investigationMsg = this.$root.replaceActionVar(this.investigationMsg, "socid", alertData.socId || 'Unknown');
 
       return investigationMsg;
     },
