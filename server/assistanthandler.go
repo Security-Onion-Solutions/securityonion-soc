@@ -72,12 +72,7 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	accept := strings.TrimSpace(r.Header.Get("Accept"))
 	streaming := strings.EqualFold(accept, "text/event-stream")
 
-	type TempBody struct {
-		Msg       string `json:"msg"`
-		SessionId string `json:"sessionId"`
-	}
-
-	tb := &TempBody{}
+	tb := &model.IncomingMessage{}
 	err = json.NewDecoder(r.Body).Decode(tb)
 	if err != nil {
 		logger.WithError(err).Error("unable to decode request body")

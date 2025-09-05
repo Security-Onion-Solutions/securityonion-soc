@@ -236,7 +236,6 @@ func TestAssistantCoordinator_Balance(t *testing.T) {
 			},
 			expectedResult: &model.BalanceResponse{
 				Balance:   100.50,
-				ApiKey:    "key",
 				KeyId:     "id",
 				CompanyId: "company",
 				Status:    "status",

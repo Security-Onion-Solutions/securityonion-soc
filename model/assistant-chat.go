@@ -10,6 +10,11 @@ import (
 	"time"
 )
 
+type IncomingMessage struct {
+	Msg       string `json:"msg" example:"What is MITRE?"`
+	SessionId string `json:"sessionId" example:"chat_1757086398900_ykhmndscn"`
+}
+
 type ChatRequest struct {
 	Messages      []*Message      `json:"messages"`
 	MaxTokens     int             `json:"max_tokens,omitempty" example:"10000"`
