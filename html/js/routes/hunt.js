@@ -3306,6 +3306,12 @@ const huntComponent = {
     },
     // AI Investigation methods
     async startAIInvestigation(item, event = null) {
+      // Only respond to left-click (button === 0) or middle-click (button === 1)
+      // Ignore right-click (button === 2) and other mouse buttons
+      if (event && event.button !== 0 && event.button !== 1) {
+        return;
+      }
+
       let targetItem = item;
 
       // Check if this is a grouped alert (has count > 1)
