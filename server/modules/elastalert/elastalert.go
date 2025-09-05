@@ -575,7 +575,13 @@ func (e *ElastAlertEngine) SyncLocalDetections(ctx context.Context, detections [
 
 			err = e.WriteFile(path, []byte(wrapped), 0644)
 			if err != nil {
-				errMap[det.PublicID] = fmt.Sprintf("unable to write enabled detection file: %s", err)
+				// Attempt to clean up the potentially corrupted file
+				deleteErr := e.DeleteFile(path)
+				if deleteErr != nil && !os.IsNotExist(deleteErr) {
+					errMap[det.PublicID] = fmt.Sprintf("unable to write enabled detection file (%s) and cleanup failed (%s)", err, deleteErr)
+				} else {
+					errMap[det.PublicID] = fmt.Sprintf("unable to write enabled detection file: %s", err)
+				}
 				continue
 			}
 		} else {
@@ -1354,7 +1360,13 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 
 			err = e.WriteFile(path, []byte(rule), 0644)
 			if err != nil {
-				errMap[detect.PublicID] = fmt.Errorf("unable to write enabled detection file: %s", err)
+				// Attempt to clean up the potentially corrupted file
+				deleteErr := e.DeleteFile(path)
+				if deleteErr != nil && !os.IsNotExist(deleteErr) {
+					errMap[detect.PublicID] = fmt.Errorf("unable to write enabled detection file (%s) and cleanup failed (%s)", err, deleteErr)
+				} else {
+					errMap[detect.PublicID] = fmt.Errorf("unable to write enabled detection file: %s", err)
+				}
 				continue
 			}
 		} else if path != "" {
