@@ -11,9 +11,9 @@ import (
 )
 
 type ToolRequest struct {
-	SessionId string          `json:"sessionId"`
-	ToolUseId string          `json:"toolUseId"`
-	Params    json.RawMessage `json:"params"`
+	SessionId string          `json:"sessionId" example:"chat_1757086398900_ykhmndscn"`
+	ToolUseId string          `json:"toolUseId" example:"tooluse_mT45or7ISwSEUivo63nqow"`
+	Params    json.RawMessage `json:"params" example:"{\"key\":\"value\"}"`
 }
 
 type ToolResponse struct {
@@ -53,20 +53,4 @@ type ToolSchemaProperty struct {
 	Type        string `json:"type"`
 	Description string `json:"description"`
 	Default     any    `json:"default,omitempty"`
-}
-
-type ToolChoice struct {
-	Type string
-}
-
-func (tc ToolChoice) MarshalJSON() ([]byte, error) {
-	if tc.Type == "" {
-		return []byte("null"), nil
-	}
-
-	result := map[string]any{
-		tc.Type: map[string]any{},
-	}
-
-	return json.Marshal(result)
 }

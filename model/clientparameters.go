@@ -174,7 +174,7 @@ type AlertingParameters struct {
 }
 
 type AssistantParameters struct {
-	EnabledInSoc           bool    `json:"enabledInSoc"`
+	Enabled                bool    `json:"enabled"`
 	InvestigationPrompt    string  `json:"investigationPrompt"`
 	ContextLimitSmall      int     `json:"contextLimitSmall"`
 	ContextLimitLarge      int     `json:"contextLimitLarge"`

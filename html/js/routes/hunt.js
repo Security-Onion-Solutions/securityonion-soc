@@ -274,7 +274,7 @@ const huntComponent = {
       return this.$root.loading;
     },
     initAssistant(params) {
-      this.assistantEnabled = params["enabledInSoc"];
+      this.assistantEnabled = params["enabled"];
       this.investigationMsg = params["investigationPrompt"];
     },
     async initHunt(params) {

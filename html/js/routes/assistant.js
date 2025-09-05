@@ -60,7 +60,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
   methods: {
 
     initAssistant(params) {
-      this.assistantEnabled = params["enabledInSoc"] && this.$root.isLicensed('oai');
+      this.assistantEnabled = params["enabled"] && this.$root.isLicensed('oai');
       this.contextLimitSmall = params["contextLimitSmall"];
       this.contextLimitLarge = params["contextLimitLarge"];
       this.thresholdColorRatioLow = params["thresholdColorRatioLow"];

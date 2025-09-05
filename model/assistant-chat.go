@@ -12,23 +12,22 @@ import (
 
 type ChatRequest struct {
 	Messages      []*Message      `json:"messages"`
-	Model         string          `json:"model,omitempty"`
-	MaxTokens     int             `json:"max_tokens,omitempty"`
-	Temperature   float64         `json:"temperature,omitempty"`
-	TopP          float64         `json:"top_p"`
-	TopK          int             `json:"top_k"`
-	StopSequences []string        `json:"stop_sequences,omitempty"`
-	System        string          `json:"system,omitempty"`
-	Stream        bool            `json:"stream,omitempty"`
+	MaxTokens     int             `json:"max_tokens,omitempty" example:"10000"`
+	Temperature   float64         `json:"temperature,omitempty" example:"0.7"`
+	TopP          float64         `json:"top_p" example:"1"`
+	TopK          int             `json:"top_k" example:"40"`
+	StopSequences []string        `json:"stop_sequences,omitempty" example:"end_turn"`
+	System        string          `json:"system,omitempty" example:"As a chatbot, your goal is to be helpful."`
+	Stream        bool            `json:"stream,omitempty" example:"true"`
 	ToolConfig    json.RawMessage `json:"toolConfig,omitempty"`
-	UserId        string          `json:"user_uuid,omitempty"`
+	UserId        string          `json:"user_uuid,omitempty" example:"8beae4b5-275b-4669-b678-8cff894911b5"`
 }
 
 type StoredMessage struct {
 	Auditable
-	DeletedAt *time.Time `json:"deletedAt,omitempty"`
-	Tags      []string   `json:"tags,omitempty"`
-	SessionId string     `json:"session_id"`
+	DeletedAt *time.Time `json:"deletedAt,omitempty" example:"2025-09-05T15:33:00.000Z"`
+	Tags      []string   `json:"tags,omitempty" example:"investigation"`
+	SessionId string     `json:"session_id" example:"chat_1757086398900_ykhmndscn"`
 	Message   *Message   `json:"message"`
 }
 
@@ -96,12 +95,12 @@ func (sm *StoredMessage) UnmarshalJSON(data []byte) error {
 }
 
 type Message struct {
-	Id            string         `json:"id"`
-	Role          string         `json:"role"`
+	Id            string         `json:"id" example:"c3d44fb8-3bc2-46e2-a7d2-8a8983556d1a"`
+	Role          string         `json:"role" example:"user"`
 	ContentStr    string         `json:"-"`
 	ContentBlocks []ContentBlock `json:"-"`
-	StopReason    *string        `json:"stop_reason,omitempty"`
-	StopSequence  *string        `json:"stop_sequence,omitempty"`
+	StopReason    *string        `json:"stop_reason,omitempty" example:"user_request"`
+	StopSequence  *string        `json:"stop_sequence,omitempty" example:"end_turn"`
 	Usage         *Usage         `json:"usage,omitempty"`
 }
 
@@ -174,19 +173,19 @@ func (msg *Message) UnmarshalJSON(data []byte) error {
 }
 
 type ContentBlock struct {
-	Type    string          `json:"type,omitempty"`
-	Id      string          `json:"id,omitempty"`
-	Name    string          `json:"name,omitempty"`
-	Input   json.RawMessage `json:"input,omitempty"`
-	Json    any             `json:"json,omitempty"`
-	Content any             `json:"content,omitempty,omitzero"`
-	Text    string          `json:"text,omitempty"`
+	Type    string          `json:"type,omitempty" example:"text"`
+	Id      string          `json:"id,omitempty" example:"tooluse_mT45or7ISwSEUivo63nqow"`
+	Name    string          `json:"name,omitempty" example:"tool_use"`
+	Input   json.RawMessage `json:"input,omitempty" example:"{\"key\":\"value\"}"`
+	Json    any             `json:"json,omitempty" example:"{\"key\":\"value\"}"`
+	Content any             `json:"content,omitempty,omitzero" example:"What exactly is an APT?"`
+	Text    string          `json:"text,omitempty" example:"What are my latest alerts?"`
 }
 
 type Usage struct {
-	InputTokens  int `json:"input_tokens"`
-	OutputTokens int `json:"output_tokens"`
-	Credits      int `json:"credits"`
+	InputTokens  int `json:"input_tokens" example:"5"`
+	OutputTokens int `json:"output_tokens" example:"10"`
+	Credits      int `json:"credits" example:"1"`
 }
 
 func (msg *Message) PrepareForStorage(sessionId string, tags []string) *StoredMessage {
@@ -198,11 +197,10 @@ func (msg *Message) PrepareForStorage(sessionId string, tags []string) *StoredMe
 }
 
 type BalanceResponse struct {
-	ApiKey    string  `json:"api_key"`
-	KeyId     string  `json:"key_id"`
-	CompanyId string  `json:"company_id"`
-	Status    string  `json:"status"`
-	Balance   float64 `json:"credit_balance"`
+	KeyId     string  `json:"key_id" example:"user-61a9d0ef-29a4-4f9f-83f2-f8bbae462608"`
+	CompanyId string  `json:"company_id" example:"SecurityOnionSolutions"`
+	Status    string  `json:"status" example:"active"`
+	Balance   float64 `json:"credit_balance" example:"123000"`
 }
 
 type ChatOpt func(*ChatConfig)

@@ -106,7 +106,7 @@ func (t *GetPlaybookQuestionsTool) Execute(ctx context.Context, srv *server.Serv
 
 	detId, ok := event.Payload["rule.uuid"].(string)
 	if !ok {
-		logger.WithField("event", event).Error("event does not have a rule.uuid field")
+		logger.WithField("specifiedEvent", event).Error("event does not have a rule.uuid field")
 		return nil, fmt.Errorf("alert does not have a rule.uuid field")
 	}
 
