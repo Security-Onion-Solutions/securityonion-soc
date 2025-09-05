@@ -158,7 +158,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
                 const investigationData = JSON.parse(investigationDataStr);
                 // This is a new investigation session, start with investigation prompt
                 this.$nextTick(() => {
-                  this.startInvestigationSession(investigationData.socId, investigationData.prompt);
+                  this.startInvestigationSession(investigationData.prompt);
                 });
                 // Clean up the localStorage after use
                 localStorage.removeItem(investigationKey);
@@ -948,14 +948,14 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         await this.executeTool(toolUse);
       } catch (error) {
         toolUse.status = 'error';
-        toolUse.error = 'Failed to execute approved tool: ' + error.message;
+        toolUse.error = this.i18n.assistantToolUseFail + ': ' + error.message;
       }
       this.scrollToBottom();
     },
     async rejectTool(toolUse) {
       toolUse.approved = false;
       toolUse.status = 'rejected';
-      toolUse.error = 'Tool execution rejected by user';
+      toolUse.error = this.i18n.assistantToolUseReject;
       
       // Add a message indicating the tool was rejected
       const rejectionMessage = `Tool execution for "${toolUse.name}" was rejected by the user.`;
@@ -963,7 +963,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
 
       this.scrollToBottom();
     },
-    async startInvestigationSession(socId, investigationPrompt) {
+    async startInvestigationSession(investigationPrompt) {
       
       // Clear the welcome message for investigations (similar to normal chats)
       this.messages = [];
@@ -1011,7 +1011,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           this.currentChatId = sessionId;
           this.saveCurrentChatId();
         } else {
-          throw new Error('No chat history found for session');
+          throw new Error(this.i18n.assistantNoHistoryFound + ' ' + sessionId);
         }
       } catch (error) {
         // If session doesn't exist, start with welcome message
@@ -1146,7 +1146,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
                   input: block.input || {}, // Ensure input is always an object, never null/undefined
                   status: 'rejected',
                   result: null,
-                  error: 'Tool execution rejected by user',
+                  error: this.i18n.assistantToolUseReject,
                   rawResult: null,
                   timestamp: msg.createTime || new Date().toISOString(),
                   approved: false
