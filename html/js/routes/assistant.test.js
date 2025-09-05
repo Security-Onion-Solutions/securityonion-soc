@@ -148,14 +148,11 @@ afterEach(() => {
 test('component data initialization', () => {
   expect(comp.messages).toEqual([]);
   expect(comp.newMessage).toBe('');
-  expect(comp.username).toBe('User');
   expect(comp.isTyping).toBe(false);
   expect(comp.chatHistory).toEqual([]);
   expect(comp.currentChatId).toBe(null);
-  expect(comp.showHistoryDialog).toBe(false);
   expect(comp.creditsRemaining).toBe(0);
   expect(comp.executingTools).toBeInstanceOf(Map);
-  expect(comp.pendingToolResults).toBeInstanceOf(Map);
 });
 
 test('loadChatHistory initializes with welcome message', async () => {
@@ -225,25 +222,6 @@ test('generateChatId creates unique ID', () => {
   expect(id1).toMatch(/^chat_\d+_[a-z0-9]+$/);
   expect(id2).toMatch(/^chat_\d+_[a-z0-9]+$/);
   expect(id1).not.toBe(id2);
-});
-
-test('generateChatTitle from first user message', () => {
-  comp.messages = [
-    fakeAssistantMessage,
-    { role: 'user', content: 'This is a very long message that should be truncated because it exceeds fifty characters' }
-  ];
-  
-  const title = comp.generateChatTitle();
-  
-  expect(title).toBe('This is a very long message that should be truncat...');
-});
-
-test('generateChatTitle default when no user message', () => {
-  comp.messages = [fakeAssistantMessage];
-  
-  const title = comp.generateChatTitle();
-  
-  expect(title).toMatch(/^New Chat - \d+\/\d+\/\d+$/);
 });
 
 // Session management tests
@@ -1542,12 +1520,11 @@ test('generateTitleFromMessage with no title', () => {
 // convertBackendMessagesToFrontend method tests
 test('convertBackendMessagesToFrontend resets context length', () => {
   comp.contextLength = 1000;
-  comp.resetContextLength = jest.fn();
   
   const backendMessages = [];
   comp.convertBackendMessagesToFrontend(backendMessages);
   
-  expect(comp.resetContextLength).toHaveBeenCalled();
+  expect(comp.contextLength).toBe(0);
 });
 
 test('convertBackendMessagesToFrontend converts user message with contentBlocks', () => {
@@ -2051,12 +2028,12 @@ test('convertBackendMessagesToFrontend handles complex message flow with skip_ne
 });
 
 test('convertBackendMessagesToFrontend handles empty backend messages array', () => {
-  comp.resetContextLength = jest.fn();
+  comp.contextLength = 1000;
   
   const result = comp.convertBackendMessagesToFrontend([]);
   
   expect(result).toEqual([]);
-  expect(comp.resetContextLength).toHaveBeenCalled();
+  expect(comp.contextLength).toBe(0);
 });
 
 test('loadChatFromBackend success', async () => {
