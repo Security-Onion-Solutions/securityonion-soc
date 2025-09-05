@@ -3305,7 +3305,7 @@ const huntComponent = {
       return 'no-data';
     },
     // AI Investigation methods
-    async startAIInvestigation(item) {
+    async startAIInvestigation(item, event = null) {
       let targetItem = item;
 
       // Check if this is a grouped alert (has count > 1)
@@ -3334,11 +3334,21 @@ const huntComponent = {
       // Check if investigation already exists for this specific soc_id
       const existingInvestigation = this.aiInvestigations[socId];
       if (existingInvestigation && existingInvestigation.chatSessionId) {
-        // Navigate to existing chat session using Vue Router
-        this.$router.push({
-          name: 'assistant',
-          params: { sessionId: existingInvestigation.chatSessionId }
-        })
+        // Check for middle-click (button === 1) to open in new tab
+        if (event && event.button === 1) {
+          // Middle-click: open in new tab
+          const url = this.$router.resolve({
+            name: 'assistant',
+            params: { sessionId: existingInvestigation.chatSessionId }
+          }).href;
+          window.open(url, '_blank');
+        } else {
+          // Left-click: navigate in current tab
+          this.$router.push({
+            name: 'assistant',
+            params: { sessionId: existingInvestigation.chatSessionId }
+          });
+        }
         return;
       }
 
@@ -3366,8 +3376,15 @@ const huntComponent = {
       };
       localStorage.setItem(`investigation_${chatSessionId}`, JSON.stringify(investigationData));
 
-      // Navigate to chat page with investigation session ID using Vue Router
-      this.$router.push(`/assistant/${chatSessionId}?investigation=true`);
+      // Check for middle-click (button === 1) to open in new tab
+      if (event && event.button === 1) {
+        // Middle-click: open in new tab
+        const url = this.$router.resolve(`/assistant/${chatSessionId}?investigation=true`).href;
+        window.open(url, '_blank');
+      } else {
+        // Left-click: navigate in current tab
+        this.$router.push(`/assistant/${chatSessionId}?investigation=true`);
+      }
     },
 
     generateInvestigationPrompt(item) {
