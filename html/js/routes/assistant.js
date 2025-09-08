@@ -169,6 +169,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
                 this.$root.showError(this.i18n.assistantUnableToParseInvestigation + ': ' + error.message);
               }
             }
+          } else {
+            this.loadChatHistory();
           }
         } finally {
           this.$root.stopLoading();
@@ -186,7 +188,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       if (lastChatId && this.chatHistory.length > 0) {
         this.$root.startLoading();
         try {
-          await this.loadChatFromBackend(lastChatId);
           // Update URL to reflect the current session
           this.updateUrlWithSessionId(lastChatId);
           return;
@@ -228,7 +229,9 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       await this.saveCurrentChat(); // Save current chat before switching
       this.$root.startLoading();
       try {
-        await this.loadChatFromBackend(chat.sessionId);
+        if (this.currentChatId === chat.sessionId) {
+          await this.loadChatFromBackend(chat.sessionId);
+        }
         this.updateUrlWithSessionId(chat.sessionId);
         this.scrollToBottom();
       } catch (error) {
