@@ -1518,6 +1518,21 @@ const huntComponent = {
       var idx = 0;
       this.groupBys = [];
       while (this.populateGroupByTable(metrics, idx++)) { };
+
+      // Apply any existing AI investigation results to the loaded group data
+      this.applyAIInvestigationsToEvents();
+
+      // Apply AI investigated filter if enabled
+      if (this.aiInvestigatedFilter) {
+        this.groupBys.forEach(group => {
+          if (group.data && group.data.length > 0) {
+            group.data = group.data.filter(item => {
+              const socId = item.soc_id;
+              return socId && this.aiInvestigations[socId];
+            });
+          }
+        });
+      }
     },
     populateGroupByTable(metrics, groupIdx) {
       const route = this;
