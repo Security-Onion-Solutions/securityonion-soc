@@ -130,10 +130,18 @@ func (t *QueryEventsTool) Execute(ctx context.Context, server *server.Server, pa
 
 	if args.GroupByField != nil && *args.GroupByField != "" {
 		eventLimit = 10000
-		metricLimit = args.Limit
+		if args.Limit > 0 {
+			metricLimit = args.Limit
+		} else {
+			metricLimit = 10
+		}
 		query = fmt.Sprintf("%s | groupby %s", query, *args.GroupByField)
 	} else {
-		eventLimit = args.Limit
+		if args.Limit > 0 {
+			eventLimit = args.Limit
+		} else {
+			eventLimit = 10
+		}
 		metricLimit = 10000
 	}
 

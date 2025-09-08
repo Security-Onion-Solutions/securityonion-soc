@@ -1985,7 +1985,7 @@ const huntComponent = {
       return this.isCategory('detections');
     },
     getExpandedData(data) {
-      const ignored = ['_isSelected', 'playbooks', '_row_idx_'];
+      const ignored = ['_isSelected', 'playbooks', '_row_idx_', 'playbookErr', 'questions'];
       var records = [];
       for (let key in data) {
         if (ignored.includes(key)) {
