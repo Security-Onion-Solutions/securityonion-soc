@@ -325,13 +325,9 @@
 														</v-btn>
 														<v-btn id="aiInvestigateButton" v-if="investigateEnabled && item['rule.uuid']" variant="text" size="x-small" icon
 															@mousedown="startAIInvestigation(item, $event)"
-															:disabled="item._aiInvestigationStatus === 'investigating'"
 															:color="getAIInvestigationButtonColor(item)"
-															:data-aid="'groups_ai_investigate_' + category" :aria-label="'AI Investigation'"
-															:title="getAIInvestigationTooltip(item)">
-															<v-icon v-if="item._aiInvestigationStatus === 'investigating'" class="fa-spin">fa-spinner</v-icon>
-															<v-icon v-else-if="item._aiInvestigationStatus === 'completed'">fa-brain</v-icon>
-															<v-icon v-else>fa-brain</v-icon>
+															:data-aid="'groups_ai_investigate_' + category" :aria-label="'AI Investigation'">
+															<v-icon :title="getAIInvestigationTooltip(item)">fa-brain</v-icon>
 														</v-btn>
 														<v-btn id="infoButton" v-if="item['rule.uuid'] && showDetailsPanel" variant="text" size="x-small" icon @click="highlightDetection(item['rule.uuid'], item, groupIdx)" :aria-label="$root.replaceActionVar(i18n.displayInfo, 'display_state', (highlightedDetection && highlightedDetection.publicId === item['rule.uuid'] ? i18n.displayed : ''))">
 															<v-icon v-if="highlightedDetection && highlightedDetection.publicId === item['rule.uuid']" color="success">fa-thumbtack</v-icon>
@@ -640,13 +636,9 @@
 											</v-btn>
 											<v-btn id="aiInvestigateButton" v-if="investigateEnabled && item['rule.uuid']" variant="text" icon size="x-small"
 												@mousedown="startAIInvestigation(item, $event)"
-												:disabled="item._aiInvestigationStatus === 'investigating'"
 												:color="getAIInvestigationButtonColor(item)"
-												:data-aid="'events_ai_investigate_' + category" :aria-label="'AI Investigation'"
-												:title="getAIInvestigationTooltip(item)">
-												<v-icon v-if="item._aiInvestigationStatus === 'investigating'" class="fa-spin">fa-spinner</v-icon>
-												<v-icon v-else-if="item._aiInvestigationStatus === 'completed'">fa-brain</v-icon>
-												<v-icon v-else>fa-brain</v-icon>
+												:data-aid="'events_ai_investigate_' + category" :aria-label="'AI Investigation'">
+												<v-icon :title="getAIInvestigationTooltip(item)">fa-brain</v-icon>
 											</v-btn>
 											<v-btn id="infoButton" v-if="item['rule.uuid'] && showDetailsPanel" variant="text" size="x-small" icon @click="highlightDetection(item['rule.uuid'], item, groupIdx)" :title="i18n.openInPanel" :aria-label="$root.replaceActionVar(i18n.displayInfo, 'display_state', (highlightedDetection && highlightedDetection.publicId === item['rule.uuid'] ? i18n.displayed : ''))">
 												<v-icon v-if="highlightedDetection && highlightedDetection.publicId === item['rule.uuid']" color="success">fa-thumbtack</v-icon>

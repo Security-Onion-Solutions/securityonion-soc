@@ -153,7 +153,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           
           if (isInvestigation) {
             // Try to get investigation data from localStorage
-            const investigationKey = `investigation_${urlSessionId}`;
+            const investigationKey = `key_${urlSessionId}`;
             const investigationDataStr = localStorage.getItem(investigationKey);
             
             if (investigationDataStr) {

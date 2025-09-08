@@ -1518,21 +1518,6 @@ const huntComponent = {
       var idx = 0;
       this.groupBys = [];
       while (this.populateGroupByTable(metrics, idx++)) { };
-
-      // Apply any existing AI investigation results to the loaded group data
-      this.applyAIInvestigationsToEvents();
-
-      // Apply AI investigated filter if enabled
-      if (this.aiInvestigatedFilter) {
-        this.groupBys.forEach(group => {
-          if (group.data && group.data.length > 0) {
-            group.data = group.data.filter(item => {
-              const socId = item.soc_id;
-              return socId && this.aiInvestigations[socId];
-            });
-          }
-        });
-      }
     },
     populateGroupByTable(metrics, groupIdx) {
       const route = this;
@@ -2410,7 +2395,6 @@ const huntComponent = {
               const socId = parts.slice(1, -1).join('_'); // Handle soc_ids that might contain underscores
               this.aiInvestigations[socId] = {
                 chatSessionId: session.sessionId,
-                status: 'completed', // Assume completed if session exists
                 socId: socId,
                 timestamp: session.createTime || new Date().toISOString()
               };
@@ -2431,35 +2415,8 @@ const huntComponent = {
           const socId = item.soc_id;
           if (socId && this.aiInvestigations[socId]) {
             const investigation = this.aiInvestigations[socId];
-            item._aiInvestigationStatus = 'completed';
-            item._aiInvestigationResult = investigation;
-          }
-        });
-      }
-
-      // Also apply to grouped data - for groups, use a simplified approach
-      if (this.groupBys && this.groupBys.length > 0) {
-        this.groupBys.forEach(group => {
-          if (group.data && group.data.length > 0) {
-            group.data.forEach(item => {
-              // For grouped alerts (count > 1), we'll show brain icon by default
-              // When clicked, it will fetch the newest event and create an investigation for that specific alert
-              // This avoids expensive queries to determine if any alert in the group has been investigated
-              if (item.count) {
-                // Don't mark grouped alerts as investigated to avoid expensive lookups
-                // The user can still investigate by clicking the brain icon
-                item._aiInvestigationStatus = null;
-                item._aiInvestigationResult = null;
-              } else {
-                // For individual alerts, check by soc_id as before
-                const socId = item.soc_id;
-                if (socId && this.aiInvestigations[socId]) {
-                  const investigation = this.aiInvestigations[socId];
-                  item._aiInvestigationStatus = 'completed';
-                  item._aiInvestigationResult = investigation;
-                }
-              }
-            });
+            item._aiInvestigated = true;
+            item._aiInvestigationData = investigation;
           }
         });
       }
@@ -3364,9 +3321,8 @@ const huntComponent = {
       // Update local tracking using soc_id as key
       this.aiInvestigations[socId] = {
         chatSessionId: chatSessionId,
-        status: 'investigating',
         socId: socId,
-        alertId: targetItem['rule.uuid'], // Keep rule.uuid as alertId for reference
+        ruleUuid: targetItem['rule.uuid'],
         timestamp: new Date().toISOString()
       };
 
@@ -3376,11 +3332,11 @@ const huntComponent = {
       // Store the investigation prompt in localStorage to avoid URL encoding issues
       const investigationData = {
         socId: socId,
-        alertId: targetItem['rule.uuid'],
+        ruleUuid: targetItem['rule.uuid'],
         prompt: investigationPrompt,
         timestamp: new Date().toISOString()
       };
-      localStorage.setItem(`investigation_${chatSessionId}`, JSON.stringify(investigationData));
+      localStorage.setItem(`key_${chatSessionId}`, JSON.stringify(investigationData));
 
       // Check for middle-click (button === 1) to open in new tab
       if (event && event.button === 1) {
