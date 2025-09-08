@@ -1519,9 +1519,6 @@ const huntComponent = {
       this.groupBys = [];
       while (this.populateGroupByTable(metrics, idx++)) { };
 
-      // Apply any existing AI investigation results to the loaded group data
-      this.applyAIInvestigationsToEvents();
-
       // Apply AI investigated filter if enabled
       if (this.aiInvestigatedFilter) {
         this.groupBys.forEach(group => {
