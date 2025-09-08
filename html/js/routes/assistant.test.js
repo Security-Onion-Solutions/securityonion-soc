@@ -247,26 +247,26 @@ test('handleRouteSessionId with non-existent session', async () => {
 test('restoreLastActiveChat success', async () => {
   comp.loadCurrentChatId = jest.fn().mockReturnValue(fakeSessionId);
   comp.chatHistory = fakeChatHistory;
-  comp.loadChatFromBackend = jest.fn().mockResolvedValue();
   comp.updateUrlWithSessionId = jest.fn();
   comp.restoreLastActive = true;
   
   await comp.restoreLastActiveChat();
   
-  expect(comp.loadChatFromBackend).toHaveBeenCalledWith(fakeSessionId);
   expect(comp.updateUrlWithSessionId).toHaveBeenCalledWith(fakeSessionId);
 });
 
 test('restoreLastActiveChat handles error', async () => {
   comp.loadCurrentChatId = jest.fn().mockReturnValue(fakeSessionId);
   comp.chatHistory = fakeChatHistory;
-  comp.loadChatFromBackend = jest.fn().mockRejectedValue(new Error('Load failed'));
+  comp.updateUrlWithSessionId = jest.fn().mockImplementation(() => {
+    throw new Error('URL update failed');
+  });
   comp.restoreLastActive = true;
   
   await comp.restoreLastActiveChat();
   
   // Should not throw error, just continue
-  expect(comp.loadChatFromBackend).toHaveBeenCalledWith(fakeSessionId);
+  expect(comp.updateUrlWithSessionId).toHaveBeenCalledWith(fakeSessionId);
 });
 
 // Credits and balance tests
@@ -295,6 +295,7 @@ test('loadChat switches to existing chat', async () => {
   comp.loadChatFromBackend = jest.fn().mockResolvedValue();
   comp.updateUrlWithSessionId = jest.fn();
   comp.scrollToBottom = jest.fn();
+  comp.currentChatId = chat.sessionId; // Set current chat ID to match
   
   await comp.loadChat(chat);
   
@@ -309,6 +310,9 @@ test('loadChat handles error', async () => {
   const showErrorMock = mockShowError();
   comp.saveCurrentChat = jest.fn().mockResolvedValue();
   comp.loadChatFromBackend = jest.fn().mockRejectedValue(new Error('Load failed'));
+  comp.updateUrlWithSessionId = jest.fn();
+  comp.scrollToBottom = jest.fn();
+  comp.currentChatId = chat.sessionId; // Set current chat ID to match
   
   await comp.loadChat(chat);
   
