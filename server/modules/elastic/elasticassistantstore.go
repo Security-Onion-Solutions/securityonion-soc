@@ -85,7 +85,6 @@ func (store *ElasticAssistantstore) indexDocument(ctx context.Context, index str
 
 	logger.WithFields(log.Fields{
 		"documentIndex": index,
-		"document":      store.truncate(document),
 		"requestId":     ctx.Value(web.ContextKeyRequestId),
 	}).Debug("Adding document to Elasticsearch")
 
@@ -104,8 +103,8 @@ func (store *ElasticAssistantstore) indexDocument(ctx context.Context, index str
 	json, err := readJsonFromResponse(res)
 
 	logger.WithFields(log.Fields{
-		"response":  store.truncate(json),
-		"requestId": ctx.Value(web.ContextKeyRequestId),
+		"indexDocumentResponseLength": len(json),
+		"requestId":                   ctx.Value(web.ContextKeyRequestId),
 	}).Debug("Index new document finished")
 
 	return json, err
@@ -252,9 +251,9 @@ func (store *ElasticAssistantstore) GetChatHistory(ctx context.Context, sessionI
 	}
 
 	logger.WithFields(log.Fields{
-		"query":     store.truncate(string(queryJSON)),
-		"sessionId": sessionId,
-		"requestId": ctx.Value(web.ContextKeyRequestId),
+		"assistantEsQuery": store.truncate(string(queryJSON)),
+		"sessionId":        sessionId,
+		"requestId":        ctx.Value(web.ContextKeyRequestId),
 	}).Debug("Searching for chat history")
 
 	// Execute search
@@ -277,9 +276,9 @@ func (store *ElasticAssistantstore) GetChatHistory(ctx context.Context, sessionI
 	}
 
 	logger.WithFields(log.Fields{
-		"response":  store.truncate(responseJSON),
-		"sessionId": sessionId,
-		"requestId": ctx.Value(web.ContextKeyRequestId),
+		"queryChatHistoryResponseLength": len(responseJSON),
+		"sessionId":                      sessionId,
+		"requestId":                      ctx.Value(web.ContextKeyRequestId),
 	}).Debug("Received Elasticsearch response")
 
 	// Parse response

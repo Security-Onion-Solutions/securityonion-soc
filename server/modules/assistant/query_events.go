@@ -16,6 +16,7 @@ import (
 	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
@@ -159,8 +160,8 @@ func (t *QueryEventsTool) Execute(ctx context.Context, server *server.Server, pa
 		}
 
 		// Parse and format times
-		startFormatted := parseTimeString(start)
-		endFormatted := parseTimeString(end)
+		startFormatted := util.ParseRelativeTimeString(start)
+		endFormatted := util.ParseRelativeTimeString(end)
 
 		timeRange = fmt.Sprintf("%s - %s", startFormatted, endFormatted)
 	}

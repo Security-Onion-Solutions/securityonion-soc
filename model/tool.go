@@ -11,9 +11,12 @@ import (
 )
 
 type ToolRequest struct {
-	SessionId string          `json:"sessionId" example:"chat_1757086398900_ykhmndscn"`
-	ToolUseId string          `json:"toolUseId" example:"tooluse_mT45or7ISwSEUivo63nqow"`
-	Params    json.RawMessage `json:"params" example:"{\"key\":\"value\"}"`
+	// The sessionId this chat message belongs to.
+	SessionId string `json:"sessionId" example:"chat_1757086398900_ykhmndscn"`
+	// The unique identifier for this tool use.
+	ToolUseId string `json:"toolUseId" example:"tooluse_mT45or7ISwSEUivo63nqow"`
+	// The parameters for this tool use.
+	Params json.RawMessage `json:"params" example:"{\"key\":\"value\"}"`
 }
 
 type ToolResponse struct {

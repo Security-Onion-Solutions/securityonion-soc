@@ -349,7 +349,7 @@ func (ac *AssistantCoordinator) ExecuteTool(ctx context.Context, toolName string
 	}
 
 	logger.WithFields(log.Fields{
-		"result": result,
+		"toolResult": result,
 	}).Info("tool executed successfully")
 
 	return result, nil

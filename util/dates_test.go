@@ -3,13 +3,12 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
-package assistant
+package util
 
 import (
 	"testing"
 	"time"
 
-	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -27,77 +26,77 @@ func TestParseTimeString(t *testing.T) {
 		{
 			name:         "now keyword",
 			input:        "now",
-			expectedTime: util.Ptr(now),
+			expectedTime: Ptr(now),
 		},
 		{
 			name:         "NOW case insensitive",
 			input:        "NOW",
-			expectedTime: util.Ptr(now),
+			expectedTime: Ptr(now),
 		},
 		{
 			name:         "today keyword",
 			input:        "today",
-			expectedTime: util.Ptr(today),
+			expectedTime: Ptr(today),
 		},
 		{
 			name:         "TODAY case insensitive",
 			input:        "TODAY",
-			expectedTime: util.Ptr(today),
+			expectedTime: Ptr(today),
 		},
 		{
 			name:         "whitespace around now",
 			input:        "  now  ",
-			expectedTime: util.Ptr(now),
+			expectedTime: Ptr(now),
 		},
 		{
 			name:         "whitespace around today",
 			input:        "  today  ",
-			expectedTime: util.Ptr(today),
+			expectedTime: Ptr(today),
 		},
 		{
 			name:         "1 minute ago",
 			input:        "-1m",
-			expectedTime: util.Ptr(now.Add(-1 * time.Minute)),
+			expectedTime: Ptr(now.Add(-1 * time.Minute)),
 		},
 		{
 			name:         "5 minutes ago",
 			input:        "-5m",
-			expectedTime: util.Ptr(now.Add(-5 * time.Minute)),
+			expectedTime: Ptr(now.Add(-5 * time.Minute)),
 		},
 		{
 			name:         "1 hour ago",
 			input:        "-1h",
-			expectedTime: util.Ptr(now.Add(-1 * time.Hour)),
+			expectedTime: Ptr(now.Add(-1 * time.Hour)),
 		},
 		{
 			name:         "24 hours ago",
 			input:        "-24h",
-			expectedTime: util.Ptr(now.Add(-24 * time.Hour)),
+			expectedTime: Ptr(now.Add(-24 * time.Hour)),
 		},
 		{
 			name:         "1 day ago",
 			input:        "-1d",
-			expectedTime: util.Ptr(now.Add(-24 * time.Hour)),
+			expectedTime: Ptr(now.Add(-24 * time.Hour)),
 		},
 		{
 			name:         "7 days ago",
 			input:        "-7d",
-			expectedTime: util.Ptr(now.Add(-7 * 24 * time.Hour)),
+			expectedTime: Ptr(now.Add(-7 * 24 * time.Hour)),
 		},
 		{
 			name:         "0 minutes ago",
 			input:        "-0m",
-			expectedTime: util.Ptr(now),
+			expectedTime: Ptr(now),
 		},
 		{
 			name:         "999 days ago",
 			input:        "-999d",
-			expectedTime: util.Ptr(now.Add(-999 * 24 * time.Hour)),
+			expectedTime: Ptr(now.Add(-999 * 24 * time.Hour)),
 		},
 		{
 			name:         "whitespace around relative time",
 			input:        "  -1h  ",
-			expectedTime: util.Ptr(now.Add(-1 * time.Hour)),
+			expectedTime: Ptr(now.Add(-1 * time.Hour)),
 		},
 		{
 			name:         "invalid unit",
@@ -143,7 +142,7 @@ func TestParseTimeString(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := parseTimeString(tc.input)
+			result := ParseRelativeTimeString(tc.input)
 
 			if tc.expectedTime == nil {
 				assert.Equal(t, tc.input, result, "Should return input unchanged for invalid format")
@@ -203,7 +202,7 @@ func TestFormatSOTime(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := formatSOTime(tc.input)
+			result := FormatSOTime(tc.input)
 			assert.Equal(t, tc.expected, result)
 		})
 	}

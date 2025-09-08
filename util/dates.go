@@ -3,7 +3,7 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
-package assistant
+package util
 
 import (
 	"regexp"
@@ -12,20 +12,20 @@ import (
 	"time"
 )
 
-// parseTimeString parses various time formats used by Security Onion
-func parseTimeString(timeStr string) string {
+// ParseRelativeTimeString parses various time formats used by Security Onion
+func ParseRelativeTimeString(timeStr string) string {
 	now := time.Now()
 	timeStr = strings.TrimSpace(timeStr)
 
 	// Handle "now"
 	if strings.ToLower(timeStr) == "now" {
-		return formatSOTime(now)
+		return FormatSOTime(now)
 	}
 
 	// Handle "today"
 	if strings.ToLower(timeStr) == "today" {
 		today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-		return formatSOTime(today)
+		return FormatSOTime(today)
 	}
 
 	// Handle relative times like "-1h", "-24h", "-7d"
@@ -41,15 +41,21 @@ func parseTimeString(timeStr string) string {
 
 			var duration time.Duration
 			switch unit {
+			case "s":
+				duration = time.Duration(amount) * time.Second
 			case "m":
 				duration = time.Duration(amount) * time.Minute
 			case "h":
 				duration = time.Duration(amount) * time.Hour
 			case "d":
 				duration = time.Duration(amount) * 24 * time.Hour
+			case "w":
+				duration = time.Duration(amount) * 7 * 24 * time.Hour
+			case "y":
+				duration = time.Duration(amount) * 365 * 24 * time.Hour
 			}
 
-			return formatSOTime(now.Add(-duration))
+			return FormatSOTime(now.Add(-duration))
 		}
 	}
 
@@ -57,8 +63,8 @@ func parseTimeString(timeStr string) string {
 	return timeStr
 }
 
-// formatSOTime formats time in Security Onion's expected format
-func formatSOTime(t time.Time) string {
+// FormatSOTime formats time in Security Onion's expected format
+func FormatSOTime(t time.Time) string {
 	// Security Onion uses "2006/01/02 3:04:05 PM" format
 	return t.Format("2006/01/02 3:04:05 PM")
 }
