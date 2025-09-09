@@ -808,20 +808,12 @@ func buildQuestionRange(event *model.EventRecord, rangeStr string, timezone stri
 		return ""
 	}
 
-	// Convert unit to time.Duration
-	var duration time.Duration
-	switch unit {
-	case "d":
-		duration = time.Duration(value) * 24 * time.Hour
-	case "h":
-		duration = time.Duration(value) * time.Hour
-	case "m":
-		duration = time.Duration(value) * time.Minute
-	case "s":
-		duration = time.Duration(value) * time.Second
-	default:
+	duration := util.UnitToDuration(unit)
+	if duration == 0 {
 		return ""
 	}
+
+	duration *= time.Duration(value)
 
 	// Calculate time range
 	var t1, t2 time.Time

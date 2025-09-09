@@ -39,21 +39,7 @@ func ParseRelativeTimeString(timeStr string) string {
 			amount, _ := strconv.Atoi(matches[1])
 			unit := matches[2]
 
-			var duration time.Duration
-			switch unit {
-			case "s":
-				duration = time.Duration(amount) * time.Second
-			case "m":
-				duration = time.Duration(amount) * time.Minute
-			case "h":
-				duration = time.Duration(amount) * time.Hour
-			case "d":
-				duration = time.Duration(amount) * 24 * time.Hour
-			case "w":
-				duration = time.Duration(amount) * 7 * 24 * time.Hour
-			case "y":
-				duration = time.Duration(amount) * 365 * 24 * time.Hour
-			}
+			duration := UnitToDuration(unit) * time.Duration(amount)
 
 			return FormatSOTime(now.Add(-duration))
 		}
@@ -67,4 +53,24 @@ func ParseRelativeTimeString(timeStr string) string {
 func FormatSOTime(t time.Time) string {
 	// Security Onion uses "2006/01/02 3:04:05 PM" format
 	return t.Format("2006/01/02 3:04:05 PM")
+}
+
+func UnitToDuration(unit string) time.Duration {
+	var duration time.Duration
+	switch unit {
+	case "s":
+		duration = time.Second
+	case "m":
+		duration = time.Minute
+	case "h":
+		duration = time.Hour
+	case "d":
+		duration = 24 * time.Hour
+	case "w":
+		duration = 7 * 24 * time.Hour
+	case "y":
+		duration = 365 * 24 * time.Hour
+	}
+
+	return duration
 }

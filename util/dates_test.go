@@ -207,3 +207,56 @@ func TestFormatSOTime(t *testing.T) {
 		})
 	}
 }
+
+func TestUnitToDuration(t *testing.T) {
+	tests := []struct {
+		Name           string
+		Input          string
+		ExpectedOutput time.Duration
+	}{
+		{
+			Name: "no input",
+		},
+		{
+			Name:  "bad input",
+			Input: "x",
+		},
+		{
+			Name:           "second",
+			Input:          "s",
+			ExpectedOutput: time.Second,
+		},
+		{
+			Name:           "minutes",
+			Input:          "m",
+			ExpectedOutput: time.Minute,
+		},
+		{
+			Name:           "hours",
+			Input:          "h",
+			ExpectedOutput: time.Hour,
+		},
+		{
+			Name:           "days",
+			Input:          "d",
+			ExpectedOutput: 24 * time.Hour,
+		},
+		{
+			Name:           "weeks",
+			Input:          "w",
+			ExpectedOutput: 7 * 24 * time.Hour,
+		},
+		{
+			Name:           "year",
+			Input:          "y",
+			ExpectedOutput: 365 * 24 * time.Hour,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			result := UnitToDuration(test.Input)
+			assert.Equal(t, test.ExpectedOutput, result)
+		})
+	}
+}
