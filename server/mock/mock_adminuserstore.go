@@ -5,6 +5,7 @@
 //
 //	mockgen -destination mock/mock_adminuserstore.go -package mock . AdminUserstore
 //
+
 // Package mock is a generated GoMock package.
 package mock
 
@@ -20,6 +21,7 @@ import (
 type MockAdminUserstore struct {
 	ctrl     *gomock.Controller
 	recorder *MockAdminUserstoreMockRecorder
+	isgomock struct{}
 }
 
 // MockAdminUserstoreMockRecorder is the mock recorder for MockAdminUserstore.
@@ -40,127 +42,127 @@ func (m *MockAdminUserstore) EXPECT() *MockAdminUserstoreMockRecorder {
 }
 
 // AddRole mocks base method.
-func (m *MockAdminUserstore) AddRole(arg0 context.Context, arg1, arg2 string) error {
+func (m *MockAdminUserstore) AddRole(ctx context.Context, id, role string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddRole", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "AddRole", ctx, id, role)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddRole indicates an expected call of AddRole.
-func (mr *MockAdminUserstoreMockRecorder) AddRole(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockAdminUserstoreMockRecorder) AddRole(ctx, id, role any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddRole", reflect.TypeOf((*MockAdminUserstore)(nil).AddRole), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddRole", reflect.TypeOf((*MockAdminUserstore)(nil).AddRole), ctx, id, role)
 }
 
 // AddUser mocks base method.
-func (m *MockAdminUserstore) AddUser(arg0 context.Context, arg1 *model.User) error {
+func (m *MockAdminUserstore) AddUser(ctx context.Context, user *model.User) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddUser", arg0, arg1)
+	ret := m.ctrl.Call(m, "AddUser", ctx, user)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddUser indicates an expected call of AddUser.
-func (mr *MockAdminUserstoreMockRecorder) AddUser(arg0, arg1 any) *gomock.Call {
+func (mr *MockAdminUserstoreMockRecorder) AddUser(ctx, user any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddUser", reflect.TypeOf((*MockAdminUserstore)(nil).AddUser), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddUser", reflect.TypeOf((*MockAdminUserstore)(nil).AddUser), ctx, user)
 }
 
 // DeleteRole mocks base method.
-func (m *MockAdminUserstore) DeleteRole(arg0 context.Context, arg1, arg2 string) error {
+func (m *MockAdminUserstore) DeleteRole(ctx context.Context, id, role string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteRole", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "DeleteRole", ctx, id, role)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteRole indicates an expected call of DeleteRole.
-func (mr *MockAdminUserstoreMockRecorder) DeleteRole(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockAdminUserstoreMockRecorder) DeleteRole(ctx, id, role any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteRole", reflect.TypeOf((*MockAdminUserstore)(nil).DeleteRole), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteRole", reflect.TypeOf((*MockAdminUserstore)(nil).DeleteRole), ctx, id, role)
 }
 
 // DeleteUser mocks base method.
-func (m *MockAdminUserstore) DeleteUser(arg0 context.Context, arg1 string) error {
+func (m *MockAdminUserstore) DeleteUser(ctx context.Context, id string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteUser", arg0, arg1)
+	ret := m.ctrl.Call(m, "DeleteUser", ctx, id)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteUser indicates an expected call of DeleteUser.
-func (mr *MockAdminUserstoreMockRecorder) DeleteUser(arg0, arg1 any) *gomock.Call {
+func (mr *MockAdminUserstoreMockRecorder) DeleteUser(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteUser", reflect.TypeOf((*MockAdminUserstore)(nil).DeleteUser), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteUser", reflect.TypeOf((*MockAdminUserstore)(nil).DeleteUser), ctx, id)
 }
 
 // DisableUser mocks base method.
-func (m *MockAdminUserstore) DisableUser(arg0 context.Context, arg1 string) error {
+func (m *MockAdminUserstore) DisableUser(ctx context.Context, id string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DisableUser", arg0, arg1)
+	ret := m.ctrl.Call(m, "DisableUser", ctx, id)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DisableUser indicates an expected call of DisableUser.
-func (mr *MockAdminUserstoreMockRecorder) DisableUser(arg0, arg1 any) *gomock.Call {
+func (mr *MockAdminUserstoreMockRecorder) DisableUser(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DisableUser", reflect.TypeOf((*MockAdminUserstore)(nil).DisableUser), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DisableUser", reflect.TypeOf((*MockAdminUserstore)(nil).DisableUser), ctx, id)
 }
 
 // EnableUser mocks base method.
-func (m *MockAdminUserstore) EnableUser(arg0 context.Context, arg1 string) error {
+func (m *MockAdminUserstore) EnableUser(ctx context.Context, id string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "EnableUser", arg0, arg1)
+	ret := m.ctrl.Call(m, "EnableUser", ctx, id)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // EnableUser indicates an expected call of EnableUser.
-func (mr *MockAdminUserstoreMockRecorder) EnableUser(arg0, arg1 any) *gomock.Call {
+func (mr *MockAdminUserstoreMockRecorder) EnableUser(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnableUser", reflect.TypeOf((*MockAdminUserstore)(nil).EnableUser), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnableUser", reflect.TypeOf((*MockAdminUserstore)(nil).EnableUser), ctx, id)
 }
 
 // ResetPassword mocks base method.
-func (m *MockAdminUserstore) ResetPassword(arg0 context.Context, arg1, arg2 string) error {
+func (m *MockAdminUserstore) ResetPassword(ctx context.Context, id, password string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ResetPassword", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "ResetPassword", ctx, id, password)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ResetPassword indicates an expected call of ResetPassword.
-func (mr *MockAdminUserstoreMockRecorder) ResetPassword(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockAdminUserstoreMockRecorder) ResetPassword(ctx, id, password any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetPassword", reflect.TypeOf((*MockAdminUserstore)(nil).ResetPassword), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetPassword", reflect.TypeOf((*MockAdminUserstore)(nil).ResetPassword), ctx, id, password)
 }
 
 // SyncUsers mocks base method.
-func (m *MockAdminUserstore) SyncUsers(arg0 context.Context) error {
+func (m *MockAdminUserstore) SyncUsers(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SyncUsers", arg0)
+	ret := m.ctrl.Call(m, "SyncUsers", ctx)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SyncUsers indicates an expected call of SyncUsers.
-func (mr *MockAdminUserstoreMockRecorder) SyncUsers(arg0 any) *gomock.Call {
+func (mr *MockAdminUserstoreMockRecorder) SyncUsers(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncUsers", reflect.TypeOf((*MockAdminUserstore)(nil).SyncUsers), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncUsers", reflect.TypeOf((*MockAdminUserstore)(nil).SyncUsers), ctx)
 }
 
 // UpdateProfile mocks base method.
-func (m *MockAdminUserstore) UpdateProfile(arg0 context.Context, arg1 *model.User) error {
+func (m *MockAdminUserstore) UpdateProfile(ctx context.Context, user *model.User) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateProfile", arg0, arg1)
+	ret := m.ctrl.Call(m, "UpdateProfile", ctx, user)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // UpdateProfile indicates an expected call of UpdateProfile.
-func (mr *MockAdminUserstoreMockRecorder) UpdateProfile(arg0, arg1 any) *gomock.Call {
+func (mr *MockAdminUserstoreMockRecorder) UpdateProfile(ctx, user any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateProfile", reflect.TypeOf((*MockAdminUserstore)(nil).UpdateProfile), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateProfile", reflect.TypeOf((*MockAdminUserstore)(nil).UpdateProfile), ctx, user)
 }

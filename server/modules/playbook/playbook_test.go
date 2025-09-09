@@ -7,7 +7,9 @@ package playbook
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"os/exec"
@@ -864,4 +866,866 @@ func TestGetPlaybooksForDetection_BaseCategoryMatching(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(playbooks))
 	assert.Equal(t, "generic-playbook", playbooks[0].Id)
+}
+
+func TestExecutePlaybookSearches(t *testing.T) {
+	ctx := context.Background()
+
+	tests := []struct {
+		name            string
+		event           *model.EventRecord
+		playbooks       []*model.Playbook
+		convertResults  []*model.ConvertedQuery
+		convertError    error
+		searchResults   *model.EventSearchResults
+		searchError     error
+		expectedError   string
+		verifyQuestions func(t *testing.T, playbooks []*model.Playbook)
+	}{
+		{
+			name: "successful execution with range question",
+			event: &model.EventRecord{
+				Id: "test-event-1",
+				Payload: map[string]interface{}{
+					"hostname":  "test-host",
+					"user.name": "test-user",
+				},
+			},
+			playbooks: []*model.Playbook{
+				{
+					Auditable: model.Auditable{Id: "test-playbook"},
+					Questions: []*model.Question{
+						{
+							Question:      "What processes were executed?",
+							Context:       "Test context",
+							Range:         util.Ptr("-1h"),
+							AnswerSources: []string{"process_creation"},
+							Query:         "hostname: {hostname}",
+						},
+					},
+				},
+			},
+			convertResults: []*model.ConvertedQuery{
+				{
+					Query:  "hostname: test-host",
+					Fields: []string{"Image", "CommandLine"},
+				},
+			},
+			searchResults: &model.EventSearchResults{
+				Events: []*model.EventRecord{
+					{
+						Id: "search-result-1",
+						Payload: map[string]interface{}{
+							"Image":       "notepad.exe",
+							"CommandLine": "notepad.exe file.txt",
+						},
+					},
+				},
+			},
+			verifyQuestions: func(t *testing.T, playbooks []*model.Playbook) {
+				assert.Len(t, playbooks[0].Questions, 1)
+				question := playbooks[0].Questions[0]
+				assert.Equal(t, "hostname: test-host", question.FilledQuery)
+				assert.Len(t, question.QueryResults, 1)
+				assert.Equal(t, "search-result-1", question.QueryResults[0].Id)
+			},
+		},
+		{
+			name: "successful execution without range",
+			event: &model.EventRecord{
+				Id: "test-event-2",
+				Payload: map[string]interface{}{
+					"src_ip": "10.0.0.1",
+				},
+			},
+			playbooks: []*model.Playbook{
+				{
+					Auditable: model.Auditable{Id: "alert-playbook"},
+					Questions: []*model.Question{
+						{
+							Question:      "What is the alert content?",
+							Context:       "Show alert details",
+							Range:         nil, // No range - should use original event
+							AnswerSources: []string{"alert"},
+							Query:         "src_ip: {src_ip}",
+						},
+					},
+				},
+			},
+			convertResults: []*model.ConvertedQuery{
+				{
+					Query:  "src_ip: 10.0.0.1",
+					Fields: []string{"rule.name", "rule.category"},
+				},
+			},
+			// searchResults not used since Range is nil
+			verifyQuestions: func(t *testing.T, playbooks []*model.Playbook) {
+				assert.Len(t, playbooks[0].Questions, 1)
+				question := playbooks[0].Questions[0]
+				assert.Equal(t, "src_ip: 10.0.0.1", question.FilledQuery)
+				assert.Len(t, question.QueryResults, 1)
+				assert.Equal(t, "test-event-2", question.QueryResults[0].Id)
+			},
+		},
+		{
+			name: "authorization error",
+			event: &model.EventRecord{
+				Id:      "test-event-3",
+				Payload: map[string]interface{}{},
+			},
+			playbooks: []*model.Playbook{
+				{
+					Auditable: model.Auditable{Id: "test-playbook"},
+					Questions: []*model.Question{
+						{
+							Question: "Test question",
+							Query:    "test query",
+						},
+					},
+				},
+			},
+			expectedError: "not authorized", // Will be set by unauthorized server
+		},
+		{
+			name: "convert questions error",
+			event: &model.EventRecord{
+				Id:      "test-event-4",
+				Payload: map[string]interface{}{},
+			},
+			playbooks: []*model.Playbook{
+				{
+					Auditable: model.Auditable{Id: "test-playbook"},
+					Questions: []*model.Question{
+						{
+							Question: "Test question",
+							Query:    "invalid query",
+						},
+					},
+				},
+			},
+			convertError:  errors.New("sigma conversion failed"),
+			expectedError: "sigma conversion failed",
+		},
+		{
+			name: "eventstore search error",
+			event: &model.EventRecord{
+				Id:      "test-event-6",
+				Payload: map[string]interface{}{},
+			},
+			playbooks: []*model.Playbook{
+				{
+					Auditable: model.Auditable{Id: "test-playbook"},
+					Questions: []*model.Question{
+						{
+							Question: "Test question",
+							Range:    util.Ptr("-1h"),
+							Query:    "test query",
+						},
+					},
+				},
+			},
+			convertResults: []*model.ConvertedQuery{
+				{
+					Query:  "valid_field: value",
+					Fields: []string{"field1"},
+				},
+			},
+			searchError:   errors.New("elasticsearch connection failed"),
+			expectedError: "elasticsearch connection failed",
+		},
+		{
+			name: "multiple questions with mixed ranges",
+			event: &model.EventRecord{
+				Id: "test-event-7",
+				Payload: map[string]interface{}{
+					"hostname": "multi-host",
+				},
+			},
+			playbooks: []*model.Playbook{
+				{
+					Auditable: model.Auditable{Id: "multi-question-playbook"},
+					Questions: []*model.Question{
+						{
+							Question: "Alert details",
+							Range:    nil, // No range
+							Query:    "hostname: {hostname}",
+						},
+						{
+							Question: "Historical data",
+							Range:    util.Ptr("-24h"),
+							Query:    "hostname: {hostname}",
+						},
+					},
+				},
+			},
+			convertResults: []*model.ConvertedQuery{
+				{Query: "hostname: multi-host", Fields: []string{"field1"}},
+				{Query: "hostname: multi-host", Fields: []string{"field2"}},
+			},
+			searchResults: &model.EventSearchResults{
+				Events: []*model.EventRecord{
+					{Id: "historical-1"},
+					{Id: "historical-2"},
+				},
+			},
+			verifyQuestions: func(t *testing.T, playbooks []*model.Playbook) {
+				assert.Len(t, playbooks[0].Questions, 2)
+
+				// First question (no range) should use original event
+				question1 := playbooks[0].Questions[0]
+				assert.Len(t, question1.QueryResults, 1)
+				assert.Equal(t, "test-event-7", question1.QueryResults[0].Id)
+
+				// Second question (with range) should use search results
+				question2 := playbooks[0].Questions[1]
+				assert.Len(t, question2.QueryResults, 2)
+				assert.Equal(t, "historical-1", question2.QueryResults[0].Id)
+				assert.Equal(t, "historical-2", question2.QueryResults[1].Id)
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			iom := mock.NewMockIOManager(ctrl)
+
+			var srv *server.Server
+			if tc.expectedError == "not authorized" {
+				srv = server.NewFakeUnauthorizedServer()
+			} else {
+				srv = server.NewFakeAuthorizedServer(nil)
+
+				// Set up fake eventstore if we need search functionality
+				if tc.searchResults != nil || tc.searchError != nil {
+					fakeEventstore := server.NewFakeEventstore()
+					if tc.searchResults != nil {
+						fakeEventstore.SearchResults = []*model.EventSearchResults{tc.searchResults}
+					}
+					if tc.searchError != nil {
+						fakeEventstore.Err = tc.searchError
+					}
+					srv.Eventstore = fakeEventstore
+				}
+			}
+
+			pdm := PlaybookDiskManager{
+				srv:       srv,
+				IOManager: iom,
+			}
+
+			// Set up ConvertQuestions expectations
+			if tc.convertResults != nil || tc.convertError != nil {
+				// Mock ExecCommand for ConvertQuestions
+				iom.EXPECT().ExecCommand(gomock.Any()).DoAndReturn(func(cmd *exec.Cmd) ([]byte, int, time.Duration, error) {
+					if tc.convertError != nil {
+						return nil, 1, time.Second, tc.convertError
+					}
+
+					// Build response with converted queries
+					var responses []string
+					for _, result := range tc.convertResults {
+						jsonBytes, _ := json.Marshal(result)
+						responses = append(responses, string(jsonBytes))
+					}
+
+					output := "Converted Queries:\n" + strings.Join(responses, "\n") + "\n"
+					return []byte(output), 0, time.Second, nil
+				}).AnyTimes()
+			}
+
+			// Execute the function
+			err := pdm.ExecutePlaybookSearches(ctx, tc.event, tc.playbooks)
+
+			// Verify results
+			if tc.expectedError != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedError)
+			} else {
+				assert.NoError(t, err)
+				if tc.verifyQuestions != nil {
+					tc.verifyQuestions(t, tc.playbooks)
+				}
+			}
+		})
+	}
+}
+
+func TestQueryVariableSubstitution(t *testing.T) {
+	tests := []struct {
+		name      string
+		event     *model.EventRecord
+		playbooks []*model.Playbook
+		expected  map[string]string // playbook ID -> expected filled query
+	}{
+		{
+			name: "basic variable substitution",
+			event: &model.EventRecord{
+				Payload: map[string]interface{}{
+					"hostname":  "test-host",
+					"user.name": "admin",
+					"src_ip":    "192.168.1.10",
+				},
+			},
+			playbooks: []*model.Playbook{
+				{
+					Auditable: model.Auditable{Id: "basic-test"},
+					Questions: []*model.Question{
+						{
+							Query: "hostname: {hostname} AND user: {user.name} AND src_ip: {src_ip}",
+						},
+					},
+				},
+			},
+			expected: map[string]string{
+				"basic-test": "hostname: test-host AND user: admin AND src_ip: 192.168.1.10",
+			},
+		},
+		{
+			name: "missing variable replacement with NODATA",
+			event: &model.EventRecord{
+				Payload: map[string]interface{}{
+					"hostname": "test-host",
+				},
+			},
+			playbooks: []*model.Playbook{
+				{
+					Auditable: model.Auditable{Id: "missing-var-test"},
+					Questions: []*model.Question{
+						{
+							Query: "hostname: {hostname} AND missing: {missing_field}",
+						},
+					},
+				},
+			},
+			expected: map[string]string{
+				"missing-var-test": "hostname: test-host AND missing: NODATA",
+			},
+		},
+		{
+			name: "array field handling for special fields",
+			event: &model.EventRecord{
+				Payload: map[string]interface{}{
+					"related.ip": []interface{}{"10.0.0.1", "192.168.1.1"},
+					"hostname":   "test-host",
+				},
+			},
+			playbooks: []*model.Playbook{
+				{
+					Auditable: model.Auditable{Id: "array-test"},
+					Questions: []*model.Question{
+						{
+							Query: `hostname: {hostname}
+related.ip: {related.ip}`,
+						},
+					},
+				},
+			},
+			expected: map[string]string{
+				"array-test": `hostname: test-host
+related.ip:
+    - 10.0.0.1
+    - 192.168.1.1`,
+			},
+		},
+		{
+			name: "array field fallback to comma-separated for non-special fields",
+			event: &model.EventRecord{
+				Payload: map[string]interface{}{
+					"tags":     []interface{}{"malware", "suspicious"},
+					"hostname": "test-host",
+				},
+			},
+			playbooks: []*model.Playbook{
+				{
+					Auditable: model.Auditable{Id: "array-fallback-test"},
+					Questions: []*model.Question{
+						{
+							Query: "hostname: {hostname} AND tags: {tags}",
+						},
+					},
+				},
+			},
+			expected: map[string]string{
+				"array-fallback-test": "hostname: test-host AND tags: malware,suspicious",
+			},
+		},
+		{
+			name: "complex array field handling with indentation",
+			event: &model.EventRecord{
+				Payload: map[string]interface{}{
+					"network.private_ip": []interface{}{"10.0.0.1", "10.0.0.2", "172.16.0.1"},
+					"hostname":           "test-host",
+				},
+			},
+			playbooks: []*model.Playbook{
+				{
+					Auditable: model.Auditable{Id: "complex-array-test"},
+					Questions: []*model.Question{
+						{
+							Query: `logsource:
+  category: network
+detection:
+  selection:
+    hostname: {hostname}
+    network.private_ip: {network.private_ip}
+  condition: selection`,
+						},
+					},
+				},
+			},
+			expected: map[string]string{
+				"complex-array-test": `logsource:
+  category: network
+detection:
+  selection:
+    hostname: test-host
+    network.private_ip:
+        - 10.0.0.1
+        - 10.0.0.2
+        - 172.16.0.1
+  condition: selection`,
+			},
+		},
+		{
+			name: "multiple playbooks variable substitution",
+			event: &model.EventRecord{
+				Payload: map[string]interface{}{
+					"src_ip":   "1.2.3.4",
+					"dst_port": 443,
+				},
+			},
+			playbooks: []*model.Playbook{
+				{
+					Auditable: model.Auditable{Id: "playbook-1"},
+					Questions: []*model.Question{
+						{
+							Query: "src_ip: {src_ip}",
+						},
+					},
+				},
+				{
+					Auditable: model.Auditable{Id: "playbook-2"},
+					Questions: []*model.Question{
+						{
+							Query: "dst_port: {dst_port} AND src_ip: {src_ip}",
+						},
+					},
+				},
+			},
+			expected: map[string]string{
+				"playbook-1": "src_ip: 1.2.3.4",
+				"playbook-2": "dst_port: 443 AND src_ip: 1.2.3.4",
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Execute variable substitution
+			queryVariableSubstitution(tc.event, tc.playbooks)
+
+			// Verify results
+			for _, pb := range tc.playbooks {
+				expectedQuery, exists := tc.expected[pb.Id]
+				assert.True(t, exists, "Expected result not found for playbook %s", pb.Id)
+
+				assert.Len(t, pb.Questions, 1, "Expected exactly one question for playbook %s", pb.Id)
+				actualQuery := pb.Questions[0].FilledQuery
+
+				assert.Equal(t, expectedQuery, actualQuery, "Filled query mismatch for playbook %s", pb.Id)
+			}
+		})
+	}
+}
+
+func TestGetEventTimestamp(t *testing.T) {
+	testCases := []struct {
+		name          string
+		event         *model.EventRecord
+		expectedTime  time.Time
+		shouldBeEmpty bool
+	}{
+		{
+			name: "event with @timestamp field",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": "2024-01-15T14:30:45.123Z",
+					"source.ip":  "10.0.0.1",
+				},
+			},
+			expectedTime: time.Date(2024, 1, 15, 14, 30, 45, 123000000, time.UTC),
+		},
+		{
+			name: "event with event_data.@timestamp field (higher priority)",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"event_data.@timestamp": "2024-01-15T14:30:45.123Z",
+					"@timestamp":            "2024-01-15T12:00:00.000Z",
+					"soc_timestamp":         "2024-01-15T10:00:00.000Z",
+				},
+			},
+			expectedTime: time.Date(2024, 1, 15, 14, 30, 45, 123000000, time.UTC),
+		},
+		{
+			name: "event with soc_timestamp field",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"soc_timestamp": "2024-01-15T14:30:45Z",
+					"source.ip":     "10.0.0.1",
+				},
+			},
+			expectedTime: time.Date(2024, 1, 15, 14, 30, 45, 0, time.UTC),
+		},
+		{
+			name: "event with RFC3339Nano format",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": "2024-01-15T14:30:45.123456789Z",
+				},
+			},
+			expectedTime: time.Date(2024, 1, 15, 14, 30, 45, 123456789, time.UTC),
+		},
+		{
+			name: "event with custom format '2006-01-02T15:04:05.000Z'",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": "2024-01-15T14:30:45.123Z",
+				},
+			},
+			expectedTime: time.Date(2024, 1, 15, 14, 30, 45, 123000000, time.UTC),
+		},
+		{
+			name: "event with simple format '2006-01-02T15:04:05Z'",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": "2024-01-15T14:30:45Z",
+				},
+			},
+			expectedTime: time.Date(2024, 1, 15, 14, 30, 45, 0, time.UTC),
+		},
+		{
+			name: "event with format '2006-01-02 15:04:05'",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": "2024-01-15 14:30:45",
+				},
+			},
+			expectedTime: time.Date(2024, 1, 15, 14, 30, 45, 0, time.UTC),
+		},
+		{
+			name: "fallback to event.Time field",
+			event: &model.EventRecord{
+				Time: time.Date(2024, 1, 15, 14, 30, 45, 0, time.UTC),
+				Payload: map[string]any{
+					"source.ip": "10.0.0.1",
+				},
+			},
+			expectedTime: time.Date(2024, 1, 15, 14, 30, 45, 0, time.UTC),
+		},
+		{
+			name: "prefer payload timestamp over event.Time",
+			event: &model.EventRecord{
+				Time: time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC),
+				Payload: map[string]any{
+					"@timestamp": "2024-01-15T14:30:45Z",
+				},
+			},
+			expectedTime: time.Date(2024, 1, 15, 14, 30, 45, 0, time.UTC),
+		},
+		{
+			name: "empty timestamp field",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": "",
+					"source.ip":  "10.0.0.1",
+				},
+			},
+			shouldBeEmpty: true,
+		},
+		{
+			name: "non-string timestamp field",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": 1234567890,
+					"source.ip":  "10.0.0.1",
+				},
+			},
+			shouldBeEmpty: true,
+		},
+		{
+			name: "invalid timestamp format",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": "invalid-time-format",
+				},
+			},
+			shouldBeEmpty: true,
+		},
+		{
+			name: "no timestamp fields and empty event.Time",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"source.ip": "10.0.0.1",
+				},
+			},
+			shouldBeEmpty: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := getEventTimestamp(tc.event)
+
+			if tc.shouldBeEmpty {
+				assert.True(t, result.IsZero(), "Expected zero time")
+			} else {
+				assert.Equal(t, tc.expectedTime.UTC(), result.UTC(), "Timestamp mismatch")
+			}
+		})
+	}
+}
+
+func TestBuildQuestionRange(t *testing.T) {
+	// Fixed timestamp for testing
+	fixedTime := time.Date(2024, 1, 15, 14, 30, 45, 0, time.UTC)
+
+	testCases := []struct {
+		name           string
+		event          *model.EventRecord
+		rangeStr       string
+		timezone       string
+		expectedResult string
+		shouldBeEmpty  bool
+	}{
+		{
+			name: "empty range string",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": fixedTime.Format(time.RFC3339),
+				},
+			},
+			rangeStr:      "",
+			timezone:      "UTC",
+			shouldBeEmpty: true,
+		},
+		{
+			name: "event with zero timestamp",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"source.ip": "10.0.0.1",
+				},
+			},
+			rangeStr:      "1h",
+			timezone:      "UTC",
+			shouldBeEmpty: true,
+		},
+		{
+			name: "plus/minus range - 1 hour",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": fixedTime.Format(time.RFC3339),
+				},
+			},
+			rangeStr: "+/-1h",
+			timezone: "UTC",
+			expectedResult: fmt.Sprintf("%s - %s",
+				fixedTime.Add(-1*time.Hour).Format(time.RFC3339),
+				fixedTime.Add(1*time.Hour).Format(time.RFC3339)),
+		},
+		{
+			name: "plus/minus range - 30 minutes",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": fixedTime.Format(time.RFC3339),
+				},
+			},
+			rangeStr: "+/-30m",
+			timezone: "UTC",
+			expectedResult: fmt.Sprintf("%s - %s",
+				fixedTime.Add(-30*time.Minute).Format(time.RFC3339),
+				fixedTime.Add(30*time.Minute).Format(time.RFC3339)),
+		},
+		{
+			name: "plus/minus range - 2 days",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": fixedTime.Format(time.RFC3339),
+				},
+			},
+			rangeStr: "+/-2d",
+			timezone: "UTC",
+			expectedResult: fmt.Sprintf("%s - %s",
+				fixedTime.Add(-48*time.Hour).Format(time.RFC3339),
+				fixedTime.Add(48*time.Hour).Format(time.RFC3339)),
+		},
+		{
+			name: "looking back range - 2 hours",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": fixedTime.Format(time.RFC3339),
+				},
+			},
+			rangeStr: "-2h",
+			timezone: "UTC",
+			expectedResult: fmt.Sprintf("%s - %s",
+				fixedTime.Add(-2*time.Hour).Format(time.RFC3339),
+				fixedTime.Format(time.RFC3339)),
+		},
+		{
+			name: "looking back range - 15 minutes",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": fixedTime.Format(time.RFC3339),
+				},
+			},
+			rangeStr: "-15m",
+			timezone: "UTC",
+			expectedResult: fmt.Sprintf("%s - %s",
+				fixedTime.Add(-15*time.Minute).Format(time.RFC3339),
+				fixedTime.Format(time.RFC3339)),
+		},
+		{
+			name: "forward range - 3 hours",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": fixedTime.Format(time.RFC3339),
+				},
+			},
+			rangeStr: "3h",
+			timezone: "UTC",
+			expectedResult: fmt.Sprintf("%s - %s",
+				fixedTime.Format(time.RFC3339),
+				fixedTime.Add(3*time.Hour).Format(time.RFC3339)),
+		},
+		{
+			name: "forward range - 45 seconds",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": fixedTime.Format(time.RFC3339),
+				},
+			},
+			rangeStr: "45s",
+			timezone: "UTC",
+			expectedResult: fmt.Sprintf("%s - %s",
+				fixedTime.Format(time.RFC3339),
+				fixedTime.Add(45*time.Second).Format(time.RFC3339)),
+		},
+		{
+			name: "timezone conversion - EST",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": fixedTime.Format(time.RFC3339),
+				},
+			},
+			rangeStr: "+/-1h",
+			timezone: "America/New_York",
+			expectedResult: func() string {
+				loc, _ := time.LoadLocation("America/New_York")
+				localTime := fixedTime.In(loc)
+				return fmt.Sprintf("%s - %s",
+					localTime.Add(-1*time.Hour).Format(time.RFC3339),
+					localTime.Add(1*time.Hour).Format(time.RFC3339))
+			}(),
+		},
+		{
+			name: "invalid timezone falls back to UTC",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": fixedTime.Format(time.RFC3339),
+				},
+			},
+			rangeStr: "+/-1h",
+			timezone: "Invalid/Timezone",
+			expectedResult: fmt.Sprintf("%s - %s",
+				fixedTime.Add(-1*time.Hour).Format(time.RFC3339),
+				fixedTime.Add(1*time.Hour).Format(time.RFC3339)),
+		},
+		{
+			name: "range too short",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": fixedTime.Format(time.RFC3339),
+				},
+			},
+			rangeStr:      "h",
+			timezone:      "UTC",
+			shouldBeEmpty: true,
+		},
+		{
+			name: "invalid unit",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": fixedTime.Format(time.RFC3339),
+				},
+			},
+			rangeStr:      "1x",
+			timezone:      "UTC",
+			shouldBeEmpty: true,
+		},
+		{
+			name: "invalid number",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": fixedTime.Format(time.RFC3339),
+				},
+			},
+			rangeStr:      "abch",
+			timezone:      "UTC",
+			shouldBeEmpty: true,
+		},
+		{
+			name: "zero value",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": fixedTime.Format(time.RFC3339),
+				},
+			},
+			rangeStr: "0h",
+			timezone: "UTC",
+			expectedResult: fmt.Sprintf("%s - %s",
+				fixedTime.Format(time.RFC3339),
+				fixedTime.Format(time.RFC3339)),
+		},
+		{
+			name: "large value",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": fixedTime.Format(time.RFC3339),
+				},
+			},
+			rangeStr: "999d",
+			timezone: "UTC",
+			expectedResult: fmt.Sprintf("%s - %s",
+				fixedTime.Format(time.RFC3339),
+				fixedTime.Add(999*24*time.Hour).Format(time.RFC3339)),
+		},
+		{
+			name: "case insensitive units",
+			event: &model.EventRecord{
+				Payload: map[string]any{
+					"@timestamp": fixedTime.Format(time.RFC3339),
+				},
+			},
+			rangeStr: "1H",
+			timezone: "UTC",
+			expectedResult: fmt.Sprintf("%s - %s",
+				fixedTime.Format(time.RFC3339),
+				fixedTime.Add(1*time.Hour).Format(time.RFC3339)),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := buildQuestionRange(tc.event, tc.rangeStr, tc.timezone)
+
+			if tc.shouldBeEmpty {
+				assert.Empty(t, result, "Expected empty result")
+			} else {
+				assert.Equal(t, tc.expectedResult, result, "Range mismatch")
+			}
+		})
+	}
 }

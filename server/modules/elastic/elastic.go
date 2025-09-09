@@ -16,23 +16,28 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
-const DEFAULT_CASE_INDEX = "*:so-case"
-const DEFAULT_CASE_AUDIT_INDEX = "*:so-casehistory"
-const DEFAULT_CASE_ASSOCIATIONS_MAX = 1000
-const DEFAULT_TIME_SHIFT_MS = 120000
-const DEFAULT_DURATION_MS = 1800000
-const DEFAULT_ES_SEARCH_OFFSET_MS = 1800000
-const DEFAULT_TIMEOUT_MS = 300000
-const DEFAULT_CACHE_MS = 86400000
-const DEFAULT_INDEX = "*:so-*"
-const DEFAULT_ASYNC_THRESHOLD = 10
-const DEFAULT_INTERVALS = 25
-const DEFAULT_MAX_LOG_LENGTH = 1024
-const DEFAULT_CASE_SCHEMA_PREFIX = "so_"
-const DEFAULT_DETECTION_INDEX = "*:so-detection"
-const DEFAULT_DETECTION_AUDIT_INDEX = "*:so-detectionhistory"
-const DEFAULT_DETECTION_ASSOCIATIONS_MAX = 1000
-const DEFAULT_DETECTION_SCHEMA_PREFIX = "so_"
+const (
+	DEFAULT_CASE_INDEX                 = "*:so-case"
+	DEFAULT_CASE_AUDIT_INDEX           = "*:so-casehistory"
+	DEFAULT_CASE_ASSOCIATIONS_MAX      = 1000
+	DEFAULT_TIME_SHIFT_MS              = 120000
+	DEFAULT_DURATION_MS                = 1800000
+	DEFAULT_ES_SEARCH_OFFSET_MS        = 1800000
+	DEFAULT_TIMEOUT_MS                 = 300000
+	DEFAULT_CACHE_MS                   = 86400000
+	DEFAULT_INDEX                      = "*:so-*"
+	DEFAULT_ASYNC_THRESHOLD            = 10
+	DEFAULT_INTERVALS                  = 25
+	DEFAULT_MAX_LOG_LENGTH             = 1024
+	DEFAULT_CASE_SCHEMA_PREFIX         = "so_"
+	DEFAULT_DETECTION_INDEX            = "*:so-detection"
+	DEFAULT_DETECTION_AUDIT_INDEX      = "*:so-detectionhistory"
+	DEFAULT_DETECTION_ASSOCIATIONS_MAX = 1000
+	DEFAULT_DETECTION_SCHEMA_PREFIX    = "so_"
+	DEFAULT_ASSISTANT_CHAT_INDEX       = "*:so-assistant-chat"
+	DEFAULT_ASSISTANT_SESSION_INDEX    = "*:so-assistant-session"
+	DEFAULT_ASSISTANT_SCHEMA_PREFIX    = "so_"
+)
 
 type Elastic struct {
 	config module.ModuleConfig
@@ -54,8 +59,8 @@ func (elastic *Elastic) PrerequisiteModules() []string {
 func (elastic *Elastic) Init(cfg module.ModuleConfig) error {
 	elastic.config = cfg
 	host := module.GetStringDefault(cfg, "hostUrl", "elasticsearch")
-	remoteHosts := module.GetStringArrayDefault(cfg, "remoteHostUrls", make([]string, 0, 0))
-	commonObservables := module.GetStringArrayDefault(cfg, "extractCommonObservables", make([]string, 0, 0))
+	remoteHosts := module.GetStringArrayDefault(cfg, "remoteHostUrls", []string{})
+	commonObservables := module.GetStringArrayDefault(cfg, "extractCommonObservables", []string{})
 	verifyCert := module.GetBoolDefault(cfg, "verifyCert", true)
 	username := module.GetStringDefault(cfg, "username", "")
 	password := module.GetStringDefault(cfg, "password", "")
@@ -74,6 +79,7 @@ func (elastic *Elastic) Init(cfg module.ModuleConfig) error {
 	casesEnabled := module.GetBoolDefault(cfg, "casesEnabled", true)
 	lookupTunnelParent := module.GetBoolDefault(cfg, "lookupTunnelParent", true)
 	detectionsEnabled := module.GetBoolDefault(cfg, "detectionsEnabled", true)
+	assistantEnabled := module.GetBoolDefault(cfg, "assistantEnabled", true)
 	maxScrollSize := module.GetIntDefault(cfg, "maxScrollSize", 10000)
 	err := elastic.store.Init(host, remoteHosts, username, password, verifyCert, timeShiftMs, defaultDurationMs,
 		esSearchOffsetMs, timeoutMs, cacheMs, index, asyncThreshold, intervals, maxLogLength, lookupTunnelParent,
@@ -114,6 +120,22 @@ func (elastic *Elastic) Init(cfg module.ModuleConfig) error {
 					return err
 				}
 				elastic.server.Detectionstore = detstore
+			}
+		}
+		if assistantEnabled {
+			if elastic.server.Assistantstore != nil {
+				return errors.New("Multiple assistant modules cannot be enabled concurrently")
+			} else {
+				assistChatIndex := module.GetStringDefault(cfg, "assistantChatIndex", DEFAULT_ASSISTANT_CHAT_INDEX)
+				assistSessionIndex := module.GetStringDefault(cfg, "assistantSessionIndex", DEFAULT_ASSISTANT_SESSION_INDEX)
+				schemaPrefix := module.GetStringDefault(cfg, "schemaPrefix", DEFAULT_ASSISTANT_SCHEMA_PREFIX)
+				assiststore := NewElasticAssistantstore(elastic.server, elastic.store.esClient, maxLogLength)
+
+				err = assiststore.Init(assistChatIndex, assistSessionIndex, schemaPrefix)
+				if err != nil {
+					return err
+				}
+				elastic.server.Assistantstore = assiststore
 			}
 		}
 	}

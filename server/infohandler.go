@@ -85,7 +85,7 @@ func (h *InfoHandler) getInfo(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	subgrids := make([]*model.Subgrid, 0, 0)
+	subgrids := make([]*model.Subgrid, 0)
 	if licensing.ValidateSubgridCount(len(subgrids)) {
 		subgrids = h.server.Config.Subgrids
 	}
@@ -93,7 +93,7 @@ func (h *InfoHandler) getInfo(w http.ResponseWriter, r *http.Request) {
 	info := &model.Info{
 		Version:        h.server.Host.Version,
 		License:        "Elastic License 2.0 (ELv2)",
-		LicenseKey:     licensing.GetLicenseKey(),
+		LicenseKey:     licensing.GetLicenseKey().LicenseKey,
 		LicenseStatus:  licensing.GetStatus(),
 		Parameters:     params,
 		ElasticVersion: os.Getenv("ELASTIC_VERSION"),

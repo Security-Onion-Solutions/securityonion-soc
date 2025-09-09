@@ -5,6 +5,7 @@
 //
 //	mockgen -destination mock/mock_gridmembersstore.go -package mock . GridMembersstore
 //
+
 // Package mock is a generated GoMock package.
 package mock
 
@@ -20,6 +21,7 @@ import (
 type MockGridMembersstore struct {
 	ctrl     *gomock.Controller
 	recorder *MockGridMembersstoreMockRecorder
+	isgomock struct{}
 }
 
 // MockGridMembersstoreMockRecorder is the mock recorder for MockGridMembersstore.
@@ -40,59 +42,59 @@ func (m *MockGridMembersstore) EXPECT() *MockGridMembersstoreMockRecorder {
 }
 
 // GetMembers mocks base method.
-func (m *MockGridMembersstore) GetMembers(arg0 context.Context) ([]*model.GridMember, error) {
+func (m *MockGridMembersstore) GetMembers(ctx context.Context) ([]*model.GridMember, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetMembers", arg0)
+	ret := m.ctrl.Call(m, "GetMembers", ctx)
 	ret0, _ := ret[0].([]*model.GridMember)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetMembers indicates an expected call of GetMembers.
-func (mr *MockGridMembersstoreMockRecorder) GetMembers(arg0 any) *gomock.Call {
+func (mr *MockGridMembersstoreMockRecorder) GetMembers(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMembers", reflect.TypeOf((*MockGridMembersstore)(nil).GetMembers), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMembers", reflect.TypeOf((*MockGridMembersstore)(nil).GetMembers), ctx)
 }
 
 // Import mocks base method.
-func (m *MockGridMembersstore) Import(arg0 context.Context, arg1, arg2, arg3 string) (*string, error) {
+func (m *MockGridMembersstore) Import(ctx context.Context, node, file, importer string) (*string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Import", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "Import", ctx, node, file, importer)
 	ret0, _ := ret[0].(*string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Import indicates an expected call of Import.
-func (mr *MockGridMembersstoreMockRecorder) Import(arg0, arg1, arg2, arg3 any) *gomock.Call {
+func (mr *MockGridMembersstoreMockRecorder) Import(ctx, node, file, importer any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Import", reflect.TypeOf((*MockGridMembersstore)(nil).Import), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Import", reflect.TypeOf((*MockGridMembersstore)(nil).Import), ctx, node, file, importer)
 }
 
 // ManageMember mocks base method.
-func (m *MockGridMembersstore) ManageMember(arg0 context.Context, arg1, arg2 string) error {
+func (m *MockGridMembersstore) ManageMember(ctx context.Context, operation, id string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ManageMember", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "ManageMember", ctx, operation, id)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ManageMember indicates an expected call of ManageMember.
-func (mr *MockGridMembersstoreMockRecorder) ManageMember(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockGridMembersstoreMockRecorder) ManageMember(ctx, operation, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ManageMember", reflect.TypeOf((*MockGridMembersstore)(nil).ManageMember), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ManageMember", reflect.TypeOf((*MockGridMembersstore)(nil).ManageMember), ctx, operation, id)
 }
 
 // SendFile mocks base method.
-func (m *MockGridMembersstore) SendFile(arg0 context.Context, arg1, arg2, arg3 string, arg4 bool) error {
+func (m *MockGridMembersstore) SendFile(ctx context.Context, node, from, to string, cleanup bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SendFile", arg0, arg1, arg2, arg3, arg4)
+	ret := m.ctrl.Call(m, "SendFile", ctx, node, from, to, cleanup)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SendFile indicates an expected call of SendFile.
-func (mr *MockGridMembersstoreMockRecorder) SendFile(arg0, arg1, arg2, arg3, arg4 any) *gomock.Call {
+func (mr *MockGridMembersstoreMockRecorder) SendFile(ctx, node, from, to, cleanup any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendFile", reflect.TypeOf((*MockGridMembersstore)(nil).SendFile), arg0, arg1, arg2, arg3, arg4)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendFile", reflect.TypeOf((*MockGridMembersstore)(nil).SendFile), ctx, node, from, to, cleanup)
 }
