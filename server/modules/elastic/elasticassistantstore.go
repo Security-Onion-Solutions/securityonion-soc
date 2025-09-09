@@ -402,8 +402,8 @@ func (store *ElasticAssistantstore) GetSessions(ctx context.Context, userId stri
 	}
 
 	logger.WithFields(log.Fields{
-		"response":  store.truncate(responseJSON),
-		"requestId": ctx.Value(web.ContextKeyRequestId),
+		"getSessionsResponseLength": len(responseJSON),
+		"requestId":                 ctx.Value(web.ContextKeyRequestId),
 	}).Debug("Received Elasticsearch response")
 
 	// Parse response
