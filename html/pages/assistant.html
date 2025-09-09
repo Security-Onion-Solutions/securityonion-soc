@@ -46,7 +46,7 @@
 				<v-card-title id="chat-header" class="py-3 d-flex align-center">
 					<v-icon class="mr-2">fa-comments</v-icon>
 					<span class="flex-grow-1">{{ i18n.chatTitle }}</span>
-					<div class="text-wrap" style="font-size: 14px;">Context Length: <span :class="getContextColor(contextLength)">{{ formatCount(contextLength) }}</span></div>
+					<div class="text-wrap" style="font-size: 14px;">{{ i18n.contextLength }}: <span :class="getContextColor(contextLength)">{{ formatCount(contextLength) }}</span></div>
 				</v-card-title>
 				<v-divider></v-divider>
 				<v-card-text id="chat-messages" class="chat-messages pa-0">
