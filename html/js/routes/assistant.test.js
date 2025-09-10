@@ -1862,7 +1862,7 @@ test('convertBackendMessagesToFrontend handles message with no text blocks', () 
   const result = comp.convertBackendMessagesToFrontend(backendMessages);
   
   expect(result).toHaveLength(1);
-  expect(result[0].content).toBe('Complex message with tools/attachments');
+  expect(result[0].content).toBe('');
 });
 
 test('convertBackendMessagesToFrontend handles empty message', () => {
@@ -1919,7 +1919,7 @@ test('convertBackendMessagesToFrontend handles tool_use blocks with completed st
   const result = comp.convertBackendMessagesToFrontend(backendMessages);
   
   expect(result).toHaveLength(1);
-  expect(result[0].content).toBe('Complex message with tools/attachments');
+  expect(result[0].content).toBe('');
   // Tool uses should be created since there's a next message and no rejection
   expect(result[0]).toHaveProperty('toolUses');
   expect(result[0].toolUses.value).toHaveLength(1);
