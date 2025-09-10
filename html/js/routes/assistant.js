@@ -32,9 +32,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     this.loadContextThresholdSetting();
     this.loadLastActiveSetting();
     this.loadChatHistory();
-    await this.loadStoredChats();
-    await this.handleRouteSessionId();
-    await this.loadCredits();
   },
   beforeUnmount() {
     // Backend automatically saves chats, just save current chat ID
@@ -59,7 +56,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
   },
   methods: {
 
-    initAssistant(params) {
+    async initAssistant(params) {
       this.assistantEnabled = params["enabled"] && this.$root.isLicensed('oai');
       this.contextLimitSmall = params["contextLimitSmall"];
       this.contextLimitLarge = params["contextLimitLarge"];
@@ -67,6 +64,12 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.thresholdColorRatioMed = params["thresholdColorRatioMed"];
       this.thresholdColorRatioMax = params["thresholdColorRatioMax"];
       this.lowBalanceColorAlert = params["lowBalanceColorAlert"];
+      
+      if (this.assistantEnabled) {
+        await this.loadStoredChats();
+        await this.handleRouteSessionId();
+        await this.loadCredits();
+      }
     },
     
     // Calculate context length from usage data (input_tokens + output_tokens)
@@ -169,7 +172,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
                 this.$root.showError(this.i18n.assistantUnableToParseInvestigation + ': ' + error.message);
               }
             }
-          } else {
+          } else if (this.messages.length > 1) {
             this.loadChatHistory();
           }
         } finally {
