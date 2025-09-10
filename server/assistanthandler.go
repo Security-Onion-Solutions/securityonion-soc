@@ -160,16 +160,7 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	noTimeOutCtx := context.Background()
-	val := ctx.Value(web.ContextKeyRunAsUsername)
-	if val != nil {
-		if username, ok := val.(string); ok {
-			noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRunAsUsername, username)
-		}
-	}
-	noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRequestorId, ctx.Value(web.ContextKeyRequestorId).(string))
-
-	response, err := h.server.AssistantManager.ChatStream(noTimeOutCtx, messages)
+	response, err := h.server.AssistantManager.ChatStream(ctx, messages)
 	if err != nil {
 		logger.WithError(err).Error("unable to chat (stream) with assistant")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -184,6 +175,15 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 
 		return
 	}
+
+	noTimeOutCtx := context.Background()
+	val := ctx.Value(web.ContextKeyRunAsUsername)
+	if val != nil {
+		if username, ok := val.(string); ok {
+			noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRunAsUsername, username)
+		}
+	}
+	noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRequestorId, ctx.Value(web.ContextKeyRequestorId).(string))
 
 	go func() {
 		msg, err := unstreamResponse(string(entireResponse))
@@ -272,8 +272,6 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 	err = h.server.Assistantstore.SaveChat(ctx, toolMsg.PrepareForStorage(toolReq.SessionId, []string{"tool_result"}))
 	if err != nil {
 		logger.WithError(err).Error("unable to save tool result message")
-		web.Respond(w, r, http.StatusInternalServerError, err)
-
 		return
 	}
 
