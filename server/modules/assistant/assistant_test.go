@@ -618,6 +618,48 @@ func TestCleanupMessages(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "ToolUse w/out text",
+			inputMessages: []*model.Message{
+				{
+					Id:           "msg1",
+					Role:         "user",
+					StopReason:   stringPtr("stop"),
+					StopSequence: stringPtr("seq"),
+					Usage: &model.Usage{
+						InputTokens:  10,
+						OutputTokens: 20,
+					},
+					ContentBlocks: []model.ContentBlock{
+						{Type: "tool_use", Input: []byte(`{"param1": "value1"}`)},
+					},
+				},
+				{
+					Id:         "msg2",
+					Role:       "assistant",
+					StopReason: stringPtr("length"),
+					ContentBlocks: []model.ContentBlock{
+						{Type: "tool_use", Input: []byte(`{"param1": "value1"}`)},
+					},
+				},
+			},
+			expectedResults: []*model.Message{
+				{
+					Id:   "msg1",
+					Role: "user",
+					ContentBlocks: []model.ContentBlock{
+						{Type: "tool_use", Input: []byte(`{"param1": "value1"}`)},
+					},
+				},
+				{
+					Id:   "msg2",
+					Role: "assistant",
+					ContentBlocks: []model.ContentBlock{
+						{Type: "tool_use", Input: []byte(`{"param1": "value1"}`), Text: "ToolUse"},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
