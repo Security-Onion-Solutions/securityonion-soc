@@ -604,16 +604,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         this.$root.showError(this.i18n.assistantNoResponse + ': ' + (error.response?.data?.error || error.message));
       }
     },
-    handleAIResponse(response) {
-      // Handle real AI responses when implemented
-      this.isTyping = false;
-      this.messages.push({
-        role: 'assistant',
-        content: response.content,
-        timestamp: new Date().toISOString()
-      });
-      this.scrollToBottom();
-    },
     scrollToBottom() {
       this.$nextTick(() => {
         const messagesContainer = this.$el.querySelector('.chat-messages');
@@ -1139,14 +1129,14 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
             if (textBlocks.length > 0) {
               frontendMsg.content = textBlocks.map(block => block.text).join('\n');
             } else {
-              frontendMsg.content = 'Complex message with tools/attachments';
+              frontendMsg.content = '';
             }
           } else if (frontendMsg.role === 'assistant') {
             const textBlocks = msg.message.contentBlocks.filter(block => block.type === 'text');
             if (textBlocks.length > 0) {
               frontendMsg.content = textBlocks.map(block => block.text).join('\n');
             } else {
-              frontendMsg.content = 'Complex message with tools/attachments';
+              frontendMsg.content = '';
             }
           }
             

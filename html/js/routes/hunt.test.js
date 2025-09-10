@@ -2466,3 +2466,330 @@ test('getExpandedData', () => {
   data = comp.getExpandedData(obj);
   expect(data).toStrictEqual([]);
 });
+
+// AI Investigation Tests
+test('loadInvestigationSessions - success', async () => {
+  const mockSessions = [
+    { sessionId: 'investigation_alert123_1234567890', createTime: '2023-10-01T12:00:00Z' },
+    { sessionId: 'investigation_alert456_1234567891', createTime: '2023-10-01T13:00:00Z' },
+    { sessionId: 'regular_session_123', createTime: '2023-10-01T14:00:00Z' }, // Should be filtered out
+  ];
+
+  const mock = mockPapi('get', { data: mockSessions });
+
+  await comp.loadInvestigationSessions();
+
+  expect(mock).toHaveBeenCalledWith('/assistant/sessions');
+  expect(comp.investigationSessions).toHaveLength(2);
+  expect(comp.investigationSessions[0].sessionId).toBe('investigation_alert123_1234567890');
+  expect(comp.investigationSessions[1].sessionId).toBe('investigation_alert456_1234567891');
+  
+  // Check aiInvestigations mapping
+  expect(comp.aiInvestigations['alert123']).toEqual({
+    chatSessionId: 'investigation_alert123_1234567890',
+    socId: 'alert123',
+    timestamp: '2023-10-01T12:00:00Z'
+  });
+  expect(comp.aiInvestigations['alert456']).toEqual({
+    chatSessionId: 'investigation_alert456_1234567891',
+    socId: 'alert456',
+    timestamp: '2023-10-01T13:00:00Z'
+  });
+
+  resetPapi();
+});
+
+test('loadInvestigationSessions - error handling', async () => {
+  const mock = mockPapi('get', null, new Error('Network error'));
+  comp.$root.showError = jest.fn();
+
+  await comp.loadInvestigationSessions();
+
+  expect(mock).toHaveBeenCalledWith('/assistant/sessions');
+  expect(comp.investigationSessions).toEqual([]);
+  expect(comp.aiInvestigations).toEqual({});
+  expect(comp.$root.showError).toHaveBeenCalledWith(comp.i18n.aiInvestigationCouldNotLoad + ': Network error');
+
+  resetPapi();
+});
+
+test('applyAIInvestigationsToEvents', () => {
+  comp.aiInvestigations = {
+    'alert123': {
+      chatSessionId: 'investigation_alert123_1234567890',
+      socId: 'alert123',
+      timestamp: '2023-10-01T12:00:00Z'
+    }
+  };
+
+  comp.eventData = [
+    { soc_id: 'alert123', 'rule.name': 'Test Rule 1' },
+    { soc_id: 'alert456', 'rule.name': 'Test Rule 2' },
+    { soc_id: 'alert789', 'rule.name': 'Test Rule 3' }
+  ];
+
+  comp.applyAIInvestigationsToEvents();
+
+  expect(comp.eventData[0]._aiInvestigated).toBe(true);
+  expect(comp.eventData[0]._aiInvestigationData).toEqual(comp.aiInvestigations['alert123']);
+  expect(comp.eventData[1]._aiInvestigated).toBeUndefined();
+  expect(comp.eventData[2]._aiInvestigated).toBeUndefined();
+});
+
+test('generateInvestigationPrompt', () => {
+  comp.investigationMsg = 'Investigate alert {socid} for potential threats';
+  comp.$root.replaceActionVar = jest.fn().mockReturnValue('Investigate alert alert123 for potential threats');
+
+  const item = {
+    soc_id: 'alert123',
+    'rule.uuid': 'rule-uuid-123',
+    'rule.name': 'Suspicious Activity',
+    'event.severity_label': 'high',
+    'soc_timestamp': '2023-10-01T12:00:00Z',
+    'source.ip': '192.168.1.100',
+    'destination.ip': '10.0.0.1',
+    'event.module': 'suricata',
+    'event.dataset': 'suricata.eve',
+    'message': 'Suspicious network activity detected',
+    'rule.rule': 'alert tcp any any -> any any (msg:"Test"; sid:1;)'
+  };
+
+  const prompt = comp.generateInvestigationPrompt(item);
+
+  expect(comp.$root.replaceActionVar).toHaveBeenCalledWith(
+    'Investigate alert {socid} for potential threats',
+    'socid',
+    'alert123'
+  );
+  expect(prompt).toBe('Investigate alert alert123 for potential threats');
+});
+
+test('startAIInvestigation - individual alert', async () => {
+  const item = {
+    soc_id: 'alert123',
+    'rule.uuid': 'rule-uuid-123',
+    'rule.name': 'Test Rule'
+  };
+
+  comp.generateInvestigationPrompt = jest.fn().mockReturnValue('Investigation prompt');
+  comp.$router = { push: jest.fn(), resolve: jest.fn().mockReturnValue({ href: '/assistant/test' }) };
+  
+  // Mock localStorage
+  const mockSetItem = jest.fn();
+  Object.defineProperty(window, 'localStorage', {
+    value: { setItem: mockSetItem },
+    writable: true
+  });
+
+  await comp.startAIInvestigation(item);
+
+  expect(comp.aiInvestigations['alert123']).toBeDefined();
+  expect(comp.aiInvestigations['alert123'].socId).toBe('alert123');
+  expect(comp.aiInvestigations['alert123'].ruleUuid).toBe('rule-uuid-123');
+  expect(comp.aiInvestigations['alert123'].chatSessionId).toMatch(/^investigation_alert123_\d+$/);
+  
+  expect(mockSetItem).toHaveBeenCalled();
+  expect(comp.$router.push).toHaveBeenCalledWith(expect.stringMatching(/^\/assistant\/investigation_alert123_\d+\?investigation=true$/));
+});
+
+test('startAIInvestigation - grouped alert', async () => {
+  const item = {
+    count: 5,
+    'rule.uuid': 'rule-uuid-123',
+    'rule.name': 'Test Rule'
+  };
+
+  comp.fetchNewestEvent = jest.fn().mockResolvedValue();
+  item.newest = {
+    soc_id: 'alert456',
+    'rule.uuid': 'rule-uuid-123',
+    'rule.name': 'Test Rule'
+  };
+
+  comp.generateInvestigationPrompt = jest.fn().mockReturnValue('Investigation prompt');
+  comp.$router = { push: jest.fn(), resolve: jest.fn().mockReturnValue({ href: '/assistant/test' }) };
+  
+  // Mock localStorage
+  const mockSetItem = jest.fn();
+  Object.defineProperty(window, 'localStorage', {
+    value: { setItem: mockSetItem },
+    writable: true
+  });
+
+  await comp.startAIInvestigation(item);
+
+  expect(comp.fetchNewestEvent).toHaveBeenCalledWith(item);
+  expect(comp.aiInvestigations['alert456']).toBeDefined();
+  expect(comp.aiInvestigations['alert456'].socId).toBe('alert456');
+});
+
+test('startAIInvestigation - existing investigation', async () => {
+  const item = {
+    soc_id: 'alert123',
+    'rule.uuid': 'rule-uuid-123'
+  };
+
+  comp.aiInvestigations = {
+    'alert123': {
+      chatSessionId: 'existing_session_123',
+      socId: 'alert123'
+    }
+  };
+
+  comp.$router = { push: jest.fn() };
+
+  await comp.startAIInvestigation(item);
+
+  expect(comp.$router.push).toHaveBeenCalledWith({
+    name: 'assistant',
+    params: { sessionId: 'existing_session_123' }
+  });
+});
+
+test('startAIInvestigation - middle click opens new tab', async () => {
+  const item = {
+    soc_id: 'alert123',
+    'rule.uuid': 'rule-uuid-123'
+  };
+
+  comp.aiInvestigations = {
+    'alert123': {
+      chatSessionId: 'existing_session_123',
+      socId: 'alert123'
+    }
+  };
+
+  comp.$router = { resolve: jest.fn().mockReturnValue({ href: '/assistant/existing_session_123' }) };
+  
+  // Mock window.open
+  const mockOpen = jest.fn();
+  Object.defineProperty(window, 'open', {
+    value: mockOpen,
+    writable: true
+  });
+
+  const event = { button: 1 }; // Middle click
+
+  await comp.startAIInvestigation(item, event);
+
+  expect(mockOpen).toHaveBeenCalledWith('/assistant/existing_session_123', '_blank');
+});
+
+test('startAIInvestigation - right click ignored', async () => {
+  const item = {
+    soc_id: 'alert123',
+    'rule.uuid': 'rule-uuid-123'
+  };
+
+  comp.$router = { push: jest.fn() };
+  const event = { button: 2 }; // Right click
+
+  await comp.startAIInvestigation(item, event);
+
+  expect(comp.$router.push).not.toHaveBeenCalled();
+});
+
+test('startAIInvestigation - no soc_id error', async () => {
+  const item = {
+    'rule.uuid': 'rule-uuid-123'
+    // Missing soc_id
+  };
+
+  comp.$root.showError = jest.fn();
+
+  await comp.startAIInvestigation(item);
+
+  expect(comp.$root.showError).toHaveBeenCalledWith(comp.i18n.aiInvestigationUnableToIdentify);
+});
+
+test('startAIInvestigation - fetch newest event error', async () => {
+  const item = {
+    count: 5,
+    'rule.uuid': 'rule-uuid-123'
+  };
+
+  comp.fetchNewestEvent = jest.fn().mockRejectedValue(new Error('Fetch error'));
+  comp.$root.showError = jest.fn();
+
+  await comp.startAIInvestigation(item);
+
+  expect(comp.$root.showError).toHaveBeenCalledWith(comp.i18n.aiInvestigationUnableToFetchNewest + ': Fetch error');
+});
+
+test('getAIInvestigationButtonColor - individual alert not investigated', () => {
+  const item = { soc_id: 'alert123' };
+  comp.aiInvestigations = {};
+
+  const color = comp.getAIInvestigationButtonColor(item);
+  expect(color).toBe('pink-lighten-2');
+});
+
+test('getAIInvestigationButtonColor - individual alert investigated', () => {
+  const item = { soc_id: 'alert123' };
+  comp.aiInvestigations = {
+    'alert123': { chatSessionId: 'session123' }
+  };
+
+  const color = comp.getAIInvestigationButtonColor(item);
+  expect(color).toBe('secondary');
+});
+
+test('getAIInvestigationButtonColor - grouped alert', () => {
+  const item = { count: 5 };
+
+  const color = comp.getAIInvestigationButtonColor(item);
+  expect(color).toBe('pink-lighten-2');
+});
+
+test('getAIInvestigationTooltip - individual alert not investigated', () => {
+  const item = { soc_id: 'alert123' };
+  comp.aiInvestigations = {};
+
+  const tooltip = comp.getAIInvestigationTooltip(item);
+  expect(tooltip).toBe(comp.i18n.aiInvestigate);
+});
+
+test('getAIInvestigationTooltip - individual alert investigated', () => {
+  const item = { soc_id: 'alert123' };
+  comp.aiInvestigations = {
+    'alert123': { chatSessionId: 'session123' }
+  };
+
+  const tooltip = comp.getAIInvestigationTooltip(item);
+  expect(tooltip).toBe(comp.i18n.aiInvestigateView);
+});
+
+test('getAIInvestigationTooltip - grouped alert', () => {
+  const item = { count: 5 };
+
+  const tooltip = comp.getAIInvestigationTooltip(item);
+  expect(tooltip).toBe(comp.i18n.aiInvestigateMostRecent);
+});
+
+test('populateEventTable - applies AI investigated filter', () => {
+  comp.aiInvestigatedFilter = true;
+  comp.aiInvestigations = {
+    'alert123': { chatSessionId: 'session123' }
+  };
+
+  const events = [
+    { id: 'alert123', payload: { 'rule.name': 'Rule 1' } },
+    { id: 'alert456', payload: { 'rule.name': 'Rule 2' } }
+  ];
+
+  comp.extractSocValues = jest.fn()
+    .mockReturnValueOnce({ soc_id: 'alert123', 'rule.name': 'Rule 1' })
+    .mockReturnValueOnce({ soc_id: 'alert456', 'rule.name': 'Rule 2' });
+  comp.lookupSocIds = jest.fn();
+  comp.lookupFieldValue = jest.fn().mockReturnValue('');
+  comp.filterVisibleFields = jest.fn().mockReturnValue(['rule.name']);
+  comp.populateEventHeaders = jest.fn();
+  comp.applyAIInvestigationsToEvents = jest.fn();
+  comp.isMultiSelect = jest.fn().mockReturnValue(false);
+  comp.$root.batchLookup = jest.fn();
+
+  comp.populateEventTable(events);
+
+  expect(comp.eventData).toHaveLength(1); // Only alert123 should remain after filtering
+  expect(comp.eventData[0].soc_id).toBe('alert123');
+});
