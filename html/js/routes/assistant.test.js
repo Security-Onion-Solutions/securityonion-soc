@@ -1479,52 +1479,6 @@ test('handleRouteSessionId handles investigation session with invalid JSON in lo
   // Verify basic session handling occurred
   expect(comp.currentChatId).toBe(fakeSessionId);
   expect(comp.saveCurrentChatId).toHaveBeenCalled();
-  // Note: Error handling may not be triggered due to mocking limitations
-});
-
-test('investigation logic can parse localStorage data and start session', async () => {
-  // Test the specific investigation logic from lines 163-174 directly
-  const investigationKey = `key_${fakeSessionId}`;
-  const investigationDataStr = JSON.stringify(fakeInvestigationData);
-  
-  comp.startInvestigationSession = jest.fn();
-  comp.$nextTick = jest.fn((callback) => {
-    if (callback) callback();
-    return Promise.resolve();
-  });
-  comp.$root = { showError: jest.fn() };
-  
-  // Simulate the investigation logic from lines 163-174
-  const isInvestigation = true;
-  if (isInvestigation) {
-    // Mock localStorage.getItem to return investigation data (line 160)
-    const investigationDataFromStorage = investigationDataStr;
-    
-    if (investigationDataFromStorage) {
-      try {
-        // Line 164: Parse the investigation data
-        const investigationData = JSON.parse(investigationDataFromStorage);
-        
-        // Lines 166-168: Use $nextTick to start investigation session
-        comp.$nextTick(() => {
-          comp.startInvestigationSession(investigationData.prompt);
-        });
-        
-        // Line 170: Clean up localStorage (simulated)
-        const cleanupCalled = true;
-        expect(cleanupCalled).toBe(true);
-        
-      } catch (error) {
-        // Lines 171-173: Error handling
-        comp.$root.showError('Unable to parse investigation data: ' + error.message);
-      }
-    }
-  }
-  
-  // Verify the investigation logic executed correctly
-  expect(comp.$nextTick).toHaveBeenCalled();
-  expect(comp.startInvestigationSession).toHaveBeenCalledWith(fakeInvestigationData.prompt);
-  expect(comp.$root.showError).not.toHaveBeenCalled(); // No error should occur
 });
 
 test('handleRouteSessionId handles non-investigation session with existing messages', async () => {
