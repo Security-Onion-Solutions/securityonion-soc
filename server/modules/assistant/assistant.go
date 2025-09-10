@@ -415,7 +415,6 @@ func cleanupMessages(messages []*model.Message) []*model.Message {
 		// ToolUse-only messages, while given out by the AI, are not accepted by the AI
 		// add text to the ToolUse body to placate the AI's validation.
 		if m.Role == "assistant" && len(m.ContentBlocks) == 1 && m.ContentBlocks[0].Type == "tool_use" {
-			m.ContentBlocks[0].Text = "ToolUse"
 			m.ContentBlocks = append([]model.ContentBlock{
 				{
 					Type: "text",
