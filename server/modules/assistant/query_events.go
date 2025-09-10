@@ -209,9 +209,15 @@ func (t *QueryEventsTool) Execute(ctx context.Context, server *server.Server, pa
 		for _, g := range groupbyResults {
 			var key any
 			for _, k := range g.Keys {
-				keys := k.([]any)
-				if len(keys) > 0 {
-					key = keys[0]
+				keys, ok := k.([]any)
+				if ok {
+					if len(keys) > 0 {
+						key = keys[0]
+						break
+					}
+				} else {
+					key = k
+					break
 				}
 			}
 
