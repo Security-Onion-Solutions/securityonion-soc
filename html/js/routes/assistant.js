@@ -1129,14 +1129,14 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
             if (textBlocks.length > 0) {
               frontendMsg.content = textBlocks.map(block => block.text).join('\n');
             } else {
-              frontendMsg.content = 'Complex message with tools/attachments';
+              frontendMsg.content = '';
             }
           } else if (frontendMsg.role === 'assistant') {
             const textBlocks = msg.message.contentBlocks.filter(block => block.type === 'text');
             if (textBlocks.length > 0) {
               frontendMsg.content = textBlocks.map(block => block.text).join('\n');
             } else {
-              frontendMsg.content = 'Complex message with tools/attachments';
+              frontendMsg.content = '';
             }
           }
             
