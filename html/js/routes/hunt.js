@@ -3388,7 +3388,7 @@ const huntComponent = {
     getAIInvestigationButtonColor(item) {
       // Grouped alerts
       if (item.count) {
-        return 'pink-lighten-2';
+        return 'white';
       }
       // For individual alerts, use soc_id as before
       const socId = item.soc_id;
@@ -3397,8 +3397,8 @@ const huntComponent = {
       if (investigation && investigation.chatSessionId) {
         return 'secondary';
       }
-      // Not investigated - show brain
-      return 'pink-lighten-2';
+      // Not investigated
+      return 'white';
     },
 
     getAIInvestigationTooltip(item) {
