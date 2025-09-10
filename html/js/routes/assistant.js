@@ -172,7 +172,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
                 this.$root.showError(this.i18n.assistantUnableToParseInvestigation + ': ' + error.message);
               }
             }
-          } else {
+          } else if (this.messages.length > 1) {
             this.loadChatHistory();
           }
         } finally {
