@@ -161,6 +161,12 @@ func (store *ElasticAssistantstore) validateChat(chat *model.StoredMessage) erro
 			for _, cb := range chat.Message.ContentBlocks {
 				if cb.Type == "text" && cb.Text == "" {
 					err = fmt.Errorf("content block of type 'text' must have non-empty text")
+					break
+				}
+
+				if cb.Type == "" {
+					err = fmt.Errorf("every content block must have a type")
+					break
 				}
 			}
 		}
@@ -169,7 +175,7 @@ func (store *ElasticAssistantstore) validateChat(chat *model.StoredMessage) erro
 			contentCount++
 		}
 
-		if contentCount != 1 {
+		if contentCount != 1 && err == nil {
 			err = fmt.Errorf("message must have exactly one content type: either ContentBlocks or ContentStr")
 		}
 	}
