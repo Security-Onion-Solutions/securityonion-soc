@@ -20,6 +20,10 @@
 				<v-btn variant="flat" color="secondary" @click.stop="loadData()" id="clients-refresh-button" class="ml-3" data-aid="clients_refresh_button">
 					<v-icon>fa-sync</v-icon>
 				</v-btn>
+				<v-spacer></v-spacer>
+				<v-btn variant="flat" color="secondary" class="mx-4" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'connect.html'" :title="i18n.contextualDocsBtn" data-aid="clients_docs">
+					<v-icon>fa-circle-question</v-icon>
+				</v-btn>
 			</v-toolbar>
 			<v-dialog v-model="dialog" persistent width="800px" data-aid="clients_create_dialog">
 				<v-card>
