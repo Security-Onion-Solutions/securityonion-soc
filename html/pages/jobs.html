@@ -13,6 +13,10 @@
 				</v-btn>
 				<v-btn variant="flat" color="secondary" @click.stop="loadData()" id="jobs-refresh-button" class="ml-3" data-aid="jobs_refresh_button">
 					<v-icon>fa-sync</v-icon>
+				</v-btn>
+				<v-spacer></v-spacer>
+				<v-btn variant="flat" color="secondary" class="mx-4" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + (isKind('reports') ? 'reports.html' : 'pcap.html')" :title="i18n.contextualDocsBtn" data-aid="jobs_docs">
+					<v-icon>fa-circle-question</v-icon>
 				</v-btn>		  
 			</v-toolbar>
 			<v-data-table :sort-by="sortBy" @update:sort-by="val => sortBy = val" :items-per-page-options="itemsPerPageOptions" v-model:items-per-page="itemsPerPage"
@@ -80,7 +84,7 @@
 									<v-text-field v-if="isKind('pcap')" variant="underlined" v-model="form.dstIp" :placeholder="i18n.dstIp" persistent-hint :hint="i18n.dstIpHelp" data-aid="jobs_create_dialog_dst_ip"></v-text-field>
 									<v-text-field v-if="isKind('pcap')" variant="underlined" v-model="form.dstPort" :placeholder="i18n.dstPort" persistent-hint :hint="i18n.dstPortHelp" data-aid="jobs_create_dialog_dst_port"></v-text-field>
 									<v-select v-if="isKind('reports')" :items="getReportTypes()" v-model="form.type" :rules="[rules.required]" :placeholder="i18n.reportTypePlaceholder" persistent-hint :hint="i18n.reportTypeHelp" data-aid="jobs_create_dialog_kind"></v-select>
-									<v-text-field id="jobtimeframe" variant="underlined" v-model="form.timeframe" :placeholder="i18n.timeFrame" persistent-hint :hint="i18n.timeFrameHelp" data-aid="jobs_create_dialog_timeframe"></v-text-field>
+									<v-text-field id="jobtimeframe" variant="underlined" v-model="form.timeframe" :placeholder="i18n.timeFrame" persistent-hint :hint="isKind('reports') ? i18n.timeFrameReportsHelp : i18n.timeFrameHelp" data-aid="jobs_create_dialog_timeframe"></v-text-field>
 								</v-col>
 							</v-row>
 						</v-container>
