@@ -218,11 +218,11 @@ type ContentBlock struct {
 // @Description Usage statistics showing token usage and billing information.
 type Usage struct {
 	// The number of input tokens used.
-	InputTokens  int `json:"input_tokens" example:"5"`
+	InputTokens int `json:"input_tokens" example:"5"`
 	// The number of output tokens used.
 	OutputTokens int `json:"output_tokens" example:"10"`
 	// The number of credits remaining after this message.
-	Credits      int `json:"credits" example:"1"`
+	Credits int `json:"credits" example:"1"`
 }
 
 func (msg *Message) PrepareForStorage(sessionId string, tags []string) *StoredMessage {
@@ -236,13 +236,13 @@ func (msg *Message) PrepareForStorage(sessionId string, tags []string) *StoredMe
 // @Description A response containing the user's balance information.
 type BalanceResponse struct {
 	// An identifier representing the key that was used for the request.
-	KeyId     string  `json:"key_id" example:"user-61a9d0ef-29a4-4f9f-83f2-f8bbae462608"`
+	KeyId string `json:"api_key_prefix" example:"user-61a9d0ef-29a4-4f9f-83f2-f8bbae462608"`
 	// An identifier indicating what company the key is registered to.
-	CompanyId string  `json:"company_id" example:"SecurityOnionSolutions"`
+	CompanyId string `json:"company_id" example:"SecurityOnionSolutions"`
 	// The status of the key used.
-	Status    string  `json:"status" example:"active"`
+	Status string `json:"status" example:"active"`
 	// The remaining credit balance.
-	Balance   float64 `json:"credit_balance" example:"123000"`
+	Balance float64 `json:"credit_balance" example:"123000"`
 }
 
 type ChatOpt func(*ChatConfig)
