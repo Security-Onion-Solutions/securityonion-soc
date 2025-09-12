@@ -5,6 +5,7 @@
 //
 //	mockgen -destination mock/mock_userstore.go -package mock . Userstore
 //
+
 // Package mock is a generated GoMock package.
 package mock
 
@@ -20,6 +21,7 @@ import (
 type MockUserstore struct {
 	ctrl     *gomock.Controller
 	recorder *MockUserstoreMockRecorder
+	isgomock struct{}
 }
 
 // MockUserstoreMockRecorder is the mock recorder for MockUserstore.
@@ -40,31 +42,31 @@ func (m *MockUserstore) EXPECT() *MockUserstoreMockRecorder {
 }
 
 // GetUserById mocks base method.
-func (m *MockUserstore) GetUserById(arg0 context.Context, arg1 string) (*model.User, error) {
+func (m *MockUserstore) GetUserById(ctx context.Context, id string) (*model.User, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetUserById", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetUserById", ctx, id)
 	ret0, _ := ret[0].(*model.User)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetUserById indicates an expected call of GetUserById.
-func (mr *MockUserstoreMockRecorder) GetUserById(arg0, arg1 any) *gomock.Call {
+func (mr *MockUserstoreMockRecorder) GetUserById(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserById", reflect.TypeOf((*MockUserstore)(nil).GetUserById), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserById", reflect.TypeOf((*MockUserstore)(nil).GetUserById), ctx, id)
 }
 
 // GetUsers mocks base method.
-func (m *MockUserstore) GetUsers(arg0 context.Context) ([]*model.User, error) {
+func (m *MockUserstore) GetUsers(ctx context.Context) ([]*model.User, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetUsers", arg0)
+	ret := m.ctrl.Call(m, "GetUsers", ctx)
 	ret0, _ := ret[0].([]*model.User)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetUsers indicates an expected call of GetUsers.
-func (mr *MockUserstoreMockRecorder) GetUsers(arg0 any) *gomock.Call {
+func (mr *MockUserstoreMockRecorder) GetUsers(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUsers", reflect.TypeOf((*MockUserstore)(nil).GetUsers), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUsers", reflect.TypeOf((*MockUserstore)(nil).GetUsers), ctx)
 }

@@ -5,6 +5,7 @@
 //
 //	mockgen -destination mock/mock_bulkindexer.go -package mock github.com/elastic/go-elasticsearch/v8/esutil BulkIndexer
 //
+
 // Package mock is a generated GoMock package.
 package mock
 
@@ -20,6 +21,7 @@ import (
 type MockBulkIndexer struct {
 	ctrl     *gomock.Controller
 	recorder *MockBulkIndexerMockRecorder
+	isgomock struct{}
 }
 
 // MockBulkIndexerMockRecorder is the mock recorder for MockBulkIndexer.

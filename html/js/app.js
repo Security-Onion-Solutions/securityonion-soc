@@ -195,6 +195,7 @@ $(document).ready(function () {
           customReports: {},
           FEAT_RPT: 'rpt',
           FEAT_TTR: 'ttr',
+          FEAT_OAI: 'oai',
         }
       },
       watch: {
@@ -1037,8 +1038,8 @@ $(document).ready(function () {
           if (response) {
             const redirectCookie = this.getCookie('AUTH_REDIRECT');
             if ((response.headers && response.headers['content-type'] == "text/html") ||
-                (response.status == 401 && response.request.responseURL.indexOf('/api/') == -1) ||
-                (response.request.responseURL.indexOf("/login/banner.md") == -1 && redirectCookie != null && redirectCookie.length > 0)) {
+                (response.status == 401 && response.request.responseURL && response.request.responseURL.indexOf('/api/') == -1) ||
+                (response.request.responseURL && response.request.responseURL.indexOf("/login/banner.md") == -1 && redirectCookie != null && redirectCookie.length > 0)) {
               this.deleteCookie('AUTH_REDIRECT');
               this.showLogin();
               return null

@@ -37,6 +37,7 @@ type Server struct {
 	Eventstore       Eventstore
 	Casestore        Casestore
 	Detectionstore   Detectionstore
+	Assistantstore   Assistantstore
 	Configstore      Configstore
 	GridMembersstore GridMembersstore
 	Metrics          Metrics
@@ -46,6 +47,7 @@ type Server struct {
 	Context          context.Context
 	Playbookstore    Playbookstore
 	DetectionEngines sync.Map // map[model.EngineName]DetectionEngine
+	AssistantManager AssistantManager
 	ApiRouter        *chi.Mux
 	Statusstore      Statusstore
 }
@@ -110,6 +112,7 @@ func (server *Server) Start() {
 		RegisterRolesRoutes(server, server.ApiRouter, "/api/roles")
 		RegisterDetectionRoutes(server, server.ApiRouter, "/api/detection")
 		RegisterPlaybookRoutes(server, server.ApiRouter, "/api/playbook")
+		RegisterAssistantRoutes(server, server.ApiRouter, "/api/assistant")
 		RegisterUtilRoutes(server, server.ApiRouter, "/api/util")
 
 		server.Host.RegisterRouter("/api/", server.ApiRouter)

@@ -6,10 +6,10 @@
 
 const RELATIVE_TIME_SECONDS = 10;
 const RELATIVE_TIME_MINUTES = 20;
-const RELATIVE_TIME_HOURS   = 30;
-const RELATIVE_TIME_DAYS    = 40;
-const RELATIVE_TIME_WEEKS   = 50;
-const RELATIVE_TIME_MONTHS  = 60;
+const RELATIVE_TIME_HOURS = 30;
+const RELATIVE_TIME_DAYS = 40;
+const RELATIVE_TIME_WEEKS = 50;
+const RELATIVE_TIME_MONTHS = 60;
 const FILTER_INCLUDE = 'INCLUDE';
 const FILTER_EXCLUDE = 'EXCLUDE';
 const FILTER_EXACT = 'EXACT';
@@ -19,164 +19,173 @@ loadPageTemplate('page-hunt', 'pages/hunt.html');
 
 const huntComponent = {
   template: '#page-hunt',
-  data() { return {
-    i18n: this.$root.i18n,
-    params: null,
-    category: '',
-    advanced: false,
-    queryAltered: false,
-    query: '',
-    querySearch: '',
-    queryRemainder: '',
-    queries: [],
-    queryBaseFilter: "",
-    queryName: '',
-    queryFilters: [],
-    queryGroupBys: [],
-    queryGroupByOptions: [],
-    querySortBys: [],
-    queryTableFields: [],
-    queryTableOptions: [],
-    eventFields: {},
-    dateRange: '',
-    relativeTimeEnabled: true,
-    relativeTimeValue: 24,
-    relativeTimeUnit: RELATIVE_TIME_HOURS,
-    relativeTimeUnits: [],
-    autoRefreshInterval: 0,
-    autoRefreshIntervals: [],
-    autoRefreshTimer: null,
-    loaded: false,
-    chartHeight: 200,
-    zone: '',
-    huntPending: false,
-    ackEnabled: false,
-    escalateEnabled: false,
-    viewEnabled: false,
-    createLink: '',
-    collapsedSections: [],
+  data() {
+    return {
+      i18n: this.$root.i18n,
+      params: null,
+      category: '',
+      advanced: false,
+      queryAltered: false,
+      query: '',
+      querySearch: '',
+      queryRemainder: '',
+      queries: [],
+      queryBaseFilter: "",
+      queryName: '',
+      queryFilters: [],
+      queryGroupBys: [],
+      queryGroupByOptions: [],
+      querySortBys: [],
+      queryTableFields: [],
+      queryTableOptions: [],
+      eventFields: {},
+      dateRange: '',
+      relativeTimeEnabled: true,
+      relativeTimeValue: 24,
+      relativeTimeUnit: RELATIVE_TIME_HOURS,
+      relativeTimeUnits: [],
+      autoRefreshInterval: 0,
+      autoRefreshIntervals: [],
+      autoRefreshTimer: null,
+      loaded: false,
+      chartHeight: 200,
+      zone: '',
+      huntPending: false,
+      ackEnabled: false,
+      escalateEnabled: false,
+      investigateEnabled: false,
+      investigationMsg: '',
+      viewEnabled: false,
+      createLink: '',
+      collapsedSections: [],
 
-    filterToggles: [],
+      filterToggles: [],
 
-    timelineChartOptions: {},
-    timelineChartData: {},
+      timelineChartOptions: {},
+      timelineChartData: {},
 
-    metricsEnabled: false,
-    eventsEnabled: true,
-    topChartOptions: {},
-    topChartData: {},
-    bottomChartOptions: {},
-    bottomChartData: {},
-    groupBys: [],
-    groupByLimitOptions: [10,25,50,100,200,500],
-    groupByLimit: 10,
-    groupByFilter: '',
-    groupByItemsPerPage: 10,
-    groupByFooters: [10,25,50,100,200,500],
-    groupByPage: 1,
-    groupBySortBy: 'count',
-    groupBySortDesc: true,
-    chartLabelMaxLength: 30,
-    chartLabelOtherLimit: 10,
-    chartLabelFieldSeparator: ', ',
+      metricsEnabled: false,
+      eventsEnabled: true,
+      topChartOptions: {},
+      topChartData: {},
+      bottomChartOptions: {},
+      bottomChartData: {},
+      groupBys: [],
+      groupByLimitOptions: [10, 25, 50, 100, 200, 500],
+      groupByLimit: 10,
+      groupByFilter: '',
+      groupByItemsPerPage: 10,
+      groupByFooters: [10, 25, 50, 100, 200, 500],
+      groupByPage: 1,
+      groupBySortBy: 'count',
+      groupBySortDesc: true,
+      chartLabelMaxLength: 30,
+      chartLabelOtherLimit: 10,
+      chartLabelFieldSeparator: ', ',
 
-    eventLimitOptions: [10,25,50,100,200,500,1000,2000,5000],
-    eventLimit: 100,
-    eventData: [],
-    eventFilter: '',
-    eventHeaders: [],
-    eventPage: 1,
-    sortBy: [{ key: 'soc_timestamp', order: 'desc' }],
-    sortDesc: true,
-    itemsPerPage: 10,
-    itemsPerPageOptions: [10,25,50,100,200,500,1000],
+      eventLimitOptions: [10, 25, 50, 100, 200, 500, 1000, 2000, 5000],
+      eventLimit: 100,
+      eventData: [],
+      eventFilter: '',
+      eventHeaders: [],
+      eventPage: 1,
+      sortBy: [{ key: 'soc_timestamp', order: 'desc' }],
+      sortDesc: true,
+      itemsPerPage: 10,
+      itemsPerPageOptions: [10, 25, 50, 100, 200, 500, 1000],
 
-    expandedHeaders: [
-      { title: "key", value: "key" },
-      { title: "value", value: "value" }
-    ],
+      expandedHeaders: [
+        { title: "key", value: "key" },
+        { title: "value", value: "value" }
+      ],
 
-    totalEvents: 0,
-    fetchTimeSecs: 0,
-    roundTripTimeSecs: 0,
-    mruQueries: [],
-    mruCases: [],
+      totalEvents: 0,
+      fetchTimeSecs: 0,
+      roundTripTimeSecs: 0,
+      mruQueries: [],
+      mruCases: [],
 
-    autohunt: true,
-    showFullQuery: true,
+      autohunt: true,
+      showFullQuery: true,
 
-    filterRouteInclude: "",
-    filterRouteExclude: "",
-    filterRouteExact: "",
-    filterRouteDrilldown: "",
-    filterRouteLessThan: "",
-    filterRouteLessThanEqual: "",
-    filterRouteGreaterThan: "",
-    filterRouteGreaterThanEqual: "",
-    groupByRoute: "",
-    groupByNewRoute: "",
-    quickActionVisible: false,
-    quickActionTarget: null,
-    quickActionEvent: null,
-    quickActionField: "",
-    quickActionValue: "",
-    quickActionIsNumeric: false,
-    escalationMenuVisible: false,
-    escalationMenuTarget: null,
-    escalationItem: null,
-    escalationGroupIdx: -1,
-    escalateRelatedEventsEnabled: false,
-    aggregationActionsEnabled: false,
-    actions: [],
-    safeStringMaxLength: Number.MAX_SAFE_INTEGER,
-    betweenDialogVisible: false,
-    betweenStart: '',
-    betweenStartEquals: false,
-    betweenEnd: '',
-    betweenEndEquals: false,
-    betweenError: '',
-    equalityOperators: [
-      { title: '<', value: false },
-      { title: '≤', value: true }
-    ],
-    addToCaseDialogVisible: false,
-    mruCases: [],
-    selectedMruCase: null,
-    disableRouteLoad: false,
-    selectAllState: false,
-    selectAllIndeterminate: false,
-    selectedCount: 0,
-    selectedAction: 'enable',
-    bulkActions: [
-      { title: this.$root.i18n.enable, value: 'enable' },
-      { title: this.$root.i18n.disable, value: 'disable' },
-      { title: this.$root.i18n.delete, value: 'delete' },
-    ],
-    quickActionDetId: null,
-    presets: {},
-    manualSyncTargetEngine: null,
-    showBulkDeleteConfirmDialog: false,
-    tuneDetectionTabTarget: null,
-    eventCurrentItems: [],
-    detectionEngineStatusQueries: {},
-    highlightedDetection: null,
-    highlightedAlertInfo: null,
-    showDetailsPanel: true,
-    openPanel: [0],
-    quickActionsOpen: [],
-    escalatingDetectionEvents: false,
-    showAckManyDialog: false,
-    ackManyArgs: [],
-    ackManyVerb: '',
-    menuScrollPos: 0,
-    maxEscalate: 100,
-    chartResizeTracker: {},
-    gridId: null,
-    activeTabs: {},
-    expandedEvents: [],
-    eventColumnWidth: 0,
-    expandedPlaybookQuestions: {},
-  }},
+      filterRouteInclude: "",
+      filterRouteExclude: "",
+      filterRouteExact: "",
+      filterRouteDrilldown: "",
+      filterRouteLessThan: "",
+      filterRouteLessThanEqual: "",
+      filterRouteGreaterThan: "",
+      filterRouteGreaterThanEqual: "",
+      groupByRoute: "",
+      groupByNewRoute: "",
+      quickActionVisible: false,
+      quickActionTarget: null,
+      quickActionEvent: null,
+      quickActionField: "",
+      quickActionValue: "",
+      quickActionIsNumeric: false,
+      escalationMenuVisible: false,
+      escalationMenuTarget: null,
+      escalationItem: null,
+      escalationGroupIdx: -1,
+      escalateRelatedEventsEnabled: false,
+      aggregationActionsEnabled: false,
+      actions: [],
+      safeStringMaxLength: Number.MAX_SAFE_INTEGER,
+      betweenDialogVisible: false,
+      betweenStart: '',
+      betweenStartEquals: false,
+      betweenEnd: '',
+      betweenEndEquals: false,
+      betweenError: '',
+      equalityOperators: [
+        { title: '<', value: false },
+        { title: '≤', value: true }
+      ],
+      addToCaseDialogVisible: false,
+      mruCases: [],
+      selectedMruCase: null,
+      disableRouteLoad: false,
+      selectAllState: false,
+      selectAllIndeterminate: false,
+      selectedCount: 0,
+      selectedAction: 'enable',
+      bulkActions: [
+        { title: this.$root.i18n.enable, value: 'enable' },
+        { title: this.$root.i18n.disable, value: 'disable' },
+        { title: this.$root.i18n.delete, value: 'delete' },
+      ],
+      quickActionDetId: null,
+      presets: {},
+      manualSyncTargetEngine: null,
+      showBulkDeleteConfirmDialog: false,
+      tuneDetectionTabTarget: null,
+      eventCurrentItems: [],
+      detectionEngineStatusQueries: {},
+      highlightedDetection: null,
+      highlightedAlertInfo: null,
+      showDetailsPanel: true,
+      openPanel: [0],
+      quickActionsOpen: [],
+      escalatingDetectionEvents: false,
+      showAckManyDialog: false,
+      ackManyArgs: [],
+      ackManyVerb: '',
+      menuScrollPos: 0,
+      maxEscalate: 100,
+      chartResizeTracker: {},
+      gridId: null,
+      activeTabs: {},
+      expandedEvents: [],
+      eventColumnWidth: 0,
+      expandedPlaybookQuestions: {},
+
+      // AI Investigation tracking
+      aiInvestigations: {}, // Maps alert ID to investigation results and chat session IDs
+      aiInvestigatedFilter: false, // Client-side filter for AI investigated alerts
+      investigationSessions: [], // Store investigation sessions from backend
+    }
+  },
   created() {
     this.$root.initializeCharts();
     this.relativeTimeUnits = [
@@ -264,7 +273,11 @@ const huntComponent = {
     loading() {
       return this.$root.loading;
     },
-    initHunt(params) {
+    initAssistant(params) {
+      this.assistantEnabled = params["enabled"];
+      this.investigationMsg = params["investigationPrompt"];
+    },
+    async initHunt(params) {
       this.params = params;
       this.groupByItemsPerPage = params["groupItemsPerPage"];
       this.groupByLimit = params["groupFetchLimit"];
@@ -305,6 +318,7 @@ const huntComponent = {
       this.zone = moment.tz.guess();
 
       this.loadLocalSettings();
+      await this.loadInvestigationSessions();
       if (this.mruQueries.length > 0 && this.isAdvanced()) {
         this.query = this.mruQueries[0];
       }
@@ -321,6 +335,12 @@ const huntComponent = {
       }
 
       this.setupCharts();
+
+      if (this.isCategory('alerts')) {
+        this.$root.loadParameters('assistant', this.initAssistant);
+        this.investigateEnabled = this.$root.isLicensed('oai') && this.assistantEnabled;
+      }
+
       this.$root.stopLoading();
 
       if (!this.parseUrlParameters()) return;
@@ -387,7 +407,7 @@ const huntComponent = {
       this.selectedCount = 0;
       this.expandedPlaybookQuestions = {};
 
-      var onSuccess = () => {};
+      var onSuccess = () => { };
       var onFail = () => {
         // When navigating to the same URL, simply refresh data
         this.loadData();
@@ -426,7 +446,7 @@ const huntComponent = {
       var route = this;
       this.stopRefreshTimer();
       if (this.autoRefreshInterval > 0) {
-        this.autoRefreshTimer = setTimeout(function() { route.hunt(true); }, this.autoRefreshInterval * 1000);
+        this.autoRefreshTimer = setTimeout(function () { route.hunt(true); }, this.autoRefreshInterval * 1000);
       }
     },
     huntQuery(query) {
@@ -458,14 +478,16 @@ const huntComponent = {
       }
 
       if (q.length > 0) {
-        const response = await this.$root.papi.get('query/filtered', { params: {
-          query: this.query,
-          field: "",
-          value: q,
-          scalar: true,
-          mode: FILTER_INCLUDE,
-          condense: true,
-        }});
+        const response = await this.$root.papi.get('query/filtered', {
+          params: {
+            query: this.query,
+            field: "",
+            value: q,
+            scalar: true,
+            mode: FILTER_INCLUDE,
+            condense: true,
+          }
+        });
 
         return response.data;
       }
@@ -661,13 +683,15 @@ const huntComponent = {
         if (valueType == "boolean" || valueType == "number" || valueType == "bigint") {
           scalar = true;
         }
-        const response = await this.$root.papi.get('query/filtered', { params: {
-          query: this.query,
-          field: filterMode == FILTER_EXACT ? "" : field,
-          value: value,
-          scalar: scalar,
-          mode: filterMode,
-        }});
+        const response = await this.$root.papi.get('query/filtered', {
+          params: {
+            query: this.query,
+            field: filterMode == FILTER_EXACT ? "" : field,
+            value: value,
+            scalar: scalar,
+            mode: filterMode,
+          }
+        });
         this.query = response.data;
         if (notify) {
           this.notifyInputsChanged(true);
@@ -678,11 +702,13 @@ const huntComponent = {
     },
     async groupQuery(field, group, notify = true) {
       try {
-        const response = await this.$root.papi.get('query/grouped', { params: {
-          query: this.query,
-          field: field,
-          group: group,
-        }});
+        const response = await this.$root.papi.get('query/grouped', {
+          params: {
+            query: this.query,
+            field: field,
+            group: group,
+          }
+        });
         this.query = response.data;
         if (notify) {
           this.notifyInputsChanged(true);
@@ -771,7 +797,7 @@ const huntComponent = {
           // Attach the event to the case
           if (caseId && this.escalateRelatedEventsEnabled) {
             let payload = {
-              fields: item,
+              fields: docEvent,
               caseId: caseId,
               acknowledged: this.isFilterToggleEnabled('acknowledged'),
               escalated: this.isFilterToggleEnabled('escalated'),
@@ -845,7 +871,7 @@ const huntComponent = {
           const inGroup = this.highlightedAlertInfo.groupIndex === -1
 
           if ((!inGroup && item === this.highlightedAlertInfo.item) ||
-              (inGroup && this.highlightedDetection.publicId === item["rule.uuid"])) {
+            (inGroup && this.highlightedDetection.publicId === item["rule.uuid"])) {
             this.highlightedDetection = null;
             this.highlightedAlertInfo = null;
           }
@@ -999,7 +1025,7 @@ const huntComponent = {
           }
           this.queryName = matchingQueryName;
           if (!route.isComplexQuery(this.querySearch)) {
-            this.querySearch.split(" AND ").forEach(function(item, index) {
+            this.querySearch.split(" AND ").forEach(function (item, index) {
               item = item.trim();
               if (item.length > 0 && item != "*") {
                 route.queryFilters.push(item);
@@ -1014,7 +1040,7 @@ const huntComponent = {
             if (segment.indexOf("groupby") == 0) {
               var fields = [];
               var options = [];
-              segment.split(" ").forEach(function(item, index) {
+              segment.split(" ").forEach(function (item, index) {
                 // Skip empty fields and segment options (they start with a hyphen)
                 if (item[0] == "-") {
                   options.push(item.substring(1));
@@ -1031,7 +1057,7 @@ const huntComponent = {
             if (segment.indexOf("table") == 0) {
               var fields = [];
               var options = [];
-              segment.split(" ").forEach(function(item, index) {
+              segment.split(" ").forEach(function (item, index) {
                 // Skip empty fields and segment options (they start with a hyphen)
                 if (item[0] == "-") {
                   options.push(item.substring(1));
@@ -1046,7 +1072,7 @@ const huntComponent = {
               route.queryTableOptions = options;
             }
             if (segment.indexOf("sortby") == 0) {
-              segment.split(" ").forEach(function(item, index) {
+              segment.split(" ").forEach(function (item, index) {
                 if (index > 0 && item.trim().length > 0) {
                   if (item.split("\"").length % 2 == 1) {
                     // Will currently skip quoted items with spaces.
@@ -1195,7 +1221,7 @@ const huntComponent = {
         if (segments[i].trim().indexOf("groupby") == 0) {
           if (currentGroupIdx++ == groupIdx) {
             segments[i].replace(/,/g, ' ');
-            removals.forEach(function(removal, index) {
+            removals.forEach(function (removal, index) {
               segments[i] = segments[i].replace(" -" + removal + " ", " ");
             });
             if (addition) {
@@ -1226,7 +1252,7 @@ const huntComponent = {
     },
     countDrilldown(event) {
       const keys = Object.keys(event).filter(field => field != 'newest' && !field.startsWith('_'));
-      if ( (keys.length == 2 && keys[0] == "count") || (keys.length == 5 && keys[0] == "count" && keys[1] == "rule.name" && keys[2] == "event.module" && keys[3] == "event.severity_label" && keys[4] == "rule.uuid") ) {
+      if ((keys.length == 2 && keys[0] == "count") || (keys.length == 5 && keys[0] == "count" && keys[1] == "rule.name" && keys[2] == "event.module" && keys[3] == "event.severity_label" && keys[4] == "rule.uuid")) {
         this.filterRouteDrilldown = this.buildFilterRoute(keys[1], event[keys[1]], FILTER_DRILLDOWN);
         this.$router.push(this.filterRouteDrilldown);
       }
@@ -1303,7 +1329,7 @@ const huntComponent = {
         this.groupByNewRoute = this.buildGroupByNewRoute(field);
 
         var route = this;
-        this.actions.forEach(function(action, index) {
+        this.actions.forEach(function (action, index) {
           action.enabled = true;
 
           if (action.categories && action.categories.indexOf(route.category) == -1) {
@@ -1363,7 +1389,7 @@ const huntComponent = {
       if (this.eventFields) {
         var filteredFields = null;
         if (eventDataset) {
-          if(eventDataset.indexOf('.') !== -1) {
+          if (eventDataset.indexOf('.') !== -1) {
             eventDataset = eventDataset.substring(eventDataset.indexOf('.') + 1);
           }
         }
@@ -1453,12 +1479,12 @@ const huntComponent = {
       const records = [];
       const route = this;
       let batch = [];
-      data.forEach(function(row, index) {
+      data.forEach(function (row, index) {
         var record = {
           count: row.value,
           _row_idx_: index,
         };
-        fields.forEach(function(field, index) {
+        fields.forEach(function (field, index) {
           record[field] = route.localizeValue(row.keys[index]);
           batch.push(record[field]);
         });
@@ -1472,7 +1498,7 @@ const huntComponent = {
       const records = [];
       const route = this;
       var other = 0;
-      data.forEach(function(row, index) {
+      data.forEach(function (row, index) {
         var record = {
           value: row.value,
           keys: [row.keys.join(route.chartLabelFieldSeparator)],
@@ -1484,14 +1510,26 @@ const huntComponent = {
         }
       });
       if (other > 0) {
-        records.push({value: other, keys: [this.i18n.other]});
+        records.push({ value: other, keys: [this.i18n.other] });
       }
       return records;
     },
     populateGroupByTables(metrics) {
       var idx = 0;
       this.groupBys = [];
-      while (this.populateGroupByTable(metrics, idx++)) {};
+      while (this.populateGroupByTable(metrics, idx++)) { };
+
+      // Apply AI investigated filter if enabled
+      if (this.aiInvestigatedFilter) {
+        this.groupBys.forEach(group => {
+          if (group.data && group.data.length > 0) {
+            group.data = group.data.filter(item => {
+              const socId = item.soc_id;
+              return socId && this.aiInvestigations[socId];
+            });
+          }
+        });
+      }
     },
     populateGroupByTable(metrics, groupIdx) {
       const route = this;
@@ -1536,7 +1574,7 @@ const huntComponent = {
           // Preserve group-by sort settings only for first group. Useful for non-advanced views.
           group.sortBy = [{ key: 'count', order: 'desc' }];
           if (this.groupBys.length == 0 && this.groupBySortBy) {
-            group.sortBy = [{key: this.groupBySortBy, order: this.groupBySortDesc ? 'desc' : 'asc'}];
+            group.sortBy = [{ key: this.groupBySortBy, order: this.groupBySortDesc ? 'desc' : 'asc' }];
           }
 
           this.groupBys.push(group);
@@ -1551,9 +1589,9 @@ const huntComponent = {
           }
           group.maximized = options.indexOf("maximize") != -1;
           if (group.maximized) {
-            const unmaximizeFn = function() {
+            const unmaximizeFn = function () {
               const newRoute = route.buildNonMaximizedRoute(group, groupIdx);
-              route.$router.push(newRoute, function() {}, function() {});
+              route.$router.push(newRoute, function () { }, function () { });
             };
             this.$nextTick(() => {
               route.$root.maximizeById("group-" + groupIdx, unmaximizeFn);
@@ -1694,6 +1732,17 @@ const huntComponent = {
 
       this.populateEventHeaders(this.filterVisibleFields(eventModule, eventDataset, fields));
       this.eventData = records;
+
+      // Apply any existing AI investigation results to the loaded events
+      this.applyAIInvestigationsToEvents();
+
+      // Apply AI investigated filter if enabled
+      if (this.aiInvestigatedFilter) {
+        this.eventData = this.eventData.filter(item => {
+          const socId = item.soc_id;
+          return socId && this.aiInvestigations[socId];
+        });
+      }
     },
     lookupFieldValue(record, field) {
       if (field in record) {
@@ -1721,7 +1770,7 @@ const huntComponent = {
         const overrideHeader = { title: this.i18n.overrides, value: 'override_count' };
 
         if (enabledCol > -1) {
-          headers = [...headers.slice(0, enabledCol+1), overrideHeader, ...headers.slice(enabledCol+1)];
+          headers = [...headers.slice(0, enabledCol + 1), overrideHeader, ...headers.slice(enabledCol + 1)];
         } else {
           headers.push(overrideHeader);
         }
@@ -1755,7 +1804,7 @@ const huntComponent = {
       this.$router.push(route);
       this.query = newQuery;
       const thisRoute = this;
-      setTimeout(function() { thisRoute.disableRouteLoad = false; }, 100);
+      setTimeout(function () { thisRoute.disableRouteLoad = false; }, 100);
     },
     toggleColumnHeader(field) {
       if (!this.isColumnHeader(field)) {
@@ -1855,7 +1904,7 @@ const huntComponent = {
       // While building the new format, also calculate the max value across all nodes to be used
       // as a scale factor for choosing colors of the sankey flows.
       var flowMax = 0;
-      var updateMaxMap = function(map, key, value) {
+      var updateMaxMap = function (map, key, value) {
         var max = map[key];
         if (!max) {
           max = 0;
@@ -1865,7 +1914,7 @@ const huntComponent = {
         flowMax = Math.max(flowMax, max);
       };
 
-      var isRecursive = function(map, from, to, current, max) {
+      var isRecursive = function (map, from, to, current, max) {
         if (current > max || from == to) {
           return true;
         }
@@ -1883,10 +1932,10 @@ const huntComponent = {
 
       var data = [];
       var maxFlowMap = {};
-      group.data.forEach(function(item, index) {
+      group.data.forEach(function (item, index) {
         for (var idx = 0; idx < group.fields.length - 1; idx++) {
           var from = item[group.fields[idx]];
-          var to = item[group.fields[idx+1]];
+          var to = item[group.fields[idx + 1]];
           var flow = { from: from, to: to, flow: item.count };
           data.push(flow);
 
@@ -1927,7 +1976,7 @@ const huntComponent = {
       chart.datasets[0].data = [];
       if (!data) return;
       const route = this;
-      data.forEach(function(item, index) {
+      data.forEach(function (item, index) {
         chart.labels.push(route.$root.truncate(route.localizeValue(route.lookupSocId(item.keys[0])), route.chartLabelMaxLength));
         chart.datasets[0].data.push(item.value);
       });
@@ -1936,7 +1985,7 @@ const huntComponent = {
       return this.isCategory('detections');
     },
     getExpandedData(data) {
-      const ignored = ['_isSelected', 'playbooks', '_row_idx_'];
+      const ignored = ['_isSelected', 'playbooks', '_row_idx_', 'playbookErr', 'questions'];
       var records = [];
       for (let key in data) {
         if (ignored.includes(key)) {
@@ -1956,7 +2005,7 @@ const huntComponent = {
     lookupGroupByMetricKey(metrics, groupIdx, longest) {
       var desiredKey = null;
       for (const key in metrics) {
-        if (key.startsWith("groupby_" + groupIdx +"|")) {
+        if (key.startsWith("groupby_" + groupIdx + "|")) {
           if (desiredKey == null) {
             desiredKey = key;
           } else if (longest && key.length > desiredKey.length) {
@@ -2027,7 +2076,7 @@ const huntComponent = {
       if (route.dateRange == '') {
         route.dateRange = $('#huntdaterange')[0].value;
       }
-      $('#huntdaterange').on('hide.daterangepicker', function(ev, picker) {
+      $('#huntdaterange').on('hide.daterangepicker', function (ev, picker) {
         route.hideDateRangePicker();
       });
     },
@@ -2338,6 +2387,53 @@ const huntComponent = {
 
       if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
     },
+
+    async loadInvestigationSessions() {
+      // Load investigation sessions from backend
+      try {
+        const response = await this.$root.papi.get('/assistant/sessions');
+        if (response.data && Array.isArray(response.data)) {
+          // Filter sessions that start with 'investigation_'
+          this.investigationSessions = response.data.filter(session =>
+            session.sessionId && session.sessionId.startsWith('investigation_')
+          );
+
+          // Update aiInvestigations based on session data, keyed by soc_id
+          this.aiInvestigations = {};
+          this.investigationSessions.forEach(session => {
+            // Extract soc_id from session ID: investigation_{soc_id}_{timestamp}
+            const parts = session.sessionId.split('_');
+            if (parts.length >= 3) {
+              const socId = parts.slice(1, -1).join('_'); // Handle soc_ids that might contain underscores
+              this.aiInvestigations[socId] = {
+                chatSessionId: session.sessionId,
+                socId: socId,
+                timestamp: session.createTime || new Date().toISOString()
+              };
+            }
+          });
+        }
+      } catch (error) {
+        this.$root.showError(this.i18n.aiInvestigationCouldNotLoad + ': ' + error.message);
+        this.investigationSessions = [];
+        this.aiInvestigations = {};
+      }
+    },
+
+    applyAIInvestigationsToEvents() {
+      // Apply loaded AI investigation results to current event data
+      if (this.eventData && this.eventData.length > 0) {
+        this.eventData.forEach(item => {
+          const socId = item.soc_id;
+          if (socId && this.aiInvestigations[socId]) {
+            const investigation = this.aiInvestigations[socId];
+            item._aiInvestigated = true;
+            item._aiInvestigationData = investigation;
+          }
+        });
+      }
+    },
+
     toggleShowSection(item) {
       if (this.isExpandedSection(item)) {
         this.collapsedSections.push(item);
@@ -2776,7 +2872,7 @@ const huntComponent = {
     },
     async loadPlaybook(event, index) {
       if ('playbooks' in event || 'playbookLoading' in event || 'playbookErr' in event) return;
-      
+
       const publicId = event?.['rule.uuid'];
       if (!publicId) {
         event.playbookErr = true;
@@ -2842,21 +2938,21 @@ const huntComponent = {
       for (let pb of playbooks) {
         for (let question of pb.questions) {
           let q = question.query;
-          
+
           // Find all variables in the query using regex
           const variables = q.match(/\{([^}]+)\}/g) || [];
-          
+
           // Process each variable
           for (const variable of variables) {
             const fieldName = variable.slice(1, -1); // Remove { and }
             let value = event[fieldName] || 'NODATA';
-            
+
             // Special handling for array fields
             if (arrayFields.includes(fieldName) && Array.isArray(value)) {
               // Find the line containing the variable
               const lines = q.split('\n');
               const lineWithVar = lines.findIndex(line => line.includes(variable));
-              
+
               if (lineWithVar !== -1) {
                 // Get the field being set (e.g., src_ip or dst_ip)
                 const match = lines[lineWithVar].match(/^(\s*)(?:-\s*)?(\w+(?:\.\w+)*(?:\|\w+)*):(?:\s*|$)/);
@@ -2867,7 +2963,7 @@ const huntComponent = {
                   const hasDash = originalLine.trim().startsWith('-');
                   const prefix = hasDash ? '- ' : '';
                   const replacement = `${indent}${prefix}${field}:\n${value.map(ip => `${indent}    - ${ip}`).join('\n')}`;
-                  
+
                   // Replace the entire line
                   lines[lineWithVar] = replacement;
                   q = lines.join('\n');
@@ -2875,11 +2971,11 @@ const huntComponent = {
                 }
               }
             }
-            
+
             // Default replacement if not handled as special case
             q = q.replaceAll(variable, value);
           }
-          
+
           question.filledQuery = q;
         }
       }
@@ -3176,20 +3272,162 @@ const huntComponent = {
       }
 
       return 'no-data';
-    }
+    },
+    // AI Investigation methods
+    async startAIInvestigation(item, event = null) {
+      // Only respond to left-click (button === 0) or middle-click (button === 1)
+      // Ignore right-click (button === 2) and other mouse buttons
+      if (event && event.button !== 0 && event.button !== 1) {
+        return;
+      }
+
+      let targetItem = item;
+
+      // Check if this is a grouped alert (has count > 1)
+      if (item.count) {
+        // For grouped alerts, fetch the newest event to get the most recent alert's soc_id
+        try {
+          await this.fetchNewestEvent(item);
+          if (item.newest) {
+            targetItem = item.newest;
+          } else {
+            this.$root.showError(this.i18n.aiInvestigationUnableToFetchNewest);
+            return;
+          }
+        } catch (error) {
+          this.$root.showError(this.i18n.aiInvestigationUnableToFetchNewest + ': ' + error.message);
+          return;
+        }
+      }
+
+      const socId = targetItem.soc_id;
+      if (!socId) {
+        this.$root.showError(this.i18n.aiInvestigationUnableToIdentify);
+        return;
+      }
+
+      // Check if investigation already exists for this specific soc_id
+      const existingInvestigation = this.aiInvestigations[socId];
+      if (existingInvestigation && existingInvestigation.chatSessionId) {
+        // Check for middle-click (button === 1) to open in new tab
+        if (event && event.button === 1) {
+          // Middle-click: open in new tab
+          const url = this.$router.resolve({
+            name: 'assistant',
+            params: { sessionId: existingInvestigation.chatSessionId }
+          }).href;
+          window.open(url, '_blank');
+        } else {
+          // Left-click: navigate in current tab
+          this.$router.push({
+            name: 'assistant',
+            params: { sessionId: existingInvestigation.chatSessionId }
+          });
+        }
+        return;
+      }
+
+      // Generate a unique chat session ID for this investigation using soc_id
+      const chatSessionId = 'investigation_' + socId + '_' + Date.now();
+
+      // Update local tracking using soc_id as key
+      this.aiInvestigations[socId] = {
+        chatSessionId: chatSessionId,
+        socId: socId,
+        ruleUuid: targetItem['rule.uuid'],
+        timestamp: new Date().toISOString()
+      };
+
+      // Create the investigation prompt with alert data
+      const investigationPrompt = this.generateInvestigationPrompt(targetItem);
+
+      // Store the investigation prompt in localStorage to avoid URL encoding issues
+      const investigationData = {
+        socId: socId,
+        ruleUuid: targetItem['rule.uuid'],
+        prompt: investigationPrompt,
+        timestamp: new Date().toISOString()
+      };
+      localStorage.setItem(`key_${chatSessionId}`, JSON.stringify(investigationData));
+
+      // Check for middle-click (button === 1) to open in new tab
+      if (event && event.button === 1) {
+        // Middle-click: open in new tab
+        const url = this.$router.resolve(`/assistant/${chatSessionId}?investigation=true`).href;
+        window.open(url, '_blank');
+      } else {
+        // Left-click: navigate in current tab
+        this.$router.push(`/assistant/${chatSessionId}?investigation=true`);
+      }
+    },
+
+    generateInvestigationPrompt(item) {
+      const socId = item.soc_id;
+      const ruleUuid = item['rule.uuid'];
+
+      // Prepare the alert data for investigation
+      const alertData = {
+        socId: socId,
+        ruleUuid: ruleUuid,
+        ruleName: item['rule.name'],
+        severity: item['event.severity_label'],
+        timestamp: item['soc_timestamp'] || item['@timestamp'],
+        sourceIp: item['source.ip'],
+        destIp: item['destination.ip'],
+        eventModule: item['event.module'],
+        eventDataset: item['event.dataset'],
+        message: item['message'],
+        alertRule: item['rule.rule']
+      };
+
+      const investigationMsg = this.$root.replaceActionVar(this.investigationMsg, "socid", alertData.socId || 'Unknown');
+
+      return investigationMsg;
+    },
+
+    getAIInvestigationButtonColor(item) {
+      // Grouped alerts
+      if (item.count) {
+        return '';
+      }
+      // For individual alerts, use soc_id as before
+      const socId = item.soc_id;
+      const investigation = this.aiInvestigations[socId];
+
+      if (investigation && investigation.chatSessionId) {
+        return 'secondary';
+      }
+      // Not investigated
+      return '';
+    },
+
+    getAIInvestigationTooltip(item) {
+      // Grouped alerts
+      if (item.count) {
+        return this.i18n.aiInvestigateMostRecent;
+      }
+      // Individual alerts
+      const socId = item.soc_id;
+      const investigation = this.aiInvestigations[socId];
+
+      if (investigation && investigation.chatSessionId) {
+        return this.i18n.aiInvestigateView;
+      }
+      return this.i18n.aiInvestigate;
+    },
   }
 };
 
-routes.push({ path: '/hunt', name: 'hunt', component: huntComponent});
+routes.push({ path: '/hunt', name: 'hunt', component: huntComponent });
 
 const alertsComponent = Object.assign({}, huntComponent);
-routes.push({ path: '/alerts', name: 'alerts', component: alertsComponent});
+routes.push({ path: '/alerts', name: 'alerts', component: alertsComponent });
 
 const casesComponent = Object.assign({}, huntComponent);
-routes.push({ path: '/cases', name: 'cases', component: casesComponent});
+routes.push({ path: '/cases', name: 'cases', component: casesComponent });
 
 const dashboardsComponent = Object.assign({}, huntComponent);
-routes.push({ path: '/dashboards', name: 'dashboards', component: dashboardsComponent});
+routes.push({ path: '/dashboards', name: 'dashboards', component: dashboardsComponent });
 
 const detectionsComponent = Object.assign({}, huntComponent);
 routes.push({ path: '/detections', name: 'detections', component: detectionsComponent });
