@@ -2721,7 +2721,7 @@ test('getAIInvestigationButtonColor - individual alert not investigated', () => 
   comp.aiInvestigations = {};
 
   const color = comp.getAIInvestigationButtonColor(item);
-  expect(color).toBe('white');
+  expect(color).toBe('');
 });
 
 test('getAIInvestigationButtonColor - individual alert investigated', () => {
@@ -2738,7 +2738,7 @@ test('getAIInvestigationButtonColor - grouped alert', () => {
   const item = { count: 5 };
 
   const color = comp.getAIInvestigationButtonColor(item);
-  expect(color).toBe('white');
+  expect(color).toBe('');
 });
 
 test('getAIInvestigationTooltip - individual alert not investigated', () => {
