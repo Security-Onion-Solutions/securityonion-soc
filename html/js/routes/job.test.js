@@ -47,3 +47,25 @@ test('transcriptCyberChef_testing', () => {
     // Cleanup
     window.open = originalOpen;
 });
+
+test('downloadUrl', () => {
+  // Setup
+  comp.$root = { apiUrl: 'https://api.example.com/' };
+  comp.job = { id: '123' };
+  comp.packetOptions = ['packets']; // unwrap not enabled
+
+  // Test without grid and unwrap false
+  let url = comp.downloadUrl();
+  expect(url).toBe('https://api.example.com/stream?jobId=123&ext=pcap&unwrap=false');
+
+  // Test with unwrap true
+  comp.packetOptions = ['unwrap'];
+  url = comp.downloadUrl();
+  expect(url).toBe('https://api.example.com/stream?jobId=123&ext=pcap&unwrap=true');
+
+  // Test with grid
+  comp.$root.selectedGridId = 'grid1';
+  comp.packetOptions = ['packets'];
+  url = comp.downloadUrl();
+  expect(url).toBe('https://api.example.com/stream?jobId=123&ext=pcap&unwrap=false&gridId=grid1');
+});
