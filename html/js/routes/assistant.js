@@ -21,6 +21,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     increaseMaxContextThreshold: false, // Toggle for max context threshold
     restoreLastActive: false, // Toggle to restore last active chat
     assistantEnabled: false,
+    isStreaming: false,
     contextLimitSmall: 200000,
     contextLimitLarge: 1000000,
     thresholdColorRatioLow: 0.5,
@@ -361,6 +362,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         const stream = response.data;
         const reader = stream.pipeThrough(new TextDecoderStream()).getReader();
 
+        this.isStreaming = true;
         let output = 0;
         let assistantMessage = null;
         let chunks = [];
@@ -586,10 +588,13 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           output++;
         }
         
+        this.isStreaming = false;
+
         // Update credits from API after successful response
         await this.loadCredits();
       } catch (error) {
         this.isTyping = false;
+        this.isStreaming = false;
         
         // Show user-friendly error message
         const errorMessage = {
@@ -619,7 +624,13 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       return this.$root.formatTimestamp(timestamp);
     },
     formatMarkdown(text) {
-      return this.$root.formatMarkdown(text);
+      md = this.$root.formatMarkdown(text, handleMermaid=true);
+      if (!this.isStreaming) {
+        this.$nextTick(() => {
+          this.$root.renderMermaid();
+        });
+      }
+      return md;
     },
     formatChatDate(timestamp) {
       return this.$root.formatDateTime(timestamp);
@@ -654,6 +665,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         const stream = response.data;
         const reader = stream.pipeThrough(new TextDecoderStream()).getReader();
 
+        this.isStreaming = true;
         let assistantMessage = null;
         let chunks = [];
         let partial = false;
@@ -859,6 +871,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           await this.$nextTick();
         }
         
+        this.isStreaming = false;
+
         // After streaming is complete, check if we need to capture the raw result
         // The raw result will be in the next message that gets saved to backend
         // We'll capture it by monitoring the messages array for new tool result messages
@@ -908,6 +922,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         await this.loadCredits();
         
       } catch (error) {
+        this.isStreaming = false;
+
         // Update tool use status with error
         toolUse.status = 'error';
         toolUse.error = error.message;
