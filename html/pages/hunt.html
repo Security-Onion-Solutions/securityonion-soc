@@ -293,7 +293,7 @@
 																	<v-icon class="theme-icon">fa-expand</v-icon>
 																</router-link>
 																<v-btn  v-if="$root.isLicensed($root.FEAT_RPT) && ((header.value == 'count' && isAdvanced() && !aggregationActionsEnabled) || (header.value == '' && aggregationActionsEnabled))" :title="i18n.exportMetricsHelp" variant="text" size="x-small" @click.stop="exportMetrics(group, groupIdx)" data-aid="events_table_metrics">
-																	<v-icon class="theme-icon" :class="{ 'ml-8': aggregationActionsEnabled }">fa-file-export</v-icon>
+																	<v-icon class="theme-icon">fa-file-export</v-icon>
 																</v-btn>
 																<v-btn v-if="header.value != 'count' && header.value != ''" variant="text" size="x-small" @click.stop="removeGroupBy(groupIdx,headerIdx - getGroupByFieldStartIndex())" :title="i18n.remove" :data-aid="'groups_table_remove_' + category">
 																	<v-icon class="theme-icon tiny-icon">fa-circle-xmark</v-icon>
