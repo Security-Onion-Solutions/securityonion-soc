@@ -160,7 +160,11 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
       }
     },
     downloadUrl() {
-      return this.$root.apiUrl + "stream?jobId=" + this.job.id + "&ext=pcap&unwrap=" + this.isOptionEnabled('unwrap');
+      var gridParam = "";
+      if (this.$root.selectedGridId) {
+        gridParam = "&gridId=" + this.$root.selectedGridId;
+      }
+      return this.$root.apiUrl + "stream?jobId=" + this.job.id + "&ext=pcap&unwrap=" + this.isOptionEnabled('unwrap') + gridParam;
     },
     packetArrayTranscript() {
       return this.packets

@@ -331,3 +331,61 @@ func TestCheckForRedirect(t *testing.T) {
 		// to be extra sure, but asserting the return value is the primary goal.
 	})
 }
+
+func TestCopyProxiedHttpHeaders(t *testing.T) {
+	t.Parallel()
+
+	table := []struct {
+		Name                string
+		RespHeaders         http.Header
+		ExpectedContentType string
+		ExpectedContentDisp string
+		ExpectedTransferEnc string
+	}{
+		{
+			Name:                "All headers present",
+			RespHeaders:         http.Header{"Content-Type": []string{"application/json"}, "Content-Disposition": []string{"attachment; filename=test.txt"}, "Content-Transfer-Encoding": []string{"binary"}},
+			ExpectedContentType: "application/json",
+			ExpectedContentDisp: "attachment; filename=test.txt",
+			ExpectedTransferEnc: "binary",
+		},
+		{
+			Name:                "Missing Content-Disposition",
+			RespHeaders:         http.Header{"Content-Type": []string{"text/plain"}, "Content-Transfer-Encoding": []string{"base64"}},
+			ExpectedContentType: "text/plain",
+			ExpectedContentDisp: "",
+			ExpectedTransferEnc: "base64",
+		},
+		{
+			Name:                "Missing Content-Transfer-Encoding",
+			RespHeaders:         http.Header{"Content-Type": []string{"application/xml"}, "Content-Disposition": []string{"inline"}},
+			ExpectedContentType: "application/xml",
+			ExpectedContentDisp: "inline",
+			ExpectedTransferEnc: "",
+		},
+		{
+			Name:                "No optional headers",
+			RespHeaders:         http.Header{"Content-Type": []string{"text/html"}},
+			ExpectedContentType: "text/html",
+			ExpectedContentDisp: "",
+			ExpectedTransferEnc: "",
+		},
+	}
+
+	for _, tt := range table {
+		t.Run(tt.Name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			resp := &http.Response{
+				Header:     tt.RespHeaders,
+				StatusCode: http.StatusOK,
+				Body:       nil,
+			}
+
+			copyProxiedHttpHeaders(w, resp)
+
+			assert.Equal(t, tt.ExpectedContentType, w.Header().Get("Content-Type"))
+			assert.Equal(t, tt.ExpectedContentDisp, w.Header().Get("Content-Disposition"))
+			assert.Equal(t, tt.ExpectedTransferEnc, w.Header().Get("Content-Transfer-Encoding"))
+		})
+	}
+}

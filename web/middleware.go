@@ -149,7 +149,7 @@ func Respond(w http.ResponseWriter, r *http.Request, statusCode int, obj interfa
 				_, _ = w.Write(data)
 			}
 		case http.Response:
-			w.Header().Set("Content-Type", data.Header.Get("Content-Type"))
+			copyProxiedHttpHeaders(w, &data)
 			w.WriteHeader(data.StatusCode)
 			io.Copy(w, data.Body)
 		default:
@@ -234,6 +234,18 @@ func isNil(i interface{}) bool {
 		return reflect.ValueOf(i).IsNil()
 	}
 	return false
+}
+
+func copyProxiedHttpHeaders(w http.ResponseWriter, resp *http.Response) {
+	w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
+	disp := resp.Header.Get("Content-Disposition")
+	if disp != "" {
+		w.Header().Set("Content-Disposition", disp)
+	}
+	txenc := resp.Header.Get("Content-Transfer-Encoding")
+	if txenc != "" {
+		w.Header().Set("Content-Transfer-Encoding", txenc)
+	}
 }
 
 func proxySubgridRequest(subgrids []*model.Subgrid, gridId string, ctx context.Context, w http.ResponseWriter, r *http.Request) {
