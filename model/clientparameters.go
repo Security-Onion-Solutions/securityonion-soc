@@ -38,7 +38,6 @@ type ClientParameters struct {
 	DetectionsEnabled   bool                 `json:"detectionsEnabled"`
 	ExportNodeId        string               `json:"exportNodeId"`
 	AssistantParams     AssistantParameters  `json:"assistant"`
-	EnableReverseLookup bool                 `json:"enableReverseLookup"`
 }
 
 func (config *ClientParameters) Verify() error {
