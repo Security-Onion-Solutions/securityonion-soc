@@ -578,7 +578,7 @@
 								<template #headers="{ props, columns, isSorted, getSortIcon, toggleSort }">
 									<tr>
 										<template v-for="header in columns" :key="header.key">
-											<th :class="{'is-sorted': isSorted(header)}">
+											<th :class="{'is-sorted': isSorted(header)}" @click="toggleSort(header)">
 												<template v-if="header.key === 'data-table-select'">
 													<div class="no-print multiselect-container ml-8">
 														<v-checkbox v-if="isMultiSelect()" id="multiselect-checkbox" class="no-details" :class="{ 'text-blue': selectAllState || selectAllIndeterminate }"
@@ -598,7 +598,7 @@
 															<v-icon class="tiny-icon">fa-caret-left</v-icon>
 														</v-btn>
 													</span>
-													<span :id="'col_label_' + header.value" :data-aid="'events_col_sort_' + category" @click="toggleSort(header)">
+													<span :id="'col_label_' + header.value" :data-aid="'events_col_sort_' + category">
 														{{ header.title }}
 													</span>
 													<span class="table-header-actions">
