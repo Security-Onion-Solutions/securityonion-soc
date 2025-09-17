@@ -23,58 +23,77 @@ import (
 )
 
 func TestReverseLookupHandler(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	cfg := &config.ServerConfig{
-		Dns: "",
+	tests := []struct {
+		Name                string
+		EnableReverseLookup bool
+		ExpectedResults     int
+	}{
+		{
+			Name:                "No DNS",
+			EnableReverseLookup: false,
+			ExpectedResults:     1,
+		},
+		{
+			Name:                "With DNS",
+			EnableReverseLookup: true,
+			ExpectedResults:     4,
+		},
 	}
 
-	srv := NewMockServer(t, ctrl, cfg)
+	for _, test := range tests {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
 
-	h := NewUtilHandler(srv)
+		cfg := &config.ServerConfig{
+			EnableReverseLookup: test.EnableReverseLookup,
+		}
 
-	fakeEventStore := srv.Eventstore.(*FakeEventstore)
+		srv := NewMockServer(t, ctrl, cfg)
 
-	fakeEventStore.MSearchResults = append(fakeEventStore.MSearchResults, &model.EventMSearchResults{
-		Responses: []*model.EventSearchResults{
-			{},
-			{},
-			{},
-			{
-				Events: []*model.EventRecord{
-					{
-						Payload: map[string]interface{}{
-							"so.ip_address":  "4.0.0.4",
-							"so.description": "host4",
+		h := NewUtilHandler(srv)
+
+		fakeEventStore := srv.Eventstore.(*FakeEventstore)
+
+		fakeEventStore.MSearchResults = append(fakeEventStore.MSearchResults, &model.EventMSearchResults{
+			Responses: []*model.EventSearchResults{
+				{},
+				{},
+				{},
+				{
+					Events: []*model.EventRecord{
+						{
+							Payload: map[string]interface{}{
+								"so.ip_address":  "4.0.0.4",
+								"so.description": "host4",
+							},
 						},
 					},
 				},
 			},
-		},
-	})
+		})
 
-	body := []byte(`["1.0.0.1", "2.0.0.2", "3.0.0.3", "4.0.0.4", "badip"]`)
+		body := []byte(`["1.0.0.1", "2.0.0.2", "3.0.0.3", "4.0.0.4", "badip"]`)
 
-	r := httptest.NewRequest("PUT", "/reverse-lookup", bytes.NewReader(body))
+		r := httptest.NewRequest("PUT", "/reverse-lookup", bytes.NewReader(body))
 
-	ctx := context.WithValue(context.Background(), web.ContextKeyRequestStart, time.Now())
-	r = r.WithContext(ctx)
+		ctx := context.WithValue(context.Background(), web.ContextKeyRequestStart, time.Now())
+		r = r.WithContext(ctx)
 
-	w := httptest.NewRecorder()
+		w := httptest.NewRecorder()
 
-	h.PutReverseLookup(w, r)
+		h.PutReverseLookup(w, r)
 
-	raw := w.Body.Bytes()
-	results := map[string][]string{}
+		raw := w.Body.Bytes()
+		results := map[string][]string{}
 
-	err := json.Unmarshal(raw, &results)
-	assert.NoError(t, err)
+		err := json.Unmarshal(raw, &results)
+		assert.NoError(t, err)
 
-	assert.Equal(t, 4, len(results))
-	for _, names := range results {
-		assert.NotEmpty(t, names)
+		assert.Equal(t, test.ExpectedResults, len(results))
+		for _, names := range results {
+			assert.NotEmpty(t, names)
+		}
+
+		assert.Equal(t, []string{"host4"}, results["4.0.0.4"])
 	}
-
-	assert.Equal(t, []string{"host4"}, results["4.0.0.4"])
 }

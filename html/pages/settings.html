@@ -137,9 +137,10 @@
 							<v-card-text>
 								<v-form v-for="key in webauthnForm.existingKeys" method="post" :action="authSettingsUrl">
 									<v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
+									<v-text-field name="webauthn_remove" v-model="key.value" class="d-none"></v-text-field>
 									<div :id="'settingsWebauthnExistingKey_' + key.id" class="ml-2">
 										{{ key.name }}
-										<v-btn name="webauthn_remove" icon variant="text" size="small" :value="key.value" :id="'settingsWebauthnDelete_' + key.id" type="submit" color="primary" data-aid="user_settings_webauth_unlink" >
+										<v-btn icon variant="text" size="small" :id="'settingsWebauthnDelete_' + key.id" type="submit" color="primary" data-aid="user_settings_webauth_unlink" >
 											<v-icon>fa-circle-xmark</v-icon>
 										</v-btn>
 									</div>

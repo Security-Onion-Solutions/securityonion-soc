@@ -1,0 +1,249 @@
+<v-container v-if="assistantEnabled" fluid data-aid="assistant_screen">
+	<v-row>
+		<v-col cols="12" lg="3">
+			<h2 v-text="i18n.chat"></h2>
+		</v-col>
+		<v-col cols="12" lg="5">
+			<v-expansion-panels>
+				<v-expansion-panel data-aid="assistant_options">
+					<v-expansion-panel-title id="chatOptionsHeader" expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up">{{i18n.options}}</v-expansion-panel-title>
+					<v-expansion-panel-text>
+						<span data-aid="assistant_increase_max_context_threshold_toggle">
+							<v-switch
+								id="increase-max-context-threshold"
+								v-model="increaseMaxContextThreshold"
+								density="compact"
+								hide-details
+								class="my-0"
+								:label="i18n.increaseMaxContextThreshold"
+								color="primary">
+							</v-switch>
+						</span>
+						<span data-aid="assistant_restore_last_active_toggle">
+							<v-switch
+								id="restore-last-active"
+								v-model="restoreLastActive"
+								density="compact"
+								hide-details
+								class="my-0"
+								:label="i18n.restoreLastActive"
+								color="primary">
+							</v-switch>
+						</span>
+					</v-expansion-panel-text>
+				</v-expansion-panel>
+			</v-expansion-panels>
+		</v-col>
+		<v-spacer></v-spacer>
+		<v-col cols="12" lg="2" align="end">
+			<h4 :data-aid="assistant_credits_remaining">{{ i18n.creditsRemaining }}: <span :class="creditsRemaining <= lowBalanceColorAlert ? 'text-error' : 'text-primary'">{{ formatCount(creditsRemaining) }}</span></h4>
+		</v-col>
+	</v-row>
+	<v-row>
+		<!-- Main Chat Area -->
+		<v-col cols="12" lg="9">
+			<v-card id="chat-container" class="chat-container">
+				<v-card-title id="chat-header" class="py-3 d-flex align-center">
+					<v-icon class="mr-2">fa-comments</v-icon>
+					<span class="flex-grow-1">{{ i18n.chatTitle }}</span>
+					<div class="text-wrap" style="font-size: 14px;">{{ i18n.contextLength }}: <span :class="getContextColor(contextLength)">{{ formatCount(contextLength) }}</span></div>
+				</v-card-title>
+				<v-divider></v-divider>
+				<v-card-text id="chat-messages" class="chat-messages pa-0">
+					<div class="pa-4">
+						<div v-for="(message, index) in messages" :key="index" :id="'message-' + index" class="message-item mb-3">
+							<div class="d-flex align-start">
+								<v-avatar id="message-avatar" size="32" class="mr-3" :color="message.role === 'user' ? 'primary' : 'secondary'">
+									<v-icon v-if="message.role === 'user'" class="text-white" size="small">fa-user</v-icon>
+									<img v-else src="images/favicon/onion.png" alt="Assistant" style="width: 24px; height: 24px;">
+								</v-avatar>
+								<div class="flex-grow-1">
+									<div id="message-header" class="d-flex align-center mb-1">
+										<span class="font-weight-medium text-body-2 mr-2">{{ message.role === 'user' ? i18n.you : i18n.chat }}</span>
+										<span class="text-caption text-medium-emphasis mr-2">{{ formatTimestamp(message.timestamp) }}</span>
+										<span class="text-caption text-primary" v-if="message.usage && message.usage.credits">{{ message.usage.credits }} {{ i18n.creditsLowercase }}</span>
+									</div>
+									<div id="message-content" class="text-body-2" :key="message.content" v-html="formatMarkdown(message.content)"></div>
+									
+									<!-- Tool Use Display -->
+									<div v-if="message.toolUses && message.toolUses.length > 0" class="mt-3">
+										<div v-for="toolUse in message.toolUses" :key="toolUse.id" class="tool-use-card mb-2">
+											<v-card id="tool-use-card" variant="outlined" class="pa-3">
+												<div class="d-flex align-center mb-2">
+													<v-icon :color="getToolStatusColor(toolUse.status)" class="mr-2" size="small">
+														{{ getToolStatusIcon(toolUse.status) }}
+													</v-icon>
+													<span class="font-weight-medium text-body-2">{{ toolUse.name }}</span>
+													<v-spacer></v-spacer>
+													<v-chip :color="getToolStatusColor(toolUse.status)" size="x-small" variant="flat">
+														{{ toolUse.status }}
+													</v-chip>
+												</div>
+												
+												<!-- Tool Parameters -->
+												<div v-if="Object.keys(toolUse.input).length > 0" class="mb-2">
+													<div class="text-caption text-medium-emphasis mb-1">{{ i18n.parameters }}:</div>
+													<v-code class="text-caption">{{ JSON.stringify(toolUse.input, null, 2) }}</v-code>
+												</div>
+												
+												<!-- Tool Approval Buttons -->
+												<div v-if="toolUse.status === 'pending_approval'" class="mb-2">
+													<div class="text-caption text-medium-emphasis mb-1">{{ i18n.toolExecuteQuestion }}</div>
+													<div id="tool-approval-buttons" class="d-flex tool-approval-buttons">
+														<v-btn
+															id="approve-tool-button"
+															color="success"
+															size="small"
+															variant="flat"
+															@click="approveTool(toolUse)"
+															data-aid="assistant_tool_use_approve"
+														>
+															<v-icon size="small" class="mr-1">fa-check</v-icon>
+															{{ i18n.approve }}
+														</v-btn>
+														<v-btn
+															id="reject-tool-button"
+															color="error"
+															size="small"
+															variant="flat"
+															@click="rejectTool(toolUse)"
+															data-aid="assistant_tool_use_reject"
+														>
+															<v-icon size="small" class="mr-1">fa-times</v-icon>
+															{{ i18n.reject }}
+														</v-btn>
+													</div>
+												</div>
+												
+												<!-- Raw Tool Result Dropdown -->
+												<div v-if="toolUse.rawResult && toolUse.status === 'completed'" class="mb-2">
+													<v-expansion-panels id="tool-result-expansion" variant="accordion" class="tool-result-expansion">
+														<v-expansion-panel id="tool-result-panel">
+															<v-expansion-panel-title id="tool-result-header" class="text-caption" expand-icon="fa-angle-down" collapse-icon="fa-angle-up">
+																{{ i18n.rawToolResult }}
+															</v-expansion-panel-title>
+															<v-expansion-panel-text id="tool-result-content">
+																<v-code id="tool-result-code" class="text-caption d-block" style="white-space: pre-wrap; max-height: 300px; overflow-y: auto; width: 100%; max-width: 100%; overflow-x: auto;">{{ toolUse.rawResult }}</v-code>
+															</v-expansion-panel-text>
+														</v-expansion-panel>
+													</v-expansion-panels>
+												</div>
+												
+												<!-- Tool Error -->
+												<div v-if="(toolUse.status === 'error' || toolUse.status === 'rejected') && toolUse.error" class="mb-2">
+													<div class="text-caption text-medium-emphasis mb-1">{{ toolUse.status === 'rejected' ? 'Rejected:' : 'Error:' }}</div>
+													<div class="text-error text-body-2">{{ toolUse.error }}</div>
+												</div>
+												
+												<!-- Execution Time -->
+												<div v-if="toolUse.completedAt" class="text-caption text-medium-emphasis">
+													{{ i18n.completed }}: {{ formatTimestamp(toolUse.completedAt) }}
+												</div>
+											</v-card>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+						<div id="chat-empty-state" v-if="messages.length === 0" class="text-center text-medium-emphasis py-8">
+							<img src="images/favicon/onion.png" alt="Assistant" style="width: 24px; height: 24px;" class="mb-4">
+							<div>{{ i18n.chatEmpty }}</div>
+						</div>
+						<div id="typing-indicator" v-if="isTyping" class="message-item mb-3">
+							<div class="d-flex align-start">
+								<v-avatar size="32" class="mr-3" color="secondary">
+									<img src="images/favicon/onion.png" alt="Assistant" style="width: 24px; height: 24px;">
+								</v-avatar>
+								<div class="flex-grow-1">
+									<div class="d-flex align-center mb-1">
+										<span class="font-weight-medium text-body-2 mr-2">{{ i18n.chat }}</span>
+										<span class="text-caption text-medium-emphasis">{{ i18n.typing }}...</span>
+									</div>
+									<div class="text-body-2">
+										<v-progress-linear indeterminate color="secondary" height="2"></v-progress-linear>
+										<span class="text-caption text-medium-emphasis">{{ i18n.thinking }}...</span>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+				</v-card-text>
+				<v-divider></v-divider>
+				<v-card-actions class="pa-4 d-flex align-center">
+					<v-text-field
+						id="chat-input-field"
+						v-model="newMessage"
+						:placeholder="i18n.chatPlaceholder"
+						variant="outlined"
+						density="compact"
+						hide-details
+						autocomplete="off"
+						spellcheck="false"
+						class="chat-input flex-grow-1 mr-3"
+						@keyup.enter="sendMessage"
+						:disabled="isTyping"
+						data-aid="assistant_chat_input"
+					></v-text-field>
+					<v-btn
+						id="chat-send-button"
+						color="primary"
+						:disabled="!newMessage.trim() || isTyping"
+						@click="sendMessage"
+						data-aid="assistant_chat_send"
+						class="flex-shrink-0"
+					>
+						<v-icon>{{ isTyping ? 'fa-hourglass-half' : 'fa-paper-plane' }}</v-icon>
+					</v-btn>
+				</v-card-actions>
+			</v-card>
+		</v-col>
+		
+		<!-- Recent Chats Sidebar -->
+		<v-col cols="12" lg="3">
+			<v-card id="chat-history-sidebar" class="chat-history-sidebar">
+				<v-card-title id="chat-history-header" class="py-3 d-flex align-center">
+					<v-icon class="mr-2">fa-history</v-icon>
+					<span class="flex-grow-1">{{ i18n.chatHistory }}</span>
+					<v-btn id="chat-new-button" icon variant="text" size="x-small" @click="startNewChat" :title="i18n.chatNewChat" data-aid="assistant_chat_history_create">
+						<v-icon size="small">fa-plus</v-icon>
+					</v-btn>
+				</v-card-title>
+				<v-divider></v-divider>
+				<v-card-text id="chat-history-content" class="chat-history-content pa-0">
+					<v-list id="chat-history-list" v-if="chatHistory.length > 0">
+						<v-list-item
+							v-for="chat in chatHistory.slice().reverse()"
+							:key="chat.id"
+							@click="loadChat(chat)"
+							:class="{ 'bg-primary': chat.id === currentChatId }"
+							data-aid="assistant_chat_history_item"
+						>
+							<v-list-item-title class="text-wrap">{{ chat.title }}</v-list-item-title>
+							<v-list-item-subtitle>{{ formatChatDate(chat.lastUpdated) }}</v-list-item-subtitle>
+							<template #append>
+								<v-btn id="chat-delete-button" icon variant="text" size="small" @click.stop="deleteChat(chat.sessionId)" data-aid="assistant_chat_history_delete">
+									<v-icon size="small" color="error">fa-trash</v-icon>
+								</v-btn>
+							</template>
+						</v-list-item>
+					</v-list>
+					<div id="chat-history-empty" v-else class="text-center text-medium-emphasis py-8">
+						<v-icon size="48" class="mb-4">fa-history</v-icon>
+						<div>{{ i18n.chatNoHistory }}</div>
+					</div>
+				</v-card-text>
+			</v-card>
+		</v-col>
+	</v-row>
+	
+</v-container>
+
+<v-container v-else fluid data-aid="assistant_unavailable">
+	<div style="
+		align-items: center;
+		margin: 0;
+		display: flex;
+		min-height: 50vh;
+		justify-content: center;
+	">{{ i18n.featureUnavailable }}</div>
+</v-container>

@@ -144,7 +144,9 @@
         <v-main>
           <v-overlay id="loading" v-model="loading" scrim="#212121" data-aid="overlay_loading">
             <v-container min-height="100vh" min-width="100vw" class="d-flex align-center justify-center">
-              <v-progress-circular indeterminate :size="50" color="primary" class=""></v-progress-circular>
+              <v-progress-circular indeterminate :size="50" color="primary" class="">
+                <v-icon v-if="loadingCancelCallback" @click="loadingCancelCallback">fa-xmark</v-icon>
+              </v-progress-circular>
             </v-container>
           </v-overlay>
           <v-snackbar id="error" location="top centered" :timeout="errorTimeout" v-model="error" color="error" data-aid="banner_error">
@@ -182,7 +184,7 @@
                 <v-icon>fa-times</v-icon>
               </v-btn>
             </template>
-            {{ tipMessage }}
+            <div v-html="tipMessage" class="tip-message"></div>
           </v-snackbar>
           <router-view id="main-view"></router-view>
         </v-main>
@@ -200,7 +202,7 @@
           <span class="text-no-wrap d-md-none" data-aid="copyright_display">
             &copy; {{ new Date().getFullYear() }}
             <a class="footer mx-1" :target="$root.target('sos')" href="https://securityonionsolutions.com/" data-aid="nav_sos">
-              SOS
+              Security Onion
             </a>
           </span>
           <v-spacer></v-spacer>
@@ -222,6 +224,12 @@
                 <v-icon>fa-home</v-icon>
               </template>
               <v-list-item-title v-text="i18n.home"></v-list-item-title>
+            </v-list-item>
+            <v-list-item v-if="isLicensed(FEAT_OAI) && parameters.assistant.enabled" data-aid="nav_assistant" @click="" to="/assistant">
+              <template #prepend>
+                <v-icon>fa-microchip</v-icon>
+              </template>
+              <v-list-item-title v-text="i18n.chat"></v-list-item-title>
             </v-list-item>
             <v-list-item data-aid="nav_alerts" @click="" to="/alerts">
               <template #prepend>
@@ -282,6 +290,12 @@
                 <v-icon>fa-download</v-icon>
               </template>
               <v-list-item-title v-text="i18n.downloads"></v-list-item-title>
+            </v-list-item>
+            <v-list-item  v-if="isLicensed(FEAT_RPT)" @click="" to="/reports" data-aid="nav_reports">
+              <template #prepend>
+                <v-icon>fa-file-export</v-icon>
+              </template>
+              <v-list-item-title v-text="i18n.reports"></v-list-item-title>
             </v-list-item>
             <v-list-group data-aid="nav_admin">
               <template #activator="{ props }">
@@ -374,6 +388,7 @@
     <script src="js/routes/config.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/downloads.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/home.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/assistant.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/hunt.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/jobs.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/job.js?v=VERSION_PLACEHOLDER"></script>

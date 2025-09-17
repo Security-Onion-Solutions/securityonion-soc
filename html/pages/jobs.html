@@ -1,22 +1,26 @@
 <v-container fluid data-aid="jobs_screen">
 	<v-row>
 		<v-col>
-			<h2 v-if="isKind('pcap')" v-text="i18n.jobs"></h2>
-			<h2 v-if="!isKind('pcap')" v-text="kind"></h2>
+			<h2 v-if="isKind('reports')" v-text="i18n.reports"></h2>
+			<h2 v-else v-text="i18n.pcap"></h2>
 		</v-col>
 	</v-row>
 	<v-row>
 		<v-col>
-			<v-toolbar v-if="isKind('pcap')" class="elevation-0 theme-background-lighten-1" fixed>
-				<v-btn variant="flat" color="primary" @click.stop="openNewJobDialog" id="add-pcap-job-button" class="ml-3" data-aid="jobs_create_new">
+			<v-toolbar class="elevation-0 theme-background-lighten-1" fixed>
+				<v-btn v-if="canCreate()" variant="flat" color="primary" @click.stop="openNewJobDialog" id="add-pcap-job-button" class="ml-3" data-aid="jobs_create_new">
 					<v-icon>fa-plus</v-icon>
 				</v-btn>
 				<v-btn variant="flat" color="secondary" @click.stop="loadData()" id="jobs-refresh-button" class="ml-3" data-aid="jobs_refresh_button">
 					<v-icon>fa-sync</v-icon>
+				</v-btn>
+				<v-spacer></v-spacer>
+				<v-btn variant="flat" color="secondary" class="mx-4" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + (isKind('reports') ? 'reports.html' : 'pcap.html')" :title="i18n.contextualDocsBtn" data-aid="jobs_docs">
+					<v-icon>fa-circle-question</v-icon>
 				</v-btn>		  
 			</v-toolbar>
 			<v-data-table :sort-by="sortBy" @update:sort-by="val => sortBy = val" :items-per-page-options="itemsPerPageOptions" v-model:items-per-page="itemsPerPage"
-				must-sort :headers="headers" :items="jobs">
+				must-sort :headers="getHeaders()" :items="jobs">
 				<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
 					<tr>
 						<template v-for="header in columns" :key="header.key">
@@ -36,19 +40,30 @@
 				<template #item="{ item }">
 					<tr>
 						<td>
-							<router-link :to="{ name: 'job', params: {jobId: item.id}}" :style="{ cursor: 'pointer'}" data-aid="jobs_open_id">
+							<router-link v-if="isViewable()" :to="{ name: 'job', params: {jobId: item.id}}" style="cursor: 'pointer'" data-aid="jobs_open_id">
 								{{ item.id }}
 							</router-link>
+							<a v-else-if="isDownloadable() && isDownloadReady(item)" :target="'report-' + item.id" :href="downloadUrl(item)" style="cursor: 'pointer'" data-aid="jobs_download_id">
+								{{ item.id }}
+							</a>
+							<div v-else>
+								{{ item.id }}
+							</div>
 						</td>
 						<td>{{ item.owner }}</td>
 						<td>{{ formatTimestamp(item.createTime) }}</td>
-						<td>{{ formatTimestamp(item.completeTime) }}</td>
-						<td v-text="item.nodeId"></td>
+						<td v-if="isSensorJob()">{{ formatTimestamp(item.completeTime) }}</td>
+						<td v-if="isSensorJob()" v-text="item.nodeId"></td>
+						<td v-else-if="isDownloadable()" v-text="getDescription(item)"></td>
+						<td v-if="isDownloadable()">{{ formatCount(formatDecimal1(item.size / 1000)) }} KB</td>
 						<td><v-chip density="compact" :color="colorJobStatus(item)" data-aid="jobs_status">{{ formatJobStatus(item) }}</v-chip></td>
 						<td>
-							<router-link :to="{ name: 'job', params: {jobId: item.id}}" style="text-decoration: none; cursor: 'pointer'" data-aid="jobs_open">
+							<router-link v-if="isViewable()" :to="{ name: 'job', params: {jobId: item.id}}" style="text-decoration: none; cursor: 'pointer'" data-aid="jobs_open">
 								<v-icon class="mr-2" :title="i18n.view">fa-binoculars</v-icon>
 							</router-link>
+							<a v-if="isDownloadable() && isDownloadReady(item)" :target="'report-' + item.id" :href="downloadUrl(item)" style="text-decoration: none; cursor: 'pointer'" data-aid="jobs_download">
+								<v-icon class="mr-2" :title="i18n.view">fa-download</v-icon>
+							</a>
 							<v-icon class="mr-2" :title="i18n.delete" @click.stop="deleteJob(item)" data-aid="jobs_delete">fa-times-circle</v-icon>
 						</td>
 					</tr>
@@ -61,14 +76,15 @@
 						<v-container grid-list-sm class="pa-4">
 							<v-row>
 								<v-col xs12>
-									<v-text-field variant="underlined" v-model="form.sensorId" :placeholder="i18n.sensorId" persistent-hint :hint="i18n.sensorIdHelp" data-aid="jobs_create_dialog_sensor_id"></v-text-field>
-									<v-text-field variant="underlined" v-model="form.importId" :placeholder="i18n.importId" persistent-hint :hint="i18n.importIdHelp" data-aid="jobs_create_dialog_import_id"></v-text-field>
-									<v-text-field variant="underlined" v-model="form.protocol" :placeholder="i18n.protocol" persistent-hint :hint="i18n.protocolHelp" data-aid="jobs_create_dialog_protocol"></v-text-field>
-									<v-text-field variant="underlined" v-model="form.srcIp" :placeholder="i18n.srcIp" persistent-hint :hint="i18n.srcIpHelp" data-aid="jobs_create_dialog_src_ip"></v-text-field>
-									<v-text-field variant="underlined" v-model="form.srcPort" :placeholder="i18n.srcPort" persistent-hint :hint="i18n.srcPortHelp" data-aid="jobs_create_dialog_src_port"></v-text-field>
-									<v-text-field variant="underlined" v-model="form.dstIp" :placeholder="i18n.dstIp" persistent-hint :hint="i18n.dstIpHelp" data-aid="jobs_create_dialog_dst_ip"></v-text-field>
-									<v-text-field variant="underlined" v-model="form.dstPort" :placeholder="i18n.dstPort" persistent-hint :hint="i18n.dstPortHelp" data-aid="jobs_create_dialog_dst_port"></v-text-field>
-									<v-text-field id="jobtimeframe" variant="underlined" v-model="form.timeframe" :placeholder="i18n.timeFrame" persistent-hint :hint="i18n.timeFrameHelp" data-aid="jobs_create_dialog_timeframe"></v-text-field>
+									<v-text-field v-if="isKind('pcap')" variant="underlined" v-model="form.sensorId" :placeholder="i18n.sensorId" persistent-hint :hint="i18n.sensorIdHelp" data-aid="jobs_create_dialog_sensor_id"></v-text-field>
+									<v-text-field v-if="isKind('pcap')" variant="underlined" v-model="form.importId" :placeholder="i18n.importId" persistent-hint :hint="i18n.importIdHelp" data-aid="jobs_create_dialog_import_id"></v-text-field>
+									<v-text-field v-if="isKind('pcap')" variant="underlined" v-model="form.protocol" :placeholder="i18n.protocol" persistent-hint :hint="i18n.protocolHelp" data-aid="jobs_create_dialog_protocol"></v-text-field>
+									<v-text-field v-if="isKind('pcap')" variant="underlined" v-model="form.srcIp" :placeholder="i18n.srcIp" persistent-hint :hint="i18n.srcIpHelp" data-aid="jobs_create_dialog_src_ip"></v-text-field>
+									<v-text-field v-if="isKind('pcap')" variant="underlined" v-model="form.srcPort" :placeholder="i18n.srcPort" persistent-hint :hint="i18n.srcPortHelp" data-aid="jobs_create_dialog_src_port"></v-text-field>
+									<v-text-field v-if="isKind('pcap')" variant="underlined" v-model="form.dstIp" :placeholder="i18n.dstIp" persistent-hint :hint="i18n.dstIpHelp" data-aid="jobs_create_dialog_dst_ip"></v-text-field>
+									<v-text-field v-if="isKind('pcap')" variant="underlined" v-model="form.dstPort" :placeholder="i18n.dstPort" persistent-hint :hint="i18n.dstPortHelp" data-aid="jobs_create_dialog_dst_port"></v-text-field>
+									<v-select v-if="isKind('reports')" :items="getReportTypes()" v-model="form.type" :rules="[rules.required]" :placeholder="i18n.reportTypePlaceholder" persistent-hint :hint="i18n.reportTypeHelp" data-aid="jobs_create_dialog_kind"></v-select>
+									<v-text-field id="jobtimeframe" variant="underlined" v-model="form.timeframe" :placeholder="i18n.timeFrame" persistent-hint :hint="isKind('reports') ? i18n.timeFrameReportsHelp : i18n.timeFrameHelp" data-aid="jobs_create_dialog_timeframe"></v-text-field>
 								</v-col>
 							</v-row>
 						</v-container>

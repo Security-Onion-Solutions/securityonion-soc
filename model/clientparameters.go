@@ -35,8 +35,9 @@ type ClientParameters struct {
 	InactiveTools       []string             `json:"inactiveTools"`
 	Tools               []ClientTool         `json:"tools"`
 	CasesEnabled        bool                 `json:"casesEnabled"`
-	EnableReverseLookup bool                 `json:"enableReverseLookup"`
 	DetectionsEnabled   bool                 `json:"detectionsEnabled"`
+	ExportNodeId        string               `json:"exportNodeId"`
+	AssistantParams     AssistantParameters  `json:"assistant"`
 }
 
 func (config *ClientParameters) Verify() error {
@@ -169,6 +170,17 @@ func (params *HuntingParameters) combineDeprecatedLinkIntoLinks() {
 type AlertingParameters struct {
 	HuntingParameters
 	MaxBulkEscalateEvents int `json:"maxBulkEscalateEvents"`
+}
+
+type AssistantParameters struct {
+	Enabled                bool    `json:"enabled"`
+	InvestigationPrompt    string  `json:"investigationPrompt"`
+	ContextLimitSmall      int     `json:"contextLimitSmall"`
+	ContextLimitLarge      int     `json:"contextLimitLarge"`
+	ThresholdColorRatioLow float64 `json:"thresholdColorRatioLow"`
+	ThresholdColorRatioMed float64 `json:"thresholdColorRatioMed"`
+	ThresholdColorRatioMax float64 `json:"thresholdColorRatioMax"`
+	LowBalanceColorAlert   int     `json:"lowBalanceColorAlert"`
 }
 
 type PresetParameters struct {

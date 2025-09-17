@@ -39,7 +39,7 @@ func (store *ElasticEventstore) cancelQuery(ctx context.Context, queryId string)
 			log.WithFields(log.Fields{
 				"cancelQueryResponse": string(respJson),
 				"queryId":             queryId,
-			}).WithError(err).Debug("Received elastic query cancellation response")
+			}).WithError(err).Debug("Received elastic query cancelation response")
 			return err
 		}
 	}
@@ -87,7 +87,7 @@ func (store *ElasticEventstore) getActiveQueries(ctx context.Context, filter boo
 }
 
 type ElasticTask struct {
-	Cancellable  bool   `json:"cancellable"`
+	Cancelable   bool   `json:"cancellable"`
 	Action       string `json:"action"`
 	Type         string `json:"type"`
 	StartTime    int64  `json:"start_time_in_millis"`
@@ -117,11 +117,11 @@ func convertFromElasticQueryTaskResults(content string, client *elasticsearch.Cl
 	tasks := make([]*model.QueryTask, 0)
 	for _, node := range elasticTaskResults.Nodes {
 		for taskId, task := range node.Tasks {
-			// Optionally filter out permanent, child, non-cancellable tasks, and this list query itself
+			// Optionally filter out permanent, child, non-cancelable tasks, and this list query itself
 			log.WithField("elasticTask", task).Debug("Found active Elasticsearch task")
 			include := true
 			if filter {
-				if !task.Cancellable {
+				if !task.Cancelable {
 					include = false
 				} else if task.Type == "persistent" {
 					include = false
@@ -133,13 +133,13 @@ func convertFromElasticQueryTaskResults(content string, client *elasticsearch.Cl
 			}
 			if include {
 				queryTask := &model.QueryTask{
-					TaskId:      taskId,
-					Cancellable: task.Cancellable,
-					Details:     fmt.Sprintf("%s (%s)", task.Type, task.Action),
-					StartTime:   time.Unix(0, task.StartTime*int64(time.Millisecond)),
-					ElapsedMs:   task.ElapsedNanos / (1000 * 1000),
-					GridId:      gridId,
-					EsClient:    client,
+					TaskId:     taskId,
+					Cancelable: task.Cancelable,
+					Details:    fmt.Sprintf("%s (%s)", task.Type, task.Action),
+					StartTime:  time.Unix(0, task.StartTime*int64(time.Millisecond)),
+					ElapsedMs:  task.ElapsedNanos / (1000 * 1000),
+					GridId:     gridId,
+					EsClient:   client,
 				}
 				tasks = append(tasks, queryTask)
 			}

@@ -11,7 +11,7 @@ const JobStatusDeleted = 3;
 
 loadPageTemplate('page-jobs', 'pages/jobs.html');
 
-routes.push({ path: '/jobs', name: 'jobs', component: {
+const jobsComponent = {
   template: '#page-jobs',
   data() { return {
     i18n: this.$root.i18n,
@@ -25,6 +25,18 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
       { title: this.$root.i18n.status, value: 'status' },
       { title: this.$root.i18n.actions },
     ],
+    reportHeaders: [
+      { title: this.$root.i18n.id, value: 'id' },
+      { title: this.$root.i18n.owner, value: 'owner' },
+      { title: this.$root.i18n.dateQueued, value: 'createTime' },
+      { title: this.$root.i18n.description, value: 'description' },
+      { title: this.$root.i18n.filesize, value: 'size' },
+      { title: this.$root.i18n.status, value: 'status' },
+      { title: this.$root.i18n.actions },
+    ],
+    rules: {
+      required: value => !!value || this.$root.i18n.required,
+    },
     sortBy: [{ key: 'id', order: 'asc' }],
     itemsPerPage: 10,
     dialog: false,
@@ -37,10 +49,14 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
       srcPort: null,
       dstIp: null,
       dstPort: null,
+      type: null,
       timeframe: '',
     },
     itemsPerPageOptions: [10,50,250,1000],
     kind: '',
+    standardReportTypes: [
+      { title: this.$root.i18n.reportProductivity, value: 'productivity' },
+    ]
   }},
   created() {
     this.loadData();
@@ -57,8 +73,9 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
     async loadData() {
       this.$root.startLoading();
       try {
-        if (this.$route.query.k) {
-          this.kind = this.$route.query.k;
+        this.kind = this.$route.path.replace("/", "");
+        if (this.kind == 'jobs') {
+          this.kind = 'pcap';
         }
         const response = await this.$root.papi.get('jobs', { params: { kind: this.kind }});
         this.jobs = response.data;
@@ -69,6 +86,26 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
       }
       this.$root.stopLoading();
       this.$root.subscribe("job", this.updateJob);
+    },
+    getReportDescription(type) {
+      const types = this.getReportTypes();
+      for (var idx = 0; idx < types.length; idx++) {
+        const reportType = types[idx];
+        if (reportType.value == type) {
+          return reportType.title;
+        }
+      }
+      return type;
+    },
+    getReportTypes() {
+      let types = [];
+      types = types.concat(this.standardReportTypes);
+
+      for (const key in this.$root.getCustomReports()) {
+        types.push({ title: this.$root.getCustomReports()[key], value: key });
+      }
+      
+      return types;
     },
     loadUserDetails() {
       for (var i = 0; i < this.jobs.length; i++) {
@@ -93,7 +130,7 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
       this.form.srcPort = localStorage['settings.jobs.addJobForm.srcPort'];
       this.form.dstIp = localStorage['settings.jobs.addJobForm.dstIp'];
       this.form.dstPort = localStorage['settings.jobs.addJobForm.dstPort'];
-      this.form.timeframe = localStorage['settings.jobs.addJobForm.timeframe'];
+      this.form.timeframe = localStorage['settings.jobs.addJobForm.' + this.kind + '.timeframe'];
     },
     updateJob(job) {
       for (var i = 0; i < this.jobs.length; i++) {
@@ -109,9 +146,18 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
       }
     },
     submitAddJob(event) {
-      this.addJob(this.form.sensorId, this.form.importId, this.form.protocol, this.form.srcIp, this.form.srcPort, this.form.dstIp, this.form.dstPort, this.form.timeframe);
+      switch (this.kind) {
+        case 'reports':
+          this.addExportJob();
+          break;
+        default:
+          this.addJob(this.form.sensorId, this.form.importId, this.form.protocol, this.form.srcIp, this.form.srcPort, this.form.dstIp, this.form.dstPort, this.form.timeframe);
+      }
       this.dialog = false;
       this.saveAddJobForm();
+
+      // Auto refresh the job list after a short delay
+      setTimeout(this.loadData, 500);
     },
     saveAddJobForm() {
       if (this.form.sensorId) localStorage['settings.jobs.addJobForm.sensorId'] = this.form.sensorId;
@@ -121,7 +167,7 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
       if (this.form.srcPort) localStorage['settings.jobs.addJobForm.srcPort'] = this.form.srcPort;
       if (this.form.dstIp) localStorage['settings.jobs.addJobForm.dstIp'] = this.form.dstIp;
       if (this.form.dstPort) localStorage['settings.jobs.addJobForm.dstPort'] = this.form.dstPort;
-      if (this.form.timeframe) localStorage['settings.jobs.addJobForm.timeframe'] = this.form.timeframe;
+      if (this.form.timeframe) localStorage['settings.jobs.addJobForm.' + this.kind + '.timeframe'] = this.form.timeframe;
     },
     clearAddJobForm() {
       this.form.sensorId = null;
@@ -133,14 +179,29 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
       this.form.dstPort = null;
       this.form.timeframe = '';
       $('#jobtimeframe').val('');
-      localStorage.removeItem('settings.jobs.addJobForm.sensorId');
-      localStorage.removeItem('settings.jobs.addJobForm.importId');
-      localStorage.removeItem('settings.jobs.addJobForm.protocol');
-      localStorage.removeItem('settings.jobs.addJobForm.srcIp');
-      localStorage.removeItem('settings.jobs.addJobForm.srcPort');
-      localStorage.removeItem('settings.jobs.addJobForm.dstIp');
-      localStorage.removeItem('settings.jobs.addJobForm.dstPort');
-      localStorage.removeItem('settings.jobs.addJobForm.timeframe');
+      if (this.isKind("pcap")) {
+        localStorage.removeItem('settings.jobs.addJobForm.sensorId');
+        localStorage.removeItem('settings.jobs.addJobForm.importId');
+        localStorage.removeItem('settings.jobs.addJobForm.protocol');
+        localStorage.removeItem('settings.jobs.addJobForm.srcIp');
+        localStorage.removeItem('settings.jobs.addJobForm.srcPort');
+        localStorage.removeItem('settings.jobs.addJobForm.dstIp');
+        localStorage.removeItem('settings.jobs.addJobForm.dstPort');
+      }
+      localStorage.removeItem('settings.jobs.addJobForm.' + this.kind + '.timeframe');
+    },
+    addExportJob() {
+      let beginDate;
+      let endDate;
+      if (this.form.timeframe) {
+        const [beginTime, endTime] = this.form.timeframe.split(' - ', 2);
+        beginDate = moment(beginTime, this.i18n.timePickerFormat).format(/* ISO 8601 */);
+        endDate = moment(endTime, this.i18n.timePickerFormat).format(/* ISO 8601 */);
+      }
+      this.$root.export({
+        type: this.form.type,
+        description: this.getReportDescription(this.form.type),
+      }, beginDate, endDate);
     },
     async addJob(sensorId, importId, protocol, srcIp, srcPort, dstIp, dstPort, timeframe) {
       try {
@@ -218,7 +279,7 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
       return color;
     },
     isKind(kind) {
-      if (this.kind == '' && kind == 'pcap') {
+      if ((this.kind == '' || this.kind == 'jobs') && kind == 'pcap') {
         return true;
       }
       return this.kind == kind;
@@ -251,5 +312,80 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
         $(this).val(value);
       });
     },
+    isComplete(job) {
+      return job.status == JobStatusCompleted;
+    },
+    downloadUrl(job) {
+      return this.$root.apiUrl + "stream?jobId=" + job.id;
+    },
+    isViewable() {
+      switch(this.kind) {
+        case 'reports':
+          return false;
+      }
+      return true;
+    },
+    isDownloadable(job) {
+      switch(this.kind) {
+        case 'reports':
+          return true
+      }
+      return false;
+    },
+    isDownloadReady(job) {
+      return this.isComplete(job) && job.size > 0;
+    },
+    canCreate() {
+      switch(this.kind) {
+        case 'reports':
+          return this.$root.isLicensed(this.$root.FEAT_RPT);
+      }
+      return true;
+    },
+    isSensorJob() {
+      switch(this.kind) {
+        case 'reports':
+          return false;
+      }
+      return true;
+    },
+    getHeaders() {
+      switch(this.kind) {
+        case 'reports':
+          return this.reportHeaders;
+      }
+      return this.headers;        
+    },
+    getDescription(job) {
+      var desc = "";
+      switch(this.kind) {
+        case 'reports':
+          if (job.filter.parameters.description) {
+            desc = job.filter.parameters.description;
+          } else {
+            desc = this.$root.localizeMessage(job.filter.parameters.type);
+          }
+          if (job.filter.parameters.id) {
+            desc += " " + job.filter.parameters.id
+          } else if (job.filter.beginTime != '0001-01-01T00:00:00Z' && job.filter.endTime != '0001-01-01T00:00:00Z') {
+            var start = moment(job.filter.beginTime).format(this.i18n.dateFormat);
+            var end = moment(job.filter.endTime).format(this.i18n.dateFormat);
+            desc += ": " + start + " - " + end;
+          }
+          if (job.fileExtension != "bin") {
+            desc += " [" + this.$root.localizeMessage(job.fileExtension) + "]";
+          }
+          break;
+        default:
+          desc = JSON.stringify(job.filter.parameters);
+      }
+      return desc;
+    },
   }
-}});
+};
+
+const pcapComponent = Object.assign({}, jobsComponent);
+routes.push({path: '/jobs', name: 'jobs', component: pcapComponent });
+
+const reportsComponent = Object.assign({}, jobsComponent);
+routes.push({ path: '/reports', name: 'reports', component: reportsComponent});

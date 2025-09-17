@@ -62,7 +62,7 @@ routes.push({ path: '/queries', name: 'queries', component: {
         const response = await this.$root.papi.post('query/cancel/' + this.cancelQueryTask.taskId, {
             gridId: this.cancelQueryTask.gridId
         });
-        this.$root.showTip(this.i18n.queryCancelled);
+        this.$root.showTip(this.i18n.queryCanceled);
       } catch (error) {
         this.$root.showError(error);
       }

@@ -51,6 +51,7 @@ const FEAT_STG = "stg"
 const FEAT_TTR = "ttr"
 const FEAT_RPT = "rpt"
 const FEAT_VRT = "vrt"
+const FEAT_OAI = "oai"
 
 const PUBLIC_KEY = `
 -----BEGIN PUBLIC KEY-----
@@ -79,7 +80,7 @@ type licenseManager struct {
 	expirationTimer *time.Timer
 	effectiveTimer  *time.Timer
 	pillarTimer     *time.Timer
-	licenseKey      *LicenseKey
+	licenseKey      *SignedLicenseKey
 }
 
 type LicenseKey struct {
@@ -119,7 +120,7 @@ var manager *licenseManager
 
 func newLicenseManager() *licenseManager {
 	return &licenseManager{
-		available: make([]string, 0, 0),
+		available: make([]string, 0),
 		limits:    make(map[string]bool),
 	}
 }
@@ -133,7 +134,7 @@ func getPublicKey() (*rsa.PublicKey, error) {
 	return anyKey.(*rsa.PublicKey), nil
 }
 
-func parseLicense(key string) (*LicenseKey, []byte, []byte, error) {
+func parseLicense(key string) (*SignedLicenseKey, []byte, []byte, error) {
 	decodedKey, decodeErr := base64.StdEncoding.DecodeString(strings.TrimSpace(key))
 	if decodeErr != nil {
 		return nil, nil, nil, decodeErr
@@ -166,10 +167,10 @@ func parseLicense(key string) (*LicenseKey, []byte, []byte, error) {
 		return nil, nil, nil, decodeErr
 	}
 
-	return hashableKey, messageBytes, sigBytes, nil
+	return originalKey, messageBytes, sigBytes, nil
 }
 
-func verify(key string) (*LicenseKey, error) {
+func verify(key string) (*SignedLicenseKey, error) {
 	pubKey, keyErr := getPublicKey()
 	if keyErr != nil {
 		return nil, keyErr
@@ -212,6 +213,7 @@ func CreateAvailableFeatureList() []string {
 	available = append(available, FEAT_TTR)
 	available = append(available, FEAT_RPT)
 	available = append(available, FEAT_VRT)
+	available = append(available, FEAT_OAI)
 	return available
 }
 
@@ -219,7 +221,7 @@ func Init(key string) {
 	available := CreateAvailableFeatureList()
 
 	status := LICENSE_STATUS_UNPROVISIONED
-	licenseKey := &LicenseKey{}
+	licenseKey := &SignedLicenseKey{LicenseKey: &LicenseKey{}}
 
 	if key != "" {
 		license, err := verify(key)
@@ -252,11 +254,11 @@ func Test(feat string, users int, nodes int, socUrl string, dataUrl string) {
 	available := CreateAvailableFeatureList()
 
 	pillarFilename = "/tmp/soc_test_pillar_monitor.sls"
-	licenseKey := &LicenseKey{}
+	licenseKey := &SignedLicenseKey{LicenseKey: &LicenseKey{}}
 	licenseKey.Expiration = time.Now().Add(time.Minute * 1)
 
 	if len(feat) > 0 {
-		features := make([]string, 0, 0)
+		features := make([]string, 0)
 		features = append(features, feat)
 		licenseKey.Features = features
 	}
@@ -276,7 +278,7 @@ func Shutdown() {
 	stopMonitor()
 }
 
-func createManager(status string, available []string, licenseKey *LicenseKey, startMonitors bool) {
+func createManager(status string, available []string, signedLicenseKey *SignedLicenseKey, startMonitors bool) {
 	mutex.Lock()
 	defer mutex.Unlock()
 
@@ -285,7 +287,7 @@ func createManager(status string, available []string, licenseKey *LicenseKey, st
 	manager = newLicenseManager()
 	manager.status = status
 	manager.available = available
-	manager.licenseKey = licenseKey
+	manager.licenseKey = signedLicenseKey
 
 	if (status == LICENSE_STATUS_ACTIVE || status == LICENSE_STATUS_PENDING) && startMonitors {
 		go startExpirationMonitor()
@@ -311,7 +313,7 @@ func createManager(status string, available []string, licenseKey *LicenseKey, st
 
 func startExpirationMonitor() {
 	if manager.licenseKey.Expiration.After(time.Now()) {
-		duration := manager.licenseKey.Expiration.Sub(time.Now())
+		duration := time.Until(manager.licenseKey.Expiration)
 		if manager.expirationTimer != nil {
 			log.Error("Expiration timer is already running; aborting thread")
 			return
@@ -329,7 +331,7 @@ func startExpirationMonitor() {
 
 func startEffectiveMonitor() {
 	if manager.licenseKey.Effective.After(time.Now()) {
-		duration := manager.licenseKey.Effective.Sub(time.Now())
+		duration := time.Until(manager.licenseKey.Effective)
 		if manager.effectiveTimer != nil {
 			log.Error("Effective timer is already running; aborting thread")
 			return
@@ -439,7 +441,7 @@ func stopMonitor() {
 				log.Info("stopped all license monitors")
 				break
 			}
-			time.Sleep(100)
+			time.Sleep(100 * time.Nanosecond)
 		}
 		manager.status = LICENSE_STATUS_INVALID
 	}
@@ -463,7 +465,7 @@ func IsEnabled(feat string) bool {
 }
 
 func ListAvailableFeatures() []string {
-	available := make([]string, 0, 0)
+	available := make([]string, 0)
 	if manager == nil || manager.status != LICENSE_STATUS_ACTIVE {
 		return available
 	}
@@ -474,7 +476,7 @@ func ListAvailableFeatures() []string {
 }
 
 func ListEnabledFeatures() []string {
-	enabled := make([]string, 0, 0)
+	enabled := make([]string, 0)
 	if manager == nil || manager.status == LICENSE_STATUS_UNPROVISIONED {
 		return enabled
 	}
@@ -488,13 +490,17 @@ func ListEnabledFeatures() []string {
 	return enabled
 }
 
-func GetLicenseKey() *LicenseKey {
+func GetLicenseKey() *SignedLicenseKey {
 	if manager == nil {
 		return nil
 	}
-	copy := *manager.licenseKey
-	copy.Features = ListEnabledFeatures()
-	return &copy
+	keyCopy := *(manager.licenseKey.LicenseKey)
+	ret := SignedLicenseKey{
+		LicenseKey: &keyCopy,
+		Signature:  manager.licenseKey.Signature,
+	}
+	ret.Features = ListEnabledFeatures()
+	return &ret
 }
 
 func GetStatus() string {

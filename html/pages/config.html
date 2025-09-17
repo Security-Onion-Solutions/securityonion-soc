@@ -207,7 +207,7 @@
 										<router-link data-aid="config_quicklink_hunt_queries" :to="{name: 'config', query: {s: 'soc.config.server.client.hunt.queries'}}">{{i18n.configQLSOCHunt}}</router-link>
 									</li>
 									<li>
-										<router-link data-aid="config_quicklink_reverse_lookup" :to="{name: 'config', query: {s: 'soc.config.server.client.enableReverseLookup'}}">{{i18n.configQLSOCDNS}}</router-link>
+										<router-link data-aid="config_quicklink_reverse_lookup" :to="{name: 'config', query: {s: 'soc.config.server.enableReverseLookup'}}">{{i18n.configQLSOCDNS}}</router-link>
 									</li>
 								</ul>
 							</li>
@@ -302,7 +302,7 @@
 													<div class="my-1" v-for="(element, elementIdx) in selected.uiElements" :key="elementIdx">
 														<v-textarea v-if="isMultiline(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" @update:model-value="markDirtyEntries" variant="outlined" :label="getElementLabel(element)" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="editing config-editor" :data-aid="'config_item_entry_' + element.field"></v-textarea>
 														<v-switch v-else-if="isToggle(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" inset @update:model-value="markDirtyEntries" variant="outlined" :label="getElementLabel(element)" :readonly="isUiElementReadonly(entry, element)" v-model="entry[element.field]" class="no-details" :data-aid="'config_item_entry_' + element.field"></v-switch>
-														<v-select v-else-if="isSelectList(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" :items="element.options" :multiple="hasMultipleValues(element)" inset @update:model-value="markDirtyEntries" :label="getElementLabel(element)" variant="outlined" :label="element.label" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="no-details" :data-aid="'config_item_entry_' + element.field"></v-select>
+														<v-select v-else-if="isSelectList(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" :items="element.options" :multiple="hasMultipleValues(element)" inset @update:model-value="markDirtyEntries" :label="getElementLabel(element)" variant="outlined" :label="element.label" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="no-details mb-6" :data-aid="'config_item_entry_' + element.field"></v-select>
 														<v-text-field v-else :id="'setting-entry-' + entryIdx + '-input-' + element.field" @update:model-value="markDirtyEntries" variant="outlined" :label="getElementLabel(element)" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="editing" :data-aid="'config_item_entry_' + element.field"></v-text-field>
 													</div>
 												</v-form>

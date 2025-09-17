@@ -31,7 +31,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/elastic/go-elasticsearch/v8/esutil"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
@@ -41,6 +40,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
+	"github.com/elastic/go-elasticsearch/v8/esutil"
 	"github.com/google/uuid"
 	"github.com/kennygrant/sanitize"
 	"github.com/samber/lo"
@@ -573,9 +573,9 @@ func (e *ElastAlertEngine) SyncLocalDetections(ctx context.Context, detections [
 				continue
 			}
 
-			err = e.WriteFile(path, []byte(wrapped), 0644)
+			err = e.writeFileWithCleanup(path, []byte(wrapped), 0644)
 			if err != nil {
-				errMap[det.PublicID] = fmt.Sprintf("unable to write enabled detection file: %s", err)
+				errMap[det.PublicID] = err.Error()
 				continue
 			}
 		} else {
@@ -1352,9 +1352,9 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 				path = filepath.Join(e.elastAlertRulesFolder, fmt.Sprintf("%s.yml", name))
 			}
 
-			err = e.WriteFile(path, []byte(rule), 0644)
+			err = e.writeFileWithCleanup(path, []byte(rule), 0644)
 			if err != nil {
-				errMap[detect.PublicID] = fmt.Errorf("unable to write enabled detection file: %s", err)
+				errMap[detect.PublicID] = err
 				continue
 			}
 		} else if path != "" {
@@ -1554,7 +1554,7 @@ func (e *ElastAlertEngine) downloadSigmaPackages() (zipData map[string][]byte, e
 			continue
 		}
 
-		resp, err := e.MakeRequest(req)
+		resp, err := e.MakeRequest(req, false)
 		if err != nil {
 			errMap[pkg] = err
 			continue
@@ -2165,4 +2165,18 @@ func (e *ElastAlertEngine) getDeployedPublicIds() (publicIds []string, err error
 	}
 
 	return publicIds, nil
+}
+
+// writeFileWithCleanup attempts to write a file and cleans up on failure
+func (e *ElastAlertEngine) writeFileWithCleanup(path string, data []byte, perm fs.FileMode) error {
+	err := e.WriteFile(path, data, perm)
+	if err != nil {
+		// Attempt to clean up the potentially corrupted file
+		deleteErr := e.DeleteFile(path)
+		if deleteErr != nil && !os.IsNotExist(deleteErr) {
+			return fmt.Errorf("unable to write enabled detection file (%s) and cleanup failed (%s)", err, deleteErr)
+		}
+		return fmt.Errorf("unable to write enabled detection file: %s", err)
+	}
+	return nil
 }

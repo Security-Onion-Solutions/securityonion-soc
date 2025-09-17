@@ -8,8 +8,6 @@ const routes = [];
 const components = [];
 const templatePromises = [];
 
-const FEAT_TTR = 'ttr';
-
 const LICENSE_STATUS_ACTIVE = "active";
 const LICENSE_STATUS_EXCEEDED = "exceeded";
 const LICENSE_STATUS_EXPIRED = "expired";
@@ -137,6 +135,7 @@ $(document).ready(function () {
           theme: Vuetify.useTheme(),
           i18n: i18n.getLocalizedTranslations(navigator.language),
           loading: false,
+          loadingCancelCallback: null,
           error: false,
           warning: false,
           info: false,
@@ -184,7 +183,6 @@ $(document).ready(function () {
           maximizedCancelFn: null,
           licenseKey: null,
           licenseStatus: null,
-          enableReverseLookup: false,
           ip2host: {},
           securitySettingsAlreadyChecked: false,
           forceUserOtp: false,
@@ -193,6 +191,11 @@ $(document).ready(function () {
           selectedGridId: LOCAL_GRID_ID,
           subgridSelectorEnabled: false,
           statusByGridId: {},
+          exportNodeId: null,
+          customReports: {},
+          FEAT_RPT: 'rpt',
+          FEAT_TTR: 'ttr',
+          FEAT_OAI: 'oai',
         }
       },
       watch: {
@@ -466,8 +469,9 @@ $(document).ready(function () {
                   this.parameters = response.data.parameters;
                   this.elasticVersion = response.data.elasticVersion;
                   this.timezones = response.data.timezones;
-                  this.enableReverseLookup = response.data.parameters.enableReverseLookup;
                   this.subgrids = response.data.subgrids;
+                  this.exportNodeId = response.data.parameters.exportNodeId;
+                  this.customReports = response.data.customReports;
 
                   this.user = await this.getUserById(response.data.userId);
                   if (this.user) {
@@ -569,7 +573,11 @@ $(document).ready(function () {
           }
         },
         getSelectedGridInfo() {
-          return this.gridInfo[this.selectedGridId];
+          const gridInfo = this.gridInfo[this.selectedGridId];
+          return gridInfo;
+        },
+        getCustomReports() {
+          return this.customReports || {};
         },
         checkUserSecuritySettings(infoResponse) {
           // Only force OTP on initial login, otherwise risk user losing data
@@ -870,6 +878,10 @@ $(document).ready(function () {
           return localized;
         },
         showError(msg) {
+          if (msg.name == "CanceledError") {
+            this.showTip(this.i18n.requestCanceled);
+            return;
+          }
           this.error = true;
           this.errorMessage = this.localizeMessage(msg);
           if (this.debug && msg && msg.stack) {
@@ -901,11 +913,12 @@ $(document).ready(function () {
             this.currentTipTimeout = this.tipTimeout;
           }
         },
-        startLoading() {
+        startLoading(cancelCallback = null) {
           this.loading = true;
           this.error = false;
           this.warning = false;
           this.info = false;
+          this.loadingCancelCallback = cancelCallback;
         },
         stopLoading() {
           this.loading = false;
@@ -1025,8 +1038,8 @@ $(document).ready(function () {
           if (response) {
             const redirectCookie = this.getCookie('AUTH_REDIRECT');
             if ((response.headers && response.headers['content-type'] == "text/html") ||
-                (response.status == 401 && response.request.responseURL.indexOf('/api/') == -1) ||
-                (response.request.responseURL.indexOf("/login/banner.md") == -1 && redirectCookie != null && redirectCookie.length > 0)) {
+                (response.status == 401 && response.request.responseURL && response.request.responseURL.indexOf('/api/') == -1) ||
+                (response.request.responseURL && response.request.responseURL.indexOf("/login/banner.md") == -1 && redirectCookie != null && redirectCookie.length > 0)) {
               this.deleteCookie('AUTH_REDIRECT');
               this.showLogin();
               return null
@@ -1059,7 +1072,7 @@ $(document).ready(function () {
         createApi(baseUrl) {
           const ax = axios.create({
             baseURL: baseUrl,
-            timeout: this.connectionTimeout
+            timeout: this.connectionTimeout,
           });
           ax.interceptors.request.use(this.apiRequestCallback, this.apiRequestFailedCallback);
           ax.interceptors.response.use(this.apiSuccessCallback, this.apiFailureCallback);
@@ -1463,12 +1476,9 @@ $(document).ready(function () {
           }
         },
         batchLookup(ips, comp) {
-          if (!this.enableReverseLookup) {
-            return;
-          }
-
           ips = ips.filter(ip => (this.isIPv4(ip) || this.isIPv6(ip)) && !this.ip2host[ip]);
           if (ips.length) {
+            ips = [...new Set(ips)];
             ips.forEach(ip => this.ip2host[ip] = []);
             const route = this;
 
@@ -1512,10 +1522,6 @@ $(document).ready(function () {
           return b === true || ("" + b).toLowerCase() == "true";
         },
         pickHostname(ip) {
-          if (!this.enableReverseLookup) {
-            return '';
-          }
-
           const arr = this.ip2host[ip];
           if (arr && arr.length) {
             const names = this.ip2host[ip].filter(host => host != ip);
@@ -1535,7 +1541,27 @@ $(document).ready(function () {
           const before = moment(d).subtract(1, 'second').format(this.i18n.timePickerFormat);
           const after = moment(d).add(1, 'second').format(this.i18n.timePickerFormat);
           return `${before} - ${after}`;
-        }
+        },
+        async export(params, beginDate, endDate) {
+          this.startLoading();
+          try {
+            const response = await this.papi.post('job/', {
+              kind: 'reports',
+              nodeId: this.exportNodeId,
+              filter: {
+                beginTime: beginDate,
+                endTime: endDate,
+                parameters: params
+              }
+            });
+            if (response && response.data) {
+              this.showTip(this.i18n.exportJobEnqueued.replace('{jobId}', response.data.id));
+            }
+          } catch (error) {
+            this.showError(error);
+          }
+          this.stopLoading();
+        },
       },
       created() {
         this.log("Initializing application components");
