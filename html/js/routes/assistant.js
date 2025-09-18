@@ -20,8 +20,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     contextLength: 0, // Track total context length
     increaseMaxContextThreshold: false, // Toggle for max context threshold
     restoreLastActive: false, // Toggle to restore last active chat
-    alwaysApproveQueryEvents: false, // Toggle to always approve query_events tools
-    alwaysApprovePlaybookQuestions: false, // Toggle to always approve get_playbook_questions tools
+    alwaysApproveReadRequests: false,
     assistantEnabled: false,
     isStreaming: false,
     contextLimitSmall: 200000,
@@ -34,8 +33,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
   async created() {
     this.loadContextThresholdSetting();
     this.loadLastActiveSetting();
-    this.loadQueryEventsApprovalSetting();
-    this.loadPlaybookQuestionsApprovalSetting();
+    this.loadReadApprovalSetting();
     this.loadChatHistory();
   },
   beforeUnmount() {
@@ -58,11 +56,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     'restoreLastActive' () {
       this.saveLastActiveSetting();
     },
-    'alwaysApproveQueryEvents'() {
-      this.saveQueryEventsApprovalSetting();
-    },
-    'alwaysApprovePlaybookQuestions'() {
-      this.savePlaybookQuestionsApprovalSetting();
+    'alwaysApproveReadRequests'() {
+      this.saveReadApprovalSetting();
     }
   },
   methods: {
@@ -1293,56 +1288,49 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }
     },
 
-    // Save and load settings for query_events tool approval
-    saveQueryEventsApprovalSetting() {
+    saveReadApprovalSetting() {
       try {
-        localStorage.setItem('so-chat-always-approve-query-events', this.alwaysApproveQueryEvents.toString());
+        localStorage.setItem('so-chat-always-approve-read-requests', this.alwaysApproveReadRequests.toString());
       } catch (error) {
-        this.$root.showError(this.i18n.assistantSaveQueryEventsError + ': ' + error.message);
+        this.$root.showError(this.i18n.assistantSaveReadApprovalError + ': ' + error.message);
       }
     },
     
-    loadQueryEventsApprovalSetting() {
+    loadReadApprovalSetting() {
       try {
-        const saved = localStorage.getItem('so-chat-always-approve-query-events');
+        const saved = localStorage.getItem('so-chat-always-approve-read-requests');
         if (saved !== null) {
-          this.alwaysApproveQueryEvents = saved === 'true';
+          this.alwaysApproveReadRequests = saved === 'true';
         }
       } catch (error) {
-        this.$root.showError(this.i18n.assistantLoadQueryEventsError + ': ' + error.message);
-      }
-    },
-
-    // Save and load settings for get_playbook_questions tool approval
-    savePlaybookQuestionsApprovalSetting() {
-      try {
-        localStorage.setItem('so-chat-always-approve-playbook-questions', this.alwaysApprovePlaybookQuestions.toString());
-      } catch (error) {
-        this.$root.showError(this.i18n.assistantSavePlaybookQuestionsError + ': ' + error.message);
-      }
-    },
-    
-    loadPlaybookQuestionsApprovalSetting() {
-      try {
-        const saved = localStorage.getItem('so-chat-always-approve-playbook-questions');
-        if (saved !== null) {
-          this.alwaysApprovePlaybookQuestions = saved === 'true';
-        }
-      } catch (error) {
-        this.$root.showError(this.i18n.assistantLoadPlaybookQuestionsError + ': ' + error.message);
+        this.$root.showError(this.i18n.assistantLoadReadApprovalError + ': ' + error.message);
       }
     },
 
     // Check if a tool should be auto-approved based on localStorage settings
     shouldAutoApproveTool(toolName) {
-      switch (toolName) {
-        case 'query_events':
-          return this.alwaysApproveQueryEvents;
-        case 'get_playbook_questions':
-          return this.alwaysApprovePlaybookQuestions;
-        default:
-          return false;
-      }
+      return ['query_events', 'get_playbook_questions'].includes(toolName) && this.alwaysApproveReadRequests;
+    },
+
+    // Open the options menu programmatically
+    openOptionsMenu() {
+      this.$nextTick(() => {
+        // Find the options expansion panel and open it
+        const optionsPanel = this.$el.querySelector('[data-aid="assistant_options"]');
+        if (optionsPanel) {
+          // Trigger click on the expansion panel title to open it
+          const panelTitle = optionsPanel.querySelector('.v-expansion-panel-title');
+          if (panelTitle) {
+            panelTitle.click();
+          }
+        }
+        
+        // Scroll to the options panel
+        const optionsHeader = this.$el.querySelector('#chatOptionsHeader');
+        if (optionsHeader) {
+          optionsHeader.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      });
     }
   }
 }});

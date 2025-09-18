@@ -30,25 +30,14 @@
 								color="primary">
 							</v-switch>
 						</span>
-						<span data-aid="assistant_always_approve_query_events_toggle">
+						<span data-aid="assistant_always_approve_reads_toggle">
 							<v-switch
-								id="always-approve-query-events"
-								v-model="alwaysApproveQueryEvents"
+								id="always-approve-read-requests"
+								v-model="alwaysApproveReadRequests"
 								density="compact"
 								hide-details
 								class="my-0"
-								:label="i18n.alwaysApproveQueryEvents"
-								color="primary">
-							</v-switch>
-						</span>
-						<span data-aid="assistant_always_approve_playbook_questions_toggle">
-							<v-switch
-								id="always-approve-playbook-questions"
-								v-model="alwaysApprovePlaybookQuestions"
-								density="compact"
-								hide-details
-								class="my-0"
-								:label="i18n.alwaysApprovePlaybookQuestions"
+								:label="i18n.alwaysApproveReadRequests"
 								color="primary">
 							</v-switch>
 						</span>
@@ -133,6 +122,17 @@
 														>
 															<v-icon size="small" class="mr-1">fa-times</v-icon>
 															{{ i18n.reject }}
+														</v-btn>
+														<v-btn
+															id="options-tool-button"
+															icon
+															variant="text"
+															size="x-small"
+															@click="openOptionsMenu"
+															data-aid="assistant_tool_use_options"
+															style="min-width: auto;"
+														>
+															<v-icon size="small">fa-cog</v-icon>
 														</v-btn>
 													</div>
 												</div>
