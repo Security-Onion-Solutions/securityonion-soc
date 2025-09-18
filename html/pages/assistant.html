@@ -30,6 +30,28 @@
 								color="primary">
 							</v-switch>
 						</span>
+						<span data-aid="assistant_always_approve_query_events_toggle">
+							<v-switch
+								id="always-approve-query-events"
+								v-model="alwaysApproveQueryEvents"
+								density="compact"
+								hide-details
+								class="my-0"
+								:label="i18n.alwaysApproveQueryEvents"
+								color="primary">
+							</v-switch>
+						</span>
+						<span data-aid="assistant_always_approve_playbook_questions_toggle">
+							<v-switch
+								id="always-approve-playbook-questions"
+								v-model="alwaysApprovePlaybookQuestions"
+								density="compact"
+								hide-details
+								class="my-0"
+								:label="i18n.alwaysApprovePlaybookQuestions"
+								color="primary">
+							</v-switch>
+						</span>
 					</v-expansion-panel-text>
 				</v-expansion-panel>
 			</v-expansion-panels>
@@ -112,6 +134,20 @@
 															<v-icon size="small" class="mr-1">fa-times</v-icon>
 															{{ i18n.reject }}
 														</v-btn>
+													</div>
+												</div>
+												
+												<!-- Tool Executing Spinner -->
+												<div v-if="toolUse.status === 'executing'" class="mb-2">
+													<div class="d-flex align-center">
+														<v-progress-circular
+															indeterminate
+															color="warning"
+															size="16"
+															width="2"
+															class="mr-2"
+														></v-progress-circular>
+														<span class="text-caption text-medium-emphasis">{{ i18n.toolExecuting }}</span>
 													</div>
 												</div>
 												

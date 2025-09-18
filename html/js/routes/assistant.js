@@ -20,6 +20,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     contextLength: 0, // Track total context length
     increaseMaxContextThreshold: false, // Toggle for max context threshold
     restoreLastActive: false, // Toggle to restore last active chat
+    alwaysApproveQueryEvents: false, // Toggle to always approve query_events tools
+    alwaysApprovePlaybookQuestions: false, // Toggle to always approve get_playbook_questions tools
     assistantEnabled: false,
     isStreaming: false,
     contextLimitSmall: 200000,
@@ -32,6 +34,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
   async created() {
     this.loadContextThresholdSetting();
     this.loadLastActiveSetting();
+    this.loadQueryEventsApprovalSetting();
+    this.loadPlaybookQuestionsApprovalSetting();
     this.loadChatHistory();
   },
   beforeUnmount() {
@@ -53,6 +57,12 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     'restoreLastActive' () {
       this.saveLastActiveSetting();
+    },
+    'alwaysApproveQueryEvents'() {
+      this.saveQueryEventsApprovalSetting();
+    },
+    'alwaysApprovePlaybookQuestions'() {
+      this.savePlaybookQuestionsApprovalSetting();
     }
   },
   methods: {
@@ -559,12 +569,23 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
                       toolUse.input = JSON.parse(toolUse.inputJson);
                     }
                     
-                    // Set status to pending approval instead of executing
-                    toolUse.status = 'pending_approval';
-                    toolUse.approved = null;
+                    // Check if this tool should be auto-approved
+                    if (this.shouldAutoApproveTool(toolUse.name)) {
+                      // Auto-approve the tool
+                      toolUse.status = 'executing';
+                      toolUse.approved = true;
+                      // Execute the tool immediately
+                      this.$nextTick(() => {
+                        this.executeTool(toolUse);
+                      });
+                    } else {
+                      // Set status to pending approval instead of executing
+                      toolUse.status = 'pending_approval';
+                      toolUse.approved = null;
+                    }
                   } catch (error) {
                     toolUse.status = 'error';
-                    toolUse.error = 'Failed to parse tool input: ' + error.message;
+                    toolUse.error = this.i18n.assistantToolParseInputError + ': ' + error.message;
                   }
                   this.scrollToBottom();
                 }
@@ -827,12 +848,23 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
                       chainedToolUse.input = JSON.parse(chainedToolUse.inputJson);
                     }
                     
-                    // Set status to pending approval
-                    chainedToolUse.status = 'pending_approval';
-                    chainedToolUse.approved = null;
+                    // Check if this chained tool should be auto-approved
+                    if (this.shouldAutoApproveTool(chainedToolUse.name)) {
+                      // Auto-approve the chained tool
+                      chainedToolUse.status = 'executing';
+                      chainedToolUse.approved = true;
+                      // Execute the tool immediately
+                      this.$nextTick(() => {
+                        this.executeTool(chainedToolUse);
+                      });
+                    } else {
+                      // Set status to pending approval
+                      chainedToolUse.status = 'pending_approval';
+                      chainedToolUse.approved = null;
+                    }
                   } catch (error) {
                     chainedToolUse.status = 'error';
-                    chainedToolUse.error = 'Failed to parse tool input: ' + error.message;
+                    chainedToolUse.error = this.i18n.assistantToolParseInputError + ': ' + error.message;
                   }
                   this.scrollToBottom();
                 }
@@ -1258,6 +1290,58 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         }
       } catch (error) {
         this.$root.showError(this.i18n.assistantLoadRecentError + ': ' + error.message);
+      }
+    },
+
+    // Save and load settings for query_events tool approval
+    saveQueryEventsApprovalSetting() {
+      try {
+        localStorage.setItem('so-chat-always-approve-query-events', this.alwaysApproveQueryEvents.toString());
+      } catch (error) {
+        this.$root.showError(this.i18n.assistantSaveQueryEventsError + ': ' + error.message);
+      }
+    },
+    
+    loadQueryEventsApprovalSetting() {
+      try {
+        const saved = localStorage.getItem('so-chat-always-approve-query-events');
+        if (saved !== null) {
+          this.alwaysApproveQueryEvents = saved === 'true';
+        }
+      } catch (error) {
+        this.$root.showError(this.i18n.assistantLoadQueryEventsError + ': ' + error.message);
+      }
+    },
+
+    // Save and load settings for get_playbook_questions tool approval
+    savePlaybookQuestionsApprovalSetting() {
+      try {
+        localStorage.setItem('so-chat-always-approve-playbook-questions', this.alwaysApprovePlaybookQuestions.toString());
+      } catch (error) {
+        this.$root.showError(this.i18n.assistantSavePlaybookQuestionsError + ': ' + error.message);
+      }
+    },
+    
+    loadPlaybookQuestionsApprovalSetting() {
+      try {
+        const saved = localStorage.getItem('so-chat-always-approve-playbook-questions');
+        if (saved !== null) {
+          this.alwaysApprovePlaybookQuestions = saved === 'true';
+        }
+      } catch (error) {
+        this.$root.showError(this.i18n.assistantLoadPlaybookQuestionsError + ': ' + error.message);
+      }
+    },
+
+    // Check if a tool should be auto-approved based on localStorage settings
+    shouldAutoApproveTool(toolName) {
+      switch (toolName) {
+        case 'query_events':
+          return this.alwaysApproveQueryEvents;
+        case 'get_playbook_questions':
+          return this.alwaysApprovePlaybookQuestions;
+        default:
+          return false;
       }
     }
   }
