@@ -272,9 +272,10 @@ func filterEvents(events []*model.EventRecord) []map[string]any {
 		"destination.ip", "destination.port",
 		"dns.query.name", "dns.query_name", // Both formats
 		"event.category", "event.module", "event.dataset", "event.severity", "event.severity_label",
+		"event_data.agent.name", "event_data.host.os.name",
 		"file.mime_type", "file.name",
 		"hash.md5", "hash.sha1",
-		"host.mac",
+		"host.mac", "host.os.name",
 		"http.method", "http.useragent", "http.virtual_host",
 		"log.id.uid",
 		"network.community_id", "network.protocol", "network.transport",
@@ -285,8 +286,8 @@ func filterEvents(events []*model.EventRecord) []map[string]any {
 		"software.name", "software.type", "software.version.unparsed",
 		"source.ip", "source.port",
 		"ssh.cypher_algorithm", "ssh.client", "ssh.server",
-		"ssl.cipher", "ssl.server_name", "ssl.version",
-		"user.name",
+		"ssl.cipher", "ssl.server_name", "ssl.version", "system.auth.sudo.command",
+		"user.name", "user.effective.name",
 		"weird.name",
 		"tags", // Important for identifying event types
 	}
