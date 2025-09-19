@@ -354,7 +354,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     // Helper method to parse JSON chunks and handle concatenated/partial JSON
     parseJsonChunk(chunk) {
       try {
-        return { success: true, data: JSON.parse(chunk), isPartial: false };
+        return { success: true, data: JSON.parse(chunk), isPartial: null };
       } catch {
         // Handle partial JSON or multiple concatenated JSON objects
         const splitChunks = [];
@@ -875,7 +875,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       return this.$root.formatTimestamp(timestamp);
     },
     formatMarkdown(text) {
-      md = this.$root.formatMarkdown(text, handleMermaid=true);
+      md = this.$root.formatMarkdown(text, true);
       if (!this.isStreaming) {
         this.$nextTick(() => {
           this.$root.renderMermaid();
