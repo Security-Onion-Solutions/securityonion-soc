@@ -350,6 +350,208 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         this.isTyping = false;
       }
     },
+    
+    // Helper method to parse JSON chunks and handle concatenated/partial JSON
+    parseJsonChunk(chunk) {
+      try {
+        return { success: true, data: JSON.parse(chunk), isPartial: false };
+      } catch {
+        // Handle partial JSON or multiple concatenated JSON objects
+        const splitChunks = [];
+        let currentChunk = '';
+        let braceCount = 0;
+        let inString = false;
+        let escaped = false;
+        
+        for (let j = 0; j < chunk.length; j++) {
+          const char = chunk[j];
+          currentChunk += char;
+          
+          if (escaped) {
+            escaped = false;
+            continue;
+          }
+          
+          if (char === '\\') {
+            escaped = true;
+            continue;
+          }
+          
+          if (char === '"') {
+            inString = !inString;
+            continue;
+          }
+          
+          if (!inString) {
+            if (char === '{') {
+              braceCount++;
+            } else if (char === '}') {
+              braceCount--;
+              if (braceCount === 0) {
+                // Complete JSON object found
+                splitChunks.push(currentChunk);
+                currentChunk = '';
+              }
+            }
+          }
+        }
+        
+        // If we found complete JSON objects, return them for processing
+        if (splitChunks.length > 0) {
+          return {
+            success: true,
+            data: splitChunks,
+            isPartial: currentChunk.trim() ? currentChunk : null
+          };
+        } else if (currentChunk.trim()) {
+          // No complete JSON found, treat entire chunk as partial
+          return { success: false, data: null, isPartial: currentChunk };
+        } else {
+          // Fallback: treat as partial
+          return { success: false, data: null, isPartial: chunk };
+        }
+      }
+    },
+    
+    // Helper method to process streaming chunks and handle partial data
+    processStreamingChunks(value, chunks, partial) {
+      // Cleanup the data, split messages apart, remove SSE label, filter out empty lines
+      const newChunks = value.split('\n\n').filter(d => d.trim()).map(d => (d.startsWith("data: ") ? d.slice(6) : d));
+      
+      // If the last read had partial data, prepend it to the new data and process it again
+      if (partial) {
+        newChunks[0] = chunks[0] + newChunks[0];
+        partial = false;
+      }
+      
+      return { chunks: newChunks, partial };
+    },
+    
+    // Helper method to handle message_start event
+    handleMessageStart(c, assistantMessage) {
+      this.isTyping = false;
+
+      assistantMessage = {
+        role: 'assistant',
+        content: Vue.ref(''), // MUST be ref
+        timestamp: new Date().toISOString(),
+        usage: Vue.ref(null),
+        toolUses: Vue.ref([]) // Track tool uses in this message
+      };
+
+      // Sometimes usage comes in message_start
+      let messageUsage = null;
+      if (c.message && c.message.usage) {
+        messageUsage = c.message.usage;
+      }
+
+      this.messages.push(assistantMessage);
+      this.scrollToBottom();
+      
+      return { assistantMessage, messageUsage };
+    },
+    
+    // Helper method to handle content_block_start event
+    handleContentBlockStart(c, assistantMessage) {
+      // Handle tool use blocks
+      if (c.content_block && c.content_block.type === 'tool_use') {
+        const toolUse = {
+          id: c.content_block.id,
+          name: c.content_block.name,
+          input: c.content_block.input || {},
+          inputJson: '', // Accumulate input JSON from deltas
+          status: 'preparing', // Start as preparing, not executing
+          result: null,
+          error: null,
+          rawResult: null, // Will store the raw tool result
+          timestamp: new Date().toISOString(),
+          blockIndex: c.index, // Store the block index for tracking
+          approved: null // null = pending, true = approved, false = rejected
+        };
+        
+        if (assistantMessage) {
+          assistantMessage.toolUses.value.push(toolUse);
+          this.executingTools.set(toolUse.id, toolUse);
+          // Also track by block index for delta updates
+          this.executingTools.set(`block_${c.index}`, toolUse);
+          this.scrollToBottom();
+        }
+      }
+    },
+    
+    // Helper method to handle content_block_delta event
+    handleContentBlockDelta(c, assistantMessage) {
+      if (assistantMessage && c.delta.type === 'text_delta') {
+        // update the ref's value
+        assistantMessage.content.value += c.delta.text;
+        this.scrollToBottom();
+      } else if (c.delta.type === 'input_json_delta') {
+        // Handle tool input updates - accumulate the JSON
+        const toolUse = this.executingTools.get(`block_${c.index}`);
+        if (toolUse) {
+          toolUse.inputJson += c.delta.partial_json;
+          toolUse.status = 'preparing';
+          this.scrollToBottom();
+        }
+      }
+    },
+    
+    // Helper method to handle content_block_stop event
+    handleContentBlockStop(c) {
+      let messageUsage = null;
+      
+      // Handle tool input completion - wait for user approval
+      const toolUse = this.executingTools.get(`block_${c.index}`);
+      if (toolUse && toolUse.status === 'preparing') {
+        try {
+          // Parse the accumulated JSON input
+          if (toolUse.inputJson) {
+            toolUse.input = JSON.parse(toolUse.inputJson);
+          }
+          
+          // Check if this tool should be auto-approved
+          if (this.shouldAutoApproveTool(toolUse.name)) {
+            // Auto-approve the tool
+            toolUse.status = 'executing';
+            toolUse.approved = true;
+            // Execute the tool immediately
+            this.$nextTick(() => {
+              this.executeTool(toolUse);
+            });
+          } else {
+            // Set status to pending approval instead of executing
+            toolUse.status = 'pending_approval';
+            toolUse.approved = null;
+          }
+        } catch (error) {
+          toolUse.status = 'error';
+          toolUse.error = this.i18n.assistantToolParseInputError + ': ' + error.message;
+        }
+        this.scrollToBottom();
+      }
+      
+      // Sometimes usage comes here
+      if (c.usage) {
+        messageUsage = c.usage;
+      }
+      
+      return messageUsage;
+    },
+    
+    // Helper method to handle message_stop event
+    handleMessageStop(assistantMessage, messageUsage) {
+      // Store usage information with the message if available
+      if (assistantMessage && messageUsage) {
+        // Set the ref's value
+        assistantMessage.usage.value = messageUsage;
+        // Update context length
+        this.updateContextLength(messageUsage);
+        this.$forceUpdate();
+      }
+      
+      return { assistantMessage: null, messageUsage: null };
+    },
+    
     async callAIAPI(userMessage) {
       try {
         const response = await this.$root.papi.post('/assistant/chat', {
@@ -379,217 +581,84 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           const { done, value } = await reader.read();
           if (done) break;
           
-          // cleanup the data, split messages apart, remove SSE label, filter out empty lines
-          const newChunks = value.split('\n\n').filter(d => d.trim()).map(d => (d.startsWith("data: ") ? d.slice(6) : d));
-          
-          // if the last read had partial data, prepend it to the new data and process it again
-          if (partial) {
-            newChunks[0] = chunks[0] + newChunks[0]
-            partial = false;
-          }
-
-          chunks = newChunks;
+          // Process streaming chunks using helper method
+          const chunkResult = this.processStreamingChunks(value, chunks, partial);
+          chunks = chunkResult.chunks;
+          partial = chunkResult.partial;
           
           // process each chunk
           for (let i = 0; i < chunks.length; i++) {
             if (chunks[i] === '[DONE]') {
-              // DONE done
               assistantMessage = null;
               continue;
             }
 
-            // attempt to parse chunk
-            let c;
-            try {
-              c = JSON.parse(chunks[i]);
-            } catch {
-              // Handle partial JSON or multiple concatenated JSON objects
-              const chunk = chunks[i];
-              
-              // Try to split concatenated JSON objects by finding complete JSON boundaries
-              const splitChunks = [];
-              let currentChunk = '';
-              let braceCount = 0;
-              let inString = false;
-              let escaped = false;
-              
-              for (let j = 0; j < chunk.length; j++) {
-                const char = chunk[j];
-                currentChunk += char;
-                
-                if (escaped) {
-                  escaped = false;
-                  continue;
-                }
-                
-                if (char === '\\') {
-                  escaped = true;
-                  continue;
-                }
-                
-                if (char === '"') {
-                  inString = !inString;
-                  continue;
-                }
-                
-                if (!inString) {
-                  if (char === '{') {
-                    braceCount++;
-                  } else if (char === '}') {
-                    braceCount--;
-                    if (braceCount === 0) {
-                      // Complete JSON object found
-                      splitChunks.push(currentChunk);
-                      currentChunk = '';
-                    }
-                  }
-                }
-              }
-              
-              // If we found complete JSON objects, process them first
-              if (splitChunks.length > 0) {
-                // We successfully split concatenated JSON objects, reprocess them
-                chunks.splice(i, 1, ...splitChunks);
-                i--; // Reprocess from current position
-                
-                // If there's remaining partial content, save it for next read
-                if (currentChunk.trim()) {
-                  partial = true;
-                  chunks.push(currentChunk);
-                }
-                continue;
-              } else if (currentChunk.trim()) {
-                // No complete JSON found, treat entire chunk as partial
+            // Parse JSON chunk using helper method
+            const parseResult = this.parseJsonChunk(chunks[i]);
+            
+            if (!parseResult.success) {
+              // Handle partial JSON
+              if (parseResult.isPartial) {
                 partial = true;
-                chunks = [currentChunk];
-                break;
-              } else {
-                // Fallback: treat as partial
-                partial = true;
-                chunks = [chunk];
+                chunks = [parseResult.isPartial];
                 break;
               }
+              continue;
+            }
+            
+            // Handle multiple JSON objects in one chunk
+            if (Array.isArray(parseResult.data)) {
+              chunks.splice(i, 1, ...parseResult.data);
+              i--; // Reprocess from current position
+              
+              // If there's remaining partial content, save it for next read
+              if (parseResult.isPartial) {
+                partial = true;
+                chunks.push(parseResult.isPartial);
+              }
+              continue;
             }
 
-            // handle chunk by type
+            const c = parseResult.data;
+
+            // handle chunk by type using helper methods
             switch (c.type) {
               case 'message_start':
-                this.isTyping = false;
-
-                assistantMessage = {
-                  role: 'assistant',
-                  content: Vue.ref(''), // MUST be ref
-                  timestamp: new Date().toISOString(),
-                  usage: Vue.ref(null),
-                  toolUses: Vue.ref([]) // Track tool uses in this message
-                };
-
-                // Sometimes usage comes in message_start
-                if (c.message && c.message.usage) {
-                  messageUsage = c.message.usage;
+                const startResult = this.handleMessageStart(c, assistantMessage);
+                assistantMessage = startResult.assistantMessage;
+                if (startResult.messageUsage) {
+                  messageUsage = startResult.messageUsage;
                 }
-
-                this.messages.push(assistantMessage);
-                this.scrollToBottom();
+                break;
                 
-                break;
               case 'content_block_start':
-                // Handle tool use blocks
-                if (c.content_block && c.content_block.type === 'tool_use') {
-                  const toolUse = {
-                    id: c.content_block.id,
-                    name: c.content_block.name,
-                    input: c.content_block.input || {},
-                    inputJson: '', // Accumulate input JSON from deltas
-                    status: 'preparing', // Start as preparing, not executing
-                    result: null,
-                    error: null,
-                    rawResult: null, // Will store the raw tool result
-                    timestamp: new Date().toISOString(),
-                    blockIndex: c.index, // Store the block index for tracking
-                    approved: null // null = pending, true = approved, false = rejected
-                  };
-                  
-                  if (assistantMessage) {
-                    assistantMessage.toolUses.value.push(toolUse);
-                    this.executingTools.set(toolUse.id, toolUse);
-                    // Also track by block index for delta updates
-                    this.executingTools.set(`block_${c.index}`, toolUse);
-                    this.scrollToBottom();
-                  }
-                }
+                this.handleContentBlockStart(c, assistantMessage);
                 break;
+                
               case 'content_block_delta':
-                if (assistantMessage && c.delta.type === 'text_delta') {
-                  // update the ref's value
-                  assistantMessage.content.value += c.delta.text;
-                  this.scrollToBottom();
-                } else if (c.delta.type === 'input_json_delta') {
-                  // Handle tool input updates - accumulate the JSON
-                  const toolUse = this.executingTools.get(`block_${c.index}`);
-                  if (toolUse) {
-                    toolUse.inputJson += c.delta.partial_json;
-                    toolUse.status = 'preparing';
-                    this.scrollToBottom();
-                  }
-                }
-
+                this.handleContentBlockDelta(c, assistantMessage);
                 break;
+                
+              case 'content_block_stop':
+                const stopUsage = this.handleContentBlockStop(c);
+                if (stopUsage) {
+                  messageUsage = stopUsage;
+                }
+                break;
+                
               case 'message_stop':
-                // Store usage information with the message if available
-                if (assistantMessage && messageUsage) {
-                  // Set the ref's value
-                  assistantMessage.usage.value = messageUsage;
-                  // Update context length
-                  this.updateContextLength(messageUsage);
-                  this.$forceUpdate();
-                }
-
-                assistantMessage = null;
-                messageUsage = null;
+                const stopResult = this.handleMessageStop(assistantMessage, messageUsage);
+                assistantMessage = stopResult.assistantMessage;
+                messageUsage = stopResult.messageUsage;
                 break;
+                
               case 'message_delta':
                 // Handle usage information if present
                 if (c.usage) {
                   messageUsage = c.usage;
                 }
                 break;
-              case 'content_block_stop':
-                // Handle tool input completion - wait for user approval
-                const toolUse = this.executingTools.get(`block_${c.index}`);
-                if (toolUse && toolUse.status === 'preparing') {
-                  try {
-                    // Parse the accumulated JSON input
-                    if (toolUse.inputJson) {
-                      toolUse.input = JSON.parse(toolUse.inputJson);
-                    }
-                    
-                    // Check if this tool should be auto-approved
-                    if (this.shouldAutoApproveTool(toolUse.name)) {
-                      // Auto-approve the tool
-                      toolUse.status = 'executing';
-                      toolUse.approved = true;
-                      // Execute the tool immediately
-                      this.$nextTick(() => {
-                        this.executeTool(toolUse);
-                      });
-                    } else {
-                      // Set status to pending approval instead of executing
-                      toolUse.status = 'pending_approval';
-                      toolUse.approved = null;
-                    }
-                  } catch (error) {
-                    toolUse.status = 'error';
-                    toolUse.error = this.i18n.assistantToolParseInputError + ': ' + error.message;
-                  }
-                  this.scrollToBottom();
-                }
                 
-                // Sometimes usage comes here
-                if (c.usage) {
-                  messageUsage = c.usage;
-                }
-                break;
               default:
                 // Log any unhandled event types that might contain usage
                 if (c.usage) {
@@ -625,6 +694,172 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         this.$root.showError(this.i18n.assistantNoResponse + ': ' + (error.response?.data?.error || error.message));
       }
     },
+    
+    // Helper method to handle message_start event for tool execution
+    handleToolExecutionMessageStart(c, assistantMessage, toolUse) {
+      assistantMessage = {
+        role: 'assistant',
+        content: Vue.ref(''),
+        timestamp: new Date().toISOString(),
+        usage: Vue.ref(null),
+        toolUses: Vue.ref([]), // Track tool uses in this response too
+        isToolResult: true,
+        toolName: toolUse.name,
+        toolId: toolUse.id
+      };
+
+      let messageUsage = null;
+      if (c.message && c.message.usage) {
+        messageUsage = c.message.usage;
+      }
+
+      this.messages.push(assistantMessage);
+      this.scrollToBottom();
+      
+      return { assistantMessage, messageUsage };
+    },
+    
+    // Helper method to handle content_block_start event for tool execution (chained tools)
+    handleToolExecutionContentBlockStart(c, assistantMessage) {
+      // Handle tool use blocks in the response after tool execution
+      if (c.content_block && c.content_block.type === 'tool_use') {
+        const newToolUse = {
+          id: c.content_block.id,
+          name: c.content_block.name,
+          input: c.content_block.input || {},
+          inputJson: '', // Accumulate input JSON from deltas
+          status: 'preparing',
+          result: null,
+          error: null,
+          rawResult: null, // Will store the raw tool result
+          timestamp: new Date().toISOString(),
+          blockIndex: c.index,
+          approved: null
+        };
+        
+        if (assistantMessage) {
+          assistantMessage.toolUses.value.push(newToolUse);
+          this.executingTools.set(newToolUse.id, newToolUse);
+          this.executingTools.set(`block_${c.index}`, newToolUse);
+          this.scrollToBottom();
+        }
+      }
+    },
+    
+    // Helper method to handle content_block_delta event for tool execution
+    handleToolExecutionContentBlockDelta(c, assistantMessage) {
+      if (assistantMessage && c.delta.type === 'text_delta') {
+        assistantMessage.content.value += c.delta.text;
+        this.scrollToBottom();
+      } else if (c.delta.type === 'input_json_delta') {
+        // Handle tool input updates for chained tools
+        const chainedToolUse = this.executingTools.get(`block_${c.index}`);
+        if (chainedToolUse) {
+          chainedToolUse.inputJson += c.delta.partial_json;
+          chainedToolUse.status = 'preparing';
+          this.scrollToBottom();
+        }
+      }
+    },
+    
+    // Helper method to handle content_block_stop event for tool execution (chained tools)
+    handleToolExecutionContentBlockStop(c) {
+      let messageUsage = null;
+      
+      // Handle tool input completion for chained tools
+      const chainedToolUse = this.executingTools.get(`block_${c.index}`);
+      if (chainedToolUse && chainedToolUse.status === 'preparing') {
+        try {
+          // Parse the accumulated JSON input
+          if (chainedToolUse.inputJson) {
+            chainedToolUse.input = JSON.parse(chainedToolUse.inputJson);
+          }
+          
+          // Check if this chained tool should be auto-approved
+          if (this.shouldAutoApproveTool(chainedToolUse.name)) {
+            // Auto-approve the chained tool
+            chainedToolUse.status = 'executing';
+            chainedToolUse.approved = true;
+            // Execute the tool immediately
+            this.$nextTick(() => {
+              this.executeTool(chainedToolUse);
+            });
+          } else {
+            // Set status to pending approval
+            chainedToolUse.status = 'pending_approval';
+            chainedToolUse.approved = null;
+          }
+        } catch (error) {
+          chainedToolUse.status = 'error';
+          chainedToolUse.error = this.i18n.assistantToolParseInputError + ': ' + error.message;
+        }
+        this.scrollToBottom();
+      }
+      
+      // Sometimes usage comes here
+      if (c.usage) {
+        messageUsage = c.usage;
+      }
+      
+      return messageUsage;
+    },
+    
+    // Helper method to handle message_stop event for tool execution
+    handleToolExecutionMessageStop(assistantMessage, messageUsage) {
+      if (assistantMessage && messageUsage) {
+        assistantMessage.usage.value = messageUsage;
+        // Update context length for tool result messages too
+        this.updateContextLength(messageUsage);
+        this.$forceUpdate();
+      }
+      return { assistantMessage: null, messageUsage: null };
+    },
+    
+    // Helper method to capture raw tool result from backend
+    async captureRawToolResult(toolUse) {
+      setTimeout(async () => {
+        try {
+          // Reload the chat history to get the raw result that was just saved
+          const response = await this.$root.papi.get(`/assistant/sessions/${this.currentChatId}`);
+          if (response.data && Array.isArray(response.data)) {
+            // Find the last tool result message for this tool
+            for (let i = response.data.length - 1; i >= 0; i--) {
+              const msg = response.data[i];
+              if (msg.tags && msg.tags.includes('tool_result')) {
+                let rawResult = null;
+                let toolError = null;
+                const textBlock = msg.message.contentBlocks.find(block => block.type === 'text');
+                if (textBlock && textBlock.text) {
+                  // Parse the tool result format: "ToolUseId: tooluse_QdvZoVlXQNm0PBuqFuqRmA, Result: [actual_result_data]"
+                  const toolResultText = textBlock.text;
+                  const toolUseIdMatch = toolResultText.match(/ToolUseId:\s*([^,]+)/);
+                  const resultMatch = toolResultText.match(/Result:\s*(.+)$/s);
+                  const errorMatch = toolResultText.match(/Error:\s*([^,]+)/);
+                  
+                  if (toolUseIdMatch && resultMatch && errorMatch) {
+                    rawResult = resultMatch[1].trim();
+                    toolError = errorMatch[1].trim();
+                  }
+                }
+                // This is a tool result - associate it with our tool use
+                toolUse.rawResult = rawResult;
+                toolUse.completedAt = msg.createTime;
+                if (toolError != "<nil>") {
+                  toolUse.error = toolError;
+                  toolUse.status = "error";
+                } else {
+                  toolUse.status = "completed";
+                }
+                break;
+              }
+            }
+          }
+        } catch (error) {
+          this.$root.showError(this.i18n.assistantNoRawToolResult + ': ' + error.message);
+        }
+      }, 1000); // Wait 1 second for the backend to save the result
+    },
+    
     scrollToBottom() {
       this.$nextTick(() => {
         const messagesContainer = this.$el.querySelector('.chat-messages');
@@ -656,7 +891,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     async executeTool(toolUse) {
       try {
-        
         // Create ToolRequest object with history and params
         // Session ID should already be set by sendMessage()
         const toolRequest = {
@@ -691,14 +925,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           const { done, value } = await reader.read();
           if (done) break;
           
-          const newChunks = value.split('\n\n').filter(d => d.trim()).map(d => (d.startsWith("data: ") ? d.slice(6) : d));
-          
-          if (partial) {
-            newChunks[0] = chunks[0] + newChunks[0]
-            partial = false;
-          }
-
-          chunks = newChunks;
+          // Process streaming chunks using helper method
+          const chunkResult = this.processStreamingChunks(value, chunks, partial);
+          chunks = chunkResult.chunks;
+          partial = chunkResult.partial;
           
           for (let i = 0; i < chunks.length; i++) {
             if (chunks[i] === '[DONE]') {
@@ -706,179 +936,63 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
               continue;
             }
 
-            let c;
-            try {
-              c = JSON.parse(chunks[i]);
-            } catch {
-              // Handle partial JSON similar to callAIAPI
-              const chunk = chunks[i];
-              const splitChunks = [];
-              let currentChunk = '';
-              let braceCount = 0;
-              let inString = false;
-              let escaped = false;
-              
-              for (let j = 0; j < chunk.length; j++) {
-                const char = chunk[j];
-                currentChunk += char;
-                
-                if (escaped) {
-                  escaped = false;
-                  continue;
-                }
-                
-                if (char === '\\') {
-                  escaped = true;
-                  continue;
-                }
-                
-                if (char === '"') {
-                  inString = !inString;
-                  continue;
-                }
-                
-                if (!inString) {
-                  if (char === '{') {
-                    braceCount++;
-                  } else if (char === '}') {
-                    braceCount--;
-                    if (braceCount === 0) {
-                      splitChunks.push(currentChunk);
-                      currentChunk = '';
-                    }
-                  }
-                }
-              }
-              
-              if (splitChunks.length > 0) {
-                chunks.splice(i, 1, ...splitChunks);
-                i--;
-                
-                if (currentChunk.trim()) {
-                  partial = true;
-                  chunks.push(currentChunk);
-                }
-                continue;
-              } else if (currentChunk.trim()) {
+            // Parse JSON chunk using helper method
+            const parseResult = this.parseJsonChunk(chunks[i]);
+            
+            if (!parseResult.success) {
+              // Handle partial JSON
+              if (parseResult.isPartial) {
                 partial = true;
-                chunks = [currentChunk];
-                break;
-              } else {
-                partial = true;
-                chunks = [chunk];
+                chunks = [parseResult.isPartial];
                 break;
               }
+              continue;
+            }
+            
+            // Handle multiple JSON objects in one chunk
+            if (Array.isArray(parseResult.data)) {
+              chunks.splice(i, 1, ...parseResult.data);
+              i--; // Reprocess from current position
+              
+              // If there's remaining partial content, save it for next read
+              if (parseResult.isPartial) {
+                partial = true;
+                chunks.push(parseResult.isPartial);
+              }
+              continue;
             }
 
-            // Handle streaming chunks for tool result response
+            const c = parseResult.data;
+
+            // Handle streaming chunks for tool result response using helper methods
             switch (c.type) {
               case 'message_start':
-                assistantMessage = {
-                  role: 'assistant',
-                  content: Vue.ref(''),
-                  timestamp: new Date().toISOString(),
-                  usage: Vue.ref(null),
-                  toolUses: Vue.ref([]), // Track tool uses in this response too
-                  isToolResult: true,
-                  toolName: toolUse.name,
-                  toolId: toolUse.id
-                };
-
-                if (c.message && c.message.usage) {
-                  messageUsage = c.message.usage;
+                const startResult = this.handleToolExecutionMessageStart(c, assistantMessage, toolUse);
+                assistantMessage = startResult.assistantMessage;
+                if (startResult.messageUsage) {
+                  messageUsage = startResult.messageUsage;
                 }
-
-                this.messages.push(assistantMessage);
-                this.scrollToBottom();
                 break;
 
               case 'content_block_start':
-                // Handle tool use blocks in the response after tool execution
-                if (c.content_block && c.content_block.type === 'tool_use') {
-                  const newToolUse = {
-                    id: c.content_block.id,
-                    name: c.content_block.name,
-                    input: c.content_block.input || {},
-                    inputJson: '', // Accumulate input JSON from deltas
-                    status: 'preparing',
-                    result: null,
-                    error: null,
-                    rawResult: null, // Will store the raw tool result
-                    timestamp: new Date().toISOString(),
-                    blockIndex: c.index,
-                    approved: null
-                  };
-                  
-                  if (assistantMessage) {
-                    assistantMessage.toolUses.value.push(newToolUse);
-                    this.executingTools.set(newToolUse.id, newToolUse);
-                    this.executingTools.set(`block_${c.index}`, newToolUse);
-                    this.scrollToBottom();
-                  }
-                }
+                this.handleToolExecutionContentBlockStart(c, assistantMessage);
                 break;
 
               case 'content_block_delta':
-                if (assistantMessage && c.delta.type === 'text_delta') {
-                  assistantMessage.content.value += c.delta.text;
-                  this.scrollToBottom();
-                } else if (c.delta.type === 'input_json_delta') {
-                  // Handle tool input updates for chained tools
-                  const chainedToolUse = this.executingTools.get(`block_${c.index}`);
-                  if (chainedToolUse) {
-                    chainedToolUse.inputJson += c.delta.partial_json;
-                    chainedToolUse.status = 'preparing';
-                    this.scrollToBottom();
-                  }
-                }
+                this.handleToolExecutionContentBlockDelta(c, assistantMessage);
                 break;
 
               case 'content_block_stop':
-                // Handle tool input completion for chained tools
-                const chainedToolUse = this.executingTools.get(`block_${c.index}`);
-                if (chainedToolUse && chainedToolUse.status === 'preparing') {
-                  try {
-                    // Parse the accumulated JSON input
-                    if (chainedToolUse.inputJson) {
-                      chainedToolUse.input = JSON.parse(chainedToolUse.inputJson);
-                    }
-                    
-                    // Check if this chained tool should be auto-approved
-                    if (this.shouldAutoApproveTool(chainedToolUse.name)) {
-                      // Auto-approve the chained tool
-                      chainedToolUse.status = 'executing';
-                      chainedToolUse.approved = true;
-                      // Execute the tool immediately
-                      this.$nextTick(() => {
-                        this.executeTool(chainedToolUse);
-                      });
-                    } else {
-                      // Set status to pending approval
-                      chainedToolUse.status = 'pending_approval';
-                      chainedToolUse.approved = null;
-                    }
-                  } catch (error) {
-                    chainedToolUse.status = 'error';
-                    chainedToolUse.error = this.i18n.assistantToolParseInputError + ': ' + error.message;
-                  }
-                  this.scrollToBottom();
-                }
-                
-                // Sometimes usage comes here
-                if (c.usage) {
-                  messageUsage = c.usage;
+                const stopUsage = this.handleToolExecutionContentBlockStop(c);
+                if (stopUsage) {
+                  messageUsage = stopUsage;
                 }
                 break;
 
               case 'message_stop':
-                if (assistantMessage && messageUsage) {
-                  assistantMessage.usage.value = messageUsage;
-                  // Update context length for tool result messages too
-                  this.updateContextLength(messageUsage);
-                  this.$forceUpdate();
-                }
-                assistantMessage = null;
-                messageUsage = null;
+                const stopResult = this.handleToolExecutionMessageStop(assistantMessage, messageUsage);
+                assistantMessage = stopResult.assistantMessage;
+                messageUsage = stopResult.messageUsage;
                 break;
 
               case 'message_delta':
@@ -900,50 +1014,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         
         this.isStreaming = false;
 
-        // After streaming is complete, check if we need to capture the raw result
-        // The raw result will be in the next message that gets saved to backend
-        // We'll capture it by monitoring the messages array for new tool result messages
-        setTimeout(async () => {
-          try {
-            // Reload the chat history to get the raw result that was just saved
-            const response = await this.$root.papi.get(`/assistant/sessions/${this.currentChatId}`);
-            if (response.data && Array.isArray(response.data)) {
-              // Find the last tool result message for this tool
-              for (let i = response.data.length - 1; i >= 0; i--) {
-                const msg = response.data[i];
-                if (msg.tags && msg.tags.includes('tool_result')) {
-                  let rawResult = null;
-                  let toolError = null;
-                  const textBlock = msg.message.contentBlocks.find(block => block.type === 'text');
-                  if (textBlock && textBlock.text) {
-                    // Parse the tool result format: "ToolUseId: tooluse_QdvZoVlXQNm0PBuqFuqRmA, Result: [actual_result_data]"
-                    const toolResultText = textBlock.text;
-                    const toolUseIdMatch = toolResultText.match(/ToolUseId:\s*([^,]+)/);
-                    const resultMatch = toolResultText.match(/Result:\s*(.+)$/s);
-                    const errorMatch = toolResultText.match(/Error:\s*([^,]+)/);
-                    
-                    if (toolUseIdMatch && resultMatch && errorMatch) {
-                      rawResult = resultMatch[1].trim();
-                      toolError = errorMatch[1].trim();
-                    }
-                  }
-                  // This is a tool result - associate it with our tool use
-                  toolUse.rawResult = rawResult;
-                  toolUse.completedAt = msg.createTime;
-                  if (toolError != "<nil>") {
-                    toolUse.error = toolError;
-                    toolUse.status = "error";
-                  } else {
-                    toolUse.status = "completed";
-                  }
-                  break;
-                }
-              }
-            }
-          } catch (error) {
-            this.$root.showError(this.i18n.assistantNoRawToolResult + ': ' + error.message);
-          }
-        }, 1000); // Wait 1 second for the backend to save the result
+        // Capture raw tool result using helper method
+        this.captureRawToolResult(toolUse);
         
         // Update credits after tool execution
         await this.loadCredits();
@@ -1074,6 +1146,124 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         }
       }
     },
+    
+    // Helper method to process tool result messages (new format with tags)
+    processToolResultMessage(msg, processedMessages) {
+      // This is a tool result message - extract the result data
+      let rawResult = null;
+      let toolUseId = null;
+      let toolError = null;
+      
+      if (msg.message.contentBlocks && msg.message.contentBlocks.length > 0) {
+        const textBlock = msg.message.contentBlocks.find(block => block.type === 'text');
+        if (textBlock && textBlock.text) {
+          // Parse the tool result format: "ToolUseId: tooluse_QdvZoVlXQNm0PBuqFuqRmA, Result: [actual_result_data]"
+          const toolResultText = textBlock.text;
+          const toolUseIdMatch = toolResultText.match(/ToolUseId:\s*([^,]+)/);
+          const resultMatch = toolResultText.match(/Result:\s*(.+)$/s);
+          const errorMatch = toolResultText.match(/Error:\s*([^,]+)/);
+          
+          if (toolUseIdMatch && resultMatch && errorMatch) {
+            toolUseId = toolUseIdMatch[1].trim();
+            rawResult = resultMatch[1].trim();
+            toolError = errorMatch[1].trim();
+          }
+        }
+      }
+      
+      // Find the assistant message with the matching tool use and add the raw result
+      if (toolUseId && rawResult && toolError) {
+        // Look backwards through processed messages to find the tool use
+        for (let j = processedMessages.length - 1; j >= 0; j--) {
+          const processedMsg = processedMessages[j];
+          if (processedMsg.role === 'assistant' && processedMsg.toolUses) {
+            const toolUses = processedMsg.toolUses.value;
+            const matchingToolUse = toolUses.find(tool => tool.id === toolUseId);
+            if (matchingToolUse) {
+              matchingToolUse.rawResult = rawResult;
+              matchingToolUse.completedAt = msg.createTime;
+              if (toolError != "<nil>") {
+                matchingToolUse.error = toolError;
+                matchingToolUse.status = "error";
+              }
+              break;
+            }
+          }
+        }
+      }
+    },
+    
+    // Helper method to process old format tool result messages
+    processOldFormatToolResult(msg, processedMessages) {
+      // This is a tool result - find the previous assistant message with tool uses
+      const prevMessage = processedMessages[processedMessages.length - 1];
+      if (prevMessage && prevMessage.role === 'assistant' && prevMessage.toolUses) {
+        // Add the raw result to the last tool use in the previous message
+        const toolUses = prevMessage.toolUses.value;
+        if (toolUses.length > 0) {
+          const lastToolUse = toolUses[toolUses.length - 1];
+          lastToolUse.rawResult = msg.message.contentStr;
+        }
+      }
+    },
+    
+    // Helper method to extract content from message blocks
+    extractMessageContent(msg, frontendMsg) {
+      if (msg.message.contentStr) {
+        frontendMsg.content = msg.message.contentStr;
+      } else if (msg.message.contentBlocks && msg.message.contentBlocks.length > 0) {
+        // Extract text from content blocks
+        const textBlocks = msg.message.contentBlocks.filter(block => block.type === 'text');
+        if (textBlocks.length > 0) {
+          frontendMsg.content = textBlocks.map(block => block.text).join('\n');
+        } else {
+          frontendMsg.content = '';
+        }
+      } else {
+        frontendMsg.content = 'Empty message';
+      }
+    },
+    
+    // Helper method to process tool use blocks
+    processToolUseBlocks(msg, frontendMsg, backendMessages, i) {
+      const toolBlocks = msg.message.contentBlocks.filter(block => block.type === 'tool_use');
+      let skip_next = false;
+      
+      if (toolBlocks.length > 0) {
+        if (i < backendMessages.length - 1 && (!backendMessages[i + 1].tags || !backendMessages[i + 1].tags.includes('tool_result'))) {
+          const nextMessage = backendMessages[i + 1];
+          if (nextMessage.message.contentBlocks[0].text.includes('rejected by the user')) {
+            frontendMsg.toolUses = Vue.ref(toolBlocks.map(block => ({
+              id: block.id || 'unknown',
+              name: block.name || 'unknown',
+              input: block.input || {}, // Ensure input is always an object, never null/undefined
+              status: 'rejected',
+              result: null,
+              error: this.i18n.assistantToolUseReject,
+              rawResult: null,
+              timestamp: msg.createTime || new Date().toISOString(),
+              approved: false
+            })));
+            skip_next = true;
+          }
+        // Using "else if" instead of "else" prevents tool uses that haven't been interacted with from appearing as completed after refreshing
+        } else if (i < backendMessages.length - 1) {
+          frontendMsg.toolUses = Vue.ref(toolBlocks.map(block => ({
+            id: block.id || 'unknown',
+            name: block.name || 'unknown',
+            input: block.input || {}, // Ensure input is always an object, never null/undefined
+            status: 'completed', // Assume completed since it's from history
+            result: null,
+            error: null,
+            rawResult: null, // Will be populated by subsequent tool result message
+            timestamp: msg.createTime || new Date().toISOString(),
+            approved: true
+          })));
+        }
+      }
+      
+      return skip_next;
+    },
 
     // Helper method to convert backend message format to frontend format
     convertBackendMessagesToFrontend(backendMessages) {
@@ -1094,65 +1284,14 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         
         // Check if this is a tool result message (new format with tags)
         if (msg.tags && msg.tags.includes('tool_result')) {
-          // This is a tool result message - extract the result data
-          let rawResult = null;
-          let toolUseId = null;
-          let toolError = null;
-          
-          if (msg.message.contentBlocks && msg.message.contentBlocks.length > 0) {
-            const textBlock = msg.message.contentBlocks.find(block => block.type === 'text');
-            if (textBlock && textBlock.text) {
-              // Parse the tool result format: "ToolUseId: tooluse_QdvZoVlXQNm0PBuqFuqRmA, Result: [actual_result_data]"
-              const toolResultText = textBlock.text;
-              const toolUseIdMatch = toolResultText.match(/ToolUseId:\s*([^,]+)/);
-              const resultMatch = toolResultText.match(/Result:\s*(.+)$/s);
-              const errorMatch = toolResultText.match(/Error:\s*([^,]+)/);
-              
-              if (toolUseIdMatch && resultMatch && errorMatch) {
-                toolUseId = toolUseIdMatch[1].trim();
-                rawResult = resultMatch[1].trim();
-                toolError = errorMatch[1].trim();
-              }
-            }
-          }
-          
-          // Find the assistant message with the matching tool use and add the raw result
-          if (toolUseId && rawResult && toolError) {
-            // Look backwards through processed messages to find the tool use
-            for (let j = processedMessages.length - 1; j >= 0; j--) {
-              const processedMsg = processedMessages[j];
-              if (processedMsg.role === 'assistant' && processedMsg.toolUses) {
-                const toolUses = processedMsg.toolUses.value;
-                const matchingToolUse = toolUses.find(tool => tool.id === toolUseId);
-                if (matchingToolUse) {
-                  matchingToolUse.rawResult = rawResult;
-                  matchingToolUse.completedAt = msg.createTime;
-                  if (toolError != "<nil>") {
-                    matchingToolUse.error = toolError;
-                    matchingToolUse.status = "error";
-                  }
-                  break;
-                }
-              }
-            }
-          }
-          
+          this.processToolResultMessage(msg, processedMessages);
           // Skip adding this message to the processed messages (filter it out)
           continue;
         }
         
         // Check if this is a tool result message (old format - user role with contentStr)
         if (msg.message.role === 'user' && msg.message.contentStr && !msg.message.contentBlocks) {
-          // This is a tool result - find the previous assistant message with tool uses
-          const prevMessage = processedMessages[processedMessages.length - 1];
-          if (prevMessage && prevMessage.role === 'assistant' && prevMessage.toolUses) {
-            // Add the raw result to the last tool use in the previous message
-            const toolUses = prevMessage.toolUses.value;
-            if (toolUses.length > 0) {
-              const lastToolUse = toolUses[toolUses.length - 1];
-              lastToolUse.rawResult = msg.message.contentStr;
-            }
-          }
+          this.processOldFormatToolResult(msg, processedMessages);
           // Skip adding this message to the processed messages (filter it out)
           continue;
         }
@@ -1162,65 +1301,15 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           timestamp: msg.createTime || new Date().toISOString()
         };
 
-        // Handle different content formats
-        if (msg.message.contentStr) {
-          frontendMsg.content = msg.message.contentStr;
-        } else if (msg.message.contentBlocks && msg.message.contentBlocks.length > 0) {
-          // For now, just extract text from content blocks
-          if (frontendMsg.role === 'user') {
-            const textBlocks = msg.message.contentBlocks.filter(block => block.type === 'text');
-            if (textBlocks.length > 0) {
-              frontendMsg.content = textBlocks.map(block => block.text).join('\n');
-            } else {
-              frontendMsg.content = '';
-            }
-          } else if (frontendMsg.role === 'assistant') {
-            const textBlocks = msg.message.contentBlocks.filter(block => block.type === 'text');
-            if (textBlocks.length > 0) {
-              frontendMsg.content = textBlocks.map(block => block.text).join('\n');
-            } else {
-              frontendMsg.content = '';
-            }
+        // Extract message content using helper method
+        this.extractMessageContent(msg, frontendMsg);
+        
+        // Process tool use blocks if present
+        if (msg.message.contentBlocks && msg.message.contentBlocks.length > 0) {
+          const toolSkipNext = this.processToolUseBlocks(msg, frontendMsg, backendMessages, i);
+          if (toolSkipNext) {
+            skip_next = true;
           }
-            
-          // Handle tool uses if present
-          const toolBlocks = msg.message.contentBlocks.filter(block => block.type === 'tool_use');
-          if (toolBlocks.length > 0) {
-
-            if (i < backendMessages.length - 1 && (!backendMessages[i + 1].tags || !backendMessages[i + 1].tags.includes('tool_result'))) {
-              const nextMessage = backendMessages[i + 1];
-              if (nextMessage.message.contentBlocks[0].text.includes('rejected by the user')) {
-                frontendMsg.toolUses = Vue.ref(toolBlocks.map(block => ({
-                  id: block.id || 'unknown',
-                  name: block.name || 'unknown',
-                  input: block.input || {}, // Ensure input is always an object, never null/undefined
-                  status: 'rejected',
-                  result: null,
-                  error: this.i18n.assistantToolUseReject,
-                  rawResult: null,
-                  timestamp: msg.createTime || new Date().toISOString(),
-                  approved: false
-                })));
-                skip_next = true;
-              }
-            // Using "else if" instead of "else" prevents tool uses that haven't beeen interacted with from appearing as completed after refreshing
-            } else if (i < backendMessages.length - 1) {
-
-              frontendMsg.toolUses = Vue.ref(toolBlocks.map(block => ({
-                id: block.id || 'unknown',
-                name: block.name || 'unknown',
-                input: block.input || {}, // Ensure input is always an object, never null/undefined
-                status: 'completed', // Assume completed since it's from history
-                result: null,
-                error: null,
-                rawResult: null, // Will be populated by subsequent tool result message
-                timestamp: msg.createTime || new Date().toISOString(),
-                approved: true
-              })));
-            }
-          }
-        } else {
-          frontendMsg.content = 'Empty message';
         }
 
         // Handle usage information if present
