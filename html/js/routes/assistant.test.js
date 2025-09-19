@@ -1684,7 +1684,7 @@ test('formatMarkdown delegates to root', () => {
   
   const result = comp.formatMarkdown(text);
   
-  expect(comp.$root.formatMarkdown).toHaveBeenCalledWith(text);
+  expect(comp.$root.formatMarkdown).toHaveBeenCalledWith(text, true);
   expect(result).toBe('<strong>bold text</strong>');
 });
 

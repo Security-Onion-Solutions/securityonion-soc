@@ -166,6 +166,7 @@ $(document).ready(function () {
           parameterSection: null,
           chartsInitialized: false,
           editorInitialized: false,
+          mermaidInitialized: false,
           tools: [],
           casesEnabled: false,
           detectionsEnabled: false,
@@ -771,25 +772,66 @@ $(document).ready(function () {
           }
           return "";
         },
-        formatMarkdown(str) {
+        formatMarkdown(str, handleMermaid=false) {
           marked.setOptions({
             renderer: new marked.Renderer(),
             smartLists: true,
             breaks: true
           })
-          marked.use({
-            tokenizer: {
-              url(src) {
-                // Blank function disables bare url tokenization
+          if (!handleMermaid) {
+            marked.use({
+              tokenizer: {
+                url(src) {
+                  // Blank function disables bare url tokenization
+                }
               }
+            })
+            var md = str;
+            if (str) {
+              md = marked.parse(str);
+              md = DOMPurify.sanitize(md);
             }
-          })
-          var md = str;
-          if (str) {
-            md = marked.parse(str);
-            md = DOMPurify.sanitize(md);
+            return md;
+          } else {
+            marked.use({
+              tokenizer: {
+                url(src) {
+                  // Blank function disables bare url tokenization
+                }
+              },
+              renderer: {
+                code: function (code) {
+                  if (code.lang == 'mermaid') {
+                    return `<pre class="mermaid">${code.text}</pre>`;
+                  }
+                  return `<pre>${code.text}</pre>`;
+                }
+              }
+            });
+            var md = str;
+            if (str) {
+              this.initializeMermaid();
+              md = marked.parse(str);
+              md = DOMPurify.sanitize(md);
+            }
+            return md;
           }
-          return md;
+        },
+        initializeMermaid() {
+          if (typeof mermaid !== 'undefined' && !this.mermaidInitialized) {
+            mermaid.initialize({
+              startOnLoad: false,
+              theme: this.$vuetify && this.$vuetify.theme.current.dark ? 'dark' : 'default',
+              securityLevel: 'loose',
+              fontFamily: 'inherit'
+            });
+            this.mermaidInitialized = true;
+          }
+        },
+        renderMermaid() {
+          if (typeof mermaid !== 'undefined' && this.mermaidInitialized) {
+            mermaid.run();
+          }
         },
         colorSeverity(value) {
           if (value == "low_false") return "yellow";

@@ -30,6 +30,17 @@
 								color="primary">
 							</v-switch>
 						</span>
+						<span data-aid="assistant_always_approve_reads_toggle">
+							<v-switch
+								id="always-approve-read-requests"
+								v-model="alwaysApproveReadRequests"
+								density="compact"
+								hide-details
+								class="my-0"
+								:label="i18n.alwaysApproveReadRequests"
+								color="primary">
+							</v-switch>
+						</span>
 					</v-expansion-panel-text>
 				</v-expansion-panel>
 			</v-expansion-panels>
@@ -112,6 +123,31 @@
 															<v-icon size="small" class="mr-1">fa-times</v-icon>
 															{{ i18n.reject }}
 														</v-btn>
+														<v-btn
+															id="options-tool-button"
+															icon
+															variant="text"
+															size="x-small"
+															@click="openOptionsMenu"
+															data-aid="assistant_tool_use_options"
+															style="min-width: auto;"
+														>
+															<v-icon size="small">fa-cog</v-icon>
+														</v-btn>
+													</div>
+												</div>
+												
+												<!-- Tool Executing Spinner -->
+												<div v-if="toolUse.status === 'executing'" class="mb-2">
+													<div class="d-flex align-center">
+														<v-progress-circular
+															indeterminate
+															color="warning"
+															size="16"
+															width="2"
+															class="mr-2"
+														></v-progress-circular>
+														<span class="text-caption text-medium-emphasis">{{ i18n.toolExecuting }}</span>
 													</div>
 												</div>
 												
