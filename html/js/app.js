@@ -140,10 +140,14 @@ $(document).ready(function () {
           warning: false,
           info: false,
           tip: false,
+          disclaimer: false,
           errorMessage: "",
           warningMessage: "",
           infoMessage: "",
           tipMessage: "",
+          disclaimerMessage: "",
+          disclaimerTitle: "",
+          disclaimerClose: "",
           tipTimeout: 6000,
           currentTipTimeout: 6000,
           warningTimeout: 30000,
@@ -954,6 +958,12 @@ $(document).ready(function () {
           } else {
             this.currentTipTimeout = this.tipTimeout;
           }
+        },
+        showDisclaimer(msg, title, closeButton) {
+          this.disclaimer = true;
+          this.disclaimerMessage = msg;
+          this.disclaimerTitle = title;
+          this.disclaimerClose = closeButton;
         },
         startLoading(cancelCallback = null) {
           this.loading = true;

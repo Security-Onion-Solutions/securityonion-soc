@@ -186,6 +186,21 @@
             </template>
             <div v-html="tipMessage" class="tip-message"></div>
           </v-snackbar>
+          <v-dialog id="disclaimer" v-model="disclaimer" class="disclaimer-container" persistent data-aid="banner_disclaimer">
+            <v-card>
+              <v-card-title id="disclaimer-header">
+                <div class="disclaimer-title" v-html="disclaimerTitle"></div>
+              </v-card-title>
+              <v-card-text id="disclaimer-body">
+                <div class="disclaimer-message" v-html="disclaimerMessage"></div>
+              </v-card-text>
+              <template #actions>
+                <v-btn id="disclaimer-close" text @click="disclaimer = false" data-aid="banner_disclaimer_close">
+                  <div class="disclaimer-close" v-html="disclaimerClose"></div>
+                </v-btn>
+              </template>
+            </v-card>
+          </v-dialog>
           <router-view id="main-view"></router-view>
         </v-main>
         <v-footer app>

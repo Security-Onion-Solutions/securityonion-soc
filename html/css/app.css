@@ -1304,3 +1304,8 @@ ul ul ul {
   overflow-x: auto;
   word-break: break-all;
 }
+
+.disclaimer-container {
+  max-width: calc(100vw - 200px) !important;
+  max-height: calc(100vh - 100px) !important;
+}

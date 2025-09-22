@@ -31,6 +31,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     lowBalanceColorAlert: 500000,
   }},
   async created() {
+    this.handleDataRetentionDisclaimer();
     this.loadContextThresholdSetting();
     this.loadLastActiveSetting();
     this.loadReadApprovalSetting();
@@ -1420,6 +1421,14 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           optionsHeader.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
       });
+    },
+
+    handleDataRetentionDisclaimer() {
+      const saved = localStorage.getItem('so-data-retention-disclaimer');
+      if (saved !== 'true') {
+        this.$root.showDisclaimer(this.i18n.assistantDisclaimerMessage, this.i18n.assistantDisclaimerTitle, this.i18n.agree);
+        localStorage.setItem('so-data-retention-disclaimer', 'true');
+      }
     }
   }
 }});
