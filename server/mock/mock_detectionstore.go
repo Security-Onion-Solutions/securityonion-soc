@@ -5,6 +5,7 @@
 //
 //	mockgen -destination mock/mock_detectionstore.go -package mock . Detectionstore
 //
+
 // Package mock is a generated GoMock package.
 package mock
 
@@ -22,6 +23,7 @@ import (
 type MockDetectionstore struct {
 	ctrl     *gomock.Controller
 	recorder *MockDetectionstoreMockRecorder
+	isgomock struct{}
 }
 
 // MockDetectionstoreMockRecorder is the mock recorder for MockDetectionstore.
@@ -42,24 +44,24 @@ func (m *MockDetectionstore) EXPECT() *MockDetectionstoreMockRecorder {
 }
 
 // BuildBulkIndexer mocks base method.
-func (m *MockDetectionstore) BuildBulkIndexer(arg0 context.Context, arg1 log.Interface) (esutil.BulkIndexer, error) {
+func (m *MockDetectionstore) BuildBulkIndexer(ctx context.Context, logger log.Interface) (esutil.BulkIndexer, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BuildBulkIndexer", arg0, arg1)
+	ret := m.ctrl.Call(m, "BuildBulkIndexer", ctx, logger)
 	ret0, _ := ret[0].(esutil.BulkIndexer)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // BuildBulkIndexer indicates an expected call of BuildBulkIndexer.
-func (mr *MockDetectionstoreMockRecorder) BuildBulkIndexer(arg0, arg1 any) *gomock.Call {
+func (mr *MockDetectionstoreMockRecorder) BuildBulkIndexer(ctx, logger any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildBulkIndexer", reflect.TypeOf((*MockDetectionstore)(nil).BuildBulkIndexer), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildBulkIndexer", reflect.TypeOf((*MockDetectionstore)(nil).BuildBulkIndexer), ctx, logger)
 }
 
 // ConvertObjectToDocument mocks base method.
-func (m *MockDetectionstore) ConvertObjectToDocument(arg0 context.Context, arg1 string, arg2 any, arg3 *model.Auditable, arg4 bool, arg5, arg6 *string) ([]byte, string, error) {
+func (m *MockDetectionstore) ConvertObjectToDocument(ctx context.Context, kind string, obj any, auditable *model.Auditable, isEdit bool, auditDocId, op *string) ([]byte, string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ConvertObjectToDocument", arg0, arg1, arg2, arg3, arg4, arg5, arg6)
+	ret := m.ctrl.Call(m, "ConvertObjectToDocument", ctx, kind, obj, auditable, isEdit, auditDocId, op)
 	ret0, _ := ret[0].([]byte)
 	ret1, _ := ret[1].(string)
 	ret2, _ := ret[2].(error)
@@ -67,90 +69,90 @@ func (m *MockDetectionstore) ConvertObjectToDocument(arg0 context.Context, arg1 
 }
 
 // ConvertObjectToDocument indicates an expected call of ConvertObjectToDocument.
-func (mr *MockDetectionstoreMockRecorder) ConvertObjectToDocument(arg0, arg1, arg2, arg3, arg4, arg5, arg6 any) *gomock.Call {
+func (mr *MockDetectionstoreMockRecorder) ConvertObjectToDocument(ctx, kind, obj, auditable, isEdit, auditDocId, op any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConvertObjectToDocument", reflect.TypeOf((*MockDetectionstore)(nil).ConvertObjectToDocument), arg0, arg1, arg2, arg3, arg4, arg5, arg6)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConvertObjectToDocument", reflect.TypeOf((*MockDetectionstore)(nil).ConvertObjectToDocument), ctx, kind, obj, auditable, isEdit, auditDocId, op)
 }
 
 // CreateComment mocks base method.
-func (m *MockDetectionstore) CreateComment(arg0 context.Context, arg1 *model.DetectionComment) (*model.DetectionComment, error) {
+func (m *MockDetectionstore) CreateComment(ctx context.Context, newComment *model.DetectionComment) (*model.DetectionComment, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateComment", arg0, arg1)
+	ret := m.ctrl.Call(m, "CreateComment", ctx, newComment)
 	ret0, _ := ret[0].(*model.DetectionComment)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CreateComment indicates an expected call of CreateComment.
-func (mr *MockDetectionstoreMockRecorder) CreateComment(arg0, arg1 any) *gomock.Call {
+func (mr *MockDetectionstoreMockRecorder) CreateComment(ctx, newComment any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateComment", reflect.TypeOf((*MockDetectionstore)(nil).CreateComment), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateComment", reflect.TypeOf((*MockDetectionstore)(nil).CreateComment), ctx, newComment)
 }
 
 // CreateDetection mocks base method.
-func (m *MockDetectionstore) CreateDetection(arg0 context.Context, arg1 *model.Detection) (*model.Detection, error) {
+func (m *MockDetectionstore) CreateDetection(ctx context.Context, detect *model.Detection) (*model.Detection, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateDetection", arg0, arg1)
+	ret := m.ctrl.Call(m, "CreateDetection", ctx, detect)
 	ret0, _ := ret[0].(*model.Detection)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CreateDetection indicates an expected call of CreateDetection.
-func (mr *MockDetectionstoreMockRecorder) CreateDetection(arg0, arg1 any) *gomock.Call {
+func (mr *MockDetectionstoreMockRecorder) CreateDetection(ctx, detect any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateDetection", reflect.TypeOf((*MockDetectionstore)(nil).CreateDetection), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateDetection", reflect.TypeOf((*MockDetectionstore)(nil).CreateDetection), ctx, detect)
 }
 
 // DeleteComment mocks base method.
-func (m *MockDetectionstore) DeleteComment(arg0 context.Context, arg1 string) error {
+func (m *MockDetectionstore) DeleteComment(ctx context.Context, id string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteComment", arg0, arg1)
+	ret := m.ctrl.Call(m, "DeleteComment", ctx, id)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteComment indicates an expected call of DeleteComment.
-func (mr *MockDetectionstoreMockRecorder) DeleteComment(arg0, arg1 any) *gomock.Call {
+func (mr *MockDetectionstoreMockRecorder) DeleteComment(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteComment", reflect.TypeOf((*MockDetectionstore)(nil).DeleteComment), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteComment", reflect.TypeOf((*MockDetectionstore)(nil).DeleteComment), ctx, id)
 }
 
 // DeleteDetection mocks base method.
-func (m *MockDetectionstore) DeleteDetection(arg0 context.Context, arg1 string) (*model.Detection, error) {
+func (m *MockDetectionstore) DeleteDetection(ctx context.Context, detectID string) (*model.Detection, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteDetection", arg0, arg1)
+	ret := m.ctrl.Call(m, "DeleteDetection", ctx, detectID)
 	ret0, _ := ret[0].(*model.Detection)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // DeleteDetection indicates an expected call of DeleteDetection.
-func (mr *MockDetectionstoreMockRecorder) DeleteDetection(arg0, arg1 any) *gomock.Call {
+func (mr *MockDetectionstoreMockRecorder) DeleteDetection(ctx, detectID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteDetection", reflect.TypeOf((*MockDetectionstore)(nil).DeleteDetection), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteDetection", reflect.TypeOf((*MockDetectionstore)(nil).DeleteDetection), ctx, detectID)
 }
 
 // DoesTemplateExist mocks base method.
-func (m *MockDetectionstore) DoesTemplateExist(arg0 context.Context, arg1 string) (bool, error) {
+func (m *MockDetectionstore) DoesTemplateExist(ctx context.Context, tmpl string) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DoesTemplateExist", arg0, arg1)
+	ret := m.ctrl.Call(m, "DoesTemplateExist", ctx, tmpl)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // DoesTemplateExist indicates an expected call of DoesTemplateExist.
-func (mr *MockDetectionstoreMockRecorder) DoesTemplateExist(arg0, arg1 any) *gomock.Call {
+func (mr *MockDetectionstoreMockRecorder) DoesTemplateExist(ctx, tmpl any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DoesTemplateExist", reflect.TypeOf((*MockDetectionstore)(nil).DoesTemplateExist), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DoesTemplateExist", reflect.TypeOf((*MockDetectionstore)(nil).DoesTemplateExist), ctx, tmpl)
 }
 
 // GetAllDetections mocks base method.
-func (m *MockDetectionstore) GetAllDetections(arg0 context.Context, arg1 ...model.GetAllOption) (map[string]*model.Detection, error) {
+func (m *MockDetectionstore) GetAllDetections(ctx context.Context, opts ...model.GetAllOption) (map[string]*model.Detection, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0}
-	for _, a := range arg1 {
+	varargs := []any{ctx}
+	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetAllDetections", varargs...)
@@ -160,128 +162,128 @@ func (m *MockDetectionstore) GetAllDetections(arg0 context.Context, arg1 ...mode
 }
 
 // GetAllDetections indicates an expected call of GetAllDetections.
-func (mr *MockDetectionstoreMockRecorder) GetAllDetections(arg0 any, arg1 ...any) *gomock.Call {
+func (mr *MockDetectionstoreMockRecorder) GetAllDetections(ctx any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0}, arg1...)
+	varargs := append([]any{ctx}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllDetections", reflect.TypeOf((*MockDetectionstore)(nil).GetAllDetections), varargs...)
 }
 
 // GetComment mocks base method.
-func (m *MockDetectionstore) GetComment(arg0 context.Context, arg1 string) (*model.DetectionComment, error) {
+func (m *MockDetectionstore) GetComment(ctx context.Context, commentId string) (*model.DetectionComment, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetComment", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetComment", ctx, commentId)
 	ret0, _ := ret[0].(*model.DetectionComment)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetComment indicates an expected call of GetComment.
-func (mr *MockDetectionstoreMockRecorder) GetComment(arg0, arg1 any) *gomock.Call {
+func (mr *MockDetectionstoreMockRecorder) GetComment(ctx, commentId any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetComment", reflect.TypeOf((*MockDetectionstore)(nil).GetComment), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetComment", reflect.TypeOf((*MockDetectionstore)(nil).GetComment), ctx, commentId)
 }
 
 // GetComments mocks base method.
-func (m *MockDetectionstore) GetComments(arg0 context.Context, arg1 string) ([]*model.DetectionComment, error) {
+func (m *MockDetectionstore) GetComments(ctx context.Context, detectionId string) ([]*model.DetectionComment, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetComments", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetComments", ctx, detectionId)
 	ret0, _ := ret[0].([]*model.DetectionComment)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetComments indicates an expected call of GetComments.
-func (mr *MockDetectionstoreMockRecorder) GetComments(arg0, arg1 any) *gomock.Call {
+func (mr *MockDetectionstoreMockRecorder) GetComments(ctx, detectionId any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetComments", reflect.TypeOf((*MockDetectionstore)(nil).GetComments), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetComments", reflect.TypeOf((*MockDetectionstore)(nil).GetComments), ctx, detectionId)
 }
 
 // GetDetection mocks base method.
-func (m *MockDetectionstore) GetDetection(arg0 context.Context, arg1 string) (*model.Detection, error) {
+func (m *MockDetectionstore) GetDetection(ctx context.Context, detectId string) (*model.Detection, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetDetection", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetDetection", ctx, detectId)
 	ret0, _ := ret[0].(*model.Detection)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetDetection indicates an expected call of GetDetection.
-func (mr *MockDetectionstoreMockRecorder) GetDetection(arg0, arg1 any) *gomock.Call {
+func (mr *MockDetectionstoreMockRecorder) GetDetection(ctx, detectId any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDetection", reflect.TypeOf((*MockDetectionstore)(nil).GetDetection), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDetection", reflect.TypeOf((*MockDetectionstore)(nil).GetDetection), ctx, detectId)
 }
 
 // GetDetectionByPublicId mocks base method.
-func (m *MockDetectionstore) GetDetectionByPublicId(arg0 context.Context, arg1 string) (*model.Detection, error) {
+func (m *MockDetectionstore) GetDetectionByPublicId(ctx context.Context, publicId string) (*model.Detection, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetDetectionByPublicId", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetDetectionByPublicId", ctx, publicId)
 	ret0, _ := ret[0].(*model.Detection)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetDetectionByPublicId indicates an expected call of GetDetectionByPublicId.
-func (mr *MockDetectionstoreMockRecorder) GetDetectionByPublicId(arg0, arg1 any) *gomock.Call {
+func (mr *MockDetectionstoreMockRecorder) GetDetectionByPublicId(ctx, publicId any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDetectionByPublicId", reflect.TypeOf((*MockDetectionstore)(nil).GetDetectionByPublicId), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDetectionByPublicId", reflect.TypeOf((*MockDetectionstore)(nil).GetDetectionByPublicId), ctx, publicId)
 }
 
 // GetDetectionHistory mocks base method.
-func (m *MockDetectionstore) GetDetectionHistory(arg0 context.Context, arg1 string) ([]any, error) {
+func (m *MockDetectionstore) GetDetectionHistory(ctx context.Context, detectID string) ([]any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetDetectionHistory", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetDetectionHistory", ctx, detectID)
 	ret0, _ := ret[0].([]any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetDetectionHistory indicates an expected call of GetDetectionHistory.
-func (mr *MockDetectionstoreMockRecorder) GetDetectionHistory(arg0, arg1 any) *gomock.Call {
+func (mr *MockDetectionstoreMockRecorder) GetDetectionHistory(ctx, detectID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDetectionHistory", reflect.TypeOf((*MockDetectionstore)(nil).GetDetectionHistory), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDetectionHistory", reflect.TypeOf((*MockDetectionstore)(nil).GetDetectionHistory), ctx, detectID)
 }
 
 // Query mocks base method.
-func (m *MockDetectionstore) Query(arg0 context.Context, arg1 string, arg2 int) ([]any, error) {
+func (m *MockDetectionstore) Query(ctx context.Context, query string, max int) ([]any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Query", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "Query", ctx, query, max)
 	ret0, _ := ret[0].([]any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Query indicates an expected call of Query.
-func (mr *MockDetectionstoreMockRecorder) Query(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockDetectionstoreMockRecorder) Query(ctx, query, max any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockDetectionstore)(nil).Query), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockDetectionstore)(nil).Query), ctx, query, max)
 }
 
 // UpdateComment mocks base method.
-func (m *MockDetectionstore) UpdateComment(arg0 context.Context, arg1 *model.DetectionComment) (*model.DetectionComment, error) {
+func (m *MockDetectionstore) UpdateComment(ctx context.Context, comment *model.DetectionComment) (*model.DetectionComment, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateComment", arg0, arg1)
+	ret := m.ctrl.Call(m, "UpdateComment", ctx, comment)
 	ret0, _ := ret[0].(*model.DetectionComment)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // UpdateComment indicates an expected call of UpdateComment.
-func (mr *MockDetectionstoreMockRecorder) UpdateComment(arg0, arg1 any) *gomock.Call {
+func (mr *MockDetectionstoreMockRecorder) UpdateComment(ctx, comment any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateComment", reflect.TypeOf((*MockDetectionstore)(nil).UpdateComment), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateComment", reflect.TypeOf((*MockDetectionstore)(nil).UpdateComment), ctx, comment)
 }
 
 // UpdateDetection mocks base method.
-func (m *MockDetectionstore) UpdateDetection(arg0 context.Context, arg1 *model.Detection) (*model.Detection, error) {
+func (m *MockDetectionstore) UpdateDetection(ctx context.Context, detect *model.Detection) (*model.Detection, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateDetection", arg0, arg1)
+	ret := m.ctrl.Call(m, "UpdateDetection", ctx, detect)
 	ret0, _ := ret[0].(*model.Detection)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // UpdateDetection indicates an expected call of UpdateDetection.
-func (mr *MockDetectionstoreMockRecorder) UpdateDetection(arg0, arg1 any) *gomock.Call {
+func (mr *MockDetectionstoreMockRecorder) UpdateDetection(ctx, detect any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateDetection", reflect.TypeOf((*MockDetectionstore)(nil).UpdateDetection), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateDetection", reflect.TypeOf((*MockDetectionstore)(nil).UpdateDetection), ctx, detect)
 }

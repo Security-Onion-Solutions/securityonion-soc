@@ -5,6 +5,7 @@
 //
 //	mockgen -destination mock/mock_clientstore.go -package mock . Clientstore
 //
+
 // Package mock is a generated GoMock package.
 package mock
 
@@ -20,6 +21,7 @@ import (
 type MockClientstore struct {
 	ctrl     *gomock.Controller
 	recorder *MockClientstoreMockRecorder
+	isgomock struct{}
 }
 
 // MockClientstoreMockRecorder is the mock recorder for MockClientstore.
@@ -40,46 +42,46 @@ func (m *MockClientstore) EXPECT() *MockClientstoreMockRecorder {
 }
 
 // GetClientById mocks base method.
-func (m *MockClientstore) GetClientById(arg0 context.Context, arg1 string) (*model.Client, error) {
+func (m *MockClientstore) GetClientById(ctx context.Context, id string) (*model.Client, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetClientById", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetClientById", ctx, id)
 	ret0, _ := ret[0].(*model.Client)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetClientById indicates an expected call of GetClientById.
-func (mr *MockClientstoreMockRecorder) GetClientById(arg0, arg1 any) *gomock.Call {
+func (mr *MockClientstoreMockRecorder) GetClientById(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClientById", reflect.TypeOf((*MockClientstore)(nil).GetClientById), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClientById", reflect.TypeOf((*MockClientstore)(nil).GetClientById), ctx, id)
 }
 
 // GetClientByToken mocks base method.
-func (m *MockClientstore) GetClientByToken(arg0 context.Context, arg1 string) (*model.Client, error) {
+func (m *MockClientstore) GetClientByToken(ctx context.Context, token string) (*model.Client, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetClientByToken", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetClientByToken", ctx, token)
 	ret0, _ := ret[0].(*model.Client)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetClientByToken indicates an expected call of GetClientByToken.
-func (mr *MockClientstoreMockRecorder) GetClientByToken(arg0, arg1 any) *gomock.Call {
+func (mr *MockClientstoreMockRecorder) GetClientByToken(ctx, token any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClientByToken", reflect.TypeOf((*MockClientstore)(nil).GetClientByToken), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClientByToken", reflect.TypeOf((*MockClientstore)(nil).GetClientByToken), ctx, token)
 }
 
 // GetClients mocks base method.
-func (m *MockClientstore) GetClients(arg0 context.Context) ([]*model.Client, error) {
+func (m *MockClientstore) GetClients(ctx context.Context) ([]*model.Client, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetClients", arg0)
+	ret := m.ctrl.Call(m, "GetClients", ctx)
 	ret0, _ := ret[0].([]*model.Client)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetClients indicates an expected call of GetClients.
-func (mr *MockClientstoreMockRecorder) GetClients(arg0 any) *gomock.Call {
+func (mr *MockClientstoreMockRecorder) GetClients(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClients", reflect.TypeOf((*MockClientstore)(nil).GetClients), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClients", reflect.TypeOf((*MockClientstore)(nil).GetClients), ctx)
 }

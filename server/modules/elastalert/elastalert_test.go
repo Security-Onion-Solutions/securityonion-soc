@@ -1114,14 +1114,14 @@ func TestDownloadSigmaPackages(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		// can't use mock's Times(x) because the first response's body
 		// closing will result in remaining requests getting 0 data
-		iom.EXPECT().MakeRequest(gomock.Any()).Return(&http.Response{
+		iom.EXPECT().MakeRequest(gomock.Any(), false).Return(&http.Response{
 			StatusCode:    http.StatusOK,
 			Body:          io.NopCloser(strings.NewReader(body)),
 			ContentLength: int64(len(body)),
 		}, nil)
 	}
 
-	iom.EXPECT().MakeRequest(gomock.Any()).Return(&http.Response{
+	iom.EXPECT().MakeRequest(gomock.Any(), false).Return(&http.Response{
 		StatusCode: http.StatusNotFound,
 	}, nil)
 
@@ -1578,7 +1578,7 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 	iom.EXPECT().ReadFile("sigmaPipelineSO").Return([]byte("data"), nil)
 	iom.EXPECT().ReadFile("sigmaPipelinesFingerprintFile").Return([]byte("3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7-3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7"), nil)
 	// downloadSigmaPackages
-	iom.EXPECT().MakeRequest(gomock.Any()).Return(&http.Response{
+	iom.EXPECT().MakeRequest(gomock.Any(), false).Return(&http.Response{
 		StatusCode: 200,
 		Body:       io.NopCloser(buf),
 	}, nil)
@@ -1707,7 +1707,7 @@ func TestSyncChanges(t *testing.T) {
 	iom.EXPECT().ReadFile("sigmaPipelineSO").Return([]byte("data"), nil)
 	iom.EXPECT().ReadFile("sigmaPipelinesFingerprintFile").Return([]byte("a different hash"), nil)
 	// downloadSigmaPackages
-	iom.EXPECT().MakeRequest(gomock.Any()).Return(&http.Response{
+	iom.EXPECT().MakeRequest(gomock.Any(), false).Return(&http.Response{
 		StatusCode: 200,
 		Body:       io.NopCloser(buf),
 	}, nil)
@@ -1914,7 +1914,7 @@ func TestSyncUnchangedOverrides(t *testing.T) {
 	iom.EXPECT().ReadFile("sigmaPipelineSO").Return([]byte("data"), nil)
 	iom.EXPECT().ReadFile("sigmaPipelinesFingerprintFile").Return([]byte("a different hash"), nil)
 	// downloadSigmaPackages
-	iom.EXPECT().MakeRequest(gomock.Any()).Return(&http.Response{
+	iom.EXPECT().MakeRequest(gomock.Any(), false).Return(&http.Response{
 		StatusCode: 200,
 		Body:       io.NopCloser(buf),
 	}, nil)
@@ -2062,7 +2062,7 @@ func TestSyncStateFileNoCommunity(t *testing.T) {
 	iom.EXPECT().ReadFile("sigmaPipelinesFingerprintFile").Return([]byte("a different hash"), nil)
 	iom.EXPECT().ReadFile("rulesFingerprintFile").Return([]byte("something"), nil)
 	// downloadSigmaPackages
-	iom.EXPECT().MakeRequest(gomock.Any()).Return(&http.Response{
+	iom.EXPECT().MakeRequest(gomock.Any(), false).Return(&http.Response{
 		StatusCode: 200,
 		Body:       io.NopCloser(buf),
 	}, nil)
@@ -2251,7 +2251,7 @@ func TestSyncLocalNew(t *testing.T) {
 	iom.EXPECT().ReadFile("sigmaPipelineSO").Return([]byte("data"), nil)
 	iom.EXPECT().ReadFile("sigmaPipelinesFingerprintFile").Return([]byte("a different hash"), nil)
 	// downloadSigmaPackages
-	iom.EXPECT().MakeRequest(gomock.Any()).Return(&http.Response{
+	iom.EXPECT().MakeRequest(gomock.Any(), false).Return(&http.Response{
 		StatusCode: 200,
 		Body:       io.NopCloser(buf),
 	}, nil)
@@ -2430,7 +2430,7 @@ func TestSyncLocalExisting(t *testing.T) {
 	iom.EXPECT().ReadFile("sigmaPipelineSO").Return([]byte("data"), nil)
 	iom.EXPECT().ReadFile("sigmaPipelinesFingerprintFile").Return([]byte("a different hash"), nil)
 	// downloadSigmaPackages
-	iom.EXPECT().MakeRequest(gomock.Any()).Return(&http.Response{
+	iom.EXPECT().MakeRequest(gomock.Any(), false).Return(&http.Response{
 		StatusCode: 200,
 		Body:       io.NopCloser(buf),
 	}, nil)
@@ -2556,4 +2556,73 @@ func TestSyncLocalExisting(t *testing.T) {
 	assert.False(t, eng.EngineState.SyncFailure)
 
 	assert.Len(t, workItems, 0)
+}
+
+func TestWriteFileWithCleanup(t *testing.T) {
+	tests := []struct {
+		name          string
+		writeErr      error
+		deleteErr     error
+		expectedError string
+	}{
+		{
+			name:          "successful write",
+			writeErr:      nil,
+			deleteErr:     nil,
+			expectedError: "",
+		},
+		{
+			name:          "write fails, cleanup succeeds",
+			writeErr:      errors.New("disk full"),
+			deleteErr:     nil,
+			expectedError: "unable to write enabled detection file: disk full",
+		},
+		{
+			name:          "write fails, file doesn't exist for cleanup",
+			writeErr:      errors.New("permission denied"),
+			deleteErr:     os.ErrNotExist,
+			expectedError: "unable to write enabled detection file: permission denied",
+		},
+		{
+			name:          "write fails, cleanup also fails",
+			writeErr:      errors.New("disk full"),
+			deleteErr:     errors.New("permission denied"),
+			expectedError: "unable to write enabled detection file (disk full) and cleanup failed (permission denied)",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockIOManager := mock.NewMockIOManager(ctrl)
+			
+			engine := &ElastAlertEngine{
+				IOManager: mockIOManager,
+			}
+
+			path := "/test/path.yml"
+			data := []byte("test data")
+			perm := fs.FileMode(0644)
+
+			// Setup expectations
+			mockIOManager.EXPECT().WriteFile(path, data, perm).Return(tt.writeErr)
+			
+			if tt.writeErr != nil {
+				mockIOManager.EXPECT().DeleteFile(path).Return(tt.deleteErr)
+			}
+
+			// Execute
+			err := engine.writeFileWithCleanup(path, data, perm)
+
+			// Verify
+			if tt.expectedError == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+				assert.Equal(t, tt.expectedError, err.Error())
+			}
+		})
+	}
 }

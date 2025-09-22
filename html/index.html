@@ -225,6 +225,12 @@
               </template>
               <v-list-item-title v-text="i18n.home"></v-list-item-title>
             </v-list-item>
+            <v-list-item v-if="isLicensed(FEAT_OAI) && parameters.assistant.enabled" data-aid="nav_assistant" @click="" to="/assistant">
+              <template #prepend>
+                <v-icon>fa-microchip</v-icon>
+              </template>
+              <v-list-item-title v-text="i18n.chat"></v-list-item-title>
+            </v-list-item>
             <v-list-item data-aid="nav_alerts" @click="" to="/alerts">
               <template #prepend>
                 <v-icon>fa-bell</v-icon>
@@ -366,6 +372,7 @@
     <script src="js/external/daterangepicker-3.1.min.js"></script>
     <script src="js/external/marked-15.0.12.min.js"></script>
     <script src="js/external/purify-3.2.6.min.js"></script>
+    <script src="js/external/mermaid-11.11.0.min.js"></script>
     <script src="js/external/chartjs-chart-sankey-0.14.0.min.js"></script>
     <script src="js/external/chartjs-adapter-moment-1.0.1.min.js"></script>
     <script src="js/external/js-yaml.4.1.0.min.js"></script>
@@ -382,6 +389,7 @@
     <script src="js/routes/config.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/downloads.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/home.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/assistant.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/hunt.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/jobs.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/job.js?v=VERSION_PLACEHOLDER"></script>

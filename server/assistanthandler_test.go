@@ -1,0 +1,413 @@
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
+// https://securityonion.net/license; you may not use this file except in compliance with the
+// Elastic License 2.0.
+
+package server
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"testing"
+	"time"
+
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/rbac"
+	"github.com/security-onion-solutions/securityonion-soc/server/mock"
+	"github.com/security-onion-solutions/securityonion-soc/util"
+	"github.com/security-onion-solutions/securityonion-soc/web"
+
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
+)
+
+func TestPostChat(t *testing.T) {
+	// Create mock server
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockManager := mock.NewMockAssistantManager(ctrl)
+	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
+	defer ctrl.Finish()
+
+	srv.AssistantManager = mockManager
+	srv.Assistantstore = mockAssistantStore
+
+	handler := NewAssistantHandler(srv)
+
+	// Test data with sessionId (history is now looked up by sessionId)
+	sessionId := "test-session-123"
+	requestBody := map[string]interface{}{
+		"msg":       "What is my current balance?",
+		"sessionId": sessionId,
+	}
+
+	jsonBody, _ := json.Marshal(requestBody)
+	req := httptest.NewRequest("POST", "/assistant/chat", bytes.NewBuffer(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	// Add required context values
+	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "test-user-123")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	ctx = context.WithValue(ctx, web.ContextKeyRequestId, "test-request-123")
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+
+	// Mock the history lookup to return previous messages
+	mockHistoryMessages := []*model.StoredMessage{
+		{
+			SessionId: sessionId,
+			Message: &model.Message{
+				Role: "user",
+				ContentBlocks: []model.ContentBlock{
+					{
+						Type: "text",
+						Text: "Hello, I need help with my account",
+					},
+				},
+			},
+		},
+		{
+			SessionId: sessionId,
+			Message: &model.Message{
+				Role: "assistant",
+				ContentBlocks: []model.ContentBlock{
+					{
+						Type: "text",
+						Text: "I'd be happy to help you with your account. What specific information do you need?",
+					},
+				},
+			},
+		},
+	}
+
+	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return(mockHistoryMessages, nil)
+
+	// Set up mock expectations
+	var capturedMessages []*model.Message
+	mockManager.EXPECT().Chat(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, messages []*model.Message, opts ...model.ChatOpt) ([]*model.Message, error) {
+			assert.Len(t, opts, 0)
+			capturedMessages = messages
+
+			return []*model.Message{{
+				Role: "assistant",
+				ContentBlocks: []model.ContentBlock{
+					{
+						Type: "text",
+						Text: "Mock response with history",
+					},
+				},
+			}}, nil
+		},
+	)
+
+	mockAssistantStore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil).Times(2)
+
+	// Execute the handler
+	handler.PostChat(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Verify that the mock received the correct number of messages
+	expectedMessageCount := 3 // 2 from history + 1 new user message
+	assert.Len(t, capturedMessages, expectedMessageCount)
+
+	// Verify the last message is the new user message
+	lastMessage := capturedMessages[len(capturedMessages)-1]
+	assert.Equal(t, "user", lastMessage.Role)
+	assert.Equal(t, "What is my current balance?", lastMessage.ContentBlocks[0].Text)
+
+	// Verify history is preserved - first message should be user from history
+	assert.Equal(t, "user", capturedMessages[0].Role)
+	assert.Equal(t, "Hello, I need help with my account", capturedMessages[0].ContentBlocks[0].Text)
+}
+
+func TestPostChatWithoutHistory(t *testing.T) {
+	// Create mock server
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockManager := mock.NewMockAssistantManager(ctrl)
+	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
+	defer ctrl.Finish()
+
+	srv.AssistantManager = mockManager
+	srv.Assistantstore = mockAssistantStore
+
+	handler := NewAssistantHandler(srv)
+
+	// Test data without sessionId (new session)
+	requestBody := map[string]interface{}{
+		"msg": "Hello",
+	}
+
+	jsonBody, _ := json.Marshal(requestBody)
+	req := httptest.NewRequest("POST", "/assistant/chat", bytes.NewBuffer(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	// Add required context values
+	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "test-user-123")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	ctx = context.WithValue(ctx, web.ContextKeyRequestId, "test-request-123")
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+
+	// Mock GetChatHistory to return empty history for new session (will generate new sessionId)
+	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{}, nil)
+	mockAssistantStore.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil)
+
+	// Set up mock expectations
+	var capturedMessages []*model.Message
+	mockManager.EXPECT().Chat(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, messages []*model.Message, opts ...model.ChatOpt) ([]*model.Message, error) {
+			assert.Len(t, opts, 0)
+			capturedMessages = messages
+
+			return []*model.Message{{
+				Role: "assistant",
+				ContentBlocks: []model.ContentBlock{
+					{
+						Type: "text",
+						Text: "Mock response",
+					},
+				},
+			}}, nil
+		},
+	)
+
+	mockAssistantStore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil).Times(2)
+
+	// Execute the handler
+	handler.PostChat(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Verify that the mock received exactly 1 message (new session with no history)
+	expectedMessageCount := 1
+	assert.Len(t, capturedMessages, expectedMessageCount)
+
+	// Verify the message content
+	assert.Equal(t, "user", capturedMessages[0].Role)
+	assert.Equal(t, "Hello", capturedMessages[0].ContentBlocks[0].Text)
+}
+
+func TestPostChatUnauthorized(t *testing.T) {
+	// Create mock server with unauthorized user
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: false},
+	}
+	ctrl := gomock.NewController(t)
+	mockManager := mock.NewMockAssistantManager(ctrl)
+	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
+	defer ctrl.Finish()
+
+	srv.AssistantManager = mockManager
+	srv.Assistantstore = mockAssistantStore
+
+	handler := NewAssistantHandler(srv)
+
+	// Test data
+	requestBody := map[string]any{
+		"msg": "Hello",
+	}
+
+	jsonBody, _ := json.Marshal(requestBody)
+	req := httptest.NewRequest("POST", "/assistant/chat", bytes.NewBuffer(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	// Add required context values
+	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "test-user-123")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	ctx = context.WithValue(ctx, web.ContextKeyRequestId, "test-request-123")
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+
+	// Execute the handler
+	handler.PostChat(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func TestGetBalance(t *testing.T) {
+	// Create mock server
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockManager := mock.NewMockAssistantManager(ctrl)
+	defer ctrl.Finish()
+
+	srv.AssistantManager = mockManager
+
+	handler := NewAssistantHandler(srv)
+
+	req := httptest.NewRequest("GET", "/assistant/balance", nil)
+
+	// Add required context values
+	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "test-user-123")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	ctx = context.WithValue(ctx, web.ContextKeyRequestId, "test-request-123")
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+
+	// Set up mock expectations
+	mockManager.EXPECT().Balance(gomock.Any()).Return(&model.BalanceResponse{Balance: 10000}, nil)
+
+	// Execute the handler
+	handler.GetBalance(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestGetUsage(t *testing.T) {
+	// Create mock server
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
+	defer ctrl.Finish()
+
+	srv.Assistantstore = mockAssistantStore
+
+	handler := NewAssistantHandler(srv)
+
+	// Test data
+	params := url.Values{
+		"range":    {"2025-01-01 00:00:00 - 2025-01-31 23:59:59"},
+		"format":   {"2006-01-02 15:04:05"},
+		"timezone": {"UTC"},
+	}
+
+	params.Encode()
+
+	req := httptest.NewRequest("POST", "/assistant/manage/stats?"+params.Encode(), nil)
+	req.Header.Set("Content-Type", "application/json")
+
+	// Add required context values
+	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "test-user-123")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	ctx = context.WithValue(ctx, web.ContextKeyRequestId, "test-request-123")
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+
+	// Mock expected usage data
+	expectedUsage := []*model.UserUsage{
+		{
+			UserId:            "user-1",
+			TotalInputTokens:  1000,
+			TotalOutputTokens: 2000,
+			TotalCredits:      150,
+			TotalMessages:     10,
+		},
+		{
+			UserId:            "user-2",
+			TotalInputTokens:  500,
+			TotalOutputTokens: 1000,
+			TotalCredits:      75,
+			TotalMessages:     5,
+		},
+	}
+
+	// Set up mock expectations
+	mockAssistantStore.EXPECT().GetUsage(gomock.Any(), gomock.Any(), gomock.Any()).Return(expectedUsage, nil)
+
+	// Execute the handler
+	handler.GetUsage(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Verify response body contains expected usage data
+	var responseUsage []*model.UserUsage
+	err := json.Unmarshal(w.Body.Bytes(), &responseUsage)
+	assert.NoError(t, err)
+	assert.Equal(t, expectedUsage, responseUsage)
+}
+
+func TestUnstreamResponse(t *testing.T) {
+	data := `data: {"type":"message_start","message":{"id":"assistant","type":"message","role":"assistant","content":[],"model":"us.anthropic.claude-sonnet-4-20250514-v1:0","stop_reason":null,"stop_sequence":null}}
+
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"I'll get"}}
+
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" your 5 newest alerts for you"}}
+
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":". Since you're"}}
+
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" asking for the \"newest\" alerts, I'll query"}}
+
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" for recent individual alert"}}
+
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" events without grouping."}}
+
+data: {"type":"content_block_stop","index":0}
+
+data: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"tooluse_9xXi7Q0YQG-LjR-ezEZYqQ","name":"query_events","input":{}}}
+
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":""}}
+
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"oql_query"}}
+
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"\": \"tags:"}}
+
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"ale"}}
+
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"rt\""}}
+
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":", \"limit\""}}
+
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":": 5}"}}
+
+data: {"type":"content_block_stop","index":1}
+
+data: {"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null}}
+
+data: {"type":"message_delta","usage":{"input_tokens":3031,"output_tokens":111,"credits":3586}}
+
+data: {"type":"message_stop"}
+
+data: [DONE]`
+
+	msg, err := unstreamResponse(data)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, msg)
+	assert.Equal(t, model.Message{
+		Id:   "assistant",
+		Role: "assistant",
+		ContentBlocks: []model.ContentBlock{
+			{
+				Type: "text",
+				Text: `I'll get your 5 newest alerts for you. Since you're asking for the "newest" alerts, I'll query for recent individual alert events without grouping.`,
+			},
+			{
+				Type:  "tool_use",
+				Id:    "tooluse_9xXi7Q0YQG-LjR-ezEZYqQ",
+				Name:  "query_events",
+				Input: json.RawMessage(`{"oql_query": "tags:alert", "limit": 5}`),
+			},
+		},
+		StopReason: util.Ptr("tool_use"),
+		Usage: &model.Usage{
+			InputTokens:  3031,
+			OutputTokens: 111,
+			Credits:      3586,
+		},
+	}, *msg)
+}

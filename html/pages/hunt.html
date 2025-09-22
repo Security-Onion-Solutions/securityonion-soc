@@ -25,6 +25,15 @@
 										@update:model-value="filterToggled($event, toggle); notifyInputsChanged()"
 										:label="$root.localizeMessage(toggle.name)" color="primary"></v-switch>
 								</span>
+								<span v-if="investigateEnabled" :data-aid="'ai_investigated_toggle_' + category">
+									<v-switch
+										id="aiInvestigatedToggle"
+										:disabled="loading()"
+										v-model="aiInvestigatedFilter"
+										density="compact" hide-details class="my-0"
+										@update:model-value="notifyInputsChanged()"
+										:label="i18n.aiInvestigated" color="primary"></v-switch>
+								</span>
 								<span data-aid="show_detection_panel">
 									<v-switch v-if="isCategory('alerts')" id="detection-panel-toggle" :disabled="loading()" v-model="showDetailsPanel" density="compact" hide-details class="my-0" :label="i18n.showDetailsPanel"></v-switch>
 								</span>
@@ -68,12 +77,16 @@
 			</v-row>
 			<v-row align="start" v-if="createLink != ''">
 				<v-col cols="12">
-					<v-toolbar class="no-print elevation-0" fixed>
+					<v-toolbar class="no-print elevation-0 theme-background-lighten-1" fixed>
 						<router-link :to="createLink" style="text-decoration: none; cursor: 'pointer'" :data-aid="'create_new_record_' + category">
 							<v-btn color="primary mx-4" variant="flat" id="add-case-button" :title="i18n.create">
 								<v-icon>fa-plus</v-icon>
 							</v-btn>
 						</router-link>
+						<v-spacer></v-spacer>
+						<v-btn variant="flat" color="secondary" class="mx-4" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + this.category + '.html'" :title="i18n.contextualDocsBtn" data-aid="hunt_docs">
+							<v-icon>fa-circle-question</v-icon>
+						</v-btn>
 					</v-toolbar>
 				</v-col>
 			</v-row>
@@ -280,7 +293,7 @@
 																	<v-icon class="theme-icon">fa-expand</v-icon>
 																</router-link>
 																<v-btn  v-if="$root.isLicensed($root.FEAT_RPT) && ((header.value == 'count' && isAdvanced() && !aggregationActionsEnabled) || (header.value == '' && aggregationActionsEnabled))" :title="i18n.exportMetricsHelp" variant="text" size="x-small" @click.stop="exportMetrics(group, groupIdx)" data-aid="events_table_metrics">
-																	<v-icon class="theme-icon" :class="{ 'ml-8': aggregationActionsEnabled }">fa-file-export</v-icon>
+																	<v-icon class="theme-icon">fa-file-export</v-icon>
 																</v-btn>
 																<v-btn v-if="header.value != 'count' && header.value != ''" variant="text" size="x-small" @click.stop="removeGroupBy(groupIdx,headerIdx - getGroupByFieldStartIndex())" :title="i18n.remove" :data-aid="'groups_table_remove_' + category">
 																	<v-icon class="theme-icon tiny-icon">fa-circle-xmark</v-icon>
@@ -313,6 +326,12 @@
 															:color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'secondary' : 'primary'"
 															:data-aid="'groups_escalate_' + category" :aria-label="i18n.escalate">
 															<v-icon :title="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate">fa-exclamation-triangle</v-icon>
+														</v-btn>
+														<v-btn id="aiInvestigateButton" v-if="investigateEnabled && item['rule.uuid']" variant="text" size="x-small" icon
+															@mousedown="startAIInvestigation(item, $event)"
+															:color="getAIInvestigationButtonColor(item)"
+															:data-aid="'groups_ai_investigate_' + category" :aria-label="'AI Investigation'">
+															<v-icon :title="getAIInvestigationTooltip(item)">fa-microchip</v-icon>
 														</v-btn>
 														<v-btn id="infoButton" v-if="item['rule.uuid'] && showDetailsPanel" variant="text" size="x-small" icon @click="highlightDetection(item['rule.uuid'], item, groupIdx)" :aria-label="$root.replaceActionVar(i18n.displayInfo, 'display_state', (highlightedDetection && highlightedDetection.publicId === item['rule.uuid'] ? i18n.displayed : ''))">
 															<v-icon v-if="highlightedDetection && highlightedDetection.publicId === item['rule.uuid']" color="success">fa-thumbtack</v-icon>
@@ -559,7 +578,7 @@
 								<template #headers="{ props, columns, isSorted, getSortIcon, toggleSort }">
 									<tr>
 										<template v-for="header in columns" :key="header.key">
-											<th :class="{'is-sorted': isSorted(header)}">
+											<th :class="{'is-sorted': isSorted(header)}" @click="toggleSort(header)">
 												<template v-if="header.key === 'data-table-select'">
 													<div class="no-print multiselect-container ml-8">
 														<v-checkbox v-if="isMultiSelect()" id="multiselect-checkbox" class="no-details" :class="{ 'text-blue': selectAllState || selectAllIndeterminate }"
@@ -579,7 +598,7 @@
 															<v-icon class="tiny-icon">fa-caret-left</v-icon>
 														</v-btn>
 													</span>
-													<span :id="'col_label_' + header.value" :data-aid="'events_col_sort_' + category" @click="toggleSort(header)">
+													<span :id="'col_label_' + header.value" :data-aid="'events_col_sort_' + category">
 														{{ header.title }}
 													</span>
 													<span class="table-header-actions">
@@ -618,6 +637,12 @@
 												:data-aid="'events_escalate_' + category"
 												:color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'secondary' : 'primary'" :aria-label="i18n.escalate">
 												<v-icon :title="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate">fa-exclamation-triangle</v-icon>
+											</v-btn>
+											<v-btn id="aiInvestigateButton" v-if="investigateEnabled && item['rule.uuid']" variant="text" icon size="x-small"
+												@mousedown="startAIInvestigation(item, $event)"
+												:color="getAIInvestigationButtonColor(item)"
+												:data-aid="'events_ai_investigate_' + category" :aria-label="'AI Investigation'">
+												<v-icon :title="getAIInvestigationTooltip(item)">fa-microchip</v-icon>
 											</v-btn>
 											<v-btn id="infoButton" v-if="item['rule.uuid'] && showDetailsPanel" variant="text" size="x-small" icon @click="highlightDetection(item['rule.uuid'], item, groupIdx)" :title="i18n.openInPanel" :aria-label="$root.replaceActionVar(i18n.displayInfo, 'display_state', (highlightedDetection && highlightedDetection.publicId === item['rule.uuid'] ? i18n.displayed : ''))">
 												<v-icon v-if="highlightedDetection && highlightedDetection.publicId === item['rule.uuid']" color="success">fa-thumbtack</v-icon>
@@ -1112,4 +1137,5 @@
 			</v-card-actions>
 		</v-card>
 	</v-dialog>
+
 </v-container>
