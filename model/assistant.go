@@ -283,17 +283,6 @@ type AssistantSession struct {
 	Tags []string `json:"tags" example:"investigation"`
 }
 
-type DateRange struct {
-	// The start of the date range.
-	Start string `json:"start" example:"2006/01/02 3:04:05 PM"`
-	// The end of the date range.
-	End string `json:"end" example:"2006/01/02 3:04:05 PM"`
-	// The date range format. If unsure how to use this then use the example value exactly as shown.
-	DateRangeFormat string `json:"dateRangeFormat" example:"2006/01/02 3:04:05 PM"`
-	// The timezone for the date range.
-	Timezone string `json:"timezone" example:"America/Denver"`
-}
-
 type UserUsage struct {
 	// The Id of the user.
 	UserId string `json:"userId" example:"8beae4b5-275b-4669-b678-8cff894911b5"`

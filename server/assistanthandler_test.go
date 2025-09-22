@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
@@ -287,15 +288,15 @@ func TestGetUsage(t *testing.T) {
 	handler := NewAssistantHandler(srv)
 
 	// Test data
-	requestBody := map[string]interface{}{
-		"start":           "2025-01-01 00:00:00",
-		"end":             "2025-01-31 23:59:59",
-		"dateRangeFormat": "2006-01-02 15:04:05",
-		"timezone":        "UTC",
+	params := url.Values{
+		"range":    {"2025-01-01 00:00:00 - 2025-01-31 23:59:59"},
+		"format":   {"2006-01-02 15:04:05"},
+		"timezone": {"UTC"},
 	}
 
-	jsonBody, _ := json.Marshal(requestBody)
-	req := httptest.NewRequest("POST", "/assistant/manage/stats", bytes.NewBuffer(jsonBody))
+	params.Encode()
+
+	req := httptest.NewRequest("POST", "/assistant/manage/stats?"+params.Encode(), nil)
 	req.Header.Set("Content-Type", "application/json")
 
 	// Add required context values
