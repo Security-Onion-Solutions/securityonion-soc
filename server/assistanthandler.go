@@ -43,6 +43,8 @@ func RegisterAssistantRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Get("/sessions", h.GetSessions)
 		r.Get("/sessions/{sessionId}", h.GetSessionHistory)
 		r.Delete("/sessions/{sessionId}", h.DeleteSession)
+
+		r.Get("/manage/stats", h.GetUsage)
 	})
 }
 
@@ -500,6 +502,93 @@ func (h *AssistantHandler) DeleteSession(w http.ResponseWriter, r *http.Request)
 	}
 
 	web.Respond(w, r, http.StatusNoContent, nil)
+}
+
+// @Summary      Get Usage Statistics
+// @Description  Retrieve usage statistics of the AI assistant over a specified date range for every user.
+// @Tags         Assistant
+// @Param        range  query  string  true "Date range, in the specified timezone" example(2024/12/03 03:09:31 PM - 2024/12/04 03:09:31 PM)
+// @Param        zone  query  string  true "Timezone of the date range" example(America/New_York)
+// @Param        format  query  string  true "Date range date format. Use the example, exactly as shown, if not familiar with date formats" example(2006/01/02 3:04:05 PM)
+// @Security     bearer[assistant/read_all]
+// @Produce      json
+// @Success      200  {array}   model.UserUsage "Usage statistics for the AI assistant"
+// @Failure      400           "The provided date range is invalid or missing"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /api/assistant/manage/stats [get]
+func (h *AssistantHandler) GetUsage(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	logger := log.FromContext(ctx)
+
+	err := h.server.CheckAuthorized(ctx, "read_all", "assistant")
+	if err != nil {
+		web.Respond(w, r, http.StatusUnauthorized, err)
+		return
+	}
+
+	err = r.ParseForm()
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	zone := r.Form.Get("zone")
+
+	loc, err := time.LoadLocation(zone)
+	if err != nil {
+		log.WithField("timezone", zone).Info("invalid timezone provided by client")
+		loc, _ = time.LoadLocation("UTC")
+	}
+
+	dateFormat := r.Form.Get("format")
+	rangeParam := r.Form.Get("range")
+
+	rangeParts := strings.Split(rangeParam, " - ")
+	if len(rangeParts) != 2 {
+		logger.WithField("dateRange", rangeParam).Error("invalid date range provided")
+		web.Respond(w, r, http.StatusBadRequest, "invalid date range provided")
+
+		return
+	}
+
+	startParam := strings.TrimSpace(rangeParts[0])
+	endParam := strings.TrimSpace(rangeParts[1])
+
+	start, err := time.ParseInLocation(dateFormat, startParam, loc)
+	if err != nil {
+		logger.WithError(err).WithFields(log.Fields{
+			"startDateRange":  startParam,
+			"dateRangeFormat": dateFormat,
+			"timezone":        zone,
+		}).Error("unable to parse start time")
+		web.Respond(w, r, http.StatusBadRequest, "unable to parse start time")
+
+		return
+	}
+
+	end, err := time.ParseInLocation(dateFormat, endParam, loc)
+	if err != nil {
+		logger.WithError(err).WithFields(log.Fields{
+			"endDateRange":    endParam,
+			"dateRangeFormat": dateFormat,
+			"timezone":        zone,
+		}).Error("unable to parse end time")
+		web.Respond(w, r, http.StatusBadRequest, "unable to parse end time")
+
+		return
+	}
+
+	usage, err := h.server.Assistantstore.GetUsage(ctx, start, end)
+	if err != nil {
+		logger.WithError(err).Error("unable to get usage")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, usage)
 }
 
 func streamResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, response *http.Response) (entireResponse []byte, err error) {
