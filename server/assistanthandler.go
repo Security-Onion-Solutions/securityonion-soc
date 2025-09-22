@@ -43,6 +43,8 @@ func RegisterAssistantRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Get("/sessions", h.GetSessions)
 		r.Get("/sessions/{sessionId}", h.GetSessionHistory)
 		r.Delete("/sessions/{sessionId}", h.DeleteSession)
+
+		r.Post("/manage/stats", h.GetUsage)
 	})
 }
 
@@ -500,6 +502,78 @@ func (h *AssistantHandler) DeleteSession(w http.ResponseWriter, r *http.Request)
 	}
 
 	web.Respond(w, r, http.StatusNoContent, nil)
+}
+
+// @Summary      Get Usage Statistics
+// @Description  Retrieve usage statistics of the AI assistant over a specified date range for every user.
+// @Tags         Assistant
+// @Security     bearer[assistant/read_all]
+// @Produce      json
+// @Success      200  {array}   model.UserUsage "Usage statistics for the AI assistant"
+// @Failure      400           "The provided date range is invalid or missing"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /api/assistant/manage/stats [post]
+func (h *AssistantHandler) GetUsage(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	logger := log.FromContext(ctx)
+
+	err := h.server.CheckAuthorized(ctx, "read_all", "assistant")
+	if err != nil {
+		web.Respond(w, r, http.StatusUnauthorized, err)
+		return
+	}
+
+	dates := &model.DateRange{}
+
+	err = json.NewDecoder(r.Body).Decode(dates)
+	if err != nil {
+		logger.WithError(err).Error("unable to decode request body")
+		web.Respond(w, r, http.StatusBadRequest, err)
+
+		return
+	}
+
+	loc, err := time.LoadLocation(dates.Timezone)
+	if err != nil {
+		log.WithField("timezone", dates.Timezone).Info("invalid timezone provided by client")
+		loc, _ = time.LoadLocation("UTC")
+	}
+
+	start, err := time.ParseInLocation(dates.DateRangeFormat, dates.Start, loc)
+	if err != nil {
+		logger.WithError(err).WithFields(log.Fields{
+			"startDateRange":  dates.Start,
+			"dateRangeFormat": dates.DateRangeFormat,
+			"timezone":        dates.Timezone,
+		}).Error("unable to parse start time")
+		web.Respond(w, r, http.StatusBadRequest, "unable to parse start time")
+
+		return
+	}
+
+	end, err := time.ParseInLocation(dates.DateRangeFormat, dates.End, loc)
+	if err != nil {
+		logger.WithError(err).WithFields(log.Fields{
+			"endDateRange":    dates.End,
+			"dateRangeFormat": dates.DateRangeFormat,
+			"timezone":        dates.Timezone,
+		}).Error("unable to parse end time")
+		web.Respond(w, r, http.StatusBadRequest, "unable to parse end time")
+
+		return
+	}
+
+	usage, err := h.server.Assistantstore.GetUsage(ctx, start, end)
+	if err != nil {
+		logger.WithError(err).Error("unable to get usage")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, usage)
 }
 
 func streamResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, response *http.Response) (entireResponse []byte, err error) {

@@ -273,6 +273,73 @@ func TestGetBalance(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
+func TestGetUsage(t *testing.T) {
+	// Create mock server
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
+	defer ctrl.Finish()
+
+	srv.Assistantstore = mockAssistantStore
+
+	handler := NewAssistantHandler(srv)
+
+	// Test data
+	requestBody := map[string]interface{}{
+		"start":           "2025-01-01 00:00:00",
+		"end":             "2025-01-31 23:59:59",
+		"dateRangeFormat": "2006-01-02 15:04:05",
+		"timezone":        "UTC",
+	}
+
+	jsonBody, _ := json.Marshal(requestBody)
+	req := httptest.NewRequest("POST", "/assistant/manage/stats", bytes.NewBuffer(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	// Add required context values
+	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "test-user-123")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	ctx = context.WithValue(ctx, web.ContextKeyRequestId, "test-request-123")
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+
+	// Mock expected usage data
+	expectedUsage := []*model.UserUsage{
+		{
+			UserId:            "user-1",
+			TotalInputTokens:  1000,
+			TotalOutputTokens: 2000,
+			TotalCredits:      150,
+			TotalMessages:     10,
+		},
+		{
+			UserId:            "user-2",
+			TotalInputTokens:  500,
+			TotalOutputTokens: 1000,
+			TotalCredits:      75,
+			TotalMessages:     5,
+		},
+	}
+
+	// Set up mock expectations
+	mockAssistantStore.EXPECT().GetUsage(gomock.Any(), gomock.Any(), gomock.Any()).Return(expectedUsage, nil)
+
+	// Execute the handler
+	handler.GetUsage(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Verify response body contains expected usage data
+	var responseUsage []*model.UserUsage
+	err := json.Unmarshal(w.Body.Bytes(), &responseUsage)
+	assert.NoError(t, err)
+	assert.Equal(t, expectedUsage, responseUsage)
+}
+
 func TestUnstreamResponse(t *testing.T) {
 	data := `data: {"type":"message_start","message":{"id":"assistant","type":"message","role":"assistant","content":[],"model":"us.anthropic.claude-sonnet-4-20250514-v1:0","stop_reason":null,"stop_sequence":null}}
 

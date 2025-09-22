@@ -7,6 +7,7 @@ package model
 
 import (
 	"encoding/json"
+	"time"
 )
 
 // @Description A user message to be added to a session.
@@ -267,4 +268,41 @@ func ApplyChatOpts(opts ...ChatOpt) *ChatConfig {
 	}
 
 	return config
+}
+
+// @Description A session for a user chatting with the Assistant.
+type AssistantSession struct {
+	Auditable
+	// The title of the session. Usually the first message sent by the user.
+	Title string `json:"title" example:"Can you write a suricata rule for me?"`
+	// The session identifier.
+	SessionId string `json:"sessionId" example:"chat_1757086398900_ykhmndscn"`
+	// The time the session was deleted.
+	DeleteTime *time.Time `json:"deleteTime,omitempty" example:"2025-09-05T15:33:00.000Z"`
+	// Metadata about the session.
+	Tags []string `json:"tags" example:"investigation"`
+}
+
+type DateRange struct {
+	// The start of the date range.
+	Start string `json:"start" example:"2006/01/02 3:04:05 PM"`
+	// The end of the date range.
+	End string `json:"end" example:"2006/01/02 3:04:05 PM"`
+	// The date range format. If unsure how to use this then use the example value exactly as shown.
+	DateRangeFormat string `json:"dateRangeFormat" example:"2006/01/02 3:04:05 PM"`
+	// The timezone for the date range.
+	Timezone string `json:"timezone" example:"America/Denver"`
+}
+
+type UserUsage struct {
+	// The Id of the user.
+	UserId string `json:"userId" example:"8beae4b5-275b-4669-b678-8cff894911b5"`
+	// The total input tokens used by the user in the date range.
+	TotalInputTokens int `json:"totalInputTokens" example:"1500"`
+	// The total output tokens used by the user in the date range.
+	TotalOutputTokens int `json:"totalOutputTokens" example:"3000"`
+	// The total credits used by the user in the date range.
+	TotalCredits int `json:"totalCredits" example:"5"`
+	// The total messages sent by the user in the date range.
+	TotalMessages int `json:"totalMessages" example:"25"`
 }
