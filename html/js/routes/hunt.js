@@ -53,6 +53,7 @@ const huntComponent = {
       huntPending: false,
       ackEnabled: false,
       escalateEnabled: false,
+      assistantEnabled: false,
       investigateEnabled: false,
       investigationMsg: '',
       viewEnabled: false,
@@ -318,7 +319,17 @@ const huntComponent = {
       this.zone = moment.tz.guess();
 
       this.loadLocalSettings();
-      await this.loadInvestigationSessions();
+      
+      if (this.isCategory('alerts')) {
+        this.$nextTick().then(() => {
+          this.$root.loadParameters('assistant', this.initAssistant);
+          this.investigateEnabled = this.$root.isLicensed('oai') && this.assistantEnabled;
+          if (this.investigateEnabled) {
+            this.loadInvestigationSessions();
+          }
+        });
+      }
+      
       if (this.mruQueries.length > 0 && this.isAdvanced()) {
         this.query = this.mruQueries[0];
       }
@@ -335,11 +346,6 @@ const huntComponent = {
       }
 
       this.setupCharts();
-
-      if (this.isCategory('alerts')) {
-        this.$root.loadParameters('assistant', this.initAssistant);
-        this.investigateEnabled = this.$root.isLicensed('oai') && this.assistantEnabled;
-      }
 
       this.$root.stopLoading();
 
