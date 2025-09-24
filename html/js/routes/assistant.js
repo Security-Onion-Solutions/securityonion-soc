@@ -31,7 +31,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     lowBalanceColorAlert: 500000,
   }},
   async created() {
-    this.$root.showDisclaimer(this.i18n.assistantDisclaimerMessage, this.i18n.assistantDisclaimerTitle, this.i18n.acknowledge, 'so-data-retention-disclaimer');
+    // this.$root.showDisclaimer(this.i18n.assistantDisclaimerMessage, this.i18n.assistantDisclaimerTitle, this.i18n.acknowledge, 'so-data-retention-disclaimer');
     this.loadContextThresholdSetting();
     this.loadLastActiveSetting();
     this.loadReadApprovalSetting();
@@ -71,11 +71,17 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.thresholdColorRatioMed = params["thresholdColorRatioMed"];
       this.thresholdColorRatioMax = params["thresholdColorRatioMax"];
       this.lowBalanceColorAlert = params["lowBalanceColorAlert"];
+
+      this.$root.showDisclaimer(this.i18n.assistantDisclaimerMessage, this.i18n.assistantDisclaimerTitle, this.i18n.acknowledge, 'so-data-retention-disclaimer');
       
       if (this.assistantEnabled) {
-        await this.loadStoredChats();
-        await this.handleRouteSessionId();
-        await this.loadCredits();
+        if (!this.$root.disclaimer) {
+          await this.loadStoredChats();
+          await this.handleRouteSessionId();
+          await this.loadCredits();
+        }
+      } else {
+        this.$root.disclaimer = false;
       }
     },
     
