@@ -148,6 +148,7 @@ $(document).ready(function () {
           disclaimerMessage: "",
           disclaimerTitle: "",
           disclaimerClose: "",
+          disclaimerStorageKey: "",
           tipTimeout: 6000,
           currentTipTimeout: 6000,
           warningTimeout: 30000,
@@ -959,11 +960,19 @@ $(document).ready(function () {
             this.currentTipTimeout = this.tipTimeout;
           }
         },
-        showDisclaimer(msg, title, closeButton) {
-          this.disclaimer = true;
-          this.disclaimerMessage = msg;
-          this.disclaimerTitle = title;
-          this.disclaimerClose = closeButton;
+        showDisclaimer(msg, title, closeButton, storageKey) {
+          const saved = localStorage.getItem(storageKey);
+          if (saved !== 'true') {
+            this.disclaimer = true;
+            this.disclaimerMessage = msg;
+            this.disclaimerTitle = title;
+            this.disclaimerClose = closeButton;
+            this.disclaimerStorageKey = storageKey;
+          }
+        },
+        acceptDisclaimer() {
+          localStorage.setItem(this.disclaimerStorageKey, 'true');
+          this.disclaimer = false;
         },
         startLoading(cancelCallback = null) {
           this.loading = true;

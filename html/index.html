@@ -195,7 +195,7 @@
                 <div class="disclaimer-message" v-html="disclaimerMessage"></div>
               </v-card-text>
               <template #actions>
-                <v-btn id="disclaimer-close" text @click="disclaimer = false" data-aid="banner_disclaimer_close">
+                <v-btn id="disclaimer-close" text @click="acceptDisclaimer()" data-aid="banner_disclaimer_close">
                   <div class="disclaimer-close" v-html="disclaimerClose"></div>
                 </v-btn>
               </template>
