@@ -31,7 +31,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     lowBalanceColorAlert: 500000,
   }},
   async created() {
-    this.$root.showDisclaimer(this.i18n.assistantDisclaimerMessage, this.i18n.assistantDisclaimerTitle, this.i18n.agree, 'so-data-retention-disclaimer');
+    this.$root.showDisclaimer(this.i18n.assistantDisclaimerMessage, this.i18n.assistantDisclaimerTitle, this.i18n.acknowledge, 'so-data-retention-disclaimer');
     this.loadContextThresholdSetting();
     this.loadLastActiveSetting();
     this.loadReadApprovalSetting();

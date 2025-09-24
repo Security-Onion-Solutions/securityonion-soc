@@ -1305,7 +1305,19 @@ ul ul ul {
   word-break: break-all;
 }
 
-.disclaimer-container {
-  max-width: calc(100vw - 200px) !important;
-  max-height: calc(100vh - 100px) !important;
+.disclaimer-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.disclaimer-body {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 16px;
+}
+
+.disclaimer-actions {
+  position: sticky;
+  bottom: 0;
+  background: inherit;
 }

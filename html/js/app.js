@@ -207,7 +207,10 @@ $(document).ready(function () {
       watch: {
         '$vuetify.theme.current.dark': 'saveTheme',
         'toolbar': 'saveToolbar',
-        '$route': 'onLocationUpdated',
+        '$route': [
+          'onLocationUpdated',
+          'closeDisclaimerOnNav'
+        ],
         'selectedGridId': 'onGridSelected',
       },
       methods: {
@@ -973,6 +976,9 @@ $(document).ready(function () {
         acceptDisclaimer() {
           localStorage.setItem(this.disclaimerStorageKey, 'true');
           this.disclaimer = false;
+        },
+        closeDisclaimerOnNav() {
+          if (this.disclaimer) this.disclaimer = false;
         },
         startLoading(cancelCallback = null) {
           this.loading = true;
