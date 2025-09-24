@@ -1150,6 +1150,47 @@ ul ul ul {
   overflow-y: auto;
 }
 
+.chat-container .message-item .text-body-2 {
+  line-height: 1.6;
+}
+
+.chat-container .message-item .text-body-2 p,
+.chat-container .message-item .text-body-2 ul,
+.chat-container .message-item .text-body-2 ol,
+.chat-container .message-item .text-body-2 table {
+  margin-top: 0;
+  margin-bottom: 1.25rem;
+}
+
+.chat-container .message-item .text-body-2 ul,
+.chat-container .message-item .text-body-2 ol {
+  padding-left: 1.25rem;
+}
+
+.chat-container .message-item .text-body-2 p:last-child,
+.chat-container .message-item .text-body-2 ul:last-child,
+.chat-container .message-item .text-body-2 ol:last-child,
+.chat-container .message-item .text-body-2 table:last-child {
+  margin-bottom: 0;
+}
+
+.chat-container .message-item .text-body-2 table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.chat-container .message-item .text-body-2 th,
+.chat-container .message-item .text-body-2 td {
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.24);
+  padding: 0.5rem 0.75rem;
+  vertical-align: top;
+}
+
+.chat-container .message-item .text-body-2 th {
+  background-color: rgba(var(--v-theme-on-surface), 0.06);
+  font-weight: 600;
+}
+
 .credits-box {
   min-width: 180px;
 }

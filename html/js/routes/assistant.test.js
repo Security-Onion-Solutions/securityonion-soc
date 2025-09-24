@@ -1688,6 +1688,16 @@ test('formatMarkdown delegates to root', () => {
   expect(result).toBe('<strong>bold text</strong>');
 });
 
+test('formatMarkdown unwraps ref content before delegating', () => {
+  const refContent = { value: '**bold text**' };
+  comp.$root.formatMarkdown = jest.fn().mockReturnValue('<strong>bold text</strong>');
+
+  const result = comp.formatMarkdown(refContent);
+
+  expect(comp.$root.formatMarkdown).toHaveBeenCalledWith('**bold text**', true);
+  expect(result).toBe('<strong>bold text</strong>');
+});
+
 test('formatChatDate delegates to root', () => {
   const timestamp = '2025-01-01T12:00:00.000Z';
   comp.$root.formatDateTime = jest.fn().mockReturnValue('formatted-datetime');

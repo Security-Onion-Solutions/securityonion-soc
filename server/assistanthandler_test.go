@@ -341,6 +341,52 @@ func TestGetUsage(t *testing.T) {
 	assert.Equal(t, expectedUsage, responseUsage)
 }
 
+func TestGetUsageFallbackFormat(t *testing.T) {
+	// Create mock server
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
+	defer ctrl.Finish()
+
+	srv.Assistantstore = mockAssistantStore
+
+	handler := NewAssistantHandler(srv)
+
+	params := url.Values{
+		"range":    {"2025-09-24 13:00:00 - 2025-09-24 14:00:00"},
+		"format":   {"2006/01/02 3:04:05 PM"},
+		"timezone": {"UTC"},
+	}
+
+	req := httptest.NewRequest("POST", "/assistant/manage/stats?"+params.Encode(), nil)
+	req.Header.Set("Content-Type", "application/json")
+
+	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "test-user-123")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	ctx = context.WithValue(ctx, web.ContextKeyRequestId, "test-request-123")
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+
+	expectedUsage := []*model.UserUsage{}
+
+	mockAssistantStore.EXPECT().GetUsage(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, start, end time.Time) ([]*model.UserUsage, error) {
+			expectedStart := time.Date(2025, 9, 24, 13, 0, 0, 0, time.UTC)
+			expectedEnd := time.Date(2025, 9, 24, 14, 0, 0, 0, time.UTC)
+			assert.Equal(t, expectedStart, start)
+			assert.Equal(t, expectedEnd, end)
+			return expectedUsage, nil
+		},
+	)
+
+	handler.GetUsage(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
 func TestUnstreamResponse(t *testing.T) {
 	data := `data: {"type":"message_start","message":{"id":"assistant","type":"message","role":"assistant","content":[],"model":"us.anthropic.claude-sonnet-4-20250514-v1:0","stop_reason":null,"stop_sequence":null}}
 

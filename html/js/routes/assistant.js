@@ -875,7 +875,15 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       return this.$root.formatTimestamp(timestamp);
     },
     formatMarkdown(text) {
-      md = this.$root.formatMarkdown(text, true);
+      let content = text;
+      if (content && typeof content === 'object' && 'value' in content) {
+        content = content.value;
+      }
+      if (content == null) {
+        content = '';
+      }
+
+      const md = this.$root.formatMarkdown(content, true);
       if (!this.isStreaming) {
         this.$nextTick(() => {
           this.$root.renderMermaid();

@@ -518,6 +518,30 @@ func (h *AssistantHandler) DeleteSession(w http.ResponseWriter, r *http.Request)
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
 // @Router       /api/assistant/manage/stats [get]
+func parseAssistantTimestamp(value, primaryFormat string, loc *time.Location) (time.Time, error) {
+	formats := []string{}
+	if primaryFormat != "" {
+		formats = append(formats, primaryFormat)
+	}
+	// Accept additional common layouts that may arrive from the UI or API clients
+	formats = append(formats,
+		"2006-01-02 15:04:05",
+		"2006-01-02 03:04:05 PM",
+		time.RFC3339,
+	)
+
+	for _, layout := range formats {
+		if layout == "" {
+			continue
+		}
+		if ts, err := time.ParseInLocation(layout, value, loc); err == nil {
+			return ts, nil
+		}
+	}
+
+	return time.Time{}, fmt.Errorf("unable to parse time %q with provided formats", value)
+}
+
 func (h *AssistantHandler) GetUsage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
@@ -556,7 +580,7 @@ func (h *AssistantHandler) GetUsage(w http.ResponseWriter, r *http.Request) {
 	startParam := strings.TrimSpace(rangeParts[0])
 	endParam := strings.TrimSpace(rangeParts[1])
 
-	start, err := time.ParseInLocation(dateFormat, startParam, loc)
+	start, err := parseAssistantTimestamp(startParam, dateFormat, loc)
 	if err != nil {
 		logger.WithError(err).WithFields(log.Fields{
 			"startDateRange":  startParam,
@@ -568,7 +592,7 @@ func (h *AssistantHandler) GetUsage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	end, err := time.ParseInLocation(dateFormat, endParam, loc)
+	end, err := parseAssistantTimestamp(endParam, dateFormat, loc)
 	if err != nil {
 		logger.WithError(err).WithFields(log.Fields{
 			"endDateRange":    endParam,

@@ -22,3 +22,5 @@ html/so-ca.crt
 
 # Avoid pushing the temporary build binary
 securityonion-soc
+
+AGENTS.md
