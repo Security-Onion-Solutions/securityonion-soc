@@ -12,6 +12,7 @@ package mock
 import (
 	context "context"
 	reflect "reflect"
+	time "time"
 
 	model "github.com/security-onion-solutions/securityonion-soc/model"
 	gomock "go.uber.org/mock/gomock"
@@ -97,6 +98,21 @@ func (m *MockAssistantstore) GetSessions(ctx context.Context, userId string) ([]
 func (mr *MockAssistantstoreMockRecorder) GetSessions(ctx, userId any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSessions", reflect.TypeOf((*MockAssistantstore)(nil).GetSessions), ctx, userId)
+}
+
+// GetUsage mocks base method.
+func (m *MockAssistantstore) GetUsage(arg0 context.Context, arg1, arg2 time.Time) ([]*model.UserUsage, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUsage", arg0, arg1, arg2)
+	ret0, _ := ret[0].([]*model.UserUsage)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetUsage indicates an expected call of GetUsage.
+func (mr *MockAssistantstoreMockRecorder) GetUsage(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUsage", reflect.TypeOf((*MockAssistantstore)(nil).GetUsage), arg0, arg1, arg2)
 }
 
 // SaveChat mocks base method.

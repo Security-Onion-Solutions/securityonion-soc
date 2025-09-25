@@ -8,6 +8,7 @@ package server
 
 import (
 	"context"
+	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 )
@@ -18,6 +19,8 @@ type Assistantstore interface {
 	GetSessions(ctx context.Context, userId string) ([]*model.AssistantSession, error)
 	CreateSession(ctx context.Context, session *model.AssistantSession) error
 	DeleteSession(context.Context, string) error
+
+	GetUsage(context.Context, time.Time, time.Time) ([]*model.UserUsage, error)
 }
 
 //go:generate mockgen -destination mock/mock_assistantstore.go -package mock . Assistantstore

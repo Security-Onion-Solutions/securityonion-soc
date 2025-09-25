@@ -536,3 +536,164 @@ func (store *ElasticAssistantstore) DeleteSession(ctx context.Context, sessionId
 
 	return nil
 }
+
+func (store *ElasticAssistantstore) GetUsage(ctx context.Context, start time.Time, end time.Time) ([]*model.UserUsage, error) {
+	if err := store.server.CheckAuthorized(ctx, "read_all", "assistant"); err != nil {
+		return nil, err
+	}
+
+	logger := log.FromContext(ctx)
+
+	query := map[string]any{
+		"query": map[string]any{
+			"bool": map[string]any{
+				"must": []any{
+					map[string]any{
+						"term": map[string]any{
+							store.schemaPrefix + "kind": "chat",
+						},
+					},
+					map[string]any{
+						"range": map[string]any{
+							"@timestamp": map[string]any{
+								"gte": start.Format(time.RFC3339),
+								"lte": end.Format(time.RFC3339),
+							},
+						},
+					},
+				},
+			},
+		},
+		"aggs": map[string]any{
+			"users": map[string]any{
+				"terms": map[string]any{
+					"field": store.schemaPrefix + "chat.userId",
+					"size":  10000,
+				},
+				"aggs": map[string]any{
+					"total_input_tokens": map[string]any{
+						"sum": map[string]any{
+							"field": store.schemaPrefix + "chat.message.usage.input_tokens",
+						},
+					},
+					"total_output_tokens": map[string]any{
+						"sum": map[string]any{
+							"field": store.schemaPrefix + "chat.message.usage.output_tokens",
+						},
+					},
+					"total_credits": map[string]any{
+						"sum": map[string]any{
+							"field": store.schemaPrefix + "chat.message.usage.credits",
+						},
+					},
+					"total_messages": map[string]any{
+						"value_count": map[string]any{
+							"field": store.schemaPrefix + "chat.userId",
+						},
+					},
+				},
+			},
+		},
+		"size": 0,
+	}
+
+	queryJSON, err := json.Marshal(query)
+	if err != nil {
+		logger.WithError(err).Error("Failed to marshal Elasticsearch aggregation query")
+		return nil, err
+	}
+
+	logger.WithFields(log.Fields{
+		"usageQuery":     store.truncate(string(queryJSON)),
+		"startDateRange": start.Format(time.RFC3339),
+		"endDateRange":   end.Format(time.RFC3339),
+		"requestId":      ctx.Value(web.ContextKeyRequestId),
+	}).Debug("Executing usage aggregation query")
+
+	res, err := store.esClient.Search(
+		store.esClient.Search.WithContext(ctx),
+		store.esClient.Search.WithIndex(store.chatIndex),
+		store.esClient.Search.WithBody(strings.NewReader(string(queryJSON))),
+	)
+	if err != nil {
+		logger.WithError(err).Error("Failed to execute usage aggregation query")
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	responseJSON, err := readJsonFromResponse(res)
+	if err != nil {
+		logger.WithError(err).Error("Failed to read usage aggregation response")
+		return nil, err
+	}
+
+	logger.WithFields(log.Fields{
+		"usageResponseLength": len(responseJSON),
+		"requestId":           ctx.Value(web.ContextKeyRequestId),
+	}).Debug("Received usage aggregation response")
+
+	var response map[string]any
+	if err := json.Unmarshal([]byte(responseJSON), &response); err != nil {
+		logger.WithError(err).Error("Failed to unmarshal usage aggregation response")
+		return nil, err
+	}
+
+	userUsages := []*model.UserUsage{}
+	if aggs, ok := response["aggregations"].(map[string]any); ok {
+		if users, ok := aggs["users"].(map[string]any); ok {
+			if buckets, ok := users["buckets"].([]any); ok {
+				for _, bucketObj := range buckets {
+					if bucket, ok := bucketObj.(map[string]any); ok {
+						userId, _ := bucket["key"].(string)
+
+						totalInputTokens := 0
+						if inputTokensAgg, ok := bucket["total_input_tokens"].(map[string]any); ok {
+							if value, ok := inputTokensAgg["value"].(float64); ok {
+								totalInputTokens = int(value)
+							}
+						}
+
+						totalOutputTokens := 0
+						if outputTokensAgg, ok := bucket["total_output_tokens"].(map[string]any); ok {
+							if value, ok := outputTokensAgg["value"].(float64); ok {
+								totalOutputTokens = int(value)
+							}
+						}
+
+						totalCredits := 0
+						if creditsAgg, ok := bucket["total_credits"].(map[string]any); ok {
+							if value, ok := creditsAgg["value"].(float64); ok {
+								totalCredits = int(value)
+							}
+						}
+
+						totalMessages := 0
+						if messagesAgg, ok := bucket["total_messages"].(map[string]any); ok {
+							if value, ok := messagesAgg["value"].(float64); ok {
+								totalMessages = int(value)
+							}
+						}
+
+						userUsage := &model.UserUsage{
+							UserId:            userId,
+							TotalInputTokens:  totalInputTokens,
+							TotalOutputTokens: totalOutputTokens,
+							TotalCredits:      totalCredits,
+							TotalMessages:     totalMessages,
+						}
+						userUsages = append(userUsages, userUsage)
+					}
+				}
+			}
+		}
+	}
+
+	logger.WithFields(log.Fields{
+		"userCount": len(userUsages),
+		"start":     start.Format(time.RFC3339),
+		"end":       end.Format(time.RFC3339),
+		"requestId": ctx.Value(web.ContextKeyRequestId),
+	}).Debug("Processed usage aggregation results")
+
+	return userUsages, nil
+}
