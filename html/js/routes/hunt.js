@@ -1804,7 +1804,7 @@ const huntComponent = {
       this.$router.push(route);
       this.query = newQuery;
       const thisRoute = this;
-      setTimeout(function () { thisRoute.disableRouteLoad = false; }, 100);
+      setTimeout(function () { thisRoute.disableRouteLoad = false; }, 1000);
     },
     toggleColumnHeader(field) {
       if (!this.isColumnHeader(field)) {
