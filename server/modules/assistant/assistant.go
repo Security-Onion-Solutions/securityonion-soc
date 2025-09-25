@@ -299,7 +299,9 @@ func (ac *AssistantCoordinator) ChatStream(ctx context.Context, messages []*mode
 		logger.WithError(err).WithField("chatrequest", req).Error("unable to encode ChatRequest")
 		return nil, err
 	}
-	logger.WithField("body", buf.String()).Info("outgoing chat request body")
+
+	logger.WithField("outgoingChatBodySize", buf.Len()).Info("outgoing chat request body")
+
 	httpReq, err := http.NewRequest(http.MethodPost, endpoint, &buf)
 	if err != nil {
 		logger.WithError(err).WithField("apiEndpoint", endpoint).Error("unable to make request object")
