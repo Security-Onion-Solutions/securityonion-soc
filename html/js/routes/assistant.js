@@ -969,6 +969,9 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
             // Handle streaming chunks for tool result response using helper methods
             switch (c.type) {
               case 'message_start':
+                // Capture raw tool result using helper method
+                this.captureRawToolResult(toolUse);
+                
                 const startResult = this.handleToolExecutionMessageStart(c, assistantMessage, toolUse);
                 assistantMessage = startResult.assistantMessage;
                 if (startResult.messageUsage) {
@@ -1015,9 +1018,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         }
         
         this.isStreaming = false;
-
-        // Capture raw tool result using helper method
-        this.captureRawToolResult(toolUse);
         
         // Update credits after tool execution
         await this.loadCredits();
