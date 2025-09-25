@@ -58,11 +58,11 @@ func (t *QueryEventsTool) GetSchema() model.JSONSchema {
 				},
 				"start_time": {
 					Type:        "string",
-					Description: "Optional start time for the query range (e.g., \"-1h\", \"2023-10-26 10:00:00\")",
+					Description: "Optional start time for the query range (e.g., \"-1h\", \"2023/10/26 10:00:00 AM\")",
 				},
 				"end_time": {
 					Type:        "string",
-					Description: "Optional end time for the query range (e.g., \"now\", \"2023-10-26 12:00:00\")",
+					Description: "Optional end time for the query range (e.g., \"now\", \"2023/10/26 12:00:00 PM\")",
 				},
 				"limit": {
 					Type:        "integer",
@@ -159,9 +159,27 @@ func (t *QueryEventsTool) Execute(ctx context.Context, server *server.Server, pa
 			end = *args.EndTime
 		}
 
+		var startFormatted, endFormatted string
+
+		formats := []string{
+			"2006-01-02 3:04:05 PM", "2006/01/02 3:04:05 PM", "2006_01_02 3:04:05 PM",
+			"2006-01-02 15:04:05", "2006/01/02 15:04:05", "2006_01_02 15:04:05",
+		}
+
 		// Parse and format times
-		startFormatted := util.ParseRelativeTimeString(start)
-		endFormatted := util.ParseRelativeTimeString(end)
+		startParsed, err := util.ParseDate(start, formats)
+		if err != nil {
+			startFormatted = util.ParseRelativeTimeString(start)
+		} else {
+			startFormatted = util.FormatSOTime(startParsed)
+		}
+
+		endParsed, err := util.ParseDate(end, formats)
+		if err != nil {
+			endFormatted = util.ParseRelativeTimeString(end)
+		} else {
+			endFormatted = util.FormatSOTime(endParsed)
+		}
 
 		timeRange = fmt.Sprintf("%s - %s", startFormatted, endFormatted)
 	}
