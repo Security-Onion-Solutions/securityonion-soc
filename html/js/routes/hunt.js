@@ -3345,36 +3345,32 @@ const huntComponent = {
       };
 
       // Create the investigation prompt with alert data
-      const investigationPrompt = this.generateInvestigationPrompt(targetItem);
-
-      // Store the investigation prompt in localStorage to avoid URL encoding issues
-      const investigationData = {
-        socId: socId,
-        ruleUuid: targetItem['rule.uuid'],
-        prompt: investigationPrompt,
-        timestamp: new Date().toISOString()
-      };
-      localStorage.setItem(`key_${chatSessionId}`, JSON.stringify(investigationData));
+      const queryList = this.generateQueryList(targetItem);
 
       // Check for middle-click (button === 1) to open in new tab
       if (event && event.button === 1) {
         // Middle-click: open in new tab
-        const url = this.$router.resolve(`/assistant/${chatSessionId}?investigation=true`).href;
+        const url = this.$router.resolve({
+          name: 'assistant',
+          params: { sessionId: chatSessionId },
+          query: queryList
+        }).href;
         window.open(url, '_blank');
       } else {
         // Left-click: navigate in current tab
-        this.$router.push(`/assistant/${chatSessionId}?investigation=true`);
+        this.$router.push({
+          name: 'assistant',
+          params: { sessionId: chatSessionId },
+          query: queryList
+        });
       }
     },
 
-    generateInvestigationPrompt(item) {
-      const socId = item.soc_id;
-      const ruleUuid = item['rule.uuid'];
-
-      // Prepare the alert data for investigation
+    generateQueryList(item) {
+      
       const alertData = {
-        socId: socId,
-        ruleUuid: ruleUuid,
+        socId: item.soc_id,
+        ruleUuid: item['rule.uuid'],
         ruleName: item['rule.name'],
         severity: item['event.severity_label'],
         timestamp: item['soc_timestamp'] || item['@timestamp'],
@@ -3386,9 +3382,15 @@ const huntComponent = {
         alertRule: item['rule.rule']
       };
 
-      const investigationMsg = this.$root.replaceActionVar(this.investigationMsg, "socid", alertData.socId || 'Unknown');
+      queryList = { investigation : true };
 
-      return investigationMsg;
+      for (let alertKey in alertData) {
+        if (this.investigationMsg.includes('{' + alertKey.toString() + '}')) {
+          queryList[alertKey] = alertData[alertKey];
+        }
+      }
+
+      return queryList;
     },
 
     getAIInvestigationButtonColor(item) {

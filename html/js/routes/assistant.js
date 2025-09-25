@@ -23,6 +23,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     alwaysApproveReadRequests: false,
     assistantEnabled: false,
     isStreaming: false,
+    investigationMsg: '',
     contextLimitSmall: 200000,
     contextLimitLarge: 1000000,
     thresholdColorRatioLow: 0.5,
@@ -65,6 +66,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
 
     async initAssistant(params) {
       this.assistantEnabled = params["enabled"] && this.$root.isLicensed('oai');
+      this.investigationMsg = params["investigationPrompt"];
       this.contextLimitSmall = params["contextLimitSmall"];
       this.contextLimitLarge = params["contextLimitLarge"];
       this.thresholdColorRatioLow = params["thresholdColorRatioLow"];
@@ -168,23 +170,16 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           const isInvestigation = this.$route.query.investigation === 'true';
           
           if (isInvestigation) {
-            // Try to get investigation data from localStorage
-            const investigationKey = `key_${urlSessionId}`;
-            const investigationDataStr = localStorage.getItem(investigationKey);
-            
-            if (investigationDataStr) {
-              try {
-                const investigationData = JSON.parse(investigationDataStr);
-                // This is a new investigation session, start with investigation prompt
-                this.$nextTick(() => {
-                  this.startInvestigationSession(investigationData.prompt);
-                });
-                // Clean up the localStorage after use
-                localStorage.removeItem(investigationKey);
-              } catch (error) {
-                this.$root.showError(this.i18n.assistantUnableToParseInvestigation + ': ' + error.message);
-              }
+            try {
+              const investigationPrompt = this.generateInvestigationPrompt(this.$route.query);
+              // This is a new investigation session, start with investigation prompt
+              this.$nextTick(() => {
+                this.startInvestigationSession(investigationPrompt);
+              });
+            } catch (error) {
+              this.$root.showError(this.i18n.assistantUnableToParseInvestigation + ': ' + error.message);
             }
+            
           } else if (this.messages.length > 1) {
             this.loadChatHistory();
           }
@@ -1330,6 +1325,32 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }
       
       return processedMessages;
+    },
+
+    generateInvestigationPrompt(fields) {
+
+      // Prepare the alert data for investigation
+      const alertData = {
+        socId: fields.socId,
+        ruleUuid: fields.ruleUuid,
+        ruleName: fields.ruleName,
+        severity: fields.severity,
+        timestamp: fields.timestamp,
+        sourceIp: fields.sourceIp,
+        destIp: fields.destIp,
+        eventModule: fields.eventModule,
+        eventDataset: fields.eventDataset,
+        message: fields.message,
+        alertRule: fields.alertRule
+      };
+
+      let investigationPrompt = this.investigationMsg;
+      
+      for (let alertKey in alertData) {
+        investigationPrompt = this.$root.replaceActionVar(investigationPrompt, alertKey.toString(), alertData[alertKey] || 'Unknown');
+      }
+
+      return investigationPrompt;
     },
 
     getContextColor(value) {
