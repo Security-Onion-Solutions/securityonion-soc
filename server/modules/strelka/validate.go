@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
-	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 )
 
@@ -132,7 +131,7 @@ func (r *YaraRule) ToDetection(license string, ruleset string, isCommunity bool)
 	formats := []string{"2006-01-02", "2006/01/02", "2006_01_02"}
 
 	if r.Meta.Date != nil {
-		t, err := detections.ParseDate(*r.Meta.Date, formats)
+		t, err := util.ParseDate(*r.Meta.Date, formats)
 		if err == nil {
 			det.SourceCreated = &t
 		}
@@ -140,7 +139,7 @@ func (r *YaraRule) ToDetection(license string, ruleset string, isCommunity bool)
 
 	modified, ok := r.Meta.Rest["date_modified"]
 	if ok && modified != "" {
-		t, err := detections.ParseDate(modified, formats)
+		t, err := util.ParseDate(modified, formats)
 		if err == nil {
 			det.SourceUpdated = &t
 		}
