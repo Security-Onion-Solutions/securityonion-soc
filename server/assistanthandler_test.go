@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -21,6 +22,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 )
@@ -239,6 +241,142 @@ func TestPostChatUnauthorized(t *testing.T) {
 
 	// Verify response
 	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func TestPostTool(t *testing.T) {
+	// Create mock server
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockManager := mock.NewMockAssistantManager(ctrl)
+	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
+	defer ctrl.Finish()
+
+	srv.AssistantManager = mockManager
+	srv.Assistantstore = mockAssistantStore
+
+	handler := NewAssistantHandler(srv)
+
+	// Test data
+	sessionId := "test-session-123"
+	toolUseId := "tooluse_test_123"
+	requestBody := model.ToolRequest{
+		SessionId: sessionId,
+		ToolUseId: toolUseId,
+		Params:    json.RawMessage(`{"query": "test query"}`),
+	}
+
+	jsonBody, _ := json.Marshal(requestBody)
+	req := httptest.NewRequest("POST", "/assistant/tool/query_events", bytes.NewBuffer(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	// Set URL param for tool name
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("name", "query_events")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	// Add required context values
+	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "test-user-123")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	ctx = context.WithValue(ctx, web.ContextKeyRequestId, "test-request-123")
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+
+	// Mock the tool execution
+	mockToolResponse := &model.ToolResponse{
+		ToolName: "query_events",
+		Result:   map[string]interface{}{"events": []string{"event1", "event2"}},
+	}
+	mockManager.EXPECT().ExecuteTool(gomock.Any(), "query_events", `{"query":"test query"}`).Return(mockToolResponse, nil)
+
+	expectedText := fmt.Sprintf("ToolUseId: %s, Error: <nil>, Result: %s", toolUseId, `{"events":["event1","event2"]}`)
+
+	// Mock saving the tool result message
+	mockAssistantStore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Do(
+		func(ctx context.Context, msg *model.StoredMessage) {
+			assert.Equal(t, sessionId, msg.SessionId)
+			assert.Equal(t, []string{"tool_result"}, msg.Tags)
+			assert.Equal(t, "user", msg.Message.Role)
+			assert.Len(t, msg.Message.ContentBlocks, 1)
+			assert.Equal(t, "text", msg.Message.ContentBlocks[0].Type)
+			assert.Equal(t, expectedText, msg.Message.ContentBlocks[0].Text)
+		},
+	).Return(nil)
+
+	// Mock the history lookup to return previous messages including the new tool result
+	mockHistoryMessages := []*model.StoredMessage{
+		{
+			SessionId: sessionId,
+			Message: &model.Message{
+				Role: "user",
+				ContentBlocks: []model.ContentBlock{
+					{
+						Type: "text",
+						Text: "Get me some events",
+					},
+				},
+			},
+		},
+		{
+			SessionId: sessionId,
+			Message: &model.Message{
+				Role: "user",
+				ContentBlocks: []model.ContentBlock{
+					{
+						Type: "text",
+						Text: expectedText,
+					},
+				},
+			},
+		},
+	}
+	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return(mockHistoryMessages, nil)
+
+	// Mock the chat response after tool execution
+	var capturedMessages []*model.Message
+	mockManager.EXPECT().Chat(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, messages []*model.Message, opts ...model.ChatOpt) ([]*model.Message, error) {
+			capturedMessages = messages
+			return []*model.Message{{
+				Role: "assistant",
+				ContentBlocks: []model.ContentBlock{
+					{
+						Type: "text",
+						Text: "I found 2 events for you based on your query.",
+					},
+				},
+			}}, nil
+		},
+	)
+
+	// Mock saving the assistant response
+	mockAssistantStore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Do(
+		func(ctx context.Context, msg *model.StoredMessage) {
+			assert.Equal(t, sessionId, msg.SessionId)
+			assert.Nil(t, msg.Tags)
+			assert.Equal(t, "assistant", msg.Message.Role)
+			assert.Len(t, msg.Message.ContentBlocks, 1)
+			assert.Equal(t, "text", msg.Message.ContentBlocks[0].Type)
+			assert.Equal(t, "I found 2 events for you based on your query.", msg.Message.ContentBlocks[0].Text)
+		},
+	).Return(nil)
+
+	// Execute the handler
+	handler.PostTool(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Verify that the chat was called with the correct number of messages
+	assert.Len(t, capturedMessages, 2)
+
+	// Verify the tool result message was included
+	toolResultMsg := capturedMessages[1]
+	assert.Equal(t, "user", toolResultMsg.Role)
+	assert.Contains(t, toolResultMsg.ContentBlocks[0].Text, toolUseId)
+	assert.Contains(t, toolResultMsg.ContentBlocks[0].Text, `{"events":["event1","event2"]}`)
 }
 
 func TestGetBalance(t *testing.T) {
