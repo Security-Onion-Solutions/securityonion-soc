@@ -72,7 +72,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.thresholdColorRatioMax = params["thresholdColorRatioMax"];
       this.lowBalanceColorAlert = params["lowBalanceColorAlert"];
 
-      this.$root.showDisclaimer(this.i18n.assistantDisclaimerMessage, this.i18n.assistantDisclaimerTitle, this.i18n.acknowledge, 'so-data-retention-disclaimer');
+      this.$root.showDisclaimer(this.i18n.assistantDisclaimerMessage, this.i18n.assistantDisclaimerTitle, this.i18n.getStarted, 'so-data-retention-disclaimer');
       
       if (this.assistantEnabled) {
         if (!this.$root.disclaimer) {
