@@ -140,10 +140,15 @@ $(document).ready(function () {
           warning: false,
           info: false,
           tip: false,
+          disclaimer: false,
           errorMessage: "",
           warningMessage: "",
           infoMessage: "",
           tipMessage: "",
+          disclaimerMessage: "",
+          disclaimerTitle: "",
+          disclaimerClose: "",
+          disclaimerStorageKey: "",
           tipTimeout: 6000,
           currentTipTimeout: 6000,
           warningTimeout: 30000,
@@ -202,7 +207,10 @@ $(document).ready(function () {
       watch: {
         '$vuetify.theme.current.dark': 'saveTheme',
         'toolbar': 'saveToolbar',
-        '$route': 'onLocationUpdated',
+        '$route': [
+          'onLocationUpdated',
+          'closeDisclaimerOnNav'
+        ],
         'selectedGridId': 'onGridSelected',
       },
       methods: {
@@ -954,6 +962,23 @@ $(document).ready(function () {
           } else {
             this.currentTipTimeout = this.tipTimeout;
           }
+        },
+        showDisclaimer(msg, title, closeButton, storageKey) {
+          const saved = localStorage.getItem(storageKey);
+          if (saved !== 'true') {
+            this.disclaimer = true;
+            this.disclaimerMessage = msg;
+            this.disclaimerTitle = title;
+            this.disclaimerClose = closeButton;
+            this.disclaimerStorageKey = storageKey;
+          }
+        },
+        acceptDisclaimer() {
+          localStorage.setItem(this.disclaimerStorageKey, 'true');
+          this.disclaimer = false;
+        },
+        closeDisclaimerOnNav() {
+          if (this.disclaimer) this.disclaimer = false;
         },
         startLoading(cancelCallback = null) {
           this.loading = true;

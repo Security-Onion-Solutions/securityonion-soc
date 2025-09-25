@@ -2536,9 +2536,8 @@ test('applyAIInvestigationsToEvents', () => {
   expect(comp.eventData[2]._aiInvestigated).toBeUndefined();
 });
 
-test('generateInvestigationPrompt', () => {
-  comp.investigationMsg = 'Investigate alert {socid} for potential threats';
-  comp.$root.replaceActionVar = jest.fn().mockReturnValue('Investigate alert alert123 for potential threats');
+test('generateQueryList', () => {
+  comp.investigationMsg = 'Investigate alert {socId} with rule {ruleUuid} for potential threats';
 
   const item = {
     soc_id: 'alert123',
@@ -2554,14 +2553,11 @@ test('generateInvestigationPrompt', () => {
     'rule.rule': 'alert tcp any any -> any any (msg:"Test"; sid:1;)'
   };
 
-  const prompt = comp.generateInvestigationPrompt(item);
+  const queryList = comp.generateQueryList(item);
 
-  expect(comp.$root.replaceActionVar).toHaveBeenCalledWith(
-    'Investigate alert {socid} for potential threats',
-    'socid',
-    'alert123'
-  );
-  expect(prompt).toBe('Investigate alert alert123 for potential threats');
+  expect(queryList.investigation).toBe(true);
+  expect(queryList.socId).toBe('alert123');
+  expect(queryList.ruleUuid).toBe('rule-uuid-123');
 });
 
 test('startAIInvestigation - individual alert', async () => {
@@ -2571,7 +2567,7 @@ test('startAIInvestigation - individual alert', async () => {
     'rule.name': 'Test Rule'
   };
 
-  comp.generateInvestigationPrompt = jest.fn().mockReturnValue('Investigation prompt');
+  comp.generateQueryList = jest.fn().mockReturnValue({ investigation: true, socId: 'alert123' });
   comp.$router = { push: jest.fn(), resolve: jest.fn().mockReturnValue({ href: '/assistant/test' }) };
   
   // Mock localStorage
@@ -2588,8 +2584,11 @@ test('startAIInvestigation - individual alert', async () => {
   expect(comp.aiInvestigations['alert123'].ruleUuid).toBe('rule-uuid-123');
   expect(comp.aiInvestigations['alert123'].chatSessionId).toMatch(/^investigation_alert123_\d+$/);
   
-  expect(mockSetItem).toHaveBeenCalled();
-  expect(comp.$router.push).toHaveBeenCalledWith(expect.stringMatching(/^\/assistant\/investigation_alert123_\d+\?investigation=true$/));
+  expect(comp.$router.push).toHaveBeenCalledWith({
+    name: 'assistant',
+    params: { sessionId: expect.stringMatching(/^investigation_alert123_\d+$/) },
+    query: { investigation: true, socId: 'alert123' }
+  });
 });
 
 test('startAIInvestigation - grouped alert', async () => {
@@ -2606,7 +2605,7 @@ test('startAIInvestigation - grouped alert', async () => {
     'rule.name': 'Test Rule'
   };
 
-  comp.generateInvestigationPrompt = jest.fn().mockReturnValue('Investigation prompt');
+  comp.generateQueryList = jest.fn().mockReturnValue({ investigation: true, socId: 'alert456' });
   comp.$router = { push: jest.fn(), resolve: jest.fn().mockReturnValue({ href: '/assistant/test' }) };
   
   // Mock localStorage
