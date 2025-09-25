@@ -771,12 +771,16 @@ test('executeTool captures raw tool result from backend', async () => {
   };
   mockPapi('get', backendResponse);
   
+  // Include message_start event to trigger captureRawToolResult
+  const messageStartData = JSON.stringify({ type: 'message_start' });
+  
   const mockResponse = {
     ok: true,
     data: {
       pipeThrough: jest.fn().mockReturnValue({
         getReader: jest.fn().mockReturnValue({
           read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: `data: ${messageStartData}\n\n` })
             .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
             .mockResolvedValueOnce({ done: true })
         })
@@ -818,7 +822,10 @@ test('executeTool handles tool result with error', async () => {
       }
     ]
   };
-  mockPapi('get', backendResponse)
+  mockPapi('get', backendResponse);
+  
+  // Include message_start event to trigger captureRawToolResult
+  const messageStartData = JSON.stringify({ type: 'message_start' });
   
   const mockResponse = {
     ok: true,
@@ -826,6 +833,7 @@ test('executeTool handles tool result with error', async () => {
       pipeThrough: jest.fn().mockReturnValue({
         getReader: jest.fn().mockReturnValue({
           read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: `data: ${messageStartData}\n\n` })
             .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
             .mockResolvedValueOnce({ done: true })
         })

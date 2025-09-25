@@ -292,8 +292,6 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 		messages = append(messages, msg.Message)
 	}
 
-	messages = append(messages, toolMsg)
-
 	if !streaming {
 		response, err := h.server.AssistantManager.Chat(ctx, messages)
 		if err != nil {

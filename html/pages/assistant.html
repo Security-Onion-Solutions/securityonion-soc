@@ -274,12 +274,22 @@
 	
 </v-container>
 
-<v-container v-else fluid data-aid="assistant_unavailable">
+<v-container v-else-if="$root.isLicensed('oai')" fluid data-aid="assistant_disabled">
 	<div style="
 		align-items: center;
 		margin: 0;
 		display: flex;
 		min-height: 50vh;
 		justify-content: center;
-	">{{ i18n.featureUnavailable }}</div>
+	">{{ i18n.assistantDisabled }}</div>
+</v-container>
+
+<v-container v-else fluid data-aid="assistant_advertisment">
+	<div style="
+		align-items: center;
+		margin: 0;
+		display: flex;
+		min-height: 50vh;
+		justify-content: center;
+	">{{ i18n.assistantAdvertisement }}</div>
 </v-container>
