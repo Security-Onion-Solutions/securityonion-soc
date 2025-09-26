@@ -38,7 +38,7 @@
 									<v-switch v-if="isCategory('alerts')" id="detection-panel-toggle" :disabled="loading()" v-model="showDetailsPanel" density="compact" hide-details class="my-0" :label="i18n.showDetailsPanel"></v-switch>
 								</span>
 								<span :data-aid="'autorefresh_select_' + category" v-if="!isCategory('detections')">
-									<v-select id="autoRefresh" class="ml-" :disabled="loading()" v-model="autoRefreshInterval" :items="autoRefreshIntervals" :hint="i18n.autoRefresh" persistent-hint variant="underlined" prepend-icon="fa-hourglass-half"></v-select>
+									<v-select id="autoRefresh" class="ml-" :disabled="loading()" v-model="autoRefreshInterval" @update:focused="autoRefreshIntervalChanged" :items="autoRefreshIntervals" :hint="i18n.autoRefresh" persistent-hint variant="underlined" prepend-icon="fa-hourglass-half"></v-select>
 								</span>
 								<span :data-aid="'timezone_select_' + category" v-if="!isCategory('detections')">
 									<v-select :disabled="loading()" @update:model-value="zone = $event; saveTimezone()" v-model="zone" :items="$root.timezones" :hint="i18n.timezoneHelp" persistent-hint variant="underlined" prepend-icon="fa-user-clock"></v-select>

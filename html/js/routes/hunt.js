@@ -437,6 +437,9 @@ const huntComponent = {
       this.selectAllState = false;
       this.selectedCount = 0;
     },
+    autoRefreshIntervalChanged() {
+      this.saveSetting('autoRefreshInterval', this.autoRefreshInterval, 0);
+    },
     stopRefreshTimer() {
       if (this.autoRefreshTimer) {
         clearTimeout(this.autoRefreshTimer);
@@ -533,10 +536,6 @@ const huntComponent = {
         });
 
         this.autoRefreshInterval = found ? parseInt(this.$route.query.ar) : 0;
-        this.autoRefreshEnabled = found;
-      } else {
-        this.autoRefreshEnabled = false;
-        this.autoRefreshInterval = 0;
       }
       if (this.$route.query.tab) {
         this.activeTabs[0] = this.$route.query.tab;
@@ -1804,7 +1803,7 @@ const huntComponent = {
       this.$router.push(route);
       this.query = newQuery;
       const thisRoute = this;
-      setTimeout(function () { thisRoute.disableRouteLoad = false; }, 1000);
+      setTimeout(function () { thisRoute.disableRouteLoad = false; }, 100);
     },
     toggleColumnHeader(field) {
       if (!this.isColumnHeader(field)) {
@@ -2384,6 +2383,7 @@ const huntComponent = {
       if (localStorage[prefix + '.autohunt']) this.autohunt = localStorage[prefix + '.autohunt'] == 'true';
       if (localStorage[prefix + '.showDetailsPanel']) this.showDetailsPanel = localStorage[prefix + '.showDetailsPanel'] == 'true';
       if (localStorage[prefix + '.advanced']) this.advanced = localStorage[prefix + '.advanced'] == 'true';
+      if (localStorage[prefix + '.autoRefreshInterval']) this.autoRefreshInterval = parseInt(localStorage[prefix + '.autoRefreshInterval']);
 
       if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
     },
