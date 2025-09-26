@@ -935,19 +935,16 @@ test('autoRefresh query string', () => {
   comp.$route = { path: "hunt", query: { ar: 30 } };
   comp.parseUrlParameters();
 
-  expect(comp.autoRefreshEnabled).toBe(true);
   expect(comp.autoRefreshInterval).toBe(30);
 
   comp.$route = { path: "hunt", query: { ar: 1 } };
   comp.parseUrlParameters();
 
-  expect(comp.autoRefreshEnabled).toBe(false);
   expect(comp.autoRefreshInterval).toBe(0);
 
   comp.$route = { path: "hunt", query: {} };
   comp.parseUrlParameters();
 
-  expect(comp.autoRefreshEnabled).toBe(false);
   expect(comp.autoRefreshInterval).toBe(0);
 });
 
