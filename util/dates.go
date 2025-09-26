@@ -6,6 +6,7 @@
 package util
 
 import (
+	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -73,4 +74,14 @@ func UnitToDuration(unit string) time.Duration {
 	}
 
 	return duration
+}
+
+func ParseDate(dateString string, layouts []string) (time.Time, error) {
+	for _, layout := range layouts {
+		t, err := time.Parse(layout, dateString)
+		if err == nil {
+			return t, nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("unable to parse date string: %s", dateString)
 }

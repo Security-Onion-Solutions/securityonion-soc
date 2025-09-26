@@ -59,8 +59,22 @@ func TestQueryEventsTool_Execute(t *testing.T) {
 			},
 		},
 		{
-			name:   "query with time range",
+			name:   "query with relative time range",
 			params: `{"oql_query": "tags:dns", "start_time": "-1h", "end_time": "now", "limit": 20}`,
+			mockResults: &model.EventSearchResults{
+				Events: []*model.EventRecord{
+					{Source: "dns-index", Id: "dns-1", Payload: map[string]any{"@timestamp": "2024-01-01T00:00:00Z", "dns.query.name": "example.com"}},
+				},
+				TotalEvents: 1,
+				Metrics:     make(map[string][]*model.EventMetric),
+			},
+			expectedResult: []map[string]any{
+				{"payload": map[string]any{"@timestamp": "2024-01-01T00:00:00Z", "dns.query.name": "example.com"}},
+			},
+		},
+		{
+			name:   "query with absolute time range",
+			params: `{"oql_query": "tags:dns", "start_time": "2024-01-01 00:00:00", "end_time": "2024/01/01 01:00:00", "limit": 20}`,
 			mockResults: &model.EventSearchResults{
 				Events: []*model.EventRecord{
 					{Source: "dns-index", Id: "dns-1", Payload: map[string]any{"@timestamp": "2024-01-01T00:00:00Z", "dns.query.name": "example.com"}},

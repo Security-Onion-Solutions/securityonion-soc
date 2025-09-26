@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
-	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
+	"github.com/security-onion-solutions/securityonion-soc/util"
 	"gopkg.in/yaml.v3"
 )
 
@@ -215,14 +215,14 @@ func (r *SigmaRule) ToDetection(ruleset string, license string, isCommunity bool
 	formats := []string{"2006-01-02", "2006/01/02", "2006_01_02"}
 
 	if r.Date != nil {
-		t, err := detections.ParseDate(*r.Date, formats)
+		t, err := util.ParseDate(*r.Date, formats)
 		if err == nil {
 			det.SourceCreated = &t
 		}
 	}
 
 	if r.Modified != nil {
-		t, err := detections.ParseDate(*r.Modified, formats)
+		t, err := util.ParseDate(*r.Modified, formats)
 		if err == nil {
 			det.SourceUpdated = &t
 		}
