@@ -438,6 +438,7 @@ const huntComponent = {
       this.selectedCount = 0;
     },
     autoRefreshIntervalChanged() {
+      // This cannot occur with the other settings due to risk of query params overwriting the saved settings
       this.saveSetting('autoRefreshInterval', this.autoRefreshInterval, 0);
     },
     stopRefreshTimer() {
