@@ -548,7 +548,8 @@ func checkExceeded(limit string, ok bool) bool {
 		if !exists {
 			manager.limits[limit] = true
 			log.WithFields(log.Fields{
-				"limit": limit,
+				"limit":         limit,
+				"licenseStatus": manager.status,
 			}).Error("exceeded license limit")
 		}
 	} else {
@@ -575,6 +576,13 @@ func ValidateUserCount(count int) bool {
 		return true
 	}
 	ok := manager.licenseKey.Users == 0 || manager.licenseKey.Users >= count
+	if !ok {
+		log.WithFields(log.Fields{
+			"licenseStatus": manager.status,
+			"allowedCount":  manager.licenseKey.Users,
+			"actualCount":   count,
+		}).Error("Users count outside allowed boundary")
+	}
 	return checkExceeded("users", ok)
 }
 
@@ -583,6 +591,13 @@ func ValidateNodeCount(count int) bool {
 		return true
 	}
 	ok := manager.licenseKey.Nodes == 0 || manager.licenseKey.Nodes >= count
+	if !ok {
+		log.WithFields(log.Fields{
+			"licenseStatus": manager.status,
+			"allowedCount":  manager.licenseKey.Nodes,
+			"actualCount":   count,
+		}).Error("Node count outside allowed boundary")
+	}
 	return checkExceeded("nodes", ok)
 }
 
@@ -591,6 +606,13 @@ func ValidateSocUrl(url string) bool {
 		return true
 	}
 	ok := manager.licenseKey.SocUrl == "" || strings.EqualFold(manager.licenseKey.SocUrl, url)
+	if !ok {
+		log.WithFields(log.Fields{
+			"licenseStatus": manager.status,
+			"allowedUrl":    manager.licenseKey.SocUrl,
+			"actualUrl":     url,
+		}).Error("Licensed SOC URL mismatch")
+	}
 	return checkExceeded("socUrl", ok)
 }
 
@@ -599,6 +621,13 @@ func ValidateDataUrl(url string) bool {
 		return true
 	}
 	ok := manager.licenseKey.DataUrl == "" || strings.EqualFold(manager.licenseKey.DataUrl, url)
+	if !ok {
+		log.WithFields(log.Fields{
+			"licenseStatus": manager.status,
+			"allowedUrl":    manager.licenseKey.DataUrl,
+			"actualUrl":     url,
+		}).Error("Licensed data URL mismatch")
+	}
 	return checkExceeded("dataUrl", ok)
 }
 
@@ -615,6 +644,13 @@ func ValidateSubgridCount(count int) bool {
 		return true
 	}
 	ok := manager.status == LICENSE_STATUS_ACTIVE && manager.licenseKey.Subgrids >= count
+	if !ok {
+		log.WithFields(log.Fields{
+			"licenseStatus": manager.status,
+			"allowedCount":  manager.licenseKey.Subgrids,
+			"actualCount":   count,
+		}).Error("Subgrid count outside allowed boundary")
+	}
 	return checkExceeded("subgrids", ok)
 }
 
@@ -627,5 +663,12 @@ func ValidateMgmtMac(mac string) bool {
 	actual := strings.TrimSpace(mac)
 	actual = strings.ToUpper(actual)
 	ok := expected == "" || strings.EqualFold(expected, actual)
+	if !ok {
+		log.WithFields(log.Fields{
+			"licenseStatus": manager.status,
+			"allowedMac":    manager.licenseKey.MgmtMac,
+			"actualMac":     mac,
+		}).Error("Licensed MAC address mismatch")
+	}
 	return checkExceeded("mgmtMac", ok)
 }

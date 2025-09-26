@@ -86,7 +86,7 @@ func (h *InfoHandler) getInfo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	subgrids := make([]*model.Subgrid, 0)
-	if licensing.ValidateSubgridCount(len(subgrids)) {
+	if licensing.ValidateSubgridCount(len(h.server.Config.Subgrids)) {
 		subgrids = h.server.Config.Subgrids
 	}
 
