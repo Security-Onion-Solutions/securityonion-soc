@@ -23,6 +23,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     alwaysApproveReadRequests: false,
     assistantEnabled: false,
     isStreaming: false,
+    collapseHistory: false,
     investigationMsg: '',
     contextLimitSmall: 200000,
     contextLimitLarge: 1000000,
@@ -1447,6 +1448,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           optionsHeader.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
       });
+    },
+
+    toggleCollapseHistory() {
+      this.collapseHistory = !this.collapseHistory;
     },
   }
 }});

@@ -50,9 +50,26 @@
 			<h4 :data-aid="assistant_credits_remaining">{{ i18n.creditsRemaining }}: <span :class="creditsRemaining <= lowBalanceColorAlert ? 'text-error' : 'text-primary'">{{ formatCount(creditsRemaining) }}</span></h4>
 		</v-col>
 	</v-row>
+	<v-row align="start">
+		<v-col cols="12">
+			<v-toolbar class="no-print elevation-0 theme-background-lighten-1" fixed>
+				<v-btn color="primary mx-4" variant="flat" id="chat-new-button" @click="startNewChat" :title="i18n.chatNewChat" data-aid="assistant_banner_create_chat">
+					<v-icon>fa-plus</v-icon>
+				</v-btn>
+				<v-spacer></v-spacer>
+				<v-btn color="primary mx-4" variant="flat" @click="toggleCollapseHistory">
+					<v-icon v-if="collapseHistory" id="chat-banner-expand-history" :title="i18n.assistantHistoryExpand" data-aid="assistant_banner_expand_history">fa-angle-left</v-icon>
+					<v-icon v-if="!collapseHistory" id="chat-banner-collapse-history" :title="i18n.assistantHistoryCollapse" data-aid="assistant_banner_collapse_history">fa-angle-right</v-icon>
+				</v-btn>
+				<v-btn variant="flat" color="secondary" class="mx-4" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'assistant.html'" :title="i18n.contextualDocsBtn" data-aid="assistant_docs">
+					<v-icon>fa-circle-question</v-icon>
+				</v-btn>
+			</v-toolbar>
+		</v-col>
+	</v-row>
 	<v-row>
 		<!-- Main Chat Area -->
-		<v-col cols="12" lg="9">
+		<v-col cols="12" :lg="collapseHistory ? 12 : 9">
 			<v-card id="chat-container" class="chat-container">
 				<v-card-title id="chat-header" class="py-3 d-flex align-center">
 					<v-icon class="mr-2">fa-comments</v-icon>
@@ -235,13 +252,13 @@
 		</v-col>
 		
 		<!-- Recent Chats Sidebar -->
-		<v-col cols="12" lg="3">
+		<v-col v-if="!collapseHistory" cols="12" lg="3">
 			<v-card id="chat-history-sidebar" class="chat-history-sidebar">
 				<v-card-title id="chat-history-header" class="py-3 d-flex align-center">
 					<v-icon class="mr-2">fa-history</v-icon>
 					<span class="flex-grow-1">{{ i18n.chatHistory }}</span>
-					<v-btn id="chat-new-button" icon variant="text" size="x-small" @click="startNewChat" :title="i18n.chatNewChat" data-aid="assistant_chat_history_create">
-						<v-icon size="small">fa-plus</v-icon>
+					<v-btn id="chat-history-collapse" icon variant="text" size="x-small" @click="toggleCollapseHistory" :title="i18n.assistantHistoryCollapse" data-aid="assistant_chat_history_collapse">
+						<v-icon size="small">fa-angle-right</v-icon>
 					</v-btn>
 				</v-card-title>
 				<v-divider></v-divider>

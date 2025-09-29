@@ -186,6 +186,8 @@ Abuse-Related Termination: Security Onion Solutions reserves the right to suspen
 This Agreement is governed by [Insert Jurisdiction] law.`,
       assistantDisclaimerTitle: 'Data Privacy End User Agreement',
       assistantErrorMessage: 'I apologize, but I\'m having trouble connecting to the AI service right now. Please try again in a moment.',
+      assistantHistoryCollapse: 'Hide Chat History',
+      assistantHistoryExpand: 'Show Chat History',
       assistantLoadContextError: 'Failed to load context theshold setting',
       assistantLoadRecentError: 'Failed to load restore last active setting',
       assistantLoadReadApprovalError: 'Failed to load read request approval setting',
