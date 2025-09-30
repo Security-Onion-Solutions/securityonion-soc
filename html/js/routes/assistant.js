@@ -23,7 +23,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     alwaysApproveReadRequests: false,
     assistantEnabled: false,
     isStreaming: false,
-    collapseHistory: false,
+    showChatHistory: true,
     investigationMsg: '',
     contextLimitSmall: 200000,
     contextLimitLarge: 1000000,
@@ -34,9 +34,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     activeStreamingSessionId: null, // Track which session is actively streaming
   }},
   async created() {
-    this.loadContextThresholdSetting();
-    this.loadLastActiveSetting();
-    this.loadReadApprovalSetting();
+    this.loadLocalSettings();
     this.loadChatHistory();
   },
   beforeUnmount() {
@@ -53,15 +51,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         this.handleRouteSessionId();
       }
     },
-    'increaseMaxContextThreshold'() {
-      this.saveContextThresholdSetting();
-    },
-    'restoreLastActive' () {
-      this.saveLastActiveSetting();
-    },
-    'alwaysApproveReadRequests'() {
-      this.saveReadApprovalSetting();
-    }
+    'increaseMaxContextThreshold': 'saveLocalSettings',
+    'restoreLastActive': 'saveLocalSettings',
+    'alwaysApproveReadRequests': 'saveLocalSettings',
+    'showChatHistory': 'saveLocalSettings'
   },
   methods: {
 
@@ -1429,63 +1422,32 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       return "text-red darken-1";
     },
     
-    // Save and load settings for the context threshold toggle
-    saveContextThresholdSetting() {
-      try {
-        localStorage.setItem('so-chat-increase-max-context-threshold', this.increaseMaxContextThreshold.toString());
-      } catch (error) {
-        this.$root.showError(this.i18n.assistantSaveContextError + ': ' + error.message);
-      }
-    },
-    
-    loadContextThresholdSetting() {
-      try {
-        const saved = localStorage.getItem('so-chat-increase-max-context-threshold');
-        if (saved !== null) {
-          this.increaseMaxContextThreshold = saved === 'true';
-        }
-      } catch (error) {
-        this.$root.showError(this.i18n.assistantLoadContextError + ': ' + error.message);
+
+    // Generic setting save method (following hunt.js pattern)
+    saveSetting(name, value, defaultValue = null) {
+      var item = 'settings.assistant.' + name;
+      if (defaultValue == null || value != defaultValue) {
+        localStorage[item] = value;
+      } else {
+        localStorage.removeItem(item);
       }
     },
 
-    // Save and load settings for the context threshold toggle
-    saveLastActiveSetting() {
-      try {
-        localStorage.setItem('so-chat-restore-last-active', this.restoreLastActive.toString());
-      } catch (error) {
-        this.$root.showError(this.i18n.assistantSaveRecentError + ': ' + error.message);
-      }
-    },
-    
-    loadLastActiveSetting() {
-      try {
-        const saved = localStorage.getItem('so-chat-restore-last-active');
-        if (saved !== null) {
-          this.restoreLastActive = saved === 'true';
-        }
-      } catch (error) {
-        this.$root.showError(this.i18n.assistantLoadRecentError + ': ' + error.message);
-      }
+    // Save all local settings (following hunt.js pattern)
+    saveLocalSettings() {
+      this.saveSetting('increaseMaxContextThreshold', this.increaseMaxContextThreshold, false);
+      this.saveSetting('restoreLastActive', this.restoreLastActive, false);
+      this.saveSetting('alwaysApproveReadRequests', this.alwaysApproveReadRequests, false);
+      this.saveSetting('showChatHistory', this.showChatHistory, true);
     },
 
-    saveReadApprovalSetting() {
-      try {
-        localStorage.setItem('so-chat-always-approve-read-requests', this.alwaysApproveReadRequests.toString());
-      } catch (error) {
-        this.$root.showError(this.i18n.assistantSaveReadApprovalError + ': ' + error.message);
-      }
-    },
-    
-    loadReadApprovalSetting() {
-      try {
-        const saved = localStorage.getItem('so-chat-always-approve-read-requests');
-        if (saved !== null) {
-          this.alwaysApproveReadRequests = saved === 'true';
-        }
-      } catch (error) {
-        this.$root.showError(this.i18n.assistantLoadReadApprovalError + ': ' + error.message);
-      }
+    // Load all local settings (following hunt.js pattern)
+    loadLocalSettings() {
+      var prefix = 'settings.assistant';
+      if (localStorage[prefix + '.increaseMaxContextThreshold']) this.increaseMaxContextThreshold = localStorage[prefix + '.increaseMaxContextThreshold'] == 'true';
+      if (localStorage[prefix + '.restoreLastActive']) this.restoreLastActive = localStorage[prefix + '.restoreLastActive'] == 'true';
+      if (localStorage[prefix + '.alwaysApproveReadRequests']) this.alwaysApproveReadRequests = localStorage[prefix + '.alwaysApproveReadRequests'] == 'true';
+      if (localStorage[prefix + '.showChatHistory']) this.showChatHistory = localStorage[prefix + '.showChatHistory'] == 'true';
     },
 
     // Check if a tool should be auto-approved based on localStorage settings
