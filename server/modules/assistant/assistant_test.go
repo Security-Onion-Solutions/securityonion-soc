@@ -284,6 +284,9 @@ func TestAssistantCoordinator_Balance(t *testing.T) {
 			ac := &AssistantCoordinator{
 				apiUrl:    tc.apiUrl,
 				IOManager: mockIO,
+				srv: &server.Server{
+					Host: &web.Host{Version: "1.0.0"},
+				},
 			}
 
 			ctx := context.Background()
@@ -444,6 +447,7 @@ func TestAssistantCoordinator_Chat(t *testing.T) {
 
 			srv := &server.Server{
 				Assistantstore: mockAssistantstore,
+				Host:           &web.Host{Version: "1.0.0"},
 			}
 
 			ac := &AssistantCoordinator{
@@ -533,6 +537,9 @@ func TestAssistantCoordinator_ChatStream(t *testing.T) {
 				apiUrl:     tc.apiUrl,
 				IOManager:  mockIO,
 				toolConfig: []byte(`{"tools": [], "tool_choice": {"auto": {}}}`),
+				srv: &server.Server{
+					Host: &web.Host{Version: "1.0.0"},
+				},
 			}
 
 			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
