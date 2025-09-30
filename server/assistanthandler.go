@@ -376,6 +376,21 @@ func (h *AssistantHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	health, err := h.server.AssistantManager.Health(ctx)
+	if err != nil {
+		logger.WithError(err).Error("unable to get assistant health")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+
+		return
+	}
+
+	if health == nil || health.Status == "" {
+		logger.WithField("healthResponse", health).Warn("assistant health response is nil or missing status")
+		web.Respond(w, r, http.StatusInternalServerError, nil)
+
+		return
+	}
+
 	response, err := h.server.AssistantManager.Balance(ctx)
 	if err != nil {
 		logger.WithError(err).Error("unable to chat with assistant")
@@ -383,6 +398,8 @@ func (h *AssistantHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 
 		return
 	}
+
+	response.HealthStatus = health.Status
 
 	web.Respond(w, r, http.StatusOK, response)
 }

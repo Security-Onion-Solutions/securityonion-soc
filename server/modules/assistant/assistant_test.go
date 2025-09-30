@@ -228,14 +228,14 @@ func TestAssistantCoordinator_Balance(t *testing.T) {
 			name:   "successful balance request",
 			apiUrl: "https://api.example.com",
 			setupMocks: func(mockIO *detectionsmock.MockIOManager) {
-				responseBody := `{"credit_balance": 100.50, "api_key": "key", "api_key_prefix": "id", "company_id": "company", "status": "status"}`
+				responseBody := `{"credit_balance": 100, "api_key": "key", "api_key_prefix": "id", "company_id": "company", "status": "status"}`
 				mockIO.EXPECT().MakeRequest(gomock.Any(), false).Return(&http.Response{
 					StatusCode: 200,
 					Body:       io.NopCloser(strings.NewReader(responseBody)),
 				}, nil)
 			},
 			expectedResult: &model.BalanceResponse{
-				Balance:   100.50,
+				Balance:   100,
 				KeyId:     "id",
 				CompanyId: "company",
 				Status:    "status",

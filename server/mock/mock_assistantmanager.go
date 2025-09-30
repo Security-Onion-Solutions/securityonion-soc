@@ -106,3 +106,18 @@ func (mr *MockAssistantManagerMockRecorder) ExecuteTool(ctx, toolName, params an
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecuteTool", reflect.TypeOf((*MockAssistantManager)(nil).ExecuteTool), ctx, toolName, params)
 }
+
+// Health mocks base method.
+func (m *MockAssistantManager) Health(arg0 context.Context) (*model.HealthResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Health", arg0)
+	ret0, _ := ret[0].(*model.HealthResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Health indicates an expected call of Health.
+func (mr *MockAssistantManagerMockRecorder) Health(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Health", reflect.TypeOf((*MockAssistantManager)(nil).Health), arg0)
+}
