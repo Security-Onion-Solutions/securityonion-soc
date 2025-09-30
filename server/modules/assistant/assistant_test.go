@@ -708,6 +708,27 @@ func TestBuildApiKey(t *testing.T) {
 	assert.Equal(t, key, "sk-46736dfccdc375085dfb8f701ea7f327860c51b4aac3629592649ae8a7bb7e29")
 }
 
+func TestPrepareRequestHeaders(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ac := &AssistantCoordinator{
+		srv: &server.Server{
+			Host: &web.Host{Version: "1.0.0"},
+		},
+		apiKey: "key",
+	}
+
+	req, err := http.NewRequest("GET", "manager", nil)
+	assert.NoError(t, err)
+
+	ac.prepareRequestHeaders(req)
+
+	assert.Len(t, req.Header, 2)
+	assert.Equal(t, "key", req.Header.Get("x-api-key"))
+	assert.Equal(t, "1.0.0", req.Header.Get("x-so-version"))
+}
+
 // Helper types and functions for testing
 
 type mockTool struct {

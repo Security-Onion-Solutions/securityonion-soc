@@ -173,8 +173,7 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, messages []*model.Mess
 	}
 
 	httpReq.Header.Add("Content-Type", "application/json")
-	httpReq.Header.Add("x-api-key", ac.apiKey)
-	httpReq.Header.Add("x-so-version", ac.srv.Host.Version)
+	ac.prepareRequestHeaders(httpReq)
 
 	res, err := ac.MakeRequest(httpReq, false)
 	if err != nil {
@@ -311,9 +310,8 @@ func (ac *AssistantCoordinator) ChatStream(ctx context.Context, messages []*mode
 	}
 
 	httpReq.Header.Add("Content-Type", "application/json")
-	httpReq.Header.Add("x-api-key", ac.apiKey)
-	httpReq.Header.Add("x-so-version", ac.srv.Host.Version)
 	httpReq.Header.Add("Accept", "text/event-stream")
+	ac.prepareRequestHeaders(httpReq)
 
 	res, err := ac.MakeRequest(httpReq, true)
 	if err != nil {
@@ -379,8 +377,7 @@ func (ac *AssistantCoordinator) Balance(ctx context.Context) (*model.BalanceResp
 		return nil, err
 	}
 
-	httpReq.Header.Add("x-api-key", ac.apiKey)
-	httpReq.Header.Add("x-so-version", ac.srv.Host.Version)
+	ac.prepareRequestHeaders(httpReq)
 
 	res, err := ac.MakeRequest(httpReq, false)
 	if err != nil {
@@ -407,6 +404,11 @@ func (ac *AssistantCoordinator) Balance(ctx context.Context) (*model.BalanceResp
 	}
 
 	return response, nil
+}
+
+func (ac *AssistantCoordinator) prepareRequestHeaders(httpReq *http.Request) {
+	httpReq.Header.Add("x-api-key", ac.apiKey)
+	httpReq.Header.Add("x-so-version", ac.srv.Host.Version)
 }
 
 func cleanupMessages(messages []*model.Message) []*model.Message {
