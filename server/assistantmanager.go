@@ -17,6 +17,7 @@ type AssistantManager interface {
 	ChatStream(ctx context.Context, messages []*model.Message) (*http.Response, error)
 	ExecuteTool(ctx context.Context, toolName string, params string) (*model.ToolResponse, error)
 	Balance(context.Context) (*model.BalanceResponse, error)
+	Health(context.Context) (*model.HealthResponse, error)
 }
 
 //go:generate mockgen -destination mock/mock_assistantmanager.go -package mock . AssistantManager
