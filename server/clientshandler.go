@@ -19,7 +19,7 @@ import (
 )
 
 var clientIdVerifier = regexp.MustCompile(`^[A-Za-z0-9_]{6,55}$`)
-var permissionVerifier = regexp.MustCompile(`^[a-z]+/[a-z]+$`)
+var permissionVerifier = regexp.MustCompile(`^[a-z]+/[a-z_]+$`)
 
 type ClientsHandler struct {
 	server *Server
