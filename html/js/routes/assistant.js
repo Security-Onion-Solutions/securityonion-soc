@@ -23,6 +23,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     alwaysApproveReadRequests: false,
     assistantEnabled: false,
     isStreaming: false,
+    showChatHistory: true,
     investigationMsg: '',
     contextLimitSmall: 200000,
     contextLimitLarge: 1000000,
@@ -30,11 +31,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     thresholdColorRatioMed: 0.75,
     thresholdColorRatioMax: 1,
     lowBalanceColorAlert: 500000,
+    activeStreamingSessionId: null, // Track which session is actively streaming
   }},
   async created() {
-    this.loadContextThresholdSetting();
-    this.loadLastActiveSetting();
-    this.loadReadApprovalSetting();
+    this.loadLocalSettings();
     this.loadChatHistory();
   },
   beforeUnmount() {
@@ -51,15 +51,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         this.handleRouteSessionId();
       }
     },
-    'increaseMaxContextThreshold'() {
-      this.saveContextThresholdSetting();
-    },
-    'restoreLastActive' () {
-      this.saveLastActiveSetting();
-    },
-    'alwaysApproveReadRequests'() {
-      this.saveReadApprovalSetting();
-    }
+    'increaseMaxContextThreshold': 'saveLocalSettings',
+    'restoreLastActive': 'saveLocalSettings',
+    'alwaysApproveReadRequests': 'saveLocalSettings',
+    'showChatHistory': 'saveLocalSettings'
   },
   methods: {
 
@@ -155,6 +150,12 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     async handleRouteSessionId() {
       const urlSessionId = this.$route.params.sessionId;
+      
+      // Clear active streaming session and UI state when route changes to different session
+      if (this.currentChatId !== urlSessionId) {
+        this.clearStreamingStates();
+      }
+      
       if (urlSessionId) {
         // Try to load chat from backend first
         this.$root.startLoading();
@@ -237,6 +238,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     async loadChat(chat) {
       await this.saveCurrentChat(); // Save current chat before switching
+      
+      // Clear active streaming session and UI state when switching chats
+      this.clearStreamingStates();
+      
       this.$root.startLoading();
       try {
         if (this.currentChatId === chat.sessionId) {
@@ -273,6 +278,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     async startNewChat() {
       await this.saveCurrentChat(); // Save current chat before starting new one
+      
+      // Clear active streaming session and UI state when starting new chat
+      this.clearStreamingStates();
+      
       this.currentChatId = null;
       this.saveCurrentChatId(); // Clear the saved current chat ID
       this.loadChatHistory(); // Reset to welcome message (also resets context length)
@@ -554,10 +563,14 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     
     async callAIAPI(userMessage) {
+      // Capture the session ID at the start of the API call
+      const streamingSessionId = this.currentChatId;
+      this.activeStreamingSessionId = streamingSessionId;
+      
       try {
         const response = await this.$root.papi.post('/assistant/chat', {
           msg: userMessage,
-          sessionId: this.currentChatId,
+          sessionId: streamingSessionId,
         },
         {
           headers: {
@@ -581,6 +594,9 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           // read in more messages
           const { done, value } = await reader.read();
           if (done) break;
+          
+          // Check if we're still in the same session - if not, continue processing but don't update UI
+          const isCurrentSession = this.activeStreamingSessionId === streamingSessionId && this.currentChatId === streamingSessionId;
           
           // Process streaming chunks using helper method
           const chunkResult = this.processStreamingChunks(value, chunks, partial);
@@ -622,77 +638,98 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
 
             const c = parseResult.data;
 
-            // handle chunk by type using helper methods
-            switch (c.type) {
-              case 'message_start':
-                const startResult = this.handleMessageStart(c, assistantMessage);
-                assistantMessage = startResult.assistantMessage;
-                if (startResult.messageUsage) {
-                  messageUsage = startResult.messageUsage;
-                }
-                break;
-                
-              case 'content_block_start':
-                this.handleContentBlockStart(c, assistantMessage);
-                break;
-                
-              case 'content_block_delta':
-                this.handleContentBlockDelta(c, assistantMessage);
-                break;
-                
-              case 'content_block_stop':
-                const stopUsage = this.handleContentBlockStop(c);
-                if (stopUsage) {
-                  messageUsage = stopUsage;
-                }
-                break;
-                
-              case 'message_stop':
-                const stopResult = this.handleMessageStop(assistantMessage, messageUsage);
-                assistantMessage = stopResult.assistantMessage;
-                messageUsage = stopResult.messageUsage;
-                break;
-                
-              case 'message_delta':
-                // Handle usage information if present
-                if (c.usage) {
-                  messageUsage = c.usage;
-                }
-                break;
-                
-              default:
-                // Log any unhandled event types that might contain usage
-                if (c.usage) {
-                  messageUsage = c.usage;
-                }
-                break;
+            // Only update UI if we're still in the same session
+            if (isCurrentSession) {
+              // handle chunk by type using helper methods
+              switch (c.type) {
+                case 'message_start':
+                  const startResult = this.handleMessageStart(c, assistantMessage);
+                  assistantMessage = startResult.assistantMessage;
+                  if (startResult.messageUsage) {
+                    messageUsage = startResult.messageUsage;
+                  }
+                  break;
+                  
+                case 'content_block_start':
+                  this.handleContentBlockStart(c, assistantMessage);
+                  break;
+                  
+                case 'content_block_delta':
+                  this.handleContentBlockDelta(c, assistantMessage);
+                  break;
+                  
+                case 'content_block_stop':
+                  const stopUsage = this.handleContentBlockStop(c);
+                  if (stopUsage) {
+                    messageUsage = stopUsage;
+                  }
+                  break;
+                  
+                case 'message_stop':
+                  const stopResult = this.handleMessageStop(assistantMessage, messageUsage);
+                  assistantMessage = stopResult.assistantMessage;
+                  messageUsage = stopResult.messageUsage;
+                  break;
+                  
+                case 'message_delta':
+                  // Handle usage information if present
+                  if (c.usage) {
+                    messageUsage = c.usage;
+                  }
+                  break;
+                  
+                default:
+                  // Log any unhandled event types that might contain usage
+                  if (c.usage) {
+                    messageUsage = c.usage;
+                  }
+                  break;
+              }
             }
           }
 
-          // done processing received chunks, update UI then read more
-          await this.$nextTick();
+          // done processing received chunks, update UI only if still current session
+          if (isCurrentSession) {
+            await this.$nextTick();
+          }
           output++;
         }
         
-        this.isStreaming = false;
-
-        // Update credits from API after successful response
-        await this.loadCredits();
+        // Only update UI state if we're still in the same session
+        if (this.activeStreamingSessionId === streamingSessionId && this.currentChatId === streamingSessionId) {
+          this.isStreaming = false;
+          // Update credits from API after successful response
+          await this.loadCredits();
+        }
+        
+        // Clear the active streaming session if this was the active one
+        if (this.activeStreamingSessionId === streamingSessionId) {
+          this.activeStreamingSessionId = null;
+        }
+        
       } catch (error) {
-        this.isTyping = false;
-        this.isStreaming = false;
+        // Only update UI state if we're still in the same session
+        if (this.activeStreamingSessionId === streamingSessionId && this.currentChatId === streamingSessionId) {
+          this.isTyping = false;
+          this.isStreaming = false;
+          
+          // Show user-friendly error message
+          const errorMessage = {
+            role: 'assistant',
+            content: this.i18n.assistantErrorMessage,
+            timestamp: new Date().toISOString()
+          };
+          this.messages.push(errorMessage);
+          this.scrollToBottom();
+          
+          // Show error to user
+          this.$root.showError(this.i18n.assistantNoResponse + ': ' + (error.response?.data?.error || error.message));
+        }
         
-        // Show user-friendly error message
-        const errorMessage = {
-          role: 'assistant',
-          content: this.i18n.assistantErrorMessage,
-          timestamp: new Date().toISOString()
-        };
-        this.messages.push(errorMessage);
-        this.scrollToBottom();
-        
-        // Show error to user
-        this.$root.showError(this.i18n.assistantNoResponse + ': ' + (error.response?.data?.error || error.message));
+        // Clear the active streaming session if this was the active one
+        if (this.activeStreamingSessionId === streamingSessionId) {
+          this.activeStreamingSessionId = null;
+        }
       }
     },
     
@@ -891,11 +928,14 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       return this.$root.formatCount(count);
     },
     async executeTool(toolUse) {
+      // Capture the session ID at the start of the tool execution
+      const toolStreamingSessionId = this.currentChatId;
+      
       try {
         // Create ToolRequest object with history and params
         // Session ID should already be set by sendMessage()
         const toolRequest = {
-          sessionId: this.currentChatId,
+          sessionId: toolStreamingSessionId,
           toolUseId: toolUse.id,
           params: toolUse.input
         };
@@ -909,14 +949,18 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           adapter: 'fetch',
         });
 
-        // Update tool status to executing
-        toolUse.status = 'executing';
+        // Update tool status to executing only if still in same session
+        if (this.currentChatId === toolStreamingSessionId) {
+          toolUse.status = 'executing';
+        }
 
         // Stream the AI's response to the tool result
         const stream = response.data;
         const reader = stream.pipeThrough(new TextDecoderStream()).getReader();
 
-        this.isStreaming = true;
+        if (this.currentChatId === toolStreamingSessionId) {
+          this.isStreaming = true;
+        }
         let assistantMessage = null;
         let chunks = [];
         let partial = false;
@@ -925,6 +969,9 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
+          
+          // Check if we're still in the same session
+          const isCurrentSession = this.currentChatId === toolStreamingSessionId;
           
           // Process streaming chunks using helper method
           const chunkResult = this.processStreamingChunks(value, chunks, partial);
@@ -965,81 +1012,92 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
 
             const c = parseResult.data;
 
-            // Handle streaming chunks for tool result response using helper methods
-            switch (c.type) {
-              case 'message_start':
-                // Capture raw tool result using helper method
-                this.captureRawToolResult(toolUse);
-                
-                const startResult = this.handleToolExecutionMessageStart(c, assistantMessage, toolUse);
-                assistantMessage = startResult.assistantMessage;
-                if (startResult.messageUsage) {
-                  messageUsage = startResult.messageUsage;
-                }
-                break;
+            // Only update UI if we're still in the same session
+            if (isCurrentSession) {
+              // Handle streaming chunks for tool result response using helper methods
+              switch (c.type) {
+                case 'message_start':
+                  // Capture raw tool result using helper method
+                  this.captureRawToolResult(toolUse);
+                  
+                  const startResult = this.handleToolExecutionMessageStart(c, assistantMessage, toolUse);
+                  assistantMessage = startResult.assistantMessage;
+                  if (startResult.messageUsage) {
+                    messageUsage = startResult.messageUsage;
+                  }
+                  break;
 
-              case 'content_block_start':
-                this.handleToolExecutionContentBlockStart(c, assistantMessage);
-                break;
+                case 'content_block_start':
+                  this.handleToolExecutionContentBlockStart(c, assistantMessage);
+                  break;
 
-              case 'content_block_delta':
-                this.handleToolExecutionContentBlockDelta(c, assistantMessage);
-                break;
+                case 'content_block_delta':
+                  this.handleToolExecutionContentBlockDelta(c, assistantMessage);
+                  break;
 
-              case 'content_block_stop':
-                const stopUsage = this.handleToolExecutionContentBlockStop(c);
-                if (stopUsage) {
-                  messageUsage = stopUsage;
-                }
-                break;
+                case 'content_block_stop':
+                  const stopUsage = this.handleToolExecutionContentBlockStop(c);
+                  if (stopUsage) {
+                    messageUsage = stopUsage;
+                  }
+                  break;
 
-              case 'message_stop':
-                const stopResult = this.handleToolExecutionMessageStop(assistantMessage, messageUsage);
-                assistantMessage = stopResult.assistantMessage;
-                messageUsage = stopResult.messageUsage;
-                break;
+                case 'message_stop':
+                  const stopResult = this.handleToolExecutionMessageStop(assistantMessage, messageUsage);
+                  assistantMessage = stopResult.assistantMessage;
+                  messageUsage = stopResult.messageUsage;
+                  break;
 
-              case 'message_delta':
-                if (c.usage) {
-                  messageUsage = c.usage;
-                }
-                break;
+                case 'message_delta':
+                  if (c.usage) {
+                    messageUsage = c.usage;
+                  }
+                  break;
 
-              default:
-                if (c.usage) {
-                  messageUsage = c.usage;
-                }
-                break;
+                default:
+                  if (c.usage) {
+                    messageUsage = c.usage;
+                  }
+                  break;
+              }
             }
           }
 
-          await this.$nextTick();
+          // Only update UI if still in same session
+          if (isCurrentSession) {
+            await this.$nextTick();
+          }
         }
         
-        this.isStreaming = false;
-        
-        // Update credits after tool execution
-        await this.loadCredits();
+        // Only update UI state if we're still in the same session
+        if (this.currentChatId === toolStreamingSessionId) {
+          this.isStreaming = false;
+          // Update credits after tool execution
+          await this.loadCredits();
+        }
         
       } catch (error) {
-        this.isStreaming = false;
+        // Only update UI state if we're still in the same session
+        if (this.currentChatId === toolStreamingSessionId) {
+          this.isStreaming = false;
 
-        // Update tool use status with error
-        toolUse.status = 'error';
-        toolUse.error = error.message;
-        
-        // Add error message to chat
-        const errorMessage = {
-          role: 'assistant',
-          content: `Error executing tool "${toolUse.name}": ${error.message}`,
-          timestamp: new Date().toISOString(),
-          isToolResult: true,
-          toolName: toolUse.name,
-          toolId: toolUse.id
-        };
-        
-        this.messages.push(errorMessage);
-        this.scrollToBottom();
+          // Update tool use status with error
+          toolUse.status = 'error';
+          toolUse.error = error.message;
+          
+          // Add error message to chat
+          const errorMessage = {
+            role: 'assistant',
+            content: `Error executing tool "${toolUse.name}": ${error.message}`,
+            timestamp: new Date().toISOString(),
+            isToolResult: true,
+            toolName: toolUse.name,
+            toolId: toolUse.id
+          };
+          
+          this.messages.push(errorMessage);
+          this.scrollToBottom();
+        }
       }
     },
     getToolStatusIcon(status) {
@@ -1233,7 +1291,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       if (toolBlocks.length > 0) {
         if (i < backendMessages.length - 1 && (!backendMessages[i + 1].tags || !backendMessages[i + 1].tags.includes('tool_result'))) {
           const nextMessage = backendMessages[i + 1];
-          if (nextMessage.message.contentBlocks[0].text.includes('rejected by the user')) {
+          if (nextMessage.message.contentBlocks[0].text && nextMessage.message.contentBlocks[0].text.includes('rejected by the user')) {
             frontendMsg.toolUses = Vue.ref(toolBlocks.map(block => ({
               id: block.id || 'unknown',
               name: block.name || 'unknown',
@@ -1364,63 +1422,32 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       return "text-red darken-1";
     },
     
-    // Save and load settings for the context threshold toggle
-    saveContextThresholdSetting() {
-      try {
-        localStorage.setItem('so-chat-increase-max-context-threshold', this.increaseMaxContextThreshold.toString());
-      } catch (error) {
-        this.$root.showError(this.i18n.assistantSaveContextError + ': ' + error.message);
-      }
-    },
-    
-    loadContextThresholdSetting() {
-      try {
-        const saved = localStorage.getItem('so-chat-increase-max-context-threshold');
-        if (saved !== null) {
-          this.increaseMaxContextThreshold = saved === 'true';
-        }
-      } catch (error) {
-        this.$root.showError(this.i18n.assistantLoadContextError + ': ' + error.message);
+
+    // Generic setting save method (following hunt.js pattern)
+    saveSetting(name, value, defaultValue = null) {
+      var item = 'settings.assistant.' + name;
+      if (defaultValue == null || value != defaultValue) {
+        localStorage[item] = value;
+      } else {
+        localStorage.removeItem(item);
       }
     },
 
-    // Save and load settings for the context threshold toggle
-    saveLastActiveSetting() {
-      try {
-        localStorage.setItem('so-chat-restore-last-active', this.restoreLastActive.toString());
-      } catch (error) {
-        this.$root.showError(this.i18n.assistantSaveRecentError + ': ' + error.message);
-      }
-    },
-    
-    loadLastActiveSetting() {
-      try {
-        const saved = localStorage.getItem('so-chat-restore-last-active');
-        if (saved !== null) {
-          this.restoreLastActive = saved === 'true';
-        }
-      } catch (error) {
-        this.$root.showError(this.i18n.assistantLoadRecentError + ': ' + error.message);
-      }
+    // Save all local settings (following hunt.js pattern)
+    saveLocalSettings() {
+      this.saveSetting('increaseMaxContextThreshold', this.increaseMaxContextThreshold, false);
+      this.saveSetting('restoreLastActive', this.restoreLastActive, false);
+      this.saveSetting('alwaysApproveReadRequests', this.alwaysApproveReadRequests, false);
+      this.saveSetting('showChatHistory', this.showChatHistory, true);
     },
 
-    saveReadApprovalSetting() {
-      try {
-        localStorage.setItem('so-chat-always-approve-read-requests', this.alwaysApproveReadRequests.toString());
-      } catch (error) {
-        this.$root.showError(this.i18n.assistantSaveReadApprovalError + ': ' + error.message);
-      }
-    },
-    
-    loadReadApprovalSetting() {
-      try {
-        const saved = localStorage.getItem('so-chat-always-approve-read-requests');
-        if (saved !== null) {
-          this.alwaysApproveReadRequests = saved === 'true';
-        }
-      } catch (error) {
-        this.$root.showError(this.i18n.assistantLoadReadApprovalError + ': ' + error.message);
-      }
+    // Load all local settings (following hunt.js pattern)
+    loadLocalSettings() {
+      var prefix = 'settings.assistant';
+      if (localStorage[prefix + '.increaseMaxContextThreshold']) this.increaseMaxContextThreshold = localStorage[prefix + '.increaseMaxContextThreshold'] == 'true';
+      if (localStorage[prefix + '.restoreLastActive']) this.restoreLastActive = localStorage[prefix + '.restoreLastActive'] == 'true';
+      if (localStorage[prefix + '.alwaysApproveReadRequests']) this.alwaysApproveReadRequests = localStorage[prefix + '.alwaysApproveReadRequests'] == 'true';
+      if (localStorage[prefix + '.showChatHistory']) this.showChatHistory = localStorage[prefix + '.showChatHistory'] == 'true';
     },
 
     // Check if a tool should be auto-approved based on localStorage settings
@@ -1447,6 +1474,12 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           optionsHeader.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
       });
+    },
+
+    clearStreamingStates() {
+      this.activeStreamingSessionId = null;
+      this.isTyping = false;
+      this.isStreaming = false;
     },
   }
 }});
