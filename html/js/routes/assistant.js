@@ -1476,10 +1476,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       });
     },
 
-    toggleCollapseHistory() {
-      this.collapseHistory = !this.collapseHistory;
-    },
-
     clearStreamingStates() {
       this.activeStreamingSessionId = null;
       this.isTyping = false;
