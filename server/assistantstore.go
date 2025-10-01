@@ -15,9 +15,9 @@ import (
 
 type Assistantstore interface {
 	SaveChat(context.Context, *model.StoredMessage) error
-	GetChatHistory(context.Context, string) ([]*model.StoredMessage, error)
-	GetSessions(ctx context.Context, userId string) ([]*model.AssistantSession, error)
-	CreateSession(ctx context.Context, session *model.AssistantSession) error
+	GetChatHistory(context.Context, string, bool) ([]*model.StoredMessage, error)
+	GetSessions(context.Context, bool, ...model.GetSessionsOpt) ([]*model.AssistantSession, error)
+	CreateSession(context.Context, *model.AssistantSession) error
 	DeleteSession(context.Context, string) error
 
 	GetUsage(context.Context, time.Time, time.Time) ([]*model.UserUsage, error)
