@@ -18,6 +18,7 @@ import (
 	"net/url"
 	"path"
 	"sort"
+	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -32,7 +33,8 @@ import (
 )
 
 const (
-	DEFAULT_APIURL = "https://onionai.securityonion.net/"
+	DEFAULT_APIURL                 = "https://onionai.securityonion.net/"
+	DEFAULT_HEALTH_TIMEOUT_SECONDS = 3
 )
 
 var (
@@ -40,10 +42,11 @@ var (
 )
 
 type AssistantCoordinator struct {
-	srv       *server.Server
-	apiKey    string
-	apiUrl    string
-	isRunning bool
+	srv                  *server.Server
+	apiKey               string
+	apiUrl               string
+	healthTimeoutSeconds int
+	isRunning            bool
 
 	FunctionLibrary map[string]Tool
 	toolConfig      json.RawMessage
@@ -67,6 +70,7 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 	ac.FunctionLibrary = knownTools
 
 	ac.apiUrl = module.GetStringDefault(config, "apiUrl", DEFAULT_APIURL)
+	ac.healthTimeoutSeconds = module.GetIntDefault(config, "healthTimeoutSeconds", DEFAULT_HEALTH_TIMEOUT_SECONDS)
 
 	ac.toolConfig, err = buildToolConfig(ac.FunctionLibrary)
 
@@ -173,7 +177,7 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, messages []*model.Mess
 	}
 
 	httpReq.Header.Add("Content-Type", "application/json")
-	httpReq.Header.Add("x-api-key", ac.apiKey)
+	ac.prepareRequestHeaders(httpReq)
 
 	res, err := ac.MakeRequest(httpReq, false)
 	if err != nil {
@@ -310,8 +314,8 @@ func (ac *AssistantCoordinator) ChatStream(ctx context.Context, messages []*mode
 	}
 
 	httpReq.Header.Add("Content-Type", "application/json")
-	httpReq.Header.Add("x-api-key", ac.apiKey)
 	httpReq.Header.Add("Accept", "text/event-stream")
+	ac.prepareRequestHeaders(httpReq)
 
 	res, err := ac.MakeRequest(httpReq, true)
 	if err != nil {
@@ -377,7 +381,7 @@ func (ac *AssistantCoordinator) Balance(ctx context.Context) (*model.BalanceResp
 		return nil, err
 	}
 
-	httpReq.Header.Add("x-api-key", ac.apiKey)
+	ac.prepareRequestHeaders(httpReq)
 
 	res, err := ac.MakeRequest(httpReq, false)
 	if err != nil {
@@ -404,6 +408,63 @@ func (ac *AssistantCoordinator) Balance(ctx context.Context) (*model.BalanceResp
 	}
 
 	return response, nil
+}
+
+func (ac *AssistantCoordinator) Health(ctx context.Context) (*model.HealthResponse, error) {
+	logger := log.FromContext(ctx)
+
+	u, err := url.Parse(ac.apiUrl)
+	if err != nil {
+		logger.WithError(err).WithField("apiUrl", ac.apiUrl).Error("unable to parse apiUrl")
+
+		return nil, err
+	}
+
+	u.Path = path.Join(u.Path, "/health")
+	endpoint := u.String()
+
+	shortLived, cancel := context.WithTimeout(ctx, time.Second*time.Duration(ac.healthTimeoutSeconds))
+	defer cancel()
+
+	httpReq, err := http.NewRequestWithContext(shortLived, http.MethodGet, endpoint, nil)
+	if err != nil {
+		logger.WithError(err).Error("unable to make request object")
+
+		return nil, err
+	}
+
+	ac.prepareRequestHeaders(httpReq)
+
+	res, err := ac.MakeRequest(httpReq, false)
+	if err != nil {
+		logger.WithError(err).WithField("apiEndpoint", endpoint).Error("unable to execute request")
+
+		return nil, err
+	}
+
+	resBody, err := io.ReadAll(res.Body)
+	if err != nil {
+		logger.WithError(err).Error("unable to read response body")
+
+		return nil, err
+	}
+
+	logger.WithField("rawHealthResponseBody", string(resBody)).Debug("health response received")
+
+	response := &model.HealthResponse{}
+
+	err = json.Unmarshal(resBody, response)
+	if err != nil {
+		logger.WithError(err).WithField("rawHealthResponseBody", string(resBody)).Error("unable to unmarhsal JSON response")
+		return nil, err
+	}
+
+	return response, nil
+}
+
+func (ac *AssistantCoordinator) prepareRequestHeaders(httpReq *http.Request) {
+	httpReq.Header.Add("x-api-key", ac.apiKey)
+	httpReq.Header.Add("x-so-version", ac.srv.Host.Version)
 }
 
 func cleanupMessages(messages []*model.Message) []*model.Message {

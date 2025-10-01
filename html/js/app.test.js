@@ -911,8 +911,8 @@ describe('formatActionContent', () => {
   });
 
   test('should replace standard placeholders', () => {
-    const content = 'Event: {eventId}, Field: {field}, Value: {value}, Grid: {gridId}';
-    const expected = 'Event: event123, Field: srcIP, Value: 1.2.3.4, Grid: localGrid';
+    const content = 'Event: {eventId}, Field: {field}, Value: {value}, OtherValue: {value}, Grid: {gridId}';
+    const expected = 'Event: event123, Field: srcIP, Value: 1.2.3.4, OtherValue: 1.2.3.4, Grid: localGrid';
     expect(app.formatActionContent(content, mockEvent, 'srcIP', '1.2.3.4')).toBe(expected);
   });
 

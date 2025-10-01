@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -403,6 +404,7 @@ func TestGetBalance(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	// Set up mock expectations
+	mockManager.EXPECT().Health(gomock.Any()).Return(&model.HealthResponse{Status: "healthy"}, nil)
 	mockManager.EXPECT().Balance(gomock.Any()).Return(&model.BalanceResponse{Balance: 10000}, nil)
 
 	// Execute the handler
@@ -410,6 +412,48 @@ func TestGetBalance(t *testing.T) {
 
 	// Verify response
 	assert.Equal(t, http.StatusOK, w.Code)
+
+	// assert response value
+	var response model.BalanceResponse
+
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+
+	assert.Equal(t, int64(10000), response.Balance)
+	assert.Equal(t, "healthy", response.HealthStatus)
+}
+
+func TestGetBalanceUnhealthy(t *testing.T) {
+	// Create mock server
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockManager := mock.NewMockAssistantManager(ctrl)
+	defer ctrl.Finish()
+
+	srv.AssistantManager = mockManager
+
+	handler := NewAssistantHandler(srv)
+
+	req := httptest.NewRequest("GET", "/assistant/balance", nil)
+
+	// Add required context values
+	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "test-user-123")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	ctx = context.WithValue(ctx, web.ContextKeyRequestId, "test-request-123")
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+
+	// Set up mock expectations
+	mockManager.EXPECT().Health(gomock.Any()).Return(nil, errors.New("service unreachable"))
+
+	// Execute the handler
+	handler.GetBalance(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
 
 func TestGetUsage(t *testing.T) {

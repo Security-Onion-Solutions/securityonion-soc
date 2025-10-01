@@ -228,14 +228,14 @@ func TestAssistantCoordinator_Balance(t *testing.T) {
 			name:   "successful balance request",
 			apiUrl: "https://api.example.com",
 			setupMocks: func(mockIO *detectionsmock.MockIOManager) {
-				responseBody := `{"credit_balance": 100.50, "api_key": "key", "api_key_prefix": "id", "company_id": "company", "status": "status"}`
+				responseBody := `{"credit_balance": 100, "api_key": "key", "api_key_prefix": "id", "company_id": "company", "status": "status"}`
 				mockIO.EXPECT().MakeRequest(gomock.Any(), false).Return(&http.Response{
 					StatusCode: 200,
 					Body:       io.NopCloser(strings.NewReader(responseBody)),
 				}, nil)
 			},
 			expectedResult: &model.BalanceResponse{
-				Balance:   100.50,
+				Balance:   100,
 				KeyId:     "id",
 				CompanyId: "company",
 				Status:    "status",
@@ -284,6 +284,9 @@ func TestAssistantCoordinator_Balance(t *testing.T) {
 			ac := &AssistantCoordinator{
 				apiUrl:    tc.apiUrl,
 				IOManager: mockIO,
+				srv: &server.Server{
+					Host: &web.Host{Version: "1.0.0"},
+				},
 			}
 
 			ctx := context.Background()
@@ -444,6 +447,7 @@ func TestAssistantCoordinator_Chat(t *testing.T) {
 
 			srv := &server.Server{
 				Assistantstore: mockAssistantstore,
+				Host:           &web.Host{Version: "1.0.0"},
 			}
 
 			ac := &AssistantCoordinator{
@@ -533,6 +537,9 @@ func TestAssistantCoordinator_ChatStream(t *testing.T) {
 				apiUrl:     tc.apiUrl,
 				IOManager:  mockIO,
 				toolConfig: []byte(`{"tools": [], "tool_choice": {"auto": {}}}`),
+				srv: &server.Server{
+					Host: &web.Host{Version: "1.0.0"},
+				},
 			}
 
 			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -699,6 +706,27 @@ func TestBuildApiKey(t *testing.T) {
 	key := buildApiKey()
 
 	assert.Equal(t, key, "sk-46736dfccdc375085dfb8f701ea7f327860c51b4aac3629592649ae8a7bb7e29")
+}
+
+func TestPrepareRequestHeaders(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ac := &AssistantCoordinator{
+		srv: &server.Server{
+			Host: &web.Host{Version: "1.0.0"},
+		},
+		apiKey: "key",
+	}
+
+	req, err := http.NewRequest("GET", "manager", nil)
+	assert.NoError(t, err)
+
+	ac.prepareRequestHeaders(req)
+
+	assert.Len(t, req.Header, 2)
+	assert.Equal(t, "key", req.Header.Get("x-api-key"))
+	assert.Equal(t, "1.0.0", req.Header.Get("x-so-version"))
 }
 
 // Helper types and functions for testing

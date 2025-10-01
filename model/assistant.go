@@ -243,7 +243,13 @@ type BalanceResponse struct {
 	// The status of the key used.
 	Status string `json:"status" example:"active"`
 	// The remaining credit balance.
-	Balance float64 `json:"credit_balance" example:"123000"`
+	Balance int64 `json:"credit_balance" example:"123000"`
+	// The health status of the service.
+	HealthStatus string `json:"health_status" example:"healthy"`
+}
+
+type HealthResponse struct {
+	Status string `json:"status"`
 }
 
 type ChatOpt func(*ChatConfig)
