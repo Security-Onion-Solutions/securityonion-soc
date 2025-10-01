@@ -90,7 +90,7 @@ func TestPostChat(t *testing.T) {
 		},
 	}
 
-	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return(mockHistoryMessages, nil)
+	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), sessionId, true).Return(mockHistoryMessages, nil)
 
 	// Set up mock expectations
 	var capturedMessages []*model.Message
@@ -166,7 +166,7 @@ func TestPostChatWithoutHistory(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	// Mock GetChatHistory to return empty history for new session (will generate new sessionId)
-	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{}, nil)
+	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any(), true).Return([]*model.StoredMessage{}, nil)
 	mockAssistantStore.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil)
 
 	// Set up mock expectations
@@ -333,7 +333,7 @@ func TestPostTool(t *testing.T) {
 			},
 		},
 	}
-	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return(mockHistoryMessages, nil)
+	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), sessionId, true).Return(mockHistoryMessages, nil)
 
 	// Mock the chat response after tool execution
 	var capturedMessages []*model.Message
@@ -521,6 +521,190 @@ func TestGetUsage(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &responseUsage)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedUsage, responseUsage)
+}
+
+func TestManageSessionHistory(t *testing.T) {
+	// Create mock server
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
+	defer ctrl.Finish()
+
+	srv.Assistantstore = mockAssistantStore
+
+	handler := NewAssistantHandler(srv)
+
+	// Test data
+	userId := "test-user-123"
+	sessionId := "test-session-456"
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/assistant/manage/%s/%s", userId, sessionId), nil)
+
+	// Set URL params
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("userId", userId)
+	rctx.URLParams.Add("sessionId", sessionId)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	// Add required context values
+	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "admin-user")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	ctx = context.WithValue(ctx, web.ContextKeyRequestId, "test-request-789")
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+
+	// Mock session data
+	mockSessions := []*model.AssistantSession{
+		{
+			Auditable: model.Auditable{
+				UserId: userId,
+			},
+			SessionId: sessionId,
+		},
+	}
+
+	// Mock history data
+	mockHistory := []*model.StoredMessage{
+		{
+			SessionId: sessionId,
+			Message: &model.Message{
+				Role: "user",
+				ContentBlocks: []model.ContentBlock{
+					{
+						Type: "text",
+						Text: "What are my recent alerts?",
+					},
+				},
+			},
+		},
+		{
+			SessionId: sessionId,
+			Message: &model.Message{
+				Role: "assistant",
+				ContentBlocks: []model.ContentBlock{
+					{
+						Type: "text",
+						Text: "Let me check your recent alerts for you.",
+					},
+				},
+			},
+		},
+	}
+
+	// Set up mock expectations
+	mockAssistantStore.EXPECT().GetSessions(
+		gomock.Any(),
+		false,
+		gomock.Any(),
+		gomock.Any(),
+		gomock.Any(),
+	).Return(mockSessions, nil)
+
+	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), sessionId, false).Return(mockHistory, nil)
+
+	// Execute the handler
+	handler.ManageSessionHistory(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Verify response body
+	var responseHistory []*model.StoredMessage
+	err := json.Unmarshal(w.Body.Bytes(), &responseHistory)
+	assert.NoError(t, err)
+	assert.Equal(t, mockHistory, responseHistory)
+}
+
+func TestManageSessionHistoryNotFound(t *testing.T) {
+	// Create mock server
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
+	defer ctrl.Finish()
+
+	srv.Assistantstore = mockAssistantStore
+
+	handler := NewAssistantHandler(srv)
+
+	// Test data
+	userId := "test-user-123"
+	sessionId := "nonexistent-session"
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/assistant/manage/%s/%s", userId, sessionId), nil)
+
+	// Set URL params
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("userId", userId)
+	rctx.URLParams.Add("sessionId", sessionId)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	// Add required context values
+	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "admin-user")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	ctx = context.WithValue(ctx, web.ContextKeyRequestId, "test-request-789")
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+
+	// Mock GetSessions to return empty result
+	mockAssistantStore.EXPECT().GetSessions(
+		gomock.Any(),
+		false,
+		gomock.Any(),
+		gomock.Any(),
+		gomock.Any(),
+	).Return([]*model.AssistantSession{}, nil)
+
+	// Execute the handler
+	handler.ManageSessionHistory(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestManageSessionHistoryUnauthorized(t *testing.T) {
+	// Create mock server with unauthorized user
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: false},
+	}
+	ctrl := gomock.NewController(t)
+	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
+	defer ctrl.Finish()
+
+	srv.Assistantstore = mockAssistantStore
+
+	handler := NewAssistantHandler(srv)
+
+	// Test data
+	userId := "test-user-123"
+	sessionId := "test-session-456"
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/assistant/manage/%s/%s", userId, sessionId), nil)
+
+	// Set URL params
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("userId", userId)
+	rctx.URLParams.Add("sessionId", sessionId)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	// Add required context values
+	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "unauthorized-user")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	ctx = context.WithValue(ctx, web.ContextKeyRequestId, "test-request-789")
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+
+	// Execute the handler
+	handler.ManageSessionHistory(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusForbidden, w.Code)
 }
 
 func TestUnstreamResponse(t *testing.T) {
