@@ -1218,8 +1218,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         const response = await this.$root.papi.get(`/assistant/sessions/${sessionId}`);
         if (response.data && Array.isArray(response.data) && response.data.length > 0) {
           // Convert backend messages to frontend format
-          this.messages = this.convertBackendMessagesToFrontend(response.data);
           this.currentChatId = sessionId;
+          this.messages = this.convertBackendMessagesToFrontend(response.data);
           this.saveCurrentChatId();
         } else {
           throw new Error(this.i18n.assistantNoHistoryFound + ' ' + sessionId);
@@ -1347,6 +1347,20 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
             rawResult: null, // Will be populated by subsequent tool result message
             timestamp: msg.createTime || new Date().toISOString(),
             approved: true
+          })));
+        // Allows tool use blocks at the end of a session to persist even when the user clicks away
+        } else {
+          frontendMsg.toolUses = Vue.ref(toolBlocks.map(block => ({
+            id: block.id || 'unknown',
+            name: block.name || 'unknown',
+            input: block.input || {}, // Ensure input is always an object, never null/undefined
+            status: 'pending_approval',
+            result: null,
+            error: null,
+            rawResult: null, // Will be populated by subsequent tool result message
+            timestamp: msg.createTime || new Date().toISOString(),
+            approved: null,
+            sessionId: this.currentChatId
           })));
         }
       }
