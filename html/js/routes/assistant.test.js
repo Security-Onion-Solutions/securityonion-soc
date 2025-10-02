@@ -70,6 +70,7 @@ const fakeToolUse = {
   approved: null
 };
 const fakeCreditsResponse = {
+  health_status: 'healthy',
   credit_balance: 100
 };
 const fakeInvestigationData = {
@@ -196,21 +197,21 @@ test('component data initialization', () => {
   expect(comp.executingTools).toBeInstanceOf(Map);
 });
 
-test('loadChatHistory initializes with welcome message', async () => {
-  await comp.loadChatHistory();
+test('loadNewChatScreen initializes with welcome message', async () => {
+  await comp.loadNewChatScreen();
   
   expect(comp.messages).toHaveLength(1);
   expect(comp.messages[0].role).toBe('assistant');
   expect(comp.messages[0].content).toContain('Hello! I\'m your AI Assistant');
 });
 
-test('loadChatHistory handles error', async () => {
+test('loadNewChatScreen handles error', async () => {
   const showErrorMock = mockShowError();
   comp.$root.showError = jest.fn(() => {
     throw new Error('Test error');
   });
   
-  await comp.loadChatHistory();
+  await comp.loadNewChatScreen();
   
   expect(comp.messages).toHaveLength(1); // Should still have welcome message
 });
@@ -318,6 +319,20 @@ test('loadCredits handles error', async () => {
   expect(comp.creditsRemaining).toBe(0);
 });
 
+test('loadCredits handles unhealthy status', async () => {
+  const showErrorMock = mockShowError();
+  const unhealthyResponse = {
+    health_status: 'unhealthy',
+    credit_balance: 50
+  };
+  mockPapi("get", { data: unhealthyResponse });
+  
+  await comp.loadCredits();
+  
+  expect(showErrorMock).toHaveBeenCalledWith('Error loading credits from API: Health check in balance request came back unhealthy.');
+  expect(comp.creditsRemaining).toBe(0); // Should remain 0 when unhealthy
+});
+
 // Chat operations tests
 test('loadChat switches to existing chat', async () => {
   const chat = fakeChatHistory[0];
@@ -355,7 +370,7 @@ test('deleteChat success', async () => {
   comp.chatHistory = [...fakeChatHistory];
   comp.currentChatId = chatId;
   comp.saveCurrentChatId = jest.fn();
-  comp.loadChatHistory = jest.fn();
+  comp.loadNewChatScreen = jest.fn();
   
   await comp.deleteChat(chatId);
   
@@ -363,7 +378,7 @@ test('deleteChat success', async () => {
   expect(comp.chatHistory).toHaveLength(0);
   expect(comp.currentChatId).toBe(null);
   expect(comp.saveCurrentChatId).toHaveBeenCalled();
-  expect(comp.loadChatHistory).toHaveBeenCalled();
+  expect(comp.loadNewChatScreen).toHaveBeenCalled();
   expect(comp.$router.push).toHaveBeenCalledWith({ name: 'assistant' });
 });
 
@@ -380,7 +395,7 @@ test('deleteChat handles error', async () => {
 test('startNewChat', async () => {
   comp.saveCurrentChat = jest.fn().mockResolvedValue();
   comp.saveCurrentChatId = jest.fn();
-  comp.loadChatHistory = jest.fn();
+  comp.loadNewChatScreen = jest.fn();
   comp.currentChatId = fakeSessionId;
   
   await comp.startNewChat();
@@ -388,7 +403,7 @@ test('startNewChat', async () => {
   expect(comp.saveCurrentChat).toHaveBeenCalled();
   expect(comp.currentChatId).toBe(null);
   expect(comp.saveCurrentChatId).toHaveBeenCalled();
-  expect(comp.loadChatHistory).toHaveBeenCalled();
+  expect(comp.loadNewChatScreen).toHaveBeenCalled();
   expect(comp.$router.push).toHaveBeenCalledWith({ name: 'assistant' });
 });
 
@@ -1479,7 +1494,7 @@ test('handleRouteSessionId handles non-investigation session with existing messa
   comp.$route.params.sessionId = fakeSessionId;
   comp.$route.query.investigation = 'false'; // Not an investigation
   comp.loadChatFromBackend = jest.fn().mockRejectedValue(new Error('Session not found'));
-  comp.loadChatHistory = jest.fn();
+  comp.loadNewChatScreen = jest.fn();
   comp.saveCurrentChatId = jest.fn();
   comp.messages = [fakeMessage, fakeAssistantMessage]; // More than 1 message
   
@@ -1487,7 +1502,7 @@ test('handleRouteSessionId handles non-investigation session with existing messa
   
   expect(comp.currentChatId).toBe(fakeSessionId);
   expect(comp.saveCurrentChatId).toHaveBeenCalled();
-  expect(comp.loadChatHistory).toHaveBeenCalled();
+  expect(comp.loadNewChatScreen).toHaveBeenCalled();
 });
 
 test('startInvestigationSession clears messages and sets up investigation prompt', async () => {
@@ -2285,11 +2300,11 @@ test('loadChatFromBackend handles 404 error', async () => {
   const error = new Error('Not found');
   error.response = { status: 404 };
   mockPapi("get", null, error);
-  comp.loadChatHistory = jest.fn();
+  comp.loadNewChatScreen = jest.fn();
   
   await comp.loadChatFromBackend(fakeSessionId);
   
-  expect(comp.loadChatHistory).toHaveBeenCalled();
+  expect(comp.loadNewChatScreen).toHaveBeenCalled();
   expect(comp.currentChatId).toBe(fakeSessionId);
 });
 

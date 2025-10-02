@@ -35,7 +35,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
   }},
   async created() {
     this.loadLocalSettings();
-    this.loadChatHistory();
+    this.loadNewChatScreen();
   },
   beforeUnmount() {
     // Backend automatically saves chats, just save current chat ID
@@ -97,7 +97,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }
     },
     
-    async loadChatHistory() {
+    async loadNewChatScreen() {
       try {
         // Initialize with a welcome message from the AI Assistant
         this.messages = [
@@ -181,7 +181,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
             }
             
           } else if (this.messages.length > 1) {
-            this.loadChatHistory();
+            this.loadNewChatScreen();
           }
         } finally {
           this.$root.stopLoading();
@@ -271,7 +271,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         if (this.currentChatId === chatId) {
           this.currentChatId = null;
           this.saveCurrentChatId(); // Clear the saved current chat ID
-          this.loadChatHistory(); // Reset to welcome message
+          this.loadNewChatScreen(); // Reset to welcome message
           // Navigate to chat without session ID
           this.$router.push({ name: 'assistant' });
         }
@@ -288,7 +288,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       
       this.currentChatId = null;
       this.saveCurrentChatId(); // Clear the saved current chat ID
-      this.loadChatHistory(); // Reset to welcome message (also resets context length)
+      this.loadNewChatScreen(); // Reset to welcome message (also resets context length)
       // Navigate to chat without session ID
       this.$router.push({ name: 'assistant' });
     },
@@ -1233,7 +1233,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       } catch (error) {
         // If session doesn't exist, start with welcome message
         if (error.response && error.response.status === 404) {
-          this.loadChatHistory(); // Reset to welcome message
+          this.loadNewChatScreen(); // Reset to welcome message
           this.currentChatId = sessionId;
           this.saveCurrentChatId();
         } else {
