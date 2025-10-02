@@ -462,9 +462,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     
     // Helper method to handle content_block_start event
-    handleContentBlockStart(c, assistantMessage) {
+    handleContentBlockStart(c, assistantMessage, sessionId = null) {
       // Handle tool use blocks
       if (c.content_block && c.content_block.type === 'tool_use') {
+        const targetSessionId = sessionId || this.currentChatId;
         const toolUse = {
           id: c.content_block.id,
           name: c.content_block.name,
@@ -476,42 +477,51 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           rawResult: null, // Will store the raw tool result
           timestamp: new Date().toISOString(),
           blockIndex: c.index, // Store the block index for tracking
-          approved: null // null = pending, true = approved, false = rejected
+          approved: null, // null = pending, true = approved, false = rejected
+          sessionId: targetSessionId // Track which session this belongs to
         };
         
-        if (assistantMessage) {
+        // Always track the tool use
+        this.executingTools.set(toolUse.id, toolUse);
+        this.executingTools.set(`block_${c.index}_${targetSessionId}`, toolUse);
+        
+        // Only update UI if this is for the current session and we have an assistant message
+        if (assistantMessage && targetSessionId === this.currentChatId) {
           assistantMessage.toolUses.value.push(toolUse);
-          this.executingTools.set(toolUse.id, toolUse);
-          // Also track by block index for delta updates
-          this.executingTools.set(`block_${c.index}`, toolUse);
           this.scrollToBottom();
         }
       }
     },
     
     // Helper method to handle content_block_delta event
-    handleContentBlockDelta(c, assistantMessage) {
-      if (assistantMessage && c.delta.type === 'text_delta') {
-        // update the ref's value
+    handleContentBlockDelta(c, assistantMessage, sessionId = null) {
+      const targetSessionId = sessionId || this.currentChatId;
+      
+      if (assistantMessage && c.delta.type === 'text_delta' && targetSessionId === this.currentChatId) {
+        // Only update UI if this is for the current session
         assistantMessage.content.value += c.delta.text;
         this.scrollToBottom();
       } else if (c.delta.type === 'input_json_delta') {
-        // Handle tool input updates - accumulate the JSON
-        const toolUse = this.executingTools.get(`block_${c.index}`);
+        // Handle tool input updates - accumulate the JSON (always process, regardless of session)
+        const toolUse = this.executingTools.get(`block_${c.index}_${targetSessionId}`);
         if (toolUse) {
           toolUse.inputJson += c.delta.partial_json;
           toolUse.status = 'preparing';
-          this.scrollToBottom();
+          // Only update UI if this is for the current session
+          if (targetSessionId === this.currentChatId) {
+            this.scrollToBottom();
+          }
         }
       }
     },
     
     // Helper method to handle content_block_stop event
-    handleContentBlockStop(c) {
+    handleContentBlockStop(c, sessionId = null) {
       let messageUsage = null;
+      const targetSessionId = sessionId || this.currentChatId;
       
       // Handle tool input completion - wait for user approval
-      const toolUse = this.executingTools.get(`block_${c.index}`);
+      const toolUse = this.executingTools.get(`block_${c.index}_${targetSessionId}`);
       if (toolUse && toolUse.status === 'preparing') {
         try {
           // Parse the accumulated JSON input
@@ -524,7 +534,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
             // Auto-approve the tool
             toolUse.status = 'executing';
             toolUse.approved = true;
-            // Execute the tool immediately
+            // Execute the tool immediately (use background execution if not current session)
             this.$nextTick(() => {
               this.executeTool(toolUse);
             });
@@ -537,7 +547,11 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           toolUse.status = 'error';
           toolUse.error = this.i18n.assistantToolParseInputError + ': ' + error.message;
         }
-        this.scrollToBottom();
+        
+        // Only update UI if this is for the current session
+        if (targetSessionId === this.currentChatId) {
+          this.scrollToBottom();
+        }
       }
       
       // Sometimes usage comes here
@@ -595,7 +609,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           const { done, value } = await reader.read();
           if (done) break;
           
-          // Check if we're still in the same session - if not, continue processing but don't update UI
+          // Check if we're still in the same session for UI updates
           const isCurrentSession = this.activeStreamingSessionId === streamingSessionId && this.currentChatId === streamingSessionId;
           
           // Process streaming chunks using helper method
@@ -638,53 +652,54 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
 
             const c = parseResult.data;
 
-            // Only update UI if we're still in the same session
-            if (isCurrentSession) {
-              // handle chunk by type using helper methods
-              switch (c.type) {
-                case 'message_start':
+            // Always process chunks for tool execution logic, but only update UI if current session
+            switch (c.type) {
+              case 'message_start':
+                if (isCurrentSession) {
                   const startResult = this.handleMessageStart(c, assistantMessage);
                   assistantMessage = startResult.assistantMessage;
                   if (startResult.messageUsage) {
                     messageUsage = startResult.messageUsage;
                   }
-                  break;
-                  
-                case 'content_block_start':
-                  this.handleContentBlockStart(c, assistantMessage);
-                  break;
-                  
-                case 'content_block_delta':
-                  this.handleContentBlockDelta(c, assistantMessage);
-                  break;
-                  
-                case 'content_block_stop':
-                  const stopUsage = this.handleContentBlockStop(c);
-                  if (stopUsage) {
-                    messageUsage = stopUsage;
-                  }
-                  break;
-                  
-                case 'message_stop':
+                }
+                break;
+                
+              case 'content_block_start':
+                this.handleContentBlockStart(c, isCurrentSession ? assistantMessage : null, streamingSessionId);
+                break;
+                
+              case 'content_block_delta':
+                this.handleContentBlockDelta(c, isCurrentSession ? assistantMessage : null, streamingSessionId);
+                break;
+                
+              case 'content_block_stop':
+                const stopUsage = this.handleContentBlockStop(c, streamingSessionId);
+                if (stopUsage && isCurrentSession) {
+                  messageUsage = stopUsage;
+                }
+                break;
+                
+              case 'message_stop':
+                if (isCurrentSession) {
                   const stopResult = this.handleMessageStop(assistantMessage, messageUsage);
                   assistantMessage = stopResult.assistantMessage;
                   messageUsage = stopResult.messageUsage;
-                  break;
-                  
-                case 'message_delta':
-                  // Handle usage information if present
-                  if (c.usage) {
-                    messageUsage = c.usage;
-                  }
-                  break;
-                  
-                default:
-                  // Log any unhandled event types that might contain usage
-                  if (c.usage) {
-                    messageUsage = c.usage;
-                  }
-                  break;
-              }
+                }
+                break;
+                
+              case 'message_delta':
+                // Handle usage information if present
+                if (c.usage && isCurrentSession) {
+                  messageUsage = c.usage;
+                }
+                break;
+                
+              default:
+                // Log any unhandled event types that might contain usage
+                if (c.usage && isCurrentSession) {
+                  messageUsage = c.usage;
+                }
+                break;
             }
           }
 
@@ -758,9 +773,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     
     // Helper method to handle content_block_start event for tool execution (chained tools)
-    handleToolExecutionContentBlockStart(c, assistantMessage) {
+    handleToolExecutionContentBlockStart(c, assistantMessage, sessionId = null) {
       // Handle tool use blocks in the response after tool execution
       if (c.content_block && c.content_block.type === 'tool_use') {
+        const targetSessionId = sessionId || this.currentChatId;
         const newToolUse = {
           id: c.content_block.id,
           name: c.content_block.name,
@@ -772,40 +788,51 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           rawResult: null, // Will store the raw tool result
           timestamp: new Date().toISOString(),
           blockIndex: c.index,
-          approved: null
+          approved: null,
+          sessionId: targetSessionId // Track which session this belongs to
         };
         
-        if (assistantMessage) {
+        // Always track the tool use
+        this.executingTools.set(newToolUse.id, newToolUse);
+        this.executingTools.set(`block_${c.index}_${targetSessionId}`, newToolUse);
+        
+        // Only update UI if this is for the current session and we have an assistant message
+        if (assistantMessage && targetSessionId === this.currentChatId) {
           assistantMessage.toolUses.value.push(newToolUse);
-          this.executingTools.set(newToolUse.id, newToolUse);
-          this.executingTools.set(`block_${c.index}`, newToolUse);
           this.scrollToBottom();
         }
       }
     },
     
     // Helper method to handle content_block_delta event for tool execution
-    handleToolExecutionContentBlockDelta(c, assistantMessage) {
-      if (assistantMessage && c.delta.type === 'text_delta') {
+    handleToolExecutionContentBlockDelta(c, assistantMessage, sessionId = null) {
+      const targetSessionId = sessionId || this.currentChatId;
+      
+      if (assistantMessage && c.delta.type === 'text_delta' && targetSessionId === this.currentChatId) {
+        // Only update UI if this is for the current session
         assistantMessage.content.value += c.delta.text;
         this.scrollToBottom();
       } else if (c.delta.type === 'input_json_delta') {
-        // Handle tool input updates for chained tools
-        const chainedToolUse = this.executingTools.get(`block_${c.index}`);
+        // Handle tool input updates for chained tools (always process, regardless of session)
+        const chainedToolUse = this.executingTools.get(`block_${c.index}_${targetSessionId}`);
         if (chainedToolUse) {
           chainedToolUse.inputJson += c.delta.partial_json;
           chainedToolUse.status = 'preparing';
-          this.scrollToBottom();
+          // Only update UI if this is for the current session
+          if (targetSessionId === this.currentChatId) {
+            this.scrollToBottom();
+          }
         }
       }
     },
     
     // Helper method to handle content_block_stop event for tool execution (chained tools)
-    handleToolExecutionContentBlockStop(c) {
+    handleToolExecutionContentBlockStop(c, sessionId = null) {
       let messageUsage = null;
+      const targetSessionId = sessionId || this.currentChatId;
       
       // Handle tool input completion for chained tools
-      const chainedToolUse = this.executingTools.get(`block_${c.index}`);
+      const chainedToolUse = this.executingTools.get(`block_${c.index}_${targetSessionId}`);
       if (chainedToolUse && chainedToolUse.status === 'preparing') {
         try {
           // Parse the accumulated JSON input
@@ -818,7 +845,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
             // Auto-approve the chained tool
             chainedToolUse.status = 'executing';
             chainedToolUse.approved = true;
-            // Execute the tool immediately
+            // Execute the tool immediately (use background execution if not current session)
             this.$nextTick(() => {
               this.executeTool(chainedToolUse);
             });
@@ -831,7 +858,11 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           chainedToolUse.status = 'error';
           chainedToolUse.error = this.i18n.assistantToolParseInputError + ': ' + error.message;
         }
-        this.scrollToBottom();
+        
+        // Only update UI if this is for the current session
+        if (targetSessionId === this.currentChatId) {
+          this.scrollToBottom();
+        }
       }
       
       // Sometimes usage comes here
@@ -928,12 +959,11 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       return this.$root.formatCount(count);
     },
     async executeTool(toolUse) {
-      // Capture the session ID at the start of the tool execution
-      const toolStreamingSessionId = this.currentChatId;
+      // Use the tool's session ID if available, otherwise use current session
+      const toolStreamingSessionId = toolUse.sessionId || this.currentChatId;
       
       try {
         // Create ToolRequest object with history and params
-        // Session ID should already be set by sendMessage()
         const toolRequest = {
           sessionId: toolStreamingSessionId,
           toolUseId: toolUse.id,
@@ -949,8 +979,11 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           adapter: 'fetch',
         });
 
+        // Check if we should update UI (current session)
+        const isCurrentSession = this.currentChatId === toolStreamingSessionId;
+
         // Update tool status to executing only if still in same session
-        if (this.currentChatId === toolStreamingSessionId) {
+        if (isCurrentSession) {
           toolUse.status = 'executing';
         }
 
@@ -958,7 +991,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         const stream = response.data;
         const reader = stream.pipeThrough(new TextDecoderStream()).getReader();
 
-        if (this.currentChatId === toolStreamingSessionId) {
+        if (isCurrentSession) {
           this.isStreaming = true;
         }
         let assistantMessage = null;
@@ -969,9 +1002,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          
-          // Check if we're still in the same session
-          const isCurrentSession = this.currentChatId === toolStreamingSessionId;
           
           // Process streaming chunks using helper method
           const chunkResult = this.processStreamingChunks(value, chunks, partial);
@@ -1012,11 +1042,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
 
             const c = parseResult.data;
 
-            // Only update UI if we're still in the same session
-            if (isCurrentSession) {
-              // Handle streaming chunks for tool result response using helper methods
-              switch (c.type) {
-                case 'message_start':
+            // Always process chunks for tool execution logic, but only update UI if current session
+            switch (c.type) {
+              case 'message_start':
+                if (isCurrentSession) {
                   // Capture raw tool result using helper method
                   this.captureRawToolResult(toolUse);
                   
@@ -1025,41 +1054,43 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
                   if (startResult.messageUsage) {
                     messageUsage = startResult.messageUsage;
                   }
-                  break;
+                }
+                break;
 
-                case 'content_block_start':
-                  this.handleToolExecutionContentBlockStart(c, assistantMessage);
-                  break;
+              case 'content_block_start':
+                this.handleToolExecutionContentBlockStart(c, isCurrentSession ? assistantMessage : null, toolStreamingSessionId);
+                break;
 
-                case 'content_block_delta':
-                  this.handleToolExecutionContentBlockDelta(c, assistantMessage);
-                  break;
+              case 'content_block_delta':
+                this.handleToolExecutionContentBlockDelta(c, isCurrentSession ? assistantMessage : null, toolStreamingSessionId);
+                break;
 
-                case 'content_block_stop':
-                  const stopUsage = this.handleToolExecutionContentBlockStop(c);
-                  if (stopUsage) {
-                    messageUsage = stopUsage;
-                  }
-                  break;
+              case 'content_block_stop':
+                const stopUsage = this.handleToolExecutionContentBlockStop(c, toolStreamingSessionId);
+                if (stopUsage && isCurrentSession) {
+                  messageUsage = stopUsage;
+                }
+                break;
 
-                case 'message_stop':
+              case 'message_stop':
+                if (isCurrentSession) {
                   const stopResult = this.handleToolExecutionMessageStop(assistantMessage, messageUsage);
                   assistantMessage = stopResult.assistantMessage;
                   messageUsage = stopResult.messageUsage;
-                  break;
+                }
+                break;
 
-                case 'message_delta':
-                  if (c.usage) {
-                    messageUsage = c.usage;
-                  }
-                  break;
+              case 'message_delta':
+                if (c.usage && isCurrentSession) {
+                  messageUsage = c.usage;
+                }
+                break;
 
-                default:
-                  if (c.usage) {
-                    messageUsage = c.usage;
-                  }
-                  break;
-              }
+              default:
+                if (c.usage && isCurrentSession) {
+                  messageUsage = c.usage;
+                }
+                break;
             }
           }
 
@@ -1070,20 +1101,19 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         }
         
         // Only update UI state if we're still in the same session
-        if (this.currentChatId === toolStreamingSessionId) {
+        if (isCurrentSession) {
           this.isStreaming = false;
           // Update credits after tool execution
           await this.loadCredits();
         }
         
       } catch (error) {
-        // Only update UI state if we're still in the same session
-        if (this.currentChatId === toolStreamingSessionId) {
+        // Always update tool status with error, but only update UI if current session
+        toolUse.status = 'error';
+        toolUse.error = error.message;
+        
+        if (isCurrentSession) {
           this.isStreaming = false;
-
-          // Update tool use status with error
-          toolUse.status = 'error';
-          toolUse.error = error.message;
           
           // Add error message to chat
           const errorMessage = {
