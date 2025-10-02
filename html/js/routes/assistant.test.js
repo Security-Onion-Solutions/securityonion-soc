@@ -766,7 +766,7 @@ test('executeTool handles chained tool use in response', async () => {
   expect(comp.messages[0].toolUses.value[0].name).toBe('analyze_data');
   expect(comp.messages[0].toolUses.value[0].status).toBe('preparing');
   expect(comp.executingTools.get('chained_tool_456')).toBeDefined();
-  expect(comp.executingTools.get('block_0')).toBeDefined();
+  expect(comp.executingTools.get(`block_0_${fakeSessionId}`)).toBeDefined();
 });
 
 test('executeTool captures raw tool result from backend', async () => {
@@ -1064,7 +1064,7 @@ test('callAIAPI processes content_block_start with tool_use', async () => {
   expect(comp.messages[0].toolUses.value[0].input).toEqual({ query: 'test query' });
   expect(comp.messages[0].toolUses.value[0].status).toBe('preparing');
   expect(comp.executingTools.get('tool_456')).toBeDefined();
-  expect(comp.executingTools.get('block_0')).toBeDefined();
+  expect(comp.executingTools.get(`block_0_${fakeSessionId}`)).toBeDefined();
 });
 
 test('callAIAPI processes content_block_delta with text_delta', async () => {
@@ -1149,7 +1149,7 @@ test('callAIAPI processes content_block_delta with input_json_delta', async () =
   
   await comp.callAIAPI('Test message');
   
-  const toolUse = comp.executingTools.get('block_0');
+  const toolUse = comp.executingTools.get(`block_0_${fakeSessionId}`);
   expect(toolUse).toBeDefined();
   expect(toolUse.inputJson).toBe('{"param": "value"}');
   expect(toolUse.status).toBe('preparing');
@@ -1198,7 +1198,7 @@ test('callAIAPI processes content_block_stop event', async () => {
   
   await comp.callAIAPI('Test message');
   
-  const toolUse = comp.executingTools.get('block_0');
+  const toolUse = comp.executingTools.get(`block_0_${fakeSessionId}`);
   expect(toolUse).toBeDefined();
   expect(toolUse.input).toEqual({ test: 'data' });
   expect(toolUse.status).toBe('pending_approval');
@@ -1247,7 +1247,7 @@ test('callAIAPI handles content_block_stop with invalid JSON', async () => {
   
   await comp.callAIAPI('Test message');
   
-  const toolUse = comp.executingTools.get('block_0');
+  const toolUse = comp.executingTools.get(`block_0_${fakeSessionId}`);
   expect(toolUse).toBeDefined();
   expect(toolUse.status).toBe('error');
   expect(toolUse.error).toContain('Failed to parse tool input');

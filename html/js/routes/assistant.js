@@ -1111,6 +1111,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         // Always update tool status with error, but only update UI if current session
         toolUse.status = 'error';
         toolUse.error = error.message;
+
+        const isCurrentSession = this.currentChatId === toolStreamingSessionId;
         
         if (isCurrentSession) {
           this.isStreaming = false;
