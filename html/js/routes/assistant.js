@@ -214,7 +214,11 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       try {
         const response = await this.$root.papi.get('/assistant/balance');
         if (response.data) {
-          this.creditsRemaining = response.data.credit_balance || 0;
+          if (response.data.health_status === 'healthy') {
+            this.creditsRemaining = response.data.credit_balance || 0;
+          } else {
+            throw new Error(this.i18n.assistantBalanceCheckUnhealthy);
+          }
         }
       } catch (error) {
         this.$root.showError(this.i18n.assistantUnableToLoadCredits + ': ' + error.message);

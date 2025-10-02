@@ -155,6 +155,7 @@ const i18n = {
       artifactValue: 'Value (hash, filename, etc.)',
       artifactValueHelp: 'Specify the observed value',
       assistantAdvertisement: 'Purchase Security Onion Pro to get access to Onion AI.',
+      assistantBalanceCheckUnhealthy: 'Health check in balance request came back unhealthy.',
       assistantDisabled: 'Onion AI is disabled. Contact your administrator to enable it.',
       assistantDisclaimerMessage: `Effective Date: [Insert Date]<br>
  Last Updated: [Insert Date]<br><br>
