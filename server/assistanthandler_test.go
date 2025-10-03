@@ -478,7 +478,7 @@ func TestGetUsage(t *testing.T) {
 
 	params.Encode()
 
-	req := httptest.NewRequest("POST", "/assistant/manage/stats?"+params.Encode(), nil)
+	req := httptest.NewRequest("POST", "/assistant/admin/stats?"+params.Encode(), nil)
 	req.Header.Set("Content-Type", "application/json")
 
 	// Add required context values
@@ -540,7 +540,7 @@ func TestManageSessionHistory(t *testing.T) {
 	userId := "test-user-123"
 	sessionId := "test-session-456"
 
-	req := httptest.NewRequest("GET", fmt.Sprintf("/assistant/manage/%s/%s", userId, sessionId), nil)
+	req := httptest.NewRequest("GET", fmt.Sprintf("/assistant/admin/%s/%s", userId, sessionId), nil)
 
 	// Set URL params
 	rctx := chi.NewRouteContext()
@@ -635,7 +635,7 @@ func TestManageSessionHistoryNotFound(t *testing.T) {
 	userId := "test-user-123"
 	sessionId := "nonexistent-session"
 
-	req := httptest.NewRequest("GET", fmt.Sprintf("/assistant/manage/%s/%s", userId, sessionId), nil)
+	req := httptest.NewRequest("GET", fmt.Sprintf("/assistant/admin/%s/%s", userId, sessionId), nil)
 
 	// Set URL params
 	rctx := chi.NewRouteContext()
@@ -684,7 +684,7 @@ func TestManageSessionHistoryUnauthorized(t *testing.T) {
 	userId := "test-user-123"
 	sessionId := "test-session-456"
 
-	req := httptest.NewRequest("GET", fmt.Sprintf("/assistant/manage/%s/%s", userId, sessionId), nil)
+	req := httptest.NewRequest("GET", fmt.Sprintf("/assistant/admin/%s/%s", userId, sessionId), nil)
 
 	// Set URL params
 	rctx := chi.NewRouteContext()
