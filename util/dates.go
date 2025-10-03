@@ -85,3 +85,33 @@ func ParseDate(dateString string, layouts []string) (time.Time, error) {
 	}
 	return time.Time{}, fmt.Errorf("unable to parse date string: %s", dateString)
 }
+
+func ParseDateRange(dateRange string, format string, zone string) (time.Time, time.Time, error) {
+	loc, err := time.LoadLocation(zone)
+	if err != nil {
+		loc, _ = time.LoadLocation("UTC")
+	}
+
+	rangeParts := strings.Split(dateRange, " - ")
+	if len(rangeParts) != 2 {
+		end := time.Now()
+		begin := end.Add(time.Duration(-24) * time.Hour)
+
+		return begin, end, nil
+	}
+
+	startParam := strings.TrimSpace(rangeParts[0])
+	endParam := strings.TrimSpace(rangeParts[1])
+
+	start, err := time.ParseInLocation(format, startParam, loc)
+	if err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+
+	end, err := time.ParseInLocation(format, endParam, loc)
+	if err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+
+	return start, end, nil
+}

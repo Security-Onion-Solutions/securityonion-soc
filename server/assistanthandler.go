@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	sse_parser "github.com/GiGurra/sse-parser"
@@ -44,11 +45,10 @@ func RegisterAssistantRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Get("/sessions/{sessionId}", h.GetSessionHistory)
 		r.Delete("/sessions/{sessionId}", h.DeleteSession)
 
-		r.Get("/manage/stats", h.GetUsage)
-		r.Get("/manage/sessions", h.manageSessions)
-		r.Get("/manage/{userId}/sessions", h.manageUserSessions)
-		r.Get("/manage/{userId}/sessions/{sessionId}", h.ManageSessions)
-		r.Get("/manage/{userId}/sessions/{sessionId}/history", h.ManageSessionHistory)
+		r.Get("/admin/stats", h.GetUsage)
+		r.Get("/admin/sessions", h.getAllSessions)
+		r.Get("/admin/{userId}/sessions", h.GetSessionsAdmin)
+		r.Get("/admin/{userId}/sessions/{sessionId}/history", h.ManageSessionHistory)
 	})
 }
 
@@ -409,11 +409,11 @@ func (h *AssistantHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 }
 
 // @Summary      Get Assistant Sessions
-// @Description  Retrieve a list of all previous chat sessions for the authenticated user.
+// @Description  Retrieve a list of all previous chat session metadata for the authenticated user.
 // @Tags         Assistant
 // @Security     bearer[assistant/read_authored]
 // @Produce      json
-// @Success      200  {array}   model.AssistantSession "List of previous conversation sessions"
+// @Success      200  {array}   model.AssistantSession "List of previous conversation session metadata"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
@@ -536,7 +536,7 @@ func (h *AssistantHandler) DeleteSession(w http.ResponseWriter, r *http.Request)
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
-// @Router       /api/assistant/manage/stats [get]
+// @Router       /api/assistant/admin/stats [get]
 func (h *AssistantHandler) GetUsage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
@@ -547,7 +547,15 @@ func (h *AssistantHandler) GetUsage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	start, end, err := parseDateRangeFromQueryString(r)
+	err = r.ParseForm()
+	if err != nil {
+		logger.WithError(err).Error("unable to parse query string")
+		web.Respond(w, r, http.StatusBadRequest, err)
+
+		return
+	}
+
+	start, end, err := util.ParseDateRange(r.Form.Get("range"), r.Form.Get("format"), r.Form.Get("zone"))
 	if err != nil {
 		logger.WithError(err).Error("unable to parse date range from query string")
 		web.Respond(w, r, http.StatusBadRequest, err)
@@ -566,48 +574,32 @@ func (h *AssistantHandler) GetUsage(w http.ResponseWriter, r *http.Request) {
 	web.Respond(w, r, http.StatusOK, usage)
 }
 
-// @Summary      Manage Assistant Sessions
-// @Description  Retrieve a list of all previous chat sessions across all users.
+// @Summary      Get Assistant Sessions
+// @Description  Get a list of all previous chat session metadata across all users.
 // @Tags         Assistant
 // @Security     bearer[assistant/read_all]
 // @Produce      json
-// @Success      200  {array}   model.AssistantSession "List of previous conversation sessions"
+// @Success      200  {array}   model.AssistantSession "List of previous chat session metadata"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
-// @Router       /api/assistant/manage/sessions [get]
-func (h *AssistantHandler) manageSessions(w http.ResponseWriter, r *http.Request) {
-	h.ManageSessions(w, r)
+// @Router       /api/assistant/admin/sessions [get]
+func (h *AssistantHandler) getAllSessions(w http.ResponseWriter, r *http.Request) {
+	h.GetSessionsAdmin(w, r)
 }
 
-// @Summary      Manage Assistant Sessions
-// @Description  Retrieve a list of all previous chat sessions for a given user.
+// @Summary      Get Assistant Sessions
+// @Description  Get chat session metadata from a specific user.
 // @Tags         Assistant
 // @Security     bearer[assistant/read_all]
-// @Param        userId     path  string              true  "ID of the user to retrieve sessions for"
+// @Param        userId     path  string              true  "ID of the user to retrieve sessions from"
 // @Produce      json
 // @Success      200  {array}   model.AssistantSession "List of previous conversation sessions"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
-// @Router       /api/assistant/manage/{userId}/sessions [get]
-func (h *AssistantHandler) manageUserSessions(w http.ResponseWriter, r *http.Request) {
-	h.ManageSessions(w, r)
-}
-
-// @Summary      Manage Assistant Sessions
-// @Description  Retrieve a previous chat sessions for a given user.
-// @Tags         Assistant
-// @Security     bearer[assistant/read_all]
-// @Param        userId     path  string              true  "ID of the user to retrieve the session from"
-// @Param        sessionId  path  string              true  "ID of the session to retrieve, it must belong to the indicated user"
-// @Produce      json
-// @Success      200  {array}   model.AssistantSession "List of previous conversation sessions"
-// @Failure      401           "Request was not properly authenticated"
-// @Failure      403           "Insufficient permissions for this request"
-// @Failure      500           "Internal SOC error; review SOC logs"
-// @Router       /api/assistant/manage/{userId}/sessions/{sessionId} [get]
-func (h *AssistantHandler) ManageSessions(w http.ResponseWriter, r *http.Request) {
+// @Router       /api/assistant/admin/{userId}/sessions [get]
+func (h *AssistantHandler) GetSessionsAdmin(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
 
@@ -617,7 +609,7 @@ func (h *AssistantHandler) ManageSessions(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	start, end, err := parseDateRangeFromQueryString(r)
+	start, end, err := util.ParseDateRange(r.Form.Get("range"), r.Form.Get("format"), r.Form.Get("zone"))
 	if err != nil {
 		logger.WithError(err).Error("unable to parse date range from query string")
 		web.Respond(w, r, http.StatusBadRequest, err)
@@ -626,7 +618,6 @@ func (h *AssistantHandler) ManageSessions(w http.ResponseWriter, r *http.Request
 	}
 
 	userId := chi.URLParam(r, "userId")
-	sessionId := chi.URLParam(r, "sessionId")
 
 	opts := []model.GetSessionsOpt{
 		model.GetSessionsWithRange(start, end),
@@ -636,10 +627,6 @@ func (h *AssistantHandler) ManageSessions(w http.ResponseWriter, r *http.Request
 
 	if userId != "" {
 		opts = append(opts, model.GetSessionsWithUserId(userId))
-	}
-
-	if sessionId != "" {
-		opts = append(opts, model.GetSessionsWithSessionId(sessionId))
 	}
 
 	sessions, err := h.server.Assistantstore.GetSessions(ctx, false, opts...)
@@ -653,8 +640,8 @@ func (h *AssistantHandler) ManageSessions(w http.ResponseWriter, r *http.Request
 	web.Respond(w, r, http.StatusOK, sessions)
 }
 
-// @Summary      Manage Assistant Session History
-// @Description  Retrieve a previous chat session's messages for a given user and session.
+// @Summary      Get Assistant Session History
+// @Description  Retrieve a chat session's messages for a given user and session.
 // @Tags         Assistant
 // @Security     bearer[assistant/read_all]
 // @Param        userId     path  string              true  "ID of the user to retrieve the session from"
@@ -664,7 +651,7 @@ func (h *AssistantHandler) ManageSessions(w http.ResponseWriter, r *http.Request
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
-// @Router       /api/assistant/manage/{userId}/sessions/{sessionId}/history [get]
+// @Router       /api/assistant/admin/{userId}/sessions/{sessionId}/history [get]
 func (h *AssistantHandler) ManageSessionHistory(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
@@ -853,58 +840,4 @@ func unstreamResponse(rawResponse string) (*model.Message, error) {
 	}
 
 	return message, nil
-}
-
-func parseDateRangeFromQueryString(r *http.Request) (time.Time, time.Time, error) {
-	logger := log.FromContext(r.Context())
-
-	err := r.ParseForm()
-	if err != nil {
-		return time.Time{}, time.Time{}, err
-	}
-
-	zone := r.Form.Get("zone")
-
-	loc, err := time.LoadLocation(zone)
-	if err != nil {
-		log.WithField("timezone", zone).Info("invalid timezone provided by client")
-		loc, _ = time.LoadLocation("UTC")
-	}
-
-	dateFormat := r.Form.Get("format")
-	rangeParam := r.Form.Get("range")
-
-	rangeParts := strings.Split(rangeParam, " - ")
-	if len(rangeParts) != 2 {
-		logger.WithField("dateRange", rangeParam).Error("invalid date range provided")
-
-		return time.Time{}, time.Time{}, fmt.Errorf("invalid date range provided")
-	}
-
-	startParam := strings.TrimSpace(rangeParts[0])
-	endParam := strings.TrimSpace(rangeParts[1])
-
-	start, err := time.ParseInLocation(dateFormat, startParam, loc)
-	if err != nil {
-		logger.WithError(err).WithFields(log.Fields{
-			"startDateRange":  startParam,
-			"dateRangeFormat": dateFormat,
-			"timezone":        zone,
-		}).Error("unable to parse start time")
-
-		return time.Time{}, time.Time{}, fmt.Errorf("unable to parse start time")
-	}
-
-	end, err := time.ParseInLocation(dateFormat, endParam, loc)
-	if err != nil {
-		logger.WithError(err).WithFields(log.Fields{
-			"endDateRange":    endParam,
-			"dateRangeFormat": dateFormat,
-			"timezone":        zone,
-		}).Error("unable to parse end time")
-
-		return time.Time{}, time.Time{}, fmt.Errorf("unable to parse end time")
-	}
-
-	return start, end, nil
 }
