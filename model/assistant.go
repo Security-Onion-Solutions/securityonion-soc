@@ -311,6 +311,8 @@ type UserUsage struct {
 	TotalOutputTokens int `json:"totalOutputTokens" example:"3000"`
 	// The total credits used by the user in the date range.
 	TotalCredits int `json:"totalCredits" example:"5"`
-	// The total messages sent by the user in the date range.
+	// The total sessions the user has added a message to in the date range.
+	TotalSessions int `json:"totalSessions" example:"3"`
+	// The total messages sent and received by the user in the date range.
 	TotalMessages int `json:"totalMessages" example:"25"`
 }

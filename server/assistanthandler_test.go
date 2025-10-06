@@ -496,7 +496,8 @@ func TestGetUsage(t *testing.T) {
 			TotalInputTokens:  1000,
 			TotalOutputTokens: 2000,
 			TotalCredits:      150,
-			TotalMessages:     10,
+			TotalMessages:     100,
+			TotalSessions:     10,
 		},
 		{
 			UserId:            "user-2",
@@ -504,6 +505,7 @@ func TestGetUsage(t *testing.T) {
 			TotalOutputTokens: 1000,
 			TotalCredits:      75,
 			TotalMessages:     5,
+			TotalSessions:     1,
 		},
 	}
 

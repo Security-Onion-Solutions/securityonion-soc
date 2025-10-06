@@ -821,6 +821,11 @@ func (store *ElasticAssistantstore) GetUsage(ctx context.Context, start time.Tim
 							"field": store.schemaPrefix + "chat.userId",
 						},
 					},
+					"total_sessions": map[string]any{
+						"cardinality": map[string]any{
+							"field": store.schemaPrefix + "chat.sessionId",
+						},
+					},
 				},
 			},
 		},
@@ -904,12 +909,20 @@ func (store *ElasticAssistantstore) GetUsage(ctx context.Context, start time.Tim
 							}
 						}
 
+						totalSessions := 0
+						if sessionsAgg, ok := bucket["total_sessions"].(map[string]any); ok {
+							if value, ok := sessionsAgg["value"].(float64); ok {
+								totalSessions = int(value)
+							}
+						}
+
 						userUsage := &model.UserUsage{
 							UserId:            userId,
 							TotalInputTokens:  totalInputTokens,
 							TotalOutputTokens: totalOutputTokens,
 							TotalCredits:      totalCredits,
 							TotalMessages:     totalMessages,
+							TotalSessions:     totalSessions,
 						}
 						userUsages = append(userUsages, userUsage)
 					}
