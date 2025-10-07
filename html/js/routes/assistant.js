@@ -98,6 +98,16 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         this.contextLength += messageContext;
       }
     },
+
+    checkContextLimitReached() {
+      const maxContextLength = this.increaseMaxContextThreshold ? this.contextLimitLarge : this.contextLimitSmall;
+      if (this.contextLength >= maxContextLength) {
+        const formattedLimit = this.formatCount(maxContextLength);
+        this.$root.showError(`Context length limit reached (${formattedLimit}+ tokens). Please start a new chat to continue.`);
+        return true;
+      }
+      return false;
+    },
     
     async loadNewChatScreen() {
       try {
@@ -308,12 +318,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }
 
       // Check if context length has reached the limit
-      const maxContextLength = this.increaseMaxContextThreshold ? this.contextLimitLarge : this.contextLimitSmall;
-      if (this.contextLength >= maxContextLength) {
-        const formattedLimit = this.formatCount(maxContextLength);
-        this.$root.showError(`Context length limit reached (${formattedLimit}+ tokens). Please start a new chat to continue.`);
-        return;
-      }
+      if (this.checkContextLimitReached()) return;
       
       // Check if user has credits
       if (this.creditsRemaining <= 0) {
@@ -536,6 +541,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           
           // Check if this tool should be auto-approved
           if (this.shouldAutoApproveTool(toolUse.name)) {
+            if (this.checkContextLimitReached()) return;
             // Auto-approve the tool
             toolUse.status = 'executing';
             toolUse.approved = true;
@@ -847,6 +853,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           
           // Check if this chained tool should be auto-approved
           if (this.shouldAutoApproveTool(chainedToolUse.name)) {
+            if (this.checkContextLimitReached()) return;
             // Auto-approve the chained tool
             chainedToolUse.status = 'executing';
             chainedToolUse.approved = true;
@@ -1274,6 +1281,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     async approveTool(toolUse) {
       try {
+        if (this.checkContextLimitReached()) return;
         toolUse.approved = true;
         toolUse.status = 'executing';
         await this.executeTool(toolUse);
@@ -1284,6 +1292,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.scrollToBottom();
     },
     async rejectTool(toolUse) {
+      if (this.checkContextLimitReached()) return;
       toolUse.approved = false;
       toolUse.status = 'rejected';
       toolUse.error = this.i18n.assistantToolUseReject;
