@@ -156,6 +156,8 @@ const i18n = {
       artifactValueHelp: 'Specify the observed value',
       assistantAdvertisement: `<v-card-text>This feature requires Security Onion Pro and credits for the OnionAI API. Visit <a target="sos" href="https://securityonionsolutions.com/pro?utm_source=ainotice&utm_medium=app&utm_id=ai">Security Onion</a>.</v-card-text>`,
       assistantBalanceCheckUnhealthy: 'The AI model could not be reached. Support for local AI models is coming soon.',
+      assistantContextLimitPt1: 'Context length limit reached',
+      assistantContextLimitPt2: 'Please start a new chat to continue.',
       assistantDisabled: 'This feature is not enabled on this grid. Contact your Security Onion administrator.',
       assistantDisclaimerMessage: `Use of this feature requires AI requests which can contain event data and will be sent to the OnionAI API in the US.<br><br>No Query Logging: OnionAI API does not record or store input prompts, queries, or generated outputs. No context is stored on the API.<br><br>Token Tracking: The API tracks usage metrics limited to token counts for billing and operational purposes.<br><br>Local Retention: Prompts and responses are stored in the local grid's Elasticsearch data store.`,
       assistantDisclaimerTitle: 'Data Privacy Notice',

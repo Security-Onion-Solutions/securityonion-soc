@@ -103,7 +103,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       const maxContextLength = this.increaseMaxContextThreshold ? this.contextLimitLarge : this.contextLimitSmall;
       if (this.contextLength >= maxContextLength) {
         const formattedLimit = this.formatCount(maxContextLength);
-        this.$root.showError(`Context length limit reached (${formattedLimit}+ tokens). Please start a new chat to continue.`);
+        this.$root.showError(this.i18n.assistantContextLimitPt1 + ` (${formattedLimit}+ tokens). ` + this.i18n.assistantContextLimitPt2);
         return true;
       }
       return false;
