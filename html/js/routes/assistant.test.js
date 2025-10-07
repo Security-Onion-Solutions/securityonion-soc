@@ -329,7 +329,7 @@ test('loadCredits handles unhealthy status', async () => {
   
   await comp.loadCredits();
   
-  expect(showErrorMock).toHaveBeenCalledWith('Error loading credits from API: Health check in balance request came back unhealthy.');
+  expect(showErrorMock).toHaveBeenCalledWith('Error loading credits from API: The AI model could not be reached. Support for local AI models is coming soon.');
   expect(comp.creditsRemaining).toBe(0); // Should remain 0 when unhealthy
 });
 
@@ -339,15 +339,15 @@ test('loadChat switches to existing chat', async () => {
   comp.saveCurrentChat = jest.fn().mockResolvedValue();
   comp.loadChatFromBackend = jest.fn().mockResolvedValue();
   comp.updateUrlWithSessionId = jest.fn();
-  comp.scrollToBottom = jest.fn();
+  comp.clearStreamingStates = jest.fn();
   comp.currentChatId = chat.sessionId; // Set current chat ID to match
   
   await comp.loadChat(chat);
   
   expect(comp.saveCurrentChat).toHaveBeenCalled();
+  expect(comp.clearStreamingStates).toHaveBeenCalled();
   expect(comp.loadChatFromBackend).toHaveBeenCalledWith(chat.sessionId);
   expect(comp.updateUrlWithSessionId).toHaveBeenCalledWith(chat.sessionId);
-  expect(comp.scrollToBottom).toHaveBeenCalled();
 });
 
 test('loadChat handles error', async () => {
@@ -2019,6 +2019,166 @@ test('convertBackendMessagesToFrontend handles tool_use blocks with null/undefin
   expect(result[0].toolUses.value[0].input).toEqual({}); // Should default to empty object
 });
 
+test('convertBackendMessagesToFrontend handles tool_use blocks at end of session with pending_approval status', () => {
+  comp.resetContextLength = jest.fn();
+  comp.currentChatId = 'test_session_123';
+  global.Vue = { ref: jest.fn((value) => ({ value })) };
+  
+  // Single message with tool use at the end (no subsequent messages)
+  const backendMessages = [
+    {
+      createTime: '2025-01-01T12:00:00.000Z',
+      message: {
+        role: 'assistant',
+        contentBlocks: [
+          {
+            type: 'tool_use',
+            id: 'tool_end_session',
+            name: 'query_events',
+            input: { query: 'test query at end' }
+          }
+        ]
+      }
+    }
+    // No subsequent messages - this is the end of the session
+  ];
+  
+  const result = comp.convertBackendMessagesToFrontend(backendMessages);
+  
+  expect(result).toHaveLength(1);
+  expect(result[0]).toHaveProperty('toolUses');
+  expect(result[0].toolUses.value).toHaveLength(1);
+  
+  const toolUse = result[0].toolUses.value[0];
+  expect(toolUse.id).toBe('tool_end_session');
+  expect(toolUse.name).toBe('query_events');
+  expect(toolUse.input).toEqual({ query: 'test query at end' });
+  expect(toolUse.status).toBe('pending_approval'); // Key assertion for line 1473
+  expect(toolUse.result).toBe(null);
+  expect(toolUse.error).toBe(null);
+  expect(toolUse.rawResult).toBe(null);
+  expect(toolUse.timestamp).toBe('2025-01-01T12:00:00.000Z');
+  expect(toolUse.approved).toBe(null);
+  expect(toolUse.sessionId).toBe('test_session_123'); // Should include sessionId
+});
+
+test('convertBackendMessagesToFrontend handles multiple tool_use blocks at end of session', () => {
+  comp.resetContextLength = jest.fn();
+  comp.currentChatId = 'multi_tool_session';
+  global.Vue = { ref: jest.fn((value) => ({ value })) };
+  
+  // Message with multiple tool uses at the end of session
+  const backendMessages = [
+    {
+      createTime: '2025-01-01T12:00:00.000Z',
+      message: {
+        role: 'assistant',
+        contentBlocks: [
+          {
+            type: 'tool_use',
+            id: 'tool_1',
+            name: 'query_events',
+            input: { query: 'first query' }
+          },
+          {
+            type: 'tool_use',
+            id: 'tool_2',
+            name: 'get_playbook_questions',
+            input: { alert_id: 'alert_123' }
+          }
+        ]
+      }
+    }
+    // No subsequent messages
+  ];
+  
+  const result = comp.convertBackendMessagesToFrontend(backendMessages);
+  
+  expect(result).toHaveLength(1);
+  expect(result[0]).toHaveProperty('toolUses');
+  expect(result[0].toolUses.value).toHaveLength(2);
+  
+  // Both tools should have pending_approval status
+  result[0].toolUses.value.forEach((toolUse, index) => {
+    expect(toolUse.status).toBe('pending_approval');
+    expect(toolUse.approved).toBe(null);
+    expect(toolUse.sessionId).toBe('multi_tool_session');
+    expect(toolUse.id).toBe(`tool_${index + 1}`);
+  });
+});
+
+test('convertBackendMessagesToFrontend handles tool_use blocks at end with missing input', () => {
+  comp.resetContextLength = jest.fn();
+  comp.currentChatId = 'missing_input_session';
+  global.Vue = { ref: jest.fn((value) => ({ value })) };
+  
+  // Tool use block with missing input at end of session
+  const backendMessages = [
+    {
+      createTime: '2025-01-01T12:00:00.000Z',
+      message: {
+        role: 'assistant',
+        contentBlocks: [
+          {
+            type: 'tool_use',
+            id: 'tool_no_input',
+            name: 'simple_tool'
+            // No input property
+          }
+        ]
+      }
+    }
+  ];
+  
+  const result = comp.convertBackendMessagesToFrontend(backendMessages);
+  
+  expect(result).toHaveLength(1);
+  expect(result[0]).toHaveProperty('toolUses');
+  expect(result[0].toolUses.value).toHaveLength(1);
+  
+  const toolUse = result[0].toolUses.value[0];
+  expect(toolUse.status).toBe('pending_approval');
+  expect(toolUse.input).toEqual({}); // Should default to empty object
+  expect(toolUse.approved).toBe(null);
+  expect(toolUse.sessionId).toBe('missing_input_session');
+});
+
+test('convertBackendMessagesToFrontend handles tool_use blocks at end with missing id/name', () => {
+  comp.resetContextLength = jest.fn();
+  comp.currentChatId = 'missing_props_session';
+  global.Vue = { ref: jest.fn((value) => ({ value })) };
+  
+  // Tool use block with missing id and name at end of session
+  const backendMessages = [
+    {
+      createTime: '2025-01-01T12:00:00.000Z',
+      message: {
+        role: 'assistant',
+        contentBlocks: [
+          {
+            type: 'tool_use'
+            // Missing id and name properties
+          }
+        ]
+      }
+    }
+  ];
+  
+  const result = comp.convertBackendMessagesToFrontend(backendMessages);
+  
+  expect(result).toHaveLength(1);
+  expect(result[0]).toHaveProperty('toolUses');
+  expect(result[0].toolUses.value).toHaveLength(1);
+  
+  const toolUse = result[0].toolUses.value[0];
+  expect(toolUse.status).toBe('pending_approval');
+  expect(toolUse.id).toBe('unknown'); // Should default to 'unknown'
+  expect(toolUse.name).toBe('unknown'); // Should default to 'unknown'
+  expect(toolUse.input).toEqual({});
+  expect(toolUse.approved).toBe(null);
+  expect(toolUse.sessionId).toBe('missing_props_session');
+});
+
 test('convertBackendMessagesToFrontend filters out new format tool result messages', () => {
   comp.resetContextLength = jest.fn();
   global.Vue = { ref: jest.fn((value) => ({ value })) };
@@ -2282,18 +2442,20 @@ test('loadChatFromBackend success', async () => {
       message: {
         role: 'assistant',
         contentBlocks: [
-          { type: '', content: 'I can help you with security analysis and investigations.' }
+          { type: 'text', text: 'I can help you with security analysis and investigations.' }
         ]
       }
     }
   ];
   const mock = mockPapi("get", { data: testMessages });
+  comp.scrollToBottomSettled = jest.fn().mockResolvedValue();
   
   await comp.loadChatFromBackend(fakeSessionId);
   
   expect(mock).toHaveBeenCalledWith(`/assistant/sessions/${fakeSessionId}`);
   expect(comp.messages).toHaveLength(2);
   expect(comp.currentChatId).toBe(fakeSessionId);
+  expect(comp.scrollToBottomSettled).toHaveBeenCalled();
 });
 
 test('loadChatFromBackend handles 404 error', async () => {
@@ -2301,11 +2463,13 @@ test('loadChatFromBackend handles 404 error', async () => {
   error.response = { status: 404 };
   mockPapi("get", null, error);
   comp.loadNewChatScreen = jest.fn();
+  comp.scrollToBottomSettled = jest.fn().mockResolvedValue();
   
   await comp.loadChatFromBackend(fakeSessionId);
   
   expect(comp.loadNewChatScreen).toHaveBeenCalled();
   expect(comp.currentChatId).toBe(fakeSessionId);
+  expect(comp.scrollToBottomSettled).toHaveBeenCalled();
 });
 
 test('loadChatFromBackend handles other errors', async () => {
@@ -2792,4 +2956,569 @@ test('settings watcher integration with saveLocalSettings', () => {
   comp.saveLocalSettings(); // Simulating watcher trigger
   
   expect(comp.saveLocalSettings).toHaveBeenCalledTimes(4);
+});
+
+// scrollToBottomSettled method tests
+test('scrollToBottomSettled waits for nextTick and finds container', async () => {
+  const mockContainer = {
+    scrollTop: 0,
+    scrollHeight: 500,
+    clientHeight: 400,
+    querySelectorAll: jest.fn().mockReturnValue([]),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn()
+  };
+  
+  comp.$el = {
+    querySelector: jest.fn().mockReturnValue(mockContainer)
+  };
+  
+  comp.forceScrollBottom = jest.fn();
+  
+  // Mock MutationObserver and ResizeObserver
+  const mockMutationObserver = {
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  };
+  const mockResizeObserver = {
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  };
+  
+  global.MutationObserver = jest.fn().mockImplementation(() => mockMutationObserver);
+  global.ResizeObserver = jest.fn().mockImplementation(() => mockResizeObserver);
+  global.window.ResizeObserver = global.ResizeObserver;
+  
+  // Use fake timers to control setTimeout
+  jest.useFakeTimers();
+  
+  const promise = comp.scrollToBottomSettled();
+  
+  // Advance timers to trigger the settle timeout
+  jest.advanceTimersByTime(180);
+  
+  await promise;
+  
+  expect(comp.$nextTick).toHaveBeenCalled();
+  expect(comp.$el.querySelector).toHaveBeenCalledWith('.chat-messages');
+  expect(comp.forceScrollBottom).toHaveBeenCalledWith(mockContainer);
+  expect(global.MutationObserver).toHaveBeenCalled();
+  expect(mockMutationObserver.observe).toHaveBeenCalledWith(mockContainer, {
+    childList: true,
+    subtree: true,
+    characterData: true
+  });
+  expect(global.ResizeObserver).toHaveBeenCalled();
+  expect(mockResizeObserver.observe).toHaveBeenCalledWith(mockContainer);
+  
+  jest.useRealTimers();
+});
+
+test('scrollToBottomSettled returns early when no container found', async () => {
+  comp.$el = {
+    querySelector: jest.fn().mockReturnValue(null)
+  };
+  
+  comp.forceScrollBottom = jest.fn();
+  
+  await comp.scrollToBottomSettled();
+  
+  expect(comp.$nextTick).toHaveBeenCalled();
+  expect(comp.$el.querySelector).toHaveBeenCalledWith('.chat-messages');
+  expect(comp.forceScrollBottom).not.toHaveBeenCalled();
+});
+
+test('scrollToBottomSettled returns early when $el is null', async () => {
+  comp.$el = null;
+  comp.forceScrollBottom = jest.fn();
+  
+  await comp.scrollToBottomSettled();
+  
+  expect(comp.$nextTick).toHaveBeenCalled();
+  expect(comp.forceScrollBottom).not.toHaveBeenCalled();
+});
+
+test('scrollToBottomSettled returns early when $el has no querySelector', async () => {
+  comp.$el = {};
+  comp.forceScrollBottom = jest.fn();
+  
+  await comp.scrollToBottomSettled();
+  
+  expect(comp.$nextTick).toHaveBeenCalled();
+  expect(comp.forceScrollBottom).not.toHaveBeenCalled();
+});
+
+test('scrollToBottomSettled uses custom settleDelay and maxWait options', async () => {
+  const mockContainer = {
+    scrollTop: 0,
+    scrollHeight: 500,
+    clientHeight: 400,
+    querySelectorAll: jest.fn().mockReturnValue([]),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn()
+  };
+  
+  comp.$el = {
+    querySelector: jest.fn().mockReturnValue(mockContainer)
+  };
+  
+  comp.forceScrollBottom = jest.fn();
+  
+  // Mock observers
+  const mockMutationObserver = {
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  };
+  const mockResizeObserver = {
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  };
+  
+  global.MutationObserver = jest.fn().mockImplementation(() => mockMutationObserver);
+  global.ResizeObserver = jest.fn().mockImplementation(() => mockResizeObserver);
+  global.window.ResizeObserver = global.ResizeObserver;
+  
+  jest.useFakeTimers();
+  
+  const promise = comp.scrollToBottomSettled({ settleDelay: 300, maxWait: 5000 });
+  
+  // Advance by custom settleDelay
+  jest.advanceTimersByTime(300);
+  
+  await promise;
+  
+  expect(comp.forceScrollBottom).toHaveBeenCalledWith(mockContainer);
+  
+  jest.useRealTimers();
+});
+
+test('scrollToBottomSettled handles height changes during settle period', async () => {
+  const mockContainer = {
+    scrollTop: 0,
+    scrollHeight: 500,
+    clientHeight: 400,
+    querySelectorAll: jest.fn().mockReturnValue([]),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn()
+  };
+  
+  comp.$el = {
+    querySelector: jest.fn().mockReturnValue(mockContainer)
+  };
+  
+  comp.forceScrollBottom = jest.fn();
+  
+  let mutationCallback;
+  const mockMutationObserver = {
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  };
+  
+  global.MutationObserver = jest.fn().mockImplementation((callback) => {
+    mutationCallback = callback;
+    return mockMutationObserver;
+  });
+  
+  global.ResizeObserver = jest.fn().mockImplementation(() => ({
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  }));
+  global.window.ResizeObserver = global.ResizeObserver;
+  
+  jest.useFakeTimers();
+  
+  const promise = comp.scrollToBottomSettled({ settleDelay: 200 });
+  
+  // Wait for the MutationObserver to be set up
+  await Promise.resolve();
+  
+  // Simulate height change during settle period
+  if (mutationCallback) {
+    mockContainer.scrollHeight = 600; // Height changed
+    mutationCallback(); // Trigger mutation callback
+  }
+  
+  // Advance timers to complete settling
+  jest.advanceTimersByTime(400);
+  
+  await promise;
+  
+  // Should have been called at least twice (initial + mutation trigger + final)
+  expect(comp.forceScrollBottom).toHaveBeenCalledWith(mockContainer);
+  expect(comp.forceScrollBottom).toHaveBeenCalledTimes(3);
+  
+  jest.useRealTimers();
+});
+
+test('scrollToBottomSettled handles image loading events', async () => {
+  const mockImg1 = {
+    complete: false,
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn()
+  };
+  const mockImg2 = {
+    complete: true, // Already loaded
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn()
+  };
+  
+  const mockContainer = {
+    scrollTop: 0,
+    scrollHeight: 500,
+    clientHeight: 400,
+    querySelectorAll: jest.fn().mockReturnValue([mockImg1, mockImg2]),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn()
+  };
+  
+  comp.$el = {
+    querySelector: jest.fn().mockReturnValue(mockContainer)
+  };
+  
+  comp.forceScrollBottom = jest.fn();
+  
+  // Mock observers
+  global.MutationObserver = jest.fn().mockImplementation(() => ({
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  }));
+  global.ResizeObserver = jest.fn().mockImplementation(() => ({
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  }));
+  global.window.ResizeObserver = global.ResizeObserver;
+  
+  jest.useFakeTimers();
+  
+  const promise = comp.scrollToBottomSettled();
+  
+  // Advance timers to complete
+  jest.advanceTimersByTime(180);
+  
+  await promise;
+  
+  expect(mockContainer.querySelectorAll).toHaveBeenCalledWith('img');
+  // Only incomplete image should have event listeners added
+  expect(mockImg1.addEventListener).toHaveBeenCalledWith('load', expect.any(Function), { once: true });
+  expect(mockImg1.addEventListener).toHaveBeenCalledWith('error', expect.any(Function), { once: true });
+  // Complete image should not have listeners added
+  expect(mockImg2.addEventListener).not.toHaveBeenCalled();
+  
+  jest.useRealTimers();
+});
+
+test('scrollToBottomSettled triggers safety timeout when maxWait exceeded', async () => {
+  const mockContainer = {
+    scrollTop: 0,
+    scrollHeight: 500,
+    clientHeight: 400,
+    querySelectorAll: jest.fn().mockReturnValue([]),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn()
+  };
+  
+  comp.$el = {
+    querySelector: jest.fn().mockReturnValue(mockContainer)
+  };
+  
+  comp.forceScrollBottom = jest.fn();
+  
+  let mutationCallback;
+  const mockMutationObserver = {
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  };
+  
+  global.MutationObserver = jest.fn().mockImplementation((callback) => {
+    mutationCallback = callback;
+    return mockMutationObserver;
+  });
+  
+  global.ResizeObserver = jest.fn().mockImplementation(() => ({
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  }));
+  global.window.ResizeObserver = global.ResizeObserver;
+  
+  jest.useFakeTimers();
+  
+  const promise = comp.scrollToBottomSettled({ settleDelay: 200, maxWait: 1000 });
+  
+  // Wait for setup
+  await Promise.resolve();
+  
+  // Keep triggering mutations to prevent settling
+  if (mutationCallback) {
+    for (let i = 0; i < 5; i++) {
+      mockContainer.scrollHeight += 10; // Keep changing height
+      mutationCallback();
+    }
+  }
+  
+  // Advance past maxWait time to trigger safety timeout
+  jest.advanceTimersByTime(1100);
+  
+  await promise;
+  
+  // Should have been called due to mutations and safety timeout
+  expect(comp.forceScrollBottom).toHaveBeenCalled();
+  expect(mockMutationObserver.disconnect).toHaveBeenCalled();
+  
+  jest.useRealTimers();
+});
+
+test('scrollToBottomSettled handles ResizeObserver not available', async () => {
+  const mockContainer = {
+    scrollTop: 0,
+    scrollHeight: 500,
+    clientHeight: 400,
+    querySelectorAll: jest.fn().mockReturnValue([]),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn()
+  };
+  
+  comp.$el = {
+    querySelector: jest.fn().mockReturnValue(mockContainer)
+  };
+  
+  comp.forceScrollBottom = jest.fn();
+  
+  // Mock MutationObserver but not ResizeObserver
+  global.MutationObserver = jest.fn().mockImplementation(() => ({
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  }));
+  
+  // Remove ResizeObserver from window
+  delete global.window.ResizeObserver;
+  delete global.ResizeObserver;
+  
+  jest.useFakeTimers();
+  
+  const promise = comp.scrollToBottomSettled();
+  
+  jest.advanceTimersByTime(180);
+  
+  await promise;
+  
+  expect(comp.forceScrollBottom).toHaveBeenCalledWith(mockContainer);
+  expect(global.MutationObserver).toHaveBeenCalled();
+  // Should not throw error when ResizeObserver is not available
+  
+  jest.useRealTimers();
+});
+
+test('scrollToBottomSettled properly cleans up all observers and timers', async () => {
+  const mockImg = {
+    complete: false,
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn()
+  };
+  
+  const mockContainer = {
+    scrollTop: 0,
+    scrollHeight: 500,
+    clientHeight: 400,
+    querySelectorAll: jest.fn().mockReturnValue([mockImg]),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn()
+  };
+  
+  comp.$el = {
+    querySelector: jest.fn().mockReturnValue(mockContainer)
+  };
+  
+  comp.forceScrollBottom = jest.fn();
+  
+  const mockMutationObserver = {
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  };
+  const mockResizeObserver = {
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  };
+  
+  global.MutationObserver = jest.fn().mockImplementation(() => mockMutationObserver);
+  global.ResizeObserver = jest.fn().mockImplementation(() => mockResizeObserver);
+  global.window.ResizeObserver = global.ResizeObserver;
+  
+  jest.useFakeTimers();
+  
+  await comp.scrollToBottomSettled();
+  
+  // Advance timers to ensure cleanup happens
+  jest.advanceTimersByTime(200);
+  
+  // Verify all cleanup functions were called
+  expect(mockMutationObserver.disconnect).toHaveBeenCalled();
+  expect(mockResizeObserver.disconnect).toHaveBeenCalled();
+  // Note: removeEventListener calls depend on the cleanup function execution
+  
+  jest.useRealTimers();
+});
+
+test('scrollToBottomSettled handles image load event triggering mutation callback', async () => {
+  let imageLoadHandler;
+  const mockImg = {
+    complete: false,
+    addEventListener: jest.fn((event, handler) => {
+      if (event === 'load') {
+        imageLoadHandler = handler;
+      }
+    }),
+    removeEventListener: jest.fn()
+  };
+  
+  const mockContainer = {
+    scrollTop: 0,
+    scrollHeight: 500,
+    clientHeight: 400,
+    querySelectorAll: jest.fn().mockReturnValue([mockImg]),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn()
+  };
+  
+  comp.$el = {
+    querySelector: jest.fn().mockReturnValue(mockContainer)
+  };
+  
+  comp.forceScrollBottom = jest.fn();
+  
+  global.MutationObserver = jest.fn().mockImplementation(() => ({
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  }));
+  global.ResizeObserver = jest.fn().mockImplementation(() => ({
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  }));
+  global.window.ResizeObserver = global.ResizeObserver;
+  
+  jest.useFakeTimers();
+  
+  const promise = comp.scrollToBottomSettled();
+  
+  // Simulate image loading after 50ms
+  setTimeout(() => {
+    if (imageLoadHandler) {
+      imageLoadHandler(); // Trigger image load
+    }
+  }, 50);
+  
+  jest.advanceTimersByTime(180);
+  
+  await promise;
+  
+  expect(mockImg.addEventListener).toHaveBeenCalledWith('load', expect.any(Function), { once: true });
+  expect(comp.forceScrollBottom).toHaveBeenCalled();
+  
+  jest.useRealTimers();
+});
+
+test('scrollToBottomSettled settles immediately when height is stable', async () => {
+  const mockContainer = {
+    scrollTop: 0,
+    scrollHeight: 500,
+    clientHeight: 400,
+    querySelectorAll: jest.fn().mockReturnValue([]),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn()
+  };
+  
+  comp.$el = {
+    querySelector: jest.fn().mockReturnValue(mockContainer)
+  };
+  
+  comp.forceScrollBottom = jest.fn();
+  
+  const mockMutationObserver = {
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  };
+  
+  global.MutationObserver = jest.fn().mockImplementation(() => mockMutationObserver);
+  global.ResizeObserver = jest.fn().mockImplementation(() => ({
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  }));
+  global.window.ResizeObserver = global.ResizeObserver;
+  
+  jest.useFakeTimers();
+  
+  await comp.scrollToBottomSettled({ settleDelay: 100 });
+  
+  // Advance timers to complete settling
+  jest.advanceTimersByTime(200);
+  
+  // Should have done initial scroll plus final scroll when settled
+  expect(comp.forceScrollBottom).toHaveBeenCalledWith(mockContainer);
+  expect(comp.forceScrollBottom).toHaveBeenCalledTimes(2);
+  expect(mockMutationObserver.disconnect).toHaveBeenCalled();
+  
+  jest.useRealTimers();
+});
+
+test('scrollToBottomSettled handles multiple rapid height changes', async () => {
+  const mockContainer = {
+    scrollTop: 0,
+    scrollHeight: 500,
+    clientHeight: 400,
+    querySelectorAll: jest.fn().mockReturnValue([]),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn()
+  };
+  
+  comp.$el = {
+    querySelector: jest.fn().mockReturnValue(mockContainer)
+  };
+  
+  comp.forceScrollBottom = jest.fn();
+  
+  let mutationCallback;
+  const mockMutationObserver = {
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  };
+  
+  global.MutationObserver = jest.fn().mockImplementation((callback) => {
+    mutationCallback = callback;
+    return mockMutationObserver;
+  });
+  
+  global.ResizeObserver = jest.fn().mockImplementation(() => ({
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  }));
+  global.window.ResizeObserver = global.ResizeObserver;
+  
+  jest.useFakeTimers();
+  
+  const promise = comp.scrollToBottomSettled({ settleDelay: 200 });
+  
+  // Wait for setup
+  await Promise.resolve();
+  
+  // Simulate rapid height changes
+  if (mutationCallback) {
+    mockContainer.scrollHeight = 600;
+    mutationCallback();
+    
+    mockContainer.scrollHeight = 700;
+    mutationCallback();
+    
+    mockContainer.scrollHeight = 800;
+    mutationCallback();
+  }
+  
+  // Let it settle after the changes
+  jest.advanceTimersByTime(400);
+  
+  await promise;
+  
+  // Should have scrolled multiple times due to height changes
+  expect(comp.forceScrollBottom).toHaveBeenCalledWith(mockContainer);
+  expect(comp.forceScrollBottom).toHaveBeenCalledTimes(5); // Initial + 3 changes + final
+  
+  jest.useRealTimers();
 });
