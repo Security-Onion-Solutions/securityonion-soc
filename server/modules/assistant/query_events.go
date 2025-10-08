@@ -287,7 +287,7 @@ func filterEvents(events []*model.EventRecord) []map[string]any {
 		"_id",
 		"@timestamp",
 		"client.name",
-		"destination.ip", "destination.port",
+		"destination.ip", "destination.port", "destination.geo.country_name",
 		"dns.query.name", "dns.query_name", // Both formats
 		"event.category", "event.module", "event.dataset", "event.severity", "event.severity_label",
 		"event_data.agent.name", "event_data.host.os.name",
@@ -302,7 +302,7 @@ func filterEvents(events []*model.EventRecord) []map[string]any {
 		"process.name", "process.executable",
 		"rule.category", "rule.name", "rule.uuid",
 		"software.name", "software.type", "software.version.unparsed",
-		"source.ip", "source.port",
+		"source.ip", "source.port", "source.geo.country_name",
 		"ssh.cypher_algorithm", "ssh.client", "ssh.server",
 		"ssl.cipher", "ssl.server_name", "ssl.version", "system.auth.sudo.command",
 		"user.name", "user.effective.name",

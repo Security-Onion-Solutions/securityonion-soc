@@ -1278,6 +1278,53 @@ func TestSyncSettings(tester *testing.T) {
 	assert.Equal(tester, `{"command":"manage-salt","command_id":"ctx_manage-salt","operation":"highstate"}`, request)
 }
 
+func TestSyncModule(tester *testing.T) {
+	defer Cleanup()
+	salt := NewTestSaltRelayQueue(tester, "ctx_manage-salt", "true.resp")
+	err := salt.SyncModule(ctx(), "soc", false)
+	assert.NoError(tester, err)
+
+	request := ReadRequest(tester, "ctx_manage-salt")
+	assert.JSONEq(tester, `{"command":"manage-salt","command_id":"ctx_manage-salt","operation":"state","state":"soc"}`, request)
+}
+
+func TestSyncModule_Async(tester *testing.T) {
+	defer Cleanup()
+	salt := NewTestSaltRelayQueue(tester, "ctx_manage-salt", "true.resp")
+	err := salt.SyncModule(ctx(), "myapp", true)
+	assert.NoError(tester, err)
+
+	request := ReadRequest(tester, "ctx_manage-salt")
+	assert.JSONEq(tester, `{"command":"manage-salt","command_id":"ctx_manage-salt","async":"true","operation":"state","state":"myapp"}`, request)
+}
+
+func TestSyncModule_Failure(tester *testing.T) {
+	defer Cleanup()
+	salt := NewTestSaltRelayQueue(tester, "ctx_manage-salt", "false.resp")
+	err := salt.SyncModule(ctx(), "soc", false)
+	assert.EqualError(tester, err, "ERROR_SALT_STATE")
+
+	request := ReadRequest(tester, "ctx_manage-salt")
+	assert.JSONEq(tester, `{"command":"manage-salt","command_id":"ctx_manage-salt","operation":"state","state":"soc"}`, request)
+}
+
+func TestSyncModule_ErrorMessage(tester *testing.T) {
+	defer Cleanup()
+	salt := NewTestSaltRelayQueue(tester, "ctx_manage-salt", "error.resp")
+	err := salt.SyncModule(ctx(), "soc", false)
+	assert.EqualError(tester, err, "ERROR_TEST_ERROR")
+
+	request := ReadRequest(tester, "ctx_manage-salt")
+	assert.JSONEq(tester, `{"command":"manage-salt","command_id":"ctx_manage-salt","operation":"state","state":"soc"}`, request)
+}
+
+func TestSyncModuleUnauthorized(tester *testing.T) {
+	srv := server.NewFakeUnauthorizedServer()
+	salt := NewSaltstore(srv)
+	err := salt.SyncModule(ctx(), "soc", false)
+	assert.ErrorContains(tester, err, "Subject 'fake-subject' is not authorized to perform operation 'write' on target 'config'")
+}
+
 func TestForceType(tester *testing.T) {
 	store := NewTestSalt()
 

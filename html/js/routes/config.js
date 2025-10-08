@@ -52,6 +52,7 @@ routes.push({
         confirmRemoveEntryMessage: "",
         confirmRemoveEntryIdx: 0,
         oldGridId: null,
+        changedModules: [],
       }
     },
     mounted() {
@@ -772,8 +773,8 @@ routes.push({
 
           this.countCustomized();
 
-          // Update the user with status
-          this.$root.showTip(this.i18n.settingSaved);
+          this.changedModules.push(setting.id.split(".")[0]);
+          this.changedModules = [...new Set(this.changedModules)].sort();
         } catch (error) {
           var msg = this.i18n.settingSaveError;
           if (error.response && error.response.data && error.response.data.startsWith("ERROR_")) {
@@ -787,10 +788,30 @@ routes.push({
     async sync() {
       this.$root.startLoading();
       try {
-        const response = await this.$root.papi.put('config/sync');
+        this.changedModules = [];
+        await this.$root.papi.put('config/sync');
         this.$root.showTip(this.i18n.settingsSynchronized);
       } catch (error) {
          this.$root.showError(error);
+      }
+      this.$root.stopLoading();
+    },
+    async syncModule(module) {
+      tmpModules = this.changedModules;
+      this.$root.startLoading();
+      try {
+        this.changedModules = [];
+        await this.$root.papi.put('config/sync/' + module);
+        this.$root.showTip(this.$root.localizeMessage(this.i18n.settingsSynchronizeFinished, {"module": module}));
+      } catch (error) {
+        if (error.response && error.response.data == "ERROR_SALT_ALREADY_RUNNING") {
+          this.$root.showWarning(error);
+          this.changedModules = tmpModules;
+        } else if (error.response && (error.response.status >= 502 && error.response.status <= 504)) {
+          this.$root.showTip(this.$root.localizeMessage(this.i18n.settingsSynchronizeFinishedRestarting, {"module": module}));
+        } else {
+          this.$root.showError(error);
+        }
       }
       this.$root.stopLoading();
     },

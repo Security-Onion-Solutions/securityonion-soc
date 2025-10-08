@@ -889,7 +889,7 @@ $(document).ready(function () {
           preselects[this.i18n.datePreselect30dToNow] = [moment().subtract(30, 'days'), moment()];
           return preselects;
         },
-        localizeMessage(origMsg) {
+        localizeMessage(origMsg, vars = null) {
           if (!origMsg) return "";
           var msg = origMsg;
           if (msg.response && msg.response.data) {
@@ -908,6 +908,13 @@ $(document).ready(function () {
             }
             localized = msg;
           }
+
+          if (vars && typeof vars == 'object') {
+            return localized.replace(/\{(\w+)\}/g, function(match, key) {
+              return vars[key] !== undefined ? vars[key] : match;
+            });
+          }
+  
           return localized;
         },
         tryLocalize(msg) {
@@ -1133,7 +1140,11 @@ $(document).ready(function () {
           return this.checkForUnauthorized(response);
         },
         apiFailureCallback(error) {
-          this.checkForUnauthorized(error.response);
+          if (error.response.status >= 502 && error.response.status <= 504) {
+            reconnecting = true;
+          } else { 
+            this.checkForUnauthorized(error.response);
+          }
           throw error;
         },
         createApi(baseUrl) {

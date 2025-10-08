@@ -287,6 +287,19 @@ type AssistantSession struct {
 	DeleteTime *time.Time `json:"deleteTime,omitempty" example:"2025-09-05T15:33:00.000Z"`
 	// Metadata about the session.
 	Tags []string `json:"tags" example:"investigation"`
+	// Usage statistics for the session.
+	Usage *SessionUsage `json:"usage,omitempty"`
+}
+
+type SessionUsage struct {
+	// The total input tokens used during the session.
+	TotalInputTokens int `json:"totalInputTokens" example:"1500"`
+	// The total output tokens used during the session.
+	TotalOutputTokens int `json:"totalOutputTokens" example:"3000"`
+	// The total credits used during the session.
+	TotalCredits int `json:"totalCredits" example:"5"`
+	// The total messages sent during the session.
+	TotalMessages int `json:"totalMessages" example:"25"`
 }
 
 type UserUsage struct {
@@ -298,6 +311,8 @@ type UserUsage struct {
 	TotalOutputTokens int `json:"totalOutputTokens" example:"3000"`
 	// The total credits used by the user in the date range.
 	TotalCredits int `json:"totalCredits" example:"5"`
-	// The total messages sent by the user in the date range.
+	// The total sessions the user has added a message to in the date range.
+	TotalSessions int `json:"totalSessions" example:"3"`
+	// The total messages sent and received by the user in the date range.
 	TotalMessages int `json:"totalMessages" example:"25"`
 }
