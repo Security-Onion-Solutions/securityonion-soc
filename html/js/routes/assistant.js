@@ -32,6 +32,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     thresholdColorRatioMax: 1,
     lowBalanceColorAlert: 500000,
     activeStreamingSessionId: null, // Track which session is actively streaming
+    autoScrollOnNextRender: false, // gate for programmatic scrolls
+    isPinnedToBottom: true, // user is at (or near) bottom?
   }},
   async created() {
     this.loadLocalSettings();
@@ -95,6 +97,16 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         const messageContext = this.calculateContextFromUsage(usage);
         this.contextLength += messageContext;
       }
+    },
+
+    checkContextLimitReached() {
+      const maxContextLength = this.increaseMaxContextThreshold ? this.contextLimitLarge : this.contextLimitSmall;
+      if (this.contextLength >= maxContextLength) {
+        const formattedLimit = this.formatCount(maxContextLength);
+        this.$root.showError(this.i18n.assistantContextLimitPt1 + ` (${formattedLimit}+ tokens). ` + this.i18n.assistantContextLimitPt2);
+        return true;
+      }
+      return false;
     },
     
     async loadNewChatScreen() {
@@ -241,24 +253,23 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       return 'chat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
     },
     async loadChat(chat) {
-      await this.saveCurrentChat(); // Save current chat before switching
-      
-      // Clear active streaming session and UI state when switching chats
+      await this.saveCurrentChat();
       this.clearStreamingStates();
-      
+
       this.$root.startLoading();
       try {
         if (this.currentChatId === chat.sessionId) {
           await this.loadChatFromBackend(chat.sessionId);
         }
         this.updateUrlWithSessionId(chat.sessionId);
-        this.scrollToBottom();
+
       } catch (error) {
         this.$root.showError(this.i18n.assistantUnableToLoadChat + ': ' + error.message);
       } finally {
         this.$root.stopLoading();
       }
     },
+
     async deleteChat(chatId) {
       try {
         // Call the backend DELETE endpoint to remove the session
@@ -307,12 +318,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }
 
       // Check if context length has reached the limit
-      const maxContextLength = this.increaseMaxContextThreshold ? this.contextLimitLarge : this.contextLimitSmall;
-      if (this.contextLength >= maxContextLength) {
-        const formattedLimit = this.formatCount(maxContextLength);
-        this.$root.showError(`Context length limit reached (${formattedLimit}+ tokens). Please start a new chat to continue.`);
-        return;
-      }
+      if (this.checkContextLimitReached()) return;
       
       // Check if user has credits
       if (this.creditsRemaining <= 0) {
@@ -460,7 +466,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }
 
       this.messages.push(assistantMessage);
-      this.scrollToBottom();
+      this.scrollIfPinned();
       
       return { assistantMessage, messageUsage };
     },
@@ -492,7 +498,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         // Only update UI if this is for the current session and we have an assistant message
         if (assistantMessage && targetSessionId === this.currentChatId) {
           assistantMessage.toolUses.value.push(toolUse);
-          this.scrollToBottom();
+          this.scrollIfPinned();
         }
       }
     },
@@ -504,7 +510,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       if (assistantMessage && c.delta.type === 'text_delta' && targetSessionId === this.currentChatId) {
         // Only update UI if this is for the current session
         assistantMessage.content.value += c.delta.text;
-        this.scrollToBottom();
+        this.scrollIfPinned();
       } else if (c.delta.type === 'input_json_delta') {
         // Handle tool input updates - accumulate the JSON (always process, regardless of session)
         const toolUse = this.executingTools.get(`block_${c.index}_${targetSessionId}`);
@@ -513,7 +519,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           toolUse.status = 'preparing';
           // Only update UI if this is for the current session
           if (targetSessionId === this.currentChatId) {
-            this.scrollToBottom();
+            this.scrollIfPinned();
           }
         }
       }
@@ -535,6 +541,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           
           // Check if this tool should be auto-approved
           if (this.shouldAutoApproveTool(toolUse.name)) {
+            if (this.checkContextLimitReached()) return;
             // Auto-approve the tool
             toolUse.status = 'executing';
             toolUse.approved = true;
@@ -554,7 +561,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         
         // Only update UI if this is for the current session
         if (targetSessionId === this.currentChatId) {
-          this.scrollToBottom();
+          this.scrollIfPinned();
         }
       }
       
@@ -739,7 +746,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
             timestamp: new Date().toISOString()
           };
           this.messages.push(errorMessage);
-          this.scrollToBottom();
+          this.scrollIfPinned();
           
           // Show error to user
           this.$root.showError(this.i18n.assistantNoResponse + ': ' + (error.response?.data?.error || error.message));
@@ -771,7 +778,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }
 
       this.messages.push(assistantMessage);
-      this.scrollToBottom();
+      this.scrollIfPinned();
       
       return { assistantMessage, messageUsage };
     },
@@ -803,7 +810,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         // Only update UI if this is for the current session and we have an assistant message
         if (assistantMessage && targetSessionId === this.currentChatId) {
           assistantMessage.toolUses.value.push(newToolUse);
-          this.scrollToBottom();
+          this.scrollIfPinned();
         }
       }
     },
@@ -815,7 +822,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       if (assistantMessage && c.delta.type === 'text_delta' && targetSessionId === this.currentChatId) {
         // Only update UI if this is for the current session
         assistantMessage.content.value += c.delta.text;
-        this.scrollToBottom();
+        this.scrollIfPinned();
       } else if (c.delta.type === 'input_json_delta') {
         // Handle tool input updates for chained tools (always process, regardless of session)
         const chainedToolUse = this.executingTools.get(`block_${c.index}_${targetSessionId}`);
@@ -824,7 +831,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           chainedToolUse.status = 'preparing';
           // Only update UI if this is for the current session
           if (targetSessionId === this.currentChatId) {
-            this.scrollToBottom();
+            this.scrollIfPinned();
           }
         }
       }
@@ -846,6 +853,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           
           // Check if this chained tool should be auto-approved
           if (this.shouldAutoApproveTool(chainedToolUse.name)) {
+            if (this.checkContextLimitReached()) return;
             // Auto-approve the chained tool
             chainedToolUse.status = 'executing';
             chainedToolUse.approved = true;
@@ -865,7 +873,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         
         // Only update UI if this is for the current session
         if (targetSessionId === this.currentChatId) {
-          this.scrollToBottom();
+          this.scrollIfPinned();
         }
       }
       
@@ -933,6 +941,14 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }, 1000); // Wait 1 second for the backend to save the result
     },
     
+    isNearBottom(container, thresholdPx = 48) {
+      return (container.scrollHeight - container.clientHeight - container.scrollTop) <= thresholdPx;
+    },
+
+    forceScrollBottom(container) {
+      container.scrollTop = container.scrollHeight;
+    },
+
     scrollToBottom() {
       this.$nextTick(() => {
         const messagesContainer = this.$el.querySelector('.chat-messages');
@@ -941,6 +957,111 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         }
       });
     },
+
+    async scrollToBottomSettled({ settleDelay = 180, maxWait = 3000 } = {}) {
+      await this.$nextTick(); // wait for Vue's immediate DOM updates
+
+      const container = this.$el && this.$el.querySelector
+        ? this.$el.querySelector('.chat-messages')
+        : null;
+      if (!container) return;
+
+      // Always do an initial snap
+      this.forceScrollBottom(container);
+
+      let resolved = false;
+      let lastHeight = container.scrollHeight;
+      let settleTimer = null;
+
+      const cleanupFns = [];
+
+      const scheduleSettle = () => {
+        if (settleTimer) clearTimeout(settleTimer);
+        settleTimer = setTimeout(() => {
+          // If height hasn't changed for settleDelay, consider layout "settled"
+          const sameHeight = container.scrollHeight === lastHeight;
+          lastHeight = container.scrollHeight;
+          if (sameHeight) {
+            resolved = true;
+            cleanup();
+            // final snap (covers any last-millisecond growth)
+            this.forceScrollBottom(container);
+          } else {
+            // height changed during debounce; snap again and wait again
+            this.forceScrollBottom(container);
+            scheduleSettle();
+          }
+        }, settleDelay);
+      };
+
+      const onMutateOrResize = () => {
+        if (resolved) return;
+        // When DOM mutates or sizes change, snap and restart settle timer
+        this.forceScrollBottom(container);
+        lastHeight = container.scrollHeight;
+        scheduleSettle();
+      };
+
+      // Observe DOM changes under chat messages (mermaid renders, tool cards, etc.)
+      const mo = new MutationObserver(onMutateOrResize);
+      mo.observe(container, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+      });
+      cleanupFns.push(() => mo.disconnect());
+
+      // Observe size changes (tables/images causing height growth)
+      if ('ResizeObserver' in window) {
+        const ro = new ResizeObserver(onMutateOrResize);
+        ro.observe(container);
+        cleanupFns.push(() => ro.disconnect());
+      }
+
+      // Listen for image loads inside container (images can change height after decode)
+      const imgs = Array.from(container.querySelectorAll('img'));
+      const pendingImgs = imgs.filter(img => !img.complete);
+      const imgHandlers = [];
+      pendingImgs.forEach(img => {
+        const h = () => onMutateOrResize();
+        img.addEventListener('load', h, { once: true });
+        img.addEventListener('error', h, { once: true });
+        imgHandlers.push(() => {
+          img.removeEventListener('load', h);
+          img.removeEventListener('error', h);
+        });
+      });
+      cleanupFns.push(() => imgHandlers.forEach(fn => fn()));
+
+      // Safety timeout so we don't hang forever if something keeps mutating
+      const safetyTimer = setTimeout(() => {
+        if (!resolved) {
+          cleanup();
+          this.forceScrollBottom(container);
+        }
+      }, maxWait);
+      cleanupFns.push(() => clearTimeout(safetyTimer));
+
+      const cleanup = () => {
+        cleanupFns.forEach(fn => fn());
+        if (settleTimer) clearTimeout(settleTimer);
+      };
+
+      // kick off the initial settle wait
+      scheduleSettle();
+    },
+
+    onChatScroll(evt) {
+      const c = evt.target;
+      const atBottom = this.isNearBottom(c, 4);
+      this.isPinnedToBottom = atBottom;
+    },
+
+    scrollIfPinned() {
+      if (!this.isPinnedToBottom) return;
+      this.scrollToBottom();
+    },
+
     getAvatar(user) {
       return this.$root.getAvatar(user);
     },
@@ -1132,7 +1253,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           };
           
           this.messages.push(errorMessage);
-          this.scrollToBottom();
+          this.scrollIfPinned();
         }
       }
     },
@@ -1160,6 +1281,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     async approveTool(toolUse) {
       try {
+        if (this.checkContextLimitReached()) return;
         toolUse.approved = true;
         toolUse.status = 'executing';
         await this.executeTool(toolUse);
@@ -1170,6 +1292,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.scrollToBottom();
     },
     async rejectTool(toolUse) {
+      if (this.checkContextLimitReached()) return;
       toolUse.approved = false;
       toolUse.status = 'rejected';
       toolUse.error = this.i18n.assistantToolUseReject;
@@ -1223,19 +1346,21 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       try {
         const response = await this.$root.papi.get(`/assistant/sessions/${sessionId}`);
         if (response.data && Array.isArray(response.data) && response.data.length > 0) {
-          // Convert backend messages to frontend format
           this.currentChatId = sessionId;
           this.messages = this.convertBackendMessagesToFrontend(response.data);
           this.saveCurrentChatId();
+
+          await this.scrollToBottomSettled({ maxWait: 6000, settleDelay: 200 });
         } else {
           throw new Error(this.i18n.assistantNoHistoryFound + ' ' + sessionId);
         }
       } catch (error) {
-        // If session doesn't exist, start with welcome message
         if (error.response && error.response.status === 404) {
-          this.loadNewChatScreen(); // Reset to welcome message
+          this.loadNewChatScreen();
           this.currentChatId = sessionId;
           this.saveCurrentChatId();
+
+          await this.scrollToBottomSettled();
         } else {
           throw error;
         }

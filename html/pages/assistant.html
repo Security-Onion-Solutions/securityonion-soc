@@ -84,7 +84,7 @@
 					<div class="text-wrap" style="font-size: 14px;">{{ i18n.contextLength }}: <span :class="getContextColor(contextLength)">{{ formatCount(contextLength) }}</span></div>
 				</v-card-title>
 				<v-divider></v-divider>
-				<v-card-text id="chat-messages" class="chat-messages pa-0">
+				<v-card-text id="chat-messages" class="chat-messages pa-0" @scroll="onChatScroll">
 					<div class="pa-4">
 						<div v-for="(message, index) in messages" :key="index" :id="'message-' + index" class="message-item mb-3">
 							<div class="d-flex align-start">
@@ -308,11 +308,11 @@
 </v-container>
 
 <v-container v-else fluid data-aid="assistant_advertisment">
-	<div style="
+	<div v-html="i18n.assistantAdvertisement" style="
 		align-items: center;
 		margin: 0;
 		display: flex;
 		min-height: 50vh;
 		justify-content: center;
-	">{{ i18n.assistantAdvertisement }}</div>
+	"></div>
 </v-container>

@@ -1305,6 +1305,13 @@ ul ul ul {
   word-break: break-all;
 }
 
+.disclaimer-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 75%;
+}
+
 .disclaimer-card {
   display: flex;
   flex-direction: column;

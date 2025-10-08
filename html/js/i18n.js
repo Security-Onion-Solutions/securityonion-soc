@@ -154,38 +154,13 @@ const i18n = {
       artifactTypeHelp: 'Select a type for classification purposes (Note: choose "file" type to upload a file)',
       artifactValue: 'Value (hash, filename, etc.)',
       artifactValueHelp: 'Specify the observed value',
-      assistantAdvertisement: 'Purchase Security Onion Pro to get access to Onion AI.',
-      assistantBalanceCheckUnhealthy: 'Health check in balance request came back unhealthy.',
-      assistantDisabled: 'Onion AI is disabled. Contact your administrator to enable it.',
-      assistantDisclaimerMessage: `Effective Date: [Insert Date]<br>
- Last Updated: [Insert Date]<br><br>
-1. INTRODUCTION<br><br>
-This Agreement governs data handling when accessing the Security Onion Solutions OnionAI API (“Service”). By using the Service, you (“User”) agree to these terms.<br><br>
-2. PARTIES AND SCOPE<br><br>
-OnionAI API: Security Onion Solutions service that proxies requests to AWS.<br><br>
-User: Individual or entity utilizing the Service.<br><br>
-This Agreement applies to all interactions with the OnionAI API.<br><br>
-3. DATA HANDLING<br><br>
-No Query Logging: OnionAI API does not record or store input prompts, queries, or generated outputs.<br><br>
-Token Usage Only: The API tracks usage metrics limited to token counts for billing and operational purposes.<br><br>
-Stateless Processing: Each request is processed independently without persistence of content.<br><br>
-4. DATA SECURITY<br><br>
-Encryption: All traffic is encrypted in transit (TLS 1.2+).<br><br>
-Content Retention: Prompts and responses are stored in the local Elastic Search data store.<br><br>
-User Ownership: Users retain ownership of all inputs and outputs.<br><br>
-5. USER RIGHTS<br><br>
-Users may:<br><br>
-Access usage records (token counts).<br><br>
-Request clarification of data handling.<br><br>
-Terminate use at any time without retention of past queries.<br><br>
-6. COMPLIANCE<br><br>
-The Service supports alignment with GDPR, CCPA, and other applicable regulations by ensuring no retention of query content and limiting processing to ephemeral token usage.<br><br>
-7. TERMINATION<br><br>
-Standard Termination: Upon termination of the Service, data processing ceases immediately. No user content remains stored. Token usage data may be retained for billing and compliance records only.<br><br>
-Abuse-Related Termination: Security Onion Solutions reserves the right to suspend or terminate access immediately if the User is found to be misusing, abusing, or attempting to compromise the Service (including but not limited to security violations, excessive or malicious usage, or attempts to circumvent system protections).<br><br>
-8. GOVERNING LAW<br><br>
-This Agreement is governed by [Insert Jurisdiction] law.`,
-      assistantDisclaimerTitle: 'Data Privacy End User Agreement',
+      assistantAdvertisement: `<v-card-text>This feature requires Security Onion Pro and credits for the OnionAI API. Visit <a target="sos" href="https://securityonionsolutions.com/pro?utm_source=ainotice&utm_medium=app&utm_id=ai">Security Onion</a>.</v-card-text>`,
+      assistantBalanceCheckUnhealthy: 'The AI model could not be reached. Support for local AI models is coming soon.',
+      assistantContextLimitPt1: 'Context length limit reached',
+      assistantContextLimitPt2: 'Please start a new chat to continue.',
+      assistantDisabled: 'This feature is not enabled on this grid. Contact your Security Onion administrator.',
+      assistantDisclaimerMessage: `Use of this feature requires AI requests which can contain event data and will be sent to the OnionAI API in the US.<br><br>No Query Logging: OnionAI API does not record or store input prompts, queries, or generated outputs. No context is stored on the API.<br><br>Token Tracking: The API tracks usage metrics limited to token counts for billing and operational purposes.<br><br>Local Retention: Prompts and responses are stored in the local grid's Elasticsearch data store.`,
+      assistantDisclaimerTitle: 'Data Privacy Notice',
       assistantErrorMessage: 'I apologize, but I\'m having trouble connecting to the AI service right now. Please try again in a moment.',
       assistantHistoryCollapse: 'Hide Chat History',
       assistantHistoryExpand: 'Show Chat History',
