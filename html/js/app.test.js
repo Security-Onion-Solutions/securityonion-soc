@@ -222,6 +222,18 @@ test('localizeMessage', () => {
   expect(app.localizeMessage('create')).toBe("Create");
 });
 
+test('localizeMessageWithArgs', () => {
+  expect(app.localizeMessage('Hello {name}', {name: 'World'})).toBe('Hello World');
+  expect(app.localizeMessage('Hello {name}, you have {count} messages', {name: 'John', count: 5})).toBe('Hello John, you have 5 messages');
+  expect(app.localizeMessage('No placeholders')).toBe('No placeholders');
+  expect(app.localizeMessage('Missing {missing}', {name: 'World'})).toBe('Missing {missing}');
+  expect(app.localizeMessage('Hello {name}', null)).toBe('Hello {name}');
+  expect(app.localizeMessage('Hello {name}', {})).toBe('Hello {name}');
+  expect(app.localizeMessage('Hello {name}', {name: null})).toBe('Hello null');
+  expect(app.localizeMessage('Hello {name}', {name: undefined})).toBe('Hello {name}');
+  expect(app.localizeMessage('Hello {name} {name}', {name: 'World'})).toBe('Hello World World');
+});
+
 test('truncate', () => {
   expect(app.truncate("short", 10)).toBe("short");
   expect(app.truncate("atthelimit!", 10)).toBe("atthelimit!");

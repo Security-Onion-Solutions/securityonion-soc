@@ -1298,7 +1298,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       toolUse.error = this.i18n.assistantToolUseReject;
       
       // Add a message indicating the tool was rejected
-      const rejectionMessage = this.$root.replaceActionVar(this.i18n.assistantToolUseRejectMessage, 'toolName', toolUse.name);
+      const rejectionMessage = this.$root.localizeMessage(this.i18n.assistantToolUseRejectMessage, {toolName: toolUse.name});
       await this.callAIAPI(rejectionMessage);
 
       this.scrollToBottom();
