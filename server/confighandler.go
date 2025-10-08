@@ -35,6 +35,7 @@ func RegisterConfigRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Put("/", h.putSetting)
 		r.Post("/", h.putSetting)
 		r.Put("/sync", h.putSync)
+		r.Put("/sync/{module}", h.putSyncModule)
 		r.Post("/sync", h.putSync)
 
 		r.Delete("/", h.deleteConfig)
@@ -132,6 +133,32 @@ func (h *ConfigHandler) putSync(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	err := h.server.Configstore.SyncSettings(ctx)
+	if err != nil {
+		web.Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, nil)
+}
+
+// @Summary      Sync Specific Module Configuration
+// @Description  Synchronizes a specific module's state to apply recent configuration changes to the grid. If async is true, this will queue up a Salt state.apply, which can take several minutes to complete, or longer if another highstate is already in progress. If async is false and another state is already in progress, this will return an error.
+// @Tags         Config
+// @Security     bearer[config/write]
+// @Param        module  path  string  true  "The module name to sync" example(soc)
+// @Param        async  query  string  false "If true, runs the synchronization in the background" example(true)
+// @Success      200                         "The synchronization request has been successfully queued"
+// @Failure      401                         "Request was not properly authenticated"
+// @Failure      403                         "Insufficient permissions for this request"
+// @Failure      405                         "Configuration module has not been loaded"
+// @Failure      500                         "Internal SOC error; review SOC logs"
+// @Router       /connect/config/sync/{module} [put]
+func (h *ConfigHandler) putSyncModule(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	module := chi.URLParam(r, "module")
+	async := r.URL.Query().Get("async") == "true"
+
+	err := h.server.Configstore.SyncModule(ctx, module, async)
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
 		return

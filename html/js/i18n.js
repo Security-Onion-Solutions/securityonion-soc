@@ -987,8 +987,13 @@ This Agreement is governed by [Insert Jurisdiction] law.`,
       settingsCustomized: 'Modified: ',
       settingsTitle: 'User Settings',
       settingsSynchronize: 'Synchronize Grid',
-      settingsSynchronizeHelp: 'Manually synchronize the manager node. This can take several minutes to complete. The rest of the grid nodes will synchronize on their own schedule.',
-      settingsSynchronized: 'Synchronization has been initiated in the background; this process can take several minutes to complete.',
+      settingsSynchronizeHelp: 'Synchronize Grid will queue up a full synchronization of the manager node. This can take several minutes to complete. The rest of the grid nodes will synchronize on their own schedule.',
+      settingsSynchronized: 'Grid synchronization has been initiated in the background; this process can take several minutes to complete.',
+      settingsSynchronizeFinished: 'Synchronization of module {module} has been completed.',
+      settingsSynchronizeFinishedRestarting: 'Synchronization complete and the backend service is restarting. SOC will be available again in just a moment.',
+      settingsChangesReady: 'New changes are ready to be applied to the {module} module. Continue making more changes, or if finished, initiate a synchronization. Note that some changes may still require a full grid synchronization.',
+      settingsMultipleChangesReady: 'Changes to multiple modules are ready to be applied.',
+      settingsSynchronizeModule: 'Synchronize {module}',
 
       setting_fake_setting_foo: 'Fake Setting Translated',
       settingHelp_fake_setting_foo: 'This is a transalated fake setting description.',
@@ -1219,6 +1224,7 @@ This Agreement is governed by [Insert Jurisdiction] law.`,
       ERROR_SALT_SEND_FILE: 'Unable to send file to minion; ensure that salt is running on the manager node and check salt logs.',
       ERROR_SALT_IMPORT: 'Unable to import file on minion; ensure that salt is running on the manager node and check salt logs.',
       ERROR_SALT_STATE: 'Unable to sync settings. Ensure that salt is running on the manager node and check salt logs.',
+      ERROR_SALT_ALREADY_RUNNING: 'Another synchronization operation is already running. Wait for it to complete and try again.',
       ERROR_BULK_COMMUNITY: 'Unable to complete bulk delete. Batch contains Community rules. No rules were deleted.',
       ERROR_DELETE_COMMUNITY: 'Unable to delete Community rule.',
 
@@ -1235,7 +1241,7 @@ This Agreement is governed by [Insert Jurisdiction] law.`,
     var trans = this.translations[lang];
     if (trans == undefined) trans = this.translations['en-US'];
     return trans;
-  },
+  }
 }
 
 if (typeof global !== 'undefined') global.i18n = i18n;
