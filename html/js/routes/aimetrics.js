@@ -11,8 +11,8 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
   data() { return {
     i18n: this.$root.i18n,
     aimetrics: [],
-    headers: {
-      0: [
+    headers: [
+      [
         { title: this.$root.i18n.userId, value: 'userId' },
         { title: this.$root.i18n.totalInputTokens, value: 'totalInputTokens' },
         { title: this.$root.i18n.totalOutputTokens, value: 'totalOutputTokens' },
@@ -20,32 +20,32 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         { title: this.$root.i18n.totalSessions, value: 'totalSessions' },
         { title: this.$root.i18n.totalMessages, value: 'totalMessages' },
       ],
-      1: [
+      [
         { value: 'expand' },
-        { title: this.$root.i18n.id, value: 'id' },
-        { title: this.$root.i18n.createTime, value: 'createTime' },
-        { title: this.$root.i18n.sessionId, value: 'sessionId' },
-      ],
-      2: [
-        { value: 'expand' },
-        { title: this.$root.i18n.id, value: 'id' },
-        { title: this.$root.i18n.createTime, value: 'createTime' },
-      ],
-    },
-    dropdownFields: {
-      1: [
-        { title: this.$root.i18n.userId, value: 'userId' },
-        { title: this.$root.i18n.kind, value: 'kind' },
         { title: this.$root.i18n.title, value: 'title' },
-        { title: this.$root.i18n.tags, value: 'tags' },
-        { title: this.$root.i18n.usage, value: 'usage' },
-      ],
-      2: [
-        { title: this.$root.i18n.userId, value: 'userId' },
-        { title: this.$root.i18n.kind, value: 'kind' },
+        { title: this.$root.i18n.createTime, value: 'createTime' },
         { title: this.$root.i18n.sessionId, value: 'sessionId' },
-        { title: this.$root.i18n.message, value: 'message' },
       ],
+      [
+        { value: 'expand' },
+        { title: this.$root.i18n.id, value: 'id' },
+        { title: this.$root.i18n.createTime, value: 'createTime' },
+      ],
+    ],
+    expandedFields: {
+      1: {
+        'id': this.$root.i18n.id,
+        'userId': this.$root.i18n.userId,
+        'kind': this.$root.i18n.kind,
+        'tags': this.$root.i18n.tags,
+        'usage': this.$root.i18n.usage,
+      },
+      2: {
+        'userId': this.$root.i18n.userId,
+        'kind': this.$root.i18n.kind,
+        'sessionId': this.$root.i18n.sessionId,
+        'message': this.$root.i18n.message,
+      },
     },
     sortBy0: [{ key: 'totalCredits', order: 'desc' }],
     sortBy1: [{ key: 'createTime', order: 'desc' }],
@@ -54,6 +54,10 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
     itemsPerPageOptions: [10,50,250,1000],
     tableSetting: 0, // 0: users 1: sessions 2: messages
     expanded: [],
+    expandedHeaders: [
+      { title: "key", value: "key" },
+      { title: "value", value: "value" }
+    ],
   }},
   created() {
     this.loadData();
@@ -135,6 +139,23 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
     },
     buildSessionLink(sessionId) {
       return { name: 'aimetrics', params: { userId: this.$route.params.userId, sessionId: sessionId }}
+    },
+    getExpandedData(data) {
+      const currFields = this.expandedFields[this.tableSetting];
+      if (!currFields) {
+        return [];
+      }
+      var records = [];
+      for (let key in data) {
+        if (Object.keys(currFields).includes(key)) {
+          records.push({
+            key: key,
+            value: data[key],
+            title: currFields[key],
+          });
+        }
+      }
+      return records;
     },
   }
 }});

@@ -77,12 +77,30 @@
               <v-icon v-else :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="aimetrics_details_expand">fa-angle-right</v-icon>
             </v-btn>
           </td>
-          <td>{{ item.id }}</td>
+          <td>{{ item.title }}</td>
           <td>{{ item.createTime }}</td>
           <td>
             <router-link :to="buildSessionLink(item.sessionId)">
               {{ item.sessionId }}
             </router-link>
+          </td>
+        </tr>
+      </template>
+      <template #expanded-row="{ columns, item, index }">
+        <tr>
+          <td :colspan="columns.length" class="px-0">
+            <v-data-table density="compact" hide-default-header hide-default-footer :headers="expandedHeaders" :items="getExpandedData(item)" items-per-page="-1">
+              <template #item="{ item: kvp }">
+                <tr :data-aid="'aimetrics_field_' + tableSetting + '_' + kvp.key" class="pt-3">
+                  <td class="expansion va-middle">
+                    <div :id="'aimetrics_fields_' + tableSetting + '_' + kvp.key" class="d-inline-block expansion va-middle" v-text="kvp.title" data-aid="aimetrics_field_name"></div>
+                  </td>
+                  <td class="expansion va-middle">
+                    <div class="d-inline-block expansion hardwrap" v-text="kvp.value" data-aid="aimetrics_field_value"></div>
+                  </td>
+                </tr>
+              </template>
+            </v-data-table>
           </td>
         </tr>
       </template>
@@ -116,6 +134,24 @@
           </td>
           <td>{{ item.id }}</td>
           <td>{{ item.createTime }}</td>
+        </tr>
+      </template>
+      <template #expanded-row="{ columns, item, index }">
+        <tr>
+          <td :colspan="columns.length" class="px-0">
+            <v-data-table density="compact" hide-default-header hide-default-footer :headers="expandedHeaders" :items="getExpandedData(item)" items-per-page="-1">
+              <template #item="{ item: kvp }">
+                <tr :data-aid="'aimetrics_field_' + tableSetting + '_' + kvp.key" class="pt-3">
+                  <td class="expansion va-middle">
+                    <div :id="'aimetrics_fields_' + tableSetting + '_' + kvp.key" class="d-inline-block expansion va-middle" v-text="kvp.title" data-aid="aimetrics_field_name"></div>
+                  </td>
+                  <td class="expansion va-middle">
+                    <div class="d-inline-block expansion hardwrap" v-text="kvp.value" data-aid="aimetrics_field_value"></div>
+                  </td>
+                </tr>
+              </template>
+            </v-data-table>
+          </td>
         </tr>
       </template>
     </v-data-table>
