@@ -966,7 +966,7 @@ const i18n = {
       settingsSynchronized: 'Grid synchronization has been initiated in the background; this process can take several minutes to complete.',
       settingsSynchronizeFinished: 'Synchronization of module {module} has been completed.',
       settingsSynchronizeFinishedRestarting: 'Synchronization complete and the backend service is restarting. SOC will be available again in just a moment.',
-      settingsChangesReady: 'New changes are ready to be applied to the {module} module. Continue making more changes, or if finished, initiate a synchronization. Note that some changes may still require a full grid synchronization.',
+      settingsChangesReady: 'New changes are ready to be applied to the {module} module. Some changes may still require a full grid synchronization.',
       settingsMultipleChangesReady: 'Changes to multiple modules are ready to be applied.',
       settingsSynchronizeModule: 'Synchronize {module}',
 

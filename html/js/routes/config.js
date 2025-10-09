@@ -805,7 +805,7 @@ routes.push({
         this.$root.showTip(this.$root.localizeMessage(this.i18n.settingsSynchronizeFinished, {"module": module}));
       } catch (error) {
         if (error.response && error.response.data == "ERROR_SALT_ALREADY_RUNNING") {
-          this.$root.showWarning(error);
+          this.$root.showTip(this.$root.localizeMessage(error));
           this.changedModules = tmpModules;
         } else if (error.response && (error.response.status >= 502 && error.response.status <= 504)) {
           this.$root.showTip(this.$root.localizeMessage(this.i18n.settingsSynchronizeFinishedRestarting, {"module": module}));

@@ -1083,22 +1083,25 @@ func TestConvertToCsv(t *testing.T) {
 
 	tests := []struct {
 		name        string
+		separator   string
 		records     [][]string
 		expected    string
 		expectError bool
 	}{
 		{
-			name: "simple records",
+			name:      "simple records",
+			separator: ";",
 			records: [][]string{
 				{"header1", "header2"},
 				{"value1", "value2"},
 				{"value3", "value4"},
 			},
-			expected:    "header1,header2\nvalue1,value2\nvalue3,value4\n",
+			expected:    "header1;header2\nvalue1;value2\nvalue3;value4\n",
 			expectError: false,
 		},
 		{
-			name: "records with commas and quotes",
+			name:      "records with commas and quotes",
+			separator: ",",
 			records: [][]string{
 				{"Name", "Address"},
 				{"John Doe", "123 Main St, Anytown"},
@@ -1109,12 +1112,14 @@ func TestConvertToCsv(t *testing.T) {
 		},
 		{
 			name:        "empty records",
+			separator:   ",",
 			records:     [][]string{},
 			expected:    "",
 			expectError: false,
 		},
 		{
-			name: "records with empty strings",
+			name:      "records with empty strings",
+			separator: ",",
 			records: [][]string{
 				{"A", "B"},
 				{"", "val2"},
@@ -1127,7 +1132,7 @@ func TestConvertToCsv(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			reader, size, err := export.convertToCsv(tt.records)
+			reader, size, err := export.convertToCsv(tt.records, tt.separator)
 			if tt.expectError {
 				assert.Error(t, err)
 				assert.Nil(t, reader)
