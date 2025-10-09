@@ -66,6 +66,7 @@ func TestGetPlaybookQuestionsTool_Execute(t *testing.T) {
 							Range:    nil,
 							QueryResults: []*model.EventRecord{
 								{
+									Id: "alert-123",
 									Payload: map[string]any{
 										"@timestamp":   "2024-01-01T00:01:00Z",
 										"process.name": "malware.exe",
@@ -80,6 +81,7 @@ func TestGetPlaybookQuestionsTool_Execute(t *testing.T) {
 							Range:    nil,
 							QueryResults: []*model.EventRecord{
 								{
+									Id: "alert-123",
 									Payload: map[string]any{
 										"@timestamp":       "2024-01-01T00:02:00Z",
 										"destination.ip":   "192.168.1.100",
@@ -103,6 +105,7 @@ func TestGetPlaybookQuestionsTool_Execute(t *testing.T) {
 							QueryResults: []map[string]any{
 								{
 									"payload": map[string]any{
+										"soc_id":       "alert-123",
 										"@timestamp":   "2024-01-01T00:01:00Z",
 										"process.name": "malware.exe",
 									},
@@ -116,6 +119,7 @@ func TestGetPlaybookQuestionsTool_Execute(t *testing.T) {
 							QueryResults: []map[string]any{
 								{
 									"payload": map[string]any{
+										"soc_id":           "alert-123",
 										"@timestamp":       "2024-01-01T00:02:00Z",
 										"destination.ip":   "192.168.1.100",
 										"destination.port": 80,
@@ -161,6 +165,7 @@ func TestGetPlaybookQuestionsTool_Execute(t *testing.T) {
 							Range:    nil,
 							QueryResults: []*model.EventRecord{
 								{
+									Id: "alert-456",
 									Payload: map[string]any{
 										"@timestamp":     "2024-01-01T00:01:00Z",
 										"destination.ip": "192.168.1.1",
@@ -196,6 +201,7 @@ func TestGetPlaybookQuestionsTool_Execute(t *testing.T) {
 							QueryResults: []map[string]any{
 								{
 									"payload": map[string]any{
+										"soc_id":         "alert-456",
 										"@timestamp":     "2024-01-01T00:01:00Z",
 										"destination.ip": "192.168.1.1",
 										"source.ip":      "10.0.0.1",
@@ -507,6 +513,7 @@ func TestSimplifyPlaybooks(t *testing.T) {
 							Range:    nil,
 							QueryResults: []*model.EventRecord{
 								{
+									Id: "alert-1",
 									Payload: map[string]any{
 										"@timestamp":   "2024-01-01T00:01:00Z",
 										"process.name": "malware.exe",
@@ -521,6 +528,7 @@ func TestSimplifyPlaybooks(t *testing.T) {
 							Range:    stringPtr("±1h"),
 							QueryResults: []*model.EventRecord{
 								{
+									Id: "alert-2",
 									Payload: map[string]any{
 										"@timestamp":       "2024-01-01T00:02:00Z",
 										"destination.ip":   "192.168.1.100",
@@ -544,6 +552,7 @@ func TestSimplifyPlaybooks(t *testing.T) {
 							QueryResults: []map[string]any{
 								{
 									"payload": map[string]any{
+										"soc_id":       "alert-1",
 										"@timestamp":   "2024-01-01T00:01:00Z",
 										"process.name": "malware.exe",
 									},
@@ -557,6 +566,7 @@ func TestSimplifyPlaybooks(t *testing.T) {
 							QueryResults: []map[string]any{
 								{
 									"payload": map[string]any{
+										"soc_id":           "alert-2",
 										"@timestamp":       "2024-01-01T00:02:00Z",
 										"destination.ip":   "192.168.1.100",
 										"destination.port": 80,
@@ -612,6 +622,7 @@ func TestSimplifyPlaybooks(t *testing.T) {
 							Context:  "Has query results",
 							QueryResults: []*model.EventRecord{
 								{
+									Id: "alert-1",
 									Payload: map[string]any{
 										"@timestamp": "2024-01-01T00:01:00Z",
 										"source.ip":  "10.0.0.1",
@@ -629,6 +640,7 @@ func TestSimplifyPlaybooks(t *testing.T) {
 							Context:  "Also has query results",
 							QueryResults: []*model.EventRecord{
 								{
+									Id: "alert-1",
 									Payload: map[string]any{
 										"@timestamp":     "2024-01-01T00:02:00Z",
 										"destination.ip": "192.168.1.1",
@@ -650,6 +662,7 @@ func TestSimplifyPlaybooks(t *testing.T) {
 							QueryResults: []map[string]any{
 								{
 									"payload": map[string]any{
+										"soc_id":     "alert-1",
 										"@timestamp": "2024-01-01T00:01:00Z",
 										"source.ip":  "10.0.0.1",
 									},
@@ -662,6 +675,7 @@ func TestSimplifyPlaybooks(t *testing.T) {
 							QueryResults: []map[string]any{
 								{
 									"payload": map[string]any{
+										"soc_id":         "alert-1",
 										"@timestamp":     "2024-01-01T00:02:00Z",
 										"destination.ip": "192.168.1.1",
 									},
@@ -685,6 +699,7 @@ func TestSimplifyPlaybooks(t *testing.T) {
 							Context:  "First context",
 							QueryResults: []*model.EventRecord{
 								{
+									Id: "alert-1",
 									Payload: map[string]any{
 										"@timestamp": "2024-01-01T00:01:00Z",
 										"event.id":   "event-1",
@@ -703,6 +718,7 @@ func TestSimplifyPlaybooks(t *testing.T) {
 							Context:  "Second context",
 							QueryResults: []*model.EventRecord{
 								{
+									Id: "alert-2",
 									Payload: map[string]any{
 										"@timestamp": "2024-01-01T00:02:00Z",
 										"event.id":   "event-2",
@@ -724,6 +740,7 @@ func TestSimplifyPlaybooks(t *testing.T) {
 							QueryResults: []map[string]any{
 								{
 									"payload": map[string]any{
+										"soc_id":     "alert-1",
 										"@timestamp": "2024-01-01T00:01:00Z",
 									},
 								},
@@ -741,6 +758,7 @@ func TestSimplifyPlaybooks(t *testing.T) {
 							QueryResults: []map[string]any{
 								{
 									"payload": map[string]any{
+										"soc_id":     "alert-2",
 										"@timestamp": "2024-01-01T00:02:00Z",
 									},
 								},
