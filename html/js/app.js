@@ -1140,7 +1140,7 @@ $(document).ready(function () {
           return this.checkForUnauthorized(response);
         },
         apiFailureCallback(error) {
-          if (error.response.status >= 502 && error.response.status <= 504) {
+          if (error.response && error.response.status >= 502 && error.response.status <= 504) {
             reconnecting = true;
           } else { 
             this.checkForUnauthorized(error.response);
