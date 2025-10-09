@@ -313,38 +313,40 @@ func filterEvents(events []*model.EventRecord) []map[string]any {
 	filtered := make([]map[string]any, 0, len(events))
 
 	for i, event := range events {
-		filteredPayload := make(map[string]any)
+		filteredPayload := map[string]any{
+			"soc_id": event.Id,
+		}
 
 		// Debug: log available fields for first event
 		if i == 0 {
-			fmt.Printf("[QueryEvents] First event payload fields:\n")
+			fmt.Printf("[query_events] First event payload fields:\n")
 			for key := range event.Payload {
 				fmt.Printf("  - %s\n", key)
 			}
 		}
 
-		// Copy only default fields
-		foundFields := 0
+		// Copy only default fields starting with the Id field
+		foundFields := 1
 		for _, field := range defaultFields {
 			// First try the field as-is (for non-nested fields)
 			if val, exists := event.Payload[field]; exists && val != nil {
 				filteredPayload[field] = val
 				foundFields++
 				if i == 0 && foundFields <= 10 {
-					fmt.Printf("[QueryEvents] Found direct field '%s'\n", field)
+					fmt.Printf("[query_events] Found direct field '%s'\n", field)
 				}
 			} else if value := getNestedField(event.Payload, field); value != nil {
 				// Try nested field lookup
 				setNestedField(filteredPayload, field, value)
 				foundFields++
 				if i == 0 && foundFields <= 10 {
-					fmt.Printf("[QueryEvents] Found nested field '%s'\n", field)
+					fmt.Printf("[query_events] Found nested field '%s'\n", field)
 				}
 			}
 		}
 
 		if i == 0 {
-			fmt.Printf("[QueryEvents] Filtered %d fields from first event\n", foundFields)
+			fmt.Printf("[query_events] Filtered %d fields from first event\n", foundFields)
 		}
 
 		filtered = append(filtered, map[string]any{
