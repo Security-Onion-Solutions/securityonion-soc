@@ -76,9 +76,20 @@
     </v-col>
   </v-row>
   <v-row>
+    <v-col cols="6"></v-col>
+    <v-col cols="6">
+      <v-text-field v-model="searchFilter" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="aimetrics_filter" variant="underlined">
+        <template #clear="{ props }">
+          <v-icon v-bind="props">fa-times-circle</v-icon>
+        </template>
+      </v-text-field>
+    </v-col>
+    <v-spacer></v-spacer>
+  </v-row>
+  <v-row>
     <v-col>
       <!-- Users Table -->
-      <v-data-table v-if="tableSetting == 0" :sort-by="sortBy0" @update:sort-by="val => sortBy0 = val" :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage"
+      <v-data-table v-if="tableSetting == 0" :search="searchFilter" :sort-by="sortBy0" @update:sort-by="val => sortBy0 = val" :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage"
         must-sort :headers="headers[tableSetting]" :items="aimetrics">
         <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
           <tr>
@@ -100,7 +111,7 @@
           <tr>
             <td>
               <router-link :to="buildUserLink(item.userId)">
-                {{ lookupSocId(item.userId) }}
+                {{ item.email }}
               </router-link>
             </td>
             <td>{{ formatCount(item.totalInputTokens) }}</td>
@@ -112,7 +123,7 @@
         </template>
       </v-data-table>
       <!-- Sessions Table -->
-      <v-data-table v-if="tableSetting == 1" :sort-by="sortBy1" @update:sort-by="val => sortBy1 = val" :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage"
+      <v-data-table v-if="tableSetting == 1" :search="searchFilter" :sort-by="sortBy1" @update:sort-by="val => sortBy1 = val" :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage"
         must-sort :headers="headers[tableSetting]" :items="aimetrics" v-model:expanded="expanded">
         <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
           <tr>
@@ -167,7 +178,7 @@
         </template>
       </v-data-table>
       <!-- Messages Table -->
-      <v-data-table v-if="tableSetting == 2" :sort-by="sortBy2" @update:sort-by="val => sortBy2 = val" :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage"
+      <v-data-table v-if="tableSetting == 2" :search="searchFilter" :sort-by="sortBy2" @update:sort-by="val => sortBy2 = val" :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage"
         must-sort :headers="headers[tableSetting]" :items="aimetrics" v-model:expanded="expanded">
         <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
           <tr>

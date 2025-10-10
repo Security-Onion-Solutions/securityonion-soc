@@ -13,7 +13,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
     aimetrics: [],
     headers: [
       [
-        { title: this.$root.i18n.email, value: 'userId' },
+        { title: this.$root.i18n.email, value: 'email' },
         { title: this.$root.i18n.totalInputTokens, value: 'totalInputTokens' },
         { title: this.$root.i18n.totalOutputTokens, value: 'totalOutputTokens' },
         { title: this.$root.i18n.totalCredits, value: 'totalCredits' },
@@ -59,6 +59,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       { title: "value", value: "value" }
     ],
     creditsRemaining: 0,
+    searchFilter: '',
     
     // Date range filter properties
     dateRange: '',
@@ -185,6 +186,9 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
             }
           });
           this.aimetrics = response.data;
+          this.aimetrics.forEach(async item => {
+            item.email = await this.lookupSocId(item.userId);
+          });
         }
       } catch (error) {
         this.$root.showError(error);
@@ -267,9 +271,9 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         this.$root.showError(this.i18n.assistantUnableToLoadCredits + ': ' + error.message);
       }
     },
-    lookupSocId(data) {
+    async lookupSocId(data) {
       if (data && data.length == 36 && data.indexOf("-") == 8) {
-        const user = this.$root.getUserByIdViaCache(data);
+        const user = await this.$root.getUserById(data);
         if (user && user.email) {
           data = user.email;
         }
