@@ -13,7 +13,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
     aimetrics: [],
     headers: [
       [
-        { title: this.$root.i18n.userId, value: 'userId' },
+        { title: this.$root.i18n.email, value: 'userId' },
         { title: this.$root.i18n.totalInputTokens, value: 'totalInputTokens' },
         { title: this.$root.i18n.totalOutputTokens, value: 'totalOutputTokens' },
         { title: this.$root.i18n.totalCredits, value: 'totalCredits' },
@@ -58,6 +58,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       { title: "key", value: "key" },
       { title: "value", value: "value" }
     ],
+    creditsRemaining: 0,
   }},
   created() {
     this.loadData();
@@ -113,6 +114,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         this.aimetrics = [];
       }
       this.$root.stopLoading();
+      await this.loadCredits();
     },
     saveLocalSettings() {
       localStorage['settings.aimetrics.sortBy0'] = JSON.stringify(this.sortBy0);
@@ -156,6 +158,29 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         }
       }
       return records;
+    },
+    async loadCredits() {
+      try {
+        const response = await this.$root.papi.get('/assistant/balance');
+        if (response.data) {
+          if (response.data.health_status === 'healthy') {
+            this.creditsRemaining = response.data.credit_balance || 0;
+          } else {
+            throw new Error(this.i18n.assistantBalanceCheckUnhealthy);
+          }
+        }
+      } catch (error) {
+        this.$root.showError(this.i18n.assistantUnableToLoadCredits + ': ' + error.message);
+      }
+    },
+    lookupSocId(data) {
+      if (data && data.length == 36 && data.indexOf("-") == 8) {
+        const user = this.$root.getUserByIdViaCache(data);
+        if (user && user.email) {
+          data = user.email;
+        }
+      }
+      return data;
     },
   }
 }});

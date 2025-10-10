@@ -1,11 +1,16 @@
 <v-container fluid data-aid="aimetrics_screen">
   <v-row>
+    <v-col cols="12" align="end">
+      <h4 :data-aid="assistant_credits_remaining">{{ i18n.creditsRemaining }}: <span :class="creditsRemaining <= lowBalanceColorAlert ? 'text-error' : 'text-primary'">{{ formatCount(creditsRemaining) }}</span></h4>
+    </v-col>
+  </v-row>
+  <v-row>
     <v-col cols="12" lg="3">
-        <h2 v-text="i18n.aiMetrics"></h2>
-      </v-col>
-      <v-spacer></v-spacer>
-    </v-row>
-    <v-row>
+      <h2 v-text="i18n.aiMetrics"></h2>
+    </v-col>
+    <v-spacer></v-spacer>
+  </v-row>
+  <v-row>
     <v-col>
       <v-toolbar class="elevation-0 theme-background-lighten-1" fixed>
         <v-btn variant="flat" color="primary" @click.stop="loadData()" id="aimetrics_refresh_button" class="ml-3" data-aid="aimetrics_refresh">
@@ -18,143 +23,143 @@
       </v-toolbar>
       <!-- Users Table -->
       <v-data-table v-if="tableSetting == 0" :sort-by="sortBy0" @update:sort-by="val => sortBy0 = val" :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage"
-      must-sort :headers="headers[tableSetting]" :items="aimetrics">
-      <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
-        <tr>
-          <template v-for="header in columns" :key="header.key">
-            <th :class="[ header.align, {'is-sorted': isSorted(header)} ]" :data-aid="'aimetrics_header_' + header?.value?.toLowerCase()">
-              <span @click="toggleSort(header)">
-                {{ header.title }}
-              </span>
-              <template v-if="isSorted(header)">
-                <v-icon>
-                  {{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down'}}
-                </v-icon>
-              </template>
-            </th>
-          </template>
-        </tr>
-      </template>
-      <template #item="{ item }">
-        <tr>
-          <td>
-            <router-link :to="buildUserLink(item.userId)">
-              {{ item.userId }}
-            </router-link>
-          </td>
-          <td>{{ item.totalInputTokens }}</td>
-          <td>{{ item.totalOutputTokens }}</td>
-          <td>{{ item.totalCredits }}</td>
-          <td>{{ item.totalSessions }}</td>
-          <td>{{ item.totalMessages }}</td>
-        </tr>
-      </template>
-    </v-data-table>
-    <!-- Sessions Table -->
-    <v-data-table v-if="tableSetting == 1" :sort-by="sortBy1" @update:sort-by="val => sortBy1 = val" :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage"
-      must-sort :headers="headers[tableSetting]" :items="aimetrics" v-model:expanded="expanded">
-      <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
-        <tr>
-          <template v-for="header in columns" :key="header.key">
-            <th :class="[ header.align, {'is-sorted': isSorted(header)} ]" :data-aid="'aimetrics_header_' + header?.value?.toLowerCase()">
-              <span @click="toggleSort(header)">
-                {{ header.title }}
-              </span>
-              <template v-if="isSorted(header)">
-                <v-icon>
-                  {{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down'}}
-                </v-icon>
-              </template>
-            </th>
-          </template>
-        </tr>
-      </template>
-      <template #item="{ item, isExpanded, toggleExpand, internalItem }">
-        <tr>
-          <td>
-            <v-btn id="expandNode" icon variant="text" size="small" @click="toggleExpand(internalItem)" data-aid="aimetrics_details_expand">
-              <v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="aimetrics_details_collapse">fa-angle-down</v-icon>
-              <v-icon v-else :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="aimetrics_details_expand">fa-angle-right</v-icon>
-            </v-btn>
-          </td>
-          <td>{{ item.title }}</td>
-          <td>{{ item.createTime }}</td>
-          <td>
-            <router-link :to="buildSessionLink(item.sessionId)">
-              {{ item.sessionId }}
-            </router-link>
-          </td>
-        </tr>
-      </template>
-      <template #expanded-row="{ columns, item, index }">
-        <tr>
-          <td :colspan="columns.length" class="px-0">
-            <v-data-table density="compact" hide-default-header hide-default-footer :headers="expandedHeaders" :items="getExpandedData(item)" items-per-page="-1">
-              <template #item="{ item: kvp }">
-                <tr :data-aid="'aimetrics_field_' + tableSetting + '_' + kvp.key" class="pt-3">
-                  <td class="expansion va-middle">
-                    <div :id="'aimetrics_fields_' + tableSetting + '_' + kvp.key" class="d-inline-block expansion va-middle" v-text="kvp.title" data-aid="aimetrics_field_name"></div>
-                  </td>
-                  <td class="expansion va-middle">
-                    <div class="d-inline-block expansion hardwrap" v-text="kvp.value" data-aid="aimetrics_field_value"></div>
-                  </td>
-                </tr>
-              </template>
-            </v-data-table>
-          </td>
-        </tr>
-      </template>
-    </v-data-table>
-    <!-- Messages Table -->
-    <v-data-table v-if="tableSetting == 2" :sort-by="sortBy2" @update:sort-by="val => sortBy2 = val" :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage"
-      must-sort :headers="headers[tableSetting]" :items="aimetrics" v-model:expanded="expanded">
-      <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
-        <tr>
-          <template v-for="header in columns" :key="header.key">
-            <th :class="[ header.align, {'is-sorted': isSorted(header)} ]" :data-aid="'aimetrics_header_' + header?.value?.toLowerCase()">
-              <span @click="toggleSort(header)">
-                {{ header.title }}
-              </span>
-              <template v-if="isSorted(header)">
-                <v-icon>
-                  {{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down'}}
-                </v-icon>
-              </template>
-            </th>
-          </template>
-        </tr>
-      </template>
-      <template #item="{ item, isExpanded, toggleExpand, internalItem }">
-        <tr>
-          <td>
-            <v-btn id="expandNode" icon variant="text" size="small" @click="toggleExpand(internalItem)" data-aid="aimetrics_details_expand">
-              <v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="aimetrics_details_collapse">fa-angle-down</v-icon>
-              <v-icon v-else :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="aimetrics_details_expand">fa-angle-right</v-icon>
-            </v-btn>
-          </td>
-          <td>{{ item.id }}</td>
-          <td>{{ item.createTime }}</td>
-        </tr>
-      </template>
-      <template #expanded-row="{ columns, item, index }">
-        <tr>
-          <td :colspan="columns.length" class="px-0">
-            <v-data-table density="compact" hide-default-header hide-default-footer :headers="expandedHeaders" :items="getExpandedData(item)" items-per-page="-1">
-              <template #item="{ item: kvp }">
-                <tr :data-aid="'aimetrics_field_' + tableSetting + '_' + kvp.key" class="pt-3">
-                  <td class="expansion va-middle">
-                    <div :id="'aimetrics_fields_' + tableSetting + '_' + kvp.key" class="d-inline-block expansion va-middle" v-text="kvp.title" data-aid="aimetrics_field_name"></div>
-                  </td>
-                  <td class="expansion va-middle">
-                    <div class="d-inline-block expansion hardwrap" v-text="kvp.value" data-aid="aimetrics_field_value"></div>
-                  </td>
-                </tr>
-              </template>
-            </v-data-table>
-          </td>
-        </tr>
-      </template>
-    </v-data-table>
-  </v-col>
+        must-sort :headers="headers[tableSetting]" :items="aimetrics">
+        <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
+          <tr>
+            <template v-for="header in columns" :key="header.key">
+              <th :class="[ header.align, {'is-sorted': isSorted(header)} ]" :data-aid="'aimetrics_header_' + header?.value?.toLowerCase()">
+                <span @click="toggleSort(header)">
+                  {{ header.title }}
+                </span>
+                <template v-if="isSorted(header)">
+                  <v-icon>
+                    {{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down'}}
+                  </v-icon>
+                </template>
+              </th>
+            </template>
+          </tr>
+        </template>
+        <template #item="{ item }">
+          <tr>
+            <td>
+              <router-link :to="buildUserLink(item.userId)">
+                {{ lookupSocId(item.userId) }}
+              </router-link>
+            </td>
+            <td>{{ formatCount(item.totalInputTokens) }}</td>
+            <td>{{ formatCount(item.totalOutputTokens) }}</td>
+            <td>{{ formatCount(item.totalCredits) }}</td>
+            <td>{{ formatCount(item.totalSessions) }}</td>
+            <td>{{ formatCount(item.totalMessages) }}</td>
+          </tr>
+        </template>
+      </v-data-table>
+      <!-- Sessions Table -->
+      <v-data-table v-if="tableSetting == 1" :sort-by="sortBy1" @update:sort-by="val => sortBy1 = val" :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage"
+        must-sort :headers="headers[tableSetting]" :items="aimetrics" v-model:expanded="expanded">
+        <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
+          <tr>
+            <template v-for="header in columns" :key="header.key">
+              <th :class="[ header.align, {'is-sorted': isSorted(header)} ]" :data-aid="'aimetrics_header_' + header?.value?.toLowerCase()">
+                <span @click="toggleSort(header)">
+                  {{ header.title }}
+                </span>
+                <template v-if="isSorted(header)">
+                  <v-icon>
+                    {{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down'}}
+                  </v-icon>
+                </template>
+              </th>
+            </template>
+          </tr>
+        </template>
+        <template #item="{ item, isExpanded, toggleExpand, internalItem }">
+          <tr>
+            <td>
+              <v-btn id="expandNode" icon variant="text" size="small" @click="toggleExpand(internalItem)" data-aid="aimetrics_details_expand">
+                <v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="aimetrics_details_collapse">fa-angle-down</v-icon>
+                <v-icon v-else :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="aimetrics_details_expand">fa-angle-right</v-icon>
+              </v-btn>
+            </td>
+            <td>{{ item.title }}</td>
+            <td>{{ item.createTime }}</td>
+            <td>
+              <router-link :to="buildSessionLink(item.sessionId)">
+                {{ item.sessionId }}
+              </router-link>
+            </td>
+          </tr>
+        </template>
+        <template #expanded-row="{ columns, item, index }">
+          <tr>
+            <td :colspan="columns.length" class="px-0">
+              <v-data-table density="compact" hide-default-header hide-default-footer :headers="expandedHeaders" :items="getExpandedData(item)" items-per-page="-1">
+                <template #item="{ item: kvp }">
+                  <tr :data-aid="'aimetrics_field_' + tableSetting + '_' + kvp.key" class="pt-3">
+                    <td class="expansion va-middle">
+                      <div :id="'aimetrics_fields_' + tableSetting + '_' + kvp.key" class="d-inline-block expansion va-middle" v-text="kvp.title" data-aid="aimetrics_field_name"></div>
+                    </td>
+                    <td class="expansion va-middle">
+                      <div class="d-inline-block expansion hardwrap" v-text="kvp.value" data-aid="aimetrics_field_value"></div>
+                    </td>
+                  </tr>
+                </template>
+              </v-data-table>
+            </td>
+          </tr>
+        </template>
+      </v-data-table>
+      <!-- Messages Table -->
+      <v-data-table v-if="tableSetting == 2" :sort-by="sortBy2" @update:sort-by="val => sortBy2 = val" :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage"
+        must-sort :headers="headers[tableSetting]" :items="aimetrics" v-model:expanded="expanded">
+        <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
+          <tr>
+            <template v-for="header in columns" :key="header.key">
+              <th :class="[ header.align, {'is-sorted': isSorted(header)} ]" :data-aid="'aimetrics_header_' + header?.value?.toLowerCase()">
+                <span @click="toggleSort(header)">
+                  {{ header.title }}
+                </span>
+                <template v-if="isSorted(header)">
+                  <v-icon>
+                    {{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down'}}
+                  </v-icon>
+                </template>
+              </th>
+            </template>
+          </tr>
+        </template>
+        <template #item="{ item, isExpanded, toggleExpand, internalItem }">
+          <tr>
+            <td>
+              <v-btn id="expandNode" icon variant="text" size="small" @click="toggleExpand(internalItem)" data-aid="aimetrics_details_expand">
+                <v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="aimetrics_details_collapse">fa-angle-down</v-icon>
+                <v-icon v-else :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="aimetrics_details_expand">fa-angle-right</v-icon>
+              </v-btn>
+            </td>
+            <td>{{ item.id }}</td>
+            <td>{{ item.createTime }}</td>
+          </tr>
+        </template>
+        <template #expanded-row="{ columns, item, index }">
+          <tr>
+            <td :colspan="columns.length" class="px-0">
+              <v-data-table density="compact" hide-default-header hide-default-footer :headers="expandedHeaders" :items="getExpandedData(item)" items-per-page="-1">
+                <template #item="{ item: kvp }">
+                  <tr :data-aid="'aimetrics_field_' + tableSetting + '_' + kvp.key" class="pt-3">
+                    <td class="expansion va-middle">
+                      <div :id="'aimetrics_fields_' + tableSetting + '_' + kvp.key" class="d-inline-block expansion va-middle" v-text="kvp.title" data-aid="aimetrics_field_name"></div>
+                    </td>
+                    <td class="expansion va-middle">
+                      <div class="d-inline-block expansion hardwrap" v-text="kvp.value" data-aid="aimetrics_field_value"></div>
+                    </td>
+                  </tr>
+                </template>
+              </v-data-table>
+            </td>
+          </tr>
+        </template>
+      </v-data-table>
+    </v-col>
   </v-row>
 </v-container>
