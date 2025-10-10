@@ -32,7 +32,7 @@ func (t *AckAlertsTool) GetName() string {
 
 func (t *AckAlertsTool) GetDescription() string {
 	return `Acknowledge (A.K.A. ack) alerts in Security Onion by querying them with an OQL query.
-	If you use wildcards in your OQL query, do not wrap the value in quotes. If date_range is specied,
+	If you use wildcards in your OQL query, do not wrap the value in quotes. If date_range is specified,
 	then date_range_format is required.`
 }
 
@@ -141,7 +141,7 @@ func (t *AckAlertsTool) Execute(ctx context.Context, server *server.Server, para
 		if results.UpdatedCount > 1 {
 			plural = "s"
 		}
-		
+
 		result.Result = fmt.Sprintf("%d eligible alert%s were successfully acknowledged", results.UpdatedCount, plural)
 	}
 
