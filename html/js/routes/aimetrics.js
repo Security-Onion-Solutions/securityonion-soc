@@ -19,12 +19,16 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         { title: this.$root.i18n.totalCredits, value: 'totalCredits' },
         { title: this.$root.i18n.totalSessions, value: 'totalSessions' },
         { title: this.$root.i18n.totalMessages, value: 'totalMessages' },
+        { title: this.$root.i18n.actions },
       ],
       [
-        { value: 'expand' },
         { title: this.$root.i18n.title, value: 'title' },
         { title: this.$root.i18n.createTime, value: 'createTime' },
-        { title: this.$root.i18n.sessionId, value: 'sessionId' },
+        { title: this.$root.i18n.totalInputTokens, value: 'totalInputTokens' },
+        { title: this.$root.i18n.totalOutputTokens, value: 'totalOutputTokens' },
+        { title: this.$root.i18n.totalCredits, value: 'totalCredits' },
+        { title: this.$root.i18n.totalMessages, value: 'totalMessages' },
+        { title: this.$root.i18n.actions },
       ],
       [
         { value: 'expand' },
@@ -175,6 +179,12 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
             }
           });
           this.aimetrics = response.data;
+          this.aimetrics.forEach(item => {
+            item.totalInputTokens = item.usage.totalInputTokens;
+            item.totalOutputTokens = item.usage.totalOutputTokens;
+            item.totalCredits = item.usage.totalCredits;
+            item.totalMessages = item.usage.totalMessages;
+          });
         } else {
           this.tableSetting = 0;
           this.$root.adjustSubgridColVisibility(this.headers[this.tableSetting]);
@@ -238,7 +248,10 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       return { name: 'aimetrics', params: { userId: userId } };
     },
     buildSessionLink(sessionId) {
-      return { name: 'aimetrics', params: { userId: this.$route.params.userId, sessionId: sessionId }}
+      return { name: 'aimetrics', params: { userId: this.$route.params.userId, sessionId: sessionId } }
+    },
+    buildAssistantLink(sessionId) {
+      return { name: 'assistant', params: {sessionId: sessionId } };
     },
     getExpandedData(data) {
       const currFields = this.expandedFields[this.tableSetting];
@@ -349,5 +362,13 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       this.saveLocalSettings();
       this.loadData();
     },
+    trimTitle(title) {
+      let trimmed = '';
+      if (title) {
+        trimmed = title.substring(0, 41)
+        if (title.length > 41) trimmed += '...';
+      }
+      return trimmed;
+    }
   }
 }});

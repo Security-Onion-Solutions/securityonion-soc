@@ -109,16 +109,17 @@
         </template>
         <template #item="{ item }">
           <tr>
-            <td>
-              <router-link :to="buildUserLink(item.userId)">
-                {{ item.email }}
-              </router-link>
-            </td>
+            <td>{{ item.email }}</td>
             <td>{{ formatCount(item.totalInputTokens) }}</td>
             <td>{{ formatCount(item.totalOutputTokens) }}</td>
             <td>{{ formatCount(item.totalCredits) }}</td>
             <td>{{ formatCount(item.totalSessions) }}</td>
             <td>{{ formatCount(item.totalMessages) }}</td>
+            <td>
+              <router-link :to="buildUserLink(item.userId)" class="no-print" style="text-decoration: none; cursor: 'pointer'" data-aid="aimetrics_open_user">
+                <v-icon class="mr-2 theme-icon" :title="i18n.viewSessions">fa-binoculars</v-icon>
+              </router-link>
+            </td>
           </tr>
         </template>
       </v-data-table>
@@ -141,38 +142,21 @@
             </template>
           </tr>
         </template>
-        <template #item="{ item, isExpanded, toggleExpand, internalItem }">
+        <template #item="{ item }">
           <tr>
+            <td>{{ trimTitle(item.title) }}</td>
+            <td>{{ formatTimestamp(item.createTime) }}</td>
+            <td>{{ formatCount(item.totalInputTokens) }}</td>
+            <td>{{ formatCount(item.totalOutputTokens) }}</td>
+            <td>{{ formatCount(item.totalCredits) }}</td>
+            <td>{{ formatCount(item.totalMessages) }}</td>
             <td>
-              <v-btn id="expandNode" icon variant="text" size="small" @click="toggleExpand(internalItem)" data-aid="aimetrics_details_expand">
-                <v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="aimetrics_details_collapse">fa-angle-down</v-icon>
-                <v-icon v-else :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="aimetrics_details_expand">fa-angle-right</v-icon>
-              </v-btn>
-            </td>
-            <td>{{ item.title }}</td>
-            <td>{{ $root.formatTimestamp(item.createTime) }}</td>
-            <td>
-              <router-link :to="buildSessionLink(item.sessionId)">
-                {{ item.sessionId }}
+              <router-link :to="buildSessionLink(item.sessionId)" class="no-print" style="text-decoration: none; cursor: 'pointer'" data-aid="aimetrics_open_session">
+                <v-icon class="mr-2 theme-icon" :title="i18n.viewMessages">fa-binoculars</v-icon>
               </router-link>
-            </td>
-          </tr>
-        </template>
-        <template #expanded-row="{ columns, item, index }">
-          <tr>
-            <td :colspan="columns.length" class="px-0">
-              <v-data-table density="compact" hide-default-header hide-default-footer :headers="expandedHeaders" :items="getExpandedData(item)" items-per-page="-1">
-                <template #item="{ item: kvp }">
-                  <tr :data-aid="'aimetrics_field_' + tableSetting + '_' + kvp.key" class="pt-3">
-                    <td class="expansion va-middle">
-                      <div :id="'aimetrics_fields_' + tableSetting + '_' + kvp.key" class="d-inline-block expansion va-middle" v-text="kvp.title" data-aid="aimetrics_field_name"></div>
-                    </td>
-                    <td class="expansion va-middle">
-                      <div class="d-inline-block expansion hardwrap" v-text="kvp.value" data-aid="aimetrics_field_value"></div>
-                    </td>
-                  </tr>
-                </template>
-              </v-data-table>
+              <router-link v-if="$root.user?.id === item.userId" :to="buildAssistantLink(item.sessionId)" class="no-print" style="text-decoration: none; cursor: 'pointer'" data-aid="aimetrics_open_assistant">
+                <v-icon class="mr-2 theme-icon" :title="i18n.openSession">fa-arrow-up-right-from-square</v-icon>
+              </router-link>
             </td>
           </tr>
         </template>

@@ -132,6 +132,7 @@
 															variant="flat"
 															@click="approveTool(toolUse)"
 															data-aid="assistant_tool_use_approve"
+															:disabled="!canChat"
 														>
 															<v-icon size="small" class="mr-1">fa-check</v-icon>
 															{{ i18n.approve }}
@@ -143,6 +144,7 @@
 															variant="flat"
 															@click="rejectTool(toolUse)"
 															data-aid="assistant_tool_use_reject"
+															:disabled="!canChat"
 														>
 															<v-icon size="small" class="mr-1">fa-times</v-icon>
 															{{ i18n.reject }}
@@ -243,13 +245,13 @@
 						spellcheck="false"
 						class="chat-input flex-grow-1 mr-3"
 						@keyup.enter="sendMessage"
-						:disabled="isTyping"
+						:disabled="isTyping || !canChat"
 						data-aid="assistant_chat_input"
 					></v-text-field>
 					<v-btn
 						id="chat-send-button"
 						color="primary"
-						:disabled="!newMessage.trim() || isTyping"
+						:disabled="!newMessage.trim() || isTyping || !canChat"
 						@click="sendMessage"
 						data-aid="assistant_chat_send"
 						class="flex-shrink-0"

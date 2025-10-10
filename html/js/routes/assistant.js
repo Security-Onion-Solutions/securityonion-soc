@@ -34,6 +34,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     activeStreamingSessionId: null, // Track which session is actively streaming
     autoScrollOnNextRender: false, // gate for programmatic scrolls
     isPinnedToBottom: true, // user is at (or near) bottom?
+    canChat: true,
   }},
   async created() {
     this.loadLocalSettings();
@@ -205,6 +206,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     async restoreLastActiveChat() {
       if (!this.restoreLastActive) {
+        this.startNewChat();
         return;
       }
       const lastChatId = this.loadCurrentChatId();
@@ -300,6 +302,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.currentChatId = null;
       this.saveCurrentChatId(); // Clear the saved current chat ID
       this.loadNewChatScreen(); // Reset to welcome message (also resets context length)
+      this.canChat = true;
       // Navigate to chat without session ID
       this.$router.push({ name: 'assistant' });
     },
@@ -311,6 +314,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     async sendMessage() {
       if (!this.newMessage.trim()) return;
+
+      if (!this.canChat) return;
       
       if (!this.assistantEnabled) {
         this.$root.showError(this.i18n.assistantNotAvailable);
@@ -1351,6 +1356,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           this.saveCurrentChatId();
 
           await this.scrollToBottomSettled({ maxWait: 6000, settleDelay: 200 });
+
+          // Blocks user from sending messages in deleted chats
+          this.checkIfDeleted(sessionId);
+
         } else {
           throw new Error(this.i18n.assistantNoHistoryFound + ' ' + sessionId);
         }
@@ -1656,5 +1665,15 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.isTyping = false;
       this.isStreaming = false;
     },
+    
+    checkIfDeleted(sessionId) {
+      const sessionInHistory = this.chatHistory.some(session => session.sessionId === sessionId);
+      if (!sessionInHistory) {
+        this.canChat = false;
+        this.$root.showError(this.i18n.assistantChatIsDeleted);
+      } else {
+        this.canChat = true;
+      }
+    }
   }
 }});
