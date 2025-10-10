@@ -1073,6 +1073,7 @@ $(document).ready(function () {
               vm.log("WebSocket connected");
               vm.connected = true;
               vm.reconnecting = false;
+              vm.loadServerSettingsTime = 0; // Force reload of server settings in case new SOC config changed
               vm.updateStatus();
             };
             this.socket.onclose = function(evt) {
