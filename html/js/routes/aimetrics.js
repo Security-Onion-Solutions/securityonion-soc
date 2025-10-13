@@ -387,7 +387,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       return trimmed;
     },
     formatExpandMessage(data) {
-      expandMessage = '';
+      let expandMessage = '';
       if (!data.message || !data.message.contentBlocks) return expandMessage;
       
       blocks = data.message.contentBlocks;
@@ -395,7 +395,30 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       for (let i = 0; i < blocks.length; i++) {
         let block = blocks[i];
         if (block.type === 'text') {
-          expandMessage += this.$root.formatMarkdown(block.text);
+          if (data.message.role === 'assistant') {
+            if (i > 0) {
+              expandMessage += `\n\n<hr>\n\n<br>`;
+            }
+            expandMessage += this.$root.formatMarkdown(block.text);
+          } else {
+            expandMessage += block.text;
+          }
+        } else if (block.type === 'tool_use') {
+          if (i > 0) {
+            expandMessage += `\n\n<hr>\n\n<br>`;
+          }
+          let toolMessage = `**Tool:** ${block.name}`;
+          if (block.input) {
+            toolMessage += `\n**Parameters:**`;
+            for (let toolKey in block.input) {
+              if (toolKey === 'limit') {
+                toolMessage += `\n- ${toolKey}: ${block.input[toolKey]}`;
+              } else {
+                toolMessage += `\n- ${toolKey}: "${block.input[toolKey]}"`;
+              }
+            }
+          }
+          expandMessage += this.$root.formatMarkdown(toolMessage);
         }
       }
       return expandMessage;

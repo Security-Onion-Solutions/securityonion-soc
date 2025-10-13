@@ -1369,3 +1369,10 @@ ul ul ul {
   background-color: rgba(var(--v-theme-on-surface), 0.06);
   font-weight: 600;
 }
+
+.hardwrap-aimetrics {
+  word-wrap: break-word;
+  white-space: normal;
+  word-break: break-all;
+  overflow-x: hidden;
+}
