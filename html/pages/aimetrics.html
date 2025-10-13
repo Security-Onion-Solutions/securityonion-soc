@@ -162,7 +162,7 @@
         <template #item="{ item }">
           <tr>
             <td>{{ trimTitle(item.title) }}</td>
-            <td>{{ formatTimestamp(item.createTime) }}</td>
+            <td>{{ $root.formatLocalTimestamp(item.createTime, zone) }}</td>
             <td>{{ formatCount(item.totalInputTokens) }}</td>
             <td>{{ formatCount(item.totalOutputTokens) }}</td>
             <td>{{ formatCount(item.totalCredits) }}</td>
@@ -206,7 +206,7 @@
               </v-btn>
             </td>
             <td>{{ item.role === 'assistant' ? trimTitle(stripHtml(item.expandMessage)) : trimTitle(item.expandMessage) }}</td>
-            <td>{{ item.createTime }}</td>
+            <td>{{ $root.formatLocalTimestamp(item.createTime, zone) }}</td>
             <td>{{ item.role }}</td>
             <td>{{ item.inputTokens ? formatCount(item.inputTokens) : '' }}</td>
             <td>{{ item.outputTokens ? formatCount(item.outputTokens) : '' }}</td>
