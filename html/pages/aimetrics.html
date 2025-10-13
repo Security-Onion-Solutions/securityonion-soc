@@ -76,7 +76,24 @@
     </v-col>
   </v-row>
   <v-row>
-    <v-col cols="6"></v-col>
+    <v-col cols="6">
+      <div>
+        <v-breadcrumbs :items="breadcrumbs">
+          <template #item="{ item }">
+            <v-breadcrumbs-item
+              :to="item.to"
+              :disabled="item.disabled"
+              :data-aid="'aimetrics_breadcrumb_' + item.title"
+            >
+              {{ item.title }}
+            </v-breadcrumbs-item>
+          </template>
+          <template #divider>
+            <v-icon>fa-chevron-right</v-icon>
+          </template>
+        </v-breadcrumbs>
+      </div>
+    </v-col>
     <v-col cols="6">
       <v-text-field v-model="searchFilter" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="aimetrics_filter" variant="underlined">
         <template #clear="{ props }">

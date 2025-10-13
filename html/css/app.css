@@ -1376,3 +1376,14 @@ ul ul ul {
   word-break: break-all;
   overflow-x: hidden;
 }
+
+.v-breadcrumbs-divider {
+  padding: 0 !important;
+  display: flex;
+  align-items: center;
+}
+
+.v-breadcrumbs-divider .v-icon {
+  font-size: 0.8em;
+  vertical-align: middle;
+}

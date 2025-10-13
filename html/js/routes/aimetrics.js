@@ -73,6 +73,23 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
     autoRefreshInterval: 0,
     autoRefreshIntervals: [],
     autoRefreshTimer: null,
+    breadcrumbs: [
+      {
+        title: 'Users',
+        disabled: false,
+        to: { name: 'aimetrics' },
+      },
+      {
+        title: 'Sessions',
+        disabled: true,
+        to: null,
+      },
+      {
+        title: 'Messages',
+        disabled: true,
+        to: null,
+      },
+    ],
   }},
   created() {
     this.relativeTimeUnits = [
@@ -153,6 +170,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       }
 
       this.$root.startLoading();
+      this.updateBreadcrumbs(currUserId, currSessionId);
       try {
         if (currSessionId && currUserId) {
           this.tableSetting = 2;
@@ -416,6 +434,22 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         }
       }
       return expandMessage;
+    },
+    updateBreadcrumbs(currUserId, currSessionId) {
+      if (currUserId && currSessionId) {
+        this.breadcrumbs[2].disabled = false;
+        this.breadcrumbs[2].to = { name: 'aimetrics', params: { userId: currUserId, sessionId: currSessionId } };
+      } else {
+        this.breadcrumbs[2].disabled = true;
+        this.breadcrumbs[2].to = null;
+      }
+      if (currUserId) {
+        this.breadcrumbs[1].disabled = false;
+        this.breadcrumbs[1].to = { name: 'aimetrics', params: { userId: currUserId } };
+      } else {
+        this.breadcrumbs[1].disabled = true;
+        this.breadcrumbs[1].to = null;
+      }
     }
   }
 }});
