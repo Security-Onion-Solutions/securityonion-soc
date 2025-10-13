@@ -34,6 +34,10 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         { value: 'expand' },
         { title: this.$root.i18n.id, value: 'id' },
         { title: this.$root.i18n.createTime, value: 'createTime' },
+        { title: this.$root.i18n.role, value: 'role' },
+        { title: this.$root.i18n.inputTokens, value: 'inputTokens' },
+        { title: this.$root.i18n.outputTokens, value: 'outputTokens' },
+        { title: this.$root.i18n.credits, value: 'credits' },
       ],
     ],
     expandedFields: {
@@ -48,7 +52,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         'userId': this.$root.i18n.userId,
         'kind': this.$root.i18n.kind,
         'sessionId': this.$root.i18n.sessionId,
-        'message': this.$root.i18n.message,
+        'expandMessage': this.$root.i18n.message,
       },
     },
     sortBy0: [{ key: 'totalCredits', order: 'desc' }],
@@ -146,7 +150,6 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       const currSessionId = this.$route.params.sessionId;
       
       this.loadLocalSettings();
-      //debugger;
       // Calculate date range
       let range = this.dateRange;
       if (this.relativeTimeEnabled || range === '') {
@@ -168,6 +171,19 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
             }
           });
           this.aimetrics = response.data;
+          this.aimetrics.forEach(item => {
+            item.role = item.message.role;
+            if (item.role === 'assistant') {
+              item.inputTokens = item.message.usage.input_tokens;
+              item.outputTokens = item.message.usage.output_tokens;
+              item.credits = item.message.usage.credits;
+            } else {
+              item.inputTokens = 0;
+              item.outputTokens = 0;
+              item.credits = 0;
+            }
+            item.expandMessage = this.formatExpandMessage(item);
+          });
         } else if (currUserId) {
           this.tableSetting = 1;
           this.$root.adjustSubgridColVisibility(this.headers[this.tableSetting]);
@@ -369,6 +385,20 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         if (title.length > 41) trimmed += '...';
       }
       return trimmed;
+    },
+    formatExpandMessage(data) {
+      expandMessage = '';
+      if (!data.message || !data.message.contentBlocks) return expandMessage;
+      
+      blocks = data.message.contentBlocks;
+      
+      for (let i = 0; i < blocks.length; i++) {
+        let block = blocks[i];
+        if (block.type === 'text') {
+          expandMessage += this.$root.formatMarkdown(block.text);
+        }
+      }
+      return expandMessage;
     }
   }
 }});

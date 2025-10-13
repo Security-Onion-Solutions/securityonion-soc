@@ -190,6 +190,10 @@
             </td>
             <td>{{ item.id }}</td>
             <td>{{ item.createTime }}</td>
+            <td>{{ item.role }}</td>
+            <td>{{ item.inputTokens ? formatCount(item.inputTokens) : '' }}</td>
+            <td>{{ item.outputTokens ? formatCount(item.outputTokens) : '' }}</td>
+            <td>{{ item.credits ? formatCount(item.credits) : '' }}</td>
           </tr>
         </template>
         <template #expanded-row="{ columns, item, index }">
@@ -202,7 +206,7 @@
                       <div :id="'aimetrics_fields_' + tableSetting + '_' + kvp.key" class="d-inline-block expansion va-middle" v-text="kvp.title" data-aid="aimetrics_field_name"></div>
                     </td>
                     <td class="expansion va-middle">
-                      <div class="d-inline-block expansion hardwrap" v-text="kvp.value" data-aid="aimetrics_field_value"></div>
+                      <div class="d-inline-block expansion hardwrap" v-html="kvp.value" data-aid="aimetrics_field_value"></div>
                     </td>
                   </tr>
                 </template>
