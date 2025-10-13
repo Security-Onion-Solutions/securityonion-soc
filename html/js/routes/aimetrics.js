@@ -48,12 +48,6 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         'tags': this.$root.i18n.tags,
         'usage': this.$root.i18n.usage,
       },
-      2: {
-        'userId': this.$root.i18n.userId,
-        'kind': this.$root.i18n.kind,
-        'sessionId': this.$root.i18n.sessionId,
-        'expandMessage': this.$root.i18n.message,
-      },
     },
     sortBy0: [{ key: 'totalCredits', order: 'desc' }],
     sortBy1: [{ key: 'createTime', order: 'desc' }],
