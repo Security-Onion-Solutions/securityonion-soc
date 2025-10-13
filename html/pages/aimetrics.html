@@ -216,7 +216,8 @@
         <template #expanded-row="{ item }">
           <tr>
             <td :colspan="headers[tableSetting].length" class="px-4 py-3">
-              <div class="expansion va-middle hardwrap-aimetrics" v-html="item.expandMessage" data-aid="aimetrics_message_content"></div>
+              <div v-if="item.role === 'assistant'" class="expansion va-middle hardwrap-aimetrics" v-html="item.expandMessage" data-aid="aimetrics_message_content_assistant"></div>
+              <div v-else class="expansion va-middle hardwrap-aimetrics" data-aid="aimetrics_message_content_user">{{ item.expandMessage }}</div>
             </td>
           </tr>
         </template>
