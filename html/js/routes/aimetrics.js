@@ -32,7 +32,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       ],
       [
         { value: 'expand' },
-        { title: this.$root.i18n.id, value: 'id' },
+        { title: this.$root.i18n.message, value: 'expandMessage' },
         { title: this.$root.i18n.createTime, value: 'createTime' },
         { title: this.$root.i18n.role, value: 'role' },
         { title: this.$root.i18n.inputTokens, value: 'inputTokens' },
@@ -434,6 +434,9 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         }
       }
       return expandMessage;
+    },
+    stripHtml(str) {
+      return str.replace(/<[^>]*>/g, '');
     },
     updateBreadcrumbs(currUserId, currSessionId) {
       if (currUserId && currSessionId) {

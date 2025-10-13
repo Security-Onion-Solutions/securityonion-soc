@@ -205,7 +205,7 @@
                 <v-icon v-else :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="aimetrics_details_expand">fa-angle-right</v-icon>
               </v-btn>
             </td>
-            <td>{{ item.id }}</td>
+            <td>{{ item.role === 'assistant' ? trimTitle(stripHtml(item.expandMessage)) : trimTitle(item.expandMessage) }}</td>
             <td>{{ item.createTime }}</td>
             <td>{{ item.role }}</td>
             <td>{{ item.inputTokens ? formatCount(item.inputTokens) : '' }}</td>
