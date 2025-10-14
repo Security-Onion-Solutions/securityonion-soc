@@ -36,8 +36,8 @@ func TestQueryEventsTool_Execute(t *testing.T) {
 				Metrics:     make(map[string][]*model.EventMetric),
 			},
 			expectedResult: []map[string]any{
-				{"payload": map[string]any{"soc_id": "alert-1", "@timestamp": "2024-01-01T00:00:00Z", "tags": []string{"alert"}}},
-				{"payload": map[string]any{"soc_id": "alert-2", "@timestamp": "2024-01-01T00:01:00Z", "tags": []string{"alert"}}},
+				{"payload": map[string]any{"_id": "alert-1", "@timestamp": "2024-01-01T00:00:00Z", "tags": []string{"alert"}}},
+				{"payload": map[string]any{"_id": "alert-2", "@timestamp": "2024-01-01T00:01:00Z", "tags": []string{"alert"}}},
 			},
 		},
 		{
@@ -69,7 +69,7 @@ func TestQueryEventsTool_Execute(t *testing.T) {
 				Metrics:     make(map[string][]*model.EventMetric),
 			},
 			expectedResult: []map[string]any{
-				{"payload": map[string]any{"soc_id": "dns-1", "@timestamp": "2024-01-01T00:00:00Z", "dns.query.name": "example.com"}},
+				{"payload": map[string]any{"_id": "dns-1", "@timestamp": "2024-01-01T00:00:00Z", "dns.query.name": "example.com"}},
 			},
 		},
 		{
@@ -83,7 +83,7 @@ func TestQueryEventsTool_Execute(t *testing.T) {
 				Metrics:     make(map[string][]*model.EventMetric),
 			},
 			expectedResult: []map[string]any{
-				{"payload": map[string]any{"soc_id": "dns-1", "@timestamp": "2024-01-01T00:00:00Z", "dns.query.name": "example.com"}},
+				{"payload": map[string]any{"_id": "dns-1", "@timestamp": "2024-01-01T00:00:00Z", "dns.query.name": "example.com"}},
 			},
 		},
 		{
@@ -97,7 +97,7 @@ func TestQueryEventsTool_Execute(t *testing.T) {
 				Metrics:     make(map[string][]*model.EventMetric),
 			},
 			expectedResult: []map[string]any{
-				{"payload": map[string]any{"soc_id": "conn-1", "@timestamp": "2024-01-01T00:00:00Z", "source.ip": "192.168.1.1", "destination.ip": "192.168.1.2"}},
+				{"payload": map[string]any{"_id": "conn-1", "@timestamp": "2024-01-01T00:00:00Z", "source.ip": "192.168.1.1", "destination.ip": "192.168.1.2"}},
 			},
 		},
 		{

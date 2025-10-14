@@ -105,7 +105,7 @@ func TestGetPlaybookQuestionsTool_Execute(t *testing.T) {
 							QueryResults: []map[string]any{
 								{
 									"payload": map[string]any{
-										"soc_id":       "alert-123",
+										"_id":          "alert-123",
 										"@timestamp":   "2024-01-01T00:01:00Z",
 										"process.name": "malware.exe",
 									},
@@ -119,7 +119,7 @@ func TestGetPlaybookQuestionsTool_Execute(t *testing.T) {
 							QueryResults: []map[string]any{
 								{
 									"payload": map[string]any{
-										"soc_id":           "alert-123",
+										"_id":              "alert-123",
 										"@timestamp":       "2024-01-01T00:02:00Z",
 										"destination.ip":   "192.168.1.100",
 										"destination.port": 80,
@@ -201,7 +201,7 @@ func TestGetPlaybookQuestionsTool_Execute(t *testing.T) {
 							QueryResults: []map[string]any{
 								{
 									"payload": map[string]any{
-										"soc_id":         "alert-456",
+										"_id":            "alert-456",
 										"@timestamp":     "2024-01-01T00:01:00Z",
 										"destination.ip": "192.168.1.1",
 										"source.ip":      "10.0.0.1",
@@ -552,7 +552,7 @@ func TestSimplifyPlaybooks(t *testing.T) {
 							QueryResults: []map[string]any{
 								{
 									"payload": map[string]any{
-										"soc_id":       "alert-1",
+										"_id":          "alert-1",
 										"@timestamp":   "2024-01-01T00:01:00Z",
 										"process.name": "malware.exe",
 									},
@@ -566,7 +566,7 @@ func TestSimplifyPlaybooks(t *testing.T) {
 							QueryResults: []map[string]any{
 								{
 									"payload": map[string]any{
-										"soc_id":           "alert-2",
+										"_id":              "alert-2",
 										"@timestamp":       "2024-01-01T00:02:00Z",
 										"destination.ip":   "192.168.1.100",
 										"destination.port": 80,
@@ -662,7 +662,7 @@ func TestSimplifyPlaybooks(t *testing.T) {
 							QueryResults: []map[string]any{
 								{
 									"payload": map[string]any{
-										"soc_id":     "alert-1",
+										"_id":        "alert-1",
 										"@timestamp": "2024-01-01T00:01:00Z",
 										"source.ip":  "10.0.0.1",
 									},
@@ -675,7 +675,7 @@ func TestSimplifyPlaybooks(t *testing.T) {
 							QueryResults: []map[string]any{
 								{
 									"payload": map[string]any{
-										"soc_id":         "alert-1",
+										"_id":            "alert-1",
 										"@timestamp":     "2024-01-01T00:02:00Z",
 										"destination.ip": "192.168.1.1",
 									},
@@ -740,7 +740,7 @@ func TestSimplifyPlaybooks(t *testing.T) {
 							QueryResults: []map[string]any{
 								{
 									"payload": map[string]any{
-										"soc_id":     "alert-1",
+										"_id":        "alert-1",
 										"@timestamp": "2024-01-01T00:01:00Z",
 									},
 								},
@@ -758,7 +758,7 @@ func TestSimplifyPlaybooks(t *testing.T) {
 							QueryResults: []map[string]any{
 								{
 									"payload": map[string]any{
-										"soc_id":     "alert-2",
+										"_id":        "alert-2",
 										"@timestamp": "2024-01-01T00:02:00Z",
 									},
 								},
