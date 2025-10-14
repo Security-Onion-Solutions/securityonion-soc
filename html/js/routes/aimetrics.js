@@ -179,7 +179,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
             params: {
               format: this.$root.i18n.timePickerSample,
               range: range,
-              timezone: this.zone,
+              zone: this.zone,
             }
           });
           this.aimetrics = response.data;
@@ -203,7 +203,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
             params: {
               format: this.$root.i18n.timePickerSample,
               range: range,
-              timezone: this.zone,
+              zone: this.zone,
             }
           });
           this.aimetrics = response.data;
@@ -220,7 +220,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
             params: {
               format: this.$root.i18n.timePickerSample,
               range: range,
-              timezone: this.zone,
+              zone: this.zone,
             }
           });
           this.aimetrics = response.data;
