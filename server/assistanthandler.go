@@ -603,7 +603,15 @@ func (h *AssistantHandler) GetSessionsAdmin(w http.ResponseWriter, r *http.Reque
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
 
-	err := h.server.CheckAuthorized(ctx, "read_all", "assistant")
+	err := r.ParseForm()
+	if err != nil {
+		logger.WithError(err).Error("unable to parse query string")
+		web.Respond(w, r, http.StatusBadRequest, err)
+
+		return
+	}
+
+	err = h.server.CheckAuthorized(ctx, "read_all", "assistant")
 	if err != nil {
 		web.Respond(w, r, http.StatusUnauthorized, err)
 		return
