@@ -316,6 +316,54 @@ test('loadLocalSettings handles missing localStorage values', () => {
   expect(comp.zone).toBe('Asia/Tokyo');
 });
 
+// Assistant initialization tests
+test('initAssistant sets assistantEnabled to true when enabled and licensed', async () => {
+  const mockParams = { enabled: true };
+  comp.$root.isLicensed = jest.fn().mockReturnValue(true);
+  comp.loadData = jest.fn();
+  
+  await comp.initAssistant(mockParams);
+  
+  expect(comp.assistantEnabled).toBe(true);
+  expect(comp.$root.isLicensed).toHaveBeenCalledWith('oai');
+  expect(comp.loadData).toHaveBeenCalled();
+});
+
+test('initAssistant sets assistantEnabled to false when not enabled', async () => {
+  const mockParams = { enabled: false };
+  comp.$root.isLicensed = jest.fn().mockReturnValue(true);
+  comp.loadData = jest.fn();
+  
+  await comp.initAssistant(mockParams);
+  
+  expect(comp.assistantEnabled).toBe(false);
+  expect(comp.loadData).not.toHaveBeenCalled();
+});
+
+test('initAssistant sets assistantEnabled to false when not licensed', async () => {
+  const mockParams = { enabled: true };
+  comp.$root.isLicensed = jest.fn().mockReturnValue(false);
+  comp.loadData = jest.fn();
+  
+  await comp.initAssistant(mockParams);
+  
+  expect(comp.assistantEnabled).toBe(false);
+  expect(comp.loadData).not.toHaveBeenCalled();
+});
+
+test('loadData returns early when assistantEnabled is false', async () => {
+  comp.assistantEnabled = false;
+  comp.loadLocalSettings = jest.fn();
+  comp.$root.startLoading = jest.fn();
+  comp.$root.stopLoading = jest.fn();
+  
+  await comp.loadData();
+  
+  expect(comp.loadLocalSettings).toHaveBeenCalled();
+  expect(comp.$root.startLoading).not.toHaveBeenCalled();
+  expect(comp.$root.stopLoading).not.toHaveBeenCalled();
+});
+
 // Data loading tests
 test('loadData with no route parameters loads users data', async () => {
   const mockResponse = {
@@ -342,6 +390,9 @@ test('loadData with no route parameters loads users data', async () => {
   comp.$root.adjustSubgridColVisibility = jest.fn();
   comp.getStartDate = jest.fn().mockReturnValue(moment('2025-01-01'));
   comp.getEndDate = jest.fn().mockReturnValue(moment('2025-01-02'));
+  
+  // Set assistantEnabled to true to bypass the early return
+  comp.assistantEnabled = true;
   
   await comp.loadData();
   
@@ -397,6 +448,9 @@ test('loadData with userId parameter loads sessions data', async () => {
   comp.getStartDate = jest.fn().mockReturnValue(moment('2025-01-01'));
   comp.getEndDate = jest.fn().mockReturnValue(moment('2025-01-02'));
   
+  // Set assistantEnabled to true to bypass the early return
+  comp.assistantEnabled = true;
+  
   await comp.loadData();
   
   expect(comp.tableSetting).toBe(1);
@@ -451,6 +505,9 @@ test('loadData with userId and sessionId parameters loads messages data', async 
   comp.getStartDate = jest.fn().mockReturnValue(moment('2025-01-01'));
   comp.getEndDate = jest.fn().mockReturnValue(moment('2025-01-02'));
   
+  // Set assistantEnabled to true to bypass the early return
+  comp.assistantEnabled = true;
+  
   await comp.loadData();
   
   expect(comp.tableSetting).toBe(2);
@@ -486,6 +543,9 @@ test('loadData handles API error', async () => {
   comp.$root.showError = jest.fn();
   comp.getStartDate = jest.fn().mockReturnValue(moment('2025-01-01'));
   comp.getEndDate = jest.fn().mockReturnValue(moment('2025-01-02'));
+  
+  // Set assistantEnabled to true to bypass the early return
+  comp.assistantEnabled = true;
   
   await comp.loadData();
   
@@ -1082,6 +1142,9 @@ test('full data loading flow for users', async () => {
   comp.getStartDate = jest.fn().mockReturnValue(moment('2025-01-01'));
   comp.getEndDate = jest.fn().mockReturnValue(moment('2025-01-02'));
   
+  // Set assistantEnabled to true to bypass the early return
+  comp.assistantEnabled = true;
+  
   await comp.loadData();
   
   expect(comp.tableSetting).toBe(0);
@@ -1149,6 +1212,9 @@ test('error handling integration', async () => {
   comp.getStartDate = jest.fn().mockReturnValue(moment('2025-01-01'));
   comp.getEndDate = jest.fn().mockReturnValue(moment('2025-01-02'));
   
+  // Set assistantEnabled to true to bypass the early return
+  comp.assistantEnabled = true;
+  
   await comp.loadData();
   
   expect(comp.$root.showError).toHaveBeenCalledWith(apiError);
@@ -1172,6 +1238,9 @@ test('handles empty API responses', async () => {
   comp.$root.adjustSubgridColVisibility = jest.fn();
   comp.getStartDate = jest.fn().mockReturnValue(moment('2025-01-01'));
   comp.getEndDate = jest.fn().mockReturnValue(moment('2025-01-02'));
+  
+  // Set assistantEnabled to true to bypass the early return
+  comp.assistantEnabled = true;
   
   await comp.loadData();
   
