@@ -32,12 +32,12 @@ test('saveLocalSettings', () => {
   comp.sortBy = 'taskId';
   comp.itemsPerPage = 20;
   comp.saveLocalSettings();
-  expect(localStorage['settings.queries.sortBy']).toBe('taskId');
+  expect(localStorage['settings.queries.sortBy']).toBe('"taskId"');
   expect(localStorage['settings.queries.itemsPerPage']).toBe("20");
 });
 
 test('loadLocalSettings', () => {
-  localStorage['settings.queries.sortBy'] = 'taskId';
+  localStorage['settings.queries.sortBy'] = '"taskId"';
   localStorage['settings.queries.itemsPerPage'] = 20;
   comp.loadLocalSettings();
   expect(comp.sortBy).toBe('taskId');
