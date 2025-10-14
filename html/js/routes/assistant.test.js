@@ -255,10 +255,92 @@ test('generateChatId creates unique ID', () => {
   expect(id1).not.toBe(id2);
 });
 
+// Assistant initialization tests
+test('initAssistant sets assistantEnabled to true when enabled and licensed', async () => {
+  const mockParams = {
+    enabled: true,
+    investigationPrompt: 'Test investigation prompt',
+    contextLimitSmall: 200000,
+    contextLimitLarge: 1000000,
+    thresholdColorRatioLow: 0.5,
+    thresholdColorRatioMed: 0.75,
+    thresholdColorRatioMax: 1,
+    lowBalanceColorAlert: 500000
+  };
+  comp.$root.isLicensed = jest.fn().mockReturnValue(true);
+  comp.$root.showDisclaimer = jest.fn();
+  comp.loadStoredChats = jest.fn().mockResolvedValue();
+  comp.handleRouteSessionId = jest.fn().mockResolvedValue();
+  comp.loadCredits = jest.fn().mockResolvedValue();
+  comp.$root.disclaimer = false;
+  
+  await comp.initAssistant(mockParams);
+  
+  expect(comp.assistantEnabled).toBe(true);
+  expect(comp.$root.isLicensed).toHaveBeenCalledWith('oai');
+  expect(comp.investigationMsg).toBe('Test investigation prompt');
+  expect(comp.contextLimitSmall).toBe(200000);
+  expect(comp.contextLimitLarge).toBe(1000000);
+  expect(comp.thresholdColorRatioLow).toBe(0.5);
+  expect(comp.thresholdColorRatioMed).toBe(0.75);
+  expect(comp.thresholdColorRatioMax).toBe(1);
+  expect(comp.lowBalanceColorAlert).toBe(500000);
+  expect(comp.loadStoredChats).toHaveBeenCalled();
+  expect(comp.handleRouteSessionId).toHaveBeenCalled();
+  expect(comp.loadCredits).toHaveBeenCalled();
+});
+
+test('initAssistant sets assistantEnabled to false when not enabled', async () => {
+  const mockParams = { enabled: false };
+  comp.$root.isLicensed = jest.fn().mockReturnValue(true);
+  comp.$root.showDisclaimer = jest.fn();
+  comp.loadStoredChats = jest.fn();
+  comp.handleRouteSessionId = jest.fn();
+  comp.loadCredits = jest.fn();
+  
+  await comp.initAssistant(mockParams);
+  
+  expect(comp.assistantEnabled).toBe(false);
+  expect(comp.$root.disclaimer).toBe(false);
+  expect(comp.loadStoredChats).not.toHaveBeenCalled();
+  expect(comp.handleRouteSessionId).not.toHaveBeenCalled();
+  expect(comp.loadCredits).not.toHaveBeenCalled();
+});
+
+test('initAssistant sets assistantEnabled to false when not licensed', async () => {
+  const mockParams = { enabled: true };
+  comp.$root.isLicensed = jest.fn().mockReturnValue(false);
+  comp.$root.showDisclaimer = jest.fn();
+  comp.loadStoredChats = jest.fn();
+  comp.handleRouteSessionId = jest.fn();
+  comp.loadCredits = jest.fn();
+  
+  await comp.initAssistant(mockParams);
+  
+  expect(comp.assistantEnabled).toBe(false);
+  expect(comp.$root.disclaimer).toBe(false);
+  expect(comp.loadStoredChats).not.toHaveBeenCalled();
+  expect(comp.handleRouteSessionId).not.toHaveBeenCalled();
+  expect(comp.loadCredits).not.toHaveBeenCalled();
+});
+
+test('handleRouteSessionId returns early when assistantEnabled is false', async () => {
+  comp.assistantEnabled = false;
+  comp.$route.params.sessionId = fakeSessionId;
+  comp.loadChatFromBackend = jest.fn();
+  comp.clearStreamingStates = jest.fn();
+  
+  await comp.handleRouteSessionId();
+  
+  expect(comp.clearStreamingStates).toHaveBeenCalled();
+  expect(comp.loadChatFromBackend).not.toHaveBeenCalled();
+});
+
 // Session management tests
 test('handleRouteSessionId with existing session', async () => {
   comp.$route.params.sessionId = fakeSessionId;
   comp.loadChatFromBackend = jest.fn().mockResolvedValue();
+  comp.assistantEnabled = true;
   
   await comp.handleRouteSessionId();
   
@@ -268,6 +350,7 @@ test('handleRouteSessionId with existing session', async () => {
 test('handleRouteSessionId with non-existent session', async () => {
   comp.$route.params.sessionId = fakeSessionId;
   comp.loadChatFromBackend = jest.fn().mockRejectedValue(new Error('Session not found'));
+  comp.assistantEnabled = true;
   
   await comp.handleRouteSessionId();
   
@@ -1476,6 +1559,7 @@ test('handleRouteSessionId detects investigation session from query parameter', 
   comp.loadChatFromBackend = jest.fn().mockRejectedValue(new Error('Session not found'));
   comp.startInvestigationSession = jest.fn();
   comp.saveCurrentChatId = jest.fn();
+  comp.assistantEnabled = true;
   
   // Mock $root methods needed for handleRouteSessionId
   comp.$root.startLoading = jest.fn();
@@ -1497,6 +1581,7 @@ test('handleRouteSessionId handles non-investigation session with existing messa
   comp.loadNewChatScreen = jest.fn();
   comp.saveCurrentChatId = jest.fn();
   comp.messages = [fakeMessage, fakeAssistantMessage]; // More than 1 message
+  comp.assistantEnabled = true;
   
   await comp.handleRouteSessionId();
   

@@ -40,6 +40,8 @@ type ChatRequest struct {
 	ToolConfig json.RawMessage `json:"toolConfig,omitempty"`
 	// Indicate which user is making the request.
 	UserId string `json:"user_uuid,omitempty" example:"8beae4b5-275b-4669-b678-8cff894911b5"`
+	// Optionally append additional context to the system prompt.
+	SystemAppend string `json:"system_append,omitempty" example:"Treat 192.168.1.105 as our internal DNS server."`
 }
 
 // @Description A stored message in the chat session. This contains metadata about the message and its context not necessary for the conversation with the Assistant.

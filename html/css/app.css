@@ -1369,3 +1369,25 @@ ul ul ul {
   background-color: rgba(var(--v-theme-on-surface), 0.06);
   font-weight: 600;
 }
+
+.hardwrap-aimetrics {
+  word-wrap: break-word;
+  white-space: normal;
+  word-break: break-all;
+  overflow-x: hidden;
+}
+
+.v-breadcrumbs-divider {
+  padding: 0 !important;
+  display: flex;
+  align-items: center;
+}
+
+.v-breadcrumbs-divider .v-icon {
+  font-size: 0.8em;
+  vertical-align: middle;
+}
+
+.text-right {
+  text-align: right !important;
+}

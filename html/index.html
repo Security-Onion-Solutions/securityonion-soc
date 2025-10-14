@@ -362,6 +362,12 @@
                 </template>
                 <v-list-item-title v-text="i18n.licenseKey"></v-list-item-title>
               </v-list-item>
+              <v-list-item data-aid="nav_admin_aimetrics" v-if="$root.isUserAdmin()" @click="" to="/aimetrics">
+                <template #prepend>
+                  <v-icon>fa-chart-simple</v-icon>
+                </template>
+                <v-list-item-title v-text="i18n.aiMetrics"></v-list-item-title>
+              </v-list-item>
             </v-list-item-group>
           </v-list>
           <v-divider></v-divider>
@@ -420,6 +426,7 @@
     <script src="js/routes/users.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/detection.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/queries.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/aimetrics.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/custom.js?v=VERSION_PLACEHOLDER"></script>
   </body>
 </html>

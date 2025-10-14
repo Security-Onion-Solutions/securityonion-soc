@@ -33,8 +33,10 @@ import (
 )
 
 const (
-	DEFAULT_APIURL                 = "https://onionai.securityonion.net/"
-	DEFAULT_HEALTH_TIMEOUT_SECONDS = 3
+	DEFAULT_APIURL                            = "https://onionai.securityonion.net/"
+	DEFAULT_HEALTH_TIMEOUT_SECONDS            = 3
+	DEFAULT_SYSTEM_PROMPT_ADDENDUM            = ""
+	DEFAULT_SYSTEM_PROMPT_ADDENDUM_MAX_LENGTH = 50000
 )
 
 var (
@@ -46,6 +48,7 @@ type AssistantCoordinator struct {
 	apiKey               string
 	apiUrl               string
 	healthTimeoutSeconds int
+	systemPromptAddendum string
 	isRunning            bool
 
 	FunctionLibrary map[string]Tool
@@ -71,6 +74,12 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 
 	ac.apiUrl = module.GetStringDefault(config, "apiUrl", DEFAULT_APIURL)
 	ac.healthTimeoutSeconds = module.GetIntDefault(config, "healthTimeoutSeconds", DEFAULT_HEALTH_TIMEOUT_SECONDS)
+	ac.systemPromptAddendum = module.GetStringDefault(config, "systemPromptAddendum", DEFAULT_SYSTEM_PROMPT_ADDENDUM)
+
+	maxLength := module.GetIntDefault(config, "systemPromptAddendumMaxLength", DEFAULT_SYSTEM_PROMPT_ADDENDUM_MAX_LENGTH)
+	if len(ac.systemPromptAddendum) > maxLength {
+		ac.systemPromptAddendum = ac.systemPromptAddendum[:maxLength]
+	}
 
 	ac.toolConfig, err = buildToolConfig(ac.FunctionLibrary)
 
@@ -146,9 +155,10 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, messages []*model.Mess
 	msgs := cleanupMessages(messages)
 
 	req := &model.ChatRequest{
-		Messages:   msgs,
-		ToolConfig: ac.toolConfig,
-		UserId:     userID,
+		Messages:     msgs,
+		ToolConfig:   ac.toolConfig,
+		UserId:       userID,
+		SystemAppend: ac.systemPromptAddendum,
 	}
 
 	u, err := url.Parse(ac.apiUrl)
@@ -280,10 +290,11 @@ func (ac *AssistantCoordinator) ChatStream(ctx context.Context, messages []*mode
 	msgs := cleanupMessages(messages)
 
 	req := &model.ChatRequest{
-		Messages:   msgs,
-		Stream:     true,
-		ToolConfig: ac.toolConfig,
-		UserId:     userID,
+		Messages:     msgs,
+		Stream:       true,
+		ToolConfig:   ac.toolConfig,
+		UserId:       userID,
+		SystemAppend: ac.systemPromptAddendum,
 	}
 
 	u, err := url.Parse(ac.apiUrl)

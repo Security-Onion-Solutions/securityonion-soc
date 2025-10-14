@@ -34,6 +34,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     activeStreamingSessionId: null, // Track which session is actively streaming
     autoScrollOnNextRender: false, // gate for programmatic scrolls
     isPinnedToBottom: true, // user is at (or near) bottom?
+    canChat: true,
   }},
   async created() {
     this.loadLocalSettings();
@@ -70,7 +71,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.thresholdColorRatioMax = params["thresholdColorRatioMax"];
       this.lowBalanceColorAlert = params["lowBalanceColorAlert"];
 
-      this.$root.showDisclaimer(this.i18n.assistantDisclaimerMessage, this.i18n.assistantDisclaimerTitle, this.i18n.getStarted, 'so-data-retention-disclaimer');
+      this.$root.showDisclaimer(this.i18n.assistantDisclaimerMessage, this.i18n.assistantDisclaimerTitle, this.i18n.getStarted, 'settings.disclaimer.acknowledged.onionai');
       
       if (this.assistantEnabled) {
         if (!this.$root.disclaimer) {
@@ -152,13 +153,13 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     saveCurrentChatId() {
       if (this.currentChatId) {
-        localStorage.setItem('so-current-chat-id', this.currentChatId);
+        localStorage.setItem('settings.assistant.currentChatId', this.currentChatId);
       } else {
-        localStorage.removeItem('so-current-chat-id');
+        localStorage.removeItem('settings.assistant.currentChatId');
       }
     },
     loadCurrentChatId() {
-      return localStorage.getItem('so-current-chat-id');
+      return localStorage.getItem('settings.assistant.currentChatId');
     },
     async handleRouteSessionId() {
       const urlSessionId = this.$route.params.sessionId;
@@ -166,6 +167,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       // Clear active streaming session and UI state when route changes to different session
       if (this.currentChatId !== urlSessionId) {
         this.clearStreamingStates();
+      }
+
+      if (!this.assistantEnabled) {
+        return;
       }
       
       if (urlSessionId) {
@@ -205,6 +210,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     async restoreLastActiveChat() {
       if (!this.restoreLastActive) {
+        this.startNewChat();
         return;
       }
       const lastChatId = this.loadCurrentChatId();
@@ -300,6 +306,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.currentChatId = null;
       this.saveCurrentChatId(); // Clear the saved current chat ID
       this.loadNewChatScreen(); // Reset to welcome message (also resets context length)
+      this.canChat = true;
       // Navigate to chat without session ID
       this.$router.push({ name: 'assistant' });
     },
@@ -311,6 +318,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     async sendMessage() {
       if (!this.newMessage.trim()) return;
+
+      if (!this.canChat) return;
       
       if (!this.assistantEnabled) {
         this.$root.showError(this.i18n.assistantNotAvailable);
@@ -1351,6 +1360,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           this.saveCurrentChatId();
 
           await this.scrollToBottomSettled({ maxWait: 6000, settleDelay: 200 });
+
+          // Blocks user from sending messages in deleted chats
+          this.checkIfDeleted(sessionId);
+
         } else {
           throw new Error(this.i18n.assistantNoHistoryFound + ' ' + sessionId);
         }
@@ -1598,7 +1611,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     
 
-    // Generic setting save method (following hunt.js pattern)
+    // Generic setting save method
     saveSetting(name, value, defaultValue = null) {
       var item = 'settings.assistant.' + name;
       if (defaultValue == null || value != defaultValue) {
@@ -1608,7 +1621,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }
     },
 
-    // Save all local settings (following hunt.js pattern)
+    // Save all local settings
     saveLocalSettings() {
       this.saveSetting('increaseMaxContextThreshold', this.increaseMaxContextThreshold, false);
       this.saveSetting('restoreLastActive', this.restoreLastActive, false);
@@ -1616,7 +1629,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.saveSetting('showChatHistory', this.showChatHistory, true);
     },
 
-    // Load all local settings (following hunt.js pattern)
+    // Load all local settings
     loadLocalSettings() {
       var prefix = 'settings.assistant';
       if (localStorage[prefix + '.increaseMaxContextThreshold']) this.increaseMaxContextThreshold = localStorage[prefix + '.increaseMaxContextThreshold'] == 'true';
@@ -1656,5 +1669,15 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.isTyping = false;
       this.isStreaming = false;
     },
+    
+    checkIfDeleted(sessionId) {
+      const sessionInHistory = this.chatHistory.some(session => session.sessionId === sessionId);
+      if (!sessionInHistory) {
+        this.canChat = false;
+        this.$root.showWarning(this.i18n.assistantChatIsDeleted);
+      } else {
+        this.canChat = true;
+      }
+    }
   }
 }});
