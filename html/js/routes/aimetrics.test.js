@@ -136,7 +136,7 @@ afterEach(() => {
 test('component data initialization', () => {
   expect(comp.aimetrics).toEqual([]);
   expect(comp.headers).toHaveLength(3);
-  expect(comp.headers[0]).toHaveLength(7); // Users table headers
+  expect(comp.headers[0]).toHaveLength(8); // Users table headers
   expect(comp.headers[1]).toHaveLength(7); // Sessions table headers
   expect(comp.headers[2]).toHaveLength(7); // Messages table headers
   expect(comp.expandedFields).toHaveProperty('1');
@@ -155,7 +155,7 @@ test('component data initialization', () => {
   expect(comp.relativeTimeUnit).toBe(RELATIVE_TIME_HOURS);
   expect(comp.autoRefreshInterval).toBe(0);
   expect(comp.autoRefreshTimer).toBe(null);
-  expect(comp.breadcrumbs).toHaveLength(3);
+  expect(comp.breadcrumbs).toHaveLength(0);
 });
 
 test('created lifecycle hook initializes data', () => {
@@ -1054,15 +1054,17 @@ test('updateBreadcrumbs with userId and sessionId', () => {
   
   comp.updateBreadcrumbs(userId, sessionId);
   
-  expect(comp.breadcrumbs[2].disabled).toBe(false);
-  expect(comp.breadcrumbs[2].to).toEqual({
-    name: 'aimetrics',
-    params: { userId: 'user123', sessionId: 'session456' }
-  });
+  expect(comp.breadcrumbs).toHaveLength(3);
+  expect(comp.breadcrumbs[2].disabled).toBe(true);
+  expect(comp.breadcrumbs[2].to).toBe(null);
   expect(comp.breadcrumbs[1].disabled).toBe(false);
   expect(comp.breadcrumbs[1].to).toEqual({
     name: 'aimetrics',
     params: { userId: 'user123' }
+  });
+  expect(comp.breadcrumbs[0].disabled).toBe(false);
+  expect(comp.breadcrumbs[0].to).toEqual({
+    name: 'aimetrics'
   });
 });
 
@@ -1071,22 +1073,21 @@ test('updateBreadcrumbs with userId only', () => {
   
   comp.updateBreadcrumbs(userId, null);
   
-  expect(comp.breadcrumbs[2].disabled).toBe(true);
-  expect(comp.breadcrumbs[2].to).toBe(null);
-  expect(comp.breadcrumbs[1].disabled).toBe(false);
-  expect(comp.breadcrumbs[1].to).toEqual({
-    name: 'aimetrics',
-    params: { userId: 'user123' }
+  expect(comp.breadcrumbs).toHaveLength(2);
+  expect(comp.breadcrumbs[1].disabled).toBe(true);
+  expect(comp.breadcrumbs[1].to).toBe(null);
+  expect(comp.breadcrumbs[0].disabled).toBe(false);
+  expect(comp.breadcrumbs[0].to).toEqual({
+    name: 'aimetrics'
   });
 });
 
 test('updateBreadcrumbs with no parameters', () => {
   comp.updateBreadcrumbs(null, null);
   
-  expect(comp.breadcrumbs[2].disabled).toBe(true);
-  expect(comp.breadcrumbs[2].to).toBe(null);
-  expect(comp.breadcrumbs[1].disabled).toBe(true);
-  expect(comp.breadcrumbs[1].to).toBe(null);
+  expect(comp.breadcrumbs).toHaveLength(1);
+  expect(comp.breadcrumbs[0].disabled).toBe(true);
+  expect(comp.breadcrumbs[0].to).toBe(null);
 });
 
 // Watcher tests
