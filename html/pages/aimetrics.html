@@ -111,7 +111,7 @@
         <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
           <tr>
             <template v-for="header in columns" :key="header.key">
-              <th :class="[ header.align, {'is-sorted': isSorted(header)} ]" :data-aid="'aimetrics_header_' + header?.value?.toLowerCase()">
+              <th :class="[ header.align, {'is-sorted': isSorted(header)}, rightShiftedHeaders[tableSetting].includes(header?.value) ? 'text-right' : '' ]" :data-aid="'aimetrics_header_' + header?.value?.toLowerCase()">
                 <span @click="toggleSort(header)">
                   {{ header.title }}
                 </span>
@@ -127,11 +127,12 @@
         <template #item="{ item }">
           <tr>
             <td>{{ item.email }}</td>
-            <td>{{ formatCount(item.totalInputTokens) }}</td>
-            <td>{{ formatCount(item.totalOutputTokens) }}</td>
-            <td>{{ formatCount(item.totalCredits) }}</td>
-            <td>{{ formatCount(item.totalSessions) }}</td>
-            <td>{{ formatCount(item.totalMessages) }}</td>
+            <td class="text-right">{{ formatCount(item.totalInputTokens) }}</td>
+            <td class="text-right">{{ formatCount(item.totalOutputTokens) }}</td>
+            <td class="text-right">{{ formatCount(item.totalCredits) }}</td>
+            <td class="text-right">{{ item.creditPercentage }}</td>
+            <td class="text-right">{{ formatCount(item.totalSessions) }}</td>
+            <td class="text-right">{{ formatCount(item.totalMessages) }}</td>
             <td>
               <router-link :to="buildUserLink(item.userId)" class="no-print" style="text-decoration: none; cursor: 'pointer'" data-aid="aimetrics_open_user">
                 <v-icon class="mr-2 theme-icon" :title="i18n.viewSessions">fa-binoculars</v-icon>
@@ -146,7 +147,7 @@
         <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
           <tr>
             <template v-for="header in columns" :key="header.key">
-              <th :class="[ header.align, {'is-sorted': isSorted(header)} ]" :data-aid="'aimetrics_header_' + header?.value?.toLowerCase()">
+              <th :class="[ header.align, {'is-sorted': isSorted(header)}, rightShiftedHeaders[tableSetting].includes(header?.value) ? 'text-right' : '' ]" :data-aid="'aimetrics_header_' + header?.value?.toLowerCase()">
                 <span @click="toggleSort(header)">
                   {{ header.title }}
                 </span>
@@ -163,10 +164,10 @@
           <tr>
             <td>{{ trimTitle(item.title) }}</td>
             <td>{{ $root.formatLocalTimestamp(item.createTime, zone) }}</td>
-            <td>{{ formatCount(item.totalInputTokens) }}</td>
-            <td>{{ formatCount(item.totalOutputTokens) }}</td>
-            <td>{{ formatCount(item.totalCredits) }}</td>
-            <td>{{ formatCount(item.totalMessages) }}</td>
+            <td class="text-right">{{ formatCount(item.totalInputTokens) }}</td>
+            <td class="text-right">{{ formatCount(item.totalOutputTokens) }}</td>
+            <td class="text-right">{{ formatCount(item.totalCredits) }}</td>
+            <td class="text-right">{{ formatCount(item.totalMessages) }}</td>
             <td>
               <router-link :to="buildSessionLink(item.sessionId)" class="no-print" style="text-decoration: none; cursor: 'pointer'" data-aid="aimetrics_open_session">
                 <v-icon class="mr-2 theme-icon" :title="i18n.viewMessages">fa-binoculars</v-icon>
@@ -184,7 +185,7 @@
         <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
           <tr>
             <template v-for="header in columns" :key="header.key">
-              <th :class="[ header.align, {'is-sorted': isSorted(header)} ]" :data-aid="'aimetrics_header_' + header?.value?.toLowerCase()">
+              <th :class="[ header.align, {'is-sorted': isSorted(header)}, rightShiftedHeaders[tableSetting].includes(header?.value) ? 'text-right' : '' ]" :data-aid="'aimetrics_header_' + header?.value?.toLowerCase()">
                 <span @click="toggleSort(header)">
                   {{ header.title }}
                 </span>
@@ -208,9 +209,9 @@
             <td>{{ item.role === 'assistant' ? trimTitle(stripHtml(item.expandMessage)) : trimTitle(item.expandMessage) }}</td>
             <td>{{ $root.formatLocalTimestamp(item.createTime, zone) }}</td>
             <td>{{ item.role }}</td>
-            <td>{{ item.inputTokens ? formatCount(item.inputTokens) : '' }}</td>
-            <td>{{ item.outputTokens ? formatCount(item.outputTokens) : '' }}</td>
-            <td>{{ item.credits ? formatCount(item.credits) : '' }}</td>
+            <td class="text-right">{{ item.inputTokens ? formatCount(item.inputTokens) : '' }}</td>
+            <td class="text-right">{{ item.outputTokens ? formatCount(item.outputTokens) : '' }}</td>
+            <td class="text-right">{{ item.credits ? formatCount(item.credits) : '' }}</td>
           </tr>
         </template>
         <template #expanded-row="{ item }">

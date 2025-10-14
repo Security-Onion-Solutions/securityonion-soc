@@ -1674,7 +1674,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       const sessionInHistory = this.chatHistory.some(session => session.sessionId === sessionId);
       if (!sessionInHistory) {
         this.canChat = false;
-        this.$root.showError(this.i18n.assistantChatIsDeleted);
+        this.$root.showWarning(this.i18n.assistantChatIsDeleted);
       } else {
         this.canChat = true;
       }

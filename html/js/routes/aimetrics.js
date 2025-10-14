@@ -17,6 +17,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         { title: this.$root.i18n.totalInputTokens, value: 'totalInputTokens' },
         { title: this.$root.i18n.totalOutputTokens, value: 'totalOutputTokens' },
         { title: this.$root.i18n.totalCredits, value: 'totalCredits' },
+        { title: this.$root.i18n.creditPercentage, value: 'creditPercentage' },
         { title: this.$root.i18n.totalSessions, value: 'totalSessions' },
         { title: this.$root.i18n.totalMessages, value: 'totalMessages' },
         { title: this.$root.i18n.actions },
@@ -49,6 +50,11 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         'usage': this.$root.i18n.usage,
       },
     },
+    rightShiftedHeaders: [
+      ['totalInputTokens', 'totalOutputTokens', 'totalCredits', 'creditPercentage', 'totalSessions', 'totalMessages'],
+      ['totalInputTokens', 'totalOutputTokens', 'totalCredits', 'totalMessages'],
+      ['inputTokens', 'outputTokens', 'credits'],
+    ],
     sortBy0: [{ key: 'totalCredits', order: 'desc' }],
     sortBy1: [{ key: 'createTime', order: 'desc' }],
     sortBy2: [{ key: 'createTime', order: 'desc' }],
@@ -74,23 +80,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
     autoRefreshIntervals: [],
     autoRefreshTimer: null,
     assistantEnabled: false,
-    breadcrumbs: [
-      {
-        title: 'Users',
-        disabled: false,
-        to: { name: 'aimetrics' },
-      },
-      {
-        title: 'Sessions',
-        disabled: true,
-        to: null,
-      },
-      {
-        title: 'Messages',
-        disabled: true,
-        to: null,
-      },
-    ],
+    breadcrumbs: [],
   }},
   created() {
     this.relativeTimeUnits = [
@@ -237,7 +227,12 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
             }
           });
           this.aimetrics = response.data;
+          let currTotal = 0;
+          this.aimetrics.forEach(item => {
+            currTotal += item.totalCredits;
+          });
           this.aimetrics.forEach(async item => {
+            item.creditPercentage = this.calculateCreditPercentage(item.totalCredits, currTotal);
             item.email = await this.lookupSocId(item.userId);
           });
         }
@@ -453,19 +448,49 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
     },
     updateBreadcrumbs(currUserId, currSessionId) {
       if (currUserId && currSessionId) {
-        this.breadcrumbs[2].disabled = false;
-        this.breadcrumbs[2].to = { name: 'aimetrics', params: { userId: currUserId, sessionId: currSessionId } };
+        this.breadcrumbs = [
+          {
+            title: 'Users',
+            disabled: false,
+            to: { name: 'aimetrics' },
+          },
+          {
+            title: 'Sessions',
+            disabled: false,
+            to: { name: 'aimetrics', params: { userId: currUserId } },
+          },
+          {
+            title: 'Messages',
+            disabled: true,
+            to: null,
+          },
+        ];
+      } else if (currUserId) {
+        this.breadcrumbs = [
+          {
+            title: 'Users',
+            disabled: false,
+            to: { name: 'aimetrics' },
+          },
+          {
+            title: 'Sessions',
+            disabled: true,
+            to: null,
+          },
+        ];
       } else {
-        this.breadcrumbs[2].disabled = true;
-        this.breadcrumbs[2].to = null;
+        this.breadcrumbs = [
+          {
+            title: 'Users',
+            disabled: true,
+            to: null,
+          },
+        ];
       }
-      if (currUserId) {
-        this.breadcrumbs[1].disabled = false;
-        this.breadcrumbs[1].to = { name: 'aimetrics', params: { userId: currUserId } };
-      } else {
-        this.breadcrumbs[1].disabled = true;
-        this.breadcrumbs[1].to = null;
-      }
-    }
+    },
+    calculateCreditPercentage(credits, total) {
+      let percentage = (credits / total) * 100;
+      return `${percentage.toFixed(1)}%`;
+    },
   }
 }});

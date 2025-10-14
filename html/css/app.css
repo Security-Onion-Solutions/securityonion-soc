@@ -1387,3 +1387,7 @@ ul ul ul {
   font-size: 0.8em;
   vertical-align: middle;
 }
+
+.text-right {
+  text-align: right !important;
+}
