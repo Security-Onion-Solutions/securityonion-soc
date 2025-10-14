@@ -168,6 +168,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       if (this.currentChatId !== urlSessionId) {
         this.clearStreamingStates();
       }
+
+      if (!this.assistantEnabled) {
+        return;
+      }
       
       if (urlSessionId) {
         // Try to load chat from backend first

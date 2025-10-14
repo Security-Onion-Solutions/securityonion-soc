@@ -73,6 +73,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
     autoRefreshInterval: 0,
     autoRefreshIntervals: [],
     autoRefreshTimer: null,
+    assistantEnabled: false,
     breadcrumbs: [
       {
         title: 'Users',
@@ -119,10 +120,12 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       { title: this.$root.i18n.interval24h, value: 86400 },
     ];
     this.zone = moment.tz.guess();
-    this.loadData();
   },
   beforeUnmount() {
     this.stopRefreshTimer();
+  },
+  mounted() {
+    this.$root.loadParameters('assistant', this.initAssistant);
   },
   watch: {
     '$route': 'loadData',
@@ -133,6 +136,12 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
     'autoRefreshInterval': 'resetRefreshTimer',
   },
   methods: {
+    async initAssistant(params) {
+      this.assistantEnabled = params["enabled"] && this.$root.isLicensed('oai');
+      if (this.assistantEnabled) {
+        this.loadData();
+      }
+    },
     autoRefreshIntervalChanged() {
       this.saveSetting('autoRefreshInterval', this.autoRefreshInterval, 0);
     },
@@ -161,6 +170,10 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       const currSessionId = this.$route.params.sessionId;
       
       this.loadLocalSettings();
+
+      if (!this.assistantEnabled) {
+        return;
+      }
       // Calculate date range
       let range = this.dateRange;
       if (this.relativeTimeEnabled || range === '') {

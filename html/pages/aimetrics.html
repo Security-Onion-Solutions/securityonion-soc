@@ -1,4 +1,4 @@
-<v-container fluid data-aid="aimetrics_screen">
+<v-container v-if="assistantEnabled" fluid data-aid="aimetrics_screen">
   <v-row>
     <v-col cols="12" lg="3">
       <h2 v-text="i18n.aiMetrics"></h2>
@@ -224,4 +224,22 @@
       </v-data-table>
     </v-col>
   </v-row>
+</v-container>
+<v-container v-else-if="$root.isLicensed('oai')" fluid data-aid="assistant_disabled">
+	<div style="
+		align-items: center;
+		margin: 0;
+		display: flex;
+		min-height: 50vh;
+		justify-content: center;
+	">{{ i18n.assistantDisabled }}</div>
+</v-container>
+<v-container v-else fluid data-aid="assistant_advertisment">
+	<div v-html="i18n.assistantAdvertisement" style="
+		align-items: center;
+		margin: 0;
+		display: flex;
+		min-height: 50vh;
+		justify-content: center;
+	"></div>
 </v-container>
