@@ -71,7 +71,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.thresholdColorRatioMax = params["thresholdColorRatioMax"];
       this.lowBalanceColorAlert = params["lowBalanceColorAlert"];
 
-      this.$root.showDisclaimer(this.i18n.assistantDisclaimerMessage, this.i18n.assistantDisclaimerTitle, this.i18n.getStarted, 'so-data-retention-disclaimer');
+      this.$root.showDisclaimer(this.i18n.assistantDisclaimerMessage, this.i18n.assistantDisclaimerTitle, this.i18n.getStarted, 'settings.disclaimer.acknowledged.onionai');
       
       if (this.assistantEnabled) {
         if (!this.$root.disclaimer) {
@@ -153,13 +153,13 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     saveCurrentChatId() {
       if (this.currentChatId) {
-        localStorage.setItem('so-current-chat-id', this.currentChatId);
+        localStorage.setItem('settings.assistant.currentChatId', this.currentChatId);
       } else {
-        localStorage.removeItem('so-current-chat-id');
+        localStorage.removeItem('settings.assistant.currentChatId');
       }
     },
     loadCurrentChatId() {
-      return localStorage.getItem('so-current-chat-id');
+      return localStorage.getItem('settings.assistant.currentChatId');
     },
     async handleRouteSessionId() {
       const urlSessionId = this.$route.params.sessionId;
@@ -1611,7 +1611,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     
 
-    // Generic setting save method (following hunt.js pattern)
+    // Generic setting save method
     saveSetting(name, value, defaultValue = null) {
       var item = 'settings.assistant.' + name;
       if (defaultValue == null || value != defaultValue) {
@@ -1621,7 +1621,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }
     },
 
-    // Save all local settings (following hunt.js pattern)
+    // Save all local settings
     saveLocalSettings() {
       this.saveSetting('increaseMaxContextThreshold', this.increaseMaxContextThreshold, false);
       this.saveSetting('restoreLastActive', this.restoreLastActive, false);
@@ -1629,7 +1629,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.saveSetting('showChatHistory', this.showChatHistory, true);
     },
 
-    // Load all local settings (following hunt.js pattern)
+    // Load all local settings
     loadLocalSettings() {
       var prefix = 'settings.assistant';
       if (localStorage[prefix + '.increaseMaxContextThreshold']) this.increaseMaxContextThreshold = localStorage[prefix + '.increaseMaxContextThreshold'] == 'true';
