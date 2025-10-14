@@ -306,7 +306,15 @@
 		display: flex;
 		min-height: 50vh;
 		justify-content: center;
-	">{{ i18n.assistantDisabled }}</div>
+    	gap: 8px;
+	">
+		<div>{{ i18n.assistantDisabled }}</div>
+		<div>
+			<router-link :to="{name: 'config', query: {s: 'soc.config.server.client.assistant.enabled'}}" class="no-print" style="text-decoration: none; cursor: 'pointer'" data-aid="assistant_config_entry_enabled">
+				<v-icon class="mr-2 theme-icon" :title="i18n.visitConfigEntry">fa-cog</v-icon>
+			</router-link>
+		</div>
+	</div>
 </v-container>
 
 <v-container v-else fluid data-aid="assistant_advertisment">

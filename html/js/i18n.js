@@ -1167,6 +1167,7 @@ const i18n = {
       viewMessages: 'View Messages',
       viewResults: 'View Results',
       viewSessions: 'View Sessions',
+      visitConfigEntry: 'Visit Config Entry',
       vrt: 'Virtualization',
       webauthn: 'Security Keys (WebAuthn / PassKey)',
       webauthnActive: 'Webauthn / Security Keys Active',
