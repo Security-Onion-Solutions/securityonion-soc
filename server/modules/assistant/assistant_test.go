@@ -43,6 +43,123 @@ func TestAssistantCoordinator_PrerequisiteModules(t *testing.T) {
 	assert.Nil(t, modules)
 }
 
+func TestAssistantCoordinator_Init(t *testing.T) {
+	// an expired test key for buildApiKey
+	license := `H4sIAAziJWgC/z2NW4+iQBSE/8qEV2YiCC3gGzcvKALSoONms2mgQZSbNFc3+98XZ5JJ6qFO6qs6fykcxzhs0g5TS2rOzMEHAz5YABlm+aUL9U7hoUpr1KRl8cMsPlgezrklkCa9mALlrwUXh22dNuObVUz4m12XU5ZGU5LUKEzxnwaTJkPBn9cMA1gwxVka4oLgV339Bb3Bb2jKYoyatsaEWv76/U61BNeTZaZ3ZYS/HSlDr86m7kRHqEE/B0mT4qs8nbuw6Ub6wm2eUb6wNUmQK+Q/R77J284zPDXT+dPdcRcFOEjrDd5Vea/LKwuuDgBZUazDLpk57PFuNX3VPZkTUK0EtIdkmHf0eNKGWrwLW6vnxj4k3W5XpAYnMwa5XirVZnucc9sWbV1QrfW4T7vOPaQsvc8VDrXPvSL4RyHbrOJS05HoJP1Je9SEjVMZGJxipot6iLz8qNKFMhb051otF0JM3w4mHYnyeYBzwUEQDHQYHUS1gFgY1MZktoocKMFKSmlxDe73HMbXlSQrSsjbZ4ueXc+fkOgqv9YJseX98NgwXDK2+Ix6ceRZfy88ofGQLG8UzN3xiFwZ841emhpub+LNWxCvz/Kszcx2P7K+thPVI6NwQUcLRmhZCdekz+21daPOCPNNU0vZfjazNdX0g4VuwCowUNQn5AIln547vL+y1xrcOkiaH9LHg+d7/tnVW77zN7JK63UYeD68MOx4+RRNQcCVfXYDseP5EpQKgSa4XE+wthTAtIRd6WJgtqHjHg0mvzm3ZsfZ1L//d3LBEekCAAA=`
+	licensing.Init(license)
+
+	testCases := []struct {
+		name                         string
+		config                       map[string]interface{}
+		expectedApiUrl               string
+		expectedHealthTimeoutSeconds int
+		expectedSystemPromptAddendum string
+		expectError                  bool
+		validateToolConfig           bool
+	}{
+		{
+			name:                         "default config",
+			config:                       map[string]interface{}{},
+			expectedApiUrl:               DEFAULT_APIURL,
+			expectedHealthTimeoutSeconds: DEFAULT_HEALTH_TIMEOUT_SECONDS,
+			expectedSystemPromptAddendum: DEFAULT_SYSTEM_PROMPT_ADDENDUM,
+			expectError:                  false,
+			validateToolConfig:           true,
+		},
+		{
+			name: "custom apiUrl",
+			config: map[string]interface{}{
+				"apiUrl": "https://custom.api.com",
+			},
+			expectedApiUrl:               "https://custom.api.com",
+			expectedHealthTimeoutSeconds: DEFAULT_HEALTH_TIMEOUT_SECONDS,
+			expectedSystemPromptAddendum: DEFAULT_SYSTEM_PROMPT_ADDENDUM,
+			expectError:                  false,
+			validateToolConfig:           true,
+		},
+		{
+			name: "custom healthTimeoutSeconds",
+			config: map[string]interface{}{
+				"healthTimeoutSeconds": float64(10),
+			},
+			expectedApiUrl:               DEFAULT_APIURL,
+			expectedHealthTimeoutSeconds: 10,
+			expectedSystemPromptAddendum: DEFAULT_SYSTEM_PROMPT_ADDENDUM,
+			expectError:                  false,
+			validateToolConfig:           true,
+		},
+		{
+			name: "custom systemPromptAddendum",
+			config: map[string]interface{}{
+				"systemPromptAddendum": "Custom addendum text",
+			},
+			expectedApiUrl:               DEFAULT_APIURL,
+			expectedHealthTimeoutSeconds: DEFAULT_HEALTH_TIMEOUT_SECONDS,
+			expectedSystemPromptAddendum: "Custom addendum text",
+			expectError:                  false,
+			validateToolConfig:           true,
+		},
+		{
+			name: "systemPromptAddendum exceeds max length",
+			config: map[string]interface{}{
+				"systemPromptAddendum":          strings.Repeat("A", 60000),
+				"systemPromptAddendumMaxLength": float64(1000),
+			},
+			expectedApiUrl:               DEFAULT_APIURL,
+			expectedHealthTimeoutSeconds: DEFAULT_HEALTH_TIMEOUT_SECONDS,
+			expectedSystemPromptAddendum: strings.Repeat("A", 1000),
+			expectError:                  false,
+			validateToolConfig:           true,
+		},
+		{
+			name: "all custom config",
+			config: map[string]interface{}{
+				"apiUrl":               "https://another.api.com",
+				"healthTimeoutSeconds": float64(15),
+				"systemPromptAddendum": "Another custom addendum",
+			},
+			expectedApiUrl:               "https://another.api.com",
+			expectedHealthTimeoutSeconds: 15,
+			expectedSystemPromptAddendum: "Another custom addendum",
+			expectError:                  false,
+			validateToolConfig:           true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := &server.Server{}
+			ac := NewAssistantCoordinator(srv)
+
+			err := ac.Init(tc.config)
+
+			if tc.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedApiUrl, ac.apiUrl)
+				assert.Equal(t, tc.expectedHealthTimeoutSeconds, ac.healthTimeoutSeconds)
+				assert.Equal(t, tc.expectedSystemPromptAddendum, ac.systemPromptAddendum)
+				assert.Equal(t, ac, srv.AssistantManager)
+				assert.NotNil(t, ac.FunctionLibrary)
+				assert.Equal(t, knownTools, ac.FunctionLibrary)
+				assert.NotEmpty(t, ac.apiKey)
+				assert.Contains(t, ac.apiKey, "sk-")
+
+				if tc.validateToolConfig {
+					assert.NotNil(t, ac.toolConfig)
+					// Verify the tool config is valid JSON
+					var toolConfig model.ToolConfig
+					err = json.Unmarshal(ac.toolConfig, &toolConfig)
+					assert.NoError(t, err)
+					assert.NotNil(t, toolConfig.Tools)
+					assert.Contains(t, toolConfig.ToolChoice, "auto")
+				}
+			}
+		})
+	}
+}
+
 func TestAssistantCoordinator_StartStopIsRunning(t *testing.T) {
 	ac := &AssistantCoordinator{}
 
@@ -496,10 +613,30 @@ func TestAssistantCoordinator_ChatStream(t *testing.T) {
 			},
 			apiUrl: "https://api.example.com",
 			setupMocks: func(mockIO *detectionsmock.MockIOManager) {
-				mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(&http.Response{
-					StatusCode: 200,
-					Body:       io.NopCloser(strings.NewReader("data: streaming response")),
-				}, nil)
+				// mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(&http.Response{
+				// 	StatusCode: 200,
+				// 	Body:       io.NopCloser(strings.NewReader("data: streaming response")),
+				// }, nil)
+				mockIO.EXPECT().MakeRequest(gomock.Any(), true).DoAndReturn(func(req *http.Request, stream bool) (*http.Response, error) {
+					outgoingBody, err := io.ReadAll(req.Body)
+					assert.NoError(t, err)
+
+					cr := &model.ChatRequest{}
+
+					err = json.Unmarshal(outgoingBody, cr)
+					assert.NoError(t, err)
+
+					assert.Len(t, cr.Messages, 1)
+					assert.True(t, cr.Stream)
+					assert.Equal(t, "addendum", cr.SystemAppend)
+					assert.NotEmpty(t, cr.ToolConfig)
+					assert.Equal(t, "test-user", cr.UserId)
+
+					return &http.Response{
+						StatusCode: 200,
+						Body:       io.NopCloser(strings.NewReader("data: streaming response")),
+					}, nil
+				})
 			},
 			expectError: false,
 		},
@@ -534,9 +671,10 @@ func TestAssistantCoordinator_ChatStream(t *testing.T) {
 			tc.setupMocks(mockIO)
 
 			ac := &AssistantCoordinator{
-				apiUrl:     tc.apiUrl,
-				IOManager:  mockIO,
-				toolConfig: []byte(`{"tools": [], "tool_choice": {"auto": {}}}`),
+				apiUrl:               tc.apiUrl,
+				IOManager:            mockIO,
+				toolConfig:           []byte(`{"tools": [], "tool_choice": {"auto": {}}}`),
+				systemPromptAddendum: "addendum",
 				srv: &server.Server{
 					Host: &web.Host{Version: "1.0.0"},
 				},
