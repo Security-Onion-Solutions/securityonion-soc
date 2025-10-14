@@ -354,7 +354,7 @@ test('loadData with no route parameters loads users data', async () => {
     params: {
       format: comp.$root.i18n.timePickerSample,
       range: expect.any(String),
-      timezone: comp.zone,
+      zone: comp.zone,
     }
   });
   expect(comp.aimetrics).toHaveLength(1);
@@ -405,7 +405,7 @@ test('loadData with userId parameter loads sessions data', async () => {
     params: {
       format: comp.$root.i18n.timePickerSample,
       range: expect.any(String),
-      timezone: comp.zone,
+      zone: comp.zone,
     }
   });
   expect(comp.aimetrics).toHaveLength(1);
@@ -459,7 +459,7 @@ test('loadData with userId and sessionId parameters loads messages data', async 
     params: {
       format: comp.$root.i18n.timePickerSample,
       range: expect.any(String),
-      timezone: comp.zone,
+      zone: comp.zone,
     }
   });
   expect(comp.aimetrics).toHaveLength(2);
