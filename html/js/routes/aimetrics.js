@@ -4,6 +4,10 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
+const TABLE_SETTING_USERS = 0;
+const TABLE_SETTING_SESSIONS = 1;
+const TABLE_SETTING_MESSAGES = 2;
+
 loadPageTemplate('page-aimetrics', 'pages/aimetrics.html');
 
 routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', component: {
@@ -60,7 +64,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
     sortBy2: [{ key: 'createTime', order: 'desc' }],
     itemsPerPage: 10,
     itemsPerPageOptions: [10,50,250,1000],
-    tableSetting: 0, // 0: users 1: sessions 2: messages
+    tableSetting: TABLE_SETTING_USERS, // 0: users 1: sessions 2: messages
     expanded: [],
     expandedHeaders: [
       { title: "key", value: "key" },
@@ -176,7 +180,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       this.updateBreadcrumbs(currUserId, currSessionId);
       try {
         if (currSessionId && currUserId) {
-          this.tableSetting = 2;
+          this.tableSetting = TABLE_SETTING_MESSAGES;
           this.$root.adjustSubgridColVisibility(this.headers[this.tableSetting]);
           const response = await this.$root.papi.get(`/assistant/admin/${currUserId}/sessions/${currSessionId}/history`, {
             params: {
@@ -200,7 +204,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
             item.expandMessage = this.formatExpandMessage(item);
           });
         } else if (currUserId) {
-          this.tableSetting = 1;
+          this.tableSetting = TABLE_SETTING_SESSIONS;
           this.$root.adjustSubgridColVisibility(this.headers[this.tableSetting]);
           const response = await this.$root.papi.get(`/assistant/admin/${currUserId}/sessions`, {
             params: {
@@ -217,7 +221,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
             item.totalMessages = item.usage.totalMessages;
           });
         } else {
-          this.tableSetting = 0;
+          this.tableSetting = TABLE_SETTING_USERS;
           this.$root.adjustSubgridColVisibility(this.headers[this.tableSetting]);
           const response = await this.$root.papi.get('/assistant/admin/stats', {
             params: {
