@@ -63,7 +63,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
     sortBy2: [{ key: 'createTime', order: 'desc' }],
     itemsPerPage: 10,
     itemsPerPageOptions: [10,50,250,1000],
-    tableSetting: this.TABLE_SETTING_USERS, // 0: users 1: sessions 2: messages
+    tableSetting: 0, // 0: users 1: sessions 2: messages
     expanded: [],
     expandedHeaders: [
       { title: "key", value: "key" },
