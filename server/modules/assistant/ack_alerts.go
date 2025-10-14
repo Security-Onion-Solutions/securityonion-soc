@@ -32,8 +32,10 @@ func (t *AckAlertsTool) GetName() string {
 
 func (t *AckAlertsTool) GetDescription() string {
 	return `Acknowledge (A.K.A. ack) alerts in Security Onion by querying them with an OQL query.
-	If you use wildcards in your OQL query, do not wrap the value in quotes. If date_range is specified,
-	then date_range_format is required.`
+If you use wildcards in your OQL query, do not wrap the value in quotes. If date_range is specified,
+then date_range_format is required. If multiple alerts are difficult to gather in one query, try
+OR'ing all the Ids together in the search_filter. When querying by id, use _id instead of soc_id
+as the field. For this tool, all dates are absolute.`
 }
 
 func (t *AckAlertsTool) GetSchema() model.JSONSchema {
@@ -51,11 +53,11 @@ func (t *AckAlertsTool) GetSchema() model.JSONSchema {
 				},
 				"date_range": {
 					Type:        "string",
-					Description: `Date range for searching events (e.g., "2024/12/03 02:31:35 PM - 2024/12/04 02:31:35 PM"). If specified, a date_range_format is required.`,
+					Description: `Date range for searching events (e.g., "2024/12/03 02:31:35 PM - 2024/12/04 02:31:35 PM"). The range must contain two dates. Do not specify a timezone or any offsets in this field. If this field is specified, a date_range_format is required.`,
 				},
 				"date_range_format": {
 					Type:        "string",
-					Description: `Format of the date range (default: "2006/01/02 3:04:05 PM"). Required when a date_range is provided.`,
+					Description: `Format of the date range (default: "2006/01/02 3:04:05 PM"). The format must be specified using Go's time package's reference layout format. "Relative" is not an acceptable format. Required when a date_range is provided.`,
 				},
 				"timezone": {
 					Type:        "string",
