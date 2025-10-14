@@ -1157,3 +1157,25 @@ test('getSettingLink', () => {
   const link2 = comp.getSettingLink(setting);
   expect(link2).toBe('https://example.com/#/config?s=test.setting&a=0');
 });
+
+test('notifyChangedSetting', () => {
+  // Test adding new module
+  comp.changedModules = [];
+  const setting = { id: 'module1.setting1' };
+  comp.notifyChangedSetting(setting);
+  expect(comp.changedModules).toEqual(['module1']);
+
+  // Test adding another new module
+  const setting2 = { id: 'module2.setting2' };
+  comp.notifyChangedSetting(setting2);
+  expect(comp.changedModules).toEqual(['module1', 'module2']);
+
+  // Test adding duplicate module (should not add again)
+  comp.notifyChangedSetting(setting);
+  expect(comp.changedModules).toEqual(['module1', 'module2']);
+
+  // Test sorting after adding a module that comes first alphabetically
+  const setting3 = { id: 'a_module.setting' };
+  comp.notifyChangedSetting(setting3);
+  expect(comp.changedModules).toEqual(['a_module', 'module1', 'module2']);
+});
