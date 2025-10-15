@@ -218,7 +218,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         this.$root.startLoading();
         try {
           // Update URL to reflect the current session
-          this.updateUrlWithSessionId(lastChatId);
+          await this.updateUrlWithSessionId(lastChatId);
           return;
         } catch (error) {
           this.$root.showError(this.i18n.assistantUnableToRestoreLastActive + ': ' + error.message);
@@ -267,7 +267,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         if (this.currentChatId === chat.sessionId) {
           await this.loadChatFromBackend(chat.sessionId);
         }
-        this.updateUrlWithSessionId(chat.sessionId);
+        await this.updateUrlWithSessionId(chat.sessionId);
 
       } catch (error) {
         this.$root.showError(this.i18n.assistantUnableToLoadChat + ': ' + error.message);
@@ -310,10 +310,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       // Navigate to chat without session ID
       this.$router.push({ name: 'assistant' });
     },
-    updateUrlWithSessionId(sessionId) {
+    async updateUrlWithSessionId(sessionId) {
       // Only update URL if it's different from current
       if (this.$route.params.sessionId !== sessionId) {
-        this.$router.replace({ name: 'assistant', params: { sessionId: sessionId } });
+        await this.$router.replace({ name: 'assistant', params: { sessionId: sessionId } });
       }
     },
     async sendMessage() {
@@ -344,7 +344,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       
       // Update URL with session ID if not already set - do this BEFORE the API call
       if (this.currentChatId && !this.$route.params.sessionId) {
-        this.updateUrlWithSessionId(this.currentChatId);
+        await this.updateUrlWithSessionId(this.currentChatId);
         // Wait for the route change to complete before proceeding
         await this.$nextTick();
       }
@@ -371,7 +371,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       try {
         // Call the actual AI API - session ID is already set
         await this.callAIAPI(messageText);
-        
+
         // Refresh chat history to show the latest session
         await this.loadStoredChats();
       } catch (error) {
