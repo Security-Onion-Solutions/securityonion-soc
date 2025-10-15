@@ -695,6 +695,7 @@ routes.push({
           }
 
           this.countCustomized();
+          this.notifyChangedSetting(setting);
 
           // Show update to user
           this.$root.showTip(this.i18n.settingDeleted);
@@ -772,9 +773,7 @@ routes.push({
           }
 
           this.countCustomized();
-
-          this.changedModules.push(setting.id.split(".")[0]);
-          this.changedModules = [...new Set(this.changedModules)].sort();
+          this.notifyChangedSetting(setting);
         } catch (error) {
           var msg = this.i18n.settingSaveError;
           if (error.response && error.response.data && error.response.data.startsWith("ERROR_")) {
@@ -784,6 +783,14 @@ routes.push({
         }
         this.$root.stopLoading();
       }
+    },
+    notifyChangedSetting(setting) {
+      const module = setting.id.split(".")[0];
+
+      if (module && !this.changedModules.includes(module)) {
+        this.changedModules.push(module);
+      }
+      this.changedModules = [...new Set(this.changedModules)].sort();
     },
     async sync() {
       this.$root.startLoading();
