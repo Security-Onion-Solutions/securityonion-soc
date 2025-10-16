@@ -35,9 +35,12 @@ func TestAckAlertsTool_GetSchema(t *testing.T) {
 	assert.Equal(t, "string", schema.Json.Properties["search_filter"].Type)
 	assert.Contains(t, schema.Json.Properties, "event_filter")
 	assert.Equal(t, "object", schema.Json.Properties["event_filter"].Type)
-	assert.Contains(t, schema.Json.Properties, "date_range")
-	assert.Contains(t, schema.Json.Properties, "date_range_format")
-	assert.Contains(t, schema.Json.Properties, "timezone")
+	assert.Contains(t, schema.Json.Properties, "range_start")
+	assert.Equal(t, "string", schema.Json.Properties["range_start"].Type)
+	assert.Contains(t, schema.Json.Properties, "range_end")
+	assert.Equal(t, "string", schema.Json.Properties["range_end"].Type)
+	assert.Contains(t, schema.Json.Properties, "range_format")
+	assert.Equal(t, "string", schema.Json.Properties["range_format"].Type)
 	assert.Contains(t, schema.Json.Required, "search_filter")
 }
 
@@ -48,11 +51,9 @@ func TestAckAlertsTool_Execute(t *testing.T) {
 		mockResults             *model.EventUpdateResults
 		mockError               error
 		expectedResult          string
-		expectedError           bool
-		expectedEventFilter     map[string]any
-		expectedDateRange       string
-		expectedDateRangeFormat string
-		expectedTimezone        string
+		expectedError       bool
+		expectedEventFilter map[string]any
+		expectDateRange     bool
 	}{
 		{
 			name:   "successful acknowledgment with search filter",
@@ -107,28 +108,31 @@ func TestAckAlertsTool_Execute(t *testing.T) {
 			expectedEventFilter: map[string]any{"rule.uuid": "test-uuid"},
 		},
 		{
-			name:          "with date range but no date_range_format",
-			params:        `{"search_filter": "soc_id:alert-123", "date_range": "2024/12/03 02:31:35 PM - 2024/12/04 02:31:35 PM"}`,
-			expectedError: true,
-		},
-		{
-			name:   "with date range and date_range_format",
-			params: `{"search_filter": "soc_id:alert-123", "date_range": "2024/12/03 02:31:35 PM - 2024/12/04 02:31:35 PM", "date_range_format": "2006/01/02 3:04:05 PM"}`,
-			mockResults: &model.EventUpdateResults{
-				UpdatedCount: 2,
-			},
-			expectedResult:          "2 eligible alerts were successfully acknowledged",
-			expectedDateRange:       "2024/12/03 02:31:35 PM - 2024/12/04 02:31:35 PM",
-			expectedDateRangeFormat: "2006/01/02 3:04:05 PM",
-		},
-		{
-			name:   "with timezone",
-			params: `{"search_filter": "soc_id:alert-123", "timezone": "America/New_York"}`,
+			name:   "with range_start only (treated as relative)",
+			params: `{"search_filter": "soc_id:alert-123", "range_start": "-2h"}`,
 			mockResults: &model.EventUpdateResults{
 				UpdatedCount: 1,
 			},
-			expectedResult:   "1 eligible alert were successfully acknowledged",
-			expectedTimezone: "America/New_York",
+			expectedResult:  "1 eligible alert were successfully acknowledged",
+			expectDateRange: true,
+		},
+		{
+			name:   "with range_start, range_end and range_format",
+			params: `{"search_filter": "soc_id:alert-123", "range_start": "2024/12/03 02:31:35 PM", "range_end": "2024/12/04 02:31:35 PM", "range_format": "2006/01/02 3:04:05 PM"}`,
+			mockResults: &model.EventUpdateResults{
+				UpdatedCount: 2,
+			},
+			expectedResult:  "2 eligible alerts were successfully acknowledged",
+			expectDateRange: true,
+		},
+		{
+			name:   "with relative date range",
+			params: `{"search_filter": "soc_id:alert-123", "range_start": "-1h", "range_end": "now"}`,
+			mockResults: &model.EventUpdateResults{
+				UpdatedCount: 1,
+			},
+			expectedResult:  "1 eligible alert were successfully acknowledged",
+			expectDateRange: true,
 		},
 	}
 
@@ -191,16 +195,10 @@ func TestAckAlertsTool_Execute(t *testing.T) {
 				}
 
 				// Verify date range fields if specified
-				if tc.expectedDateRange != "" {
-					assert.Equal(t, tc.expectedDateRange, criteria.DateRange)
-				}
-
-				if tc.expectedDateRangeFormat != "" {
-					assert.Equal(t, tc.expectedDateRangeFormat, criteria.DateRangeFormat)
-				}
-
-				if tc.expectedTimezone != "" {
-					assert.Equal(t, tc.expectedTimezone, criteria.Timezone)
+				if tc.expectDateRange {
+					assert.NotEmpty(t, criteria.DateRange)
+					assert.Equal(t, "2006/01/02 3:04:05 PM", criteria.DateRangeFormat)
+					assert.Equal(t, "UTC", criteria.Timezone)
 				}
 			}
 
@@ -293,9 +291,9 @@ func TestAckAlertsTool_Execute_ComplexQuery(t *testing.T) {
 	params := `{
 		"search_filter": "rule.name:*phishing* AND event.severity:high",
 		"event_filter": {"source.ip": "192.168.1.1", "destination.port": 443},
-		"date_range": "2024/12/01 12:00:00 PM - 2024/12/07 12:00:00 PM",
-		"date_range_format": "2006/01/02 3:04:05 PM",
-		"timezone": "America/New_York"
+		"range_start": "2024/12/01 12:00:00 PM",
+		"range_end": "2024/12/07 12:00:00 PM",
+		"range_format": "2006/01/02 3:04:05 PM"
 	}`
 	result, err := tool.Execute(ctx, mockServer, params)
 
@@ -310,7 +308,7 @@ func TestAckAlertsTool_Execute_ComplexQuery(t *testing.T) {
 	assert.Equal(t, "(tags:alert AND NOT event.acknowledged:true AND NOT event.escalated:true) AND (rule.name:*phishing* AND event.severity:high)", criteria.SearchFilter)
 	assert.Equal(t, "192.168.1.1", criteria.EventFilter["source.ip"])
 	assert.Equal(t, float64(443), criteria.EventFilter["destination.port"])
-	assert.Equal(t, "2024/12/01 12:00:00 PM - 2024/12/07 12:00:00 PM", criteria.DateRange)
+	assert.NotEmpty(t, criteria.DateRange)
 	assert.Equal(t, "2006/01/02 3:04:05 PM", criteria.DateRangeFormat)
-	assert.Equal(t, "America/New_York", criteria.Timezone)
+	assert.Equal(t, "UTC", criteria.Timezone)
 }
