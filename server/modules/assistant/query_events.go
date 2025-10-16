@@ -44,7 +44,10 @@ func (t *QueryEventsTool) GetDescription() string {
 		"- Examples for NON-GROUPED queries (individual events):\n" +
 		"  - **\"Show me the latest 5 alerts\"**: `{\"query\": \"tags:alert\", \"limit\": 5}`\n" +
 		"  - **\"List recent SSH connections\"**: `{\"query\": \"tags:ssh\", \"limit\": 10}`\n" +
-		"  - **\"Show alert details for ID X\"**: `{\"query\": \"tags:alert AND log.id.uid:\\\"X\\\"\", \"limit\": 1}`"
+		"  - **\"Show alert details for ID X\"**: `{\"query\": \"tags:alert AND log.id.uid:\\\"X\\\"\", \"limit\": 1}`" +
+		"- Examples for wild cards:\n" +
+		"  - Search terms cannot begin with a wildcard (e.g., `*xyz` the wildcard is ignored, but `xyz*` is valid)\n" +
+		"  - If you use wildcards, do not wrap the value in quotes, instead use parentheses (e.g., `rule.name:(A B*)` is valid, but `rule.name:\"A B*\"` will not work as expected)"
 }
 
 func (t *QueryEventsTool) GetSchema() model.JSONSchema {

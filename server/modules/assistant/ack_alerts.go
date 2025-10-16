@@ -32,10 +32,12 @@ func (t *AckAlertsTool) GetName() string {
 
 func (t *AckAlertsTool) GetDescription() string {
 	return `Acknowledge (A.K.A. ack) alerts in Security Onion by querying them with an OQL query.
-If you use wildcards in your OQL query, do not wrap the value in quotes. If date_range is specified,
-then date_range_format is required. If multiple alerts are difficult to gather in one query, try
-OR'ing all the Ids together in the search_filter. When querying by id, use _id instead of soc_id
-as the field. For this tool, all dates are absolute.`
+If date_range is specified, then date_range_format is required. If multiple alerts are difficult
+to gather in one query, try OR'ing all the Ids together in the search_filter. When querying by id,
+use _id instead of soc_id as the field. For this tool, all dates are absolute.\n` +
+		"- Examples for wild cards:\n" +
+		"  - Search terms cannot begin with a wildcard (e.g., `*xyz` the wildcard is ignored, but `xyz*` is valid)\n" +
+		"  - If you use wildcards, do not wrap the value in quotes, instead use parentheses (e.g., `rule.name:(A B*)` is valid, but `rule.name:\"A B*\"` will not work as expected)"
 }
 
 func (t *AckAlertsTool) GetSchema() model.JSONSchema {
