@@ -70,6 +70,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       { title: "value", value: "value" }
     ],
     creditsRemaining: 0,
+    lowBalanceColorAlert: 500000,
     searchFilter: '',
     
     // Date range filter properties
@@ -131,6 +132,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
   methods: {
     async initAssistant(params) {
       this.assistantEnabled = params["enabled"] && this.$root.isLicensed('oai');
+      this.lowBalanceColorAlert = params["lowBalanceColorAlert"];
       if (this.assistantEnabled) {
         this.loadData();
       }
