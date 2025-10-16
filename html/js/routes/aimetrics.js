@@ -23,7 +23,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         { title: this.$root.i18n.creditPercentage, value: 'creditPercentage' },
         { title: this.$root.i18n.totalSessions, value: 'totalSessions' },
         { title: this.$root.i18n.totalMessages, value: 'totalMessages' },
-        { title: this.$root.i18n.actions },
+        { title: this.$root.i18n.actions, value: 'actions' },
       ],
       [
         { title: this.$root.i18n.title, value: 'title' },
@@ -32,7 +32,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         { title: this.$root.i18n.totalOutputTokens, value: 'totalOutputTokens' },
         { title: this.$root.i18n.totalCredits, value: 'totalCredits' },
         { title: this.$root.i18n.totalMessages, value: 'totalMessages' },
-        { title: this.$root.i18n.actions },
+        { title: this.$root.i18n.actions, value: 'actions' },
       ],
       [
         { value: 'expand' },

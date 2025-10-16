@@ -6,10 +6,10 @@
     <v-col cols="12" lg="5">
       <v-expansion-panels class="no-print">
         <v-expansion-panel data-aid="aimetrics_options">
-          <v-expansion-panel-title id="aimetricsOptionsHeader" expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up">{{i18n.options}}</v-expansion-panel-title>
+          <v-expansion-panel-title id="aimetrics-options-header" expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up">{{i18n.options}}</v-expansion-panel-title>
           <v-expansion-panel-text>
             <span data-aid="aimetrics_autorefresh_select">
-              <v-select id="autoRefresh" :disabled="$root.loading" v-model="autoRefreshInterval" @update:focused="autoRefreshIntervalChanged" :items="autoRefreshIntervals" :hint="i18n.autoRefresh" persistent-hint variant="underlined" prepend-icon="fa-hourglass-half"></v-select>
+              <v-select id="aimetrics-auto-refresh" :disabled="$root.loading" v-model="autoRefreshInterval" @update:focused="autoRefreshIntervalChanged" :items="autoRefreshIntervals" :hint="i18n.autoRefresh" persistent-hint variant="underlined" prepend-icon="fa-hourglass-half"></v-select>
             </span>
             <span data-aid="aimetrics_timezone_select">
               <v-select :disabled="$root.loading" @update:model-value="zone = $event; saveLocalSettings(); loadData()" v-model="zone" :items="$root.timezones" :hint="i18n.timezoneHelp" persistent-hint variant="underlined" prepend-icon="fa-user-clock"></v-select>
@@ -20,13 +20,13 @@
     </v-col>
     <v-spacer></v-spacer>
     <v-col cols="12" lg="2" align="end">
-      <h4 :data-aid="assistant_credits_remaining">{{ i18n.creditsRemaining }}: <span :class="creditsRemaining <= lowBalanceColorAlert ? 'text-error' : 'text-primary'">{{ formatCount(creditsRemaining) }}</span></h4>
+      <h4 :data-aid="aimetrics_credits_remaining">{{ i18n.creditsRemaining }}: <span :class="creditsRemaining <= lowBalanceColorAlert ? 'text-error' : 'text-primary'">{{ formatCount(creditsRemaining) }}</span></h4>
     </v-col>
   </v-row>
   <v-row>
     <v-col>
       <v-toolbar class="elevation-0 theme-background-lighten-1" fixed>
-        <v-btn variant="flat" color="primary" @click.stop="loadData()" id="aimetrics_refresh_button" class="ml-3" data-aid="aimetrics_refresh">
+        <v-btn variant="flat" color="primary" @click.stop="loadData()" id="aimetrics-refresh-button" class="ml-3" data-aid="aimetrics_refresh">
           <v-icon>fa-sync</v-icon>
         </v-btn>
         <v-spacer></v-spacer>
@@ -39,7 +39,7 @@
   <v-row align="start">
     <v-col cols="12" md="7"></v-col>
     <v-col cols="12" md="5" class="d-flex flex-nowrap align-center" :class="{'mt-4': relativeTimeEnabled}">
-      <v-text-field :disabled="$root.loading" v-if="relativeTimeEnabled" id="aimetricsrelativetimevalue" @change="notifyInputsChanged" class="mx-2"
+      <v-text-field :disabled="$root.loading" v-if="relativeTimeEnabled" id="aimetrics-relative-time-value" @change="notifyInputsChanged" class="mx-2"
         v-model="relativeTimeValue" :hint="i18n.relativeTimeHelp" persistent-hint type="number" data-aid="aimetrics_relative_time_input"
         variant="underlined" density="compact">
         <template #prepend>
@@ -52,12 +52,12 @@
         </template>
         <template #append>
           <span data-aid="aimetrics_relative_time_units">
-            <v-select id="aimetricsrelativetimeunit" class="my-n1 py-0 no-details align-self-start" :disabled="$root.loading" v-if="relativeTimeEnabled" @update:model-value="relativeTimeUnit = $event; notifyInputsChanged()"
+            <v-select id="aimetrics-relative-time-unit" class="my-n1 py-0 no-details align-self-start" :disabled="$root.loading" v-if="relativeTimeEnabled" @update:model-value="relativeTimeUnit = $event; notifyInputsChanged()"
               v-model="relativeTimeUnit" :items="relativeTimeUnits" variant="plain"></v-select>
           </span>
         </template>
       </v-text-field>
-      <v-text-field variant="underlined" :disabled="$root.loading" v-if="!relativeTimeEnabled" id="aimetricsdaterange" @change="notifyInputsChanged" class="mx-2 closer-prepend"
+      <v-text-field variant="underlined" :disabled="$root.loading" v-if="!relativeTimeEnabled" id="aimetrics-date-range" @change="notifyInputsChanged" class="mx-2 closer-prepend"
         v-model="dateRange" :hint="i18n.timePickerHelp" persistent-hint
         data-aid="aimetrics_absolute_time">
         <template #prepend>
@@ -69,14 +69,14 @@
           </v-btn>
         </template>
       </v-text-field>
-      <v-btn id="aimetrics_hunt" class="align-self-start" :class="{'mt-4': !relativeTimeEnabled}" :disabled="$root.loading" color="primary" @click.stop="loadData()" data-aid="aimetrics_run_query">
+      <v-btn id="aimetrics-hunt" class="align-self-start" :class="{'mt-4': !relativeTimeEnabled}" :disabled="$root.loading" color="primary" @click.stop="loadData()" data-aid="aimetrics_run_query">
         <span class="d-sm-none d-lg-inline pr-2" v-text="i18n.refresh"></span>
         <v-icon>fa-sync</v-icon>
       </v-btn>
     </v-col>
   </v-row>
   <v-row>
-    <v-col cols="6">
+    <v-col cols="6" id="aimetrics-breadcrumbs">
       <div>
         <v-breadcrumbs :items="breadcrumbs">
           <template #item="{ item }">
@@ -104,10 +104,10 @@
     <v-spacer></v-spacer>
   </v-row>
   <v-row>
-    <v-col>
+    <v-col id="aimetrics-table">
       <!-- Users Table -->
       <v-data-table v-if="tableSetting == TABLE_SETTING_USERS" :search="searchFilter" :sort-by="sortBy0" @update:sort-by="val => sortBy0 = val" :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage"
-        must-sort :headers="headers[tableSetting]" :items="aimetrics">
+        must-sort :headers="headers[tableSetting]" :items="aimetrics" data-aid="aimetrics_table_users">
         <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
           <tr>
             <template v-for="header in columns" :key="header.key">
@@ -143,7 +143,7 @@
       </v-data-table>
       <!-- Sessions Table -->
       <v-data-table v-if="tableSetting == TABLE_SETTING_SESSIONS" :search="searchFilter" :sort-by="sortBy1" @update:sort-by="val => sortBy1 = val" :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage"
-        must-sort :headers="headers[tableSetting]" :items="aimetrics" v-model:expanded="expanded">
+        must-sort :headers="headers[tableSetting]" :items="aimetrics" v-model:expanded="expanded" data-aid="aimetrics_table_sessions">
         <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
           <tr>
             <template v-for="header in columns" :key="header.key">
@@ -181,7 +181,7 @@
       </v-data-table>
       <!-- Messages Table -->
       <v-data-table v-if="tableSetting == TABLE_SETTING_MESSAGES" :search="searchFilter" :sort-by="sortBy2" @update:sort-by="val => sortBy2 = val" :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage"
-        must-sort :headers="headers[tableSetting]" :items="aimetrics" v-model:expanded="expanded">
+        must-sort :headers="headers[tableSetting]" :items="aimetrics" v-model:expanded="expanded" data-aid="aimetrics_table_messages">
         <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
           <tr>
             <template v-for="header in columns" :key="header.key">
@@ -201,7 +201,7 @@
         <template #item="{ item, isExpanded, toggleExpand, internalItem }">
           <tr>
             <td>
-              <v-btn id="expandNode" icon variant="text" size="small" @click="toggleExpand(internalItem)" data-aid="aimetrics_details_expand">
+              <v-btn id="aimetrics-expand-node" icon variant="text" size="small" @click="toggleExpand(internalItem)" data-aid="aimetrics_details_expand">
                 <v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="aimetrics_details_collapse">fa-angle-down</v-icon>
                 <v-icon v-else :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="aimetrics_details_expand">fa-angle-right</v-icon>
               </v-btn>
@@ -226,7 +226,7 @@
     </v-col>
   </v-row>
 </v-container>
-<v-container v-else-if="$root.isLicensed('oai')" fluid data-aid="assistant_disabled">
+<v-container v-else-if="$root.isLicensed('oai')" fluid data-aid="aimetrics_disabled">
 	<div style="
 		align-items: center;
 		margin: 0;
@@ -243,7 +243,7 @@
     </div>
   </div>
 </v-container>
-<v-container v-else fluid data-aid="assistant_advertisment">
+<v-container v-else fluid data-aid="aimetrics_advertisment">
 	<div v-html="i18n.assistantAdvertisement" style="
 		align-items: center;
 		margin: 0;
