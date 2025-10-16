@@ -37,9 +37,12 @@ func TestEscalateAlertsTool_GetSchema(t *testing.T) {
 	assert.Equal(t, "string", schema.Json.Properties["search_filter"].Type)
 	assert.Contains(t, schema.Json.Properties, "case_title")
 	assert.Equal(t, "string", schema.Json.Properties["case_title"].Type)
-	assert.Contains(t, schema.Json.Properties, "date_range")
-	assert.Contains(t, schema.Json.Properties, "date_range_format")
-	assert.Contains(t, schema.Json.Properties, "timezone")
+	assert.Contains(t, schema.Json.Properties, "range_start")
+	assert.Equal(t, "string", schema.Json.Properties["range_start"].Type)
+	assert.Contains(t, schema.Json.Properties, "range_end")
+	assert.Equal(t, "string", schema.Json.Properties["range_end"].Type)
+	assert.Contains(t, schema.Json.Properties, "range_format")
+	assert.Equal(t, "string", schema.Json.Properties["range_format"].Type)
 	assert.Contains(t, schema.Json.Required, "search_filter")
 }
 
@@ -47,15 +50,13 @@ func TestEscalateAlertsTool_Execute(t *testing.T) {
 	testCases := []struct {
 		name                    string
 		params                  string
-		mockSearchResults       *model.EventSearchResults
-		mockUpdateResults       *model.EventUpdateResults
-		mockCase                *model.Case
-		mockError               error
-		expectedResult          string
-		expectedError           bool
-		expectedDateRange       string
-		expectedDateRangeFormat string
-		expectedTimezone        string
+		mockSearchResults *model.EventSearchResults
+		mockUpdateResults *model.EventUpdateResults
+		mockCase          *model.Case
+		mockError         error
+		expectedResult    string
+		expectedError     bool
+		expectDateRange   bool
 	}{
 		{
 			name:   "successful escalation with search filter",
@@ -148,13 +149,33 @@ func TestEscalateAlertsTool_Execute(t *testing.T) {
 			expectedError: true,
 		},
 		{
-			name:          "with date range but no date_range_format",
-			params:        `{"search_filter": "soc_id:alert-123", "case_title": "Test Case", "date_range": "2024/12/03 02:31:35 PM - 2024/12/04 02:31:35 PM"}`,
-			expectedError: true,
+			name:   "with range_start only (treated as relative)",
+			params: `{"search_filter": "soc_id:alert-123", "case_title": "Test Case", "range_start": "-2h"}`,
+			mockSearchResults: &model.EventSearchResults{
+				Events: []*model.EventRecord{
+					{
+						Id: "alert-123",
+						Payload: map[string]interface{}{
+							"@timestamp": "2024-12-04T10:00:00Z",
+						},
+					},
+				},
+			},
+			mockUpdateResults: &model.EventUpdateResults{
+				UpdatedCount: 1,
+			},
+			mockCase: &model.Case{
+				Auditable: model.Auditable{
+					Id: "case-123",
+				},
+				Title: "Test Case",
+			},
+			expectedResult:  `Successfully added 1 alert to new case "Test Case" (Id: case-123)`,
+			expectDateRange: true,
 		},
 		{
-			name:   "with date range and date_range_format",
-			params: `{"search_filter": "soc_id:alert-123", "case_title": "Date Range Case", "date_range": "2024/12/03 02:31:35 PM - 2024/12/04 02:31:35 PM", "date_range_format": "2006/01/02 3:04:05 PM"}`,
+			name:   "with range_start, range_end and range_format",
+			params: `{"search_filter": "soc_id:alert-123", "case_title": "Date Range Case", "range_start": "2024/12/03 02:31:35 PM", "range_end": "2024/12/04 02:31:35 PM", "range_format": "2006/01/02 3:04:05 PM"}`,
 			mockSearchResults: &model.EventSearchResults{
 				Events: []*model.EventRecord{
 					{
@@ -180,13 +201,12 @@ func TestEscalateAlertsTool_Execute(t *testing.T) {
 				},
 				Title: "Date Range Case",
 			},
-			expectedResult:          `Successfully added 2 alerts to new case "Date Range Case" (Id: case-789)`,
-			expectedDateRange:       "2024/12/03 02:31:35 PM - 2024/12/04 02:31:35 PM",
-			expectedDateRangeFormat: "2006/01/02 3:04:05 PM",
+			expectedResult:  `Successfully added 2 alerts to new case "Date Range Case" (Id: case-789)`,
+			expectDateRange: true,
 		},
 		{
-			name:   "with timezone",
-			params: `{"search_filter": "soc_id:alert-123", "case_title": "Timezone Case", "timezone": "America/New_York"}`,
+			name:   "with relative date range",
+			params: `{"search_filter": "soc_id:alert-123", "case_title": "Relative Date Case", "range_start": "-1h", "range_end": "now"}`,
 			mockSearchResults: &model.EventSearchResults{
 				Events: []*model.EventRecord{
 					{
@@ -204,10 +224,10 @@ func TestEscalateAlertsTool_Execute(t *testing.T) {
 				Auditable: model.Auditable{
 					Id: "case-999",
 				},
-				Title: "Timezone Case",
+				Title: "Relative Date Case",
 			},
-			expectedResult:   `Successfully added 1 alert to new case "Timezone Case" (Id: case-999)`,
-			expectedTimezone: "America/New_York",
+			expectedResult:  `Successfully added 1 alert to new case "Relative Date Case" (Id: case-999)`,
+			expectDateRange: true,
 		},
 	}
 
@@ -294,8 +314,8 @@ func TestEscalateAlertsTool_Execute(t *testing.T) {
 				}
 
 				// Verify date range fields were parsed correctly if specified
-				// Note: The date range/format/timezone parameters are used to set BeginTime and EndTime
-				if tc.expectedDateRange != "" {
+				// Note: The date range parameters are used to set BeginTime and EndTime
+				if tc.expectDateRange {
 					// Just verify that BeginTime and EndTime were set (not zero)
 					assert.False(t, searchCrit.BeginTime.IsZero())
 					assert.False(t, searchCrit.EndTime.IsZero())
@@ -452,9 +472,9 @@ func TestEscalateAlertsTool_Execute_ComplexQuery(t *testing.T) {
 	params := `{
 		"search_filter": "rule.name:*phishing* AND event.severity:high",
 		"case_title": "Complex Phishing Case",
-		"date_range": "2024/12/01 12:00:00 PM - 2024/12/07 12:00:00 PM",
-		"date_range_format": "2006/01/02 3:04:05 PM",
-		"timezone": "America/New_York"
+		"range_start": "2024/12/01 12:00:00 PM",
+		"range_end": "2024/12/07 12:00:00 PM",
+		"range_format": "2006/01/02 3:04:05 PM"
 	}`
 	result, err := tool.Execute(ctx, mockServer, params)
 

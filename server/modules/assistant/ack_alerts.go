@@ -13,7 +13,6 @@ import (
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
-	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
@@ -32,9 +31,9 @@ func (t *AckAlertsTool) GetName() string {
 
 func (t *AckAlertsTool) GetDescription() string {
 	return `Acknowledge (A.K.A. ack) alerts in Security Onion by querying them with an OQL query.
-If date_range is specified, then date_range_format is required. If multiple alerts are difficult
-to gather in one query, try OR'ing all the Ids together in the search_filter. When querying by id,
-use _id instead of soc_id as the field. For this tool, all dates are absolute.\n` +
+If range_start or range_end is specified, then date_range_format is required. If multiple alerts are
+difficult to gather in one query, try OR'ing all the Ids together in the search_filter. When querying
+by id, use _id instead of soc_id as the field.\n` +
 		"- Examples for wild cards:\n" +
 		"  - Search terms cannot begin with a wildcard (e.g., `*xyz` the wildcard is ignored, but `xyz*` is valid)\n" +
 		"  - If you use wildcards, do not wrap the value in quotes, instead use parentheses (e.g., `rule.name:(A B*)` is valid, but `rule.name:\"A B*\"` will not work as expected)"
@@ -53,17 +52,17 @@ func (t *AckAlertsTool) GetSchema() model.JSONSchema {
 					Type:        "object",
 					Description: "Optional dict of field:value pairs to further filter events",
 				},
-				"date_range": {
+				"range_start": {
 					Type:        "string",
-					Description: `Date range for searching events (e.g., "2024/12/03 02:31:35 PM - 2024/12/04 02:31:35 PM"). The range must contain two dates. Do not specify a timezone or any offsets in this field. If this field is specified, a date_range_format is required.`,
+					Description: "Optional start time for the query range (e.g., \"-1h\", \"2023/10/26 10:00:00 AM\"). Default is 24 hours ago (\"-24h\")",
 				},
-				"date_range_format": {
+				"range_end": {
 					Type:        "string",
-					Description: `Format of the date range (default: "2006/01/02 3:04:05 PM"). The format must be specified using Go's time package's reference layout format. "Relative" is not an acceptable format. Required when a date_range is provided.`,
+					Description: "Optional end time for the query range (e.g., \"now\", \"2023/10/26 12:00:00 PM\"). Default is now.",
 				},
-				"timezone": {
+				"range_format": {
 					Type:        "string",
-					Description: `Timezone for the date range (default: "UTC")`,
+					Description: "Format of the date range (default: \"2006/01/02 3:04:05 PM\"). The format must be specified using Go's time package's reference layout format. Required if either range_start or range_end is provided.",
 				},
 			},
 			Required: []string{"search_filter"},
@@ -72,11 +71,11 @@ func (t *AckAlertsTool) GetSchema() model.JSONSchema {
 }
 
 type ackAlertArgs struct {
-	SearchFilter    string         `json:"search_filter"`
-	EventFilter     map[string]any `json:"event_filter,omitempty"`
-	DateRange       string         `json:"date_range,omitempty"`
-	DateRangeFormat string         `json:"date_range_format,omitempty"`
-	Timezone        string         `json:"timezone,omitempty"`
+	SearchFilter string         `json:"search_filter"`
+	EventFilter  map[string]any `json:"event_filter,omitempty"`
+	RangeStart   string         `json:"range_start,omitempty"`
+	RangeEnd     string         `json:"range_end,omitempty"`
+	RangeFormat  string         `json:"range_format,omitempty"`
 }
 
 func (t *AckAlertsTool) Execute(ctx context.Context, server *server.Server, params string) (result *model.ToolResponse, err error) {
@@ -104,15 +103,10 @@ func (t *AckAlertsTool) Execute(ctx context.Context, server *server.Server, para
 		return nil, err
 	}
 
-	if args.DateRange != "" {
-		if args.DateRangeFormat == "" {
-			return nil, fmt.Errorf("date_range_format is required when date_range is provided")
-		}
+	var timeRange string
 
-		_, _, err = util.ParseDateRange(args.DateRange, args.DateRangeFormat, args.Timezone)
-		if err != nil {
-			return nil, fmt.Errorf("error parsing date_range: %w", err)
-		}
+	if args.RangeStart != "" || args.RangeEnd != "" {
+		timeRange = parseRangeAllowRelative(args.RangeStart, args.RangeEnd, args.RangeFormat)
 	}
 
 	result.Parameters = args
@@ -121,9 +115,9 @@ func (t *AckAlertsTool) Execute(ctx context.Context, server *server.Server, para
 	crit.Acknowledge = true
 	crit.SearchFilter = "(tags:alert AND NOT event.acknowledged:true AND NOT event.escalated:true) AND (" + args.SearchFilter + ")"
 	crit.EventFilter = args.EventFilter
-	crit.DateRange = args.DateRange
-	crit.DateRangeFormat = args.DateRangeFormat
-	crit.Timezone = args.Timezone
+	crit.DateRange = timeRange
+	crit.DateRangeFormat = "2006/01/02 3:04:05 PM"
+	crit.Timezone = "UTC"
 
 	if len(crit.EventFilter) == 0 {
 		crit.EventFilter = map[string]any{

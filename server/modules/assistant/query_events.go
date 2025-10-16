@@ -16,7 +16,6 @@ import (
 	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
-	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
@@ -59,13 +58,17 @@ func (t *QueryEventsTool) GetSchema() model.JSONSchema {
 					Type:        "string",
 					Description: "The OQL query string to execute",
 				},
-				"start_time": {
+				"range_start": {
 					Type:        "string",
-					Description: "Optional start time for the query range (e.g., \"-1h\", \"2023/10/26 10:00:00 AM\")",
+					Description: "Optional start time for the query range (e.g., \"-1h\", \"2023/10/26 10:00:00 AM\"). Default is 24 hours ago (\"-24h\")",
 				},
-				"end_time": {
+				"range_end": {
 					Type:        "string",
-					Description: "Optional end time for the query range (e.g., \"now\", \"2023/10/26 12:00:00 PM\")",
+					Description: "Optional end time for the query range (e.g., \"now\", \"2023/10/26 12:00:00 PM\"). Default is now.",
+				},
+				"range_format": {
+					Type:        "string",
+					Description: "Format of the date range (default: \"2006/01/02 3:04:05 PM\"). The format must be specified using Go's time package's reference layout format. Required if either range_start or range_end is provided.",
 				},
 				"limit": {
 					Type:        "integer",
@@ -85,8 +88,9 @@ func (t *QueryEventsTool) GetSchema() model.JSONSchema {
 type queryEventsArgs struct {
 	OQLQuery     string  `json:"oql_query"`
 	Query        string  `json:"query"` // Support both query and oql_query
-	StartTime    *string `json:"start_time,omitempty"`
-	EndTime      *string `json:"end_time,omitempty"`
+	RangeStart   string  `json:"range_start,omitempty"`
+	RangeEnd     string  `json:"range_end,omitempty"`
+	RangeFormat  string  `json:"range_format,omitempty"`
 	Limit        int     `json:"limit"`
 	GroupByField *string `json:"groupby_field,omitempty"`
 }
@@ -151,40 +155,8 @@ func (t *QueryEventsTool) Execute(ctx context.Context, server *server.Server, pa
 
 	var timeRange string
 
-	if args.StartTime != nil || args.EndTime != nil {
-		start := "-24h"
-		end := "now"
-
-		if args.StartTime != nil {
-			start = *args.StartTime
-		}
-		if args.EndTime != nil {
-			end = *args.EndTime
-		}
-
-		var startFormatted, endFormatted string
-
-		formats := []string{
-			"2006-01-02 3:04:05 PM", "2006/01/02 3:04:05 PM", "2006_01_02 3:04:05 PM",
-			"2006-01-02 15:04:05", "2006/01/02 15:04:05", "2006_01_02 15:04:05",
-		}
-
-		// Parse and format times
-		startParsed, err := util.ParseDate(start, formats)
-		if err != nil {
-			startFormatted = util.ParseRelativeTimeString(start)
-		} else {
-			startFormatted = util.FormatSOTime(startParsed)
-		}
-
-		endParsed, err := util.ParseDate(end, formats)
-		if err != nil {
-			endFormatted = util.ParseRelativeTimeString(end)
-		} else {
-			endFormatted = util.FormatSOTime(endParsed)
-		}
-
-		timeRange = fmt.Sprintf("%s - %s", startFormatted, endFormatted)
+	if args.RangeStart != "" || args.RangeEnd != "" {
+		timeRange = parseRangeAllowRelative(args.RangeStart, args.RangeEnd, args.RangeFormat)
 	}
 
 	criteria := model.NewEventSearchCriteria()
