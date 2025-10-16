@@ -374,9 +374,10 @@ func (h *AssistantHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
 
-	err := h.server.CheckAuthorized(ctx, "read_authored", "assistant")
-	if err != nil {
-		web.Respond(w, r, http.StatusUnauthorized, err)
+	self := h.server.CheckAuthorized(ctx, "read_authored", "assistant")
+	all := h.server.CheckAuthorized(ctx, "read_all", "assistant")
+	if self != nil && all != nil {
+		web.Respond(w, r, http.StatusUnauthorized, self)
 		return
 	}
 
