@@ -18,7 +18,7 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-func TestGetPlaybookQuestionsTool_Execute(t *testing.T) {
+func TestGetPlaybooksTool_Execute(t *testing.T) {
 	testCases := []struct {
 		name                   string
 		params                 string
@@ -443,7 +443,7 @@ func TestGetPlaybookQuestionsTool_Execute(t *testing.T) {
 			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user-id")
 
 			// Create tool and execute
-			tool := &GetPlaybookQuestionsTool{}
+			tool := &GetPlaybooksTool{}
 			result, err := tool.Execute(ctx, mockServer, tc.params)
 
 			// Assert error expectations
@@ -454,7 +454,7 @@ func TestGetPlaybookQuestionsTool_Execute(t *testing.T) {
 
 			assert.NoError(t, err)
 			assert.NotNil(t, result)
-			assert.Equal(t, "get_playbook_questions", result.ToolName)
+			assert.Equal(t, "get_playbooks", result.ToolName)
 			assert.Equal(t, "test-user-id", result.OnBehalfOfUser)
 			assert.True(t, result.TimeToExecute > 0)
 
