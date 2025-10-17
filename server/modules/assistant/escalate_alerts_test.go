@@ -48,8 +48,8 @@ func TestEscalateAlertsTool_GetSchema(t *testing.T) {
 
 func TestEscalateAlertsTool_Execute(t *testing.T) {
 	testCases := []struct {
-		name                    string
-		params                  string
+		name              string
+		params            string
 		mockSearchResults *model.EventSearchResults
 		mockUpdateResults *model.EventUpdateResults
 		mockCase          *model.Case

@@ -32,9 +32,9 @@ func (t *EscalateAlertsTool) GetName() string {
 
 func (t *EscalateAlertsTool) GetDescription() string {
 	return "Escalate an alert in Security Onion to a new case using the alert's unique identifier (_id).\n" +
-	"- Examples for wild cards in the search_filter:\n" +
-	"  - Search terms cannot begin with a wildcard (e.g., `*xyz` the wildcard is ignored, but `xyz*` is valid)\n" +
-	"  - When using wildcards, do not wrap the value in quotes, instead use parentheses (e.g., `rule.name:(A B*)` is valid, but `rule.name:\"A B*\"` will not work as expected)"
+		"- Examples for wild cards in the search_filter:\n" +
+		"  - Search terms cannot begin with a wildcard (e.g., `*xyz` the wildcard is ignored, but `xyz*` is valid)\n" +
+		"  - When using wildcards, do not wrap the value in quotes, instead use parentheses (e.g., `rule.name:(A B*)` is valid, but `rule.name:\"A B*\"` will not work as expected)"
 }
 
 func (t *EscalateAlertsTool) GetSchema() model.JSONSchema {
@@ -110,12 +110,13 @@ func (t *EscalateAlertsTool) Execute(ctx context.Context, server *server.Server,
 	result.Parameters = args
 
 	searchCrit := model.NewEventSearchCriteria()
+	zone := "UTC"
 
 	err = searchCrit.Populate(
 		"(tags:alert AND NOT event.acknowledged:true AND NOT event.escalated:true) AND ("+args.SearchFilter+")",
 		timeRange,
 		"2006/01/02 3:04:05 PM",
-		"UTC",
+		zone,
 		"0",
 		"10000",
 	)
@@ -193,6 +194,9 @@ func (t *EscalateAlertsTool) Execute(ctx context.Context, server *server.Server,
 	ackCrit.Acknowledge = true
 	ackCrit.Escalate = true
 	ackCrit.SearchFilter = searchCrit.ParsedQuery.String()
+	ackCrit.DateRange = timeRange
+	ackCrit.DateRangeFormat = "2006/01/02 3:04:05 PM"
+	ackCrit.Timezone = zone
 	ackCrit.EventFilter = map[string]any{
 		"tags": "alert",
 	}
