@@ -209,7 +209,7 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 }
 
 // @Summary      Execute Tool
-// @Description  Execute a tool on behalf of the assistant and continue the conversation with the result.
+// @Description  Execute a tool on behalf of the assistant and continue the conversation with the result. Note that more permissions may be checked depending on the tool being executed.
 // @Tags         Assistant
 // @Security     bearer[assistant/write_authored]
 // @Param        name     path  string              true  "Name of the tool to execute"
@@ -364,6 +364,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 // @Description  Retrieve the current balance/usage information for the AI assistant.
 // @Tags         Assistant
 // @Security     bearer[assistant/read_authored]
+// @Security     bearer[assistant/read_all]
 // @Produce      json
 // @Success      200  {object}  model.Usage "Current assistant balance and usage information"
 // @Failure      401           "Request was not properly authenticated"
