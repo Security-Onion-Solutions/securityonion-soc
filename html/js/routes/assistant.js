@@ -1640,7 +1640,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
 
     // Check if a tool should be auto-approved based on localStorage settings
     shouldAutoApproveTool(toolName) {
-      return ['query_events', 'get_playbook_questions'].includes(toolName) && this.alwaysApproveReadRequests;
+      return ['query_events', 'get_playbooks'].includes(toolName) && this.alwaysApproveReadRequests;
     },
 
     // Open the options menu programmatically
