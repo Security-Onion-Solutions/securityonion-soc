@@ -835,7 +835,7 @@ func unstreamResponse(ctx context.Context, rawResponse string) (*model.Message, 
 				}
 			}
 		case "content_block_stop":
-			for sm.Index < len(message.ContentBlocks) {
+			for sm.Index >= len(message.ContentBlocks) {
 				message.ContentBlocks = append(message.ContentBlocks, model.ContentBlock{})
 			}
 			if message.ContentBlocks[sm.Index].Type == "" {
