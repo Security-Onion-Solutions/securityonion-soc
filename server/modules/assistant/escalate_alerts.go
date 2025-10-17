@@ -31,7 +31,7 @@ func (t *EscalateAlertsTool) GetName() string {
 }
 
 func (t *EscalateAlertsTool) GetDescription() string {
-	return "Escalate an alert in Security Onion to a new case using the alert's unique identifier (_id).\n" +
+	return "Escalate an alert in Security Onion to a new case using the alert's unique identifier (_id). This tool will only create new cases, and never attach to existing cases. If a user wishes to add to an existing case, they must manually do so through the SOC case interface.\n" +
 		"- Examples for wild cards in the search_filter:\n" +
 		"  - Search terms cannot begin with a wildcard (e.g., `*xyz` the wildcard is ignored, but `xyz*` is valid)\n" +
 		"  - When using wildcards, do not wrap the value in quotes, instead use parentheses (e.g., `rule.name:(A B*)` is valid, but `rule.name:\"A B*\"` will not work as expected)"
