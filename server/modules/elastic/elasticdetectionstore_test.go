@@ -1645,9 +1645,6 @@ func TestConvertObjectToDocument(t *testing.T) {
 
 			doc, index, err := store.ConvertObjectToDocument(context.Background(), test.Kind, test.Object, &test.AuditObj, test.IsEdit, test.AuditDocID, test.Op)
 
-			fmt.Println(string(doc))
-			fmt.Println(string(test.ExpDoc))
-
 			// timestamp is close to time.Now(), so we need to remove it for comparison
 			var timestamp string
 			if !test.IsEdit {
