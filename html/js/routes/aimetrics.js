@@ -23,7 +23,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         { title: this.$root.i18n.creditPercentage, value: 'creditPercentage' },
         { title: this.$root.i18n.totalSessions, value: 'totalSessions' },
         { title: this.$root.i18n.totalMessages, value: 'totalMessages' },
-        { title: this.$root.i18n.actions },
+        { title: this.$root.i18n.actions, value: 'actions' },
       ],
       [
         { title: this.$root.i18n.title, value: 'title' },
@@ -32,7 +32,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         { title: this.$root.i18n.totalOutputTokens, value: 'totalOutputTokens' },
         { title: this.$root.i18n.totalCredits, value: 'totalCredits' },
         { title: this.$root.i18n.totalMessages, value: 'totalMessages' },
-        { title: this.$root.i18n.actions },
+        { title: this.$root.i18n.actions, value: 'actions' },
       ],
       [
         { value: 'expand' },
@@ -70,6 +70,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       { title: "value", value: "value" }
     ],
     creditsRemaining: 0,
+    lowBalanceColorAlert: 500000,
     searchFilter: '',
     
     // Date range filter properties
@@ -131,6 +132,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
   methods: {
     async initAssistant(params) {
       this.assistantEnabled = params["enabled"] && this.$root.isLicensed('oai');
+      this.lowBalanceColorAlert = params["lowBalanceColorAlert"];
       if (this.assistantEnabled) {
         this.loadData();
       }
@@ -422,7 +424,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
             if (i > 0) {
               expandMessage += `\n\n<hr>\n\n<br>`;
             }
-            expandMessage += this.$root.formatMarkdown(block.text);
+            expandMessage += this.formatMarkdownMermaid(block.text);
           } else {
             expandMessage += block.text;
           }
@@ -448,6 +450,13 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
     },
     stripHtml(str) {
       return str.replace(/<[^>]*>/g, '');
+    },
+    formatMarkdownMermaid(text) {
+      md = this.$root.formatMarkdown(text, true);
+      this.$nextTick(() => {
+        this.$root.renderMermaid();
+      });
+      return md;
     },
     updateBreadcrumbs(currUserId, currSessionId) {
       if (currUserId && currSessionId) {

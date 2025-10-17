@@ -127,7 +127,7 @@
 											<div class="d-flex flex-column align-start">
 												<div v-if="!isEdit(`comment-${index}`)" class="case d-block comment-body mt-2" data-aid="detection_comment_display">
 													<div class="mb-2">
-														<div :id="`comment-${index}`" class="markdown-body" v-html="formatMarkdown(comment.value)"></div>
+														<div :id="`comment-${index}`" class="markdown-body" v-html="formatMarkdownMermaid(comment.value)"></div>
 													</div>
 												</div>
 												<div v-else class="d-flex flex-column" style="width: 100%;">

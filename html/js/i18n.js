@@ -287,6 +287,7 @@ const i18n = {
       credits: 'Credits',
       creditsLowercase: 'credits',
       creditsRemaining: 'Credits Remaining',
+      creditsSubjectToExpiration: '(credits subject to expiration)',
       close: 'Close',
       collapse: 'Collapse',
       collapseAll: 'Collapse All',
