@@ -2168,7 +2168,7 @@ test('convertBackendMessagesToFrontend handles multiple tool_use blocks at end o
           {
             type: 'tool_use',
             id: 'tool_2',
-            name: 'get_playbook_questions',
+            name: 'get_playbooks',
             input: { alert_id: 'alert_123' }
           }
         ]
