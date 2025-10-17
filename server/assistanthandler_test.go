@@ -752,7 +752,7 @@ data: {"type":"message_stop"}
 
 data: [DONE]`
 
-	msg, err := unstreamResponse(data)
+	msg, err := unstreamResponse(context.Background(), data)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, msg)
