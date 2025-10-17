@@ -30,3 +30,6 @@ query-admin:       superuser
 query-monitor:     superuser
 playbook-admin:    superuser analyst
 playbook-monitor:  limited-analyst auditor limited-auditor
+assistant-admin:   superuser
+assistant-user:    analyst
+assistant-monitor: auditor
