@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -1644,9 +1643,6 @@ func TestConvertObjectToDocument(t *testing.T) {
 			test.Object.Auditable = test.AuditObj
 
 			doc, index, err := store.ConvertObjectToDocument(context.Background(), test.Kind, test.Object, &test.AuditObj, test.IsEdit, test.AuditDocID, test.Op)
-
-			fmt.Println(string(doc))
-			fmt.Println(string(test.ExpDoc))
 
 			// timestamp is close to time.Now(), so we need to remove it for comparison
 			var timestamp string

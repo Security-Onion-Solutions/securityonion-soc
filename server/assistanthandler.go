@@ -192,7 +192,7 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	go func() {
-		msg, err := unstreamResponse(string(entireResponse))
+		msg, err := unstreamResponse(ctx, string(entireResponse))
 		if err != nil {
 			logger.WithError(err).Error("error unstreaming response")
 			return
@@ -344,7 +344,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 	noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRequestorId, ctx.Value(web.ContextKeyRequestorId).(string))
 
 	go func() {
-		msg, err := unstreamResponse(string(entireResponse))
+		msg, err := unstreamResponse(ctx, string(entireResponse))
 		if err != nil {
 			logger.WithError(err).Error("error unstreaming response")
 			return
@@ -764,7 +764,7 @@ func streamResponse(ctx context.Context, w http.ResponseWriter, r *http.Request,
 	return entireResponse, err
 }
 
-func unstreamResponse(rawResponse string) (*model.Message, error) {
+func unstreamResponse(ctx context.Context, rawResponse string) (*model.Message, error) {
 	type Delta struct {
 		Type        string  `json:"type"`
 		Text        string  `json:"text,omitempty"`
@@ -781,6 +781,8 @@ func unstreamResponse(rawResponse string) (*model.Message, error) {
 		Usage        *model.Usage        `json:"usage,omitempty"`
 	}
 
+	logger := log.FromContext(ctx)
+
 	// Create a parser without a completion function
 	parser := sse_parser.NewParser(nil)
 
@@ -796,7 +798,7 @@ func unstreamResponse(rawResponse string) (*model.Message, error) {
 		var sm StreamingMessage
 		err := json.Unmarshal([]byte(msg.Data), &sm)
 		if err != nil {
-			fmt.Printf("Error unmarshalling JSON: %v\n", err)
+			logger.WithError(err).Warn("unable to unmarshal streaming message JSON, skipping")
 			continue
 		}
 
