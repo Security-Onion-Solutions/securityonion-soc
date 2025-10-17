@@ -835,9 +835,16 @@ func unstreamResponse(ctx context.Context, rawResponse string) (*model.Message, 
 				}
 			}
 		case "content_block_stop":
+			for sm.Index < len(message.ContentBlocks) {
+				message.ContentBlocks = append(message.ContentBlocks, model.ContentBlock{})
+			}
 			if message.ContentBlocks[sm.Index].Type == "" {
 				message.ContentBlocks[sm.Index].Type = "text"
-				message.ContentBlocks[sm.Index].Text = message.ContentBlocks[sm.Index].Content.(string)
+				if message.ContentBlocks[sm.Index].Content != nil {
+					message.ContentBlocks[sm.Index].Text = message.ContentBlocks[sm.Index].Content.(string)
+				} else {
+					message.ContentBlocks[sm.Index].Text = ""
+				}
 				message.ContentBlocks[sm.Index].Content = nil
 			}
 		case "message_delta":
