@@ -785,11 +785,33 @@ routes.push({
       }
     },
     notifyChangedSetting(setting) {
-      const module = setting.id.split(".")[0];
+      const moduleStateMap = new Map();
+      moduleStateMap.set("advanced", ["fake1-to-trigger-highstate", "fake2-to-trigger-highstate"]);
+      moduleStateMap.set("bpf.zeek", ["zeek"]);
+      moduleStateMap.set("bpf.pcap", ["pcap"]);
+      moduleStateMap.set("bpf.suricata", ["suricata"]);
+      moduleStateMap.set("elastic_fleet_package_registry", ["elastic-fleet-package-registry"]);
+      moduleStateMap.set("global", ["fake1-to-trigger-highstate", "fake2-to-trigger-highstate"]);
+      moduleStateMap.set("host", ["fake1-to-trigger-highstate", "fake2-to-trigger-highstate"]);
+      moduleStateMap.set("patch", ["patch.os"]);
+      moduleStateMap.set("vm", ["vm.user"]);
 
-      if (module && !this.changedModules.includes(module)) {
-        this.changedModules.push(module);
+      var override = false;
+      moduleStateMap.forEach((modules, prefix) => {
+        if (setting.id.startsWith(prefix)) {
+          modules.forEach(module => this.changedModules.push(module));
+          override = true;
+        }
+      });
+
+      if (!override) {
+        const module = setting.id.split(".")[0];
+
+        if (module && !this.changedModules.includes(module)) {
+          this.changedModules.push(module);
+        }
       }
+
       this.changedModules = [...new Set(this.changedModules)].sort();
     },
     async sync() {
