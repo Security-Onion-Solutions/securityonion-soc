@@ -307,23 +307,29 @@
 		display: flex;
 		min-height: 50vh;
 		justify-content: center;
-    	gap: 8px;
+		gap: 8px;
+		flex-direction: column;
 	">
+	<div class="my-8" style="display: flex; gap: 8px; align-items: center;">
 		<div>{{ i18n.assistantDisabled }}</div>
-		<div>
-			<router-link :to="{name: 'config', query: {s: 'soc.config.server.client.assistant.enabled'}}" class="no-print" style="text-decoration: none; cursor: 'pointer'" data-aid="assistant_config_entry_enabled">
-				<v-icon class="mr-2 theme-icon" :title="i18n.visitConfigEntry">fa-cog</v-icon>
-			</router-link>
-		</div>
+		<router-link v-if="$root.isUserAdmin()" :to="{name: 'config', query: {s: 'soc.config.server.client.assistant.enabled'}}" class="no-print" style="text-decoration: none; cursor: 'pointer'" data-aid="assistant_config_entry_enable">
+			<v-icon class="mr-2 theme-icon" :title="i18n.visitConfigEntry">fa-gear</v-icon>
+		</router-link>
+	</div>
+		<video src="../images/videos/onionai.mp4" autoplay muted loop controls style="width: 80%; max-width: 1408px;" data-aid="assistant_needs_enabled_video"></video>
 	</div>
 </v-container>
 
-<v-container v-else fluid data-aid="assistant_advertisment">
-	<div v-html="i18n.assistantAdvertisement" style="
+<v-container v-else>
+	<div style="
 		align-items: center;
-		margin: 0;
 		display: flex;
 		min-height: 50vh;
 		justify-content: center;
-	"></div>
+		gap: 8px;
+		flex-direction: column;
+	">
+	<div class="my-8" v-html="i18n.assistantUnavailable"></div>
+		<video src="../images/videos/onionai.mp4" autoplay muted loop controls style="width: 80%; max-width: 1408px;" data-aid="assistant_needs_pro_video"></video>
+	</div>
 </v-container>

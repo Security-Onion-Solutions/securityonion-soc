@@ -155,7 +155,7 @@ const i18n = {
       artifactTypeHelp: 'Select a type for classification purposes (Note: choose "file" type to upload a file)',
       artifactValue: 'Value (hash, filename, etc.)',
       artifactValueHelp: 'Specify the observed value',
-      assistantAdvertisement: `<v-card-text>This feature requires Security Onion Pro and credits for the OnionAI API. Visit <a target="sos" href="https://securityonionsolutions.com/pro?utm_source=ainotice&utm_medium=app&utm_id=ai">Security Onion</a>.</v-card-text>`,
+      assistantUnavailable: `This feature requires a valid Security Onion Pro license and Internet connection. Visit the <a class="px-1" target="sos" href="https://securityonionsolutions.com/pro?utm_source=ainotice&utm_medium=app&utm_id=ai" data-aid="assistant_visit_pro_website">Security Onion website</a> to learn more about Security Onion Pro.`,
       assistantBalanceCheckUnhealthy: 'The AI model could not be reached. Support for local AI models is coming soon.',
       assistantChatIsDeleted: 'This session has been deleted and therefore cannot be resumed.',
       assistantContextLimitPt1: 'Context length limit reached',

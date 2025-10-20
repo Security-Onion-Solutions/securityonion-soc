@@ -362,9 +362,9 @@
                 </template>
                 <v-list-item-title v-text="i18n.licenseKey"></v-list-item-title>
               </v-list-item>
-              <v-list-item data-aid="nav_admin_aimetrics" v-if="$root.isUserAdmin()" @click="" to="/aimetrics">
+              <v-list-item data-aid="nav_admin_aimetrics" v-if="$root.isUserAdmin() && isLicensed('oai')" @click="" to="/aimetrics">
                 <template #prepend>
-                  <v-icon>fa-chart-simple</v-icon>
+                  <v-icon>fa-microchip</v-icon>
                 </template>
                 <v-list-item-title v-text="i18n.aiMetrics"></v-list-item-title>
               </v-list-item>

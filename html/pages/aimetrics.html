@@ -235,21 +235,25 @@
 		min-height: 50vh;
 		justify-content: center;
     gap: 8px;
+    flex-direction: column;
 	">
-    <div>{{ i18n.assistantDisabled }}</div>
-    <div>
-      <router-link :to="{name: 'config', query: {s: 'soc.config.server.client.assistant.enabled'}}" class="no-print" style="text-decoration: none; cursor: 'pointer'" data-aid="aimetrics_config_entry_enabled">
-        <v-icon class="mr-2 theme-icon" :title="i18n.visitConfigEntry">fa-cog</v-icon>
+    <div class="my-8" style="display: flex; gap: 8px; align-items: center;">
+      <div>{{ i18n.assistantDisabled }}</div>
+      <router-link v-if="$root.isUserAdmin()" :to="{name: 'config', query: {s: 'soc.config.server.client.assistant.enabled'}}" class="no-print" style="text-decoration: none; cursor: 'pointer'" data-aid="aimetrics_config_entry_enabled">
+        <v-icon class="mr-2 theme-icon" :title="i18n.visitConfigEntry">fa-gear</v-icon>
       </router-link>
     </div>
   </div>
 </v-container>
-<v-container v-else fluid data-aid="aimetrics_advertisment">
-	<div v-html="i18n.assistantAdvertisement" style="
+<v-container v-else>
+	<div style="
 		align-items: center;
-		margin: 0;
 		display: flex;
 		min-height: 50vh;
 		justify-content: center;
-	"></div>
+    gap: 8px;
+    flex-direction: column;
+	">
+    <div class="my-8" v-html="i18n.assistantUnavailable"></div>
+  </div>
 </v-container>
