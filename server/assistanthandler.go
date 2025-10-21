@@ -399,7 +399,7 @@ func (h *AssistantHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 
 	response, err := h.server.AssistantManager.Balance(ctx)
 	if err != nil {
-		logger.WithError(err).Error("unable to chat with assistant")
+		logger.WithError(err).Error("unable to retrieve balance")
 		web.Respond(w, r, http.StatusInternalServerError, err)
 
 		return
