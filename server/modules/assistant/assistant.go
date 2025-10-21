@@ -210,7 +210,7 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, messages []*model.Mess
 
 	err = json.Unmarshal(resBody, response)
 	if err != nil {
-		logger.WithError(err).WithField("rawChatResponseBody", string(resBody)).Error("unable to unmarhsal JSON response")
+		logger.WithError(err).WithField("rawChatResponseBody", string(resBody)).Error("unable to unmarshal JSON response")
 		return nil, err
 	}
 
@@ -414,7 +414,7 @@ func (ac *AssistantCoordinator) Balance(ctx context.Context) (*model.BalanceResp
 
 	err = json.Unmarshal(resBody, response)
 	if err != nil {
-		logger.WithError(err).WithField("rawBalanceResponseBody", string(resBody)).Error("unable to unmarhsal JSON response")
+		logger.WithError(err).WithField("rawBalanceResponseBody", string(resBody)).Error("unable to unmarshal JSON response")
 		return nil, err
 	}
 
@@ -466,7 +466,7 @@ func (ac *AssistantCoordinator) Health(ctx context.Context) (*model.HealthRespon
 
 	err = json.Unmarshal(resBody, response)
 	if err != nil {
-		logger.WithError(err).WithField("rawHealthResponseBody", string(resBody)).Error("unable to unmarhsal JSON response")
+		logger.WithError(err).WithField("rawHealthResponseBody", string(resBody)).Error("unable to unmarshal JSON response")
 		return nil, err
 	}
 
