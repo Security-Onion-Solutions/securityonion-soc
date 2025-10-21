@@ -452,6 +452,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       return str.replace(/<[^>]*>/g, '');
     },
     formatMarkdownMermaid(text) {
+      text = text.replace(/(?<=```mermaid(?:(?!```)[\s\S])*?)\n\s*\n(?=(?:(?!```)[\s\S])*```)/g, '\n');
       md = this.$root.formatMarkdown(text, true);
       this.$nextTick(() => {
         this.$root.renderMermaid();

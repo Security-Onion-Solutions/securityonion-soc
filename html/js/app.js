@@ -17,7 +17,7 @@ const LICENSE_STATUS_UNPROVISIONED = "unprovisioned";
 
 const LICENSE_EXPIRES_SOON_DAYS = 45;
 
-const SUBGRID_DISABLED_ROUTES = ['home','settings'];
+const SUBGRID_DISABLED_ROUTES = ['home','settings','assistant','aimetrics'];
 const LOCAL_GRID_ID = ''
 
 const USER_PASSWORD_LENGTH_MIN = 8;
