@@ -798,6 +798,7 @@ const i18n = {
       oidcUnlink: 'Unlink from ',
       ok: 'OK',
       offline: 'Offline',
+      onionaiExcludeToggle: 'Exclude Onion AI data',
       online: 'Online',
       openSession: 'Open Chat Session',
       openInPanel: 'Open in Details Panel',
