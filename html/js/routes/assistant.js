@@ -1078,6 +1078,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       return this.$root.formatTimestamp(timestamp);
     },
     formatMarkdown(text) {
+      text = text.replace(/(?<=```mermaid(?:(?!```)[\s\S])*?)\n\s*\n(?=(?:(?!```)[\s\S])*```)/g, '\n');
       md = this.$root.formatMarkdown(text, true);
       if (!this.isStreaming) {
         this.$nextTick(() => {
