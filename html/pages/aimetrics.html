@@ -1,0 +1,259 @@
+<v-container v-if="assistantEnabled" fluid data-aid="aimetrics_screen">
+  <v-row>
+    <v-col cols="12" lg="3">
+      <h2 v-text="i18n.aiMetrics"></h2>
+    </v-col>
+    <v-col cols="12" lg="5">
+      <v-expansion-panels class="no-print">
+        <v-expansion-panel data-aid="aimetrics_options">
+          <v-expansion-panel-title id="aimetrics-options-header" expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up">{{i18n.options}}</v-expansion-panel-title>
+          <v-expansion-panel-text>
+            <span data-aid="aimetrics_autorefresh_select">
+              <v-select id="aimetrics-auto-refresh" :disabled="$root.loading" v-model="autoRefreshInterval" @update:focused="autoRefreshIntervalChanged" :items="autoRefreshIntervals" :hint="i18n.autoRefresh" persistent-hint variant="underlined" prepend-icon="fa-hourglass-half"></v-select>
+            </span>
+            <span data-aid="aimetrics_timezone_select">
+              <v-select :disabled="$root.loading" @update:model-value="zone = $event; saveLocalSettings(); loadData()" v-model="zone" :items="$root.timezones" :hint="i18n.timezoneHelp" persistent-hint variant="underlined" prepend-icon="fa-user-clock"></v-select>
+            </span>
+          </v-expansion-panel-text>
+        </v-expansion-panel>
+      </v-expansion-panels>
+    </v-col>
+    <v-spacer></v-spacer>
+    <v-col cols="12" lg="2" align="end">
+      <h4 :data-aid="aimetrics_credits_remaining">{{ i18n.creditsRemaining }}: <span :class="creditsRemaining <= lowBalanceColorAlert ? 'text-error' : 'text-primary'">{{ formatCount(creditsRemaining) }}</span></h4>
+      <span class="text-caption">{{ i18n.creditsSubjectToExpiration }}</span>
+    </v-col>
+  </v-row>
+  <v-row>
+    <v-col>
+      <v-toolbar class="elevation-0 theme-background-lighten-1" fixed>
+        <v-btn variant="flat" color="primary" @click.stop="loadData()" id="aimetrics-refresh-button" class="ml-3" data-aid="aimetrics_refresh">
+          <v-icon>fa-sync</v-icon>
+        </v-btn>
+        <v-spacer></v-spacer>
+        <v-btn variant="flat" color="secondary" class="mx-4" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'assistant.html'" :title="i18n.contextualDocsBtn" data-aid="aimetrics_docs">
+          <v-icon>fa-circle-question</v-icon>
+        </v-btn>
+      </v-toolbar>
+    </v-col>
+  </v-row>
+  <v-row align="start">
+    <v-col cols="12" md="7"></v-col>
+    <v-col cols="12" md="5" class="d-flex flex-nowrap align-center" :class="{'mt-4': relativeTimeEnabled}">
+      <v-text-field :disabled="$root.loading" v-if="relativeTimeEnabled" id="aimetrics-relative-time-value" @change="notifyInputsChanged" class="mx-2"
+        v-model="relativeTimeValue" :hint="i18n.relativeTimeHelp" persistent-hint type="number" data-aid="aimetrics_relative_time_input"
+        variant="underlined" density="compact">
+        <template #prepend>
+          <v-btn v-if="relativeTimeEnabled" icon variant="text" size="x-small" @click="showAbsoluteTime" id="aimetrics-show-absolute-time" data-aid="aimetrics_absolute_time_toggle">
+            <v-icon class="theme-icon">fa-history</v-icon>
+          </v-btn>
+          <div v-if="relativeTimeEnabled" class="px-4">
+            {{ i18n.last }}
+          </div>
+        </template>
+        <template #append>
+          <span data-aid="aimetrics_relative_time_units">
+            <v-select id="aimetrics-relative-time-unit" class="my-n1 py-0 no-details align-self-start" :disabled="$root.loading" v-if="relativeTimeEnabled" @update:model-value="relativeTimeUnit = $event; notifyInputsChanged()"
+              v-model="relativeTimeUnit" :items="relativeTimeUnits" variant="plain"></v-select>
+          </span>
+        </template>
+      </v-text-field>
+      <v-text-field variant="underlined" :disabled="$root.loading" v-if="!relativeTimeEnabled" id="aimetrics-date-range" @change="notifyInputsChanged" class="mx-2 closer-prepend"
+        v-model="dateRange" :hint="i18n.timePickerHelp" persistent-hint
+        data-aid="aimetrics_absolute_time">
+        <template #prepend>
+          <v-btn v-if="!relativeTimeEnabled" icon variant="text" size="x-small" @click="showRelativeTime" id="aimetrics-show-relative-time" data-aid="aimetrics_relative_time_toggle">
+            <v-icon class="theme-icon">fa-calendar-alt</v-icon>
+          </v-btn>
+          <v-btn @click="showDateRangePicker()" icon variant="text" size="x-small">
+            <v-icon class="theme-icon">fa-angle-down</v-icon>
+          </v-btn>
+        </template>
+      </v-text-field>
+      <v-btn id="aimetrics-hunt" class="align-self-start" :class="{'mt-4': !relativeTimeEnabled}" :disabled="$root.loading" color="primary" @click.stop="loadData()" data-aid="aimetrics_run_query">
+        <span class="d-sm-none d-lg-inline pr-2" v-text="i18n.refresh"></span>
+        <v-icon>fa-sync</v-icon>
+      </v-btn>
+    </v-col>
+  </v-row>
+  <v-row>
+    <v-col cols="6" id="aimetrics-breadcrumbs">
+      <div>
+        <v-breadcrumbs :items="breadcrumbs">
+          <template #item="{ item }">
+            <v-breadcrumbs-item
+              :to="item.to"
+              :disabled="item.disabled"
+              :data-aid="'aimetrics_breadcrumb_' + item.title"
+            >
+              {{ item.title }}
+            </v-breadcrumbs-item>
+          </template>
+          <template #divider>
+            <v-icon>fa-chevron-right</v-icon>
+          </template>
+        </v-breadcrumbs>
+      </div>
+    </v-col>
+    <v-col cols="6">
+      <v-text-field v-model="searchFilter" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="aimetrics_filter" variant="underlined">
+        <template #clear="{ props }">
+          <v-icon v-bind="props">fa-times-circle</v-icon>
+        </template>
+      </v-text-field>
+    </v-col>
+    <v-spacer></v-spacer>
+  </v-row>
+  <v-row>
+    <v-col id="aimetrics-table">
+      <!-- Users Table -->
+      <v-data-table v-if="tableSetting == TABLE_SETTING_USERS" :search="searchFilter" :sort-by="sortBy0" @update:sort-by="val => sortBy0 = val" :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage"
+        must-sort :headers="headers[tableSetting]" :items="aimetrics" data-aid="aimetrics_table_users">
+        <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
+          <tr>
+            <template v-for="header in columns" :key="header.key">
+              <th :class="[ header.align, {'is-sorted': isSorted(header)}, rightShiftedHeaders[tableSetting].includes(header?.value) ? 'text-right' : '' ]" :data-aid="'aimetrics_header_' + header?.value?.toLowerCase()">
+                <span @click="toggleSort(header)">
+                  {{ header.title }}
+                </span>
+                <template v-if="isSorted(header)">
+                  <v-icon>
+                    {{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down'}}
+                  </v-icon>
+                </template>
+              </th>
+            </template>
+          </tr>
+        </template>
+        <template #item="{ item }">
+          <tr>
+            <td>{{ item.email }}</td>
+            <td class="text-right">{{ formatCount(item.totalInputTokens) }}</td>
+            <td class="text-right">{{ formatCount(item.totalOutputTokens) }}</td>
+            <td class="text-right">{{ formatCount(item.totalCredits) }}</td>
+            <td class="text-right">{{ item.creditPercentage }}</td>
+            <td class="text-right">{{ formatCount(item.totalSessions) }}</td>
+            <td class="text-right">{{ formatCount(item.totalMessages) }}</td>
+            <td>
+              <router-link :to="buildUserLink(item.userId)" class="no-print" style="text-decoration: none; cursor: 'pointer'" data-aid="aimetrics_open_user">
+                <v-icon class="mr-2 theme-icon" :title="i18n.viewSessions">fa-binoculars</v-icon>
+              </router-link>
+            </td>
+          </tr>
+        </template>
+      </v-data-table>
+      <!-- Sessions Table -->
+      <v-data-table v-if="tableSetting == TABLE_SETTING_SESSIONS" :search="searchFilter" :sort-by="sortBy1" @update:sort-by="val => sortBy1 = val" :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage"
+        must-sort :headers="headers[tableSetting]" :items="aimetrics" v-model:expanded="expanded" data-aid="aimetrics_table_sessions">
+        <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
+          <tr>
+            <template v-for="header in columns" :key="header.key">
+              <th :class="[ header.align, {'is-sorted': isSorted(header)}, rightShiftedHeaders[tableSetting].includes(header?.value) ? 'text-right' : '' ]" :data-aid="'aimetrics_header_' + header?.value?.toLowerCase()">
+                <span @click="toggleSort(header)">
+                  {{ header.title }}
+                </span>
+                <template v-if="isSorted(header)">
+                  <v-icon>
+                    {{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down'}}
+                  </v-icon>
+                </template>
+              </th>
+            </template>
+          </tr>
+        </template>
+        <template #item="{ item }">
+          <tr>
+            <td>{{ trimTitle(item.title) }}</td>
+            <td>{{ $root.formatLocalTimestamp(item.createTime, zone) }}</td>
+            <td class="text-right">{{ formatCount(item.totalInputTokens) }}</td>
+            <td class="text-right">{{ formatCount(item.totalOutputTokens) }}</td>
+            <td class="text-right">{{ formatCount(item.totalCredits) }}</td>
+            <td class="text-right">{{ formatCount(item.totalMessages) }}</td>
+            <td>
+              <router-link :to="buildSessionLink(item.sessionId)" class="no-print" style="text-decoration: none; cursor: 'pointer'" data-aid="aimetrics_open_session">
+                <v-icon class="mr-2 theme-icon" :title="i18n.viewMessages">fa-binoculars</v-icon>
+              </router-link>
+              <router-link v-if="$root.user?.id === item.userId" :to="buildAssistantLink(item.sessionId)" class="no-print" style="text-decoration: none; cursor: 'pointer'" data-aid="aimetrics_open_assistant">
+                <v-icon class="mr-2 theme-icon" :title="i18n.openSession">fa-arrow-up-right-from-square</v-icon>
+              </router-link>
+            </td>
+          </tr>
+        </template>
+      </v-data-table>
+      <!-- Messages Table -->
+      <v-data-table v-if="tableSetting == TABLE_SETTING_MESSAGES" :search="searchFilter" :sort-by="sortBy2" @update:sort-by="val => sortBy2 = val" :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage"
+        must-sort :headers="headers[tableSetting]" :items="aimetrics" v-model:expanded="expanded" data-aid="aimetrics_table_messages">
+        <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
+          <tr>
+            <template v-for="header in columns" :key="header.key">
+              <th :class="[ header.align, {'is-sorted': isSorted(header)}, rightShiftedHeaders[tableSetting].includes(header?.value) ? 'text-right' : '' ]" :data-aid="'aimetrics_header_' + header?.value?.toLowerCase()">
+                <span @click="toggleSort(header)">
+                  {{ header.title }}
+                </span>
+                <template v-if="isSorted(header)">
+                  <v-icon>
+                    {{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down'}}
+                  </v-icon>
+                </template>
+              </th>
+            </template>
+          </tr>
+        </template>
+        <template #item="{ item, isExpanded, toggleExpand, internalItem }">
+          <tr>
+            <td>
+              <v-btn id="aimetrics-expand-node" icon variant="text" size="small" @click="toggleExpand(internalItem)" data-aid="aimetrics_details_expand">
+                <v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="aimetrics_details_collapse">fa-angle-down</v-icon>
+                <v-icon v-else :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="aimetrics_details_expand">fa-angle-right</v-icon>
+              </v-btn>
+            </td>
+            <td>{{ item.role === 'assistant' ? trimTitle(stripHtml(item.expandMessage)) : trimTitle(item.expandMessage) }}</td>
+            <td>{{ $root.formatLocalTimestamp(item.createTime, zone) }}</td>
+            <td>{{ item.role }}</td>
+            <td class="text-right">{{ item.inputTokens ? formatCount(item.inputTokens) : '' }}</td>
+            <td class="text-right">{{ item.outputTokens ? formatCount(item.outputTokens) : '' }}</td>
+            <td class="text-right">{{ item.credits ? formatCount(item.credits) : '' }}</td>
+          </tr>
+        </template>
+        <template #expanded-row="{ item }">
+          <tr>
+            <td :colspan="headers[tableSetting].length" class="px-4 py-3">
+              <div v-if="item.role === 'assistant'" class="expansion va-middle hardwrap-aimetrics" v-html="formatMarkdownMermaid(item.expandMessage)" data-aid="aimetrics_message_content_assistant"></div>
+              <div v-else class="expansion va-middle hardwrap-aimetrics" data-aid="aimetrics_message_content_user">{{ item.expandMessage }}</div>
+            </td>
+          </tr>
+        </template>
+      </v-data-table>
+    </v-col>
+  </v-row>
+</v-container>
+<v-container v-else-if="$root.isLicensed('oai')" fluid data-aid="aimetrics_disabled">
+	<div style="
+		align-items: center;
+		margin: 0;
+		display: flex;
+		min-height: 50vh;
+		justify-content: center;
+    gap: 8px;
+    flex-direction: column;
+	">
+    <div class="my-8" style="display: flex; gap: 8px; align-items: center;">
+      <div>{{ i18n.assistantDisabled }}</div>
+      <router-link v-if="$root.isUserAdmin()" :to="{name: 'config', query: {s: 'soc.config.server.client.assistant.enabled'}}" class="no-print" style="text-decoration: none; cursor: 'pointer'" data-aid="aimetrics_config_entry_enabled">
+        <v-icon class="mr-2 theme-icon" :title="i18n.visitConfigEntry">fa-gear</v-icon>
+      </router-link>
+    </div>
+  </div>
+</v-container>
+<v-container v-else>
+	<div style="
+		align-items: center;
+		display: flex;
+		min-height: 50vh;
+		justify-content: center;
+    gap: 8px;
+    flex-direction: column;
+	">
+    <div class="my-8" v-html="i18n.assistantUnavailable"></div>
+  </div>
+</v-container>

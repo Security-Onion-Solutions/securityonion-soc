@@ -214,9 +214,17 @@ func (store *ElasticAssistantstore) SaveChat(ctx context.Context, chat *model.St
 	return err
 }
 
-func (store *ElasticAssistantstore) GetChatHistory(ctx context.Context, sessionId string) ([]*model.StoredMessage, error) {
-	if err := store.server.CheckAuthorized(ctx, "read_authored", "assistant"); err != nil {
-		return nil, err
+func (store *ElasticAssistantstore) GetChatHistory(ctx context.Context, sessionId string, authored bool) ([]*model.StoredMessage, error) {
+	userId := ctx.Value(web.ContextKeyRequestorId).(string)
+
+	if authored {
+		if err := store.server.CheckAuthorized(ctx, "read_authored", "assistant"); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := store.server.CheckAuthorized(ctx, "read_all", "assistant"); err != nil {
+			return nil, err
+		}
 	}
 
 	logger := log.FromContext(ctx)
@@ -318,7 +326,9 @@ func (store *ElasticAssistantstore) GetChatHistory(ctx context.Context, sessionI
 							message.Auditable.Kind = source[store.schemaPrefix+"kind"].(string)
 							message.Auditable.Id = hit["_id"].(string)
 
-							messages = append(messages, &message)
+							if !authored || message.UserId == userId {
+								messages = append(messages, &message)
+							}
 						}
 					}
 				}
@@ -335,9 +345,20 @@ func (store *ElasticAssistantstore) GetChatHistory(ctx context.Context, sessionI
 	return messages, nil
 }
 
-func (store *ElasticAssistantstore) GetSessions(ctx context.Context, userId string) ([]*model.AssistantSession, error) {
-	if err := store.server.CheckAuthorized(ctx, "read_authored", "assistant"); err != nil {
-		return nil, err
+func (store *ElasticAssistantstore) GetSessions(ctx context.Context, authored bool, opts ...model.GetSessionsOpt) ([]*model.AssistantSession, error) {
+	opt := &model.GetSessionsOpts{}
+	for _, o := range opts {
+		o(opt)
+	}
+
+	if authored {
+		if err := store.server.CheckAuthorized(ctx, "read_authored", "assistant"); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := store.server.CheckAuthorized(ctx, "read_all", "assistant"); err != nil {
+			return nil, err
+		}
 	}
 
 	logger := log.FromContext(ctx)
@@ -345,35 +366,77 @@ func (store *ElasticAssistantstore) GetSessions(ctx context.Context, userId stri
 	query := map[string]any{
 		"query": map[string]any{
 			"bool": map[string]any{
-				"must": []any{
-					map[string]any{
-						"term": map[string]any{
-							store.schemaPrefix + "session.userId": userId,
-						},
-					},
-					map[string]any{
+				"must": []map[string]any{
+					{
 						"term": map[string]any{
 							store.schemaPrefix + "kind": "session",
 						},
 					},
 				},
-				"must_not": []any{
-					map[string]any{
-						"exists": map[string]any{
-							"field": store.schemaPrefix + "session.deleteTime",
-						},
-					},
-				},
 			},
 		},
-		"sort": []any{
-			map[string]any{
+		"sort": []map[string]any{
+			{
 				"@timestamp": map[string]any{
 					"order": "asc",
 				},
 			},
 		},
 		"size": 10000,
+	}
+
+	if opt.UserId() != "" {
+		boolQuery, _ := query["query"].(map[string]any)["bool"].(map[string]any)
+		mustQuery, _ := boolQuery["must"].([]map[string]any)
+
+		mustQuery = append(mustQuery, map[string]any{
+			"term": map[string]any{
+				store.schemaPrefix + "session.userId": opt.UserId(),
+			},
+		})
+
+		boolQuery["must"] = mustQuery
+	}
+
+	if opt.SessionId() != "" {
+		boolQuery, _ := query["query"].(map[string]any)["bool"].(map[string]any)
+		mustQuery, _ := boolQuery["must"].([]map[string]any)
+
+		mustQuery = append(mustQuery, map[string]any{
+			"term": map[string]any{
+				store.schemaPrefix + "session.sessionId": opt.SessionId(),
+			},
+		})
+
+		boolQuery["must"] = mustQuery
+	}
+
+	if !opt.IncludeDeleted() {
+		boolQuery, _ := query["query"].(map[string]any)["bool"].(map[string]any)
+		boolQuery["must_not"] = []any{
+			map[string]any{
+				"exists": map[string]any{
+					"field": store.schemaPrefix + "session.deleteTime",
+				},
+			},
+		}
+	}
+
+	start, end := opt.Range()
+	if !start.IsZero() && !end.IsZero() {
+		boolQuery, _ := query["query"].(map[string]any)["bool"].(map[string]any)
+		mustQuery, _ := boolQuery["must"].([]map[string]any)
+
+		mustQuery = append(mustQuery, map[string]any{
+			"range": map[string]any{
+				"@timestamp": map[string]any{
+					"gte": start.Format(time.RFC3339),
+					"lte": end.Format(time.RFC3339),
+				},
+			},
+		})
+
+		boolQuery["must"] = mustQuery
 	}
 
 	// Convert query to JSON
@@ -452,11 +515,178 @@ func (store *ElasticAssistantstore) GetSessions(ctx context.Context, userId stri
 
 	logger.WithFields(log.Fields{
 		"sessionCount": len(sessions),
-		"userId":       userId,
+		"userId":       opt.UserId(),
 		"requestId":    ctx.Value(web.ContextKeyRequestId),
 	}).Debug("Found first messages for sessions")
 
+	if opt.Usage() {
+		if err := store.populateSessionUsage(ctx, sessions); err != nil {
+			logger.WithError(err).Error("Failed to populate session usage")
+			return nil, err
+		}
+	}
+
 	return sessions, nil
+}
+
+func (store *ElasticAssistantstore) populateSessionUsage(ctx context.Context, sessions []*model.AssistantSession) error {
+	if len(sessions) == 0 {
+		return nil
+	}
+
+	logger := log.FromContext(ctx)
+
+	// Build MSearch request body - one search per session
+	var msearchBody strings.Builder
+	for _, session := range sessions {
+		// Header line (empty object means use default index)
+		msearchBody.WriteString("{}\n")
+
+		// Query to aggregate usage for this session
+		query := map[string]any{
+			"query": map[string]any{
+				"bool": map[string]any{
+					"must": []any{
+						map[string]any{
+							"term": map[string]any{
+								store.schemaPrefix + "chat.sessionId": session.SessionId,
+							},
+						},
+						map[string]any{
+							"term": map[string]any{
+								store.schemaPrefix + "kind": "chat",
+							},
+						},
+					},
+				},
+			},
+			"aggs": map[string]any{
+				"total_input_tokens": map[string]any{
+					"sum": map[string]any{
+						"field": store.schemaPrefix + "chat.message.usage.input_tokens",
+					},
+				},
+				"total_output_tokens": map[string]any{
+					"sum": map[string]any{
+						"field": store.schemaPrefix + "chat.message.usage.output_tokens",
+					},
+				},
+				"total_credits": map[string]any{
+					"sum": map[string]any{
+						"field": store.schemaPrefix + "chat.message.usage.credits",
+					},
+				},
+				"total_messages": map[string]any{
+					"value_count": map[string]any{
+						"field": store.schemaPrefix + "chat.sessionId",
+					},
+				},
+			},
+			"size": 0,
+		}
+
+		queryJSON, err := json.Marshal(query)
+		if err != nil {
+			logger.WithError(err).Error("Failed to marshal session usage query")
+			return err
+		}
+		msearchBody.WriteString(string(queryJSON))
+		msearchBody.WriteString("\n")
+	}
+
+	logger.WithFields(log.Fields{
+		"sessionCount":  len(sessions),
+		"msearchLength": msearchBody.Len(),
+		"requestId":     ctx.Value(web.ContextKeyRequestId),
+	}).Debug("Executing MSearch for session usage")
+
+	// Execute MSearch
+	res, err := store.esClient.Msearch(
+		strings.NewReader(msearchBody.String()),
+		store.esClient.Msearch.WithContext(ctx),
+		store.esClient.Msearch.WithIndex(store.chatIndex),
+	)
+	if err != nil {
+		logger.WithError(err).Error("Failed to execute MSearch for session usage")
+		return err
+	}
+	defer res.Body.Close()
+
+	responseJSON, err := readJsonFromResponse(res)
+	if err != nil {
+		logger.WithError(err).Error("Failed to read MSearch response")
+		return err
+	}
+
+	logger.WithFields(log.Fields{
+		"msearchResponseLength": len(responseJSON),
+		"requestId":             ctx.Value(web.ContextKeyRequestId),
+	}).Debug("Received MSearch response")
+
+	var response map[string]any
+	if err := json.Unmarshal([]byte(responseJSON), &response); err != nil {
+		logger.WithError(err).Error("Failed to unmarshal MSearch response")
+		return err
+	}
+
+	// Parse responses and populate session usage
+	if responses, ok := response["responses"].([]any); ok {
+		for i, respObj := range responses {
+			if i >= len(sessions) {
+				break
+			}
+
+			session := sessions[i]
+			if resp, ok := respObj.(map[string]any); ok {
+				// Check for error
+				if errObj, hasErr := resp["error"]; hasErr {
+					logger.WithFields(log.Fields{
+						"sessionId": session.SessionId,
+						"error":     errObj,
+					}).Warn("Error in MSearch response for session")
+					continue
+				}
+
+				// Extract aggregations
+				if aggs, ok := resp["aggregations"].(map[string]any); ok {
+					usage := &model.SessionUsage{}
+
+					if inputTokensAgg, ok := aggs["total_input_tokens"].(map[string]any); ok {
+						if value, ok := inputTokensAgg["value"].(float64); ok {
+							usage.TotalInputTokens = int(value)
+						}
+					}
+
+					if outputTokensAgg, ok := aggs["total_output_tokens"].(map[string]any); ok {
+						if value, ok := outputTokensAgg["value"].(float64); ok {
+							usage.TotalOutputTokens = int(value)
+						}
+					}
+
+					if creditsAgg, ok := aggs["total_credits"].(map[string]any); ok {
+						if value, ok := creditsAgg["value"].(float64); ok {
+							usage.TotalCredits = int(value)
+						}
+					}
+
+					if messagesAgg, ok := aggs["total_messages"].(map[string]any); ok {
+						if value, ok := messagesAgg["value"].(float64); ok {
+							usage.TotalMessages = int(value)
+						}
+					}
+
+					session.Usage = usage
+				}
+			}
+		}
+	}
+
+	logger.WithFields(log.Fields{
+		"sessionCount": len(sessions),
+		"requestId":    ctx.Value(web.ContextKeyRequestId),
+	}).Debug("Populated session usage")
+
+	return nil
 }
 
 func (store *ElasticAssistantstore) CreateSession(ctx context.Context, session *model.AssistantSession) error {
@@ -535,4 +765,178 @@ func (store *ElasticAssistantstore) DeleteSession(ctx context.Context, sessionId
 	}).Debug("successfully deleted session")
 
 	return nil
+}
+
+func (store *ElasticAssistantstore) GetUsage(ctx context.Context, start time.Time, end time.Time) ([]*model.UserUsage, error) {
+	if err := store.server.CheckAuthorized(ctx, "read_all", "assistant"); err != nil {
+		return nil, err
+	}
+
+	logger := log.FromContext(ctx)
+
+	query := map[string]any{
+		"query": map[string]any{
+			"bool": map[string]any{
+				"must": []any{
+					map[string]any{
+						"term": map[string]any{
+							store.schemaPrefix + "kind": "chat",
+						},
+					},
+					map[string]any{
+						"range": map[string]any{
+							"@timestamp": map[string]any{
+								"gte": start.Format(time.RFC3339),
+								"lte": end.Format(time.RFC3339),
+							},
+						},
+					},
+				},
+			},
+		},
+		"aggs": map[string]any{
+			"users": map[string]any{
+				"terms": map[string]any{
+					"field": store.schemaPrefix + "chat.userId",
+					"size":  10000,
+				},
+				"aggs": map[string]any{
+					"total_input_tokens": map[string]any{
+						"sum": map[string]any{
+							"field": store.schemaPrefix + "chat.message.usage.input_tokens",
+						},
+					},
+					"total_output_tokens": map[string]any{
+						"sum": map[string]any{
+							"field": store.schemaPrefix + "chat.message.usage.output_tokens",
+						},
+					},
+					"total_credits": map[string]any{
+						"sum": map[string]any{
+							"field": store.schemaPrefix + "chat.message.usage.credits",
+						},
+					},
+					"total_messages": map[string]any{
+						"value_count": map[string]any{
+							"field": store.schemaPrefix + "chat.userId",
+						},
+					},
+					"total_sessions": map[string]any{
+						"cardinality": map[string]any{
+							"field": store.schemaPrefix + "chat.sessionId",
+						},
+					},
+				},
+			},
+		},
+		"size": 0,
+	}
+
+	queryJSON, err := json.Marshal(query)
+	if err != nil {
+		logger.WithError(err).Error("Failed to marshal Elasticsearch aggregation query")
+		return nil, err
+	}
+
+	logger.WithFields(log.Fields{
+		"usageQuery":     store.truncate(string(queryJSON)),
+		"startDateRange": start.Format(time.RFC3339),
+		"endDateRange":   end.Format(time.RFC3339),
+		"requestId":      ctx.Value(web.ContextKeyRequestId),
+	}).Debug("Executing usage aggregation query")
+
+	res, err := store.esClient.Search(
+		store.esClient.Search.WithContext(ctx),
+		store.esClient.Search.WithIndex(store.chatIndex),
+		store.esClient.Search.WithBody(strings.NewReader(string(queryJSON))),
+	)
+	if err != nil {
+		logger.WithError(err).Error("Failed to execute usage aggregation query")
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	responseJSON, err := readJsonFromResponse(res)
+	if err != nil {
+		logger.WithError(err).Error("Failed to read usage aggregation response")
+		return nil, err
+	}
+
+	logger.WithFields(log.Fields{
+		"usageResponseLength": len(responseJSON),
+		"requestId":           ctx.Value(web.ContextKeyRequestId),
+	}).Debug("Received usage aggregation response")
+
+	var response map[string]any
+	if err := json.Unmarshal([]byte(responseJSON), &response); err != nil {
+		logger.WithError(err).Error("Failed to unmarshal usage aggregation response")
+		return nil, err
+	}
+
+	userUsages := []*model.UserUsage{}
+	if aggs, ok := response["aggregations"].(map[string]any); ok {
+		if users, ok := aggs["users"].(map[string]any); ok {
+			if buckets, ok := users["buckets"].([]any); ok {
+				for _, bucketObj := range buckets {
+					if bucket, ok := bucketObj.(map[string]any); ok {
+						userId, _ := bucket["key"].(string)
+
+						totalInputTokens := 0
+						if inputTokensAgg, ok := bucket["total_input_tokens"].(map[string]any); ok {
+							if value, ok := inputTokensAgg["value"].(float64); ok {
+								totalInputTokens = int(value)
+							}
+						}
+
+						totalOutputTokens := 0
+						if outputTokensAgg, ok := bucket["total_output_tokens"].(map[string]any); ok {
+							if value, ok := outputTokensAgg["value"].(float64); ok {
+								totalOutputTokens = int(value)
+							}
+						}
+
+						totalCredits := 0
+						if creditsAgg, ok := bucket["total_credits"].(map[string]any); ok {
+							if value, ok := creditsAgg["value"].(float64); ok {
+								totalCredits = int(value)
+							}
+						}
+
+						totalMessages := 0
+						if messagesAgg, ok := bucket["total_messages"].(map[string]any); ok {
+							if value, ok := messagesAgg["value"].(float64); ok {
+								totalMessages = int(value)
+							}
+						}
+
+						totalSessions := 0
+						if sessionsAgg, ok := bucket["total_sessions"].(map[string]any); ok {
+							if value, ok := sessionsAgg["value"].(float64); ok {
+								totalSessions = int(value)
+							}
+						}
+
+						userUsage := &model.UserUsage{
+							UserId:            userId,
+							TotalInputTokens:  totalInputTokens,
+							TotalOutputTokens: totalOutputTokens,
+							TotalCredits:      totalCredits,
+							TotalMessages:     totalMessages,
+							TotalSessions:     totalSessions,
+						}
+						userUsages = append(userUsages, userUsage)
+					}
+				}
+			}
+		}
+	}
+
+	logger.WithFields(log.Fields{
+		"userCount": len(userUsages),
+		"start":     start.Format(time.RFC3339),
+		"end":       end.Format(time.RFC3339),
+		"requestId": ctx.Value(web.ContextKeyRequestId),
+	}).Debug("Processed usage aggregation results")
+
+	return userUsages, nil
 }

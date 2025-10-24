@@ -157,11 +157,15 @@ func (export *Export) convertToString(value interface{}) string {
 	}
 }
 
-func (export *Export) convertToCsv(records [][]string) (io.Reader, int, error) {
+func (export *Export) convertToCsv(records [][]string, csvSeparator string) (io.Reader, int, error) {
 	var err error
 	buffer := bytes.NewBufferString("")
 	writer := csv.NewWriter(buffer)
-	writer.WriteAll(records)
+	writer.Comma = []rune(csvSeparator)[0]
+	defer writer.Flush()
+
+	// Write all records at once
+	err = writer.WriteAll(records)
 
 	size := buffer.Len()
 

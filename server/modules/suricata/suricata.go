@@ -333,14 +333,14 @@ func (e *SuricataEngine) ExtractDetails(detect *model.Detection) error {
 				detect.Severity = model.SeverityCritical
 			}
 		} else if strings.EqualFold(meta.Key, "created_at") {
-			t, err := detections.ParseDate(meta.Value, formats)
+			t, err := util.ParseDate(meta.Value, formats)
 			if err == nil {
 				detect.SourceCreated = &t
 			} else {
 				log.WithField("created_at", meta.Value).WithError(err).Warn("unable to parse date")
 			}
 		} else if strings.EqualFold(meta.Key, "updated_at") {
-			t, err := detections.ParseDate(meta.Value, formats)
+			t, err := util.ParseDate(meta.Value, formats)
 			if err == nil {
 				detect.SourceUpdated = &t
 			} else {
@@ -788,7 +788,7 @@ func (e *SuricataEngine) ParseRules(content string, ruleset string) ([]*model.De
 				return strings.EqualFold(m.Key, "created_at")
 			})
 			if ok {
-				t, err := detections.ParseDate(sourceCreated.Value, formats)
+				t, err := util.ParseDate(sourceCreated.Value, formats)
 				if err == nil {
 					srcCreated = &t
 				}
@@ -798,7 +798,7 @@ func (e *SuricataEngine) ParseRules(content string, ruleset string) ([]*model.De
 				return strings.EqualFold(m.Key, "updated_at")
 			})
 			if ok {
-				t, err := detections.ParseDate(sourceUpdated.Value, formats)
+				t, err := util.ParseDate(sourceUpdated.Value, formats)
 				if err == nil {
 					srcUpdated = &t
 				}

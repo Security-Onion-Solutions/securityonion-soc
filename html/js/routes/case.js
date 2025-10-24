@@ -1093,6 +1093,13 @@ routes.push({ path: '/case/:id', name: 'case', component: {
 
       return obj;
     },
+    formatMarkdownMermaid(text) {
+      md = this.$root.formatMarkdown(text, true);
+      this.$nextTick(() => {
+        this.$root.renderMermaid();
+      });
+      return md;
+    },
   }
 }});
 

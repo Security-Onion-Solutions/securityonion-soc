@@ -30,6 +30,28 @@
 								color="primary">
 							</v-switch>
 						</span>
+						<span data-aid="assistant_always_approve_reads_toggle">
+							<v-switch
+								id="always-approve-read-requests"
+								v-model="alwaysApproveReadRequests"
+								density="compact"
+								hide-details
+								class="my-0"
+								:label="i18n.alwaysApproveReadRequests"
+								color="primary">
+							</v-switch>
+						</span>
+						<span data-aid="assistant_show_chat_history_toggle">
+							<v-switch
+								id="show-chat-history"
+								v-model="showChatHistory"
+								density="compact"
+								hide-details
+								class="my-0"
+								:label="i18n.showChatHistory"
+								color="primary">
+							</v-switch>
+						</span>
 					</v-expansion-panel-text>
 				</v-expansion-panel>
 			</v-expansion-panels>
@@ -37,11 +59,25 @@
 		<v-spacer></v-spacer>
 		<v-col cols="12" lg="2" align="end">
 			<h4 :data-aid="assistant_credits_remaining">{{ i18n.creditsRemaining }}: <span :class="creditsRemaining <= lowBalanceColorAlert ? 'text-error' : 'text-primary'">{{ formatCount(creditsRemaining) }}</span></h4>
+			<span class="text-caption">{{ i18n.creditsSubjectToExpiration }}</span>
+		</v-col>
+	</v-row>
+	<v-row align="start">
+		<v-col cols="12">
+			<v-toolbar class="no-print elevation-0 theme-background-lighten-1" fixed>
+				<v-btn color="primary mx-4" variant="flat" id="chat-new-button" @click="startNewChat" :title="i18n.chatNewChat" data-aid="assistant_banner_create_chat">
+					<v-icon>fa-plus</v-icon>
+				</v-btn>
+				<v-spacer></v-spacer>
+				<v-btn variant="flat" color="secondary" class="mx-4" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'assistant.html'" :title="i18n.contextualDocsBtn" data-aid="assistant_docs">
+					<v-icon>fa-circle-question</v-icon>
+				</v-btn>
+			</v-toolbar>
 		</v-col>
 	</v-row>
 	<v-row>
 		<!-- Main Chat Area -->
-		<v-col cols="12" lg="9">
+		<v-col cols="12" :lg="!showChatHistory ? 12 : 9">
 			<v-card id="chat-container" class="chat-container">
 				<v-card-title id="chat-header" class="py-3 d-flex align-center">
 					<v-icon class="mr-2">fa-comments</v-icon>
@@ -49,7 +85,7 @@
 					<div class="text-wrap" style="font-size: 14px;">{{ i18n.contextLength }}: <span :class="getContextColor(contextLength)">{{ formatCount(contextLength) }}</span></div>
 				</v-card-title>
 				<v-divider></v-divider>
-				<v-card-text id="chat-messages" class="chat-messages pa-0">
+				<v-card-text id="chat-messages" class="chat-messages pa-0" @scroll="onChatScroll">
 					<div class="pa-4">
 						<div v-for="(message, index) in messages" :key="index" :id="'message-' + index" class="message-item mb-3">
 							<div class="d-flex align-start">
@@ -97,6 +133,7 @@
 															variant="flat"
 															@click="approveTool(toolUse)"
 															data-aid="assistant_tool_use_approve"
+															:disabled="!canChat"
 														>
 															<v-icon size="small" class="mr-1">fa-check</v-icon>
 															{{ i18n.approve }}
@@ -108,10 +145,38 @@
 															variant="flat"
 															@click="rejectTool(toolUse)"
 															data-aid="assistant_tool_use_reject"
+															:disabled="!canChat"
 														>
 															<v-icon size="small" class="mr-1">fa-times</v-icon>
 															{{ i18n.reject }}
 														</v-btn>
+														<v-btn
+															id="options-tool-button"
+															icon
+															variant="text"
+															size="x-small"
+															height="auto"
+															width="auto"
+															@click="openOptionsMenu"
+															data-aid="assistant_tool_use_options"
+															style="min-width: auto;"
+														>
+															<v-icon size="small">fa-cog</v-icon>
+														</v-btn>
+													</div>
+												</div>
+												
+												<!-- Tool Executing Spinner -->
+												<div v-if="toolUse.status === 'executing'" class="mb-2">
+													<div class="d-flex align-center">
+														<v-progress-circular
+															indeterminate
+															color="warning"
+															size="16"
+															width="2"
+															class="mr-2"
+														></v-progress-circular>
+														<span class="text-caption text-medium-emphasis">{{ i18n.toolExecuting }}</span>
 													</div>
 												</div>
 												
@@ -181,13 +246,13 @@
 						spellcheck="false"
 						class="chat-input flex-grow-1 mr-3"
 						@keyup.enter="sendMessage"
-						:disabled="isTyping"
+						:disabled="isTyping || !canChat"
 						data-aid="assistant_chat_input"
 					></v-text-field>
 					<v-btn
 						id="chat-send-button"
 						color="primary"
-						:disabled="!newMessage.trim() || isTyping"
+						:disabled="!newMessage.trim() || isTyping || !canChat"
 						@click="sendMessage"
 						data-aid="assistant_chat_send"
 						class="flex-shrink-0"
@@ -199,14 +264,11 @@
 		</v-col>
 		
 		<!-- Recent Chats Sidebar -->
-		<v-col cols="12" lg="3">
+		<v-col v-if="showChatHistory" cols="12" lg="3">
 			<v-card id="chat-history-sidebar" class="chat-history-sidebar">
 				<v-card-title id="chat-history-header" class="py-3 d-flex align-center">
 					<v-icon class="mr-2">fa-history</v-icon>
 					<span class="flex-grow-1">{{ i18n.chatHistory }}</span>
-					<v-btn id="chat-new-button" icon variant="text" size="x-small" @click="startNewChat" :title="i18n.chatNewChat" data-aid="assistant_chat_history_create">
-						<v-icon size="small">fa-plus</v-icon>
-					</v-btn>
 				</v-card-title>
 				<v-divider></v-divider>
 				<v-card-text id="chat-history-content" class="chat-history-content pa-0">
@@ -238,12 +300,36 @@
 	
 </v-container>
 
-<v-container v-else fluid data-aid="assistant_unavailable">
+<v-container v-else-if="$root.isLicensed('oai')" fluid data-aid="assistant_disabled">
 	<div style="
 		align-items: center;
 		margin: 0;
 		display: flex;
 		min-height: 50vh;
 		justify-content: center;
-	">{{ i18n.featureUnavailable }}</div>
+		gap: 8px;
+		flex-direction: column;
+	">
+	<div class="my-8" style="display: flex; gap: 8px; align-items: center;">
+		<div>{{ i18n.assistantDisabled }}</div>
+		<router-link v-if="$root.isUserAdmin()" :to="{name: 'config', query: {s: 'soc.config.server.client.assistant.enabled'}}" class="no-print" style="text-decoration: none; cursor: 'pointer'" data-aid="assistant_config_entry_enable">
+			<v-icon class="mr-2 theme-icon" :title="i18n.visitConfigEntry">fa-gear</v-icon>
+		</router-link>
+	</div>
+		<video src="../images/videos/onionai.mp4" autoplay muted loop controls style="width: 80%; max-width: 1408px;" data-aid="assistant_needs_enabled_video"></video>
+	</div>
+</v-container>
+
+<v-container v-else>
+	<div style="
+		align-items: center;
+		display: flex;
+		min-height: 50vh;
+		justify-content: center;
+		gap: 8px;
+		flex-direction: column;
+	">
+	<div class="my-8" v-html="i18n.assistantUnavailable"></div>
+		<video src="../images/videos/onionai.mp4" autoplay muted loop controls style="width: 80%; max-width: 1408px;" data-aid="assistant_needs_pro_video"></video>
+	</div>
 </v-container>

@@ -16,7 +16,6 @@ import (
 	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
-	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
@@ -44,7 +43,10 @@ func (t *QueryEventsTool) GetDescription() string {
 		"- Examples for NON-GROUPED queries (individual events):\n" +
 		"  - **\"Show me the latest 5 alerts\"**: `{\"query\": \"tags:alert\", \"limit\": 5}`\n" +
 		"  - **\"List recent SSH connections\"**: `{\"query\": \"tags:ssh\", \"limit\": 10}`\n" +
-		"  - **\"Show alert details for ID X\"**: `{\"query\": \"tags:alert AND log.id.uid:\\\"X\\\"\", \"limit\": 1}`"
+		"  - **\"Show alert details for ID X\"**: `{\"query\": \"tags:alert AND log.id.uid:\\\"X\\\"\", \"limit\": 1}`" +
+		"- Examples for wild cards:\n" +
+		"  - Search terms cannot begin with a wildcard (e.g., `*xyz` the wildcard is ignored, but `xyz*` is valid)\n" +
+		"  - If you use wildcards, do not wrap the value in quotes, instead use parentheses (e.g., `rule.name:(A B*)` is valid, but `rule.name:\"A B*\"` will not work as expected)"
 }
 
 func (t *QueryEventsTool) GetSchema() model.JSONSchema {
@@ -56,13 +58,17 @@ func (t *QueryEventsTool) GetSchema() model.JSONSchema {
 					Type:        "string",
 					Description: "The OQL query string to execute",
 				},
-				"start_time": {
+				"range_start": {
 					Type:        "string",
-					Description: "Optional start time for the query range (e.g., \"-1h\", \"2023-10-26 10:00:00\")",
+					Description: "Optional start time for the query range (e.g., \"-1h\", \"2023/10/26 10:00:00 AM\"). Default is 24 hours ago (\"-24h\")",
 				},
-				"end_time": {
+				"range_end": {
 					Type:        "string",
-					Description: "Optional end time for the query range (e.g., \"now\", \"2023-10-26 12:00:00\")",
+					Description: "Optional end time for the query range (e.g., \"now\", \"2023/10/26 12:00:00 PM\"). Default is now.",
+				},
+				"range_format": {
+					Type:        "string",
+					Description: "Format of the date range (default: \"2006/01/02 3:04:05 PM\"). The format must be specified using Go's time package's reference layout format. Required if either range_start or range_end is provided.",
 				},
 				"limit": {
 					Type:        "integer",
@@ -82,8 +88,9 @@ func (t *QueryEventsTool) GetSchema() model.JSONSchema {
 type queryEventsArgs struct {
 	OQLQuery     string  `json:"oql_query"`
 	Query        string  `json:"query"` // Support both query and oql_query
-	StartTime    *string `json:"start_time,omitempty"`
-	EndTime      *string `json:"end_time,omitempty"`
+	RangeStart   string  `json:"range_start,omitempty"`
+	RangeEnd     string  `json:"range_end,omitempty"`
+	RangeFormat  string  `json:"range_format,omitempty"`
 	Limit        int     `json:"limit"`
 	GroupByField *string `json:"groupby_field,omitempty"`
 }
@@ -148,22 +155,8 @@ func (t *QueryEventsTool) Execute(ctx context.Context, server *server.Server, pa
 
 	var timeRange string
 
-	if args.StartTime != nil || args.EndTime != nil {
-		start := "-24h"
-		end := "now"
-
-		if args.StartTime != nil {
-			start = *args.StartTime
-		}
-		if args.EndTime != nil {
-			end = *args.EndTime
-		}
-
-		// Parse and format times
-		startFormatted := util.ParseRelativeTimeString(start)
-		endFormatted := util.ParseRelativeTimeString(end)
-
-		timeRange = fmt.Sprintf("%s - %s", startFormatted, endFormatted)
+	if args.RangeStart != "" || args.RangeEnd != "" {
+		timeRange = parseRangeAllowRelative(args.RangeStart, args.RangeEnd, args.RangeFormat)
 	}
 
 	criteria := model.NewEventSearchCriteria()
@@ -266,15 +259,15 @@ func (t *QueryEventsTool) Execute(ctx context.Context, server *server.Server, pa
 func filterEvents(events []*model.EventRecord) []map[string]any {
 	// Default fields from Python implementation
 	defaultFields := []string{
-		"_id",
 		"@timestamp",
 		"client.name",
-		"destination.ip", "destination.port",
+		"destination.ip", "destination.port", "destination.geo.country_name",
 		"dns.query.name", "dns.query_name", // Both formats
 		"event.category", "event.module", "event.dataset", "event.severity", "event.severity_label",
+		"event_data.agent.name", "event_data.host.os.name",
 		"file.mime_type", "file.name",
 		"hash.md5", "hash.sha1",
-		"host.mac",
+		"host.mac", "host.os.name",
 		"http.method", "http.useragent", "http.virtual_host",
 		"log.id.uid",
 		"network.community_id", "network.protocol", "network.transport",
@@ -283,49 +276,30 @@ func filterEvents(events []*model.EventRecord) []map[string]any {
 		"process.name", "process.executable",
 		"rule.category", "rule.name", "rule.uuid",
 		"software.name", "software.type", "software.version.unparsed",
-		"source.ip", "source.port",
+		"source.ip", "source.port", "source.geo.country_name",
 		"ssh.cypher_algorithm", "ssh.client", "ssh.server",
-		"ssl.cipher", "ssl.server_name", "ssl.version",
-		"user.name",
+		"ssl.cipher", "ssl.server_name", "ssl.version", "system.auth.sudo.command",
+		"user.name", "user.effective.name",
 		"weird.name",
 		"tags", // Important for identifying event types
 	}
 
 	filtered := make([]map[string]any, 0, len(events))
 
-	for i, event := range events {
-		filteredPayload := make(map[string]any)
-
-		// Debug: log available fields for first event
-		if i == 0 {
-			fmt.Printf("[QueryEvents] First event payload fields:\n")
-			for key := range event.Payload {
-				fmt.Printf("  - %s\n", key)
-			}
+	for _, event := range events {
+		filteredPayload := map[string]any{
+			"_id": event.Id,
 		}
 
-		// Copy only default fields
-		foundFields := 0
+		// Copy only default fields starting with the Id field
 		for _, field := range defaultFields {
 			// First try the field as-is (for non-nested fields)
 			if val, exists := event.Payload[field]; exists && val != nil {
 				filteredPayload[field] = val
-				foundFields++
-				if i == 0 && foundFields <= 10 {
-					fmt.Printf("[QueryEvents] Found direct field '%s'\n", field)
-				}
 			} else if value := getNestedField(event.Payload, field); value != nil {
 				// Try nested field lookup
 				setNestedField(filteredPayload, field, value)
-				foundFields++
-				if i == 0 && foundFields <= 10 {
-					fmt.Printf("[QueryEvents] Found nested field '%s'\n", field)
-				}
 			}
-		}
-
-		if i == 0 {
-			fmt.Printf("[QueryEvents] Filtered %d fields from first event\n", foundFields)
 		}
 
 		filtered = append(filtered, map[string]any{

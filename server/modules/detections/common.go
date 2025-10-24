@@ -8,7 +8,6 @@ package detections
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	modcontext "github.com/security-onion-solutions/securityonion-soc/server/modules/context"
@@ -46,14 +45,4 @@ func UpdateOverrideNote(ctx context.Context, store Detectionstore, detectId stri
 	_, err = store.UpdateDetection(skipCtx, det)
 
 	return true, err
-}
-
-func ParseDate(dateString string, layouts []string) (time.Time, error) {
-	for _, layout := range layouts {
-		t, err := time.Parse(layout, dateString)
-		if err == nil {
-			return t, nil
-		}
-	}
-	return time.Time{}, fmt.Errorf("unable to parse date string: %s", dateString)
 }

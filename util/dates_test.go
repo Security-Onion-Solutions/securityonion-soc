@@ -260,3 +260,165 @@ func TestUnitToDuration(t *testing.T) {
 		})
 	}
 }
+
+func TestParseDate(t *testing.T) {
+	formats := []string{"2006-01-02", "2006/01/02", "2006_01_02"}
+
+	tests := []struct {
+		Name        string
+		Date        string
+		ExpOutput   string
+		ShouldError bool
+	}{
+		{
+			Name:      "Valid date w/Slashes",
+			Date:      "2021/01/01",
+			ExpOutput: "2021-01-01 00:00:00 +0000 UTC",
+		},
+		{
+			Name:      "Valid date w/Dashes",
+			Date:      "2023-10-14",
+			ExpOutput: "2023-10-14 00:00:00 +0000 UTC",
+		},
+		{
+			Name:      "Valid date w/Underscores",
+			Date:      "2022_05_30",
+			ExpOutput: "2022-05-30 00:00:00 +0000 UTC",
+		},
+		{
+			Name:        "Invalid date",
+			Date:        "2022-05-30T12:00:00",
+			ShouldError: true,
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			t.Parallel()
+
+			output, err := ParseDate(test.Date, formats)
+
+			if test.ShouldError {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), "unable to parse date string")
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, test.ExpOutput, output.String())
+			}
+		})
+	}
+}
+
+func TestParseDateRange(t *testing.T) {
+	format := "2006/01/02 3:04:05 PM"
+
+	tests := []struct {
+		Name           string
+		DateRange      string
+		Format         string
+		Zone           string
+		ExpectedStart  string
+		ExpectedEnd    string
+		ShouldError    bool
+		UseDefaultTime bool
+	}{
+		{
+			Name:          "Valid date range with UTC",
+			DateRange:     "2023/01/15 10:00:00 AM - 2023/01/15 5:00:00 PM",
+			Format:        format,
+			Zone:          "UTC",
+			ExpectedStart: "2023-01-15 10:00:00 +0000 UTC",
+			ExpectedEnd:   "2023-01-15 17:00:00 +0000 UTC",
+		},
+		{
+			Name:          "Valid date range with America/New_York",
+			DateRange:     "2023/06/01 9:00:00 AM - 2023/06/01 6:00:00 PM",
+			Format:        format,
+			Zone:          "America/New_York",
+			ExpectedStart: "2023-06-01 09:00:00 -0400 EDT",
+			ExpectedEnd:   "2023-06-01 18:00:00 -0400 EDT",
+		},
+		{
+			Name:          "Valid date range with whitespace",
+			DateRange:     "  2023/03/10 1:00:00 PM  -  2023/03/10 11:59:59 PM  ",
+			Format:        format,
+			Zone:          "UTC",
+			ExpectedStart: "2023-03-10 13:00:00 +0000 UTC",
+			ExpectedEnd:   "2023-03-10 23:59:59 +0000 UTC",
+		},
+		{
+			Name:          "Valid date range spanning multiple days",
+			DateRange:     "2023/12/25 12:00:00 AM - 2023/12/31 11:59:59 PM",
+			Format:        format,
+			Zone:          "UTC",
+			ExpectedStart: "2023-12-25 00:00:00 +0000 UTC",
+			ExpectedEnd:   "2023-12-31 23:59:59 +0000 UTC",
+		},
+		{
+			Name:           "Empty date range defaults to last 24 hours",
+			DateRange:      "",
+			Format:         format,
+			Zone:           "UTC",
+			UseDefaultTime: true,
+		},
+		{
+			Name:           "Invalid format (no separator) defaults to last 24 hours",
+			DateRange:      "2023/01/15 10:00:00 AM",
+			Format:         format,
+			Zone:           "UTC",
+			UseDefaultTime: true,
+		},
+		{
+			Name:        "Invalid start date format",
+			DateRange:   "invalid - 2023/01/15 5:00:00 PM",
+			Format:      format,
+			Zone:        "UTC",
+			ShouldError: true,
+		},
+		{
+			Name:        "Invalid end date format",
+			DateRange:   "2023/01/15 10:00:00 AM - invalid",
+			Format:      format,
+			Zone:        "UTC",
+			ShouldError: true,
+		},
+		{
+			Name:          "Invalid timezone defaults to UTC",
+			DateRange:     "2023/02/20 3:00:00 PM - 2023/02/20 9:00:00 PM",
+			Format:        format,
+			Zone:          "Invalid/Timezone",
+			ExpectedStart: "2023-02-20 15:00:00 +0000 UTC",
+			ExpectedEnd:   "2023-02-20 21:00:00 +0000 UTC",
+		},
+		{
+			Name:          "Date range with Europe/London timezone",
+			DateRange:     "2023/07/15 2:30:00 PM - 2023/07/15 10:30:00 PM",
+			Format:        format,
+			Zone:          "Europe/London",
+			ExpectedStart: "2023-07-15 14:30:00 +0100 BST",
+			ExpectedEnd:   "2023-07-15 22:30:00 +0100 BST",
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			start, end, err := ParseDateRange(test.DateRange, test.Format, test.Zone)
+
+			if test.ShouldError {
+				assert.Error(t, err)
+			} else if test.UseDefaultTime {
+				assert.NoError(t, err)
+				// Verify it returns a 24-hour range ending at approximately now
+				diff := time.Since(end)
+				assert.True(t, diff < time.Second*5, "End time should be close to now")
+				assert.Equal(t, 24*time.Hour, end.Sub(start), "Range should be 24 hours")
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, test.ExpectedStart, start.String())
+				assert.Equal(t, test.ExpectedEnd, end.String())
+			}
+		})
+	}
+}

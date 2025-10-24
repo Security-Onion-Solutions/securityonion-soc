@@ -16,4 +16,5 @@ type Configstore interface {
 	GetSettings(ctx context.Context, advanced bool) ([]*model.Setting, error)
 	UpdateSetting(ctx context.Context, setting *model.Setting, remove bool) error
 	SyncSettings(ctx context.Context) error
+	SyncModule(ctx context.Context, module string, force bool) error
 }

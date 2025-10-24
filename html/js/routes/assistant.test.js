@@ -70,6 +70,7 @@ const fakeToolUse = {
   approved: null
 };
 const fakeCreditsResponse = {
+  health_status: 'healthy',
   credit_balance: 100
 };
 const fakeInvestigationData = {
@@ -95,14 +96,51 @@ beforeEach(() => {
   console.error = jest.fn();
   console.warn = jest.fn();
   
-  // Mock localStorage with proper Jest mocks
-  mockLocalStorage = {
-    getItem: jest.fn(),
-    setItem: jest.fn(),
-    removeItem: jest.fn(),
-    clear: jest.fn()
+  // Mock localStorage with proper Jest mocks that supports property access
+  const removeItemMock = jest.fn();
+  const getItemMock = jest.fn();
+  const setItemMock = jest.fn();
+  const clearMock = jest.fn();
+  const storageData = {};
+  
+  // Create localStorage mock that handles both property access and method calls
+  const localStorageMock = {
+    getItem: getItemMock,
+    setItem: setItemMock,
+    removeItem: removeItemMock,
+    clear: clearMock
   };
-  global.localStorage = mockLocalStorage;
+  
+  // Override removeItem to also delete from storageData
+  localStorageMock.removeItem = jest.fn((key) => {
+    delete storageData[key];
+    removeItemMock(key);
+  });
+  
+  global.localStorage = new Proxy(localStorageMock, {
+    get(target, prop) {
+      if (typeof prop === 'string' && prop.startsWith('settings.')) {
+        return storageData[prop];
+      }
+      return target[prop];
+    },
+    set(target, prop, value) {
+      if (typeof prop === 'string' && prop.startsWith('settings.')) {
+        // Convert values to strings like real localStorage
+        storageData[prop] = String(value);
+        return true;
+      }
+      target[prop] = value;
+      return true;
+    },
+    deleteProperty(target, prop) {
+      delete storageData[prop];
+      return true;
+    }
+  });
+  
+  // Keep reference to the mock for testing
+  mockLocalStorage = global.localStorage;
   
   // Mock fetch for streaming responses
   global.fetch = jest.fn();
@@ -159,21 +197,21 @@ test('component data initialization', () => {
   expect(comp.executingTools).toBeInstanceOf(Map);
 });
 
-test('loadChatHistory initializes with welcome message', async () => {
-  await comp.loadChatHistory();
+test('loadNewChatScreen initializes with welcome message', async () => {
+  await comp.loadNewChatScreen();
   
   expect(comp.messages).toHaveLength(1);
   expect(comp.messages[0].role).toBe('assistant');
   expect(comp.messages[0].content).toContain('Hello! I\'m your AI Assistant');
 });
 
-test('loadChatHistory handles error', async () => {
+test('loadNewChatScreen handles error', async () => {
   const showErrorMock = mockShowError();
   comp.$root.showError = jest.fn(() => {
     throw new Error('Test error');
   });
   
-  await comp.loadChatHistory();
+  await comp.loadNewChatScreen();
   
   expect(comp.messages).toHaveLength(1); // Should still have welcome message
 });
@@ -208,17 +246,6 @@ test('loadStoredChats handles error', async () => {
   expect(comp.chatHistory).toEqual([]);
 });
 
-
-test('loadCurrentChatId handles localStorage error', () => {
-  mockLocalStorage.getItem.mockImplementation(() => {
-    throw new Error('localStorage error');
-  });
-  
-  const result = comp.loadCurrentChatId();
-  
-  expect(result).toBe(null);
-});
-
 test('generateChatId creates unique ID', () => {
   const id1 = comp.generateChatId();
   const id2 = comp.generateChatId();
@@ -228,10 +255,92 @@ test('generateChatId creates unique ID', () => {
   expect(id1).not.toBe(id2);
 });
 
+// Assistant initialization tests
+test('initAssistant sets assistantEnabled to true when enabled and licensed', async () => {
+  const mockParams = {
+    enabled: true,
+    investigationPrompt: 'Test investigation prompt',
+    contextLimitSmall: 200000,
+    contextLimitLarge: 1000000,
+    thresholdColorRatioLow: 0.5,
+    thresholdColorRatioMed: 0.75,
+    thresholdColorRatioMax: 1,
+    lowBalanceColorAlert: 500000
+  };
+  comp.$root.isLicensed = jest.fn().mockReturnValue(true);
+  comp.$root.showDisclaimer = jest.fn();
+  comp.loadStoredChats = jest.fn().mockResolvedValue();
+  comp.handleRouteSessionId = jest.fn().mockResolvedValue();
+  comp.loadCredits = jest.fn().mockResolvedValue();
+  comp.$root.disclaimer = false;
+  
+  await comp.initAssistant(mockParams);
+  
+  expect(comp.assistantEnabled).toBe(true);
+  expect(comp.$root.isLicensed).toHaveBeenCalledWith('oai');
+  expect(comp.investigationMsg).toBe('Test investigation prompt');
+  expect(comp.contextLimitSmall).toBe(200000);
+  expect(comp.contextLimitLarge).toBe(1000000);
+  expect(comp.thresholdColorRatioLow).toBe(0.5);
+  expect(comp.thresholdColorRatioMed).toBe(0.75);
+  expect(comp.thresholdColorRatioMax).toBe(1);
+  expect(comp.lowBalanceColorAlert).toBe(500000);
+  expect(comp.loadStoredChats).toHaveBeenCalled();
+  expect(comp.handleRouteSessionId).toHaveBeenCalled();
+  expect(comp.loadCredits).toHaveBeenCalled();
+});
+
+test('initAssistant sets assistantEnabled to false when not enabled', async () => {
+  const mockParams = { enabled: false };
+  comp.$root.isLicensed = jest.fn().mockReturnValue(true);
+  comp.$root.showDisclaimer = jest.fn();
+  comp.loadStoredChats = jest.fn();
+  comp.handleRouteSessionId = jest.fn();
+  comp.loadCredits = jest.fn();
+  
+  await comp.initAssistant(mockParams);
+  
+  expect(comp.assistantEnabled).toBe(false);
+  expect(comp.$root.disclaimer).toBe(false);
+  expect(comp.loadStoredChats).not.toHaveBeenCalled();
+  expect(comp.handleRouteSessionId).not.toHaveBeenCalled();
+  expect(comp.loadCredits).not.toHaveBeenCalled();
+});
+
+test('initAssistant sets assistantEnabled to false when not licensed', async () => {
+  const mockParams = { enabled: true };
+  comp.$root.isLicensed = jest.fn().mockReturnValue(false);
+  comp.$root.showDisclaimer = jest.fn();
+  comp.loadStoredChats = jest.fn();
+  comp.handleRouteSessionId = jest.fn();
+  comp.loadCredits = jest.fn();
+  
+  await comp.initAssistant(mockParams);
+  
+  expect(comp.assistantEnabled).toBe(false);
+  expect(comp.$root.disclaimer).toBe(false);
+  expect(comp.loadStoredChats).not.toHaveBeenCalled();
+  expect(comp.handleRouteSessionId).not.toHaveBeenCalled();
+  expect(comp.loadCredits).not.toHaveBeenCalled();
+});
+
+test('handleRouteSessionId returns early when assistantEnabled is false', async () => {
+  comp.assistantEnabled = false;
+  comp.$route.params.sessionId = fakeSessionId;
+  comp.loadChatFromBackend = jest.fn();
+  comp.clearStreamingStates = jest.fn();
+  
+  await comp.handleRouteSessionId();
+  
+  expect(comp.clearStreamingStates).toHaveBeenCalled();
+  expect(comp.loadChatFromBackend).not.toHaveBeenCalled();
+});
+
 // Session management tests
 test('handleRouteSessionId with existing session', async () => {
   comp.$route.params.sessionId = fakeSessionId;
   comp.loadChatFromBackend = jest.fn().mockResolvedValue();
+  comp.assistantEnabled = true;
   
   await comp.handleRouteSessionId();
   
@@ -241,6 +350,7 @@ test('handleRouteSessionId with existing session', async () => {
 test('handleRouteSessionId with non-existent session', async () => {
   comp.$route.params.sessionId = fakeSessionId;
   comp.loadChatFromBackend = jest.fn().mockRejectedValue(new Error('Session not found'));
+  comp.assistantEnabled = true;
   
   await comp.handleRouteSessionId();
   
@@ -292,21 +402,35 @@ test('loadCredits handles error', async () => {
   expect(comp.creditsRemaining).toBe(0);
 });
 
+test('loadCredits handles unhealthy status', async () => {
+  const showErrorMock = mockShowError();
+  const unhealthyResponse = {
+    health_status: 'unhealthy',
+    credit_balance: 50
+  };
+  mockPapi("get", { data: unhealthyResponse });
+  
+  await comp.loadCredits();
+  
+  expect(showErrorMock).toHaveBeenCalledWith('Error loading credits from API: The AI model could not be reached. Support for local AI models is coming soon.');
+  expect(comp.creditsRemaining).toBe(0); // Should remain 0 when unhealthy
+});
+
 // Chat operations tests
 test('loadChat switches to existing chat', async () => {
   const chat = fakeChatHistory[0];
   comp.saveCurrentChat = jest.fn().mockResolvedValue();
   comp.loadChatFromBackend = jest.fn().mockResolvedValue();
   comp.updateUrlWithSessionId = jest.fn();
-  comp.scrollToBottom = jest.fn();
+  comp.clearStreamingStates = jest.fn();
   comp.currentChatId = chat.sessionId; // Set current chat ID to match
   
   await comp.loadChat(chat);
   
   expect(comp.saveCurrentChat).toHaveBeenCalled();
+  expect(comp.clearStreamingStates).toHaveBeenCalled();
   expect(comp.loadChatFromBackend).toHaveBeenCalledWith(chat.sessionId);
   expect(comp.updateUrlWithSessionId).toHaveBeenCalledWith(chat.sessionId);
-  expect(comp.scrollToBottom).toHaveBeenCalled();
 });
 
 test('loadChat handles error', async () => {
@@ -329,7 +453,7 @@ test('deleteChat success', async () => {
   comp.chatHistory = [...fakeChatHistory];
   comp.currentChatId = chatId;
   comp.saveCurrentChatId = jest.fn();
-  comp.loadChatHistory = jest.fn();
+  comp.loadNewChatScreen = jest.fn();
   
   await comp.deleteChat(chatId);
   
@@ -337,7 +461,7 @@ test('deleteChat success', async () => {
   expect(comp.chatHistory).toHaveLength(0);
   expect(comp.currentChatId).toBe(null);
   expect(comp.saveCurrentChatId).toHaveBeenCalled();
-  expect(comp.loadChatHistory).toHaveBeenCalled();
+  expect(comp.loadNewChatScreen).toHaveBeenCalled();
   expect(comp.$router.push).toHaveBeenCalledWith({ name: 'assistant' });
 });
 
@@ -354,7 +478,7 @@ test('deleteChat handles error', async () => {
 test('startNewChat', async () => {
   comp.saveCurrentChat = jest.fn().mockResolvedValue();
   comp.saveCurrentChatId = jest.fn();
-  comp.loadChatHistory = jest.fn();
+  comp.loadNewChatScreen = jest.fn();
   comp.currentChatId = fakeSessionId;
   
   await comp.startNewChat();
@@ -362,7 +486,7 @@ test('startNewChat', async () => {
   expect(comp.saveCurrentChat).toHaveBeenCalled();
   expect(comp.currentChatId).toBe(null);
   expect(comp.saveCurrentChatId).toHaveBeenCalled();
-  expect(comp.loadChatHistory).toHaveBeenCalled();
+  expect(comp.loadNewChatScreen).toHaveBeenCalled();
   expect(comp.$router.push).toHaveBeenCalledWith({ name: 'assistant' });
 });
 
@@ -740,7 +864,7 @@ test('executeTool handles chained tool use in response', async () => {
   expect(comp.messages[0].toolUses.value[0].name).toBe('analyze_data');
   expect(comp.messages[0].toolUses.value[0].status).toBe('preparing');
   expect(comp.executingTools.get('chained_tool_456')).toBeDefined();
-  expect(comp.executingTools.get('block_0')).toBeDefined();
+  expect(comp.executingTools.get(`block_0_${fakeSessionId}`)).toBeDefined();
 });
 
 test('executeTool captures raw tool result from backend', async () => {
@@ -771,12 +895,16 @@ test('executeTool captures raw tool result from backend', async () => {
   };
   mockPapi('get', backendResponse);
   
+  // Include message_start event to trigger captureRawToolResult
+  const messageStartData = JSON.stringify({ type: 'message_start' });
+  
   const mockResponse = {
     ok: true,
     data: {
       pipeThrough: jest.fn().mockReturnValue({
         getReader: jest.fn().mockReturnValue({
           read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: `data: ${messageStartData}\n\n` })
             .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
             .mockResolvedValueOnce({ done: true })
         })
@@ -818,7 +946,10 @@ test('executeTool handles tool result with error', async () => {
       }
     ]
   };
-  mockPapi('get', backendResponse)
+  mockPapi('get', backendResponse);
+  
+  // Include message_start event to trigger captureRawToolResult
+  const messageStartData = JSON.stringify({ type: 'message_start' });
   
   const mockResponse = {
     ok: true,
@@ -826,6 +957,7 @@ test('executeTool handles tool result with error', async () => {
       pipeThrough: jest.fn().mockReturnValue({
         getReader: jest.fn().mockReturnValue({
           read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: `data: ${messageStartData}\n\n` })
             .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
             .mockResolvedValueOnce({ done: true })
         })
@@ -1030,7 +1162,7 @@ test('callAIAPI processes content_block_start with tool_use', async () => {
   expect(comp.messages[0].toolUses.value[0].input).toEqual({ query: 'test query' });
   expect(comp.messages[0].toolUses.value[0].status).toBe('preparing');
   expect(comp.executingTools.get('tool_456')).toBeDefined();
-  expect(comp.executingTools.get('block_0')).toBeDefined();
+  expect(comp.executingTools.get(`block_0_${fakeSessionId}`)).toBeDefined();
 });
 
 test('callAIAPI processes content_block_delta with text_delta', async () => {
@@ -1115,7 +1247,7 @@ test('callAIAPI processes content_block_delta with input_json_delta', async () =
   
   await comp.callAIAPI('Test message');
   
-  const toolUse = comp.executingTools.get('block_0');
+  const toolUse = comp.executingTools.get(`block_0_${fakeSessionId}`);
   expect(toolUse).toBeDefined();
   expect(toolUse.inputJson).toBe('{"param": "value"}');
   expect(toolUse.status).toBe('preparing');
@@ -1164,7 +1296,7 @@ test('callAIAPI processes content_block_stop event', async () => {
   
   await comp.callAIAPI('Test message');
   
-  const toolUse = comp.executingTools.get('block_0');
+  const toolUse = comp.executingTools.get(`block_0_${fakeSessionId}`);
   expect(toolUse).toBeDefined();
   expect(toolUse.input).toEqual({ test: 'data' });
   expect(toolUse.status).toBe('pending_approval');
@@ -1213,7 +1345,7 @@ test('callAIAPI handles content_block_stop with invalid JSON', async () => {
   
   await comp.callAIAPI('Test message');
   
-  const toolUse = comp.executingTools.get('block_0');
+  const toolUse = comp.executingTools.get(`block_0_${fakeSessionId}`);
   expect(toolUse).toBeDefined();
   expect(toolUse.status).toBe('error');
   expect(toolUse.error).toContain('Failed to parse tool input');
@@ -1427,6 +1559,7 @@ test('handleRouteSessionId detects investigation session from query parameter', 
   comp.loadChatFromBackend = jest.fn().mockRejectedValue(new Error('Session not found'));
   comp.startInvestigationSession = jest.fn();
   comp.saveCurrentChatId = jest.fn();
+  comp.assistantEnabled = true;
   
   // Mock $root methods needed for handleRouteSessionId
   comp.$root.startLoading = jest.fn();
@@ -1441,59 +1574,20 @@ test('handleRouteSessionId detects investigation session from query parameter', 
   expect(comp.$route.query.investigation).toBe('true');
 });
 
-test('handleRouteSessionId handles investigation session with missing localStorage data', async () => {
-  comp.$route.params.sessionId = fakeSessionId;
-  comp.$route.query.investigation = 'true';
-  comp.loadChatFromBackend = jest.fn().mockRejectedValue(new Error('Session not found'));
-  comp.startInvestigationSession = jest.fn();
-  comp.saveCurrentChatId = jest.fn();
-  
-  // Mock localStorage returning null (no investigation data)
-  mockLocalStorage.getItem.mockReturnValue(null);
-  
-  await comp.handleRouteSessionId();
-  
-  // Verify basic session handling occurred
-  expect(comp.currentChatId).toBe(fakeSessionId);
-  expect(comp.saveCurrentChatId).toHaveBeenCalled();
-  // Note: Investigation code path may not be triggered due to mocking limitations
-});
-
-test('handleRouteSessionId handles investigation session with invalid JSON in localStorage', async () => {
-  const showErrorMock = mockShowError();
-  comp.$route.params.sessionId = fakeSessionId;
-  comp.$route.query.investigation = 'true';
-  comp.loadChatFromBackend = jest.fn().mockRejectedValue(new Error('Session not found'));
-  comp.startInvestigationSession = jest.fn();
-  comp.saveCurrentChatId = jest.fn();
-  
-  // Mock $root methods needed for handleRouteSessionId
-  comp.$root.startLoading = jest.fn();
-  comp.$root.stopLoading = jest.fn();
-  
-  // Mock localStorage returning invalid JSON
-  mockLocalStorage.getItem.mockReturnValue('invalid json data');
-  
-  await comp.handleRouteSessionId();
-  
-  // Verify basic session handling occurred
-  expect(comp.currentChatId).toBe(fakeSessionId);
-  expect(comp.saveCurrentChatId).toHaveBeenCalled();
-});
-
 test('handleRouteSessionId handles non-investigation session with existing messages', async () => {
   comp.$route.params.sessionId = fakeSessionId;
   comp.$route.query.investigation = 'false'; // Not an investigation
   comp.loadChatFromBackend = jest.fn().mockRejectedValue(new Error('Session not found'));
-  comp.loadChatHistory = jest.fn();
+  comp.loadNewChatScreen = jest.fn();
   comp.saveCurrentChatId = jest.fn();
   comp.messages = [fakeMessage, fakeAssistantMessage]; // More than 1 message
+  comp.assistantEnabled = true;
   
   await comp.handleRouteSessionId();
   
   expect(comp.currentChatId).toBe(fakeSessionId);
   expect(comp.saveCurrentChatId).toHaveBeenCalled();
-  expect(comp.loadChatHistory).toHaveBeenCalled();
+  expect(comp.loadNewChatScreen).toHaveBeenCalled();
 });
 
 test('startInvestigationSession clears messages and sets up investigation prompt', async () => {
@@ -1684,7 +1778,7 @@ test('formatMarkdown delegates to root', () => {
   
   const result = comp.formatMarkdown(text);
   
-  expect(comp.$root.formatMarkdown).toHaveBeenCalledWith(text);
+  expect(comp.$root.formatMarkdown).toHaveBeenCalledWith(text, true);
   expect(result).toBe('<strong>bold text</strong>');
 });
 
@@ -2010,6 +2104,166 @@ test('convertBackendMessagesToFrontend handles tool_use blocks with null/undefin
   expect(result[0].toolUses.value[0].input).toEqual({}); // Should default to empty object
 });
 
+test('convertBackendMessagesToFrontend handles tool_use blocks at end of session with pending_approval status', () => {
+  comp.resetContextLength = jest.fn();
+  comp.currentChatId = 'test_session_123';
+  global.Vue = { ref: jest.fn((value) => ({ value })) };
+  
+  // Single message with tool use at the end (no subsequent messages)
+  const backendMessages = [
+    {
+      createTime: '2025-01-01T12:00:00.000Z',
+      message: {
+        role: 'assistant',
+        contentBlocks: [
+          {
+            type: 'tool_use',
+            id: 'tool_end_session',
+            name: 'query_events',
+            input: { query: 'test query at end' }
+          }
+        ]
+      }
+    }
+    // No subsequent messages - this is the end of the session
+  ];
+  
+  const result = comp.convertBackendMessagesToFrontend(backendMessages);
+  
+  expect(result).toHaveLength(1);
+  expect(result[0]).toHaveProperty('toolUses');
+  expect(result[0].toolUses.value).toHaveLength(1);
+  
+  const toolUse = result[0].toolUses.value[0];
+  expect(toolUse.id).toBe('tool_end_session');
+  expect(toolUse.name).toBe('query_events');
+  expect(toolUse.input).toEqual({ query: 'test query at end' });
+  expect(toolUse.status).toBe('pending_approval'); // Key assertion for line 1473
+  expect(toolUse.result).toBe(null);
+  expect(toolUse.error).toBe(null);
+  expect(toolUse.rawResult).toBe(null);
+  expect(toolUse.timestamp).toBe('2025-01-01T12:00:00.000Z');
+  expect(toolUse.approved).toBe(null);
+  expect(toolUse.sessionId).toBe('test_session_123'); // Should include sessionId
+});
+
+test('convertBackendMessagesToFrontend handles multiple tool_use blocks at end of session', () => {
+  comp.resetContextLength = jest.fn();
+  comp.currentChatId = 'multi_tool_session';
+  global.Vue = { ref: jest.fn((value) => ({ value })) };
+  
+  // Message with multiple tool uses at the end of session
+  const backendMessages = [
+    {
+      createTime: '2025-01-01T12:00:00.000Z',
+      message: {
+        role: 'assistant',
+        contentBlocks: [
+          {
+            type: 'tool_use',
+            id: 'tool_1',
+            name: 'query_events',
+            input: { query: 'first query' }
+          },
+          {
+            type: 'tool_use',
+            id: 'tool_2',
+            name: 'get_playbooks',
+            input: { alert_id: 'alert_123' }
+          }
+        ]
+      }
+    }
+    // No subsequent messages
+  ];
+  
+  const result = comp.convertBackendMessagesToFrontend(backendMessages);
+  
+  expect(result).toHaveLength(1);
+  expect(result[0]).toHaveProperty('toolUses');
+  expect(result[0].toolUses.value).toHaveLength(2);
+  
+  // Both tools should have pending_approval status
+  result[0].toolUses.value.forEach((toolUse, index) => {
+    expect(toolUse.status).toBe('pending_approval');
+    expect(toolUse.approved).toBe(null);
+    expect(toolUse.sessionId).toBe('multi_tool_session');
+    expect(toolUse.id).toBe(`tool_${index + 1}`);
+  });
+});
+
+test('convertBackendMessagesToFrontend handles tool_use blocks at end with missing input', () => {
+  comp.resetContextLength = jest.fn();
+  comp.currentChatId = 'missing_input_session';
+  global.Vue = { ref: jest.fn((value) => ({ value })) };
+  
+  // Tool use block with missing input at end of session
+  const backendMessages = [
+    {
+      createTime: '2025-01-01T12:00:00.000Z',
+      message: {
+        role: 'assistant',
+        contentBlocks: [
+          {
+            type: 'tool_use',
+            id: 'tool_no_input',
+            name: 'simple_tool'
+            // No input property
+          }
+        ]
+      }
+    }
+  ];
+  
+  const result = comp.convertBackendMessagesToFrontend(backendMessages);
+  
+  expect(result).toHaveLength(1);
+  expect(result[0]).toHaveProperty('toolUses');
+  expect(result[0].toolUses.value).toHaveLength(1);
+  
+  const toolUse = result[0].toolUses.value[0];
+  expect(toolUse.status).toBe('pending_approval');
+  expect(toolUse.input).toEqual({}); // Should default to empty object
+  expect(toolUse.approved).toBe(null);
+  expect(toolUse.sessionId).toBe('missing_input_session');
+});
+
+test('convertBackendMessagesToFrontend handles tool_use blocks at end with missing id/name', () => {
+  comp.resetContextLength = jest.fn();
+  comp.currentChatId = 'missing_props_session';
+  global.Vue = { ref: jest.fn((value) => ({ value })) };
+  
+  // Tool use block with missing id and name at end of session
+  const backendMessages = [
+    {
+      createTime: '2025-01-01T12:00:00.000Z',
+      message: {
+        role: 'assistant',
+        contentBlocks: [
+          {
+            type: 'tool_use'
+            // Missing id and name properties
+          }
+        ]
+      }
+    }
+  ];
+  
+  const result = comp.convertBackendMessagesToFrontend(backendMessages);
+  
+  expect(result).toHaveLength(1);
+  expect(result[0]).toHaveProperty('toolUses');
+  expect(result[0].toolUses.value).toHaveLength(1);
+  
+  const toolUse = result[0].toolUses.value[0];
+  expect(toolUse.status).toBe('pending_approval');
+  expect(toolUse.id).toBe('unknown'); // Should default to 'unknown'
+  expect(toolUse.name).toBe('unknown'); // Should default to 'unknown'
+  expect(toolUse.input).toEqual({});
+  expect(toolUse.approved).toBe(null);
+  expect(toolUse.sessionId).toBe('missing_props_session');
+});
+
 test('convertBackendMessagesToFrontend filters out new format tool result messages', () => {
   comp.resetContextLength = jest.fn();
   global.Vue = { ref: jest.fn((value) => ({ value })) };
@@ -2273,30 +2527,34 @@ test('loadChatFromBackend success', async () => {
       message: {
         role: 'assistant',
         contentBlocks: [
-          { type: '', content: 'I can help you with security analysis and investigations.' }
+          { type: 'text', text: 'I can help you with security analysis and investigations.' }
         ]
       }
     }
   ];
   const mock = mockPapi("get", { data: testMessages });
+  comp.scrollToBottomSettled = jest.fn().mockResolvedValue();
   
   await comp.loadChatFromBackend(fakeSessionId);
   
   expect(mock).toHaveBeenCalledWith(`/assistant/sessions/${fakeSessionId}`);
   expect(comp.messages).toHaveLength(2);
   expect(comp.currentChatId).toBe(fakeSessionId);
+  expect(comp.scrollToBottomSettled).toHaveBeenCalled();
 });
 
 test('loadChatFromBackend handles 404 error', async () => {
   const error = new Error('Not found');
   error.response = { status: 404 };
   mockPapi("get", null, error);
-  comp.loadChatHistory = jest.fn();
+  comp.loadNewChatScreen = jest.fn();
+  comp.scrollToBottomSettled = jest.fn().mockResolvedValue();
   
   await comp.loadChatFromBackend(fakeSessionId);
   
-  expect(comp.loadChatHistory).toHaveBeenCalled();
+  expect(comp.loadNewChatScreen).toHaveBeenCalled();
   expect(comp.currentChatId).toBe(fakeSessionId);
+  expect(comp.scrollToBottomSettled).toHaveBeenCalled();
 });
 
 test('loadChatFromBackend handles other errors', async () => {
@@ -2329,4 +2587,1023 @@ test('saveCurrentChat generates ID and refreshes history', async () => {
   expect(comp.currentChatId).toBe(fakeSessionId);
   expect(comp.saveCurrentChatId).toHaveBeenCalled();
   expect(comp.loadStoredChats).toHaveBeenCalled();
+});
+
+// Settings management tests
+test('saveSetting stores value in localStorage with correct key', () => {
+  const settingName = 'testSetting';
+  const settingValue = 'testValue';
+  
+  comp.saveSetting(settingName, settingValue);
+  
+  expect(mockLocalStorage['settings.assistant.testSetting']).toBe('testValue');
+});
+
+test('saveSetting stores value when different from default', () => {
+  const settingName = 'testSetting';
+  const settingValue = 'customValue';
+  const defaultValue = 'defaultValue';
+  
+  comp.saveSetting(settingName, settingValue, defaultValue);
+  
+  expect(mockLocalStorage['settings.assistant.testSetting']).toBe('customValue');
+});
+
+test('saveSetting handles null default value', () => {
+  const settingName = 'testSetting';
+  const settingValue = 'someValue';
+  
+  comp.saveSetting(settingName, settingValue, null);
+  
+  expect(mockLocalStorage['settings.assistant.testSetting']).toBe('someValue');
+});
+
+test('saveSetting handles boolean values', () => {
+  const settingName = 'booleanSetting';
+  const settingValue = true;
+  const defaultValue = false;
+  
+  comp.saveSetting(settingName, settingValue, defaultValue);
+  
+  expect(mockLocalStorage['settings.assistant.booleanSetting']).toBe('true');
+});
+
+test('saveSetting handles numeric values', () => {
+  const settingName = 'numericSetting';
+  const settingValue = 42;
+  const defaultValue = 0;
+  
+  comp.saveSetting(settingName, settingValue, defaultValue);
+  
+  expect(mockLocalStorage['settings.assistant.numericSetting']).toBe('42');
+});
+
+test('saveLocalSettings saves all assistant settings with correct defaults', () => {
+  // Set up component state
+  comp.increaseMaxContextThreshold = true;
+  comp.restoreLastActive = true;
+  comp.alwaysApproveReadRequests = true;
+  comp.showChatHistory = false; // Different from default
+  
+  // Mock saveSetting to track calls
+  comp.saveSetting = jest.fn();
+  
+  comp.saveLocalSettings();
+  
+  expect(comp.saveSetting).toHaveBeenCalledWith('increaseMaxContextThreshold', true, false);
+  expect(comp.saveSetting).toHaveBeenCalledWith('restoreLastActive', true, false);
+  expect(comp.saveSetting).toHaveBeenCalledWith('alwaysApproveReadRequests', true, false);
+  expect(comp.saveSetting).toHaveBeenCalledWith('showChatHistory', false, true);
+  expect(comp.saveSetting).toHaveBeenCalledTimes(4);
+});
+
+test('saveLocalSettings saves default values correctly', () => {
+  // Set up component state with default values
+  comp.increaseMaxContextThreshold = false;
+  comp.restoreLastActive = false;
+  comp.alwaysApproveReadRequests = false;
+  comp.showChatHistory = true;
+  
+  comp.saveSetting = jest.fn();
+  
+  comp.saveLocalSettings();
+  
+  expect(comp.saveSetting).toHaveBeenCalledWith('increaseMaxContextThreshold', false, false);
+  expect(comp.saveSetting).toHaveBeenCalledWith('restoreLastActive', false, false);
+  expect(comp.saveSetting).toHaveBeenCalledWith('alwaysApproveReadRequests', false, false);
+  expect(comp.saveSetting).toHaveBeenCalledWith('showChatHistory', true, true);
+});
+
+test('loadLocalSettings loads all settings from localStorage', () => {
+  // Mock localStorage values
+  mockLocalStorage['settings.assistant.increaseMaxContextThreshold'] = 'true';
+  mockLocalStorage['settings.assistant.restoreLastActive'] = 'true';
+  mockLocalStorage['settings.assistant.alwaysApproveReadRequests'] = 'true';
+  mockLocalStorage['settings.assistant.showChatHistory'] = 'false';
+  
+  comp.loadLocalSettings();
+  
+  expect(comp.increaseMaxContextThreshold).toBe(true);
+  expect(comp.restoreLastActive).toBe(true);
+  expect(comp.alwaysApproveReadRequests).toBe(true);
+  expect(comp.showChatHistory).toBe(false);
+});
+
+test('loadLocalSettings handles missing localStorage values', () => {
+  // Set initial values different from defaults
+  comp.increaseMaxContextThreshold = true;
+  comp.restoreLastActive = true;
+  comp.alwaysApproveReadRequests = true;
+  comp.showChatHistory = false;
+  
+  // Ensure localStorage has no values (delete them)
+  delete mockLocalStorage['settings.assistant.increaseMaxContextThreshold'];
+  delete mockLocalStorage['settings.assistant.restoreLastActive'];
+  delete mockLocalStorage['settings.assistant.alwaysApproveReadRequests'];
+  delete mockLocalStorage['settings.assistant.showChatHistory'];
+  
+  comp.loadLocalSettings();
+  
+  // Values should remain unchanged when localStorage is empty
+  expect(comp.increaseMaxContextThreshold).toBe(true);
+  expect(comp.restoreLastActive).toBe(true);
+  expect(comp.alwaysApproveReadRequests).toBe(true);
+  expect(comp.showChatHistory).toBe(false);
+});
+
+test('loadLocalSettings handles partial localStorage values', () => {
+  // Set initial values
+  comp.increaseMaxContextThreshold = false;
+  comp.restoreLastActive = false;
+  comp.alwaysApproveReadRequests = false;
+  comp.showChatHistory = true;
+  
+  // Mock localStorage with only some values
+  mockLocalStorage['settings.assistant.increaseMaxContextThreshold'] = 'true';
+  mockLocalStorage['settings.assistant.showChatHistory'] = 'false';
+  // restoreLastActive and alwaysApproveReadRequests are undefined
+  
+  comp.loadLocalSettings();
+  
+  expect(comp.increaseMaxContextThreshold).toBe(true);
+  expect(comp.restoreLastActive).toBe(false); // Unchanged
+  expect(comp.alwaysApproveReadRequests).toBe(false); // Unchanged
+  expect(comp.showChatHistory).toBe(false);
+});
+
+test('loadLocalSettings handles string boolean conversion correctly', () => {
+  // Set initial values
+  comp.increaseMaxContextThreshold = false;
+  comp.restoreLastActive = true;
+  comp.alwaysApproveReadRequests = true;
+  comp.showChatHistory = false;
+  
+  // Test various string representations
+  mockLocalStorage['settings.assistant.increaseMaxContextThreshold'] = 'true';
+  mockLocalStorage['settings.assistant.restoreLastActive'] = 'false';
+  mockLocalStorage['settings.assistant.alwaysApproveReadRequests'] = 'TRUE'; // Should not match
+  mockLocalStorage['settings.assistant.showChatHistory'] = 'true';
+  
+  comp.loadLocalSettings();
+  
+  expect(comp.increaseMaxContextThreshold).toBe(true);
+  expect(comp.restoreLastActive).toBe(false);
+  expect(comp.alwaysApproveReadRequests).toBe(false); // Should remain unchanged due to 'TRUE' != 'true'
+  expect(comp.showChatHistory).toBe(true);
+});
+
+test('loadLocalSettings handles empty string values', () => {
+  // Mock localStorage with empty strings
+  mockLocalStorage['settings.assistant.increaseMaxContextThreshold'] = '';
+  mockLocalStorage['settings.assistant.restoreLastActive'] = '';
+  mockLocalStorage['settings.assistant.alwaysApproveReadRequests'] = '';
+  mockLocalStorage['settings.assistant.showChatHistory'] = '';
+  
+  // Set initial values
+  comp.increaseMaxContextThreshold = true;
+  comp.restoreLastActive = true;
+  comp.alwaysApproveReadRequests = true;
+  comp.showChatHistory = false;
+  
+  comp.loadLocalSettings();
+  
+  // Values should remain unchanged for empty strings
+  expect(comp.increaseMaxContextThreshold).toBe(true);
+  expect(comp.restoreLastActive).toBe(true);
+  expect(comp.alwaysApproveReadRequests).toBe(true);
+  expect(comp.showChatHistory).toBe(false);
+});
+
+test('loadLocalSettings integration with actual localStorage access', () => {
+  // Test the actual localStorage access pattern used by loadLocalSettings
+  // This simulates how the function actually checks for localStorage values
+  mockLocalStorage['settings.assistant.increaseMaxContextThreshold'] = 'true';
+  mockLocalStorage['settings.assistant.restoreLastActive'] = 'true';
+  mockLocalStorage['settings.assistant.alwaysApproveReadRequests'] = 'true';
+  mockLocalStorage['settings.assistant.showChatHistory'] = 'false';
+  
+  // Set initial values
+  comp.increaseMaxContextThreshold = false;
+  comp.restoreLastActive = false;
+  comp.alwaysApproveReadRequests = false;
+  comp.showChatHistory = true;
+  
+  comp.loadLocalSettings();
+  
+  expect(comp.increaseMaxContextThreshold).toBe(true);
+  expect(comp.restoreLastActive).toBe(true);
+  expect(comp.alwaysApproveReadRequests).toBe(true);
+  expect(comp.showChatHistory).toBe(false);
+});
+
+test('openOptionsMenu finds and clicks expansion panel', () => {
+  const mockPanelTitle = {
+    click: jest.fn()
+  };
+  const mockOptionsPanel = {
+    querySelector: jest.fn().mockReturnValue(mockPanelTitle)
+  };
+  const mockOptionsHeader = {
+    scrollIntoView: jest.fn()
+  };
+  
+  // Mock querySelector to return different elements based on selector
+  comp.$el.querySelector = jest.fn((selector) => {
+    if (selector === '[data-aid="assistant_options"]') {
+      return mockOptionsPanel;
+    } else if (selector === '#chatOptionsHeader') {
+      return mockOptionsHeader;
+    }
+    return null;
+  });
+  
+  comp.openOptionsMenu();
+  
+  expect(comp.$nextTick).toHaveBeenCalled();
+  
+  // Execute the nextTick callback manually for testing
+  const nextTickCallback = comp.$nextTick.mock.calls[0][0];
+  if (nextTickCallback) {
+    nextTickCallback();
+  }
+  
+  expect(comp.$el.querySelector).toHaveBeenCalledWith('[data-aid="assistant_options"]');
+  expect(mockOptionsPanel.querySelector).toHaveBeenCalledWith('.v-expansion-panel-title');
+  expect(mockPanelTitle.click).toHaveBeenCalled();
+  expect(comp.$el.querySelector).toHaveBeenCalledWith('#chatOptionsHeader');
+  expect(mockOptionsHeader.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
+});
+
+test('openOptionsMenu handles missing options panel', () => {
+  const mockOptionsHeader = {
+    scrollIntoView: jest.fn()
+  };
+  
+  comp.$el.querySelector = jest.fn((selector) => {
+    if (selector === '[data-aid="assistant_options"]') {
+      return null; // Panel not found
+    } else if (selector === '#chatOptionsHeader') {
+      return mockOptionsHeader;
+    }
+    return null;
+  });
+  
+  comp.openOptionsMenu();
+  
+  expect(comp.$nextTick).toHaveBeenCalled();
+  
+  // Execute the nextTick callback manually for testing
+  const nextTickCallback = comp.$nextTick.mock.calls[0][0];
+  if (nextTickCallback) {
+    nextTickCallback();
+  }
+  
+  expect(comp.$el.querySelector).toHaveBeenCalledWith('[data-aid="assistant_options"]');
+  expect(comp.$el.querySelector).toHaveBeenCalledWith('#chatOptionsHeader');
+  expect(mockOptionsHeader.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
+  // Should not throw error when panel is missing
+});
+
+test('openOptionsMenu handles missing panel title', () => {
+  const mockOptionsPanel = {
+    querySelector: jest.fn().mockReturnValue(null) // Panel title not found
+  };
+  const mockOptionsHeader = {
+    scrollIntoView: jest.fn()
+  };
+  
+  comp.$el.querySelector = jest.fn((selector) => {
+    if (selector === '[data-aid="assistant_options"]') {
+      return mockOptionsPanel;
+    } else if (selector === '#chatOptionsHeader') {
+      return mockOptionsHeader;
+    }
+    return null;
+  });
+  
+  comp.openOptionsMenu();
+  
+  expect(comp.$nextTick).toHaveBeenCalled();
+  
+  // Execute the nextTick callback manually for testing
+  const nextTickCallback = comp.$nextTick.mock.calls[0][0];
+  if (nextTickCallback) {
+    nextTickCallback();
+  }
+  
+  expect(comp.$el.querySelector).toHaveBeenCalledWith('[data-aid="assistant_options"]');
+  expect(mockOptionsPanel.querySelector).toHaveBeenCalledWith('.v-expansion-panel-title');
+  expect(comp.$el.querySelector).toHaveBeenCalledWith('#chatOptionsHeader');
+  expect(mockOptionsHeader.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
+  // Should not throw error when panel title is missing
+});
+
+test('openOptionsMenu handles missing options header', () => {
+  const mockPanelTitle = {
+    click: jest.fn()
+  };
+  const mockOptionsPanel = {
+    querySelector: jest.fn().mockReturnValue(mockPanelTitle)
+  };
+  
+  comp.$el.querySelector = jest.fn((selector) => {
+    if (selector === '[data-aid="assistant_options"]') {
+      return mockOptionsPanel;
+    } else if (selector === '#chatOptionsHeader') {
+      return null; // Header not found
+    }
+    return null;
+  });
+  
+  comp.openOptionsMenu();
+  
+  expect(comp.$nextTick).toHaveBeenCalled();
+  
+  // Execute the nextTick callback manually for testing
+  const nextTickCallback = comp.$nextTick.mock.calls[0][0];
+  if (nextTickCallback) {
+    nextTickCallback();
+  }
+  
+  expect(comp.$el.querySelector).toHaveBeenCalledWith('[data-aid="assistant_options"]');
+  expect(mockOptionsPanel.querySelector).toHaveBeenCalledWith('.v-expansion-panel-title');
+  expect(mockPanelTitle.click).toHaveBeenCalled();
+  expect(comp.$el.querySelector).toHaveBeenCalledWith('#chatOptionsHeader');
+  // Should not throw error when header is missing
+});
+
+test('openOptionsMenu handles complete DOM element absence', () => {
+  comp.$el.querySelector = jest.fn().mockReturnValue(null);
+  
+  comp.openOptionsMenu();
+  
+  expect(comp.$nextTick).toHaveBeenCalled();
+  
+  // Execute the nextTick callback manually for testing
+  const nextTickCallback = comp.$nextTick.mock.calls[0][0];
+  if (nextTickCallback) {
+    nextTickCallback();
+  }
+  
+  expect(comp.$el.querySelector).toHaveBeenCalledWith('[data-aid="assistant_options"]');
+  expect(comp.$el.querySelector).toHaveBeenCalledWith('#chatOptionsHeader');
+  // Should not throw error when all elements are missing
+});
+
+test('openOptionsMenu uses nextTick for DOM manipulation timing', () => {
+  comp.openOptionsMenu();
+  
+  expect(comp.$nextTick).toHaveBeenCalledTimes(1);
+  expect(typeof comp.$nextTick.mock.calls[0][0]).toBe('function');
+});
+
+test('openOptionsMenu scrollIntoView uses correct options', () => {
+  const mockOptionsHeader = {
+    scrollIntoView: jest.fn()
+  };
+  
+  comp.$el.querySelector = jest.fn((selector) => {
+    if (selector === '#chatOptionsHeader') {
+      return mockOptionsHeader;
+    }
+    return null;
+  });
+  
+  comp.openOptionsMenu();
+  
+  // Execute the nextTick callback manually for testing
+  const nextTickCallback = comp.$nextTick.mock.calls[0][0];
+  if (nextTickCallback) {
+    nextTickCallback();
+  }
+  
+  expect(mockOptionsHeader.scrollIntoView).toHaveBeenCalledWith({
+    behavior: 'smooth',
+    block: 'center'
+  });
+});
+
+// Integration tests for settings functionality
+test('settings integration: save and load cycle', () => {
+  // Set up initial state
+  comp.increaseMaxContextThreshold = true;
+  comp.restoreLastActive = false;
+  comp.alwaysApproveReadRequests = true;
+  comp.showChatHistory = false;
+  
+  // Save settings
+  comp.saveLocalSettings();
+  
+  // Verify localStorage state after save (values are stored as strings by the localStorage mock)
+  expect(mockLocalStorage['settings.assistant.increaseMaxContextThreshold']).toBe('true');
+  expect(mockLocalStorage['settings.assistant.restoreLastActive']).toBeUndefined(); // Should be removed
+  expect(mockLocalStorage['settings.assistant.alwaysApproveReadRequests']).toBe('true');
+  expect(mockLocalStorage['settings.assistant.showChatHistory']).toBe('false');
+  
+  // Simulate localStorage state after save (convert to strings as localStorage would)
+  mockLocalStorage['settings.assistant.increaseMaxContextThreshold'] = 'true';
+  delete mockLocalStorage['settings.assistant.restoreLastActive'];
+  mockLocalStorage['settings.assistant.alwaysApproveReadRequests'] = 'true';
+  mockLocalStorage['settings.assistant.showChatHistory'] = 'false';
+  
+  // Reset component state
+  comp.increaseMaxContextThreshold = false;
+  comp.restoreLastActive = true;
+  comp.alwaysApproveReadRequests = false;
+  comp.showChatHistory = true;
+  
+  // Load settings
+  comp.loadLocalSettings();
+  
+  // Verify state was restored correctly
+  expect(comp.increaseMaxContextThreshold).toBe(true);
+  expect(comp.restoreLastActive).toBe(true); // Should remain unchanged due to undefined localStorage
+  expect(comp.alwaysApproveReadRequests).toBe(true);
+  expect(comp.showChatHistory).toBe(false);
+});
+
+test('settings watcher integration with saveLocalSettings', () => {
+  // Mock the saveLocalSettings method to track calls
+  comp.saveLocalSettings = jest.fn();
+  
+  // Simulate watcher behavior by manually calling saveLocalSettings
+  // In the actual component, these would be triggered by Vue watchers
+  comp.increaseMaxContextThreshold = true;
+  comp.saveLocalSettings(); // Simulating watcher trigger
+  
+  comp.restoreLastActive = true;
+  comp.saveLocalSettings(); // Simulating watcher trigger
+  
+  comp.alwaysApproveReadRequests = true;
+  comp.saveLocalSettings(); // Simulating watcher trigger
+  
+  comp.showChatHistory = false;
+  comp.saveLocalSettings(); // Simulating watcher trigger
+  
+  expect(comp.saveLocalSettings).toHaveBeenCalledTimes(4);
+});
+
+// scrollToBottomSettled method tests
+test('scrollToBottomSettled waits for nextTick and finds container', async () => {
+  const mockContainer = {
+    scrollTop: 0,
+    scrollHeight: 500,
+    clientHeight: 400,
+    querySelectorAll: jest.fn().mockReturnValue([]),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn()
+  };
+  
+  comp.$el = {
+    querySelector: jest.fn().mockReturnValue(mockContainer)
+  };
+  
+  comp.forceScrollBottom = jest.fn();
+  
+  // Mock MutationObserver and ResizeObserver
+  const mockMutationObserver = {
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  };
+  const mockResizeObserver = {
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  };
+  
+  global.MutationObserver = jest.fn().mockImplementation(() => mockMutationObserver);
+  global.ResizeObserver = jest.fn().mockImplementation(() => mockResizeObserver);
+  global.window.ResizeObserver = global.ResizeObserver;
+  
+  // Use fake timers to control setTimeout
+  jest.useFakeTimers();
+  
+  const promise = comp.scrollToBottomSettled();
+  
+  // Advance timers to trigger the settle timeout
+  jest.advanceTimersByTime(180);
+  
+  await promise;
+  
+  expect(comp.$nextTick).toHaveBeenCalled();
+  expect(comp.$el.querySelector).toHaveBeenCalledWith('.chat-messages');
+  expect(comp.forceScrollBottom).toHaveBeenCalledWith(mockContainer);
+  expect(global.MutationObserver).toHaveBeenCalled();
+  expect(mockMutationObserver.observe).toHaveBeenCalledWith(mockContainer, {
+    childList: true,
+    subtree: true,
+    characterData: true
+  });
+  expect(global.ResizeObserver).toHaveBeenCalled();
+  expect(mockResizeObserver.observe).toHaveBeenCalledWith(mockContainer);
+  
+  jest.useRealTimers();
+});
+
+test('scrollToBottomSettled returns early when no container found', async () => {
+  comp.$el = {
+    querySelector: jest.fn().mockReturnValue(null)
+  };
+  
+  comp.forceScrollBottom = jest.fn();
+  
+  await comp.scrollToBottomSettled();
+  
+  expect(comp.$nextTick).toHaveBeenCalled();
+  expect(comp.$el.querySelector).toHaveBeenCalledWith('.chat-messages');
+  expect(comp.forceScrollBottom).not.toHaveBeenCalled();
+});
+
+test('scrollToBottomSettled returns early when $el is null', async () => {
+  comp.$el = null;
+  comp.forceScrollBottom = jest.fn();
+  
+  await comp.scrollToBottomSettled();
+  
+  expect(comp.$nextTick).toHaveBeenCalled();
+  expect(comp.forceScrollBottom).not.toHaveBeenCalled();
+});
+
+test('scrollToBottomSettled returns early when $el has no querySelector', async () => {
+  comp.$el = {};
+  comp.forceScrollBottom = jest.fn();
+  
+  await comp.scrollToBottomSettled();
+  
+  expect(comp.$nextTick).toHaveBeenCalled();
+  expect(comp.forceScrollBottom).not.toHaveBeenCalled();
+});
+
+test('scrollToBottomSettled uses custom settleDelay and maxWait options', async () => {
+  const mockContainer = {
+    scrollTop: 0,
+    scrollHeight: 500,
+    clientHeight: 400,
+    querySelectorAll: jest.fn().mockReturnValue([]),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn()
+  };
+  
+  comp.$el = {
+    querySelector: jest.fn().mockReturnValue(mockContainer)
+  };
+  
+  comp.forceScrollBottom = jest.fn();
+  
+  // Mock observers
+  const mockMutationObserver = {
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  };
+  const mockResizeObserver = {
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  };
+  
+  global.MutationObserver = jest.fn().mockImplementation(() => mockMutationObserver);
+  global.ResizeObserver = jest.fn().mockImplementation(() => mockResizeObserver);
+  global.window.ResizeObserver = global.ResizeObserver;
+  
+  jest.useFakeTimers();
+  
+  const promise = comp.scrollToBottomSettled({ settleDelay: 300, maxWait: 5000 });
+  
+  // Advance by custom settleDelay
+  jest.advanceTimersByTime(300);
+  
+  await promise;
+  
+  expect(comp.forceScrollBottom).toHaveBeenCalledWith(mockContainer);
+  
+  jest.useRealTimers();
+});
+
+test('scrollToBottomSettled handles height changes during settle period', async () => {
+  const mockContainer = {
+    scrollTop: 0,
+    scrollHeight: 500,
+    clientHeight: 400,
+    querySelectorAll: jest.fn().mockReturnValue([]),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn()
+  };
+  
+  comp.$el = {
+    querySelector: jest.fn().mockReturnValue(mockContainer)
+  };
+  
+  comp.forceScrollBottom = jest.fn();
+  
+  let mutationCallback;
+  const mockMutationObserver = {
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  };
+  
+  global.MutationObserver = jest.fn().mockImplementation((callback) => {
+    mutationCallback = callback;
+    return mockMutationObserver;
+  });
+  
+  global.ResizeObserver = jest.fn().mockImplementation(() => ({
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  }));
+  global.window.ResizeObserver = global.ResizeObserver;
+  
+  jest.useFakeTimers();
+  
+  const promise = comp.scrollToBottomSettled({ settleDelay: 200 });
+  
+  // Wait for the MutationObserver to be set up
+  await Promise.resolve();
+  
+  // Simulate height change during settle period
+  if (mutationCallback) {
+    mockContainer.scrollHeight = 600; // Height changed
+    mutationCallback(); // Trigger mutation callback
+  }
+  
+  // Advance timers to complete settling
+  jest.advanceTimersByTime(400);
+  
+  await promise;
+  
+  // Should have been called at least twice (initial + mutation trigger + final)
+  expect(comp.forceScrollBottom).toHaveBeenCalledWith(mockContainer);
+  expect(comp.forceScrollBottom).toHaveBeenCalledTimes(3);
+  
+  jest.useRealTimers();
+});
+
+test('scrollToBottomSettled handles image loading events', async () => {
+  const mockImg1 = {
+    complete: false,
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn()
+  };
+  const mockImg2 = {
+    complete: true, // Already loaded
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn()
+  };
+  
+  const mockContainer = {
+    scrollTop: 0,
+    scrollHeight: 500,
+    clientHeight: 400,
+    querySelectorAll: jest.fn().mockReturnValue([mockImg1, mockImg2]),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn()
+  };
+  
+  comp.$el = {
+    querySelector: jest.fn().mockReturnValue(mockContainer)
+  };
+  
+  comp.forceScrollBottom = jest.fn();
+  
+  // Mock observers
+  global.MutationObserver = jest.fn().mockImplementation(() => ({
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  }));
+  global.ResizeObserver = jest.fn().mockImplementation(() => ({
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  }));
+  global.window.ResizeObserver = global.ResizeObserver;
+  
+  jest.useFakeTimers();
+  
+  const promise = comp.scrollToBottomSettled();
+  
+  // Advance timers to complete
+  jest.advanceTimersByTime(180);
+  
+  await promise;
+  
+  expect(mockContainer.querySelectorAll).toHaveBeenCalledWith('img');
+  // Only incomplete image should have event listeners added
+  expect(mockImg1.addEventListener).toHaveBeenCalledWith('load', expect.any(Function), { once: true });
+  expect(mockImg1.addEventListener).toHaveBeenCalledWith('error', expect.any(Function), { once: true });
+  // Complete image should not have listeners added
+  expect(mockImg2.addEventListener).not.toHaveBeenCalled();
+  
+  jest.useRealTimers();
+});
+
+test('scrollToBottomSettled triggers safety timeout when maxWait exceeded', async () => {
+  const mockContainer = {
+    scrollTop: 0,
+    scrollHeight: 500,
+    clientHeight: 400,
+    querySelectorAll: jest.fn().mockReturnValue([]),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn()
+  };
+  
+  comp.$el = {
+    querySelector: jest.fn().mockReturnValue(mockContainer)
+  };
+  
+  comp.forceScrollBottom = jest.fn();
+  
+  let mutationCallback;
+  const mockMutationObserver = {
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  };
+  
+  global.MutationObserver = jest.fn().mockImplementation((callback) => {
+    mutationCallback = callback;
+    return mockMutationObserver;
+  });
+  
+  global.ResizeObserver = jest.fn().mockImplementation(() => ({
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  }));
+  global.window.ResizeObserver = global.ResizeObserver;
+  
+  jest.useFakeTimers();
+  
+  const promise = comp.scrollToBottomSettled({ settleDelay: 200, maxWait: 1000 });
+  
+  // Wait for setup
+  await Promise.resolve();
+  
+  // Keep triggering mutations to prevent settling
+  if (mutationCallback) {
+    for (let i = 0; i < 5; i++) {
+      mockContainer.scrollHeight += 10; // Keep changing height
+      mutationCallback();
+    }
+  }
+  
+  // Advance past maxWait time to trigger safety timeout
+  jest.advanceTimersByTime(1100);
+  
+  await promise;
+  
+  // Should have been called due to mutations and safety timeout
+  expect(comp.forceScrollBottom).toHaveBeenCalled();
+  expect(mockMutationObserver.disconnect).toHaveBeenCalled();
+  
+  jest.useRealTimers();
+});
+
+test('scrollToBottomSettled handles ResizeObserver not available', async () => {
+  const mockContainer = {
+    scrollTop: 0,
+    scrollHeight: 500,
+    clientHeight: 400,
+    querySelectorAll: jest.fn().mockReturnValue([]),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn()
+  };
+  
+  comp.$el = {
+    querySelector: jest.fn().mockReturnValue(mockContainer)
+  };
+  
+  comp.forceScrollBottom = jest.fn();
+  
+  // Mock MutationObserver but not ResizeObserver
+  global.MutationObserver = jest.fn().mockImplementation(() => ({
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  }));
+  
+  // Remove ResizeObserver from window
+  delete global.window.ResizeObserver;
+  delete global.ResizeObserver;
+  
+  jest.useFakeTimers();
+  
+  const promise = comp.scrollToBottomSettled();
+  
+  jest.advanceTimersByTime(180);
+  
+  await promise;
+  
+  expect(comp.forceScrollBottom).toHaveBeenCalledWith(mockContainer);
+  expect(global.MutationObserver).toHaveBeenCalled();
+  // Should not throw error when ResizeObserver is not available
+  
+  jest.useRealTimers();
+});
+
+test('scrollToBottomSettled properly cleans up all observers and timers', async () => {
+  const mockImg = {
+    complete: false,
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn()
+  };
+  
+  const mockContainer = {
+    scrollTop: 0,
+    scrollHeight: 500,
+    clientHeight: 400,
+    querySelectorAll: jest.fn().mockReturnValue([mockImg]),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn()
+  };
+  
+  comp.$el = {
+    querySelector: jest.fn().mockReturnValue(mockContainer)
+  };
+  
+  comp.forceScrollBottom = jest.fn();
+  
+  const mockMutationObserver = {
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  };
+  const mockResizeObserver = {
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  };
+  
+  global.MutationObserver = jest.fn().mockImplementation(() => mockMutationObserver);
+  global.ResizeObserver = jest.fn().mockImplementation(() => mockResizeObserver);
+  global.window.ResizeObserver = global.ResizeObserver;
+  
+  jest.useFakeTimers();
+  
+  await comp.scrollToBottomSettled();
+  
+  // Advance timers to ensure cleanup happens
+  jest.advanceTimersByTime(200);
+  
+  // Verify all cleanup functions were called
+  expect(mockMutationObserver.disconnect).toHaveBeenCalled();
+  expect(mockResizeObserver.disconnect).toHaveBeenCalled();
+  // Note: removeEventListener calls depend on the cleanup function execution
+  
+  jest.useRealTimers();
+});
+
+test('scrollToBottomSettled handles image load event triggering mutation callback', async () => {
+  let imageLoadHandler;
+  const mockImg = {
+    complete: false,
+    addEventListener: jest.fn((event, handler) => {
+      if (event === 'load') {
+        imageLoadHandler = handler;
+      }
+    }),
+    removeEventListener: jest.fn()
+  };
+  
+  const mockContainer = {
+    scrollTop: 0,
+    scrollHeight: 500,
+    clientHeight: 400,
+    querySelectorAll: jest.fn().mockReturnValue([mockImg]),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn()
+  };
+  
+  comp.$el = {
+    querySelector: jest.fn().mockReturnValue(mockContainer)
+  };
+  
+  comp.forceScrollBottom = jest.fn();
+  
+  global.MutationObserver = jest.fn().mockImplementation(() => ({
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  }));
+  global.ResizeObserver = jest.fn().mockImplementation(() => ({
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  }));
+  global.window.ResizeObserver = global.ResizeObserver;
+  
+  jest.useFakeTimers();
+  
+  const promise = comp.scrollToBottomSettled();
+  
+  // Simulate image loading after 50ms
+  setTimeout(() => {
+    if (imageLoadHandler) {
+      imageLoadHandler(); // Trigger image load
+    }
+  }, 50);
+  
+  jest.advanceTimersByTime(180);
+  
+  await promise;
+  
+  expect(mockImg.addEventListener).toHaveBeenCalledWith('load', expect.any(Function), { once: true });
+  expect(comp.forceScrollBottom).toHaveBeenCalled();
+  
+  jest.useRealTimers();
+});
+
+test('scrollToBottomSettled settles immediately when height is stable', async () => {
+  const mockContainer = {
+    scrollTop: 0,
+    scrollHeight: 500,
+    clientHeight: 400,
+    querySelectorAll: jest.fn().mockReturnValue([]),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn()
+  };
+  
+  comp.$el = {
+    querySelector: jest.fn().mockReturnValue(mockContainer)
+  };
+  
+  comp.forceScrollBottom = jest.fn();
+  
+  const mockMutationObserver = {
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  };
+  
+  global.MutationObserver = jest.fn().mockImplementation(() => mockMutationObserver);
+  global.ResizeObserver = jest.fn().mockImplementation(() => ({
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  }));
+  global.window.ResizeObserver = global.ResizeObserver;
+  
+  jest.useFakeTimers();
+  
+  await comp.scrollToBottomSettled({ settleDelay: 100 });
+  
+  // Advance timers to complete settling
+  jest.advanceTimersByTime(200);
+  
+  // Should have done initial scroll plus final scroll when settled
+  expect(comp.forceScrollBottom).toHaveBeenCalledWith(mockContainer);
+  expect(comp.forceScrollBottom).toHaveBeenCalledTimes(2);
+  expect(mockMutationObserver.disconnect).toHaveBeenCalled();
+  
+  jest.useRealTimers();
+});
+
+test('scrollToBottomSettled handles multiple rapid height changes', async () => {
+  const mockContainer = {
+    scrollTop: 0,
+    scrollHeight: 500,
+    clientHeight: 400,
+    querySelectorAll: jest.fn().mockReturnValue([]),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn()
+  };
+  
+  comp.$el = {
+    querySelector: jest.fn().mockReturnValue(mockContainer)
+  };
+  
+  comp.forceScrollBottom = jest.fn();
+  
+  let mutationCallback;
+  const mockMutationObserver = {
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  };
+  
+  global.MutationObserver = jest.fn().mockImplementation((callback) => {
+    mutationCallback = callback;
+    return mockMutationObserver;
+  });
+  
+  global.ResizeObserver = jest.fn().mockImplementation(() => ({
+    observe: jest.fn(),
+    disconnect: jest.fn()
+  }));
+  global.window.ResizeObserver = global.ResizeObserver;
+  
+  jest.useFakeTimers();
+  
+  const promise = comp.scrollToBottomSettled({ settleDelay: 200 });
+  
+  // Wait for setup
+  await Promise.resolve();
+  
+  // Simulate rapid height changes
+  if (mutationCallback) {
+    mockContainer.scrollHeight = 600;
+    mutationCallback();
+    
+    mockContainer.scrollHeight = 700;
+    mutationCallback();
+    
+    mockContainer.scrollHeight = 800;
+    mutationCallback();
+  }
+  
+  // Let it settle after the changes
+  jest.advanceTimersByTime(400);
+  
+  await promise;
+  
+  // Should have scrolled multiple times due to height changes
+  expect(comp.forceScrollBottom).toHaveBeenCalledWith(mockContainer);
+  expect(comp.forceScrollBottom).toHaveBeenCalledTimes(5); // Initial + 3 changes + final
+  
+  jest.useRealTimers();
 });

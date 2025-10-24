@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -1371,6 +1372,30 @@ func (store *Saltstore) SyncSettings(ctx context.Context) error {
 	output, err := store.execCommand(ctx, args)
 	if err == nil {
 		if output == "false" {
+			err = errors.New("ERROR_SALT_STATE")
+		}
+	}
+
+	return err
+}
+
+func (store *Saltstore) SyncModule(ctx context.Context, module string, async bool) error {
+	if err := store.server.CheckAuthorized(ctx, "write", "config"); err != nil {
+		return err
+	}
+
+	args := make(map[string]string)
+	args["command"] = "manage-salt"
+	args["operation"] = "state"
+	args["state"] = module
+	if async {
+		args["async"] = strconv.FormatBool(async)
+	}
+	output, err := store.execCommand(ctx, args)
+	if err == nil {
+		if matched, _ := regexp.MatchString("^ERROR_[A-Z_]+$", output); matched {
+			err = errors.New(output)
+		} else if output == "false" {
 			err = errors.New("ERROR_SALT_STATE")
 		}
 	}

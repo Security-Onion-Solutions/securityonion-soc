@@ -49,3 +49,7 @@ func (m *MemConfigStore) UpdateSetting(ctx context.Context, setting *model.Setti
 func (m *MemConfigStore) SyncSettings(ctx context.Context) error {
 	return nil
 }
+
+func (m *MemConfigStore) SyncModule(ctx context.Context, module string, force bool) error {
+	return nil
+}

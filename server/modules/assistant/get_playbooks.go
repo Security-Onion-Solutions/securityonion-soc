@@ -18,21 +18,25 @@ import (
 )
 
 func init() {
-	t := &GetPlaybookQuestionsTool{}
+	t := &GetPlaybooksTool{}
 	knownTools[t.GetName()] = t
 }
 
-type GetPlaybookQuestionsTool struct{}
+type GetPlaybooksTool struct{}
 
-func (t *GetPlaybookQuestionsTool) GetName() string {
-	return "get_playbook_questions"
+func (t *GetPlaybooksTool) GetName() string {
+	return "get_playbooks"
 }
 
-func (t *GetPlaybookQuestionsTool) GetDescription() string {
-	return "Get playbook questions for a given alert to guide investigation"
+func (t *GetPlaybooksTool) GetDescription() string {
+	return "Get playbooks for a given alert to guide investigation. Playbooks consist " +
+	"of questions and sigma searches to help gather context about the alert. The searches " +
+	"are executed and the results are returned along with the questions. If multiple playbooks " +
+	"are available for the alert, you can specify a playbook_index (0-based) to get questions " +
+	"from a specific playbook. Lower index playbooks are usually more specific to the alert."
 }
 
-func (t *GetPlaybookQuestionsTool) GetSchema() model.JSONSchema {
+func (t *GetPlaybooksTool) GetSchema() model.JSONSchema {
 	return model.JSONSchema{
 		Json: &model.ToolSchema{
 			Type: "object",
@@ -56,7 +60,7 @@ type getPlaybookQuestionsArgs struct {
 	PlaybookIndex *int   `json:"playbook_index,omitempty"`
 }
 
-func (t *GetPlaybookQuestionsTool) Execute(ctx context.Context, srv *server.Server, params string) (result *model.ToolResponse, err error) {
+func (t *GetPlaybooksTool) Execute(ctx context.Context, srv *server.Server, params string) (result *model.ToolResponse, err error) {
 	logger := log.FromContext(ctx)
 
 	logger.WithField("toolParameters", params).Info("running tool for assistant")

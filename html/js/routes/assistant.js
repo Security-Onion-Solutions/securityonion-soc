@@ -20,18 +20,25 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     contextLength: 0, // Track total context length
     increaseMaxContextThreshold: false, // Toggle for max context threshold
     restoreLastActive: false, // Toggle to restore last active chat
+    alwaysApproveReadRequests: false,
     assistantEnabled: false,
+    isStreaming: false,
+    showChatHistory: true,
+    investigationMsg: '',
     contextLimitSmall: 200000,
     contextLimitLarge: 1000000,
     thresholdColorRatioLow: 0.5,
     thresholdColorRatioMed: 0.75,
     thresholdColorRatioMax: 1,
     lowBalanceColorAlert: 500000,
+    activeStreamingSessionId: null, // Track which session is actively streaming
+    autoScrollOnNextRender: false, // gate for programmatic scrolls
+    isPinnedToBottom: true, // user is at (or near) bottom?
+    canChat: true,
   }},
   async created() {
-    this.loadContextThresholdSetting();
-    this.loadLastActiveSetting();
-    this.loadChatHistory();
+    this.loadLocalSettings();
+    this.loadNewChatScreen();
   },
   beforeUnmount() {
     // Backend automatically saves chats, just save current chat ID
@@ -47,28 +54,33 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         this.handleRouteSessionId();
       }
     },
-    'increaseMaxContextThreshold'() {
-      this.saveContextThresholdSetting();
-    },
-    'restoreLastActive' () {
-      this.saveLastActiveSetting();
-    }
+    'increaseMaxContextThreshold': 'saveLocalSettings',
+    'restoreLastActive': 'saveLocalSettings',
+    'alwaysApproveReadRequests': 'saveLocalSettings',
+    'showChatHistory': 'saveLocalSettings'
   },
   methods: {
 
     async initAssistant(params) {
       this.assistantEnabled = params["enabled"] && this.$root.isLicensed('oai');
+      this.investigationMsg = params["investigationPrompt"];
       this.contextLimitSmall = params["contextLimitSmall"];
       this.contextLimitLarge = params["contextLimitLarge"];
       this.thresholdColorRatioLow = params["thresholdColorRatioLow"];
       this.thresholdColorRatioMed = params["thresholdColorRatioMed"];
       this.thresholdColorRatioMax = params["thresholdColorRatioMax"];
       this.lowBalanceColorAlert = params["lowBalanceColorAlert"];
+
+      this.$root.showDisclaimer(this.i18n.assistantDisclaimerMessage, this.i18n.assistantDisclaimerTitle, this.i18n.getStarted, 'settings.disclaimer.acknowledged.onionai');
       
       if (this.assistantEnabled) {
-        await this.loadStoredChats();
-        await this.handleRouteSessionId();
-        await this.loadCredits();
+        if (!this.$root.disclaimer) {
+          await this.loadStoredChats();
+          await this.handleRouteSessionId();
+          await this.loadCredits();
+        }
+      } else {
+        this.$root.disclaimer = false;
       }
     },
     
@@ -87,8 +99,18 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         this.contextLength += messageContext;
       }
     },
+
+    checkContextLimitReached() {
+      const maxContextLength = this.increaseMaxContextThreshold ? this.contextLimitLarge : this.contextLimitSmall;
+      if (this.contextLength >= maxContextLength) {
+        const formattedLimit = this.formatCount(maxContextLength);
+        this.$root.showError(this.i18n.assistantContextLimitPt1 + ` (${formattedLimit}+ tokens). ` + this.i18n.assistantContextLimitPt2);
+        return true;
+      }
+      return false;
+    },
     
-    async loadChatHistory() {
+    async loadNewChatScreen() {
       try {
         // Initialize with a welcome message from the AI Assistant
         this.messages = [
@@ -131,16 +153,26 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     saveCurrentChatId() {
       if (this.currentChatId) {
-        localStorage.setItem('so-current-chat-id', this.currentChatId);
+        localStorage.setItem('settings.assistant.currentChatId', this.currentChatId);
       } else {
-        localStorage.removeItem('so-current-chat-id');
+        localStorage.removeItem('settings.assistant.currentChatId');
       }
     },
     loadCurrentChatId() {
-      return localStorage.getItem('so-current-chat-id');
+      return localStorage.getItem('settings.assistant.currentChatId');
     },
     async handleRouteSessionId() {
       const urlSessionId = this.$route.params.sessionId;
+      
+      // Clear active streaming session and UI state when route changes to different session
+      if (this.currentChatId !== urlSessionId) {
+        this.clearStreamingStates();
+      }
+
+      if (!this.assistantEnabled) {
+        return;
+      }
+      
       if (urlSessionId) {
         // Try to load chat from backend first
         this.$root.startLoading();
@@ -155,25 +187,18 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           const isInvestigation = this.$route.query.investigation === 'true';
           
           if (isInvestigation) {
-            // Try to get investigation data from localStorage
-            const investigationKey = `key_${urlSessionId}`;
-            const investigationDataStr = localStorage.getItem(investigationKey);
-            
-            if (investigationDataStr) {
-              try {
-                const investigationData = JSON.parse(investigationDataStr);
-                // This is a new investigation session, start with investigation prompt
-                this.$nextTick(() => {
-                  this.startInvestigationSession(investigationData.prompt);
-                });
-                // Clean up the localStorage after use
-                localStorage.removeItem(investigationKey);
-              } catch (error) {
-                this.$root.showError(this.i18n.assistantUnableToParseInvestigation + ': ' + error.message);
-              }
+            try {
+              const investigationPrompt = this.generateInvestigationPrompt(this.$route.query);
+              // This is a new investigation session, start with investigation prompt
+              this.$nextTick(() => {
+                this.startInvestigationSession(investigationPrompt);
+              });
+            } catch (error) {
+              this.$root.showError(this.i18n.assistantUnableToParseInvestigation + ': ' + error.message);
             }
+            
           } else if (this.messages.length > 1) {
-            this.loadChatHistory();
+            this.loadNewChatScreen();
           }
         } finally {
           this.$root.stopLoading();
@@ -185,6 +210,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     async restoreLastActiveChat() {
       if (!this.restoreLastActive) {
+        this.startNewChat();
         return;
       }
       const lastChatId = this.loadCurrentChatId();
@@ -192,7 +218,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         this.$root.startLoading();
         try {
           // Update URL to reflect the current session
-          this.updateUrlWithSessionId(lastChatId);
+          await this.updateUrlWithSessionId(lastChatId);
           return;
         } catch (error) {
           this.$root.showError(this.i18n.assistantUnableToRestoreLastActive + ': ' + error.message);
@@ -206,7 +232,11 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       try {
         const response = await this.$root.papi.get('/assistant/balance');
         if (response.data) {
-          this.creditsRemaining = response.data.credit_balance || 0;
+          if (response.data.health_status === 'healthy') {
+            this.creditsRemaining = response.data.credit_balance || 0;
+          } else {
+            throw new Error(this.i18n.assistantBalanceCheckUnhealthy);
+          }
         }
       } catch (error) {
         this.$root.showError(this.i18n.assistantUnableToLoadCredits + ': ' + error.message);
@@ -229,20 +259,23 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       return 'chat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
     },
     async loadChat(chat) {
-      await this.saveCurrentChat(); // Save current chat before switching
+      await this.saveCurrentChat();
+      this.clearStreamingStates();
+
       this.$root.startLoading();
       try {
         if (this.currentChatId === chat.sessionId) {
           await this.loadChatFromBackend(chat.sessionId);
         }
-        this.updateUrlWithSessionId(chat.sessionId);
-        this.scrollToBottom();
+        await this.updateUrlWithSessionId(chat.sessionId);
+
       } catch (error) {
         this.$root.showError(this.i18n.assistantUnableToLoadChat + ': ' + error.message);
       } finally {
         this.$root.stopLoading();
       }
     },
+
     async deleteChat(chatId) {
       try {
         // Call the backend DELETE endpoint to remove the session
@@ -255,7 +288,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         if (this.currentChatId === chatId) {
           this.currentChatId = null;
           this.saveCurrentChatId(); // Clear the saved current chat ID
-          this.loadChatHistory(); // Reset to welcome message
+          this.loadNewChatScreen(); // Reset to welcome message
           // Navigate to chat without session ID
           this.$router.push({ name: 'assistant' });
         }
@@ -266,20 +299,27 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     async startNewChat() {
       await this.saveCurrentChat(); // Save current chat before starting new one
+      
+      // Clear active streaming session and UI state when starting new chat
+      this.clearStreamingStates();
+      
       this.currentChatId = null;
       this.saveCurrentChatId(); // Clear the saved current chat ID
-      this.loadChatHistory(); // Reset to welcome message (also resets context length)
+      this.loadNewChatScreen(); // Reset to welcome message (also resets context length)
+      this.canChat = true;
       // Navigate to chat without session ID
       this.$router.push({ name: 'assistant' });
     },
-    updateUrlWithSessionId(sessionId) {
+    async updateUrlWithSessionId(sessionId) {
       // Only update URL if it's different from current
       if (this.$route.params.sessionId !== sessionId) {
-        this.$router.replace({ name: 'assistant', params: { sessionId: sessionId } });
+        await this.$router.replace({ name: 'assistant', params: { sessionId: sessionId } });
       }
     },
     async sendMessage() {
       if (!this.newMessage.trim()) return;
+
+      if (!this.canChat) return;
       
       if (!this.assistantEnabled) {
         this.$root.showError(this.i18n.assistantNotAvailable);
@@ -287,12 +327,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }
 
       // Check if context length has reached the limit
-      const maxContextLength = this.increaseMaxContextThreshold ? this.contextLimitLarge : this.contextLimitSmall;
-      if (this.contextLength >= maxContextLength) {
-        const formattedLimit = this.formatCount(maxContextLength);
-        this.$root.showError(`Context length limit reached (${formattedLimit}+ tokens). Please start a new chat to continue.`);
-        return;
-      }
+      if (this.checkContextLimitReached()) return;
       
       // Check if user has credits
       if (this.creditsRemaining <= 0) {
@@ -309,7 +344,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       
       // Update URL with session ID if not already set - do this BEFORE the API call
       if (this.currentChatId && !this.$route.params.sessionId) {
-        this.updateUrlWithSessionId(this.currentChatId);
+        await this.updateUrlWithSessionId(this.currentChatId);
         // Wait for the route change to complete before proceeding
         await this.$nextTick();
       }
@@ -336,7 +371,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       try {
         // Call the actual AI API - session ID is already set
         await this.callAIAPI(messageText);
-        
+
         // Refresh chat history to show the latest session
         await this.loadStoredChats();
       } catch (error) {
@@ -344,11 +379,232 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         this.isTyping = false;
       }
     },
+    
+    // Helper method to parse JSON chunks and handle concatenated/partial JSON
+    parseJsonChunk(chunk) {
+      try {
+        return { success: true, data: JSON.parse(chunk), isPartial: null };
+      } catch {
+        // Handle partial JSON or multiple concatenated JSON objects
+        const splitChunks = [];
+        let currentChunk = '';
+        let braceCount = 0;
+        let inString = false;
+        let escaped = false;
+        
+        for (let j = 0; j < chunk.length; j++) {
+          const char = chunk[j];
+          currentChunk += char;
+          
+          if (escaped) {
+            escaped = false;
+            continue;
+          }
+          
+          if (char === '\\') {
+            escaped = true;
+            continue;
+          }
+          
+          if (char === '"') {
+            inString = !inString;
+            continue;
+          }
+          
+          if (!inString) {
+            if (char === '{') {
+              braceCount++;
+            } else if (char === '}') {
+              braceCount--;
+              if (braceCount === 0) {
+                // Complete JSON object found
+                splitChunks.push(currentChunk);
+                currentChunk = '';
+              }
+            }
+          }
+        }
+        
+        // If we found complete JSON objects, return them for processing
+        if (splitChunks.length > 0) {
+          return {
+            success: true,
+            data: splitChunks,
+            isPartial: currentChunk.trim() ? currentChunk : null
+          };
+        } else if (currentChunk.trim()) {
+          // No complete JSON found, treat entire chunk as partial
+          return { success: false, data: null, isPartial: currentChunk };
+        } else {
+          // Fallback: treat as partial
+          return { success: false, data: null, isPartial: chunk };
+        }
+      }
+    },
+    
+    // Helper method to process streaming chunks and handle partial data
+    processStreamingChunks(value, chunks, partial) {
+      // Cleanup the data, split messages apart, remove SSE label, filter out empty lines
+      const newChunks = value.split('\n\n').filter(d => d.trim()).map(d => (d.startsWith("data: ") ? d.slice(6) : d));
+      
+      // If the last read had partial data, prepend it to the new data and process it again
+      if (partial) {
+        newChunks[0] = chunks[0] + newChunks[0];
+        partial = false;
+      }
+      
+      return { chunks: newChunks, partial };
+    },
+    
+    // Helper method to handle message_start event
+    handleMessageStart(c, assistantMessage) {
+      this.isTyping = false;
+
+      assistantMessage = {
+        role: 'assistant',
+        content: Vue.ref(''), // MUST be ref
+        timestamp: new Date().toISOString(),
+        usage: Vue.ref(null),
+        toolUses: Vue.ref([]) // Track tool uses in this message
+      };
+
+      // Sometimes usage comes in message_start
+      let messageUsage = null;
+      if (c.message && c.message.usage) {
+        messageUsage = c.message.usage;
+      }
+
+      this.messages.push(assistantMessage);
+      this.scrollIfPinned();
+      
+      return { assistantMessage, messageUsage };
+    },
+    
+    // Helper method to handle content_block_start event
+    handleContentBlockStart(c, assistantMessage, sessionId = null) {
+      // Handle tool use blocks
+      if (c.content_block && c.content_block.type === 'tool_use') {
+        const targetSessionId = sessionId || this.currentChatId;
+        const toolUse = {
+          id: c.content_block.id,
+          name: c.content_block.name,
+          input: c.content_block.input || {},
+          inputJson: '', // Accumulate input JSON from deltas
+          status: 'preparing', // Start as preparing, not executing
+          result: null,
+          error: null,
+          rawResult: null, // Will store the raw tool result
+          timestamp: new Date().toISOString(),
+          blockIndex: c.index, // Store the block index for tracking
+          approved: null, // null = pending, true = approved, false = rejected
+          sessionId: targetSessionId // Track which session this belongs to
+        };
+        
+        // Always track the tool use
+        this.executingTools.set(toolUse.id, toolUse);
+        this.executingTools.set(`block_${c.index}_${targetSessionId}`, toolUse);
+        
+        // Only update UI if this is for the current session and we have an assistant message
+        if (assistantMessage && targetSessionId === this.currentChatId) {
+          assistantMessage.toolUses.value.push(toolUse);
+          this.scrollIfPinned();
+        }
+      }
+    },
+    
+    // Helper method to handle content_block_delta event
+    handleContentBlockDelta(c, assistantMessage, sessionId = null) {
+      const targetSessionId = sessionId || this.currentChatId;
+      
+      if (assistantMessage && c.delta.type === 'text_delta' && targetSessionId === this.currentChatId) {
+        // Only update UI if this is for the current session
+        assistantMessage.content.value += c.delta.text;
+        this.scrollIfPinned();
+      } else if (c.delta.type === 'input_json_delta') {
+        // Handle tool input updates - accumulate the JSON (always process, regardless of session)
+        const toolUse = this.executingTools.get(`block_${c.index}_${targetSessionId}`);
+        if (toolUse) {
+          toolUse.inputJson += c.delta.partial_json;
+          toolUse.status = 'preparing';
+          // Only update UI if this is for the current session
+          if (targetSessionId === this.currentChatId) {
+            this.scrollIfPinned();
+          }
+        }
+      }
+    },
+    
+    // Helper method to handle content_block_stop event
+    handleContentBlockStop(c, sessionId = null) {
+      let messageUsage = null;
+      const targetSessionId = sessionId || this.currentChatId;
+      
+      // Handle tool input completion - wait for user approval
+      const toolUse = this.executingTools.get(`block_${c.index}_${targetSessionId}`);
+      if (toolUse && toolUse.status === 'preparing') {
+        try {
+          // Parse the accumulated JSON input
+          if (toolUse.inputJson) {
+            toolUse.input = JSON.parse(toolUse.inputJson);
+          }
+          
+          // Check if this tool should be auto-approved
+          if (this.shouldAutoApproveTool(toolUse.name)) {
+            if (this.checkContextLimitReached()) return;
+            // Auto-approve the tool
+            toolUse.status = 'executing';
+            toolUse.approved = true;
+            // Execute the tool immediately (use background execution if not current session)
+            this.$nextTick(() => {
+              this.executeTool(toolUse);
+            });
+          } else {
+            // Set status to pending approval instead of executing
+            toolUse.status = 'pending_approval';
+            toolUse.approved = null;
+          }
+        } catch (error) {
+          toolUse.status = 'error';
+          toolUse.error = this.i18n.assistantToolParseInputError + ': ' + error.message;
+        }
+        
+        // Only update UI if this is for the current session
+        if (targetSessionId === this.currentChatId) {
+          this.scrollIfPinned();
+        }
+      }
+      
+      // Sometimes usage comes here
+      if (c.usage) {
+        messageUsage = c.usage;
+      }
+      
+      return messageUsage;
+    },
+    
+    // Helper method to handle message_stop event
+    handleMessageStop(assistantMessage, messageUsage) {
+      // Store usage information with the message if available
+      if (assistantMessage && messageUsage) {
+        // Set the ref's value
+        assistantMessage.usage.value = messageUsage;
+        // Update context length
+        this.updateContextLength(messageUsage);
+        this.$forceUpdate();
+      }
+      
+      return { assistantMessage: null, messageUsage: null };
+    },
+    
     async callAIAPI(userMessage) {
+      // Capture the session ID at the start of the API call
+      const streamingSessionId = this.currentChatId;
+      this.activeStreamingSessionId = streamingSessionId;
+      
       try {
         const response = await this.$root.papi.post('/assistant/chat', {
           msg: userMessage,
-          sessionId: this.currentChatId,
+          sessionId: streamingSessionId,
         },
         {
           headers: {
@@ -361,6 +617,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         const stream = response.data;
         const reader = stream.pipeThrough(new TextDecoderStream()).getReader();
 
+        this.isStreaming = true;
         let output = 0;
         let assistantMessage = null;
         let chunks = [];
@@ -372,238 +629,335 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           const { done, value } = await reader.read();
           if (done) break;
           
-          // cleanup the data, split messages apart, remove SSE label, filter out empty lines
-          const newChunks = value.split('\n\n').filter(d => d.trim()).map(d => (d.startsWith("data: ") ? d.slice(6) : d));
+          // Check if we're still in the same session for UI updates
+          const isCurrentSession = this.activeStreamingSessionId === streamingSessionId && this.currentChatId === streamingSessionId;
           
-          // if the last read had partial data, prepend it to the new data and process it again
-          if (partial) {
-            newChunks[0] = chunks[0] + newChunks[0]
-            partial = false;
-          }
-
-          chunks = newChunks;
+          // Process streaming chunks using helper method
+          const chunkResult = this.processStreamingChunks(value, chunks, partial);
+          chunks = chunkResult.chunks;
+          partial = chunkResult.partial;
           
           // process each chunk
           for (let i = 0; i < chunks.length; i++) {
             if (chunks[i] === '[DONE]') {
-              // DONE done
               assistantMessage = null;
               continue;
             }
 
-            // attempt to parse chunk
-            let c;
-            try {
-              c = JSON.parse(chunks[i]);
-            } catch {
-              // Handle partial JSON or multiple concatenated JSON objects
-              const chunk = chunks[i];
-              
-              // Try to split concatenated JSON objects by finding complete JSON boundaries
-              const splitChunks = [];
-              let currentChunk = '';
-              let braceCount = 0;
-              let inString = false;
-              let escaped = false;
-              
-              for (let j = 0; j < chunk.length; j++) {
-                const char = chunk[j];
-                currentChunk += char;
-                
-                if (escaped) {
-                  escaped = false;
-                  continue;
-                }
-                
-                if (char === '\\') {
-                  escaped = true;
-                  continue;
-                }
-                
-                if (char === '"') {
-                  inString = !inString;
-                  continue;
-                }
-                
-                if (!inString) {
-                  if (char === '{') {
-                    braceCount++;
-                  } else if (char === '}') {
-                    braceCount--;
-                    if (braceCount === 0) {
-                      // Complete JSON object found
-                      splitChunks.push(currentChunk);
-                      currentChunk = '';
-                    }
-                  }
-                }
-              }
-              
-              // If we found complete JSON objects, process them first
-              if (splitChunks.length > 0) {
-                // We successfully split concatenated JSON objects, reprocess them
-                chunks.splice(i, 1, ...splitChunks);
-                i--; // Reprocess from current position
-                
-                // If there's remaining partial content, save it for next read
-                if (currentChunk.trim()) {
-                  partial = true;
-                  chunks.push(currentChunk);
-                }
-                continue;
-              } else if (currentChunk.trim()) {
-                // No complete JSON found, treat entire chunk as partial
+            // Parse JSON chunk using helper method
+            const parseResult = this.parseJsonChunk(chunks[i]);
+            
+            if (!parseResult.success) {
+              // Handle partial JSON
+              if (parseResult.isPartial) {
                 partial = true;
-                chunks = [currentChunk];
-                break;
-              } else {
-                // Fallback: treat as partial
-                partial = true;
-                chunks = [chunk];
+                chunks = [parseResult.isPartial];
                 break;
               }
+              continue;
+            }
+            
+            // Handle multiple JSON objects in one chunk
+            if (Array.isArray(parseResult.data)) {
+              chunks.splice(i, 1, ...parseResult.data);
+              i--; // Reprocess from current position
+              
+              // If there's remaining partial content, save it for next read
+              if (parseResult.isPartial) {
+                partial = true;
+                chunks.push(parseResult.isPartial);
+              }
+              continue;
             }
 
-            // handle chunk by type
+            const c = parseResult.data;
+
+            // Always process chunks for tool execution logic, but only update UI if current session
             switch (c.type) {
               case 'message_start':
-                this.isTyping = false;
-
-                assistantMessage = {
-                  role: 'assistant',
-                  content: Vue.ref(''), // MUST be ref
-                  timestamp: new Date().toISOString(),
-                  usage: Vue.ref(null),
-                  toolUses: Vue.ref([]) // Track tool uses in this message
-                };
-
-                // Sometimes usage comes in message_start
-                if (c.message && c.message.usage) {
-                  messageUsage = c.message.usage;
+                if (isCurrentSession) {
+                  const startResult = this.handleMessageStart(c, assistantMessage);
+                  assistantMessage = startResult.assistantMessage;
+                  if (startResult.messageUsage) {
+                    messageUsage = startResult.messageUsage;
+                  }
                 }
-
-                this.messages.push(assistantMessage);
-                this.scrollToBottom();
+                break;
                 
-                break;
               case 'content_block_start':
-                // Handle tool use blocks
-                if (c.content_block && c.content_block.type === 'tool_use') {
-                  const toolUse = {
-                    id: c.content_block.id,
-                    name: c.content_block.name,
-                    input: c.content_block.input || {},
-                    inputJson: '', // Accumulate input JSON from deltas
-                    status: 'preparing', // Start as preparing, not executing
-                    result: null,
-                    error: null,
-                    rawResult: null, // Will store the raw tool result
-                    timestamp: new Date().toISOString(),
-                    blockIndex: c.index, // Store the block index for tracking
-                    approved: null // null = pending, true = approved, false = rejected
-                  };
-                  
-                  if (assistantMessage) {
-                    assistantMessage.toolUses.value.push(toolUse);
-                    this.executingTools.set(toolUse.id, toolUse);
-                    // Also track by block index for delta updates
-                    this.executingTools.set(`block_${c.index}`, toolUse);
-                    this.scrollToBottom();
-                  }
-                }
+                this.handleContentBlockStart(c, isCurrentSession ? assistantMessage : null, streamingSessionId);
                 break;
+                
               case 'content_block_delta':
-                if (assistantMessage && c.delta.type === 'text_delta') {
-                  // update the ref's value
-                  assistantMessage.content.value += c.delta.text;
-                  this.scrollToBottom();
-                } else if (c.delta.type === 'input_json_delta') {
-                  // Handle tool input updates - accumulate the JSON
-                  const toolUse = this.executingTools.get(`block_${c.index}`);
-                  if (toolUse) {
-                    toolUse.inputJson += c.delta.partial_json;
-                    toolUse.status = 'preparing';
-                    this.scrollToBottom();
-                  }
-                }
-
+                this.handleContentBlockDelta(c, isCurrentSession ? assistantMessage : null, streamingSessionId);
                 break;
+                
+              case 'content_block_stop':
+                const stopUsage = this.handleContentBlockStop(c, streamingSessionId);
+                if (stopUsage && isCurrentSession) {
+                  messageUsage = stopUsage;
+                }
+                break;
+                
               case 'message_stop':
-                // Store usage information with the message if available
-                if (assistantMessage && messageUsage) {
-                  // Set the ref's value
-                  assistantMessage.usage.value = messageUsage;
-                  // Update context length
-                  this.updateContextLength(messageUsage);
-                  this.$forceUpdate();
+                if (isCurrentSession) {
+                  const stopResult = this.handleMessageStop(assistantMessage, messageUsage);
+                  assistantMessage = stopResult.assistantMessage;
+                  messageUsage = stopResult.messageUsage;
                 }
-
-                assistantMessage = null;
-                messageUsage = null;
                 break;
+                
               case 'message_delta':
                 // Handle usage information if present
-                if (c.usage) {
+                if (c.usage && isCurrentSession) {
                   messageUsage = c.usage;
                 }
                 break;
-              case 'content_block_stop':
-                // Handle tool input completion - wait for user approval
-                const toolUse = this.executingTools.get(`block_${c.index}`);
-                if (toolUse && toolUse.status === 'preparing') {
-                  try {
-                    // Parse the accumulated JSON input
-                    if (toolUse.inputJson) {
-                      toolUse.input = JSON.parse(toolUse.inputJson);
-                    }
-                    
-                    // Set status to pending approval instead of executing
-                    toolUse.status = 'pending_approval';
-                    toolUse.approved = null;
-                  } catch (error) {
-                    toolUse.status = 'error';
-                    toolUse.error = 'Failed to parse tool input: ' + error.message;
-                  }
-                  this.scrollToBottom();
-                }
                 
-                // Sometimes usage comes here
-                if (c.usage) {
-                  messageUsage = c.usage;
-                }
-                break;
               default:
                 // Log any unhandled event types that might contain usage
-                if (c.usage) {
+                if (c.usage && isCurrentSession) {
                   messageUsage = c.usage;
                 }
                 break;
             }
           }
 
-          // done processing received chunks, update UI then read more
-          await this.$nextTick();
+          // done processing received chunks, update UI only if still current session
+          if (isCurrentSession) {
+            await this.$nextTick();
+          }
           output++;
         }
         
-        // Update credits from API after successful response
-        await this.loadCredits();
+        // Only update UI state if we're still in the same session
+        if (this.activeStreamingSessionId === streamingSessionId && this.currentChatId === streamingSessionId) {
+          this.isStreaming = false;
+          // Update credits from API after successful response
+          await this.loadCredits();
+        }
+        
+        // Clear the active streaming session if this was the active one
+        if (this.activeStreamingSessionId === streamingSessionId) {
+          this.activeStreamingSessionId = null;
+        }
+        
       } catch (error) {
-        this.isTyping = false;
+        // Only update UI state if we're still in the same session
+        if (this.activeStreamingSessionId === streamingSessionId && this.currentChatId === streamingSessionId) {
+          this.isTyping = false;
+          this.isStreaming = false;
+          
+          // Show user-friendly error message
+          const errorMessage = {
+            role: 'assistant',
+            content: this.i18n.assistantErrorMessage,
+            timestamp: new Date().toISOString()
+          };
+          this.messages.push(errorMessage);
+          this.scrollIfPinned();
+          
+          // Show error to user
+          this.$root.showError(this.i18n.assistantNoResponse + ': ' + (error.response?.data?.error || error.message));
+        }
         
-        // Show user-friendly error message
-        const errorMessage = {
-          role: 'assistant',
-          content: this.i18n.assistantErrorMessage,
-          timestamp: new Date().toISOString()
-        };
-        this.messages.push(errorMessage);
-        this.scrollToBottom();
-        
-        // Show error to user
-        this.$root.showError(this.i18n.assistantNoResponse + ': ' + (error.response?.data?.error || error.message));
+        // Clear the active streaming session if this was the active one
+        if (this.activeStreamingSessionId === streamingSessionId) {
+          this.activeStreamingSessionId = null;
+        }
       }
     },
+    
+    // Helper method to handle message_start event for tool execution
+    handleToolExecutionMessageStart(c, assistantMessage, toolUse) {
+      assistantMessage = {
+        role: 'assistant',
+        content: Vue.ref(''),
+        timestamp: new Date().toISOString(),
+        usage: Vue.ref(null),
+        toolUses: Vue.ref([]), // Track tool uses in this response too
+        isToolResult: true,
+        toolName: toolUse.name,
+        toolId: toolUse.id
+      };
+
+      let messageUsage = null;
+      if (c.message && c.message.usage) {
+        messageUsage = c.message.usage;
+      }
+
+      this.messages.push(assistantMessage);
+      this.scrollIfPinned();
+      
+      return { assistantMessage, messageUsage };
+    },
+    
+    // Helper method to handle content_block_start event for tool execution (chained tools)
+    handleToolExecutionContentBlockStart(c, assistantMessage, sessionId = null) {
+      // Handle tool use blocks in the response after tool execution
+      if (c.content_block && c.content_block.type === 'tool_use') {
+        const targetSessionId = sessionId || this.currentChatId;
+        const newToolUse = {
+          id: c.content_block.id,
+          name: c.content_block.name,
+          input: c.content_block.input || {},
+          inputJson: '', // Accumulate input JSON from deltas
+          status: 'preparing',
+          result: null,
+          error: null,
+          rawResult: null, // Will store the raw tool result
+          timestamp: new Date().toISOString(),
+          blockIndex: c.index,
+          approved: null,
+          sessionId: targetSessionId // Track which session this belongs to
+        };
+        
+        // Always track the tool use
+        this.executingTools.set(newToolUse.id, newToolUse);
+        this.executingTools.set(`block_${c.index}_${targetSessionId}`, newToolUse);
+        
+        // Only update UI if this is for the current session and we have an assistant message
+        if (assistantMessage && targetSessionId === this.currentChatId) {
+          assistantMessage.toolUses.value.push(newToolUse);
+          this.scrollIfPinned();
+        }
+      }
+    },
+    
+    // Helper method to handle content_block_delta event for tool execution
+    handleToolExecutionContentBlockDelta(c, assistantMessage, sessionId = null) {
+      const targetSessionId = sessionId || this.currentChatId;
+      
+      if (assistantMessage && c.delta.type === 'text_delta' && targetSessionId === this.currentChatId) {
+        // Only update UI if this is for the current session
+        assistantMessage.content.value += c.delta.text;
+        this.scrollIfPinned();
+      } else if (c.delta.type === 'input_json_delta') {
+        // Handle tool input updates for chained tools (always process, regardless of session)
+        const chainedToolUse = this.executingTools.get(`block_${c.index}_${targetSessionId}`);
+        if (chainedToolUse) {
+          chainedToolUse.inputJson += c.delta.partial_json;
+          chainedToolUse.status = 'preparing';
+          // Only update UI if this is for the current session
+          if (targetSessionId === this.currentChatId) {
+            this.scrollIfPinned();
+          }
+        }
+      }
+    },
+    
+    // Helper method to handle content_block_stop event for tool execution (chained tools)
+    handleToolExecutionContentBlockStop(c, sessionId = null) {
+      let messageUsage = null;
+      const targetSessionId = sessionId || this.currentChatId;
+      
+      // Handle tool input completion for chained tools
+      const chainedToolUse = this.executingTools.get(`block_${c.index}_${targetSessionId}`);
+      if (chainedToolUse && chainedToolUse.status === 'preparing') {
+        try {
+          // Parse the accumulated JSON input
+          if (chainedToolUse.inputJson) {
+            chainedToolUse.input = JSON.parse(chainedToolUse.inputJson);
+          }
+          
+          // Check if this chained tool should be auto-approved
+          if (this.shouldAutoApproveTool(chainedToolUse.name)) {
+            if (this.checkContextLimitReached()) return;
+            // Auto-approve the chained tool
+            chainedToolUse.status = 'executing';
+            chainedToolUse.approved = true;
+            // Execute the tool immediately (use background execution if not current session)
+            this.$nextTick(() => {
+              this.executeTool(chainedToolUse);
+            });
+          } else {
+            // Set status to pending approval
+            chainedToolUse.status = 'pending_approval';
+            chainedToolUse.approved = null;
+          }
+        } catch (error) {
+          chainedToolUse.status = 'error';
+          chainedToolUse.error = this.i18n.assistantToolParseInputError + ': ' + error.message;
+        }
+        
+        // Only update UI if this is for the current session
+        if (targetSessionId === this.currentChatId) {
+          this.scrollIfPinned();
+        }
+      }
+      
+      // Sometimes usage comes here
+      if (c.usage) {
+        messageUsage = c.usage;
+      }
+      
+      return messageUsage;
+    },
+    
+    // Helper method to handle message_stop event for tool execution
+    handleToolExecutionMessageStop(assistantMessage, messageUsage) {
+      if (assistantMessage && messageUsage) {
+        assistantMessage.usage.value = messageUsage;
+        // Update context length for tool result messages too
+        this.updateContextLength(messageUsage);
+        this.$forceUpdate();
+      }
+      return { assistantMessage: null, messageUsage: null };
+    },
+    
+    // Helper method to capture raw tool result from backend
+    async captureRawToolResult(toolUse) {
+      setTimeout(async () => {
+        try {
+          // Reload the chat history to get the raw result that was just saved
+          const response = await this.$root.papi.get(`/assistant/sessions/${this.currentChatId}`);
+          if (response.data && Array.isArray(response.data)) {
+            // Find the last tool result message for this tool
+            for (let i = response.data.length - 1; i >= 0; i--) {
+              const msg = response.data[i];
+              if (msg.tags && msg.tags.includes('tool_result')) {
+                let rawResult = null;
+                let toolError = null;
+                const textBlock = msg.message.contentBlocks.find(block => block.type === 'text');
+                if (textBlock && textBlock.text) {
+                  // Parse the tool result format: "ToolUseId: tooluse_QdvZoVlXQNm0PBuqFuqRmA, Result: [actual_result_data]"
+                  const toolResultText = textBlock.text;
+                  const toolUseIdMatch = toolResultText.match(/ToolUseId:\s*([^,]+)/);
+                  const resultMatch = toolResultText.match(/Result:\s*(.+)$/s);
+                  const errorMatch = toolResultText.match(/Error:\s*([^,]+)/);
+                  
+                  if (toolUseIdMatch && resultMatch && errorMatch) {
+                    rawResult = resultMatch[1].trim();
+                    toolError = errorMatch[1].trim();
+                  }
+                }
+                // This is a tool result - associate it with our tool use
+                toolUse.rawResult = rawResult;
+                toolUse.completedAt = msg.createTime;
+                if (toolError != "<nil>") {
+                  toolUse.error = toolError;
+                  toolUse.status = "error";
+                } else {
+                  toolUse.status = "completed";
+                }
+                break;
+              }
+            }
+          }
+        } catch (error) {
+          this.$root.showError(this.i18n.assistantNoRawToolResult + ': ' + error.message);
+        }
+      }, 1000); // Wait 1 second for the backend to save the result
+    },
+    
+    isNearBottom(container, thresholdPx = 48) {
+      return (container.scrollHeight - container.clientHeight - container.scrollTop) <= thresholdPx;
+    },
+
+    forceScrollBottom(container) {
+      container.scrollTop = container.scrollHeight;
+    },
+
     scrollToBottom() {
       this.$nextTick(() => {
         const messagesContainer = this.$el.querySelector('.chat-messages');
@@ -612,6 +966,111 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         }
       });
     },
+
+    async scrollToBottomSettled({ settleDelay = 180, maxWait = 3000 } = {}) {
+      await this.$nextTick(); // wait for Vue's immediate DOM updates
+
+      const container = this.$el && this.$el.querySelector
+        ? this.$el.querySelector('.chat-messages')
+        : null;
+      if (!container) return;
+
+      // Always do an initial snap
+      this.forceScrollBottom(container);
+
+      let resolved = false;
+      let lastHeight = container.scrollHeight;
+      let settleTimer = null;
+
+      const cleanupFns = [];
+
+      const scheduleSettle = () => {
+        if (settleTimer) clearTimeout(settleTimer);
+        settleTimer = setTimeout(() => {
+          // If height hasn't changed for settleDelay, consider layout "settled"
+          const sameHeight = container.scrollHeight === lastHeight;
+          lastHeight = container.scrollHeight;
+          if (sameHeight) {
+            resolved = true;
+            cleanup();
+            // final snap (covers any last-millisecond growth)
+            this.forceScrollBottom(container);
+          } else {
+            // height changed during debounce; snap again and wait again
+            this.forceScrollBottom(container);
+            scheduleSettle();
+          }
+        }, settleDelay);
+      };
+
+      const onMutateOrResize = () => {
+        if (resolved) return;
+        // When DOM mutates or sizes change, snap and restart settle timer
+        this.forceScrollBottom(container);
+        lastHeight = container.scrollHeight;
+        scheduleSettle();
+      };
+
+      // Observe DOM changes under chat messages (mermaid renders, tool cards, etc.)
+      const mo = new MutationObserver(onMutateOrResize);
+      mo.observe(container, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+      });
+      cleanupFns.push(() => mo.disconnect());
+
+      // Observe size changes (tables/images causing height growth)
+      if ('ResizeObserver' in window) {
+        const ro = new ResizeObserver(onMutateOrResize);
+        ro.observe(container);
+        cleanupFns.push(() => ro.disconnect());
+      }
+
+      // Listen for image loads inside container (images can change height after decode)
+      const imgs = Array.from(container.querySelectorAll('img'));
+      const pendingImgs = imgs.filter(img => !img.complete);
+      const imgHandlers = [];
+      pendingImgs.forEach(img => {
+        const h = () => onMutateOrResize();
+        img.addEventListener('load', h, { once: true });
+        img.addEventListener('error', h, { once: true });
+        imgHandlers.push(() => {
+          img.removeEventListener('load', h);
+          img.removeEventListener('error', h);
+        });
+      });
+      cleanupFns.push(() => imgHandlers.forEach(fn => fn()));
+
+      // Safety timeout so we don't hang forever if something keeps mutating
+      const safetyTimer = setTimeout(() => {
+        if (!resolved) {
+          cleanup();
+          this.forceScrollBottom(container);
+        }
+      }, maxWait);
+      cleanupFns.push(() => clearTimeout(safetyTimer));
+
+      const cleanup = () => {
+        cleanupFns.forEach(fn => fn());
+        if (settleTimer) clearTimeout(settleTimer);
+      };
+
+      // kick off the initial settle wait
+      scheduleSettle();
+    },
+
+    onChatScroll(evt) {
+      const c = evt.target;
+      const atBottom = this.isNearBottom(c, 4);
+      this.isPinnedToBottom = atBottom;
+    },
+
+    scrollIfPinned() {
+      if (!this.isPinnedToBottom) return;
+      this.scrollToBottom();
+    },
+
     getAvatar(user) {
       return this.$root.getAvatar(user);
     },
@@ -619,7 +1078,14 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       return this.$root.formatTimestamp(timestamp);
     },
     formatMarkdown(text) {
-      return this.$root.formatMarkdown(text);
+      text = text.replace(/(?<=```mermaid(?:(?!```)[\s\S])*?)\n\s*\n(?=(?:(?!```)[\s\S])*```)/g, '\n');
+      md = this.$root.formatMarkdown(text, true);
+      if (!this.isStreaming) {
+        this.$nextTick(() => {
+          this.$root.renderMermaid();
+        });
+      }
+      return md;
     },
     formatChatDate(timestamp) {
       return this.$root.formatDateTime(timestamp);
@@ -628,12 +1094,13 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       return this.$root.formatCount(count);
     },
     async executeTool(toolUse) {
+      // Use the tool's session ID if available, otherwise use current session
+      const toolStreamingSessionId = toolUse.sessionId || this.currentChatId;
+      
       try {
-        
         // Create ToolRequest object with history and params
-        // Session ID should already be set by sendMessage()
         const toolRequest = {
-          sessionId: this.currentChatId,
+          sessionId: toolStreamingSessionId,
           toolUseId: toolUse.id,
           params: toolUse.input
         };
@@ -647,13 +1114,21 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           adapter: 'fetch',
         });
 
-        // Update tool status to executing
-        toolUse.status = 'executing';
+        // Check if we should update UI (current session)
+        const isCurrentSession = this.currentChatId === toolStreamingSessionId;
+
+        // Update tool status to executing only if still in same session
+        if (isCurrentSession) {
+          toolUse.status = 'executing';
+        }
 
         // Stream the AI's response to the tool result
         const stream = response.data;
         const reader = stream.pipeThrough(new TextDecoderStream()).getReader();
 
+        if (isCurrentSession) {
+          this.isStreaming = true;
+        }
         let assistantMessage = null;
         let chunks = [];
         let partial = false;
@@ -663,14 +1138,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           const { done, value } = await reader.read();
           if (done) break;
           
-          const newChunks = value.split('\n\n').filter(d => d.trim()).map(d => (d.startsWith("data: ") ? d.slice(6) : d));
-          
-          if (partial) {
-            newChunks[0] = chunks[0] + newChunks[0]
-            partial = false;
-          }
-
-          chunks = newChunks;
+          // Process streaming chunks using helper method
+          const chunkResult = this.processStreamingChunks(value, chunks, partial);
+          chunks = chunkResult.chunks;
+          partial = chunkResult.partial;
           
           for (let i = 0; i < chunks.length; i++) {
             if (chunks[i] === '[DONE]') {
@@ -678,252 +1149,122 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
               continue;
             }
 
-            let c;
-            try {
-              c = JSON.parse(chunks[i]);
-            } catch {
-              // Handle partial JSON similar to callAIAPI
-              const chunk = chunks[i];
-              const splitChunks = [];
-              let currentChunk = '';
-              let braceCount = 0;
-              let inString = false;
-              let escaped = false;
-              
-              for (let j = 0; j < chunk.length; j++) {
-                const char = chunk[j];
-                currentChunk += char;
-                
-                if (escaped) {
-                  escaped = false;
-                  continue;
-                }
-                
-                if (char === '\\') {
-                  escaped = true;
-                  continue;
-                }
-                
-                if (char === '"') {
-                  inString = !inString;
-                  continue;
-                }
-                
-                if (!inString) {
-                  if (char === '{') {
-                    braceCount++;
-                  } else if (char === '}') {
-                    braceCount--;
-                    if (braceCount === 0) {
-                      splitChunks.push(currentChunk);
-                      currentChunk = '';
-                    }
-                  }
-                }
-              }
-              
-              if (splitChunks.length > 0) {
-                chunks.splice(i, 1, ...splitChunks);
-                i--;
-                
-                if (currentChunk.trim()) {
-                  partial = true;
-                  chunks.push(currentChunk);
-                }
-                continue;
-              } else if (currentChunk.trim()) {
+            // Parse JSON chunk using helper method
+            const parseResult = this.parseJsonChunk(chunks[i]);
+            
+            if (!parseResult.success) {
+              // Handle partial JSON
+              if (parseResult.isPartial) {
                 partial = true;
-                chunks = [currentChunk];
-                break;
-              } else {
-                partial = true;
-                chunks = [chunk];
+                chunks = [parseResult.isPartial];
                 break;
               }
+              continue;
+            }
+            
+            // Handle multiple JSON objects in one chunk
+            if (Array.isArray(parseResult.data)) {
+              chunks.splice(i, 1, ...parseResult.data);
+              i--; // Reprocess from current position
+              
+              // If there's remaining partial content, save it for next read
+              if (parseResult.isPartial) {
+                partial = true;
+                chunks.push(parseResult.isPartial);
+              }
+              continue;
             }
 
-            // Handle streaming chunks for tool result response
+            const c = parseResult.data;
+
+            // Always process chunks for tool execution logic, but only update UI if current session
             switch (c.type) {
               case 'message_start':
-                assistantMessage = {
-                  role: 'assistant',
-                  content: Vue.ref(''),
-                  timestamp: new Date().toISOString(),
-                  usage: Vue.ref(null),
-                  toolUses: Vue.ref([]), // Track tool uses in this response too
-                  isToolResult: true,
-                  toolName: toolUse.name,
-                  toolId: toolUse.id
-                };
-
-                if (c.message && c.message.usage) {
-                  messageUsage = c.message.usage;
+                if (isCurrentSession) {
+                  // Capture raw tool result using helper method
+                  this.captureRawToolResult(toolUse);
+                  
+                  const startResult = this.handleToolExecutionMessageStart(c, assistantMessage, toolUse);
+                  assistantMessage = startResult.assistantMessage;
+                  if (startResult.messageUsage) {
+                    messageUsage = startResult.messageUsage;
+                  }
                 }
-
-                this.messages.push(assistantMessage);
-                this.scrollToBottom();
                 break;
 
               case 'content_block_start':
-                // Handle tool use blocks in the response after tool execution
-                if (c.content_block && c.content_block.type === 'tool_use') {
-                  const newToolUse = {
-                    id: c.content_block.id,
-                    name: c.content_block.name,
-                    input: c.content_block.input || {},
-                    inputJson: '', // Accumulate input JSON from deltas
-                    status: 'preparing',
-                    result: null,
-                    error: null,
-                    rawResult: null, // Will store the raw tool result
-                    timestamp: new Date().toISOString(),
-                    blockIndex: c.index,
-                    approved: null
-                  };
-                  
-                  if (assistantMessage) {
-                    assistantMessage.toolUses.value.push(newToolUse);
-                    this.executingTools.set(newToolUse.id, newToolUse);
-                    this.executingTools.set(`block_${c.index}`, newToolUse);
-                    this.scrollToBottom();
-                  }
-                }
+                this.handleToolExecutionContentBlockStart(c, isCurrentSession ? assistantMessage : null, toolStreamingSessionId);
                 break;
 
               case 'content_block_delta':
-                if (assistantMessage && c.delta.type === 'text_delta') {
-                  assistantMessage.content.value += c.delta.text;
-                  this.scrollToBottom();
-                } else if (c.delta.type === 'input_json_delta') {
-                  // Handle tool input updates for chained tools
-                  const chainedToolUse = this.executingTools.get(`block_${c.index}`);
-                  if (chainedToolUse) {
-                    chainedToolUse.inputJson += c.delta.partial_json;
-                    chainedToolUse.status = 'preparing';
-                    this.scrollToBottom();
-                  }
-                }
+                this.handleToolExecutionContentBlockDelta(c, isCurrentSession ? assistantMessage : null, toolStreamingSessionId);
                 break;
 
               case 'content_block_stop':
-                // Handle tool input completion for chained tools
-                const chainedToolUse = this.executingTools.get(`block_${c.index}`);
-                if (chainedToolUse && chainedToolUse.status === 'preparing') {
-                  try {
-                    // Parse the accumulated JSON input
-                    if (chainedToolUse.inputJson) {
-                      chainedToolUse.input = JSON.parse(chainedToolUse.inputJson);
-                    }
-                    
-                    // Set status to pending approval
-                    chainedToolUse.status = 'pending_approval';
-                    chainedToolUse.approved = null;
-                  } catch (error) {
-                    chainedToolUse.status = 'error';
-                    chainedToolUse.error = 'Failed to parse tool input: ' + error.message;
-                  }
-                  this.scrollToBottom();
-                }
-                
-                // Sometimes usage comes here
-                if (c.usage) {
-                  messageUsage = c.usage;
+                const stopUsage = this.handleToolExecutionContentBlockStop(c, toolStreamingSessionId);
+                if (stopUsage && isCurrentSession) {
+                  messageUsage = stopUsage;
                 }
                 break;
 
               case 'message_stop':
-                if (assistantMessage && messageUsage) {
-                  assistantMessage.usage.value = messageUsage;
-                  // Update context length for tool result messages too
-                  this.updateContextLength(messageUsage);
-                  this.$forceUpdate();
+                if (isCurrentSession) {
+                  const stopResult = this.handleToolExecutionMessageStop(assistantMessage, messageUsage);
+                  assistantMessage = stopResult.assistantMessage;
+                  messageUsage = stopResult.messageUsage;
                 }
-                assistantMessage = null;
-                messageUsage = null;
                 break;
 
               case 'message_delta':
-                if (c.usage) {
+                if (c.usage && isCurrentSession) {
                   messageUsage = c.usage;
                 }
                 break;
 
               default:
-                if (c.usage) {
+                if (c.usage && isCurrentSession) {
                   messageUsage = c.usage;
                 }
                 break;
             }
           }
 
-          await this.$nextTick();
+          // Only update UI if still in same session
+          if (isCurrentSession) {
+            await this.$nextTick();
+          }
         }
         
-        // After streaming is complete, check if we need to capture the raw result
-        // The raw result will be in the next message that gets saved to backend
-        // We'll capture it by monitoring the messages array for new tool result messages
-        setTimeout(async () => {
-          try {
-            // Reload the chat history to get the raw result that was just saved
-            const response = await this.$root.papi.get(`/assistant/sessions/${this.currentChatId}`);
-            if (response.data && Array.isArray(response.data)) {
-              // Find the last tool result message for this tool
-              for (let i = response.data.length - 1; i >= 0; i--) {
-                const msg = response.data[i];
-                if (msg.tags && msg.tags.includes('tool_result')) {
-                  let rawResult = null;
-                  let toolError = null;
-                  const textBlock = msg.message.contentBlocks.find(block => block.type === 'text');
-                  if (textBlock && textBlock.text) {
-                    // Parse the tool result format: "ToolUseId: tooluse_QdvZoVlXQNm0PBuqFuqRmA, Result: [actual_result_data]"
-                    const toolResultText = textBlock.text;
-                    const toolUseIdMatch = toolResultText.match(/ToolUseId:\s*([^,]+)/);
-                    const resultMatch = toolResultText.match(/Result:\s*(.+)$/s);
-                    const errorMatch = toolResultText.match(/Error:\s*([^,]+)/);
-                    
-                    if (toolUseIdMatch && resultMatch && errorMatch) {
-                      rawResult = resultMatch[1].trim();
-                      toolError = errorMatch[1].trim();
-                    }
-                  }
-                  // This is a tool result - associate it with our tool use
-                  toolUse.rawResult = rawResult;
-                  toolUse.completedAt = msg.createTime;
-                  if (toolError != "<nil>") {
-                    toolUse.error = toolError;
-                    toolUse.status = "error";
-                  } else {
-                    toolUse.status = "completed";
-                  }
-                  break;
-                }
-              }
-            }
-          } catch (error) {
-            this.$root.showError(this.i18n.assistantNoRawToolResult + ': ' + error.message);
-          }
-        }, 1000); // Wait 1 second for the backend to save the result
-        
-        // Update credits after tool execution
-        await this.loadCredits();
+        // Only update UI state if we're still in the same session
+        if (isCurrentSession) {
+          this.isStreaming = false;
+          // Update credits after tool execution
+          await this.loadCredits();
+        }
         
       } catch (error) {
-        // Update tool use status with error
+        // Always update tool status with error, but only update UI if current session
         toolUse.status = 'error';
         toolUse.error = error.message;
+
+        const isCurrentSession = this.currentChatId === toolStreamingSessionId;
         
-        // Add error message to chat
-        const errorMessage = {
-          role: 'assistant',
-          content: `Error executing tool "${toolUse.name}": ${error.message}`,
-          timestamp: new Date().toISOString(),
-          isToolResult: true,
-          toolName: toolUse.name,
-          toolId: toolUse.id
-        };
-        
-        this.messages.push(errorMessage);
-        this.scrollToBottom();
+        if (isCurrentSession) {
+          this.isStreaming = false;
+          
+          // Add error message to chat
+          const errorMessage = {
+            role: 'assistant',
+            content: `Error executing tool "${toolUse.name}": ${error.message}`,
+            timestamp: new Date().toISOString(),
+            isToolResult: true,
+            toolName: toolUse.name,
+            toolId: toolUse.id
+          };
+          
+          this.messages.push(errorMessage);
+          this.scrollIfPinned();
+        }
       }
     },
     getToolStatusIcon(status) {
@@ -950,6 +1291,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     async approveTool(toolUse) {
       try {
+        if (this.checkContextLimitReached()) return;
         toolUse.approved = true;
         toolUse.status = 'executing';
         await this.executeTool(toolUse);
@@ -960,12 +1302,13 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.scrollToBottom();
     },
     async rejectTool(toolUse) {
+      if (this.checkContextLimitReached()) return;
       toolUse.approved = false;
       toolUse.status = 'rejected';
       toolUse.error = this.i18n.assistantToolUseReject;
       
       // Add a message indicating the tool was rejected
-      const rejectionMessage = this.$root.replaceActionVar(this.i18n.assistantToolUseRejectMessage, 'toolName', toolUse.name);
+      const rejectionMessage = this.$root.localizeMessage(this.i18n.assistantToolUseRejectMessage, {toolName: toolUse.name});
       await this.callAIAPI(rejectionMessage);
 
       this.scrollToBottom();
@@ -1013,23 +1356,161 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       try {
         const response = await this.$root.papi.get(`/assistant/sessions/${sessionId}`);
         if (response.data && Array.isArray(response.data) && response.data.length > 0) {
-          // Convert backend messages to frontend format
-          this.messages = this.convertBackendMessagesToFrontend(response.data);
           this.currentChatId = sessionId;
+          this.messages = this.convertBackendMessagesToFrontend(response.data);
           this.saveCurrentChatId();
+
+          await this.scrollToBottomSettled({ maxWait: 6000, settleDelay: 200 });
+
+          // Blocks user from sending messages in deleted chats
+          this.checkIfDeleted(sessionId);
+
         } else {
           throw new Error(this.i18n.assistantNoHistoryFound + ' ' + sessionId);
         }
       } catch (error) {
-        // If session doesn't exist, start with welcome message
         if (error.response && error.response.status === 404) {
-          this.loadChatHistory(); // Reset to welcome message
+          this.loadNewChatScreen();
           this.currentChatId = sessionId;
           this.saveCurrentChatId();
+
+          await this.scrollToBottomSettled();
         } else {
           throw error;
         }
       }
+    },
+    
+    // Helper method to process tool result messages (new format with tags)
+    processToolResultMessage(msg, processedMessages) {
+      // This is a tool result message - extract the result data
+      let rawResult = null;
+      let toolUseId = null;
+      let toolError = null;
+      
+      if (msg.message.contentBlocks && msg.message.contentBlocks.length > 0) {
+        const textBlock = msg.message.contentBlocks.find(block => block.type === 'text');
+        if (textBlock && textBlock.text) {
+          // Parse the tool result format: "ToolUseId: tooluse_QdvZoVlXQNm0PBuqFuqRmA, Result: [actual_result_data]"
+          const toolResultText = textBlock.text;
+          const toolUseIdMatch = toolResultText.match(/ToolUseId:\s*([^,]+)/);
+          const resultMatch = toolResultText.match(/Result:\s*(.+)$/s);
+          const errorMatch = toolResultText.match(/Error:\s*([^,]+)/);
+          
+          if (toolUseIdMatch && resultMatch && errorMatch) {
+            toolUseId = toolUseIdMatch[1].trim();
+            rawResult = resultMatch[1].trim();
+            toolError = errorMatch[1].trim();
+          }
+        }
+      }
+      
+      // Find the assistant message with the matching tool use and add the raw result
+      if (toolUseId && rawResult && toolError) {
+        // Look backwards through processed messages to find the tool use
+        for (let j = processedMessages.length - 1; j >= 0; j--) {
+          const processedMsg = processedMessages[j];
+          if (processedMsg.role === 'assistant' && processedMsg.toolUses) {
+            const toolUses = processedMsg.toolUses.value;
+            const matchingToolUse = toolUses.find(tool => tool.id === toolUseId);
+            if (matchingToolUse) {
+              matchingToolUse.rawResult = rawResult;
+              matchingToolUse.completedAt = msg.createTime;
+              if (toolError != "<nil>") {
+                matchingToolUse.error = toolError;
+                matchingToolUse.status = "error";
+              }
+              break;
+            }
+          }
+        }
+      }
+    },
+    
+    // Helper method to process old format tool result messages
+    processOldFormatToolResult(msg, processedMessages) {
+      // This is a tool result - find the previous assistant message with tool uses
+      const prevMessage = processedMessages[processedMessages.length - 1];
+      if (prevMessage && prevMessage.role === 'assistant' && prevMessage.toolUses) {
+        // Add the raw result to the last tool use in the previous message
+        const toolUses = prevMessage.toolUses.value;
+        if (toolUses.length > 0) {
+          const lastToolUse = toolUses[toolUses.length - 1];
+          lastToolUse.rawResult = msg.message.contentStr;
+        }
+      }
+    },
+    
+    // Helper method to extract content from message blocks
+    extractMessageContent(msg, frontendMsg) {
+      if (msg.message.contentStr) {
+        frontendMsg.content = msg.message.contentStr;
+      } else if (msg.message.contentBlocks && msg.message.contentBlocks.length > 0) {
+        // Extract text from content blocks
+        const textBlocks = msg.message.contentBlocks.filter(block => block.type === 'text');
+        if (textBlocks.length > 0) {
+          frontendMsg.content = textBlocks.map(block => block.text).join('\n');
+        } else {
+          frontendMsg.content = '';
+        }
+      } else {
+        frontendMsg.content = 'Empty message';
+      }
+    },
+    
+    // Helper method to process tool use blocks
+    processToolUseBlocks(msg, frontendMsg, backendMessages, i) {
+      const toolBlocks = msg.message.contentBlocks.filter(block => block.type === 'tool_use');
+      let skip_next = false;
+      
+      if (toolBlocks.length > 0) {
+        if (i < backendMessages.length - 1 && (!backendMessages[i + 1].tags || !backendMessages[i + 1].tags.includes('tool_result'))) {
+          const nextMessage = backendMessages[i + 1];
+          if (nextMessage.message.contentBlocks[0].text && nextMessage.message.contentBlocks[0].text.includes('rejected by the user')) {
+            frontendMsg.toolUses = Vue.ref(toolBlocks.map(block => ({
+              id: block.id || 'unknown',
+              name: block.name || 'unknown',
+              input: block.input || {}, // Ensure input is always an object, never null/undefined
+              status: 'rejected',
+              result: null,
+              error: this.i18n.assistantToolUseReject,
+              rawResult: null,
+              timestamp: msg.createTime || new Date().toISOString(),
+              approved: false
+            })));
+            skip_next = true;
+          }
+        // Using "else if" instead of "else" prevents tool uses that haven't been interacted with from appearing as completed after refreshing
+        } else if (i < backendMessages.length - 1) {
+          frontendMsg.toolUses = Vue.ref(toolBlocks.map(block => ({
+            id: block.id || 'unknown',
+            name: block.name || 'unknown',
+            input: block.input || {}, // Ensure input is always an object, never null/undefined
+            status: 'completed', // Assume completed since it's from history
+            result: null,
+            error: null,
+            rawResult: null, // Will be populated by subsequent tool result message
+            timestamp: msg.createTime || new Date().toISOString(),
+            approved: true
+          })));
+        // Allows tool use blocks at the end of a session to persist even when the user clicks away
+        } else {
+          frontendMsg.toolUses = Vue.ref(toolBlocks.map(block => ({
+            id: block.id || 'unknown',
+            name: block.name || 'unknown',
+            input: block.input || {}, // Ensure input is always an object, never null/undefined
+            status: 'pending_approval',
+            result: null,
+            error: null,
+            rawResult: null, // Will be populated by subsequent tool result message
+            timestamp: msg.createTime || new Date().toISOString(),
+            approved: null,
+            sessionId: this.currentChatId
+          })));
+        }
+      }
+      
+      return skip_next;
     },
 
     // Helper method to convert backend message format to frontend format
@@ -1051,65 +1532,14 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         
         // Check if this is a tool result message (new format with tags)
         if (msg.tags && msg.tags.includes('tool_result')) {
-          // This is a tool result message - extract the result data
-          let rawResult = null;
-          let toolUseId = null;
-          let toolError = null;
-          
-          if (msg.message.contentBlocks && msg.message.contentBlocks.length > 0) {
-            const textBlock = msg.message.contentBlocks.find(block => block.type === 'text');
-            if (textBlock && textBlock.text) {
-              // Parse the tool result format: "ToolUseId: tooluse_QdvZoVlXQNm0PBuqFuqRmA, Result: [actual_result_data]"
-              const toolResultText = textBlock.text;
-              const toolUseIdMatch = toolResultText.match(/ToolUseId:\s*([^,]+)/);
-              const resultMatch = toolResultText.match(/Result:\s*(.+)$/s);
-              const errorMatch = toolResultText.match(/Error:\s*([^,]+)/);
-              
-              if (toolUseIdMatch && resultMatch && errorMatch) {
-                toolUseId = toolUseIdMatch[1].trim();
-                rawResult = resultMatch[1].trim();
-                toolError = errorMatch[1].trim();
-              }
-            }
-          }
-          
-          // Find the assistant message with the matching tool use and add the raw result
-          if (toolUseId && rawResult && toolError) {
-            // Look backwards through processed messages to find the tool use
-            for (let j = processedMessages.length - 1; j >= 0; j--) {
-              const processedMsg = processedMessages[j];
-              if (processedMsg.role === 'assistant' && processedMsg.toolUses) {
-                const toolUses = processedMsg.toolUses.value;
-                const matchingToolUse = toolUses.find(tool => tool.id === toolUseId);
-                if (matchingToolUse) {
-                  matchingToolUse.rawResult = rawResult;
-                  matchingToolUse.completedAt = msg.createTime;
-                  if (toolError != "<nil>") {
-                    matchingToolUse.error = toolError;
-                    matchingToolUse.status = "error";
-                  }
-                  break;
-                }
-              }
-            }
-          }
-          
+          this.processToolResultMessage(msg, processedMessages);
           // Skip adding this message to the processed messages (filter it out)
           continue;
         }
         
         // Check if this is a tool result message (old format - user role with contentStr)
         if (msg.message.role === 'user' && msg.message.contentStr && !msg.message.contentBlocks) {
-          // This is a tool result - find the previous assistant message with tool uses
-          const prevMessage = processedMessages[processedMessages.length - 1];
-          if (prevMessage && prevMessage.role === 'assistant' && prevMessage.toolUses) {
-            // Add the raw result to the last tool use in the previous message
-            const toolUses = prevMessage.toolUses.value;
-            if (toolUses.length > 0) {
-              const lastToolUse = toolUses[toolUses.length - 1];
-              lastToolUse.rawResult = msg.message.contentStr;
-            }
-          }
+          this.processOldFormatToolResult(msg, processedMessages);
           // Skip adding this message to the processed messages (filter it out)
           continue;
         }
@@ -1119,65 +1549,15 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           timestamp: msg.createTime || new Date().toISOString()
         };
 
-        // Handle different content formats
-        if (msg.message.contentStr) {
-          frontendMsg.content = msg.message.contentStr;
-        } else if (msg.message.contentBlocks && msg.message.contentBlocks.length > 0) {
-          // For now, just extract text from content blocks
-          if (frontendMsg.role === 'user') {
-            const textBlocks = msg.message.contentBlocks.filter(block => block.type === 'text');
-            if (textBlocks.length > 0) {
-              frontendMsg.content = textBlocks.map(block => block.text).join('\n');
-            } else {
-              frontendMsg.content = '';
-            }
-          } else if (frontendMsg.role === 'assistant') {
-            const textBlocks = msg.message.contentBlocks.filter(block => block.type === 'text');
-            if (textBlocks.length > 0) {
-              frontendMsg.content = textBlocks.map(block => block.text).join('\n');
-            } else {
-              frontendMsg.content = '';
-            }
+        // Extract message content using helper method
+        this.extractMessageContent(msg, frontendMsg);
+        
+        // Process tool use blocks if present
+        if (msg.message.contentBlocks && msg.message.contentBlocks.length > 0) {
+          const toolSkipNext = this.processToolUseBlocks(msg, frontendMsg, backendMessages, i);
+          if (toolSkipNext) {
+            skip_next = true;
           }
-            
-          // Handle tool uses if present
-          const toolBlocks = msg.message.contentBlocks.filter(block => block.type === 'tool_use');
-          if (toolBlocks.length > 0) {
-
-            if (i < backendMessages.length - 1 && (!backendMessages[i + 1].tags || !backendMessages[i + 1].tags.includes('tool_result'))) {
-              const nextMessage = backendMessages[i + 1];
-              if (nextMessage.message.contentBlocks[0].text.includes('rejected by the user')) {
-                frontendMsg.toolUses = Vue.ref(toolBlocks.map(block => ({
-                  id: block.id || 'unknown',
-                  name: block.name || 'unknown',
-                  input: block.input || {}, // Ensure input is always an object, never null/undefined
-                  status: 'rejected',
-                  result: null,
-                  error: this.i18n.assistantToolUseReject,
-                  rawResult: null,
-                  timestamp: msg.createTime || new Date().toISOString(),
-                  approved: false
-                })));
-                skip_next = true;
-              }
-            // Using "else if" instead of "else" prevents tool uses that haven't beeen interacted with from appearing as completed after refreshing
-            } else if (i < backendMessages.length - 1) {
-
-              frontendMsg.toolUses = Vue.ref(toolBlocks.map(block => ({
-                id: block.id || 'unknown',
-                name: block.name || 'unknown',
-                input: block.input || {}, // Ensure input is always an object, never null/undefined
-                status: 'completed', // Assume completed since it's from history
-                result: null,
-                error: null,
-                rawResult: null, // Will be populated by subsequent tool result message
-                timestamp: msg.createTime || new Date().toISOString(),
-                approved: true
-              })));
-            }
-          }
-        } else {
-          frontendMsg.content = 'Empty message';
         }
 
         // Handle usage information if present
@@ -1193,6 +1573,32 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       return processedMessages;
     },
 
+    generateInvestigationPrompt(fields) {
+
+      // Prepare the alert data for investigation
+      const alertData = {
+        socId: fields.socId,
+        ruleUuid: fields.ruleUuid,
+        ruleName: fields.ruleName,
+        severity: fields.severity,
+        timestamp: fields.timestamp,
+        sourceIp: fields.sourceIp,
+        destIp: fields.destIp,
+        eventModule: fields.eventModule,
+        eventDataset: fields.eventDataset,
+        message: fields.message,
+        alertRule: fields.alertRule
+      };
+
+      let investigationPrompt = this.investigationMsg;
+      
+      for (let alertKey in alertData) {
+        investigationPrompt = this.$root.replaceActionVar(investigationPrompt, alertKey.toString(), alertData[alertKey] || 'Unknown');
+      }
+
+      return investigationPrompt;
+    },
+
     getContextColor(value) {
       const maxContextLength = this.increaseMaxContextThreshold ? this.contextLimitLarge : this.contextLimitSmall;
       const threshold1 = maxContextLength * this.thresholdColorRatioLow;
@@ -1205,43 +1611,73 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       return "text-red darken-1";
     },
     
-    // Save and load settings for the context threshold toggle
-    saveContextThresholdSetting() {
-      try {
-        localStorage.setItem('so-chat-increase-max-context-threshold', this.increaseMaxContextThreshold.toString());
-      } catch (error) {
-        this.$root.showError(this.i18n.assistantSaveContextError + ': ' + error.message);
-      }
-    },
-    
-    loadContextThresholdSetting() {
-      try {
-        const saved = localStorage.getItem('so-chat-increase-max-context-threshold');
-        if (saved !== null) {
-          this.increaseMaxContextThreshold = saved === 'true';
-        }
-      } catch (error) {
-        this.$root.showError(this.i18n.assistantLoadContextError + ': ' + error.message);
+
+    // Generic setting save method
+    saveSetting(name, value, defaultValue = null) {
+      var item = 'settings.assistant.' + name;
+      if (defaultValue == null || value != defaultValue) {
+        localStorage[item] = value;
+      } else {
+        localStorage.removeItem(item);
       }
     },
 
-    // Save and load settings for the context threshold toggle
-    saveLastActiveSetting() {
-      try {
-        localStorage.setItem('so-chat-restore-last-active', this.restoreLastActive.toString());
-      } catch (error) {
-        this.$root.showError(this.i18n.assistantSaveRecentError + ': ' + error.message);
-      }
+    // Save all local settings
+    saveLocalSettings() {
+      this.saveSetting('increaseMaxContextThreshold', this.increaseMaxContextThreshold, false);
+      this.saveSetting('restoreLastActive', this.restoreLastActive, false);
+      this.saveSetting('alwaysApproveReadRequests', this.alwaysApproveReadRequests, false);
+      this.saveSetting('showChatHistory', this.showChatHistory, true);
+    },
+
+    // Load all local settings
+    loadLocalSettings() {
+      var prefix = 'settings.assistant';
+      if (localStorage[prefix + '.increaseMaxContextThreshold']) this.increaseMaxContextThreshold = localStorage[prefix + '.increaseMaxContextThreshold'] == 'true';
+      if (localStorage[prefix + '.restoreLastActive']) this.restoreLastActive = localStorage[prefix + '.restoreLastActive'] == 'true';
+      if (localStorage[prefix + '.alwaysApproveReadRequests']) this.alwaysApproveReadRequests = localStorage[prefix + '.alwaysApproveReadRequests'] == 'true';
+      if (localStorage[prefix + '.showChatHistory']) this.showChatHistory = localStorage[prefix + '.showChatHistory'] == 'true';
+    },
+
+    // Check if a tool should be auto-approved based on localStorage settings
+    shouldAutoApproveTool(toolName) {
+      return ['query_events', 'get_playbooks'].includes(toolName) && this.alwaysApproveReadRequests;
+    },
+
+    // Open the options menu programmatically
+    openOptionsMenu() {
+      this.$nextTick(() => {
+        // Find the options expansion panel and open it
+        const optionsPanel = this.$el.querySelector('[data-aid="assistant_options"]');
+        if (optionsPanel) {
+          // Trigger click on the expansion panel title to open it
+          const panelTitle = optionsPanel.querySelector('.v-expansion-panel-title');
+          if (panelTitle) {
+            panelTitle.click();
+          }
+        }
+        
+        // Scroll to the options panel
+        const optionsHeader = this.$el.querySelector('#chatOptionsHeader');
+        if (optionsHeader) {
+          optionsHeader.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      });
+    },
+
+    clearStreamingStates() {
+      this.activeStreamingSessionId = null;
+      this.isTyping = false;
+      this.isStreaming = false;
     },
     
-    loadLastActiveSetting() {
-      try {
-        const saved = localStorage.getItem('so-chat-restore-last-active');
-        if (saved !== null) {
-          this.restoreLastActive = saved === 'true';
-        }
-      } catch (error) {
-        this.$root.showError(this.i18n.assistantLoadRecentError + ': ' + error.message);
+    checkIfDeleted(sessionId) {
+      const sessionInHistory = this.chatHistory.some(session => session.sessionId === sessionId);
+      if (!sessionInHistory) {
+        this.canChat = false;
+        this.$root.showWarning(this.i18n.assistantChatIsDeleted);
+      } else {
+        this.canChat = true;
       }
     }
   }

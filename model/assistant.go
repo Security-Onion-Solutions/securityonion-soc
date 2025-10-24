@@ -7,6 +7,7 @@ package model
 
 import (
 	"encoding/json"
+	"time"
 )
 
 // @Description A user message to be added to a session.
@@ -39,6 +40,8 @@ type ChatRequest struct {
 	ToolConfig json.RawMessage `json:"toolConfig,omitempty"`
 	// Indicate which user is making the request.
 	UserId string `json:"user_uuid,omitempty" example:"8beae4b5-275b-4669-b678-8cff894911b5"`
+	// Optionally append additional context to the system prompt.
+	SystemAppend string `json:"system_append,omitempty" example:"Treat 192.168.1.105 as our internal DNS server."`
 }
 
 // @Description A stored message in the chat session. This contains metadata about the message and its context not necessary for the conversation with the Assistant.
@@ -242,7 +245,13 @@ type BalanceResponse struct {
 	// The status of the key used.
 	Status string `json:"status" example:"active"`
 	// The remaining credit balance.
-	Balance float64 `json:"credit_balance" example:"123000"`
+	Balance int64 `json:"credit_balance" example:"123000"`
+	// The health status of the service.
+	HealthStatus string `json:"health_status" example:"healthy"`
+}
+
+type HealthResponse struct {
+	Status string `json:"status"`
 }
 
 type ChatOpt func(*ChatConfig)
@@ -267,4 +276,45 @@ func ApplyChatOpts(opts ...ChatOpt) *ChatConfig {
 	}
 
 	return config
+}
+
+// @Description A session for a user chatting with the Assistant.
+type AssistantSession struct {
+	Auditable
+	// The title of the session. Usually the first message sent by the user.
+	Title string `json:"title" example:"Can you write a suricata rule for me?"`
+	// The session identifier.
+	SessionId string `json:"sessionId" example:"chat_1757086398900_ykhmndscn"`
+	// The time the session was deleted.
+	DeleteTime *time.Time `json:"deleteTime,omitempty" example:"2025-09-05T15:33:00.000Z"`
+	// Metadata about the session.
+	Tags []string `json:"tags" example:"investigation"`
+	// Usage statistics for the session.
+	Usage *SessionUsage `json:"usage,omitempty"`
+}
+
+type SessionUsage struct {
+	// The total input tokens used during the session.
+	TotalInputTokens int `json:"totalInputTokens" example:"1500"`
+	// The total output tokens used during the session.
+	TotalOutputTokens int `json:"totalOutputTokens" example:"3000"`
+	// The total credits used during the session.
+	TotalCredits int `json:"totalCredits" example:"5"`
+	// The total messages sent during the session.
+	TotalMessages int `json:"totalMessages" example:"25"`
+}
+
+type UserUsage struct {
+	// The Id of the user.
+	UserId string `json:"userId" example:"8beae4b5-275b-4669-b678-8cff894911b5"`
+	// The total input tokens used by the user in the date range.
+	TotalInputTokens int `json:"totalInputTokens" example:"1500"`
+	// The total output tokens used by the user in the date range.
+	TotalOutputTokens int `json:"totalOutputTokens" example:"3000"`
+	// The total credits used by the user in the date range.
+	TotalCredits int `json:"totalCredits" example:"5"`
+	// The total sessions the user has added a message to in the date range.
+	TotalSessions int `json:"totalSessions" example:"3"`
+	// The total messages sent and received by the user in the date range.
+	TotalMessages int `json:"totalMessages" example:"25"`
 }

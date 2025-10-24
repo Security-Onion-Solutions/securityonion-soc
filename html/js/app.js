@@ -17,7 +17,7 @@ const LICENSE_STATUS_UNPROVISIONED = "unprovisioned";
 
 const LICENSE_EXPIRES_SOON_DAYS = 45;
 
-const SUBGRID_DISABLED_ROUTES = ['home','settings'];
+const SUBGRID_DISABLED_ROUTES = ['home','settings','assistant','aimetrics'];
 const LOCAL_GRID_ID = ''
 
 const USER_PASSWORD_LENGTH_MIN = 8;
@@ -140,10 +140,15 @@ $(document).ready(function () {
           warning: false,
           info: false,
           tip: false,
+          disclaimer: false,
           errorMessage: "",
           warningMessage: "",
           infoMessage: "",
           tipMessage: "",
+          disclaimerMessage: "",
+          disclaimerTitle: "",
+          disclaimerClose: "",
+          disclaimerStorageKey: "",
           tipTimeout: 6000,
           currentTipTimeout: 6000,
           warningTimeout: 30000,
@@ -166,6 +171,7 @@ $(document).ready(function () {
           parameterSection: null,
           chartsInitialized: false,
           editorInitialized: false,
+          mermaidInitialized: false,
           tools: [],
           casesEnabled: false,
           detectionsEnabled: false,
@@ -201,7 +207,10 @@ $(document).ready(function () {
       watch: {
         '$vuetify.theme.current.dark': 'saveTheme',
         'toolbar': 'saveToolbar',
-        '$route': 'onLocationUpdated',
+        '$route': [
+          'onLocationUpdated',
+          'closeDisclaimerOnNav'
+        ],
         'selectedGridId': 'onGridSelected',
       },
       methods: {
@@ -335,13 +344,13 @@ $(document).ready(function () {
             return input;
           };
 
-          content = content.replace("{" + field + "}", encode(value));
+          content = content.replaceAll("{" + field + "}", encode(value));
           if (content.indexOf("{" + field + "|base64}") !== -1)
-            content = content.replace("{" + field + "|base64}", encode(this.base64encode(value)));
-          content = content.replace("{" + field + "|escape}", encode(this.escape(value)));
+            content = content.replaceAll("{" + field + "|base64}", encode(this.base64encode(value)));
+          content = content.replaceAll("{" + field + "|escape}", encode(this.escape(value)));
           if (content.indexOf("{" + field + "|escape|base64}") !== -1)
-            content = content.replace("{" + field + "|escape|base64}", encode(this.base64encode(this.escape(value))));
-          content = content.replace("{" + field + "|processAncestors}", encode(this.processAncestors(value)));
+            content = content.replaceAll("{" + field + "|escape|base64}", encode(this.base64encode(this.escape(value))));
+          content = content.replaceAll("{" + field + "|processAncestors}", encode(this.processAncestors(value)));
           return content;
         },
         copyToClipboard(data, style) {
@@ -771,25 +780,66 @@ $(document).ready(function () {
           }
           return "";
         },
-        formatMarkdown(str) {
+        formatMarkdown(str, handleMermaid=false) {
           marked.setOptions({
             renderer: new marked.Renderer(),
             smartLists: true,
             breaks: true
           })
-          marked.use({
-            tokenizer: {
-              url(src) {
-                // Blank function disables bare url tokenization
+          if (!handleMermaid) {
+            marked.use({
+              tokenizer: {
+                url(src) {
+                  // Blank function disables bare url tokenization
+                }
               }
+            })
+            var md = str;
+            if (str) {
+              md = marked.parse(str);
+              md = DOMPurify.sanitize(md);
             }
-          })
-          var md = str;
-          if (str) {
-            md = marked.parse(str);
-            md = DOMPurify.sanitize(md);
+            return md;
+          } else {
+            marked.use({
+              tokenizer: {
+                url(src) {
+                  // Blank function disables bare url tokenization
+                }
+              },
+              renderer: {
+                code: function (code) {
+                  if (code.lang == 'mermaid') {
+                    return `<pre class="mermaid">${code.text}</pre>`;
+                  }
+                  return `<pre>${code.text}</pre>`;
+                }
+              }
+            });
+            var md = str;
+            if (str) {
+              this.initializeMermaid();
+              md = marked.parse(str);
+              md = DOMPurify.sanitize(md);
+            }
+            return md;
           }
-          return md;
+        },
+        initializeMermaid() {
+          if (typeof mermaid !== 'undefined' && !this.mermaidInitialized) {
+            mermaid.initialize({
+              startOnLoad: false,
+              theme: this.$vuetify && this.$vuetify.theme.current.dark ? 'dark' : 'default',
+              securityLevel: 'loose',
+              fontFamily: 'inherit'
+            });
+            this.mermaidInitialized = true;
+          }
+        },
+        renderMermaid() {
+          if (typeof mermaid !== 'undefined' && this.mermaidInitialized) {
+            mermaid.run();
+          }
         },
         colorSeverity(value) {
           if (value == "low_false") return "yellow";
@@ -839,7 +889,7 @@ $(document).ready(function () {
           preselects[this.i18n.datePreselect30dToNow] = [moment().subtract(30, 'days'), moment()];
           return preselects;
         },
-        localizeMessage(origMsg) {
+        localizeMessage(origMsg, vars = null) {
           if (!origMsg) return "";
           var msg = origMsg;
           if (msg.response && msg.response.data) {
@@ -858,6 +908,13 @@ $(document).ready(function () {
             }
             localized = msg;
           }
+
+          if (vars && typeof vars == 'object') {
+            return localized.replace(/\{(\w+)\}/g, function(match, key) {
+              return vars[key] !== undefined ? vars[key] : match;
+            });
+          }
+  
           return localized;
         },
         tryLocalize(msg) {
@@ -912,6 +969,23 @@ $(document).ready(function () {
           } else {
             this.currentTipTimeout = this.tipTimeout;
           }
+        },
+        showDisclaimer(msg, title, closeButton, storageKey) {
+          const saved = localStorage.getItem(storageKey);
+          if (saved !== 'true') {
+            this.disclaimer = true;
+            this.disclaimerMessage = msg;
+            this.disclaimerTitle = title;
+            this.disclaimerClose = closeButton;
+            this.disclaimerStorageKey = storageKey;
+          }
+        },
+        acceptDisclaimer() {
+          localStorage.setItem(this.disclaimerStorageKey, 'true');
+          this.disclaimer = false;
+        },
+        closeDisclaimerOnNav() {
+          if (this.disclaimer) this.disclaimer = false;
         },
         startLoading(cancelCallback = null) {
           this.loading = true;
@@ -999,6 +1073,7 @@ $(document).ready(function () {
               vm.log("WebSocket connected");
               vm.connected = true;
               vm.reconnecting = false;
+              vm.loadServerSettingsTime = 0; // Force reload of server settings in case new SOC config changed
               vm.updateStatus();
             };
             this.socket.onclose = function(evt) {
@@ -1066,7 +1141,11 @@ $(document).ready(function () {
           return this.checkForUnauthorized(response);
         },
         apiFailureCallback(error) {
-          this.checkForUnauthorized(error.response);
+          if (error.response && error.response.status >= 502 && error.response.status <= 504) {
+            reconnecting = true;
+          } else { 
+            this.checkForUnauthorized(error.response);
+          }
           throw error;
         },
         createApi(baseUrl) {

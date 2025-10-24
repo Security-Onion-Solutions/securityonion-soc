@@ -38,7 +38,7 @@
 									<v-switch v-if="isCategory('alerts')" id="detection-panel-toggle" :disabled="loading()" v-model="showDetailsPanel" density="compact" hide-details class="my-0" :label="i18n.showDetailsPanel"></v-switch>
 								</span>
 								<span :data-aid="'autorefresh_select_' + category" v-if="!isCategory('detections')">
-									<v-select id="autoRefresh" class="ml-" :disabled="loading()" v-model="autoRefreshInterval" :items="autoRefreshIntervals" :hint="i18n.autoRefresh" persistent-hint variant="underlined" prepend-icon="fa-hourglass-half"></v-select>
+									<v-select id="autoRefresh" class="ml-" :disabled="loading()" v-model="autoRefreshInterval" @update:focused="autoRefreshIntervalChanged" :items="autoRefreshIntervals" :hint="i18n.autoRefresh" persistent-hint variant="underlined" prepend-icon="fa-hourglass-half"></v-select>
 								</span>
 								<span :data-aid="'timezone_select_' + category" v-if="!isCategory('detections')">
 									<v-select :disabled="loading()" @update:model-value="zone = $event; saveTimezone()" v-model="zone" :items="$root.timezones" :hint="i18n.timezoneHelp" persistent-hint variant="underlined" prepend-icon="fa-user-clock"></v-select>
@@ -93,7 +93,7 @@
 			<v-row align="start">
 				<v-col cols="12" :md="isCategory('detections') ? 10 : 7">
 					<v-textarea :clearable="isAdvanced()" :auto-grow="isAdvanced()" :readonly="!isAdvanced()" :disabled="loading()" @input="queryAltered = true"
-						@change="queryModified" class="mx-2" v-model="$data[getDisplayedQueryVar()]" :hint="isAdvanced() ? i18n.queryHelp : ''"
+						@change="queryModified" class="mx-2" v-model="$data[getDisplayedQueryVar()]" :hint="isAdvanced() ? (queryAltered ? i18n.queryHelp : $data['queryName']) : ''"
 						rows="1" persistent-hint prepend-icon="fa-search" @keydown.enter.prevent="submitQuery" id="hunt-query-input" ref="huntQueryInput" :data-aid="'query_input_' + category"
 						variant="underlined">
 						<template #prepend-inner>
