@@ -53,6 +53,18 @@
 								color="primary">
 							</v-switch>
 						</span>
+						<span data-aid="assistant_model_select">
+							<v-select
+								:disabled="$root.loading"
+								v-model="currentModel"
+								@update:model-value="currentModel = $event; updateModelParams()"
+								:items="modelsMap.keys()"
+								:hint="i18n.selectModel"
+								persistent-hint
+								variant="underlined"
+								prepend-icon="fa-microchip">
+							</v-select>
+						</span>
 					</v-expansion-panel-text>
 				</v-expansion-panel>
 			</v-expansion-panels>
