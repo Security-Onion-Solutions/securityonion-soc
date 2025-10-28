@@ -16,28 +16,28 @@ const DEFAULT_CHART_LABEL_OTHER_LIMIT = 10
 const DEFAULT_CHART_LABEL_FIELD_SEPARATOR = ", "
 
 type ClientParameters struct {
-	HuntingParams       HuntingParameters    `json:"hunt"`
-	AlertingParams      AlertingParameters   `json:"alerts"`
-	CasesParams         HuntingParameters    `json:"cases"`
-	CaseParams          CaseParameters       `json:"case"`
-	DashboardsParams    HuntingParameters    `json:"dashboards"`
-	JobParams           HuntingParameters    `json:"job"`
-	DetectionsParams    DetectionsParameters `json:"detections"`
-	DetectionParams     DetectionParameters  `json:"detection"`
-	DocsUrl             string               `json:"docsUrl"`
-	CheatsheetUrl       string               `json:"cheatsheetUrl"`
-	ReleaseNotesUrl     string               `json:"releaseNotesUrl"`
-	GridParams          GridParameters       `json:"grid"`
-	WebSocketTimeoutMs  int                  `json:"webSocketTimeoutMs"`
-	TipTimeoutMs        int                  `json:"tipTimeoutMs"`
-	ApiTimeoutMs        int                  `json:"apiTimeoutMs"`
-	CacheExpirationMs   int                  `json:"cacheExpirationMs"`
-	InactiveTools       []string             `json:"inactiveTools"`
-	Tools               []ClientTool         `json:"tools"`
-	CasesEnabled        bool                 `json:"casesEnabled"`
-	DetectionsEnabled   bool                 `json:"detectionsEnabled"`
-	ExportNodeId        string               `json:"exportNodeId"`
-	AssistantParams     AssistantParameters  `json:"assistant"`
+	HuntingParams      HuntingParameters    `json:"hunt"`
+	AlertingParams     AlertingParameters   `json:"alerts"`
+	CasesParams        HuntingParameters    `json:"cases"`
+	CaseParams         CaseParameters       `json:"case"`
+	DashboardsParams   HuntingParameters    `json:"dashboards"`
+	JobParams          HuntingParameters    `json:"job"`
+	DetectionsParams   DetectionsParameters `json:"detections"`
+	DetectionParams    DetectionParameters  `json:"detection"`
+	DocsUrl            string               `json:"docsUrl"`
+	CheatsheetUrl      string               `json:"cheatsheetUrl"`
+	ReleaseNotesUrl    string               `json:"releaseNotesUrl"`
+	GridParams         GridParameters       `json:"grid"`
+	WebSocketTimeoutMs int                  `json:"webSocketTimeoutMs"`
+	TipTimeoutMs       int                  `json:"tipTimeoutMs"`
+	ApiTimeoutMs       int                  `json:"apiTimeoutMs"`
+	CacheExpirationMs  int                  `json:"cacheExpirationMs"`
+	InactiveTools      []string             `json:"inactiveTools"`
+	Tools              []ClientTool         `json:"tools"`
+	CasesEnabled       bool                 `json:"casesEnabled"`
+	DetectionsEnabled  bool                 `json:"detectionsEnabled"`
+	ExportNodeId       string               `json:"exportNodeId"`
+	AssistantParams    AssistantParameters  `json:"assistant"`
 }
 
 func (config *ClientParameters) Verify() error {
@@ -173,14 +173,22 @@ type AlertingParameters struct {
 }
 
 type AssistantParameters struct {
-	Enabled                bool    `json:"enabled"`
-	InvestigationPrompt    string  `json:"investigationPrompt"`
-	ContextLimitSmall      int     `json:"contextLimitSmall"`
-	ContextLimitLarge      int     `json:"contextLimitLarge"`
-	ThresholdColorRatioLow float64 `json:"thresholdColorRatioLow"`
-	ThresholdColorRatioMed float64 `json:"thresholdColorRatioMed"`
-	ThresholdColorRatioMax float64 `json:"thresholdColorRatioMax"`
-	LowBalanceColorAlert   int     `json:"lowBalanceColorAlert"`
+	Enabled                bool              `json:"enabled"`
+	InvestigationPrompt    string            `json:"investigationPrompt"`
+	ContextLimitSmall      int               `json:"contextLimitSmall"`
+	ContextLimitLarge      int               `json:"contextLimitLarge"`
+	ThresholdColorRatioLow float64           `json:"thresholdColorRatioLow"`
+	ThresholdColorRatioMed float64           `json:"thresholdColorRatioMed"`
+	ThresholdColorRatioMax float64           `json:"thresholdColorRatioMax"`
+	LowBalanceColorAlert   int               `json:"lowBalanceColorAlert"`
+	AvailableModels        []ModelParameters `json:"availableModels"`
+}
+
+type ModelParameters struct {
+	Name                 string `json:"name"`
+	ContextLimitSmall    int    `json:"contextLimitSmall"`
+	ContextLimitLarge    int    `json:"contextLimitLarge"`
+	LowBalanceColorAlert int    `json:"lowBalanceColorAlert"`
 }
 
 type PresetParameters struct {

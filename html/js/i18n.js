@@ -922,6 +922,7 @@ const i18n = {
       selected: 'Selected',
       selectAll: 'Would you like to select all [[count]] Detections?',
       selectGrid: 'Selected Grid',
+      selectModel: 'Select Model',
       sensor: 'Sensor',
       sensorId: 'Sensor ID',
       sensorIdRequired: 'The Sensor ID must be entered before adding a new job.',

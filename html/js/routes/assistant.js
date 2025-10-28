@@ -25,12 +25,15 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     isStreaming: false,
     showChatHistory: true,
     investigationMsg: '',
-    contextLimitSmall: 200000,
-    contextLimitLarge: 1000000,
+    contextLimitSmall: 0,
+    contextLimitLarge: 0,
     thresholdColorRatioLow: 0.5,
     thresholdColorRatioMed: 0.75,
     thresholdColorRatioMax: 1,
-    lowBalanceColorAlert: 500000,
+    lowBalanceColorAlert: 0,
+    availableModels: [],
+    modelsMap: new Map(),
+    currentModel: '',
     activeStreamingSessionId: null, // Track which session is actively streaming
     autoScrollOnNextRender: false, // gate for programmatic scrolls
     isPinnedToBottom: true, // user is at (or near) bottom?
@@ -57,19 +60,25 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     'increaseMaxContextThreshold': 'saveLocalSettings',
     'restoreLastActive': 'saveLocalSettings',
     'alwaysApproveReadRequests': 'saveLocalSettings',
-    'showChatHistory': 'saveLocalSettings'
+    'showChatHistory': 'saveLocalSettings',
+    'currentModel': 'saveLocalSettings'
   },
   methods: {
 
     async initAssistant(params) {
       this.assistantEnabled = params["enabled"] && this.$root.isLicensed('oai');
       this.investigationMsg = params["investigationPrompt"];
-      this.contextLimitSmall = params["contextLimitSmall"];
-      this.contextLimitLarge = params["contextLimitLarge"];
       this.thresholdColorRatioLow = params["thresholdColorRatioLow"];
       this.thresholdColorRatioMed = params["thresholdColorRatioMed"];
       this.thresholdColorRatioMax = params["thresholdColorRatioMax"];
-      this.lowBalanceColorAlert = params["lowBalanceColorAlert"];
+      this.availableModels = params["availableModels"];
+      if (this.availableModels.length > 0) {
+        this.modelsMap = new Map(
+          this.availableModels.map(m => [m.name, m])
+        );
+        if (!this.currentModel || !this.modelsMap.has(this.currentModel)) this.currentModel = this.availableModels[0].name;
+      }
+      this.updateModelParams();
 
       this.$root.showDisclaimer(this.i18n.assistantDisclaimerMessage, this.i18n.assistantDisclaimerTitle, this.i18n.getStarted, 'settings.disclaimer.acknowledged.onionai');
       
@@ -1639,6 +1648,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.saveSetting('restoreLastActive', this.restoreLastActive, false);
       this.saveSetting('alwaysApproveReadRequests', this.alwaysApproveReadRequests, false);
       this.saveSetting('showChatHistory', this.showChatHistory, true);
+      this.saveSetting('currentModel', this.currentModel, '');
     },
 
     // Load all local settings
@@ -1648,6 +1658,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       if (localStorage[prefix + '.restoreLastActive']) this.restoreLastActive = localStorage[prefix + '.restoreLastActive'] == 'true';
       if (localStorage[prefix + '.alwaysApproveReadRequests']) this.alwaysApproveReadRequests = localStorage[prefix + '.alwaysApproveReadRequests'] == 'true';
       if (localStorage[prefix + '.showChatHistory']) this.showChatHistory = localStorage[prefix + '.showChatHistory'] == 'true';
+      if (localStorage[prefix + '.currentModel']) this.currentModel = localStorage[prefix + '.currentModel'];
     },
 
     // Check if a tool should be auto-approved based on localStorage settings
@@ -1690,6 +1701,13 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       } else {
         this.canChat = true;
       }
-    }
+    },
+
+    updateModelParams() {
+      if (!this.currentModel || this.modelsMap.size == 0) return;
+      this.contextLimitSmall = this.modelsMap.get(this.currentModel).contextLimitSmall;
+      this.contextLimitLarge = this.modelsMap.get(this.currentModel).contextLimitLarge;
+      this.lowBalanceColorAlert = this.modelsMap.get(this.currentModel).lowBalanceColorAlert;
+    },
   }
 }});
