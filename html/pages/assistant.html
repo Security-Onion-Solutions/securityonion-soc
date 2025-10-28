@@ -112,7 +112,7 @@
 													<span class="font-weight-medium text-body-2">{{ toolUse.name }}</span>
 													<v-spacer></v-spacer>
 													<v-chip :color="getToolStatusColor(toolUse.status)" size="x-small" variant="flat">
-														{{ toolUse.status }}
+														{{ getToolStatusTitle(toolUse.status) }}
 													</v-chip>
 												</div>
 												
