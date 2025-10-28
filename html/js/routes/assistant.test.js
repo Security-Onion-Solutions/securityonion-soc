@@ -596,6 +596,16 @@ test('getToolStatusColor returns correct colors', () => {
   expect(comp.getToolStatusColor('unknown')).toBe('info');
 });
 
+test('getToolStatusTitle returns correct titles', () => {
+  expect(comp.getToolStatusTitle('preparing')).toBe(comp.i18n.preparing);
+  expect(comp.getToolStatusTitle('pending_approval')).toBe(comp.i18n.pendingApproval);
+  expect(comp.getToolStatusTitle('executing')).toBe(comp.i18n.executing);
+  expect(comp.getToolStatusTitle('completed')).toBe(comp.i18n.completed);
+  expect(comp.getToolStatusTitle('error')).toBe(comp.i18n.error);
+  expect(comp.getToolStatusTitle('rejected')).toBe(comp.i18n.rejected);
+  expect(comp.getToolStatusTitle('unknown')).toBe(comp.i18n.statusUnknown);
+});
+
 test('approveTool executes tool', async () => {
   const toolUse = { ...fakeToolUse };
   comp.executeTool = jest.fn().mockResolvedValue();

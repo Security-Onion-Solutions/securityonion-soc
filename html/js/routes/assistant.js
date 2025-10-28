@@ -1295,6 +1295,17 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         default: return 'info';
       }
     },
+    getToolStatusTitle(status) {
+      switch (status) {
+        case 'preparing': return this.i18n.preparing;
+        case 'pending_approval': return this.i18n.pendingApproval;
+        case 'executing': return this.i18n.executing;
+        case 'completed': return this.i18n.completed;
+        case 'error': return this.i18n.error;
+        case 'rejected': return this.i18n.rejected;
+        default: return this.i18n.statusUnknown;
+      }
+    },
     async approveTool(toolUse) {
       try {
         if (this.checkContextLimitReached()) return;
