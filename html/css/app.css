@@ -1126,15 +1126,6 @@ ul ul ul {
   }
 }
 /* Chat-specific styles */
-.chat-container {
-  height: calc(100vh - 300px) !important;
-}
-
-.chat-messages {
-  height: calc(100vh - 420px);
-  overflow-y: auto;
-}
-
 .chat-input {
   min-width: 0;
 }
@@ -1336,7 +1327,9 @@ ul ul ul {
 .chat-container .message-item .text-body-2 p,
 .chat-container .message-item .text-body-2 ul,
 .chat-container .message-item .text-body-2 ol,
-.chat-container .message-item .text-body-2 table {
+.chat-container .message-item .text-body-2 table,
+.chat-container .message-item .text-body-2 pre,
+.chat-container .message-item .text-body-2 hr {
   margin-top: 0;
   margin-bottom: 1.25rem;
 }
@@ -1349,7 +1342,9 @@ ul ul ul {
 .chat-container .message-item .text-body-2 p:last-child,
 .chat-container .message-item .text-body-2 ul:last-child,
 .chat-container .message-item .text-body-2 ol:last-child,
-.chat-container .message-item .text-body-2 table:last-child {
+.chat-container .message-item .text-body-2 table:last-child,
+.chat-container .message-item .text-body-2 pre:last-child,
+.chat-container .message-item .text-body-2 hr:last-child {
   margin-bottom: 0;
 }
 
@@ -1390,4 +1385,23 @@ ul ul ul {
 
 .text-right {
   text-align: right !important;
+}
+
+.chat-container {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 300px);
+  overflow: hidden;
+}
+
+.chat-messages {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  height: auto !important;
+}
+
+.chat-input textarea {
+  overflow-y: auto;
+  line-height: 1.5;
 }

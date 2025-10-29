@@ -235,22 +235,26 @@
 				</v-card-text>
 				<v-divider></v-divider>
 				<v-card-actions class="pa-4 d-flex align-center">
-					<v-text-field
+					<v-textarea
 						id="chat-input-field"
 						v-model="newMessage"
 						:placeholder="i18n.chatPlaceholder"
 						variant="outlined"
 						density="compact"
 						hide-details
+						auto-grow
+						rows="1"
+						max-rows="8"
 						autocomplete="off"
 						spellcheck="false"
 						class="chat-input flex-grow-1 mr-3"
-						@keyup.enter="sendMessage"
+						@keydown.enter.exact.prevent="$refs.sendButton.$el.click()"
 						:disabled="isTyping || !canChat"
 						data-aid="assistant_chat_input"
-					></v-text-field>
+					></v-textarea>
 					<v-btn
 						id="chat-send-button"
+						ref="sendButton"
 						color="primary"
 						:disabled="!newMessage.trim() || isTyping || !canChat"
 						@click="sendMessage"
