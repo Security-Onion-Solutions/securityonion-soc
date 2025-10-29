@@ -617,6 +617,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         const response = await this.$root.papi.post('/assistant/chat', {
           msg: userMessage,
           sessionId: streamingSessionId,
+          model: this.currentModel,
         },
         {
           headers: {
