@@ -159,6 +159,7 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, messages []*model.Mess
 		ToolConfig:   ac.toolConfig,
 		UserId:       userID,
 		SystemAppend: ac.systemPromptAddendum,
+		Model:        config.Model,
 	}
 
 	u, err := url.Parse(ac.apiUrl)
@@ -282,7 +283,7 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, messages []*model.Mess
 	return newMessages, nil
 }
 
-func (ac *AssistantCoordinator) ChatStream(ctx context.Context, messages []*model.Message) (*http.Response, error) {
+func (ac *AssistantCoordinator) ChatStream(ctx context.Context, messages []*model.Message, mdl string) (*http.Response, error) {
 	logger := log.FromContext(ctx)
 	userID := ctx.Value(web.ContextKeyRequestorId).(string)
 
@@ -295,6 +296,7 @@ func (ac *AssistantCoordinator) ChatStream(ctx context.Context, messages []*mode
 		ToolConfig:   ac.toolConfig,
 		UserId:       userID,
 		SystemAppend: ac.systemPromptAddendum,
+		Model:        mdl,
 	}
 
 	u, err := url.Parse(ac.apiUrl)

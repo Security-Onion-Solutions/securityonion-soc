@@ -175,12 +175,9 @@ type AlertingParameters struct {
 type AssistantParameters struct {
 	Enabled                bool              `json:"enabled"`
 	InvestigationPrompt    string            `json:"investigationPrompt"`
-	ContextLimitSmall      int               `json:"contextLimitSmall"`
-	ContextLimitLarge      int               `json:"contextLimitLarge"`
 	ThresholdColorRatioLow float64           `json:"thresholdColorRatioLow"`
 	ThresholdColorRatioMed float64           `json:"thresholdColorRatioMed"`
 	ThresholdColorRatioMax float64           `json:"thresholdColorRatioMax"`
-	LowBalanceColorAlert   int               `json:"lowBalanceColorAlert"`
 	AvailableModels        []ModelParameters `json:"availableModels"`
 }
 

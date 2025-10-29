@@ -14,7 +14,7 @@ import (
 
 type AssistantManager interface {
 	Chat(context.Context, []*model.Message, ...model.ChatOpt) ([]*model.Message, error)
-	ChatStream(ctx context.Context, messages []*model.Message) (*http.Response, error)
+	ChatStream(ctx context.Context, messages []*model.Message, model string) (*http.Response, error)
 	ExecuteTool(ctx context.Context, toolName string, params string) (*model.ToolResponse, error)
 	Balance(context.Context) (*model.BalanceResponse, error)
 	Health(context.Context) (*model.HealthResponse, error)
