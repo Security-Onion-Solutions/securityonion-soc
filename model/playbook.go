@@ -44,6 +44,9 @@ type Question struct {
 	FilledQuery string `json:"filledQuery,omitempty" yaml:"filledQuery,omitempty"`
 	// The results after the queries have been substituted, converted, and executed.
 	QueryResults []*EventRecord `json:"queryResults,omitempty" yaml:"queryResults,omitempty"`
+
+	// not returned by the API, only used internally
+	QueryFields []string `json:"-" yaml:"-"`
 }
 
 type ConvertedQuery struct {
