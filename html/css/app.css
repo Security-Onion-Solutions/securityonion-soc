@@ -1126,15 +1126,6 @@ ul ul ul {
   }
 }
 /* Chat-specific styles */
-.chat-container {
-  height: calc(100vh - 300px) !important;
-}
-
-.chat-messages {
-  height: calc(100vh - 420px);
-  overflow-y: auto;
-}
-
 .chat-input {
   min-width: 0;
 }
@@ -1392,4 +1383,23 @@ ul ul ul {
 
 .text-right {
   text-align: right !important;
+}
+
+.chat-container {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 300px);
+  overflow: hidden;
+}
+
+.chat-messages {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  height: auto !important;
+}
+
+.chat-input textarea {
+  overflow-y: auto;
+  line-height: 1.5;
 }
