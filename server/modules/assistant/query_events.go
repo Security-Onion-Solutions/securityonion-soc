@@ -256,7 +256,7 @@ func (t *QueryEventsTool) Execute(ctx context.Context, server *server.Server, pa
 }
 
 // filterEvents filters event fields to reduce payload size
-func filterEvents(events []*model.EventRecord) []map[string]any {
+func filterEvents(events []*model.EventRecord, extraFields ...string) []map[string]any {
 	// Default fields from Python implementation
 	defaultFields := []string{
 		"@timestamp",
@@ -286,13 +286,15 @@ func filterEvents(events []*model.EventRecord) []map[string]any {
 
 	filtered := make([]map[string]any, 0, len(events))
 
+	fields := append(defaultFields, extraFields...)
+
 	for _, event := range events {
 		filteredPayload := map[string]any{
 			"_id": event.Id,
 		}
 
 		// Copy only default fields starting with the Id field
-		for _, field := range defaultFields {
+		for _, field := range fields {
 			// First try the field as-is (for non-nested fields)
 			if val, exists := event.Payload[field]; exists && val != nil {
 				filteredPayload[field] = val

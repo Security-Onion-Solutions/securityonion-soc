@@ -30,10 +30,10 @@ func (t *GetPlaybooksTool) GetName() string {
 
 func (t *GetPlaybooksTool) GetDescription() string {
 	return "Get playbooks for a given alert to guide investigation. Playbooks consist " +
-	"of questions and sigma searches to help gather context about the alert. The searches " +
-	"are executed and the results are returned along with the questions. If multiple playbooks " +
-	"are available for the alert, you can specify a playbook_index (0-based) to get questions " +
-	"from a specific playbook. Lower index playbooks are usually more specific to the alert."
+		"of questions and sigma searches to help gather context about the alert. The searches " +
+		"are executed and the results are returned along with the questions. If multiple playbooks " +
+		"are available for the alert, you can specify a playbook_index (0-based) to get questions " +
+		"from a specific playbook. Lower index playbooks are usually more specific to the alert."
 }
 
 func (t *GetPlaybooksTool) GetSchema() model.JSONSchema {
@@ -187,7 +187,7 @@ func simplifyPlaybooks(playbooks []*model.Playbook) []*SimplePlaybook {
 					Question:     q.Question,
 					Context:      q.Context,
 					Range:        q.Range,
-					QueryResults: filterEvents(q.QueryResults),
+					QueryResults: filterEvents(q.QueryResults, q.QueryFields...),
 				})
 			}
 		}
@@ -195,13 +195,7 @@ func simplifyPlaybooks(playbooks []*model.Playbook) []*SimplePlaybook {
 		simplePlaybooks = append(simplePlaybooks, &SimplePlaybook{
 			Name:        pb.Name,
 			Description: pb.Description,
-			// SourceCreated:     pb.SourceCreated,
-			// SourceUpdated:     pb.SourceUpdated,
-			// DetectionId:       pb.DetectionId,
-			// DetectionCategory: pb.DetectionCategory,
-			// DetectionType:     pb.DetectionType,
-			// Contributors:      pb.Contributors,
-			Questions: simpleQuestions,
+			Questions:   simpleQuestions,
 		})
 	}
 

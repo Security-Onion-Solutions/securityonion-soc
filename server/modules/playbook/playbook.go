@@ -653,6 +653,7 @@ func (pdm *PlaybookDiskManager) ExecutePlaybookSearches(ctx context.Context, eve
 				}
 
 				pb.Questions[i].QueryResults = searchResults.Events
+				pb.Questions[i].QueryFields = converted[i].Fields
 			}
 		}
 	}
