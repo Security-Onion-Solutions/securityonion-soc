@@ -3003,7 +3003,7 @@ const huntComponent = {
       let payload = {
         name: 'hunt',
         query: {
-          q: question.filledOQL,
+          q: question.oqlQuery,
         },
       };
 
