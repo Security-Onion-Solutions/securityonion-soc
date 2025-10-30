@@ -34,7 +34,7 @@ func RegisterPlaybookRoutes(srv *Server, r chi.Router, prefix string) {
 	r.Route(prefix, func(r chi.Router) {
 		r.Get("/{id}", h.GetPlaybook)
 		r.Get("/detection/{id}", h.GetPlaybooksForDetection)
-		r.Post("/convert", h.ConvertPlaybook)
+		r.Get("/event/{id}", h.GetEventSpecificPlaybook)
 	})
 }
 
@@ -187,16 +187,19 @@ func (h *PlaybookHandler) GetPlaybooksForDetection(w http.ResponseWriter, r *htt
 	web.Respond(w, r, http.StatusOK, pbs)
 }
 
-// @Summary      Convert Playbook Questions
-// @Description  Converts the questions of a playbook from Sigma to OQL.
+// @Summary      Get Event-Specific Playbook
+// @Description	 Fetches the playbook for a specific event.
 // @Tags         Playbooks
-// @Security     bearer[playbooks/read]
-// @Param        request body	[]string  true         "The variable substituted Sigma queries to convert"
-// @Success      200  {array}  model.ConvertedQuery  "The queries were successfully converted"
-// @Failure      401                                 "Request was not properly authenticated"
-// @Failure      500                                 "Internal SOC error; review SOC logs"
-// @Router       /connect/playbook/convert [post]
-func (h *PlaybookHandler) ConvertPlaybook(w http.ResponseWriter, r *http.Request) {
+// @Security     bearer[playbooks/read, detections/read, events/read]
+// @Param        id  path  string  true        "The SOC Id for the alert"
+// @Success      200  {array}  model.Playbook  "The playbook was successfully retrieved"
+// @Failure		 400                           "Malformed request"
+// @Failure      401                           "Request was not properly authenticated"
+// @Failure      404                           "Event not found"
+// @Failure      500                           "Internal SOC error; review SOC logs"
+// @Produce      application/json
+// @Router       /connect/playbook/event/{id} [get]
+func (h *PlaybookHandler) GetEventSpecificPlaybook(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
 
@@ -206,26 +209,39 @@ func (h *PlaybookHandler) ConvertPlaybook(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	queries := []string{}
-	err = web.ReadJson(r, &queries)
+	err = h.server.CheckAuthorized(ctx, "read", "detections")
 	if err != nil {
-		logger.WithError(err).Error("unable to read queries")
-		web.Respond(w, r, http.StatusBadRequest, err)
-
+		web.Respond(w, r, http.StatusUnauthorized, err)
 		return
 	}
 
-	pbConverted := []*model.ConvertedQuery{}
-
-	if len(queries) != 0 {
-		pbConverted, err = h.server.Playbookstore.ConvertQuestions(ctx, queries)
-		if err != nil {
-			logger.WithError(err).Error("unable to convert playbook")
-			web.Respond(w, r, http.StatusInternalServerError, err)
-
-			return
-		}
+	err = h.server.CheckAuthorized(ctx, "read", "events")
+	if err != nil {
+		web.Respond(w, r, http.StatusUnauthorized, err)
+		return
 	}
 
-	web.Respond(w, r, http.StatusOK, pbConverted)
+	socId := chi.URLParam(r, "id")
+	if socId == "" {
+		logger.Error("detection id required")
+		web.Respond(w, r, http.StatusBadRequest, nil)
+		return
+	}
+
+	pbs, err := h.server.Playbookstore.GetEventSpecificPlaybook(ctx, socId)
+	if err != nil {
+		logger.WithError(err).Error("unable to get playbooks for event")
+		if strings.Contains(err.Error(), "no alert found") {
+			web.Respond(w, r, http.StatusNotFound, err)
+		} else {
+			web.Respond(w, r, http.StatusInternalServerError, err)
+		}
+		return
+	}
+
+	if len(pbs) == 0 {
+		pbs = []*model.Playbook{}
+	}
+
+	web.Respond(w, r, http.StatusOK, pbs)
 }

@@ -43,10 +43,12 @@ type Question struct {
 	// The query after variable substitution has been performed.
 	FilledQuery string `json:"filledQuery,omitempty" yaml:"filledQuery,omitempty"`
 	// The results after the queries have been substituted, converted, and executed.
-	QueryResults []*EventRecord `json:"queryResults,omitempty" yaml:"queryResults,omitempty"`
+	QueryResults []*EventRecord `json:"queryResults" yaml:"-"`
 
 	// not returned by the API, only used internally
-	QueryFields []string `json:"-" yaml:"-"`
+	QueryFields []string `json:"fields" yaml:"-"`
+	// The event-specific query in OQL format
+	OqlQuery string `json:"oqlQuery" yaml:"-"`
 }
 
 type ConvertedQuery struct {
