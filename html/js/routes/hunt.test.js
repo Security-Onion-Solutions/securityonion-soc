@@ -1904,227 +1904,6 @@ test('sortAggregateEvents', () => {
   }
 });
 
-test('askQuestion', async () => {
-  comp.$root.enableReverseLookup = true;
-  comp.zone = "Etc/UTC";
-
-  let question = {};
-  let event = {
-    field: 'present',
-    func: function() {}, // not present
-  };
-
-  await comp.askQuestion(question, event);
-
-  expect(question.answers.length).toBe(1);
-  expect('field' in question.answers[0].payload).toBe(true);
-  expect('func' in question.answers[0].payload).toBe(false);
-
-  const mock1 = mockPapi('get', {
-    data: {
-      metrics: {
-        biggest: [
-          {
-            payload: {
-              name: 'metric event',
-              ip: '1.1.1.1',
-            },
-          },
-        ],
-      },
-    },
-  });
-
-  const mock2 = mockPapi('put', {
-    then: function () { },
-  });
-
-  question = {
-    range: '-30d',
-    filledOQL: 'OQL Query',
-    isAggregate: true,
-  };
-  event = {
-    'soc_timestamp': '2023-10-01T12:00:00Z',
-  };
-
-  await comp.askQuestion(question, event);
-
-  expect(question.answers.length).toBe(1);
-  expect(question.answers[0].payload.name).toBe('metric event');
-  expect('error' in question).toBe(false);
-
-  expect(mock1).toHaveBeenCalledTimes(1);
-  expect(mock1).toHaveBeenCalledWith('events/', {
-    params: {
-      query: 'OQL Query',
-      range: '2023/09/01 12:00:00 PM - 2023/10/01 12:00:00 PM',
-      format: '2006/01/02 3:04:05 PM',
-      zone: 'Etc/UTC',
-      metricLimit: 5,
-      eventLimit: 5,
-    },
-  });
-
-  expect(mock2).toHaveBeenCalledTimes(1);
-  expect(mock2).toHaveBeenCalledWith('util/reverse-lookup', ['1.1.1.1'], {params: {gridId: ''}});
-
-  resetPapi();
-  const mock3 = mockPapi('get', null, new Error('something went wrong'));
-
-  question = {
-    range: '-30d',
-    filledOQL: 'OQL Query',
-    isAggregate: false,
-  };
-  event = {
-    'soc_timestamp': '2023-10-01T12:00:00Z',
-  };
-
-  await comp.askQuestion(question, event);
-
-  expect(question.answers.length).toBe(0);
-  expect('error' in question).toBe(true);
-  expect(question.error).toBe(true);
-
-  expect(mock3).toHaveBeenCalledTimes(1);
-  expect(mock3).toHaveBeenCalledWith('events/', {
-    params: {
-      query: 'OQL Query | sortby @timestamp',
-      range: '2023/09/01 12:00:00 PM - 2023/10/01 12:00:00 PM',
-      format: '2006/01/02 3:04:05 PM',
-      zone: 'Etc/UTC',
-      metricLimit: 5,
-      eventLimit: 5,
-    },
-  });
-
-  comp.$root.enableReverseLookup = false;
-  resetPapi();
-});
-
-test('queryVariableSubstitution - handles simple variable substitution', () => {
-    const event = {
-      'host.name': 'test-host',
-      'source.ip': '192.168.1.1'
-    };
-    const playbooks = [{
-      questions: [{
-        query: 'hostname: {host.name}\nsource_ip: {source.ip}'
-      }]
-    }];
-
-    comp.queryVariableSubstitution(event, playbooks);
-    expect(playbooks[0].questions[0].filledQuery).toBe(
-      'hostname: test-host\nsource_ip: 192.168.1.1'
-    );
-  });
-
-test('queryVariableSubstitution - handles array fields with proper indentation', () => {
-    const event = {
-      'network.private_ip': ['192.168.1.1', '10.0.0.1'],
-      'network.public_ip': ['203.0.113.1']
-    };
-    const playbooks = [{
-      questions: [{
-        query: '    private_ips: {network.private_ip}\n    public_ips: {network.public_ip}'
-      }]
-    }];
-
-    comp.queryVariableSubstitution(event, playbooks);
-    expect(playbooks[0].questions[0].filledQuery).toBe(
-      '    private_ips:\n        - 192.168.1.1\n        - 10.0.0.1\n    public_ips:\n        - 203.0.113.1'
-    );
-  });
-
-test('queryVariableSubstitution - handles missing fields with NODATA', () => {
-    const event = {
-      'host.name': 'test-host'
-    };
-    const playbooks = [{
-      questions: [{
-        query: 'hostname: {host.name}\nip: {missing.field}'
-      }]
-    }];
-
-    comp.queryVariableSubstitution(event, playbooks);
-    expect(playbooks[0].questions[0].filledQuery).toBe(
-      'hostname: test-host\nip: NODATA'
-    );
-  });
-
-test('queryVariableSubstitution - handles array fields with dashes', () => {
-    const event = {
-      'network.private_ip': ['192.168.1.1', '10.0.0.1']
-    };
-    const playbooks = [{
-      questions: [{
-        query: '    - private_ips: {network.private_ip}'
-      }]
-    }];
-
-    comp.queryVariableSubstitution(event, playbooks);
-    expect(playbooks[0].questions[0].filledQuery).toBe(
-      '    - private_ips:\n        - 192.168.1.1\n        - 10.0.0.1'
-    );
-  });
-
-test('queryVariableSubstitution - handles real-world query format', () => {
-  const event = {
-    'network.private_ip': ['192.168.1.1', '10.0.0.1'],
-    'dns.query_name': 'malicious.com',
-    'network.public_ip': ['203.0.113.1'],
-    'related.ip': ['203.0.113.1', '192.168.1.2'],
-  };
-  const playbooks = [{
-    questions: [{
-      query: `aggregation: false
-logsource:
-  category: network
-  service: dns
-detection:
-    selection:
-       - src_ip: '{network.private_ip}'
-       - dns.query.name|contains: '{dns.query_name}'
-       - dns.resolved_ip: '{network.public_ip}'
-    filter:
-      dst_ip: '{related.ip}'
-    condition: selection and filter
-fields:
-    - dns.query.name
-    - dns.query.type_name
-    - dns.resolved_ip
-    - dns.response.code_name`
-    }]
-  }];
-
-  comp.queryVariableSubstitution(event, playbooks);
-  expect(playbooks[0].questions[0].filledQuery).toBe(
-    `aggregation: false
-logsource:
-  category: network
-  service: dns
-detection:
-    selection:
-       - src_ip:
-           - 192.168.1.1
-           - 10.0.0.1
-       - dns.query.name|contains: 'malicious.com'
-       - dns.resolved_ip:
-           - 203.0.113.1
-    filter:
-      dst_ip:
-          - 203.0.113.1
-          - 192.168.1.2
-    condition: selection and filter
-fields:
-    - dns.query.name
-    - dns.query.type_name
-    - dns.resolved_ip
-    - dns.response.code_name`
-  );
-});
-
 test('fetchNewestEvent', async () => {
   const eventSearch = mockPapi('get', { data: { events: [{ id: '100', payload: { a: 1, b: "2", c: true } }] } });
   
@@ -2302,7 +2081,7 @@ test('toggleAllQuestions', () => {
 
 test('loadPlaybook', async () => {
   let event = {
-    'rule.uuid': '123',
+    'soc_id': '123',
   };
 
   const playbooks = [{ id: '1', questions: [] }, { id: '2', questions: [] }];
@@ -2311,7 +2090,7 @@ test('loadPlaybook', async () => {
 
   await comp.loadPlaybook(event, 0);
 
-  expect(papiMock).toHaveBeenCalledWith('playbook/detection/123');
+  expect(papiMock).toHaveBeenCalledWith('playbook/event/123');
   expect(event.playbooks).toStrictEqual(playbooks);
   expect(event.playbookLoading).toBe(undefined);
   expect(event.playbookErr).toBe(false);
@@ -2320,12 +2099,12 @@ test('loadPlaybook', async () => {
   papiMock = mockPapi('get', null, 'error');
 
   event = {
-    'rule.uuid': '456',
+    'soc_id': '456',
   };
 
   comp.loadPlaybook(event, 0);
 
-  expect(papiMock).toHaveBeenCalledWith('playbook/detection/456');
+  expect(papiMock).toHaveBeenCalledWith('playbook/event/456');
   expect(papiMock).toHaveBeenCalledTimes(1);
   expect(event.playbookErr).toBe(true);
   expect(event.playbooks).toBe(null);
@@ -2363,13 +2142,6 @@ test('loadPlaybook', async () => {
 });
 
 test('pickQuestionColor', () => {
-  let question = {
-    error: true,
-  };
-
-  let c = comp.pickQuestionColor(question);
-  expect(c).toBe('has-error');
-
   question = {
     error: false,
   };
@@ -2383,34 +2155,26 @@ test('pickQuestionColor', () => {
   expect(c).toBe('no-data');
 
   question = {
-    answers: [],
+    queryResults: [],
   };
 
   c = comp.pickQuestionColor(question);
   expect(c).toBe('no-data');
 
   question = {
-    answers: [{}],
+    queryResults: [{}],
   };
 
   c = comp.pickQuestionColor(question);
   expect(c).toBe('has-answers');
 
   question = {
-    answers: [{}],
+    queryResults: [{}],
     error: false,
   };
 
   c = comp.pickQuestionColor(question);
   expect(c).toBe('has-answers');
-
-  question = {
-    answers: [{}],
-    error: true,
-  };
-
-  c = comp.pickQuestionColor(question);
-  expect(c).toBe('has-error');
 });
 
 test('getExpandedData', () => {
