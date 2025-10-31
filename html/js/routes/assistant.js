@@ -1118,7 +1118,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         const toolRequest = {
           sessionId: toolStreamingSessionId,
           toolUseId: toolUse.id,
-          params: toolUse.input
+          params: toolUse.input,
+          model: this.currentModel,
         };
         
         // Use streaming for tool results

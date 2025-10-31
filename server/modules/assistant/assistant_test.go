@@ -579,7 +579,7 @@ func TestAssistantCoordinator_Chat(t *testing.T) {
 
 			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
-			result, err := ac.Chat(ctx, tc.messages, tc.chatOpts...)
+			result, err := ac.Chat(ctx, "test-model", tc.messages, tc.chatOpts...)
 
 			if tc.expectedError {
 				assert.Error(t, err)
@@ -682,7 +682,7 @@ func TestAssistantCoordinator_ChatStream(t *testing.T) {
 
 			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
-			result, err := ac.ChatStream(ctx, tc.messages)
+			result, err := ac.ChatStream(ctx, "test-model", tc.messages)
 
 			if tc.expectError {
 				assert.Error(t, err)
