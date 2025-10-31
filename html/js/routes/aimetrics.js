@@ -452,7 +452,10 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       return str.replace(/<[^>]*>/g, '');
     },
     formatMarkdownMermaid(text) {
+      // removes double blank lines from mermaid charts
       text = text.replace(/(?<=```mermaid(?:(?!```)[\s\S])*?)\n\s*\n(?=(?:(?!```)[\s\S])*```)/g, '\n');
+      // converts non-separator colons to ratio characters in mermaid charts
+      text = text.replace(/(?<=```mermaid(?:(?!```)[\s\S])*?)(?<!\s):(?=(?:(?!```)[\s\S])*```)/g, '\u2236');
       md = this.$root.formatMarkdown(text, true);
       this.$nextTick(() => {
         this.$root.renderMermaid();
