@@ -190,12 +190,14 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, messages []*model.Mess
 	ac.prepareRequestHeaders(httpReq)
 
 	res, err := ac.MakeRequest(httpReq, false)
+	if res != nil && res.Body != nil {
+		defer res.Body.Close()
+	}
 	if err != nil {
 		logger.WithError(err).Error("unable to execute request")
 
 		return nil, err
 	}
-	defer res.Body.Close()
 
 	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
@@ -330,6 +332,10 @@ func (ac *AssistantCoordinator) ChatStream(ctx context.Context, messages []*mode
 
 	res, err := ac.MakeRequest(httpReq, true)
 	if err != nil {
+		if res != nil && res.Body != nil {
+			defer res.Body.Close()
+		}
+
 		logger.WithError(err).Error("unable to execute request")
 
 		return nil, err
@@ -395,6 +401,9 @@ func (ac *AssistantCoordinator) Balance(ctx context.Context) (*model.BalanceResp
 	ac.prepareRequestHeaders(httpReq)
 
 	res, err := ac.MakeRequest(httpReq, false)
+	if res != nil && res.Body != nil {
+		defer res.Body.Close()
+	}
 	if err != nil {
 		logger.WithError(err).WithField("apiEndpoint", endpoint).Error("unable to execute request")
 
@@ -447,6 +456,9 @@ func (ac *AssistantCoordinator) Health(ctx context.Context) (*model.HealthRespon
 	ac.prepareRequestHeaders(httpReq)
 
 	res, err := ac.MakeRequest(httpReq, false)
+	if res != nil && res.Body != nil {
+		defer res.Body.Close()
+	}
 	if err != nil {
 		logger.WithError(err).WithField("apiEndpoint", endpoint).Error("unable to execute request")
 

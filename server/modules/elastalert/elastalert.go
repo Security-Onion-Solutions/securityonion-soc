@@ -1555,6 +1555,9 @@ func (e *ElastAlertEngine) downloadSigmaPackages() (zipData map[string][]byte, e
 		}
 
 		resp, err := e.MakeRequest(req, false)
+		if resp != nil && resp.Body != nil {
+			defer resp.Body.Close()
+		}
 		if err != nil {
 			errMap[pkg] = err
 			continue
