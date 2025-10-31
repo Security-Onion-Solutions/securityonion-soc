@@ -35,6 +35,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     autoScrollOnNextRender: false, // gate for programmatic scrolls
     isPinnedToBottom: true, // user is at (or near) bottom?
     canChat: true,
+    paramsLoaded: false,
   }},
   async created() {
     this.loadLocalSettings();
@@ -72,6 +73,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.lowBalanceColorAlert = params["lowBalanceColorAlert"];
 
       this.$root.showDisclaimer(this.i18n.assistantDisclaimerMessage, this.i18n.assistantDisclaimerTitle, this.i18n.getStarted, 'settings.disclaimer.acknowledged.onionai');
+
+      this.paramsLoaded = true;
       
       if (this.assistantEnabled) {
         if (!this.$root.disclaimer) {
@@ -1078,7 +1081,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       return this.$root.formatTimestamp(timestamp);
     },
     formatMarkdown(text) {
+      // removes double blank lines from mermaid charts
       text = text.replace(/(?<=```mermaid(?:(?!```)[\s\S])*?)\n\s*\n(?=(?:(?!```)[\s\S])*```)/g, '\n');
+      // converts non-separator colons to ratio characters in mermaid charts
+      text = text.replace(/(?<=```mermaid(?:(?!```)[\s\S])*?)(?<!\s):(?=(?:(?!```)[\s\S])*```)/g, '\u2236');
       md = this.$root.formatMarkdown(text, true);
       if (!this.isStreaming) {
         this.$nextTick(() => {
