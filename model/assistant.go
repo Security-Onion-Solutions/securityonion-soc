@@ -16,6 +16,8 @@ type IncomingMessage struct {
 	Msg string `json:"msg" example:"What is MITRE?"`
 	// The session this message belongs to. Can be empty for a new session.
 	SessionId string `json:"sessionId" example:"chat_1757086398900_ykhmndscn"`
+	// The model to use for this message.
+	Model string `json:"model,omitempty" example:"claude-sonnet-4.5"`
 }
 
 // @Description A request to initiate a chat session.
@@ -42,6 +44,8 @@ type ChatRequest struct {
 	UserId string `json:"user_uuid,omitempty" example:"8beae4b5-275b-4669-b678-8cff894911b5"`
 	// Optionally append additional context to the system prompt.
 	SystemAppend string `json:"system_append,omitempty" example:"Treat 192.168.1.105 as our internal DNS server."`
+	// The model to use for this chat transaction.
+	Model string `json:"model,omitempty" example:"claude-sonnet-4.5"`
 }
 
 // @Description A stored message in the chat session. This contains metadata about the message and its context not necessary for the conversation with the Assistant.
@@ -267,9 +271,7 @@ func WithAutoExecuteTools(autoExecute bool) ChatOpt {
 }
 
 func ApplyChatOpts(opts ...ChatOpt) *ChatConfig {
-	config := &ChatConfig{
-		AutoExecuteTools: false, // Default to false
-	}
+	config := &ChatConfig{}
 
 	for _, opt := range opts {
 		opt(config)

@@ -43,25 +43,25 @@ func (m *MockAssistantManager) EXPECT() *MockAssistantManagerMockRecorder {
 }
 
 // Balance mocks base method.
-func (m *MockAssistantManager) Balance(arg0 context.Context) (*model.BalanceResponse, error) {
+func (m *MockAssistantManager) Balance(ctx context.Context) (*model.BalanceResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Balance", arg0)
+	ret := m.ctrl.Call(m, "Balance", ctx)
 	ret0, _ := ret[0].(*model.BalanceResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Balance indicates an expected call of Balance.
-func (mr *MockAssistantManagerMockRecorder) Balance(arg0 any) *gomock.Call {
+func (mr *MockAssistantManagerMockRecorder) Balance(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Balance", reflect.TypeOf((*MockAssistantManager)(nil).Balance), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Balance", reflect.TypeOf((*MockAssistantManager)(nil).Balance), ctx)
 }
 
 // Chat mocks base method.
-func (m *MockAssistantManager) Chat(arg0 context.Context, arg1 []*model.Message, arg2 ...model.ChatOpt) ([]*model.Message, error) {
+func (m *MockAssistantManager) Chat(ctx context.Context, aiModel string, messages []*model.Message, opts ...model.ChatOpt) ([]*model.Message, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{ctx, aiModel, messages}
+	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Chat", varargs...)
@@ -71,25 +71,25 @@ func (m *MockAssistantManager) Chat(arg0 context.Context, arg1 []*model.Message,
 }
 
 // Chat indicates an expected call of Chat.
-func (mr *MockAssistantManagerMockRecorder) Chat(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockAssistantManagerMockRecorder) Chat(ctx, aiModel, messages any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{ctx, aiModel, messages}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Chat", reflect.TypeOf((*MockAssistantManager)(nil).Chat), varargs...)
 }
 
 // ChatStream mocks base method.
-func (m *MockAssistantManager) ChatStream(ctx context.Context, messages []*model.Message) (*http.Response, error) {
+func (m *MockAssistantManager) ChatStream(ctx context.Context, aiModel string, messages []*model.Message) (*http.Response, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ChatStream", ctx, messages)
+	ret := m.ctrl.Call(m, "ChatStream", ctx, aiModel, messages)
 	ret0, _ := ret[0].(*http.Response)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ChatStream indicates an expected call of ChatStream.
-func (mr *MockAssistantManagerMockRecorder) ChatStream(ctx, messages any) *gomock.Call {
+func (mr *MockAssistantManagerMockRecorder) ChatStream(ctx, aiModel, messages any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChatStream", reflect.TypeOf((*MockAssistantManager)(nil).ChatStream), ctx, messages)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChatStream", reflect.TypeOf((*MockAssistantManager)(nil).ChatStream), ctx, aiModel, messages)
 }
 
 // ExecuteTool mocks base method.
@@ -108,16 +108,16 @@ func (mr *MockAssistantManagerMockRecorder) ExecuteTool(ctx, toolName, params an
 }
 
 // Health mocks base method.
-func (m *MockAssistantManager) Health(arg0 context.Context) (*model.HealthResponse, error) {
+func (m *MockAssistantManager) Health(ctx context.Context) (*model.HealthResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Health", arg0)
+	ret := m.ctrl.Call(m, "Health", ctx)
 	ret0, _ := ret[0].(*model.HealthResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Health indicates an expected call of Health.
-func (mr *MockAssistantManagerMockRecorder) Health(arg0 any) *gomock.Call {
+func (mr *MockAssistantManagerMockRecorder) Health(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Health", reflect.TypeOf((*MockAssistantManager)(nil).Health), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Health", reflect.TypeOf((*MockAssistantManager)(nil).Health), ctx)
 }

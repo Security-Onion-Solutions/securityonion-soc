@@ -841,6 +841,13 @@ $(document).ready(function () {
             mermaid.run();
           }
         },
+        performMermaidRegexes(text) {
+          // removes double blank lines from mermaid charts
+          text = text.replace(/(?<=```mermaid(?:(?!```)[\s\S])*?)\n\s*\n(?=(?:(?!```)[\s\S])*```)/g, '\n');
+          // converts non-separator colons to ratio characters in mermaid charts
+          text = text.replace(/(?<=```mermaid(?:(?!```)[\s\S])*?)(?<!\s):(?=(?:(?!```)[\s\S])*```)/g, '\u2236');
+          return text
+        },
         colorSeverity(value) {
           if (value == "low_false") return "yellow";
           if (value == "medium_false") return "amber darken-1";

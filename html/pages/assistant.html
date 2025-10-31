@@ -53,6 +53,20 @@
 								color="primary">
 							</v-switch>
 						</span>
+						<span data-aid="assistant_model_select">
+							<v-select
+								:disabled="$root.loading"
+								v-model="currentModel"
+								@update:model-value="updateModelParams()"
+								:items="modelsMap.values()"
+								item-title="displayName"
+								item-value="id"
+								:hint="i18n.selectModel"
+								persistent-hint
+								variant="underlined"
+								prepend-icon="fa-microchip">
+							</v-select>
+						</span>
 					</v-expansion-panel-text>
 				</v-expansion-panel>
 			</v-expansion-panels>
@@ -113,7 +127,7 @@
 													<span class="font-weight-medium text-body-2">{{ toolUse.name }}</span>
 													<v-spacer></v-spacer>
 													<v-chip :color="getToolStatusColor(toolUse.status)" size="x-small" variant="flat">
-														{{ toolUse.status }}
+														{{ getToolStatusTitle(toolUse.status) }}
 													</v-chip>
 												</div>
 												
