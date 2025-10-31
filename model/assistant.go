@@ -262,18 +262,11 @@ type ChatOpt func(*ChatConfig)
 
 type ChatConfig struct {
 	AutoExecuteTools bool
-	Model            string
 }
 
 func WithAutoExecuteTools(autoExecute bool) ChatOpt {
 	return func(config *ChatConfig) {
 		config.AutoExecuteTools = autoExecute
-	}
-}
-
-func WithModel(model string) ChatOpt {
-	return func(config *ChatConfig) {
-		config.Model = model
 	}
 }
 

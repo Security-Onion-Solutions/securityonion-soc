@@ -145,7 +145,7 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !streaming || !ok {
-		response, err := h.server.AssistantManager.Chat(ctx, messages, model.WithModel(incMsg.Model))
+		response, err := h.server.AssistantManager.Chat(ctx, incMsg.Model, messages)
 		if err != nil {
 			logger.WithError(err).Error("unable to chat with assistant")
 			web.Respond(w, r, http.StatusInternalServerError, err)
@@ -175,7 +175,7 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	}
 	noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRequestorId, ctx.Value(web.ContextKeyRequestorId).(string))
 
-	response, err := h.server.AssistantManager.ChatStream(noTimeOutCtx, messages, incMsg.Model)
+	response, err := h.server.AssistantManager.ChatStream(noTimeOutCtx, incMsg.Model, messages)
 	if err != nil {
 		logger.WithError(err).Error("unable to chat (stream) with assistant")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -297,7 +297,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !streaming {
-		response, err := h.server.AssistantManager.Chat(ctx, messages)
+		response, err := h.server.AssistantManager.Chat(ctx, toolReq.Model, messages)
 		if err != nil {
 			logger.WithError(err).Error("unable to chat with assistant after tool execution")
 			web.Respond(w, r, http.StatusInternalServerError, err)
@@ -318,7 +318,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := h.server.AssistantManager.ChatStream(ctx, messages, toolReq.Model)
+	response, err := h.server.AssistantManager.ChatStream(ctx, toolReq.Model, messages)
 	if err != nil {
 		logger.WithError(err).Error("unable to chat (stream) with assistant after tool execution")
 		web.Respond(w, r, http.StatusInternalServerError, err)

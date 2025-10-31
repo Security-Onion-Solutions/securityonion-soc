@@ -147,7 +147,7 @@ func (ac *AssistantCoordinator) IsRunning() bool {
 	return ac.isRunning
 }
 
-func (ac *AssistantCoordinator) Chat(ctx context.Context, messages []*model.Message, opts ...model.ChatOpt) ([]*model.Message, error) {
+func (ac *AssistantCoordinator) Chat(ctx context.Context, aiModel string, messages []*model.Message, opts ...model.ChatOpt) ([]*model.Message, error) {
 	logger := log.FromContext(ctx)
 	userID := ctx.Value(web.ContextKeyRequestorId).(string)
 	config := model.ApplyChatOpts(opts...)
@@ -159,7 +159,7 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, messages []*model.Mess
 		ToolConfig:   ac.toolConfig,
 		UserId:       userID,
 		SystemAppend: ac.systemPromptAddendum,
-		Model:        config.Model,
+		Model:        aiModel,
 	}
 
 	u, err := url.Parse(ac.apiUrl)
@@ -267,7 +267,7 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, messages []*model.Mess
 					// append to message history and recurse to send the tool result back with context
 					messages = append(messages, toolMsg)
 
-					toolResponse, err := ac.Chat(ctx, messages, model.WithAutoExecuteTools(true))
+					toolResponse, err := ac.Chat(ctx, aiModel, messages, model.WithAutoExecuteTools(true))
 					if err != nil {
 						logger.WithError(err).Error("failed to chat with assistant after tool execution")
 						return nil, err
@@ -283,7 +283,7 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, messages []*model.Mess
 	return newMessages, nil
 }
 
-func (ac *AssistantCoordinator) ChatStream(ctx context.Context, messages []*model.Message, mdl string) (*http.Response, error) {
+func (ac *AssistantCoordinator) ChatStream(ctx context.Context, aiModel string, messages []*model.Message) (*http.Response, error) {
 	logger := log.FromContext(ctx)
 	userID := ctx.Value(web.ContextKeyRequestorId).(string)
 
@@ -296,7 +296,7 @@ func (ac *AssistantCoordinator) ChatStream(ctx context.Context, messages []*mode
 		ToolConfig:   ac.toolConfig,
 		UserId:       userID,
 		SystemAppend: ac.systemPromptAddendum,
-		Model:        mdl,
+		Model:        aiModel,
 	}
 
 	u, err := url.Parse(ac.apiUrl)

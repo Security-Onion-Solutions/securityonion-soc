@@ -847,6 +847,7 @@ test('executeTool makes correct API request', async () => {
   };
   const mockPost = mockPapi('post', mockResponse);
   comp.loadCredits = jest.fn().mockResolvedValue();
+  comp.currentModel = 'test-model';
   mockPapi('get', { data: [] });
   
   await comp.executeTool(toolUse);
@@ -854,7 +855,8 @@ test('executeTool makes correct API request', async () => {
   expect(mockPost).toHaveBeenCalledWith('/assistant/tool/query_events', {
     sessionId: fakeSessionId,
     toolUseId: toolUse.id,
-    params: toolUse.input  
+    params: toolUse.input,
+    model: 'test-model',
   },
   {
     adapter: 'fetch',
@@ -1246,12 +1248,14 @@ test('callAIAPI makes correct API request', async () => {
   };
   const mockPost = mockPapi('post', mockResponse);
   comp.loadCredits = jest.fn().mockResolvedValue();
+  comp.currentModel = 'test-model';
   
   await comp.callAIAPI('Test message');
   
   expect(mockPost).toHaveBeenCalledWith('/assistant/chat', {
       msg: 'Test message',
-      sessionId: fakeSessionId
+      sessionId: fakeSessionId,
+      model: 'test-model',
   }, {
     adapter: 'fetch',
     headers: {
