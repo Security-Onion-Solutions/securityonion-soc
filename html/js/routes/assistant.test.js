@@ -288,7 +288,7 @@ test('initAssistant sets assistantEnabled to true when enabled and licensed', as
     thresholdColorRatioMax: 1,
     lowBalanceColorAlert: 500000,
     availableModels: [
-      { name: 'test-model', contextLimitSmall: 200000, contextLimitLarge: 1000000, lowBalanceColorAlert: 500000 }
+      { id: 'test-model', displayName: "Test Model", contextLimitSmall: 200000, contextLimitLarge: 1000000, lowBalanceColorAlert: 500000 }
     ]
   };
   comp.$root.isLicensed = jest.fn().mockReturnValue(true);

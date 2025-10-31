@@ -75,9 +75,9 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.availableModels = params["availableModels"];
       if (this.availableModels.length > 0) {
         this.modelsMap = new Map(
-          this.availableModels.map(m => [m.name, m])
+          this.availableModels.map(m => [m.id, m])
         );
-        if (!this.currentModel || !this.modelsMap.has(this.currentModel)) this.currentModel = this.availableModels[0].name;
+        if (!this.currentModel || !this.modelsMap.has(this.currentModel)) this.currentModel = this.availableModels[0].id;
       }
       this.updateModelParams();
 

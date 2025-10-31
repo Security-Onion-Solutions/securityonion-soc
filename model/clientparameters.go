@@ -182,7 +182,8 @@ type AssistantParameters struct {
 }
 
 type ModelParameters struct {
-	Name                 string `json:"name"`
+	ID                   string `json:"id"`
+	DisplayName          string `json:"displayName"`
 	ContextLimitSmall    int    `json:"contextLimitSmall"`
 	ContextLimitLarge    int    `json:"contextLimitLarge"`
 	LowBalanceColorAlert int    `json:"lowBalanceColorAlert"`
