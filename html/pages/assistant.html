@@ -56,8 +56,10 @@
 							<v-select
 								:disabled="$root.loading"
 								v-model="currentModel"
-								@update:model-value="currentModel = $event; updateModelParams()"
-								:items="modelsMap.keys()"
+								@update:model-value="updateModelParams()"
+								:items="modelsMap.values()"
+								item-title="displayName"
+								item-value="id"
 								:hint="i18n.selectModel"
 								persistent-hint
 								variant="underlined"
