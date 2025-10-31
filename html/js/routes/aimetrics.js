@@ -85,6 +85,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
     autoRefreshTimer: null,
     assistantEnabled: false,
     breadcrumbs: [],
+    paramsLoaded: false,
   }},
   created() {
     this.relativeTimeUnits = [
@@ -133,6 +134,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
     async initAssistant(params) {
       this.assistantEnabled = params["enabled"] && this.$root.isLicensed('oai');
       this.lowBalanceColorAlert = params["lowBalanceColorAlert"];
+      this.paramsLoaded = true;
       if (this.assistantEnabled) {
         this.loadData();
       }
