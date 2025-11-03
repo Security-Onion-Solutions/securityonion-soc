@@ -2916,6 +2916,7 @@ const huntComponent = {
             } else {
               bad.push(q);
             }
+            
             for (let answer of q.queryResults) {
               if (answer.payload) {
                 for (let v of Object.values(answer.payload)) {
@@ -2923,11 +2924,15 @@ const huntComponent = {
                     ips.push(v);
                   }
                 }
-              } else if (answer.keys) {
-                for (let key of answer.keys) {
-                  ips.push(key);
-                }
               }
+            }
+            
+            q.isAggregate = this.isQuestionAggregate(q);
+
+            if (q.isAggregate) {
+              q.fields = [this.i18n.count, ...q.fields];
+            } else {
+              q.fields = ['@timestamp', ...q.fields];
             }
           }
         }
@@ -2940,15 +2945,6 @@ const huntComponent = {
           this.expandedPlaybookQuestions[index].push(i);
         }
       }
-    },
-    sortAggregateEvents(events) {
-      events = events.sort((a, b) => b.value - a.value);
-
-      if (events.length > 5) {
-        events = events.slice(0, 5);
-      }
-
-      return events;
     },
     buildQuestionRange(event, range) {
       if (!range) {

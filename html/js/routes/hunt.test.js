@@ -1869,41 +1869,6 @@ test('buildQuestionRange', () => {
   expect(range).toBe('');
 });
 
-test('sortAggregateEvents', () => {
-  let tests = [
-    [
-      { expectedPos: 1, value: 2 },
-      { expectedPos: 2, value: 1 },
-      { expectedPos: 0, value: 3 },
-    ],
-    [
-      { expectedPos: 2, value: 40 },
-      { expectedPos: 3, value: 30 },
-      { expectedPos: 0, value: 60 },
-      { value: 10 },
-      { expectedPos: 1, value: 50 },
-      { expectedPos: 4, value: 20 },
-    ],
-    [
-      { expectedPos: 0, value: 0 },
-    ],
-  ];
-
-  for (let events of tests) {
-    const sortedEvents = comp.sortAggregateEvents(events);
-
-    if (events.length >= 5) {
-      expect(sortedEvents.length).toBe(5);
-    } else {
-      expect(sortedEvents.length).toBe(events.length);
-    }
-
-    for (let i = 0; i < sortedEvents.length; i++) {
-      expect(sortedEvents[i].expectedPos).toBe(i);
-    }
-  }
-});
-
 test('fetchNewestEvent', async () => {
   const eventSearch = mockPapi('get', { data: { events: [{ id: '100', payload: { a: 1, b: "2", c: true } }] } });
   
