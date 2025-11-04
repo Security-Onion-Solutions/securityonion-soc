@@ -2104,6 +2104,65 @@ test('loadPlaybook', async () => {
   expect(papiMock).toHaveBeenCalledTimes(0);
 
   resetPapi();
+
+  // Test aggregate and non-aggregate question handling
+  event = {
+    'soc_id': '789',
+  };
+
+  const playbooksWithQuestions = [
+    {
+      id: '1',
+      questions: [
+        {
+          id: 'q1',
+          query: 'aggregation: true\nquery: test',
+          queryResults: [{ payload: { field1: 'value1' } }],
+          fields: ['field1']
+        },
+        {
+          id: 'q2',
+          query: 'aggregation: false\nquery: test',
+          queryResults: [],
+          fields: ['field2']
+        }
+      ]
+    }
+  ];
+
+  papiMock = mockPapi('get', { data: playbooksWithQuestions });
+  comp.i18n = { count: 'Count' };
+  comp.$root.batchLookup = jest.fn();
+  comp.expandedPlaybookQuestions = {};
+
+  await comp.loadPlaybook(event, 0);
+
+  expect(papiMock).toHaveBeenCalledWith('playbook/event/789');
+
+  // Check that questions are sorted: good (with results) before bad (without)
+  expect(event.questions).toHaveLength(2);
+  expect(event.questions[0].id).toBe('q1'); // Has results, should be first
+  expect(event.questions[1].id).toBe('q2'); // No results, should be second
+
+  // Check that aggregate question has count field prepended
+  expect(event.playbooks[0].questions[0].isAggregate).toBe(true);
+  expect(event.playbooks[0].questions[0].fields).toHaveLength(2);
+  expect(event.playbooks[0].questions[0].fields[0]).toBe('Count');
+  expect(event.playbooks[0].questions[0].fields[1]).toBe('field1');
+
+  // Check that non-aggregate question has @timestamp prepended
+  expect(event.playbooks[0].questions[1].isAggregate).toBe(false);
+  expect(event.playbooks[0].questions[1].fields).toHaveLength(2);
+  expect(event.playbooks[0].questions[1].fields[0]).toBe('@timestamp');
+  expect(event.playbooks[0].questions[1].fields[1]).toBe('field2');
+
+  // Check that expandedPlaybookQuestions only includes questions with results
+  expect(comp.expandedPlaybookQuestions[0]).toEqual([0]); // Only first question has results
+
+  // Verify batchLookup was called with extracted IPs
+  expect(comp.$root.batchLookup).toHaveBeenCalledWith(['value1'], comp);
+
+  resetPapi();
 });
 
 test('pickQuestionColor', () => {
