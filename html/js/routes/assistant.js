@@ -1121,6 +1121,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           params: toolUse.input,
           model: this.currentModel,
         };
+
+        this.applyToolSpecificChanges(toolUse, toolRequest);
         
         // Use streaming for tool results
         const response = await this.$root.papi.post(`/assistant/tool/${toolUse.name}`, toolRequest, {
@@ -1671,7 +1673,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
 
     // Check if a tool should be auto-approved based on localStorage settings
     shouldAutoApproveTool(toolName) {
-      return ['query_events', 'get_playbooks'].includes(toolName) && this.alwaysApproveReadRequests;
+      return ['query_events', 'get_playbooks', 'query_cases'].includes(toolName) && this.alwaysApproveReadRequests;
     },
 
     // Open the options menu programmatically
@@ -1716,6 +1718,16 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.contextLimitSmall = this.modelsMap.get(this.currentModel).contextLimitSmall;
       this.contextLimitLarge = this.modelsMap.get(this.currentModel).contextLimitLarge;
       this.lowBalanceColorAlert = this.modelsMap.get(this.currentModel).lowBalanceColorAlert;
+    },
+
+    applyToolSpecificChanges(toolUse, toolRequest) {
+      if (toolUse.name === 'query_cases') {
+        const rawMRU = localStorage.getItem('settings.case.mruCases');
+        if (rawMRU) {
+          const cases = JSON.parse(rawMRU);
+          toolRequest.auxData = cases;
+        }
+      }
     },
   }
 }});

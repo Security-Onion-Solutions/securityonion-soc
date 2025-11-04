@@ -78,7 +78,7 @@ type ackAlertArgs struct {
 	RangeFormat  string         `json:"range_format,omitempty"`
 }
 
-func (t *AckAlertsTool) Execute(ctx context.Context, server *server.Server, params string) (result *model.ToolResponse, err error) {
+func (t *AckAlertsTool) Execute(ctx context.Context, server *server.Server, params string, auxData string) (result *model.ToolResponse, err error) {
 	logger := log.FromContext(ctx)
 
 	logger.WithField("toolParameters", params).Info("running tool for assistant")

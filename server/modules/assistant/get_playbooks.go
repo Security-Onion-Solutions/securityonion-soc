@@ -60,7 +60,7 @@ type getPlaybookQuestionsArgs struct {
 	PlaybookIndex *int   `json:"playbook_index,omitempty"`
 }
 
-func (t *GetPlaybooksTool) Execute(ctx context.Context, srv *server.Server, params string) (result *model.ToolResponse, err error) {
+func (t *GetPlaybooksTool) Execute(ctx context.Context, srv *server.Server, params string, auxData string) (result *model.ToolResponse, err error) {
 	logger := log.FromContext(ctx)
 
 	logger.WithField("toolParameters", params).Info("running tool for assistant")

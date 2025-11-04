@@ -19,6 +19,8 @@ type ToolRequest struct {
 	Params json.RawMessage `json:"params" example:"{\"key\":\"value\"}"`
 	// The model to use for this tool execution.
 	Model string `json:"model,omitempty" example:"claude-sonnet-4.5"`
+	// Auxiliary data for certain tools.
+	AuxData json.RawMessage `json:"auxData,omitempty" example:"{toolSpecificData: 'example'}"`
 }
 
 type ToolResponse struct {

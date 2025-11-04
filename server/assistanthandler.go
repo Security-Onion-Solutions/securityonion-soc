@@ -246,7 +246,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, toolErr := h.server.AssistantManager.ExecuteTool(ctx, toolName, string(toolReq.Params))
+	result, toolErr := h.server.AssistantManager.ExecuteTool(ctx, toolName, string(toolReq.Params), string(toolReq.AuxData))
 	if toolErr != nil {
 		logger.WithError(toolErr).Error("unable to execute tool")
 	}

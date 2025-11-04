@@ -226,7 +226,7 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, aiModel string, messag
 			for _, content := range responses[i].ContentBlocks {
 				if content.Type == "tool_use" {
 					// Execute the tool and add result back to conversation
-					result, err := ac.ExecuteTool(ctx, content.Name, string(content.Input))
+					result, err := ac.ExecuteTool(ctx, content.Name, string(content.Input), "")
 					if err != nil {
 						logger.WithError(err).WithField("toolName", content.Name).Error("failed to execute tool")
 						continue
@@ -346,7 +346,7 @@ func (ac *AssistantCoordinator) ChatStream(ctx context.Context, aiModel string, 
 	return res, nil
 }
 
-func (ac *AssistantCoordinator) ExecuteTool(ctx context.Context, toolName string, params string) (*model.ToolResponse, error) {
+func (ac *AssistantCoordinator) ExecuteTool(ctx context.Context, toolName string, params string, auxData string) (*model.ToolResponse, error) {
 	logger := log.FromContext(ctx).WithFields(log.Fields{
 		"toolName":  toolName,
 		"toolUseId": uuid.New().String(),
@@ -367,7 +367,7 @@ func (ac *AssistantCoordinator) ExecuteTool(ctx context.Context, toolName string
 		"userId":   userID,
 	}).Info("executing tool for assistant")
 
-	result, err := tool.Execute(assistantCtx, ac.srv, params)
+	result, err := tool.Execute(assistantCtx, ac.srv, params, auxData)
 	if err != nil {
 		logger.WithError(err).Error("error executing tool")
 		return nil, err
