@@ -697,8 +697,6 @@ func (pdm *PlaybookDiskManager) ExecutePlaybookSearches(ctx context.Context, eve
 			return err
 		}
 
-		re := regexp.MustCompile(`(\|\s+groupby\s+[\w\.]+?)\*`)
-
 		for i := 0; i < len(pb.Questions); i++ {
 			if pb.Questions[i].Range == nil {
 				pb.Questions[i].QueryResults = []*model.EventRecord{event}
@@ -713,9 +711,6 @@ func (pdm *PlaybookDiskManager) ExecutePlaybookSearches(ctx context.Context, eve
 				if !isAgg {
 					query += " | sortby @timestamp"
 				}
-
-				// remove * from groupby clauses, "__missing__ not an IP" problem otherwise
-				query = re.ReplaceAllString(query, "${1}")
 
 				err = criteria.Populate(query, dateRange, time.RFC3339, "", "5", "5")
 				if err != nil {
