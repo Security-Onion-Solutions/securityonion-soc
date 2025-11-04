@@ -1566,7 +1566,6 @@ $(document).ready(function () {
           if (ips.length) {
             ips = [...new Set(ips)];
             ips.forEach(ip => this.ip2host[ip] = []);
-            const route = this;
 
             // Do not use subgrid ID for this API call.
             this.papi.put('util/reverse-lookup', ips, {params: { gridId: LOCAL_GRID_ID}}).then(response => {

@@ -437,51 +437,18 @@
 																						<span class="italic" data-aid="playbook_grouped_event_timestamp">
 																							{{ i18n.eventOccurredAt }} {{ formatTimestamp(getEventTimestamp(item.newest)) }}
 																						</span>
-																						<table v-if="question.isAggregate" class="simple-table">
+																						<table class="simple-table">
 																							<thead>
 																								<tr>
-																									<th data-aid="playbook_grouped_instantinsights_aggregate_header_count">
-																										{{ i18n.count }}
-																									</th>
-																									<th v-for="field in question.fields" :key="field" :data-aid="'playbook_grouped_instantinsights_aggregate_header_' + field">
-																										{{ field }}
-																									</th>
-																								</tr>
-																							</thead>
-																							<tbody>
-																								<tr v-for="agg in question.queryResults">
-																									<td class="text-right" data-aid="playbook_grouped_instantinsights_aggregate_answer_count">
-																										{{ agg.value }}
-																									</td>
-																									<td v-for="value in agg.keys" data-aid="playbook_grouped_instantinsights_aggregate_answer">
-																										{{ translateValue(value) }}<span class="resolved-host" v-if="$root.pickHostname(value)"> - {{ $root.pickHostname(value) }}</span>
-																									</td>
-																								</tr>
-																								<tr v-if="question.queryResults && question.queryResults.length === 0">
-																									<td colspan="100%" class="text-center" data-aid="playbook_grouped_instantinsights_aggregate_nodata">
-																										{{ question.error ? i18n.error : i18n.noData }}
-																									</td>
-																								</tr>
-																							</tbody>
-																						</table>
-																						<table v-else class="simple-table">
-																							<thead>
-																								<tr>
-																									<th data-aid="playbook_grouped_instantinsights_header_timestamp">
-																										{{ i18n.timestamp }}
-																									</th>
 																									<th v-for="field in question.fields" :key="field" :data-aid="'playbook_grouped_instantinsights_header_' + field">
 																										{{ field }}
 																									</th>
 																								</tr>
 																							</thead>
 																							<tbody>
-																								<tr v-for="answer in question.queryResults" :key="answer.id">
-																									<td class="text-normal" data-aid="playbook_grouped_instantinsights_result_timestamp">
-																										{{ formatTimestamp(getEventTimestamp(answer.payload)) }}
-																									</td>
-																									<td v-for="field in question.fields" :key="field" data-aid="playbook_grouped_instantinsights_result">
-																										{{ translateValue(getEventField(answer.payload, field)) }}<span class="resolved-host" v-if="$root.pickHostname(getEventField(answer.payload, field))"> - {{ $root.pickHostname(getEventField(answer.payload, field)) }}</span>
+																								<tr v-for="result in question.queryResults">
+																									<td v-for="value in question.fields" data-aid="playbook_grouped_instantinsights_answer">
+																										{{ translateValue(result.payload[value]) }}<span class="resolved-host" v-if="$root.pickHostname(value)"> - {{ $root.pickHostname(value) }}</span>
 																									</td>
 																								</tr>
 																								<tr v-if="question.queryResults && question.queryResults.length === 0">
@@ -750,51 +717,18 @@
 																			<span class="italic" data-aid="playbook_event_timestamp">
 																				{{i18n.eventOccurredAt}} {{ formatTimestamp(getEventTimestamp(item)) }}
 																			</span>
-																			<table v-if="question.isAggregate" class="simple-table">
+																			<table class="simple-table">
 																				<thead>
 																					<tr>
-																						<th data-aid="playbook_instantinsights_aggregate_header_count">
-																							{{ i18n.count }}
-																						</th>
-																						<th v-for="field in question.fields" :key="field" :data-aid="'playbook_instantinsights_aggregate_header_' + field">
-																							{{ field }}
-																						</th>
-																					</tr>
-																				</thead>
-																				<tbody>
-																					<tr v-for="agg in question.queryResults">
-																						<td class="text-right" data-aid="playbook_instantinsights_aggregate_answer_count">
-																							{{ agg.value }}
-																						</td>
-																						<td v-for="value in agg.keys" data-aid="playbook_instantinsights_aggregate_answer">
-																							{{ translateValue(value) }}<span class="resolved-host" v-if="$root.pickHostname(value)"> - {{ $root.pickHostname(value) }}</span>
-																						</td>
-																					</tr>
-																					<tr v-if="question.queryResults && question.queryResults.length === 0">
-																						<td colspan="100%" class="text-center" data-aid="playbook_instantinsights_aggregate_nodata">
-																							{{ question.error ? i18n.error : i18n.noData }}
-																						</td>
-																					</tr>
-																				</tbody>
-																			</table>
-																			<table v-else class="simple-table">
-																				<thead>
-																					<tr>
-																						<th data-aid="playbook_instantinsights_header_timestamp">
-																							{{ i18n.timestamp }}
-																						</th>
 																						<th v-for="field in question.fields" :key="field" :data-aid="'playbook_instantinsights_header_' + field">
 																							{{ field }}
 																						</th>
 																					</tr>
 																				</thead>
 																				<tbody>
-																					<tr v-for="answer in question.queryResults" :key="answer.id">
-																						<td class="text-normal" data-aid="playbook_instantinsights_result_timestamp">
-																							{{ formatTimestamp(getEventTimestamp(answer.payload)) }}
-																						</td>
-																						<td v-for="field in question.fields" :key="field" data-aid="playbook_instantinsights_result">
-																							{{ translateValue(getEventField(answer.payload, field)) }}<span class="resolved-host" v-if="$root.pickHostname(getEventField(answer.payload, field))"> - {{ $root.pickHostname(getEventField(answer.payload, field)) }}</span>
+																					<tr v-for="result in question.queryResults">
+																						<td v-for="value in question.fields" data-aid="playbook_instantinsights_answer">
+																							{{ translateValue(result.payload[value]) }}<span class="resolved-host" v-if="$root.pickHostname(value)"> - {{ $root.pickHostname(value) }}</span>
 																						</td>
 																					</tr>
 																					<tr v-if="question.queryResults && question.queryResults.length === 0">

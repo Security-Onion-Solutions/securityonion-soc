@@ -705,7 +705,14 @@ func (pdm *PlaybookDiskManager) ExecutePlaybookSearches(ctx context.Context, eve
 
 				criteria := model.NewEventSearchCriteria()
 
-				err = criteria.Populate(converted[i].Query, dateRange, time.RFC3339, "", "0", "5")
+				query := converted[i].Query
+				isAgg := isQuestionAggregate(pb.Questions[i].Query)
+
+				if !isAgg {
+					query += " | sortby @timestamp"
+				}
+
+				err = criteria.Populate(query, dateRange, time.RFC3339, "", "5", "5")
 				if err != nil {
 					logger.WithError(err).WithFields(log.Fields{"playbookId": pb.Id, "eventId": event.Id}).Warn("unable to populate search criteria")
 					return err
@@ -717,9 +724,38 @@ func (pdm *PlaybookDiskManager) ExecutePlaybookSearches(ctx context.Context, eve
 					return err
 				}
 
-				pb.Questions[i].QueryResults = searchResults.Events
-				pb.Questions[i].QueryFields = converted[i].Fields
+				if isAgg {
+					longest := ""
+					for key := range searchResults.Metrics {
+						if len(key) > len(longest) {
+							longest = key
+						}
+					}
+
+					events := make([]*model.EventRecord, 0, len(searchResults.Metrics[longest]))
+
+					for _, metric := range searchResults.Metrics[longest] {
+						m := map[string]any{}
+
+						m["Count"] = metric.Value
+						for k, v := range converted[i].Fields {
+							m[v] = metric.Keys[k]
+						}
+
+						e := model.EventRecord{
+							Payload: m,
+						}
+
+						events = append(events, &e)
+					}
+
+					pb.Questions[i].QueryResults = events
+				} else {
+					pb.Questions[i].QueryResults = searchResults.Events
+				}
+
 				pb.Questions[i].OqlQuery = converted[i].Query
+				pb.Questions[i].QueryFields = converted[i].Fields
 			}
 		}
 	}
@@ -937,4 +973,17 @@ func getEventTimestamp(event *model.EventRecord) time.Time {
 	}
 
 	return time.Time{}
+}
+
+func isQuestionAggregate(query string) bool {
+	m := struct {
+		Aggregation bool `yaml:"aggregation"`
+	}{}
+
+	err := yaml.Unmarshal([]byte(query), &m)
+	if err != nil {
+		return false
+	}
+
+	return m.Aggregation
 }
