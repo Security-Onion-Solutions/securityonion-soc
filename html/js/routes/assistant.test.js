@@ -354,6 +354,88 @@ test('initAssistant sets assistantEnabled to false when not licensed', async () 
   expect(comp.loadCredits).not.toHaveBeenCalled();
 });
 
+test('initAssistant corrects contextLimitLarge when smaller than contextLimitSmall', async () => {
+  const mockParams = {
+    enabled: true,
+    availableModels: [
+      {
+        id: 'model-1',
+        displayName: "Model 1",
+        contextLimitSmall: 200000,
+        contextLimitLarge: 150000, // Smaller than contextLimitSmall - should be corrected
+        lowBalanceColorAlert: 500000
+      },
+      {
+        id: 'model-2',
+        displayName: "Model 2",
+        contextLimitSmall: 100000,
+        contextLimitLarge: 300000, // Larger than contextLimitSmall - should remain unchanged
+        lowBalanceColorAlert: 400000
+      },
+      {
+        id: 'model-3',
+        displayName: "Model 3",
+        contextLimitSmall: 250000,
+        contextLimitLarge: 250000, // Equal to contextLimitSmall - should remain unchanged
+        lowBalanceColorAlert: 600000
+      }
+    ]
+  };
+  
+  comp.$root.isLicensed = jest.fn().mockReturnValue(true);
+  comp.$root.showDisclaimer = jest.fn();
+  comp.loadStoredChats = jest.fn().mockResolvedValue();
+  comp.handleRouteSessionId = jest.fn().mockResolvedValue();
+  comp.loadCredits = jest.fn().mockResolvedValue();
+  comp.updateModelParams = jest.fn();
+  comp.$root.disclaimer = false;
+  
+  await comp.initAssistant(mockParams);
+  
+  // Check that the modelsMap was created correctly
+  expect(comp.modelsMap.size).toBe(3);
+  expect(comp.modelsMap.has('model-1')).toBe(true);
+  expect(comp.modelsMap.has('model-2')).toBe(true);
+  expect(comp.modelsMap.has('model-3')).toBe(true);
+  
+  // Check that contextLimitLarge was corrected for model-1
+  const model1 = comp.modelsMap.get('model-1');
+  expect(model1.contextLimitSmall).toBe(200000);
+  expect(model1.contextLimitLarge).toBe(200000); // Should be corrected to match contextLimitSmall
+  
+  // Check that contextLimitLarge was not changed for model-2 (already larger)
+  const model2 = comp.modelsMap.get('model-2');
+  expect(model2.contextLimitSmall).toBe(100000);
+  expect(model2.contextLimitLarge).toBe(300000); // Should remain unchanged
+  
+  // Check that contextLimitLarge was not changed for model-3 (equal)
+  const model3 = comp.modelsMap.get('model-3');
+  expect(model3.contextLimitSmall).toBe(250000);
+  expect(model3.contextLimitLarge).toBe(250000); // Should remain unchanged
+});
+
+test('initAssistant handles empty availableModels array', async () => {
+  const mockParams = {
+    enabled: true,
+    availableModels: [] // Empty array
+  };
+  
+  comp.$root.isLicensed = jest.fn().mockReturnValue(true);
+  comp.$root.showDisclaimer = jest.fn();
+  comp.loadStoredChats = jest.fn().mockResolvedValue();
+  comp.handleRouteSessionId = jest.fn().mockResolvedValue();
+  comp.loadCredits = jest.fn().mockResolvedValue();
+  comp.updateModelParams = jest.fn();
+  comp.$root.disclaimer = false;
+  
+  await comp.initAssistant(mockParams);
+  
+  // Check that modelsMap is empty and no correction logic was executed
+  expect(comp.modelsMap.size).toBe(0);
+  expect(comp.currentModel).toBe(''); // Should remain empty
+  expect(comp.updateModelParams).toHaveBeenCalled();
+});
+
 test('handleRouteSessionId returns early when assistantEnabled is false', async () => {
   comp.assistantEnabled = false;
   comp.$route.params.sessionId = fakeSessionId;
