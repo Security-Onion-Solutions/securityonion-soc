@@ -825,6 +825,12 @@ func unstreamResponse(ctx context.Context, rawResponse string) (*model.Message, 
 			if sm.Delta != nil {
 				switch sm.Delta.Type {
 				case "text_delta":
+					for len(message.ContentBlocks) <= sm.Index {
+						message.ContentBlocks = append(message.ContentBlocks, model.ContentBlock{
+							Content: "",
+						})
+					}
+
 					if message.ContentBlocks[sm.Index].Content == nil {
 						message.ContentBlocks[sm.Index].Content = ""
 					}
