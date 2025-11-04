@@ -77,6 +77,9 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         this.modelsMap = new Map(
           this.availableModels.map(m => [m.id, m])
         );
+        for (let val of this.modelsMap.values()) {
+          if (val.contextLimitLarge < val.contextLimitSmall) val.contextLimitLarge = val.contextLimitSmall;
+        }
         if (!this.currentModel || !this.modelsMap.has(this.currentModel)) this.currentModel = this.availableModels[0].id;
       }
       this.updateModelParams();
