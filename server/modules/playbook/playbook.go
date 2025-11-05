@@ -753,10 +753,10 @@ func (pdm *PlaybookDiskManager) ExecutePlaybookSearches(ctx context.Context, eve
 				} else {
 					pb.Questions[i].QueryResults = searchResults.Events
 				}
-
-				pb.Questions[i].OqlQuery = converted[i].Query
-				pb.Questions[i].QueryFields = converted[i].Fields
 			}
+
+			pb.Questions[i].OqlQuery = converted[i].Query
+			pb.Questions[i].QueryFields = converted[i].Fields
 		}
 	}
 

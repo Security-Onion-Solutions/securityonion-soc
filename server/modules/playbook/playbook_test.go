@@ -1148,6 +1148,13 @@ func TestExecutePlaybookSearches(t *testing.T) {
 				if tc.verifyQuestions != nil {
 					tc.verifyQuestions(t, tc.playbooks)
 				}
+
+				for _, pb := range tc.playbooks {
+					for _, q := range pb.Questions {
+						assert.NotEmpty(t, q.FilledQuery, "FilledQuery should not be empty")
+						assert.NotEmpty(t, q.QueryFields, "QueryFields should not be empty")
+					}
+				}
 			}
 		})
 	}
