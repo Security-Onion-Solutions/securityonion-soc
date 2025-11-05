@@ -81,7 +81,7 @@ func TestEscalateAlertsTool_Execute(t *testing.T) {
 				},
 				Title: "Test Alert Case",
 			},
-			expectedResult: `Successfully added 1 alert to new case "Test Alert Case" (Id: case-123)`,
+			expectedResult: `Successfully added 1 alert to case "Test Alert Case" (Id: case-123)`,
 		},
 		{
 			name:   "no alerts found",
@@ -125,7 +125,7 @@ func TestEscalateAlertsTool_Execute(t *testing.T) {
 				},
 				Title: "Multiple Alerts Case",
 			},
-			expectedResult: `Successfully added 3 alerts to new case "Multiple Alerts Case" (Id: case-456)`,
+			expectedResult: `Successfully added 3 alerts to case "Multiple Alerts Case" (Id: case-456)`,
 		},
 		{
 			name:          "invalid JSON parameters",
@@ -170,7 +170,7 @@ func TestEscalateAlertsTool_Execute(t *testing.T) {
 				},
 				Title: "Test Case",
 			},
-			expectedResult:  `Successfully added 1 alert to new case "Test Case" (Id: case-123)`,
+			expectedResult:  `Successfully added 1 alert to case "Test Case" (Id: case-123)`,
 			expectDateRange: true,
 		},
 		{
@@ -201,7 +201,7 @@ func TestEscalateAlertsTool_Execute(t *testing.T) {
 				},
 				Title: "Date Range Case",
 			},
-			expectedResult:  `Successfully added 2 alerts to new case "Date Range Case" (Id: case-789)`,
+			expectedResult:  `Successfully added 2 alerts to case "Date Range Case" (Id: case-789)`,
 			expectDateRange: true,
 		},
 		{
@@ -226,7 +226,7 @@ func TestEscalateAlertsTool_Execute(t *testing.T) {
 				},
 				Title: "Relative Date Case",
 			},
-			expectedResult:  `Successfully added 1 alert to new case "Relative Date Case" (Id: case-999)`,
+			expectedResult:  `Successfully added 1 alert to case "Relative Date Case" (Id: case-999)`,
 			expectDateRange: true,
 		},
 	}
@@ -279,7 +279,7 @@ func TestEscalateAlertsTool_Execute(t *testing.T) {
 
 			// Create tool and execute
 			tool := &EscalateAlertsTool{}
-			result, err := tool.Execute(ctx, mockServer, tc.params)
+			result, err := tool.Execute(ctx, mockServer, tc.params, "")
 
 			// Assert error expectations
 			if tc.expectedError {
@@ -380,7 +380,7 @@ func TestEscalateAlertsTool_Execute_VerifyContextPropagation(t *testing.T) {
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user-123")
 
 	tool := &EscalateAlertsTool{}
-	_, err := tool.Execute(ctx, mockServer, `{"search_filter": "soc_id:test-alert", "case_title": "Test Case"}`)
+	_, err := tool.Execute(ctx, mockServer, `{"search_filter": "soc_id:test-alert", "case_title": "Test Case"}`, "")
 
 	assert.NoError(t, err)
 	assert.Len(t, mockEventstore.InputContexts, 2) // Once for Search, once for Acknowledge
@@ -413,7 +413,7 @@ func TestEscalateAlertsTool_Execute_EmptySearchFilter(t *testing.T) {
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
 	tool := &EscalateAlertsTool{}
-	result, err := tool.Execute(ctx, mockServer, `{"search_filter": "", "case_title": "Empty Filter Case"}`)
+	result, err := tool.Execute(ctx, mockServer, `{"search_filter": "", "case_title": "Empty Filter Case"}`, "")
 
 	// Empty search filter results in an error during query parsing
 	assert.Error(t, err)
@@ -476,11 +476,11 @@ func TestEscalateAlertsTool_Execute_ComplexQuery(t *testing.T) {
 		"range_end": "2024/12/07 12:00:00 PM",
 		"range_format": "2006/01/02 3:04:05 PM"
 	}`
-	result, err := tool.Execute(ctx, mockServer, params)
+	result, err := tool.Execute(ctx, mockServer, params, "")
 
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
-	assert.Equal(t, `Successfully added 10 alerts to new case "Complex Phishing Case" (Id: case-complex)`, result.Result)
+	assert.Equal(t, `Successfully added 10 alerts to case "Complex Phishing Case" (Id: case-complex)`, result.Result)
 
 	// Verify all search criteria fields were populated correctly
 	assert.Len(t, mockEventstore.InputSearchCriterias, 1)
@@ -541,7 +541,7 @@ func TestEscalateAlertsTool_Execute_NoAlertsEscalated(t *testing.T) {
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
 	tool := &EscalateAlertsTool{}
-	result, err := tool.Execute(ctx, mockServer, `{"search_filter": "soc_id:alert-123", "case_title": "Test Case"}`)
+	result, err := tool.Execute(ctx, mockServer, `{"search_filter": "soc_id:alert-123", "case_title": "Test Case"}`, "")
 
 	assert.NoError(t, err)
 	assert.NotNil(t, result)

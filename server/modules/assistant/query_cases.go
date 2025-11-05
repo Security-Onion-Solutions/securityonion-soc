@@ -71,7 +71,7 @@ func (t *QueryCasesTool) GetSchema() model.JSONSchema {
 				},
 				"limit": {
 					Type:        "integer",
-					Description: "The maximum number of events to return",
+					Description: "The maximum number of cases to return",
 					Default:     100,
 				},
 			},
@@ -116,7 +116,7 @@ func (t *QueryCasesTool) Execute(ctx context.Context, server *server.Server, par
 
 	result.Parameters = args
 
-	var metricLimit, eventLimit int
+	var metricLimit, caseLimit int
 	zone := "UTC"
 	query := args.OQLQuery
 
@@ -131,9 +131,9 @@ func (t *QueryCasesTool) Execute(ctx context.Context, server *server.Server, par
 	}
 
 	if args.Limit > 0 {
-		eventLimit = args.Limit
+		caseLimit = args.Limit
 	} else {
-		eventLimit = 10
+		caseLimit = 10
 	}
 	metricLimit = 10000
 
@@ -149,7 +149,7 @@ func (t *QueryCasesTool) Execute(ctx context.Context, server *server.Server, par
 		"2006/01/02 3:04:05 PM",
 		zone,
 		strconv.Itoa(metricLimit),
-		strconv.Itoa(eventLimit))
+		strconv.Itoa(caseLimit))
 	if err != nil {
 		return nil, err
 	}
@@ -166,24 +166,24 @@ func (t *QueryCasesTool) Execute(ctx context.Context, server *server.Server, par
 		return nil, err
 	}
 
-	events := searchResults.Events
+	caseEvents := searchResults.Events
 
-	if len(events) == 0 {
-		result.Result = "No events found"
+	if len(caseEvents) == 0 {
+		result.Result = "No cases found"
 		return result, nil
 	}
 
-	logger.WithField("eventsFound", len(events)).Info("query executed successfully")
+	logger.WithField("casesFound", len(caseEvents)).Info("query executed successfully")
 
-	// Log raw event size before filtering
-	rawJSON, _ := json.Marshal(events)
-	logger.WithField("rawEventSize", len(rawJSON)).Debug("raw event size before filtering")
+	// Log raw case size before filtering
+	rawJSON, _ := json.Marshal(caseEvents)
+	logger.WithField("rawCaseSize", len(rawJSON)).Debug("raw case size before filtering")
 
-	// Filter event fields to reduce size
-	filteredEvents := filterCases(events)
+	// Filter case fields to reduce size
+	filteredCases := filterCases(caseEvents)
 
 	// Convert to JSON
-	resultJSON, err := json.MarshalIndent(filteredEvents, "", "  ")
+	resultJSON, err := json.MarshalIndent(filteredCases, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal result: %w", err)
 	}
@@ -199,14 +199,14 @@ func (t *QueryCasesTool) Execute(ctx context.Context, server *server.Server, par
 	}
 
 	result.Result = QueryCasesResult{
-		QueryResults: filteredEvents,
+		QueryResults: filteredCases,
 		RecentCases:  recentCases,
 	}
 
 	return result, nil
 }
 
-// filterEvents filters event fields to reduce payload size
+// filterCases filters case event fields to reduce payload size
 func filterCases(events []*model.EventRecord, extraFields ...string) []map[string]any {
 	// Default fields from Python implementation
 	defaultFields := []string{

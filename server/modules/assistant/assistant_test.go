@@ -267,7 +267,7 @@ func TestAssistantCoordinator_ExecuteTool(t *testing.T) {
 			toolName: "test_tool",
 			params:   `{"param1": "value1"}`,
 			setupMocks: func(mockTool *mock.MockTool) {
-				mockTool.EXPECT().Execute(gomock.Any(), gomock.Any(), `{"param1": "value1"}`).Return(&model.ToolResponse{
+				mockTool.EXPECT().Execute(gomock.Any(), gomock.Any(), `{"param1": "value1"}`, "").Return(&model.ToolResponse{
 					ToolName:       "test_tool",
 					OnBehalfOfUser: "test-user",
 					Result:         "success",
@@ -293,7 +293,7 @@ func TestAssistantCoordinator_ExecuteTool(t *testing.T) {
 			toolName: "failing_tool",
 			params:   `{"param1": "value1"}`,
 			setupMocks: func(mockTool *mock.MockTool) {
-				mockTool.EXPECT().Execute(gomock.Any(), gomock.Any(), `{"param1": "value1"}`).Return(nil, errors.New("tool execution failed"))
+				mockTool.EXPECT().Execute(gomock.Any(), gomock.Any(), `{"param1": "value1"}`, "").Return(nil, errors.New("tool execution failed"))
 			},
 			expectedResult: nil,
 			expectedError:  errors.New("tool execution failed"),
@@ -319,7 +319,7 @@ func TestAssistantCoordinator_ExecuteTool(t *testing.T) {
 
 			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
-			result, err := ac.ExecuteTool(ctx, tc.toolName, tc.params)
+			result, err := ac.ExecuteTool(ctx, tc.toolName, tc.params, "")
 
 			if tc.expectedError != nil {
 				assert.Error(t, err)
@@ -555,7 +555,7 @@ func TestAssistantCoordinator_Chat(t *testing.T) {
 
 			// Setup tool mock for auto-execute cases
 			if len(tc.chatOpts) > 0 {
-				mockTool.EXPECT().Execute(gomock.Any(), gomock.Any(), gomock.Any()).Return(&model.ToolResponse{
+				mockTool.EXPECT().Execute(gomock.Any(), gomock.Any(), gomock.Any(), "").Return(&model.ToolResponse{
 					ToolName:       "test_tool",
 					OnBehalfOfUser: "test-user",
 					Result:         "tool result",
@@ -887,7 +887,7 @@ func (m *mockTool) GetSchema() model.JSONSchema {
 	return m.schema
 }
 
-func (m *mockTool) Execute(ctx context.Context, srv *server.Server, params string) (*model.ToolResponse, error) {
+func (m *mockTool) Execute(ctx context.Context, srv *server.Server, params string, auxData string) (*model.ToolResponse, error) {
 	return &model.ToolResponse{
 		ToolName: m.name,
 		Result:   "mock result",

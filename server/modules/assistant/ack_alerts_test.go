@@ -46,11 +46,11 @@ func TestAckAlertsTool_GetSchema(t *testing.T) {
 
 func TestAckAlertsTool_Execute(t *testing.T) {
 	testCases := []struct {
-		name                    string
-		params                  string
-		mockResults             *model.EventUpdateResults
-		mockError               error
-		expectedResult          string
+		name                string
+		params              string
+		mockResults         *model.EventUpdateResults
+		mockError           error
+		expectedResult      string
 		expectedError       bool
 		expectedEventFilter map[string]any
 		expectDateRange     bool
@@ -157,7 +157,7 @@ func TestAckAlertsTool_Execute(t *testing.T) {
 
 			// Create tool and execute
 			tool := &AckAlertsTool{}
-			result, err := tool.Execute(ctx, mockServer, tc.params)
+			result, err := tool.Execute(ctx, mockServer, tc.params, "")
 
 			// Assert error expectations
 			if tc.expectedError {
@@ -234,7 +234,7 @@ func TestAckAlertsTool_Execute_VerifyContextPropagation(t *testing.T) {
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user-123")
 
 	tool := &AckAlertsTool{}
-	_, err := tool.Execute(ctx, mockServer, `{"search_filter": "soc_id:test-alert"}`)
+	_, err := tool.Execute(ctx, mockServer, `{"search_filter": "soc_id:test-alert"}`, "")
 
 	assert.NoError(t, err)
 	assert.Len(t, mockEventstore.InputContexts, 1)
@@ -260,7 +260,7 @@ func TestAckAlertTool_Execute_EmptySearchFilter(t *testing.T) {
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
 	tool := &AckAlertsTool{}
-	result, err := tool.Execute(ctx, mockServer, `{"search_filter": ""}`)
+	result, err := tool.Execute(ctx, mockServer, `{"search_filter": ""}`, "")
 
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
@@ -295,7 +295,7 @@ func TestAckAlertsTool_Execute_ComplexQuery(t *testing.T) {
 		"range_end": "2024/12/07 12:00:00 PM",
 		"range_format": "2006/01/02 3:04:05 PM"
 	}`
-	result, err := tool.Execute(ctx, mockServer, params)
+	result, err := tool.Execute(ctx, mockServer, params, "")
 
 	assert.NoError(t, err)
 	assert.NotNil(t, result)

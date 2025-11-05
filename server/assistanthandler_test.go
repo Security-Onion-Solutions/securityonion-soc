@@ -293,7 +293,7 @@ func TestPostTool(t *testing.T) {
 		ToolName: "query_events",
 		Result:   map[string]interface{}{"events": []string{"event1", "event2"}},
 	}
-	mockManager.EXPECT().ExecuteTool(gomock.Any(), "query_events", `{"query":"test query"}`).Return(mockToolResponse, nil)
+	mockManager.EXPECT().ExecuteTool(gomock.Any(), "query_events", `{"query":"test query"}`, "").Return(mockToolResponse, nil)
 
 	expectedText := fmt.Sprintf("ToolUseId: %s, Error: <nil>, Result: %s", toolUseId, `{"events":["event1","event2"]}`)
 

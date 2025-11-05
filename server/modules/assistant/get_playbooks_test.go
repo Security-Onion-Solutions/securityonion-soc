@@ -444,7 +444,7 @@ func TestGetPlaybooksTool_Execute(t *testing.T) {
 
 			// Create tool and execute
 			tool := &GetPlaybooksTool{}
-			result, err := tool.Execute(ctx, mockServer, tc.params)
+			result, err := tool.Execute(ctx, mockServer, tc.params, "")
 
 			// Assert error expectations
 			if tc.expectedError {
