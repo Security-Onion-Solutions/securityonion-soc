@@ -37,14 +37,14 @@ func (t *QueryCasesTool) GetName() string {
 }
 
 func (t *QueryCasesTool) GetDescription() string {
-	return "- Execute OQL queries to retrieve Security Onion cases that are most applicable to the given alert(s)\n" +
-		"- Search for cases by referencing so_case.description and so_case.title" +
-		"- *IMPORTANT* All queries should include `AND _index:\"*:so-case\" AND so_kind:case` appended to the end. The quotes around *:so-case MUST be included." +
-		"- When searching for cases, specify a date range of 999 days ago" +
+	return "- Execute OQL queries to retrieve Security Onion cases that are most applicable to the given alert(s).\n" +
+		"- Search for cases by referencing so_case.description and so_case.title\n" +
+		"- *IMPORTANT* All queries should include `AND _index:\"*:so-case\" AND so_kind:case` appended to the end. The quotes around *:so-case MUST be included.\n" +
+		"- When searching for cases, specify a date range of 999 days ago.\n" +
 		"- Examples for wild cards in the oql_query:\n" +
 		"  - Search terms cannot begin with a wildcard (e.g., `*xyz` the wildcard is ignored, but `xyz*` is valid)\n" +
-		"  - When using wildcards, do not wrap the value in quotes, instead use parentheses (e.g., `rule.name:(A B*)` is valid, but `rule.name:\"A B*\"` will not work as expected)" +
-		"- In addition to search results, you'll also get the user's most recently viewed cases. This field is called recent_cases." +
+		"  - When using wildcards, do not wrap the value in quotes, instead use parentheses (e.g., `rule.name:(A B*)` is valid, but `rule.name:\"A B*\"` will not work as expected)\n" +
+		"- In addition to search results, you'll also get the user's most recently viewed cases. This field is called recent_cases.\n" +
 		"- If the most applicable case is clear-cut, explain that to the user. Otherwise, give multiple options, compare them, and let the user choose."
 }
 
@@ -168,10 +168,19 @@ func (t *QueryCasesTool) Execute(ctx context.Context, server *server.Server, par
 
 	caseEvents := searchResults.Events
 
-	if len(caseEvents) == 0 {
+	// Parse auxData first, regardless of whether cases are found
+	recentCases := []map[string]any{}
+	err = json.Unmarshal([]byte(auxData), &recentCases)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal recent cases from auxData: %w", err)
+	}
+
+	if len(caseEvents) == 0 && len(recentCases) == 0 {
 		result.Result = "No cases found"
 		return result, nil
 	}
+
+	logger.WithField("recentCasesFound", len(recentCases)).Debug("recent cases parsed from auxData")
 
 	logger.WithField("casesFound", len(caseEvents)).Info("query executed successfully")
 
@@ -190,13 +199,6 @@ func (t *QueryCasesTool) Execute(ctx context.Context, server *server.Server, par
 
 	// Log filtered result size and preview
 	logger.WithField("filteredResultSize", len(resultJSON)).Debug("filtered result size")
-
-	recentCases := []map[string]any{}
-
-	err = json.Unmarshal([]byte(auxData), &recentCases)
-	if err != nil {
-		return nil, err
-	}
 
 	result.Result = QueryCasesResult{
 		QueryResults: filteredCases,

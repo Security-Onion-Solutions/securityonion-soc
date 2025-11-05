@@ -7,6 +7,7 @@ package assistant
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -37,6 +38,8 @@ func TestEscalateAlertsTool_GetSchema(t *testing.T) {
 	assert.Equal(t, "string", schema.Json.Properties["search_filter"].Type)
 	assert.Contains(t, schema.Json.Properties, "case_title")
 	assert.Equal(t, "string", schema.Json.Properties["case_title"].Type)
+	assert.Contains(t, schema.Json.Properties, "case_id")
+	assert.Equal(t, "string", schema.Json.Properties["case_id"].Type)
 	assert.Contains(t, schema.Json.Properties, "range_start")
 	assert.Equal(t, "string", schema.Json.Properties["range_start"].Type)
 	assert.Contains(t, schema.Json.Properties, "range_end")
@@ -229,6 +232,102 @@ func TestEscalateAlertsTool_Execute(t *testing.T) {
 			expectedResult:  `Successfully added 1 alert to case "Relative Date Case" (Id: case-999)`,
 			expectDateRange: true,
 		},
+		{
+			name:   "successful escalation with case_id",
+			params: `{"search_filter": "soc_id:alert-456", "case_id": "existing-case-123"}`,
+			mockSearchResults: &model.EventSearchResults{
+				Events: []*model.EventRecord{
+					{
+						Id: "alert-456",
+						Payload: map[string]interface{}{
+							"@timestamp": "2024-12-04T10:00:00Z",
+							"rule.name":  "Existing Case Rule",
+						},
+					},
+				},
+			},
+			mockUpdateResults: &model.EventUpdateResults{
+				UpdatedCount: 1,
+			},
+			mockCase: &model.Case{
+				Auditable: model.Auditable{
+					Id: "existing-case-123",
+				},
+				Title: "Existing Case Title",
+			},
+			expectedResult: `Successfully added 1 alert to case "Existing Case Title" (Id: existing-case-123)`,
+		},
+		{
+			name:   "multiple alerts escalated to existing case",
+			params: `{"search_filter": "rule.uuid:existing-rule", "case_id": "existing-case-456"}`,
+			mockSearchResults: &model.EventSearchResults{
+				Events: []*model.EventRecord{
+					{
+						Id: "alert-10",
+						Payload: map[string]interface{}{
+							"@timestamp": "2024-12-04T11:00:00Z",
+						},
+					},
+					{
+						Id: "alert-11",
+						Payload: map[string]interface{}{
+							"@timestamp": "2024-12-04T11:01:00Z",
+						},
+					},
+				},
+			},
+			mockUpdateResults: &model.EventUpdateResults{
+				UpdatedCount: 2,
+			},
+			mockCase: &model.Case{
+				Auditable: model.Auditable{
+					Id: "existing-case-456",
+				},
+				Title: "Multi Alert Existing Case",
+			},
+			expectedResult: `Successfully added 2 alerts to case "Multi Alert Existing Case" (Id: existing-case-456)`,
+		},
+		{
+			name:   "case_id with date range",
+			params: `{"search_filter": "soc_id:alert-789", "case_id": "existing-case-789", "range_start": "-3h", "range_end": "now"}`,
+			mockSearchResults: &model.EventSearchResults{
+				Events: []*model.EventRecord{
+					{
+						Id: "alert-789",
+						Payload: map[string]interface{}{
+							"@timestamp": "2024-12-04T12:00:00Z",
+						},
+					},
+				},
+			},
+			mockUpdateResults: &model.EventUpdateResults{
+				UpdatedCount: 1,
+			},
+			mockCase: &model.Case{
+				Auditable: model.Auditable{
+					Id: "existing-case-789",
+				},
+				Title: "Date Range Existing Case",
+			},
+			expectedResult:  `Successfully added 1 alert to case "Date Range Existing Case" (Id: existing-case-789)`,
+			expectDateRange: true,
+		},
+		{
+			name:   "case_id not found error",
+			params: `{"search_filter": "soc_id:alert-999", "case_id": "nonexistent-case"}`,
+			mockSearchResults: &model.EventSearchResults{
+				Events: []*model.EventRecord{
+					{
+						Id: "alert-999",
+						Payload: map[string]interface{}{
+							"@timestamp": "2024-12-04T10:00:00Z",
+						},
+					},
+				},
+			},
+			mockError:     assert.AnError,
+			expectedError: true,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -253,19 +352,33 @@ func TestEscalateAlertsTool_Execute(t *testing.T) {
 
 			// Only set up casestore expectations if we expect to create a case
 			if !tc.expectedError && tc.mockSearchResults != nil && len(tc.mockSearchResults.Events) > 0 {
-				// Expect Create call
-				mockCasestore.EXPECT().
-					Create(gomock.Any(), gomock.Any()).
-					Return(tc.mockCase, nil).
-					Times(1)
+				// Parse params to determine if we're using case_id or case_title
+				var args escalateAlertArgs
+				json.Unmarshal([]byte(tc.params), &args)
 
-				// Expect CreateRelatedEvents call
-				mockCasestore.EXPECT().
-					CreateRelatedEvents(gomock.Any(), gomock.Any()).
-					DoAndReturn(func(ctx context.Context, events []*model.RelatedEvent) (int, map[string]error, error) {
-						return len(events), nil, nil
-					}).
-					Times(1)
+				if args.CaseId != "" {
+					// Expect GetCase call for existing case
+					mockCasestore.EXPECT().
+						GetCase(gomock.Any(), args.CaseId).
+						Return(tc.mockCase, tc.mockError).
+						Times(1)
+				} else {
+					// Expect Create call for new case
+					mockCasestore.EXPECT().
+						Create(gomock.Any(), gomock.Any()).
+						Return(tc.mockCase, nil).
+						Times(1)
+				}
+
+				// Expect CreateRelatedEvents call (only if GetCase/Create succeeds)
+				if tc.mockError == nil {
+					mockCasestore.EXPECT().
+						CreateRelatedEvents(gomock.Any(), gomock.Any()).
+						DoAndReturn(func(ctx context.Context, events []*model.RelatedEvent) (int, map[string]error, error) {
+							return len(events), nil, nil
+						}).
+						Times(1)
+				}
 			}
 
 			// Create mock server

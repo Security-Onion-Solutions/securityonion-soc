@@ -4593,3 +4593,50 @@ test('handleToolExecutionContentBlockStop handles empty input JSON', () => {
   expect(comp.executeTool).toHaveBeenCalledWith(chainedToolUse);
   expect(result).toBe(null);
 });
+
+// applyToolSpecificChanges method tests
+test('applyToolSpecificChanges adds auxData for query_cases tool when MRU data exists', () => {
+  const toolUse = { id: 'tool_123', name: 'query_cases', input: { query: 'test query' } };
+  const toolRequest = {
+    sessionId: 'test-session',
+    toolUseId: 'tool_123',
+    params: { query: 'test query' },
+    model: 'test-model'
+  };
+
+  const mruCases = [
+    { id: 'case1', title: 'Test Case 1' },
+    { id: 'case2', title: 'Test Case 2' }
+  ];
+
+  // Spy on Storage.prototype so jsdom/localStorage is handled correctly
+  const getSpy = jest.spyOn(Storage.prototype, 'getItem').mockReturnValue(JSON.stringify(mruCases));
+
+  comp.applyToolSpecificChanges(toolUse, toolRequest);
+
+  expect(getSpy).toHaveBeenCalledWith('settings.case.mruCases');
+  expect(toolRequest.auxData).toEqual(mruCases);
+
+  getSpy.mockRestore();
+});
+
+test('applyToolSpecificChanges does nothing for non-query_cases tools', () => {
+  const toolUse = { id: 'tool_other', name: 'query_events', input: { oql_query: 'event.module: suricata' } };
+  const toolRequest = {
+    sessionId: 'test-session',
+    toolUseId: 'tool_other',
+    params: { oql_query: 'event.module: suricata' },
+    model: 'test-model'
+  };
+
+  // Spy on the prototype (no return value needed)
+  const getSpy = jest.spyOn(Storage.prototype, 'getItem');
+
+  comp.applyToolSpecificChanges(toolUse, toolRequest);
+
+  expect(getSpy).not.toHaveBeenCalled();
+  expect(toolRequest.auxData).toBeUndefined();
+
+  getSpy.mockRestore();
+});
+
