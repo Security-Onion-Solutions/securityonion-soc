@@ -1195,3 +1195,27 @@ describe('export', () => {
     } 
   });
 });
+
+test('performMermaidRegexes', () => {
+  expect(app.performMermaidRegexes('regular text')).toBe('regular text');
+  expect(app.performMermaidRegexes('')).toBe('');
+
+  const mermaidWithBothIssues = `
+\`\`\`mermaid
+graph TD
+    A[Start: Begin]
+
+    B[Step: Process]
+    A --> B
+\`\`\``;
+
+  const expectedBothFixed = `
+\`\`\`mermaid
+graph TD
+    A[Start∶ Begin]
+    B[Step∶ Process]
+    A --> B
+\`\`\``;
+
+  expect(app.performMermaidRegexes(mermaidWithBothIssues)).toBe(expectedBothFixed);
+});

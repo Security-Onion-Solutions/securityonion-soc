@@ -48,6 +48,7 @@ func TestPostChat(t *testing.T) {
 	requestBody := map[string]interface{}{
 		"msg":       "What is my current balance?",
 		"sessionId": sessionId,
+		"model":     "test-model",
 	}
 
 	jsonBody, _ := json.Marshal(requestBody)
@@ -94,8 +95,8 @@ func TestPostChat(t *testing.T) {
 
 	// Set up mock expectations
 	var capturedMessages []*model.Message
-	mockManager.EXPECT().Chat(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, messages []*model.Message, opts ...model.ChatOpt) ([]*model.Message, error) {
+	mockManager.EXPECT().Chat(gomock.Any(), "test-model", gomock.Any()).DoAndReturn(
+		func(ctx context.Context, aiModel string, messages []*model.Message, opts ...model.ChatOpt) ([]*model.Message, error) {
 			assert.Len(t, opts, 0)
 			capturedMessages = messages
 
@@ -150,7 +151,8 @@ func TestPostChatWithoutHistory(t *testing.T) {
 
 	// Test data without sessionId (new session)
 	requestBody := map[string]interface{}{
-		"msg": "Hello",
+		"msg":   "Hello",
+		"model": "test-model",
 	}
 
 	jsonBody, _ := json.Marshal(requestBody)
@@ -171,8 +173,8 @@ func TestPostChatWithoutHistory(t *testing.T) {
 
 	// Set up mock expectations
 	var capturedMessages []*model.Message
-	mockManager.EXPECT().Chat(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, messages []*model.Message, opts ...model.ChatOpt) ([]*model.Message, error) {
+	mockManager.EXPECT().Chat(gomock.Any(), "test-model", gomock.Any()).DoAndReturn(
+		func(ctx context.Context, aiModel string, messages []*model.Message, opts ...model.ChatOpt) ([]*model.Message, error) {
 			assert.Len(t, opts, 0)
 			capturedMessages = messages
 
@@ -266,6 +268,7 @@ func TestPostTool(t *testing.T) {
 		SessionId: sessionId,
 		ToolUseId: toolUseId,
 		Params:    json.RawMessage(`{"query": "test query"}`),
+		Model:     "test-model",
 	}
 
 	jsonBody, _ := json.Marshal(requestBody)
@@ -290,7 +293,7 @@ func TestPostTool(t *testing.T) {
 		ToolName: "query_events",
 		Result:   map[string]interface{}{"events": []string{"event1", "event2"}},
 	}
-	mockManager.EXPECT().ExecuteTool(gomock.Any(), "query_events", `{"query":"test query"}`).Return(mockToolResponse, nil)
+	mockManager.EXPECT().ExecuteTool(gomock.Any(), "query_events", `{"query":"test query"}`, "").Return(mockToolResponse, nil)
 
 	expectedText := fmt.Sprintf("ToolUseId: %s, Error: <nil>, Result: %s", toolUseId, `{"events":["event1","event2"]}`)
 
@@ -337,8 +340,8 @@ func TestPostTool(t *testing.T) {
 
 	// Mock the chat response after tool execution
 	var capturedMessages []*model.Message
-	mockManager.EXPECT().Chat(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, messages []*model.Message, opts ...model.ChatOpt) ([]*model.Message, error) {
+	mockManager.EXPECT().Chat(gomock.Any(), "test-model", gomock.Any()).DoAndReturn(
+		func(ctx context.Context, aiModel string, messages []*model.Message, opts ...model.ChatOpt) ([]*model.Message, error) {
 			capturedMessages = messages
 			return []*model.Message{{
 				Role: "assistant",
@@ -752,7 +755,7 @@ data: {"type":"message_stop"}
 
 data: [DONE]`
 
-	msg, err := unstreamResponse(data)
+	msg, err := unstreamResponse(context.Background(), data)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, msg)

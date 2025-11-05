@@ -552,6 +552,71 @@ func (pdm *PlaybookDiskManager) GetPlaybookById(ctx context.Context, id string) 
 	return pb, nil
 }
 
+func (pdm *PlaybookDiskManager) GetEventSpecificPlaybook(ctx context.Context, id string) ([]*model.Playbook, error) {
+	logger := log.FromContext(ctx)
+
+	query := fmt.Sprintf(`log.id.uid:"%[1]s" OR event.id:"%[1]s" OR _id:"%[1]s"`, id)
+	criteria := model.NewEventSearchCriteria()
+
+	dateRange := "1970-01-01T00:00:00Z - " + time.Now().Format(time.RFC3339)
+
+	err := criteria.Populate(query, dateRange, time.RFC3339, "", "0", "1")
+	if err != nil {
+		return nil, err
+	}
+
+	events, err := pdm.srv.Eventstore.Search(ctx, criteria)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search for alert: %w", err)
+	}
+	if events.TotalEvents == 0 || len(events.Events) == 0 {
+		return nil, fmt.Errorf("no alert found with ID %s", id)
+	}
+
+	event := events.Events[0]
+
+	detId, ok := event.Payload["rule.uuid"].(string)
+	if !ok {
+		logger.WithField("specifiedEvent", event).Error("event does not have a rule.uuid field")
+		return nil, fmt.Errorf("alert does not have a rule.uuid field")
+	}
+
+	detection, err := pdm.srv.Detectionstore.GetDetectionByPublicId(ctx, detId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get detection by ID %s: %w", detId, err)
+	}
+
+	engInt, ok := pdm.srv.DetectionEngines.Load(detection.Engine)
+	if ok {
+		eng := engInt.(server.DetectionEngine)
+
+		err = eng.ExtractDetails(detection)
+		if err != nil {
+			logger.WithError(err).WithFields(log.Fields{
+				"detectionEngine":   detection.Engine,
+				"detectionPublicId": detection.PublicID,
+			}).Error("unable to extract details from detection")
+		}
+	} else {
+		logger.WithFields(log.Fields{
+			"detectionEngine":   detection.Engine,
+			"detectionPublicId": detection.PublicID,
+		}).Error("retrieved detection with unsupported engine")
+	}
+
+	playbooks, err := pdm.srv.Playbookstore.GetPlaybooksForDetection(ctx, detection.PublicID, detection.Category, detection.Engine)
+	if err != nil || len(playbooks) == 0 {
+		return nil, fmt.Errorf("failed to get playbooks for detection %s: %w", detection.PublicID, err)
+	}
+
+	err = pdm.srv.Playbookstore.ExecutePlaybookSearches(ctx, event, playbooks)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute playbook searches: %w", err)
+	}
+
+	return playbooks, nil
+}
+
 func (pdm *PlaybookDiskManager) ConvertQuestions(ctx context.Context, queries []string) ([]*model.ConvertedQuery, error) {
 	logger := log.FromContext(ctx)
 
@@ -640,7 +705,14 @@ func (pdm *PlaybookDiskManager) ExecutePlaybookSearches(ctx context.Context, eve
 
 				criteria := model.NewEventSearchCriteria()
 
-				err = criteria.Populate(converted[i].Query, dateRange, time.RFC3339, "", "0", "5")
+				query := converted[i].Query
+				isAgg := isQuestionAggregate(pb.Questions[i].Query)
+
+				if !isAgg {
+					query += " | sortby @timestamp"
+				}
+
+				err = criteria.Populate(query, dateRange, time.RFC3339, "", "5", "5")
 				if err != nil {
 					logger.WithError(err).WithFields(log.Fields{"playbookId": pb.Id, "eventId": event.Id}).Warn("unable to populate search criteria")
 					return err
@@ -652,8 +724,39 @@ func (pdm *PlaybookDiskManager) ExecutePlaybookSearches(ctx context.Context, eve
 					return err
 				}
 
-				pb.Questions[i].QueryResults = searchResults.Events
+				if isAgg {
+					longest := ""
+					for key := range searchResults.Metrics {
+						if len(key) > len(longest) {
+							longest = key
+						}
+					}
+
+					events := make([]*model.EventRecord, 0, len(searchResults.Metrics[longest]))
+
+					for _, metric := range searchResults.Metrics[longest] {
+						m := map[string]any{}
+
+						m["Count"] = metric.Value
+						for k, v := range converted[i].Fields {
+							m[v] = metric.Keys[k]
+						}
+
+						e := model.EventRecord{
+							Payload: m,
+						}
+
+						events = append(events, &e)
+					}
+
+					pb.Questions[i].QueryResults = events
+				} else {
+					pb.Questions[i].QueryResults = searchResults.Events
+				}
 			}
+
+			pb.Questions[i].OqlQuery = converted[i].Query
+			pb.Questions[i].QueryFields = converted[i].Fields
 		}
 	}
 
@@ -870,4 +973,17 @@ func getEventTimestamp(event *model.EventRecord) time.Time {
 	}
 
 	return time.Time{}
+}
+
+func isQuestionAggregate(query string) bool {
+	m := struct {
+		Aggregation bool `yaml:"aggregation"`
+	}{}
+
+	err := yaml.Unmarshal([]byte(query), &m)
+	if err != nil {
+		return false
+	}
+
+	return m.Aggregation
 }

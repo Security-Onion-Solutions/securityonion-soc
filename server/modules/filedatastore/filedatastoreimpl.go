@@ -243,6 +243,8 @@ func (datastore *FileDatastoreImpl) filterParameterMatches(parameters map[string
 }
 
 func (datastore *FileDatastoreImpl) GetJobs(ctx context.Context, kind string, parameters map[string]interface{}) []*model.Job {
+	logger := log.FromContext(ctx)
+
 	if kind == "" {
 		kind = model.DEFAULT_JOB_KIND
 	}
@@ -252,7 +254,12 @@ func (datastore *FileDatastoreImpl) GetJobs(ctx context.Context, kind string, pa
 	allJobs := make([]*model.Job, 0)
 	for _, job := range datastore.jobsById {
 		if datastore.jobIsAllowed(ctx, job, "read") {
-			fmt.Println("Checking job:", job.Id, "Kind:", job.GetKind(), "Filter Parameters:", job.Filter.Parameters, "expectedKind:", kind)
+			logger.WithFields(log.Fields{
+				"jobId":           job.Id,
+				"jobKind":         job.GetKind(),
+				"jobFilterParams": job.Filter.Parameters,
+				"expectedJobKind": kind,
+			}).Info("checking job")
 			if job.GetKind() == kind && datastore.filterParameterMatches(parameters, job.Filter.Parameters) {
 				allJobs = append(allJobs, job)
 			}

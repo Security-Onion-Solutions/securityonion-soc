@@ -34,6 +34,7 @@ const DEFAULT_TIMEOUT_MS = 1200000
 const DEFAULT_CACHE_REFRESH_INTERVAL_MS = 10000
 const DEFAULT_METRIC_LIMIT = 10000
 const DEFAULT_EVENT_LIMIT = 10000
+const DEFAULT_CSV_SEPARATOR = ","
 
 const NO_EVENTS = 0
 const SECONDS_PER_HOUR = 3600.0
@@ -52,6 +53,7 @@ type Export struct {
 	cacheRefreshIntervalMs int // in milliseconds
 	exportMetricLimit      int
 	exportEventLimit       int
+	csvSeparator           string
 }
 
 func NewExport(agt *agent.Agent) *Export {
@@ -75,6 +77,7 @@ func (export *Export) Init(cfg module.ModuleConfig) error {
 	export.cacheRefreshIntervalMs = module.GetIntDefault(cfg, "cacheRefreshIntervalMs", DEFAULT_CACHE_REFRESH_INTERVAL_MS)
 	export.exportMetricLimit = module.GetIntDefault(cfg, "exportMetricLimit", DEFAULT_METRIC_LIMIT)
 	export.exportEventLimit = module.GetIntDefault(cfg, "exportEventLimit", DEFAULT_EVENT_LIMIT)
+	export.csvSeparator = module.GetStringDefault(cfg, "csvSeparator", DEFAULT_CSV_SEPARATOR)
 
 	if export.agent == nil {
 		err = errors.New("unable to invoke JobMgr.AddJobProcessor due to nil agent")
@@ -129,7 +132,7 @@ func (export *Export) ProcessJob(job *model.Job, reader io.ReadCloser) (io.ReadC
 			return reader, fmt.Errorf("failed to generate tabular data: %v", err)
 		}
 
-		csvReader, size, err := export.convertToCsv(records)
+		csvReader, size, err := export.convertToCsv(records, export.csvSeparator)
 		if err != nil {
 			return reader, fmt.Errorf("failed to generate CSV: %v", err)
 		}

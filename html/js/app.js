@@ -17,7 +17,7 @@ const LICENSE_STATUS_UNPROVISIONED = "unprovisioned";
 
 const LICENSE_EXPIRES_SOON_DAYS = 45;
 
-const SUBGRID_DISABLED_ROUTES = ['home','settings'];
+const SUBGRID_DISABLED_ROUTES = ['home','settings','assistant','aimetrics'];
 const LOCAL_GRID_ID = ''
 
 const USER_PASSWORD_LENGTH_MIN = 8;
@@ -841,6 +841,13 @@ $(document).ready(function () {
             mermaid.run();
           }
         },
+        performMermaidRegexes(text) {
+          // removes double blank lines from mermaid charts
+          text = text.replace(/(?<=```mermaid(?:(?!```)[\s\S])*?)\n\s*\n(?=(?:(?!```)[\s\S])*```)/g, '\n');
+          // converts non-separator colons to ratio characters in mermaid charts
+          text = text.replace(/(?<=```mermaid(?:(?!```)[\s\S])*?)(?<!\s):(?=(?:(?!```)[\s\S])*```)/g, '\u2236');
+          return text
+        },
         colorSeverity(value) {
           if (value == "low_false") return "yellow";
           if (value == "medium_false") return "amber darken-1";
@@ -1073,6 +1080,7 @@ $(document).ready(function () {
               vm.log("WebSocket connected");
               vm.connected = true;
               vm.reconnecting = false;
+              vm.loadServerSettingsTime = 0; // Force reload of server settings in case new SOC config changed
               vm.updateStatus();
             };
             this.socket.onclose = function(evt) {
@@ -1140,7 +1148,7 @@ $(document).ready(function () {
           return this.checkForUnauthorized(response);
         },
         apiFailureCallback(error) {
-          if (error.response.status >= 502 && error.response.status <= 504) {
+          if (error.response && error.response.status >= 502 && error.response.status <= 504) {
             reconnecting = true;
           } else { 
             this.checkForUnauthorized(error.response);
@@ -1558,7 +1566,6 @@ $(document).ready(function () {
           if (ips.length) {
             ips = [...new Set(ips)];
             ips.forEach(ip => this.ip2host[ip] = []);
-            const route = this;
 
             // Do not use subgrid ID for this API call.
             this.papi.put('util/reverse-lookup', ips, {params: { gridId: LOCAL_GRID_ID}}).then(response => {

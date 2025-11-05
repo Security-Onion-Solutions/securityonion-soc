@@ -2880,8 +2880,8 @@ const huntComponent = {
     async loadPlaybook(event, index) {
       if ('playbooks' in event || 'playbookLoading' in event || 'playbookErr' in event) return;
 
-      const publicId = event?.['rule.uuid'];
-      if (!publicId) {
+      const socId = event?.['soc_id'];
+      if (!socId) {
         event.playbookErr = true;
         return;
       }
@@ -2892,19 +2892,13 @@ const huntComponent = {
       let pbErr = false;
 
       try {
-        const response = await this.$root.papi.get(`playbook/detection/${publicId}`);
+        const response = await this.$root.papi.get(`playbook/event/${socId}`);
 
         playbooks = response.data;
       } catch (e) {
         pbErr = true;
         playbooks = null;
       }
-
-      if (playbooks) {
-        this.queryVariableSubstitution(event, playbooks);
-        await this.convertPlaybookQueries(playbooks);
-      }
-
       event.playbooks = playbooks;
       event.playbookErr = pbErr;
       delete event.playbookLoading;
@@ -2912,168 +2906,45 @@ const huntComponent = {
       if (playbooks) {
         // answer the questions and
         // stable sort them by results
+        let ips = [];
         let good = []; // has answers
         let bad = [];  // no answers
-        let ugly = []; // error
         for (let pb of event.playbooks) {
           for (let q of pb.questions) {
-            await this.$nextTick();
-            await this.askQuestion(q, event);
-
-            if (q.error) {
-              ugly.push(q);
-            } else if (q.answers.length > 0) {
+            if (q.queryResults.length > 0) {
               good.push(q);
             } else {
               bad.push(q);
             }
+            
+            for (let answer of q.queryResults) {
+              if (answer.payload) {
+                for (let v of Object.values(answer.payload)) {
+                  if (v && typeof v === 'string') {
+                    ips.push(v);
+                  }
+                }
+              }
+            }
+            
+            q.isAggregate = this.isQuestionAggregate(q);
+
+            if (q.isAggregate) {
+              q.fields = [this.i18n.count, ...q.fields];
+            } else {
+              q.fields = ['@timestamp', ...q.fields];
+            }
           }
         }
+        this.$root.batchLookup(ips, this);
 
-        event.questions = [...good, ...bad, ...ugly];
+        event.questions = [...good, ...bad];
 
         this.expandedPlaybookQuestions[index] = [];
         for (let i = 0; i < good.length; i++) {
           this.expandedPlaybookQuestions[index].push(i);
         }
       }
-    },
-    queryVariableSubstitution(event, playbooks) {
-      // Fields that require special array handling
-      const arrayFields = ['network.private_ip', 'network.public_ip', 'related.ip'];
-
-      for (let pb of playbooks) {
-        for (let question of pb.questions) {
-          let q = question.query;
-
-          // Find all variables in the query using regex
-          const variables = q.match(/\{([^}]+)\}/g) || [];
-
-          // Process each variable
-          for (const variable of variables) {
-            const fieldName = variable.slice(1, -1); // Remove { and }
-            let value = event[fieldName] || 'NODATA';
-
-            // Special handling for array fields
-            if (arrayFields.includes(fieldName) && Array.isArray(value)) {
-              // Find the line containing the variable
-              const lines = q.split('\n');
-              const lineWithVar = lines.findIndex(line => line.includes(variable));
-
-              if (lineWithVar !== -1) {
-                // Get the field being set (e.g., src_ip or dst_ip)
-                const match = lines[lineWithVar].match(/^(\s*)(?:-\s*)?(\w+(?:\.\w+)*(?:\|\w+)*):(?:\s*|$)/);
-                if (match) {
-                  const indent = match[1];
-                  const field = match[2];
-                  const originalLine = lines[lineWithVar];
-                  const hasDash = originalLine.trim().startsWith('-');
-                  const prefix = hasDash ? '- ' : '';
-                  const replacement = `${indent}${prefix}${field}:\n${value.map(ip => `${indent}    - ${ip}`).join('\n')}`;
-
-                  // Replace the entire line
-                  lines[lineWithVar] = replacement;
-                  q = lines.join('\n');
-                  continue;
-                }
-              }
-            }
-
-            // Default replacement if not handled as special case
-            q = q.replaceAll(variable, value);
-          }
-
-          question.filledQuery = q;
-        }
-      }
-    },
-
-    async convertPlaybookQueries(playbooks) {
-      let queries = playbooks.map((pb) => pb.questions.map((q) => q.filledQuery)).flat();
-
-      if (queries.length === 0) return;
-
-      let response = await this.$root.papi.post('playbook/convert', queries);
-
-      let index = 0;
-      for (let pb of playbooks) {
-        for (let question of pb.questions) {
-          question.filledOQL = response.data[index].query;
-          question.fields = response.data[index].fields;
-          index++;
-        }
-      }
-    },
-    async askQuestion(question, event) {
-      if (question.range) {
-        try {
-          const dateRange = this.buildQuestionRange(event, question.range);
-          let query = question.filledOQL;
-          if (!this.isQuestionAggregate(question)) {
-            query = query + ` | sortby @timestamp`;
-          }
-
-          let response = await this.$root.papi.get('events/', {
-            params: {
-              query: query,
-              range: dateRange,
-              format: this.i18n.timePickerSample,
-              zone: this.zone,
-              metricLimit: 5,
-              eventLimit: 5
-            }
-          });
-
-          if (this.isQuestionAggregate(question)) {
-            let biggest = '';
-            for (let field in response.data.metrics) {
-              if (field.length > biggest.length) biggest = field;
-            }
-            if (biggest) {
-              question.answers = this.sortAggregateEvents(response.data.metrics[biggest]);
-            } else {
-              // fallback, less than ideal
-              question.answers = response.data.events;
-            }
-          } else {
-            question.answers = response.data.events;
-          }
-        } catch (e) {
-          question.error = true;
-          question.answers = [];
-        }
-      } else {
-        // no range specified means we can find the answer on the event
-        // but avoid making a circular reference
-        const dupe = JSON.parse(JSON.stringify(event));
-        question.answers = [{ payload: dupe }];
-      }
-
-      let ips = [];
-      for (let answer of question.answers) {
-        if (answer.payload) {
-          for (let v of Object.values(answer.payload)) {
-            if (v && typeof v === 'string') {
-              ips.push(v);
-            }
-          }
-        } else if (answer.keys) {
-          for (let key of answer.keys) {
-            ips.push(key);
-          }
-        }
-      }
-
-      this.$root.batchLookup(ips, this);
-    },
-    sortAggregateEvents(events) {
-      events = events.sort((a, b) => b.value - a.value);
-
-      if (events.length > 5) {
-        events = events.slice(0, 5);
-      }
-
-      return events;
     },
     buildQuestionRange(event, range) {
       if (!range) {
@@ -3128,7 +2999,7 @@ const huntComponent = {
       let payload = {
         name: 'hunt',
         query: {
-          q: question.filledOQL,
+          q: question.oqlQuery,
         },
       };
 
@@ -3270,11 +3141,7 @@ const huntComponent = {
       }
     },
     pickQuestionColor(question) {
-      if (question.error) {
-        return 'has-error';
-      }
-
-      if (question.answers && question.answers.length > 0) {
+      if (question.queryResults && question.queryResults.length > 0) {
         return 'has-answers';
       }
 

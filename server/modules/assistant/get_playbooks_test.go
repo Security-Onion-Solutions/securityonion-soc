@@ -18,7 +18,7 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-func TestGetPlaybookQuestionsTool_Execute(t *testing.T) {
+func TestGetPlaybooksTool_Execute(t *testing.T) {
 	testCases := []struct {
 		name                   string
 		params                 string
@@ -66,6 +66,7 @@ func TestGetPlaybookQuestionsTool_Execute(t *testing.T) {
 							Range:    nil,
 							QueryResults: []*model.EventRecord{
 								{
+									Id: "alert-123",
 									Payload: map[string]any{
 										"@timestamp":   "2024-01-01T00:01:00Z",
 										"process.name": "malware.exe",
@@ -80,6 +81,7 @@ func TestGetPlaybookQuestionsTool_Execute(t *testing.T) {
 							Range:    nil,
 							QueryResults: []*model.EventRecord{
 								{
+									Id: "alert-123",
 									Payload: map[string]any{
 										"@timestamp":       "2024-01-01T00:02:00Z",
 										"destination.ip":   "192.168.1.100",
@@ -103,6 +105,7 @@ func TestGetPlaybookQuestionsTool_Execute(t *testing.T) {
 							QueryResults: []map[string]any{
 								{
 									"payload": map[string]any{
+										"_id":          "alert-123",
 										"@timestamp":   "2024-01-01T00:01:00Z",
 										"process.name": "malware.exe",
 									},
@@ -116,6 +119,7 @@ func TestGetPlaybookQuestionsTool_Execute(t *testing.T) {
 							QueryResults: []map[string]any{
 								{
 									"payload": map[string]any{
+										"_id":              "alert-123",
 										"@timestamp":       "2024-01-01T00:02:00Z",
 										"destination.ip":   "192.168.1.100",
 										"destination.port": 80,
@@ -161,6 +165,7 @@ func TestGetPlaybookQuestionsTool_Execute(t *testing.T) {
 							Range:    nil,
 							QueryResults: []*model.EventRecord{
 								{
+									Id: "alert-456",
 									Payload: map[string]any{
 										"@timestamp":     "2024-01-01T00:01:00Z",
 										"destination.ip": "192.168.1.1",
@@ -196,6 +201,7 @@ func TestGetPlaybookQuestionsTool_Execute(t *testing.T) {
 							QueryResults: []map[string]any{
 								{
 									"payload": map[string]any{
+										"_id":            "alert-456",
 										"@timestamp":     "2024-01-01T00:01:00Z",
 										"destination.ip": "192.168.1.1",
 										"source.ip":      "10.0.0.1",
@@ -437,8 +443,8 @@ func TestGetPlaybookQuestionsTool_Execute(t *testing.T) {
 			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user-id")
 
 			// Create tool and execute
-			tool := &GetPlaybookQuestionsTool{}
-			result, err := tool.Execute(ctx, mockServer, tc.params)
+			tool := &GetPlaybooksTool{}
+			result, err := tool.Execute(ctx, mockServer, tc.params, "")
 
 			// Assert error expectations
 			if tc.expectedError {
@@ -448,7 +454,7 @@ func TestGetPlaybookQuestionsTool_Execute(t *testing.T) {
 
 			assert.NoError(t, err)
 			assert.NotNil(t, result)
-			assert.Equal(t, "get_playbook_questions", result.ToolName)
+			assert.Equal(t, "get_playbooks", result.ToolName)
 			assert.Equal(t, "test-user-id", result.OnBehalfOfUser)
 			assert.True(t, result.TimeToExecute > 0)
 
@@ -507,6 +513,7 @@ func TestSimplifyPlaybooks(t *testing.T) {
 							Range:    nil,
 							QueryResults: []*model.EventRecord{
 								{
+									Id: "alert-1",
 									Payload: map[string]any{
 										"@timestamp":   "2024-01-01T00:01:00Z",
 										"process.name": "malware.exe",
@@ -521,6 +528,7 @@ func TestSimplifyPlaybooks(t *testing.T) {
 							Range:    stringPtr("±1h"),
 							QueryResults: []*model.EventRecord{
 								{
+									Id: "alert-2",
 									Payload: map[string]any{
 										"@timestamp":       "2024-01-01T00:02:00Z",
 										"destination.ip":   "192.168.1.100",
@@ -544,6 +552,7 @@ func TestSimplifyPlaybooks(t *testing.T) {
 							QueryResults: []map[string]any{
 								{
 									"payload": map[string]any{
+										"_id":          "alert-1",
 										"@timestamp":   "2024-01-01T00:01:00Z",
 										"process.name": "malware.exe",
 									},
@@ -557,6 +566,7 @@ func TestSimplifyPlaybooks(t *testing.T) {
 							QueryResults: []map[string]any{
 								{
 									"payload": map[string]any{
+										"_id":              "alert-2",
 										"@timestamp":       "2024-01-01T00:02:00Z",
 										"destination.ip":   "192.168.1.100",
 										"destination.port": 80,
@@ -612,6 +622,7 @@ func TestSimplifyPlaybooks(t *testing.T) {
 							Context:  "Has query results",
 							QueryResults: []*model.EventRecord{
 								{
+									Id: "alert-1",
 									Payload: map[string]any{
 										"@timestamp": "2024-01-01T00:01:00Z",
 										"source.ip":  "10.0.0.1",
@@ -629,6 +640,7 @@ func TestSimplifyPlaybooks(t *testing.T) {
 							Context:  "Also has query results",
 							QueryResults: []*model.EventRecord{
 								{
+									Id: "alert-1",
 									Payload: map[string]any{
 										"@timestamp":     "2024-01-01T00:02:00Z",
 										"destination.ip": "192.168.1.1",
@@ -650,6 +662,7 @@ func TestSimplifyPlaybooks(t *testing.T) {
 							QueryResults: []map[string]any{
 								{
 									"payload": map[string]any{
+										"_id":        "alert-1",
 										"@timestamp": "2024-01-01T00:01:00Z",
 										"source.ip":  "10.0.0.1",
 									},
@@ -662,6 +675,7 @@ func TestSimplifyPlaybooks(t *testing.T) {
 							QueryResults: []map[string]any{
 								{
 									"payload": map[string]any{
+										"_id":            "alert-1",
 										"@timestamp":     "2024-01-01T00:02:00Z",
 										"destination.ip": "192.168.1.1",
 									},
@@ -672,6 +686,62 @@ func TestSimplifyPlaybooks(t *testing.T) {
 				},
 			},
 			description: "Should only include questions with query results",
+		},
+		{
+			name: "playbook with QueryFields preserves custom fields",
+			inputPlaybooks: []*model.Playbook{
+				{
+					Name:        "Custom Field Investigation",
+					Description: "Investigation playbook with custom fields specified",
+					Questions: []*model.Question{
+						{
+							Question:    "What custom fields are present?",
+							Context:     "Check for custom fields not in default list",
+							Range:       nil,
+							QueryFields: []string{"custom.field.one", "custom.field.two", "process.pid"},
+							QueryResults: []*model.EventRecord{
+								{
+									Id: "alert-3",
+									Payload: map[string]any{
+										"@timestamp":       "2024-01-01T00:03:00Z",
+										"custom.field.one": "value1",
+										"custom.field.two": "value2",
+										"process.pid":      5678,
+										"process.name":     "test.exe",
+										"unwanted.field":   "should be filtered",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedResult: []*SimplePlaybook{
+				{
+					Name:        "Custom Field Investigation",
+					Description: "Investigation playbook with custom fields specified",
+					Questions: []*SimpleQuestion{
+						{
+							Question: "What custom fields are present?",
+							Context:  "Check for custom fields not in default list",
+							Range:    nil,
+							QueryResults: []map[string]any{
+								{
+									"payload": map[string]any{
+										"_id":              "alert-3",
+										"@timestamp":       "2024-01-01T00:03:00Z",
+										"custom.field.one": "value1",
+										"custom.field.two": "value2",
+										"process.pid":      5678,
+										"process.name":     "test.exe",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			description: "Should preserve fields specified in QueryFields even if not in default list",
 		},
 		{
 			name: "multiple playbooks",
@@ -685,6 +755,7 @@ func TestSimplifyPlaybooks(t *testing.T) {
 							Context:  "First context",
 							QueryResults: []*model.EventRecord{
 								{
+									Id: "alert-1",
 									Payload: map[string]any{
 										"@timestamp": "2024-01-01T00:01:00Z",
 										"event.id":   "event-1",
@@ -703,6 +774,7 @@ func TestSimplifyPlaybooks(t *testing.T) {
 							Context:  "Second context",
 							QueryResults: []*model.EventRecord{
 								{
+									Id: "alert-2",
 									Payload: map[string]any{
 										"@timestamp": "2024-01-01T00:02:00Z",
 										"event.id":   "event-2",
@@ -724,6 +796,7 @@ func TestSimplifyPlaybooks(t *testing.T) {
 							QueryResults: []map[string]any{
 								{
 									"payload": map[string]any{
+										"_id":        "alert-1",
 										"@timestamp": "2024-01-01T00:01:00Z",
 									},
 								},
@@ -741,6 +814,7 @@ func TestSimplifyPlaybooks(t *testing.T) {
 							QueryResults: []map[string]any{
 								{
 									"payload": map[string]any{
+										"_id":        "alert-2",
 										"@timestamp": "2024-01-01T00:02:00Z",
 									},
 								},

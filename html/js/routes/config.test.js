@@ -1157,3 +1157,94 @@ test('getSettingLink', () => {
   const link2 = comp.getSettingLink(setting);
   expect(link2).toBe('https://example.com/#/config?s=test.setting&a=0');
 });
+
+test('notifyChangedSetting', () => {
+  // Test adding new module
+  comp.changedModules = [];
+  const setting = { id: 'module1.setting1' };
+  comp.notifyChangedSetting(setting);
+  expect(comp.changedModules).toEqual(['module1']);
+
+  // Test adding another new module
+  const setting2 = { id: 'module2.setting2' };
+  comp.notifyChangedSetting(setting2);
+  expect(comp.changedModules).toEqual(['module1', 'module2']);
+
+  // Test adding duplicate module (should not add again)
+  comp.notifyChangedSetting(setting);
+  expect(comp.changedModules).toEqual(['module1', 'module2']);
+
+  // Test sorting after adding a module that comes first alphabetically
+  const setting3 = { id: 'a_module.setting' };
+  comp.notifyChangedSetting(setting3);
+  expect(comp.changedModules).toEqual(['a_module', 'module1', 'module2']);
+});
+
+test('notifyChangedSetting with moduleStateMap', () => {
+  // Test override with advanced prefix
+  comp.changedModules = [];
+  const settingAdvanced = { id: 'advanced.some.setting' };
+  comp.notifyChangedSetting(settingAdvanced);
+  expect(comp.changedModules).toEqual(['fake1-to-trigger-highstate', 'fake2-to-trigger-highstate']);
+
+  // Test override with bpf.zeek prefix
+  comp.changedModules = [];
+  const settingBpfZeek = { id: 'bpf.zeek.config' };
+  comp.notifyChangedSetting(settingBpfZeek);
+  expect(comp.changedModules).toEqual(['zeek']);
+
+  // Test override with bpf.pcap prefix
+  comp.changedModules = [];
+  const settingBpfPcap = { id: 'bpf.pcap.interface' };
+  comp.notifyChangedSetting(settingBpfPcap);
+  expect(comp.changedModules).toEqual(['pcap']);
+
+  // Test override with bpf.suricata prefix
+  comp.changedModules = [];
+  const settingBpfSuricata = { id: 'bpf.suricata.rules' };
+  comp.notifyChangedSetting(settingBpfSuricata);
+  expect(comp.changedModules).toEqual(['suricata']);
+
+  // Test override with elastic_fleet_package_registry prefix
+  comp.changedModules = [];
+  const settingElasticFleet = { id: 'elastic_fleet_package_registry.version' };
+  comp.notifyChangedSetting(settingElasticFleet);
+  expect(comp.changedModules).toEqual(['elastic-fleet-package-registry']);
+
+  // Test override with global prefix
+  comp.changedModules = [];
+  const settingGlobal = { id: 'global.timeout' };
+  comp.notifyChangedSetting(settingGlobal);
+  expect(comp.changedModules).toEqual(['fake1-to-trigger-highstate', 'fake2-to-trigger-highstate']);
+
+  // Test override with host prefix
+  comp.changedModules = [];
+  const settingHost = { id: 'host.network' };
+  comp.notifyChangedSetting(settingHost);
+  expect(comp.changedModules).toEqual(['fake1-to-trigger-highstate', 'fake2-to-trigger-highstate']);
+
+  // Test override with patch prefix
+  comp.changedModules = [];
+  const settingPatch = { id: 'patch.schedule' };
+  comp.notifyChangedSetting(settingPatch);
+  expect(comp.changedModules).toEqual(['patch.os']);
+
+  // Test override with vm prefix
+  comp.changedModules = [];
+  const settingVm = { id: 'vm.config' };
+  comp.notifyChangedSetting(settingVm);
+  expect(comp.changedModules).toEqual(['vm.user']);
+
+  // Test no override, falls back to default logic
+  comp.changedModules = [];
+  const settingDefault = { id: 'unknown.module' };
+  comp.notifyChangedSetting(settingDefault);
+  expect(comp.changedModules).toEqual(['unknown']);
+
+  // Test multiple calls with overrides and ensure uniqueness and sorting
+  comp.changedModules = [];
+  comp.notifyChangedSetting(settingAdvanced); // adds fake1, fake2
+  comp.notifyChangedSetting(settingBpfZeek); // adds zeek
+  comp.notifyChangedSetting(settingAdvanced); // duplicate, should not add again
+  expect(comp.changedModules).toEqual(['fake1-to-trigger-highstate', 'fake2-to-trigger-highstate', 'zeek']);
+});

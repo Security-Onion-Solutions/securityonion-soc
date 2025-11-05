@@ -25,15 +25,20 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     isStreaming: false,
     showChatHistory: true,
     investigationMsg: '',
-    contextLimitSmall: 200000,
-    contextLimitLarge: 1000000,
+    contextLimitSmall: 0,
+    contextLimitLarge: 0,
     thresholdColorRatioLow: 0.5,
     thresholdColorRatioMed: 0.75,
     thresholdColorRatioMax: 1,
-    lowBalanceColorAlert: 500000,
+    lowBalanceColorAlert: 0,
+    availableModels: [],
+    modelsMap: new Map(),
+    currentModel: '',
     activeStreamingSessionId: null, // Track which session is actively streaming
     autoScrollOnNextRender: false, // gate for programmatic scrolls
     isPinnedToBottom: true, // user is at (or near) bottom?
+    canChat: true,
+    paramsLoaded: false,
   }},
   async created() {
     this.loadLocalSettings();
@@ -56,21 +61,32 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     'increaseMaxContextThreshold': 'saveLocalSettings',
     'restoreLastActive': 'saveLocalSettings',
     'alwaysApproveReadRequests': 'saveLocalSettings',
-    'showChatHistory': 'saveLocalSettings'
+    'showChatHistory': 'saveLocalSettings',
+    'currentModel': 'saveLocalSettings'
   },
   methods: {
 
     async initAssistant(params) {
       this.assistantEnabled = params["enabled"] && this.$root.isLicensed('oai');
       this.investigationMsg = params["investigationPrompt"];
-      this.contextLimitSmall = params["contextLimitSmall"];
-      this.contextLimitLarge = params["contextLimitLarge"];
       this.thresholdColorRatioLow = params["thresholdColorRatioLow"];
       this.thresholdColorRatioMed = params["thresholdColorRatioMed"];
       this.thresholdColorRatioMax = params["thresholdColorRatioMax"];
-      this.lowBalanceColorAlert = params["lowBalanceColorAlert"];
+      this.availableModels = params["availableModels"];
+      if (this.availableModels.length > 0) {
+        this.modelsMap = new Map(
+          this.availableModels.map(m => [m.id, m])
+        );
+        for (let val of this.modelsMap.values()) {
+          if (val.contextLimitLarge < val.contextLimitSmall) val.contextLimitLarge = val.contextLimitSmall;
+        }
+        if (!this.currentModel || !this.modelsMap.has(this.currentModel)) this.currentModel = this.availableModels[0].id;
+      }
+      this.updateModelParams();
 
-      this.$root.showDisclaimer(this.i18n.assistantDisclaimerMessage, this.i18n.assistantDisclaimerTitle, this.i18n.getStarted, 'so-data-retention-disclaimer');
+      this.$root.showDisclaimer(this.i18n.assistantDisclaimerMessage, this.i18n.assistantDisclaimerTitle, this.i18n.getStarted, 'settings.disclaimer.acknowledged.onionai');
+
+      this.paramsLoaded = true;
       
       if (this.assistantEnabled) {
         if (!this.$root.disclaimer) {
@@ -152,13 +168,13 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     saveCurrentChatId() {
       if (this.currentChatId) {
-        localStorage.setItem('so-current-chat-id', this.currentChatId);
+        localStorage.setItem('settings.assistant.currentChatId', this.currentChatId);
       } else {
-        localStorage.removeItem('so-current-chat-id');
+        localStorage.removeItem('settings.assistant.currentChatId');
       }
     },
     loadCurrentChatId() {
-      return localStorage.getItem('so-current-chat-id');
+      return localStorage.getItem('settings.assistant.currentChatId');
     },
     async handleRouteSessionId() {
       const urlSessionId = this.$route.params.sessionId;
@@ -166,6 +182,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       // Clear active streaming session and UI state when route changes to different session
       if (this.currentChatId !== urlSessionId) {
         this.clearStreamingStates();
+      }
+
+      if (!this.assistantEnabled) {
+        return;
       }
       
       if (urlSessionId) {
@@ -205,6 +225,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     async restoreLastActiveChat() {
       if (!this.restoreLastActive) {
+        this.startNewChat();
         return;
       }
       const lastChatId = this.loadCurrentChatId();
@@ -212,7 +233,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         this.$root.startLoading();
         try {
           // Update URL to reflect the current session
-          this.updateUrlWithSessionId(lastChatId);
+          await this.updateUrlWithSessionId(lastChatId);
           return;
         } catch (error) {
           this.$root.showError(this.i18n.assistantUnableToRestoreLastActive + ': ' + error.message);
@@ -261,7 +282,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         if (this.currentChatId === chat.sessionId) {
           await this.loadChatFromBackend(chat.sessionId);
         }
-        this.updateUrlWithSessionId(chat.sessionId);
+        await this.updateUrlWithSessionId(chat.sessionId);
 
       } catch (error) {
         this.$root.showError(this.i18n.assistantUnableToLoadChat + ': ' + error.message);
@@ -300,17 +321,20 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.currentChatId = null;
       this.saveCurrentChatId(); // Clear the saved current chat ID
       this.loadNewChatScreen(); // Reset to welcome message (also resets context length)
+      this.canChat = true;
       // Navigate to chat without session ID
       this.$router.push({ name: 'assistant' });
     },
-    updateUrlWithSessionId(sessionId) {
+    async updateUrlWithSessionId(sessionId) {
       // Only update URL if it's different from current
       if (this.$route.params.sessionId !== sessionId) {
-        this.$router.replace({ name: 'assistant', params: { sessionId: sessionId } });
+        await this.$router.replace({ name: 'assistant', params: { sessionId: sessionId } });
       }
     },
     async sendMessage() {
       if (!this.newMessage.trim()) return;
+
+      if (!this.canChat) return;
       
       if (!this.assistantEnabled) {
         this.$root.showError(this.i18n.assistantNotAvailable);
@@ -335,7 +359,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       
       // Update URL with session ID if not already set - do this BEFORE the API call
       if (this.currentChatId && !this.$route.params.sessionId) {
-        this.updateUrlWithSessionId(this.currentChatId);
+        await this.updateUrlWithSessionId(this.currentChatId);
         // Wait for the route change to complete before proceeding
         await this.$nextTick();
       }
@@ -362,7 +386,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       try {
         // Call the actual AI API - session ID is already set
         await this.callAIAPI(messageText);
-        
+
         // Refresh chat history to show the latest session
         await this.loadStoredChats();
       } catch (error) {
@@ -596,6 +620,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         const response = await this.$root.papi.post('/assistant/chat', {
           msg: userMessage,
           sessionId: streamingSessionId,
+          model: this.currentModel,
         },
         {
           headers: {
@@ -1069,6 +1094,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       return this.$root.formatTimestamp(timestamp);
     },
     formatMarkdown(text) {
+      text = this.$root.performMermaidRegexes(text);
       md = this.$root.formatMarkdown(text, true);
       if (!this.isStreaming) {
         this.$nextTick(() => {
@@ -1092,8 +1118,11 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         const toolRequest = {
           sessionId: toolStreamingSessionId,
           toolUseId: toolUse.id,
-          params: toolUse.input
+          params: toolUse.input,
+          model: this.currentModel,
         };
+
+        this.applyToolSpecificChanges(toolUse, toolRequest);
         
         // Use streaming for tool results
         const response = await this.$root.papi.post(`/assistant/tool/${toolUse.name}`, toolRequest, {
@@ -1279,6 +1308,17 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         default: return 'info';
       }
     },
+    getToolStatusTitle(status) {
+      switch (status) {
+        case 'preparing': return this.i18n.preparing;
+        case 'pending_approval': return this.i18n.pendingApproval;
+        case 'executing': return this.i18n.executing;
+        case 'completed': return this.i18n.completed;
+        case 'error': return this.i18n.error;
+        case 'rejected': return this.i18n.rejected;
+        default: return this.i18n.statusUnknown;
+      }
+    },
     async approveTool(toolUse) {
       try {
         if (this.checkContextLimitReached()) return;
@@ -1351,6 +1391,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           this.saveCurrentChatId();
 
           await this.scrollToBottomSettled({ maxWait: 6000, settleDelay: 200 });
+
+          // Blocks user from sending messages in deleted chats
+          this.checkIfDeleted(sessionId);
+
         } else {
           throw new Error(this.i18n.assistantNoHistoryFound + ' ' + sessionId);
         }
@@ -1598,7 +1642,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     
 
-    // Generic setting save method (following hunt.js pattern)
+    // Generic setting save method
     saveSetting(name, value, defaultValue = null) {
       var item = 'settings.assistant.' + name;
       if (defaultValue == null || value != defaultValue) {
@@ -1608,26 +1652,28 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }
     },
 
-    // Save all local settings (following hunt.js pattern)
+    // Save all local settings
     saveLocalSettings() {
       this.saveSetting('increaseMaxContextThreshold', this.increaseMaxContextThreshold, false);
       this.saveSetting('restoreLastActive', this.restoreLastActive, false);
       this.saveSetting('alwaysApproveReadRequests', this.alwaysApproveReadRequests, false);
       this.saveSetting('showChatHistory', this.showChatHistory, true);
+      this.saveSetting('currentModel', this.currentModel, '');
     },
 
-    // Load all local settings (following hunt.js pattern)
+    // Load all local settings
     loadLocalSettings() {
       var prefix = 'settings.assistant';
       if (localStorage[prefix + '.increaseMaxContextThreshold']) this.increaseMaxContextThreshold = localStorage[prefix + '.increaseMaxContextThreshold'] == 'true';
       if (localStorage[prefix + '.restoreLastActive']) this.restoreLastActive = localStorage[prefix + '.restoreLastActive'] == 'true';
       if (localStorage[prefix + '.alwaysApproveReadRequests']) this.alwaysApproveReadRequests = localStorage[prefix + '.alwaysApproveReadRequests'] == 'true';
       if (localStorage[prefix + '.showChatHistory']) this.showChatHistory = localStorage[prefix + '.showChatHistory'] == 'true';
+      if (localStorage[prefix + '.currentModel']) this.currentModel = localStorage[prefix + '.currentModel'];
     },
 
     // Check if a tool should be auto-approved based on localStorage settings
     shouldAutoApproveTool(toolName) {
-      return ['query_events', 'get_playbook_questions'].includes(toolName) && this.alwaysApproveReadRequests;
+      return ['query_events', 'get_playbooks', 'query_cases'].includes(toolName) && this.alwaysApproveReadRequests;
     },
 
     // Open the options menu programmatically
@@ -1655,6 +1701,33 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.activeStreamingSessionId = null;
       this.isTyping = false;
       this.isStreaming = false;
+    },
+    
+    checkIfDeleted(sessionId) {
+      const sessionInHistory = this.chatHistory.some(session => session.sessionId === sessionId);
+      if (!sessionInHistory) {
+        this.canChat = false;
+        this.$root.showWarning(this.i18n.assistantChatIsDeleted);
+      } else {
+        this.canChat = true;
+      }
+    },
+
+    updateModelParams() {
+      if (!this.currentModel || this.modelsMap.size == 0) return;
+      this.contextLimitSmall = this.modelsMap.get(this.currentModel).contextLimitSmall;
+      this.contextLimitLarge = this.modelsMap.get(this.currentModel).contextLimitLarge;
+      this.lowBalanceColorAlert = this.modelsMap.get(this.currentModel).lowBalanceColorAlert;
+    },
+
+    applyToolSpecificChanges(toolUse, toolRequest) {
+      if (toolUse.name === 'query_cases') {
+        const rawMRU = localStorage.getItem('settings.case.mruCases');
+        if (rawMRU) {
+          const cases = JSON.parse(rawMRU);
+          toolRequest.auxData = cases;
+        }
+      }
     },
   }
 }});

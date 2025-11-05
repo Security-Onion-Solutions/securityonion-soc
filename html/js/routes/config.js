@@ -695,6 +695,7 @@ routes.push({
           }
 
           this.countCustomized();
+          this.notifyChangedSetting(this.resetSetting);
 
           // Show update to user
           this.$root.showTip(this.i18n.settingDeleted);
@@ -772,9 +773,7 @@ routes.push({
           }
 
           this.countCustomized();
-
-          this.changedModules.push(setting.id.split(".")[0]);
-          this.changedModules = [...new Set(this.changedModules)].sort();
+          this.notifyChangedSetting(setting);
         } catch (error) {
           var msg = this.i18n.settingSaveError;
           if (error.response && error.response.data && error.response.data.startsWith("ERROR_")) {
@@ -784,6 +783,36 @@ routes.push({
         }
         this.$root.stopLoading();
       }
+    },
+    notifyChangedSetting(setting) {
+      const moduleStateMap = new Map();
+      moduleStateMap.set("advanced", ["fake1-to-trigger-highstate", "fake2-to-trigger-highstate"]);
+      moduleStateMap.set("bpf.zeek", ["zeek"]);
+      moduleStateMap.set("bpf.pcap", ["pcap"]);
+      moduleStateMap.set("bpf.suricata", ["suricata"]);
+      moduleStateMap.set("elastic_fleet_package_registry", ["elastic-fleet-package-registry"]);
+      moduleStateMap.set("global", ["fake1-to-trigger-highstate", "fake2-to-trigger-highstate"]);
+      moduleStateMap.set("host", ["fake1-to-trigger-highstate", "fake2-to-trigger-highstate"]);
+      moduleStateMap.set("patch", ["patch.os"]);
+      moduleStateMap.set("vm", ["vm.user"]);
+
+      var override = false;
+      moduleStateMap.forEach((modules, prefix) => {
+        if (setting.id.startsWith(prefix)) {
+          modules.forEach(module => this.changedModules.push(module));
+          override = true;
+        }
+      });
+
+      if (!override) {
+        const module = setting.id.split(".")[0];
+
+        if (module && !this.changedModules.includes(module)) {
+          this.changedModules.push(module);
+        }
+      }
+
+      this.changedModules = [...new Set(this.changedModules)].sort();
     },
     async sync() {
       this.$root.startLoading();
@@ -805,7 +834,7 @@ routes.push({
         this.$root.showTip(this.$root.localizeMessage(this.i18n.settingsSynchronizeFinished, {"module": module}));
       } catch (error) {
         if (error.response && error.response.data == "ERROR_SALT_ALREADY_RUNNING") {
-          this.$root.showWarning(error);
+          this.$root.showTip(this.$root.localizeMessage(error));
           this.changedModules = tmpModules;
         } else if (error.response && (error.response.status >= 502 && error.response.status <= 504)) {
           this.$root.showTip(this.$root.localizeMessage(this.i18n.settingsSynchronizeFinishedRestarting, {"module": module}));

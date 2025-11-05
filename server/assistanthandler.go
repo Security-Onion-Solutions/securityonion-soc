@@ -78,8 +78,8 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	accept := strings.TrimSpace(r.Header.Get("Accept"))
 	streaming := strings.EqualFold(accept, "text/event-stream")
 
-	tb := &model.IncomingMessage{}
-	err = json.NewDecoder(r.Body).Decode(tb)
+	incMsg := &model.IncomingMessage{}
+	err = json.NewDecoder(r.Body).Decode(incMsg)
 	if err != nil {
 		logger.WithError(err).Error("unable to decode request body")
 		web.Respond(w, r, http.StatusBadRequest, err)
@@ -87,8 +87,8 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if tb.SessionId == "" {
-		tb.SessionId = uuid.NewString()
+	if incMsg.SessionId == "" {
+		incMsg.SessionId = uuid.NewString()
 	}
 
 	newMsg := &model.Message{
@@ -96,12 +96,12 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		ContentBlocks: []model.ContentBlock{
 			{
 				Type: "text",
-				Text: tb.Msg,
+				Text: incMsg.Msg,
 			},
 		},
 	}
 
-	stored, err := h.server.Assistantstore.GetChatHistory(ctx, tb.SessionId, true)
+	stored, err := h.server.Assistantstore.GetChatHistory(ctx, incMsg.SessionId, true)
 	if err != nil {
 		logger.WithError(err).Error("unable to get chat history")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -112,8 +112,8 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	if len(stored) == 0 {
 		// create new session
 		session := &model.AssistantSession{
-			SessionId: tb.SessionId,
-			Title:     tb.Msg,
+			SessionId: incMsg.SessionId,
+			Title:     incMsg.Msg,
 		}
 		err = h.server.Assistantstore.CreateSession(ctx, session)
 		if err != nil {
@@ -129,7 +129,7 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		messages = append(messages, msg.Message)
 	}
 
-	err = h.server.Assistantstore.SaveChat(ctx, newMsg.PrepareForStorage(tb.SessionId, nil))
+	err = h.server.Assistantstore.SaveChat(ctx, newMsg.PrepareForStorage(incMsg.SessionId, nil))
 	if err != nil {
 		logger.WithError(err).Error("unable to save chat message")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -145,7 +145,7 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !streaming || !ok {
-		response, err := h.server.AssistantManager.Chat(ctx, messages)
+		response, err := h.server.AssistantManager.Chat(ctx, incMsg.Model, messages)
 		if err != nil {
 			logger.WithError(err).Error("unable to chat with assistant")
 			web.Respond(w, r, http.StatusInternalServerError, err)
@@ -154,7 +154,7 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for _, msg := range response {
-			err = h.server.Assistantstore.SaveChat(ctx, msg.PrepareForStorage(tb.SessionId, nil))
+			err = h.server.Assistantstore.SaveChat(ctx, msg.PrepareForStorage(incMsg.SessionId, nil))
 			if err != nil {
 				logger.WithError(err).Error("unable to save chat message")
 				return
@@ -175,7 +175,7 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	}
 	noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRequestorId, ctx.Value(web.ContextKeyRequestorId).(string))
 
-	response, err := h.server.AssistantManager.ChatStream(noTimeOutCtx, messages)
+	response, err := h.server.AssistantManager.ChatStream(noTimeOutCtx, incMsg.Model, messages)
 	if err != nil {
 		logger.WithError(err).Error("unable to chat (stream) with assistant")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -192,14 +192,14 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	go func() {
-		msg, err := unstreamResponse(string(entireResponse))
+		msg, err := unstreamResponse(ctx, string(entireResponse))
 		if err != nil {
 			logger.WithError(err).Error("error unstreaming response")
 			return
 		}
 
 		if msg != nil {
-			err = h.server.Assistantstore.SaveChat(noTimeOutCtx, msg.PrepareForStorage(tb.SessionId, nil))
+			err = h.server.Assistantstore.SaveChat(noTimeOutCtx, msg.PrepareForStorage(incMsg.SessionId, nil))
 			if err != nil {
 				logger.WithError(err).Error("unable to save chat message")
 				return
@@ -209,7 +209,7 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 }
 
 // @Summary      Execute Tool
-// @Description  Execute a tool on behalf of the assistant and continue the conversation with the result.
+// @Description  Execute a tool on behalf of the assistant and continue the conversation with the result. Note that more permissions may be checked depending on the tool being executed.
 // @Tags         Assistant
 // @Security     bearer[assistant/write_authored]
 // @Param        name     path  string              true  "Name of the tool to execute"
@@ -246,7 +246,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, toolErr := h.server.AssistantManager.ExecuteTool(ctx, toolName, string(toolReq.Params))
+	result, toolErr := h.server.AssistantManager.ExecuteTool(ctx, toolName, string(toolReq.Params), string(toolReq.AuxData))
 	if toolErr != nil {
 		logger.WithError(toolErr).Error("unable to execute tool")
 	}
@@ -297,7 +297,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !streaming {
-		response, err := h.server.AssistantManager.Chat(ctx, messages)
+		response, err := h.server.AssistantManager.Chat(ctx, toolReq.Model, messages)
 		if err != nil {
 			logger.WithError(err).Error("unable to chat with assistant after tool execution")
 			web.Respond(w, r, http.StatusInternalServerError, err)
@@ -318,7 +318,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := h.server.AssistantManager.ChatStream(ctx, messages)
+	response, err := h.server.AssistantManager.ChatStream(ctx, toolReq.Model, messages)
 	if err != nil {
 		logger.WithError(err).Error("unable to chat (stream) with assistant after tool execution")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -344,7 +344,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 	noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRequestorId, ctx.Value(web.ContextKeyRequestorId).(string))
 
 	go func() {
-		msg, err := unstreamResponse(string(entireResponse))
+		msg, err := unstreamResponse(ctx, string(entireResponse))
 		if err != nil {
 			logger.WithError(err).Error("error unstreaming response")
 			return
@@ -364,6 +364,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 // @Description  Retrieve the current balance/usage information for the AI assistant.
 // @Tags         Assistant
 // @Security     bearer[assistant/read_authored]
+// @Security     bearer[assistant/read_all]
 // @Produce      json
 // @Success      200  {object}  model.Usage "Current assistant balance and usage information"
 // @Failure      401           "Request was not properly authenticated"
@@ -374,9 +375,10 @@ func (h *AssistantHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
 
-	err := h.server.CheckAuthorized(ctx, "read_authored", "assistant")
-	if err != nil {
-		web.Respond(w, r, http.StatusUnauthorized, err)
+	self := h.server.CheckAuthorized(ctx, "read_authored", "assistant")
+	all := h.server.CheckAuthorized(ctx, "read_all", "assistant")
+	if self != nil && all != nil {
+		web.Respond(w, r, http.StatusUnauthorized, self)
 		return
 	}
 
@@ -397,7 +399,7 @@ func (h *AssistantHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 
 	response, err := h.server.AssistantManager.Balance(ctx)
 	if err != nil {
-		logger.WithError(err).Error("unable to chat with assistant")
+		logger.WithError(err).Error("unable to retrieve balance")
 		web.Respond(w, r, http.StatusInternalServerError, err)
 
 		return
@@ -603,7 +605,15 @@ func (h *AssistantHandler) GetSessionsAdmin(w http.ResponseWriter, r *http.Reque
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
 
-	err := h.server.CheckAuthorized(ctx, "read_all", "assistant")
+	err := r.ParseForm()
+	if err != nil {
+		logger.WithError(err).Error("unable to parse query string")
+		web.Respond(w, r, http.StatusBadRequest, err)
+
+		return
+	}
+
+	err = h.server.CheckAuthorized(ctx, "read_all", "assistant")
 	if err != nil {
 		web.Respond(w, r, http.StatusUnauthorized, err)
 		return
@@ -754,7 +764,7 @@ func streamResponse(ctx context.Context, w http.ResponseWriter, r *http.Request,
 	return entireResponse, err
 }
 
-func unstreamResponse(rawResponse string) (*model.Message, error) {
+func unstreamResponse(ctx context.Context, rawResponse string) (*model.Message, error) {
 	type Delta struct {
 		Type        string  `json:"type"`
 		Text        string  `json:"text,omitempty"`
@@ -771,6 +781,8 @@ func unstreamResponse(rawResponse string) (*model.Message, error) {
 		Usage        *model.Usage        `json:"usage,omitempty"`
 	}
 
+	logger := log.FromContext(ctx)
+
 	// Create a parser without a completion function
 	parser := sse_parser.NewParser(nil)
 
@@ -786,7 +798,7 @@ func unstreamResponse(rawResponse string) (*model.Message, error) {
 		var sm StreamingMessage
 		err := json.Unmarshal([]byte(msg.Data), &sm)
 		if err != nil {
-			fmt.Printf("Error unmarshalling JSON: %v\n", err)
+			logger.WithError(err).Warn("unable to unmarshal streaming message JSON, skipping")
 			continue
 		}
 

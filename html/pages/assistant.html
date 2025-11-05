@@ -1,4 +1,5 @@
-<v-container v-if="assistantEnabled" fluid data-aid="assistant_screen">
+<v-container v-if="!paramsLoaded" fluid data-aid="assistant_loading_parameters"></v-container>
+<v-container v-else-if="assistantEnabled" fluid data-aid="assistant_screen">
 	<v-row>
 		<v-col cols="12" lg="3">
 			<h2 v-text="i18n.chat"></h2>
@@ -10,6 +11,7 @@
 					<v-expansion-panel-text>
 						<span data-aid="assistant_increase_max_context_threshold_toggle">
 							<v-switch
+								v-if="contextLimitLarge > contextLimitSmall"
 								id="increase-max-context-threshold"
 								v-model="increaseMaxContextThreshold"
 								density="compact"
@@ -52,13 +54,31 @@
 								color="primary">
 							</v-switch>
 						</span>
+						<span data-aid="assistant_model_select">
+							<v-select
+								:disabled="$root.loading"
+								v-model="currentModel"
+								@update:model-value="updateModelParams()"
+								:items="modelsMap.values()"
+								item-title="displayName"
+								item-value="id"
+								:hint="i18n.selectModel"
+								persistent-hint
+								variant="underlined"
+								prepend-icon="fa-microchip">
+							</v-select>
+						</span>
 					</v-expansion-panel-text>
 				</v-expansion-panel>
 			</v-expansion-panels>
 		</v-col>
 		<v-spacer></v-spacer>
 		<v-col cols="12" lg="2" align="end">
-			<h4 :data-aid="assistant_credits_remaining">{{ i18n.creditsRemaining }}: <span :class="creditsRemaining <= lowBalanceColorAlert ? 'text-error' : 'text-primary'">{{ formatCount(creditsRemaining) }}</span></h4>
+			<h4 data-aid="assistant_max_context">{{ i18n.maxContext }}: {{ increaseMaxContextThreshold ? formatCount(contextLimitLarge) : formatCount(contextLimitSmall) }}</h4>
+		</v-col>
+		<v-col cols="12" lg="2" align="end">
+			<h4 data-aid="assistant_credits_remaining">{{ i18n.creditsRemaining }}: <span :class="creditsRemaining <= lowBalanceColorAlert ? 'text-error' : 'text-primary'">{{ formatCount(creditsRemaining) }}</span></h4>
+			<span class="text-caption">{{ i18n.creditsSubjectToExpiration }}</span>
 		</v-col>
 	</v-row>
 	<v-row align="start">
@@ -111,7 +131,7 @@
 													<span class="font-weight-medium text-body-2">{{ toolUse.name }}</span>
 													<v-spacer></v-spacer>
 													<v-chip :color="getToolStatusColor(toolUse.status)" size="x-small" variant="flat">
-														{{ toolUse.status }}
+														{{ getToolStatusTitle(toolUse.status) }}
 													</v-chip>
 												</div>
 												
@@ -132,6 +152,7 @@
 															variant="flat"
 															@click="approveTool(toolUse)"
 															data-aid="assistant_tool_use_approve"
+															:disabled="!canChat"
 														>
 															<v-icon size="small" class="mr-1">fa-check</v-icon>
 															{{ i18n.approve }}
@@ -143,6 +164,7 @@
 															variant="flat"
 															@click="rejectTool(toolUse)"
 															data-aid="assistant_tool_use_reject"
+															:disabled="!canChat"
 														>
 															<v-icon size="small" class="mr-1">fa-times</v-icon>
 															{{ i18n.reject }}
@@ -232,24 +254,28 @@
 				</v-card-text>
 				<v-divider></v-divider>
 				<v-card-actions class="pa-4 d-flex align-center">
-					<v-text-field
+					<v-textarea
 						id="chat-input-field"
 						v-model="newMessage"
 						:placeholder="i18n.chatPlaceholder"
 						variant="outlined"
 						density="compact"
 						hide-details
+						auto-grow
+						rows="1"
+						max-rows="8"
 						autocomplete="off"
 						spellcheck="false"
 						class="chat-input flex-grow-1 mr-3"
-						@keyup.enter="sendMessage"
-						:disabled="isTyping"
+						@keydown.enter.exact.prevent="$refs.sendButton.$el.click()"
+						:disabled="isTyping || !canChat"
 						data-aid="assistant_chat_input"
-					></v-text-field>
+					></v-textarea>
 					<v-btn
 						id="chat-send-button"
+						ref="sendButton"
 						color="primary"
-						:disabled="!newMessage.trim() || isTyping"
+						:disabled="!newMessage.trim() || isTyping || !canChat"
 						@click="sendMessage"
 						data-aid="assistant_chat_send"
 						class="flex-shrink-0"
@@ -304,15 +330,29 @@
 		display: flex;
 		min-height: 50vh;
 		justify-content: center;
-	">{{ i18n.assistantDisabled }}</div>
+		gap: 8px;
+		flex-direction: column;
+	">
+	<div class="my-8" style="display: flex; gap: 8px; align-items: center;">
+		<div>{{ i18n.assistantDisabled }}</div>
+		<router-link v-if="$root.isUserAdmin()" :to="{name: 'config', query: {s: 'soc.config.server.client.assistant.enabled'}}" class="no-print" style="text-decoration: none; cursor: 'pointer'" data-aid="assistant_config_entry_enable">
+			<v-icon class="mr-2 theme-icon" :title="i18n.visitConfigEntry">fa-gear</v-icon>
+		</router-link>
+	</div>
+		<video src="../images/videos/onionai.mp4" autoplay muted loop controls style="width: 80%; max-width: 1408px;" data-aid="assistant_needs_enabled_video"></video>
+	</div>
 </v-container>
 
-<v-container v-else fluid data-aid="assistant_advertisment">
-	<div v-html="i18n.assistantAdvertisement" style="
+<v-container v-else>
+	<div style="
 		align-items: center;
-		margin: 0;
 		display: flex;
 		min-height: 50vh;
 		justify-content: center;
-	"></div>
+		gap: 8px;
+		flex-direction: column;
+	">
+	<div class="my-8" v-html="i18n.assistantUnavailable"></div>
+		<video src="../images/videos/onionai.mp4" autoplay muted loop controls style="width: 80%; max-width: 1408px;" data-aid="assistant_needs_pro_video"></video>
+	</div>
 </v-container>

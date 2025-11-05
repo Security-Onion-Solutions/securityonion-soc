@@ -195,6 +195,27 @@ test('component data initialization', () => {
   expect(comp.currentChatId).toBe(null);
   expect(comp.creditsRemaining).toBe(0);
   expect(comp.executingTools).toBeInstanceOf(Map);
+  expect(comp.contextLength).toBe(0);
+  expect(comp.increaseMaxContextThreshold).toBe(false);
+  expect(comp.restoreLastActive).toBe(false);
+  expect(comp.alwaysApproveReadRequests).toBe(false);
+  expect(comp.assistantEnabled).toBe(false);
+  expect(comp.isStreaming).toBe(false);
+  expect(comp.showChatHistory).toBe(true);
+  expect(comp.investigationMsg).toBe('');
+  expect(comp.contextLimitSmall).toBe(0);
+  expect(comp.contextLimitLarge).toBe(0);
+  expect(comp.thresholdColorRatioLow).toBe(0.5);
+  expect(comp.thresholdColorRatioMed).toBe(0.75);
+  expect(comp.thresholdColorRatioMax).toBe(1);
+  expect(comp.lowBalanceColorAlert).toBe(0);
+  expect(comp.availableModels).toEqual([]);
+  expect(comp.modelsMap).toBeInstanceOf(Map);
+  expect(comp.currentModel).toBe('');
+  expect(comp.activeStreamingSessionId).toBe(null);
+  expect(comp.autoScrollOnNextRender).toBe(false);
+  expect(comp.isPinnedToBottom).toBe(true);
+  expect(comp.canChat).toBe(true);
 });
 
 test('loadNewChatScreen initializes with welcome message', async () => {
@@ -255,10 +276,183 @@ test('generateChatId creates unique ID', () => {
   expect(id1).not.toBe(id2);
 });
 
+// Assistant initialization tests
+test('initAssistant sets assistantEnabled to true when enabled and licensed', async () => {
+  const mockParams = {
+    enabled: true,
+    investigationPrompt: 'Test investigation prompt',
+    contextLimitSmall: 200000,
+    contextLimitLarge: 1000000,
+    thresholdColorRatioLow: 0.5,
+    thresholdColorRatioMed: 0.75,
+    thresholdColorRatioMax: 1,
+    lowBalanceColorAlert: 500000,
+    availableModels: [
+      { id: 'test-model', displayName: "Test Model", contextLimitSmall: 200000, contextLimitLarge: 1000000, lowBalanceColorAlert: 500000 }
+    ]
+  };
+  comp.$root.isLicensed = jest.fn().mockReturnValue(true);
+  comp.$root.showDisclaimer = jest.fn();
+  comp.loadStoredChats = jest.fn().mockResolvedValue();
+  comp.handleRouteSessionId = jest.fn().mockResolvedValue();
+  comp.loadCredits = jest.fn().mockResolvedValue();
+  comp.$root.disclaimer = false;
+  
+  await comp.initAssistant(mockParams);
+  
+  expect(comp.assistantEnabled).toBe(true);
+  expect(comp.$root.isLicensed).toHaveBeenCalledWith('oai');
+  expect(comp.investigationMsg).toBe('Test investigation prompt');
+  expect(comp.contextLimitSmall).toBe(200000);
+  expect(comp.contextLimitLarge).toBe(1000000);
+  expect(comp.thresholdColorRatioLow).toBe(0.5);
+  expect(comp.thresholdColorRatioMed).toBe(0.75);
+  expect(comp.thresholdColorRatioMax).toBe(1);
+  expect(comp.lowBalanceColorAlert).toBe(500000);
+  expect(comp.loadStoredChats).toHaveBeenCalled();
+  expect(comp.handleRouteSessionId).toHaveBeenCalled();
+  expect(comp.loadCredits).toHaveBeenCalled();
+});
+
+test('initAssistant sets assistantEnabled to false when not enabled', async () => {
+  const mockParams = {
+    enabled: false,
+    availableModels: []
+  };
+  comp.$root.isLicensed = jest.fn().mockReturnValue(true);
+  comp.$root.showDisclaimer = jest.fn();
+  comp.loadStoredChats = jest.fn();
+  comp.handleRouteSessionId = jest.fn();
+  comp.loadCredits = jest.fn();
+  
+  await comp.initAssistant(mockParams);
+  
+  expect(comp.assistantEnabled).toBe(false);
+  expect(comp.$root.disclaimer).toBe(false);
+  expect(comp.loadStoredChats).not.toHaveBeenCalled();
+  expect(comp.handleRouteSessionId).not.toHaveBeenCalled();
+  expect(comp.loadCredits).not.toHaveBeenCalled();
+});
+
+test('initAssistant sets assistantEnabled to false when not licensed', async () => {
+  const mockParams = {
+    enabled: true,
+    availableModels: []
+  };
+  comp.$root.isLicensed = jest.fn().mockReturnValue(false);
+  comp.$root.showDisclaimer = jest.fn();
+  comp.loadStoredChats = jest.fn();
+  comp.handleRouteSessionId = jest.fn();
+  comp.loadCredits = jest.fn();
+  
+  await comp.initAssistant(mockParams);
+  
+  expect(comp.assistantEnabled).toBe(false);
+  expect(comp.$root.disclaimer).toBe(false);
+  expect(comp.loadStoredChats).not.toHaveBeenCalled();
+  expect(comp.handleRouteSessionId).not.toHaveBeenCalled();
+  expect(comp.loadCredits).not.toHaveBeenCalled();
+});
+
+test('initAssistant corrects contextLimitLarge when smaller than contextLimitSmall', async () => {
+  const mockParams = {
+    enabled: true,
+    availableModels: [
+      {
+        id: 'model-1',
+        displayName: "Model 1",
+        contextLimitSmall: 200000,
+        contextLimitLarge: 150000, // Smaller than contextLimitSmall - should be corrected
+        lowBalanceColorAlert: 500000
+      },
+      {
+        id: 'model-2',
+        displayName: "Model 2",
+        contextLimitSmall: 100000,
+        contextLimitLarge: 300000, // Larger than contextLimitSmall - should remain unchanged
+        lowBalanceColorAlert: 400000
+      },
+      {
+        id: 'model-3',
+        displayName: "Model 3",
+        contextLimitSmall: 250000,
+        contextLimitLarge: 250000, // Equal to contextLimitSmall - should remain unchanged
+        lowBalanceColorAlert: 600000
+      }
+    ]
+  };
+  
+  comp.$root.isLicensed = jest.fn().mockReturnValue(true);
+  comp.$root.showDisclaimer = jest.fn();
+  comp.loadStoredChats = jest.fn().mockResolvedValue();
+  comp.handleRouteSessionId = jest.fn().mockResolvedValue();
+  comp.loadCredits = jest.fn().mockResolvedValue();
+  comp.updateModelParams = jest.fn();
+  comp.$root.disclaimer = false;
+  
+  await comp.initAssistant(mockParams);
+  
+  // Check that the modelsMap was created correctly
+  expect(comp.modelsMap.size).toBe(3);
+  expect(comp.modelsMap.has('model-1')).toBe(true);
+  expect(comp.modelsMap.has('model-2')).toBe(true);
+  expect(comp.modelsMap.has('model-3')).toBe(true);
+  
+  // Check that contextLimitLarge was corrected for model-1
+  const model1 = comp.modelsMap.get('model-1');
+  expect(model1.contextLimitSmall).toBe(200000);
+  expect(model1.contextLimitLarge).toBe(200000); // Should be corrected to match contextLimitSmall
+  
+  // Check that contextLimitLarge was not changed for model-2 (already larger)
+  const model2 = comp.modelsMap.get('model-2');
+  expect(model2.contextLimitSmall).toBe(100000);
+  expect(model2.contextLimitLarge).toBe(300000); // Should remain unchanged
+  
+  // Check that contextLimitLarge was not changed for model-3 (equal)
+  const model3 = comp.modelsMap.get('model-3');
+  expect(model3.contextLimitSmall).toBe(250000);
+  expect(model3.contextLimitLarge).toBe(250000); // Should remain unchanged
+});
+
+test('initAssistant handles empty availableModels array', async () => {
+  const mockParams = {
+    enabled: true,
+    availableModels: [] // Empty array
+  };
+  
+  comp.$root.isLicensed = jest.fn().mockReturnValue(true);
+  comp.$root.showDisclaimer = jest.fn();
+  comp.loadStoredChats = jest.fn().mockResolvedValue();
+  comp.handleRouteSessionId = jest.fn().mockResolvedValue();
+  comp.loadCredits = jest.fn().mockResolvedValue();
+  comp.updateModelParams = jest.fn();
+  comp.$root.disclaimer = false;
+  
+  await comp.initAssistant(mockParams);
+  
+  // Check that modelsMap is empty and no correction logic was executed
+  expect(comp.modelsMap.size).toBe(0);
+  expect(comp.currentModel).toBe(''); // Should remain empty
+  expect(comp.updateModelParams).toHaveBeenCalled();
+});
+
+test('handleRouteSessionId returns early when assistantEnabled is false', async () => {
+  comp.assistantEnabled = false;
+  comp.$route.params.sessionId = fakeSessionId;
+  comp.loadChatFromBackend = jest.fn();
+  comp.clearStreamingStates = jest.fn();
+  
+  await comp.handleRouteSessionId();
+  
+  expect(comp.clearStreamingStates).toHaveBeenCalled();
+  expect(comp.loadChatFromBackend).not.toHaveBeenCalled();
+});
+
 // Session management tests
 test('handleRouteSessionId with existing session', async () => {
   comp.$route.params.sessionId = fakeSessionId;
   comp.loadChatFromBackend = jest.fn().mockResolvedValue();
+  comp.assistantEnabled = true;
   
   await comp.handleRouteSessionId();
   
@@ -268,6 +462,7 @@ test('handleRouteSessionId with existing session', async () => {
 test('handleRouteSessionId with non-existent session', async () => {
   comp.$route.params.sessionId = fakeSessionId;
   comp.loadChatFromBackend = jest.fn().mockRejectedValue(new Error('Session not found'));
+  comp.assistantEnabled = true;
   
   await comp.handleRouteSessionId();
   
@@ -434,6 +629,8 @@ test('sendMessage with insufficient credits', async () => {
   comp.newMessage = 'Test message';
   comp.creditsRemaining = 0;
   comp.assistantEnabled = true;
+  comp.canChat = true;
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
   
   await comp.sendMessage();
   
@@ -461,6 +658,8 @@ test('sendMessage creates session ID and updates URL', async () => {
   comp.loadStoredChats = jest.fn().mockResolvedValue();
   comp.scrollToBottom = jest.fn();
   comp.assistantEnabled = true;
+  comp.canChat = true;
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
   
   await comp.sendMessage();
   
@@ -485,11 +684,158 @@ test('sendMessage handles API error', async () => {
   comp.callAIAPI = jest.fn().mockRejectedValue(new Error('API failed'));
   comp.scrollToBottom = jest.fn();
   comp.assistantEnabled = true;
+  comp.canChat = true;
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
   
   await comp.sendMessage();
   
   expect(showErrorMock).toHaveBeenCalledWith('Failed to get AI response: API failed');
   expect(comp.isTyping).toBe(false);
+});
+
+// Context length and model management tests
+test('calculateContextFromUsage calculates correct context length', () => {
+  const usage1 = { input_tokens: 100, output_tokens: 50 };
+  const usage2 = { input_tokens: 200, output_tokens: 75 };
+  const usage3 = null;
+  const usage4 = { input_tokens: 150 }; // Missing output_tokens
+  const usage5 = { output_tokens: 100 }; // Missing input_tokens
+  
+  expect(comp.calculateContextFromUsage(usage1)).toBe(150);
+  expect(comp.calculateContextFromUsage(usage2)).toBe(275);
+  expect(comp.calculateContextFromUsage(usage3)).toBe(0);
+  expect(comp.calculateContextFromUsage(usage4)).toBe(150);
+  expect(comp.calculateContextFromUsage(usage5)).toBe(100);
+});
+
+test('updateContextLength updates total context length', () => {
+  comp.contextLength = 100;
+  const usage1 = { input_tokens: 50, output_tokens: 25 };
+  const usage2 = { input_tokens: 30, output_tokens: 20 };
+  
+  comp.updateContextLength(usage1);
+  expect(comp.contextLength).toBe(175); // 100 + 50 + 25
+  
+  comp.updateContextLength(usage2);
+  expect(comp.contextLength).toBe(225); // 175 + 30 + 20
+  
+  comp.updateContextLength(null);
+  expect(comp.contextLength).toBe(225); // Should remain unchanged
+});
+
+test('checkContextLimitReached returns false when under limit', () => {
+  comp.contextLength = 50000;
+  comp.contextLimitSmall = 100000;
+  comp.contextLimitLarge = 200000;
+  comp.increaseMaxContextThreshold = false;
+  
+  const result = comp.checkContextLimitReached();
+  
+  expect(result).toBe(false);
+});
+
+test('checkContextLimitReached returns true when over small limit', () => {
+  const showErrorMock = mockShowError();
+  comp.contextLength = 150000;
+  comp.contextLimitSmall = 100000;
+  comp.contextLimitLarge = 200000;
+  comp.increaseMaxContextThreshold = false;
+  comp.formatCount = jest.fn().mockReturnValue('100,000');
+  
+  const result = comp.checkContextLimitReached();
+  
+  expect(result).toBe(true);
+  expect(showErrorMock).toHaveBeenCalledWith(expect.stringContaining('100,000+ tokens'));
+});
+
+test('checkContextLimitReached uses large limit when threshold increased', () => {
+  comp.contextLength = 150000;
+  comp.contextLimitSmall = 100000;
+  comp.contextLimitLarge = 200000;
+  comp.increaseMaxContextThreshold = true;
+  
+  const result = comp.checkContextLimitReached();
+  
+  expect(result).toBe(false); // Should be under large limit
+});
+
+test('checkContextLimitReached returns true when over large limit', () => {
+  const showErrorMock = mockShowError();
+  comp.contextLength = 250000;
+  comp.contextLimitSmall = 100000;
+  comp.contextLimitLarge = 200000;
+  comp.increaseMaxContextThreshold = true;
+  comp.formatCount = jest.fn().mockReturnValue('200,000');
+  
+  const result = comp.checkContextLimitReached();
+  
+  expect(result).toBe(true);
+  expect(showErrorMock).toHaveBeenCalledWith(expect.stringContaining('200,000+ tokens'));
+});
+
+test('updateModelParams updates context limits and balance alert', () => {
+  comp.currentModel = 'test-model';
+  comp.modelsMap = new Map([
+    ['test-model', {
+      contextLimitSmall: 150000,
+      contextLimitLarge: 800000,
+      lowBalanceColorAlert: 600000
+    }]
+  ]);
+  
+  comp.updateModelParams();
+  
+  expect(comp.contextLimitSmall).toBe(150000);
+  expect(comp.contextLimitLarge).toBe(800000);
+  expect(comp.lowBalanceColorAlert).toBe(600000);
+});
+
+test('updateModelParams handles missing current model', () => {
+  comp.currentModel = '';
+  comp.modelsMap = new Map();
+  comp.contextLimitSmall = 100000; // Initial value
+  
+  comp.updateModelParams();
+  
+  expect(comp.contextLimitSmall).toBe(100000); // Should remain unchanged
+});
+
+test('updateModelParams handles empty models map', () => {
+  comp.currentModel = 'nonexistent-model';
+  comp.modelsMap = new Map();
+  comp.contextLimitSmall = 100000; // Initial value
+  
+  comp.updateModelParams();
+  
+  expect(comp.contextLimitSmall).toBe(100000); // Should remain unchanged
+});
+
+test('getContextColor returns correct color classes', () => {
+  comp.contextLimitSmall = 100000;
+  comp.contextLimitLarge = 200000;
+  comp.increaseMaxContextThreshold = false;
+  comp.thresholdColorRatioLow = 0.5;
+  comp.thresholdColorRatioMed = 0.75;
+  comp.thresholdColorRatioMax = 1.0;
+  
+  expect(comp.getContextColor(25000)).toBe('text-green'); // Under low threshold
+  expect(comp.getContextColor(60000)).toBe('text-yellow'); // Between low and med
+  expect(comp.getContextColor(85000)).toBe('text-amber darken-1'); // Between med and max
+  expect(comp.getContextColor(100000)).toBe('text-red darken-1'); // At max threshold
+});
+
+test('getContextColor uses large limit when threshold increased', () => {
+  comp.contextLimitSmall = 100000;
+  comp.contextLimitLarge = 200000;
+  comp.increaseMaxContextThreshold = true;
+  comp.thresholdColorRatioLow = 0.5;
+  comp.thresholdColorRatioMed = 0.75;
+  comp.thresholdColorRatioMax = 1.0;
+  
+  expect(comp.getContextColor(50000)).toBe('text-green'); // Under low threshold of large limit
+  expect(comp.getContextColor(120000)).toBe('text-yellow'); // Between low and med of large limit
+  expect(comp.getContextColor(170000)).toBe('text-amber darken-1'); // Between med and max of large limit
+  expect(comp.getContextColor(200000)).toBe('text-red darken-1'); // At max of large limit
 });
 
 // Tool execution tests
@@ -513,10 +859,21 @@ test('getToolStatusColor returns correct colors', () => {
   expect(comp.getToolStatusColor('unknown')).toBe('info');
 });
 
+test('getToolStatusTitle returns correct titles', () => {
+  expect(comp.getToolStatusTitle('preparing')).toBe(comp.i18n.preparing);
+  expect(comp.getToolStatusTitle('pending_approval')).toBe(comp.i18n.pendingApproval);
+  expect(comp.getToolStatusTitle('executing')).toBe(comp.i18n.executing);
+  expect(comp.getToolStatusTitle('completed')).toBe(comp.i18n.completed);
+  expect(comp.getToolStatusTitle('error')).toBe(comp.i18n.error);
+  expect(comp.getToolStatusTitle('rejected')).toBe(comp.i18n.rejected);
+  expect(comp.getToolStatusTitle('unknown')).toBe(comp.i18n.statusUnknown);
+});
+
 test('approveTool executes tool', async () => {
   const toolUse = { ...fakeToolUse };
   comp.executeTool = jest.fn().mockResolvedValue();
   comp.scrollToBottom = jest.fn();
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
   
   await comp.approveTool(toolUse);
   
@@ -530,6 +887,7 @@ test('approveTool handles execution error', async () => {
   const toolUse = { ...fakeToolUse };
   comp.executeTool = jest.fn().mockRejectedValue(new Error('Execution failed'));
   comp.scrollToBottom = jest.fn();
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
   
   await comp.approveTool(toolUse);
   
@@ -541,6 +899,7 @@ test('rejectTool marks as rejected', async () => {
   const toolUse = { ...fakeToolUse };
   comp.scrollToBottom = jest.fn();
   comp.callAIAPI = jest.fn().mockResolvedValue();
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
   
   await comp.rejectTool(toolUse);
   
@@ -570,6 +929,7 @@ test('executeTool makes correct API request', async () => {
   };
   const mockPost = mockPapi('post', mockResponse);
   comp.loadCredits = jest.fn().mockResolvedValue();
+  comp.currentModel = 'test-model';
   mockPapi('get', { data: [] });
   
   await comp.executeTool(toolUse);
@@ -577,7 +937,8 @@ test('executeTool makes correct API request', async () => {
   expect(mockPost).toHaveBeenCalledWith('/assistant/tool/query_events', {
     sessionId: fakeSessionId,
     toolUseId: toolUse.id,
-    params: toolUse.input  
+    params: toolUse.input,
+    model: 'test-model',
   },
   {
     adapter: 'fetch',
@@ -969,12 +1330,14 @@ test('callAIAPI makes correct API request', async () => {
   };
   const mockPost = mockPapi('post', mockResponse);
   comp.loadCredits = jest.fn().mockResolvedValue();
+  comp.currentModel = 'test-model';
   
   await comp.callAIAPI('Test message');
   
   expect(mockPost).toHaveBeenCalledWith('/assistant/chat', {
       msg: 'Test message',
-      sessionId: fakeSessionId
+      sessionId: fakeSessionId,
+      model: 'test-model',
   }, {
     adapter: 'fetch',
     headers: {
@@ -1476,6 +1839,7 @@ test('handleRouteSessionId detects investigation session from query parameter', 
   comp.loadChatFromBackend = jest.fn().mockRejectedValue(new Error('Session not found'));
   comp.startInvestigationSession = jest.fn();
   comp.saveCurrentChatId = jest.fn();
+  comp.assistantEnabled = true;
   
   // Mock $root methods needed for handleRouteSessionId
   comp.$root.startLoading = jest.fn();
@@ -1497,6 +1861,7 @@ test('handleRouteSessionId handles non-investigation session with existing messa
   comp.loadNewChatScreen = jest.fn();
   comp.saveCurrentChatId = jest.fn();
   comp.messages = [fakeMessage, fakeAssistantMessage]; // More than 1 message
+  comp.assistantEnabled = true;
   
   await comp.handleRouteSessionId();
   
@@ -2083,7 +2448,7 @@ test('convertBackendMessagesToFrontend handles multiple tool_use blocks at end o
           {
             type: 'tool_use',
             id: 'tool_2',
-            name: 'get_playbook_questions',
+            name: 'get_playbooks',
             input: { alert_id: 'alert_123' }
           }
         ]
@@ -2559,6 +2924,7 @@ test('saveLocalSettings saves all assistant settings with correct defaults', () 
   comp.restoreLastActive = true;
   comp.alwaysApproveReadRequests = true;
   comp.showChatHistory = false; // Different from default
+  comp.currentModel = 'test-model';
   
   // Mock saveSetting to track calls
   comp.saveSetting = jest.fn();
@@ -2569,7 +2935,8 @@ test('saveLocalSettings saves all assistant settings with correct defaults', () 
   expect(comp.saveSetting).toHaveBeenCalledWith('restoreLastActive', true, false);
   expect(comp.saveSetting).toHaveBeenCalledWith('alwaysApproveReadRequests', true, false);
   expect(comp.saveSetting).toHaveBeenCalledWith('showChatHistory', false, true);
-  expect(comp.saveSetting).toHaveBeenCalledTimes(4);
+  expect(comp.saveSetting).toHaveBeenCalledWith('currentModel', 'test-model', '');
+  expect(comp.saveSetting).toHaveBeenCalledTimes(5);
 });
 
 test('saveLocalSettings saves default values correctly', () => {
@@ -3522,3 +3889,754 @@ test('scrollToBottomSettled handles multiple rapid height changes', async () => 
   
   jest.useRealTimers();
 });
+
+test('parseJsonChunk parses valid JSON successfully', () => {
+  const validJson = '{"type": "message_start", "data": "test"}';
+  
+  const result = comp.parseJsonChunk(validJson);
+  
+  expect(result.success).toBe(true);
+  expect(result.data).toEqual({ type: 'message_start', data: 'test' });
+  expect(result.isPartial).toBe(null);
+});
+
+test('parseJsonChunk handles partial JSON', () => {
+  const partialJson = '{"type": "message_start", "data"';
+  
+  const result = comp.parseJsonChunk(partialJson);
+  
+  expect(result.success).toBe(false);
+  expect(result.data).toBe(null);
+  expect(result.isPartial).toBe(partialJson);
+});
+
+test('parseJsonChunk handles concatenated JSON objects', () => {
+  const concatenatedJson = '{"type": "start"}{"type": "end"}';
+  
+  const result = comp.parseJsonChunk(concatenatedJson);
+  
+  expect(result.success).toBe(true);
+  expect(Array.isArray(result.data)).toBe(true);
+  expect(result.data).toEqual(['{"type": "start"}', '{"type": "end"}']);
+  expect(result.isPartial).toBe(null);
+});
+
+test('parseJsonChunk handles concatenated JSON with partial remainder', () => {
+  const mixedJson = '{"type": "complete"}{"type": "partial", "data"';
+  
+  const result = comp.parseJsonChunk(mixedJson);
+  
+  expect(result.success).toBe(true);
+  expect(Array.isArray(result.data)).toBe(true);
+  expect(result.data).toEqual(['{"type": "complete"}']);
+  expect(result.isPartial).toBe('{"type": "partial", "data"');
+});
+
+test('parseJsonChunk handles empty string', () => {
+  const result = comp.parseJsonChunk('');
+  
+  expect(result.success).toBe(false);
+  expect(result.data).toBe(null);
+  expect(result.isPartial).toBe('');
+});
+
+test('parseJsonChunk handles malformed JSON', () => {
+  const malformedJson = '{"type": "invalid", "data":}'; // Missing value after colon
+  
+  const result = comp.parseJsonChunk(malformedJson);
+  
+  expect(result.success).toBe(true);
+  expect(Array.isArray(result.data)).toBe(true);
+  expect(result.data).toEqual(['{"type": "invalid", "data":}']);
+  expect(result.isPartial).toBe(null);
+});
+
+test('processStreamingChunks processes SSE data correctly', () => {
+  const sseData = 'data: {"type": "test1"}\n\ndata: {"type": "test2"}\n\n';
+  const chunks = [];
+  const partial = false;
+  
+  const result = comp.processStreamingChunks(sseData, chunks, partial);
+  
+  expect(result.chunks).toEqual(['{"type": "test1"}', '{"type": "test2"}']);
+  expect(result.partial).toBe(false);
+});
+
+test('processStreamingChunks handles partial data prepending', () => {
+  const sseData = 'data: {"complete": true}\n\n';
+  const chunks = ['{"partial":'];
+  const partial = true;
+  
+  const result = comp.processStreamingChunks(sseData, chunks, partial);
+  
+  expect(result.chunks[0]).toBe('{"partial":{"complete": true}');
+  expect(result.partial).toBe(false);
+});
+
+test('processStreamingChunks filters empty chunks', () => {
+  const sseData = 'data: {"type": "test"}\n\n\n\ndata: {"type": "test2"}\n\n';
+  const chunks = [];
+  const partial = false;
+  
+  const result = comp.processStreamingChunks(sseData, chunks, partial);
+  
+  expect(result.chunks).toEqual(['{"type": "test"}', '{"type": "test2"}']);
+});
+
+test('isNearBottom returns true when near bottom', () => {
+  const container = {
+    scrollHeight: 1000,
+    clientHeight: 400,
+    scrollTop: 580 // 1000 - 400 - 580 = 20, which is <= 48
+  };
+  
+  const result = comp.isNearBottom(container);
+  
+  expect(result).toBe(true);
+});
+
+test('isNearBottom returns false when not near bottom', () => {
+  const container = {
+    scrollHeight: 1000,
+    clientHeight: 400,
+    scrollTop: 500 // 1000 - 400 - 500 = 100, which is > 48
+  };
+  
+  const result = comp.isNearBottom(container);
+  
+  expect(result).toBe(false);
+});
+
+test('isNearBottom uses custom threshold', () => {
+  const container = {
+    scrollHeight: 1000,
+    clientHeight: 400,
+    scrollTop: 580 // 1000 - 400 - 580 = 20
+  };
+  
+  const result = comp.isNearBottom(container, 10); // Custom threshold of 10px
+  
+  expect(result).toBe(false); // 20 > 10
+});
+
+test('forceScrollBottom sets scrollTop to scrollHeight', () => {
+  const container = {
+    scrollHeight: 1000,
+    scrollTop: 0
+  };
+  
+  comp.forceScrollBottom(container);
+  
+  expect(container.scrollTop).toBe(1000);
+});
+
+test('onChatScroll updates isPinnedToBottom based on scroll position', () => {
+  const mockContainer = {
+    scrollHeight: 1000,
+    clientHeight: 400,
+    scrollTop: 596 // Near bottom (within 4px)
+  };
+  const mockEvent = { target: mockContainer };
+  
+  comp.onChatScroll(mockEvent);
+  
+  expect(comp.isPinnedToBottom).toBe(true);
+});
+
+test('onChatScroll sets isPinnedToBottom to false when not near bottom', () => {
+  const mockContainer = {
+    scrollHeight: 1000,
+    clientHeight: 400,
+    scrollTop: 500 // Not near bottom
+  };
+  const mockEvent = { target: mockContainer };
+  
+  comp.onChatScroll(mockEvent);
+  
+  expect(comp.isPinnedToBottom).toBe(false);
+});
+
+test('scrollIfPinned scrolls when pinned to bottom', () => {
+  comp.isPinnedToBottom = true;
+  comp.scrollToBottom = jest.fn();
+  
+  comp.scrollIfPinned();
+  
+  expect(comp.scrollToBottom).toHaveBeenCalled();
+});
+
+test('scrollIfPinned does not scroll when not pinned to bottom', () => {
+  comp.isPinnedToBottom = false;
+  comp.scrollToBottom = jest.fn();
+  
+  comp.scrollIfPinned();
+  
+  expect(comp.scrollToBottom).not.toHaveBeenCalled();
+});
+
+// Streaming session management tests
+test('clearStreamingStates resets streaming-related state', () => {
+  comp.activeStreamingSessionId = 'test-session';
+  comp.isTyping = true;
+  comp.isStreaming = true;
+  
+  comp.clearStreamingStates();
+  
+  expect(comp.activeStreamingSessionId).toBe(null);
+  expect(comp.isTyping).toBe(false);
+  expect(comp.isStreaming).toBe(false);
+});
+
+test('checkIfDeleted sets canChat to false when session not in history', () => {
+  const sessionId = 'missing-session';
+  comp.chatHistory = [
+    { sessionId: 'session1' },
+    { sessionId: 'session2' }
+  ];
+  comp.canChat = true;
+  const showWarningMock = jest.fn();
+  comp.$root.showWarning = showWarningMock;
+  
+  comp.checkIfDeleted(sessionId);
+  
+  expect(comp.canChat).toBe(false);
+  expect(showWarningMock).toHaveBeenCalledWith(comp.i18n.assistantChatIsDeleted);
+});
+
+test('checkIfDeleted sets canChat to true when session exists in history', () => {
+  const sessionId = 'existing-session';
+  comp.chatHistory = [
+    { sessionId: 'session1' },
+    { sessionId: 'existing-session' },
+    { sessionId: 'session2' }
+  ];
+  comp.canChat = false;
+  
+  comp.checkIfDeleted(sessionId);
+  
+  expect(comp.canChat).toBe(true);
+});
+
+// Auto-approval functionality tests
+test('shouldAutoApproveTool returns true for query_events when setting enabled', () => {
+  comp.alwaysApproveReadRequests = true;
+  
+  const result = comp.shouldAutoApproveTool('query_events');
+  
+  expect(result).toBe(true);
+});
+
+test('shouldAutoApproveTool returns true for get_playbooks when setting enabled', () => {
+  comp.alwaysApproveReadRequests = true;
+  
+  const result = comp.shouldAutoApproveTool('get_playbooks');
+  
+  expect(result).toBe(true);
+});
+
+test('shouldAutoApproveTool returns false for other tools when setting enabled', () => {
+  comp.alwaysApproveReadRequests = true;
+  
+  const result = comp.shouldAutoApproveTool('other_tool');
+  
+  expect(result).toBe(false);
+});
+
+test('shouldAutoApproveTool returns false when setting disabled', () => {
+  comp.alwaysApproveReadRequests = false;
+  
+  expect(comp.shouldAutoApproveTool('query_events')).toBe(false);
+  expect(comp.shouldAutoApproveTool('get_playbooks')).toBe(false);
+  expect(comp.shouldAutoApproveTool('other_tool')).toBe(false);
+});
+
+// Enhanced sendMessage tests for new functionality
+test('sendMessage returns early when canChat is false', async () => {
+  comp.newMessage = 'Test message';
+  comp.canChat = false;
+  comp.assistantEnabled = true;
+  comp.creditsRemaining = 100;
+  comp.callAIAPI = jest.fn();
+  
+  await comp.sendMessage();
+  
+  expect(comp.callAIAPI).not.toHaveBeenCalled();
+  expect(comp.newMessage).toBe('Test message'); // Should not clear message
+});
+
+test('sendMessage checks context limit before proceeding', async () => {
+  comp.newMessage = 'Test message';
+  comp.canChat = true;
+  comp.assistantEnabled = true;
+  comp.creditsRemaining = 100;
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(true);
+  comp.callAIAPI = jest.fn();
+  
+  await comp.sendMessage();
+  
+  expect(comp.checkContextLimitReached).toHaveBeenCalled();
+  expect(comp.callAIAPI).not.toHaveBeenCalled();
+});
+
+test('sendMessage clears welcome message when starting first real conversation', async () => {
+  const welcomeMessage = {
+    role: 'assistant',
+    content: comp.i18n.assistantWelcomeMessage,
+    timestamp: new Date().toISOString()
+  };
+  comp.messages = [welcomeMessage]; // Only welcome message
+  comp.newMessage = 'Test message';
+  comp.canChat = true;
+  comp.assistantEnabled = true;
+  comp.creditsRemaining = 100;
+  comp.currentChatId = 'test-session';
+  comp.callAIAPI = jest.fn().mockResolvedValue();
+  comp.loadStoredChats = jest.fn().mockResolvedValue();
+  comp.scrollToBottom = jest.fn();
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
+  
+  await comp.sendMessage();
+  
+  expect(comp.messages).toHaveLength(1); // Should clear welcome message and add user message
+  expect(comp.messages[0].role).toBe('user');
+  expect(comp.messages[0].content).toBe('Test message');
+});
+
+// Enhanced streaming functionality tests
+test('callAIAPI sets activeStreamingSessionId at start', async () => {
+  comp.currentChatId = 'test-session';
+  comp.loadCredits = jest.fn().mockResolvedValue();
+  
+  const mockResponse = {
+    data: {
+      pipeThrough: jest.fn().mockReturnValue({
+        getReader: jest.fn().mockReturnValue({
+          read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
+            .mockResolvedValueOnce({ done: true })
+        })
+      })
+    }
+  };
+  mockPapi('post', mockResponse);
+  
+  await comp.callAIAPI('Test message');
+  
+  expect(comp.activeStreamingSessionId).toBe(null); // Should be cleared after completion
+});
+
+test('callAIAPI handles session switching during streaming', async () => {
+  comp.currentChatId = 'session1';
+  comp.activeStreamingSessionId = 'session1';
+  comp.loadCredits = jest.fn().mockResolvedValue();
+  comp.scrollIfPinned = jest.fn();
+  
+  const messageStartData = JSON.stringify({ type: 'message_start' });
+  const mockResponse = {
+    data: {
+      pipeThrough: jest.fn().mockReturnValue({
+        getReader: jest.fn().mockReturnValue({
+          read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: `data: ${messageStartData}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
+            .mockResolvedValueOnce({ done: true })
+        })
+      })
+    }
+  };
+  mockPapi('post', mockResponse);
+  
+  // Simulate session change during streaming
+  setTimeout(() => {
+    comp.currentChatId = 'session2';
+  }, 10);
+  
+  await comp.callAIAPI('Test message');
+  
+  expect(comp.messages).toHaveLength(1); // Should still process for original session
+});
+
+// Enhanced tool execution with session management
+test('executeTool handles background execution for different session', async () => {
+  const toolUse = {
+    id: 'tool_123',
+    name: 'query_events',
+    input: { query: 'test' },
+    sessionId: 'background-session'
+  };
+  comp.currentChatId = 'current-session'; // Different from tool's session
+  comp.loadCredits = jest.fn().mockResolvedValue();
+  
+  const mockResponse = {
+    data: {
+      pipeThrough: jest.fn().mockReturnValue({
+        getReader: jest.fn().mockReturnValue({
+          read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
+            .mockResolvedValueOnce({ done: true })
+        })
+      })
+    }
+  };
+  mockPapi('post', mockResponse);
+  
+  // Set initial status to executing since executeTool expects the tool to already be approved
+  toolUse.status = 'executing';
+  
+  await comp.executeTool(toolUse);
+  
+  expect(toolUse.status).toBe('executing'); // Should still update tool status
+  expect(comp.messages).toHaveLength(0); // Should not add to current session's messages
+});
+
+// Enhanced auto-scroll functionality
+test('loadNewChatScreen resets context length', async () => {
+  comp.contextLength = 5000;
+  
+  await comp.loadNewChatScreen();
+  
+  expect(comp.contextLength).toBe(0);
+});
+
+test('startNewChat sets canChat to true', async () => {
+  comp.canChat = false;
+  comp.saveCurrentChat = jest.fn().mockResolvedValue();
+  comp.clearStreamingStates = jest.fn();
+  comp.saveCurrentChatId = jest.fn();
+  comp.loadNewChatScreen = jest.fn();
+  
+  await comp.startNewChat();
+  
+  expect(comp.canChat).toBe(true);
+});
+
+// handleToolExecutionContentBlockStop method tests
+test('handleToolExecutionContentBlockStop auto-approves chained tool for query_events', () => {
+  const sessionId = 'test-session';
+  comp.currentChatId = sessionId;
+  comp.alwaysApproveReadRequests = true;
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
+  comp.executeTool = jest.fn();
+  comp.scrollIfPinned = jest.fn();
+  comp.$nextTick = jest.fn((callback) => callback && callback());
+  
+  // Set up a chained tool use
+  const chainedToolUse = {
+    id: 'chained_tool_456',
+    name: 'query_events',
+    inputJson: '{"oql_query": "event.module: suricata"}',
+    status: 'preparing'
+  };
+  comp.executingTools.set(`block_0_${sessionId}`, chainedToolUse);
+  
+  const contentBlockStopEvent = {
+    index: 0,
+    usage: { input_tokens: 10, output_tokens: 15 }
+  };
+  
+  const result = comp.handleToolExecutionContentBlockStop(contentBlockStopEvent, sessionId);
+  
+  expect(chainedToolUse.input).toEqual({ oql_query: "event.module: suricata" });
+  expect(chainedToolUse.status).toBe('executing');
+  expect(chainedToolUse.approved).toBe(true);
+  expect(comp.$nextTick).toHaveBeenCalled();
+  expect(comp.executeTool).toHaveBeenCalledWith(chainedToolUse);
+  expect(result).toEqual({ input_tokens: 10, output_tokens: 15 });
+});
+
+test('handleToolExecutionContentBlockStop auto-approves chained tool for get_playbooks', () => {
+  const sessionId = 'test-session';
+  comp.currentChatId = sessionId;
+  comp.alwaysApproveReadRequests = true;
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
+  comp.executeTool = jest.fn();
+  comp.scrollIfPinned = jest.fn();
+  comp.$nextTick = jest.fn((callback) => callback && callback());
+  
+  // Set up a chained tool use
+  const chainedToolUse = {
+    id: 'chained_tool_789',
+    name: 'get_playbooks',
+    inputJson: '{"alert_id": "alert_123"}',
+    status: 'preparing'
+  };
+  comp.executingTools.set(`block_1_${sessionId}`, chainedToolUse);
+  
+  const contentBlockStopEvent = {
+    index: 1
+  };
+  
+  const result = comp.handleToolExecutionContentBlockStop(contentBlockStopEvent, sessionId);
+  
+  expect(chainedToolUse.input).toEqual({ alert_id: "alert_123" });
+  expect(chainedToolUse.status).toBe('executing');
+  expect(chainedToolUse.approved).toBe(true);
+  expect(comp.$nextTick).toHaveBeenCalled();
+  expect(comp.executeTool).toHaveBeenCalledWith(chainedToolUse);
+  expect(result).toBe(null);
+});
+
+test('handleToolExecutionContentBlockStop sets pending_approval for non-auto-approved tools', () => {
+  const sessionId = 'test-session';
+  comp.currentChatId = sessionId;
+  comp.alwaysApproveReadRequests = true; // Enabled but tool not in auto-approve list
+  comp.scrollIfPinned = jest.fn();
+  
+  // Set up a chained tool use for a non-auto-approved tool
+  const chainedToolUse = {
+    id: 'chained_tool_other',
+    name: 'other_tool',
+    inputJson: '{"param": "value"}',
+    status: 'preparing'
+  };
+  comp.executingTools.set(`block_0_${sessionId}`, chainedToolUse);
+  
+  const contentBlockStopEvent = {
+    index: 0
+  };
+  
+  const result = comp.handleToolExecutionContentBlockStop(contentBlockStopEvent, sessionId);
+  
+  expect(chainedToolUse.input).toEqual({ param: "value" });
+  expect(chainedToolUse.status).toBe('pending_approval');
+  expect(chainedToolUse.approved).toBe(null);
+  expect(result).toBe(null);
+});
+
+test('handleToolExecutionContentBlockStop returns early when context limit reached', () => {
+  const sessionId = 'test-session';
+  comp.currentChatId = sessionId;
+  comp.alwaysApproveReadRequests = true;
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(true); // Context limit reached
+  comp.executeTool = jest.fn();
+  
+  // Set up a chained tool use
+  const chainedToolUse = {
+    id: 'chained_tool_limit',
+    name: 'query_events',
+    inputJson: '{"query": "test"}',
+    status: 'preparing'
+  };
+  comp.executingTools.set(`block_0_${sessionId}`, chainedToolUse);
+  
+  const contentBlockStopEvent = {
+    index: 0
+  };
+  
+  const result = comp.handleToolExecutionContentBlockStop(contentBlockStopEvent, sessionId);
+  
+  expect(comp.checkContextLimitReached).toHaveBeenCalled();
+  expect(comp.executeTool).not.toHaveBeenCalled();
+  expect(result).toBeUndefined();
+});
+
+test('handleToolExecutionContentBlockStop handles JSON parsing error', () => {
+  const sessionId = 'test-session';
+  comp.currentChatId = sessionId;
+  comp.scrollIfPinned = jest.fn();
+  
+  // Set up a chained tool use with invalid JSON
+  const chainedToolUse = {
+    id: 'chained_tool_invalid',
+    name: 'test_tool',
+    inputJson: '{"invalid": json}', // Invalid JSON
+    status: 'preparing'
+  };
+  comp.executingTools.set(`block_0_${sessionId}`, chainedToolUse);
+  
+  const contentBlockStopEvent = {
+    index: 0
+  };
+  
+  const result = comp.handleToolExecutionContentBlockStop(contentBlockStopEvent, sessionId);
+  
+  expect(chainedToolUse.status).toBe('error');
+  expect(chainedToolUse.error).toContain('Failed to parse tool input');
+  expect(result).toBe(null);
+});
+
+test('handleToolExecutionContentBlockStop handles missing tool use', () => {
+  const sessionId = 'test-session';
+  comp.currentChatId = sessionId;
+  
+  const contentBlockStopEvent = {
+    index: 0
+  };
+  
+  // No tool use set up in executingTools
+  const result = comp.handleToolExecutionContentBlockStop(contentBlockStopEvent, sessionId);
+  
+  expect(result).toBe(null);
+});
+
+test('handleToolExecutionContentBlockStop handles tool use not in preparing status', () => {
+  const sessionId = 'test-session';
+  comp.currentChatId = sessionId;
+  
+  // Set up a chained tool use that's not in preparing status
+  const chainedToolUse = {
+    id: 'chained_tool_completed',
+    name: 'test_tool',
+    inputJson: '{"param": "value"}',
+    status: 'completed' // Not preparing
+  };
+  comp.executingTools.set(`block_0_${sessionId}`, chainedToolUse);
+  
+  const contentBlockStopEvent = {
+    index: 0,
+    usage: { input_tokens: 5, output_tokens: 10 }
+  };
+  
+  const result = comp.handleToolExecutionContentBlockStop(contentBlockStopEvent, sessionId);
+  
+  // Should return usage but not process the tool
+  expect(result).toEqual({ input_tokens: 5, output_tokens: 10 });
+  expect(chainedToolUse.status).toBe('completed'); // Unchanged
+});
+
+test('handleToolExecutionContentBlockStop handles background session execution', () => {
+  const backgroundSessionId = 'background-session';
+  const currentSessionId = 'current-session';
+  comp.currentChatId = currentSessionId; // Different from background session
+  comp.alwaysApproveReadRequests = true;
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
+  comp.executeTool = jest.fn();
+  comp.scrollIfPinned = jest.fn(); // Should not be called for background session
+  comp.$nextTick = jest.fn((callback) => callback && callback());
+  
+  // Set up a chained tool use for background session
+  const chainedToolUse = {
+    id: 'background_tool',
+    name: 'query_events',
+    inputJson: '{"query": "background"}',
+    status: 'preparing'
+  };
+  comp.executingTools.set(`block_0_${backgroundSessionId}`, chainedToolUse);
+  
+  const contentBlockStopEvent = {
+    index: 0
+  };
+  
+  const result = comp.handleToolExecutionContentBlockStop(contentBlockStopEvent, backgroundSessionId);
+  
+  expect(chainedToolUse.input).toEqual({ query: "background" });
+  expect(chainedToolUse.status).toBe('executing');
+  expect(chainedToolUse.approved).toBe(true);
+  expect(comp.$nextTick).toHaveBeenCalled();
+  expect(comp.executeTool).toHaveBeenCalledWith(chainedToolUse);
+  expect(comp.scrollIfPinned).not.toHaveBeenCalled(); // Should not update UI for background session
+  expect(result).toBe(null);
+});
+
+test('handleToolExecutionContentBlockStop uses default session ID when none provided', () => {
+  comp.currentChatId = 'default-session';
+  comp.alwaysApproveReadRequests = true;
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
+  comp.executeTool = jest.fn();
+  comp.scrollIfPinned = jest.fn();
+  comp.$nextTick = jest.fn((callback) => callback && callback());
+  
+  // Set up a chained tool use using current session ID
+  const chainedToolUse = {
+    id: 'default_tool',
+    name: 'query_events',
+    inputJson: '{"query": "default"}',
+    status: 'preparing'
+  };
+  comp.executingTools.set(`block_0_${comp.currentChatId}`, chainedToolUse);
+  
+  const contentBlockStopEvent = {
+    index: 0
+  };
+  
+  // Call without sessionId parameter (should use currentChatId)
+  const result = comp.handleToolExecutionContentBlockStop(contentBlockStopEvent);
+  
+  expect(chainedToolUse.input).toEqual({ query: "default" });
+  expect(chainedToolUse.status).toBe('executing');
+  expect(chainedToolUse.approved).toBe(true);
+  expect(comp.$nextTick).toHaveBeenCalled();
+  expect(comp.executeTool).toHaveBeenCalledWith(chainedToolUse);
+  expect(comp.scrollIfPinned).toHaveBeenCalled(); // Should update UI for current session
+  expect(result).toBe(null);
+});
+
+test('handleToolExecutionContentBlockStop handles empty input JSON', () => {
+  const sessionId = 'test-session';
+  comp.currentChatId = sessionId;
+  comp.alwaysApproveReadRequests = true;
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
+  comp.executeTool = jest.fn();
+  comp.scrollIfPinned = jest.fn();
+  comp.$nextTick = jest.fn((callback) => callback && callback());
+  
+  // Set up a chained tool use with empty inputJson
+  const chainedToolUse = {
+    id: 'empty_input_tool',
+    name: 'query_events',
+    inputJson: '', // Empty JSON
+    status: 'preparing',
+    input: {} // Initialize with empty object since inputJson parsing will be skipped
+  };
+  comp.executingTools.set(`block_0_${sessionId}`, chainedToolUse);
+  
+  const contentBlockStopEvent = {
+    index: 0
+  };
+  
+  const result = comp.handleToolExecutionContentBlockStop(contentBlockStopEvent, sessionId);
+  
+  expect(chainedToolUse.input).toEqual({}); // Should remain empty object
+  expect(chainedToolUse.status).toBe('executing');
+  expect(chainedToolUse.approved).toBe(true);
+  expect(comp.$nextTick).toHaveBeenCalled();
+  expect(comp.executeTool).toHaveBeenCalledWith(chainedToolUse);
+  expect(result).toBe(null);
+});
+
+// applyToolSpecificChanges method tests
+test('applyToolSpecificChanges adds auxData for query_cases tool when MRU data exists', () => {
+  const toolUse = { id: 'tool_123', name: 'query_cases', input: { query: 'test query' } };
+  const toolRequest = {
+    sessionId: 'test-session',
+    toolUseId: 'tool_123',
+    params: { query: 'test query' },
+    model: 'test-model'
+  };
+
+  const mruCases = [
+    { id: 'case1', title: 'Test Case 1' },
+    { id: 'case2', title: 'Test Case 2' }
+  ];
+
+  // Spy on Storage.prototype so jsdom/localStorage is handled correctly
+  const getSpy = jest.spyOn(Storage.prototype, 'getItem').mockReturnValue(JSON.stringify(mruCases));
+
+  comp.applyToolSpecificChanges(toolUse, toolRequest);
+
+  expect(getSpy).toHaveBeenCalledWith('settings.case.mruCases');
+  expect(toolRequest.auxData).toEqual(mruCases);
+
+  getSpy.mockRestore();
+});
+
+test('applyToolSpecificChanges does nothing for non-query_cases tools', () => {
+  const toolUse = { id: 'tool_other', name: 'query_events', input: { oql_query: 'event.module: suricata' } };
+  const toolRequest = {
+    sessionId: 'test-session',
+    toolUseId: 'tool_other',
+    params: { oql_query: 'event.module: suricata' },
+    model: 'test-model'
+  };
+
+  // Spy on the prototype (no return value needed)
+  const getSpy = jest.spyOn(Storage.prototype, 'getItem');
+
+  comp.applyToolSpecificChanges(toolUse, toolRequest);
+
+  expect(getSpy).not.toHaveBeenCalled();
+  expect(toolRequest.auxData).toBeUndefined();
+
+  getSpy.mockRestore();
+});
+
