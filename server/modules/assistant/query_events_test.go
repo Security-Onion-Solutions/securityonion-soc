@@ -152,7 +152,7 @@ func TestQueryEventsTool_Execute(t *testing.T) {
 
 			// Create tool and execute
 			tool := &QueryEventsTool{}
-			result, err := tool.Execute(ctx, mockServer, tc.params)
+			result, err := tool.Execute(ctx, mockServer, tc.params, "")
 
 			// Assert error expectations
 			if tc.expectedError {
@@ -198,12 +198,12 @@ func TestFilterEvents(t *testing.T) {
 					Id:     "test-id-1",
 					Source: "test-index",
 					Payload: map[string]any{
-						"@timestamp":   "2024-01-01T00:00:00Z",
-						"source.ip":    "192.168.1.1",
+						"@timestamp":     "2024-01-01T00:00:00Z",
+						"source.ip":      "192.168.1.1",
 						"destination.ip": "10.0.0.1",
-						"tags":         []string{"alert", "malware"},
-						"rule.name":    "ET MALWARE Suspicious",
-						"ignored_field": "this should not appear",
+						"tags":           []string{"alert", "malware"},
+						"rule.name":      "ET MALWARE Suspicious",
+						"ignored_field":  "this should not appear",
 					},
 				},
 			},

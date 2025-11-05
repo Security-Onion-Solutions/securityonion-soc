@@ -31,7 +31,8 @@ func (t *EscalateAlertsTool) GetName() string {
 }
 
 func (t *EscalateAlertsTool) GetDescription() string {
-	return "Escalate an alert in Security Onion to a new case using the alert's unique identifier (_id). This tool will only create new cases, and never attach to existing cases. If a user wishes to add to an existing case, they must manually do so through the SOC case interface.\n" +
+	return "Escalate an alert in Security Onion to a case using the alert's unique identifier (_id). This tool should create a new case if case_title is provided. On the other hand, if case_id is provided, escalate to that case.\n" +
+		"- *IMPORTANT* You MUST provide ONE of case_title or case_id, but NEVER both.\n" +
 		"- Examples for wild cards in the search_filter:\n" +
 		"  - Search terms cannot begin with a wildcard (e.g., `*xyz` the wildcard is ignored, but `xyz*` is valid)\n" +
 		"  - When using wildcards, do not wrap the value in quotes, instead use parentheses (e.g., `rule.name:(A B*)` is valid, but `rule.name:\"A B*\"` will not work as expected)"
@@ -49,6 +50,10 @@ func (t *EscalateAlertsTool) GetSchema() model.JSONSchema {
 				"case_title": {
 					Type:        "string",
 					Description: `Title for the new case, usually named after the rule name of the alert(s) being escalated (e.g., "ET SCAN Potential SSH Scan")`,
+				},
+				"case_id": {
+					Type:        "string",
+					Description: `Id of the case we want to escalate to. (e.g., "Y6i16JkBZwOCEak1tWqX")`,
 				},
 				"range_start": {
 					Type:        "string",
@@ -71,12 +76,13 @@ func (t *EscalateAlertsTool) GetSchema() model.JSONSchema {
 type escalateAlertArgs struct {
 	SearchFilter string `json:"search_filter"`
 	CaseTitle    string `json:"case_title"`
+	CaseId       string `json:"case_id"`
 	RangeStart   string `json:"range_start,omitempty"`
 	RangeEnd     string `json:"range_end,omitempty"`
 	RangeFormat  string `json:"range_format,omitempty"`
 }
 
-func (t *EscalateAlertsTool) Execute(ctx context.Context, server *server.Server, params string) (result *model.ToolResponse, err error) {
+func (t *EscalateAlertsTool) Execute(ctx context.Context, server *server.Server, params string, auxData string) (result *model.ToolResponse, err error) {
 	logger := log.FromContext(ctx)
 
 	logger.WithField("toolParameters", params).Info("running tool for assistant")
@@ -157,21 +163,30 @@ func (t *EscalateAlertsTool) Execute(ctx context.Context, server *server.Server,
 		return result, nil
 	}
 
+	var modelCase *model.Case
+
 	// Step 2: Create Case
+	if args.CaseTitle != "" {
+		newCase := model.NewCase()
+		newCase.Title = args.CaseTitle
+		newCase.Description = "Review escalated event details in the Events tab below. Click here to update this description."
 
-	newCase := model.NewCase()
-	newCase.Title = args.CaseTitle
-	newCase.Description = "Review escalated event details in the Events tab below. Click here to update this description."
+		modelCase, err = server.Casestore.Create(ctx, newCase)
+		if err != nil {
+			logger.WithError(err).Error("error creating case for escalated alert")
 
-	savedCase, err := server.Casestore.Create(ctx, newCase)
-	if err != nil {
-		logger.WithError(err).Error("error creating case for escalated alert")
+			return nil, err
+		}
+	} else {
+		modelCase, err = server.Casestore.GetCase(ctx, args.CaseId)
+		if err != nil {
+			logger.WithField("caseId", args.CaseId).WithError(err).Error("error fetching case for escalated alert")
 
-		return nil, err
+			return nil, err
+		}
 	}
-
 	for _, ev := range relatedEvents {
-		ev.CaseId = savedCase.Id
+		ev.CaseId = modelCase.Id
 	}
 
 	// Step 3: Link Alerts to Case
@@ -186,7 +201,7 @@ func (t *EscalateAlertsTool) Execute(ctx context.Context, server *server.Server,
 	logger.WithFields(log.Fields{
 		"relatedEventsCreated": created,
 		"errMap":               util.TruncateMap(errMap, 20),
-	}).Info("linked alerts to new case")
+	}).Info("linked alerts case")
 
 	// Step 4: Mark Alerts as Escalated
 
@@ -203,7 +218,7 @@ func (t *EscalateAlertsTool) Execute(ctx context.Context, server *server.Server,
 
 	ackResults, err := server.Eventstore.Acknowledge(ctx, ackCrit)
 	if err != nil {
-		logger.WithError(err).Error("error escalating alert to new case")
+		logger.WithError(err).Error("error escalating alert")
 
 		return nil, err
 	}
@@ -216,7 +231,7 @@ func (t *EscalateAlertsTool) Execute(ctx context.Context, server *server.Server,
 			plural = "s"
 		}
 
-		result.Result = fmt.Sprintf(`Successfully added %d alert%s to new case "%s" (Id: %s)`, created, plural, savedCase.Title, savedCase.Id)
+		result.Result = fmt.Sprintf(`Successfully added %d alert%s to case "%s" (Id: %s)`, created, plural, modelCase.Title, modelCase.Id)
 	}
 
 	return result, nil
