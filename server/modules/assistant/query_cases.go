@@ -37,7 +37,7 @@ func (t *QueryCasesTool) GetName() string {
 }
 
 func (t *QueryCasesTool) GetDescription() string {
-	return "- Execute OQL queries to retrieve Security Onion cases that are most applicable to the given alert(s).\n" +
+	return "- Execute OQL queries to retrieve Security Onion cases that are most applicable to the given alert(s) (or other event(s)/topic(s)) at hand.\n" +
 		"- Search for cases by referencing so_case.description and so_case.title\n" +
 		"- *IMPORTANT* All queries should include `AND _index:\"*:so-case\" AND so_kind:case` appended to the end. The quotes around *:so-case MUST be included.\n" +
 		"- When searching for cases, specify a date range of 999 days ago.\n" +
