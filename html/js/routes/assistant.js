@@ -16,9 +16,12 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     chatHistory: [],
     currentChatId: null,
     creditsRemaining: 0,
-    executingTools: new Map(), // Track tool executions by ID
+    executingToolsBySession: new Map(), // Map<sessionId, Map<toolUseId, toolUse>>
+    toolIndexToIdBySession: new Map(), // Map<sessionId, Map<index, toolUseId>>
+    toolQueues: new Map(), // Map<sessionId, Array<toolUseId>>
+    toolRunnerBusy: new Set(), // Set<sessionId>
     contextLength: 0, // Track total context length
-    increaseMaxContextThreshold: false, // Toggle for max context threshold
+    increaseContextLimit: false, // Toggle for max context threshold
     restoreLastActive: false, // Toggle to restore last active chat
     alwaysApproveReadRequests: false,
     assistantEnabled: false,
@@ -58,7 +61,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         this.handleRouteSessionId();
       }
     },
-    'increaseMaxContextThreshold': 'saveLocalSettings',
+    'increaseContextLimit': 'saveLocalSettings',
     'restoreLastActive': 'saveLocalSettings',
     'alwaysApproveReadRequests': 'saveLocalSettings',
     'showChatHistory': 'saveLocalSettings',
@@ -116,7 +119,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
 
     checkContextLimitReached() {
-      const maxContextLength = this.increaseMaxContextThreshold ? this.contextLimitLarge : this.contextLimitSmall;
+      const maxContextLength = this.increaseContextLimit ? this.contextLimitLarge : this.contextLimitSmall;
       if (this.contextLength >= maxContextLength) {
         const formattedLimit = this.formatCount(maxContextLength);
         this.$root.showError(this.i18n.assistantContextLimitPt1 + ` (${formattedLimit}+ tokens). ` + this.i18n.assistantContextLimitPt2);
@@ -515,9 +518,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           sessionId: targetSessionId // Track which session this belongs to
         };
         
-        // Always track the tool use
-        this.executingTools.set(toolUse.id, toolUse);
-        this.executingTools.set(`block_${c.index}_${targetSessionId}`, toolUse);
+        this.getSessionToolMap(targetSessionId).set(toolUse.id, toolUse);
+        this.getIndexMap(targetSessionId).set(c.index, toolUse.id);
         
         // Only update UI if this is for the current session and we have an assistant message
         if (assistantMessage && targetSessionId === this.currentChatId) {
@@ -536,8 +538,9 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         assistantMessage.content.value += c.delta.text;
         this.scrollIfPinned();
       } else if (c.delta.type === 'input_json_delta') {
-        // Handle tool input updates - accumulate the JSON (always process, regardless of session)
-        const toolUse = this.executingTools.get(`block_${c.index}_${targetSessionId}`);
+        const idMap = this.getIndexMap(targetSessionId);
+        const toolId = idMap.get(c.index);
+        const toolUse = this.getSessionToolMap(targetSessionId).get(toolId);
         if (toolUse) {
           toolUse.inputJson += c.delta.partial_json;
           toolUse.status = 'preparing';
@@ -554,25 +557,21 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       let messageUsage = null;
       const targetSessionId = sessionId || this.currentChatId;
       
-      // Handle tool input completion - wait for user approval
-      const toolUse = this.executingTools.get(`block_${c.index}_${targetSessionId}`);
+      const idMap = this.getIndexMap(targetSessionId);
+      const toolId = idMap.get(c.index);
+      const toolUse = this.getSessionToolMap(targetSessionId).get(toolId);
       if (toolUse && toolUse.status === 'preparing') {
         try {
           // Parse the accumulated JSON input
           if (toolUse.inputJson) {
             toolUse.input = JSON.parse(toolUse.inputJson);
           }
-          
           // Check if this tool should be auto-approved
           if (this.shouldAutoApproveTool(toolUse.name)) {
             if (this.checkContextLimitReached()) return;
             // Auto-approve the tool
-            toolUse.status = 'executing';
             toolUse.approved = true;
-            // Execute the tool immediately (use background execution if not current session)
-            this.$nextTick(() => {
-              this.executeTool(toolUse);
-            });
+            this.queueTool(targetSessionId, toolUse.id);
           } else {
             // Set status to pending approval instead of executing
             toolUse.status = 'pending_approval';
@@ -828,9 +827,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           sessionId: targetSessionId // Track which session this belongs to
         };
         
-        // Always track the tool use
-        this.executingTools.set(newToolUse.id, newToolUse);
-        this.executingTools.set(`block_${c.index}_${targetSessionId}`, newToolUse);
+        this.getSessionToolMap(targetSessionId).set(newToolUse.id, newToolUse);
+        this.getIndexMap(targetSessionId).set(c.index, newToolUse.id);
         
         // Only update UI if this is for the current session and we have an assistant message
         if (assistantMessage && targetSessionId === this.currentChatId) {
@@ -849,8 +847,9 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         assistantMessage.content.value += c.delta.text;
         this.scrollIfPinned();
       } else if (c.delta.type === 'input_json_delta') {
-        // Handle tool input updates for chained tools (always process, regardless of session)
-        const chainedToolUse = this.executingTools.get(`block_${c.index}_${targetSessionId}`);
+        const idMap = this.getIndexMap(targetSessionId);
+        const toolId = idMap.get(c.index);
+        const chainedToolUse = this.getSessionToolMap(targetSessionId).get(toolId);
         if (chainedToolUse) {
           chainedToolUse.inputJson += c.delta.partial_json;
           chainedToolUse.status = 'preparing';
@@ -868,7 +867,9 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       const targetSessionId = sessionId || this.currentChatId;
       
       // Handle tool input completion for chained tools
-      const chainedToolUse = this.executingTools.get(`block_${c.index}_${targetSessionId}`);
+      const idMap = this.getIndexMap(targetSessionId);
+      const toolId = idMap.get(c.index);
+      const chainedToolUse = this.getSessionToolMap(targetSessionId).get(toolId);
       if (chainedToolUse && chainedToolUse.status === 'preparing') {
         try {
           // Parse the accumulated JSON input
@@ -879,13 +880,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           // Check if this chained tool should be auto-approved
           if (this.shouldAutoApproveTool(chainedToolUse.name)) {
             if (this.checkContextLimitReached()) return;
-            // Auto-approve the chained tool
-            chainedToolUse.status = 'executing';
             chainedToolUse.approved = true;
-            // Execute the tool immediately (use background execution if not current session)
-            this.$nextTick(() => {
-              this.executeTool(chainedToolUse);
-            });
+            this.queueTool(targetSessionId, chainedToolUse.id);
           } else {
             // Set status to pending approval
             chainedToolUse.status = 'pending_approval';
@@ -1289,6 +1285,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     getToolStatusIcon(status) {
       switch (status) {
         case 'preparing': return 'fa-cog';
+        case 'queued': return 'fa-cog';
         case 'pending_approval': return 'fa-question-circle';
         case 'executing': return 'fa-hourglass-half';
         case 'completed': return 'fa-check-circle';
@@ -1300,6 +1297,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     getToolStatusColor(status) {
       switch (status) {
         case 'preparing': return 'info';
+        case 'queued': return 'info';
         case 'pending_approval': return 'warning';
         case 'executing': return 'warning';
         case 'completed': return 'success';
@@ -1311,6 +1309,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     getToolStatusTitle(status) {
       switch (status) {
         case 'preparing': return this.i18n.preparing;
+        case 'queued': return this.i18n.preparing;
         case 'pending_approval': return this.i18n.pendingApproval;
         case 'executing': return this.i18n.executing;
         case 'completed': return this.i18n.completed;
@@ -1323,8 +1322,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       try {
         if (this.checkContextLimitReached()) return;
         toolUse.approved = true;
-        toolUse.status = 'executing';
-        await this.executeTool(toolUse);
+        toolUse.status = 'preparing';
+        this.queueTool(toolUse.sessionId || this.currentChatId, toolUse.id);
       } catch (error) {
         toolUse.status = 'error';
         toolUse.error = this.i18n.assistantToolUseFail + ': ' + error.message;
@@ -1630,7 +1629,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
 
     getContextColor(value) {
-      const maxContextLength = this.increaseMaxContextThreshold ? this.contextLimitLarge : this.contextLimitSmall;
+      const maxContextLength = this.increaseContextLimit ? this.contextLimitLarge : this.contextLimitSmall;
       const threshold1 = maxContextLength * this.thresholdColorRatioLow;
       const threshold2 = maxContextLength * this.thresholdColorRatioMed;
       const threshold3 = maxContextLength * this.thresholdColorRatioMax;
@@ -1654,7 +1653,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
 
     // Save all local settings
     saveLocalSettings() {
-      this.saveSetting('increaseMaxContextThreshold', this.increaseMaxContextThreshold, false);
+      this.saveSetting('increaseContextLimit', this.increaseContextLimit, false);
       this.saveSetting('restoreLastActive', this.restoreLastActive, false);
       this.saveSetting('alwaysApproveReadRequests', this.alwaysApproveReadRequests, false);
       this.saveSetting('showChatHistory', this.showChatHistory, true);
@@ -1664,7 +1663,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     // Load all local settings
     loadLocalSettings() {
       var prefix = 'settings.assistant';
-      if (localStorage[prefix + '.increaseMaxContextThreshold']) this.increaseMaxContextThreshold = localStorage[prefix + '.increaseMaxContextThreshold'] == 'true';
+      if (localStorage[prefix + '.increaseContextLimit']) this.increaseContextLimit = localStorage[prefix + '.increaseContextLimit'] == 'true';
       if (localStorage[prefix + '.restoreLastActive']) this.restoreLastActive = localStorage[prefix + '.restoreLastActive'] == 'true';
       if (localStorage[prefix + '.alwaysApproveReadRequests']) this.alwaysApproveReadRequests = localStorage[prefix + '.alwaysApproveReadRequests'] == 'true';
       if (localStorage[prefix + '.showChatHistory']) this.showChatHistory = localStorage[prefix + '.showChatHistory'] == 'true';
@@ -1727,6 +1726,50 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           const cases = JSON.parse(rawMRU);
           toolRequest.auxData = cases;
         }
+      }
+    },
+    getSessionToolMap(sessionId) {
+      let m = this.executingToolsBySession.get(sessionId);
+      if (!m) {
+        m = new Map();
+        this.executingToolsBySession.set(sessionId, m);
+      }
+      return m;
+    },
+    getIndexMap(sessionId) {
+      let m = this.toolIndexToIdBySession.get(sessionId);
+      if (!m) {
+        m = new Map();
+        this.toolIndexToIdBySession.set(sessionId, m);
+      }
+      return m;
+    },
+    queueTool(sessionId, toolUseId) {
+      const q = this.toolQueues.get(sessionId) || [];
+      q.push(toolUseId);
+      this.toolQueues.set(sessionId, q);
+      this.runToolQueue(sessionId);
+    },
+    async runToolQueue(sessionId) {
+      if (this.toolRunnerBusy.has(sessionId)) return;
+      this.toolRunnerBusy.add(sessionId);
+      try {
+        let q = this.toolQueues.get(sessionId) || [];
+        const toolMap = this.getSessionToolMap(sessionId);
+        while (q.length) {
+          const toolUseId = q[0];
+          const toolUse = toolMap.get(toolUseId);
+          if (!toolUse || ['completed','error','rejected'].includes(toolUse.status)) {
+            q.shift();
+            continue;
+          }
+          toolUse.status = 'executing';
+          await this.executeTool(toolUse);
+          q.shift();
+          q = this.toolQueues.get(sessionId) || [];
+        }
+      } finally {
+        this.toolRunnerBusy.delete(sessionId);
       }
     },
   }
