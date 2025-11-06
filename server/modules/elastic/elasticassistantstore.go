@@ -158,11 +158,24 @@ func (store *ElasticAssistantstore) validateChat(chat *model.StoredMessage) erro
 		contentCount := 0
 		if len(chat.Message.ContentBlocks) != 0 {
 			contentCount++
+			keepers := make([]model.ContentBlock, 0, len(chat.Message.ContentBlocks))
+			filtered := false
+
 			for _, cb := range chat.Message.ContentBlocks {
 				if cb.Type == "" {
 					err = fmt.Errorf("every content block must have a type")
 					break
 				}
+
+				if !(cb.Type == "text" && cb.Text == "") {
+					keepers = append(keepers, cb)
+				} else {
+					filtered = true
+				}
+			}
+
+			if filtered {
+				chat.Message.ContentBlocks = keepers
 			}
 		}
 
