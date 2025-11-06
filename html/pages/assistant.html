@@ -268,19 +268,19 @@
 						spellcheck="false"
 						class="chat-input flex-grow-1 mr-3"
 						@keydown.enter.exact.prevent="$refs.sendButton.$el.click()"
-						:disabled="isTyping || !canChat"
+						:disabled="!canChat"
 						data-aid="assistant_chat_input"
 					></v-textarea>
 					<v-btn
 						id="chat-send-button"
 						ref="sendButton"
 						color="primary"
-						:disabled="!newMessage.trim() || isTyping || !canChat"
+						:disabled="!newMessage.trim() || !canChat || checkForActivity()"
 						@click="sendMessage"
 						data-aid="assistant_chat_send"
 						class="flex-shrink-0"
 					>
-						<v-icon>{{ isTyping ? 'fa-hourglass-half' : 'fa-paper-plane' }}</v-icon>
+						<v-icon>{{ checkForActivity() ? 'fa-hourglass-half' : 'fa-paper-plane' }}</v-icon>
 					</v-btn>
 				</v-card-actions>
 			</v-card>

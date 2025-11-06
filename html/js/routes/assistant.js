@@ -1524,18 +1524,22 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           })));
         // Allows tool use blocks at the end of a session to persist even when the user clicks away
         } else {
-          frontendMsg.toolUses = Vue.ref(toolBlocks.map(block => ({
-            id: block.id || 'unknown',
-            name: block.name || 'unknown',
-            input: block.input || {}, // Ensure input is always an object, never null/undefined
-            status: 'pending_approval',
-            result: null,
-            error: null,
-            rawResult: null, // Will be populated by subsequent tool result message
-            timestamp: msg.createTime || new Date().toISOString(),
-            approved: null,
-            sessionId: this.currentChatId
-          })));
+          frontendMsg.toolUses = Vue.ref(toolBlocks.map(block => {
+            const toolUse = {
+              id: block.id || 'unknown',
+              name: block.name || 'unknown',
+              input: block.input || {}, // Ensure input is always an object, never null/undefined
+              status: 'pending_approval',
+              result: null,
+              error: null,
+              rawResult: null, // Will be populated by subsequent tool result message
+              timestamp: msg.createTime || new Date().toISOString(),
+              approved: null,
+              sessionId: this.currentChatId
+            };
+            this.getSessionToolMap(this.currentChatId).set(toolUse.id, toolUse);
+            return toolUse;
+          }));
         }
       }
       
@@ -1771,6 +1775,9 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       } finally {
         this.toolRunnerBusy.delete(sessionId);
       }
+    },
+    checkForActivity() {
+      return this.isStreaming || this.isTyping || (this.toolQueues.get(this.currentChatId) && this.toolQueues.get(this.currentChatId).length);
     },
   }
 }});
