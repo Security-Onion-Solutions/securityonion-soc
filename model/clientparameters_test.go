@@ -217,16 +217,12 @@ func TestModelParameters_UnmarshalJSON(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var got ModelParameters
 			err := json.Unmarshal([]byte(tt.input), &got)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("UnmarshalJSON() error = %v, wantErr %v", err, tt.wantErr)
-			}
 			if tt.wantErr {
+				assert.Error(t, err)
 				return
 			}
 
-			if got != tt.want {
-				t.Errorf("UnmarshalJSON() = %+v, want %+v", got, tt.want)
-			}
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
