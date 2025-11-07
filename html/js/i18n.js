@@ -304,6 +304,7 @@ const i18n = {
       commentRequired: 'Comments cannot be empty.',
       community: 'Community',
       completed: 'Completed',
+      compressContext: 'Compress Context',
       config: 'Configuration',
       configAdvancedTag: 'adv',
       configTitle: 'Grid Configuration',

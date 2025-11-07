@@ -10,6 +10,10 @@ import (
 	"time"
 )
 
+const (
+	MessageTagContextCompression = "context_compression"
+)
+
 // @Description A user message to be added to a session.
 type IncomingMessage struct {
 	// The content of the message.
@@ -319,4 +323,8 @@ type UserUsage struct {
 	TotalSessions int `json:"totalSessions" example:"3"`
 	// The total messages sent and received by the user in the date range.
 	TotalMessages int `json:"totalMessages" example:"25"`
+}
+
+type ModelChoice struct {
+	Model string `json:"model" example:"sonnet-4"`
 }

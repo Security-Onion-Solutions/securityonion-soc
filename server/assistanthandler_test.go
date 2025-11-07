@@ -782,3 +782,123 @@ data: [DONE]`
 		},
 	}, *msg)
 }
+
+func TestHistoryToContext(t *testing.T) {
+	tests := []struct {
+		name            string
+		history         []*model.StoredMessage
+		expectedContext []*model.Message
+	}{
+		{
+			name: "simple history, no compression",
+			history: []*model.StoredMessage{
+				{
+					Message: &model.Message{
+						Role: "user",
+						ContentBlocks: []model.ContentBlock{
+							{Type: "text", Text: "Hello"},
+						},
+					},
+				},
+				{
+					Message: &model.Message{
+						Role: "assistant",
+						ContentBlocks: []model.ContentBlock{
+							{Type: "text", Text: "Hi there! How can I assist you?"},
+						},
+					},
+				},
+			},
+			expectedContext: []*model.Message{
+				{
+					Role: "user",
+					ContentBlocks: []model.ContentBlock{
+						{Type: "text", Text: "Hello"},
+					},
+				},
+				{
+					Role: "assistant",
+					ContentBlocks: []model.ContentBlock{
+						{Type: "text", Text: "Hi there! How can I assist you?"},
+					},
+				},
+			},
+		},
+		{
+			name: "compressed history",
+			history: []*model.StoredMessage{
+				{
+					Message: &model.Message{
+						Role: "user",
+						ContentBlocks: []model.ContentBlock{
+							{Type: "text", Text: "Hello"},
+						},
+					},
+				},
+				{
+					Message: &model.Message{
+						Role: "assistant",
+						ContentBlocks: []model.ContentBlock{
+							{Type: "text", Text: "Hi there! How can I assist you?"},
+						},
+					},
+					Tags: []string{"something_else"},
+				},
+				{
+					Message: &model.Message{
+						Role: "user",
+						ContentBlocks: []model.ContentBlock{
+							{Type: "text", Text: "Can you do a thing for me?"},
+						},
+					},
+				},
+				{
+					Message: &model.Message{
+						Role: "assistant",
+						ContentBlocks: []model.ContentBlock{
+							{Type: "text", Text: "Sure thing, that generated a lot of data"},
+						},
+					},
+				},
+				{
+					Message: &model.Message{
+						Role: "user",
+						ContentBlocks: []model.ContentBlock{
+							{Type: "text", Text: "Compress it"},
+						},
+					},
+					Tags: []string{model.MessageTagContextCompression},
+				},
+				{
+					Message: &model.Message{
+						Role: "assistant",
+						ContentBlocks: []model.ContentBlock{
+							{Type: "text", Text: "Less data"},
+						},
+					},
+				},
+			},
+			expectedContext: []*model.Message{
+				{
+					Role: "user",
+					ContentBlocks: []model.ContentBlock{
+						{Type: "text", Text: "Compress it"},
+					},
+				},
+				{
+					Role: "assistant",
+					ContentBlocks: []model.ContentBlock{
+						{Type: "text", Text: "Less data"},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			contextMessages := historyToContext(tt.history)
+			assert.Equal(t, tt.expectedContext, contextMessages)
+		})
+	}
+}

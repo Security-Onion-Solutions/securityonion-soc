@@ -1806,5 +1806,19 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       const tQ = this.toolQueues.get(this.currentChatId) || [];
       return this.isStreaming || this.isTyping || tQ.length > 0;
     },
+
+    async compressCurrentSession() {
+      try {
+        const response = await this.$root.papi.post(`/assistant/sessions/${this.currentChatId}/compress`, {
+          model: this.currentModel,
+        });
+        if (response.data && response.data.success) {
+          // Reload the chat to reflect compressed context
+          await this.loadChatFromBackend(this.currentChatId);
+        }
+      } catch (error) {
+        this.$root.showError(error.message);
+      }
+    },
   }
 }});
