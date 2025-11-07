@@ -131,14 +131,14 @@ func TestModelParameters_UnmarshalJSON(t *testing.T) {
 				"displayName": "Sci Notation",
 				"contextLimitSmall": "1e3",
 				"contextLimitLarge": "2e6",
-				"lowBalanceColorAlert": 3
+				"lowBalanceColorAlert": "3e4"
 			}`,
 			want: ModelParameters{
 				ID:                   "sci",
 				DisplayName:          "Sci Notation",
 				ContextLimitSmall:    1000,
 				ContextLimitLarge:    2000000,
-				LowBalanceColorAlert: 3,
+				LowBalanceColorAlert: 30000,
 			},
 		},
 		{
@@ -148,7 +148,7 @@ func TestModelParameters_UnmarshalJSON(t *testing.T) {
 				"displayName": "String Ints",
 				"contextLimitSmall": "1234",
 				"contextLimitLarge": "5678",
-				"lowBalanceColorAlert": 9
+				"lowBalanceColorAlert": "9"
 			}`,
 			want: ModelParameters{
 				ID:                   "str",
@@ -165,7 +165,7 @@ func TestModelParameters_UnmarshalJSON(t *testing.T) {
 				"displayName": "Mixed",
 				"contextLimitSmall": 8000,
 				"contextLimitLarge": "9e3",
-				"lowBalanceColorAlert": 4
+				"lowBalanceColorAlert": "4"
 			}`,
 			want: ModelParameters{
 				ID:                   "mix",
@@ -189,15 +189,14 @@ func TestModelParameters_UnmarshalJSON(t *testing.T) {
 			name: "missing context fields should default to zero",
 			input: `{
 				"id": "missing",
-				"displayName": "Missing Fields",
-				"lowBalanceColorAlert": 42
+				"displayName": "Missing Fields"
 			}`,
 			want: ModelParameters{
 				ID:                   "missing",
 				DisplayName:          "Missing Fields",
 				ContextLimitSmall:    0,
 				ContextLimitLarge:    0,
-				LowBalanceColorAlert: 42,
+				LowBalanceColorAlert: 0,
 			},
 		},
 		{
@@ -207,7 +206,7 @@ func TestModelParameters_UnmarshalJSON(t *testing.T) {
 				"displayName": "Weird Types",
 				"contextLimitSmall": false,
 				"contextLimitLarge": true,
-				"lowBalanceColorAlert": 42
+				"lowBalanceColorAlert": undefined
 			}`,
 			wantErr: true,
 		},
