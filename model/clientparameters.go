@@ -200,8 +200,9 @@ type ModelParameters struct {
 func (m *ModelParameters) UnmarshalJSON(data []byte) error {
 	type Alias ModelParameters // Prevent recursion
 	aux := struct {
-		ContextLimitSmall any `json:"contextLimitSmall"`
-		ContextLimitLarge any `json:"contextLimitLarge"`
+		ContextLimitSmall    any `json:"contextLimitSmall"`
+		ContextLimitLarge    any `json:"contextLimitLarge"`
+		LowBalanceColorAlert any `json:"lowBalanceColorAlert"`
 		*Alias
 	}{
 		Alias: (*Alias)(m),
@@ -234,6 +235,9 @@ func (m *ModelParameters) UnmarshalJSON(data []byte) error {
 	}
 	if m.ContextLimitLarge, err = parseToInt(aux.ContextLimitLarge); err != nil {
 		return fmt.Errorf("parsing contextLimitLarge: %w", err)
+	}
+	if m.LowBalanceColorAlert, err = parseToInt(aux.LowBalanceColorAlert); err != nil {
+		return fmt.Errorf("parsing LowBalanceColorAlert: %w", err)
 	}
 
 	return nil
