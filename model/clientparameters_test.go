@@ -7,6 +7,7 @@
 package model
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -97,4 +98,135 @@ func TestVerifyDetectionsParams(t *testing.T) {
 	err := params.Verify()
 	assert.Nil(t, err)
 	verifyInitialHuntingParams(t, &params.HuntingParameters)
+}
+
+func TestModelParameters_UnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    ModelParameters
+		wantErr bool
+	}{
+		{
+			name: "normal integers",
+			input: `{
+				"id": "abc",
+				"displayName": "Normal",
+				"contextLimitSmall": 512,
+				"contextLimitLarge": 2048,
+				"lowBalanceColorAlert": 7
+			}`,
+			want: ModelParameters{
+				ID:                   "abc",
+				DisplayName:          "Normal",
+				ContextLimitSmall:    512,
+				ContextLimitLarge:    2048,
+				LowBalanceColorAlert: 7,
+			},
+		},
+		{
+			name: "scientific notation as strings",
+			input: `{
+				"id": "sci",
+				"displayName": "Sci Notation",
+				"contextLimitSmall": "1e3",
+				"contextLimitLarge": "2e6",
+				"lowBalanceColorAlert": 3
+			}`,
+			want: ModelParameters{
+				ID:                   "sci",
+				DisplayName:          "Sci Notation",
+				ContextLimitSmall:    1000,
+				ContextLimitLarge:    2000000,
+				LowBalanceColorAlert: 3,
+			},
+		},
+		{
+			name: "string integers",
+			input: `{
+				"id": "str",
+				"displayName": "String Ints",
+				"contextLimitSmall": "1234",
+				"contextLimitLarge": "5678",
+				"lowBalanceColorAlert": 9
+			}`,
+			want: ModelParameters{
+				ID:                   "str",
+				DisplayName:          "String Ints",
+				ContextLimitSmall:    1234,
+				ContextLimitLarge:    5678,
+				LowBalanceColorAlert: 9,
+			},
+		},
+		{
+			name: "mixed numeric and string",
+			input: `{
+				"id": "mix",
+				"displayName": "Mixed",
+				"contextLimitSmall": 8000,
+				"contextLimitLarge": "9e3",
+				"lowBalanceColorAlert": 4
+			}`,
+			want: ModelParameters{
+				ID:                   "mix",
+				DisplayName:          "Mixed",
+				ContextLimitSmall:    8000,
+				ContextLimitLarge:    9000,
+				LowBalanceColorAlert: 4,
+			},
+		},
+		{
+			name: "invalid numeric string",
+			input: `{
+				"id": "bad",
+				"displayName": "Invalid",
+				"contextLimitSmall": "notanumber",
+				"contextLimitLarge": "1e2"
+			}`,
+			wantErr: true,
+		},
+		{
+			name: "missing context fields should default to zero",
+			input: `{
+				"id": "missing",
+				"displayName": "Missing Fields",
+				"lowBalanceColorAlert": 42
+			}`,
+			want: ModelParameters{
+				ID:                   "missing",
+				DisplayName:          "Missing Fields",
+				ContextLimitSmall:    0,
+				ContextLimitLarge:    0,
+				LowBalanceColorAlert: 42,
+			},
+		},
+		{
+			name: "weird types",
+			input: `{
+				"id": "weird",
+				"displayName": "Weird Types",
+				"contextLimitSmall": false,
+				"contextLimitLarge": true,
+				"lowBalanceColorAlert": 42
+			}`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got ModelParameters
+			err := json.Unmarshal([]byte(tt.input), &got)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("UnmarshalJSON() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantErr {
+				return
+			}
+
+			if got != tt.want {
+				t.Errorf("UnmarshalJSON() = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
 }
