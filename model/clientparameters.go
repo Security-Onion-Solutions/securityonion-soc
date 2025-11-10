@@ -6,6 +6,13 @@
 
 package model
 
+import (
+	"encoding/json"
+	"fmt"
+	"math"
+	"strconv"
+)
+
 const DEFAULT_GROUP_FETCH_LIMIT = 10
 const DEFAULT_EVENT_FETCH_LIMIT = 100
 const DEFAULT_RELATIVE_TIME_VALUE = 24
@@ -187,6 +194,53 @@ type ModelParameters struct {
 	ContextLimitSmall    int    `json:"contextLimitSmall"`
 	ContextLimitLarge    int    `json:"contextLimitLarge"`
 	LowBalanceColorAlert int    `json:"lowBalanceColorAlert"`
+}
+
+// Custom unmarshal to handle numeric or scientific-notation string fields
+func (m *ModelParameters) UnmarshalJSON(data []byte) error {
+	type Alias ModelParameters // Prevent recursion
+	aux := struct {
+		ContextLimitSmall    any `json:"contextLimitSmall"`
+		ContextLimitLarge    any `json:"contextLimitLarge"`
+		LowBalanceColorAlert any `json:"lowBalanceColorAlert"`
+		*Alias
+	}{
+		Alias: (*Alias)(m),
+	}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	parseToInt := func(v any) (int, error) {
+		switch val := v.(type) {
+		case float64:
+			return int(val), nil
+		case string:
+			f, err := strconv.ParseFloat(val, 64)
+			if err != nil {
+				return 0, err
+			}
+			return int(math.Round(f)), nil
+		case nil:
+			return 0, nil
+		default:
+			return 0, fmt.Errorf("unexpected type %T for numeric field", v)
+		}
+	}
+
+	var err error
+	if m.ContextLimitSmall, err = parseToInt(aux.ContextLimitSmall); err != nil {
+		return fmt.Errorf("parsing contextLimitSmall: %w", err)
+	}
+	if m.ContextLimitLarge, err = parseToInt(aux.ContextLimitLarge); err != nil {
+		return fmt.Errorf("parsing contextLimitLarge: %w", err)
+	}
+	if m.LowBalanceColorAlert, err = parseToInt(aux.LowBalanceColorAlert); err != nil {
+		return fmt.Errorf("parsing LowBalanceColorAlert: %w", err)
+	}
+
+	return nil
 }
 
 type PresetParameters struct {
