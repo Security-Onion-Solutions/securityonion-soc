@@ -1803,7 +1803,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }
     },
     checkForActivity() {
-      return this.isStreaming || this.isTyping || (this.toolQueues.get(this.currentChatId) && this.toolQueues.get(this.currentChatId).length);
+      const tQ = this.toolQueues.get(this.currentChatId) || [];
+      return this.isStreaming || this.isTyping || tQ.length > 0;
     },
   }
 }});

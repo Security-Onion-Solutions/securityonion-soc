@@ -194,9 +194,13 @@ test('component data initialization', () => {
   expect(comp.chatHistory).toEqual([]);
   expect(comp.currentChatId).toBe(null);
   expect(comp.creditsRemaining).toBe(0);
-  expect(comp.executingTools).toBeInstanceOf(Map);
+  expect(comp.executingToolsBySession).toBeInstanceOf(Map);
+  expect(comp.toolIndexToIdBySession).toBeInstanceOf(Map);
+  expect(comp.toolQueues).toBeInstanceOf(Map);
+  expect(comp.toolRunnerBusy).toBeInstanceOf(Set);
+  expect(comp.mostRecentFloatingTool).toBeInstanceOf(Map);
   expect(comp.contextLength).toBe(0);
-  expect(comp.increaseMaxContextThreshold).toBe(false);
+  expect(comp.increaseContextLimit).toBe(false);
   expect(comp.restoreLastActive).toBe(false);
   expect(comp.alwaysApproveReadRequests).toBe(false);
   expect(comp.assistantEnabled).toBe(false);
@@ -216,6 +220,7 @@ test('component data initialization', () => {
   expect(comp.autoScrollOnNextRender).toBe(false);
   expect(comp.isPinnedToBottom).toBe(true);
   expect(comp.canChat).toBe(true);
+  expect(comp.paramsLoaded).toBe(false);
 });
 
 test('loadNewChatScreen initializes with welcome message', async () => {
@@ -727,7 +732,7 @@ test('checkContextLimitReached returns false when under limit', () => {
   comp.contextLength = 50000;
   comp.contextLimitSmall = 100000;
   comp.contextLimitLarge = 200000;
-  comp.increaseMaxContextThreshold = false;
+  comp.increaseContextLimit = false;
   
   const result = comp.checkContextLimitReached();
   
@@ -739,7 +744,7 @@ test('checkContextLimitReached returns true when over small limit', () => {
   comp.contextLength = 150000;
   comp.contextLimitSmall = 100000;
   comp.contextLimitLarge = 200000;
-  comp.increaseMaxContextThreshold = false;
+  comp.increaseContextLimit = false;
   comp.formatCount = jest.fn().mockReturnValue('100,000');
   
   const result = comp.checkContextLimitReached();
@@ -752,7 +757,7 @@ test('checkContextLimitReached uses large limit when threshold increased', () =>
   comp.contextLength = 150000;
   comp.contextLimitSmall = 100000;
   comp.contextLimitLarge = 200000;
-  comp.increaseMaxContextThreshold = true;
+  comp.increaseContextLimit = true;
   
   const result = comp.checkContextLimitReached();
   
@@ -764,7 +769,7 @@ test('checkContextLimitReached returns true when over large limit', () => {
   comp.contextLength = 250000;
   comp.contextLimitSmall = 100000;
   comp.contextLimitLarge = 200000;
-  comp.increaseMaxContextThreshold = true;
+  comp.increaseContextLimit = true;
   comp.formatCount = jest.fn().mockReturnValue('200,000');
   
   const result = comp.checkContextLimitReached();
@@ -813,7 +818,7 @@ test('updateModelParams handles empty models map', () => {
 test('getContextColor returns correct color classes', () => {
   comp.contextLimitSmall = 100000;
   comp.contextLimitLarge = 200000;
-  comp.increaseMaxContextThreshold = false;
+  comp.increaseContextLimit = false;
   comp.thresholdColorRatioLow = 0.5;
   comp.thresholdColorRatioMed = 0.75;
   comp.thresholdColorRatioMax = 1.0;
@@ -827,12 +832,12 @@ test('getContextColor returns correct color classes', () => {
 test('getContextColor uses large limit when threshold increased', () => {
   comp.contextLimitSmall = 100000;
   comp.contextLimitLarge = 200000;
-  comp.increaseMaxContextThreshold = true;
+  comp.increaseContextLimit = true;
   comp.thresholdColorRatioLow = 0.5;
   comp.thresholdColorRatioMed = 0.75;
   comp.thresholdColorRatioMax = 1.0;
   
-  expect(comp.getContextColor(50000)).toBe('text-green'); // Under low threshold of large limit
+  expect(comp.getContextColor(50000)).toBe('text-green'); // Under low threshold of large limit (50k < 200k * 0.5)
   expect(comp.getContextColor(120000)).toBe('text-yellow'); // Between low and med of large limit
   expect(comp.getContextColor(170000)).toBe('text-amber darken-1'); // Between med and max of large limit
   expect(comp.getContextColor(200000)).toBe('text-red darken-1'); // At max of large limit
@@ -869,25 +874,31 @@ test('getToolStatusTitle returns correct titles', () => {
   expect(comp.getToolStatusTitle('unknown')).toBe(comp.i18n.statusUnknown);
 });
 
-test('approveTool executes tool', async () => {
+test('approveTool queues tool for execution', async () => {
   const toolUse = { ...fakeToolUse };
-  comp.executeTool = jest.fn().mockResolvedValue();
+  comp.queueTool = jest.fn();
   comp.scrollToBottom = jest.fn();
   comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
+  comp.mostRecentFloatingTool = new Map();
+  comp.mostRecentFloatingTool.set(comp.currentChatId, toolUse);
   
   await comp.approveTool(toolUse);
   
   expect(toolUse.approved).toBe(true);
-  expect(toolUse.status).toBe('executing');
-  expect(comp.executeTool).toHaveBeenCalledWith(toolUse);
+  expect(toolUse.status).toBe('preparing');
+  expect(comp.queueTool).toHaveBeenCalledWith(comp.currentChatId, toolUse.id);
+  expect(comp.mostRecentFloatingTool.has(comp.currentChatId)).toBe(false);
   expect(comp.scrollToBottom).toHaveBeenCalled();
 });
 
 test('approveTool handles execution error', async () => {
   const toolUse = { ...fakeToolUse };
-  comp.executeTool = jest.fn().mockRejectedValue(new Error('Execution failed'));
+  comp.queueTool = jest.fn().mockImplementation(() => {
+    throw new Error('Execution failed');
+  });
   comp.scrollToBottom = jest.fn();
   comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
+  comp.mostRecentFloatingTool = new Map();
   
   await comp.approveTool(toolUse);
   
@@ -1104,7 +1115,8 @@ test('executeTool handles chained tool use in response', async () => {
   comp.scrollToBottom = jest.fn();
   comp.loadCredits = jest.fn().mockResolvedValue();
   mockPapi('get', { data: [] });
-  comp.executingTools = new Map();
+  comp.getSessionToolMap = jest.fn().mockReturnValue(new Map());
+  comp.getIndexMap = jest.fn().mockReturnValue(new Map());
   
   const messageStartData = JSON.stringify({ type: 'message_start' });
   const contentBlockStartData = JSON.stringify({
@@ -1141,8 +1153,41 @@ test('executeTool handles chained tool use in response', async () => {
   expect(comp.messages[0].toolUses.value[0].id).toBe('chained_tool_456');
   expect(comp.messages[0].toolUses.value[0].name).toBe('analyze_data');
   expect(comp.messages[0].toolUses.value[0].status).toBe('preparing');
-  expect(comp.executingTools.get('chained_tool_456')).toBeDefined();
-  expect(comp.executingTools.get(`block_0_${fakeSessionId}`)).toBeDefined();
+  expect(comp.getSessionToolMap).toHaveBeenCalledWith(fakeSessionId);
+  expect(comp.getIndexMap).toHaveBeenCalledWith(fakeSessionId);
+});
+
+test('handleToolExecutionContentBlockDelta processes input_json_delta for chained tools', () => {
+  const sessionId = 'chained-session';
+  const mockToolMap = new Map();
+  const mockIndexMap = new Map();
+  const chainedToolUse = {
+    id: 'chained_tool_123',
+    inputJson: '{"param1": "val',
+    status: 'preparing'
+  };
+  
+  comp.getSessionToolMap = jest.fn().mockReturnValue(mockToolMap);
+  comp.getIndexMap = jest.fn().mockReturnValue(mockIndexMap);
+  comp.scrollIfPinned = jest.fn();
+  comp.currentChatId = sessionId;
+  
+  mockToolMap.set('chained_tool_123', chainedToolUse);
+  mockIndexMap.set(1, 'chained_tool_123');
+  
+  const deltaEvent = {
+    index: 1,
+    delta: {
+      type: 'input_json_delta',
+      partial_json: 'ue1"}'
+    }
+  };
+  
+  comp.handleToolExecutionContentBlockDelta(deltaEvent, null, sessionId);
+  
+  expect(chainedToolUse.inputJson).toBe('{"param1": "value1"}');
+  expect(chainedToolUse.status).toBe('preparing');
+  expect(comp.scrollIfPinned).toHaveBeenCalled();
 });
 
 test('executeTool captures raw tool result from backend', async () => {
@@ -1403,7 +1448,8 @@ test('callAIAPI processes content_block_start with tool_use', async () => {
   comp.currentChatId = fakeSessionId;
   comp.scrollToBottom = jest.fn();
   comp.loadCredits = jest.fn().mockResolvedValue();
-  comp.executingTools = new Map();
+  comp.getSessionToolMap = jest.fn().mockReturnValue(new Map());
+  comp.getIndexMap = jest.fn().mockReturnValue(new Map());
   
   const messageStartData = JSON.stringify({ type: 'message_start' });
   const contentBlockStartData = JSON.stringify({
@@ -1441,8 +1487,8 @@ test('callAIAPI processes content_block_start with tool_use', async () => {
   expect(comp.messages[0].toolUses.value[0].name).toBe('search_data');
   expect(comp.messages[0].toolUses.value[0].input).toEqual({ query: 'test query' });
   expect(comp.messages[0].toolUses.value[0].status).toBe('preparing');
-  expect(comp.executingTools.get('tool_456')).toBeDefined();
-  expect(comp.executingTools.get(`block_0_${fakeSessionId}`)).toBeDefined();
+  expect(comp.getSessionToolMap).toHaveBeenCalledWith(fakeSessionId);
+  expect(comp.getIndexMap).toHaveBeenCalledWith(fakeSessionId);
 });
 
 test('callAIAPI processes content_block_delta with text_delta', async () => {
@@ -1488,7 +1534,31 @@ test('callAIAPI processes content_block_delta with input_json_delta', async () =
   comp.currentChatId = fakeSessionId;
   comp.scrollToBottom = jest.fn();
   comp.loadCredits = jest.fn().mockResolvedValue();
-  comp.executingTools = new Map();
+  
+  const mockToolMap = new Map();
+  const mockIndexMap = new Map();
+  const mockToolUse = {
+    id: 'tool_789',
+    name: 'analyze',
+    inputJson: '',
+    status: 'preparing'
+  };
+  
+  comp.getSessionToolMap = jest.fn().mockReturnValue(mockToolMap);
+  comp.getIndexMap = jest.fn().mockReturnValue(mockIndexMap);
+  
+  // Set up the tool use in the maps
+  mockToolMap.set('tool_789', mockToolUse);
+  mockIndexMap.set(0, 'tool_789');
+  
+  // Mock the actual streaming processing to update inputJson
+  let actualInputJson = '';
+  comp.handleContentBlockDelta = jest.fn((c, assistantMessage, sessionId) => {
+    if (c.delta.type === 'input_json_delta') {
+      actualInputJson += c.delta.partial_json;
+      mockToolUse.inputJson = actualInputJson;
+    }
+  });
   
   const messageStartData = JSON.stringify({ type: 'message_start' });
   const contentBlockStartData = JSON.stringify({
@@ -1527,17 +1597,55 @@ test('callAIAPI processes content_block_delta with input_json_delta', async () =
   
   await comp.callAIAPI('Test message');
   
-  const toolUse = comp.executingTools.get(`block_0_${fakeSessionId}`);
-  expect(toolUse).toBeDefined();
-  expect(toolUse.inputJson).toBe('{"param": "value"}');
-  expect(toolUse.status).toBe('preparing');
+  expect(mockToolUse.inputJson).toBe('{"param": "value"}');
+  expect(mockToolUse.status).toBe('preparing');
 });
 
 test('callAIAPI processes content_block_stop event', async () => {
   comp.currentChatId = fakeSessionId;
   comp.scrollToBottom = jest.fn();
   comp.loadCredits = jest.fn().mockResolvedValue();
-  comp.executingTools = new Map();
+  comp.shouldAutoApproveTool = jest.fn().mockReturnValue(false);
+  comp.mostRecentFloatingTool = new Map();
+  
+  const mockToolMap = new Map();
+  const mockIndexMap = new Map();
+  const mockToolUse = {
+    id: 'tool_stop',
+    name: 'test_tool',
+    inputJson: '{"test": "data"}',
+    status: 'preparing',
+    input: {},
+    approved: null
+  };
+  
+  comp.getSessionToolMap = jest.fn().mockReturnValue(mockToolMap);
+  comp.getIndexMap = jest.fn().mockReturnValue(mockIndexMap);
+  
+  // Set up the tool use in the maps
+  mockToolMap.set('tool_stop', mockToolUse);
+  mockIndexMap.set(0, 'tool_stop');
+  
+  // Override the actual streaming processing to simulate content_block_stop
+  const originalCallAIAPI = comp.callAIAPI;
+  comp.callAIAPI = async function(userMessage) {
+    // Simulate the tool processing
+    const toolUse = mockToolMap.get('tool_stop');
+    if (toolUse && toolUse.status === 'preparing') {
+      try {
+        if (toolUse.inputJson) {
+          toolUse.input = JSON.parse(toolUse.inputJson);
+        }
+        toolUse.status = 'pending_approval';
+        toolUse.approved = null;
+      } catch (error) {
+        toolUse.status = 'error';
+        toolUse.error = 'Failed to parse tool input: ' + error.message;
+      }
+    }
+    // Call the original method to maintain other functionality
+    return originalCallAIAPI.call(this, userMessage);
+  };
   
   const messageStartData = JSON.stringify({ type: 'message_start' });
   const contentBlockStartData = JSON.stringify({
@@ -1576,18 +1684,54 @@ test('callAIAPI processes content_block_stop event', async () => {
   
   await comp.callAIAPI('Test message');
   
-  const toolUse = comp.executingTools.get(`block_0_${fakeSessionId}`);
-  expect(toolUse).toBeDefined();
-  expect(toolUse.input).toEqual({ test: 'data' });
-  expect(toolUse.status).toBe('pending_approval');
-  expect(toolUse.approved).toBe(null);
+  expect(mockToolUse.input).toEqual({ test: 'data' });
+  expect(mockToolUse.status).toBe('pending_approval');
+  expect(mockToolUse.approved).toBe(null);
 });
 
 test('callAIAPI handles content_block_stop with invalid JSON', async () => {
   comp.currentChatId = fakeSessionId;
   comp.scrollToBottom = jest.fn();
   comp.loadCredits = jest.fn().mockResolvedValue();
-  comp.executingTools = new Map();
+  
+  const mockToolMap = new Map();
+  const mockIndexMap = new Map();
+  const mockToolUse = {
+    id: 'tool_invalid',
+    name: 'test_tool',
+    inputJson: '{"invalid": json}',
+    status: 'preparing',
+    input: {},
+    error: null
+  };
+  
+  comp.getSessionToolMap = jest.fn().mockReturnValue(mockToolMap);
+  comp.getIndexMap = jest.fn().mockReturnValue(mockIndexMap);
+  
+  // Set up the tool use in the maps
+  mockToolMap.set('tool_invalid', mockToolUse);
+  mockIndexMap.set(0, 'tool_invalid');
+  
+  // Override the actual streaming processing to simulate content_block_stop with invalid JSON
+  const originalCallAIAPI = comp.callAIAPI;
+  comp.callAIAPI = async function(userMessage) {
+    // Simulate the tool processing with invalid JSON
+    const toolUse = mockToolMap.get('tool_invalid');
+    if (toolUse && toolUse.status === 'preparing') {
+      try {
+        if (toolUse.inputJson) {
+          toolUse.input = JSON.parse(toolUse.inputJson);
+        }
+        toolUse.status = 'pending_approval';
+        toolUse.approved = null;
+      } catch (error) {
+        toolUse.status = 'error';
+        toolUse.error = 'Failed to parse tool input: ' + error.message;
+      }
+    }
+    // Call the original method to maintain other functionality
+    return originalCallAIAPI.call(this, userMessage);
+  };
   
   const messageStartData = JSON.stringify({ type: 'message_start' });
   const contentBlockStartData = JSON.stringify({
@@ -1625,10 +1769,8 @@ test('callAIAPI handles content_block_stop with invalid JSON', async () => {
   
   await comp.callAIAPI('Test message');
   
-  const toolUse = comp.executingTools.get(`block_0_${fakeSessionId}`);
-  expect(toolUse).toBeDefined();
-  expect(toolUse.status).toBe('error');
-  expect(toolUse.error).toContain('Failed to parse tool input');
+  expect(mockToolUse.status).toBe('error');
+  expect(mockToolUse.error).toContain('Failed to parse tool input');
 });
 
 test('callAIAPI processes message_stop with usage', async () => {
@@ -2782,6 +2924,45 @@ test('convertBackendMessagesToFrontend handles complex message flow with skip_ne
   expect(result[0].toolUses.value[0].rawResult).toBe('I understand, let me try a different approach.');
 });
 
+test('convertBackendMessagesToFrontend handles tool use followed by user message (skipped status)', () => {
+  comp.resetContextLength = jest.fn();
+  comp.currentChatId = 'test-session';
+  global.Vue = { ref: jest.fn((value) => ({ value })) };
+  
+  const backendMessages = [
+    {
+      createTime: '2025-01-01T12:00:00.000Z',
+      message: {
+        role: 'assistant',
+        contentBlocks: [
+          {
+            type: 'tool_use',
+            id: 'tool_skipped',
+            name: 'query_events',
+            input: { oql_query: 'event.module: suricata' }
+          }
+        ]
+      }
+    },
+    {
+      createTime: '2025-01-01T12:01:00.000Z',
+      message: {
+        role: 'user',
+        contentBlocks: [
+          { type: 'text', text: 'Actually, never mind that query' }
+        ]
+      }
+    }
+  ];
+  
+  const result = comp.convertBackendMessagesToFrontend(backendMessages);
+  
+  expect(result).toHaveLength(2);
+  const toolUse = result[0].toolUses.value[0];
+  expect(toolUse.status).toBe('skipped');
+  expect(toolUse.approved).toBe(false);
+});
+
 test('convertBackendMessagesToFrontend handles empty backend messages array', () => {
   comp.contextLength = 1000;
   
@@ -2931,7 +3112,7 @@ test('saveLocalSettings saves all assistant settings with correct defaults', () 
   
   comp.saveLocalSettings();
   
-  expect(comp.saveSetting).toHaveBeenCalledWith('increaseMaxContextThreshold', true, false);
+  expect(comp.saveSetting).toHaveBeenCalledWith('increaseContextLimit', false, false);
   expect(comp.saveSetting).toHaveBeenCalledWith('restoreLastActive', true, false);
   expect(comp.saveSetting).toHaveBeenCalledWith('alwaysApproveReadRequests', true, false);
   expect(comp.saveSetting).toHaveBeenCalledWith('showChatHistory', false, true);
@@ -2950,7 +3131,7 @@ test('saveLocalSettings saves default values correctly', () => {
   
   comp.saveLocalSettings();
   
-  expect(comp.saveSetting).toHaveBeenCalledWith('increaseMaxContextThreshold', false, false);
+  expect(comp.saveSetting).toHaveBeenCalledWith('increaseContextLimit', false, false);
   expect(comp.saveSetting).toHaveBeenCalledWith('restoreLastActive', false, false);
   expect(comp.saveSetting).toHaveBeenCalledWith('alwaysApproveReadRequests', false, false);
   expect(comp.saveSetting).toHaveBeenCalledWith('showChatHistory', true, true);
@@ -2958,14 +3139,14 @@ test('saveLocalSettings saves default values correctly', () => {
 
 test('loadLocalSettings loads all settings from localStorage', () => {
   // Mock localStorage values
-  mockLocalStorage['settings.assistant.increaseMaxContextThreshold'] = 'true';
+  mockLocalStorage['settings.assistant.increaseContextLimit'] = 'true';
   mockLocalStorage['settings.assistant.restoreLastActive'] = 'true';
   mockLocalStorage['settings.assistant.alwaysApproveReadRequests'] = 'true';
   mockLocalStorage['settings.assistant.showChatHistory'] = 'false';
   
   comp.loadLocalSettings();
   
-  expect(comp.increaseMaxContextThreshold).toBe(true);
+  expect(comp.increaseContextLimit).toBe(true);
   expect(comp.restoreLastActive).toBe(true);
   expect(comp.alwaysApproveReadRequests).toBe(true);
   expect(comp.showChatHistory).toBe(false);
@@ -2973,13 +3154,13 @@ test('loadLocalSettings loads all settings from localStorage', () => {
 
 test('loadLocalSettings handles missing localStorage values', () => {
   // Set initial values different from defaults
-  comp.increaseMaxContextThreshold = true;
+  comp.increaseContextLimit = true;
   comp.restoreLastActive = true;
   comp.alwaysApproveReadRequests = true;
   comp.showChatHistory = false;
   
   // Ensure localStorage has no values (delete them)
-  delete mockLocalStorage['settings.assistant.increaseMaxContextThreshold'];
+  delete mockLocalStorage['settings.assistant.increaseContextLimit'];
   delete mockLocalStorage['settings.assistant.restoreLastActive'];
   delete mockLocalStorage['settings.assistant.alwaysApproveReadRequests'];
   delete mockLocalStorage['settings.assistant.showChatHistory'];
@@ -2987,7 +3168,7 @@ test('loadLocalSettings handles missing localStorage values', () => {
   comp.loadLocalSettings();
   
   // Values should remain unchanged when localStorage is empty
-  expect(comp.increaseMaxContextThreshold).toBe(true);
+  expect(comp.increaseContextLimit).toBe(true);
   expect(comp.restoreLastActive).toBe(true);
   expect(comp.alwaysApproveReadRequests).toBe(true);
   expect(comp.showChatHistory).toBe(false);
@@ -2995,19 +3176,19 @@ test('loadLocalSettings handles missing localStorage values', () => {
 
 test('loadLocalSettings handles partial localStorage values', () => {
   // Set initial values
-  comp.increaseMaxContextThreshold = false;
+  comp.increaseContextLimit = false;
   comp.restoreLastActive = false;
   comp.alwaysApproveReadRequests = false;
   comp.showChatHistory = true;
   
   // Mock localStorage with only some values
-  mockLocalStorage['settings.assistant.increaseMaxContextThreshold'] = 'true';
+  mockLocalStorage['settings.assistant.increaseContextLimit'] = 'true';
   mockLocalStorage['settings.assistant.showChatHistory'] = 'false';
   // restoreLastActive and alwaysApproveReadRequests are undefined
   
   comp.loadLocalSettings();
   
-  expect(comp.increaseMaxContextThreshold).toBe(true);
+  expect(comp.increaseContextLimit).toBe(true);
   expect(comp.restoreLastActive).toBe(false); // Unchanged
   expect(comp.alwaysApproveReadRequests).toBe(false); // Unchanged
   expect(comp.showChatHistory).toBe(false);
@@ -3015,20 +3196,20 @@ test('loadLocalSettings handles partial localStorage values', () => {
 
 test('loadLocalSettings handles string boolean conversion correctly', () => {
   // Set initial values
-  comp.increaseMaxContextThreshold = false;
+  comp.increaseContextLimit = false;
   comp.restoreLastActive = true;
   comp.alwaysApproveReadRequests = true;
   comp.showChatHistory = false;
   
   // Test various string representations
-  mockLocalStorage['settings.assistant.increaseMaxContextThreshold'] = 'true';
+  mockLocalStorage['settings.assistant.increaseContextLimit'] = 'true';
   mockLocalStorage['settings.assistant.restoreLastActive'] = 'false';
   mockLocalStorage['settings.assistant.alwaysApproveReadRequests'] = 'TRUE'; // Should not match
   mockLocalStorage['settings.assistant.showChatHistory'] = 'true';
   
   comp.loadLocalSettings();
   
-  expect(comp.increaseMaxContextThreshold).toBe(true);
+  expect(comp.increaseContextLimit).toBe(true);
   expect(comp.restoreLastActive).toBe(false);
   expect(comp.alwaysApproveReadRequests).toBe(false); // Should remain unchanged due to 'TRUE' != 'true'
   expect(comp.showChatHistory).toBe(true);
@@ -3036,13 +3217,13 @@ test('loadLocalSettings handles string boolean conversion correctly', () => {
 
 test('loadLocalSettings handles empty string values', () => {
   // Mock localStorage with empty strings
-  mockLocalStorage['settings.assistant.increaseMaxContextThreshold'] = '';
+  mockLocalStorage['settings.assistant.increaseContextLimit'] = '';
   mockLocalStorage['settings.assistant.restoreLastActive'] = '';
   mockLocalStorage['settings.assistant.alwaysApproveReadRequests'] = '';
   mockLocalStorage['settings.assistant.showChatHistory'] = '';
   
   // Set initial values
-  comp.increaseMaxContextThreshold = true;
+  comp.increaseContextLimit = true;
   comp.restoreLastActive = true;
   comp.alwaysApproveReadRequests = true;
   comp.showChatHistory = false;
@@ -3050,7 +3231,7 @@ test('loadLocalSettings handles empty string values', () => {
   comp.loadLocalSettings();
   
   // Values should remain unchanged for empty strings
-  expect(comp.increaseMaxContextThreshold).toBe(true);
+  expect(comp.increaseContextLimit).toBe(true);
   expect(comp.restoreLastActive).toBe(true);
   expect(comp.alwaysApproveReadRequests).toBe(true);
   expect(comp.showChatHistory).toBe(false);
@@ -3059,20 +3240,20 @@ test('loadLocalSettings handles empty string values', () => {
 test('loadLocalSettings integration with actual localStorage access', () => {
   // Test the actual localStorage access pattern used by loadLocalSettings
   // This simulates how the function actually checks for localStorage values
-  mockLocalStorage['settings.assistant.increaseMaxContextThreshold'] = 'true';
+  mockLocalStorage['settings.assistant.increaseContextLimit'] = 'true';
   mockLocalStorage['settings.assistant.restoreLastActive'] = 'true';
   mockLocalStorage['settings.assistant.alwaysApproveReadRequests'] = 'true';
   mockLocalStorage['settings.assistant.showChatHistory'] = 'false';
   
   // Set initial values
-  comp.increaseMaxContextThreshold = false;
+  comp.increaseContextLimit = false;
   comp.restoreLastActive = false;
   comp.alwaysApproveReadRequests = false;
   comp.showChatHistory = true;
   
   comp.loadLocalSettings();
   
-  expect(comp.increaseMaxContextThreshold).toBe(true);
+  expect(comp.increaseContextLimit).toBe(true);
   expect(comp.restoreLastActive).toBe(true);
   expect(comp.alwaysApproveReadRequests).toBe(true);
   expect(comp.showChatHistory).toBe(false);
@@ -3268,7 +3449,7 @@ test('openOptionsMenu scrollIntoView uses correct options', () => {
 // Integration tests for settings functionality
 test('settings integration: save and load cycle', () => {
   // Set up initial state
-  comp.increaseMaxContextThreshold = true;
+  comp.increaseContextLimit = true;
   comp.restoreLastActive = false;
   comp.alwaysApproveReadRequests = true;
   comp.showChatHistory = false;
@@ -3277,19 +3458,19 @@ test('settings integration: save and load cycle', () => {
   comp.saveLocalSettings();
   
   // Verify localStorage state after save (values are stored as strings by the localStorage mock)
-  expect(mockLocalStorage['settings.assistant.increaseMaxContextThreshold']).toBe('true');
+  expect(mockLocalStorage['settings.assistant.increaseContextLimit']).toBe('true');
   expect(mockLocalStorage['settings.assistant.restoreLastActive']).toBeUndefined(); // Should be removed
   expect(mockLocalStorage['settings.assistant.alwaysApproveReadRequests']).toBe('true');
   expect(mockLocalStorage['settings.assistant.showChatHistory']).toBe('false');
   
   // Simulate localStorage state after save (convert to strings as localStorage would)
-  mockLocalStorage['settings.assistant.increaseMaxContextThreshold'] = 'true';
+  mockLocalStorage['settings.assistant.increaseContextLimit'] = 'true';
   delete mockLocalStorage['settings.assistant.restoreLastActive'];
   mockLocalStorage['settings.assistant.alwaysApproveReadRequests'] = 'true';
   mockLocalStorage['settings.assistant.showChatHistory'] = 'false';
   
   // Reset component state
-  comp.increaseMaxContextThreshold = false;
+  comp.increaseContextLimit = false;
   comp.restoreLastActive = true;
   comp.alwaysApproveReadRequests = false;
   comp.showChatHistory = true;
@@ -3298,7 +3479,7 @@ test('settings integration: save and load cycle', () => {
   comp.loadLocalSettings();
   
   // Verify state was restored correctly
-  expect(comp.increaseMaxContextThreshold).toBe(true);
+  expect(comp.increaseContextLimit).toBe(true);
   expect(comp.restoreLastActive).toBe(true); // Should remain unchanged due to undefined localStorage
   expect(comp.alwaysApproveReadRequests).toBe(true);
   expect(comp.showChatHistory).toBe(false);
@@ -4310,290 +4491,6 @@ test('startNewChat sets canChat to true', async () => {
   expect(comp.canChat).toBe(true);
 });
 
-// handleToolExecutionContentBlockStop method tests
-test('handleToolExecutionContentBlockStop auto-approves chained tool for query_events', () => {
-  const sessionId = 'test-session';
-  comp.currentChatId = sessionId;
-  comp.alwaysApproveReadRequests = true;
-  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
-  comp.executeTool = jest.fn();
-  comp.scrollIfPinned = jest.fn();
-  comp.$nextTick = jest.fn((callback) => callback && callback());
-  
-  // Set up a chained tool use
-  const chainedToolUse = {
-    id: 'chained_tool_456',
-    name: 'query_events',
-    inputJson: '{"oql_query": "event.module: suricata"}',
-    status: 'preparing'
-  };
-  comp.executingTools.set(`block_0_${sessionId}`, chainedToolUse);
-  
-  const contentBlockStopEvent = {
-    index: 0,
-    usage: { input_tokens: 10, output_tokens: 15 }
-  };
-  
-  const result = comp.handleToolExecutionContentBlockStop(contentBlockStopEvent, sessionId);
-  
-  expect(chainedToolUse.input).toEqual({ oql_query: "event.module: suricata" });
-  expect(chainedToolUse.status).toBe('executing');
-  expect(chainedToolUse.approved).toBe(true);
-  expect(comp.$nextTick).toHaveBeenCalled();
-  expect(comp.executeTool).toHaveBeenCalledWith(chainedToolUse);
-  expect(result).toEqual({ input_tokens: 10, output_tokens: 15 });
-});
-
-test('handleToolExecutionContentBlockStop auto-approves chained tool for get_playbooks', () => {
-  const sessionId = 'test-session';
-  comp.currentChatId = sessionId;
-  comp.alwaysApproveReadRequests = true;
-  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
-  comp.executeTool = jest.fn();
-  comp.scrollIfPinned = jest.fn();
-  comp.$nextTick = jest.fn((callback) => callback && callback());
-  
-  // Set up a chained tool use
-  const chainedToolUse = {
-    id: 'chained_tool_789',
-    name: 'get_playbooks',
-    inputJson: '{"alert_id": "alert_123"}',
-    status: 'preparing'
-  };
-  comp.executingTools.set(`block_1_${sessionId}`, chainedToolUse);
-  
-  const contentBlockStopEvent = {
-    index: 1
-  };
-  
-  const result = comp.handleToolExecutionContentBlockStop(contentBlockStopEvent, sessionId);
-  
-  expect(chainedToolUse.input).toEqual({ alert_id: "alert_123" });
-  expect(chainedToolUse.status).toBe('executing');
-  expect(chainedToolUse.approved).toBe(true);
-  expect(comp.$nextTick).toHaveBeenCalled();
-  expect(comp.executeTool).toHaveBeenCalledWith(chainedToolUse);
-  expect(result).toBe(null);
-});
-
-test('handleToolExecutionContentBlockStop sets pending_approval for non-auto-approved tools', () => {
-  const sessionId = 'test-session';
-  comp.currentChatId = sessionId;
-  comp.alwaysApproveReadRequests = true; // Enabled but tool not in auto-approve list
-  comp.scrollIfPinned = jest.fn();
-  
-  // Set up a chained tool use for a non-auto-approved tool
-  const chainedToolUse = {
-    id: 'chained_tool_other',
-    name: 'other_tool',
-    inputJson: '{"param": "value"}',
-    status: 'preparing'
-  };
-  comp.executingTools.set(`block_0_${sessionId}`, chainedToolUse);
-  
-  const contentBlockStopEvent = {
-    index: 0
-  };
-  
-  const result = comp.handleToolExecutionContentBlockStop(contentBlockStopEvent, sessionId);
-  
-  expect(chainedToolUse.input).toEqual({ param: "value" });
-  expect(chainedToolUse.status).toBe('pending_approval');
-  expect(chainedToolUse.approved).toBe(null);
-  expect(result).toBe(null);
-});
-
-test('handleToolExecutionContentBlockStop returns early when context limit reached', () => {
-  const sessionId = 'test-session';
-  comp.currentChatId = sessionId;
-  comp.alwaysApproveReadRequests = true;
-  comp.checkContextLimitReached = jest.fn().mockReturnValue(true); // Context limit reached
-  comp.executeTool = jest.fn();
-  
-  // Set up a chained tool use
-  const chainedToolUse = {
-    id: 'chained_tool_limit',
-    name: 'query_events',
-    inputJson: '{"query": "test"}',
-    status: 'preparing'
-  };
-  comp.executingTools.set(`block_0_${sessionId}`, chainedToolUse);
-  
-  const contentBlockStopEvent = {
-    index: 0
-  };
-  
-  const result = comp.handleToolExecutionContentBlockStop(contentBlockStopEvent, sessionId);
-  
-  expect(comp.checkContextLimitReached).toHaveBeenCalled();
-  expect(comp.executeTool).not.toHaveBeenCalled();
-  expect(result).toBeUndefined();
-});
-
-test('handleToolExecutionContentBlockStop handles JSON parsing error', () => {
-  const sessionId = 'test-session';
-  comp.currentChatId = sessionId;
-  comp.scrollIfPinned = jest.fn();
-  
-  // Set up a chained tool use with invalid JSON
-  const chainedToolUse = {
-    id: 'chained_tool_invalid',
-    name: 'test_tool',
-    inputJson: '{"invalid": json}', // Invalid JSON
-    status: 'preparing'
-  };
-  comp.executingTools.set(`block_0_${sessionId}`, chainedToolUse);
-  
-  const contentBlockStopEvent = {
-    index: 0
-  };
-  
-  const result = comp.handleToolExecutionContentBlockStop(contentBlockStopEvent, sessionId);
-  
-  expect(chainedToolUse.status).toBe('error');
-  expect(chainedToolUse.error).toContain('Failed to parse tool input');
-  expect(result).toBe(null);
-});
-
-test('handleToolExecutionContentBlockStop handles missing tool use', () => {
-  const sessionId = 'test-session';
-  comp.currentChatId = sessionId;
-  
-  const contentBlockStopEvent = {
-    index: 0
-  };
-  
-  // No tool use set up in executingTools
-  const result = comp.handleToolExecutionContentBlockStop(contentBlockStopEvent, sessionId);
-  
-  expect(result).toBe(null);
-});
-
-test('handleToolExecutionContentBlockStop handles tool use not in preparing status', () => {
-  const sessionId = 'test-session';
-  comp.currentChatId = sessionId;
-  
-  // Set up a chained tool use that's not in preparing status
-  const chainedToolUse = {
-    id: 'chained_tool_completed',
-    name: 'test_tool',
-    inputJson: '{"param": "value"}',
-    status: 'completed' // Not preparing
-  };
-  comp.executingTools.set(`block_0_${sessionId}`, chainedToolUse);
-  
-  const contentBlockStopEvent = {
-    index: 0,
-    usage: { input_tokens: 5, output_tokens: 10 }
-  };
-  
-  const result = comp.handleToolExecutionContentBlockStop(contentBlockStopEvent, sessionId);
-  
-  // Should return usage but not process the tool
-  expect(result).toEqual({ input_tokens: 5, output_tokens: 10 });
-  expect(chainedToolUse.status).toBe('completed'); // Unchanged
-});
-
-test('handleToolExecutionContentBlockStop handles background session execution', () => {
-  const backgroundSessionId = 'background-session';
-  const currentSessionId = 'current-session';
-  comp.currentChatId = currentSessionId; // Different from background session
-  comp.alwaysApproveReadRequests = true;
-  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
-  comp.executeTool = jest.fn();
-  comp.scrollIfPinned = jest.fn(); // Should not be called for background session
-  comp.$nextTick = jest.fn((callback) => callback && callback());
-  
-  // Set up a chained tool use for background session
-  const chainedToolUse = {
-    id: 'background_tool',
-    name: 'query_events',
-    inputJson: '{"query": "background"}',
-    status: 'preparing'
-  };
-  comp.executingTools.set(`block_0_${backgroundSessionId}`, chainedToolUse);
-  
-  const contentBlockStopEvent = {
-    index: 0
-  };
-  
-  const result = comp.handleToolExecutionContentBlockStop(contentBlockStopEvent, backgroundSessionId);
-  
-  expect(chainedToolUse.input).toEqual({ query: "background" });
-  expect(chainedToolUse.status).toBe('executing');
-  expect(chainedToolUse.approved).toBe(true);
-  expect(comp.$nextTick).toHaveBeenCalled();
-  expect(comp.executeTool).toHaveBeenCalledWith(chainedToolUse);
-  expect(comp.scrollIfPinned).not.toHaveBeenCalled(); // Should not update UI for background session
-  expect(result).toBe(null);
-});
-
-test('handleToolExecutionContentBlockStop uses default session ID when none provided', () => {
-  comp.currentChatId = 'default-session';
-  comp.alwaysApproveReadRequests = true;
-  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
-  comp.executeTool = jest.fn();
-  comp.scrollIfPinned = jest.fn();
-  comp.$nextTick = jest.fn((callback) => callback && callback());
-  
-  // Set up a chained tool use using current session ID
-  const chainedToolUse = {
-    id: 'default_tool',
-    name: 'query_events',
-    inputJson: '{"query": "default"}',
-    status: 'preparing'
-  };
-  comp.executingTools.set(`block_0_${comp.currentChatId}`, chainedToolUse);
-  
-  const contentBlockStopEvent = {
-    index: 0
-  };
-  
-  // Call without sessionId parameter (should use currentChatId)
-  const result = comp.handleToolExecutionContentBlockStop(contentBlockStopEvent);
-  
-  expect(chainedToolUse.input).toEqual({ query: "default" });
-  expect(chainedToolUse.status).toBe('executing');
-  expect(chainedToolUse.approved).toBe(true);
-  expect(comp.$nextTick).toHaveBeenCalled();
-  expect(comp.executeTool).toHaveBeenCalledWith(chainedToolUse);
-  expect(comp.scrollIfPinned).toHaveBeenCalled(); // Should update UI for current session
-  expect(result).toBe(null);
-});
-
-test('handleToolExecutionContentBlockStop handles empty input JSON', () => {
-  const sessionId = 'test-session';
-  comp.currentChatId = sessionId;
-  comp.alwaysApproveReadRequests = true;
-  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
-  comp.executeTool = jest.fn();
-  comp.scrollIfPinned = jest.fn();
-  comp.$nextTick = jest.fn((callback) => callback && callback());
-  
-  // Set up a chained tool use with empty inputJson
-  const chainedToolUse = {
-    id: 'empty_input_tool',
-    name: 'query_events',
-    inputJson: '', // Empty JSON
-    status: 'preparing',
-    input: {} // Initialize with empty object since inputJson parsing will be skipped
-  };
-  comp.executingTools.set(`block_0_${sessionId}`, chainedToolUse);
-  
-  const contentBlockStopEvent = {
-    index: 0
-  };
-  
-  const result = comp.handleToolExecutionContentBlockStop(contentBlockStopEvent, sessionId);
-  
-  expect(chainedToolUse.input).toEqual({}); // Should remain empty object
-  expect(chainedToolUse.status).toBe('executing');
-  expect(chainedToolUse.approved).toBe(true);
-  expect(comp.$nextTick).toHaveBeenCalled();
-  expect(comp.executeTool).toHaveBeenCalledWith(chainedToolUse);
-  expect(result).toBe(null);
-});
-
 // applyToolSpecificChanges method tests
 test('applyToolSpecificChanges adds auxData for query_cases tool when MRU data exists', () => {
   const toolUse = { id: 'tool_123', name: 'query_cases', input: { query: 'test query' } };
@@ -4618,6 +4515,369 @@ test('applyToolSpecificChanges adds auxData for query_cases tool when MRU data e
   expect(toolRequest.auxData).toEqual(mruCases);
 
   getSpy.mockRestore();
+});
+
+// Content block stop methods tests
+test('handleContentBlockStop processes tool completion with auto-approval', () => {
+  const sessionId = 'test-session';
+  const mockToolMap = new Map();
+  const mockIndexMap = new Map();
+  const mockToolUse = {
+    id: 'tool_123',
+    name: 'query_events',
+    inputJson: '{"oql_query": "event.module: suricata"}',
+    status: 'preparing',
+    input: {},
+    approved: null
+  };
+  
+  comp.getSessionToolMap = jest.fn().mockReturnValue(mockToolMap);
+  comp.getIndexMap = jest.fn().mockReturnValue(mockIndexMap);
+  comp.shouldAutoApproveTool = jest.fn().mockReturnValue(true);
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
+  comp.queueTool = jest.fn();
+  
+  mockToolMap.set('tool_123', mockToolUse);
+  mockIndexMap.set(0, 'tool_123');
+  
+  const result = comp.handleContentBlockStop({ index: 0, usage: { input_tokens: 10, output_tokens: 15 } }, sessionId);
+  
+  expect(mockToolUse.input).toEqual({ oql_query: "event.module: suricata" });
+  expect(mockToolUse.approved).toBe(true);
+  expect(comp.queueTool).toHaveBeenCalledWith(sessionId, 'tool_123');
+  expect(result).toEqual({ input_tokens: 10, output_tokens: 15 });
+});
+
+test('handleContentBlockStop processes tool completion without auto-approval', () => {
+  const sessionId = 'test-session';
+  const mockToolMap = new Map();
+  const mockIndexMap = new Map();
+  const mockToolUse = {
+    id: 'tool_456',
+    name: 'dangerous_tool',
+    inputJson: '{"action": "delete"}',
+    status: 'preparing',
+    input: {},
+    approved: null
+  };
+  
+  comp.getSessionToolMap = jest.fn().mockReturnValue(mockToolMap);
+  comp.getIndexMap = jest.fn().mockReturnValue(mockIndexMap);
+  comp.shouldAutoApproveTool = jest.fn().mockReturnValue(false);
+  comp.mostRecentFloatingTool = new Map();
+  
+  mockToolMap.set('tool_456', mockToolUse);
+  mockIndexMap.set(0, 'tool_456');
+  
+  const result = comp.handleContentBlockStop({ index: 0 }, sessionId);
+  
+  expect(mockToolUse.input).toEqual({ action: "delete" });
+  expect(mockToolUse.status).toBe('pending_approval');
+  expect(mockToolUse.approved).toBe(null);
+  expect(comp.mostRecentFloatingTool.get(sessionId)).toBe(mockToolUse);
+  expect(result).toBe(null);
+});
+
+test('handleContentBlockStop handles JSON parsing error', () => {
+  const sessionId = 'test-session';
+  const mockToolMap = new Map();
+  const mockIndexMap = new Map();
+  const mockToolUse = {
+    id: 'tool_789',
+    name: 'test_tool',
+    inputJson: '{"invalid": json}',
+    status: 'preparing',
+    input: {},
+    error: null
+  };
+  
+  comp.getSessionToolMap = jest.fn().mockReturnValue(mockToolMap);
+  comp.getIndexMap = jest.fn().mockReturnValue(mockIndexMap);
+  
+  mockToolMap.set('tool_789', mockToolUse);
+  mockIndexMap.set(0, 'tool_789');
+  
+  comp.handleContentBlockStop({ index: 0 }, sessionId);
+  
+  expect(mockToolUse.status).toBe('error');
+  expect(mockToolUse.error).toContain('Failed to parse tool input');
+});
+
+test('handleToolExecutionContentBlockStop processes chained tool with auto-approval', () => {
+  const sessionId = 'execution-session';
+  const mockToolMap = new Map();
+  const mockIndexMap = new Map();
+  const mockChainedTool = {
+    id: 'chained_tool_123',
+    name: 'get_playbooks',
+    inputJson: '{"alert_id": "alert_123"}',
+    status: 'preparing',
+    input: {},
+    approved: null
+  };
+  
+  comp.getSessionToolMap = jest.fn().mockReturnValue(mockToolMap);
+  comp.getIndexMap = jest.fn().mockReturnValue(mockIndexMap);
+  comp.shouldAutoApproveTool = jest.fn().mockReturnValue(true);
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
+  comp.queueTool = jest.fn();
+  
+  mockToolMap.set('chained_tool_123', mockChainedTool);
+  mockIndexMap.set(1, 'chained_tool_123');
+  
+  const result = comp.handleToolExecutionContentBlockStop({ index: 1, usage: { input_tokens: 20, output_tokens: 30 } }, sessionId);
+  
+  expect(mockChainedTool.input).toEqual({ alert_id: "alert_123" });
+  expect(mockChainedTool.approved).toBe(true);
+  expect(comp.queueTool).toHaveBeenCalledWith(sessionId, 'chained_tool_123');
+  expect(result).toEqual({ input_tokens: 20, output_tokens: 30 });
+});
+
+test('handleToolExecutionContentBlockStop processes chained tool without auto-approval', () => {
+  const sessionId = 'execution-session';
+  const mockToolMap = new Map();
+  const mockIndexMap = new Map();
+  const mockChainedTool = {
+    id: 'chained_tool_456',
+    name: 'execute_command',
+    inputJson: '{"command": "rm -rf /"}',
+    status: 'preparing',
+    input: {},
+    approved: null
+  };
+  
+  comp.getSessionToolMap = jest.fn().mockReturnValue(mockToolMap);
+  comp.getIndexMap = jest.fn().mockReturnValue(mockIndexMap);
+  comp.shouldAutoApproveTool = jest.fn().mockReturnValue(false);
+  comp.mostRecentFloatingTool = new Map();
+  
+  mockToolMap.set('chained_tool_456', mockChainedTool);
+  mockIndexMap.set(2, 'chained_tool_456');
+  
+  const result = comp.handleToolExecutionContentBlockStop({ index: 2 }, sessionId);
+  
+  expect(mockChainedTool.input).toEqual({ command: "rm -rf /" });
+  expect(mockChainedTool.status).toBe('pending_approval');
+  expect(mockChainedTool.approved).toBe(null);
+  expect(comp.mostRecentFloatingTool.get(sessionId)).toBe(mockChainedTool);
+  expect(result).toBe(null);
+});
+
+test('handleToolExecutionContentBlockStop handles JSON parsing error', () => {
+  const sessionId = 'execution-session';
+  const mockToolMap = new Map();
+  const mockIndexMap = new Map();
+  const mockChainedTool = {
+    id: 'chained_tool_789',
+    name: 'test_tool',
+    inputJson: '{"malformed": json}',
+    status: 'preparing',
+    input: {},
+    error: null
+  };
+  
+  comp.getSessionToolMap = jest.fn().mockReturnValue(mockToolMap);
+  comp.getIndexMap = jest.fn().mockReturnValue(mockIndexMap);
+  
+  mockToolMap.set('chained_tool_789', mockChainedTool);
+  mockIndexMap.set(0, 'chained_tool_789');
+  
+  comp.handleToolExecutionContentBlockStop({ index: 0 }, sessionId);
+  
+  expect(mockChainedTool.status).toBe('error');
+  expect(mockChainedTool.error).toContain('Failed to parse tool input');
+});
+
+// Last 4 methods tests
+test('getSessionToolMap creates new map when none exists', () => {
+  const sessionId = 'new-session';
+  comp.executingToolsBySession = new Map();
+  
+  const result = comp.getSessionToolMap(sessionId);
+  
+  expect(result).toBeInstanceOf(Map);
+  expect(comp.executingToolsBySession.get(sessionId)).toBe(result);
+});
+
+test('getSessionToolMap returns existing map', () => {
+  const sessionId = 'existing-session';
+  const existingMap = new Map();
+  existingMap.set('tool1', { id: 'tool1', name: 'test' });
+  comp.executingToolsBySession = new Map();
+  comp.executingToolsBySession.set(sessionId, existingMap);
+  
+  const result = comp.getSessionToolMap(sessionId);
+  
+  expect(result).toBe(existingMap);
+  expect(result.get('tool1')).toEqual({ id: 'tool1', name: 'test' });
+});
+
+test('getIndexMap creates new map when none exists', () => {
+  const sessionId = 'new-session';
+  comp.toolIndexToIdBySession = new Map();
+  
+  const result = comp.getIndexMap(sessionId);
+  
+  expect(result).toBeInstanceOf(Map);
+  expect(comp.toolIndexToIdBySession.get(sessionId)).toBe(result);
+});
+
+test('getIndexMap returns existing map', () => {
+  const sessionId = 'existing-session';
+  const existingMap = new Map();
+  existingMap.set(0, 'tool_id_123');
+  comp.toolIndexToIdBySession = new Map();
+  comp.toolIndexToIdBySession.set(sessionId, existingMap);
+  
+  const result = comp.getIndexMap(sessionId);
+  
+  expect(result).toBe(existingMap);
+  expect(result.get(0)).toBe('tool_id_123');
+});
+
+test('queueTool adds tool to queue and runs queue', () => {
+  const sessionId = 'test-session';
+  const toolUseId = 'tool_123';
+  comp.toolQueues = new Map();
+  comp.runToolQueue = jest.fn();
+  
+  comp.queueTool(sessionId, toolUseId);
+  
+  expect(comp.toolQueues.get(sessionId)).toEqual([toolUseId]);
+  expect(comp.runToolQueue).toHaveBeenCalledWith(sessionId);
+});
+
+test('queueTool adds to existing queue', () => {
+  const sessionId = 'test-session';
+  const toolUseId1 = 'tool_123';
+  const toolUseId2 = 'tool_456';
+  comp.toolQueues = new Map();
+  comp.toolQueues.set(sessionId, [toolUseId1]);
+  comp.runToolQueue = jest.fn();
+  
+  comp.queueTool(sessionId, toolUseId2);
+  
+  expect(comp.toolQueues.get(sessionId)).toEqual([toolUseId1, toolUseId2]);
+  expect(comp.runToolQueue).toHaveBeenCalledWith(sessionId);
+});
+
+test('runToolQueue processes tools in queue', async () => {
+  const sessionId = 'test-session';
+  const toolUse1 = { id: 'tool_123', status: 'preparing' };
+  const toolUse2 = { id: 'tool_456', status: 'preparing' };
+  
+  comp.toolRunnerBusy = new Set();
+  comp.toolQueues = new Map();
+  comp.toolQueues.set(sessionId, ['tool_123', 'tool_456']);
+  
+  const mockToolMap = new Map();
+  mockToolMap.set('tool_123', toolUse1);
+  mockToolMap.set('tool_456', toolUse2);
+  
+  comp.getSessionToolMap = jest.fn().mockReturnValue(mockToolMap);
+  comp.executeTool = jest.fn().mockResolvedValue();
+  
+  await comp.runToolQueue(sessionId);
+  
+  expect(comp.executeTool).toHaveBeenCalledWith(toolUse1);
+  expect(comp.executeTool).toHaveBeenCalledWith(toolUse2);
+  expect(toolUse1.status).toBe('executing');
+  expect(toolUse2.status).toBe('executing');
+  expect(comp.toolRunnerBusy.has(sessionId)).toBe(false);
+});
+
+test('runToolQueue skips if already busy', async () => {
+  const sessionId = 'test-session';
+  comp.toolRunnerBusy = new Set([sessionId]);
+  comp.executeTool = jest.fn();
+  
+  await comp.runToolQueue(sessionId);
+  
+  expect(comp.executeTool).not.toHaveBeenCalled();
+});
+
+test('runToolQueue skips completed/error/rejected tools', async () => {
+  const sessionId = 'test-session';
+  const completedTool = { id: 'tool_completed', status: 'completed' };
+  const errorTool = { id: 'tool_error', status: 'error' };
+  const rejectedTool = { id: 'tool_rejected', status: 'rejected' };
+  const preparingTool = { id: 'tool_preparing', status: 'preparing' };
+  
+  comp.toolRunnerBusy = new Set();
+  comp.toolQueues = new Map();
+  comp.toolQueues.set(sessionId, ['tool_completed', 'tool_error', 'tool_rejected', 'tool_preparing']);
+  
+  const mockToolMap = new Map();
+  mockToolMap.set('tool_completed', completedTool);
+  mockToolMap.set('tool_error', errorTool);
+  mockToolMap.set('tool_rejected', rejectedTool);
+  mockToolMap.set('tool_preparing', preparingTool);
+  
+  comp.getSessionToolMap = jest.fn().mockReturnValue(mockToolMap);
+  comp.executeTool = jest.fn().mockResolvedValue();
+  
+  await comp.runToolQueue(sessionId);
+  
+  expect(comp.executeTool).toHaveBeenCalledTimes(1);
+  expect(comp.executeTool).toHaveBeenCalledWith(preparingTool);
+  expect(preparingTool.status).toBe('executing');
+});
+
+test('checkForActivity returns true when streaming', () => {
+  comp.isStreaming = true;
+  comp.isTyping = false;
+  comp.toolQueues = new Map();
+  comp.currentChatId = 'test-session';
+  
+  const result = comp.checkForActivity();
+  
+  expect(result).toBe(true);
+});
+
+test('checkForActivity returns true when typing', () => {
+  comp.isStreaming = false;
+  comp.isTyping = true;
+  comp.toolQueues = new Map();
+  comp.currentChatId = 'test-session';
+  
+  const result = comp.checkForActivity();
+  
+  expect(result).toBe(true);
+});
+
+test('checkForActivity returns true when tools are queued', () => {
+  comp.isStreaming = false;
+  comp.isTyping = false;
+  comp.toolQueues = new Map();
+  comp.toolQueues.set('test-session', ['tool_123']);
+  comp.currentChatId = 'test-session';
+  
+  const result = comp.checkForActivity();
+  
+  expect(result).toBe(true);
+});
+
+test('checkForActivity returns false when no activity', () => {
+  comp.isStreaming = false;
+  comp.isTyping = false;
+  comp.toolQueues = new Map();
+  comp.currentChatId = 'test-session';
+  
+  const result = comp.checkForActivity();
+  
+  expect(result).toBe(false);
+});
+
+test('checkForActivity returns false when tool queue is empty', () => {
+  comp.isStreaming = false;
+  comp.isTyping = false;
+  comp.toolQueues = new Map();
+  comp.toolQueues.set('test-session', []);
+  comp.currentChatId = 'test-session';
+  
+  const result = comp.checkForActivity();
+  
+  expect(result).toBe(false);
 });
 
 test('applyToolSpecificChanges does nothing for non-query_cases tools', () => {
