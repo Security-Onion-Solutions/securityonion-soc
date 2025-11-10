@@ -28,6 +28,7 @@ let comp;
 beforeEach(() => {
   comp = getComponent("config");
   resetPapi();
+  global.localStorage = {};
 });
 
 test('loadData', async () => {
@@ -1247,4 +1248,28 @@ test('notifyChangedSetting with moduleStateMap', () => {
   comp.notifyChangedSetting(settingBpfZeek); // adds zeek
   comp.notifyChangedSetting(settingAdvanced); // duplicate, should not add again
   expect(comp.changedModules).toEqual(['fake1-to-trigger-highstate', 'fake2-to-trigger-highstate', 'zeek']);
+});
+
+test('saveLocalSettings', () => {
+  comp.advanced = true;
+  comp.saveLocalSettings();
+  expect(localStorage['settings.config.advanced']).toBe('true');
+
+  comp.advanced = false;
+  comp.saveLocalSettings();
+  expect(localStorage['settings.config.advanced']).toBe('false');
+});
+
+test('loadLocalSettings', () => {
+  localStorage['settings.config.advanced'] = 'true';
+  comp.loadLocalSettings();
+  expect(comp.advanced).toBe(true);
+
+  localStorage['settings.config.advanced'] = 'false';
+  comp.loadLocalSettings();
+  expect(comp.advanced).toBe(false);
+
+  delete localStorage['settings.config.advanced'];
+  comp.loadLocalSettings();
+  expect(comp.advanced).toBe(false); // default value
 });
