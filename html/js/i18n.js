@@ -1036,6 +1036,7 @@ const i18n = {
       sidMissingErr: "This Suricata rule is missing its SID.",
       sidMultipleErr: 'Suricata rules can only specify one SID.',
       signature: 'Signature',
+      skipped: 'Skipped',
       socExcludeToggle: 'Exclude SOC logs',
       socId: 'SOC Id',
       socUrl: 'SOC Url',

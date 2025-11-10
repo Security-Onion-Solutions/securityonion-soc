@@ -20,6 +20,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     toolIndexToIdBySession: new Map(), // Map<sessionId, Map<index, toolUseId>>
     toolQueues: new Map(), // Map<sessionId, Array<toolUseId>>
     toolRunnerBusy: new Set(), // Set<sessionId>
+    mostRecentFloatingTool: new Map(), // Map<sessionId, toolUse>
     contextLength: 0, // Track total context length
     increaseContextLimit: false, // Toggle for max context threshold
     restoreLastActive: false, // Toggle to restore last active chat
@@ -377,6 +378,12 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         this.messages = [];
       }
 
+      if (this.messages.length > 1 && this.mostRecentFloatingTool.get(this.currentChatId)) {
+        let floatingTool = this.mostRecentFloatingTool.get(this.currentChatId);
+        floatingTool.status = 'skipped';
+        this.mostRecentFloatingTool.delete(this.currentChatId);
+      }
+
       // Add user message to chat
       this.messages.push(userMessage);
       const messageText = this.newMessage.trim();
@@ -576,6 +583,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
             // Set status to pending approval instead of executing
             toolUse.status = 'pending_approval';
             toolUse.approved = null;
+            this.mostRecentFloatingTool.set(targetSessionId, toolUse);
           }
         } catch (error) {
           toolUse.status = 'error';
@@ -886,6 +894,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
             // Set status to pending approval
             chainedToolUse.status = 'pending_approval';
             chainedToolUse.approved = null;
+            this.mostRecentFloatingTool.set(targetSessionId, chainedToolUse);
           }
         } catch (error) {
           chainedToolUse.status = 'error';
@@ -1286,6 +1295,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       switch (status) {
         case 'preparing': return 'fa-cog';
         case 'queued': return 'fa-cog';
+        case 'skipped': return 'fa-circle-info';
         case 'pending_approval': return 'fa-question-circle';
         case 'executing': return 'fa-hourglass-half';
         case 'completed': return 'fa-check-circle';
@@ -1298,6 +1308,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       switch (status) {
         case 'preparing': return 'info';
         case 'queued': return 'info';
+        case 'skipped': return 'info';
         case 'pending_approval': return 'warning';
         case 'executing': return 'warning';
         case 'completed': return 'success';
@@ -1310,6 +1321,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       switch (status) {
         case 'preparing': return this.i18n.preparing;
         case 'queued': return this.i18n.preparing;
+        case 'skipped': return this.i18n.skipped;
         case 'pending_approval': return this.i18n.pendingApproval;
         case 'executing': return this.i18n.executing;
         case 'completed': return this.i18n.completed;
@@ -1323,6 +1335,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         if (this.checkContextLimitReached()) return;
         toolUse.approved = true;
         toolUse.status = 'preparing';
+        this.mostRecentFloatingTool.delete(toolUse.sessionId || this.currentChatId);
         this.queueTool(toolUse.sessionId || this.currentChatId, toolUse.id);
       } catch (error) {
         toolUse.status = 'error';
@@ -1334,6 +1347,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       if (this.checkContextLimitReached()) return;
       toolUse.approved = false;
       toolUse.status = 'rejected';
+      this.mostRecentFloatingTool.delete(toolUse.sessionId || this.currentChatId);
       toolUse.error = this.i18n.assistantToolUseReject;
       
       // Add a message indicating the tool was rejected
@@ -1508,6 +1522,17 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
               approved: false
             })));
             skip_next = true;
+          } else if (nextMessage.message.role === 'user') {
+            frontendMsg.toolUses = Vue.ref(toolBlocks.map(block => ({
+              id: block.id || 'unknown',
+              name: block.name || 'unknown',
+              input: block.input || {}, // Ensure input is always an object, never null/undefined
+              status: 'skipped',
+              result: null,
+              error: null,
+              timestamp: msg.createTime || new Date().toISOString(),
+              approved: false
+            })));
           }
         // Using "else if" instead of "else" prevents tool uses that haven't been interacted with from appearing as completed after refreshing
         } else if (i < backendMessages.length - 1) {
@@ -1538,6 +1563,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
               sessionId: this.currentChatId
             };
             this.getSessionToolMap(this.currentChatId).set(toolUse.id, toolUse);
+            this.mostRecentFloatingTool.set(this.currentChatId, toolUse);
             return toolUse;
           }));
         }
