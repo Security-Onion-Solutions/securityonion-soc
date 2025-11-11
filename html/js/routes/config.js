@@ -56,12 +56,13 @@ routes.push({
       }
     },
     mounted() {
+      this.loadLocalSettings();
       this.processRouteParameters();
       this.loadData();
     },
     watch: {
       "active": "selectSetting",
-      "advanced": "loadData",
+      "advanced": "toggleAdvanced",
       '$route': "onRouteUpdate",
   },
   computed: {
@@ -80,6 +81,10 @@ routes.push({
       } else {
         this.refreshTree();
       }
+    },
+    toggleAdvanced() {
+      this.loadData();
+      this.saveLocalSettings();
     },
     processRouteParameters() {
       var forceDataReload = false;
@@ -1013,5 +1018,12 @@ routes.push({
     closeSetting() {
       this.active = [];
     },
+    saveLocalSettings() {
+      localStorage['settings.config.advanced'] = this.advanced;
+    },
+    loadLocalSettings() {
+      if (localStorage['settings.config.advanced']) this.advanced = localStorage['settings.config.advanced'] == "true";
+    },
+
   }
 }});

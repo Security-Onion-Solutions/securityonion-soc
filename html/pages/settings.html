@@ -62,12 +62,11 @@
 						<v-card-subtitle v-text="i18n.oidcHelp"></v-card-subtitle>
 						<v-card-text v-if="passwordEnabled">
 							<div class="mb-2" v-text="i18n.oidcLinkHelp"></div>
-							<v-form method="post" :action="authSettingsUrl">
+							<v-form v-for="oidc in oidcProviders" method="post" :action="authSettingsUrl">
 								<v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
-								<div v-for="oidc in oidcProviders">
-									<v-btn v-if="oidc.op == 'link'" :name="oidc.op" :value="oidc.id" :id="'settingsOidcLink_' + oidc.id" type="submit" color="primary" v-text="i18n.oidcLink + ' ' + oidc.id"></v-btn>
-									<v-btn v-if="oidc.op == 'unlink'" :name="oidc.op" :value="oidc.id" :id="'settingsOidcUnlink_' + oidc.id" type="submit" color="primary" v-text="i18n.oidcUnlink + ' ' + oidc.id"></v-btn>
-								</div>
+								<v-text-field :name="oidc.op" :value="oidc.id" class="d-none"></v-text-field>
+								<v-btn v-if="oidc.op == 'link'" :id="'settingsOidcLink_' + oidc.id" type="submit" color="primary" v-text="i18n.oidcLink + ' ' + oidc.id"></v-btn>
+								<v-btn v-if="oidc.op == 'unlink'" :id="'settingsOidcUnlink_' + oidc.id" type="submit" color="primary" v-text="i18n.oidcUnlink + ' ' + oidc.id"></v-btn>
 							</v-form>
 						</v-card-text>
 					</v-card>
