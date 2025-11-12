@@ -348,7 +348,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }
 
       // Check if context length has reached the limit
-      if (this.checkContextLimitReached()) return;
+      if (this.checkContextLimitReached() && (!tags || !tags.includes('context_compression'))) return;
       
       // Check if user has credits
       if (this.creditsRemaining <= 0) {

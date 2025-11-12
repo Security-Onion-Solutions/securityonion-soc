@@ -4449,6 +4449,21 @@ test('sendMessage checks context limit before proceeding', async () => {
   expect(comp.callAIAPI).not.toHaveBeenCalled();
 });
 
+test('sendMessage checks context limit before proceeding, but allows context_compression', async () => {
+  comp.newMessage = 'Summarize the conversation so far for context preservation';
+  comp.canChat = true;
+  comp.assistantEnabled = true;
+  comp.creditsRemaining = 100;
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(true);
+  comp.callAIAPI = jest.fn();
+  
+  await comp.sendMessage(['context_compression']);
+  
+  expect(comp.checkContextLimitReached).toHaveBeenCalled();
+  expect(comp.callAIAPI).toHaveBeenCalled();
+  expect(comp.callAIAPI).toHaveBeenCalledWith('Summarize the conversation so far for context preservation', ['context_compression']);
+});
+
 test('sendMessage clears welcome message when starting first real conversation', async () => {
   const welcomeMessage = {
     role: 'assistant',
