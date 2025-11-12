@@ -44,7 +44,6 @@ func RegisterAssistantRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Get("/balance", h.GetBalance)
 		r.Get("/sessions", h.GetSessions)
 		r.Get("/sessions/{sessionId}", h.GetSessionHistory)
-		r.Post("/sessions/{sessionId}/compress", h.CompressContext)
 		r.Delete("/sessions/{sessionId}", h.DeleteSession)
 
 		r.Get("/admin/stats", h.GetUsage)
@@ -128,7 +127,7 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 
 	messages := historyToContext(history)
 
-	err = h.server.Assistantstore.SaveChat(ctx, newMsg.PrepareForStorage(incMsg.SessionId, nil))
+	err = h.server.Assistantstore.SaveChat(ctx, newMsg.PrepareForStorage(incMsg.SessionId, incMsg.Tags))
 	if err != nil {
 		logger.WithError(err).Error("unable to save chat message")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -478,91 +477,6 @@ func (h *AssistantHandler) GetSessionHistory(w http.ResponseWriter, r *http.Requ
 	}
 
 	web.Respond(w, r, http.StatusOK, history)
-}
-
-func (h *AssistantHandler) CompressContext(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	logger := log.FromContext(ctx)
-
-	err := h.server.CheckAuthorized(ctx, "write_authored", "assistant")
-	if err != nil {
-		web.Respond(w, r, http.StatusUnauthorized, err)
-		return
-	}
-
-	modelChoice := &model.ModelChoice{}
-	err = json.NewDecoder(r.Body).Decode(modelChoice)
-	if err != nil {
-		logger.WithError(err).Error("unable to decode request body")
-		web.Respond(w, r, http.StatusBadRequest, err)
-
-		return
-	}
-
-	if modelChoice.Model == "" {
-		logger.Error("model is required, and not specified in the body")
-		web.Respond(w, r, http.StatusBadRequest, "model is required")
-
-		return
-	}
-
-	sessionId := chi.URLParam(r, "sessionId")
-	if sessionId == "" {
-		logger.Error("sessionId is required")
-		web.Respond(w, r, http.StatusBadRequest, "sessionId is required")
-
-		return
-	}
-
-	history, err := h.server.Assistantstore.GetChatHistory(ctx, sessionId, true)
-	if err != nil {
-		logger.WithError(err).Error("unable to get chat history for session")
-		web.Respond(w, r, http.StatusInternalServerError, err)
-
-		return
-	}
-
-	messages := historyToContext(history)
-
-	compressMsg := &model.Message{
-		Role: "user",
-		ContentBlocks: []model.ContentBlock{
-			{
-				Type: "text",
-				Text: "Summarize the conversation so far for context preservation",
-			},
-		},
-	}
-
-	err = h.server.Assistantstore.SaveChat(ctx, compressMsg.PrepareForStorage(sessionId, []string{model.MessageTagContextCompression}))
-	if err != nil {
-		logger.WithError(err).Error("unable to save chat message")
-		return
-	}
-
-	messages = append(messages, compressMsg)
-
-	allNewMsgs := []*model.Message{compressMsg}
-
-	response, err := h.server.AssistantManager.Chat(ctx, modelChoice.Model, messages)
-	if err != nil {
-		logger.WithError(err).Error("unable to chat with assistant for context compression")
-		web.Respond(w, r, http.StatusInternalServerError, err)
-
-		return
-	}
-
-	for _, msg := range response {
-		err = h.server.Assistantstore.SaveChat(ctx, msg.PrepareForStorage(sessionId, nil))
-		if err != nil {
-			logger.WithError(err).Error("unable to save chat message")
-			return
-		}
-	}
-
-	allNewMsgs = append(allNewMsgs, response...)
-
-	web.Respond(w, r, http.StatusOK, allNewMsgs)
 }
 
 // @Summary      Delete Session

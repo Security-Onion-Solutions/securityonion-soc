@@ -22,6 +22,8 @@ type IncomingMessage struct {
 	SessionId string `json:"sessionId" example:"chat_1757086398900_ykhmndscn"`
 	// The model to use for this message.
 	Model string `json:"model,omitempty" example:"claude-sonnet-4.5"`
+	// Tags to be applied to the message.
+	Tags []string `json:"tags,omitempty" example:"investigation"`
 }
 
 // @Description A request to initiate a chat session.
@@ -323,8 +325,4 @@ type UserUsage struct {
 	TotalSessions int `json:"totalSessions" example:"3"`
 	// The total messages sent and received by the user in the date range.
 	TotalMessages int `json:"totalMessages" example:"25"`
-}
-
-type ModelChoice struct {
-	Model string `json:"model" example:"sonnet-4"`
 }

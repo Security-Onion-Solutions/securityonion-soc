@@ -685,7 +685,7 @@ test('sendMessage creates session ID and updates URL', async () => {
   expect(comp.messages[0].content).toBe('Test message');
   expect(comp.newMessage).toBe('');
   expect(comp.isTyping).toBe(true);
-  expect(comp.callAIAPI).toHaveBeenCalledWith('Test message');
+  expect(comp.callAIAPI).toHaveBeenCalledWith('Test message', undefined);
   expect(comp.loadStoredChats).toHaveBeenCalled();
 });
 
@@ -1391,6 +1391,7 @@ test('callAIAPI makes correct API request', async () => {
       msg: 'Test message',
       sessionId: fakeSessionId,
       model: 'test-model',
+      tags: null,
   }, {
     adapter: 'fetch',
     headers: {
@@ -2978,6 +2979,87 @@ test('convertBackendMessagesToFrontend handles empty backend messages array', ()
   
   expect(result).toEqual([]);
   expect(comp.contextLength).toBe(0);
+});
+
+test('convertBackendMessagesToFrontend handles tags', () => {
+  comp.resetContextLength = jest.fn();
+  
+  const backendMessages = [
+    {
+      createTime: '2025-01-01T12:00:00.000Z',
+      message: {
+        role: 'user',
+        contentBlocks: [
+          { type: 'text', text: 'Hello, how can you help me?' }
+        ]
+      },
+      tags: ["context_compression"],
+    }
+  ];
+  
+  const result = comp.convertBackendMessagesToFrontend(backendMessages);
+  
+  expect(result).toHaveLength(1);
+  expect(result[0].role).toBe('user');
+  expect(result[0].content).toBe('Hello, how can you help me?');
+  expect(result[0].timestamp).toBe('2025-01-01T12:00:00.000Z');
+  expect(result[0].tags).toEqual(['context_compression']);
+});
+
+test('convertBackendMessagesToFrontend calculates context length accurately after context compression', () => {
+  comp.resetContextLength = jest.fn();
+  
+  const backendMessages = [
+    {
+      createTime: '2025-01-01T12:00:00.000Z',
+      message: {
+        role: 'user',
+        contentBlocks: [
+          { type: 'text', text: '' }
+        ]
+      },
+    },
+    {
+      createTime: '2025-01-01T12:00:00.000Z',
+      message: {
+        role: 'assistant',
+        contentBlocks: [
+          { type: 'text', text: '' }
+        ],
+        usage: {
+          input_tokens: 1000,
+          output_tokens: 1000,
+        },
+      },
+    },
+    {
+      createTime: '2025-01-01T12:00:00.000Z',
+      message: {
+        role: 'user',
+        contentBlocks: [
+          { type: 'text', text: '' },
+        ],
+      },
+      tags: ["context_compression"],
+    },
+    {
+      createTime: '2025-01-01T12:00:00.000Z',
+      message: {
+        role: 'assistant',
+        contentBlocks: [
+          { type: 'text', text: '' }
+        ],
+        usage: {
+          input_tokens: 1000,
+          output_tokens: 1000,
+        },
+      },
+    },
+  ];
+  
+  comp.convertBackendMessagesToFrontend(backendMessages);
+  
+  expect(comp.contextLength).toBe(2000);
 });
 
 test('loadChatFromBackend success', async () => {
@@ -4908,3 +4990,8 @@ test('applyToolSpecificChanges does nothing for non-query_cases tools', () => {
   getSpy.mockRestore();
 });
 
+test('messageClassesFromTags', () => {
+  let tags = ['important', 'error', 'context_compression'];
+  let result = comp.messageClassesFromTags(tags);
+  expect(result).toEqual(['msgTag-important', 'msgTag-error', 'msgTag-context_compression']);
+});
