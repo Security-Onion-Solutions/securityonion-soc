@@ -43,7 +43,7 @@ func (t *QueryCasesTool) GetDescription() string {
 		"- When searching for cases, specify a date range of 999 days ago.\n" +
 		"- Examples for wild cards in the oql_query:\n" +
 		"  - Search terms cannot begin with a wildcard (e.g., `*xyz` the wildcard is ignored, but `xyz*` is valid)\n" +
-		"  - When using wildcards, do not wrap the value in quotes, instead use parentheses (e.g., `rule.name:(A B*)` is valid, but `rule.name:\"A B*\"` will not work as expected)\n" +
+		"  - When using wildcards, do not wrap the value in quotes, instead use parentheses (e.g., `so_case.title:(A B*)` is valid, but `so_case.title:\"A B*\"` will not work as expected)\n" +
 		"- In addition to search results, you'll also get the user's most recently viewed cases. This field is called recent_cases.\n" +
 		"- If the most applicable case is clear-cut, explain that to the user. Otherwise, give multiple options, compare them, and let the user choose."
 }
