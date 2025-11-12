@@ -9,15 +9,15 @@
 				<v-expansion-panel data-aid="assistant_options">
 					<v-expansion-panel-title id="chatOptionsHeader" expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up">{{i18n.options}}</v-expansion-panel-title>
 					<v-expansion-panel-text>
-						<span data-aid="assistant_increase_max_context_threshold_toggle">
+						<span data-aid="assistant_increase_context_limit_toggle">
 							<v-switch
 								v-if="contextLimitLarge > contextLimitSmall"
-								id="increase-max-context-threshold"
-								v-model="increaseMaxContextThreshold"
+								id="increase-context-limit"
+								v-model="increaseContextLimit"
 								density="compact"
 								hide-details
 								class="my-0"
-								:label="i18n.increaseMaxContextThreshold"
+								:label="i18n.increaseContextLimit"
 								color="primary">
 							</v-switch>
 						</span>
@@ -74,7 +74,7 @@
 		</v-col>
 		<v-spacer></v-spacer>
 		<v-col cols="12" lg="2" align="end">
-			<h4 data-aid="assistant_max_context">{{ i18n.maxContext }}: {{ increaseMaxContextThreshold ? formatCount(contextLimitLarge) : formatCount(contextLimitSmall) }}</h4>
+			<h4 data-aid="assistant_max_context">{{ i18n.contextLimit }}: {{ increaseContextLimit ? formatCount(contextLimitLarge) : formatCount(contextLimitSmall) }}</h4>
 		</v-col>
 		<v-col cols="12" lg="2" align="end">
 			<h4 data-aid="assistant_credits_remaining">{{ i18n.creditsRemaining }}: <span :class="creditsRemaining <= lowBalanceColorAlert ? 'text-error' : 'text-primary'">{{ formatCount(creditsRemaining) }}</span></h4>
@@ -268,19 +268,19 @@
 						spellcheck="false"
 						class="chat-input flex-grow-1 mr-3"
 						@keydown.enter.exact.prevent="$refs.sendButton.$el.click()"
-						:disabled="isTyping || !canChat"
+						:disabled="!canChat"
 						data-aid="assistant_chat_input"
 					></v-textarea>
 					<v-btn
 						id="chat-send-button"
 						ref="sendButton"
 						color="primary"
-						:disabled="!newMessage.trim() || isTyping || !canChat"
+						:disabled="!newMessage.trim() || !canChat || checkForActivity()"
 						@click="sendMessage"
 						data-aid="assistant_chat_send"
 						class="flex-shrink-0"
 					>
-						<v-icon>{{ isTyping ? 'fa-hourglass-half' : 'fa-paper-plane' }}</v-icon>
+						<v-icon>{{ checkForActivity() ? 'fa-hourglass-half' : 'fa-paper-plane' }}</v-icon>
 					</v-btn>
 				</v-card-actions>
 			</v-card>
