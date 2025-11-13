@@ -2577,3 +2577,74 @@ test('populateEventTable - applies AI investigated filter', () => {
   expect(comp.eventData).toHaveLength(1); // Only alert123 should remain after filtering
   expect(comp.eventData[0].soc_id).toBe('alert123');
 });
+
+test('isQuestionAggregate', () => {
+  // contains valid yaml, is processed correctly
+  let q = {
+    query: `aggregation: true
+logsource:
+  category: network
+  service: connection
+detection:
+  selection:
+    dst_ip: '{destination.ip}'
+  condition: selection
+fields:
+  - dst_ip`
+  };
+  
+  let result = comp.isQuestionAggregate(q);
+
+  expect(result).toBe(true);
+  expect(q.isAggregate).toBe(true);
+
+  // contains "invalid" yaml (duplicate field http.uri|contains)
+  // falls back to regex approach
+  q = {
+    query: `aggregation: true
+logsource:
+  category: network
+  service: http
+detection:
+  selection:
+    src_ip: '{source.ip}'
+    http.uri|contains: '.php'
+    http.uri|contains: '?'
+  malware_params:
+    http.uri|contains:
+      - 'adv='
+      - 'id='
+      - 'ver='
+      - 'bot='
+  condition: selection and malware_params
+fields:
+  - dst_ip
+  - http.virtual_host
+  - http.uri
+  - http.user_agent
+  - http.method`
+  };
+  
+  result = comp.isQuestionAggregate(q);
+
+  expect(result).toBe(true);
+  expect(q.isAggregate).toBe(true);
+
+  // garbage in, false out
+  q = {
+    query: `This is not valid YAML at all!!! ### $$$ ???`
+  };
+
+  result = comp.isQuestionAggregate(q);
+
+  expect(result).toBe(false);
+  expect(q.isAggregate).toBe(false);
+
+  // undefined in, false out
+  q = {};
+
+  result = comp.isQuestionAggregate(q);
+
+  expect(result).toBe(false);
+  expect(q.isAggregate).toBe(false);
+});
