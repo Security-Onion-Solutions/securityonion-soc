@@ -149,7 +149,7 @@ func (t *CreateDetectionTool) Execute(ctx context.Context, srv *server.Server, p
 	_, err = engine.ApplyFilters(detect)
 	if err != nil {
 		logger.WithError(err).Error("unable to apply filters for detection")
-		return nil, fmt.Errorf("unable to appy filters for detection: %w", err)
+		return nil, fmt.Errorf("unable to apply filters for detection: %w", err)
 	}
 
 	detect, err = srv.Detectionstore.CreateDetection(ctx, detect)
