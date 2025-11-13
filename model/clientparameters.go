@@ -194,6 +194,7 @@ type ModelParameters struct {
 	ContextLimitSmall    int    `json:"contextLimitSmall"`
 	ContextLimitLarge    int    `json:"contextLimitLarge"`
 	LowBalanceColorAlert int    `json:"lowBalanceColorAlert"`
+	Enabled              bool   `json:"enabled"`
 }
 
 // Custom unmarshal to handle numeric or scientific-notation string fields

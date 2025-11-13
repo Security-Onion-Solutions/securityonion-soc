@@ -293,7 +293,7 @@ test('initAssistant sets assistantEnabled to true when enabled and licensed', as
     thresholdColorRatioMax: 1,
     lowBalanceColorAlert: 500000,
     availableModels: [
-      { id: 'test-model', displayName: "Test Model", contextLimitSmall: 200000, contextLimitLarge: 1000000, lowBalanceColorAlert: 500000 }
+      { id: 'test-model', displayName: "Test Model", contextLimitSmall: 200000, contextLimitLarge: 1000000, lowBalanceColorAlert: 500000, enabled: true }
     ]
   };
   comp.$root.isLicensed = jest.fn().mockReturnValue(true);
@@ -368,22 +368,29 @@ test('initAssistant corrects contextLimitLarge when smaller than contextLimitSma
         displayName: "Model 1",
         contextLimitSmall: 200000,
         contextLimitLarge: 150000, // Smaller than contextLimitSmall - should be corrected
-        lowBalanceColorAlert: 500000
+        lowBalanceColorAlert: 500000,
+        enabled: true,
       },
       {
         id: 'model-2',
         displayName: "Model 2",
         contextLimitSmall: 100000,
         contextLimitLarge: 300000, // Larger than contextLimitSmall - should remain unchanged
-        lowBalanceColorAlert: 400000
+        lowBalanceColorAlert: 400000,
+        enabled: true,
       },
       {
         id: 'model-3',
         displayName: "Model 3",
         contextLimitSmall: 250000,
         contextLimitLarge: 250000, // Equal to contextLimitSmall - should remain unchanged
-        lowBalanceColorAlert: 600000
-      }
+        lowBalanceColorAlert: 600000,
+        enabled: true,
+      },
+      {
+        id: 'model-4',
+        enabled: false,
+      },
     ]
   };
   
@@ -402,6 +409,7 @@ test('initAssistant corrects contextLimitLarge when smaller than contextLimitSma
   expect(comp.modelsMap.has('model-1')).toBe(true);
   expect(comp.modelsMap.has('model-2')).toBe(true);
   expect(comp.modelsMap.has('model-3')).toBe(true);
+  expect(comp.modelsMap.has('model-4')).toBe(false); // Disabled model should not be included
   
   // Check that contextLimitLarge was corrected for model-1
   const model1 = comp.modelsMap.get('model-1');

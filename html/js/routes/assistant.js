@@ -79,7 +79,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.availableModels = params["availableModels"];
       if (this.availableModels.length > 0) {
         this.modelsMap = new Map(
-          this.availableModels.map(m => [m.id, m])
+          this.availableModels.filter(m => m.enabled).map(m => [m.id, m])
         );
         for (let val of this.modelsMap.values()) {
           if (val.contextLimitLarge < val.contextLimitSmall) val.contextLimitLarge = val.contextLimitSmall;
