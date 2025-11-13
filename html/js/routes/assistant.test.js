@@ -10,6 +10,8 @@ Object.assign(global, { TextDecoder, TextEncoder });
 require('../test_common.js');
 require('./assistant.js');
 
+const MSGTAG_CONTEXTCOMPRESSION = "context_compression";
+
 // Mock data
 const fakeSessionId = 'chat_1234567890_abcdef123';
 const fakeMessage = {
@@ -2993,7 +2995,7 @@ test('convertBackendMessagesToFrontend handles tags', () => {
           { type: 'text', text: 'Hello, how can you help me?' }
         ]
       },
-      tags: ["context_compression"],
+      tags: [MSGTAG_CONTEXTCOMPRESSION],
     }
   ];
   
@@ -3003,7 +3005,7 @@ test('convertBackendMessagesToFrontend handles tags', () => {
   expect(result[0].role).toBe('user');
   expect(result[0].content).toBe('Hello, how can you help me?');
   expect(result[0].timestamp).toBe('2025-01-01T12:00:00.000Z');
-  expect(result[0].tags).toEqual(['context_compression']);
+  expect(result[0].tags).toEqual([MSGTAG_CONTEXTCOMPRESSION]);
 });
 
 test('convertBackendMessagesToFrontend calculates context length accurately after context compression', () => {
@@ -3040,7 +3042,7 @@ test('convertBackendMessagesToFrontend calculates context length accurately afte
           { type: 'text', text: '' },
         ],
       },
-      tags: ["context_compression"],
+      tags: [MSGTAG_CONTEXTCOMPRESSION],
     },
     {
       createTime: '2025-01-01T12:00:00.000Z',
@@ -4457,11 +4459,11 @@ test('sendMessage checks context limit before proceeding, but allows context_com
   comp.checkContextLimitReached = jest.fn().mockReturnValue(true);
   comp.callAIAPI = jest.fn();
   
-  await comp.sendMessage(['context_compression']);
+  await comp.sendMessage([MSGTAG_CONTEXTCOMPRESSION]);
   
   expect(comp.checkContextLimitReached).toHaveBeenCalled();
   expect(comp.callAIAPI).toHaveBeenCalled();
-  expect(comp.callAIAPI).toHaveBeenCalledWith('Summarize the conversation so far for context preservation', ['context_compression']);
+  expect(comp.callAIAPI).toHaveBeenCalledWith('Summarize the conversation so far for context preservation', [MSGTAG_CONTEXTCOMPRESSION]);
 });
 
 test('sendMessage clears welcome message when starting first real conversation', async () => {
@@ -5006,7 +5008,7 @@ test('applyToolSpecificChanges does nothing for non-query_cases tools', () => {
 });
 
 test('messageClassesFromTags', () => {
-  let tags = ['important', 'error', 'context_compression'];
+  let tags = ['important', 'error', MSGTAG_CONTEXTCOMPRESSION];
   let result = comp.messageClassesFromTags(tags);
   expect(result).toEqual(['msgTag-important', 'msgTag-error', 'msgTag-context_compression']);
 });

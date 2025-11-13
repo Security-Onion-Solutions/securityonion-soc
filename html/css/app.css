@@ -1406,31 +1406,33 @@ ul ul ul {
   line-height: 1.5;
 }
 
-.msgTag-context_compression:not(:has(~ .msgTag-context_compression))::before {
-  content: "Context Starts Here";
+.context-divider {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75em;
-
-  color: rgb(var(--v-theme-icon)) !important;
-  font-size: 0.9rem;
-  text-transform: uppercase;
-  margin: 1.5em 0;
-
-  position: relative;
+  width: 100%;
 }
 
-.msgTag-context_compression:not(:has(~ .msgTag-context_compression))::before {
-  /* use a background trick for the lines */
+.context-divider > .label {
+  flex: 0 0 auto;
+}
+
+.context-divider > .spacer {
+  flex: 1 1 auto;
+  height: 1px;
+  align-self: center;
+}
+
+.context-divider > .spacer-left {
   background:linear-gradient(to right,
-    rgb(var(--v-theme-icon)) 0%,      /* solid */
-    rgb(var(--v-theme-icon)) 20%,     /* fade out */
-    transparent 35%, transparent 65%, /* transparent space for label */
-    rgb(var(--v-theme-icon)) 80%,     /* fade in */
-    rgb(var(--v-theme-icon)) 100%);   /* solid */
-  background-repeat: no-repeat;
-  background-size: 100% 1px;
-  background-position: center;
-  padding: 0 1em;
+    rgb(var(--v-theme-icon)) 0%,
+    rgb(var(--v-theme-icon)) 60%,
+    transparent 95%,
+    transparent 100%);
+}
+
+.context-divider > .spacer-right {
+  background:linear-gradient(to left,
+    rgb(var(--v-theme-icon)) 0%,
+    rgb(var(--v-theme-icon)) 60%,
+    transparent 95%,
+    transparent 100%);
 }

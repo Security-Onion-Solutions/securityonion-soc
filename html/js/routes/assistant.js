@@ -6,6 +6,8 @@
 
 loadPageTemplate('page-assistant', 'pages/assistant.html');
 
+const MSGTAG_CONTEXTCOMPRESSION = "context_compression";
+
 routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
   template: '#page-assistant',
   data() { return {
@@ -30,6 +32,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     showChatHistory: true,
     investigationMsg: '',
     compressContextMsg: '',
+    contextStartMessageIndex: -1,
     contextLimitSmall: 0,
     contextLimitLarge: 0,
     thresholdColorRatioLow: 0.5,
@@ -348,7 +351,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }
 
       // Check if context length has reached the limit
-      if (this.checkContextLimitReached() && (!tags || !tags.includes('context_compression'))) return;
+      if (this.checkContextLimitReached() && (!tags || !tags.includes(MSGTAG_CONTEXTCOMPRESSION))) return;
       
       // Check if user has credits
       if (this.creditsRemaining <= 0) {
@@ -1580,6 +1583,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       const processedMessages = [];
       // Reset context length when loading from backend
       this.contextLength = 0;
+      this.contextStartMessageIndex = -1;
       
       let skip_next = false;
 
@@ -1623,12 +1627,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           }
         }
 
-        if (msg.tags && msg.tags.includes('context_compression')) {
-          // reset context, messages prior to this message are no longer
-          // sent to the AI
-          this.contextLength = 0;
-        }
-
         // Handle usage information if present
         if (msg.message.usage) {
           frontendMsg.usage = Vue.ref(msg.message.usage);
@@ -1637,6 +1635,13 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         }
 
         processedMessages.push(frontendMsg);
+
+        if (msg.tags && msg.tags.includes(MSGTAG_CONTEXTCOMPRESSION)) {
+          // reset context, messages prior to this message are no longer
+          // sent to the AI
+          this.contextLength = 0;
+          this.contextStartMessageIndex = processedMessages.length - 1;
+        }
       }
       
       return processedMessages;
@@ -1832,7 +1837,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
 
       this.contextLength = 0;
       
-      await this.sendMessage(['context_compression']);
+      await this.sendMessage([MSGTAG_CONTEXTCOMPRESSION]);
       this.loadChatFromBackend(this.currentChatId);
       
       if (oldMsg) this.newMessage = oldMsg;
