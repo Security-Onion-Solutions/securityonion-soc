@@ -29,17 +29,19 @@ import (
 )
 
 const DEFAULT_RETRY_FAILURE_INTERVAL_MS = 600000
+const DEFAULT_RETRY_FAILURE_MAX_ATTEMPTS = 5
 
 type FileDatastoreImpl struct {
-	server                 *server.Server
-	jobDir                 string
-	retryFailureIntervalMs int
-	jobsByNodeId           map[string][]*model.Job
-	jobsById               map[int]*model.Job
-	nodesById              map[string]*model.Node
-	ready                  bool
-	nextJobId              int
-	lock                   sync.RWMutex
+	server                  *server.Server
+	jobDir                  string
+	retryFailureIntervalMs  int
+	retryFailureMaxAttempts int
+	jobsByNodeId            map[string][]*model.Job
+	jobsById                map[int]*model.Job
+	nodesById               map[string]*model.Node
+	ready                   bool
+	nextJobId               int
+	lock                    sync.RWMutex
 }
 
 func NewFileDatastoreImpl(srv *server.Server) *FileDatastoreImpl {
@@ -59,6 +61,7 @@ func (datastore *FileDatastoreImpl) Init(cfg module.ModuleConfig) error {
 	}
 	if err == nil {
 		datastore.retryFailureIntervalMs = module.GetIntDefault(cfg, "retryFailureIntervalMs", DEFAULT_RETRY_FAILURE_INTERVAL_MS)
+		datastore.retryFailureMaxAttempts = module.GetIntDefault(cfg, "retryFailureMaxAttempts", DEFAULT_RETRY_FAILURE_MAX_ATTEMPTS)
 	}
 	return datastore.loadJobs()
 }
@@ -145,13 +148,11 @@ func (datastore *FileDatastoreImpl) GetNextJob(ctx context.Context, nodeId strin
 	var nextJob *model.Job
 
 	if err := datastore.server.CheckAuthorized(ctx, "process", "jobs"); err == nil {
-		now := time.Now()
 		jobs := datastore.jobsByNodeId[strings.ToLower(nodeId)]
 		for _, job := range jobs {
-			retryTime := job.FailTime.Add(time.Millisecond * time.Duration(datastore.retryFailureIntervalMs))
 			if job.Status != model.JobStatusCompleted &&
 				(nextJob == nil || job.CreateTime.Before(nextJob.CreateTime)) &&
-				(job.Status != model.JobStatusIncomplete || retryTime.Before(now)) {
+				(job.Status != model.JobStatusIncomplete || job.IsEligibleForRetry(datastore.retryFailureIntervalMs, datastore.retryFailureMaxAttempts)) {
 
 				if job.Kind == "reports" && !licensing.IsEnabled(licensing.FEAT_RPT) {
 					continue

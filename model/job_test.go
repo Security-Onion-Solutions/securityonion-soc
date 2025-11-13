@@ -9,6 +9,7 @@ package model
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -83,4 +84,35 @@ func TestKind(tester *testing.T) {
 
 	job.Kind = "foo"
 	assert.Equal(tester, "foo", job.GetKind())
+}
+
+func TestIsEligibleForRetry(tester *testing.T) {
+	job := NewJob()
+
+	// Fake job is executed attempt 1
+
+	// Fail the job once
+	job.Fail(errors.New("test failure"))
+	assert.True(tester, job.IsEligibleForRetry(0, 3))
+
+	// Fake job is executed attempt 2
+
+	// Fail again, still eligible
+	job.Fail(errors.New("test failure 2"))
+	assert.True(tester, job.IsEligibleForRetry(0, 3))
+
+	// Fake job is executed attempt 3
+
+	// Fail third time, now ineligible since max attempts is 3
+	job.Fail(errors.New("test failure 3"))
+	assert.False(tester, job.IsEligibleForRetry(0, 3))
+
+	// Test retry interval
+	job = NewJob()
+	job.Fail(errors.New("test failure"))
+	job.FailTime = time.Now().Add(-500 * time.Millisecond) // Set fail time to 500ms ago
+	assert.False(tester, job.IsEligibleForRetry(1000, 3))  // Retry interval is 1000ms, so not yet
+
+	job.FailTime = time.Now().Add(-1500 * time.Millisecond) // Set fail time to 1500ms ago
+	assert.True(tester, job.IsEligibleForRetry(1000, 3))    // Now eligible
 }
