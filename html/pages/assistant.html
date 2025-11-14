@@ -104,6 +104,9 @@
 				<v-card-title id="chat-header" class="py-3 d-flex align-center">
 					<v-icon class="mr-2">fa-comments</v-icon>
 					<span class="flex-grow-1">{{ i18n.chatTitle }}</span>
+					<div v-if="currentChatId">
+						<v-checkbox :model-value="((chatHistoryById[currentChatId] || {}).tags || []).includes('shared')" @change="toggleSharedSession()" class="mx-4">{{i18n.shareSessionLabel}}</v-checkbox>
+					</div>
 					<v-btn :color="getCompressColor()" class="mx-4" variant="flat" id="compress-context" @click="compressCurrentSession()" :title="i18n.compressContext" data-aid="assistant_banner_compress_context">
 						<v-icon>fa-minimize</v-icon>
 					</v-btn>

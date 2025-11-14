@@ -16,6 +16,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     newMessage: '',
     isTyping: false,
     chatHistory: [],
+    chatHistoryById: {},
     currentChatId: null,
     creditsRemaining: 0,
     creditsLoaded: false,
@@ -166,13 +167,20 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         const response = await this.$root.papi.get('/assistant/sessions');
         if (response.data && Array.isArray(response.data)) {
           // Convert backend format to frontend format
-          this.chatHistory = response.data.map(session => ({
-            sessionId: session.sessionId,
-            title: this.generateTitleFromMessage(session),
-            messages: [], // Will be loaded when session is opened
-            timestamp: session.createTime || new Date().toISOString(),
-            lastUpdated: session.createTime || new Date().toISOString()
-          }));
+          this.chatHistoryById = {};
+          this.chatHistory = response.data.map(session => {
+            let s = {
+              sessionId: session.sessionId,
+              title: this.generateTitleFromMessage(session),
+              messages: [], // Will be loaded when session is opened
+              timestamp: session.createTime || new Date().toISOString(),
+              lastUpdated: session.createTime || new Date().toISOString(),
+              tags: session.tags || [],
+            };
+            this.chatHistoryById[session.sessionId] = s;
+
+            return s;
+          });
         } else {
           this.chatHistory = [];
         }
@@ -1849,7 +1857,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       const tQ = this.toolQueues.get(this.currentChatId) || [];
       return this.isStreaming || this.isTyping || tQ.length > 0;
     },
-
     async compressCurrentSession() {
       const oldMsg = this.newMessage;
       this.newMessage = this.compressContextMsg;
@@ -1864,6 +1871,31 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
 
     messageClassesFromTags(tags) {
       return tags.map(tag => 'msgTag-' + tag);
+    },
+    async toggleSharedSession() {
+      const tag = 'shared';
+
+      const session = this.chatHistoryById[this.currentChatId];
+      if (!session) return;
+      
+      const hasTag = session.tags.includes(tag);
+      const action = hasTag ? 'remove' : 'add';
+      
+      await this.updateSessionTag(this.currentChatId, action, tag);
+
+      await this.loadStoredChats();
+    },
+    async updateSessionTag(sessionId, action, tag) {
+      try {
+        const payload = {
+          action: action,
+          tag: tag
+        };
+        await this.$root.papi.put(`/assistant/sessions/${sessionId}`, payload);
+
+      } catch (error) {
+        this.$root.showError(this.i18n.assistantSessionTagUpdateFail + ': ' + error.message);
+      }
     },
   }
 }});

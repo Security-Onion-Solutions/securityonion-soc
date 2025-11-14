@@ -18,6 +18,7 @@ type Assistantstore interface {
 	GetChatHistory(context.Context, string, bool) ([]*model.StoredMessage, error)
 	GetSessions(context.Context, bool, ...model.GetSessionsOpt) ([]*model.AssistantSession, error)
 	CreateSession(context.Context, *model.AssistantSession) error
+	UpdateSessionTags(ctx context.Context, sessionId string, tags []string) error
 	DeleteSession(context.Context, string) error
 
 	GetUsage(context.Context, time.Time, time.Time) ([]*model.UserUsage, error)

@@ -848,11 +848,72 @@ func (store *ElasticAssistantstore) CreateSession(ctx context.Context, session *
 	return err
 }
 
+func (store *ElasticAssistantstore) UpdateSessionTags(ctx context.Context, sessionId string, tags []string) error {
+	if err := store.server.CheckAuthorized(ctx, "write_authored", "assistant"); err != nil {
+		return err
+	}
+
+	userId := ctx.Value(web.ContextKeyRequestorId).(string)
+	logger := log.FromContext(ctx)
+
+	// Build UpdateByQuery request to update session tags
+	query := map[string]any{
+		"query": map[string]any{
+			"term": map[string]any{
+				store.schemaPrefix + "session.sessionId": sessionId,
+				store.schemaPrefix + "session.userId":    userId,
+			},
+		},
+		"script": map[string]any{
+			"source": "ctx._source." + store.schemaPrefix + "session.tags = params.tags;",
+			"lang":   "painless",
+			"params": map[string]any{
+				"tags": tags,
+			},
+		},
+	}
+
+	// Convert query to JSON
+	queryJSON, err := json.Marshal(query)
+	if err != nil {
+		logger.WithError(err).Error("Failed to marshal UpdateByQuery request")
+		return err
+	}
+
+	logger.WithFields(log.Fields{
+		"sessionId": sessionId,
+		"tags":      tags,
+		"requestId": ctx.Value(web.ContextKeyRequestId),
+	}).Debug("Updating session tags using UpdateByQuery")
+
+	// Execute UpdateByQuery to update the session tags
+	res, err := store.esClient.UpdateByQuery(
+		[]string{store.disableCrossClusterIndex(store.sessionIndex)},
+		store.esClient.UpdateByQuery.WithContext(ctx),
+		store.esClient.UpdateByQuery.WithBody(strings.NewReader(string(queryJSON))),
+		store.esClient.UpdateByQuery.WithRefresh(true),
+		store.esClient.UpdateByQuery.WithWaitForCompletion(true),
+	)
+	if err != nil {
+		logger.WithError(err).Error("Failed to update session tags")
+		return err
+	}
+	defer res.Body.Close()
+
+	logger.WithFields(log.Fields{
+		"sessionId": sessionId,
+		"requestId": ctx.Value(web.ContextKeyRequestId),
+	}).Debug("successfully updated session tags")
+
+	return nil
+}
+
 func (store *ElasticAssistantstore) DeleteSession(ctx context.Context, sessionId string) error {
 	if err := store.server.CheckAuthorized(ctx, "delete_authored", "assistant"); err != nil {
 		return err
 	}
 
+	userId := ctx.Value(web.ContextKeyRequestorId).(string)
 	logger := log.FromContext(ctx)
 
 	now := time.Now()
@@ -863,6 +924,7 @@ func (store *ElasticAssistantstore) DeleteSession(ctx context.Context, sessionId
 		"query": map[string]any{
 			"term": map[string]any{
 				store.schemaPrefix + "session.sessionId": sessionId,
+				store.schemaPrefix + "session.userId":    userId,
 			},
 		},
 		"script": map[string]any{

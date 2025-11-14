@@ -1001,6 +1001,7 @@ const i18n = {
       sha1: 'SHA1',
       sha256: 'SHA256',
       share: 'Clipboard',
+      shareSessionLabel: 'Shared',
       showAll: 'Show all...',
       showDetailsPanel: 'Show Details Panel',
       'so-desktop': 'Desktop',

@@ -326,3 +326,8 @@ type UserUsage struct {
 	// The total messages sent and received by the user in the date range.
 	TotalMessages int `json:"totalMessages" example:"25"`
 }
+
+type UpdateSessionRequest struct {
+	Action string `json:"action" example:"add" enum:"add,remove"`
+	Tag    string `json:"tag" example:"shared"`
+}

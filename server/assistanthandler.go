@@ -44,6 +44,7 @@ func RegisterAssistantRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Get("/balance", h.GetBalance)
 		r.Get("/sessions", h.GetSessions)
 		r.Get("/sessions/{sessionId}", h.GetSessionHistory)
+		r.Put("/sessions/{sessionId}", h.UpdateSession)
 		r.Delete("/sessions/{sessionId}", h.DeleteSession)
 
 		r.Get("/admin/stats", h.GetUsage)
@@ -495,6 +496,83 @@ func (h *AssistantHandler) GetSessionHistory(w http.ResponseWriter, r *http.Requ
 	}
 
 	web.Respond(w, r, http.StatusOK, history)
+}
+
+func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	logger := log.FromContext(ctx)
+
+	err := h.server.CheckAuthorized(ctx, "write_authored", "assistant")
+	if err != nil {
+		web.Respond(w, r, http.StatusUnauthorized, err)
+		return
+	}
+
+	sessionId := chi.URLParam(r, "sessionId")
+	if sessionId == "" {
+		logger.Error("sessionId is required")
+		web.Respond(w, r, http.StatusBadRequest, "sessionId is required")
+
+		return
+	}
+
+	updateReq := &model.UpdateSessionRequest{}
+
+	err = json.NewDecoder(r.Body).Decode(updateReq)
+	if err != nil {
+		logger.WithError(err).Error("unable to decode request body")
+		web.Respond(w, r, http.StatusBadRequest, err)
+
+		return
+	}
+
+	sessions, err := h.server.Assistantstore.GetSessions(ctx, true, model.GetSessionsWithSessionId(sessionId))
+	if err != nil {
+		logger.WithError(err).Error("unable to get session")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+
+		return
+	}
+
+	if len(sessions) == 0 {
+		logger.Error("session not found")
+		web.Respond(w, r, http.StatusNotFound, "session not found")
+
+		return
+	}
+
+	session := sessions[0]
+
+	switch updateReq.Action {
+	case "add":
+		if !slices.Contains(session.Tags, updateReq.Tag) {
+			session.Tags = append(session.Tags, updateReq.Tag)
+		} else {
+			logger.Warn("tag already exists on session")
+			web.Respond(w, r, http.StatusConflict, "tag already exists on session")
+
+			return
+		}
+	case "remove":
+		if slices.Contains(session.Tags, updateReq.Tag) {
+			session.Tags = slices.Delete(session.Tags, slices.Index(session.Tags, updateReq.Tag), slices.Index(session.Tags, updateReq.Tag)+1)
+		} else {
+			logger.Warn("tag does not exist on session")
+			web.Respond(w, r, http.StatusConflict, "tag does not exist on session")
+
+			return
+		}
+	}
+
+	err = h.server.Assistantstore.UpdateSessionTags(ctx, sessionId, session.Tags)
+	if err != nil {
+		logger.WithError(err).Error("unable to update session")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+
+		return
+	}
+
+	web.Respond(w, r, http.StatusNoContent, nil)
 }
 
 // @Summary      Delete Session
