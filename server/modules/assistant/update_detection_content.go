@@ -8,9 +8,7 @@ package assistant
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"net/http"
 	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -55,7 +53,8 @@ func (t *UpdateDetectionContentTool) GetDescription() string {
 	*IMPORTANT*: Note that if the user asks you to modify anything else about the content field, such as references, it is totally fine to take a swing at it. The above run-down isn't a strict set of
 	rules, but instead is a loose guide to follow to help you. In fact, the actual behavior of a rule, which is outlined in the content field, is not at all tied to the attributes above.
 	However, it will be very common for users to ask you to modify a rule's behavior, and you should definitely help them out with that by editing the content field, even though the above
-	attributes might not be explicitly modified.`
+	attributes might not be explicitly modified.
+	This tool will return the newly-updated detection.`
 }
 
 func (t *UpdateDetectionContentTool) GetSchema() model.JSONSchema {
@@ -136,7 +135,7 @@ func (t *UpdateDetectionContentTool) Execute(ctx context.Context, srv *server.Se
 	err = detect.Validate()
 	if err != nil {
 		logger.WithError(err).Error("invalid detection")
-		return nil, fmt.Errorf("invalid detection")
+		return nil, fmt.Errorf("invalid detection: %w", err)
 	}
 
 	engInt, ok := srv.DetectionEngines.Load(detect.Engine)
@@ -168,19 +167,12 @@ func (t *UpdateDetectionContentTool) Execute(ctx context.Context, srv *server.Se
 		return nil, fmt.Errorf("unable to apply filters for detection: %w", err)
 	}
 
-	err = (server.DetectionHandler).PrepareForSave(ctx, detect, engine)
-	if err != nil {
-		if err.Error() == "Object not found" {
-			web.Respond(w, r, http.StatusNotFound, nil)
-		} else if errors.Is(err, errPublicIdExists) {
-			web.Respond(w, r, http.StatusConflict, err)
-		} else if err.Error() == "rule does not contain a public Id" {
-			web.Respond(w, r, http.StatusBadRequest, "missingPublicIdErr")
-		} else {
-			web.Respond(w, r, http.StatusBadRequest, err)
-		}
+	detect.Kind = ""
 
-		return
+	detect, err = srv.Detectionstore.UpdateDetection(ctx, detect)
+	if err != nil {
+		logger.WithError(err).Error("failed to update detection")
+		return nil, fmt.Errorf("failed to update detection: %w", err)
 	}
 
 	errMap, err := engine.SyncLocalDetections(ctx, []*model.Detection{detect})
@@ -192,6 +184,14 @@ func (t *UpdateDetectionContentTool) Execute(ctx context.Context, srv *server.Se
 	if len(errMap) != 0 {
 		logger.WithField("errMap", errMap).Error("unable to sync detection")
 		return nil, fmt.Errorf("unable to sync detection")
+	}
+
+	err = engine.MergeAuxiliaryData(detect)
+	if err != nil {
+		logger.WithError(err).WithFields(log.Fields{
+			"detectionEngine": detect.Engine,
+			"detectionId":     detect.Id,
+		}).Error("unable to merge auxiliary data into detection")
 	}
 
 	result.Result = detect
