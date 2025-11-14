@@ -168,6 +168,7 @@ func (t *UpdateDetectionContentTool) Execute(ctx context.Context, srv *server.Se
 	}
 
 	detect.Kind = ""
+	detect.Operation = ""
 
 	detect, err = srv.Detectionstore.UpdateDetection(ctx, detect)
 	if err != nil {
