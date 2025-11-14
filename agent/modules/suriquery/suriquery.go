@@ -187,10 +187,12 @@ func (suri *SuriQuery) streamPacketsInPcaps(paths []string, filter *model.Filter
 			continue
 		}
 
-		packets, perr := packet.ParseRawPcap(decompressedPath, suri.pcapMaxCount, filter)
+		availablePacketCount := suri.pcapMaxCount - len(allPackets)
+		packets, perr := packet.ParseRawPcap(decompressedPath, availablePacketCount, filter)
 		if perr != nil {
 			log.WithError(perr).WithField("pcapPath", decompressedPath).Error("Failed to parse PCAP file")
 		}
+
 		if len(packets) > 0 {
 			log.WithFields(log.Fields{
 				"pcapPath":    decompressedPath,
@@ -208,6 +210,15 @@ func (suri *SuriQuery) streamPacketsInPcaps(paths []string, filter *model.Filter
 			if rerr != nil {
 				log.WithError(rerr).WithField("pcapPath", decompressedPath).Error("Failed to remove decompressed PCAP file")
 			}
+		}
+
+		if len(allPackets) >= suri.pcapMaxCount {
+			log.WithFields(log.Fields{
+				"pcapPath":    decompressedPath,
+				"packetCount": len(allPackets),
+				"maxPackets":  suri.pcapMaxCount,
+			}).Warn("Reached max PCAP packet limit")
+			break
 		}
 	}
 
