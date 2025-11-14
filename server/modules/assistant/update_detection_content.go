@@ -130,6 +130,10 @@ func (t *UpdateDetectionContentTool) Execute(ctx context.Context, srv *server.Se
 		}
 	}
 
+	if detect.IsCommunity {
+		return nil, fmt.Errorf("cannot update a community rule")
+	}
+
 	detect.Content = args.Content
 
 	err = detect.Validate()

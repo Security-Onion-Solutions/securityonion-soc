@@ -175,14 +175,14 @@ func (t *EscalateAlertsTool) Execute(ctx context.Context, server *server.Server,
 		if err != nil {
 			logger.WithError(err).Error("error creating case for escalated alert")
 
-			return nil, err
+			return nil, fmt.Errorf("error creating case for escalated alert: %w", err)
 		}
 	} else {
 		modelCase, err = server.Casestore.GetCase(ctx, args.CaseId)
 		if err != nil {
 			logger.WithField("caseId", args.CaseId).WithError(err).Error("error fetching case for escalated alert")
 
-			return nil, err
+			return nil, fmt.Errorf("error fetching case for escalated alert: %w", err)
 		}
 	}
 	for _, ev := range relatedEvents {
@@ -195,7 +195,7 @@ func (t *EscalateAlertsTool) Execute(ctx context.Context, server *server.Server,
 	if err != nil {
 		logger.WithError(err).Error("error linking alerts to new case")
 
-		return nil, err
+		return nil, fmt.Errorf("error linking alerts to new case: %w", err)
 	}
 
 	logger.WithFields(log.Fields{
@@ -220,7 +220,7 @@ func (t *EscalateAlertsTool) Execute(ctx context.Context, server *server.Server,
 	if err != nil {
 		logger.WithError(err).Error("error escalating alert")
 
-		return nil, err
+		return nil, fmt.Errorf("error escalating alert: %w", err)
 	}
 
 	if ackResults.UpdatedCount == 0 {

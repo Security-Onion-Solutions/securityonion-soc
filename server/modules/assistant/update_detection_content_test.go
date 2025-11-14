@@ -332,6 +332,21 @@ func TestUpdateDetectionContentTool_Execute(t *testing.T) {
 			mockMergeAuxError: errors.New("failed to merge auxiliary data"),
 			expectedError:     false, // This error is logged but not fatal
 		},
+		{
+			name:   "community detection cannot be updated",
+			params: `{"soc_id": "community-detection-id", "content": "title: Updated Community Rule"}`,
+			mockDetection: &model.Detection{
+				Auditable: model.Auditable{
+					Id: "community-detection-id",
+				},
+				PublicID:    "community-public-id",
+				Title:       "Community Rule",
+				Content:     "original community content",
+				Engine:      model.EngineNameElastAlert,
+				IsCommunity: true, // This should trigger the error
+			},
+			expectedError: true,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -373,7 +388,10 @@ func TestUpdateDetectionContentTool_Execute(t *testing.T) {
 					}
 
 					// Set up subsequent expectations based on error type
-					if tc.mockValidateError != nil {
+					// Skip all engine expectations for community detection error since it returns early
+					if tc.name == "community detection cannot be updated" {
+						// Don't set up any engine expectations since the function returns early with community error
+					} else if tc.mockValidateError != nil {
 						// Detection.Validate() is called on the detection object itself, so we can't mock it directly
 						// This would require the detection to have invalid fields
 						// For this test case, we need to set up the engine but not expect any calls since validation fails early
