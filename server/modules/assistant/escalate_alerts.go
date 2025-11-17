@@ -112,7 +112,7 @@ func (t *EscalateAlertsTool) Execute(ctx context.Context, server *server.Server,
 	if args.RangeFormat != "" {
 		timeFormat = args.RangeFormat
 	} else {
-		timeFormat = "2006-01-02 3:04:05 PM"
+		timeFormat = "2006/01/02 3:04:05 PM"
 	}
 
 	var timeRange string

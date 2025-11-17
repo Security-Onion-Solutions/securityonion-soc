@@ -55,14 +55,6 @@ type DetectionHandler struct {
 	server *Server
 }
 
-type BulkUpdateStats struct {
-	Updated        int
-	Audited        int
-	Filtered       int
-	ErrMap         map[string]string
-	UpdateDuration time.Duration
-}
-
 func NewDetectionHandler(srv *Server) *DetectionHandler {
 	return &DetectionHandler{
 		server: srv,

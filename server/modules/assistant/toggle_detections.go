@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -72,8 +73,9 @@ func (t *ToggleDetectionsTool) GetSchema() model.JSONSchema {
 						"- @timestamp: The date and time when this detection was last created/updated/modified. Example: \"2025-11-12T19:38:17.413984706Z\"",
 				},
 				"enable": {
-					Type:        "bool",
-					Description: "This is a true/false value based on whether the user wants to enable or disable the detections at hand. A value of true corresponds to the enable operation, and false corresponds to the disable operation.",
+					Type: "string",
+					Description: "This is a \"true\"/\"false\" value based on whether the user wants to enable or disable the detections at hand. A value of \"true\" corresponds to the enable operation, and \"false\" corresponds to the disable operation.\n" +
+						"*IMPORTANT* This can only have one of two values: \"true\" or \"false\".",
 				},
 				"range_start": {
 					Type:        "string",
@@ -95,7 +97,7 @@ func (t *ToggleDetectionsTool) GetSchema() model.JSONSchema {
 
 type toggleDetectionsArgs struct {
 	SearchFilter string `json:"search_filter"`
-	Enable       bool   `json:"enable"`
+	Enable       string `json:"enable" enums:"true,false"`
 	RangeStart   string `json:"range_start,omitempty"`
 	RangeEnd     string `json:"range_end,omitempty"`
 	RangeFormat  string `json:"range_format,omitempty"`
@@ -127,6 +129,11 @@ func (t *ToggleDetectionsTool) Execute(ctx context.Context, server *server.Serve
 	}
 
 	result.Parameters = args
+
+	enableBool, err := strconv.ParseBool(args.Enable)
+	if err != nil {
+		return nil, fmt.Errorf("invalid value for argument \"enable\": %w", err)
+	}
 
 	query := args.SearchFilter
 
@@ -160,14 +167,14 @@ func (t *ToggleDetectionsTool) Execute(ctx context.Context, server *server.Serve
 		detects = append(detects, det)
 	}
 
-	bulkStats, err := server.Detectionstore.BulkUpdateDetections(ctx, args.Enable, detects, logger)
+	bulkStats, err := server.Detectionstore.BulkUpdateDetections(ctx, enableBool, detects, logger)
 	if err != nil {
 		logger.WithError(err).Error("error updating detections")
 		return nil, fmt.Errorf("error updating detections: %w", err)
 	}
 
 	var opString string
-	if args.Enable {
+	if enableBool {
 		opString = "Enabled"
 	} else {
 		opString = "Disabled"
