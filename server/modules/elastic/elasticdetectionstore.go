@@ -6,6 +6,7 @@
 package elastic
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -14,6 +15,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -423,6 +425,70 @@ func (store *ElasticDetectionstore) Query(ctx context.Context, query string, max
 	return objects, err
 }
 
+func (store *ElasticDetectionstore) QueryWithRange(ctx context.Context, query string, rangeStart string, rangeEnd string, rangeFormat string) (objects []interface{}, err error) {
+	logger := log.FromContext(ctx)
+
+	err = store.server.CheckAuthorized(ctx, "read", "detections")
+	if err != nil {
+		return nil, err
+	}
+
+	var timeFormat string
+
+	if rangeFormat != "" {
+		timeFormat = rangeFormat
+	} else {
+		timeFormat = "2006-01-02 3:04:05 PM"
+	}
+
+	var timeRange string
+
+	if rangeStart != "" || rangeEnd != "" {
+		timeRange = parseRangeAllowRelative(rangeStart, rangeEnd, timeFormat)
+	}
+
+	zone := "UTC"
+
+	var results *model.EventSearchResults
+
+	criteria := model.NewEventSearchCriteria()
+	err = criteria.Populate(query,
+		timeRange,  // timeframe range
+		timeFormat, // timeframe format
+		zone,       // timezone
+		"0",        // no metrics
+		"10000")
+
+	if err != nil {
+		return nil, err
+	}
+
+	criteria.SortFields = []*model.SortCriteria{
+		{
+			Field: "@timestamp",
+			Order: "desc",
+		},
+	}
+
+	results, err = store.DetectionSearch(ctx, criteria)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, event := range results.Events {
+		var obj interface{}
+
+		obj, err = convertElasticEventToObject(event, store.schemaPrefix)
+		if err == nil {
+			objects = append(objects, obj)
+		} else {
+			logger.WithField("returnedEvent", event).WithError(err).Error("Unable to convert detection object")
+		}
+	}
+
+	return objects, err
+}
+
 func (store *ElasticDetectionstore) DetectionSearch(ctx context.Context, criteria *model.EventSearchCriteria) (*model.EventSearchResults, error) {
 	err := store.server.CheckAuthorized(ctx, "read", "detections")
 	if err != nil {
@@ -555,6 +621,183 @@ func (store *ElasticDetectionstore) UpdateDetection(ctx context.Context, detect 
 
 	// Read object back to get new modify date, etc
 	return store.GetDetection(ctx, results.DocumentId)
+}
+
+func (store *ElasticDetectionstore) BulkUpdateDetections(ctx context.Context, newStatus bool, detects []*model.Detection, logger log.Interface) (*model.BulkUpdateStats, error) {
+	bulkStats := &model.BulkUpdateStats{}
+	errMap := map[string]string{}
+	updated := 0
+	audited := 0
+	filtered := 0
+
+	start := time.Now()
+
+	bulk, err := store.BuildBulkIndexer(ctx, logger)
+	if err != nil {
+		logger.WithError(err).Error("failed to create bulk indexer")
+		return nil, fmt.Errorf("failed to create bulk indexer: %w", err)
+	}
+
+	createAudit := []model.AuditInfo{} // Object => *model.Detection
+	auditMut := sync.Mutex{}
+	errMut := sync.Mutex{}
+
+	for i := range detects {
+		detect := detects[i]
+		id := detect.Id
+
+		engineInt, ok := store.server.DetectionEngines.Load(detect.Engine)
+		if !ok {
+			logger.WithFields(log.Fields{
+				"publicId": detect.PublicID,
+				"engine":   detect.Engine,
+			}).Error("detection has unsupported engine, skipping")
+			errMap[detect.PublicID] = "unsupported engine"
+
+			continue
+		}
+
+		engine := engineInt.(server.DetectionEngine)
+
+		detect.IsEnabled = newStatus
+
+		filterApplied, err := engine.ApplyFilters(detect)
+		if err != nil {
+			logger.WithError(err).WithFields(log.Fields{
+				"detectionPublicId": detect.PublicID,
+				"detectionEngine":   detect.Engine,
+			}).Error("unable to apply engine filters to detection")
+
+			return nil, fmt.Errorf("unable to apply filters to detection with Public ID %s: %w", detect.PublicID, err)
+		}
+
+		if filterApplied && detect.IsEnabled != newStatus {
+			filtered++
+		}
+
+		exErr := engine.ExtractDetails(detect)
+		if exErr != nil {
+			logger.WithField("publicId", detect.PublicID).WithError(exErr).Warn("unable to extract details from detection, skipping")
+			errMap[detect.PublicID] = fmt.Sprintf("unable to extract details: %s", exErr.Error())
+			continue
+		}
+
+		document, index, err := store.ConvertObjectToDocument(ctx, "detection", detect, &detect.Auditable, true, nil, nil)
+		if err != nil {
+			errMap[detect.PublicID] = err.Error()
+			continue
+		}
+
+		work := esutil.BulkIndexerItem{
+			Index:      index,
+			Action:     "update",
+			DocumentID: id,
+			OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
+				auditMut.Lock()
+				defer auditMut.Unlock()
+				updated++
+				createAudit = append(createAudit, model.AuditInfo{
+					DocId:  resp.DocumentID,
+					Op:     "update",
+					Object: detect,
+				})
+			},
+			OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
+				errMut.Lock()
+				defer errMut.Unlock()
+
+				if err != nil {
+					errMap[detect.PublicID] = err.Error()
+				} else {
+					errMap[detect.PublicID] = resp.Error.Reason
+				}
+			},
+		}
+
+		work.Body = bytes.NewReader(document)
+
+		err = bulk.Add(ctx, work)
+		if err != nil {
+			errMap[detect.PublicID] = err.Error()
+			continue
+		}
+	}
+
+	err = bulk.Close(ctx)
+	if err != nil {
+		logger.WithError(err).Error("unable to close bulk indexer for detection changes")
+		return nil, fmt.Errorf("unable to close bulk indexer for detection changes: %w", err)
+	}
+
+	bulk, err = store.BuildBulkIndexer(ctx, logger)
+	if err != nil {
+		logger.WithError(err).Error("unable to create audit bulk indexer")
+		return nil, fmt.Errorf("unable to create audit bulk indexer: %w", err)
+	}
+
+	dirty := make([]*model.Detection, 0, len(createAudit))
+
+	for _, audit := range createAudit {
+		det := audit.Object.(*model.Detection)
+
+		document, index, err := store.ConvertObjectToDocument(ctx, "detection", audit.Object, &det.Auditable, false, &audit.DocId, &audit.Op)
+		if err != nil {
+			errMap[det.PublicID] = err.Error()
+			continue
+		}
+
+		err = bulk.Add(ctx, esutil.BulkIndexerItem{
+			Index:  index,
+			Action: "create",
+			Body:   bytes.NewReader(document),
+			OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
+				auditMut.Lock()
+				defer auditMut.Unlock()
+
+				audited++
+			},
+			OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
+				errMut.Lock()
+				defer errMut.Unlock()
+
+				if err != nil {
+					errMap[det.PublicID] = fmt.Sprintf("AUDIT: %s", err.Error())
+				} else {
+					errMap[det.PublicID] = fmt.Sprintf("AUDIT: %s", resp.Error.Reason)
+				}
+			},
+		})
+		if err != nil {
+			errMap[det.PublicID] = err.Error()
+			continue
+		}
+
+		det.PersistChange = true
+
+		dirty = append(dirty, det)
+	}
+
+	err = bulk.Close(ctx)
+	if err != nil {
+		logger.WithError(err).Error("unable to close bulk indexer for audit history")
+		return nil, fmt.Errorf("unable to close bulk indexer for audit history: %w", err)
+	}
+
+	updateDur := time.Since(start)
+
+	logger.WithFields(log.Fields{
+		"bulkUpdated": updated,
+		"bulkAudited": audited,
+		"errMap":      util.TruncateMap(errMap, 5),
+	}).Info("bulk operation complete")
+
+	bulkStats.Updated = updated
+	bulkStats.Audited = audited
+	bulkStats.Filtered = filtered
+	bulkStats.ErrMap = errMap
+	bulkStats.UpdateDuration = updateDur
+
+	return bulkStats, nil
 }
 
 func (store *ElasticDetectionstore) DeleteDetection(ctx context.Context, id string) (*model.Detection, error) {
@@ -859,4 +1102,35 @@ func (store *ElasticDetectionstore) ConvertObjectToDocument(ctx context.Context,
 	rawDoc, err := json.Marshal(document)
 
 	return rawDoc, index, err
+}
+
+func parseRangeAllowRelative(rangeStart string, rangeEnd string, format string) string {
+	start := "-24h"
+	end := "now"
+
+	if rangeStart != "" {
+		start = rangeStart
+	}
+	if rangeEnd != "" {
+		end = rangeEnd
+	}
+
+	var startFormatted, endFormatted string
+
+	// Parse and format times
+	startParsed, err := time.Parse(format, start)
+	if err != nil {
+		startFormatted = util.ParseRelativeTimeString(start)
+	} else {
+		startFormatted = util.FormatSOTime(startParsed)
+	}
+
+	endParsed, err := time.Parse(format, end)
+	if err != nil {
+		endFormatted = util.ParseRelativeTimeString(end)
+	} else {
+		endFormatted = util.FormatSOTime(endParsed)
+	}
+
+	return fmt.Sprintf("%s - %s", startFormatted, endFormatted)
 }

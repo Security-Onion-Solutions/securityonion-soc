@@ -213,6 +213,14 @@ type OverrideNoteUpdate struct {
 	Note string `json:"note" example:"corrected note"`
 }
 
+type BulkUpdateStats struct {
+	Updated        int
+	Audited        int
+	Filtered       int
+	ErrMap         map[string]string
+	UpdateDuration time.Duration
+}
+
 func (o Override) PrepareForSigma() (map[string]interface{}, error) {
 	if o.CustomFilter == nil || !o.IsEnabled {
 		return map[string]interface{}{}, nil

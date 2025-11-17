@@ -58,6 +58,21 @@ func (mr *MockDetectionstoreMockRecorder) BuildBulkIndexer(ctx, logger any) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildBulkIndexer", reflect.TypeOf((*MockDetectionstore)(nil).BuildBulkIndexer), ctx, logger)
 }
 
+// BulkUpdateDetections mocks base method.
+func (m *MockDetectionstore) BulkUpdateDetections(ctx context.Context, newStatus bool, detects []*model.Detection, logger log.Interface) (*model.BulkUpdateStats, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BulkUpdateDetections", ctx, newStatus, detects, logger)
+	ret0, _ := ret[0].(*model.BulkUpdateStats)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// BulkUpdateDetections indicates an expected call of BulkUpdateDetections.
+func (mr *MockDetectionstoreMockRecorder) BulkUpdateDetections(ctx, newStatus, detects, logger any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BulkUpdateDetections", reflect.TypeOf((*MockDetectionstore)(nil).BulkUpdateDetections), ctx, newStatus, detects, logger)
+}
+
 // ConvertObjectToDocument mocks base method.
 func (m *MockDetectionstore) ConvertObjectToDocument(ctx context.Context, kind string, obj any, auditable *model.Auditable, isEdit bool, auditDocId, op *string) ([]byte, string, error) {
 	m.ctrl.T.Helper()
@@ -256,6 +271,21 @@ func (m *MockDetectionstore) Query(ctx context.Context, query string, max int) (
 func (mr *MockDetectionstoreMockRecorder) Query(ctx, query, max any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockDetectionstore)(nil).Query), ctx, query, max)
+}
+
+// QueryWithRange mocks base method.
+func (m *MockDetectionstore) QueryWithRange(ctx context.Context, query, rangeStart, rangeEnd, rangeFormat string) ([]any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "QueryWithRange", ctx, query, rangeStart, rangeEnd, rangeFormat)
+	ret0, _ := ret[0].([]any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// QueryWithRange indicates an expected call of QueryWithRange.
+func (mr *MockDetectionstoreMockRecorder) QueryWithRange(ctx, query, rangeStart, rangeEnd, rangeFormat any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryWithRange", reflect.TypeOf((*MockDetectionstore)(nil).QueryWithRange), ctx, query, rangeStart, rangeEnd, rangeFormat)
 }
 
 // UpdateComment mocks base method.

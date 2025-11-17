@@ -107,10 +107,18 @@ func (t *EscalateAlertsTool) Execute(ctx context.Context, server *server.Server,
 		return nil, err
 	}
 
+	var timeFormat string
+
+	if args.RangeFormat != "" {
+		timeFormat = args.RangeFormat
+	} else {
+		timeFormat = "2006-01-02 3:04:05 PM"
+	}
+
 	var timeRange string
 
 	if args.RangeStart != "" || args.RangeEnd != "" {
-		timeRange = parseRangeAllowRelative(args.RangeStart, args.RangeEnd, args.RangeFormat)
+		timeRange = parseRangeAllowRelative(args.RangeStart, args.RangeEnd, timeFormat)
 	}
 
 	result.Parameters = args
@@ -121,7 +129,7 @@ func (t *EscalateAlertsTool) Execute(ctx context.Context, server *server.Server,
 	err = searchCrit.Populate(
 		"(tags:alert AND NOT event.acknowledged:true AND NOT event.escalated:true) AND ("+args.SearchFilter+")",
 		timeRange,
-		"2006/01/02 3:04:05 PM",
+		timeFormat,
 		zone,
 		"0",
 		"10000",
