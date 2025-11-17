@@ -208,7 +208,7 @@ func TestToggleDetectionsTool_Execute(t *testing.T) {
 				UpdateDuration: 100000000, // 100ms in nanoseconds
 				NeedToSync:     []*model.Detection{},
 			},
-			expectedResult:     "Successfully Enabled 2 detections.\nEnabled=2, Audited=2, Filtered=0, Errors=map[], UpdateDuration=100ms, SyncDuration=",
+			expectedResult:     "Successfully Enabled 2 detections. Enabled=2, Audited=2, Filtered=0, Errors=map[], UpdateDuration=100ms, SyncDuration=",
 			expectedEnable:     true,
 			expectedDetections: 2,
 		},
@@ -231,7 +231,7 @@ func TestToggleDetectionsTool_Execute(t *testing.T) {
 				UpdateDuration: 50000000, // 50ms in nanoseconds
 				NeedToSync:     []*model.Detection{},
 			},
-			expectedResult:     "Successfully Disabled 1 detections.\nDisabled=1, Audited=1, Filtered=0, Errors=map[], UpdateDuration=50ms, SyncDuration=",
+			expectedResult:     "Successfully Disabled 1 detections. Disabled=1, Audited=1, Filtered=0, Errors=map[], UpdateDuration=50ms, SyncDuration=",
 			expectedEnable:     false,
 			expectedDetections: 1,
 		},
@@ -254,7 +254,7 @@ func TestToggleDetectionsTool_Execute(t *testing.T) {
 				UpdateDuration: 75000000, // 75ms in nanoseconds
 				NeedToSync:     []*model.Detection{},
 			},
-			expectedResult:     "Successfully Enabled 1 detections.\nEnabled=1, Audited=1, Filtered=0, Errors=map[], UpdateDuration=75ms, SyncDuration=",
+			expectedResult:     "Successfully Enabled 1 detections. Enabled=1, Audited=1, Filtered=0, Errors=map[], UpdateDuration=75ms, SyncDuration=",
 			expectedEnable:     true,
 			expectedDetections: 1,
 		},
@@ -277,7 +277,7 @@ func TestToggleDetectionsTool_Execute(t *testing.T) {
 				UpdateDuration: 60000000, // 60ms in nanoseconds
 				NeedToSync:     []*model.Detection{},
 			},
-			expectedResult:     "Successfully Disabled 1 detections.\nDisabled=1, Audited=1, Filtered=0, Errors=map[], UpdateDuration=60ms, SyncDuration=",
+			expectedResult:     "Successfully Disabled 1 detections. Disabled=1, Audited=1, Filtered=0, Errors=map[], UpdateDuration=60ms, SyncDuration=",
 			expectedEnable:     false,
 			expectedDetections: 1,
 		},
@@ -308,7 +308,7 @@ func TestToggleDetectionsTool_Execute(t *testing.T) {
 				UpdateDuration: 25000000, // 25ms in nanoseconds
 				NeedToSync:     []*model.Detection{},
 			},
-			expectedResult:     "Successfully Enabled 0 detections.\nEnabled=0, Audited=0, Filtered=0, Errors=map[PUB006:unsupported engine], UpdateDuration=25ms, SyncDuration=",
+			expectedResult:     "Successfully Enabled 0 detections. Enabled=0, Audited=0, Filtered=0, Errors=map[PUB006:unsupported engine], UpdateDuration=25ms, SyncDuration=",
 			expectedEnable:     true,
 			expectedDetections: 1,
 		},
@@ -331,7 +331,7 @@ func TestToggleDetectionsTool_Execute(t *testing.T) {
 				UpdateDuration: 80000000, // 80ms in nanoseconds
 				NeedToSync:     []*model.Detection{},
 			},
-			expectedResult:     "Successfully Enabled 1 detections.\nEnabled=1, Audited=1, Filtered=1, Errors=map[], UpdateDuration=80ms, SyncDuration=",
+			expectedResult:     "Successfully Enabled 1 detections. Enabled=1, Audited=1, Filtered=1, Errors=map[], UpdateDuration=80ms, SyncDuration=",
 			expectedEnable:     true,
 			expectedDetections: 1,
 		},
@@ -394,7 +394,7 @@ func TestToggleDetectionsTool_Execute(t *testing.T) {
 					},
 				},
 			},
-			expectedResult:     "Successfully Enabled 1 detections.\nEnabled=1, Audited=1, Filtered=0, Errors=map[], UpdateDuration=30ms, SyncDuration=",
+			expectedResult:     "Successfully Enabled 1 detections. Enabled=1, Audited=1, Filtered=0, Errors=map[], UpdateDuration=30ms, SyncDuration=",
 			expectedEnable:     true,
 			expectedDetections: 1,
 		},

@@ -221,7 +221,7 @@ func (t *ToggleDetectionsTool) Execute(ctx context.Context, srv *server.Server, 
 	}
 
 	result.Result = fmt.Sprintf(
-		"Successfully %s %d detections.\n%s=%d, Audited=%d, Filtered=%d, Errors=%v, UpdateDuration=%s, SyncDuration=%s",
+		"Successfully %s %d detections. %s=%d, Audited=%d, Filtered=%d, Errors=%v, UpdateDuration=%s, SyncDuration=%s",
 		opString,
 		bulkStats.Updated,
 		opString,
