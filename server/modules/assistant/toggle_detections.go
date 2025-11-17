@@ -103,7 +103,7 @@ type toggleDetectionsArgs struct {
 	RangeFormat  string `json:"range_format,omitempty"`
 }
 
-func (t *ToggleDetectionsTool) Execute(ctx context.Context, server *server.Server, params string, auxData string) (result *model.ToolResponse, err error) {
+func (t *ToggleDetectionsTool) Execute(ctx context.Context, srv *server.Server, params string, auxData string) (result *model.ToolResponse, err error) {
 	logger := log.FromContext(ctx)
 
 	logger.WithField("toolParameters", params).Info("running tool for assistant")
@@ -143,12 +143,12 @@ func (t *ToggleDetectionsTool) Execute(ctx context.Context, server *server.Serve
 		query = `NOT metadata.raw_index:"logs-soc-so"`
 	}
 
-	err = server.CheckAuthorized(ctx, "write", "detections")
+	err = srv.CheckAuthorized(ctx, "write", "detections")
 	if err != nil {
 		return nil, err
 	}
 
-	detectObjects, err := server.Detectionstore.QueryWithRange(ctx, query, args.RangeStart, args.RangeEnd, args.RangeFormat)
+	detectObjects, err := srv.Detectionstore.QueryWithRange(ctx, query, args.RangeStart, args.RangeEnd, args.RangeFormat)
 	if err != nil {
 		return nil, err
 	}
@@ -167,11 +167,51 @@ func (t *ToggleDetectionsTool) Execute(ctx context.Context, server *server.Serve
 		detects = append(detects, det)
 	}
 
-	bulkStats, err := server.Detectionstore.BulkUpdateDetections(ctx, enableBool, detects, logger)
+	bulkStats, err := srv.Detectionstore.BulkUpdateDetections(ctx, enableBool, detects, logger)
 	if err != nil {
 		logger.WithError(err).Error("error updating detections")
 		return nil, fmt.Errorf("error updating detections: %w", err)
 	}
+
+	syncDetects := bulkStats.NeedToSync
+	syncStart := time.Now()
+	errMap := map[string]string{}
+
+	byEngine := map[model.EngineName][]*model.Detection{}
+	for _, detectCurr := range syncDetects {
+		byEngine[detectCurr.Engine] = append(byEngine[detectCurr.Engine], detectCurr)
+	}
+
+	srv.DetectionEngines.Range(func(n, engineInt interface{}) bool {
+		name := n.(model.EngineName)
+		engine := engineInt.(server.DetectionEngine)
+
+		if len(byEngine[name]) != 0 {
+			var eMap map[string]string
+
+			eMap, err = engine.SyncLocalDetections(ctx, byEngine[name])
+			for sid, e := range eMap {
+				errMap[sid] = e
+			}
+			if err != nil {
+				return false
+			}
+		}
+
+		return true
+	})
+
+	if err != nil {
+		logger.WithError(err).Error("unable to sync detections")
+		return nil, fmt.Errorf("unable to sync detections: %w", err)
+	}
+
+	if len(errMap) != 0 {
+		logger.WithField("errMap", errMap).Error("unable to sync detections")
+		return nil, fmt.Errorf("unable to sync detections")
+	}
+
+	syncDur := time.Since(syncStart)
 
 	var opString string
 	if enableBool {
@@ -181,13 +221,16 @@ func (t *ToggleDetectionsTool) Execute(ctx context.Context, server *server.Serve
 	}
 
 	result.Result = fmt.Sprintf(
-		"%s=%d, Audited=%d, Filtered=%d, Errs=%v, Duration=%s",
+		"Successfully %s %d detections.\n%s=%d, Audited=%d, Filtered=%d, Errors=%v, UpdateDuration=%s, SyncDuration=%s",
+		opString,
+		bulkStats.Updated,
 		opString,
 		bulkStats.Updated,
 		bulkStats.Audited,
 		bulkStats.Filtered,
 		bulkStats.ErrMap,
 		bulkStats.UpdateDuration,
+		syncDur,
 	)
 
 	return result, nil

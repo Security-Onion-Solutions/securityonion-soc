@@ -8,6 +8,7 @@ package assistant
 import (
 	"context"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/apex/log"
@@ -117,6 +118,58 @@ func (f *FakeDetectionstore) ConvertObjectToDocument(ctx context.Context, kind s
 	return nil, "", nil
 }
 
+// FakeDetectionEngine implements the DetectionEngine interface for testing
+type FakeDetectionEngine struct {
+	SyncError    error
+	SyncErrorMap map[string]string
+}
+
+func (f *FakeDetectionEngine) ValidateRule(rule string) (string, error) {
+	return rule, nil
+}
+
+func (f *FakeDetectionEngine) SyncLocalDetections(ctx context.Context, detections []*model.Detection) (map[string]string, error) {
+	if f.SyncError != nil {
+		return nil, f.SyncError
+	}
+	if f.SyncErrorMap != nil {
+		return f.SyncErrorMap, nil
+	}
+	return map[string]string{}, nil
+}
+
+func (f *FakeDetectionEngine) ConvertRule(ctx context.Context, detect *model.Detection) (string, error) {
+	return detect.Content, nil
+}
+
+func (f *FakeDetectionEngine) ExtractDetails(detect *model.Detection) error {
+	return nil
+}
+
+func (f *FakeDetectionEngine) InterruptSync(forceFull bool, notify bool) {
+	// No-op for testing
+}
+
+func (f *FakeDetectionEngine) DuplicateDetection(ctx context.Context, detection *model.Detection) (*model.Detection, error) {
+	return detection, nil
+}
+
+func (f *FakeDetectionEngine) GetState() *model.EngineState {
+	return &model.EngineState{}
+}
+
+func (f *FakeDetectionEngine) GenerateUnusedPublicId(ctx context.Context) (string, error) {
+	return "test-public-id", nil
+}
+
+func (f *FakeDetectionEngine) ApplyFilters(detect *model.Detection) (bool, error) {
+	return false, nil
+}
+
+func (f *FakeDetectionEngine) MergeAuxiliaryData(detect *model.Detection) error {
+	return nil
+}
+
 func TestToggleDetectionsTool_Execute(t *testing.T) {
 	testCases := []struct {
 		name               string
@@ -153,8 +206,9 @@ func TestToggleDetectionsTool_Execute(t *testing.T) {
 				Filtered:       0,
 				ErrMap:         map[string]string{},
 				UpdateDuration: 100000000, // 100ms in nanoseconds
+				NeedToSync:     []*model.Detection{},
 			},
-			expectedResult:     "Enabled=2, Audited=2, Filtered=0, Errs=map[], Duration=100ms",
+			expectedResult:     "Successfully Enabled 2 detections.\nEnabled=2, Audited=2, Filtered=0, Errors=map[], UpdateDuration=100ms, SyncDuration=",
 			expectedEnable:     true,
 			expectedDetections: 2,
 		},
@@ -175,8 +229,9 @@ func TestToggleDetectionsTool_Execute(t *testing.T) {
 				Filtered:       0,
 				ErrMap:         map[string]string{},
 				UpdateDuration: 50000000, // 50ms in nanoseconds
+				NeedToSync:     []*model.Detection{},
 			},
-			expectedResult:     "Disabled=1, Audited=1, Filtered=0, Errs=map[], Duration=50ms",
+			expectedResult:     "Successfully Disabled 1 detections.\nDisabled=1, Audited=1, Filtered=0, Errors=map[], UpdateDuration=50ms, SyncDuration=",
 			expectedEnable:     false,
 			expectedDetections: 1,
 		},
@@ -197,8 +252,9 @@ func TestToggleDetectionsTool_Execute(t *testing.T) {
 				Filtered:       0,
 				ErrMap:         map[string]string{},
 				UpdateDuration: 75000000, // 75ms in nanoseconds
+				NeedToSync:     []*model.Detection{},
 			},
-			expectedResult:     "Enabled=1, Audited=1, Filtered=0, Errs=map[], Duration=75ms",
+			expectedResult:     "Successfully Enabled 1 detections.\nEnabled=1, Audited=1, Filtered=0, Errors=map[], UpdateDuration=75ms, SyncDuration=",
 			expectedEnable:     true,
 			expectedDetections: 1,
 		},
@@ -219,8 +275,9 @@ func TestToggleDetectionsTool_Execute(t *testing.T) {
 				Filtered:       0,
 				ErrMap:         map[string]string{},
 				UpdateDuration: 60000000, // 60ms in nanoseconds
+				NeedToSync:     []*model.Detection{},
 			},
-			expectedResult:     "Disabled=1, Audited=1, Filtered=0, Errs=map[], Duration=60ms",
+			expectedResult:     "Successfully Disabled 1 detections.\nDisabled=1, Audited=1, Filtered=0, Errors=map[], UpdateDuration=60ms, SyncDuration=",
 			expectedEnable:     false,
 			expectedDetections: 1,
 		},
@@ -249,8 +306,9 @@ func TestToggleDetectionsTool_Execute(t *testing.T) {
 					"PUB006": "unsupported engine",
 				},
 				UpdateDuration: 25000000, // 25ms in nanoseconds
+				NeedToSync:     []*model.Detection{},
 			},
-			expectedResult:     "Enabled=0, Audited=0, Filtered=0, Errs=map[PUB006:unsupported engine], Duration=25ms",
+			expectedResult:     "Successfully Enabled 0 detections.\nEnabled=0, Audited=0, Filtered=0, Errors=map[PUB006:unsupported engine], UpdateDuration=25ms, SyncDuration=",
 			expectedEnable:     true,
 			expectedDetections: 1,
 		},
@@ -271,8 +329,9 @@ func TestToggleDetectionsTool_Execute(t *testing.T) {
 				Filtered:       1,
 				ErrMap:         map[string]string{},
 				UpdateDuration: 80000000, // 80ms in nanoseconds
+				NeedToSync:     []*model.Detection{},
 			},
-			expectedResult:     "Enabled=1, Audited=1, Filtered=1, Errs=map[], Duration=80ms",
+			expectedResult:     "Successfully Enabled 1 detections.\nEnabled=1, Audited=1, Filtered=1, Errors=map[], UpdateDuration=80ms, SyncDuration=",
 			expectedEnable:     true,
 			expectedDetections: 1,
 		},
@@ -307,6 +366,38 @@ func TestToggleDetectionsTool_Execute(t *testing.T) {
 			expectedError:      true,
 			expectedDetections: 1,
 		},
+		{
+			name:   "sync detections successfully",
+			params: `{"search_filter": "so_detection.title:sync AND _index:\"*:so-detection\" AND so_kind:detection", "enable": "true"}`,
+			mockQueryResults: []interface{}{
+				&model.Detection{
+					Auditable: model.Auditable{Id: "detection-sync"},
+					PublicID:  "PUB-SYNC",
+					Title:     "Sync Detection",
+					IsEnabled: false,
+					Engine:    model.EngineNameSuricata,
+				},
+			},
+			mockBulkStats: &model.BulkUpdateStats{
+				Updated:        1,
+				Audited:        1,
+				Filtered:       0,
+				ErrMap:         map[string]string{},
+				UpdateDuration: 30000000, // 30ms in nanoseconds
+				NeedToSync: []*model.Detection{
+					{
+						Auditable: model.Auditable{Id: "detection-sync"},
+						PublicID:  "PUB-SYNC",
+						Title:     "Sync Detection",
+						IsEnabled: true,
+						Engine:    model.EngineNameSuricata,
+					},
+				},
+			},
+			expectedResult:     "Successfully Enabled 1 detections.\nEnabled=1, Audited=1, Filtered=0, Errors=map[], UpdateDuration=30ms, SyncDuration=",
+			expectedEnable:     true,
+			expectedDetections: 1,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -331,6 +422,17 @@ func TestToggleDetectionsTool_Execute(t *testing.T) {
 				"test-user-id": {"detections/write"},
 			})
 			mockServer.Detectionstore = mockDetectionstore
+			// Add DetectionEngines with mock engine for sync testing
+			mockServer.DetectionEngines = sync.Map{}
+			if tc.name == "sync detections successfully" {
+				mockEngine := &FakeDetectionEngine{}
+				mockServer.DetectionEngines.Store(model.EngineNameSuricata, mockEngine)
+			} else if tc.name == "sync error during detection sync" {
+				mockEngine := &FakeDetectionEngine{
+					SyncError: assert.AnError,
+				}
+				mockServer.DetectionEngines.Store(model.EngineNameSuricata, mockEngine)
+			}
 
 			// Create context with user ID
 			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user-id")
@@ -364,9 +466,16 @@ func TestToggleDetectionsTool_Execute(t *testing.T) {
 				assert.Len(t, mockDetectionstore.BulkUpdateDetectionList, tc.expectedDetections)
 			}
 
-			// Assert result content
+			// Assert result content - check if result contains expected parts since sync duration varies
 			if tc.expectedResult != "" {
-				assert.Equal(t, tc.expectedResult, result.Result)
+				resultStr := result.Result.(string)
+				if strings.Contains(tc.expectedResult, "SyncDuration=") {
+					// For results with sync duration, check that it starts correctly and contains expected parts
+					assert.True(t, strings.HasPrefix(resultStr, strings.Split(tc.expectedResult, "SyncDuration=")[0]))
+					assert.Contains(t, resultStr, "SyncDuration=")
+				} else {
+					assert.Equal(t, tc.expectedResult, resultStr)
+				}
 			}
 		})
 	}
@@ -467,6 +576,8 @@ func TestToggleDetectionsTool_QueryFiltering(t *testing.T) {
 				"test-user-id": {"detections/write"},
 			})
 			mockServer.Detectionstore = mockDetectionstore
+			// Add empty DetectionEngines to avoid nil pointer issues
+			mockServer.DetectionEngines = sync.Map{}
 
 			// Create context with user ID
 			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user-id")
@@ -533,6 +644,7 @@ func TestToggleDetectionsTool_Authorization(t *testing.T) {
 					Filtered:       0,
 					ErrMap:         map[string]string{},
 					UpdateDuration: 50000000, // 50ms in nanoseconds
+					NeedToSync:     []*model.Detection{},
 				}
 			}
 
@@ -548,6 +660,8 @@ func TestToggleDetectionsTool_Authorization(t *testing.T) {
 				})
 			}
 			mockServer.Detectionstore = mockDetectionstore
+			// Add empty DetectionEngines to avoid nil pointer issues
+			mockServer.DetectionEngines = sync.Map{}
 
 			// Create context with user ID
 			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user-id")

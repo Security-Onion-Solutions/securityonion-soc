@@ -796,6 +796,7 @@ func (store *ElasticDetectionstore) BulkUpdateDetections(ctx context.Context, ne
 	bulkStats.Filtered = filtered
 	bulkStats.ErrMap = errMap
 	bulkStats.UpdateDuration = updateDur
+	bulkStats.NeedToSync = dirty
 
 	return bulkStats, nil
 }

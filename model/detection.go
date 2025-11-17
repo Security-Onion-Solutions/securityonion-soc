@@ -219,6 +219,7 @@ type BulkUpdateStats struct {
 	Filtered       int
 	ErrMap         map[string]string
 	UpdateDuration time.Duration
+	NeedToSync     []*Detection
 }
 
 func (o Override) PrepareForSigma() (map[string]interface{}, error) {
