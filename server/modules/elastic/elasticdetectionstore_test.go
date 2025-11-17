@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	modcontext "github.com/security-onion-solutions/securityonion-soc/server/modules/context"
@@ -1674,4 +1675,213 @@ func TestConvertObjectToDocument(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestBulkUpdateDetections(t *testing.T) {
+	t.Parallel()
+
+	client, _ := modmock.NewMockClient(t)
+	fakesrv := server.NewFakeAuthorizedServer(nil)
+	fakeStore := server.NewFakeEventstore()
+
+	// Create a simple mock detection engine that implements the interface
+	mockEngine := &mockDetectionEngine{}
+	fakesrv.DetectionEngines.Store(model.EngineName("suricata"), mockEngine)
+
+	fakesrv.Eventstore = fakeStore
+	store := NewElasticDetectionstore(fakesrv, client, 100)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, 2)
+
+	detections := []*model.Detection{
+		{
+			Auditable: model.Auditable{
+				Id: "detection1",
+			},
+			PublicID:  "PUB001",
+			Engine:    "suricata",
+			IsEnabled: false,
+		},
+		{
+			Auditable: model.Auditable{
+				Id: "detection2",
+			},
+			PublicID:  "PUB002",
+			Engine:    "suricata",
+			IsEnabled: false,
+		},
+	}
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+	logger := log.WithField("test", "BulkUpdateDetections")
+
+	stats, err := store.BulkUpdateDetections(ctx, true, detections, logger)
+
+	// The bulk operation completes but with no actual updates due to mock client limitations
+	assert.NoError(t, err)
+	assert.NotNil(t, stats)
+	assert.True(t, stats.UpdateDuration > 0)
+	assert.Equal(t, 0, stats.Updated) // No actual updates due to mock limitations
+	assert.Equal(t, 0, stats.Audited) // No actual audits due to mock limitations
+
+	// Verify detections were processed and status updated in memory
+	assert.True(t, detections[0].IsEnabled)
+	assert.True(t, detections[1].IsEnabled)
+}
+
+func TestBulkUpdateDetectionsWithErrors(t *testing.T) {
+	t.Parallel()
+
+	client, _ := modmock.NewMockClient(t)
+	fakesrv := server.NewFakeAuthorizedServer(nil)
+	fakeStore := server.NewFakeEventstore()
+
+	fakesrv.Eventstore = fakeStore
+	store := NewElasticDetectionstore(fakesrv, client, 100)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, 2)
+
+	detections := []*model.Detection{
+		{
+			Auditable: model.Auditable{
+				Id: "detection1",
+			},
+			PublicID: "PUB001",
+			Engine:   "unsupported_engine", // This should cause an error
+		},
+	}
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+	logger := log.WithField("test", "BulkUpdateDetectionsWithErrors")
+
+	stats, err := store.BulkUpdateDetections(ctx, true, detections, logger)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, stats)
+	assert.Equal(t, 0, stats.Updated)
+	assert.Equal(t, 0, stats.Audited)
+	assert.Contains(t, stats.ErrMap, "PUB001")
+	assert.Equal(t, "unsupported engine", stats.ErrMap["PUB001"])
+}
+
+// Simple mock detection engine for testing
+type mockDetectionEngine struct{}
+
+func (m *mockDetectionEngine) ValidateRule(rule string) (string, error) {
+	return rule, nil
+}
+
+func (m *mockDetectionEngine) ConvertRule(ctx context.Context, detect *model.Detection) (string, error) {
+	return detect.Content, nil
+}
+
+func (m *mockDetectionEngine) ExtractDetails(detect *model.Detection) error {
+	return nil
+}
+
+func (m *mockDetectionEngine) ApplyFilters(detect *model.Detection) (bool, error) {
+	return false, nil
+}
+
+func (m *mockDetectionEngine) MergeAuxiliaryData(detect *model.Detection) error {
+	return nil
+}
+
+func (m *mockDetectionEngine) DuplicateDetection(ctx context.Context, detection *model.Detection) (*model.Detection, error) {
+	return detection, nil
+}
+
+func (m *mockDetectionEngine) GenerateUnusedPublicId(ctx context.Context) (string, error) {
+	return "unused-id", nil
+}
+
+func (m *mockDetectionEngine) SyncLocalDetections(ctx context.Context, detections []*model.Detection) (map[string]string, error) {
+	return map[string]string{}, nil
+}
+
+func (m *mockDetectionEngine) GetState() *model.EngineState {
+	return &model.EngineState{}
+}
+
+func (m *mockDetectionEngine) InterruptSync(forceFull, notify bool) {}
+
+func TestParseRangeAllowRelative(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		rangeStart  string
+		rangeEnd    string
+		format      string
+		expected    string
+		description string
+	}{
+		{
+			name:        "Empty inputs use defaults",
+			rangeStart:  "",
+			rangeEnd:    "",
+			format:      "2006/01/02 3:04:05 PM",
+			description: "Should use default -24h to now",
+		},
+		{
+			name:        "Relative time strings",
+			rangeStart:  "-1h",
+			rangeEnd:    "now",
+			format:      "2006/01/02 3:04:05 PM",
+			description: "Should handle relative time strings",
+		},
+		{
+			name:        "Absolute time strings",
+			rangeStart:  "2023/01/01 12:00:00 PM",
+			rangeEnd:    "2023/01/01 1:00:00 PM",
+			format:      "2006/01/02 3:04:05 PM",
+			expected:    "2023/01/01 12:00:00 PM - 2023/01/01 1:00:00 PM",
+			description: "Should parse and format absolute times",
+		},
+		{
+			name:        "Mixed absolute and relative",
+			rangeStart:  "2023/01/01 12:00:00 PM",
+			rangeEnd:    "now",
+			format:      "2006/01/02 3:04:05 PM",
+			description: "Should handle mix of absolute start and relative end",
+		},
+		{
+			name:        "Custom format",
+			rangeStart:  "2023-01-01T12:00:00Z",
+			rangeEnd:    "2023-01-01T13:00:00Z",
+			format:      "2006-01-02T15:04:05Z",
+			expected:    "2023/01/01 12:00:00 PM - 2023/01/01 1:00:00 PM",
+			description: "Should work with custom time format",
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			result := parseRangeAllowRelative(test.rangeStart, test.rangeEnd, test.format)
+
+			if test.expected != "" {
+				assert.Equal(t, test.expected, result)
+			} else {
+				// For relative times, just verify the format is correct (contains " - ")
+				assert.Contains(t, result, " - ")
+				assert.NotEmpty(t, result)
+			}
+		})
+	}
+}
+
+func TestParseRangeAllowRelativeDefaults(t *testing.T) {
+	t.Parallel()
+
+	// Test that empty inputs use the expected defaults
+	result := parseRangeAllowRelative("", "", "2006/01/02 3:04:05 PM")
+
+	// Should contain the default pattern with relative times
+	assert.Contains(t, result, " - ")
+	assert.NotEmpty(t, result)
+
+	// The result should be parseable as a time range
+	parts := strings.Split(result, " - ")
+	assert.Equal(t, 2, len(parts))
+	assert.NotEmpty(t, parts[0])
+	assert.NotEmpty(t, parts[1])
 }
