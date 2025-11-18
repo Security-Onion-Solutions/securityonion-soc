@@ -958,15 +958,16 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     
     // Helper method to capture raw tool result from backend
-    async captureRawToolResult(toolUse) {
+    captureRawToolResult(toolUse) {
       setTimeout(async () => {
         try {
           // Reload the chat history to get the raw result that was just saved
           const response = await this.$root.papi.get(`/assistant/sessions/${this.currentChatId}`);
-          if (response.data && Array.isArray(response.data)) {
+          if (response.data) {
             // Find the last tool result message for this tool
-            for (let i = response.data.length - 1; i >= 0; i--) {
-              const msg = response.data[i];
+            const messages = response.data.history;
+            for (let i = messages.length - 1; i >= 0; i--) {
+              const msg = messages[i];
               if (msg.tags && msg.tags.includes('tool_result')) {
                 let rawResult = null;
                 let toolError = null;
@@ -1429,16 +1430,17 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     async loadChatFromBackend(sessionId) {
       try {
         const response = await this.$root.papi.get(`/assistant/sessions/${sessionId}`);
-        if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+        if (response.data && Array.isArray(response.data.history) && response.data.history.length > 0) {
           this.currentChatId = sessionId;
-          this.messages = this.convertBackendMessagesToFrontend(response.data);
+          this.messages = this.convertBackendMessagesToFrontend(response.data.history);
           this.saveCurrentChatId();
 
           await this.scrollToBottomSettled({ maxWait: 6000, settleDelay: 200 });
 
           // Blocks user from sending messages in deleted chats
-          this.checkIfDeleted(sessionId);
+          this.checkIfDeleted(response.data.session);
 
+          this.chatHistoryById[sessionId] = response.data.session;
         } else {
           throw new Error(this.i18n.assistantNoHistoryFound + ' ' + sessionId);
         }
@@ -1783,11 +1785,11 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.isStreaming = false;
     },
     
-    checkIfDeleted(sessionId) {
-      const sessionInHistory = this.chatHistory.some(session => session.sessionId === sessionId);
+    checkIfDeleted(session) {
+      const sessionInHistory = this.chatHistory.some(s => s.sessionId === session.sessionId);
       if (!sessionInHistory) {
         this.canChat = false;
-        this.$root.showWarning(this.i18n.assistantChatIsDeleted);
+        this.$root.showWarning(this.i18n.assistantChatNoResume);
       } else {
         this.canChat = true;
       }

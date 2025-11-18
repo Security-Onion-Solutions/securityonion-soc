@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -222,20 +223,40 @@ func (store *ElasticAssistantstore) SaveChat(ctx context.Context, chat *model.St
 	return err
 }
 
-func (store *ElasticAssistantstore) GetChatHistory(ctx context.Context, sessionId string, authored bool) ([]*model.StoredMessage, error) {
-	userId := ctx.Value(web.ContextKeyRequestorId).(string)
+func (store *ElasticAssistantstore) GetChatHistory(ctx context.Context, sessionId string) ([]*model.StoredMessage, error) {
+	logger := log.FromContext(ctx)
 
-	if authored {
-		if err := store.server.CheckAuthorized(ctx, "read_authored", "assistant"); err != nil {
+	existing, err := store.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId))
+	if err != nil {
+		return nil, err
+	}
+
+	if len(existing) == 0 {
+		return nil, fmt.Errorf("Object not found")
+	}
+
+	session := existing[0]
+
+	userId := ctx.Value(web.ContextKeyRequestorId).(string)
+	if session.UserId == userId {
+		// they own it, can the user read_authored?
+		err := store.server.CheckAuthorized(ctx, "read_authored", "assistant")
+		if err != nil {
+			return nil, err
+		}
+	} else if slices.Contains(session.Tags, "shared") {
+		// they don't own it but it's shared, can the user read_shared?
+		err := store.server.CheckAuthorized(ctx, "read_shared", "assistant")
+		if err != nil {
 			return nil, err
 		}
 	} else {
-		if err := store.server.CheckAuthorized(ctx, "read_all", "assistant"); err != nil {
+		// they don't own it and it isn't shared, can the user read_all?
+		err := store.server.CheckAuthorized(ctx, "read_all", "assistant")
+		if err != nil {
 			return nil, err
 		}
 	}
-
-	logger := log.FromContext(ctx)
 
 	// Build Elasticsearch query to get all messages for the session
 	query := map[string]any{
@@ -334,9 +355,7 @@ func (store *ElasticAssistantstore) GetChatHistory(ctx context.Context, sessionI
 							message.Auditable.Kind = source[store.schemaPrefix+"kind"].(string)
 							message.Auditable.Id = hit["_id"].(string)
 
-							if !authored || message.UserId == userId {
-								messages = append(messages, &message)
-							}
+							messages = append(messages, &message)
 						}
 					}
 				}
@@ -353,20 +372,10 @@ func (store *ElasticAssistantstore) GetChatHistory(ctx context.Context, sessionI
 	return messages, nil
 }
 
-func (store *ElasticAssistantstore) GetSessions(ctx context.Context, authored bool, opts ...model.GetSessionsOpt) ([]*model.AssistantSession, error) {
+func (store *ElasticAssistantstore) GetSessions(ctx context.Context, opts ...model.GetSessionsOpt) ([]*model.AssistantSession, error) {
 	opt := &model.GetSessionsOpts{}
 	for _, o := range opts {
 		o(opt)
-	}
-
-	if authored {
-		if err := store.server.CheckAuthorized(ctx, "read_authored", "assistant"); err != nil {
-			return nil, err
-		}
-	} else {
-		if err := store.server.CheckAuthorized(ctx, "read_all", "assistant"); err != nil {
-			return nil, err
-		}
 	}
 
 	logger := log.FromContext(ctx)
@@ -527,6 +536,8 @@ func (store *ElasticAssistantstore) GetSessions(ctx context.Context, authored bo
 		"requestId":    ctx.Value(web.ContextKeyRequestId),
 	}).Debug("Found first messages for sessions")
 
+	sessions = store.filterSharedSessions(ctx, sessions)
+
 	if opt.Usage() {
 		if err := store.populateSessionUsage(ctx, sessions); err != nil {
 			logger.WithError(err).Error("Failed to populate session usage")
@@ -540,6 +551,61 @@ func (store *ElasticAssistantstore) GetSessions(ctx context.Context, authored bo
 	}
 
 	return sessions, nil
+}
+
+func (store *ElasticAssistantstore) filterSharedSessions(ctx context.Context, sessions []*model.AssistantSession) []*model.AssistantSession {
+	logger := log.FromContext(ctx)
+	userId := ctx.Value(web.ContextKeyRequestorId).(string)
+	filteredOut := 0
+
+	var canReadAll, canReadShared, canReadAuthored *bool
+
+	filtered := make([]*model.AssistantSession, 0, len(sessions))
+	for _, s := range sessions {
+		if s.UserId == userId {
+			// they own it, can they read it?
+			if canReadAuthored == nil {
+				err := store.server.CheckAuthorized(ctx, "read_authored", "assistant")
+				canReadAuthored = util.Ptr(err == nil)
+			}
+			if *canReadAuthored {
+				filtered = append(filtered, s)
+			} else {
+				filteredOut++
+			}
+		} else {
+			// they don't own it, is it shared?
+			if slices.Contains(s.Tags, "shared") {
+				// its shared, can they read shared?
+				if canReadShared == nil {
+					err := store.server.CheckAuthorized(ctx, "read_shared", "assistant")
+					canReadShared = util.Ptr(err == nil)
+				}
+				if *canReadShared {
+					filtered = append(filtered, s)
+				} else {
+					filteredOut++
+				}
+			} else {
+				// they don't own it and it's not shared, can they read all?
+				if canReadAll == nil {
+					err := store.server.CheckAuthorized(ctx, "read_all", "assistant")
+					canReadAll = util.Ptr(err == nil)
+				}
+				if *canReadAll {
+					filtered = append(filtered, s)
+				} else {
+					filteredOut++
+				}
+			}
+		}
+	}
+
+	if filteredOut != 0 {
+		logger.WithField("filteredSessions", filteredOut).Info("filtering out shared sessions")
+	}
+
+	return filtered
 }
 
 func (store *ElasticAssistantstore) populateSessionUsage(ctx context.Context, sessions []*model.AssistantSession) error {
@@ -859,9 +925,19 @@ func (store *ElasticAssistantstore) UpdateSessionTags(ctx context.Context, sessi
 	// Build UpdateByQuery request to update session tags
 	query := map[string]any{
 		"query": map[string]any{
-			"term": map[string]any{
-				store.schemaPrefix + "session.sessionId": sessionId,
-				store.schemaPrefix + "session.userId":    userId,
+			"bool": map[string]any{
+				"must": []any{
+					map[string]any{
+						"term": map[string]any{
+							store.schemaPrefix + "session.sessionId": sessionId,
+						},
+					},
+					map[string]any{
+						"term": map[string]any{
+							store.schemaPrefix + "session.userId": userId,
+						},
+					},
+				},
 			},
 		},
 		"script": map[string]any{
@@ -922,9 +998,19 @@ func (store *ElasticAssistantstore) DeleteSession(ctx context.Context, sessionId
 	// Build UpdateByQuery request to mark session as deleted
 	query := map[string]any{
 		"query": map[string]any{
-			"term": map[string]any{
-				store.schemaPrefix + "session.sessionId": sessionId,
-				store.schemaPrefix + "session.userId":    userId,
+			"bool": map[string]any{
+				"must": []any{
+					map[string]any{
+						"term": map[string]any{
+							store.schemaPrefix + "session.sessionId": sessionId,
+						},
+					},
+					map[string]any{
+						"term": map[string]any{
+							store.schemaPrefix + "session.userId": userId,
+						},
+					},
+				},
 			},
 		},
 		"script": map[string]any{

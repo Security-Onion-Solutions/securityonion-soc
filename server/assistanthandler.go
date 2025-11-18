@@ -43,7 +43,7 @@ func RegisterAssistantRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Post("/tool/{name}", h.PostTool)
 		r.Get("/balance", h.GetBalance)
 		r.Get("/sessions", h.GetSessions)
-		r.Get("/sessions/{sessionId}", h.GetSessionHistory)
+		r.Get("/sessions/{sessionId}", h.GetSessionDetails)
 		r.Put("/sessions/{sessionId}", h.UpdateSession)
 		r.Delete("/sessions/{sessionId}", h.DeleteSession)
 
@@ -116,8 +116,8 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	history, err := h.server.Assistantstore.GetChatHistory(ctx, incMsg.SessionId, true)
-	if err != nil {
+	history, err := h.server.Assistantstore.GetChatHistory(ctx, incMsg.SessionId)
+	if err != nil && !strings.Contains(err.Error(), "not found") {
 		logger.WithError(err).Error("unable to get chat history")
 		web.Respond(w, r, http.StatusInternalServerError, err)
 
@@ -299,7 +299,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	history, err := h.server.Assistantstore.GetChatHistory(ctx, toolReq.SessionId, true)
+	history, err := h.server.Assistantstore.GetChatHistory(ctx, toolReq.SessionId)
 	if err != nil {
 		logger.WithError(err).Error("unable to get chat history")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -446,7 +446,7 @@ func (h *AssistantHandler) GetSessions(w http.ResponseWriter, r *http.Request) {
 
 	userId := ctx.Value(web.ContextKeyRequestorId).(string)
 
-	sessions, err := h.server.Assistantstore.GetSessions(ctx, true, model.GetSessionsWithUserId(userId))
+	sessions, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithUserId(userId))
 	if err != nil {
 		logger.WithError(err).Error("unable to get previous conversations")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -457,7 +457,7 @@ func (h *AssistantHandler) GetSessions(w http.ResponseWriter, r *http.Request) {
 	web.Respond(w, r, http.StatusOK, sessions)
 }
 
-// @Summary      Get Session History
+// @Summary      Get Session Details
 // @Description  Retrieve the complete chat history for a specific session.
 // @Tags         Assistant
 // @Security     bearer[assistant/read_authored]
@@ -469,7 +469,7 @@ func (h *AssistantHandler) GetSessions(w http.ResponseWriter, r *http.Request) {
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
 // @Router       /api/assistant/sessions/{sessionId} [get]
-func (h *AssistantHandler) GetSessionHistory(w http.ResponseWriter, r *http.Request) {
+func (h *AssistantHandler) GetSessionDetails(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
 
@@ -487,7 +487,22 @@ func (h *AssistantHandler) GetSessionHistory(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	history, err := h.server.Assistantstore.GetChatHistory(ctx, sessionId, true)
+	session, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId))
+	if err != nil {
+		logger.WithError(err).Error("unable to get session")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+
+		return
+	}
+
+	if len(session) == 0 {
+		logger.Error("session not found")
+		web.Respond(w, r, http.StatusNotFound, "session not found")
+
+		return
+	}
+
+	history, err := h.server.Assistantstore.GetChatHistory(ctx, sessionId)
 	if err != nil {
 		logger.WithError(err).Error("unable to get chat history for session")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -495,7 +510,10 @@ func (h *AssistantHandler) GetSessionHistory(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	web.Respond(w, r, http.StatusOK, history)
+	web.Respond(w, r, http.StatusOK, &model.AssistantSessionDetails{
+		Session: session[0],
+		History: history,
+	})
 }
 
 func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request) {
@@ -526,7 +544,7 @@ func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	sessions, err := h.server.Assistantstore.GetSessions(ctx, true, model.GetSessionsWithSessionId(sessionId))
+	sessions, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId))
 	if err != nil {
 		logger.WithError(err).Error("unable to get session")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -730,7 +748,7 @@ func (h *AssistantHandler) GetSessionsAdmin(w http.ResponseWriter, r *http.Reque
 		opts = append(opts, model.GetSessionsWithUserId(userId))
 	}
 
-	sessions, err := h.server.Assistantstore.GetSessions(ctx, false, opts...)
+	sessions, err := h.server.Assistantstore.GetSessions(ctx, opts...)
 	if err != nil {
 		logger.WithError(err).Error("unable to manage sessions")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -766,7 +784,7 @@ func (h *AssistantHandler) ManageSessionHistory(w http.ResponseWriter, r *http.R
 	userId := chi.URLParam(r, "userId")
 	sessionId := chi.URLParam(r, "sessionId")
 
-	sessions, err := h.server.Assistantstore.GetSessions(ctx, false, model.GetSessionsWithUserId(userId), model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithIncludeDeleted(true))
+	sessions, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithUserId(userId), model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithIncludeDeleted(true))
 	if err != nil {
 		logger.WithError(err).Error("unable to manage sessions")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -784,7 +802,7 @@ func (h *AssistantHandler) ManageSessionHistory(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	history, err := h.server.Assistantstore.GetChatHistory(ctx, sessionId, false)
+	history, err := h.server.Assistantstore.GetChatHistory(ctx, sessionId)
 	if err != nil {
 		logger.WithError(err).Error("unable to manage session history")
 		web.Respond(w, r, http.StatusInternalServerError, err)

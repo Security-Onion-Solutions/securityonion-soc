@@ -157,7 +157,7 @@ const i18n = {
       artifactValueHelp: 'Specify the observed value',
       assistantUnavailable: `This feature requires a valid Security Onion Pro license and Internet connection. Visit the <a class="px-1" target="sos" href="https://securityonionsolutions.com/pro?utm_source=ainotice&utm_medium=app&utm_id=ai" data-aid="assistant_visit_pro_website">Security Onion website</a> to learn more about Security Onion Pro.`,
       assistantBalanceCheckUnhealthy: 'The AI model could not be reached. Support for local AI models is coming soon.',
-      assistantChatIsDeleted: 'This session has been deleted and therefore cannot be resumed.',
+      assistantChatNoResume: 'This session cannot be resumed.',
       assistantContextLimitPt1: 'Context length limit reached',
       assistantContextLimitPt2: 'You may try compressing your context to continue, or start a new chat.',
       assistantDisabled: 'This feature is not enabled on this grid. Contact your Security Onion administrator.',

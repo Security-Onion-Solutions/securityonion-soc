@@ -301,6 +301,14 @@ type AssistantSession struct {
 	Usage *SessionUsage `json:"usage,omitempty"`
 }
 
+// @Description Detailed information about an Assistant session, including its messages.
+type AssistantSessionDetails struct {
+	// Meta information about the session.
+	Session *AssistantSession `json:"session"`
+	// The messages in the session.
+	History []*StoredMessage `json:"history"`
+}
+
 type SessionUsage struct {
 	// The total input tokens used during the session.
 	TotalInputTokens int `json:"totalInputTokens" example:"1500"`

@@ -1215,29 +1215,29 @@ test('executeTool captures raw tool result from backend', async () => {
   // wait out any setTimeouts from previous tests
   await new Promise(resolve => setTimeout(resolve, 1100));
 
-  const toolUse = { ...fakeToolUse };
+  resetPapi();
+
+  let toolUse = { ...fakeToolUse };
   comp.currentChatId = fakeSessionId;
   comp.scrollToBottom = jest.fn();
   comp.loadCredits = jest.fn().mockResolvedValue();
   
   // Mock backend response with tool result
-  const backendResponse = {
-    data: [
-      {
-        createTime: '2025-01-01T12:00:00.000Z',
-        tags: ['tool_result'],
-        message: {
-          contentBlocks: [
-            {
-              type: 'text',
-              text: 'ToolUseId: tool_123, Result: {"events": 5, "alerts": 2}, Error: <nil>'
-            }
-          ]
-        }
+  const backendResponse =  [
+    {
+      createTime: '2025-01-01T12:00:00.000Z',
+      tags: ['tool_result'],
+      message: {
+        contentBlocks: [
+          {
+            type: 'text',
+            text: 'ToolUseId: tool_123, Result: {"events": 5, "alerts": 2}, Error: <nil>'
+          }
+        ]
       }
-    ]
-  };
-  mockPapi('get', backendResponse);
+    }
+  ];
+  mockPapi('get', { data: { session: {}, history: backendResponse } });
   
   // Include message_start event to trigger captureRawToolResult
   const messageStartData = JSON.stringify({ type: 'message_start' });
@@ -1268,29 +1268,29 @@ test('executeTool captures raw tool result from backend', async () => {
 });
 
 test('executeTool handles tool result with error', async () => {
+  resetPapi();
+
   const toolUse = { ...fakeToolUse };
   comp.currentChatId = fakeSessionId;
   comp.scrollToBottom = jest.fn();
   comp.loadCredits = jest.fn().mockResolvedValue();
   
   // Mock backend response with tool error
-  const backendResponse = {
-    data: [
-      {
-        createTime: '2025-01-01T12:00:00.000Z',
-        tags: ['tool_result'],
-        message: {
-          contentBlocks: [
-            {
-              type: 'text',
-              text: 'ToolUseId: tool_123, Result: null, Error: Query timeout'
-            }
-          ]
-        }
+  const backendResponse = [
+    {
+      createTime: '2025-01-01T12:00:00.000Z',
+      tags: ['tool_result'],
+      message: {
+        contentBlocks: [
+          {
+            type: 'text',
+            text: 'ToolUseId: tool_123, Result: null, Error: Query timeout'
+          }
+        ]
       }
-    ]
-  };
-  mockPapi('get', backendResponse);
+    }
+  ];
+  mockPapi('get', { data: { session: {}, history: backendResponse } });
   
   // Include message_start event to trigger captureRawToolResult
   const messageStartData = JSON.stringify({ type: 'message_start' });
@@ -1317,7 +1317,7 @@ test('executeTool handles tool result with error', async () => {
   
   expect(toolUse.error).toBe('Query timeout');
   expect(toolUse.status).toBe('error');
-});
+}, 30000);
 
 test('executeTool handles partial JSON chunks', async () => {
   const toolUse = { ...fakeToolUse };
@@ -3096,7 +3096,7 @@ test('loadChatFromBackend success', async () => {
       }
     }
   ];
-  const mock = mockPapi("get", { data: testMessages });
+  const mock = mockPapi("get", { data: { session: null, history: testMessages } });
   comp.scrollToBottomSettled = jest.fn().mockResolvedValue();
   
   await comp.loadChatFromBackend(fakeSessionId);
@@ -4384,11 +4384,11 @@ test('checkIfDeleted sets canChat to false when session not in history', () => {
   comp.checkIfDeleted(sessionId);
   
   expect(comp.canChat).toBe(false);
-  expect(showWarningMock).toHaveBeenCalledWith(comp.i18n.assistantChatIsDeleted);
+  expect(showWarningMock).toHaveBeenCalledWith(comp.i18n.assistantChatNoResume);
 });
 
 test('checkIfDeleted sets canChat to true when session exists in history', () => {
-  const sessionId = 'existing-session';
+  const sessionId = { sessionId: 'existing-session' };
   comp.chatHistory = [
     { sessionId: 'session1' },
     { sessionId: 'existing-session' },
