@@ -33,7 +33,7 @@ type FakeDetectionstore struct {
 	BulkUpdateDetectionList []*model.Detection
 }
 
-func (f *FakeDetectionstore) QueryWithRange(ctx context.Context, query, rangeStart, rangeEnd, rangeFormat string) ([]interface{}, error) {
+func (f *FakeDetectionstore) QueryWithRange(ctx context.Context, query, rangeStart, rangeEnd, rangeFormat string, limit int) ([]interface{}, error) {
 	f.QueryWithRangeCalled = true
 	f.QueryWithRangeQuery = query
 	if f.QueryWithRangeError != nil {

@@ -78,7 +78,6 @@ func (t *UpdateDetectionContentTool) GetSchema() model.JSONSchema {
 					content field to "high". Then, you will pass the entire updated content field as this argument.`,
 				},
 			},
-			Required: []string{"search_filter"},
 		},
 	}
 }

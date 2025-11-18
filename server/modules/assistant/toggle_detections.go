@@ -89,6 +89,10 @@ func (t *ToggleDetectionsTool) GetSchema() model.JSONSchema {
 					Type:        "string",
 					Description: "Format of the date range (default: \"2006/01/02 3:04:05 PM\"). The format must be specified using Go's time package's reference layout format. Required if either range_start or range_end is provided.",
 				},
+				"limit": {
+					Type:        "integer",
+					Description: "The maximum number of detections to return. Unless some kind of limit is applicable to the user's request, this field should be left out.",
+				},
 			},
 			Required: []string{"search_filter"},
 		},
@@ -101,6 +105,7 @@ type toggleDetectionsArgs struct {
 	RangeStart   string `json:"range_start,omitempty"`
 	RangeEnd     string `json:"range_end,omitempty"`
 	RangeFormat  string `json:"range_format,omitempty"`
+	Limit        int    `json:"limit"`
 }
 
 func (t *ToggleDetectionsTool) Execute(ctx context.Context, srv *server.Server, params string, auxData string) (result *model.ToolResponse, err error) {
@@ -143,12 +148,19 @@ func (t *ToggleDetectionsTool) Execute(ctx context.Context, srv *server.Server, 
 		query = `NOT metadata.raw_index:"logs-soc-so"`
 	}
 
+	var detectLimit int
+	if args.Limit > 0 {
+		detectLimit = args.Limit
+	} else {
+		detectLimit = 10000
+	}
+
 	err = srv.CheckAuthorized(ctx, "write", "detections")
 	if err != nil {
 		return nil, err
 	}
 
-	detectObjects, err := srv.Detectionstore.QueryWithRange(ctx, query, args.RangeStart, args.RangeEnd, args.RangeFormat)
+	detectObjects, err := srv.Detectionstore.QueryWithRange(ctx, query, args.RangeStart, args.RangeEnd, args.RangeFormat, detectLimit)
 	if err != nil {
 		return nil, err
 	}

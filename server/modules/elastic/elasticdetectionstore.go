@@ -425,7 +425,7 @@ func (store *ElasticDetectionstore) Query(ctx context.Context, query string, max
 	return objects, err
 }
 
-func (store *ElasticDetectionstore) QueryWithRange(ctx context.Context, query string, rangeStart string, rangeEnd string, rangeFormat string) (objects []interface{}, err error) {
+func (store *ElasticDetectionstore) QueryWithRange(ctx context.Context, query string, rangeStart string, rangeEnd string, rangeFormat string, limit int) (objects []interface{}, err error) {
 	logger := log.FromContext(ctx)
 
 	err = store.server.CheckAuthorized(ctx, "read", "detections")
@@ -457,7 +457,7 @@ func (store *ElasticDetectionstore) QueryWithRange(ctx context.Context, query st
 		timeFormat, // timeframe format
 		zone,       // timezone
 		"0",        // no metrics
-		"10000")
+		strconv.Itoa(limit))
 
 	if err != nil {
 		return nil, err

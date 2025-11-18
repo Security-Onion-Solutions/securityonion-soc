@@ -274,18 +274,18 @@ func (mr *MockDetectionstoreMockRecorder) Query(ctx, query, max any) *gomock.Cal
 }
 
 // QueryWithRange mocks base method.
-func (m *MockDetectionstore) QueryWithRange(ctx context.Context, query, rangeStart, rangeEnd, rangeFormat string) ([]any, error) {
+func (m *MockDetectionstore) QueryWithRange(ctx context.Context, query, rangeStart, rangeEnd, rangeFormat string, limit int) ([]any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "QueryWithRange", ctx, query, rangeStart, rangeEnd, rangeFormat)
+	ret := m.ctrl.Call(m, "QueryWithRange", ctx, query, rangeStart, rangeEnd, rangeFormat, limit)
 	ret0, _ := ret[0].([]any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // QueryWithRange indicates an expected call of QueryWithRange.
-func (mr *MockDetectionstoreMockRecorder) QueryWithRange(ctx, query, rangeStart, rangeEnd, rangeFormat any) *gomock.Call {
+func (mr *MockDetectionstoreMockRecorder) QueryWithRange(ctx, query, rangeStart, rangeEnd, rangeFormat, limit any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryWithRange", reflect.TypeOf((*MockDetectionstore)(nil).QueryWithRange), ctx, query, rangeStart, rangeEnd, rangeFormat)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryWithRange", reflect.TypeOf((*MockDetectionstore)(nil).QueryWithRange), ctx, query, rangeStart, rangeEnd, rangeFormat, limit)
 }
 
 // UpdateComment mocks base method.

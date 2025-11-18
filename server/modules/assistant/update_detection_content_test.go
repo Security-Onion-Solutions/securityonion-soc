@@ -56,8 +56,6 @@ func TestUpdateDetectionContentTool_GetSchema(t *testing.T) {
 	assert.Contains(t, schema.Json.Properties, "content")
 	assert.Equal(t, "string", schema.Json.Properties["content"].Type)
 	assert.Contains(t, schema.Json.Properties["content"].Description, "detection rule source content")
-
-	assert.Contains(t, schema.Json.Required, "search_filter")
 }
 
 func TestUpdateDetectionContentTool_Execute(t *testing.T) {

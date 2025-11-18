@@ -23,7 +23,7 @@ type Detectionstore interface {
 	DeleteDetection(ctx context.Context, detectID string) (*model.Detection, error)
 	GetAllDetections(ctx context.Context, opts ...model.GetAllOption) (map[string]*model.Detection, error) // map[detection.PublicId]detection
 	Query(ctx context.Context, query string, max int) ([]interface{}, error)
-	QueryWithRange(ctx context.Context, query string, rangeStart string, rangeEnd string, rangeFormat string) ([]interface{}, error)
+	QueryWithRange(ctx context.Context, query string, rangeStart string, rangeEnd string, rangeFormat string, limit int) ([]interface{}, error)
 	GetDetectionHistory(ctx context.Context, detectID string) ([]interface{}, error)
 
 	CreateComment(ctx context.Context, newComment *model.DetectionComment) (*model.DetectionComment, error)
