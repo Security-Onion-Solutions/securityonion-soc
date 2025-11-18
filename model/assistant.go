@@ -10,6 +10,10 @@ import (
 	"time"
 )
 
+const (
+	MessageTagContextCompression = "context_compression"
+)
+
 // @Description A user message to be added to a session.
 type IncomingMessage struct {
 	// The content of the message.
@@ -18,6 +22,8 @@ type IncomingMessage struct {
 	SessionId string `json:"sessionId" example:"chat_1757086398900_ykhmndscn"`
 	// The model to use for this message.
 	Model string `json:"model,omitempty" example:"claude-sonnet-4.5"`
+	// Tags to be applied to the message.
+	Tags []string `json:"tags,omitempty" example:"investigation"`
 }
 
 // @Description A request to initiate a chat session.

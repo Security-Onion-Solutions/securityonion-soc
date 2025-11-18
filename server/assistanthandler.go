@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -101,7 +102,7 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	stored, err := h.server.Assistantstore.GetChatHistory(ctx, incMsg.SessionId, true)
+	history, err := h.server.Assistantstore.GetChatHistory(ctx, incMsg.SessionId, true)
 	if err != nil {
 		logger.WithError(err).Error("unable to get chat history")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -109,7 +110,7 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(stored) == 0 {
+	if len(history) == 0 {
 		// create new session
 		session := &model.AssistantSession{
 			SessionId: incMsg.SessionId,
@@ -124,12 +125,9 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	messages := make([]*model.Message, 0, len(stored))
-	for _, msg := range stored {
-		messages = append(messages, msg.Message)
-	}
+	messages := historyToContext(history)
 
-	err = h.server.Assistantstore.SaveChat(ctx, newMsg.PrepareForStorage(incMsg.SessionId, nil))
+	err = h.server.Assistantstore.SaveChat(ctx, newMsg.PrepareForStorage(incMsg.SessionId, incMsg.Tags))
 	if err != nil {
 		logger.WithError(err).Error("unable to save chat message")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -283,7 +281,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stored, err := h.server.Assistantstore.GetChatHistory(ctx, toolReq.SessionId, true)
+	history, err := h.server.Assistantstore.GetChatHistory(ctx, toolReq.SessionId, true)
 	if err != nil {
 		logger.WithError(err).Error("unable to get chat history")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -291,10 +289,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	messages := make([]*model.Message, 0, len(stored))
-	for _, msg := range stored {
-		messages = append(messages, msg.Message)
-	}
+	messages := historyToContext(history)
 
 	if !streaming {
 		response, err := h.server.AssistantManager.Chat(ctx, toolReq.Model, messages)
@@ -701,6 +696,8 @@ func (h *AssistantHandler) ManageSessionHistory(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// Note: Do not convert to context, the UI gets the entire history
+
 	web.Respond(w, r, http.StatusOK, history)
 }
 
@@ -865,4 +862,19 @@ func unstreamResponse(ctx context.Context, rawResponse string) (*model.Message, 
 	}
 
 	return message, nil
+}
+
+// Converts stored message history to only the messages that'll get sent as context.
+func historyToContext(history []*model.StoredMessage) []*model.Message {
+	messages := make([]*model.Message, 0, len(history))
+	for _, msg := range history {
+		if slices.Contains(msg.Tags, model.MessageTagContextCompression) {
+			// drop older messages, keep capacity
+			messages = messages[:0]
+		}
+
+		messages = append(messages, msg.Message)
+	}
+
+	return messages
 }

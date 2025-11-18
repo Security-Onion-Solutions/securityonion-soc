@@ -6,6 +6,8 @@
 
 loadPageTemplate('page-assistant', 'pages/assistant.html');
 
+const MSGTAG_CONTEXTCOMPRESSION = "context_compression";
+
 routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
   template: '#page-assistant',
   data() { return {
@@ -29,6 +31,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     isStreaming: false,
     showChatHistory: true,
     investigationMsg: '',
+    compressContextMsg: '',
+    contextStartMessageIndex: -1,
     contextLimitSmall: 0,
     contextLimitLarge: 0,
     thresholdColorRatioLow: 0.5,
@@ -73,6 +77,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     async initAssistant(params) {
       this.assistantEnabled = params["enabled"] && this.$root.isLicensed('oai');
       this.investigationMsg = params["investigationPrompt"];
+      this.compressContextMsg = params["compressContextPrompt"];
       this.thresholdColorRatioLow = params["thresholdColorRatioLow"];
       this.thresholdColorRatioMed = params["thresholdColorRatioMed"];
       this.thresholdColorRatioMax = params["thresholdColorRatioMax"];
@@ -335,7 +340,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         await this.$router.replace({ name: 'assistant', params: { sessionId: sessionId } });
       }
     },
-    async sendMessage() {
+    async sendMessage(tags) {
       if (!this.newMessage.trim()) return;
 
       if (!this.canChat) return;
@@ -346,7 +351,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }
 
       // Check if context length has reached the limit
-      if (this.checkContextLimitReached()) return;
+      if (this.checkContextLimitReached() && (!tags || !tags.includes(MSGTAG_CONTEXTCOMPRESSION))) return;
       
       // Check if user has credits
       if (this.creditsRemaining <= 0) {
@@ -395,7 +400,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       
       try {
         // Call the actual AI API - session ID is already set
-        await this.callAIAPI(messageText);
+        await this.callAIAPI(messageText, tags);
 
         // Refresh chat history to show the latest session
         await this.loadStoredChats();
@@ -618,7 +623,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       return { assistantMessage: null, messageUsage: null };
     },
     
-    async callAIAPI(userMessage) {
+    async callAIAPI(userMessage, tags = null) {
       // Capture the session ID at the start of the API call
       const streamingSessionId = this.currentChatId;
       this.activeStreamingSessionId = streamingSessionId;
@@ -628,6 +633,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           msg: userMessage,
           sessionId: streamingSessionId,
           model: this.currentModel,
+          tags: tags,
         },
         {
           headers: {
@@ -1577,6 +1583,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       const processedMessages = [];
       // Reset context length when loading from backend
       this.contextLength = 0;
+      this.contextStartMessageIndex = -1;
       
       let skip_next = false;
 
@@ -1605,7 +1612,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         
         const frontendMsg = {
           role: msg.message.role,
-          timestamp: msg.createTime || new Date().toISOString()
+          timestamp: msg.createTime || new Date().toISOString(),
+          tags: msg.tags || [],
         };
 
         // Extract message content using helper method
@@ -1627,6 +1635,13 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         }
 
         processedMessages.push(frontendMsg);
+
+        if (msg.tags && msg.tags.includes(MSGTAG_CONTEXTCOMPRESSION)) {
+          // reset context, messages prior to this message are no longer
+          // sent to the AI
+          this.contextLength = 0;
+          this.contextStartMessageIndex = processedMessages.length - 1;
+        }
       }
       
       return processedMessages;
@@ -1668,6 +1683,15 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       if (value < threshold2) return "text-yellow";
       if (value < threshold3) return "text-amber darken-1";
       return "text-red darken-1";
+    },
+
+    getCompressColor() {
+      const maxContextLength = this.increaseMaxContextThreshold ? this.contextLimitLarge : this.contextLimitSmall;
+      if (this.contextLength >= maxContextLength / 2) {
+        return 'primary';
+      }
+
+      return 'secondary';
     },
     
 
@@ -1805,6 +1829,22 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     checkForActivity() {
       const tQ = this.toolQueues.get(this.currentChatId) || [];
       return this.isStreaming || this.isTyping || tQ.length > 0;
+    },
+
+    async compressCurrentSession() {
+      const oldMsg = this.newMessage;
+      this.newMessage = this.compressContextMsg;
+
+      this.contextLength = 0;
+      
+      await this.sendMessage([MSGTAG_CONTEXTCOMPRESSION]);
+      this.loadChatFromBackend(this.currentChatId);
+      
+      if (oldMsg) this.newMessage = oldMsg;
+    },
+
+    messageClassesFromTags(tags) {
+      return tags.map(tag => 'msgTag-' + tag);
     },
   }
 }});

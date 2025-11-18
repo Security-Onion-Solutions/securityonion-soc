@@ -10,6 +10,8 @@ Object.assign(global, { TextDecoder, TextEncoder });
 require('../test_common.js');
 require('./assistant.js');
 
+const MSGTAG_CONTEXTCOMPRESSION = "context_compression";
+
 // Mock data
 const fakeSessionId = 'chat_1234567890_abcdef123';
 const fakeMessage = {
@@ -685,7 +687,7 @@ test('sendMessage creates session ID and updates URL', async () => {
   expect(comp.messages[0].content).toBe('Test message');
   expect(comp.newMessage).toBe('');
   expect(comp.isTyping).toBe(true);
-  expect(comp.callAIAPI).toHaveBeenCalledWith('Test message');
+  expect(comp.callAIAPI).toHaveBeenCalledWith('Test message', undefined);
   expect(comp.loadStoredChats).toHaveBeenCalled();
 });
 
@@ -1391,6 +1393,7 @@ test('callAIAPI makes correct API request', async () => {
       msg: 'Test message',
       sessionId: fakeSessionId,
       model: 'test-model',
+      tags: null,
   }, {
     adapter: 'fetch',
     headers: {
@@ -2980,6 +2983,87 @@ test('convertBackendMessagesToFrontend handles empty backend messages array', ()
   expect(comp.contextLength).toBe(0);
 });
 
+test('convertBackendMessagesToFrontend handles tags', () => {
+  comp.resetContextLength = jest.fn();
+  
+  const backendMessages = [
+    {
+      createTime: '2025-01-01T12:00:00.000Z',
+      message: {
+        role: 'user',
+        contentBlocks: [
+          { type: 'text', text: 'Hello, how can you help me?' }
+        ]
+      },
+      tags: [MSGTAG_CONTEXTCOMPRESSION],
+    }
+  ];
+  
+  const result = comp.convertBackendMessagesToFrontend(backendMessages);
+  
+  expect(result).toHaveLength(1);
+  expect(result[0].role).toBe('user');
+  expect(result[0].content).toBe('Hello, how can you help me?');
+  expect(result[0].timestamp).toBe('2025-01-01T12:00:00.000Z');
+  expect(result[0].tags).toEqual([MSGTAG_CONTEXTCOMPRESSION]);
+});
+
+test('convertBackendMessagesToFrontend calculates context length accurately after context compression', () => {
+  comp.resetContextLength = jest.fn();
+  
+  const backendMessages = [
+    {
+      createTime: '2025-01-01T12:00:00.000Z',
+      message: {
+        role: 'user',
+        contentBlocks: [
+          { type: 'text', text: '' }
+        ]
+      },
+    },
+    {
+      createTime: '2025-01-01T12:00:00.000Z',
+      message: {
+        role: 'assistant',
+        contentBlocks: [
+          { type: 'text', text: '' }
+        ],
+        usage: {
+          input_tokens: 1000,
+          output_tokens: 1000,
+        },
+      },
+    },
+    {
+      createTime: '2025-01-01T12:00:00.000Z',
+      message: {
+        role: 'user',
+        contentBlocks: [
+          { type: 'text', text: '' },
+        ],
+      },
+      tags: [MSGTAG_CONTEXTCOMPRESSION],
+    },
+    {
+      createTime: '2025-01-01T12:00:00.000Z',
+      message: {
+        role: 'assistant',
+        contentBlocks: [
+          { type: 'text', text: '' }
+        ],
+        usage: {
+          input_tokens: 1000,
+          output_tokens: 1000,
+        },
+      },
+    },
+  ];
+  
+  comp.convertBackendMessagesToFrontend(backendMessages);
+  
+  expect(comp.contextLength).toBe(2000);
+});
+
 test('loadChatFromBackend success', async () => {
   const testMessages = [
     {
@@ -4367,6 +4451,21 @@ test('sendMessage checks context limit before proceeding', async () => {
   expect(comp.callAIAPI).not.toHaveBeenCalled();
 });
 
+test('sendMessage checks context limit before proceeding, but allows context_compression', async () => {
+  comp.newMessage = 'Summarize the conversation so far for context preservation';
+  comp.canChat = true;
+  comp.assistantEnabled = true;
+  comp.creditsRemaining = 100;
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(true);
+  comp.callAIAPI = jest.fn();
+  
+  await comp.sendMessage([MSGTAG_CONTEXTCOMPRESSION]);
+  
+  expect(comp.checkContextLimitReached).toHaveBeenCalled();
+  expect(comp.callAIAPI).toHaveBeenCalled();
+  expect(comp.callAIAPI).toHaveBeenCalledWith('Summarize the conversation so far for context preservation', [MSGTAG_CONTEXTCOMPRESSION]);
+});
+
 test('sendMessage clears welcome message when starting first real conversation', async () => {
   const welcomeMessage = {
     role: 'assistant',
@@ -4908,3 +5007,8 @@ test('applyToolSpecificChanges does nothing for non-query_cases tools', () => {
   getSpy.mockRestore();
 });
 
+test('messageClassesFromTags', () => {
+  let tags = ['important', 'error', MSGTAG_CONTEXTCOMPRESSION];
+  let result = comp.messageClassesFromTags(tags);
+  expect(result).toEqual(['msgTag-important', 'msgTag-error', 'msgTag-context_compression']);
+});

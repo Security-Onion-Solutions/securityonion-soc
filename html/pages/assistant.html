@@ -101,12 +101,22 @@
 				<v-card-title id="chat-header" class="py-3 d-flex align-center">
 					<v-icon class="mr-2">fa-comments</v-icon>
 					<span class="flex-grow-1">{{ i18n.chatTitle }}</span>
+					<v-btn :color="getCompressColor()" class="mx-4" variant="flat" id="compress-context" @click="compressCurrentSession()" :title="i18n.compressContext" data-aid="assistant_banner_compress_context">
+						<v-icon>fa-minimize</v-icon>
+					</v-btn>
 					<div class="text-wrap" style="font-size: 14px;">{{ i18n.contextLength }}: <span :class="getContextColor(contextLength)">{{ formatCount(contextLength) }}</span></div>
 				</v-card-title>
 				<v-divider></v-divider>
 				<v-card-text id="chat-messages" class="chat-messages pa-0" @scroll="onChatScroll">
 					<div class="pa-4">
-						<div v-for="(message, index) in messages" :key="index" :id="'message-' + index" class="message-item mb-3">
+						<div v-for="(message, index) in messages" :key="index" :id="'message-' + index" :class="['message-item', 'mb-3'].concat(messageClassesFromTags(message.tags || []))">
+							<div v-if="index === contextStartMessageIndex" class="context-divider py-4">
+								<div class="spacer spacer-left"></div>
+								<div class="label theme-text">
+									{{ i18n.contextStartsHere }}
+								</div>
+								<div class="spacer spacer-right"></div>
+							</div>
 							<div class="d-flex align-start">
 								<v-avatar id="message-avatar" size="32" class="mr-3" :color="message.role === 'user' ? 'primary' : 'secondary'">
 									<v-icon v-if="message.role === 'user'" class="text-white" size="small">fa-user</v-icon>
@@ -276,7 +286,7 @@
 						ref="sendButton"
 						color="primary"
 						:disabled="!newMessage.trim() || !canChat || checkForActivity()"
-						@click="sendMessage"
+						@click="sendMessage()"
 						data-aid="assistant_chat_send"
 						class="flex-shrink-0"
 					>

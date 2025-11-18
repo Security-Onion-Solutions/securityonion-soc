@@ -182,6 +182,7 @@ type AlertingParameters struct {
 type AssistantParameters struct {
 	Enabled                bool              `json:"enabled"`
 	InvestigationPrompt    string            `json:"investigationPrompt"`
+	CompressContextPrompt  string            `json:"compressContextPrompt"`
 	ThresholdColorRatioLow float64           `json:"thresholdColorRatioLow"`
 	ThresholdColorRatioMed float64           `json:"thresholdColorRatioMed"`
 	ThresholdColorRatioMax float64           `json:"thresholdColorRatioMax"`

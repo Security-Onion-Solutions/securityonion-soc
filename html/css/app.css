@@ -1405,3 +1405,34 @@ ul ul ul {
   overflow-y: auto;
   line-height: 1.5;
 }
+
+.context-divider {
+  display: flex;
+  width: 100%;
+}
+
+.context-divider > .label {
+  flex: 0 0 auto;
+}
+
+.context-divider > .spacer {
+  flex: 1 1 auto;
+  height: 1px;
+  align-self: center;
+}
+
+.context-divider > .spacer-left {
+  background:linear-gradient(to right,
+    rgb(var(--v-theme-icon)) 0%,
+    rgb(var(--v-theme-icon)) 60%,
+    transparent 95%,
+    transparent 100%);
+}
+
+.context-divider > .spacer-right {
+  background:linear-gradient(to left,
+    rgb(var(--v-theme-icon)) 0%,
+    rgb(var(--v-theme-icon)) 60%,
+    transparent 95%,
+    transparent 100%);
+}

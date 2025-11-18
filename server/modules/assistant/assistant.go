@@ -211,7 +211,7 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, aiModel string, messag
 
 	response := &model.Message{}
 
-	err = json.Unmarshal(resBody, response)
+	err = json.Unmarshal(resBody, &response)
 	if err != nil {
 		logger.WithError(err).WithField("rawChatResponseBody", string(resBody)).Error("unable to unmarshal JSON response")
 		return nil, err
