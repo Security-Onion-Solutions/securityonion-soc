@@ -1880,7 +1880,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       const session = this.chatHistoryById[this.currentChatId];
       if (!session) return;
       
-      const hasTag = session.tags.includes(tag);
+      const hasTag = (session.tags || []).includes(tag);
       const action = hasTag ? 'remove' : 'add';
       
       await this.updateSessionTag(this.currentChatId, action, tag);
