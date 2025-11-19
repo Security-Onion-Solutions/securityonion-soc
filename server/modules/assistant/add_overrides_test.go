@@ -60,9 +60,8 @@ func TestAddOverridesTool_GetSchema(t *testing.T) {
 
 	// Check overrides property
 	overrides := schema.Json.Properties["overrides"]
-	assert.Equal(t, "string", overrides.Type)
+	assert.Equal(t, "array", overrides.Type)
 	assert.Contains(t, overrides.Description, "new overrides to add")
-	assert.Contains(t, overrides.Description, "string format")
 
 	// Check range properties
 	rangeStart := schema.Json.Properties["range_start"]
@@ -100,7 +99,7 @@ func TestAddOverridesTool_Execute(t *testing.T) {
 	}{
 		{
 			name:   "successfully add suricata threshold override",
-			params: `{"search_filter": "so_detection.title:malware AND _index:\"*:so-detection\" AND so_kind:detection", "overrides": "[{\"note\":\"\",\"seconds\":60,\"isEnabled\":true,\"count\":10,\"type\":\"threshold\",\"track\":\"by_src\",\"thresholdType\":\"both\"}]"}`,
+			params: `{"search_filter": "so_detection.title:malware AND _index:\"*:so-detection\" AND so_kind:detection", "overrides": [{"note":"","seconds":60,"isEnabled":true,"count":10,"type":"threshold","track":"by_src","thresholdType":"both"}]}`,
 			mockQueryResults: []interface{}{
 				&model.Detection{
 					Auditable: model.Auditable{Id: "detection-1"},
@@ -144,7 +143,7 @@ func TestAddOverridesTool_Execute(t *testing.T) {
 		},
 		{
 			name:   "successfully add multiple suricata overrides",
-			params: `{"search_filter": "so_detection.engine:suricata AND _index:\"*:so-detection\" AND so_kind:detection", "overrides": "[{\"note\":\"Threshold override\",\"seconds\":60,\"isEnabled\":true,\"count\":10,\"type\":\"threshold\",\"track\":\"by_src\",\"thresholdType\":\"both\"},{\"note\":\"Modify override\",\"regex\":\"rev:1;\",\"isEnabled\":true,\"type\":\"modify\",\"value\":\"rev:2;\"}]"}`,
+			params: `{"search_filter": "so_detection.engine:suricata AND _index:\"*:so-detection\" AND so_kind:detection", "overrides": [{"note":"Threshold override","seconds":60,"isEnabled":true,"count":10,"type":"threshold","track":"by_src","thresholdType":"both"},{"note":"Modify override","regex":"rev:1;","isEnabled":true,"type":"modify","value":"rev:2;"}]}`,
 			mockQueryResults: []interface{}{
 				&model.Detection{
 					Auditable: model.Auditable{Id: "detection-1"},
@@ -175,7 +174,7 @@ func TestAddOverridesTool_Execute(t *testing.T) {
 		},
 		{
 			name:   "successfully add sigma custom filter override",
-			params: `{"search_filter": "so_detection.language:sigma AND _index:\"*:so-detection\" AND so_kind:detection", "overrides": "[{\"note\":\"Custom filter\",\"isEnabled\":true,\"type\":\"customFilter\",\"customFilter\":\"sofilter:\\n  user.name: test_user\"}]"}`,
+			params: `{"search_filter": "so_detection.language:sigma AND _index:\"*:so-detection\" AND so_kind:detection", "overrides": [{"note":"Custom filter","isEnabled":true,"type":"customFilter","customFilter":"sofilter:\n  user.name: test_user"}]}`,
 			mockQueryResults: []interface{}{
 				&model.Detection{
 					Auditable: model.Auditable{Id: "detection-1"},
@@ -206,7 +205,7 @@ func TestAddOverridesTool_Execute(t *testing.T) {
 		},
 		{
 			name:             "no detections found",
-			params:           `{"search_filter": "so_detection.title:nonexistent AND _index:\"*:so-detection\" AND so_kind:detection", "overrides": "[{\"note\":\"\",\"seconds\":60,\"isEnabled\":true,\"count\":10,\"type\":\"threshold\",\"track\":\"by_src\",\"thresholdType\":\"both\"}]"}`,
+			params:           `{"search_filter": "so_detection.title:nonexistent AND _index:\"*:so-detection\" AND so_kind:detection", "overrides": [{"note":"","seconds":60,"isEnabled":true,"count":10,"type":"threshold","track":"by_src","thresholdType":"both"}]}`,
 			mockQueryResults: []interface{}{},
 			expectedResult:   "No detections found",
 		},
@@ -222,13 +221,13 @@ func TestAddOverridesTool_Execute(t *testing.T) {
 		},
 		{
 			name:           "query error",
-			params:         `{"search_filter": "so_detection.title:test AND _index:\"*:so-detection\" AND so_kind:detection", "overrides": "[{\"note\":\"\",\"seconds\":60,\"isEnabled\":true,\"count\":10,\"type\":\"threshold\",\"track\":\"by_src\",\"thresholdType\":\"both\"}]"}`,
+			params:         `{"search_filter": "so_detection.title:test AND _index:\"*:so-detection\" AND so_kind:detection", "overrides": [{"note":"","seconds":60,"isEnabled":true,"count":10,"type":"threshold","track":"by_src","thresholdType":"both"}]}`,
 			mockQueryError: assert.AnError,
 			expectedError:  true,
 		},
 		{
 			name:   "bulk add overrides error",
-			params: `{"search_filter": "so_detection.title:test AND _index:\"*:so-detection\" AND so_kind:detection", "overrides": "[{\"note\":\"\",\"seconds\":60,\"isEnabled\":true,\"count\":10,\"type\":\"threshold\",\"track\":\"by_src\",\"thresholdType\":\"both\"}]"}`,
+			params: `{"search_filter": "so_detection.title:test AND _index:\"*:so-detection\" AND so_kind:detection", "overrides": [{"note":"","seconds":60,"isEnabled":true,"count":10,"type":"threshold","track":"by_src","thresholdType":"both"}]}`,
 			mockQueryResults: []interface{}{
 				&model.Detection{
 					Auditable: model.Auditable{Id: "detection-1"},
@@ -253,7 +252,7 @@ func TestAddOverridesTool_Execute(t *testing.T) {
 		},
 		{
 			name:   "sync error during detection sync",
-			params: `{"search_filter": "so_detection.title:sync AND _index:\"*:so-detection\" AND so_kind:detection", "overrides": "[{\"note\":\"\",\"seconds\":60,\"isEnabled\":true,\"count\":10,\"type\":\"threshold\",\"track\":\"by_src\",\"thresholdType\":\"both\"}]"}`,
+			params: `{"search_filter": "so_detection.title:sync AND _index:\"*:so-detection\" AND so_kind:detection", "overrides": [{"note":"","seconds":60,"isEnabled":true,"count":10,"type":"threshold","track":"by_src","thresholdType":"both"}]}`,
 			mockQueryResults: []interface{}{
 				&model.Detection{
 					Auditable: model.Auditable{Id: "detection-sync"},
@@ -284,7 +283,7 @@ func TestAddOverridesTool_Execute(t *testing.T) {
 		},
 		{
 			name:   "sync error map during detection sync",
-			params: `{"search_filter": "so_detection.title:sync AND _index:\"*:so-detection\" AND so_kind:detection", "overrides": "[{\"note\":\"\",\"seconds\":60,\"isEnabled\":true,\"count\":10,\"type\":\"threshold\",\"track\":\"by_src\",\"thresholdType\":\"both\"}]"}`,
+			params: `{"search_filter": "so_detection.title:sync AND _index:\"*:so-detection\" AND so_kind:detection", "overrides": [{"note":"","seconds":60,"isEnabled":true,"count":10,"type":"threshold","track":"by_src","thresholdType":"both"}]}`,
 			mockQueryResults: []interface{}{
 				&model.Detection{
 					Auditable: model.Auditable{Id: "detection-sync"},

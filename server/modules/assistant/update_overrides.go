@@ -61,8 +61,68 @@ func (t *UpdateOverridesTool) GetSchema() model.JSONSchema {
 					Description: `The public ID shared across all Security Onion grids. In a detection, this is the "so_detection.publicId" field.`,
 				},
 				"overrides": {
-					Type: "string",
-					Description: `The entire updated overrides block for the detection, in string format. Here's an example overrides block:
+					Type: "array",
+					Items: map[string]model.ToolSchemaProperty{
+						"override": {
+							Description: "Each of these objects represents an individual override.",
+							Type:        "object",
+							Items: map[string]model.ToolSchemaProperty{
+								"isEnabled": {
+									Type:        "boolean",
+									Description: "Indicates whether this override is enabled.",
+								},
+								"createdAt": {
+									Type:        "string",
+									Description: "The date and time when this override was created. This field should not be included for newly created overrides, and it also should not be modified.",
+								},
+								"updatedAt": {
+									Type:        "string",
+									Description: "The date and time when this override was last modified. This field should not be included for newly created overrides, and it also should not be modified.",
+								},
+								"type": {
+									Type:        "string",
+									Description: "The type of override; available values vary between detection engines.",
+								},
+								"note": {
+									Type:        "string",
+									Description: "An optional operational note for this override.",
+								},
+								"regex": {
+									Type:        "string",
+									Description: "(suricata only) Regular expression for matching modify overrides.",
+								},
+								"value": {
+									Type:        "string",
+									Description: "(suricata only) The value needing to match the regex in order for this override to apply.",
+								},
+								"track": {
+									Type:        "string",
+									Description: "(suricata only) Track type for suppress and threshold overrides (by_either only applies to suppress overrides).",
+								},
+								"ip": {
+									Type:        "string",
+									Description: "(suricata only) The IP address or network value.",
+								},
+								"thresholdType": {
+									Type:        "string",
+									Description: "(suricata only) Threshold type, for threshold overrides.",
+								},
+								"count": {
+									Type:        "integer",
+									Description: "(suricata only) For treshold overrides, this is the number of occurrences allowed, within the given seconds interval, before this detection triggers an alert. Must be non-negative and greater than 0.",
+								},
+								"seconds": {
+									Type:        "integer",
+									Description: "(suricata only) For treshold overrides, this is the number of seconds that the occurrence threshold must occur within. Must be non-negative and greater than 0.",
+								},
+								"customFilter": {
+									Type:        "string",
+									Description: "(elastalert only) The custom filter applied to Sigma detections before the detection will trigger an alert.",
+								},
+							},
+						},
+					},
+					Description: `The entire updated overrides block for the detection, as an array of objects. Here's an example overrides block:
 [
 	{
 		"note": "",
@@ -87,7 +147,7 @@ func (t *UpdateOverridesTool) GetSchema() model.JSONSchema {
 ]
 					The overrides block is located at the so_detection.overrides field of a detection. This particular overrides argument will be the updated overrides field of the original detection that the user wants to update.
 					For instance, if the user wants to update the first override above to track by destination instead of by source, you would take the current overrides block, find the first override, and change the value of the "track"
-					field in that override to "by_dst". Then, you will pass the entire updated overrides block, including the overrides that weren't actually updated, as this argument, in string format.`,
+					field in that override to "by_dst". Then, you will pass the entire updated overrides block, including the overrides that weren't actually updated, as this argument, as an array of objects.`,
 				},
 			},
 		},
@@ -95,9 +155,9 @@ func (t *UpdateOverridesTool) GetSchema() model.JSONSchema {
 }
 
 type updateOverridesArgs struct {
-	SocId     string `json:"soc_id" example:"gQKCepgBAWAm-kn2lYs2"`
-	PublicId  string `json:"public_id" example:"dcbe6004-f6e0-4579-9f98-9576201ffb29"`
-	Overrides string `json:"overrides" example:"[{\"note\":\"\",\"createdAt\":\"2025-06-11T11:32:33.528762983-04:00\",\"seconds\":60,\"isEnabled\":true,\"count\":10,\"type\":\"threshold\",\"track\":\"by_src\",\"thresholdType\":\"both\",\"updatedAt\":\"2025-06-11T11:32:33.528762983-04:00\"},{\"note\":\"Override Note\",\"createdAt\":\"2025-06-11T11:32:39.70697702-04:00\",\"regex\":\"rev:1;\",\"isEnabled\":true,\"type\":\"modify\",\"value\":\"rev:2;\",\"updatedAt\":\"2025-06-11T11:32:39.70697702-04:00\"}]"`
+	SocId     string           `json:"soc_id" example:"gQKCepgBAWAm-kn2lYs2"`
+	PublicId  string           `json:"public_id" example:"dcbe6004-f6e0-4579-9f98-9576201ffb29"`
+	Overrides []map[string]any `json:"overrides"`
 }
 
 func (t *UpdateOverridesTool) Execute(ctx context.Context, srv *server.Server, params string, auxData string) (result *model.ToolResponse, err error) {
@@ -129,7 +189,12 @@ func (t *UpdateOverridesTool) Execute(ctx context.Context, srv *server.Server, p
 
 	var updatedOverrides []*model.Override
 
-	err = json.Unmarshal([]byte(args.Overrides), &updatedOverrides)
+	overridesBytes, err := json.Marshal(args.Overrides)
+	if err != nil {
+		return nil, fmt.Errorf("couldn't marshal overrides param: %w", err)
+	}
+
+	err = json.Unmarshal(overridesBytes, &updatedOverrides)
 	if err != nil {
 		return nil, fmt.Errorf("couldn't unmarshal overrides param: %w", err)
 	}

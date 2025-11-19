@@ -68,7 +68,7 @@ func TestUpdateOverridesTool_Execute(t *testing.T) {
 	}{
 		{
 			name:   "successful update with suricata threshold override",
-			params: `{"soc_id": "test-id", "overrides": "[{\"note\":\"\",\"isEnabled\":true,\"type\":\"threshold\",\"thresholdType\":\"both\",\"track\":\"by_src\",\"count\":10,\"seconds\":60}]"}`,
+			params: `{"soc_id": "test-id", "overrides": [{"note":"","isEnabled":true,"type":"threshold","thresholdType":"both","track":"by_src","count":10,"seconds":60}]}`,
 			mockDetection: &model.Detection{
 				Auditable: model.Auditable{Id: "test-id"},
 				PublicID:  "test-public-id",
@@ -102,7 +102,7 @@ func TestUpdateOverridesTool_Execute(t *testing.T) {
 		},
 		{
 			name:   "successful update with sigma custom filter override",
-			params: `{"public_id": "test-public-id", "overrides": "[{\"note\":\"Custom filter\",\"isEnabled\":true,\"type\":\"customFilter\",\"customFilter\":\"sofilter:\\n  user.name: test_user\"}]"}`,
+			params: `{"public_id": "test-public-id", "overrides": [{"note":"Custom filter","isEnabled":true,"type":"customFilter","customFilter":"sofilter:\n  user.name: test_user"}]}`,
 			mockDetection: &model.Detection{
 				Auditable: model.Auditable{Id: "test-id"},
 				PublicID:  "test-public-id",
@@ -134,7 +134,7 @@ func TestUpdateOverridesTool_Execute(t *testing.T) {
 		},
 		{
 			name:   "multiple overrides update",
-			params: `{"soc_id": "test-id", "overrides": "[{\"note\":\"First\",\"isEnabled\":true,\"type\":\"threshold\",\"thresholdType\":\"limit\",\"track\":\"by_src\",\"count\":5,\"seconds\":30},{\"note\":\"Second\",\"isEnabled\":false,\"type\":\"modify\",\"regex\":\"sid:1000001;\",\"value\":\"sid:1000002;\"}]"}`,
+			params: `{"soc_id": "test-id", "overrides": [{"note":"First","isEnabled":true,"type":"threshold","thresholdType":"limit","track":"by_src","count":5,"seconds":30},{"note":"Second","isEnabled":false,"type":"modify","regex":"sid:1000001;","value":"sid:1000002;"}]}`,
 			mockDetection: &model.Detection{
 				Auditable: model.Auditable{Id: "test-id"},
 				PublicID:  "test-public-id",
@@ -176,13 +176,13 @@ func TestUpdateOverridesTool_Execute(t *testing.T) {
 		},
 		{
 			name:                  "detection not found",
-			params:                `{"soc_id": "nonexistent-id", "overrides": "[]"}`,
+			params:                `{"soc_id": "nonexistent-id", "overrides": []}`,
 			mockGetDetectionError: errors.New("detection not found"),
 			expectedError:         true,
 		},
 		{
 			name:   "validation error - missing required parameters",
-			params: `{"soc_id": "test-id", "overrides": "[{\"type\":\"threshold\",\"isEnabled\":true,\"track\":\"by_src\"}]"}`,
+			params: `{"soc_id": "test-id", "overrides": [{"type":"threshold","isEnabled":true,"track":"by_src"}]}`,
 			mockDetection: &model.Detection{
 				Auditable: model.Auditable{Id: "test-id"},
 				PublicID:  "test-public-id",
@@ -192,7 +192,7 @@ func TestUpdateOverridesTool_Execute(t *testing.T) {
 		},
 		{
 			name:   "unsupported engine",
-			params: `{"soc_id": "test-id", "overrides": "[]"}`,
+			params: `{"soc_id": "test-id", "overrides": []}`,
 			mockDetection: &model.Detection{
 				Auditable: model.Auditable{Id: "test-id"},
 				Engine:    model.EngineNameSuricata,
@@ -202,7 +202,7 @@ func TestUpdateOverridesTool_Execute(t *testing.T) {
 		},
 		{
 			name:   "apply filters error",
-			params: `{"soc_id": "test-id", "overrides": "[]"}`,
+			params: `{"soc_id": "test-id", "overrides": []}`,
 			mockDetection: &model.Detection{
 				Auditable: model.Auditable{Id: "test-id"},
 				Engine:    model.EngineNameSuricata,
@@ -212,7 +212,7 @@ func TestUpdateOverridesTool_Execute(t *testing.T) {
 		},
 		{
 			name:   "update detection error",
-			params: `{"soc_id": "test-id", "overrides": "[]"}`,
+			params: `{"soc_id": "test-id", "overrides": []}`,
 			mockDetection: &model.Detection{
 				Auditable: model.Auditable{Id: "test-id"},
 				Engine:    model.EngineNameSuricata,
@@ -222,7 +222,7 @@ func TestUpdateOverridesTool_Execute(t *testing.T) {
 		},
 		{
 			name:   "sync error",
-			params: `{"soc_id": "test-id", "overrides": "[]"}`,
+			params: `{"soc_id": "test-id", "overrides": []}`,
 			mockDetection: &model.Detection{
 				Auditable: model.Auditable{Id: "test-id"},
 				Engine:    model.EngineNameSuricata,
@@ -396,7 +396,7 @@ func TestUpdateOverridesTool_Execute_TimestampHandling(t *testing.T) {
 	mockDetectionEngine.EXPECT().MergeAuxiliaryData(gomock.Any()).Return(nil)
 
 	tool := &UpdateOverridesTool{}
-	params := fmt.Sprintf(`{"soc_id": "test-id", "overrides": "[{\"isEnabled\":true,\"type\":\"threshold\",\"thresholdType\":\"both\",\"track\":\"by_dst\",\"count\":10,\"seconds\":60,\"createdAt\":\"%s\",\"updatedAt\":\"%s\"}]"}`,
+	params := fmt.Sprintf(`{"soc_id": "test-id", "overrides": [{"isEnabled":true,"type":"threshold","thresholdType":"both","track":"by_dst","count":10,"seconds":60,"createdAt":"%s","updatedAt":"%s"}]}`,
 		existingTime.Format(time.RFC3339), existingTime.Format(time.RFC3339))
 	result, err := tool.Execute(ctx, mockServer, params, "")
 
@@ -459,7 +459,7 @@ func TestUpdateOverridesTool_Execute_EmptyOverrides(t *testing.T) {
 	mockDetectionEngine.EXPECT().MergeAuxiliaryData(gomock.Any()).Return(nil)
 
 	tool := &UpdateOverridesTool{}
-	result, err := tool.Execute(ctx, mockServer, `{"soc_id": "test-id", "overrides": "[]"}`, "")
+	result, err := tool.Execute(ctx, mockServer, `{"soc_id": "test-id", "overrides": []}`, "")
 
 	assert.NoError(t, err)
 	assert.NotNil(t, result)

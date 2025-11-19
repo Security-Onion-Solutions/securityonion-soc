@@ -84,10 +84,70 @@ func (t *AddOverridesTool) GetSchema() model.JSONSchema {
 						"- @timestamp: The date and time when this detection was last created/updated/modified. Example: \"2025-11-12T19:38:17.413984706Z\"",
 				},
 				"overrides": {
-					Type: "string",
+					Type: "array",
+					Items: map[string]model.ToolSchemaProperty{
+						"override": {
+							Description: "Each of these objects represents an individual override.",
+							Type:        "object",
+							Items: map[string]model.ToolSchemaProperty{
+								"isEnabled": {
+									Type:        "boolean",
+									Description: "Indicates whether this override is enabled.",
+								},
+								"createdAt": {
+									Type:        "string",
+									Description: "The date and time when this override was created. This field should not be included for newly created overrides, and it also should not be modified.",
+								},
+								"updatedAt": {
+									Type:        "string",
+									Description: "The date and time when this override was last modified. This field should not be included for newly created overrides, and it also should not be modified.",
+								},
+								"type": {
+									Type:        "string",
+									Description: "The type of override; available values vary between detection engines.",
+								},
+								"note": {
+									Type:        "string",
+									Description: "An optional operational note for this override.",
+								},
+								"regex": {
+									Type:        "string",
+									Description: "(suricata only) Regular expression for matching modify overrides.",
+								},
+								"value": {
+									Type:        "string",
+									Description: "(suricata only) The value needing to match the regex in order for this override to apply.",
+								},
+								"track": {
+									Type:        "string",
+									Description: "(suricata only) Track type for suppress and threshold overrides (by_either only applies to suppress overrides).",
+								},
+								"ip": {
+									Type:        "string",
+									Description: "(suricata only) The IP address or network value.",
+								},
+								"thresholdType": {
+									Type:        "string",
+									Description: "(suricata only) Threshold type, for threshold overrides.",
+								},
+								"count": {
+									Type:        "integer",
+									Description: "(suricata only) For treshold overrides, this is the number of occurrences allowed, within the given seconds interval, before this detection triggers an alert. Must be non-negative and greater than 0.",
+								},
+								"seconds": {
+									Type:        "integer",
+									Description: "(suricata only) For treshold overrides, this is the number of seconds that the occurrence threshold must occur within. Must be non-negative and greater than 0.",
+								},
+								"customFilter": {
+									Type:        "string",
+									Description: "(elastalert only) The custom filter applied to Sigma detections before the detection will trigger an alert.",
+								},
+							},
+						},
+					},
 					Description: `The new overrides to add to the detections at hand. These will be appended to the existing overrides block for each queried detection.
-					This field should be a list of the new override(s), in string format. Note that even in the case where there is only one new override being added, this new override
-					should still be placed inside a list, with the entire input in string format. Here is an example input for this field, in the case where the user wants
+					This field should be a list of the new override(s), as an array of objects. Note that even in the case where there is only one new override being added,
+					this new override should still be placed inside an array. Here is an example input for this field, in the case where the user wants
 					to append two new overrides to each of the detections returned by the search_filter:
 [
 	{
@@ -107,8 +167,8 @@ func (t *AddOverridesTool) GetSchema() model.JSONSchema {
 		"value": "rev:2;",
 	}
 ]
-					The above example should be passed as an input in string format. The above "overrides" argument is only the *new* overrides that the user wants to add to the given detection(s). This argument
-					should NOT include any existing overrides from the given detections' so_detection.overrides blocks, only new ones.`,
+					If used as input, the above example should be passed as an array of objects. The above "overrides" argument is only the *new* overrides that the user wants to add to the given detection(s).
+					This argument should NOT include any existing overrides from the given detections' so_detection.overrides blocks, only new ones.`,
 				},
 				"range_start": {
 					Type:        "string",
@@ -134,12 +194,12 @@ func (t *AddOverridesTool) GetSchema() model.JSONSchema {
 }
 
 type AddOverridesArgs struct {
-	SearchFilter string `json:"search_filter"`
-	Overrides    string `json:"overrides" example:"[{\"note\":\"\",\"seconds\":60,\"isEnabled\":true,\"count\":10,\"type\":\"threshold\",\"track\":\"by_src\",\"thresholdType\":\"both\"},{\"note\":\"Override Note\",\"regex\":\"rev:1;\",\"isEnabled\":true,\"type\":\"modify\",\"value\":\"rev:2;\"}]"`
-	RangeStart   string `json:"range_start,omitempty"`
-	RangeEnd     string `json:"range_end,omitempty"`
-	RangeFormat  string `json:"range_format,omitempty"`
-	Limit        int    `json:"limit"`
+	SearchFilter string           `json:"search_filter"`
+	Overrides    []map[string]any `json:"overrides"`
+	RangeStart   string           `json:"range_start,omitempty"`
+	RangeEnd     string           `json:"range_end,omitempty"`
+	RangeFormat  string           `json:"range_format,omitempty"`
+	Limit        int              `json:"limit"`
 }
 
 func (t *AddOverridesTool) Execute(ctx context.Context, srv *server.Server, params string, auxData string) (result *model.ToolResponse, err error) {
@@ -171,7 +231,12 @@ func (t *AddOverridesTool) Execute(ctx context.Context, srv *server.Server, para
 
 	var newOverrides []*model.Override
 
-	err = json.Unmarshal([]byte(args.Overrides), &newOverrides)
+	overridesBytes, err := json.Marshal(args.Overrides)
+	if err != nil {
+		return nil, fmt.Errorf("couldn't marshal overrides param: %w", err)
+	}
+
+	err = json.Unmarshal(overridesBytes, &newOverrides)
 	if err != nil {
 		return nil, fmt.Errorf("couldn't unmarshal overrides param: %w", err)
 	}
