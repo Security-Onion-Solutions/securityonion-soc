@@ -11,167 +11,13 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/apex/log"
-	"github.com/elastic/go-elasticsearch/v8/esutil"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/server/mock"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 )
-
-// FakeDetectionstore implements the Detectionstore interface for testing
-type FakeDetectionstore struct {
-	QueryWithRangeResults []interface{}
-	QueryWithRangeError   error
-	QueryWithRangeCalled  bool
-	QueryWithRangeQuery   string
-
-	BulkUpdateStats         *model.BulkUpdateStats
-	BulkUpdateError         error
-	BulkUpdateCalled        bool
-	BulkUpdateEnable        bool
-	BulkUpdateDetectionList []*model.Detection
-}
-
-func (f *FakeDetectionstore) QueryWithRange(ctx context.Context, query, rangeStart, rangeEnd, rangeFormat string, limit int) ([]interface{}, error) {
-	f.QueryWithRangeCalled = true
-	f.QueryWithRangeQuery = query
-	if f.QueryWithRangeError != nil {
-		return nil, f.QueryWithRangeError
-	}
-	return f.QueryWithRangeResults, nil
-}
-
-func (f *FakeDetectionstore) BulkUpdateDetections(ctx context.Context, newStatus bool, detects []*model.Detection, logger log.Interface) (*model.BulkUpdateStats, error) {
-	f.BulkUpdateCalled = true
-	f.BulkUpdateEnable = newStatus
-	f.BulkUpdateDetectionList = detects
-	if f.BulkUpdateError != nil {
-		return nil, f.BulkUpdateError
-	}
-	return f.BulkUpdateStats, nil
-}
-
-// Stub implementations for other required methods (not used in toggle_detections)
-func (f *FakeDetectionstore) Query(ctx context.Context, query string, max int) ([]interface{}, error) {
-	return nil, nil
-}
-func (f *FakeDetectionstore) CreateDetection(ctx context.Context, detect *model.Detection) (*model.Detection, error) {
-	return nil, nil
-}
-func (f *FakeDetectionstore) GetDetection(ctx context.Context, detectId string) (*model.Detection, error) {
-	return nil, nil
-}
-func (f *FakeDetectionstore) GetDetectionByPublicId(ctx context.Context, publicId string) (*model.Detection, error) {
-	return nil, nil
-}
-func (f *FakeDetectionstore) UpdateDetection(ctx context.Context, detect *model.Detection) (*model.Detection, error) {
-	return nil, nil
-}
-func (f *FakeDetectionstore) BulkAddOverrides(ctx context.Context, newOverrides []*model.Override, detects []*model.Detection, logger log.Interface) (*model.BulkUpdateStats, error) {
-	return nil, nil
-}
-func (f *FakeDetectionstore) DeleteDetection(ctx context.Context, detectID string) (*model.Detection, error) {
-	return nil, nil
-}
-func (f *FakeDetectionstore) GetAllDetections(ctx context.Context, opts ...model.GetAllOption) (map[string]*model.Detection, error) {
-	return nil, nil
-}
-func (f *FakeDetectionstore) GetDetectionHistory(ctx context.Context, detectID string) ([]interface{}, error) {
-	return nil, nil
-}
-func (f *FakeDetectionstore) CreateComment(ctx context.Context, newComment *model.DetectionComment) (*model.DetectionComment, error) {
-	return nil, nil
-}
-func (f *FakeDetectionstore) GetComment(ctx context.Context, commentId string) (*model.DetectionComment, error) {
-	return nil, nil
-}
-func (f *FakeDetectionstore) GetComments(ctx context.Context, detectionId string) ([]*model.DetectionComment, error) {
-	return nil, nil
-}
-func (f *FakeDetectionstore) UpdateComment(ctx context.Context, comment *model.DetectionComment) (*model.DetectionComment, error) {
-	return nil, nil
-}
-func (f *FakeDetectionstore) DeleteComment(ctx context.Context, id string) error {
-	return nil
-}
-func (f *FakeDetectionstore) DoesTemplateExist(ctx context.Context, tmpl string) (bool, error) {
-	return false, nil
-}
-func (f *FakeDetectionstore) BuildBulkIndexer(ctx context.Context, logger log.Interface) (esutil.BulkIndexer, error) {
-	// Return a mock that satisfies the esutil.BulkIndexer interface
-	return &mockBulkIndexer{}, nil
-}
-
-// mockBulkIndexer is a simple mock for the esutil.BulkIndexer interface
-type mockBulkIndexer struct{}
-
-func (m *mockBulkIndexer) Add(ctx context.Context, item esutil.BulkIndexerItem) error {
-	return nil
-}
-
-func (m *mockBulkIndexer) Close(ctx context.Context) error {
-	return nil
-}
-
-func (m *mockBulkIndexer) Stats() esutil.BulkIndexerStats {
-	return esutil.BulkIndexerStats{}
-}
-func (f *FakeDetectionstore) ConvertObjectToDocument(ctx context.Context, kind string, obj interface{}, auditable *model.Auditable, isEdit bool, auditDocId *string, op *string) ([]byte, string, error) {
-	return nil, "", nil
-}
-
-// FakeDetectionEngine implements the DetectionEngine interface for testing
-type FakeDetectionEngine struct {
-	SyncError    error
-	SyncErrorMap map[string]string
-}
-
-func (f *FakeDetectionEngine) ValidateRule(rule string) (string, error) {
-	return rule, nil
-}
-
-func (f *FakeDetectionEngine) SyncLocalDetections(ctx context.Context, detections []*model.Detection) (map[string]string, error) {
-	if f.SyncError != nil {
-		return nil, f.SyncError
-	}
-	if f.SyncErrorMap != nil {
-		return f.SyncErrorMap, nil
-	}
-	return map[string]string{}, nil
-}
-
-func (f *FakeDetectionEngine) ConvertRule(ctx context.Context, detect *model.Detection) (string, error) {
-	return detect.Content, nil
-}
-
-func (f *FakeDetectionEngine) ExtractDetails(detect *model.Detection) error {
-	return nil
-}
-
-func (f *FakeDetectionEngine) InterruptSync(forceFull bool, notify bool) {
-	// No-op for testing
-}
-
-func (f *FakeDetectionEngine) DuplicateDetection(ctx context.Context, detection *model.Detection) (*model.Detection, error) {
-	return detection, nil
-}
-
-func (f *FakeDetectionEngine) GetState() *model.EngineState {
-	return &model.EngineState{}
-}
-
-func (f *FakeDetectionEngine) GenerateUnusedPublicId(ctx context.Context) (string, error) {
-	return "test-public-id", nil
-}
-
-func (f *FakeDetectionEngine) ApplyFilters(detect *model.Detection) (bool, error) {
-	return false, nil
-}
-
-func (f *FakeDetectionEngine) MergeAuxiliaryData(detect *model.Detection) error {
-	return nil
-}
 
 func TestToggleDetectionsTool_Execute(t *testing.T) {
 	testCases := []struct {
@@ -185,6 +31,9 @@ func TestToggleDetectionsTool_Execute(t *testing.T) {
 		expectedError      bool
 		expectedEnable     bool
 		expectedDetections int
+		setupEngines       bool
+		syncError          error
+		syncErrorMap       map[string]string
 	}{
 		{
 			name:   "enable detections successfully",
@@ -400,24 +249,55 @@ func TestToggleDetectionsTool_Execute(t *testing.T) {
 			expectedResult:     "Successfully Enabled 1 detections. Enabled=1, Audited=1, Filtered=0, Errors=map[], UpdateDuration=30ms, SyncDuration=",
 			expectedEnable:     true,
 			expectedDetections: 1,
+			setupEngines:       true,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
 			// Create mock detection store
-			mockDetectionstore := &FakeDetectionstore{}
-			if tc.mockQueryResults != nil {
-				mockDetectionstore.QueryWithRangeResults = tc.mockQueryResults
+			mockDetectionstore := mock.NewMockDetectionstore(ctrl)
+
+			// Setup QueryWithRange expectations
+			if tc.mockQueryResults != nil || tc.mockQueryError != nil {
+				mockDetectionstore.EXPECT().
+					QueryWithRange(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(ctx context.Context, query, rangeStart, rangeEnd, rangeFormat string, limit int) ([]interface{}, error) {
+						// Verify the query contains the metadata filter
+						if !strings.Contains(query, `NOT metadata.raw_index:"logs-soc-so"`) {
+							t.Errorf("Query should contain metadata filter, got: %s", query)
+						}
+						if tc.mockQueryError != nil {
+							return nil, tc.mockQueryError
+						}
+						return tc.mockQueryResults, nil
+					}).
+					Times(1)
 			}
-			if tc.mockQueryError != nil {
-				mockDetectionstore.QueryWithRangeError = tc.mockQueryError
-			}
-			if tc.mockBulkStats != nil {
-				mockDetectionstore.BulkUpdateStats = tc.mockBulkStats
-			}
-			if tc.mockBulkError != nil {
-				mockDetectionstore.BulkUpdateError = tc.mockBulkError
+
+			// Setup BulkUpdateDetections expectations
+			if tc.expectedDetections > 0 && tc.mockBulkError == nil && !tc.expectedError {
+				mockDetectionstore.EXPECT().
+					BulkUpdateDetections(gomock.Any(), tc.expectedEnable, gomock.Any(), gomock.Any()).
+					DoAndReturn(func(ctx context.Context, newStatus bool, detects []*model.Detection, logger interface{}) (*model.BulkUpdateStats, error) {
+						// Verify the correct number of detections
+						if len(detects) != tc.expectedDetections {
+							t.Errorf("Expected %d detections, got %d", tc.expectedDetections, len(detects))
+						}
+						if tc.mockBulkError != nil {
+							return nil, tc.mockBulkError
+						}
+						return tc.mockBulkStats, nil
+					}).
+					Times(1)
+			} else if tc.mockBulkError != nil {
+				mockDetectionstore.EXPECT().
+					BulkUpdateDetections(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+					Return(nil, tc.mockBulkError).
+					Times(1)
 			}
 
 			// Create mock server with proper authorization
@@ -425,16 +305,24 @@ func TestToggleDetectionsTool_Execute(t *testing.T) {
 				"test-user-id": {"detections/write"},
 			})
 			mockServer.Detectionstore = mockDetectionstore
-			// Add DetectionEngines with mock engine for sync testing
 			mockServer.DetectionEngines = sync.Map{}
-			if tc.name == "sync detections successfully" {
-				mockEngine := &FakeDetectionEngine{}
-				mockServer.DetectionEngines.Store(model.EngineNameSuricata, mockEngine)
-			} else if tc.name == "sync error during detection sync" {
-				mockEngine := &FakeDetectionEngine{
-					SyncError: assert.AnError,
-				}
-				mockServer.DetectionEngines.Store(model.EngineNameSuricata, mockEngine)
+
+			// Setup detection engines if needed for sync testing
+			if tc.setupEngines {
+				mockDetectionEngine := mock.NewMockDetectionEngine(ctrl)
+				mockDetectionEngine.EXPECT().
+					SyncLocalDetections(gomock.Any(), gomock.Any()).
+					DoAndReturn(func(ctx context.Context, detections []*model.Detection) (map[string]string, error) {
+						if tc.syncError != nil {
+							return nil, tc.syncError
+						}
+						if tc.syncErrorMap != nil {
+							return tc.syncErrorMap, nil
+						}
+						return map[string]string{}, nil
+					}).
+					AnyTimes()
+				mockServer.DetectionEngines.Store(model.EngineNameSuricata, mockDetectionEngine)
 			}
 
 			// Create context with user ID
@@ -455,19 +343,6 @@ func TestToggleDetectionsTool_Execute(t *testing.T) {
 			assert.Equal(t, "toggle_detections", result.ToolName)
 			assert.Equal(t, "test-user-id", result.OnBehalfOfUser)
 			assert.True(t, result.TimeToExecute > 0)
-
-			// Verify query was called with correct parameters
-			if tc.mockQueryResults != nil || tc.mockQueryError != nil {
-				assert.True(t, mockDetectionstore.QueryWithRangeCalled)
-				assert.Contains(t, mockDetectionstore.QueryWithRangeQuery, "NOT metadata.raw_index:")
-			}
-
-			// Verify bulk update was called with correct parameters
-			if tc.expectedDetections > 0 && tc.mockBulkError == nil {
-				assert.True(t, mockDetectionstore.BulkUpdateCalled)
-				assert.Equal(t, tc.expectedEnable, mockDetectionstore.BulkUpdateEnable)
-				assert.Len(t, mockDetectionstore.BulkUpdateDetectionList, tc.expectedDetections)
-			}
 
 			// Assert result content - check if result contains expected parts since sync duration varies
 			if tc.expectedResult != "" {
@@ -570,16 +445,21 @@ func TestToggleDetectionsTool_QueryFiltering(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
 			// Create mock detection store
-			mockDetectionstore := &FakeDetectionstore{}
-			mockDetectionstore.QueryWithRangeResults = []interface{}{} // No results to avoid bulk update
+			mockDetectionstore := mock.NewMockDetectionstore(ctrl)
+			mockDetectionstore.EXPECT().
+				QueryWithRange(gomock.Any(), tc.expectedQuery, gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+				Return([]interface{}{}, nil).
+				Times(1)
 
 			// Create mock server with proper authorization
 			mockServer := server.NewFakeAuthorizedServer(map[string][]string{
 				"test-user-id": {"detections/write"},
 			})
 			mockServer.Detectionstore = mockDetectionstore
-			// Add empty DetectionEngines to avoid nil pointer issues
 			mockServer.DetectionEngines = sync.Map{}
 
 			// Create context with user ID
@@ -596,10 +476,6 @@ func TestToggleDetectionsTool_QueryFiltering(t *testing.T) {
 			assert.NoError(t, err)
 			assert.NotNil(t, result)
 			assert.Equal(t, "No detections found", result.Result)
-
-			// Verify the query was modified correctly
-			assert.True(t, mockDetectionstore.QueryWithRangeCalled)
-			assert.Equal(t, tc.expectedQuery, mockDetectionstore.QueryWithRangeQuery)
 		})
 	}
 }
@@ -629,26 +505,37 @@ func TestToggleDetectionsTool_Authorization(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
 			// Create mock detection store
-			mockDetectionstore := &FakeDetectionstore{}
-			mockDetectionstore.QueryWithRangeResults = []interface{}{
-				&model.Detection{
-					Auditable: model.Auditable{Id: "detection-1"},
-					PublicID:  "PUB001",
-					Title:     "Test Detection",
-					IsEnabled: false,
-				},
-			}
-			// Add mock bulk update stats for successful cases
+			mockDetectionstore := mock.NewMockDetectionstore(ctrl)
+
 			if !tc.expectError {
-				mockDetectionstore.BulkUpdateStats = &model.BulkUpdateStats{
-					Updated:        1,
-					Audited:        1,
-					Filtered:       0,
-					ErrMap:         map[string]string{},
-					UpdateDuration: 50000000, // 50ms in nanoseconds
-					NeedToSync:     []*model.Detection{},
-				}
+				// Setup expectations for authorized case
+				mockDetectionstore.EXPECT().
+					QueryWithRange(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+					Return([]interface{}{
+						&model.Detection{
+							Auditable: model.Auditable{Id: "detection-1"},
+							PublicID:  "PUB001",
+							Title:     "Test Detection",
+							IsEnabled: false,
+						},
+					}, nil).
+					Times(1)
+
+				mockDetectionstore.EXPECT().
+					BulkUpdateDetections(gomock.Any(), true, gomock.Any(), gomock.Any()).
+					Return(&model.BulkUpdateStats{
+						Updated:        1,
+						Audited:        1,
+						Filtered:       0,
+						ErrMap:         map[string]string{},
+						UpdateDuration: 50000000,
+						NeedToSync:     []*model.Detection{},
+					}, nil).
+					Times(1)
 			}
 
 			// Create mock server with specific permissions
@@ -663,7 +550,6 @@ func TestToggleDetectionsTool_Authorization(t *testing.T) {
 				})
 			}
 			mockServer.Detectionstore = mockDetectionstore
-			// Add empty DetectionEngines to avoid nil pointer issues
 			mockServer.DetectionEngines = sync.Map{}
 
 			// Create context with user ID
