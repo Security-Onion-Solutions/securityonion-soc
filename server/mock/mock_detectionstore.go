@@ -58,6 +58,21 @@ func (mr *MockDetectionstoreMockRecorder) BuildBulkIndexer(ctx, logger any) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildBulkIndexer", reflect.TypeOf((*MockDetectionstore)(nil).BuildBulkIndexer), ctx, logger)
 }
 
+// BulkAddOverrides mocks base method.
+func (m *MockDetectionstore) BulkAddOverrides(ctx context.Context, newOverrides []*model.Override, detects []*model.Detection, logger log.Interface) (*model.BulkUpdateStats, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BulkAddOverrides", ctx, newOverrides, detects, logger)
+	ret0, _ := ret[0].(*model.BulkUpdateStats)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// BulkAddOverrides indicates an expected call of BulkAddOverrides.
+func (mr *MockDetectionstoreMockRecorder) BulkAddOverrides(ctx, newOverrides, detects, logger any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BulkAddOverrides", reflect.TypeOf((*MockDetectionstore)(nil).BulkAddOverrides), ctx, newOverrides, detects, logger)
+}
+
 // BulkUpdateDetections mocks base method.
 func (m *MockDetectionstore) BulkUpdateDetections(ctx context.Context, newStatus bool, detects []*model.Detection, logger log.Interface) (*model.BulkUpdateStats, error) {
 	m.ctrl.T.Helper()

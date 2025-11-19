@@ -801,6 +801,177 @@ func (store *ElasticDetectionstore) BulkUpdateDetections(ctx context.Context, ne
 	return bulkStats, nil
 }
 
+func (store *ElasticDetectionstore) BulkAddOverrides(ctx context.Context, newOverrides []*model.Override, detects []*model.Detection, logger log.Interface) (*model.BulkUpdateStats, error) {
+	bulkStats := &model.BulkUpdateStats{}
+	errMap := map[string]string{}
+	updated := 0
+	audited := 0
+
+	start := time.Now()
+
+	bulk, err := store.BuildBulkIndexer(ctx, logger)
+	if err != nil {
+		logger.WithError(err).Error("failed to create bulk indexer")
+		return nil, fmt.Errorf("failed to create bulk indexer: %w", err)
+	}
+
+	createAudit := []model.AuditInfo{} // Object => *model.Detection
+	auditMut := sync.Mutex{}
+	errMut := sync.Mutex{}
+
+	currLang := detects[0].Language
+
+	for _, det := range detects {
+		if det.Language != currLang {
+			return nil, fmt.Errorf("detections must be of the same engine")
+		}
+		currLang = det.Language
+	}
+
+	engInt, ok := store.server.DetectionEngines.Load(detects[0].Engine)
+	if !ok {
+		logger.WithField("detectionEngine", detects[0].Engine).Error("unsupported engine")
+		return nil, fmt.Errorf("unsupported engine")
+	}
+
+	engine := engInt.(server.DetectionEngine)
+
+	for i := range detects {
+		detect := detects[i]
+		id := detect.Id
+
+		detect.Overrides = append(detect.Overrides, newOverrides...)
+
+		err = detect.Validate()
+		if err != nil {
+			logger.WithError(err).Error("invalid override")
+			return nil, fmt.Errorf("invalid override for detection with Public ID %s: %w", detect.PublicID, err)
+		}
+
+		_, err = engine.ApplyFilters(detect)
+		if err != nil {
+			logger.WithError(err).Error("unable to apply filters for detection")
+			return nil, fmt.Errorf("unable to apply filters for detection with Public ID %s: %w", detect.PublicID, err)
+		}
+
+		document, index, err := store.ConvertObjectToDocument(ctx, "detection", detect, &detect.Auditable, true, nil, nil)
+		if err != nil {
+			errMap[detect.PublicID] = err.Error()
+			continue
+		}
+
+		work := esutil.BulkIndexerItem{
+			Index:      index,
+			Action:     "update",
+			DocumentID: id,
+			OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
+				auditMut.Lock()
+				defer auditMut.Unlock()
+				updated++
+				createAudit = append(createAudit, model.AuditInfo{
+					DocId:  resp.DocumentID,
+					Op:     "update",
+					Object: detect,
+				})
+			},
+			OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
+				errMut.Lock()
+				defer errMut.Unlock()
+
+				if err != nil {
+					errMap[detect.PublicID] = err.Error()
+				} else {
+					errMap[detect.PublicID] = resp.Error.Reason
+				}
+			},
+		}
+
+		work.Body = bytes.NewReader(document)
+
+		err = bulk.Add(ctx, work)
+		if err != nil {
+			errMap[detect.PublicID] = err.Error()
+			continue
+		}
+	}
+
+	err = bulk.Close(ctx)
+	if err != nil {
+		logger.WithError(err).Error("unable to close bulk indexer for detection changes")
+		return nil, fmt.Errorf("unable to close bulk indexer for detection changes: %w", err)
+	}
+
+	bulk, err = store.BuildBulkIndexer(ctx, logger)
+	if err != nil {
+		logger.WithError(err).Error("unable to create audit bulk indexer")
+		return nil, fmt.Errorf("unable to create audit bulk indexer: %w", err)
+	}
+
+	dirty := make([]*model.Detection, 0, len(createAudit))
+
+	for _, audit := range createAudit {
+		det := audit.Object.(*model.Detection)
+
+		document, index, err := store.ConvertObjectToDocument(ctx, "detection", audit.Object, &det.Auditable, false, &audit.DocId, &audit.Op)
+		if err != nil {
+			errMap[det.PublicID] = err.Error()
+			continue
+		}
+
+		err = bulk.Add(ctx, esutil.BulkIndexerItem{
+			Index:  index,
+			Action: "create",
+			Body:   bytes.NewReader(document),
+			OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
+				auditMut.Lock()
+				defer auditMut.Unlock()
+
+				audited++
+			},
+			OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
+				errMut.Lock()
+				defer errMut.Unlock()
+
+				if err != nil {
+					errMap[det.PublicID] = fmt.Sprintf("AUDIT: %s", err.Error())
+				} else {
+					errMap[det.PublicID] = fmt.Sprintf("AUDIT: %s", resp.Error.Reason)
+				}
+			},
+		})
+		if err != nil {
+			errMap[det.PublicID] = err.Error()
+			continue
+		}
+
+		det.PersistChange = true
+
+		dirty = append(dirty, det)
+	}
+
+	err = bulk.Close(ctx)
+	if err != nil {
+		logger.WithError(err).Error("unable to close bulk indexer for audit history")
+		return nil, fmt.Errorf("unable to close bulk indexer for audit history: %w", err)
+	}
+
+	updateDur := time.Since(start)
+
+	logger.WithFields(log.Fields{
+		"bulkUpdated": updated,
+		"bulkAudited": audited,
+		"errMap":      util.TruncateMap(errMap, 5),
+	}).Info("bulk operation complete")
+
+	bulkStats.Updated = updated
+	bulkStats.Audited = audited
+	bulkStats.ErrMap = errMap
+	bulkStats.UpdateDuration = updateDur
+	bulkStats.NeedToSync = dirty
+
+	return bulkStats, nil
+}
+
 func (store *ElasticDetectionstore) DeleteDetection(ctx context.Context, id string) (*model.Detection, error) {
 	logger := log.FromContext(ctx)
 

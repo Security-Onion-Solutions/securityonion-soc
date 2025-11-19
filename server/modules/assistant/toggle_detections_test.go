@@ -68,6 +68,9 @@ func (f *FakeDetectionstore) GetDetectionByPublicId(ctx context.Context, publicI
 func (f *FakeDetectionstore) UpdateDetection(ctx context.Context, detect *model.Detection) (*model.Detection, error) {
 	return nil, nil
 }
+func (f *FakeDetectionstore) BulkAddOverrides(ctx context.Context, newOverrides []*model.Override, detects []*model.Detection, logger log.Interface) (*model.BulkUpdateStats, error) {
+	return nil, nil
+}
 func (f *FakeDetectionstore) DeleteDetection(ctx context.Context, detectID string) (*model.Detection, error) {
 	return nil, nil
 }

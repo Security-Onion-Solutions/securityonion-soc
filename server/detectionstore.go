@@ -20,6 +20,7 @@ type Detectionstore interface {
 	GetDetectionByPublicId(ctx context.Context, publicId string) (*model.Detection, error)
 	UpdateDetection(ctx context.Context, detect *model.Detection) (*model.Detection, error)
 	BulkUpdateDetections(ctx context.Context, newStatus bool, detects []*model.Detection, logger log.Interface) (*model.BulkUpdateStats, error)
+	BulkAddOverrides(ctx context.Context, newOverrides []*model.Override, detects []*model.Detection, logger log.Interface) (*model.BulkUpdateStats, error)
 	DeleteDetection(ctx context.Context, detectID string) (*model.Detection, error)
 	GetAllDetections(ctx context.Context, opts ...model.GetAllOption) (map[string]*model.Detection, error) // map[detection.PublicId]detection
 	Query(ctx context.Context, query string, max int) ([]interface{}, error)

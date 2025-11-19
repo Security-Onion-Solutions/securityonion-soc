@@ -9,7 +9,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -20,27 +19,39 @@ import (
 )
 
 func init() {
-	t := &ToggleDetectionsTool{}
+	t := &AddOverridesTool{}
 	knownTools[t.GetName()] = t
 }
 
-type ToggleDetectionsTool struct{}
+type AddOverridesTool struct{}
 
-func (t *ToggleDetectionsTool) GetName() string {
-	return "toggle_detections"
+func (t *AddOverridesTool) GetName() string {
+	return "add_overrides"
 }
 
-func (t *ToggleDetectionsTool) GetDescription() string {
-	return "Enable or disable detections in Security Onion (per the user's request) by querying for them with a search filter.\n" +
-		"- Search for detections by referencing any potentially relevant field(s), whichever you see fit from the ones described to you.\n" +
-		"- *IMPORTANT* All queries should include `AND _index:\"*:so-detection\" AND so_kind:detection` appended to the end. The quotes around *:so-detection MUST be included.\n" +
-		"- When searching for detections, specify a date range of 999 days ago unless advised otherwise.\n" +
-		"- Examples for wild cards in the oql_query:\n" +
-		"  - Search terms cannot begin with a wildcard (e.g., `*xyz` the wildcard is ignored, but `xyz*` is valid)\n" +
-		"  - When using wildcards, do not wrap the value in quotes, instead use parentheses (e.g., `so_detection.title:(A B*)` is valid, but `so_detection.title:\"A B*\"` will not work as expected)\n"
+func (t *AddOverridesTool) GetDescription() string {
+	return `Add one or more new overrides to existing detection(s) per the user's request. Search for detections by referencing any potentially relevant field(s), whichever you see fit from the ones described to you.
+	- *IMPORTANT* All detections MUST be of the same language/engine (Suricata or Sigma). Otherwise, the new override(s) won't be compatible with some of them.
+	- *IMPORTANT* All queries should include 'AND _index:"*:so-detection" AND so_kind:detection' appended to the end. The quotes around *:so-detection MUST be included.
+	- When searching for detections, specify a date range of 999 days ago unless advised otherwise.
+	- Examples for wild cards in the oql_query:
+	  - Search terms cannot begin with a wildcard (e.g., "*xyz" the wildcard is ignored, but "xyz*" is valid)
+	  - When using wildcards, do not wrap the value in quotes, instead use parentheses (e.g., so_detection.title:(A B*) is valid, but so_detection.title:"A B*" will not work as expected)
+	The types of overrides and the fields for each override can vary between the Suricata and Sigma languages.
+	YARA does not have overrides. The 5 fields that all overrides do share in common, no matter the language, are "isEnabled", "createdAt", "updatedAt", "type", and "note".
+	The "note" field is the only one that can be empty. Here is a run-down of the language-specific override types and their respective fields and potential values:
+	Suricata:
+	- 3 different values for "type": "modify", "suppress", and "threshold"
+	  - "modify" overrides also have the fields "regex" and "value".
+	  - "suppress" overrides also have the fields "track" and "ip". The "track" field can ONLY take ONE of the following 3 values: "by_dst", "by_src", or "by_either". The "ip" field can be in CIDR notation or a Suricata variable.
+	  - "threshold" overrides also have the fields "thresholdType", "track", "count", and "seconds". The "track" field can only take one of 2 values: "by_dst" or "by_src". The "thresholdType" field can only take one of 3 values: "threshold", "limit", or "both".
+	Sigma:
+	- Only 1 value for "type": "customFilter"
+	  - "customFilter" overrides also have a field called "customFilter", where you put the actual filter.
+	*IMPORTANT* When creating a new override, DO NOT include createdAt or updatedAt fields for the new override.`
 }
 
-func (t *ToggleDetectionsTool) GetSchema() model.JSONSchema {
+func (t *AddOverridesTool) GetSchema() model.JSONSchema {
 	return model.JSONSchema{
 		Json: &model.ToolSchema{
 			Type: "object",
@@ -72,10 +83,32 @@ func (t *ToggleDetectionsTool) GetSchema() model.JSONSchema {
 						"- so_detection.service: Used by Sigma rules for filtering a subset of log outputs to a specific server. Example: \"sshd\"\n" +
 						"- @timestamp: The date and time when this detection was last created/updated/modified. Example: \"2025-11-12T19:38:17.413984706Z\"",
 				},
-				"enable": {
+				"overrides": {
 					Type: "string",
-					Description: "This is a \"true\"/\"false\" value based on whether the user wants to enable or disable the detections at hand. A value of \"true\" corresponds to the enable operation, and \"false\" corresponds to the disable operation.\n" +
-						"*IMPORTANT* This can only have one of two values: \"true\" or \"false\".",
+					Description: `The new overrides to add to the detections at hand. These will be appended to the existing overrides block for each queried detection.
+					This field should be a list of the new override(s), in string format. Note that even in the case where there is only one new override being added, this new override
+					should still be placed inside a list, with the entire input in string format. Here is an example input for this field, in the case where the user wants
+					to append two new overrides to each of the detections returned by the search_filter:
+[
+	{
+		"note": "",
+		"seconds": 60,
+		"isEnabled": true,
+		"count": 10,
+		"type": "threshold",
+		"track": "by_src",
+		"thresholdType": "both",
+	},
+	{
+		"note": "Override Note",
+		"regex": "rev:1;",
+		"isEnabled": true,
+		"type": "modify",
+		"value": "rev:2;",
+	}
+]
+					The above example should be passed as an input in string format. The above "overrides" argument is only the *new* overrides that the user wants to add to the given detection(s). This argument
+					should NOT include any existing overrides from the given detections' so_detection.overrides blocks, only new ones.`,
 				},
 				"range_start": {
 					Type:        "string",
@@ -92,7 +125,7 @@ func (t *ToggleDetectionsTool) GetSchema() model.JSONSchema {
 				"limit": {
 					Type: "integer",
 					Description: `The maximum number of detections to return. Unless some kind of limit is applicable to the user's request, this field should be left out.
-						Here's an example where "limit" would be useful: "enable the 5 most recent suricata detections".`,
+						Here's an example where "limit" would be useful: "add the following override to the 5 most recent suricata detections: ...".`,
 				},
 			},
 			Required: []string{"search_filter"},
@@ -100,23 +133,23 @@ func (t *ToggleDetectionsTool) GetSchema() model.JSONSchema {
 	}
 }
 
-type toggleDetectionsArgs struct {
+type AddOverridesArgs struct {
 	SearchFilter string `json:"search_filter"`
-	Enable       string `json:"enable" enums:"true,false"`
+	Overrides    string `json:"overrides" example:"[{\"note\":\"\",\"seconds\":60,\"isEnabled\":true,\"count\":10,\"type\":\"threshold\",\"track\":\"by_src\",\"thresholdType\":\"both\"},{\"note\":\"Override Note\",\"regex\":\"rev:1;\",\"isEnabled\":true,\"type\":\"modify\",\"value\":\"rev:2;\"}]"`
 	RangeStart   string `json:"range_start,omitempty"`
 	RangeEnd     string `json:"range_end,omitempty"`
 	RangeFormat  string `json:"range_format,omitempty"`
 	Limit        int    `json:"limit"`
 }
 
-func (t *ToggleDetectionsTool) Execute(ctx context.Context, srv *server.Server, params string, auxData string) (result *model.ToolResponse, err error) {
+func (t *AddOverridesTool) Execute(ctx context.Context, srv *server.Server, params string, auxData string) (result *model.ToolResponse, err error) {
 	logger := log.FromContext(ctx)
 
 	logger.WithField("toolParameters", params).Info("running tool for assistant")
 
 	userId := ctx.Value(web.ContextKeyRequestorId).(string)
 
-	args := &toggleDetectionsArgs{}
+	args := &AddOverridesArgs{}
 	result = &model.ToolResponse{
 		ToolName:       t.GetName(),
 		OnBehalfOfUser: userId,
@@ -136,9 +169,11 @@ func (t *ToggleDetectionsTool) Execute(ctx context.Context, srv *server.Server, 
 
 	result.Parameters = args
 
-	enableBool, err := strconv.ParseBool(args.Enable)
+	var newOverrides []*model.Override
+
+	err = json.Unmarshal([]byte(args.Overrides), &newOverrides)
 	if err != nil {
-		return nil, fmt.Errorf("invalid value for argument \"enable\": %w", err)
+		return nil, fmt.Errorf("couldn't unmarshal overrides param: %w", err)
 	}
 
 	query := args.SearchFilter
@@ -180,67 +215,48 @@ func (t *ToggleDetectionsTool) Execute(ctx context.Context, srv *server.Server, 
 		detects = append(detects, det)
 	}
 
-	bulkStats, err := srv.Detectionstore.BulkUpdateDetections(ctx, enableBool, detects, logger)
+	engInt, ok := srv.DetectionEngines.Load(detects[0].Engine)
+	if !ok {
+		logger.WithField("detectionEngine", detects[0].Engine).Error("unsupported engine")
+		return nil, fmt.Errorf("unsupported engine")
+	}
+
+	engine := engInt.(server.DetectionEngine)
+
+	bulkStats, err := srv.Detectionstore.BulkAddOverrides(ctx, newOverrides, detects, logger)
 	if err != nil {
-		logger.WithError(err).Error("error updating detections")
-		return nil, fmt.Errorf("error updating detections: %w", err)
+		logger.WithError(err).Error("error adding overrides")
+		return nil, fmt.Errorf("error adding overrides: %w", err)
 	}
 
 	syncDetects := bulkStats.NeedToSync
 	syncStart := time.Now()
-	errMap := map[string]string{}
 
-	byEngine := map[model.EngineName][]*model.Detection{}
-	for _, detectCurr := range syncDetects {
-		byEngine[detectCurr.Engine] = append(byEngine[detectCurr.Engine], detectCurr)
-	}
-
-	srv.DetectionEngines.Range(func(n, engineInt interface{}) bool {
-		name := n.(model.EngineName)
-		engine := engineInt.(server.DetectionEngine)
-
-		if len(byEngine[name]) != 0 {
-			var eMap map[string]string
-
-			eMap, err = engine.SyncLocalDetections(ctx, byEngine[name])
-			for sid, e := range eMap {
-				errMap[sid] = e
-			}
-			if err != nil {
-				return false
-			}
-		}
-
-		return true
-	})
-
+	errMap, err := engine.SyncLocalDetections(ctx, syncDetects)
 	if err != nil {
-		logger.WithError(err).Error("unable to sync detections")
-		return nil, fmt.Errorf("unable to sync detections: %w", err)
+		logger.WithError(err).Error("unable to sync detection")
+		return nil, fmt.Errorf("unable to sync detection: %w", err)
 	}
 
 	if len(errMap) != 0 {
-		logger.WithField("errMap", errMap).Error("unable to sync detections")
-		return nil, fmt.Errorf("unable to sync detections")
+		logger.WithField("errMap", errMap).Error("unable to sync detection")
+		return nil, fmt.Errorf("unable to sync detection")
 	}
 
 	syncDur := time.Since(syncStart)
 
-	var opString string
-	if enableBool {
-		opString = "Enabled"
-	} else {
-		opString = "Disabled"
+	plural := ""
+	if len(newOverrides) > 1 {
+		plural = "s"
 	}
 
 	result.Result = fmt.Sprintf(
-		"Successfully %s %d detections. %s=%d, Audited=%d, Filtered=%d, Errors=%v, UpdateDuration=%s, SyncDuration=%s",
-		opString,
+		"Successfully added %d override%s to %d detections. Updated=%d, Audited=%d, Errors=%v, UpdateDuration=%s, SyncDuration=%s",
+		len(newOverrides),
+		plural,
 		bulkStats.Updated,
-		opString,
 		bulkStats.Updated,
 		bulkStats.Audited,
-		bulkStats.Filtered,
 		bulkStats.ErrMap,
 		bulkStats.UpdateDuration,
 		syncDur,
