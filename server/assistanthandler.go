@@ -496,8 +496,7 @@ func (h *AssistantHandler) GetSessionDetails(w http.ResponseWriter, r *http.Requ
 	}
 
 	if len(session) == 0 {
-		logger.Error("session not found")
-		web.Respond(w, r, http.StatusNotFound, "session not found")
+		web.Respond(w, r, http.StatusOK, &model.AssistantSessionDetails{})
 
 		return
 	}
