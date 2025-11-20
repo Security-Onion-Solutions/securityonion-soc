@@ -116,7 +116,7 @@ func (t *ToggleDetectionsTool) Execute(ctx context.Context, srv *server.Server, 
 
 	err = srv.CheckAuthorized(ctx, "write", "detections")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("user is not authorized to write detections: %w", err)
 	}
 
 	userId := ctx.Value(web.ContextKeyRequestorId).(string)
@@ -136,14 +136,14 @@ func (t *ToggleDetectionsTool) Execute(ctx context.Context, srv *server.Server, 
 
 	err = json.Unmarshal([]byte(params), args)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("couldn't unmarshal params: %w", err)
 	}
 
 	result.Parameters = args
 
 	enableBool, err := strconv.ParseBool(args.Enable)
 	if err != nil {
-		return nil, fmt.Errorf("invalid value for argument \"enable\": %w", err)
+		return nil, fmt.Errorf("invalid value %s for argument \"enable\": %w", args.Enable, err)
 	}
 
 	query := args.SearchFilter
@@ -163,7 +163,7 @@ func (t *ToggleDetectionsTool) Execute(ctx context.Context, srv *server.Server, 
 
 	detectObjects, err := srv.Detectionstore.QueryWithRange(ctx, query, args.RangeStart, args.RangeEnd, args.RangeFormat, detectLimit)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to search for detections with query %s: %w", query, err)
 	}
 
 	if len(detectObjects) == 0 {
@@ -221,7 +221,7 @@ func (t *ToggleDetectionsTool) Execute(ctx context.Context, srv *server.Server, 
 
 	if len(errMap) != 0 {
 		logger.WithField("errMap", errMap).Error("unable to sync detections")
-		return nil, fmt.Errorf("unable to sync detections")
+		return nil, fmt.Errorf("unable to sync detections: %v", errMap)
 	}
 
 	syncDur := time.Since(syncStart)

@@ -112,7 +112,7 @@ func (t *QueryDetectionsTool) Execute(ctx context.Context, server *server.Server
 
 	err = server.CheckAuthorized(ctx, "read", "detections")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("user is not authorized to read detections: %w", err)
 	}
 
 	userId := ctx.Value(web.ContextKeyRequestorId).(string)
@@ -132,7 +132,7 @@ func (t *QueryDetectionsTool) Execute(ctx context.Context, server *server.Server
 
 	err = json.Unmarshal([]byte(params), args)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("couldn't unmarshal params: %w", err)
 	}
 
 	result.Parameters = args
@@ -180,7 +180,7 @@ func (t *QueryDetectionsTool) Execute(ctx context.Context, server *server.Server
 		strconv.Itoa(metricLimit),
 		strconv.Itoa(detectLimit))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error populating search criteria: %w", err)
 	}
 
 	criteria.SortFields = []*model.SortCriteria{
@@ -192,7 +192,7 @@ func (t *QueryDetectionsTool) Execute(ctx context.Context, server *server.Server
 
 	searchResults, err := server.Eventstore.Search(ctx, criteria)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to search for detections: %w", err)
 	}
 
 	detectEvents := searchResults.Events
@@ -214,7 +214,7 @@ func (t *QueryDetectionsTool) Execute(ctx context.Context, server *server.Server
 	// Convert to JSON
 	resultJSON, err := json.MarshalIndent(filteredDetects, "", "  ")
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal result: %w", err)
+		return nil, fmt.Errorf("failed to marshal %d filtered detections: %w", len(filteredDetects), err)
 	}
 
 	// Log filtered result size and preview

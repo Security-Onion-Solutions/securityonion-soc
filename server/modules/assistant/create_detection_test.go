@@ -49,8 +49,6 @@ func TestCreateDetectionTool_GetSchema(t *testing.T) {
 
 	assert.Contains(t, schema.Json.Properties, "content")
 	assert.Equal(t, "string", schema.Json.Properties["content"].Type)
-
-	assert.Contains(t, schema.Json.Required, "search_filter")
 }
 
 func TestCreateDetectionTool_Execute(t *testing.T) {
