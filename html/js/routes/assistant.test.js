@@ -5023,3 +5023,61 @@ test('messageClassesFromTags', () => {
   let result = comp.messageClassesFromTags(tags);
   expect(result).toEqual(['msgTag-important', 'msgTag-error', 'msgTag-context_compression']);
 });
+
+test('toggleSharedSession', async () => {
+  const _updateSessionTag = comp.updateSessionTag;
+  const _loadStoredChats = comp.loadStoredChats;
+  comp.updateSessionTag = jest.fn();
+  comp.loadStoredChats = jest.fn();
+
+  // Removing 'shared' tag
+  comp.currentChatId = 'session_123';
+  comp.chatHistoryById = {
+    'session_123': { tags: ["shared"], userId: 'me' },
+  };
+  comp.$root.user = { id: 'me' };
+
+  await comp.toggleSharedSession();
+
+  expect(comp.updateSessionTag).toHaveBeenCalledTimes(1);
+  expect(comp.updateSessionTag).toHaveBeenCalledWith(comp.currentChatId, 'remove', 'shared');
+  expect(comp.loadStoredChats).toHaveBeenCalledTimes(1);
+
+  // Can't change a session you don't own
+  comp.updateSessionTag.mockClear();
+  comp.loadStoredChats.mockClear();
+
+  comp.chatHistoryById[comp.currentChatId].userId = 'u';
+
+  await comp.toggleSharedSession();
+
+  expect(comp.updateSessionTag).toHaveBeenCalledTimes(0);
+  expect(comp.loadStoredChats).toHaveBeenCalledTimes(0);
+
+  // Adding 'shared' tag
+  comp.chatHistoryById[comp.currentChatId].userId = 'me';
+  comp.updateSessionTag.mockClear();
+  comp.loadStoredChats.mockClear();
+
+  comp.chatHistoryById[comp.currentChatId].tags = ['a', 'b', 'c'];
+
+  await comp.toggleSharedSession();
+
+  expect(comp.updateSessionTag).toHaveBeenCalledTimes(1);
+  expect(comp.updateSessionTag).toHaveBeenCalledWith(comp.currentChatId, 'add', 'shared');
+  expect(comp.loadStoredChats).toHaveBeenCalledTimes(1);
+
+  // Unknown session
+  comp.updateSessionTag.mockClear();
+  comp.loadStoredChats.mockClear();
+
+  comp.chatHistoryById = { 'other-session': {}};
+
+  await comp.toggleSharedSession();
+
+  expect(comp.updateSessionTag).toHaveBeenCalledTimes(0);
+  expect(comp.loadStoredChats).toHaveBeenCalledTimes(0);
+
+  comp.updateSessionTag = _updateSessionTag;
+  comp.loadStoredChats = _loadStoredChats;
+});

@@ -8,6 +8,8 @@ loadPageTemplate('page-assistant', 'pages/assistant.html');
 
 const MSGTAG_CONTEXTCOMPRESSION = "context_compression";
 
+const SESTAG_SHARED = 'shared';
+
 routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
   template: '#page-assistant',
   data() { return {
@@ -176,6 +178,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
               timestamp: session.createTime || new Date().toISOString(),
               lastUpdated: session.createTime || new Date().toISOString(),
               tags: session.tags || [],
+              userId: session.userId,
             };
             this.chatHistoryById[session.sessionId] = s;
 
@@ -1875,15 +1878,13 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       return tags.map(tag => 'msgTag-' + tag);
     },
     async toggleSharedSession() {
-      const tag = 'shared';
-
       const session = this.chatHistoryById[this.currentChatId];
-      if (!session) return;
+      if (!session || session.userId !== this.$root.user.id) return;
       
-      const hasTag = (session.tags || []).includes(tag);
+      const hasTag = (session.tags || []).includes(SESTAG_SHARED);
       const action = hasTag ? 'remove' : 'add';
       
-      await this.updateSessionTag(this.currentChatId, action, tag);
+      await this.updateSessionTag(this.currentChatId, action, SESTAG_SHARED);
 
       await this.loadStoredChats();
     },
