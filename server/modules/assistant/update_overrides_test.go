@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/mock"
@@ -247,6 +248,9 @@ func TestUpdateOverridesTool_Execute(t *testing.T) {
 
 			mockServer := &server.Server{
 				Detectionstore: mockDetectionstore,
+				Config: &config.ServerConfig{
+					DeveloperEnabled: true,
+				},
 			}
 
 			if tc.mockEngineError == nil && tc.mockDetection != nil {
@@ -332,6 +336,9 @@ func TestUpdateOverridesTool_Execute_TimestampHandling(t *testing.T) {
 
 	mockServer := &server.Server{
 		Detectionstore: mockDetectionstore,
+		Config: &config.ServerConfig{
+			DeveloperEnabled: true,
+		},
 	}
 	mockServer.DetectionEngines.Store(model.EngineNameSuricata, mockDetectionEngine)
 
@@ -414,6 +421,9 @@ func TestUpdateOverridesTool_Execute_EmptyOverrides(t *testing.T) {
 
 	mockServer := &server.Server{
 		Detectionstore: mockDetectionstore,
+		Config: &config.ServerConfig{
+			DeveloperEnabled: true,
+		},
 	}
 	mockServer.DetectionEngines.Store(model.EngineNameSuricata, mockDetectionEngine)
 

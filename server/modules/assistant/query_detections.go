@@ -110,6 +110,11 @@ func (t *QueryDetectionsTool) Execute(ctx context.Context, server *server.Server
 
 	logger.WithField("toolParameters", params).Info("running tool for assistant")
 
+	err = server.CheckAuthorized(ctx, "read", "detections")
+	if err != nil {
+		return nil, err
+	}
+
 	userId := ctx.Value(web.ContextKeyRequestorId).(string)
 
 	args := &queryDetectionsArgs{}
@@ -183,11 +188,6 @@ func (t *QueryDetectionsTool) Execute(ctx context.Context, server *server.Server
 			Field: "@timestamp",
 			Order: "desc",
 		},
-	}
-
-	err = server.CheckAuthorized(ctx, "read", "detections")
-	if err != nil {
-		return nil, err
 	}
 
 	searchResults, err := server.Eventstore.Search(ctx, criteria)

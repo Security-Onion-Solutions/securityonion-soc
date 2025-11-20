@@ -114,6 +114,11 @@ func (t *ToggleDetectionsTool) Execute(ctx context.Context, srv *server.Server, 
 
 	logger.WithField("toolParameters", params).Info("running tool for assistant")
 
+	err = srv.CheckAuthorized(ctx, "write", "detections")
+	if err != nil {
+		return nil, err
+	}
+
 	userId := ctx.Value(web.ContextKeyRequestorId).(string)
 
 	args := &toggleDetectionsArgs{}
@@ -154,11 +159,6 @@ func (t *ToggleDetectionsTool) Execute(ctx context.Context, srv *server.Server, 
 		detectLimit = args.Limit
 	} else {
 		detectLimit = 10000
-	}
-
-	err = srv.CheckAuthorized(ctx, "write", "detections")
-	if err != nil {
-		return nil, err
 	}
 
 	detectObjects, err := srv.Detectionstore.QueryWithRange(ctx, query, args.RangeStart, args.RangeEnd, args.RangeFormat, detectLimit)

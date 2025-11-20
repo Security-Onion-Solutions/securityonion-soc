@@ -93,6 +93,11 @@ func (t *UpdateDetectionContentTool) Execute(ctx context.Context, srv *server.Se
 
 	logger.WithField("toolParameters", params).Info("running tool for assistant")
 
+	err = srv.CheckAuthorized(ctx, "write", "detections")
+	if err != nil {
+		return nil, err
+	}
+
 	userId := ctx.Value(web.ContextKeyRequestorId).(string)
 
 	args := &updateDetectionContentArgs{}

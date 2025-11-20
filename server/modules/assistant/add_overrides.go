@@ -207,6 +207,11 @@ func (t *AddOverridesTool) Execute(ctx context.Context, srv *server.Server, para
 
 	logger.WithField("toolParameters", params).Info("running tool for assistant")
 
+	err = srv.CheckAuthorized(ctx, "write", "detections")
+	if err != nil {
+		return nil, err
+	}
+
 	userId := ctx.Value(web.ContextKeyRequestorId).(string)
 
 	args := &AddOverridesArgs{}
@@ -285,11 +290,6 @@ func (t *AddOverridesTool) Execute(ctx context.Context, srv *server.Server, para
 		detectLimit = args.Limit
 	} else {
 		detectLimit = 10000
-	}
-
-	err = srv.CheckAuthorized(ctx, "write", "detections")
-	if err != nil {
-		return nil, err
 	}
 
 	detectObjects, err := srv.Detectionstore.QueryWithRange(ctx, query, args.RangeStart, args.RangeEnd, args.RangeFormat, detectLimit)

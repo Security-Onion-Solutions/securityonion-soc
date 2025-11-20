@@ -69,6 +69,11 @@ func (t *CreateDetectionTool) Execute(ctx context.Context, srv *server.Server, p
 
 	logger.WithField("toolParameters", params).Info("running tool for assistant")
 
+	err = srv.CheckAuthorized(ctx, "write", "detections")
+	if err != nil {
+		return nil, err
+	}
+
 	userId := ctx.Value(web.ContextKeyRequestorId).(string)
 
 	args := &createDetectionArgs{}

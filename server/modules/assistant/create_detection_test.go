@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/mock"
@@ -262,6 +263,9 @@ func TestCreateDetectionTool_Execute(t *testing.T) {
 			mockServer := &server.Server{
 				Detectionstore: mockDetectionstore,
 				Userstore:      mockUserstore,
+				Config: &config.ServerConfig{
+					DeveloperEnabled: true,
+				},
 			}
 
 			// Set up detection engine expectations if not expecting engine error
@@ -367,6 +371,9 @@ func TestCreateDetectionTool_Execute_VerifyContextPropagation(t *testing.T) {
 	mockServer := &server.Server{
 		Detectionstore: mockDetectionstore,
 		Userstore:      mockUserstore,
+		Config: &config.ServerConfig{
+			DeveloperEnabled: true,
+		},
 	}
 	mockServer.DetectionEngines.Store(model.EngineNameElastAlert, mockDetectionEngine)
 
@@ -410,6 +417,9 @@ func TestCreateDetectionTool_Execute_OverrideTimestamps(t *testing.T) {
 	mockServer := &server.Server{
 		Detectionstore: mockDetectionstore,
 		Userstore:      mockUserstore,
+		Config: &config.ServerConfig{
+			DeveloperEnabled: true,
+		},
 	}
 	mockServer.DetectionEngines.Store(model.EngineNameElastAlert, mockDetectionEngine)
 
@@ -471,6 +481,9 @@ func TestCreateDetectionTool_Execute_AuthorAssignment(t *testing.T) {
 	mockServer := &server.Server{
 		Detectionstore: mockDetectionstore,
 		Userstore:      mockUserstore,
+		Config: &config.ServerConfig{
+			DeveloperEnabled: true,
+		},
 	}
 	mockServer.DetectionEngines.Store(model.EngineNameElastAlert, mockDetectionEngine)
 

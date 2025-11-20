@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/mock"
@@ -359,6 +360,9 @@ func TestUpdateDetectionContentTool_Execute(t *testing.T) {
 			// Create mock server
 			mockServer := &server.Server{
 				Detectionstore: mockDetectionstore,
+				Config: &config.ServerConfig{
+					DeveloperEnabled: true,
+				},
 			}
 
 			// Set up detection engine expectations if not expecting engine error
@@ -485,6 +489,9 @@ func TestUpdateDetectionContentTool_Execute_VerifyContextPropagation(t *testing.
 
 	mockServer := &server.Server{
 		Detectionstore: mockDetectionstore,
+		Config: &config.ServerConfig{
+			DeveloperEnabled: true,
+		},
 	}
 	mockServer.DetectionEngines.Store(model.EngineNameElastAlert, mockDetectionEngine)
 
@@ -534,6 +541,9 @@ func TestUpdateDetectionContentTool_Execute_ContentUpdate(t *testing.T) {
 
 	mockServer := &server.Server{
 		Detectionstore: mockDetectionstore,
+		Config: &config.ServerConfig{
+			DeveloperEnabled: true,
+		},
 	}
 	mockServer.DetectionEngines.Store(model.EngineNameElastAlert, mockDetectionEngine)
 
@@ -604,6 +614,9 @@ func TestUpdateDetectionContentTool_Execute_TimeToExecute(t *testing.T) {
 
 	mockServer := &server.Server{
 		Detectionstore: mockDetectionstore,
+		Config: &config.ServerConfig{
+			DeveloperEnabled: true,
+		},
 	}
 	mockServer.DetectionEngines.Store(model.EngineNameElastAlert, mockDetectionEngine)
 
