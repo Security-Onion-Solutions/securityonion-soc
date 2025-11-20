@@ -839,13 +839,11 @@ func (store *ElasticDetectionstore) BulkAddOverrides(ctx context.Context, newOve
 		currLang = det.Language
 	}
 
-	engInt, ok := store.server.DetectionEngines.Load(detects[0].Engine)
+	_, ok := store.server.DetectionEngines.Load(detects[0].Engine)
 	if !ok {
 		logger.WithField("detectionEngine", detects[0].Engine).Error("unsupported engine")
-		return nil, fmt.Errorf("unsupported engine")
+		return nil, fmt.Errorf("unsupported engine %s", detects[0].Engine)
 	}
-
-	engine := engInt.(server.DetectionEngine)
 
 	for i := range detects {
 		detect := detects[i]
@@ -857,12 +855,6 @@ func (store *ElasticDetectionstore) BulkAddOverrides(ctx context.Context, newOve
 		if err != nil {
 			logger.WithError(err).Error("invalid override")
 			return nil, fmt.Errorf("invalid override for detection with Public ID %s: %w", detect.PublicID, err)
-		}
-
-		_, err = engine.ApplyFilters(detect)
-		if err != nil {
-			logger.WithError(err).Error("unable to apply filters for detection")
-			return nil, fmt.Errorf("unable to apply filters for detection with Public ID %s: %w", detect.PublicID, err)
 		}
 
 		document, index, err := store.ConvertObjectToDocument(ctx, "detection", detect, &detect.Auditable, true, nil, nil)
