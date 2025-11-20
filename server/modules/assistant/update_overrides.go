@@ -294,12 +294,6 @@ func (t *UpdateOverridesTool) Execute(ctx context.Context, srv *server.Server, p
 
 	engine := engInt.(server.DetectionEngine)
 
-	_, err = engine.ApplyFilters(detect)
-	if err != nil {
-		logger.WithError(err).WithField("detectionPublicId", detect.PublicID).Error("unable to apply filters for detection")
-		return nil, fmt.Errorf("unable to apply filters for detection with Public ID %s: %w", detect.PublicID, err)
-	}
-
 	detect.Kind = ""
 	detect.Operation = ""
 

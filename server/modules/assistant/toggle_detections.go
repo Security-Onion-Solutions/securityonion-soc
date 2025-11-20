@@ -161,24 +161,22 @@ func (t *ToggleDetectionsTool) Execute(ctx context.Context, srv *server.Server, 
 		detectLimit = 10000
 	}
 
-	detectObjects, err := srv.Detectionstore.QueryWithRange(ctx, query, args.RangeStart, args.RangeEnd, args.RangeFormat, detectLimit)
+	detectEvents, err := srv.Detectionstore.QueryWithRange(ctx, query, args.RangeStart, args.RangeEnd, args.RangeFormat, detectLimit)
 	if err != nil {
 		return nil, fmt.Errorf("unable to search for detections with query %s: %w", query, err)
 	}
 
-	if len(detectObjects) == 0 {
+	detects, err := srv.Detectionstore.ConvertEventsToDetections(ctx, detectEvents)
+	if err != nil {
+		return nil, fmt.Errorf("unable to convert events to detections: %w", err)
+	}
+
+	if len(detects) == 0 {
 		result.Result = "No detections found"
 		return result, nil
 	}
 
-	logger.WithField("detectionsFound", len(detectObjects)).Info("query executed successfully")
-
-	detects := []*model.Detection{}
-
-	for _, d := range detectObjects {
-		det := d.(*model.Detection)
-		detects = append(detects, det)
-	}
+	logger.WithField("detectionsFound", len(detects)).Info("query executed successfully")
 
 	bulkStats, err := srv.Detectionstore.BulkUpdateDetections(ctx, enableBool, detects, logger)
 	if err != nil {

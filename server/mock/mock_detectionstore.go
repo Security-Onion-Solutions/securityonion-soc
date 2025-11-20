@@ -88,6 +88,21 @@ func (mr *MockDetectionstoreMockRecorder) BulkUpdateDetections(ctx, newStatus, d
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BulkUpdateDetections", reflect.TypeOf((*MockDetectionstore)(nil).BulkUpdateDetections), ctx, newStatus, detects, logger)
 }
 
+// ConvertEventsToDetections mocks base method.
+func (m *MockDetectionstore) ConvertEventsToDetections(ctx context.Context, detectEvents *model.EventSearchResults) ([]*model.Detection, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ConvertEventsToDetections", ctx, detectEvents)
+	ret0, _ := ret[0].([]*model.Detection)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ConvertEventsToDetections indicates an expected call of ConvertEventsToDetections.
+func (mr *MockDetectionstoreMockRecorder) ConvertEventsToDetections(ctx, detectEvents any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConvertEventsToDetections", reflect.TypeOf((*MockDetectionstore)(nil).ConvertEventsToDetections), ctx, detectEvents)
+}
+
 // ConvertObjectToDocument mocks base method.
 func (m *MockDetectionstore) ConvertObjectToDocument(ctx context.Context, kind string, obj any, auditable *model.Auditable, isEdit bool, auditDocId, op *string) ([]byte, string, error) {
 	m.ctrl.T.Helper()
@@ -289,10 +304,10 @@ func (mr *MockDetectionstoreMockRecorder) Query(ctx, query, max any) *gomock.Cal
 }
 
 // QueryWithRange mocks base method.
-func (m *MockDetectionstore) QueryWithRange(ctx context.Context, query, rangeStart, rangeEnd, rangeFormat string, limit int) ([]any, error) {
+func (m *MockDetectionstore) QueryWithRange(ctx context.Context, query, rangeStart, rangeEnd, rangeFormat string, limit int) (*model.EventSearchResults, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "QueryWithRange", ctx, query, rangeStart, rangeEnd, rangeFormat, limit)
-	ret0, _ := ret[0].([]any)
+	ret0, _ := ret[0].(*model.EventSearchResults)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

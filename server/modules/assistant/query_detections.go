@@ -9,7 +9,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -137,8 +136,6 @@ func (t *QueryDetectionsTool) Execute(ctx context.Context, server *server.Server
 
 	result.Parameters = args
 
-	var metricLimit, detectLimit int
-	zone := "UTC"
 	query := args.OQLQuery
 
 	if args.Query != "" && args.OQLQuery == "" {
@@ -151,48 +148,16 @@ func (t *QueryDetectionsTool) Execute(ctx context.Context, server *server.Server
 		query = `NOT metadata.raw_index:"logs-soc-so"`
 	}
 
+	var detectLimit int
 	if args.Limit > 0 {
 		detectLimit = args.Limit
 	} else {
 		detectLimit = 10
 	}
-	metricLimit = 10000
 
-	var timeFormat string
-
-	if args.RangeFormat != "" {
-		timeFormat = args.RangeFormat
-	} else {
-		timeFormat = "2006/01/02 3:04:05 PM"
-	}
-
-	var timeRange string
-
-	if args.RangeStart != "" || args.RangeEnd != "" {
-		timeRange = parseRangeAllowRelative(args.RangeStart, args.RangeEnd, timeFormat)
-	}
-
-	criteria := model.NewEventSearchCriteria()
-	err = criteria.Populate(query,
-		timeRange,
-		timeFormat,
-		zone,
-		strconv.Itoa(metricLimit),
-		strconv.Itoa(detectLimit))
+	searchResults, err := server.Detectionstore.QueryWithRange(ctx, query, args.RangeStart, args.RangeEnd, args.RangeFormat, detectLimit)
 	if err != nil {
-		return nil, fmt.Errorf("error populating search criteria: %w", err)
-	}
-
-	criteria.SortFields = []*model.SortCriteria{
-		{
-			Field: "@timestamp",
-			Order: "desc",
-		},
-	}
-
-	searchResults, err := server.Eventstore.Search(ctx, criteria)
-	if err != nil {
-		return nil, fmt.Errorf("failed to search for detections: %w", err)
+		return nil, fmt.Errorf("unable to search for detection events with query %s: %w", query, err)
 	}
 
 	detectEvents := searchResults.Events

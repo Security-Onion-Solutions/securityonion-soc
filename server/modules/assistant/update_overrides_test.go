@@ -61,7 +61,6 @@ func TestUpdateOverridesTool_Execute(t *testing.T) {
 		mockUpdatedDetection  *model.Detection
 		mockGetDetectionError error
 		mockEngineError       error
-		mockApplyFiltersError error
 		mockUpdateError       error
 		mockSyncError         error
 		expectedError         bool
@@ -202,16 +201,6 @@ func TestUpdateOverridesTool_Execute(t *testing.T) {
 			expectedError:   true,
 		},
 		{
-			name:   "apply filters error",
-			params: `{"soc_id": "test-id", "overrides": []}`,
-			mockDetection: &model.Detection{
-				Auditable: model.Auditable{Id: "test-id"},
-				Engine:    model.EngineNameSuricata,
-			},
-			mockApplyFiltersError: errors.New("failed to apply filters"),
-			expectedError:         true,
-		},
-		{
 			name:   "update detection error",
 			params: `{"soc_id": "test-id", "overrides": []}`,
 			mockDetection: &model.Detection{
@@ -278,18 +267,13 @@ func TestUpdateOverridesTool_Execute(t *testing.T) {
 						// Don't set up engine expectations since validation fails early
 					} else if tc.mockEngineError != nil {
 						// Don't set up engine expectations for unsupported engine
-					} else if tc.mockApplyFiltersError != nil {
-						mockDetectionEngine.EXPECT().ApplyFilters(gomock.Any()).Return(false, tc.mockApplyFiltersError)
 					} else if tc.mockUpdateError != nil {
-						mockDetectionEngine.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
 						mockDetectionstore.EXPECT().UpdateDetection(ctx, gomock.Any()).Return(nil, tc.mockUpdateError)
 					} else if tc.mockSyncError != nil {
-						mockDetectionEngine.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
 						mockDetectionstore.EXPECT().UpdateDetection(ctx, gomock.Any()).Return(tc.mockUpdatedDetection, nil)
 						mockDetectionEngine.EXPECT().SyncLocalDetections(ctx, gomock.Any()).Return(nil, tc.mockSyncError)
 					} else {
 						// Successful case
-						mockDetectionEngine.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
 						mockDetectionstore.EXPECT().UpdateDetection(ctx, gomock.Any()).DoAndReturn(func(ctx context.Context, detect *model.Detection) (*model.Detection, error) {
 							assert.Equal(t, "", detect.Kind)
 							assert.Equal(t, "", detect.Operation)
@@ -389,7 +373,6 @@ func TestUpdateOverridesTool_Execute_TimestampHandling(t *testing.T) {
 	}
 
 	mockDetectionstore.EXPECT().GetDetection(ctx, "test-id").Return(mockDetection, nil)
-	mockDetectionEngine.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
 	mockDetectionstore.EXPECT().UpdateDetection(ctx, gomock.Any()).DoAndReturn(func(ctx context.Context, detect *model.Detection) (*model.Detection, error) {
 		if len(detect.Overrides) > 0 {
 			override := detect.Overrides[0]
@@ -460,7 +443,6 @@ func TestUpdateOverridesTool_Execute_EmptyOverrides(t *testing.T) {
 	}
 
 	mockDetectionstore.EXPECT().GetDetection(ctx, "test-id").Return(mockDetection, nil)
-	mockDetectionEngine.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
 	mockDetectionstore.EXPECT().UpdateDetection(ctx, gomock.Any()).DoAndReturn(func(ctx context.Context, detect *model.Detection) (*model.Detection, error) {
 		assert.Len(t, detect.Overrides, 0)
 		return mockUpdatedDetection, nil

@@ -265,7 +265,7 @@ func TestToggleDetectionsTool_Execute(t *testing.T) {
 			if tc.mockQueryResults != nil || tc.mockQueryError != nil {
 				mockDetectionstore.EXPECT().
 					QueryWithRange(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(ctx context.Context, query, rangeStart, rangeEnd, rangeFormat string, limit int) ([]interface{}, error) {
+					DoAndReturn(func(ctx context.Context, query, rangeStart, rangeEnd, rangeFormat string, limit int) (*model.EventSearchResults, error) {
 						// Verify the query contains the metadata filter
 						if !strings.Contains(query, `NOT metadata.raw_index:"logs-soc-so"`) {
 							t.Errorf("Query should contain metadata filter, got: %s", query)
@@ -273,9 +273,25 @@ func TestToggleDetectionsTool_Execute(t *testing.T) {
 						if tc.mockQueryError != nil {
 							return nil, tc.mockQueryError
 						}
-						return tc.mockQueryResults, nil
+						// Return EventSearchResults with empty Events slice
+						return &model.EventSearchResults{Events: []*model.EventRecord{}}, nil
 					}).
 					Times(1)
+
+				// Setup ConvertEventsToDetections expectations
+				if tc.mockQueryError == nil {
+					mockDetectionstore.EXPECT().
+						ConvertEventsToDetections(gomock.Any(), gomock.Any()).
+						DoAndReturn(func(ctx context.Context, detectEvents *model.EventSearchResults) ([]*model.Detection, error) {
+							// Convert []interface{} to []*model.Detection
+							detections := make([]*model.Detection, len(tc.mockQueryResults))
+							for i, obj := range tc.mockQueryResults {
+								detections[i] = obj.(*model.Detection)
+							}
+							return detections, nil
+						}).
+						Times(1)
+				}
 			}
 
 			// Setup BulkUpdateDetections expectations
@@ -452,7 +468,12 @@ func TestToggleDetectionsTool_QueryFiltering(t *testing.T) {
 			mockDetectionstore := mock.NewMockDetectionstore(ctrl)
 			mockDetectionstore.EXPECT().
 				QueryWithRange(gomock.Any(), tc.expectedQuery, gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-				Return([]interface{}{}, nil).
+				Return(&model.EventSearchResults{Events: []*model.EventRecord{}}, nil).
+				Times(1)
+
+			mockDetectionstore.EXPECT().
+				ConvertEventsToDetections(gomock.Any(), gomock.Any()).
+				Return([]*model.Detection{}, nil).
 				Times(1)
 
 			// Create mock server with proper authorization
@@ -515,8 +536,13 @@ func TestToggleDetectionsTool_Authorization(t *testing.T) {
 				// Setup expectations for authorized case
 				mockDetectionstore.EXPECT().
 					QueryWithRange(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-					Return([]interface{}{
-						&model.Detection{
+					Return(&model.EventSearchResults{Events: []*model.EventRecord{}}, nil).
+					Times(1)
+
+				mockDetectionstore.EXPECT().
+					ConvertEventsToDetections(gomock.Any(), gomock.Any()).
+					Return([]*model.Detection{
+						{
 							Auditable: model.Auditable{Id: "detection-1"},
 							PublicID:  "PUB001",
 							Title:     "Test Detection",

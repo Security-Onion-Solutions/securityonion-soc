@@ -328,14 +328,28 @@ func TestAddOverridesTool_Execute(t *testing.T) {
 			if tc.mockQueryResults != nil || tc.mockQueryError != nil {
 				mockDetectionstore.EXPECT().
 					QueryWithRange(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(ctx context.Context, query, rangeStart, rangeEnd, rangeFormat string, limit int) ([]interface{}, error) {
+					DoAndReturn(func(ctx context.Context, query, rangeStart, rangeEnd, rangeFormat string, limit int) (*model.EventSearchResults, error) {
 						// Verify query contains metadata filter
 						assert.Contains(t, query, "NOT metadata.raw_index:")
 						if tc.mockQueryError != nil {
 							return nil, tc.mockQueryError
 						}
-						return tc.mockQueryResults, nil
+						return &model.EventSearchResults{Events: []*model.EventRecord{}}, nil
 					})
+
+				// Setup ConvertEventsToDetections expectations
+				if tc.mockQueryError == nil {
+					mockDetectionstore.EXPECT().
+						ConvertEventsToDetections(gomock.Any(), gomock.Any()).
+						DoAndReturn(func(ctx context.Context, detectEvents *model.EventSearchResults) ([]*model.Detection, error) {
+							// Convert []interface{} to []*model.Detection
+							detections := make([]*model.Detection, len(tc.mockQueryResults))
+							for i, obj := range tc.mockQueryResults {
+								detections[i] = obj.(*model.Detection)
+							}
+							return detections, nil
+						})
+				}
 			}
 
 			if tc.mockBulkAddStats != nil || tc.mockBulkAddError != nil {

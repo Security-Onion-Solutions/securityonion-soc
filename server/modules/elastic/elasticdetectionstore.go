@@ -425,9 +425,7 @@ func (store *ElasticDetectionstore) Query(ctx context.Context, query string, max
 	return objects, err
 }
 
-func (store *ElasticDetectionstore) QueryWithRange(ctx context.Context, query string, rangeStart string, rangeEnd string, rangeFormat string, limit int) (objects []interface{}, err error) {
-	logger := log.FromContext(ctx)
-
+func (store *ElasticDetectionstore) QueryWithRange(ctx context.Context, query string, rangeStart string, rangeEnd string, rangeFormat string, limit int) (detectEvents *model.EventSearchResults, err error) {
 	err = store.server.CheckAuthorized(ctx, "read", "detections")
 	if err != nil {
 		return nil, err
@@ -449,8 +447,6 @@ func (store *ElasticDetectionstore) QueryWithRange(ctx context.Context, query st
 
 	zone := "UTC"
 
-	var results *model.EventSearchResults
-
 	criteria := model.NewEventSearchCriteria()
 	err = criteria.Populate(query,
 		timeRange,  // timeframe range
@@ -470,12 +466,20 @@ func (store *ElasticDetectionstore) QueryWithRange(ctx context.Context, query st
 		},
 	}
 
-	results, err = store.DetectionSearch(ctx, criteria)
+	detectEvents, err = store.DetectionSearch(ctx, criteria)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, event := range results.Events {
+	return detectEvents, err
+}
+
+func (store *ElasticDetectionstore) ConvertEventsToDetections(ctx context.Context, events *model.EventSearchResults) (detects []*model.Detection, err error) {
+	logger := log.FromContext(ctx)
+
+	objects := make([]interface{}, 0, len(events.Events))
+
+	for _, event := range events.Events {
 		var obj interface{}
 
 		obj, err = convertElasticEventToObject(event, store.schemaPrefix)
@@ -486,7 +490,14 @@ func (store *ElasticDetectionstore) QueryWithRange(ctx context.Context, query st
 		}
 	}
 
-	return objects, err
+	detects = make([]*model.Detection, 0, len(objects))
+
+	for _, d := range objects {
+		det := d.(*model.Detection)
+		detects = append(detects, det)
+	}
+
+	return detects, err
 }
 
 func (store *ElasticDetectionstore) DetectionSearch(ctx context.Context, criteria *model.EventSearchCriteria) (*model.EventSearchResults, error) {

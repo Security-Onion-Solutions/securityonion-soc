@@ -100,16 +100,6 @@ func (t *CreateDetectionTool) Execute(ctx context.Context, srv *server.Server, p
 	detect.License = args.License
 	detect.Content = args.Content
 
-	for _, over := range detect.Overrides {
-		if over.CreatedAt.IsZero() {
-			over.CreatedAt = time.Now()
-		}
-
-		if over.UpdatedAt.IsZero() {
-			over.UpdatedAt = time.Now()
-		}
-	}
-
 	detect.Ruleset = detections.RULESET_CUSTOM
 
 	switch detect.Language {

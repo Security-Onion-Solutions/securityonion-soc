@@ -11,8 +11,10 @@ import (
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/server/mock"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 )
 
 func TestQueryDetectionsTool_Execute(t *testing.T) {
@@ -345,20 +347,32 @@ func TestQueryDetectionsTool_Execute(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Create mock eventstore
-			mockEventstore := server.NewFakeEventstore()
-			if tc.mockResults != nil {
-				mockEventstore.SearchResults = []*model.EventSearchResults{tc.mockResults}
-			}
-			if tc.mockError != nil {
-				mockEventstore.Err = tc.mockError
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			// Create mock detectionstore
+			mockDetectionstore := mock.NewMockDetectionstore(ctrl)
+			if tc.mockResults != nil || tc.mockError != nil {
+				mockDetectionstore.EXPECT().
+					QueryWithRange(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(ctx context.Context, query, rangeStart, rangeEnd, rangeFormat string, limit int) (*model.EventSearchResults, error) {
+						// Verify the query contains the metadata filter
+						if !assert.Contains(t, query, `NOT metadata.raw_index:"logs-soc-so"`) {
+							t.Errorf("Query should contain metadata filter, got: %s", query)
+						}
+						if tc.mockError != nil {
+							return nil, tc.mockError
+						}
+						return tc.mockResults, nil
+					}).
+					Times(1)
 			}
 
 			// Create mock server with proper authorization
 			mockServer := server.NewFakeAuthorizedServer(map[string][]string{
 				"test-user-id": {"detections/read"},
 			})
-			mockServer.Eventstore = mockEventstore
+			mockServer.Detectionstore = mockDetectionstore
 
 			// Create context with user ID
 			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user-id")
@@ -377,14 +391,6 @@ func TestQueryDetectionsTool_Execute(t *testing.T) {
 			assert.NotNil(t, result)
 			assert.Equal(t, "query_detections", result.ToolName)
 			assert.Equal(t, "test-user-id", result.OnBehalfOfUser)
-
-			// Verify search criteria was populated correctly
-			if !tc.expectedError && tc.mockError == nil {
-				assert.Len(t, mockEventstore.InputSearchCriterias, 1)
-				criteria := mockEventstore.InputSearchCriterias[0]
-				assert.NotNil(t, criteria)
-				assert.Contains(t, criteria.RawQuery, "NOT metadata.raw_index:")
-			}
 
 			// Assert result content
 			if tc.expectedResult != nil {
