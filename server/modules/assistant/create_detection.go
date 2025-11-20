@@ -46,7 +46,7 @@ func (t *CreateDetectionTool) GetSchema() model.JSONSchema {
 				},
 				"license": {
 					Type:        "string",
-					Description: `The license that applies to this detection. (e.g., "DRL")`,
+					Description: `The license that applies to this detection. (e.g., "DRL") *IMPORTANT*: The license should be left blank unless explicitly instructed by the user what the license should be.`,
 				},
 				"content": {
 					Type:        "string",
