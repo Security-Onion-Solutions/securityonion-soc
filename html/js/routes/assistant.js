@@ -18,6 +18,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     chatHistory: [],
     currentChatId: null,
     creditsRemaining: 0,
+    creditsLoaded: false,
     executingToolsBySession: new Map(), // Map<sessionId, Map<toolUseId, toolUse>>
     toolIndexToIdBySession: new Map(), // Map<sessionId, Map<index, toolUseId>>
     toolQueues: new Map(), // Map<sessionId, Array<toolUseId>>
@@ -267,12 +268,14 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         if (response.data) {
           if (response.data.health_status === 'healthy') {
             this.creditsRemaining = response.data.credit_balance || 0;
+            this.creditsLoaded = true;
           } else {
             throw new Error(this.i18n.assistantBalanceCheckUnhealthy);
           }
         }
       } catch (error) {
         this.$root.showError(this.i18n.assistantUnableToLoadCredits + ': ' + error.message);
+        this.creditsLoaded = true;
       }
     },
     async saveCurrentChat() {

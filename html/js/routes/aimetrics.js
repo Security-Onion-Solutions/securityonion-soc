@@ -71,7 +71,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       { title: "value", value: "value" }
     ],
     creditsRemaining: 0,
-    lowBalanceColorAlert: 500000,
+    creditsLoaded: false,
     searchFilter: '',
     
     // Date range filter properties
@@ -134,7 +134,6 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
   methods: {
     async initAssistant(params) {
       this.assistantEnabled = params["enabled"] && this.$root.isLicensed('oai');
-      this.lowBalanceColorAlert = params["lowBalanceColorAlert"];
       this.paramsLoaded = true;
       if (this.assistantEnabled) {
         this.loadData();
@@ -317,12 +316,14 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         if (response.data) {
           if (response.data.health_status === 'healthy') {
             this.creditsRemaining = response.data.credit_balance || 0;
+            this.creditsLoaded = true;
           } else {
             throw new Error(this.i18n.assistantBalanceCheckUnhealthy);
           }
         }
       } catch (error) {
         this.$root.showError(this.i18n.assistantUnableToLoadCredits + ': ' + error.message);
+        this.creditsLoaded = true;
       }
     },
     async lookupSocId(data) {

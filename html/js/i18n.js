@@ -373,6 +373,7 @@ const i18n = {
       createNewCase: 'Create a new case...',
       createTime: 'Create Time',
       csv: 'CSV',
+      currentModel: 'Current Model',
       custom: 'Custom',
       customFilter: 'Custom Filter',
       darkMode: 'Dark Mode',
