@@ -58,9 +58,9 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       ['totalInputTokens', 'totalOutputTokens', 'totalCredits', 'totalMessages'],
       ['inputTokens', 'outputTokens', 'credits'],
     ],
-    sortBy0: [{ key: 'totalCredits', order: 'desc' }],
-    sortBy1: [{ key: 'createTime', order: 'desc' }],
-    sortBy2: [{ key: 'createTime', order: 'desc' }],
+    sortByUsers: [{ key: 'totalCredits', order: 'desc' }],
+    sortBySessions: [{ key: 'createTime', order: 'desc' }],
+    sortByMessages: [{ key: 'createTime', order: 'desc' }],
     itemsPerPage: 10,
     itemsPerPageOptions: [10,50,250,1000],
     tableSetting: 0, // 0: users 1: sessions 2: messages
@@ -124,9 +124,9 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
   },
   watch: {
     '$route': 'loadData',
-    'sortBy0': 'saveLocalSettings',
-    'sortBy1': 'saveLocalSettings',
-    'sortBy2': 'saveLocalSettings',
+    'sortByUsers': 'saveLocalSettings',
+    'sortBySessions': 'saveLocalSettings',
+    'sortByMessages': 'saveLocalSettings',
     'itemsPerPage': 'saveLocalSettings',
     'autoRefreshInterval': 'resetRefreshTimer',
   },
@@ -252,12 +252,12 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       this.resetRefreshTimer();
     },
     saveLocalSettings() {
-      this.saveSetting('sortBy0', this.sortBy0[0].key, 'totalCredits');
-      this.saveSetting('sortDesc0', this.sortBy0[0].order, 'desc')
-      this.saveSetting('sortBy1', this.sortBy1[0].key, 'createTime');
-      this.saveSetting('sortDesc1', this.sortBy1[0].order, 'desc')
-      this.saveSetting('sortBy2', this.sortBy2[0].key, 'createTime');
-      this.saveSetting('sortDesc2', this.sortBy2[0].order, 'desc')
+      this.saveSetting('sortByUsers', this.sortByUsers[0].key, 'totalCredits');
+      this.saveSetting('sortDescUsers', this.sortByUsers[0].order, 'desc')
+      this.saveSetting('sortBySessions', this.sortBySessions[0].key, 'createTime');
+      this.saveSetting('sortDescSessions', this.sortBySessions[0].order, 'desc')
+      this.saveSetting('sortByMessages', this.sortByMessages[0].key, 'createTime');
+      this.saveSetting('sortDescMessages', this.sortByMessages[0].order, 'desc')
       this.saveSetting('itemsPerPage', this.itemsPerPage, 10);
       this.saveSetting('relativeTimeValue', this.relativeTimeValue, 24);
       this.saveSetting('relativeTimeUnit', this.relativeTimeUnit, RELATIVE_TIME_HOURS);
@@ -265,14 +265,14 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       localStorage['timezone'] = this.zone;
     },
     loadLocalSettings() {
-      if (localStorage['settings.aimetrics.sortBy0']) this.sortBy0[0].key = localStorage['settings.aimetrics.sortBy0'];
-      if (localStorage['settings.aimetrics.sortDesc0']) this.sortBy0[0].order = localStorage['settings.aimetrics.sortDesc0'];
+      if (localStorage['settings.aimetrics.sortByUsers']) this.sortByUsers[0].key = localStorage['settings.aimetrics.sortByUsers'];
+      if (localStorage['settings.aimetrics.sortDescUsers']) this.sortByUsers[0].order = localStorage['settings.aimetrics.sortDescUsers'];
       
-      if (localStorage['settings.aimetrics.sortBy1']) this.sortBy1[0].key = localStorage['settings.aimetrics.sortBy1'];
-      if (localStorage['settings.aimetrics.sortDesc1']) this.sortBy1[0].order = localStorage['settings.aimetrics.sortDesc1'];
+      if (localStorage['settings.aimetrics.sortBySessions']) this.sortBySessions[0].key = localStorage['settings.aimetrics.sortBySessions'];
+      if (localStorage['settings.aimetrics.sortDescSessions']) this.sortBySessions[0].order = localStorage['settings.aimetrics.sortDescSessions'];
       
-      if (localStorage['settings.aimetrics.sortBy2']) this.sortBy2[0].key = localStorage['settings.aimetrics.sortBy2'];
-      if (localStorage['settings.aimetrics.sortDesc2']) this.sortBy2[0].order = localStorage['settings.aimetrics.sortDesc2'];
+      if (localStorage['settings.aimetrics.sortByMessages']) this.sortByMessages[0].key = localStorage['settings.aimetrics.sortByMessages'];
+      if (localStorage['settings.aimetrics.sortDescMessages']) this.sortByMessages[0].order = localStorage['settings.aimetrics.sortDescMessages'];
       
       if (localStorage['settings.aimetrics.itemsPerPage']) this.itemsPerPage = parseInt(localStorage['settings.aimetrics.itemsPerPage']);
       if (localStorage['settings.aimetrics.relativeTimeValue']) this.relativeTimeValue = parseInt(localStorage['settings.aimetrics.relativeTimeValue']);

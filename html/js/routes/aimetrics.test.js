@@ -140,9 +140,9 @@ test('component data initialization', () => {
   expect(comp.headers[1]).toHaveLength(7); // Sessions table headers
   expect(comp.headers[2]).toHaveLength(7); // Messages table headers
   expect(comp.expandedFields).toHaveProperty('1');
-  expect(comp.sortBy0).toEqual([{ key: 'totalCredits', order: 'desc' }]);
-  expect(comp.sortBy1).toEqual([{ key: 'createTime', order: 'desc' }]);
-  expect(comp.sortBy2).toEqual([{ key: 'createTime', order: 'desc' }]);
+  expect(comp.sortByUsers).toEqual([{ key: 'totalCredits', order: 'desc' }]);
+  expect(comp.sortBySessions).toEqual([{ key: 'createTime', order: 'desc' }]);
+  expect(comp.sortByMessages).toEqual([{ key: 'createTime', order: 'desc' }]);
   expect(comp.itemsPerPage).toBe(10);
   expect(comp.itemsPerPageOptions).toEqual([10, 50, 250, 1000]);
   expect(comp.tableSetting).toBe(0);
@@ -255,9 +255,9 @@ test('saveSetting stores value when different from default', () => {
 
 test('saveLocalSettings saves all settings', () => {
   comp.saveSetting = jest.fn();
-  comp.sortBy0 = [{ key: 'email', order: 'asc' }];
-  comp.sortBy1 = [{ key: 'title', order: 'desc' }];
-  comp.sortBy2 = [{ key: 'role', order: 'asc' }];
+  comp.sortByUsers = [{ key: 'email', order: 'asc' }];
+  comp.sortBySessions = [{ key: 'title', order: 'desc' }];
+  comp.sortByMessages = [{ key: 'role', order: 'asc' }];
   comp.itemsPerPage = 50;
   comp.relativeTimeValue = 12;
   comp.relativeTimeUnit = RELATIVE_TIME_MINUTES;
@@ -266,12 +266,12 @@ test('saveLocalSettings saves all settings', () => {
   
   comp.saveLocalSettings();
   
-  expect(comp.saveSetting).toHaveBeenCalledWith('sortBy0', 'email', 'totalCredits');
-  expect(comp.saveSetting).toHaveBeenCalledWith('sortDesc0', 'asc', 'desc');
-  expect(comp.saveSetting).toHaveBeenCalledWith('sortBy1', 'title', 'createTime');
-  expect(comp.saveSetting).toHaveBeenCalledWith('sortDesc1', 'desc', 'desc');
-  expect(comp.saveSetting).toHaveBeenCalledWith('sortBy2', 'role', 'createTime');
-  expect(comp.saveSetting).toHaveBeenCalledWith('sortDesc2', 'asc', 'desc');
+  expect(comp.saveSetting).toHaveBeenCalledWith('sortByUsers', 'email', 'totalCredits');
+  expect(comp.saveSetting).toHaveBeenCalledWith('sortDescUsers', 'asc', 'desc');
+  expect(comp.saveSetting).toHaveBeenCalledWith('sortBySessions', 'title', 'createTime');
+  expect(comp.saveSetting).toHaveBeenCalledWith('sortDescSessions', 'desc', 'desc');
+  expect(comp.saveSetting).toHaveBeenCalledWith('sortByMessages', 'role', 'createTime');
+  expect(comp.saveSetting).toHaveBeenCalledWith('sortDescMessages', 'asc', 'desc');
   expect(comp.saveSetting).toHaveBeenCalledWith('itemsPerPage', 50, 10);
   expect(comp.saveSetting).toHaveBeenCalledWith('relativeTimeValue', 12, 24);
   expect(comp.saveSetting).toHaveBeenCalledWith('relativeTimeUnit', RELATIVE_TIME_MINUTES, RELATIVE_TIME_HOURS);
@@ -281,12 +281,12 @@ test('saveLocalSettings saves all settings', () => {
 
 test('loadLocalSettings loads all settings from localStorage', () => {
   // Mock localStorage values
-  mockLocalStorage['settings.aimetrics.sortBy0'] = 'test';
-  mockLocalStorage['settings.aimetrics.sortDesc0'] = 'desc'
-  mockLocalStorage['settings.aimetrics.sortBy1'] = 'test1';
-  mockLocalStorage['settings.aimetrics.sortDesc1'] = 'asc'
-  mockLocalStorage['settings.aimetrics.sortBy2'] = 'test2';
-  mockLocalStorage['settings.aimetrics.sortDesc2'] = 'desc'
+  mockLocalStorage['settings.aimetrics.sortByUsers'] = 'test';
+  mockLocalStorage['settings.aimetrics.sortDescUsers'] = 'desc'
+  mockLocalStorage['settings.aimetrics.sortBySessions'] = 'test1';
+  mockLocalStorage['settings.aimetrics.sortDescSessions'] = 'asc'
+  mockLocalStorage['settings.aimetrics.sortByMessages'] = 'test2';
+  mockLocalStorage['settings.aimetrics.sortDescMessages'] = 'desc'
   mockLocalStorage['settings.aimetrics.itemsPerPage'] = '25';
   mockLocalStorage['settings.aimetrics.relativeTimeValue'] = '48';
   mockLocalStorage['settings.aimetrics.relativeTimeUnit'] = String(RELATIVE_TIME_DAYS);
@@ -295,9 +295,9 @@ test('loadLocalSettings loads all settings from localStorage', () => {
   
   comp.loadLocalSettings();
   
-  expect(comp.sortBy0).toEqual([{ key: 'test', order: 'desc' }]);
-  expect(comp.sortBy1).toEqual([{ key: 'test1', order: 'asc' }]);
-  expect(comp.sortBy2).toEqual([{ key: 'test2', order: 'desc' }]);
+  expect(comp.sortByUsers).toEqual([{ key: 'test', order: 'desc' }]);
+  expect(comp.sortBySessions).toEqual([{ key: 'test1', order: 'asc' }]);
+  expect(comp.sortByMessages).toEqual([{ key: 'test2', order: 'desc' }]);
   expect(comp.itemsPerPage).toBe(25);
   expect(comp.relativeTimeValue).toBe(48);
   expect(comp.relativeTimeUnit).toBe(RELATIVE_TIME_DAYS);
@@ -1169,7 +1169,7 @@ test('full data loading flow for users', async () => {
 
 test('settings persistence integration', () => {
   // Set up some custom settings
-  comp.sortBy0 = [{ key: 'email', order: 'asc' }];
+  comp.sortByUsers = [{ key: 'email', order: 'asc' }];
   comp.itemsPerPage = 25;
   comp.relativeTimeValue = 48;
   comp.relativeTimeUnit = RELATIVE_TIME_DAYS;
@@ -1180,8 +1180,8 @@ test('settings persistence integration', () => {
   comp.saveLocalSettings();
   
   // Verify localStorage was updated
-  expect(mockLocalStorage['settings.aimetrics.sortBy0']).toBe('email');
-  expect(mockLocalStorage['settings.aimetrics.sortDesc0']).toBe('asc');
+  expect(mockLocalStorage['settings.aimetrics.sortByUsers']).toBe('email');
+  expect(mockLocalStorage['settings.aimetrics.sortDescUsers']).toBe('asc');
   expect(mockLocalStorage['settings.aimetrics.itemsPerPage']).toBe('25');
   expect(mockLocalStorage['settings.aimetrics.relativeTimeValue']).toBe('48');
   expect(mockLocalStorage['settings.aimetrics.relativeTimeUnit']).toBe(String(RELATIVE_TIME_DAYS));
@@ -1189,7 +1189,7 @@ test('settings persistence integration', () => {
   expect(mockLocalStorage['timezone']).toBe('Europe/London');
   
   // Reset component state
-  comp.sortBy0 = [{ key: 'totalCredits', order: 'desc' }];
+  comp.sortByUsers = [{ key: 'totalCredits', order: 'desc' }];
   comp.itemsPerPage = 10;
   comp.relativeTimeValue = 24;
   comp.relativeTimeUnit = RELATIVE_TIME_HOURS;
