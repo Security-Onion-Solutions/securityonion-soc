@@ -104,7 +104,6 @@
 					<v-btn :color="getCompressColor()" class="mx-4" variant="flat" id="compress-context" @click="compressCurrentSession()" :title="i18n.compressContext" data-aid="assistant_banner_compress_context">
 						<v-icon>fa-minimize</v-icon>
 					</v-btn>
-					<div class="text-wrap mr-4" style="font-size: 14px;">{{ i18n.totalCredits }}: <span class="text-primary">{{ formatCount(creditsUsed) }}</span></div>
 					<div class="text-wrap" style="font-size: 14px;">{{ i18n.contextLength }}: <span :class="getContextColor(contextLength)">{{ formatCount(contextLength) }}</span></div>
 				</v-card-title>
 				<v-divider></v-divider>
