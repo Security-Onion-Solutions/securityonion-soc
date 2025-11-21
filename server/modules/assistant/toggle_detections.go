@@ -187,6 +187,7 @@ func (t *ToggleDetectionsTool) Execute(ctx context.Context, srv *server.Server, 
 	syncDetects := bulkStats.NeedToSync
 	syncStart := time.Now()
 	errMap := map[string]string{}
+	errList := []error{}
 
 	byEngine := map[model.EngineName][]*model.Detection{}
 	for _, detectCurr := range syncDetects {
@@ -205,16 +206,16 @@ func (t *ToggleDetectionsTool) Execute(ctx context.Context, srv *server.Server, 
 				errMap[sid] = e
 			}
 			if err != nil {
-				return false
+				errList = append(errList, err)
 			}
 		}
 
 		return true
 	})
 
-	if err != nil {
+	if len(errList) != 0 {
 		logger.WithError(err).Error("unable to sync detections")
-		return nil, fmt.Errorf("unable to sync detections: %w", err)
+		return nil, fmt.Errorf("unable to sync detections: %v", errList)
 	}
 
 	if len(errMap) != 0 {
