@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -292,8 +293,8 @@ func TestPopulateOverridesFromMaps(t *testing.T) {
 					IsEnabled: true,
 					Note:      "Test suppress note",
 					OverrideParameters: model.OverrideParameters{
-						IP:    stringPtr("192.168.1.0/24"),
-						Track: stringPtr("by_src"),
+						IP:    util.Ptr("192.168.1.0/24"),
+						Track: util.Ptr("by_src"),
 					},
 				},
 			},
@@ -322,10 +323,10 @@ func TestPopulateOverridesFromMaps(t *testing.T) {
 					CreatedAt: mustParseTime("2024-01-15T10:00:00Z"),
 					UpdatedAt: mustParseTime("2024-01-15T11:00:00Z"),
 					OverrideParameters: model.OverrideParameters{
-						ThresholdType: stringPtr("limit"),
-						Track:         stringPtr("by_dst"),
-						Count:         intPtr(10),
-						Seconds:       intPtr(60),
+						ThresholdType: util.Ptr("limit"),
+						Track:         util.Ptr("by_dst"),
+						Count:         util.Ptr(10),
+						Seconds:       util.Ptr(60),
 					},
 				},
 			},
@@ -348,8 +349,8 @@ func TestPopulateOverridesFromMaps(t *testing.T) {
 					IsEnabled: false,
 					Note:      "Test modify note",
 					OverrideParameters: model.OverrideParameters{
-						Regex: stringPtr("content:xyz"),
-						Value: stringPtr("content:abc"),
+						Regex: util.Ptr("content:xyz"),
+						Value: util.Ptr("content:abc"),
 					},
 				},
 			},
@@ -371,7 +372,7 @@ func TestPopulateOverridesFromMaps(t *testing.T) {
 					IsEnabled: true,
 					Note:      "Test custom filter note",
 					OverrideParameters: model.OverrideParameters{
-						CustomFilter: stringPtr("sofilter:\n  user.name: test"),
+						CustomFilter: util.Ptr("sofilter:\n  user.name: test"),
 					},
 				},
 			},
@@ -410,8 +411,8 @@ func TestPopulateOverridesFromMaps(t *testing.T) {
 					IsEnabled: true,
 					Note:      "First override",
 					OverrideParameters: model.OverrideParameters{
-						IP:    stringPtr("10.0.0.0/8"),
-						Track: stringPtr("by_either"),
+						IP:    util.Ptr("10.0.0.0/8"),
+						Track: util.Ptr("by_either"),
 					},
 				},
 				{
@@ -419,10 +420,10 @@ func TestPopulateOverridesFromMaps(t *testing.T) {
 					IsEnabled: false,
 					Note:      "Second override",
 					OverrideParameters: model.OverrideParameters{
-						ThresholdType: stringPtr("both"),
-						Track:         stringPtr("by_src"),
-						Count:         intPtr(5),
-						Seconds:       intPtr(120),
+						ThresholdType: util.Ptr("both"),
+						Track:         util.Ptr("by_src"),
+						Count:         util.Ptr(5),
+						Seconds:       util.Ptr(120),
 					},
 				},
 				{
@@ -430,8 +431,8 @@ func TestPopulateOverridesFromMaps(t *testing.T) {
 					IsEnabled: true,
 					Note:      "Third override",
 					OverrideParameters: model.OverrideParameters{
-						Regex: stringPtr("pattern"),
-						Value: stringPtr("replacement"),
+						Regex: util.Ptr("pattern"),
+						Value: util.Ptr("replacement"),
 					},
 				},
 			},
@@ -456,8 +457,8 @@ func TestPopulateOverridesFromMaps(t *testing.T) {
 					IsEnabled: true,
 					Note:      "Test note",
 					OverrideParameters: model.OverrideParameters{
-						IP:    stringPtr("172.16.0.0/12"),
-						Track: stringPtr("by_dst"),
+						IP:    util.Ptr("172.16.0.0/12"),
+						Track: util.Ptr("by_dst"),
 					},
 				},
 			},
@@ -483,8 +484,8 @@ func TestPopulateOverridesFromMaps(t *testing.T) {
 					Note:      "Test note",
 					UpdatedAt: mustParseTime("2024-01-15T11:00:00Z"),
 					OverrideParameters: model.OverrideParameters{
-						IP:    stringPtr("192.168.0.0/16"),
-						Track: stringPtr("by_src"),
+						IP:    util.Ptr("192.168.0.0/16"),
+						Track: util.Ptr("by_src"),
 					},
 				},
 			},
@@ -507,8 +508,8 @@ func TestPopulateOverridesFromMaps(t *testing.T) {
 					IsEnabled: true,
 					Note:      "",
 					OverrideParameters: model.OverrideParameters{
-						IP:    stringPtr("10.10.10.0/24"),
-						Track: stringPtr("by_src"),
+						IP:    util.Ptr("10.10.10.0/24"),
+						Track: util.Ptr("by_src"),
 					},
 				},
 			},
@@ -537,14 +538,14 @@ func TestPopulateOverridesFromMaps(t *testing.T) {
 					IsEnabled: true,
 					Note:      "Complete override",
 					OverrideParameters: model.OverrideParameters{
-						ThresholdType: stringPtr("threshold"),
-						Track:         stringPtr("by_dst"),
-						Count:         intPtr(100),
-						Seconds:       intPtr(300),
-						Regex:         stringPtr("should_be_ignored_for_threshold"),
-						Value:         stringPtr("should_be_ignored_for_threshold"),
-						IP:            stringPtr("should_be_ignored_for_threshold"),
-						CustomFilter:  stringPtr("should_be_ignored_for_threshold"),
+						ThresholdType: util.Ptr("threshold"),
+						Track:         util.Ptr("by_dst"),
+						Count:         util.Ptr(100),
+						Seconds:       util.Ptr(300),
+						Regex:         util.Ptr("should_be_ignored_for_threshold"),
+						Value:         util.Ptr("should_be_ignored_for_threshold"),
+						IP:            util.Ptr("should_be_ignored_for_threshold"),
+						CustomFilter:  util.Ptr("should_be_ignored_for_threshold"),
 					},
 				},
 			},
@@ -582,59 +583,25 @@ func TestPopulateOverridesFromMaps(t *testing.T) {
 					assert.True(t, actualOverride.UpdatedAt.IsZero(), "UpdatedAt should be zero when includeTimes is false")
 				}
 
-				// Check pointer fields
-				assertStringPtrEqual(t, expectedOverride.Regex, actualOverride.Regex, "Regex")
-				assertStringPtrEqual(t, expectedOverride.Value, actualOverride.Value, "Value")
-				assertStringPtrEqual(t, expectedOverride.Track, actualOverride.Track, "Track")
-				assertStringPtrEqual(t, expectedOverride.IP, actualOverride.IP, "IP")
-				assertStringPtrEqual(t, expectedOverride.ThresholdType, actualOverride.ThresholdType, "ThresholdType")
-				assertIntPtrEqual(t, expectedOverride.Count, actualOverride.Count, "Count")
-				assertIntPtrEqual(t, expectedOverride.Seconds, actualOverride.Seconds, "Seconds")
-				assertStringPtrEqual(t, expectedOverride.CustomFilter, actualOverride.CustomFilter, "CustomFilter")
+				// Check pointer fields using util.Equal
+				assert.True(t, util.Equal(expectedOverride.Regex, actualOverride.Regex), "Regex should match")
+				assert.True(t, util.Equal(expectedOverride.Value, actualOverride.Value), "Value should match")
+				assert.True(t, util.Equal(expectedOverride.Track, actualOverride.Track), "Track should match")
+				assert.True(t, util.Equal(expectedOverride.IP, actualOverride.IP), "IP should match")
+				assert.True(t, util.Equal(expectedOverride.ThresholdType, actualOverride.ThresholdType), "ThresholdType should match")
+				assert.True(t, util.Equal(expectedOverride.Count, actualOverride.Count), "Count should match")
+				assert.True(t, util.Equal(expectedOverride.Seconds, actualOverride.Seconds), "Seconds should match")
+				assert.True(t, util.Equal(expectedOverride.CustomFilter, actualOverride.CustomFilter), "CustomFilter should match")
 			}
 		})
 	}
 }
 
-// Helper functions for tests
-func intPtr(i int) *int {
-	return &i
-}
-
+// Helper function for tests
 func mustParseTime(s string) time.Time {
 	t, err := time.Parse(time.RFC3339, s)
 	if err != nil {
 		panic(err)
 	}
 	return t
-}
-
-func assertStringPtrEqual(t *testing.T, expected, actual *string, fieldName string) {
-	if expected == nil && actual == nil {
-		return
-	}
-	if expected == nil {
-		assert.Nil(t, actual, "%s should be nil", fieldName)
-		return
-	}
-	if actual == nil {
-		t.Errorf("%s should not be nil, expected: %s", fieldName, *expected)
-		return
-	}
-	assert.Equal(t, *expected, *actual, "%s should match", fieldName)
-}
-
-func assertIntPtrEqual(t *testing.T, expected, actual *int, fieldName string) {
-	if expected == nil && actual == nil {
-		return
-	}
-	if expected == nil {
-		assert.Nil(t, actual, "%s should be nil", fieldName)
-		return
-	}
-	if actual == nil {
-		t.Errorf("%s should not be nil, expected: %d", fieldName, *expected)
-		return
-	}
-	assert.Equal(t, *expected, *actual, "%s should match", fieldName)
 }
