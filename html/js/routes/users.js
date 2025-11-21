@@ -74,14 +74,12 @@ routes.push({ path: '/users', name: 'users', component: {
       this.$root.stopLoading();
     },
     saveLocalSettings() {
-      localStorage['settings.users.sortBy'] = this.sortBy[0].key;
-      localStorage['settings.users.sortDesc'] = this.sortDesc[0].order;
-      localStorage['settings.users.itemsPerPage'] = this.itemsPerPage;
+      localStorage['settings.queries.sortBy'] = JSON.stringify(this.sortBy);
+      localStorage['settings.queries.itemsPerPage'] = this.itemsPerPage;
     },
     loadLocalSettings() {
       if (localStorage['settings.users.sortBy']) {
-        this.sortBy[0].key = localStorage['settings.users.sortBy'];
-        this.sortBy[0].order = localStorage['settings.users.sortDesc'];
+        this.sortBy = JSON.parse(localStorage['settings.users.sortBy']);
         this.itemsPerPage = parseInt(localStorage['settings.users.itemsPerPage']);
       }
     },
