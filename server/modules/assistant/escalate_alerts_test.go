@@ -328,6 +328,71 @@ func TestEscalateAlertsTool_Execute(t *testing.T) {
 			mockError:     assert.AnError,
 			expectedError: true,
 		},
+		{
+			name:          "search criteria population error",
+			params:        `{"search_filter": "soc_id:alert-123", "case_title": "Test Case", "range_start": "invalid-date", "range_end": "also-invalid", "range_format": "invalid-format"}`,
+			expectedError: true,
+		},
+		{
+			name:   "case creation error",
+			params: `{"search_filter": "soc_id:alert-123", "case_title": "Test Case"}`,
+			mockSearchResults: &model.EventSearchResults{
+				Events: []*model.EventRecord{
+					{
+						Id: "alert-123",
+						Payload: map[string]interface{}{
+							"@timestamp": "2024-12-04T10:00:00Z",
+						},
+					},
+				},
+			},
+			mockError:     assert.AnError,
+			expectedError: true,
+		},
+		{
+			name:   "create related events error",
+			params: `{"search_filter": "soc_id:alert-123", "case_title": "Test Case"}`,
+			mockSearchResults: &model.EventSearchResults{
+				Events: []*model.EventRecord{
+					{
+						Id: "alert-123",
+						Payload: map[string]interface{}{
+							"@timestamp": "2024-12-04T10:00:00Z",
+						},
+					},
+				},
+			},
+			mockCase: &model.Case{
+				Auditable: model.Auditable{
+					Id: "case-123",
+				},
+				Title: "Test Case",
+			},
+			mockError:     assert.AnError,
+			expectedError: true,
+		},
+		{
+			name:   "eventstore acknowledge error",
+			params: `{"search_filter": "soc_id:alert-123", "case_title": "Test Case"}`,
+			mockSearchResults: &model.EventSearchResults{
+				Events: []*model.EventRecord{
+					{
+						Id: "alert-123",
+						Payload: map[string]interface{}{
+							"@timestamp": "2024-12-04T10:00:00Z",
+						},
+					},
+				},
+			},
+			mockCase: &model.Case{
+				Auditable: model.Auditable{
+					Id: "case-123",
+				},
+				Title: "Test Case",
+			},
+			mockError:     assert.AnError,
+			expectedError: true,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -343,41 +408,72 @@ func TestEscalateAlertsTool_Execute(t *testing.T) {
 			if tc.mockUpdateResults != nil {
 				mockEventstore.UpdateResults = []*model.EventUpdateResults{tc.mockUpdateResults}
 			}
-			if tc.mockError != nil {
+			// Only set eventstore error for actual eventstore errors
+			if tc.mockError != nil && (tc.name == "eventstore error" || tc.name == "eventstore acknowledge error") {
 				mockEventstore.Err = tc.mockError
 			}
 
 			// Create mock casestore
 			mockCasestore := mock.NewMockCasestore(ctrl)
 
-			// Only set up casestore expectations if we expect to create a case
-			if !tc.expectedError && tc.mockSearchResults != nil && len(tc.mockSearchResults.Events) > 0 {
+			// Set up casestore expectations based on test case
+			if tc.mockSearchResults != nil && len(tc.mockSearchResults.Events) > 0 {
 				// Parse params to determine if we're using case_id or case_title
 				var args escalateAlertArgs
 				json.Unmarshal([]byte(tc.params), &args)
 
-				if args.CaseId != "" {
-					// Expect GetCase call for existing case
-					mockCasestore.EXPECT().
-						GetCase(gomock.Any(), args.CaseId).
-						Return(tc.mockCase, tc.mockError).
-						Times(1)
-				} else {
-					// Expect Create call for new case
-					mockCasestore.EXPECT().
-						Create(gomock.Any(), gomock.Any()).
-						Return(tc.mockCase, nil).
-						Times(1)
-				}
+				// Determine the specific error scenario
+				isCaseCreationError := tc.name == "case creation error"
+				isCaseRetrievalError := tc.name == "case_id not found error"
+				isCreateRelatedEventsError := tc.name == "create related events error"
+				isEventstoreError := tc.name == "eventstore error" || tc.name == "eventstore acknowledge error"
 
-				// Expect CreateRelatedEvents call (only if GetCase/Create succeeds)
-				if tc.mockError == nil {
-					mockCasestore.EXPECT().
-						CreateRelatedEvents(gomock.Any(), gomock.Any()).
-						DoAndReturn(func(ctx context.Context, events []*model.RelatedEvent) (int, map[string]error, error) {
-							return len(events), nil, nil
-						}).
-						Times(1)
+				// Skip casestore setup for eventstore errors and search criteria errors
+				if !isEventstoreError && tc.name != "search criteria population error" {
+					if args.CaseId != "" {
+						// Expect GetCase call for existing case
+						if isCaseRetrievalError {
+							mockCasestore.EXPECT().
+								GetCase(gomock.Any(), args.CaseId).
+								Return(nil, tc.mockError).
+								Times(1)
+						} else {
+							mockCasestore.EXPECT().
+								GetCase(gomock.Any(), args.CaseId).
+								Return(tc.mockCase, nil).
+								Times(1)
+						}
+					} else {
+						// Expect Create call for new case
+						if isCaseCreationError {
+							mockCasestore.EXPECT().
+								Create(gomock.Any(), gomock.Any()).
+								Return(nil, tc.mockError).
+								Times(1)
+						} else {
+							mockCasestore.EXPECT().
+								Create(gomock.Any(), gomock.Any()).
+								Return(tc.mockCase, nil).
+								Times(1)
+						}
+					}
+
+					// Expect CreateRelatedEvents call (only if GetCase/Create succeeds)
+					if !isCaseCreationError && !isCaseRetrievalError {
+						if isCreateRelatedEventsError {
+							mockCasestore.EXPECT().
+								CreateRelatedEvents(gomock.Any(), gomock.Any()).
+								Return(0, nil, tc.mockError).
+								Times(1)
+						} else {
+							mockCasestore.EXPECT().
+								CreateRelatedEvents(gomock.Any(), gomock.Any()).
+								DoAndReturn(func(ctx context.Context, events []*model.RelatedEvent) (int, map[string]error, error) {
+									return len(events), nil, nil
+								}).
+								Times(1)
+						}
+					}
 				}
 			}
 
@@ -659,4 +755,60 @@ func TestEscalateAlertsTool_Execute_NoAlertsEscalated(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
 	assert.Equal(t, "No case was created", result.Result)
+}
+
+func TestEscalateAlertsTool_Execute_AcknowledgeError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Create a custom eventstore that succeeds on Search but fails on Acknowledge
+	mockEventstore := &CustomEventstoreForAckError{
+		FakeEventstore: server.NewFakeEventstore(),
+	}
+	mockEventstore.SearchResults = []*model.EventSearchResults{
+		{
+			Events: []*model.EventRecord{
+				{
+					Id: "alert-123",
+					Payload: map[string]interface{}{
+						"@timestamp": "2024-12-04T10:00:00Z",
+					},
+				},
+			},
+		},
+	}
+
+	mockCasestore := mock.NewMockCasestore(ctrl)
+	mockCasestore.EXPECT().
+		Create(gomock.Any(), gomock.Any()).
+		Return(&model.Case{Auditable: model.Auditable{Id: "case-123"}, Title: "Test Case"}, nil).
+		Times(1)
+	mockCasestore.EXPECT().
+		CreateRelatedEvents(gomock.Any(), gomock.Any()).
+		Return(1, nil, nil).
+		Times(1)
+
+	mockServer := &server.Server{
+		Eventstore: mockEventstore,
+		Casestore:  mockCasestore,
+	}
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+	tool := &EscalateAlertsTool{}
+	result, err := tool.Execute(ctx, mockServer, `{"search_filter": "soc_id:alert-123", "case_title": "Test Case"}`, "")
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Contains(t, err.Error(), "error escalating alert")
+}
+
+// CustomEventstoreForAckError wraps FakeEventstore to fail only on Acknowledge
+type CustomEventstoreForAckError struct {
+	*server.FakeEventstore
+}
+
+func (e *CustomEventstoreForAckError) Acknowledge(ctx context.Context, criteria *model.EventAckCriteria) (*model.EventUpdateResults, error) {
+	// Always fail on acknowledge
+	return nil, assert.AnError
 }

@@ -57,7 +57,8 @@ type ToolSchema struct {
 }
 
 type ToolSchemaProperty struct {
-	Type        string `json:"type"`
-	Description string `json:"description"`
-	Default     any    `json:"default,omitempty"`
+	Type        string                        `json:"type"`
+	Description string                        `json:"description"`
+	Default     any                           `json:"default,omitempty"`
+	Items       map[string]ToolSchemaProperty `json:"items,omitempty"`
 }

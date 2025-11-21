@@ -19,9 +19,13 @@ type Detectionstore interface {
 	GetDetection(ctx context.Context, detectId string) (*model.Detection, error)
 	GetDetectionByPublicId(ctx context.Context, publicId string) (*model.Detection, error)
 	UpdateDetection(ctx context.Context, detect *model.Detection) (*model.Detection, error)
+	BulkUpdateDetections(ctx context.Context, newStatus bool, detects []*model.Detection, logger log.Interface) (*model.BulkUpdateStats, error)
+	BulkAddOverrides(ctx context.Context, newOverrides []*model.Override, detects []*model.Detection, logger log.Interface) (*model.BulkUpdateStats, error)
 	DeleteDetection(ctx context.Context, detectID string) (*model.Detection, error)
 	GetAllDetections(ctx context.Context, opts ...model.GetAllOption) (map[string]*model.Detection, error) // map[detection.PublicId]detection
 	Query(ctx context.Context, query string, max int) ([]interface{}, error)
+	QueryWithRange(ctx context.Context, query string, rangeStart string, rangeEnd string, rangeFormat string, limit int) (*model.EventSearchResults, error)
+	ConvertEventsToDetections(ctx context.Context, detectEvents *model.EventSearchResults) (detects []*model.Detection, err error)
 	GetDetectionHistory(ctx context.Context, detectID string) ([]interface{}, error)
 
 	CreateComment(ctx context.Context, newComment *model.DetectionComment) (*model.DetectionComment, error)
