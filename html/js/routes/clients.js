@@ -61,7 +61,7 @@ routes.push({ path: '/clients', name: 'clients', component: {
     },
     saveLocalSettings() {
       localStorage['settings.clients.sortBy'] = this.sortBy[0].key;
-      localStorage['settings.clients.sortDesc'] = this.sortDesc[0].order;
+      localStorage['settings.clients.sortDesc'] = this.sortBy[0].order;
       localStorage['settings.clients.itemsPerPage'] = this.itemsPerPage;
     },
     loadLocalSettings() {

@@ -123,12 +123,14 @@ test('saveLocalSettings', () => {
   comp.sortBy = [{ key: 'firstName', order: 'desc' }];
   comp.itemsPerPage = 50;
   comp.saveLocalSettings();
-  expect(localStorage['settings.queries.sortBy']).toBe(JSON.stringify([{ key: 'firstName', order: 'desc' }]));
-  expect(localStorage['settings.queries.itemsPerPage']).toBe('50');
+  expect(localStorage['settings.users.sortBy']).toBe('firstName');
+  expect(localStorage['settings.users.sortDesc']).toBe('desc');
+  expect(localStorage['settings.users.itemsPerPage']).toBe('50');
 });
 
 test('loadLocalSettings', () => {
-  localStorage['settings.users.sortBy'] = JSON.stringify([{ key: 'lastName', order: 'asc' }]);
+  localStorage['settings.users.sortBy'] = 'lastName';
+  localStorage['settings.users.sortDesc'] = 'asc';
   localStorage['settings.users.itemsPerPage'] = '250';
   comp.loadLocalSettings();
   expect(comp.sortBy).toEqual([{ key: 'lastName', order: 'asc' }]);

@@ -28,22 +28,6 @@ test('loadData', async () => {
   expect(mock).toHaveBeenCalledWith('query/active', { params: { filter: 'false' } });
 });
 
-test('saveLocalSettings', () => {
-  comp.sortBy = 'taskId';
-  comp.itemsPerPage = 20;
-  comp.saveLocalSettings();
-  expect(localStorage['settings.queries.sortBy']).toBe('"taskId"');
-  expect(localStorage['settings.queries.itemsPerPage']).toBe("20");
-});
-
-test('loadLocalSettings', () => {
-  localStorage['settings.queries.sortBy'] = '"taskId"';
-  localStorage['settings.queries.itemsPerPage'] = 20;
-  comp.loadLocalSettings();
-  expect(comp.sortBy).toBe('taskId');
-  expect(comp.itemsPerPage).toBe(20);
-});
-
 test('cancelQuery', async () => {
   resetPapi();
   const mock = mockPapi("post");
@@ -51,4 +35,32 @@ test('cancelQuery', async () => {
   comp.showCancelQueryConfirm(queryTask);
   await comp.cancelQuery(queryTask);
   expect(mock).toHaveBeenCalledWith('query/cancel/1', { gridId: 'g1' });
+});
+
+test('saveLocalSettings', () => {
+  comp.sortBy = [{ key: 'taskId', order: 'desc' }];
+  comp.itemsPerPage = 50;
+  comp.saveLocalSettings();
+  expect(localStorage['settings.queries.sortBy']).toBe('taskId');
+  expect(localStorage['settings.queries.sortDesc']).toBe('desc');
+  expect(localStorage['settings.queries.itemsPerPage']).toBe('50');
+});
+
+test('loadLocalSettings', () => {
+  localStorage['settings.queries.sortBy'] = 'gridId';
+  localStorage['settings.queries.sortDesc'] = 'asc';
+  localStorage['settings.queries.itemsPerPage'] = '250';
+  comp.loadLocalSettings();
+  expect(comp.sortBy).toEqual([{ key: 'gridId', order: 'asc' }]);
+  expect(comp.itemsPerPage).toBe(250);
+});
+
+test('loadLocalSettings_defaults', () => {
+  delete localStorage['settings.queries.sortBy'];
+  delete localStorage['settings.queries.itemsPerPage'];
+  comp.sortBy = [{ key: 'elapsedMs', order: 'asc' }];
+  comp.itemsPerPage = 10;
+  comp.loadLocalSettings();
+  expect(comp.sortBy).toEqual([{ key: 'elapsedMs', order: 'asc' }]);
+  expect(comp.itemsPerPage).toBe(10);
 });

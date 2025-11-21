@@ -252,9 +252,12 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       this.resetRefreshTimer();
     },
     saveLocalSettings() {
-      this.saveSetting('sortBy0', JSON.stringify(this.sortBy0), '[]');
-      this.saveSetting('sortBy1', JSON.stringify(this.sortBy1), '[]');
-      this.saveSetting('sortBy2', JSON.stringify(this.sortBy2), '[]');
+      this.saveSetting('sortBy0', this.sortBy0[0].key, 'totalCredits');
+      this.saveSetting('sortDesc0', this.sortBy0[0].order, 'desc')
+      this.saveSetting('sortBy1', this.sortBy1[0].key, 'createTime');
+      this.saveSetting('sortDesc1', this.sortBy1[0].order, 'desc')
+      this.saveSetting('sortBy2', this.sortBy2[0].key, 'createTime');
+      this.saveSetting('sortDesc2', this.sortBy2[0].order, 'desc')
       this.saveSetting('itemsPerPage', this.itemsPerPage, 10);
       this.saveSetting('relativeTimeValue', this.relativeTimeValue, 24);
       this.saveSetting('relativeTimeUnit', this.relativeTimeUnit, RELATIVE_TIME_HOURS);
@@ -262,30 +265,20 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       localStorage['timezone'] = this.zone;
     },
     loadLocalSettings() {
-      if (localStorage['settings.aimetrics.sortBy0']) {
-        this.sortBy = JSON.parse(localStorage['settings.aimetrics.sortBy0']);
-      }
-      if (localStorage['settings.aimetrics.sortBy1']) {
-        this.sortBy = JSON.parse(localStorage['settings.aimetrics.sortBy1']);
-      }
-      if (localStorage['settings.aimetrics.sortBy2']) {
-        this.sortBy = JSON.parse(localStorage['settings.aimetrics.sortBy2']);
-      }
-      if (localStorage['settings.aimetrics.itemsPerPage']) {
-        this.itemsPerPage = parseInt(localStorage['settings.aimetrics.itemsPerPage']);
-      }
-      if (localStorage['settings.aimetrics.relativeTimeValue']) {
-        this.relativeTimeValue = parseInt(localStorage['settings.aimetrics.relativeTimeValue']);
-      }
-      if (localStorage['settings.aimetrics.relativeTimeUnit']) {
-        this.relativeTimeUnit = parseInt(localStorage['settings.aimetrics.relativeTimeUnit']);
-      }
-      if (localStorage['timezone']) {
-        this.zone = localStorage['timezone'];
-      }
-      if (localStorage['settings.aimetrics.autoRefreshInterval']) {
-        this.autoRefreshInterval = parseInt(localStorage['settings.aimetrics.autoRefreshInterval']);
-      }
+      if (localStorage['settings.aimetrics.sortBy0']) this.sortBy0[0].key = localStorage['settings.aimetrics.sortBy0'];
+      if (localStorage['settings.aimetrics.sortDesc0']) this.sortBy0[0].order = localStorage['settings.aimetrics.sortDesc0'];
+      
+      if (localStorage['settings.aimetrics.sortBy1']) this.sortBy1[0].key = localStorage['settings.aimetrics.sortBy1'];
+      if (localStorage['settings.aimetrics.sortDesc1']) this.sortBy1[0].order = localStorage['settings.aimetrics.sortDesc1'];
+      
+      if (localStorage['settings.aimetrics.sortBy2']) this.sortBy2[0].key = localStorage['settings.aimetrics.sortBy2'];
+      if (localStorage['settings.aimetrics.sortDesc2']) this.sortBy2[0].order = localStorage['settings.aimetrics.sortDesc2'];
+      
+      if (localStorage['settings.aimetrics.itemsPerPage']) this.itemsPerPage = parseInt(localStorage['settings.aimetrics.itemsPerPage']);
+      if (localStorage['settings.aimetrics.relativeTimeValue']) this.relativeTimeValue = parseInt(localStorage['settings.aimetrics.relativeTimeValue']);
+      if (localStorage['settings.aimetrics.relativeTimeUnit']) this.relativeTimeUnit = parseInt(localStorage['settings.aimetrics.relativeTimeUnit']);
+      if (localStorage['timezone']) this.zone = localStorage['timezone'];
+      if (localStorage['settings.aimetrics.autoRefreshInterval']) this.autoRefreshInterval = parseInt(localStorage['settings.aimetrics.autoRefreshInterval']);
     },
     buildUserLink(userId) {
       return { name: 'aimetrics', params: { userId: userId } };

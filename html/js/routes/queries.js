@@ -48,12 +48,14 @@ routes.push({ path: '/queries', name: 'queries', component: {
       this.$root.stopLoading();
     },
     saveLocalSettings() {
-      localStorage['settings.queries.sortBy'] = JSON.stringify(this.sortBy);
+      localStorage['settings.queries.sortBy'] = this.sortBy[0].key;
+      localStorage['settings.queries.sortDesc'] = this.sortBy[0].order;
       localStorage['settings.queries.itemsPerPage'] = this.itemsPerPage;
     },
     loadLocalSettings() {
       if (localStorage['settings.queries.sortBy']) {
-        this.sortBy = JSON.parse(localStorage['settings.queries.sortBy']);
+        this.sortBy[0].key = localStorage['settings.queries.sortBy'];
+        this.sortBy[0].order = localStorage['settings.queries.sortDesc'];
         this.itemsPerPage = parseInt(localStorage['settings.queries.itemsPerPage']);
       }
     },

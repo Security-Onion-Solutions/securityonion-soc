@@ -266,9 +266,12 @@ test('saveLocalSettings saves all settings', () => {
   
   comp.saveLocalSettings();
   
-  expect(comp.saveSetting).toHaveBeenCalledWith('sortBy0', JSON.stringify([{ key: 'email', order: 'asc' }]), '[]');
-  expect(comp.saveSetting).toHaveBeenCalledWith('sortBy1', JSON.stringify([{ key: 'title', order: 'desc' }]), '[]');
-  expect(comp.saveSetting).toHaveBeenCalledWith('sortBy2', JSON.stringify([{ key: 'role', order: 'asc' }]), '[]');
+  expect(comp.saveSetting).toHaveBeenCalledWith('sortBy0', 'email', 'totalCredits');
+  expect(comp.saveSetting).toHaveBeenCalledWith('sortDesc0', 'asc', 'desc');
+  expect(comp.saveSetting).toHaveBeenCalledWith('sortBy1', 'title', 'createTime');
+  expect(comp.saveSetting).toHaveBeenCalledWith('sortDesc1', 'desc', 'desc');
+  expect(comp.saveSetting).toHaveBeenCalledWith('sortBy2', 'role', 'createTime');
+  expect(comp.saveSetting).toHaveBeenCalledWith('sortDesc2', 'asc', 'desc');
   expect(comp.saveSetting).toHaveBeenCalledWith('itemsPerPage', 50, 10);
   expect(comp.saveSetting).toHaveBeenCalledWith('relativeTimeValue', 12, 24);
   expect(comp.saveSetting).toHaveBeenCalledWith('relativeTimeUnit', RELATIVE_TIME_MINUTES, RELATIVE_TIME_HOURS);
@@ -278,9 +281,12 @@ test('saveLocalSettings saves all settings', () => {
 
 test('loadLocalSettings loads all settings from localStorage', () => {
   // Mock localStorage values
-  mockLocalStorage['settings.aimetrics.sortBy0'] = JSON.stringify([{ key: 'test', order: 'desc' }]);
-  mockLocalStorage['settings.aimetrics.sortBy1'] = JSON.stringify([{ key: 'test1', order: 'asc' }]);
-  mockLocalStorage['settings.aimetrics.sortBy2'] = JSON.stringify([{ key: 'test2', order: 'desc' }]);
+  mockLocalStorage['settings.aimetrics.sortBy0'] = 'test';
+  mockLocalStorage['settings.aimetrics.sortDesc0'] = 'desc'
+  mockLocalStorage['settings.aimetrics.sortBy1'] = 'test1';
+  mockLocalStorage['settings.aimetrics.sortDesc1'] = 'asc'
+  mockLocalStorage['settings.aimetrics.sortBy2'] = 'test2';
+  mockLocalStorage['settings.aimetrics.sortDesc2'] = 'desc'
   mockLocalStorage['settings.aimetrics.itemsPerPage'] = '25';
   mockLocalStorage['settings.aimetrics.relativeTimeValue'] = '48';
   mockLocalStorage['settings.aimetrics.relativeTimeUnit'] = String(RELATIVE_TIME_DAYS);
@@ -289,7 +295,9 @@ test('loadLocalSettings loads all settings from localStorage', () => {
   
   comp.loadLocalSettings();
   
-  expect(comp.sortBy).toEqual([{ key: 'test2', order: 'desc' }]); // Last one wins
+  expect(comp.sortBy0).toEqual([{ key: 'test', order: 'desc' }]);
+  expect(comp.sortBy1).toEqual([{ key: 'test1', order: 'asc' }]);
+  expect(comp.sortBy2).toEqual([{ key: 'test2', order: 'desc' }]);
   expect(comp.itemsPerPage).toBe(25);
   expect(comp.relativeTimeValue).toBe(48);
   expect(comp.relativeTimeUnit).toBe(RELATIVE_TIME_DAYS);
@@ -1172,7 +1180,8 @@ test('settings persistence integration', () => {
   comp.saveLocalSettings();
   
   // Verify localStorage was updated
-  expect(mockLocalStorage['settings.aimetrics.sortBy0']).toBe(JSON.stringify([{ key: 'email', order: 'asc' }]));
+  expect(mockLocalStorage['settings.aimetrics.sortBy0']).toBe('email');
+  expect(mockLocalStorage['settings.aimetrics.sortDesc0']).toBe('asc');
   expect(mockLocalStorage['settings.aimetrics.itemsPerPage']).toBe('25');
   expect(mockLocalStorage['settings.aimetrics.relativeTimeValue']).toBe('48');
   expect(mockLocalStorage['settings.aimetrics.relativeTimeUnit']).toBe(String(RELATIVE_TIME_DAYS));
@@ -1180,7 +1189,7 @@ test('settings persistence integration', () => {
   expect(mockLocalStorage['timezone']).toBe('Europe/London');
   
   // Reset component state
-  comp.sortBy0 = [];
+  comp.sortBy0 = [{ key: 'totalCredits', order: 'desc' }];
   comp.itemsPerPage = 10;
   comp.relativeTimeValue = 24;
   comp.relativeTimeUnit = RELATIVE_TIME_HOURS;
