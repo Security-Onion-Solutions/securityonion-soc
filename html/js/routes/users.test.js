@@ -118,3 +118,29 @@ test('onlyExpandOneRow', () => {
   comp.onlyExpandOneRow();
   expect(comp.expanded).toEqual(['10']);
 });
+
+test('saveLocalSettings', () => {
+  comp.sortBy = [{ key: 'firstName', order: 'desc' }];
+  comp.itemsPerPage = 50;
+  comp.saveLocalSettings();
+  expect(localStorage['settings.queries.sortBy']).toBe(JSON.stringify([{ key: 'firstName', order: 'desc' }]));
+  expect(localStorage['settings.queries.itemsPerPage']).toBe('50');
+});
+
+test('loadLocalSettings', () => {
+  localStorage['settings.users.sortBy'] = JSON.stringify([{ key: 'lastName', order: 'asc' }]);
+  localStorage['settings.users.itemsPerPage'] = '250';
+  comp.loadLocalSettings();
+  expect(comp.sortBy).toEqual([{ key: 'lastName', order: 'asc' }]);
+  expect(comp.itemsPerPage).toBe(250);
+});
+
+test('loadLocalSettings_defaults', () => {
+  delete localStorage['settings.users.sortBy'];
+  delete localStorage['settings.users.itemsPerPage'];
+  comp.sortBy = [{ key: 'email', order: 'asc' }];
+  comp.itemsPerPage = 10;
+  comp.loadLocalSettings();
+  expect(comp.sortBy).toEqual([{ key: 'email', order: 'asc' }]);
+  expect(comp.itemsPerPage).toBe(10);
+});
