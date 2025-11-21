@@ -28,6 +28,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       [
         { title: this.$root.i18n.title, value: 'title' },
         { title: this.$root.i18n.createTime, value: 'createTime' },
+        { title: this.$root.i18n.duration, value: 'duration', key: 'durationMs' },
         { title: this.$root.i18n.totalInputTokens, value: 'totalInputTokens' },
         { title: this.$root.i18n.totalOutputTokens, value: 'totalOutputTokens' },
         { title: this.$root.i18n.totalCredits, value: 'totalCredits' },
@@ -222,6 +223,10 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
             item.totalOutputTokens = item.usage.totalOutputTokens;
             item.totalCredits = item.usage.totalCredits;
             item.totalMessages = item.usage.totalMessages;
+            const startMs = new Date(item.createTime);
+            const endMs = new Date(item.updateTime);
+            item.durationMs = endMs - startMs;
+            item.duration = this.formatDHM(startMs, endMs);
           });
         } else {
           this.tableSetting = this.TABLE_SETTING_USERS;
@@ -499,6 +504,21 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
     calculateCreditPercentage(credits, total) {
       let percentage = (credits / total) * 100;
       return `${percentage.toFixed(1)}%`;
+    },
+    formatDHM(startMs, endMs) {
+      const diffMs = endMs - startMs;
+      let seconds = Math.floor(diffMs / 1000);
+
+      const days = Math.floor(seconds / 86400);
+      seconds %= 86400;
+
+      const hours = Math.floor(seconds / 3600);
+      seconds %= 3600;
+
+      const minutes = Math.floor(seconds / 60);
+
+      let result = `${days}d ${hours}h ${minutes}m`;
+      return result;
     },
   }
 }});
