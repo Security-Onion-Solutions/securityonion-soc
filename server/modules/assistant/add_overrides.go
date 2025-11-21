@@ -234,48 +234,7 @@ func (t *AddOverridesTool) Execute(ctx context.Context, srv *server.Server, para
 
 	result.Parameters = args
 
-	var newOverrides []*model.Override
-
-	for _, overrideMap := range args.Overrides {
-		override := &model.Override{}
-
-		if v, ok := overrideMap["type"].(string); ok {
-			override.Type = model.OverrideType(v)
-		}
-		if v, ok := overrideMap["isEnabled"].(bool); ok {
-			override.IsEnabled = v
-		}
-		if v, ok := overrideMap["note"].(string); ok {
-			override.Note = v
-		}
-		if v, ok := overrideMap["regex"].(string); ok {
-			override.Regex = &v
-		}
-		if v, ok := overrideMap["value"].(string); ok {
-			override.Value = &v
-		}
-		if v, ok := overrideMap["track"].(string); ok {
-			override.Track = &v
-		}
-		if v, ok := overrideMap["ip"].(string); ok {
-			override.IP = &v
-		}
-		if v, ok := overrideMap["thresholdType"].(string); ok {
-			override.ThresholdType = &v
-		}
-		if v, ok := overrideMap["count"].(float64); ok {
-			count := int(v)
-			override.Count = &count
-		}
-		if v, ok := overrideMap["seconds"].(float64); ok {
-			seconds := int(v)
-			override.Seconds = &seconds
-		}
-		if v, ok := overrideMap["customFilter"].(string); ok {
-			override.CustomFilter = &v
-		}
-		newOverrides = append(newOverrides, override)
-	}
+	newOverrides := populateOverridesFromMaps(args.Overrides, false)
 
 	query := args.SearchFilter
 
