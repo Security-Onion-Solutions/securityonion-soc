@@ -372,6 +372,7 @@ const i18n = {
       create: 'Create',
       createNewCase: 'Create a new case...',
       createTime: 'Create Time',
+      creditsPerMinute: 'Credits Per Minute',
       csv: 'CSV',
       currentModel: 'Current Model',
       custom: 'Custom',

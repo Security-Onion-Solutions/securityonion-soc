@@ -32,6 +32,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         { title: this.$root.i18n.totalInputTokens, value: 'totalInputTokens' },
         { title: this.$root.i18n.totalOutputTokens, value: 'totalOutputTokens' },
         { title: this.$root.i18n.totalCredits, value: 'totalCredits' },
+        { title: this.$root.i18n.creditsPerMinute, value: 'creditsPerMinute' },
         { title: this.$root.i18n.totalMessages, value: 'totalMessages' },
         { title: this.$root.i18n.actions, value: 'actions' },
       ],
@@ -195,7 +196,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
           this.aimetrics = response.data;
           this.aimetrics.forEach(item => {
             item.role = item.message.role;
-            if (item.role === 'assistant') {
+            if (item.role === 'assistant' && item.message.usage) {
               item.inputTokens = item.message.usage.input_tokens;
               item.outputTokens = item.message.usage.output_tokens;
               item.credits = item.message.usage.credits;
@@ -225,7 +226,8 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
             const startMs = new Date(item.createTime);
             const endMs = new Date(item.updateTime);
             item.durationMs = endMs - startMs;
-            item.duration = this.formatDHM(startMs, endMs);
+            item.duration = this.formatDHM(item.durationMs);
+            item.creditsPerMinute = this.getCPM(item.durationMs, item.totalCredits);
           });
         } else {
           this.tableSetting = this.TABLE_SETTING_USERS;
@@ -506,9 +508,8 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       let percentage = (credits / total) * 100;
       return `${percentage.toFixed(1)}%`;
     },
-    formatDHM(startMs, endMs) {
-      const diffMs = endMs - startMs;
-      let seconds = Math.floor(diffMs / 1000);
+    formatDHM(durationMs) {
+      let seconds = Math.floor(durationMs / 1000);
 
       const days = Math.floor(seconds / 86400);
       seconds %= 86400;
@@ -521,5 +522,10 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       let result = `${days}d ${hours}h ${minutes}m`;
       return result;
     },
+    getCPM(durationMs, totalCredits) {
+      let minutes = durationMs / 60000;
+      let rawCPM = totalCredits / minutes;
+      return Math.round(rawCPM);
+    }
   }
 }});
