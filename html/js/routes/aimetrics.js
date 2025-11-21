@@ -57,7 +57,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
     },
     rightShiftedHeaders: [
       ['totalInputTokens', 'totalOutputTokens', 'totalCredits', 'creditPercentage', 'totalSessions', 'totalMessages'],
-      ['totalInputTokens', 'totalOutputTokens', 'totalCredits', 'totalMessages'],
+      ['totalInputTokens', 'totalOutputTokens', 'totalCredits', 'creditsPerMinute', 'totalMessages'],
       ['inputTokens', 'outputTokens', 'credits'],
     ],
     sortByUsers: [{ key: 'totalCredits', order: 'desc' }],
