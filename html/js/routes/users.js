@@ -75,7 +75,7 @@ routes.push({ path: '/users', name: 'users', component: {
     },
     saveLocalSettings() {
       localStorage['settings.users.sortBy'] = this.sortBy[0].key;
-      localStorage['settings.users.sortDesc'] = this.sortDesc[0].order;
+      localStorage['settings.users.sortDesc'] = this.sortBy[0].order;
       localStorage['settings.users.itemsPerPage'] = this.itemsPerPage;
     },
     loadLocalSettings() {

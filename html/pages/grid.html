@@ -33,7 +33,7 @@
 					<v-icon>fa-circle-question</v-icon>
 				</v-btn>
 			</v-toolbar>
-			<v-data-table :search="gridFilter" :sort-by="sortBy" @update:sort-by="val => sortBy = val"
+			<v-data-table :search="gridFilter" :sort-by="sortBy" @update:sort-by="val => sortBy = val" @update:items-per-page="val => itemsPerPage = val"
 				data-aid="grid_list" :items-per-page-options="itemsPerPageOptions" :expanded="expanded" @update:expanded="val => expanded = val"
 				v-model:items-per-page="itemsPerPage" must-sort :headers="headers" :items="nodes">
 				<template #top>
