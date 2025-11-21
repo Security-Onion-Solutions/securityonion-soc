@@ -163,7 +163,7 @@ const i18n = {
       assistantDisabled: 'This feature is not enabled on this grid. Contact your Security Onion administrator.',
       assistantDisclaimerMessage: `Use of this feature requires AI requests which can contain event data and will be sent to the OnionAI API in the US.<br><br>No Query Logging: OnionAI API does not record or store input prompts, queries, or generated outputs. No context is stored on the API.<br><br>Token Tracking: The API tracks usage metrics limited to token counts for billing and operational purposes.<br><br>Local Retention: Prompts and responses are stored in the local grid's Elasticsearch data store.`,
       assistantDisclaimerTitle: 'Data Privacy Notice',
-      assistantErrorMessage: 'I apologize, but I\'m having trouble connecting to the AI service right now. Please try again in a moment.',
+      assistantErrorMessage: 'I\'m having trouble connecting to the AI service right now. Please try again in a moment.',
       assistantHistoryCollapse: 'Hide Chat History',
       assistantHistoryExpand: 'Show Chat History',
       assistantLoadContextError: 'Failed to load context theshold setting',
