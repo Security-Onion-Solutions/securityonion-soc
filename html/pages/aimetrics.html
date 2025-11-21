@@ -108,8 +108,8 @@
   <v-row>
     <v-col id="aimetrics-table">
       <!-- Users Table -->
-      <v-data-table v-if="tableSetting == TABLE_SETTING_USERS" :search="searchFilter" :sort-by="sortBy0" @update:sort-by="val => sortBy0 = val" :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage"
-        must-sort :headers="headers[tableSetting]" :items="aimetrics" data-aid="aimetrics_table_users">
+      <v-data-table v-if="tableSetting == TABLE_SETTING_USERS" :search="searchFilter" :sort-by="sortBy0" @update:sort-by="val => sortBy0 = val" @update:items-per-page="val => itemsPerPage = val"
+        :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage" must-sort :headers="headers[tableSetting]" :items="aimetrics" data-aid="aimetrics_table_users">
         <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
           <tr>
             <template v-for="header in columns" :key="header.key">
@@ -144,8 +144,8 @@
         </template>
       </v-data-table>
       <!-- Sessions Table -->
-      <v-data-table v-if="tableSetting == TABLE_SETTING_SESSIONS" :search="searchFilter" :sort-by="sortBy1" @update:sort-by="val => sortBy1 = val" :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage"
-        must-sort :headers="headers[tableSetting]" :items="aimetrics" v-model:expanded="expanded" data-aid="aimetrics_table_sessions">
+      <v-data-table v-if="tableSetting == TABLE_SETTING_SESSIONS" :search="searchFilter" :sort-by="sortBy1" @update:sort-by="val => sortBy1 = val" @update:items-per-page="val => itemsPerPage = val"
+        :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage" must-sort :headers="headers[tableSetting]" :items="aimetrics" v-model:expanded="expanded" data-aid="aimetrics_table_sessions">
         <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
           <tr>
             <template v-for="header in columns" :key="header.key">
@@ -182,8 +182,8 @@
         </template>
       </v-data-table>
       <!-- Messages Table -->
-      <v-data-table v-if="tableSetting == TABLE_SETTING_MESSAGES" :search="searchFilter" :sort-by="sortBy2" @update:sort-by="val => sortBy2 = val" :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage"
-        must-sort :headers="headers[tableSetting]" :items="aimetrics" v-model:expanded="expanded" data-aid="aimetrics_table_messages">
+      <v-data-table v-if="tableSetting == TABLE_SETTING_MESSAGES" :search="searchFilter" :sort-by="sortBy2" @update:sort-by="val => sortBy2 = val" @update:items-per-page="val => itemsPerPage = val"
+        :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage" must-sort :headers="headers[tableSetting]" :items="aimetrics" v-model:expanded="expanded" data-aid="aimetrics_table_messages">
         <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
           <tr>
             <template v-for="header in columns" :key="header.key">

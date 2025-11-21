@@ -31,8 +31,8 @@
           <v-icon>fa-circle-question</v-icon>
         </v-btn>
       </v-toolbar>
-      <v-data-table :sort-by="sortBy" @update:sort-by="val => sortBy = val" :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage"
-      must-sort :headers="headers" :items="queries">
+      <v-data-table :sort-by="sortBy" @update:sort-by="val => sortBy = val" @update:items-per-page="val => itemsPerPage = val" :items-per-page-options="itemsPerPageOptions"
+      :items-per-page="itemsPerPage" must-sort :headers="headers" :items="queries">
       <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
         <tr>
           <template v-for="header in columns" :key="header.key">
