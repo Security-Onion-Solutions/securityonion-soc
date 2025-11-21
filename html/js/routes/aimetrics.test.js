@@ -137,7 +137,7 @@ test('component data initialization', () => {
   expect(comp.aimetrics).toEqual([]);
   expect(comp.headers).toHaveLength(3);
   expect(comp.headers[0]).toHaveLength(8); // Users table headers
-  expect(comp.headers[1]).toHaveLength(7); // Sessions table headers
+  expect(comp.headers[1]).toHaveLength(8); // Sessions table headers
   expect(comp.headers[2]).toHaveLength(7); // Messages table headers
   expect(comp.expandedFields).toHaveProperty('1');
   expect(comp.sortBy0).toEqual([{ key: 'totalCredits', order: 'desc' }]);
@@ -1279,4 +1279,41 @@ test('beforeUnmount lifecycle cleanup', () => {
   }
   
   expect(comp.stopRefreshTimer).toHaveBeenCalled();
+});
+
+// formatDHM tests
+test('formatDHM formats duration with days, hours, and minutes', () => {
+  const startMs = new Date('2025-01-01T00:00:00Z');
+  const endMs = new Date('2025-01-03T05:30:00Z');
+  
+  const result = comp.formatDHM(startMs, endMs);
+  
+  expect(result).toBe('2d 5h 30m');
+});
+
+test('formatDHM formats duration with only hours and minutes', () => {
+  const startMs = new Date('2025-01-01T00:00:00Z');
+  const endMs = new Date('2025-01-01T03:45:00Z');
+  
+  const result = comp.formatDHM(startMs, endMs);
+  
+  expect(result).toBe('0d 3h 45m');
+});
+
+test('formatDHM formats duration with only minutes', () => {
+  const startMs = new Date('2025-01-01T00:00:00Z');
+  const endMs = new Date('2025-01-01T00:25:00Z');
+  
+  const result = comp.formatDHM(startMs, endMs);
+  
+  expect(result).toBe('0d 0h 25m');
+});
+
+test('formatDHM formats zero duration', () => {
+  const startMs = new Date('2025-01-01T00:00:00Z');
+  const endMs = new Date('2025-01-01T00:00:00Z');
+  
+  const result = comp.formatDHM(startMs, endMs);
+  
+  expect(result).toBe('0d 0h 0m');
 });

@@ -484,6 +484,7 @@ const i18n = {
       dstPort: 'Destination Port',
       dstPortHelp: 'Optional destination TCP port to include in this job filter',
       duplicate: 'Duplicate',
+      duration: 'Duration',
       edit: 'Edit',
       edited: '(edited)',
       email: 'Email Address',
