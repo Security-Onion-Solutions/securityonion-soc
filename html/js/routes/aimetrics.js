@@ -524,7 +524,8 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
     },
     getCPM(durationMs, totalCredits) {
       let minutes = durationMs / 60000;
-      let rawCPM = totalCredits / minutes;
+      if (minutes < 1) minutes = 1;
+      const rawCPM = totalCredits / minutes;
       return Math.round(rawCPM);
     }
   }

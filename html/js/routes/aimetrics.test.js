@@ -1355,3 +1355,12 @@ test('getCPM handles zero credits', () => {
   
   expect(result).toBe(0);
 });
+
+test('getCPM handles less than one minute', () => {
+  const durationMs = 45000; // 45 seconds
+  const totalCredits = 50000;
+  
+  const result = comp.getCPM(durationMs, totalCredits);
+  
+  expect(result).toBe(50000);
+});
