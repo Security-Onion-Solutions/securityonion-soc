@@ -37,7 +37,7 @@ func TestToggleDetectionsTool_Execute(t *testing.T) {
 	}{
 		{
 			name:   "enable detections successfully",
-			params: `{"search_filter": "so_detection.title:malware AND _index:\"*:so-detection\" AND so_kind:detection", "enable": "true"}`,
+			params: `{"search_filter": "so_detection.title:malware AND _index:\"*:so-detection\" AND so_kind:detection", "enable": true}`,
 			mockQueryResults: []interface{}{
 				&model.Detection{
 					Auditable: model.Auditable{Id: "detection-1"},
@@ -66,7 +66,7 @@ func TestToggleDetectionsTool_Execute(t *testing.T) {
 		},
 		{
 			name:   "disable detections successfully",
-			params: `{"search_filter": "so_detection.severity:high AND _index:\"*:so-detection\" AND so_kind:detection", "enable": "false"}`,
+			params: `{"search_filter": "so_detection.severity:high AND _index:\"*:so-detection\" AND so_kind:detection", "enable": false}`,
 			mockQueryResults: []interface{}{
 				&model.Detection{
 					Auditable: model.Auditable{Id: "detection-3"},
@@ -89,7 +89,7 @@ func TestToggleDetectionsTool_Execute(t *testing.T) {
 		},
 		{
 			name:   "toggle with time range",
-			params: `{"search_filter": "so_detection.language:sigma AND _index:\"*:so-detection\" AND so_kind:detection", "enable": "true", "range_start": "-999d", "range_end": "now"}`,
+			params: `{"search_filter": "so_detection.language:sigma AND _index:\"*:so-detection\" AND so_kind:detection", "enable": true, "range_start": "-999d", "range_end": "now"}`,
 			mockQueryResults: []interface{}{
 				&model.Detection{
 					Auditable: model.Auditable{Id: "detection-4"},
@@ -112,7 +112,7 @@ func TestToggleDetectionsTool_Execute(t *testing.T) {
 		},
 		{
 			name:   "toggle with absolute time range",
-			params: `{"search_filter": "so_detection.engine:suricata AND _index:\"*:so-detection\" AND so_kind:detection", "enable": "false", "range_start": "2024/01/01 10:00:00 AM", "range_end": "2024/01/01 11:00:00 AM", "range_format": "2006/01/02 3:04:05 PM"}`,
+			params: `{"search_filter": "so_detection.engine:suricata AND _index:\"*:so-detection\" AND so_kind:detection", "enable": false, "range_start": "2024/01/01 10:00:00 AM", "range_end": "2024/01/01 11:00:00 AM", "range_format": "2006/01/02 3:04:05 PM"}`,
 			mockQueryResults: []interface{}{
 				&model.Detection{
 					Auditable: model.Auditable{Id: "detection-5"},
@@ -135,13 +135,13 @@ func TestToggleDetectionsTool_Execute(t *testing.T) {
 		},
 		{
 			name:             "no detections found",
-			params:           `{"search_filter": "so_detection.title:nonexistent AND _index:\"*:so-detection\" AND so_kind:detection", "enable": "true"}`,
+			params:           `{"search_filter": "so_detection.title:nonexistent AND _index:\"*:so-detection\" AND so_kind:detection", "enable": true}`,
 			mockQueryResults: []interface{}{},
 			expectedResult:   "No detections found",
 		},
 		{
 			name:   "toggle with errors in bulk update",
-			params: `{"search_filter": "so_detection.title:problematic AND _index:\"*:so-detection\" AND so_kind:detection", "enable": "true"}`,
+			params: `{"search_filter": "so_detection.title:problematic AND _index:\"*:so-detection\" AND so_kind:detection", "enable": true}`,
 			mockQueryResults: []interface{}{
 				&model.Detection{
 					Auditable: model.Auditable{Id: "detection-6"},
@@ -166,7 +166,7 @@ func TestToggleDetectionsTool_Execute(t *testing.T) {
 		},
 		{
 			name:   "toggle with filtered detections",
-			params: `{"search_filter": "so_detection.title:filtered AND _index:\"*:so-detection\" AND so_kind:detection", "enable": "true"}`,
+			params: `{"search_filter": "so_detection.title:filtered AND _index:\"*:so-detection\" AND so_kind:detection", "enable": true}`,
 			mockQueryResults: []interface{}{
 				&model.Detection{
 					Auditable: model.Auditable{Id: "detection-7"},
@@ -199,13 +199,13 @@ func TestToggleDetectionsTool_Execute(t *testing.T) {
 		},
 		{
 			name:           "query error",
-			params:         `{"search_filter": "so_detection.title:test AND _index:\"*:so-detection\" AND so_kind:detection", "enable": "true"}`,
+			params:         `{"search_filter": "so_detection.title:test AND _index:\"*:so-detection\" AND so_kind:detection", "enable": true}`,
 			mockQueryError: assert.AnError,
 			expectedError:  true,
 		},
 		{
 			name:   "bulk update error",
-			params: `{"search_filter": "so_detection.title:test AND _index:\"*:so-detection\" AND so_kind:detection", "enable": "true"}`,
+			params: `{"search_filter": "so_detection.title:test AND _index:\"*:so-detection\" AND so_kind:detection", "enable": true}`,
 			mockQueryResults: []interface{}{
 				&model.Detection{
 					Auditable: model.Auditable{Id: "detection-8"},
@@ -220,7 +220,7 @@ func TestToggleDetectionsTool_Execute(t *testing.T) {
 		},
 		{
 			name:   "sync detections successfully",
-			params: `{"search_filter": "so_detection.title:sync AND _index:\"*:so-detection\" AND so_kind:detection", "enable": "true"}`,
+			params: `{"search_filter": "so_detection.title:sync AND _index:\"*:so-detection\" AND so_kind:detection", "enable": true}`,
 			mockQueryResults: []interface{}{
 				&model.Detection{
 					Auditable: model.Auditable{Id: "detection-sync"},
@@ -413,7 +413,7 @@ func TestToggleDetectionsTool_GetSchema(t *testing.T) {
 
 	// Check enable property
 	enable := schema.Json.Properties["enable"]
-	assert.Equal(t, "string", enable.Type)
+	assert.Equal(t, "boolean", enable.Type)
 	assert.Contains(t, enable.Description, "true")
 	assert.Contains(t, enable.Description, "false")
 
@@ -488,7 +488,7 @@ func TestToggleDetectionsTool_QueryFiltering(t *testing.T) {
 
 			// Create parameters - properly escape quotes in JSON
 			escapedFilter := strings.ReplaceAll(tc.searchFilter, `"`, `\"`)
-			params := `{"search_filter": "` + escapedFilter + `", "enable": "true"}`
+			params := `{"search_filter": "` + escapedFilter + `", "enable": true}`
 
 			// Create tool and execute
 			tool := &ToggleDetectionsTool{}
@@ -582,7 +582,7 @@ func TestToggleDetectionsTool_Authorization(t *testing.T) {
 			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user-id")
 
 			// Create parameters
-			params := `{"search_filter": "so_detection.title:test", "enable": "true"}`
+			params := `{"search_filter": "so_detection.title:test", "enable": true}`
 
 			// Create tool and execute
 			tool := &ToggleDetectionsTool{}

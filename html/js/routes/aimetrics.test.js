@@ -137,7 +137,7 @@ test('component data initialization', () => {
   expect(comp.aimetrics).toEqual([]);
   expect(comp.headers).toHaveLength(3);
   expect(comp.headers[0]).toHaveLength(8); // Users table headers
-  expect(comp.headers[1]).toHaveLength(7); // Sessions table headers
+  expect(comp.headers[1]).toHaveLength(9); // Sessions table headers
   expect(comp.headers[2]).toHaveLength(7); // Messages table headers
   expect(comp.expandedFields).toHaveProperty('1');
   expect(comp.sortByUsers).toEqual([{ key: 'totalCredits', order: 'desc' }]);
@@ -1288,4 +1288,42 @@ test('beforeUnmount lifecycle cleanup', () => {
   }
   
   expect(comp.stopRefreshTimer).toHaveBeenCalled();
+});
+
+// getCPM tests
+
+test('getCPM calculates credits per minute for multiple minutes', () => {
+  const durationMs = 300000; // 5 minutes
+  const totalCredits = 250;
+  
+  const result = comp.getCPM(durationMs, totalCredits);
+  
+  expect(result).toBe(50); // 250 / 5 = 50
+});
+
+test('getCPM rounds to nearest integer', () => {
+  const durationMs = 90000; // 1.5 minutes
+  const totalCredits = 100;
+  
+  const result = comp.getCPM(durationMs, totalCredits);
+  
+  expect(result).toBe(67); // 100 / 1.5 = 66.666... rounds to 67
+});
+
+test('getCPM handles zero credits', () => {
+  const durationMs = 60000; // 1 minute
+  const totalCredits = 0;
+  
+  const result = comp.getCPM(durationMs, totalCredits);
+  
+  expect(result).toBe(0);
+});
+
+test('getCPM handles less than one minute', () => {
+  const durationMs = 45000; // 45 seconds
+  const totalCredits = 50000;
+  
+  const result = comp.getCPM(durationMs, totalCredits);
+  
+  expect(result).toBe(50000);
 });

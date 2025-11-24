@@ -756,6 +756,19 @@ $(document).ready(function () {
             return moment.duration(duration,"s").humanize();
           }
         },
+        formatLongDuration(durationMs) {
+          const totalSeconds = durationMs / 1000;
+          const minutes = totalSeconds / 60;
+          const hours = minutes / 60;
+          const days = hours / 24;
+          if (days >= 1) {
+            return `${days.toFixed(1)}${this.i18n.dDays}`;
+          }
+          if (hours >= 1) {
+            return `${hours.toFixed(1)}${this.i18n.hHours}`;
+          }
+          return `${Math.round(minutes)}${this.i18n.mMinutes}`;
+        },
         formatHours(hours) {
           return this.formatDecimal2(hours);
         },

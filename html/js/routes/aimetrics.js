@@ -28,9 +28,11 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       [
         { title: this.$root.i18n.title, value: 'title' },
         { title: this.$root.i18n.createTime, value: 'createTime' },
+        { title: this.$root.i18n.duration, value: 'durationMs' },
         { title: this.$root.i18n.totalInputTokens, value: 'totalInputTokens' },
         { title: this.$root.i18n.totalOutputTokens, value: 'totalOutputTokens' },
         { title: this.$root.i18n.totalCredits, value: 'totalCredits' },
+        { title: this.$root.i18n.creditsPerMinute, value: 'creditsPerMinute' },
         { title: this.$root.i18n.totalMessages, value: 'totalMessages' },
         { title: this.$root.i18n.actions, value: 'actions' },
       ],
@@ -55,7 +57,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
     },
     rightShiftedHeaders: [
       ['totalInputTokens', 'totalOutputTokens', 'totalCredits', 'creditPercentage', 'totalSessions', 'totalMessages'],
-      ['totalInputTokens', 'totalOutputTokens', 'totalCredits', 'totalMessages'],
+      ['durationMs', 'totalInputTokens', 'totalOutputTokens', 'totalCredits', 'creditsPerMinute', 'totalMessages'],
       ['inputTokens', 'outputTokens', 'credits'],
     ],
     sortByUsers: [{ key: 'totalCredits', order: 'desc' }],
@@ -70,7 +72,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       { title: "value", value: "value" }
     ],
     creditsRemaining: 0,
-    lowBalanceColorAlert: 500000,
+    creditsLoaded: false,
     searchFilter: '',
     
     // Date range filter properties
@@ -133,7 +135,6 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
   methods: {
     async initAssistant(params) {
       this.assistantEnabled = params["enabled"] && this.$root.isLicensed('oai');
-      this.lowBalanceColorAlert = params["lowBalanceColorAlert"];
       this.paramsLoaded = true;
       if (this.assistantEnabled) {
         this.loadData();
@@ -195,7 +196,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
           this.aimetrics = response.data;
           this.aimetrics.forEach(item => {
             item.role = item.message.role;
-            if (item.role === 'assistant') {
+            if (item.role === 'assistant' && item.message.usage) {
               item.inputTokens = item.message.usage.input_tokens;
               item.outputTokens = item.message.usage.output_tokens;
               item.credits = item.message.usage.credits;
@@ -222,6 +223,11 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
             item.totalOutputTokens = item.usage.totalOutputTokens;
             item.totalCredits = item.usage.totalCredits;
             item.totalMessages = item.usage.totalMessages;
+            const startMs = new Date(item.createTime);
+            const endMs = new Date(item.updateTime);
+            item.durationMs = endMs - startMs;
+            item.duration = this.$root.formatLongDuration(item.durationMs);
+            item.creditsPerMinute = this.getCPM(item.durationMs, item.totalCredits);
           });
         } else {
           this.tableSetting = this.TABLE_SETTING_USERS;
@@ -312,12 +318,14 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         if (response.data) {
           if (response.data.health_status === 'healthy') {
             this.creditsRemaining = response.data.credit_balance || 0;
+            this.creditsLoaded = true;
           } else {
             throw new Error(this.i18n.assistantBalanceCheckUnhealthy);
           }
         }
       } catch (error) {
         this.$root.showError(this.i18n.assistantUnableToLoadCredits + ': ' + error.message);
+        this.creditsLoaded = true;
       }
     },
     async lookupSocId(data) {
@@ -500,5 +508,11 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       let percentage = (credits / total) * 100;
       return `${percentage.toFixed(1)}%`;
     },
+    getCPM(durationMs, totalCredits) {
+      let minutes = durationMs / 60000;
+      if (minutes < 1) minutes = 1;
+      const rawCPM = totalCredits / minutes;
+      return Math.round(rawCPM);
+    }
   }
 }});

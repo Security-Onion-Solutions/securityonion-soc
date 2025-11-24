@@ -431,28 +431,20 @@ func (store *ElasticDetectionstore) QueryWithRange(ctx context.Context, query st
 		return nil, err
 	}
 
-	var timeFormat string
-
-	if rangeFormat != "" {
-		timeFormat = rangeFormat
-	} else {
-		timeFormat = "2006/01/02 3:04:05 PM"
-	}
-
 	var timeRange string
 
 	if rangeStart != "" || rangeEnd != "" {
-		timeRange = parseRangeAllowRelative(rangeStart, rangeEnd, timeFormat)
+		timeRange = parseRangeAllowRelative(rangeStart, rangeEnd, rangeFormat)
 	}
 
 	zone := "UTC"
 
 	criteria := model.NewEventSearchCriteria()
 	err = criteria.Populate(query,
-		timeRange,  // timeframe range
-		timeFormat, // timeframe format
-		zone,       // timezone
-		"0",        // no metrics
+		timeRange,               // timeframe range
+		"2006/01/02 3:04:05 PM", // timeframe format
+		zone,                    // timezone
+		"0",                     // no metrics
 		strconv.Itoa(limit))
 
 	if err != nil {

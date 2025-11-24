@@ -534,6 +534,11 @@ func (store *ElasticAssistantstore) GetSessions(ctx context.Context, authored bo
 		}
 	}
 
+	if err := store.addMetaFromMessages(ctx, sessions); err != nil {
+		logger.WithError(err).Error("Failed to populate session update time")
+		return nil, err
+	}
+
 	return sessions, nil
 }
 
@@ -684,6 +689,134 @@ func (store *ElasticAssistantstore) populateSessionUsage(ctx context.Context, se
 					}
 
 					session.Usage = usage
+				}
+			}
+		}
+	}
+
+	logger.WithFields(log.Fields{
+		"sessionCount": len(sessions),
+		"requestId":    ctx.Value(web.ContextKeyRequestId),
+	}).Debug("Populated session usage")
+
+	return nil
+}
+
+func (store *ElasticAssistantstore) addMetaFromMessages(ctx context.Context, sessions []*model.AssistantSession) error {
+	if len(sessions) == 0 {
+		return nil
+	}
+
+	logger := log.FromContext(ctx)
+
+	// Build MSearch request body - one search per session
+	var msearchBody strings.Builder
+	for _, session := range sessions {
+		// Header line (empty object means use default index)
+		msearchBody.WriteString("{}\n")
+
+		// Query to aggregate usage for this session
+		query := map[string]any{
+			"query": map[string]any{
+				"bool": map[string]any{
+					"must": []any{
+						map[string]any{
+							"term": map[string]any{
+								store.schemaPrefix + "chat.sessionId": session.SessionId,
+							},
+						},
+						map[string]any{
+							"term": map[string]any{
+								store.schemaPrefix + "kind": "chat",
+							},
+						},
+					},
+				},
+			},
+			"aggs": map[string]any{
+				"update_time": map[string]any{
+					"max": map[string]any{
+						"field":  store.schemaPrefix + "chat.createTime",
+						"format": "strict_date_optional_time",
+					},
+				},
+			},
+			"size": 0,
+		}
+
+		queryJSON, err := json.Marshal(query)
+		if err != nil {
+			logger.WithError(err).Error("Failed to marshal session usage query")
+			return err
+		}
+		msearchBody.WriteString(string(queryJSON))
+		msearchBody.WriteString("\n")
+	}
+
+	logger.WithFields(log.Fields{
+		"sessionCount":  len(sessions),
+		"msearchLength": msearchBody.Len(),
+		"requestId":     ctx.Value(web.ContextKeyRequestId),
+	}).Debug("Executing MSearch for session usage")
+
+	// Execute MSearch
+	res, err := store.esClient.Msearch(
+		strings.NewReader(msearchBody.String()),
+		store.esClient.Msearch.WithContext(ctx),
+		store.esClient.Msearch.WithIndex(store.chatIndex),
+	)
+	if err != nil {
+		logger.WithError(err).Error("Failed to execute MSearch for session usage")
+		return err
+	}
+	defer res.Body.Close()
+
+	responseJSON, err := readJsonFromResponse(res)
+	if err != nil {
+		logger.WithError(err).Error("Failed to read MSearch response")
+		return err
+	}
+
+	logger.WithFields(log.Fields{
+		"msearchResponseLength": len(responseJSON),
+		"requestId":             ctx.Value(web.ContextKeyRequestId),
+	}).Debug("Received MSearch response")
+
+	var response map[string]any
+	if err := json.Unmarshal([]byte(responseJSON), &response); err != nil {
+		logger.WithError(err).Error("Failed to unmarshal MSearch response")
+		return err
+	}
+
+	// Parse responses and populate session usage
+	if responses, ok := response["responses"].([]any); ok {
+		for i, respObj := range responses {
+			if i >= len(sessions) {
+				break
+			}
+
+			session := sessions[i]
+			if resp, ok := respObj.(map[string]any); ok {
+				// Check for error
+				if errObj, hasErr := resp["error"]; hasErr {
+					logger.WithFields(log.Fields{
+						"sessionId": session.SessionId,
+						"error":     errObj,
+					}).Warn("Error in MSearch response for session")
+					continue
+				}
+
+				// Extract aggregations
+				if aggs, ok := resp["aggregations"].(map[string]any); ok {
+					if updateTimeAgg, ok := aggs["update_time"].(map[string]any); ok {
+						if value, ok := updateTimeAgg["value_as_string"].(string); ok {
+							updateTimeConverted, err := time.Parse(time.RFC3339, value)
+							if err != nil {
+								return fmt.Errorf("failed to parse updateTime string: %w", err)
+							}
+							session.UpdateTime = &updateTimeConverted
+						}
+					}
 				}
 			}
 		}

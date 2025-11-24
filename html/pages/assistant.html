@@ -73,11 +73,17 @@
 			</v-expansion-panels>
 		</v-col>
 		<v-spacer></v-spacer>
-		<v-col cols="12" lg="2" align="end">
-			<h4 data-aid="assistant_max_context">{{ i18n.contextLimit }}: {{ increaseContextLimit ? formatCount(contextLimitLarge) : formatCount(contextLimitSmall) }}</h4>
+		<v-col cols="12" lg="2">
+			<h4 class="ml-5" data-aid="assistant_current_model">{{ i18n.currentModel }}: {{ modelsMap.get(currentModel).displayName }}</h4>
+			<h4 class="ml-5" data-aid="assistant_max_context">{{ i18n.contextLimit }}: {{ increaseContextLimit ? formatCount(contextLimitLarge) : formatCount(contextLimitSmall) }}</h4>
 		</v-col>
 		<v-col cols="12" lg="2" align="end">
-			<h4 data-aid="assistant_credits_remaining">{{ i18n.creditsRemaining }}: <span :class="creditsRemaining <= lowBalanceColorAlert ? 'text-error' : 'text-primary'">{{ formatCount(creditsRemaining) }}</span></h4>
+			<h4 data-aid="assistant_credits_remaining">{{ i18n.creditsRemaining }}:
+				<span v-if="!creditsLoaded">
+					<v-progress-circular indeterminate color="primary" size="14" width="3"></v-progress-circular>
+				</span>
+				<span v-else :class="creditsRemaining <= lowBalanceColorAlert ? 'text-error' : 'text-primary'">{{ formatCount(creditsRemaining) }}</span>
+			</h4>
 			<span class="text-caption">{{ i18n.creditsSubjectToExpiration }}</span>
 		</v-col>
 	</v-row>
@@ -104,6 +110,7 @@
 					<v-btn :color="getCompressColor()" class="mx-4" variant="flat" id="compress-context" @click="compressCurrentSession()" :title="i18n.compressContext" data-aid="assistant_banner_compress_context">
 						<v-icon>fa-minimize</v-icon>
 					</v-btn>
+					<div class="text-wrap mr-4" style="font-size: 14px;">{{ i18n.totalCredits }}: <span class="text-primary">{{ formatCount(creditsUsed) }}</span></div>
 					<div class="text-wrap" style="font-size: 14px;">{{ i18n.contextLength }}: <span :class="getContextColor(contextLength)">{{ formatCount(contextLength) }}</span></div>
 				</v-card-title>
 				<v-divider></v-divider>

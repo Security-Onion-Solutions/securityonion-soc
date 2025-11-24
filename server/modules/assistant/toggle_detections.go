@@ -9,7 +9,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -37,7 +36,7 @@ func (t *ToggleDetectionsTool) GetDescription() string {
 		"- When searching for detections, specify a date range of 999 days ago unless advised otherwise.\n" +
 		"- Examples for wild cards in the oql_query:\n" +
 		"  - Search terms cannot begin with a wildcard (e.g., `*xyz` the wildcard is ignored, but `xyz*` is valid)\n" +
-		"  - When using wildcards, do not wrap the value in quotes, instead use parentheses (e.g., `so_detection.title:(A B*)` is valid, but `so_detection.title:\"A B*\"` will not work as expected)\n"
+		"  - When using wildcards, do not wrap the value in quotes, instead use parentheses (e.g., `so_detection.title:(A B*)` is valid, but `so_detection.title:\"A B*\"` will not work as expected)"
 }
 
 func (t *ToggleDetectionsTool) GetSchema() model.JSONSchema {
@@ -73,9 +72,8 @@ func (t *ToggleDetectionsTool) GetSchema() model.JSONSchema {
 						"- @timestamp: The date and time when this detection was last created/updated/modified. Example: \"2025-11-12T19:38:17.413984706Z\"",
 				},
 				"enable": {
-					Type: "string",
-					Description: "This is a \"true\"/\"false\" value based on whether the user wants to enable or disable the detections at hand. A value of \"true\" corresponds to the enable operation, and \"false\" corresponds to the disable operation.\n" +
-						"*IMPORTANT* This can only have one of two values: \"true\" or \"false\".",
+					Type:        "boolean",
+					Description: "This is a boolean value based on whether the user wants to enable or disable the detections at hand. A value of true corresponds to the enable operation, and false corresponds to the disable operation.",
 				},
 				"range_start": {
 					Type:        "string",
@@ -102,7 +100,7 @@ func (t *ToggleDetectionsTool) GetSchema() model.JSONSchema {
 
 type toggleDetectionsArgs struct {
 	SearchFilter string `json:"search_filter"`
-	Enable       string `json:"enable" enums:"true,false"`
+	Enable       bool   `json:"enable"`
 	RangeStart   string `json:"range_start,omitempty"`
 	RangeEnd     string `json:"range_end,omitempty"`
 	RangeFormat  string `json:"range_format,omitempty"`
@@ -141,11 +139,6 @@ func (t *ToggleDetectionsTool) Execute(ctx context.Context, srv *server.Server, 
 
 	result.Parameters = args
 
-	enableBool, err := strconv.ParseBool(args.Enable)
-	if err != nil {
-		return nil, fmt.Errorf("invalid value %s for argument \"enable\": %w", args.Enable, err)
-	}
-
 	query := args.SearchFilter
 
 	if query != "" && !strings.Contains(query, "NOT metadata.raw_index:") {
@@ -178,7 +171,7 @@ func (t *ToggleDetectionsTool) Execute(ctx context.Context, srv *server.Server, 
 
 	logger.WithField("detectionsFound", len(detects)).Info("query executed successfully")
 
-	bulkStats, err := srv.Detectionstore.BulkUpdateDetections(ctx, enableBool, detects, logger)
+	bulkStats, err := srv.Detectionstore.BulkUpdateDetections(ctx, args.Enable, detects, logger)
 	if err != nil {
 		logger.WithError(err).Error("error updating detections")
 		return nil, fmt.Errorf("error updating detections: %w", err)
@@ -226,7 +219,7 @@ func (t *ToggleDetectionsTool) Execute(ctx context.Context, srv *server.Server, 
 	syncDur := time.Since(syncStart)
 
 	var opString string
-	if enableBool {
+	if args.Enable {
 		opString = "Enabled"
 	} else {
 		opString = "Disabled"

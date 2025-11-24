@@ -18,12 +18,14 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     chatHistory: [],
     currentChatId: null,
     creditsRemaining: 0,
+    creditsLoaded: false,
     executingToolsBySession: new Map(), // Map<sessionId, Map<toolUseId, toolUse>>
     toolIndexToIdBySession: new Map(), // Map<sessionId, Map<index, toolUseId>>
     toolQueues: new Map(), // Map<sessionId, Array<toolUseId>>
     toolRunnerBusy: new Set(), // Set<sessionId>
     mostRecentFloatingTool: new Map(), // Map<sessionId, toolUse>
     contextLength: 0, // Track total context length
+    creditsUsed: 0, // Track total accumulated credits used for a session
     increaseContextLimit: false, // Toggle for max context threshold
     restoreLastActive: false, // Toggle to restore last active chat
     alwaysApproveReadRequests: false,
@@ -124,6 +126,13 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }
     },
 
+    updateCreditsUsed(usage) {
+      if (usage) {
+        const messageCredits = usage.credits || 0;
+        this.creditsUsed += messageCredits;
+      }
+    },
+
     checkContextLimitReached() {
       const maxContextLength = this.increaseContextLimit ? this.contextLimitLarge : this.contextLimitSmall;
       if (this.contextLength >= maxContextLength) {
@@ -146,6 +155,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         ];
         // Reset context length for new chat
         this.contextLength = 0;
+        this.creditsUsed = 0;
       } catch (error) {
         this.$root.showError(error);
       }
@@ -258,12 +268,14 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         if (response.data) {
           if (response.data.health_status === 'healthy') {
             this.creditsRemaining = response.data.credit_balance || 0;
+            this.creditsLoaded = true;
           } else {
             throw new Error(this.i18n.assistantBalanceCheckUnhealthy);
           }
         }
       } catch (error) {
         this.$root.showError(this.i18n.assistantUnableToLoadCredits + ': ' + error.message);
+        this.creditsLoaded = true;
       }
     },
     async saveCurrentChat() {
@@ -617,6 +629,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         assistantMessage.usage.value = messageUsage;
         // Update context length
         this.updateContextLength(messageUsage);
+        this.updateCreditsUsed(messageUsage);
         this.$forceUpdate();
       }
       
@@ -927,6 +940,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         assistantMessage.usage.value = messageUsage;
         // Update context length for tool result messages too
         this.updateContextLength(messageUsage);
+        this.updateCreditsUsed(messageUsage);
         this.$forceUpdate();
       }
       return { assistantMessage: null, messageUsage: null };
@@ -1583,6 +1597,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       const processedMessages = [];
       // Reset context length when loading from backend
       this.contextLength = 0;
+      this.creditsUsed = 0;
       this.contextStartMessageIndex = -1;
       
       let skip_next = false;
@@ -1632,6 +1647,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           frontendMsg.usage = Vue.ref(msg.message.usage);
           // Update context length for loaded messages
           this.updateContextLength(msg.message.usage);
+          this.updateCreditsUsed(msg.message.usage);
         }
 
         processedMessages.push(frontendMsg);

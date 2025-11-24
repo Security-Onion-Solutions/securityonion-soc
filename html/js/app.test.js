@@ -59,6 +59,16 @@ test('formatHours', () => {
   expect(app.formatHours(10.14)).toBe("10.14");
 });
 
+test('formatLongDuration', () => {
+  expect(app.formatLongDuration(29000)).toBe("0m");
+  expect(app.formatLongDuration(300000)).toBe("5m");
+  expect(app.formatLongDuration(290000)).toBe("5m");
+  expect(app.formatLongDuration(3600000)).toBe("1.0h");
+  expect(app.formatLongDuration(3960000)).toBe("1.1h");
+  expect(app.formatLongDuration(86400000)).toBe("1.0d");
+  expect(app.formatLongDuration(95040000)).toBe("1.1d");
+});
+
 test('formatDecimals', () => {
   expect(app.formatDecimal1(null)).toBe("0.0");
   expect(app.formatDecimal2(null)).toBe("0.00");
