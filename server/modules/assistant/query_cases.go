@@ -37,15 +37,11 @@ func (t *QueryCasesTool) GetName() string {
 }
 
 func (t *QueryCasesTool) GetDescription() string {
-	return "- Execute OQL queries to retrieve Security Onion cases that are most applicable to the given alert(s) (or other event(s)/topic(s)) at hand.\n" +
-		"- Search for cases by referencing so_case.description and so_case.title\n" +
-		"- *IMPORTANT* All queries should include `AND _index:\"*:so-case\" AND so_kind:case` appended to the end. The quotes around *:so-case MUST be included.\n" +
-		"- When searching for cases, specify a date range of 999 days ago.\n" +
-		"- Examples for wild cards in the oql_query:\n" +
-		"  - Search terms cannot begin with a wildcard (e.g., `*xyz` the wildcard is ignored, but `xyz*` is valid)\n" +
-		"  - When using wildcards, do not wrap the value in quotes, instead use parentheses (e.g., `so_case.title:(A B*)` is valid, but `so_case.title:\"A B*\"` will not work as expected)\n" +
-		"- In addition to search results, you'll also get the user's most recently viewed cases. This field is called recent_cases.\n" +
-		"- If the most applicable case is clear-cut, explain that to the user. Otherwise, give multiple options, compare them, and let the user choose."
+	return "Retrieve Security Onion cases using OQL queries. " +
+		"IMPORTANT: All queries must include `AND _index:\"*:so-case\" AND so_kind:case` (quotes required). " +
+		"Use a 999-day date range. Search so_case.description and so_case.title fields. " +
+		"Results include both query matches and user's recent_cases. " +
+		"Present clear-cut matches directly, or provide multiple options with comparisons for user selection."
 }
 
 func (t *QueryCasesTool) GetSchema() model.JSONSchema {
@@ -55,23 +51,23 @@ func (t *QueryCasesTool) GetSchema() model.JSONSchema {
 			Properties: map[string]model.ToolSchemaProperty{
 				"oql_query": {
 					Type:        "string",
-					Description: "The OQL query string to execute",
+					Description: "OQL query to search cases.",
 				},
 				"range_start": {
 					Type:        "string",
-					Description: "Optional start time for the query range (e.g., \"-1h\", \"2023/10/26 10:00:00 AM\"). Default is 24 hours ago (\"-24h\")",
+					Description: "Optional start time (e.g., \"-1h\", \"2023/10/26 10:00:00 AM\"). Default: \"-24h\".",
 				},
 				"range_end": {
 					Type:        "string",
-					Description: "Optional end time for the query range (e.g., \"now\", \"2023/10/26 12:00:00 PM\"). Default is now.",
+					Description: "Optional end time (e.g., \"now\", \"2023/10/26 12:00:00 PM\"). Default: \"now\".",
 				},
 				"range_format": {
 					Type:        "string",
-					Description: "Format of the date range (default: \"2006/01/02 3:04:05 PM\"). The format must be specified using Go's time package's reference layout format. Required if either range_start or range_end is provided.",
+					Description: "Date format using Go time layout (default: \"2006/01/02 3:04:05 PM\"). Required if range_start or range_end is provided.",
 				},
 				"limit": {
 					Type:        "integer",
-					Description: "The maximum number of cases to return",
+					Description: "Maximum cases to return.",
 					Default:     100,
 				},
 			},

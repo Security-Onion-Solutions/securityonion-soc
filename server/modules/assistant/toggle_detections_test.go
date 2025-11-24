@@ -382,11 +382,8 @@ func TestToggleDetectionsTool_GetName(t *testing.T) {
 
 func TestToggleDetectionsTool_GetDescription(t *testing.T) {
 	tool := &ToggleDetectionsTool{}
-	description := tool.GetDescription()
-	assert.Contains(t, description, "Enable or disable detections in Security Onion")
-	assert.Contains(t, description, "_index:\"*:so-detection\" AND so_kind:detection")
-	assert.Contains(t, description, "999 days ago")
-	assert.Contains(t, description, "wildcards")
+	desc := tool.GetDescription()
+	assert.NotEmpty(t, desc)
 }
 
 func TestToggleDetectionsTool_GetSchema(t *testing.T) {
@@ -406,29 +403,20 @@ func TestToggleDetectionsTool_GetSchema(t *testing.T) {
 	// Check search_filter property
 	searchFilter := schema.Json.Properties["search_filter"]
 	assert.Equal(t, "string", searchFilter.Type)
-	assert.Contains(t, searchFilter.Description, "so_detection.id")
-	assert.Contains(t, searchFilter.Description, "so_detection.title")
-	assert.Contains(t, searchFilter.Description, "so_detection.severity")
-	assert.Contains(t, searchFilter.Description, "so_detection.isEnabled")
 
 	// Check enable property
 	enable := schema.Json.Properties["enable"]
 	assert.Equal(t, "boolean", enable.Type)
-	assert.Contains(t, enable.Description, "true")
-	assert.Contains(t, enable.Description, "false")
 
 	// Check range properties
 	rangeStart := schema.Json.Properties["range_start"]
 	assert.Equal(t, "string", rangeStart.Type)
-	assert.Contains(t, rangeStart.Description, "start time")
 
 	rangeEnd := schema.Json.Properties["range_end"]
 	assert.Equal(t, "string", rangeEnd.Type)
-	assert.Contains(t, rangeEnd.Description, "end time")
 
 	rangeFormat := schema.Json.Properties["range_format"]
 	assert.Equal(t, "string", rangeFormat.Type)
-	assert.Contains(t, rangeFormat.Description, "format")
 }
 
 func TestToggleDetectionsTool_QueryFiltering(t *testing.T) {

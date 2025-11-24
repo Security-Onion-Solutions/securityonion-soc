@@ -30,25 +30,30 @@ func (t *AddOverridesTool) GetName() string {
 }
 
 func (t *AddOverridesTool) GetDescription() string {
-	return `Add one or more new overrides to existing detection(s) per the user's request. Search for detections by referencing any potentially relevant field(s), whichever you see fit from the ones described to you.
-	- *IMPORTANT* All detections MUST be of the same language/engine (Suricata or Sigma). Otherwise, the new override(s) won't be compatible with some of them.
-	- *IMPORTANT* All queries should include 'AND _index:"*:so-detection" AND so_kind:detection' appended to the end. The quotes around *:so-detection MUST be included.
-	- When searching for detections, specify a date range of 999 days ago unless advised otherwise.
-	- Examples for wild cards in the oql_query:
-	  - Search terms cannot begin with a wildcard (e.g., "*xyz" the wildcard is ignored, but "xyz*" is valid)
-	  - When using wildcards, do not wrap the value in quotes, instead use parentheses (e.g., so_detection.title:(A B*) is valid, but so_detection.title:"A B*" will not work as expected)
-	The types of overrides and the fields for each override can vary between the Suricata and Sigma languages.
-	YARA does not have overrides. The 5 fields that all overrides do share in common, no matter the language, are "isEnabled", "createdAt", "updatedAt", "type", and "note".
-	The "note" field is the only one that can be empty. Here is a run-down of the language-specific override types and their respective fields and potential values:
-	Suricata:
-	- 3 different values for "type": "modify", "suppress", and "threshold"
-	  - "modify" overrides also have the fields "regex" and "value".
-	  - "suppress" overrides also have the fields "track" and "ip". The "track" field can ONLY take ONE of the following 3 values: "by_dst", "by_src", or "by_either". The "ip" field can be in CIDR notation or a Suricata variable.
-	  - "threshold" overrides also have the fields "thresholdType", "track", "count", and "seconds". The "track" field can only take one of 2 values: "by_dst" or "by_src". The "thresholdType" field can only take one of 3 values: "threshold", "limit", or "both".
-	Sigma:
-	- Only 1 value for "type": "customFilter"
-	  - "customFilter" overrides also have a field called "customFilter", where you put the actual filter.
-	*IMPORTANT* When creating a new override, DO NOT include createdAt or updatedAt fields for the new override.`
+	return `Adds new overrides to existing detections. Overrides modify detection behavior (suppress alerts, set thresholds, apply filters, etc.).
+
+CRITICAL REQUIREMENTS:
+- All target detections MUST use the same engine (Suricata or Sigma) - overrides are engine-specific
+- Always append to search_filter: 'AND _index:"*:so-detection" AND so_kind:detection'
+- Use 999-day date range unless specified otherwise
+- DO NOT include createdAt or updatedAt in new overrides
+
+OVERRIDE TYPES BY ENGINE:
+
+Suricata (3 types):
+1. "modify": Changes rule content
+   - Fields: type, isEnabled, note, regex, value
+2. "suppress": Prevents alerts for specific IPs
+   - Fields: type, isEnabled, note, track (by_src|by_dst|by_either), ip (CIDR or variable)
+3. "threshold": Rate-limits alerts
+   - Fields: type, isEnabled, note, thresholdType (threshold|limit|both), track (by_src|by_dst), count (>0), seconds (>0)
+
+Sigma (1 type):
+1. "customFilter": Adds filter conditions
+   - Fields: type, isEnabled, note, customFilter
+
+Common fields: isEnabled (bool), type (string), note (string, optional)
+YARA: No overrides supported`
 }
 
 func (t *AddOverridesTool) GetSchema() model.JSONSchema {
@@ -57,135 +62,102 @@ func (t *AddOverridesTool) GetSchema() model.JSONSchema {
 			Type: "object",
 			Properties: map[string]model.ToolSchemaProperty{
 				"search_filter": {
-					Type: "string",
-					Description: "OQL search filter to find matching detections. Here is a run-down of each of the potentially relevant fields you might want to use in your query:\n" +
-						"- so_detection.id: The ID assigned to this detection by the server. This is a read-only field. Example: \"gQKCepgBAWAm-kn2lYs2\"\n" +
-						"- so_detection.createTime: The date and time that this detection was created. This is a read-only field. Example: \"2024-11-14T15:03:22Z\"\n" +
-						"- so_detection.userId: The ID of the user that created this detection. Example: \"dcbe6004-f6e0-4579-9f98-9576201ffb29\"\n" +
-						"- so_detection.publicId: The public ID shared across all Security Onion grids. Example: \"923421c7-9b1e-45d4-80cc-e21d060c8723\"\n" +
-						"- so_detection.title: Summarized title of the detection. Example: \"Security Onion - Grid Node Login Failure (SSH)\"\n" +
-						"- so_detection.severity: The severity classification of this detection. This MUST be either \"unknown\", \"informational\", \"low\", \"medium\", \"high\", or \"critical\".\n" +
-						"- so_detection.author: The original author of this detection. This can be a mixture of email address, organization name, first name, or any freeform value. Example: \"Security Onion Solutions\"\n" +
-						"- so_detection.category: Used for categorizing this detection into a broader grouping such as firewalls or web servers. Example: \"ps_script\"\n" +
-						"- so_detection.description: Brief explanation of this detection. Example: \"Detects when a user fails to login to a grid node via SSH. Review associated logs for username and source IP.\"\n" +
-						"- so_detection.content: The underlying detection rule source content. Example: \"title: CobaltStrike Named Pipe\\nid: ...\\n logsource:\\n ...\\ncondition: selection\\nfalsepositives:\\n...\"\n" +
-						"- so_detection.isEnabled: Indicates whether this detection is currently enabled in the Security Onion grid. Example: true\n" +
-						"- so_detection.isCommunity: Indicates whether this detection originated from a community ruleset. Duplicated detections will show 'false'. Example: true\n" +
-						"- so_detection.engine: The engine that processes this detection.\n" +
-						"- so_detection.language: The language that this detection uses. This MUST be either \"sigma\", \"suricata\", or \"yara\".\n" +
-						"- so_detection.overrides: A list of tuning overrides that apply to this detection.\n" +
-						"- so_detection.tags: An optional list of user-defined tags, useful for grouping similar detections together.\n" +
-						"- so_detection.ruleset: The name of the ruleset from which this detection originated, or __custom__ if the ruleset was created outside of a ruleset. Example: \"__custom__\"\n" +
-						"- so_detection.license: The license that applies to this detection. Example: \"DRL\"\n" +
-						"- so_detection.sourceCreated: The date and time when the underlying detection rule source was created. This is not when the detection was added to this grid.\n" +
-						"- so_detection.sourceUpdated: The date and time when the underlying detection rule source was last updated. This is not when the detection was updated in this grid.\n" +
-						"- so_detection.product: Used by Sigma rules for filtering log outputs to a specific product, such as the Windows eventlog types. Example: \"windows\"\n" +
-						"- so_detection.service: Used by Sigma rules for filtering a subset of log outputs to a specific server. Example: \"sshd\"\n" +
-						"- @timestamp: The date and time when this detection was last created/updated/modified. Example: \"2025-11-12T19:38:17.413984706Z\"",
+					Type:        "string",
+					Description: "OQL query to find target detections. Must include: 'AND _index:\"*:so-detection\" AND so_kind:detection'",
 				},
 				"overrides": {
 					Type: "array",
 					Items: map[string]model.ToolSchemaProperty{
 						"override": {
-							Description: "Each of these objects represents an individual override.",
+							Description: "Individual override object. Include only fields relevant to the override type.",
 							Type:        "object",
 							Items: map[string]model.ToolSchemaProperty{
 								"isEnabled": {
 									Type:        "boolean",
-									Description: "Indicates whether this override is enabled.",
-								},
-								"createdAt": {
-									Type:        "string",
-									Description: "The date and time when this override was created. This field should not be included for newly created overrides, and it also should not be modified.",
-								},
-								"updatedAt": {
-									Type:        "string",
-									Description: "The date and time when this override was last modified. This field should not be included for newly created overrides, and it also should not be modified.",
+									Description: "Whether override is active (required)",
 								},
 								"type": {
 									Type:        "string",
-									Description: "The type of override; available values vary between detection engines.",
+									Description: "Override type: Suricata: modify|suppress|threshold, Sigma: customFilter (required)",
 								},
 								"note": {
 									Type:        "string",
-									Description: "An optional operational note for this override.",
+									Description: "Optional description/comment",
 								},
 								"regex": {
 									Type:        "string",
-									Description: "(suricata only) Regular expression for matching modify overrides.",
+									Description: "Suricata modify: regex pattern to match in rule (required for modify)",
 								},
 								"value": {
 									Type:        "string",
-									Description: "(suricata only) The value needing to match the regex in order for this override to apply.",
+									Description: "Suricata modify: replacement value (required for modify)",
 								},
 								"track": {
 									Type:        "string",
-									Description: "(suricata only) Track type for suppress and threshold overrides (by_either only applies to suppress overrides).",
+									Description: "Suricata suppress/threshold: by_src|by_dst (threshold) or by_src|by_dst|by_either (suppress) (required)",
 								},
 								"ip": {
 									Type:        "string",
-									Description: "(suricata only) The IP address or network value.",
+									Description: "Suricata suppress: IP/CIDR or variable to suppress (required for suppress)",
 								},
 								"thresholdType": {
 									Type:        "string",
-									Description: "(suricata only) Threshold type, for threshold overrides.",
+									Description: "Suricata threshold: threshold|limit|both (required for threshold)",
 								},
 								"count": {
 									Type:        "integer",
-									Description: "(suricata only) For treshold overrides, this is the number of occurrences allowed, within the given seconds interval, before this detection triggers an alert. Must be non-negative and greater than 0.",
+									Description: "Suricata threshold: occurrences before alert, must be >0 (required for threshold)",
 								},
 								"seconds": {
 									Type:        "integer",
-									Description: "(suricata only) For treshold overrides, this is the number of seconds that the occurrence threshold must occur within. Must be non-negative and greater than 0.",
+									Description: "Suricata threshold: time window in seconds, must be >0 (required for threshold)",
 								},
 								"customFilter": {
 									Type:        "string",
-									Description: "(elastalert only) The custom filter applied to Sigma detections before the detection will trigger an alert.",
+									Description: "Sigma customFilter: filter expression to apply (required for customFilter)",
 								},
 							},
 						},
 					},
-					Description: `The new overrides to add to the detections at hand. These will be appended to the existing overrides block for each queried detection.
-					This field should be a list of the new override(s), as an array of objects. Note that even in the case where there is only one new override being added,
-					this new override should still be placed inside an array. Here is an example input for this field, in the case where the user wants
-					to append two new overrides to each of the detections returned by the search_filter:
+					Description: `Array of new override objects to append to each matched detection. Always use array format even for single override.
+
+Example (two overrides):
 [
-	{
-		"note": "",
-		"seconds": 60,
-		"isEnabled": true,
-		"count": 10,
-		"type": "threshold",
-		"track": "by_src",
-		"thresholdType": "both",
-	},
-	{
-		"note": "Override Note",
-		"regex": "rev:1;",
-		"isEnabled": true,
-		"type": "modify",
-		"value": "rev:2;",
-	}
+		{
+				"type": "threshold",
+				"isEnabled": true,
+				"track": "by_src",
+				"thresholdType": "both",
+				"count": 10,
+				"seconds": 60,
+				"note": ""
+		},
+		{
+				"type": "modify",
+				"isEnabled": true,
+				"regex": "rev:1;",
+				"value": "rev:2;",
+				"note": "Override Note"
+		}
 ]
-					If used as input, the above example should be passed as an array of objects. The above "overrides" argument is only the *new* overrides that the user wants to add to the given detection(s).
-					This argument should NOT include any existing overrides from the given detections' so_detection.overrides blocks, only new ones.`,
+
+IMPORTANT: Only include NEW overrides, not existing ones from detections.`,
 				},
 				"range_start": {
 					Type:        "string",
-					Description: "Optional start time for the query range (e.g., \"-1h\", \"2023/10/26 10:00:00 AM\"). Default is 24 hours ago (\"-24h\")",
+					Description: "Start time for query range (e.g., \"-1h\", \"2023/10/26 10:00:00 AM\"). Default: -24h",
 				},
 				"range_end": {
 					Type:        "string",
-					Description: "Optional end time for the query range (e.g., \"now\", \"2023/10/26 12:00:00 PM\"). Default is now.",
+					Description: "End time for query range (e.g., \"now\", \"2023/10/26 12:00:00 PM\"). Default: now",
 				},
 				"range_format": {
 					Type:        "string",
-					Description: "Format of the date range (default: \"2006/01/02 3:04:05 PM\"). The format must be specified using Go's time package's reference layout format. Required if either range_start or range_end is provided.",
+					Description: "Go time format for range_start/range_end (default: \"2006/01/02 3:04:05 PM\"). Required if range_start or range_end provided.",
 				},
 				"limit": {
-					Type: "integer",
-					Description: `The maximum number of detections to return. Unless some kind of limit is applicable to the user's request, this field should be left out.
-						Here's an example where "limit" would be useful: "add the following override to the 5 most recent suricata detections: ...".`,
+					Type:        "integer",
+					Description: "Max detections to return. Omit unless user specifies (e.g., \"add to 5 most recent detections\").",
 				},
 			},
 			Required: []string{"search_filter"},
