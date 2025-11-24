@@ -53,16 +53,13 @@ func (t *EscalateAlertsTool) GetSchema() model.JSONSchema {
 					Description: `Id of the case we want to escalate to. (e.g., "Y6i16JkBZwOCEak1tWqX")`,
 				},
 				"range_start": {
-					Type:        "string",
-					Description: "Optional start time for the query range (e.g., \"-1h\", \"2023/10/26 10:00:00 AM\"). Default is 24 hours ago (\"-24h\")",
+					Type: "string",
 				},
 				"range_end": {
-					Type:        "string",
-					Description: "Optional end time for the query range (e.g., \"now\", \"2023/10/26 12:00:00 PM\"). Default is now.",
+					Type: "string",
 				},
 				"range_format": {
-					Type:        "string",
-					Description: "Format of the date range (default: \"2006/01/02 3:04:05 PM\"). The format must be specified using Go's time package's reference layout format. Required if either range_start or range_end is provided.",
+					Type: "string",
 				},
 			},
 			Required: []string{"search_filter"},
@@ -104,10 +101,18 @@ func (t *EscalateAlertsTool) Execute(ctx context.Context, server *server.Server,
 		return nil, err
 	}
 
+	var timeFormat string
+
+	if args.RangeFormat != "" {
+		timeFormat = args.RangeFormat
+	} else {
+		timeFormat = "2006/01/02 3:04:05 PM"
+	}
+
 	var timeRange string
 
 	if args.RangeStart != "" || args.RangeEnd != "" {
-		timeRange = parseRangeAllowRelative(args.RangeStart, args.RangeEnd, args.RangeFormat)
+		timeRange = parseRangeAllowRelative(args.RangeStart, args.RangeEnd, timeFormat)
 	}
 
 	result.Parameters = args

@@ -31,7 +31,6 @@ func (t *QueryDetectionsTool) GetName() string {
 
 func (t *QueryDetectionsTool) GetDescription() string {
 	return "Retrieve Security Onion detections using OQL queries. " +
-		"IMPORTANT: All queries must include `AND _index:\"*:so-detection\" AND so_kind:detection` (quotes required). " +
 		"Use a 999-day date range. Search any relevant detection fields. " +
 		"Present clear-cut matches directly, or provide multiple options with comparisons for user selection."
 }
@@ -46,16 +45,13 @@ func (t *QueryDetectionsTool) GetSchema() model.JSONSchema {
 					Description: "OQL query to search detections.",
 				},
 				"range_start": {
-					Type:        "string",
-					Description: "Optional start time (e.g., \"-1h\", \"2023/10/26 10:00:00 AM\"). Default: \"-24h\".",
+					Type: "string",
 				},
 				"range_end": {
-					Type:        "string",
-					Description: "Optional end time (e.g., \"now\", \"2023/10/26 12:00:00 PM\"). Default: \"now\".",
+					Type: "string",
 				},
 				"range_format": {
-					Type:        "string",
-					Description: "Date format using Go time layout (default: \"2006/01/02 3:04:05 PM\"). Required if range_start or range_end is provided.",
+					Type: "string",
 				},
 				"limit": {
 					Type:        "integer",

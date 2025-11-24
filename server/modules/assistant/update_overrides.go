@@ -29,13 +29,7 @@ func (t *UpdateOverridesTool) GetName() string {
 }
 
 func (t *UpdateOverridesTool) GetDescription() string {
-	return `Updates overrides for a single detection by replacing its entire overrides array. Can add, modify, enable/disable, or delete overrides.
-
-CRITICAL REQUIREMENTS:
-- Provide EXACTLY ONE of: soc_id OR public_id (NEVER both)
-- Pass the COMPLETE updated overrides array (including unchanged overrides)
-- DO NOT modify createdAt or updatedAt fields in existing overrides
-- DO NOT include createdAt or updatedAt in new overrides
+	return `Updates overrides for a single detection by replacing its entire overrides array.
 
 OPERATIONS SUPPORTED:
 - Add new override: Include it in the array
@@ -44,22 +38,9 @@ OPERATIONS SUPPORTED:
 - Delete override: Omit it from the array
 - Multiple operations: Combine any of the above
 
-OVERRIDE TYPES BY ENGINE:
-
-Suricata (3 types):
-1. "modify": Changes rule content
-   - Fields: type, isEnabled, note, regex, value
-2. "suppress": Prevents alerts for specific IPs
-   - Fields: type, isEnabled, note, track (by_src|by_dst|by_either), ip (CIDR or variable)
-3. "threshold": Rate-limits alerts
-   - Fields: type, isEnabled, note, thresholdType (threshold|limit|both), track (by_src|by_dst), count (>0), seconds (>0)
-
-Sigma (1 type):
-1. "customFilter": Adds filter conditions
-   - Fields: type, isEnabled, note, customFilter
-
-Common fields: isEnabled (bool), type (string), note (string, optional)
-YARA: No overrides supported`
+CRITICAL REQUIREMENTS:
+- Provide EXACTLY ONE of: soc_id OR public_id (NEVER both)
+- Pass the COMPLETE updated overrides array (including unchanged overrides)`
 }
 
 func (t *UpdateOverridesTool) GetSchema() model.JSONSchema {
@@ -69,11 +50,11 @@ func (t *UpdateOverridesTool) GetSchema() model.JSONSchema {
 			Properties: map[string]model.ToolSchemaProperty{
 				"soc_id": {
 					Type:        "string",
-					Description: `Server-assigned detection ID (so_detection.id field). Use soc_id OR public_id, not both.`,
+					Description: `Server-assigned detection ID (so_detection.id field).`,
 				},
 				"public_id": {
 					Type:        "string",
-					Description: `Grid-wide detection ID (so_detection.publicId field). Use soc_id OR public_id, not both.`,
+					Description: `Grid-wide detection ID (so_detection.publicId field).`,
 				},
 				"overrides": {
 					Type: "array",
@@ -83,88 +64,48 @@ func (t *UpdateOverridesTool) GetSchema() model.JSONSchema {
 							Type:        "object",
 							Items: map[string]model.ToolSchemaProperty{
 								"isEnabled": {
-									Type:        "boolean",
-									Description: "Whether override is active",
+									Type: "boolean",
 								},
 								"createdAt": {
-									Type:        "string",
-									Description: "Creation timestamp. Keep existing value for old overrides, omit for new ones.",
+									Type: "string",
 								},
 								"updatedAt": {
-									Type:        "string",
-									Description: "Last modified timestamp. Keep existing value for old overrides, omit for new ones.",
+									Type: "string",
 								},
 								"type": {
-									Type:        "string",
-									Description: "Override type: Suricata: modify|suppress|threshold, Sigma: customFilter",
+									Type: "string",
 								},
 								"note": {
-									Type:        "string",
-									Description: "Optional description/comment",
+									Type: "string",
 								},
 								"regex": {
-									Type:        "string",
-									Description: "Suricata modify: regex pattern to match in rule",
+									Type: "string",
 								},
 								"value": {
-									Type:        "string",
-									Description: "Suricata modify: replacement value",
+									Type: "string",
 								},
 								"track": {
-									Type:        "string",
-									Description: "Suricata suppress/threshold: by_src|by_dst (threshold) or by_src|by_dst|by_either (suppress)",
+									Type: "string",
 								},
 								"ip": {
-									Type:        "string",
-									Description: "Suricata suppress: IP/CIDR or variable to suppress",
+									Type: "string",
 								},
 								"thresholdType": {
-									Type:        "string",
-									Description: "Suricata threshold: threshold|limit|both",
+									Type: "string",
 								},
 								"count": {
-									Type:        "integer",
-									Description: "Suricata threshold: occurrences before alert, must be >0",
+									Type: "integer",
 								},
 								"seconds": {
-									Type:        "integer",
-									Description: "Suricata threshold: time window in seconds, must be >0",
+									Type: "integer",
 								},
 								"customFilter": {
-									Type:        "string",
-									Description: "Sigma customFilter: filter expression to apply",
+									Type: "string",
 								},
 							},
 						},
 					},
-					Description: `COMPLETE overrides array for the detection (from so_detection.overrides). Must include ALL overrides, even unchanged ones.
-
-Example (modify first override's track field):
-[
-		{
-				"type": "threshold",
-				"isEnabled": true,
-				"track": "by_dst",
-				"thresholdType": "both",
-				"count": 10,
-				"seconds": 60,
-				"note": "",
-				"createdAt": "2025-06-11T11:32:33.528762983-04:00",
-				"updatedAt": "2025-06-11T11:32:33.528762983-04:00"
-		},
-		{
-				"type": "modify",
-				"isEnabled": true,
-				"regex": "rev:1;",
-				"value": "rev:2;",
-				"note": "Override Note",
-				"createdAt": "2025-06-11T11:32:39.70697702-04:00",
-				"updatedAt": "2025-06-11T11:32:39.70697702-04:00"
-		}
-]
-
-To delete an override: omit it from the array
-To add an override: include it without createdAt/updatedAt`,
+					Description: `COMPLETE overrides array for the detection (from so_detection.overrides). Must include ALL overrides, even unchanged ones.`,
 				},
 			},
 		},

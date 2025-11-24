@@ -431,10 +431,18 @@ func (store *ElasticDetectionstore) QueryWithRange(ctx context.Context, query st
 		return nil, err
 	}
 
+	var timeFormat string
+
+	if rangeFormat != "" {
+		timeFormat = rangeFormat
+	} else {
+		timeFormat = "2006/01/02 3:04:05 PM"
+	}
+
 	var timeRange string
 
 	if rangeStart != "" || rangeEnd != "" {
-		timeRange = parseRangeAllowRelative(rangeStart, rangeEnd, rangeFormat)
+		timeRange = parseRangeAllowRelative(rangeStart, rangeEnd, timeFormat)
 	}
 
 	zone := "UTC"

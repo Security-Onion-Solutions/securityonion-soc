@@ -34,26 +34,8 @@ func (t *AddOverridesTool) GetDescription() string {
 
 CRITICAL REQUIREMENTS:
 - All target detections MUST use the same engine (Suricata or Sigma) - overrides are engine-specific
-- Always append to search_filter: 'AND _index:"*:so-detection" AND so_kind:detection'
 - Use 999-day date range unless specified otherwise
-- DO NOT include createdAt or updatedAt in new overrides
-
-OVERRIDE TYPES BY ENGINE:
-
-Suricata (3 types):
-1. "modify": Changes rule content
-   - Fields: type, isEnabled, note, regex, value
-2. "suppress": Prevents alerts for specific IPs
-   - Fields: type, isEnabled, note, track (by_src|by_dst|by_either), ip (CIDR or variable)
-3. "threshold": Rate-limits alerts
-   - Fields: type, isEnabled, note, thresholdType (threshold|limit|both), track (by_src|by_dst), count (>0), seconds (>0)
-
-Sigma (1 type):
-1. "customFilter": Adds filter conditions
-   - Fields: type, isEnabled, note, customFilter
-
-Common fields: isEnabled (bool), type (string), note (string, optional)
-YARA: No overrides supported`
+- Only include NEW overrides, not the ones that these detections already have`
 }
 
 func (t *AddOverridesTool) GetSchema() model.JSONSchema {
@@ -63,7 +45,7 @@ func (t *AddOverridesTool) GetSchema() model.JSONSchema {
 			Properties: map[string]model.ToolSchemaProperty{
 				"search_filter": {
 					Type:        "string",
-					Description: "OQL query to find target detections. Must include: 'AND _index:\"*:so-detection\" AND so_kind:detection'",
+					Description: "OQL query to find target detections.",
 				},
 				"overrides": {
 					Type: "array",
@@ -73,87 +55,51 @@ func (t *AddOverridesTool) GetSchema() model.JSONSchema {
 							Type:        "object",
 							Items: map[string]model.ToolSchemaProperty{
 								"isEnabled": {
-									Type:        "boolean",
-									Description: "Whether override is active (required)",
+									Type: "boolean",
 								},
 								"type": {
-									Type:        "string",
-									Description: "Override type: Suricata: modify|suppress|threshold, Sigma: customFilter (required)",
+									Type: "string",
 								},
 								"note": {
-									Type:        "string",
-									Description: "Optional description/comment",
+									Type: "string",
 								},
 								"regex": {
-									Type:        "string",
-									Description: "Suricata modify: regex pattern to match in rule (required for modify)",
+									Type: "string",
 								},
 								"value": {
-									Type:        "string",
-									Description: "Suricata modify: replacement value (required for modify)",
+									Type: "string",
 								},
 								"track": {
-									Type:        "string",
-									Description: "Suricata suppress/threshold: by_src|by_dst (threshold) or by_src|by_dst|by_either (suppress) (required)",
+									Type: "string",
 								},
 								"ip": {
-									Type:        "string",
-									Description: "Suricata suppress: IP/CIDR or variable to suppress (required for suppress)",
+									Type: "string",
 								},
 								"thresholdType": {
-									Type:        "string",
-									Description: "Suricata threshold: threshold|limit|both (required for threshold)",
+									Type: "string",
 								},
 								"count": {
-									Type:        "integer",
-									Description: "Suricata threshold: occurrences before alert, must be >0 (required for threshold)",
+									Type: "integer",
 								},
 								"seconds": {
-									Type:        "integer",
-									Description: "Suricata threshold: time window in seconds, must be >0 (required for threshold)",
+									Type: "integer",
 								},
 								"customFilter": {
-									Type:        "string",
-									Description: "Sigma customFilter: filter expression to apply (required for customFilter)",
+									Type: "string",
 								},
 							},
 						},
 					},
-					Description: `Array of new override objects to append to each matched detection. Always use array format even for single override.
-
-Example (two overrides):
-[
-		{
-				"type": "threshold",
-				"isEnabled": true,
-				"track": "by_src",
-				"thresholdType": "both",
-				"count": 10,
-				"seconds": 60,
-				"note": ""
-		},
-		{
-				"type": "modify",
-				"isEnabled": true,
-				"regex": "rev:1;",
-				"value": "rev:2;",
-				"note": "Override Note"
-		}
-]
-
-IMPORTANT: Only include NEW overrides, not existing ones from detections.`,
+					Description: `Array of new override objects to append to each matched detection. Always use array format even for single override.`,
 				},
 				"range_start": {
-					Type:        "string",
-					Description: "Start time for query range (e.g., \"-1h\", \"2023/10/26 10:00:00 AM\"). Default: -24h",
+					Type: "string",
 				},
 				"range_end": {
-					Type:        "string",
-					Description: "End time for query range (e.g., \"now\", \"2023/10/26 12:00:00 PM\"). Default: now",
+					Type: "string",
 				},
 				"range_format": {
-					Type:        "string",
-					Description: "Go time format for range_start/range_end (default: \"2006/01/02 3:04:05 PM\"). Required if range_start or range_end provided.",
+					Type: "string",
 				},
 				"limit": {
 					Type:        "integer",
