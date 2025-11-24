@@ -147,18 +147,10 @@ func (t *QueryEventsTool) Execute(ctx context.Context, server *server.Server, pa
 		metricLimit = 10000
 	}
 
-	var timeFormat string
-
-	if args.RangeFormat != "" {
-		timeFormat = args.RangeFormat
-	} else {
-		timeFormat = "2006/01/02 3:04:05 PM"
-	}
-
 	var timeRange string
 
 	if args.RangeStart != "" || args.RangeEnd != "" {
-		timeRange = parseRangeAllowRelative(args.RangeStart, args.RangeEnd, timeFormat)
+		timeRange = parseRangeAllowRelative(args.RangeStart, args.RangeEnd, args.RangeFormat)
 	}
 
 	criteria := model.NewEventSearchCriteria()

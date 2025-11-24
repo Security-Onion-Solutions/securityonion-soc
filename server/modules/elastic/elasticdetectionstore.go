@@ -431,18 +431,10 @@ func (store *ElasticDetectionstore) QueryWithRange(ctx context.Context, query st
 		return nil, err
 	}
 
-	var timeFormat string
-
-	if rangeFormat != "" {
-		timeFormat = rangeFormat
-	} else {
-		timeFormat = "2006/01/02 3:04:05 PM"
-	}
-
 	var timeRange string
 
 	if rangeStart != "" || rangeEnd != "" {
-		timeRange = parseRangeAllowRelative(rangeStart, rangeEnd, timeFormat)
+		timeRange = parseRangeAllowRelative(rangeStart, rangeEnd, rangeFormat)
 	}
 
 	zone := "UTC"
@@ -1279,15 +1271,19 @@ func (store *ElasticDetectionstore) ConvertObjectToDocument(ctx context.Context,
 	return rawDoc, index, err
 }
 
-func parseRangeAllowRelative(rangeStart string, rangeEnd string, format string) string {
+func parseRangeAllowRelative(rangeStart string, rangeEnd string, rangeFormat string) string {
 	start := "-24h"
 	end := "now"
+	format := "2006/01/02 3:04:05 PM"
 
 	if rangeStart != "" {
 		start = rangeStart
 	}
 	if rangeEnd != "" {
 		end = rangeEnd
+	}
+	if rangeFormat != "" {
+		format = rangeFormat
 	}
 
 	var startFormatted, endFormatted string
