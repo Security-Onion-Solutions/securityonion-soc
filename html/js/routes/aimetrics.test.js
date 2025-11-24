@@ -1290,43 +1290,6 @@ test('beforeUnmount lifecycle cleanup', () => {
   expect(comp.stopRefreshTimer).toHaveBeenCalled();
 });
 
-// formatDHM tests
-test('formatDHM formats duration with days, hours, and minutes', () => {
-  const startMs = new Date('2025-01-01T00:00:00Z');
-  const endMs = new Date('2025-01-03T05:30:00Z');
-  
-  const result = comp.formatDHM(endMs - startMs);
-  
-  expect(result).toBe('2d 5h 30m');
-});
-
-test('formatDHM formats duration with only hours and minutes', () => {
-  const startMs = new Date('2025-01-01T00:00:00Z');
-  const endMs = new Date('2025-01-01T03:45:00Z');
-  
-  const result = comp.formatDHM(endMs - startMs);
-  
-  expect(result).toBe('0d 3h 45m');
-});
-
-test('formatDHM formats duration with only minutes', () => {
-  const startMs = new Date('2025-01-01T00:00:00Z');
-  const endMs = new Date('2025-01-01T00:25:00Z');
-  
-  const result = comp.formatDHM(endMs - startMs);
-  
-  expect(result).toBe('0d 0h 25m');
-});
-
-test('formatDHM formats zero duration', () => {
-  const startMs = new Date('2025-01-01T00:00:00Z');
-  const endMs = new Date('2025-01-01T00:00:00Z');
-  
-  const result = comp.formatDHM(endMs - startMs);
-  
-  expect(result).toBe('0d 0h 0m');
-});
-
 // getCPM tests
 
 test('getCPM calculates credits per minute for multiple minutes', () => {

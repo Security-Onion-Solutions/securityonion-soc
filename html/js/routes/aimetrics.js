@@ -28,7 +28,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       [
         { title: this.$root.i18n.title, value: 'title' },
         { title: this.$root.i18n.createTime, value: 'createTime' },
-        { title: this.$root.i18n.duration, value: 'duration', key: 'durationMs' },
+        { title: this.$root.i18n.duration, value: 'durationMs' },
         { title: this.$root.i18n.totalInputTokens, value: 'totalInputTokens' },
         { title: this.$root.i18n.totalOutputTokens, value: 'totalOutputTokens' },
         { title: this.$root.i18n.totalCredits, value: 'totalCredits' },
@@ -57,7 +57,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
     },
     rightShiftedHeaders: [
       ['totalInputTokens', 'totalOutputTokens', 'totalCredits', 'creditPercentage', 'totalSessions', 'totalMessages'],
-      ['totalInputTokens', 'totalOutputTokens', 'totalCredits', 'creditsPerMinute', 'totalMessages'],
+      ['durationMs', 'totalInputTokens', 'totalOutputTokens', 'totalCredits', 'creditsPerMinute', 'totalMessages'],
       ['inputTokens', 'outputTokens', 'credits'],
     ],
     sortByUsers: [{ key: 'totalCredits', order: 'desc' }],
@@ -226,7 +226,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
             const startMs = new Date(item.createTime);
             const endMs = new Date(item.updateTime);
             item.durationMs = endMs - startMs;
-            item.duration = this.formatDHM(item.durationMs);
+            item.duration = this.$root.formatLongDuration(item.durationMs);
             item.creditsPerMinute = this.getCPM(item.durationMs, item.totalCredits);
           });
         } else {
@@ -507,20 +507,6 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
     calculateCreditPercentage(credits, total) {
       let percentage = (credits / total) * 100;
       return `${percentage.toFixed(1)}%`;
-    },
-    formatDHM(durationMs) {
-      let seconds = Math.floor(durationMs / 1000);
-
-      const days = Math.floor(seconds / 86400);
-      seconds %= 86400;
-
-      const hours = Math.floor(seconds / 3600);
-      seconds %= 3600;
-
-      const minutes = Math.floor(seconds / 60);
-
-      let result = `${days}d ${hours}h ${minutes}m`;
-      return result;
     },
     getCPM(durationMs, totalCredits) {
       let minutes = durationMs / 60000;

@@ -171,7 +171,7 @@
           <tr>
             <td>{{ trimTitle(item.title) }}</td>
             <td>{{ $root.formatLocalTimestamp(item.createTime, zone) }}</td>
-            <td>{{ item.duration }}</td>
+            <td class="text-right">{{ item.duration }}</td>
             <td class="text-right">{{ item.totalInputTokens ? formatCount(item.totalInputTokens) : 0 }}</td>
             <td class="text-right">{{ item.totalOutputTokens ? formatCount(item.totalOutputTokens) : 0 }}</td>
             <td class="text-right">{{ item.totalCredits ? formatCount(item.totalCredits) : 0 }}</td>
