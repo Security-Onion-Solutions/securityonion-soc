@@ -103,18 +103,10 @@ func (t *AckAlertsTool) Execute(ctx context.Context, server *server.Server, para
 		return nil, err
 	}
 
-	var timeFormat string
-
-	if args.RangeFormat != "" {
-		timeFormat = args.RangeFormat
-	} else {
-		timeFormat = "2006/01/02 3:04:05 PM"
-	}
-
 	var timeRange string
 
 	if args.RangeStart != "" || args.RangeEnd != "" {
-		timeRange = parseRangeAllowRelative(args.RangeStart, args.RangeEnd, timeFormat)
+		timeRange = parseRangeAllowRelative(args.RangeStart, args.RangeEnd, args.RangeFormat)
 	}
 
 	result.Parameters = args
@@ -124,7 +116,7 @@ func (t *AckAlertsTool) Execute(ctx context.Context, server *server.Server, para
 	crit.SearchFilter = "(tags:alert AND NOT event.acknowledged:true AND NOT event.escalated:true) AND (" + args.SearchFilter + ")"
 	crit.EventFilter = args.EventFilter
 	crit.DateRange = timeRange
-	crit.DateRangeFormat = timeFormat
+	crit.DateRangeFormat = "2006/01/02 3:04:05 PM"
 	crit.Timezone = "UTC"
 
 	if len(crit.EventFilter) == 0 {
