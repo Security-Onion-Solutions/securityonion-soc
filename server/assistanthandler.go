@@ -365,6 +365,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
+// @Failure      503           "Service unavailable"
 // @Router       /api/assistant/balance [get]
 func (h *AssistantHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -374,6 +375,13 @@ func (h *AssistantHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 	all := h.server.CheckAuthorized(ctx, "read_all", "assistant")
 	if self != nil && all != nil {
 		web.Respond(w, r, http.StatusUnauthorized, self)
+		return
+	}
+
+	if h.server.Config.AirgapEnabled {
+		logger.Error("unable to retrieve balance on airgap installation")
+		web.Respond(w, r, http.StatusServiceUnavailable, nil)
+
 		return
 	}
 

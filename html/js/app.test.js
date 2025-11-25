@@ -1206,6 +1206,48 @@ describe('export', () => {
   });
 });
 
+test('showErrorExtraHtml', () => {
+  const oldShowError = app.showError;
+  app.showError = origShowError;
+  try {
+    const mockShowError = jest.fn();
+    app.showError = mockShowError;
+    
+    const errorMsg = 'Test error message';
+    const extraMsg = 'Additional information';
+    const extraLink = 'https://example.com/help';
+    
+    app.showErrorExtraHtml(errorMsg, extraMsg, extraLink);
+    
+    expect(mockShowError).toHaveBeenCalledWith(errorMsg);
+    expect(app.errorExtraMsg).toBe(extraMsg);
+    expect(app.errorExtraLink).toBe(extraLink);
+  } finally {
+    app.showError = oldShowError;
+  }
+});
+
+test('showErrorExtraHtml with empty extra message', () => {
+  const oldShowError = app.showError;
+  app.showError = origShowError;
+  try {
+    const mockShowError = jest.fn();
+    app.showError = mockShowError;
+    
+    const errorMsg = 'Test error';
+    const extraMsg = '';
+    const extraLink = '';
+    
+    app.showErrorExtraHtml(errorMsg, extraMsg, extraLink);
+    
+    expect(mockShowError).toHaveBeenCalledWith(errorMsg);
+    expect(app.errorExtraMsg).toBe('');
+    expect(app.errorExtraLink).toBe('');
+  } finally {
+    app.showError = oldShowError;
+  }
+});
+
 test('performMermaidRegexes', () => {
   expect(app.performMermaidRegexes('regular text')).toBe('regular text');
   expect(app.performMermaidRegexes('')).toBe('');

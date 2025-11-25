@@ -518,15 +518,49 @@ test('loadCredits success', async () => {
   
   expect(mock).toHaveBeenCalledWith('/assistant/balance');
   expect(comp.creditsRemaining).toBe(100);
+  expect(comp.creditsLoaded).toBe(true);
 });
 
-test('loadCredits handles error', async () => {
-  const showErrorMock = mockShowError();
-  mockPapi("get", null, new Error("API error"));
+test('loadCredits handles 500 error with extra HTML', async () => {
+  const error = new Error("Server error");
+  error.response = { status: 500 };
+  mockPapi("get", null, error);
+  
+  comp.$root.showErrorExtraHtml = jest.fn();
   
   await comp.loadCredits();
   
+  expect(comp.$root.showErrorExtraHtml).toHaveBeenCalledWith(
+    'Error loading credits from API: Server error',
+    comp.i18n.assistantPotentialOutage,
+    'https://securityonionsolutions.com/status/'
+  );
   expect(comp.creditsRemaining).toBe(0);
+  expect(comp.creditsLoaded).toBe(true);
+});
+
+test('loadCredits handles non-500 error', async () => {
+  const showErrorMock = mockShowError();
+  const error = new Error("API error");
+  error.response = { status: 400 };
+  mockPapi("get", null, error);
+  
+  await comp.loadCredits();
+  
+  expect(showErrorMock).toHaveBeenCalledWith('Error loading credits from API: API error');
+  expect(comp.creditsRemaining).toBe(0);
+  expect(comp.creditsLoaded).toBe(true);
+});
+
+test('loadCredits handles error without response', async () => {
+  const showErrorMock = mockShowError();
+  mockPapi("get", null, new Error("Network error"));
+  
+  await comp.loadCredits();
+  
+  expect(showErrorMock).toHaveBeenCalledWith('Error loading credits from API: Network error');
+  expect(comp.creditsRemaining).toBe(0);
+  expect(comp.creditsLoaded).toBe(true);
 });
 
 test('loadCredits handles unhealthy status', async () => {
@@ -540,7 +574,8 @@ test('loadCredits handles unhealthy status', async () => {
   await comp.loadCredits();
   
   expect(showErrorMock).toHaveBeenCalledWith('Error loading credits from API: The AI model could not be reached. Support for local AI models is coming soon.');
-  expect(comp.creditsRemaining).toBe(0); // Should remain 0 when unhealthy
+  expect(comp.creditsRemaining).toBe(0);
+  expect(comp.creditsLoaded).toBe(true);
 });
 
 // Chat operations tests

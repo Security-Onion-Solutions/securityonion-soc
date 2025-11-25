@@ -174,6 +174,7 @@ const i18n = {
       assistantNoResponse: 'Failed to get AI response',
       assistantNotAvailable: 'Onion AI is not enabled or is otherwise unavailable.',
       assistantOutOfCredits: 'Insufficient credits. Please contact your administrator to purchase more credits.',
+      assistantPotentialOutage: 'There may be a network or upstream provider issue. Refer to the Security Onion status page for current state updates.',
       assistantSaveContextError: 'Failed to save context theshold setting',
       assistantSaveRecentError: 'Failed to save restore last active setting',
       assistantSaveReadApprovalError: 'Failed to save read request approval setting',

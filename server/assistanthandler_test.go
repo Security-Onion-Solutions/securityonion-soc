@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/rbac"
 	"github.com/security-onion-solutions/securityonion-soc/server/mock"
@@ -387,6 +388,9 @@ func TestGetBalance(t *testing.T) {
 	// Create mock server
 	srv := &Server{
 		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+		Config: &config.ServerConfig{
+			AirgapEnabled: false,
+		},
 	}
 	ctrl := gomock.NewController(t)
 	mockManager := mock.NewMockAssistantManager(ctrl)
@@ -430,6 +434,9 @@ func TestGetBalanceUnhealthy(t *testing.T) {
 	// Create mock server
 	srv := &Server{
 		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+		Config: &config.ServerConfig{
+			AirgapEnabled: false,
+		},
 	}
 	ctrl := gomock.NewController(t)
 	mockManager := mock.NewMockAssistantManager(ctrl)
@@ -457,6 +464,40 @@ func TestGetBalanceUnhealthy(t *testing.T) {
 
 	// Verify response
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+func TestGetBalanceAirgapEnabled(t *testing.T) {
+	// Create mock server with airgap enabled
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+		Config: &config.ServerConfig{
+			AirgapEnabled: true,
+		},
+	}
+	ctrl := gomock.NewController(t)
+	mockManager := mock.NewMockAssistantManager(ctrl)
+	defer ctrl.Finish()
+
+	srv.AssistantManager = mockManager
+
+	handler := NewAssistantHandler(srv)
+
+	req := httptest.NewRequest("GET", "/assistant/balance", nil)
+
+	// Add required context values
+	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "test-user-123")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	ctx = context.WithValue(ctx, web.ContextKeyRequestId, "test-request-123")
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+
+	// No mock expectations needed - should return early due to airgap
+
+	// Execute the handler
+	handler.GetBalance(w, req)
+
+	// Verify response - should be 503 Service Unavailable
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 }
 
 func TestGetUsage(t *testing.T) {

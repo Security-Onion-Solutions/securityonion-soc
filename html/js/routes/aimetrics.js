@@ -324,7 +324,11 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
           }
         }
       } catch (error) {
-        this.$root.showError(this.i18n.assistantUnableToLoadCredits + ': ' + error.message);
+        if (error.response && error.response.status == 500) {
+          this.$root.showErrorExtraHtml(this.i18n.assistantUnableToLoadCredits + ': ' + error.message, this.i18n.assistantPotentialOutage, 'https://securityonionsolutions.com/status/');
+        } else {
+          this.$root.showError(this.i18n.assistantUnableToLoadCredits + ': ' + error.message);
+        }
         this.creditsLoaded = true;
       }
     },

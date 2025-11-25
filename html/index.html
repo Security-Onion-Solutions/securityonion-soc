@@ -156,6 +156,12 @@
               </v-btn>
             </template>
             {{ errorMessage }}
+            <div v-if="errorExtraMsg" class="mt-2 no-underline">
+              {{ errorExtraMsg }}
+              <a v-if="errorExtraLink" :target="$root.target('so-help')" :href="errorExtraLink" class="text-decoration-none" data-aid="nav_docs_error">
+                <v-icon color="white">fa-life-ring</v-icon>
+              </a>
+            </div>
             <div class="mt-2 no-underline">
               {{ i18n.errorHelp }}
               <a :target="$root.target('so-help')" :href="parameters.docsUrl + 'help.html'" class="text-decoration-none" data-aid="nav_docs_error">

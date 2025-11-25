@@ -578,6 +578,46 @@ test('loadCredits success', async () => {
   
   expect(mock).toHaveBeenCalledWith('/assistant/balance');
   expect(comp.creditsRemaining).toBe(150);
+  expect(comp.creditsLoaded).toBe(true);
+});
+
+test('loadCredits handles 500 error with extra HTML', async () => {
+  const error = new Error('Internal Server Error');
+  error.response = { status: 500 };
+  mockPapi("get", null, error);
+  comp.$root.showErrorExtraHtml = jest.fn();
+  
+  await comp.loadCredits();
+  
+  expect(comp.$root.showErrorExtraHtml).toHaveBeenCalledWith(
+    comp.i18n.assistantUnableToLoadCredits + ': ' + error.message,
+    comp.i18n.assistantPotentialOutage,
+    'https://securityonionsolutions.com/status/'
+  );
+  expect(comp.creditsLoaded).toBe(true);
+});
+
+test('loadCredits handles non-500 error', async () => {
+  const error = new Error('Bad Request');
+  error.response = { status: 400 };
+  mockPapi("get", null, error);
+  comp.$root.showError = jest.fn();
+  
+  await comp.loadCredits();
+  
+  expect(comp.$root.showError).toHaveBeenCalledWith(comp.i18n.assistantUnableToLoadCredits + ': ' + error.message);
+  expect(comp.creditsLoaded).toBe(true);
+});
+
+test('loadCredits handles error without response', async () => {
+  const error = new Error('Network error');
+  mockPapi("get", null, error);
+  comp.$root.showError = jest.fn();
+  
+  await comp.loadCredits();
+  
+  expect(comp.$root.showError).toHaveBeenCalledWith(comp.i18n.assistantUnableToLoadCredits + ': ' + error.message);
+  expect(comp.creditsLoaded).toBe(true);
 });
 
 test('loadCredits handles unhealthy status', async () => {
@@ -593,16 +633,7 @@ test('loadCredits handles unhealthy status', async () => {
   await comp.loadCredits();
   
   expect(comp.$root.showError).toHaveBeenCalledWith('Error loading credits from API: ' + comp.i18n.assistantBalanceCheckUnhealthy);
-});
-
-test('loadCredits handles API error', async () => {
-  const error = new Error('Network error');
-  mockPapi("get", null, error);
-  comp.$root.showError = jest.fn();
-  
-  await comp.loadCredits();
-  
-  expect(comp.$root.showError).toHaveBeenCalledWith(comp.i18n.assistantUnableToLoadCredits + ': ' + error.message);
+  expect(comp.creditsLoaded).toBe(true);
 });
 
 test('loadCredits handles missing data', async () => {
