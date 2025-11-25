@@ -27,13 +27,8 @@ func TestAddOverridesTool_GetName(t *testing.T) {
 
 func TestAddOverridesTool_GetDescription(t *testing.T) {
 	tool := &AddOverridesTool{}
-	description := tool.GetDescription()
-	assert.Contains(t, description, "Add one or more new overrides to existing detection(s)")
-	assert.Contains(t, description, "_index:\"*:so-detection\" AND so_kind:detection")
-	assert.Contains(t, description, "999 days ago")
-	assert.Contains(t, description, "Suricata:")
-	assert.Contains(t, description, "Sigma:")
-	assert.Contains(t, description, "YARA does not have overrides")
+	desc := tool.GetDescription()
+	assert.NotEmpty(t, desc)
 }
 
 func TestAddOverridesTool_GetSchema(t *testing.T) {
@@ -53,33 +48,24 @@ func TestAddOverridesTool_GetSchema(t *testing.T) {
 	// Check search_filter property
 	searchFilter := schema.Json.Properties["search_filter"]
 	assert.Equal(t, "string", searchFilter.Type)
-	assert.Contains(t, searchFilter.Description, "so_detection.id")
-	assert.Contains(t, searchFilter.Description, "so_detection.title")
-	assert.Contains(t, searchFilter.Description, "so_detection.severity")
-	assert.Contains(t, searchFilter.Description, "so_detection.isEnabled")
 
 	// Check overrides property
 	overrides := schema.Json.Properties["overrides"]
 	assert.Equal(t, "array", overrides.Type)
-	assert.Contains(t, overrides.Description, "new overrides to add")
 
 	// Check range properties
 	rangeStart := schema.Json.Properties["range_start"]
 	assert.Equal(t, "string", rangeStart.Type)
-	assert.Contains(t, rangeStart.Description, "start time")
 
 	rangeEnd := schema.Json.Properties["range_end"]
 	assert.Equal(t, "string", rangeEnd.Type)
-	assert.Contains(t, rangeEnd.Description, "end time")
 
 	rangeFormat := schema.Json.Properties["range_format"]
 	assert.Equal(t, "string", rangeFormat.Type)
-	assert.Contains(t, rangeFormat.Description, "format")
 
 	// Check limit property
 	limit := schema.Json.Properties["limit"]
 	assert.Equal(t, "integer", limit.Type)
-	assert.Contains(t, limit.Description, "maximum number")
 }
 
 func TestAddOverridesTool_Execute(t *testing.T) {

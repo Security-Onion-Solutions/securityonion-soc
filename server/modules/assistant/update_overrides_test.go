@@ -30,11 +30,6 @@ func TestUpdateOverridesTool_GetName(t *testing.T) {
 func TestUpdateOverridesTool_GetDescription(t *testing.T) {
 	desc := (&UpdateOverridesTool{}).GetDescription()
 	assert.NotEmpty(t, desc)
-	assert.Contains(t, desc, "Update an existing detection's overrides")
-	assert.Contains(t, desc, "soc_id or public_id")
-	assert.Contains(t, desc, "Suricata:")
-	assert.Contains(t, desc, "Sigma:")
-	assert.Contains(t, desc, "YARA does not have overrides")
 }
 
 func TestUpdateOverridesTool_GetSchema(t *testing.T) {

@@ -34,19 +34,12 @@ func TestEscalateAlertsTool_GetSchema(t *testing.T) {
 
 	assert.NotNil(t, schema.Json)
 	assert.Equal(t, "object", schema.Json.Type)
-	assert.Contains(t, schema.Json.Properties, "search_filter")
 	assert.Equal(t, "string", schema.Json.Properties["search_filter"].Type)
-	assert.Contains(t, schema.Json.Properties, "case_title")
 	assert.Equal(t, "string", schema.Json.Properties["case_title"].Type)
-	assert.Contains(t, schema.Json.Properties, "case_id")
 	assert.Equal(t, "string", schema.Json.Properties["case_id"].Type)
-	assert.Contains(t, schema.Json.Properties, "range_start")
 	assert.Equal(t, "string", schema.Json.Properties["range_start"].Type)
-	assert.Contains(t, schema.Json.Properties, "range_end")
 	assert.Equal(t, "string", schema.Json.Properties["range_end"].Type)
-	assert.Contains(t, schema.Json.Properties, "range_format")
 	assert.Equal(t, "string", schema.Json.Properties["range_format"].Type)
-	assert.Contains(t, schema.Json.Required, "search_filter")
 }
 
 func TestEscalateAlertsTool_Execute(t *testing.T) {

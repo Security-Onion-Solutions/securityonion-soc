@@ -30,31 +30,14 @@ func (t *UpdateDetectionContentTool) GetName() string {
 }
 
 func (t *UpdateDetectionContentTool) GetDescription() string {
-	return `Update an existing detection per the user's request by modifying its content field. Note that only custom detections (those with so_detection.isCommunity: false) can be
-	modified in this way. This detection will be accessed with either its SOC Id or Public Id. *IMPORTANT* You MUST provide ONE of soc_id or public_id, but NEVER both.
-	Modifying the content field of a detection can update the values of certain attributes of a detection. These attributes and the ways in which they are specified
-	in the content field can vary for the 3 different languages. Here is a run-down of which attributes can be set/updated in the content field for the 3 different languages:
-	Sigma:
-	- so_detection.title: this will follow "title: " in the sigma rule
-	- so_detection.description: this will follow "description: "
-	- so_detection.sourceCreated: this will follow "date: "
-	- so_detection.severity: this will follow "level: "
-	- so_detection.category: this will be under logsource.category
-	- so_detection.product: this will be under logsource.product
-	Suricata:
-	- so_detection.title: this will follow "msg:"
-	- so_detection.severity: this will follow "signature severity" under the metadata field. Note that "minor" corresponds to low and "major" corresponds to high.
-	- so_detection.sourceCreated: this is under metadata and follows "created_at"
-	- so_detection.sourceUpdated: this is under metadata and follows "updated_at"
-	YARA:
-	- so_detection.title: this will be at the top of the rule block, and will follow "rule ". Note that this must be unique, as it is also the Public Id.
-	- so_detection.description: this will be under metadata and will follow "description = "
-	- so_detection.sourceCreated: this will be under metadata and will follow "date = "
-	*IMPORTANT*: Note that if the user asks you to modify anything else about the content field, such as references, it is totally fine to take a swing at it. The above run-down isn't a strict set of
-	rules, but instead is a loose guide to follow to help you. In fact, the actual behavior of a rule, which is outlined in the content field, is not at all tied to the attributes above.
-	However, it will be very common for users to ask you to modify a rule's behavior, and you should definitely help them out with that by editing the content field, even though the above
-	attributes might not be explicitly modified.
-	This tool will return the newly-updated detection.`
+	return `Updates a custom detection's content field (only detections with so_detection.isCommunity: false). Provide ONE of soc_id or public_id to identify the detection.
+
+Content field attribute mappings by language:
+Sigma: title (title:), description (description:), sourceCreated (date:), severity (level:), category (logsource.category), product (logsource.product)
+Suricata: title (msg:), severity (metadata signature_severity, minor=low/major=high), sourceCreated (metadata created_at), sourceUpdated (metadata updated_at)
+YARA: title (rule name, must be unique), description (metadata description =), sourceCreated (metadata date =)
+
+You can modify any aspect of the content field including rule behavior, references, and logic - the above mappings are guidelines, not restrictions. Returns the updated detection.`
 }
 
 func (t *UpdateDetectionContentTool) GetSchema() model.JSONSchema {
@@ -64,18 +47,15 @@ func (t *UpdateDetectionContentTool) GetSchema() model.JSONSchema {
 			Properties: map[string]model.ToolSchemaProperty{
 				"soc_id": {
 					Type:        "string",
-					Description: `The ID assigned to this detection by the server. This is often referred to as the "SOC ID" or "_id". In a detection, this is the "so_detection.id" field.`,
+					Description: `Server-assigned detection ID (so_detection.id field). Also called "SOC ID" or "_id".`,
 				},
 				"public_id": {
 					Type:        "string",
-					Description: `The public ID shared across all Security Onion grids. In a detection, this is the "so_detection.publicId" field.`,
+					Description: `Grid-wide detection identifier (so_detection.publicId field).`,
 				},
 				"content": {
-					Type: "string",
-					Description: `The underlying detection rule source content. (e.g., "title: CobaltStrike Named Pipe\nid: ...\n logsource:\n ...\ncondition: selection\nfalsepositives:\n...")
-					For a detection, this is the so_detection.content field. This particular content argument will be the updated content field of the original detection that the user wants to update.
-					For instance, if the user wants to update the severity of a suricata rule to "high", you would take the rule's current content field, and change the value of the "level" field inside this
-					content field to "high". Then, you will pass the entire updated content field as this argument.`,
+					Type:        "string",
+					Description: `Complete updated detection rule source (so_detection.content field). Modify the original content with requested changes and provide the entire updated content string.`,
 				},
 			},
 		},

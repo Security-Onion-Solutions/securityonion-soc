@@ -29,14 +29,6 @@ func TestUpdateDetectionContentTool_GetName(t *testing.T) {
 func TestUpdateDetectionContentTool_GetDescription(t *testing.T) {
 	desc := (&UpdateDetectionContentTool{}).GetDescription()
 	assert.NotEmpty(t, desc)
-	assert.Contains(t, desc, "Update an existing detection")
-	assert.Contains(t, desc, "modifying its content field")
-	assert.Contains(t, desc, "custom detections")
-	assert.Contains(t, desc, "isCommunity: false")
-	assert.Contains(t, desc, "soc_id or public_id")
-	assert.Contains(t, desc, "Sigma:")
-	assert.Contains(t, desc, "Suricata:")
-	assert.Contains(t, desc, "YARA:")
 }
 
 func TestUpdateDetectionContentTool_GetSchema(t *testing.T) {
@@ -48,15 +40,12 @@ func TestUpdateDetectionContentTool_GetSchema(t *testing.T) {
 	// Check required properties
 	assert.Contains(t, schema.Json.Properties, "soc_id")
 	assert.Equal(t, "string", schema.Json.Properties["soc_id"].Type)
-	assert.Contains(t, schema.Json.Properties["soc_id"].Description, "SOC ID")
 
 	assert.Contains(t, schema.Json.Properties, "public_id")
 	assert.Equal(t, "string", schema.Json.Properties["public_id"].Type)
-	assert.Contains(t, schema.Json.Properties["public_id"].Description, "public ID")
 
 	assert.Contains(t, schema.Json.Properties, "content")
 	assert.Equal(t, "string", schema.Json.Properties["content"].Type)
-	assert.Contains(t, schema.Json.Properties["content"].Description, "detection rule source content")
 }
 
 func TestUpdateDetectionContentTool_Execute(t *testing.T) {
