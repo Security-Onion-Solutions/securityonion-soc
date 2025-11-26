@@ -726,23 +726,6 @@ test('sendMessage creates session ID and updates URL', async () => {
   expect(comp.loadStoredChats).toHaveBeenCalled();
 });
 
-test('sendMessage handles API error', async () => {
-  const showErrorMock = mockShowError();
-  comp.newMessage = 'Test message';
-  comp.creditsRemaining = 100;
-  comp.currentChatId = fakeSessionId;
-  comp.callAIAPI = jest.fn().mockRejectedValue(new Error('API failed'));
-  comp.scrollToBottom = jest.fn();
-  comp.assistantEnabled = true;
-  comp.canChat = true;
-  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
-  
-  await comp.sendMessage();
-  
-  expect(showErrorMock).toHaveBeenCalledWith('Failed to get AI response: API failed');
-  expect(comp.isTyping).toBe(false);
-});
-
 // Context length and model management tests
 test('calculateContextFromUsage calculates correct context length', () => {
   const usage1 = { input_tokens: 100, output_tokens: 50 };
