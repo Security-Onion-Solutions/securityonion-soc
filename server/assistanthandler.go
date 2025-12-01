@@ -880,8 +880,6 @@ func streamResponse(ctx context.Context, w http.ResponseWriter, r *http.Request,
 		}
 	}
 
-	logger.WithField("entireResponse", string(entireResponse)).Debug("entire response streamed")
-
 	if err == io.EOF {
 		err = nil // EOF is not an error in this context
 	}
