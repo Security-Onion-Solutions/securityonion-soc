@@ -461,6 +461,7 @@ func (h *AssistantHandler) GetSessions(w http.ResponseWriter, r *http.Request) {
 // @Description  Retrieve the complete chat history for a specific session.
 // @Tags         Assistant
 // @Security     bearer[assistant/read_authored]
+// @Security     bearer[assistant/read_shared]
 // @Param        sessionId  path  string  true  "Session ID to retrieve history for"
 // @Produce      json
 // @Success      200  {array}   model.StoredMessage "Complete chat history for the session"
@@ -515,6 +516,20 @@ func (h *AssistantHandler) GetSessionDetails(w http.ResponseWriter, r *http.Requ
 	})
 }
 
+// @Summary      Update metadata for a Session
+// @Description  Allow a user to modify their own session tags.
+// @Tags         Assistant
+// @Security     bearer[assistant/write_authored]
+// @Param        sessionId  path  string  true  "Session ID to modify"
+// @Param        request  body  model.UpdateSessionRequest   true  "Indicate what field we're doing what operation with."
+// @Produce      json
+// @Success      206           "No content"
+// @Failure      400           "The provided session ID is invalid or missing"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      404           "Session not found"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /api/assistant/sessions/{sessionId} [put]
 func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)

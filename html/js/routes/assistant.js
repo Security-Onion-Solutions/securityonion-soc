@@ -1723,7 +1723,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         return 'primary';
       }
 
-      return 'secondary';
+      return 'theme-icon';
     },
     
 
