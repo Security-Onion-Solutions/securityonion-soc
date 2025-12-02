@@ -518,15 +518,43 @@ test('loadCredits success', async () => {
   
   expect(mock).toHaveBeenCalledWith('/assistant/balance');
   expect(comp.creditsRemaining).toBe(100);
+  expect(comp.creditsLoaded).toBe(true);
 });
 
-test('loadCredits handles error', async () => {
-  const showErrorMock = mockShowError();
-  mockPapi("get", null, new Error("API error"));
+test('loadCredits handles 500 error due to outage', async () => {
+  const error = new Error('ERROR_UPSTREAM_SERVICE_ERROR');
+  error.response = { status: 500 };
+  mockPapi("get", null, error);
+  comp.$root.showError = jest.fn();
   
   await comp.loadCredits();
   
+  expect(comp.$root.showError).toHaveBeenCalledWith(error);
+  expect(comp.creditsLoaded).toBe(false);
+});
+
+test('loadCredits handles non-500 error', async () => {
+  const showErrorMock = mockShowError();
+  const error = new Error("API error");
+  error.response = { status: 400 };
+  mockPapi("get", null, error);
+  
+  await comp.loadCredits();
+  
+  expect(showErrorMock).toHaveBeenCalledWith(error);
   expect(comp.creditsRemaining).toBe(0);
+  expect(comp.creditsLoaded).toBe(false);
+});
+
+test('loadCredits handles error without response', async () => {
+  const showErrorMock = mockShowError();
+  const error = new Error("Network error")
+  mockPapi("get", null, error);
+  
+  await comp.loadCredits();
+  
+  expect(showErrorMock).toHaveBeenCalledWith(error);
+  expect(comp.creditsLoaded).toBe(false);
 });
 
 test('loadCredits handles unhealthy status', async () => {
@@ -539,8 +567,8 @@ test('loadCredits handles unhealthy status', async () => {
   
   await comp.loadCredits();
   
-  expect(showErrorMock).toHaveBeenCalledWith('Error loading credits from API: The AI model could not be reached. Support for local AI models is coming soon.');
-  expect(comp.creditsRemaining).toBe(0); // Should remain 0 when unhealthy
+  expect(showErrorMock).toHaveBeenCalledWith(new Error(comp.i18n.assistantBalanceCheckUnhealthy));
+  expect(comp.creditsLoaded).toBe(false);
 });
 
 // Chat operations tests
@@ -689,23 +717,6 @@ test('sendMessage creates session ID and updates URL', async () => {
   expect(comp.isTyping).toBe(true);
   expect(comp.callAIAPI).toHaveBeenCalledWith('Test message', undefined);
   expect(comp.loadStoredChats).toHaveBeenCalled();
-});
-
-test('sendMessage handles API error', async () => {
-  const showErrorMock = mockShowError();
-  comp.newMessage = 'Test message';
-  comp.creditsRemaining = 100;
-  comp.currentChatId = fakeSessionId;
-  comp.callAIAPI = jest.fn().mockRejectedValue(new Error('API failed'));
-  comp.scrollToBottom = jest.fn();
-  comp.assistantEnabled = true;
-  comp.canChat = true;
-  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
-  
-  await comp.sendMessage();
-  
-  expect(showErrorMock).toHaveBeenCalledWith('Failed to get AI response: API failed');
-  expect(comp.isTyping).toBe(false);
 });
 
 // Context length and model management tests

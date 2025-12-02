@@ -230,6 +230,10 @@ test('loadServerSettings', async () => {
 test('localizeMessage', () => {
   expect(app.localizeMessage(null)).toBe("");
   expect(app.localizeMessage('create')).toBe("Create");
+  expect(app.localizeMessage('"quoted message"')).toBe("quoted message");
+  expect(app.localizeMessage('"error with quotes"')).toBe("error with quotes");
+  expect(app.localizeMessage('no quotes')).toBe("no quotes");
+  expect(app.localizeMessage('"single quote"')).toBe("single quote");
 });
 
 test('localizeMessageWithArgs', () => {

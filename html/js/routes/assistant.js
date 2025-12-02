@@ -160,8 +160,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         this.$root.showError(error);
       }
     },
-    async loadStoredChats() {
-      this.$root.startLoading();
+    async loadStoredChats(showLoading = true) {
+      if (showLoading) this.$root.startLoading();
       try {
         const response = await this.$root.papi.get('/assistant/sessions');
         if (response.data && Array.isArray(response.data)) {
@@ -182,7 +182,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         // Fallback to empty array if backend is unavailable
         this.chatHistory = [];
       } finally {
-        this.$root.stopLoading();
+        if (showLoading) this.$root.stopLoading();
       }
     },
     saveCurrentChatId() {
@@ -274,8 +274,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           }
         }
       } catch (error) {
-        this.$root.showError(this.i18n.assistantUnableToLoadCredits + ': ' + error.message);
-        this.creditsLoaded = true;
+        this.$root.showError(error);
+        this.creditsLoaded = false;
       }
     },
     async saveCurrentChat() {
@@ -410,16 +410,11 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       // Show typing indicator
       this.isTyping = true;
       
-      try {
-        // Call the actual AI API - session ID is already set
-        await this.callAIAPI(messageText, tags);
+      // Call the actual AI API - session ID is already set
+      await this.callAIAPI(messageText, tags);
 
-        // Refresh chat history to show the latest session
-        await this.loadStoredChats();
-      } catch (error) {
-        this.$root.showError(this.i18n.assistantNoResponse + ': ' + error.message);
-        this.isTyping = false;
-      }
+      // Refresh chat history to show the latest session
+      await this.loadStoredChats(false);
     },
     
     // Helper method to parse JSON chunks and handle concatenated/partial JSON
@@ -798,9 +793,17 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           };
           this.messages.push(errorMessage);
           this.scrollIfPinned();
-          
+
+          // Read streamed error
+          if (error && error.response && error.response.data) {
+            const stream = error.response.data;
+            const reader = stream.pipeThrough(new TextDecoderStream()).getReader();
+            const { done, value } = await reader.read();
+            error = value;
+          }
+
           // Show error to user
-          this.$root.showError(this.i18n.assistantNoResponse + ': ' + (error.response?.data?.error || error.message));
+          this.$root.showError(error);
         }
         
         // Clear the active streaming session if this was the active one

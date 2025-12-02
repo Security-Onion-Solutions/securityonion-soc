@@ -1237,6 +1237,8 @@ const i18n = {
       ERROR_SALT_ALREADY_RUNNING: 'Another synchronization operation is already running. Wait for it to complete and try again.',
       ERROR_BULK_COMMUNITY: 'Unable to complete bulk delete. Batch contains Community rules. No rules were deleted.',
       ERROR_DELETE_COMMUNITY: 'Unable to delete Community rule.',
+      ERROR_SERVICE_NOT_AVAILABLE: 'The configuration of this grid does not support the requested operation. Contact your administrator for assistance with enabling additional features.',
+      ERROR_UPSTREAM_SERVICE_ERROR: 'Error while communicating with remote, upstream service. Check the <a target="sos" href="https://status.securityonion.net">Security Onion status page</a> for any known incidents.',
 
       // correct casing
       cc_elastalert: 'ElastAlert',

@@ -324,8 +324,8 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
           }
         }
       } catch (error) {
-        this.$root.showError(this.i18n.assistantUnableToLoadCredits + ': ' + error.message);
-        this.creditsLoaded = true;
+        this.creditsLoaded = false;
+        this.$root.showError(error);
       }
     },
     async lookupSocId(data) {

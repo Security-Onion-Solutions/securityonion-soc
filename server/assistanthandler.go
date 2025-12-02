@@ -53,6 +53,15 @@ func RegisterAssistantRoutes(srv *Server, r chi.Router, prefix string) {
 	})
 }
 
+func (h *AssistantHandler) checkAssistantAvailable(ctx context.Context, w http.ResponseWriter, r *http.Request) bool {
+	if h.server != nil && h.server.Config != nil && h.server.Config.AirgapEnabled {
+		log.FromContext(ctx).Error("unable to use assistant on airgap installation")
+		web.Respond(w, r, http.StatusInternalServerError, "ERROR_SERVICE_NOT_AVAILABLE")
+		return false
+	}
+	return true
+}
+
 // @Summary      Send Chat Message
 // @Description  Send a message to the AI assistant and receive a response. Supports both streaming (SSE) and non-streaming responses.
 // @Tags         Assistant
@@ -73,6 +82,10 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	err := h.server.CheckAuthorized(ctx, "write_authored", "assistant")
 	if err != nil {
 		web.Respond(w, r, http.StatusUnauthorized, err)
+		return
+	}
+
+	if !h.checkAssistantAvailable(ctx, w, r) {
 		return
 	}
 
@@ -146,7 +159,7 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		response, err := h.server.AssistantManager.Chat(ctx, incMsg.Model, messages)
 		if err != nil {
 			logger.WithError(err).Error("unable to chat with assistant")
-			web.Respond(w, r, http.StatusInternalServerError, err)
+			web.Respond(w, r, http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR")
 
 			return
 		}
@@ -176,7 +189,7 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	response, err := h.server.AssistantManager.ChatStream(noTimeOutCtx, incMsg.Model, messages)
 	if err != nil {
 		logger.WithError(err).Error("unable to chat (stream) with assistant")
-		web.Respond(w, r, http.StatusInternalServerError, err)
+		web.Respond(w, r, http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR")
 
 		return
 	}
@@ -227,6 +240,10 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 	err := h.server.CheckAuthorized(ctx, "write_authored", "assistant")
 	if err != nil {
 		web.Respond(w, r, http.StatusUnauthorized, err)
+		return
+	}
+
+	if !h.checkAssistantAvailable(ctx, w, r) {
 		return
 	}
 
@@ -295,7 +312,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 		response, err := h.server.AssistantManager.Chat(ctx, toolReq.Model, messages)
 		if err != nil {
 			logger.WithError(err).Error("unable to chat with assistant after tool execution")
-			web.Respond(w, r, http.StatusInternalServerError, err)
+			web.Respond(w, r, http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR")
 
 			return
 		}
@@ -316,7 +333,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 	response, err := h.server.AssistantManager.ChatStream(ctx, toolReq.Model, messages)
 	if err != nil {
 		logger.WithError(err).Error("unable to chat (stream) with assistant after tool execution")
-		web.Respond(w, r, http.StatusInternalServerError, err)
+		web.Respond(w, r, http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR")
 
 		return
 	}
@@ -377,26 +394,27 @@ func (h *AssistantHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !h.checkAssistantAvailable(ctx, w, r) {
+		return
+	}
+
 	health, err := h.server.AssistantManager.Health(ctx)
 	if err != nil {
 		logger.WithError(err).Error("unable to get assistant health")
-		web.Respond(w, r, http.StatusInternalServerError, err)
-
+		web.Respond(w, r, http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR")
 		return
 	}
 
 	if health == nil || health.Status == "" {
 		logger.WithField("healthResponse", health).Warn("assistant health response is nil or missing status")
 		web.Respond(w, r, http.StatusInternalServerError, nil)
-
 		return
 	}
 
 	response, err := h.server.AssistantManager.Balance(ctx)
 	if err != nil {
 		logger.WithError(err).Error("unable to retrieve balance")
-		web.Respond(w, r, http.StatusInternalServerError, err)
-
+		web.Respond(w, r, http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR")
 		return
 	}
 

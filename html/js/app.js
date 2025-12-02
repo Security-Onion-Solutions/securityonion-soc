@@ -918,6 +918,12 @@ $(document).ready(function () {
               msg = msg.error.reason;
             }
           }
+
+          // Remove encapsulating quotes
+          if (msg.startsWith != undefined && msg.startsWith("\"") && msg.endsWith("\"")) {
+            msg = msg.substring(1, msg.length - 1);
+          }
+
           var localized = this.i18n[msg];
           if (!localized) {
             if (origMsg.message) {
