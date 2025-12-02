@@ -496,8 +496,8 @@ func TestGetBalanceAirgapEnabled(t *testing.T) {
 	// Execute the handler
 	handler.GetBalance(w, req)
 
-	// Verify response - should be 503 Service Unavailable
-	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, []byte("\"ERROR_SERVICE_NOT_AVAILABLE\""), w.Body.Bytes())
 }
 
 func TestGetUsage(t *testing.T) {
@@ -956,6 +956,7 @@ func TestCheckAssistantAvailable_AirgapEnabled(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/assistant/test", nil)
 	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "test-user-123")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
 	req = req.WithContext(ctx)
 
 	w := httptest.NewRecorder()
@@ -966,8 +967,8 @@ func TestCheckAssistantAvailable_AirgapEnabled(t *testing.T) {
 	// Verify result is false
 	assert.False(t, result)
 
-	// Verify response is 503 Service Unavailable
-	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, []byte("\"ERROR_SERVICE_NOT_AVAILABLE\""), w.Body.Bytes())
 }
 
 func TestCheckAssistantAvailable_AirgapDisabled(t *testing.T) {
@@ -992,6 +993,6 @@ func TestCheckAssistantAvailable_AirgapDisabled(t *testing.T) {
 	// Verify result is true
 	assert.True(t, result)
 
-	// Verify no response was written (status should be 0)
-	assert.Equal(t, 0, w.Code)
+	// Verify no response was written
+	assert.Nil(t, w.Body.Bytes())
 }

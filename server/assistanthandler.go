@@ -54,7 +54,7 @@ func RegisterAssistantRoutes(srv *Server, r chi.Router, prefix string) {
 }
 
 func (h *AssistantHandler) checkAssistantAvailable(ctx context.Context, w http.ResponseWriter, r *http.Request) bool {
-	if h.server.Config.AirgapEnabled {
+	if h.server != nil && h.server.Config != nil && h.server.Config.AirgapEnabled {
 		log.FromContext(ctx).Error("unable to use assistant on airgap installation")
 		web.Respond(w, r, http.StatusInternalServerError, "ERROR_SERVICE_NOT_AVAILABLE")
 		return false
