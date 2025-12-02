@@ -207,6 +207,8 @@ func (e *SuricataEngine) Init(config module.ModuleConfig) (err error) {
 	e.IntegrityCheckerData.Thread = &sync.WaitGroup{}
 	e.IntegrityCheckerData.Interrupt = make(chan bool, 1)
 	e.aiSummaries = &sync.Map{}
+	e.flowbitResolver = NewFlowbitResolver(e.logger())
+	e.flowbitRequired = make(map[string]*FlowbitDependency)
 
 	e.allRulesFile = module.GetStringDefault(config, "allRulesFile", DEFAULT_ALL_RULES_FILE)
 	e.thresholdFile = module.GetStringDefault(config, "thresholdFile", DEFAULT_THRESHOLD_FILE)
@@ -265,10 +267,6 @@ func (e *SuricataEngine) Init(config module.ModuleConfig) (err error) {
 
 	// Initialize RulesetManager with enabled sources
 	e.rulesetManager = NewRulesetManager(e.IOManager, e.logger(), enabledSources...)
-
-	// Initialize flowbit resolver
-	e.flowbitResolver = NewFlowbitResolver(e.logger())
-	e.flowbitRequired = make(map[string]*FlowbitDependency)
 
 	return nil
 }
