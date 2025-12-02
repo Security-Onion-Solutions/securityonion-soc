@@ -11,16 +11,17 @@ import (
 	"crypto/md5"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/elastic/go-elasticsearch/v8/esutil"
@@ -35,12 +36,12 @@ import (
 	"github.com/apex/log"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
-	"gopkg.in/yaml.v3"
 )
 
-var sidExtracter = regexp.MustCompile(`(?i)\bsid: ?['"]?(.*?)['"]?;`)
+// Constants and package variables
 
-const modifyFromTo = `"flowbits" "noalert; flowbits"`
+var sidExtracter = regexp.MustCompile(`(?i)\bsid: ?['"]?(.*?)['"]?;`)
+var categoryExtractor = regexp.MustCompile(`^(\w+)\s+(\w+)`)
 
 var licenseBySource = map[string]string{
 	"etopen": model.LicenseBSD,
@@ -48,21 +49,22 @@ var licenseBySource = map[string]string{
 }
 
 const (
-	DEFAULT_COMMUNITY_RULES_FILE                  = "/nsm/rules/suricata/emerging-all.rules"
-	DEFAULT_ALL_RULES_FILE                        = "/opt/sensoroni/nids/all.rules"
-	DEFAULT_RULES_FINGERPRINT_FILE                = "/opt/sensoroni/fingerprints/emerging-all.fingerprint"
+	DEFAULT_ALL_RULES_FILE                        = "/opt/sensoroni/suricata/rules/all-rulesets.rules"
+	DEFAULT_THRESHOLD_FILE                        = "/opt/sensoroni/suricata/threshold/threshold.conf"
+	DEFAULT_CONFIG_FINGERPRINT_FILE               = "/opt/sensoroni/fingerprints/suricata-config.fingerprint"
 	DEFAULT_COMMUNITY_RULES_IMPORT_FREQUENCY_SECS = 86400
 	DEFAULT_STATE_FILE_PATH                       = "/opt/sensoroni/fingerprints/suricataengine.state"
+	DEFAULT_SYNC_BLOCK_FILE_PATH                  = "/opt/sensoroni/fingerprints/suricataengine.syncBlock"
 	DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS     = 300
-	DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT    = 10
 	DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS     = 600
+	DEFAULT_CONFIG_CHANGE_SYNC_DELAY_SECONDS      = 15
 	DEFAULT_AI_REPO                               = "https://github.com/Security-Onion-Solutions/securityonion-resources"
 	DEFAULT_AI_REPO_BRANCH                        = "generated-summaries-published"
 	DEFAULT_AI_REPO_PATH                          = "/opt/sensoroni/ai_summary_repos"
 	DEFAULT_SHOW_AI_SUMMARIES                     = true
 	DEFAULT_AUTO_UPDATE_ENABLED                   = false
-
-	CUSTOM_RULE_LOC = "/nsm/rules/detect-suricata/custom_temp"
+	DEFAULT_MIGRATIONS_DIR                        = "/opt/so/conf/soc/migrations/"
+	DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT    = 10
 )
 
 var ( // treat as constants
@@ -70,19 +72,89 @@ var ( // treat as constants
 	DEFAULT_DISABLE_REGEX = []string{}
 )
 
+// Types
+
+// DuplicateInfo tracks duplicate SID information
+type DuplicateInfo struct {
+	KeptRuleset    string
+	SkippedRuleset string
+}
+
+// MergeResult holds the results of merging rulesets
+type MergeResult struct {
+	Detections []*model.Detection
+	Duplicates map[string]DuplicateInfo
+	Stats      map[string]int // ruleset -> accepted count
+}
+
+// StateStats tracks user state application statistics
+type StateStats struct {
+	ExistingRules      int
+	NewRules           int
+	UserModified       int
+	PreservedUserPrefs int
+}
+
+// RulesetStats tracks per-ruleset sync statistics
+type RulesetStats struct {
+	Added     int
+	Updated   int
+	Unchanged int
+	Deleted   int
+}
+
+// nidsLogger wraps log.Entry to automatically prefix fields with "nids."
+type nidsLogger struct {
+	*log.Entry
+}
+
+// WithField adds "nids." prefix appropriately
+func (l *nidsLogger) WithField(key string, value interface{}) *nidsLogger {
+	return l.WithFields(log.Fields{key: value})
+}
+
+// WithFields adds "nids." prefix to Suricata-specific fields
+func (l *nidsLogger) WithFields(fields log.Fields) *nidsLogger {
+	prefixed := make(log.Fields)
+	for k, v := range fields {
+		// Keep existing prefixed fields and special fields as-is
+		if strings.Contains(k, ".") ||
+			k == "detectionEngine" ||
+			k == "error" ||
+			k == "component" ||
+			k == "operation" ||
+			k == "migrationVersion" {
+			prefixed[k] = v
+		} else {
+			// Add nids. prefix to Suricata-specific fields
+			prefixed["nids."+k] = v
+		}
+	}
+	return &nidsLogger{l.Entry.WithFields(prefixed)}
+}
+
+// WithError passes through without prefix
+func (l *nidsLogger) WithError(err error) *nidsLogger {
+	return &nidsLogger{l.Entry.WithError(err)}
+}
+
+// Constructors
+
 type SuricataEngine struct {
 	srv                            *server.Server
-	communityRulesFile             string
 	allRulesFile                   string
-	rulesFingerprintFile           string
+	thresholdFile                  string
+	configFingerprintFile          string
 	failAfterConsecutiveErrorCount int
+	configChangeSyncDelaySeconds   int
 	isRunning                      bool
 	interm                         sync.Mutex
 	notify                         bool
 	migrations                     map[string]func(string) error
-	customRulesets                 []*model.CustomRuleset
+	rulesetSources                 []*RulesetSource
 	writeNoRead                    *string
 	checkMigrationsOnce            func()
+	rulesetManager                 *RulesetManager
 	enableRegex                    []*regexp.Regexp
 	disableRegex                   []*regexp.Regexp
 	aiSummaries                    *sync.Map // map[string]*detections.AiSummary{}
@@ -91,6 +163,8 @@ type SuricataEngine struct {
 	aiRepoBranch                   string
 	aiRepoPath                     string
 	autoUpdateEnabled              bool
+	flowbitResolver                *FlowbitResolver
+	flowbitRequired                map[string]*FlowbitDependency
 	detections.SyncSchedulerParams
 	detections.IntegrityCheckerData
 	detections.IOManager
@@ -112,12 +186,19 @@ func NewSuricataEngine(srv *server.Server) *SuricataEngine {
 	return e
 }
 
+// Module interface implementation
+
 func (e *SuricataEngine) PrerequisiteModules() []string {
 	return nil
 }
 
+// logger returns a nidsLogger with the detectionEngine field set
+func (e *SuricataEngine) logger() *nidsLogger {
+	return &nidsLogger{log.WithField("detectionEngine", model.EngineNameSuricata)}
+}
+
 func (e *SuricataEngine) GetState() *model.EngineState {
-	return util.Ptr(e.EngineState)
+	return &e.EngineState
 }
 
 func (e *SuricataEngine) Init(config module.ModuleConfig) (err error) {
@@ -127,13 +208,14 @@ func (e *SuricataEngine) Init(config module.ModuleConfig) (err error) {
 	e.IntegrityCheckerData.Interrupt = make(chan bool, 1)
 	e.aiSummaries = &sync.Map{}
 
-	e.communityRulesFile = module.GetStringDefault(config, "communityRulesFile", DEFAULT_COMMUNITY_RULES_FILE)
 	e.allRulesFile = module.GetStringDefault(config, "allRulesFile", DEFAULT_ALL_RULES_FILE)
-	e.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", DEFAULT_RULES_FINGERPRINT_FILE)
+	e.thresholdFile = module.GetStringDefault(config, "thresholdFile", DEFAULT_THRESHOLD_FILE)
+	e.configFingerprintFile = module.GetStringDefault(config, "configFingerprintFile", DEFAULT_CONFIG_FINGERPRINT_FILE)
 	e.CommunityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", DEFAULT_COMMUNITY_RULES_IMPORT_FREQUENCY_SECS)
 	e.CommunityRulesImportErrorSeconds = module.GetIntDefault(config, "communityRulesImportErrorSeconds", DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS)
 	e.failAfterConsecutiveErrorCount = module.GetIntDefault(config, "failAfterConsecutiveErrorCount", DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT)
 	e.IntegrityCheckerData.FrequencySeconds = module.GetIntDefault(config, "integrityCheckFrequencySeconds", DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS)
+	e.configChangeSyncDelaySeconds = module.GetIntDefault(config, "configChangeSyncDelaySeconds", DEFAULT_CONFIG_CHANGE_SYNC_DELAY_SECONDS)
 	e.autoUpdateEnabled = module.GetBoolDefault(config, "autoUpdateEnabled", DEFAULT_AUTO_UPDATE_ENABLED)
 
 	enable := module.GetStringArrayDefault(config, "enableRegex", DEFAULT_ENABLE_REGEX)
@@ -164,15 +246,29 @@ func (e *SuricataEngine) Init(config module.ModuleConfig) (err error) {
 	}
 
 	e.StateFilePath = module.GetStringDefault(config, "stateFilePath", DEFAULT_STATE_FILE_PATH)
-	e.customRulesets, err = model.GetCustomRulesetsDefault(config, "customRulesets", []*model.CustomRuleset{})
-	if err != nil {
-		return fmt.Errorf("unable to get custom rulesets: %w", err)
-	}
+	e.SyncBlockFilePath = module.GetStringDefault(config, "syncBlockFilePath", DEFAULT_SYNC_BLOCK_FILE_PATH)
 
 	e.showAiSummaries = module.GetBoolDefault(config, "showAiSummaries", DEFAULT_SHOW_AI_SUMMARIES)
 	e.aiRepoUrl = module.GetStringDefault(config, "aiRepoUrl", DEFAULT_AI_REPO)
 	e.aiRepoBranch = module.GetStringDefault(config, "aiRepoBranch", DEFAULT_AI_REPO_BRANCH)
 	e.aiRepoPath = module.GetStringDefault(config, "aiRepoPath", DEFAULT_AI_REPO_PATH)
+
+	e.rulesetSources, err = GetRulesetSourcesFromConfig(config, "rulesetSources", nil)
+	if err != nil {
+		return fmt.Errorf("unable to get ruleset sources: %w", err)
+	}
+
+	// Filter for enabled sources
+	enabledSources := lo.Filter(e.rulesetSources, func(s *RulesetSource, _ int) bool {
+		return s.Enabled != nil && *s.Enabled
+	})
+
+	// Initialize RulesetManager with enabled sources
+	e.rulesetManager = NewRulesetManager(e.IOManager, e.logger(), enabledSources...)
+
+	// Initialize flowbit resolver
+	e.flowbitResolver = NewFlowbitResolver(e.logger())
+	e.flowbitRequired = make(map[string]*FlowbitDependency)
 
 	return nil
 }
@@ -182,16 +278,45 @@ func (e *SuricataEngine) Start() error {
 	e.isRunning = true
 	e.IntegrityCheckerData.IsRunning = true
 
+	// Check if configuration changed and schedule immediate sync if so
+	configChanged, err := e.hasConfigChanged()
+	if err != nil {
+		e.logger().WithError(err).Warn("failed to check config changes, proceeding normally")
+	}
+
 	// start long running processes
 	go detections.SyncScheduler(e.srv.Context, e.srv.Detectionstore, e, &e.SyncSchedulerParams, &e.EngineState, model.EngineNameSuricata, &e.isRunning)
 	go detections.IntegrityChecker(model.EngineNameSuricata, e, &e.IntegrityCheckerData, &e.EngineState.IntegrityFailure)
 
+	// If config changed, trigger immediate sync after startup (unless first import)
+	if configChanged {
+		_, hasState, _ := e.readFingerprint(e.StateFilePath)
+		if hasState {
+			e.logger().Info("ruleset configuration changed since last startup, scheduling immediate sync")
+			go func() {
+				time.Sleep(time.Duration(e.configChangeSyncDelaySeconds) * time.Second)
+				e.InterruptSync(true, true)
+			}()
+		} else {
+			e.logger().Info("ruleset configuration changed, but deferring to initial startup delay")
+		}
+	}
+
+	// Write current config fingerprint for next startup
+	currentFingerprint := e.generateConfigFingerprint()
+	err = e.IOManager.WriteFile(e.configFingerprintFile, []byte(currentFingerprint), 0644)
+	if err != nil {
+		e.logger().WithError(err).Error("failed to write config fingerprint")
+	} else {
+		e.logger().WithField("configFingerprint", currentFingerprint).Debug("wrote config fingerprint")
+	}
+
 	// update Ai Summaries once and don't block
 	if e.showAiSummaries {
 		go func() {
-			logger := log.WithField("detectionEngine", model.EngineNameSuricata)
+			logger := e.logger()
 
-			err := detections.RefreshAiSummaries(e, model.SigLangSuricata, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.aiRepoBranch, logger, e.IOManager)
+			err := detections.RefreshAiSummaries(e, model.SigLangSuricata, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.aiRepoBranch, logger.Entry, e.IOManager)
 			if err != nil {
 				if errors.Is(err, detections.ErrModuleStopped) {
 					return
@@ -258,13 +383,7 @@ func (e *SuricataEngine) ResumeIntegrityChecker() {
 }
 
 func checkAndExtractCategory(title string) string {
-	// Regex to extract the first two words from the title
-	regex, err := regexp.Compile(`^(\w+)\s+(\w+)`)
-	if err != nil {
-		log.WithError(err).Error("unable to compile suricata category extraction regex")
-	}
-
-	matches := regex.FindStringSubmatch(title)
+	matches := categoryExtractor.FindStringSubmatch(title)
 	if len(matches) > 1 {
 		firstWord := matches[1]
 		secondWord := matches[2]
@@ -282,6 +401,136 @@ func checkAndExtractCategory(title string) string {
 func (e *SuricataEngine) IsRunning() bool {
 	return e.isRunning
 }
+
+// Rule file operations
+
+// SyncLocalDetections - DEPRECATED: Use RegenerateRuleFiles instead
+// This is called when a rule is changed (eg. via the UI)
+func (e *SuricataEngine) SyncLocalDetections(ctx context.Context, detections []*model.Detection) (errMap map[string]string, err error) {
+	e.logger().
+		Debug("SyncLocalDetections called - delegating to RegenerateRuleFiles")
+	return e.RegenerateRuleFiles(ctx, detections)
+}
+
+// RegenerateRuleFiles regenerates all rule files from current Elasticsearch state.
+func (e *SuricataEngine) RegenerateRuleFiles(ctx context.Context, changedDetections []*model.Detection) (errMap map[string]string, err error) {
+	logger := e.logger().WithFields(log.Fields{
+		"changedCount": len(changedDetections),
+		"operation":    "regenerateRuleFiles",
+	})
+
+	// Check for sync block
+	if blocked := detections.IsSyncBlocked(e.IOManager, e.SyncBlockFilePath); blocked {
+		logger.WithFields(log.Fields{
+			"blockFilePath": e.SyncBlockFilePath,
+		}).Warn("regenerate rule files blocked by block file")
+
+		return map[string]string{"blocked": "sync operations blocked"},
+			fmt.Errorf("rule file regeneration blocked")
+	}
+
+	// Log what triggered this regeneration (if provided)
+	if len(changedDetections) > 0 {
+		changedSIDs := []string{}
+		for i, det := range changedDetections {
+			if i < 5 {
+				changedSIDs = append(changedSIDs, det.PublicID)
+			} else {
+				changedSIDs = append(changedSIDs, "...")
+				break
+			}
+		}
+		logger.WithField("changedSIDs", changedSIDs).Info("regenerating rule files after detection changes")
+	} else {
+		logger.Info("regenerating rule files")
+	}
+
+	// Get ALL detections from Elasticsearch (source of truth) - needed for flowbits handling
+	allDetectionsMap, err := e.getAllSuricataDetections(ctx)
+	if err != nil {
+		logger.WithError(err).Error("failed to fetch detections from store")
+		return map[string]string{"fetch": err.Error()}, err
+	}
+
+	// Filter out pending delete
+	allDetections := make([]*model.Detection, 0, len(allDetectionsMap))
+	for _, det := range allDetectionsMap {
+		if !det.PendingDelete {
+			allDetections = append(allDetections, det)
+		}
+	}
+
+	logger.WithField("totalDetections", len(allDetections)).Debug("fetched detections")
+
+	// Resolve flowbit dependencies
+	e.flowbitRequired = e.flowbitResolver.ResolveFlowbitDependencies(allDetections)
+
+	if len(e.flowbitRequired) > 0 {
+		logger.WithField("requiredCount", len(e.flowbitRequired)).
+			Debug("identified disabled rules needed for flowbit dependencies")
+	}
+
+	// Write the rules file
+	if err := e.writeAllRulesFile(allDetections); err != nil {
+		logger.WithError(err).Error("failed to write all.rules file")
+		return map[string]string{"write_rules": err.Error()}, err
+	}
+
+	// Count enabled rules for logging
+	enabledCount := 0
+	for _, det := range allDetections {
+		if det.IsEnabled {
+			enabledCount++
+		}
+	}
+
+	logger.WithFields(log.Fields{
+		"enabledRules": enabledCount,
+		"totalRules":   len(allDetections),
+		"filePath":     e.allRulesFile,
+	}).Info("wrote all.rules file")
+
+	// Write threshold file using the same detections (for overrides)
+	if err := e.writeThresholdFile(allDetections); err != nil {
+		logger.WithError(err).Error("failed to write threshold file")
+		return map[string]string{"write_threshold": err.Error()}, err
+	}
+
+	// Count overrides for logging
+	rulesWithOverrides := 0
+	suppressCount := 0
+	thresholdCount := 0
+	for _, det := range allDetections {
+		if len(det.Overrides) > 0 {
+			rulesWithOverrides++
+			for _, override := range det.Overrides {
+				if override.IsEnabled {
+					if override.Type == model.OverrideTypeSuppress {
+						suppressCount++
+					} else if override.Type == model.OverrideTypeThreshold {
+						thresholdCount++
+					}
+				}
+			}
+		}
+	}
+
+	logger.WithFields(log.Fields{
+		"totalDetections": len(allDetections),
+		"withOverrides":   rulesWithOverrides,
+		"suppressRules":   suppressCount,
+		"thresholdRules":  thresholdCount,
+		"filePath":        e.thresholdFile,
+	}).Info("wrote threshold configuration")
+
+	logger.WithFields(log.Fields{
+		"totalRules": len(allDetections),
+		"operation":  "regenerateRuleFiles",
+	}).Info("successfully regenerated rule files")
+	return nil, nil
+}
+
+// Rule processing
 
 func (e *SuricataEngine) ConvertRule(ctx context.Context, detect *model.Detection) (string, error) {
 	return "", fmt.Errorf("not implemented")
@@ -337,14 +586,14 @@ func (e *SuricataEngine) ExtractDetails(detect *model.Detection) error {
 			if err == nil {
 				detect.SourceCreated = &t
 			} else {
-				log.WithField("created_at", meta.Value).WithError(err).Warn("unable to parse date")
+				e.logger().WithField("created_at", meta.Value).WithError(err).Warn("unable to parse date")
 			}
 		} else if strings.EqualFold(meta.Key, "updated_at") {
 			t, err := util.ParseDate(meta.Value, formats)
 			if err == nil {
 				detect.SourceUpdated = &t
 			} else {
-				log.WithField("updated_at", meta.Value).WithError(err).Warn("unable to parse date")
+				e.logger().WithField("updated_at", meta.Value).WithError(err).Warn("unable to parse date")
 			}
 		}
 	}
@@ -352,10 +601,33 @@ func (e *SuricataEngine) ExtractDetails(detect *model.Detection) error {
 	return nil
 }
 
+// Core sync operations
+
 func (e *SuricataEngine) Sync(logger *log.Entry, forceSync bool) error {
 	defer func() {
 		e.resetInterruptSync()
 	}()
+
+	// Check for sync block at the very start
+	if blocked := detections.IsSyncBlocked(e.IOManager, e.SyncBlockFilePath); blocked {
+		logger.WithFields(log.Fields{
+			"blockFilePath": e.SyncBlockFilePath,
+		}).Warn("sync blocked by block file")
+
+		if e.notify {
+			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+				Engine: model.EngineNameSuricata,
+				Status: "blocked",
+			})
+		}
+
+		return fmt.Errorf("sync blocked")
+	}
+
+	// Validate ruleset configuration before starting sync
+	if err := e.validateRulesetNames(); err != nil {
+		return e.handleSyncError(err, "sync aborted due to configuration error", logger)
+	}
 
 	if detections.CheckWriteNoRead(e.srv.Context, e.srv.Detectionstore, e.writeNoRead) {
 		if e.notify {
@@ -364,7 +636,6 @@ func (e *SuricataEngine) Sync(logger *log.Entry, forceSync bool) error {
 				Status: "error",
 			})
 		}
-
 		return detections.ErrSyncFailed
 	}
 
@@ -375,213 +646,793 @@ func (e *SuricataEngine) Sync(logger *log.Entry, forceSync bool) error {
 			"autoUpdateEnabled": e.autoUpdateEnabled,
 			"forceSync":         forceSync,
 		}).Info("skipping sync")
-
 		return nil
 	}
 
+	// Refresh AI summaries if enabled
 	if e.showAiSummaries {
 		err := detections.RefreshAiSummaries(e, model.SigLangSuricata, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.aiRepoBranch, logger, e.IOManager)
 		if err != nil {
 			if errors.Is(err, detections.ErrModuleStopped) {
 				return err
 			}
-
 			logger.WithError(err).Error("unable to refresh AI summaries")
 		} else {
 			logger.Info("successfully refreshed AI summaries")
 		}
 	}
 
+	logger.Info("starting detection sync")
 	e.EngineState.Syncing = true
 
-	rules, hash, err := e.readAndHash(e.communityRulesFile)
-	if err != nil {
-		if e.notify {
-			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-				Engine: model.EngineNameSuricata,
-				Status: "error",
-			})
-		}
+	// Build map of configured rulesets for deletion logic
+	configuredRulesets := e.buildConfiguredRulesetsMap()
 
-		logger.WithError(err).Error("unable to read community rules file")
+	// Sync all configured rulesets using RulesetManager
+	rulesetResults := e.rulesetManager.SyncAll(e.srv.Context, e.srv.Detectionstore)
 
-		return detections.ErrSyncFailed
-	}
-
-	fingerprint, haveFP, err := e.readFingerprint(e.rulesFingerprintFile)
-	if err != nil {
-		logger.WithError(err).Error("unable to read rules fingerprint file")
-		return detections.ErrSyncFailed
-	}
-
-	if !forceSync {
-		if haveFP && strings.EqualFold(*fingerprint, hash) {
-			// if we have a fingerprint and the hashes are equal, there's nothing to do
-			logger.Info("community rule sync found no changes")
-
-			detections.WriteStateFile(e.IOManager, e.StateFilePath)
+	// Check if ANY ruleset failed - abort entire sync if so
+	for rulesetName, result := range rulesetResults {
+		if !result.Success {
+			e.logger().WithError(result.Error).WithField("failedRuleset", rulesetName).
+				Error("aborting sync due to ruleset failure")
 
 			if e.notify {
 				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
 					Engine: model.EngineNameSuricata,
-					Status: "success",
+					Status: "error",
 				})
 			}
+			return e.handleSyncError(result.Error, "ruleset sync failed", logger)
+		}
+	}
 
-			e.checkMigrationsOnce()
+	// Merge all rulesets
+	mergeResult := e.mergeRulesetResults(rulesetResults)
+	e.logDuplicates(mergeResult.Duplicates)
+	logger.WithField("totalDetections", len(mergeResult.Detections)).Info("merged all rulesets")
 
-			_, _, err = e.IntegrityCheck(false, logger)
+	allDetections := mergeResult.Detections
 
-			e.EngineState.IntegrityFailure = err != nil
+	// Apply user state from Elasticsearch (enable/disable, overrides)
+	if err := e.applyUserState(e.srv.Context, allDetections); err != nil {
+		return e.handleSyncError(err, "failed to apply user state", logger)
+	}
 
-			if err != nil {
-				logger.WithError(err).Error("post-sync integrity check failed")
-			} else {
-				logger.Info("post-sync integrity check passed")
+	// Resolve flowbit dependencies
+	// This identifies disabled rules that need to be active for flowbits
+	// IMPORTANT: Does NOT modify det.IsEnabled - that preserves user intent
+	e.flowbitRequired = e.flowbitResolver.ResolveFlowbitDependencies(allDetections)
+
+	if len(e.flowbitRequired) > 0 {
+		sampleSIDs := make([]string, 0, min(10, len(e.flowbitRequired)))
+		for sid := range e.flowbitRequired {
+			if len(sampleSIDs) >= 10 {
+				break
 			}
-
-			// a non-forceSync sync that found no changes is a success
-			return nil
+			sampleSIDs = append(sampleSIDs, sid)
 		}
+		logger.WithFields(log.Fields{
+			"requiredCount": len(e.flowbitRequired),
+			"sampleSIDs":    sampleSIDs,
+		}).Info("identified disabled rules needed for flowbit dependencies")
 	}
 
-	allSettings, err := e.srv.Configstore.GetSettings(e.srv.Context, true)
-	if err != nil {
-		if e.notify {
-			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-				Engine: model.EngineNameSuricata,
-				Status: "error",
-			})
-		}
-
-		logger.WithError(err).Error("unable to get settings")
-
-		return detections.ErrSyncFailed
+	// Write rules directly to Suricata format
+	if err := e.writeAllRulesFile(allDetections); err != nil {
+		return e.handleSyncError(err, "failed to write all-rulesets.rules file", logger)
 	}
 
-	if !e.isRunning {
-		return detections.ErrModuleStopped
+	// Write threshold configuration
+	if err := e.writeThresholdFile(allDetections); err != nil {
+		logger.WithError(err).Warn("failed to write threshold file (non-fatal)")
+		// Don't fail sync for threshold file issues, just log
 	}
 
-	ruleset := settingByID(allSettings, "idstools.config.ruleset")
-
-	commDetections, err := e.ParseRules(rules, ruleset.Value)
-	if err != nil {
-		if e.notify {
-			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-				Engine: model.EngineNameSuricata,
-				Status: "error",
-			})
-		}
-
-		logger.WithError(err).Error("unable to parse community rules")
-
-		return detections.ErrSyncFailed
+	// Update detection store with bulk indexer
+	if err := e.updateDetectionStore(e.srv.Context, allDetections, configuredRulesets, rulesetResults); err != nil {
+		return e.handleSyncError(err, "failed to update detection store", logger)
 	}
 
-	for _, d := range commDetections {
-		d.IsCommunity = true
-	}
-
-	dets, err := e.ReadCustomRulesets()
-	if err != nil {
-		if e.notify {
-			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-				Engine: model.EngineNameSuricata,
-				Status: "error",
-			})
-		}
-
-		logger.WithError(err).Error("unable to parse custom rulesets")
-
-		return detections.ErrSyncFailed
-	}
-
-	commDetections = append(commDetections, dets...)
-
-	commDetections = detections.DeduplicateByPublicId(commDetections)
-
-	errMap, err := e.syncCommunityDetections(e.srv.Context, logger, commDetections, haveFP, true, allSettings)
-	if err != nil {
-		if errors.Is(err, detections.ErrModuleStopped) {
-			logger.Info("incomplete sync of suricata community detections due to module stopping")
-			return err
-		} else if errors.Is(err, detections.ErrStateFileNoCommunity) {
-			return err
-		}
-
-		if err.Error() == "Object not found" {
-			// errMap contains exactly 1 error: the publicId of the detection that
-			// was written to but not read back
-			for publicId := range errMap {
-				e.writeNoRead = util.Ptr(publicId)
-			}
-		}
-
-		if e.notify {
-			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-				Engine: model.EngineNameSuricata,
-				Status: "error",
-			})
-		}
-
-		logger.WithError(err).Error("unable to sync suricata community detections")
-
-		return detections.ErrSyncFailed
-	}
-
+	// Write state file
 	detections.WriteStateFile(e.IOManager, e.StateFilePath)
 
-	if len(errMap) > 0 {
-		// there were errors, don't save the fingerprint.
-		// idempotency means we might fix it if we try again later.
-		logger.WithField("suricataSyncErrors", errMap).Error("unable to sync all community detections")
-
-		if e.notify {
-			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-				Engine: model.EngineNameSuricata,
-				Status: "partial",
-			})
-		}
+	// Run post-sync integrity check
+	_, _, err := e.IntegrityCheck(false, logger)
+	e.EngineState.IntegrityFailure = err != nil
+	if err != nil {
+		logger.WithError(err).Error("post-sync integrity check failed")
 	} else {
-		err = e.WriteFile(e.rulesFingerprintFile, []byte(hash), 0644)
-		if err != nil {
-			logger.WithError(err).WithField("repoPath", e.rulesFingerprintFile).Error("unable to write rules fingerprint file")
-		}
-
-		if e.notify {
-			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-				Engine: model.EngineNameSuricata,
-				Status: "success",
-			})
-		}
-
-		_, _, err = e.IntegrityCheck(false, logger)
-
-		e.EngineState.IntegrityFailure = err != nil
-
-		if err != nil {
-			logger.WithError(err).Error("post-sync integrity check failed")
-		} else {
-			logger.Info("post-sync integrity check passed")
-		}
+		logger.Info("post-sync integrity check passed")
 	}
 
+	// Broadcast success
+	if e.notify {
+		e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+			Engine: model.EngineNameSuricata,
+			Status: "success",
+		})
+	}
+
+	// Calculate final sync summary
+	enabledCount := 0
+	disabledCount := 0
+	overrideCount := 0
+	for _, det := range allDetections {
+		if det.IsEnabled {
+			enabledCount++
+		} else {
+			disabledCount++
+		}
+		overrideCount += len(det.Overrides)
+	}
+
+	logger.WithFields(log.Fields{
+		"totalRules":     len(allDetections),
+		"enabledRules":   enabledCount,
+		"disabledRules":  disabledCount,
+		"totalOverrides": overrideCount,
+		"operation":      "sync",
+	}).Info("detection sync completed successfully")
+
+	// Check for migrations
 	e.checkMigrationsOnce()
 
 	return nil
 }
 
+// mergeRulesetResults combines detections from multiple rulesets with duplicate handling
+func (e *SuricataEngine) mergeRulesetResults(results map[string]*RulesetSyncResult) *MergeResult {
+	// Process rulesets in deterministic order for consistency
+	rulesets := lo.Keys(results)
+	sort.Strings(rulesets)
+
+	seen := make(map[string]string) // SID -> first ruleset that had it
+	var allDetections []*model.Detection
+	duplicates := make(map[string]DuplicateInfo)
+	stats := make(map[string]int)
+
+	for _, rulesetName := range rulesets {
+		result := results[rulesetName]
+		unique := e.partitionDetectionsBySID(result.Detections, rulesetName, seen, duplicates)
+
+		allDetections = append(allDetections, unique...)
+		stats[rulesetName] = len(unique)
+
+		// Log processing info
+		e.logger().WithFields(log.Fields{
+			"ruleset":        rulesetName,
+			"ruleCount":      len(unique),
+			"duplicateCount": len(result.Detections) - len(unique),
+		}).Info("processed ruleset")
+	}
+
+	return &MergeResult{
+		Detections: allDetections,
+		Duplicates: duplicates,
+		Stats:      stats,
+	}
+}
+
+// partitionDetectionsBySID separates unique detections from duplicates and builds duplicate info
+func (e *SuricataEngine) partitionDetectionsBySID(detections []*model.Detection, rulesetName string, seen map[string]string, duplicates map[string]DuplicateInfo) []*model.Detection {
+	unique := make([]*model.Detection, 0, len(detections))
+
+	for _, det := range detections {
+		if keptRuleset, exists := seen[det.PublicID]; exists {
+			// Build duplicate info directly
+			duplicates[det.PublicID] = DuplicateInfo{
+				KeptRuleset:    keptRuleset,
+				SkippedRuleset: rulesetName,
+			}
+		} else {
+			seen[det.PublicID] = rulesetName
+			unique = append(unique, det)
+		}
+	}
+
+	return unique
+}
+
+// logDuplicates logs duplicate SID information in a structured way
+func (e *SuricataEngine) logDuplicates(duplicates map[string]DuplicateInfo) {
+	if len(duplicates) == 0 {
+		return
+	}
+
+	logger := e.logger()
+
+	// Count duplicates by skipped ruleset
+	byRuleset := make(map[string]int)
+	for _, info := range duplicates {
+		byRuleset[info.SkippedRuleset]++
+	}
+
+	// Log summary per ruleset
+	for ruleset, count := range byRuleset {
+		logger.WithFields(log.Fields{
+			"ruleset":        ruleset,
+			"duplicateCount": count,
+			"resolution":     "kept_first",
+		}).Warn("ruleset contained duplicate SIDs")
+	}
+
+	// Log individual duplicates at debug level
+	for sid, info := range duplicates {
+		logger.WithFields(log.Fields{
+			"duplicateSID":    sid,
+			"skippedRuleset":  info.SkippedRuleset,
+			"acceptedRuleset": info.KeptRuleset,
+			"resolution":      "kept_first",
+		}).Debug("duplicate SID details")
+	}
+}
+
+// applyUserState applies user preferences from Elasticsearch to detections
+func (e *SuricataEngine) applyUserState(ctx context.Context, detections []*model.Detection) error {
+	existingDetections, err := e.getAllSuricataDetections(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get existing detections: %w", err)
+	}
+
+	stats := &StateStats{}
+
+	for _, det := range detections {
+		if existing, exists := existingDetections[det.PublicID]; exists {
+			e.applyExistingRuleState(det, existing, stats)
+		} else {
+			e.applyNewRuleState(det, stats)
+		}
+		e.ApplyFilters(det)
+	}
+
+	e.logStateApplication(stats, len(detections))
+	return nil
+}
+
+// applyExistingRuleState applies state from existing ES detection
+func (e *SuricataEngine) applyExistingRuleState(det *model.Detection, existing *model.Detection, stats *StateStats) {
+	stats.ExistingRules++
+
+	originalEnabled := det.IsEnabled
+
+	// Copy user preferences
+	det.IsEnabled = existing.IsEnabled
+	det.Overrides = existing.Overrides
+	det.PendingDelete = existing.PendingDelete
+
+	// Copy ES metadata
+	det.Id = existing.Id
+	det.CreateTime = existing.CreateTime
+
+	// Track modifications
+	hasEnabledChange := originalEnabled != existing.IsEnabled
+	hasOverrides := len(existing.Overrides) > 0
+
+	if hasEnabledChange || hasOverrides {
+		stats.UserModified++
+	}
+	if hasEnabledChange {
+		stats.PreservedUserPrefs++
+	}
+}
+
+// applyNewRuleState sets up state for new detection
+func (e *SuricataEngine) applyNewRuleState(det *model.Detection, stats *StateStats) {
+	stats.NewRules++
+	det.Id = util.ToUUID(det.PublicID)
+	det.CreateTime = util.Ptr(time.Now())
+	// det.IsEnabled is already set correctly from parsing the rule content
+}
+
+// logStateApplication logs the statistics from state application
+func (e *SuricataEngine) logStateApplication(stats *StateStats, totalProcessed int) {
+	e.logger().WithFields(log.Fields{
+		"existingRules":      stats.ExistingRules,
+		"newRules":           stats.NewRules,
+		"userModifiedRules":  stats.UserModified,
+		"preservedUserPrefs": stats.PreservedUserPrefs,
+		"totalProcessed":     totalProcessed,
+	}).Info("applied user state to rules")
+}
+
+// Detection merging and state application helpers
+
+// writeAllRulesFile writes the consolidated rules file in Suricata format
+func (e *SuricataEngine) writeAllRulesFile(detections []*model.Detection) error {
+	var rules bytes.Buffer
+
+	// Group rules by ruleset for organization
+	rulesByRuleset := make(map[string][]*model.Detection)
+	for _, det := range detections {
+		if det.PendingDelete {
+			continue
+		}
+
+		// Include rule if:
+		// 1. User has enabled it (det.IsEnabled = true), OR
+		// 2. User disabled it BUT it's needed for flowbits
+		includeRule := det.IsEnabled || e.flowbitRequired[det.PublicID] != nil
+
+		if includeRule {
+			rulesByRuleset[det.Ruleset] = append(rulesByRuleset[det.Ruleset], det)
+		}
+	}
+
+	// Write rules grouped by ruleset
+	for rulesetName, rulesetDetections := range rulesByRuleset {
+		rules.WriteString(fmt.Sprintf("# Ruleset: %s\n", rulesetName))
+
+		for _, det := range rulesetDetections {
+			content := det.Content
+
+			// Apply user-defined modify overrides first
+			for _, override := range det.Overrides {
+				if override.Type == model.OverrideTypeModify && override.IsEnabled {
+					if override.Regex != nil && override.Value != nil {
+						content = strings.ReplaceAll(content, *override.Regex, *override.Value)
+					}
+				}
+			}
+
+			// Handle disabled rules that are needed for flowbits
+			if !det.IsEnabled && e.flowbitRequired[det.PublicID] != nil {
+				dep := e.flowbitRequired[det.PublicID]
+				// Add explanatory comment
+				rules.WriteString(fmt.Sprintf(
+					"# AUTO-ENABLED (flowbit: %s, required by %d rule(s)): This disabled rule runs with noalert\n",
+					dep.FlowbitName,
+					len(dep.RequiredBy),
+				))
+
+				// Add noalert to the rule itself
+				content = AddNoalertToRule(content)
+			}
+
+			rules.WriteString(content)
+			rules.WriteString("\n")
+		}
+
+		rules.WriteString("\n")
+	}
+
+	return e.IOManager.WriteFile(e.allRulesFile, rules.Bytes(), 0644)
+}
+
+// writeThresholdFile writes threshold configuration in Suricata format
+// Note: Override validation happens at creation time in model.Override.Validate()
+func (e *SuricataEngine) writeThresholdFile(detections []*model.Detection) error {
+	var thresholds bytes.Buffer
+
+	thresholds.WriteString("# Threshold configuration generated by Security Onion\n")
+	thresholds.WriteString("# This file is automatically generated - do not edit manually\n\n")
+
+	for _, det := range detections {
+		if det.PendingDelete {
+			continue
+		}
+
+		for _, override := range det.Overrides {
+			if !override.IsEnabled {
+				continue
+			}
+
+			switch override.Type {
+			case model.OverrideTypeThreshold:
+				// Format: threshold gen_id <gid>, sig_id <sid>, type <type>, track <track>, count <count>, seconds <seconds>
+				thresholds.WriteString(fmt.Sprintf("threshold gen_id 1, sig_id %s, type %s, track %s, count %d, seconds %d\n",
+					det.PublicID, *override.ThresholdType, *override.Track, *override.Count, *override.Seconds))
+			case model.OverrideTypeSuppress:
+				// Format: suppress gen_id <gid>, sig_id <sid>, track <track_by>, ip <ip_address>
+				thresholds.WriteString(fmt.Sprintf("suppress gen_id 1, sig_id %s, track %s, ip %s\n",
+					det.PublicID, *override.Track, *override.IP))
+			}
+		}
+	}
+
+	return e.IOManager.WriteFile(e.thresholdFile, thresholds.Bytes(), 0644)
+}
+
+// updateDetectionStore updates Elasticsearch with the synced detections
+func (e *SuricataEngine) updateDetectionStore(
+	ctx context.Context,
+	detects []*model.Detection,
+	configuredRulesets map[string]*RulesetSource,
+	_ map[string]*RulesetSyncResult,
+) error {
+	// Get all existing detections
+	existingDetections, err := e.getAllSuricataDetections(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get existing detections: %w", err)
+	}
+
+	// Build bulk indexer for efficient updates
+	bulk, err := e.createBulkIndexer(ctx, e.logger().Entry)
+	if err != nil {
+		return err
+	}
+
+	// Set up audit and error tracking (thread-safe for concurrent bulk operations)
+	createAudit := make([]model.AuditInfo, 0, len(detects))
+	auditMut := sync.Mutex{}
+	errMut := sync.Mutex{}
+	errMap := make(map[string]string)
+
+	// Error tracker to abort sync if too many consecutive errors occur
+	et := detections.NewErrorTracker(e.failAfterConsecutiveErrorCount)
+
+	// Track which detections we're keeping
+	processedSIDs := make(map[string]bool)
+
+	// Track stats per ruleset
+	rulesetStats := make(map[string]*RulesetStats)
+	for name := range configuredRulesets {
+		rulesetStats[name] = &RulesetStats{}
+	}
+
+	// PHASE 1: UPDATE/CREATE - Process new detections
+	for _, det := range detects {
+		processedSIDs[det.PublicID] = true
+
+		existing, exists := existingDetections[det.PublicID]
+
+		// Prepare document
+		document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(ctx,
+			"detection", det, &det.Auditable, exists, nil, nil)
+		if err != nil {
+			e.logger().WithError(err).WithField("sid", det.PublicID).Error("failed to convert detection")
+			continue
+		}
+
+		// Track per-ruleset stats based on actual changes
+		if stats := rulesetStats[det.Ruleset]; stats != nil {
+			if exists {
+				if e.hasDetectionChanged(existing, det) {
+					stats.Updated++
+				} else {
+					stats.Unchanged++
+				}
+			} else {
+				stats.Added++
+			}
+		}
+
+		if exists {
+			// Update existing detection if changed
+			if e.hasDetectionChanged(existing, det) {
+				err = bulk.Add(ctx, esutil.BulkIndexerItem{
+					Index:      index,
+					Action:     "update",
+					DocumentID: existing.Id,
+					Body:       bytes.NewReader(document),
+					OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
+						auditMut.Lock()
+						defer auditMut.Unlock()
+						createAudit = append(createAudit, model.AuditInfo{
+							Object: det,
+							DocId:  resp.DocumentID,
+							Op:     "update",
+						})
+					},
+					OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
+						errMut.Lock()
+						defer errMut.Unlock()
+						if err != nil {
+							errMap[det.PublicID] = fmt.Sprintf("unable to update detection; reason=%s", err.Error())
+						} else {
+							errMap[det.PublicID] = fmt.Sprintf("unable to update detection; reason=%s", resp.Error.Reason)
+						}
+					},
+				})
+				if err != nil {
+					errMut.Lock()
+					errMap[det.PublicID] = fmt.Sprintf("unable to add update to bulk indexer; reason=%s", err.Error())
+					errMut.Unlock()
+				}
+
+				// Track consecutive errors - abort if too many failures in a row
+				if eterr := et.AddError(err); eterr != nil {
+					return eterr
+				}
+			}
+		} else {
+			// Create new detection
+			err = bulk.Add(ctx, esutil.BulkIndexerItem{
+				Index:      index,
+				Action:     "create",
+				DocumentID: det.Id,
+				Body:       bytes.NewReader(document),
+				OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
+					auditMut.Lock()
+					defer auditMut.Unlock()
+					createAudit = append(createAudit, model.AuditInfo{
+						Object: det,
+						DocId:  resp.DocumentID,
+						Op:     "create",
+					})
+				},
+				OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
+					errMut.Lock()
+					defer errMut.Unlock()
+					if err != nil {
+						errMap[det.PublicID] = fmt.Sprintf("unable to create detection; reason=%s", err.Error())
+					} else {
+						errMap[det.PublicID] = fmt.Sprintf("unable to create detection; reason=%s", resp.Error.Reason)
+					}
+				},
+			})
+			if err != nil {
+				errMut.Lock()
+				errMap[det.PublicID] = fmt.Sprintf("unable to add create to bulk indexer; reason=%s", err.Error())
+				errMut.Unlock()
+			}
+
+			// Track consecutive errors - abort if too many failures in a row
+			if eterr := et.AddError(err); eterr != nil {
+				return eterr
+			}
+		}
+	}
+
+	// PHASE 2: DELETE - Simple deletion logic
+	toDelete := map[string]struct{}{}
+	for sid := range existingDetections {
+		if !processedSIDs[sid] {
+			toDelete[sid] = struct{}{}
+		}
+	}
+
+	// Delete rules based on source status and rule type
+	deletedCount := 0
+	for sid := range toDelete {
+		rule := existingDetections[sid]
+		sourceConfig := configuredRulesets[rule.Ruleset]
+
+		var reason string
+		if sourceConfig == nil {
+			// Case 1: Ruleset removed from configuration - user removed the source
+			reason = "ruleset_removed"
+		} else if sourceConfig.DeleteUnreferenced {
+			// Case 2: Ruleset configured with DeleteUnreferenced = true
+			reason = "unreferenced_rule"
+		} else {
+			// Case 3: Preserve (DeleteUnreferenced = false)
+			continue
+		}
+
+		e.logger().WithFields(log.Fields{
+			"sid":     sid,
+			"ruleset": rule.Ruleset,
+			"reason":  reason,
+		}).Debug("deleting rule")
+
+		// Track deletion stats (create entry for orphaned rulesets if needed)
+		if rulesetStats[rule.Ruleset] == nil {
+			rulesetStats[rule.Ruleset] = &RulesetStats{}
+		}
+		rulesetStats[rule.Ruleset].Deleted++
+
+		err := e.executeRuleDeletion(ctx, bulk, rule, reason, &createAudit, &auditMut, &errMap, &errMut)
+		if err != nil {
+			e.logger().WithError(err).WithFields(log.Fields{
+				"sid":     sid,
+				"ruleset": rule.Ruleset,
+			}).Error("failed to delete rule")
+		}
+
+		// Track consecutive errors - abort if too many failures in a row
+		if eterr := et.AddError(err); eterr != nil {
+			return eterr
+		}
+
+		if err == nil {
+			deletedCount++
+		}
+	}
+
+	e.logger().WithField("deletedCount", deletedCount).Info("completed rule deletions")
+
+	// Close first bulk indexer - this must complete before audit records can be created
+	err = bulk.Close(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to close detection bulk indexer: %w", err)
+	}
+
+	// PHASE 3: Create audit records (only if there are any to create)
+	if len(createAudit) > 0 {
+		auditBulk, err := e.createBulkIndexer(ctx, e.logger().Entry)
+		if err != nil {
+			return fmt.Errorf("failed to create audit bulk indexer: %w", err)
+		}
+
+		for _, audit := range createAudit {
+			det := audit.Object.(*model.Detection)
+			// Prepare audit document
+			document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(ctx,
+				"detection", audit.Object, &det.Auditable, false, &audit.DocId, &audit.Op)
+			if err != nil {
+				errMut.Lock()
+				errMap[det.PublicID] = fmt.Sprintf("unable to convert detection to document map for creating an audit doc; reason=%s", err.Error())
+				errMut.Unlock()
+				continue
+			}
+
+			// Create audit document
+			err = auditBulk.Add(ctx, esutil.BulkIndexerItem{
+				Index:  index,
+				Action: "create",
+				Body:   bytes.NewReader(document),
+				OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
+					errMut.Lock()
+					defer errMut.Unlock()
+					if err != nil {
+						errMap[det.PublicID] = fmt.Sprintf("unable to create audit doc; reason=%s", err.Error())
+					} else {
+						errMap[det.PublicID] = fmt.Sprintf("unable to create audit doc; reason=%s", resp.Error.Reason)
+					}
+				},
+			})
+			if err != nil {
+				errMut.Lock()
+				errMap[det.PublicID] = fmt.Sprintf("unable to add audit doc to bulk indexer; reason=%s", err.Error())
+				errMut.Unlock()
+				continue
+			}
+		}
+
+		// Close audit bulk indexer
+		err = auditBulk.Close(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to close audit bulk indexer: %w", err)
+		}
+
+		e.logger().WithField("auditCount", len(createAudit)).Info("completed audit record creation")
+	}
+
+	// Log any errors that occurred
+	// No mutex needed - all bulk operations are complete at this point
+	if len(errMap) > 0 {
+		for sid, errMsg := range errMap {
+			e.logger().WithField("sid", sid).Error(errMsg)
+		}
+	}
+
+	// Log per-ruleset stats
+	for name, stats := range rulesetStats {
+		if stats.Added > 0 || stats.Updated > 0 || stats.Unchanged > 0 || stats.Deleted > 0 {
+			e.logger().WithFields(log.Fields{
+				"ruleset":   name,
+				"added":     stats.Added,
+				"updated":   stats.Updated,
+				"unchanged": stats.Unchanged,
+				"deleted":   stats.Deleted,
+			}).Info("ruleset sync summary")
+		}
+	}
+
+	return nil
+}
+
+// hasDetectionChanged checks if a detection needs to be updated
+func (e *SuricataEngine) hasDetectionChanged(existing, new *model.Detection) bool {
+	return existing.Content != new.Content ||
+		existing.Title != new.Title ||
+		existing.Severity != new.Severity ||
+		existing.Ruleset != new.Ruleset ||
+		existing.License != new.License ||
+		existing.IsCommunity != new.IsCommunity ||
+		existing.IsEnabled != new.IsEnabled
+}
+
+// Helper methods
+
+// getAllSuricataDetections gets all Suricata detections with optional filters
+func (e *SuricataEngine) getAllSuricataDetections(ctx context.Context, filters ...model.GetAllOption) (map[string]*model.Detection, error) {
+	queryFilters := []model.GetAllOption{model.WithEngine(model.EngineNameSuricata)}
+	queryFilters = append(queryFilters, filters...)
+	return e.srv.Detectionstore.GetAllDetections(ctx, queryFilters...)
+}
+
+// handleSyncError handles sync errors with consistent logging and broadcasting
+func (e *SuricataEngine) handleSyncError(err error, message string, logger *log.Entry) error {
+	logger.WithError(err).Error(message)
+	if e.notify {
+		e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+			Engine: model.EngineNameSuricata,
+			Status: "error",
+		})
+	}
+	return detections.ErrSyncFailed
+}
+
+// createBulkIndexer creates and returns a bulk indexer with consistent error handling
+func (e *SuricataEngine) createBulkIndexer(ctx context.Context, logger *log.Entry) (esutil.BulkIndexer, error) {
+	bulk, err := e.srv.Detectionstore.BuildBulkIndexer(ctx, logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build bulk indexer: %w", err)
+	}
+	return bulk, nil
+}
+
+// buildConfiguredRulesetsMap builds a map of configured ruleset sources
+func (e *SuricataEngine) buildConfiguredRulesetsMap() map[string]*RulesetSource {
+	configured := make(map[string]*RulesetSource)
+
+	// Get sources from RulesetManager
+	if e.rulesetManager != nil {
+		for _, source := range e.rulesetManager.GetSources() {
+			if source.Enabled != nil && *source.Enabled {
+				configured[source.Name] = source
+			}
+		}
+	}
+
+	return configured
+}
+
+// executeRuleDeletion performs the actual deletion of a rule
+func (e *SuricataEngine) executeRuleDeletion(
+	ctx context.Context,
+	bulk esutil.BulkIndexer,
+	rule *model.Detection,
+	reason string,
+	createAudit *[]model.AuditInfo,
+	auditMut *sync.Mutex,
+	errMap *map[string]string,
+	errMut *sync.Mutex,
+) error {
+	e.logger().WithFields(log.Fields{
+		"sid":     rule.PublicID,
+		"ruleset": rule.Ruleset,
+		"reason":  reason,
+	}).Debug("deleting rule")
+
+	_, index, _ := e.srv.Detectionstore.ConvertObjectToDocument(
+		ctx, "detection", rule, &rule.Auditable, false, nil, nil)
+
+	err := bulk.Add(ctx, esutil.BulkIndexerItem{
+		Action:     "delete",
+		Index:      index,
+		DocumentID: rule.Id,
+		OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
+			auditMut.Lock()
+			defer auditMut.Unlock()
+			*createAudit = append(*createAudit, model.AuditInfo{
+				Object: rule,
+				DocId:  resp.DocumentID,
+				Op:     "delete",
+			})
+		},
+		OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
+			errMut.Lock()
+			defer errMut.Unlock()
+			if err != nil {
+				(*errMap)[rule.PublicID] = fmt.Sprintf("unable to delete detection; reason=%s", err.Error())
+			} else {
+				(*errMap)[rule.PublicID] = fmt.Sprintf("unable to delete detection; reason=%s", resp.Error.Reason)
+			}
+		},
+	})
+	if err != nil {
+		errMut.Lock()
+		defer errMut.Unlock()
+		(*errMap)[rule.PublicID] = fmt.Sprintf("unable to add delete to bulk indexer; reason=%s", err.Error())
+		return err
+	}
+
+	return nil
+}
+
 func (e *SuricataEngine) checkForMigrations() {
-	log.Info("checking for suricata migrations")
+	e.logger().Info("checking for suricata migrations")
 
 	migrationFinder := regexp.MustCompile(`^suricata-migration-(.*)$`)
 
-	migDir := "/opt/so/conf/soc/migrations/"
+	migDir := DEFAULT_MIGRATIONS_DIR
 
 	items, err := e.ReadDir(migDir)
 	if err != nil {
-		log.WithError(err).Error("unable to read directory")
+		e.logger().WithError(err).Error("unable to read directory")
 		return
 	}
 
@@ -610,9 +1461,9 @@ func (e *SuricataEngine) checkForMigrations() {
 	semver.Sort(versions)
 
 	if len(versions) == 0 {
-		log.Info("no suricata migrations found")
+		e.logger().Info("no suricata migrations found")
 	} else {
-		log.WithField("migrationCount", len(versions)).Info("found suricata migrations")
+		e.logger().WithField("migrationCount", len(versions)).Info("found suricata migrations")
 	}
 
 	for _, key := range versions {
@@ -622,15 +1473,15 @@ func (e *SuricataEngine) checkForMigrations() {
 
 		migFunc, ok := e.migrations[key]
 		if !ok {
-			log.WithField("migrationVersion", key).Error("migration function not found")
+			e.logger().WithField("migrationVersion", key).Error("migration function not found")
 			continue
 		}
 
-		log.WithField("migrationVersion", key).Info("attempting migration")
+		e.logger().WithField("migrationVersion", key).Info("attempting migration")
 
 		err := migFunc(state)
 		if err != nil {
-			log.WithError(err).WithField("migrationVersion", key).Error("unable to apply migration, halting migrations")
+			e.logger().WithError(err).WithField("migrationVersion", key).Error("unable to apply migration, halting migrations")
 			e.EngineState.MigrationFailure = true
 			break
 		}
@@ -638,19 +1489,7 @@ func (e *SuricataEngine) checkForMigrations() {
 
 	e.EngineState.Migrating = false
 
-	log.Info("done checking for suricata migrations")
-}
-
-func (e *SuricataEngine) readAndHash(path string) (content string, sha256Hash string, err error) {
-	raw, err := e.ReadFile(path)
-	if err != nil {
-		return "", "", err
-	}
-
-	rawHash := sha256.Sum256(raw)
-	hexHash := hex.EncodeToString(rawHash[:])
-
-	return string(raw), hexHash, nil
+	e.logger().Info("done checking for suricata migrations")
 }
 
 func (e *SuricataEngine) readFingerprint(path string) (fingerprint *string, ok bool, err error) {
@@ -692,19 +1531,21 @@ func (e *SuricataEngine) ValidateRule(rule string) (string, error) {
 }
 
 func (e *SuricataEngine) ApplyFilters(detect *model.Detection) (bool, error) {
-	modified := e.applyStatusRegexes(detect)
-
-	return modified, nil
+	return e.applyStatusRegexes(detect), nil
 }
 
-func (e *SuricataEngine) ParseRules(content string, ruleset string) ([]*model.Detection, error) {
+// ParseSuricataRules parses Suricata rules from content string
+func ParseSuricataRules(ctx context.Context, content string, ruleset string) ([]*model.Detection, error) {
 	// expecting one rule per line
 	lines := strings.Split(content, "\n")
 	dets := []*model.Detection{}
 
 	for i, line := range lines {
-		if !e.isRunning {
-			return nil, detections.ErrModuleStopped
+		// Check for cancellation
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
 		}
 
 		line = strings.TrimSpace(line)
@@ -718,10 +1559,13 @@ func (e *SuricataEngine) ParseRules(content string, ruleset string) ([]*model.De
 			line = strings.TrimSpace(strings.TrimLeft(line, "#"))
 
 			lower := strings.ToLower(line)
+			// Check if this is a commented rule (vs an actual comment)
+			// Valid Suricata rule actions: alert, pass, drop, reject*, config
 			if strings.HasPrefix(lower, "alert") ||
+				strings.HasPrefix(lower, "pass") ||
 				strings.HasPrefix(lower, "drop") ||
-				strings.HasPrefix(lower, "reject") ||
-				strings.HasPrefix(lower, "pass") {
+				strings.HasPrefix(lower, "reject") || // covers reject, rejectsrc, rejectdst, rejectboth
+				strings.HasPrefix(lower, "config") {
 				wasCommented = true
 			} else {
 				// actual comment, skip line
@@ -827,807 +1671,7 @@ func (e *SuricataEngine) ParseRules(content string, ruleset string) ([]*model.De
 	return dets, nil
 }
 
-func (e *SuricataEngine) SyncLocalDetections(ctx context.Context, detects []*model.Detection) (errMap map[string]string, err error) {
-	defer func() {
-		if len(errMap) == 0 {
-			errMap = nil
-		}
-	}()
-
-	// incoming context was checked for detections/write perms already, using server
-	// context to complete ConfigStore actions.
-	allSettings, err := e.srv.Configstore.GetSettings(e.srv.Context, true)
-	if err != nil {
-		return nil, err
-	}
-
-	localDets := []*model.Detection{}
-	communityDets := []*model.Detection{}
-
-	for _, detect := range detects {
-		if detect.IsCommunity {
-			communityDets = append(communityDets, detect)
-		} else {
-			localDets = append(localDets, detect)
-		}
-	}
-
-	errMap = map[string]string{} // map[sid]error
-
-	if len(communityDets) != 0 {
-		_, haveFP, _ := e.readFingerprint(e.rulesFingerprintFile)
-
-		eMap, err := e.syncCommunityDetections(ctx, nil, communityDets, haveFP, false, allSettings)
-		if err != nil {
-			return eMap, err
-		}
-
-		for sid, e := range eMap {
-			errMap[sid] = e
-		}
-	}
-
-	if len(localDets) == 0 {
-		return errMap, nil
-	}
-
-	local := settingByID(allSettings, "idstools.rules.local__rules")
-	if local == nil {
-		return nil, fmt.Errorf("unable to find local rules setting")
-	}
-
-	enabled := settingByID(allSettings, "idstools.sids.enabled")
-	if enabled == nil {
-		return nil, fmt.Errorf("unable to find enabled setting")
-	}
-
-	disabled := settingByID(allSettings, "idstools.sids.disabled")
-	if disabled == nil {
-		return nil, fmt.Errorf("unable to find disabled setting")
-	}
-
-	modify := settingByID(allSettings, "idstools.sids.modify")
-	if modify == nil {
-		return nil, fmt.Errorf("unable to find modify setting")
-	}
-
-	threshold := settingByID(allSettings, "suricata.thresholding.sids__yaml")
-
-	localLines := strings.Split(local.Value, "\n")
-	enabledLines := strings.Split(enabled.Value, "\n")
-	disabledLines := strings.Split(disabled.Value, "\n")
-	modifyLines := strings.Split(modify.Value, "\n")
-
-	localIndex := indexLocal(localLines)
-	enabledIndex := indexEnabled(enabledLines, false)
-	disabledIndex := indexEnabled(disabledLines, false)
-	modifyIndex := indexModify(modifyLines, false, false)
-
-	thresholdIndex, err := indexThreshold(threshold.Value)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, detect := range localDets {
-		if !e.isRunning {
-			return nil, detections.ErrModuleStopped
-		}
-
-		_, err = e.ApplyFilters(detect)
-		if err != nil {
-			errMap[detect.PublicID] = fmt.Sprintf("unable to apply filters; reason=%s", err.Error())
-			continue
-		}
-
-		parsedRule, err := ParseSuricataRule(detect.Content)
-		if err != nil {
-			errMap[detect.PublicID] = fmt.Sprintf("unable to parse rule; reason=%s", err.Error())
-			continue
-		}
-
-		opt, ok := parsedRule.GetOption("sid")
-		if !ok || opt == nil {
-			errMap[detect.PublicID] = fmt.Sprintf("rule does not contain a SID; rule=%s", detect.Content)
-			continue
-		}
-
-		sid := *opt
-		_, isFlowbits := parsedRule.GetOption("flowbits")
-
-		// update local
-		localLines = updateLocal(localLines, localIndex, sid, isFlowbits, detect)
-
-		// update enabled
-		enabledLines = updateEnabled(enabledLines, enabledIndex, sid, isFlowbits, detect)
-
-		// update disabled
-		disabledLines = updateDisabled(disabledLines, disabledIndex, sid, isFlowbits, detect)
-
-		// update overrides
-		modifyLines = updateModify(modifyLines, modifyIndex, sid, detect)
-
-		if isFlowbits && !detect.IsEnabled {
-			modifyLines = updateModifyForDisabledFlowbits(modifyLines, modifyIndex, sid, detect)
-		}
-
-		updateThreshold(thresholdIndex, parsedRule.GetGenId(), detect)
-	}
-
-	localLines = removeBlankLines(localLines)
-	enabledLines = removeBlankLines(enabledLines)
-	disabledLines = removeBlankLines(disabledLines)
-	modifyLines = removeBlankLines(modifyLines)
-
-	local.Value = strings.Join(localLines, "\n")
-	enabled.Value = strings.Join(enabledLines, "\n")
-	disabled.Value = strings.Join(disabledLines, "\n")
-	modify.Value = strings.Join(modifyLines, "\n")
-
-	yamlThreshold, err := yaml.Marshal(thresholdIndex)
-	if err != nil {
-		return errMap, err
-	}
-
-	threshold.Value = string(yamlThreshold)
-
-	err = e.srv.Configstore.UpdateSetting(e.srv.Context, local, false)
-	if err != nil {
-		return errMap, err
-	}
-
-	err = e.srv.Configstore.UpdateSetting(e.srv.Context, enabled, false)
-	if err != nil {
-		return errMap, err
-	}
-
-	err = e.srv.Configstore.UpdateSetting(e.srv.Context, disabled, false)
-	if err != nil {
-		return errMap, err
-	}
-
-	err = e.srv.Configstore.UpdateSetting(e.srv.Context, modify, false)
-	if err != nil {
-		return errMap, err
-	}
-
-	err = e.srv.Configstore.UpdateSetting(e.srv.Context, threshold, false)
-	if err != nil {
-		return errMap, err
-	}
-
-	return errMap, nil
-}
-
-func removeBlankLines(lines []string) []string {
-	return lo.Filter(lines, func(line string, _ int) bool {
-		return strings.TrimSpace(line) != ""
-	})
-}
-
-func updateLocal(localLines []string, localIndex map[string]int, sid string, isFlowbits bool, detect *model.Detection) []string {
-	lineNum, inLocal := localIndex[sid]
-	if !inLocal && !detect.PendingDelete {
-		if detect.IsEnabled || isFlowbits {
-			// not in local, but should be
-			localLines = append(localLines, detect.Content)
-			lineNum = len(localLines) - 1
-			localIndex[sid] = lineNum
-		}
-	} else {
-		// in local...
-		if (detect.IsEnabled || isFlowbits) && !detect.PendingDelete {
-			// and should be, update it
-			localLines[lineNum] = detect.Content
-		} else {
-			// and shouldn't be, remove it
-			localLines[lineNum] = ""
-			delete(localIndex, sid)
-		}
-	}
-
-	return localLines
-}
-
-func updateEnabled(enabledLines []string, enabledIndex map[string]int, sid string, isFlowbits bool, detect *model.Detection) []string {
-	lineNum, inEnabled := enabledIndex[sid]
-	remove := (!detect.IsEnabled && !isFlowbits) || detect.PendingDelete
-
-	line := detect.PublicID
-	if remove {
-		line = ""
-	}
-
-	if !inEnabled {
-		if !remove {
-			enabledLines = append(enabledLines, line)
-			lineNum = len(enabledLines) - 1
-			enabledIndex[sid] = lineNum
-		}
-	} else {
-		enabledLines[lineNum] = line
-		if remove {
-			delete(enabledIndex, sid)
-		}
-	}
-
-	return enabledLines
-}
-
-func updateModify(modifyLines []string, modifyIndex map[string]int, sid string, detect *model.Detection) []string {
-	// find active modify override, if it exists
-	var override *model.Override
-	if detect.IsEnabled && !detect.PendingDelete {
-		for _, o := range detect.Overrides {
-			if o.Type == model.OverrideTypeModify && o.IsEnabled {
-				override = o
-				break
-			}
-		}
-	}
-
-	if override == nil {
-		// no active override, remove any that are present
-		lineNum, inModify := modifyIndex[sid]
-		if inModify {
-			modifyLines[lineNum] = ""
-			delete(modifyIndex, sid)
-		}
-
-		return modifyLines
-	}
-
-	find := detections.EscapeDoubleQuotes(*override.Regex)
-	replace := detections.EscapeDoubleQuotes(*override.Value)
-
-	line := fmt.Sprintf(`%s "%s" "%s"`, detect.PublicID, find, replace)
-
-	lineNum, inModify := modifyIndex[sid]
-	if !inModify {
-		modifyLines = append(modifyLines, line)
-		lineNum = len(modifyLines) - 1
-		modifyIndex[sid] = lineNum
-	} else {
-		modifyLines[lineNum] = line
-	}
-
-	return modifyLines
-}
-
-func updateDisabled(disabledLines []string, disabledIndex map[string]int, sid string, isFlowbits bool, detect *model.Detection) []string {
-	if !isFlowbits || detect.PendingDelete {
-		lineNum, inDisabled := disabledIndex[sid]
-
-		line := detect.PublicID
-		if detect.IsEnabled || detect.PendingDelete {
-			line = ""
-		}
-
-		if !inDisabled {
-			if !detect.PendingDelete && !detect.IsEnabled {
-				disabledLines = append(disabledLines, line)
-				lineNum = len(disabledLines) - 1
-				disabledIndex[sid] = lineNum
-			}
-		} else {
-			disabledLines[lineNum] = line
-			if detect.IsEnabled || detect.PendingDelete {
-				delete(disabledIndex, sid)
-			}
-		}
-	}
-
-	return disabledLines
-}
-
-// updateModifyForDisabledFlowbits updates the modify file for disabled flowbits rules so the rules stay enabled but don't alert
-func updateModifyForDisabledFlowbits(modifyLines []string, modifyIndex map[string]int, sid string, detect *model.Detection) []string {
-	lineNum, inModify := modifyIndex[sid]
-	line := fmt.Sprintf("%s %s", detect.PublicID, modifyFromTo)
-
-	if detect.PendingDelete {
-		line = ""
-		delete(modifyIndex, sid)
-	}
-
-	if !inModify {
-		// not in the modify file, but should be
-		if !detect.PendingDelete {
-			modifyLines = append(modifyLines, line)
-			lineNum = len(modifyLines) - 1
-			modifyIndex[sid] = lineNum
-		}
-	} else {
-		// in modify, but should be updated
-		modifyLines[lineNum] = line
-	}
-
-	return modifyLines
-}
-
-func updateThreshold(thresholdIndex map[string][]*model.Override, genID int, detect *model.Detection) {
-	delete(thresholdIndex, detect.PublicID)
-	if detect.PendingDelete {
-		return
-	}
-
-	detOverrides := lo.Filter(detect.Overrides, func(o *model.Override, _ int) bool {
-		return o.IsEnabled && (o.Type == model.OverrideTypeThreshold || o.Type == model.OverrideTypeSuppress)
-	})
-
-	if len(detOverrides) > 0 {
-		for _, o := range detOverrides {
-			if o.Type == model.OverrideTypeSuppress || o.Type == model.OverrideTypeThreshold {
-				o.GenID = util.Ptr(genID)
-			}
-		}
-
-		thresholdIndex[detect.PublicID] = detOverrides
-	}
-}
-
-func removeFromIndex(lines []string, index map[string]int, sid string) {
-	lineNum, inIndex := index[sid]
-	if inIndex {
-		delete(index, sid)
-		lines[lineNum] = ""
-	}
-}
-
-func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *log.Entry, detects []*model.Detection, fingerprintFilePresent bool, deleteUnreferenced bool, allSettings []*model.Setting) (errMap map[string]string, err error) {
-	defer func() {
-		if len(errMap) == 0 {
-			errMap = nil
-		}
-	}()
-	errMap = map[string]string{}
-
-	if logger == nil {
-		logger = log.WithField("detectionEngine", model.EngineNameSuricata)
-	}
-
-	results := struct {
-		Added     int32
-		Updated   int32
-		Removed   int32
-		Unchanged int32
-		Audited   int32
-	}{}
-
-	enabled := settingByID(allSettings, "idstools.sids.enabled")
-	if enabled == nil {
-		return nil, fmt.Errorf("unable to find enabled setting")
-	}
-
-	disabled := settingByID(allSettings, "idstools.sids.disabled")
-	if disabled == nil {
-		return nil, fmt.Errorf("unable to find disabled setting")
-	}
-
-	modify := settingByID(allSettings, "idstools.sids.modify")
-	if modify == nil {
-		return nil, fmt.Errorf("unable to find modify setting")
-	}
-
-	threshold := settingByID(allSettings, "suricata.thresholding.sids__yaml")
-	if threshold == nil {
-		return nil, fmt.Errorf("unable to find threshold setting")
-	}
-
-	// unpack settings into lines/indices
-	enabledLines := strings.Split(enabled.Value, "\n")
-	disabledLines := strings.Split(disabled.Value, "\n")
-	modifyLines := strings.Split(modify.Value, "\n")
-
-	enabledIndex := indexEnabled(enabledLines, false)
-	disabledIndex := indexEnabled(disabledLines, false)
-	modifyIndex := indexModify(modifyLines, false, false)
-
-	thresholdIndex, err := indexThreshold(threshold.Value)
-	if err != nil {
-		return nil, err
-	}
-
-	commSIDs, err := e.srv.Detectionstore.GetAllDetections(ctx, model.WithEngine(model.EngineNameSuricata), model.WithCommunity(true))
-	if err != nil {
-		return nil, err
-	}
-
-	if fingerprintFilePresent && len(commSIDs) == 0 {
-		// Two conflicting facts appear to be true:
-		// 1) We have imported rules before, the fingerprint file exists
-		// 2) There are 0 imported community rules
-		// This lines up perfectly with the weird glitch of double-imported
-		// detections we've been tracking. Mark the sync as a failure.
-
-		if e.notify {
-			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-				Engine: model.EngineNameSuricata,
-				Status: "error",
-			})
-		}
-
-		return nil, detections.ErrStateFileNoCommunity
-	}
-
-	toDelete := map[string]struct{}{}
-	for sid := range commSIDs {
-		toDelete[sid] = struct{}{}
-	}
-
-	et := detections.NewErrorTracker(e.failAfterConsecutiveErrorCount)
-
-	bulk, err := e.srv.Detectionstore.BuildBulkIndexer(e.srv.Context, logger)
-	if err != nil {
-		return nil, err
-	}
-
-	createAudit := make([]model.AuditInfo, 0, len(detects))
-	auditMut := sync.Mutex{}
-	errMut := sync.Mutex{}
-
-	for i := range detects {
-		detect := detects[i]
-
-		if !e.isRunning {
-			return nil, detections.ErrModuleStopped
-		}
-
-		delete(toDelete, detect.PublicID)
-
-		logger.WithFields(log.Fields{
-			"rule.uuid": detect.PublicID,
-			"rule.name": detect.Title,
-		}).Info("syncing rule")
-
-		exErr := e.ExtractDetails(detect)
-		if exErr != nil {
-			logger.WithField("publicId", detect.PublicID).WithError(exErr).Warn("unable to extract details from detection, skipping")
-			errMap[detect.PublicID] = fmt.Sprintf("unable to extract details; reason=%s", exErr.Error())
-
-			continue
-		}
-
-		orig, exists := commSIDs[detect.PublicID]
-		if exists {
-			_, isSpecificallyEnabled := enabledIndex[detect.PublicID]
-			_, isSpecificallyDisabled := disabledIndex[detect.PublicID]
-			if isSpecificallyDisabled || isSpecificallyEnabled {
-				detect.IsEnabled = orig.IsEnabled
-			}
-			detect.Id = orig.Id
-			detect.Overrides = orig.Overrides
-			detect.CreateTime = orig.CreateTime
-		} else {
-			detect.Id = util.ToUUID(detect.PublicID)
-			detect.CreateTime = util.Ptr(time.Now())
-		}
-
-		parsedRule, err := ParseSuricataRule(detect.Content)
-		if err != nil {
-			errMap[detect.PublicID] = fmt.Sprintf("unable to parse rule; reason=%s", err.Error())
-			continue
-		}
-
-		opt, ok := parsedRule.GetOption("sid")
-		if !ok || opt == nil {
-			errMap[detect.PublicID] = fmt.Sprintf("rule does not contain a SID; rule=%s", detect.Content)
-			continue
-		}
-
-		sid := *opt
-		_, isFlowbits := parsedRule.GetOption("flowbits")
-
-		modifiedByFilter := e.applyStatusRegexes(detect)
-
-		_, inEnabled := enabledIndex[sid]
-		_, inDisabled := disabledIndex[sid]
-
-		if detect.PersistChange || inEnabled || inDisabled || modifiedByFilter {
-			// update enabled
-			enabledLines = updateEnabled(enabledLines, enabledIndex, sid, isFlowbits, detect)
-
-			// update disabled
-			disabledLines = updateDisabled(disabledLines, disabledIndex, sid, isFlowbits, detect)
-		}
-
-		// update overrides
-		modifyLines = updateModify(modifyLines, modifyIndex, sid, detect)
-		updateThreshold(thresholdIndex, parsedRule.GetGenId(), detect)
-
-		if isFlowbits && !detect.IsEnabled {
-			modifyLines = updateModifyForDisabledFlowbits(modifyLines, modifyIndex, sid, detect)
-		}
-
-		detect.Kind = ""
-
-		document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(ctx, "detection", detect, &detect.Auditable, exists, nil, nil)
-		if err != nil {
-			errMap[detect.PublicID] = fmt.Sprintf("unable to convert detection to document map; reason=%s", err.Error())
-			continue
-		}
-
-		if exists {
-			hasChanged := orig.Content != detect.Content
-			hasChanged = hasChanged || orig.Ruleset != detect.Ruleset
-			hasChanged = hasChanged || modifiedByFilter
-
-			if hasChanged {
-				logger.WithFields(log.Fields{
-					"rule.uuid": detect.PublicID,
-					"rule.name": detect.Title,
-				}).Info("updating Suricata detection")
-
-				err = bulk.Add(ctx, esutil.BulkIndexerItem{
-					Index:      index,
-					Action:     "update",
-					DocumentID: orig.Id,
-					Body:       bytes.NewReader(document),
-					OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
-						auditMut.Lock()
-						defer auditMut.Unlock()
-
-						results.Updated++
-
-						createAudit = append(createAudit, model.AuditInfo{
-							Object: detect,
-							DocId:  resp.DocumentID,
-							Op:     "update",
-						})
-					},
-					OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
-						errMut.Lock()
-						defer errMut.Unlock()
-
-						if err != nil {
-							errMap[detect.PublicID] = fmt.Sprintf("unable to update detection; reason=%s", err.Error())
-						} else {
-							errMap[detect.PublicID] = fmt.Sprintf("unable to update detection; reason=%s", resp.Error.Reason)
-						}
-					},
-				})
-				if err != nil {
-					if err.Error() == "Object not found" {
-						errMap = map[string]string{
-							detect.PublicID: "Object not found",
-						}
-
-						return errMap, err
-					}
-
-					errMap[detect.PublicID] = fmt.Sprintf("unable to update detection; reason=%s", err.Error())
-				}
-
-				err = et.AddError(err)
-				if err != nil {
-					return errMap, err
-				}
-			} else {
-				results.Unchanged++
-			}
-		} else {
-			logger.WithFields(log.Fields{
-				"rule.uuid": detect.PublicID,
-				"rule.name": detect.Title,
-			}).Info("creating new Suricata detection")
-
-			err = bulk.Add(ctx, esutil.BulkIndexerItem{
-				Index:      index,
-				Action:     "create",
-				DocumentID: detect.Id,
-				Body:       bytes.NewReader(document),
-				OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
-					auditMut.Lock()
-					defer auditMut.Unlock()
-
-					results.Added++
-
-					createAudit = append(createAudit, model.AuditInfo{
-						Object: detect,
-						DocId:  resp.DocumentID,
-						Op:     "create",
-					})
-				},
-				OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
-					errMut.Lock()
-					defer errMut.Unlock()
-
-					if err != nil {
-						errMap[detect.PublicID] = fmt.Sprintf("unable to update detection; reason=%s", err.Error())
-					} else {
-						errMap[detect.PublicID] = fmt.Sprintf("unable to update detection; reason=%s", resp.Error.Reason)
-					}
-				},
-			})
-			if err != nil {
-				if err.Error() == "Object not found" {
-					errMap = map[string]string{
-						detect.PublicID: err.Error(),
-					}
-
-					return errMap, err
-				}
-
-				errMap[detect.PublicID] = fmt.Sprintf("unable to create detection; reason=%s", err.Error())
-			}
-
-			err = et.AddError(err)
-			if err != nil {
-				return errMap, err
-			}
-		}
-	}
-
-	if deleteUnreferenced {
-		for sid := range toDelete {
-			if !e.isRunning {
-				return nil, detections.ErrModuleStopped
-			}
-
-			removeFromIndex(enabledLines, enabledIndex, sid)
-			removeFromIndex(disabledLines, disabledIndex, sid)
-			removeFromIndex(modifyLines, modifyIndex, sid)
-			delete(thresholdIndex, sid)
-
-			id := commSIDs[sid].Id
-
-			_, index, _ := e.srv.Detectionstore.ConvertObjectToDocument(ctx, "detection", commSIDs[sid], &commSIDs[sid].Auditable, false, nil, nil)
-
-			err = bulk.Add(ctx, esutil.BulkIndexerItem{
-				Action:     "delete",
-				Index:      index,
-				DocumentID: id,
-				OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
-					auditMut.Lock()
-					defer auditMut.Unlock()
-
-					results.Removed++
-
-					createAudit = append(createAudit, model.AuditInfo{
-						Object: commSIDs[sid],
-						DocId:  resp.DocumentID,
-						Op:     "delete",
-					})
-				},
-				OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
-					errMut.Lock()
-					defer errMut.Unlock()
-
-					if err != nil {
-						errMap[commSIDs[sid].PublicID] = fmt.Sprintf("unable to update detection; reason=%s", err.Error())
-					} else {
-						errMap[commSIDs[sid].PublicID] = fmt.Sprintf("unable to update detection; reason=%s", resp.Error.Reason)
-					}
-				},
-			})
-			if err != nil {
-				errMap[sid] = fmt.Sprintf("unable to add to bulk indexer; reason=%s", err.Error())
-			}
-		}
-	}
-
-	err = bulk.Close(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	stats := bulk.Stats()
-	logger.WithFields(log.Fields{
-		"NumAdded":    stats.NumAdded,
-		"NumCreated":  stats.NumCreated,
-		"NumDeleted":  stats.NumDeleted,
-		"NumFailed":   stats.NumFailed,
-		"NumFlushed":  stats.NumFlushed,
-		"NumIndexed":  stats.NumIndexed,
-		"NumRequests": stats.NumRequests,
-		"NumUpdated":  stats.NumUpdated,
-	}).Debug("detections bulk audit sync stats")
-
-	if len(createAudit) != 0 {
-		bulk, err = e.srv.Detectionstore.BuildBulkIndexer(e.srv.Context, logger)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, audit := range createAudit {
-			det := audit.Object.(*model.Detection)
-			// prepare audit doc
-			document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(ctx, "detection", audit.Object, &det.Auditable, false, &audit.DocId, &audit.Op)
-			if err != nil {
-				errMap[det.PublicID] = fmt.Sprintf("unable to convert detection to document map for creating an audit doc; reason=%s", err.Error())
-				continue
-			}
-
-			// create audit doc
-			err = bulk.Add(ctx, esutil.BulkIndexerItem{
-				Index:  index,
-				Action: "create",
-				Body:   bytes.NewReader(document),
-				OnSuccess: func(ctx context.Context, bii esutil.BulkIndexerItem, biri esutil.BulkIndexerResponseItem) {
-					atomic.AddInt32(&results.Audited, 1)
-				},
-				OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
-					errMut.Lock()
-					defer errMut.Unlock()
-
-					if err != nil {
-						errMap[det.PublicID] = fmt.Sprintf("unable to create audit doc; reason=%s", err.Error())
-					} else {
-						errMap[det.PublicID] = fmt.Sprintf("unable to create audit doc; reason=%s", resp.Error.Reason)
-					}
-				},
-			})
-			if err != nil {
-				errMap[det.PublicID] = fmt.Sprintf("unable to add audit doc to bulk indexer; reason=%s", err.Error())
-				continue
-			}
-		}
-
-		err = bulk.Close(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		stats := bulk.Stats()
-		logger.WithFields(log.Fields{
-			"NumAdded":    stats.NumAdded,
-			"NumCreated":  stats.NumCreated,
-			"NumDeleted":  stats.NumDeleted,
-			"NumFailed":   stats.NumFailed,
-			"NumFlushed":  stats.NumFlushed,
-			"NumIndexed":  stats.NumIndexed,
-			"NumRequests": stats.NumRequests,
-			"NumUpdated":  stats.NumUpdated,
-		}).Debug("detections bulk audit sync stats")
-	}
-
-	enabledLines = removeBlankLines(enabledLines)
-	disabledLines = removeBlankLines(disabledLines)
-	modifyLines = removeBlankLines(modifyLines)
-
-	// re-pack indices back to settings
-	enabled.Value = strings.Join(enabledLines, "\n")
-	disabled.Value = strings.Join(disabledLines, "\n")
-	modify.Value = strings.Join(modifyLines, "\n")
-
-	yamlThreshold, err := yaml.Marshal(thresholdIndex)
-	if err != nil {
-		return errMap, err
-	}
-
-	threshold.Value = string(yamlThreshold)
-
-	err = e.srv.Configstore.UpdateSetting(e.srv.Context, enabled, false)
-	if err != nil {
-		return errMap, err
-	}
-
-	err = e.srv.Configstore.UpdateSetting(e.srv.Context, disabled, false)
-	if err != nil {
-		return errMap, err
-	}
-
-	err = e.srv.Configstore.UpdateSetting(e.srv.Context, modify, false)
-	if err != nil {
-		return errMap, err
-	}
-
-	err = e.srv.Configstore.UpdateSetting(e.srv.Context, threshold, false)
-	if err != nil {
-		return errMap, err
-	}
-
-	logger.WithFields(log.Fields{
-		"syncAudited":            results.Audited,
-		"syncAdded":              results.Added,
-		"syncUpdated":            results.Updated,
-		"syncRemoved":            results.Removed,
-		"syncUnchanged":          results.Unchanged,
-		"syncErrors":             errMap,
-		"syncDeleteUnreferenced": deleteUnreferenced,
-	}).Info("suricata community diff")
-
-	return errMap, nil
-}
+// Package-level utilities
 
 func settingByID(all []*model.Setting, id string) *model.Setting {
 	found, ok := lo.Find(all, func(s *model.Setting) bool {
@@ -1667,62 +1711,6 @@ func (e *SuricataEngine) applyStatusRegexes(detect *model.Detection) (affectedBy
 	return false
 }
 
-func indexLocal(lines []string) map[string]int {
-	index := map[string]int{}
-
-	for i, line := range lines {
-		sid := extractSID(line)
-		if sid == nil {
-			continue
-		}
-
-		index[*sid] = i
-	}
-
-	return index
-}
-
-func indexEnabled(lines []string, ignoreComments bool) map[string]int {
-	index := map[string]int{}
-
-	for i, line := range lines {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "#") && ignoreComments {
-			continue
-		}
-
-		line = strings.TrimLeft(line, "# \t")
-		if line != "" {
-			index[line] = i
-		}
-	}
-
-	return index
-}
-
-func indexModify(lines []string, ignoreComments bool, onlyFlowBits bool) map[string]int {
-	index := map[string]int{}
-
-	for i, line := range lines {
-		if ignoreComments && strings.HasPrefix(line, "#") {
-			continue
-		}
-
-		line = strings.TrimSpace(strings.TrimLeft(line, "# \t"))
-
-		if onlyFlowBits && !strings.Contains(line, modifyFromTo) {
-			continue
-		}
-
-		parts := strings.SplitN(line, " ", 2)
-		if parts[0] != "" {
-			index[parts[0]] = i
-		}
-	}
-
-	return index
-}
-
 func indexRules(lines []string, ignoreComments bool) map[string]int {
 	index := map[string]int{}
 
@@ -1741,17 +1729,6 @@ func indexRules(lines []string, ignoreComments bool) map[string]int {
 
 	return index
 
-}
-
-func indexThreshold(content string) (map[string][]*model.Override, error) {
-	index := map[string][]*model.Override{}
-
-	err := yaml.Unmarshal([]byte(content), &index)
-	if err != nil {
-		return nil, err
-	}
-
-	return index, nil
 }
 
 func lookupLicense(ruleset string) string {
@@ -1801,7 +1778,7 @@ func (e *SuricataEngine) DuplicateDetection(ctx context.Context, detection *mode
 
 	rule.UpdateForDuplication(id)
 
-	dets, err := e.ParseRules(rule.String(), detections.RULESET_CUSTOM)
+	dets, err := ParseSuricataRules(ctx, rule.String(), detections.RULESET_CUSTOM)
 	if err != nil {
 		return nil, err
 	}
@@ -1845,9 +1822,8 @@ func (e *SuricataEngine) LoadAuxiliaryData(summaries []*model.AiSummary) error {
 
 	e.aiSummaries = sum
 
-	log.WithFields(log.Fields{
-		"detectionEngine": model.EngineNameSuricata,
-		"aiSummaryCount":  len(summaries),
+	e.logger().WithFields(log.Fields{
+		"aiSummaryCount": len(summaries),
 	}).Info("loaded AI summaries")
 
 	return nil
@@ -1872,53 +1848,7 @@ func (e *SuricataEngine) MergeAuxiliaryData(detect *model.Detection) error {
 	return nil
 }
 
-func (e *SuricataEngine) ReadCustomRulesets() (detects []*model.Detection, err error) {
-	detects = []*model.Detection{}
-
-	for _, custom := range e.customRulesets {
-		var content []byte
-
-		if custom.File != "" {
-			content, err = e.ReadFile(custom.File)
-			if err != nil {
-				log.WithError(err).WithField("customRulesetFilePath", custom.File).Error("unable to read custom ruleset File, skipping")
-
-				return nil, err
-			}
-		} else if custom.Url != "" && custom.TargetFile != "" {
-			path := filepath.Join(CUSTOM_RULE_LOC, custom.TargetFile)
-
-			content, err = e.ReadFile(path)
-			if err != nil {
-				log.WithError(err).WithField("customRulesetTargetFilePath", path).Error("unable to read custom ruleset TargetFile, skipping")
-
-				return nil, err
-			}
-		} else {
-			log.WithFields(log.Fields{
-				"rulesetName": custom.Ruleset,
-			}).Error("invalid custom ruleset, skipping")
-
-			return nil, errors.New("invalid custom ruleset")
-		}
-
-		dets, err := e.ParseRules(string(content), custom.Ruleset)
-		if err != nil {
-			log.WithError(err).WithField("customRulesetName", custom.Ruleset).Error("unable to parse custom ruleset, skipping")
-
-			return nil, err
-		}
-
-		for _, detect := range dets {
-			detect.IsCommunity = custom.Community
-			detect.License = custom.License
-
-			detects = append(detects, detect)
-		}
-	}
-
-	return detects, nil
-}
+// Integrity checking
 
 func (e *SuricataEngine) IntegrityCheck(canInterrupt bool, logger *log.Entry) (deployedButNotEnabled []string, enabledButNotDeployed []string, err error) {
 	// escape
@@ -1934,31 +1864,23 @@ func (e *SuricataEngine) IntegrityCheck(canInterrupt bool, logger *log.Entry) (d
 
 	logger = logger.WithField("intCheckId", uuid.New().String())
 
-	allSettings, err := e.srv.Configstore.GetSettings(e.srv.Context, true)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	// escape
 	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
 		logger.Info("integrity checker stopped")
 		return nil, nil, detections.ErrIntCheckerStopped
 	}
 
+	// Read the deployed rules file
 	allRules, err := e.ReadFile(e.allRulesFile)
 	if err != nil {
-		logger.WithError(err).WithField("path", e.allRulesFile).Error("unable to read all.rules file")
+		logger.WithError(err).WithField("path", e.allRulesFile).Error("unable to read rules file")
 		return nil, nil, err
 	}
 
-	disabled := settingByID(allSettings, "idstools.sids.disabled")
-	if disabled == nil {
-		return nil, nil, fmt.Errorf("unable to find disabled setting")
-	}
-
-	modify := settingByID(allSettings, "idstools.sids.modify")
-	if modify == nil {
-		return nil, nil, fmt.Errorf("unable to find modify setting")
+	// Get ignored SID ranges setting
+	allSettings, err := e.srv.Configstore.GetSettings(e.srv.Context, true)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	ignored := settingByID(allSettings, "soc.config.server.modules.suricataengine.ignoredSidRanges")
@@ -1971,29 +1893,14 @@ func (e *SuricataEngine) IntegrityCheck(canInterrupt bool, logger *log.Entry) (d
 		return nil, nil, detections.ErrIntCheckerStopped
 	}
 
-	// unpack settings into lines/indices
-	disabledLines := strings.Split(disabled.Value, "\n")
-	modifyLines := strings.Split(modify.Value, "\n")
+	// Parse deployed rules from rules file (only uncommented rules are deployed)
 	rulesLines := strings.Split(string(allRules), "\n")
+	rulesIndex := indexRules(rulesLines, true) // ignore comments
 
-	disabledIndex := indexEnabled(disabledLines, true)
-	modifyIndex := indexModify(modifyLines, true, true)
-	rulesIndex := indexRules(rulesLines, true)
-
-	sidRangesToIgnore := parseIgnoredSidRanges(ignored.Value)
-
-	// modifyIndex is filtered for flowbits rules meaning the index is equivalent
-	// in function to a list of disabled flowbits rules
-	for k, v := range modifyIndex {
-		disabledIndex[k] = v
+	deployed := make([]string, 0, len(rulesIndex))
+	for sid := range rulesIndex {
+		deployed = append(deployed, sid)
 	}
-
-	// escape
-	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
-		return nil, nil, detections.ErrIntCheckerStopped
-	}
-
-	deployed := consolidateEnabled(rulesIndex, disabledIndex)
 
 	logger.WithField("deployedPublicIdsCount", len(deployed)).Debug("deployed sids")
 
@@ -2002,9 +1909,10 @@ func (e *SuricataEngine) IntegrityCheck(canInterrupt bool, logger *log.Entry) (d
 		return nil, nil, detections.ErrIntCheckerStopped
 	}
 
-	ret, err := e.srv.Detectionstore.GetAllDetections(e.srv.Context, model.WithEngine(model.EngineNameSuricata), model.WithEnabled(true))
+	// Get ALL detections from Elasticsearch
+	allDetections, err := e.srv.Detectionstore.GetAllDetections(e.srv.Context, model.WithEngine(model.EngineNameSuricata))
 	if err != nil {
-		logger.WithError(err).Error("unable to query for enabled detections")
+		logger.WithError(err).Error("unable to query for all detections")
 		return nil, nil, detections.ErrIntCheckFailed
 	}
 
@@ -2013,12 +1921,23 @@ func (e *SuricataEngine) IntegrityCheck(canInterrupt bool, logger *log.Entry) (d
 		return nil, nil, detections.ErrIntCheckerStopped
 	}
 
-	enabled := make([]string, 0, len(ret))
-	for pid := range ret {
-		enabled = append(enabled, pid)
+	// Build "expected enabled" list:
+	// - User-enabled rules (IsEnabled=true)
+	// - Disabled rules that are needed for flowbits
+	expectedEnabled := make([]string, 0, len(allDetections))
+
+	for pid, det := range allDetections {
+		if det.PendingDelete {
+			continue
+		}
+
+		// Include if user enabled OR needed for flowbits
+		if det.IsEnabled || e.flowbitRequired[pid] != nil {
+			expectedEnabled = append(expectedEnabled, pid)
+		}
 	}
 
-	logger.WithField("enabledDetectionsCount", len(enabled)).Debug("enabled detections")
+	logger.WithField("expectedEnabledCount", len(expectedEnabled)).Debug("expected enabled detections")
 
 	// escape
 	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
@@ -2026,19 +1945,23 @@ func (e *SuricataEngine) IntegrityCheck(canInterrupt bool, logger *log.Entry) (d
 		return nil, nil, detections.ErrIntCheckerStopped
 	}
 
+	// Apply ignored SID ranges to both lists
+	sidRangesToIgnore := parseIgnoredSidRanges(ignored.Value)
+
 	deployedBefore := len(deployed)
-	enabledBefore := len(enabled)
+	expectedBefore := len(expectedEnabled)
 
 	deployed = filterOutSIDsInRanges(deployed, sidRangesToIgnore)
-	enabled = filterOutSIDsInRanges(enabled, sidRangesToIgnore)
+	expectedEnabled = filterOutSIDsInRanges(expectedEnabled, sidRangesToIgnore)
 
 	logger.WithFields(log.Fields{
 		"deployedFilteredOutCount": deployedBefore - len(deployed),
-		"enabledFilteredOutCount":  enabledBefore - len(enabled),
+		"expectedFilteredOutCount": expectedBefore - len(expectedEnabled),
 		"rangesToIgnore":           sidRangesToIgnore,
 	}).Info("ignoring SIDs")
 
-	deployedButNotEnabled, enabledButNotDeployed, _ = detections.DiffLists(deployed, enabled)
+	// Compare deployed vs expected enabled to find discrepancies
+	deployedButNotEnabled, enabledButNotDeployed, _ = detections.DiffLists(deployed, expectedEnabled)
 
 	intCheckReport := logger.WithFields(log.Fields{
 		"deployedButNotEnabled":      util.TruncateList(deployedButNotEnabled, 20),
@@ -2057,18 +1980,7 @@ func (e *SuricataEngine) IntegrityCheck(canInterrupt bool, logger *log.Entry) (d
 	return deployedButNotEnabled, enabledButNotDeployed, nil
 }
 
-func consolidateEnabled(rulesIndex map[string]int, disabledIndex map[string]int) (pids []string) {
-	pids = make([]string, 0, len(rulesIndex))
-
-	for pid := range rulesIndex {
-		_, disabled := disabledIndex[pid]
-		if !disabled {
-			pids = append(pids, pid)
-		}
-	}
-
-	return pids
-}
+// Removed consolidateEnabled - no longer needed with new architecture
 
 type Range struct {
 	LowerLimit uint64
@@ -2165,4 +2077,101 @@ func filterOutSIDsInRanges(sids []string, ranges []Range) []string {
 	}
 
 	return filtered
+}
+
+// Configuration change detection
+
+// generateConfigFingerprint creates a hash of the ruleset configuration
+func (e *SuricataEngine) generateConfigFingerprint() string {
+	// Create a normalized config structure for fingerprinting
+	// Only include settings that affect which rules are deployed
+	type fingerprintConfig struct {
+		Rulesets     []*RulesetSource `json:"rulesets"`
+		EnableRegex  []string         `json:"enableRegex"`
+		DisableRegex []string         `json:"disableRegex"`
+	}
+
+	// Sort rulesets by name for consistent hashing
+	sortedSources := make([]*RulesetSource, len(e.rulesetSources))
+	copy(sortedSources, e.rulesetSources)
+	sort.Slice(sortedSources, func(i, j int) bool {
+		return sortedSources[i].Name < sortedSources[j].Name
+	})
+
+	// Sort each ruleset's exclude patterns for consistency
+	for _, source := range sortedSources {
+		if len(source.ExcludeFiles) > 0 {
+			excludeFiles := make([]string, len(source.ExcludeFiles))
+			copy(excludeFiles, source.ExcludeFiles)
+			sort.Strings(excludeFiles)
+			source.ExcludeFiles = excludeFiles
+		}
+	}
+
+	// Extract regex strings
+	enableRegexStrs := make([]string, 0, len(e.enableRegex))
+	for _, re := range e.enableRegex {
+		enableRegexStrs = append(enableRegexStrs, re.String())
+	}
+
+	disableRegexStrs := make([]string, 0, len(e.disableRegex))
+	for _, re := range e.disableRegex {
+		disableRegexStrs = append(disableRegexStrs, re.String())
+	}
+
+	config := fingerprintConfig{
+		Rulesets:     sortedSources,
+		EnableRegex:  enableRegexStrs,
+		DisableRegex: disableRegexStrs,
+	}
+
+	// Marshal to JSON
+	jsonBytes, err := json.Marshal(config)
+	if err != nil {
+		e.logger().WithError(err).Error("failed to marshal config for fingerprinting")
+		return ""
+	}
+
+	// Hash the JSON
+	hash := sha256.Sum256(jsonBytes)
+	return hex.EncodeToString(hash[:])
+}
+
+// validateRulesetNames checks for duplicate ruleset names
+func (e *SuricataEngine) validateRulesetNames() error {
+	namesSeen := make(map[string]bool)
+	for _, source := range e.rulesetSources {
+		if namesSeen[source.Name] {
+			return fmt.Errorf("duplicate ruleset name '%s' - each ruleset must have a unique name", source.Name)
+		}
+		namesSeen[source.Name] = true
+	}
+	return nil
+}
+
+// hasConfigChanged checks if ruleset configuration changed since last startup
+func (e *SuricataEngine) hasConfigChanged() (bool, error) {
+	currentFingerprint := e.generateConfigFingerprint()
+
+	// Read previous config fingerprint
+	previousFingerprint, havePrevious, err := e.readFingerprint(e.configFingerprintFile)
+	if err != nil {
+		e.logger().WithError(err).Warn("unable to read config fingerprint file")
+		return true, nil // Assume changed if can't read previous
+	}
+
+	if !havePrevious {
+		e.logger().Info("no previous config fingerprint found, assuming configuration changed")
+		return true, nil
+	}
+
+	changed := !strings.EqualFold(*previousFingerprint, currentFingerprint)
+
+	e.logger().WithFields(log.Fields{
+		"configChanged":       changed,
+		"currentFingerprint":  currentFingerprint,
+		"previousFingerprint": *previousFingerprint,
+	}).Debug("configuration change detection completed")
+
+	return changed, nil
 }

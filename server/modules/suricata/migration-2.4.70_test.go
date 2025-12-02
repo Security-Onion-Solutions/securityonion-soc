@@ -333,7 +333,6 @@ func TestM2470LoadOverrides(t *testing.T) {
 		Type:      model.OverrideTypeSuppress,
 		IsEnabled: true,
 		OverrideParameters: model.OverrideParameters{
-			GenID: util.Ptr(1),
 			Track: util.Ptr("by_src"),
 			IP:    util.Ptr("10.10.3.0/24"),
 		},
@@ -360,7 +359,6 @@ func TestM2470ApplyOverrides(t *testing.T) {
 			{
 				Type: model.OverrideTypeSuppress,
 				OverrideParameters: model.OverrideParameters{
-					GenID: util.Ptr(1),
 					Track: util.Ptr("by_src"),
 					IP:    util.Ptr("10.10.3.0/24"),
 				},
@@ -384,7 +382,6 @@ func TestM2470ApplyOverrides(t *testing.T) {
 			CreatedAt: then,
 			UpdatedAt: then,
 			OverrideParameters: model.OverrideParameters{
-				GenID: util.Ptr(1),
 				Track: util.Ptr("by_src"),
 				IP:    util.Ptr("10.10.3.0/24"),
 			},

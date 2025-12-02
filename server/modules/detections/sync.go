@@ -8,6 +8,7 @@ package detections
 import (
 	"context"
 	"errors"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -21,6 +22,7 @@ import (
 
 var (
 	ErrSyncFailed    = errors.New("failed to sync community rules")
+	ErrSyncBlocked   = errors.New("sync blocked by block file")
 	ErrModuleStopped = errors.New("module stopped")
 )
 
@@ -37,6 +39,7 @@ type SyncSchedulerParams struct {
 	SyncThread                           *sync.WaitGroup
 	InterruptChan                        chan bool
 	StateFilePath                        string
+	SyncBlockFilePath                    string
 	CommunityRulesImportFrequencySeconds int
 	CommunityRulesImportErrorSeconds     int
 }
@@ -55,6 +58,10 @@ func SyncScheduler(ctx context.Context, detStore TemplateChecker, e DetailedDete
 		if lastImport == nil && lastSyncSuccess != nil && *lastSyncSuccess {
 			lastImport = util.Ptr(uint64(time.Now().UnixMilli()))
 		}
+
+		// Check block status and update engine state
+		blocked := IsSyncBlocked(e, syncParams.SyncBlockFilePath)
+		engineState.Blocked = blocked
 
 		engineState.Syncing = false
 		engineState.Importing = lastImport == nil
@@ -103,6 +110,18 @@ func SyncScheduler(ctx context.Context, detStore TemplateChecker, e DetailedDete
 			continue
 		}
 
+		// Check for sync block before pausing integrity checker
+		if blocked {
+			log.WithFields(log.Fields{
+				"detectionEngine": engName,
+				"blockFilePath":   syncParams.SyncBlockFilePath,
+			}).Info("sync blocked by block file")
+
+			// Treat as success so we wait normal interval, not error interval
+			lastSyncSuccess = util.Ptr(true)
+			continue
+		}
+
 		e.PauseIntegrityChecker()
 
 		if !*isRunning {
@@ -139,4 +158,25 @@ func SyncScheduler(ctx context.Context, detStore TemplateChecker, e DetailedDete
 			*lastSyncSuccess = true
 		}
 	}
+}
+
+// IsSyncBlocked checks if the sync block file exists and returns block status
+func IsSyncBlocked(iom IOManager, blockFilePath string) bool {
+	if blockFilePath == "" {
+		return false
+	}
+
+	_, err := iom.ReadFile(blockFilePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false
+		}
+		// Error reading - block to be safe
+		log.WithError(err).WithField("blockFilePath", blockFilePath).
+			Warn("error reading sync block file, blocking operation")
+		return true
+	}
+
+	// File exists - sync is blocked
+	return true
 }

@@ -1400,6 +1400,7 @@ $(document).ready(function () {
             case "MigrationFailure": return "text-warning";
             case "SyncFailure": return "text-warning";
             case "IntegrityFailure": return "text-warning";
+            case "Blocked": return "text-warning";
             case "Healthy": return "text-success";
           }
           return "text-normal";
@@ -1423,6 +1424,8 @@ $(document).ready(function () {
             return "MigrationFailure";
           } else if (engineStatus.integrityFailure) {
             return "IntegrityFailure";
+          } else if (engineStatus.blocked) {
+            return "Blocked";
           } else if (engineStatus.syncFailure) {
             return "SyncFailure";
           } else if (engineStatus.importing && !engineStatus.syncing) {

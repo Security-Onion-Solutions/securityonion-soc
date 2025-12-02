@@ -209,6 +209,7 @@ func (h *DetectionHandler) GetByPublicId(w http.ResponseWriter, r *http.Request)
 // @Failure      401                         "Request was not properly authenticated"
 // @Failure      403                         "Insufficient permissions for this request"
 // @Failure      409                         "Public ID conflicts with existing detection"
+// @Failure      423                         "Rule synchronization is currently blocked"
 // @Failure      500                         "Internal SOC error; review SOC logs"
 // @Router       /connect/detection/ [post]
 func (h *DetectionHandler) CreateDetection(w http.ResponseWriter, r *http.Request) {
@@ -303,9 +304,17 @@ func (h *DetectionHandler) CreateDetection(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Regenerate rule files to include this new detection
+	// Note: If statusModifiedByFilter is true, this regeneration will apply the same
+	// filter again and produce the same result (rule already has correct state in ES).
+	// This is slightly redundant but ensures consistency and is a rare edge case.
 	errMap, err := h.syncLocalDetections(ctx, []*model.Detection{detect})
 	if err != nil {
-		web.Respond(w, r, http.StatusInternalServerError, err)
+		if strings.Contains(err.Error(), "blocked") {
+			web.Respond(w, r, http.StatusLocked, err)
+		} else {
+			web.Respond(w, r, http.StatusInternalServerError, err)
+		}
 		return
 	}
 
@@ -410,6 +419,7 @@ func (h *DetectionHandler) DuplicateDetection(w http.ResponseWriter, r *http.Req
 // @Failure      403                         "Insufficient permissions for this request"
 // @Failure      404                         "Detection not found"
 // @Failure      409                         "Public ID conflicts with existing detection"
+// @Failure      423                         "Rule synchronization is currently blocked"
 // @Failure      500                         "Internal SOC error; review SOC logs"
 // @Router       /connect/detection/ [put]
 func (h *DetectionHandler) UpdateDetection(w http.ResponseWriter, r *http.Request) {
@@ -484,6 +494,10 @@ func (h *DetectionHandler) UpdateDetection(w http.ResponseWriter, r *http.Reques
 
 	disabledAfterSync := false
 
+	// Regenerate rule files to reflect this updated detection
+	// Note: If statusModifiedByFilter is true, this regeneration will apply the same
+	// filter again and produce the same result (rule already has correct state in ES).
+	// This is slightly redundant but ensures consistency and is a rare edge case.
 	errMap, err := h.syncLocalDetections(ctx, []*model.Detection{detect})
 	if err != nil {
 		if detect.IsEnabled && !filterApplied {
@@ -503,7 +517,11 @@ func (h *DetectionHandler) UpdateDetection(w http.ResponseWriter, r *http.Reques
 		}
 
 		if err != nil {
-			web.Respond(w, r, http.StatusInternalServerError, err)
+			if strings.Contains(err.Error(), "blocked") {
+				web.Respond(w, r, http.StatusLocked, err)
+			} else {
+				web.Respond(w, r, http.StatusInternalServerError, err)
+			}
 			return
 		}
 	}
@@ -592,6 +610,7 @@ func (h *DetectionHandler) UpdateOverrideNote(w http.ResponseWriter, r *http.Req
 // @Failure      401                         "Request was not properly authenticated"
 // @Failure      403                         "Insufficient permissions for this request"
 // @Failure      404                         "Detection not found"
+// @Failure      423                         "Sync operation is blocked"
 // @Failure      500                         "Internal SOC error; review SOC logs"
 // @Router       /connect/detection/{id} [delete]
 func (h *DetectionHandler) DeleteDetection(w http.ResponseWriter, r *http.Request) {
@@ -632,7 +651,11 @@ func (h *DetectionHandler) DeleteDetection(w http.ResponseWriter, r *http.Reques
 
 	errMap, err := h.syncLocalDetections(ctx, []*model.Detection{old})
 	if err != nil {
-		web.Respond(w, r, http.StatusInternalServerError, err)
+		if strings.Contains(err.Error(), "blocked") {
+			web.Respond(w, r, http.StatusLocked, err)
+		} else {
+			web.Respond(w, r, http.StatusInternalServerError, err)
+		}
 		return
 	}
 

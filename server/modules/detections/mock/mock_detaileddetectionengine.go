@@ -190,6 +190,21 @@ func (mr *MockDetailedDetectionEngineMockRecorder) ResumeIntegrityChecker() *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResumeIntegrityChecker", reflect.TypeOf((*MockDetailedDetectionEngine)(nil).ResumeIntegrityChecker))
 }
 
+// Stat mocks base method.
+func (m *MockDetailedDetectionEngine) Stat(path string) (os.FileInfo, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Stat", path)
+	ret0, _ := ret[0].(os.FileInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Stat indicates an expected call of Stat.
+func (mr *MockDetailedDetectionEngineMockRecorder) Stat(path any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stat", reflect.TypeOf((*MockDetailedDetectionEngine)(nil).Stat), path)
+}
+
 // Sync mocks base method.
 func (m *MockDetailedDetectionEngine) Sync(arg0 *log.Entry, arg1 bool) error {
 	m.ctrl.T.Helper()

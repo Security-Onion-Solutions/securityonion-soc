@@ -8,6 +8,7 @@ package model
 import (
 	"errors"
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
 	"time"
@@ -51,6 +52,19 @@ const (
 	OverrideTypeThreshold    OverrideType = "threshold"
 	OverrideTypeModify       OverrideType = "modify"
 	OverrideTypeCustomFilter OverrideType = "customFilter"
+
+	// Valid values for Track parameter (shared between threshold and suppress)
+	TrackBySrc = "by_src"
+	TrackByDst = "by_dst"
+	// TrackByEither is only valid for suppress overrides
+	TrackByEither = "by_either"
+	// TrackByBoth is only valid for threshold overrides
+	TrackByBoth = "by_both"
+
+	// Valid values for ThresholdType parameter
+	ThresholdTypeLimit     = "limit"
+	ThresholdTypeThreshold = "threshold"
+	ThresholdTypeBoth      = "both"
 
 	LicenseDRL        = "DRL"
 	LicenseCommercial = "Commercial"
@@ -192,7 +206,6 @@ type OverrideParameters struct {
 	Regex *string `json:"regex,omitempty" yaml:"regex,omitempty" example:"content:xyz"` // modify
 	// (suricata only) The value needing to match the regex in order for this override to apply
 	Value *string `json:"value,omitempty" yaml:"value,omitempty" example:"content:xyz content:!1.2.3.4/32"` // modify
-	GenID *int    `json:"-" yaml:"gen_id,omitempty"`                                                        // suppress, threshold
 	// (suricata only) Threshold type, for threshold overrides
 	ThresholdType *string `json:"thresholdType,omitempty" yaml:"type,omitempty" enums:"threshold,limit,both"` // threshold
 	// (suricata only) Track type for suppress and threshold overrides (by_either only applies to suppress overrides)
@@ -313,8 +326,7 @@ func (o *Override) Validate(engine EngineName) error {
 				return errors.New("missing required parameter(s)")
 			}
 
-			if o.GenID != nil ||
-				o.ThresholdType != nil ||
+			if o.ThresholdType != nil ||
 				o.Track != nil ||
 				o.Count != nil ||
 				o.Seconds != nil ||
@@ -328,12 +340,24 @@ func (o *Override) Validate(engine EngineName) error {
 
 			if o.Regex != nil ||
 				o.Value != nil ||
-				o.GenID != nil ||
 				o.ThresholdType != nil ||
 				o.Count != nil ||
 				o.Seconds != nil ||
 				o.CustomFilter != nil {
 				return errors.New("unnecessary fields in override")
+			}
+
+			// Validate Track value (suppress allows by_either)
+			switch *o.Track {
+			case TrackBySrc, TrackByDst, TrackByEither:
+				// valid
+			default:
+				return fmt.Errorf("invalid track value %q: must be by_src, by_dst, or by_either", *o.Track)
+			}
+
+			// Validate IP format
+			if err := validateSuricataIP(*o.IP); err != nil {
+				return err
 			}
 		case OverrideTypeThreshold:
 			if o.ThresholdType == nil || o.Track == nil || o.Count == nil || o.Seconds == nil {
@@ -342,9 +366,34 @@ func (o *Override) Validate(engine EngineName) error {
 
 			if o.Regex != nil ||
 				o.Value != nil ||
-				o.GenID != nil ||
 				o.CustomFilter != nil {
 				return errors.New("unnecessary fields in override")
+			}
+
+			// Validate ThresholdType value
+			switch *o.ThresholdType {
+			case ThresholdTypeLimit, ThresholdTypeThreshold, ThresholdTypeBoth:
+				// valid
+			default:
+				return fmt.Errorf("invalid thresholdType value %q: must be limit, threshold, or both", *o.ThresholdType)
+			}
+
+			// Validate Track value (threshold allows by_both, not by_either)
+			switch *o.Track {
+			case TrackBySrc, TrackByDst, TrackByBoth:
+				// valid
+			default:
+				return fmt.Errorf("invalid track value %q: must be by_src, by_dst, or by_both", *o.Track)
+			}
+
+			// Validate Count is positive
+			if *o.Count <= 0 {
+				return fmt.Errorf("invalid count value %d: must be greater than 0", *o.Count)
+			}
+
+			// Validate Seconds is positive
+			if *o.Seconds <= 0 {
+				return fmt.Errorf("invalid seconds value %d: must be greater than 0", *o.Seconds)
 			}
 		}
 
@@ -357,7 +406,6 @@ func (o *Override) Validate(engine EngineName) error {
 
 			if o.Regex != nil ||
 				o.Value != nil ||
-				o.GenID != nil ||
 				o.ThresholdType != nil ||
 				o.Track != nil ||
 				o.Count != nil ||
@@ -379,6 +427,53 @@ func (o *Override) Validate(engine EngineName) error {
 		return ErrInvalidOverrideType
 	}
 
+	return nil
+}
+
+// validateSuricataIP validates IP format for Suricata suppress rules.
+// Valid formats: plain IP (1.2.3.4), CIDR (1.2.3.0/24), variable ($HOME_NET),
+// or bracketed list ([1.2.3.4,5.6.7.8/24])
+func validateSuricataIP(ip string) error {
+	if ip == "" {
+		return errors.New("ip value cannot be empty")
+	}
+
+	// Allow Suricata variables like $HOME_NET
+	if strings.HasPrefix(ip, "$") {
+		return nil
+	}
+
+	// Handle bracketed list format [ip1,ip2,...]
+	if strings.HasPrefix(ip, "[") && strings.HasSuffix(ip, "]") {
+		inner := ip[1 : len(ip)-1]
+		parts := strings.Split(inner, ",")
+		for _, part := range parts {
+			part = strings.TrimSpace(part)
+			if err := validateSingleIP(part); err != nil {
+				return fmt.Errorf("invalid IP in list %q: %w", part, err)
+			}
+		}
+		return nil
+	}
+
+	return validateSingleIP(ip)
+}
+
+// validateSingleIP validates a single IP or CIDR
+func validateSingleIP(ip string) error {
+	// Try CIDR first
+	if strings.Contains(ip, "/") {
+		_, _, err := net.ParseCIDR(ip)
+		if err != nil {
+			return fmt.Errorf("invalid CIDR %q: %w", ip, err)
+		}
+		return nil
+	}
+
+	// Try plain IP
+	if net.ParseIP(ip) == nil {
+		return fmt.Errorf("invalid IP address %q", ip)
+	}
 	return nil
 }
 
