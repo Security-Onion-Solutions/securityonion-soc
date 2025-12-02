@@ -581,32 +581,16 @@ test('loadCredits success', async () => {
   expect(comp.creditsLoaded).toBe(true);
 });
 
-test('loadCredits handles 500 error with extra HTML', async () => {
+test('loadCredits handles 500 error due to outage', async () => {
   const error = new Error('Internal Server Error');
-  error.response = { status: 500 };
-  mockPapi("get", null, error);
-  comp.$root.showErrorExtraHtml = jest.fn();
-  
-  await comp.loadCredits();
-  
-  expect(comp.$root.showErrorExtraHtml).toHaveBeenCalledWith(
-    comp.i18n.assistantUnableToLoadCredits + ': ' + error.message,
-    comp.i18n.assistantPotentialOutage,
-    'https://securityonionsolutions.com/status/'
-  );
-  expect(comp.creditsLoaded).toBe(true);
-});
-
-test('loadCredits handles non-500 error', async () => {
-  const error = new Error('Bad Request');
-  error.response = { status: 400 };
+  error.response = { status: 500, data: "ERROR_UPSTREAM_SERVICE_ERROR" };
   mockPapi("get", null, error);
   comp.$root.showError = jest.fn();
   
   await comp.loadCredits();
   
-  expect(comp.$root.showError).toHaveBeenCalledWith(comp.i18n.assistantUnableToLoadCredits + ': ' + error.message);
-  expect(comp.creditsLoaded).toBe(true);
+  expect(comp.$root.showError).toHaveBeenCalledWith(error);
+  expect(comp.creditsLoaded).toBe(false);
 });
 
 test('loadCredits handles error without response', async () => {
@@ -616,8 +600,8 @@ test('loadCredits handles error without response', async () => {
   
   await comp.loadCredits();
   
-  expect(comp.$root.showError).toHaveBeenCalledWith(comp.i18n.assistantUnableToLoadCredits + ': ' + error.message);
-  expect(comp.creditsLoaded).toBe(true);
+  expect(comp.$root.showError).toHaveBeenCalledWith(error);
+  expect(comp.creditsLoaded).toBe(false);
 });
 
 test('loadCredits handles unhealthy status', async () => {
@@ -632,8 +616,8 @@ test('loadCredits handles unhealthy status', async () => {
   
   await comp.loadCredits();
   
-  expect(comp.$root.showError).toHaveBeenCalledWith('Error loading credits from API: ' + comp.i18n.assistantBalanceCheckUnhealthy);
-  expect(comp.creditsLoaded).toBe(true);
+  expect(comp.$root.showError).toHaveBeenCalledWith(new Error(comp.i18n.assistantBalanceCheckUnhealthy));
+  expect(comp.creditsLoaded).toBe(false);
 });
 
 test('loadCredits handles missing data', async () => {

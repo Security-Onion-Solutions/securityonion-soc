@@ -274,12 +274,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           }
         }
       } catch (error) {
-        if (error.response && error.response.status == 500) {
-          this.$root.showErrorExtraHtml(this.i18n.assistantUnableToLoadCredits + ': ' + error.message, this.i18n.assistantPotentialOutage, 'https://securityonionsolutions.com/status/');
-        } else {
-          this.$root.showError(this.i18n.assistantUnableToLoadCredits + ': ' + error.message);
-        }
-        this.creditsLoaded = true;
+        this.$root.showError(error);
+        this.creditsLoaded = false;
       }
     },
     async saveCurrentChat() {
@@ -797,9 +793,17 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           };
           this.messages.push(errorMessage);
           this.scrollIfPinned();
-          
+
+          // Read streamed error
+          if (error && error.response && error.response.data) {
+            const stream = error.response.data;
+            const reader = stream.pipeThrough(new TextDecoderStream()).getReader();
+            const { done, value } = await reader.read();
+            error = value;
+          }
+
           // Show error to user
-          this.$root.showErrorExtraHtml(this.i18n.assistantNoResponse + ': ' + (error.response?.data?.error || error.message), this.i18n.assistantPotentialOutage, 'https://securityonionsolutions.com/status/');
+          this.$root.showError(error);
         }
         
         // Clear the active streaming session if this was the active one

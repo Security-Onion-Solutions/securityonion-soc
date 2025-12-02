@@ -142,8 +142,6 @@ $(document).ready(function () {
           tip: false,
           disclaimer: false,
           errorMessage: "",
-          errorExtraMsg: "",
-          errorExtraLink: "",
           warningMessage: "",
           infoMessage: "",
           tipMessage: "",
@@ -920,6 +918,12 @@ $(document).ready(function () {
               msg = msg.error.reason;
             }
           }
+
+          // Remove encapsulating quotes
+          if (msg.startsWith != undefined && msg.startsWith("\"") && msg.endsWith("\"")) {
+            msg = msg.substring(1, msg.length - 1);
+          }
+
           var localized = this.i18n[msg];
           if (!localized) {
             if (origMsg.message) {
@@ -961,18 +965,11 @@ $(document).ready(function () {
             this.showTip(this.i18n.requestCanceled);
             return;
           }
-          this.errorExtraMsg = "";
-          this.errorExtraLink = "";
           this.error = true;
           this.errorMessage = this.localizeMessage(msg);
           if (this.debug && msg && msg.stack) {
             console.log(msg.stack);
           }
-        },
-        showErrorExtraHtml(msg, extraMsg, extraLink) {
-          this.showError(msg);
-          this.errorExtraMsg = extraMsg;
-          this.errorExtraLink = extraLink;
         },
         showWarning(msg, skipLocalization) {
           this.warning = true;

@@ -285,14 +285,14 @@
 						spellcheck="false"
 						class="chat-input flex-grow-1 mr-3"
 						@keydown.enter.exact.prevent="$refs.sendButton.$el.click()"
-						:disabled="!canChat"
+						:disabled="!canChat || !creditsLoaded"
 						data-aid="assistant_chat_input"
 					></v-textarea>
 					<v-btn
 						id="chat-send-button"
 						ref="sendButton"
 						color="primary"
-						:disabled="!newMessage.trim() || !canChat || checkForActivity()"
+						:disabled="!newMessage.trim() || !canChat || checkForActivity() || !creditsLoaded"
 						@click="sendMessage()"
 						data-aid="assistant_chat_send"
 						class="flex-shrink-0"

@@ -943,3 +943,55 @@ func TestHistoryToContext(t *testing.T) {
 		})
 	}
 }
+
+func TestCheckAssistantAvailable_AirgapEnabled(t *testing.T) {
+	// Create mock server with airgap enabled
+	srv := &Server{
+		Config: &config.ServerConfig{
+			AirgapEnabled: true,
+		},
+	}
+
+	handler := NewAssistantHandler(srv)
+
+	req := httptest.NewRequest("GET", "/assistant/test", nil)
+	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "test-user-123")
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+
+	// Execute the check
+	result := handler.checkAssistantAvailable(ctx, w, req)
+
+	// Verify result is false
+	assert.False(t, result)
+
+	// Verify response is 503 Service Unavailable
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+}
+
+func TestCheckAssistantAvailable_AirgapDisabled(t *testing.T) {
+	// Create mock server with airgap disabled
+	srv := &Server{
+		Config: &config.ServerConfig{
+			AirgapEnabled: false,
+		},
+	}
+
+	handler := NewAssistantHandler(srv)
+
+	req := httptest.NewRequest("GET", "/assistant/test", nil)
+	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "test-user-123")
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+
+	// Execute the check
+	result := handler.checkAssistantAvailable(ctx, w, req)
+
+	// Verify result is true
+	assert.True(t, result)
+
+	// Verify no response was written (status should be 0)
+	assert.Equal(t, 0, w.Code)
+}

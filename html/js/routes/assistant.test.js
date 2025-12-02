@@ -521,22 +521,16 @@ test('loadCredits success', async () => {
   expect(comp.creditsLoaded).toBe(true);
 });
 
-test('loadCredits handles 500 error with extra HTML', async () => {
-  const error = new Error("Server error");
+test('loadCredits handles 500 error due to outage', async () => {
+  const error = new Error('ERROR_UPSTREAM_SERVICE_ERROR');
   error.response = { status: 500 };
   mockPapi("get", null, error);
-  
-  comp.$root.showErrorExtraHtml = jest.fn();
+  comp.$root.showError = jest.fn();
   
   await comp.loadCredits();
   
-  expect(comp.$root.showErrorExtraHtml).toHaveBeenCalledWith(
-    'Error loading credits from API: Server error',
-    comp.i18n.assistantPotentialOutage,
-    'https://securityonionsolutions.com/status/'
-  );
-  expect(comp.creditsRemaining).toBe(0);
-  expect(comp.creditsLoaded).toBe(true);
+  expect(comp.$root.showError).toHaveBeenCalledWith(error);
+  expect(comp.creditsLoaded).toBe(false);
 });
 
 test('loadCredits handles non-500 error', async () => {
@@ -547,20 +541,20 @@ test('loadCredits handles non-500 error', async () => {
   
   await comp.loadCredits();
   
-  expect(showErrorMock).toHaveBeenCalledWith('Error loading credits from API: API error');
+  expect(showErrorMock).toHaveBeenCalledWith(error);
   expect(comp.creditsRemaining).toBe(0);
-  expect(comp.creditsLoaded).toBe(true);
+  expect(comp.creditsLoaded).toBe(false);
 });
 
 test('loadCredits handles error without response', async () => {
   const showErrorMock = mockShowError();
-  mockPapi("get", null, new Error("Network error"));
+  const error = new Error("Network error")
+  mockPapi("get", null, error);
   
   await comp.loadCredits();
   
-  expect(showErrorMock).toHaveBeenCalledWith('Error loading credits from API: Network error');
-  expect(comp.creditsRemaining).toBe(0);
-  expect(comp.creditsLoaded).toBe(true);
+  expect(showErrorMock).toHaveBeenCalledWith(error);
+  expect(comp.creditsLoaded).toBe(false);
 });
 
 test('loadCredits handles unhealthy status', async () => {
@@ -573,9 +567,8 @@ test('loadCredits handles unhealthy status', async () => {
   
   await comp.loadCredits();
   
-  expect(showErrorMock).toHaveBeenCalledWith('Error loading credits from API: The AI model could not be reached. Support for local AI models is coming soon.');
-  expect(comp.creditsRemaining).toBe(0);
-  expect(comp.creditsLoaded).toBe(true);
+  expect(showErrorMock).toHaveBeenCalledWith(new Error(comp.i18n.assistantBalanceCheckUnhealthy));
+  expect(comp.creditsLoaded).toBe(false);
 });
 
 // Chat operations tests

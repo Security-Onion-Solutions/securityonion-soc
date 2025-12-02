@@ -230,6 +230,10 @@ test('loadServerSettings', async () => {
 test('localizeMessage', () => {
   expect(app.localizeMessage(null)).toBe("");
   expect(app.localizeMessage('create')).toBe("Create");
+  expect(app.localizeMessage('"quoted message"')).toBe("quoted message");
+  expect(app.localizeMessage('"error with quotes"')).toBe("error with quotes");
+  expect(app.localizeMessage('no quotes')).toBe("no quotes");
+  expect(app.localizeMessage('"single quote"')).toBe("single quote");
 });
 
 test('localizeMessageWithArgs', () => {
@@ -1204,48 +1208,6 @@ describe('export', () => {
       app.showError = oldShowError;
     } 
   });
-});
-
-test('showErrorExtraHtml', () => {
-  const oldShowError = app.showError;
-  app.showError = origShowError;
-  try {
-    const mockShowError = jest.fn();
-    app.showError = mockShowError;
-    
-    const errorMsg = 'Test error message';
-    const extraMsg = 'Additional information';
-    const extraLink = 'https://example.com/help';
-    
-    app.showErrorExtraHtml(errorMsg, extraMsg, extraLink);
-    
-    expect(mockShowError).toHaveBeenCalledWith(errorMsg);
-    expect(app.errorExtraMsg).toBe(extraMsg);
-    expect(app.errorExtraLink).toBe(extraLink);
-  } finally {
-    app.showError = oldShowError;
-  }
-});
-
-test('showErrorExtraHtml with empty extra message', () => {
-  const oldShowError = app.showError;
-  app.showError = origShowError;
-  try {
-    const mockShowError = jest.fn();
-    app.showError = mockShowError;
-    
-    const errorMsg = 'Test error';
-    const extraMsg = '';
-    const extraLink = '';
-    
-    app.showErrorExtraHtml(errorMsg, extraMsg, extraLink);
-    
-    expect(mockShowError).toHaveBeenCalledWith(errorMsg);
-    expect(app.errorExtraMsg).toBe('');
-    expect(app.errorExtraLink).toBe('');
-  } finally {
-    app.showError = oldShowError;
-  }
 });
 
 test('performMermaidRegexes', () => {
