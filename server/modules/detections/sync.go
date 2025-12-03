@@ -94,7 +94,11 @@ func SyncScheduler(ctx context.Context, detStore TemplateChecker, e DetailedDete
 			"expectedStartTime": time.Now().Add(timerDur).Format(time.RFC3339),
 		}).Info("waiting for next community rules sync")
 
-		e.ResumeIntegrityChecker()
+		// Only resume integrity checker if sync isn't blocked
+		// (no point checking integrity when rules haven't been synced)
+		if !blocked {
+			e.ResumeIntegrityChecker()
+		}
 
 		select {
 		case <-timer.C:
