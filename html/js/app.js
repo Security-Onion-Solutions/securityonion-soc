@@ -1419,6 +1419,17 @@ $(document).ready(function () {
           }
           return "Healthy";
         },
+        isDetectionEngineStatusUnhealthy(engine) {
+          switch (this.getDetectionEngineStatus(engine)) {
+            case "Migrating":
+            case "Importing":
+            case "ImportPending":
+            case "Syncing":
+            case "Health":
+              return false;
+          }
+          return true;
+        },
         getCurrentStatus() {
           return this.statusByGridId[this.selectedGridId];
         },
