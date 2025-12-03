@@ -812,7 +812,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         }
       }
     },
-    
     // Helper method to handle message_start event for tool execution
     handleToolExecutionMessageStart(c, assistantMessage, toolUse) {
       assistantMessage = {
@@ -1253,6 +1252,9 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
 
             // Always process chunks for tool execution logic, but only update UI if current session
             switch (c.type) {
+              case 'error':
+                console.log(c);
+                this.$root.showError(this.i18n.assistantToolExecuteError + ': ' + (c.error.message || 'Unknown error') + ' (' + c.error.type + ')');
               case 'message_start':
                 if (isCurrentSession) {
                   // Capture raw tool result using helper method

@@ -8,6 +8,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"slices"
@@ -800,6 +801,11 @@ func unstreamResponse(ctx context.Context, rawResponse string) (*model.Message, 
 		StopReason  *string `json:"stop_reason,omitempty"`
 	}
 
+	type ErrorResponse struct {
+		Type    string `json:"type"`
+		Message string `json:"message"`
+	}
+
 	type StreamingMessage struct {
 		Type         string              `json:"type"`
 		Index        int                 `json:"index"`
@@ -807,6 +813,7 @@ func unstreamResponse(ctx context.Context, rawResponse string) (*model.Message, 
 		Delta        *Delta              `json:"delta"`
 		ContentBlock *model.ContentBlock `json:"content_block,omitempty"`
 		Usage        *model.Usage        `json:"usage,omitempty"`
+		Error        ErrorResponse       `json:"error,omitempty"`
 	}
 
 	logger := log.FromContext(ctx)
@@ -831,6 +838,13 @@ func unstreamResponse(ctx context.Context, rawResponse string) (*model.Message, 
 		}
 
 		switch sm.Type {
+		case "error":
+			logger.WithFields(log.Fields{
+				"errorType":    sm.Error.Type,
+				"errorMessage": sm.Error.Message,
+			}).Error("received error in streaming response")
+
+			return nil, fmt.Errorf("type: %s, message: %s", sm.Error.Type, sm.Error.Message)
 		case "message_start":
 			if sm.Message != nil {
 				message = sm.Message
