@@ -296,8 +296,6 @@ func TestPostTool(t *testing.T) {
 	}
 	mockManager.EXPECT().ExecuteTool(gomock.Any(), "query_events", `{"query":"test query"}`, "").Return(mockToolResponse, nil)
 
-	expectedText := fmt.Sprintf("ToolUseId: %s, Error: <nil>, Result: %s", toolUseId, `{"events":["event1","event2"]}`)
-
 	// Mock saving the tool result message
 	mockAssistantStore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Do(
 		func(ctx context.Context, msg *model.StoredMessage) {
@@ -305,8 +303,9 @@ func TestPostTool(t *testing.T) {
 			assert.Equal(t, []string{"tool_result"}, msg.Tags)
 			assert.Equal(t, "user", msg.Message.Role)
 			assert.Len(t, msg.Message.ContentBlocks, 1)
-			assert.Equal(t, "text", msg.Message.ContentBlocks[0].Type)
-			assert.Equal(t, expectedText, msg.Message.ContentBlocks[0].Text)
+			assert.Equal(t, "tool_result", msg.Message.ContentBlocks[0].Type)
+			assert.Equal(t, toolUseId, msg.Message.ContentBlocks[0].ToolResult.ToolUseId)
+			assert.Equal(t, mockToolResponse.Result, msg.Message.ContentBlocks[0].ToolResult.Content[0].Json)
 		},
 	).Return(nil)
 
@@ -330,8 +329,15 @@ func TestPostTool(t *testing.T) {
 				Role: "user",
 				ContentBlocks: []model.ContentBlock{
 					{
-						Type: "text",
-						Text: expectedText,
+						Type: "tool_result",
+						ToolResult: &model.ToolResult{
+							ToolUseId: toolUseId,
+							Content: []model.ToolResultContent{
+								{
+									Json: mockToolResponse.Result,
+								},
+							},
+						},
 					},
 				},
 			},
@@ -380,8 +386,9 @@ func TestPostTool(t *testing.T) {
 	// Verify the tool result message was included
 	toolResultMsg := capturedMessages[1]
 	assert.Equal(t, "user", toolResultMsg.Role)
-	assert.Contains(t, toolResultMsg.ContentBlocks[0].Text, toolUseId)
-	assert.Contains(t, toolResultMsg.ContentBlocks[0].Text, `{"events":["event1","event2"]}`)
+	assert.Equal(t, "tool_result", toolResultMsg.ContentBlocks[0].Type)
+	assert.Equal(t, toolUseId, toolResultMsg.ContentBlocks[0].ToolResult.ToolUseId)
+	assert.Equal(t, mockToolResponse.Result, toolResultMsg.ContentBlocks[0].ToolResult.Content[0].Json)
 }
 
 func TestGetBalance(t *testing.T) {

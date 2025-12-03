@@ -226,6 +226,20 @@ type ContentBlock struct {
 	Content any `json:"content,omitempty,omitzero" example:"What exactly is an APT?"`
 	// The plain text content of the message.
 	Text string `json:"text,omitempty" example:"What are my latest alerts?"`
+	// The tool result content of the message.
+	ToolResult *ToolResult `json:"toolResult,omitempty"`
+}
+
+type ToolResult struct {
+	ToolUseId string              `json:"toolUseId"`
+	Content   []ToolResultContent `json:"content"`
+	Status    string              `json:"status,omitempty"`
+	IsError   bool                `json:"isError,omitempty"`
+}
+
+type ToolResultContent struct {
+	Json any    `json:"json,omitempty"`
+	Text string `json:"text,omitempty"`
 }
 
 // @Description Usage statistics showing token usage and billing information.

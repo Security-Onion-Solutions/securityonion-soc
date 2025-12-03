@@ -8,7 +8,6 @@ package server
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"slices"
@@ -266,16 +265,30 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 		logger.WithError(toolErr).Error("unable to execute tool")
 	}
 
-	encoded := []byte("<nil>")
-
-	if result != nil {
-		encoded, err = json.Marshal(result.Result)
-		if err != nil {
-			logger.WithError(err).WithField("toolResult", result.Result).Error("unable to marshal tool result")
-
-			if toolErr == nil {
-				toolErr = err
-			}
+	var toolResult *model.ToolResult
+	if toolErr != nil {
+		toolResult = &model.ToolResult{
+			ToolUseId: toolReq.ToolUseId,
+			Status:    "error",
+			IsError:   true,
+			Content: []model.ToolResultContent{
+				{
+					Text: toolErr.Error(),
+				},
+			},
+		}
+	} else {
+		var res any
+		if result != nil {
+			res = result.Result
+		}
+		toolResult = &model.ToolResult{
+			ToolUseId: toolReq.ToolUseId,
+			Content: []model.ToolResultContent{
+				{
+					Json: res,
+				},
+			},
 		}
 	}
 
@@ -284,8 +297,8 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 		Role: "user",
 		ContentBlocks: []model.ContentBlock{
 			{
-				Type: "text",
-				Text: fmt.Sprintf("ToolUseId: %s, Error: %v, Result: %s", toolReq.ToolUseId, toolErr, string(encoded)),
+				Type:       "tool_result",
+				ToolResult: toolResult,
 			},
 		},
 	}

@@ -252,8 +252,15 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, aiModel string, messag
 						Role: "user",
 						ContentBlocks: []model.ContentBlock{
 							{
-								Type: "text",
-								Text: fmt.Sprintf("ToolUseId: %s, Result: %s", content.Id, string(toolResultJSON)),
+								Type: "tool_result",
+								ToolResult: &model.ToolResult{
+									ToolUseId: content.Id,
+									Content: []model.ToolResultContent{
+										{
+											Json: result.Result,
+										},
+									},
+								},
 							},
 						},
 					}

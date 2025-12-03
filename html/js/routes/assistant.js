@@ -962,29 +962,56 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
               if (msg.tags && msg.tags.includes('tool_result')) {
                 let rawResult = null;
                 let toolError = null;
-                const textBlock = msg.message.contentBlocks.find(block => block.type === 'text');
-                if (textBlock && textBlock.text) {
-                  // Parse the tool result format: "ToolUseId: tooluse_QdvZoVlXQNm0PBuqFuqRmA, Result: [actual_result_data]"
-                  const toolResultText = textBlock.text;
-                  const toolUseIdMatch = toolResultText.match(/ToolUseId:\s*([^,]+)/);
-                  const resultMatch = toolResultText.match(/Result:\s*(.+)$/s);
-                  const errorMatch = toolResultText.match(/Error:\s*([^,]+)/);
-                  
-                  if (toolUseIdMatch && resultMatch && errorMatch) {
-                    rawResult = resultMatch[1].trim();
-                    toolError = errorMatch[1].trim();
+                let found = false;
+
+                const toolResultBlock = msg.message.contentBlocks.find(block => block.type === 'tool_result');
+                if (toolResultBlock && toolResultBlock.toolResult) {
+                  const tr = toolResultBlock.toolResult;
+                  if (tr.toolUseId === toolUse.id) {
+                    found = true;
+                    if (tr.isError || tr.status === 'error') {
+                      toolError = (tr.content && tr.content[0] && tr.content[0].text) ? tr.content[0].text : "Unknown error";
+                    } else {
+                      if (tr.content && tr.content[0] && tr.content[0].json) {
+                        rawResult = JSON.stringify(tr.content[0].json, null, 2);
+                      } else {
+                        rawResult = JSON.stringify(tr.content);
+                      }
+                      toolError = "<nil>";
+                    }
+                  }
+                } else {
+                  const textBlock = msg.message.contentBlocks.find(block => block.type === 'text');
+                  if (textBlock && textBlock.text) {
+                    // Parse the tool result format: "ToolUseId: tooluse_QdvZoVlXQNm0PBuqFuqRmA, Result: [actual_result_data]"
+                    const toolResultText = textBlock.text;
+                    const toolUseIdMatch = toolResultText.match(/ToolUseId:\s*([^,]+)/);
+                    
+                    if (toolUseIdMatch && toolUseIdMatch[1].trim() === toolUse.id) {
+                      const resultMatch = toolResultText.match(/Result:\s*(.+)$/s);
+                      const errorMatch = toolResultText.match(/Error:\s*([^,]+)/);
+                      
+                      if (resultMatch && errorMatch) {
+                        found = true;
+                        rawResult = resultMatch[1].trim();
+                        toolError = errorMatch[1].trim();
+                      }
+                    }
                   }
                 }
-                // This is a tool result - associate it with our tool use
-                toolUse.rawResult = rawResult;
-                toolUse.completedAt = msg.createTime;
-                if (toolError != "<nil>") {
-                  toolUse.error = toolError;
-                  toolUse.status = "error";
-                } else {
-                  toolUse.status = "completed";
+
+                if (found) {
+                  // This is a tool result - associate it with our tool use
+                  toolUse.rawResult = rawResult;
+                  toolUse.completedAt = msg.createTime;
+                  if (toolError && toolError != "<nil>") {
+                    toolUse.error = toolError;
+                    toolUse.status = "error";
+                  } else {
+                    toolUse.status = "completed";
+                  }
+                  break;
                 }
-                break;
               }
             }
           }
@@ -1454,7 +1481,22 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       let toolUseId = null;
       let toolError = null;
       
-      if (msg.message.contentBlocks && msg.message.contentBlocks.length > 0) {
+      const toolResultBlock = msg.message.contentBlocks.find(block => block.type === 'tool_result');
+      if (toolResultBlock && toolResultBlock.toolResult) {
+        const tr = toolResultBlock.toolResult;
+        toolUseId = tr.toolUseId;
+        if (tr.isError || tr.status === 'error') {
+          toolError = (tr.content && tr.content[0] && tr.content[0].text) ? tr.content[0].text : "Unknown error";
+          rawResult = toolError;
+        } else {
+          if (tr.content && tr.content[0] && tr.content[0].json) {
+            rawResult = JSON.stringify(tr.content[0].json, null, 2);
+          } else {
+            rawResult = JSON.stringify(tr.content);
+          }
+          toolError = "<nil>";
+        }
+      } else if (msg.message.contentBlocks && msg.message.contentBlocks.length > 0) {
         const textBlock = msg.message.contentBlocks.find(block => block.type === 'text');
         if (textBlock && textBlock.text) {
           // Parse the tool result format: "ToolUseId: tooluse_QdvZoVlXQNm0PBuqFuqRmA, Result: [actual_result_data]"
@@ -1472,7 +1514,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }
       
       // Find the assistant message with the matching tool use and add the raw result
-      if (toolUseId && rawResult && toolError) {
+      if (toolUseId && (rawResult || toolError)) {
         // Look backwards through processed messages to find the tool use
         for (let j = processedMessages.length - 1; j >= 0; j--) {
           const processedMsg = processedMessages[j];
@@ -1482,7 +1524,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
             if (matchingToolUse) {
               matchingToolUse.rawResult = rawResult;
               matchingToolUse.completedAt = msg.createTime;
-              if (toolError != "<nil>") {
+              if (toolError && toolError != "<nil>") {
                 matchingToolUse.error = toolError;
                 matchingToolUse.status = "error";
               }

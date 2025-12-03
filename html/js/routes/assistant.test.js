@@ -1229,8 +1229,11 @@ test('executeTool captures raw tool result from backend', async () => {
         message: {
           contentBlocks: [
             {
-              type: 'text',
-              text: 'ToolUseId: tool_123, Result: {"events": 5, "alerts": 2}, Error: <nil>'
+              type: 'tool_result',
+              toolResult: {
+                toolUseId: 'tool_123',
+                content: [{ json: { "events": 5, "alerts": 2 } }]
+              }
             }
           ]
         }
@@ -1262,7 +1265,7 @@ test('executeTool captures raw tool result from backend', async () => {
   // Wait for the setTimeout to complete
   await new Promise(resolve => setTimeout(resolve, 1100));
   
-  expect(toolUse.rawResult).toBe('{"events": 5, "alerts": 2}, Error: <nil>');
+  expect(toolUse.rawResult).toBe(JSON.stringify({ "events": 5, "alerts": 2 }, null, 2));
   expect(toolUse.status).toBe('completed');
   expect(toolUse.completedAt).toBe('2025-01-01T12:00:00.000Z');
 });
@@ -1282,8 +1285,13 @@ test('executeTool handles tool result with error', async () => {
         message: {
           contentBlocks: [
             {
-              type: 'text',
-              text: 'ToolUseId: tool_123, Result: null, Error: Query timeout'
+              type: 'tool_result',
+              toolResult: {
+                toolUseId: 'tool_123',
+                status: 'error',
+                isError: true,
+                content: [{ text: 'Query timeout' }]
+              }
             }
           ]
         }
@@ -2733,8 +2741,11 @@ test('convertBackendMessagesToFrontend filters out new format tool result messag
       message: {
         contentBlocks: [
           {
-            type: 'text',
-            text: 'ToolUseId: tool_result_test, Result: {"events": 5}, Error: <nil>'
+            type: 'tool_result',
+            toolResult: {
+              toolUseId: 'tool_result_test',
+              content: [{ json: { "events": 5 } }]
+            }
           }
         ]
       }
@@ -2744,7 +2755,7 @@ test('convertBackendMessagesToFrontend filters out new format tool result messag
   const result = comp.convertBackendMessagesToFrontend(backendMessages);
   
   expect(result).toHaveLength(1); // Tool result message should be filtered out
-  expect(result[0].toolUses.value[0].rawResult).toBe('{"events": 5}, Error: <nil>');
+  expect(result[0].toolUses.value[0].rawResult).toBe(JSON.stringify({ "events": 5 }, null, 2));
   expect(result[0].toolUses.value[0].completedAt).toBe('2025-01-01T12:01:00.000Z');
   expect(result[0].toolUses.value[0].status).toBe('completed'); // No error since Error is <nil>
 });
@@ -2774,8 +2785,13 @@ test('convertBackendMessagesToFrontend handles new format tool result with error
       message: {
         contentBlocks: [
           {
-            type: 'text',
-            text: 'ToolUseId: tool_error_test, Result: null, Error: Connection timeout'
+            type: 'tool_result',
+            toolResult: {
+              toolUseId: 'tool_error_test',
+              status: 'error',
+              isError: true,
+              content: [{ text: 'Connection timeout' }]
+            }
           }
         ]
       }
@@ -2785,7 +2801,7 @@ test('convertBackendMessagesToFrontend handles new format tool result with error
   const result = comp.convertBackendMessagesToFrontend(backendMessages);
   
   expect(result).toHaveLength(1);
-  expect(result[0].toolUses.value[0].rawResult).toBe('null, Error: Connection timeout');
+  expect(result[0].toolUses.value[0].rawResult).toBe('Connection timeout');
   expect(result[0].toolUses.value[0].error).toBe('Connection timeout');
   expect(result[0].toolUses.value[0].status).toBe('error');
 });
