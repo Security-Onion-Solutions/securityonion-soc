@@ -695,6 +695,37 @@ test('getDetectionEngineStatus', () => {
   expect(app.getDetectionEngineStatus('strelka')).toBe('Healthy');
 });
 
+test('isDetectionEngineStatusUnhealthy', () => {
+  // Test healthy states (returns false)
+  app.statusByGridId[''] = { detections: { strelka: { migrating: true }}};
+  expect(app.isDetectionEngineStatusUnhealthy('strelka')).toBe(false);
+
+  app.statusByGridId[''] = { detections: { strelka: { importing: true, syncing: true }}};
+  expect(app.isDetectionEngineStatusUnhealthy('strelka')).toBe(false);
+
+  app.statusByGridId[''] = { detections: { strelka: { importing: true, syncing: false }}};
+  expect(app.isDetectionEngineStatusUnhealthy('strelka')).toBe(false);
+
+  app.statusByGridId[''] = { detections: { strelka: { syncing: true }}};
+  expect(app.isDetectionEngineStatusUnhealthy('strelka')).toBe(false);
+
+  app.statusByGridId[''] = { detections: { strelka: { importing: false }}}; // Healthy
+  expect(app.isDetectionEngineStatusUnhealthy('strelka')).toBe(true);
+
+  // Test unhealthy states (returns true)
+  app.statusByGridId[''] = { detections: { strelka: { migrationFailure: true }}};
+  expect(app.isDetectionEngineStatusUnhealthy('strelka')).toBe(true);
+
+  app.statusByGridId[''] = { detections: { strelka: { syncFailure: true }}};
+  expect(app.isDetectionEngineStatusUnhealthy('strelka')).toBe(true);
+
+  app.statusByGridId[''] = { detections: { strelka: { integrityFailure: true }}};
+  expect(app.isDetectionEngineStatusUnhealthy('strelka')).toBe(true);
+
+  // Test unknown engine
+  expect(app.isDetectionEngineStatusUnhealthy('unknown')).toBe(true);
+});
+
 test('isAttentionNeeded', () => {
   app.connected = true;
   app.statusByGridId = {};

@@ -438,6 +438,7 @@ const i18n = {
       detectionDeleteConfirmationTitle: 'Delete Detections',
       detectionDescription: 'Detection Description',
       detectionEnabled: 'Enabled',
+      detectionEngineStatusHelp: 'Hunt for more information about this engine\'s sync issues',
       detectionEngineHealthy: 'OK',
       detectionEngineHealthyHelp: 'No problems detected with this engine\'s rules.',
       detectionEngineImportPending: 'Import Pending',
