@@ -1254,7 +1254,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
             switch (c.type) {
               case 'error':
                 console.log(c);
-                this.$root.showError(this.i18n.assistantToolExecuteError + ': ' + (c.error.message || 'Unknown error') + ' (' + c.error.type + ')');
+                this.$root.showError((c.error.message || 'Unknown error') + ' (' + c.error.type + ')');
               case 'message_start':
                 if (isCurrentSession) {
                   // Capture raw tool result using helper method
