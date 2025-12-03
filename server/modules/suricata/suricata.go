@@ -56,6 +56,7 @@ const (
 	DEFAULT_STATE_FILE_PATH                       = "/opt/sensoroni/fingerprints/suricataengine.state"
 	DEFAULT_SYNC_BLOCK_FILE_PATH                  = "/opt/sensoroni/fingerprints/suricataengine.syncBlock"
 	DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS     = 300
+	DEFAULT_FIRST_IMPORT_DELAY_SECONDS            = 300
 	DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS     = 600
 	DEFAULT_CONFIG_CHANGE_SYNC_DELAY_SECONDS      = 15
 	DEFAULT_AI_REPO                               = "https://github.com/Security-Onion-Solutions/securityonion-resources"
@@ -215,6 +216,7 @@ func (e *SuricataEngine) Init(config module.ModuleConfig) (err error) {
 	e.configFingerprintFile = module.GetStringDefault(config, "configFingerprintFile", DEFAULT_CONFIG_FINGERPRINT_FILE)
 	e.CommunityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", DEFAULT_COMMUNITY_RULES_IMPORT_FREQUENCY_SECS)
 	e.CommunityRulesImportErrorSeconds = module.GetIntDefault(config, "communityRulesImportErrorSeconds", DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS)
+	e.FirstImportDelaySeconds = module.GetIntDefault(config, "firstImportDelaySeconds", DEFAULT_FIRST_IMPORT_DELAY_SECONDS)
 	e.failAfterConsecutiveErrorCount = module.GetIntDefault(config, "failAfterConsecutiveErrorCount", DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT)
 	e.IntegrityCheckerData.FrequencySeconds = module.GetIntDefault(config, "integrityCheckFrequencySeconds", DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS)
 	e.configChangeSyncDelaySeconds = module.GetIntDefault(config, "configChangeSyncDelaySeconds", DEFAULT_CONFIG_CHANGE_SYNC_DELAY_SECONDS)

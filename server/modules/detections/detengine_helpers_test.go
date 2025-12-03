@@ -30,10 +30,10 @@ func TestDetermineWaitTimeNoState(t *testing.T) {
 
 	iom.EXPECT().ReadFile("state").Return(nil, fs.ErrNotExist)
 
-	lastImport, dur := DetermineWaitTime(iom, "state", time.Minute)
+	lastImport, dur := DetermineWaitTime(iom, "state", time.Minute, 5*time.Minute)
 
 	assert.Nil(t, lastImport, "Expected lastImport to be nil")
-	assert.Equal(t, time.Minute*20, dur, "Expected duration to be 20 minutes")
+	assert.Equal(t, 5*time.Minute, dur, "Expected duration to be 5 minutes")
 }
 
 func TestDetermineWaitTime(t *testing.T) {
@@ -45,7 +45,7 @@ func TestDetermineWaitTime(t *testing.T) {
 
 	iom.EXPECT().ReadFile("state").Return([]byte(tenSecAgoStr), nil)
 
-	lastImport, dur := DetermineWaitTime(iom, "state", time.Minute)
+	lastImport, dur := DetermineWaitTime(iom, "state", time.Minute, 5*time.Minute)
 	assert.NotNil(t, lastImport, "Expected lastImport not to be nil")
 	assert.InEpsilon(t, time.Duration(time.Second*50), dur, 1)
 }
@@ -57,9 +57,9 @@ func TestDetermineWaitTimeBadRead(t *testing.T) {
 	iom.EXPECT().ReadFile("state").Return(nil, errors.New("bad read"))
 	iom.EXPECT().DeleteFile("state").Return(nil)
 
-	lastImport, dur := DetermineWaitTime(iom, "state", time.Minute)
+	lastImport, dur := DetermineWaitTime(iom, "state", time.Minute, 5*time.Minute)
 	assert.Nil(t, lastImport, "Expected lastImport to be nil")
-	assert.Equal(t, time.Duration(time.Minute*20), dur)
+	assert.Equal(t, 5*time.Minute, dur)
 }
 
 func TestDetermineWaitTimeBadValue(t *testing.T) {
@@ -69,9 +69,9 @@ func TestDetermineWaitTimeBadValue(t *testing.T) {
 	iom.EXPECT().ReadFile("state").Return([]byte("bad"), nil)
 	iom.EXPECT().DeleteFile("state").Return(nil)
 
-	lastImport, dur := DetermineWaitTime(iom, "state", time.Minute)
+	lastImport, dur := DetermineWaitTime(iom, "state", time.Minute, 5*time.Minute)
 	assert.Nil(t, lastImport, "Expected lastImport to be nil")
-	assert.Equal(t, time.Duration(time.Minute*20), dur)
+	assert.Equal(t, 5*time.Minute, dur)
 }
 
 func TestWriteStateFile(t *testing.T) {

@@ -42,6 +42,7 @@ type SyncSchedulerParams struct {
 	SyncBlockFilePath                    string
 	CommunityRulesImportFrequencySeconds int
 	CommunityRulesImportErrorSeconds     int
+	FirstImportDelaySeconds              int
 }
 
 func SyncScheduler(ctx context.Context, detStore TemplateChecker, e DetailedDetectionEngine, syncParams *SyncSchedulerParams, engineState *model.EngineState, engName model.EngineName, isRunning *bool) {
@@ -52,7 +53,7 @@ func SyncScheduler(ctx context.Context, detStore TemplateChecker, e DetailedDete
 	}()
 
 	var lastSyncSuccess *bool
-	lastImport, timerDur := DetermineWaitTime(e, syncParams.StateFilePath, time.Duration(syncParams.CommunityRulesImportFrequencySeconds)*time.Second)
+	lastImport, timerDur := DetermineWaitTime(e, syncParams.StateFilePath, time.Duration(syncParams.CommunityRulesImportFrequencySeconds)*time.Second, time.Duration(syncParams.FirstImportDelaySeconds)*time.Second)
 
 	for *isRunning {
 		if lastImport == nil && lastSyncSuccess != nil && *lastSyncSuccess {
