@@ -67,7 +67,7 @@
 							{{ i18n['cc_' + engine] }}:
 							<router-link :to="{ name: 'hunt', query: {q: buildDetectionEngineHuntQuery(engine), t: moment().subtract(1, 'hours').format(i18n.timePickerFormat) + ' - ' + moment().format(i18n.timePickerFormat), socExcludeToggle: false, detectionsExcludeToggle: false }}" style="text-decoration: none; cursor: 'pointer'" :class="$root.getDetectionEngineStatusClass(engine)" :data-aid="'detection_engine_status_' + engine" :title="i18n['detectionEngine' + $root.getDetectionEngineStatus(engine) + 'Help']">
 								{{ i18n['detectionEngine' + $root.getDetectionEngineStatus(engine)] }}
-								<v-icon v-if="!$root.isDetectionEngineStatusUnhealthy(engine)" :title="i18n.detectionEngineStatusHelp" :data-aid="'detections_engine_status_link_' + engine">fa-crosshairs</v-icon>
+								<v-icon v-if="$root.isDetectionEngineStatusUnhealthy(engine)" :title="i18n.detectionEngineStatusHelp" :data-aid="'detections_engine_status_link_' + engine">fa-crosshairs</v-icon>
 							</router-link>
 						</h5>
 					</div>
