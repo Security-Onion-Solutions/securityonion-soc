@@ -1237,6 +1237,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
               case 'error':
                 console.log(c);
                 this.$root.showError(this.i18n.assistantToolUseFail);
+                break;
               case 'message_start':
                 if (isCurrentSession) {
                   // Capture raw tool result using helper method
