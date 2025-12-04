@@ -1223,8 +1223,7 @@ test('executeTool captures raw tool result from backend', async () => {
   comp.loadCredits = jest.fn().mockResolvedValue();
   
   // Mock backend response with tool result
-  const backendResponse = {
-    data: [
+  const backendResponse = [
       {
         createTime: '2025-01-01T12:00:00.000Z',
         tags: ['tool_result'],
@@ -1240,8 +1239,7 @@ test('executeTool captures raw tool result from backend', async () => {
           ]
         }
       }
-    }
-  ];
+    ];
   mockPapi('get', { data: { session: {}, history: backendResponse } });
   
   // Include message_start event to trigger captureRawToolResult
@@ -1281,26 +1279,24 @@ test('executeTool handles tool result with error', async () => {
   comp.loadCredits = jest.fn().mockResolvedValue();
   
   // Mock backend response with tool error
-  const backendResponse = {
-    data: [
-      {
-        createTime: '2025-01-01T12:00:00.000Z',
-        tags: ['tool_result'],
-        message: {
-          contentBlocks: [
-            {
-              toolResult: {
-                isError: true,
-                status: 'error',
-                content: [
-                  {
-                    text: 'something went wrong'
-                  }
-                ]
-              }
+  const backendResponse = [
+    {
+      createTime: '2025-01-01T12:00:00.000Z',
+      tags: ['tool_result'],
+      message: {
+        contentBlocks: [
+          {
+            toolResult: {
+              isError: true,
+              status: 'error',
+              content: [
+                {
+                  text: 'something went wrong'
+                }
+              ]
             }
-          ]
-        }
+          }
+        ]
       }
     }
   ];
