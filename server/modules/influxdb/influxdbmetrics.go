@@ -58,6 +58,10 @@ type InfluxDBMetrics struct {
 	pcapDays                 map[string]float64
 	stenoLossPct             map[string]float64
 	suriLossPct              map[string]float64
+	suriRulesLoaded          map[string]int
+	suriRulesFailed          map[string]int
+	suriRulesReloadTime      map[string]string
+	suriRulesStatus          map[string]string
 	zeekLossPct              map[string]float64
 	captureLossPct           map[string]float64
 	trafficMonInMbs          map[string]float64
@@ -78,16 +82,20 @@ type InfluxDBMetrics struct {
 
 func NewInfluxDBMetrics(srv *server.Server) *InfluxDBMetrics {
 	return &InfluxDBMetrics{
-		server:           srv,
-		raidStatus:       make(map[string]int),
-		processStatus:    make(map[string]int),
-		processJson:      make(map[string]string),
-		consumptionEps:   make(map[string]int),
-		productionEps:    make(map[string]int),
-		failedEvents:     make(map[string]int),
-		eventstoreStatus: make(map[string]string),
-		osNeedsRestart:   make(map[string]int),
-		osUptime:         make(map[string]int),
+		server:              srv,
+		raidStatus:          make(map[string]int),
+		processStatus:       make(map[string]int),
+		processJson:         make(map[string]string),
+		consumptionEps:      make(map[string]int),
+		productionEps:       make(map[string]int),
+		failedEvents:        make(map[string]int),
+		eventstoreStatus:    make(map[string]string),
+		osNeedsRestart:      make(map[string]int),
+		osUptime:            make(map[string]int),
+		suriRulesLoaded:     make(map[string]int),
+		suriRulesFailed:     make(map[string]int),
+		suriRulesReloadTime: make(map[string]string),
+		suriRulesStatus:     make(map[string]string),
 	}
 }
 
@@ -322,6 +330,10 @@ func (metrics *InfluxDBMetrics) updateOsStatus() {
 		metrics.pcapDays = metrics.convertValuesToFloat64(metrics.fetchLatestValuesByHost("pcapage", "seconds", "", ""), secondsToDays)
 		metrics.stenoLossPct = metrics.convertValuesToFloat64(metrics.fetchLatestValuesByHost("stenodrop", "drop", "", ""), identity)
 		metrics.suriLossPct = metrics.convertValuesToFloat64(metrics.fetchLatestValuesByHost("suridrop", "drop", "", ""), toPercent)
+		metrics.suriRulesLoaded = metrics.convertValuesToInt(metrics.fetchLatestValuesByHost("surirules", "loaded", "", ""))
+		metrics.suriRulesFailed = metrics.convertValuesToInt(metrics.fetchLatestValuesByHost("surirules", "failed", "", ""))
+		metrics.suriRulesReloadTime = metrics.convertValuesToString(metrics.fetchLatestValuesByHost("surirules", "reload_time", "", ""))
+		metrics.suriRulesStatus = metrics.convertValuesToString(metrics.fetchLatestValuesByHost("surirules", "status", "", ""))
 		metrics.zeekLossPct = metrics.convertValuesToFloat64(metrics.fetchLatestValuesByHost("zeekdrop", "drop", "", ""), toPercent)
 		metrics.captureLossPct = metrics.convertValuesToFloat64(metrics.fetchLatestValuesByHost("zeekcaptureloss", "loss", "", ""), identity)
 		metrics.trafficMonInMbs = metrics.convertValuesToFloat64(metrics.fetchLatestValuesByHostDirect(metrics.generateNetFilter("monint", "bytes_recv"), ""), bytesToMb)
@@ -485,6 +497,10 @@ func (metrics *InfluxDBMetrics) UpdateNodeMetrics(ctx context.Context, node *mod
 		node.PcapDays = metrics.pcapDays[node.Id]
 		node.StenoLossPct = metrics.stenoLossPct[node.Id]
 		node.SuriLossPct = metrics.suriLossPct[node.Id]
+		node.SuriRulesLoaded = metrics.suriRulesLoaded[node.Id]
+		node.SuriRulesFailed = metrics.suriRulesFailed[node.Id]
+		node.SuriRulesReloadTime = metrics.suriRulesReloadTime[node.Id]
+		node.SuriRulesStatus = metrics.suriRulesStatus[node.Id]
 		node.ZeekLossPct = metrics.zeekLossPct[node.Id]
 		node.CaptureLossPct = metrics.captureLossPct[node.Id]
 		node.TrafficMonInMbs = metrics.trafficMonInMbs[node.Id]

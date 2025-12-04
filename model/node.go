@@ -96,6 +96,14 @@ type Node struct {
 	StenoLossPct float64 `json:"stenoLossPct" example:"0"`
 	// The current percentage packet loss experienced by Suricata, if applicable to this node
 	SuriLossPct float64 `json:"suriLossPct" example:"1.1345"`
+	// The number of Suricata rules currently loaded, if applicable to this node
+	SuriRulesLoaded int `json:"suriRulesLoaded" example:"45879"`
+	// The number of Suricata rules that failed to load, if applicable to this node
+	SuriRulesFailed int `json:"suriRulesFailed" example:"0"`
+	// The timestamp of the last Suricata rule reload, if applicable to this node
+	SuriRulesReloadTime string `json:"suriRulesReloadTime" example:"2025-12-04T01:04:07.994734+0000"`
+	// The status of Suricata rule loading: ok, unknown
+	SuriRulesStatus string `json:"suriRulesStatus" example:"ok"`
 	// The current percentage packet loss experienced by Zeek, if applicable to this node
 	ZeekLossPct float64 `json:"zeekLossPct" example:"0"`
 	// The current percentage capture loss experienced by the network, if applicable to this node
