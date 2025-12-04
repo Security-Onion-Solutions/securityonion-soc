@@ -1223,17 +1223,22 @@ test('executeTool captures raw tool result from backend', async () => {
   comp.loadCredits = jest.fn().mockResolvedValue();
   
   // Mock backend response with tool result
-  const backendResponse =  [
-    {
-      createTime: '2025-01-01T12:00:00.000Z',
-      tags: ['tool_result'],
-      message: {
-        contentBlocks: [
-          {
-            type: 'text',
-            text: 'ToolUseId: tool_123, Result: {"events": 5, "alerts": 2}, Error: <nil>'
-          }
-        ]
+  const backendResponse = {
+    data: [
+      {
+        createTime: '2025-01-01T12:00:00.000Z',
+        tags: ['tool_result'],
+        message: {
+          contentBlocks: [
+            {
+              type: 'tool_result',
+              toolResult: {
+                toolUseId: 'tool_123',
+                content: [{ json: { "events": 5, "alerts": 2 } }]
+              }
+            }
+          ]
+        }
       }
     }
   ];
@@ -1262,7 +1267,7 @@ test('executeTool captures raw tool result from backend', async () => {
   // Wait for the setTimeout to complete
   await new Promise(resolve => setTimeout(resolve, 1100));
   
-  expect(toolUse.rawResult).toBe('{"events": 5, "alerts": 2}, Error: <nil>');
+  expect(toolUse.rawResult).toBe(JSON.stringify({ "events": 5, "alerts": 2 }, null, 2));
   expect(toolUse.status).toBe('completed');
   expect(toolUse.completedAt).toBe('2025-01-01T12:00:00.000Z');
 });
