@@ -92,7 +92,7 @@ func TestPostChat(t *testing.T) {
 		},
 	}
 
-	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), sessionId, true).Return(mockHistoryMessages, nil)
+	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return(mockHistoryMessages, nil)
 
 	// Set up mock expectations
 	var capturedMessages []*model.Message
@@ -169,7 +169,7 @@ func TestPostChatWithoutHistory(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	// Mock GetChatHistory to return empty history for new session (will generate new sessionId)
-	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any(), true).Return([]*model.StoredMessage{}, nil)
+	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{}, nil)
 	mockAssistantStore.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil)
 
 	// Set up mock expectations
@@ -337,7 +337,7 @@ func TestPostTool(t *testing.T) {
 			},
 		},
 	}
-	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), sessionId, true).Return(mockHistoryMessages, nil)
+	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return(mockHistoryMessages, nil)
 
 	// Mock the chat response after tool execution
 	var capturedMessages []*model.Message
@@ -643,13 +643,12 @@ func TestManageSessionHistory(t *testing.T) {
 	// Set up mock expectations
 	mockAssistantStore.EXPECT().GetSessions(
 		gomock.Any(),
-		false,
 		gomock.Any(),
 		gomock.Any(),
 		gomock.Any(),
 	).Return(mockSessions, nil)
 
-	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), sessionId, false).Return(mockHistory, nil)
+	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return(mockHistory, nil)
 
 	// Execute the handler
 	handler.ManageSessionHistory(w, req)
@@ -700,7 +699,6 @@ func TestManageSessionHistoryNotFound(t *testing.T) {
 	// Mock GetSessions to return empty result
 	mockAssistantStore.EXPECT().GetSessions(
 		gomock.Any(),
-		false,
 		gomock.Any(),
 		gomock.Any(),
 		gomock.Any(),

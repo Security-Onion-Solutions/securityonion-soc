@@ -1436,3 +1436,7 @@ ul ul ul {
     transparent 95%,
     transparent 100%);
 }
+
+.tiny-link-icon {
+  font-size: 12px !important;
+}
