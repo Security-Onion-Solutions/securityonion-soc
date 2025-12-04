@@ -980,7 +980,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
                   if (resultBlock.toolResult.isError || resultBlock.toolResult.status === 'error') {
                     toolError = cb?.text || this.i18n.assistantToolUnknownError;
                   } else {
-                    rawResult = resultBlock.toolResult?.content?.[0]?.json;
+                    rawResult = cb?.json;
                   }
                 }
                 // This is a tool result - associate it with our tool use

@@ -1267,7 +1267,7 @@ test('executeTool captures raw tool result from backend', async () => {
   // Wait for the setTimeout to complete
   await new Promise(resolve => setTimeout(resolve, 1100));
   
-  expect(toolUse.rawResult).toBe(JSON.stringify({ "events": 5, "alerts": 2 }, null, 2));
+  expect(toolUse.rawResult).toEqual({ "events": 5, "alerts": 2 });
   expect(toolUse.status).toBe('completed');
   expect(toolUse.completedAt).toBe('2025-01-01T12:00:00.000Z');
 });
@@ -1281,17 +1281,26 @@ test('executeTool handles tool result with error', async () => {
   comp.loadCredits = jest.fn().mockResolvedValue();
   
   // Mock backend response with tool error
-  const backendResponse = [
-    {
-      createTime: '2025-01-01T12:00:00.000Z',
-      tags: ['tool_result'],
-      message: {
-        contentBlocks: [
-          {
-            type: 'text',
-            text: 'ToolUseId: tool_123, Result: null, Error: Query timeout'
-          }
-        ]
+  const backendResponse = {
+    data: [
+      {
+        createTime: '2025-01-01T12:00:00.000Z',
+        tags: ['tool_result'],
+        message: {
+          contentBlocks: [
+            {
+              toolResult: {
+                isError: true,
+                status: 'error',
+                content: [
+                  {
+                    text: 'something went wrong'
+                  }
+                ]
+              }
+            }
+          ]
+        }
       }
     }
   ];
@@ -1320,7 +1329,7 @@ test('executeTool handles tool result with error', async () => {
   // Wait for the setTimeout to complete
   await new Promise(resolve => setTimeout(resolve, 1100));
   
-  expect(toolUse.error).toBe('Query timeout');
+  expect(toolUse.error).toBe('something went wrong');
   expect(toolUse.status).toBe('error');
 }, 30000);
 
