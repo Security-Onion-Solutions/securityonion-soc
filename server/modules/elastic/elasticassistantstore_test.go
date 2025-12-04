@@ -955,7 +955,29 @@ func TestGetChatHistory(t *testing.T) {
 		Body: io.NopCloser(strings.NewReader(sessionCheck)),
 	}, nil)
 
-	// Mock search response
+	// Mock MSearch response for addMetaFromMessages (update time) - called by GetSessions
+	msearchUpdateTimeResponse := `{
+		"responses": [
+			{
+				"aggregations": {
+					"update_time": {
+						"value": 1234567890000,
+						"value_as_string": "2009-02-13T23:31:30.000Z"
+					}
+				}
+			}
+		]
+	}`
+
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(msearchUpdateTimeResponse)),
+	}, nil)
+
+	// Mock search response for chat messages
 	searchResponse := `{
 		"hits": {
 			"total": {
