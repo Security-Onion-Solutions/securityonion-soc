@@ -163,7 +163,7 @@ func (store *ElasticAssistantstore) validateChat(chat *model.StoredMessage) erro
 			filtered := false
 
 			for _, cb := range chat.Message.ContentBlocks {
-				if cb.Type == "" {
+				if cb.Type == "" && cb.ToolResult == nil {
 					err = fmt.Errorf("every content block must have a type")
 					break
 				}

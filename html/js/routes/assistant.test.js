@@ -1223,20 +1223,23 @@ test('executeTool captures raw tool result from backend', async () => {
   comp.loadCredits = jest.fn().mockResolvedValue();
   
   // Mock backend response with tool result
-  const backendResponse =  [
-    {
-      createTime: '2025-01-01T12:00:00.000Z',
-      tags: ['tool_result'],
-      message: {
-        contentBlocks: [
-          {
-            type: 'text',
-            text: 'ToolUseId: tool_123, Result: {"events": 5, "alerts": 2}, Error: <nil>'
-          }
-        ]
+  const backendResponse = [
+      {
+        createTime: '2025-01-01T12:00:00.000Z',
+        tags: ['tool_result'],
+        message: {
+          contentBlocks: [
+            {
+              type: 'tool_result',
+              toolResult: {
+                toolUseId: 'tool_123',
+                content: [{ json: { "events": 5, "alerts": 2 } }]
+              }
+            }
+          ]
+        }
       }
-    }
-  ];
+    ];
   mockPapi('get', { data: { session: {}, history: backendResponse } });
   
   // Include message_start event to trigger captureRawToolResult
@@ -1262,7 +1265,7 @@ test('executeTool captures raw tool result from backend', async () => {
   // Wait for the setTimeout to complete
   await new Promise(resolve => setTimeout(resolve, 1100));
   
-  expect(toolUse.rawResult).toBe('{"events": 5, "alerts": 2}, Error: <nil>');
+  expect(toolUse.rawResult).toEqual({ "events": 5, "alerts": 2 });
   expect(toolUse.status).toBe('completed');
   expect(toolUse.completedAt).toBe('2025-01-01T12:00:00.000Z');
 });
@@ -1283,8 +1286,15 @@ test('executeTool handles tool result with error', async () => {
       message: {
         contentBlocks: [
           {
-            type: 'text',
-            text: 'ToolUseId: tool_123, Result: null, Error: Query timeout'
+            toolResult: {
+              isError: true,
+              status: 'error',
+              content: [
+                {
+                  text: 'something went wrong'
+                }
+              ]
+            }
           }
         ]
       }
@@ -1315,7 +1325,7 @@ test('executeTool handles tool result with error', async () => {
   // Wait for the setTimeout to complete
   await new Promise(resolve => setTimeout(resolve, 1100));
   
-  expect(toolUse.error).toBe('Query timeout');
+  expect(toolUse.error).toBe('something went wrong');
   expect(toolUse.status).toBe('error');
 }, 30000);
 

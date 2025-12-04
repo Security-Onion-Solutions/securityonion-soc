@@ -506,7 +506,7 @@ func cleanupMessages(messages []*model.Message) []*model.Message {
 			m.ContentBlocks = append([]model.ContentBlock{
 				{
 					Type: "text",
-					Text: "ToolUse",
+					Text: "&nbsp;",
 				},
 			}, m.ContentBlocks...)
 		}

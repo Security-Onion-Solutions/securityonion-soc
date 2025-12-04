@@ -800,7 +800,7 @@ func TestCleanupMessages(t *testing.T) {
 					Id:   "msg2",
 					Role: "assistant",
 					ContentBlocks: []model.ContentBlock{
-						{Type: "text", Text: "ToolUse"},
+						{Type: "text", Text: "&nbsp;"},
 						{Type: "tool_use", Input: []byte(`{"param1": "value1"}`)},
 					},
 				},

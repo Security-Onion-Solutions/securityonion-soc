@@ -973,18 +973,14 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
               const msg = messages[i];
               if (msg.tags && msg.tags.includes('tool_result')) {
                 let rawResult = null;
-                let toolError = null;
-                const textBlock = msg.message.contentBlocks.find(block => block.type === 'text');
-                if (textBlock && textBlock.text) {
-                  // Parse the tool result format: "ToolUseId: tooluse_QdvZoVlXQNm0PBuqFuqRmA, Result: [actual_result_data]"
-                  const toolResultText = textBlock.text;
-                  const toolUseIdMatch = toolResultText.match(/ToolUseId:\s*([^,]+)/);
-                  const resultMatch = toolResultText.match(/Result:\s*(.+)$/s);
-                  const errorMatch = toolResultText.match(/Error:\s*([^,]+)/);
-                  
-                  if (toolUseIdMatch && resultMatch && errorMatch) {
-                    rawResult = resultMatch[1].trim();
-                    toolError = errorMatch[1].trim();
+                let toolError = '<nil>';
+                const resultBlock = msg.message.contentBlocks.find(block => block.toolResult);
+                if (resultBlock && resultBlock.toolResult?.content?.length) {
+                  const cb = resultBlock.toolResult.content[0];
+                  if (resultBlock.toolResult.isError || resultBlock.toolResult.status === 'error') {
+                    toolError = cb?.text || this.i18n.assistantToolUnknownError;
+                  } else {
+                    rawResult = cb?.json;
                   }
                 }
                 // This is a tool result - associate it with our tool use
@@ -1238,6 +1234,9 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
 
             // Always process chunks for tool execution logic, but only update UI if current session
             switch (c.type) {
+              case 'error':
+                console.log(c);
+                this.$root.showError(this.i18n.assistantToolUseFail);
               case 'message_start':
                 if (isCurrentSession) {
                   // Capture raw tool result using helper method

@@ -296,8 +296,6 @@ func TestPostTool(t *testing.T) {
 	}
 	mockManager.EXPECT().ExecuteTool(gomock.Any(), "query_events", `{"query":"test query"}`, "").Return(mockToolResponse, nil)
 
-	expectedText := fmt.Sprintf("ToolUseId: %s, Error: <nil>, Result: %s", toolUseId, `{"events":["event1","event2"]}`)
-
 	// Mock saving the tool result message
 	mockAssistantStore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Do(
 		func(ctx context.Context, msg *model.StoredMessage) {
@@ -305,8 +303,10 @@ func TestPostTool(t *testing.T) {
 			assert.Equal(t, []string{"tool_result"}, msg.Tags)
 			assert.Equal(t, "user", msg.Message.Role)
 			assert.Len(t, msg.Message.ContentBlocks, 1)
-			assert.Equal(t, "text", msg.Message.ContentBlocks[0].Type)
-			assert.Equal(t, expectedText, msg.Message.ContentBlocks[0].Text)
+			assert.NotNil(t, msg.Message.ContentBlocks[0].ToolResult)
+			assert.Equal(t, "tooluse_test_123", msg.Message.ContentBlocks[0].ToolResult.ToolUseId)
+			assert.False(t, msg.Message.ContentBlocks[0].ToolResult.IsError)
+			assert.Equal(t, map[string]any{"result": mockToolResponse.Result}, msg.Message.ContentBlocks[0].ToolResult.Content[0].Json)
 		},
 	).Return(nil)
 
@@ -330,8 +330,16 @@ func TestPostTool(t *testing.T) {
 				Role: "user",
 				ContentBlocks: []model.ContentBlock{
 					{
-						Type: "text",
-						Text: expectedText,
+						Type: "tool_result",
+						ToolResult: &model.ToolResult{
+							ToolUseId: toolUseId,
+							Content: []model.ToolResultContent{
+								{
+									Json: map[string]any{"result": mockToolResponse.Result},
+								},
+							},
+							IsError: false,
+						},
 					},
 				},
 			},
@@ -380,8 +388,9 @@ func TestPostTool(t *testing.T) {
 	// Verify the tool result message was included
 	toolResultMsg := capturedMessages[1]
 	assert.Equal(t, "user", toolResultMsg.Role)
-	assert.Contains(t, toolResultMsg.ContentBlocks[0].Text, toolUseId)
-	assert.Contains(t, toolResultMsg.ContentBlocks[0].Text, `{"events":["event1","event2"]}`)
+	assert.NotNil(t, toolResultMsg.ContentBlocks[0].ToolResult)
+	assert.Equal(t, toolUseId, toolResultMsg.ContentBlocks[0].ToolResult.ToolUseId)
+	assert.Equal(t, map[string]any{"result": mockToolResponse.Result}, toolResultMsg.ContentBlocks[0].ToolResult.Content[0].Json)
 }
 
 func TestGetBalance(t *testing.T) {
