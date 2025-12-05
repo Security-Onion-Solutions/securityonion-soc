@@ -299,6 +299,37 @@
 														</v-progress-linear>
 													</span>
 												</div>
+												<div v-if="item.metricsEnabled && hasSuri(item)" class="text-no-wrap">
+													<span class="filter label">{{ i18n.suriRulesLoaded }}:</span>
+													<span id="node_suriRulesLoaded" :class="areMetricsCurrent(item) ? 'filter value text-' + colorSuriRules(item) : 'filter value stale'">
+														<!-- Unknown status (container down, socket error) -->
+														<span v-if="item.suriRulesStatus === 'unknown'">
+															{{ i18n.rulesUnknown }}
+														</span>
+														<!-- All rules failed to load -->
+														<span v-else-if="item.suriRulesLoaded === 0 && item.suriRulesFailed > 0">
+															{{ item.suriRulesFailed }} {{ i18n.rulesAllFailed }}
+														</span>
+														<!-- Some rules loaded, some failed -->
+														<span v-else-if="item.suriRulesLoaded > 0 && item.suriRulesFailed > 0">
+															{{ item.suriRulesLoaded }} {{ i18n.rulesLoaded }}, {{ item.suriRulesFailed }} {{ i18n.rulesFailed }}
+														</span>
+														<!-- No rules configured (none loaded, none failed) -->
+														<span v-else-if="item.suriRulesLoaded === 0 && item.suriRulesFailed === 0">
+															{{ i18n.rulesNoRulesConfigured }}
+														</span>
+														<!-- All rules loaded successfully -->
+														<span v-else>
+															{{ item.suriRulesLoaded }} {{ i18n.rulesLoaded }}
+														</span>
+													</span>
+												</div>
+												<div v-if="item.metricsEnabled && hasSuri(item) && item.suriRulesReloadTime" class="text-no-wrap">
+													<span class="filter label">{{ i18n.suriRulesReloadTime }}:</span>
+													<span id="node_suriRulesReloadTime" :class="areMetricsCurrent(item) ? 'filter value' : 'filter value stale'">
+														{{ toTZ(item.suriRulesReloadTime) }}
+													</span>
+												</div>
 												<div v-if="item.metricsEnabled && hasSteno(item)" class="text-no-wrap">
 													<span class="filter label">{{ i18n.stenoLoss }}:</span>
 													<span :class="areMetricsCurrent(item) ? 'filter value' : 'filter value stale'">

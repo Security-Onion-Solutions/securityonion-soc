@@ -62,6 +62,7 @@ const (
 	DEFAULT_REPOS_FOLDER                             = "/opt/sensoroni/sigma/repos"
 	DEFAULT_STATE_FILE_PATH                          = "/opt/sensoroni/fingerprints/elastalertengine.state"
 	DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS        = 300
+	DEFAULT_FIRST_IMPORT_DELAY_SECONDS               = 300
 	DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT       = 10
 	DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS        = 600
 	DEFAULT_AI_REPO                                  = "https://github.com/Security-Onion-Solutions/securityonion-resources"
@@ -262,6 +263,7 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.enabledSigmaRules = loadEnabledSigmaRules(config)
 	e.autoEnabledSigmaRules = module.GetStringArrayDefault(config, "autoEnabledSigmaRules", []string{})
 	e.CommunityRulesImportErrorSeconds = module.GetIntDefault(config, "communityRulesImportErrorSeconds", DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS)
+	e.FirstImportDelaySeconds = module.GetIntDefault(config, "firstImportDelaySeconds", DEFAULT_FIRST_IMPORT_DELAY_SECONDS)
 	e.failAfterConsecutiveErrorCount = module.GetIntDefault(config, "failAfterConsecutiveErrorCount", DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT)
 	e.additionalAlerters = module.GetStringArrayDefault(config, "additionalAlerters", []string{})
 	e.additionalAlerterParams = module.GetStringDefault(config, "additionalSev0AlertersParams", "")

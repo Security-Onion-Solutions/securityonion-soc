@@ -100,7 +100,7 @@ func TestDetectionOverrideValidate(t *testing.T) {
 						OverrideParameters: OverrideParameters{
 							Regex: util.Ptr(".*"),
 							Value: util.Ptr("test"),
-							GenID: util.Ptr(1),
+							Count: util.Ptr(1),
 						},
 					},
 				},
@@ -130,7 +130,7 @@ func TestDetectionOverrideValidate(t *testing.T) {
 						OverrideParameters: OverrideParameters{
 							IP:    util.Ptr("0.0.0.0"),
 							Track: util.Ptr("by_src"),
-							GenID: util.Ptr(1),
+							Count: util.Ptr(1),
 						},
 					},
 				},
@@ -169,6 +169,257 @@ func TestDetectionOverrideValidate(t *testing.T) {
 			},
 			ExpectedError: util.Ptr("unnecessary fields in override"),
 		},
+		// Suppress validation tests
+		{
+			Name: "Invalid Suricata Suppress Override (Invalid Track - by_both)",
+			Detect: &Detection{
+				Engine: EngineNameSuricata,
+				Overrides: []*Override{
+					{
+						Type: OverrideTypeSuppress,
+						OverrideParameters: OverrideParameters{
+							IP:    util.Ptr("192.168.1.1/32"),
+							Track: util.Ptr("by_both"), // by_both is only valid for threshold
+						},
+					},
+				},
+			},
+			ExpectedError: util.Ptr("invalid track value"),
+		},
+		{
+			Name: "Invalid Suricata Suppress Override (Invalid Track - garbage)",
+			Detect: &Detection{
+				Engine: EngineNameSuricata,
+				Overrides: []*Override{
+					{
+						Type: OverrideTypeSuppress,
+						OverrideParameters: OverrideParameters{
+							IP:    util.Ptr("192.168.1.1/32"),
+							Track: util.Ptr("invalid"),
+						},
+					},
+				},
+			},
+			ExpectedError: util.Ptr("invalid track value"),
+		},
+		{
+			Name: "Invalid Suricata Suppress Override (Invalid IP - malformed)",
+			Detect: &Detection{
+				Engine: EngineNameSuricata,
+				Overrides: []*Override{
+					{
+						Type: OverrideTypeSuppress,
+						OverrideParameters: OverrideParameters{
+							IP:    util.Ptr("not-an-ip"),
+							Track: util.Ptr("by_src"),
+						},
+					},
+				},
+			},
+			ExpectedError: util.Ptr("invalid IP address"),
+		},
+		{
+			Name: "Invalid Suricata Suppress Override (Invalid IP - bad CIDR)",
+			Detect: &Detection{
+				Engine: EngineNameSuricata,
+				Overrides: []*Override{
+					{
+						Type: OverrideTypeSuppress,
+						OverrideParameters: OverrideParameters{
+							IP:    util.Ptr("192.168.1.0/99"),
+							Track: util.Ptr("by_src"),
+						},
+					},
+				},
+			},
+			ExpectedError: util.Ptr("invalid CIDR"),
+		},
+		{
+			Name: "Valid Suricata Suppress Override (Plain IP)",
+			Detect: &Detection{
+				Engine: EngineNameSuricata,
+				Overrides: []*Override{
+					{
+						Type: OverrideTypeSuppress,
+						OverrideParameters: OverrideParameters{
+							IP:    util.Ptr("192.168.1.1"),
+							Track: util.Ptr("by_src"),
+						},
+					},
+				},
+			},
+		},
+		{
+			Name: "Valid Suricata Suppress Override (CIDR)",
+			Detect: &Detection{
+				Engine: EngineNameSuricata,
+				Overrides: []*Override{
+					{
+						Type: OverrideTypeSuppress,
+						OverrideParameters: OverrideParameters{
+							IP:    util.Ptr("192.168.1.0/24"),
+							Track: util.Ptr("by_dst"),
+						},
+					},
+				},
+			},
+		},
+		{
+			Name: "Valid Suricata Suppress Override (Variable)",
+			Detect: &Detection{
+				Engine: EngineNameSuricata,
+				Overrides: []*Override{
+					{
+						Type: OverrideTypeSuppress,
+						OverrideParameters: OverrideParameters{
+							IP:    util.Ptr("$HOME_NET"),
+							Track: util.Ptr("by_either"),
+						},
+					},
+				},
+			},
+		},
+		{
+			Name: "Valid Suricata Suppress Override (Bracketed List)",
+			Detect: &Detection{
+				Engine: EngineNameSuricata,
+				Overrides: []*Override{
+					{
+						Type: OverrideTypeSuppress,
+						OverrideParameters: OverrideParameters{
+							IP:    util.Ptr("[192.168.1.1,10.0.0.0/8]"),
+							Track: util.Ptr("by_src"),
+						},
+					},
+				},
+			},
+		},
+		// Threshold validation tests
+		{
+			Name: "Invalid Suricata Threshold Override (Invalid ThresholdType)",
+			Detect: &Detection{
+				Engine: EngineNameSuricata,
+				Overrides: []*Override{
+					{
+						Type: OverrideTypeThreshold,
+						OverrideParameters: OverrideParameters{
+							ThresholdType: util.Ptr("suppress"),
+							Track:         util.Ptr("by_src"),
+							Count:         util.Ptr(1),
+							Seconds:       util.Ptr(60),
+						},
+					},
+				},
+			},
+			ExpectedError: util.Ptr("invalid thresholdType value"),
+		},
+		{
+			Name: "Invalid Suricata Threshold Override (Invalid Track - by_either)",
+			Detect: &Detection{
+				Engine: EngineNameSuricata,
+				Overrides: []*Override{
+					{
+						Type: OverrideTypeThreshold,
+						OverrideParameters: OverrideParameters{
+							ThresholdType: util.Ptr("limit"),
+							Track:         util.Ptr("by_either"), // by_either is only valid for suppress
+							Count:         util.Ptr(1),
+							Seconds:       util.Ptr(60),
+						},
+					},
+				},
+			},
+			ExpectedError: util.Ptr("invalid track value"),
+		},
+		{
+			Name: "Invalid Suricata Threshold Override (Count zero)",
+			Detect: &Detection{
+				Engine: EngineNameSuricata,
+				Overrides: []*Override{
+					{
+						Type: OverrideTypeThreshold,
+						OverrideParameters: OverrideParameters{
+							ThresholdType: util.Ptr("limit"),
+							Track:         util.Ptr("by_src"),
+							Count:         util.Ptr(0),
+							Seconds:       util.Ptr(60),
+						},
+					},
+				},
+			},
+			ExpectedError: util.Ptr("invalid count value"),
+		},
+		{
+			Name: "Invalid Suricata Threshold Override (Count negative)",
+			Detect: &Detection{
+				Engine: EngineNameSuricata,
+				Overrides: []*Override{
+					{
+						Type: OverrideTypeThreshold,
+						OverrideParameters: OverrideParameters{
+							ThresholdType: util.Ptr("limit"),
+							Track:         util.Ptr("by_src"),
+							Count:         util.Ptr(-1),
+							Seconds:       util.Ptr(60),
+						},
+					},
+				},
+			},
+			ExpectedError: util.Ptr("invalid count value"),
+		},
+		{
+			Name: "Invalid Suricata Threshold Override (Seconds zero)",
+			Detect: &Detection{
+				Engine: EngineNameSuricata,
+				Overrides: []*Override{
+					{
+						Type: OverrideTypeThreshold,
+						OverrideParameters: OverrideParameters{
+							ThresholdType: util.Ptr("limit"),
+							Track:         util.Ptr("by_src"),
+							Count:         util.Ptr(1),
+							Seconds:       util.Ptr(0),
+						},
+					},
+				},
+			},
+			ExpectedError: util.Ptr("invalid seconds value"),
+		},
+		{
+			Name: "Invalid Suricata Threshold Override (Seconds negative)",
+			Detect: &Detection{
+				Engine: EngineNameSuricata,
+				Overrides: []*Override{
+					{
+						Type: OverrideTypeThreshold,
+						OverrideParameters: OverrideParameters{
+							ThresholdType: util.Ptr("limit"),
+							Track:         util.Ptr("by_src"),
+							Count:         util.Ptr(1),
+							Seconds:       util.Ptr(-60),
+						},
+					},
+				},
+			},
+			ExpectedError: util.Ptr("invalid seconds value"),
+		},
+		{
+			Name: "Valid Suricata Threshold Override (by_both track)",
+			Detect: &Detection{
+				Engine: EngineNameSuricata,
+				Overrides: []*Override{
+					{
+						Type: OverrideTypeThreshold,
+						OverrideParameters: OverrideParameters{
+							ThresholdType: util.Ptr("both"),
+							Track:         util.Ptr("by_both"),
+							Count:         util.Ptr(5),
+							Seconds:       util.Ptr(120),
+						},
+					},
+				},
+			},
+		},
 		{
 			Name: "Valid ElastAlert Override",
 			Detect: &Detection{
@@ -205,7 +456,7 @@ func TestDetectionOverrideValidate(t *testing.T) {
 						Type: OverrideTypeCustomFilter,
 						OverrideParameters: OverrideParameters{
 							CustomFilter: util.Ptr("k: v"),
-							GenID:        util.Ptr(1),
+							Count:        util.Ptr(1),
 						},
 					},
 				},
@@ -425,7 +676,7 @@ func TestOverrideEqual(t *testing.T) {
 			One: &Override{
 				Type: OverrideTypeThreshold,
 				OverrideParameters: OverrideParameters{
-					ThresholdType: util.Ptr("suppress"),
+					ThresholdType: util.Ptr("both"),
 					Track:         util.Ptr("by_src"),
 					Count:         util.Ptr(1),
 					Seconds:       util.Ptr(180),
@@ -435,7 +686,7 @@ func TestOverrideEqual(t *testing.T) {
 				Type: OverrideTypeThreshold,
 				OverrideParameters: OverrideParameters{
 					ThresholdType: util.Ptr("limit"),
-					Track:         util.Ptr("by_dest"),
+					Track:         util.Ptr("by_dst"),
 					Count:         util.Ptr(3),
 					Seconds:       util.Ptr(60),
 				},

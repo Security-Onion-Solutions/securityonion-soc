@@ -8,6 +8,7 @@ package detections
 import (
 	"context"
 	"errors"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -21,6 +22,7 @@ import (
 
 var (
 	ErrSyncFailed    = errors.New("failed to sync community rules")
+	ErrSyncBlocked   = errors.New("sync blocked by block file")
 	ErrModuleStopped = errors.New("module stopped")
 )
 
@@ -37,8 +39,10 @@ type SyncSchedulerParams struct {
 	SyncThread                           *sync.WaitGroup
 	InterruptChan                        chan bool
 	StateFilePath                        string
+	SyncBlockFilePath                    string
 	CommunityRulesImportFrequencySeconds int
 	CommunityRulesImportErrorSeconds     int
+	FirstImportDelaySeconds              int
 }
 
 func SyncScheduler(ctx context.Context, detStore TemplateChecker, e DetailedDetectionEngine, syncParams *SyncSchedulerParams, engineState *model.EngineState, engName model.EngineName, isRunning *bool) {
@@ -49,12 +53,16 @@ func SyncScheduler(ctx context.Context, detStore TemplateChecker, e DetailedDete
 	}()
 
 	var lastSyncSuccess *bool
-	lastImport, timerDur := DetermineWaitTime(e, syncParams.StateFilePath, time.Duration(syncParams.CommunityRulesImportFrequencySeconds)*time.Second)
+	lastImport, timerDur := DetermineWaitTime(e, syncParams.StateFilePath, time.Duration(syncParams.CommunityRulesImportFrequencySeconds)*time.Second, time.Duration(syncParams.FirstImportDelaySeconds)*time.Second)
 
 	for *isRunning {
 		if lastImport == nil && lastSyncSuccess != nil && *lastSyncSuccess {
 			lastImport = util.Ptr(uint64(time.Now().UnixMilli()))
 		}
+
+		// Check block status and update engine state
+		blocked := IsSyncBlocked(e, syncParams.SyncBlockFilePath)
+		engineState.Blocked = blocked
 
 		engineState.Syncing = false
 		engineState.Importing = lastImport == nil
@@ -87,7 +95,11 @@ func SyncScheduler(ctx context.Context, detStore TemplateChecker, e DetailedDete
 			"expectedStartTime": time.Now().Add(timerDur).Format(time.RFC3339),
 		}).Info("waiting for next community rules sync")
 
-		e.ResumeIntegrityChecker()
+		// Only resume integrity checker if sync isn't blocked
+		// (no point checking integrity when rules haven't been synced)
+		if !blocked {
+			e.ResumeIntegrityChecker()
+		}
 
 		select {
 		case <-timer.C:
@@ -100,6 +112,18 @@ func SyncScheduler(ctx context.Context, detStore TemplateChecker, e DetailedDete
 			lastSyncSuccess = util.Ptr(false)
 			log.WithField("detectionEngine", engName).Error("no template found, failing sync")
 
+			continue
+		}
+
+		// Check for sync block before pausing integrity checker
+		if blocked {
+			log.WithFields(log.Fields{
+				"detectionEngine": engName,
+				"blockFilePath":   syncParams.SyncBlockFilePath,
+			}).Info("sync blocked by block file")
+
+			// Treat as success so we wait normal interval, not error interval
+			lastSyncSuccess = util.Ptr(true)
 			continue
 		}
 
@@ -139,4 +163,25 @@ func SyncScheduler(ctx context.Context, detStore TemplateChecker, e DetailedDete
 			*lastSyncSuccess = true
 		}
 	}
+}
+
+// IsSyncBlocked checks if the sync block file exists and returns block status
+func IsSyncBlocked(iom IOManager, blockFilePath string) bool {
+	if blockFilePath == "" {
+		return false
+	}
+
+	_, err := iom.ReadFile(blockFilePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false
+		}
+		// Error reading - block to be safe
+		log.WithError(err).WithField("blockFilePath", blockFilePath).
+			Warn("error reading sync block file, blocking operation")
+		return true
+	}
+
+	// File exists - sync is blocked
+	return true
 }
