@@ -2456,9 +2456,14 @@ test('convertBackendMessagesToFrontend handles tool_use blocks with completed st
         "tool_result"
       ],
       message: {
-        role: 'assistant',
+        role: 'user',
         contentBlocks: [
-          { type: 'text', text: 'Tool completed successfully' }
+          {
+            toolResult: {
+              toolUseId: 'tool_123',
+              content: [{ json: { result: 'success' } }]
+            }
+          }
         ]
       }
     }
@@ -2476,6 +2481,7 @@ test('convertBackendMessagesToFrontend handles tool_use blocks with completed st
   expect(result[0].toolUses.value[0].input).toEqual({ query: 'test' });
   expect(result[0].toolUses.value[0].status).toBe('completed');
   expect(result[0].toolUses.value[0].approved).toBe(true);
+  expect(result[0].toolUses.value[0].rawResult).toEqual({ result: 'success' });
 });
 
 test('convertBackendMessagesToFrontend handles tool_use blocks with rejected status', () => {
@@ -2500,7 +2506,7 @@ test('convertBackendMessagesToFrontend handles tool_use blocks with rejected sta
     {
       createTime: '2025-01-01T12:01:00.000Z',
       message: {
-        role: 'assistant',
+        role: 'user',
         contentBlocks: [
           { type: 'text', text: 'Tool execution was rejected by the user' }
         ]
@@ -2543,9 +2549,14 @@ test('convertBackendMessagesToFrontend handles tool_use blocks with null/undefin
         "tool_result"
       ],
       message: {
-        role: 'assistant',
+        role: 'user',
         contentBlocks: [
-          { type: 'text', text: 'Tool completed' }
+          {
+            toolResult: {
+              toolUseId: 'tool_789',
+              content: [{ json: { result: 'success' } }]
+            }
+          }
         ]
       }
     }
@@ -2718,7 +2729,7 @@ test('convertBackendMessagesToFrontend handles tool_use blocks at end with missi
   expect(toolUse.sessionId).toBe('missing_props_session');
 });
 
-test('convertBackendMessagesToFrontend filters out new format tool result messages', () => {
+test('convertBackendMessagesToFrontend filters out legacy format tool result messages', () => {
   comp.resetContextLength = jest.fn();
   global.Vue = { ref: jest.fn((value) => ({ value })) };
   
@@ -2759,7 +2770,7 @@ test('convertBackendMessagesToFrontend filters out new format tool result messag
   expect(result[0].toolUses.value[0].status).toBe('completed'); // No error since Error is <nil>
 });
 
-test('convertBackendMessagesToFrontend handles new format tool result with error', () => {
+test('convertBackendMessagesToFrontend handles legacy format tool result with error', () => {
   comp.resetContextLength = jest.fn();
   global.Vue = { ref: jest.fn((value) => ({ value })) };
   
