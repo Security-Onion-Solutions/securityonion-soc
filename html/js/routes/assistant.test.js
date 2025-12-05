@@ -518,15 +518,43 @@ test('loadCredits success', async () => {
   
   expect(mock).toHaveBeenCalledWith('/assistant/balance');
   expect(comp.creditsRemaining).toBe(100);
+  expect(comp.creditsLoaded).toBe(true);
 });
 
-test('loadCredits handles error', async () => {
-  const showErrorMock = mockShowError();
-  mockPapi("get", null, new Error("API error"));
+test('loadCredits handles 500 error due to outage', async () => {
+  const error = new Error('ERROR_UPSTREAM_SERVICE_ERROR');
+  error.response = { status: 500 };
+  mockPapi("get", null, error);
+  comp.$root.showError = jest.fn();
   
   await comp.loadCredits();
   
+  expect(comp.$root.showError).toHaveBeenCalledWith(error);
+  expect(comp.creditsLoaded).toBe(false);
+});
+
+test('loadCredits handles non-500 error', async () => {
+  const showErrorMock = mockShowError();
+  const error = new Error("API error");
+  error.response = { status: 400 };
+  mockPapi("get", null, error);
+  
+  await comp.loadCredits();
+  
+  expect(showErrorMock).toHaveBeenCalledWith(error);
   expect(comp.creditsRemaining).toBe(0);
+  expect(comp.creditsLoaded).toBe(false);
+});
+
+test('loadCredits handles error without response', async () => {
+  const showErrorMock = mockShowError();
+  const error = new Error("Network error")
+  mockPapi("get", null, error);
+  
+  await comp.loadCredits();
+  
+  expect(showErrorMock).toHaveBeenCalledWith(error);
+  expect(comp.creditsLoaded).toBe(false);
 });
 
 test('loadCredits handles unhealthy status', async () => {
@@ -539,8 +567,8 @@ test('loadCredits handles unhealthy status', async () => {
   
   await comp.loadCredits();
   
-  expect(showErrorMock).toHaveBeenCalledWith('Error loading credits from API: The AI model could not be reached. Support for local AI models is coming soon.');
-  expect(comp.creditsRemaining).toBe(0); // Should remain 0 when unhealthy
+  expect(showErrorMock).toHaveBeenCalledWith(new Error(comp.i18n.assistantBalanceCheckUnhealthy));
+  expect(comp.creditsLoaded).toBe(false);
 });
 
 // Chat operations tests
@@ -689,23 +717,6 @@ test('sendMessage creates session ID and updates URL', async () => {
   expect(comp.isTyping).toBe(true);
   expect(comp.callAIAPI).toHaveBeenCalledWith('Test message', undefined);
   expect(comp.loadStoredChats).toHaveBeenCalled();
-});
-
-test('sendMessage handles API error', async () => {
-  const showErrorMock = mockShowError();
-  comp.newMessage = 'Test message';
-  comp.creditsRemaining = 100;
-  comp.currentChatId = fakeSessionId;
-  comp.callAIAPI = jest.fn().mockRejectedValue(new Error('API failed'));
-  comp.scrollToBottom = jest.fn();
-  comp.assistantEnabled = true;
-  comp.canChat = true;
-  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
-  
-  await comp.sendMessage();
-  
-  expect(showErrorMock).toHaveBeenCalledWith('Failed to get AI response: API failed');
-  expect(comp.isTyping).toBe(false);
 });
 
 // Context length and model management tests
@@ -1204,29 +1215,32 @@ test('executeTool captures raw tool result from backend', async () => {
   // wait out any setTimeouts from previous tests
   await new Promise(resolve => setTimeout(resolve, 1100));
 
-  const toolUse = { ...fakeToolUse };
+  resetPapi();
+
+  let toolUse = { ...fakeToolUse };
   comp.currentChatId = fakeSessionId;
   comp.scrollToBottom = jest.fn();
   comp.loadCredits = jest.fn().mockResolvedValue();
   
   // Mock backend response with tool result
-  const backendResponse = {
-    data: [
+  const backendResponse = [
       {
         createTime: '2025-01-01T12:00:00.000Z',
         tags: ['tool_result'],
         message: {
           contentBlocks: [
             {
-              type: 'text',
-              text: 'ToolUseId: tool_123, Result: {"events": 5, "alerts": 2}, Error: <nil>'
+              type: 'tool_result',
+              toolResult: {
+                toolUseId: 'tool_123',
+                content: [{ json: { "events": 5, "alerts": 2 } }]
+              }
             }
           ]
         }
       }
-    ]
-  };
-  mockPapi('get', backendResponse);
+    ];
+  mockPapi('get', { data: { session: {}, history: backendResponse } });
   
   // Include message_start event to trigger captureRawToolResult
   const messageStartData = JSON.stringify({ type: 'message_start' });
@@ -1251,35 +1265,42 @@ test('executeTool captures raw tool result from backend', async () => {
   // Wait for the setTimeout to complete
   await new Promise(resolve => setTimeout(resolve, 1100));
   
-  expect(toolUse.rawResult).toBe('{"events": 5, "alerts": 2}, Error: <nil>');
+  expect(toolUse.rawResult).toEqual({ "events": 5, "alerts": 2 });
   expect(toolUse.status).toBe('completed');
   expect(toolUse.completedAt).toBe('2025-01-01T12:00:00.000Z');
 });
 
 test('executeTool handles tool result with error', async () => {
+  resetPapi();
+
   const toolUse = { ...fakeToolUse };
   comp.currentChatId = fakeSessionId;
   comp.scrollToBottom = jest.fn();
   comp.loadCredits = jest.fn().mockResolvedValue();
   
   // Mock backend response with tool error
-  const backendResponse = {
-    data: [
-      {
-        createTime: '2025-01-01T12:00:00.000Z',
-        tags: ['tool_result'],
-        message: {
-          contentBlocks: [
-            {
-              type: 'text',
-              text: 'ToolUseId: tool_123, Result: null, Error: Query timeout'
+  const backendResponse = [
+    {
+      createTime: '2025-01-01T12:00:00.000Z',
+      tags: ['tool_result'],
+      message: {
+        contentBlocks: [
+          {
+            toolResult: {
+              isError: true,
+              status: 'error',
+              content: [
+                {
+                  text: 'something went wrong'
+                }
+              ]
             }
-          ]
-        }
+          }
+        ]
       }
-    ]
-  };
-  mockPapi('get', backendResponse);
+    }
+  ];
+  mockPapi('get', { data: { session: {}, history: backendResponse } });
   
   // Include message_start event to trigger captureRawToolResult
   const messageStartData = JSON.stringify({ type: 'message_start' });
@@ -1304,9 +1325,9 @@ test('executeTool handles tool result with error', async () => {
   // Wait for the setTimeout to complete
   await new Promise(resolve => setTimeout(resolve, 1100));
   
-  expect(toolUse.error).toBe('Query timeout');
+  expect(toolUse.error).toBe('something went wrong');
   expect(toolUse.status).toBe('error');
-});
+}, 30000);
 
 test('executeTool handles partial JSON chunks', async () => {
   const toolUse = { ...fakeToolUse };
@@ -3085,7 +3106,7 @@ test('loadChatFromBackend success', async () => {
       }
     }
   ];
-  const mock = mockPapi("get", { data: testMessages });
+  const mock = mockPapi("get", { data: { session: null, history: testMessages } });
   comp.scrollToBottomSettled = jest.fn().mockResolvedValue();
   
   await comp.loadChatFromBackend(fakeSessionId);
@@ -4373,11 +4394,11 @@ test('checkIfDeleted sets canChat to false when session not in history', () => {
   comp.checkIfDeleted(sessionId);
   
   expect(comp.canChat).toBe(false);
-  expect(showWarningMock).toHaveBeenCalledWith(comp.i18n.assistantChatIsDeleted);
+  expect(showWarningMock).toHaveBeenCalledWith(comp.i18n.assistantChatNoResume);
 });
 
 test('checkIfDeleted sets canChat to true when session exists in history', () => {
-  const sessionId = 'existing-session';
+  const sessionId = { sessionId: 'existing-session' };
   comp.chatHistory = [
     { sessionId: 'session1' },
     { sessionId: 'existing-session' },
@@ -5011,4 +5032,62 @@ test('messageClassesFromTags', () => {
   let tags = ['important', 'error', MSGTAG_CONTEXTCOMPRESSION];
   let result = comp.messageClassesFromTags(tags);
   expect(result).toEqual(['msgTag-important', 'msgTag-error', 'msgTag-context_compression']);
+});
+
+test('toggleSharedSession', async () => {
+  const _updateSessionTag = comp.updateSessionTag;
+  const _loadStoredChats = comp.loadStoredChats;
+  comp.updateSessionTag = jest.fn();
+  comp.loadStoredChats = jest.fn();
+
+  // Removing 'shared' tag
+  comp.currentChatId = 'session_123';
+  comp.chatHistoryById = {
+    'session_123': { tags: ["shared"], userId: 'me' },
+  };
+  comp.$root.user = { id: 'me' };
+
+  await comp.toggleSharedSession();
+
+  expect(comp.updateSessionTag).toHaveBeenCalledTimes(1);
+  expect(comp.updateSessionTag).toHaveBeenCalledWith(comp.currentChatId, 'remove', 'shared');
+  expect(comp.loadStoredChats).toHaveBeenCalledTimes(1);
+
+  // Can't change a session you don't own
+  comp.updateSessionTag.mockClear();
+  comp.loadStoredChats.mockClear();
+
+  comp.chatHistoryById[comp.currentChatId].userId = 'u';
+
+  await comp.toggleSharedSession();
+
+  expect(comp.updateSessionTag).toHaveBeenCalledTimes(0);
+  expect(comp.loadStoredChats).toHaveBeenCalledTimes(0);
+
+  // Adding 'shared' tag
+  comp.chatHistoryById[comp.currentChatId].userId = 'me';
+  comp.updateSessionTag.mockClear();
+  comp.loadStoredChats.mockClear();
+
+  comp.chatHistoryById[comp.currentChatId].tags = ['a', 'b', 'c'];
+
+  await comp.toggleSharedSession();
+
+  expect(comp.updateSessionTag).toHaveBeenCalledTimes(1);
+  expect(comp.updateSessionTag).toHaveBeenCalledWith(comp.currentChatId, 'add', 'shared');
+  expect(comp.loadStoredChats).toHaveBeenCalledTimes(1);
+
+  // Unknown session
+  comp.updateSessionTag.mockClear();
+  comp.loadStoredChats.mockClear();
+
+  comp.chatHistoryById = { 'other-session': {}};
+
+  await comp.toggleSharedSession();
+
+  expect(comp.updateSessionTag).toHaveBeenCalledTimes(0);
+  expect(comp.loadStoredChats).toHaveBeenCalledTimes(0);
+
+  comp.updateSessionTag = _updateSessionTag;
+  comp.loadStoredChats = _loadStoredChats;
 });

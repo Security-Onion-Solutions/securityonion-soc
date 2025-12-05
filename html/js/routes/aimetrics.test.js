@@ -578,6 +578,30 @@ test('loadCredits success', async () => {
   
   expect(mock).toHaveBeenCalledWith('/assistant/balance');
   expect(comp.creditsRemaining).toBe(150);
+  expect(comp.creditsLoaded).toBe(true);
+});
+
+test('loadCredits handles 500 error due to outage', async () => {
+  const error = new Error('Internal Server Error');
+  error.response = { status: 500, data: "ERROR_UPSTREAM_SERVICE_ERROR" };
+  mockPapi("get", null, error);
+  comp.$root.showError = jest.fn();
+  
+  await comp.loadCredits();
+  
+  expect(comp.$root.showError).toHaveBeenCalledWith(error);
+  expect(comp.creditsLoaded).toBe(false);
+});
+
+test('loadCredits handles error without response', async () => {
+  const error = new Error('Network error');
+  mockPapi("get", null, error);
+  comp.$root.showError = jest.fn();
+  
+  await comp.loadCredits();
+  
+  expect(comp.$root.showError).toHaveBeenCalledWith(error);
+  expect(comp.creditsLoaded).toBe(false);
 });
 
 test('loadCredits handles unhealthy status', async () => {
@@ -592,17 +616,8 @@ test('loadCredits handles unhealthy status', async () => {
   
   await comp.loadCredits();
   
-  expect(comp.$root.showError).toHaveBeenCalledWith('Error loading credits from API: ' + comp.i18n.assistantBalanceCheckUnhealthy);
-});
-
-test('loadCredits handles API error', async () => {
-  const error = new Error('Network error');
-  mockPapi("get", null, error);
-  comp.$root.showError = jest.fn();
-  
-  await comp.loadCredits();
-  
-  expect(comp.$root.showError).toHaveBeenCalledWith(comp.i18n.assistantUnableToLoadCredits + ': ' + error.message);
+  expect(comp.$root.showError).toHaveBeenCalledWith(new Error(comp.i18n.assistantBalanceCheckUnhealthy));
+  expect(comp.creditsLoaded).toBe(false);
 });
 
 test('loadCredits handles missing data', async () => {

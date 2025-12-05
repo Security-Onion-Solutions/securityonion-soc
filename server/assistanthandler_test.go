@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/rbac"
 	"github.com/security-onion-solutions/securityonion-soc/server/mock"
@@ -91,7 +92,7 @@ func TestPostChat(t *testing.T) {
 		},
 	}
 
-	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), sessionId, true).Return(mockHistoryMessages, nil)
+	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return(mockHistoryMessages, nil)
 
 	// Set up mock expectations
 	var capturedMessages []*model.Message
@@ -168,7 +169,7 @@ func TestPostChatWithoutHistory(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	// Mock GetChatHistory to return empty history for new session (will generate new sessionId)
-	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any(), true).Return([]*model.StoredMessage{}, nil)
+	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{}, nil)
 	mockAssistantStore.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil)
 
 	// Set up mock expectations
@@ -295,8 +296,6 @@ func TestPostTool(t *testing.T) {
 	}
 	mockManager.EXPECT().ExecuteTool(gomock.Any(), "query_events", `{"query":"test query"}`, "").Return(mockToolResponse, nil)
 
-	expectedText := fmt.Sprintf("ToolUseId: %s, Error: <nil>, Result: %s", toolUseId, `{"events":["event1","event2"]}`)
-
 	// Mock saving the tool result message
 	mockAssistantStore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Do(
 		func(ctx context.Context, msg *model.StoredMessage) {
@@ -304,8 +303,10 @@ func TestPostTool(t *testing.T) {
 			assert.Equal(t, []string{"tool_result"}, msg.Tags)
 			assert.Equal(t, "user", msg.Message.Role)
 			assert.Len(t, msg.Message.ContentBlocks, 1)
-			assert.Equal(t, "text", msg.Message.ContentBlocks[0].Type)
-			assert.Equal(t, expectedText, msg.Message.ContentBlocks[0].Text)
+			assert.NotNil(t, msg.Message.ContentBlocks[0].ToolResult)
+			assert.Equal(t, "tooluse_test_123", msg.Message.ContentBlocks[0].ToolResult.ToolUseId)
+			assert.False(t, msg.Message.ContentBlocks[0].ToolResult.IsError)
+			assert.Equal(t, map[string]any{"result": mockToolResponse.Result}, msg.Message.ContentBlocks[0].ToolResult.Content[0].Json)
 		},
 	).Return(nil)
 
@@ -329,14 +330,22 @@ func TestPostTool(t *testing.T) {
 				Role: "user",
 				ContentBlocks: []model.ContentBlock{
 					{
-						Type: "text",
-						Text: expectedText,
+						Type: "tool_result",
+						ToolResult: &model.ToolResult{
+							ToolUseId: toolUseId,
+							Content: []model.ToolResultContent{
+								{
+									Json: map[string]any{"result": mockToolResponse.Result},
+								},
+							},
+							IsError: false,
+						},
 					},
 				},
 			},
 		},
 	}
-	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), sessionId, true).Return(mockHistoryMessages, nil)
+	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return(mockHistoryMessages, nil)
 
 	// Mock the chat response after tool execution
 	var capturedMessages []*model.Message
@@ -379,14 +388,18 @@ func TestPostTool(t *testing.T) {
 	// Verify the tool result message was included
 	toolResultMsg := capturedMessages[1]
 	assert.Equal(t, "user", toolResultMsg.Role)
-	assert.Contains(t, toolResultMsg.ContentBlocks[0].Text, toolUseId)
-	assert.Contains(t, toolResultMsg.ContentBlocks[0].Text, `{"events":["event1","event2"]}`)
+	assert.NotNil(t, toolResultMsg.ContentBlocks[0].ToolResult)
+	assert.Equal(t, toolUseId, toolResultMsg.ContentBlocks[0].ToolResult.ToolUseId)
+	assert.Equal(t, map[string]any{"result": mockToolResponse.Result}, toolResultMsg.ContentBlocks[0].ToolResult.Content[0].Json)
 }
 
 func TestGetBalance(t *testing.T) {
 	// Create mock server
 	srv := &Server{
 		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+		Config: &config.ServerConfig{
+			AirgapEnabled: false,
+		},
 	}
 	ctrl := gomock.NewController(t)
 	mockManager := mock.NewMockAssistantManager(ctrl)
@@ -430,6 +443,9 @@ func TestGetBalanceUnhealthy(t *testing.T) {
 	// Create mock server
 	srv := &Server{
 		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+		Config: &config.ServerConfig{
+			AirgapEnabled: false,
+		},
 	}
 	ctrl := gomock.NewController(t)
 	mockManager := mock.NewMockAssistantManager(ctrl)
@@ -457,6 +473,40 @@ func TestGetBalanceUnhealthy(t *testing.T) {
 
 	// Verify response
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+func TestGetBalanceAirgapEnabled(t *testing.T) {
+	// Create mock server with airgap enabled
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+		Config: &config.ServerConfig{
+			AirgapEnabled: true,
+		},
+	}
+	ctrl := gomock.NewController(t)
+	mockManager := mock.NewMockAssistantManager(ctrl)
+	defer ctrl.Finish()
+
+	srv.AssistantManager = mockManager
+
+	handler := NewAssistantHandler(srv)
+
+	req := httptest.NewRequest("GET", "/assistant/balance", nil)
+
+	// Add required context values
+	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "test-user-123")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	ctx = context.WithValue(ctx, web.ContextKeyRequestId, "test-request-123")
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+
+	// No mock expectations needed - should return early due to airgap
+
+	// Execute the handler
+	handler.GetBalance(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, []byte("\"ERROR_SERVICE_NOT_AVAILABLE\""), w.Body.Bytes())
 }
 
 func TestGetUsage(t *testing.T) {
@@ -602,13 +652,12 @@ func TestManageSessionHistory(t *testing.T) {
 	// Set up mock expectations
 	mockAssistantStore.EXPECT().GetSessions(
 		gomock.Any(),
-		false,
 		gomock.Any(),
 		gomock.Any(),
 		gomock.Any(),
 	).Return(mockSessions, nil)
 
-	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), sessionId, false).Return(mockHistory, nil)
+	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return(mockHistory, nil)
 
 	// Execute the handler
 	handler.ManageSessionHistory(w, req)
@@ -659,7 +708,6 @@ func TestManageSessionHistoryNotFound(t *testing.T) {
 	// Mock GetSessions to return empty result
 	mockAssistantStore.EXPECT().GetSessions(
 		gomock.Any(),
-		false,
 		gomock.Any(),
 		gomock.Any(),
 		gomock.Any(),
@@ -901,4 +949,57 @@ func TestHistoryToContext(t *testing.T) {
 			assert.Equal(t, tt.expectedContext, contextMessages)
 		})
 	}
+}
+
+func TestCheckAssistantAvailable_AirgapEnabled(t *testing.T) {
+	// Create mock server with airgap enabled
+	srv := &Server{
+		Config: &config.ServerConfig{
+			AirgapEnabled: true,
+		},
+	}
+
+	handler := NewAssistantHandler(srv)
+
+	req := httptest.NewRequest("GET", "/assistant/test", nil)
+	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "test-user-123")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+
+	// Execute the check
+	result := handler.checkAssistantAvailable(ctx, w, req)
+
+	// Verify result is false
+	assert.False(t, result)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, []byte("\"ERROR_SERVICE_NOT_AVAILABLE\""), w.Body.Bytes())
+}
+
+func TestCheckAssistantAvailable_AirgapDisabled(t *testing.T) {
+	// Create mock server with airgap disabled
+	srv := &Server{
+		Config: &config.ServerConfig{
+			AirgapEnabled: false,
+		},
+	}
+
+	handler := NewAssistantHandler(srv)
+
+	req := httptest.NewRequest("GET", "/assistant/test", nil)
+	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "test-user-123")
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+
+	// Execute the check
+	result := handler.checkAssistantAvailable(ctx, w, req)
+
+	// Verify result is true
+	assert.True(t, result)
+
+	// Verify no response was written
+	assert.Nil(t, w.Body.Bytes())
 }

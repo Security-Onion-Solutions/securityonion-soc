@@ -71,25 +71,25 @@ func (mr *MockAssistantstoreMockRecorder) DeleteSession(arg0, arg1 any) *gomock.
 }
 
 // GetChatHistory mocks base method.
-func (m *MockAssistantstore) GetChatHistory(arg0 context.Context, arg1 string, arg2 bool) ([]*model.StoredMessage, error) {
+func (m *MockAssistantstore) GetChatHistory(arg0 context.Context, arg1 string) ([]*model.StoredMessage, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetChatHistory", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "GetChatHistory", arg0, arg1)
 	ret0, _ := ret[0].([]*model.StoredMessage)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetChatHistory indicates an expected call of GetChatHistory.
-func (mr *MockAssistantstoreMockRecorder) GetChatHistory(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockAssistantstoreMockRecorder) GetChatHistory(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetChatHistory", reflect.TypeOf((*MockAssistantstore)(nil).GetChatHistory), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetChatHistory", reflect.TypeOf((*MockAssistantstore)(nil).GetChatHistory), arg0, arg1)
 }
 
 // GetSessions mocks base method.
-func (m *MockAssistantstore) GetSessions(arg0 context.Context, arg1 bool, arg2 ...model.GetSessionsOpt) ([]*model.AssistantSession, error) {
+func (m *MockAssistantstore) GetSessions(arg0 context.Context, arg1 ...model.GetSessionsOpt) ([]*model.AssistantSession, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{arg0}
+	for _, a := range arg1 {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetSessions", varargs...)
@@ -99,9 +99,9 @@ func (m *MockAssistantstore) GetSessions(arg0 context.Context, arg1 bool, arg2 .
 }
 
 // GetSessions indicates an expected call of GetSessions.
-func (mr *MockAssistantstoreMockRecorder) GetSessions(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockAssistantstoreMockRecorder) GetSessions(arg0 any, arg1 ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{arg0}, arg1...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSessions", reflect.TypeOf((*MockAssistantstore)(nil).GetSessions), varargs...)
 }
 
@@ -132,4 +132,18 @@ func (m *MockAssistantstore) SaveChat(arg0 context.Context, arg1 *model.StoredMe
 func (mr *MockAssistantstoreMockRecorder) SaveChat(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveChat", reflect.TypeOf((*MockAssistantstore)(nil).SaveChat), arg0, arg1)
+}
+
+// UpdateSessionTags mocks base method.
+func (m *MockAssistantstore) UpdateSessionTags(ctx context.Context, sessionId string, tags []string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateSessionTags", ctx, sessionId, tags)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateSessionTags indicates an expected call of UpdateSessionTags.
+func (mr *MockAssistantstoreMockRecorder) UpdateSessionTags(ctx, sessionId, tags any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateSessionTags", reflect.TypeOf((*MockAssistantstore)(nil).UpdateSessionTags), ctx, sessionId, tags)
 }

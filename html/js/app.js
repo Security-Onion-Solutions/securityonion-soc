@@ -918,6 +918,12 @@ $(document).ready(function () {
               msg = msg.error.reason;
             }
           }
+
+          // Remove encapsulating quotes
+          if (msg.startsWith != undefined && msg.startsWith("\"") && msg.endsWith("\"")) {
+            msg = msg.substring(1, msg.length - 1);
+          }
+
           var localized = this.i18n[msg];
           if (!localized) {
             if (origMsg.message) {
@@ -1434,6 +1440,17 @@ $(document).ready(function () {
             return "Syncing";
           }
           return "Healthy";
+        },
+        isDetectionEngineStatusUnhealthy(engine) {
+          switch (this.getDetectionEngineStatus(engine)) {
+            case "Migrating":
+            case "Importing":
+            case "ImportPending":
+            case "Syncing":
+            case "Health":
+              return false;
+          }
+          return true;
         },
         getCurrentStatus() {
           return this.statusByGridId[this.selectedGridId];

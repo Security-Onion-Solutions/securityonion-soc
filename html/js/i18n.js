@@ -157,7 +157,7 @@ const i18n = {
       artifactValueHelp: 'Specify the observed value',
       assistantUnavailable: `This feature requires a valid Security Onion Pro license and Internet connection. Visit the <a class="px-1" target="sos" href="https://securityonionsolutions.com/pro?utm_source=ainotice&utm_medium=app&utm_id=ai" data-aid="assistant_visit_pro_website">Security Onion website</a> to learn more about Security Onion Pro.`,
       assistantBalanceCheckUnhealthy: 'The AI model could not be reached. Support for local AI models is coming soon.',
-      assistantChatIsDeleted: 'This session has been deleted and therefore cannot be resumed.',
+      assistantChatNoResume: 'This session cannot be resumed.',
       assistantContextLimitPt1: 'Context length limit reached',
       assistantContextLimitPt2: 'You may try compressing your context to continue, or start a new chat.',
       assistantDisabled: 'This feature is not enabled on this grid. Contact your Security Onion administrator.',
@@ -438,6 +438,7 @@ const i18n = {
       detectionDeleteConfirmationTitle: 'Delete Detections',
       detectionDescription: 'Detection Description',
       detectionEnabled: 'Enabled',
+      detectionEngineStatusHelp: 'Hunt for more information about this engine\'s sync issues',
       detectionEngineHealthy: 'OK',
       detectionEngineHealthyHelp: 'No problems detected with this engine\'s rules.',
       detectionEngineImportPending: 'Import Pending',
@@ -1004,6 +1005,7 @@ const i18n = {
       sha1: 'SHA1',
       sha256: 'SHA256',
       share: 'Clipboard',
+      shareSessionLabel: 'Shared',
       showAll: 'Show all...',
       showDetailsPanel: 'Show Details Panel',
       'so-desktop': 'Desktop',
@@ -1248,6 +1250,8 @@ const i18n = {
       ERROR_SALT_ALREADY_RUNNING: 'Another synchronization operation is already running. Wait for it to complete and try again.',
       ERROR_BULK_COMMUNITY: 'Unable to complete bulk delete. Batch contains Community rules. No rules were deleted.',
       ERROR_DELETE_COMMUNITY: 'Unable to delete Community rule.',
+      ERROR_SERVICE_NOT_AVAILABLE: 'The configuration of this grid does not support the requested operation. Contact your administrator for assistance with enabling additional features.',
+      ERROR_UPSTREAM_SERVICE_ERROR: 'Error while communicating with remote, upstream service. Check the <a target="sos" href="https://status.securityonion.net">Security Onion status page</a> for any known incidents.',
 
       // correct casing
       cc_elastalert: 'ElastAlert',
