@@ -447,6 +447,24 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
             }
           }
           expandMessage += this.$root.formatMarkdown(toolMessage);
+        } else if (block.toolResult) {
+          let resultMessage = `**Tool Result:**\n`;
+          if (block.toolResult.content) {
+            for (let j = 0; j < block.toolResult.content.length; j++) {
+              if (j > 0) {
+                expandMessage += `\n\n<hr>\n\n<br>`;
+              }
+              let contentBlock = block.toolResult.content[j];
+              if (contentBlock.text) {
+                resultMessage += `\n${contentBlock.text}\n`;
+              } else if (contentBlock.json) {
+                resultMessage += `\n\`\`\`json\n${JSON.stringify(contentBlock.json, null, 2)}\n\`\`\`\n`;
+              }
+            }
+          } else if (block.toolResult.error) {
+            resultMessage += `\n**Error:** ${block.toolResult.error}\n`;
+          }
+          expandMessage += this.$root.formatMarkdown(resultMessage);
         }
       }
       return expandMessage;

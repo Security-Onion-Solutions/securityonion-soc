@@ -1034,6 +1034,51 @@ test('formatExpandMessage handles tool_use blocks', () => {
   expect(comp.$root.formatMarkdown).toHaveBeenCalledTimes(2);
 });
 
+test('formatExpandMessage handles legacy ToolResult text blocks', () => {
+  const data = {
+    message: {
+      role: 'assistuserant',
+      contentBlocks: [
+        { type: 'text', text: 'ToolUseId: x, Error: <nil>, Result: No events found' },
+      ]
+    }
+  };
+  
+  const result = comp.formatExpandMessage(data);
+  
+  expect(result).toContain('ToolUseId: x, Error: <nil>, Result: No events found');
+});
+
+test('formatExpandMessage handles proper ToolResult blocks', () => {
+  const data = {
+    message: {
+      role: 'user',
+      contentBlocks: [
+        {
+          toolResult: {
+            toolUseId: 'x',
+            content: [
+              {
+                json: {
+                  result: 'No events found'
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  };
+
+  comp.$root.formatMarkdown = jest.fn()
+    .mockReturnValueOnce('<p><strong>ToolResult:</strong></p><p><code>{ "result": "No events found" }</code></p>');
+  
+  const result = comp.formatExpandMessage(data);
+  
+  expect(result).toContain('ToolResult:');
+  expect(result).toContain('No events found');
+});
+
 test('formatExpandMessage handles empty or missing content blocks', () => {
   const data = {
     message: {

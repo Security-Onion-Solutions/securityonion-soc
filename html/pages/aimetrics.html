@@ -215,7 +215,7 @@
                 <v-icon v-else :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="aimetrics_details_expand">fa-angle-right</v-icon>
               </v-btn>
             </td>
-            <td>{{ item.role === 'assistant' ? trimTitle(stripHtml(item.expandMessage)) : trimTitle(item.expandMessage) }}</td>
+            <td>{{ (item.role === 'assistant' || item?.tags?.includes('tool_result')) ? trimTitle(stripHtml(item.expandMessage)) : trimTitle(item.expandMessage) }}</td>
             <td>{{ $root.formatLocalTimestamp(item.createTime, zone) }}</td>
             <td>{{ item.role }}</td>
             <td class="text-right">{{ item.inputTokens ? formatCount(item.inputTokens) : '' }}</td>
@@ -227,6 +227,7 @@
           <tr>
             <td :colspan="headers[tableSetting].length" class="px-4 py-3">
               <div v-if="item.role === 'assistant'" class="expansion va-middle hardwrap-aimetrics" v-html="formatMarkdownMermaid(item.expandMessage)" data-aid="aimetrics_message_content_assistant"></div>
+              <div v-else-if="item?.tags?.includes('tool_result')" class="expansion va-middle hardwrap-aimetrics" data-aid="aimetrics_message_content_toolresult" v-html="item.expandMessage"></div>
               <div v-else class="expansion va-middle hardwrap-aimetrics" data-aid="aimetrics_message_content_user">{{ item.expandMessage }}</div>
             </td>
           </tr>
