@@ -122,8 +122,8 @@ func SyncScheduler(ctx context.Context, detStore TemplateChecker, e DetailedDete
 				"blockFilePath":   syncParams.SyncBlockFilePath,
 			}).Info("sync blocked by block file")
 
-			// Treat as success so we wait normal interval, not error interval
-			lastSyncSuccess = util.Ptr(true)
+			// Use error interval so we check again soon for unblock
+			lastSyncSuccess = util.Ptr(false)
 			continue
 		}
 
