@@ -695,8 +695,11 @@ test('isDetectionEngineStatusUnhealthy', () => {
   app.statusByGridId[''] = { detections: { strelka: { syncing: true }}};
   expect(app.isDetectionEngineStatusUnhealthy('strelka')).toBe(false);
 
+  app.statusByGridId[''] = { detections: { strelka: { pending: true }}};
+  expect(app.isDetectionEngineStatusUnhealthy('strelka')).toBe(false);
+
   app.statusByGridId[''] = { detections: { strelka: { importing: false }}}; // Healthy
-  expect(app.isDetectionEngineStatusUnhealthy('strelka')).toBe(true);
+  expect(app.isDetectionEngineStatusUnhealthy('strelka')).toBe(false);
 
   // Test unhealthy states (returns true)
   app.statusByGridId[''] = { detections: { strelka: { migrationFailure: true }}};
