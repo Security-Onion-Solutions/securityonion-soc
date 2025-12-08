@@ -56,7 +56,7 @@ const (
 	DEFAULT_STATE_FILE_PATH                       = "/opt/sensoroni/fingerprints/suricataengine.state"
 	DEFAULT_SYNC_BLOCK_FILE_PATH                  = "/opt/sensoroni/fingerprints/suricataengine.syncBlock"
 	DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS     = 300
-	DEFAULT_FIRST_IMPORT_DELAY_SECONDS            = 15
+	DEFAULT_FIRST_IMPORT_DELAY_SECONDS            = 60
 	DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS     = 600
 	DEFAULT_CONFIG_CHANGE_SYNC_DELAY_SECONDS      = 15
 	DEFAULT_AI_REPO                               = "https://github.com/Security-Onion-Solutions/securityonion-resources"
