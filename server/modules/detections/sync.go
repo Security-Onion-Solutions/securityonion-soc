@@ -115,7 +115,10 @@ func SyncScheduler(ctx context.Context, detStore TemplateChecker, e DetailedDete
 			continue
 		}
 
-		// Check for sync block before pausing integrity checker
+		// Re-check block status after wait (may have changed while waiting)
+		blocked = IsSyncBlocked(e, syncParams.SyncBlockFilePath)
+		engineState.Blocked = blocked
+
 		if blocked {
 			log.WithFields(log.Fields{
 				"detectionEngine": engName,
