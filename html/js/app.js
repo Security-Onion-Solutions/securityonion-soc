@@ -1446,8 +1446,9 @@ $(document).ready(function () {
             case "Migrating":
             case "Importing":
             case "ImportPending":
+            case "Pending":
             case "Syncing":
-            case "Health":
+            case "Healthy":
               return false;
           }
           return true;
