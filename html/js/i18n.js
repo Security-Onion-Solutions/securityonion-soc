@@ -166,6 +166,7 @@ const i18n = {
       assistantErrorMessage: 'I\'m having trouble connecting to the AI service right now. Please try again in a moment.',
       assistantHistoryCollapse: 'Hide Chat History',
       assistantHistoryExpand: 'Show Chat History',
+      assistantLinkTitle: 'Toggle sharing of this chat session with other users',
       assistantLoadContextError: 'Failed to load context theshold setting',
       assistantLoadRecentError: 'Failed to load restore last active setting',
       assistantLoadReadApprovalError: 'Failed to load read request approval setting',

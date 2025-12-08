@@ -104,7 +104,7 @@
 				<v-card-title id="chat-header" class="py-3 d-flex align-center">
 					<v-icon class="mr-2">fa-comments</v-icon>
 					<span class="mr-2">{{ i18n.chatTitle }}</span>
-					<v-icon v-if="currentChatId" @click="toggleSharedSession()" data-aid="assistant_banner_share_toggle" :disabled="$root.user.id !== chatHistoryById?.[currentChatId]?.userId">
+					<v-icon v-if="currentChatId" @click="toggleSharedSession()" data-aid="assistant_banner_share_toggle" :disabled="$root.user.id !== chatHistoryById?.[currentChatId]?.userId" :title="i18n.assistantLinkTitle">
 						{{ (chatHistoryById?.[currentChatId]?.tags?.includes('shared')) ? 'fa-link' : 'fa-link-slash' }}
 					</v-icon>
 					<v-spacer></v-spacer>
