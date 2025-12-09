@@ -1131,7 +1131,7 @@ ul ul ul {
 }
 
 .chat-history-sidebar {
-  height: calc(100vh - 300px) !important;
+  height: calc(100vh - 325px) !important;
   position: sticky;
   top: 20px;
 }
@@ -1390,7 +1390,7 @@ ul ul ul {
 .chat-container {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 300px);
+  height: calc(100vh - 325px);
   overflow: hidden;
 }
 
