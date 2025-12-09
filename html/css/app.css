@@ -1406,23 +1406,31 @@ ul ul ul {
   line-height: 1.5;
 }
 
-.context-divider {
-  display: flex;
-  width: 100%;
-}
+ .context-divider {
+   display: flex;
+   width: 100%;
+ }
 
-.context-divider > .label {
-  flex: 0 0 auto;
-}
+ .context-divider > .label {
+   flex: 0 0 auto;
+ }
 
 .context-divider > .spacer {
   flex: 1 1 auto;
-  height: 1px;
+  height: 2px;
+  min-height: 2px;
   align-self: center;
+  opacity: 0.6;
+}
+
+.context-divider > .spacer-left,
+.context-divider > .spacer-right {
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
 }
 
 .context-divider > .spacer-left {
-  background:linear-gradient(to right,
+  background: linear-gradient(to right,
     rgb(var(--v-theme-icon)) 0%,
     rgb(var(--v-theme-icon)) 60%,
     transparent 95%,
@@ -1430,7 +1438,7 @@ ul ul ul {
 }
 
 .context-divider > .spacer-right {
-  background:linear-gradient(to left,
+  background: linear-gradient(to left,
     rgb(var(--v-theme-icon)) 0%,
     rgb(var(--v-theme-icon)) 60%,
     transparent 95%,
