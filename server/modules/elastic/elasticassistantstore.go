@@ -226,7 +226,7 @@ func (store *ElasticAssistantstore) SaveChat(ctx context.Context, chat *model.St
 func (store *ElasticAssistantstore) GetChatHistory(ctx context.Context, sessionId string) ([]*model.StoredMessage, error) {
 	logger := log.FromContext(ctx)
 
-	existing, err := store.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId))
+	existing, err := store.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithIncludeDeleted(true))
 	if err != nil {
 		return nil, err
 	}

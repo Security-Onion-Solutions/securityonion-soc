@@ -1031,6 +1031,15 @@ func TestGetChatHistory(t *testing.T) {
 	assert.Equal(t, "msg2", messages[1].Id)
 	assert.Equal(t, "Hello", messages[0].Message.ContentStr)
 	assert.Equal(t, "Hi there!", messages[1].Message.ContentStr)
+
+	// ensure GetSession call does not filter out deleted sessions
+	reqs := transport.GetRequests()
+	assert.Len(t, reqs, 3) // One for GetSessions, one for session meta data, one for chat messages
+	body, err := reqs[0].GetBody()
+	assert.NoError(t, err)
+	data, err := io.ReadAll(body)
+	assert.NoError(t, err)
+	assert.NotContains(t, string(data), "deleteTime")
 }
 
 func TestGetSessions_WithFilters(t *testing.T) {
