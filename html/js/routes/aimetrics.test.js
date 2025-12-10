@@ -1387,3 +1387,14 @@ test('getCPM handles less than one minute', () => {
   
   expect(result).toBe(50000);
 });
+
+test('nbspRegexOp', () => {
+  expect(comp.nbspRegexOp('&nbsp;')).toBe('');
+  expect(comp.nbspRegexOp('&nbsp')).toBe('');
+  expect(comp.nbspRegexOp('Hello&nbsp;World')).toBe('Hello&nbsp;World');
+  expect(comp.nbspRegexOp('&nbsp;\n\nHelloWorld')).toBe('HelloWorld');
+  expect(comp.nbspRegexOp('&nbsp;Hello&nbsp;World')).toBe('Hello&nbsp;World');
+  expect(comp.nbspRegexOp('&nbspHelloWorld')).toBe('HelloWorld');
+  expect(comp.nbspRegexOp('Hello World')).toBe('Hello World');
+  expect(comp.nbspRegexOp('')).toBe('');
+});

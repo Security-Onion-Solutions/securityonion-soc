@@ -533,7 +533,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       return Math.round(rawCPM);
     },
     nbspRegexOp(text) {
-      return text.replace(/(&nbsp;?[\n]*)/g, '');
+      return text.replace(/^(&nbsp;?[\n]*)/, '');
     }
   }
 }});

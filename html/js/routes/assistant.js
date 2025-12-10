@@ -1915,7 +1915,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }
     },
     nbspRegexOp(text) {
-      return text.replace(/(&nbsp;?[\n]*)/g, '');
+      return text.replace(/^(&nbsp;?[\n]*)/, '');
     }
   }
 }});
