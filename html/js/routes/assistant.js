@@ -1235,8 +1235,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
             // Always process chunks for tool execution logic, but only update UI if current session
             switch (c.type) {
               case 'error':
-                console.log(c);
-                this.$root.showError(this.i18n.assistantToolUseFail);
+                this.$root.showError(this.i18n.assistantToolUseFail + ': ' + c.error.message);
                 break;
               case 'message_start':
                 if (isCurrentSession) {
