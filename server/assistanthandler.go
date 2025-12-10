@@ -473,13 +473,13 @@ func (h *AssistantHandler) GetSessions(w http.ResponseWriter, r *http.Request) {
 }
 
 // @Summary      Get Session Details
-// @Description  Retrieve the complete chat history for a specific session.
+// @Description  Retrieve the complete chat history for a specific session. Can lookup deleted sessions.
 // @Tags         Assistant
 // @Security     bearer[assistant/read_authored]
 // @Security     bearer[assistant/read_shared]
 // @Param        sessionId  path  string  true  "Session ID to retrieve history for"
 // @Produce      json
-// @Success      200  {array}   model.StoredMessage "Complete chat history for the session"
+// @Success      200  model.AssistantSessionDetails "Complete chat history and session details"
 // @Failure      400           "The provided session ID is invalid or missing"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
@@ -503,7 +503,7 @@ func (h *AssistantHandler) GetSessionDetails(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	session, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId))
+	session, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithIncludeDeleted(true))
 	if err != nil {
 		logger.WithError(err).Error("unable to get session")
 		web.Respond(w, r, http.StatusInternalServerError, err)
