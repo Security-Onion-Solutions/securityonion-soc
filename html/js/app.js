@@ -1422,7 +1422,9 @@ $(document).ready(function () {
           // Order is important in this if/else block. Certain status should take priority. For example,
           // If a sync failure and integrity failure both occurred then show the integrity failure, because
           // if it got to the integrity check then the sync finished but the integrity check failed.
-          if (engineStatus.migrating) {
+          if (engineStatus.blocked) {
+            return "Blocked";
+          } else if (engineStatus.migrating) {
             return "Migrating";
           } else if (engineStatus.importing && engineStatus.syncing) {
             return "Importing";
@@ -1430,8 +1432,6 @@ $(document).ready(function () {
             return "MigrationFailure";
           } else if (engineStatus.integrityFailure) {
             return "IntegrityFailure";
-          } else if (engineStatus.blocked) {
-            return "Blocked";
           } else if (engineStatus.syncFailure) {
             return "SyncFailure";
           } else if (engineStatus.importing && !engineStatus.syncing) {
