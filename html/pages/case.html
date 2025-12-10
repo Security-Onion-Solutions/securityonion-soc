@@ -359,36 +359,41 @@
 								<tr>
 									<td :colspan="4" class="case">
 										<v-container fluid class="py-1">
-											<a :target="$root.target('soc-download')" :href="`/api/case/artifactstream?id=${item.id}`" class="no-underline" data-aid="case_attachment_download">
-												<v-icon class="theme-text" style="vertical-align: text-top;">fa-download</v-icon>
-												{{ item.value }}
-												({{ formatCount(item.streamLength) }}
-												{{ i18n.bytes }})
-											</a>
-											<div class="mt-4">
-												<div class="font-weight-bold">{{i18n.sha256}}: </div>
-												<div :id="`attachments-${index}-sha256`" class="case">
-													{{ withDefault(item.sha256, i18n.unknown) }}
-													<v-icon class="ml-1" @click="$root.copyToClipboard(item.sha256)" :title="i18n.copyToClipboard" data-aid="case_attachment_copy_sha256">fa-copy</v-icon>
-													<v-icon class="ml-1" @click="populateAddObservableForm('sha256', item.sha256)" :title="i18n.addObservable" data-aid="case_attachment_add_observable_sha256">fa-eye</v-icon>
+											<template v-if="item.artifactType != 'assistant_chat'">
+												<a :target="$root.target('soc-download')" :href="`/api/case/artifactstream?id=${item.id}`" class="no-underline" data-aid="case_attachment_download">
+													<v-icon class="theme-text" style="vertical-align: text-top;">fa-download</v-icon>
+													{{ item.value }}
+													({{ formatCount(item.streamLength) }}
+													{{ i18n.bytes }})
+												</a>
+												<div class="mt-4">
+													<div class="font-weight-bold">{{i18n.sha256}}: </div>
+													<div :id="`attachments-${index}-sha256`" class="case">
+														{{ withDefault(item.sha256, i18n.unknown) }}
+														<v-icon class="ml-1" @click="$root.copyToClipboard(item.sha256)" :title="i18n.copyToClipboard" data-aid="case_attachment_copy_sha256">fa-copy</v-icon>
+														<v-icon class="ml-1" @click="populateAddObservableForm('sha256', item.sha256)" :title="i18n.addObservable" data-aid="case_attachment_add_observable_sha256">fa-eye</v-icon>
+													</div>
 												</div>
-											</div>
-											<div class="mt-2">
-												<div class="font-weight-bold">{{i18n.sha1}}: </div>
-												<div :id="`attachments-${index}-sha1`" class="case">
-													{{ withDefault(item.sha1, i18n.unknown) }}
-													<v-icon class="ml-1" @click="$root.copyToClipboard(item.sha1)" :title="i18n.copyToClipboard" data-aid="case_attachment_copy_sha1">fa-copy</v-icon>
-													<v-icon class="ml-1" @click="populateAddObservableForm('sha1', item.sha1)" :title="i18n.addObservable" data-aid="case_attachment_add_observable_sha1">fa-eye</v-icon>
+												<div class="mt-2">
+													<div class="font-weight-bold">{{i18n.sha1}}: </div>
+													<div :id="`attachments-${index}-sha1`" class="case">
+														{{ withDefault(item.sha1, i18n.unknown) }}
+														<v-icon class="ml-1" @click="$root.copyToClipboard(item.sha1)" :title="i18n.copyToClipboard" data-aid="case_attachment_copy_sha1">fa-copy</v-icon>
+														<v-icon class="ml-1" @click="populateAddObservableForm('sha1', item.sha1)" :title="i18n.addObservable" data-aid="case_attachment_add_observable_sha1">fa-eye</v-icon>
+													</div>
 												</div>
-											</div>
-											<div class="mt-2">
-												<div class="font-weight-bold">{{i18n.md5}}: </div>
-												<div :id="`attachments-${index}-md5`" class="case">
-													{{ withDefault(item.md5, i18n.unknown) }}
-													<v-icon class="ml-1" @click="$root.copyToClipboard(item.md5)" :title="i18n.copyToClipboard" data-aid="case_attachment_copy_md5">fa-copy</v-icon>
-													<v-icon class="ml-1" @click="populateAddObservableForm('md5', item.md5)" :title="i18n.addObservable" data-aid="case_attachment_add_observable_md5">fa-eye</v-icon>
+												<div class="mt-2">
+													<div class="font-weight-bold">{{i18n.md5}}: </div>
+													<div :id="`attachments-${index}-md5`" class="case">
+														{{ withDefault(item.md5, i18n.unknown) }}
+														<v-icon class="ml-1" @click="$root.copyToClipboard(item.md5)" :title="i18n.copyToClipboard" data-aid="case_attachment_copy_md5">fa-copy</v-icon>
+														<v-icon class="ml-1" @click="populateAddObservableForm('md5', item.md5)" :title="i18n.addObservable" data-aid="case_attachment_add_observable_md5">fa-eye</v-icon>
+													</div>
 												</div>
-											</div>
+											</template>
+											<template v-else>
+												<router-link :to="{ name: 'assistant', params: {sessionId: item.value} }" target="_blank">{{i18n.openChatSession}}</router-link>
+											</template>
 										</v-container>
 										<v-container fluid class="pt-2 pb-0" data-aid="case_attachment_description_input">
 											<div tabindex="0" class="clicktoedit" @click="startEdit(`attachments-${index}-description-input`, item.description, `attachments-${index}-description`, 'description', modifyAssociation, ['attachments', item], true)"

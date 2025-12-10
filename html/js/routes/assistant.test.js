@@ -5072,7 +5072,7 @@ test('toggleSharedSession', async () => {
   };
   comp.$root.user = { id: 'me' };
 
-  await comp.toggleSharedSession();
+  await comp.toggleSharedSession(comp.currentChatId);
 
   expect(comp.updateSessionTag).toHaveBeenCalledTimes(1);
   expect(comp.updateSessionTag).toHaveBeenCalledWith(comp.currentChatId, 'remove', 'shared');
@@ -5084,7 +5084,7 @@ test('toggleSharedSession', async () => {
 
   comp.chatHistoryById[comp.currentChatId].userId = 'u';
 
-  await comp.toggleSharedSession();
+  await comp.toggleSharedSession(comp.currentChatId);
 
   expect(comp.updateSessionTag).toHaveBeenCalledTimes(0);
   expect(comp.loadStoredChats).toHaveBeenCalledTimes(0);
@@ -5096,7 +5096,7 @@ test('toggleSharedSession', async () => {
 
   comp.chatHistoryById[comp.currentChatId].tags = ['a', 'b', 'c'];
 
-  await comp.toggleSharedSession();
+  await comp.toggleSharedSession(comp.currentChatId);
 
   expect(comp.updateSessionTag).toHaveBeenCalledTimes(1);
   expect(comp.updateSessionTag).toHaveBeenCalledWith(comp.currentChatId, 'add', 'shared');
@@ -5108,7 +5108,7 @@ test('toggleSharedSession', async () => {
 
   comp.chatHistoryById = { 'other-session': {}};
 
-  await comp.toggleSharedSession();
+  await comp.toggleSharedSession(comp.currentChatId);
 
   expect(comp.updateSessionTag).toHaveBeenCalledTimes(0);
   expect(comp.loadStoredChats).toHaveBeenCalledTimes(0);

@@ -54,6 +54,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     isPinnedToBottom: true, // user is at (or near) bottom?
     canChat: true,
     paramsLoaded: false,
+    caseMenuVisible: false,
+    mruCases: [],
   }},
   async created() {
     this.loadLocalSettings();
@@ -1779,6 +1781,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       if (localStorage[prefix + '.alwaysApproveReadRequests']) this.alwaysApproveReadRequests = localStorage[prefix + '.alwaysApproveReadRequests'] == 'true';
       if (localStorage[prefix + '.showChatHistory']) this.showChatHistory = localStorage[prefix + '.showChatHistory'] == 'true';
       if (localStorage[prefix + '.currentModel']) this.currentModel = localStorage[prefix + '.currentModel'];
+
+			if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
     },
 
     // Check if a tool should be auto-approved based on localStorage settings
@@ -1902,14 +1906,14 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     messageClassesFromTags(tags) {
       return tags.map(tag => 'msgTag-' + tag);
     },
-    async toggleSharedSession() {
-      const session = this.chatHistoryById[this.currentChatId];
+    async toggleSharedSession(chatId) {
+      const session = this.chatHistoryById[chatId];
       if (!session || session.userId !== this.$root.user.id) return;
       
       const hasTag = (session.tags || []).includes(SESTAG_SHARED);
       const action = hasTag ? 'remove' : 'add';
       
-      await this.updateSessionTag(this.currentChatId, action, SESTAG_SHARED);
+      await this.updateSessionTag(chatId, action, SESTAG_SHARED);
 
       await this.loadStoredChats();
     },
@@ -1990,5 +1994,54 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       if (typeof text !== 'string') return text;
       return text.replace(/^\s*\n+/, '').replace(/\n+\s*$/, '');
     }
+    },
+		async attachToCase(chatId, caseId) {
+			this.caseMenuVisible = false;
+
+			const session = this.chatHistoryById[chatId];
+			if (!session) {
+				this.$root.showError(this.i18n.assistantEscalateNoSession);
+				return;
+			}
+
+			if (!(session.tags || []).includes(SESTAG_SHARED)) {
+				await this.toggleSharedSession(chatId)
+			}
+
+			if (caseId === null) { 
+				const response = await this.$root.papi.post('case/', this.buildCase(session));
+				if (response && response.data) {
+					caseId = response.data.id;
+				}
+			}
+
+			const payload = {
+				caseId: caseId,
+				groupType: 'attachments',
+				artifactType: 'assistant_chat',
+				value: chatId,
+				description: session.title,
+			};
+
+			try {
+				this.$root.papi.post('/case/artifacts', payload);
+			} catch (err) { 
+				this.$root.showError(this.i18n.assistantAttachToCaseFail);
+			}
+		},
+		formatCaseSummary(socCase) {
+      return socCase.title;
+		},
+		buildCase(session) {
+			var title = session.title;
+      var description = this.i18n.caseEscalatedDescription;
+
+      return {
+        title: title,
+        description: description,
+        severity: '',
+        template: '',
+      };
+    },
   }
 }});
