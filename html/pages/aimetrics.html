@@ -215,7 +215,7 @@
                 <v-icon v-else :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="aimetrics_details_expand">fa-angle-right</v-icon>
               </v-btn>
             </td>
-            <td>{{ (item.role === 'assistant' || item?.tags?.includes('tool_result')) ? trimTitle(stripHtml(item.expandMessage)) : trimTitle(item.expandMessage) }}</td>
+            <td>{{ (item.role === 'assistant' || item?.tags?.includes('tool_result')) ? nbspRegexOp(trimTitle(stripHtml(item.expandMessage))) : trimTitle(item.expandMessage) }}</td>
             <td>{{ $root.formatLocalTimestamp(item.createTime, zone) }}</td>
             <td>{{ item.role }}</td>
             <td class="text-right">{{ item.inputTokens ? formatCount(item.inputTokens) : '' }}</td>

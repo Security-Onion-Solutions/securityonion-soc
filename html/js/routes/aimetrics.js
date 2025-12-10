@@ -418,21 +418,21 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       let expandMessage = '';
       if (!data.message || !data.message.contentBlocks) return expandMessage;
       
-      blocks = data.message.contentBlocks;
+      let blocks = data.message.contentBlocks;
       
       for (let i = 0; i < blocks.length; i++) {
         let block = blocks[i];
         if (block.type === 'text') {
           if (data.message.role === 'assistant') {
-            if (i > 0) {
+            if (i > 0 && this.nbspRegexOp(blocks[i - 1].text) != '') {
               expandMessage += `\n\n<hr>\n\n<br>`;
             }
-            expandMessage += this.formatMarkdownMermaid(block.text);
+            expandMessage += this.formatMarkdownMermaid(this.nbspRegexOp(block.text));
           } else {
             expandMessage += block.text;
           }
         } else if (block.type === 'tool_use') {
-          if (i > 0) {
+          if (i > 0 && this.nbspRegexOp(blocks[i - 1].text) != '') {
             expandMessage += `\n\n<hr>\n\n<br>`;
           }
           let toolMessage = `**Tool:** ${block.name}`;
@@ -531,6 +531,9 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       if (minutes < 1) minutes = 1;
       const rawCPM = totalCredits / minutes;
       return Math.round(rawCPM);
+    },
+    nbspRegexOp(text) {
+      return text.replace(/(&nbsp;?[\n]*)/g, '');
     }
   }
 }});
