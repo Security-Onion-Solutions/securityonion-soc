@@ -479,7 +479,7 @@ func (h *AssistantHandler) GetSessions(w http.ResponseWriter, r *http.Request) {
 // @Security     bearer[assistant/read_shared]
 // @Param        sessionId  path  string  true  "Session ID to retrieve history for"
 // @Produce      json
-// @Success      200  model.AssistantSessionDetails "Complete chat history and session details"
+// @Success      200 {object} model.AssistantSessionDetails "Complete chat history and session details"
 // @Failure      400           "The provided session ID is invalid or missing"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
