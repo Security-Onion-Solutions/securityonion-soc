@@ -110,7 +110,15 @@
 					<v-spacer></v-spacer>
 					<div class="text-wrap mr-4" style="font-size: 14px;">{{ i18n.totalCredits }}: <span class="text-primary">{{ formatCount(creditsUsed) }}</span></div>
 					<div class="text-wrap" style="font-size: 14px;">{{ i18n.contextLength }}: <span :class="getContextColor(contextLength)">{{ formatCount(contextLength) }}</span> / <span class="font-weight-thin">{{ increaseContextLimit ? formatCount(contextLimitLarge) : formatCount(contextLimitSmall) }}</span></div>
-					<v-icon :color="getCompressColor()" class="ml-4" variant="flat" id="compress-context" @click="compressCurrentSession()" :title="i18n.compressContext" data-aid="assistant_banner_compress_context">
+					<v-icon :color="getCompressColor()"
+						class="ml-4"
+						variant="flat"
+						id="compress-context"
+						@click="compressCurrentSession()"
+						:disabled="!canChat || checkForActivity() || !creditsLoaded"
+						:title="i18n.compressContext"
+						data-aid="assistant_banner_compress_context"
+					>
 						fa-arrows-to-circle
 					</v-icon>
 				</v-card-title>

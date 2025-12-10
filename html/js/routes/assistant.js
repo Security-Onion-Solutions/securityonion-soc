@@ -565,7 +565,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       
       if (assistantMessage && c.delta.type === 'text_delta' && targetSessionId === this.currentChatId) {
         // Only update UI if this is for the current session
-        assistantMessage.content.value += c.delta.text;
+        assistantMessage.content.value += this.nbspRegexOp(c.delta.text);
         this.scrollIfPinned();
       } else if (c.delta.type === 'input_json_delta') {
         const idMap = this.getIndexMap(targetSessionId);
@@ -885,7 +885,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       
       if (assistantMessage && c.delta.type === 'text_delta' && targetSessionId === this.currentChatId) {
         // Only update UI if this is for the current session
-        assistantMessage.content.value += c.delta.text;
+        assistantMessage.content.value += this.nbspRegexOp(c.delta.text);
         this.scrollIfPinned();
       } else if (c.delta.type === 'input_json_delta') {
         const idMap = this.getIndexMap(targetSessionId);
@@ -1235,8 +1235,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
             // Always process chunks for tool execution logic, but only update UI if current session
             switch (c.type) {
               case 'error':
-                console.log(c);
-                this.$root.showError(this.i18n.assistantToolUseFail);
+                this.$root.showError(this.i18n.assistantToolUseFail + ': ' + c.error.message);
                 break;
               case 'message_start':
                 if (isCurrentSession) {
@@ -1543,7 +1542,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         // Extract text from content blocks
         const textBlocks = msg.message.contentBlocks.filter(block => block.type === 'text');
         if (textBlocks.length > 0) {
-          frontendMsg.content = textBlocks.map(block => block.text).join('\n');
+          frontendMsg.content = textBlocks.map(block => this.nbspRegexOp(block.text)).join('\n');
         } else {
           frontendMsg.content = '';
         }
@@ -1915,5 +1914,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         this.$root.showError(this.i18n.assistantSessionTagUpdateFail + ': ' + error.message);
       }
     },
+    nbspRegexOp(text) {
+      return text.replace(/^(&nbsp;?[\n]*)/, '');
+    }
   }
 }});

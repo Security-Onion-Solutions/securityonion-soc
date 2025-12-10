@@ -5102,3 +5102,14 @@ test('toggleSharedSession', async () => {
   comp.updateSessionTag = _updateSessionTag;
   comp.loadStoredChats = _loadStoredChats;
 });
+
+test('nbspRegexOp', () => {
+  expect(comp.nbspRegexOp('&nbsp;')).toBe('');
+  expect(comp.nbspRegexOp('&nbsp')).toBe('');
+  expect(comp.nbspRegexOp('Hello&nbsp;World')).toBe('Hello&nbsp;World');
+  expect(comp.nbspRegexOp('&nbsp;\n\nHelloWorld')).toBe('HelloWorld');
+  expect(comp.nbspRegexOp('&nbsp;Hello&nbsp;World')).toBe('Hello&nbsp;World');
+  expect(comp.nbspRegexOp('&nbspHelloWorld')).toBe('HelloWorld');
+  expect(comp.nbspRegexOp('Hello World')).toBe('Hello World');
+  expect(comp.nbspRegexOp('')).toBe('');
+});
