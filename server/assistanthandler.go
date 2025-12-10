@@ -503,7 +503,7 @@ func (h *AssistantHandler) GetSessionDetails(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	session, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId))
+	session, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithIncludeDeleted(true))
 	if err != nil {
 		logger.WithError(err).Error("unable to get session")
 		web.Respond(w, r, http.StatusInternalServerError, err)
