@@ -36,6 +36,7 @@ type Casestore interface {
 	GetArtifacts(ctx context.Context, caseId string, groupType string, groupId string) ([]*model.Artifact, error)
 	DeleteArtifact(ctx context.Context, id string) error
 	UpdateArtifact(ctx context.Context, artifact *model.Artifact) (*model.Artifact, error)
+	GetCaseIdsWithArtifact(ctx context.Context, artType string, value string) ([]string, error)
 
 	CreateArtifactStream(ctx context.Context, artifactstream *model.ArtifactStream) (string, error)
 	GetArtifactStream(ctx context.Context, id string) (*model.ArtifactStream, error)

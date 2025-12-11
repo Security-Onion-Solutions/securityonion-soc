@@ -1078,6 +1078,40 @@ func (store *ElasticCasestore) DeleteArtifactStream(ctx context.Context, id stri
 	return err
 }
 
+func (store *ElasticCasestore) GetCaseIdsWithArtifact(ctx context.Context, artType string, value string) ([]string, error) {
+	var err error
+	var caseIds []string
+
+	err = store.validateStringRequired(artType, 1, LONG_STRING_MAX, "artType")
+	if err != nil {
+		return nil, err
+	}
+
+	err = store.validateStringRequired(value, 1, LONG_STRING_MAX, "value")
+	if err != nil {
+		return nil, err
+	}
+
+	caseIds = make([]string, 0)
+	query := fmt.Sprintf(`_index:"%s" AND %skind:"artifact" AND %sartifact.artifactType:"%s" AND %sartifact.value:"%s"`, store.index, store.schemaPrefix, store.schemaPrefix, artType, store.schemaPrefix, value)
+	var objects []interface{}
+	objects, err = store.getAll(store.server.Context, query, store.maxAssociations)
+	if err == nil {
+		// Use a map to track unique case IDs
+		caseIdMap := make(map[string]struct{})
+		for _, obj := range objects {
+			artifact := obj.(*model.Artifact)
+			_, ok := caseIdMap[artifact.CaseId]
+			if !ok {
+				caseIdMap[artifact.CaseId] = struct{}{}
+				caseIds = append(caseIds, artifact.CaseId)
+			}
+		}
+	}
+
+	return caseIds, err
+}
+
 func (store *ElasticCasestore) ExtractCommonObservables(ctx context.Context, event *model.RelatedEvent) error {
 	logger := log.FromContext(ctx)
 

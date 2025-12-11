@@ -1902,7 +1902,9 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       
       if (oldMsg) this.newMessage = oldMsg;
     },
-
+    nbspRegexOp(text) {
+      return text.replace(/^(&nbsp;?[\n]*)/, '');
+    },
     messageClassesFromTags(tags) {
       return tags.map(tag => 'msgTag-' + tag);
     },
@@ -1915,7 +1917,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       
       await this.updateSessionTag(chatId, action, SESTAG_SHARED);
 
-      await this.loadStoredChats();
+      await this.loadStoredChats(false);
     },
     async updateSessionTag(sessionId, action, tag) {
       try {
@@ -1926,7 +1928,13 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         await this.$root.papi.put(`/assistant/sessions/${sessionId}`, payload);
 
       } catch (error) {
-        this.$root.showError(this.i18n.assistantSessionTagUpdateFail + ': ' + error.message);
+        let msg = error.response.data;
+        if (msg.startsWith('ERROR_SESSION_ATTACHED_TO_CASES')) { 
+          const count = (msg.replaceAll('ERROR_SESSION_ATTACHED_TO_CASES', '') + '').trim();
+          msg = this.$root.replaceActionVar(this.i18n.ERROR_SESSION_ATTACHED_TO_CASES, 'count', count);
+        }
+
+        this.$root.showError({ message: msg });
       }
     },
     nbspRegexOp(text) {
@@ -1995,31 +2003,28 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       return text.replace(/^\s*\n+/, '').replace(/\n+\s*$/, '');
     }
     },
-		async attachToCase(chatId, caseId) {
+		async attachToCase(sessionId, caseId) {
 			this.caseMenuVisible = false;
 
-			const session = this.chatHistoryById[chatId];
+			const session = this.chatHistoryById[sessionId];
 			if (!session) {
-				this.$root.showError(this.i18n.assistantEscalateNoSession);
+				this.$root.showError(this.i18n.assistantAttachNoSession);
 				return;
 			}
 
 			if (!(session.tags || []).includes(SESTAG_SHARED)) {
-				await this.toggleSharedSession(chatId)
+				await this.toggleSharedSession(sessionId)
 			}
 
 			if (caseId === null) { 
-				const response = await this.$root.papi.post('case/', this.buildCase(session));
-				if (response && response.data) {
-					caseId = response.data.id;
-				}
+        caseId = this.createCase(session.title);
 			}
 
 			const payload = {
 				caseId: caseId,
 				groupType: 'attachments',
 				artifactType: 'assistant_chat',
-				value: chatId,
+				value: sessionId,
 				description: session.title,
 			};
 
@@ -2028,20 +2033,20 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
 			} catch (err) { 
 				this.$root.showError(this.i18n.assistantAttachToCaseFail);
 			}
-		},
-		formatCaseSummary(socCase) {
-      return socCase.title;
-		},
-		buildCase(session) {
-			var title = session.title;
-      var description = this.i18n.caseEscalatedDescription;
-
-      return {
-        title: title,
-        description: description,
-        severity: '',
-        template: '',
-      };
     },
+    async createCase(title) {
+      const response = await this.$root.papi.post('case/', {
+        title: title,
+        description: this.i18n.caseEscalatedDescription,
+      });
+      if (response && response.data) {
+        return response.data.id;
+      }
+
+      return null;
+    },
+		formatCaseSummary(socCase) {
+      return socCase?.title;
+		},
   }
 }});
