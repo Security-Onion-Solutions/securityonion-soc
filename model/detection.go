@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -324,6 +325,11 @@ func (o *Override) Validate(engine EngineName) error {
 		case OverrideTypeModify:
 			if o.Regex == nil || o.Value == nil {
 				return errors.New("missing required parameter(s)")
+			}
+
+			// Validate that the regex pattern compiles
+			if _, err := regexp.Compile(*o.Regex); err != nil {
+				return fmt.Errorf("invalid regex pattern: %w", err)
 			}
 
 			if o.ThresholdType != nil ||

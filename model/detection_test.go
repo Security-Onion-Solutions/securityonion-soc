@@ -108,6 +108,22 @@ func TestDetectionOverrideValidate(t *testing.T) {
 			ExpectedError: util.Ptr("unnecessary fields in override"),
 		},
 		{
+			Name: "Invalid Suricata Modify Override (Invalid Regex)",
+			Detect: &Detection{
+				Engine: EngineNameSuricata,
+				Overrides: []*Override{
+					{
+						Type: OverrideTypeModify,
+						OverrideParameters: OverrideParameters{
+							Regex: util.Ptr("[invalid"),
+							Value: util.Ptr("test"),
+						},
+					},
+				},
+			},
+			ExpectedError: util.Ptr("invalid regex pattern"),
+		},
+		{
 			Name: "Invalid Suricata Suppress Override (Missing)",
 			Detect: &Detection{
 				Engine: EngineNameSuricata,

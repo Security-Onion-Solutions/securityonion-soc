@@ -73,6 +73,13 @@ var ( // treat as constants
 	DEFAULT_DISABLE_REGEX = []string{}
 )
 
+var (
+	// pcrePattern matches pcre:"..." sections to exclude from backref checking
+	pcrePattern = regexp.MustCompile(`pcre:"[^"]*"`)
+	// backrefPattern matches Python-style backreferences \1 through \9
+	backrefPattern = regexp.MustCompile(`\\[1-9]`)
+)
+
 // Types
 
 // DuplicateInfo tracks duplicate SID information
@@ -970,7 +977,19 @@ func (e *SuricataEngine) writeAllRulesFile(detections []*model.Detection) error 
 			for _, override := range det.Overrides {
 				if override.Type == model.OverrideTypeModify && override.IsEnabled {
 					if override.Regex != nil && override.Value != nil {
-						content = strings.ReplaceAll(content, *override.Regex, *override.Value)
+						re, err := regexp.Compile(*override.Regex)
+						if err != nil {
+							return fmt.Errorf("invalid modify override regex for SID %s: %w", det.PublicID, err)
+						}
+
+						// Check for unsupported Python-style backreferences in replacement
+						// Exclude pcre:"..." sections which may legitimately contain \1-\9
+						stripped := pcrePattern.ReplaceAllString(*override.Value, "")
+						if backrefPattern.MatchString(stripped) {
+							return fmt.Errorf("modify override for SID %s contains unsupported backreference (\\1-\\9); use literal replacement instead", det.PublicID)
+						}
+
+						content = re.ReplaceAllLiteralString(content, *override.Value)
 					}
 				}
 			}

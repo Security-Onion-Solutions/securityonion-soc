@@ -2782,7 +2782,7 @@ func TestWriteAllRulesFileAdditionalCoverage(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
-	t.Run("Apply modify overrides", func(t *testing.T) {
+	t.Run("Modify override with literal string replacement", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
@@ -2790,9 +2790,8 @@ func TestWriteAllRulesFileAdditionalCoverage(t *testing.T) {
 		iom.EXPECT().WriteFile(gomock.Any(), gomock.Any(), os.FileMode(0644)).DoAndReturn(
 			func(path string, data []byte, perm os.FileMode) error {
 				content := string(data)
-				// The override should replace "original" with "modified"
-				assert.Contains(t, content, "modified-value")
-				assert.NotContains(t, content, "original-value")
+				assert.Contains(t, content, `content:"88:98:30`)
+				assert.NotContains(t, content, `content:"67:98:30`)
 				return nil
 			})
 
@@ -2804,8 +2803,8 @@ func TestWriteAllRulesFileAdditionalCoverage(t *testing.T) {
 
 		detections := []*model.Detection{
 			{
-				PublicID:  "1001",
-				Content:   "alert tcp any any -> any any (msg:\"original-value\"; sid:1001;)",
+				PublicID:  "903200005",
+				Content:   `alert tls $EXTERNAL_NET any -> $HOME_NET any (msg:"SSLBL: Malicious SSL certificate detected (Shylock C&C)"; tls_cert_fingerprint; content:"67:98:30:81:90:fb:07:05:36:af:19:02:3a:e8:9b:a4:bd:54:e9:b6"; sid:903200005; rev:1;)`,
 				IsEnabled: true,
 				Ruleset:   "test",
 				Overrides: []*model.Override{
@@ -2813,8 +2812,8 @@ func TestWriteAllRulesFileAdditionalCoverage(t *testing.T) {
 						Type:      model.OverrideTypeModify,
 						IsEnabled: true,
 						OverrideParameters: model.OverrideParameters{
-							Regex: util.Ptr("original-value"),
-							Value: util.Ptr("modified-value"),
+							Regex: util.Ptr(`content:"67:98:30`),
+							Value: util.Ptr(`content:"88:98:30`),
 						},
 					},
 				},
@@ -2825,7 +2824,7 @@ func TestWriteAllRulesFileAdditionalCoverage(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
-	t.Run("Skip disabled modify overrides", func(t *testing.T) {
+	t.Run("Modify override with regex pattern", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
@@ -2833,9 +2832,8 @@ func TestWriteAllRulesFileAdditionalCoverage(t *testing.T) {
 		iom.EXPECT().WriteFile(gomock.Any(), gomock.Any(), os.FileMode(0644)).DoAndReturn(
 			func(path string, data []byte, perm os.FileMode) error {
 				content := string(data)
-				// The disabled override should NOT be applied
-				assert.Contains(t, content, "original-value")
-				assert.NotContains(t, content, "modified-value")
+				assert.Contains(t, content, "seconds 3600")
+				assert.NotContains(t, content, "seconds 60")
 				return nil
 			})
 
@@ -2848,16 +2846,173 @@ func TestWriteAllRulesFileAdditionalCoverage(t *testing.T) {
 		detections := []*model.Detection{
 			{
 				PublicID:  "1001",
-				Content:   "alert tcp any any -> any any (msg:\"original-value\"; sid:1001;)",
+				Content:   `alert http any any -> any any (msg:"Test"; threshold:type limit,track by_src,count 1,seconds 60; sid:1001;)`,
 				IsEnabled: true,
 				Ruleset:   "test",
 				Overrides: []*model.Override{
 					{
 						Type:      model.OverrideTypeModify,
-						IsEnabled: false, // disabled
+						IsEnabled: true,
 						OverrideParameters: model.OverrideParameters{
-							Regex: util.Ptr("original-value"),
-							Value: util.Ptr("modified-value"),
+							Regex: util.Ptr(`seconds \d+`),
+							Value: util.Ptr("seconds 3600"),
+						},
+					},
+				},
+			},
+		}
+
+		err := eng.writeAllRulesFile(detections)
+		assert.NoError(t, err)
+	})
+
+	t.Run("Modify override skipped when disabled", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		iom := mock.NewMockIOManager(ctrl)
+		iom.EXPECT().WriteFile(gomock.Any(), gomock.Any(), os.FileMode(0644)).DoAndReturn(
+			func(path string, data []byte, perm os.FileMode) error {
+				content := string(data)
+				assert.Contains(t, content, `content:"67:98:30`)
+				assert.NotContains(t, content, `content:"88:98:30`)
+				return nil
+			})
+
+		eng := &SuricataEngine{
+			IOManager:       iom,
+			allRulesFile:    "/test/all.rules",
+			flowbitRequired: map[string]*FlowbitDependency{},
+		}
+
+		detections := []*model.Detection{
+			{
+				PublicID:  "903200005",
+				Content:   `alert tls $EXTERNAL_NET any -> $HOME_NET any (msg:"SSLBL: Malicious SSL certificate detected (Shylock C&C)"; tls_cert_fingerprint; content:"67:98:30:81:90:fb:07:05:36:af:19:02:3a:e8:9b:a4:bd:54:e9:b6"; sid:903200005; rev:1;)`,
+				IsEnabled: true,
+				Ruleset:   "test",
+				Overrides: []*model.Override{
+					{
+						Type:      model.OverrideTypeModify,
+						IsEnabled: false,
+						OverrideParameters: model.OverrideParameters{
+							Regex: util.Ptr(`content:"67:98:30`),
+							Value: util.Ptr(`content:"88:98:30`),
+						},
+					},
+				},
+			},
+		}
+
+		err := eng.writeAllRulesFile(detections)
+		assert.NoError(t, err)
+	})
+
+	t.Run("Modify override with invalid regex returns error", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		iom := mock.NewMockIOManager(ctrl)
+
+		eng := &SuricataEngine{
+			IOManager:       iom,
+			allRulesFile:    "/test/all.rules",
+			flowbitRequired: map[string]*FlowbitDependency{},
+		}
+
+		detections := []*model.Detection{
+			{
+				PublicID:  "1001",
+				Content:   `alert tcp any any -> any any (msg:"Test"; sid:1001;)`,
+				IsEnabled: true,
+				Ruleset:   "test",
+				Overrides: []*model.Override{
+					{
+						Type:      model.OverrideTypeModify,
+						IsEnabled: true,
+						OverrideParameters: model.OverrideParameters{
+							Regex: util.Ptr(`[invalid`),
+							Value: util.Ptr("replacement"),
+						},
+					},
+				},
+			},
+		}
+
+		err := eng.writeAllRulesFile(detections)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid modify override regex")
+		assert.Contains(t, err.Error(), "SID 1001")
+	})
+
+	t.Run("Modify override with Python-style backreference returns error", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		iom := mock.NewMockIOManager(ctrl)
+
+		eng := &SuricataEngine{
+			IOManager:       iom,
+			allRulesFile:    "/test/all.rules",
+			flowbitRequired: map[string]*FlowbitDependency{},
+		}
+
+		detections := []*model.Detection{
+			{
+				PublicID:  "1001",
+				Content:   `alert tcp any any -> any any (msg:"Test"; sid:1001;)`,
+				IsEnabled: true,
+				Ruleset:   "test",
+				Overrides: []*model.Override{
+					{
+						Type:      model.OverrideTypeModify,
+						IsEnabled: true,
+						OverrideParameters: model.OverrideParameters{
+							Regex: util.Ptr(`(alert)(.*)`),
+							Value: util.Ptr(`drop\2`),
+						},
+					},
+				},
+			},
+		}
+
+		err := eng.writeAllRulesFile(detections)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "unsupported backreference")
+		assert.Contains(t, err.Error(), "SID 1001")
+	})
+
+	t.Run("Modify override with PCRE containing backslash sequences succeeds", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		iom := mock.NewMockIOManager(ctrl)
+		iom.EXPECT().WriteFile(gomock.Any(), gomock.Any(), os.FileMode(0644)).DoAndReturn(
+			func(path string, data []byte, perm os.FileMode) error {
+				content := string(data)
+				assert.Contains(t, content, `pcre:"/[^\1]/"`)
+				return nil
+			})
+
+		eng := &SuricataEngine{
+			IOManager:       iom,
+			allRulesFile:    "/test/all.rules",
+			flowbitRequired: map[string]*FlowbitDependency{},
+		}
+
+		detections := []*model.Detection{
+			{
+				PublicID:  "1001",
+				Content:   `alert tcp any any -> any any (msg:"Test"; pcre:"/test/"; sid:1001;)`,
+				IsEnabled: true,
+				Ruleset:   "test",
+				Overrides: []*model.Override{
+					{
+						Type:      model.OverrideTypeModify,
+						IsEnabled: true,
+						OverrideParameters: model.OverrideParameters{
+							Regex: util.Ptr(`pcre:"/test/"`),
+							Value: util.Ptr(`pcre:"/[^\1]/"`),
 						},
 					},
 				},
