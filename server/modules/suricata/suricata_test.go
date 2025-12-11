@@ -2944,6 +2944,84 @@ func TestWriteAllRulesFileAdditionalCoverage(t *testing.T) {
 		assert.Contains(t, err.Error(), "invalid modify override regex")
 		assert.Contains(t, err.Error(), "SID 1001")
 	})
+
+	t.Run("Modify override with Python-style backreference returns error", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		iom := mock.NewMockIOManager(ctrl)
+
+		eng := &SuricataEngine{
+			IOManager:       iom,
+			allRulesFile:    "/test/all.rules",
+			flowbitRequired: map[string]*FlowbitDependency{},
+		}
+
+		detections := []*model.Detection{
+			{
+				PublicID:  "1001",
+				Content:   `alert tcp any any -> any any (msg:"Test"; sid:1001;)`,
+				IsEnabled: true,
+				Ruleset:   "test",
+				Overrides: []*model.Override{
+					{
+						Type:      model.OverrideTypeModify,
+						IsEnabled: true,
+						OverrideParameters: model.OverrideParameters{
+							Regex: util.Ptr(`(alert)(.*)`),
+							Value: util.Ptr(`drop\2`),
+						},
+					},
+				},
+			},
+		}
+
+		err := eng.writeAllRulesFile(detections)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "unsupported backreference")
+		assert.Contains(t, err.Error(), "SID 1001")
+	})
+
+	t.Run("Modify override with PCRE containing backslash sequences succeeds", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		iom := mock.NewMockIOManager(ctrl)
+		iom.EXPECT().WriteFile(gomock.Any(), gomock.Any(), os.FileMode(0644)).DoAndReturn(
+			func(path string, data []byte, perm os.FileMode) error {
+				content := string(data)
+				assert.Contains(t, content, `pcre:"/[^\1]/"`)
+				return nil
+			})
+
+		eng := &SuricataEngine{
+			IOManager:       iom,
+			allRulesFile:    "/test/all.rules",
+			flowbitRequired: map[string]*FlowbitDependency{},
+		}
+
+		detections := []*model.Detection{
+			{
+				PublicID:  "1001",
+				Content:   `alert tcp any any -> any any (msg:"Test"; pcre:"/test/"; sid:1001;)`,
+				IsEnabled: true,
+				Ruleset:   "test",
+				Overrides: []*model.Override{
+					{
+						Type:      model.OverrideTypeModify,
+						IsEnabled: true,
+						OverrideParameters: model.OverrideParameters{
+							Regex: util.Ptr(`pcre:"/test/"`),
+							Value: util.Ptr(`pcre:"/[^\1]/"`),
+						},
+					},
+				},
+			},
+		}
+
+		err := eng.writeAllRulesFile(detections)
+		assert.NoError(t, err)
+	})
 }
 
 // Test buildConfiguredRulesetsMap method
