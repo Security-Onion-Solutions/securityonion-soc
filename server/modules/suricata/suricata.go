@@ -970,7 +970,11 @@ func (e *SuricataEngine) writeAllRulesFile(detections []*model.Detection) error 
 			for _, override := range det.Overrides {
 				if override.Type == model.OverrideTypeModify && override.IsEnabled {
 					if override.Regex != nil && override.Value != nil {
-						content = strings.ReplaceAll(content, *override.Regex, *override.Value)
+						re, err := regexp.Compile(*override.Regex)
+						if err != nil {
+							return fmt.Errorf("invalid modify override regex for SID %s: %w", det.PublicID, err)
+						}
+						content = re.ReplaceAllString(content, *override.Value)
 					}
 				}
 			}
