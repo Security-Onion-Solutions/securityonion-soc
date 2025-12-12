@@ -118,19 +118,21 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }
     },
     
-    // Calculate context length from usage data (input_tokens + output_tokens)
-    calculateContextFromUsage(usage) {
+    // Calculate context length from usage data (input_tokens + output_tokens),
+    // ignore input tokens if on a context compression message
+    calculateContextFromUsage(usage, ignoreInputTokens) {
       if (!usage) return 0;
       const inputTokens = usage.input_tokens || 0;
       const outputTokens = usage.output_tokens || 0;
-      return inputTokens + outputTokens;
+      
+      return ignoreInputTokens ? outputTokens : inputTokens + outputTokens;
     },
     
     // Update the total context length
-    updateContextLength(usage) {
+    updateContextLength(usage, ignoreInputTokens = false) {
       if (usage) {
-        const messageContext = this.calculateContextFromUsage(usage);
-        this.contextLength += messageContext;
+        const messageContext = this.calculateContextFromUsage(usage, ignoreInputTokens);
+        this.contextLength = messageContext;
       }
     },
 
@@ -1639,9 +1641,9 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     convertBackendMessagesToFrontend(backendMessages) {
       const processedMessages = [];
       // Reset context length when loading from backend
-      this.contextLength = 0;
       this.creditsUsed = 0;
       this.contextStartMessageIndex = -1;
+      let justResetContext = false;
       
       let skip_next = false;
 
@@ -1689,7 +1691,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         if (msg.message.usage) {
           frontendMsg.usage = Vue.ref(msg.message.usage);
           // Update context length for loaded messages
-          this.updateContextLength(msg.message.usage);
+          this.updateContextLength(msg.message.usage, justResetContext);
           this.updateCreditsUsed(msg.message.usage);
         }
 
@@ -1698,14 +1700,39 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         if (msg.tags && msg.tags.includes(MSGTAG_CONTEXTCOMPRESSION)) {
           // reset context, messages prior to this message are no longer
           // sent to the AI
-          this.contextLength = 0;
+          if (i >= 0 && i < backendMessages.length - 1) {
+            this.contextLength = this.calculateContextOfMessage(backendMessages, i);
+          } else {
+            // this context compression is the latest message, can't determine
+            // context size until assistant responds
+            this.contextLength = 0;
+          }
           this.contextStartMessageIndex = processedMessages.length - 1;
+          justResetContext = true;
+        } else {
+          justResetContext = false;
         }
       }
       
       return processedMessages;
     },
+    calculateContextOfMessage(allMessages, msgIndex) {
+      if (msgIndex >= 0 && msgIndex < allMessages.length && allMessages[msgIndex].role !== 'user') {
+        // asking about an assistant message, return its output tokens
+        return allMessages[msgIndex].message.usage.output_tokens;
+      }
+      let prev, next;
+      if (msgIndex > 0) prev = allMessages[msgIndex - 1];
+      if (msgIndex < allMessages.length - 1) next = allMessages[msgIndex + 1];
 
+      let contextLength;
+      if (prev) {
+        contextLength = next.message.usage.input_tokens - (prev.message.usage.input_tokens + prev.message.usage.output_tokens);
+      } else {
+        contextLength = next.message.usage.input_tokens;
+      }
+      return contextLength;
+    },
     generateInvestigationPrompt(fields) {
 
       // Prepare the alert data for investigation
