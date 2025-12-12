@@ -495,7 +495,7 @@
 												</div>
 											</template>
 										</v-container>
-										<v-container fluid class="py-2" data-aid="case_attachments_protected_toggle">
+										<v-container v-if="item.artifactType != 'assistant_chat'" fluid class="py-2" data-aid="case_attachments_protected_toggle">
 											<div tabindex="0" class="clicktoedit" @click="startEdit(`attachments-${index}-protected-input`, item.protected, `attachments-${index}-protected`, 'protected', modifyAssociation, ['attachments', item])">
 												<div class="font-weight-bold">{{i18n.artifactProtected}}: </div>
 												<div :id="`attachments-${index}-protected`" class="case detail-field" v-if="!isEdit(`attachments-${index}-protected`)">{{ item.protected ? i18n.yes : i18n.no }}</div>
