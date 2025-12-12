@@ -553,7 +553,37 @@ func TestGetSessions_WithUsage(t *testing.T) {
 		Body: io.NopCloser(strings.NewReader(msearchResponse)),
 	}, nil)
 
-	sessions, err := store.GetSessions(ctx, false, model.GetSessionsWithUsage(true))
+	// Mock MSearch response for addMetaFromMessages (update time)
+	msearchUpdateTimeResponse := `{
+		"responses": [
+			{
+				"aggregations": {
+					"update_time": {
+						"value": 1234567890000,
+						"value_as_string": "2009-02-13T23:31:30.000Z"
+					}
+				}
+			},
+			{
+				"aggregations": {
+					"update_time": {
+						"value": 1234567890000,
+						"value_as_string": "2009-02-13T23:31:30.000Z"
+					}
+				}
+			}
+		]
+	}`
+
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(msearchUpdateTimeResponse)),
+	}, nil)
+
+	sessions, err := store.GetSessions(ctx, model.GetSessionsWithUsage(true))
 	assert.NoError(t, err)
 	assert.Len(t, sessions, 2)
 	assert.NotNil(t, sessions[0].Usage)
@@ -601,8 +631,30 @@ func TestGetSessions_WithoutUsage(t *testing.T) {
 		Body: io.NopCloser(strings.NewReader(searchResponse)),
 	}, nil)
 
-	// No MSearch call should be made when usage is false
-	sessions, err := store.GetSessions(ctx, false, model.GetSessionsWithUsage(false))
+	// Mock MSearch response for addMetaFromMessages (update time) - always called
+	msearchUpdateTimeResponse := `{
+		"responses": [
+			{
+				"aggregations": {
+					"update_time": {
+						"value": 1234567890000,
+						"value_as_string": "2009-02-13T23:31:30.000Z"
+					}
+				}
+			}
+		]
+	}`
+
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(msearchUpdateTimeResponse)),
+	}, nil)
+
+	// No usage MSearch call should be made when usage is false
+	sessions, err := store.GetSessions(ctx, model.GetSessionsWithUsage(false))
 	assert.NoError(t, err)
 	assert.Len(t, sessions, 1)
 	assert.Nil(t, sessions[0].Usage)
@@ -874,7 +926,58 @@ func TestGetChatHistory(t *testing.T) {
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
-	// Mock search response
+	// Mock session check
+	sessionCheck := `{
+		"hits": {
+			"total": {
+				"value": 1
+			},
+			"hits": [
+				{
+					"_id": "session1",
+					"_source": {
+						"so_kind": "session",
+						"so_session": {
+							"sessionId": "session1",
+							"userId": "test-user"
+						}
+					}
+				}
+			]
+		}
+	}`
+
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(sessionCheck)),
+	}, nil)
+
+	// Mock MSearch response for addMetaFromMessages (update time) - called by GetSessions
+	msearchUpdateTimeResponse := `{
+		"responses": [
+			{
+				"aggregations": {
+					"update_time": {
+						"value": 1234567890000,
+						"value_as_string": "2009-02-13T23:31:30.000Z"
+					}
+				}
+			}
+		]
+	}`
+
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(msearchUpdateTimeResponse)),
+	}, nil)
+
+	// Mock search response for chat messages
 	searchResponse := `{
 		"hits": {
 			"total": {
@@ -921,13 +1024,22 @@ func TestGetChatHistory(t *testing.T) {
 		Body: io.NopCloser(strings.NewReader(searchResponse)),
 	}, nil)
 
-	messages, err := store.GetChatHistory(ctx, "session1", true)
+	messages, err := store.GetChatHistory(ctx, "session1")
 	assert.NoError(t, err)
 	assert.Len(t, messages, 2)
 	assert.Equal(t, "msg1", messages[0].Id)
 	assert.Equal(t, "msg2", messages[1].Id)
 	assert.Equal(t, "Hello", messages[0].Message.ContentStr)
 	assert.Equal(t, "Hi there!", messages[1].Message.ContentStr)
+
+	// ensure GetSession call does not filter out deleted sessions
+	reqs := transport.GetRequests()
+	assert.Len(t, reqs, 3) // One for GetSessions, one for session meta data, one for chat messages
+	body, err := reqs[0].GetBody()
+	assert.NoError(t, err)
+	data, err := io.ReadAll(body)
+	assert.NoError(t, err)
+	assert.NotContains(t, string(data), "deleteTime")
 }
 
 func TestGetSessions_WithFilters(t *testing.T) {
@@ -968,12 +1080,33 @@ func TestGetSessions_WithFilters(t *testing.T) {
 		Body: io.NopCloser(strings.NewReader(searchResponse)),
 	}, nil)
 
+	// Mock MSearch response for addMetaFromMessages (update time)
+	msearchUpdateTimeResponse := `{
+		"responses": [
+			{
+				"aggregations": {
+					"update_time": {
+						"value": 1234567890000,
+						"value_as_string": "2009-02-13T23:31:30.000Z"
+					}
+				}
+			}
+		]
+	}`
+
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(msearchUpdateTimeResponse)),
+	}, nil)
+
 	start := time.Now().Add(-24 * time.Hour)
 	end := time.Now()
 
 	sessions, err := store.GetSessions(
 		ctx,
-		false,
 		model.GetSessionsWithUserId("specific-user"),
 		model.GetSessionsWithRange(start, end),
 		model.GetSessionsWithIncludeDeleted(false),
@@ -1045,7 +1178,7 @@ func TestGetSessions_Authorization(t *testing.T) {
 				}, nil)
 			}
 
-			sessions, err := store.GetSessions(ctx, tt.authored)
+			sessions, err := store.GetSessions(ctx)
 			if tt.wantErr {
 				assert.Error(t, err)
 				assert.Nil(t, sessions)
@@ -1082,7 +1215,7 @@ func TestGetSessions_EmptyResults(t *testing.T) {
 		Body: io.NopCloser(strings.NewReader(searchResponse)),
 	}, nil)
 
-	sessions, err := store.GetSessions(ctx, true)
+	sessions, err := store.GetSessions(ctx)
 	assert.NoError(t, err)
 	assert.Empty(t, sessions)
 }
@@ -1104,7 +1237,7 @@ func TestGetSessions_ElasticsearchError(t *testing.T) {
 		Body: io.NopCloser(strings.NewReader(`{"error": "internal server error"}`)),
 	}, nil)
 
-	sessions, err := store.GetSessions(ctx, false)
+	sessions, err := store.GetSessions(ctx)
 	assert.Error(t, err)
 	assert.Nil(t, sessions)
 }
@@ -1126,7 +1259,7 @@ func TestGetSessions_MalformedResponse(t *testing.T) {
 		Body: io.NopCloser(strings.NewReader(`{invalid json`)),
 	}, nil)
 
-	sessions, err := store.GetSessions(ctx, false)
+	sessions, err := store.GetSessions(ctx)
 	assert.Error(t, err)
 	assert.Nil(t, sessions)
 }
@@ -1168,14 +1301,36 @@ func TestGetSessions_UserIdFilter(t *testing.T) {
 		Body: io.NopCloser(strings.NewReader(searchResponse)),
 	}, nil)
 
-	sessions, err := store.GetSessions(ctx, false, model.GetSessionsWithUserId("specific-user"))
+	// Mock MSearch response for addMetaFromMessages (update time)
+	msearchUpdateTimeResponse := `{
+		"responses": [
+			{
+				"aggregations": {
+					"update_time": {
+						"value": 1234567890000,
+						"value_as_string": "2009-02-13T23:31:30.000Z"
+					}
+				}
+			}
+		]
+	}`
+
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(msearchUpdateTimeResponse)),
+	}, nil)
+
+	sessions, err := store.GetSessions(ctx, model.GetSessionsWithUserId("specific-user"))
 	assert.NoError(t, err)
 	assert.Len(t, sessions, 1)
 	assert.Equal(t, "specific-user", sessions[0].UserId)
 
 	// Verify the query sent to Elasticsearch
 	reqs := transport.GetRequests()
-	assert.Len(t, reqs, 1)
+	assert.Len(t, reqs, 2) // One for sessions search, one for msearch (update time)
 
 	var query map[string]any
 	err = json.NewDecoder(reqs[0].Body).Decode(&query)
@@ -1240,14 +1395,36 @@ func TestGetSessions_IncludeDeleted(t *testing.T) {
 		Body: io.NopCloser(strings.NewReader(searchResponse)),
 	}, nil)
 
-	sessions, err := store.GetSessions(ctx, false, model.GetSessionsWithIncludeDeleted(true))
+	// Mock MSearch response for addMetaFromMessages (update time)
+	msearchUpdateTimeResponse := `{
+		"responses": [
+			{
+				"aggregations": {
+					"update_time": {
+						"value": 1234567890000,
+						"value_as_string": "2009-02-13T23:31:30.000Z"
+					}
+				}
+			}
+		]
+	}`
+
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(msearchUpdateTimeResponse)),
+	}, nil)
+
+	sessions, err := store.GetSessions(ctx, model.GetSessionsWithIncludeDeleted(true))
 	assert.NoError(t, err)
 	assert.Len(t, sessions, 1)
 	assert.NotNil(t, sessions[0].DeleteTime)
 
 	// Verify the query sent to Elasticsearch
 	reqs := transport.GetRequests()
-	assert.Len(t, reqs, 1)
+	assert.Len(t, reqs, 2) // One for sessions search, one for msearch (update time)
 
 	var query map[string]any
 	err = json.NewDecoder(reqs[0].Body).Decode(&query)
@@ -1296,16 +1473,38 @@ func TestGetSessions_TimeRangeFilter(t *testing.T) {
 		Body: io.NopCloser(strings.NewReader(searchResponse)),
 	}, nil)
 
+	// Mock MSearch response for addMetaFromMessages (update time)
+	msearchUpdateTimeResponse := `{
+		"responses": [
+			{
+				"aggregations": {
+					"update_time": {
+						"value": 1234567890000,
+						"value_as_string": "2009-02-13T23:31:30.000Z"
+					}
+				}
+			}
+		]
+	}`
+
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(msearchUpdateTimeResponse)),
+	}, nil)
+
 	start := time.Now().Add(-24 * time.Hour)
 	end := time.Now()
 
-	sessions, err := store.GetSessions(ctx, false, model.GetSessionsWithRange(start, end))
+	sessions, err := store.GetSessions(ctx, model.GetSessionsWithRange(start, end))
 	assert.NoError(t, err)
 	assert.Len(t, sessions, 1)
 
 	// Verify the query sent to Elasticsearch
 	reqs := transport.GetRequests()
-	assert.Len(t, reqs, 1)
+	assert.Len(t, reqs, 2) // One for sessions search, one for msearch (update time)
 
 	var query map[string]any
 	err = json.NewDecoder(reqs[0].Body).Decode(&query)
@@ -1378,7 +1577,7 @@ func TestGetSessions_UsagePopulationError(t *testing.T) {
 		Body: io.NopCloser(strings.NewReader(`{"error": "internal server error"}`)),
 	}, nil)
 
-	sessions, err := store.GetSessions(ctx, false, model.GetSessionsWithUsage(true))
+	sessions, err := store.GetSessions(ctx, model.GetSessionsWithUsage(true))
 	assert.Error(t, err)
 	assert.Nil(t, sessions)
 }
@@ -1438,7 +1637,37 @@ func TestGetSessions_PartiallyMalformedHits(t *testing.T) {
 		Body: io.NopCloser(strings.NewReader(searchResponse)),
 	}, nil)
 
-	sessions, err := store.GetSessions(ctx, false)
+	// Mock MSearch response for addMetaFromMessages (update time)
+	msearchUpdateTimeResponse := `{
+		"responses": [
+			{
+				"aggregations": {
+					"update_time": {
+						"value": 1234567890000,
+						"value_as_string": "2009-02-13T23:31:30.000Z"
+					}
+				}
+			},
+			{
+				"aggregations": {
+					"update_time": {
+						"value": 1234567890000,
+						"value_as_string": "2009-02-13T23:31:30.000Z"
+					}
+				}
+			}
+		]
+	}`
+
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(msearchUpdateTimeResponse)),
+	}, nil)
+
+	sessions, err := store.GetSessions(ctx)
 	assert.NoError(t, err)
 	// Should only return the 2 valid sessions, skipping the malformed one
 	assert.Len(t, sessions, 2)
@@ -1483,7 +1712,29 @@ func TestGetSessions_SessionIdFilter(t *testing.T) {
 		Body: io.NopCloser(strings.NewReader(searchResponse)),
 	}, nil)
 
-	sessions, err := store.GetSessions(ctx, false, model.GetSessionsWithSessionId("session123"))
+	// Mock MSearch response for addMetaFromMessages (update time)
+	msearchUpdateTimeResponse := `{
+		"responses": [
+			{
+				"aggregations": {
+					"update_time": {
+						"value": 1234567890000,
+						"value_as_string": "2009-02-13T23:31:30.000Z"
+					}
+				}
+			}
+		]
+	}`
+
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(msearchUpdateTimeResponse)),
+	}, nil)
+
+	sessions, err := store.GetSessions(ctx, model.GetSessionsWithSessionId("session123"))
 	assert.NoError(t, err)
 	assert.Len(t, sessions, 1)
 	assert.Equal(t, "session123", sessions[0].SessionId)
@@ -1491,7 +1742,7 @@ func TestGetSessions_SessionIdFilter(t *testing.T) {
 
 	// Verify the query sent to Elasticsearch
 	reqs := transport.GetRequests()
-	assert.Len(t, reqs, 1)
+	assert.Len(t, reqs, 2) // One for sessions search, one for msearch (update time)
 
 	var query map[string]any
 	err = json.NewDecoder(reqs[0].Body).Decode(&query)
@@ -1654,7 +1905,45 @@ func TestGetSessions_MultipleSessionsWithUsage(t *testing.T) {
 		Body: io.NopCloser(strings.NewReader(msearchResponse)),
 	}, nil)
 
-	sessions, err := store.GetSessions(ctx, false, model.GetSessionsWithUsage(true))
+	// Mock MSearch response for addMetaFromMessages (update time)
+	msearchUpdateTimeResponse := `{
+		"responses": [
+			{
+				"aggregations": {
+					"update_time": {
+						"value": 1234567890000,
+						"value_as_string": "2009-02-13T23:31:30.000Z"
+					}
+				}
+			},
+			{
+				"aggregations": {
+					"update_time": {
+						"value": 1234567890000,
+						"value_as_string": "2009-02-13T23:31:30.000Z"
+					}
+				}
+			},
+			{
+				"aggregations": {
+					"update_time": {
+						"value": 1234567890000,
+						"value_as_string": "2009-02-13T23:31:30.000Z"
+					}
+				}
+			}
+		]
+	}`
+
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(msearchUpdateTimeResponse)),
+	}, nil)
+
+	sessions, err := store.GetSessions(ctx, model.GetSessionsWithUsage(true))
 	assert.NoError(t, err)
 	assert.Len(t, sessions, 3)
 
@@ -1754,12 +2043,33 @@ func TestGetSessions_CombinedFilters(t *testing.T) {
 		Body: io.NopCloser(strings.NewReader(msearchResponse)),
 	}, nil)
 
+	// Mock MSearch response for addMetaFromMessages (update time)
+	msearchUpdateTimeResponse := `{
+		"responses": [
+			{
+				"aggregations": {
+					"update_time": {
+						"value": 1234567890000,
+						"value_as_string": "2009-02-13T23:31:30.000Z"
+					}
+				}
+			}
+		]
+	}`
+
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(msearchUpdateTimeResponse)),
+	}, nil)
+
 	start := time.Now().Add(-24 * time.Hour)
 	end := time.Now()
 
 	sessions, err := store.GetSessions(
 		ctx,
-		false,
 		model.GetSessionsWithUserId("specific-user"),
 		model.GetSessionsWithRange(start, end),
 		model.GetSessionsWithUsage(true),
@@ -1780,7 +2090,7 @@ func TestGetSessions_CombinedFilters(t *testing.T) {
 
 	// Verify the query sent to Elasticsearch includes all filters
 	reqs := transport.GetRequests()
-	assert.Len(t, reqs, 2) // One for sessions search, one for msearch (usage)
+	assert.Len(t, reqs, 3) // One for sessions search, one for msearch (usage), one for msearch (update time)
 
 	var query map[string]any
 	err = json.NewDecoder(reqs[0].Body).Decode(&query)
@@ -1856,9 +2166,30 @@ func TestGetSessions_AuthoredWithUserId(t *testing.T) {
 		Body: io.NopCloser(strings.NewReader(searchResponse)),
 	}, nil)
 
+	// Mock MSearch response for addMetaFromMessages (update time)
+	msearchResponse := `{
+		"responses": [
+			{
+				"aggregations": {
+					"update_time": {
+						"value": 1234567890000,
+						"value_as_string": "2009-02-13T23:31:30.000Z"
+					}
+				}
+			}
+		]
+	}`
+
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(msearchResponse)),
+	}, nil)
+
 	sessions, err := store.GetSessions(
 		ctx,
-		true,
 		model.GetSessionsWithUserId("test-user"),
 	)
 

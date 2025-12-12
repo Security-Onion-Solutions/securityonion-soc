@@ -76,7 +76,7 @@
 					</v-card-actions>
 				</v-card>
 			</v-dialog>
-			<v-data-table :sort-by="sortBy" @update:sort-by="val => sortBy = val" :items-per-page-options="itemsPerPageOptions" data-aid="users_details"
+			<v-data-table :sort-by="sortBy" @update:sort-by="val => sortBy = val" @update:items-per-page="val => itemsPerPage = val" :items-per-page-options="itemsPerPageOptions" data-aid="users_details"
 				v-model:items-per-page="itemsPerPage" must-sort :headers="headers" :items="users" v-model:expanded="expanded">
 				<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
 					<tr>

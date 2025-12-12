@@ -342,3 +342,31 @@ test('setInterval and clearInterval', () => {
   clearIntervalSpy.mockRestore();
   loadDataSpy.mockRestore();
 });
+
+test('saveLocalSettings', () => {
+  comp.sortBy = [{ key: 'model', order: 'desc' }];
+  comp.itemsPerPage = 50;
+  comp.saveLocalSettings();
+  expect(localStorage['settings.grid.sortBy']).toBe('model');
+  expect(localStorage['settings.grid.sortDesc']).toBe('desc');
+  expect(localStorage['settings.grid.itemsPerPage']).toBe('50');
+});
+
+test('loadLocalSettings', () => {
+  localStorage['settings.grid.sortBy'] = 'role';
+  localStorage['settings.grid.sortDesc'] = 'asc';
+  localStorage['settings.grid.itemsPerPage'] = '250';
+  comp.loadLocalSettings();
+  expect(comp.sortBy).toEqual([{ key: 'role', order: 'asc' }]);
+  expect(comp.itemsPerPage).toBe(250);
+});
+
+test('loadLocalSettings_defaults', () => {
+  delete localStorage['settings.grid.sortBy'];
+  delete localStorage['settings.grid.itemsPerPage'];
+  comp.sortBy = [{ key: 'id', order: 'asc' }];
+  comp.itemsPerPage = 10;
+  comp.loadLocalSettings();
+  expect(comp.sortBy).toEqual([{ key: 'id', order: 'asc' }]);
+  expect(comp.itemsPerPage).toBe(10);
+});

@@ -122,3 +122,9 @@ func (job *Job) Fail(err error) {
 	job.FailTime = time.Now()
 	job.FailCount++
 }
+
+func (job *Job) IsEligibleForRetry(retryIntervalMs int, retryMaxAttempts int) bool {
+	now := time.Now()
+	retryTime := job.FailTime.Add(time.Millisecond * time.Duration(retryIntervalMs))
+	return job.FailCount < retryMaxAttempts && retryTime.Before(now)
+}

@@ -6,6 +6,10 @@
 
 loadPageTemplate('page-assistant', 'pages/assistant.html');
 
+const MSGTAG_CONTEXTCOMPRESSION = "context_compression";
+
+const SESTAG_SHARED = 'shared';
+
 routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
   template: '#page-assistant',
   data() { return {
@@ -14,14 +18,17 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     newMessage: '',
     isTyping: false,
     chatHistory: [],
+    chatHistoryById: {},
     currentChatId: null,
     creditsRemaining: 0,
+    creditsLoaded: false,
     executingToolsBySession: new Map(), // Map<sessionId, Map<toolUseId, toolUse>>
     toolIndexToIdBySession: new Map(), // Map<sessionId, Map<index, toolUseId>>
     toolQueues: new Map(), // Map<sessionId, Array<toolUseId>>
     toolRunnerBusy: new Set(), // Set<sessionId>
     mostRecentFloatingTool: new Map(), // Map<sessionId, toolUse>
     contextLength: 0, // Track total context length
+    creditsUsed: 0, // Track total accumulated credits used for a session
     increaseContextLimit: false, // Toggle for max context threshold
     restoreLastActive: false, // Toggle to restore last active chat
     alwaysApproveReadRequests: false,
@@ -29,6 +36,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     isStreaming: false,
     showChatHistory: true,
     investigationMsg: '',
+    compressContextMsg: '',
+    contextStartMessageIndex: -1,
     contextLimitSmall: 0,
     contextLimitLarge: 0,
     thresholdColorRatioLow: 0.5,
@@ -73,13 +82,14 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     async initAssistant(params) {
       this.assistantEnabled = params["enabled"] && this.$root.isLicensed('oai');
       this.investigationMsg = params["investigationPrompt"];
+      this.compressContextMsg = params["compressContextPrompt"];
       this.thresholdColorRatioLow = params["thresholdColorRatioLow"];
       this.thresholdColorRatioMed = params["thresholdColorRatioMed"];
       this.thresholdColorRatioMax = params["thresholdColorRatioMax"];
       this.availableModels = params["availableModels"];
       if (this.availableModels.length > 0) {
         this.modelsMap = new Map(
-          this.availableModels.map(m => [m.id, m])
+          this.availableModels.filter(m => m.enabled).map(m => [m.id, m])
         );
         for (let val of this.modelsMap.values()) {
           if (val.contextLimitLarge < val.contextLimitSmall) val.contextLimitLarge = val.contextLimitSmall;
@@ -119,6 +129,13 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }
     },
 
+    updateCreditsUsed(usage) {
+      if (usage) {
+        const messageCredits = usage.credits || 0;
+        this.creditsUsed += messageCredits;
+      }
+    },
+
     checkContextLimitReached() {
       const maxContextLength = this.increaseContextLimit ? this.contextLimitLarge : this.contextLimitSmall;
       if (this.contextLength >= maxContextLength) {
@@ -141,23 +158,32 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         ];
         // Reset context length for new chat
         this.contextLength = 0;
+        this.creditsUsed = 0;
       } catch (error) {
         this.$root.showError(error);
       }
     },
-    async loadStoredChats() {
-      this.$root.startLoading();
+    async loadStoredChats(showLoading = true) {
+      if (showLoading) this.$root.startLoading();
       try {
         const response = await this.$root.papi.get('/assistant/sessions');
         if (response.data && Array.isArray(response.data)) {
           // Convert backend format to frontend format
-          this.chatHistory = response.data.map(session => ({
-            sessionId: session.sessionId,
-            title: this.generateTitleFromMessage(session),
-            messages: [], // Will be loaded when session is opened
-            timestamp: session.createTime || new Date().toISOString(),
-            lastUpdated: session.createTime || new Date().toISOString()
-          }));
+          this.chatHistoryById = {};
+          this.chatHistory = response.data.map(session => {
+            let s = {
+              sessionId: session.sessionId,
+              title: this.generateTitleFromMessage(session),
+              messages: [], // Will be loaded when session is opened
+              timestamp: session.createTime || new Date().toISOString(),
+              lastUpdated: session.createTime || new Date().toISOString(),
+              tags: session.tags || [],
+              userId: session.userId,
+            };
+            this.chatHistoryById[session.sessionId] = s;
+
+            return s;
+          });
         } else {
           this.chatHistory = [];
         }
@@ -167,7 +193,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         // Fallback to empty array if backend is unavailable
         this.chatHistory = [];
       } finally {
-        this.$root.stopLoading();
+        if (showLoading) this.$root.stopLoading();
       }
     },
     saveCurrentChatId() {
@@ -253,12 +279,14 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         if (response.data) {
           if (response.data.health_status === 'healthy') {
             this.creditsRemaining = response.data.credit_balance || 0;
+            this.creditsLoaded = true;
           } else {
             throw new Error(this.i18n.assistantBalanceCheckUnhealthy);
           }
         }
       } catch (error) {
-        this.$root.showError(this.i18n.assistantUnableToLoadCredits + ': ' + error.message);
+        this.$root.showError(error);
+        this.creditsLoaded = false;
       }
     },
     async saveCurrentChat() {
@@ -335,7 +363,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         await this.$router.replace({ name: 'assistant', params: { sessionId: sessionId } });
       }
     },
-    async sendMessage() {
+    async sendMessage(tags) {
       if (!this.newMessage.trim()) return;
 
       if (!this.canChat) return;
@@ -346,7 +374,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }
 
       // Check if context length has reached the limit
-      if (this.checkContextLimitReached()) return;
+      if (this.checkContextLimitReached() && (!tags || !tags.includes(MSGTAG_CONTEXTCOMPRESSION))) return;
       
       // Check if user has credits
       if (this.creditsRemaining <= 0) {
@@ -393,16 +421,11 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       // Show typing indicator
       this.isTyping = true;
       
-      try {
-        // Call the actual AI API - session ID is already set
-        await this.callAIAPI(messageText);
+      // Call the actual AI API - session ID is already set
+      await this.callAIAPI(messageText, tags);
 
-        // Refresh chat history to show the latest session
-        await this.loadStoredChats();
-      } catch (error) {
-        this.$root.showError(this.i18n.assistantNoResponse + ': ' + error.message);
-        this.isTyping = false;
-      }
+      // Refresh chat history to show the latest session
+      await this.loadStoredChats(false);
     },
     
     // Helper method to parse JSON chunks and handle concatenated/partial JSON
@@ -542,7 +565,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       
       if (assistantMessage && c.delta.type === 'text_delta' && targetSessionId === this.currentChatId) {
         // Only update UI if this is for the current session
-        assistantMessage.content.value += c.delta.text;
+        assistantMessage.content.value += this.nbspRegexOp(c.delta.text);
         this.scrollIfPinned();
       } else if (c.delta.type === 'input_json_delta') {
         const idMap = this.getIndexMap(targetSessionId);
@@ -612,13 +635,14 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         assistantMessage.usage.value = messageUsage;
         // Update context length
         this.updateContextLength(messageUsage);
+        this.updateCreditsUsed(messageUsage);
         this.$forceUpdate();
       }
       
       return { assistantMessage: null, messageUsage: null };
     },
     
-    async callAIAPI(userMessage) {
+    async callAIAPI(userMessage, tags = null) {
       // Capture the session ID at the start of the API call
       const streamingSessionId = this.currentChatId;
       this.activeStreamingSessionId = streamingSessionId;
@@ -628,6 +652,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           msg: userMessage,
           sessionId: streamingSessionId,
           model: this.currentModel,
+          tags: tags,
         },
         {
           headers: {
@@ -779,9 +804,17 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           };
           this.messages.push(errorMessage);
           this.scrollIfPinned();
-          
+
+          // Read streamed error
+          if (error && error.response && error.response.data) {
+            const stream = error.response.data;
+            const reader = stream.pipeThrough(new TextDecoderStream()).getReader();
+            const { done, value } = await reader.read();
+            error = value;
+          }
+
           // Show error to user
-          this.$root.showError(this.i18n.assistantNoResponse + ': ' + (error.response?.data?.error || error.message));
+          this.$root.showError(error);
         }
         
         // Clear the active streaming session if this was the active one
@@ -852,7 +885,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       
       if (assistantMessage && c.delta.type === 'text_delta' && targetSessionId === this.currentChatId) {
         // Only update UI if this is for the current session
-        assistantMessage.content.value += c.delta.text;
+        assistantMessage.content.value += this.nbspRegexOp(c.delta.text);
         this.scrollIfPinned();
       } else if (c.delta.type === 'input_json_delta') {
         const idMap = this.getIndexMap(targetSessionId);
@@ -921,35 +954,33 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         assistantMessage.usage.value = messageUsage;
         // Update context length for tool result messages too
         this.updateContextLength(messageUsage);
+        this.updateCreditsUsed(messageUsage);
         this.$forceUpdate();
       }
       return { assistantMessage: null, messageUsage: null };
     },
     
     // Helper method to capture raw tool result from backend
-    async captureRawToolResult(toolUse) {
+    captureRawToolResult(toolUse) {
       setTimeout(async () => {
         try {
           // Reload the chat history to get the raw result that was just saved
           const response = await this.$root.papi.get(`/assistant/sessions/${this.currentChatId}`);
-          if (response.data && Array.isArray(response.data)) {
+          if (response.data) {
             // Find the last tool result message for this tool
-            for (let i = response.data.length - 1; i >= 0; i--) {
-              const msg = response.data[i];
+            const messages = response.data.history;
+            for (let i = messages.length - 1; i >= 0; i--) {
+              const msg = messages[i];
               if (msg.tags && msg.tags.includes('tool_result')) {
                 let rawResult = null;
-                let toolError = null;
-                const textBlock = msg.message.contentBlocks.find(block => block.type === 'text');
-                if (textBlock && textBlock.text) {
-                  // Parse the tool result format: "ToolUseId: tooluse_QdvZoVlXQNm0PBuqFuqRmA, Result: [actual_result_data]"
-                  const toolResultText = textBlock.text;
-                  const toolUseIdMatch = toolResultText.match(/ToolUseId:\s*([^,]+)/);
-                  const resultMatch = toolResultText.match(/Result:\s*(.+)$/s);
-                  const errorMatch = toolResultText.match(/Error:\s*([^,]+)/);
-                  
-                  if (toolUseIdMatch && resultMatch && errorMatch) {
-                    rawResult = resultMatch[1].trim();
-                    toolError = errorMatch[1].trim();
+                let toolError = '<nil>';
+                const resultBlock = msg.message.contentBlocks.find(block => block.toolResult);
+                if (resultBlock && resultBlock.toolResult?.content?.length) {
+                  const cb = resultBlock.toolResult.content[0];
+                  if (resultBlock.toolResult.isError || resultBlock.toolResult.status === 'error') {
+                    toolError = cb?.text || this.i18n.assistantToolUnknownError;
+                  } else {
+                    rawResult = cb?.json;
                   }
                 }
                 // This is a tool result - associate it with our tool use
@@ -1203,6 +1234,9 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
 
             // Always process chunks for tool execution logic, but only update UI if current session
             switch (c.type) {
+              case 'error':
+                this.$root.showError(this.i18n.assistantToolUseFail + ': ' + c.error.message);
+                break;
               case 'message_start':
                 if (isCurrentSession) {
                   // Capture raw tool result using helper method
@@ -1398,16 +1432,17 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     async loadChatFromBackend(sessionId) {
       try {
         const response = await this.$root.papi.get(`/assistant/sessions/${sessionId}`);
-        if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+        if (response.data && Array.isArray(response.data.history) && response.data.history.length > 0) {
           this.currentChatId = sessionId;
-          this.messages = this.convertBackendMessagesToFrontend(response.data);
+          this.messages = this.convertBackendMessagesToFrontend(response.data.history);
           this.saveCurrentChatId();
 
           await this.scrollToBottomSettled({ maxWait: 6000, settleDelay: 200 });
 
           // Blocks user from sending messages in deleted chats
-          this.checkIfDeleted(sessionId);
+          this.checkIfDeleted(response.data.session);
 
+          this.chatHistoryById[sessionId] = response.data.session;
         } else {
           throw new Error(this.i18n.assistantNoHistoryFound + ' ' + sessionId);
         }
@@ -1432,18 +1467,33 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       let toolError = null;
       
       if (msg.message.contentBlocks && msg.message.contentBlocks.length > 0) {
-        const textBlock = msg.message.contentBlocks.find(block => block.type === 'text');
-        if (textBlock && textBlock.text) {
-          // Parse the tool result format: "ToolUseId: tooluse_QdvZoVlXQNm0PBuqFuqRmA, Result: [actual_result_data]"
-          const toolResultText = textBlock.text;
-          const toolUseIdMatch = toolResultText.match(/ToolUseId:\s*([^,]+)/);
-          const resultMatch = toolResultText.match(/Result:\s*(.+)$/s);
-          const errorMatch = toolResultText.match(/Error:\s*([^,]+)/);
-          
-          if (toolUseIdMatch && resultMatch && errorMatch) {
-            toolUseId = toolUseIdMatch[1].trim();
-            rawResult = resultMatch[1].trim();
-            toolError = errorMatch[1].trim();
+        // proper tool use approach
+        const toolResultBlock = msg.message.contentBlocks.find(block => block.toolResult);
+        if (toolResultBlock && toolResultBlock.toolResult.content?.length) {
+          const cb = toolResultBlock.toolResult.content[0];
+          if (toolResultBlock.toolResult.isError || toolResultBlock.toolResult.status === 'error') {
+            toolError = cb.text || this.i18n.assistantToolUnknownError;
+            rawResult = '<nil>';
+          } else {
+            rawResult = cb?.json;
+            toolError = '<nil>';
+          }
+          toolUseId = toolResultBlock.toolResult.toolUseId;
+        } else {
+          // legacy "ToolResult in Text Response" approach
+          const textBlock = msg.message.contentBlocks.find(block => block.type === 'text');
+          if (textBlock && textBlock.text) {
+            // Parse the tool result format: "ToolUseId: tooluse_QdvZoVlXQNm0PBuqFuqRmA, Result: [actual_result_data]"
+            const toolResultText = textBlock.text;
+            const toolUseIdMatch = toolResultText.match(/ToolUseId:\s*([^,]+)/);
+            const resultMatch = toolResultText.match(/Result:\s*(.+)$/s);
+            const errorMatch = toolResultText.match(/Error:\s*([^,]+)/);
+            
+            if (toolUseIdMatch && resultMatch && errorMatch) {
+              toolUseId = toolUseIdMatch[1].trim();
+              rawResult = resultMatch[1].trim();
+              toolError = errorMatch[1].trim();
+            }
           }
         }
       }
@@ -1492,7 +1542,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         // Extract text from content blocks
         const textBlocks = msg.message.contentBlocks.filter(block => block.type === 'text');
         if (textBlocks.length > 0) {
-          frontendMsg.content = textBlocks.map(block => block.text).join('\n');
+          frontendMsg.content = textBlocks.map(block => this.nbspRegexOp(block.text)).join('\n');
         } else {
           frontendMsg.content = '';
         }
@@ -1577,6 +1627,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       const processedMessages = [];
       // Reset context length when loading from backend
       this.contextLength = 0;
+      this.creditsUsed = 0;
+      this.contextStartMessageIndex = -1;
       
       let skip_next = false;
 
@@ -1605,7 +1657,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         
         const frontendMsg = {
           role: msg.message.role,
-          timestamp: msg.createTime || new Date().toISOString()
+          timestamp: msg.createTime || new Date().toISOString(),
+          tags: msg.tags || [],
         };
 
         // Extract message content using helper method
@@ -1624,9 +1677,17 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           frontendMsg.usage = Vue.ref(msg.message.usage);
           // Update context length for loaded messages
           this.updateContextLength(msg.message.usage);
+          this.updateCreditsUsed(msg.message.usage);
         }
 
         processedMessages.push(frontendMsg);
+
+        if (msg.tags && msg.tags.includes(MSGTAG_CONTEXTCOMPRESSION)) {
+          // reset context, messages prior to this message are no longer
+          // sent to the AI
+          this.contextLength = 0;
+          this.contextStartMessageIndex = processedMessages.length - 1;
+        }
       }
       
       return processedMessages;
@@ -1669,6 +1730,15 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       if (value < threshold3) return "text-amber darken-1";
       return "text-red darken-1";
     },
+
+    getCompressColor() {
+      const maxContextLength = this.increaseMaxContextThreshold ? this.contextLimitLarge : this.contextLimitSmall;
+      if (this.contextLength >= maxContextLength / 2) {
+        return 'primary';
+      }
+
+      return 'theme-icon';
+    },
     
 
     // Generic setting save method
@@ -1702,7 +1772,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
 
     // Check if a tool should be auto-approved based on localStorage settings
     shouldAutoApproveTool(toolName) {
-      return ['query_events', 'get_playbooks', 'query_cases'].includes(toolName) && this.alwaysApproveReadRequests;
+      return ['query_events', 'get_playbooks', 'query_cases', 'query_detections'].includes(toolName) && this.alwaysApproveReadRequests;
     },
 
     // Open the options menu programmatically
@@ -1732,11 +1802,11 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.isStreaming = false;
     },
     
-    checkIfDeleted(sessionId) {
-      const sessionInHistory = this.chatHistory.some(session => session.sessionId === sessionId);
+    checkIfDeleted(session) {
+      const sessionInHistory = this.chatHistory.some(s => s.sessionId === session.sessionId);
       if (!sessionInHistory) {
         this.canChat = false;
-        this.$root.showWarning(this.i18n.assistantChatIsDeleted);
+        this.$root.showWarning(this.i18n.assistantChatNoResume);
       } else {
         this.canChat = true;
       }
@@ -1806,5 +1876,46 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       const tQ = this.toolQueues.get(this.currentChatId) || [];
       return this.isStreaming || this.isTyping || tQ.length > 0;
     },
+    async compressCurrentSession() {
+      const oldMsg = this.newMessage;
+      this.newMessage = this.compressContextMsg;
+
+      this.contextLength = 0;
+      
+      await this.sendMessage([MSGTAG_CONTEXTCOMPRESSION]);
+      this.loadChatFromBackend(this.currentChatId);
+      
+      if (oldMsg) this.newMessage = oldMsg;
+    },
+
+    messageClassesFromTags(tags) {
+      return tags.map(tag => 'msgTag-' + tag);
+    },
+    async toggleSharedSession() {
+      const session = this.chatHistoryById[this.currentChatId];
+      if (!session || session.userId !== this.$root.user.id) return;
+      
+      const hasTag = (session.tags || []).includes(SESTAG_SHARED);
+      const action = hasTag ? 'remove' : 'add';
+      
+      await this.updateSessionTag(this.currentChatId, action, SESTAG_SHARED);
+
+      await this.loadStoredChats();
+    },
+    async updateSessionTag(sessionId, action, tag) {
+      try {
+        const payload = {
+          action: action,
+          tag: tag
+        };
+        await this.$root.papi.put(`/assistant/sessions/${sessionId}`, payload);
+
+      } catch (error) {
+        this.$root.showError(this.i18n.assistantSessionTagUpdateFail + ': ' + error.message);
+      }
+    },
+    nbspRegexOp(text) {
+      return text.replace(/^(&nbsp;?[\n]*)/, '');
+    }
   }
 }});

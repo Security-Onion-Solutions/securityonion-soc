@@ -3014,8 +3014,17 @@ const huntComponent = {
     isQuestionAggregate(question) {
       if ('isAggregate' in question) return question.isAggregate;
 
-      const yaml = jsyaml.load(question.query, { schema: jsyaml.FAILSAFE_SCHEMA });
-      question.isAggregate = typeof yaml.aggregation === 'string' && yaml.aggregation.toLowerCase() === 'true';
+      try {
+        const yaml = jsyaml.load(question.query, { schema: jsyaml.FAILSAFE_SCHEMA });
+        question.isAggregate = typeof yaml.aggregation === 'string' && yaml.aggregation.toLowerCase() === 'true';
+      } catch {
+        const match = question.query.match(/^\s*aggregation\s*:\s*(true|false)\s*$/im)
+        if (match) {
+          question.isAggregate = match[1].toLowerCase() === 'true';
+        } else { 
+          question.isAggregate = false;
+        }
+      }
 
       return question.isAggregate;
     },

@@ -182,6 +182,7 @@ type AlertingParameters struct {
 type AssistantParameters struct {
 	Enabled                bool              `json:"enabled"`
 	InvestigationPrompt    string            `json:"investigationPrompt"`
+	CompressContextPrompt  string            `json:"compressContextPrompt"`
 	ThresholdColorRatioLow float64           `json:"thresholdColorRatioLow"`
 	ThresholdColorRatioMed float64           `json:"thresholdColorRatioMed"`
 	ThresholdColorRatioMax float64           `json:"thresholdColorRatioMax"`
@@ -194,6 +195,7 @@ type ModelParameters struct {
 	ContextLimitSmall    int    `json:"contextLimitSmall"`
 	ContextLimitLarge    int    `json:"contextLimitLarge"`
 	LowBalanceColorAlert int    `json:"lowBalanceColorAlert"`
+	Enabled              bool   `json:"enabled"`
 }
 
 // Custom unmarshal to handle numeric or scientific-notation string fields

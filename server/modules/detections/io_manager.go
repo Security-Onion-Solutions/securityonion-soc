@@ -37,6 +37,7 @@ type IOManager interface {
 	DeleteFile(path string) error
 	ReadDir(path string) ([]os.DirEntry, error)
 	RemoveAll(path string) error
+	Stat(path string) (os.FileInfo, error)
 	MakeRequest(*http.Request, bool) (*http.Response, error)
 	ExecCommand(cmd *exec.Cmd) ([]byte, int, time.Duration, error)
 	WalkDir(root string, fn fs.WalkDirFunc) error
@@ -68,6 +69,10 @@ func (_ *ResourceManager) ReadDir(path string) ([]os.DirEntry, error) {
 
 func (_ *ResourceManager) RemoveAll(path string) error {
 	return os.RemoveAll(path)
+}
+
+func (_ *ResourceManager) Stat(path string) (os.FileInfo, error) {
+	return os.Stat(path)
 }
 
 func (resman *ResourceManager) MakeRequest(req *http.Request, streaming bool) (*http.Response, error) {

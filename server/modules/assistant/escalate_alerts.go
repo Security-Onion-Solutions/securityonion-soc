@@ -32,10 +32,7 @@ func (t *EscalateAlertsTool) GetName() string {
 
 func (t *EscalateAlertsTool) GetDescription() string {
 	return "Escalate an alert in Security Onion to a case using the alert's unique identifier (_id). This tool should create a new case if case_title is provided. On the other hand, if case_id is provided, escalate to that case.\n" +
-		"- *IMPORTANT* You MUST provide ONE of case_title or case_id, but NEVER both.\n" +
-		"- Examples for wild cards in the search_filter:\n" +
-		"  - Search terms cannot begin with a wildcard (e.g., `*xyz` the wildcard is ignored, but `xyz*` is valid)\n" +
-		"  - When using wildcards, do not wrap the value in quotes, instead use parentheses (e.g., `rule.name:(A B*)` is valid, but `rule.name:\"A B*\"` will not work as expected)"
+		"- *IMPORTANT* You MUST provide ONE of case_title or case_id, but NEVER both."
 }
 
 func (t *EscalateAlertsTool) GetSchema() model.JSONSchema {
@@ -56,16 +53,13 @@ func (t *EscalateAlertsTool) GetSchema() model.JSONSchema {
 					Description: `Id of the case we want to escalate to. (e.g., "Y6i16JkBZwOCEak1tWqX")`,
 				},
 				"range_start": {
-					Type:        "string",
-					Description: "Optional start time for the query range (e.g., \"-1h\", \"2023/10/26 10:00:00 AM\"). Default is 24 hours ago (\"-24h\")",
+					Type: "string",
 				},
 				"range_end": {
-					Type:        "string",
-					Description: "Optional end time for the query range (e.g., \"now\", \"2023/10/26 12:00:00 PM\"). Default is now.",
+					Type: "string",
 				},
 				"range_format": {
-					Type:        "string",
-					Description: "Format of the date range (default: \"2006/01/02 3:04:05 PM\"). The format must be specified using Go's time package's reference layout format. Required if either range_start or range_end is provided.",
+					Type: "string",
 				},
 			},
 			Required: []string{"search_filter"},
@@ -175,14 +169,14 @@ func (t *EscalateAlertsTool) Execute(ctx context.Context, server *server.Server,
 		if err != nil {
 			logger.WithError(err).Error("error creating case for escalated alert")
 
-			return nil, err
+			return nil, fmt.Errorf("error creating case for escalated alert: %w", err)
 		}
 	} else {
 		modelCase, err = server.Casestore.GetCase(ctx, args.CaseId)
 		if err != nil {
 			logger.WithField("caseId", args.CaseId).WithError(err).Error("error fetching case for escalated alert")
 
-			return nil, err
+			return nil, fmt.Errorf("error fetching case for escalated alert: %w", err)
 		}
 	}
 	for _, ev := range relatedEvents {
@@ -195,7 +189,7 @@ func (t *EscalateAlertsTool) Execute(ctx context.Context, server *server.Server,
 	if err != nil {
 		logger.WithError(err).Error("error linking alerts to new case")
 
-		return nil, err
+		return nil, fmt.Errorf("error linking alerts to new case: %w", err)
 	}
 
 	logger.WithFields(log.Fields{
@@ -220,7 +214,7 @@ func (t *EscalateAlertsTool) Execute(ctx context.Context, server *server.Server,
 	if err != nil {
 		logger.WithError(err).Error("error escalating alert")
 
-		return nil, err
+		return nil, fmt.Errorf("error escalating alert: %w", err)
 	}
 
 	if ackResults.UpdatedCount == 0 {

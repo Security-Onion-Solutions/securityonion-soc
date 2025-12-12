@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -162,7 +163,7 @@ func (store *ElasticAssistantstore) validateChat(chat *model.StoredMessage) erro
 			filtered := false
 
 			for _, cb := range chat.Message.ContentBlocks {
-				if cb.Type == "" {
+				if cb.Type == "" && cb.ToolResult == nil {
 					err = fmt.Errorf("every content block must have a type")
 					break
 				}
@@ -222,20 +223,40 @@ func (store *ElasticAssistantstore) SaveChat(ctx context.Context, chat *model.St
 	return err
 }
 
-func (store *ElasticAssistantstore) GetChatHistory(ctx context.Context, sessionId string, authored bool) ([]*model.StoredMessage, error) {
-	userId := ctx.Value(web.ContextKeyRequestorId).(string)
+func (store *ElasticAssistantstore) GetChatHistory(ctx context.Context, sessionId string) ([]*model.StoredMessage, error) {
+	logger := log.FromContext(ctx)
 
-	if authored {
-		if err := store.server.CheckAuthorized(ctx, "read_authored", "assistant"); err != nil {
+	existing, err := store.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithIncludeDeleted(true))
+	if err != nil {
+		return nil, err
+	}
+
+	if len(existing) == 0 {
+		return nil, fmt.Errorf("Object not found")
+	}
+
+	session := existing[0]
+
+	userId := ctx.Value(web.ContextKeyRequestorId).(string)
+	if session.UserId == userId {
+		// they own it, can the user read_authored?
+		err := store.server.CheckAuthorized(ctx, "read_authored", "assistant")
+		if err != nil {
+			return nil, err
+		}
+	} else if slices.Contains(session.Tags, "shared") {
+		// they don't own it but it's shared, can the user read_shared?
+		err := store.server.CheckAuthorized(ctx, "read_shared", "assistant")
+		if err != nil {
 			return nil, err
 		}
 	} else {
-		if err := store.server.CheckAuthorized(ctx, "read_all", "assistant"); err != nil {
+		// they don't own it and it isn't shared, can the user read_all?
+		err := store.server.CheckAuthorized(ctx, "read_all", "assistant")
+		if err != nil {
 			return nil, err
 		}
 	}
-
-	logger := log.FromContext(ctx)
 
 	// Build Elasticsearch query to get all messages for the session
 	query := map[string]any{
@@ -334,9 +355,7 @@ func (store *ElasticAssistantstore) GetChatHistory(ctx context.Context, sessionI
 							message.Auditable.Kind = source[store.schemaPrefix+"kind"].(string)
 							message.Auditable.Id = hit["_id"].(string)
 
-							if !authored || message.UserId == userId {
-								messages = append(messages, &message)
-							}
+							messages = append(messages, &message)
 						}
 					}
 				}
@@ -353,20 +372,10 @@ func (store *ElasticAssistantstore) GetChatHistory(ctx context.Context, sessionI
 	return messages, nil
 }
 
-func (store *ElasticAssistantstore) GetSessions(ctx context.Context, authored bool, opts ...model.GetSessionsOpt) ([]*model.AssistantSession, error) {
+func (store *ElasticAssistantstore) GetSessions(ctx context.Context, opts ...model.GetSessionsOpt) ([]*model.AssistantSession, error) {
 	opt := &model.GetSessionsOpts{}
 	for _, o := range opts {
 		o(opt)
-	}
-
-	if authored {
-		if err := store.server.CheckAuthorized(ctx, "read_authored", "assistant"); err != nil {
-			return nil, err
-		}
-	} else {
-		if err := store.server.CheckAuthorized(ctx, "read_all", "assistant"); err != nil {
-			return nil, err
-		}
 	}
 
 	logger := log.FromContext(ctx)
@@ -527,6 +536,8 @@ func (store *ElasticAssistantstore) GetSessions(ctx context.Context, authored bo
 		"requestId":    ctx.Value(web.ContextKeyRequestId),
 	}).Debug("Found first messages for sessions")
 
+	sessions = store.filterSharedSessions(ctx, sessions)
+
 	if opt.Usage() {
 		if err := store.populateSessionUsage(ctx, sessions); err != nil {
 			logger.WithError(err).Error("Failed to populate session usage")
@@ -534,7 +545,67 @@ func (store *ElasticAssistantstore) GetSessions(ctx context.Context, authored bo
 		}
 	}
 
+	if err := store.addMetaFromMessages(ctx, sessions); err != nil {
+		logger.WithError(err).Error("Failed to populate session update time")
+		return nil, err
+	}
+
 	return sessions, nil
+}
+
+func (store *ElasticAssistantstore) filterSharedSessions(ctx context.Context, sessions []*model.AssistantSession) []*model.AssistantSession {
+	logger := log.FromContext(ctx)
+	userId := ctx.Value(web.ContextKeyRequestorId).(string)
+	filteredOut := 0
+
+	var canReadAll, canReadShared, canReadAuthored *bool
+
+	filtered := make([]*model.AssistantSession, 0, len(sessions))
+	for _, s := range sessions {
+		if s.UserId == userId {
+			// they own it, can they read it?
+			if canReadAuthored == nil {
+				err := store.server.CheckAuthorized(ctx, "read_authored", "assistant")
+				canReadAuthored = util.Ptr(err == nil)
+			}
+			if *canReadAuthored {
+				filtered = append(filtered, s)
+			} else {
+				filteredOut++
+			}
+		} else {
+			// they don't own it, is it shared?
+			if slices.Contains(s.Tags, "shared") {
+				// its shared, can they read shared?
+				if canReadShared == nil {
+					err := store.server.CheckAuthorized(ctx, "read_shared", "assistant")
+					canReadShared = util.Ptr(err == nil)
+				}
+				if *canReadShared {
+					filtered = append(filtered, s)
+				} else {
+					filteredOut++
+				}
+			} else {
+				// they don't own it and it's not shared, can they read all?
+				if canReadAll == nil {
+					err := store.server.CheckAuthorized(ctx, "read_all", "assistant")
+					canReadAll = util.Ptr(err == nil)
+				}
+				if *canReadAll {
+					filtered = append(filtered, s)
+				} else {
+					filteredOut++
+				}
+			}
+		}
+	}
+
+	if filteredOut != 0 {
+		logger.WithField("filteredSessions", filteredOut).Info("filtering out shared sessions")
+	}
+
+	return filtered
 }
 
 func (store *ElasticAssistantstore) populateSessionUsage(ctx context.Context, sessions []*model.AssistantSession) error {
@@ -697,6 +768,134 @@ func (store *ElasticAssistantstore) populateSessionUsage(ctx context.Context, se
 	return nil
 }
 
+func (store *ElasticAssistantstore) addMetaFromMessages(ctx context.Context, sessions []*model.AssistantSession) error {
+	if len(sessions) == 0 {
+		return nil
+	}
+
+	logger := log.FromContext(ctx)
+
+	// Build MSearch request body - one search per session
+	var msearchBody strings.Builder
+	for _, session := range sessions {
+		// Header line (empty object means use default index)
+		msearchBody.WriteString("{}\n")
+
+		// Query to aggregate usage for this session
+		query := map[string]any{
+			"query": map[string]any{
+				"bool": map[string]any{
+					"must": []any{
+						map[string]any{
+							"term": map[string]any{
+								store.schemaPrefix + "chat.sessionId": session.SessionId,
+							},
+						},
+						map[string]any{
+							"term": map[string]any{
+								store.schemaPrefix + "kind": "chat",
+							},
+						},
+					},
+				},
+			},
+			"aggs": map[string]any{
+				"update_time": map[string]any{
+					"max": map[string]any{
+						"field":  store.schemaPrefix + "chat.createTime",
+						"format": "strict_date_optional_time",
+					},
+				},
+			},
+			"size": 0,
+		}
+
+		queryJSON, err := json.Marshal(query)
+		if err != nil {
+			logger.WithError(err).Error("Failed to marshal session usage query")
+			return err
+		}
+		msearchBody.WriteString(string(queryJSON))
+		msearchBody.WriteString("\n")
+	}
+
+	logger.WithFields(log.Fields{
+		"sessionCount":  len(sessions),
+		"msearchLength": msearchBody.Len(),
+		"requestId":     ctx.Value(web.ContextKeyRequestId),
+	}).Debug("Executing MSearch for session usage")
+
+	// Execute MSearch
+	res, err := store.esClient.Msearch(
+		strings.NewReader(msearchBody.String()),
+		store.esClient.Msearch.WithContext(ctx),
+		store.esClient.Msearch.WithIndex(store.chatIndex),
+	)
+	if err != nil {
+		logger.WithError(err).Error("Failed to execute MSearch for session usage")
+		return err
+	}
+	defer res.Body.Close()
+
+	responseJSON, err := readJsonFromResponse(res)
+	if err != nil {
+		logger.WithError(err).Error("Failed to read MSearch response")
+		return err
+	}
+
+	logger.WithFields(log.Fields{
+		"msearchResponseLength": len(responseJSON),
+		"requestId":             ctx.Value(web.ContextKeyRequestId),
+	}).Debug("Received MSearch response")
+
+	var response map[string]any
+	if err := json.Unmarshal([]byte(responseJSON), &response); err != nil {
+		logger.WithError(err).Error("Failed to unmarshal MSearch response")
+		return err
+	}
+
+	// Parse responses and populate session usage
+	if responses, ok := response["responses"].([]any); ok {
+		for i, respObj := range responses {
+			if i >= len(sessions) {
+				break
+			}
+
+			session := sessions[i]
+			if resp, ok := respObj.(map[string]any); ok {
+				// Check for error
+				if errObj, hasErr := resp["error"]; hasErr {
+					logger.WithFields(log.Fields{
+						"sessionId": session.SessionId,
+						"error":     errObj,
+					}).Warn("Error in MSearch response for session")
+					continue
+				}
+
+				// Extract aggregations
+				if aggs, ok := resp["aggregations"].(map[string]any); ok {
+					if updateTimeAgg, ok := aggs["update_time"].(map[string]any); ok {
+						if value, ok := updateTimeAgg["value_as_string"].(string); ok {
+							updateTimeConverted, err := time.Parse(time.RFC3339, value)
+							if err != nil {
+								return fmt.Errorf("failed to parse updateTime string: %w", err)
+							}
+							session.UpdateTime = &updateTimeConverted
+						}
+					}
+				}
+			}
+		}
+	}
+
+	logger.WithFields(log.Fields{
+		"sessionCount": len(sessions),
+		"requestId":    ctx.Value(web.ContextKeyRequestId),
+	}).Debug("Populated session usage")
+
+	return nil
+}
+
 func (store *ElasticAssistantstore) CreateSession(ctx context.Context, session *model.AssistantSession) error {
 	if err := store.server.CheckAuthorized(ctx, "write_authored", "assistant"); err != nil {
 		return err
@@ -715,11 +914,82 @@ func (store *ElasticAssistantstore) CreateSession(ctx context.Context, session *
 	return err
 }
 
+func (store *ElasticAssistantstore) UpdateSessionTags(ctx context.Context, sessionId string, tags []string) error {
+	if err := store.server.CheckAuthorized(ctx, "write_authored", "assistant"); err != nil {
+		return err
+	}
+
+	userId := ctx.Value(web.ContextKeyRequestorId).(string)
+	logger := log.FromContext(ctx)
+
+	// Build UpdateByQuery request to update session tags
+	query := map[string]any{
+		"query": map[string]any{
+			"bool": map[string]any{
+				"must": []any{
+					map[string]any{
+						"term": map[string]any{
+							store.schemaPrefix + "session.sessionId": sessionId,
+						},
+					},
+					map[string]any{
+						"term": map[string]any{
+							store.schemaPrefix + "session.userId": userId,
+						},
+					},
+				},
+			},
+		},
+		"script": map[string]any{
+			"source": "ctx._source." + store.schemaPrefix + "session.tags = params.tags;",
+			"lang":   "painless",
+			"params": map[string]any{
+				"tags": tags,
+			},
+		},
+	}
+
+	// Convert query to JSON
+	queryJSON, err := json.Marshal(query)
+	if err != nil {
+		logger.WithError(err).Error("Failed to marshal UpdateByQuery request")
+		return err
+	}
+
+	logger.WithFields(log.Fields{
+		"sessionId": sessionId,
+		"tags":      tags,
+		"requestId": ctx.Value(web.ContextKeyRequestId),
+	}).Debug("Updating session tags using UpdateByQuery")
+
+	// Execute UpdateByQuery to update the session tags
+	res, err := store.esClient.UpdateByQuery(
+		[]string{store.disableCrossClusterIndex(store.sessionIndex)},
+		store.esClient.UpdateByQuery.WithContext(ctx),
+		store.esClient.UpdateByQuery.WithBody(strings.NewReader(string(queryJSON))),
+		store.esClient.UpdateByQuery.WithRefresh(true),
+		store.esClient.UpdateByQuery.WithWaitForCompletion(true),
+	)
+	if err != nil {
+		logger.WithError(err).Error("Failed to update session tags")
+		return err
+	}
+	defer res.Body.Close()
+
+	logger.WithFields(log.Fields{
+		"sessionId": sessionId,
+		"requestId": ctx.Value(web.ContextKeyRequestId),
+	}).Debug("successfully updated session tags")
+
+	return nil
+}
+
 func (store *ElasticAssistantstore) DeleteSession(ctx context.Context, sessionId string) error {
 	if err := store.server.CheckAuthorized(ctx, "delete_authored", "assistant"); err != nil {
 		return err
 	}
 
+	userId := ctx.Value(web.ContextKeyRequestorId).(string)
 	logger := log.FromContext(ctx)
 
 	now := time.Now()
@@ -728,8 +998,19 @@ func (store *ElasticAssistantstore) DeleteSession(ctx context.Context, sessionId
 	// Build UpdateByQuery request to mark session as deleted
 	query := map[string]any{
 		"query": map[string]any{
-			"term": map[string]any{
-				store.schemaPrefix + "session.sessionId": sessionId,
+			"bool": map[string]any{
+				"must": []any{
+					map[string]any{
+						"term": map[string]any{
+							store.schemaPrefix + "session.sessionId": sessionId,
+						},
+					},
+					map[string]any{
+						"term": map[string]any{
+							store.schemaPrefix + "session.userId": userId,
+						},
+					},
+				},
 			},
 		},
 		"script": map[string]any{

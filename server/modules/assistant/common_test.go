@@ -10,6 +10,8 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -258,4 +260,348 @@ func splitRange(rangeStr string) []string {
 		}
 	}
 	return parts
+}
+
+func TestPopulateOverridesFromMaps(t *testing.T) {
+	testCases := []struct {
+		name         string
+		inputMaps    []map[string]any
+		includeTimes bool
+		expected     []*model.Override
+	}{
+		{
+			name:         "empty input",
+			inputMaps:    []map[string]any{},
+			includeTimes: false,
+			expected:     []*model.Override{},
+		},
+		{
+			name: "single suppress override without times",
+			inputMaps: []map[string]any{
+				{
+					"type":      "suppress",
+					"isEnabled": true,
+					"note":      "Test suppress note",
+					"ip":        "192.168.1.0/24",
+					"track":     "by_src",
+				},
+			},
+			includeTimes: false,
+			expected: []*model.Override{
+				{
+					Type:      model.OverrideTypeSuppress,
+					IsEnabled: true,
+					Note:      "Test suppress note",
+					OverrideParameters: model.OverrideParameters{
+						IP:    util.Ptr("192.168.1.0/24"),
+						Track: util.Ptr("by_src"),
+					},
+				},
+			},
+		},
+		{
+			name: "single threshold override with times",
+			inputMaps: []map[string]any{
+				{
+					"type":          "threshold",
+					"isEnabled":     true,
+					"note":          "Test threshold note",
+					"thresholdType": "limit",
+					"track":         "by_dst",
+					"count":         float64(10),
+					"seconds":       float64(60),
+					"createdAt":     "2024-01-15T10:00:00Z",
+					"updatedAt":     "2024-01-15T11:00:00Z",
+				},
+			},
+			includeTimes: true,
+			expected: []*model.Override{
+				{
+					Type:      model.OverrideTypeThreshold,
+					IsEnabled: true,
+					Note:      "Test threshold note",
+					CreatedAt: mustParseTime("2024-01-15T10:00:00Z"),
+					UpdatedAt: mustParseTime("2024-01-15T11:00:00Z"),
+					OverrideParameters: model.OverrideParameters{
+						ThresholdType: util.Ptr("limit"),
+						Track:         util.Ptr("by_dst"),
+						Count:         util.Ptr(10),
+						Seconds:       util.Ptr(60),
+					},
+				},
+			},
+		},
+		{
+			name: "modify override",
+			inputMaps: []map[string]any{
+				{
+					"type":      "modify",
+					"isEnabled": false,
+					"note":      "Test modify note",
+					"regex":     "content:xyz",
+					"value":     "content:abc",
+				},
+			},
+			includeTimes: false,
+			expected: []*model.Override{
+				{
+					Type:      model.OverrideTypeModify,
+					IsEnabled: false,
+					Note:      "Test modify note",
+					OverrideParameters: model.OverrideParameters{
+						Regex: util.Ptr("content:xyz"),
+						Value: util.Ptr("content:abc"),
+					},
+				},
+			},
+		},
+		{
+			name: "customFilter override",
+			inputMaps: []map[string]any{
+				{
+					"type":         "customFilter",
+					"isEnabled":    true,
+					"note":         "Test custom filter note",
+					"customFilter": "sofilter:\n  user.name: test",
+				},
+			},
+			includeTimes: false,
+			expected: []*model.Override{
+				{
+					Type:      model.OverrideTypeCustomFilter,
+					IsEnabled: true,
+					Note:      "Test custom filter note",
+					OverrideParameters: model.OverrideParameters{
+						CustomFilter: util.Ptr("sofilter:\n  user.name: test"),
+					},
+				},
+			},
+		},
+		{
+			name: "multiple overrides with mixed types",
+			inputMaps: []map[string]any{
+				{
+					"type":      "suppress",
+					"isEnabled": true,
+					"note":      "First override",
+					"ip":        "10.0.0.0/8",
+					"track":     "by_either",
+				},
+				{
+					"type":          "threshold",
+					"isEnabled":     false,
+					"note":          "Second override",
+					"thresholdType": "both",
+					"track":         "by_src",
+					"count":         float64(5),
+					"seconds":       float64(120),
+				},
+				{
+					"type":      "modify",
+					"isEnabled": true,
+					"note":      "Third override",
+					"regex":     "pattern",
+					"value":     "replacement",
+				},
+			},
+			includeTimes: false,
+			expected: []*model.Override{
+				{
+					Type:      model.OverrideTypeSuppress,
+					IsEnabled: true,
+					Note:      "First override",
+					OverrideParameters: model.OverrideParameters{
+						IP:    util.Ptr("10.0.0.0/8"),
+						Track: util.Ptr("by_either"),
+					},
+				},
+				{
+					Type:      model.OverrideTypeThreshold,
+					IsEnabled: false,
+					Note:      "Second override",
+					OverrideParameters: model.OverrideParameters{
+						ThresholdType: util.Ptr("both"),
+						Track:         util.Ptr("by_src"),
+						Count:         util.Ptr(5),
+						Seconds:       util.Ptr(120),
+					},
+				},
+				{
+					Type:      model.OverrideTypeModify,
+					IsEnabled: true,
+					Note:      "Third override",
+					OverrideParameters: model.OverrideParameters{
+						Regex: util.Ptr("pattern"),
+						Value: util.Ptr("replacement"),
+					},
+				},
+			},
+		},
+		{
+			name: "override with times excluded when includeTimes is false",
+			inputMaps: []map[string]any{
+				{
+					"type":      "suppress",
+					"isEnabled": true,
+					"note":      "Test note",
+					"ip":        "172.16.0.0/12",
+					"track":     "by_dst",
+					"createdAt": "2024-01-15T10:00:00Z",
+					"updatedAt": "2024-01-15T11:00:00Z",
+				},
+			},
+			includeTimes: false,
+			expected: []*model.Override{
+				{
+					Type:      model.OverrideTypeSuppress,
+					IsEnabled: true,
+					Note:      "Test note",
+					OverrideParameters: model.OverrideParameters{
+						IP:    util.Ptr("172.16.0.0/12"),
+						Track: util.Ptr("by_dst"),
+					},
+				},
+			},
+		},
+		{
+			name: "override with invalid time format (should be skipped)",
+			inputMaps: []map[string]any{
+				{
+					"type":      "suppress",
+					"isEnabled": true,
+					"note":      "Test note",
+					"ip":        "192.168.0.0/16",
+					"track":     "by_src",
+					"createdAt": "invalid-time-format",
+					"updatedAt": "2024-01-15T11:00:00Z",
+				},
+			},
+			includeTimes: true,
+			expected: []*model.Override{
+				{
+					Type:      model.OverrideTypeSuppress,
+					IsEnabled: true,
+					Note:      "Test note",
+					UpdatedAt: mustParseTime("2024-01-15T11:00:00Z"),
+					OverrideParameters: model.OverrideParameters{
+						IP:    util.Ptr("192.168.0.0/16"),
+						Track: util.Ptr("by_src"),
+					},
+				},
+			},
+		},
+		{
+			name: "override with missing optional fields",
+			inputMaps: []map[string]any{
+				{
+					"type":      "suppress",
+					"isEnabled": true,
+					// note is missing
+					"ip":    "10.10.10.0/24",
+					"track": "by_src",
+				},
+			},
+			includeTimes: false,
+			expected: []*model.Override{
+				{
+					Type:      model.OverrideTypeSuppress,
+					IsEnabled: true,
+					Note:      "",
+					OverrideParameters: model.OverrideParameters{
+						IP:    util.Ptr("10.10.10.0/24"),
+						Track: util.Ptr("by_src"),
+					},
+				},
+			},
+		},
+		{
+			name: "override with all pointer fields",
+			inputMaps: []map[string]any{
+				{
+					"type":          "threshold",
+					"isEnabled":     true,
+					"note":          "Complete override",
+					"thresholdType": "threshold",
+					"track":         "by_dst",
+					"count":         float64(100),
+					"seconds":       float64(300),
+					"regex":         "should_be_ignored_for_threshold",
+					"value":         "should_be_ignored_for_threshold",
+					"ip":            "should_be_ignored_for_threshold",
+					"customFilter":  "should_be_ignored_for_threshold",
+				},
+			},
+			includeTimes: false,
+			expected: []*model.Override{
+				{
+					Type:      model.OverrideTypeThreshold,
+					IsEnabled: true,
+					Note:      "Complete override",
+					OverrideParameters: model.OverrideParameters{
+						ThresholdType: util.Ptr("threshold"),
+						Track:         util.Ptr("by_dst"),
+						Count:         util.Ptr(100),
+						Seconds:       util.Ptr(300),
+						Regex:         util.Ptr("should_be_ignored_for_threshold"),
+						Value:         util.Ptr("should_be_ignored_for_threshold"),
+						IP:            util.Ptr("should_be_ignored_for_threshold"),
+						CustomFilter:  util.Ptr("should_be_ignored_for_threshold"),
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := populateOverridesFromMaps(tc.inputMaps, tc.includeTimes)
+
+			assert.Equal(t, len(tc.expected), len(result), "Number of overrides should match")
+
+			for i, expectedOverride := range tc.expected {
+				if i >= len(result) {
+					t.Fatalf("Expected override at index %d but result is too short", i)
+				}
+
+				actualOverride := result[i]
+
+				assert.Equal(t, expectedOverride.Type, actualOverride.Type, "Override type should match")
+				assert.Equal(t, expectedOverride.IsEnabled, actualOverride.IsEnabled, "IsEnabled should match")
+				assert.Equal(t, expectedOverride.Note, actualOverride.Note, "Note should match")
+
+				// Check times if includeTimes was true
+				if tc.includeTimes {
+					if !expectedOverride.CreatedAt.IsZero() {
+						assert.Equal(t, expectedOverride.CreatedAt, actualOverride.CreatedAt, "CreatedAt should match")
+					}
+					if !expectedOverride.UpdatedAt.IsZero() {
+						assert.Equal(t, expectedOverride.UpdatedAt, actualOverride.UpdatedAt, "UpdatedAt should match")
+					}
+				} else {
+					// When includeTimes is false, times should be zero
+					assert.True(t, actualOverride.CreatedAt.IsZero(), "CreatedAt should be zero when includeTimes is false")
+					assert.True(t, actualOverride.UpdatedAt.IsZero(), "UpdatedAt should be zero when includeTimes is false")
+				}
+
+				// Check pointer fields using util.Equal
+				assert.True(t, util.Equal(expectedOverride.Regex, actualOverride.Regex), "Regex should match")
+				assert.True(t, util.Equal(expectedOverride.Value, actualOverride.Value), "Value should match")
+				assert.True(t, util.Equal(expectedOverride.Track, actualOverride.Track), "Track should match")
+				assert.True(t, util.Equal(expectedOverride.IP, actualOverride.IP), "IP should match")
+				assert.True(t, util.Equal(expectedOverride.ThresholdType, actualOverride.ThresholdType), "ThresholdType should match")
+				assert.True(t, util.Equal(expectedOverride.Count, actualOverride.Count), "Count should match")
+				assert.True(t, util.Equal(expectedOverride.Seconds, actualOverride.Seconds), "Seconds should match")
+				assert.True(t, util.Equal(expectedOverride.CustomFilter, actualOverride.CustomFilter), "CustomFilter should match")
+			}
+		})
+	}
+}
+
+// Helper function for tests
+func mustParseTime(s string) time.Time {
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		panic(err)
+	}
+	return t
 }

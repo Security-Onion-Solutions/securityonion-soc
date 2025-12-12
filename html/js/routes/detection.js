@@ -826,6 +826,9 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 					case 409:
 						this.$root.showWarning(this.i18n.publicIdConflictErr);
 						break;
+					case 423:
+						this.$root.showWarning(this.i18n.detectionSyncBlockedErr);
+						break;
 					default:
 						this.$root.showError(error);
 						break;

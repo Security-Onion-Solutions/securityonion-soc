@@ -10,6 +10,10 @@ import (
 	"time"
 )
 
+const (
+	MessageTagContextCompression = "context_compression"
+)
+
 // @Description A user message to be added to a session.
 type IncomingMessage struct {
 	// The content of the message.
@@ -18,6 +22,8 @@ type IncomingMessage struct {
 	SessionId string `json:"sessionId" example:"chat_1757086398900_ykhmndscn"`
 	// The model to use for this message.
 	Model string `json:"model,omitempty" example:"claude-sonnet-4.5"`
+	// Tags to be applied to the message.
+	Tags []string `json:"tags,omitempty" example:"investigation"`
 }
 
 // @Description A request to initiate a chat session.
@@ -220,6 +226,20 @@ type ContentBlock struct {
 	Content any `json:"content,omitempty,omitzero" example:"What exactly is an APT?"`
 	// The plain text content of the message.
 	Text string `json:"text,omitempty" example:"What are my latest alerts?"`
+	// The tool result content of the message.
+	ToolResult *ToolResult `json:"toolResult,omitempty"`
+}
+
+type ToolResult struct {
+	ToolUseId string              `json:"toolUseId"`
+	Content   []ToolResultContent `json:"content"`
+	Status    string              `json:"status,omitempty"`
+	IsError   bool                `json:"isError,omitempty"`
+}
+
+type ToolResultContent struct {
+	Json any    `json:"json,omitempty"`
+	Text string `json:"text,omitempty"`
 }
 
 // @Description Usage statistics showing token usage and billing information.
@@ -295,6 +315,14 @@ type AssistantSession struct {
 	Usage *SessionUsage `json:"usage,omitempty"`
 }
 
+// @Description Detailed information about an Assistant session, including its messages.
+type AssistantSessionDetails struct {
+	// Meta information about the session.
+	Session *AssistantSession `json:"session"`
+	// The messages in the session.
+	History []*StoredMessage `json:"history"`
+}
+
 type SessionUsage struct {
 	// The total input tokens used during the session.
 	TotalInputTokens int `json:"totalInputTokens" example:"1500"`
@@ -319,4 +347,9 @@ type UserUsage struct {
 	TotalSessions int `json:"totalSessions" example:"3"`
 	// The total messages sent and received by the user in the date range.
 	TotalMessages int `json:"totalMessages" example:"25"`
+}
+
+type UpdateSessionRequest struct {
+	Action string `json:"action" example:"add" enum:"add,remove"`
+	Tag    string `json:"tag" example:"shared"`
 }

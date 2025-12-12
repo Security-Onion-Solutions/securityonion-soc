@@ -73,12 +73,15 @@
 			</v-expansion-panels>
 		</v-col>
 		<v-spacer></v-spacer>
-		<v-col cols="12" lg="2" align="end">
-			<h4 data-aid="assistant_max_context">{{ i18n.contextLimit }}: {{ increaseContextLimit ? formatCount(contextLimitLarge) : formatCount(contextLimitSmall) }}</h4>
-		</v-col>
-		<v-col cols="12" lg="2" align="end">
-			<h4 data-aid="assistant_credits_remaining">{{ i18n.creditsRemaining }}: <span :class="creditsRemaining <= lowBalanceColorAlert ? 'text-error' : 'text-primary'">{{ formatCount(creditsRemaining) }}</span></h4>
+		<v-col cols="12" lg="4" align="end">
+			<h4 data-aid="assistant_credits_remaining">{{ i18n.creditsRemaining }}:
+				<span v-if="!creditsLoaded">
+					<v-progress-circular indeterminate color="primary" size="14" width="3"></v-progress-circular>
+				</span>
+				<span v-else :class="creditsRemaining <= lowBalanceColorAlert ? 'text-error' : 'text-primary'">{{ formatCount(creditsRemaining) }}</span>
+			</h4>
 			<span class="text-caption">{{ i18n.creditsSubjectToExpiration }}</span>
+			<h5 class="ml-5 mt-2" data-aid="assistant_current_model">{{ modelsMap.get(currentModel).displayName }}</h5>
 		</v-col>
 	</v-row>
 	<v-row align="start">
@@ -99,14 +102,37 @@
 		<v-col cols="12" :lg="!showChatHistory ? 12 : 9">
 			<v-card id="chat-container" class="chat-container">
 				<v-card-title id="chat-header" class="py-3 d-flex align-center">
-					<v-icon class="mr-2">fa-comments</v-icon>
-					<span class="flex-grow-1">{{ i18n.chatTitle }}</span>
-					<div class="text-wrap" style="font-size: 14px;">{{ i18n.contextLength }}: <span :class="getContextColor(contextLength)">{{ formatCount(contextLength) }}</span></div>
+					<v-icon class="mr-2" data-aid="assistant_banner_chat_icon">fa-comments</v-icon>
+					<span class="mr-2">{{ i18n.chatTitle }}</span>
+					<v-icon v-if="currentChatId" @click="toggleSharedSession()" data-aid="assistant_banner_share_toggle" :disabled="$root.user.id !== chatHistoryById?.[currentChatId]?.userId" :title="i18n.assistantLinkTitle">
+						{{ (chatHistoryById?.[currentChatId]?.tags?.includes('shared')) ? 'fa-link' : 'fa-link-slash' }}
+					</v-icon>
+					<v-spacer></v-spacer>
+					<div class="text-wrap mr-4" style="font-size: 14px;">{{ i18n.totalCredits }}: <span class="text-primary">{{ formatCount(creditsUsed) }}</span></div>
+					<div class="text-wrap" style="font-size: 14px;">{{ i18n.contextLength }}: <span :class="getContextColor(contextLength)">{{ formatCount(contextLength) }}</span> / <span class="font-weight-thin">{{ increaseContextLimit ? formatCount(contextLimitLarge) : formatCount(contextLimitSmall) }}</span></div>
+					<v-icon :color="getCompressColor()"
+						class="ml-4"
+						variant="flat"
+						id="compress-context"
+						@click="compressCurrentSession()"
+						:disabled="!canChat || checkForActivity() || !creditsLoaded"
+						:title="i18n.compressContext"
+						data-aid="assistant_banner_compress_context"
+					>
+						fa-arrows-to-circle
+					</v-icon>
 				</v-card-title>
 				<v-divider></v-divider>
 				<v-card-text id="chat-messages" class="chat-messages pa-0" @scroll="onChatScroll">
 					<div class="pa-4">
-						<div v-for="(message, index) in messages" :key="index" :id="'message-' + index" class="message-item mb-3">
+						<div v-for="(message, index) in messages" :key="index" :id="'message-' + index" :class="['message-item', 'mb-3'].concat(messageClassesFromTags(message.tags || []))">
+							<div v-if="index === contextStartMessageIndex" class="context-divider py-4">
+								<div class="spacer spacer-left"></div>
+								<div class="label theme-text">
+									{{ i18n.contextStartsHere }}
+								</div>
+								<div class="spacer spacer-right"></div>
+							</div>
 							<div class="d-flex align-start">
 								<v-avatar id="message-avatar" size="32" class="mr-3" :color="message.role === 'user' ? 'primary' : 'secondary'">
 									<v-icon v-if="message.role === 'user'" class="text-white" size="small">fa-user</v-icon>
@@ -268,15 +294,15 @@
 						spellcheck="false"
 						class="chat-input flex-grow-1 mr-3"
 						@keydown.enter.exact.prevent="$refs.sendButton.$el.click()"
-						:disabled="!canChat"
+						:disabled="!canChat || !creditsLoaded"
 						data-aid="assistant_chat_input"
 					></v-textarea>
 					<v-btn
 						id="chat-send-button"
 						ref="sendButton"
 						color="primary"
-						:disabled="!newMessage.trim() || !canChat || checkForActivity()"
-						@click="sendMessage"
+						:disabled="!newMessage.trim() || !canChat || checkForActivity() || !creditsLoaded"
+						@click="sendMessage()"
 						data-aid="assistant_chat_send"
 						class="flex-shrink-0"
 					>
@@ -304,7 +330,10 @@
 							data-aid="assistant_chat_history_item"
 						>
 							<v-list-item-title class="text-wrap">{{ chat.title }}</v-list-item-title>
-							<v-list-item-subtitle>{{ formatChatDate(chat.lastUpdated) }}</v-list-item-subtitle>
+							<v-list-item-subtitle>
+								{{ formatChatDate(chat.lastUpdated) }}
+								<v-icon v-if="chat?.tags?.includes('shared')" class="ml-1 tiny-link-icon" title="Shared Session">fa-link</v-icon>
+							</v-list-item-subtitle>
 							<template #append>
 								<v-btn id="chat-delete-button" icon variant="text" size="small" @click.stop="deleteChat(chat.sessionId)" data-aid="assistant_chat_history_delete">
 									<v-icon size="small" color="error">fa-trash</v-icon>

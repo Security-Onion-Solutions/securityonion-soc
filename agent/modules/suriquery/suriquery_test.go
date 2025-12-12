@@ -7,10 +7,12 @@
 package suriquery
 
 import (
+	"io"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/google/gopacket/pcapgo"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/stretchr/testify/assert"
 )
@@ -115,4 +117,38 @@ func TestStreamPacketsInPcaps(tester *testing.T) {
 	assert.Nil(tester, err)
 	assert.Equal(tester, pcap_length, count)
 	assert.Equal(tester, pcap_length, size)
+}
+
+func TestStreamPacketsInPcapsLimitsAcrossMultiplePaths(tester *testing.T) {
+	sq := initTest()
+
+	// Set a low max count to test limiting
+	sq.pcapMaxCount = 5
+
+	paths := []string{"test_resources/3/so-pcap.1575817346", "test_resources/1/so-pcap.1575817346.lz4"}
+	filter := model.NewFilter()
+	startTime, _ := time.Parse(time.RFC3339, "2019-12-08T00:00:00Z")
+	filter.BeginTime = startTime
+	endTime, _ := time.Parse(time.RFC3339, "2019-12-08T23:59:59Z")
+	filter.EndTime = endTime
+
+	reader, _, err := sq.streamPacketsInPcaps(paths, filter)
+	assert.Nil(tester, err)
+
+	// Read all packets from the stream
+	var totalPackets int
+	pcapReader, err := pcapgo.NewReader(reader)
+	assert.Nil(tester, err)
+
+	for {
+		_, _, err := pcapReader.ReadPacketData()
+		if err == io.EOF {
+			break
+		}
+		assert.Nil(tester, err)
+		totalPackets++
+	}
+
+	// Should be limited to pcapMaxCount
+	assert.Equal(tester, sq.pcapMaxCount, totalPackets)
 }

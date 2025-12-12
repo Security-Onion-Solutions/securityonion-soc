@@ -10,6 +10,8 @@ Object.assign(global, { TextDecoder, TextEncoder });
 require('../test_common.js');
 require('./assistant.js');
 
+const MSGTAG_CONTEXTCOMPRESSION = "context_compression";
+
 // Mock data
 const fakeSessionId = 'chat_1234567890_abcdef123';
 const fakeMessage = {
@@ -293,7 +295,7 @@ test('initAssistant sets assistantEnabled to true when enabled and licensed', as
     thresholdColorRatioMax: 1,
     lowBalanceColorAlert: 500000,
     availableModels: [
-      { id: 'test-model', displayName: "Test Model", contextLimitSmall: 200000, contextLimitLarge: 1000000, lowBalanceColorAlert: 500000 }
+      { id: 'test-model', displayName: "Test Model", contextLimitSmall: 200000, contextLimitLarge: 1000000, lowBalanceColorAlert: 500000, enabled: true }
     ]
   };
   comp.$root.isLicensed = jest.fn().mockReturnValue(true);
@@ -368,22 +370,29 @@ test('initAssistant corrects contextLimitLarge when smaller than contextLimitSma
         displayName: "Model 1",
         contextLimitSmall: 200000,
         contextLimitLarge: 150000, // Smaller than contextLimitSmall - should be corrected
-        lowBalanceColorAlert: 500000
+        lowBalanceColorAlert: 500000,
+        enabled: true,
       },
       {
         id: 'model-2',
         displayName: "Model 2",
         contextLimitSmall: 100000,
         contextLimitLarge: 300000, // Larger than contextLimitSmall - should remain unchanged
-        lowBalanceColorAlert: 400000
+        lowBalanceColorAlert: 400000,
+        enabled: true,
       },
       {
         id: 'model-3',
         displayName: "Model 3",
         contextLimitSmall: 250000,
         contextLimitLarge: 250000, // Equal to contextLimitSmall - should remain unchanged
-        lowBalanceColorAlert: 600000
-      }
+        lowBalanceColorAlert: 600000,
+        enabled: true,
+      },
+      {
+        id: 'model-4',
+        enabled: false,
+      },
     ]
   };
   
@@ -402,6 +411,7 @@ test('initAssistant corrects contextLimitLarge when smaller than contextLimitSma
   expect(comp.modelsMap.has('model-1')).toBe(true);
   expect(comp.modelsMap.has('model-2')).toBe(true);
   expect(comp.modelsMap.has('model-3')).toBe(true);
+  expect(comp.modelsMap.has('model-4')).toBe(false); // Disabled model should not be included
   
   // Check that contextLimitLarge was corrected for model-1
   const model1 = comp.modelsMap.get('model-1');
@@ -508,15 +518,43 @@ test('loadCredits success', async () => {
   
   expect(mock).toHaveBeenCalledWith('/assistant/balance');
   expect(comp.creditsRemaining).toBe(100);
+  expect(comp.creditsLoaded).toBe(true);
 });
 
-test('loadCredits handles error', async () => {
-  const showErrorMock = mockShowError();
-  mockPapi("get", null, new Error("API error"));
+test('loadCredits handles 500 error due to outage', async () => {
+  const error = new Error('ERROR_UPSTREAM_SERVICE_ERROR');
+  error.response = { status: 500 };
+  mockPapi("get", null, error);
+  comp.$root.showError = jest.fn();
   
   await comp.loadCredits();
   
+  expect(comp.$root.showError).toHaveBeenCalledWith(error);
+  expect(comp.creditsLoaded).toBe(false);
+});
+
+test('loadCredits handles non-500 error', async () => {
+  const showErrorMock = mockShowError();
+  const error = new Error("API error");
+  error.response = { status: 400 };
+  mockPapi("get", null, error);
+  
+  await comp.loadCredits();
+  
+  expect(showErrorMock).toHaveBeenCalledWith(error);
   expect(comp.creditsRemaining).toBe(0);
+  expect(comp.creditsLoaded).toBe(false);
+});
+
+test('loadCredits handles error without response', async () => {
+  const showErrorMock = mockShowError();
+  const error = new Error("Network error")
+  mockPapi("get", null, error);
+  
+  await comp.loadCredits();
+  
+  expect(showErrorMock).toHaveBeenCalledWith(error);
+  expect(comp.creditsLoaded).toBe(false);
 });
 
 test('loadCredits handles unhealthy status', async () => {
@@ -529,8 +567,8 @@ test('loadCredits handles unhealthy status', async () => {
   
   await comp.loadCredits();
   
-  expect(showErrorMock).toHaveBeenCalledWith('Error loading credits from API: The AI model could not be reached. Support for local AI models is coming soon.');
-  expect(comp.creditsRemaining).toBe(0); // Should remain 0 when unhealthy
+  expect(showErrorMock).toHaveBeenCalledWith(new Error(comp.i18n.assistantBalanceCheckUnhealthy));
+  expect(comp.creditsLoaded).toBe(false);
 });
 
 // Chat operations tests
@@ -677,25 +715,8 @@ test('sendMessage creates session ID and updates URL', async () => {
   expect(comp.messages[0].content).toBe('Test message');
   expect(comp.newMessage).toBe('');
   expect(comp.isTyping).toBe(true);
-  expect(comp.callAIAPI).toHaveBeenCalledWith('Test message');
+  expect(comp.callAIAPI).toHaveBeenCalledWith('Test message', undefined);
   expect(comp.loadStoredChats).toHaveBeenCalled();
-});
-
-test('sendMessage handles API error', async () => {
-  const showErrorMock = mockShowError();
-  comp.newMessage = 'Test message';
-  comp.creditsRemaining = 100;
-  comp.currentChatId = fakeSessionId;
-  comp.callAIAPI = jest.fn().mockRejectedValue(new Error('API failed'));
-  comp.scrollToBottom = jest.fn();
-  comp.assistantEnabled = true;
-  comp.canChat = true;
-  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
-  
-  await comp.sendMessage();
-  
-  expect(showErrorMock).toHaveBeenCalledWith('Failed to get AI response: API failed');
-  expect(comp.isTyping).toBe(false);
 });
 
 // Context length and model management tests
@@ -1194,29 +1215,32 @@ test('executeTool captures raw tool result from backend', async () => {
   // wait out any setTimeouts from previous tests
   await new Promise(resolve => setTimeout(resolve, 1100));
 
-  const toolUse = { ...fakeToolUse };
+  resetPapi();
+
+  let toolUse = { ...fakeToolUse };
   comp.currentChatId = fakeSessionId;
   comp.scrollToBottom = jest.fn();
   comp.loadCredits = jest.fn().mockResolvedValue();
   
   // Mock backend response with tool result
-  const backendResponse = {
-    data: [
+  const backendResponse = [
       {
         createTime: '2025-01-01T12:00:00.000Z',
         tags: ['tool_result'],
         message: {
           contentBlocks: [
             {
-              type: 'text',
-              text: 'ToolUseId: tool_123, Result: {"events": 5, "alerts": 2}, Error: <nil>'
+              type: 'tool_result',
+              toolResult: {
+                toolUseId: 'tool_123',
+                content: [{ json: { "events": 5, "alerts": 2 } }]
+              }
             }
           ]
         }
       }
-    ]
-  };
-  mockPapi('get', backendResponse);
+    ];
+  mockPapi('get', { data: { session: {}, history: backendResponse } });
   
   // Include message_start event to trigger captureRawToolResult
   const messageStartData = JSON.stringify({ type: 'message_start' });
@@ -1241,35 +1265,42 @@ test('executeTool captures raw tool result from backend', async () => {
   // Wait for the setTimeout to complete
   await new Promise(resolve => setTimeout(resolve, 1100));
   
-  expect(toolUse.rawResult).toBe('{"events": 5, "alerts": 2}, Error: <nil>');
+  expect(toolUse.rawResult).toEqual({ "events": 5, "alerts": 2 });
   expect(toolUse.status).toBe('completed');
   expect(toolUse.completedAt).toBe('2025-01-01T12:00:00.000Z');
 });
 
 test('executeTool handles tool result with error', async () => {
+  resetPapi();
+
   const toolUse = { ...fakeToolUse };
   comp.currentChatId = fakeSessionId;
   comp.scrollToBottom = jest.fn();
   comp.loadCredits = jest.fn().mockResolvedValue();
   
   // Mock backend response with tool error
-  const backendResponse = {
-    data: [
-      {
-        createTime: '2025-01-01T12:00:00.000Z',
-        tags: ['tool_result'],
-        message: {
-          contentBlocks: [
-            {
-              type: 'text',
-              text: 'ToolUseId: tool_123, Result: null, Error: Query timeout'
+  const backendResponse = [
+    {
+      createTime: '2025-01-01T12:00:00.000Z',
+      tags: ['tool_result'],
+      message: {
+        contentBlocks: [
+          {
+            toolResult: {
+              isError: true,
+              status: 'error',
+              content: [
+                {
+                  text: 'something went wrong'
+                }
+              ]
             }
-          ]
-        }
+          }
+        ]
       }
-    ]
-  };
-  mockPapi('get', backendResponse);
+    }
+  ];
+  mockPapi('get', { data: { session: {}, history: backendResponse } });
   
   // Include message_start event to trigger captureRawToolResult
   const messageStartData = JSON.stringify({ type: 'message_start' });
@@ -1294,9 +1325,9 @@ test('executeTool handles tool result with error', async () => {
   // Wait for the setTimeout to complete
   await new Promise(resolve => setTimeout(resolve, 1100));
   
-  expect(toolUse.error).toBe('Query timeout');
+  expect(toolUse.error).toBe('something went wrong');
   expect(toolUse.status).toBe('error');
-});
+}, 30000);
 
 test('executeTool handles partial JSON chunks', async () => {
   const toolUse = { ...fakeToolUse };
@@ -1383,6 +1414,7 @@ test('callAIAPI makes correct API request', async () => {
       msg: 'Test message',
       sessionId: fakeSessionId,
       model: 'test-model',
+      tags: null,
   }, {
     adapter: 'fetch',
     headers: {
@@ -2424,9 +2456,14 @@ test('convertBackendMessagesToFrontend handles tool_use blocks with completed st
         "tool_result"
       ],
       message: {
-        role: 'assistant',
+        role: 'user',
         contentBlocks: [
-          { type: 'text', text: 'Tool completed successfully' }
+          {
+            toolResult: {
+              toolUseId: 'tool_123',
+              content: [{ json: { result: 'success' } }]
+            }
+          }
         ]
       }
     }
@@ -2444,6 +2481,7 @@ test('convertBackendMessagesToFrontend handles tool_use blocks with completed st
   expect(result[0].toolUses.value[0].input).toEqual({ query: 'test' });
   expect(result[0].toolUses.value[0].status).toBe('completed');
   expect(result[0].toolUses.value[0].approved).toBe(true);
+  expect(result[0].toolUses.value[0].rawResult).toEqual({ result: 'success' });
 });
 
 test('convertBackendMessagesToFrontend handles tool_use blocks with rejected status', () => {
@@ -2468,7 +2506,7 @@ test('convertBackendMessagesToFrontend handles tool_use blocks with rejected sta
     {
       createTime: '2025-01-01T12:01:00.000Z',
       message: {
-        role: 'assistant',
+        role: 'user',
         contentBlocks: [
           { type: 'text', text: 'Tool execution was rejected by the user' }
         ]
@@ -2511,9 +2549,14 @@ test('convertBackendMessagesToFrontend handles tool_use blocks with null/undefin
         "tool_result"
       ],
       message: {
-        role: 'assistant',
+        role: 'user',
         contentBlocks: [
-          { type: 'text', text: 'Tool completed' }
+          {
+            toolResult: {
+              toolUseId: 'tool_789',
+              content: [{ json: { result: 'success' } }]
+            }
+          }
         ]
       }
     }
@@ -2686,7 +2729,7 @@ test('convertBackendMessagesToFrontend handles tool_use blocks at end with missi
   expect(toolUse.sessionId).toBe('missing_props_session');
 });
 
-test('convertBackendMessagesToFrontend filters out new format tool result messages', () => {
+test('convertBackendMessagesToFrontend filters out legacy format tool result messages', () => {
   comp.resetContextLength = jest.fn();
   global.Vue = { ref: jest.fn((value) => ({ value })) };
   
@@ -2727,7 +2770,7 @@ test('convertBackendMessagesToFrontend filters out new format tool result messag
   expect(result[0].toolUses.value[0].status).toBe('completed'); // No error since Error is <nil>
 });
 
-test('convertBackendMessagesToFrontend handles new format tool result with error', () => {
+test('convertBackendMessagesToFrontend handles legacy format tool result with error', () => {
   comp.resetContextLength = jest.fn();
   global.Vue = { ref: jest.fn((value) => ({ value })) };
   
@@ -2972,6 +3015,87 @@ test('convertBackendMessagesToFrontend handles empty backend messages array', ()
   expect(comp.contextLength).toBe(0);
 });
 
+test('convertBackendMessagesToFrontend handles tags', () => {
+  comp.resetContextLength = jest.fn();
+  
+  const backendMessages = [
+    {
+      createTime: '2025-01-01T12:00:00.000Z',
+      message: {
+        role: 'user',
+        contentBlocks: [
+          { type: 'text', text: 'Hello, how can you help me?' }
+        ]
+      },
+      tags: [MSGTAG_CONTEXTCOMPRESSION],
+    }
+  ];
+  
+  const result = comp.convertBackendMessagesToFrontend(backendMessages);
+  
+  expect(result).toHaveLength(1);
+  expect(result[0].role).toBe('user');
+  expect(result[0].content).toBe('Hello, how can you help me?');
+  expect(result[0].timestamp).toBe('2025-01-01T12:00:00.000Z');
+  expect(result[0].tags).toEqual([MSGTAG_CONTEXTCOMPRESSION]);
+});
+
+test('convertBackendMessagesToFrontend calculates context length accurately after context compression', () => {
+  comp.resetContextLength = jest.fn();
+  
+  const backendMessages = [
+    {
+      createTime: '2025-01-01T12:00:00.000Z',
+      message: {
+        role: 'user',
+        contentBlocks: [
+          { type: 'text', text: '' }
+        ]
+      },
+    },
+    {
+      createTime: '2025-01-01T12:00:00.000Z',
+      message: {
+        role: 'assistant',
+        contentBlocks: [
+          { type: 'text', text: '' }
+        ],
+        usage: {
+          input_tokens: 1000,
+          output_tokens: 1000,
+        },
+      },
+    },
+    {
+      createTime: '2025-01-01T12:00:00.000Z',
+      message: {
+        role: 'user',
+        contentBlocks: [
+          { type: 'text', text: '' },
+        ],
+      },
+      tags: [MSGTAG_CONTEXTCOMPRESSION],
+    },
+    {
+      createTime: '2025-01-01T12:00:00.000Z',
+      message: {
+        role: 'assistant',
+        contentBlocks: [
+          { type: 'text', text: '' }
+        ],
+        usage: {
+          input_tokens: 1000,
+          output_tokens: 1000,
+        },
+      },
+    },
+  ];
+  
+  comp.convertBackendMessagesToFrontend(backendMessages);
+  
+  expect(comp.contextLength).toBe(2000);
+});
+
 test('loadChatFromBackend success', async () => {
   const testMessages = [
     {
@@ -2993,7 +3117,7 @@ test('loadChatFromBackend success', async () => {
       }
     }
   ];
-  const mock = mockPapi("get", { data: testMessages });
+  const mock = mockPapi("get", { data: { session: null, history: testMessages } });
   comp.scrollToBottomSettled = jest.fn().mockResolvedValue();
   
   await comp.loadChatFromBackend(fakeSessionId);
@@ -4281,11 +4405,11 @@ test('checkIfDeleted sets canChat to false when session not in history', () => {
   comp.checkIfDeleted(sessionId);
   
   expect(comp.canChat).toBe(false);
-  expect(showWarningMock).toHaveBeenCalledWith(comp.i18n.assistantChatIsDeleted);
+  expect(showWarningMock).toHaveBeenCalledWith(comp.i18n.assistantChatNoResume);
 });
 
 test('checkIfDeleted sets canChat to true when session exists in history', () => {
-  const sessionId = 'existing-session';
+  const sessionId = { sessionId: 'existing-session' };
   comp.chatHistory = [
     { sessionId: 'session1' },
     { sessionId: 'existing-session' },
@@ -4357,6 +4481,21 @@ test('sendMessage checks context limit before proceeding', async () => {
   
   expect(comp.checkContextLimitReached).toHaveBeenCalled();
   expect(comp.callAIAPI).not.toHaveBeenCalled();
+});
+
+test('sendMessage checks context limit before proceeding, but allows context_compression', async () => {
+  comp.newMessage = 'Summarize the conversation so far for context preservation';
+  comp.canChat = true;
+  comp.assistantEnabled = true;
+  comp.creditsRemaining = 100;
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(true);
+  comp.callAIAPI = jest.fn();
+  
+  await comp.sendMessage([MSGTAG_CONTEXTCOMPRESSION]);
+  
+  expect(comp.checkContextLimitReached).toHaveBeenCalled();
+  expect(comp.callAIAPI).toHaveBeenCalled();
+  expect(comp.callAIAPI).toHaveBeenCalledWith('Summarize the conversation so far for context preservation', [MSGTAG_CONTEXTCOMPRESSION]);
 });
 
 test('sendMessage clears welcome message when starting first real conversation', async () => {
@@ -4900,3 +5039,77 @@ test('applyToolSpecificChanges does nothing for non-query_cases tools', () => {
   getSpy.mockRestore();
 });
 
+test('messageClassesFromTags', () => {
+  let tags = ['important', 'error', MSGTAG_CONTEXTCOMPRESSION];
+  let result = comp.messageClassesFromTags(tags);
+  expect(result).toEqual(['msgTag-important', 'msgTag-error', 'msgTag-context_compression']);
+});
+
+test('toggleSharedSession', async () => {
+  const _updateSessionTag = comp.updateSessionTag;
+  const _loadStoredChats = comp.loadStoredChats;
+  comp.updateSessionTag = jest.fn();
+  comp.loadStoredChats = jest.fn();
+
+  // Removing 'shared' tag
+  comp.currentChatId = 'session_123';
+  comp.chatHistoryById = {
+    'session_123': { tags: ["shared"], userId: 'me' },
+  };
+  comp.$root.user = { id: 'me' };
+
+  await comp.toggleSharedSession();
+
+  expect(comp.updateSessionTag).toHaveBeenCalledTimes(1);
+  expect(comp.updateSessionTag).toHaveBeenCalledWith(comp.currentChatId, 'remove', 'shared');
+  expect(comp.loadStoredChats).toHaveBeenCalledTimes(1);
+
+  // Can't change a session you don't own
+  comp.updateSessionTag.mockClear();
+  comp.loadStoredChats.mockClear();
+
+  comp.chatHistoryById[comp.currentChatId].userId = 'u';
+
+  await comp.toggleSharedSession();
+
+  expect(comp.updateSessionTag).toHaveBeenCalledTimes(0);
+  expect(comp.loadStoredChats).toHaveBeenCalledTimes(0);
+
+  // Adding 'shared' tag
+  comp.chatHistoryById[comp.currentChatId].userId = 'me';
+  comp.updateSessionTag.mockClear();
+  comp.loadStoredChats.mockClear();
+
+  comp.chatHistoryById[comp.currentChatId].tags = ['a', 'b', 'c'];
+
+  await comp.toggleSharedSession();
+
+  expect(comp.updateSessionTag).toHaveBeenCalledTimes(1);
+  expect(comp.updateSessionTag).toHaveBeenCalledWith(comp.currentChatId, 'add', 'shared');
+  expect(comp.loadStoredChats).toHaveBeenCalledTimes(1);
+
+  // Unknown session
+  comp.updateSessionTag.mockClear();
+  comp.loadStoredChats.mockClear();
+
+  comp.chatHistoryById = { 'other-session': {}};
+
+  await comp.toggleSharedSession();
+
+  expect(comp.updateSessionTag).toHaveBeenCalledTimes(0);
+  expect(comp.loadStoredChats).toHaveBeenCalledTimes(0);
+
+  comp.updateSessionTag = _updateSessionTag;
+  comp.loadStoredChats = _loadStoredChats;
+});
+
+test('nbspRegexOp', () => {
+  expect(comp.nbspRegexOp('&nbsp;')).toBe('');
+  expect(comp.nbspRegexOp('&nbsp')).toBe('');
+  expect(comp.nbspRegexOp('Hello&nbsp;World')).toBe('Hello&nbsp;World');
+  expect(comp.nbspRegexOp('&nbsp;\n\nHelloWorld')).toBe('HelloWorld');
+  expect(comp.nbspRegexOp('&nbsp;Hello&nbsp;World')).toBe('Hello&nbsp;World');
+  expect(comp.nbspRegexOp('&nbspHelloWorld')).toBe('HelloWorld');
+  expect(comp.nbspRegexOp('Hello World')).toBe('Hello World');
+  expect(comp.nbspRegexOp('')).toBe('');
+});
