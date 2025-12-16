@@ -75,7 +75,6 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
     creditsLoaded: false,
     searchFilter: '',
     
-    // Date range filter properties
     dateRange: '',
     relativeTimeEnabled: true,
     relativeTimeValue: 24,
@@ -88,6 +87,19 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
     assistantEnabled: false,
     breadcrumbs: [],
     paramsLoaded: false,
+    collapsedSections: [],
+    chartHeight: 200,
+    
+    graphUsersCreditsOptions: {},
+    graphUsersCreditsData: {},
+    graphUsersSessionsOptions: {},
+    graphUsersSessionsData: {},
+    graphUsersMessagesOptions: {},
+    graphUsersMessagesData: {},
+    graphSessionsCreditsOptions: {},
+    graphSessionsCreditsData: {},
+    graphSessionsMessagesOptions: {},
+    graphSessionsMessagesData: {},
   }},
   created() {
     this.relativeTimeUnits = [
@@ -117,12 +129,14 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       { title: this.$root.i18n.interval24h, value: 86400 },
     ];
     this.zone = moment.tz.guess();
+    this.$root.initializeCharts();
   },
   beforeUnmount() {
     this.stopRefreshTimer();
   },
   mounted() {
     this.$root.loadParameters('assistant', this.initAssistant);
+    this.setupCharts();
   },
   watch: {
     '$route': 'loadData',
@@ -229,6 +243,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
             item.duration = this.$root.formatLongDuration(item.durationMs);
             item.creditsPerMinute = this.getCPM(item.durationMs, item.totalCredits);
           });
+          this.populateSessionsCharts();
         } else {
           this.tableSetting = this.TABLE_SETTING_USERS;
           this.$root.adjustSubgridColVisibility(this.headers[this.tableSetting]);
@@ -248,6 +263,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
             item.creditPercentage = this.calculateCreditPercentage(item.totalCredits, currTotal);
             item.email = await this.lookupSocId(item.userId);
           });
+          this.populateUsersCharts();
         }
       } catch (error) {
         this.$root.showError(error);
@@ -534,6 +550,145 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
     },
     nbspRegexOp(text) {
       return text.replace(/^(&nbsp;?[\n]*)/, '');
+    },
+    toggleShowSection(item) {
+      if (this.isExpandedSection(item)) {
+        this.collapsedSections.push(item);
+      } else {
+        this.collapsedSections.splice(this.collapsedSections.indexOf(item), 1);
+      }
+    },
+    isExpandedSection(item) {
+      return (this.collapsedSections.indexOf(item) == -1);
+    },
+    setupCharts() {
+      this.setupPieChart(this.graphUsersCreditsOptions, this.graphUsersCreditsData, this.i18n.totalCredits);
+      this.setupPieChart(this.graphUsersSessionsOptions, this.graphUsersSessionsData, this.i18n.totalSessions);
+      this.setupPieChart(this.graphUsersMessagesOptions, this.graphUsersMessagesData, this.i18n.totalMessages);
+      this.graphUsersCreditsData.key = 0;
+      this.graphUsersSessionsData.key = 0;
+      this.graphUsersMessagesData.key = 0;
+
+      this.setupTimelineChart(this.graphSessionsCreditsOptions, this.graphSessionsCreditsData, this.i18n.totalCredits);
+      this.setupTimelineChart(this.graphSessionsMessagesOptions, this.graphSessionsMessagesData, this.i18n.totalMessages);
+      this.graphSessionsCreditsData.key = 0;
+      this.graphSessionsMessagesData.key = 0;
+    },
+    populateUsersCharts() {
+      this.populateChart(this.graphUsersCreditsData, this.aimetrics, 'totalCredits');
+      this.populateChart(this.graphUsersSessionsData, this.aimetrics, 'totalSessions');
+      this.populateChart(this.graphUsersMessagesData, this.aimetrics, 'totalMessages');
+    },
+    populateSessionsCharts() {
+      this.populateChart(this.graphSessionsCreditsData, this.aimetrics, 'totalCredits', 'createTime');
+      this.populateChart(this.graphSessionsMessagesData, this.aimetrics, 'totalMessages', 'createTime');
+    },
+    populateChart(chart, data, field, timefield=null) {
+      chart.key++;
+      chart.labels = [];
+      chart.datasets[0].data = [];
+      
+      if (!data || data.length === 0) return;
+      
+      const route = this;
+      if (timefield != null) {
+        data.forEach(function (item, index) {
+          chart.datasets[0].data.push({
+            x: new Date(item[timefield]),
+            y: item[field] || 0
+          });
+        });
+      } else {
+        data.forEach(function (item, index) {
+          const label = item.email || item.userId || 'Unknown';
+          chart.labels.push(route.$root.truncate(label, 30));
+          chart.datasets[0].data.push(item[field] || 0);
+        });
+      }
+    },
+    setupBarChart(options, data, title) {
+      var fontColor = this.$root.getColor("#888888", -40);
+      var dataColor = this.$root.getColor("primary");
+      var gridColor = this.$root.getColor("#888888", 65);
+      options.responsive = true;
+      options.maintainAspectRatio = false;
+      options.plugins = {
+        legend: {
+          display: false,
+        },
+        title: {
+          display: true,
+          text: title,
+        }
+      };
+      options.scales = {
+        y: {
+          grid: {
+            color: gridColor,
+          },
+          ticks: {
+            beginAtZero: true,
+            fontColor: fontColor,
+            precision: 0,
+          }
+        },
+        x: {
+          gridLines: {
+            color: gridColor,
+          },
+          ticks: {
+            fontColor: fontColor,
+          }
+        },
+      };
+
+      data.labels = [];
+      data.datasets = [{
+        backgroundColor: dataColor,
+        borderColor: dataColor,
+        pointRadius: 3,
+        fill: false,
+        data: [],
+        label: this.i18n.field_count,
+      }];
+    },
+    setupTimelineChart(options, data, title) {
+      this.setupBarChart(options, data, title);
+      options.onClick = null;
+      options.scales.x.type = 'timeseries';
+    },
+    setupPieChart(options, data, title) {
+      options.responsive = true;
+      options.maintainAspectRatio = false;
+      options.plugins = {
+        legend: {
+          display: true,
+          position: 'left',
+        },
+        title: {
+          display: true,
+          text: title,
+        }
+      };
+      data.labels = [];
+      data.datasets = [{
+        backgroundColor: [
+          'rgba(77, 201, 246, 1)',
+          'rgba(246, 112, 25, 1)',
+          'rgba(245, 55, 148, 1)',
+          'rgba(83, 123, 196, 1)',
+          'rgba(172, 194, 54, 1)',
+          'rgba(22, 106, 143, 1)',
+          'rgba(0, 169, 80, 1)',
+          'rgba(88, 89, 91, 1)',
+          'rgba(133, 73, 186, 1)',
+          'rgba(235, 204, 52, 1)',
+          'rgba(127, 127, 127, 1)',
+        ],
+        borderColor: 'rgba(255, 255, 255, 0.5)',
+        data: [],
+        label: this.i18n.field_count,
+      }];
     }
   }
 }});

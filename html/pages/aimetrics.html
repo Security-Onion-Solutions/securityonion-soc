@@ -112,8 +112,16 @@
   </v-row>
   <v-row>
     <v-col id="aimetrics-table">
+      <v-toolbar density="compact" variant="flat">
+        <v-toolbar-title>{{ i18n.tableMetrics }}</v-toolbar-title>
+        <v-spacer></v-spacer>
+        <v-btn variant="text" size="small" icon class="mr-1" @click="toggleShowSection('aimetrics-table')" data-aid="aimetrics_table_toggle">
+          <v-icon v-if="!isExpandedSection('aimetrics-table')" data-aid="aimetrics_table_expand">fa-angle-down</v-icon>
+          <v-icon v-if="isExpandedSection('aimetrics-table')" data-aid="aimetrics_table_collapse">fa-angle-up</v-icon>
+        </v-btn>
+      </v-toolbar>
       <!-- Users Table -->
-      <v-data-table v-if="tableSetting == TABLE_SETTING_USERS" :search="searchFilter" :sort-by="sortByUsers" @update:sort-by="val => sortByUsers = val" @update:items-per-page="val => itemsPerPage = val"
+      <v-data-table v-if="tableSetting == TABLE_SETTING_USERS && isExpandedSection('aimetrics-table')" :search="searchFilter" :sort-by="sortByUsers" @update:sort-by="val => sortByUsers = val" @update:items-per-page="val => itemsPerPage = val"
         :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage" must-sort :headers="headers[tableSetting]" :items="aimetrics" data-aid="aimetrics_table_users">
         <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
           <tr>
@@ -149,7 +157,7 @@
         </template>
       </v-data-table>
       <!-- Sessions Table -->
-      <v-data-table v-if="tableSetting == TABLE_SETTING_SESSIONS" :search="searchFilter" :sort-by="sortBySessions" @update:sort-by="val => sortBySessions = val" @update:items-per-page="val => itemsPerPage = val"
+      <v-data-table v-if="tableSetting == TABLE_SETTING_SESSIONS && isExpandedSection('aimetrics-table')" :search="searchFilter" :sort-by="sortBySessions" @update:sort-by="val => sortBySessions = val" @update:items-per-page="val => itemsPerPage = val"
         :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage" must-sort :headers="headers[tableSetting]" :items="aimetrics" v-model:expanded="expanded" data-aid="aimetrics_table_sessions">
         <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
           <tr>
@@ -189,7 +197,7 @@
         </template>
       </v-data-table>
       <!-- Messages Table -->
-      <v-data-table v-if="tableSetting == TABLE_SETTING_MESSAGES" :search="searchFilter" :sort-by="sortByMessages" @update:sort-by="val => sortByMessages = val" @update:items-per-page="val => itemsPerPage = val"
+      <v-data-table v-if="tableSetting == TABLE_SETTING_MESSAGES && isExpandedSection('aimetrics-table')" :search="searchFilter" :sort-by="sortByMessages" @update:sort-by="val => sortByMessages = val" @update:items-per-page="val => itemsPerPage = val"
         :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage" must-sort :headers="headers[tableSetting]" :items="aimetrics" v-model:expanded="expanded" data-aid="aimetrics_table_messages">
         <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
           <tr>
@@ -234,6 +242,41 @@
         </template>
       </v-data-table>
     </v-col>
+  </v-row>
+  <v-row v-if="tableSetting == TABLE_SETTING_USERS || tableSetting == TABLE_SETTING_SESSIONS">
+    <v-col id="aimetrics-graphs" data-aid="aimetrics_graphs_tab">
+      <v-toolbar density="compact" variant="flat">
+        <v-toolbar-title>{{ i18n.graphMetrics }}</v-toolbar-title>
+        <v-spacer></v-spacer>
+        <v-btn variant="text" size="small" icon class="mr-1" @click="toggleShowSection('aimetrics-graphs')" data-aid="aimetrics_graphs_toggle">
+          <v-icon v-if="!isExpandedSection('aimetrics-graphs')" data-aid="aimetrics_graphs_expand">fa-angle-down</v-icon>
+          <v-icon v-if="isExpandedSection('aimetrics-graphs')" data-aid="aimetrics_graphs_collapse">fa-angle-up</v-icon>
+        </v-btn>
+      </v-toolbar>
+      <div v-if="tableSetting == TABLE_SETTING_USERS && isExpandedSection('aimetrics-graphs')">
+        <v-row>
+          <v-col cols="12" md="4" data-aid="aimetrics_users_pie_credits">
+            <pie-chart id="aimetrics-users-pie-credits" :height="chartHeight" :key="graphUsersCreditsData.key" :data="graphUsersCreditsData" :options="graphUsersCreditsOptions"></pie-chart>
+          </v-col>
+          <v-col cols="12" md="4" data-aid="aimetrics_users_pie_sessions">
+            <pie-chart id="aimetrics-users-pie-sessions" :height="chartHeight" :key="graphUsersSessionsData.key" :data="graphUsersSessionsData" :options="graphUsersSessionsOptions"></pie-chart>
+          </v-col>
+          <v-col cols="12" md="4" data-aid="aimetrics_users_pie_messages">
+            <pie-chart id="aimetrics-users-pie-messages" :height="chartHeight" :key="graphUsersMessagesData.key" :data="graphUsersMessagesData" :options="graphUsersMessagesOptions"></pie-chart>
+          </v-col>
+        </v-row>
+      </div>
+      <div v-else-if="tableSetting == TABLE_SETTING_SESSIONS && isExpandedSection('aimetrics-graphs')">
+        <v-row>
+          <v-col cols="12" md="6" data-aid="aimetrics_sessions_timeline_credits">
+            <line-chart id="aimetrics-sessions-timeline-credits" :height="chartHeight" :key="graphSessionsCreditsData.key" :data="graphSessionsCreditsData" :options="graphSessionsCreditsOptions"></line-chart>
+          </v-col>
+          <v-col cols="12" md="6" data-aid="aimetrics_sessions_timelines_messages">
+            <line-chart id="aimetrics-sessions-timeline-messages" :height="chartHeight" :key="graphSessionsMessagesData.key" :data="graphSessionsMessagesData" :options="graphSessionsMessagesOptions"></line-chart>
+          </v-col>
+        </v-row>
+      </div>
+		</v-col>
   </v-row>
 </v-container>
 <v-container v-else-if="$root.isLicensed('oai')" fluid data-aid="aimetrics_disabled">
