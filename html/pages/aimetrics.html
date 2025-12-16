@@ -1,4 +1,5 @@
-<v-container v-if="assistantEnabled" fluid data-aid="aimetrics_screen">
+<v-container v-if="!paramsLoaded" fluid data-aid="aimetrics_loading_parameters"></v-container>
+<v-container v-else-if="assistantEnabled" fluid data-aid="aimetrics_screen">
   <v-row>
     <v-col cols="12" lg="3">
       <h2 v-text="i18n.aiMetrics"></h2>
@@ -20,7 +21,12 @@
     </v-col>
     <v-spacer></v-spacer>
     <v-col cols="12" lg="2" align="end">
-      <h4 :data-aid="aimetrics_credits_remaining">{{ i18n.creditsRemaining }}: <span :class="creditsRemaining <= lowBalanceColorAlert ? 'text-error' : 'text-primary'">{{ formatCount(creditsRemaining) }}</span></h4>
+      <h4 data-aid="aimetrics_credits_remaining">{{ i18n.creditsRemaining }}:
+        <span v-if="!creditsLoaded">
+					<v-progress-circular indeterminate color="primary" size="14" width="3"></v-progress-circular>
+				</span>
+        <span v-else :class="creditsRemaining <= 0 ? 'text-error' : 'text-primary'">{{ formatCount(creditsRemaining) }}</span>
+      </h4>
       <span class="text-caption">{{ i18n.creditsSubjectToExpiration }}</span>
     </v-col>
   </v-row>
@@ -107,8 +113,8 @@
   <v-row>
     <v-col id="aimetrics-table">
       <!-- Users Table -->
-      <v-data-table v-if="tableSetting == TABLE_SETTING_USERS" :search="searchFilter" :sort-by="sortBy0" @update:sort-by="val => sortBy0 = val" :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage"
-        must-sort :headers="headers[tableSetting]" :items="aimetrics" data-aid="aimetrics_table_users">
+      <v-data-table v-if="tableSetting == TABLE_SETTING_USERS" :search="searchFilter" :sort-by="sortByUsers" @update:sort-by="val => sortByUsers = val" @update:items-per-page="val => itemsPerPage = val"
+        :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage" must-sort :headers="headers[tableSetting]" :items="aimetrics" data-aid="aimetrics_table_users">
         <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
           <tr>
             <template v-for="header in columns" :key="header.key">
@@ -128,12 +134,12 @@
         <template #item="{ item }">
           <tr>
             <td>{{ item.email }}</td>
-            <td class="text-right">{{ formatCount(item.totalInputTokens) }}</td>
-            <td class="text-right">{{ formatCount(item.totalOutputTokens) }}</td>
-            <td class="text-right">{{ formatCount(item.totalCredits) }}</td>
+            <td class="text-right">{{ item.totalInputTokens ? formatCount(item.totalInputTokens) : 0 }}</td>
+            <td class="text-right">{{ item.totalOutputTokens ? formatCount(item.totalOutputTokens) : 0 }}</td>
+            <td class="text-right">{{ item.totalCredits ? formatCount(item.totalCredits) : 0 }}</td>
             <td class="text-right">{{ item.creditPercentage }}</td>
-            <td class="text-right">{{ formatCount(item.totalSessions) }}</td>
-            <td class="text-right">{{ formatCount(item.totalMessages) }}</td>
+            <td class="text-right">{{ item.totalSessions ? formatCount(item.totalSessions) : 0 }}</td>
+            <td class="text-right">{{ item.totalMessages ? formatCount(item.totalMessages) : 0 }}</td>
             <td>
               <router-link :to="buildUserLink(item.userId)" class="no-print" style="text-decoration: none; cursor: 'pointer'" data-aid="aimetrics_open_user">
                 <v-icon class="mr-2 theme-icon" :title="i18n.viewSessions">fa-binoculars</v-icon>
@@ -143,8 +149,8 @@
         </template>
       </v-data-table>
       <!-- Sessions Table -->
-      <v-data-table v-if="tableSetting == TABLE_SETTING_SESSIONS" :search="searchFilter" :sort-by="sortBy1" @update:sort-by="val => sortBy1 = val" :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage"
-        must-sort :headers="headers[tableSetting]" :items="aimetrics" v-model:expanded="expanded" data-aid="aimetrics_table_sessions">
+      <v-data-table v-if="tableSetting == TABLE_SETTING_SESSIONS" :search="searchFilter" :sort-by="sortBySessions" @update:sort-by="val => sortBySessions = val" @update:items-per-page="val => itemsPerPage = val"
+        :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage" must-sort :headers="headers[tableSetting]" :items="aimetrics" v-model:expanded="expanded" data-aid="aimetrics_table_sessions">
         <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
           <tr>
             <template v-for="header in columns" :key="header.key">
@@ -165,10 +171,12 @@
           <tr>
             <td>{{ trimTitle(item.title) }}</td>
             <td>{{ $root.formatLocalTimestamp(item.createTime, zone) }}</td>
-            <td class="text-right">{{ formatCount(item.totalInputTokens) }}</td>
-            <td class="text-right">{{ formatCount(item.totalOutputTokens) }}</td>
-            <td class="text-right">{{ formatCount(item.totalCredits) }}</td>
-            <td class="text-right">{{ formatCount(item.totalMessages) }}</td>
+            <td class="text-right">{{ item.duration }}</td>
+            <td class="text-right">{{ item.totalInputTokens ? formatCount(item.totalInputTokens) : 0 }}</td>
+            <td class="text-right">{{ item.totalOutputTokens ? formatCount(item.totalOutputTokens) : 0 }}</td>
+            <td class="text-right">{{ item.totalCredits ? formatCount(item.totalCredits) : 0 }}</td>
+            <td class="text-right">{{ item.creditsPerMinute ? formatCount(item.creditsPerMinute) : 0 }}</td>
+            <td class="text-right">{{ item.totalMessages ? formatCount(item.totalMessages) : 0 }}</td>
             <td>
               <router-link :to="buildSessionLink(item.sessionId)" class="no-print" style="text-decoration: none; cursor: 'pointer'" data-aid="aimetrics_open_session">
                 <v-icon class="mr-2 theme-icon" :title="i18n.viewMessages">fa-binoculars</v-icon>
@@ -181,8 +189,8 @@
         </template>
       </v-data-table>
       <!-- Messages Table -->
-      <v-data-table v-if="tableSetting == TABLE_SETTING_MESSAGES" :search="searchFilter" :sort-by="sortBy2" @update:sort-by="val => sortBy2 = val" :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage"
-        must-sort :headers="headers[tableSetting]" :items="aimetrics" v-model:expanded="expanded" data-aid="aimetrics_table_messages">
+      <v-data-table v-if="tableSetting == TABLE_SETTING_MESSAGES" :search="searchFilter" :sort-by="sortByMessages" @update:sort-by="val => sortByMessages = val" @update:items-per-page="val => itemsPerPage = val"
+        :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage" must-sort :headers="headers[tableSetting]" :items="aimetrics" v-model:expanded="expanded" data-aid="aimetrics_table_messages">
         <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
           <tr>
             <template v-for="header in columns" :key="header.key">
@@ -207,7 +215,7 @@
                 <v-icon v-else :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="aimetrics_details_expand">fa-angle-right</v-icon>
               </v-btn>
             </td>
-            <td>{{ item.role === 'assistant' ? trimTitle(stripHtml(item.expandMessage)) : trimTitle(item.expandMessage) }}</td>
+            <td>{{ (item.role === 'assistant' || item?.tags?.includes('tool_result')) ? trimTitle(stripHtml(item.expandMessage)) : trimTitle(item.expandMessage) }}</td>
             <td>{{ $root.formatLocalTimestamp(item.createTime, zone) }}</td>
             <td>{{ item.role }}</td>
             <td class="text-right">{{ item.inputTokens ? formatCount(item.inputTokens) : '' }}</td>
@@ -219,6 +227,7 @@
           <tr>
             <td :colspan="headers[tableSetting].length" class="px-4 py-3">
               <div v-if="item.role === 'assistant'" class="expansion va-middle hardwrap-aimetrics" v-html="formatMarkdownMermaid(item.expandMessage)" data-aid="aimetrics_message_content_assistant"></div>
+              <div v-else-if="item?.tags?.includes('tool_result')" class="expansion va-middle hardwrap-aimetrics" data-aid="aimetrics_message_content_toolresult" v-html="item.expandMessage"></div>
               <div v-else class="expansion va-middle hardwrap-aimetrics" data-aid="aimetrics_message_content_user">{{ item.expandMessage }}</div>
             </td>
           </tr>

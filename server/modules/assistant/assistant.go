@@ -147,7 +147,7 @@ func (ac *AssistantCoordinator) IsRunning() bool {
 	return ac.isRunning
 }
 
-func (ac *AssistantCoordinator) Chat(ctx context.Context, messages []*model.Message, opts ...model.ChatOpt) ([]*model.Message, error) {
+func (ac *AssistantCoordinator) Chat(ctx context.Context, aiModel string, messages []*model.Message, opts ...model.ChatOpt) ([]*model.Message, error) {
 	logger := log.FromContext(ctx)
 	userID := ctx.Value(web.ContextKeyRequestorId).(string)
 	config := model.ApplyChatOpts(opts...)
@@ -159,6 +159,7 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, messages []*model.Mess
 		ToolConfig:   ac.toolConfig,
 		UserId:       userID,
 		SystemAppend: ac.systemPromptAddendum,
+		Model:        aiModel,
 	}
 
 	u, err := url.Parse(ac.apiUrl)
@@ -190,12 +191,14 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, messages []*model.Mess
 	ac.prepareRequestHeaders(httpReq)
 
 	res, err := ac.MakeRequest(httpReq, false)
+	if res != nil && res.Body != nil {
+		defer res.Body.Close()
+	}
 	if err != nil {
 		logger.WithError(err).Error("unable to execute request")
 
 		return nil, err
 	}
-	defer res.Body.Close()
 
 	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
@@ -208,7 +211,7 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, messages []*model.Mess
 
 	response := &model.Message{}
 
-	err = json.Unmarshal(resBody, response)
+	err = json.Unmarshal(resBody, &response)
 	if err != nil {
 		logger.WithError(err).WithField("rawChatResponseBody", string(resBody)).Error("unable to unmarshal JSON response")
 		return nil, err
@@ -223,7 +226,7 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, messages []*model.Mess
 			for _, content := range responses[i].ContentBlocks {
 				if content.Type == "tool_use" {
 					// Execute the tool and add result back to conversation
-					result, err := ac.ExecuteTool(ctx, content.Name, string(content.Input))
+					result, err := ac.ExecuteTool(ctx, content.Name, string(content.Input), "")
 					if err != nil {
 						logger.WithError(err).WithField("toolName", content.Name).Error("failed to execute tool")
 						continue
@@ -266,7 +269,7 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, messages []*model.Mess
 					// append to message history and recurse to send the tool result back with context
 					messages = append(messages, toolMsg)
 
-					toolResponse, err := ac.Chat(ctx, messages, model.WithAutoExecuteTools(true))
+					toolResponse, err := ac.Chat(ctx, aiModel, messages, model.WithAutoExecuteTools(true))
 					if err != nil {
 						logger.WithError(err).Error("failed to chat with assistant after tool execution")
 						return nil, err
@@ -282,7 +285,7 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, messages []*model.Mess
 	return newMessages, nil
 }
 
-func (ac *AssistantCoordinator) ChatStream(ctx context.Context, messages []*model.Message) (*http.Response, error) {
+func (ac *AssistantCoordinator) ChatStream(ctx context.Context, aiModel string, messages []*model.Message) (*http.Response, error) {
 	logger := log.FromContext(ctx)
 	userID := ctx.Value(web.ContextKeyRequestorId).(string)
 
@@ -295,6 +298,7 @@ func (ac *AssistantCoordinator) ChatStream(ctx context.Context, messages []*mode
 		ToolConfig:   ac.toolConfig,
 		UserId:       userID,
 		SystemAppend: ac.systemPromptAddendum,
+		Model:        aiModel,
 	}
 
 	u, err := url.Parse(ac.apiUrl)
@@ -330,6 +334,10 @@ func (ac *AssistantCoordinator) ChatStream(ctx context.Context, messages []*mode
 
 	res, err := ac.MakeRequest(httpReq, true)
 	if err != nil {
+		if res != nil && res.Body != nil {
+			defer res.Body.Close()
+		}
+
 		logger.WithError(err).Error("unable to execute request")
 
 		return nil, err
@@ -338,7 +346,7 @@ func (ac *AssistantCoordinator) ChatStream(ctx context.Context, messages []*mode
 	return res, nil
 }
 
-func (ac *AssistantCoordinator) ExecuteTool(ctx context.Context, toolName string, params string) (*model.ToolResponse, error) {
+func (ac *AssistantCoordinator) ExecuteTool(ctx context.Context, toolName string, params string, auxData string) (*model.ToolResponse, error) {
 	logger := log.FromContext(ctx).WithFields(log.Fields{
 		"toolName":  toolName,
 		"toolUseId": uuid.New().String(),
@@ -359,7 +367,7 @@ func (ac *AssistantCoordinator) ExecuteTool(ctx context.Context, toolName string
 		"userId":   userID,
 	}).Info("executing tool for assistant")
 
-	result, err := tool.Execute(assistantCtx, ac.srv, params)
+	result, err := tool.Execute(assistantCtx, ac.srv, params, auxData)
 	if err != nil {
 		logger.WithError(err).Error("error executing tool")
 		return nil, err
@@ -395,6 +403,9 @@ func (ac *AssistantCoordinator) Balance(ctx context.Context) (*model.BalanceResp
 	ac.prepareRequestHeaders(httpReq)
 
 	res, err := ac.MakeRequest(httpReq, false)
+	if res != nil && res.Body != nil {
+		defer res.Body.Close()
+	}
 	if err != nil {
 		logger.WithError(err).WithField("apiEndpoint", endpoint).Error("unable to execute request")
 
@@ -447,6 +458,9 @@ func (ac *AssistantCoordinator) Health(ctx context.Context) (*model.HealthRespon
 	ac.prepareRequestHeaders(httpReq)
 
 	res, err := ac.MakeRequest(httpReq, false)
+	if res != nil && res.Body != nil {
+		defer res.Body.Close()
+	}
 	if err != nil {
 		logger.WithError(err).WithField("apiEndpoint", endpoint).Error("unable to execute request")
 
@@ -492,7 +506,7 @@ func cleanupMessages(messages []*model.Message) []*model.Message {
 			m.ContentBlocks = append([]model.ContentBlock{
 				{
 					Type: "text",
-					Text: "ToolUse",
+					Text: "&nbsp;",
 				},
 			}, m.ContentBlocks...)
 		}

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -42,7 +43,8 @@ func RegisterAssistantRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Post("/tool/{name}", h.PostTool)
 		r.Get("/balance", h.GetBalance)
 		r.Get("/sessions", h.GetSessions)
-		r.Get("/sessions/{sessionId}", h.GetSessionHistory)
+		r.Get("/sessions/{sessionId}", h.GetSessionDetails)
+		r.Put("/sessions/{sessionId}", h.UpdateSession)
 		r.Delete("/sessions/{sessionId}", h.DeleteSession)
 
 		r.Get("/admin/stats", h.GetUsage)
@@ -50,6 +52,15 @@ func RegisterAssistantRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Get("/admin/{userId}/sessions", h.GetSessionsAdmin)
 		r.Get("/admin/{userId}/sessions/{sessionId}/history", h.ManageSessionHistory)
 	})
+}
+
+func (h *AssistantHandler) checkAssistantAvailable(ctx context.Context, w http.ResponseWriter, r *http.Request) bool {
+	if h.server != nil && h.server.Config != nil && h.server.Config.AirgapEnabled {
+		log.FromContext(ctx).Error("unable to use assistant on airgap installation")
+		web.Respond(w, r, http.StatusInternalServerError, "ERROR_SERVICE_NOT_AVAILABLE")
+		return false
+	}
+	return true
 }
 
 // @Summary      Send Chat Message
@@ -75,11 +86,15 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !h.checkAssistantAvailable(ctx, w, r) {
+		return
+	}
+
 	accept := strings.TrimSpace(r.Header.Get("Accept"))
 	streaming := strings.EqualFold(accept, "text/event-stream")
 
-	tb := &model.IncomingMessage{}
-	err = json.NewDecoder(r.Body).Decode(tb)
+	incMsg := &model.IncomingMessage{}
+	err = json.NewDecoder(r.Body).Decode(incMsg)
 	if err != nil {
 		logger.WithError(err).Error("unable to decode request body")
 		web.Respond(w, r, http.StatusBadRequest, err)
@@ -87,8 +102,8 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if tb.SessionId == "" {
-		tb.SessionId = uuid.NewString()
+	if incMsg.SessionId == "" {
+		incMsg.SessionId = uuid.NewString()
 	}
 
 	newMsg := &model.Message{
@@ -96,24 +111,24 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		ContentBlocks: []model.ContentBlock{
 			{
 				Type: "text",
-				Text: tb.Msg,
+				Text: incMsg.Msg,
 			},
 		},
 	}
 
-	stored, err := h.server.Assistantstore.GetChatHistory(ctx, tb.SessionId, true)
-	if err != nil {
+	history, err := h.server.Assistantstore.GetChatHistory(ctx, incMsg.SessionId)
+	if err != nil && !strings.Contains(err.Error(), "not found") {
 		logger.WithError(err).Error("unable to get chat history")
 		web.Respond(w, r, http.StatusInternalServerError, err)
 
 		return
 	}
 
-	if len(stored) == 0 {
+	if len(history) == 0 {
 		// create new session
 		session := &model.AssistantSession{
-			SessionId: tb.SessionId,
-			Title:     tb.Msg,
+			SessionId: incMsg.SessionId,
+			Title:     incMsg.Msg,
 		}
 		err = h.server.Assistantstore.CreateSession(ctx, session)
 		if err != nil {
@@ -124,12 +139,9 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	messages := make([]*model.Message, 0, len(stored))
-	for _, msg := range stored {
-		messages = append(messages, msg.Message)
-	}
+	messages := historyToContext(history)
 
-	err = h.server.Assistantstore.SaveChat(ctx, newMsg.PrepareForStorage(tb.SessionId, nil))
+	err = h.server.Assistantstore.SaveChat(ctx, newMsg.PrepareForStorage(incMsg.SessionId, incMsg.Tags))
 	if err != nil {
 		logger.WithError(err).Error("unable to save chat message")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -145,16 +157,16 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !streaming || !ok {
-		response, err := h.server.AssistantManager.Chat(ctx, messages)
+		response, err := h.server.AssistantManager.Chat(ctx, incMsg.Model, messages)
 		if err != nil {
 			logger.WithError(err).Error("unable to chat with assistant")
-			web.Respond(w, r, http.StatusInternalServerError, err)
+			web.Respond(w, r, http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR")
 
 			return
 		}
 
 		for _, msg := range response {
-			err = h.server.Assistantstore.SaveChat(ctx, msg.PrepareForStorage(tb.SessionId, nil))
+			err = h.server.Assistantstore.SaveChat(ctx, msg.PrepareForStorage(incMsg.SessionId, nil))
 			if err != nil {
 				logger.WithError(err).Error("unable to save chat message")
 				return
@@ -175,10 +187,10 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	}
 	noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRequestorId, ctx.Value(web.ContextKeyRequestorId).(string))
 
-	response, err := h.server.AssistantManager.ChatStream(noTimeOutCtx, messages)
+	response, err := h.server.AssistantManager.ChatStream(noTimeOutCtx, incMsg.Model, messages)
 	if err != nil {
 		logger.WithError(err).Error("unable to chat (stream) with assistant")
-		web.Respond(w, r, http.StatusInternalServerError, err)
+		web.Respond(w, r, http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR")
 
 		return
 	}
@@ -199,7 +211,7 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if msg != nil {
-			err = h.server.Assistantstore.SaveChat(noTimeOutCtx, msg.PrepareForStorage(tb.SessionId, nil))
+			err = h.server.Assistantstore.SaveChat(noTimeOutCtx, msg.PrepareForStorage(incMsg.SessionId, nil))
 			if err != nil {
 				logger.WithError(err).Error("unable to save chat message")
 				return
@@ -232,6 +244,10 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !h.checkAssistantAvailable(ctx, w, r) {
+		return
+	}
+
 	accept := strings.TrimSpace(r.Header.Get("Accept"))
 	streaming := strings.EqualFold(accept, "text/event-stream")
 
@@ -246,21 +262,37 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, toolErr := h.server.AssistantManager.ExecuteTool(ctx, toolName, string(toolReq.Params))
+	result, toolErr := h.server.AssistantManager.ExecuteTool(ctx, toolName, string(toolReq.Params), string(toolReq.AuxData))
 	if toolErr != nil {
 		logger.WithError(toolErr).Error("unable to execute tool")
 	}
 
-	encoded := []byte("<nil>")
-
-	if result != nil {
-		encoded, err = json.Marshal(result.Result)
-		if err != nil {
-			logger.WithError(err).WithField("toolResult", result.Result).Error("unable to marshal tool result")
-
-			if toolErr == nil {
-				toolErr = err
+	var toolResult *model.ToolResult
+	if toolErr != nil {
+		toolResult = &model.ToolResult{
+			ToolUseId: toolReq.ToolUseId,
+			Status:    "error",
+			IsError:   true,
+			Content: []model.ToolResultContent{
+				{
+					Text: toolErr.Error(),
+				},
+			},
+		}
+	} else {
+		var res any
+		if result != nil {
+			res = map[string]any{
+				"result": result.Result,
 			}
+		}
+		toolResult = &model.ToolResult{
+			ToolUseId: toolReq.ToolUseId,
+			Content: []model.ToolResultContent{
+				{
+					Json: res,
+				},
+			},
 		}
 	}
 
@@ -269,8 +301,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 		Role: "user",
 		ContentBlocks: []model.ContentBlock{
 			{
-				Type: "text",
-				Text: fmt.Sprintf("ToolUseId: %s, Error: %v, Result: %s", toolReq.ToolUseId, toolErr, string(encoded)),
+				ToolResult: toolResult,
 			},
 		},
 	}
@@ -283,7 +314,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stored, err := h.server.Assistantstore.GetChatHistory(ctx, toolReq.SessionId, true)
+	history, err := h.server.Assistantstore.GetChatHistory(ctx, toolReq.SessionId)
 	if err != nil {
 		logger.WithError(err).Error("unable to get chat history")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -291,16 +322,13 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	messages := make([]*model.Message, 0, len(stored))
-	for _, msg := range stored {
-		messages = append(messages, msg.Message)
-	}
+	messages := historyToContext(history)
 
 	if !streaming {
-		response, err := h.server.AssistantManager.Chat(ctx, messages)
+		response, err := h.server.AssistantManager.Chat(ctx, toolReq.Model, messages)
 		if err != nil {
 			logger.WithError(err).Error("unable to chat with assistant after tool execution")
-			web.Respond(w, r, http.StatusInternalServerError, err)
+			web.Respond(w, r, http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR")
 
 			return
 		}
@@ -318,10 +346,10 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := h.server.AssistantManager.ChatStream(ctx, messages)
+	response, err := h.server.AssistantManager.ChatStream(ctx, toolReq.Model, messages)
 	if err != nil {
 		logger.WithError(err).Error("unable to chat (stream) with assistant after tool execution")
-		web.Respond(w, r, http.StatusInternalServerError, err)
+		web.Respond(w, r, http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR")
 
 		return
 	}
@@ -382,26 +410,27 @@ func (h *AssistantHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !h.checkAssistantAvailable(ctx, w, r) {
+		return
+	}
+
 	health, err := h.server.AssistantManager.Health(ctx)
 	if err != nil {
 		logger.WithError(err).Error("unable to get assistant health")
-		web.Respond(w, r, http.StatusInternalServerError, err)
-
+		web.Respond(w, r, http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR")
 		return
 	}
 
 	if health == nil || health.Status == "" {
 		logger.WithField("healthResponse", health).Warn("assistant health response is nil or missing status")
 		web.Respond(w, r, http.StatusInternalServerError, nil)
-
 		return
 	}
 
 	response, err := h.server.AssistantManager.Balance(ctx)
 	if err != nil {
 		logger.WithError(err).Error("unable to retrieve balance")
-		web.Respond(w, r, http.StatusInternalServerError, err)
-
+		web.Respond(w, r, http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR")
 		return
 	}
 
@@ -432,7 +461,7 @@ func (h *AssistantHandler) GetSessions(w http.ResponseWriter, r *http.Request) {
 
 	userId := ctx.Value(web.ContextKeyRequestorId).(string)
 
-	sessions, err := h.server.Assistantstore.GetSessions(ctx, true, model.GetSessionsWithUserId(userId))
+	sessions, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithUserId(userId))
 	if err != nil {
 		logger.WithError(err).Error("unable to get previous conversations")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -443,19 +472,20 @@ func (h *AssistantHandler) GetSessions(w http.ResponseWriter, r *http.Request) {
 	web.Respond(w, r, http.StatusOK, sessions)
 }
 
-// @Summary      Get Session History
-// @Description  Retrieve the complete chat history for a specific session.
+// @Summary      Get Session Details
+// @Description  Retrieve the complete chat history for a specific session. Can lookup deleted sessions.
 // @Tags         Assistant
 // @Security     bearer[assistant/read_authored]
+// @Security     bearer[assistant/read_shared]
 // @Param        sessionId  path  string  true  "Session ID to retrieve history for"
 // @Produce      json
-// @Success      200  {array}   model.StoredMessage "Complete chat history for the session"
+// @Success      200 {object} model.AssistantSessionDetails "Complete chat history and session details"
 // @Failure      400           "The provided session ID is invalid or missing"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
 // @Router       /api/assistant/sessions/{sessionId} [get]
-func (h *AssistantHandler) GetSessionHistory(w http.ResponseWriter, r *http.Request) {
+func (h *AssistantHandler) GetSessionDetails(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
 
@@ -473,7 +503,21 @@ func (h *AssistantHandler) GetSessionHistory(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	history, err := h.server.Assistantstore.GetChatHistory(ctx, sessionId, true)
+	session, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithIncludeDeleted(true))
+	if err != nil {
+		logger.WithError(err).Error("unable to get session")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+
+		return
+	}
+
+	if len(session) == 0 {
+		web.Respond(w, r, http.StatusOK, &model.AssistantSessionDetails{})
+
+		return
+	}
+
+	history, err := h.server.Assistantstore.GetChatHistory(ctx, sessionId)
 	if err != nil {
 		logger.WithError(err).Error("unable to get chat history for session")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -481,7 +525,101 @@ func (h *AssistantHandler) GetSessionHistory(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	web.Respond(w, r, http.StatusOK, history)
+	web.Respond(w, r, http.StatusOK, &model.AssistantSessionDetails{
+		Session: session[0],
+		History: history,
+	})
+}
+
+// @Summary      Update metadata for a Session
+// @Description  Allow a user to modify their own session tags.
+// @Tags         Assistant
+// @Security     bearer[assistant/write_authored]
+// @Param        sessionId  path  string  true  "Session ID to modify"
+// @Param        request  body  model.UpdateSessionRequest   true  "Indicate what field we're doing what operation with."
+// @Produce      json
+// @Success      206           "No content"
+// @Failure      400           "The provided session ID is invalid or missing"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      404           "Session not found"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /api/assistant/sessions/{sessionId} [put]
+func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	logger := log.FromContext(ctx)
+
+	err := h.server.CheckAuthorized(ctx, "write_authored", "assistant")
+	if err != nil {
+		web.Respond(w, r, http.StatusUnauthorized, err)
+		return
+	}
+
+	sessionId := chi.URLParam(r, "sessionId")
+	if sessionId == "" {
+		logger.Error("sessionId is required")
+		web.Respond(w, r, http.StatusBadRequest, "sessionId is required")
+
+		return
+	}
+
+	updateReq := &model.UpdateSessionRequest{}
+
+	err = json.NewDecoder(r.Body).Decode(updateReq)
+	if err != nil {
+		logger.WithError(err).Error("unable to decode request body")
+		web.Respond(w, r, http.StatusBadRequest, err)
+
+		return
+	}
+
+	sessions, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId))
+	if err != nil {
+		logger.WithError(err).Error("unable to get session")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+
+		return
+	}
+
+	if len(sessions) == 0 {
+		logger.Error("session not found")
+		web.Respond(w, r, http.StatusNotFound, "session not found")
+
+		return
+	}
+
+	session := sessions[0]
+
+	switch updateReq.Action {
+	case "add":
+		if !slices.Contains(session.Tags, updateReq.Tag) {
+			session.Tags = append(session.Tags, updateReq.Tag)
+		} else {
+			logger.Warn("tag already exists on session")
+			web.Respond(w, r, http.StatusConflict, "tag already exists on session")
+
+			return
+		}
+	case "remove":
+		if slices.Contains(session.Tags, updateReq.Tag) {
+			session.Tags = slices.Delete(session.Tags, slices.Index(session.Tags, updateReq.Tag), slices.Index(session.Tags, updateReq.Tag)+1)
+		} else {
+			logger.Warn("tag does not exist on session")
+			web.Respond(w, r, http.StatusConflict, "tag does not exist on session")
+
+			return
+		}
+	}
+
+	err = h.server.Assistantstore.UpdateSessionTags(ctx, sessionId, session.Tags)
+	if err != nil {
+		logger.WithError(err).Error("unable to update session")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+
+		return
+	}
+
+	web.Respond(w, r, http.StatusNoContent, nil)
 }
 
 // @Summary      Delete Session
@@ -639,7 +777,7 @@ func (h *AssistantHandler) GetSessionsAdmin(w http.ResponseWriter, r *http.Reque
 		opts = append(opts, model.GetSessionsWithUserId(userId))
 	}
 
-	sessions, err := h.server.Assistantstore.GetSessions(ctx, false, opts...)
+	sessions, err := h.server.Assistantstore.GetSessions(ctx, opts...)
 	if err != nil {
 		logger.WithError(err).Error("unable to manage sessions")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -675,7 +813,7 @@ func (h *AssistantHandler) ManageSessionHistory(w http.ResponseWriter, r *http.R
 	userId := chi.URLParam(r, "userId")
 	sessionId := chi.URLParam(r, "sessionId")
 
-	sessions, err := h.server.Assistantstore.GetSessions(ctx, false, model.GetSessionsWithUserId(userId), model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithIncludeDeleted(true))
+	sessions, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithUserId(userId), model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithIncludeDeleted(true))
 	if err != nil {
 		logger.WithError(err).Error("unable to manage sessions")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -693,13 +831,15 @@ func (h *AssistantHandler) ManageSessionHistory(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	history, err := h.server.Assistantstore.GetChatHistory(ctx, sessionId, false)
+	history, err := h.server.Assistantstore.GetChatHistory(ctx, sessionId)
 	if err != nil {
 		logger.WithError(err).Error("unable to manage session history")
 		web.Respond(w, r, http.StatusInternalServerError, err)
 
 		return
 	}
+
+	// Note: Do not convert to context, the UI gets the entire history
 
 	web.Respond(w, r, http.StatusOK, history)
 }
@@ -755,8 +895,6 @@ func streamResponse(ctx context.Context, w http.ResponseWriter, r *http.Request,
 		}
 	}
 
-	logger.WithField("entireResponse", string(entireResponse)).Debug("entire response streamed")
-
 	if err == io.EOF {
 		err = nil // EOF is not an error in this context
 	}
@@ -772,6 +910,11 @@ func unstreamResponse(ctx context.Context, rawResponse string) (*model.Message, 
 		StopReason  *string `json:"stop_reason,omitempty"`
 	}
 
+	type ErrorResponse struct {
+		Type    string `json:"type"`
+		Message string `json:"message"`
+	}
+
 	type StreamingMessage struct {
 		Type         string              `json:"type"`
 		Index        int                 `json:"index"`
@@ -779,6 +922,7 @@ func unstreamResponse(ctx context.Context, rawResponse string) (*model.Message, 
 		Delta        *Delta              `json:"delta"`
 		ContentBlock *model.ContentBlock `json:"content_block,omitempty"`
 		Usage        *model.Usage        `json:"usage,omitempty"`
+		Error        ErrorResponse       `json:"error,omitempty"`
 	}
 
 	logger := log.FromContext(ctx)
@@ -803,6 +947,13 @@ func unstreamResponse(ctx context.Context, rawResponse string) (*model.Message, 
 		}
 
 		switch sm.Type {
+		case "error":
+			logger.WithFields(log.Fields{
+				"errorType":    sm.Error.Type,
+				"errorMessage": sm.Error.Message,
+			}).Error("received error in streaming response")
+
+			return nil, fmt.Errorf("type: %s, message: %s", sm.Error.Type, sm.Error.Message)
 		case "message_start":
 			if sm.Message != nil {
 				message = sm.Message
@@ -825,6 +976,12 @@ func unstreamResponse(ctx context.Context, rawResponse string) (*model.Message, 
 			if sm.Delta != nil {
 				switch sm.Delta.Type {
 				case "text_delta":
+					for len(message.ContentBlocks) <= sm.Index {
+						message.ContentBlocks = append(message.ContentBlocks, model.ContentBlock{
+							Content: "",
+						})
+					}
+
 					if message.ContentBlocks[sm.Index].Content == nil {
 						message.ContentBlocks[sm.Index].Content = ""
 					}
@@ -835,9 +992,16 @@ func unstreamResponse(ctx context.Context, rawResponse string) (*model.Message, 
 				}
 			}
 		case "content_block_stop":
+			for sm.Index >= len(message.ContentBlocks) {
+				message.ContentBlocks = append(message.ContentBlocks, model.ContentBlock{})
+			}
 			if message.ContentBlocks[sm.Index].Type == "" {
 				message.ContentBlocks[sm.Index].Type = "text"
-				message.ContentBlocks[sm.Index].Text = message.ContentBlocks[sm.Index].Content.(string)
+				if message.ContentBlocks[sm.Index].Content != nil {
+					message.ContentBlocks[sm.Index].Text = message.ContentBlocks[sm.Index].Content.(string)
+				} else {
+					message.ContentBlocks[sm.Index].Text = ""
+				}
 				message.ContentBlocks[sm.Index].Content = nil
 			}
 		case "message_delta":
@@ -852,4 +1016,19 @@ func unstreamResponse(ctx context.Context, rawResponse string) (*model.Message, 
 	}
 
 	return message, nil
+}
+
+// Converts stored message history to only the messages that'll get sent as context.
+func historyToContext(history []*model.StoredMessage) []*model.Message {
+	messages := make([]*model.Message, 0, len(history))
+	for _, msg := range history {
+		if slices.Contains(msg.Tags, model.MessageTagContextCompression) {
+			// drop older messages, keep capacity
+			messages = messages[:0]
+		}
+
+		messages = append(messages, msg.Message)
+	}
+
+	return messages
 }

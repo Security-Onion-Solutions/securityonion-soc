@@ -17,6 +17,7 @@ type Playbookstore interface {
 	GetPlaybookById(ctx context.Context, id string) (*model.Playbook, error)
 	ConvertQuestions(ctx context.Context, queries []string) ([]*model.ConvertedQuery, error)
 	ExecutePlaybookSearches(ctx context.Context, event *model.EventRecord, pbs []*model.Playbook) error
+	GetEventSpecificPlaybook(ctx context.Context, id string) ([]*model.Playbook, error)
 }
 
 //go:generate mockgen -destination mock/mock_playbookstore.go -package mock . Playbookstore

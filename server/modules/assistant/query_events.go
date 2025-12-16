@@ -43,10 +43,7 @@ func (t *QueryEventsTool) GetDescription() string {
 		"- Examples for NON-GROUPED queries (individual events):\n" +
 		"  - **\"Show me the latest 5 alerts\"**: `{\"query\": \"tags:alert\", \"limit\": 5}`\n" +
 		"  - **\"List recent SSH connections\"**: `{\"query\": \"tags:ssh\", \"limit\": 10}`\n" +
-		"  - **\"Show alert details for ID X\"**: `{\"query\": \"tags:alert AND log.id.uid:\\\"X\\\"\", \"limit\": 1}`" +
-		"- Examples for wild cards:\n" +
-		"  - Search terms cannot begin with a wildcard (e.g., `*xyz` the wildcard is ignored, but `xyz*` is valid)\n" +
-		"  - If you use wildcards, do not wrap the value in quotes, instead use parentheses (e.g., `rule.name:(A B*)` is valid, but `rule.name:\"A B*\"` will not work as expected)"
+		"  - **\"Show alert details for ID X\"**: `{\"query\": \"tags:alert AND log.id.uid:\\\"X\\\"\", \"limit\": 1}`"
 }
 
 func (t *QueryEventsTool) GetSchema() model.JSONSchema {
@@ -59,16 +56,13 @@ func (t *QueryEventsTool) GetSchema() model.JSONSchema {
 					Description: "The OQL query string to execute",
 				},
 				"range_start": {
-					Type:        "string",
-					Description: "Optional start time for the query range (e.g., \"-1h\", \"2023/10/26 10:00:00 AM\"). Default is 24 hours ago (\"-24h\")",
+					Type: "string",
 				},
 				"range_end": {
-					Type:        "string",
-					Description: "Optional end time for the query range (e.g., \"now\", \"2023/10/26 12:00:00 PM\"). Default is now.",
+					Type: "string",
 				},
 				"range_format": {
-					Type:        "string",
-					Description: "Format of the date range (default: \"2006/01/02 3:04:05 PM\"). The format must be specified using Go's time package's reference layout format. Required if either range_start or range_end is provided.",
+					Type: "string",
 				},
 				"limit": {
 					Type:        "integer",
@@ -95,7 +89,7 @@ type queryEventsArgs struct {
 	GroupByField *string `json:"groupby_field,omitempty"`
 }
 
-func (t *QueryEventsTool) Execute(ctx context.Context, server *server.Server, params string) (result *model.ToolResponse, err error) {
+func (t *QueryEventsTool) Execute(ctx context.Context, server *server.Server, params string, auxData string) (result *model.ToolResponse, err error) {
 	logger := log.FromContext(ctx)
 
 	logger.WithField("toolParameters", params).Info("running tool for assistant")
@@ -256,7 +250,7 @@ func (t *QueryEventsTool) Execute(ctx context.Context, server *server.Server, pa
 }
 
 // filterEvents filters event fields to reduce payload size
-func filterEvents(events []*model.EventRecord) []map[string]any {
+func filterEvents(events []*model.EventRecord, extraFields ...string) []map[string]any {
 	// Default fields from Python implementation
 	defaultFields := []string{
 		"@timestamp",
@@ -286,13 +280,15 @@ func filterEvents(events []*model.EventRecord) []map[string]any {
 
 	filtered := make([]map[string]any, 0, len(events))
 
+	fields := append(defaultFields, extraFields...)
+
 	for _, event := range events {
 		filteredPayload := map[string]any{
 			"_id": event.Id,
 		}
 
 		// Copy only default fields starting with the Id field
-		for _, field := range defaultFields {
+		for _, field := range fields {
 			// First try the field as-is (for non-nested fields)
 			if val, exists := event.Payload[field]; exists && val != nil {
 				filteredPayload[field] = val

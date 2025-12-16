@@ -59,6 +59,16 @@ test('formatHours', () => {
   expect(app.formatHours(10.14)).toBe("10.14");
 });
 
+test('formatLongDuration', () => {
+  expect(app.formatLongDuration(29000)).toBe("0m");
+  expect(app.formatLongDuration(300000)).toBe("5m");
+  expect(app.formatLongDuration(290000)).toBe("5m");
+  expect(app.formatLongDuration(3600000)).toBe("1.0h");
+  expect(app.formatLongDuration(3960000)).toBe("1.1h");
+  expect(app.formatLongDuration(86400000)).toBe("1.0d");
+  expect(app.formatLongDuration(95040000)).toBe("1.1d");
+});
+
 test('formatDecimals', () => {
   expect(app.formatDecimal1(null)).toBe("0.0");
   expect(app.formatDecimal2(null)).toBe("0.00");
@@ -220,6 +230,10 @@ test('loadServerSettings', async () => {
 test('localizeMessage', () => {
   expect(app.localizeMessage(null)).toBe("");
   expect(app.localizeMessage('create')).toBe("Create");
+  expect(app.localizeMessage('"quoted message"')).toBe("quoted message");
+  expect(app.localizeMessage('"error with quotes"')).toBe("error with quotes");
+  expect(app.localizeMessage('no quotes')).toBe("no quotes");
+  expect(app.localizeMessage('"single quote"')).toBe("single quote");
 });
 
 test('localizeMessageWithArgs', () => {
@@ -679,6 +693,40 @@ test('getDetectionEngineStatus', () => {
   expect(app.getDetectionEngineStatus('strelka')).toBe('ImportPending');
   app.statusByGridId[''] = { detections: { strelka: { importing: false }}};
   expect(app.getDetectionEngineStatus('strelka')).toBe('Healthy');
+});
+
+test('isDetectionEngineStatusUnhealthy', () => {
+  // Test healthy states (returns false)
+  app.statusByGridId[''] = { detections: { strelka: { migrating: true }}};
+  expect(app.isDetectionEngineStatusUnhealthy('strelka')).toBe(false);
+
+  app.statusByGridId[''] = { detections: { strelka: { importing: true, syncing: true }}};
+  expect(app.isDetectionEngineStatusUnhealthy('strelka')).toBe(false);
+
+  app.statusByGridId[''] = { detections: { strelka: { importing: true, syncing: false }}};
+  expect(app.isDetectionEngineStatusUnhealthy('strelka')).toBe(false);
+
+  app.statusByGridId[''] = { detections: { strelka: { syncing: true }}};
+  expect(app.isDetectionEngineStatusUnhealthy('strelka')).toBe(false);
+
+  app.statusByGridId[''] = { detections: { strelka: { pending: true }}};
+  expect(app.isDetectionEngineStatusUnhealthy('strelka')).toBe(false);
+
+  app.statusByGridId[''] = { detections: { strelka: { importing: false }}}; // Healthy
+  expect(app.isDetectionEngineStatusUnhealthy('strelka')).toBe(false);
+
+  // Test unhealthy states (returns true)
+  app.statusByGridId[''] = { detections: { strelka: { migrationFailure: true }}};
+  expect(app.isDetectionEngineStatusUnhealthy('strelka')).toBe(true);
+
+  app.statusByGridId[''] = { detections: { strelka: { syncFailure: true }}};
+  expect(app.isDetectionEngineStatusUnhealthy('strelka')).toBe(true);
+
+  app.statusByGridId[''] = { detections: { strelka: { integrityFailure: true }}};
+  expect(app.isDetectionEngineStatusUnhealthy('strelka')).toBe(true);
+
+  // Test unknown engine
+  expect(app.isDetectionEngineStatusUnhealthy('unknown')).toBe(true);
 });
 
 test('isAttentionNeeded', () => {
@@ -1194,4 +1242,28 @@ describe('export', () => {
       app.showError = oldShowError;
     } 
   });
+});
+
+test('performMermaidRegexes', () => {
+  expect(app.performMermaidRegexes('regular text')).toBe('regular text');
+  expect(app.performMermaidRegexes('')).toBe('');
+
+  const mermaidWithBothIssues = `
+\`\`\`mermaid
+graph TD
+    A[Start: Begin]
+
+    B[Step: Process]
+    A --> B
+\`\`\``;
+
+  const expectedBothFixed = `
+\`\`\`mermaid
+graph TD
+    A[Start∶ Begin]
+    B[Step∶ Process]
+    A --> B
+\`\`\``;
+
+  expect(app.performMermaidRegexes(mermaidWithBothIssues)).toBe(expectedBothFixed);
 });

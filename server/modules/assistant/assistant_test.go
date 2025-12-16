@@ -267,7 +267,7 @@ func TestAssistantCoordinator_ExecuteTool(t *testing.T) {
 			toolName: "test_tool",
 			params:   `{"param1": "value1"}`,
 			setupMocks: func(mockTool *mock.MockTool) {
-				mockTool.EXPECT().Execute(gomock.Any(), gomock.Any(), `{"param1": "value1"}`).Return(&model.ToolResponse{
+				mockTool.EXPECT().Execute(gomock.Any(), gomock.Any(), `{"param1": "value1"}`, "").Return(&model.ToolResponse{
 					ToolName:       "test_tool",
 					OnBehalfOfUser: "test-user",
 					Result:         "success",
@@ -293,7 +293,7 @@ func TestAssistantCoordinator_ExecuteTool(t *testing.T) {
 			toolName: "failing_tool",
 			params:   `{"param1": "value1"}`,
 			setupMocks: func(mockTool *mock.MockTool) {
-				mockTool.EXPECT().Execute(gomock.Any(), gomock.Any(), `{"param1": "value1"}`).Return(nil, errors.New("tool execution failed"))
+				mockTool.EXPECT().Execute(gomock.Any(), gomock.Any(), `{"param1": "value1"}`, "").Return(nil, errors.New("tool execution failed"))
 			},
 			expectedResult: nil,
 			expectedError:  errors.New("tool execution failed"),
@@ -319,7 +319,7 @@ func TestAssistantCoordinator_ExecuteTool(t *testing.T) {
 
 			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
-			result, err := ac.ExecuteTool(ctx, tc.toolName, tc.params)
+			result, err := ac.ExecuteTool(ctx, tc.toolName, tc.params, "")
 
 			if tc.expectedError != nil {
 				assert.Error(t, err)
@@ -555,7 +555,7 @@ func TestAssistantCoordinator_Chat(t *testing.T) {
 
 			// Setup tool mock for auto-execute cases
 			if len(tc.chatOpts) > 0 {
-				mockTool.EXPECT().Execute(gomock.Any(), gomock.Any(), gomock.Any()).Return(&model.ToolResponse{
+				mockTool.EXPECT().Execute(gomock.Any(), gomock.Any(), gomock.Any(), "").Return(&model.ToolResponse{
 					ToolName:       "test_tool",
 					OnBehalfOfUser: "test-user",
 					Result:         "tool result",
@@ -579,7 +579,7 @@ func TestAssistantCoordinator_Chat(t *testing.T) {
 
 			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
-			result, err := ac.Chat(ctx, tc.messages, tc.chatOpts...)
+			result, err := ac.Chat(ctx, "test-model", tc.messages, tc.chatOpts...)
 
 			if tc.expectedError {
 				assert.Error(t, err)
@@ -682,7 +682,7 @@ func TestAssistantCoordinator_ChatStream(t *testing.T) {
 
 			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
-			result, err := ac.ChatStream(ctx, tc.messages)
+			result, err := ac.ChatStream(ctx, "test-model", tc.messages)
 
 			if tc.expectError {
 				assert.Error(t, err)
@@ -800,7 +800,7 @@ func TestCleanupMessages(t *testing.T) {
 					Id:   "msg2",
 					Role: "assistant",
 					ContentBlocks: []model.ContentBlock{
-						{Type: "text", Text: "ToolUse"},
+						{Type: "text", Text: "&nbsp;"},
 						{Type: "tool_use", Input: []byte(`{"param1": "value1"}`)},
 					},
 				},
@@ -887,7 +887,7 @@ func (m *mockTool) GetSchema() model.JSONSchema {
 	return m.schema
 }
 
-func (m *mockTool) Execute(ctx context.Context, srv *server.Server, params string) (*model.ToolResponse, error) {
+func (m *mockTool) Execute(ctx context.Context, srv *server.Server, params string, auxData string) (*model.ToolResponse, error) {
 	return &model.ToolResponse{
 		ToolName: m.name,
 		Result:   "mock result",

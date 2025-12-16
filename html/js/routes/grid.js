@@ -438,6 +438,26 @@ routes.push({ path: '/grid', name: 'grid', component: {
     colorContainerStatus(status) {
       return status == "running" ? "success" : "error";
     },
+    colorSuriRules(item) {
+      // Unknown status (container down, socket error, etc.)
+      if (item.suriRulesStatus === "unknown") {
+        return "";  // Gray/default color
+      }
+      // All rules failed to load - error
+      if (item.suriRulesLoaded === 0 && item.suriRulesFailed > 0) {
+        return "error";
+      }
+      // Some rules loaded but some failed - warning
+      if (item.suriRulesLoaded > 0 && item.suriRulesFailed > 0) {
+        return "warning";
+      }
+      // No rules configured (none loaded, none failed) - warning
+      if (item.suriRulesLoaded === 0 && item.suriRulesFailed === 0) {
+        return "warning";
+      }
+      // All rules loaded successfully
+      return "success";
+    },
     formatLinearColor(val, caution, warn, crit) {
       if (val >= crit) {
         return "error";

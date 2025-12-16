@@ -6,6 +6,13 @@
 
 package model
 
+import (
+	"encoding/json"
+	"fmt"
+	"math"
+	"strconv"
+)
+
 const DEFAULT_GROUP_FETCH_LIMIT = 10
 const DEFAULT_EVENT_FETCH_LIMIT = 100
 const DEFAULT_RELATIVE_TIME_VALUE = 24
@@ -16,28 +23,28 @@ const DEFAULT_CHART_LABEL_OTHER_LIMIT = 10
 const DEFAULT_CHART_LABEL_FIELD_SEPARATOR = ", "
 
 type ClientParameters struct {
-	HuntingParams       HuntingParameters    `json:"hunt"`
-	AlertingParams      AlertingParameters   `json:"alerts"`
-	CasesParams         HuntingParameters    `json:"cases"`
-	CaseParams          CaseParameters       `json:"case"`
-	DashboardsParams    HuntingParameters    `json:"dashboards"`
-	JobParams           HuntingParameters    `json:"job"`
-	DetectionsParams    DetectionsParameters `json:"detections"`
-	DetectionParams     DetectionParameters  `json:"detection"`
-	DocsUrl             string               `json:"docsUrl"`
-	CheatsheetUrl       string               `json:"cheatsheetUrl"`
-	ReleaseNotesUrl     string               `json:"releaseNotesUrl"`
-	GridParams          GridParameters       `json:"grid"`
-	WebSocketTimeoutMs  int                  `json:"webSocketTimeoutMs"`
-	TipTimeoutMs        int                  `json:"tipTimeoutMs"`
-	ApiTimeoutMs        int                  `json:"apiTimeoutMs"`
-	CacheExpirationMs   int                  `json:"cacheExpirationMs"`
-	InactiveTools       []string             `json:"inactiveTools"`
-	Tools               []ClientTool         `json:"tools"`
-	CasesEnabled        bool                 `json:"casesEnabled"`
-	DetectionsEnabled   bool                 `json:"detectionsEnabled"`
-	ExportNodeId        string               `json:"exportNodeId"`
-	AssistantParams     AssistantParameters  `json:"assistant"`
+	HuntingParams      HuntingParameters    `json:"hunt"`
+	AlertingParams     AlertingParameters   `json:"alerts"`
+	CasesParams        HuntingParameters    `json:"cases"`
+	CaseParams         CaseParameters       `json:"case"`
+	DashboardsParams   HuntingParameters    `json:"dashboards"`
+	JobParams          HuntingParameters    `json:"job"`
+	DetectionsParams   DetectionsParameters `json:"detections"`
+	DetectionParams    DetectionParameters  `json:"detection"`
+	DocsUrl            string               `json:"docsUrl"`
+	CheatsheetUrl      string               `json:"cheatsheetUrl"`
+	ReleaseNotesUrl    string               `json:"releaseNotesUrl"`
+	GridParams         GridParameters       `json:"grid"`
+	WebSocketTimeoutMs int                  `json:"webSocketTimeoutMs"`
+	TipTimeoutMs       int                  `json:"tipTimeoutMs"`
+	ApiTimeoutMs       int                  `json:"apiTimeoutMs"`
+	CacheExpirationMs  int                  `json:"cacheExpirationMs"`
+	InactiveTools      []string             `json:"inactiveTools"`
+	Tools              []ClientTool         `json:"tools"`
+	CasesEnabled       bool                 `json:"casesEnabled"`
+	DetectionsEnabled  bool                 `json:"detectionsEnabled"`
+	ExportNodeId       string               `json:"exportNodeId"`
+	AssistantParams    AssistantParameters  `json:"assistant"`
 }
 
 func (config *ClientParameters) Verify() error {
@@ -173,14 +180,69 @@ type AlertingParameters struct {
 }
 
 type AssistantParameters struct {
-	Enabled                bool    `json:"enabled"`
-	InvestigationPrompt    string  `json:"investigationPrompt"`
-	ContextLimitSmall      int     `json:"contextLimitSmall"`
-	ContextLimitLarge      int     `json:"contextLimitLarge"`
-	ThresholdColorRatioLow float64 `json:"thresholdColorRatioLow"`
-	ThresholdColorRatioMed float64 `json:"thresholdColorRatioMed"`
-	ThresholdColorRatioMax float64 `json:"thresholdColorRatioMax"`
-	LowBalanceColorAlert   int     `json:"lowBalanceColorAlert"`
+	Enabled                bool              `json:"enabled"`
+	InvestigationPrompt    string            `json:"investigationPrompt"`
+	CompressContextPrompt  string            `json:"compressContextPrompt"`
+	ThresholdColorRatioLow float64           `json:"thresholdColorRatioLow"`
+	ThresholdColorRatioMed float64           `json:"thresholdColorRatioMed"`
+	ThresholdColorRatioMax float64           `json:"thresholdColorRatioMax"`
+	AvailableModels        []ModelParameters `json:"availableModels"`
+}
+
+type ModelParameters struct {
+	ID                   string `json:"id"`
+	DisplayName          string `json:"displayName"`
+	ContextLimitSmall    int    `json:"contextLimitSmall"`
+	ContextLimitLarge    int    `json:"contextLimitLarge"`
+	LowBalanceColorAlert int    `json:"lowBalanceColorAlert"`
+	Enabled              bool   `json:"enabled"`
+}
+
+// Custom unmarshal to handle numeric or scientific-notation string fields
+func (m *ModelParameters) UnmarshalJSON(data []byte) error {
+	type Alias ModelParameters // Prevent recursion
+	aux := struct {
+		ContextLimitSmall    any `json:"contextLimitSmall"`
+		ContextLimitLarge    any `json:"contextLimitLarge"`
+		LowBalanceColorAlert any `json:"lowBalanceColorAlert"`
+		*Alias
+	}{
+		Alias: (*Alias)(m),
+	}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	parseToInt := func(v any) (int, error) {
+		switch val := v.(type) {
+		case float64:
+			return int(val), nil
+		case string:
+			f, err := strconv.ParseFloat(val, 64)
+			if err != nil {
+				return 0, err
+			}
+			return int(math.Round(f)), nil
+		case nil:
+			return 0, nil
+		default:
+			return 0, fmt.Errorf("unexpected type %T for numeric field", v)
+		}
+	}
+
+	var err error
+	if m.ContextLimitSmall, err = parseToInt(aux.ContextLimitSmall); err != nil {
+		return fmt.Errorf("parsing contextLimitSmall: %w", err)
+	}
+	if m.ContextLimitLarge, err = parseToInt(aux.ContextLimitLarge); err != nil {
+		return fmt.Errorf("parsing contextLimitLarge: %w", err)
+	}
+	if m.LowBalanceColorAlert, err = parseToInt(aux.LowBalanceColorAlert); err != nil {
+		return fmt.Errorf("parsing LowBalanceColorAlert: %w", err)
+	}
+
+	return nil
 }
 
 type PresetParameters struct {

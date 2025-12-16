@@ -39,7 +39,7 @@ type GetterByPublicId interface {
 
 //go:generate mockgen -destination mock/mock_iomanager.go -package mock . IOManager
 
-func DetermineWaitTime(iom IOManager, path string, importFrequency time.Duration) (*uint64, time.Duration) {
+func DetermineWaitTime(iom IOManager, path string, importFrequency time.Duration, firstImportDelay time.Duration) (*uint64, time.Duration) {
 	lastImport, err := ReadStateFile(iom, path)
 	if err != nil {
 		log.WithError(err).Error("unable to read state file, deleting it")
@@ -59,8 +59,8 @@ func DetermineWaitTime(iom IOManager, path string, importFrequency time.Duration
 
 		timerDur = time.Until(nextImportTime)
 	} else {
-		log.Info("no engine state file found, waiting 20 mins for first import")
-		timerDur = time.Duration(time.Minute * 20)
+		log.WithField("delaySeconds", firstImportDelay.Seconds()).Info("no engine state file found, waiting for first import")
+		timerDur = firstImportDelay
 	}
 
 	return lastImport, timerDur

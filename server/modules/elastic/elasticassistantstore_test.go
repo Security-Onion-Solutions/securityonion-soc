@@ -34,139 +34,179 @@ func TestValidateId(t *testing.T) {
 	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), nil, 1000)
 	store.Init("chat-index", "session-index", "so_")
 
-	// Valid IDs
-	assert.NoError(t, store.validateId("12345", "test"))
-	assert.NoError(t, store.validateId("chat_1757086398900_ykhmndscn", "test"))
-	assert.NoError(t, store.validateId("a-b-c_d-e_f", "test"))
-	assert.NoError(t, store.validateId("12345678901234567890123456789012345678901234567890", "test"))
+	tests := []struct {
+		name      string
+		id        string
+		wantError bool
+	}{
+		{"valid short id", "12345", false},
+		{"valid with underscores and hyphens", "chat_1757086398900_ykhmndscn", false},
+		{"valid with mixed separators", "a-b-c_d-e_f", false},
+		{"valid max length", "12345678901234567890123456789012345678901234567890", false},
+		{"empty id", "", true},
+		{"too short", "1234", true},
+		{"too long", "123456789012345678901234567890123456789012345678901", true},
+		{"contains spaces", "invalid id", true},
+		{"contains special chars", "invalid@id", true},
+	}
 
-	// Invalid IDs
-	assert.Error(t, store.validateId("", "test"))
-	assert.Error(t, store.validateId("1234", "test"))                                                // too short
-	assert.Error(t, store.validateId("123456789012345678901234567890123456789012345678901", "test")) // too long
-	assert.Error(t, store.validateId("invalid id", "test"))                                          // spaces
-	assert.Error(t, store.validateId("invalid@id", "test"))                                          // special chars
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := store.validateId(tt.id, "test")
+			if tt.wantError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }
 
 func TestValidateChat(t *testing.T) {
 	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), nil, 1000)
 	store.Init("chat-index", "session-index", "so_")
 
-	t.Run("valid chat with ContentStr", func(t *testing.T) {
-		chat := &model.StoredMessage{
-			SessionId: "chat_123456",
-			Message: &model.Message{
-				ContentStr: "Hello, world!",
-			},
-		}
-		err := store.validateChat(chat)
-		assert.NoError(t, err)
-	})
-
-	t.Run("valid chat with ContentBlocks", func(t *testing.T) {
-		chat := &model.StoredMessage{
-			SessionId: "chat_123456",
-			Message: &model.Message{
-				ContentBlocks: []model.ContentBlock{
-					{Type: "text", Text: "Hello"},
+	tests := []struct {
+		name      string
+		chat      *model.StoredMessage
+		wantError bool
+	}{
+		{
+			name: "valid chat with ContentStr",
+			chat: &model.StoredMessage{
+				SessionId: "chat_123456",
+				Message: &model.Message{
+					ContentStr: "Hello, world!",
 				},
 			},
-		}
-		err := store.validateChat(chat)
-		assert.NoError(t, err)
-	})
-
-	t.Run("invalid session ID", func(t *testing.T) {
-		chat := &model.StoredMessage{
-			SessionId: "bad",
-			Message: &model.Message{
-				ContentStr: "Hello",
-			},
-		}
-		err := store.validateChat(chat)
-		assert.Error(t, err)
-	})
-
-	t.Run("missing content", func(t *testing.T) {
-		chat := &model.StoredMessage{
-			SessionId: "chat_123456",
-			Message:   &model.Message{},
-		}
-		err := store.validateChat(chat)
-		assert.Error(t, err)
-	})
-
-	t.Run("both content types", func(t *testing.T) {
-		chat := &model.StoredMessage{
-			SessionId: "chat_123456",
-			Message: &model.Message{
-				ContentStr: "Hello",
-				ContentBlocks: []model.ContentBlock{
-					{Type: "text", Text: "World"},
+			wantError: false,
+		},
+		{
+			name: "valid chat with ContentBlocks",
+			chat: &model.StoredMessage{
+				SessionId: "chat_123456",
+				Message: &model.Message{
+					ContentBlocks: []model.ContentBlock{
+						{Type: "text", Text: "Hello"},
+					},
 				},
 			},
-		}
-		err := store.validateChat(chat)
-		assert.Error(t, err)
-	})
-
-	t.Run("empty text in content block", func(t *testing.T) {
-		chat := &model.StoredMessage{
-			SessionId: "chat_123456",
-			Message: &model.Message{
-				ContentBlocks: []model.ContentBlock{
-					{Type: "text", Text: ""},
+			wantError: false,
+		},
+		{
+			name: "invalid session ID",
+			chat: &model.StoredMessage{
+				SessionId: "bad",
+				Message: &model.Message{
+					ContentStr: "Hello",
 				},
 			},
-		}
-		err := store.validateChat(chat)
-		assert.Error(t, err)
-	})
-
-	t.Run("missing type in content block", func(t *testing.T) {
-		chat := &model.StoredMessage{
-			SessionId: "chat_123456",
-			Message: &model.Message{
-				ContentBlocks: []model.ContentBlock{
-					{Text: "Hello"},
+			wantError: true,
+		},
+		{
+			name: "missing content",
+			chat: &model.StoredMessage{
+				SessionId: "chat_123456",
+				Message:   &model.Message{},
+			},
+			wantError: true,
+		},
+		{
+			name: "both content types",
+			chat: &model.StoredMessage{
+				SessionId: "chat_123456",
+				Message: &model.Message{
+					ContentStr: "Hello",
+					ContentBlocks: []model.ContentBlock{
+						{Type: "text", Text: "World"},
+					},
 				},
 			},
-		}
-		err := store.validateChat(chat)
-		assert.Error(t, err)
-	})
+			wantError: true,
+		},
+		{
+			name: "empty text in content block - allowed",
+			chat: &model.StoredMessage{
+				SessionId: "chat_123456",
+				Message: &model.Message{
+					ContentBlocks: []model.ContentBlock{
+						{Type: "text", Text: ""},
+					},
+				},
+			},
+			wantError: false,
+		},
+		{
+			name: "missing type in content block",
+			chat: &model.StoredMessage{
+				SessionId: "chat_123456",
+				Message: &model.Message{
+					ContentBlocks: []model.ContentBlock{
+						{Text: "Hello"},
+					},
+				},
+			},
+			wantError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := store.validateChat(tt.chat)
+			if tt.wantError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }
 
 func TestValidateSession(t *testing.T) {
 	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), nil, 1000)
 	store.Init("chat-index", "session-index", "so_")
 
-	t.Run("valid session", func(t *testing.T) {
-		session := &model.AssistantSession{
-			SessionId: "chat_123456",
-			Title:     "My Chat Session",
-		}
-		err := store.validateSession(session)
-		assert.NoError(t, err)
-	})
+	tests := []struct {
+		name      string
+		session   *model.AssistantSession
+		wantError bool
+	}{
+		{
+			name: "valid session",
+			session: &model.AssistantSession{
+				SessionId: "chat_123456",
+				Title:     "My Chat Session",
+			},
+			wantError: false,
+		},
+		{
+			name: "invalid session ID",
+			session: &model.AssistantSession{
+				SessionId: "bad",
+				Title:     "My Chat Session",
+			},
+			wantError: true,
+		},
+		{
+			name: "empty title",
+			session: &model.AssistantSession{
+				SessionId: "chat_123456",
+				Title:     "",
+			},
+			wantError: true,
+		},
+	}
 
-	t.Run("invalid session ID", func(t *testing.T) {
-		session := &model.AssistantSession{
-			SessionId: "bad",
-			Title:     "My Chat Session",
-		}
-		err := store.validateSession(session)
-		assert.Error(t, err)
-	})
-
-	t.Run("empty title", func(t *testing.T) {
-		session := &model.AssistantSession{
-			SessionId: "chat_123456",
-			Title:     "",
-		}
-		err := store.validateSession(session)
-		assert.Error(t, err)
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := store.validateSession(tt.session)
+			if tt.wantError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }
 
 func TestPopulateSessionUsage_Empty(t *testing.T) {
@@ -174,16 +214,20 @@ func TestPopulateSessionUsage_Empty(t *testing.T) {
 	store.Init("chat-index", "session-index", "so_")
 	ctx := context.Background()
 
-	t.Run("empty sessions", func(t *testing.T) {
-		sessions := []*model.AssistantSession{}
-		err := store.populateSessionUsage(ctx, sessions)
-		assert.NoError(t, err)
-	})
+	tests := []struct {
+		name     string
+		sessions []*model.AssistantSession
+	}{
+		{"empty sessions", []*model.AssistantSession{}},
+		{"nil sessions", nil},
+	}
 
-	t.Run("nil sessions", func(t *testing.T) {
-		err := store.populateSessionUsage(ctx, nil)
-		assert.NoError(t, err)
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := store.populateSessionUsage(ctx, tt.sessions)
+			assert.NoError(t, err)
+		})
+	}
 }
 
 func TestPopulateSessionUsage_Success(t *testing.T) {
@@ -509,7 +553,37 @@ func TestGetSessions_WithUsage(t *testing.T) {
 		Body: io.NopCloser(strings.NewReader(msearchResponse)),
 	}, nil)
 
-	sessions, err := store.GetSessions(ctx, false, model.GetSessionsWithUsage(true))
+	// Mock MSearch response for addMetaFromMessages (update time)
+	msearchUpdateTimeResponse := `{
+		"responses": [
+			{
+				"aggregations": {
+					"update_time": {
+						"value": 1234567890000,
+						"value_as_string": "2009-02-13T23:31:30.000Z"
+					}
+				}
+			},
+			{
+				"aggregations": {
+					"update_time": {
+						"value": 1234567890000,
+						"value_as_string": "2009-02-13T23:31:30.000Z"
+					}
+				}
+			}
+		]
+	}`
+
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(msearchUpdateTimeResponse)),
+	}, nil)
+
+	sessions, err := store.GetSessions(ctx, model.GetSessionsWithUsage(true))
 	assert.NoError(t, err)
 	assert.Len(t, sessions, 2)
 	assert.NotNil(t, sessions[0].Usage)
@@ -557,8 +631,30 @@ func TestGetSessions_WithoutUsage(t *testing.T) {
 		Body: io.NopCloser(strings.NewReader(searchResponse)),
 	}, nil)
 
-	// No MSearch call should be made when usage is false
-	sessions, err := store.GetSessions(ctx, false, model.GetSessionsWithUsage(false))
+	// Mock MSearch response for addMetaFromMessages (update time) - always called
+	msearchUpdateTimeResponse := `{
+		"responses": [
+			{
+				"aggregations": {
+					"update_time": {
+						"value": 1234567890000,
+						"value_as_string": "2009-02-13T23:31:30.000Z"
+					}
+				}
+			}
+		]
+	}`
+
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(msearchUpdateTimeResponse)),
+	}, nil)
+
+	// No usage MSearch call should be made when usage is false
+	sessions, err := store.GetSessions(ctx, model.GetSessionsWithUsage(false))
 	assert.NoError(t, err)
 	assert.Len(t, sessions, 1)
 	assert.Nil(t, sessions[0].Usage)
@@ -584,37 +680,42 @@ func TestPrepareForSave(t *testing.T) {
 func TestTruncate(t *testing.T) {
 	store := NewElasticAssistantstore(nil, nil, 10)
 
-	t.Run("short string", func(t *testing.T) {
-		input := "short"
-		result := store.truncate(input)
-		assert.Equal(t, "short", result)
-	})
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"short string", "short", "short"},
+		{"exact length", "1234567890", "1234567890"},
+		{"long string", "12345678901234567890", "1234567890..."},
+	}
 
-	t.Run("exact length", func(t *testing.T) {
-		input := "1234567890"
-		result := store.truncate(input)
-		assert.Equal(t, "1234567890", result)
-	})
-
-	t.Run("long string", func(t *testing.T) {
-		input := "12345678901234567890"
-		result := store.truncate(input)
-		assert.Equal(t, "1234567890...", result)
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := store.truncate(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
 }
 
 func TestDisableCrossClusterIndex(t *testing.T) {
 	store := NewElasticAssistantstore(nil, nil, 1000)
 
-	t.Run("regular index", func(t *testing.T) {
-		result := store.disableCrossClusterIndex("my-index")
-		assert.Equal(t, "my-index", result)
-	})
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"regular index", "my-index", "my-index"},
+		{"cross-cluster index", "cluster1:my-index", "my-index"},
+	}
 
-	t.Run("cross-cluster index", func(t *testing.T) {
-		result := store.disableCrossClusterIndex("cluster1:my-index")
-		assert.Equal(t, "my-index", result)
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := store.disableCrossClusterIndex(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
 }
 
 func TestSaveChat(t *testing.T) {
@@ -825,7 +926,58 @@ func TestGetChatHistory(t *testing.T) {
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
-	// Mock search response
+	// Mock session check
+	sessionCheck := `{
+		"hits": {
+			"total": {
+				"value": 1
+			},
+			"hits": [
+				{
+					"_id": "session1",
+					"_source": {
+						"so_kind": "session",
+						"so_session": {
+							"sessionId": "session1",
+							"userId": "test-user"
+						}
+					}
+				}
+			]
+		}
+	}`
+
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(sessionCheck)),
+	}, nil)
+
+	// Mock MSearch response for addMetaFromMessages (update time) - called by GetSessions
+	msearchUpdateTimeResponse := `{
+		"responses": [
+			{
+				"aggregations": {
+					"update_time": {
+						"value": 1234567890000,
+						"value_as_string": "2009-02-13T23:31:30.000Z"
+					}
+				}
+			}
+		]
+	}`
+
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(msearchUpdateTimeResponse)),
+	}, nil)
+
+	// Mock search response for chat messages
 	searchResponse := `{
 		"hits": {
 			"total": {
@@ -872,13 +1024,22 @@ func TestGetChatHistory(t *testing.T) {
 		Body: io.NopCloser(strings.NewReader(searchResponse)),
 	}, nil)
 
-	messages, err := store.GetChatHistory(ctx, "session1", true)
+	messages, err := store.GetChatHistory(ctx, "session1")
 	assert.NoError(t, err)
 	assert.Len(t, messages, 2)
 	assert.Equal(t, "msg1", messages[0].Id)
 	assert.Equal(t, "msg2", messages[1].Id)
 	assert.Equal(t, "Hello", messages[0].Message.ContentStr)
 	assert.Equal(t, "Hi there!", messages[1].Message.ContentStr)
+
+	// ensure GetSession call does not filter out deleted sessions
+	reqs := transport.GetRequests()
+	assert.Len(t, reqs, 3) // One for GetSessions, one for session meta data, one for chat messages
+	body, err := reqs[0].GetBody()
+	assert.NoError(t, err)
+	data, err := io.ReadAll(body)
+	assert.NoError(t, err)
+	assert.NotContains(t, string(data), "deleteTime")
 }
 
 func TestGetSessions_WithFilters(t *testing.T) {
@@ -919,12 +1080,33 @@ func TestGetSessions_WithFilters(t *testing.T) {
 		Body: io.NopCloser(strings.NewReader(searchResponse)),
 	}, nil)
 
+	// Mock MSearch response for addMetaFromMessages (update time)
+	msearchUpdateTimeResponse := `{
+		"responses": [
+			{
+				"aggregations": {
+					"update_time": {
+						"value": 1234567890000,
+						"value_as_string": "2009-02-13T23:31:30.000Z"
+					}
+				}
+			}
+		]
+	}`
+
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(msearchUpdateTimeResponse)),
+	}, nil)
+
 	start := time.Now().Add(-24 * time.Hour)
 	end := time.Now()
 
 	sessions, err := store.GetSessions(
 		ctx,
-		false,
 		model.GetSessionsWithUserId("specific-user"),
 		model.GetSessionsWithRange(start, end),
 		model.GetSessionsWithIncludeDeleted(false),
@@ -936,84 +1118,76 @@ func TestGetSessions_WithFilters(t *testing.T) {
 	assert.Equal(t, "specific-user", sessions[0].UserId)
 }
 
-func TestGetSessions_AuthorizationReadAll(t *testing.T) {
-	mockEsClient, transport := modmock.NewMockClient(t)
-
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
-	store.Init("chat-index", "session-index", "so_")
-
-	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
-
-	searchResponse := `{
-		"hits": {
-			"total": {
-				"value": 0
-			},
-			"hits": []
-		}
-	}`
-
-	transport.AddResponse(&http.Response{
-		StatusCode: 200,
-		Header: http.Header{
-			"X-Elastic-Product": []string{"Elasticsearch"},
+func TestGetSessions_Authorization(t *testing.T) {
+	tests := []struct {
+		name     string
+		server   *server.Server
+		authored bool
+		wantErr  bool
+	}{
+		{
+			name:     "authorized read all",
+			server:   server.NewFakeAuthorizedServer(nil),
+			authored: false,
+			wantErr:  false,
 		},
-		Body: io.NopCloser(strings.NewReader(searchResponse)),
-	}, nil)
-
-	// Default behavior should require read_all permission
-	sessions, err := store.GetSessions(ctx, false)
-	assert.NoError(t, err)
-	assert.NotNil(t, sessions)
-}
-
-func TestGetSessions_AuthorizationReadAuthored(t *testing.T) {
-	mockEsClient, transport := modmock.NewMockClient(t)
-
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
-	store.Init("chat-index", "session-index", "so_")
-
-	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
-
-	searchResponse := `{
-		"hits": {
-			"total": {
-				"value": 0
-			},
-			"hits": []
-		}
-	}`
-
-	transport.AddResponse(&http.Response{
-		StatusCode: 200,
-		Header: http.Header{
-			"X-Elastic-Product": []string{"Elasticsearch"},
+		{
+			name:     "authorized read authored",
+			server:   server.NewFakeAuthorizedServer(nil),
+			authored: true,
+			wantErr:  false,
 		},
-		Body: io.NopCloser(strings.NewReader(searchResponse)),
-	}, nil)
+		{
+			name:     "unauthorized read all",
+			server:   server.NewFakeUnauthorizedServer(),
+			authored: false,
+			wantErr:  true,
+		},
+		{
+			name:     "unauthorized read authored",
+			server:   server.NewFakeUnauthorizedServer(),
+			authored: true,
+			wantErr:  true,
+		},
+	}
 
-	// With authored=true, should require read_authored permission
-	sessions, err := store.GetSessions(ctx, true)
-	assert.NoError(t, err)
-	assert.NotNil(t, sessions)
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockEsClient, transport := modmock.NewMockClient(t)
+			store := NewElasticAssistantstore(tt.server, mockEsClient, 1000)
+			store.Init("chat-index", "session-index", "so_")
 
-func TestGetSessions_Unauthorized(t *testing.T) {
-	mockEsClient, _ := modmock.NewMockClient(t)
+			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
-	store := NewElasticAssistantstore(server.NewFakeUnauthorizedServer(), mockEsClient, 1000)
-	store.Init("chat-index", "session-index", "so_")
+			if !tt.wantErr {
+				searchResponse := `{
+					"hits": {
+						"total": {
+							"value": 0
+						},
+						"hits": []
+					}
+				}`
 
-	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+				transport.AddResponse(&http.Response{
+					StatusCode: 200,
+					Header: http.Header{
+						"X-Elastic-Product": []string{"Elasticsearch"},
+					},
+					Body: io.NopCloser(strings.NewReader(searchResponse)),
+				}, nil)
+			}
 
-	// Should fail authorization check
-	sessions, err := store.GetSessions(ctx, false)
-	assert.Error(t, err)
-	assert.Nil(t, sessions)
-
-	sessions, err = store.GetSessions(ctx, true)
-	assert.Error(t, err)
-	assert.Nil(t, sessions)
+			sessions, err := store.GetSessions(ctx)
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Nil(t, sessions)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, sessions)
+			}
+		})
+	}
 }
 
 func TestGetSessions_EmptyResults(t *testing.T) {
@@ -1041,7 +1215,7 @@ func TestGetSessions_EmptyResults(t *testing.T) {
 		Body: io.NopCloser(strings.NewReader(searchResponse)),
 	}, nil)
 
-	sessions, err := store.GetSessions(ctx, true)
+	sessions, err := store.GetSessions(ctx)
 	assert.NoError(t, err)
 	assert.Empty(t, sessions)
 }
@@ -1063,7 +1237,7 @@ func TestGetSessions_ElasticsearchError(t *testing.T) {
 		Body: io.NopCloser(strings.NewReader(`{"error": "internal server error"}`)),
 	}, nil)
 
-	sessions, err := store.GetSessions(ctx, false)
+	sessions, err := store.GetSessions(ctx)
 	assert.Error(t, err)
 	assert.Nil(t, sessions)
 }
@@ -1085,7 +1259,7 @@ func TestGetSessions_MalformedResponse(t *testing.T) {
 		Body: io.NopCloser(strings.NewReader(`{invalid json`)),
 	}, nil)
 
-	sessions, err := store.GetSessions(ctx, false)
+	sessions, err := store.GetSessions(ctx)
 	assert.Error(t, err)
 	assert.Nil(t, sessions)
 }
@@ -1127,14 +1301,36 @@ func TestGetSessions_UserIdFilter(t *testing.T) {
 		Body: io.NopCloser(strings.NewReader(searchResponse)),
 	}, nil)
 
-	sessions, err := store.GetSessions(ctx, false, model.GetSessionsWithUserId("specific-user"))
+	// Mock MSearch response for addMetaFromMessages (update time)
+	msearchUpdateTimeResponse := `{
+		"responses": [
+			{
+				"aggregations": {
+					"update_time": {
+						"value": 1234567890000,
+						"value_as_string": "2009-02-13T23:31:30.000Z"
+					}
+				}
+			}
+		]
+	}`
+
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(msearchUpdateTimeResponse)),
+	}, nil)
+
+	sessions, err := store.GetSessions(ctx, model.GetSessionsWithUserId("specific-user"))
 	assert.NoError(t, err)
 	assert.Len(t, sessions, 1)
 	assert.Equal(t, "specific-user", sessions[0].UserId)
 
 	// Verify the query sent to Elasticsearch
 	reqs := transport.GetRequests()
-	assert.Len(t, reqs, 1)
+	assert.Len(t, reqs, 2) // One for sessions search, one for msearch (update time)
 
 	var query map[string]any
 	err = json.NewDecoder(reqs[0].Body).Decode(&query)
@@ -1199,14 +1395,36 @@ func TestGetSessions_IncludeDeleted(t *testing.T) {
 		Body: io.NopCloser(strings.NewReader(searchResponse)),
 	}, nil)
 
-	sessions, err := store.GetSessions(ctx, false, model.GetSessionsWithIncludeDeleted(true))
+	// Mock MSearch response for addMetaFromMessages (update time)
+	msearchUpdateTimeResponse := `{
+		"responses": [
+			{
+				"aggregations": {
+					"update_time": {
+						"value": 1234567890000,
+						"value_as_string": "2009-02-13T23:31:30.000Z"
+					}
+				}
+			}
+		]
+	}`
+
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(msearchUpdateTimeResponse)),
+	}, nil)
+
+	sessions, err := store.GetSessions(ctx, model.GetSessionsWithIncludeDeleted(true))
 	assert.NoError(t, err)
 	assert.Len(t, sessions, 1)
 	assert.NotNil(t, sessions[0].DeleteTime)
 
 	// Verify the query sent to Elasticsearch
 	reqs := transport.GetRequests()
-	assert.Len(t, reqs, 1)
+	assert.Len(t, reqs, 2) // One for sessions search, one for msearch (update time)
 
 	var query map[string]any
 	err = json.NewDecoder(reqs[0].Body).Decode(&query)
@@ -1255,16 +1473,38 @@ func TestGetSessions_TimeRangeFilter(t *testing.T) {
 		Body: io.NopCloser(strings.NewReader(searchResponse)),
 	}, nil)
 
+	// Mock MSearch response for addMetaFromMessages (update time)
+	msearchUpdateTimeResponse := `{
+		"responses": [
+			{
+				"aggregations": {
+					"update_time": {
+						"value": 1234567890000,
+						"value_as_string": "2009-02-13T23:31:30.000Z"
+					}
+				}
+			}
+		]
+	}`
+
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(msearchUpdateTimeResponse)),
+	}, nil)
+
 	start := time.Now().Add(-24 * time.Hour)
 	end := time.Now()
 
-	sessions, err := store.GetSessions(ctx, false, model.GetSessionsWithRange(start, end))
+	sessions, err := store.GetSessions(ctx, model.GetSessionsWithRange(start, end))
 	assert.NoError(t, err)
 	assert.Len(t, sessions, 1)
 
 	// Verify the query sent to Elasticsearch
 	reqs := transport.GetRequests()
-	assert.Len(t, reqs, 1)
+	assert.Len(t, reqs, 2) // One for sessions search, one for msearch (update time)
 
 	var query map[string]any
 	err = json.NewDecoder(reqs[0].Body).Decode(&query)
@@ -1337,7 +1577,7 @@ func TestGetSessions_UsagePopulationError(t *testing.T) {
 		Body: io.NopCloser(strings.NewReader(`{"error": "internal server error"}`)),
 	}, nil)
 
-	sessions, err := store.GetSessions(ctx, false, model.GetSessionsWithUsage(true))
+	sessions, err := store.GetSessions(ctx, model.GetSessionsWithUsage(true))
 	assert.Error(t, err)
 	assert.Nil(t, sessions)
 }
@@ -1397,7 +1637,37 @@ func TestGetSessions_PartiallyMalformedHits(t *testing.T) {
 		Body: io.NopCloser(strings.NewReader(searchResponse)),
 	}, nil)
 
-	sessions, err := store.GetSessions(ctx, false)
+	// Mock MSearch response for addMetaFromMessages (update time)
+	msearchUpdateTimeResponse := `{
+		"responses": [
+			{
+				"aggregations": {
+					"update_time": {
+						"value": 1234567890000,
+						"value_as_string": "2009-02-13T23:31:30.000Z"
+					}
+				}
+			},
+			{
+				"aggregations": {
+					"update_time": {
+						"value": 1234567890000,
+						"value_as_string": "2009-02-13T23:31:30.000Z"
+					}
+				}
+			}
+		]
+	}`
+
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(msearchUpdateTimeResponse)),
+	}, nil)
+
+	sessions, err := store.GetSessions(ctx)
 	assert.NoError(t, err)
 	// Should only return the 2 valid sessions, skipping the malformed one
 	assert.Len(t, sessions, 2)
@@ -1442,7 +1712,29 @@ func TestGetSessions_SessionIdFilter(t *testing.T) {
 		Body: io.NopCloser(strings.NewReader(searchResponse)),
 	}, nil)
 
-	sessions, err := store.GetSessions(ctx, false, model.GetSessionsWithSessionId("session123"))
+	// Mock MSearch response for addMetaFromMessages (update time)
+	msearchUpdateTimeResponse := `{
+		"responses": [
+			{
+				"aggregations": {
+					"update_time": {
+						"value": 1234567890000,
+						"value_as_string": "2009-02-13T23:31:30.000Z"
+					}
+				}
+			}
+		]
+	}`
+
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(msearchUpdateTimeResponse)),
+	}, nil)
+
+	sessions, err := store.GetSessions(ctx, model.GetSessionsWithSessionId("session123"))
 	assert.NoError(t, err)
 	assert.Len(t, sessions, 1)
 	assert.Equal(t, "session123", sessions[0].SessionId)
@@ -1450,7 +1742,7 @@ func TestGetSessions_SessionIdFilter(t *testing.T) {
 
 	// Verify the query sent to Elasticsearch
 	reqs := transport.GetRequests()
-	assert.Len(t, reqs, 1)
+	assert.Len(t, reqs, 2) // One for sessions search, one for msearch (update time)
 
 	var query map[string]any
 	err = json.NewDecoder(reqs[0].Body).Decode(&query)
@@ -1613,7 +1905,45 @@ func TestGetSessions_MultipleSessionsWithUsage(t *testing.T) {
 		Body: io.NopCloser(strings.NewReader(msearchResponse)),
 	}, nil)
 
-	sessions, err := store.GetSessions(ctx, false, model.GetSessionsWithUsage(true))
+	// Mock MSearch response for addMetaFromMessages (update time)
+	msearchUpdateTimeResponse := `{
+		"responses": [
+			{
+				"aggregations": {
+					"update_time": {
+						"value": 1234567890000,
+						"value_as_string": "2009-02-13T23:31:30.000Z"
+					}
+				}
+			},
+			{
+				"aggregations": {
+					"update_time": {
+						"value": 1234567890000,
+						"value_as_string": "2009-02-13T23:31:30.000Z"
+					}
+				}
+			},
+			{
+				"aggregations": {
+					"update_time": {
+						"value": 1234567890000,
+						"value_as_string": "2009-02-13T23:31:30.000Z"
+					}
+				}
+			}
+		]
+	}`
+
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(msearchUpdateTimeResponse)),
+	}, nil)
+
+	sessions, err := store.GetSessions(ctx, model.GetSessionsWithUsage(true))
 	assert.NoError(t, err)
 	assert.Len(t, sessions, 3)
 
@@ -1713,12 +2043,33 @@ func TestGetSessions_CombinedFilters(t *testing.T) {
 		Body: io.NopCloser(strings.NewReader(msearchResponse)),
 	}, nil)
 
+	// Mock MSearch response for addMetaFromMessages (update time)
+	msearchUpdateTimeResponse := `{
+		"responses": [
+			{
+				"aggregations": {
+					"update_time": {
+						"value": 1234567890000,
+						"value_as_string": "2009-02-13T23:31:30.000Z"
+					}
+				}
+			}
+		]
+	}`
+
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(msearchUpdateTimeResponse)),
+	}, nil)
+
 	start := time.Now().Add(-24 * time.Hour)
 	end := time.Now()
 
 	sessions, err := store.GetSessions(
 		ctx,
-		false,
 		model.GetSessionsWithUserId("specific-user"),
 		model.GetSessionsWithRange(start, end),
 		model.GetSessionsWithUsage(true),
@@ -1739,7 +2090,7 @@ func TestGetSessions_CombinedFilters(t *testing.T) {
 
 	// Verify the query sent to Elasticsearch includes all filters
 	reqs := transport.GetRequests()
-	assert.Len(t, reqs, 2) // One for sessions search, one for msearch (usage)
+	assert.Len(t, reqs, 3) // One for sessions search, one for msearch (usage), one for msearch (update time)
 
 	var query map[string]any
 	err = json.NewDecoder(reqs[0].Body).Decode(&query)
@@ -1815,9 +2166,30 @@ func TestGetSessions_AuthoredWithUserId(t *testing.T) {
 		Body: io.NopCloser(strings.NewReader(searchResponse)),
 	}, nil)
 
+	// Mock MSearch response for addMetaFromMessages (update time)
+	msearchResponse := `{
+		"responses": [
+			{
+				"aggregations": {
+					"update_time": {
+						"value": 1234567890000,
+						"value_as_string": "2009-02-13T23:31:30.000Z"
+					}
+				}
+			}
+		]
+	}`
+
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(msearchResponse)),
+	}, nil)
+
 	sessions, err := store.GetSessions(
 		ctx,
-		true,
 		model.GetSessionsWithUserId("test-user"),
 	)
 

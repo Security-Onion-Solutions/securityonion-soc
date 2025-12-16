@@ -67,6 +67,7 @@
 							{{ i18n['cc_' + engine] }}:
 							<router-link :to="{ name: 'hunt', query: {q: buildDetectionEngineHuntQuery(engine), t: moment().subtract(1, 'hours').format(i18n.timePickerFormat) + ' - ' + moment().format(i18n.timePickerFormat), socExcludeToggle: false, detectionsExcludeToggle: false }}" style="text-decoration: none; cursor: 'pointer'" :class="$root.getDetectionEngineStatusClass(engine)" :data-aid="'detection_engine_status_' + engine" :title="i18n['detectionEngine' + $root.getDetectionEngineStatus(engine) + 'Help']">
 								{{ i18n['detectionEngine' + $root.getDetectionEngineStatus(engine)] }}
+								<v-icon v-if="$root.isDetectionEngineStatusUnhealthy(engine)" :title="i18n.detectionEngineStatusHelp" :data-aid="'detections_engine_status_link_' + engine">fa-crosshairs</v-icon>
 							</router-link>
 						</h5>
 					</div>
@@ -123,7 +124,7 @@
 										<v-list-item-title class="theme-text" :title="query.description">
 											{{ query.name }}
 										</v-list-item-title>
-										<v-list-item-subtitle v-if="query.showSubtitle" v-text="query.query"></v-list-item-subtitle>
+										<v-list-item-subtitle v-if="query.showSubtitle" class="theme-text" v-text="query.query"></v-list-item-subtitle>
 									</v-list-item>
 								</v-list>
 							</v-menu>
@@ -426,10 +427,10 @@
 																							</v-btn>
 																						</v-col>
 																						<v-col style="align-content: center;" data-aid="playbook_grouped_question_query">
-																							{{ question.filledOQL }}
+																							{{ question.oqlQuery }}
 																						</v-col>
 																					</v-row>
-																					<template v-if="question.answers">
+																					<template v-if="question.queryResults">
 																						<span class="font-weight-bold font-italic">
 																							{{ i18n.instantInsight }}
 																						</span>
@@ -437,54 +438,21 @@
 																						<span class="italic" data-aid="playbook_grouped_event_timestamp">
 																							{{ i18n.eventOccurredAt }} {{ formatTimestamp(getEventTimestamp(item.newest)) }}
 																						</span>
-																						<table v-if="question.isAggregate" class="simple-table">
+																						<table class="simple-table">
 																							<thead>
 																								<tr>
-																									<th data-aid="playbook_grouped_instantinsights_aggregate_header_count">
-																										{{ i18n.count }}
-																									</th>
-																									<th v-for="field in question.fields" :key="field" :data-aid="'playbook_grouped_instantinsights_aggregate_header_' + field">
-																										{{ field }}
-																									</th>
-																								</tr>
-																							</thead>
-																							<tbody>
-																								<tr v-for="agg in question.answers">
-																									<td class="text-right" data-aid="playbook_grouped_instantinsights_aggregate_answer_count">
-																										{{ agg.value }}
-																									</td>
-																									<td v-for="value in agg.keys" data-aid="playbook_grouped_instantinsights_aggregate_answer">
-																										{{ translateValue(value) }}<span class="resolved-host" v-if="$root.pickHostname(value)"> - {{ $root.pickHostname(value) }}</span>
-																									</td>
-																								</tr>
-																								<tr v-if="question.answers && question.answers.length === 0">
-																									<td colspan="100%" class="text-center" data-aid="playbook_grouped_instantinsights_aggregate_nodata">
-																										{{ question.error ? i18n.error : i18n.noData }}
-																									</td>
-																								</tr>
-																							</tbody>
-																						</table>
-																						<table v-else class="simple-table">
-																							<thead>
-																								<tr>
-																									<th data-aid="playbook_grouped_instantinsights_header_timestamp">
-																										{{ i18n.timestamp }}
-																									</th>
 																									<th v-for="field in question.fields" :key="field" :data-aid="'playbook_grouped_instantinsights_header_' + field">
 																										{{ field }}
 																									</th>
 																								</tr>
 																							</thead>
 																							<tbody>
-																								<tr v-for="answer in question.answers" :key="answer.id">
-																									<td class="text-normal" data-aid="playbook_grouped_instantinsights_result_timestamp">
-																										{{ formatTimestamp(getEventTimestamp(answer.payload)) }}
-																									</td>
-																									<td v-for="field in question.fields" :key="field" data-aid="playbook_grouped_instantinsights_result">
-																										{{ translateValue(getEventField(answer.payload, field)) }}<span class="resolved-host" v-if="$root.pickHostname(getEventField(answer.payload, field))"> - {{ $root.pickHostname(getEventField(answer.payload, field)) }}</span>
+																								<tr v-for="result in question.queryResults">
+																									<td v-for="value in question.fields" data-aid="playbook_grouped_instantinsights_answer">
+																										{{ translateValue(result.payload[value]) }}<span class="resolved-host" v-if="$root.pickHostname(value)"> - {{ $root.pickHostname(value) }}</span>
 																									</td>
 																								</tr>
-																								<tr v-if="question.answers && question.answers.length === 0">
+																								<tr v-if="question.queryResults && question.queryResults.length === 0">
 																									<td colspan="100%" class="text-center" data-aid="playbook_grouped_instantinsights_nodata">
 																										{{ question.error ? i18n.error : i18n.noData }}
 																									</td>
@@ -739,10 +707,10 @@
 																				</v-btn>
 																			</v-col>
 																			<v-col style="align-content: center;" data-aid="playbook_question_query">
-																				{{question.filledOQL}}
+																				{{question.oqlQuery}}
 																			</v-col>
 																		</v-row>
-																		<template v-if="question.answers">
+																		<template v-if="question.queryResults">
 																			<span class="font-weight-bold font-italic">
 																				{{i18n.instantInsight}}
 																			</span>
@@ -750,54 +718,21 @@
 																			<span class="italic" data-aid="playbook_event_timestamp">
 																				{{i18n.eventOccurredAt}} {{ formatTimestamp(getEventTimestamp(item)) }}
 																			</span>
-																			<table v-if="question.isAggregate" class="simple-table">
+																			<table class="simple-table">
 																				<thead>
 																					<tr>
-																						<th data-aid="playbook_instantinsights_aggregate_header_count">
-																							{{ i18n.count }}
-																						</th>
-																						<th v-for="field in question.fields" :key="field" :data-aid="'playbook_instantinsights_aggregate_header_' + field">
-																							{{ field }}
-																						</th>
-																					</tr>
-																				</thead>
-																				<tbody>
-																					<tr v-for="agg in question.answers">
-																						<td class="text-right" data-aid="playbook_instantinsights_aggregate_answer_count">
-																							{{ agg.value }}
-																						</td>
-																						<td v-for="value in agg.keys" data-aid="playbook_instantinsights_aggregate_answer">
-																							{{ translateValue(value) }}<span class="resolved-host" v-if="$root.pickHostname(value)"> - {{ $root.pickHostname(value) }}</span>
-																						</td>
-																					</tr>
-																					<tr v-if="question.answers && question.answers.length === 0">
-																						<td colspan="100%" class="text-center" data-aid="playbook_instantinsights_aggregate_nodata">
-																							{{ question.error ? i18n.error : i18n.noData }}
-																						</td>
-																					</tr>
-																				</tbody>
-																			</table>
-																			<table v-else class="simple-table">
-																				<thead>
-																					<tr>
-																						<th data-aid="playbook_instantinsights_header_timestamp">
-																							{{ i18n.timestamp }}
-																						</th>
 																						<th v-for="field in question.fields" :key="field" :data-aid="'playbook_instantinsights_header_' + field">
 																							{{ field }}
 																						</th>
 																					</tr>
 																				</thead>
 																				<tbody>
-																					<tr v-for="answer in question.answers" :key="answer.id">
-																						<td class="text-normal" data-aid="playbook_instantinsights_result_timestamp">
-																							{{ formatTimestamp(getEventTimestamp(answer.payload)) }}
-																						</td>
-																						<td v-for="field in question.fields" :key="field" data-aid="playbook_instantinsights_result">
-																							{{ translateValue(getEventField(answer.payload, field)) }}<span class="resolved-host" v-if="$root.pickHostname(getEventField(answer.payload, field))"> - {{ $root.pickHostname(getEventField(answer.payload, field)) }}</span>
+																					<tr v-for="result in question.queryResults">
+																						<td v-for="value in question.fields" data-aid="playbook_instantinsights_answer">
+																							{{ translateValue(result.payload[value]) }}<span class="resolved-host" v-if="$root.pickHostname(value)"> - {{ $root.pickHostname(value) }}</span>
 																						</td>
 																					</tr>
-																					<tr v-if="question.answers && question.answers.length === 0">
+																					<tr v-if="question.queryResults && question.queryResults.length === 0">
 																						<td colspan="100%" class="text-center" data-aid="playbook_instantinsights_nodata">
 																							{{ question.error ? i18n.error : i18n.noData }}
 																						</td>

@@ -70,6 +70,21 @@ func (mr *MockPlaybookstoreMockRecorder) ExecutePlaybookSearches(ctx, event, pbs
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecutePlaybookSearches", reflect.TypeOf((*MockPlaybookstore)(nil).ExecutePlaybookSearches), ctx, event, pbs)
 }
 
+// GetEventSpecificPlaybook mocks base method.
+func (m *MockPlaybookstore) GetEventSpecificPlaybook(ctx context.Context, id string) ([]*model.Playbook, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetEventSpecificPlaybook", ctx, id)
+	ret0, _ := ret[0].([]*model.Playbook)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetEventSpecificPlaybook indicates an expected call of GetEventSpecificPlaybook.
+func (mr *MockPlaybookstoreMockRecorder) GetEventSpecificPlaybook(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEventSpecificPlaybook", reflect.TypeOf((*MockPlaybookstore)(nil).GetEventSpecificPlaybook), ctx, id)
+}
+
 // GetPlaybookById mocks base method.
 func (m *MockPlaybookstore) GetPlaybookById(ctx context.Context, id string) (*model.Playbook, error) {
 	m.ctrl.T.Helper()

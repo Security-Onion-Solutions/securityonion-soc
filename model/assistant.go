@@ -10,12 +10,20 @@ import (
 	"time"
 )
 
+const (
+	MessageTagContextCompression = "context_compression"
+)
+
 // @Description A user message to be added to a session.
 type IncomingMessage struct {
 	// The content of the message.
 	Msg string `json:"msg" example:"What is MITRE?"`
 	// The session this message belongs to. Can be empty for a new session.
 	SessionId string `json:"sessionId" example:"chat_1757086398900_ykhmndscn"`
+	// The model to use for this message.
+	Model string `json:"model,omitempty" example:"claude-sonnet-4.5"`
+	// Tags to be applied to the message.
+	Tags []string `json:"tags,omitempty" example:"investigation"`
 }
 
 // @Description A request to initiate a chat session.
@@ -42,6 +50,8 @@ type ChatRequest struct {
 	UserId string `json:"user_uuid,omitempty" example:"8beae4b5-275b-4669-b678-8cff894911b5"`
 	// Optionally append additional context to the system prompt.
 	SystemAppend string `json:"system_append,omitempty" example:"Treat 192.168.1.105 as our internal DNS server."`
+	// The model to use for this chat transaction.
+	Model string `json:"model,omitempty" example:"claude-sonnet-4.5"`
 }
 
 // @Description A stored message in the chat session. This contains metadata about the message and its context not necessary for the conversation with the Assistant.
@@ -216,6 +226,20 @@ type ContentBlock struct {
 	Content any `json:"content,omitempty,omitzero" example:"What exactly is an APT?"`
 	// The plain text content of the message.
 	Text string `json:"text,omitempty" example:"What are my latest alerts?"`
+	// The tool result content of the message.
+	ToolResult *ToolResult `json:"toolResult,omitempty"`
+}
+
+type ToolResult struct {
+	ToolUseId string              `json:"toolUseId"`
+	Content   []ToolResultContent `json:"content"`
+	Status    string              `json:"status,omitempty"`
+	IsError   bool                `json:"isError,omitempty"`
+}
+
+type ToolResultContent struct {
+	Json any    `json:"json,omitempty"`
+	Text string `json:"text,omitempty"`
 }
 
 // @Description Usage statistics showing token usage and billing information.
@@ -267,9 +291,7 @@ func WithAutoExecuteTools(autoExecute bool) ChatOpt {
 }
 
 func ApplyChatOpts(opts ...ChatOpt) *ChatConfig {
-	config := &ChatConfig{
-		AutoExecuteTools: false, // Default to false
-	}
+	config := &ChatConfig{}
 
 	for _, opt := range opts {
 		opt(config)
@@ -291,6 +313,14 @@ type AssistantSession struct {
 	Tags []string `json:"tags" example:"investigation"`
 	// Usage statistics for the session.
 	Usage *SessionUsage `json:"usage,omitempty"`
+}
+
+// @Description Detailed information about an Assistant session, including its messages.
+type AssistantSessionDetails struct {
+	// Meta information about the session.
+	Session *AssistantSession `json:"session"`
+	// The messages in the session.
+	History []*StoredMessage `json:"history"`
 }
 
 type SessionUsage struct {
@@ -317,4 +347,9 @@ type UserUsage struct {
 	TotalSessions int `json:"totalSessions" example:"3"`
 	// The total messages sent and received by the user in the date range.
 	TotalMessages int `json:"totalMessages" example:"25"`
+}
+
+type UpdateSessionRequest struct {
+	Action string `json:"action" example:"add" enum:"add,remove"`
+	Tag    string `json:"tag" example:"shared"`
 }

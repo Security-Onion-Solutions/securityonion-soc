@@ -104,3 +104,31 @@ test('hasPermission', () => {
   expect(comp.hasPermission({permissions: ['foo']}, 'test')).toBe(false);
   expect(comp.hasPermission({permissions: ['foo/bar','test/this']}, 'test', 'this')).toBe(true);
 });
+
+test('saveLocalSettings', () => {
+  comp.sortBy = [{ key: 'name', order: 'desc' }];
+  comp.itemsPerPage = 50;
+  comp.saveLocalSettings();
+  expect(localStorage['settings.clients.sortBy']).toBe('name');
+  expect(localStorage['settings.clients.sortDesc']).toBe('desc');
+  expect(localStorage['settings.clients.itemsPerPage']).toBe('50');
+});
+
+test('loadLocalSettings', () => {
+  localStorage['settings.clients.sortBy'] = 'note';
+  localStorage['settings.clients.sortDesc'] = 'asc';
+  localStorage['settings.clients.itemsPerPage'] = '250';
+  comp.loadLocalSettings();
+  expect(comp.sortBy).toEqual([{ key: 'note', order: 'asc' }]);
+  expect(comp.itemsPerPage).toBe(250);
+});
+
+test('loadLocalSettings_defaults', () => {
+  delete localStorage['settings.clients.sortBy'];
+  delete localStorage['settings.clients.itemsPerPage'];
+  comp.sortBy = [{ key: 'id', order: 'asc' }];
+  comp.itemsPerPage = 10;
+  comp.loadLocalSettings();
+  expect(comp.sortBy).toEqual([{ key: 'id', order: 'asc' }]);
+  expect(comp.itemsPerPage).toBe(10);
+});

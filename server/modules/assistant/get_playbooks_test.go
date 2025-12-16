@@ -444,7 +444,7 @@ func TestGetPlaybooksTool_Execute(t *testing.T) {
 
 			// Create tool and execute
 			tool := &GetPlaybooksTool{}
-			result, err := tool.Execute(ctx, mockServer, tc.params)
+			result, err := tool.Execute(ctx, mockServer, tc.params, "")
 
 			// Assert error expectations
 			if tc.expectedError {
@@ -686,6 +686,62 @@ func TestSimplifyPlaybooks(t *testing.T) {
 				},
 			},
 			description: "Should only include questions with query results",
+		},
+		{
+			name: "playbook with QueryFields preserves custom fields",
+			inputPlaybooks: []*model.Playbook{
+				{
+					Name:        "Custom Field Investigation",
+					Description: "Investigation playbook with custom fields specified",
+					Questions: []*model.Question{
+						{
+							Question:    "What custom fields are present?",
+							Context:     "Check for custom fields not in default list",
+							Range:       nil,
+							QueryFields: []string{"custom.field.one", "custom.field.two", "process.pid"},
+							QueryResults: []*model.EventRecord{
+								{
+									Id: "alert-3",
+									Payload: map[string]any{
+										"@timestamp":       "2024-01-01T00:03:00Z",
+										"custom.field.one": "value1",
+										"custom.field.two": "value2",
+										"process.pid":      5678,
+										"process.name":     "test.exe",
+										"unwanted.field":   "should be filtered",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedResult: []*SimplePlaybook{
+				{
+					Name:        "Custom Field Investigation",
+					Description: "Investigation playbook with custom fields specified",
+					Questions: []*SimpleQuestion{
+						{
+							Question: "What custom fields are present?",
+							Context:  "Check for custom fields not in default list",
+							Range:    nil,
+							QueryResults: []map[string]any{
+								{
+									"payload": map[string]any{
+										"_id":              "alert-3",
+										"@timestamp":       "2024-01-01T00:03:00Z",
+										"custom.field.one": "value1",
+										"custom.field.two": "value2",
+										"process.pid":      5678,
+										"process.name":     "test.exe",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			description: "Should preserve fields specified in QueryFields even if not in default list",
 		},
 		{
 			name: "multiple playbooks",

@@ -28,9 +28,11 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       [
         { title: this.$root.i18n.title, value: 'title' },
         { title: this.$root.i18n.createTime, value: 'createTime' },
+        { title: this.$root.i18n.duration, value: 'durationMs' },
         { title: this.$root.i18n.totalInputTokens, value: 'totalInputTokens' },
         { title: this.$root.i18n.totalOutputTokens, value: 'totalOutputTokens' },
         { title: this.$root.i18n.totalCredits, value: 'totalCredits' },
+        { title: this.$root.i18n.creditsPerMinute, value: 'creditsPerMinute' },
         { title: this.$root.i18n.totalMessages, value: 'totalMessages' },
         { title: this.$root.i18n.actions, value: 'actions' },
       ],
@@ -55,12 +57,12 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
     },
     rightShiftedHeaders: [
       ['totalInputTokens', 'totalOutputTokens', 'totalCredits', 'creditPercentage', 'totalSessions', 'totalMessages'],
-      ['totalInputTokens', 'totalOutputTokens', 'totalCredits', 'totalMessages'],
+      ['durationMs', 'totalInputTokens', 'totalOutputTokens', 'totalCredits', 'creditsPerMinute', 'totalMessages'],
       ['inputTokens', 'outputTokens', 'credits'],
     ],
-    sortBy0: [{ key: 'totalCredits', order: 'desc' }],
-    sortBy1: [{ key: 'createTime', order: 'desc' }],
-    sortBy2: [{ key: 'createTime', order: 'desc' }],
+    sortByUsers: [{ key: 'totalCredits', order: 'desc' }],
+    sortBySessions: [{ key: 'createTime', order: 'desc' }],
+    sortByMessages: [{ key: 'createTime', order: 'desc' }],
     itemsPerPage: 10,
     itemsPerPageOptions: [10,50,250,1000],
     tableSetting: 0, // 0: users 1: sessions 2: messages
@@ -70,7 +72,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       { title: "value", value: "value" }
     ],
     creditsRemaining: 0,
-    lowBalanceColorAlert: 500000,
+    creditsLoaded: false,
     searchFilter: '',
     
     // Date range filter properties
@@ -85,6 +87,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
     autoRefreshTimer: null,
     assistantEnabled: false,
     breadcrumbs: [],
+    paramsLoaded: false,
   }},
   created() {
     this.relativeTimeUnits = [
@@ -123,16 +126,16 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
   },
   watch: {
     '$route': 'loadData',
-    'sortBy0': 'saveLocalSettings',
-    'sortBy1': 'saveLocalSettings',
-    'sortBy2': 'saveLocalSettings',
+    'sortByUsers': 'saveLocalSettings',
+    'sortBySessions': 'saveLocalSettings',
+    'sortByMessages': 'saveLocalSettings',
     'itemsPerPage': 'saveLocalSettings',
     'autoRefreshInterval': 'resetRefreshTimer',
   },
   methods: {
     async initAssistant(params) {
       this.assistantEnabled = params["enabled"] && this.$root.isLicensed('oai');
-      this.lowBalanceColorAlert = params["lowBalanceColorAlert"];
+      this.paramsLoaded = true;
       if (this.assistantEnabled) {
         this.loadData();
       }
@@ -193,7 +196,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
           this.aimetrics = response.data;
           this.aimetrics.forEach(item => {
             item.role = item.message.role;
-            if (item.role === 'assistant') {
+            if (item.role === 'assistant' && item.message.usage) {
               item.inputTokens = item.message.usage.input_tokens;
               item.outputTokens = item.message.usage.output_tokens;
               item.credits = item.message.usage.credits;
@@ -220,6 +223,11 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
             item.totalOutputTokens = item.usage.totalOutputTokens;
             item.totalCredits = item.usage.totalCredits;
             item.totalMessages = item.usage.totalMessages;
+            const startMs = new Date(item.createTime);
+            const endMs = new Date(item.updateTime);
+            item.durationMs = endMs - startMs;
+            item.duration = this.$root.formatLongDuration(item.durationMs);
+            item.creditsPerMinute = this.getCPM(item.durationMs, item.totalCredits);
           });
         } else {
           this.tableSetting = this.TABLE_SETTING_USERS;
@@ -250,9 +258,12 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       this.resetRefreshTimer();
     },
     saveLocalSettings() {
-      this.saveSetting('sortBy0', JSON.stringify(this.sortBy0), '[]');
-      this.saveSetting('sortBy1', JSON.stringify(this.sortBy1), '[]');
-      this.saveSetting('sortBy2', JSON.stringify(this.sortBy2), '[]');
+      this.saveSetting('sortByUsers', this.sortByUsers[0].key, 'totalCredits');
+      this.saveSetting('sortDescUsers', this.sortByUsers[0].order, 'desc')
+      this.saveSetting('sortBySessions', this.sortBySessions[0].key, 'createTime');
+      this.saveSetting('sortDescSessions', this.sortBySessions[0].order, 'desc')
+      this.saveSetting('sortByMessages', this.sortByMessages[0].key, 'createTime');
+      this.saveSetting('sortDescMessages', this.sortByMessages[0].order, 'desc')
       this.saveSetting('itemsPerPage', this.itemsPerPage, 10);
       this.saveSetting('relativeTimeValue', this.relativeTimeValue, 24);
       this.saveSetting('relativeTimeUnit', this.relativeTimeUnit, RELATIVE_TIME_HOURS);
@@ -260,30 +271,20 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       localStorage['timezone'] = this.zone;
     },
     loadLocalSettings() {
-      if (localStorage['settings.aimetrics.sortBy0']) {
-        this.sortBy = JSON.parse(localStorage['settings.aimetrics.sortBy0']);
-      }
-      if (localStorage['settings.aimetrics.sortBy1']) {
-        this.sortBy = JSON.parse(localStorage['settings.aimetrics.sortBy1']);
-      }
-      if (localStorage['settings.aimetrics.sortBy2']) {
-        this.sortBy = JSON.parse(localStorage['settings.aimetrics.sortBy2']);
-      }
-      if (localStorage['settings.aimetrics.itemsPerPage']) {
-        this.itemsPerPage = parseInt(localStorage['settings.aimetrics.itemsPerPage']);
-      }
-      if (localStorage['settings.aimetrics.relativeTimeValue']) {
-        this.relativeTimeValue = parseInt(localStorage['settings.aimetrics.relativeTimeValue']);
-      }
-      if (localStorage['settings.aimetrics.relativeTimeUnit']) {
-        this.relativeTimeUnit = parseInt(localStorage['settings.aimetrics.relativeTimeUnit']);
-      }
-      if (localStorage['timezone']) {
-        this.zone = localStorage['timezone'];
-      }
-      if (localStorage['settings.aimetrics.autoRefreshInterval']) {
-        this.autoRefreshInterval = parseInt(localStorage['settings.aimetrics.autoRefreshInterval']);
-      }
+      if (localStorage['settings.aimetrics.sortByUsers']) this.sortByUsers[0].key = localStorage['settings.aimetrics.sortByUsers'];
+      if (localStorage['settings.aimetrics.sortDescUsers']) this.sortByUsers[0].order = localStorage['settings.aimetrics.sortDescUsers'];
+      
+      if (localStorage['settings.aimetrics.sortBySessions']) this.sortBySessions[0].key = localStorage['settings.aimetrics.sortBySessions'];
+      if (localStorage['settings.aimetrics.sortDescSessions']) this.sortBySessions[0].order = localStorage['settings.aimetrics.sortDescSessions'];
+      
+      if (localStorage['settings.aimetrics.sortByMessages']) this.sortByMessages[0].key = localStorage['settings.aimetrics.sortByMessages'];
+      if (localStorage['settings.aimetrics.sortDescMessages']) this.sortByMessages[0].order = localStorage['settings.aimetrics.sortDescMessages'];
+      
+      if (localStorage['settings.aimetrics.itemsPerPage']) this.itemsPerPage = parseInt(localStorage['settings.aimetrics.itemsPerPage']);
+      if (localStorage['settings.aimetrics.relativeTimeValue']) this.relativeTimeValue = parseInt(localStorage['settings.aimetrics.relativeTimeValue']);
+      if (localStorage['settings.aimetrics.relativeTimeUnit']) this.relativeTimeUnit = parseInt(localStorage['settings.aimetrics.relativeTimeUnit']);
+      if (localStorage['timezone']) this.zone = localStorage['timezone'];
+      if (localStorage['settings.aimetrics.autoRefreshInterval']) this.autoRefreshInterval = parseInt(localStorage['settings.aimetrics.autoRefreshInterval']);
     },
     buildUserLink(userId) {
       return { name: 'aimetrics', params: { userId: userId } };
@@ -317,12 +318,14 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         if (response.data) {
           if (response.data.health_status === 'healthy') {
             this.creditsRemaining = response.data.credit_balance || 0;
+            this.creditsLoaded = true;
           } else {
             throw new Error(this.i18n.assistantBalanceCheckUnhealthy);
           }
         }
       } catch (error) {
-        this.$root.showError(this.i18n.assistantUnableToLoadCredits + ': ' + error.message);
+        this.creditsLoaded = false;
+        this.$root.showError(error);
       }
     },
     async lookupSocId(data) {
@@ -415,21 +418,21 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       let expandMessage = '';
       if (!data.message || !data.message.contentBlocks) return expandMessage;
       
-      blocks = data.message.contentBlocks;
+      let blocks = data.message.contentBlocks;
       
       for (let i = 0; i < blocks.length; i++) {
         let block = blocks[i];
         if (block.type === 'text') {
           if (data.message.role === 'assistant') {
-            if (i > 0) {
+            if (i > 0 && this.nbspRegexOp(blocks[i - 1].text) != '') {
               expandMessage += `\n\n<hr>\n\n<br>`;
             }
-            expandMessage += this.formatMarkdownMermaid(block.text);
+            expandMessage += this.formatMarkdownMermaid(this.nbspRegexOp(block.text));
           } else {
             expandMessage += block.text;
           }
         } else if (block.type === 'tool_use') {
-          if (i > 0) {
+          if (i > 0 && this.nbspRegexOp(blocks[i - 1].text) != '') {
             expandMessage += `\n\n<hr>\n\n<br>`;
           }
           let toolMessage = `**Tool:** ${block.name}`;
@@ -444,6 +447,24 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
             }
           }
           expandMessage += this.$root.formatMarkdown(toolMessage);
+        } else if (block.toolResult) {
+          let resultMessage = `**Tool Result:**\n`;
+          if (block.toolResult.content) {
+            for (let j = 0; j < block.toolResult.content.length; j++) {
+              if (j > 0) {
+                expandMessage += `\n\n<hr>\n\n<br>`;
+              }
+              let contentBlock = block.toolResult.content[j];
+              if (contentBlock.text) {
+                resultMessage += `\n${contentBlock.text}\n`;
+              } else if (contentBlock.json) {
+                resultMessage += `\n\`\`\`json\n${JSON.stringify(contentBlock.json, null, 2)}\n\`\`\`\n`;
+              }
+            }
+          } else if (block.toolResult.error) {
+            resultMessage += `\n**Error:** ${block.toolResult.error}\n`;
+          }
+          expandMessage += this.$root.formatMarkdown(resultMessage);
         }
       }
       return expandMessage;
@@ -452,7 +473,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       return str.replace(/<[^>]*>/g, '');
     },
     formatMarkdownMermaid(text) {
-      text = text.replace(/(?<=```mermaid(?:(?!```)[\s\S])*?)\n\s*\n(?=(?:(?!```)[\s\S])*```)/g, '\n');
+      text = this.$root.performMermaidRegexes(text);
       md = this.$root.formatMarkdown(text, true);
       this.$nextTick(() => {
         this.$root.renderMermaid();
@@ -505,5 +526,14 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       let percentage = (credits / total) * 100;
       return `${percentage.toFixed(1)}%`;
     },
+    getCPM(durationMs, totalCredits) {
+      let minutes = durationMs / 60000;
+      if (minutes < 1) minutes = 1;
+      const rawCPM = totalCredits / minutes;
+      return Math.round(rawCPM);
+    },
+    nbspRegexOp(text) {
+      return text.replace(/^(&nbsp;?[\n]*)/, '');
+    }
   }
 }});

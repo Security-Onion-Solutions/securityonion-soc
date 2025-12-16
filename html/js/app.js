@@ -756,6 +756,19 @@ $(document).ready(function () {
             return moment.duration(duration,"s").humanize();
           }
         },
+        formatLongDuration(durationMs) {
+          const totalSeconds = durationMs / 1000;
+          const minutes = totalSeconds / 60;
+          const hours = minutes / 60;
+          const days = hours / 24;
+          if (days >= 1) {
+            return `${days.toFixed(1)}${this.i18n.dDays}`;
+          }
+          if (hours >= 1) {
+            return `${hours.toFixed(1)}${this.i18n.hHours}`;
+          }
+          return `${Math.round(minutes)}${this.i18n.mMinutes}`;
+        },
         formatHours(hours) {
           return this.formatDecimal2(hours);
         },
@@ -841,6 +854,13 @@ $(document).ready(function () {
             mermaid.run();
           }
         },
+        performMermaidRegexes(text) {
+          // removes double blank lines from mermaid charts
+          text = text.replace(/(?<=```mermaid(?:(?!```)[\s\S])*?)\n\s*\n(?=(?:(?!```)[\s\S])*```)/g, '\n');
+          // converts non-separator colons to ratio characters in mermaid charts
+          text = text.replace(/(?<=```mermaid(?:(?!```)[\s\S])*?)(?<!\s):(?=(?:(?!```)[\s\S])*```)/g, '\u2236');
+          return text
+        },
         colorSeverity(value) {
           if (value == "low_false") return "yellow";
           if (value == "medium_false") return "amber darken-1";
@@ -898,6 +918,12 @@ $(document).ready(function () {
               msg = msg.error.reason;
             }
           }
+
+          // Remove encapsulating quotes
+          if (msg.startsWith != undefined && msg.startsWith("\"") && msg.endsWith("\"")) {
+            msg = msg.substring(1, msg.length - 1);
+          }
+
           var localized = this.i18n[msg];
           if (!localized) {
             if (origMsg.message) {
@@ -1380,6 +1406,7 @@ $(document).ready(function () {
             case "MigrationFailure": return "text-warning";
             case "SyncFailure": return "text-warning";
             case "IntegrityFailure": return "text-warning";
+            case "Blocked": return "text-warning";
             case "Healthy": return "text-success";
           }
           return "text-normal";
@@ -1395,7 +1422,9 @@ $(document).ready(function () {
           // Order is important in this if/else block. Certain status should take priority. For example,
           // If a sync failure and integrity failure both occurred then show the integrity failure, because
           // if it got to the integrity check then the sync finished but the integrity check failed.
-          if (engineStatus.migrating) {
+          if (engineStatus.blocked) {
+            return "Blocked";
+          } else if (engineStatus.migrating) {
             return "Migrating";
           } else if (engineStatus.importing && engineStatus.syncing) {
             return "Importing";
@@ -1411,6 +1440,18 @@ $(document).ready(function () {
             return "Syncing";
           }
           return "Healthy";
+        },
+        isDetectionEngineStatusUnhealthy(engine) {
+          switch (this.getDetectionEngineStatus(engine)) {
+            case "Migrating":
+            case "Importing":
+            case "ImportPending":
+            case "Pending":
+            case "Syncing":
+            case "Healthy":
+              return false;
+          }
+          return true;
         },
         getCurrentStatus() {
           return this.statusByGridId[this.selectedGridId];
@@ -1559,7 +1600,6 @@ $(document).ready(function () {
           if (ips.length) {
             ips = [...new Set(ips)];
             ips.forEach(ip => this.ip2host[ip] = []);
-            const route = this;
 
             // Do not use subgrid ID for this API call.
             this.papi.put('util/reverse-lookup', ips, {params: { gridId: LOCAL_GRID_ID}}).then(response => {

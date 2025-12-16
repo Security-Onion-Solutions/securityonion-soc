@@ -11,19 +11,22 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"time"
+
+	"github.com/security-onion-solutions/securityonion-soc/config"
 
 	"github.com/apex/log"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/transport"
-	"github.com/security-onion-solutions/securityonion-soc/config"
 )
 
 //go:generate mockgen -destination mock/mock_iomanager.go -package mock . IOManager
@@ -34,6 +37,7 @@ type IOManager interface {
 	DeleteFile(path string) error
 	ReadDir(path string) ([]os.DirEntry, error)
 	RemoveAll(path string) error
+	Stat(path string) (os.FileInfo, error)
 	MakeRequest(*http.Request, bool) (*http.Response, error)
 	ExecCommand(cmd *exec.Cmd) ([]byte, int, time.Duration, error)
 	WalkDir(root string, fn fs.WalkDirFunc) error
@@ -67,6 +71,10 @@ func (_ *ResourceManager) RemoveAll(path string) error {
 	return os.RemoveAll(path)
 }
 
+func (_ *ResourceManager) Stat(path string) (os.FileInfo, error) {
+	return os.Stat(path)
+}
+
 func (resman *ResourceManager) MakeRequest(req *http.Request, streaming bool) (*http.Response, error) {
 	var client *http.Client
 	if streaming {
@@ -83,7 +91,25 @@ func (resman *ResourceManager) MakeRequest(req *http.Request, streaming bool) (*
 		client = resman._client
 	}
 
-	return client.Do(req)
+	res, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	if res.StatusCode < 200 || res.StatusCode > 299 {
+		bytes, _ := io.ReadAll(res.Body)
+		body := string(bytes)
+
+		log.WithFields(log.Fields{
+			"body": body,
+		}).Debug("Response")
+
+		err = errors.New("Request did not complete successfully (" + strconv.Itoa(res.StatusCode) + "): " + res.Status)
+
+		return res, err
+	}
+
+	return res, nil
 }
 
 func (resman *ResourceManager) buildHttpClient(disableCompression bool) *http.Client {

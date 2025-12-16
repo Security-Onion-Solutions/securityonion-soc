@@ -52,6 +52,8 @@ type EngineState struct {
 	Syncing bool `json:"syncing" example:"true"`
 	// True if a failure occurred during the most recent sync attempt.
 	SyncFailure bool `json:"syncFailure" example:"false"`
+	// True if sync operations are currently blocked (e.g., during migrations).
+	Blocked bool `json:"blocked" example:"false"`
 }
 
 func (state *EngineState) IsFailureState() bool {
