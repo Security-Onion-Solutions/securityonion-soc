@@ -259,10 +259,10 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
           this.aimetrics.forEach(item => {
             currTotal += item.totalCredits;
           });
-          this.aimetrics.forEach(async item => {
+          await Promise.all(this.aimetrics.map(async item => {
             item.creditPercentage = this.calculateCreditPercentage(item.totalCredits, currTotal);
             item.email = await this.lookupSocId(item.userId);
-          });
+          }));
           this.populateUsersCharts();
         }
       } catch (error) {
@@ -600,7 +600,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         });
       } else {
         data.forEach(function (item, index) {
-          const label = item.email || item.userId || 'Unknown';
+          const label = item.email || item.userId || route.i18n.unknown;
           chart.labels.push(route.$root.truncate(label, 30));
           chart.datasets[0].data.push(item[field] || 0);
         });
