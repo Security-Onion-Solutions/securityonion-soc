@@ -101,12 +101,13 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.$root.showDisclaimer(this.i18n.assistantDisclaimerMessage, this.i18n.assistantDisclaimerTitle, this.i18n.getStarted, 'settings.disclaimer.acknowledged.onionai');
 
       this.paramsLoaded = true;
-      
+
       if (this.assistantEnabled) {
         if (!this.$root.disclaimer) {
           await this.loadStoredChats();
           await this.handleRouteSessionId();
           await this.loadCredits();
+          this.focusChatInput();
         }
       } else {
         this.$root.disclaimer = false;
@@ -252,6 +253,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         // No session ID in URL, restore last active chat
         await this.restoreLastActiveChat();
       }
+      await this.$nextTick();
+      this.focusChatInput();
     },
     async restoreLastActiveChat() {
       if (!this.restoreLastActive) {
@@ -353,6 +356,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.currentChatId = null;
       this.saveCurrentChatId(); // Clear the saved current chat ID
       this.loadNewChatScreen(); // Reset to welcome message (also resets context length)
+      this.focusChatInput();
       this.canChat = true;
       // Navigate to chat without session ID
       this.$router.push({ name: 'assistant' });
@@ -1916,6 +1920,16 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     nbspRegexOp(text) {
       return text.replace(/^(&nbsp;?[\n]*)/, '');
+    },
+    focusChatInput() {
+      this.$nextTick(() => {
+        const input = this.$refs.chatInputField;
+        if (!input) return;
+        const el = input.$el.querySelector('textarea');
+        if (el) {
+          el.focus();
+        }
+      });
     }
   }
 }});
