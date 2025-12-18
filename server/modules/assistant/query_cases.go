@@ -38,7 +38,7 @@ func (t *QueryCasesTool) GetName() string {
 
 func (t *QueryCasesTool) GetDescription() string {
 	return "Retrieve Security Onion cases using OQL queries. " +
-		"IMPORTANT: All queries must include `AND _index:\"*:so-case\" AND so_kind:case` (quotes required). " +
+		"IMPORTANT: All queries must end with `_index:\"*:so-case\" AND so_kind:case` (quotes required). " +
 		"Use a 999-day date range. Search so_case.description and so_case.title fields. " +
 		"Results include both query matches and user's recent_cases. " +
 		"Present clear-cut matches directly, or provide multiple options with comparisons for user selection."
@@ -162,6 +162,9 @@ func (t *QueryCasesTool) Execute(ctx context.Context, server *server.Server, par
 	caseEvents := searchResults.Events
 
 	// Parse auxData first, regardless of whether cases are found
+	if auxData == "" {
+		auxData = "[]"
+	}
 	recentCases := []map[string]any{}
 	err = json.Unmarshal([]byte(auxData), &recentCases)
 	if err != nil {
