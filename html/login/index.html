@@ -145,6 +145,18 @@
             </v-col>
           </v-row>
         </v-container>
+
+        <v-container v-if="sessionExpired && !showLoginForm" grid-list-sm class="pa-4">
+          <v-row>
+            <v-col class="mx-auto px-12">
+              <div id="banner" class="mb-4">{{ i18n.sessionExpiredMessage }}</div>
+              <div class="text-center">
+                <v-btn id="reloginExpired" text color="primary" class="text-lg-center" v-text="i18n.login" @click="this.$root.showLogin()" data-aid="login_banner_session_expired"></v-btn>
+              </div>
+            </v-col>
+          </v-row>
+        </v-container>
+
       </v-card>
     </script>
 

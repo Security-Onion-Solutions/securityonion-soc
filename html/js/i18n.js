@@ -742,6 +742,7 @@ const i18n = {
       loginDisabled: 'Locked',
       loginEnabled: 'Unlocked',
       loginExpired: 'The login session has expired. Refresh, or wait for the page to refresh automatically, and then try again.',
+      sessionExpiredMessage: 'This login form has expired. Restart the login process to continue.',
       loginInvalid: 'The provided credentials are invalid. Please try again.',
       loginOidc: 'Continue with',
       loginTitle: 'Login to Security Onion',
