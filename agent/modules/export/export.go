@@ -165,6 +165,29 @@ func (export *Export) ProcessJob(job *model.Job, reader io.ReadCloser) (io.ReadC
 
 		// Return content as reader
 		return io.NopCloser(pdfReader), nil
+	case "assistant_session":
+		sessionId, ok := job.Filter.Parameters["id"].(string)
+		if !ok {
+			return reader, errors.New("missing required parameter: id")
+		}
+
+		// Generate report content
+		content, err := export.generateAssistantSessionReport(sessionId)
+		if err != nil {
+			return reader, fmt.Errorf("failed to generate assistant session report markdown: %v", err)
+		}
+
+		params := export.getAssistantSessionExportParams(export.templatePath)
+		pdfReader, size, err := export.convertMdToPdf(job.Id, content, params)
+		if err != nil {
+			return reader, fmt.Errorf("failed to generate PDF: %v", err)
+		}
+
+		job.Size = size
+		job.FileExtension = "pdf"
+
+		// Return content as reader
+		return io.NopCloser(pdfReader), nil
 	case "productivity":
 		// Generate report content
 		content, err := export.generateProductivityReport(job)
@@ -245,18 +268,19 @@ func (export *Export) populateTemplatesCache() {
 		"templatePath": export.templatePath,
 	}).Info("Refreshing templates cache for export module")
 	master := template.New("export").Funcs(template.FuncMap{
-		"getUserDetail":     export.getUserDetail,
-		"formatDateTime":    export.formatDateTime,
-		"join":              strings.Join,
-		"lower":             strings.ToLower,
-		"upper":             strings.ToUpper,
-		"sortHistory":       export.sortHistory,
-		"sortComments":      export.sortComments,
-		"sortRelatedEvents": export.sortRelatedEvents,
-		"sortArtifacts":     export.sortArtifacts,
-		"sortDetections":    export.sortDetections,
-		"sortMetrics":       export.sortMetrics,
-		"formatNumber":      export.formatNumber,
+		"getUserDetail":         export.getUserDetail,
+		"formatDateTime":        export.formatDateTime,
+		"join":                  strings.Join,
+		"lower":                 strings.ToLower,
+		"upper":                 strings.ToUpper,
+		"sortHistory":           export.sortHistory,
+		"sortComments":          export.sortComments,
+		"sortRelatedEvents":     export.sortRelatedEvents,
+		"sortArtifacts":         export.sortArtifacts,
+		"sortDetections":        export.sortDetections,
+		"sortMetrics":           export.sortMetrics,
+		"sortAssistantMessages": export.sortAssistantMessages,
+		"formatNumber":          export.formatNumber,
 	})
 
 	var err error
