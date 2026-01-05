@@ -1,6 +1,7 @@
 package export
 
 import (
+	"encoding/json"
 	"net/http"
 	"os"
 	"strings"
@@ -881,6 +882,90 @@ valueA,,true,event2,0,,2025-07-01T11:00:00Z,
 	})
 }
 
+func TestProcessJob_AssistantSessionReport(t *testing.T) {
+	export := NewExport(agent.NewAgent(&config.AgentConfig{}, "test-version"))
+
+	// Create a temporary directory for test templates
+	tmpDir, err := os.MkdirTemp("", "export_templates_test")
+	assert.Nil(t, err)
+	defer os.RemoveAll(tmpDir) // Clean up after tests
+
+	export.templatePath = tmpDir
+
+	// Create standard template directory
+	stdDir := tmpDir + "/standard"
+	err = os.MkdirAll(stdDir, 0755)
+	assert.Nil(t, err)
+
+	// Create fake assistant session report template
+	err = os.WriteFile(stdDir+"/assistant_session_report.md", []byte("# Assistant Session Report\n\nSession: {{ .Session.SessionId }}\nTitle: {{ .Session.Title }}"), 0644)
+	assert.Nil(t, err)
+
+	config := module.ModuleConfig{}
+	config["executablePath"] = "../../../scripts/md2pdf"
+	config["templatePath"] = tmpDir
+	export.Init(config)
+	export.agent.Client = web.NewClient("http://localhost:8080", true)
+	export.agent.Client.Auth = FakeClientAuth{}
+
+	// Mock responses for users and assistant session details
+	export.agent.Client.MockStringResponse(`[{"id":"xyz"}]`, 200, nil) // Get Users
+
+	sessionDetailsJson := `{
+		"session": {
+			"id": "session1",
+			"createTime": "2025-07-01T16:41:09.698562704-04:00",
+			"updateTime": "2025-07-01T16:41:09.698562704-04:00",
+			"sessionId": "chat_1757086398900_ykhmndscn",
+			"title": "Test Assistant Session",
+			"tags": ["investigation"]
+		},
+		"history": [
+			{
+				"id": "msg1",
+				"createTime": "2025-07-01T16:41:09.698562704-04:00",
+				"updateTime": "2025-07-01T16:41:09.698562704-04:00",
+				"sessionId": "chat_1757086398900_ykhmndscn",
+				"message": {
+					"id": "msg1",
+					"role": "user",
+					"contentStr": "Hello, can you help me?"
+				}
+			},
+			{
+				"id": "msg2",
+				"createTime": "2025-07-01T16:42:09.698562704-04:00",
+				"updateTime": "2025-07-01T16:42:09.698562704-04:00",
+				"sessionId": "chat_1757086398900_ykhmndscn",
+				"message": {
+					"id": "msg2",
+					"role": "assistant",
+					"contentStr": "Of course! How can I assist you today?"
+				}
+			}
+		]
+	}`
+	export.agent.Client.MockStringResponse(sessionDetailsJson, 200, nil) // Get Assistant Session Details
+
+	job := model.NewJob()
+	job.Kind = model.JOB_KIND_EXPORT
+	job.Filter.Parameters = map[string]interface{}{
+		"type": "assistant_session",
+		"id":   "chat_1757086398900_ykhmndscn",
+	}
+
+	reader, err := export.ProcessJob(job, nil)
+	assert.Nil(t, err)
+	assert.NotNil(t, reader)
+
+	// Read the output and check for expected content
+	output, err := io.ReadAll(reader)
+	assert.Nil(t, err)
+	assert.Contains(t, string(output), "Helvetica") // A valid PDF should contain a font name
+	assert.Equal(t, "pdf", job.FileExtension)
+	assert.Greater(t, job.Size, 0)
+}
+
 func TestGetMetricLimit(t *testing.T) {
 	tests := []struct {
 		name              string
@@ -1541,6 +1626,209 @@ func TestParseJobParameterInt(t *testing.T) {
 			result, valid := export.parseJobParameterInt(job, tt.paramName)
 			assert.Equal(t, tt.expected, result)
 			assert.Equal(t, tt.valid, valid)
+		})
+	}
+}
+
+func TestParseJSON(t *testing.T) {
+	export := NewExport(nil)
+
+	tests := []struct {
+		name     string
+		input    interface{}
+		expected map[string]interface{}
+	}{
+		{
+			name:     "Valid JSON bytes",
+			input:    []byte(`{"key1":"value1","key2":123,"key3":true}`),
+			expected: map[string]interface{}{"key1": "value1", "key2": float64(123), "key3": true},
+		},
+		{
+			name:     "Valid JSON string",
+			input:    `{"name":"test","count":5}`,
+			expected: map[string]interface{}{"name": "test", "count": float64(5)},
+		},
+		{
+			name:     "Valid JSON RawMessage",
+			input:    json.RawMessage(`{"foo":"bar"}`),
+			expected: map[string]interface{}{"foo": "bar"},
+		},
+		{
+			name:     "Empty JSON bytes",
+			input:    []byte{},
+			expected: map[string]interface{}{},
+		},
+		{
+			name:     "Empty JSON string",
+			input:    "",
+			expected: map[string]interface{}{},
+		},
+		{
+			name:     "Invalid JSON",
+			input:    []byte(`{invalid json}`),
+			expected: map[string]interface{}{},
+		},
+		{
+			name:     "Unexpected type",
+			input:    12345,
+			expected: map[string]interface{}{},
+		},
+		{
+			name:     "Nil input",
+			input:    nil,
+			expected: map[string]interface{}{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := export.parseJSON(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestToJSON(t *testing.T) {
+	export := NewExport(nil)
+
+	tests := []struct {
+		name     string
+		input    interface{}
+		expected string
+	}{
+		{
+			name:     "Simple map",
+			input:    map[string]interface{}{"key": "value", "number": 42},
+			expected: "{\n  \"key\": \"value\",\n  \"number\": 42\n}",
+		},
+		{
+			name:     "Nested structure",
+			input:    map[string]interface{}{"outer": map[string]interface{}{"inner": "value"}},
+			expected: "{\n  \"outer\": {\n    \"inner\": \"value\"\n  }\n}",
+		},
+		{
+			name:     "Array",
+			input:    []string{"a", "b", "c"},
+			expected: "[\n  \"a\",\n  \"b\",\n  \"c\"\n]",
+		},
+		{
+			name:     "Nil input",
+			input:    nil,
+			expected: "",
+		},
+		{
+			name:     "Empty map",
+			input:    map[string]interface{}{},
+			expected: "{}",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := export.toJSON(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestAdd(t *testing.T) {
+	export := NewExport(nil)
+
+	tests := []struct {
+		name     string
+		a        int
+		b        int
+		expected int
+	}{
+		{
+			name:     "Positive numbers",
+			a:        5,
+			b:        3,
+			expected: 8,
+		},
+		{
+			name:     "Negative numbers",
+			a:        -5,
+			b:        -3,
+			expected: -8,
+		},
+		{
+			name:     "Mixed signs",
+			a:        10,
+			b:        -3,
+			expected: 7,
+		},
+		{
+			name:     "Zero values",
+			a:        0,
+			b:        0,
+			expected: 0,
+		},
+		{
+			name:     "Add to zero",
+			a:        0,
+			b:        5,
+			expected: 5,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := export.add(tt.a, tt.b)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestStripEmoji(t *testing.T) {
+	export := NewExport(nil)
+
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "Text with emoji",
+			input:    "Hello 😀 World 🌍",
+			expected: "Hello  World ",
+		},
+		{
+			name:     "Computer emoji",
+			input:    "Server 🖥️ is running",
+			expected: "Server  is running",
+		},
+		{
+			name:     "Multiple emojis",
+			input:    "🎉🎊🎈 Party time! 🥳",
+			expected: " Party time! ",
+		},
+		{
+			name:     "No emojis",
+			input:    "Plain text without emojis",
+			expected: "Plain text without emojis",
+		},
+		{
+			name:     "Empty string",
+			input:    "",
+			expected: "",
+		},
+		{
+			name:     "Only emojis",
+			input:    "😀😃😄😁",
+			expected: "",
+		},
+		{
+			name:     "Mixed content",
+			input:    "Check ✅ this out 👀",
+			expected: "Check  this out ",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := export.stripEmoji(tt.input)
+			assert.Equal(t, tt.expected, result)
 		})
 	}
 }
