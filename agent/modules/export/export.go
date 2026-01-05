@@ -8,12 +8,14 @@ package export
 
 import (
 	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"text/template"
@@ -281,6 +283,10 @@ func (export *Export) populateTemplatesCache() {
 		"sortMetrics":           export.sortMetrics,
 		"sortAssistantMessages": export.sortAssistantMessages,
 		"formatNumber":          export.formatNumber,
+		"parseJSON":             export.parseJSON,
+		"toJSON":                export.toJSON,
+		"add":                   export.add,
+		"stripEmoji":            export.stripEmoji,
 	})
 
 	var err error
@@ -328,6 +334,66 @@ func (export *Export) getUserDetail(attr string, userId string) string {
 
 func (export *Export) prepareKeyForTemplate(key string) string {
 	return strings.ReplaceAll(key, ".", "_")
+}
+
+func (export *Export) parseJSON(data interface{}) map[string]interface{} {
+	result := make(map[string]interface{})
+
+	var jsonBytes []byte
+	switch v := data.(type) {
+	case []byte:
+		jsonBytes = v
+	case string:
+		jsonBytes = []byte(v)
+	case json.RawMessage:
+		jsonBytes = []byte(v)
+	default:
+		log.WithField("type", fmt.Sprintf("%T", data)).Warn("parseJSON received unexpected type")
+		return result
+	}
+
+	if len(jsonBytes) == 0 {
+		log.Debug("parseJSON received empty JSON bytes")
+		return result
+	}
+
+	err := json.Unmarshal(jsonBytes, &result)
+	if err != nil {
+		log.WithError(err).WithField("json", string(jsonBytes)).Warn("Failed to parse JSON in template")
+		return result
+	}
+
+	log.WithFields(log.Fields{
+		"parsedKeys": len(result),
+		"json":       string(jsonBytes),
+	}).Debug("Successfully parsed JSON in template")
+
+	return result
+}
+
+func (export *Export) toJSON(data interface{}) string {
+	if data == nil {
+		return ""
+	}
+
+	jsonBytes, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		log.WithError(err).WithField("type", fmt.Sprintf("%T", data)).Warn("Failed to marshal data to JSON in template")
+		return fmt.Sprintf("%v", data)
+	}
+
+	return string(jsonBytes)
+}
+
+func (export *Export) add(a, b int) int {
+	return a + b
+}
+
+func (export *Export) stripEmoji(text string) string {
+	// Remove emoji and other non-ASCII characters that don't render well in PDFs
+	// This regex matches common emoji ranges
+	emojiPattern := regexp.MustCompile(`[\x{1F600}-\x{1F64F}]|[\x{1F300}-\x{1F5FF}]|[\x{1F680}-\x{1F6FF}]|[\x{1F1E0}-\x{1F1FF}]|[\x{2600}-\x{26FF}]|[\x{2700}-\x{27BF}]|[\x{FE00}-\x{FE0F}]|[\x{1F900}-\x{1F9FF}]|[\x{1F018}-\x{1F270}]|[\x{238C}-\x{2454}]|[\x{20D0}-\x{20FF}]`)
+	return emojiPattern.ReplaceAllString(text, "")
 }
 
 /* getParamsFromTemplate retrieves parameters from a template file.

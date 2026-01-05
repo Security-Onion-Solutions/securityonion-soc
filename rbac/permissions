@@ -41,8 +41,8 @@ users/delete:              user-admin
 playbooks/read:            playbook-monitor
 playbooks/write:           playbook-admin
 playbooks/delete:          playbook-admin
-assistant/read_authored:   assistant-user
-assistant/read_shared:     assistant-user
+assistant/read_authored:   assistant-user assistant-monitor
+assistant/read_shared:     assistant-user assistant-monitor
 assistant/write_authored:  assistant-user
 assistant/delete_authored: assistant-user
 assistant/read_all:        assistant-admin

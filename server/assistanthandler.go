@@ -473,7 +473,7 @@ func (h *AssistantHandler) GetSessions(w http.ResponseWriter, r *http.Request) {
 }
 
 // @Summary      Get Session Details
-// @Description  Retrieve the complete chat history for a specific session. Can lookup deleted sessions.
+// @Description  Retrieve the complete chat history and usage for a specific session. Can lookup deleted sessions.
 // @Tags         Assistant
 // @Security     bearer[assistant/read_authored]
 // @Security     bearer[assistant/read_shared]
@@ -503,7 +503,7 @@ func (h *AssistantHandler) GetSessionDetails(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	session, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithIncludeDeleted(true))
+	session, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithIncludeDeleted(true), model.GetSessionsWithUsage(true))
 	if err != nil {
 		logger.WithError(err).Error("unable to get session")
 		web.Respond(w, r, http.StatusInternalServerError, err)

@@ -19,7 +19,6 @@ func (export *Export) getAssistantSessionDetailsFromServer(sessionId string) (*A
 
 	sessionTemplateInput := &AssistantSessionTemplateInput{}
 
-	// Get session details (includes session metadata and history)
 	sessionDetails := &model.AssistantSessionDetails{}
 	_, err := export.agent.Client.SendAuthorizedObject("GET", fmt.Sprintf("/api/assistant/sessions/%s", sessionId), nil, sessionDetails)
 	if err != nil {
@@ -32,26 +31,6 @@ func (export *Export) getAssistantSessionDetailsFromServer(sessionId string) (*A
 
 	sessionTemplateInput.Session = sessionDetails.Session
 	sessionTemplateInput.History = sessionDetails.History
-
-	// Calculate usage statistics from the message history
-	if sessionTemplateInput.Session != nil {
-		if sessionTemplateInput.Session.Usage == nil {
-			sessionTemplateInput.Session.Usage = &model.SessionUsage{}
-		}
-
-		// Calculate total credits and total messages from history
-		totalCredits := 0
-		totalMessages := len(sessionTemplateInput.History)
-
-		for _, msg := range sessionTemplateInput.History {
-			if msg.Message != nil && msg.Message.Usage != nil {
-				totalCredits += msg.Message.Usage.Credits
-			}
-		}
-
-		sessionTemplateInput.Session.Usage.TotalCredits = totalCredits
-		sessionTemplateInput.Session.Usage.TotalMessages = totalMessages
-	}
 
 	return sessionTemplateInput, nil
 }
