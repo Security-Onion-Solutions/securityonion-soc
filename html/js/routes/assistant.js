@@ -1642,6 +1642,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       const processedMessages = [];
       // Reset context length when loading from backend
       this.creditsUsed = 0;
+      this.contextLength = 0;
       this.contextStartMessageIndex = -1;
       let justResetContext = false;
       
@@ -1717,7 +1718,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       return processedMessages;
     },
     calculateContextOfMessage(allMessages, msgIndex) {
-      if (msgIndex >= 0 && msgIndex < allMessages.length && allMessages[msgIndex].role !== 'user') {
+      if (msgIndex >= 0 && msgIndex < allMessages.length && allMessages[msgIndex].message.role !== 'user') {
         // asking about an assistant message, return its output tokens
         return allMessages[msgIndex].message.usage.output_tokens;
       }

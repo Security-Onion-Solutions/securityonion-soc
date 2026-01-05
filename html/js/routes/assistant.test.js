@@ -754,13 +754,13 @@ test('updateContextLength updates total context length', () => {
   const usage2 = { input_tokens: 30, output_tokens: 20 };
   
   comp.updateContextLength(usage1);
-  expect(comp.contextLength).toBe(175); // 100 + 50 + 25
+  expect(comp.contextLength).toBe(75); // 50 + 25
   
   comp.updateContextLength(usage2);
-  expect(comp.contextLength).toBe(225); // 175 + 30 + 20
+  expect(comp.contextLength).toBe(50); // 30 + 20
   
   comp.updateContextLength(null);
-  expect(comp.contextLength).toBe(225); // Should remain unchanged
+  expect(comp.contextLength).toBe(50); // Should remain unchanged
 });
 
 test('checkContextLimitReached returns false when under limit', () => {
@@ -2381,7 +2381,7 @@ test('convertBackendMessagesToFrontend converts assistant message with text bloc
   expect(result[0].content).toBe('I can help you with security analysis.');
   expect(result[0].timestamp).toBe('2025-01-01T12:00:00.000Z');
   expect(result[0].usage.value).toEqual({ input_tokens: 10, output_tokens: 20 });
-  expect(comp.updateContextLength).toHaveBeenCalledWith({ input_tokens: 10, output_tokens: 20 });
+  expect(comp.updateContextLength).toHaveBeenCalledWith({ input_tokens: 10, output_tokens: 20 }, false);
 });
 
 test('convertBackendMessagesToFrontend handles multiple text blocks', () => {
@@ -3107,7 +3107,7 @@ test('convertBackendMessagesToFrontend calculates context length accurately afte
   
   comp.convertBackendMessagesToFrontend(backendMessages);
   
-  expect(comp.contextLength).toBe(2000);
+  expect(comp.contextLength).toBe(1000);
 });
 
 test('loadChatFromBackend success', async () => {
