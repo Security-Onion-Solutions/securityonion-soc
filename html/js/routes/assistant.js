@@ -2003,36 +2003,36 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       return text.replace(/^\s*\n+/, '').replace(/\n+\s*$/, '');
     }
     },
-		async attachToCase(sessionId, caseId) {
-			this.caseMenuVisible = false;
+    async attachToCase(sessionId, caseId) {
+      this.caseMenuVisible = false;
 
-			const session = this.chatHistoryById[sessionId];
-			if (!session) {
-				this.$root.showError(this.i18n.assistantAttachNoSession);
-				return;
-			}
+      const session = this.chatHistoryById[sessionId];
+      if (!session) {
+        this.$root.showError(this.i18n.assistantAttachNoSession);
+        return;
+      }
 
-			if (!(session.tags || []).includes(SESTAG_SHARED)) {
-				await this.toggleSharedSession(sessionId)
-			}
+      if (!(session.tags || []).includes(SESTAG_SHARED)) {
+        await this.toggleSharedSession(sessionId)
+      }
 
-			if (caseId === null) { 
+      if (caseId === null) { 
         caseId = this.createCase(session.title);
-			}
+      }
 
-			const payload = {
-				caseId: caseId,
-				groupType: 'attachments',
-				artifactType: 'assistant_chat',
-				value: sessionId,
-				description: session.title,
-			};
+      const payload = {
+        caseId: caseId,
+        groupType: 'attachments',
+        artifactType: 'assistant_chat',
+        value: sessionId,
+        description: session.title,
+      };
 
-			try {
-				this.$root.papi.post('/case/artifacts', payload);
-			} catch (err) { 
-				this.$root.showError(this.i18n.assistantAttachToCaseFail);
-			}
+      try {
+        this.$root.papi.post('/case/artifacts', payload);
+      } catch (err) { 
+        this.$root.showError(this.i18n.assistantAttachToCaseFail);
+      }
     },
     async createCase(title) {
       const response = await this.$root.papi.post('case/', {
@@ -2045,8 +2045,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
 
       return null;
     },
-		formatCaseSummary(socCase) {
+    formatCaseSummary(socCase) {
       return socCase?.title;
-		},
+    },
   }
-}});
+});
