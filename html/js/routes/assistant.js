@@ -1930,6 +1930,12 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           el.focus();
         }
       });
+    },
+    async exportSession() {
+      this.$root.export({
+        type: 'assistant_session',
+        id: this.currentChatId,
+      });
     }
   }
 }});

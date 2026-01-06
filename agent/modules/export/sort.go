@@ -212,6 +212,40 @@ func (export *Export) sortDetections(field string, dir string, list []*model.Det
 	return list
 }
 
+func (export *Export) sortAssistantMessages(field string, dir string, list []*model.StoredMessage) []*model.StoredMessage {
+	sort.Slice(list, func(i, j int) bool {
+		a := list[i]
+		b := list[j]
+		if a == nil || b == nil {
+			return false
+		}
+		switch strings.ToLower(field) {
+		case "id":
+			return export.compareWithDir(a.Id, b.Id, dir)
+		case "createtime":
+			return export.compareWithDir(a.CreateTime, b.CreateTime, dir)
+		case "updatetime":
+			return export.compareWithDir(a.UpdateTime, b.UpdateTime, dir)
+		case "userid":
+			return export.compareWithDir(a.UserId, b.UserId, dir)
+		case "kind":
+			return export.compareWithDir(a.Kind, b.Kind, dir)
+		case "operation":
+			return export.compareWithDir(a.Operation, b.Operation, dir)
+		case "sessionid":
+			return export.compareWithDir(a.SessionId, b.SessionId, dir)
+		case "role":
+			if a.Message == nil || b.Message == nil {
+				return false
+			}
+			return export.compareWithDir(a.Message.Role, b.Message.Role, dir)
+		default:
+			return false
+		}
+	})
+	return list
+}
+
 func (export *Export) sortMetrics(field string, dir string, list []*model.EventMetric) []*model.EventMetric {
 	sort.Slice(list, func(i, j int) bool {
 		a := list[i]

@@ -1091,6 +1091,72 @@ test('formatExpandMessage handles proper ToolResult blocks', () => {
   expect(result).toContain('No events found');
 });
 
+test('formatExpandMessage handles ToolResult with error text', () => {
+  const data = {
+    message: {
+      role: 'user',
+      contentBlocks: [
+        {
+          toolResult: {
+            toolUseId: 'tool-123',
+            isError: true,
+            content: [
+              {
+                text: 'Connection timeout'
+              }
+            ]
+          }
+        }
+      ]
+    }
+  };
+
+  comp.$root.formatMarkdown = jest.fn()
+    .mockReturnValueOnce('<p><strong>Tool Result:</strong></p><p><strong>Error:</strong> Connection timeout</p>');
+  
+  const result = comp.formatExpandMessage(data);
+  
+  expect(comp.$root.formatMarkdown).toHaveBeenCalled();
+  const markdownArg = comp.$root.formatMarkdown.mock.calls[0][0];
+  expect(markdownArg).toContain('**Tool Result:**');
+  expect(markdownArg).toContain('**Error:** Connection timeout');
+  expect(result).toContain('Error:');
+  expect(result).toContain('Connection timeout');
+});
+
+test('formatExpandMessage handles ToolResult with non-error text', () => {
+  const data = {
+    message: {
+      role: 'user',
+      contentBlocks: [
+        {
+          toolResult: {
+            toolUseId: 'tool-456',
+            isError: false,
+            content: [
+              {
+                text: 'Query executed successfully'
+              }
+            ]
+          }
+        }
+      ]
+    }
+  };
+
+  comp.$root.formatMarkdown = jest.fn()
+    .mockReturnValueOnce('<p><strong>Tool Result:</strong></p><p>Query executed successfully</p>');
+  
+  const result = comp.formatExpandMessage(data);
+  
+  expect(comp.$root.formatMarkdown).toHaveBeenCalled();
+  const markdownArg = comp.$root.formatMarkdown.mock.calls[0][0];
+  expect(markdownArg).toContain('**Tool Result:**');
+  expect(markdownArg).toContain('Query executed successfully');
+  expect(markdownArg).not.toContain('**Error:**');
+  expect(result).toContain('Query executed successfully');
+});
+
 test('formatExpandMessage handles empty or missing content blocks', () => {
   const data = {
     message: {

@@ -472,13 +472,15 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
               }
               let contentBlock = block.toolResult.content[j];
               if (contentBlock.text) {
-                resultMessage += `\n${contentBlock.text}\n`;
+                if (block.toolResult.isError) {
+                  resultMessage += `\n**Error:** ${contentBlock.text}\n`;
+                } else {
+                  resultMessage += `\n${contentBlock.text}\n`;
+                }
               } else if (contentBlock.json) {
                 resultMessage += `\n\`\`\`json\n${JSON.stringify(contentBlock.json, null, 2)}\n\`\`\`\n`;
               }
             }
-          } else if (block.toolResult.error) {
-            resultMessage += `\n**Error:** ${block.toolResult.error}\n`;
           }
           expandMessage += this.$root.formatMarkdown(resultMessage);
         }

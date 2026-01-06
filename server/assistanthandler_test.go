@@ -1079,6 +1079,7 @@ func TestGetSessionDetails(t *testing.T) {
 		gomock.Any(),
 		gomock.Any(),
 		gomock.Any(),
+		gomock.Any(),
 	).DoAndReturn(func(ctx context.Context, opts ...model.GetSessionsOpt) ([]*model.AssistantSession, error) {
 		opt := &model.GetSessionsOpts{}
 		for _, o := range opts {
@@ -1087,6 +1088,7 @@ func TestGetSessionDetails(t *testing.T) {
 
 		assert.Equal(t, sessionId, opt.SessionId())
 		assert.True(t, opt.IncludeDeleted())
+		assert.True(t, opt.Usage())
 
 		return mockSessions, nil
 	})
@@ -1140,6 +1142,7 @@ func TestGetSessionDetailsNotFound(t *testing.T) {
 
 	// Mock GetSessions to return empty result
 	mockAssistantStore.EXPECT().GetSessions(
+		gomock.Any(),
 		gomock.Any(),
 		gomock.Any(),
 		gomock.Any(),
