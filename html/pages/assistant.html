@@ -126,7 +126,7 @@
 					</v-icon>
 				</v-card-title>
 				<v-divider></v-divider>
-				<v-card-text id="chat-messages" class="chat-messages pa-0" @scroll="onChatScroll">
+				<v-card-text id="chat-messages" class="chat-messages pa-0" @scroll="onChatScroll" @click="onChatClick">
 					<div class="pa-4">
 						<div v-for="(message, index) in messages" :key="index" :id="'message-' + index" :class="['message-item', 'mb-3'].concat(messageClassesFromTags(message.tags || []))">
 							<div v-if="index === contextStartMessageIndex" class="context-divider py-4">

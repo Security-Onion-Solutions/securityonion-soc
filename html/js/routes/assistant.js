@@ -10,6 +10,8 @@ const MSGTAG_CONTEXTCOMPRESSION = "context_compression";
 
 const SESTAG_SHARED = 'shared';
 
+const CHOICE_MARKER_REGEX = /\[\[CHOICE\]\]([\s\S]*?)\[\[\/CHOICE\]\]/g;
+
 routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
   template: '#page-assistant',
   data() { return {
@@ -1134,6 +1136,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       return this.$root.formatTimestamp(timestamp);
     },
     formatMarkdown(text) {
+      text = this.applyChoiceButtons(text);
       text = this.$root.performMermaidRegexes(text);
       md = this.$root.formatMarkdown(text, true);
       if (!this.isStreaming) {
@@ -1142,6 +1145,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         });
       }
       return md;
+    },
+    renderInlineMarkdown(text) {
+      if (!text) return '';
+      return this.$root.formatMarkdown(text, false);
     },
     formatChatDate(timestamp) {
       return this.$root.formatDateTime(timestamp);
@@ -1936,6 +1943,52 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         type: 'assistant_session',
         id: this.currentChatId,
       });
+    },
+    escapeHtml(str) {
+      return String(str).replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+      }[char]));
+    },
+    applyChoiceButtons(text) {
+      if (!text || typeof text !== 'string') return text;
+
+      return text.replace(CHOICE_MARKER_REGEX, (_fullMatch, rawLabel) => {
+        const label = this.stripNewlines(rawLabel).trim();
+        if (!label) return '';
+
+        const cleanLabel = this.stripHtml(this.renderInlineMarkdown(label));
+        const safeChoiceAttr = this.escapeHtml(label);
+
+        return `<button type="button" class="assistant-choice-btn" data-choice="${safeChoiceAttr}">${cleanLabel}</button>`;
+      });
+    },
+    onChatClick(event) {
+      const btn = event.target?.closest?.('button[data-choice]');
+      if (!btn) return;
+
+      event.preventDefault();
+
+      if (!this.canChat || this.checkForActivity() || !this.creditsLoaded) return;
+
+      const choice = btn.getAttribute('data-choice') || '';
+      if (!choice.trim()) return;
+
+      this.newMessage = choice;
+      this.$nextTick(() => {
+        this.focusChatInput();
+        this.sendMessage();
+      });
+    },
+    stripHtml(str) {
+      return str.replace(/<[^>]*>/g, '');
+    },
+    stripNewlines(text) {
+      if (typeof text !== 'string') return text;
+      return text.replace(/^\s*\n+/, '').replace(/\n+\s*$/, '');
     }
   }
 }});

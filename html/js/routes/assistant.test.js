@@ -5149,3 +5149,274 @@ test('focusChatInput focuses the chat input textarea', () => {
   expect(mockInputField.$el.querySelector).toHaveBeenCalledWith('textarea');
   expect(mockTextarea.focus).toHaveBeenCalled();
 });
+
+// Credits tracking tests
+test('updateCreditsUsed updates total credits used', () => {
+  comp.creditsUsed = 100;
+  const usage1 = { credits: 50 };
+  const usage2 = { credits: 25 };
+  
+  comp.updateCreditsUsed(usage1);
+  expect(comp.creditsUsed).toBe(150);
+  
+  comp.updateCreditsUsed(usage2);
+  expect(comp.creditsUsed).toBe(175);
+  
+  comp.updateCreditsUsed(null);
+  expect(comp.creditsUsed).toBe(175);
+});
+
+test('updateCreditsUsed handles missing credits field', () => {
+  comp.creditsUsed = 100;
+  const usage = { input_tokens: 10, output_tokens: 20 };
+  
+  comp.updateCreditsUsed(usage);
+  expect(comp.creditsUsed).toBe(100);
+});
+
+// Floating tool tests
+test('sendMessage marks floating tool as skipped when sending new message', async () => {
+  const floatingTool = {
+    id: 'tool_floating',
+    name: 'query_events',
+    status: 'pending_approval',
+    approved: null
+  };
+  
+  comp.messages = [fakeAssistantMessage, fakeMessage];
+  comp.currentChatId = 'test-session';
+  comp.mostRecentFloatingTool = new Map();
+  comp.mostRecentFloatingTool.set('test-session', floatingTool);
+  comp.newMessage = 'New message';
+  comp.canChat = true;
+  comp.assistantEnabled = true;
+  comp.creditsRemaining = 100;
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
+  comp.callAIAPI = jest.fn().mockResolvedValue();
+  comp.loadStoredChats = jest.fn().mockResolvedValue();
+  comp.scrollToBottom = jest.fn();
+  
+  await comp.sendMessage();
+  
+  expect(floatingTool.status).toBe('skipped');
+  expect(comp.mostRecentFloatingTool.has('test-session')).toBe(false);
+});
+
+test('sendMessage does not mark floating tool as skipped when only welcome message', async () => {
+  const floatingTool = {
+    id: 'tool_floating',
+    name: 'query_events',
+    status: 'pending_approval',
+    approved: null
+  };
+  
+  comp.messages = [fakeAssistantMessage];
+  comp.currentChatId = 'test-session';
+  comp.mostRecentFloatingTool = new Map();
+  comp.mostRecentFloatingTool.set('test-session', floatingTool);
+  comp.newMessage = 'First message';
+  comp.canChat = true;
+  comp.assistantEnabled = true;
+  comp.creditsRemaining = 100;
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
+  comp.callAIAPI = jest.fn().mockResolvedValue();
+  comp.loadStoredChats = jest.fn().mockResolvedValue();
+  comp.scrollToBottom = jest.fn();
+  
+  await comp.sendMessage();
+  
+  expect(floatingTool.status).toBe('pending_approval');
+});
+
+// Context compression tests
+test('compressCurrentSession sends compression message and reloads chat', async () => {
+  comp.currentChatId = 'test-session';
+  comp.newMessage = 'Original message';
+  comp.compressContextMsg = 'Compress the context';
+  comp.contextLength = 5000;
+  comp.sendMessage = jest.fn().mockResolvedValue();
+  comp.loadChatFromBackend = jest.fn().mockResolvedValue();
+  
+  await comp.compressCurrentSession();
+  
+  expect(comp.newMessage).toBe('Original message');
+  expect(comp.contextLength).toBe(0);
+  expect(comp.sendMessage).toHaveBeenCalledWith([MSGTAG_CONTEXTCOMPRESSION]);
+  expect(comp.loadChatFromBackend).toHaveBeenCalledWith('test-session');
+});
+
+// Choice buttons tests
+test('applyChoiceButtons converts choice markers to buttons', () => {
+  const text = 'Choose an option: [[CHOICE]]Option 1[[/CHOICE]] or [[CHOICE]]Option 2[[/CHOICE]]';
+  
+  const result = comp.applyChoiceButtons(text);
+  
+  expect(result).toContain('class="assistant-choice-btn"');
+  expect(result).toContain('data-choice="Option 1"');
+  expect(result).toContain('data-choice="Option 2"');
+});
+
+test('applyChoiceButtons handles empty choice markers', () => {
+  const text = 'Text with [[CHOICE]][[/CHOICE]] empty choice';
+  
+  const result = comp.applyChoiceButtons(text);
+  
+  expect(result).toBe('Text with  empty choice');
+});
+
+test('applyChoiceButtons handles text without choice markers', () => {
+  const text = 'Regular text without choices';
+  
+  const result = comp.applyChoiceButtons(text);
+  
+  expect(result).toBe('Regular text without choices');
+});
+
+test('applyChoiceButtons handles null text', () => {
+  const result = comp.applyChoiceButtons(null);
+  
+  expect(result).toBe(null);
+});
+
+test('applyChoiceButtons strips newlines from choice labels', () => {
+  const text = '[[CHOICE]]\n\nOption with newlines\n\n[[/CHOICE]]';
+  
+  const result = comp.applyChoiceButtons(text);
+  
+  expect(result).toContain('data-choice="Option with newlines"');
+});
+
+test('onChatClick handles choice button click', () => {
+  const mockButton = {
+    getAttribute: jest.fn().mockReturnValue('Selected choice')
+  };
+  const mockEvent = {
+    target: {
+      closest: jest.fn().mockReturnValue(mockButton)
+    },
+    preventDefault: jest.fn()
+  };
+  
+  comp.canChat = true;
+  comp.checkForActivity = jest.fn().mockReturnValue(false);
+  comp.creditsLoaded = true;
+  comp.focusChatInput = jest.fn();
+  comp.sendMessage = jest.fn();
+  
+  comp.onChatClick(mockEvent);
+  
+  expect(mockEvent.preventDefault).toHaveBeenCalled();
+  expect(comp.newMessage).toBe('Selected choice');
+  expect(comp.$nextTick).toHaveBeenCalled();
+});
+
+test('onChatClick ignores non-button clicks', () => {
+  const mockEvent = {
+    target: {
+      closest: jest.fn().mockReturnValue(null)
+    },
+    preventDefault: jest.fn()
+  };
+  
+  comp.sendMessage = jest.fn();
+  
+  comp.onChatClick(mockEvent);
+  
+  expect(mockEvent.preventDefault).not.toHaveBeenCalled();
+  expect(comp.sendMessage).not.toHaveBeenCalled();
+});
+
+test('onChatClick does not send when activity in progress', () => {
+  const mockButton = {
+    getAttribute: jest.fn().mockReturnValue('Choice')
+  };
+  const mockEvent = {
+    target: {
+      closest: jest.fn().mockReturnValue(mockButton)
+    },
+    preventDefault: jest.fn()
+  };
+  
+  comp.canChat = true;
+  comp.checkForActivity = jest.fn().mockReturnValue(true);
+  comp.creditsLoaded = true;
+  comp.sendMessage = jest.fn();
+  
+  comp.onChatClick(mockEvent);
+  
+  expect(comp.sendMessage).not.toHaveBeenCalled();
+});
+
+test('onChatClick does not send when canChat is false', () => {
+  const mockButton = {
+    getAttribute: jest.fn().mockReturnValue('Choice')
+  };
+  const mockEvent = {
+    target: {
+      closest: jest.fn().mockReturnValue(mockButton)
+    },
+    preventDefault: jest.fn()
+  };
+  
+  comp.canChat = false;
+  comp.checkForActivity = jest.fn().mockReturnValue(false);
+  comp.creditsLoaded = true;
+  comp.sendMessage = jest.fn();
+  
+  comp.onChatClick(mockEvent);
+  
+  expect(comp.sendMessage).not.toHaveBeenCalled();
+});
+
+test('stripHtml removes HTML tags', () => {
+  expect(comp.stripHtml('<p>Hello <strong>World</strong></p>')).toBe('Hello World');
+  expect(comp.stripHtml('<div><span>Test</span></div>')).toBe('Test');
+  expect(comp.stripHtml('No tags')).toBe('No tags');
+});
+
+test('stripNewlines removes leading and trailing newlines', () => {
+  expect(comp.stripNewlines('\n\nHello World\n\n')).toBe('Hello World');
+  expect(comp.stripNewlines('  \n\nText\n\n  ')).toBe('Text');
+  expect(comp.stripNewlines('No newlines')).toBe('No newlines');
+});
+
+test('stripNewlines handles non-string input', () => {
+  expect(comp.stripNewlines(null)).toBe(null);
+  expect(comp.stripNewlines(undefined)).toBe(undefined);
+  expect(comp.stripNewlines(123)).toBe(123);
+});
+
+// Session tag update tests
+test('updateSessionTag sends correct API request for add action', async () => {
+  const sessionId = 'test-session';
+  const mockPut = mockPapi('put');
+  
+  await comp.updateSessionTag(sessionId, 'add', 'shared');
+  
+  expect(mockPut).toHaveBeenCalledWith(`/assistant/sessions/${sessionId}`, {
+    action: 'add',
+    tag: 'shared'
+  });
+});
+
+test('updateSessionTag sends correct API request for remove action', async () => {
+  const sessionId = 'test-session';
+  const mockPut = mockPapi('put');
+  
+  await comp.updateSessionTag(sessionId, 'remove', 'shared');
+  
+  expect(mockPut).toHaveBeenCalledWith(`/assistant/sessions/${sessionId}`, {
+    action: 'remove',
+    tag: 'shared'
+  });
+});
+
+test('updateSessionTag handles API error', async () => {
+  const sessionId = 'test-session';
+  const showErrorMock = mockShowError();
+  mockPapi('put', null, new Error('Update failed'));
+  
+  await comp.updateSessionTag(sessionId, 'add', 'shared');
+  
+  expect(showErrorMock).toHaveBeenCalledWith(expect.stringContaining('Update failed'));
+});
