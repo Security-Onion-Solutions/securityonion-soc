@@ -262,3 +262,73 @@ test('shouldDetectOIDCExistingLocalAccount', async () => {
 
   comp.$root.createApi = _createApi;
 });
+test('shouldDetectSessionExpiration', async () => {
+  const identifier = {attributes: {name: 'csrf_token', value: 'some_identifier'}};
+  const passwordMethod = {group: 'password', attributes: {name: 'method', value: 'password'}};
+  const nodes = [identifier, passwordMethod];
+  
+  const now = new Date();
+  const expirationTime = new Date(now.getTime() + 5000); // 5 seconds from now
+  
+  const response = {data: {
+    ui: {nodes: nodes},
+    expires_at: expirationTime.toISOString()
+  }};
+
+  // Mock MOTD response
+  const _createApi = comp.$root.createApi;
+  const createApiMock = jest.fn().mockReturnValue({
+    get: () => { return { data: '' } },
+  });
+  
+  // Mock Auth response
+  const authApiMock = mockAuthApi("get", response);
+  comp.$root.createApi = createApiMock;
+
+  await comp.loadData();
+
+  expect(authApiMock).toHaveBeenCalledTimes(1);
+  expect(authApiMock).toHaveBeenCalledWith('login/flows?id=null');
+  expect(createApiMock).toHaveBeenCalledTimes(1);
+  expect(comp.sessionExpirationTimer).toBeDefined();
+  
+  // Clean up
+  if (comp.sessionExpirationTimer) {
+    clearTimeout(comp.sessionExpirationTimer);
+  }
+
+  comp.$root.createApi = _createApi;
+});
+
+test('shouldShowSessionExpiredModalImmediately', async () => {
+  const identifier = {attributes: {name: 'csrf_token', value: 'some_identifier'}};
+  const passwordMethod = {group: 'password', attributes: {name: 'method', value: 'password'}};
+  const nodes = [identifier, passwordMethod];
+  
+  const pastTime = new Date(Date.now() - 5000); // 5 seconds ago
+  
+  const response = {data: {
+    ui: {nodes: nodes},
+    expires_at: pastTime.toISOString()
+  }};
+
+  // Mock DOM element
+  const modalMock = {style: {display: 'none'}, classList: {add: jest.fn(), remove: jest.fn()}};
+  const getElementByIdMock = jest.fn().mockReturnValue(modalMock);
+  global.document.getElementById = getElementByIdMock;
+
+  // Mock MOTD response
+  const _createApi = comp.$root.createApi;
+  const createApiMock = jest.fn().mockReturnValue({
+    get: () => { return { data: '' } },
+  });
+  
+  // Mock Auth response
+  const authApiMock = mockAuthApi("get", response);
+  comp.$root.createApi = createApiMock;
+
+  await comp.loadData();
+
+  expect(comp.sessionExpired).toBe(true);
+  comp.$root.createApi = _createApi;
+});

@@ -159,12 +159,21 @@ test('component data initialization', () => {
 });
 
 test('created lifecycle hook initializes data', () => {
+  // Mock VueChartJs and initializeCharts
+  global.VueChartJs = {
+    Bar: jest.fn(),
+    Line: jest.fn(),
+    Pie: jest.fn()
+  };
+  comp.$root.initializeCharts = jest.fn();
+  
   // Simulate the created lifecycle hook
   comp.created();
   
   expect(comp.relativeTimeUnits).toHaveLength(6);
   expect(comp.autoRefreshIntervals).toHaveLength(16);
   expect(comp.zone).toBe(moment.tz.guess());
+  expect(comp.$root.initializeCharts).toHaveBeenCalled();
 });
 
 // Auto refresh functionality tests
@@ -393,6 +402,7 @@ test('loadData with no route parameters loads users data', async () => {
   comp.loadCredits = jest.fn().mockResolvedValue();
   comp.resetRefreshTimer = jest.fn();
   comp.lookupSocId = jest.fn().mockResolvedValue('user1@example.com');
+  comp.populateUsersCharts = jest.fn();
   comp.$root.startLoading = jest.fn();
   comp.$root.stopLoading = jest.fn();
   comp.$root.adjustSubgridColVisibility = jest.fn();
@@ -450,9 +460,11 @@ test('loadData with userId parameter loads sessions data', async () => {
   comp.updateBreadcrumbs = jest.fn();
   comp.loadCredits = jest.fn().mockResolvedValue();
   comp.resetRefreshTimer = jest.fn();
+  comp.populateSessionsCharts = jest.fn();
   comp.$root.startLoading = jest.fn();
   comp.$root.stopLoading = jest.fn();
   comp.$root.adjustSubgridColVisibility = jest.fn();
+  comp.$root.formatLongDuration = jest.fn().mockReturnValue('5 minutes');
   comp.getStartDate = jest.fn().mockReturnValue(moment('2025-01-01'));
   comp.getEndDate = jest.fn().mockReturnValue(moment('2025-01-02'));
   
@@ -1205,6 +1217,7 @@ test('full data loading flow for users', async () => {
   comp.updateBreadcrumbs = jest.fn();
   comp.resetRefreshTimer = jest.fn();
   comp.lookupSocId = jest.fn().mockResolvedValue('user@example.com');
+  comp.populateUsersCharts = jest.fn();
   comp.$root.startLoading = jest.fn();
   comp.$root.stopLoading = jest.fn();
   comp.$root.adjustSubgridColVisibility = jest.fn();
@@ -1397,4 +1410,226 @@ test('nbspRegexOp', () => {
   expect(comp.nbspRegexOp('&nbspHelloWorld')).toBe('HelloWorld');
   expect(comp.nbspRegexOp('Hello World')).toBe('Hello World');
   expect(comp.nbspRegexOp('')).toBe('');
+});
+
+// Chart method tests
+test('setupCharts initializes all chart configurations', () => {
+  comp.setupPieChart = jest.fn();
+  comp.setupTimelineChart = jest.fn();
+  
+  comp.setupCharts();
+  
+  expect(comp.setupPieChart).toHaveBeenCalledTimes(3);
+  expect(comp.setupPieChart).toHaveBeenCalledWith(comp.graphUsersCreditsOptions, comp.graphUsersCreditsData, comp.i18n.totalCredits);
+  expect(comp.setupPieChart).toHaveBeenCalledWith(comp.graphUsersSessionsOptions, comp.graphUsersSessionsData, comp.i18n.totalSessions);
+  expect(comp.setupPieChart).toHaveBeenCalledWith(comp.graphUsersMessagesOptions, comp.graphUsersMessagesData, comp.i18n.totalMessages);
+  
+  expect(comp.setupTimelineChart).toHaveBeenCalledTimes(2);
+  expect(comp.setupTimelineChart).toHaveBeenCalledWith(comp.graphSessionsCreditsOptions, comp.graphSessionsCreditsData, comp.i18n.totalCredits);
+  expect(comp.setupTimelineChart).toHaveBeenCalledWith(comp.graphSessionsMessagesOptions, comp.graphSessionsMessagesData, comp.i18n.totalMessages);
+  
+  expect(comp.graphUsersCreditsData.key).toBe(0);
+  expect(comp.graphUsersSessionsData.key).toBe(0);
+  expect(comp.graphUsersMessagesData.key).toBe(0);
+  expect(comp.graphSessionsCreditsData.key).toBe(0);
+  expect(comp.graphSessionsMessagesData.key).toBe(0);
+});
+
+test('populateUsersCharts calls populateChart for each user chart', () => {
+  comp.populateChart = jest.fn();
+  comp.aimetrics = [{ totalCredits: 100, totalSessions: 5, totalMessages: 20 }];
+  
+  comp.populateUsersCharts();
+  
+  expect(comp.populateChart).toHaveBeenCalledTimes(3);
+  expect(comp.populateChart).toHaveBeenCalledWith(comp.graphUsersCreditsData, comp.aimetrics, 'totalCredits');
+  expect(comp.populateChart).toHaveBeenCalledWith(comp.graphUsersSessionsData, comp.aimetrics, 'totalSessions');
+  expect(comp.populateChart).toHaveBeenCalledWith(comp.graphUsersMessagesData, comp.aimetrics, 'totalMessages');
+});
+
+test('populateSessionsCharts calls populateChart for each session chart with time field', () => {
+  comp.populateChart = jest.fn();
+  comp.aimetrics = [{ totalCredits: 50, totalMessages: 10, createTime: '2025-01-01T12:00:00Z' }];
+  
+  comp.populateSessionsCharts();
+  
+  expect(comp.populateChart).toHaveBeenCalledTimes(2);
+  expect(comp.populateChart).toHaveBeenCalledWith(comp.graphSessionsCreditsData, comp.aimetrics, 'totalCredits', 'createTime');
+  expect(comp.populateChart).toHaveBeenCalledWith(comp.graphSessionsMessagesData, comp.aimetrics, 'totalMessages', 'createTime');
+});
+
+test('populateChart increments key and populates data without timefield', () => {
+  const chart = { key: 5, labels: [], datasets: [{ data: [] }] };
+  const data = [
+    { email: 'user1@example.com', totalCredits: 100 },
+    { email: 'user2@example.com', totalCredits: 200 },
+    { userId: 'user3-id', totalCredits: 150 }
+  ];
+  comp.$root.truncate = jest.fn((str, len) => str.substring(0, len));
+  
+  comp.populateChart(chart, data, 'totalCredits');
+  
+  expect(chart.key).toBe(6);
+  expect(chart.labels).toHaveLength(3);
+  expect(chart.labels[0]).toBe('user1@example.com');
+  expect(chart.labels[1]).toBe('user2@example.com');
+  expect(chart.labels[2]).toBe('user3-id');
+  expect(chart.datasets[0].data).toEqual([100, 200, 150]);
+});
+
+test('populateChart handles missing field values', () => {
+  const chart = { key: 0, labels: [], datasets: [{ data: [] }] };
+  const data = [
+    { email: 'user1@example.com', totalCredits: 100 },
+    { email: 'user2@example.com' } // missing totalCredits
+  ];
+  comp.$root.truncate = jest.fn((str, len) => str);
+  
+  comp.populateChart(chart, data, 'totalCredits');
+  
+  expect(chart.datasets[0].data).toEqual([100, 0]);
+});
+
+test('populateChart populates data with timefield', () => {
+  const chart = { key: 2, labels: [], datasets: [{ data: [] }] };
+  const data = [
+    { createTime: '2025-01-01T12:00:00Z', totalCredits: 50 },
+    { createTime: '2025-01-01T13:00:00Z', totalCredits: 75 }
+  ];
+  
+  comp.populateChart(chart, data, 'totalCredits', 'createTime');
+  
+  expect(chart.key).toBe(3);
+  expect(chart.labels).toEqual([]);
+  expect(chart.datasets[0].data).toHaveLength(2);
+  expect(chart.datasets[0].data[0].x).toBeInstanceOf(Date);
+  expect(chart.datasets[0].data[0].y).toBe(50);
+  expect(chart.datasets[0].data[1].y).toBe(75);
+});
+
+test('populateChart handles empty data array', () => {
+  const chart = { key: 1, labels: ['old'], datasets: [{ data: [100] }] };
+  
+  comp.populateChart(chart, [], 'totalCredits');
+  
+  expect(chart.key).toBe(2);
+  expect(chart.labels).toEqual([]);
+  expect(chart.datasets[0].data).toEqual([]);
+});
+
+test('populateChart handles null data', () => {
+  const chart = { key: 1, labels: ['old'], datasets: [{ data: [100] }] };
+  
+  comp.populateChart(chart, null, 'totalCredits');
+  
+  expect(chart.key).toBe(2);
+  expect(chart.labels).toEqual([]);
+  expect(chart.datasets[0].data).toEqual([]);
+});
+
+test('setupBarChart configures bar chart options and data', () => {
+  const options = {};
+  const data = {};
+  const title = 'Test Chart';
+  comp.$root.getColor = jest.fn()
+    .mockReturnValueOnce('#666666')
+    .mockReturnValueOnce('#0000ff')
+    .mockReturnValueOnce('#cccccc');
+  
+  comp.setupBarChart(options, data, title);
+  
+  expect(options.responsive).toBe(true);
+  expect(options.maintainAspectRatio).toBe(false);
+  expect(options.plugins.legend.display).toBe(false);
+  expect(options.plugins.title.display).toBe(true);
+  expect(options.plugins.title.text).toBe('Test Chart');
+  expect(options.scales.y.ticks.beginAtZero).toBe(true);
+  expect(options.scales.y.ticks.precision).toBe(0);
+  expect(data.labels).toEqual([]);
+  expect(data.datasets).toHaveLength(1);
+  expect(data.datasets[0].data).toEqual([]);
+  expect(data.datasets[0].fill).toBe(false);
+});
+
+test('setupTimelineChart extends bar chart with timeseries', () => {
+  const options = {};
+  const data = {};
+  const title = 'Timeline Chart';
+  comp.$root.getColor = jest.fn()
+    .mockReturnValueOnce('#666666')
+    .mockReturnValueOnce('#0000ff')
+    .mockReturnValueOnce('#cccccc');
+  
+  comp.setupTimelineChart(options, data, title);
+  
+  expect(options.onClick).toBe(null);
+  expect(options.scales.x.type).toBe('timeseries');
+  expect(options.responsive).toBe(true);
+  expect(options.maintainAspectRatio).toBe(false);
+});
+
+test('setupPieChart configures pie chart options and data', () => {
+  const options = {};
+  const data = {};
+  const title = 'Pie Chart';
+  
+  comp.setupPieChart(options, data, title);
+  
+  expect(options.responsive).toBe(true);
+  expect(options.maintainAspectRatio).toBe(false);
+  expect(options.plugins.legend.display).toBe(true);
+  expect(options.plugins.legend.position).toBe('left');
+  expect(options.plugins.title.display).toBe(true);
+  expect(options.plugins.title.text).toBe('Pie Chart');
+  expect(data.labels).toEqual([]);
+  expect(data.datasets).toHaveLength(1);
+  expect(data.datasets[0].backgroundColor).toHaveLength(11);
+  expect(data.datasets[0].borderColor).toBe('rgba(255, 255, 255, 0.5)');
+  expect(data.datasets[0].data).toEqual([]);
+});
+
+test('toggleShowSection adds item to collapsed sections', () => {
+  comp.collapsedSections = [];
+  
+  comp.toggleShowSection('section1');
+  
+  expect(comp.collapsedSections).toContain('section1');
+});
+
+test('toggleShowSection removes item from collapsed sections', () => {
+  comp.collapsedSections = ['section1'];
+  
+  comp.toggleShowSection('section1');
+  
+  expect(comp.collapsedSections).not.toContain('section1');
+});
+
+test('isExpandedSection returns true when section not collapsed', () => {
+  comp.collapsedSections = ['section2'];
+  
+  expect(comp.isExpandedSection('section1')).toBe(true);
+});
+
+test('isExpandedSection returns false when section is collapsed', () => {
+  comp.collapsedSections = ['section1'];
+  
+  expect(comp.isExpandedSection('section1')).toBe(false);
+});
+
+test('calculateCreditPercentage calculates percentage correctly', () => {
+  const result = comp.calculateCreditPercentage(25, 100);
+  
+  expect(result).toBe('25.0%');
+});
+
+test('calculateCreditPercentage handles decimal percentages', () => {
+  const result = comp.calculateCreditPercentage(33, 100);
+  
+  expect(result).toBe('33.0%');
+});
+
+test('calculateCreditPercentage rounds to one decimal place', () => {
+  const result = comp.calculateCreditPercentage(33.333, 100);
+  
+  expect(result).toBe('33.3%');
 });

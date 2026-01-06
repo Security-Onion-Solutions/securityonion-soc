@@ -109,7 +109,7 @@
 					</v-icon>
 					<v-spacer></v-spacer>
 					<div class="text-wrap mr-4" style="font-size: 14px;">{{ i18n.totalCredits }}: <span class="text-primary">{{ formatCount(creditsUsed) }}</span></div>
-					<div class="text-wrap" style="font-size: 14px;">{{ i18n.contextLength }}: <span :class="getContextColor(contextLength)">{{ formatCount(contextLength) }}</span> / <span class="font-weight-thin">{{ increaseContextLimit ? formatCount(contextLimitLarge) : formatCount(contextLimitSmall) }}</span></div>
+					<div class="text-wrap" style="font-size: 14px;">{{ i18n.contextLength }}: <span :class="getContextColor(contextLength)">{{ $root.formatCountMK(contextLength) }}</span> / <span class="font-weight-thin">{{ increaseContextLimit ? $root.formatCountMK(contextLimitLarge) : $root.formatCountMK(contextLimitSmall) }}</span></div>
 					<v-icon :color="getCompressColor()"
 						class="ml-4"
 						variant="flat"
@@ -282,6 +282,7 @@
 				<v-card-actions class="pa-4 d-flex align-center">
 					<v-textarea
 						id="chat-input-field"
+						ref="chatInputField"
 						v-model="newMessage"
 						:placeholder="i18n.chatPlaceholder"
 						variant="outlined"
@@ -368,7 +369,7 @@
 			<v-icon class="mr-2 theme-icon" :title="i18n.visitConfigEntry">fa-gear</v-icon>
 		</router-link>
 	</div>
-		<video src="../images/videos/onionai.mp4" autoplay muted loop controls style="width: 80%; max-width: 1408px;" data-aid="assistant_needs_enabled_video"></video>
+		<video src="../images/videos/onionai-demo-xs.mp4" autoplay muted loop controls style="width: 80%; max-width: 1408px;" data-aid="assistant_needs_enabled_video"></video>
 	</div>
 </v-container>
 
@@ -382,6 +383,6 @@
 		flex-direction: column;
 	">
 	<div class="my-8" v-html="i18n.assistantUnavailable"></div>
-		<video src="../images/videos/onionai.mp4" autoplay muted loop controls style="width: 80%; max-width: 1408px;" data-aid="assistant_needs_pro_video"></video>
+		<video src="../images/videos/onionai-demo-xs.mp4" autoplay muted loop controls style="width: 80%; max-width: 1408px;" data-aid="assistant_needs_pro_video"></video>
 	</div>
 </v-container>

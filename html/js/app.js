@@ -787,6 +787,23 @@ $(document).ready(function () {
         formatCount(count) {
           return Number(count).toLocaleString();
         },
+        formatCountMK(count) {
+          let modifiedCount = count;
+          let suffix = '';
+          let countStr;
+          if (Math.abs(count) >= 1000000) {
+            modifiedCount /= 1000000;
+            countStr = this.formatDecimal1(modifiedCount).toLocaleString();
+            suffix = this.i18n.mMillion;
+          } else if (Math.abs(count) >= 1000) {
+            modifiedCount /= 1000;
+            countStr = this.formatDecimal1(modifiedCount).toLocaleString();
+            suffix = this.i18n.kThousand;
+          } else {
+            countStr = this.formatCount(modifiedCount);
+          }
+          return countStr + suffix;
+        },
         formatStringArray(strArray) {
           if (strArray != null && strArray.length > 0) {
             return strArray.join(", ");

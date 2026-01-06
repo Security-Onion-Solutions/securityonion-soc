@@ -304,6 +304,7 @@ test('initAssistant sets assistantEnabled to true when enabled and licensed', as
   comp.handleRouteSessionId = jest.fn().mockResolvedValue();
   comp.loadCredits = jest.fn().mockResolvedValue();
   comp.$root.disclaimer = false;
+  comp.focusChatInput = jest.fn();
   
   await comp.initAssistant(mockParams);
   
@@ -319,6 +320,7 @@ test('initAssistant sets assistantEnabled to true when enabled and licensed', as
   expect(comp.loadStoredChats).toHaveBeenCalled();
   expect(comp.handleRouteSessionId).toHaveBeenCalled();
   expect(comp.loadCredits).toHaveBeenCalled();
+  expect(comp.focusChatInput).toHaveBeenCalled();
 });
 
 test('initAssistant sets assistantEnabled to false when not enabled', async () => {
@@ -331,6 +333,7 @@ test('initAssistant sets assistantEnabled to false when not enabled', async () =
   comp.loadStoredChats = jest.fn();
   comp.handleRouteSessionId = jest.fn();
   comp.loadCredits = jest.fn();
+  comp.focusChatInput = jest.fn();
   
   await comp.initAssistant(mockParams);
   
@@ -339,6 +342,7 @@ test('initAssistant sets assistantEnabled to false when not enabled', async () =
   expect(comp.loadStoredChats).not.toHaveBeenCalled();
   expect(comp.handleRouteSessionId).not.toHaveBeenCalled();
   expect(comp.loadCredits).not.toHaveBeenCalled();
+  expect(comp.focusChatInput).not.toHaveBeenCalled();
 });
 
 test('initAssistant sets assistantEnabled to false when not licensed', async () => {
@@ -351,6 +355,7 @@ test('initAssistant sets assistantEnabled to false when not licensed', async () 
   comp.loadStoredChats = jest.fn();
   comp.handleRouteSessionId = jest.fn();
   comp.loadCredits = jest.fn();
+  comp.focusChatInput = jest.fn();
   
   await comp.initAssistant(mockParams);
   
@@ -359,6 +364,7 @@ test('initAssistant sets assistantEnabled to false when not licensed', async () 
   expect(comp.loadStoredChats).not.toHaveBeenCalled();
   expect(comp.handleRouteSessionId).not.toHaveBeenCalled();
   expect(comp.loadCredits).not.toHaveBeenCalled();
+  expect(comp.focusChatInput).not.toHaveBeenCalled();
 });
 
 test('initAssistant corrects contextLimitLarge when smaller than contextLimitSmall', async () => {
@@ -456,11 +462,13 @@ test('handleRouteSessionId returns early when assistantEnabled is false', async 
   comp.$route.params.sessionId = fakeSessionId;
   comp.loadChatFromBackend = jest.fn();
   comp.clearStreamingStates = jest.fn();
+  comp.focusChatInput = jest.fn();
   
   await comp.handleRouteSessionId();
   
   expect(comp.clearStreamingStates).toHaveBeenCalled();
   expect(comp.loadChatFromBackend).not.toHaveBeenCalled();
+  expect(comp.focusChatInput).not.toHaveBeenCalled();
 });
 
 // Session management tests
@@ -468,20 +476,24 @@ test('handleRouteSessionId with existing session', async () => {
   comp.$route.params.sessionId = fakeSessionId;
   comp.loadChatFromBackend = jest.fn().mockResolvedValue();
   comp.assistantEnabled = true;
+  comp.focusChatInput = jest.fn();
   
   await comp.handleRouteSessionId();
   
   expect(comp.loadChatFromBackend).toHaveBeenCalledWith(fakeSessionId);
+  expect(comp.focusChatInput).toHaveBeenCalled();
 });
 
 test('handleRouteSessionId with non-existent session', async () => {
   comp.$route.params.sessionId = fakeSessionId;
   comp.loadChatFromBackend = jest.fn().mockRejectedValue(new Error('Session not found'));
   comp.assistantEnabled = true;
+  comp.focusChatInput = jest.fn();
   
   await comp.handleRouteSessionId();
   
   expect(comp.currentChatId).toBe(fakeSessionId);
+  expect(comp.focusChatInput).toHaveBeenCalled();
 });
 
 
@@ -634,6 +646,7 @@ test('startNewChat', async () => {
   comp.saveCurrentChat = jest.fn().mockResolvedValue();
   comp.saveCurrentChatId = jest.fn();
   comp.loadNewChatScreen = jest.fn();
+  comp.focusChatInput = jest.fn();
   comp.currentChatId = fakeSessionId;
   
   await comp.startNewChat();
@@ -643,6 +656,7 @@ test('startNewChat', async () => {
   expect(comp.saveCurrentChatId).toHaveBeenCalled();
   expect(comp.loadNewChatScreen).toHaveBeenCalled();
   expect(comp.$router.push).toHaveBeenCalledWith({ name: 'assistant' });
+  expect(comp.focusChatInput).toHaveBeenCalled();
 });
 
 test('updateUrlWithSessionId updates route', () => {
@@ -5112,4 +5126,26 @@ test('nbspRegexOp', () => {
   expect(comp.nbspRegexOp('&nbspHelloWorld')).toBe('HelloWorld');
   expect(comp.nbspRegexOp('Hello World')).toBe('Hello World');
   expect(comp.nbspRegexOp('')).toBe('');
+});
+
+test('focusChatInput focuses the chat input textarea', () => {
+  const mockTextarea = {
+    focus: jest.fn()
+  };
+  const mockInputField = {
+    $el: {
+      querySelector: jest.fn().mockReturnValue(mockTextarea)
+    }
+  };
+  comp.$refs = {
+    chatInputField: mockInputField
+  };
+  comp.focusChatInput();
+  expect(comp.$nextTick).toHaveBeenCalled();
+  const nextTickCallback = comp.$nextTick.mock.calls[0][0];
+  if (nextTickCallback) {
+    nextTickCallback();
+  }
+  expect(mockInputField.$el.querySelector).toHaveBeenCalledWith('textarea');
+  expect(mockTextarea.focus).toHaveBeenCalled();
 });

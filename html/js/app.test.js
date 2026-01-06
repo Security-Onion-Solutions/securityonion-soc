@@ -88,6 +88,16 @@ test('formatCount', () => {
   expect(app.formatCount(1234)).toBe("1,234");
 });
 
+test('formatCountMK', () => {
+  expect(app.formatCountMK(null)).toBe('0');
+  expect(app.formatCountMK(1000000)).toBe('1.0m');
+  expect(app.formatCountMK(1240000)).toBe('1.2m');
+  expect(app.formatCountMK(900000)).toBe('900.0k');
+  expect(app.formatCountMK(456456)).toBe('456.5k');
+  expect(app.formatCountMK(999)).toBe('999');
+  expect(app.formatCountMK(0)).toBe('0');
+});
+
 test('formatStringArray', () => {
   expect(app.formatStringArray(['hi','there','foo'])).toBe('hi, there, foo');
   expect(app.formatStringArray(['hi','there'])).toBe('hi, there');
