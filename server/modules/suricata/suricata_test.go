@@ -1,4 +1,4 @@
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -22,10 +22,10 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
-	"github.com/security-onion-solutions/securityonion-soc/web"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/handmock"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
 	"github.com/elastic/go-elasticsearch/v8/esutil"
@@ -230,9 +230,6 @@ func TestExtractSID(t *testing.T) {
 	}
 }
 
-
-
-
 func TestIndexRules(t *testing.T) {
 	lines := []string{
 		`90000 this that`,
@@ -435,8 +432,6 @@ func TestParse(t *testing.T) {
 	}
 }
 
-
-
 func TestExtractDetails(t *testing.T) {
 	t.Parallel()
 
@@ -493,11 +488,6 @@ func TestExtractDetails(t *testing.T) {
 		})
 	}
 }
-
-
-
-
-
 
 func TestCheckForMigrations(t *testing.T) {
 	ctrl := gomock.NewController(t)
@@ -789,16 +779,16 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 	// Mock the new unified Sync behavior with empty rulesets
 	// Allow multiple calls to GetAllDetections (used by applyUserState and IntegrityCheck)
 	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{}, nil).AnyTimes()
-	
+
 	// Mock BulkIndexer for updateDetectionStore (even with no detections, it still creates indexer)
 	bim := servermock.NewMockBulkIndexer(ctrl)
 	detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(bim, nil)
 	bim.EXPECT().Close(gomock.Any()).Return(nil)
 	bim.EXPECT().Stats().Return(esutil.BulkIndexerStats{}).AnyTimes()
-	
+
 	// 1. Write empty all rules file
 	iom.EXPECT().WriteFile("allRulesFile", gomock.Nil(), fs.FileMode(0644)).Return(nil)
-	// 2. Write empty threshold file  
+	// 2. Write empty threshold file
 	iom.EXPECT().WriteFile("/opt/sensoroni/nids/threshold.conf", gomock.Any(), fs.FileMode(0644)).Return(nil)
 	// 3. Write state file
 	iom.EXPECT().WriteFile("stateFilePath", gomock.Any(), fs.FileMode(0644)).Return(nil)
@@ -847,7 +837,6 @@ func TestSyncDisabled(t *testing.T) {
 	assert.False(t, eng.EngineState.Importing)
 	assert.False(t, eng.EngineState.SyncFailure)
 }
-
 
 // TestSyncIntegrityCheckWithNoRulesets verifies that the integrity check correctly detects
 // mismatches between enabled rules in Elasticsearch and deployed rules when no rulesets
@@ -947,11 +936,10 @@ func TestSyncIntegrityCheckWithNoRulesets(t *testing.T) {
 	assert.False(t, eng.EngineState.Importing)
 	assert.False(t, eng.EngineState.SyncFailure)
 	assert.True(t, migrationChecked)
-	
+
 	// This test verifies that integrity check correctly detects mismatches
 	// between enabled rules in ES and deployed rules when no rulesets are configured
 }
-
 
 func TestSyncStateFileNoCommunity(t *testing.T) {
 	ctrl := gomock.NewController(t)
@@ -1672,14 +1660,14 @@ func TestApplyUserState(t *testing.T) {
 	// Mock getting existing detections with user modifications
 	existingDetections := map[string]*model.Detection{
 		"1001": {
-			PublicID:     "1001",
-			IsEnabled:    false, // User disabled this rule
+			PublicID:    "1001",
+			IsEnabled:   false, // User disabled this rule
 			IsCommunity: false,
-			Ruleset:      "community",
+			Ruleset:     "community",
 		},
 	}
 
-	detStore.EXPECT().GetAllDetections(ctx, 
+	detStore.EXPECT().GetAllDetections(ctx,
 		gomock.Any(), // EngineNameSuricata filter
 	).Return(existingDetections, nil)
 
@@ -1727,7 +1715,7 @@ func TestWriteAllRulesFile(t *testing.T) {
 
 	// Expected content should include comment header and only enabled rules
 	expectedContent := "# Ruleset: test\nalert tcp any any -> any any (msg:\"Test Rule 1\"; sid:1001;)\nalert tcp any any -> any any (msg:\"Test Rule 3\"; sid:1003;)\n\n"
-	
+
 	iom.EXPECT().WriteFile("/opt/rules/all.rules", []byte(expectedContent), fs.FileMode(0644)).Return(nil)
 
 	err := eng.writeAllRulesFile(detections)
@@ -1778,17 +1766,17 @@ func TestWriteThresholdFile(t *testing.T) {
 			// Verify the content contains threshold for enabled rule with correct parameters
 			contentStr := string(content)
 			assert.Contains(t, contentStr, "gen_id 1, sig_id 1001", "Should include rule 1001")
-			
+
 			// Verify that the actual override parameters are used, not hardcoded values
 			assert.Contains(t, contentStr, "type limit", "Should use ThresholdType from override (limit, not threshold)")
-			assert.Contains(t, contentStr, "track by_src", "Should use Track from override") 
+			assert.Contains(t, contentStr, "track by_src", "Should use Track from override")
 			assert.Contains(t, contentStr, "count 5", "Should use Count from override (5, not 1)")
 			assert.Contains(t, contentStr, "seconds 60", "Should use Seconds from override")
-			
+
 			// Full line verification
 			assert.Contains(t, contentStr, "threshold gen_id 1, sig_id 1001, type limit, track by_src, count 5, seconds 60",
 				"Complete threshold line should use all override parameters")
-			
+
 			assert.NotContains(t, contentStr, "sig_id 1002", "Disabled rule's threshold should not be included")
 			return nil
 		})
@@ -1910,26 +1898,26 @@ func TestHasDetectionChanged(t *testing.T) {
 		{
 			name: "Title changed",
 			existing: &model.Detection{
-				PublicID:  "1001",
-				Content:   "alert tcp any any -> any any (msg:\"Test\"; sid:1001;)",
-				Title:     "Old Title",
+				PublicID: "1001",
+				Content:  "alert tcp any any -> any any (msg:\"Test\"; sid:1001;)",
+				Title:    "Old Title",
 			},
 			new: &model.Detection{
-				PublicID:  "1001",
-				Content:   "alert tcp any any -> any any (msg:\"Test\"; sid:1001;)",
-				Title:     "New Title",
+				PublicID: "1001",
+				Content:  "alert tcp any any -> any any (msg:\"Test\"; sid:1001;)",
+				Title:    "New Title",
 			},
 			expected: true,
 		},
 		{
 			name: "Severity changed",
 			existing: &model.Detection{
-				PublicID:  "1001",
-				Severity:  model.SeverityMedium,
+				PublicID: "1001",
+				Severity: model.SeverityMedium,
 			},
 			new: &model.Detection{
-				PublicID:  "1001",
-				Severity:  model.SeverityHigh,
+				PublicID: "1001",
+				Severity: model.SeverityHigh,
 			},
 			expected: true,
 		},
@@ -3481,4 +3469,3 @@ func TestHasConfigChanged(t *testing.T) {
 		assert.False(t, changed, "should return false when fingerprints match")
 	})
 }
-

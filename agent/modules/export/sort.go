@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -205,6 +205,40 @@ func (export *Export) sortDetections(field string, dir string, list []*model.Det
 			return export.compareWithDir(a.Severity, b.Severity, dir)
 		case "title":
 			return export.compareWithDir(a.Title, b.Title, dir)
+		default:
+			return false
+		}
+	})
+	return list
+}
+
+func (export *Export) sortAssistantMessages(field string, dir string, list []*model.StoredMessage) []*model.StoredMessage {
+	sort.Slice(list, func(i, j int) bool {
+		a := list[i]
+		b := list[j]
+		if a == nil || b == nil {
+			return false
+		}
+		switch strings.ToLower(field) {
+		case "id":
+			return export.compareWithDir(a.Id, b.Id, dir)
+		case "createtime":
+			return export.compareWithDir(a.CreateTime, b.CreateTime, dir)
+		case "updatetime":
+			return export.compareWithDir(a.UpdateTime, b.UpdateTime, dir)
+		case "userid":
+			return export.compareWithDir(a.UserId, b.UserId, dir)
+		case "kind":
+			return export.compareWithDir(a.Kind, b.Kind, dir)
+		case "operation":
+			return export.compareWithDir(a.Operation, b.Operation, dir)
+		case "sessionid":
+			return export.compareWithDir(a.SessionId, b.SessionId, dir)
+		case "role":
+			if a.Message == nil || b.Message == nil {
+				return false
+			}
+			return export.compareWithDir(a.Message.Role, b.Message.Role, dir)
 		default:
 			return false
 		}

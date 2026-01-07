@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -191,6 +191,7 @@ const i18n = {
       assistantUnableToParseInvestigation: 'Failed to parse investigation data',
       assistantUnableToRestoreLastActive: 'Failed to restore last active chat',
       assistantWelcomeMessage: 'Hello! I\'m your AI Assistant for Security Onion. How can I help you today?',
+      assistant_session: 'Assistant Session',
       attachments: 'Attachments',
       attachmentAdd: 'Add Attachment',
       attachmentHelp: 'Click to attach a file to upload. (Note: max upload size is {maxUploadSizeBytes} bytes)',
@@ -547,6 +548,7 @@ const i18n = {
       exportEventsHelp: 'Export the backing event records as a CSV file',
       exportJobEnqueued: 'A new exported report job #{jobId} has been enqueued. When completed, it will be available for download on the Reports page.',
       exportMetricsHelp: 'Export these metrics as a CSV file',
+      exportSessionHelp: 'Export this session as a PDF report',
       extract: 'Extract',
       incomplete: 'Incomplete',
       invalidHours: 'Hours are not valid. Ex: 1.5',

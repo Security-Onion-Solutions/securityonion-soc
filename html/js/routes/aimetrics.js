@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -472,13 +472,15 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
               }
               let contentBlock = block.toolResult.content[j];
               if (contentBlock.text) {
-                resultMessage += `\n${contentBlock.text}\n`;
+                if (block.toolResult.isError) {
+                  resultMessage += `\n**Error:** ${contentBlock.text}\n`;
+                } else {
+                  resultMessage += `\n${contentBlock.text}\n`;
+                }
               } else if (contentBlock.json) {
                 resultMessage += `\n\`\`\`json\n${JSON.stringify(contentBlock.json, null, 2)}\n\`\`\`\n`;
               }
             }
-          } else if (block.toolResult.error) {
-            resultMessage += `\n**Error:** ${block.toolResult.error}\n`;
           }
           expandMessage += this.$root.formatMarkdown(resultMessage);
         }
