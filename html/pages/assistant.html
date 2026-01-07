@@ -111,7 +111,7 @@
 						fa-file-export
 					</v-icon>
 					<template v-if="currentChatId">
-						<v-icon class="mx-2" v-if="currentChatId" @click="toggleSharedSession(currentChatId)" data-aid="assistant_banner_share_toggle" :disabled="$root.user.id !== chatHistoryById?.[currentChatId]?.userId" :title="i18n.assistantLinkTitle">
+						<v-icon class="mx-2" v-if="currentChatId" @click="toggleSharedSession(currentChatId)" data-aid="assistant_banner_share_toggle" :disabled="$root.isMyUser(chatHistoryById?.[currentChatId]?.userId)()" :title="i18n.assistantLinkTitle">
 							{{ (chatHistoryById?.[currentChatId]?.tags?.includes('shared')) ? 'fa-link' : 'fa-link-slash' }}
 						</v-icon>
 						<v-icon id="attachToCaseBtn" @click="caseMenuVisible = true">fa-exclamation-triangle</v-icon>
