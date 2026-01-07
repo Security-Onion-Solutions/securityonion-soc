@@ -5414,11 +5414,11 @@ test('updateSessionTag sends correct API request for remove action', async () =>
 test('updateSessionTag handles API error', async () => {
   const sessionId = 'test-session';
   const showErrorMock = mockShowError();
-  mockPapi('put', null, new Error('Update failed'));
+  mockPapi('put', null, { response: { data: "Update failed"} });
   
   await comp.updateSessionTag(sessionId, 'add', 'shared');
   
-  expect(showErrorMock).toHaveBeenCalledWith(expect.stringContaining('Update failed'));
+  expect(showErrorMock).toHaveBeenCalledWith({ message: "Update failed" });
 });
 
 test('updateSessionTag', async () => {
