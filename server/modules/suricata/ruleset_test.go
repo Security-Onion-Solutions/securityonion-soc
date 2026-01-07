@@ -1,4 +1,4 @@
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -1121,9 +1121,9 @@ func TestExtractTarGzFiles(t *testing.T) {
 
 	t.Run("Handle nested directories", func(t *testing.T) {
 		tarGz := createTestTarGz(map[string]string{
-			"rules/emerging-attack.rules":  "alert tcp any any -> any any (msg:\"attack\"; sid:1;)\n",
-			"rules/malware/botnet.rules":   "alert tcp any any -> any any (msg:\"botnet\"; sid:2;)\n",
-			"rules/policy/social.rules":    "alert tcp any any -> any any (msg:\"social\"; sid:3;)\n",
+			"rules/emerging-attack.rules": "alert tcp any any -> any any (msg:\"attack\"; sid:1;)\n",
+			"rules/malware/botnet.rules":  "alert tcp any any -> any any (msg:\"botnet\"; sid:2;)\n",
+			"rules/policy/social.rules":   "alert tcp any any -> any any (msg:\"social\"; sid:3;)\n",
 		})
 
 		files, err := rm.extractTarGzFiles(tarGz)

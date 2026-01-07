@@ -1,4 +1,4 @@
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -180,15 +180,15 @@ func (rm *RulesetManager) SyncAll(ctx context.Context, detStore server.Detection
 	for _, source := range rm.sources {
 		if source.Enabled == nil || !*source.Enabled {
 			rm.logger.WithFields(log.Fields{
-				"component":    "RulesetManager",
-				"ruleset": source.Name,
+				"component": "RulesetManager",
+				"ruleset":   source.Name,
 			}).Debug("skipping disabled ruleset")
 			continue
 		}
 
 		rm.logger.WithFields(log.Fields{
-			"component":    "RulesetManager",
-			"ruleset": source.Name,
+			"component": "RulesetManager",
+			"ruleset":   source.Name,
 		}).Info("syncing ruleset")
 
 		startTime := time.Now()
@@ -203,10 +203,10 @@ func (rm *RulesetManager) SyncAll(ctx context.Context, detStore server.Detection
 
 		if err != nil {
 			rm.logger.WithError(err).WithFields(log.Fields{
-				"component":     "RulesetManager",
-				"ruleset":  source.Name,
-				"duration": duration.Seconds(),
-				"success":  false,
+				"component": "RulesetManager",
+				"ruleset":   source.Name,
+				"duration":  duration.Seconds(),
+				"success":   false,
 			}).Error("failed to sync ruleset")
 
 			result.Success = false
@@ -217,7 +217,7 @@ func (rm *RulesetManager) SyncAll(ctx context.Context, detStore server.Detection
 			result.RuleCount = len(detections)
 
 			rm.logger.WithFields(log.Fields{
-				"component":      "RulesetManager",
+				"component": "RulesetManager",
 				"ruleset":   source.Name,
 				"ruleCount": len(detections),
 				"duration":  duration.Seconds(),
@@ -281,8 +281,8 @@ func (rm *RulesetManager) getHTTPClient(source *RulesetSource) (*http.Client, er
 
 		transport.Proxy = http.ProxyURL(proxyURL)
 		rm.logger.WithFields(log.Fields{
-			"ruleset": source.Name,
-			"proxy.url":    source.ProxyURL,
+			"ruleset":   source.Name,
+			"proxy.url": source.ProxyURL,
 		}).Debug("configured HTTP proxy for ruleset download")
 	}
 
@@ -306,7 +306,7 @@ func (rm *RulesetManager) getHTTPClient(source *RulesetSource) (*http.Client, er
 		tlsConfig.RootCAs = caCertPool
 		rm.logger.WithFields(log.Fields{
 			"ruleset": source.Name,
-			"ca.cert":      source.ProxyCACert,
+			"ca.cert": source.ProxyCACert,
 		}).Debug("loaded custom CA certificate for ruleset download")
 	}
 
