@@ -275,7 +275,7 @@ func (h *GridMembersHandler) postImport(w http.ResponseWriter, r *http.Request) 
 // @Tags         Grid
 // @Security     bearer[grid/write]
 // @Param        id path string true "The grid member ID to be managed" example(so_standalone)
-// @Param        operation path string true "The operation to perform: add, reject, delete, test, restart" example(reject)
+// @Param        operation path string true "The operation to perform: add, reject, delete, test, restart, estroubleshoot" example(reject)
 // @Success      200                                 "The operation was executed successfully"
 // @Failure      401                                 "Request was not properly authenticated"
 // @Failure      403                                 "Insufficient permissions for this request"
@@ -292,8 +292,23 @@ func (h *GridMembersHandler) postManageMembers(w http.ResponseWriter, r *http.Re
 	}
 
 	op := chi.URLParam(r, "operation")
-	if op != "add" && op != "reject" && op != "delete" && op != "test" && op != "restart" {
+	if op != "add" && op != "reject" && op != "delete" && op != "test" && op != "restart" && op != "estroubleshoot" {
 		web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid operation"))
+		return
+	}
+
+	// Handle Elasticsearch troubleshoot operation separately since it returns output
+	if op == "estroubleshoot" {
+		// Extract node name from minion ID (e.g., "manager_standalone" -> "manager")
+		parts := strings.SplitN(id, "_", 2)
+		nodeName := parts[0]
+
+		output, err := h.server.GridMembersstore.RunTroubleshoot(ctx, nodeName, "/usr/sbin/so-elasticsearch-troubleshoot")
+		if err != nil {
+			web.Respond(w, r, http.StatusInternalServerError, err)
+			return
+		}
+		web.Respond(w, r, http.StatusOK, map[string]string{"output": output})
 		return
 	}
 

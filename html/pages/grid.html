@@ -213,6 +213,7 @@
 													<span class="filter label">{{ i18n.eventstoreStatus }}:</span>
 													<span id="node_eventstoreStatus" :class="areMetricsCurrent(item) ? 'filter value text-' + colorNodeStatus(item.eventstoreStatus) : 'filter value stale'">
 														{{ $root.localizeMessage(item.eventstoreStatus) }}
+														<v-icon v-if="canTroubleshoot(item)" style="font-size: 10px; vertical-align: middle;" :title="i18n.troubleshootElasticsearch" @click="showTroubleshootDialog(item)" class="theme-icon cursor-pointer ml-1" data-aid="grid_node_troubleshoot">fa-circle-info</v-icon>
 													</span>
 												</div>
 												<div v-if="item.metricsEnabled" class="text-no-wrap">
@@ -526,6 +527,116 @@
 				<v-spacer></v-spacer>
 				<v-btn text id="grid-upload-proceed-button" :disabled="!uploadForm.valid" @click="gridMemberUpload" v-text="i18n.upload" data-aid="grid_import_confirm"></v-btn>
 				<v-btn text id="grid-upload-cancel-button" @click="hideUploadConfirm" v-text="i18n.cancel" data-aid="grid_import_cancel"></v-btn>
+			</v-card-actions>
+		</v-card>
+	</v-dialog>
+	<v-dialog v-model="troubleshootDialog" persistent max-width="900" scrollable data-aid="grid_troubleshoot_dialog">
+		<v-card>
+			<v-card-title class="text-h5 d-flex align-center">
+				{{ i18n.troubleshootElasticsearch }}
+				<v-spacer></v-spacer>
+				<v-btn icon variant="text" @click="hideTroubleshootDialog" data-aid="grid_troubleshoot_close">
+					<v-icon>fa-times</v-icon>
+				</v-btn>
+			</v-card-title>
+			<v-card-text>
+				<div v-if="troubleshootLoading" class="text-center py-4">
+					<v-progress-circular indeterminate color="primary"></v-progress-circular>
+					<p class="mt-2">{{ i18n.runningTroubleshoot }}</p>
+				</div>
+				<v-alert v-else-if="troubleshootError" type="error" class="mb-4">{{ troubleshootError }}</v-alert>
+				<div v-else-if="troubleshootData">
+					<!-- Elasticsearch Not Accessible -->
+					<v-alert v-if="!troubleshootData.elasticsearchStatus?.accessible" type="error" class="mb-4">
+						{{ troubleshootData.elasticsearchStatus?.errorMessage || 'Elasticsearch is not accessible' }}
+					</v-alert>
+					<div v-else>
+						<!-- Issues Section - Show problems first -->
+						<div v-if="troubleshootData.elasticsearchStatus?.healthReport?.nonGreenCount > 0 && troubleshootData.elasticsearchStatus?.healthReport?.indicators?.length">
+							<div class="text-subtitle-1 font-weight-bold mb-3">Issues Found</div>
+							<v-alert v-for="(indicator, issueIdx) in (troubleshootData?.elasticsearchStatus?.healthReport?.indicators || []).filter(i => i && i.status !== 'green' && !['repository_integrity', 'slm'].includes(i.name))"
+								:key="issueIdx"
+								:type="indicator?.status === 'red' ? 'error' : 'warning'"
+								variant="tonal"
+								class="mb-3">
+								<div class="mb-2">{{ indicator?.symptom }}</div>
+								<div v-for="(diag, diagIdx) in (indicator?.diagnosis || [])" :key="diagIdx">
+									<template v-if="diag">
+										<p class="mb-2 text-caption">{{ diag.cause }}</p>
+										<p v-if="diag.affectedNodes?.length > 0" class="mb-2 text-caption">
+											Affected node{{ diag.affectedNodes.length > 1 ? 's' : '' }}: {{ diag.affectedNodes.length <= 5 ? diag.affectedNodes.join(', ') : diag.affectedNodes.slice(0, 5).join(', ') + ' and ' + (diag.affectedNodes.length - 5) + ' more' }}
+										</p>
+										<p class="mb-2 text-caption">Recommendation: {{ diag.action }}</p>
+										<v-expansion-panels v-if="diag.affectedIndices?.length > 0" flat>
+											<v-expansion-panel>
+												<v-expansion-panel-title class="py-0 text-caption">
+													{{ diag.affectedIndices.length }} affected indices
+												</v-expansion-panel-title>
+												<v-expansion-panel-text>
+													<div style="max-height: 150px; overflow-y: auto;" class="text-caption">
+														<div v-for="(index, indexIdx) in (diag.affectedIndices || []).slice(0, 50)" :key="indexIdx">{{ index }}</div>
+														<div v-if="diag.affectedIndices?.length > 50" class="font-italic">...and {{ diag.affectedIndices.length - 50 }} more</div>
+													</div>
+												</v-expansion-panel-text>
+											</v-expansion-panel>
+										</v-expansion-panels>
+									</template>
+								</div>
+							</v-alert>
+						</div>
+
+						<!-- Disk Usage Table -->
+						<div class="text-subtitle-1 font-weight-bold mb-2">{{ i18n.diskUsage }}</div>
+						<div v-if="troubleshootData.diskUsage?.nodes?.length" style="max-height: 300px; overflow-y: auto;">
+							<v-table density="compact">
+								<template #default>
+									<thead>
+										<tr>
+											<th>Node</th>
+											<th>IP</th>
+											<th>Disk Used</th>
+											<th>Available</th>
+											<th>Status</th>
+										</tr>
+									</thead>
+									<tbody>
+										<template v-for="(node, nodeIdx) in (troubleshootData?.diskUsage?.nodes || [])" :key="nodeIdx">
+											<tr v-if="node">
+												<td>{{ node.name }}</td>
+												<td>{{ node.ip }}</td>
+												<td>{{ node.usedPercent != null ? node.usedPercent.toFixed(1) + '%' : '—' }}</td>
+												<td>{{ node.availableBytes }}</td>
+												<td><v-chip :color="getStatusColor(node.status)" size="x-small">{{ node.status }}</v-chip></td>
+											</tr>
+										</template>
+									</tbody>
+								</template>
+							</v-table>
+						</div>
+						<div class="text-caption text--secondary mb-4">
+							Elasticsearch watermarks —
+							writes blocked at <strong>{{ troubleshootData.diskUsage?.watermarks?.floodDisplay }}</strong> (flood),
+							rebalancing starts at <strong>{{ troubleshootData.diskUsage?.watermarks?.highDisplay }}</strong> (high),
+							new shards blocked at <strong>{{ troubleshootData.diskUsage?.watermarks?.lowDisplay }}</strong> (low)
+						</div>
+
+						<!-- All Checks Summary -->
+						<div v-if="troubleshootData.elasticsearchStatus?.healthReport?.indicators?.length" class="mt-4">
+							<div class="text-subtitle-1 font-weight-bold mb-2">All Checks</div>
+							<div class="d-flex flex-wrap ga-2">
+								<v-chip v-for="(indicator, indicatorIdx) in (troubleshootData?.elasticsearchStatus?.healthReport?.indicators || []).filter(i => i && !['repository_integrity', 'slm'].includes(i.name))" :key="indicatorIdx"
+									:color="getStatusColor(indicator?.status)" variant="flat" size="small">
+									{{ indicator?.displayName }}
+								</v-chip>
+							</div>
+						</div>
+					</div>
+				</div>
+			</v-card-text>
+			<v-card-actions>
+				<v-spacer></v-spacer>
+				<v-btn text @click="runTroubleshoot" :disabled="troubleshootLoading" data-aid="grid_troubleshoot_refresh">{{ i18n.refresh }}</v-btn>
+				<v-btn text @click="hideTroubleshootDialog" data-aid="grid_troubleshoot_close_btn">{{ i18n.close }}</v-btn>
 			</v-card-actions>
 		</v-card>
 	</v-dialog>
