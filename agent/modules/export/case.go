@@ -58,6 +58,30 @@ func (export *Export) getCaseDetailsFromServer(caseId string) (*CaseTemplateInpu
 		}).WithError(err).Error("failed to get case observables")
 	}
 
+	for _, attachment := range caseTemplateInput.Attachments {
+		if attachment.ArtifactType == "assistant_chat" {
+			currSessionId := attachment.Value
+			sessionExists := false
+			for _, session := range caseTemplateInput.AssistantSessions {
+				if session.Session.SessionId == currSessionId {
+					sessionExists = true
+					break
+				}
+			}
+			if !sessionExists {
+				sessionDetails := &model.AssistantSessionDetails{}
+				_, err := export.agent.Client.SendAuthorizedObject("GET", fmt.Sprintf("/api/assistant/sessions/%s", currSessionId), nil, sessionDetails)
+				if err != nil {
+					log.WithFields(log.Fields{
+						"sessionId": currSessionId,
+					}).WithError(err).Error("failed to get assistant session for attachment")
+				} else {
+					caseTemplateInput.AssistantSessions = append(caseTemplateInput.AssistantSessions, sessionDetails)
+				}
+			}
+		}
+	}
+
 	// Get related events
 	_, err = export.agent.Client.SendAuthorizedObject("GET", fmt.Sprintf("/api/case/events/%s", caseId), nil, &caseTemplateInput.RelatedEvents)
 	if err != nil {
@@ -119,14 +143,15 @@ func (export *Export) getCaseDetailsFromServer(caseId string) (*CaseTemplateInpu
 }
 
 type CaseTemplateInput struct {
-	Case          *model.Case
-	Comments      []*model.Comment
-	Attachments   []*model.Artifact
-	Observables   []*model.Artifact
-	Detections    []*model.Detection
-	RelatedEvents []*model.RelatedEvent
-	History       []*model.Auditable
-	TotalHours    float64
+	Case              *model.Case
+	Comments          []*model.Comment
+	Attachments       []*model.Artifact
+	AssistantSessions []*model.AssistantSessionDetails
+	Observables       []*model.Artifact
+	Detections        []*model.Detection
+	RelatedEvents     []*model.RelatedEvent
+	History           []*model.Auditable
+	TotalHours        float64
 }
 
 func (export *Export) generateCaseReport(caseId string) ([]byte, error) {

@@ -54,6 +54,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     isPinnedToBottom: true, // user is at (or near) bottom?
     canChat: true,
     paramsLoaded: false,
+    caseMenuVisible: false,
+    mruCases: [],
   }},
   async created() {
     this.loadLocalSettings();
@@ -1779,6 +1781,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       if (localStorage[prefix + '.alwaysApproveReadRequests']) this.alwaysApproveReadRequests = localStorage[prefix + '.alwaysApproveReadRequests'] == 'true';
       if (localStorage[prefix + '.showChatHistory']) this.showChatHistory = localStorage[prefix + '.showChatHistory'] == 'true';
       if (localStorage[prefix + '.currentModel']) this.currentModel = localStorage[prefix + '.currentModel'];
+
+      if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
     },
 
     // Check if a tool should be auto-approved based on localStorage settings
@@ -1898,20 +1902,22 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       
       if (oldMsg) this.newMessage = oldMsg;
     },
-
+    nbspRegexOp(text) {
+      return text.replace(/^(&nbsp;?[\n]*)/, '');
+    },
     messageClassesFromTags(tags) {
       return tags.map(tag => 'msgTag-' + tag);
     },
-    async toggleSharedSession() {
-      const session = this.chatHistoryById[this.currentChatId];
+    async toggleSharedSession(chatId) {
+      const session = this.chatHistoryById[chatId];
       if (!session || session.userId !== this.$root.user.id) return;
       
       const hasTag = (session.tags || []).includes(SESTAG_SHARED);
       const action = hasTag ? 'remove' : 'add';
       
-      await this.updateSessionTag(this.currentChatId, action, SESTAG_SHARED);
+      await this.updateSessionTag(chatId, action, SESTAG_SHARED);
 
-      await this.loadStoredChats();
+      await this.loadStoredChats(false);
     },
     async updateSessionTag(sessionId, action, tag) {
       try {
@@ -1922,7 +1928,13 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         await this.$root.papi.put(`/assistant/sessions/${sessionId}`, payload);
 
       } catch (error) {
-        this.$root.showError(this.i18n.assistantSessionTagUpdateFail + ': ' + error.message);
+        let msg = error.response.data;
+        if (msg.startsWith('ERROR_SESSION_ATTACHED_TO_CASES')) { 
+          const count = (msg.replaceAll('ERROR_SESSION_ATTACHED_TO_CASES', '') + '').trim();
+          msg = this.$root.replaceActionVar(this.i18n.ERROR_SESSION_ATTACHED_TO_CASES, 'count', count);
+        }
+
+        this.$root.showError({ message: msg });
       }
     },
     nbspRegexOp(text) {
@@ -1989,6 +2001,51 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     stripNewlines(text) {
       if (typeof text !== 'string') return text;
       return text.replace(/^\s*\n+/, '').replace(/\n+\s*$/, '');
+    },
+    async attachToCase(sessionId, caseId) {
+      this.caseMenuVisible = false;
+
+      const session = this.chatHistoryById[sessionId];
+      if (!session) {
+        this.$root.showError(this.i18n.assistantAttachNoSession);
+        return;
+      }
+
+      if (!(session.tags || []).includes(SESTAG_SHARED)) {
+        await this.toggleSharedSession(sessionId)
+      }
+
+      if (caseId === null) { 
+        caseId = this.createCase(session.title);
+      }
+
+      const payload = {
+        caseId: caseId,
+        groupType: 'attachments',
+        artifactType: 'assistant_chat',
+        value: sessionId,
+        description: session.title,
+      };
+
+      try {
+        this.$root.papi.post('/case/artifacts', payload);
+      } catch (err) { 
+        this.$root.showError(this.i18n.assistantAttachToCaseFail);
+      }
+    },
+    async createCase(title) {
+      const response = await this.$root.papi.post('case/', {
+        title: title,
+        description: this.i18n.caseEscalatedDescription,
+      });
+      if (response && response.data) {
+        return response.data.id;
+      }
+
+      return null;
+    },
+    formatCaseSummary(socCase) {
+      return socCase?.title;
     }
   }
 }});
