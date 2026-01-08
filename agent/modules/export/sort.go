@@ -246,6 +246,42 @@ func (export *Export) sortAssistantMessages(field string, dir string, list []*mo
 	return list
 }
 
+func (export *Export) SortAssistantSessionDetails(field string, dir string, list []*model.AssistantSessionDetails) []*model.AssistantSessionDetails {
+	sort.Slice(list, func(i, j int) bool {
+		a := list[i]
+		b := list[j]
+		if a == nil || b == nil || a.Session == nil || b.Session == nil {
+			return false
+		}
+		switch strings.ToLower(field) {
+		case "id":
+			return export.compareWithDir(a.Session.Id, b.Session.Id, dir)
+		case "createtime":
+			return export.compareWithDir(a.Session.CreateTime, b.Session.CreateTime, dir)
+		case "updatetime":
+			return export.compareWithDir(a.Session.UpdateTime, b.Session.UpdateTime, dir)
+		case "deletetime":
+			if a.Session.DeleteTime == nil || b.Session.DeleteTime == nil {
+				return false
+			}
+			return export.compareWithDir(*a.Session.DeleteTime, *b.Session.DeleteTime, dir)
+		case "userid":
+			return export.compareWithDir(a.Session.UserId, b.Session.UserId, dir)
+		case "kind":
+			return export.compareWithDir(a.Session.Kind, b.Session.Kind, dir)
+		case "operation":
+			return export.compareWithDir(a.Session.Operation, b.Session.Operation, dir)
+		case "title":
+			return export.compareWithDir(a.Session.Title, b.Session.Title, dir)
+		case "sessionid":
+			return export.compareWithDir(a.Session.SessionId, b.Session.SessionId, dir)
+		default:
+			return false
+		}
+	})
+	return list
+}
+
 func (export *Export) sortMetrics(field string, dir string, list []*model.EventMetric) []*model.EventMetric {
 	sort.Slice(list, func(i, j int) bool {
 		a := list[i]
