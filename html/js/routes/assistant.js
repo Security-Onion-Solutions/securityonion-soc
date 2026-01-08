@@ -2001,7 +2001,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     stripNewlines(text) {
       if (typeof text !== 'string') return text;
       return text.replace(/^\s*\n+/, '').replace(/\n+\s*$/, '');
-    }
     },
     async attachToCase(sessionId, caseId) {
       this.caseMenuVisible = false;
@@ -2047,6 +2046,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     formatCaseSummary(socCase) {
       return socCase?.title;
-    },
+    }
   }
-});
+}});
