@@ -152,3 +152,7 @@ func (store *TheHiveCasestore) BuildBulkIndexer(ctx context.Context, logger log.
 func (store *TheHiveCasestore) ConvertObjectToDocument(ctx context.Context, kind string, obj any, auditable *model.Auditable, isEdit bool, auditDocId *string, op *string) (doc []byte, index string, err error) {
 	return nil, "", errors.New("Unsupported operation by this module")
 }
+
+func (store *TheHiveCasestore) GetCaseIdsWithArtifact(ctx context.Context, artType string, value string) ([]string, error) {
+	return nil, errors.New("Unsupported operation by this module")
+}

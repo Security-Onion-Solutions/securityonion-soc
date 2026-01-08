@@ -601,14 +601,17 @@ func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request)
 			return
 		}
 	case "remove":
-		if slices.Contains(session.Tags, updateReq.Tag) {
-			session.Tags = slices.Delete(session.Tags, slices.Index(session.Tags, updateReq.Tag), slices.Index(session.Tags, updateReq.Tag)+1)
-		} else {
-			logger.Warn("tag does not exist on session")
-			web.Respond(w, r, http.StatusConflict, "tag does not exist on session")
+		err = h.canRemoveTag(ctx, session, updateReq.Tag)
+		if err != nil {
+			logger.WithFields(log.Fields{
+				"assistantSessionId": sessionId,
+				"tag":                updateReq.Tag,
+			}).Error("unable to remove tag")
+			web.Respond(w, r, http.StatusConflict, err)
 
 			return
 		}
+		session.Tags = slices.Delete(session.Tags, slices.Index(session.Tags, updateReq.Tag), slices.Index(session.Tags, updateReq.Tag)+1)
 	}
 
 	err = h.server.Assistantstore.UpdateSessionTags(ctx, sessionId, session.Tags)
@@ -620,6 +623,23 @@ func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request)
 	}
 
 	web.Respond(w, r, http.StatusNoContent, nil)
+}
+
+func (h *AssistantHandler) canRemoveTag(ctx context.Context, session *model.AssistantSession, tag string) error {
+	if !slices.Contains(session.Tags, tag) {
+		return fmt.Errorf("session does not have tag")
+	}
+
+	cases, err := h.server.Casestore.GetCaseIdsWithArtifact(ctx, "assistant_chat", session.SessionId)
+	if err != nil {
+		return err
+	}
+
+	if len(cases) != 0 {
+		return fmt.Errorf("ERROR_SESSION_ATTACHED_TO_CASES %d", len(cases))
+	}
+
+	return nil
 }
 
 // @Summary      Delete Session

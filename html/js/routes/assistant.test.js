@@ -5072,7 +5072,7 @@ test('toggleSharedSession', async () => {
   };
   comp.$root.user = { id: 'me' };
 
-  await comp.toggleSharedSession();
+  await comp.toggleSharedSession(comp.currentChatId);
 
   expect(comp.updateSessionTag).toHaveBeenCalledTimes(1);
   expect(comp.updateSessionTag).toHaveBeenCalledWith(comp.currentChatId, 'remove', 'shared');
@@ -5084,7 +5084,7 @@ test('toggleSharedSession', async () => {
 
   comp.chatHistoryById[comp.currentChatId].userId = 'u';
 
-  await comp.toggleSharedSession();
+  await comp.toggleSharedSession(comp.currentChatId);
 
   expect(comp.updateSessionTag).toHaveBeenCalledTimes(0);
   expect(comp.loadStoredChats).toHaveBeenCalledTimes(0);
@@ -5096,7 +5096,7 @@ test('toggleSharedSession', async () => {
 
   comp.chatHistoryById[comp.currentChatId].tags = ['a', 'b', 'c'];
 
-  await comp.toggleSharedSession();
+  await comp.toggleSharedSession(comp.currentChatId);
 
   expect(comp.updateSessionTag).toHaveBeenCalledTimes(1);
   expect(comp.updateSessionTag).toHaveBeenCalledWith(comp.currentChatId, 'add', 'shared');
@@ -5108,7 +5108,7 @@ test('toggleSharedSession', async () => {
 
   comp.chatHistoryById = { 'other-session': {}};
 
-  await comp.toggleSharedSession();
+  await comp.toggleSharedSession(comp.currentChatId);
 
   expect(comp.updateSessionTag).toHaveBeenCalledTimes(0);
   expect(comp.loadStoredChats).toHaveBeenCalledTimes(0);
@@ -5414,9 +5414,89 @@ test('updateSessionTag sends correct API request for remove action', async () =>
 test('updateSessionTag handles API error', async () => {
   const sessionId = 'test-session';
   const showErrorMock = mockShowError();
-  mockPapi('put', null, new Error('Update failed'));
+  mockPapi('put', null, { response: { data: "Update failed"} });
   
   await comp.updateSessionTag(sessionId, 'add', 'shared');
   
-  expect(showErrorMock).toHaveBeenCalledWith(expect.stringContaining('Update failed'));
+  expect(showErrorMock).toHaveBeenCalledWith({ message: "Update failed" });
+});
+
+test('updateSessionTag', async () => {
+  const sessionId = 'session_123';
+  const action = 'remove';
+  const tag = 'shared';
+  const showError = jest.fn();
+  comp.$root.showError = showError;
+  let put = mockPapi('put', {});
+
+  await comp.updateSessionTag(sessionId, action, tag);
+
+  expect(put).toHaveBeenCalledWith(`/assistant/sessions/${sessionId}`, { action: action, tag: tag });
+  expect(showError).not.toHaveBeenCalled();
+
+  put = mockPapi('put', {}, { response: { data: 'ERROR_SESSION_ATTACHED_TO_CASES 2' } });
+
+  await comp.updateSessionTag(sessionId, action, tag);
+
+  expect(put).toHaveBeenCalledWith(`/assistant/sessions/${sessionId}`, { action: action, tag: tag });
+  expect(showError).toHaveBeenCalledWith({ message: 'Unable to unshare session. The session is attached to 2 case(s).' });
+});
+
+test('attachToCase', async () => {
+  comp.caseMenuVisible = true;
+
+  const sessionId = 'sessionId';
+  const caseId = 'caseId';
+
+  comp.chatHistoryById = {
+    [sessionId]: {
+      title: 'AI Session',
+      tags: ['context_compress'],
+      userId: 'me',
+    },
+  };
+
+  const _origtoggleSharedSession = comp.toggleSharedSession;
+  comp.toggleSharedSession = jest.fn();
+
+  const _origcreateCase = comp.createCase;
+  comp.createCase = jest.fn();
+
+  await comp.attachToCase(sessionId, caseId)
+
+  expect(comp.caseMenuVisible).toBe(false);
+  expect(comp.toggleSharedSession).toHaveBeenCalledWith(sessionId);
+  expect(comp.createCase).toHaveBeenCalledTimes(0);
+
+  comp.caseMenuVisible = true;
+  comp.chatHistoryById[sessionId].tags = ['shared'];
+  comp.toggleSharedSession.mockClear();
+  comp.createCase.mockClear();
+
+  await comp.attachToCase(sessionId, caseId);
+
+  expect(comp.caseMenuVisible).toBe(false);
+  expect(comp.toggleSharedSession).toHaveBeenCalledTimes(0);
+  expect(comp.createCase).toHaveBeenCalledTimes(0);
+
+  await comp.attachToCase(sessionId, null);
+
+  expect(comp.caseMenuVisible).toBe(false);
+  expect(comp.toggleSharedSession).toHaveBeenCalledTimes(0);
+  expect(comp.createCase).toHaveBeenCalledWith('AI Session');
+
+  comp.toggleSharedSession = _origtoggleSharedSession;
+  comp.createCase = _origcreateCase;
+  resetPapi();
+});
+
+test('createCase', async () => {
+  const post = mockPapi('post', { data: { id: '123' } });
+
+  const result = await comp.createCase('title');
+
+  expect(post).toHaveBeenCalledWith('case/', { title: 'title', description: comp.i18n.caseEscalatedDescription });
+  expect(result).toBe('123');
+
+  resetPapi();
 });
