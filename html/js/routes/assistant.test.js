@@ -754,13 +754,13 @@ test('updateContextLength updates total context length', () => {
   const usage2 = { input_tokens: 30, output_tokens: 20 };
   
   comp.updateContextLength(usage1);
-  expect(comp.contextLength).toBe(175); // 100 + 50 + 25
+  expect(comp.contextLength).toBe(75); // 50 + 25
   
   comp.updateContextLength(usage2);
-  expect(comp.contextLength).toBe(225); // 175 + 30 + 20
+  expect(comp.contextLength).toBe(50); // 30 + 20
   
   comp.updateContextLength(null);
-  expect(comp.contextLength).toBe(225); // Should remain unchanged
+  expect(comp.contextLength).toBe(50); // Should remain unchanged
 });
 
 test('checkContextLimitReached returns false when under limit', () => {
@@ -2381,7 +2381,7 @@ test('convertBackendMessagesToFrontend converts assistant message with text bloc
   expect(result[0].content).toBe('I can help you with security analysis.');
   expect(result[0].timestamp).toBe('2025-01-01T12:00:00.000Z');
   expect(result[0].usage.value).toEqual({ input_tokens: 10, output_tokens: 20 });
-  expect(comp.updateContextLength).toHaveBeenCalledWith({ input_tokens: 10, output_tokens: 20 });
+  expect(comp.updateContextLength).toHaveBeenCalledWith({ input_tokens: 10, output_tokens: 20 }, false);
 });
 
 test('convertBackendMessagesToFrontend handles multiple text blocks', () => {
@@ -3107,7 +3107,7 @@ test('convertBackendMessagesToFrontend calculates context length accurately afte
   
   comp.convertBackendMessagesToFrontend(backendMessages);
   
-  expect(comp.contextLength).toBe(2000);
+  expect(comp.contextLength).toBe(1000);
 });
 
 test('loadChatFromBackend success', async () => {
@@ -5499,4 +5499,121 @@ test('createCase', async () => {
   expect(result).toBe('123');
 
   resetPapi();
+});
+
+test('calculateContextOfMessage - assistant message', () => {
+  const allMessages = [
+    {
+      message: {
+        role: 'user',
+        usage: {
+          input_tokens: 100,
+          output_tokens: 0
+        }
+      }
+    },
+    {
+      message: {
+        role: 'assistant',
+        usage: {
+          input_tokens: 200,
+          output_tokens: 150
+        }
+      }
+    }
+  ];
+
+  // the context usage of a single assistant message is given to us
+  // as the output_tokens of that message, no calculation necessary
+  const result = comp.calculateContextOfMessage(allMessages, 1);
+
+  expect(result).toBe(150);
+});
+
+test('calculateContextOfMessage - user message mid-session', () => {
+  const allMessages = [
+    {
+      message: {
+        role: 'assistant',
+        usage: {
+          input_tokens: 100,
+          output_tokens: 50
+        }
+      }
+    },
+    {
+      message: {
+        role: 'user',
+        usage: {
+          input_tokens: 0,
+          output_tokens: 0
+        }
+      }
+    },
+    {
+      message: {
+        role: 'assistant',
+        usage: {
+          input_tokens: 200,
+          output_tokens: 75
+        }
+      }
+    }
+  ];
+
+  // For the user message at index 1:
+  // contextLength = next.input_tokens - (prev.input_tokens + prev.output_tokens)
+  // contextLength = 200 - (100 + 50) = 50
+  const result = comp.calculateContextOfMessage(allMessages, 1);
+
+  expect(result).toBe(50);
+});
+
+test('calculateContextOfMessage - first user message', () => {
+  const allMessages = [
+    {
+      message: {
+        role: 'user',
+        usage: {
+          input_tokens: 0,
+          output_tokens: 0
+        }
+      }
+    },
+    {
+      message: {
+        role: 'assistant',
+        usage: {
+          input_tokens: 120,
+          output_tokens: 80
+        }
+      }
+    }
+  ];
+
+  // For the first user message (no previous message):
+  // contextLength = next.input_tokens
+  const result = comp.calculateContextOfMessage(allMessages, 0);
+
+  expect(result).toBe(120);
+});
+
+test('calculateContextOfMessage - latest user message without assistant response', () => {
+  const allMessages = [
+    {
+      message: {
+        role: 'user',
+        usage: {
+          input_tokens: 0,
+          output_tokens: 0
+        }
+      }
+    }
+  ];
+
+  const result = comp.calculateContextOfMessage(allMessages, 1);
+
+  // the length of this message isn't calculable given what we have. This should
+  // only last for a short time until the model responds to the message.
+  expect(result).toBe(0);
 });
