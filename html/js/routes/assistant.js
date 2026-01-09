@@ -1718,18 +1718,24 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       return processedMessages;
     },
     calculateContextOfMessage(allMessages, msgIndex) {
+      // non-user messages tell us their context in output_tokens
       if (msgIndex >= 0 && msgIndex < allMessages.length && allMessages[msgIndex].message.role !== 'user') {
         // asking about an assistant message, return its output tokens
         return allMessages[msgIndex].message.usage.output_tokens;
       }
+
+      // this is a user message, use nearby message to calculate how many tokens
+      // are in this message
       let prev, next;
       if (msgIndex > 0) prev = allMessages[msgIndex - 1];
       if (msgIndex < allMessages.length - 1) next = allMessages[msgIndex + 1];
 
-      let contextLength;
-      if (prev) {
+      let contextLength = 0;
+      if (prev && next) {
+        // use the message before and after to calculate the tokens in this message
         contextLength = next.message.usage.input_tokens - (prev.message.usage.input_tokens + prev.message.usage.output_tokens);
-      } else {
+      } else if (next) {
+        // use the next message's input_tokens as the length of this solitary message
         contextLength = next.message.usage.input_tokens;
       }
       return contextLength;

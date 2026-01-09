@@ -5500,3 +5500,120 @@ test('createCase', async () => {
 
   resetPapi();
 });
+
+test('calculateContextOfMessage - assistant message', () => {
+  const allMessages = [
+    {
+      message: {
+        role: 'user',
+        usage: {
+          input_tokens: 100,
+          output_tokens: 0
+        }
+      }
+    },
+    {
+      message: {
+        role: 'assistant',
+        usage: {
+          input_tokens: 200,
+          output_tokens: 150
+        }
+      }
+    }
+  ];
+
+  // the context usage of a single assistant message is given to us
+  // as the output_tokens of that message, no calculation necessary
+  const result = comp.calculateContextOfMessage(allMessages, 1);
+
+  expect(result).toBe(150);
+});
+
+test('calculateContextOfMessage - user message mid-session', () => {
+  const allMessages = [
+    {
+      message: {
+        role: 'assistant',
+        usage: {
+          input_tokens: 100,
+          output_tokens: 50
+        }
+      }
+    },
+    {
+      message: {
+        role: 'user',
+        usage: {
+          input_tokens: 0,
+          output_tokens: 0
+        }
+      }
+    },
+    {
+      message: {
+        role: 'assistant',
+        usage: {
+          input_tokens: 200,
+          output_tokens: 75
+        }
+      }
+    }
+  ];
+
+  // For the user message at index 1:
+  // contextLength = next.input_tokens - (prev.input_tokens + prev.output_tokens)
+  // contextLength = 200 - (100 + 50) = 50
+  const result = comp.calculateContextOfMessage(allMessages, 1);
+
+  expect(result).toBe(50);
+});
+
+test('calculateContextOfMessage - first user message', () => {
+  const allMessages = [
+    {
+      message: {
+        role: 'user',
+        usage: {
+          input_tokens: 0,
+          output_tokens: 0
+        }
+      }
+    },
+    {
+      message: {
+        role: 'assistant',
+        usage: {
+          input_tokens: 120,
+          output_tokens: 80
+        }
+      }
+    }
+  ];
+
+  // For the first user message (no previous message):
+  // contextLength = next.input_tokens
+  const result = comp.calculateContextOfMessage(allMessages, 0);
+
+  expect(result).toBe(120);
+});
+
+test('calculateContextOfMessage - latest user message without assistant response', () => {
+  const allMessages = [
+    {
+      message: {
+        role: 'user',
+        usage: {
+          input_tokens: 0,
+          output_tokens: 0
+        }
+      }
+    }
+  ];
+
+  const result = comp.calculateContextOfMessage(allMessages, 1);
+
+  // the length of this message isn't calculable given what we have. This should
+  // only last for a short time until the model responds to the message.
+  expect(result).toBe(0);
+});
