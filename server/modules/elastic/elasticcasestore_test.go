@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -1580,4 +1580,65 @@ func TestExtractCommonObservables_SkipWhenExists(t *testing.T) {
 	event.Fields["my IP addr"] = "127.0.0.1"
 	assert.NoError(t, store.ExtractCommonObservables(ctx, event))
 	assert.Len(t, fakeEventStore.InputDocuments, 0)
+}
+
+func TestGetCaseIdsWithArtifact(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil), nil)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, nil, -1)
+	fakeEventStore := server.NewFakeEventstore()
+	store.server.Eventstore = fakeEventStore
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+	query := `_index:"myIndex" AND so_kind:"artifact" AND so_artifact.artifactType:"assistant_session" AND so_artifact.value:"chat_1764962755081_dl2dzsuq6"`
+
+	// Create artifacts with different case IDs
+	artifact1Payload := make(map[string]interface{})
+	artifact1Payload["so_kind"] = "artifact"
+	artifact1Payload["so_artifact.caseId"] = "case1"
+	artifact1Event := &model.EventRecord{
+		Payload: artifact1Payload,
+	}
+
+	artifact2Payload := make(map[string]interface{})
+	artifact2Payload["so_kind"] = "artifact"
+	artifact2Payload["so_artifact.caseId"] = "case2"
+	artifact2Event := &model.EventRecord{
+		Payload: artifact2Payload,
+	}
+
+	// Add a duplicate case ID to ensure uniqueness is preserved
+	artifact3Payload := make(map[string]interface{})
+	artifact3Payload["so_kind"] = "artifact"
+	artifact3Payload["so_artifact.caseId"] = "case1"
+	artifact3Event := &model.EventRecord{
+		Payload: artifact3Payload,
+	}
+
+	fakeEventStore.SearchResults[0].Events = append(fakeEventStore.SearchResults[0].Events, artifact1Event)
+	fakeEventStore.SearchResults[0].Events = append(fakeEventStore.SearchResults[0].Events, artifact2Event)
+	fakeEventStore.SearchResults[0].Events = append(fakeEventStore.SearchResults[0].Events, artifact3Event)
+
+	caseIds, err := store.GetCaseIdsWithArtifact(ctx, "assistant_session", "chat_1764962755081_dl2dzsuq6")
+	assert.NoError(tester, err)
+	assert.Len(tester, fakeEventStore.InputSearchCriterias, 1)
+	assert.Equal(tester, query, fakeEventStore.InputSearchCriterias[0].RawQuery)
+	assert.NotNil(tester, caseIds)
+	assert.Len(tester, caseIds, 2)
+	assert.Contains(tester, caseIds, "case1")
+	assert.Contains(tester, caseIds, "case2")
+}
+
+func TestGetCaseIdsWithArtifactInvalidParams(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil), nil)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, nil, -1)
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+
+	// Test with empty artType
+	_, err := store.GetCaseIdsWithArtifact(ctx, "", "192.168.1.1")
+	assert.Error(tester, err)
+	assert.Contains(tester, err.Error(), "artType")
+
+	// Test with empty value
+	_, err = store.GetCaseIdsWithArtifact(ctx, "ip", "")
+	assert.Error(tester, err)
+	assert.Contains(tester, err.Error(), "value")
 }

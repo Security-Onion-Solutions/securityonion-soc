@@ -1,4 +1,4 @@
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -1233,4 +1233,419 @@ func TestGetSessionDetailsUnauthorized(t *testing.T) {
 
 	// Verify response
 	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func TestUpdateSession(t *testing.T) {
+	// Create mock server
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
+	defer ctrl.Finish()
+
+	srv.Assistantstore = mockAssistantStore
+
+	handler := NewAssistantHandler(srv)
+
+	// Test data
+	sessionId := "test-session-123"
+	requestBody := model.UpdateSessionRequest{
+		Action: "add",
+		Tag:    "case-1234",
+	}
+
+	jsonBody, _ := json.Marshal(requestBody)
+	req := httptest.NewRequest("PUT", fmt.Sprintf("/assistant/sessions/%s", sessionId), bytes.NewBuffer(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	// Set URL params
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("sessionId", sessionId)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	// Add required context values
+	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "test-user-123")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	ctx = context.WithValue(ctx, web.ContextKeyRequestId, "test-request-456")
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+
+	// Mock existing session data
+	mockSession := []*model.AssistantSession{
+		{
+			Auditable: model.Auditable{
+				UserId: "test-user-123",
+			},
+			SessionId: sessionId,
+			Title:     "Test Session",
+			Tags:      []string{"existing-tag"},
+		},
+	}
+
+	// Set up mock expectations
+	mockAssistantStore.EXPECT().GetSessions(
+		gomock.Any(),
+		gomock.Any(),
+	).Return(mockSession, nil)
+
+	mockAssistantStore.EXPECT().UpdateSessionTags(
+		gomock.Any(),
+		sessionId,
+		[]string{"existing-tag", "case-1234"},
+	).Return(nil)
+
+	// Execute the handler
+	handler.UpdateSession(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusNoContent, w.Code)
+}
+
+func TestUpdateSessionRemoveTag(t *testing.T) {
+	// Create mock server
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
+	mockCaseStore := mock.NewMockCasestore(ctrl)
+	defer ctrl.Finish()
+
+	srv.Assistantstore = mockAssistantStore
+	srv.Casestore = mockCaseStore
+
+	handler := NewAssistantHandler(srv)
+
+	// Test data
+	sessionId := "test-session-123"
+	requestBody := model.UpdateSessionRequest{
+		Action: "remove",
+		Tag:    "case-1234",
+	}
+
+	jsonBody, _ := json.Marshal(requestBody)
+	req := httptest.NewRequest("PUT", fmt.Sprintf("/assistant/sessions/%s", sessionId), bytes.NewBuffer(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	// Set URL params
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("sessionId", sessionId)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	// Add required context values
+	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "test-user-123")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	ctx = context.WithValue(ctx, web.ContextKeyRequestId, "test-request-456")
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+
+	// Mock existing session data with the tag to remove
+	mockSession := []*model.AssistantSession{
+		{
+			Auditable: model.Auditable{
+				UserId: "test-user-123",
+			},
+			SessionId: sessionId,
+			Title:     "Test Session",
+			Tags:      []string{"case-1234", "other-tag"},
+		},
+	}
+
+	// Set up mock expectations
+	mockAssistantStore.EXPECT().GetSessions(
+		gomock.Any(),
+		gomock.Any(),
+	).Return(mockSession, nil)
+
+	// Mock that the session is not attached to any cases
+	mockCaseStore.EXPECT().GetCaseIdsWithArtifact(
+		gomock.Any(),
+		"assistant_chat",
+		sessionId,
+	).Return([]string{}, nil)
+
+	mockAssistantStore.EXPECT().UpdateSessionTags(
+		gomock.Any(),
+		sessionId,
+		[]string{"other-tag"},
+	).Return(nil)
+
+	// Execute the handler
+	handler.UpdateSession(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusNoContent, w.Code)
+}
+
+func TestUpdateSessionNotFound(t *testing.T) {
+	// Create mock server
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
+	defer ctrl.Finish()
+
+	srv.Assistantstore = mockAssistantStore
+
+	handler := NewAssistantHandler(srv)
+
+	// Test data
+	sessionId := "nonexistent-session"
+	requestBody := model.UpdateSessionRequest{
+		Action: "add",
+		Tag:    "case-1234",
+	}
+
+	jsonBody, _ := json.Marshal(requestBody)
+	req := httptest.NewRequest("PUT", fmt.Sprintf("/assistant/sessions/%s", sessionId), bytes.NewBuffer(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	// Set URL params
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("sessionId", sessionId)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	// Add required context values
+	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "test-user-123")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	ctx = context.WithValue(ctx, web.ContextKeyRequestId, "test-request-456")
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+
+	// Mock GetSessions to return empty result
+	mockAssistantStore.EXPECT().GetSessions(
+		gomock.Any(),
+		gomock.Any(),
+	).Return([]*model.AssistantSession{}, nil)
+
+	// Execute the handler
+	handler.UpdateSession(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestUpdateSessionUnauthorized(t *testing.T) {
+	// Create mock server with unauthorized user
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: false},
+	}
+	ctrl := gomock.NewController(t)
+	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
+	defer ctrl.Finish()
+
+	srv.Assistantstore = mockAssistantStore
+
+	handler := NewAssistantHandler(srv)
+
+	// Test data
+	sessionId := "test-session-123"
+	requestBody := model.UpdateSessionRequest{
+		Action: "add",
+		Tag:    "case-1234",
+	}
+
+	jsonBody, _ := json.Marshal(requestBody)
+	req := httptest.NewRequest("PUT", fmt.Sprintf("/assistant/sessions/%s", sessionId), bytes.NewBuffer(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	// Set URL params
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("sessionId", sessionId)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	// Add required context values
+	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "unauthorized-user")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	ctx = context.WithValue(ctx, web.ContextKeyRequestId, "test-request-456")
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+
+	// Execute the handler
+	handler.UpdateSession(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func TestUpdateSessionMissingSessionId(t *testing.T) {
+	// Create mock server
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
+	defer ctrl.Finish()
+
+	srv.Assistantstore = mockAssistantStore
+
+	handler := NewAssistantHandler(srv)
+
+	// Test data
+	requestBody := model.UpdateSessionRequest{
+		Action: "add",
+		Tag:    "case-1234",
+	}
+
+	jsonBody, _ := json.Marshal(requestBody)
+	req := httptest.NewRequest("PUT", "/assistant/sessions/", bytes.NewBuffer(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	// Set URL params with empty sessionId
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("sessionId", "")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	// Add required context values
+	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "test-user-123")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	ctx = context.WithValue(ctx, web.ContextKeyRequestId, "test-request-456")
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+
+	// Execute the handler
+	handler.UpdateSession(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestUpdateSessionTagAlreadyExists(t *testing.T) {
+	// Create mock server
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
+	defer ctrl.Finish()
+
+	srv.Assistantstore = mockAssistantStore
+
+	handler := NewAssistantHandler(srv)
+
+	// Test data
+	sessionId := "test-session-123"
+	requestBody := model.UpdateSessionRequest{
+		Action: "add",
+		Tag:    "existing-tag",
+	}
+
+	jsonBody, _ := json.Marshal(requestBody)
+	req := httptest.NewRequest("PUT", fmt.Sprintf("/assistant/sessions/%s", sessionId), bytes.NewBuffer(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	// Set URL params
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("sessionId", sessionId)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	// Add required context values
+	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "test-user-123")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	ctx = context.WithValue(ctx, web.ContextKeyRequestId, "test-request-456")
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+
+	// Mock existing session data with the tag already present
+	mockSession := []*model.AssistantSession{
+		{
+			Auditable: model.Auditable{
+				UserId: "test-user-123",
+			},
+			SessionId: sessionId,
+			Title:     "Test Session",
+			Tags:      []string{"existing-tag"},
+		},
+	}
+
+	// Set up mock expectations
+	mockAssistantStore.EXPECT().GetSessions(
+		gomock.Any(),
+		gomock.Any(),
+	).Return(mockSession, nil)
+
+	// Execute the handler
+	handler.UpdateSession(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusConflict, w.Code)
+}
+
+func TestUpdateSessionRemoveTagAttachedToCase(t *testing.T) {
+	// Create mock server
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
+	mockCaseStore := mock.NewMockCasestore(ctrl)
+	defer ctrl.Finish()
+
+	srv.Assistantstore = mockAssistantStore
+	srv.Casestore = mockCaseStore
+
+	handler := NewAssistantHandler(srv)
+
+	// Test data
+	sessionId := "test-session-123"
+	requestBody := model.UpdateSessionRequest{
+		Action: "remove",
+		Tag:    "case-1234",
+	}
+
+	jsonBody, _ := json.Marshal(requestBody)
+	req := httptest.NewRequest("PUT", fmt.Sprintf("/assistant/sessions/%s", sessionId), bytes.NewBuffer(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	// Set URL params
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("sessionId", sessionId)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	// Add required context values
+	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "test-user-123")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	ctx = context.WithValue(ctx, web.ContextKeyRequestId, "test-request-456")
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+
+	// Mock existing session data with the tag to remove
+	mockSession := []*model.AssistantSession{
+		{
+			Auditable: model.Auditable{
+				UserId: "test-user-123",
+			},
+			SessionId: sessionId,
+			Title:     "Test Session",
+			Tags:      []string{"case-1234"},
+		},
+	}
+
+	// Set up mock expectations
+	mockAssistantStore.EXPECT().GetSessions(
+		gomock.Any(),
+		gomock.Any(),
+	).Return(mockSession, nil)
+
+	// Mock that the session is attached to cases (cannot remove)
+	mockCaseStore.EXPECT().GetCaseIdsWithArtifact(
+		gomock.Any(),
+		"assistant_chat",
+		sessionId,
+	).Return([]string{"case-1", "case-2"}, nil)
+
+	// Execute the handler
+	handler.UpdateSession(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusConflict, w.Code)
 }

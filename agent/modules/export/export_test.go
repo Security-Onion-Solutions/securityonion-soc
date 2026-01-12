@@ -191,6 +191,178 @@ func TestGetCaseDetailsFromServer(t *testing.T) {
 	assert.NotNil(t, templateInput)
 }
 
+func TestGetCaseDetailsFromServer_SessionAttachments(t *testing.T) {
+	export := NewExport(agent.NewAgent(&config.AgentConfig{}, "test-version"))
+	export.agent.Client = web.NewClient("http://localhost:8080", true)
+	export.agent.Client.Auth = FakeClientAuth{}
+
+	caseId := "test-case-with-sessions"
+
+	// Mock attachments JSON with assistant_chat artifacts
+	attachmentsWithSessionsJson := `[{
+		"id":"attachment1",
+		"createTime": "2025-07-01T16:41:09.698562704-04:00",
+		"updateTime": "2025-07-01T16:41:09.698562704-04:00",
+		"description": "This is a test file",
+		"artifactType": "file"
+	},{
+		"id":"attachment2",
+		"createTime": "2025-07-01T16:42:09.698562704-04:00",
+		"updateTime": "2025-07-01T16:42:09.698562704-04:00",
+		"description": "Assistant chat session 1",
+		"artifactType": "assistant_chat",
+		"value": "chat_session_123"
+	},{
+		"id":"attachment3",
+		"createTime": "2025-07-01T16:43:09.698562704-04:00",
+		"updateTime": "2025-07-01T16:43:09.698562704-04:00",
+		"description": "Assistant chat session 2",
+		"artifactType": "assistant_chat",
+		"value": "chat_session_456"
+	},{
+		"id":"attachment4",
+		"createTime": "2025-07-01T16:44:09.698562704-04:00",
+		"updateTime": "2025-07-01T16:44:09.698562704-04:00",
+		"description": "Duplicate session reference",
+		"artifactType": "assistant_chat",
+		"value": "chat_session_123"
+	}]`
+
+	sessionDetails1Json := `{
+		"session": {
+			"id": "session1",
+			"createTime": "2025-07-01T16:41:09.698562704-04:00",
+			"updateTime": "2025-07-01T16:41:09.698562704-04:00",
+			"sessionId": "chat_session_123",
+			"title": "First Assistant Session",
+			"tags": ["investigation"]
+		},
+		"history": [
+			{
+				"id": "msg1",
+				"createTime": "2025-07-01T16:41:09.698562704-04:00",
+				"updateTime": "2025-07-01T16:41:09.698562704-04:00",
+				"sessionId": "chat_session_123",
+				"message": {
+					"id": "msg1",
+					"role": "user",
+					"contentStr": "What is this alert about?"
+				}
+			}
+		]
+	}`
+
+	sessionDetails2Json := `{
+		"session": {
+			"id": "session2",
+			"createTime": "2025-07-01T16:42:09.698562704-04:00",
+			"updateTime": "2025-07-01T16:42:09.698562704-04:00",
+			"sessionId": "chat_session_456",
+			"title": "Second Assistant Session",
+			"tags": ["analysis"]
+		},
+		"history": [
+			{
+				"id": "msg2",
+				"createTime": "2025-07-01T16:42:09.698562704-04:00",
+				"updateTime": "2025-07-01T16:42:09.698562704-04:00",
+				"sessionId": "chat_session_456",
+				"message": {
+					"id": "msg2",
+					"role": "user",
+					"contentStr": "Can you help analyze this?"
+				}
+			}
+		]
+	}`
+
+	// Mock successful responses - order matters based on the sequence of API calls in getCaseDetailsFromServer
+	export.agent.Client.MockStringResponse(caseJson, 200, nil)                    // Get Case
+	export.agent.Client.MockStringResponse(commentJson, 200, nil)                 // Get Case Comments
+	export.agent.Client.MockStringResponse(attachmentsWithSessionsJson, 200, nil) // Get Case Attachments with sessions
+	export.agent.Client.MockStringResponse(observablesJson, 200, nil)             // Get Case Observables
+	export.agent.Client.MockStringResponse(sessionDetails1Json, 200, nil)         // Get Assistant Session 1 (chat_session_123)
+	export.agent.Client.MockStringResponse(sessionDetails2Json, 200, nil)         // Get Assistant Session 2 (chat_session_456) - duplicate chat_session_123 should not trigger another call
+	export.agent.Client.MockStringResponse(eventsJson, 200, nil)                  // Get Case Related Events
+	export.agent.Client.MockStringResponse(detectionJson, 200, nil)               // Get Detection for Event
+	export.agent.Client.MockStringResponse(historyJson, 200, nil)                 // Get Case History
+
+	templateInput, err := export.getCaseDetailsFromServer(caseId)
+	assert.Nil(t, err)
+	assert.NotNil(t, templateInput)
+
+	// Verify basic case data
+	assert.Equal(t, "case1", templateInput.Case.Id)
+	assert.Len(t, templateInput.Comments, 1)
+	assert.Len(t, templateInput.Attachments, 4) // 1 file + 3 assistant_chat attachments
+
+	// Verify assistant sessions were fetched
+	assert.Len(t, templateInput.AssistantSessions, 2) // Only 2 unique sessions despite 3 assistant_chat attachments
+
+	// Verify session details
+	sessionIds := make(map[string]bool)
+	for _, session := range templateInput.AssistantSessions {
+		sessionIds[session.Session.SessionId] = true
+	}
+	assert.True(t, sessionIds["chat_session_123"])
+	assert.True(t, sessionIds["chat_session_456"])
+
+	// Verify session titles
+	var session1, session2 *model.AssistantSessionDetails
+	for _, session := range templateInput.AssistantSessions {
+		if session.Session.SessionId == "chat_session_123" {
+			session1 = session
+		} else if session.Session.SessionId == "chat_session_456" {
+			session2 = session
+		}
+	}
+	assert.NotNil(t, session1)
+	assert.NotNil(t, session2)
+	assert.Equal(t, "First Assistant Session", session1.Session.Title)
+	assert.Equal(t, "Second Assistant Session", session2.Session.Title)
+	assert.Len(t, session1.History, 1)
+	assert.Len(t, session2.History, 1)
+}
+
+func TestGetCaseDetailsFromServer_SessionAttachmentError(t *testing.T) {
+	export := NewExport(agent.NewAgent(&config.AgentConfig{}, "test-version"))
+	export.agent.Client = web.NewClient("http://localhost:8080", true)
+	export.agent.Client.Auth = FakeClientAuth{}
+
+	caseId := "test-case-session-error"
+
+	// Mock attachments JSON with assistant_chat artifact
+	attachmentsWithSessionJson := `[{
+		"id":"attachment1",
+		"createTime": "2025-07-01T16:41:09.698562704-04:00",
+		"updateTime": "2025-07-01T16:41:09.698562704-04:00",
+		"description": "Assistant chat session",
+		"artifactType": "assistant_chat",
+		"value": "chat_session_error"
+	}]`
+
+	// Mock successful responses for case data, but error for session
+	export.agent.Client.MockStringResponse(caseJson, 200, nil)                   // Get Case
+	export.agent.Client.MockStringResponse(commentJson, 200, nil)                // Get Case Comments
+	export.agent.Client.MockStringResponse(attachmentsWithSessionJson, 200, nil) // Get Case Attachments
+	export.agent.Client.MockStringResponse("", 500, assert.AnError)              // Get Assistant Session fails
+	export.agent.Client.MockStringResponse(observablesJson, 200, nil)            // Get Case Observables
+	export.agent.Client.MockStringResponse(eventsJson, 200, nil)                 // Get Case Related Events
+	export.agent.Client.MockStringResponse(detectionJson, 200, nil)              // Get Detection for Event
+	export.agent.Client.MockStringResponse(historyJson, 200, nil)                // Get Case History
+
+	templateInput, err := export.getCaseDetailsFromServer(caseId)
+	assert.Nil(t, err) // Error is logged but not returned
+	assert.NotNil(t, templateInput)
+
+	// Verify case data is still returned
+	assert.Equal(t, "case1", templateInput.Case.Id)
+	assert.Len(t, templateInput.Attachments, 1)
+
+	// Verify no assistant sessions were added due to error
+	assert.Len(t, templateInput.AssistantSessions, 0)
+}
+
 func TestPrerequisiteModules(t *testing.T) {
 	export := NewExport(nil)
 	assert.Nil(t, export.PrerequisiteModules())

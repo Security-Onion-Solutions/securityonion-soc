@@ -104,12 +104,37 @@
 				<v-card-title id="chat-header" class="py-3 d-flex align-center">
 					<v-icon class="mr-2" data-aid="assistant_banner_chat_icon">fa-comments</v-icon>
 					<span class="mr-2">{{ i18n.chatTitle }}</span>
-					<v-icon v-if="currentChatId" class="mr-2" @click="toggleSharedSession()" data-aid="assistant_banner_share_toggle" :disabled="$root.user.id !== chatHistoryById?.[currentChatId]?.userId" :title="i18n.assistantLinkTitle">
+					<v-icon v-if="currentChatId" class="mr-2" @click="toggleSharedSession(currentChatId)" data-aid="assistant_banner_share_toggle" :disabled="$root.isMyUser(chatHistoryById?.[currentChatId]?.userId)" :title="i18n.assistantLinkTitle">
 						{{ (chatHistoryById?.[currentChatId]?.tags?.includes('shared')) ? 'fa-link' : 'fa-link-slash' }}
 					</v-icon>
-					<v-icon v-if="currentChatId" @click.stop="exportSession" data-aid="assistant_banner_export_session" :disabled="!creditsUsed" :title="i18n.exportSessionHelp">
+					<v-icon v-if="currentChatId" class="mr-2" @click.stop="exportSession" data-aid="assistant_banner_export_session" :disabled="!creditsUsed" :title="i18n.exportSessionHelp">
 						fa-file-export
 					</v-icon>
+					<template v-if="currentChatId">
+						<v-icon id="attachToCaseBtn" @click="caseMenuVisible = true">fa-exclamation-triangle</v-icon>
+						<v-menu v-model="caseMenuVisible" target="#attachToCaseBtn" data-aid="assistant_case_attach_menu">
+							<v-list id="assistant-escalate-menu" color="secondary">
+								<v-list-item id="attachToCaseNew" density="compact" v-bind:title.attr="i18n.escalateNewCaseHelp" data-aid="assistant_attach_to_case_new" @click="attachToCase(currentChatId, null);">
+									<template #prepend>
+										<v-icon :alt="i18n.escalateNewCase">fa-plus</v-icon>
+									</template>
+									<v-list-item-title class="theme-text">
+										{{ i18n.escalateNewCase }}
+									</v-list-item-title>
+								</v-list-item>
+								<v-divider></v-divider>
+								<v-list-subheader class="theme-text">{{ i18n.escalateExistingCase }}</v-list-subheader>
+								<v-list-item v-for="socCase in mruCases" density="compact" v-bind:title.attr="i18n.escalateExistingCaseHelp" @click="attachToCase(currentChatId, socCase.id)" :data-aid="'assistant_attach_to_case_existing'">
+									<template #prepend>
+										<v-icon :alt="i18n.escalateExistingCase">fa-link</v-icon>
+									</template>
+									<v-list-item-title class="theme-text">
+										{{ formatCaseSummary(socCase) }}
+									</v-list-item-title>
+								</v-list-item>
+							</v-list>
+						</v-menu>
+					</template>
 					<v-spacer></v-spacer>
 					<div class="text-wrap mr-4" style="font-size: 14px;">{{ i18n.totalCredits }}: <span class="text-primary">{{ formatCount(creditsUsed) }}</span></div>
 					<div class="text-wrap" style="font-size: 14px;">{{ i18n.contextLength }}: <span :class="getContextColor(contextLength)">{{ $root.formatCountMK(contextLength) }}</span> / <span class="font-weight-thin">{{ increaseContextLimit ? $root.formatCountMK(contextLimitLarge) : $root.formatCountMK(contextLimitSmall) }}</span></div>

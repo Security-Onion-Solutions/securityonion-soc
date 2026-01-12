@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -54,6 +54,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     isPinnedToBottom: true, // user is at (or near) bottom?
     canChat: true,
     paramsLoaded: false,
+    caseMenuVisible: false,
+    mruCases: [],
   }},
   async created() {
     this.loadLocalSettings();
@@ -116,19 +118,21 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }
     },
     
-    // Calculate context length from usage data (input_tokens + output_tokens)
-    calculateContextFromUsage(usage) {
+    // Calculate context length from usage data (input_tokens + output_tokens),
+    // ignore input tokens if on a context compression message
+    calculateContextFromUsage(usage, ignoreInputTokens) {
       if (!usage) return 0;
       const inputTokens = usage.input_tokens || 0;
       const outputTokens = usage.output_tokens || 0;
-      return inputTokens + outputTokens;
+      
+      return ignoreInputTokens ? outputTokens : inputTokens + outputTokens;
     },
     
     // Update the total context length
-    updateContextLength(usage) {
+    updateContextLength(usage, ignoreInputTokens = false) {
       if (usage) {
-        const messageContext = this.calculateContextFromUsage(usage);
-        this.contextLength += messageContext;
+        const messageContext = this.calculateContextFromUsage(usage, ignoreInputTokens);
+        this.contextLength = messageContext;
       }
     },
 
@@ -1637,9 +1641,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     convertBackendMessagesToFrontend(backendMessages) {
       const processedMessages = [];
       // Reset context length when loading from backend
-      this.contextLength = 0;
       this.creditsUsed = 0;
+      this.contextLength = 0;
       this.contextStartMessageIndex = -1;
+      let justResetContext = false;
       
       let skip_next = false;
 
@@ -1687,7 +1692,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         if (msg.message.usage) {
           frontendMsg.usage = Vue.ref(msg.message.usage);
           // Update context length for loaded messages
-          this.updateContextLength(msg.message.usage);
+          this.updateContextLength(msg.message.usage, justResetContext);
           this.updateCreditsUsed(msg.message.usage);
         }
 
@@ -1696,14 +1701,45 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         if (msg.tags && msg.tags.includes(MSGTAG_CONTEXTCOMPRESSION)) {
           // reset context, messages prior to this message are no longer
           // sent to the AI
-          this.contextLength = 0;
+          if (i >= 0 && i < backendMessages.length - 1) {
+            this.contextLength = this.calculateContextOfMessage(backendMessages, i);
+          } else {
+            // this context compression is the latest message, can't determine
+            // context size until assistant responds
+            this.contextLength = 0;
+          }
           this.contextStartMessageIndex = processedMessages.length - 1;
+          justResetContext = true;
+        } else {
+          justResetContext = false;
         }
       }
       
       return processedMessages;
     },
+    calculateContextOfMessage(allMessages, msgIndex) {
+      // non-user messages tell us their context in output_tokens
+      if (msgIndex >= 0 && msgIndex < allMessages.length && allMessages[msgIndex].message.role !== 'user') {
+        // asking about an assistant message, return its output tokens
+        return allMessages[msgIndex].message.usage.output_tokens;
+      }
 
+      // this is a user message, use nearby message to calculate how many tokens
+      // are in this message
+      let prev, next;
+      if (msgIndex > 0) prev = allMessages[msgIndex - 1];
+      if (msgIndex < allMessages.length - 1) next = allMessages[msgIndex + 1];
+
+      let contextLength = 0;
+      if (prev && next) {
+        // use the message before and after to calculate the tokens in this message
+        contextLength = next.message.usage.input_tokens - (prev.message.usage.input_tokens + prev.message.usage.output_tokens);
+      } else if (next) {
+        // use the next message's input_tokens as the length of this solitary message
+        contextLength = next.message.usage.input_tokens;
+      }
+      return contextLength;
+    },
     generateInvestigationPrompt(fields) {
 
       // Prepare the alert data for investigation
@@ -1779,6 +1815,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       if (localStorage[prefix + '.alwaysApproveReadRequests']) this.alwaysApproveReadRequests = localStorage[prefix + '.alwaysApproveReadRequests'] == 'true';
       if (localStorage[prefix + '.showChatHistory']) this.showChatHistory = localStorage[prefix + '.showChatHistory'] == 'true';
       if (localStorage[prefix + '.currentModel']) this.currentModel = localStorage[prefix + '.currentModel'];
+
+      if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
     },
 
     // Check if a tool should be auto-approved based on localStorage settings
@@ -1898,20 +1936,22 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       
       if (oldMsg) this.newMessage = oldMsg;
     },
-
+    nbspRegexOp(text) {
+      return text.replace(/^(&nbsp;?[\n]*)/, '');
+    },
     messageClassesFromTags(tags) {
       return tags.map(tag => 'msgTag-' + tag);
     },
-    async toggleSharedSession() {
-      const session = this.chatHistoryById[this.currentChatId];
+    async toggleSharedSession(chatId) {
+      const session = this.chatHistoryById[chatId];
       if (!session || session.userId !== this.$root.user.id) return;
       
       const hasTag = (session.tags || []).includes(SESTAG_SHARED);
       const action = hasTag ? 'remove' : 'add';
       
-      await this.updateSessionTag(this.currentChatId, action, SESTAG_SHARED);
+      await this.updateSessionTag(chatId, action, SESTAG_SHARED);
 
-      await this.loadStoredChats();
+      await this.loadStoredChats(false);
     },
     async updateSessionTag(sessionId, action, tag) {
       try {
@@ -1922,7 +1962,13 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         await this.$root.papi.put(`/assistant/sessions/${sessionId}`, payload);
 
       } catch (error) {
-        this.$root.showError(this.i18n.assistantSessionTagUpdateFail + ': ' + error.message);
+        let msg = error.response.data;
+        if (msg.startsWith('ERROR_SESSION_ATTACHED_TO_CASES')) { 
+          const count = (msg.replaceAll('ERROR_SESSION_ATTACHED_TO_CASES', '') + '').trim();
+          msg = this.$root.replaceActionVar(this.i18n.ERROR_SESSION_ATTACHED_TO_CASES, 'count', count);
+        }
+
+        this.$root.showError({ message: msg });
       }
     },
     nbspRegexOp(text) {
@@ -1989,6 +2035,51 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     stripNewlines(text) {
       if (typeof text !== 'string') return text;
       return text.replace(/^\s*\n+/, '').replace(/\n+\s*$/, '');
+    },
+    async attachToCase(sessionId, caseId) {
+      this.caseMenuVisible = false;
+
+      const session = this.chatHistoryById[sessionId];
+      if (!session) {
+        this.$root.showError(this.i18n.assistantAttachNoSession);
+        return;
+      }
+
+      if (!(session.tags || []).includes(SESTAG_SHARED)) {
+        await this.toggleSharedSession(sessionId)
+      }
+
+      if (caseId === null) { 
+        caseId = this.createCase(session.title);
+      }
+
+      const payload = {
+        caseId: caseId,
+        groupType: 'attachments',
+        artifactType: 'assistant_chat',
+        value: sessionId,
+        description: session.title,
+      };
+
+      try {
+        this.$root.papi.post('/case/artifacts', payload);
+      } catch (err) { 
+        this.$root.showError(this.i18n.assistantAttachToCaseFail);
+      }
+    },
+    async createCase(title) {
+      const response = await this.$root.papi.post('case/', {
+        title: title,
+        description: this.i18n.caseEscalatedDescription,
+      });
+      if (response && response.data) {
+        return response.data.id;
+      }
+
+      return null;
+    },
+    formatCaseSummary(socCase) {
+      return socCase?.title;
     }
   }
 }});

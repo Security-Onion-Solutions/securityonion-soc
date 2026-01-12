@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -737,12 +737,12 @@ func TestAddUpdateScript(t *testing.T) {
 	timeNow := time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)
 
 	criteria := &model.EventUpdateCriteria{}
-	store.addUpdateScripts(criteria, timeNow, false, false)
+	store.addUpdateScripts(criteria, timeNow, false, false, "admin")
 	assert.Len(t, criteria.UpdateScripts, 1)
 	assert.Equal(t, "ctx._source.event.acknowledged = false;", criteria.UpdateScripts[0])
 
 	criteria = &model.EventUpdateCriteria{}
-	store.addUpdateScripts(criteria, timeNow, true, false)
+	store.addUpdateScripts(criteria, timeNow, true, false, "admin")
 	assert.Len(t, criteria.UpdateScripts, 1)
 	expected := `
 			boolean track_timing = false;
@@ -757,6 +757,7 @@ func TestAddUpdateScript(t *testing.T) {
 
 			if (ctx._source.event.acknowledged != true) {
 				ctx._source.event.acknowledged = true;
+				ctx._source.event.acknowledged_by = 'admin';
 				if (track_timing) {
 					ctx._source.event.acknowledged_timestamp = now_date;
 					ctx._source.event.acknowledged_elapsed_seconds = elapsed_seconds;
@@ -765,6 +766,7 @@ func TestAddUpdateScript(t *testing.T) {
 
 			if (ctx._source.event.escalated != true && esc_bool) {
 				ctx._source.event.escalated = esc_bool;
+				ctx._source.event.escalated_by = 'admin';
 				if (track_timing) {
 					ctx._source.event.escalated_timestamp = now_date;
 					ctx._source.event.escalated_elapsed_seconds = elapsed_seconds;
@@ -774,9 +776,10 @@ func TestAddUpdateScript(t *testing.T) {
 	assert.Equal(t, expected, criteria.UpdateScripts[0])
 
 	criteria = &model.EventUpdateCriteria{}
-	store.addUpdateScripts(criteria, timeNow, true, true)
+	store.addUpdateScripts(criteria, timeNow, true, true, "admin")
 	assert.Len(t, criteria.UpdateScripts, 1)
 	assert.Contains(t, criteria.UpdateScripts[0], "esc_bool = true")
+	assert.Contains(t, criteria.UpdateScripts[0], "ctx._source.event.escalated_by = 'admin';")
 }
 
 func TestSearchPermissionsAuthorized(t *testing.T) {
