@@ -56,6 +56,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     paramsLoaded: false,
     caseMenuVisible: false,
     mruCases: [],
+    perMessageStatsEnabled: false,
   }},
   async created() {
     this.loadLocalSettings();
@@ -80,6 +81,12 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     'alwaysApproveReadRequests': 'saveLocalSettings',
     'showChatHistory': 'saveLocalSettings',
     'currentModel': 'saveLocalSettings'
+  },
+  computed: {
+    messageContextValues() {
+      const msgs = this.messages || [];
+      return msgs.map((_, i) => this.calculateContextOfMessage(msgs, i));
+    }
   },
   methods: {
 
@@ -1702,7 +1709,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           // reset context, messages prior to this message are no longer
           // sent to the AI
           if (i >= 0 && i < backendMessages.length - 1) {
-            this.contextLength = this.calculateContextOfMessage(backendMessages, i);
+            this.contextLength = this.calculateContextOfMessage(backendMessages.map(m => m.message), i);
           } else {
             // this context compression is the latest message, can't determine
             // context size until assistant responds
@@ -1719,9 +1726,9 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     calculateContextOfMessage(allMessages, msgIndex) {
       // non-user messages tell us their context in output_tokens
-      if (msgIndex >= 0 && msgIndex < allMessages.length && allMessages[msgIndex].message.role !== 'user') {
+      if (msgIndex >= 0 && msgIndex < allMessages.length && allMessages[msgIndex].role !== 'user') {
         // asking about an assistant message, return its output tokens
-        return allMessages[msgIndex].message.usage.output_tokens;
+        return allMessages[msgIndex].usage ? allMessages[msgIndex].usage.output_tokens : 0;
       }
 
       // this is a user message, use nearby message to calculate how many tokens
@@ -1731,12 +1738,12 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       if (msgIndex < allMessages.length - 1) next = allMessages[msgIndex + 1];
 
       let contextLength = 0;
-      if (prev && next) {
+      if (prev && prev.usage && next && next.usage) {
         // use the message before and after to calculate the tokens in this message
-        contextLength = next.message.usage.input_tokens - (prev.message.usage.input_tokens + prev.message.usage.output_tokens);
-      } else if (next) {
+        contextLength = next.usage.input_tokens - (prev.usage.input_tokens + prev.usage.output_tokens);
+      } else if (next && next.usage) {
         // use the next message's input_tokens as the length of this solitary message
-        contextLength = next.message.usage.input_tokens;
+        contextLength = next.usage.input_tokens;
       }
       return contextLength;
     },
@@ -1815,6 +1822,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       if (localStorage[prefix + '.alwaysApproveReadRequests']) this.alwaysApproveReadRequests = localStorage[prefix + '.alwaysApproveReadRequests'] == 'true';
       if (localStorage[prefix + '.showChatHistory']) this.showChatHistory = localStorage[prefix + '.showChatHistory'] == 'true';
       if (localStorage[prefix + '.currentModel']) this.currentModel = localStorage[prefix + '.currentModel'];
+      if (localStorage[prefix + '.perMessageStatsEnabled']) this.perMessageStatsEnabled = localStorage[prefix + '.perMessageStatsEnabled'] == 'true';
 
       if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
     },

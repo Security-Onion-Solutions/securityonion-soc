@@ -5504,21 +5504,17 @@ test('createCase', async () => {
 test('calculateContextOfMessage - assistant message', () => {
   const allMessages = [
     {
-      message: {
-        role: 'user',
-        usage: {
-          input_tokens: 100,
-          output_tokens: 0
-        }
+      role: 'user',
+      usage: {
+        input_tokens: 100,
+        output_tokens: 0
       }
     },
     {
-      message: {
-        role: 'assistant',
-        usage: {
-          input_tokens: 200,
-          output_tokens: 150
-        }
+      role: 'assistant',
+      usage: {
+        input_tokens: 200,
+        output_tokens: 150
       }
     }
   ];
@@ -5533,30 +5529,24 @@ test('calculateContextOfMessage - assistant message', () => {
 test('calculateContextOfMessage - user message mid-session', () => {
   const allMessages = [
     {
-      message: {
-        role: 'assistant',
-        usage: {
-          input_tokens: 100,
-          output_tokens: 50
-        }
+      role: 'assistant',
+      usage: {
+        input_tokens: 100,
+        output_tokens: 50
       }
     },
     {
-      message: {
-        role: 'user',
-        usage: {
-          input_tokens: 0,
-          output_tokens: 0
-        }
+      role: 'user',
+      usage: {
+        input_tokens: 0,
+        output_tokens: 0
       }
     },
     {
-      message: {
-        role: 'assistant',
-        usage: {
-          input_tokens: 200,
-          output_tokens: 75
-        }
+      role: 'assistant',
+      usage: {
+        input_tokens: 200,
+        output_tokens: 75
       }
     }
   ];
@@ -5572,21 +5562,17 @@ test('calculateContextOfMessage - user message mid-session', () => {
 test('calculateContextOfMessage - first user message', () => {
   const allMessages = [
     {
-      message: {
-        role: 'user',
-        usage: {
-          input_tokens: 0,
-          output_tokens: 0
-        }
+      role: 'user',
+      usage: {
+        input_tokens: 0,
+        output_tokens: 0
       }
     },
     {
-      message: {
-        role: 'assistant',
-        usage: {
-          input_tokens: 120,
-          output_tokens: 80
-        }
+      role: 'assistant',
+      usage: {
+        input_tokens: 120,
+        output_tokens: 80
       }
     }
   ];
@@ -5601,12 +5587,10 @@ test('calculateContextOfMessage - first user message', () => {
 test('calculateContextOfMessage - latest user message without assistant response', () => {
   const allMessages = [
     {
-      message: {
-        role: 'user',
-        usage: {
-          input_tokens: 0,
-          output_tokens: 0
-        }
+      role: 'user',
+      usage: {
+        input_tokens: 0,
+        output_tokens: 0
       }
     }
   ];
@@ -5616,4 +5600,62 @@ test('calculateContextOfMessage - latest user message without assistant response
   // the length of this message isn't calculable given what we have. This should
   // only last for a short time until the model responds to the message.
   expect(result).toBe(0);
+});
+
+// messageContextValues computed property tests
+test('messageContextValues returns context values for all messages', () => {
+  comp.messages = [
+    {
+      role: 'user',
+      usage: {
+        input_tokens: 0,
+        output_tokens: 0
+      }
+    },
+    {
+      role: 'assistant',
+      usage: {
+        input_tokens: 120,
+        output_tokens: 80
+      }
+    },
+    {
+      role: 'user',
+      usage: {
+        input_tokens: 0,
+        output_tokens: 0
+      }
+    },
+    {
+      role: 'assistant',
+      usage: {
+        input_tokens: 200,
+        output_tokens: 150
+      }
+    }
+  ];
+
+  const result = comp.messageContextValues();
+
+  expect(result).toHaveLength(4);
+  expect(result[0]).toBe(120); // First user message: next.input_tokens = 120
+  expect(result[1]).toBe(80);  // First assistant message: output_tokens = 80
+  expect(result[2]).toBe(0);   // Second user message: next.input_tokens - (prev.input_tokens + prev.output_tokens) = 200 - (120 + 80) = 0
+  expect(result[3]).toBe(150); // Second assistant message: output_tokens = 150
+});
+
+test('messageContextValues handles empty messages array', () => {
+  comp.messages = [];
+
+  const result = comp.messageContextValues();
+
+  expect(result).toEqual([]);
+});
+
+test('messageContextValues handles null messages', () => {
+  comp.messages = null;
+
+  const result = comp.messageContextValues();
+
+  expect(result).toEqual([]);
 });
