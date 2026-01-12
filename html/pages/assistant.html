@@ -170,7 +170,10 @@
 									<div id="message-header" class="d-flex align-center mb-1">
 										<span class="font-weight-medium text-body-2 mr-2">{{ message.role === 'user' ? i18n.you : i18n.chat }}</span>
 										<span class="text-caption text-medium-emphasis mr-2">{{ formatTimestamp(message.timestamp) }}</span>
-										<span class="text-caption text-primary" v-if="message.usage && message.usage.credits">{{ message.usage.credits }} {{ i18n.creditsLowercase }}</span>
+										<template v-if="perMessageStatsEnabled">
+											<span class="text-caption text-primary mr-2" v-if="message.usage && message.usage.credits">{{ message.usage.credits }} {{ i18n.creditsLowercase }}</span>
+											<span class="text-caption text-green" v-if="messageContextValues[index] > 0">{{ messageContextValues[index] }} {{ i18n.tokensLowercase }}</span>
+										</template>
 									</div>
 									<div id="message-content" class="text-body-2" :key="message.content" v-html="formatMarkdown(message.content)"></div>
 									
