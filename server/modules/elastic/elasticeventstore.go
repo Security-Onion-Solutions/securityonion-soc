@@ -1047,7 +1047,7 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 	return nil
 }
 
-func (store *ElasticEventstore) addUpdateScripts(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, ack bool, esc bool) {
+func (store *ElasticEventstore) addUpdateScripts(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, ack bool, esc bool, userId string) {
 	if ack {
 		trackTiming := strconv.FormatBool(licensing.IsEnabled(licensing.FEAT_RPT))
 		escBool := strconv.FormatBool(esc)
@@ -1066,6 +1066,7 @@ func (store *ElasticEventstore) addUpdateScripts(updateCriteria *model.EventUpda
 
 			if (ctx._source.event.acknowledged != true) {
 				ctx._source.event.acknowledged = true;
+				ctx._source.event.acknowledged_by = '` + userId + `';
 				if (track_timing) {
 					ctx._source.event.acknowledged_timestamp = now_date;
 					ctx._source.event.acknowledged_elapsed_seconds = elapsed_seconds;
@@ -1074,6 +1075,7 @@ func (store *ElasticEventstore) addUpdateScripts(updateCriteria *model.EventUpda
 
 			if (ctx._source.event.escalated != true && esc_bool) {
 				ctx._source.event.escalated = esc_bool;
+				ctx._source.event.escalated_by = '` + userId + `';
 				if (track_timing) {
 					ctx._source.event.escalated_timestamp = now_date;
 					ctx._source.event.escalated_elapsed_seconds = elapsed_seconds;
@@ -1099,7 +1101,8 @@ func (store *ElasticEventstore) Acknowledge(ctx context.Context, ackCriteria *mo
 			}).Info("Acknowledging event")
 
 			updateCriteria := model.NewEventUpdateCriteria()
-			store.addUpdateScripts(updateCriteria, time.Now(), ackCriteria.Acknowledge, ackCriteria.Escalate)
+			userId := ctx.Value(web.ContextKeyRequestorId).(string)
+			store.addUpdateScripts(updateCriteria, time.Now(), ackCriteria.Acknowledge, ackCriteria.Escalate, userId)
 			updateCriteria.Populate(ackCriteria.SearchFilter,
 				ackCriteria.DateRange,
 				ackCriteria.DateRangeFormat,

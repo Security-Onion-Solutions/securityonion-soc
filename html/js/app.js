@@ -1369,6 +1369,12 @@ $(document).ready(function () {
           }
           return null;
         },
+        getUserDisplayName(user) {
+          if (!user) {
+            return "";
+          }
+          return user.email;
+        },
         async populateUserDetails(obj, idField, outputField) {
           if (obj[idField] && obj[idField].length > 0) {
             const id = obj[idField];
@@ -1379,10 +1385,11 @@ $(document).ready(function () {
 
             const user = await this.$root.getUserById(id);
             if (user) {
+              const displayName = this.getUserDisplayName(user);
               if (Vue.isRef(obj[outputField])) {
-                obj[outputField].value = user.email;
+                obj[outputField].value = displayName;
               } else {
-                obj[outputField] = user.email;
+                obj[outputField] = displayName;
               }
             } else {
               obj[outputField] = id;
@@ -1656,6 +1663,33 @@ $(document).ready(function () {
         },
         isTrue(b) {
           return b === true || ("" + b).toLowerCase() == "true";
+        },
+        tryResolveAlias(field, value) {
+          var alias = this.pickHostname(value);
+          if (alias) {
+            return alias;
+          }
+
+          if (field && field.endsWith('detection.author')) {
+            return this.tryLocalize(value);
+          }
+
+          alias = this.pickUserInfo(field, value);
+          if (alias) {
+            return alias;
+          }
+
+          return null;
+        },
+        pickUserInfo(field, value) {
+          if (field && field.endsWith('_by')) {
+            // try to resolve the username
+            const user = this.getUserByIdViaCache(value);
+            if (user) {
+              return this.getUserDisplayName(user);
+            }
+          }
+          return null;
         },
         pickHostname(ip) {
           const arr = this.ip2host[ip];
