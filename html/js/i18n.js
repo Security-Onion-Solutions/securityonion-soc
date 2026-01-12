@@ -1116,6 +1116,7 @@ const i18n = {
       title: 'Title',
       toggleLegend: 'Toggle Legend',
       toggleFullsizeHelp: 'Toggle between normal size and maximized size',
+      tokensLowercase: 'tokens',
       toolCyberchef: 'CyberChef',
       toolCyberchefHelp: 'Data decoding and transformation tools',
       toolElasticFleet: 'Elastic Fleet',
