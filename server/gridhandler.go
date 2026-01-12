@@ -26,7 +26,39 @@ func RegisterGridRoutes(srv *Server, r chi.Router, prefix string) {
 	r.Route(prefix, func(r chi.Router) {
 		r.Get("/", h.getNodes)
 		r.Get("/status", h.getStatus)
+		r.Get("/{id}/metrics", h.getNodeMetrics)
 	})
+}
+
+// @Summary      Get Node Historical Metrics
+// @Description  Retrieves historical performance metrics for a specific grid node.
+// @Tags         Grid
+// @Security     bearer[nodes/read]
+// @Param        id path string true "The node ID"
+// @Produce      json
+// @Success      200  {object}  model.HistoricalMetrics "The node historical metrics"
+// @Failure      401                                 "Request was not properly authenticated"
+// @Failure      403                                 "Insufficient permissions for this request"
+// @Failure      500                                 "Internal SOC error; review SOC logs"
+// @Failure      503                                 "Metrics module not enabled"
+// @Router       /connect/grid/{id}/metrics [get]
+func (h *GridHandler) getNodeMetrics(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id := chi.URLParam(r, "id")
+	duration := r.URL.Query().Get("range")
+
+	if h.server.Metrics == nil {
+		web.Respond(w, r, http.StatusServiceUnavailable, nil)
+		return
+	}
+
+	metrics, err := h.server.Metrics.GetHistoricalMetrics(ctx, id, duration)
+	if err != nil {
+		web.Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, metrics)
 }
 
 // @Summary      Get Grid Status

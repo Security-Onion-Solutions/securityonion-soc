@@ -260,6 +260,98 @@ func (store *Saltstore) filter(settings []*model.Setting, advanced bool) []*mode
 	})
 }
 
+func (store *Saltstore) GetCategories(ctx context.Context, advanced bool) ([]*model.ConfigCategory, error) {
+	if err := store.server.CheckAuthorized(ctx, "read", "config"); err != nil {
+		return nil, err
+	}
+
+	settings, err := store.GetSettings(ctx, advanced)
+	if err != nil {
+		return nil, err
+	}
+
+	// Group settings by their first segment (category)
+	categoryMap := make(map[string]*model.ConfigCategory)
+
+	for _, setting := range settings {
+		// Skip node-specific settings for counting (they're duplicates of global settings)
+		if setting.NodeId != "" {
+			continue
+		}
+
+		segments := strings.Split(setting.Id, ".")
+		if len(segments) == 0 {
+			continue
+		}
+
+		categoryId := segments[0]
+		category, exists := categoryMap[categoryId]
+		if !exists {
+			// Create human-friendly name by capitalizing first letter
+			name := categoryId
+			if len(name) > 0 {
+				name = strings.ToUpper(name[:1]) + name[1:]
+			}
+
+			category = &model.ConfigCategory{
+				Id:              categoryId,
+				Name:            name,
+				SettingsCount:   0,
+				CustomizedCount: 0,
+				Advanced:        setting.Advanced,
+			}
+			categoryMap[categoryId] = category
+		}
+
+		category.SettingsCount++
+
+		// Count as customized if value differs from default
+		if setting.DefaultAvailable && setting.Value != setting.Default {
+			category.CustomizedCount++
+		}
+
+		// If any setting in category is not advanced, mark category as not advanced
+		if !setting.Advanced {
+			category.Advanced = false
+		}
+	}
+
+	// Convert map to slice and sort
+	categories := make([]*model.ConfigCategory, 0, len(categoryMap))
+	for _, category := range categoryMap {
+		categories = append(categories, category)
+	}
+
+	sort.Slice(categories, func(i, j int) bool {
+		return categories[i].Id < categories[j].Id
+	})
+
+	return categories, nil
+}
+
+func (store *Saltstore) GetCategorySettings(ctx context.Context, category string, advanced bool) ([]*model.Setting, error) {
+	if err := store.server.CheckAuthorized(ctx, "read", "config"); err != nil {
+		return nil, err
+	}
+
+	settings, err := store.GetSettings(ctx, advanced)
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter to only settings that start with the category prefix
+	prefix := category + "."
+	filtered := make([]*model.Setting, 0)
+
+	for _, setting := range settings {
+		if strings.HasPrefix(setting.Id, prefix) || setting.Id == category {
+			filtered = append(filtered, setting)
+		}
+	}
+
+	return filtered, nil
+}
+
 func (store *Saltstore) sortSettings(settings []*model.Setting) []*model.Setting {
 	sort.Slice(settings, func(idx_a, idx_b int) bool {
 		return (settings[idx_a].Id < settings[idx_b].Id && !strings.HasSuffix(settings[idx_a].Id, "advanced")) ||

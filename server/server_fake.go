@@ -181,6 +181,10 @@ func (impl *FakeMetrics) UpdateNodeMetrics(ctx context.Context, node *model.Node
 	return false
 }
 
+func (impl *FakeMetrics) GetHistoricalMetrics(ctx context.Context, host string, duration string) (*model.HistoricalMetrics, error) {
+	return &model.HistoricalMetrics{}, nil
+}
+
 func NewFakeServer(authorized bool, roleMap map[string][]string) *Server {
 	cfg := &config.ServerConfig{}
 	srv := NewServer(cfg, "")

@@ -23,6 +23,14 @@ func (f *FakeConfigstore) GetSettings(ctx context.Context, advanced bool) ([]*mo
 	return nil, nil
 }
 
+func (f *FakeConfigstore) GetCategories(ctx context.Context, advanced bool) ([]*model.ConfigCategory, error) {
+	return nil, nil
+}
+
+func (f *FakeConfigstore) GetCategorySettings(ctx context.Context, category string, advanced bool) ([]*model.Setting, error) {
+	return nil, nil
+}
+
 func (f *FakeConfigstore) UpdateSetting(ctx context.Context, setting *model.Setting, remove bool) error {
 	return nil
 }

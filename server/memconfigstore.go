@@ -7,6 +7,8 @@ package server
 
 import (
 	"context"
+	"sort"
+	"strings"
 
 	"github.com/samber/lo"
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -24,6 +26,73 @@ func NewMemConfigStore(settings []*model.Setting) *MemConfigStore {
 
 func (m *MemConfigStore) GetSettings(ctx context.Context, advanced bool) ([]*model.Setting, error) {
 	return m.settings, nil
+}
+
+func (m *MemConfigStore) GetCategories(ctx context.Context, advanced bool) ([]*model.ConfigCategory, error) {
+	categoryMap := make(map[string]*model.ConfigCategory)
+
+	for _, setting := range m.settings {
+		if setting.NodeId != "" {
+			continue
+		}
+
+		segments := strings.Split(setting.Id, ".")
+		if len(segments) == 0 {
+			continue
+		}
+
+		categoryId := segments[0]
+		category, exists := categoryMap[categoryId]
+		if !exists {
+			name := categoryId
+			if len(name) > 0 {
+				name = strings.ToUpper(name[:1]) + name[1:]
+			}
+
+			category = &model.ConfigCategory{
+				Id:              categoryId,
+				Name:            name,
+				SettingsCount:   0,
+				CustomizedCount: 0,
+				Advanced:        setting.Advanced,
+			}
+			categoryMap[categoryId] = category
+		}
+
+		category.SettingsCount++
+
+		if setting.DefaultAvailable && setting.Value != setting.Default {
+			category.CustomizedCount++
+		}
+
+		if !setting.Advanced {
+			category.Advanced = false
+		}
+	}
+
+	categories := make([]*model.ConfigCategory, 0, len(categoryMap))
+	for _, category := range categoryMap {
+		categories = append(categories, category)
+	}
+
+	sort.Slice(categories, func(i, j int) bool {
+		return categories[i].Id < categories[j].Id
+	})
+
+	return categories, nil
+}
+
+func (m *MemConfigStore) GetCategorySettings(ctx context.Context, category string, advanced bool) ([]*model.Setting, error) {
+	prefix := category + "."
+	filtered := make([]*model.Setting, 0)
+
+	for _, setting := range m.settings {
+		if strings.HasPrefix(setting.Id, prefix) || setting.Id == category {
+			filtered = append(filtered, setting)
+		}
+	}
+
+	return filtered, nil
 }
 
 func (m *MemConfigStore) UpdateSetting(ctx context.Context, setting *model.Setting, remove bool) error {

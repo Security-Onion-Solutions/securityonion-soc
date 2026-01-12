@@ -15,4 +15,5 @@ import (
 type Metrics interface {
 	GetGridEps(ctx context.Context) int
 	UpdateNodeMetrics(ctx context.Context, node *model.Node) bool
+	GetHistoricalMetrics(ctx context.Context, host string, duration string) (*model.HistoricalMetrics, error)
 }

@@ -5,7 +5,13 @@
 
 package model
 
-import "time"
+import (
+	"errors"
+	"strconv"
+	"time"
+)
+
+const PLAYBOOK_RULESET_CUSTOM = "__custom__"
 
 type Playbook struct {
 	// The name of the playbook.
@@ -27,6 +33,51 @@ type Playbook struct {
 	Contributors []string `yaml:"contributors" json:"contributors" example:"['John Doe', 'Jane Smith']"`
 	// The questions of this playbook that guide the user in response to an alert.
 	Questions []*Question `yaml:"questions" json:"questions"`
+	// Whether this playbook is from a community repository (read-only) or user-created.
+	IsCommunity bool `json:"isCommunity" yaml:"-"`
+	// The ruleset this playbook belongs to. Custom playbooks use "__custom__".
+	Ruleset string `json:"ruleset" yaml:"-"`
+}
+
+// Validate checks that the playbook has required fields and valid structure.
+func (p *Playbook) Validate() error {
+	if p.Name == "" {
+		return errors.New("playbook name is required")
+	}
+	if len(p.Name) > 200 {
+		return errors.New("playbook name must be 200 characters or less")
+	}
+	if len(p.Description) > 2000 {
+		return errors.New("playbook description must be 2000 characters or less")
+	}
+	// Validate detection type if provided
+	if p.DetectionType != "" {
+		validTypes := map[string]bool{"nids": true, "sigma": true, "yara": true}
+		if !validTypes[p.DetectionType] {
+			return errors.New("detection type must be one of: nids, sigma, yara")
+		}
+	}
+	// Validate questions
+	for i, q := range p.Questions {
+		if err := q.Validate(); err != nil {
+			return errors.New("question " + strconv.Itoa(i+1) + ": " + err.Error())
+		}
+	}
+	return nil
+}
+
+// Validate checks that the question has required fields.
+func (q *Question) Validate() error {
+	if q.Question == "" {
+		return errors.New("question text is required")
+	}
+	if len(q.Question) > 500 {
+		return errors.New("question text must be 500 characters or less")
+	}
+	if len(q.Context) > 1000 {
+		return errors.New("context must be 1000 characters or less")
+	}
+	return nil
 }
 
 type Question struct {
@@ -56,4 +107,14 @@ type ConvertedQuery struct {
 	Query string `json:"query"`
 	// Fields that the query will return that should be made visible in the UI.
 	Fields []string `json:"fields"`
+}
+
+// GroupedPlaybooks groups playbooks by their match level for a detection
+type GroupedPlaybooks struct {
+	// Playbooks that match the specific detection ID
+	DetectionLevel []*Playbook `json:"detectionLevel"`
+	// Playbooks that match the detection's category
+	CategoryLevel []*Playbook `json:"categoryLevel"`
+	// Playbooks that match the detection engine (fallback)
+	EngineLevel []*Playbook `json:"engineLevel"`
 }

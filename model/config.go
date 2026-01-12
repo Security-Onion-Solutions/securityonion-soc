@@ -92,6 +92,21 @@ type Setting struct {
 	UiElementsDeleteMessage string `json:"uiElementsDeleteMessage"`
 }
 
+// ConfigCategory represents a group of settings organized by the first segment of their ID.
+// Used to support progressive loading of configuration settings in the UI.
+type ConfigCategory struct {
+	// The unique identifier for this category (first segment of setting IDs)
+	Id string `json:"id" example:"elasticsearch"`
+	// A human-friendly display name for the category
+	Name string `json:"name" example:"Elasticsearch"`
+	// Total number of settings in this category
+	SettingsCount int `json:"settingsCount" example:"45"`
+	// Number of settings that have been customized from their defaults
+	CustomizedCount int `json:"customizedCount" example:"3"`
+	// True if this category contains only advanced settings
+	Advanced bool `json:"advanced" example:"false"`
+}
+
 func NewSetting(id string) *Setting {
 	setting := &Setting{}
 	setting.SetId(id)

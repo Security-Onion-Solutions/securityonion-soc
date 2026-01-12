@@ -6,6 +6,7 @@
 package server
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -32,8 +33,13 @@ func RegisterPlaybookRoutes(srv *Server, r chi.Router, prefix string) {
 	h := NewPlaybookHandler(srv)
 
 	r.Route(prefix, func(r chi.Router) {
+		r.Get("/", h.GetAllPlaybooks)
+		r.Post("/", h.CreatePlaybook)
+		r.Put("/", h.UpdatePlaybook)
 		r.Get("/{id}", h.GetPlaybook)
+		r.Delete("/{id}", h.DeletePlaybook)
 		r.Get("/detection/{id}", h.GetPlaybooksForDetection)
+		r.Get("/detection/{id}/grouped", h.GetPlaybooksForDetectionGrouped)
 		r.Get("/event/{id}", h.GetEventSpecificPlaybook)
 	})
 }
@@ -187,6 +193,86 @@ func (h *PlaybookHandler) GetPlaybooksForDetection(w http.ResponseWriter, r *htt
 	web.Respond(w, r, http.StatusOK, pbs)
 }
 
+// @Summary      Get Playbooks For Detection (Grouped)
+// @Description  Retrieves playbooks grouped by match level (detection-specific, category, engine).
+// @Tags         Playbooks
+// @Security     bearer[playbooks/read, detections/read, events/read]
+// @Param        id  path  string  true        "The public Id for the detection" example(6F64990A-ACDA-40B6-AB71-134C073013B5)
+// @Success      200  {object}  model.GroupedPlaybooks  "Playbooks grouped by match level"
+// @Failure      401                           "Request was not properly authenticated"
+// @Failure      404                           "Detection not found"
+// @Failure      500                           "Internal SOC error; review SOC logs"
+// @Produce      application/json
+// @Router       /connect/playbook/detection/{id}/grouped [get]
+func (h *PlaybookHandler) GetPlaybooksForDetectionGrouped(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	logger := log.FromContext(ctx)
+
+	err := h.server.CheckAuthorized(ctx, "read", "playbooks")
+	if err != nil {
+		web.Respond(w, r, http.StatusUnauthorized, err)
+		return
+	}
+
+	err = h.server.CheckAuthorized(ctx, "read", "detections")
+	if err != nil {
+		web.Respond(w, r, http.StatusUnauthorized, err)
+		return
+	}
+
+	err = h.server.CheckAuthorized(ctx, "read", "events")
+	if err != nil {
+		web.Respond(w, r, http.StatusUnauthorized, err)
+		return
+	}
+
+	publicId := chi.URLParam(r, "id")
+	if publicId == "" {
+		logger.Error("detection id required")
+		web.Respond(w, r, http.StatusBadRequest, nil)
+		return
+	}
+
+	det, err := h.server.Detectionstore.GetDetectionByPublicId(ctx, publicId)
+	if err != nil {
+		logger.WithError(err).Error("unable to get detection")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	if det == nil {
+		web.Respond(w, r, http.StatusNotFound, nil)
+		return
+	}
+
+	engInt, ok := h.server.DetectionEngines.Load(det.Engine)
+	if ok {
+		eng := engInt.(DetectionEngine)
+
+		err = eng.ExtractDetails(det)
+		if err != nil {
+			logger.WithError(err).WithFields(log.Fields{
+				"detectionEngine":   det.Engine,
+				"detectionPublicId": publicId,
+			}).Error("unable to extract details from detection")
+		}
+	} else {
+		logger.WithFields(log.Fields{
+			"detectionEngine":   det.Engine,
+			"detectionPublicId": publicId,
+		}).Error("retrieved detection with unsupported engine")
+	}
+
+	grouped, err := h.server.Playbookstore.GetPlaybooksForDetectionGrouped(ctx, det.PublicID, det.Category, det.Engine)
+	if err != nil {
+		logger.WithError(err).Error("unable to get grouped playbooks for detection")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, grouped)
+}
+
 // @Summary      Get Event-Specific Playbook
 // @Description	 Fetches the playbook for a specific event.
 // @Tags         Playbooks
@@ -244,4 +330,170 @@ func (h *PlaybookHandler) GetEventSpecificPlaybook(w http.ResponseWriter, r *htt
 	}
 
 	web.Respond(w, r, http.StatusOK, pbs)
+}
+
+// @Summary      Get All Playbooks
+// @Description  Retrieves all playbooks (both community and custom).
+// @Tags         Playbooks
+// @Security     bearer[playbooks/read]
+// @Success      200  {array}  model.Playbook  "Playbooks successfully retrieved"
+// @Failure      401                           "Request was not properly authenticated"
+// @Failure      500                           "Internal SOC error; review SOC logs"
+// @Produce      application/json
+// @Router       /connect/playbook/ [get]
+func (h *PlaybookHandler) GetAllPlaybooks(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	logger := log.FromContext(ctx)
+
+	err := h.server.CheckAuthorized(ctx, "read", "playbooks")
+	if err != nil {
+		web.Respond(w, r, http.StatusUnauthorized, err)
+		return
+	}
+
+	pbs, err := h.server.Playbookstore.GetAllPlaybooks(ctx)
+	if err != nil {
+		logger.WithError(err).Error("unable to get all playbooks")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	if len(pbs) == 0 {
+		pbs = []*model.Playbook{}
+	}
+
+	web.Respond(w, r, http.StatusOK, pbs)
+}
+
+// @Summary      Create Playbook
+// @Description  Creates a new custom playbook.
+// @Tags         Playbooks
+// @Security     bearer[playbooks/write]
+// @Param        playbook body model.Playbook true "The playbook to create"
+// @Success      200  {object}  model.Playbook  "The playbook was successfully created"
+// @Failure      400                            "Invalid playbook data"
+// @Failure      401                            "Request was not properly authenticated"
+// @Failure      500                            "Internal SOC error; review SOC logs"
+// @Accept       application/json
+// @Produce      application/json
+// @Router       /connect/playbook/ [post]
+func (h *PlaybookHandler) CreatePlaybook(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	logger := log.FromContext(ctx)
+
+	err := h.server.CheckAuthorized(ctx, "write", "playbooks")
+	if err != nil {
+		web.Respond(w, r, http.StatusUnauthorized, err)
+		return
+	}
+
+	var playbook model.Playbook
+	if err := json.NewDecoder(r.Body).Decode(&playbook); err != nil {
+		logger.WithError(err).Error("unable to decode playbook request")
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	created, err := h.server.Playbookstore.CreatePlaybook(ctx, &playbook)
+	if err != nil {
+		logger.WithError(err).Error("unable to create playbook")
+		if strings.Contains(err.Error(), "community") || strings.Contains(err.Error(), "unexpected ID") || strings.Contains(err.Error(), "required") {
+			web.Respond(w, r, http.StatusBadRequest, err)
+		} else {
+			web.Respond(w, r, http.StatusInternalServerError, err)
+		}
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, created)
+}
+
+// @Summary      Update Playbook
+// @Description  Updates an existing custom playbook.
+// @Tags         Playbooks
+// @Security     bearer[playbooks/write]
+// @Param        playbook body model.Playbook true "The playbook to update"
+// @Success      200  {object}  model.Playbook  "The playbook was successfully updated"
+// @Failure      400                            "Invalid playbook data or cannot update community playbooks"
+// @Failure      401                            "Request was not properly authenticated"
+// @Failure      404                            "Playbook not found"
+// @Failure      500                            "Internal SOC error; review SOC logs"
+// @Accept       application/json
+// @Produce      application/json
+// @Router       /connect/playbook/ [put]
+func (h *PlaybookHandler) UpdatePlaybook(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	logger := log.FromContext(ctx)
+
+	err := h.server.CheckAuthorized(ctx, "write", "playbooks")
+	if err != nil {
+		web.Respond(w, r, http.StatusUnauthorized, err)
+		return
+	}
+
+	var playbook model.Playbook
+	if err := json.NewDecoder(r.Body).Decode(&playbook); err != nil {
+		logger.WithError(err).Error("unable to decode playbook request")
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	updated, err := h.server.Playbookstore.UpdatePlaybook(ctx, &playbook)
+	if err != nil {
+		logger.WithError(err).Error("unable to update playbook")
+		if strings.Contains(err.Error(), "not found") {
+			web.Respond(w, r, http.StatusNotFound, err)
+		} else if strings.Contains(err.Error(), "community") || strings.Contains(err.Error(), "missing") || strings.Contains(err.Error(), "required") {
+			web.Respond(w, r, http.StatusBadRequest, err)
+		} else {
+			web.Respond(w, r, http.StatusInternalServerError, err)
+		}
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, updated)
+}
+
+// @Summary      Delete Playbook
+// @Description  Deletes a custom playbook.
+// @Tags         Playbooks
+// @Security     bearer[playbooks/write]
+// @Param        id path string true "The playbook ID to delete"
+// @Success      200                            "The playbook was successfully deleted"
+// @Failure      400                            "Cannot delete community playbooks"
+// @Failure      401                            "Request was not properly authenticated"
+// @Failure      404                            "Playbook not found"
+// @Failure      500                            "Internal SOC error; review SOC logs"
+// @Router       /connect/playbook/{id} [delete]
+func (h *PlaybookHandler) DeletePlaybook(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	logger := log.FromContext(ctx)
+
+	err := h.server.CheckAuthorized(ctx, "write", "playbooks")
+	if err != nil {
+		web.Respond(w, r, http.StatusUnauthorized, err)
+		return
+	}
+
+	playbookId := chi.URLParam(r, "id")
+	if playbookId == "" {
+		logger.Error("playbook id required")
+		web.Respond(w, r, http.StatusBadRequest, nil)
+		return
+	}
+
+	err = h.server.Playbookstore.DeletePlaybook(ctx, playbookId)
+	if err != nil {
+		logger.WithError(err).Error("unable to delete playbook")
+		if strings.Contains(err.Error(), "not found") {
+			web.Respond(w, r, http.StatusNotFound, err)
+		} else if strings.Contains(err.Error(), "community") {
+			web.Respond(w, r, http.StatusBadRequest, err)
+		} else {
+			web.Respond(w, r, http.StatusInternalServerError, err)
+		}
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, nil)
 }

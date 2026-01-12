@@ -257,3 +257,15 @@ type ProcessStatus struct {
 	Status  string `json:"Status"`
 	Details string `json:"Details"`
 }
+type MetricPoint struct {
+	Timestamp int64   `json:"t"`
+	Value     float64 `json:"v"`
+}
+
+type HistoricalMetrics struct {
+	CPU     []MetricPoint `json:"cpu"`
+	Memory  []MetricPoint `json:"memory"`
+	MgmtIn  []MetricPoint `json:"mgmtIn"`
+	MgmtOut []MetricPoint `json:"mgmtOut"`
+	BondIn  []MetricPoint `json:"bondIn"`
+}

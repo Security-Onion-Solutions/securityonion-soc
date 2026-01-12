@@ -561,13 +561,14 @@ func TestScheduler(t *testing.T) {
 	assert.Equal(t, 1, len(pdm.PlaybooksByDetectionId))
 	assert.NotNil(t, pdm.PlaybooksByDetectionId["1182f3b3-e716-4efa-99ab-d2685d04360f"])
 
+	// Maps now store file paths instead of playbook IDs
 	assert.Equal(t, 1, len(pdm.PlaybooksByCategory))
 	assert.Equal(t, 1, len(pdm.PlaybooksByCategory["process_creation"]))
-	assert.Equal(t, "4f1db62f-cb41-41fb-8af3-11a67585b5db", pdm.PlaybooksByCategory["process_creation"][0])
+	assert.Equal(t, "/tmp/playbooks/repo/playbook3.yaml", pdm.PlaybooksByCategory["process_creation"][0])
 
 	assert.Equal(t, 1, len(pdm.PlaybooksByEngine))
 	assert.Equal(t, 1, len(pdm.PlaybooksByEngine["suricata"]))
-	assert.Equal(t, "1dfe7517-f105-454f-ae96-f2280c09e4b2", pdm.PlaybooksByEngine["suricata"][0])
+	assert.Equal(t, "/tmp/playbooks/repo/playbook1.yaml", pdm.PlaybooksByEngine["suricata"][0])
 
 	assert.Equal(t, 3, len(pdm.playbooksOnDisk))
 	assert.Equal(t, "/tmp/playbooks/repo/playbook1.yaml", pdm.playbooksOnDisk["1dfe7517-f105-454f-ae96-f2280c09e4b2"])
@@ -581,21 +582,27 @@ func TestGetPlaybooksForDetection(t *testing.T) {
 
 	iom := mock.NewMockIOManager(ctrl)
 
+	// Maps now store file paths directly instead of playbook IDs
 	pdm := PlaybookDiskManager{
 		srv: server.NewFakeAuthorizedServer(nil),
 		PlaybooksByDetectionId: map[string][]string{
-			"1182f3b3-e716-4efa-99ab-d2685d04360f": {"6f64990a-acda-40b6-ab71-134c073013b5"},
+			"1182f3b3-e716-4efa-99ab-d2685d04360f": {"/path/6f6"},
 		},
 		PlaybooksByCategory: map[string][]string{
-			"process_creation": {"4f1db62f-cb41-41fb-8af3-11a67585b5db"},
+			"process_creation": {"/path/4f1", "/path/4f1_nids"},
 		},
 		PlaybooksByEngine: map[string][]string{
-			"suricata": {"1dfe7517-f105-454f-ae96-f2280c09e4b2"},
+			"suricata": {"/path/1df"},
 		},
 		playbooksOnDisk: map[string]string{
 			"6f64990a-acda-40b6-ab71-134c073013b5": "/path/6f6",
 			"4f1db62f-cb41-41fb-8af3-11a67585b5db": "/path/4f1",
 			"1dfe7517-f105-454f-ae96-f2280c09e4b2": "/path/1df",
+			"4f1db62f-nids":                        "/path/4f1_nids",
+		},
+		playbookTypes: map[string]string{
+			"/path/4f1":      "sigma",
+			"/path/4f1_nids": "nids",
 		},
 		IOManager: iom,
 	}
@@ -621,12 +628,12 @@ func TestGetPlaybooksForDetection(t *testing.T) {
 	assert.Equal(t, "1dfe7517-f105-454f-ae96-f2280c09e4b2", playbooks[0].Id)
 
 	iom.EXPECT().ReadFile("/path/6f6").Return([]byte("id: 6f64990a-acda-40b6-ab71-134c073013b5"), nil)
-	iom.EXPECT().ReadFile("/path/4f1").Return([]byte("id: 4f1db62f-cb41-41fb-8af3-11a67585b5db"), nil)
+	iom.EXPECT().ReadFile("/path/4f1_nids").Return([]byte("id: 4f1db62f-nids"), nil)
 	playbooks, err = pdm.GetPlaybooksForDetection(ctx, "1182F3B3-E716-4EFA-99AB-D2685D04360F", "PROCESS_CREATION", model.EngineNameSuricata)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(playbooks))
 	assert.Equal(t, "6f64990a-acda-40b6-ab71-134c073013b5", playbooks[0].Id)
-	assert.Equal(t, "4f1db62f-cb41-41fb-8af3-11a67585b5db", playbooks[1].Id)
+	assert.Equal(t, "4f1db62f-nids", playbooks[1].Id)
 }
 
 func TestGetPlaybookById(t *testing.T) {
@@ -790,14 +797,15 @@ func TestGetPlaybooksForDetection_BaseCategoryMatching(t *testing.T) {
 
 	iom := mock.NewMockIOManager(ctrl)
 
+	// Maps now store file paths directly instead of playbook IDs
 	pdm := PlaybookDiskManager{
 		srv:                    server.NewFakeAuthorizedServer(nil),
 		PlaybooksByDetectionId: map[string][]string{},
 		PlaybooksByCategory: map[string][]string{
-			"scan":    {"scan-playbook", "sigma-scan-playbook"},
-			"et scan": {"et-scan-playbook"},
-			"sql":     {"sql-playbook"},
-			"generic": {"generic-playbook"},
+			"scan":    {"/path/scan", "/path/sigma-scan"},
+			"et scan": {"/path/et-scan"},
+			"sql":     {"/path/sql"},
+			"generic": {"/path/generic"},
 		},
 		PlaybooksByEngine: map[string][]string{},
 		playbooksOnDisk: map[string]string{
@@ -808,11 +816,11 @@ func TestGetPlaybooksForDetection_BaseCategoryMatching(t *testing.T) {
 			"generic-playbook":    "/path/generic",
 		},
 		playbookTypes: map[string]string{
-			"scan-playbook":       "nids",
-			"sigma-scan-playbook": "sigma",
-			"et-scan-playbook":    "nids",
-			"sql-playbook":        "nids",
-			// generic-playbook has no type - should match any engine
+			"/path/scan":       "nids",
+			"/path/sigma-scan": "sigma",
+			"/path/et-scan":    "nids",
+			"/path/sql":        "nids",
+			// /path/generic has no type - should match any engine
 		},
 		IOManager: iom,
 	}

@@ -17,7 +17,7 @@ const LICENSE_STATUS_UNPROVISIONED = "unprovisioned";
 
 const LICENSE_EXPIRES_SOON_DAYS = 45;
 
-const SUBGRID_DISABLED_ROUTES = ['home','settings','assistant','aimetrics'];
+const SUBGRID_DISABLED_ROUTES = ['home', 'settings', 'assistant', 'aimetrics'];
 const LOCAL_GRID_ID = ''
 
 const USER_PASSWORD_LENGTH_MIN = 8;
@@ -33,6 +33,15 @@ if (typeof global !== 'undefined') {
 }
 
 $(document).ready(function () {
+  // Check for interface preference for modern UI
+  const preferredInterface = localStorage.getItem('preferred_interface');
+  if (preferredInterface === 'modern' && !window.location.pathname.includes('/modern/')) {
+    // Basic check to prevent infinite loop if the file doesn't exist but we are trying to go there.
+    // In production, we assume /modern/index.html exists.
+    window.location.href = 'modern/index.html';
+    return;
+  }
+
   Promise.all(templatePromises).then(() => {
     const vuetify = Vuetify.createVuetify({
       defaults: {
@@ -262,7 +271,7 @@ $(document).ready(function () {
           const fields = this.getDynamicActionFieldNames(content);
           const route = this;
           if (fields && fields.length > 0) {
-            fields.forEach(function(field) {
+            fields.forEach(function (field) {
               value = event[field];
               content = route.replaceActionVar(content, ":" + field, value, uriEncode)
             });
@@ -279,29 +288,29 @@ $(document).ready(function () {
           action.target = localStorage['settings.flags.testing'] !== 'true' ? action.target : '_self';
           const route = this;
           fetch(action.linkFormatted, options)
-          .then(data => {
-            var link = action.backgroundSuccessLinkFormatted;
-            if (link) {
-              if (data.status != null) {
-                link = route.replaceActionVar(link, "responseCode", data.status, true)
+            .then(data => {
+              var link = action.backgroundSuccessLinkFormatted;
+              if (link) {
+                if (data.status != null) {
+                  link = route.replaceActionVar(link, "responseCode", data.status, true)
+                }
+                if (data.statusText != null) {
+                  link = route.replaceActionVar(link, "responseStatus", data.statusText, true)
+                }
+                window.open(link, action.target);
+              } else {
+                route.$root.showTip(route.i18n.actionSuccess + route.$root.localizeMessage(action.name));
               }
-              if (data.statusText != null) {
-                link = route.replaceActionVar(link, "responseStatus", data.statusText, true)
+            })
+            .catch((error) => {
+              var link = action.backgroundFailureLinkFormatted;
+              if (link) {
+                link = route.replaceActionVar(link, "error", error.message, true)
+                window.open(link, action.target);
+              } else {
+                route.$root.showTip(route.i18n.actionFailure + route.$root.localizeMessage(action.name));
               }
-              window.open(link, action.target);
-            } else {
-              route.$root.showTip(route.i18n.actionSuccess + route.$root.localizeMessage(action.name));
-            }
-          })
-          .catch((error) => {
-            var link = action.backgroundFailureLinkFormatted;
-            if (link) {
-              link = route.replaceActionVar(link, "error", error.message, true)
-              window.open(link, action.target);
-            } else {
-              route.$root.showTip(route.i18n.actionFailure + route.$root.localizeMessage(action.name));
-            }
-          });
+            });
           return true;
         },
         base64encode(content) {
@@ -337,7 +346,7 @@ $(document).ready(function () {
         replaceActionVar(content, field, value, uriEncode) {
           if (value === undefined || value == null) return content;
 
-          var encode = function(input) {
+          var encode = function (input) {
             if (uriEncode) {
               return encodeURIComponent(input);
             }
@@ -384,7 +393,7 @@ $(document).ready(function () {
           eligible &= (link.indexOf("{eventId}") == -1 || event['soc_id']);
           const fields = this.getDynamicActionFieldNames(link);
           if (fields && fields.length > 0) {
-            fields.forEach(function(field) {
+            fields.forEach(function (field) {
               value = event[field];
               eligible &= value != undefined && value != null;
             });
@@ -410,14 +419,14 @@ $(document).ready(function () {
             if (destUri) {
               this.deleteCookie("AUTH_REDIRECT");
               if (destUri != "/" &&
-                  !destUri.includes(".?v=") &&
-                  !destUri.endsWith(".ico") &&
-                  !destUri.endsWith(".js") &&
-                  !destUri.endsWith(".css") &&
-                  !destUri.endsWith(".png") &&
-                  !destUri.endsWith(".svg") &&
-                  !destUri.endsWith(".jpg") &&
-                  !destUri.endsWith(".gif")) {
+                !destUri.includes(".?v=") &&
+                !destUri.endsWith(".ico") &&
+                !destUri.endsWith(".js") &&
+                !destUri.endsWith(".css") &&
+                !destUri.endsWith(".png") &&
+                !destUri.endsWith(".svg") &&
+                !destUri.endsWith(".jpg") &&
+                !destUri.endsWith(".gif")) {
                 this.log("Redirecting to auth destination: " + destUri);
                 location.pathname = destUri;
                 return true;
@@ -451,7 +460,7 @@ $(document).ready(function () {
               this.loadServerSettingsTime = now;
               try {
                 // Do not allow subgrid override for this API call.
-                const response = await this.papi.get('info', {params: { gridId: LOCAL_GRID_ID}});
+                const response = await this.papi.get('info', { params: { gridId: LOCAL_GRID_ID } });
                 if (response) {
                   this.papi.defaults.headers.common['X-Srv-Token'] = response.data.srvToken;
                   this.version = response.data.version;
@@ -545,7 +554,7 @@ $(document).ready(function () {
                       case 'error':
                         this.showError(this.i18n.syncFailure.replace('{engine}', eng));
                         break;
-                      }
+                    }
                   });
 
                   this.gridInfo[LOCAL_GRID_ID] = response.data;
@@ -569,7 +578,7 @@ $(document).ready(function () {
           for (var idx = 0; idx < this.subgrids.length; idx++) {
             const grid = this.subgrids[idx];
             try {
-              const gridResponse = await this.papi.get('info', {params: { gridId: grid.id}});
+              const gridResponse = await this.papi.get('info', { params: { gridId: grid.id } });
               if (gridResponse) {
                 this.gridInfo[grid.id] = gridResponse.data;
               }
@@ -661,7 +670,7 @@ $(document).ready(function () {
             : '';
 
           const svgFavicon = document.querySelector('.so-favicon[type="image/svg+xml"]'),
-                pngFavicon = document.querySelector('.so-favicon[type="image/png"]');
+            pngFavicon = document.querySelector('.so-favicon[type="image/png"]');
 
           if (pngFavicon && svgFavicon) {
             const ext = ".svg";
@@ -694,7 +703,7 @@ $(document).ready(function () {
           var element = $(elementId);
           if (element && element.removeClass) {
             element.removeClass('waggle');
-            setTimeout(function() {
+            setTimeout(function () {
               element.addClass('waggle');
             }, 100);
           }
@@ -704,7 +713,7 @@ $(document).ready(function () {
         },
         isLicensed(feat) {
           return this.licenseKey != null && this.licenseStatus == LICENSE_STATUS_ACTIVE &&
-              (!this.licenseKey.features.length || this.licenseKey.features.indexOf(feat) != -1);
+            (!this.licenseKey.features.length || this.licenseKey.features.indexOf(feat) != -1);
         },
         colorLicenseStatus(value) {
           if (value == LICENSE_STATUS_ACTIVE) return "success";
@@ -753,7 +762,7 @@ $(document).ready(function () {
         },
         formatDuration(duration) {
           if (duration != null) {
-            return moment.duration(duration,"s").humanize();
+            return moment.duration(duration, "s").humanize();
           }
         },
         formatLongDuration(durationMs) {
@@ -810,7 +819,7 @@ $(document).ready(function () {
           }
           return "";
         },
-        formatMarkdown(str, handleMermaid=false) {
+        formatMarkdown(str, handleMermaid = false) {
           marked.setOptions({
             renderer: new marked.Renderer(),
             smartLists: true,
@@ -898,7 +907,7 @@ $(document).ready(function () {
           this.updateColumnClass(headers, this.i18n.gridId, this.hasSubgrids());
         },
         updateColumnClass(headers, title, visible, size = "d-sm-table-cell") {
-          const column = headers.find(function(item) {
+          const column = headers.find(function (item) {
             return item.title == title
           });
           if (!column) return;
@@ -953,11 +962,11 @@ $(document).ready(function () {
           }
 
           if (vars && typeof vars == 'object') {
-            return localized.replace(/\{(\w+)\}/g, function(match, key) {
+            return localized.replace(/\{(\w+)\}/g, function (match, key) {
               return vars[key] !== undefined ? vars[key] : match;
             });
           }
-  
+
           return localized;
         },
         tryLocalize(msg) {
@@ -969,8 +978,8 @@ $(document).ready(function () {
           return msg;
         },
         correctCasing(origMsg) {
-          const msg = (origMsg+'').toLowerCase();
-          var localized = this.i18n['cc_'+msg];
+          const msg = (origMsg + '').toLowerCase();
+          var localized = this.i18n['cc_' + msg];
           if (!localized) {
             return origMsg;
           }
@@ -1092,7 +1101,7 @@ $(document).ready(function () {
         publish(kind, obj) {
           var listeners = this.subscriptions[kind];
           if (listeners) {
-            listeners.forEach(function(listener) {
+            listeners.forEach(function (listener) {
               listener(obj);
             });
           }
@@ -1106,31 +1115,31 @@ $(document).ready(function () {
           }
         },
         openWebsocket() {
-          if (!this.socket || this.socket.readyState == WebSocket.CLOSED ) {
+          if (!this.socket || this.socket.readyState == WebSocket.CLOSED) {
             const vm = this;
             this.connected = false;
             this.reconnecting = true;
             this.log("WebSocket connecting to " + this.wsUrl);
             this.socket = new WebSocket(this.wsUrl);
-            this.socket.onopen = function(evt) {
+            this.socket.onopen = function (evt) {
               vm.log("WebSocket connected");
               vm.connected = true;
               vm.reconnecting = false;
               vm.loadServerSettingsTime = 0; // Force reload of server settings in case new SOC config changed
               vm.updateStatus();
             };
-            this.socket.onclose = function(evt) {
+            this.socket.onclose = function (evt) {
               vm.log("WebSocket closed, will attempt to reconnect");
               vm.socket = null;
               vm.connected = false;
               vm.reconnecting = false;
               vm.updateStatus();
             };
-            this.socket.onmessage = function(evt) {
+            this.socket.onmessage = function (evt) {
               var msg = JSON.parse(evt.data);
               vm.publish(msg.Kind, msg.Object);
             };
-            this.socket.onerror = function(evt) {
+            this.socket.onerror = function (evt) {
               vm.log("WebSocket failure: " + evt.data);
             };
           } else {
@@ -1156,8 +1165,8 @@ $(document).ready(function () {
           if (response) {
             const redirectCookie = this.getCookie('AUTH_REDIRECT');
             if ((response.headers && response.headers['content-type'] == "text/html") ||
-                (response.status == 401 && response.request.responseURL && response.request.responseURL.indexOf('/api/') == -1) ||
-                (response.request.responseURL && response.request.responseURL.indexOf("/login/banner.md") == -1 && redirectCookie != null && redirectCookie.length > 0)) {
+              (response.status == 401 && response.request.responseURL && response.request.responseURL.indexOf('/api/') == -1) ||
+              (response.request.responseURL && response.request.responseURL.indexOf("/login/banner.md") == -1 && redirectCookie != null && redirectCookie.length > 0)) {
               this.deleteCookie('AUTH_REDIRECT');
               this.showLogin();
               return null
@@ -1186,7 +1195,7 @@ $(document).ready(function () {
         apiFailureCallback(error) {
           if (error.response && error.response.status >= 502 && error.response.status <= 504) {
             reconnecting = true;
-          } else { 
+          } else {
             this.checkForUnauthorized(error.response);
           }
           throw error;
@@ -1221,11 +1230,11 @@ $(document).ready(function () {
         getCookie(name) {
           let cookies = document.cookie.split(';');
           for (let i = 0; i < cookies.length; i++) {
-              let cookie = cookies[i].trim();
-              let pair = cookie.split("=", 2);
-              if (pair.length == 2 && pair[0] == name) {
-                return pair[1];
-              }
+            let cookie = cookies[i].trim();
+            let pair = cookie.split("=", 2);
+            if (pair.length == 2 && pair[0] == name) {
+              return pair[1];
+            }
           }
           return null;
         },
@@ -1279,23 +1288,23 @@ $(document).ready(function () {
           if (this.$root.$vuetify && this.$root.$vuetify.theme.current.colors[colorName]) {
             color = this.$root.$vuetify.theme.current.colors[colorName];
           }
-          var R = parseInt(color.substring(1,3),16);
-          var G = parseInt(color.substring(3,5),16);
-          var B = parseInt(color.substring(5,7),16);
+          var R = parseInt(color.substring(1, 3), 16);
+          var G = parseInt(color.substring(3, 5), 16);
+          var B = parseInt(color.substring(5, 7), 16);
 
           R = parseInt(R * (100 + percent) / 100);
           G = parseInt(G * (100 + percent) / 100);
           B = parseInt(B * (100 + percent) / 100);
 
-          R = (R<255)?R:255;
-          G = (G<255)?G:255;
-          B = (B<255)?B:255;
+          R = (R < 255) ? R : 255;
+          G = (G < 255) ? G : 255;
+          B = (B < 255) ? B : 255;
 
-          var RR = ((R.toString(16).length==1)?"0"+R.toString(16):R.toString(16));
-          var GG = ((G.toString(16).length==1)?"0"+G.toString(16):G.toString(16));
-          var BB = ((B.toString(16).length==1)?"0"+B.toString(16):B.toString(16));
+          var RR = ((R.toString(16).length == 1) ? "0" + R.toString(16) : R.toString(16));
+          var GG = ((G.toString(16).length == 1) ? "0" + G.toString(16) : G.toString(16));
+          var BB = ((B.toString(16).length == 1) ? "0" + B.toString(16) : B.toString(16));
 
-          return "#"+RR+GG+BB;
+          return "#" + RR + GG + BB;
         },
         truncate(value, max) {
           const ellipses = "...";
@@ -1306,7 +1315,7 @@ $(document).ready(function () {
           return value;
         },
         getAllGrids() {
-          const grids = [{id: LOCAL_GRID_ID, name: this.i18n.gridLocal}];
+          const grids = [{ id: LOCAL_GRID_ID, name: this.i18n.gridLocal }];
           this.subgrids.forEach((grid) => {
             grid.name = grid.id;
             grids.push(grid);
@@ -1329,7 +1338,7 @@ $(document).ready(function () {
           for (idx in allGrids) {
             const grid = allGrids[idx];
             try {
-              const response = await this.papi.get('users/', { params: { gridId: grid.id }});
+              const response = await this.papi.get('users/', { params: { gridId: grid.id } });
               allUsers.push(...response.data);
             } catch (error) {
               this.showError(error);
@@ -1490,7 +1499,7 @@ $(document).ready(function () {
         isGridDetectionsUnhealthy(gridId) {
           const status = this.statusByGridId[gridId];
           if (status != null && status.detections != null &&
-            ( status.detections.elastalert.integrityFailure ||
+            (status.detections.elastalert.integrityFailure ||
               status.detections.suricata.integrityFailure ||
               status.detections.strelka.integrityFailure ||
               status.detections.elastalert.syncFailure ||
@@ -1498,7 +1507,7 @@ $(document).ready(function () {
               status.detections.strelka.syncFailure ||
               status.detections.elastalert.migrationFailure ||
               status.detections.suricata.migrationFailure ||
-              status.detections.strelka.migrationFailure )) {
+              status.detections.strelka.migrationFailure)) {
             return true;
           }
           return false;
@@ -1515,7 +1524,7 @@ $(document).ready(function () {
           const status = this.statusByGridId[gridId];
           return status != null && status.detections != null &&
             !this.isGridDetectionsUnhealthy(gridId) &&
-            ( status.detections.elastalert.importing === true ||
+            (status.detections.elastalert.importing === true ||
               status.detections.elastalert.migrating === true ||
               status.detections.elastalert.syncing === true ||
               status.detections.strelka.importing === true ||
@@ -1523,7 +1532,7 @@ $(document).ready(function () {
               status.detections.strelka.syncing === true ||
               status.detections.suricata.importing === true ||
               status.detections.suricata.migrating === true ||
-              status.detections.suricata.syncing === true );
+              status.detections.suricata.syncing === true);
         },
         isDetectionsUpdating() {
           for (gridId in this.statusByGridId) {
@@ -1550,7 +1559,7 @@ $(document).ready(function () {
         },
         isNewGridAlert(gridId) {
           const status = this.statusByGridId[gridId];
-          if (status && status.alerts && status.alerts.newCount  > 0) {
+          if (status && status.alerts && status.alerts.newCount > 0) {
             return true;
           }
           return false;
@@ -1572,26 +1581,26 @@ $(document).ready(function () {
         isMaximized() {
           return this.maximizedTarget != null;
         },
-        maximizeById(targetId, escapeFn=null) {
+        maximizeById(targetId, escapeFn = null) {
           const target = document.getElementById(targetId);
           if (target) {
             return this.maximize(target, escapeFn);
           }
           return false;
         },
-        maximize(target, escapeFn=null) {
+        maximize(target, escapeFn = null) {
           this.unmaximize();
           this.maximizedTarget = target;
           this.maximizedOrigWidth = target.style.width;
           this.maximizedOrigHeight = target.style.height;
           target.classList.add("maximized");
           document.documentElement.classList.add("maximized-bg");
-          window.scrollTo(0,0);
+          window.scrollTo(0, 0);
           this.maximizedCancelFn = escapeFn;
           document.addEventListener('keydown', this.unmaximizeEscapeListener);
           return true;
         },
-        unmaximize(userInitiated=false) {
+        unmaximize(userInitiated = false) {
           if (!this.maximizedTarget) return;
           if (userInitiated && this.maximizedCancelFn) {
             if (this.maximizedCancelFn(this.maximizeTarget)) return;
@@ -1619,7 +1628,7 @@ $(document).ready(function () {
             ips.forEach(ip => this.ip2host[ip] = []);
 
             // Do not use subgrid ID for this API call.
-            this.papi.put('util/reverse-lookup', ips, {params: { gridId: LOCAL_GRID_ID}}).then(response => {
+            this.papi.put('util/reverse-lookup', ips, { params: { gridId: LOCAL_GRID_ID } }).then(response => {
               for (let entry in response.data) {
                 let existing = this.ip2host[entry];
                 if (!existing) {
@@ -1755,8 +1764,8 @@ $(document).ready(function () {
 const cacheBuster = document.currentScript ? new URL(document.currentScript.src).search : '';
 function loadPageTemplate(templateId, templatePath) {
   const promise = new Promise((resolve, reject) => {
-    const page = $("<template>", {id: templateId});
-    page.load(templatePath + cacheBuster, function(response, status) {
+    const page = $("<template>", { id: templateId });
+    page.load(templatePath + cacheBuster, function (response, status) {
       if (status === "success") {
         $('body').append(page);
         resolve();

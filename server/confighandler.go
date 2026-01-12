@@ -31,6 +31,8 @@ func RegisterConfigRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Use(h.configEnabled)
 
 		r.Get("/", h.getConfig)
+		r.Get("/categories", h.getCategories)
+		r.Get("/category/{name}", h.getCategorySettings)
 
 		r.Put("/", h.putSetting)
 		r.Post("/", h.putSetting)
@@ -53,6 +55,71 @@ func (h *ConfigHandler) configEnabled(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+// @Summary      Get Configuration Categories
+// @Description  Retrieves the list of configuration categories with counts of settings and customizations.
+// @Description  This is a lightweight endpoint for progressive loading of the configuration UI.
+// @Tags         Config
+// @Security     bearer[config/read]
+// @param        advanced  query  boolean  false  "If true, include categories that only contain advanced settings" example(true)
+// @Success      200  {array} model.ConfigCategory   "The configuration category objects"
+// @Failure      401                         "Request was not properly authenticated"
+// @Failure      403                         "Insufficient permissions for this request"
+// @Failure      405                         "Configuration module has not been loaded"
+// @Failure      500                         "Internal SOC error; review SOC logs"
+// @Router       /connect/config/categories [get]
+func (h *ConfigHandler) getCategories(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	advanced, err := strconv.ParseBool(r.URL.Query().Get("advanced"))
+	if err != nil {
+		advanced = false
+	}
+
+	categories, err := h.server.Configstore.GetCategories(ctx, advanced)
+	if err != nil {
+		web.Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, categories)
+}
+
+// @Summary      Get Category Settings
+// @Description  Retrieves all configuration settings for a specific category.
+// @Description  This enables progressive loading by fetching settings on-demand when a category is expanded.
+// @Tags         Config
+// @Security     bearer[config/read]
+// @param        name      path   string   true   "The category name (first segment of setting IDs)" example(elasticsearch)
+// @param        advanced  query  boolean  false  "If true, include advanced settings in the category" example(true)
+// @Success      200  {array} model.Setting   "The configuration setting objects for this category"
+// @Failure      401                         "Request was not properly authenticated"
+// @Failure      403                         "Insufficient permissions for this request"
+// @Failure      405                         "Configuration module has not been loaded"
+// @Failure      500                         "Internal SOC error; review SOC logs"
+// @Router       /connect/config/category/{name} [get]
+func (h *ConfigHandler) getCategorySettings(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	name := chi.URLParam(r, "name")
+	if name == "" {
+		web.Respond(w, r, http.StatusBadRequest, errors.New("Category name is required"))
+		return
+	}
+
+	advanced, err := strconv.ParseBool(r.URL.Query().Get("advanced"))
+	if err != nil {
+		advanced = false
+	}
+
+	settings, err := h.server.Configstore.GetCategorySettings(ctx, name, advanced)
+	if err != nil {
+		web.Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, settings)
 }
 
 // @Summary      Get Configuration

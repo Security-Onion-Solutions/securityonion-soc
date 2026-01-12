@@ -9,6 +9,7 @@ package influxdb
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"strconv"
 	"sync"
 	"time"
@@ -526,4 +527,131 @@ func (metrics *InfluxDBMetrics) UpdateNodeMetrics(ctx context.Context, node *mod
 		licensing.ValidateFeature(licensing.FEAT_LKS, node.LksEnabled == 1)
 	}
 	return status
+}
+
+func (metrics *InfluxDBMetrics) GetHistoricalMetrics(ctx context.Context, host string, duration string) (*model.HistoricalMetrics, error) {
+	if metrics.client == nil {
+		return nil, errors.New("InfluxDB client not connected")
+	}
+
+	// Determine window based on duration
+	window := "1m"
+	if duration == "" {
+		duration = "1h"
+	}
+	switch duration {
+	case "24h":
+		window = "30m"
+	case "7d":
+		window = "4h"
+	}
+
+	results := &model.HistoricalMetrics{
+		CPU:     make([]model.MetricPoint, 0),
+		Memory:  make([]model.MetricPoint, 0),
+		MgmtIn:  make([]model.MetricPoint, 0),
+		MgmtOut: make([]model.MetricPoint, 0),
+		BondIn:  make([]model.MetricPoint, 0),
+	}
+
+	// CPU Query (100 - idle)
+	cpuQuery := `from(bucket:"` + metrics.bucket + `")
+		|> range(start: -` + duration + `)
+		|> filter(fn: (r) => r._measurement == "cpu" and r._field == "usage_idle" and r.cpu == "cpu-total" and r.host == "` + host + `")
+		|> map(fn: (r) => ({ _time: r._time, _value: 100.0 - r._value }))
+		|> aggregateWindow(every: ` + window + `, fn: mean, createEmpty: false)
+		|> keep(columns: ["_time", "_value"])`
+
+	// Memory Query (used_percent)
+	memQuery := `from(bucket:"` + metrics.bucket + `")
+		|> range(start: -` + duration + `)
+		|> filter(fn: (r) => r._measurement == "mem" and r._field == "used_percent" and r.host == "` + host + `")
+		|> aggregateWindow(every: ` + window + `, fn: mean, createEmpty: false)
+		|> keep(columns: ["_time", "_value"])`
+
+	// Traffic MB/s Query Helper
+	// Uses metrics.bucket for historical data (longer retention) instead of so_short_term
+	genTrafficQuery := func(ifaceType string, metric string) string {
+		return `
+		import "join"
+		manints = from(bucket: "` + metrics.bucket + `")
+		  |> range(start: -30d)
+		  |> filter(fn: (r) => r["_measurement"] == "node_config" and r["_field"] == "` + ifaceType + `" and r.host == "` + host + `")
+		  |> duplicate(column: "_value", as: "interface")
+		  |> group(columns: ["host","interface"])
+		  |> last()
+
+		trafficRaw = from(bucket: "` + metrics.bucket + `")
+		  |> range(start: -` + duration + `)
+		  |> filter(fn: (r) => r["_measurement"] == "net" and r["_field"] == "` + metric + `" and r.host == "` + host + `")
+		  |> derivative(unit: 1s, nonNegative: true, columns: ["_value"], timeColumn: "_time")
+		  |> group(columns: ["host","interface"])
+		  |> aggregateWindow(every: ` + window + `, fn: mean, createEmpty: false)
+
+		join.inner(left: trafficRaw, right: manints,
+		  on: (l,r) => l.interface == r.interface and l.host == r.host,
+		  as: (l, r) => ({l with _value: l._value * 8.0 / 1000000.0}))
+		|> keep(columns: ["_time", "_value"])`
+	}
+
+	var err error
+
+	results.CPU, err = metrics.fetchSeries(cpuQuery)
+	if err != nil {
+		log.WithError(err).WithField("host", host).Warn("Failed to fetch CPU metrics")
+	}
+
+	results.Memory, err = metrics.fetchSeries(memQuery)
+	if err != nil {
+		log.WithError(err).WithField("host", host).Warn("Failed to fetch Memory metrics")
+	}
+
+	results.MgmtIn, err = metrics.fetchSeries(genTrafficQuery("manint", "bytes_recv"))
+	if err != nil {
+		log.WithError(err).WithField("host", host).Warn("Failed to fetch MgmtIn metrics")
+	}
+
+	results.MgmtOut, err = metrics.fetchSeries(genTrafficQuery("manint", "bytes_sent"))
+	if err != nil {
+		log.WithError(err).WithField("host", host).Warn("Failed to fetch MgmtOut metrics")
+	}
+
+	results.BondIn, err = metrics.fetchSeries(genTrafficQuery("monint", "bytes_recv"))
+	if err != nil {
+		log.WithError(err).WithField("host", host).Warn("Failed to fetch BondIn (monitoring interface) metrics")
+	}
+
+	return results, nil
+}
+
+func (metrics *InfluxDBMetrics) fetchSeries(query string) ([]model.MetricPoint, error) {
+	points := make([]model.MetricPoint, 0)
+	result, err := metrics.queryApi.Query(context.Background(), query)
+	if err != nil {
+		return nil, err
+	}
+	for result.Next() {
+		val := result.Record().Value()
+		if val == nil {
+			continue
+		}
+		var floatVal float64
+		switch v := val.(type) {
+		case float64:
+			floatVal = v
+		case int64:
+			floatVal = float64(v)
+		case int:
+			floatVal = float64(v)
+		case uint64:
+			floatVal = float64(v)
+		default:
+			continue
+		}
+		points = append(points, model.MetricPoint{
+			Timestamp: result.Record().Time().Unix(),
+			Value:     floatVal,
+		})
+	}
+	return points, result.Err()
 }

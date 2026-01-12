@@ -8,8 +8,10 @@ package playbook
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -23,6 +25,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 	"github.com/security-onion-solutions/securityonion-soc/util"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
 	"github.com/google/uuid"
@@ -67,6 +70,11 @@ type PlaybookDiskManager struct {
 	playbooksOnDisk        map[string]string
 	playbookTypes          map[string]string // Maps playbook ID to detection type
 
+	// Custom playbooks storage
+	customPlaybooks      map[string]*model.Playbook
+	customPlaybooksFile  string
+	customPlaybooksMutex sync.RWMutex
+
 	detections.IOManager
 }
 
@@ -92,6 +100,15 @@ func (pdm *PlaybookDiskManager) Init(config module.ModuleConfig) (err error) {
 	pdm.playbookRepos, err = model.GetReposDefault(config, "playbookRepos", false, DEFAULT_PLAYBOOK_REPOS)
 	if err != nil {
 		return fmt.Errorf("unable to parse Playbooks playbookRepos: %w", err)
+	}
+
+	// Initialize custom playbooks storage
+	pdm.customPlaybooks = make(map[string]*model.Playbook)
+	pdm.customPlaybooksFile = filepath.Join(pdm.playbookRepoPath, "custom_playbooks.json")
+
+	// Load existing custom playbooks
+	if err := pdm.loadCustomPlaybooks(); err != nil {
+		log.WithError(err).Warn("unable to load custom playbooks, starting with empty set")
 	}
 
 	return nil
@@ -247,11 +264,14 @@ func (pdm *PlaybookDiskManager) LoadPlaybooks(logger log.Interface, repos []*det
 }
 
 func (pdm *PlaybookDiskManager) readPlaybooks(logger log.Interface, repos []*detections.RepoOnDisk) ([]*model.Playbook, error) {
-	byDetId := make(map[string][]string)
-	onDisk := make(map[string]string)
-	byCategory := make(map[string][]string)
-	byEngine := make(map[string][]string)
-	types := make(map[string]string)
+	// Use file paths as unique identifiers instead of playbook IDs
+	// This allows multiple files with the same playbook ID to coexist
+	// (e.g., one detection-specific and one category-specific with the same ID)
+	byDetId := make(map[string][]string)   // detection_id -> []filePath
+	byCategory := make(map[string][]string) // category -> []filePath
+	byEngine := make(map[string][]string)   // engine -> []filePath
+	onDisk := make(map[string]string)       // playbookId -> filePath (for GetPlaybookById)
+	types := make(map[string]string)        // filePath -> detectionType
 
 	total := 0
 	playbooks := []*model.Playbook{}
@@ -324,38 +344,46 @@ func (pdm *PlaybookDiskManager) readPlaybooks(logger log.Interface, repos []*det
 			playbooks = append(playbooks, pb)
 			files++
 
+			// Store detection type by file path
 			if pb.DetectionType != "" {
-				types[id] = strings.ToLower(pb.DetectionType)
+				types[p] = strings.ToLower(pb.DetectionType)
 			}
 
+			// Index by detection ID - use file path as value
 			if pb.DetectionId != "" {
 				detId := strings.ToLower(pb.DetectionId)
-				byDetId[detId] = append(byDetId[detId], id)
+				byDetId[detId] = append(byDetId[detId], p)
 			}
 
+			// Index by category - use file path as value
 			if pb.DetectionCategory != "" {
 				category := strings.ToLower(pb.DetectionCategory)
-				byCategory[category] = append(byCategory[category], id)
+				byCategory[category] = append(byCategory[category], p)
 			}
 
+			// Index by engine for generic playbooks
 			if pb.DetectionId == "" && pb.DetectionCategory == "" {
 				switch strings.ToLower(pb.DetectionType) {
 				case "sigma":
-					byEngine[string(model.EngineNameElastAlert)] = append(byEngine[string(model.EngineNameElastAlert)], id)
+					byEngine[string(model.EngineNameElastAlert)] = append(byEngine[string(model.EngineNameElastAlert)], p)
 				case "strelka":
-					byEngine[string(model.EngineNameStrelka)] = append(byEngine[string(model.EngineNameStrelka)], id)
+					byEngine[string(model.EngineNameStrelka)] = append(byEngine[string(model.EngineNameStrelka)], p)
 				case "nids":
-					byEngine[string(model.EngineNameSuricata)] = append(byEngine[string(model.EngineNameSuricata)], id)
+					byEngine[string(model.EngineNameSuricata)] = append(byEngine[string(model.EngineNameSuricata)], p)
 				default:
 					logger.Warn("unexpected playbook detection_type: " + pb.DetectionType)
 				}
 			}
 
-			_, ok := onDisk[id]
-			if ok {
-				logger.WithField("playbookId", id).Warn("duplicate playbook id")
+			// Keep playbook ID -> path mapping for GetPlaybookById
+			// (if duplicate IDs exist, last one wins - this is acceptable for ID-based lookups)
+			if existingPath, ok := onDisk[id]; ok {
+				logger.WithFields(log.Fields{
+					"playbookId":   id,
+					"existingPath": existingPath,
+					"newPath":      p,
+				}).Warn("duplicate playbook id found; using newer file for ID-based lookups")
 			}
-
 			onDisk[id] = p
 
 			return nil
@@ -404,8 +432,9 @@ func (pdm *PlaybookDiskManager) GetPlaybooksForDetection(ctx context.Context, pu
 	pdm.pbUpdateMutex.RLock()
 	defer pdm.pbUpdateMutex.RUnlock()
 
-	forId := pdm.PlaybooksByDetectionId[publicId]
-	forCategory := []string{}
+	// Maps now store file paths directly instead of playbook IDs
+	forDetectionPaths := pdm.PlaybooksByDetectionId[publicId]
+	forCategoryPaths := []string{}
 
 	// First try exact match, filtered by detection type for engine consistency
 	if matches := pdm.PlaybooksByCategory[detectCategory]; len(matches) > 0 {
@@ -419,11 +448,11 @@ func (pdm *PlaybookDiskManager) GetPlaybooksForDetection(ctx context.Context, pu
 			expectedType = "yara"
 		}
 
-		for _, playbookId := range matches {
-			playbookType, ok := pdm.playbookTypes[playbookId]
+		for _, playbookPath := range matches {
+			playbookType, ok := pdm.playbookTypes[playbookPath]
 			if !ok || playbookType == expectedType {
 				// Include playbooks with matching type or no type specified
-				forCategory = append(forCategory, playbookId)
+				forCategoryPaths = append(forCategoryPaths, playbookPath)
 			}
 		}
 	}
@@ -437,39 +466,43 @@ func (pdm *PlaybookDiskManager) GetPlaybooksForDetection(ctx context.Context, pu
 			baseCategory := strings.ToLower(parts[len(parts)-1])
 			if matches := pdm.PlaybooksByCategory[baseCategory]; len(matches) > 0 {
 				// Filter matches to only include NIDS playbooks
-				for _, playbookId := range matches {
-					playbookType, ok := pdm.playbookTypes[playbookId]
+				for _, playbookPath := range matches {
+					playbookType, ok := pdm.playbookTypes[playbookPath]
 					if ok && playbookType == "nids" {
-						forCategory = append(forCategory, playbookId)
+						forCategoryPaths = append(forCategoryPaths, playbookPath)
 					}
 				}
 			}
 		}
 	}
 
-	results := append([]string{}, forId...)
-	results = append(results, forCategory...)
+	// Combine paths from detection-specific and category-level
+	allPaths := append([]string{}, forDetectionPaths...)
+	allPaths = append(allPaths, forCategoryPaths...)
 
-	if len(results) == 0 {
-		results = pdm.PlaybooksByEngine[string(detectEngine)]
+	// Deduplicate paths - a playbook file with both detection_id and detection_category
+	// would be indexed in both maps and appear twice
+	seen := make(map[string]bool)
+	dedupedPaths := make([]string, 0, len(allPaths))
+	for _, path := range allPaths {
+		if !seen[path] {
+			seen[path] = true
+			dedupedPaths = append(dedupedPaths, path)
+		}
 	}
 
-	pbs := make([]*model.Playbook, 0, len(results))
-	for _, id := range results {
-		path, ok := pdm.playbooksOnDisk[id]
-		if !ok {
-			logger.WithFields(log.Fields{
-				"detectionPublicId": publicId,
-				"playbookId":        id,
-			}).Warn("referenced playbook is not known to be on disk")
-			continue
-		}
+	// Fall back to engine-level playbooks if no matches
+	if len(dedupedPaths) == 0 {
+		dedupedPaths = pdm.PlaybooksByEngine[string(detectEngine)]
+	}
 
+	// Load playbooks from file paths
+	pbs := make([]*model.Playbook, 0, len(dedupedPaths))
+	for _, path := range dedupedPaths {
 		raw, err := pdm.ReadFile(path)
 		if err != nil {
 			logger.WithFields(log.Fields{
 				"detectionPublicId": publicId,
-				"playbookId":        id,
 				"playbookPath":      path,
 			}).Error("unable to read playbook from disk")
 			continue
@@ -480,24 +513,180 @@ func (pdm *PlaybookDiskManager) GetPlaybooksForDetection(ctx context.Context, pu
 		err = yaml.Unmarshal(raw, &pb)
 		if err != nil {
 			logger.WithError(err).WithFields(log.Fields{
-				"playbookId":   id,
 				"playbookPath": path,
 			}).Error("unable to parse playbook from disk")
 			continue
 		}
 
+		pb.IsCommunity = true
 		pbs = append(pbs, pb)
 	}
 
+	// Also get custom playbooks for this detection
+	customPbs := pdm.getCustomPlaybooksForDetection(publicId, detectCategory, detectEngine)
+	pbs = append(pbs, customPbs...)
+
 	logger.WithFields(log.Fields{
-		"playbookCount":     len(pbs),
-		"detectionPublicId": publicId,
-		"detectCategory":    detectCategory,
-		"detectEngine":      detectEngine,
-		"playbookIds":       results,
+		"playbookCount":       len(pbs),
+		"communityCount":      len(dedupedPaths),
+		"customCount":         len(customPbs),
+		"detectionPublicId":   publicId,
+		"detectCategory":      detectCategory,
+		"detectEngine":        detectEngine,
+		"forDetectionPaths":   forDetectionPaths,
+		"forCategoryPaths":    forCategoryPaths,
+		"communityPaths":      dedupedPaths,
 	}).Info("retrieving playbooks for detection")
 
 	return pbs, nil
+}
+
+// GetPlaybooksForDetectionGrouped returns playbooks grouped by their match level
+// This allows the UI to display detection-specific, category-level, and engine-level playbooks separately
+func (pdm *PlaybookDiskManager) GetPlaybooksForDetectionGrouped(ctx context.Context, publicId string, detectCategory string, detectEngine model.EngineName) (*model.GroupedPlaybooks, error) {
+	logger := log.FromContext(ctx)
+
+	err := pdm.srv.CheckAuthorized(ctx, "read", "playbooks")
+	if err != nil {
+		return nil, err
+	}
+
+	publicId = strings.ToLower(publicId)
+	detectCategory = strings.ToLower(detectCategory)
+
+	pdm.pbUpdateMutex.RLock()
+	defer pdm.pbUpdateMutex.RUnlock()
+
+	result := &model.GroupedPlaybooks{
+		DetectionLevel: []*model.Playbook{},
+		CategoryLevel:  []*model.Playbook{},
+		EngineLevel:    []*model.Playbook{},
+	}
+
+	// Track paths we've already loaded to avoid duplicates
+	loadedPaths := make(map[string]bool)
+
+	// Helper function to load a playbook from path
+	loadPlaybook := func(path string) *model.Playbook {
+		raw, err := pdm.ReadFile(path)
+		if err != nil {
+			logger.WithFields(log.Fields{
+				"detectionPublicId": publicId,
+				"playbookPath":      path,
+			}).Error("unable to read playbook from disk")
+			return nil
+		}
+
+		pb := &model.Playbook{}
+		err = yaml.Unmarshal(raw, &pb)
+		if err != nil {
+			logger.WithError(err).WithFields(log.Fields{
+				"playbookPath": path,
+			}).Error("unable to parse playbook from disk")
+			return nil
+		}
+
+		pb.IsCommunity = true
+		return pb
+	}
+
+	// Get expected detection type for engine filtering
+	expectedType := ""
+	switch detectEngine {
+	case model.EngineNameSuricata:
+		expectedType = "nids"
+	case model.EngineNameElastAlert:
+		expectedType = "sigma"
+	case model.EngineNameStrelka:
+		expectedType = "yara"
+	}
+
+	// 1. Load detection-specific playbooks
+	for _, path := range pdm.PlaybooksByDetectionId[publicId] {
+		if loadedPaths[path] {
+			continue
+		}
+		if pb := loadPlaybook(path); pb != nil {
+			result.DetectionLevel = append(result.DetectionLevel, pb)
+			loadedPaths[path] = true
+		}
+	}
+
+	// 2. Load category-level playbooks (filtered by engine type)
+	categoryPaths := []string{}
+
+	// Exact category match
+	if matches := pdm.PlaybooksByCategory[detectCategory]; len(matches) > 0 {
+		for _, path := range matches {
+			playbookType, ok := pdm.playbookTypes[path]
+			if !ok || playbookType == expectedType {
+				categoryPaths = append(categoryPaths, path)
+			}
+		}
+	}
+
+	// For NIDS engine, try base category without prefix (e.g., "SCAN" from "ET SCAN")
+	if detectEngine == model.EngineNameSuricata && detectCategory != "" {
+		parts := strings.Fields(detectCategory)
+		if len(parts) > 1 {
+			baseCategory := strings.ToLower(parts[len(parts)-1])
+			if matches := pdm.PlaybooksByCategory[baseCategory]; len(matches) > 0 {
+				for _, path := range matches {
+					playbookType, ok := pdm.playbookTypes[path]
+					if ok && playbookType == "nids" {
+						categoryPaths = append(categoryPaths, path)
+					}
+				}
+			}
+		}
+	}
+
+	for _, path := range categoryPaths {
+		if loadedPaths[path] {
+			continue
+		}
+		if pb := loadPlaybook(path); pb != nil {
+			result.CategoryLevel = append(result.CategoryLevel, pb)
+			loadedPaths[path] = true
+		}
+	}
+
+	// 3. Load engine-level playbooks only if no detection or category matches
+	if len(result.DetectionLevel) == 0 && len(result.CategoryLevel) == 0 {
+		for _, path := range pdm.PlaybooksByEngine[string(detectEngine)] {
+			if loadedPaths[path] {
+				continue
+			}
+			if pb := loadPlaybook(path); pb != nil {
+				result.EngineLevel = append(result.EngineLevel, pb)
+				loadedPaths[path] = true
+			}
+		}
+	}
+
+	// 4. Add custom playbooks to appropriate levels
+	customPbs := pdm.getCustomPlaybooksForDetection(publicId, detectCategory, detectEngine)
+	for _, pb := range customPbs {
+		// Determine which level based on the playbook's fields
+		if pb.DetectionId != "" && strings.ToLower(pb.DetectionId) == publicId {
+			result.DetectionLevel = append(result.DetectionLevel, pb)
+		} else if pb.DetectionCategory != "" {
+			result.CategoryLevel = append(result.CategoryLevel, pb)
+		} else {
+			result.EngineLevel = append(result.EngineLevel, pb)
+		}
+	}
+
+	logger.WithFields(log.Fields{
+		"detectionLevelCount": len(result.DetectionLevel),
+		"categoryLevelCount":  len(result.CategoryLevel),
+		"engineLevelCount":    len(result.EngineLevel),
+		"detectionPublicId":   publicId,
+		"detectCategory":      detectCategory,
+		"detectEngine":        detectEngine,
+	}).Info("retrieving grouped playbooks for detection")
+
+	return result, nil
 }
 
 func (pdm *PlaybookDiskManager) GetPlaybookById(ctx context.Context, id string) (pb *model.Playbook, err error) {
@@ -518,6 +707,15 @@ func (pdm *PlaybookDiskManager) GetPlaybookById(ctx context.Context, id string) 
 		}
 	}()
 
+	// First check custom playbooks
+	pdm.customPlaybooksMutex.RLock()
+	if customPb, exists := pdm.customPlaybooks[id]; exists {
+		pdm.customPlaybooksMutex.RUnlock()
+		return customPb, nil
+	}
+	pdm.customPlaybooksMutex.RUnlock()
+
+	// Then check community playbooks on disk
 	pdm.pbUpdateMutex.RLock()
 	defer pdm.pbUpdateMutex.RUnlock()
 
@@ -549,6 +747,7 @@ func (pdm *PlaybookDiskManager) GetPlaybookById(ctx context.Context, id string) 
 		return nil, err
 	}
 
+	pb.IsCommunity = true
 	return pb, nil
 }
 
@@ -986,4 +1185,327 @@ func isQuestionAggregate(query string) bool {
 	}
 
 	return m.Aggregation
+}
+
+// ============================================================================
+// Custom Playbook CRUD Operations
+// ============================================================================
+
+// loadCustomPlaybooks loads custom playbooks from the JSON file
+func (pdm *PlaybookDiskManager) loadCustomPlaybooks() error {
+	pdm.customPlaybooksMutex.Lock()
+	defer pdm.customPlaybooksMutex.Unlock()
+
+	data, err := os.ReadFile(pdm.customPlaybooksFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// File doesn't exist yet, that's okay
+			return nil
+		}
+		return fmt.Errorf("failed to read custom playbooks file: %w", err)
+	}
+
+	var playbooks []*model.Playbook
+	if err := json.Unmarshal(data, &playbooks); err != nil {
+		return fmt.Errorf("failed to unmarshal custom playbooks: %w", err)
+	}
+
+	pdm.customPlaybooks = make(map[string]*model.Playbook)
+	for _, pb := range playbooks {
+		pdm.customPlaybooks[pb.Id] = pb
+	}
+
+	return nil
+}
+
+// saveCustomPlaybooks saves custom playbooks to the JSON file
+func (pdm *PlaybookDiskManager) saveCustomPlaybooks() error {
+	pdm.customPlaybooksMutex.RLock()
+	playbooks := make([]*model.Playbook, 0, len(pdm.customPlaybooks))
+	for _, pb := range pdm.customPlaybooks {
+		playbooks = append(playbooks, pb)
+	}
+	pdm.customPlaybooksMutex.RUnlock()
+
+	data, err := json.MarshalIndent(playbooks, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal custom playbooks: %w", err)
+	}
+
+	// Ensure directory exists
+	dir := filepath.Dir(pdm.customPlaybooksFile)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create directory for custom playbooks: %w", err)
+	}
+
+	if err := os.WriteFile(pdm.customPlaybooksFile, data, 0644); err != nil {
+		return fmt.Errorf("failed to write custom playbooks file: %w", err)
+	}
+
+	return nil
+}
+
+// CreatePlaybook creates a new custom playbook
+func (pdm *PlaybookDiskManager) CreatePlaybook(ctx context.Context, playbook *model.Playbook) (*model.Playbook, error) {
+	logger := log.FromContext(ctx)
+
+	if err := pdm.srv.CheckAuthorized(ctx, "write", "playbooks"); err != nil {
+		return nil, err
+	}
+
+	// Validate playbook
+	if err := playbook.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Ensure no ID is set for new playbooks
+	if playbook.Id != "" {
+		return nil, errors.New("unexpected ID found in new playbook")
+	}
+
+	// Cannot create community playbooks via API
+	if playbook.IsCommunity {
+		return nil, errors.New("cannot create community playbooks via API")
+	}
+
+	// Set custom ruleset
+	playbook.Ruleset = model.PLAYBOOK_RULESET_CUSTOM
+	playbook.IsCommunity = false
+
+	// Set timestamps
+	now := time.Now()
+	playbook.CreateTime = &now
+
+	// Generate ID
+	playbook.Id = uuid.New().String()
+
+	// Set kind
+	playbook.Kind = "playbook"
+
+	// Get user ID from context
+	if userID, ok := ctx.Value(web.ContextKeyRequestorId).(string); ok {
+		playbook.UserId = userID
+	}
+
+	// Save to custom playbooks
+	pdm.customPlaybooksMutex.Lock()
+	pdm.customPlaybooks[playbook.Id] = playbook
+	pdm.customPlaybooksMutex.Unlock()
+
+	if err := pdm.saveCustomPlaybooks(); err != nil {
+		// Rollback
+		pdm.customPlaybooksMutex.Lock()
+		delete(pdm.customPlaybooks, playbook.Id)
+		pdm.customPlaybooksMutex.Unlock()
+		return nil, err
+	}
+
+	logger.WithFields(log.Fields{
+		"playbookId":   playbook.Id,
+		"playbookName": playbook.Name,
+		"requestId":    ctx.Value(web.ContextKeyRequestId),
+		"userId":       playbook.UserId,
+	}).Info("Playbook created")
+
+	return playbook, nil
+}
+
+// UpdatePlaybook updates an existing custom playbook
+func (pdm *PlaybookDiskManager) UpdatePlaybook(ctx context.Context, playbook *model.Playbook) (*model.Playbook, error) {
+	logger := log.FromContext(ctx)
+
+	if err := pdm.srv.CheckAuthorized(ctx, "write", "playbooks"); err != nil {
+		return nil, err
+	}
+
+	// Validate playbook
+	if err := playbook.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Require ID for updates
+	if playbook.Id == "" {
+		return nil, errors.New("missing playbook ID")
+	}
+
+	// Get existing playbook
+	pdm.customPlaybooksMutex.RLock()
+	existing, exists := pdm.customPlaybooks[playbook.Id]
+	pdm.customPlaybooksMutex.RUnlock()
+
+	if !exists {
+		return nil, errors.New("playbook not found")
+	}
+
+	// Cannot update community playbooks
+	if existing.IsCommunity {
+		return nil, errors.New("cannot update community playbooks")
+	}
+
+	// Preserve read-only fields
+	playbook.CreateTime = existing.CreateTime
+	playbook.IsCommunity = existing.IsCommunity
+	playbook.Ruleset = existing.Ruleset
+
+	// Update timestamp
+	now := time.Now()
+	playbook.UpdateTime = &now
+
+	// Get user ID from context
+	if userID, ok := ctx.Value(web.ContextKeyRequestorId).(string); ok {
+		playbook.UserId = userID
+	}
+
+	// Save to custom playbooks
+	pdm.customPlaybooksMutex.Lock()
+	oldPlaybook := pdm.customPlaybooks[playbook.Id]
+	pdm.customPlaybooks[playbook.Id] = playbook
+	pdm.customPlaybooksMutex.Unlock()
+
+	if err := pdm.saveCustomPlaybooks(); err != nil {
+		// Rollback
+		pdm.customPlaybooksMutex.Lock()
+		pdm.customPlaybooks[playbook.Id] = oldPlaybook
+		pdm.customPlaybooksMutex.Unlock()
+		return nil, err
+	}
+
+	logger.WithFields(log.Fields{
+		"playbookId":   playbook.Id,
+		"playbookName": playbook.Name,
+		"requestId":    ctx.Value(web.ContextKeyRequestId),
+		"userId":       playbook.UserId,
+	}).Info("Playbook updated")
+
+	return playbook, nil
+}
+
+// DeletePlaybook deletes a custom playbook
+func (pdm *PlaybookDiskManager) DeletePlaybook(ctx context.Context, playbookId string) error {
+	logger := log.FromContext(ctx)
+
+	if err := pdm.srv.CheckAuthorized(ctx, "write", "playbooks"); err != nil {
+		return err
+	}
+
+	// Get existing playbook
+	pdm.customPlaybooksMutex.RLock()
+	existing, exists := pdm.customPlaybooks[playbookId]
+	pdm.customPlaybooksMutex.RUnlock()
+
+	if !exists {
+		return errors.New("playbook not found")
+	}
+
+	// Cannot delete community playbooks
+	if existing.IsCommunity {
+		return errors.New("cannot delete community playbooks")
+	}
+
+	// Delete from custom playbooks
+	pdm.customPlaybooksMutex.Lock()
+	delete(pdm.customPlaybooks, playbookId)
+	pdm.customPlaybooksMutex.Unlock()
+
+	if err := pdm.saveCustomPlaybooks(); err != nil {
+		// Rollback
+		pdm.customPlaybooksMutex.Lock()
+		pdm.customPlaybooks[playbookId] = existing
+		pdm.customPlaybooksMutex.Unlock()
+		return err
+	}
+
+	logger.WithFields(log.Fields{
+		"playbookId":   playbookId,
+		"playbookName": existing.Name,
+		"requestId":    ctx.Value(web.ContextKeyRequestId),
+		"userId":       ctx.Value(web.ContextKeyRequestorId),
+	}).Info("Playbook deleted")
+
+	return nil
+}
+
+// GetAllPlaybooks returns all playbooks (both community and custom)
+func (pdm *PlaybookDiskManager) GetAllPlaybooks(ctx context.Context) ([]*model.Playbook, error) {
+	if err := pdm.srv.CheckAuthorized(ctx, "read", "playbooks"); err != nil {
+		return nil, err
+	}
+
+	playbooks := []*model.Playbook{}
+
+	// Get community playbooks from disk
+	pdm.pbUpdateMutex.RLock()
+	for id, path := range pdm.playbooksOnDisk {
+		contents, err := pdm.ReadFile(path)
+		if err != nil {
+			log.WithError(err).WithField("playbookId", id).Warn("failed to read playbook file")
+			continue
+		}
+
+		pb := &model.Playbook{}
+		if err := yaml.Unmarshal(contents, pb); err != nil {
+			log.WithError(err).WithField("playbookId", id).Warn("failed to unmarshal playbook")
+			continue
+		}
+
+		pb.IsCommunity = true
+		playbooks = append(playbooks, pb)
+	}
+	pdm.pbUpdateMutex.RUnlock()
+
+	// Get custom playbooks
+	pdm.customPlaybooksMutex.RLock()
+	for _, pb := range pdm.customPlaybooks {
+		playbooks = append(playbooks, pb)
+	}
+	pdm.customPlaybooksMutex.RUnlock()
+
+	return playbooks, nil
+}
+
+// getCustomPlaybooksForDetection returns custom playbooks matching the given detection criteria
+func (pdm *PlaybookDiskManager) getCustomPlaybooksForDetection(detectionId string, detectCategory string, detectEngine model.EngineName) []*model.Playbook {
+	pdm.customPlaybooksMutex.RLock()
+	defer pdm.customPlaybooksMutex.RUnlock()
+
+	var results []*model.Playbook
+	detectionIdLower := strings.ToLower(detectionId)
+	categoryLower := strings.ToLower(detectCategory)
+
+	// Map engine to detection type
+	var detectType string
+	switch detectEngine {
+	case model.EngineNameElastAlert:
+		detectType = "sigma"
+	case model.EngineNameStrelka:
+		detectType = "yara"
+	case model.EngineNameSuricata:
+		detectType = "nids"
+	}
+
+	for _, pb := range pdm.customPlaybooks {
+		// Match by detection ID
+		if pb.DetectionId != "" && strings.ToLower(pb.DetectionId) == detectionIdLower {
+			results = append(results, pb)
+			continue
+		}
+
+		// Match by category
+		if pb.DetectionCategory != "" && strings.ToLower(pb.DetectionCategory) == categoryLower {
+			// Also check detection type if specified
+			if pb.DetectionType == "" || strings.ToLower(pb.DetectionType) == detectType {
+				results = append(results, pb)
+				continue
+			}
+		}
+
+		// Match by engine type (for generic playbooks)
+		if pb.DetectionId == "" && pb.DetectionCategory == "" {
+			if strings.ToLower(pb.DetectionType) == detectType {
+				results = append(results, pb)
+			}
+		}
+	}
+
+	return results
 }
