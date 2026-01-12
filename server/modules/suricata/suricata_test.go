@@ -1855,6 +1855,59 @@ func TestWriteThresholdFileMultipleTypes(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// Test writeThresholdFile skips overrides with nil fields
+func TestWriteThresholdFileNilOverrideFields(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	iom := mock.NewMockIOManager(ctrl)
+
+	eng := &SuricataEngine{
+		IOManager:     iom,
+		thresholdFile: "/opt/sensoroni/nids/threshold.conf",
+	}
+
+	detections := []*model.Detection{
+		{
+			PublicID: "1001",
+			Overrides: []*model.Override{
+				{
+					Type:      model.OverrideTypeSuppress,
+					IsEnabled: true,
+					OverrideParameters: model.OverrideParameters{
+						Track: nil, // nil field
+						IP:    util.Ptr("192.168.1.0/24"),
+					},
+				},
+			},
+		},
+		{
+			PublicID: "1002",
+			Overrides: []*model.Override{
+				{
+					Type:      model.OverrideTypeSuppress,
+					IsEnabled: true,
+					OverrideParameters: model.OverrideParameters{
+						Track: util.Ptr("by_src"),
+						IP:    nil, // nil field
+					},
+				},
+			},
+		},
+	}
+
+	iom.EXPECT().WriteFile("/opt/sensoroni/nids/threshold.conf", gomock.Any(), fs.FileMode(0644)).DoAndReturn(
+		func(path string, content []byte, perm fs.FileMode) error {
+			contentStr := string(content)
+			assert.NotContains(t, contentStr, "sig_id 1001")
+			assert.NotContains(t, contentStr, "sig_id 1002")
+			return nil
+		})
+
+	err := eng.writeThresholdFile(detections)
+	assert.NoError(t, err)
+}
+
 // Test hasDetectionChanged method
 func TestHasDetectionChanged(t *testing.T) {
 	eng := &SuricataEngine{}
