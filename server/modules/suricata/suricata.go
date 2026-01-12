@@ -1039,10 +1039,18 @@ func (e *SuricataEngine) writeThresholdFile(detections []*model.Detection) error
 			switch override.Type {
 			case model.OverrideTypeThreshold:
 				// Format: threshold gen_id <gid>, sig_id <sid>, type <type>, track <track>, count <count>, seconds <seconds>
+				if override.ThresholdType == nil || override.Track == nil || override.Count == nil || override.Seconds == nil {
+					e.logger().WithField("publicId", det.PublicID).Warn("skipping invalid threshold override: missing required fields")
+					continue
+				}
 				thresholds.WriteString(fmt.Sprintf("threshold gen_id 1, sig_id %s, type %s, track %s, count %d, seconds %d\n",
 					det.PublicID, *override.ThresholdType, *override.Track, *override.Count, *override.Seconds))
 			case model.OverrideTypeSuppress:
 				// Format: suppress gen_id <gid>, sig_id <sid>, track <track_by>, ip <ip_address>
+				if override.Track == nil || override.IP == nil {
+					e.logger().WithField("publicId", det.PublicID).Warn("skipping invalid suppress override: missing required fields")
+					continue
+				}
 				thresholds.WriteString(fmt.Sprintf("suppress gen_id 1, sig_id %s, track %s, ip %s\n",
 					det.PublicID, *override.Track, *override.IP))
 			}
