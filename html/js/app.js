@@ -1473,6 +1473,7 @@ $(document).ready(function () {
             case "Pending":
             case "Syncing":
             case "Healthy":
+            case "Unknown":
               return false;
           }
           return true;
