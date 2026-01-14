@@ -276,16 +276,17 @@ async function checkExistingPcapJob() {
     if (!alert.value) return
 
     // Check if this alert has a stored PCAP job ID
-    const jobId = alert.value['alert.pcap_id']
+    const jobId = alert.value['soc_pcap_job_id']
+    console.log('Checking for existing PCAP job, soc_pcap_job_id:', jobId, 'alert keys:', Object.keys(alert.value).filter(k => k.includes('pcap') || k.includes('job')))
     if (!jobId) return
 
     try {
-        const response = await get<PcapJob>(`/api/job/${jobId}`)
-        if (response) {
-            pcapJob.value = response
+        const response = await fetch(`/api/job?jobId=${jobId}`)
+        if (response.ok) {
+            pcapJob.value = await response.json()
 
             // If job is still pending, start polling
-            if (pcapJob.value.status === JOB_STATUS.PENDING) {
+            if (pcapJob.value?.status === JOB_STATUS.PENDING) {
                 startPcapPolling()
             }
         }
@@ -360,23 +361,35 @@ async function saveJobIdToAlert(jobId: number) {
     if (!alert.value?.soc_id) return
 
     try {
+        // Build a wide date range to find the alert
+        // Add 24 hours buffer to end time to handle timezone differences
+        const now = new Date()
+        const endTime = new Date(now.getTime() + 24 * 60 * 60 * 1000) // tomorrow
+        const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
+        const dateRange = `${formatDateForApi(oneYearAgo)} - ${formatDateForApi(endTime)}`
+
         // Update the alert with the PCAP job ID so other users can access it
-        await post('/api/events/ack', {
-            searchFilter: `soc_id:"${alert.value.soc_id}"`,
-            eventFilter: { 'soc_id': alert.value.soc_id },
+        // Use _id for the search since that's how alerts are stored in Elasticsearch
+        const result = await post('/api/events/ack', {
+            searchFilter: `_id:"${alert.value.soc_id}"`,
+            eventFilter: { '_id': alert.value.soc_id },
+            dateRange,
+            dateRangeFormat: '2006/01/02 3:04:05 PM',
+            timezone: 'Local',
             acknowledge: false,
             escalate: false,
             updateFields: {
-                'alert.pcap_id': jobId
+                'soc_pcap_job_id': jobId
             }
         })
+        console.log('PCAP job ID save result:', result)
 
         // Update local state
-        alert.value['alert.pcap_id'] = jobId
+        alert.value['soc_pcap_job_id'] = jobId
     } catch (e) {
         // Still update local state even if persist fails
-        alert.value['alert.pcap_id'] = jobId
-        console.debug('Could not persist PCAP job ID to alert:', e)
+        alert.value['soc_pcap_job_id'] = jobId
+        console.error('Could not persist PCAP job ID to alert:', e)
     }
 }
 
@@ -384,12 +397,13 @@ async function refreshPcapJobStatus() {
     if (!pcapJob.value) return
 
     try {
-        const response = await get<PcapJob>(`/api/job/${pcapJob.value.id}`)
-        if (response) {
-            pcapJob.value = response
+        const response = await fetch(`/api/job?jobId=${pcapJob.value.id}`)
+        if (response.ok) {
+            const job = await response.json()
+            pcapJob.value = job
 
             // Stop polling if job is no longer pending
-            if (response.status !== JOB_STATUS.PENDING) {
+            if (job.status !== JOB_STATUS.PENDING) {
                 stopPcapPolling()
             }
         }
@@ -604,6 +618,8 @@ async function fetchAlert() {
         if (response?.events?.length > 0) {
             const event = response.events[0]
             const payload = event.payload || {}
+            console.log('Fetched alert payload keys:', Object.keys(payload).filter(k => k.includes('pcap') || k.includes('soc_')))
+            console.log('Full event object:', event)
             alert.value = {
                 soc_id: event.id || payload['soc_id'],
                 soc_timestamp: event.timestamp || payload['@timestamp'],

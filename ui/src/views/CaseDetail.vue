@@ -205,6 +205,45 @@ const addHashAsEvidence = (hash: string, hashType: string) => {
   }
   artifactSubTab.value = 'evidence'
 }
+
+// History helper functions
+const getHistoryDotColor = (operation: string) => {
+  switch (operation?.toLowerCase()) {
+    case 'create': return 'bg-green-500 text-white'
+    case 'update': return 'bg-blue-500 text-white'
+    case 'delete': return 'bg-red-500 text-white'
+    default: return 'bg-muted-foreground text-background'
+  }
+}
+
+const getHistoryIcon = (kind: string) => {
+  switch (kind?.toLowerCase()) {
+    case 'case': return Briefcase
+    case 'comment': return MessageSquare
+    case 'artifact': return Paperclip
+    case 'relatedevent': return Activity
+    default: return History
+  }
+}
+
+const getOperationStyles = (operation: string) => {
+  switch (operation?.toLowerCase()) {
+    case 'create': return 'bg-green-500/10 text-green-500 border border-green-500/20'
+    case 'update': return 'bg-blue-500/10 text-blue-500 border border-blue-500/20'
+    case 'delete': return 'bg-red-500/10 text-red-500 border border-red-500/20'
+    default: return 'bg-muted text-muted-foreground border border-border'
+  }
+}
+
+const getKindLabel = (kind: string) => {
+  switch (kind?.toLowerCase()) {
+    case 'case': return 'Case'
+    case 'comment': return 'Comment'
+    case 'artifact': return 'Artifact'
+    case 'relatedevent': return 'Related Event'
+    default: return kind || 'Unknown'
+  }
+}
 </script>
 
 <template>
@@ -496,12 +535,91 @@ const addHashAsEvidence = (hash: string, hashType: string) => {
             </div>
           </div>
 
+          <!-- History Tab -->
+          <div v-else-if="activeTab === 'history'" class="flex flex-col h-full animate-in fade-in duration-300">
+            <div class="flex-1 p-6 overflow-y-auto max-h-[600px]">
+              <div v-if="associations.history.length === 0" class="text-center py-8 text-muted-foreground">
+                <History class="h-12 w-12 mx-auto mb-3 opacity-50" />
+                <p>No history available for this case.</p>
+              </div>
+
+              <!-- Timeline -->
+              <div v-else class="relative">
+                <!-- Timeline line -->
+                <div class="absolute left-4 top-0 bottom-0 w-px bg-border"></div>
+
+                <!-- History items -->
+                <div class="space-y-6">
+                  <div
+                    v-for="(item, index) in associations.history"
+                    :key="item.id || index"
+                    class="relative pl-10"
+                  >
+                    <!-- Timeline dot -->
+                    <div
+                      :class="cn(
+                        'absolute left-2 w-5 h-5 rounded-full border-2 border-background flex items-center justify-center',
+                        getHistoryDotColor(item.operation)
+                      )"
+                    >
+                      <component :is="getHistoryIcon(item.kind)" class="h-2.5 w-2.5" />
+                    </div>
+
+                    <!-- Content card -->
+                    <div class="bg-muted/30 border border-border/50 rounded-lg p-4 hover:bg-muted/50 transition-colors">
+                      <div class="flex items-start justify-between gap-4">
+                        <div class="flex-1 min-w-0">
+                          <div class="flex items-center gap-2 flex-wrap">
+                            <span class="font-medium text-sm">{{ getUserName(item.userId) || 'System' }}</span>
+                            <span :class="cn(
+                              'px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase',
+                              getOperationStyles(item.operation)
+                            )">
+                              {{ item.operation }}
+                            </span>
+                            <span class="text-xs text-muted-foreground">
+                              {{ getKindLabel(item.kind) }}
+                            </span>
+                          </div>
+
+                          <!-- Details based on kind -->
+                          <div class="mt-2 text-sm text-muted-foreground">
+                            <template v-if="item.kind === 'case'">
+                              <p v-if="item.operation === 'create'">Created this case</p>
+                              <p v-else-if="item.title">Updated case: "{{ item.title }}"</p>
+                              <p v-else>Updated case details</p>
+                            </template>
+                            <template v-else-if="item.kind === 'comment'">
+                              <p class="line-clamp-2">{{ item.description || 'Added a comment' }}</p>
+                            </template>
+                            <template v-else-if="item.kind === 'artifact'">
+                              <p>{{ item.artifactType || 'Artifact' }}: {{ item.value || item.description || 'Updated artifact' }}</p>
+                            </template>
+                            <template v-else-if="item.kind === 'relatedEvent'">
+                              <p>Related event {{ item.operation === 'create' ? 'added' : 'updated' }}</p>
+                            </template>
+                            <template v-else>
+                              <p>{{ item.description || `${item.operation} ${item.kind}` }}</p>
+                            </template>
+                          </div>
+                        </div>
+
+                        <div class="text-xs text-muted-foreground whitespace-nowrap">
+                          {{ formatDate(item.createTime || item.updateTime) }}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Coming Soon (for other tabs) -->
           <div v-else class="flex-1 flex flex-col items-center justify-center p-12 text-center space-y-4 animate-in zoom-in duration-300">
             <div class="p-4 rounded-full bg-muted">
               <Activity v-if="activeTab === 'events'" class="h-10 w-10 text-muted-foreground" />
               <CheckSquare v-else-if="activeTab === 'tasks'" class="h-10 w-10 text-muted-foreground" />
-              <History v-else-if="activeTab === 'history'" class="h-10 w-10 text-muted-foreground" />
             </div>
             <div>
               <h3 class="text-lg font-semibold capitalize">{{ activeTab }} View</h3>

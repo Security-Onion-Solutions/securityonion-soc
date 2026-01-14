@@ -1158,7 +1158,14 @@ func (store *ElasticEventstore) Acknowledge(ctx context.Context, ackCriteria *mo
 
 			updateCriteria := model.NewEventUpdateCriteria()
 			userId := ctx.Value(web.ContextKeyRequestorId).(string)
-			store.addUpdateScripts(updateCriteria, time.Now(), ackCriteria.Acknowledge, ackCriteria.Escalate, userId)
+
+			// Only add acknowledgment scripts if:
+			// - Acknowledging (ack=true), OR
+			// - Explicitly unacknowledging (ack=false) without custom field updates
+			// When updateFields is provided with ack=false, we assume user only wants to update fields
+			if ackCriteria.Acknowledge || len(ackCriteria.UpdateFields) == 0 {
+				store.addUpdateScripts(updateCriteria, time.Now(), ackCriteria.Acknowledge, ackCriteria.Escalate, userId)
+			}
 
 			// Add custom field updates if specified
 			if len(ackCriteria.UpdateFields) > 0 {
@@ -1201,7 +1208,9 @@ func (store *ElasticEventstore) Acknowledge(ctx context.Context, ackCriteria *mo
 			updateCriteria.ParsedQuery.AddSegment(searchSegment)
 
 			results, err = store.Update(ctx, updateCriteria)
-			if err == nil && !updateCriteria.Asynchronous {
+			// Only validate acknowledgment results when actually acknowledging (not just updating fields)
+			isAckOperation := ackCriteria.Acknowledge || len(ackCriteria.UpdateFields) == 0
+			if err == nil && !updateCriteria.Asynchronous && isAckOperation {
 				if results.UpdatedCount == 0 {
 					if results.UnchangedCount == 0 {
 						err = errors.New("No eligible events available to acknowledge")
