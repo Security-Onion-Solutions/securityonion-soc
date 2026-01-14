@@ -1,73 +1,75 @@
+@import 'leaflet/dist/leaflet.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
- 
+
 @layer base {
   :root {
-    /* Security Onion Dark Theme Mapped to Shadcn Vars */
-    --background: 0 0% 12%; /* #1e1e1e (approx) */
-    --foreground: 0 0% 98%; /* White text */
+    /* Security Onion Light Theme */
+    --background: 0 0% 100%; /* White */
+    --foreground: 222 47% 11%; /* Dark text */
 
-    --card: 0 0% 15%; /* Slightly lighter than bg */
-    --card-foreground: 0 0% 98%;
- 
-    --popover: 0 0% 15%;
-    --popover-foreground: 0 0% 98%;
- 
+    --card: 0 0% 100%; /* White cards */
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
     --primary: 207 90% 54%; /* #2196f3 Blue */
     --primary-foreground: 0 0% 100%;
- 
-    --secondary: 0 0% 26%; /* #424242 */
-    --secondary-foreground: 0 0% 98%;
- 
-    --muted: 0 0% 26%;
-    --muted-foreground: 0 0% 63%; /* #a1a1aa */
- 
-    --accent: 207 90% 54%;
-    --accent-foreground: 0 0% 98%;
- 
-    --destructive: 0 62% 30%; /* Darker red */
-    --destructive-foreground: 0 85% 97%; /* Lighter red text */
 
-    --border: 0 0% 20%;
-    --input: 0 0% 20%;
+    --secondary: 210 40% 96%; /* Light gray */
+    --secondary-foreground: 222 47% 11%;
+
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+
+    --accent: 210 40% 96%;
+    --accent-foreground: 222 47% 11%;
+
+    --destructive: 0 84% 60%; /* Red */
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
     --ring: 207 90% 54%;
- 
+
     --radius: 0.5rem;
   }
- 
+
   .dark {
-    /* Same as root for now since SO is dark by default */
-    --background: 0 0% 12%;
-    --foreground: 0 0% 98%;
- 
+    /* Security Onion Dark Theme */
+    --background: 0 0% 12%; /* #1e1e1e */
+    --foreground: 0 0% 98%; /* White text */
+
     --card: 0 0% 15%;
     --card-foreground: 0 0% 98%;
- 
+
     --popover: 0 0% 15%;
     --popover-foreground: 0 0% 98%;
- 
+
     --primary: 207 90% 54%;
     --primary-foreground: 0 0% 100%;
- 
+
     --secondary: 0 0% 26%;
     --secondary-foreground: 0 0% 98%;
- 
+
     --muted: 0 0% 26%;
     --muted-foreground: 0 0% 63%;
- 
+
     --accent: 207 90% 54%;
     --accent-foreground: 0 0% 98%;
- 
+
     --destructive: 0 62% 30%;
     --destructive-foreground: 0 85% 97%;
- 
+
     --border: 0 0% 20%;
     --input: 0 0% 20%;
     --ring: 207 90% 54%;
   }
 }
- 
+
 @layer base {
   * {
     @apply border-border;

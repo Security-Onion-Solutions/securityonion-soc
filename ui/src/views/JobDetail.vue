@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { 
-  ArrowLeft, 
-  Download, 
+import { ref, onMounted, computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import {
+  ArrowLeft,
+  Download,
   RefreshCw,
   FileText,
   Maximize2,
@@ -12,11 +13,14 @@ import {
 } from 'lucide-vue-next'
 import { cn } from '../lib/utils'
 
-const props = defineProps<{
-  id: string
-}>()
+const route = useRoute()
+const router = useRouter()
 
-const emit = defineEmits(['back'])
+// Get ID from route params (with fallback to props for compatibility)
+const props = defineProps<{ id?: string }>()
+const jobId = computed(() => (route.params.id as string) || props.id || '')
+
+const goBack = () => router.push({ name: 'jobs' })
 
 const job = ref<any>(null)
 const packets = ref<any[]>([])
@@ -25,6 +29,7 @@ const packetsLoading = ref(false)
 const error = ref<string | null>(null)
 const expandedPackets = ref<Set<number>>(new Set())
 const packetViewMode = ref<'hex' | 'ascii'>('hex')
+const displayMode = ref<'packets' | 'transcript'>('packets')
 
 const setViewMode = (mode: 'hex' | 'ascii') => {
     const scrollY = window.scrollY
@@ -51,7 +56,7 @@ const headers = [
 const fetchJob = async () => {
     loading.value = true
     try {
-        const response = await fetch(`/api/job?jobId=${props.id}`)
+        const response = await fetch(`/api/job?jobId=${jobId.value}`)
         if (response.ok) {
             job.value = await response.json()
             error.value = null
@@ -70,7 +75,7 @@ const fetchPackets = async () => {
     if (!job.value) return
     packetsLoading.value = true
     try {
-        const response = await fetch(`/api/packets?jobId=${props.id}&offset=0&count=500&unwrap=${unwrap.value}`)
+        const response = await fetch(`/api/packets?jobId=${jobId.value}&offset=0&count=500&unwrap=${unwrap.value}`)
         if (response.ok) {
             packets.value = await response.json()
         } else {
@@ -154,6 +159,46 @@ const getTypeColor = (type: string) => {
     return 'bg-gray-100 text-gray-800 border-gray-200'
 }
 
+interface TranscriptSegment {
+    text: string
+    direction: 'client' | 'server'
+    directionChanged: boolean
+}
+
+const getAsciiTranscriptSegments = (): TranscriptSegment[] => {
+    if (packets.value.length === 0) return []
+
+    const segments: TranscriptSegment[] = []
+    // Use first packet's source as "client" direction
+    const clientIp = packets.value[0]?.srcIp
+    const clientPort = packets.value[0]?.srcPort
+    let lastDirection: 'client' | 'server' | null = null
+
+    for (const packet of packets.value) {
+        if (!packet.payload) continue
+        try {
+            const binaryString = atob(packet.payload)
+            const bytes = Uint8Array.from(binaryString, c => c.charCodeAt(0))
+            const sliced = bytes.slice(packet.payloadOffset || 0)
+            const ascii = new TextDecoder('utf-8').decode(sliced).replace(/[^\x20-\x7E\n\r\t]/g, '.')
+            if (ascii.trim()) {
+                const isClient = packet.srcIp === clientIp && packet.srcPort === clientPort
+                const direction = isClient ? 'client' : 'server'
+                const directionChanged = lastDirection !== null && lastDirection !== direction
+                segments.push({
+                    text: ascii,
+                    direction,
+                    directionChanged
+                })
+                lastDirection = direction
+            }
+        } catch (e) {
+            // Skip packets with decode errors
+        }
+    }
+    return segments
+}
+
 onMounted(() => {
     fetchJob()
 })
@@ -163,7 +208,7 @@ onMounted(() => {
   <div class="space-y-6 animate-in slide-in-from-right duration-500">
      <!-- Header -->
     <div class="flex flex-col gap-4">
-      <button @click="emit('back')" class="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors w-fit group">
+      <button @click="goBack()" class="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors w-fit group">
         <ArrowLeft class="h-4 w-4 group-hover:-translate-x-1 transition-transform" />
         Back to Jobs
       </button>
@@ -172,7 +217,7 @@ onMounted(() => {
           <div>
               <h2 class="text-3xl font-bold tracking-tight text-foreground flex items-center gap-3">
                   <FileText class="h-8 w-8 text-primary" />
-                  Job {{ props.id }}
+                  Job {{ jobId }}
               </h2>
                <div v-if="job && job.filter" class="flex items-center gap-4 mt-2 text-sm text-muted-foreground font-mono">
                   <div class="bg-muted px-2 py-1 rounded border border-border">
@@ -191,37 +236,60 @@ onMounted(() => {
     <!-- Packets Table -->
     <div class="rounded-xl border border-border bg-card overflow-hidden shadow-sm">
         <!-- Toolbar inside card -->
-        <div class="flex items-center gap-2 justify-end p-3 border-b border-border bg-muted/30">
-           <button @click="fetchPackets" class="p-2 hover:bg-muted rounded-md transition-colors text-muted-foreground" title="Refresh Packets">
-              <RefreshCw class="h-5 w-5" :class="{ 'animate-spin': packetsLoading }" />
-          </button>
-          <div class="h-6 w-px bg-border mx-1"></div>
-          <button
-              @click="setViewMode('hex')"
-              :class="cn('px-3 py-1.5 rounded-md text-sm font-medium transition-colors border', packetViewMode === 'hex' ? 'bg-primary/10 text-primary border-primary/20' : 'text-muted-foreground border-transparent hover:bg-muted')"
-          >
-              Hex
-          </button>
-           <button
-              @click="setViewMode('ascii')"
-              :class="cn('px-3 py-1.5 rounded-md text-sm font-medium transition-colors border', packetViewMode === 'ascii' ? 'bg-primary/10 text-primary border-primary/20' : 'text-muted-foreground border-transparent hover:bg-muted')"
-          >
-              ASCII
-          </button>
-          <div class="h-6 w-px bg-border mx-1"></div>
-           <button @click="expandAll" class="p-2 hover:bg-muted rounded-md transition-colors text-muted-foreground" title="Expand All">
-              <Maximize2 class="h-5 w-5" />
-          </button>
-           <button @click="collapseAll" class="p-2 hover:bg-muted rounded-md transition-colors text-muted-foreground" title="Collapse All">
-              <Minimize2 class="h-5 w-5" />
-          </button>
-          <div class="h-6 w-px bg-border mx-1"></div>
-          <button @click="downloadPcap" class="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-all shadow-lg active:scale-95">
-              <Download class="h-4 w-4" />
-              Download PCAP
-          </button>
+        <div class="flex items-center justify-between p-3 border-b border-border bg-muted/30">
+            <!-- Left side: Display mode toggle -->
+            <div class="flex items-center gap-1 bg-muted rounded-lg p-1">
+                <button
+                    @click="displayMode = 'packets'"
+                    :class="cn('px-3 py-1.5 rounded-md text-sm font-medium transition-colors', displayMode === 'packets' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')"
+                >
+                    Packets
+                </button>
+                <button
+                    @click="displayMode = 'transcript'"
+                    :class="cn('px-3 py-1.5 rounded-md text-sm font-medium transition-colors', displayMode === 'transcript' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')"
+                >
+                    Transcript
+                </button>
+            </div>
+
+            <!-- Right side: Tools -->
+            <div class="flex items-center gap-2">
+                <button @click="fetchPackets" class="p-2 hover:bg-muted rounded-md transition-colors text-muted-foreground" title="Refresh Packets">
+                    <RefreshCw class="h-5 w-5" :class="{ 'animate-spin': packetsLoading }" />
+                </button>
+                <template v-if="displayMode === 'packets'">
+                    <div class="h-6 w-px bg-border mx-1"></div>
+                    <button
+                        @click="setViewMode('hex')"
+                        :class="cn('px-3 py-1.5 rounded-md text-sm font-medium transition-colors border', packetViewMode === 'hex' ? 'bg-primary/10 text-primary border-primary/20' : 'text-muted-foreground border-transparent hover:bg-muted')"
+                    >
+                        Hex
+                    </button>
+                    <button
+                        @click="setViewMode('ascii')"
+                        :class="cn('px-3 py-1.5 rounded-md text-sm font-medium transition-colors border', packetViewMode === 'ascii' ? 'bg-primary/10 text-primary border-primary/20' : 'text-muted-foreground border-transparent hover:bg-muted')"
+                    >
+                        ASCII
+                    </button>
+                    <div class="h-6 w-px bg-border mx-1"></div>
+                    <button @click="expandAll" class="p-2 hover:bg-muted rounded-md transition-colors text-muted-foreground" title="Expand All">
+                        <Maximize2 class="h-5 w-5" />
+                    </button>
+                    <button @click="collapseAll" class="p-2 hover:bg-muted rounded-md transition-colors text-muted-foreground" title="Collapse All">
+                        <Minimize2 class="h-5 w-5" />
+                    </button>
+                </template>
+                <div class="h-6 w-px bg-border mx-1"></div>
+                <button @click="downloadPcap" class="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-all shadow-lg active:scale-95">
+                    <Download class="h-4 w-4" />
+                    Download PCAP
+                </button>
+            </div>
         </div>
-        <div class="overflow-x-auto">
+
+        <!-- Packets Table View -->
+        <div v-if="displayMode === 'packets'" class="overflow-x-auto">
             <table class="w-full text-sm font-mono">
                 <thead>
                     <tr class="bg-muted/30 border-b border-border">
@@ -236,14 +304,14 @@ onMounted(() => {
                         <td colspan="10" class="h-32 text-center text-muted-foreground font-sans">Loading packets...</td>
                     </tr>
                     <template v-for="packet in packets" :key="packet.number">
-                        <tr 
-                            @click="toggleExpand(packet.number)" 
+                        <tr
+                            @click="toggleExpand(packet.number)"
                             class="hover:bg-muted/50 cursor-pointer transition-colors"
                             :class="{ 'bg-muted/20': expandedPackets.has(packet.number) }"
                         >
                             <td class="px-4 py-2 text-center">
-                                <ChevronDown 
-                                    class="h-4 w-4 text-muted-foreground transition-transform duration-200" 
+                                <ChevronDown
+                                    class="h-4 w-4 text-muted-foreground transition-transform duration-200"
                                     :class="{ '-rotate-90': !expandedPackets.has(packet.number) }"
                                 />
                             </td>
@@ -268,7 +336,7 @@ onMounted(() => {
                         <!-- Payload Row -->
                         <tr v-if="expandedPackets.has(packet.number)">
                             <td colspan="10" class="bg-muted/10 p-4 border-b border-border">
-                                <div :class="cn('bg-card border border-border rounded-lg p-4 font-mono text-xs leading-relaxed select-text shadow-inner', packetViewMode === 'hex' ? 'overflow-x-auto whitespace-pre' : 'whitespace-pre-wrap break-all')">
+                                <div class="bg-card border border-border rounded-lg p-4 font-mono text-xs leading-relaxed select-text shadow-inner whitespace-pre-wrap break-words" style="overflow-wrap: anywhere;">
                                     {{ formatPayload(packet.payload, packet.payloadOffset) }}
                                 </div>
                             </td>
@@ -276,6 +344,34 @@ onMounted(() => {
                     </template>
                 </tbody>
             </table>
+        </div>
+
+        <!-- ASCII Transcript View -->
+        <div v-else-if="displayMode === 'transcript'" class="p-4">
+            <div v-if="packetsLoading" class="h-32 flex items-center justify-center text-muted-foreground">
+                Loading packets...
+            </div>
+            <div v-else-if="packets.length === 0" class="h-32 flex items-center justify-center text-muted-foreground">
+                No packets found
+            </div>
+            <template v-else>
+                <div class="flex items-center gap-4 mb-3 text-xs">
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded bg-red-500"></span>
+                        <span class="text-muted-foreground">Client → Server</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded bg-blue-500"></span>
+                        <span class="text-muted-foreground">Server → Client</span>
+                    </div>
+                </div>
+                <div class="bg-card border border-border rounded-lg p-4 font-mono text-xs leading-relaxed select-text shadow-inner whitespace-pre-wrap break-words" style="overflow-wrap: anywhere;"><template
+                    v-for="(segment, idx) in getAsciiTranscriptSegments()"
+                    :key="idx"
+                ><span v-if="segment.directionChanged" class="block my-3 border-t border-border"></span><span
+                    :class="segment.direction === 'client' ? 'text-red-500' : 'text-blue-500'"
+                >{{ segment.text }}</span></template></div>
+            </template>
         </div>
     </div>
   </div>

@@ -1,27 +1,35 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { 
+import { useRouter } from 'vue-router'
+import {
   FileText, // For Jobs
-  Plus, 
-  Search, 
-  RefreshCw, 
+  Plus,
+  Search,
+  RefreshCw,
   Trash2,
   Clock, // Queue
   CheckCircle2, // Completed
   AlertTriangle, // Incomplete/Failed
   XCircle, // Deleted
   Eye,
-  Server
+  Server,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-vue-next'
 import { cn } from '../lib/utils'
 import { useUsers } from '../composables/useUsers'
 import { useFormatters } from '../composables/useFormatters'
 import { useStatusStyles } from '../composables/useStatusStyles'
 
-const emit = defineEmits(['view-detail'])
+const router = useRouter()
+
 const { getUserName } = useUsers()
 const { formatDate } = useFormatters()
 const { getJobStatusStyles } = useStatusStyles()
+
+const viewDetail = (id: string) => {
+  router.push({ name: 'job-detail', params: { id } })
+}
 
 interface Job {
     id: string
@@ -65,6 +73,26 @@ const jobs = ref<Job[]>([])
 const loading = ref(true)
 const searchQuery = ref('')
 
+// Sorting state
+type SortField = 'id' | 'status' | 'userId' | 'nodeId' | 'createTime' | 'completeTime'
+type SortDirection = 'asc' | 'desc'
+const sortField = ref<SortField>('createTime')
+const sortDirection = ref<SortDirection>('desc')
+
+function toggleSort(field: SortField) {
+  if (sortField.value === field) {
+    sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    sortField.value = field
+    // Default to desc for time fields, asc for others
+    sortDirection.value = (field === 'createTime' || field === 'completeTime') ? 'desc' : 'asc'
+  }
+}
+
+function getSortIcon(field: SortField) {
+  if (sortField.value !== field) return null
+  return sortDirection.value === 'asc' ? ChevronUp : ChevronDown
+}
 
 // PCAP-capable nodes
 const pcapNodes = ref<GridNode[]>([])
@@ -172,13 +200,49 @@ const createJob = async () => {
 }
 
 const filteredJobs = computed(() => {
-    if (!searchQuery.value) return jobs.value
-    const q = searchQuery.value.toLowerCase()
-    return jobs.value.filter(j =>
-        j.id.toLowerCase().includes(q) ||
-        j.nodeId.toLowerCase().includes(q) ||
-        getUserName(j.userId)?.toLowerCase().includes(q)
-    )
+    let result = jobs.value
+
+    // Apply search filter
+    if (searchQuery.value) {
+        const q = searchQuery.value.toLowerCase()
+        result = result.filter(j =>
+            j.id.toLowerCase().includes(q) ||
+            j.nodeId.toLowerCase().includes(q) ||
+            getUserName(j.userId)?.toLowerCase().includes(q)
+        )
+    }
+
+    // Apply sorting
+    result = [...result].sort((a, b) => {
+        let comparison = 0
+
+        switch (sortField.value) {
+            case 'id':
+                comparison = a.id.localeCompare(b.id)
+                break
+            case 'status':
+                comparison = a.status - b.status
+                break
+            case 'userId':
+                comparison = (getUserName(a.userId) || '').localeCompare(getUserName(b.userId) || '')
+                break
+            case 'nodeId':
+                comparison = a.nodeId.localeCompare(b.nodeId)
+                break
+            case 'createTime':
+                comparison = new Date(a.createTime).getTime() - new Date(b.createTime).getTime()
+                break
+            case 'completeTime':
+                const aTime = a.completeTime ? new Date(a.completeTime).getTime() : 0
+                const bTime = b.completeTime ? new Date(b.completeTime).getTime() : 0
+                comparison = aTime - bTime
+                break
+        }
+
+        return sortDirection.value === 'asc' ? comparison : -comparison
+    })
+
+    return result
 })
 
 const getStatusText = (status: number) => {
@@ -295,12 +359,60 @@ onMounted(() => {
         <table class="w-full text-sm">
           <thead>
             <tr class="border-b border-border bg-muted/30">
-              <th class="h-12 px-6 text-left align-middle font-semibold text-muted-foreground">ID</th>
-              <th class="h-12 px-6 text-left align-middle font-semibold text-muted-foreground">Status</th>
-              <th class="h-12 px-6 text-left align-middle font-semibold text-muted-foreground">Owner</th>
-              <th class="h-12 px-6 text-left align-middle font-semibold text-muted-foreground">Sensor</th>
-              <th class="h-12 px-6 text-left align-middle font-semibold text-muted-foreground">Created</th>
-              <th class="h-12 px-6 text-left align-middle font-semibold text-muted-foreground">Completed</th>
+              <th
+                @click="toggleSort('id')"
+                class="h-12 px-6 text-left align-middle font-semibold text-muted-foreground cursor-pointer hover:text-foreground transition-colors select-none"
+              >
+                <div class="flex items-center gap-1">
+                  ID
+                  <component :is="getSortIcon('id')" v-if="getSortIcon('id')" class="h-4 w-4" />
+                </div>
+              </th>
+              <th
+                @click="toggleSort('status')"
+                class="h-12 px-6 text-left align-middle font-semibold text-muted-foreground cursor-pointer hover:text-foreground transition-colors select-none"
+              >
+                <div class="flex items-center gap-1">
+                  Status
+                  <component :is="getSortIcon('status')" v-if="getSortIcon('status')" class="h-4 w-4" />
+                </div>
+              </th>
+              <th
+                @click="toggleSort('userId')"
+                class="h-12 px-6 text-left align-middle font-semibold text-muted-foreground cursor-pointer hover:text-foreground transition-colors select-none"
+              >
+                <div class="flex items-center gap-1">
+                  Owner
+                  <component :is="getSortIcon('userId')" v-if="getSortIcon('userId')" class="h-4 w-4" />
+                </div>
+              </th>
+              <th
+                @click="toggleSort('nodeId')"
+                class="h-12 px-6 text-left align-middle font-semibold text-muted-foreground cursor-pointer hover:text-foreground transition-colors select-none"
+              >
+                <div class="flex items-center gap-1">
+                  Sensor
+                  <component :is="getSortIcon('nodeId')" v-if="getSortIcon('nodeId')" class="h-4 w-4" />
+                </div>
+              </th>
+              <th
+                @click="toggleSort('createTime')"
+                class="h-12 px-6 text-left align-middle font-semibold text-muted-foreground cursor-pointer hover:text-foreground transition-colors select-none"
+              >
+                <div class="flex items-center gap-1">
+                  Created
+                  <component :is="getSortIcon('createTime')" v-if="getSortIcon('createTime')" class="h-4 w-4" />
+                </div>
+              </th>
+              <th
+                @click="toggleSort('completeTime')"
+                class="h-12 px-6 text-left align-middle font-semibold text-muted-foreground cursor-pointer hover:text-foreground transition-colors select-none"
+              >
+                <div class="flex items-center gap-1">
+                  Completed
+                  <component :is="getSortIcon('completeTime')" v-if="getSortIcon('completeTime')" class="h-4 w-4" />
+                </div>
+              </th>
               <th class="h-12 px-6 text-right align-middle font-semibold text-muted-foreground">Actions</th>
             </tr>
           </thead>
@@ -315,7 +427,7 @@ onMounted(() => {
               v-for="job in filteredJobs" 
               :key="job.id"
               class="group transition-colors hover:bg-muted/30 cursor-pointer"
-              @click="emit('view-detail', job.id)"
+              @click="viewDetail(job.id)"
             >
                 <td class="px-6 py-4 font-mono text-xs">{{ job.id }}</td>
                 <td class="px-6 py-4">
@@ -336,7 +448,7 @@ onMounted(() => {
                 <td class="px-6 py-4 text-muted-foreground">{{ formatDate(job.completeTime) }}</td>
                 <td class="px-6 py-4 text-right" @click.stop>
                     <div class="flex items-center justify-end gap-1">
-                        <button v-if="job.status === JobStatus.Completed" @click="emit('view-detail', job.id)" class="p-2 hover:bg-muted rounded text-muted-foreground hover:text-primary transition-all" title="View Packets">
+                        <button v-if="job.status === JobStatus.Completed" @click="viewDetail(job.id)" class="p-2 hover:bg-muted rounded text-muted-foreground hover:text-primary transition-all" title="View Packets">
                             <Eye class="h-4 w-4" />
                         </button>
                          <button @click="deleteJob(job.id)" class="p-2 hover:bg-muted rounded text-muted-foreground hover:text-red-500 transition-all" title="Delete Job">

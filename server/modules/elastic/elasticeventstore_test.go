@@ -782,6 +782,84 @@ func TestAddUpdateScript(t *testing.T) {
 	assert.Contains(t, criteria.UpdateScripts[0], "ctx._source.event.escalated_by = 'admin';")
 }
 
+func TestBuildFieldUpdateScript(t *testing.T) {
+	store := &ElasticEventstore{}
+
+	// Test simple field with string value
+	script := store.buildFieldUpdateScript("status", "completed")
+	assert.Equal(t, "ctx._source.status = 'completed';", script)
+
+	// Test simple field with integer value (JSON numbers come as float64)
+	script = store.buildFieldUpdateScript("count", float64(42))
+	assert.Equal(t, "ctx._source.count = 42;", script)
+
+	// Test simple field with boolean value
+	script = store.buildFieldUpdateScript("enabled", true)
+	assert.Equal(t, "ctx._source.enabled = true;", script)
+
+	// Test nested field (one level)
+	script = store.buildFieldUpdateScript("alert.pcap_id", float64(12345))
+	assert.Contains(t, script, "if (ctx._source.alert == null) { ctx._source.alert = new HashMap(); }")
+	assert.Contains(t, script, "ctx._source.alert.pcap_id = 12345;")
+
+	// Test nested field (two levels)
+	script = store.buildFieldUpdateScript("event.custom.field", "value")
+	assert.Contains(t, script, "if (ctx._source.event == null) { ctx._source.event = new HashMap(); }")
+	assert.Contains(t, script, "if (ctx._source.event.custom == null) { ctx._source.event.custom = new HashMap(); }")
+	assert.Contains(t, script, "ctx._source.event.custom.field = 'value';")
+
+	// Test string with single quote (should be escaped)
+	script = store.buildFieldUpdateScript("message", "it's working")
+	assert.Equal(t, "ctx._source.message = 'it\\'s working';", script)
+
+	// Test nil value
+	script = store.buildFieldUpdateScript("nullable", nil)
+	assert.Equal(t, "ctx._source.nullable = null;", script)
+}
+
+func TestAddCustomFieldUpdateScripts(t *testing.T) {
+	store := &ElasticEventstore{}
+
+	criteria := &model.EventUpdateCriteria{}
+	updateFields := map[string]interface{}{
+		"alert.pcap_id": float64(12345),
+		"custom_field":  "test_value",
+	}
+
+	store.addCustomFieldUpdateScripts(criteria, updateFields)
+
+	assert.Len(t, criteria.UpdateScripts, 2)
+
+	// Check that both scripts are present (order may vary due to map iteration)
+	allScripts := strings.Join(criteria.UpdateScripts, " ")
+	assert.Contains(t, allScripts, "ctx._source.alert.pcap_id = 12345;")
+	assert.Contains(t, allScripts, "ctx._source.custom_field = 'test_value';")
+}
+
+func TestFormatPainlessValue(t *testing.T) {
+	// Test string
+	assert.Equal(t, "'hello'", formatPainlessValue("hello"))
+
+	// Test string with single quote
+	assert.Equal(t, "'it\\'s a test'", formatPainlessValue("it's a test"))
+
+	// Test integer (as float64 from JSON)
+	assert.Equal(t, "42", formatPainlessValue(float64(42)))
+
+	// Test float
+	result := formatPainlessValue(float64(3.14))
+	assert.Contains(t, result, "3.14")
+
+	// Test boolean true
+	assert.Equal(t, "true", formatPainlessValue(true))
+
+	// Test boolean false
+	assert.Equal(t, "false", formatPainlessValue(false))
+
+	// Test nil
+	assert.Equal(t, "null", formatPainlessValue(nil))
+}
+
 func TestSearchPermissionsAuthorized(t *testing.T) {
 	srv := server.NewFakeAuthorizedServer(nil)
 

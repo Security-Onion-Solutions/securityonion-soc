@@ -4,6 +4,36 @@ interface FetchOptions extends RequestInit {
     params?: Record<string, string>
 }
 
+// Global CSRF token cache
+let srvToken: string | null = null
+let tokenPromise: Promise<string | null> | null = null
+
+async function ensureSrvToken(): Promise<string | null> {
+    if (srvToken) {
+        return srvToken
+    }
+
+    // Avoid multiple parallel fetches
+    if (tokenPromise) {
+        return tokenPromise
+    }
+
+    tokenPromise = (async () => {
+        try {
+            const response = await fetch('/api/info')
+            if (response.ok) {
+                const data = await response.json()
+                srvToken = data.srvToken || null
+            }
+        } catch (e) {
+            console.error('Failed to fetch srvToken:', e)
+        }
+        return srvToken
+    })()
+
+    return tokenPromise
+}
+
 export function useApi() {
     const loading = ref(false)
     const error = ref<string | null>(null)
@@ -19,10 +49,19 @@ export function useApi() {
                 finalUrl += `?${queryParams.toString()}`
             }
 
-            const headers = {
+            const headers: Record<string, string> = {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
-                ...options.headers,
+                ...(options.headers as Record<string, string> || {}),
+            }
+
+            // Add CSRF token for mutating requests
+            const method = options.method?.toUpperCase()
+            if (method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE') {
+                const token = await ensureSrvToken()
+                if (token) {
+                    headers['X-Srv-Token'] = token
+                }
             }
 
             const response = await fetch(finalUrl, {

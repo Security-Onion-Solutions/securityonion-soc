@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import {
   ShieldAlert,
   Search,
@@ -13,6 +14,8 @@ import {
 import { cn } from '../lib/utils'
 import { useFormatters } from '../composables/useFormatters'
 import { useStatusStyles } from '../composables/useStatusStyles'
+
+const router = useRouter()
 
 const { formatDateForApi } = useFormatters()
 const { getSeverityStyles } = useStatusStyles()
@@ -35,8 +38,6 @@ interface Detection {
   createdAt?: string
   updatedAt?: string
 }
-
-const emit = defineEmits(['view-detail'])
 
 const detections = ref<Detection[]>([])
 const loading = ref(true)
@@ -156,7 +157,7 @@ const toggleEnabled = async (detection: Detection) => {
 }
 
 const viewDetail = (id: string) => {
-  emit('view-detail', id)
+  router.push({ name: 'detection-detail', params: { id } })
 }
 </script>
 

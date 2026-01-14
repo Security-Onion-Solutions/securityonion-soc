@@ -1,14 +1,31 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
-import { Briefcase, Search, Plus, Eye, Activity, Clock, AlertTriangle } from 'lucide-vue-next'
+import { useRouter } from 'vue-router'
+import { Briefcase, Search, Plus, Eye, Activity, Clock, AlertTriangle, ChevronUp, ChevronDown, Filter } from 'lucide-vue-next'
 import { cn } from '../lib/utils'
 import { useUsers } from '../composables/useUsers'
 import { useFormatters } from '../composables/useFormatters'
 import { useStatusStyles } from '../composables/useStatusStyles'
+import { useTimeRange } from '../composables/useTimeRange'
+import CreateCaseDialog from '../components/cases/CreateCaseDialog.vue'
+import DateTimePicker from '../components/common/DateTimePicker.vue'
+
+const router = useRouter()
 
 const { getUserName, fetchUsers } = useUsers()
-const { formatDateForApi } = useFormatters()
+const { formatDateForApi, formatDate } = useFormatters()
 const { getSeverityStyles, getStatusStyles } = useStatusStyles()
+const { formattedRange, setRelativeTime, RELATIVE_TIME_UNITS } = useTimeRange()
+
+// Initialize with a wide time range for cases (1 year by default)
+setRelativeTime(1, 60) // 60 = RELATIVE_TIME_MONTHS
+
+const showCreateDialog = ref(false)
+
+function handleCaseCreated(caseId: string) {
+  showCreateDialog.value = false
+  router.push({ name: 'case-detail', params: { id: caseId } })
+}
 
 interface Case {
   soc_id: string
@@ -27,14 +44,37 @@ const loading = ref(true)
 const error = ref<string | null>(null)
 const searchQuery = ref('')
 const currentStatusFilter = ref('open')
+const currentSeverityFilter = ref('all')
+
+// Sorting state
+type SortField = 'createdAt' | 'title' | 'severity' | 'status' | 'assignee'
+type SortDirection = 'asc' | 'desc'
+const sortField = ref<SortField>('createdAt')
+const sortDirection = ref<SortDirection>('desc')
+
+const severityOptions = ['all', 'critical', 'high', 'medium', 'low']
+
+function toggleSort(field: SortField) {
+  if (sortField.value === field) {
+    sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    sortField.value = field
+    sortDirection.value = field === 'createdAt' ? 'desc' : 'asc'
+  }
+}
+
+function getSortIcon(field: SortField) {
+  if (sortField.value !== field) return null
+  return sortDirection.value === 'asc' ? ChevronUp : ChevronDown
+}
 
 const fetchCases = async () => {
   loading.value = true
   const statusFilter = currentStatusFilter.value
   try {
     // Construct search query for cases as per user feedback
-    // We restrict to the so-case index to avoid matching non-case events
-    let query = '_index:"*:so-case" AND NOT so_case.category:template'
+    // We restrict to the so-case index and filter for documents with a title (only cases have titles)
+    let query = '_index:"*:so-case" AND so_case.title:* AND NOT so_case.category:template'
     if (statusFilter === 'open') {
       query += ' AND NOT so_case.status:closed'
     } else if (statusFilter === 'closed') {
@@ -49,16 +89,12 @@ const fetchCases = async () => {
       query = `(${query}) AND (${searchQuery.value.trim()})`
     }
 
-    const now = new Date()
-    // Broaden range to 1 year to ensure older open cases are found
-    // Open cases in Security Onion are often kept regardless of their creation date
-    const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
-
-    const dateRange = `${formatDateForApi(oneYearAgo)} - ${formatDateForApi(now)}`
+    // Sort by createTime descending to show newest cases first
+    const sortedQuery = `${query} | sortby so_case.createTime^`
 
     const params = new URLSearchParams({
-      query: `${query}`,
-      range: dateRange,
+      query: sortedQuery,
+      range: formattedRange.value,
       format: '2006/01/02 3:04:05 PM',
       zone: 'Local',
       metricLimit: '10',
@@ -113,19 +149,56 @@ onMounted(() => {
 })
 
 const filteredCases = computed(() => {
-  if (!searchQuery.value) return cases.value
-  const query = searchQuery.value.toLowerCase()
-  return cases.value.filter(c => 
-    c.title.toLowerCase().includes(query) || 
-    c.id.toLowerCase().includes(query) ||
-    c.owner.toLowerCase().includes(query)
-  )
+  let result = cases.value
+
+  // Apply severity filter
+  if (currentSeverityFilter.value !== 'all') {
+    result = result.filter(c => c.severity.toLowerCase() === currentSeverityFilter.value)
+  }
+
+  // Apply search filter
+  if (searchQuery.value) {
+    const query = searchQuery.value.toLowerCase()
+    result = result.filter(c =>
+      c.title.toLowerCase().includes(query) ||
+      c.id.toLowerCase().includes(query) ||
+      c.owner.toLowerCase().includes(query)
+    )
+  }
+
+  // Apply sorting
+  const severityOrder = { critical: 0, high: 1, medium: 2, low: 3, unknown: 4 }
+
+  result = [...result].sort((a, b) => {
+    let comparison = 0
+
+    switch (sortField.value) {
+      case 'createdAt':
+        comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        break
+      case 'title':
+        comparison = a.title.localeCompare(b.title)
+        break
+      case 'severity':
+        comparison = (severityOrder[a.severity.toLowerCase() as keyof typeof severityOrder] ?? 4) -
+                     (severityOrder[b.severity.toLowerCase() as keyof typeof severityOrder] ?? 4)
+        break
+      case 'status':
+        comparison = a.status.localeCompare(b.status)
+        break
+      case 'assignee':
+        comparison = (a.assignee || '').localeCompare(b.assignee || '')
+        break
+    }
+
+    return sortDirection.value === 'asc' ? comparison : -comparison
+  })
+
+  return result
 })
 
-const emit = defineEmits(['view-detail'])
-
 const viewDetail = (id: string) => {
-  emit('view-detail', id)
+  router.push({ name: 'case-detail', params: { id } })
 }
 </script>
 
@@ -139,20 +212,38 @@ const viewDetail = (id: string) => {
       <div class="flex items-center gap-4">
         <!-- Status Filter -->
         <div class="flex items-center bg-muted rounded-lg p-1">
-          <button 
-            v-for="status in ['open', 'closed', 'all']" 
+          <button
+            v-for="status in ['open', 'closed', 'all']"
             :key="status"
             @click="currentStatusFilter = status"
             :class="cn(
               'px-3 py-1.5 rounded-md text-xs font-medium capitalize transition-all',
-              currentStatusFilter === status 
-                ? 'bg-background text-foreground shadow-sm' 
+              currentStatusFilter === status
+                ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'
             )"
           >
             {{ status }}
           </button>
         </div>
+
+        <!-- Severity Filter -->
+        <div class="relative">
+          <Filter class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <select
+            v-model="currentSeverityFilter"
+            class="appearance-none bg-background border border-border rounded-md pl-9 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer"
+          >
+            <option value="all">All Severities</option>
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+        </div>
+
+        <!-- Time Range -->
+        <DateTimePicker @change="fetchCases" />
 
         <div class="relative w-64">
           <Search class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -163,7 +254,10 @@ const viewDetail = (id: string) => {
             class="w-full bg-background border border-border rounded-md pl-9 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
           />
         </div>
-        <button class="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors font-medium">
+        <button
+          @click="showCreateDialog = true"
+          class="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors font-medium"
+        >
           <Plus class="h-4 w-4" />
           Create Case
         </button>
@@ -208,11 +302,51 @@ const viewDetail = (id: string) => {
         <table class="w-full text-sm">
           <thead>
             <tr class="bg-muted/50 border-b border-border">
-              <th class="px-4 py-3 text-left font-medium text-muted-foreground">ID</th>
-              <th class="px-4 py-3 text-left font-medium text-muted-foreground">Title</th>
-              <th class="px-4 py-3 text-left font-medium text-muted-foreground">Severity</th>
-              <th class="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
-              <th class="px-4 py-3 text-left font-medium text-muted-foreground">Assignee</th>
+              <th
+                @click="toggleSort('createdAt')"
+                class="px-4 py-3 text-left font-medium text-muted-foreground cursor-pointer hover:text-foreground transition-colors select-none"
+              >
+                <div class="flex items-center gap-1">
+                  Created
+                  <component :is="getSortIcon('createdAt')" v-if="getSortIcon('createdAt')" class="h-4 w-4" />
+                </div>
+              </th>
+              <th
+                @click="toggleSort('title')"
+                class="px-4 py-3 text-left font-medium text-muted-foreground cursor-pointer hover:text-foreground transition-colors select-none"
+              >
+                <div class="flex items-center gap-1">
+                  Title
+                  <component :is="getSortIcon('title')" v-if="getSortIcon('title')" class="h-4 w-4" />
+                </div>
+              </th>
+              <th
+                @click="toggleSort('severity')"
+                class="px-4 py-3 text-left font-medium text-muted-foreground cursor-pointer hover:text-foreground transition-colors select-none"
+              >
+                <div class="flex items-center gap-1">
+                  Severity
+                  <component :is="getSortIcon('severity')" v-if="getSortIcon('severity')" class="h-4 w-4" />
+                </div>
+              </th>
+              <th
+                @click="toggleSort('status')"
+                class="px-4 py-3 text-left font-medium text-muted-foreground cursor-pointer hover:text-foreground transition-colors select-none"
+              >
+                <div class="flex items-center gap-1">
+                  Status
+                  <component :is="getSortIcon('status')" v-if="getSortIcon('status')" class="h-4 w-4" />
+                </div>
+              </th>
+              <th
+                @click="toggleSort('assignee')"
+                class="px-4 py-3 text-left font-medium text-muted-foreground cursor-pointer hover:text-foreground transition-colors select-none"
+              >
+                <div class="flex items-center gap-1">
+                  Assignee
+                  <component :is="getSortIcon('assignee')" v-if="getSortIcon('assignee')" class="h-4 w-4" />
+                </div>
+              </th>
               <th class="px-4 py-3 text-left font-medium text-muted-foreground text-right">Actions</th>
             </tr>
           </thead>
@@ -236,8 +370,8 @@ const viewDetail = (id: string) => {
               class="hover:bg-muted/30 transition-colors group cursor-pointer"
               @click="viewDetail(item.soc_id)"
             >
-              <td class="px-4 py-4 font-mono text-xs text-muted-foreground">
-                {{ item.id }}
+              <td class="px-4 py-4 text-xs text-muted-foreground">
+                {{ formatDate(item.createdAt) }}
               </td>
               <td class="px-4 py-4">
                 <div class="font-medium text-foreground line-clamp-1 group-hover:text-primary transition-colors">
@@ -275,5 +409,12 @@ const viewDetail = (id: string) => {
         </table>
       </div>
     </div>
+
+    <!-- Create Case Dialog -->
+    <CreateCaseDialog
+      :open="showCreateDialog"
+      @close="showCreateDialog = false"
+      @created="handleCaseCreated"
+    />
   </div>
 </template>

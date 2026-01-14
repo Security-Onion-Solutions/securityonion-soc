@@ -366,13 +366,9 @@ export function useHuntActions() {
     }
 
     function generateInvestigationPrompt(event: EventRecord): string {
-        const ruleName = event['rule.name'] || event['event.module'] || 'alert'
-        const sourceIp = event['source.ip'] || 'unknown'
-        const destIp = event['destination.ip'] || 'unknown'
+        const alertId = event.soc_id || 'unknown'
 
-        return `Investigate this ${ruleName} alert. ` +
-            `Source: ${sourceIp}, Destination: ${destIp}. ` +
-            `Help me understand if this is a true positive and what actions I should take.`
+        return `Investigate alert ${alertId}`
     }
 
     // Initialize

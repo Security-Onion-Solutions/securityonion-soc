@@ -227,20 +227,20 @@ export function useTimeRange() {
         }
     }
 
-    // URL parameter handling
+    // URL parameter handling (compatible with old UI: q, rt, rtu, t, z, el, gl, ar)
     function parseFromUrlParams(params: URLSearchParams): boolean {
         let changed = false
 
         // Check for relative time (rt parameter)
         const rtParam = params.get('rt')
-        const ruParam = params.get('ru')
+        const rtuParam = params.get('rtu')  // Old UI uses 'rtu' for relative time unit
         const tParam = params.get('t')
 
         if (rtParam) {
             isRelativeTime.value = true
             relativeTimeValue.value = parseInt(rtParam, 10) || 24
-            if (ruParam) {
-                const unit = parseInt(ruParam, 10)
+            if (rtuParam) {
+                const unit = parseInt(rtuParam, 10)
                 if ([10, 20, 30, 40, 50, 60].includes(unit)) {
                     relativeTimeUnit.value = unit as RelativeTimeUnit
                 }
@@ -258,6 +258,13 @@ export function useTimeRange() {
             changed = true
         }
 
+        // Auto-refresh interval (ar parameter from old UI)
+        const arParam = params.get('ar')
+        if (arParam) {
+            autoRefreshInterval.value = parseInt(arParam, 10) || 0
+            changed = true
+        }
+
         return changed
     }
 
@@ -266,13 +273,17 @@ export function useTimeRange() {
 
         if (isRelativeTime.value) {
             params.rt = relativeTimeValue.value.toString()
-            params.ru = relativeTimeUnit.value.toString()
-        } else {
+            params.rtu = relativeTimeUnit.value.toString()  // Old UI uses 'rtu'
+        } else if (dateRange.value) {
             params.t = dateRange.value
         }
 
         if (zone.value && zone.value !== Intl.DateTimeFormat().resolvedOptions().timeZone) {
             params.z = zone.value
+        }
+
+        if (autoRefreshInterval.value > 0) {
+            params.ar = autoRefreshInterval.value.toString()
         }
 
         return params

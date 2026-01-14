@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowLeft,
   Code,
@@ -32,6 +33,9 @@ import { usePlaybook, type Playbook, type GroupedPlaybooks } from '../composable
 import PlaybookCard from '../components/playbook/PlaybookCard.vue'
 import PlaybookEditor from '../components/playbook/PlaybookEditor.vue'
 
+const route = useRoute()
+const router = useRouter()
+
 const { formatDate } = useFormatters()
 const { getSeverityStyles } = useStatusStyles()
 const { getUserName, fetchUsers } = useUsers()
@@ -44,11 +48,11 @@ const {
   deletePlaybook
 } = usePlaybook()
 
-const props = defineProps<{
-  id: string
-}>()
+// Get ID from route params (with fallback to props for compatibility)
+const props = defineProps<{ id?: string }>()
+const detectionId = computed(() => (route.params.id as string) || detectionId.value || '')
 
-const emit = defineEmits(['back'])
+const goBack = () => router.push({ name: 'detections' })
 
 interface DetectionComment {
   id: string
@@ -257,7 +261,7 @@ const fetchDetectionDetail = async () => {
   error.value = null
 
   try {
-    const response = await fetch(`/api/detection/${props.id}`)
+    const response = await fetch(`/api/detection/${detectionId.value}`)
     if (!response.ok) {
       if (response.status === 404) {
         throw new Error('Detection not found')
@@ -279,7 +283,7 @@ const fetchComments = async () => {
   commentsLoading.value = true
 
   try {
-    const response = await fetch(`/api/detection/${props.id}/comment`)
+    const response = await fetch(`/api/detection/${detectionId.value}/comment`)
     if (!response.ok) {
       throw new Error('Failed to fetch comments')
     }
@@ -301,7 +305,7 @@ const fetchHistory = async () => {
   historyLoading.value = true
 
   try {
-    const response = await fetch(`/api/detection/${props.id}/history`)
+    const response = await fetch(`/api/detection/${detectionId.value}/history`)
     if (!response.ok) {
       throw new Error('Failed to fetch history')
     }
@@ -416,7 +420,7 @@ const submitComment = async () => {
   submittingComment.value = true
 
   try {
-    const response = await fetch(`/api/detection/${props.id}/comment`, {
+    const response = await fetch(`/api/detection/${detectionId.value}/comment`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ value: newComment.value })
@@ -531,7 +535,7 @@ onMounted(async () => {
   <div class="space-y-6 animate-in slide-in-from-right duration-500">
     <!-- Header -->
     <div class="flex flex-col gap-4">
-      <button @click="emit('back')" class="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors w-fit group">
+      <button @click="goBack()" class="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors w-fit group">
         <ArrowLeft class="h-4 w-4 group-hover:-translate-x-1 transition-transform" />
         Back to Detections
       </button>

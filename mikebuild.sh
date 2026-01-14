@@ -27,7 +27,7 @@ if [[ "$1" == "--html" ]]; then
 fi
 
 # Hardcoded version
-VERSION="2.4.200"
+VERSION="2.4.210"
 
 echo "=== Starting so-soc Docker build process ==="
 echo "Building version: $VERSION"
@@ -48,7 +48,7 @@ scp so-soc.tar mreeves@somn24:/tmp/so-soc.tar
 # Step 4: Load and tag the image on the manager
 echo "Loading and tagging image on manager..."
 ssh mreeves@somn24 "sudo docker load -i /tmp/so-soc.tar && \
-                    sudo docker tag so-soc:latest somn24:5000/security-onion-solutions/so-soc:2.4.200 && \
+                    sudo docker tag so-soc:latest somn24:5000/security-onion-solutions/so-soc:2.4.210 && \
                     rm /tmp/so-soc.tar"
 
 # Step 5: Restart so-soc service

@@ -168,6 +168,10 @@ export interface GroupByData {
     sortBy: SortConfig[]
     maximized: boolean
     isIncomplete?: boolean
+    // Client-side filtering and pagination
+    filter?: string
+    currentPage?: number
+    itemsPerPage?: number
 }
 
 export interface GroupByRecord {

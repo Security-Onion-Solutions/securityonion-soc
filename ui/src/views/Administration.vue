@@ -1,18 +1,21 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useRoute } from 'vue-router'
 import UsersView from './admin/Users.vue'
 import GridMembersView from './admin/GridMembers.vue'
 import ConfigView from './admin/Config.vue'
 import LicenseView from './admin/License.vue'
+
+const route = useRoute()
 
 // Placeholder components for future implementation
 const AiMetricsView = { template: '<div class="p-4">AI Metrics View (Pending Implementation)</div>' }
 const ClientsView = { template: '<div class="p-4">Clients View (Pending Implementation)</div>' }
 const QueriesView = { template: '<div class="p-4">Active Queries View (Pending Implementation)</div>' }
 
-const props = defineProps<{
-  activeTab?: string
-}>()
+// Get tab from route params (with fallback to props for compatibility)
+const props = defineProps<{ tab?: string }>()
+const activeTab = computed(() => (route.params.tab as string) || props.tab || 'users')
 
 const components: Record<string, any> = {
   users: UsersView,
@@ -25,7 +28,7 @@ const components: Record<string, any> = {
 }
 
 const currentComponent = computed(() => {
-  return components[props.activeTab || 'users'] || UsersView
+  return components[activeTab.value] || UsersView
 })
 
 </script>

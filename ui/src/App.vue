@@ -1,6 +1,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import {
   Home,
   Settings,
@@ -10,7 +11,6 @@ import {
   LayoutGrid,
   Shield,
   Activity,
-  Database,
   Menu,
   RotateCcw,
   Server,
@@ -20,33 +20,28 @@ import {
   Users,
   Key,
   UserCog,
-  FileText
+  FileText,
+  ChevronDown
 } from 'lucide-vue-next'
-import Grid from './components/Grid.vue'
-import Hunt from './views/Hunt.vue'
-import Detections from './views/Detections.vue'
-import DetectionDetail from './views/DetectionDetail.vue'
-import Jobs from './views/Jobs.vue'
-import JobDetail from './views/JobDetail.vue'
-import Cases from './views/Cases.vue'
-import CaseDetail from './views/CaseDetail.vue'
-import Assistant from './views/Assistant.vue'
-import Administration from './views/Administration.vue'
-import Overview from './views/Overview.vue'
 import ChatWidget from './components/chat-widget/ChatWidget.vue'
+import UserMenu from './components/common/UserMenu.vue'
 
-import Login from './views/Login.vue'
 import { cn } from './lib/utils'
 import { useChatWidget } from './composables/useChatWidget'
+
+const route = useRoute()
+const router = useRouter()
 
 const { isOpen: isChatOpen, toggle: toggleChat, collapse: closeChat } = useChatWidget()
 
 const sidebarOpen = ref(true)
+const adminExpanded = ref(false)
 
 onMounted(() => {
+  // Handle login flow redirect
   const params = new URLSearchParams(window.location.search)
   if (params.get('flow')) {
-    activeRoute.value = 'login'
+    router.push({ name: 'login', query: { flow: params.get('flow') } })
   }
 })
 
@@ -70,7 +65,6 @@ async function logout() {
     if (data.logout_url) {
       window.location.href = data.logout_url
     } else {
-        // Fallback or error handling?
         console.error("No logout_url found in response")
     }
   } catch (error) {
@@ -78,156 +72,147 @@ async function logout() {
   }
 }
 
-const activeRoute = ref('home')
-const activeAdminTab = ref('users')
+// Current route name for sidebar highlighting
+const currentRouteName = computed(() => route.name as string)
 
-function navigateToAdmin(tab: string) {
-  activeRoute.value = 'administration'
-  activeAdminTab.value = tab
-}
-
-const selectedDetectionId = ref<string | null>(null)
-
-function navigateToDetection(id: string) {
-  selectedDetectionId.value = id
-  activeRoute.value = 'detection-detail'
-}
-
-const selectedCaseId = ref<string | null>(null)
-
-function navigateToCase(id: string) {
-  selectedCaseId.value = id
-  activeRoute.value = 'case-detail'
-}
-
-const selectedJobId = ref<string | null>(null)
-
-function navigateToJob(id: string) {
-  selectedJobId.value = id
-  activeRoute.value = 'job-detail'
-}
-
-const selectedAssistantSessionId = ref<string | null>(null)
-
-function navigateToAssistantSession(sessionId: string) {
-  selectedAssistantSessionId.value = sessionId
-}
+// Check if we're on an admin page
+const isAdminRoute = computed(() => currentRouteName.value === 'administration')
+const currentAdminTab = computed(() => route.params.tab as string || 'users')
 
 // Routes where the chat widget should be visible
-const chatWidgetRoutes = ['home', 'hunt', 'alerts', 'cases', 'case-detail', 'detections', 'detection-detail']
-const showChatWidget = computed(() => chatWidgetRoutes.includes(activeRoute.value))
+const showChatWidget = computed(() => route.meta.showChatWidget === true)
 
-// Hunt query for event navigation from chat
-const huntQuery = ref<string | null>(null)
+// Page title from route meta
+const pageTitle = computed(() => {
+  const title = route.meta.title as string
+  if (isAdminRoute.value) {
+    return `Administration - ${currentAdminTab.value.charAt(0).toUpperCase() + currentAdminTab.value.slice(1)}`
+  }
+  return title || 'Security Onion'
+})
 
 function openAssistantFromWidget() {
   closeChat()
-  activeRoute.value = 'assistant'
+  router.push({ name: 'assistant' })
 }
 
 function navigateToEventFromChat(eventId: string, query?: string) {
-  // Navigate to Hunt with the event query
-  huntQuery.value = query || `_id:"${eventId}"`
-  activeRoute.value = 'hunt'
+  const q = query || `_id:"${eventId}"`
+  router.push({ name: 'hunt', query: { q } })
+}
+
+// Check if sidebar item is active
+function isActive(routeName: string | string[]): boolean {
+  const names = Array.isArray(routeName) ? routeName : [routeName]
+  return names.includes(currentRouteName.value)
 }
 </script>
 
 <template>
-  <Login v-if="activeRoute === 'login'" />
+  <div v-if="currentRouteName === 'login'">
+    <router-view />
+  </div>
   <div v-else class="flex min-h-screen w-full bg-background text-foreground">
     <!-- Sidebar -->
-    <aside 
+    <aside
       :class="cn(
-        'fixed left-0 top-0 z-40 h-screen bg-card border-r border-border transition-all duration-300',
+        'fixed left-0 top-0 z-40 h-screen bg-card border-r border-border transition-all duration-300 overflow-y-auto',
         sidebarOpen ? 'w-64' : 'w-16'
       )"
     >
-      <div class="flex h-16 items-center justify-between px-4 border-b border-border">
+      <div class="flex h-16 items-center justify-between px-4 border-b border-border sticky top-0 bg-card z-10">
         <div v-if="sidebarOpen" class="flex items-center gap-2 font-bold text-xl text-primary">
           <Shield class="h-6 w-6" />
           <span>Security Onion</span>
         </div>
-        <div v-else class="mx-auto">
-          <Shield class="h-6 w-6 text-primary" />
-        </div>
+        <button v-else @click="toggleSidebar" class="mx-auto p-1 hover:bg-muted rounded transition-colors">
+          <Menu class="h-6 w-6 text-primary" />
+        </button>
         <button v-if="sidebarOpen" @click="toggleSidebar" class="p-1 hover:bg-muted rounded text-muted-foreground">
           <Menu class="h-5 w-5" />
         </button>
       </div>
 
       <nav class="p-2 space-y-1">
-        <a href="#" @click.prevent="activeRoute = 'home'" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', activeRoute === 'home' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
+        <router-link to="/" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', isActive('home') ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
           <Home class="h-5 w-5" />
           <span v-if="sidebarOpen">Overview</span>
-        </a>
-        <a href="#" @click.prevent="activeRoute = 'alerts'" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', activeRoute === 'alerts' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
+        </router-link>
+        <router-link to="/alerts" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', isActive('alerts') ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
           <Bell class="h-5 w-5" />
           <span v-if="sidebarOpen">Alerts</span>
-        </a>
-        <a href="#" @click.prevent="activeRoute = 'hunt'" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', activeRoute === 'hunt' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
+        </router-link>
+        <router-link to="/hunt" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', isActive('hunt') ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
           <Search class="h-5 w-5" />
           <span v-if="sidebarOpen">Hunt</span>
-        </a>
-        <a href="#" @click.prevent="activeRoute = 'dashboards'" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', activeRoute === 'dashboards' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
-  <LayoutGrid class="h-5 w-5" />
+        </router-link>
+        <router-link to="/dashboards" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', isActive('dashboards') ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
+          <LayoutGrid class="h-5 w-5" />
           <span v-if="sidebarOpen">Dashboards</span>
-        </a>
-        <a href="#" @click.prevent="activeRoute = 'grid'" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', activeRoute === 'grid' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
+        </router-link>
+        <router-link to="/grid" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', isActive('grid') ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
           <Server class="h-5 w-5" />
           <span v-if="sidebarOpen">Grid</span>
-        </a>
-        <a href="#" @click.prevent="activeRoute = 'detections'" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', activeRoute === 'detections' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
+        </router-link>
+        <router-link to="/detections" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', isActive(['detections', 'detection-detail']) ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
           <ShieldAlert class="h-5 w-5" />
           <span v-if="sidebarOpen">Detections</span>
-        </a>
-        <a href="#" @click.prevent="activeRoute = 'jobs'" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', activeRoute === 'jobs' || activeRoute === 'job-detail' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
+        </router-link>
+        <router-link to="/jobs" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', isActive(['jobs', 'job-detail']) ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
           <FileText class="h-5 w-5" />
           <span v-if="sidebarOpen">PCAP</span>
-        </a>
-        <a href="#" @click.prevent="activeRoute = 'cases'" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', activeRoute === 'cases' || activeRoute === 'case-detail' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
+        </router-link>
+        <router-link to="/cases" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', isActive(['cases', 'case-detail']) ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
           <Briefcase class="h-5 w-5" />
           <span v-if="sidebarOpen">Cases</span>
-        </a>
-        <a href="#" @click.prevent="activeRoute = 'assistant'" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', activeRoute === 'assistant' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
+        </router-link>
+        <router-link to="/assistant" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', isActive('assistant') ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
           <Bot class="h-5 w-5" />
           <span v-if="sidebarOpen">AI Assistant</span>
-        </a>
+        </router-link>
         <div class="pt-4 border-t border-border mt-4">
-             <div class="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1" v-if="sidebarOpen">
-                Administration
-             </div>
-             <a href="#" @click.prevent="navigateToAdmin('users')" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', activeRoute === 'administration' && activeAdminTab === 'users' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
-                <Users class="h-5 w-5" />
-                <span v-if="sidebarOpen">Users</span>
-            </a>
-            <a href="#" @click.prevent="navigateToAdmin('grid')" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', activeRoute === 'administration' && activeAdminTab === 'grid' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
-                <Server class="h-5 w-5" />
-                <span v-if="sidebarOpen">Grid Members</span>
-            </a>
-            <a href="#" @click.prevent="navigateToAdmin('config')" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', activeRoute === 'administration' && activeAdminTab === 'config' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
+             <button
+               @click="adminExpanded = !adminExpanded"
+               :class="cn('w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-muted-foreground hover:bg-muted hover:text-foreground', isAdminRoute && 'text-primary')"
+             >
                 <Settings class="h-5 w-5" />
-                <span v-if="sidebarOpen">Configuration</span>
-            </a>
-             <a href="#" @click.prevent="navigateToAdmin('license')" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', activeRoute === 'administration' && activeAdminTab === 'license' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
-                <Key class="h-5 w-5" />
-                <span v-if="sidebarOpen">License</span>
-            </a>
-             <a href="#" @click.prevent="navigateToAdmin('aimetrics')" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', activeRoute === 'administration' && activeAdminTab === 'aimetrics' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
-                <Activity class="h-5 w-5" />
-                <span v-if="sidebarOpen">AI Metrics</span>
-            </a>
-             <a href="#" @click.prevent="navigateToAdmin('clients')" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', activeRoute === 'administration' && activeAdminTab === 'clients' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
-                <UserCog class="h-5 w-5" />
-                <span v-if="sidebarOpen">Clients</span>
-            </a>
-             <a href="#" @click.prevent="navigateToAdmin('queries')" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', activeRoute === 'administration' && activeAdminTab === 'queries' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
-                <Search class="h-5 w-5" />
-                <span v-if="sidebarOpen">Active Queries</span>
-            </a>
+                <span v-if="sidebarOpen" class="flex-1 text-left text-xs font-semibold uppercase tracking-wider">Administration</span>
+                <ChevronDown v-if="sidebarOpen" :class="cn('h-4 w-4 transition-transform', adminExpanded && 'rotate-180')" />
+             </button>
+             <div v-show="adminExpanded" class="space-y-1 mt-1">
+               <router-link to="/admin/users" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', sidebarOpen && 'pl-6', isAdminRoute && currentAdminTab === 'users' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
+                  <Users class="h-5 w-5" />
+                  <span v-if="sidebarOpen">Users</span>
+              </router-link>
+              <router-link to="/admin/grid" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', sidebarOpen && 'pl-6', isAdminRoute && currentAdminTab === 'grid' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
+                  <Server class="h-5 w-5" />
+                  <span v-if="sidebarOpen">Grid Members</span>
+              </router-link>
+              <router-link to="/admin/config" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', sidebarOpen && 'pl-6', isAdminRoute && currentAdminTab === 'config' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
+                  <Settings class="h-5 w-5" />
+                  <span v-if="sidebarOpen">Configuration</span>
+              </router-link>
+               <router-link to="/admin/license" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', sidebarOpen && 'pl-6', isAdminRoute && currentAdminTab === 'license' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
+                  <Key class="h-5 w-5" />
+                  <span v-if="sidebarOpen">License</span>
+              </router-link>
+               <router-link to="/admin/aimetrics" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', sidebarOpen && 'pl-6', isAdminRoute && currentAdminTab === 'aimetrics' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
+                  <Activity class="h-5 w-5" />
+                  <span v-if="sidebarOpen">AI Metrics</span>
+              </router-link>
+               <router-link to="/admin/clients" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', sidebarOpen && 'pl-6', isAdminRoute && currentAdminTab === 'clients' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
+                  <UserCog class="h-5 w-5" />
+                  <span v-if="sidebarOpen">Clients</span>
+              </router-link>
+               <router-link to="/admin/queries" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', sidebarOpen && 'pl-6', isAdminRoute && currentAdminTab === 'queries' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
+                  <Search class="h-5 w-5" />
+                  <span v-if="sidebarOpen">Active Queries</span>
+              </router-link>
+             </div>
         </div>
       </nav>
 
-      <div class="absolute bottom-4 left-0 w-full px-2 space-y-1 border-t border-border pt-2">
+      <div class="px-2 py-4 space-y-1 border-t border-border mt-4">
          <button @click="switchToClassic" class="w-full flex items-center gap-3 px-3 py-2 rounded-md text-amber-500 hover:bg-amber-500/10 transition-colors">
           <RotateCcw class="h-5 w-5" />
           <span v-if="sidebarOpen">Back to Classic</span>
@@ -242,14 +227,14 @@ function navigateToEventFromChat(eventId: string, query?: string) {
     <!-- Main Content Area (includes chat panel when open) -->
     <div
       :class="cn(
-        'flex flex-1 transition-all duration-300 min-h-screen',
+        'flex flex-1 transition-all duration-300 h-screen',
         sidebarOpen ? 'ml-64' : 'ml-16'
       )"
     >
     <!-- Main Content -->
-    <main class="flex-1 min-h-screen bg-background min-w-0">
-      <header class="h-16 border-b border-border bg-card flex items-center justify-between px-6 sticky top-0 z-30">
-        <h1 class="text-xl font-semibold capitalize">{{ activeRoute.replace('-', ' ') }}</h1>
+    <main class="flex-1 h-screen bg-background min-w-0 flex flex-col">
+      <header class="h-16 border-b border-border bg-card flex items-center justify-between px-6 shrink-0 z-30">
+        <h1 class="text-xl font-semibold capitalize">{{ pageTitle }}</h1>
         <div class="flex items-center gap-4">
           <div class="bg-muted px-3 py-1 rounded-full text-sm font-medium">
             System Status: <span class="text-green-500">Healthy</span>
@@ -268,69 +253,13 @@ function navigateToEventFromChat(eventId: string, query?: string) {
             <Bot class="h-4 w-4" />
             <span class="hidden sm:inline">AI Assistant</span>
           </button>
-          <div class="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold">
-            U
-          </div>
+          <UserMenu />
         </div>
       </header>
 
-      <div class="p-6">
-        <Overview v-if="activeRoute === 'home'" />
-        
-        <div v-else-if="activeRoute === 'grid'">
-            <Grid />
-        </div>
-
-        <div v-else-if="activeRoute === 'hunt'">
-            <Hunt category="hunt" :initial-query="huntQuery" />
-        </div>
-
-        <div v-else-if="activeRoute === 'alerts'">
-            <Hunt category="alerts" :initial-query="huntQuery" />
-        </div>
-
-        <div v-else-if="activeRoute === 'detections'">
-            <Detections @view-detail="navigateToDetection" />
-        </div>
-
-        <div v-else-if="activeRoute === 'detection-detail' && selectedDetectionId">
-            <DetectionDetail :id="selectedDetectionId" @back="activeRoute = 'detections'" />
-        </div>
-
-        <div v-else-if="activeRoute === 'cases'">
-            <Cases @view-detail="navigateToCase" />
-        </div>
-
-        <div v-else-if="activeRoute === 'case-detail' && selectedCaseId">
-            <CaseDetail :id="selectedCaseId" @back="activeRoute = 'cases'" />
-        </div>
-
-        <div v-else-if="activeRoute === 'jobs'">
-            <Jobs @view-detail="navigateToJob" />
-        </div>
-
-        <div v-else-if="activeRoute === 'job-detail' && selectedJobId">
-            <JobDetail :id="selectedJobId" @back="activeRoute = 'jobs'" />
-        </div>
-
-        <div v-else-if="activeRoute === 'assistant'" class="h-[calc(100vh-theme(spacing.16)-theme(spacing.12))] -m-6">
-            <Assistant
-              :session-id="selectedAssistantSessionId"
-              @navigate-to-session="navigateToAssistantSession"
-            />
-        </div>
-
-        <div v-else-if="activeRoute === 'administration'" class="h-[calc(100vh-theme(spacing.16)-theme(spacing.12))] -m-6">
-            <Administration :active-tab="activeAdminTab" />
-        </div>
-
-        <div v-else class="flex flex-col items-center justify-center h-96 text-muted-foreground">
-          <Database class="h-16 w-16 mb-4 opacity-20" />
-          <h2 class="text-2xl font-semibold">Module Not Implemented</h2>
-          <p>This part of the modern interface is coming soon.</p>
-        </div>
+      <div class="flex-1 overflow-auto p-6">
+        <router-view />
       </div>
-
     </main>
 
     <!-- Chat Widget Panel (integrated into layout, pushes content) -->

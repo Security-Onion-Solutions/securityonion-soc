@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowLeft,
   MessageSquare,
@@ -12,17 +13,48 @@ import {
   Activity,
   CheckSquare,
   ChevronRight,
-  Info
+  Info,
+  Send,
+  Loader2,
+  Eye,
+  Edit3,
+  File,
+  Crosshair
 } from 'lucide-vue-next'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import { cn } from '../lib/utils'
 import { useUsers } from '../composables/useUsers'
 import { useFormatters } from '../composables/useFormatters'
+import { useApi } from '../composables/useApi'
+import AttachmentsPanel from '../components/cases/AttachmentsPanel.vue'
+import EvidencePanel from '../components/cases/EvidencePanel.vue'
+
+const route = useRoute()
+const router = useRouter()
 
 const { getUserName } = useUsers()
 const { formatDate, formatDateOnly } = useFormatters()
+const { post } = useApi()
 
-const props = defineProps<{ id: string }>()
-const emit = defineEmits(['back'])
+// Configure marked for GFM
+marked.setOptions({
+  breaks: true,
+  gfm: true
+})
+
+// Render markdown to sanitized HTML
+function renderMarkdown(content: string): string {
+  if (!content) return ''
+  const html = marked.parse(content) as string
+  return DOMPurify.sanitize(html)
+}
+
+// Get ID from route params (with fallback to props for compatibility)
+const props = defineProps<{ id?: string }>()
+const caseId = computed(() => (route.params.id as string) || props.id || '')
+
+const goBack = () => router.push({ name: 'cases' })
 
 const caseObj = ref<any>(null)
 const associations = ref<any>({
@@ -36,6 +68,45 @@ const associations = ref<any>({
 const loading = ref(true)
 const error = ref<string | null>(null)
 const activeTab = ref('summary')
+const artifactSubTab = ref<'attachments' | 'evidence'>('attachments')
+
+// Evidence form state for pre-populating from attachment hashes
+const pendingEvidence = ref<{ value: string; description: string } | null>(null)
+
+// Comment form state
+const newCommentText = ref('')
+const newCommentHours = ref<number | null>(null)
+const addingComment = ref(false)
+const commentError = ref<string | null>(null)
+const showPreview = ref(false)
+
+async function addComment() {
+  if (!newCommentText.value.trim()) {
+    commentError.value = 'Comment cannot be empty'
+    return
+  }
+
+  addingComment.value = true
+  commentError.value = null
+
+  try {
+    await post('/api/case/comments', {
+      caseId: caseId.value,
+      description: newCommentText.value.trim(),
+      hours: newCommentHours.value || 0
+    })
+
+    // Clear form and reload comments
+    newCommentText.value = ''
+    newCommentHours.value = null
+    showPreview.value = false
+    await loadAssociation('comments')
+  } catch (err: any) {
+    commentError.value = err.message || 'Failed to add comment'
+  } finally {
+    addingComment.value = false
+  }
+}
 
 const tabs = [
   { id: 'summary', name: 'Summary', icon: Info },
@@ -49,7 +120,7 @@ const tabs = [
 const fetchCaseDetail = async () => {
   loading.value = true
   try {
-    const response = await fetch(`/api/case/?id=${props.id}`)
+    const response = await fetch(`/api/case/?id=${caseId.value}`)
     if (!response.ok) throw new Error('Failed to fetch case details')
     
     caseObj.value = await response.json()
@@ -71,8 +142,8 @@ const loadAssociation = async (association: string) => {
     if (association === 'attachments' || association === 'evidence') {
       path = `artifacts/${association}`
     }
-    
-    const response = await fetch(`/api/case/${path}?id=${props.id}`)
+
+    const response = await fetch(`/api/case/${path}?id=${caseId.value}`)
     if (!response.ok) throw new Error(`Failed to fetch ${association}`)
     
     associations.value[association] = await response.json()
@@ -115,6 +186,25 @@ const getTLPStyles = (tlp: string) => {
     default: return 'bg-slate-500 text-white'
   }
 }
+
+// Refresh attachments
+const refreshAttachments = () => {
+  loadAssociation('attachments')
+}
+
+// Refresh evidence
+const refreshEvidence = () => {
+  loadAssociation('evidence')
+}
+
+// Add hash as evidence (from attachment panel)
+const addHashAsEvidence = (hash: string, hashType: string) => {
+  pendingEvidence.value = {
+    value: hash,
+    description: `${hashType.toUpperCase()} hash from attachment`
+  }
+  artifactSubTab.value = 'evidence'
+}
 </script>
 
 <template>
@@ -122,8 +212,8 @@ const getTLPStyles = (tlp: string) => {
     <!-- Header -->
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-4">
-        <button 
-          @click="emit('back')" 
+        <button
+          @click="goBack"
           class="p-2 hover:bg-muted rounded-full transition-colors text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft class="h-5 w-5" />
@@ -246,50 +336,170 @@ const getTLPStyles = (tlp: string) => {
 
           <!-- Comments Tab -->
           <div v-else-if="activeTab === 'comments'" class="flex flex-col h-full animate-in fade-in duration-300">
+            <!-- Comments List -->
             <div class="flex-1 p-6 space-y-6 overflow-y-auto max-h-[500px]">
+              <div v-if="associations.comments.length === 0" class="text-center py-8 text-muted-foreground">
+                <MessageSquare class="h-12 w-12 mx-auto mb-3 opacity-50" />
+                <p>No comments yet. Be the first to add one!</p>
+              </div>
               <div v-for="comment in associations.comments" :key="comment.id" class="flex gap-4">
                 <div class="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center font-bold text-xs text-primary shrink-0">
-                  {{ getUserName(comment.userId).charAt(0).toUpperCase() }}
+                  {{ getUserName(comment.userId)?.charAt(0)?.toUpperCase() || '?' }}
                 </div>
                 <div class="space-y-1 flex-1">
                   <div class="flex items-center justify-between">
-                    <span class="text-sm font-semibold">{{ getUserName(comment.userId) }}</span>
+                    <span class="text-sm font-semibold">{{ getUserName(comment.userId) || 'Unknown' }}</span>
                     <span class="text-xs text-muted-foreground">{{ formatDate(comment.createTime) }}</span>
                   </div>
-                  <div class="text-sm text-muted-foreground bg-muted/30 p-3 rounded-lg border border-border/50">
-                    {{ comment.description }}
-                  </div>
-                  <div class="flex items-center gap-1 text-[10px] text-muted-foreground pt-1">
+                  <div
+                    class="prose prose-sm prose-invert max-w-none bg-muted/30 p-3 rounded-lg border border-border/50 text-sm [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                    v-html="renderMarkdown(comment.description)"
+                  ></div>
+                  <div v-if="comment.hours" class="flex items-center gap-1 text-[10px] text-muted-foreground pt-1">
                     <Clock class="h-3 w-3" />
                     Hours spent: {{ comment.hours }}
                   </div>
                 </div>
               </div>
             </div>
+
+            <!-- Add Comment Form -->
             <div class="p-6 border-t border-border bg-muted/30 mt-auto">
               <div class="space-y-4">
-                <textarea 
-                  placeholder="Add a comment... (Markdown supported)"
-                  class="w-full bg-background border border-border rounded-lg p-3 text-sm min-h-[100px] focus:outline-none focus:ring-2 focus:ring-primary/50"
+                <!-- Error Message -->
+                <div v-if="commentError" class="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
+                  {{ commentError }}
+                </div>
+
+                <!-- Preview Toggle -->
+                <div class="flex items-center gap-2 border-b border-border pb-2">
+                  <button
+                    @click="showPreview = false"
+                    :class="cn(
+                      'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+                      !showPreview ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                    )"
+                  >
+                    <Edit3 class="h-3.5 w-3.5" />
+                    Write
+                  </button>
+                  <button
+                    @click="showPreview = true"
+                    :class="cn(
+                      'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+                      showPreview ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                    )"
+                  >
+                    <Eye class="h-3.5 w-3.5" />
+                    Preview
+                  </button>
+                </div>
+
+                <!-- Write Mode -->
+                <textarea
+                  v-if="!showPreview"
+                  v-model="newCommentText"
+                  placeholder="Add a comment... (Markdown supported: **bold**, *italic*, `code`, lists, etc.)"
+                  class="w-full bg-background border border-border rounded-lg p-3 text-sm min-h-[120px] focus:outline-none focus:ring-2 focus:ring-primary/50 font-mono"
+                  :disabled="addingComment"
                 ></textarea>
+
+                <!-- Preview Mode -->
+                <div
+                  v-else
+                  class="w-full bg-background border border-border rounded-lg p-3 min-h-[120px] prose prose-sm prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                >
+                  <div v-if="newCommentText.trim()" v-html="renderMarkdown(newCommentText)"></div>
+                  <p v-else class="text-muted-foreground italic">Nothing to preview</p>
+                </div>
+
                 <div class="flex items-center justify-between">
                   <div class="flex items-center gap-2">
-                    <input type="number" step="0.5" class="w-20 bg-background border border-border rounded px-2 py-1 text-xs" placeholder="Hours" />
-                    <span class="text-xs text-muted-foreground">hours spent</span>
+                    <input
+                      v-model.number="newCommentHours"
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      class="w-20 bg-background border border-border rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      placeholder="Hours"
+                      :disabled="addingComment"
+                    />
+                    <span class="text-xs text-muted-foreground">hours spent (optional)</span>
                   </div>
-                  <button class="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors">
-                    Add Comment
+                  <button
+                    @click="addComment"
+                    :disabled="addingComment || !newCommentText.trim()"
+                    class="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Loader2 v-if="addingComment" class="h-4 w-4 animate-spin" />
+                    <Send v-else class="h-4 w-4" />
+                    {{ addingComment ? 'Adding...' : 'Add Comment' }}
                   </button>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- Coming Soon -->
+          <!-- Artifacts Tab -->
+          <div v-else-if="activeTab === 'artifacts'" class="flex flex-col h-full animate-in fade-in duration-300">
+            <!-- Sub-tabs for Attachments and Evidence -->
+            <div class="flex items-center gap-1 p-4 border-b border-border bg-muted/30">
+              <button
+                @click="artifactSubTab = 'attachments'"
+                :class="cn(
+                  'flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors',
+                  artifactSubTab === 'attachments'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                )"
+              >
+                <File class="h-4 w-4" />
+                Attachments
+                <span v-if="associations.attachments.length" class="ml-1 px-1.5 py-0.5 rounded-full bg-primary-foreground/20 text-[10px]">
+                  {{ associations.attachments.length }}
+                </span>
+              </button>
+              <button
+                @click="artifactSubTab = 'evidence'"
+                :class="cn(
+                  'flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors',
+                  artifactSubTab === 'evidence'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                )"
+              >
+                <Crosshair class="h-4 w-4" />
+                Evidence
+                <span v-if="associations.evidence.length" class="ml-1 px-1.5 py-0.5 rounded-full bg-primary-foreground/20 text-[10px]">
+                  {{ associations.evidence.length }}
+                </span>
+              </button>
+            </div>
+
+            <!-- Attachments Panel -->
+            <div v-if="artifactSubTab === 'attachments'" class="flex-1 p-6 overflow-y-auto">
+              <AttachmentsPanel
+                :case-id="caseId"
+                :attachments="associations.attachments"
+                @refresh="refreshAttachments"
+                @add-evidence="addHashAsEvidence"
+              />
+            </div>
+
+            <!-- Evidence Panel -->
+            <div v-if="artifactSubTab === 'evidence'" class="flex-1 p-6 overflow-y-auto">
+              <EvidencePanel
+                :case-id="caseId"
+                :evidence="associations.evidence"
+                @refresh="refreshEvidence"
+              />
+            </div>
+          </div>
+
+          <!-- Coming Soon (for other tabs) -->
           <div v-else class="flex-1 flex flex-col items-center justify-center p-12 text-center space-y-4 animate-in zoom-in duration-300">
             <div class="p-4 rounded-full bg-muted">
               <Activity v-if="activeTab === 'events'" class="h-10 w-10 text-muted-foreground" />
-              <Paperclip v-else-if="activeTab === 'artifacts'" class="h-10 w-10 text-muted-foreground" />
               <CheckSquare v-else-if="activeTab === 'tasks'" class="h-10 w-10 text-muted-foreground" />
               <History v-else-if="activeTab === 'history'" class="h-10 w-10 text-muted-foreground" />
             </div>

@@ -5,6 +5,18 @@
 // Elastic License 2.0.
 
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { Pie, Bar } from 'vue-chartjs'
+import {
+    Chart as ChartJS,
+    ArcElement,
+    BarElement,
+    CategoryScale,
+    LinearScale,
+    Tooltip,
+    Legend,
+    Title
+} from 'chart.js'
 import {
     Search,
     RefreshCw,
@@ -26,8 +38,14 @@ import {
     PanelRightOpen,
     PanelRightClose,
     Bot,
-    MessageSquare
+    MessageSquare,
+    PieChart,
+    Maximize2,
+    Minimize2
 } from 'lucide-vue-next'
+
+// Register Chart.js components
+ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend, Title)
 import { cn } from '../lib/utils'
 import { useApi } from '../composables/useApi'
 import { useFormatters } from '../composables/useFormatters'
@@ -42,6 +60,7 @@ import AlertActions from '../components/hunt/AlertActions.vue'
 import EscalationMenu from '../components/hunt/EscalationMenu.vue'
 import PlaybookPanel from '../components/hunt/PlaybookPanel.vue'
 import BulkActions from '../components/hunt/BulkActions.vue'
+import DateTimePicker from '../components/common/DateTimePicker.vue'
 import {
     type HuntCategory,
     type CategoryConfig,
@@ -74,6 +93,9 @@ const emit = defineEmits<{
 // Composables
 // =============================================================================
 
+const route = useRoute()
+const router = useRouter()
+
 const { get, loading: apiLoading, error: apiError } = useApi()
 const { formatDate, formatRelativeTime } = useFormatters()
 const { getSeverityStyles } = useStatusStyles()
@@ -94,7 +116,9 @@ const {
     stopAutoRefresh,
     setAutoRefreshInterval,
     loadFromLocalStorage: loadTimeSettings,
-    saveToLocalStorage: saveTimeSettings
+    saveToLocalStorage: saveTimeSettings,
+    parseFromUrlParams: parseTimeFromUrl,
+    serializeToUrlParams: serializeTimeToUrl
 } = useTimeRange()
 
 const {
@@ -115,7 +139,9 @@ const {
     addMruQuery,
     buildEffectiveQuery,
     loadFromLocalStorage: loadQuerySettings,
-    saveToLocalStorage: saveQuerySettings
+    saveToLocalStorage: saveQuerySettings,
+    parseFromUrlParams: parseQueryFromUrl,
+    serializeToUrlParams: serializeQueryToUrl
 } = useHuntQuery()
 
 const {
@@ -130,6 +156,8 @@ const {
     filterVisibleFields,
     constructHeaders: buildHeadersFromFields,
     extractModuleDataset,
+    getQueries,
+    getParams,
     loaded: paramsLoaded
 } = useHuntParams()
 
@@ -230,6 +258,9 @@ const autohunt = ref(true)
 const showOptions = ref(false)
 const showQueryDropdown = ref(false)
 
+// Query presets from server config
+const queryPresets = computed(() => getQueries(props.category))
+
 // Results
 const events = ref<EventRecord[]>([])
 const groupBys = ref<GroupByData[]>([])
@@ -251,6 +282,18 @@ const expandedEvents = ref<string[]>([])
 
 // Items per page options
 const itemsPerPageOptions = [10, 25, 50, 100, 200, 500]
+
+// Fetch limits
+const eventLimit = ref(500)
+const groupByLimit = ref(10)
+const eventLimitOptions = [10, 25, 50, 100, 200, 500, 1000, 2000, 5000]
+const groupByLimitOptions = [10, 25, 50, 100, 200, 500]
+
+// Client-side filters (filter fetched results locally)
+const eventFilter = ref('')
+const groupByFilter = ref('')
+const groupByItemsPerPage = ref(10)
+const groupByCurrentPage = ref(1)
 
 // Quick action menu state
 const quickActionVisible = ref(false)
@@ -281,14 +324,110 @@ const aiEnabled = ref(true) // TODO: Check license for AI features
 // Computed
 // =============================================================================
 
+// Filter events based on eventFilter text
+const filteredEvents = computed(() => {
+    if (!eventFilter.value.trim()) {
+        return events.value
+    }
+    const searchLower = eventFilter.value.toLowerCase()
+    return events.value.filter(event => {
+        // Search across all string/number fields
+        for (const [key, value] of Object.entries(event)) {
+            if (key.startsWith('_')) continue
+            const strVal = String(value ?? '').toLowerCase()
+            if (strVal.includes(searchLower)) {
+                return true
+            }
+        }
+        return false
+    })
+})
+
 const paginatedEvents = computed(() => {
     const start = (currentPage.value - 1) * itemsPerPage.value
     const end = start + itemsPerPage.value
-    return events.value.slice(start, end)
+    return filteredEvents.value.slice(start, end)
 })
 
 const totalPages = computed(() => {
-    return Math.ceil(events.value.length / itemsPerPage.value)
+    return Math.ceil(filteredEvents.value.length / itemsPerPage.value)
+})
+
+// Combined group-by data - merges all group-by tables into one
+const combinedGroupByData = computed(() => {
+    const combined: any[] = []
+    for (const group of groupBys.value) {
+        for (const row of group.data) {
+            // Create a new object with all the row's fields explicitly copied
+            const combinedRow: Record<string, any> = {
+                count: row.count,
+                _row_idx_: row._row_idx_,
+                _groupKey: group.key,
+                _groupTitle: group.title,
+                _groupFields: group.fields
+            }
+            // Copy each field value from the row
+            for (const field of group.fields) {
+                combinedRow[field] = row[field]
+            }
+            combined.push(combinedRow)
+        }
+    }
+    return combined
+})
+
+// Get all unique fields across all group-bys for headers
+const combinedGroupByFields = computed(() => {
+    const fieldsSet = new Set<string>()
+    for (const group of groupBys.value) {
+        for (const field of group.fields) {
+            fieldsSet.add(field)
+        }
+    }
+    return Array.from(fieldsSet)
+})
+
+// Helper to get field value from a row (handles missing fields)
+function getGroupByFieldValue(row: any, field: string): string {
+    // Check if this field belongs to this row's group
+    if (row._groupFields && !row._groupFields.includes(field)) {
+        return '-'
+    }
+    const val = row[field]
+    if (val === undefined || val === null || val === '') {
+        return '-'
+    }
+    return String(val)
+}
+
+// Filter combined group-by data
+const filteredGroupByData = computed(() => {
+    if (!groupByFilter.value.trim()) {
+        return combinedGroupByData.value
+    }
+    const searchLower = groupByFilter.value.toLowerCase()
+    return combinedGroupByData.value.filter(row => {
+        for (const [key, value] of Object.entries(row)) {
+            if (key.startsWith('_')) continue
+            const strVal = String(value ?? '').toLowerCase()
+            if (strVal.includes(searchLower)) {
+                return true
+            }
+        }
+        return false
+    })
+})
+
+// Paginated combined group-by data
+const paginatedGroupByData = computed(() => {
+    const start = (groupByCurrentPage.value - 1) * groupByItemsPerPage.value
+    const end = start + groupByItemsPerPage.value
+    return filteredGroupByData.value.slice(start, end)
+})
+
+// Total pages for combined group-by
+const groupByTotalPages = computed(() => {
+    return Math.ceil(filteredGroupByData.value.length / groupByItemsPerPage.value)
 })
 
 const hasFilters = computed(() => {
@@ -330,8 +469,8 @@ async function hunt() {
             range: range,
             format: '2006/01/02 3:04:05 PM', // Go reference time format
             zone: zone.value || 'Local',
-            metricLimit: categoryConfig.value.showMetrics ? '10' : '0',
-            eventLimit: '500'
+            metricLimit: categoryConfig.value.showMetrics ? groupByLimit.value.toString() : '0',
+            eventLimit: eventLimit.value.toString()
         }
 
         const response = await get<EventSearchResponse>('/api/events/', params)
@@ -370,6 +509,9 @@ async function hunt() {
             }
 
             loaded.value = true
+
+            // Sync state to URL after successful hunt
+            syncToUrl()
         }
     } catch (e) {
         console.error('Hunt failed:', e)
@@ -379,6 +521,12 @@ async function hunt() {
 }
 
 function handleQuerySubmit() {
+    hunt()
+}
+
+function selectPresetQuery(preset: { name: string; query: string; description?: string }) {
+    setQuery(preset.query)
+    showQueryDropdown.value = false
     hunt()
 }
 
@@ -456,28 +604,240 @@ function getEventFields(event: EventRecord): { key: string; value: any }[] {
     return fields.sort((a, b) => a.key.localeCompare(b.key))
 }
 
+/**
+ * Find the longest metric key for a given groupby index
+ * Example: For groupby_0, prefer "groupby_0|foo|bar" over "groupby_0|foo"
+ */
+function lookupGroupByMetricKey(metrics: Record<string, ChartMetric[]>, groupIdx: number, longest: boolean = true): string | null {
+    let desiredKey: string | null = null
+    const prefix = `groupby_${groupIdx}|`
+
+    for (const key of Object.keys(metrics)) {
+        if (key.startsWith(prefix)) {
+            if (desiredKey === null) {
+                desiredKey = key
+            } else if (longest && key.length > desiredKey.length) {
+                desiredKey = key
+            } else if (!longest && key.length < desiredKey.length) {
+                desiredKey = key
+            }
+        }
+    }
+
+    return desiredKey
+}
+
+/**
+ * Localize a value for display
+ * Handles special cases like empty strings, nulls, etc.
+ */
+function localizeValue(value: any): string {
+    if (value === null || value === undefined) {
+        return ''
+    }
+    if (value === '') {
+        return '(empty)'
+    }
+    return String(value)
+}
+
+/**
+ * Resolve SOC-specific IDs in a record
+ * Looks up fields starting with "soc_" for display names
+ */
+function lookupSocIds(record: Record<string, any>) {
+    for (const key of Object.keys(record)) {
+        if (key.startsWith('soc_') && key !== 'soc_id') {
+            // For now, just ensure string conversion
+            // Future: Add user ID resolution, etc.
+            record[key] = localizeValue(record[key])
+        }
+    }
+}
+
+/**
+ * Construct groupby table rows from raw metrics
+ */
+function constructGroupByRows(fields: string[], data: ChartMetric[]): any[] {
+    const records: any[] = []
+
+    data.forEach((row, index) => {
+        const record: Record<string, any> = {
+            count: row.value,
+            _row_idx_: index
+        }
+        fields.forEach((field, i) => {
+            record[field] = localizeValue(row.keys[i])
+        })
+        lookupSocIds(record)
+        records.push(record)
+    })
+
+    return records
+}
+
+/**
+ * Construct chart-specific metrics with aggregation for "Other" category
+ */
+function constructChartMetrics(data: ChartMetric[], fieldSeparator: string, otherLimit: number): ChartMetric[] {
+    const records: ChartMetric[] = []
+    let other = 0
+
+    data.forEach((row) => {
+        const record: ChartMetric = {
+            value: row.value,
+            keys: [row.keys.join(fieldSeparator)]
+        }
+        if (records.length >= otherLimit) {
+            other += row.value
+        } else {
+            records.push(record)
+        }
+    })
+
+    if (other > 0) {
+        records.push({ value: other, keys: ['Other'] })
+    }
+
+    return records
+}
+
+/**
+ * Determine chart type from query options
+ */
+function getChartTypeFromOptions(options: string[]): 'table' | 'pie' | 'bar' | 'sankey' {
+    if (options.includes('pie')) return 'pie'
+    if (options.includes('bar')) return 'bar'
+    if (options.includes('sankey')) return 'sankey'
+    return 'table'
+}
+
+/**
+ * Build chart data for pie/bar charts
+ */
+function buildChartData(chartMetrics: ChartMetric[], chartType: 'pie' | 'bar' | 'sankey' | 'table') {
+    if (chartType === 'table') return null
+
+    const labels = chartMetrics.map(m => m.keys[0] || '(empty)')
+    const values = chartMetrics.map(m => m.value)
+
+    // Color palette
+    const colors = [
+        'rgba(59, 130, 246, 0.8)',   // blue
+        'rgba(16, 185, 129, 0.8)',   // green
+        'rgba(249, 115, 22, 0.8)',   // orange
+        'rgba(139, 92, 246, 0.8)',   // purple
+        'rgba(236, 72, 153, 0.8)',   // pink
+        'rgba(245, 158, 11, 0.8)',   // amber
+        'rgba(6, 182, 212, 0.8)',    // cyan
+        'rgba(239, 68, 68, 0.8)',    // red
+        'rgba(107, 114, 128, 0.8)',  // gray
+        'rgba(34, 197, 94, 0.8)'     // lime
+    ]
+
+    if (chartType === 'pie') {
+        return {
+            labels,
+            datasets: [{
+                data: values,
+                backgroundColor: colors.slice(0, values.length),
+                borderWidth: 1
+            }]
+        }
+    }
+
+    if (chartType === 'bar') {
+        return {
+            labels,
+            datasets: [{
+                label: 'Count',
+                data: values,
+                backgroundColor: colors[0],
+                borderWidth: 1
+            }]
+        }
+    }
+
+    return null
+}
+
+/**
+ * Build chart options based on chart type
+ */
+function buildChartOptions(chartType: 'pie' | 'bar' | 'sankey' | 'table', showLegend: boolean) {
+    if (chartType === 'table') return null
+
+    const baseOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                display: showLegend,
+                position: 'right' as const
+            }
+        }
+    }
+
+    if (chartType === 'bar') {
+        return {
+            ...baseOptions,
+            indexAxis: 'y' as const,
+            scales: {
+                x: {
+                    beginAtZero: true
+                }
+            }
+        }
+    }
+
+    return baseOptions
+}
+
 function processMetrics(metrics: Record<string, ChartMetric[]>) {
     groupBys.value = []
 
-    for (const [key, data] of Object.entries(metrics)) {
+    // Get params for chart settings
+    const huntParams = getParams(props.category)
+    const fieldSeparator = huntParams?.chartLabelFieldSeparator || ', '
+    const otherLimit = huntParams?.chartLabelOtherLimit || 10
+
+    // Get query groupby options for chart types
+    const queryGroupByOpts = queryGroupBys.value
+
+    // Process each groupby index by finding the longest key
+    let groupIdx = 0
+    while (true) {
+        const key = lookupGroupByMetricKey(metrics, groupIdx, true)
+        if (!key) break
+
+        const data = metrics[key]
+        if (!data) break
+
         // Parse the key format: "groupby_N|field1|field2"
         const parts = key.split('|')
-        if (parts.length < 2) continue
+        if (parts.length < 2) {
+            groupIdx++
+            continue
+        }
 
         const fields = parts.slice(1)
-        const title = `Group by ${fields.join(', ')}`
+        const title = fields.join(fieldSeparator)
 
-        const records: any[] = data.map((metric, idx) => {
-            const record: any = {
-                count: metric.value,
-                _row_idx_: idx
-            }
-            // Map keys to field names
-            fields.forEach((field, i) => {
-                record[field] = metric.keys[i] ?? ''
-            })
-            return record
-        })
+        // Construct table rows
+        const records = constructGroupByRows(fields, data)
+
+        // Construct chart metrics with Other aggregation
+        const chartMetrics = constructChartMetrics(data, fieldSeparator, otherLimit)
+
+        // Get chart type from query options
+        const options = queryGroupByOpts[groupIdx]?.options || []
+        const chartType = getChartTypeFromOptions(options)
+        const showLegend = !options.includes('nolegend')
+        const maximized = options.includes('maximize')
+
+        // Build chart data if needed
+        const chartData = buildChartData(chartMetrics, chartType)
+        const chartOptions = buildChartOptions(chartType, showLegend)
 
         const groupHeaders: EventHeader[] = [
             { title: 'Count', value: 'count', sortable: true },
@@ -490,16 +850,75 @@ function processMetrics(metrics: Record<string, ChartMetric[]>) {
             fields,
             data: records,
             headers: groupHeaders,
-            chartType: 'table',
-            chartMetrics: data,
-            chartData: null,
-            chartOptions: null,
+            chartType,
+            chartMetrics,
+            chartData,
+            chartOptions,
             sortBy: [{ key: 'count', order: 'desc' }],
-            maximized: false,
-            isIncomplete: false
+            maximized,
+            isIncomplete: false,
+            filter: '',
+            currentPage: 1,
+            itemsPerPage: groupByItemsPerPage.value
         })
+
+        groupIdx++
     }
 }
+
+/**
+ * Set the chart type for a specific groupby
+ */
+function setGroupByChartType(groupIdx: number, chartType: 'table' | 'pie' | 'bar' | 'sankey') {
+    if (groupIdx < 0 || groupIdx >= groupBys.value.length) return
+
+    const group = groupBys.value[groupIdx]
+    group.chartType = chartType
+
+    // Rebuild chart data when switching to a chart type
+    if (chartType !== 'table' && group.chartMetrics) {
+        group.chartData = buildChartData(group.chartMetrics, chartType)
+        group.chartOptions = buildChartOptions(chartType, true)
+    }
+}
+
+/**
+ * Toggle maximize state for a specific groupby
+ */
+function toggleGroupByMaximize(groupIdx: number) {
+    if (groupIdx < 0 || groupIdx >= groupBys.value.length) return
+    groupBys.value[groupIdx].maximized = !groupBys.value[groupIdx].maximized
+}
+
+/**
+ * Get paged data for a specific groupby
+ */
+function getGroupByPagedData(group: GroupByData): any[] {
+    const page = group.currentPage || 1
+    const perPage = group.itemsPerPage || 10
+    const start = (page - 1) * perPage
+    const end = start + perPage
+    return group.data.slice(start, end)
+}
+
+/**
+ * Get total pages for a specific groupby
+ */
+function getGroupByTotalPages(group: GroupByData): number {
+    const perPage = group.itemsPerPage || 10
+    return Math.ceil(group.data.length / perPage)
+}
+
+/**
+ * Set the current page for a specific groupby
+ */
+function setGroupByPage(groupIdx: number, page: number) {
+    if (groupIdx < 0 || groupIdx >= groupBys.value.length) return
+    const group = groupBys.value[groupIdx]
+    const totalPages = getGroupByTotalPages(group)
+    group.currentPage = Math.max(1, Math.min(page, totalPages))
+}
+
 
 /**
  * Update table headers based on event module/dataset from results
@@ -712,9 +1131,7 @@ function clearSelection() {
 async function handleBulkEnable() {
     actionLoading.value = true
     try {
-        // Bulk enable detections
-        console.log('Bulk enable:', selectedEvents.value.map(e => e.soc_id))
-        // Implementation would call detection enable API
+        // TODO: Bulk enable detections - call detection enable API
     } finally {
         actionLoading.value = false
         clearSelection()
@@ -724,9 +1141,7 @@ async function handleBulkEnable() {
 async function handleBulkDisable() {
     actionLoading.value = true
     try {
-        // Bulk disable detections
-        console.log('Bulk disable:', selectedEvents.value.map(e => e.soc_id))
-        // Implementation would call detection disable API
+        // TODO: Bulk disable detections - call detection disable API
     } finally {
         actionLoading.value = false
         clearSelection()
@@ -736,9 +1151,7 @@ async function handleBulkDisable() {
 async function handleBulkDelete() {
     actionLoading.value = true
     try {
-        // Bulk delete detections
-        console.log('Bulk delete:', selectedEvents.value.map(e => e.soc_id))
-        // Implementation would call detection delete API
+        // TODO: Bulk delete detections - call detection delete API
     } finally {
         actionLoading.value = false
         clearSelection()
@@ -756,6 +1169,62 @@ function handlePlaybookHuntQuery(query: string, range: string) {
 }
 
 // =============================================================================
+// URL Sync
+// =============================================================================
+
+/**
+ * Parse URL params and load state from URL (higher priority than localStorage)
+ */
+function loadFromUrl(): boolean {
+    const params = new URLSearchParams(route.query as Record<string, string>)
+    const timeFromUrl = parseTimeFromUrl(params)
+    const queryFromUrl = parseQueryFromUrl(params)
+
+    // Parse fetch limits (el = eventLimit, gl = groupByLimit)
+    let limitsFromUrl = false
+    const elParam = params.get('el')
+    const glParam = params.get('gl')
+    if (elParam) {
+        const el = parseInt(elParam, 10)
+        if (eventLimitOptions.includes(el)) {
+            eventLimit.value = el
+            limitsFromUrl = true
+        }
+    }
+    if (glParam) {
+        const gl = parseInt(glParam, 10)
+        if (groupByLimitOptions.includes(gl)) {
+            groupByLimit.value = gl
+            limitsFromUrl = true
+        }
+    }
+
+    return timeFromUrl || queryFromUrl || limitsFromUrl
+}
+
+/**
+ * Sync current state to URL params
+ */
+function syncToUrl() {
+    const queryParams: Record<string, string> = {
+        ...serializeTimeToUrl(),
+        ...serializeQueryToUrl()
+    }
+
+    // Add fetch limits to URL
+    queryParams.el = eventLimit.value.toString()
+    queryParams.gl = groupByLimit.value.toString()
+
+    // Only update URL if params actually changed
+    const currentParams = new URLSearchParams(route.query as Record<string, string>)
+    const newParams = new URLSearchParams(queryParams)
+
+    if (currentParams.toString() !== newParams.toString()) {
+        router.replace({ query: queryParams })
+    }
+}
+
+// =============================================================================
 // Lifecycle
 // =============================================================================
 
@@ -763,11 +1232,16 @@ onMounted(async () => {
     // Fetch hunt parameters (eventFields config) from server
     await fetchParams()
 
-    // Load saved settings
-    loadTimeSettings(props.category)
-    loadQuerySettings(props.category)
+    // Try to load from URL params first (higher priority)
+    const loadedFromUrl = loadFromUrl()
 
-    // Set default query for category
+    // Fall back to localStorage if no URL params
+    if (!loadedFromUrl) {
+        loadTimeSettings(props.category)
+        loadQuerySettings(props.category)
+    }
+
+    // Set default query for category if still empty
     if (!query.value) {
         setQuery(categoryConfig.value.defaultQuery)
     }
@@ -779,6 +1253,9 @@ onMounted(async () => {
 
     // Set default headers initially
     headers.value = [...defaultHeaders]
+
+    // Sync initial state to URL
+    syncToUrl()
 
     // Auto-hunt on mount
     hunt()
@@ -927,39 +1404,64 @@ watch(autoRefreshInterval, (newVal) => {
 
                     <!-- Query Dropdown -->
                     <div
-                        v-if="showQueryDropdown && mruQueries.length > 0"
-                        class="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-md shadow-lg z-50 max-h-60 overflow-auto"
+                        v-if="showQueryDropdown && (queryPresets.length > 0 || mruQueries.length > 0)"
+                        class="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-md shadow-lg z-50 max-h-80 overflow-auto"
                     >
-                        <div class="p-2 text-xs text-muted-foreground border-b border-border">
-                            Recent Queries
-                        </div>
-                        <button
-                            v-for="(q, idx) in mruQueries"
-                            :key="idx"
-                            @click="selectMruQuery(q)"
-                            class="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors truncate"
-                        >
-                            {{ q }}
-                        </button>
+                        <!-- Default Searches from config -->
+                        <template v-if="queryPresets.length > 0">
+                            <div class="p-2 text-xs text-muted-foreground border-b border-border font-medium">
+                                Default Searches
+                            </div>
+                            <button
+                                v-for="(preset, idx) in queryPresets"
+                                :key="'preset-' + idx"
+                                @click.stop="selectPresetQuery(preset)"
+                                class="w-full text-left px-3 py-2 hover:bg-muted transition-colors group"
+                            >
+                                <div class="text-sm font-medium">{{ preset.name }}</div>
+                                <div v-if="preset.description" class="text-xs text-muted-foreground truncate">{{ preset.description }}</div>
+                            </button>
+                        </template>
+
+                        <!-- Recent Queries -->
+                        <template v-if="mruQueries.length > 0">
+                            <div class="p-2 text-xs text-muted-foreground border-b border-border font-medium" :class="{ 'border-t': queryPresets.length > 0 }">
+                                Recent Queries
+                            </div>
+                            <button
+                                v-for="(q, idx) in mruQueries"
+                                :key="'mru-' + idx"
+                                @click.stop="selectMruQuery(q)"
+                                class="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors truncate"
+                            >
+                                {{ q }}
+                            </button>
+                        </template>
                     </div>
                 </div>
 
                 <!-- Time Range (if enabled) -->
-                <div v-if="categoryConfig.showTimeRange" class="flex items-center gap-2">
-                    <Clock class="h-4 w-4 text-muted-foreground" />
+                <DateTimePicker
+                    v-if="categoryConfig.showTimeRange"
+                    :show-auto-refresh="true"
+                    @change="autohunt && hunt()"
+                />
+
+                <!-- Fetch Limits -->
+                <div class="flex items-center gap-2 border-l border-border pl-4">
+                    <span class="text-xs text-muted-foreground">Events:</span>
                     <select
-                        v-model="relativeTimeValue"
+                        v-model="eventLimit"
                         class="text-sm bg-muted border-0 rounded-md px-2 py-2"
                     >
-                        <option v-for="n in [1, 5, 15, 30, 60]" :key="n" :value="n">{{ n }}</option>
+                        <option v-for="n in eventLimitOptions" :key="n" :value="n">{{ n }}</option>
                     </select>
+                    <span class="text-xs text-muted-foreground">Groups:</span>
                     <select
-                        v-model="relativeTimeUnit"
+                        v-model="groupByLimit"
                         class="text-sm bg-muted border-0 rounded-md px-2 py-2"
                     >
-                        <option v-for="unit in RELATIVE_TIME_UNITS" :key="unit.value" :value="unit.value">
-                            {{ unit.label }}
-                        </option>
+                        <option v-for="n in groupByLimitOptions" :key="n" :value="n">{{ n }}</option>
                     </select>
                 </div>
             </div>
@@ -1043,61 +1545,153 @@ watch(autoRefreshInterval, (newVal) => {
                     @bulk-delete="handleBulkDelete"
                 />
 
-                <!-- GroupBy Results -->
+                <!-- GroupBy Results (Individual Cards) -->
                 <div v-if="groupBys.length > 0" class="space-y-4">
                     <div
                         v-for="(group, groupIdx) in groupBys"
                         :key="group.key"
-                        class="rounded-xl border border-border bg-card overflow-hidden"
+                        :class="cn(
+                            'rounded-xl border border-border bg-card overflow-hidden',
+                            group.maximized && 'col-span-full'
+                        )"
                     >
-                        <!-- Group Header -->
+                        <!-- Header -->
                         <div class="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/50">
+                            <div class="flex items-center gap-3">
+                                <component
+                                    :is="group.chartType === 'pie' ? PieChart : BarChart3"
+                                    class="h-4 w-4 text-purple-500"
+                                />
+                                <h3 class="font-semibold text-sm">{{ group.title }}</h3>
+                                <span class="text-xs text-muted-foreground">
+                                    ({{ group.data.length }} results)
+                                </span>
+                            </div>
                             <div class="flex items-center gap-2">
-                                <BarChart3 class="h-4 w-4 text-purple-500" />
-                                <h3 class="font-semibold">{{ group.title }}</h3>
-                                <span class="text-sm text-muted-foreground">({{ group.data.length }} results)</span>
+                                <!-- View toggle buttons -->
+                                <div class="flex items-center border border-border rounded-md overflow-hidden">
+                                    <button
+                                        @click="setGroupByChartType(groupIdx, 'table')"
+                                        :class="cn(
+                                            'p-1.5 transition-colors',
+                                            group.chartType === 'table' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+                                        )"
+                                        title="Table view"
+                                    >
+                                        <Table class="h-3.5 w-3.5" />
+                                    </button>
+                                    <button
+                                        @click="setGroupByChartType(groupIdx, 'pie')"
+                                        :class="cn(
+                                            'p-1.5 transition-colors',
+                                            group.chartType === 'pie' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+                                        )"
+                                        title="Pie chart"
+                                    >
+                                        <PieChart class="h-3.5 w-3.5" />
+                                    </button>
+                                    <button
+                                        @click="setGroupByChartType(groupIdx, 'bar')"
+                                        :class="cn(
+                                            'p-1.5 transition-colors',
+                                            group.chartType === 'bar' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+                                        )"
+                                        title="Bar chart"
+                                    >
+                                        <BarChart3 class="h-3.5 w-3.5" />
+                                    </button>
+                                </div>
+                                <!-- Maximize/Minimize toggle -->
+                                <button
+                                    @click="toggleGroupByMaximize(groupIdx)"
+                                    class="p-1.5 hover:bg-muted rounded-md transition-colors"
+                                    :title="group.maximized ? 'Minimize' : 'Maximize'"
+                                >
+                                    <component :is="group.maximized ? Minimize2 : Maximize2" class="h-3.5 w-3.5" />
+                                </button>
                             </div>
                         </div>
 
-                        <!-- Group Table -->
-                        <div class="overflow-x-auto">
+                        <!-- Chart View -->
+                        <div v-if="group.chartType === 'pie' || group.chartType === 'bar'" class="p-4">
+                            <div :class="cn('relative', group.maximized ? 'h-96' : 'h-64')">
+                                <Pie
+                                    v-if="group.chartType === 'pie' && group.chartData"
+                                    :data="group.chartData"
+                                    :options="group.chartOptions"
+                                />
+                                <Bar
+                                    v-else-if="group.chartType === 'bar' && group.chartData"
+                                    :data="group.chartData"
+                                    :options="group.chartOptions"
+                                />
+                                <div v-else class="flex items-center justify-center h-full text-muted-foreground">
+                                    No chart data available
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Table View -->
+                        <div v-else class="overflow-x-auto">
                             <table class="w-full text-sm">
                                 <thead class="bg-muted/30">
                                     <tr>
+                                        <th class="px-4 py-2 text-left font-medium text-muted-foreground text-xs">Count</th>
                                         <th
-                                            v-for="header in group.headers"
-                                            :key="header.value"
-                                            class="px-4 py-3 text-left font-medium text-muted-foreground"
+                                            v-for="field in group.fields"
+                                            :key="field"
+                                            class="px-4 py-2 text-left font-medium text-muted-foreground text-xs"
                                         >
-                                            {{ header.title }}
+                                            {{ field }}
                                         </th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <tr
-                                        v-for="row in group.data"
-                                        :key="row._row_idx_"
-                                        class="border-t border-border hover:bg-muted/50 cursor-pointer transition-colors"
+                                        v-for="row in getGroupByPagedData(group)"
+                                        :key="`${group.key}-${row._row_idx_}`"
+                                        class="border-t border-border hover:bg-muted/50 transition-colors"
                                     >
-                                        <td class="px-4 py-3 font-medium">
+                                        <td class="px-4 py-2 font-medium text-xs">
                                             {{ row.count.toLocaleString() }}
                                         </td>
                                         <td
                                             v-for="field in group.fields"
                                             :key="field"
                                             @click="showQuickAction($event, field, row[field])"
-                                            class="px-4 py-3 hover:text-primary hover:underline"
+                                            class="px-4 py-2 text-xs hover:text-primary hover:underline cursor-pointer"
                                         >
                                             {{ row[field] || '-' }}
                                         </td>
                                     </tr>
                                     <tr v-if="group.data.length === 0">
-                                        <td :colspan="group.headers.length" class="px-4 py-8 text-center text-muted-foreground">
+                                        <td :colspan="1 + group.fields.length" class="px-4 py-6 text-center text-muted-foreground text-xs">
                                             No aggregation results
                                         </td>
                                     </tr>
                                 </tbody>
                             </table>
+
+                            <!-- Pagination for individual group -->
+                            <div v-if="getGroupByTotalPages(group) > 1" class="flex items-center justify-between px-4 py-2 border-t border-border">
+                                <button
+                                    @click="setGroupByPage(groupIdx, (group.currentPage || 1) - 1)"
+                                    :disabled="(group.currentPage || 1) === 1"
+                                    class="px-2 py-0.5 text-xs rounded bg-muted hover:bg-muted/80 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    Prev
+                                </button>
+                                <span class="text-xs text-muted-foreground">
+                                    {{ group.currentPage || 1 }} / {{ getGroupByTotalPages(group) }}
+                                </span>
+                                <button
+                                    @click="setGroupByPage(groupIdx, (group.currentPage || 1) + 1)"
+                                    :disabled="(group.currentPage || 1) === getGroupByTotalPages(group)"
+                                    class="px-2 py-0.5 text-xs rounded bg-muted hover:bg-muted/80 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    Next
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1106,10 +1700,33 @@ watch(autoRefreshInterval, (newVal) => {
                 <div class="rounded-xl border border-border bg-card overflow-hidden">
                     <!-- Table Header -->
                     <div class="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/50">
-                        <h3 class="font-semibold">{{ categoryConfig.eventsLabel }}</h3>
-                        <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-3">
+                            <h3 class="font-semibold">{{ categoryConfig.eventsLabel }}</h3>
                             <span class="text-sm text-muted-foreground">
-                                Showing {{ paginatedEvents.length }} of {{ events.length }}
+                                ({{ filteredEvents.length }}{{ eventFilter ? ' filtered' : '' }} of {{ events.length }})
+                            </span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <!-- Event Filter -->
+                            <div class="relative">
+                                <Filter class="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <input
+                                    v-model="eventFilter"
+                                    @input="currentPage = 1"
+                                    type="text"
+                                    placeholder="Filter results..."
+                                    class="w-48 pl-8 pr-8 py-1.5 text-sm rounded-md border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                />
+                                <button
+                                    v-if="eventFilter"
+                                    @click="eventFilter = ''; currentPage = 1"
+                                    class="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                >
+                                    <X class="h-4 w-4" />
+                                </button>
+                            </div>
+                            <span class="text-sm text-muted-foreground">
+                                Showing {{ paginatedEvents.length }} of {{ filteredEvents.length }}
                             </span>
                             <select
                                 v-model="itemsPerPage"

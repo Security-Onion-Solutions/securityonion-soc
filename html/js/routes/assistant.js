@@ -798,6 +798,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         // Only update UI state if we're still in the same session
         if (this.activeStreamingSessionId === streamingSessionId && this.currentChatId === streamingSessionId) {
           this.isStreaming = false;
+          // Render any mermaid diagrams now that streaming is complete
+          this.$nextTick(() => {
+            this.$root.renderMermaid();
+          });
           // Update credits from API after successful response
           await this.loadCredits();
         }
@@ -1318,10 +1322,14 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         // Only update UI state if we're still in the same session
         if (isCurrentSession) {
           this.isStreaming = false;
+          // Render any mermaid diagrams now that streaming is complete
+          this.$nextTick(() => {
+            this.$root.renderMermaid();
+          });
           // Update credits after tool execution
           await this.loadCredits();
         }
-        
+
       } catch (error) {
         // Always update tool status with error, but only update UI if current session
         toolUse.status = 'error';
@@ -1460,6 +1468,11 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           this.saveCurrentChatId();
 
           await this.scrollToBottomSettled({ maxWait: 6000, settleDelay: 200 });
+
+          // Render any mermaid diagrams in the loaded chat
+          this.$nextTick(() => {
+            this.$root.renderMermaid();
+          });
 
           // Blocks user from sending messages in deleted chats
           this.checkIfDeleted(response.data.session);

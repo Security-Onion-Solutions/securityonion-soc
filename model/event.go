@@ -201,6 +201,8 @@ type EventAckCriteria struct {
 	Escalate bool `json:"escalate" example:"false"`
 	// Whether to acknowledge or unacknowledge the events: true = acknowledge, false = unacknowledge
 	Acknowledge bool `json:"acknowledge" example:"true"`
+	// Optional fields to update on matching events. These are field:value pairs that will be set on the event.
+	UpdateFields map[string]interface{} `json:"updateFields,omitempty" example:"alert.pcap_id:12345"`
 }
 
 func NewEventAckCriteria() *EventAckCriteria {

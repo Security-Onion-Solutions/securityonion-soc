@@ -9,15 +9,21 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@types/leaflet": "^1.9.21",
     "@vueuse/core": "^14.1.0",
+    "chart.js": "^4.5.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dompurify": "^3.2.6",
+    "leaflet": "^1.9.4",
     "lucide-vue-next": "^0.562.0",
     "marked": "^15.0.7",
+    "mermaid": "^11.4.0",
     "tailwind-merge": "^3.4.0",
     "typescript": "^5.9.3",
-    "vue": "^3.5.24"
+    "vue": "^3.5.24",
+    "vue-chartjs": "^5.3.3",
+    "vue-router": "^4.6.4"
   },
   "devDependencies": {
     "@types/node": "^25.0.3",

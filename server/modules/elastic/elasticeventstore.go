@@ -1047,6 +1047,62 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 	return nil
 }
 
+func (store *ElasticEventstore) addCustomFieldUpdateScripts(updateCriteria *model.EventUpdateCriteria, updateFields map[string]interface{}) {
+	for field, value := range updateFields {
+		script := store.buildFieldUpdateScript(field, value)
+		if script != "" {
+			updateCriteria.AddUpdateScript(script)
+		}
+	}
+}
+
+func (store *ElasticEventstore) buildFieldUpdateScript(field string, value interface{}) string {
+	// Split field path for nested fields (e.g., "alert.pcap_id" -> ["alert", "pcap_id"])
+	parts := strings.Split(field, ".")
+
+	var scriptBuilder strings.Builder
+
+	// Build parent object initialization for nested fields
+	if len(parts) > 1 {
+		currentPath := "ctx._source"
+		for i := 0; i < len(parts)-1; i++ {
+			currentPath = currentPath + "." + parts[i]
+			scriptBuilder.WriteString(fmt.Sprintf("if (%s == null) { %s = new HashMap(); } ", currentPath, currentPath))
+		}
+	}
+
+	// Build the assignment
+	fullPath := "ctx._source." + field
+	valueStr := formatPainlessValue(value)
+	scriptBuilder.WriteString(fmt.Sprintf("%s = %s;", fullPath, valueStr))
+
+	return scriptBuilder.String()
+}
+
+func formatPainlessValue(value interface{}) string {
+	switch v := value.(type) {
+	case string:
+		// Escape single quotes and wrap in single quotes for Painless
+		escaped := strings.ReplaceAll(v, "'", "\\'")
+		return fmt.Sprintf("'%s'", escaped)
+	case float64:
+		// JSON numbers are float64, check if it's a whole number
+		if v == float64(int64(v)) {
+			return fmt.Sprintf("%d", int64(v))
+		}
+		return fmt.Sprintf("%f", v)
+	case int, int64, int32:
+		return fmt.Sprintf("%d", v)
+	case bool:
+		return fmt.Sprintf("%t", v)
+	case nil:
+		return "null"
+	default:
+		// For complex types, convert to string
+		return fmt.Sprintf("'%v'", v)
+	}
+}
+
 func (store *ElasticEventstore) addUpdateScripts(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, ack bool, esc bool, userId string) {
 	if ack {
 		trackTiming := strconv.FormatBool(licensing.IsEnabled(licensing.FEAT_RPT))
@@ -1103,6 +1159,12 @@ func (store *ElasticEventstore) Acknowledge(ctx context.Context, ackCriteria *mo
 			updateCriteria := model.NewEventUpdateCriteria()
 			userId := ctx.Value(web.ContextKeyRequestorId).(string)
 			store.addUpdateScripts(updateCriteria, time.Now(), ackCriteria.Acknowledge, ackCriteria.Escalate, userId)
+
+			// Add custom field updates if specified
+			if len(ackCriteria.UpdateFields) > 0 {
+				store.addCustomFieldUpdateScripts(updateCriteria, ackCriteria.UpdateFields)
+			}
+
 			updateCriteria.Populate(ackCriteria.SearchFilter,
 				ackCriteria.DateRange,
 				ackCriteria.DateRangeFormat,

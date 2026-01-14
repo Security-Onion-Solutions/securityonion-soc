@@ -240,6 +240,10 @@ export function useHuntParams() {
         return eventFields.value[category] || {}
     }
 
+    function getQueries(category: HuntCategory): { name: string; query: string; description?: string }[] {
+        return params.value[category]?.queries || []
+    }
+
     // =========================================================================
     // Return
     // =========================================================================
@@ -258,6 +262,7 @@ export function useHuntParams() {
         formatFieldTitle,
         extractModuleDataset,
         getParams,
-        getEventFields
+        getEventFields,
+        getQueries
     }
 }

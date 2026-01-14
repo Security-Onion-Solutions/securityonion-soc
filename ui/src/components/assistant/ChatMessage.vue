@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch, nextTick, onMounted } from 'vue'
 import { User, Bot, Loader2 } from 'lucide-vue-next'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import mermaid from 'mermaid'
 import { formatRelativeTime } from '@/composables/useFormatters'
 import type { Message, ToolUse } from '@/composables/useAssistant'
 import ToolUseCard from './ToolUseCard.vue'
@@ -11,6 +12,33 @@ const props = defineProps<{
     message: Message
     isStreaming?: boolean
 }>()
+
+// Mermaid initialization
+let mermaidInitialized = false
+function initializeMermaid() {
+    if (!mermaidInitialized) {
+        mermaid.initialize({
+            startOnLoad: false,
+            theme: document.documentElement.classList.contains('dark') ? 'dark' : 'default',
+            securityLevel: 'loose',
+            fontFamily: 'inherit'
+        })
+        mermaidInitialized = true
+    }
+}
+
+// Ref to track the content element
+const contentRef = ref<HTMLElement | null>(null)
+
+// Render mermaid diagrams
+async function renderMermaid() {
+    if (!contentRef.value) return
+    const mermaidElements = contentRef.value.querySelectorAll('.mermaid')
+    if (mermaidElements.length > 0) {
+        initializeMermaid()
+        await mermaid.run({ nodes: mermaidElements as NodeListOf<HTMLElement> })
+    }
+}
 
 const emit = defineEmits<{
     approveTool: [toolUse: ToolUse]
@@ -51,26 +79,66 @@ function applyChoiceButtons(text: string): string {
     })
 }
 
+// Clean up mermaid content - remove double blank lines and fix colons
+function performMermaidRegexes(text: string): string {
+    // removes double blank lines from mermaid charts
+    text = text.replace(/(?<=```mermaid(?:(?!```)[\s\S])*?)\n\s*\n(?=(?:(?!```)[\s\S])*```)/g, '\n')
+    // converts non-separator colons to ratio characters in mermaid charts
+    text = text.replace(/(?<=```mermaid(?:(?!```)[\s\S])*?)(?<!\s):(?=(?:(?!```)[\s\S])*```)/g, '\u2236')
+    return text
+}
+
 const formattedContent = computed(() => {
     let content = props.message.content || ''
 
     // Apply choice buttons before markdown
     content = applyChoiceButtons(content)
 
-    // Configure marked for security
+    // Clean up mermaid syntax
+    content = performMermaidRegexes(content)
+
+    // Configure marked with custom renderer for mermaid
     marked.setOptions({
         breaks: true,
         gfm: true,
     })
 
+    // Use custom renderer for mermaid code blocks
+    marked.use({
+        renderer: {
+            code(code) {
+                if (code.lang === 'mermaid') {
+                    return `<pre class="mermaid">${code.text}</pre>`
+                }
+                return `<pre><code>${code.text}</code></pre>`
+            }
+        }
+    })
+
     // Parse markdown
     const html = marked.parse(content) as string
 
-    // Sanitize HTML
+    // Sanitize HTML - allow mermaid pre elements
     return DOMPurify.sanitize(html, {
-        ADD_ATTR: ['data-choice'],
-        ADD_TAGS: ['button'],
+        ADD_ATTR: ['data-choice', 'class'],
+        ADD_TAGS: ['button', 'pre'],
     })
+})
+
+// Render mermaid when content changes (only when not streaming)
+watch(() => [props.message.content, props.isStreaming], async () => {
+    if (!props.isStreaming) {
+        await nextTick()
+        renderMermaid()
+    }
+})
+
+// Initial render on mount
+onMounted(async () => {
+    if (!props.isStreaming) {
+        await nextTick()
+        renderMermaid()
+    }
 })
 
 const relativeTime = computed(() => formatRelativeTime(props.message.timestamp))
@@ -118,6 +186,7 @@ function handleContentClick(event: MouseEvent) {
             >
                 <!-- Content -->
                 <div
+                    ref="contentRef"
                     v-if="message.content"
                     class="prose prose-sm dark:prose-invert max-w-none break-words"
                     :class="isUser ? 'prose-invert' : ''"
@@ -238,5 +307,19 @@ function handleContentClick(event: MouseEvent) {
 
 :deep(.prose th) {
     background-color: rgb(0 0 0 / 0.1);
+}
+
+/* Mermaid diagram styling */
+:deep(.mermaid) {
+    background-color: transparent;
+    padding: 0.5em;
+    margin: 0.5em 0;
+    overflow-x: auto;
+    text-align: center;
+}
+
+:deep(.mermaid svg) {
+    max-width: 100%;
+    height: auto;
 }
 </style>

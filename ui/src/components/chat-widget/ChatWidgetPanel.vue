@@ -290,10 +290,10 @@ async function handleRefresh(): Promise<void> {
     >
         <!-- Resize Handle -->
         <div
-            class="absolute left-0 top-0 bottom-0 w-1 cursor-ew-resize hover:bg-primary/50 transition-colors z-10 group"
+            class="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-primary/50 transition-colors z-50 group"
             @mousedown="startResize"
         >
-            <div class="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div class="absolute left-1/2 top-1/2 -translate-y-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                 <GripVertical class="h-6 w-6 text-muted-foreground" />
             </div>
         </div>
