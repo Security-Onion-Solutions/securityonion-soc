@@ -525,10 +525,12 @@ test('restoreLastActiveChat handles error', async () => {
 // Credits and balance tests
 test('loadCredits success', async () => {
   const mock = mockPapi("get", { data: fakeCreditsResponse });
+
+  comp.currentModel = "model";
   
   await comp.loadCredits();
   
-  expect(mock).toHaveBeenCalledWith('/assistant/balance');
+  expect(mock).toHaveBeenCalledWith('/assistant/balance/model');
   expect(comp.creditsRemaining).toBe(100);
   expect(comp.creditsLoaded).toBe(true);
 });

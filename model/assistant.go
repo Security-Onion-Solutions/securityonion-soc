@@ -265,13 +265,13 @@ type BalanceResponse struct {
 	// An identifier representing the key that was used for the request.
 	KeyId string `json:"api_key_prefix" example:"user-61a9d0ef-29a4-4f9f-83f2-f8bbae462608"`
 	// An identifier indicating what company the key is registered to.
-	CompanyId string `json:"company_id" example:"SecurityOnionSolutions"`
+	CompanyId string `json:"company_id,omitempty" example:"SecurityOnionSolutions"`
 	// The status of the key used.
-	Status string `json:"status" example:"active"`
+	Status string `json:"status,omitempty" example:"active"`
 	// The remaining credit balance.
-	Balance int64 `json:"credit_balance" example:"123000"`
+	Balance int64 `json:"credit_balance,omitempty" example:"123000"`
 	// The health status of the service.
-	HealthStatus string `json:"health_status" example:"healthy"`
+	HealthStatus string `json:"health_status,omitempty" example:"healthy"`
 }
 
 type HealthResponse struct {

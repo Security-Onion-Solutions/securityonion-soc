@@ -6,19 +6,15 @@
 package assistant
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
-	"net/url"
-	"path"
 	"sort"
-	"time"
+	"strings"
 
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -45,14 +41,13 @@ var (
 
 type AssistantCoordinator struct {
 	srv                  *server.Server
-	apiKey               string
-	apiUrl               string
-	healthTimeoutSeconds int
 	systemPromptAddendum string
 	isRunning            bool
 
 	FunctionLibrary map[string]Tool
 	toolConfig      json.RawMessage
+
+	adapters map[string]server.AssistantAdapter
 
 	detections.IOManager
 }
@@ -72,9 +67,10 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 	ac.srv.AssistantManager = ac
 	ac.FunctionLibrary = knownTools
 
-	ac.apiUrl = module.GetStringDefault(config, "apiUrl", DEFAULT_APIURL)
-	ac.healthTimeoutSeconds = module.GetIntDefault(config, "healthTimeoutSeconds", DEFAULT_HEALTH_TIMEOUT_SECONDS)
+	apiUrl := module.GetStringDefault(config, "apiUrl", DEFAULT_APIURL)
+	healthTimeoutSeconds := module.GetIntDefault(config, "healthTimeoutSeconds", DEFAULT_HEALTH_TIMEOUT_SECONDS)
 	ac.systemPromptAddendum = module.GetStringDefault(config, "systemPromptAddendum", DEFAULT_SYSTEM_PROMPT_ADDENDUM)
+	geminiKey := module.GetStringDefault(config, "geminiApiKey", "")
 
 	maxLength := module.GetIntDefault(config, "systemPromptAddendumMaxLength", DEFAULT_SYSTEM_PROMPT_ADDENDUM_MAX_LENGTH)
 	if len(ac.systemPromptAddendum) > maxLength {
@@ -83,7 +79,18 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 
 	ac.toolConfig, err = buildToolConfig(ac.FunctionLibrary)
 
-	ac.apiKey = buildApiKey()
+	apiKey := buildApiKey()
+
+	ac.adapters = map[string]server.AssistantAdapter{}
+
+	if apiUrl != "" && apiKey != "" {
+		bedrock := NewBedrockAdapter(ac.srv, apiUrl, apiKey, healthTimeoutSeconds)
+		ac.adapters[bedrock.Name()] = bedrock
+	}
+	if geminiKey != "" {
+		gemini := NewGeminiAdapter(ac.srv.Context, ac.srv, geminiKey)
+		ac.adapters[gemini.Name()] = gemini
+	}
 
 	return err
 }
@@ -147,6 +154,25 @@ func (ac *AssistantCoordinator) IsRunning() bool {
 	return ac.isRunning
 }
 
+func (ac *AssistantCoordinator) selectAdapter(aiModel string) server.AssistantAdapter {
+	models := ac.srv.Config.ClientParams.AssistantParams.AvailableModels
+	for _, m := range models {
+		if !m.Enabled {
+			continue
+		}
+
+		if strings.EqualFold(m.ID, aiModel) {
+			if m.Adapter != "" {
+				return ac.adapters[m.Adapter]
+			} else {
+				return ac.adapters["bedrock"]
+			}
+		}
+	}
+
+	return ac.adapters["bedrock"]
+}
+
 func (ac *AssistantCoordinator) Chat(ctx context.Context, aiModel string, messages []*model.Message, opts ...model.ChatOpt) ([]*model.Message, error) {
 	logger := log.FromContext(ctx)
 	userID := ctx.Value(web.ContextKeyRequestorId).(string)
@@ -162,58 +188,11 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, aiModel string, messag
 		Model:        aiModel,
 	}
 
-	u, err := url.Parse(ac.apiUrl)
+	adapter := ac.selectAdapter(aiModel)
+
+	response, err := adapter.SendMessage(ctx, req)
 	if err != nil {
-		logger.WithError(err).WithField("apiUrl", ac.apiUrl).Error("unable to parse apiUrl")
-
-		return nil, err
-	}
-
-	u.Path = path.Join(u.Path, "/api/chat")
-	endpoint := u.String()
-
-	var buf bytes.Buffer
-
-	err = json.NewEncoder(&buf).Encode(req)
-	if err != nil {
-		logger.WithError(err).WithField("chatrequest", req).Error("unable to encode ChatRequest")
-		return nil, err
-	}
-
-	httpReq, err := http.NewRequest(http.MethodPost, endpoint, &buf)
-	if err != nil {
-		logger.WithError(err).WithField("apiEndpoint", endpoint).Error("unable to make request object")
-
-		return nil, err
-	}
-
-	httpReq.Header.Add("Content-Type", "application/json")
-	ac.prepareRequestHeaders(httpReq)
-
-	res, err := ac.MakeRequest(httpReq, false)
-	if res != nil && res.Body != nil {
-		defer res.Body.Close()
-	}
-	if err != nil {
-		logger.WithError(err).Error("unable to execute request")
-
-		return nil, err
-	}
-
-	resBody, err := io.ReadAll(res.Body)
-	if err != nil {
-		logger.WithError(err).Error("unable to read response body")
-
-		return nil, err
-	}
-
-	logger.WithField("rawChatResponseBody", string(resBody)).Debug("chat response received")
-
-	response := &model.Message{}
-
-	err = json.Unmarshal(resBody, &response)
-	if err != nil {
-		logger.WithError(err).WithField("rawChatResponseBody", string(resBody)).Error("unable to unmarshal JSON response")
+		logger.WithError(err).Error("unable to send message to assistant")
 		return nil, err
 	}
 
@@ -286,7 +265,6 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, aiModel string, messag
 }
 
 func (ac *AssistantCoordinator) ChatStream(ctx context.Context, aiModel string, messages []*model.Message) (*http.Response, error) {
-	logger := log.FromContext(ctx)
 	userID := ctx.Value(web.ContextKeyRequestorId).(string)
 
 	// copy and modify
@@ -301,45 +279,10 @@ func (ac *AssistantCoordinator) ChatStream(ctx context.Context, aiModel string, 
 		Model:        aiModel,
 	}
 
-	u, err := url.Parse(ac.apiUrl)
+	adapter := ac.selectAdapter(aiModel)
+
+	res, err := adapter.SendMessageStream(ctx, req)
 	if err != nil {
-		logger.WithError(err).WithField("apiUrl", ac.apiUrl).Error("unable to parse apiUrl")
-
-		return nil, err
-	}
-
-	u.Path = path.Join(u.Path, "/api/chat")
-	endpoint := u.String()
-
-	var buf bytes.Buffer
-
-	err = json.NewEncoder(&buf).Encode(req)
-	if err != nil {
-		logger.WithError(err).WithField("chatrequest", req).Error("unable to encode ChatRequest")
-		return nil, err
-	}
-
-	logger.WithField("outgoingChatBodySize", buf.Len()).Info("outgoing chat request body")
-
-	httpReq, err := http.NewRequest(http.MethodPost, endpoint, &buf)
-	if err != nil {
-		logger.WithError(err).WithField("apiEndpoint", endpoint).Error("unable to make request object")
-
-		return nil, err
-	}
-
-	httpReq.Header.Add("Content-Type", "application/json")
-	httpReq.Header.Add("Accept", "text/event-stream")
-	ac.prepareRequestHeaders(httpReq)
-
-	res, err := ac.MakeRequest(httpReq, true)
-	if err != nil {
-		if res != nil && res.Body != nil {
-			defer res.Body.Close()
-		}
-
-		logger.WithError(err).Error("unable to execute request")
-
 		return nil, err
 	}
 
@@ -380,116 +323,26 @@ func (ac *AssistantCoordinator) ExecuteTool(ctx context.Context, toolName string
 	return result, nil
 }
 
-func (ac *AssistantCoordinator) Balance(ctx context.Context) (*model.BalanceResponse, error) {
-	logger := log.FromContext(ctx)
+func (ac *AssistantCoordinator) Balance(ctx context.Context, aiModel string) (*model.BalanceResponse, error) {
+	adapter := ac.selectAdapter(aiModel)
 
-	u, err := url.Parse(ac.apiUrl)
+	response, err := adapter.GetBalance(ctx)
 	if err != nil {
-		logger.WithError(err).WithField("apiUrl", ac.apiUrl).Error("unable to parse apiUrl")
-
-		return nil, err
-	}
-
-	u.Path = path.Join(u.Path, "/api/balance")
-	endpoint := u.String()
-
-	httpReq, err := http.NewRequest(http.MethodGet, endpoint, nil)
-	if err != nil {
-		logger.WithError(err).Error("unable to make request object")
-
-		return nil, err
-	}
-
-	ac.prepareRequestHeaders(httpReq)
-
-	res, err := ac.MakeRequest(httpReq, false)
-	if res != nil && res.Body != nil {
-		defer res.Body.Close()
-	}
-	if err != nil {
-		logger.WithError(err).WithField("apiEndpoint", endpoint).Error("unable to execute request")
-
-		return nil, err
-	}
-
-	resBody, err := io.ReadAll(res.Body)
-	if err != nil {
-		logger.WithError(err).Error("unable to read response body")
-
-		return nil, err
-	}
-
-	logger.WithField("rawBalanceResponseBody", string(resBody)).Debug("balance response received")
-
-	response := &model.BalanceResponse{}
-
-	err = json.Unmarshal(resBody, response)
-	if err != nil {
-		logger.WithError(err).WithField("rawBalanceResponseBody", string(resBody)).Error("unable to unmarshal JSON response")
 		return nil, err
 	}
 
 	return response, nil
 }
 
-func (ac *AssistantCoordinator) Health(ctx context.Context) (*model.HealthResponse, error) {
-	logger := log.FromContext(ctx)
+func (ac *AssistantCoordinator) Health(ctx context.Context, aiModel string) (*model.HealthResponse, error) {
+	adapter := ac.selectAdapter(aiModel)
 
-	u, err := url.Parse(ac.apiUrl)
+	response, err := adapter.GetHealth(ctx)
 	if err != nil {
-		logger.WithError(err).WithField("apiUrl", ac.apiUrl).Error("unable to parse apiUrl")
-
-		return nil, err
-	}
-
-	u.Path = path.Join(u.Path, "/health")
-	endpoint := u.String()
-
-	shortLived, cancel := context.WithTimeout(ctx, time.Second*time.Duration(ac.healthTimeoutSeconds))
-	defer cancel()
-
-	httpReq, err := http.NewRequestWithContext(shortLived, http.MethodGet, endpoint, nil)
-	if err != nil {
-		logger.WithError(err).Error("unable to make request object")
-
-		return nil, err
-	}
-
-	ac.prepareRequestHeaders(httpReq)
-
-	res, err := ac.MakeRequest(httpReq, false)
-	if res != nil && res.Body != nil {
-		defer res.Body.Close()
-	}
-	if err != nil {
-		logger.WithError(err).WithField("apiEndpoint", endpoint).Error("unable to execute request")
-
-		return nil, err
-	}
-
-	resBody, err := io.ReadAll(res.Body)
-	if err != nil {
-		logger.WithError(err).Error("unable to read response body")
-
-		return nil, err
-	}
-
-	logger.WithField("rawHealthResponseBody", string(resBody)).Debug("health response received")
-
-	response := &model.HealthResponse{}
-
-	err = json.Unmarshal(resBody, response)
-	if err != nil {
-		logger.WithError(err).WithField("rawHealthResponseBody", string(resBody)).Error("unable to unmarshal JSON response")
 		return nil, err
 	}
 
 	return response, nil
-}
-
-func (ac *AssistantCoordinator) prepareRequestHeaders(httpReq *http.Request) {
-	httpReq.Header.Add("x-api-key", ac.apiKey)
-	httpReq.Header.Add("x-so-version", ac.srv.Host.Version)
 }
 
 func cleanupMessages(messages []*model.Message) []*model.Message {

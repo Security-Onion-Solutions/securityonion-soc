@@ -41,7 +41,7 @@ func RegisterAssistantRoutes(srv *Server, r chi.Router, prefix string) {
 	r.Route(prefix, func(r chi.Router) {
 		r.Post("/chat", h.PostChat)
 		r.Post("/tool/{name}", h.PostTool)
-		r.Get("/balance", h.GetBalance)
+		r.Get("/balance/{model}", h.GetBalance)
 		r.Get("/sessions", h.GetSessions)
 		r.Get("/sessions/{sessionId}", h.GetSessionDetails)
 		r.Put("/sessions/{sessionId}", h.UpdateSession)
@@ -414,7 +414,9 @@ func (h *AssistantHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	health, err := h.server.AssistantManager.Health(ctx)
+	model := chi.URLParam(r, "model")
+
+	health, err := h.server.AssistantManager.Health(ctx, model)
 	if err != nil {
 		logger.WithError(err).Error("unable to get assistant health")
 		web.Respond(w, r, http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR")
@@ -427,7 +429,7 @@ func (h *AssistantHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := h.server.AssistantManager.Balance(ctx)
+	response, err := h.server.AssistantManager.Balance(ctx, model)
 	if err != nil {
 		logger.WithError(err).Error("unable to retrieve balance")
 		web.Respond(w, r, http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR")

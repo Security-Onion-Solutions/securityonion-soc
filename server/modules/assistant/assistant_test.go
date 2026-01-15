@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -137,14 +138,20 @@ func TestAssistantCoordinator_Init(t *testing.T) {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, tc.expectedApiUrl, ac.apiUrl)
-				assert.Equal(t, tc.expectedHealthTimeoutSeconds, ac.healthTimeoutSeconds)
 				assert.Equal(t, tc.expectedSystemPromptAddendum, ac.systemPromptAddendum)
 				assert.Equal(t, ac, srv.AssistantManager)
 				assert.NotNil(t, ac.FunctionLibrary)
 				assert.Equal(t, knownTools, ac.FunctionLibrary)
-				assert.NotEmpty(t, ac.apiKey)
-				assert.Contains(t, ac.apiKey, "sk-")
+
+				adapter, ok := ac.adapters["bedrock"]
+				assert.True(t, ok)
+				assert.NotNil(t, adapter)
+
+				br := adapter.(*BedrockAdapter)
+				assert.NotEmpty(t, br.apiKey)
+				assert.Contains(t, br.apiKey, "sk-")
+				assert.Equal(t, tc.expectedApiUrl, br.apiUrl)
+				assert.Equal(t, tc.expectedHealthTimeoutSeconds, br.healthTimeoutSeconds)
 
 				if tc.validateToolConfig {
 					assert.NotNil(t, ac.toolConfig)
@@ -398,17 +405,37 @@ func TestAssistantCoordinator_Balance(t *testing.T) {
 			mockIO := detectionsmock.NewMockIOManager(ctrl)
 			tc.setupMocks(mockIO)
 
+			srv := &server.Server{
+				Host: &web.Host{Version: "1.0.0"},
+				Config: &config.ServerConfig{
+					ClientParams: model.ClientParameters{
+						AssistantParams: model.AssistantParameters{
+							AvailableModels: []model.ModelParameters{
+								{
+									ID:      "model",
+									Adapter: "bedrock",
+								},
+							},
+						},
+					},
+				},
+			}
+
 			ac := &AssistantCoordinator{
-				apiUrl:    tc.apiUrl,
 				IOManager: mockIO,
-				srv: &server.Server{
-					Host: &web.Host{Version: "1.0.0"},
+				srv:       srv,
+				adapters: map[string]server.AssistantAdapter{
+					"bedrock": &BedrockAdapter{
+						apiUrl:    tc.apiUrl,
+						srv:       srv,
+						IOManager: mockIO,
+					},
 				},
 			}
 
 			ctx := context.Background()
 
-			result, err := ac.Balance(ctx)
+			result, err := ac.Balance(ctx, "model")
 
 			if tc.expectedError {
 				assert.Error(t, err)
@@ -565,14 +592,27 @@ func TestAssistantCoordinator_Chat(t *testing.T) {
 			srv := &server.Server{
 				Assistantstore: mockAssistantstore,
 				Host:           &web.Host{Version: "1.0.0"},
+				Config: &config.ServerConfig{
+					ClientParams: model.ClientParameters{
+						AssistantParams: model.AssistantParameters{
+							AvailableModels: []model.ModelParameters{},
+						},
+					},
+				},
 			}
 
 			ac := &AssistantCoordinator{
 				srv:       srv,
-				apiUrl:    tc.apiUrl,
 				IOManager: mockIO,
 				FunctionLibrary: map[string]Tool{
 					"test_tool": mockTool,
+				},
+				adapters: map[string]server.AssistantAdapter{
+					"bedrock": &BedrockAdapter{
+						apiUrl:    tc.apiUrl,
+						srv:       srv,
+						IOManager: mockIO,
+					},
 				},
 				toolConfig: []byte(`{"tools": [], "tool_choice": {"auto": {}}}`),
 			}
@@ -670,13 +710,28 @@ func TestAssistantCoordinator_ChatStream(t *testing.T) {
 			mockIO := detectionsmock.NewMockIOManager(ctrl)
 			tc.setupMocks(mockIO)
 
+			srv := &server.Server{
+				Host: &web.Host{Version: "1.0.0"},
+				Config: &config.ServerConfig{
+					ClientParams: model.ClientParameters{
+						AssistantParams: model.AssistantParameters{
+							AvailableModels: []model.ModelParameters{},
+						},
+					},
+				},
+			}
+
 			ac := &AssistantCoordinator{
-				apiUrl:               tc.apiUrl,
 				IOManager:            mockIO,
 				toolConfig:           []byte(`{"tools": [], "tool_choice": {"auto": {}}}`),
 				systemPromptAddendum: "addendum",
-				srv: &server.Server{
-					Host: &web.Host{Version: "1.0.0"},
+				srv:                  srv,
+				adapters: map[string]server.AssistantAdapter{
+					"bedrock": &BedrockAdapter{
+						apiUrl:    tc.apiUrl,
+						srv:       srv,
+						IOManager: mockIO,
+					},
 				},
 			}
 
@@ -844,27 +899,6 @@ func TestBuildApiKey(t *testing.T) {
 	key := buildApiKey()
 
 	assert.Equal(t, key, "sk-46736dfccdc375085dfb8f701ea7f327860c51b4aac3629592649ae8a7bb7e29")
-}
-
-func TestPrepareRequestHeaders(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	ac := &AssistantCoordinator{
-		srv: &server.Server{
-			Host: &web.Host{Version: "1.0.0"},
-		},
-		apiKey: "key",
-	}
-
-	req, err := http.NewRequest("GET", "manager", nil)
-	assert.NoError(t, err)
-
-	ac.prepareRequestHeaders(req)
-
-	assert.Len(t, req.Header, 2)
-	assert.Equal(t, "key", req.Header.Get("x-api-key"))
-	assert.Equal(t, "1.0.0", req.Header.Get("x-so-version"))
 }
 
 // Helper types and functions for testing

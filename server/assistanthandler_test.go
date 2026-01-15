@@ -420,8 +420,8 @@ func TestGetBalance(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	// Set up mock expectations
-	mockManager.EXPECT().Health(gomock.Any()).Return(&model.HealthResponse{Status: "healthy"}, nil)
-	mockManager.EXPECT().Balance(gomock.Any()).Return(&model.BalanceResponse{Balance: 10000}, nil)
+	mockManager.EXPECT().Health(gomock.Any(), gomock.Any()).Return(&model.HealthResponse{Status: "healthy"}, nil)
+	mockManager.EXPECT().Balance(gomock.Any(), gomock.Any()).Return(&model.BalanceResponse{Balance: 10000}, nil)
 
 	// Execute the handler
 	handler.GetBalance(w, req)
@@ -466,7 +466,7 @@ func TestGetBalanceUnhealthy(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	// Set up mock expectations
-	mockManager.EXPECT().Health(gomock.Any()).Return(nil, errors.New("service unreachable"))
+	mockManager.EXPECT().Health(gomock.Any(), gomock.Any()).Return(nil, errors.New("service unreachable"))
 
 	// Execute the handler
 	handler.GetBalance(w, req)

@@ -291,7 +291,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     async loadCredits() {
       try {
-        const response = await this.$root.papi.get('/assistant/balance');
+        const response = await this.$root.papi.get('/assistant/balance/' + this.currentModel);
         if (response.data) {
           if (response.data.health_status === 'healthy') {
             this.creditsRemaining = response.data.credit_balance || 0;

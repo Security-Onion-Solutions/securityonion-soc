@@ -43,18 +43,18 @@ func (m *MockAssistantManager) EXPECT() *MockAssistantManagerMockRecorder {
 }
 
 // Balance mocks base method.
-func (m *MockAssistantManager) Balance(ctx context.Context) (*model.BalanceResponse, error) {
+func (m *MockAssistantManager) Balance(ctx context.Context, aiModel string) (*model.BalanceResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Balance", ctx)
+	ret := m.ctrl.Call(m, "Balance", ctx, aiModel)
 	ret0, _ := ret[0].(*model.BalanceResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Balance indicates an expected call of Balance.
-func (mr *MockAssistantManagerMockRecorder) Balance(ctx any) *gomock.Call {
+func (mr *MockAssistantManagerMockRecorder) Balance(ctx, aiModel any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Balance", reflect.TypeOf((*MockAssistantManager)(nil).Balance), ctx)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Balance", reflect.TypeOf((*MockAssistantManager)(nil).Balance), ctx, aiModel)
 }
 
 // Chat mocks base method.
@@ -108,16 +108,16 @@ func (mr *MockAssistantManagerMockRecorder) ExecuteTool(ctx, toolName, params, a
 }
 
 // Health mocks base method.
-func (m *MockAssistantManager) Health(ctx context.Context) (*model.HealthResponse, error) {
+func (m *MockAssistantManager) Health(ctx context.Context, aiModel string) (*model.HealthResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Health", ctx)
+	ret := m.ctrl.Call(m, "Health", ctx, aiModel)
 	ret0, _ := ret[0].(*model.HealthResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Health indicates an expected call of Health.
-func (mr *MockAssistantManagerMockRecorder) Health(ctx any) *gomock.Call {
+func (mr *MockAssistantManagerMockRecorder) Health(ctx, aiModel any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Health", reflect.TypeOf((*MockAssistantManager)(nil).Health), ctx)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Health", reflect.TypeOf((*MockAssistantManager)(nil).Health), ctx, aiModel)
 }
