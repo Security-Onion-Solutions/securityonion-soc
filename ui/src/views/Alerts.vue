@@ -14,11 +14,20 @@ import {
     Network,
     Clock,
     Check,
+    CheckCheck,
     X,
     Sparkles,
     Briefcase,
     ExternalLink,
-    Eye
+    Eye,
+    ArrowUpDown,
+    ArrowUp,
+    ArrowDown,
+    Settings,
+    Layers,
+    Table,
+    Group,
+    Shield
 } from 'lucide-vue-next'
 import { cn } from '../lib/utils'
 import { useAlerts } from '../composables/useAlerts'
@@ -30,6 +39,7 @@ import { useChatWidget } from '../composables/useChatWidget'
 import type { AlertGroup, SourceDestPair } from '../types/alerts'
 import type { EventRecord } from '../types/hunt'
 import DateTimePicker from '../components/common/DateTimePicker.vue'
+import EscalateDialog from '../components/alerts/EscalateDialog.vue'
 
 const router = useRouter()
 const { getSeverityStyles } = useStatusStyles()
@@ -46,20 +56,49 @@ const {
     hasMoreGroups,
     searchQuery,
     acknowledgedFilter,
+    sortField,
+    sortDirection,
+    triageGroupBy,
+    setTriageGroupBy,
     fetchAlertGroups,
     fetchPairs,
+    fetchSubgroups,
     fetchAlerts,
+    fetchAlertsForSubgroup,
+    fetchAllAlerts,
     pairs,
+    subgroups,
+    subgroupsLoading,
     alerts,
     pairsLoading,
     alertsLoading,
     selectedPair,
-    selectPair
+    selectPair,
+    setSort,
+    allAlerts,
+    sortedAllAlerts,
+    allAlertsLoading,
+    allAlertsLoadingMore,
+    hasMoreAllAlerts,
+    tableSortField,
+    tableSortDirection,
+    tableGroupBy,
+    tableGroups,
+    setTableSort,
+    setTableGroupBy,
+    toggleTableGroup,
+    computeTableGroups,
+    buildGroupQuery,
+    buildSubgroupQuery,
+    getGroupLabel,
+    getSubgroupLabel
 } = useAlerts()
 
 const {
     acknowledgeEvent,
     escalateToNewCase,
+    bulkAcknowledgeByQuery,
+    bulkEscalateByQuery,
     generateInvestigationPrompt
 } = useHuntActions()
 
@@ -70,6 +109,52 @@ const expandedGroup = ref<string | null>(null)
 const expandedPair = ref<string | null>(null)
 const refreshing = ref(false)
 const loadTrigger = ref<HTMLElement | null>(null)
+
+// View mode state
+type ViewMode = 'triage' | 'table'
+const PREFERENCES_KEY = 'alertsViewPreferences'
+const viewMode = ref<ViewMode>('triage')
+const showSettingsPanel = ref(false)
+
+function loadViewPreferences() {
+    try {
+        const stored = localStorage.getItem(PREFERENCES_KEY)
+        if (stored) {
+            const parsed = JSON.parse(stored)
+            if (parsed.viewMode) viewMode.value = parsed.viewMode
+        }
+    } catch (e) {
+        console.debug('Could not load alerts view preferences:', e)
+    }
+}
+
+function saveViewPreferences() {
+    try {
+        localStorage.setItem(PREFERENCES_KEY, JSON.stringify({ viewMode: viewMode.value }))
+    } catch (e) {
+        console.debug('Could not save alerts view preferences:', e)
+    }
+}
+
+function setViewMode(mode: ViewMode) {
+    viewMode.value = mode
+    saveViewPreferences()
+    // Always ensure we have the right data for the selected view
+    if (mode === 'table') {
+        if (allAlerts.value.length === 0) {
+            fetchAllAlerts()
+        }
+    } else {
+        if (alertGroups.value.length === 0) {
+            fetchAlertGroups()
+        }
+    }
+}
+
+// Escalate dialog state
+const showEscalateDialog = ref(false)
+const escalateDialogRef = ref<InstanceType<typeof EscalateDialog> | null>(null)
+const escalateTarget = ref<EventRecord | null>(null)
 
 // Track loading state per group
 const groupLoadingState = reactive<Record<string, boolean>>({})
@@ -87,14 +172,23 @@ watch(searchQuery, () => {
 watch(acknowledgedFilter, () => {
     expandedGroup.value = null
     expandedPair.value = null
-    fetchAlertGroups()
+    if (viewMode.value === 'table') {
+        fetchAllAlerts()
+    } else {
+        fetchAlertGroups()
+    }
 })
 
 // Infinite scroll observer
 let observer: IntersectionObserver | null = null
 
 onMounted(() => {
-    fetchAlertGroups()
+    loadViewPreferences()
+    if (viewMode.value === 'table') {
+        fetchAllAlerts()
+    } else {
+        fetchAlertGroups()
+    }
 
     observer = new IntersectionObserver(
         (entries) => {
@@ -119,7 +213,11 @@ async function handleRefresh() {
     refreshing.value = true
     expandedGroup.value = null
     expandedPair.value = null
-    await fetchAlertGroups()
+    if (viewMode.value === 'table') {
+        await fetchAllAlerts()
+    } else {
+        await fetchAlertGroups()
+    }
     refreshing.value = false
 }
 
@@ -129,11 +227,13 @@ async function toggleGroup(group: AlertGroup) {
         expandedGroup.value = null
         expandedPair.value = null
     } else {
-        // Expand and fetch pairs
+        // Expand and fetch subgroups (pairs or rules depending on triageGroupBy)
         expandedGroup.value = group.ruleId
         expandedPair.value = null
         groupLoadingState[group.ruleId] = true
-        await fetchPairs(group.ruleName)
+        // Use the decoded ruleId as the group key (it contains the actual value like IP or rule name)
+        const groupKey = decodeURIComponent(group.ruleId)
+        await fetchSubgroups(groupKey)
         groupLoadingState[group.ruleId] = false
     }
 }
@@ -152,6 +252,19 @@ async function togglePair(group: AlertGroup, pair: SourceDestPair) {
     }
 }
 
+// Toggle subgroup expansion (works for both pair and rule subgroups)
+async function toggleSubgroup(group: AlertGroup, subgroup: { key: string; label: string; secondaryLabel?: string; count: number; type: 'pair' | 'rule' }) {
+    if (expandedPair.value === subgroup.key) {
+        // Collapse
+        expandedPair.value = null
+    } else {
+        // Expand and fetch alerts for this subgroup
+        expandedPair.value = subgroup.key
+        const parentGroupKey = decodeURIComponent(group.ruleId)
+        await fetchAlertsForSubgroup(parentGroupKey, subgroup)
+    }
+}
+
 function getPairKey(pair: SourceDestPair): string {
     return `${pair.sourceIp}-${pair.destinationIp}`
 }
@@ -163,10 +276,30 @@ async function handleAcknowledge(alert: EventRecord, acknowledge: boolean) {
     }
 }
 
-async function handleEscalate(alert: EventRecord) {
-    const caseId = await escalateToNewCase(alert)
-    if (caseId) {
-        router.push({ name: 'case-detail', params: { id: caseId } })
+function handleEscalate(alert: EventRecord) {
+    escalateTarget.value = alert
+    showEscalateDialog.value = true
+}
+
+async function handleEscalateConfirm(data: { title: string; description: string; severity: string }) {
+    if (!escalateTarget.value) return
+
+    try {
+        const caseId = await escalateToNewCase(escalateTarget.value, {
+            title: data.title,
+            description: data.description,
+            severity: data.severity
+        })
+
+        if (caseId) {
+            escalateTarget.value['event.escalated'] = true
+            showEscalateDialog.value = false
+            router.push({ name: 'case-detail', params: { id: caseId } })
+        }
+    } catch (e: any) {
+        console.error('Escalation failed:', e)
+    } finally {
+        escalateDialogRef.value?.setLoading(false)
     }
 }
 
@@ -185,6 +318,105 @@ function viewAlertDetail(alert: EventRecord) {
 
 function getField(alert: EventRecord, field: string): string {
     return alert[field] || '-'
+}
+
+// Bulk action state
+const bulkActionLoading = reactive<Record<string, boolean>>({})
+
+// Bulk acknowledge all alerts in a group
+async function handleBulkAcknowledgeGroup(group: AlertGroup) {
+    const groupKey = decodeURIComponent(group.ruleId)
+    const loadingKey = `ack-group-${group.ruleId}`
+    bulkActionLoading[loadingKey] = true
+
+    try {
+        const query = buildGroupQuery(groupKey)
+        const success = await bulkAcknowledgeByQuery(query, true, { timezone: 'Local' })
+        if (success) {
+            // Refresh the groups to update counts
+            await fetchAlertGroups()
+        }
+    } catch (e) {
+        console.error('Bulk acknowledge failed:', e)
+    } finally {
+        bulkActionLoading[loadingKey] = false
+    }
+}
+
+// Bulk escalate all alerts in a group to a new case
+async function handleBulkEscalateGroup(group: AlertGroup) {
+    const groupKey = decodeURIComponent(group.ruleId)
+    const loadingKey = `esc-group-${group.ruleId}`
+    bulkActionLoading[loadingKey] = true
+
+    try {
+        const query = buildGroupQuery(groupKey)
+        const label = getGroupLabel(groupKey)
+        const caseId = await bulkEscalateByQuery(query, {
+            title: `Escalated: ${label}`,
+            description: `Bulk escalation of ${group.count} alerts for ${label}`,
+            severity: group.severity,
+            timezone: 'Local'
+        })
+
+        if (caseId) {
+            // Refresh and navigate to case
+            await fetchAlertGroups()
+            router.push({ name: 'case-detail', params: { id: caseId } })
+        }
+    } catch (e) {
+        console.error('Bulk escalate failed:', e)
+    } finally {
+        bulkActionLoading[loadingKey] = false
+    }
+}
+
+// Bulk acknowledge all alerts in a subgroup
+async function handleBulkAcknowledgeSubgroup(group: AlertGroup, subgroup: { key: string; label: string; secondaryLabel?: string; count: number; type: 'pair' | 'rule' }) {
+    const parentGroupKey = decodeURIComponent(group.ruleId)
+    const loadingKey = `ack-subgroup-${subgroup.key}`
+    bulkActionLoading[loadingKey] = true
+
+    try {
+        const query = buildSubgroupQuery(parentGroupKey, subgroup as any)
+        const success = await bulkAcknowledgeByQuery(query, true, { timezone: 'Local' })
+        if (success) {
+            // Refresh subgroups to update counts
+            await fetchSubgroups(parentGroupKey)
+        }
+    } catch (e) {
+        console.error('Bulk acknowledge subgroup failed:', e)
+    } finally {
+        bulkActionLoading[loadingKey] = false
+    }
+}
+
+// Bulk escalate all alerts in a subgroup to a new case
+async function handleBulkEscalateSubgroup(group: AlertGroup, subgroup: { key: string; label: string; secondaryLabel?: string; count: number; type: 'pair' | 'rule' }) {
+    const parentGroupKey = decodeURIComponent(group.ruleId)
+    const loadingKey = `esc-subgroup-${subgroup.key}`
+    bulkActionLoading[loadingKey] = true
+
+    try {
+        const query = buildSubgroupQuery(parentGroupKey, subgroup as any)
+        const label = getSubgroupLabel(parentGroupKey, subgroup as any)
+        const caseId = await bulkEscalateByQuery(query, {
+            title: `Escalated: ${label}`,
+            description: `Bulk escalation of ${subgroup.count} alerts for ${label}`,
+            severity: group.severity,
+            timezone: 'Local'
+        })
+
+        if (caseId) {
+            // Refresh and navigate to case
+            await fetchSubgroups(parentGroupKey)
+            router.push({ name: 'case-detail', params: { id: caseId } })
+        }
+    } catch (e) {
+        console.error('Bulk escalate subgroup failed:', e)
+    } finally {
+        bulkActionLoading[loadingKey] = false
+    }
 }
 
 // Stats
@@ -248,8 +480,60 @@ function getCriticalCount() {
                     <RefreshCw :class="cn('h-4 w-4', (refreshing || groupsLoading) && 'animate-spin')" />
                     Refresh
                 </button>
+
+                <!-- Settings -->
+                <div class="relative">
+                    <button
+                        @click="showSettingsPanel = !showSettingsPanel"
+                        :class="cn(
+                            'p-2 rounded-md transition-colors',
+                            showSettingsPanel ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                        )"
+                    >
+                        <Settings class="h-5 w-5" />
+                    </button>
+                    <div
+                        v-if="showSettingsPanel"
+                        class="absolute right-0 top-full mt-2 w-56 bg-popover border border-border rounded-lg shadow-lg z-50"
+                    >
+                        <div class="p-3 border-b border-border">
+                            <h3 class="font-semibold text-sm">Display Settings</h3>
+                            <p class="text-xs text-muted-foreground mt-0.5">Choose how alerts are displayed</p>
+                        </div>
+                        <div class="p-2">
+                            <button
+                                @click="setViewMode('triage')"
+                                :class="cn(
+                                    'w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors',
+                                    viewMode === 'triage' ? 'bg-primary/10 text-primary' : 'hover:bg-muted'
+                                )"
+                            >
+                                <Layers class="h-4 w-4" />
+                                <div class="text-left">
+                                    <div class="font-medium">Triage View</div>
+                                    <div class="text-xs text-muted-foreground">Grouped by rule with expandable pairs</div>
+                                </div>
+                            </button>
+                            <button
+                                @click="setViewMode('table')"
+                                :class="cn(
+                                    'w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors mt-1',
+                                    viewMode === 'table' ? 'bg-primary/10 text-primary' : 'hover:bg-muted'
+                                )"
+                            >
+                                <Table class="h-4 w-4" />
+                                <div class="text-left">
+                                    <div class="font-medium">Table View</div>
+                                    <div class="text-xs text-muted-foreground">Flat list like Hunt</div>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
+        <!-- Settings Panel Backdrop -->
+        <div v-if="showSettingsPanel" class="fixed inset-0 z-40" @click="showSettingsPanel = false"></div>
 
         <!-- Stats Cards -->
         <div class="grid gap-4 md:grid-cols-4">
@@ -283,17 +567,72 @@ function getCriticalCount() {
             </div>
         </div>
 
-        <!-- Error State -->
-        <div v-if="groupsError" class="rounded-xl border border-destructive/50 bg-destructive/10 p-6 text-center">
-            <AlertTriangle class="h-8 w-8 text-destructive mx-auto mb-2" />
-            <p class="text-destructive font-medium">{{ groupsError }}</p>
-            <button @click="handleRefresh" class="mt-4 px-4 py-2 bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/90">
-                Retry
-            </button>
-        </div>
+        <!-- ==================== TRIAGE VIEW ==================== -->
+        <template v-if="viewMode === 'triage'">
+            <!-- Triage Toolbar -->
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-4">
+                    <!-- Group By Dropdown -->
+                    <div class="flex items-center gap-2">
+                        <Group class="h-4 w-4 text-muted-foreground" />
+                        <span class="text-sm text-muted-foreground">Group by:</span>
+                        <select
+                            :value="triageGroupBy"
+                            @change="setTriageGroupBy(($event.target as HTMLSelectElement).value as any)"
+                            class="bg-background border border-border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                        >
+                            <option value="rule">Rule</option>
+                            <option value="severity">Severity</option>
+                            <option value="source">Source IP</option>
+                            <option value="destination">Destination IP</option>
+                        </select>
+                    </div>
 
-        <!-- Alert Groups Accordion -->
-        <div v-else class="space-y-2">
+                    <!-- Sort Controls -->
+                    <div class="flex items-center gap-1">
+                        <span class="text-sm text-muted-foreground mr-1">Sort:</span>
+                        <div class="flex items-center bg-muted rounded-lg p-1">
+                            <button
+                                v-for="sort in [
+                                    { value: 'count', label: 'Count' },
+                                    { value: 'name', label: 'Name' },
+                                    { value: 'severity', label: 'Severity' }
+                                ]"
+                                :key="sort.value"
+                                @click="setSort(sort.value as any)"
+                                :class="cn(
+                                    'px-3 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1',
+                                    sortField === sort.value
+                                        ? 'bg-background text-foreground shadow-sm'
+                                        : 'text-muted-foreground hover:text-foreground'
+                                )"
+                            >
+                                {{ sort.label }}
+                                <component
+                                    v-if="sortField === sort.value"
+                                    :is="sortDirection === 'asc' ? ArrowUp : ArrowDown"
+                                    class="h-3 w-3"
+                                />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="text-sm text-muted-foreground">
+                    {{ filteredGroups.length }} groups &middot; {{ totalAlerts.toLocaleString() }} alerts
+                </div>
+            </div>
+
+            <!-- Error State -->
+            <div v-if="groupsError" class="rounded-xl border border-destructive/50 bg-destructive/10 p-6 text-center">
+                <AlertTriangle class="h-8 w-8 text-destructive mx-auto mb-2" />
+                <p class="text-destructive font-medium">{{ groupsError }}</p>
+                <button @click="handleRefresh" class="mt-4 px-4 py-2 bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/90">
+                    Retry
+                </button>
+            </div>
+
+            <!-- Alert Groups Accordion -->
+            <div v-else class="space-y-2">
             <!-- Loading State -->
             <div v-if="groupsLoading && !groupsLoadingMore" class="space-y-2">
                 <div v-for="i in 5" :key="i" class="rounded-xl border border-border bg-card p-4 animate-pulse">
@@ -334,65 +673,136 @@ function getCriticalCount() {
                                 class="h-5 w-5 text-muted-foreground flex-shrink-0 transition-transform"
                             />
                             <div class="min-w-0 flex-1">
-                                <div class="font-medium text-foreground line-clamp-1">
+                                <!-- Primary group display based on triageGroupBy -->
+                                <div v-if="triageGroupBy === 'severity'" class="flex items-center gap-2">
+                                    <span :class="cn('px-2 py-0.5 rounded-full border text-xs font-semibold', getSeverityStyles(group.severity))">
+                                        {{ group.severity }}
+                                    </span>
+                                </div>
+                                <div v-else-if="triageGroupBy === 'source' || triageGroupBy === 'destination'" class="flex items-center gap-2">
+                                    <Network class="h-4 w-4 text-muted-foreground" />
+                                    <span class="font-mono font-medium">{{ decodeURIComponent(group.ruleId) }}</span>
+                                </div>
+                                <div v-else class="font-medium text-foreground line-clamp-1">
                                     {{ group.ruleName }}
                                 </div>
+                                <!-- Secondary info row -->
                                 <div class="flex items-center gap-3 mt-1">
-                                    <span class="text-xs text-muted-foreground font-mono">{{ group.module }}</span>
-                                    <span :class="cn('px-2 py-0.5 rounded-full border text-xs font-semibold', getSeverityStyles(group.severity))">
+                                    <span v-if="triageGroupBy !== 'rule' && group.ruleName !== 'Unknown'" class="text-xs text-muted-foreground truncate max-w-xs" :title="group.ruleName">
+                                        {{ group.ruleName }}
+                                    </span>
+                                    <span v-if="triageGroupBy === 'rule'" class="text-xs text-muted-foreground font-mono">{{ group.module }}</span>
+                                    <span v-if="triageGroupBy !== 'severity'" :class="cn('px-2 py-0.5 rounded-full border text-xs font-semibold', getSeverityStyles(group.severity))">
                                         {{ group.severity }}
                                     </span>
                                 </div>
                             </div>
                         </div>
                         <div class="flex items-center gap-4 flex-shrink-0">
+                            <!-- Bulk Actions -->
+                            <div class="flex items-center gap-1">
+                                <button
+                                    @click.stop="handleBulkAcknowledgeGroup(group)"
+                                    :disabled="bulkActionLoading[`ack-group-${group.ruleId}`]"
+                                    class="p-1.5 hover:bg-green-500/20 text-green-600 rounded transition-colors disabled:opacity-50"
+                                    title="Acknowledge All"
+                                >
+                                    <Loader2 v-if="bulkActionLoading[`ack-group-${group.ruleId}`]" class="h-4 w-4 animate-spin" />
+                                    <CheckCheck v-else class="h-4 w-4" />
+                                </button>
+                                <button
+                                    @click.stop="handleBulkEscalateGroup(group)"
+                                    :disabled="bulkActionLoading[`esc-group-${group.ruleId}`]"
+                                    class="p-1.5 hover:bg-primary/20 text-primary rounded transition-colors disabled:opacity-50"
+                                    title="Escalate All to Case"
+                                >
+                                    <Loader2 v-if="bulkActionLoading[`esc-group-${group.ruleId}`]" class="h-4 w-4 animate-spin" />
+                                    <Briefcase v-else class="h-4 w-4" />
+                                </button>
+                            </div>
                             <span class="font-mono font-semibold text-lg">{{ group.count.toLocaleString() }}</span>
                             <Loader2 v-if="groupLoadingState[group.ruleId]" class="h-4 w-4 animate-spin text-muted-foreground" />
                         </div>
                     </div>
 
-                    <!-- Expanded Content: Source/Dest Pairs -->
+                    <!-- Expanded Content: Subgroups (Pairs when grouped by rule, Rules when grouped by source/dest) -->
                     <div v-if="expandedGroup === group.ruleId" class="border-t border-border">
-                        <!-- Loading pairs -->
-                        <div v-if="pairsLoading && pairs.length === 0" class="p-4 text-center">
+                        <!-- Loading subgroups -->
+                        <div v-if="subgroupsLoading && subgroups.length === 0" class="p-4 text-center">
                             <Loader2 class="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
-                            <p class="text-sm text-muted-foreground mt-2">Loading source/destination pairs...</p>
+                            <p class="text-sm text-muted-foreground mt-2">
+                                {{ triageGroupBy === 'rule' ? 'Loading source/destination pairs...' : 'Loading rules...' }}
+                            </p>
                         </div>
 
-                        <!-- No pairs -->
-                        <div v-else-if="pairs.length === 0" class="p-6 text-center text-muted-foreground">
-                            <Network class="h-8 w-8 mx-auto mb-2 opacity-30" />
-                            <p>No source/destination pairs found</p>
+                        <!-- No subgroups -->
+                        <div v-else-if="subgroups.length === 0" class="p-6 text-center text-muted-foreground">
+                            <component :is="triageGroupBy === 'rule' ? Network : Shield" class="h-8 w-8 mx-auto mb-2 opacity-30" />
+                            <p>{{ triageGroupBy === 'rule' ? 'No source/destination pairs found' : 'No rules found' }}</p>
                         </div>
 
-                        <!-- Pairs list -->
+                        <!-- Subgroups list -->
                         <div v-else class="divide-y divide-border">
-                            <div v-for="pair in pairs" :key="getPairKey(pair)">
-                                <!-- Pair Row -->
+                            <div v-for="subgroup in subgroups" :key="subgroup.key">
+                                <!-- Subgroup Row -->
                                 <div
-                                    @click="togglePair(group, pair)"
+                                    @click="toggleSubgroup(group, subgroup)"
                                     :class="cn(
                                         'px-4 py-3 pl-12 flex items-center justify-between cursor-pointer transition-colors',
-                                        expandedPair === getPairKey(pair) ? 'bg-primary/5' : 'hover:bg-muted/30'
+                                        expandedPair === subgroup.key ? 'bg-primary/5' : 'hover:bg-muted/30'
                                     )"
                                 >
                                     <div class="flex items-center gap-3">
                                         <component
-                                            :is="expandedPair === getPairKey(pair) ? ChevronDown : ChevronRight"
+                                            :is="expandedPair === subgroup.key ? ChevronDown : ChevronRight"
                                             class="h-4 w-4 text-muted-foreground"
                                         />
-                                        <Network class="h-4 w-4 text-muted-foreground" />
-                                        <span class="font-mono text-sm">
-                                            {{ pair.sourceIp }}
-                                            <span class="text-muted-foreground mx-2">→</span>
-                                            {{ pair.destinationIp }}
-                                        </span>
+                                        <!-- Pair display (source → dest) -->
+                                        <template v-if="subgroup.type === 'pair'">
+                                            <Network class="h-4 w-4 text-muted-foreground" />
+                                            <span class="font-mono text-sm">
+                                                {{ subgroup.label }}
+                                                <span class="text-muted-foreground mx-2">→</span>
+                                                {{ subgroup.secondaryLabel }}
+                                            </span>
+                                        </template>
+                                        <!-- Rule display (rule name with severity badge) -->
+                                        <template v-else>
+                                            <Shield class="h-4 w-4 text-muted-foreground" />
+                                            <span class="text-sm truncate max-w-md" :title="subgroup.label">{{ subgroup.label }}</span>
+                                            <span v-if="subgroup.secondaryLabel" :class="cn('px-2 py-0.5 rounded-full border text-xs font-semibold', getSeverityStyles(subgroup.secondaryLabel))">
+                                                {{ subgroup.secondaryLabel }}
+                                            </span>
+                                        </template>
                                     </div>
-                                    <span class="font-mono font-medium">{{ pair.count.toLocaleString() }}</span>
+                                    <div class="flex items-center gap-3">
+                                        <!-- Subgroup Bulk Actions -->
+                                        <div class="flex items-center gap-1">
+                                            <button
+                                                @click.stop="handleBulkAcknowledgeSubgroup(group, subgroup)"
+                                                :disabled="bulkActionLoading[`ack-subgroup-${subgroup.key}`]"
+                                                class="p-1 hover:bg-green-500/20 text-green-600 rounded transition-colors disabled:opacity-50"
+                                                title="Acknowledge All"
+                                            >
+                                                <Loader2 v-if="bulkActionLoading[`ack-subgroup-${subgroup.key}`]" class="h-3.5 w-3.5 animate-spin" />
+                                                <CheckCheck v-else class="h-3.5 w-3.5" />
+                                            </button>
+                                            <button
+                                                @click.stop="handleBulkEscalateSubgroup(group, subgroup)"
+                                                :disabled="bulkActionLoading[`esc-subgroup-${subgroup.key}`]"
+                                                class="p-1 hover:bg-primary/20 text-primary rounded transition-colors disabled:opacity-50"
+                                                title="Escalate All to Case"
+                                            >
+                                                <Loader2 v-if="bulkActionLoading[`esc-subgroup-${subgroup.key}`]" class="h-3.5 w-3.5 animate-spin" />
+                                                <Briefcase v-else class="h-3.5 w-3.5" />
+                                            </button>
+                                        </div>
+                                        <span class="font-mono font-medium">{{ subgroup.count.toLocaleString() }}</span>
+                                    </div>
                                 </div>
 
-                                <!-- Expanded Alerts for this pair -->
-                                <div v-if="expandedPair === getPairKey(pair)" class="bg-muted/20 border-t border-border">
+                                <!-- Expanded Alerts for this subgroup -->
+                                <div v-if="expandedPair === subgroup.key" class="bg-muted/20 border-t border-border">
                                     <!-- Loading alerts -->
                                     <div v-if="alertsLoading && alerts.length === 0" class="p-4 text-center">
                                         <Loader2 class="h-4 w-4 animate-spin mx-auto text-muted-foreground" />
@@ -404,6 +814,7 @@ function getCriticalCount() {
                                             <thead>
                                                 <tr class="bg-muted/50 border-b border-border">
                                                     <th class="px-4 py-2 text-left font-medium text-muted-foreground text-xs">Timestamp</th>
+                                                    <th v-if="subgroup.type === 'rule'" class="px-4 py-2 text-left font-medium text-muted-foreground text-xs">Rule</th>
                                                     <th class="px-4 py-2 text-left font-medium text-muted-foreground text-xs">Source</th>
                                                     <th class="px-4 py-2 text-left font-medium text-muted-foreground text-xs">Destination</th>
                                                     <th class="px-4 py-2 text-left font-medium text-muted-foreground text-xs">Status</th>
@@ -422,6 +833,9 @@ function getCriticalCount() {
                                                             <Clock class="h-3 w-3 text-muted-foreground" />
                                                             {{ formatDate(alert.soc_timestamp || alert['@timestamp']) }}
                                                         </div>
+                                                    </td>
+                                                    <td v-if="subgroup.type === 'rule'" class="px-4 py-2 text-xs truncate max-w-xs" :title="getField(alert, 'rule.name')">
+                                                        {{ getField(alert, 'rule.name') }}
                                                     </td>
                                                     <td class="px-4 py-2 font-mono text-xs">
                                                         {{ getField(alert, 'source.ip') }}
@@ -489,7 +903,7 @@ function getCriticalCount() {
 
                                     <!-- No alerts -->
                                     <div v-else class="p-4 text-center text-sm text-muted-foreground">
-                                        No alerts found for this pair
+                                        No alerts found
                                     </div>
                                 </div>
                             </div>
@@ -511,6 +925,326 @@ function getCriticalCount() {
             <div v-else-if="!hasMoreGroups && filteredGroups.length > 0" class="py-4 text-center text-sm text-muted-foreground">
                 End of results
             </div>
-        </div>
+            </div>
+        </template>
+
+        <!-- ==================== TABLE VIEW (Hunt-like) ==================== -->
+        <template v-else-if="viewMode === 'table'">
+            <!-- Table Toolbar -->
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-4">
+                    <!-- Group By Dropdown -->
+                    <div class="flex items-center gap-2">
+                        <Group class="h-4 w-4 text-muted-foreground" />
+                        <span class="text-sm text-muted-foreground">Group by:</span>
+                        <select
+                            :value="tableGroupBy"
+                            @change="setTableGroupBy(($event.target as HTMLSelectElement).value as any)"
+                            class="bg-background border border-border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                        >
+                            <option value="none">None</option>
+                            <option value="rule">Rule</option>
+                            <option value="severity">Severity</option>
+                            <option value="source">Source IP</option>
+                            <option value="destination">Destination IP</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="text-sm text-muted-foreground">
+                    {{ totalAlerts.toLocaleString() }} alerts
+                </div>
+            </div>
+
+            <!-- Loading State -->
+            <div v-if="allAlertsLoading && !allAlertsLoadingMore" class="rounded-xl border border-border bg-card overflow-hidden">
+                <div class="p-8 text-center">
+                    <Loader2 class="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
+                    <p class="text-sm text-muted-foreground mt-2">Loading alerts...</p>
+                </div>
+            </div>
+
+            <!-- Empty State -->
+            <div v-else-if="allAlerts.length === 0" class="rounded-xl border border-border bg-card p-12 text-center">
+                <Bell class="h-12 w-12 mx-auto mb-4 opacity-20" />
+                <p class="text-lg font-medium">No alerts found</p>
+                <p class="text-sm text-muted-foreground mt-1">No alerts match the current filters.</p>
+            </div>
+
+            <!-- Grouped View -->
+            <div v-else-if="tableGroupBy !== 'none'" class="space-y-2">
+                <div
+                    v-for="group in tableGroups"
+                    :key="group.key"
+                    class="rounded-xl border border-border bg-card overflow-hidden"
+                >
+                    <!-- Group Header -->
+                    <div
+                        @click="toggleTableGroup(group.key)"
+                        class="px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-muted/30 transition-colors"
+                    >
+                        <div class="flex items-center gap-3">
+                            <component
+                                :is="group.expanded ? ChevronDown : ChevronRight"
+                                class="h-5 w-5 text-muted-foreground"
+                            />
+                            <span v-if="tableGroupBy === 'severity'" :class="cn('px-2 py-0.5 rounded-full border text-xs font-semibold', getSeverityStyles(group.label))">
+                                {{ group.label }}
+                            </span>
+                            <span v-else class="font-medium">{{ group.label }}</span>
+                        </div>
+                        <span class="font-mono font-semibold">{{ group.count.toLocaleString() }}</span>
+                    </div>
+
+                    <!-- Expanded Group Table -->
+                    <div v-if="group.expanded" class="border-t border-border">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="bg-muted/30 border-b border-border">
+                                        <th class="px-4 py-2 text-left font-medium text-muted-foreground text-xs">Timestamp</th>
+                                        <th v-if="tableGroupBy !== 'rule'" class="px-4 py-2 text-left font-medium text-muted-foreground text-xs">Rule</th>
+                                        <th v-if="tableGroupBy !== 'severity'" class="px-4 py-2 text-left font-medium text-muted-foreground text-xs">Severity</th>
+                                        <th v-if="tableGroupBy !== 'source'" class="px-4 py-2 text-left font-medium text-muted-foreground text-xs">Source</th>
+                                        <th v-if="tableGroupBy !== 'destination'" class="px-4 py-2 text-left font-medium text-muted-foreground text-xs">Destination</th>
+                                        <th class="px-4 py-2 text-left font-medium text-muted-foreground text-xs">Status</th>
+                                        <th class="px-4 py-2 text-right font-medium text-muted-foreground text-xs">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-border">
+                                    <tr
+                                        v-for="alert in group.alerts"
+                                        :key="alert.soc_id"
+                                        class="hover:bg-muted/30 transition-colors cursor-pointer"
+                                        @click="viewAlertDetail(alert)"
+                                    >
+                                        <td class="px-4 py-2 text-xs">{{ formatDate(alert.soc_timestamp || alert['@timestamp']) }}</td>
+                                        <td v-if="tableGroupBy !== 'rule'" class="px-4 py-2 text-xs max-w-xs truncate" :title="alert['rule.name']">{{ alert['rule.name'] || '-' }}</td>
+                                        <td v-if="tableGroupBy !== 'severity'" class="px-4 py-2">
+                                            <span :class="cn('px-2 py-0.5 rounded-full border text-xs font-semibold', getSeverityStyles(alert['event.severity_label'] || 'unknown'))">
+                                                {{ alert['event.severity_label'] || 'unknown' }}
+                                            </span>
+                                        </td>
+                                        <td v-if="tableGroupBy !== 'source'" class="px-4 py-2 font-mono text-xs">{{ alert['source.ip'] || '-' }}</td>
+                                        <td v-if="tableGroupBy !== 'destination'" class="px-4 py-2 font-mono text-xs">{{ alert['destination.ip'] || '-' }}</td>
+                                        <td class="px-4 py-2">
+                                            <span v-if="alert['event.acknowledged']" class="text-xs text-green-600">Ack</span>
+                                            <span v-else class="text-xs text-muted-foreground">Unack</span>
+                                        </td>
+                                        <td class="px-4 py-2">
+                                            <div class="flex items-center justify-end gap-1">
+                                                <button
+                                                    v-if="!alert['event.acknowledged']"
+                                                    @click.stop="handleAcknowledge(alert, true)"
+                                                    class="p-1 hover:bg-green-500/20 text-green-600 rounded"
+                                                    title="Acknowledge"
+                                                >
+                                                    <Check class="h-3.5 w-3.5" />
+                                                </button>
+                                                <button
+                                                    v-else
+                                                    @click.stop="handleAcknowledge(alert, false)"
+                                                    class="p-1 hover:bg-red-500/20 text-red-600 rounded"
+                                                    title="Unacknowledge"
+                                                >
+                                                    <X class="h-3.5 w-3.5" />
+                                                </button>
+                                                <button @click.stop="handleEscalate(alert)" class="p-1 hover:bg-primary/20 text-primary rounded" title="Escalate">
+                                                    <Briefcase class="h-3.5 w-3.5" />
+                                                </button>
+                                                <button @click.stop="handleInvestigate(alert)" class="p-1 hover:bg-purple-500/20 text-purple-600 rounded" title="AI Investigate">
+                                                    <Sparkles class="h-3.5 w-3.5" />
+                                                </button>
+                                                <button @click.stop="drillIntoHunt(alert)" class="p-1 hover:bg-muted text-muted-foreground rounded" title="Open in Hunt">
+                                                    <ExternalLink class="h-3.5 w-3.5" />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Flat Table View (no grouping) -->
+            <div v-else class="rounded-xl border border-border bg-card overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="bg-muted/50 border-b border-border">
+                                <th
+                                    @click="setTableSort('timestamp')"
+                                    class="px-4 py-3 text-left font-medium text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
+                                >
+                                    <div class="flex items-center gap-1">
+                                        Timestamp
+                                        <component v-if="tableSortField === 'timestamp'" :is="tableSortDirection === 'asc' ? ArrowUp : ArrowDown" class="h-3 w-3" />
+                                        <ArrowUpDown v-else class="h-3 w-3 opacity-30" />
+                                    </div>
+                                </th>
+                                <th
+                                    @click="setTableSort('rule')"
+                                    class="px-4 py-3 text-left font-medium text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
+                                >
+                                    <div class="flex items-center gap-1">
+                                        Rule
+                                        <component v-if="tableSortField === 'rule'" :is="tableSortDirection === 'asc' ? ArrowUp : ArrowDown" class="h-3 w-3" />
+                                        <ArrowUpDown v-else class="h-3 w-3 opacity-30" />
+                                    </div>
+                                </th>
+                                <th
+                                    @click="setTableSort('severity')"
+                                    class="px-4 py-3 text-left font-medium text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
+                                >
+                                    <div class="flex items-center gap-1">
+                                        Severity
+                                        <component v-if="tableSortField === 'severity'" :is="tableSortDirection === 'asc' ? ArrowUp : ArrowDown" class="h-3 w-3" />
+                                        <ArrowUpDown v-else class="h-3 w-3 opacity-30" />
+                                    </div>
+                                </th>
+                                <th
+                                    @click="setTableSort('source')"
+                                    class="px-4 py-3 text-left font-medium text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
+                                >
+                                    <div class="flex items-center gap-1">
+                                        Source
+                                        <component v-if="tableSortField === 'source'" :is="tableSortDirection === 'asc' ? ArrowUp : ArrowDown" class="h-3 w-3" />
+                                        <ArrowUpDown v-else class="h-3 w-3 opacity-30" />
+                                    </div>
+                                </th>
+                                <th
+                                    @click="setTableSort('destination')"
+                                    class="px-4 py-3 text-left font-medium text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
+                                >
+                                    <div class="flex items-center gap-1">
+                                        Destination
+                                        <component v-if="tableSortField === 'destination'" :is="tableSortDirection === 'asc' ? ArrowUp : ArrowDown" class="h-3 w-3" />
+                                        <ArrowUpDown v-else class="h-3 w-3 opacity-30" />
+                                    </div>
+                                </th>
+                                <th class="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
+                                <th class="px-4 py-3 text-right font-medium text-muted-foreground">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-border">
+                            <tr
+                                v-for="alert in sortedAllAlerts"
+                                :key="alert.soc_id"
+                                class="hover:bg-muted/30 transition-colors group cursor-pointer"
+                                @click="viewAlertDetail(alert)"
+                            >
+                                <td class="px-4 py-3">
+                                    <div class="flex items-center gap-2 text-xs">
+                                        <Clock class="h-3 w-3 text-muted-foreground" />
+                                        {{ formatDate(alert.soc_timestamp || alert['@timestamp']) }}
+                                    </div>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <div class="font-medium text-sm line-clamp-1 max-w-xs" :title="alert['rule.name']">
+                                        {{ alert['rule.name'] || '-' }}
+                                    </div>
+                                    <div class="text-xs text-muted-foreground font-mono">{{ alert['event.module'] || '-' }}</div>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <span :class="cn('px-2 py-0.5 rounded-full border text-xs font-semibold', getSeverityStyles(alert['event.severity_label'] || 'unknown'))">
+                                        {{ alert['event.severity_label'] || 'unknown' }}
+                                    </span>
+                                </td>
+                                <td class="px-4 py-3 font-mono text-xs">
+                                    {{ alert['source.ip'] || '-' }}
+                                    <span v-if="alert['source.port']" class="text-muted-foreground">:{{ alert['source.port'] }}</span>
+                                </td>
+                                <td class="px-4 py-3 font-mono text-xs">
+                                    {{ alert['destination.ip'] || '-' }}
+                                    <span v-if="alert['destination.port']" class="text-muted-foreground">:{{ alert['destination.port'] }}</span>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <span v-if="alert['event.acknowledged']" class="inline-flex items-center gap-1 text-xs text-green-600">
+                                        <CheckCircle class="h-3 w-3" />
+                                        Ack
+                                    </span>
+                                    <span v-else class="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                                        <X class="h-3 w-3" />
+                                        Unack
+                                    </span>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <div class="flex items-center justify-end gap-1">
+                                        <button
+                                            v-if="!alert['event.acknowledged']"
+                                            @click.stop="handleAcknowledge(alert, true)"
+                                            class="p-1.5 hover:bg-green-500/20 text-green-600 rounded transition-colors"
+                                            title="Acknowledge"
+                                        >
+                                            <Check class="h-4 w-4" />
+                                        </button>
+                                        <button
+                                            v-else
+                                            @click.stop="handleAcknowledge(alert, false)"
+                                            class="p-1.5 hover:bg-red-500/20 text-red-600 rounded transition-colors"
+                                            title="Unacknowledge"
+                                        >
+                                            <X class="h-4 w-4" />
+                                        </button>
+                                        <button
+                                            @click.stop="handleEscalate(alert)"
+                                            class="p-1.5 hover:bg-primary/20 text-primary rounded transition-colors"
+                                            title="Escalate to Case"
+                                        >
+                                            <Briefcase class="h-4 w-4" />
+                                        </button>
+                                        <button
+                                            @click.stop="handleInvestigate(alert)"
+                                            class="p-1.5 hover:bg-purple-500/20 text-purple-600 rounded transition-colors"
+                                            title="AI Investigate"
+                                        >
+                                            <Sparkles class="h-4 w-4" />
+                                        </button>
+                                        <button
+                                            @click.stop="drillIntoHunt(alert)"
+                                            class="p-1.5 hover:bg-muted text-muted-foreground rounded transition-colors"
+                                            title="Open in Hunt"
+                                        >
+                                            <ExternalLink class="h-4 w-4" />
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Loading More -->
+                <div v-if="allAlertsLoadingMore" class="flex items-center justify-center py-4 border-t border-border">
+                    <Loader2 class="h-5 w-5 animate-spin text-muted-foreground" />
+                    <span class="ml-2 text-sm text-muted-foreground">Loading more...</span>
+                </div>
+
+                <!-- Load More Button -->
+                <div v-else-if="hasMoreAllAlerts" class="p-4 border-t border-border text-center">
+                    <button
+                        @click="fetchAllAlerts(true)"
+                        class="px-4 py-2 bg-muted hover:bg-muted/80 rounded-md text-sm font-medium transition-colors"
+                    >
+                        Load More
+                    </button>
+                </div>
+
+                <!-- End of List -->
+                <div v-else class="py-4 border-t border-border text-center text-sm text-muted-foreground">
+                    End of results
+                </div>
+            </div>
+        </template>
+
+        <!-- Escalate Dialog -->
+        <EscalateDialog
+            ref="escalateDialogRef"
+            :open="showEscalateDialog"
+            :event="escalateTarget"
+            @close="showEscalateDialog = false"
+            @confirm="handleEscalateConfirm"
+        />
     </div>
 </template>

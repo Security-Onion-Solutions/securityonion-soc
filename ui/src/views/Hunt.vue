@@ -4,7 +4,7 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, defineAsyncComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Pie, Bar } from 'vue-chartjs'
 import {
@@ -41,7 +41,8 @@ import {
     MessageSquare,
     PieChart,
     Maximize2,
-    Minimize2
+    Minimize2,
+    Network
 } from 'lucide-vue-next'
 
 // Register Chart.js components
@@ -55,12 +56,17 @@ import { useHuntQuery } from '../composables/useHuntQuery'
 import { useHuntActions } from '../composables/useHuntActions'
 import { useHuntParams } from '../composables/useHuntParams'
 import { useChatWidget } from '../composables/useChatWidget'
+import { useTheme } from '../composables/useTheme'
 import QuickActionMenu from '../components/hunt/QuickActionMenu.vue'
 import AlertActions from '../components/hunt/AlertActions.vue'
 import EscalationMenu from '../components/hunt/EscalationMenu.vue'
 import PlaybookPanel from '../components/hunt/PlaybookPanel.vue'
 import BulkActions from '../components/hunt/BulkActions.vue'
 import DateTimePicker from '../components/common/DateTimePicker.vue'
+import type { SankeyLink } from '../types/dashboard'
+
+// Lazy load SankeyWidget to avoid bundling with mermaid's d3-sankey
+const SankeyWidget = defineAsyncComponent(() => import('../components/dashboards/widgets/SankeyWidget.vue'))
 import {
     type HuntCategory,
     type CategoryConfig,
@@ -99,6 +105,7 @@ const router = useRouter()
 const { get, loading: apiLoading, error: apiError } = useApi()
 const { formatDate, formatRelativeTime } = useFormatters()
 const { getSeverityStyles } = useStatusStyles()
+const { isDarkMode } = useTheme()
 
 const {
     isRelativeTime,
@@ -762,10 +769,37 @@ function buildChartData(chartMetrics: ChartMetric[], chartType: 'pie' | 'bar' | 
 }
 
 /**
+ * Build sankey data from chart metrics
+ * Requires at least 2 fields in the groupby (source and target)
+ */
+function buildSankeyData(chartMetrics: ChartMetric[], fields: string[]): SankeyLink[] {
+    if (fields.length < 2 || !chartMetrics.length) return []
+
+    const links: SankeyLink[] = []
+
+    for (const metric of chartMetrics) {
+        if (metric.keys.length >= 2) {
+            links.push({
+                source: metric.keys[0] || '(empty)',
+                target: metric.keys[1] || '(empty)',
+                value: metric.value
+            })
+        }
+    }
+
+    return links
+}
+
+/**
  * Build chart options based on chart type
  */
 function buildChartOptions(chartType: 'pie' | 'bar' | 'sankey' | 'table', showLegend: boolean) {
     if (chartType === 'table') return null
+
+    // Use theme-aware colors
+    const textColor = isDarkMode.value ? '#e5e7eb' : '#374151'
+    const mutedTextColor = isDarkMode.value ? '#9ca3af' : '#6b7280'
+    const gridColor = isDarkMode.value ? 'rgba(75, 85, 99, 0.3)' : 'rgba(209, 213, 219, 0.5)'
 
     const baseOptions = {
         responsive: true,
@@ -773,7 +807,15 @@ function buildChartOptions(chartType: 'pie' | 'bar' | 'sankey' | 'table', showLe
         plugins: {
             legend: {
                 display: showLegend,
-                position: 'right' as const
+                position: 'right' as const,
+                labels: {
+                    boxWidth: 12,
+                    padding: 8,
+                    font: {
+                        size: 11
+                    },
+                    color: textColor
+                }
             }
         }
     }
@@ -784,7 +826,27 @@ function buildChartOptions(chartType: 'pie' | 'bar' | 'sankey' | 'table', showLe
             indexAxis: 'y' as const,
             scales: {
                 x: {
-                    beginAtZero: true
+                    beginAtZero: true,
+                    ticks: {
+                        color: mutedTextColor,
+                        font: {
+                            size: 10
+                        }
+                    },
+                    grid: {
+                        color: gridColor
+                    }
+                },
+                y: {
+                    ticks: {
+                        color: mutedTextColor,
+                        font: {
+                            size: 10
+                        }
+                    },
+                    grid: {
+                        display: false
+                    }
                 }
             }
         }
@@ -1559,7 +1621,7 @@ watch(autoRefreshInterval, (newVal) => {
                         <div class="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/50">
                             <div class="flex items-center gap-3">
                                 <component
-                                    :is="group.chartType === 'pie' ? PieChart : BarChart3"
+                                    :is="group.chartType === 'pie' ? PieChart : group.chartType === 'bar' ? BarChart3 : group.chartType === 'sankey' ? Network : Table"
                                     class="h-4 w-4 text-purple-500"
                                 />
                                 <h3 class="font-semibold text-sm">{{ group.title }}</h3>
@@ -1600,6 +1662,17 @@ watch(autoRefreshInterval, (newVal) => {
                                     >
                                         <BarChart3 class="h-3.5 w-3.5" />
                                     </button>
+                                    <button
+                                        v-if="group.fields.length >= 2"
+                                        @click="setGroupByChartType(groupIdx, 'sankey')"
+                                        :class="cn(
+                                            'p-1.5 transition-colors',
+                                            group.chartType === 'sankey' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+                                        )"
+                                        title="Sankey diagram (flow visualization)"
+                                    >
+                                        <Network class="h-3.5 w-3.5" />
+                                    </button>
                                 </div>
                                 <!-- Maximize/Minimize toggle -->
                                 <button
@@ -1612,7 +1685,7 @@ watch(autoRefreshInterval, (newVal) => {
                             </div>
                         </div>
 
-                        <!-- Chart View -->
+                        <!-- Chart View (Pie/Bar) -->
                         <div v-if="group.chartType === 'pie' || group.chartType === 'bar'" class="p-4">
                             <div :class="cn('relative', group.maximized ? 'h-96' : 'h-64')">
                                 <Pie
@@ -1627,6 +1700,25 @@ watch(autoRefreshInterval, (newVal) => {
                                 />
                                 <div v-else class="flex items-center justify-center h-full text-muted-foreground">
                                     No chart data available
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Sankey View -->
+                        <div v-else-if="group.chartType === 'sankey'" class="p-4">
+                            <div :class="cn('relative', group.maximized ? 'h-96' : 'h-64')">
+                                <SankeyWidget
+                                    v-if="group.chartMetrics && group.fields.length >= 2"
+                                    :data="{
+                                        id: `sankey-${group.key}`,
+                                        name: group.title,
+                                        type: 'sankey',
+                                        size: 'lg',
+                                        links: buildSankeyData(group.chartMetrics, group.fields)
+                                    }"
+                                />
+                                <div v-else class="flex items-center justify-center h-full text-muted-foreground">
+                                    Sankey requires at least 2 groupby fields
                                 </div>
                             </div>
                         </div>

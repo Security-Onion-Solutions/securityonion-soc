@@ -21,7 +21,8 @@ import {
   Key,
   UserCog,
   FileText,
-  ChevronDown
+  ChevronDown,
+  BookOpen
 } from 'lucide-vue-next'
 import ChatWidget from './components/chat-widget/ChatWidget.vue'
 import UserMenu from './components/common/UserMenu.vue'
@@ -165,6 +166,10 @@ function isActive(routeName: string | string[]): boolean {
         <router-link to="/cases" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', isActive(['cases', 'case-detail']) ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
           <Briefcase class="h-5 w-5" />
           <span v-if="sidebarOpen">Cases</span>
+        </router-link>
+        <router-link to="/playbooks" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', isActive('playbooks') ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
+          <BookOpen class="h-5 w-5" />
+          <span v-if="sidebarOpen">Playbooks</span>
         </router-link>
         <router-link to="/assistant" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', isActive('assistant') ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
           <Bot class="h-5 w-5" />

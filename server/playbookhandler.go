@@ -33,7 +33,7 @@ func RegisterPlaybookRoutes(srv *Server, r chi.Router, prefix string) {
 	h := NewPlaybookHandler(srv)
 
 	r.Route(prefix, func(r chi.Router) {
-		r.Get("/", h.GetAllPlaybooks)
+		r.Get("/", h.GetPlaybooksPaginated)
 		r.Post("/", h.CreatePlaybook)
 		r.Put("/", h.UpdatePlaybook)
 		r.Get("/{id}", h.GetPlaybook)
@@ -332,16 +332,21 @@ func (h *PlaybookHandler) GetEventSpecificPlaybook(w http.ResponseWriter, r *htt
 	web.Respond(w, r, http.StatusOK, pbs)
 }
 
-// @Summary      Get All Playbooks
-// @Description  Retrieves all playbooks (both community and custom).
+// @Summary      Get Playbooks (Paginated)
+// @Description  Retrieves playbooks with pagination, filtering, and search support.
 // @Tags         Playbooks
 // @Security     bearer[playbooks/read]
-// @Success      200  {array}  model.Playbook  "Playbooks successfully retrieved"
+// @Param        limit   query int    false "Number of playbooks to return (default 50, max 500)"
+// @Param        offset  query int    false "Offset for pagination"
+// @Param        search  query string false "Search query to filter by name, description, detection_id, or category"
+// @Param        type    query string false "Filter by detection type (sigma, nids, yara, global)"
+// @Param        source  query string false "Filter by source (community, custom)"
+// @Success      200  {object}  model.PlaybookListResponse  "Playbooks successfully retrieved"
 // @Failure      401                           "Request was not properly authenticated"
 // @Failure      500                           "Internal SOC error; review SOC logs"
 // @Produce      application/json
 // @Router       /connect/playbook/ [get]
-func (h *PlaybookHandler) GetAllPlaybooks(w http.ResponseWriter, r *http.Request) {
+func (h *PlaybookHandler) GetPlaybooksPaginated(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
 
@@ -351,18 +356,33 @@ func (h *PlaybookHandler) GetAllPlaybooks(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	pbs, err := h.server.Playbookstore.GetAllPlaybooks(ctx)
+	// Parse query parameters
+	criteria := &model.PlaybookSearchCriteria{
+		Search: r.URL.Query().Get("search"),
+		Type:   r.URL.Query().Get("type"),
+		Source: r.URL.Query().Get("source"),
+	}
+
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if limit, err := strconv.Atoi(limitStr); err == nil {
+			criteria.Limit = limit
+		}
+	}
+
+	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
+		if offset, err := strconv.Atoi(offsetStr); err == nil {
+			criteria.Offset = offset
+		}
+	}
+
+	response, err := h.server.Playbookstore.GetPlaybooksPaginated(ctx, criteria)
 	if err != nil {
-		logger.WithError(err).Error("unable to get all playbooks")
+		logger.WithError(err).Error("unable to get playbooks")
 		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	if len(pbs) == 0 {
-		pbs = []*model.Playbook{}
-	}
-
-	web.Respond(w, r, http.StatusOK, pbs)
+	web.Respond(w, r, http.StatusOK, response)
 }
 
 // @Summary      Create Playbook

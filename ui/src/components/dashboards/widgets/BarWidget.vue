@@ -16,8 +16,11 @@ import {
 } from 'chart.js'
 import type { BarWidgetData } from '../../../types/dashboard'
 import { CHART_COLORS } from '../../../types/dashboard'
+import { useTheme } from '../../../composables/useTheme'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend)
+
+const { isDarkMode } = useTheme()
 
 const props = defineProps<{
     data: BarWidgetData
@@ -36,49 +39,53 @@ const chartData = computed(() => ({
     }]
 }))
 
-const chartOptions = computed(() => ({
-    responsive: true,
-    maintainAspectRatio: false,
-    indexAxis: isHorizontal.value ? 'y' as const : 'x' as const,
-    plugins: {
-        legend: {
-            display: false
-        },
-        tooltip: {
-            callbacks: {
-                label: (context: any) => {
-                    return context.raw.toLocaleString()
-                }
-            }
-        }
-    },
-    scales: {
-        x: {
-            display: !isHorizontal.value,
-            grid: {
+const chartOptions = computed(() => {
+    const mutedTextColor = isDarkMode.value ? '#9ca3af' : '#6b7280'
+
+    return {
+        responsive: true,
+        maintainAspectRatio: false,
+        indexAxis: isHorizontal.value ? 'y' as const : 'x' as const,
+        plugins: {
+            legend: {
                 display: false
             },
-            ticks: {
-                color: 'hsl(var(--muted-foreground))',
-                font: {
-                    size: 10
+            tooltip: {
+                callbacks: {
+                    label: (context: any) => {
+                        return context.raw.toLocaleString()
+                    }
                 }
             }
         },
-        y: {
-            display: isHorizontal.value,
-            grid: {
-                display: false
+        scales: {
+            x: {
+                display: !isHorizontal.value,
+                grid: {
+                    display: false
+                },
+                ticks: {
+                    color: mutedTextColor,
+                    font: {
+                        size: 10
+                    }
+                }
             },
-            ticks: {
-                color: 'hsl(var(--muted-foreground))',
-                font: {
-                    size: 10
+            y: {
+                display: isHorizontal.value,
+                grid: {
+                    display: false
+                },
+                ticks: {
+                    color: mutedTextColor,
+                    font: {
+                        size: 10
+                    }
                 }
             }
         }
     }
-}))
+})
 </script>
 
 <template>

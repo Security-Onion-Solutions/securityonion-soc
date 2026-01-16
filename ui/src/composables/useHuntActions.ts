@@ -87,6 +87,35 @@ export function useHuntActions() {
         }
     }
 
+    /**
+     * Bulk acknowledge events by query filter
+     */
+    async function bulkAcknowledgeByQuery(
+        searchFilter: string,
+        acknowledge: boolean,
+        options: {
+            dateRange?: string
+            timezone?: string
+        } = {}
+    ): Promise<boolean> {
+        try {
+            const payload = {
+                searchFilter,
+                eventFilter: {},
+                dateRange: options.dateRange || '',
+                timezone: options.timezone || 'Local',
+                acknowledge,
+                escalate: false
+            }
+
+            await post<AckResponse>('/api/events/ack', payload)
+            return true
+        } catch (e) {
+            console.error('Failed to bulk acknowledge by query:', e)
+            return false
+        }
+    }
+
     // =========================================================================
     // Escalate
     // =========================================================================
@@ -102,6 +131,7 @@ export function useHuntActions() {
             severity?: string
             template?: string
             includeRelated?: boolean
+            relatedEventIds?: string[]
         } = {}
     ): Promise<string | null> {
         try {
@@ -112,24 +142,69 @@ export function useHuntActions() {
             const response = await post<{ id: string }>('/api/case/', caseData)
 
             if (response?.id) {
+                const caseId = response.id
+
+                // Attach the primary event to the case
+                try {
+                    await post('/api/case/events', {
+                        caseId,
+                        fields: { soc_id: event.soc_id },
+                        dateRange: '',
+                        dateRangeFormat: '2006/01/02 3:04:05 PM',
+                        timezone: 'Local',
+                        acknowledged: false,
+                        escalated: false
+                    })
+                } catch (attachError) {
+                    console.warn('Failed to attach event to case:', attachError)
+                }
+
+                // Attach related events from guided analysis (if any)
+                if (options.relatedEventIds && options.relatedEventIds.length > 0) {
+                    for (const relatedId of options.relatedEventIds) {
+                        try {
+                            await post('/api/case/events', {
+                                caseId,
+                                fields: { soc_id: relatedId },
+                                dateRange: '',
+                                dateRangeFormat: '2006/01/02 3:04:05 PM',
+                                timezone: 'Local',
+                                acknowledged: false,
+                                escalated: false
+                            })
+                        } catch (attachError) {
+                            // Don't fail the whole escalation if one related event fails
+                            console.warn(`Failed to attach related event ${relatedId}:`, attachError)
+                        }
+                    }
+                }
+
                 // Acknowledge the event as escalated
-                await post('/api/events/ack', {
-                    searchFilter: `soc_id:"${event.soc_id}"`,
-                    eventFilter: { 'soc_id': event.soc_id },
-                    acknowledge: true,
-                    escalate: true
-                })
+                try {
+                    await post('/api/events/ack', {
+                        searchFilter: `_id:"${event.soc_id}"`,
+                        eventFilter: { '_id': event.soc_id },
+                        dateRange: '',
+                        dateRangeFormat: '2006/01/02 3:04:05 PM',
+                        timezone: 'Local',
+                        acknowledge: true,
+                        escalate: true
+                    })
+                } catch (ackError) {
+                    // Event ack can fail but case was still created
+                    console.warn('Failed to acknowledge escalated event:', ackError)
+                }
 
                 // Add to MRU
-                addMruCase(response.id, caseData.title)
+                addMruCase(caseId, caseData.title)
 
-                return response.id
+                return caseId
             }
 
             return null
         } catch (e) {
             console.error('Failed to create case:', e)
-            return null
+            throw e // Re-throw so the caller can handle the error
         }
     }
 
@@ -144,16 +219,24 @@ export function useHuntActions() {
         } = {}
     ): Promise<boolean> {
         try {
-            // Add event to case
+            // Attach the event to the case
             await post('/api/case/events', {
                 caseId,
-                eventIds: [event.soc_id]
+                fields: { soc_id: event.soc_id },
+                dateRange: '',
+                dateRangeFormat: '2006/01/02 3:04:05 PM',
+                timezone: 'Local',
+                acknowledged: false,
+                escalated: false
             })
 
             // Acknowledge the event as escalated
             await post('/api/events/ack', {
-                searchFilter: `soc_id:"${event.soc_id}"`,
-                eventFilter: { 'soc_id': event.soc_id },
+                searchFilter: `_id:"${event.soc_id}"`,
+                eventFilter: { '_id': event.soc_id },
+                dateRange: '',
+                dateRangeFormat: '2006/01/02 3:04:05 PM',
+                timezone: 'Local',
                 acknowledge: true,
                 escalate: true
             })
@@ -162,6 +245,85 @@ export function useHuntActions() {
         } catch (e) {
             console.error('Failed to add to case:', e)
             return false
+        }
+    }
+
+    /**
+     * Bulk escalate events by query to a new case
+     */
+    async function bulkEscalateByQuery(
+        searchFilter: string,
+        options: {
+            title: string
+            description?: string
+            severity?: string
+            template?: string
+            dateRange?: string
+            timezone?: string
+        }
+    ): Promise<string | null> {
+        try {
+            // Server has a 100 character limit on title
+            const MAX_TITLE_LENGTH = 100
+            let title = options.title
+            if (title.length > MAX_TITLE_LENGTH) {
+                title = title.substring(0, MAX_TITLE_LENGTH - 3) + '...'
+            }
+
+            // Create the case - matching classic UI format
+            // Always include severity and template (even if empty) for server compatibility
+            const caseData: Record<string, any> = {
+                title,
+                description: options.description || `Escalated alerts matching: ${searchFilter}`,
+                severity: options.severity || '',
+                template: options.template || ''
+            }
+
+            const response = await post<{ id: string }>('/api/case/', caseData)
+
+            if (response?.id) {
+                const caseId = response.id
+
+                // Attach events by query to the case
+                try {
+                    await post('/api/case/events', {
+                        caseId,
+                        fields: {},
+                        searchFilter,
+                        dateRange: options.dateRange || '',
+                        dateRangeFormat: '2006/01/02 3:04:05 PM',
+                        timezone: options.timezone || 'Local',
+                        acknowledged: false,
+                        escalated: false
+                    })
+                } catch (attachError) {
+                    console.warn('Failed to attach events to case:', attachError)
+                }
+
+                // Mark all matching events as escalated
+                try {
+                    await post('/api/events/ack', {
+                        searchFilter,
+                        eventFilter: {},
+                        dateRange: options.dateRange || '',
+                        timezone: options.timezone || 'Local',
+                        acknowledge: true,
+                        escalate: true
+                    })
+                } catch (ackError) {
+                    console.warn('Failed to mark events as escalated:', ackError)
+                }
+
+                // Add to MRU
+                addMruCase(caseId, caseData.title)
+
+                return caseId
+            }
+
+            return null
+        } catch (e) {
+            console.error('Failed to bulk escalate:', e)
+            throw e
         }
     }
 
@@ -180,17 +342,24 @@ export function useHuntActions() {
         // Extract relevant fields for case
         const ruleName = event['rule.name'] || event['event.module'] || 'Unknown Alert'
         const ruleDesc = event['rule.description'] || ''
-        const sourceIp = event['source.ip'] || ''
-        const destIp = event['destination.ip'] || ''
-        const severity = options.severity || mapScoreToSeverity(event.soc_score)
 
-        return {
-            title: options.title || `Alert: ${ruleName}`,
-            description: options.description || buildCaseDescription(event, ruleDesc),
-            severity,
-            template: options.template || '',
-            status: 'open'
+        // Server has a 100 character limit on title
+        const MAX_TITLE_LENGTH = 100
+        let title = options.title || `Alert: ${ruleName}`
+        if (title.length > MAX_TITLE_LENGTH) {
+            title = title.substring(0, MAX_TITLE_LENGTH - 3) + '...'
         }
+
+        // Build case data matching classic UI format
+        // Always include severity and template (even if empty) for server compatibility
+        const caseData: Record<string, any> = {
+            title,
+            description: options.description || buildCaseDescription(event, ruleDesc),
+            severity: options.severity || '',
+            template: options.template || ''
+        }
+
+        return caseData
     }
 
     function buildCaseDescription(event: EventRecord, ruleDesc: string): string {
@@ -255,6 +424,103 @@ export function useHuntActions() {
             }
         } catch (e) {
             console.error('Failed to load MRU cases:', e)
+        }
+    }
+
+    // =========================================================================
+    // PCAP Attachment
+    // =========================================================================
+
+    /**
+     * Attach a PCAP file from a job to a case as an attachment
+     */
+    async function attachPcapToCase(
+        pcapJobId: number,
+        caseId: string,
+        event?: EventRecord
+    ): Promise<boolean> {
+        console.log('[attachPcapToCase] Starting with jobId:', pcapJobId, 'caseId:', caseId)
+        try {
+            // Fetch the PCAP file as a blob
+            const streamUrl = `/api/stream/${pcapJobId}?ext=pcap`
+            console.log('[attachPcapToCase] Fetching PCAP from:', streamUrl)
+            const response = await fetch(streamUrl)
+            console.log('[attachPcapToCase] Fetch response status:', response.status)
+            if (!response.ok) {
+                throw new Error(`Failed to download PCAP file: ${response.status} ${response.statusText}`)
+            }
+
+            const blob = await response.blob()
+            console.log('[attachPcapToCase] Got blob, size:', blob.size)
+
+            // Generate filename from event info
+            const timestamp = event?.soc_timestamp || new Date().toISOString()
+            const dateStr = timestamp.replace(/[:/]/g, '-').replace(/\s/g, '_').slice(0, 19)
+            const srcIp = event?.['source.ip'] || 'unknown'
+            const dstIp = event?.['destination.ip'] || 'unknown'
+            const filename = `pcap_${dateStr}_${srcIp}_to_${dstIp}.pcap`
+            console.log('[attachPcapToCase] Generated filename:', filename)
+
+            // Create a File object from the blob
+            const file = new File([blob], filename, { type: 'application/vnd.tcpdump.pcap' })
+
+            // Get CSRF token
+            let srvToken: string | null = null
+            try {
+                const infoResponse = await fetch('/api/info')
+                if (infoResponse.ok) {
+                    const data = await infoResponse.json()
+                    srvToken = data.srvToken || null
+                }
+            } catch (e) {
+                console.debug('Could not fetch srvToken:', e)
+            }
+            console.log('[attachPcapToCase] Got srvToken:', !!srvToken)
+
+            // Build multipart form data
+            // NOTE: Do NOT include 'value' - the server sets it from the uploaded filename
+            const artifactData = {
+                caseId,
+                groupType: 'attachments',
+                artifactType: 'file',
+                description: `Packet capture from alert investigation (Job #${pcapJobId})`,
+                tlp: 'AMBER',
+                tags: ['pcap', 'network'],
+                protected: false
+            }
+            console.log('[attachPcapToCase] Artifact data:', artifactData)
+
+            const formData = new FormData()
+            formData.append('json', JSON.stringify(artifactData))
+            formData.append('attachment', file)
+
+            // Upload to case artifacts
+            const headers: Record<string, string> = {}
+            if (srvToken) {
+                headers['X-Srv-Token'] = srvToken
+            }
+
+            console.log('[attachPcapToCase] Uploading to /api/case/artifacts...')
+            const uploadResponse = await fetch('/api/case/artifacts', {
+                method: 'POST',
+                headers,
+                body: formData
+            })
+
+            console.log('[attachPcapToCase] Upload response status:', uploadResponse.status)
+            if (!uploadResponse.ok) {
+                const errorText = await uploadResponse.text()
+                console.error('[attachPcapToCase] Upload error:', errorText)
+                throw new Error(errorText || 'Failed to upload PCAP attachment')
+            }
+
+            const result = await uploadResponse.json()
+            console.log('[attachPcapToCase] Upload result:', result)
+
+            return true
+        } catch (e) {
+            console.error('[attachPcapToCase] Failed:', e)
+            return false
         }
     }
 
@@ -383,15 +649,20 @@ export function useHuntActions() {
         // Acknowledge
         acknowledgeEvent,
         bulkAcknowledge,
+        bulkAcknowledgeByQuery,
 
         // Escalate
         escalateToNewCase,
         addToCase,
+        bulkEscalateByQuery,
         buildCaseFromEvent,
 
         // MRU
         addMruCase,
         loadMruCases,
+
+        // PCAP
+        attachPcapToCase,
 
         // Custom actions
         executeAction,

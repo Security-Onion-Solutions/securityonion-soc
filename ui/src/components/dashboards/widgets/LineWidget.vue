@@ -18,8 +18,11 @@ import {
 } from 'chart.js'
 import type { LineWidgetData } from '../../../types/dashboard'
 import { CHART_COLORS } from '../../../types/dashboard'
+import { useTheme } from '../../../composables/useTheme'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip, Legend)
+
+const { isDarkMode } = useTheme()
 
 const props = defineProps<{
     data: LineWidgetData
@@ -45,59 +48,64 @@ const chartData = computed(() => ({
     }]
 }))
 
-const chartOptions = computed(() => ({
-    responsive: true,
-    maintainAspectRatio: false,
-    interaction: {
-        mode: 'index' as const,
-        intersect: false
-    },
-    plugins: {
-        legend: {
-            display: false
+const chartOptions = computed(() => {
+    const mutedTextColor = isDarkMode.value ? '#9ca3af' : '#6b7280'
+    const gridColor = isDarkMode.value ? 'rgba(75, 85, 99, 0.3)' : 'rgba(209, 213, 219, 0.5)'
+
+    return {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {
+            mode: 'index' as const,
+            intersect: false
         },
-        tooltip: {
-            callbacks: {
-                label: (context: any) => {
-                    return context.raw.toLocaleString()
-                }
-            }
-        }
-    },
-    scales: {
-        x: {
-            display: true,
-            grid: {
+        plugins: {
+            legend: {
                 display: false
             },
-            ticks: {
-                color: 'hsl(var(--muted-foreground))',
-                font: {
-                    size: 10
-                },
-                maxTicksLimit: 6
+            tooltip: {
+                callbacks: {
+                    label: (context: any) => {
+                        return context.raw.toLocaleString()
+                    }
+                }
             }
         },
-        y: {
-            display: true,
-            beginAtZero: true,
-            grid: {
-                color: 'hsla(var(--border), 0.5)'
-            },
-            ticks: {
-                color: 'hsl(var(--muted-foreground))',
-                font: {
-                    size: 10
+        scales: {
+            x: {
+                display: true,
+                grid: {
+                    display: false
                 },
-                callback: (value: number) => {
-                    if (value >= 1000000) return (value / 1000000).toFixed(1) + 'M'
-                    if (value >= 1000) return (value / 1000).toFixed(1) + 'K'
-                    return value
+                ticks: {
+                    color: mutedTextColor,
+                    font: {
+                        size: 10
+                    },
+                    maxTicksLimit: 6
+                }
+            },
+            y: {
+                display: true,
+                beginAtZero: true,
+                grid: {
+                    color: gridColor
+                },
+                ticks: {
+                    color: mutedTextColor,
+                    font: {
+                        size: 10
+                    },
+                    callback: (value: number) => {
+                        if (value >= 1000000) return (value / 1000000).toFixed(1) + 'M'
+                        if (value >= 1000) return (value / 1000).toFixed(1) + 'K'
+                        return value
+                    }
                 }
             }
         }
     }
-}))
+})
 </script>
 
 <template>

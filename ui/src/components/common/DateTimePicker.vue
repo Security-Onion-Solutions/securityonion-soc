@@ -18,10 +18,12 @@ const props = withDefaults(defineProps<{
     showAutoRefresh?: boolean
     compact?: boolean
     showModeToggle?: boolean
+    scope?: string  // Optional scope for independent time range (e.g., 'cases')
 }>(), {
     showAutoRefresh: false,
     compact: false,
-    showModeToggle: true
+    showModeToggle: true,
+    scope: undefined
 })
 
 const emit = defineEmits<{
@@ -39,7 +41,7 @@ const {
     setAbsoluteTime,
     setAutoRefreshInterval,
     toggleTimeMode
-} = useTimeRange()
+} = useTimeRange({ scope: props.scope })
 
 // Local state for dropdown
 const showDropdown = ref(false)

@@ -14,8 +14,11 @@ import {
 } from 'chart.js'
 import type { PieWidgetData } from '../../../types/dashboard'
 import { CHART_COLORS } from '../../../types/dashboard'
+import { useTheme } from '../../../composables/useTheme'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
+
+const { isDarkMode } = useTheme()
 
 const props = defineProps<{
     data: PieWidgetData
@@ -31,34 +34,38 @@ const chartData = computed(() => ({
     }]
 }))
 
-const chartOptions = computed(() => ({
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-        legend: {
-            display: true,
-            position: 'right' as const,
-            labels: {
-                boxWidth: 12,
-                padding: 8,
-                font: {
-                    size: 11
-                },
-                color: 'hsl(var(--foreground))'
-            }
-        },
-        tooltip: {
-            callbacks: {
-                label: (context: any) => {
-                    const value = context.raw as number
-                    const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0)
-                    const percentage = ((value / total) * 100).toFixed(1)
-                    return `${context.label}: ${value.toLocaleString()} (${percentage}%)`
+const chartOptions = computed(() => {
+    const textColor = isDarkMode.value ? '#e5e7eb' : '#374151'
+
+    return {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                display: true,
+                position: 'right' as const,
+                labels: {
+                    boxWidth: 12,
+                    padding: 8,
+                    font: {
+                        size: 11
+                    },
+                    color: textColor
+                }
+            },
+            tooltip: {
+                callbacks: {
+                    label: (context: any) => {
+                        const value = context.raw as number
+                        const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0)
+                        const percentage = ((value / total) * 100).toFixed(1)
+                        return `${context.label}: ${value.toLocaleString()} (${percentage}%)`
+                    }
                 }
             }
         }
     }
-}))
+})
 
 const ChartComponent = computed(() => props.data.type === 'donut' ? Doughnut : Pie)
 </script>

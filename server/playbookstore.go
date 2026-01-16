@@ -25,6 +25,7 @@ type Playbookstore interface {
 	UpdatePlaybook(ctx context.Context, playbook *model.Playbook) (*model.Playbook, error)
 	DeletePlaybook(ctx context.Context, playbookId string) error
 	GetAllPlaybooks(ctx context.Context) ([]*model.Playbook, error)
+	GetPlaybooksPaginated(ctx context.Context, criteria *model.PlaybookSearchCriteria) (*model.PlaybookListResponse, error)
 }
 
 //go:generate mockgen -destination mock/mock_playbookstore.go -package mock . Playbookstore

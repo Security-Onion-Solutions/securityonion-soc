@@ -29,6 +29,8 @@ type Playbook struct {
 	DetectionCategory string `yaml:"detection_category" json:"detection_category" example:"process_creation"`
 	// The type of detection this playbook applies to. This is analogous to which detection engine the playbook is for.
 	DetectionType string `yaml:"detection_type" json:"detection_type" enums:"nids,sigma,yara"`
+	// Whether this is a global playbook that applies to all alerts regardless of detection.
+	IsGlobal bool `yaml:"is_global" json:"is_global"`
 	// Authors of the playbook.
 	Contributors []string `yaml:"contributors" json:"contributors" example:"['John Doe', 'Jane Smith']"`
 	// The questions of this playbook that guide the user in response to an alert.
@@ -117,4 +119,42 @@ type GroupedPlaybooks struct {
 	CategoryLevel []*Playbook `json:"categoryLevel"`
 	// Playbooks that match the detection engine (fallback)
 	EngineLevel []*Playbook `json:"engineLevel"`
+	// Global playbooks that apply to all detections
+	GlobalLevel []*Playbook `json:"globalLevel"`
+}
+
+// PlaybookSearchCriteria contains parameters for searching/filtering playbooks
+type PlaybookSearchCriteria struct {
+	// Search query to filter by name, description, detection_id, or category
+	Search string `json:"search"`
+	// Filter by detection type (sigma, nids, yara)
+	Type string `json:"type"`
+	// Filter by source (community, custom)
+	Source string `json:"source"`
+	// Number of playbooks to return (default 50, max 500)
+	Limit int `json:"limit"`
+	// Offset for pagination
+	Offset int `json:"offset"`
+}
+
+// PlaybookListResponse contains paginated playbook results
+type PlaybookListResponse struct {
+	// The playbooks matching the search criteria
+	Playbooks []*Playbook `json:"playbooks"`
+	// Total number of playbooks matching the criteria (before pagination)
+	Total int `json:"total"`
+	// Stats about playbook counts
+	Stats PlaybookStats `json:"stats"`
+}
+
+// PlaybookStats contains aggregate counts for playbooks
+type PlaybookStats struct {
+	// Total number of all playbooks
+	Total int `json:"total"`
+	// Number of community playbooks
+	Community int `json:"community"`
+	// Number of custom playbooks
+	Custom int `json:"custom"`
+	// Number of global playbooks
+	Global int `json:"global"`
 }

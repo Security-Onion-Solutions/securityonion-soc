@@ -4,7 +4,7 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import type { SankeyWidgetData, SankeyLink } from '../../../types/dashboard'
 import { CHART_COLORS } from '../../../types/dashboard'
 
@@ -15,22 +15,57 @@ const props = defineProps<{
 const containerRef = ref<HTMLDivElement | null>(null)
 const width = ref(400)
 const height = ref(250)
+let resizeObserver: ResizeObserver | null = null
 
-onMounted(() => {
+function updateDimensions() {
     if (containerRef.value) {
         const rect = containerRef.value.getBoundingClientRect()
-        width.value = rect.width || 400
-        height.value = rect.height || 250
+        if (rect.width > 0) width.value = rect.width
+        if (rect.height > 0) height.value = rect.height
     }
+}
+
+onMounted(() => {
+    updateDimensions()
+
+    // Use ResizeObserver to handle dynamic container sizing
+    if (containerRef.value && typeof ResizeObserver !== 'undefined') {
+        resizeObserver = new ResizeObserver(() => {
+            updateDimensions()
+        })
+        resizeObserver.observe(containerRef.value)
+    }
+})
+
+onUnmounted(() => {
+    if (resizeObserver) {
+        resizeObserver.disconnect()
+        resizeObserver = null
+    }
+})
+
+// Check if we have valid data
+const hasData = computed(() => {
+    return props.data?.links && Array.isArray(props.data.links) && props.data.links.length > 0
 })
 
 // Layout calculations
 const layout = computed(() => {
+    // Return empty layout if no data
+    if (!hasData.value) {
+        return {
+            sourceNodes: [],
+            targetNodes: [],
+            links: [],
+            nodeWidth: 20
+        }
+    }
+
     const links = props.data.links
-    const nodeWidth = 20
-    const nodePadding = 8
-    const marginX = 60
-    const marginY = 15
+    const nodeWidth = 16
+    const nodePadding = 4
+    const marginX = 50
+    const marginY = 10
 
     // Extract unique source and target nodes
     const sourceNodes = [...new Set(links.map(l => l.source))]
@@ -45,49 +80,49 @@ const layout = computed(() => {
         targetTotals[link.target] = (targetTotals[link.target] || 0) + link.value
     })
 
-    const totalSourceValue = Object.values(sourceTotals).reduce((a, b) => a + b, 0)
-    const totalTargetValue = Object.values(targetTotals).reduce((a, b) => a + b, 0)
+    const totalSourceValue = Object.values(sourceTotals).reduce((a, b) => a + b, 0) || 1
+    const totalTargetValue = Object.values(targetTotals).reduce((a, b) => a + b, 0) || 1
 
-    // Available height for nodes (accounting for padding between nodes)
+    // Available height for nodes (accounting for margins)
     const availableHeight = height.value - marginY * 2
     const sourceNodeCount = sourceNodes.length
     const targetNodeCount = targetNodes.length
 
     // Calculate total padding space needed
-    const sourcePaddingTotal = (sourceNodeCount - 1) * nodePadding
-    const targetPaddingTotal = (targetNodeCount - 1) * nodePadding
+    const sourcePaddingTotal = Math.max(0, sourceNodeCount - 1) * nodePadding
+    const targetPaddingTotal = Math.max(0, targetNodeCount - 1) * nodePadding
 
-    // Available height for actual node bars
-    const sourceBarHeight = availableHeight - sourcePaddingTotal
-    const targetBarHeight = availableHeight - targetPaddingTotal
+    // Height available for actual node bars (after padding)
+    const sourceBarHeight = Math.max(0, availableHeight - sourcePaddingTotal)
+    const targetBarHeight = Math.max(0, availableHeight - targetPaddingTotal)
 
-    // Calculate source node positions - scale to fit available space
+    // Calculate source node positions - strictly fit within available space
     const sourceNodePositions: Record<string, { y: number; height: number; color: string }> = {}
     let sourceY = marginY
 
     sourceNodes.forEach((node, idx) => {
-        // Proportional height based on value, scaled to fit
-        const nodeHeight = Math.max(15, (sourceTotals[node] / totalSourceValue) * sourceBarHeight)
+        // Proportional height that sums exactly to sourceBarHeight
+        const nodeHeight = (sourceTotals[node] / totalSourceValue) * sourceBarHeight
         sourceNodePositions[node] = {
             y: sourceY,
-            height: nodeHeight,
+            height: Math.max(2, nodeHeight), // minimum 2px for visibility
             color: CHART_COLORS[idx % CHART_COLORS.length]
         }
-        sourceY += nodeHeight + nodePadding
+        sourceY += Math.max(2, nodeHeight) + nodePadding
     })
 
-    // Calculate target node positions - scale to fit available space
+    // Calculate target node positions - strictly fit within available space
     const targetNodePositions: Record<string, { y: number; height: number; color: string }> = {}
     let targetY = marginY
 
     targetNodes.forEach((node, idx) => {
-        const nodeHeight = Math.max(15, (targetTotals[node] / totalTargetValue) * targetBarHeight)
+        const nodeHeight = (targetTotals[node] / totalTargetValue) * targetBarHeight
         targetNodePositions[node] = {
             y: targetY,
-            height: nodeHeight,
+            height: Math.max(2, nodeHeight),
             color: CHART_COLORS[(idx + sourceNodes.length) % CHART_COLORS.length]
         }
-        targetY += nodeHeight + nodePadding
+        targetY += Math.max(2, nodeHeight) + nodePadding
     })
 
     // Build link paths
@@ -102,7 +137,8 @@ const layout = computed(() => {
         const targetPos = targetNodePositions[link.target]
 
         // Calculate link thickness proportional to the source node's height
-        const linkRatio = link.value / sourceTotals[link.source]
+        const sourceTotal = sourceTotals[link.source] || 1
+        const linkRatio = link.value / sourceTotal
         const linkHeight = Math.max(3, sourcePos.height * linkRatio)
 
         const x1 = marginX + nodeWidth
@@ -161,7 +197,12 @@ const hoveredLink = ref<number | null>(null)
 
 <template>
     <div ref="containerRef" class="h-full w-full min-h-[200px] relative overflow-hidden">
-        <svg :width="width" :height="height" class="overflow-hidden">
+        <!-- No data message -->
+        <div v-if="!hasData" class="flex items-center justify-center h-full text-muted-foreground text-sm">
+            No flow data available
+        </div>
+
+        <svg v-else :viewBox="`0 0 ${width} ${height}`" class="w-full h-full overflow-hidden" preserveAspectRatio="xMidYMid meet">
             <!-- Links -->
             <g class="links">
                 <path

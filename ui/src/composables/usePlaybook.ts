@@ -31,6 +31,7 @@ export interface Playbook {
     detection_id?: string
     detection_category?: string
     detection_type?: string
+    is_global?: boolean
     contributors?: string[]
     questions: PlaybookQuestionRaw[]
     isCommunity?: boolean
@@ -43,6 +44,28 @@ export interface GroupedPlaybooks {
     detectionLevel: Playbook[]
     categoryLevel: Playbook[]
     engineLevel: Playbook[]
+    globalLevel: Playbook[]
+}
+
+export interface PlaybookSearchCriteria {
+    search?: string
+    type?: string   // sigma, nids, yara, global
+    source?: string // community, custom
+    limit?: number
+    offset?: number
+}
+
+export interface PlaybookStats {
+    total: number
+    community: number
+    custom: number
+    global: number
+}
+
+export interface PlaybookListResponse {
+    playbooks: Playbook[]
+    total: number
+    stats: PlaybookStats
 }
 
 export interface PlaybookState {
@@ -343,20 +366,44 @@ export function usePlaybook() {
     async function getPlaybooksForDetectionGrouped(publicId: string): Promise<GroupedPlaybooks> {
         try {
             const response = await get<GroupedPlaybooks>(`/api/playbook/detection/${publicId}/grouped`)
-            return response || { detectionLevel: [], categoryLevel: [], engineLevel: [] }
+            return response || { detectionLevel: [], categoryLevel: [], engineLevel: [], globalLevel: [] }
         } catch (e) {
             console.error('Failed to get grouped playbooks for detection:', e)
-            return { detectionLevel: [], categoryLevel: [], engineLevel: [] }
+            return { detectionLevel: [], categoryLevel: [], engineLevel: [], globalLevel: [] }
         }
     }
 
     /**
-     * Get all playbooks
+     * Get playbooks with pagination and filtering
+     */
+    async function getPlaybooksPaginated(criteria: PlaybookSearchCriteria = {}): Promise<PlaybookListResponse> {
+        try {
+            const params = new URLSearchParams()
+            if (criteria.search) params.set('search', criteria.search)
+            if (criteria.type && criteria.type !== 'all') params.set('type', criteria.type)
+            if (criteria.source && criteria.source !== 'all') params.set('source', criteria.source)
+            if (criteria.limit) params.set('limit', String(criteria.limit))
+            if (criteria.offset) params.set('offset', String(criteria.offset))
+
+            const queryString = params.toString()
+            const url = queryString ? `/api/playbook/?${queryString}` : '/api/playbook/'
+
+            const response = await get<PlaybookListResponse>(url)
+            return response || { playbooks: [], total: 0, stats: { total: 0, community: 0, custom: 0, global: 0 } }
+        } catch (e) {
+            console.error('Failed to get playbooks:', e)
+            return { playbooks: [], total: 0, stats: { total: 0, community: 0, custom: 0, global: 0 } }
+        }
+    }
+
+    /**
+     * Get all playbooks (deprecated - use getPlaybooksPaginated for large datasets)
      */
     async function getAllPlaybooks(): Promise<Playbook[]> {
         try {
-            const response = await get<Playbook[]>('/api/playbook/')
-            return response || []
+            // Use paginated API with high limit for backward compatibility
+            const response = await getPlaybooksPaginated({ limit: 500 })
+            return response.playbooks || []
         } catch (e) {
             console.error('Failed to get all playbooks:', e)
             return []
@@ -430,6 +477,7 @@ export function usePlaybook() {
         // CRUD operations
         getPlaybooksForDetection,
         getPlaybooksForDetectionGrouped,
+        getPlaybooksPaginated,
         getAllPlaybooks,
         createPlaybook,
         updatePlaybook,

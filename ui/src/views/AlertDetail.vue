@@ -6,6 +6,7 @@ import {
     Clock,
     Network,
     Shield,
+    ShieldOff,
     Server,
     AlertTriangle,
     Check,
@@ -32,7 +33,10 @@ import {
     Download,
     HardDrive,
     RefreshCw,
-    Eye
+    Eye,
+    Settings,
+    List,
+    LayoutGrid
 } from 'lucide-vue-next'
 import { cn } from '../lib/utils'
 import { useApi } from '../composables/useApi'
@@ -42,6 +46,7 @@ import { useStatusStyles } from '../composables/useStatusStyles'
 import { useHuntActions } from '../composables/useHuntActions'
 import { useChatWidget } from '../composables/useChatWidget'
 import { usePlaybook, type PlaybookState } from '../composables/usePlaybook'
+import EscalateDialog from '../components/alerts/EscalateDialog.vue'
 import type { EventRecord, PlaybookQuestion } from '../types/hunt'
 
 const route = useRoute()
@@ -50,7 +55,7 @@ const router = useRouter()
 const props = defineProps<{ id?: string }>()
 const alertId = computed(() => (route.params.id as string) || props.id || '')
 
-const { get, post } = useApi()
+const { get, post, put } = useApi()
 const { formatDate, formatDateForApi } = useFormatters()
 const { getSeverityStyles } = useStatusStyles()
 const { zone } = useTimeRange()
@@ -58,12 +63,34 @@ const { zone } = useTimeRange()
 const {
     acknowledgeEvent,
     escalateToNewCase,
+    attachPcapToCase,
     generateInvestigationPrompt,
     loading: actionLoading
 } = useHuntActions()
 
 const { openNewChatWithPrompt } = useChatWidget()
 const { loadPlaybook, buildHuntQuery, toggleQuestion, expandAllQuestions, collapseAllQuestions, isQuestionExpanded } = usePlaybook()
+
+// Override interface for detection tuning
+interface Override {
+    type: 'suppress' | 'threshold' | 'modify' | 'customFilter'
+    isEnabled: boolean
+    note?: string
+    createdAt?: string
+    updatedAt?: string
+    // Suricata suppress/threshold
+    track?: 'by_src' | 'by_dst' | 'by_either'
+    ip?: string
+    // Threshold specific
+    thresholdType?: string
+    count?: number
+    seconds?: number
+    // Modify specific
+    regex?: string
+    value?: string
+    // ElastAlert specific
+    customFilter?: string
+}
 
 // Detection interface
 interface Detection {
@@ -79,6 +106,7 @@ interface Detection {
     content: string
     tags: string[]
     ruleset: string
+    overrides?: Override[]
 }
 
 // PCAP Job interface
@@ -140,7 +168,241 @@ const expandedPackets = ref<Set<number>>(new Set())
 const packetViewMode = ref<'hex' | 'ascii'>('hex')
 const pcapDisplayMode = ref<'packets' | 'transcript'>('packets')
 
+// Escalate dialog state
+const showEscalateDialog = ref(false)
+const escalateDialogRef = ref<InstanceType<typeof EscalateDialog> | null>(null)
+
+// Action menu state
+const actionMenuVisible = ref(false)
+const actionMenuX = ref(0)
+const actionMenuY = ref(0)
+const actionMenuField = ref('')
+const actionMenuValue = ref<any>(null)
+
+// Suppression confirmation dialog state
+const showSuppressionConfirm = ref(false)
+const pendingSuppressionTrack = ref<'by_src' | 'by_dst' | null>(null)
+const pendingSuppressionIp = ref<string | null>(null)
+
+// User preferences
+interface AlertDetailPreferences {
+    autoExpandDetectionDetails: boolean
+    autoExpandGuidedAnalysis: boolean
+    autoExpandAllFields: boolean
+    allFieldsDisplayMode: 'list' | 'grid'
+}
+
+const PREFERENCES_KEY = 'alertDetailPreferences'
+const showSettingsPanel = ref(false)
+
+const defaultPreferences: AlertDetailPreferences = {
+    autoExpandDetectionDetails: false,
+    autoExpandGuidedAnalysis: true,
+    autoExpandAllFields: false,
+    allFieldsDisplayMode: 'list'
+}
+
+const preferences = ref<AlertDetailPreferences>({ ...defaultPreferences })
+
+function loadPreferences() {
+    try {
+        const stored = localStorage.getItem(PREFERENCES_KEY)
+        if (stored) {
+            const parsed = JSON.parse(stored)
+            preferences.value = { ...defaultPreferences, ...parsed }
+        }
+    } catch (e) {
+        console.debug('Could not load alert detail preferences:', e)
+    }
+
+    // Apply preferences to initial expand states
+    showRuleContent.value = preferences.value.autoExpandDetectionDetails
+    showGuidedAnalysis.value = preferences.value.autoExpandGuidedAnalysis
+    showAllFields.value = preferences.value.autoExpandAllFields
+}
+
+function savePreferences() {
+    try {
+        localStorage.setItem(PREFERENCES_KEY, JSON.stringify(preferences.value))
+    } catch (e) {
+        console.debug('Could not save alert detail preferences:', e)
+    }
+}
+
+function togglePreference(key: keyof AlertDetailPreferences) {
+    preferences.value[key] = !preferences.value[key]
+    savePreferences()
+}
+
+function setAllFieldsDisplayMode(mode: 'list' | 'grid') {
+    preferences.value.allFieldsDisplayMode = mode
+    savePreferences()
+}
+
+function showActionMenu(e: MouseEvent, field: string, value: any) {
+    e.preventDefault()
+    e.stopPropagation()
+    actionMenuField.value = field
+    actionMenuValue.value = value
+    actionMenuX.value = e.clientX
+    actionMenuY.value = e.clientY
+    actionMenuVisible.value = true
+}
+
+function closeActionMenu() {
+    actionMenuVisible.value = false
+}
+
+function huntInNewTab(field: string, value: any) {
+    // Build the filter query
+    const filterValue = typeof value === 'string' ? `"${value}"` : value
+    const query = `${field}:${filterValue}`
+
+    // Build the Hunt URL with the query
+    const huntUrl = router.resolve({
+        name: 'hunt',
+        query: { q: query }
+    })
+
+    // Open in new tab
+    window.open(huntUrl.href, '_blank')
+    closeActionMenu()
+}
+
+function copyFieldValue(value: any) {
+    const val = value === null || value === undefined ? '' : String(value)
+    navigator.clipboard.writeText(val)
+    closeActionMenu()
+}
+
+function askAiAboutField(field: string, value: any) {
+    const prompt = `Tell me about this field and value from the alert:\n\nField: ${field}\nValue: ${value}`
+    openNewChatWithPrompt(prompt)
+    closeActionMenu()
+}
+
+// Check if field is an IP address field
+function isIpField(field: string): boolean {
+    return field === 'source.ip' || field === 'destination.ip' ||
+           field.endsWith('.ip') || field.includes('.ip.')
+}
+
+// Check if suppression is possible (Suricata detection exists)
+const canAddSuppression = computed(() => {
+    return detection.value && detection.value.engine === 'suricata'
+})
+
+// Suppression state
+const suppressionLoading = ref(false)
+const suppressionError = ref<string | null>(null)
+const suppressionSuccess = ref(false)
+
+// Add a suppression for the detection
+async function addSuppression(track: 'by_src' | 'by_dst', ip: string) {
+    if (!detection.value || !ip) return
+
+    suppressionLoading.value = true
+    suppressionError.value = null
+    suppressionSuccess.value = false
+
+    try {
+        // Format IP as CIDR if not already
+        const cidrIp = ip.includes('/') ? ip : `${ip}/32`
+
+        // Create the new override
+        const newOverride: Override = {
+            type: 'suppress',
+            isEnabled: true,
+            track: track,
+            ip: cidrIp,
+            note: `Suppression added from Alert Detail for ${track === 'by_src' ? 'source' : 'destination'} IP`
+        }
+
+        // Fetch the full detection to get current overrides (use useApi for auth headers)
+        const fullDetection = await get<Detection>(`/api/detection/${detection.value.id}`)
+        if (!fullDetection) {
+            throw new Error('Failed to fetch detection')
+        }
+
+        // Add the new override to existing overrides
+        const updatedOverrides = [...(fullDetection.overrides || []), newOverride]
+
+        // Update the detection with the new override (use useApi for CSRF token)
+        const updatedDetection = await put<Detection>(`/api/detection/`, {
+            ...fullDetection,
+            overrides: updatedOverrides
+        })
+
+        if (!updatedDetection) {
+            throw new Error('Failed to add suppression')
+        }
+
+        // Update local detection state
+        detection.value = updatedDetection
+        suppressionSuccess.value = true
+
+        // Auto-hide success after 3 seconds
+        setTimeout(() => {
+            suppressionSuccess.value = false
+        }, 3000)
+
+    } catch (e: any) {
+        suppressionError.value = e.message || 'Failed to add suppression'
+        setTimeout(() => {
+            suppressionError.value = null
+        }, 5000)
+    } finally {
+        suppressionLoading.value = false
+        closeActionMenu()
+    }
+}
+
+// Show confirmation dialog for suppression by source IP
+function addSuppressionBySource() {
+    const ip = actionMenuValue.value
+    if (ip) {
+        pendingSuppressionTrack.value = 'by_src'
+        pendingSuppressionIp.value = String(ip)
+        showSuppressionConfirm.value = true
+        closeActionMenu()
+    }
+}
+
+// Show confirmation dialog for suppression by destination IP
+function addSuppressionByDestination() {
+    const ip = actionMenuValue.value
+    if (ip) {
+        pendingSuppressionTrack.value = 'by_dst'
+        pendingSuppressionIp.value = String(ip)
+        showSuppressionConfirm.value = true
+        closeActionMenu()
+    }
+}
+
+// Confirm and execute the suppression
+function confirmSuppression() {
+    if (pendingSuppressionTrack.value && pendingSuppressionIp.value) {
+        addSuppression(pendingSuppressionTrack.value, pendingSuppressionIp.value)
+    }
+    cancelSuppression()
+}
+
+// Cancel the suppression
+function cancelSuppression() {
+    showSuppressionConfirm.value = false
+    pendingSuppressionTrack.value = null
+    pendingSuppressionIp.value = null
+}
+
+// Get human-readable track description
+function getTrackDescription(track: 'by_src' | 'by_dst' | null): string {
+    if (track === 'by_src') return 'source'
+    if (track === 'by_dst') return 'destination'
+    return ''
+}
+
 onMounted(async () => {
+    loadPreferences()
     await fetchAlert()
 })
 
@@ -170,6 +432,32 @@ async function fetchPlaybook() {
     if (!alert.value) return
     playbookState.value = await loadPlaybook(alert.value)
 }
+
+// Collect all unique events from guided analysis results
+const guidedAnalysisEvents = computed(() => {
+    if (!playbookState.value?.questions) return []
+
+    const eventMap = new Map<string, { soc_id: string; question: string }>()
+
+    for (const question of playbookState.value.questions) {
+        if (question.queryResults && question.queryResults.length > 0) {
+            for (const result of question.queryResults) {
+                // Results come as { payload: { ... }, id: "..." } objects
+                const payload = result.payload || result
+                // The event ID is at result.id (top level), not in payload
+                const socId = payload.soc_id || payload._id || result.id
+                if (socId && !eventMap.has(socId)) {
+                    eventMap.set(socId, {
+                        soc_id: socId,
+                        question: question.question
+                    })
+                }
+            }
+        }
+    }
+
+    return Array.from(eventMap.values())
+})
 
 function getQuestionColor(question: PlaybookQuestion): string {
     if (question.queryResults && question.queryResults.length > 0) {
@@ -277,7 +565,6 @@ async function checkExistingPcapJob() {
 
     // Check if this alert has a stored PCAP job ID
     const jobId = alert.value['soc_pcap_job_id']
-    console.log('Checking for existing PCAP job, soc_pcap_job_id:', jobId, 'alert keys:', Object.keys(alert.value).filter(k => k.includes('pcap') || k.includes('job')))
     if (!jobId) return
 
     try {
@@ -382,7 +669,6 @@ async function saveJobIdToAlert(jobId: number) {
                 'soc_pcap_job_id': jobId
             }
         })
-        console.log('PCAP job ID save result:', result)
 
         // Update local state
         alert.value['soc_pcap_job_id'] = jobId
@@ -618,8 +904,6 @@ async function fetchAlert() {
         if (response?.events?.length > 0) {
             const event = response.events[0]
             const payload = event.payload || {}
-            console.log('Fetched alert payload keys:', Object.keys(payload).filter(k => k.includes('pcap') || k.includes('soc_')))
-            console.log('Full event object:', event)
             alert.value = {
                 soc_id: event.id || payload['soc_id'],
                 soc_timestamp: event.timestamp || payload['@timestamp'],
@@ -661,11 +945,55 @@ async function handleAcknowledge(acknowledge: boolean) {
     }
 }
 
-async function handleEscalate() {
+function handleEscalate() {
     if (!alert.value) return
-    const caseId = await escalateToNewCase(alert.value)
-    if (caseId) {
-        router.push({ name: 'case-detail', params: { id: caseId } })
+    showEscalateDialog.value = true
+}
+
+async function handleEscalateConfirm(data: { title: string; description: string; severity: string; includeGuidedAnalysis: boolean; includePcap: boolean }) {
+    if (!alert.value) return
+
+    console.log('[Escalate] Confirm data:', data)
+    console.log('[Escalate] pcapJob:', pcapJob.value)
+
+    try {
+        // Collect event IDs to attach if includeGuidedAnalysis is true
+        const relatedEventIds = data.includeGuidedAnalysis
+            ? guidedAnalysisEvents.value.map(e => e.soc_id)
+            : []
+
+        const caseId = await escalateToNewCase(alert.value, {
+            title: data.title,
+            description: data.description,
+            severity: data.severity,
+            relatedEventIds
+        })
+
+        console.log('[Escalate] Created case:', caseId)
+
+        if (caseId) {
+            // Attach PCAP if requested and available
+            console.log('[Escalate] Should attach PCAP?', data.includePcap, 'pcapJob.id:', pcapJob.value?.id)
+            if (data.includePcap && pcapJob.value?.id) {
+                console.log('[Escalate] Attaching PCAP...')
+                try {
+                    const result = await attachPcapToCase(pcapJob.value.id, caseId, alert.value)
+                    console.log('[Escalate] PCAP attach result:', result)
+                } catch (pcapError) {
+                    // Don't fail the escalation if PCAP attachment fails
+                    console.warn('Failed to attach PCAP to case:', pcapError)
+                }
+            }
+
+            alert.value['event.escalated'] = true
+            showEscalateDialog.value = false
+            router.push({ name: 'case-detail', params: { id: caseId } })
+        }
+    } catch (e: any) {
+        console.error('Escalation failed:', e)
+        error.value = e.message || 'Failed to escalate alert to case'
+    } finally {
+        escalateDialogRef.value?.setLoading(false)
     }
 }
 
@@ -783,7 +1111,81 @@ const highlightedContent = computed(() => {
             <div class="flex-1">
                 <h1 class="text-2xl font-bold">Alert Details</h1>
             </div>
+            <!-- Settings Button -->
+            <div class="relative">
+                <button
+                    @click="showSettingsPanel = !showSettingsPanel"
+                    class="p-2 hover:bg-muted rounded-lg transition-colors text-muted-foreground hover:text-foreground"
+                    title="Display Settings"
+                >
+                    <Settings class="h-5 w-5" />
+                </button>
+                <!-- Settings Panel -->
+                <div
+                    v-if="showSettingsPanel"
+                    class="absolute right-0 top-full mt-2 w-72 bg-popover border border-border rounded-lg shadow-xl z-50"
+                >
+                    <div class="p-3 border-b border-border">
+                        <h3 class="font-semibold text-sm">Display Settings</h3>
+                        <p class="text-xs text-muted-foreground mt-0.5">Auto-expand sections on page load</p>
+                    </div>
+                    <div class="p-2 space-y-1">
+                        <label class="flex items-center gap-3 px-2 py-2 hover:bg-muted rounded-md cursor-pointer transition-colors">
+                            <input
+                                type="checkbox"
+                                :checked="preferences.autoExpandDetectionDetails"
+                                @change="togglePreference('autoExpandDetectionDetails')"
+                                class="w-4 h-4 rounded border-border text-primary focus:ring-primary"
+                            />
+                            <span class="text-sm">Detection Details</span>
+                        </label>
+                        <label class="flex items-center gap-3 px-2 py-2 hover:bg-muted rounded-md cursor-pointer transition-colors">
+                            <input
+                                type="checkbox"
+                                :checked="preferences.autoExpandGuidedAnalysis"
+                                @change="togglePreference('autoExpandGuidedAnalysis')"
+                                class="w-4 h-4 rounded border-border text-primary focus:ring-primary"
+                            />
+                            <span class="text-sm">Guided Analysis</span>
+                        </label>
+                        <label class="flex items-center gap-3 px-2 py-2 hover:bg-muted rounded-md cursor-pointer transition-colors">
+                            <input
+                                type="checkbox"
+                                :checked="preferences.autoExpandAllFields"
+                                @change="togglePreference('autoExpandAllFields')"
+                                class="w-4 h-4 rounded border-border text-primary focus:ring-primary"
+                            />
+                            <span class="text-sm">All Fields</span>
+                        </label>
+                    </div>
+                    <div class="border-t border-border px-3 py-2">
+                        <div class="text-xs text-muted-foreground mb-2">All Fields Display</div>
+                        <div class="flex items-center gap-1 bg-muted rounded-lg p-1">
+                            <button
+                                @click="setAllFieldsDisplayMode('list')"
+                                :class="cn('flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-colors', preferences.allFieldsDisplayMode === 'list' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')"
+                            >
+                                <List class="h-3.5 w-3.5" />
+                                List
+                            </button>
+                            <button
+                                @click="setAllFieldsDisplayMode('grid')"
+                                :class="cn('flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-colors', preferences.allFieldsDisplayMode === 'grid' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')"
+                            >
+                                <LayoutGrid class="h-3.5 w-3.5" />
+                                Grid
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
+        <!-- Settings Panel Backdrop -->
+        <div
+            v-if="showSettingsPanel"
+            class="fixed inset-0 z-40"
+            @click="showSettingsPanel = false"
+        ></div>
 
         <!-- Loading State -->
         <div v-if="loading" class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -807,61 +1209,170 @@ const highlightedContent = computed(() => {
 
         <!-- Alert Content -->
         <template v-else-if="alert">
-            <!-- Top Section: Rule Name & Actions -->
-            <div class="rounded-xl border border-border bg-card p-6 mb-6">
-                <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-                    <div class="flex-1">
-                        <div class="flex items-center gap-3 mb-2">
-                            <Shield class="h-6 w-6 text-primary" />
-                            <span class="text-sm text-muted-foreground uppercase tracking-wider">Detection Rule</span>
+            <!-- Alert Overview Card (Consolidated) -->
+            <div class="rounded-xl border border-border bg-card overflow-hidden mb-6">
+                <!-- Header: Rule Name + Actions -->
+                <div class="p-5 border-b border-border">
+                    <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 mb-1">
+                                <Shield class="h-5 w-5 text-primary flex-shrink-0" />
+                                <span class="text-xs text-muted-foreground uppercase tracking-wider">Detection</span>
+                            </div>
+                            <h2 class="text-lg font-bold leading-tight" :title="getField('rule.name', 'Unknown Rule')">
+                                {{ getField('rule.name', 'Unknown Rule') }}
+                            </h2>
                         </div>
-                        <h2 class="text-xl font-bold leading-tight">{{ getField('rule.name', 'Unknown Rule') }}</h2>
-                        <p v-if="alert['rule.description']" class="text-muted-foreground mt-2 text-sm">
-                            {{ alert['rule.description'] }}
-                        </p>
+                        <div class="flex flex-wrap gap-2 flex-shrink-0">
+                            <button
+                                v-if="!alert['event.acknowledged']"
+                                @click="handleAcknowledge(true)"
+                                :disabled="actionLoading"
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-sm font-medium"
+                            >
+                                <Check class="h-3.5 w-3.5" />
+                                Ack
+                            </button>
+                            <button
+                                v-else
+                                @click="handleAcknowledge(false)"
+                                :disabled="actionLoading"
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors text-sm font-medium"
+                            >
+                                <X class="h-3.5 w-3.5" />
+                                Unack
+                            </button>
+                            <button
+                                @click="handleEscalate"
+                                :disabled="actionLoading"
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium"
+                            >
+                                <Briefcase class="h-3.5 w-3.5" />
+                                Escalate
+                            </button>
+                            <button
+                                @click="handleInvestigate"
+                                :disabled="actionLoading"
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors text-sm font-medium"
+                            >
+                                <Sparkles class="h-3.5 w-3.5" />
+                                AI
+                            </button>
+                            <button
+                                @click="drillIntoHunt"
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-muted text-foreground rounded-lg hover:bg-muted/80 transition-colors text-sm font-medium"
+                            >
+                                <ExternalLink class="h-3.5 w-3.5" />
+                                Hunt
+                            </button>
+                        </div>
                     </div>
-                    <div class="flex flex-wrap gap-2">
-                        <button
-                            v-if="!alert['event.acknowledged']"
-                            @click="handleAcknowledge(true)"
-                            :disabled="actionLoading"
-                            class="inline-flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium shadow-sm"
-                        >
-                            <Check class="h-4 w-4" />
-                            Acknowledge
-                        </button>
-                        <button
-                            v-else
-                            @click="handleAcknowledge(false)"
-                            :disabled="actionLoading"
-                            class="inline-flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors font-medium shadow-sm"
-                        >
-                            <X class="h-4 w-4" />
-                            Unacknowledge
-                        </button>
-                        <button
-                            @click="handleEscalate"
-                            :disabled="actionLoading"
-                            class="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors font-medium shadow-sm"
-                        >
-                            <Briefcase class="h-4 w-4" />
-                            Escalate
-                        </button>
-                        <button
-                            @click="handleInvestigate"
-                            :disabled="actionLoading"
-                            class="inline-flex items-center gap-2 px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors font-medium shadow-sm"
-                        >
-                            <Sparkles class="h-4 w-4" />
-                            AI Investigate
-                        </button>
-                        <button
-                            @click="drillIntoHunt"
-                            class="inline-flex items-center gap-2 px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted/80 transition-colors font-medium"
-                        >
-                            <ExternalLink class="h-4 w-4" />
-                            Hunt
-                        </button>
+                </div>
+
+                <!-- Meta Row: Severity, Status, Timestamp, Module -->
+                <div class="px-5 py-3 bg-muted/20 border-b border-border">
+                    <div class="flex items-center flex-wrap gap-x-6 gap-y-2 text-sm">
+                        <!-- Severity -->
+                        <div class="flex items-center gap-2">
+                            <AlertTriangle class="h-4 w-4 text-muted-foreground" />
+                            <span :class="cn('px-2 py-0.5 rounded text-xs font-bold', getSeverityStyles(getField('event.severity_label', 'unknown')))">
+                                {{ getField('event.severity_label', 'unknown').toUpperCase() }}
+                            </span>
+                        </div>
+
+                        <!-- Status -->
+                        <div class="flex items-center gap-2">
+                            <Activity class="h-4 w-4 text-muted-foreground" />
+                            <span v-if="alert['event.acknowledged']" class="text-green-500 font-medium flex items-center gap-1">
+                                <CheckCircle class="h-3.5 w-3.5" />
+                                Acknowledged
+                            </span>
+                            <span v-else class="text-muted-foreground font-medium">Unacknowledged</span>
+                        </div>
+
+                        <!-- Timestamp -->
+                        <div class="flex items-center gap-2">
+                            <Clock class="h-4 w-4 text-muted-foreground" />
+                            <span class="font-medium">{{ formatDate(alert.soc_timestamp || alert['@timestamp']) }}</span>
+                        </div>
+
+                        <!-- Module -->
+                        <div class="flex items-center gap-2">
+                            <Server class="h-4 w-4 text-muted-foreground" />
+                            <span class="font-mono">{{ getField('event.module') }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Network Row -->
+                <div class="px-5 py-3 border-b border-border">
+                    <div class="flex items-center flex-wrap gap-x-6 gap-y-2 text-sm">
+                        <div class="flex items-center gap-2">
+                            <Network class="h-4 w-4 text-muted-foreground" />
+                            <button
+                                v-if="getField('source.ip') !== '-'"
+                                @click="showActionMenu($event, 'source.ip', getField('source.ip'))"
+                                class="font-mono hover:bg-muted px-1.5 py-0.5 rounded transition-colors cursor-pointer"
+                                title="Click for actions"
+                            >
+                                {{ getField('source.ip') }}<span v-if="getField('source.port') !== '-'" class="text-muted-foreground">:{{ getField('source.port') }}</span>
+                            </button>
+                            <span v-else class="font-mono">-</span>
+                            <span class="text-primary font-bold">→</span>
+                            <button
+                                v-if="getField('destination.ip') !== '-'"
+                                @click="showActionMenu($event, 'destination.ip', getField('destination.ip'))"
+                                class="font-mono hover:bg-muted px-1.5 py-0.5 rounded transition-colors cursor-pointer"
+                                title="Click for actions"
+                            >
+                                {{ getField('destination.ip') }}<span v-if="getField('destination.port') !== '-'" class="text-muted-foreground">:{{ getField('destination.port') }}</span>
+                            </button>
+                            <span v-else class="font-mono">-</span>
+                        </div>
+
+                        <div v-if="getField('network.transport') !== '-'" class="flex items-center gap-1">
+                            <span class="text-muted-foreground">Protocol:</span>
+                            <span class="font-mono uppercase font-medium">{{ getField('network.transport') }}</span>
+                        </div>
+
+                        <div v-if="getField('network.bytes') !== '-'" class="flex items-center gap-1">
+                            <span class="text-muted-foreground">Bytes:</span>
+                            <span class="font-mono">{{ getField('network.bytes') }}</span>
+                        </div>
+
+                        <div v-if="getField('network.direction') !== '-'" class="flex items-center gap-1">
+                            <span class="text-muted-foreground">Direction:</span>
+                            <span>{{ getField('network.direction') }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Context Row: Observer, Dataset, Event ID -->
+                <div class="px-5 py-3">
+                    <div class="flex items-center flex-wrap gap-x-6 gap-y-2 text-sm">
+                        <div v-if="getField('observer.name') !== '-'" class="flex items-center gap-2">
+                            <MapPin class="h-4 w-4 text-muted-foreground" />
+                            <span class="text-muted-foreground">Observer:</span>
+                            <span class="font-medium">{{ getField('observer.name') }}</span>
+                        </div>
+
+                        <div v-if="getField('event.dataset') !== '-'" class="flex items-center gap-2">
+                            <FileText class="h-4 w-4 text-muted-foreground" />
+                            <span class="text-muted-foreground">Dataset:</span>
+                            <span class="font-mono">{{ getField('event.dataset') }}</span>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <Hash class="h-4 w-4 text-muted-foreground" />
+                            <span class="text-muted-foreground">ID:</span>
+                            <span class="font-mono text-xs">{{ alert.soc_id }}</span>
+                            <button
+                                @click="copyToClipboard(alert.soc_id)"
+                                class="p-1 hover:bg-muted rounded transition-colors text-muted-foreground hover:text-foreground"
+                            >
+                                <Copy class="h-3.5 w-3.5" />
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1085,7 +1596,8 @@ const highlightedContent = computed(() => {
                                                     <td
                                                         v-for="field in question.fields"
                                                         :key="field"
-                                                        class="px-3 py-2 font-mono text-xs"
+                                                        @click="showActionMenu($event, field, result.payload?.[field])"
+                                                        class="px-3 py-2 font-mono text-xs cursor-pointer hover:text-primary hover:underline transition-colors"
                                                     >
                                                         {{ result.payload?.[field] ?? '-' }}
                                                     </td>
@@ -1130,131 +1642,6 @@ const highlightedContent = computed(() => {
                 </div>
             </div>
 
-            <!-- Cards Grid -->
-            <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
-                <!-- Severity Card -->
-                <div class="rounded-xl border border-border bg-card p-5">
-                    <div class="flex items-center gap-2 text-muted-foreground mb-3">
-                        <AlertTriangle class="h-4 w-4" />
-                        <span class="text-sm font-medium">Severity</span>
-                    </div>
-                    <span :class="cn('inline-flex px-3 py-1.5 rounded-lg text-sm font-bold', getSeverityStyles(getField('event.severity_label', 'unknown')))">
-                        {{ getField('event.severity_label', 'unknown').toUpperCase() }}
-                    </span>
-                </div>
-
-                <!-- Status Card -->
-                <div class="rounded-xl border border-border bg-card p-5">
-                    <div class="flex items-center gap-2 text-muted-foreground mb-3">
-                        <Activity class="h-4 w-4" />
-                        <span class="text-sm font-medium">Status</span>
-                    </div>
-                    <div v-if="alert['event.acknowledged']" class="flex items-center gap-2 text-green-500 font-bold">
-                        <CheckCircle class="h-5 w-5" />
-                        Acknowledged
-                    </div>
-                    <div v-else class="flex items-center gap-2 text-muted-foreground font-bold">
-                        <X class="h-5 w-5" />
-                        Unacknowledged
-                    </div>
-                </div>
-
-                <!-- Timestamp Card -->
-                <div class="rounded-xl border border-border bg-card p-5">
-                    <div class="flex items-center gap-2 text-muted-foreground mb-3">
-                        <Clock class="h-4 w-4" />
-                        <span class="text-sm font-medium">Timestamp</span>
-                    </div>
-                    <div class="font-semibold">
-                        {{ formatDate(alert.soc_timestamp || alert['@timestamp']) }}
-                    </div>
-                </div>
-
-                <!-- Module Card -->
-                <div class="rounded-xl border border-border bg-card p-5">
-                    <div class="flex items-center gap-2 text-muted-foreground mb-3">
-                        <Server class="h-4 w-4" />
-                        <span class="text-sm font-medium">Module</span>
-                    </div>
-                    <div class="font-mono font-semibold">
-                        {{ getField('event.module') }}
-                    </div>
-                </div>
-            </div>
-
-            <!-- Network Flow Card (Compact) -->
-            <div class="rounded-xl border border-border bg-card p-4 mb-6">
-                <div class="flex items-center flex-wrap gap-x-6 gap-y-2">
-                    <div class="flex items-center gap-2 text-muted-foreground">
-                        <Network class="h-4 w-4" />
-                        <span class="text-sm font-medium">Network</span>
-                    </div>
-
-                    <!-- Source → Destination -->
-                    <div class="flex items-center gap-2">
-                        <span class="font-mono text-sm">
-                            {{ getField('source.ip') }}<span v-if="getField('source.port') !== '-'" class="text-muted-foreground">:{{ getField('source.port') }}</span>
-                        </span>
-                        <span class="text-primary">→</span>
-                        <span class="font-mono text-sm">
-                            {{ getField('destination.ip') }}<span v-if="getField('destination.port') !== '-'" class="text-muted-foreground">:{{ getField('destination.port') }}</span>
-                        </span>
-                    </div>
-
-                    <!-- Protocol/Bytes/Direction inline -->
-                    <div v-if="getField('network.transport') !== '-'" class="flex items-center gap-1 text-sm">
-                        <span class="text-muted-foreground">Protocol:</span>
-                        <span class="font-mono uppercase">{{ getField('network.transport') }}</span>
-                    </div>
-                    <div v-if="getField('network.bytes') !== '-'" class="flex items-center gap-1 text-sm">
-                        <span class="text-muted-foreground">Bytes:</span>
-                        <span class="font-mono">{{ getField('network.bytes') }}</span>
-                    </div>
-                    <div v-if="getField('network.direction') !== '-'" class="flex items-center gap-1 text-sm">
-                        <span class="text-muted-foreground">Direction:</span>
-                        <span>{{ getField('network.direction') }}</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Context Cards Row -->
-            <div class="grid gap-4 md:grid-cols-3 mb-6">
-                <!-- Observer Card -->
-                <div v-if="getField('observer.name') !== '-'" class="rounded-xl border border-border bg-card p-5">
-                    <div class="flex items-center gap-2 text-muted-foreground mb-3">
-                        <MapPin class="h-4 w-4" />
-                        <span class="text-sm font-medium">Observer</span>
-                    </div>
-                    <div class="font-semibold">{{ getField('observer.name') }}</div>
-                </div>
-
-                <!-- Dataset Card -->
-                <div v-if="getField('event.dataset') !== '-'" class="rounded-xl border border-border bg-card p-5">
-                    <div class="flex items-center gap-2 text-muted-foreground mb-3">
-                        <FileText class="h-4 w-4" />
-                        <span class="text-sm font-medium">Dataset</span>
-                    </div>
-                    <div class="font-mono font-semibold">{{ getField('event.dataset') }}</div>
-                </div>
-
-                <!-- Event ID Card -->
-                <div class="rounded-xl border border-border bg-card p-5">
-                    <div class="flex items-center gap-2 text-muted-foreground mb-3">
-                        <Hash class="h-4 w-4" />
-                        <span class="text-sm font-medium">Event ID</span>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <div class="font-mono text-sm truncate flex-1">{{ alert.soc_id }}</div>
-                        <button
-                            @click="copyToClipboard(alert.soc_id)"
-                            class="p-1.5 hover:bg-muted rounded transition-colors text-muted-foreground hover:text-foreground flex-shrink-0"
-                        >
-                            <Copy class="h-4 w-4" />
-                        </button>
-                    </div>
-                </div>
-            </div>
-
             <!-- All Fields Expandable -->
             <div class="rounded-xl border border-border bg-card overflow-hidden">
                 <button
@@ -1270,7 +1657,8 @@ const highlightedContent = computed(() => {
                 </button>
 
                 <div v-if="showAllFields" class="border-t border-border max-h-96 overflow-auto">
-                    <div class="divide-y divide-border">
+                    <!-- List View -->
+                    <div v-if="preferences.allFieldsDisplayMode === 'list'" class="divide-y divide-border">
                         <div
                             v-for="[key, value] in allFields"
                             :key="key"
@@ -1279,7 +1667,11 @@ const highlightedContent = computed(() => {
                             <div class="w-1/3 font-mono text-sm text-muted-foreground break-words min-w-0 flex-shrink-0">
                                 {{ key }}
                             </div>
-                            <div class="flex-1 font-mono text-sm break-words min-w-0 overflow-hidden" style="overflow-wrap: anywhere;">
+                            <div
+                                @click="showActionMenu($event, key, value)"
+                                class="flex-1 font-mono text-sm break-words min-w-0 overflow-hidden cursor-pointer hover:text-primary hover:underline transition-colors"
+                                style="overflow-wrap: anywhere;"
+                            >
                                 {{ typeof value === 'object' ? JSON.stringify(value) : value }}
                             </div>
                             <button
@@ -1288,6 +1680,23 @@ const highlightedContent = computed(() => {
                             >
                                 <Copy class="h-3 w-3" />
                             </button>
+                        </div>
+                    </div>
+                    <!-- Grid View (Hunt-style) -->
+                    <div v-else class="p-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                        <div
+                            v-for="[key, value] in allFields"
+                            :key="key"
+                            class="text-xs group"
+                        >
+                            <div class="text-muted-foreground truncate" :title="key">{{ key }}</div>
+                            <div
+                                @click="showActionMenu($event, key, value)"
+                                class="font-medium truncate cursor-pointer hover:text-primary hover:underline transition-colors"
+                                :title="typeof value === 'object' ? JSON.stringify(value) : String(value)"
+                            >
+                                {{ typeof value === 'object' ? JSON.stringify(value) : value }}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1576,6 +1985,198 @@ const highlightedContent = computed(() => {
                 </div>
             </Transition>
         </Teleport>
+
+        <!-- Action Menu -->
+        <Teleport to="body">
+            <div
+                v-if="actionMenuVisible"
+                class="fixed inset-0 z-50"
+                @click="closeActionMenu"
+            >
+                <div
+                    class="absolute bg-popover border border-border rounded-lg shadow-xl py-1 min-w-[200px]"
+                    :style="{ left: `${actionMenuX}px`, top: `${actionMenuY}px` }"
+                    @click.stop
+                >
+                    <button
+                        @click="huntInNewTab(actionMenuField, actionMenuValue)"
+                        class="w-full px-3 py-2 text-sm text-left hover:bg-muted flex items-center gap-2 transition-colors"
+                    >
+                        <Crosshair class="h-4 w-4 text-primary" />
+                        Hunt
+                    </button>
+                    <button
+                        @click="copyFieldValue(actionMenuValue)"
+                        class="w-full px-3 py-2 text-sm text-left hover:bg-muted flex items-center gap-2 transition-colors"
+                    >
+                        <Copy class="h-4 w-4 text-muted-foreground" />
+                        Copy Value
+                    </button>
+                    <button
+                        @click="askAiAboutField(actionMenuField, actionMenuValue)"
+                        class="w-full px-3 py-2 text-sm text-left hover:bg-muted flex items-center gap-2 transition-colors"
+                    >
+                        <Sparkles class="h-4 w-4 text-purple-500" />
+                        Ask AI
+                    </button>
+
+                    <!-- Suppression options (only for IP fields with Suricata detections) -->
+                    <template v-if="isIpField(actionMenuField) && canAddSuppression">
+                        <div class="my-1 border-t border-border"></div>
+                        <div class="px-3 py-1 text-xs text-muted-foreground font-medium">
+                            Add Suppression
+                        </div>
+                        <button
+                            @click="addSuppressionBySource"
+                            :disabled="suppressionLoading"
+                            class="w-full px-3 py-2 text-sm text-left hover:bg-muted flex items-center gap-2 transition-colors disabled:opacity-50"
+                        >
+                            <ShieldOff class="h-4 w-4 text-amber-500" />
+                            Suppress by Source
+                        </button>
+                        <button
+                            @click="addSuppressionByDestination"
+                            :disabled="suppressionLoading"
+                            class="w-full px-3 py-2 text-sm text-left hover:bg-muted flex items-center gap-2 transition-colors disabled:opacity-50"
+                        >
+                            <ShieldOff class="h-4 w-4 text-amber-500" />
+                            Suppress by Destination
+                        </button>
+                    </template>
+
+                    <!-- Show message if suppression not available -->
+                    <template v-else-if="isIpField(actionMenuField) && detection && detection.engine !== 'suricata'">
+                        <div class="my-1 border-t border-border"></div>
+                        <div class="px-3 py-2 text-xs text-muted-foreground">
+                            Suppression only available for Suricata detections
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </Teleport>
+
+        <!-- Suppression Toast -->
+        <Teleport to="body">
+            <Transition
+                enter-active-class="transition-all duration-300"
+                enter-from-class="opacity-0 translate-y-2"
+                enter-to-class="opacity-100 translate-y-0"
+                leave-active-class="transition-all duration-300"
+                leave-from-class="opacity-100 translate-y-0"
+                leave-to-class="opacity-0 translate-y-2"
+            >
+                <div
+                    v-if="suppressionSuccess"
+                    class="fixed bottom-4 right-4 px-4 py-2 bg-green-600 text-white rounded-lg shadow-lg flex items-center gap-2 z-50"
+                >
+                    <CheckCircle class="h-4 w-4" />
+                    Suppression added successfully
+                </div>
+            </Transition>
+            <Transition
+                enter-active-class="transition-all duration-300"
+                enter-from-class="opacity-0 translate-y-2"
+                enter-to-class="opacity-100 translate-y-0"
+                leave-active-class="transition-all duration-300"
+                leave-from-class="opacity-100 translate-y-0"
+                leave-to-class="opacity-0 translate-y-2"
+            >
+                <div
+                    v-if="suppressionError"
+                    class="fixed bottom-4 right-4 px-4 py-2 bg-destructive text-destructive-foreground rounded-lg shadow-lg flex items-center gap-2 z-50"
+                >
+                    <AlertTriangle class="h-4 w-4" />
+                    {{ suppressionError }}
+                </div>
+            </Transition>
+        </Teleport>
+
+        <!-- Suppression Confirmation Dialog -->
+        <Teleport to="body">
+            <Transition
+                enter-active-class="transition-opacity duration-200"
+                enter-from-class="opacity-0"
+                enter-to-class="opacity-100"
+                leave-active-class="transition-opacity duration-200"
+                leave-from-class="opacity-100"
+                leave-to-class="opacity-0"
+            >
+                <div
+                    v-if="showSuppressionConfirm"
+                    class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+                    @click.self="cancelSuppression"
+                >
+                    <div class="bg-card border border-border rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+                        <!-- Header -->
+                        <div class="px-6 py-4 border-b border-border bg-muted/30">
+                            <div class="flex items-center gap-3">
+                                <div class="p-2 rounded-lg bg-amber-500/10">
+                                    <ShieldOff class="h-5 w-5 text-amber-500" />
+                                </div>
+                                <h3 class="text-lg font-semibold">Add Suppression</h3>
+                            </div>
+                        </div>
+
+                        <!-- Content -->
+                        <div class="px-6 py-5">
+                            <p class="text-sm text-muted-foreground mb-4">
+                                Are you sure you want to add a suppression to this detection?
+                            </p>
+
+                            <div class="bg-muted/50 rounded-lg p-4 space-y-2 text-sm">
+                                <div class="flex justify-between">
+                                    <span class="text-muted-foreground">Detection:</span>
+                                    <span class="font-medium truncate max-w-[200px]" :title="detection?.title">
+                                        {{ detection?.title || 'Unknown' }}
+                                    </span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-muted-foreground">Track:</span>
+                                    <span class="font-mono">{{ pendingSuppressionTrack }}</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-muted-foreground">IP Address:</span>
+                                    <span class="font-mono">{{ pendingSuppressionIp }}</span>
+                                </div>
+                            </div>
+
+                            <p class="text-xs text-muted-foreground mt-4">
+                                This will suppress alerts from this detection when the {{ getTrackDescription(pendingSuppressionTrack) }} IP matches <span class="font-mono">{{ pendingSuppressionIp }}</span>.
+                            </p>
+                        </div>
+
+                        <!-- Footer -->
+                        <div class="px-6 py-4 border-t border-border bg-muted/30 flex justify-end gap-3">
+                            <button
+                                @click="cancelSuppression"
+                                class="px-4 py-2 text-sm font-medium rounded-lg border border-border hover:bg-muted transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                @click="confirmSuppression"
+                                :disabled="suppressionLoading"
+                                class="px-4 py-2 text-sm font-medium rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                            >
+                                <Loader2 v-if="suppressionLoading" class="h-4 w-4 animate-spin" />
+                                <span>{{ suppressionLoading ? 'Adding...' : 'Add Suppression' }}</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </Transition>
+        </Teleport>
+
+        <!-- Escalate Dialog -->
+        <EscalateDialog
+            ref="escalateDialogRef"
+            :open="showEscalateDialog"
+            :event="alert"
+            :guidedAnalysisEvents="guidedAnalysisEvents"
+            :pcapJob="pcapJob"
+            @close="showEscalateDialog = false"
+            @confirm="handleEscalateConfirm"
+        />
     </div>
 </template>
 

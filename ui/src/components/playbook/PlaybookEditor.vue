@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { X, Save, Plus, FileText, Target, Users, HelpCircle, RefreshCw } from 'lucide-vue-next'
+import { X, Save, Plus, FileText, Target, Users, HelpCircle, RefreshCw, Globe } from 'lucide-vue-next'
 import { cn } from '../../lib/utils'
 import QuestionEditor from './QuestionEditor.vue'
 
@@ -19,6 +19,7 @@ interface Playbook {
   detection_id?: string
   detection_category?: string
   detection_type?: string
+  is_global?: boolean
   contributors?: string[]
   questions: PlaybookQuestion[]
   isCommunity?: boolean
@@ -45,6 +46,7 @@ const formData = ref<Playbook>({
   detection_id: '',
   detection_category: '',
   detection_type: '',
+  is_global: false,
   contributors: [],
   questions: []
 })
@@ -69,6 +71,7 @@ watch(() => props.playbook, (pb) => {
       detection_id: pb.detection_id || '',
       detection_category: pb.detection_category || '',
       detection_type: pb.detection_type || '',
+      is_global: pb.is_global || false,
       contributors: pb.contributors ? [...pb.contributors] : [],
       questions: pb.questions ? pb.questions.map(q => ({ ...q })) : []
     }
@@ -80,6 +83,7 @@ watch(() => props.playbook, (pb) => {
       detection_id: props.detectionId || '',
       detection_category: props.detectionCategory || '',
       detection_type: props.detectionType || '',
+      is_global: false,
       contributors: [],
       questions: []
     }
@@ -180,7 +184,24 @@ const handleSave = async () => {
             Detection Association
           </h3>
 
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <!-- Global Playbook Toggle -->
+          <div class="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
+            <input
+              type="checkbox"
+              id="isGlobal"
+              v-model="formData.is_global"
+              class="h-4 w-4 rounded border-border text-primary focus:ring-primary/50"
+            />
+            <label for="isGlobal" class="flex items-center gap-2 text-sm font-medium text-foreground cursor-pointer">
+              <Globe class="h-4 w-4 text-green-500" />
+              Global Playbook
+            </label>
+            <span class="text-xs text-muted-foreground">
+              This playbook will be included in guided analysis for all alerts
+            </span>
+          </div>
+
+          <div v-if="!formData.is_global" class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div class="space-y-1.5">
               <label class="text-sm font-medium text-foreground">Detection ID</label>
               <input
@@ -214,7 +235,7 @@ const handleSave = async () => {
               </select>
             </div>
           </div>
-          <p class="text-xs text-muted-foreground">
+          <p v-if="!formData.is_global" class="text-xs text-muted-foreground">
             Link this playbook to specific detections by ID, category, or type. Leave blank to apply broadly.
           </p>
         </section>

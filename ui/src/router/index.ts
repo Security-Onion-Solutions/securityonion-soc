@@ -74,6 +74,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: 'Case Detail', showChatWidget: true }
   },
   {
+    path: '/playbooks',
+    name: 'playbooks',
+    component: () => import('../views/Playbooks.vue'),
+    meta: { title: 'Playbooks', showChatWidget: true }
+  },
+  {
     path: '/jobs',
     name: 'jobs',
     component: () => import('../views/Jobs.vue'),

@@ -202,3 +202,18 @@ func (mr *MockPlaybookstoreMockRecorder) GetAllPlaybooks(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllPlaybooks", reflect.TypeOf((*MockPlaybookstore)(nil).GetAllPlaybooks), ctx)
 }
+
+// GetPlaybooksPaginated mocks base method.
+func (m *MockPlaybookstore) GetPlaybooksPaginated(ctx context.Context, criteria *model.PlaybookSearchCriteria) (*model.PlaybookListResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPlaybooksPaginated", ctx, criteria)
+	ret0, _ := ret[0].(*model.PlaybookListResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPlaybooksPaginated indicates an expected call of GetPlaybooksPaginated.
+func (mr *MockPlaybookstoreMockRecorder) GetPlaybooksPaginated(ctx, criteria any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPlaybooksPaginated", reflect.TypeOf((*MockPlaybookstore)(nil).GetPlaybooksPaginated), ctx, criteria)
+}

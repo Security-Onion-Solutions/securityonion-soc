@@ -570,11 +570,12 @@ func (metrics *InfluxDBMetrics) GetHistoricalMetrics(ctx context.Context, host s
 		|> keep(columns: ["_time", "_value"])`
 
 	// Traffic MB/s Query Helper
-	// Uses metrics.bucket for historical data (longer retention) instead of so_short_term
+	// Uses metrics.bucket for historical traffic data (longer retention)
+	// but node_config (interface names) from so_short_term where it's stored
 	genTrafficQuery := func(ifaceType string, metric string) string {
 		return `
 		import "join"
-		manints = from(bucket: "` + metrics.bucket + `")
+		manints = from(bucket: "telegraf/so_short_term")
 		  |> range(start: -30d)
 		  |> filter(fn: (r) => r["_measurement"] == "node_config" and r["_field"] == "` + ifaceType + `" and r.host == "` + host + `")
 		  |> duplicate(column: "_value", as: "interface")

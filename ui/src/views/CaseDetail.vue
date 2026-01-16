@@ -19,7 +19,8 @@ import {
   Eye,
   Edit3,
   File,
-  Crosshair
+  Crosshair,
+  Sparkles
 } from 'lucide-vue-next'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
@@ -27,6 +28,7 @@ import { cn } from '../lib/utils'
 import { useUsers } from '../composables/useUsers'
 import { useFormatters } from '../composables/useFormatters'
 import { useApi } from '../composables/useApi'
+import { useChatWidget } from '../composables/useChatWidget'
 import AttachmentsPanel from '../components/cases/AttachmentsPanel.vue'
 import EvidencePanel from '../components/cases/EvidencePanel.vue'
 
@@ -36,6 +38,7 @@ const router = useRouter()
 const { getUserName } = useUsers()
 const { formatDate, formatDateOnly } = useFormatters()
 const { post } = useApi()
+const { openNewChatWithPrompt } = useChatWidget()
 
 // Configure marked for GFM
 marked.setOptions({
@@ -68,10 +71,9 @@ const associations = ref<any>({
 const loading = ref(true)
 const error = ref<string | null>(null)
 const activeTab = ref('summary')
-const artifactSubTab = ref<'attachments' | 'evidence'>('attachments')
 
-// Evidence form state for pre-populating from attachment hashes
-const pendingEvidence = ref<{ value: string; description: string } | null>(null)
+// Events expansion state
+const expandedEvents = ref<Set<string>>(new Set())
 
 // Comment form state
 const newCommentText = ref('')
@@ -111,7 +113,8 @@ async function addComment() {
 const tabs = [
   { id: 'summary', name: 'Summary', icon: Info },
   { id: 'comments', name: 'Comments', icon: MessageSquare },
-  { id: 'artifacts', name: 'Artifacts', icon: Paperclip },
+  { id: 'observables', name: 'Observables', icon: Crosshair },
+  { id: 'attachments', name: 'Attachments', icon: Paperclip },
   { id: 'events', name: 'Events', icon: Activity },
   { id: 'tasks', name: 'Tasks', icon: CheckSquare },
   { id: 'history', name: 'History', icon: History }
@@ -155,10 +158,8 @@ const loadAssociation = async (association: string) => {
 const handleTabChange = (tabId: string) => {
   activeTab.value = tabId
   if (tabId === 'comments') loadAssociation('comments')
-  if (tabId === 'artifacts') {
-    loadAssociation('attachments')
-    loadAssociation('evidence')
-  }
+  if (tabId === 'observables') loadAssociation('evidence')
+  if (tabId === 'attachments') loadAssociation('attachments')
   if (tabId === 'events') loadAssociation('events')
   if (tabId === 'tasks') loadAssociation('tasks')
   if (tabId === 'history') loadAssociation('history')
@@ -197,13 +198,11 @@ const refreshEvidence = () => {
   loadAssociation('evidence')
 }
 
-// Add hash as evidence (from attachment panel)
-const addHashAsEvidence = (hash: string, hashType: string) => {
-  pendingEvidence.value = {
-    value: hash,
-    description: `${hashType.toUpperCase()} hash from attachment`
-  }
-  artifactSubTab.value = 'evidence'
+// Switch to observables tab and pre-fill (from attachment panel)
+const addHashAsObservable = (hash: string, hashType: string) => {
+  // TODO: Pre-fill observable form with hash value
+  activeTab.value = 'observables'
+  loadAssociation('evidence')
 }
 
 // History helper functions
@@ -244,6 +243,195 @@ const getKindLabel = (kind: string) => {
     default: return kind || 'Unknown'
   }
 }
+
+// Events helper functions
+const toggleEventExpanded = (eventId: string) => {
+  if (expandedEvents.value.has(eventId)) {
+    expandedEvents.value.delete(eventId)
+  } else {
+    expandedEvents.value.add(eventId)
+  }
+  // Force reactivity update
+  expandedEvents.value = new Set(expandedEvents.value)
+}
+
+const getEventField = (event: any, fieldPath: string): string | null => {
+  if (!event?.fields) return null
+
+  // Try direct field access
+  if (event.fields[fieldPath] !== undefined) {
+    return String(event.fields[fieldPath])
+  }
+
+  // Try nested access (e.g., 'source.ip' -> fields['source.ip'] or fields.source?.ip)
+  const parts = fieldPath.split('.')
+  let value = event.fields
+  for (const part of parts) {
+    if (value && typeof value === 'object' && part in value) {
+      value = value[part]
+    } else {
+      return null
+    }
+  }
+
+  return value !== undefined && value !== null ? String(value) : null
+}
+
+const getEventSeverityStyles = (severity: string | null) => {
+  if (!severity) return 'bg-muted text-muted-foreground'
+
+  switch (severity.toString().toLowerCase()) {
+    case 'critical':
+    case '1':
+      return 'bg-red-500/10 text-red-500 border border-red-500/20'
+    case 'high':
+    case '2':
+      return 'bg-orange-500/10 text-orange-500 border border-orange-500/20'
+    case 'medium':
+    case '3':
+      return 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+    case 'low':
+    case '4':
+      return 'bg-blue-500/10 text-blue-500 border border-blue-500/20'
+    default:
+      return 'bg-muted text-muted-foreground border border-border'
+  }
+}
+
+const formatFieldValue = (value: any): string => {
+  if (value === null || value === undefined) return '-'
+  if (typeof value === 'object') {
+    return JSON.stringify(value)
+  }
+  return String(value)
+}
+
+const removeRelatedEvent = async (eventId: string) => {
+  if (!confirm('Remove this event from the case?')) return
+
+  try {
+    const response = await fetch(`/api/case/events/${eventId}`, {
+      method: 'DELETE'
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to remove event')
+    }
+
+    // Refresh events list
+    await loadAssociation('events')
+
+    // Also refresh history to show the removal
+    await loadAssociation('history')
+  } catch (err: any) {
+    console.error('Error removing event:', err)
+    alert('Failed to remove event: ' + (err.message || 'Unknown error'))
+  }
+}
+
+// AI Analysis function
+const analyzeWithAI = async () => {
+  // Ensure we have the latest data
+  if (associations.value.events.length === 0) {
+    await loadAssociation('events')
+  }
+  if (associations.value.evidence.length === 0) {
+    await loadAssociation('evidence')
+  }
+  if (associations.value.attachments.length === 0) {
+    await loadAssociation('attachments')
+  }
+
+  // Build the prompt with case context
+  let prompt = `Please analyze this security case and provide your assessment:\n\n`
+
+  // Case details
+  prompt += `## Case Information\n`
+  prompt += `- **Title:** ${caseObj.value?.title || 'Unknown'}\n`
+  prompt += `- **Severity:** ${caseObj.value?.severity || 'Unknown'}\n`
+  prompt += `- **Status:** ${caseObj.value?.status || 'Unknown'}\n`
+  prompt += `- **TLP:** ${caseObj.value?.tlp || 'Unknown'}\n`
+  if (caseObj.value?.description) {
+    prompt += `- **Description:** ${caseObj.value.description}\n`
+  }
+  prompt += `\n`
+
+  // Attachments (files)
+  if (associations.value.attachments.length > 0) {
+    prompt += `## Attachments (${associations.value.attachments.length} files)\n`
+    for (const attachment of associations.value.attachments.slice(0, 10)) {
+      prompt += `- ${attachment.name || attachment.value || 'Unknown file'}`
+      if (attachment.mimeType) prompt += ` (${attachment.mimeType})`
+      if (attachment.md5) prompt += ` [MD5: ${attachment.md5}]`
+      if (attachment.sha256) prompt += ` [SHA256: ${attachment.sha256}]`
+      prompt += `\n`
+    }
+    if (associations.value.attachments.length > 10) {
+      prompt += `- ... and ${associations.value.attachments.length - 10} more files\n`
+    }
+    prompt += `\n`
+  }
+
+  // Observables (evidence/IOCs)
+  if (associations.value.evidence.length > 0) {
+    prompt += `## Observables (${associations.value.evidence.length} items)\n`
+    for (const observable of associations.value.evidence.slice(0, 20)) {
+      prompt += `- **${observable.artifactType || 'Unknown type'}:** ${observable.value || 'N/A'}`
+      if (observable.description) {
+        prompt += ` (${observable.description})`
+      }
+      prompt += `\n`
+    }
+    if (associations.value.evidence.length > 20) {
+      prompt += `- ... and ${associations.value.evidence.length - 20} more items\n`
+    }
+    prompt += `\n`
+  }
+
+  // Related Events
+  if (associations.value.events.length > 0) {
+    prompt += `## Related Events (${associations.value.events.length} events)\n`
+    for (const event of associations.value.events.slice(0, 10)) {
+      const ruleName = getEventField(event, 'rule.name') || getEventField(event, 'event.module') || 'Event'
+      const sourceIp = getEventField(event, 'source.ip') || getEventField(event, 'client.ip') || 'N/A'
+      const destIp = getEventField(event, 'destination.ip') || getEventField(event, 'server.ip') || 'N/A'
+      const timestamp = getEventField(event, '@timestamp') || getEventField(event, 'soc_timestamp') || 'N/A'
+      const severity = getEventField(event, 'event.severity_label') || getEventField(event, 'event.severity') || ''
+
+      prompt += `- **${ruleName}**`
+      if (severity) prompt += ` [${severity}]`
+      prompt += `: ${sourceIp} → ${destIp}`
+      if (timestamp !== 'N/A') prompt += ` at ${timestamp}`
+      prompt += `\n`
+
+      // Add key fields from the event
+      const keyFields = ['rule.category', 'event.dataset', 'network.protocol', 'destination.port', 'user.name', 'process.name']
+      const fieldValues: string[] = []
+      for (const field of keyFields) {
+        const value = getEventField(event, field)
+        if (value) {
+          fieldValues.push(`${field.split('.').pop()}: ${value}`)
+        }
+      }
+      if (fieldValues.length > 0) {
+        prompt += `  - ${fieldValues.join(', ')}\n`
+      }
+    }
+    if (associations.value.events.length > 10) {
+      prompt += `- ... and ${associations.value.events.length - 10} more events\n`
+    }
+    prompt += `\n`
+  }
+
+  prompt += `## Questions\n`
+  prompt += `1. What is your assessment of this case based on the evidence and events?\n`
+  prompt += `2. Are there any indicators of compromise (IOCs) that stand out?\n`
+  prompt += `3. What additional investigation steps would you recommend?\n`
+  prompt += `4. What is the likely threat type or attack pattern?\n`
+
+  // Open chat with the prompt
+  openNewChatWithPrompt(prompt)
+}
 </script>
 
 <template>
@@ -275,6 +463,13 @@ const getKindLabel = (kind: string) => {
         <div :class="cn('px-3 py-1 rounded text-xs font-bold', getTLPStyles(caseObj.tlp))">
           TLP:{{ caseObj.tlp }}
         </div>
+        <button
+          @click="analyzeWithAI"
+          class="inline-flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-md hover:bg-violet-700 transition-colors text-sm font-medium"
+        >
+          <Sparkles class="h-4 w-4" />
+          Analyze with AI
+        </button>
         <button class="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors text-sm font-medium">
           Update Case
         </button>
@@ -479,59 +674,124 @@ const getKindLabel = (kind: string) => {
             </div>
           </div>
 
-          <!-- Artifacts Tab -->
-          <div v-else-if="activeTab === 'artifacts'" class="flex flex-col h-full animate-in fade-in duration-300">
-            <!-- Sub-tabs for Attachments and Evidence -->
-            <div class="flex items-center gap-1 p-4 border-b border-border bg-muted/30">
-              <button
-                @click="artifactSubTab = 'attachments'"
-                :class="cn(
-                  'flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors',
-                  artifactSubTab === 'attachments'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                )"
-              >
-                <File class="h-4 w-4" />
-                Attachments
-                <span v-if="associations.attachments.length" class="ml-1 px-1.5 py-0.5 rounded-full bg-primary-foreground/20 text-[10px]">
-                  {{ associations.attachments.length }}
-                </span>
-              </button>
-              <button
-                @click="artifactSubTab = 'evidence'"
-                :class="cn(
-                  'flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors',
-                  artifactSubTab === 'evidence'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                )"
-              >
-                <Crosshair class="h-4 w-4" />
-                Evidence
-                <span v-if="associations.evidence.length" class="ml-1 px-1.5 py-0.5 rounded-full bg-primary-foreground/20 text-[10px]">
-                  {{ associations.evidence.length }}
-                </span>
-              </button>
-            </div>
-
-            <!-- Attachments Panel -->
-            <div v-if="artifactSubTab === 'attachments'" class="flex-1 p-6 overflow-y-auto">
-              <AttachmentsPanel
-                :case-id="caseId"
-                :attachments="associations.attachments"
-                @refresh="refreshAttachments"
-                @add-evidence="addHashAsEvidence"
-              />
-            </div>
-
-            <!-- Evidence Panel -->
-            <div v-if="artifactSubTab === 'evidence'" class="flex-1 p-6 overflow-y-auto">
+          <!-- Observables Tab -->
+          <div v-else-if="activeTab === 'observables'" class="flex flex-col h-full animate-in fade-in duration-300">
+            <div class="flex-1 p-6 overflow-y-auto">
               <EvidencePanel
                 :case-id="caseId"
                 :evidence="associations.evidence"
                 @refresh="refreshEvidence"
               />
+            </div>
+          </div>
+
+          <!-- Attachments Tab -->
+          <div v-else-if="activeTab === 'attachments'" class="flex flex-col h-full animate-in fade-in duration-300">
+            <div class="flex-1 p-6 overflow-y-auto">
+              <AttachmentsPanel
+                :case-id="caseId"
+                :attachments="associations.attachments"
+                @refresh="refreshAttachments"
+                @add-evidence="addHashAsObservable"
+              />
+            </div>
+          </div>
+
+          <!-- Events Tab -->
+          <div v-else-if="activeTab === 'events'" class="flex flex-col h-full animate-in fade-in duration-300">
+            <div class="flex-1 p-6 overflow-y-auto max-h-[600px]">
+              <div v-if="associations.events.length === 0" class="text-center py-8 text-muted-foreground">
+                <Activity class="h-12 w-12 mx-auto mb-3 opacity-50" />
+                <p>No related events attached to this case.</p>
+                <p class="text-xs mt-2">Events can be attached from the Hunt or Alerts pages.</p>
+              </div>
+
+              <!-- Events List -->
+              <div v-else class="space-y-3">
+                <div class="flex items-center justify-between mb-4">
+                  <h3 class="text-sm font-semibold text-muted-foreground">
+                    {{ associations.events.length }} Related Event{{ associations.events.length !== 1 ? 's' : '' }}
+                  </h3>
+                </div>
+
+                <div
+                  v-for="(event, index) in associations.events"
+                  :key="event.id || index"
+                  class="bg-muted/30 border border-border/50 rounded-lg overflow-hidden hover:border-border transition-colors"
+                >
+                  <!-- Event Header -->
+                  <div
+                    class="flex items-center justify-between p-4 cursor-pointer"
+                    @click="toggleEventExpanded(event.id)"
+                  >
+                    <div class="flex items-center gap-3 flex-1 min-w-0">
+                      <div class="p-2 rounded-lg bg-primary/10">
+                        <Activity class="h-4 w-4 text-primary" />
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2 flex-wrap">
+                          <span class="font-medium text-sm truncate">
+                            {{ getEventField(event, 'rule.name') || getEventField(event, 'event.module') || 'Event' }}
+                          </span>
+                          <span v-if="getEventField(event, 'event.severity_label') || getEventField(event, 'event.severity')"
+                            :class="cn(
+                              'px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase',
+                              getEventSeverityStyles(getEventField(event, 'event.severity_label') || getEventField(event, 'event.severity'))
+                            )"
+                          >
+                            {{ getEventField(event, 'event.severity_label') || getEventField(event, 'event.severity') }}
+                          </span>
+                        </div>
+                        <div class="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
+                          <span v-if="getEventField(event, 'source.ip') || getEventField(event, 'client.ip')">
+                            {{ getEventField(event, 'source.ip') || getEventField(event, 'client.ip') }}
+                          </span>
+                          <span v-if="getEventField(event, 'source.ip') || getEventField(event, 'client.ip')">→</span>
+                          <span v-if="getEventField(event, 'destination.ip') || getEventField(event, 'server.ip')">
+                            {{ getEventField(event, 'destination.ip') || getEventField(event, 'server.ip') }}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-3">
+                      <span class="text-xs text-muted-foreground whitespace-nowrap">
+                        {{ formatDate(getEventField(event, '@timestamp') || getEventField(event, 'soc_timestamp') || event.createTime) }}
+                      </span>
+                      <ChevronRight
+                        :class="cn(
+                          'h-4 w-4 text-muted-foreground transition-transform',
+                          expandedEvents.has(event.id) && 'rotate-90'
+                        )"
+                      />
+                    </div>
+                  </div>
+
+                  <!-- Expanded Fields -->
+                  <div v-if="expandedEvents.has(event.id)" class="border-t border-border/50 bg-background/50">
+                    <div class="p-4 space-y-2">
+                      <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Event Fields</span>
+                        <button
+                          @click.stop="removeRelatedEvent(event.id)"
+                          class="text-xs text-destructive hover:text-destructive/80 font-medium"
+                        >
+                          Remove from Case
+                        </button>
+                      </div>
+                      <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div
+                          v-for="(value, key) in event.fields"
+                          :key="key"
+                          class="flex flex-col gap-0.5 p-2 rounded bg-muted/50"
+                        >
+                          <span class="text-muted-foreground font-mono">{{ key }}</span>
+                          <span class="font-medium break-all">{{ formatFieldValue(value) }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -615,16 +875,15 @@ const getKindLabel = (kind: string) => {
             </div>
           </div>
 
-          <!-- Coming Soon (for other tabs) -->
-          <div v-else class="flex-1 flex flex-col items-center justify-center p-12 text-center space-y-4 animate-in zoom-in duration-300">
+          <!-- Coming Soon (for tasks tab) -->
+          <div v-else-if="activeTab === 'tasks'" class="flex-1 flex flex-col items-center justify-center p-12 text-center space-y-4 animate-in zoom-in duration-300">
             <div class="p-4 rounded-full bg-muted">
-              <Activity v-if="activeTab === 'events'" class="h-10 w-10 text-muted-foreground" />
-              <CheckSquare v-else-if="activeTab === 'tasks'" class="h-10 w-10 text-muted-foreground" />
+              <CheckSquare class="h-10 w-10 text-muted-foreground" />
             </div>
             <div>
-              <h3 class="text-lg font-semibold capitalize">{{ activeTab }} View</h3>
+              <h3 class="text-lg font-semibold">Tasks View</h3>
               <p class="text-sm text-muted-foreground max-w-xs mx-auto">
-                Detailed management for {{ activeTab }} is coming soon to the modern interface.
+                Task management is coming soon to the modern interface.
               </p>
             </div>
             <button class="text-xs font-medium text-primary hover:underline" @click="activeTab = 'summary'">

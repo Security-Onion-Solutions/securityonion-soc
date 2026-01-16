@@ -15,10 +15,13 @@ const router = useRouter()
 const { getUserName, fetchUsers } = useUsers()
 const { formatDateForApi, formatDate } = useFormatters()
 const { getSeverityStyles, getStatusStyles } = useStatusStyles()
-const { formattedRange, setRelativeTime, RELATIVE_TIME_UNITS } = useTimeRange()
 
-// Initialize with a wide time range for cases (1 year by default)
-setRelativeTime(1, 60) // 60 = RELATIVE_TIME_MONTHS
+// Cases uses its own independent time range scope (doesn't affect Hunt/Alerts)
+const { formattedRange, setRelativeTime, RELATIVE_TIME_UNITS, zone } = useTimeRange({ scope: 'cases' })
+
+// Initialize with 1 year time range to match classic interface exactly
+// 60 = RELATIVE_TIME_MONTHS from hunt.ts
+setRelativeTime(12, 60)
 
 const showCreateDialog = ref(false)
 
@@ -72,16 +75,15 @@ const fetchCases = async () => {
   loading.value = true
   const statusFilter = currentStatusFilter.value
   try {
-    // Construct search query for cases as per user feedback
-    // We restrict to the so-case index and filter for documents with a title (only cases have titles)
-    let query = '_index:"*:so-case" AND so_case.title:* AND NOT so_case.category:template'
+    // Construct search query for cases - use the exact same query as classic
+    let query: string
     if (statusFilter === 'open') {
-      query += ' AND NOT so_case.status:closed'
+      query = '(NOT so_case.status:closed AND NOT so_case.category:template) AND _index:"*:so-case" AND so_kind:case'
     } else if (statusFilter === 'closed') {
-      query += ' AND so_case.status:closed'
+      query = '(so_case.status:closed AND NOT so_case.category:template) AND _index:"*:so-case" AND so_kind:case'
     } else {
-      // For 'all', we still want to make sure it's a case record
-      query += ' AND so_case.status:*'
+      // 'all' - show both open and closed, just exclude templates
+      query = 'NOT so_case.category:template AND _index:"*:so-case" AND so_kind:case'
     }
 
     // Integrate search query if present
@@ -96,36 +98,39 @@ const fetchCases = async () => {
       query: sortedQuery,
       range: formattedRange.value,
       format: '2006/01/02 3:04:05 PM',
-      zone: 'Local',
-      metricLimit: '10',
-      eventLimit: '1000'
+      zone: zone.value,
+      metricLimit: '100',
+      eventLimit: '500'
     })
 
     const response = await fetch(`/api/events/?${params.toString()}`)
     if (!response.ok) throw new Error('Failed to fetch cases')
-    
+
     const data = await response.json()
-    
+
     if (data && data.events) {
       cases.value = data.events.map((event: any) => {
         const payload = event.payload || {}
+        // Case fields are stored with so_case. prefix (e.g., so_case.title)
+        // But also check for nested so_case object for backwards compatibility
+        const nestedCase = payload['so_case'] || {}
         return {
           soc_id: event.id,
-          id: payload['id'] || event.id,
-          title: payload['so_case.title'] || 'No Title',
-          severity: payload['so_case.severity'] || 'unknown',
-          status: payload['so_case.status'] || 'open',
-          owner: payload['so_case.userId'] || 'System',
-          assignee: payload['so_case.assigneeId'] || 'Unassigned',
-          createdAt: payload['so_case.createTime'] || event.timestamp || new Date().toISOString(),
+          id: payload['so_case.id'] || nestedCase.id || event.id,
+          title: payload['so_case.title'] || nestedCase.title || 'No Title',
+          severity: payload['so_case.severity'] || nestedCase.severity || 'unknown',
+          status: payload['so_case.status'] || nestedCase.status || 'open',
+          owner: payload['so_case.userId'] || nestedCase.userId || 'System',
+          assignee: payload['so_case.assigneeId'] || nestedCase.assigneeId || 'Unassigned',
+          createdAt: payload['so_case.createTime'] || nestedCase.createTime || event.timestamp || new Date().toISOString(),
           updatedAt: event.timestamp
         }
       })
     }
-    
+
     loading.value = false
   } catch (err: any) {
-    console.error('Fetch cases error:', err)
+    console.error('[Cases] Fetch error:', err)
     error.value = err.message || 'Failed to fetch cases'
     loading.value = false
   }
@@ -243,7 +248,7 @@ const viewDetail = (id: string) => {
         </div>
 
         <!-- Time Range -->
-        <DateTimePicker @change="fetchCases" />
+        <DateTimePicker scope="cases" @change="fetchCases" />
 
         <div class="relative w-64">
           <Search class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />

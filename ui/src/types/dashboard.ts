@@ -7,7 +7,7 @@
 // Widget Types
 // =============================================================================
 
-export type WidgetType = 'count' | 'pie' | 'bar' | 'line' | 'table' | 'donut' | 'sankey' | 'map'
+export type WidgetType = 'count' | 'pie' | 'bar' | 'line' | 'table' | 'donut' | 'sankey' | 'map' | 'alertMap' | 'connectionMap'
 
 export type WidgetSize = 'sm' | 'md' | 'lg' | 'wide'
 
@@ -114,20 +114,46 @@ export interface SankeyWidgetData extends Widget {
 // Map Widget Data (Pew Pew Map)
 // =============================================================================
 
-export type MapConnectionType = 'attack' | 'blocked' | 'allowed' | 'scan'
+export type MapConnectionType = 'attack' | 'blocked' | 'allowed' | 'scan' | 'alert'
 
+// Map display modes
+export type MapMode = 'alerts' | 'connections'
+
+// Geographic point with coordinates
+export interface GeoPoint {
+    lat: number
+    lng: number
+    label?: string        // Country, city, or custom label
+    country?: string      // Country code or name
+    city?: string         // City name
+}
+
+// A marker on the map (for alert geo mode)
+export interface MapMarker {
+    location: GeoPoint
+    count: number         // Number of events at this location
+    type?: MapConnectionType
+    color?: string
+}
+
+// A connection between two points (for connection mode)
 export interface MapConnection {
-    from: string          // Location key (e.g., 'us-east', 'china', 'russia-west')
-    to: string            // Location key
-    count: number         // Number of connections
+    from: string | GeoPoint   // Location key or coordinates
+    to: string | GeoPoint     // Location key or coordinates
+    count: number             // Number of connections
     type?: MapConnectionType
     color?: string
 }
 
 export interface MapWidgetData extends Widget {
     type: 'map'
-    connections: MapConnection[]
+    mapMode: MapMode           // 'alerts' for geo markers, 'connections' for flows
+    connections?: MapConnection[]  // For connection mode
+    markers?: MapMarker[]          // For alert geo mode
     showLegend?: boolean
+    centerLat?: number         // Optional map center
+    centerLng?: number
+    zoom?: number
 }
 
 // =============================================================================

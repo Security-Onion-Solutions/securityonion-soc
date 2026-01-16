@@ -20,6 +20,7 @@ interface Playbook {
   detection_id?: string
   detection_category?: string
   detection_type?: string
+  is_global?: boolean
   contributors?: string[]
   questions: PlaybookQuestion[]
   isCommunity: boolean
@@ -35,16 +36,24 @@ const props = defineProps<{
 // Determine why this playbook matched
 const matchLevel = computed(() => {
   const pb = props.playbook
+  // Check for global playbook first
+  if (pb.is_global || (!pb.detection_id && !pb.detection_category && !pb.detection_type)) {
+    return { label: 'Global', color: 'bg-green-500/10 text-green-500', tooltip: 'Applies to all alerts' }
+  }
   // If playbook's detection_id matches the current detection, it's detection-specific
   if (pb.detection_id && props.currentDetectionId &&
       pb.detection_id.toLowerCase() === props.currentDetectionId.toLowerCase()) {
-    return { label: 'Detection', color: 'bg-green-500/10 text-green-500', tooltip: 'Matches this specific detection' }
+    return { label: 'Detection', color: 'bg-emerald-500/10 text-emerald-500', tooltip: 'Matches this specific detection' }
   }
   // If it has a detection_id but doesn't match current, it matched via category/engine
   if (pb.detection_id && props.currentDetectionId &&
       pb.detection_id.toLowerCase() !== props.currentDetectionId.toLowerCase()) {
     // This shouldn't normally happen, but handle it
     return { label: 'Other Detection', color: 'bg-gray-500/10 text-gray-500', tooltip: 'From another detection' }
+  }
+  // If it has a detection_id (but no currentDetectionId to compare), it's detection-level
+  if (pb.detection_id) {
+    return { label: 'Detection', color: 'bg-emerald-500/10 text-emerald-500', tooltip: `For detection: ${pb.detection_id}` }
   }
   // If it has detection_category, it's category-level
   if (pb.detection_category) {

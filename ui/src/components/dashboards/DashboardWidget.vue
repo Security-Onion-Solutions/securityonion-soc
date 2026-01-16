@@ -22,8 +22,25 @@ import PieWidget from './widgets/PieWidget.vue'
 import BarWidget from './widgets/BarWidget.vue'
 import LineWidget from './widgets/LineWidget.vue'
 import TableWidget from './widgets/TableWidget.vue'
-import SankeyWidget from './widgets/SankeyWidget.vue'
 import MapWidget from './widgets/MapWidget.vue'
+
+// Lazy load SankeyWidget to avoid bundling with mermaid's d3-sankey
+import { defineAsyncComponent, h } from 'vue'
+const SankeyWidget = defineAsyncComponent({
+    loader: () => import('./widgets/SankeyWidget.vue'),
+    loadingComponent: {
+        render() {
+            return h('div', { class: 'flex items-center justify-center h-full text-muted-foreground text-sm' }, 'Loading...')
+        }
+    },
+    errorComponent: {
+        render() {
+            return h('div', { class: 'flex items-center justify-center h-full text-destructive text-sm' }, 'Failed to load chart')
+        }
+    },
+    delay: 200,
+    timeout: 10000
+})
 
 const props = defineProps<{
     widget: WidgetData

@@ -20,6 +20,7 @@ import { formatDateForApi } from './useFormatters'
 // Module-level state (shared across components)
 // =============================================================================
 
+// Default/global scope state (shared between Hunt, Alerts, etc.)
 const isRelativeTime = ref(true)
 const relativeTimeValue = ref(24)
 const relativeTimeUnit = ref<RelativeTimeUnit>(RELATIVE_TIME_HOURS)
@@ -27,8 +28,42 @@ const dateRange = ref('')
 const zone = ref(Intl.DateTimeFormat().resolvedOptions().timeZone)
 const autoRefreshInterval = ref(0)
 
+// Track if the time range has been initialized (prevents re-loading from localStorage on navigation)
+let isInitialized = false
+
 let autoRefreshTimer: ReturnType<typeof setTimeout> | null = null
 let autoRefreshCallback: (() => void) | null = null
+
+// =============================================================================
+// Scoped state for independent time ranges (e.g., Cases)
+// =============================================================================
+
+interface ScopedTimeState {
+    isRelativeTime: ReturnType<typeof ref<boolean>>
+    relativeTimeValue: ReturnType<typeof ref<number>>
+    relativeTimeUnit: ReturnType<typeof ref<RelativeTimeUnit>>
+    dateRange: ReturnType<typeof ref<string>>
+    zone: ReturnType<typeof ref<string>>
+    autoRefreshInterval: ReturnType<typeof ref<number>>
+    isInitialized: boolean
+}
+
+const scopedStates = new Map<string, ScopedTimeState>()
+
+function getOrCreateScopedState(scope: string): ScopedTimeState {
+    if (!scopedStates.has(scope)) {
+        scopedStates.set(scope, {
+            isRelativeTime: ref(true),
+            relativeTimeValue: ref(24),
+            relativeTimeUnit: ref(RELATIVE_TIME_HOURS as RelativeTimeUnit),
+            dateRange: ref(''),
+            zone: ref(Intl.DateTimeFormat().resolvedOptions().timeZone),
+            autoRefreshInterval: ref(0),
+            isInitialized: false
+        })
+    }
+    return scopedStates.get(scope)!
+}
 
 // =============================================================================
 // Constants
@@ -122,24 +157,49 @@ function parseDateRange(range: string): { start: Date; end: Date } | null {
 // Composable
 // =============================================================================
 
-export function useTimeRange() {
+export interface UseTimeRangeOptions {
+    scope?: string  // Optional scope for independent time range state (e.g., 'cases')
+}
+
+export function useTimeRange(options: UseTimeRangeOptions = {}) {
+    // Determine which state to use based on scope
+    const scopedState = options.scope ? getOrCreateScopedState(options.scope) : null
+
+    // Use scoped state or global state
+    const _isRelativeTime = scopedState?.isRelativeTime ?? isRelativeTime
+    const _relativeTimeValue = scopedState?.relativeTimeValue ?? relativeTimeValue
+    const _relativeTimeUnit = scopedState?.relativeTimeUnit ?? relativeTimeUnit
+    const _dateRange = scopedState?.dateRange ?? dateRange
+    const _zone = scopedState?.zone ?? zone
+    const _autoRefreshInterval = scopedState?.autoRefreshInterval ?? autoRefreshInterval
+
+    // Track initialization for scoped state
+    const getIsInitialized = () => scopedState ? scopedState.isInitialized : isInitialized
+    const setIsInitialized = (value: boolean) => {
+        if (scopedState) {
+            scopedState.isInitialized = value
+        } else {
+            isInitialized = value
+        }
+    }
+
     // Computed: Get start date based on relative or absolute time
     const startDate = computed<Date>(() => {
-        if (isRelativeTime.value) {
-            return subtractTime(new Date(), relativeTimeValue.value, relativeTimeUnit.value)
+        if (_isRelativeTime.value) {
+            return subtractTime(new Date(), _relativeTimeValue.value, _relativeTimeUnit.value)
         }
 
-        const parsed = parseDateRange(dateRange.value)
+        const parsed = parseDateRange(_dateRange.value)
         return parsed ? parsed.start : subtractTime(new Date(), 24, RELATIVE_TIME_HOURS)
     })
 
     // Computed: Get end date based on relative or absolute time
     const endDate = computed<Date>(() => {
-        if (isRelativeTime.value) {
+        if (_isRelativeTime.value) {
             return new Date()
         }
 
-        const parsed = parseDateRange(dateRange.value)
+        const parsed = parseDateRange(_dateRange.value)
         return parsed ? parsed.end : new Date()
     })
 
@@ -150,38 +210,41 @@ export function useTimeRange() {
 
     // Computed: Human readable time range description
     const rangeDescription = computed<string>(() => {
-        if (isRelativeTime.value) {
-            const unitStr = getRelativeTimeUnitString(relativeTimeUnit.value)
-            return `Last ${relativeTimeValue.value} ${unitStr}`
+        if (_isRelativeTime.value) {
+            const unitStr = getRelativeTimeUnitString(_relativeTimeUnit.value)
+            return `Last ${_relativeTimeValue.value} ${unitStr}`
         }
-        return dateRange.value || 'Custom range'
+        return _dateRange.value || 'Custom range'
     })
 
     // Set relative time
     function setRelativeTime(value: number, unit: RelativeTimeUnit) {
-        isRelativeTime.value = true
-        relativeTimeValue.value = value
-        relativeTimeUnit.value = unit
-        dateRange.value = ''
+        _isRelativeTime.value = true
+        _relativeTimeValue.value = value
+        _relativeTimeUnit.value = unit
+        _dateRange.value = ''
+        setIsInitialized(true)
     }
 
     // Set absolute time range
     function setAbsoluteTime(start: Date, end: Date) {
-        isRelativeTime.value = false
-        dateRange.value = `${formatDateForApi(start)} - ${formatDateForApi(end)}`
+        _isRelativeTime.value = false
+        _dateRange.value = `${formatDateForApi(start)} - ${formatDateForApi(end)}`
+        setIsInitialized(true)
     }
 
     // Set epoch time (for detections - from epoch 0 to now)
     function setEpochTime() {
-        isRelativeTime.value = false
+        _isRelativeTime.value = false
         const epochStart = new Date(0)
         const now = new Date()
-        dateRange.value = `${formatDateForApi(epochStart)} - ${formatDateForApi(now)}`
+        _dateRange.value = `${formatDateForApi(epochStart)} - ${formatDateForApi(now)}`
+        setIsInitialized(true)
     }
 
     // Toggle between relative and absolute
     function toggleTimeMode() {
-        if (isRelativeTime.value) {
+        if (_isRelativeTime.value) {
             // Switching to absolute - set current computed range
             setAbsoluteTime(startDate.value, endDate.value)
         } else {
@@ -194,14 +257,14 @@ export function useTimeRange() {
     function startAutoRefresh(callback: () => void) {
         stopAutoRefresh()
 
-        if (autoRefreshInterval.value <= 0) return
+        if (_autoRefreshInterval.value <= 0) return
 
         autoRefreshCallback = callback
         autoRefreshTimer = setInterval(() => {
             if (autoRefreshCallback) {
                 autoRefreshCallback()
             }
-        }, autoRefreshInterval.value * 1000)
+        }, _autoRefreshInterval.value * 1000)
     }
 
     function stopAutoRefresh() {
@@ -213,13 +276,13 @@ export function useTimeRange() {
     }
 
     function resetAutoRefresh(callback: () => void) {
-        if (autoRefreshInterval.value > 0 && autoRefreshCallback) {
+        if (_autoRefreshInterval.value > 0 && autoRefreshCallback) {
             startAutoRefresh(callback)
         }
     }
 
     function setAutoRefreshInterval(seconds: number) {
-        autoRefreshInterval.value = seconds
+        _autoRefreshInterval.value = seconds
         if (seconds <= 0) {
             stopAutoRefresh()
         } else if (autoRefreshCallback) {
@@ -237,32 +300,36 @@ export function useTimeRange() {
         const tParam = params.get('t')
 
         if (rtParam) {
-            isRelativeTime.value = true
-            relativeTimeValue.value = parseInt(rtParam, 10) || 24
+            _isRelativeTime.value = true
+            _relativeTimeValue.value = parseInt(rtParam, 10) || 24
             if (rtuParam) {
                 const unit = parseInt(rtuParam, 10)
                 if ([10, 20, 30, 40, 50, 60].includes(unit)) {
-                    relativeTimeUnit.value = unit as RelativeTimeUnit
+                    _relativeTimeUnit.value = unit as RelativeTimeUnit
                 }
             }
             changed = true
         } else if (tParam) {
-            isRelativeTime.value = false
-            dateRange.value = tParam
+            _isRelativeTime.value = false
+            _dateRange.value = tParam
             changed = true
         }
 
         const zoneParam = params.get('z')
         if (zoneParam) {
-            zone.value = zoneParam
+            _zone.value = zoneParam
             changed = true
         }
 
         // Auto-refresh interval (ar parameter from old UI)
         const arParam = params.get('ar')
         if (arParam) {
-            autoRefreshInterval.value = parseInt(arParam, 10) || 0
+            _autoRefreshInterval.value = parseInt(arParam, 10) || 0
             changed = true
+        }
+
+        if (changed) {
+            setIsInitialized(true)
         }
 
         return changed
@@ -271,19 +338,19 @@ export function useTimeRange() {
     function serializeToUrlParams(): Record<string, string> {
         const params: Record<string, string> = {}
 
-        if (isRelativeTime.value) {
-            params.rt = relativeTimeValue.value.toString()
-            params.rtu = relativeTimeUnit.value.toString()  // Old UI uses 'rtu'
-        } else if (dateRange.value) {
-            params.t = dateRange.value
+        if (_isRelativeTime.value) {
+            params.rt = _relativeTimeValue.value.toString()
+            params.rtu = _relativeTimeUnit.value.toString()  // Old UI uses 'rtu'
+        } else if (_dateRange.value) {
+            params.t = _dateRange.value
         }
 
-        if (zone.value && zone.value !== Intl.DateTimeFormat().resolvedOptions().timeZone) {
-            params.z = zone.value
+        if (_zone.value && _zone.value !== Intl.DateTimeFormat().resolvedOptions().timeZone) {
+            params.z = _zone.value
         }
 
-        if (autoRefreshInterval.value > 0) {
-            params.ar = autoRefreshInterval.value.toString()
+        if (_autoRefreshInterval.value > 0) {
+            params.ar = _autoRefreshInterval.value.toString()
         }
 
         return params
@@ -293,52 +360,59 @@ export function useTimeRange() {
     function saveToLocalStorage(category: string) {
         const key = `hunt.${category}.timeRange`
         const data = {
-            isRelative: isRelativeTime.value,
-            relativeValue: relativeTimeValue.value,
-            relativeUnit: relativeTimeUnit.value,
-            zone: zone.value,
-            autoRefreshInterval: autoRefreshInterval.value
+            isRelative: _isRelativeTime.value,
+            relativeValue: _relativeTimeValue.value,
+            relativeUnit: _relativeTimeUnit.value,
+            zone: _zone.value,
+            autoRefreshInterval: _autoRefreshInterval.value
         }
         localStorage.setItem(key, JSON.stringify(data))
     }
 
     function loadFromLocalStorage(category: string) {
+        // Skip if already initialized (navigating within app, not fresh page load)
+        if (getIsInitialized()) {
+            return
+        }
+
         const key = `hunt.${category}.timeRange`
         const stored = localStorage.getItem(key)
 
         if (stored) {
             try {
                 const data = JSON.parse(stored)
-                if (data.isRelative !== undefined) isRelativeTime.value = data.isRelative
-                if (data.relativeValue !== undefined) relativeTimeValue.value = data.relativeValue
-                if (data.relativeUnit !== undefined) relativeTimeUnit.value = data.relativeUnit
-                if (data.zone !== undefined) zone.value = data.zone
-                if (data.autoRefreshInterval !== undefined) autoRefreshInterval.value = data.autoRefreshInterval
+                if (data.isRelative !== undefined) _isRelativeTime.value = data.isRelative
+                if (data.relativeValue !== undefined) _relativeTimeValue.value = data.relativeValue
+                if (data.relativeUnit !== undefined) _relativeTimeUnit.value = data.relativeUnit
+                if (data.zone !== undefined) _zone.value = data.zone
+                if (data.autoRefreshInterval !== undefined) _autoRefreshInterval.value = data.autoRefreshInterval
             } catch (e) {
                 console.error('Failed to parse time range settings:', e)
             }
         }
+
+        setIsInitialized(true)
     }
 
     // Reset to defaults
     function reset() {
-        isRelativeTime.value = true
-        relativeTimeValue.value = 24
-        relativeTimeUnit.value = RELATIVE_TIME_HOURS
-        dateRange.value = ''
-        zone.value = Intl.DateTimeFormat().resolvedOptions().timeZone
-        autoRefreshInterval.value = 0
+        _isRelativeTime.value = true
+        _relativeTimeValue.value = 24
+        _relativeTimeUnit.value = RELATIVE_TIME_HOURS
+        _dateRange.value = ''
+        _zone.value = Intl.DateTimeFormat().resolvedOptions().timeZone
+        _autoRefreshInterval.value = 0
         stopAutoRefresh()
     }
 
     return {
-        // State
-        isRelativeTime,
-        relativeTimeValue,
-        relativeTimeUnit,
-        dateRange,
-        zone,
-        autoRefreshInterval,
+        // State (uses scoped state if scope was provided)
+        isRelativeTime: _isRelativeTime,
+        relativeTimeValue: _relativeTimeValue,
+        relativeTimeUnit: _relativeTimeUnit,
+        dateRange: _dateRange,
+        zone: _zone,
+        autoRefreshInterval: _autoRefreshInterval,
 
         // Computed
         startDate,

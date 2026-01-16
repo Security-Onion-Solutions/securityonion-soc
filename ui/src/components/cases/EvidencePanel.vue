@@ -210,7 +210,7 @@ async function submitEvidence() {
     cancelAdd()
     emit('refresh')
   } catch (e: any) {
-    formError.value = e.message || 'Failed to add evidence'
+    formError.value = e.message || 'Failed to add observable'
   } finally {
     submitting.value = false
   }
@@ -361,7 +361,7 @@ function getResultIcon(result: AnalyzerResult) {
         class="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
       >
         <Plus class="h-4 w-4" />
-        Add Evidence
+        Add Observable
       </button>
       <button
         @click="emit('refresh')"
@@ -379,7 +379,7 @@ function getResultIcon(result: AnalyzerResult) {
     >
       <div class="flex items-center gap-2 text-sm font-semibold text-primary">
         <Plus class="h-4 w-4" />
-        Add Evidence
+        Add Observable
       </div>
 
       <!-- Error Message -->
@@ -439,7 +439,7 @@ function getResultIcon(result: AnalyzerResult) {
             v-model="formData.description"
             rows="2"
             class="w-full bg-background border border-border rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-            placeholder="Describe this evidence..."
+            placeholder="Describe this observable..."
           ></textarea>
         </div>
 
@@ -492,7 +492,7 @@ function getResultIcon(result: AnalyzerResult) {
     <!-- Evidence List -->
     <div v-if="evidence.length === 0 && !showAddForm" class="text-center py-8 text-muted-foreground">
       <Crosshair class="h-12 w-12 mx-auto mb-3 opacity-50" />
-      <p>No evidence yet. Click "Add Evidence" to add observables or indicators.</p>
+      <p>No observables yet. Click "Add Observable" to add IOCs or indicators.</p>
     </div>
 
     <div v-else class="rounded-md border border-border bg-card overflow-hidden">
@@ -816,9 +816,9 @@ function getResultIcon(result: AnalyzerResult) {
         class="bg-card border border-border rounded-lg p-6 max-w-sm w-full mx-4 shadow-lg"
         @click.stop
       >
-        <h3 class="text-lg font-semibold mb-2">Delete Evidence</h3>
+        <h3 class="text-lg font-semibold mb-2">Delete Observable</h3>
         <p class="text-muted-foreground text-sm mb-4">
-          Are you sure you want to delete this evidence? This action cannot be undone.
+          Are you sure you want to delete this observable? This action cannot be undone.
         </p>
         <div class="flex justify-end gap-2">
           <button

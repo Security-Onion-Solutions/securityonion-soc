@@ -67,6 +67,7 @@ type PlaybookDiskManager struct {
 	PlaybooksByDetectionId map[string][]string
 	PlaybooksByCategory    map[string][]string
 	PlaybooksByEngine      map[string][]string
+	GlobalPlaybooks        []string // Global playbooks that apply to all detections
 	playbooksOnDisk        map[string]string
 	playbookTypes          map[string]string // Maps playbook ID to detection type
 
@@ -74,6 +75,11 @@ type PlaybookDiskManager struct {
 	customPlaybooks      map[string]*model.Playbook
 	customPlaybooksFile  string
 	customPlaybooksMutex sync.RWMutex
+
+	// Cached community playbooks for fast access
+	communityPlaybooksCache []*model.Playbook
+	communityPlaybookStats  model.PlaybookStats
+	cacheInitialized        bool
 
 	detections.IOManager
 }
@@ -270,6 +276,7 @@ func (pdm *PlaybookDiskManager) readPlaybooks(logger log.Interface, repos []*det
 	byDetId := make(map[string][]string)   // detection_id -> []filePath
 	byCategory := make(map[string][]string) // category -> []filePath
 	byEngine := make(map[string][]string)   // engine -> []filePath
+	globalPaths := []string{}               // global playbooks that apply to all detections
 	onDisk := make(map[string]string)       // playbookId -> filePath (for GetPlaybookById)
 	types := make(map[string]string)        // filePath -> detectionType
 
@@ -349,6 +356,11 @@ func (pdm *PlaybookDiskManager) readPlaybooks(logger log.Interface, repos []*det
 				types[p] = strings.ToLower(pb.DetectionType)
 			}
 
+			// Index global playbooks
+			if pb.IsGlobal {
+				globalPaths = append(globalPaths, p)
+			}
+
 			// Index by detection ID - use file path as value
 			if pb.DetectionId != "" {
 				detId := strings.ToLower(pb.DetectionId)
@@ -410,6 +422,7 @@ func (pdm *PlaybookDiskManager) readPlaybooks(logger log.Interface, repos []*det
 	pdm.PlaybooksByEngine = byEngine
 	pdm.PlaybooksByCategory = byCategory
 	pdm.PlaybooksByDetectionId = byDetId
+	pdm.GlobalPlaybooks = globalPaths
 	pdm.playbooksOnDisk = onDisk
 	pdm.playbookTypes = types
 
@@ -476,9 +489,10 @@ func (pdm *PlaybookDiskManager) GetPlaybooksForDetection(ctx context.Context, pu
 		}
 	}
 
-	// Combine paths from detection-specific and category-level
+	// Combine paths from detection-specific, category-level, and global playbooks
 	allPaths := append([]string{}, forDetectionPaths...)
 	allPaths = append(allPaths, forCategoryPaths...)
+	allPaths = append(allPaths, pdm.GlobalPlaybooks...)
 
 	// Deduplicate paths - a playbook file with both detection_id and detection_category
 	// would be indexed in both maps and appear twice
@@ -561,6 +575,7 @@ func (pdm *PlaybookDiskManager) GetPlaybooksForDetectionGrouped(ctx context.Cont
 		DetectionLevel: []*model.Playbook{},
 		CategoryLevel:  []*model.Playbook{},
 		EngineLevel:    []*model.Playbook{},
+		GlobalLevel:    []*model.Playbook{},
 	}
 
 	// Track paths we've already loaded to avoid duplicates
@@ -664,11 +679,24 @@ func (pdm *PlaybookDiskManager) GetPlaybooksForDetectionGrouped(ctx context.Cont
 		}
 	}
 
-	// 4. Add custom playbooks to appropriate levels
+	// 4. Load global community playbooks (always included)
+	for _, path := range pdm.GlobalPlaybooks {
+		if loadedPaths[path] {
+			continue
+		}
+		if pb := loadPlaybook(path); pb != nil {
+			result.GlobalLevel = append(result.GlobalLevel, pb)
+			loadedPaths[path] = true
+		}
+	}
+
+	// 5. Add custom playbooks to appropriate levels
 	customPbs := pdm.getCustomPlaybooksForDetection(publicId, detectCategory, detectEngine)
 	for _, pb := range customPbs {
 		// Determine which level based on the playbook's fields
-		if pb.DetectionId != "" && strings.ToLower(pb.DetectionId) == publicId {
+		if pb.IsGlobal {
+			result.GlobalLevel = append(result.GlobalLevel, pb)
+		} else if pb.DetectionId != "" && strings.ToLower(pb.DetectionId) == publicId {
 			result.DetectionLevel = append(result.DetectionLevel, pb)
 		} else if pb.DetectionCategory != "" {
 			result.CategoryLevel = append(result.CategoryLevel, pb)
@@ -681,6 +709,7 @@ func (pdm *PlaybookDiskManager) GetPlaybooksForDetectionGrouped(ctx context.Cont
 		"detectionLevelCount": len(result.DetectionLevel),
 		"categoryLevelCount":  len(result.CategoryLevel),
 		"engineLevelCount":    len(result.EngineLevel),
+		"globalLevelCount":    len(result.GlobalLevel),
 		"detectionPublicId":   publicId,
 		"detectCategory":      detectCategory,
 		"detectEngine":        detectEngine,
@@ -1463,6 +1492,184 @@ func (pdm *PlaybookDiskManager) GetAllPlaybooks(ctx context.Context) ([]*model.P
 	return playbooks, nil
 }
 
+// initPlaybookCache loads all community playbooks into memory cache for fast access
+func (pdm *PlaybookDiskManager) initPlaybookCache() {
+	pdm.pbUpdateMutex.Lock()
+	defer pdm.pbUpdateMutex.Unlock()
+
+	if pdm.cacheInitialized {
+		return
+	}
+
+	log.Info("Initializing playbook cache...")
+	playbooks := make([]*model.Playbook, 0, len(pdm.playbooksOnDisk))
+	globalCount := 0
+
+	for id, path := range pdm.playbooksOnDisk {
+		contents, err := pdm.ReadFile(path)
+		if err != nil {
+			log.WithError(err).WithField("playbookId", id).Warn("failed to read playbook file for cache")
+			continue
+		}
+
+		pb := &model.Playbook{}
+		if err := yaml.Unmarshal(contents, pb); err != nil {
+			log.WithError(err).WithField("playbookId", id).Warn("failed to unmarshal playbook for cache")
+			continue
+		}
+
+		pb.IsCommunity = true
+		playbooks = append(playbooks, pb)
+
+		// Count global playbooks
+		if pb.IsGlobal || (pb.DetectionId == "" && pb.DetectionCategory == "" && pb.DetectionType == "") {
+			globalCount++
+		}
+	}
+
+	pdm.communityPlaybooksCache = playbooks
+	pdm.communityPlaybookStats = model.PlaybookStats{
+		Total:     len(playbooks),
+		Community: len(playbooks),
+		Custom:    0, // Will be calculated dynamically
+		Global:    globalCount,
+	}
+	pdm.cacheInitialized = true
+
+	log.WithField("count", len(playbooks)).Info("Playbook cache initialized")
+}
+
+// GetPlaybooksPaginated returns playbooks with pagination and filtering support
+func (pdm *PlaybookDiskManager) GetPlaybooksPaginated(ctx context.Context, criteria *model.PlaybookSearchCriteria) (*model.PlaybookListResponse, error) {
+	if err := pdm.srv.CheckAuthorized(ctx, "read", "playbooks"); err != nil {
+		return nil, err
+	}
+
+	// Initialize cache if needed
+	if !pdm.cacheInitialized {
+		pdm.initPlaybookCache()
+	}
+
+	// Set defaults
+	limit := criteria.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 500 {
+		limit = 500
+	}
+	offset := criteria.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	// Collect all playbooks (community + custom)
+	pdm.pbUpdateMutex.RLock()
+	communityPlaybooks := pdm.communityPlaybooksCache
+	communityStats := pdm.communityPlaybookStats
+	pdm.pbUpdateMutex.RUnlock()
+
+	pdm.customPlaybooksMutex.RLock()
+	customPlaybooks := make([]*model.Playbook, 0, len(pdm.customPlaybooks))
+	customGlobalCount := 0
+	for _, pb := range pdm.customPlaybooks {
+		customPlaybooks = append(customPlaybooks, pb)
+		if pb.IsGlobal || (pb.DetectionId == "" && pb.DetectionCategory == "" && pb.DetectionType == "") {
+			customGlobalCount++
+		}
+	}
+	pdm.customPlaybooksMutex.RUnlock()
+
+	// Calculate stats
+	stats := model.PlaybookStats{
+		Total:     communityStats.Total + len(customPlaybooks),
+		Community: communityStats.Community,
+		Custom:    len(customPlaybooks),
+		Global:    communityStats.Global + customGlobalCount,
+	}
+
+	// Apply filters
+	searchLower := strings.ToLower(criteria.Search)
+	typeLower := strings.ToLower(criteria.Type)
+	sourceLower := strings.ToLower(criteria.Source)
+
+	var filtered []*model.Playbook
+
+	// Filter community playbooks
+	if sourceLower != "custom" {
+		for _, pb := range communityPlaybooks {
+			if matchesPlaybookCriteria(pb, searchLower, typeLower) {
+				filtered = append(filtered, pb)
+			}
+		}
+	}
+
+	// Filter custom playbooks
+	if sourceLower != "community" {
+		for _, pb := range customPlaybooks {
+			if matchesPlaybookCriteria(pb, searchLower, typeLower) {
+				filtered = append(filtered, pb)
+			}
+		}
+	}
+
+	// Calculate total matching
+	total := len(filtered)
+
+	// Apply pagination
+	start := offset
+	if start > len(filtered) {
+		start = len(filtered)
+	}
+	end := start + limit
+	if end > len(filtered) {
+		end = len(filtered)
+	}
+
+	result := filtered[start:end]
+
+	return &model.PlaybookListResponse{
+		Playbooks: result,
+		Total:     total,
+		Stats:     stats,
+	}, nil
+}
+
+// matchesPlaybookCriteria checks if a playbook matches the search/filter criteria
+func matchesPlaybookCriteria(pb *model.Playbook, searchLower, typeLower string) bool {
+	// Apply type filter
+	if typeLower != "" && typeLower != "all" {
+		if typeLower == "global" {
+			// Check if it's a global playbook
+			if !pb.IsGlobal && (pb.DetectionId != "" || pb.DetectionCategory != "" || pb.DetectionType != "") {
+				return false
+			}
+		} else {
+			// Filter by detection type
+			if strings.ToLower(pb.DetectionType) != typeLower {
+				return false
+			}
+		}
+	}
+
+	// Apply search filter
+	if searchLower != "" {
+		nameLower := strings.ToLower(pb.Name)
+		descLower := strings.ToLower(pb.Description)
+		detIdLower := strings.ToLower(pb.DetectionId)
+		catLower := strings.ToLower(pb.DetectionCategory)
+
+		if !strings.Contains(nameLower, searchLower) &&
+			!strings.Contains(descLower, searchLower) &&
+			!strings.Contains(detIdLower, searchLower) &&
+			!strings.Contains(catLower, searchLower) {
+			return false
+		}
+	}
+
+	return true
+}
+
 // getCustomPlaybooksForDetection returns custom playbooks matching the given detection criteria
 func (pdm *PlaybookDiskManager) getCustomPlaybooksForDetection(detectionId string, detectCategory string, detectEngine model.EngineName) []*model.Playbook {
 	pdm.customPlaybooksMutex.RLock()
@@ -1484,6 +1691,12 @@ func (pdm *PlaybookDiskManager) getCustomPlaybooksForDetection(detectionId strin
 	}
 
 	for _, pb := range pdm.customPlaybooks {
+		// Global playbooks apply to all detections
+		if pb.IsGlobal {
+			results = append(results, pb)
+			continue
+		}
+
 		// Match by detection ID
 		if pb.DetectionId != "" && strings.ToLower(pb.DetectionId) == detectionIdLower {
 			results = append(results, pb)
