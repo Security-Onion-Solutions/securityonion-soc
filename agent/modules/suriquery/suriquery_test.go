@@ -9,6 +9,7 @@ package suriquery
 import (
 	"io"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -151,4 +152,49 @@ func TestStreamPacketsInPcapsLimitsAcrossMultiplePaths(tester *testing.T) {
 
 	// Should be limited to pcapMaxCount
 	assert.Equal(tester, sq.pcapMaxCount, totalPackets)
+}
+
+func TestProcessJob(tester *testing.T) {
+	sq := initTest()
+	startTime, _ := time.Parse(time.RFC3339, "2019-12-08T00:00:00Z")
+	endTime, _ := time.Parse(time.RFC3339, "2019-12-08T23:59:59Z")
+
+	// Case 1: suricata.capture_file is present and valid string
+	job := model.NewJob()
+	job.Filter.BeginTime = startTime
+	job.Filter.EndTime = endTime
+	job.Filter.Parameters["suricata.capture_file"] = "test_resources/3/so-pcap.1575817346"
+	job.Filter.SrcIp = "185.47.63.113"
+	job.Filter.SrcPort = 19
+	job.Filter.DstIp = "176.126.243.198"
+	job.Filter.DstPort = 34515
+
+	// We need a dummy reader
+	reader := io.NopCloser(strings.NewReader(""))
+
+	newReader, err := sq.ProcessJob(job, reader)
+	assert.Nil(tester, err)
+	assert.NotNil(tester, newReader)
+	// Read some bytes to make sure it's actually streaming the file
+	bytes := make([]byte, 1024)
+	n, readErr := newReader.Read(bytes)
+	assert.Nil(tester, readErr)
+	assert.True(tester, n > 0)
+
+	// Case 2: suricata.capture_file is present but NOT a string
+	job = model.NewJob()
+	job.Filter.BeginTime = startTime
+	job.Filter.EndTime = endTime
+	job.Filter.Parameters["suricata.capture_file"] = 123
+	_, err = sq.ProcessJob(job, reader)
+	assert.Error(tester, err)
+	assert.Contains(tester, err.Error(), "invalid pcap path")
+
+	// Case 3: suricata.capture_file is NOT present
+	job = model.NewJob()
+	job.Filter.BeginTime = startTime
+	job.Filter.EndTime = endTime
+	newReader, err = sq.ProcessJob(job, reader)
+	assert.Nil(tester, err)
+	assert.NotNil(tester, newReader)
 }

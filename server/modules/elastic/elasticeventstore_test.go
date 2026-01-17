@@ -934,3 +934,84 @@ func TestSearchPermissionsUnauthorized(t *testing.T) {
 	assert.Equal(t, "events", unauth.Target)
 	assert.Nil(t, results2)
 }
+
+func TestAddParameterToFilter(t *testing.T) {
+	store := &ElasticEventstore{}
+	filter := model.NewFilter()
+
+	json := `{"hits":{"hits":[{"_source":{"suricata":{"capture_file":"/path/to/pcap"}}}]}}`
+	store.addParameterToFilter(json, "suricata.capture_file", filter)
+	assert.Equal(t, "/path/to/pcap", filter.Parameters["suricata.capture_file"])
+
+	// Test overwrite
+	json2 := `{"hits":{"hits":[{"_source":{"suricata":{"capture_file":"/new/path"}}}]}}`
+	store.addParameterToFilter(json2, "suricata.capture_file", filter)
+	assert.Equal(t, "/new/path", filter.Parameters["suricata.capture_file"])
+
+	// Test empty value
+	json3 := `{"hits":{"hits":[{"_source":{"suricata":{}}}]}}`
+	store.addParameterToFilter(json3, "suricata.capture_file", filter)
+	assert.Equal(t, "/new/path", filter.Parameters["suricata.capture_file"], "should not have overwritten with empty")
+}
+
+func TestPopulateJobFromDocQuery(t *testing.T) {
+	ctx := context.Background()
+	client, transport := modmock.NewMockClient(t)
+	srv := server.NewFakeAuthorizedServer(nil)
+	store := &ElasticEventstore{
+		esClient:          client,
+		server:            srv,
+		index:             "myIndex",
+		esSearchOffsetMs:  1000,
+		timeShiftMs:       500,
+		defaultDurationMs: 60000,
+	}
+
+	// Primary search response
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(`{
+			"hits" : {
+				"total" : {
+					"value" : 1,
+					"relation" : "eq"
+				},
+				"hits" : [
+					{
+						"_source" : {
+							"@timestamp" : "2024-07-22T15:54:30.269Z",
+							"source" : { "ip": "1.1.1.1", "port": 1111 },
+							"destination" : { "ip": "2.2.2.2", "port": 2222 },
+							"network" : { "transport": "tcp" },
+							"suricata" : { "capture_file": "/path/to/suricata.pcap" },
+							"observer" : { "name": "sensor1" }
+						}
+					}
+				]
+			}
+		}`)),
+	}, nil)
+
+	job := model.NewJob()
+	err := store.PopulateJobFromDocQuery(ctx, "_id", "some-id", "2024-07-22T15:54:30.269Z", job)
+	assert.NoError(t, err)
+	assert.Equal(t, "/path/to/suricata.pcap", job.Filter.Parameters["suricata.capture_file"])
+	assert.Equal(t, "sensor1", job.NodeId)
+	assert.Equal(t, "1.1.1.1", job.Filter.SrcIp)
+	assert.Equal(t, "tcp", job.Filter.Protocol)
+
+	// Check begin/end times
+	// timestamp: 2024-07-22T15:54:30.269Z
+	// duration: 60000ms
+	// timeShift: 500ms
+	// begin = timestamp - 60000 - 500 = timestamp - 60500ms
+	// end = timestamp + 60000 + 500 = timestamp + 60500ms
+	ts, _ := time.Parse(time.RFC3339, "2024-07-22T15:54:30.269Z")
+	expectedBegin := ts.Add(time.Duration(-60500) * time.Millisecond)
+	expectedEnd := ts.Add(time.Duration(60500) * time.Millisecond)
+	assert.True(t, expectedBegin.Equal(job.Filter.BeginTime))
+	assert.True(t, expectedEnd.Equal(job.Filter.EndTime))
+}
