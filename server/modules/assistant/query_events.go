@@ -8,6 +8,7 @@ package assistant
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -111,7 +112,7 @@ func (t *QueryEventsTool) Execute(ctx context.Context, server *server.Server, pa
 
 	err = json.Unmarshal([]byte(params), args)
 	if err != nil {
-		return nil, err
+		return nil, errors.New("ERROR_ONIONAI_UNMARSHAL_PARAMS")
 	}
 
 	result.Parameters = args
@@ -237,7 +238,7 @@ func (t *QueryEventsTool) Execute(ctx context.Context, server *server.Server, pa
 		// Convert to JSON
 		resultJSON, err := json.MarshalIndent(filteredEvents, "", "  ")
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal result: %w", err)
+			return nil, errors.New("ERROR_ONIONAI_MARSHAL_TOOL_RESULT")
 		}
 
 		// Log filtered result size and preview

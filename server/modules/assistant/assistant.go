@@ -40,7 +40,7 @@ const (
 )
 
 var (
-	ErrToolNotFound = errors.New("tool not found")
+	ErrToolNotFound = errors.New("ERROR_ONIONAI_TOOL_NOT_FOUND")
 )
 
 type AssistantCoordinator struct {

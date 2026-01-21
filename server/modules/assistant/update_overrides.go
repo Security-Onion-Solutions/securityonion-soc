@@ -8,7 +8,7 @@ package assistant
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"time"
 
 	"github.com/apex/log"
@@ -125,7 +125,7 @@ func (t *UpdateOverridesTool) Execute(ctx context.Context, srv *server.Server, p
 
 	err = srv.CheckAuthorized(ctx, "write", "detections")
 	if err != nil {
-		return nil, fmt.Errorf("user is not authorized to write detections: %w", err)
+		return nil, errors.New("ERROR_PERMISSION_DENIED")
 	}
 
 	userId := ctx.Value(web.ContextKeyRequestorId).(string)
@@ -145,7 +145,7 @@ func (t *UpdateOverridesTool) Execute(ctx context.Context, srv *server.Server, p
 
 	err = json.Unmarshal([]byte(params), args)
 	if err != nil {
-		return nil, fmt.Errorf("couldn't unmarshal params: %w", err)
+		return nil, errors.New("ERROR_ONIONAI_UNMARSHAL_PARAMS")
 	}
 
 	result.Parameters = args
@@ -157,12 +157,12 @@ func (t *UpdateOverridesTool) Execute(ctx context.Context, srv *server.Server, p
 	if args.PublicId != "" {
 		detect, err = srv.Detectionstore.GetDetectionByPublicId(ctx, args.PublicId)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get detection by Public ID %s: %w", args.PublicId, err)
+			return nil, err
 		}
 	} else {
 		detect, err = srv.Detectionstore.GetDetection(ctx, args.SocId)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get detection by SOC ID %s: %w", args.SocId, err)
+			return nil, err
 		}
 	}
 
@@ -190,13 +190,13 @@ func (t *UpdateOverridesTool) Execute(ctx context.Context, srv *server.Server, p
 	err = detect.Validate()
 	if err != nil {
 		logger.WithError(err).WithField("detectionPublicId", detect.PublicID).Error("invalid override")
-		return nil, fmt.Errorf("invalid override for detection with Public ID %s: %w", detect.PublicID, err)
+		return nil, err
 	}
 
 	engInt, ok := srv.DetectionEngines.Load(detect.Engine)
 	if !ok {
 		logger.WithField("detectionEngine", detect.Engine).Error("unsupported engine")
-		return nil, fmt.Errorf("unsupported engine %s", detect.Engine)
+		return nil, errors.New("ERROR_UNSUPPORTED_ENGINE")
 	}
 
 	engine := engInt.(server.DetectionEngine)
@@ -208,13 +208,13 @@ func (t *UpdateOverridesTool) Execute(ctx context.Context, srv *server.Server, p
 	detect, err = srv.Detectionstore.UpdateDetection(ctx, detect)
 	if err != nil {
 		logger.WithError(err).WithField("detectionPublicId", tempPublicId).Error("failed to update overrides")
-		return nil, fmt.Errorf("failed to update overrides for detection with Public ID %s: %w", tempPublicId, err)
+		return nil, err
 	}
 
 	errMap, err := engine.SyncLocalDetections(ctx, []*model.Detection{detect})
 	if err != nil {
 		logger.WithError(err).WithField("detectionPublicId", detect.PublicID).Error("unable to sync detection")
-		return nil, fmt.Errorf("unable to sync detection with Public ID %s: %w", detect.PublicID, err)
+		return nil, errors.New("ERROR_DETECTION_SYNC_FAILED")
 	}
 
 	if len(errMap) != 0 {
@@ -222,7 +222,7 @@ func (t *UpdateOverridesTool) Execute(ctx context.Context, srv *server.Server, p
 			"detectionPublicId": detect.PublicID,
 			"errMap":            errMap,
 		}).Error("unable to sync detection")
-		return nil, fmt.Errorf("unable to sync detection with Public ID %s: %v", detect.PublicID, errMap)
+		return nil, errors.New("ERROR_DETECTION_SYNC_FAILED")
 	}
 
 	err = engine.MergeAuxiliaryData(detect)

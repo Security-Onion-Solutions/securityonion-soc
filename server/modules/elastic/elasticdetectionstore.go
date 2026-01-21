@@ -638,7 +638,7 @@ func (store *ElasticDetectionstore) BulkUpdateDetections(ctx context.Context, ne
 	bulk, err := store.BuildBulkIndexer(ctx, logger)
 	if err != nil {
 		logger.WithError(err).Error("failed to create bulk indexer")
-		return nil, fmt.Errorf("failed to create bulk indexer: %w", err)
+		return nil, errors.New("ERROR_BULK_INDEXER_BUILD_FAILED")
 	}
 
 	createAudit := []model.AuditInfo{} // Object => *model.Detection
@@ -729,13 +729,13 @@ func (store *ElasticDetectionstore) BulkUpdateDetections(ctx context.Context, ne
 	err = bulk.Close(ctx)
 	if err != nil {
 		logger.WithError(err).Error("unable to close bulk indexer for detection changes")
-		return nil, fmt.Errorf("unable to close bulk indexer for detection changes: %w", err)
+		return nil, errors.New("ERROR_BULK_INDEXER_CLOSE_FAILED")
 	}
 
 	bulk, err = store.BuildBulkIndexer(ctx, logger)
 	if err != nil {
 		logger.WithError(err).Error("unable to create audit bulk indexer")
-		return nil, fmt.Errorf("unable to create audit bulk indexer: %w", err)
+		return nil, errors.New("ERROR_BULK_INDEXER_BUILD_FAILED")
 	}
 
 	dirty := make([]*model.Detection, 0, len(createAudit))
@@ -783,7 +783,7 @@ func (store *ElasticDetectionstore) BulkUpdateDetections(ctx context.Context, ne
 	err = bulk.Close(ctx)
 	if err != nil {
 		logger.WithError(err).Error("unable to close bulk indexer for audit history")
-		return nil, fmt.Errorf("unable to close bulk indexer for audit history: %w", err)
+		return nil, errors.New("ERROR_BULK_INDEXER_CLOSE_FAILED")
 	}
 
 	updateDur := time.Since(start)
@@ -815,7 +815,7 @@ func (store *ElasticDetectionstore) BulkAddOverrides(ctx context.Context, newOve
 	bulk, err := store.BuildBulkIndexer(ctx, logger)
 	if err != nil {
 		logger.WithError(err).Error("failed to create bulk indexer")
-		return nil, fmt.Errorf("failed to create bulk indexer: %w", err)
+		return nil, errors.New("ERROR_BULK_INDEXER_BUILD_FAILED")
 	}
 
 	createAudit := []model.AuditInfo{} // Object => *model.Detection
@@ -826,7 +826,7 @@ func (store *ElasticDetectionstore) BulkAddOverrides(ctx context.Context, newOve
 
 	for _, det := range detects {
 		if det.Language != currLang {
-			return nil, fmt.Errorf("detections must be of the same engine")
+			return nil, errors.New("ERROR_BULK_OVERRIDES_DIFFERENT_DETECTION_ENGINES")
 		}
 		currLang = det.Language
 	}
@@ -834,7 +834,7 @@ func (store *ElasticDetectionstore) BulkAddOverrides(ctx context.Context, newOve
 	_, ok := store.server.DetectionEngines.Load(detects[0].Engine)
 	if !ok {
 		logger.WithField("detectionEngine", detects[0].Engine).Error("unsupported engine")
-		return nil, fmt.Errorf("unsupported engine %s", detects[0].Engine)
+		return nil, errors.New("ERROR_UNSUPPORTED_ENGINE")
 	}
 
 	for i := range detects {
@@ -893,13 +893,13 @@ func (store *ElasticDetectionstore) BulkAddOverrides(ctx context.Context, newOve
 	err = bulk.Close(ctx)
 	if err != nil {
 		logger.WithError(err).Error("unable to close bulk indexer for detection changes")
-		return nil, fmt.Errorf("unable to close bulk indexer for detection changes: %w", err)
+		return nil, errors.New("ERROR_BULK_INDEXER_CLOSE_FAILED")
 	}
 
 	bulk, err = store.BuildBulkIndexer(ctx, logger)
 	if err != nil {
 		logger.WithError(err).Error("unable to create audit bulk indexer")
-		return nil, fmt.Errorf("unable to create audit bulk indexer: %w", err)
+		return nil, errors.New("ERROR_BULK_INDEXER_BUILD_FAILED")
 	}
 
 	dirty := make([]*model.Detection, 0, len(createAudit))
@@ -947,7 +947,7 @@ func (store *ElasticDetectionstore) BulkAddOverrides(ctx context.Context, newOve
 	err = bulk.Close(ctx)
 	if err != nil {
 		logger.WithError(err).Error("unable to close bulk indexer for audit history")
-		return nil, fmt.Errorf("unable to close bulk indexer for audit history: %w", err)
+		return nil, errors.New("ERROR_BULK_INDEXER_CLOSE_FAILED")
 	}
 
 	updateDur := time.Since(start)

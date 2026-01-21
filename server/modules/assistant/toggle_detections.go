@@ -8,6 +8,7 @@ package assistant
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -82,7 +83,7 @@ func (t *ToggleDetectionsTool) Execute(ctx context.Context, srv *server.Server, 
 
 	err = srv.CheckAuthorized(ctx, "write", "detections")
 	if err != nil {
-		return nil, fmt.Errorf("user is not authorized to write detections: %w", err)
+		return nil, errors.New("ERROR_PERMISSION_DENIED")
 	}
 
 	userId := ctx.Value(web.ContextKeyRequestorId).(string)
@@ -102,7 +103,7 @@ func (t *ToggleDetectionsTool) Execute(ctx context.Context, srv *server.Server, 
 
 	err = json.Unmarshal([]byte(params), args)
 	if err != nil {
-		return nil, fmt.Errorf("couldn't unmarshal params: %w", err)
+		return nil, errors.New("ERROR_ONIONAI_UNMARSHAL_PARAMS")
 	}
 
 	result.Parameters = args
@@ -124,12 +125,12 @@ func (t *ToggleDetectionsTool) Execute(ctx context.Context, srv *server.Server, 
 
 	detectEvents, err := srv.Detectionstore.QueryWithRange(ctx, query, args.RangeStart, args.RangeEnd, args.RangeFormat, detectLimit)
 	if err != nil {
-		return nil, fmt.Errorf("unable to search for detections with query %s: %w", query, err)
+		return nil, err
 	}
 
 	detects, err := srv.Detectionstore.ConvertEventsToDetections(ctx, detectEvents)
 	if err != nil {
-		return nil, fmt.Errorf("unable to convert events to detections: %w", err)
+		return nil, errors.New("ERROR_ONIONAI_CONVERT_EVENTS_TO_DETECTIONS")
 	}
 
 	if len(detects) == 0 {
@@ -142,7 +143,7 @@ func (t *ToggleDetectionsTool) Execute(ctx context.Context, srv *server.Server, 
 	bulkStats, err := srv.Detectionstore.BulkUpdateDetections(ctx, args.Enable, detects, logger)
 	if err != nil {
 		logger.WithError(err).Error("error updating detections")
-		return nil, fmt.Errorf("error updating detections: %w", err)
+		return nil, err
 	}
 
 	syncDetects := bulkStats.NeedToSync
@@ -176,12 +177,12 @@ func (t *ToggleDetectionsTool) Execute(ctx context.Context, srv *server.Server, 
 
 	if len(errList) != 0 {
 		logger.WithError(err).Error("unable to sync detections")
-		return nil, fmt.Errorf("unable to sync detections: %v", errList)
+		return nil, errors.New("ERROR_DETECTION_SYNC_FAILED")
 	}
 
 	if len(errMap) != 0 {
 		logger.WithField("errMap", errMap).Error("unable to sync detections")
-		return nil, fmt.Errorf("unable to sync detections: %v", errMap)
+		return nil, errors.New("ERROR_DETECTION_SYNC_FAILED")
 	}
 
 	syncDur := time.Since(syncStart)

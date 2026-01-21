@@ -8,7 +8,7 @@ package assistant
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -75,7 +75,7 @@ func (t *UpdateDetectionContentTool) Execute(ctx context.Context, srv *server.Se
 
 	err = srv.CheckAuthorized(ctx, "write", "detections")
 	if err != nil {
-		return nil, fmt.Errorf("user is not authorized to write detections: %w", err)
+		return nil, errors.New("ERROR_PERMISSION_DENIED")
 	}
 
 	userId := ctx.Value(web.ContextKeyRequestorId).(string)
@@ -95,7 +95,7 @@ func (t *UpdateDetectionContentTool) Execute(ctx context.Context, srv *server.Se
 
 	err = json.Unmarshal([]byte(params), args)
 	if err != nil {
-		return nil, fmt.Errorf("couldn't unmarshal params: %w", err)
+		return nil, errors.New("ERROR_ONIONAI_UNMARSHAL_PARAMS")
 	}
 
 	result.Parameters = args
@@ -105,17 +105,17 @@ func (t *UpdateDetectionContentTool) Execute(ctx context.Context, srv *server.Se
 	if args.PublicId != "" {
 		detect, err = srv.Detectionstore.GetDetectionByPublicId(ctx, args.PublicId)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get detection by Public ID %s: %w", args.PublicId, err)
+			return nil, err
 		}
 	} else {
 		detect, err = srv.Detectionstore.GetDetection(ctx, args.SocId)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get detection by SOC ID %s: %w", args.SocId, err)
+			return nil, err
 		}
 	}
 
 	if detect.IsCommunity {
-		return nil, fmt.Errorf("cannot update a community rule (Public ID %s)", detect.PublicID)
+		return nil, errors.New("ERROR_DETECTION_CANNOT_UPDATE_COMMUNITY")
 	}
 
 	detect.Content = args.Content
@@ -123,13 +123,13 @@ func (t *UpdateDetectionContentTool) Execute(ctx context.Context, srv *server.Se
 	err = detect.Validate()
 	if err != nil {
 		logger.WithError(err).WithField("detectionPublicId", detect.PublicID).Error("invalid detection")
-		return nil, fmt.Errorf("invalid detection with Public ID %s: %w", detect.PublicID, err)
+		return nil, err
 	}
 
 	engInt, ok := srv.DetectionEngines.Load(detect.Engine)
 	if !ok {
 		logger.WithField("detectionEngine", detect.Engine).Error("unsupported engine")
-		return nil, fmt.Errorf("unsupported engine %s", detect.Engine)
+		return nil, errors.New("ERROR_UNSUPPORTED_ENGINE")
 	}
 
 	engine := engInt.(server.DetectionEngine)
@@ -137,7 +137,7 @@ func (t *UpdateDetectionContentTool) Execute(ctx context.Context, srv *server.Se
 	_, err = engine.ValidateRule(detect.Content)
 	if err != nil {
 		logger.WithError(err).WithField("detectionContent", detect.Content).Error("invalid rule")
-		return nil, fmt.Errorf("invalid rule (%s): %w", detect.Content, err)
+		return nil, err
 	}
 
 	err = engine.ExtractDetails(detect)
@@ -146,13 +146,13 @@ func (t *UpdateDetectionContentTool) Execute(ctx context.Context, srv *server.Se
 			"detectionEngine":   detect.Engine,
 			"detectionPublicId": detect.PublicID,
 		}).Error("unable to extract details from detection")
-		return nil, fmt.Errorf("unable to extract details for detection with Public ID %s and engine %s: %w", detect.PublicID, detect.Engine, err)
+		return nil, err
 	}
 
 	_, err = engine.ApplyFilters(detect)
 	if err != nil {
 		logger.WithError(err).WithField("detectionPublicId", detect.PublicID).Error("unable to apply filters for detection")
-		return nil, fmt.Errorf("unable to apply filters for detection with Public ID %s: %w", detect.PublicID, err)
+		return nil, err
 	}
 
 	detect.Kind = ""
@@ -162,13 +162,13 @@ func (t *UpdateDetectionContentTool) Execute(ctx context.Context, srv *server.Se
 	detect, err = srv.Detectionstore.UpdateDetection(ctx, detect)
 	if err != nil {
 		logger.WithError(err).WithField("detectionPublicId", tempPublicId).Error("failed to update detection")
-		return nil, fmt.Errorf("failed to update detection with Public ID %s: %w", tempPublicId, err)
+		return nil, err
 	}
 
 	errMap, err := engine.SyncLocalDetections(ctx, []*model.Detection{detect})
 	if err != nil {
 		logger.WithError(err).WithField("detectionPublicId", detect.PublicID).Error("unable to sync detection")
-		return nil, fmt.Errorf("unable to sync detection with Public ID %s: %w", detect.PublicID, err)
+		return nil, errors.New("ERROR_DETECTION_SYNC_FAILED")
 	}
 
 	if len(errMap) != 0 {
@@ -176,7 +176,7 @@ func (t *UpdateDetectionContentTool) Execute(ctx context.Context, srv *server.Se
 			"detectionPublicId": detect.PublicID,
 			"errMap":            errMap,
 		}).Error("unable to sync detection")
-		return nil, fmt.Errorf("unable to sync detection with Public ID %s: %v", detect.PublicID, errMap)
+		return nil, errors.New("ERROR_DETECTION_SYNC_FAILED")
 	}
 
 	err = engine.MergeAuxiliaryData(detect)

@@ -8,6 +8,7 @@ package assistant
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -82,7 +83,7 @@ func (t *GetPlaybooksTool) Execute(ctx context.Context, srv *server.Server, para
 
 	err = json.Unmarshal([]byte(params), args)
 	if err != nil {
-		return nil, err
+		return nil, errors.New("ERROR_ONIONAI_UNMARSHAL_PARAMS")
 	}
 
 	result.Parameters = args
@@ -100,10 +101,10 @@ func (t *GetPlaybooksTool) Execute(ctx context.Context, srv *server.Server, para
 
 	events, err := srv.Eventstore.Search(ctx, criteria)
 	if err != nil {
-		return nil, fmt.Errorf("failed to search for alert: %w", err)
+		return nil, err
 	}
 	if events.TotalEvents == 0 || len(events.Events) == 0 {
-		return nil, fmt.Errorf("no alert found with ID %s", args.AlertID)
+		return nil, errors.New("ERROR_ONIONAI_NO_ALERT_FOUND")
 	}
 
 	event := events.Events[0]
@@ -111,12 +112,12 @@ func (t *GetPlaybooksTool) Execute(ctx context.Context, srv *server.Server, para
 	detId, ok := event.Payload["rule.uuid"].(string)
 	if !ok {
 		logger.WithField("specifiedEvent", event).Error("event does not have a rule.uuid field")
-		return nil, fmt.Errorf("alert does not have a rule.uuid field")
+		return nil, errors.New("ERROR_ONIONAI_NO_ALERT_UUID_FIELD")
 	}
 
 	detection, err := srv.Detectionstore.GetDetectionByPublicId(ctx, detId)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get detection by ID %s: %w", detId, err)
+		return nil, err
 	}
 
 	engInt, ok := srv.DetectionEngines.Load(detection.Engine)
@@ -139,7 +140,7 @@ func (t *GetPlaybooksTool) Execute(ctx context.Context, srv *server.Server, para
 
 	playbooks, err := srv.Playbookstore.GetPlaybooksForDetection(ctx, detection.PublicID, detection.Category, detection.Engine)
 	if err != nil || len(playbooks) == 0 {
-		return nil, fmt.Errorf("failed to get playbooks for detection %s: %w", detection.PublicID, err)
+		return nil, errors.New("ERROR_ONIONAI_PLAYBOOKS_RETRIEVAL_FAILED")
 	}
 
 	if args.PlaybookIndex != nil {

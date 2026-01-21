@@ -8,6 +8,7 @@ package assistant
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -98,7 +99,7 @@ func (t *EscalateAlertsTool) Execute(ctx context.Context, server *server.Server,
 
 	err = json.Unmarshal([]byte(params), args)
 	if err != nil {
-		return nil, err
+		return nil, errors.New("ERROR_ONIONAI_UNMARSHAL_PARAMS")
 	}
 
 	var timeRange string
@@ -169,14 +170,14 @@ func (t *EscalateAlertsTool) Execute(ctx context.Context, server *server.Server,
 		if err != nil {
 			logger.WithError(err).Error("error creating case for escalated alert")
 
-			return nil, fmt.Errorf("error creating case for escalated alert: %w", err)
+			return nil, err
 		}
 	} else {
 		modelCase, err = server.Casestore.GetCase(ctx, args.CaseId)
 		if err != nil {
 			logger.WithField("caseId", args.CaseId).WithError(err).Error("error fetching case for escalated alert")
 
-			return nil, fmt.Errorf("error fetching case for escalated alert: %w", err)
+			return nil, err
 		}
 	}
 	for _, ev := range relatedEvents {
@@ -189,7 +190,7 @@ func (t *EscalateAlertsTool) Execute(ctx context.Context, server *server.Server,
 	if err != nil {
 		logger.WithError(err).Error("error linking alerts to new case")
 
-		return nil, fmt.Errorf("error linking alerts to new case: %w", err)
+		return nil, err
 	}
 
 	logger.WithFields(log.Fields{
@@ -214,7 +215,7 @@ func (t *EscalateAlertsTool) Execute(ctx context.Context, server *server.Server,
 	if err != nil {
 		logger.WithError(err).Error("error escalating alert")
 
-		return nil, fmt.Errorf("error escalating alert: %w", err)
+		return nil, err
 	}
 
 	if ackResults.UpdatedCount == 0 {

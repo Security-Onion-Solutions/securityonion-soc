@@ -8,6 +8,7 @@ package assistant
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -80,7 +81,7 @@ func (t *QueryDetectionsTool) Execute(ctx context.Context, server *server.Server
 
 	err = server.CheckAuthorized(ctx, "read", "detections")
 	if err != nil {
-		return nil, fmt.Errorf("user is not authorized to read detections: %w", err)
+		return nil, errors.New("ERROR_PERMISSION_DENIED")
 	}
 
 	userId := ctx.Value(web.ContextKeyRequestorId).(string)
@@ -100,7 +101,7 @@ func (t *QueryDetectionsTool) Execute(ctx context.Context, server *server.Server
 
 	err = json.Unmarshal([]byte(params), args)
 	if err != nil {
-		return nil, fmt.Errorf("couldn't unmarshal params: %w", err)
+		return nil, errors.New("ERROR_ONIONAI_UNMARSHAL_PARAMS")
 	}
 
 	result.Parameters = args
@@ -126,7 +127,7 @@ func (t *QueryDetectionsTool) Execute(ctx context.Context, server *server.Server
 
 	searchResults, err := server.Detectionstore.QueryWithRange(ctx, query, args.RangeStart, args.RangeEnd, args.RangeFormat, detectLimit)
 	if err != nil {
-		return nil, fmt.Errorf("unable to search for detection events with query %s: %w", query, err)
+		return nil, err
 	}
 
 	detectEvents := searchResults.Events
@@ -148,7 +149,7 @@ func (t *QueryDetectionsTool) Execute(ctx context.Context, server *server.Server
 	// Convert to JSON
 	resultJSON, err := json.MarshalIndent(filteredDetects, "", "  ")
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal %d filtered detections: %w", len(filteredDetects), err)
+		return nil, errors.New("ERROR_ONIONAI_MARSHAL_TOOL_RESULT")
 	}
 
 	// Log filtered result size and preview
