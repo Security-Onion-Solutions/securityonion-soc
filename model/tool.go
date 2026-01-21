@@ -32,8 +32,8 @@ type ToolResponse struct {
 }
 
 type ToolConfig struct {
-	Tools      []*ToolSpec    `json:"tools"`
-	ToolChoice map[string]any `json:"toolChoice"`
+	Tools      []*ToolSpec           `json:"tools"`
+	ToolChoice map[string]JSONSchema `json:"toolChoice"`
 }
 
 type ToolSpec struct {
@@ -41,13 +41,13 @@ type ToolSpec struct {
 }
 
 type ToolDefinition struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	InputSchema any    `json:"inputSchema"`
+	Name        string     `json:"name"`
+	Description string     `json:"description"`
+	InputSchema JSONSchema `json:"inputSchema"`
 }
 
 type JSONSchema struct {
-	Json *ToolSchema `json:"json"`
+	Json *ToolSchema `json:"json,omitempty"`
 }
 
 type ToolSchema struct {

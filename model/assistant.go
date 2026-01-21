@@ -228,9 +228,12 @@ type ContentBlock struct {
 	Text string `json:"text,omitempty" example:"What are my latest alerts?"`
 	// The tool result content of the message.
 	ToolResult *ToolResult `json:"toolResult,omitempty"`
+	// A signature representing the Assistant's reasoning leading to this tool use.
+	ThoughtSignature []byte `json:"thought_signature,omitempty"`
 }
 
 type ToolResult struct {
+	Name      string              `json:"-"`
 	ToolUseId string              `json:"toolUseId"`
 	Content   []ToolResultContent `json:"content"`
 	Status    string              `json:"status,omitempty"`

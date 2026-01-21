@@ -125,8 +125,8 @@ func buildToolConfig(functions map[string]Tool) (json.RawMessage, error) {
 
 	tc := &model.ToolConfig{
 		Tools: toolSpecs,
-		ToolChoice: map[string]any{
-			"auto": map[string]any{},
+		ToolChoice: map[string]model.JSONSchema{
+			"auto": {},
 		},
 	}
 
