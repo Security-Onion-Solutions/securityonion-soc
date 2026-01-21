@@ -107,14 +107,14 @@ func (a *BedrockAdapter) SendMessage(ctx context.Context, req *model.ChatRequest
 	return response, nil
 }
 
-func (a *BedrockAdapter) SendMessageStream(ctx context.Context, req *model.ChatRequest) (*http.Response, error) {
+func (a *BedrockAdapter) SendMessageStream(ctx context.Context, req *model.ChatRequest) (*http.Response, *model.AuxMessageData, error) {
 	logger := log.FromContext(ctx)
 
 	u, err := url.Parse(a.apiUrl)
 	if err != nil {
 		logger.WithError(err).WithField("apiUrl", a.apiUrl).Error("unable to parse apiUrl")
 
-		return nil, err
+		return nil, nil, err
 	}
 
 	u.Path = path.Join(u.Path, "/api/chat")
@@ -125,7 +125,7 @@ func (a *BedrockAdapter) SendMessageStream(ctx context.Context, req *model.ChatR
 	err = json.NewEncoder(&buf).Encode(req)
 	if err != nil {
 		logger.WithError(err).WithField("chatrequest", req).Error("unable to encode ChatRequest")
-		return nil, err
+		return nil, nil, err
 	}
 
 	logger.WithField("outgoingChatBodySize", buf.Len()).Info("outgoing chat request body")
@@ -134,7 +134,7 @@ func (a *BedrockAdapter) SendMessageStream(ctx context.Context, req *model.ChatR
 	if err != nil {
 		logger.WithError(err).WithField("apiEndpoint", endpoint).Error("unable to make request object")
 
-		return nil, err
+		return nil, nil, err
 	}
 
 	httpReq.Header.Add("Content-Type", "application/json")
@@ -149,10 +149,10 @@ func (a *BedrockAdapter) SendMessageStream(ctx context.Context, req *model.ChatR
 
 		logger.WithError(err).Error("unable to execute request")
 
-		return nil, err
+		return nil, nil, err
 	}
 
-	return res, nil
+	return res, nil, nil
 }
 
 func (a *BedrockAdapter) GetBalance(ctx context.Context) (*model.BalanceResponse, error) {

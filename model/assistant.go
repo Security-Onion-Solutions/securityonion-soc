@@ -232,6 +232,10 @@ type ContentBlock struct {
 	ThoughtSignature []byte `json:"thought_signature,omitempty"`
 }
 
+type AuxMessageData struct {
+	ThoughtSignatures map[string][]byte
+}
+
 type ToolResult struct {
 	Name      string              `json:"-"`
 	ToolUseId string              `json:"toolUseId"`

@@ -264,7 +264,7 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, aiModel string, messag
 	return newMessages, nil
 }
 
-func (ac *AssistantCoordinator) ChatStream(ctx context.Context, aiModel string, messages []*model.Message) (*http.Response, error) {
+func (ac *AssistantCoordinator) ChatStream(ctx context.Context, aiModel string, messages []*model.Message) (*http.Response, *model.AuxMessageData, error) {
 	userID := ctx.Value(web.ContextKeyRequestorId).(string)
 
 	// copy and modify
@@ -281,12 +281,12 @@ func (ac *AssistantCoordinator) ChatStream(ctx context.Context, aiModel string, 
 
 	adapter := ac.selectAdapter(aiModel)
 
-	res, err := adapter.SendMessageStream(ctx, req)
+	res, aux, err := adapter.SendMessageStream(ctx, req)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return res, nil
+	return res, aux, nil
 }
 
 func (ac *AssistantCoordinator) ExecuteTool(ctx context.Context, toolName string, params string, auxData string) (*model.ToolResponse, error) {

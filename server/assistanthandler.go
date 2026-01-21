@@ -187,7 +187,7 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	}
 	noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRequestorId, ctx.Value(web.ContextKeyRequestorId).(string))
 
-	response, err := h.server.AssistantManager.ChatStream(noTimeOutCtx, incMsg.Model, messages)
+	response, aux, err := h.server.AssistantManager.ChatStream(noTimeOutCtx, incMsg.Model, messages)
 	if err != nil {
 		logger.WithError(err).Error("unable to chat (stream) with assistant")
 		web.Respond(w, r, http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR")
@@ -204,7 +204,7 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	go func() {
-		msg, err := unstreamResponse(ctx, string(entireResponse))
+		msg, err := unstreamResponse(ctx, string(entireResponse), aux)
 		if err != nil {
 			logger.WithError(err).Error("error unstreaming response")
 			return
@@ -346,7 +346,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := h.server.AssistantManager.ChatStream(ctx, toolReq.Model, messages)
+	response, aux, err := h.server.AssistantManager.ChatStream(ctx, toolReq.Model, messages)
 	if err != nil {
 		logger.WithError(err).Error("unable to chat (stream) with assistant after tool execution")
 		web.Respond(w, r, http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR")
@@ -372,7 +372,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 	noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRequestorId, ctx.Value(web.ContextKeyRequestorId).(string))
 
 	go func() {
-		msg, err := unstreamResponse(ctx, string(entireResponse))
+		msg, err := unstreamResponse(ctx, string(entireResponse), aux)
 		if err != nil {
 			logger.WithError(err).Error("error unstreaming response")
 			return
@@ -526,6 +526,8 @@ func (h *AssistantHandler) GetSessionDetails(w http.ResponseWriter, r *http.Requ
 
 		return
 	}
+
+	removeAuxData(history)
 
 	web.Respond(w, r, http.StatusOK, &model.AssistantSessionDetails{
 		Session: session[0],
@@ -924,7 +926,7 @@ func streamResponse(ctx context.Context, w http.ResponseWriter, r *http.Request,
 	return entireResponse, err
 }
 
-func unstreamResponse(ctx context.Context, rawResponse string) (*model.Message, error) {
+func unstreamResponse(ctx context.Context, rawResponse string, aux *model.AuxMessageData) (*model.Message, error) {
 	type Delta struct {
 		Type        string  `json:"type"`
 		Text        string  `json:"text,omitempty"`
@@ -1037,6 +1039,19 @@ func unstreamResponse(ctx context.Context, rawResponse string) (*model.Message, 
 		}
 	}
 
+	if aux != nil {
+		// for _, cb := range message.ContentBlocks {
+		for i := 0; i < len(message.ContentBlocks); i++ {
+			cb := &message.ContentBlocks[i]
+			if cb.Type == "tool_use" {
+				ts, ok := aux.ThoughtSignatures[cb.Id]
+				if ok {
+					cb.ThoughtSignature = ts
+				}
+			}
+		}
+	}
+
 	return message, nil
 }
 
@@ -1053,4 +1068,13 @@ func historyToContext(history []*model.StoredMessage) []*model.Message {
 	}
 
 	return messages
+}
+
+func removeAuxData(messages []*model.StoredMessage) {
+	for _, msg := range messages {
+		for i := 0; i < len(msg.Message.ContentBlocks); i++ {
+			cb := &msg.Message.ContentBlocks[i]
+			cb.ThoughtSignature = nil
+		}
+	}
 }

@@ -65,7 +65,7 @@ func (a *GeminiAdapter) SendMessage(ctx context.Context, req *model.ChatRequest)
 	return nil, nil
 }
 
-func (a *GeminiAdapter) SendMessageStream(ctx context.Context, req *model.ChatRequest) (*http.Response, error) {
+func (a *GeminiAdapter) SendMessageStream(ctx context.Context, req *model.ChatRequest) (*http.Response, *model.AuxMessageData, error) {
 	// %s = model
 	const msgStart = `data: {"type":"message_start","message":{"id":"assistant","type":"message","role":"assistant","content":[],"model":"%s","stop_reason":null,"stop_sequence":null}}` + "\n\n"
 	// %s = model tokens
@@ -100,7 +100,7 @@ func (a *GeminiAdapter) SendMessageStream(ctx context.Context, req *model.ChatRe
 		ToolConfig: toolConfig,
 	}, history)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	bodyReader, bodyWriter := io.Pipe()
@@ -113,6 +113,10 @@ func (a *GeminiAdapter) SendMessageStream(ctx context.Context, req *model.ChatRe
 
 	res.Header.Add("Content-Type", "text/event-stream")
 
+	aux := &model.AuxMessageData{
+		ThoughtSignatures: map[string][]byte{},
+	}
+
 	go func() {
 		defer bodyWriter.Close()
 
@@ -123,8 +127,6 @@ func (a *GeminiAdapter) SendMessageStream(ctx context.Context, req *model.ChatRe
 
 		var finalResp *genai.GenerateContentResponse
 		finishReason := "end_turn"
-
-		thoughtSignatures := map[string][]byte{}
 
 		// don't allow a user closing their request connection to cause us to lose the message stream
 		noTimeoutContext := context.WithValue(context.Background(), web.ContextKeyRequestId, ctx.Value(web.ContextKeyRequestId))
@@ -170,7 +172,7 @@ func (a *GeminiAdapter) SendMessageStream(ctx context.Context, req *model.ChatRe
 							if toolUseId == "" {
 								toolUseId = fmt.Sprintf("toolu_%d", contentBlockIndex)
 							}
-							thoughtSignatures[toolUseId] = part.ThoughtSignature
+							aux.ThoughtSignatures[toolUseId] = part.ThoughtSignature
 						}
 					}
 
@@ -187,11 +189,10 @@ func (a *GeminiAdapter) SendMessageStream(ctx context.Context, req *model.ChatRe
 					}
 
 					toolUseBlock := map[string]any{
-						"type":              "tool_use",
-						"id":                toolUseId,
-						"name":              fc.Name,
-						"input":             map[string]any{},
-						"thought_signature": thoughtSignatures[toolUseId],
+						"type":  "tool_use",
+						"id":    toolUseId,
+						"name":  fc.Name,
+						"input": map[string]any{},
 					}
 					toolUseJSON, _ := json.Marshal(toolUseBlock)
 					fmt.Fprintf(bodyWriter, contentBlockStart, contentBlockIndex, string(toolUseJSON))
@@ -229,7 +230,7 @@ func (a *GeminiAdapter) SendMessageStream(ctx context.Context, req *model.ChatRe
 		fmt.Fprint(bodyWriter, done)
 	}()
 
-	return res, nil
+	return res, aux, nil
 }
 
 func (a *GeminiAdapter) GetBalance(ctx context.Context) (*model.BalanceResponse, error) {
