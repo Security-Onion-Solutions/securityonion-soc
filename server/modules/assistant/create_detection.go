@@ -70,6 +70,7 @@ func (t *CreateDetectionTool) Execute(ctx context.Context, srv *server.Server, p
 
 	err = srv.CheckAuthorized(ctx, "write", "detections")
 	if err != nil {
+		logger.WithError(err).Error("user is not authorized to write detections")
 		return nil, errors.New("ERROR_PERMISSION_DENIED")
 	}
 

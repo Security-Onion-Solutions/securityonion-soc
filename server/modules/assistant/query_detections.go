@@ -81,6 +81,7 @@ func (t *QueryDetectionsTool) Execute(ctx context.Context, server *server.Server
 
 	err = server.CheckAuthorized(ctx, "read", "detections")
 	if err != nil {
+		logger.WithError(err).Error("user is not authorized to read detections")
 		return nil, errors.New("ERROR_PERMISSION_DENIED")
 	}
 

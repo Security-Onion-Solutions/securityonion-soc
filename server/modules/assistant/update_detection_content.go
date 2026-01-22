@@ -75,6 +75,7 @@ func (t *UpdateDetectionContentTool) Execute(ctx context.Context, srv *server.Se
 
 	err = srv.CheckAuthorized(ctx, "write", "detections")
 	if err != nil {
+		logger.WithError(err).Error("user is not authorized to write detections")
 		return nil, errors.New("ERROR_PERMISSION_DENIED")
 	}
 
@@ -116,6 +117,7 @@ func (t *UpdateDetectionContentTool) Execute(ctx context.Context, srv *server.Se
 	}
 
 	if detect.IsCommunity {
+		logger.WithField("publicId", detect.PublicID).Error("cannot update a community rule")
 		return nil, errors.New("ERROR_DETECTION_CANNOT_UPDATE_COMMUNITY")
 	}
 

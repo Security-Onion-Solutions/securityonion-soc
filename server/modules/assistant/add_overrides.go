@@ -128,6 +128,7 @@ func (t *AddOverridesTool) Execute(ctx context.Context, srv *server.Server, para
 
 	err = srv.CheckAuthorized(ctx, "write", "detections")
 	if err != nil {
+		logger.WithError(err).Error("user is not authorized to write detections")
 		return nil, errors.New("ERROR_PERMISSION_DENIED")
 	}
 
@@ -178,6 +179,7 @@ func (t *AddOverridesTool) Execute(ctx context.Context, srv *server.Server, para
 
 	detects, err := srv.Detectionstore.ConvertEventsToDetections(ctx, detectEvents)
 	if err != nil {
+		logger.WithError(err).WithField("detectEvents", detectEvents).Error("unable to convert events to detections")
 		return nil, errors.New("ERROR_ASSISTANT_CONVERT_EVENTS_TO_DETECTIONS")
 	}
 

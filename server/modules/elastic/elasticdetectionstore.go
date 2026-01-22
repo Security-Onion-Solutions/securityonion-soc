@@ -826,6 +826,10 @@ func (store *ElasticDetectionstore) BulkAddOverrides(ctx context.Context, newOve
 
 	for _, det := range detects {
 		if det.Language != currLang {
+			logger.WithFields(log.Fields{
+				"detectEngine1": currLang,
+				"detectEngine2": det.Language,
+			}).Error("detections must be of the same engine")
 			return nil, errors.New("ERROR_BULK_OVERRIDES_DIFFERENT_DETECTION_ENGINES")
 		}
 		currLang = det.Language

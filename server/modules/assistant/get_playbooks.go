@@ -105,6 +105,7 @@ func (t *GetPlaybooksTool) Execute(ctx context.Context, srv *server.Server, para
 		return nil, err
 	}
 	if events.TotalEvents == 0 || len(events.Events) == 0 {
+		logger.WithField("alertId", args.AlertID).Error("no alert found with corresponding ID")
 		return nil, errors.New("ERROR_ASSISTANT_NO_ALERT_FOUND")
 	}
 
@@ -141,6 +142,7 @@ func (t *GetPlaybooksTool) Execute(ctx context.Context, srv *server.Server, para
 
 	playbooks, err := srv.Playbookstore.GetPlaybooksForDetection(ctx, detection.PublicID, detection.Category, detection.Engine)
 	if err != nil || len(playbooks) == 0 {
+		logger.WithField("publicId", detection.PublicID).Error("failed to get playbooks for detection")
 		return nil, errors.New("ERROR_ASSISTANT_PLAYBOOKS_RETRIEVAL_FAILED")
 	}
 
