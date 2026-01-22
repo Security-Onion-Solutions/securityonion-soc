@@ -521,6 +521,13 @@ watch(activeTab, (tab) => {
 })
 
 onMounted(async () => {
+  // Check for tab query parameter
+  const tabParam = route.query.tab as string
+  const validTabs = tabs.map(t => t.id)
+  if (tabParam && validTabs.includes(tabParam)) {
+    activeTab.value = tabParam
+  }
+
   await fetchDetectionDetail()
   // Pre-fetch comments and history for a smoother experience
   if (detection.value) {

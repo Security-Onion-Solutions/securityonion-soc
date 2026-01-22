@@ -1,7 +1,7 @@
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, computed, onMounted, nextTick } from 'vue'
+import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import {
   Home,
   Settings,
@@ -37,6 +37,31 @@ const { isOpen: isChatOpen, toggle: toggleChat, collapse: closeChat } = useChatW
 
 const sidebarOpen = ref(true)
 const adminExpanded = ref(false)
+
+// Scroll position preservation for keep-alive routes
+const mainContentRef = ref<HTMLElement | null>(null)
+const scrollPositions = new Map<string, number>()
+
+// Save scroll position before leaving a route
+router.beforeEach((to, from) => {
+  if (mainContentRef.value && from.name) {
+    scrollPositions.set(String(from.name), mainContentRef.value.scrollTop)
+  }
+})
+
+// Restore scroll position after navigation
+router.afterEach((to) => {
+  nextTick(() => {
+    if (mainContentRef.value && to.name) {
+      const savedPosition = scrollPositions.get(String(to.name))
+      if (savedPosition !== undefined) {
+        mainContentRef.value.scrollTop = savedPosition
+      } else {
+        mainContentRef.value.scrollTop = 0
+      }
+    }
+  })
+})
 
 onMounted(() => {
   // Handle login flow redirect
@@ -262,8 +287,12 @@ function isActive(routeName: string | string[]): boolean {
         </div>
       </header>
 
-      <div class="flex-1 overflow-auto p-6">
-        <router-view />
+      <div ref="mainContentRef" class="flex-1 overflow-auto p-6">
+        <router-view v-slot="{ Component }">
+          <keep-alive :include="['Alerts', 'AlertGroupDetail', 'Detections', 'Cases', 'Hunt']">
+            <component :is="Component" />
+          </keep-alive>
+        </router-view>
       </div>
     </main>
 

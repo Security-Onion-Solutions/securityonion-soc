@@ -1,4 +1,6 @@
 <script setup lang="ts">
+defineOptions({ name: 'AlertGroupDetail' })
+
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {

@@ -106,6 +106,12 @@ type RelatedEvent struct {
 	CaseId string `json:"caseId" example:"PdFc-JIBLkNJ8-bDfz47" validate:"required"`
 	// A mapping of related event field names and their values.
 	Fields map[string]interface{} `json:"fields" example:"client.ip:1.2.3.4,client.port:1099" validate:"required"`
+	// Whether this event is highlighted/marked as important by an analyst.
+	IsHighlighted bool `json:"isHighlighted,omitempty"`
+	// Analyst notes about this related event.
+	Note string `json:"note,omitempty"`
+	// The guided analysis question that produced this event (if applicable).
+	SourceQuestion string `json:"sourceQuestion,omitempty"`
 }
 
 func NewRelatedEvent() *RelatedEvent {
@@ -131,6 +137,12 @@ type AttachEventCriteria struct {
 	Escalated bool `json:"escalated" example:"false"`
 	// Whether to attach events that are already acknowledged: true = act on acknowledged events, false = act on unacknowledged events
 	Acknowledged bool `json:"acknowledged" example:"true"`
+	// Whether this event is highlighted/marked as important by an analyst.
+	IsHighlighted bool `json:"isHighlighted,omitempty"`
+	// Analyst notes about this related event.
+	Note string `json:"note,omitempty"`
+	// The guided analysis question that produced this event (if applicable).
+	SourceQuestion string `json:"sourceQuestion,omitempty"`
 }
 
 func NewAttachEventCriteria() *AttachEventCriteria {

@@ -29,6 +29,7 @@ type Casestore interface {
 	CreateRelatedEvents(ctx context.Context, events []*model.RelatedEvent) (int, map[string]error, error)
 	GetRelatedEvent(ctx context.Context, id string) (*model.RelatedEvent, error)
 	GetRelatedEvents(ctx context.Context, caseId string) ([]*model.RelatedEvent, error)
+	UpdateRelatedEvent(ctx context.Context, event *model.RelatedEvent) (*model.RelatedEvent, error)
 	DeleteRelatedEvent(ctx context.Context, id string) error
 
 	CreateArtifact(ctx context.Context, artifact *model.Artifact) (*model.Artifact, error)

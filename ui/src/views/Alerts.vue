@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted, watch } from 'vue'
+defineOptions({ name: 'Alerts' })
+
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
     Bell,
@@ -27,10 +29,13 @@ import {
     Layers,
     Table,
     Group,
-    Shield
+    Shield,
+    Bot,
+    Power
 } from 'lucide-vue-next'
 import { cn } from '../lib/utils'
 import { useAlerts } from '../composables/useAlerts'
+import { useApi } from '../composables/useApi'
 import { useTimeRange } from '../composables/useTimeRange'
 import { useStatusStyles } from '../composables/useStatusStyles'
 import { useFormatters } from '../composables/useFormatters'
@@ -42,9 +47,10 @@ import DateTimePicker from '../components/common/DateTimePicker.vue'
 import EscalateDialog from '../components/alerts/EscalateDialog.vue'
 
 const router = useRouter()
+const { put } = useApi()
 const { getSeverityStyles } = useStatusStyles()
 const { formatDate } = useFormatters()
-const { rangeDescription } = useTimeRange()
+const { rangeDescription, zone } = useTimeRange()
 
 const {
     alertGroups,
@@ -91,7 +97,10 @@ const {
     buildGroupQuery,
     buildSubgroupQuery,
     getGroupLabel,
-    getSubgroupLabel
+    getSubgroupLabel,
+    fetchDetectionForRule,
+    getDetectionInfo,
+    isDetectionInfoLoading
 } = useAlerts()
 
 const {
@@ -109,6 +118,122 @@ const expandedGroup = ref<string | null>(null)
 const expandedPair = ref<string | null>(null)
 const refreshing = ref(false)
 const loadTrigger = ref<HTMLElement | null>(null)
+
+// Detection toggle state
+interface Detection {
+    id: string
+    publicId: string
+    title: string
+    isEnabled: boolean
+    [key: string]: any
+}
+const detectionToggleLoading = ref<string | null>(null) // Rule name being toggled
+const showDisableDetectionConfirm = ref(false)
+const disableDetectionAckAll = ref(true)
+const pendingDisableRuleName = ref<string | null>(null)
+const detectionCache = ref<Map<string, Detection>>(new Map())
+
+// Fetch full detection data for toggle
+async function fetchFullDetection(ruleName: string): Promise<Detection | null> {
+    // Check cache first
+    if (detectionCache.value.has(ruleName)) {
+        return detectionCache.value.get(ruleName) || null
+    }
+
+    const detectionInfo = getDetectionInfo(ruleName)
+    if (!detectionInfo?.publicId) {
+        return null
+    }
+
+    try {
+        const response = await fetch(`/api/detection/public/${encodeURIComponent(detectionInfo.publicId)}`)
+        if (response.ok) {
+            const detection = await response.json()
+            detectionCache.value.set(ruleName, detection)
+            return detection
+        }
+    } catch (e) {
+        console.error('Failed to fetch detection:', e)
+    }
+    return null
+}
+
+// Toggle detection enabled/disabled
+function toggleDetectionEnabled(ruleName: string) {
+    if (detectionToggleLoading.value) return
+
+    const detection = detectionCache.value.get(ruleName)
+    if (!detection) return
+
+    // If enabling, do it directly
+    if (!detection.isEnabled) {
+        performToggleDetection(ruleName)
+        return
+    }
+
+    // If disabling, show confirmation dialog
+    pendingDisableRuleName.value = ruleName
+    disableDetectionAckAll.value = true
+    showDisableDetectionConfirm.value = true
+}
+
+// Actually perform the detection toggle
+async function performToggleDetection(ruleName: string) {
+    const detection = detectionCache.value.get(ruleName)
+    if (!detection || detectionToggleLoading.value) return
+
+    detectionToggleLoading.value = ruleName
+    try {
+        const updatedDetection = await put<Detection>(`/api/detection/`, {
+            ...detection,
+            isEnabled: !detection.isEnabled
+        })
+
+        if (updatedDetection) {
+            detectionCache.value.set(ruleName, updatedDetection)
+        }
+    } catch (e: any) {
+        console.error('Failed to update detection:', e)
+    } finally {
+        detectionToggleLoading.value = null
+    }
+}
+
+// Confirm disable detection and optionally acknowledge all alerts
+async function confirmDisableDetection() {
+    const ruleName = pendingDisableRuleName.value
+    if (!ruleName) return
+
+    showDisableDetectionConfirm.value = false
+
+    const detection = detectionCache.value.get(ruleName)
+    if (!detection) return
+
+    // Disable the detection
+    await performToggleDetection(ruleName)
+
+    // If user chose to acknowledge all alerts
+    if (disableDetectionAckAll.value) {
+        try {
+            const ruleTitle = detection.title || detection.publicId
+            const searchFilter = `tags:alert AND rule.name:"${ruleTitle.replace(/"/g, '\\"')}" AND NOT event.acknowledged:true`
+            await bulkAcknowledgeByQuery(searchFilter, true, { timezone: zone.value })
+            // Refresh the groups after acknowledging
+            await fetchAlertGroups()
+        } catch (e: any) {
+            console.error('Failed to acknowledge alerts:', e)
+        }
+    }
+
+    pendingDisableRuleName.value = null
+}
+
+// Cancel disable detection
+function cancelDisableDetection() {
+    showDisableDetectionConfirm.value = false
+    disableDetectionAckAll.value = true
+    pendingDisableRuleName.value = null
+}
 
 // View mode state
 type ViewMode = 'triage' | 'table'
@@ -155,6 +280,9 @@ function setViewMode(mode: ViewMode) {
 const showEscalateDialog = ref(false)
 const escalateDialogRef = ref<InstanceType<typeof EscalateDialog> | null>(null)
 const escalateTarget = ref<EventRecord | null>(null)
+
+// Track last clicked alert for highlighting when returning from detail view
+const lastClickedAlertId = ref<string | null>(null)
 
 // Track loading state per group
 const groupLoadingState = reactive<Record<string, boolean>>({})
@@ -233,6 +361,15 @@ async function toggleGroup(group: AlertGroup) {
         groupLoadingState[group.ruleId] = true
         // Use the decoded ruleId as the group key (it contains the actual value like IP or rule name)
         const groupKey = decodeURIComponent(group.ruleId)
+
+        // Fetch detection info (AI summary) and full detection data in parallel when grouped by rule
+        if (triageGroupBy.value === 'rule') {
+            fetchDetectionForRule(groupKey).then(() => {
+                // After detection info is fetched, fetch full detection for toggle
+                fetchFullDetection(groupKey)
+            })
+        }
+
         await fetchSubgroups(groupKey)
         groupLoadingState[group.ruleId] = false
     }
@@ -313,6 +450,7 @@ function drillIntoHunt(alert: EventRecord) {
 }
 
 function viewAlertDetail(alert: EventRecord) {
+    lastClickedAlertId.value = alert.soc_id
     router.push({ name: 'alert-detail', params: { id: alert.soc_id } })
 }
 
@@ -425,6 +563,39 @@ function getCriticalCount() {
         .filter(g => g.severity.toLowerCase() === 'critical' || g.severity.toLowerCase() === 'high')
         .reduce((sum, g) => sum + g.count, 0)
 }
+
+// Computed: Aggregate unique source IPs from current subgroups (pairs)
+const aggregatedSourceIps = computed(() => {
+    if (triageGroupBy.value !== 'rule') return []
+    const ipMap = new Map<string, number>()
+    for (const subgroup of subgroups.value) {
+        if (subgroup.type === 'pair' && subgroup.label && subgroup.label !== '-') {
+            ipMap.set(subgroup.label, (ipMap.get(subgroup.label) || 0) + subgroup.count)
+        }
+    }
+    return Array.from(ipMap.entries())
+        .map(([ip, count]) => ({ ip, count }))
+        .sort((a, b) => b.count - a.count)
+})
+
+// Computed: Aggregate unique destination IPs from current subgroups (pairs)
+const aggregatedDestIps = computed(() => {
+    if (triageGroupBy.value !== 'rule') return []
+    const ipMap = new Map<string, number>()
+    for (const subgroup of subgroups.value) {
+        if (subgroup.type === 'pair' && subgroup.secondaryLabel && subgroup.secondaryLabel !== '-') {
+            ipMap.set(subgroup.secondaryLabel, (ipMap.get(subgroup.secondaryLabel) || 0) + subgroup.count)
+        }
+    }
+    return Array.from(ipMap.entries())
+        .map(([ip, count]) => ({ ip, count }))
+        .sort((a, b) => b.count - a.count)
+})
+
+// Computed: Total alert count from subgroups
+const aggregatedTotalCount = computed(() => {
+    return subgroups.value.reduce((sum, s) => sum + s.count, 0)
+})
 </script>
 
 <template>
@@ -727,6 +898,131 @@ function getCriticalCount() {
 
                     <!-- Expanded Content: Subgroups (Pairs when grouped by rule, Rules when grouped by source/dest) -->
                     <div v-if="expandedGroup === group.ruleId" class="border-t border-border">
+                        <!-- AI Summary (shown when grouped by rule) -->
+                        <div
+                            v-if="triageGroupBy === 'rule' && (getDetectionInfo(decodeURIComponent(group.ruleId)) !== undefined || isDetectionInfoLoading(decodeURIComponent(group.ruleId)))"
+                            class="px-4 py-3 bg-muted/30 border-b border-border"
+                        >
+                            <div v-if="isDetectionInfoLoading(decodeURIComponent(group.ruleId))" class="flex items-center gap-2 text-sm text-muted-foreground">
+                                <Loader2 class="h-4 w-4 animate-spin" />
+                                <span>Loading AI summary...</span>
+                            </div>
+                            <div v-else class="space-y-1">
+                                <div class="flex items-center gap-2">
+                                    <Bot class="h-4 w-4 text-primary" />
+                                    <span class="text-xs font-semibold text-primary uppercase tracking-wider">AI Summary</span>
+                                    <span
+                                        v-if="getDetectionInfo(decodeURIComponent(group.ruleId))?.isAiSummaryStale"
+                                        class="text-xs bg-amber-500/10 text-amber-500 px-1.5 py-0.5 rounded"
+                                    >
+                                        Stale
+                                    </span>
+                                </div>
+                                <p v-if="getDetectionInfo(decodeURIComponent(group.ruleId))?.aiSummary" class="text-sm text-muted-foreground leading-relaxed pl-6">
+                                    {{ getDetectionInfo(decodeURIComponent(group.ruleId))?.aiSummary }}
+                                </p>
+                                <p v-else class="text-sm text-muted-foreground/60 italic pl-6">This rule doesn't have an AI Summary</p>
+                            </div>
+                        </div>
+
+                        <!-- IP Aggregation Summary (shown when grouped by rule and subgroups are loaded) -->
+                        <div
+                            v-if="triageGroupBy === 'rule' && subgroups.length > 0 && (aggregatedSourceIps.length > 0 || aggregatedDestIps.length > 0)"
+                            class="px-4 py-3 bg-muted/20 border-b border-border"
+                        >
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="flex items-center gap-2">
+                                    <Network class="h-4 w-4 text-muted-foreground" />
+                                    <span class="text-xs font-semibold text-muted-foreground uppercase tracking-wider">IP Overview</span>
+                                    <span class="text-xs text-muted-foreground">
+                                        ({{ aggregatedTotalCount.toLocaleString() }} alerts across {{ subgroups.length }} pairs)
+                                    </span>
+                                </div>
+                                <!-- Detection Toggle -->
+                                <div v-if="detectionCache.get(decodeURIComponent(group.ruleId))" class="flex items-center gap-2">
+                                    <span class="text-xs text-muted-foreground">Detection</span>
+                                    <span
+                                        :class="detectionCache.get(decodeURIComponent(group.ruleId))?.isEnabled ? 'text-green-500' : 'text-amber-500'"
+                                        class="text-xs font-medium flex items-center gap-1"
+                                    >
+                                        <CheckCircle v-if="detectionCache.get(decodeURIComponent(group.ruleId))?.isEnabled" class="h-3 w-3" />
+                                        <X v-else class="h-3 w-3" />
+                                        {{ detectionCache.get(decodeURIComponent(group.ruleId))?.isEnabled ? 'Active' : 'Disabled' }}
+                                    </span>
+                                    <button
+                                        @click.stop="toggleDetectionEnabled(decodeURIComponent(group.ruleId))"
+                                        :disabled="detectionToggleLoading === decodeURIComponent(group.ruleId)"
+                                        :class="cn(
+                                            'relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed',
+                                            detectionCache.get(decodeURIComponent(group.ruleId))?.isEnabled ? 'bg-green-500' : 'bg-muted'
+                                        )"
+                                        :title="detectionCache.get(decodeURIComponent(group.ruleId))?.isEnabled ? 'Disable detection' : 'Enable detection'"
+                                    >
+                                        <span
+                                            :class="cn(
+                                                'inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform',
+                                                detectionCache.get(decodeURIComponent(group.ruleId))?.isEnabled ? 'translate-x-5' : 'translate-x-0.5'
+                                            )"
+                                        />
+                                        <Loader2
+                                            v-if="detectionToggleLoading === decodeURIComponent(group.ruleId)"
+                                            class="absolute inset-0 m-auto h-2.5 w-2.5 animate-spin text-white"
+                                        />
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <!-- Source IPs -->
+                                <div class="space-y-1.5">
+                                    <div class="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                                        <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                                        Sources ({{ aggregatedSourceIps.length }})
+                                    </div>
+                                    <div class="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                                        <span
+                                            v-for="item in aggregatedSourceIps.slice(0, 10)"
+                                            :key="item.ip"
+                                            class="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded text-xs font-mono"
+                                            :title="`${item.ip}: ${item.count} alerts`"
+                                        >
+                                            {{ item.ip }}
+                                            <span class="text-blue-400 dark:text-blue-500">{{ item.count }}</span>
+                                        </span>
+                                        <span
+                                            v-if="aggregatedSourceIps.length > 10"
+                                            class="inline-flex items-center px-2 py-0.5 bg-muted text-muted-foreground rounded text-xs"
+                                        >
+                                            +{{ aggregatedSourceIps.length - 10 }} more
+                                        </span>
+                                    </div>
+                                </div>
+                                <!-- Destination IPs -->
+                                <div class="space-y-1.5">
+                                    <div class="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                                        <span class="w-2 h-2 rounded-full bg-orange-500"></span>
+                                        Destinations ({{ aggregatedDestIps.length }})
+                                    </div>
+                                    <div class="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                                        <span
+                                            v-for="item in aggregatedDestIps.slice(0, 10)"
+                                            :key="item.ip"
+                                            class="inline-flex items-center gap-1 px-2 py-0.5 bg-orange-500/10 text-orange-600 dark:text-orange-400 rounded text-xs font-mono"
+                                            :title="`${item.ip}: ${item.count} alerts`"
+                                        >
+                                            {{ item.ip }}
+                                            <span class="text-orange-400 dark:text-orange-500">{{ item.count }}</span>
+                                        </span>
+                                        <span
+                                            v-if="aggregatedDestIps.length > 10"
+                                            class="inline-flex items-center px-2 py-0.5 bg-muted text-muted-foreground rounded text-xs"
+                                        >
+                                            +{{ aggregatedDestIps.length - 10 }} more
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Loading subgroups -->
                         <div v-if="subgroupsLoading && subgroups.length === 0" class="p-4 text-center">
                             <Loader2 class="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
@@ -825,7 +1121,10 @@ function getCriticalCount() {
                                                 <tr
                                                     v-for="alert in alerts"
                                                     :key="alert.soc_id"
-                                                    class="hover:bg-muted/30 transition-colors group cursor-pointer"
+                                                    :class="cn(
+                                                        'hover:bg-muted/30 transition-colors group cursor-pointer',
+                                                        lastClickedAlertId === alert.soc_id && 'bg-primary/10 ring-1 ring-primary/30'
+                                                    )"
                                                     @click="viewAlertDetail(alert)"
                                                 >
                                                     <td class="px-4 py-2">
@@ -1014,7 +1313,10 @@ function getCriticalCount() {
                                     <tr
                                         v-for="alert in group.alerts"
                                         :key="alert.soc_id"
-                                        class="hover:bg-muted/30 transition-colors cursor-pointer"
+                                        :class="cn(
+                                            'hover:bg-muted/30 transition-colors cursor-pointer',
+                                            lastClickedAlertId === alert.soc_id && 'bg-primary/10 ring-1 ring-primary/30'
+                                        )"
                                         @click="viewAlertDetail(alert)"
                                     >
                                         <td class="px-4 py-2 text-xs">{{ formatDate(alert.soc_timestamp || alert['@timestamp']) }}</td>
@@ -1131,7 +1433,10 @@ function getCriticalCount() {
                             <tr
                                 v-for="alert in sortedAllAlerts"
                                 :key="alert.soc_id"
-                                class="hover:bg-muted/30 transition-colors group cursor-pointer"
+                                :class="cn(
+                                    'hover:bg-muted/30 transition-colors group cursor-pointer',
+                                    lastClickedAlertId === alert.soc_id && 'bg-primary/10 ring-1 ring-primary/30'
+                                )"
                                 @click="viewAlertDetail(alert)"
                             >
                                 <td class="px-4 py-3">
@@ -1246,5 +1551,95 @@ function getCriticalCount() {
             @close="showEscalateDialog = false"
             @confirm="handleEscalateConfirm"
         />
+
+        <!-- Disable Detection Confirmation Dialog -->
+        <Teleport to="body">
+            <Transition
+                enter-active-class="transition-opacity duration-200"
+                enter-from-class="opacity-0"
+                enter-to-class="opacity-100"
+                leave-active-class="transition-opacity duration-200"
+                leave-from-class="opacity-100"
+                leave-to-class="opacity-0"
+            >
+                <div
+                    v-if="showDisableDetectionConfirm"
+                    class="fixed inset-0 z-50 flex items-center justify-center p-4"
+                >
+                    <!-- Backdrop -->
+                    <div
+                        class="absolute inset-0 bg-background/80 backdrop-blur-sm"
+                        @click="cancelDisableDetection"
+                    />
+
+                    <!-- Dialog -->
+                    <div class="relative bg-card border border-border rounded-xl shadow-2xl w-full max-w-md animate-in zoom-in-95 duration-200">
+                        <!-- Header -->
+                        <div class="px-6 py-4 border-b border-border">
+                            <div class="flex items-center gap-3">
+                                <div class="p-2 rounded-lg bg-amber-500/10">
+                                    <Power class="h-5 w-5 text-amber-500" />
+                                </div>
+                                <h3 class="text-lg font-semibold">Disable Detection</h3>
+                            </div>
+                        </div>
+
+                        <!-- Content -->
+                        <div class="px-6 py-5 space-y-4">
+                            <p class="text-sm text-muted-foreground">
+                                You are about to disable this detection. No new alerts will be generated for this rule.
+                            </p>
+
+                            <div class="bg-muted/50 rounded-lg p-4 space-y-2 text-sm">
+                                <div class="flex justify-between">
+                                    <span class="text-muted-foreground">Detection:</span>
+                                    <span class="font-medium truncate max-w-[200px]" :title="pendingDisableRuleName || ''">
+                                        {{ pendingDisableRuleName || 'Unknown' }}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- Acknowledge all alerts checkbox -->
+                            <label class="flex items-start gap-3 cursor-pointer group">
+                                <div class="relative mt-0.5">
+                                    <input
+                                        type="checkbox"
+                                        v-model="disableDetectionAckAll"
+                                        class="sr-only peer"
+                                    />
+                                    <div class="w-5 h-5 border-2 border-border rounded peer-checked:border-primary peer-checked:bg-primary transition-colors">
+                                        <Check v-if="disableDetectionAckAll" class="h-4 w-4 text-primary-foreground" />
+                                    </div>
+                                </div>
+                                <div class="flex-1">
+                                    <span class="text-sm font-medium">Acknowledge all unacknowledged alerts</span>
+                                    <p class="text-xs text-muted-foreground mt-0.5">
+                                        Mark all existing alerts from this detection as acknowledged since they are no longer relevant.
+                                    </p>
+                                </div>
+                            </label>
+                        </div>
+
+                        <!-- Footer -->
+                        <div class="px-6 py-4 border-t border-border bg-muted/30 flex justify-end gap-3">
+                            <button
+                                @click="cancelDisableDetection"
+                                class="px-4 py-2 text-sm font-medium rounded-lg border border-border hover:bg-muted transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                @click="confirmDisableDetection"
+                                :disabled="detectionToggleLoading !== null"
+                                class="px-4 py-2 text-sm font-medium rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                            >
+                                <Loader2 v-if="detectionToggleLoading !== null" class="h-4 w-4 animate-spin" />
+                                <span>{{ detectionToggleLoading !== null ? 'Disabling...' : 'Disable Detection' }}</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </Transition>
+        </Teleport>
     </div>
 </template>

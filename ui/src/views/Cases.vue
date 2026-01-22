@@ -1,4 +1,6 @@
 <script setup lang="ts">
+defineOptions({ name: 'Cases' })
+
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Briefcase, Search, Plus, Eye, Activity, Clock, AlertTriangle, ChevronUp, ChevronDown, Filter } from 'lucide-vue-next'

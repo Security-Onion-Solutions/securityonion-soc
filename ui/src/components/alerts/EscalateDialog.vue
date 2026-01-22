@@ -6,7 +6,9 @@ import {
     AlertTriangle,
     Loader2,
     BookOpen,
-    HardDrive
+    HardDrive,
+    Star,
+    CheckSquare
 } from 'lucide-vue-next'
 import { cn } from '../../lib/utils'
 import type { EventRecord } from '../../types/hunt'
@@ -17,6 +19,14 @@ interface GuidedAnalysisEvent {
     question?: string
 }
 
+// Marked event from guided analysis - includes notes and highlighting info
+interface MarkedEvent {
+    soc_id: string
+    note: string
+    sourceQuestion: string
+    isHighlighted: boolean
+}
+
 // PCAP Job info - minimal info needed for attachment option
 interface PcapJobInfo {
     id: number
@@ -24,16 +34,26 @@ interface PcapJobInfo {
     size?: number
 }
 
+// Escalation modes for guided analysis events
+type EscalationMode = 'none' | 'all' | 'marked' | 'all-highlight-marked'
+
 const props = defineProps<{
     open: boolean
     event: EventRecord | null
     guidedAnalysisEvents?: GuidedAnalysisEvent[]
+    markedEvents?: MarkedEvent[]
     pcapJob?: PcapJobInfo | null
 }>()
 
 const emit = defineEmits<{
     (e: 'close'): void
-    (e: 'confirm', data: { title: string; description: string; severity: string; includeGuidedAnalysis: boolean; includePcap: boolean }): void
+    (e: 'confirm', data: {
+        title: string
+        description: string
+        severity: string
+        escalationMode: EscalationMode
+        includePcap: boolean
+    }): void
 }>()
 
 const loading = ref(false)
@@ -42,11 +62,17 @@ const loading = ref(false)
 const title = ref('')
 const description = ref('')
 const severity = ref('medium')
-const includeGuidedAnalysis = ref(true)
+const escalationMode = ref<EscalationMode>('all')
 const includePcap = ref(true)
 
 // Computed: count of guided analysis events
 const guidedAnalysisCount = computed(() => props.guidedAnalysisEvents?.length || 0)
+
+// Computed: count of marked events
+const markedCount = computed(() => props.markedEvents?.length || 0)
+
+// Computed: check if any events have notes
+const hasNotedEvents = computed(() => props.markedEvents?.some(e => e.note.trim()) || false)
 
 // Computed: check if PCAP is available (completed job)
 const JOB_STATUS_COMPLETED = 1
@@ -107,8 +133,17 @@ watch(() => props.open, (isOpen) => {
             severity.value = 'medium'
         }
 
-        // Default to include guided analysis events if any exist
-        includeGuidedAnalysis.value = guidedAnalysisCount.value > 0
+        // Set default escalation mode based on marked events
+        if (markedCount.value > 0) {
+            // If there are marked events, default to including all and highlighting marked
+            escalationMode.value = 'all-highlight-marked'
+        } else if (guidedAnalysisCount.value > 0) {
+            // If there are guided analysis events but none marked, include all
+            escalationMode.value = 'all'
+        } else {
+            // No guided analysis events
+            escalationMode.value = 'none'
+        }
 
         // Default to include PCAP if available
         includePcap.value = pcapAvailable.value
@@ -127,13 +162,11 @@ async function handleConfirm() {
         title: title.value,
         description: description.value,
         severity: severity.value,
-        includeGuidedAnalysis: includeGuidedAnalysis.value && guidedAnalysisCount.value > 0,
+        escalationMode: escalationMode.value,
         includePcap: includePcap.value && pcapAvailable.value
     }
     console.log('[EscalateDialog] Emitting confirm with data:', confirmData)
-    console.log('[EscalateDialog] pcapJob prop:', props.pcapJob)
-    console.log('[EscalateDialog] pcapAvailable:', pcapAvailable.value)
-    console.log('[EscalateDialog] includePcap state:', includePcap.value)
+    console.log('[EscalateDialog] markedEvents:', props.markedEvents)
     emit('confirm', confirmData)
 }
 
@@ -236,31 +269,125 @@ defineExpose({
                             <textarea
                                 v-model="description"
                                 :disabled="loading"
-                                rows="8"
+                                rows="6"
                                 class="w-full px-3 py-2 bg-background border border-border rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none disabled:opacity-50"
                                 placeholder="Enter case description..."
                             ></textarea>
                             <p class="text-xs text-muted-foreground mt-1">Supports Markdown formatting</p>
                         </div>
 
-                        <!-- Include Guided Analysis Events -->
-                        <div v-if="guidedAnalysisCount > 0" class="flex items-start gap-3 p-3 bg-muted/50 rounded-lg border border-border">
-                            <input
-                                type="checkbox"
-                                id="includeGuidedAnalysis"
-                                v-model="includeGuidedAnalysis"
-                                :disabled="loading"
-                                class="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary/50 disabled:opacity-50"
-                            />
-                            <label for="includeGuidedAnalysis" class="flex-1 cursor-pointer">
-                                <div class="flex items-center gap-2 text-sm font-medium">
+                        <!-- Guided Analysis Events Escalation Mode -->
+                        <div v-if="guidedAnalysisCount > 0" class="space-y-2">
+                            <label class="block text-sm font-medium">
+                                <div class="flex items-center gap-2">
                                     <BookOpen class="h-4 w-4 text-primary" />
-                                    Include Guided Analysis Events
+                                    Guided Analysis Events
                                 </div>
-                                <p class="text-xs text-muted-foreground mt-0.5">
-                                    Attach {{ guidedAnalysisCount }} related {{ guidedAnalysisCount === 1 ? 'event' : 'events' }} from guided analysis to the case
-                                </p>
                             </label>
+                            <p class="text-xs text-muted-foreground mb-2">
+                                {{ guidedAnalysisCount }} {{ guidedAnalysisCount === 1 ? 'event' : 'events' }} found
+                                <template v-if="markedCount > 0">
+                                    <span class="text-amber-500 font-medium">
+                                        ({{ markedCount }} marked<template v-if="hasNotedEvents">, with notes</template>)
+                                    </span>
+                                </template>
+                            </p>
+
+                            <div class="space-y-2 bg-muted/30 rounded-lg p-3 border border-border">
+                                <!-- Option: Include All -->
+                                <label class="flex items-start gap-3 cursor-pointer p-2 rounded-md hover:bg-muted/50 transition-colors">
+                                    <input
+                                        type="radio"
+                                        v-model="escalationMode"
+                                        value="all"
+                                        :disabled="loading"
+                                        class="mt-0.5 h-4 w-4 text-primary focus:ring-primary/50"
+                                    />
+                                    <div class="flex-1">
+                                        <div class="text-sm font-medium">Include All Events</div>
+                                        <p class="text-xs text-muted-foreground">
+                                            Attach all {{ guidedAnalysisCount }} events from guided analysis
+                                        </p>
+                                    </div>
+                                </label>
+
+                                <!-- Option: Include Only Marked -->
+                                <label
+                                    :class="cn(
+                                        'flex items-start gap-3 cursor-pointer p-2 rounded-md transition-colors',
+                                        markedCount === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-muted/50'
+                                    )"
+                                >
+                                    <input
+                                        type="radio"
+                                        v-model="escalationMode"
+                                        value="marked"
+                                        :disabled="loading || markedCount === 0"
+                                        class="mt-0.5 h-4 w-4 text-primary focus:ring-primary/50"
+                                    />
+                                    <div class="flex-1">
+                                        <div class="text-sm font-medium flex items-center gap-2">
+                                            <CheckSquare class="h-3.5 w-3.5 text-amber-500" />
+                                            Include Only Marked Events
+                                        </div>
+                                        <p class="text-xs text-muted-foreground">
+                                            <template v-if="markedCount > 0">
+                                                Attach {{ markedCount }} marked {{ markedCount === 1 ? 'event' : 'events' }} (highlighted in case)
+                                            </template>
+                                            <template v-else>
+                                                No events marked - use checkboxes in guided analysis results
+                                            </template>
+                                        </p>
+                                    </div>
+                                </label>
+
+                                <!-- Option: Include All, Highlight Marked -->
+                                <label
+                                    :class="cn(
+                                        'flex items-start gap-3 cursor-pointer p-2 rounded-md transition-colors',
+                                        markedCount === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-muted/50'
+                                    )"
+                                >
+                                    <input
+                                        type="radio"
+                                        v-model="escalationMode"
+                                        value="all-highlight-marked"
+                                        :disabled="loading || markedCount === 0"
+                                        class="mt-0.5 h-4 w-4 text-primary focus:ring-primary/50"
+                                    />
+                                    <div class="flex-1">
+                                        <div class="text-sm font-medium flex items-center gap-2">
+                                            <Star class="h-3.5 w-3.5 text-amber-500" />
+                                            Include All, Highlight Marked
+                                        </div>
+                                        <p class="text-xs text-muted-foreground">
+                                            <template v-if="markedCount > 0">
+                                                Attach all events, highlight {{ markedCount }} marked with notes visible in case
+                                            </template>
+                                            <template v-else>
+                                                No events marked - use checkboxes in guided analysis results
+                                            </template>
+                                        </p>
+                                    </div>
+                                </label>
+
+                                <!-- Option: Don't Include Events -->
+                                <label class="flex items-start gap-3 cursor-pointer p-2 rounded-md hover:bg-muted/50 transition-colors">
+                                    <input
+                                        type="radio"
+                                        v-model="escalationMode"
+                                        value="none"
+                                        :disabled="loading"
+                                        class="mt-0.5 h-4 w-4 text-primary focus:ring-primary/50"
+                                    />
+                                    <div class="flex-1">
+                                        <div class="text-sm font-medium">Don't Include Events</div>
+                                        <p class="text-xs text-muted-foreground">
+                                            Only attach the primary alert to the case
+                                        </p>
+                                    </div>
+                                </label>
+                            </div>
                         </div>
 
                         <!-- Include PCAP -->

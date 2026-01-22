@@ -20,7 +20,12 @@ import {
   Edit3,
   File,
   Crosshair,
-  Sparkles
+  Sparkles,
+  Star,
+  StickyNote,
+  ArrowUpDown,
+  X,
+  Save
 } from 'lucide-vue-next'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
@@ -74,6 +79,10 @@ const activeTab = ref('summary')
 
 // Events expansion state
 const expandedEvents = ref<Set<string>>(new Set())
+const sortHighlightedFirst = ref(true)
+const editingNoteEventId = ref<string | null>(null)
+const editingNoteText = ref('')
+const savingNote = ref(false)
 
 // Comment form state
 const newCommentText = ref('')
@@ -329,6 +338,96 @@ const removeRelatedEvent = async (eventId: string) => {
   }
 }
 
+// Highlighted events count
+const highlightedEventsCount = computed(() => {
+  return associations.value.events.filter((e: any) => e.isHighlighted).length
+})
+
+// Sorted events based on highlighted first toggle
+const sortedEvents = computed(() => {
+  const events = [...associations.value.events]
+  if (sortHighlightedFirst.value) {
+    events.sort((a: any, b: any) => {
+      if (a.isHighlighted && !b.isHighlighted) return -1
+      if (!a.isHighlighted && b.isHighlighted) return 1
+      return 0
+    })
+  }
+  return events
+})
+
+// Start editing a note
+const startEditingNote = (event: any) => {
+  editingNoteEventId.value = event.id
+  editingNoteText.value = event.note || ''
+}
+
+// Cancel editing
+const cancelEditingNote = () => {
+  editingNoteEventId.value = null
+  editingNoteText.value = ''
+}
+
+// Save note
+const saveNote = async (eventId: string) => {
+  savingNote.value = true
+  try {
+    const response = await fetch('/api/case/events', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: eventId,
+        note: editingNoteText.value
+      })
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to save note')
+    }
+
+    // Update local state
+    const eventIndex = associations.value.events.findIndex((e: any) => e.id === eventId)
+    if (eventIndex >= 0) {
+      associations.value.events[eventIndex].note = editingNoteText.value
+    }
+
+    editingNoteEventId.value = null
+    editingNoteText.value = ''
+  } catch (err: any) {
+    console.error('Error saving note:', err)
+    alert('Failed to save note: ' + (err.message || 'Unknown error'))
+  } finally {
+    savingNote.value = false
+  }
+}
+
+// Toggle highlight status
+const toggleHighlight = async (event: any) => {
+  try {
+    const response = await fetch('/api/case/events', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: event.id,
+        isHighlighted: !event.isHighlighted
+      })
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to update highlight status')
+    }
+
+    // Update local state
+    const eventIndex = associations.value.events.findIndex((e: any) => e.id === event.id)
+    if (eventIndex >= 0) {
+      associations.value.events[eventIndex].isHighlighted = !event.isHighlighted
+    }
+  } catch (err: any) {
+    console.error('Error toggling highlight:', err)
+    alert('Failed to update highlight status: ' + (err.message || 'Unknown error'))
+  }
+}
+
 // AI Analysis function
 const analyzeWithAI = async () => {
   // Ensure we have the latest data
@@ -484,19 +583,32 @@ const analyzeWithAI = async () => {
     <div v-else-if="caseObj" class="grid grid-cols-1 lg:grid-cols-4 gap-8">
       <!-- Sidebar Navigation -->
       <div class="lg:col-span-1 space-y-1">
-        <button 
-          v-for="tab in tabs" 
-          :key="tab.id" 
+        <button
+          v-for="tab in tabs"
+          :key="tab.id"
           @click="handleTabChange(tab.id)"
           :class="cn(
             'w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all group',
-            activeTab === tab.id 
-              ? 'bg-primary text-primary-foreground shadow-sm' 
+            activeTab === tab.id
+              ? 'bg-primary text-primary-foreground shadow-sm'
               : 'text-muted-foreground hover:bg-muted hover:text-foreground'
           )"
         >
           <component :is="tab.icon" class="h-4 w-4" />
           {{ tab.name }}
+          <!-- Show highlighted event count on Events tab -->
+          <span
+            v-if="tab.id === 'events' && highlightedEventsCount > 0"
+            :class="cn(
+              'ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-semibold flex items-center gap-0.5',
+              activeTab === 'events'
+                ? 'bg-amber-500/30 text-amber-200'
+                : 'bg-amber-500/20 text-amber-500'
+            )"
+          >
+            <Star class="h-2.5 w-2.5 fill-current" />
+            {{ highlightedEventsCount }}
+          </span>
           <ChevronRight v-if="activeTab === tab.id" class="h-4 w-4 ml-auto" />
         </button>
 
@@ -709,15 +821,39 @@ const analyzeWithAI = async () => {
               <!-- Events List -->
               <div v-else class="space-y-3">
                 <div class="flex items-center justify-between mb-4">
-                  <h3 class="text-sm font-semibold text-muted-foreground">
-                    {{ associations.events.length }} Related Event{{ associations.events.length !== 1 ? 's' : '' }}
-                  </h3>
+                  <div class="flex items-center gap-3">
+                    <h3 class="text-sm font-semibold text-muted-foreground">
+                      {{ associations.events.length }} Related Event{{ associations.events.length !== 1 ? 's' : '' }}
+                    </h3>
+                    <span v-if="highlightedEventsCount > 0" class="text-xs text-amber-500 font-medium flex items-center gap-1">
+                      <Star class="h-3.5 w-3.5 fill-amber-500" />
+                      {{ highlightedEventsCount }} highlighted
+                    </span>
+                  </div>
+                  <button
+                    v-if="highlightedEventsCount > 0"
+                    @click="sortHighlightedFirst = !sortHighlightedFirst"
+                    :class="cn(
+                      'text-xs font-medium flex items-center gap-1.5 px-2 py-1 rounded transition-colors',
+                      sortHighlightedFirst
+                        ? 'bg-amber-500/10 text-amber-500'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                    )"
+                  >
+                    <ArrowUpDown class="h-3.5 w-3.5" />
+                    {{ sortHighlightedFirst ? 'Highlighted First' : 'Default Order' }}
+                  </button>
                 </div>
 
                 <div
-                  v-for="(event, index) in associations.events"
+                  v-for="(event, index) in sortedEvents"
                   :key="event.id || index"
-                  class="bg-muted/30 border border-border/50 rounded-lg overflow-hidden hover:border-border transition-colors"
+                  :class="cn(
+                    'rounded-lg overflow-hidden transition-colors',
+                    event.isHighlighted
+                      ? 'bg-amber-500/10 border-2 border-amber-500/30 hover:border-amber-500/50'
+                      : 'bg-muted/30 border border-border/50 hover:border-border'
+                  )"
                 >
                   <!-- Event Header -->
                   <div
@@ -725,8 +861,12 @@ const analyzeWithAI = async () => {
                     @click="toggleEventExpanded(event.id)"
                   >
                     <div class="flex items-center gap-3 flex-1 min-w-0">
-                      <div class="p-2 rounded-lg bg-primary/10">
-                        <Activity class="h-4 w-4 text-primary" />
+                      <div :class="cn(
+                        'p-2 rounded-lg',
+                        event.isHighlighted ? 'bg-amber-500/20' : 'bg-primary/10'
+                      )">
+                        <Star v-if="event.isHighlighted" class="h-4 w-4 text-amber-500 fill-amber-500" />
+                        <Activity v-else class="h-4 w-4 text-primary" />
                       </div>
                       <div class="flex-1 min-w-0">
                         <div class="flex items-center gap-2 flex-wrap">
@@ -741,6 +881,9 @@ const analyzeWithAI = async () => {
                           >
                             {{ getEventField(event, 'event.severity_label') || getEventField(event, 'event.severity') }}
                           </span>
+                          <span v-if="event.note" class="text-amber-500">
+                            <StickyNote class="h-3.5 w-3.5" />
+                          </span>
                         </div>
                         <div class="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
                           <span v-if="getEventField(event, 'source.ip') || getEventField(event, 'client.ip')">
@@ -749,6 +892,9 @@ const analyzeWithAI = async () => {
                           <span v-if="getEventField(event, 'source.ip') || getEventField(event, 'client.ip')">→</span>
                           <span v-if="getEventField(event, 'destination.ip') || getEventField(event, 'server.ip')">
                             {{ getEventField(event, 'destination.ip') || getEventField(event, 'server.ip') }}
+                          </span>
+                          <span v-if="event.sourceQuestion" class="text-muted-foreground/70 truncate max-w-[200px]" :title="event.sourceQuestion">
+                            from: {{ event.sourceQuestion }}
                           </span>
                         </div>
                       </div>
@@ -766,11 +912,84 @@ const analyzeWithAI = async () => {
                     </div>
                   </div>
 
+                  <!-- Note Preview (when collapsed, if note exists) -->
+                  <div v-if="event.note && !expandedEvents.has(event.id)" class="px-4 pb-3 -mt-2">
+                    <div class="text-xs text-amber-600 bg-amber-500/5 rounded px-2 py-1 flex items-start gap-1.5 border border-amber-500/20">
+                      <StickyNote class="h-3 w-3 flex-shrink-0 mt-0.5" />
+                      <span class="line-clamp-1">{{ event.note }}</span>
+                    </div>
+                  </div>
+
                   <!-- Expanded Fields -->
                   <div v-if="expandedEvents.has(event.id)" class="border-t border-border/50 bg-background/50">
-                    <div class="p-4 space-y-2">
-                      <div class="flex items-center justify-between mb-3">
-                        <span class="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Event Fields</span>
+                    <div class="p-4 space-y-4">
+                      <!-- Note Section -->
+                      <div class="space-y-2">
+                        <div class="flex items-center justify-between">
+                          <span class="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                            <StickyNote class="h-3.5 w-3.5" />
+                            Analyst Note
+                          </span>
+                          <div class="flex items-center gap-2">
+                            <button
+                              v-if="editingNoteEventId !== event.id"
+                              @click.stop="startEditingNote(event)"
+                              class="text-xs text-primary hover:text-primary/80 font-medium"
+                            >
+                              {{ event.note ? 'Edit Note' : 'Add Note' }}
+                            </button>
+                            <template v-else>
+                              <button
+                                @click.stop="saveNote(event.id)"
+                                :disabled="savingNote"
+                                class="text-xs text-green-500 hover:text-green-600 font-medium flex items-center gap-1"
+                              >
+                                <Loader2 v-if="savingNote" class="h-3 w-3 animate-spin" />
+                                <Save v-else class="h-3 w-3" />
+                                Save
+                              </button>
+                              <button
+                                @click.stop="cancelEditingNote"
+                                class="text-xs text-muted-foreground hover:text-foreground font-medium flex items-center gap-1"
+                              >
+                                <X class="h-3 w-3" />
+                                Cancel
+                              </button>
+                            </template>
+                          </div>
+                        </div>
+                        <div v-if="editingNoteEventId === event.id" @click.stop>
+                          <textarea
+                            v-model="editingNoteText"
+                            placeholder="Add analyst notes about this event..."
+                            class="w-full text-xs bg-background border border-border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none min-h-[80px]"
+                            rows="3"
+                          ></textarea>
+                        </div>
+                        <div v-else-if="event.note" class="text-xs bg-amber-500/5 rounded px-3 py-2 border border-amber-500/20 text-amber-700 dark:text-amber-400 whitespace-pre-wrap">
+                          {{ event.note }}
+                        </div>
+                        <div v-else class="text-xs text-muted-foreground italic">
+                          No note added
+                        </div>
+                      </div>
+
+                      <!-- Actions Row -->
+                      <div class="flex items-center justify-between pt-2 border-t border-border/50">
+                        <div class="flex items-center gap-2">
+                          <button
+                            @click.stop="toggleHighlight(event)"
+                            :class="cn(
+                              'text-xs font-medium flex items-center gap-1.5 px-2 py-1 rounded transition-colors',
+                              event.isHighlighted
+                                ? 'bg-amber-500/10 text-amber-500 hover:bg-amber-500/20'
+                                : 'text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10'
+                            )"
+                          >
+                            <Star :class="cn('h-3.5 w-3.5', event.isHighlighted && 'fill-amber-500')" />
+                            {{ event.isHighlighted ? 'Highlighted' : 'Highlight' }}
+                          </button>
+                        </div>
                         <button
                           @click.stop="removeRelatedEvent(event.id)"
                           class="text-xs text-destructive hover:text-destructive/80 font-medium"
@@ -778,14 +997,19 @@ const analyzeWithAI = async () => {
                           Remove from Case
                         </button>
                       </div>
-                      <div class="grid grid-cols-2 gap-2 text-xs">
-                        <div
-                          v-for="(value, key) in event.fields"
-                          :key="key"
-                          class="flex flex-col gap-0.5 p-2 rounded bg-muted/50"
-                        >
-                          <span class="text-muted-foreground font-mono">{{ key }}</span>
-                          <span class="font-medium break-all">{{ formatFieldValue(value) }}</span>
+
+                      <!-- Event Fields -->
+                      <div class="space-y-2">
+                        <span class="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Event Fields</span>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                          <div
+                            v-for="(value, key) in event.fields"
+                            :key="key"
+                            class="flex flex-col gap-0.5 p-2 rounded bg-muted/50"
+                          >
+                            <span class="text-muted-foreground font-mono">{{ key }}</span>
+                            <span class="font-medium break-all">{{ formatFieldValue(value) }}</span>
+                          </div>
                         </div>
                       </div>
                     </div>

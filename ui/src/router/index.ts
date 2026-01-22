@@ -126,7 +126,15 @@ const routes: RouteRecordRaw[] = [
 
 export const router = createRouter({
   history: createWebHashHistory(),
-  routes
+  routes,
+  scrollBehavior(to, from, savedPosition) {
+    // If we have a saved position (browser back/forward), use it
+    if (savedPosition) {
+      return savedPosition
+    }
+    // Otherwise scroll to top
+    return { top: 0 }
+  }
 })
 
 // Update document title on navigation

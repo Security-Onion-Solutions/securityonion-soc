@@ -763,6 +763,17 @@ func convertElasticEventToRelatedEvent(event *model.EventRecord, schemaPrefix st
 				obj.CaseId = value.(string)
 			}
 			obj.CreateTime = parseTime(event.Payload, schemaPrefix+"related.createTime")
+
+			// Parse highlighting and note fields
+			if value, ok := event.Payload[schemaPrefix+"related.isHighlighted"]; ok {
+				obj.IsHighlighted = value.(bool)
+			}
+			if value, ok := event.Payload[schemaPrefix+"related.note"]; ok {
+				obj.Note = value.(string)
+			}
+			if value, ok := event.Payload[schemaPrefix+"related.sourceQuestion"]; ok {
+				obj.SourceQuestion = value.(string)
+			}
 		}
 	}
 

@@ -577,6 +577,10 @@ func TestConvertElasticEventToRelatedEvent(t *testing.T) {
 	event.Payload["so_related.caseId"] = "myCaseId"
 	event.Time = myTime
 	event.Payload["so_related.createTime"] = myCreateTime
+	// New fields for highlighting and notes
+	event.Payload["so_related.isHighlighted"] = true
+	event.Payload["so_related.note"] = "This is a test note"
+	event.Payload["so_related.sourceQuestion"] = "What processes were running?"
 	interf, err := convertElasticEventToObject(event, DEFAULT_CASE_SCHEMA_PREFIX)
 	assert.NoError(t, err)
 	obj := interf.(*model.RelatedEvent)
@@ -588,6 +592,10 @@ func TestConvertElasticEventToRelatedEvent(t *testing.T) {
 	assert.Equal(t, &myCreateTime, obj.CreateTime)
 	assert.Len(t, obj.Fields, 1)
 	assert.Equal(t, "bar", obj.Fields["foo"])
+	// Verify new fields are parsed correctly
+	assert.True(t, obj.IsHighlighted)
+	assert.Equal(t, "This is a test note", obj.Note)
+	assert.Equal(t, "What processes were running?", obj.SourceQuestion)
 }
 
 func TestConvertSeverity(t *testing.T) {

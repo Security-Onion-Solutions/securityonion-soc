@@ -356,6 +356,21 @@ func (mr *MockCasestoreMockRecorder) GetRelatedEvents(ctx, caseId any) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRelatedEvents", reflect.TypeOf((*MockCasestore)(nil).GetRelatedEvents), ctx, caseId)
 }
 
+// UpdateRelatedEvent mocks base method.
+func (m *MockCasestore) UpdateRelatedEvent(ctx context.Context, event *model.RelatedEvent) (*model.RelatedEvent, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateRelatedEvent", ctx, event)
+	ret0, _ := ret[0].(*model.RelatedEvent)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateRelatedEvent indicates an expected call of UpdateRelatedEvent.
+func (mr *MockCasestoreMockRecorder) UpdateRelatedEvent(ctx, event any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateRelatedEvent", reflect.TypeOf((*MockCasestore)(nil).UpdateRelatedEvent), ctx, event)
+}
+
 // Update mocks base method.
 func (m *MockCasestore) Update(ctx context.Context, socCase *model.Case) (*model.Case, error) {
 	m.ctrl.T.Helper()

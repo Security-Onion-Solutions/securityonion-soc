@@ -340,6 +340,127 @@ export function useAlerts() {
     const subgroupsOffset = ref(0)
     const subgroupsCache = ref<Map<string, Subgroup[]>>(new Map())
 
+    // =========================================================================
+    // Detection AI Summary Cache
+    // =========================================================================
+
+    interface DetectionInfo {
+        publicId: string
+        title: string
+        aiSummary?: string
+        isAiSummaryStale?: boolean
+    }
+
+    const detectionInfoCache = ref<Map<string, DetectionInfo | null>>(new Map())
+    const detectionInfoLoading = ref<Map<string, boolean>>(new Map())
+
+    /**
+     * Fetch detection info (including AI summary) by public ID (rule.uuid)
+     */
+    async function fetchDetectionByPublicId(publicId: string): Promise<DetectionInfo | null> {
+        // Check cache first (keyed by publicId)
+        if (detectionInfoCache.value.has(publicId)) {
+            return detectionInfoCache.value.get(publicId) || null
+        }
+
+        // Check if already loading
+        if (detectionInfoLoading.value.get(publicId)) {
+            return null
+        }
+
+        detectionInfoLoading.value.set(publicId, true)
+
+        try {
+            const response = await fetch(`/api/detection/public/${encodeURIComponent(publicId)}`)
+            if (response.ok) {
+                const detection = await response.json()
+                const info: DetectionInfo = {
+                    publicId: detection.publicId || publicId,
+                    title: detection.title || '',
+                    aiSummary: detection.aiSummary,
+                    isAiSummaryStale: detection.isAiSummaryStale
+                }
+                detectionInfoCache.value.set(publicId, info)
+                return info
+            }
+
+            // Detection not found - cache null to avoid repeated lookups
+            detectionInfoCache.value.set(publicId, null)
+            return null
+        } catch (e) {
+            console.error('Failed to fetch detection info:', e)
+            return null
+        } finally {
+            detectionInfoLoading.value.set(publicId, false)
+        }
+    }
+
+    /**
+     * Fetch detection info for a rule by fetching a sample alert to get rule.uuid
+     */
+    async function fetchDetectionForRule(ruleName: string): Promise<DetectionInfo | null> {
+        // Check if we already have it cached by rule name
+        const cacheKey = `rule:${ruleName}`
+        if (detectionInfoCache.value.has(cacheKey)) {
+            return detectionInfoCache.value.get(cacheKey) || null
+        }
+
+        // Check if already loading
+        if (detectionInfoLoading.value.get(cacheKey)) {
+            return null
+        }
+
+        detectionInfoLoading.value.set(cacheKey, true)
+
+        try {
+            // Fetch one sample alert to get the rule.uuid
+            const escapedRule = ruleName.replace(/"/g, '\\"')
+            const query = `${buildBaseQuery()} AND rule.name:"${escapedRule}"`
+
+            const response = await get<EventSearchResponse>('/api/events/', {
+                query,
+                range: formattedRange.value,
+                format: GO_TIME_FORMAT,
+                zone: zone.value,
+                metricLimit: '0',
+                eventLimit: '1'
+            })
+
+            if (response?.events?.length) {
+                const event = response.events[0]
+                const payload = event.payload || event
+                const ruleUuid = payload['rule.uuid']
+
+                if (ruleUuid) {
+                    // Now fetch the detection using the rule.uuid
+                    const detectionInfo = await fetchDetectionByPublicId(ruleUuid)
+                    // Also cache by rule name for future lookups
+                    detectionInfoCache.value.set(cacheKey, detectionInfo)
+                    return detectionInfo
+                }
+            }
+
+            // No rule.uuid found - cache null
+            detectionInfoCache.value.set(cacheKey, null)
+            return null
+        } catch (e) {
+            console.error('Failed to fetch detection for rule:', e)
+            return null
+        } finally {
+            detectionInfoLoading.value.set(cacheKey, false)
+        }
+    }
+
+    function getDetectionInfo(ruleName: string): DetectionInfo | null | undefined {
+        const cacheKey = `rule:${ruleName}`
+        return detectionInfoCache.value.get(cacheKey)
+    }
+
+    function isDetectionInfoLoading(ruleName: string): boolean {
+        const cacheKey = `rule:${ruleName}`
+        return detectionInfoLoading.value.get(cacheKey) || false
+    }
+
     async function fetchSubgroups(groupKey: string, loadMore = false): Promise<void> {
         currentRuleName.value = groupKey
 
@@ -1067,6 +1188,11 @@ export function useAlerts() {
         buildGroupQuery,
         buildSubgroupQuery,
         getGroupLabel,
-        getSubgroupLabel
+        getSubgroupLabel,
+
+        // Detection Info (AI Summaries)
+        fetchDetectionForRule,
+        getDetectionInfo,
+        isDetectionInfoLoading
     }
 }

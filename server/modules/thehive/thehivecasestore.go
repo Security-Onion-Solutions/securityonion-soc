@@ -109,6 +109,10 @@ func (store *TheHiveCasestore) GetRelatedEvents(ctx context.Context, caseId stri
 	return nil, errors.New("Unsupported operation by this module")
 }
 
+func (store *TheHiveCasestore) UpdateRelatedEvent(ctx context.Context, event *model.RelatedEvent) (*model.RelatedEvent, error) {
+	return nil, errors.New("Unsupported operation by this module")
+}
+
 func (store *TheHiveCasestore) DeleteRelatedEvent(ctx context.Context, id string) error {
 	return errors.New("Unsupported operation by this module")
 }

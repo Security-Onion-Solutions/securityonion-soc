@@ -7,6 +7,7 @@
 package model
 
 import (
+	"encoding/json"
 	"strconv"
 	"strings"
 	"time"
@@ -98,6 +99,10 @@ func NewEventSearchCriteria() *EventSearchCriteria {
 }
 
 func (criteria *EventSearchCriteria) Populate(query string, dateRange string, dateRangeFormat string, timezone string, metricLimit string, eventLimit string) (err error) {
+	return criteria.PopulateWithSearchAfter(query, dateRange, dateRangeFormat, timezone, metricLimit, eventLimit, "")
+}
+
+func (criteria *EventSearchCriteria) PopulateWithSearchAfter(query string, dateRange string, dateRangeFormat string, timezone string, metricLimit string, eventLimit string, searchAfter string) (err error) {
 	criteria.RawQuery = strings.Trim(query, " ")
 
 	criteria.BeginTime, criteria.EndTime, err = util.ParseDateRange(dateRange, dateRangeFormat, timezone)
@@ -107,6 +112,10 @@ func (criteria *EventSearchCriteria) Populate(query string, dateRange string, da
 	}
 	if err == nil {
 		criteria.EventLimit, err = strconv.Atoi(eventLimit)
+	}
+
+	if err == nil && searchAfter != "" {
+		err = json.Unmarshal([]byte(searchAfter), &criteria.SearchAfter)
 	}
 
 	if err == nil {

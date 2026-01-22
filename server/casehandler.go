@@ -71,6 +71,7 @@ func RegisterCaseRoutes(srv *Server, r chi.Router, prefix string) {
 
 		r.Put("/", h.updateCase)
 		r.Put("/comments", h.updateComment)
+		r.Put("/events", h.UpdateRelatedEvent)
 		r.Put("/tasks", h.updateArtifact)
 		r.Put("/artifacts", h.updateArtifact)
 
@@ -217,6 +218,10 @@ func (h *CaseHandler) CreateEvents(w http.ResponseWriter, r *http.Request) {
 		related.Fields = event.Payload
 		related.Fields["soc_id"] = event.Id
 		related.Fields["soc_timestamp"] = event.Payload["@timestamp"]
+		// Copy highlighting and note fields from request
+		related.IsHighlighted = body.IsHighlighted
+		related.Note = body.Note
+		related.SourceQuestion = body.SourceQuestion
 
 		relatedEvents = append(relatedEvents, related)
 	}
@@ -485,6 +490,40 @@ func (h *CaseHandler) updateComment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	obj, err := h.server.Casestore.UpdateComment(ctx, inputComment)
+	if err != nil {
+		web.Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, obj)
+}
+
+// @Summary      Update Related Event
+// @Description  Updates an existing related event with a provided related event object as input. Only IsHighlighted, Note, and SourceQuestion fields can be modified.
+// @Tags         Cases
+// @Security     bearer[cases/read, cases/write, events/read, events/write]
+// @Param        request  body  model.RelatedEvent true "Replacement related event object. The provided ID will be used to match the existing related event."
+// @Accept       json
+// @Produce      json
+// @Success      200  {object}  model.RelatedEvent   "Outputs the related event object."
+// @Failure      400         "The provided input object or parameters are malformed or invalid"
+// @Failure      401         "Request was not properly authenticated"
+// @Failure      403         "Insufficient permissions for this request"
+// @Failure      404         "Related event not found"
+// @Failure      405         "Case module not configured on server"
+// @Failure      500         "Internal SOC error; review SOC logs"
+// @Router       /connect/case/events [put]
+func (h *CaseHandler) UpdateRelatedEvent(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	inputEvent := model.NewRelatedEvent()
+
+	err := json.NewDecoder(r.Body).Decode(&inputEvent)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	obj, err := h.server.Casestore.UpdateRelatedEvent(ctx, inputEvent)
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
 		return

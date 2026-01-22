@@ -572,3 +572,124 @@ func TestHandlerCreateEvents(t *testing.T) {
 		})
 	}
 }
+
+func TestHandlerUpdateRelatedEvent(t *testing.T) {
+	tests := []struct {
+		Name         string
+		RequestBody  []byte
+		InitMock     func(*Server, *gomock.Controller)
+		Code         int
+		ResponseBody any
+	}{
+		{
+			Name:        "Sunny Day - Update Note",
+			RequestBody: []byte(`{"id": "event-123", "note": "Important finding from guided analysis", "isHighlighted": true}`),
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
+				mHostAuth := srv.Host.Authorizer.(*rbac.FakeAuthorizer)
+				mHostAuth.Authorized = true
+
+				fakeCaseStore := srv.Casestore.(*mock.MockCasestore)
+				fakeCaseStore.EXPECT().UpdateRelatedEvent(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, event *model.RelatedEvent) (*model.RelatedEvent, error) {
+					assert.Equal(t, "event-123", event.Id)
+					assert.Equal(t, "Important finding from guided analysis", event.Note)
+					assert.True(t, event.IsHighlighted)
+
+					// Return the updated event
+					return &model.RelatedEvent{
+						Auditable: model.Auditable{
+							Id: "event-123",
+						},
+						CaseId:        "case-456",
+						IsHighlighted: true,
+						Note:          "Important finding from guided analysis",
+						Fields:        map[string]interface{}{"soc_id": "abc"},
+					}, nil
+				})
+			},
+			Code: 200,
+		},
+		{
+			Name:        "Sunny Day - Update Highlight Only",
+			RequestBody: []byte(`{"id": "event-123", "isHighlighted": false}`),
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
+				mHostAuth := srv.Host.Authorizer.(*rbac.FakeAuthorizer)
+				mHostAuth.Authorized = true
+
+				fakeCaseStore := srv.Casestore.(*mock.MockCasestore)
+				fakeCaseStore.EXPECT().UpdateRelatedEvent(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, event *model.RelatedEvent) (*model.RelatedEvent, error) {
+					assert.Equal(t, "event-123", event.Id)
+					assert.False(t, event.IsHighlighted)
+
+					return &model.RelatedEvent{
+						Auditable: model.Auditable{
+							Id: "event-123",
+						},
+						CaseId:        "case-456",
+						IsHighlighted: false,
+						Fields:        map[string]interface{}{"soc_id": "abc"},
+					}, nil
+				})
+			},
+			Code: 200,
+		},
+		{
+			Name:        "Invalid Body",
+			RequestBody: []byte(`not valid json`),
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
+				mHostAuth := srv.Host.Authorizer.(*rbac.FakeAuthorizer)
+				mHostAuth.Authorized = true
+			},
+			Code:         400,
+			ResponseBody: []byte(`The request could not be processed.`),
+		},
+		{
+			Name:        "Update Fails",
+			RequestBody: []byte(`{"id": "event-123", "note": "test"}`),
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
+				mHostAuth := srv.Host.Authorizer.(*rbac.FakeAuthorizer)
+				mHostAuth.Authorized = true
+
+				fakeCaseStore := srv.Casestore.(*mock.MockCasestore)
+				fakeCaseStore.EXPECT().UpdateRelatedEvent(gomock.Any(), gomock.Any()).Return(nil, errors.New("event not found"))
+			},
+			Code:         500,
+			ResponseBody: []byte(`The request could not be processed.`),
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			srv := NewMockServer(t, ctrl, &config.ServerConfig{})
+
+			h := NewCaseHandler(srv)
+
+			test.InitMock(srv, ctrl)
+
+			ctx := NewTestContext(nil)
+			mem, l := NewInMemoryLogger()
+			_ = mem // silence unused variable
+
+			ctx = log.NewContext(ctx, l)
+			ctx = context.WithValue(ctx, web.ContextKeyRunAsUsername, "test")
+			ctx = context.WithValue(ctx, web.ContextKeyRequestorId, "00000000-0000-0000-0000-000000000000")
+
+			w := httptest.NewRecorder()
+			r := httptest.NewRequestWithContext(ctx, "PUT", "/case/events", bytes.NewReader(test.RequestBody))
+
+			h.UpdateRelatedEvent(w, r)
+
+			assert.Equal(t, test.Code, w.Code)
+
+			if test.ResponseBody != nil {
+				switch res := test.ResponseBody.(type) {
+				case []byte:
+					assert.Equal(t, res, w.Body.Bytes())
+				}
+			}
+		})
+	}
+}

@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+defineOptions({ name: 'Detections' })
+
+import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   ShieldAlert,
@@ -9,151 +11,46 @@ import {
   MoreVertical,
   Eye,
   RefreshCw,
-  Plus
+  Plus,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft
 } from 'lucide-vue-next'
 import { cn } from '../lib/utils'
-import { useFormatters } from '../composables/useFormatters'
 import { useStatusStyles } from '../composables/useStatusStyles'
+import { useDetections } from '../composables/useDetections'
 
 const router = useRouter()
-
-const { formatDateForApi } = useFormatters()
 const { getSeverityStyles } = useStatusStyles()
 
-interface Detection {
-  soc_id: string
-  publicId: string
-  title: string
-  description: string
-  severity: string
-  engine: string
-  author: string
-  isEnabled: boolean
-  isReporting: boolean
-  isCommunity: boolean
-  language: string
-  ruleset: string
-  license: string
-  overrideCount: number
-  createdAt?: string
-  updatedAt?: string
-}
-
-const detections = ref<Detection[]>([])
-const loading = ref(true)
-const error = ref<string | null>(null)
-const searchQuery = ref('')
-const totalEvents = ref(0)
-
-// Map event fields from the events API response to our Detection interface
-// The events API returns: { id, score, type, timestamp, source, payload: { so_detection: {...}, ... } }
-const mapEventToDetection = (event: Record<string, any>): Detection => {
-  // The payload contains the actual document fields
-  const payload = event.payload || event
-
-  return {
-    soc_id: event.id || payload['soc_id'] || '',
-    publicId: payload['so_detection.publicId'] || '',
-    title: payload['so_detection.title'] || '',
-    description: payload['so_detection.description'] || '',
-    severity: payload['so_detection.severity'] || 'unknown',
-    engine: payload['so_detection.engine'] || '',
-    author: payload['so_detection.author'] || '',
-    isEnabled: payload['so_detection.isEnabled'] ?? false,
-    isReporting: payload['so_detection.isReporting'] ?? false,
-    isCommunity: payload['so_detection.isCommunity'] ?? false,
-    language: payload['so_detection.language'] || '',
-    ruleset: payload['so_detection.ruleset'] || '',
-    license: payload['so_detection.license'] || '',
-    overrideCount: payload['so_detection.overrides']?.length || 0,
-    createdAt: payload['so_detection.createTime'] || event.timestamp || payload['@timestamp'],
-    updatedAt: payload['so_detection.updateTime'] || event.timestamp || payload['@timestamp']
-  }
-}
-
-const fetchDetections = async () => {
-  loading.value = true
-  error.value = null
-
-  try {
-    // Use epoch to now for full detection list (like old UI does)
-    const now = new Date()
-    const epoch = new Date(0)
-    const dateRange = `${formatDateForApi(epoch)} - ${formatDateForApi(now)}`
-
-    // Query the so-detection index with so_kind:detection filter
-    // Use a high limit to get all detections - the old UI allows up to 5000
-    const params = new URLSearchParams({
-        query: '_index:"*:so-detection" AND so_kind:detection',
-        range: dateRange,
-        format: '2006/01/02 3:04:05 PM',
-        zone: 'Local',
-        metricLimit: '0',
-        eventLimit: '10000'
-    })
-
-    const response = await fetch(`/api/events?${params.toString()}`)
-
-    if (!response.ok) {
-        throw new Error(`Failed to fetch detections: ${response.status}`)
-    }
-
-    const data = await response.json()
-    totalEvents.value = data.totalEvents || 0
-
-    // Map events to detection objects
-    const events = data.events || []
-    detections.value = events.map(mapEventToDetection)
-
-  } catch (err: any) {
-    console.error('Error fetching detections:', err)
-    error.value = err.message
-    detections.value = []
-  } finally {
-    loading.value = false
-  }
-}
+const {
+  detections,
+  totalEvents,
+  loading,
+  error,
+  searchQuery,
+  currentPage,
+  totalPages,
+  hasNextPage,
+  hasPrevPage,
+  enabledCount,
+  disabledCount,
+  fetchDetections,
+  search,
+  refresh,
+  toggleEnabled,
+  nextPage,
+  prevPage,
+  firstPage
+} = useDetections()
 
 onMounted(() => {
   fetchDetections()
 })
 
-const filteredDetections = computed(() => {
-  if (!searchQuery.value) return detections.value
-  const query = searchQuery.value.toLowerCase()
-  return detections.value.filter(d =>
-    d.title?.toLowerCase().includes(query) ||
-    d.description?.toLowerCase().includes(query) ||
-    d.publicId?.toLowerCase().includes(query) ||
-    d.engine?.toLowerCase().includes(query) ||
-    d.author?.toLowerCase().includes(query)
-  )
-})
-
-const toggleEnabled = async (detection: Detection) => {
-  const previousState = detection.isEnabled
-  detection.isEnabled = !detection.isEnabled
-
-  try {
-    const response = await fetch(`/api/detection/${detection.soc_id}`)
-    if (!response.ok) throw new Error('Failed to fetch detection')
-
-    const fullDetection = await response.json()
-    fullDetection.isEnabled = detection.isEnabled
-
-    const updateResponse = await fetch('/api/detection', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(fullDetection)
-    })
-
-    if (!updateResponse.ok) {
-      throw new Error('Failed to update detection')
-    }
-  } catch (err) {
-    console.error('Error toggling detection:', err)
-    detection.isEnabled = previousState
-  }
+const handleSearch = (event: Event) => {
+  const target = event.target as HTMLInputElement
+  search(target.value)
 }
 
 const viewDetail = (id: string) => {
@@ -174,17 +71,19 @@ const viewDetail = (id: string) => {
       <div class="flex items-center gap-2">
          <div class="relative w-64">
           <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <input 
-            v-model="searchQuery"
-            type="text" 
-            placeholder="Search rules..." 
+          <input
+            :value="searchQuery"
+            @input="handleSearch"
+            type="text"
+            placeholder="Search rules..."
             class="w-full pl-9 pr-4 py-2 bg-card border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
           />
         </div>
-        <button 
-          @click="fetchDetections"
+        <button
+          @click="refresh"
           class="p-2 hover:bg-muted rounded-md transition-colors text-muted-foreground"
           :class="{ 'animate-spin': loading }"
+          :disabled="loading"
         >
           <RefreshCw class="h-5 w-5" />
         </button>
@@ -201,8 +100,8 @@ const viewDetail = (id: string) => {
             <div>
                 <p class="text-sm font-medium text-muted-foreground">Total Rules</p>
                 <div class="flex items-end gap-2">
-                    <h3 class="text-3xl font-bold">{{ detections.length }}</h3>
-                    <span class="text-xs text-muted-foreground mb-1">Active</span>
+                    <h3 class="text-3xl font-bold">{{ totalEvents.toLocaleString() }}</h3>
+                    <span class="text-xs text-muted-foreground mb-1">{{ searchQuery ? 'matching' : 'total' }}</span>
                 </div>
             </div>
             <div class="p-3 bg-primary/10 rounded-lg group-hover:scale-110 transition-transform">
@@ -213,8 +112,8 @@ const viewDetail = (id: string) => {
             <div>
                 <p class="text-sm font-medium text-muted-foreground">Enabled</p>
                 <div class="flex items-end gap-2">
-                    <h3 class="text-3xl font-bold text-green-500">{{ detections.filter(d => d.isEnabled).length }}</h3>
-                    <span class="text-xs text-muted-foreground mb-1">Live</span>
+                    <h3 class="text-3xl font-bold text-green-500">{{ enabledCount.toLocaleString() }}</h3>
+                    <span class="text-xs text-muted-foreground mb-1">{{ searchQuery ? 'matching' : 'total' }}</span>
                 </div>
             </div>
             <div class="p-3 bg-green-500/10 rounded-lg group-hover:scale-110 transition-transform">
@@ -225,8 +124,8 @@ const viewDetail = (id: string) => {
             <div>
                 <p class="text-sm font-medium text-muted-foreground">Disabled</p>
                 <div class="flex items-end gap-2">
-                    <h3 class="text-3xl font-bold text-amber-500">{{ detections.filter(d => !d.isEnabled).length }}</h3>
-                    <span class="text-xs text-muted-foreground mb-1">Paused</span>
+                    <h3 class="text-3xl font-bold text-amber-500">{{ disabledCount.toLocaleString() }}</h3>
+                    <span class="text-xs text-muted-foreground mb-1">{{ searchQuery ? 'matching' : 'total' }}</span>
                 </div>
             </div>
             <div class="p-3 bg-amber-500/10 rounded-lg group-hover:scale-110 transition-transform">
@@ -250,27 +149,27 @@ const viewDetail = (id: string) => {
             </tr>
           </thead>
           <tbody class="divide-y divide-border">
-            <tr v-if="loading" class="animate-pulse">
+            <tr v-if="loading && detections.length === 0" class="animate-pulse">
                 <td colspan="6" class="h-32 text-center text-muted-foreground">Loading detections...</td>
             </tr>
-            <tr v-else-if="filteredDetections.length === 0" class="h-32 text-center text-muted-foreground">
-                <td colspan="6">No detections match your search.</td>
+            <tr v-else-if="!loading && detections.length === 0" class="h-32 text-center text-muted-foreground">
+                <td colspan="6">No detections found.</td>
             </tr>
-            <tr 
-              v-for="detection in filteredDetections" 
+            <tr
+              v-for="detection in detections"
               :key="detection.soc_id"
               class="group transition-colors hover:bg-muted/30 cursor-pointer"
               @click="viewDetail(detection.soc_id)"
             >
               <td class="px-6 py-4 align-middle" @click.stop>
-                 <button 
+                 <button
                    @click="toggleEnabled(detection)"
                    :class="cn(
                      'relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
                      detection.isEnabled ? 'bg-green-500' : 'bg-muted-foreground/30'
                    )"
                  >
-                   <span 
+                   <span
                      :class="cn(
                        'pointer-events-none block h-4 w-4 rounded-full bg-white shadow-lg ring-0 transition-transform',
                        detection.isEnabled ? 'translate-x-4' : 'translate-x-1'
@@ -306,6 +205,41 @@ const viewDetail = (id: string) => {
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <!-- Pagination -->
+      <div v-if="totalPages > 1" class="flex items-center justify-between px-6 py-4 border-t border-border bg-muted/20">
+        <div class="text-sm text-muted-foreground">
+          Page {{ currentPage }} of {{ totalPages.toLocaleString() }}
+          <span class="ml-2">({{ totalEvents.toLocaleString() }} total)</span>
+        </div>
+        <div class="flex items-center gap-1">
+          <button
+            @click="firstPage"
+            :disabled="!hasPrevPage || loading"
+            class="p-2 hover:bg-muted rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title="First page"
+          >
+            <ChevronsLeft class="h-4 w-4" />
+          </button>
+          <button
+            @click="prevPage"
+            :disabled="!hasPrevPage || loading"
+            class="p-2 hover:bg-muted rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Previous page"
+          >
+            <ChevronLeft class="h-4 w-4" />
+          </button>
+          <span class="px-3 py-1 text-sm font-medium">{{ currentPage }}</span>
+          <button
+            @click="nextPage"
+            :disabled="!hasNextPage || loading"
+            class="p-2 hover:bg-muted rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Next page"
+          >
+            <ChevronRight class="h-4 w-4" />
+          </button>
+        </div>
       </div>
     </div>
   </div>

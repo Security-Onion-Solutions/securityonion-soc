@@ -112,6 +112,10 @@ func (store *ElasticCasestore) GetRelatedEvents(ctx context.Context, caseId stri
 	return nil, errors.New("Unsupported operation by this module")
 }
 
+func (store *ElasticCasestore) UpdateRelatedEvent(ctx context.Context, event *model.RelatedEvent) (*model.RelatedEvent, error) {
+	return nil, errors.New("Unsupported operation by this module")
+}
+
 func (store *ElasticCasestore) DeleteRelatedEvent(ctx context.Context, id string) error {
 	return errors.New("Unsupported operation by this module")
 }

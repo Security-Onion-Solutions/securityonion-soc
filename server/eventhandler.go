@@ -56,6 +56,7 @@ func (h *EventHandler) eventsEnabled(next http.Handler) http.Handler {
 // @Param        format  query  string  true "Date range date format. Use the example, exactly as shown, if not familiar with date formats" example(2006/01/02 3:04:05 PM)
 // @Param        metricLimit  query  integer  true "Maximum number of metrics to include in each aggregation" example(10)
 // @Param        eventLimit  query  integer  true "Maximum number of events to return" example(100)
+// @Param        searchAfter  query  string  false "JSON array of sort values from previous page's last result for pagination" example([1234567890000,"docId123"])
 // @Produce      json
 // @Success      200  {array}  model.EventSearchResults   "Outputs the list of search results"
 // @Failure      400         "The provided input object or parameters are malformed or invalid"
@@ -73,12 +74,13 @@ func (h *EventHandler) getEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	criteria := model.NewEventSearchCriteria()
-	err = criteria.Populate(r.Form.Get("query"),
+	err = criteria.PopulateWithSearchAfter(r.Form.Get("query"),
 		r.Form.Get("range"),
 		r.Form.Get("format"),
 		r.Form.Get("zone"),
 		r.Form.Get("metricLimit"),
-		r.Form.Get("eventLimit"))
+		r.Form.Get("eventLimit"),
+		r.Form.Get("searchAfter"))
 	if err != nil {
 		web.Respond(w, r, http.StatusBadRequest, err)
 		return

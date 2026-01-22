@@ -61,6 +61,8 @@ export function useApi() {
                 const token = await ensureSrvToken()
                 if (token) {
                     headers['X-Srv-Token'] = token
+                } else {
+                    console.warn('[useApi] No CSRF token available for mutating request:', finalUrl)
                 }
             }
 

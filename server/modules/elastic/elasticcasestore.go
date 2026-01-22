@@ -773,6 +773,34 @@ func (store *ElasticCasestore) GetRelatedEvents(ctx context.Context, caseId stri
 	return events, err
 }
 
+func (store *ElasticCasestore) UpdateRelatedEvent(ctx context.Context, event *model.RelatedEvent) (*model.RelatedEvent, error) {
+	var err error
+
+	err = store.validateRelatedEvent(event)
+	if err == nil {
+		if event.Id == "" {
+			err = errors.New("Missing related event ID")
+		} else {
+			var old *model.RelatedEvent
+			old, err = store.GetRelatedEvent(ctx, event.Id)
+			if err == nil {
+				// Preserve read-only fields
+				event.CreateTime = old.CreateTime
+				event.CaseId = old.CaseId
+				event.Fields = old.Fields
+				// Note, IsHighlighted, and SourceQuestion can be updated
+				var results *model.EventIndexResults
+				results, err = store.save(ctx, event, "related", store.prepareForSave(ctx, &event.Auditable))
+				if err == nil {
+					// Read object back to get new modify date, etc
+					event, err = store.GetRelatedEvent(ctx, results.DocumentId)
+				}
+			}
+		}
+	}
+	return event, err
+}
+
 func (store *ElasticCasestore) DeleteRelatedEvent(ctx context.Context, id string) error {
 	var err error
 

@@ -120,8 +120,23 @@ export function useHuntActions() {
     // Escalate
     // =========================================================================
 
+    // Types for escalation
+    type EscalationMode = 'none' | 'all' | 'marked' | 'all-highlight-marked'
+
+    interface GuidedAnalysisEvent {
+        soc_id: string
+        question?: string
+    }
+
+    interface MarkedEventInfo {
+        soc_id: string
+        note: string
+        sourceQuestion: string
+        isHighlighted: boolean
+    }
+
     /**
-     * Escalate an event to a new case
+     * Escalate an event to a new case with flexible event attachment modes
      */
     async function escalateToNewCase(
         event: EventRecord,
@@ -130,13 +145,22 @@ export function useHuntActions() {
             description?: string
             severity?: string
             template?: string
+            // Legacy support
             includeRelated?: boolean
             relatedEventIds?: string[]
+            // New escalation modes
+            escalationMode?: EscalationMode
+            allGuidedAnalysisEvents?: GuidedAnalysisEvent[]
+            markedEvents?: MarkedEventInfo[]
         } = {}
     ): Promise<string | null> {
         try {
             // Build case from event
             const caseData = buildCaseFromEvent(event, options)
+
+            // Debug: log exactly what we're sending
+            console.log('[escalateToNewCase] Case data being sent:', JSON.stringify(caseData, null, 2))
+            console.log('[escalateToNewCase] Raw caseData object:', caseData)
 
             // Create case
             const response = await post<{ id: string }>('/api/case/', caseData)
@@ -148,7 +172,7 @@ export function useHuntActions() {
                 try {
                     await post('/api/case/events', {
                         caseId,
-                        fields: { soc_id: event.soc_id },
+                        fields: { _id: event.soc_id },
                         dateRange: '',
                         dateRangeFormat: '2006/01/02 3:04:05 PM',
                         timezone: 'Local',
@@ -159,13 +183,19 @@ export function useHuntActions() {
                     console.warn('Failed to attach event to case:', attachError)
                 }
 
-                // Attach related events from guided analysis (if any)
-                if (options.relatedEventIds && options.relatedEventIds.length > 0) {
+                // Handle escalation modes for guided analysis events
+                const escalationMode = options.escalationMode || 'none'
+                const allEvents = options.allGuidedAnalysisEvents || []
+                const markedEvents = options.markedEvents || []
+                const markedEventMap = new Map(markedEvents.map(e => [e.soc_id, e]))
+
+                // Legacy support: if relatedEventIds is provided and no escalationMode, use old behavior
+                if (!options.escalationMode && options.relatedEventIds && options.relatedEventIds.length > 0) {
                     for (const relatedId of options.relatedEventIds) {
                         try {
                             await post('/api/case/events', {
                                 caseId,
-                                fields: { soc_id: relatedId },
+                                fields: { _id: relatedId },
                                 dateRange: '',
                                 dateRangeFormat: '2006/01/02 3:04:05 PM',
                                 timezone: 'Local',
@@ -173,8 +203,81 @@ export function useHuntActions() {
                                 escalated: false
                             })
                         } catch (attachError) {
-                            // Don't fail the whole escalation if one related event fails
                             console.warn(`Failed to attach related event ${relatedId}:`, attachError)
+                        }
+                    }
+                } else if (escalationMode !== 'none') {
+                    // New escalation mode handling
+                    let eventsToAttach: Array<{
+                        soc_id: string
+                        isHighlighted: boolean
+                        note: string
+                        sourceQuestion: string
+                    }> = []
+
+                    switch (escalationMode) {
+                        case 'all':
+                            // Attach all events, none highlighted
+                            eventsToAttach = allEvents.map(e => ({
+                                soc_id: e.soc_id,
+                                isHighlighted: false,
+                                note: '',
+                                sourceQuestion: e.question || ''
+                            }))
+                            break
+
+                        case 'marked':
+                            // Attach only marked events, all highlighted
+                            eventsToAttach = markedEvents.map(e => ({
+                                soc_id: e.soc_id,
+                                isHighlighted: true,
+                                note: e.note,
+                                sourceQuestion: e.sourceQuestion
+                            }))
+                            break
+
+                        case 'all-highlight-marked':
+                            // Attach all events, marked ones get highlighted with notes
+                            eventsToAttach = allEvents.map(e => {
+                                const marked = markedEventMap.get(e.soc_id)
+                                return {
+                                    soc_id: e.soc_id,
+                                    isHighlighted: !!marked,
+                                    note: marked?.note || '',
+                                    sourceQuestion: marked?.sourceQuestion || e.question || ''
+                                }
+                            })
+                            break
+                    }
+
+                    // Attach events to the case
+                    console.log('[escalateToNewCase] Attaching events with notes:', eventsToAttach.map(e => ({
+                        soc_id: e.soc_id,
+                        note: e.note ? e.note.substring(0, 30) + '...' : '(empty)',
+                        isHighlighted: e.isHighlighted,
+                        sourceQuestion: e.sourceQuestion?.substring(0, 30) || ''
+                    })))
+
+                    for (const eventData of eventsToAttach) {
+                        // Use _id for searching since that's the Elasticsearch document ID
+                        const attachPayload = {
+                            caseId,
+                            fields: { _id: eventData.soc_id },
+                            dateRange: '',
+                            dateRangeFormat: '2006/01/02 3:04:05 PM',
+                            timezone: 'Local',
+                            acknowledged: false,
+                            escalated: false,
+                            isHighlighted: eventData.isHighlighted,
+                            note: eventData.note,
+                            sourceQuestion: eventData.sourceQuestion
+                        }
+                        console.log('[escalateToNewCase] Attaching event:', eventData.soc_id, 'with note:', eventData.note ? 'yes' : 'no', 'payload:', attachPayload)
+                        try {
+                            const result = await post('/api/case/events', attachPayload)
+                            console.log('[escalateToNewCase] Event attached successfully:', eventData.soc_id, 'result:', result)
+                        } catch (attachError) {
+                            console.warn(`Failed to attach event ${eventData.soc_id}:`, attachError)
                         }
                     }
                 }
@@ -222,7 +325,7 @@ export function useHuntActions() {
             // Attach the event to the case
             await post('/api/case/events', {
                 caseId,
-                fields: { soc_id: event.soc_id },
+                fields: { _id: event.soc_id },
                 dateRange: '',
                 dateRangeFormat: '2006/01/02 3:04:05 PM',
                 timezone: 'Local',
@@ -352,11 +455,22 @@ export function useHuntActions() {
 
         // Build case data matching classic UI format
         // Always include severity and template (even if empty) for server compatibility
+        const description = options.description || buildCaseDescription(event, ruleDesc)
+
+        // Validate all fields are strings (server expects string values)
         const caseData: Record<string, any> = {
-            title,
-            description: options.description || buildCaseDescription(event, ruleDesc),
-            severity: options.severity || '',
-            template: options.template || ''
+            title: String(title || ''),
+            description: String(description || ''),
+            severity: String(options.severity || ''),
+            template: String(options.template || '')
+        }
+
+        // Sanity check - ensure no undefined or null values
+        for (const [key, value] of Object.entries(caseData)) {
+            if (value === undefined || value === null) {
+                console.error(`[buildCaseFromEvent] Field ${key} is null/undefined, replacing with empty string`)
+                caseData[key] = ''
+            }
         }
 
         return caseData
