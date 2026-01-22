@@ -83,7 +83,7 @@ func (t *GetPlaybooksTool) Execute(ctx context.Context, srv *server.Server, para
 
 	err = json.Unmarshal([]byte(params), args)
 	if err != nil {
-		return nil, errors.New("ERROR_ONIONAI_UNMARSHAL_PARAMS")
+		return nil, errors.New("ERROR_ASSISTANT_UNMARSHAL_PARAMS")
 	}
 
 	result.Parameters = args
@@ -104,7 +104,7 @@ func (t *GetPlaybooksTool) Execute(ctx context.Context, srv *server.Server, para
 		return nil, err
 	}
 	if events.TotalEvents == 0 || len(events.Events) == 0 {
-		return nil, errors.New("ERROR_ONIONAI_NO_ALERT_FOUND")
+		return nil, errors.New("ERROR_ASSISTANT_NO_ALERT_FOUND")
 	}
 
 	event := events.Events[0]
@@ -112,7 +112,7 @@ func (t *GetPlaybooksTool) Execute(ctx context.Context, srv *server.Server, para
 	detId, ok := event.Payload["rule.uuid"].(string)
 	if !ok {
 		logger.WithField("specifiedEvent", event).Error("event does not have a rule.uuid field")
-		return nil, errors.New("ERROR_ONIONAI_NO_ALERT_UUID_FIELD")
+		return nil, errors.New("ERROR_ASSISTANT_NO_ALERT_UUID_FIELD")
 	}
 
 	detection, err := srv.Detectionstore.GetDetectionByPublicId(ctx, detId)
@@ -140,7 +140,7 @@ func (t *GetPlaybooksTool) Execute(ctx context.Context, srv *server.Server, para
 
 	playbooks, err := srv.Playbookstore.GetPlaybooksForDetection(ctx, detection.PublicID, detection.Category, detection.Engine)
 	if err != nil || len(playbooks) == 0 {
-		return nil, errors.New("ERROR_ONIONAI_PLAYBOOKS_RETRIEVAL_FAILED")
+		return nil, errors.New("ERROR_ASSISTANT_PLAYBOOKS_RETRIEVAL_FAILED")
 	}
 
 	if args.PlaybookIndex != nil {

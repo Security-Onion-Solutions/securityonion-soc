@@ -112,7 +112,7 @@ func (t *QueryEventsTool) Execute(ctx context.Context, server *server.Server, pa
 
 	err = json.Unmarshal([]byte(params), args)
 	if err != nil {
-		return nil, errors.New("ERROR_ONIONAI_UNMARSHAL_PARAMS")
+		return nil, errors.New("ERROR_ASSISTANT_UNMARSHAL_PARAMS")
 	}
 
 	result.Parameters = args
@@ -238,7 +238,7 @@ func (t *QueryEventsTool) Execute(ctx context.Context, server *server.Server, pa
 		// Convert to JSON
 		resultJSON, err := json.MarshalIndent(filteredEvents, "", "  ")
 		if err != nil {
-			return nil, errors.New("ERROR_ONIONAI_MARSHAL_TOOL_RESULT")
+			return nil, errors.New("ERROR_ASSISTANT_MARSHAL_TOOL_RESULT")
 		}
 
 		// Log filtered result size and preview

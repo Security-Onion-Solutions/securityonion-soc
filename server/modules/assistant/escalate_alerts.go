@@ -99,7 +99,7 @@ func (t *EscalateAlertsTool) Execute(ctx context.Context, server *server.Server,
 
 	err = json.Unmarshal([]byte(params), args)
 	if err != nil {
-		return nil, errors.New("ERROR_ONIONAI_UNMARSHAL_PARAMS")
+		return nil, errors.New("ERROR_ASSISTANT_UNMARSHAL_PARAMS")
 	}
 
 	var timeRange string

@@ -95,7 +95,7 @@ func (t *UpdateDetectionContentTool) Execute(ctx context.Context, srv *server.Se
 
 	err = json.Unmarshal([]byte(params), args)
 	if err != nil {
-		return nil, errors.New("ERROR_ONIONAI_UNMARSHAL_PARAMS")
+		return nil, errors.New("ERROR_ASSISTANT_UNMARSHAL_PARAMS")
 	}
 
 	result.Parameters = args

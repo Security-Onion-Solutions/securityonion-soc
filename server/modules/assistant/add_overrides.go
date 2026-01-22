@@ -148,7 +148,7 @@ func (t *AddOverridesTool) Execute(ctx context.Context, srv *server.Server, para
 
 	err = json.Unmarshal([]byte(params), args)
 	if err != nil {
-		return nil, errors.New("ERROR_ONIONAI_UNMARSHAL_PARAMS")
+		return nil, errors.New("ERROR_ASSISTANT_UNMARSHAL_PARAMS")
 	}
 
 	result.Parameters = args
@@ -177,7 +177,7 @@ func (t *AddOverridesTool) Execute(ctx context.Context, srv *server.Server, para
 
 	detects, err := srv.Detectionstore.ConvertEventsToDetections(ctx, detectEvents)
 	if err != nil {
-		return nil, errors.New("ERROR_ONIONAI_CONVERT_EVENTS_TO_DETECTIONS")
+		return nil, errors.New("ERROR_ASSISTANT_CONVERT_EVENTS_TO_DETECTIONS")
 	}
 
 	if len(detects) == 0 {

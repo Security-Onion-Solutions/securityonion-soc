@@ -90,7 +90,7 @@ func (t *CreateDetectionTool) Execute(ctx context.Context, srv *server.Server, p
 
 	err = json.Unmarshal([]byte(params), args)
 	if err != nil {
-		return nil, errors.New("ERROR_ONIONAI_UNMARSHAL_PARAMS")
+		return nil, errors.New("ERROR_ASSISTANT_UNMARSHAL_PARAMS")
 	}
 
 	result.Parameters = args

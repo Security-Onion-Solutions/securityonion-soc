@@ -105,7 +105,7 @@ func (t *QueryCasesTool) Execute(ctx context.Context, server *server.Server, par
 
 	err = json.Unmarshal([]byte(params), args)
 	if err != nil {
-		return nil, errors.New("ERROR_ONIONAI_UNMARSHAL_PARAMS")
+		return nil, errors.New("ERROR_ASSISTANT_UNMARSHAL_PARAMS")
 	}
 
 	result.Parameters = args
@@ -169,7 +169,7 @@ func (t *QueryCasesTool) Execute(ctx context.Context, server *server.Server, par
 	recentCases := []map[string]any{}
 	err = json.Unmarshal([]byte(auxData), &recentCases)
 	if err != nil {
-		return nil, errors.New("ERROR_ONIONAI_UNMARSHAL_AUXDATA")
+		return nil, errors.New("ERROR_ASSISTANT_UNMARSHAL_AUXDATA")
 	}
 
 	if len(caseEvents) == 0 && len(recentCases) == 0 {
@@ -191,7 +191,7 @@ func (t *QueryCasesTool) Execute(ctx context.Context, server *server.Server, par
 	// Convert to JSON
 	resultJSON, err := json.MarshalIndent(filteredCases, "", "  ")
 	if err != nil {
-		return nil, errors.New("ERROR_ONIONAI_MARSHAL_TOOL_RESULT")
+		return nil, errors.New("ERROR_ASSISTANT_MARSHAL_TOOL_RESULT")
 	}
 
 	// Log filtered result size and preview
