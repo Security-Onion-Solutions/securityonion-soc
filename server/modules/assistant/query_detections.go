@@ -101,6 +101,7 @@ func (t *QueryDetectionsTool) Execute(ctx context.Context, server *server.Server
 
 	err = json.Unmarshal([]byte(params), args)
 	if err != nil {
+		logger.WithError(err).WithField("toolParams", params).Error("failed to unmarshal tool params")
 		return nil, errors.New("ERROR_ASSISTANT_UNMARSHAL_PARAMS")
 	}
 
@@ -149,6 +150,7 @@ func (t *QueryDetectionsTool) Execute(ctx context.Context, server *server.Server
 	// Convert to JSON
 	resultJSON, err := json.MarshalIndent(filteredDetects, "", "  ")
 	if err != nil {
+		logger.WithError(err).WithField("filteredDetects", filteredDetects).Error("failed to marshal tool result")
 		return nil, errors.New("ERROR_ASSISTANT_MARSHAL_TOOL_RESULT")
 	}
 

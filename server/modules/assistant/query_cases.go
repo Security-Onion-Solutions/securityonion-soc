@@ -105,6 +105,7 @@ func (t *QueryCasesTool) Execute(ctx context.Context, server *server.Server, par
 
 	err = json.Unmarshal([]byte(params), args)
 	if err != nil {
+		logger.WithError(err).WithField("toolParams", params).Error("failed to unmarshal tool params")
 		return nil, errors.New("ERROR_ASSISTANT_UNMARSHAL_PARAMS")
 	}
 
@@ -169,6 +170,7 @@ func (t *QueryCasesTool) Execute(ctx context.Context, server *server.Server, par
 	recentCases := []map[string]any{}
 	err = json.Unmarshal([]byte(auxData), &recentCases)
 	if err != nil {
+		logger.WithError(err).WithField("auxData", auxData).Error("failed to unmarshal recent cases from auxData")
 		return nil, errors.New("ERROR_ASSISTANT_UNMARSHAL_AUXDATA")
 	}
 
@@ -191,6 +193,7 @@ func (t *QueryCasesTool) Execute(ctx context.Context, server *server.Server, par
 	// Convert to JSON
 	resultJSON, err := json.MarshalIndent(filteredCases, "", "  ")
 	if err != nil {
+		logger.WithError(err).WithField("filteredCases", filteredCases).Error("failed to marshal tool result")
 		return nil, errors.New("ERROR_ASSISTANT_MARSHAL_TOOL_RESULT")
 	}
 

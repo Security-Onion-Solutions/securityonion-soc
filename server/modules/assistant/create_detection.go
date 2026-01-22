@@ -90,6 +90,7 @@ func (t *CreateDetectionTool) Execute(ctx context.Context, srv *server.Server, p
 
 	err = json.Unmarshal([]byte(params), args)
 	if err != nil {
+		logger.WithError(err).WithField("toolParams", params).Error("failed to unmarshal tool params")
 		return nil, errors.New("ERROR_ASSISTANT_UNMARSHAL_PARAMS")
 	}
 
