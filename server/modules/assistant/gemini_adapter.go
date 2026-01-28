@@ -11,16 +11,21 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
-	"strings"
+	"sync"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
+	"github.com/apex/log"
 	"google.golang.org/genai"
 )
+
+func init() {
+	adapters[(&GeminiAdapter{}).Name()] = NewGeminiAdapter
+}
 
 type GeminiAdapter struct {
 	srv    *server.Server
@@ -28,10 +33,11 @@ type GeminiAdapter struct {
 	detections.IOManager
 }
 
-func NewGeminiAdapter(ctx context.Context, srv *server.Server, apiKey string) *GeminiAdapter {
+func NewGeminiAdapter(ctx context.Context, srv *server.Server, config map[string]any) (server.AssistantAdapter, error) {
+	apiKey := module.GetStringDefault(config, "apiKey", "")
 	client, err := buildClientFromApiKey(ctx, apiKey)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	return &GeminiAdapter{
@@ -40,7 +46,7 @@ func NewGeminiAdapter(ctx context.Context, srv *server.Server, apiKey string) *G
 		IOManager: &detections.ResourceManager{
 			Config: srv.Config,
 		},
-	}
+	}, nil
 }
 
 func buildClientFromApiKey(ctx context.Context, apikey string) (client *genai.Client, err error) {
@@ -62,27 +68,7 @@ func (a *GeminiAdapter) Name() string {
 }
 
 func (a *GeminiAdapter) SendMessage(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
-	return nil, nil
-}
-
-func (a *GeminiAdapter) SendMessageStream(ctx context.Context, req *model.ChatRequest) (*http.Response, *model.AuxMessageData, error) {
-	// %s = model
-	const msgStart = `data: {"type":"message_start","message":{"id":"assistant","type":"message","role":"assistant","content":[],"model":"%s","stop_reason":null,"stop_sequence":null}}` + "\n\n"
-	// %s = model tokens
-	const contentBlockDelta = `data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"%s"}}` + "\n\n"
-	const contentBlockStop = `data: {"type":"content_block_stop","index":0}` + "\n\n"
-	// %d = index, %s = content block JSON
-	const contentBlockStart = `data: {"type":"content_block_start","index":%d,"content_block":%s}` + "\n\n"
-	// %d = index, %s = partial JSON as string
-	const inputJsonDelta = `data: {"type":"content_block_delta","index":%d,"delta":{"type":"input_json_delta","partial_json":"%s"}}` + "\n\n"
-	// %d = index
-	const contentBlockStopIndexed = `data: {"type":"content_block_stop","index":%d}` + "\n\n"
-	// %s = stop reason
-	const stopReason = `data: {"type":"message_delta","delta":{"stop_reason":"%s","stop_sequence":null}}` + "\n\n"
-	// %d = input tokens, %d = output tokens
-	const usage = `data: {"type":"message_delta","usage":{"input_tokens":%d,"output_tokens":%d}}` + "\n\n"
-	const msgStop = `data: {"type":"message_stop"}` + "\n\n"
-	const done = `data: [DONE]`
+	logger := log.FromContext(ctx)
 
 	history := convertHistory(req)
 	tools, toolConfig := convertToolConfig(req)
@@ -98,35 +84,136 @@ func (a *GeminiAdapter) SendMessageStream(ctx context.Context, req *model.ChatRe
 		},
 		Tools:      tools,
 		ToolConfig: toolConfig,
+		ThinkingConfig: &genai.ThinkingConfig{
+			IncludeThoughts: true,
+		},
+	}, history)
+	if err != nil {
+		return nil, err
+	}
+
+	// Send message (non-streaming)
+	resp, err := session.SendMessage(ctx, *latest.Parts[0])
+	if err != nil {
+		logger.WithFields(log.Fields{
+			"model": req.Model,
+		}).WithError(err).Error("error sending message to gemini")
+		return nil, err
+	}
+
+	// Convert response to model.Message
+	message := &model.Message{
+		Id:            "assistant",
+		Role:          "assistant",
+		ContentBlocks: []model.ContentBlock{},
+	}
+
+	// Get text content
+	text := resp.Text()
+	if text != "" {
+		message.ContentBlocks = append(message.ContentBlocks, model.ContentBlock{
+			Type: "text",
+			Text: text,
+		})
+	}
+
+	// Get function calls
+	functionCalls := resp.FunctionCalls()
+	for _, fc := range functionCalls {
+		inputJSON, err := json.Marshal(fc.Args)
+		if err != nil {
+			logger.WithError(err).WithField("functionCall", fc).Error("failed to marshal function call args")
+			continue
+		}
+
+		toolUseId := fc.ID
+		if toolUseId == "" {
+			toolUseId = fmt.Sprintf("toolu_%d", len(message.ContentBlocks))
+		}
+
+		// Find thought signature for this tool use
+		var thoughtSignature []byte
+		for _, cand := range resp.Candidates {
+			for _, part := range cand.Content.Parts {
+				if part.FunctionCall != nil && part.FunctionCall.ID == fc.ID {
+					thoughtSignature = part.ThoughtSignature
+					break
+				}
+			}
+		}
+
+		message.ContentBlocks = append(message.ContentBlocks, model.ContentBlock{
+			Type:             "tool_use",
+			Id:               toolUseId,
+			Name:             fc.Name,
+			Input:            inputJSON,
+			ThoughtSignature: thoughtSignature,
+		})
+	}
+
+	// Set stop reason
+	for _, cand := range resp.Candidates {
+		if cand.FinishReason != "" {
+			stopReason := string(cand.FinishReason)
+			message.StopReason = &stopReason
+			break
+		}
+	}
+
+	// Set usage metadata
+	if resp.UsageMetadata != nil {
+		message.Usage = &model.Usage{
+			InputTokens:  int(resp.UsageMetadata.PromptTokenCount),
+			OutputTokens: int(resp.UsageMetadata.CandidatesTokenCount),
+		}
+	}
+
+	return message, nil
+}
+
+func (a *GeminiAdapter) SendMessageStream(ctx context.Context, req *model.ChatRequest) (response *http.Response, aux *model.AuxMessageData, err error) {
+	logger := log.FromContext(ctx)
+
+	history := convertHistory(req)
+	tools, toolConfig := convertToolConfig(req)
+
+	latest := history[len(history)-1]
+	history = history[:len(history)-1]
+
+	session, err := a.client.Chats.Create(ctx, req.Model, &genai.GenerateContentConfig{
+		SystemInstruction: &genai.Content{
+			Parts: []*genai.Part{
+				{Text: req.SystemAppend},
+			},
+		},
+		Tools:      tools,
+		ToolConfig: toolConfig,
+		ThinkingConfig: &genai.ThinkingConfig{
+			IncludeThoughts: true,
+		},
 	}, history)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	bodyReader, bodyWriter := io.Pipe()
+	response, bodyWriter := fabricateResponse(http.StatusOK)
 
-	res := &http.Response{
-		StatusCode: http.StatusOK,
-		Body:       bodyReader,
-		Header:     make(http.Header),
-	}
-
-	res.Header.Add("Content-Type", "text/event-stream")
-
-	aux := &model.AuxMessageData{
+	aux = &model.AuxMessageData{
 		ThoughtSignatures: map[string][]byte{},
 	}
+
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+
+	// Create SSE writer and stream processor
+	writer := newSSEEventWriter(bodyWriter)
+	processor := newStreamProcessor(writer, req.Model, wg)
 
 	go func() {
 		defer bodyWriter.Close()
 
-		// don't start writing the response until the first bit of content is received
-		firstSend := true
-		contentBlockIndex := 0
-		hasOpenBlock := false
-
-		var finalResp *genai.GenerateContentResponse
 		finishReason := "end_turn"
+		var finalResp *genai.GenerateContentResponse
 
 		// don't allow a user closing their request connection to cause us to lose the message stream
 		noTimeoutContext := context.WithValue(context.Background(), web.ContextKeyRequestId, ctx.Value(web.ContextKeyRequestId))
@@ -134,103 +221,41 @@ func (a *GeminiAdapter) SendMessageStream(ctx context.Context, req *model.ChatRe
 
 		for resp, err := range session.SendMessageStream(noTimeoutContext, *latest.Parts[0]) {
 			if err != nil {
-				panic(err)
+				if replacement, shouldReturn := handleStreamError(err, processor.firstSend, writer, logger, req.Model); shouldReturn {
+					if replacement != nil {
+						response = replacement
+					}
+					return
+				}
 			}
-			_, _, _ = tools, toolConfig, history
 
+			// Process chunk - automatically handles first send on first delta
+			thoughtSigs, reason, err := processor.processChunk(resp)
+			if err != nil {
+				// Mid-stream error during processing
+				processor.writeError(err)
+				return
+			}
+
+			// Collect thought signatures into aux
+			for toolId, sig := range thoughtSigs {
+				aux.ThoughtSignatures[toolId] = sig
+			}
+
+			// Track finish reason and final response
+			if reason != "" {
+				finishReason = reason
+			}
 			finalResp = resp
-
-			if firstSend {
-				firstSend = false
-				fmt.Fprintf(bodyWriter, msgStart, req.Model)
-			}
-
-			// Handle text content
-			text := resp.Text()
-			if text != "" {
-				// escape quotes, but remove surrounding quotes added by strconv.Quote
-				escapedText := strings.TrimSuffix(strings.TrimPrefix(strconv.Quote(text), "\""), "\"")
-				fmt.Fprintf(bodyWriter, contentBlockDelta, escapedText)
-				hasOpenBlock = true
-			}
-
-			// Handle function calls
-			functionCalls := resp.FunctionCalls()
-			if len(functionCalls) > 0 {
-				// Close text content block if it was open
-				if hasOpenBlock {
-					fmt.Fprint(bodyWriter, contentBlockStop)
-					contentBlockIndex++
-					hasOpenBlock = false
-				}
-
-				for _, cand := range resp.Candidates {
-					for _, part := range cand.Content.Parts {
-						if part.FunctionCall != nil {
-							// Record thought signature for this tool use
-							toolUseId := part.FunctionCall.ID
-							if toolUseId == "" {
-								toolUseId = fmt.Sprintf("toolu_%d", contentBlockIndex)
-							}
-							aux.ThoughtSignatures[toolUseId] = part.ThoughtSignature
-						}
-					}
-
-					if cand.FinishReason != "" {
-						finishReason = string(cand.FinishReason)
-					}
-				}
-
-				// Process each function call
-				for _, fc := range functionCalls {
-					toolUseId := fc.ID
-					if toolUseId == "" {
-						toolUseId = fmt.Sprintf("toolu_%d", contentBlockIndex)
-					}
-
-					toolUseBlock := map[string]any{
-						"type":  "tool_use",
-						"id":    toolUseId,
-						"name":  fc.Name,
-						"input": map[string]any{},
-					}
-					toolUseJSON, _ := json.Marshal(toolUseBlock)
-					fmt.Fprintf(bodyWriter, contentBlockStart, contentBlockIndex, string(toolUseJSON))
-
-					// Send function arguments as input_json_delta
-					if len(fc.Args) > 0 {
-						argsJSON, err := json.Marshal(fc.Args)
-						if err == nil {
-							// escape quotes in the JSON
-							escapedJSON := strings.TrimSuffix(strings.TrimPrefix(strconv.Quote(string(argsJSON)), "\""), "\"")
-							fmt.Fprintf(bodyWriter, inputJsonDelta, contentBlockIndex, escapedJSON)
-						}
-					}
-
-					fmt.Fprintf(bodyWriter, contentBlockStopIndexed, contentBlockIndex)
-					contentBlockIndex++
-				}
-			}
 		}
 
-		// Close any remaining open text block
-		if hasOpenBlock {
-			fmt.Fprint(bodyWriter, contentBlockStop)
-		}
-
-		if finishReason == "" {
-			finishReason = "end_turn"
-		}
-
-		fmt.Fprintf(bodyWriter, stopReason, finishReason)
-		if finalResp.UsageMetadata != nil {
-			fmt.Fprintf(bodyWriter, usage, finalResp.UsageMetadata.PromptTokenCount, finalResp.UsageMetadata.CandidatesTokenCount)
-		}
-		fmt.Fprint(bodyWriter, msgStop)
-		fmt.Fprint(bodyWriter, done)
+		// Finalization - processor handles closing blocks and writing final events
+		processor.finalize(finishReason, finalResp.UsageMetadata)
 	}()
 
-	return res, aux, nil
+	wg.Wait()
+
+	return response, aux, nil
 }
 
 func (a *GeminiAdapter) GetBalance(ctx context.Context) (*model.BalanceResponse, error) {
@@ -453,4 +478,62 @@ func convertTypeToGemini(typeStr string) genai.Type {
 	default:
 		return genai.TypeString
 	}
+}
+
+func getThought(resp *genai.GenerateContentResponse) (thought string) {
+	for _, cand := range resp.Candidates {
+		for _, part := range cand.Content.Parts {
+			if part.Thought {
+				thought += part.Text
+			}
+		}
+	}
+
+	return thought
+}
+
+func fabricateResponse(code int) (*http.Response, *io.PipeWriter) {
+	bodyReader, bodyWriter := io.Pipe()
+
+	response := &http.Response{
+		StatusCode: code,
+		Body:       bodyReader,
+		Header:     make(http.Header),
+	}
+
+	response.Header.Add("Content-Type", "text/event-stream")
+
+	return response, bodyWriter
+}
+
+// handleStreamError handles errors during streaming
+// Returns a replacement response (if first send error) and whether the caller should return
+func handleStreamError(err error, firstSend bool, writer *sseEventWriter, logger log.Interface, model string) (*http.Response, bool) {
+	if firstSend {
+		// No response sent to client yet - fabricate error response
+		logger.WithFields(log.Fields{
+			"model": model,
+		}).WithError(err).Error("first response error from gemini")
+
+		var body *io.PipeWriter
+		response, body := fabricateResponse(http.StatusInternalServerError)
+
+		// Write to pipe in goroutine to avoid blocking
+		go func() {
+			fmt.Fprint(body, "ERROR_GEMINI_FIRST_RESPONSE")
+			body.Close()
+		}()
+
+		return response, true
+	}
+
+	// Error after partial response sent to client
+	logger.WithFields(log.Fields{
+		"model": model,
+	}).WithError(err).Error("subsequent response error from gemini")
+
+	writer.writeError(err.Error())
+	writer.writeDone()
+
+	return nil, true
 }

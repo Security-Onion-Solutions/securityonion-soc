@@ -78,12 +78,13 @@ func (mr *MockAssistantManagerMockRecorder) Chat(ctx, aiModel, messages any, opt
 }
 
 // ChatStream mocks base method.
-func (m *MockAssistantManager) ChatStream(ctx context.Context, aiModel string, messages []*model.Message) (*http.Response, error) {
+func (m *MockAssistantManager) ChatStream(ctx context.Context, aiModel string, messages []*model.Message) (*http.Response, *model.AuxMessageData, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ChatStream", ctx, aiModel, messages)
 	ret0, _ := ret[0].(*http.Response)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret1, _ := ret[1].(*model.AuxMessageData)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
 }
 
 // ChatStream indicates an expected call of ChatStream.

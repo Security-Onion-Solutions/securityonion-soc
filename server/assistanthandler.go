@@ -204,7 +204,7 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	go func() {
-		msg, err := unstreamResponse(ctx, string(entireResponse), aux)
+		msg, err := unstreamResponse(noTimeOutCtx, string(entireResponse), aux)
 		if err != nil {
 			logger.WithError(err).Error("error unstreaming response")
 			return
@@ -287,6 +287,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		toolResult = &model.ToolResult{
+			Name:      result.ToolName,
 			ToolUseId: toolReq.ToolUseId,
 			Content: []model.ToolResultContent{
 				{

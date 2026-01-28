@@ -7,8 +7,6 @@ package assistant
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,7 +14,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -28,21 +25,17 @@ import (
 	"github.com/google/uuid"
 )
 
-const (
-	DEFAULT_APIURL                            = "https://onionai.securityonion.net/"
-	DEFAULT_HEALTH_TIMEOUT_SECONDS            = 3
-	DEFAULT_SYSTEM_PROMPT_ADDENDUM            = ""
-	DEFAULT_SYSTEM_PROMPT_ADDENDUM_MAX_LENGTH = 50000
-)
+type AdapterConstructor func(context.Context, *server.Server, map[string]any) (server.AssistantAdapter, error)
+
+var adapters = map[string]AdapterConstructor{}
 
 var (
 	ErrToolNotFound = errors.New("ERROR_ASSISTANT_TOOL_NOT_FOUND")
 )
 
 type AssistantCoordinator struct {
-	srv                  *server.Server
-	systemPromptAddendum string
-	isRunning            bool
+	srv       *server.Server
+	isRunning bool
 
 	FunctionLibrary map[string]Tool
 	toolConfig      json.RawMessage
@@ -64,42 +57,39 @@ func (ac *AssistantCoordinator) PrerequisiteModules() []string {
 }
 
 func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
+	logger := log.FromContext(ac.srv.Context)
+
 	ac.srv.AssistantManager = ac
 	ac.FunctionLibrary = knownTools
 
-	apiUrl := module.GetStringDefault(config, "apiUrl", DEFAULT_APIURL)
-	healthTimeoutSeconds := module.GetIntDefault(config, "healthTimeoutSeconds", DEFAULT_HEALTH_TIMEOUT_SECONDS)
-	ac.systemPromptAddendum = module.GetStringDefault(config, "systemPromptAddendum", DEFAULT_SYSTEM_PROMPT_ADDENDUM)
-	geminiKey := module.GetStringDefault(config, "geminiApiKey", "")
-
-	maxLength := module.GetIntDefault(config, "systemPromptAddendumMaxLength", DEFAULT_SYSTEM_PROMPT_ADDENDUM_MAX_LENGTH)
-	if len(ac.systemPromptAddendum) > maxLength {
-		ac.systemPromptAddendum = ac.systemPromptAddendum[:maxLength]
-	}
-
 	ac.toolConfig, err = buildToolConfig(ac.FunctionLibrary)
-
-	apiKey := buildApiKey()
 
 	ac.adapters = map[string]server.AssistantAdapter{}
 
-	if apiUrl != "" && apiKey != "" {
-		bedrock := NewBedrockAdapter(ac.srv, apiUrl, apiKey, healthTimeoutSeconds)
-		ac.adapters[bedrock.Name()] = bedrock
-	}
-	if geminiKey != "" {
-		gemini := NewGeminiAdapter(ac.srv.Context, ac.srv, geminiKey)
-		ac.adapters[gemini.Name()] = gemini
+	adapterConfig, ok := config["adapters"].(map[string]any)
+	if ok && adapterConfig != nil {
+		for name, ctor := range adapters {
+			config, ok := adapterConfig[name].(map[string]any)
+			if ok {
+				adapter, err := ctor(ac.srv.Context, ac.srv, config)
+				if err != nil {
+					logger.WithError(err).WithFields(log.Fields{
+						"adapter": name,
+					}).Error("unable to initialize adapter")
+
+					continue
+				}
+
+				ac.adapters[name] = adapter
+			} else {
+				logger.WithField("adapter", name).Warn("known adapter missing config, not loading adapter")
+			}
+		}
+	} else {
+		log.Log.Warn("no adapter config, no adapters loaded")
 	}
 
 	return err
-}
-
-func buildApiKey() string {
-	key := licensing.GetLicenseKey()
-	hash := sha256.Sum256([]byte(key.Signature))
-
-	return fmt.Sprintf("sk-%s", hex.EncodeToString(hash[:]))
 }
 
 func buildToolConfig(functions map[string]Tool) (json.RawMessage, error) {
@@ -165,12 +155,12 @@ func (ac *AssistantCoordinator) selectAdapter(aiModel string) server.AssistantAd
 			if m.Adapter != "" {
 				return ac.adapters[m.Adapter]
 			} else {
-				return ac.adapters["bedrock"]
+				return ac.adapters["securityonion_ai_cloud"]
 			}
 		}
 	}
 
-	return ac.adapters["bedrock"]
+	return ac.adapters["securityonion_ai_cloud"]
 }
 
 func (ac *AssistantCoordinator) Chat(ctx context.Context, aiModel string, messages []*model.Message, opts ...model.ChatOpt) ([]*model.Message, error) {
@@ -181,11 +171,10 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, aiModel string, messag
 	msgs := cleanupMessages(messages)
 
 	req := &model.ChatRequest{
-		Messages:     msgs,
-		ToolConfig:   ac.toolConfig,
-		UserId:       userID,
-		SystemAppend: ac.systemPromptAddendum,
-		Model:        aiModel,
+		Messages:   msgs,
+		ToolConfig: ac.toolConfig,
+		UserId:     userID,
+		Model:      aiModel,
 	}
 
 	adapter := ac.selectAdapter(aiModel)
@@ -271,12 +260,11 @@ func (ac *AssistantCoordinator) ChatStream(ctx context.Context, aiModel string, 
 	msgs := cleanupMessages(messages)
 
 	req := &model.ChatRequest{
-		Messages:     msgs,
-		Stream:       true,
-		ToolConfig:   ac.toolConfig,
-		UserId:       userID,
-		SystemAppend: ac.systemPromptAddendum,
-		Model:        aiModel,
+		Messages:   msgs,
+		Stream:     true,
+		ToolConfig: ac.toolConfig,
+		UserId:     userID,
+		Model:      aiModel,
 	}
 
 	adapter := ac.selectAdapter(aiModel)

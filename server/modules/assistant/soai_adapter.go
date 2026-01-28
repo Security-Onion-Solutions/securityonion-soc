@@ -8,46 +8,85 @@ package assistant
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"path"
 	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 
 	"github.com/apex/log"
 )
 
-type BedrockAdapter struct {
+func init() {
+	adapters[(&SOAiCloudAdapter{}).Name()] = NewSOAiCloudAdapter
+}
+
+const (
+	DEFAULT_APIURL                            = "https://onionai.securityonion.net/"
+	DEFAULT_HEALTH_TIMEOUT_SECONDS            = 3
+	DEFAULT_SYSTEM_PROMPT_ADDENDUM            = ""
+	DEFAULT_SYSTEM_PROMPT_ADDENDUM_MAX_LENGTH = 50000
+)
+
+type SOAiCloudAdapter struct {
 	srv                  *server.Server
 	apiUrl               string
 	apiKey               string
 	healthTimeoutSeconds int
+	systemPromptAddendum string
 	detections.IOManager
 }
 
-func NewBedrockAdapter(srv *server.Server, apiUrl string, apiKey string, healthTimeoutSeconds int) *BedrockAdapter {
-	return &BedrockAdapter{
+func NewSOAiCloudAdapter(_ context.Context, srv *server.Server, config map[string]any) (server.AssistantAdapter, error) {
+	// apiUrl string, apiKey string, healthTimeoutSeconds int
+	apiUrl := module.GetStringDefault(config, "apiUrl", DEFAULT_APIURL)
+	healthTimeoutSeconds := module.GetIntDefault(config, "healthTimeoutSeconds", DEFAULT_HEALTH_TIMEOUT_SECONDS)
+	systemPromptAddendum := module.GetStringDefault(config, "systemPromptAddendum", DEFAULT_SYSTEM_PROMPT_ADDENDUM)
+
+	maxLength := module.GetIntDefault(config, "systemPromptAddendumMaxLength", DEFAULT_SYSTEM_PROMPT_ADDENDUM_MAX_LENGTH)
+	if len(systemPromptAddendum) > maxLength {
+		systemPromptAddendum = systemPromptAddendum[:maxLength]
+	}
+
+	apiKey := buildApiKey()
+
+	return &SOAiCloudAdapter{
 		srv:                  srv,
 		apiUrl:               apiUrl,
 		apiKey:               apiKey,
 		healthTimeoutSeconds: healthTimeoutSeconds,
+		systemPromptAddendum: systemPromptAddendum,
 		IOManager: &detections.ResourceManager{
 			Config: srv.Config,
 		},
-	}
+	}, nil
 }
 
-func (a *BedrockAdapter) Name() string {
-	return "bedrock"
+func (a *SOAiCloudAdapter) Name() string {
+	return "securityonion_ai_cloud"
 }
 
-func (a *BedrockAdapter) SendMessage(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+func buildApiKey() string {
+	key := licensing.GetLicenseKey()
+	hash := sha256.Sum256([]byte(key.Signature))
+
+	return fmt.Sprintf("sk-%s", hex.EncodeToString(hash[:]))
+}
+
+func (a *SOAiCloudAdapter) SendMessage(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
 	logger := log.FromContext(ctx)
+
+	req.SystemAppend = a.systemPromptAddendum
 
 	u, err := url.Parse(a.apiUrl)
 	if err != nil {
@@ -107,7 +146,7 @@ func (a *BedrockAdapter) SendMessage(ctx context.Context, req *model.ChatRequest
 	return response, nil
 }
 
-func (a *BedrockAdapter) SendMessageStream(ctx context.Context, req *model.ChatRequest) (*http.Response, *model.AuxMessageData, error) {
+func (a *SOAiCloudAdapter) SendMessageStream(ctx context.Context, req *model.ChatRequest) (*http.Response, *model.AuxMessageData, error) {
 	logger := log.FromContext(ctx)
 
 	u, err := url.Parse(a.apiUrl)
@@ -155,7 +194,7 @@ func (a *BedrockAdapter) SendMessageStream(ctx context.Context, req *model.ChatR
 	return res, nil, nil
 }
 
-func (a *BedrockAdapter) GetBalance(ctx context.Context) (*model.BalanceResponse, error) {
+func (a *SOAiCloudAdapter) GetBalance(ctx context.Context) (*model.BalanceResponse, error) {
 	logger := log.FromContext(ctx)
 
 	u, err := url.Parse(a.apiUrl)
@@ -207,7 +246,7 @@ func (a *BedrockAdapter) GetBalance(ctx context.Context) (*model.BalanceResponse
 	return response, nil
 }
 
-func (a *BedrockAdapter) GetHealth(ctx context.Context) (*model.HealthResponse, error) {
+func (a *SOAiCloudAdapter) GetHealth(ctx context.Context) (*model.HealthResponse, error) {
 	logger := log.FromContext(ctx)
 
 	u, err := url.Parse(a.apiUrl)
@@ -262,7 +301,7 @@ func (a *BedrockAdapter) GetHealth(ctx context.Context) (*model.HealthResponse, 
 	return response, nil
 }
 
-func (a *BedrockAdapter) prepareRequestHeaders(httpReq *http.Request) {
+func (a *SOAiCloudAdapter) prepareRequestHeaders(httpReq *http.Request) {
 	httpReq.Header.Add("x-api-key", a.apiKey)
 	httpReq.Header.Add("x-so-version", a.srv.Host.Version)
 }

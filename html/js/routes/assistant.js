@@ -527,6 +527,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
 
       assistantMessage = {
         role: 'assistant',
+        thought: Vue.ref(''), // MUST be ref
         content: Vue.ref(''), // MUST be ref
         timestamp: new Date().toISOString(),
         usage: Vue.ref(null),
@@ -596,6 +597,9 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
             this.scrollIfPinned();
           }
         }
+      } else if (c.delta.type === 'thought_delta') {
+        assistantMessage.thought.value += this.nbspRegexOp(c.delta.text);
+        console.log('thought:', assistantMessage);
       }
     },
     
@@ -845,6 +849,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     handleToolExecutionMessageStart(c, assistantMessage, toolUse) {
       assistantMessage = {
         role: 'assistant',
+        thought: Vue.ref(''),
         content: Vue.ref(''),
         timestamp: new Date().toISOString(),
         usage: Vue.ref(null),

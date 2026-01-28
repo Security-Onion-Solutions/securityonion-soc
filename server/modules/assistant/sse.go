@@ -1,0 +1,251 @@
+package assistant
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"strconv"
+	"sync"
+
+	"google.golang.org/genai"
+)
+
+// sseEventWriter handles writing Server-Sent Events in the expected format
+type sseEventWriter struct {
+	writer io.Writer
+}
+
+func newSSEEventWriter(writer io.Writer) *sseEventWriter {
+	return &sseEventWriter{writer: writer}
+}
+
+func (w *sseEventWriter) writeMessageStart(model string) error {
+	_, err := fmt.Fprintf(w.writer, `data: {"type":"message_start","message":{"id":"assistant","type":"message","role":"assistant","content":[],"model":%s,"stop_reason":null,"stop_sequence":null}}`+"\n\n", strconv.Quote(model))
+	return err
+}
+
+func (w *sseEventWriter) writeContentBlockDelta(index int, deltaType string, text string) error {
+	_, err := fmt.Fprintf(w.writer, `data: {"type":"content_block_delta","index":%d,"delta":{"type":%s,"text":%s}}`+"\n\n", index, strconv.Quote(deltaType), text)
+	return err
+}
+
+func (w *sseEventWriter) writeContentBlockStop(index int) error {
+	_, err := fmt.Fprintf(w.writer, `data: {"type":"content_block_stop","index":%d}`+"\n\n", index)
+	return err
+}
+
+func (w *sseEventWriter) writeContentBlockStart(index int, block interface{}) error {
+	blockJSON, err := json.Marshal(block)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(w.writer, `data: {"type":"content_block_start","index":%d,"content_block":%s}`+"\n\n", index, string(blockJSON))
+	return err
+}
+
+func (w *sseEventWriter) writeInputJsonDelta(index int, partialJSON string) error {
+	_, err := fmt.Fprintf(w.writer, `data: {"type":"content_block_delta","index":%d,"delta":{"type":"input_json_delta","partial_json":%s}}`+"\n\n", index, strconv.Quote(partialJSON))
+	return err
+}
+
+func (w *sseEventWriter) writeStopReason(reason string) error {
+	_, err := fmt.Fprintf(w.writer, `data: {"type":"message_delta","delta":{"stop_reason":%s,"stop_sequence":null}}`+"\n\n", strconv.Quote(reason))
+	return err
+}
+
+func (w *sseEventWriter) writeUsage(inputTokens, outputTokens int64) error {
+	_, err := fmt.Fprintf(w.writer, `data: {"type":"message_delta","usage":{"input_tokens":%d,"output_tokens":%d}}`+"\n\n", inputTokens, outputTokens)
+	return err
+}
+
+func (w *sseEventWriter) writeMessageStop() error {
+	_, err := fmt.Fprint(w.writer, `data: {"type":"message_stop"}`+"\n\n")
+	return err
+}
+
+func (w *sseEventWriter) writeDone() error {
+	_, err := fmt.Fprint(w.writer, `data: [DONE]`)
+	return err
+}
+
+func (w *sseEventWriter) writeError(message string) error {
+	_, err := fmt.Fprintf(w.writer, `data: {"type":"error","message":%s}`+"\n\n", strconv.Quote(message))
+	return err
+}
+
+// streamProcessor processes response chunks and manages streaming state
+type streamProcessor struct {
+	writer            *sseEventWriter
+	model             string
+	wg                *sync.WaitGroup
+	contentBlockIndex int
+	hasOpenBlock      bool
+	firstSend         bool
+}
+
+func newStreamProcessor(writer *sseEventWriter, model string, wg *sync.WaitGroup) *streamProcessor {
+	return &streamProcessor{
+		writer:            writer,
+		model:             model,
+		wg:                wg,
+		contentBlockIndex: 0,
+		hasOpenBlock:      false,
+		firstSend:         true,
+	}
+}
+
+// processChunk processes a response chunk and writes appropriate events
+// Returns thought signatures, finish reason, and any error that occurred
+func (p *streamProcessor) processChunk(resp *genai.GenerateContentResponse) (map[string][]byte, string, error) {
+	thoughtSigs := make(map[string][]byte)
+	finishReason := ""
+
+	// Extract thought
+	thought := getThought(resp)
+	if thought != "" {
+		p.ensureFirstSend()
+		p.writeThought(thought)
+	}
+
+	// Extract text
+	text := resp.Text()
+	if text != "" {
+		p.ensureFirstSend()
+		p.writeText(text)
+	}
+
+	// Extract function calls
+	functionCalls := resp.FunctionCalls()
+	if len(functionCalls) > 0 {
+		// Close any open text/thought block
+		if p.hasOpenBlock {
+			p.closeOpenBlock()
+		}
+
+		// Collect thought signatures from candidates
+		for _, cand := range resp.Candidates {
+			for _, part := range cand.Content.Parts {
+				if part.FunctionCall != nil {
+					toolUseId := part.FunctionCall.ID
+					if toolUseId == "" {
+						toolUseId = fmt.Sprintf("toolu_%d", p.contentBlockIndex)
+					}
+					if part.ThoughtSignature != nil {
+						thoughtSigs[toolUseId] = part.ThoughtSignature
+					}
+				}
+			}
+
+			if cand.FinishReason != "" {
+				finishReason = string(cand.FinishReason)
+			}
+		}
+
+		// Write function calls
+		sigs := p.writeFunctionCalls(functionCalls)
+		for id, sig := range sigs {
+			thoughtSigs[id] = sig
+		}
+	}
+
+	// Check for finish reason in candidates
+	for _, cand := range resp.Candidates {
+		if cand.FinishReason != "" {
+			finishReason = string(cand.FinishReason)
+			break
+		}
+	}
+
+	return thoughtSigs, finishReason, nil
+}
+
+// writeError writes an error event and done message
+func (p *streamProcessor) writeError(err error) {
+	p.writer.writeError(err.Error())
+	p.writer.writeDone()
+}
+
+// finalize closes any open blocks and writes final events
+func (p *streamProcessor) finalize(finishReason string, usage *genai.GenerateContentResponseUsageMetadata) {
+	if p.hasOpenBlock {
+		p.closeOpenBlock()
+	}
+
+	if finishReason == "" {
+		finishReason = "end_turn"
+	}
+
+	p.writer.writeStopReason(finishReason)
+	if usage != nil {
+		p.writer.writeUsage(int64(usage.PromptTokenCount), int64(usage.CandidatesTokenCount))
+	}
+	p.writer.writeMessageStop()
+	p.writer.writeDone()
+}
+
+// ensureFirstSend handles first send ceremony (only once)
+func (p *streamProcessor) ensureFirstSend() {
+	if p.firstSend {
+		p.wg.Done()
+		p.firstSend = false
+		p.writer.writeMessageStart(p.model)
+	}
+}
+
+// writeThought writes a thought delta
+func (p *streamProcessor) writeThought(thought string) {
+	escapedText := strconv.Quote(thought)
+	p.writer.writeContentBlockDelta(p.contentBlockIndex, "thought_delta", escapedText)
+	p.hasOpenBlock = true
+}
+
+// writeText writes a text delta
+func (p *streamProcessor) writeText(text string) {
+	escapedText := strconv.Quote(text)
+	p.writer.writeContentBlockDelta(p.contentBlockIndex, "text_delta", escapedText)
+	p.hasOpenBlock = true
+}
+
+// writeFunctionCalls writes function call blocks and returns their thought signatures
+func (p *streamProcessor) writeFunctionCalls(functionCalls []*genai.FunctionCall) map[string][]byte {
+	thoughtSigs := make(map[string][]byte)
+
+	for _, fc := range functionCalls {
+		p.ensureFirstSend()
+
+		toolUseId := fc.ID
+		if toolUseId == "" {
+			toolUseId = fmt.Sprintf("toolu_%d", p.contentBlockIndex)
+		}
+
+		toolUseBlock := map[string]any{
+			"type":  "tool_use",
+			"id":    toolUseId,
+			"name":  fc.Name,
+			"input": map[string]any{},
+		}
+		p.writer.writeContentBlockStart(p.contentBlockIndex, toolUseBlock)
+
+		// Send function arguments as input_json_delta
+		if len(fc.Args) > 0 {
+			argsJSON, err := json.Marshal(fc.Args)
+			if err == nil {
+				p.writer.writeInputJsonDelta(p.contentBlockIndex, string(argsJSON))
+			}
+		}
+
+		p.writer.writeContentBlockStop(p.contentBlockIndex)
+		p.contentBlockIndex++
+	}
+
+	return thoughtSigs
+}
+
+// closeOpenBlock closes the currently open text/thought block
+func (p *streamProcessor) closeOpenBlock() {
+	if p.hasOpenBlock {
+		p.writer.writeContentBlockStop(p.contentBlockIndex)
+		p.contentBlockIndex++
+		p.hasOpenBlock = false
+	}
+}

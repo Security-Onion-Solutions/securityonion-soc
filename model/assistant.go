@@ -237,7 +237,7 @@ type AuxMessageData struct {
 }
 
 type ToolResult struct {
-	Name      string              `json:"-"`
+	Name      string              `json:"name,omitempty"`
 	ToolUseId string              `json:"toolUseId"`
 	Content   []ToolResultContent `json:"content"`
 	Status    string              `json:"status,omitempty"`
