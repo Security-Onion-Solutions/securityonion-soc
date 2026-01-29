@@ -20,6 +20,9 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
+	"github.com/tidwall/gjson"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/google"
 	"google.golang.org/genai"
 )
 
@@ -29,20 +32,30 @@ func init() {
 
 type GeminiAdapter struct {
 	srv    *server.Server
-	client *genai.Client
+	client GeminiClient
 	detections.IOManager
 }
 
 func NewGeminiAdapter(ctx context.Context, srv *server.Server, config map[string]any) (server.AssistantAdapter, error) {
-	apiKey := module.GetStringDefault(config, "apiKey", "")
-	client, err := buildClientFromApiKey(ctx, apiKey)
+	var client *genai.Client
+	var err error
+
+	serviceAccountJSON := module.GetStringDefault(config, "serviceAccountJSON", "")
+	serviceAccountLocation := module.GetStringDefault(config, "serviceAccountLocation", "")
+
+	if serviceAccountJSON != "" && serviceAccountLocation != "" {
+		client, err = BuildClientServiceAccount(ctx, serviceAccountJSON, serviceAccountLocation)
+	} else {
+		apiKey := module.GetStringDefault(config, "apiKey", "")
+		client, err = buildClientFromApiKey(ctx, apiKey)
+	}
 	if err != nil {
 		return nil, err
 	}
 
 	return &GeminiAdapter{
 		srv:    srv,
-		client: client,
+		client: NewGeminiClientWrapper(client),
 		IOManager: &detections.ResourceManager{
 			Config: srv.Config,
 		},
@@ -63,6 +76,34 @@ func buildClientFromApiKey(ctx context.Context, apikey string) (client *genai.Cl
 	return client, nil
 }
 
+func BuildClientServiceAccount(ctx context.Context, servAccountJSON string, location string) (*genai.Client, error) {
+	const scopeCloudPlatform = "https://www.googleapis.com/auth/cloud-platform"
+
+	gjRes := gjson.Get(servAccountJSON, "project_id")
+	if !gjRes.Exists() {
+		return nil, fmt.Errorf("service account json does not contain project_id")
+	}
+	projID := gjRes.Str
+
+	// 1) Explicitly load credentials from the JSON you were given.
+	// The Google auth library owns token URLs/endpoints and any future changes.
+	creds, err := google.CredentialsFromJSON(ctx, []byte(servAccountJSON), scopeCloudPlatform)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2) Explicitly construct an HTTP client that uses that TokenSource.
+	authHTTPClient := oauth2.NewClient(ctx, creds.TokenSource)
+
+	// 3) Use your authenticated HTTP client with the GenAI client.
+	return genai.NewClient(ctx, &genai.ClientConfig{
+		Project:    projID,
+		Location:   location,
+		Backend:    genai.BackendVertexAI,
+		HTTPClient: authHTTPClient,
+	})
+}
+
 func (a *GeminiAdapter) Name() string {
 	return "gemini"
 }
@@ -76,11 +117,17 @@ func (a *GeminiAdapter) SendMessage(ctx context.Context, req *model.ChatRequest)
 	latest := history[len(history)-1]
 	history = history[:len(history)-1]
 
-	session, err := a.client.Chats.Create(ctx, req.Model, &genai.GenerateContentConfig{
+	prompt := make([]*genai.Part, 0, 2)
+	if req.System != "" {
+		prompt = append(prompt, &genai.Part{Text: req.System})
+	}
+	if req.SystemAppend != "" {
+		prompt = append(prompt, &genai.Part{Text: req.SystemAppend})
+	}
+
+	session, err := a.client.CreateSession(ctx, req.Model, &genai.GenerateContentConfig{
 		SystemInstruction: &genai.Content{
-			Parts: []*genai.Part{
-				{Text: req.SystemAppend},
-			},
+			Parts: prompt,
 		},
 		Tools:      tools,
 		ToolConfig: toolConfig,
@@ -180,11 +227,17 @@ func (a *GeminiAdapter) SendMessageStream(ctx context.Context, req *model.ChatRe
 	latest := history[len(history)-1]
 	history = history[:len(history)-1]
 
-	session, err := a.client.Chats.Create(ctx, req.Model, &genai.GenerateContentConfig{
+	prompt := make([]*genai.Part, 0, 2)
+	if req.System != "" {
+		prompt = append(prompt, &genai.Part{Text: req.System})
+	}
+	if req.SystemAppend != "" {
+		prompt = append(prompt, &genai.Part{Text: req.SystemAppend})
+	}
+
+	session, err := a.client.CreateSession(ctx, req.Model, &genai.GenerateContentConfig{
 		SystemInstruction: &genai.Content{
-			Parts: []*genai.Part{
-				{Text: req.SystemAppend},
-			},
+			Parts: prompt,
 		},
 		Tools:      tools,
 		ToolConfig: toolConfig,
@@ -221,7 +274,8 @@ func (a *GeminiAdapter) SendMessageStream(ctx context.Context, req *model.ChatRe
 
 		for resp, err := range session.SendMessageStream(noTimeoutContext, *latest.Parts[0]) {
 			if err != nil {
-				if replacement, shouldReturn := handleStreamError(err, processor.firstSend, writer, logger, req.Model); shouldReturn {
+				replacement, shouldReturn := handleStreamError(err, processor.firstSend, writer, logger, req.Model)
+				if shouldReturn {
 					if replacement != nil {
 						response = replacement
 					}
@@ -249,8 +303,13 @@ func (a *GeminiAdapter) SendMessageStream(ctx context.Context, req *model.ChatRe
 			finalResp = resp
 		}
 
+		var usage *genai.GenerateContentResponseUsageMetadata
+		if finalResp != nil && finalResp.UsageMetadata != nil {
+			usage = finalResp.UsageMetadata
+		}
+
 		// Finalization - processor handles closing blocks and writing final events
-		processor.finalize(finishReason, finalResp.UsageMetadata)
+		processor.finalize(finishReason, usage)
 	}()
 
 	wg.Wait()
@@ -384,7 +443,8 @@ func convertToolConfig(req *model.ChatRequest) ([]*genai.Tool, *genai.ToolConfig
 	}
 
 	// Convert tool specifications to Gemini function declarations
-	tools := make([]*genai.Tool, 0, len(toolConfig.Tools))
+	// Collect all function declarations into a single Tool object for Vertex AI compatibility
+	functionDeclarations := make([]*genai.FunctionDeclaration, 0, len(toolConfig.Tools))
 
 	for _, toolSpec := range toolConfig.Tools {
 		if toolSpec.Spec.InputSchema == (model.JSONSchema{}) {
@@ -399,11 +459,15 @@ func convertToolConfig(req *model.ChatRequest) ([]*genai.Tool, *genai.ToolConfig
 			Parameters:  inputSchema,
 		}
 
-		t := &genai.Tool{
-			FunctionDeclarations: []*genai.FunctionDeclaration{funcDecl},
-		}
+		functionDeclarations = append(functionDeclarations, funcDecl)
+	}
 
-		tools = append(tools, t)
+	// Create a single Tool with all function declarations
+	// This works with both Gemini API and Vertex AI backends
+	tools := []*genai.Tool{
+		{
+			FunctionDeclarations: functionDeclarations,
+		},
 	}
 
 	// Configure function calling mode

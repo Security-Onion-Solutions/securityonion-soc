@@ -32,10 +32,8 @@ func init() {
 }
 
 const (
-	DEFAULT_APIURL                            = "https://onionai.securityonion.net/"
-	DEFAULT_HEALTH_TIMEOUT_SECONDS            = 3
-	DEFAULT_SYSTEM_PROMPT_ADDENDUM            = ""
-	DEFAULT_SYSTEM_PROMPT_ADDENDUM_MAX_LENGTH = 50000
+	DEFAULT_APIURL                 = "https://onionai.securityonion.net/"
+	DEFAULT_HEALTH_TIMEOUT_SECONDS = 3
 )
 
 type SOAiCloudAdapter struct {
@@ -43,7 +41,6 @@ type SOAiCloudAdapter struct {
 	apiUrl               string
 	apiKey               string
 	healthTimeoutSeconds int
-	systemPromptAddendum string
 	detections.IOManager
 }
 
@@ -51,12 +48,6 @@ func NewSOAiCloudAdapter(_ context.Context, srv *server.Server, config map[strin
 	// apiUrl string, apiKey string, healthTimeoutSeconds int
 	apiUrl := module.GetStringDefault(config, "apiUrl", DEFAULT_APIURL)
 	healthTimeoutSeconds := module.GetIntDefault(config, "healthTimeoutSeconds", DEFAULT_HEALTH_TIMEOUT_SECONDS)
-	systemPromptAddendum := module.GetStringDefault(config, "systemPromptAddendum", DEFAULT_SYSTEM_PROMPT_ADDENDUM)
-
-	maxLength := module.GetIntDefault(config, "systemPromptAddendumMaxLength", DEFAULT_SYSTEM_PROMPT_ADDENDUM_MAX_LENGTH)
-	if len(systemPromptAddendum) > maxLength {
-		systemPromptAddendum = systemPromptAddendum[:maxLength]
-	}
 
 	apiKey := buildApiKey()
 
@@ -65,7 +56,6 @@ func NewSOAiCloudAdapter(_ context.Context, srv *server.Server, config map[strin
 		apiUrl:               apiUrl,
 		apiKey:               apiKey,
 		healthTimeoutSeconds: healthTimeoutSeconds,
-		systemPromptAddendum: systemPromptAddendum,
 		IOManager: &detections.ResourceManager{
 			Config: srv.Config,
 		},
@@ -85,8 +75,6 @@ func buildApiKey() string {
 
 func (a *SOAiCloudAdapter) SendMessage(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
 	logger := log.FromContext(ctx)
-
-	req.SystemAppend = a.systemPromptAddendum
 
 	u, err := url.Parse(a.apiUrl)
 	if err != nil {
@@ -160,6 +148,9 @@ func (a *SOAiCloudAdapter) SendMessageStream(ctx context.Context, req *model.Cha
 	endpoint := u.String()
 
 	var buf bytes.Buffer
+
+	// The AI Gateway determines the prompt, do not send.
+	req.System = ""
 
 	err = json.NewEncoder(&buf).Encode(req)
 	if err != nil {

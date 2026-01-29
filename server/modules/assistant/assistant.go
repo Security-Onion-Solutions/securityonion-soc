@@ -7,12 +7,15 @@ package assistant
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
@@ -33,14 +36,24 @@ var (
 	ErrToolNotFound = errors.New("ERROR_ASSISTANT_TOOL_NOT_FOUND")
 )
 
+const (
+	DEFAULT_SYSTEM_PROMPT_ADDENDUM            = ""
+	DEFAULT_SYSTEM_PROMPT_ADDENDUM_MAX_LENGTH = 50000
+)
+
+//go:embed SOSystemPrompt.txt
+var embeddedSystemPrompt string
+
 type AssistantCoordinator struct {
 	srv       *server.Server
 	isRunning bool
 
 	FunctionLibrary map[string]Tool
 	toolConfig      json.RawMessage
+	adapters        map[string]server.AssistantAdapter
 
-	adapters map[string]server.AssistantAdapter
+	systemPrompt         string
+	systemPromptAddendum string
 
 	detections.IOManager
 }
@@ -66,6 +79,15 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 
 	ac.adapters = map[string]server.AssistantAdapter{}
 
+	systemPromptAddendum := module.GetStringDefault(config, "systemPromptAddendum", DEFAULT_SYSTEM_PROMPT_ADDENDUM)
+
+	maxLength := module.GetIntDefault(config, "systemPromptAddendumMaxLength", DEFAULT_SYSTEM_PROMPT_ADDENDUM_MAX_LENGTH)
+	if len(systemPromptAddendum) > maxLength {
+		systemPromptAddendum = systemPromptAddendum[:maxLength]
+	}
+
+	ac.systemPromptAddendum = systemPromptAddendum
+
 	adapterConfig, ok := config["adapters"].(map[string]any)
 	if ok && adapterConfig != nil {
 		for name, ctor := range adapters {
@@ -86,8 +108,10 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 			}
 		}
 	} else {
-		log.Log.Warn("no adapter config, no adapters loaded")
+		logger.Warn("no adapter config, no adapters loaded")
 	}
+
+	ac.getPrompt()
 
 	return err
 }
@@ -126,6 +150,34 @@ func buildToolConfig(functions map[string]Tool) (json.RawMessage, error) {
 	}
 
 	return result, nil
+}
+
+func (ac *AssistantCoordinator) getPrompt() {
+	if embeddedSystemPrompt != "" {
+		ac.systemPrompt = embeddedSystemPrompt
+		return
+	}
+
+	logger := log.FromContext(ac.srv.Context)
+
+	path := os.Getenv("SO_AI_SYSTEM_PROMPT_PATH")
+	if path == "" {
+		logger.Warn("no prompt loaded")
+		return
+	}
+
+	raw, err := ac.ReadFile(path)
+	if err != nil {
+		logger.WithError(err).WithField("path", path).Error("unable to read system prompt from file, no prompt loaded")
+		return
+	}
+
+	if !utf8.Valid(raw) {
+		logger.WithError(err).WithField("path", path).Error("system prompt must be in UTF-8 encoding, no prompt loaded")
+		return
+	}
+
+	ac.systemPrompt = string(raw)
 }
 
 func (ac *AssistantCoordinator) Start() error {
@@ -171,10 +223,12 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, aiModel string, messag
 	msgs := cleanupMessages(messages)
 
 	req := &model.ChatRequest{
-		Messages:   msgs,
-		ToolConfig: ac.toolConfig,
-		UserId:     userID,
-		Model:      aiModel,
+		Messages:     msgs,
+		ToolConfig:   ac.toolConfig,
+		UserId:       userID,
+		Model:        aiModel,
+		System:       ac.systemPrompt,
+		SystemAppend: ac.systemPromptAddendum,
 	}
 
 	adapter := ac.selectAdapter(aiModel)
@@ -260,11 +314,13 @@ func (ac *AssistantCoordinator) ChatStream(ctx context.Context, aiModel string, 
 	msgs := cleanupMessages(messages)
 
 	req := &model.ChatRequest{
-		Messages:   msgs,
-		Stream:     true,
-		ToolConfig: ac.toolConfig,
-		UserId:     userID,
-		Model:      aiModel,
+		Messages:     msgs,
+		Stream:       true,
+		ToolConfig:   ac.toolConfig,
+		UserId:       userID,
+		Model:        aiModel,
+		System:       ac.systemPrompt,
+		SystemAppend: ac.systemPromptAddendum,
 	}
 
 	adapter := ac.selectAdapter(aiModel)

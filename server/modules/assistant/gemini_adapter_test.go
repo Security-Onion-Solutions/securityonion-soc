@@ -8,14 +8,50 @@ package assistant
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
+	"iter"
 	"testing"
 
+	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/genai"
 )
+
+// Test doubles to avoid import cycles
+
+type mockGeminiClient struct {
+	createSessionFunc func(ctx context.Context, model string, config *genai.GenerateContentConfig, history []*genai.Content) (GeminiSession, error)
+}
+
+func (m *mockGeminiClient) CreateSession(ctx context.Context, model string, config *genai.GenerateContentConfig, history []*genai.Content) (GeminiSession, error) {
+	if m.createSessionFunc != nil {
+		return m.createSessionFunc(ctx, model, config, history)
+	}
+	return nil, errors.New("not implemented")
+}
+
+type mockGeminiSession struct {
+	sendMessageFunc       func(ctx context.Context, part genai.Part) (*genai.GenerateContentResponse, error)
+	sendMessageStreamFunc func(ctx context.Context, part genai.Part) iter.Seq2[*genai.GenerateContentResponse, error]
+}
+
+func (m *mockGeminiSession) SendMessage(ctx context.Context, part genai.Part) (*genai.GenerateContentResponse, error) {
+	if m.sendMessageFunc != nil {
+		return m.sendMessageFunc(ctx, part)
+	}
+	return nil, errors.New("not implemented")
+}
+
+func (m *mockGeminiSession) SendMessageStream(ctx context.Context, part genai.Part) iter.Seq2[*genai.GenerateContentResponse, error] {
+	if m.sendMessageStreamFunc != nil {
+		return m.sendMessageStreamFunc(ctx, part)
+	}
+	return func(yield func(*genai.GenerateContentResponse, error) bool) {}
+}
 
 func TestGetThought(t *testing.T) {
 	tests := []struct {
@@ -353,9 +389,10 @@ func TestConvertToolConfig(t *testing.T) {
 			expectTools:  true,
 			expectConfig: true,
 			validate: func(t *testing.T, tools []*genai.Tool, config *genai.ToolConfig) {
-				assert.Len(t, tools, 2)
+				assert.Len(t, tools, 1)
+				assert.Len(t, tools[0].FunctionDeclarations, 2)
 				assert.Equal(t, "tool1", tools[0].FunctionDeclarations[0].Name)
-				assert.Equal(t, "tool2", tools[1].FunctionDeclarations[0].Name)
+				assert.Equal(t, "tool2", tools[0].FunctionDeclarations[1].Name)
 				assert.NotNil(t, config)
 			},
 		},
@@ -929,6 +966,234 @@ func TestConvertPropertyToGemini(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			schema := convertPropertyToGemini(tt.prop)
 			tt.validate(t, schema)
+		})
+	}
+}
+
+func TestGeminiAdapterSendMessage(t *testing.T) {
+	tests := []struct {
+		name             string
+		req              *model.ChatRequest
+		mockResponse     *genai.GenerateContentResponse
+		mockSessionError error
+		mockCreateError  error
+		validate         func(t *testing.T, message *model.Message, err error)
+	}{
+		{
+			name: "success with text response",
+			req: &model.ChatRequest{
+				Model: "gemini-1.5-pro",
+				Messages: []*model.Message{
+					{
+						Role: "user",
+						ContentBlocks: []model.ContentBlock{
+							{Type: "text", Text: "Hello, how are you?"},
+						},
+					},
+				},
+			},
+			mockResponse: &genai.GenerateContentResponse{
+				Candidates: []*genai.Candidate{
+					{
+						Content: &genai.Content{
+							Parts: []*genai.Part{
+								{Text: "Hello! I'm doing well, thank you for asking."},
+							},
+						},
+						FinishReason: "end_turn",
+					},
+				},
+				UsageMetadata: &genai.GenerateContentResponseUsageMetadata{
+					PromptTokenCount:     10,
+					CandidatesTokenCount: 15,
+				},
+			},
+			validate: func(t *testing.T, message *model.Message, err error) {
+				assert.NoError(t, err)
+				assert.NotNil(t, message)
+				assert.Equal(t, "assistant", message.Role)
+				assert.Len(t, message.ContentBlocks, 1)
+				assert.Equal(t, "text", message.ContentBlocks[0].Type)
+				assert.Equal(t, "Hello! I'm doing well, thank you for asking.", message.ContentBlocks[0].Text)
+				assert.NotNil(t, message.Usage)
+				assert.Equal(t, 10, message.Usage.InputTokens)
+				assert.Equal(t, 15, message.Usage.OutputTokens)
+				assert.NotNil(t, message.StopReason)
+				assert.Equal(t, "end_turn", *message.StopReason)
+			},
+		},
+		{
+			name: "success with function calls",
+			req: &model.ChatRequest{
+				Model: "gemini-1.5-pro",
+				Messages: []*model.Message{
+					{
+						Role: "user",
+						ContentBlocks: []model.ContentBlock{
+							{Type: "text", Text: "Search for security logs"},
+						},
+					},
+				},
+				ToolConfig: json.RawMessage(`{"tools":[{"toolSpec":{"name":"search","description":"Search tool","inputSchema":{"json":{"type":"object","properties":{"query":{"type":"string"}}}}}}]}`),
+			},
+			mockResponse: &genai.GenerateContentResponse{
+				Candidates: []*genai.Candidate{
+					{
+						Content: &genai.Content{
+							Parts: []*genai.Part{
+								{
+									FunctionCall: &genai.FunctionCall{
+										ID:   "call-123",
+										Name: "search",
+										Args: map[string]any{"query": "security logs"},
+									},
+									ThoughtSignature: []byte("thought-sig-123"),
+								},
+							},
+						},
+						FinishReason: "end_turn",
+					},
+				},
+			},
+			validate: func(t *testing.T, message *model.Message, err error) {
+				assert.NoError(t, err)
+				assert.NotNil(t, message)
+				assert.Len(t, message.ContentBlocks, 1)
+				assert.Equal(t, "tool_use", message.ContentBlocks[0].Type)
+				assert.Equal(t, "call-123", message.ContentBlocks[0].Id)
+				assert.Equal(t, "search", message.ContentBlocks[0].Name)
+				assert.NotNil(t, message.ContentBlocks[0].ThoughtSignature)
+				assert.Equal(t, []byte("thought-sig-123"), message.ContentBlocks[0].ThoughtSignature)
+			},
+		},
+		{
+			name: "error during session creation",
+			req: &model.ChatRequest{
+				Model: "gemini-1.5-pro",
+				Messages: []*model.Message{
+					{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "Hi"}}},
+				},
+			},
+			mockCreateError: errors.New("API key invalid"),
+			validate: func(t *testing.T, message *model.Message, err error) {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), "API key invalid")
+				assert.Nil(t, message)
+			},
+		},
+		{
+			name: "error during message send",
+			req: &model.ChatRequest{
+				Model: "gemini-1.5-pro",
+				Messages: []*model.Message{
+					{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "Hi"}}},
+				},
+			},
+			mockSessionError: errors.New("rate limit exceeded"),
+			validate: func(t *testing.T, message *model.Message, err error) {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), "rate limit exceeded")
+				assert.Nil(t, message)
+			},
+		},
+		{
+			name: "empty response",
+			req: &model.ChatRequest{
+				Model: "gemini-1.5-pro",
+				Messages: []*model.Message{
+					{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "Hi"}}},
+				},
+			},
+			mockResponse: &genai.GenerateContentResponse{
+				Candidates: []*genai.Candidate{},
+			},
+			validate: func(t *testing.T, message *model.Message, err error) {
+				assert.NoError(t, err)
+				assert.NotNil(t, message)
+				assert.Empty(t, message.ContentBlocks)
+			},
+		},
+		{
+			name: "multiple function calls",
+			req: &model.ChatRequest{
+				Model: "gemini-1.5-pro",
+				Messages: []*model.Message{
+					{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "Search and analyze"}}},
+				},
+			},
+			mockResponse: &genai.GenerateContentResponse{
+				Candidates: []*genai.Candidate{
+					{
+						Content: &genai.Content{
+							Parts: []*genai.Part{
+								{
+									FunctionCall: &genai.FunctionCall{
+										ID:   "call-1",
+										Name: "search",
+										Args: map[string]any{"query": "test1"},
+									},
+								},
+								{
+									FunctionCall: &genai.FunctionCall{
+										ID:   "call-2",
+										Name: "analyze",
+										Args: map[string]any{"data": "test2"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			validate: func(t *testing.T, message *model.Message, err error) {
+				assert.NoError(t, err)
+				assert.NotNil(t, message)
+				assert.Len(t, message.ContentBlocks, 2)
+				assert.Equal(t, "tool_use", message.ContentBlocks[0].Type)
+				assert.Equal(t, "search", message.ContentBlocks[0].Name)
+				assert.Equal(t, "tool_use", message.ContentBlocks[1].Type)
+				assert.Equal(t, "analyze", message.ContentBlocks[1].Name)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup mocks based on test case
+			mockSession := &mockGeminiSession{
+				sendMessageFunc: func(ctx context.Context, part genai.Part) (*genai.GenerateContentResponse, error) {
+					if tt.mockSessionError != nil {
+						return nil, tt.mockSessionError
+					}
+					return tt.mockResponse, nil
+				},
+			}
+
+			mockClient := &mockGeminiClient{
+				createSessionFunc: func(ctx context.Context, model string, config *genai.GenerateContentConfig, history []*genai.Content) (GeminiSession, error) {
+					if tt.mockCreateError != nil {
+						return nil, tt.mockCreateError
+					}
+					return mockSession, nil
+				},
+			}
+
+			// Create adapter with mock client
+			adapter := &GeminiAdapter{
+				client: mockClient,
+				IOManager: &detections.ResourceManager{
+					Config: &config.ServerConfig{},
+				},
+			}
+
+			// Execute
+			ctx := context.Background()
+			message, err := adapter.SendMessage(ctx, tt.req)
+
+			// Validate using custom validation function
+			if tt.validate != nil {
+				tt.validate(t, message, err)
+			}
 		})
 	}
 }

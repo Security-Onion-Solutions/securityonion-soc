@@ -773,6 +773,91 @@ func TestBuildApiKey(t *testing.T) {
 	assert.Equal(t, key, "sk-46736dfccdc375085dfb8f701ea7f327860c51b4aac3629592649ae8a7bb7e29")
 }
 
+func TestAssistantCoordinator_GetPrompt(t *testing.T) {
+	testCases := []struct {
+		name           string
+		embeddedPrompt string
+		envVarValue    string
+		setupMock      func(*detectionsmock.MockIOManager)
+		expectedPrompt string
+	}{
+		{
+			name:           "embedded prompt provided",
+			embeddedPrompt: "This is the embedded system prompt",
+			envVarValue:    "",
+			setupMock:      func(mockIO *detectionsmock.MockIOManager) {},
+			expectedPrompt: "This is the embedded system prompt",
+		},
+		{
+			name:           "embedded prompt empty, env var set, file loads successfully",
+			embeddedPrompt: "",
+			envVarValue:    "/path/to/prompt.txt",
+			setupMock: func(mockIO *detectionsmock.MockIOManager) {
+				mockIO.EXPECT().ReadFile("/path/to/prompt.txt").Return([]byte("Prompt from file"), nil)
+			},
+			expectedPrompt: "Prompt from file",
+		},
+		{
+			name:           "embedded prompt empty, env var not set",
+			embeddedPrompt: "",
+			envVarValue:    "",
+			setupMock:      func(mockIO *detectionsmock.MockIOManager) {},
+			expectedPrompt: "",
+		},
+		{
+			name:           "embedded prompt empty, env var set, file read fails",
+			embeddedPrompt: "",
+			envVarValue:    "/path/to/nonexistent.txt",
+			setupMock: func(mockIO *detectionsmock.MockIOManager) {
+				mockIO.EXPECT().ReadFile("/path/to/nonexistent.txt").Return(nil, errors.New("file not found"))
+			},
+			expectedPrompt: "",
+		},
+		{
+			name:           "embedded prompt empty, env var set, file has invalid UTF-8",
+			embeddedPrompt: "",
+			envVarValue:    "/path/to/invalid.txt",
+			setupMock: func(mockIO *detectionsmock.MockIOManager) {
+				mockIO.EXPECT().ReadFile("/path/to/invalid.txt").Return([]byte{0xff, 0xfe, 0xfd}, nil)
+			},
+			expectedPrompt: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			// Save and restore original embeddedSystemPrompt
+			originalPrompt := embeddedSystemPrompt
+			defer func() {
+				embeddedSystemPrompt = originalPrompt
+			}()
+			embeddedSystemPrompt = tc.embeddedPrompt
+
+			mockIO := detectionsmock.NewMockIOManager(ctrl)
+			tc.setupMock(mockIO)
+
+			// Set environment variable (empty string to unset, or actual value)
+			t.Setenv("SO_AI_SYSTEM_PROMPT_PATH", tc.envVarValue)
+
+			srv := &server.Server{
+				Context: context.Background(),
+			}
+
+			ac := &AssistantCoordinator{
+				srv:       srv,
+				IOManager: mockIO,
+			}
+
+			ac.getPrompt()
+
+			assert.Equal(t, tc.expectedPrompt, ac.systemPrompt)
+		})
+	}
+}
+
 // Helper types and functions for testing
 
 type mockTool struct {

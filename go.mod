@@ -29,6 +29,7 @@ require (
 	github.com/samber/lo v1.51.0
 	go.uber.org/mock v0.6.0
 	golang.org/x/mod v0.29.0
+	golang.org/x/oauth2 v0.23.0
 	golang.org/x/text v0.31.0
 	google.golang.org/genai v1.41.0
 )
