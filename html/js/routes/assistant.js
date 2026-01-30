@@ -599,7 +599,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         }
       } else if (c.delta.type === 'thought_delta') {
         assistantMessage.thought.value += this.nbspRegexOp(c.delta.text);
-        console.log('thought:', assistantMessage);
       }
     },
     
