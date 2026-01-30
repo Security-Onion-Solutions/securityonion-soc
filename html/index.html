@@ -332,7 +332,7 @@
                 </template>
                 <v-list-item-title v-text="i18n.users"></v-list-item-title>
               </v-list-item>
-              <v-list-item v-if="isLicensed('api')" data-aid="nav_admin_clients" @click="" to="/clients">
+              <v-list-item v-if="isLicensed('api') && $root.isUserAdmin()" data-aid="nav_admin_clients" @click="" to="/clients">
                 <template #prepend>
                   <v-icon>fa-robot</v-icon>
                 </template>

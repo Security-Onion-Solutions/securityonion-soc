@@ -158,7 +158,17 @@ test('canTest', () => {
 	expect(comp.canTest(node)).toBe(false);
 
 	node['keywords'] = "Foo Sensor Bar";
+	comp.$root.user = { roles: ['superuser'] };
 	expect(comp.canTest(node)).toBe(true);
+
+	// Case: Admin user, but node is not a sensor
+	node['keywords'] = "Foo Bar";
+	expect(comp.canTest(node)).toBe(false);
+
+	// Case: Non-admin user, but node is a sensor
+	node['keywords'] = "Foo Sensor Bar";
+	comp.$root.user = { roles: ['user'] };
+	expect(comp.canTest(node)).toBe(false);
 });
 
 
