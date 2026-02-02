@@ -27,6 +27,8 @@ import (
 )
 
 const (
+	// Unused balances are for adapters that do not maintain a token or credit balance.
+	// Must be a static positive integer to allow the assistant to remain active.
 	UNUSED_BALANCE = 1
 )
 
