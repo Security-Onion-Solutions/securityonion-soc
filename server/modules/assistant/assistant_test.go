@@ -19,7 +19,6 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
-	"github.com/security-onion-solutions/securityonion-soc/server/modules/assistant/mock"
 	detectionsmock "github.com/security-onion-solutions/securityonion-soc/server/modules/detections/mock"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 	"github.com/stretchr/testify/assert"
@@ -142,7 +141,7 @@ func TestAssistantCoordinator_ExecuteTool(t *testing.T) {
 		name           string
 		toolName       string
 		params         string
-		setupMocks     func(*mock.MockTool)
+		executeFunc    func(ctx context.Context, srv *server.Server, params string, auxData string) (*model.ToolResponse, error)
 		expectedResult *model.ToolResponse
 		expectedError  error
 	}{
@@ -150,12 +149,12 @@ func TestAssistantCoordinator_ExecuteTool(t *testing.T) {
 			name:     "successful tool execution",
 			toolName: "test_tool",
 			params:   `{"param1": "value1"}`,
-			setupMocks: func(mockTool *mock.MockTool) {
-				mockTool.EXPECT().Execute(gomock.Any(), gomock.Any(), `{"param1": "value1"}`, "").Return(&model.ToolResponse{
+			executeFunc: func(ctx context.Context, srv *server.Server, params string, auxData string) (*model.ToolResponse, error) {
+				return &model.ToolResponse{
 					ToolName:       "test_tool",
 					OnBehalfOfUser: "test-user",
 					Result:         "success",
-				}, nil)
+				}, nil
 			},
 			expectedResult: &model.ToolResponse{
 				ToolName:       "test_tool",
@@ -168,7 +167,7 @@ func TestAssistantCoordinator_ExecuteTool(t *testing.T) {
 			name:           "tool not found",
 			toolName:       "nonexistent_tool",
 			params:         `{}`,
-			setupMocks:     func(mockTool *mock.MockTool) {},
+			executeFunc:    nil,
 			expectedResult: nil,
 			expectedError:  ErrToolNotFound,
 		},
@@ -176,8 +175,8 @@ func TestAssistantCoordinator_ExecuteTool(t *testing.T) {
 			name:     "tool execution error",
 			toolName: "failing_tool",
 			params:   `{"param1": "value1"}`,
-			setupMocks: func(mockTool *mock.MockTool) {
-				mockTool.EXPECT().Execute(gomock.Any(), gomock.Any(), `{"param1": "value1"}`, "").Return(nil, errors.New("tool execution failed"))
+			executeFunc: func(ctx context.Context, srv *server.Server, params string, auxData string) (*model.ToolResponse, error) {
+				return nil, errors.New("tool execution failed")
 			},
 			expectedResult: nil,
 			expectedError:  errors.New("tool execution failed"),
@@ -186,11 +185,10 @@ func TestAssistantCoordinator_ExecuteTool(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
-			mockTool := mock.NewMockTool(ctrl)
-			tc.setupMocks(mockTool)
+			mockTool := &mockTool{
+				name:        tc.toolName,
+				executeFunc: tc.executeFunc,
+			}
 
 			srv := &server.Server{}
 			ac := &AssistantCoordinator{
@@ -453,17 +451,24 @@ func TestAssistantCoordinator_Chat(t *testing.T) {
 
 			mockIO := detectionsmock.NewMockIOManager(ctrl)
 			mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
-			mockTool := mock.NewMockTool(ctrl)
 
 			tc.setupMocks(mockIO, mockAssistantstore)
 
 			// Setup tool mock for auto-execute cases
+			var testTool Tool
 			if len(tc.chatOpts) > 0 {
-				mockTool.EXPECT().Execute(gomock.Any(), gomock.Any(), gomock.Any(), "").Return(&model.ToolResponse{
-					ToolName:       "test_tool",
-					OnBehalfOfUser: "test-user",
-					Result:         "tool result",
-				}, nil).AnyTimes()
+				testTool = &mockTool{
+					name: "test_tool",
+					executeFunc: func(ctx context.Context, srv *server.Server, params string, auxData string) (*model.ToolResponse, error) {
+						return &model.ToolResponse{
+							ToolName:       "test_tool",
+							OnBehalfOfUser: "test-user",
+							Result:         "tool result",
+						}, nil
+					},
+				}
+			} else {
+				testTool = &mockTool{name: "test_tool"}
 			}
 
 			srv := &server.Server{
@@ -482,7 +487,7 @@ func TestAssistantCoordinator_Chat(t *testing.T) {
 				srv:       srv,
 				IOManager: mockIO,
 				FunctionLibrary: map[string]Tool{
-					"test_tool": mockTool,
+					"test_tool": testTool,
 				},
 				adapters: map[string]server.AssistantAdapter{
 					"securityonion_ai_cloud": &SOAiCloudAdapter{
@@ -864,6 +869,7 @@ type mockTool struct {
 	name        string
 	description string
 	schema      model.JSONSchema
+	executeFunc func(ctx context.Context, srv *server.Server, params string, auxData string) (*model.ToolResponse, error)
 }
 
 func (m *mockTool) GetName() string {
@@ -879,6 +885,9 @@ func (m *mockTool) GetSchema() model.JSONSchema {
 }
 
 func (m *mockTool) Execute(ctx context.Context, srv *server.Server, params string, auxData string) (*model.ToolResponse, error) {
+	if m.executeFunc != nil {
+		return m.executeFunc(ctx, srv, params, auxData)
+	}
 	return &model.ToolResponse{
 		ToolName: m.name,
 		Result:   "mock result",

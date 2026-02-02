@@ -23,6 +23,9 @@ type GeminiClient interface {
 		config *genai.GenerateContentConfig,
 		history []*genai.Content,
 	) (GeminiSession, error)
+
+	// CheckHealth checks the health of the Gemini service.
+	CheckHealth(ctx context.Context) string
 }
 
 //go:generate mockgen -source=gemini_client.go -destination=mock/mock_gemini_client.go -package=mock
@@ -59,6 +62,15 @@ func (r *realGeminiClient) CreateSession(
 		return nil, err
 	}
 	return &realGeminiSession{session: session}, nil
+}
+
+func (r *realGeminiClient) CheckHealth(ctx context.Context) string {
+	page, err := r.client.Models.List(ctx, &genai.ListModelsConfig{})
+	if err != nil || len(page.Items) == 0 {
+		return "unhealthy"
+	}
+
+	return "healthy"
 }
 
 // realGeminiSession wraps the actual session object.

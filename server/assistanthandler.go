@@ -1041,7 +1041,6 @@ func unstreamResponse(ctx context.Context, rawResponse string, aux *model.AuxMes
 	}
 
 	if aux != nil {
-		// for _, cb := range message.ContentBlocks {
 		for i := 0; i < len(message.ContentBlocks); i++ {
 			cb := &message.ContentBlocks[i]
 			if cb.Type == "tool_use" {

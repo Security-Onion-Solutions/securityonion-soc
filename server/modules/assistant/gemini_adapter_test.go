@@ -25,6 +25,7 @@ import (
 
 type mockGeminiClient struct {
 	createSessionFunc func(ctx context.Context, model string, config *genai.GenerateContentConfig, history []*genai.Content) (GeminiSession, error)
+	checkHealthFunc   func(ctx context.Context) string
 }
 
 func (m *mockGeminiClient) CreateSession(ctx context.Context, model string, config *genai.GenerateContentConfig, history []*genai.Content) (GeminiSession, error) {
@@ -32,6 +33,13 @@ func (m *mockGeminiClient) CreateSession(ctx context.Context, model string, conf
 		return m.createSessionFunc(ctx, model, config, history)
 	}
 	return nil, errors.New("not implemented")
+}
+
+func (m *mockGeminiClient) CheckHealth(ctx context.Context) string {
+	if m.checkHealthFunc != nil {
+		return m.checkHealthFunc(ctx)
+	}
+	return "healthy"
 }
 
 type mockGeminiSession struct {

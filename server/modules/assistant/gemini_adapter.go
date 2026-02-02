@@ -26,6 +26,10 @@ import (
 	"google.golang.org/genai"
 )
 
+const (
+	UNUSED_BALANCE = 1
+)
+
 func init() {
 	adapters[(&GeminiAdapter{}).Name()] = NewGeminiAdapter
 }
@@ -319,13 +323,13 @@ func (a *GeminiAdapter) SendMessageStream(ctx context.Context, req *model.ChatRe
 
 func (a *GeminiAdapter) GetBalance(ctx context.Context) (*model.BalanceResponse, error) {
 	return &model.BalanceResponse{
-		Balance: 100,
+		Balance: UNUSED_BALANCE,
 	}, nil
 }
 
 func (a *GeminiAdapter) GetHealth(ctx context.Context) (*model.HealthResponse, error) {
 	return &model.HealthResponse{
-		Status: "healthy",
+		Status: a.client.CheckHealth(a.srv.Context),
 	}, nil
 }
 
