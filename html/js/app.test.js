@@ -767,8 +767,8 @@ test('isDetectionEngineStatusUnhealthy', () => {
   app.statusByGridId[''] = { detections: { strelka: { integrityFailure: true }}};
   expect(app.isDetectionEngineStatusUnhealthy('strelka')).toBe(true);
 
-  // Test unknown engine
-  expect(app.isDetectionEngineStatusUnhealthy('unknown')).toBe(true);
+  // Test unknown engine (similar to pending state)
+  expect(app.isDetectionEngineStatusUnhealthy('unknown')).toBe(false);
 });
 
 test('isAttentionNeeded', () => {

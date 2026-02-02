@@ -902,6 +902,7 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 	uid := store.parseFirst(json, "log.id.uid")
 	x509id := store.parseFirst(json, "log.id.id")
 	fuid := store.parseFirst(json, "log.id.fuid")
+	store.addParameterToFilter(json, "suricata.capture_file", filter)
 	outputSensorId = gjson.Get(json, "hits.hits.0._source.observer.name").String()
 	duration := int64(store.defaultDurationMs)
 
@@ -945,6 +946,7 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 				}
 
 				uid = store.parseFirst(json, "log.id.uid")
+				store.addParameterToFilter(json, "suricata.capture_file", filter)
 			}
 
 			if len(uid) == 0 {
@@ -986,6 +988,7 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 			return errors.New("Unable to locate Zeek record")
 		}
 
+		store.addParameterToFilter(json, "suricata.capture_file", filter)
 		results := gjson.Get(json, "hits.hits.#._source.\\@timestamp").Array()
 		var closestDeltaNs int64
 		closestDeltaNs = 0
@@ -1100,6 +1103,16 @@ func formatPainlessValue(value interface{}) string {
 	default:
 		// For complex types, convert to string
 		return fmt.Sprintf("'%v'", v)
+	}
+}
+
+func (store *ElasticEventstore) addParameterToFilter(json string, key string, filter *model.Filter) {
+	value := store.parseFirst(json, key)
+
+	// If the key was provided, add it to the filter parameters.
+	// Overwrite if the key already exists
+	if len(value) > 0 {
+		filter.Parameters[key] = value
 	}
 }
 

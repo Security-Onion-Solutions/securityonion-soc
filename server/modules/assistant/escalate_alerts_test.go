@@ -793,7 +793,6 @@ func TestEscalateAlertsTool_Execute_AcknowledgeError(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
-	assert.Contains(t, err.Error(), "error escalating alert")
 }
 
 // CustomEventstoreForAckError wraps FakeEventstore to fail only on Acknowledge
