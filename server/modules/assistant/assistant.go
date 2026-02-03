@@ -28,9 +28,9 @@ import (
 	"github.com/google/uuid"
 )
 
-type AdapterConstructor func(context.Context, *server.Server, map[string]any) (server.AssistantAdapter, error)
+type ProtocolConstructor func(context.Context, *server.Server, map[string]any) (server.AssistantAdapter, error)
 
-var adapters = map[string]AdapterConstructor{}
+var protocols = map[string]ProtocolConstructor{}
 
 var (
 	ErrToolNotFound = errors.New("ERROR_ASSISTANT_TOOL_NOT_FOUND")
@@ -77,8 +77,6 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 
 	ac.toolConfig, err = buildToolConfig(ac.FunctionLibrary)
 
-	ac.adapters = map[string]server.AssistantAdapter{}
-
 	systemPromptAddendum := module.GetStringDefault(config, "systemPromptAddendum", DEFAULT_SYSTEM_PROMPT_ADDENDUM)
 
 	maxLength := module.GetIntDefault(config, "systemPromptAddendumMaxLength", DEFAULT_SYSTEM_PROMPT_ADDENDUM_MAX_LENGTH)
@@ -87,25 +85,50 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 	}
 
 	ac.systemPromptAddendum = systemPromptAddendum
+	ac.adapters = map[string]server.AssistantAdapter{}
 
-	adapterConfig, ok := config["adapters"].(map[string]any)
+	adapterConfig, ok := config["adapters"].([]any)
 	if ok && adapterConfig != nil {
-		for name, ctor := range adapters {
-			config, ok := adapterConfig[name].(map[string]any)
-			if ok {
-				adapter, err := ctor(ac.srv.Context, ac.srv, config)
-				if err != nil {
-					logger.WithError(err).WithFields(log.Fields{
-						"adapter": name,
-					}).Error("unable to initialize adapter")
-
-					continue
-				}
-
-				ac.adapters[name] = adapter
-			} else {
-				logger.WithField("adapter", name).Warn("known adapter missing config, not loading adapter")
+		for i, adapterInter := range adapterConfig {
+			adapterEntry, ok := adapterInter.(map[string]any)
+			if !ok {
+				logger.Errorf("adapter entry at index %d is not a valid object, skipping", i)
+				continue
 			}
+
+			name, err := module.GetString(adapterEntry, "name")
+			if err != nil {
+				logger.WithError(err).Errorf("adapter entry at index %d missing name field, skipping", i)
+				continue
+			}
+
+			protocol, err := module.GetString(adapterEntry, "protocol")
+			if err != nil {
+				logger.WithError(err).WithField("adapter", name).Warn("adapter missing protocol field, skipping")
+				continue
+			}
+
+			ctor, ok := protocols[protocol]
+			if !ok {
+				logger.WithField("protocol", protocol).Warn("unknown protocol, skipping")
+				continue
+			}
+
+			adapt, err := ctor(ac.srv.Context, ac.srv, adapterEntry)
+			if err != nil {
+				logger.WithError(err).WithFields(log.Fields{
+					"adapter":  name,
+					"protocol": protocol,
+				}).Error("unable to initialize adapter")
+
+				continue
+			}
+
+			ac.adapters[name] = adapt
+			logger.WithFields(log.Fields{
+				"adapter":  name,
+				"protocol": protocol,
+			}).Info("loaded assistant adapter")
 		}
 	} else {
 		logger.Warn("no adapter config, no adapters loaded")
@@ -196,23 +219,18 @@ func (ac *AssistantCoordinator) IsRunning() bool {
 	return ac.isRunning
 }
 
-func (ac *AssistantCoordinator) selectAdapter(aiModel string) server.AssistantAdapter {
-	models := ac.srv.Config.ClientParams.AssistantParams.AvailableModels
-	for _, m := range models {
-		if !m.Enabled {
-			continue
-		}
+// func (ac *AssistantCoordinator) selectAdapter(aiModel string) server.AssistantAdapter {
+// 	_, adapter := splitModelAdapter(aiModel)
+// 	return ac.adapters[adapter]
+// }
 
-		if strings.EqualFold(m.ID, aiModel) {
-			if m.Adapter != "" {
-				return ac.adapters[m.Adapter]
-			} else {
-				return ac.adapters["securityonion_ai_cloud"]
-			}
-		}
+func splitModelAdapter(aiModel string) (string, string) {
+	parts := strings.SplitN(aiModel, "@", 2)
+	if len(parts) == 1 {
+		parts = append(parts, "SOAI")
 	}
 
-	return ac.adapters["securityonion_ai_cloud"]
+	return parts[0], parts[1]
 }
 
 func (ac *AssistantCoordinator) Chat(ctx context.Context, aiModel string, messages []*model.Message, opts ...model.ChatOpt) ([]*model.Message, error) {
@@ -222,16 +240,18 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, aiModel string, messag
 
 	msgs := cleanupMessages(messages)
 
+	modelId, adapterName := splitModelAdapter(aiModel)
+
 	req := &model.ChatRequest{
 		Messages:     msgs,
 		ToolConfig:   ac.toolConfig,
 		UserId:       userID,
-		Model:        aiModel,
+		Model:        modelId,
 		System:       ac.systemPrompt,
 		SystemAppend: ac.systemPromptAddendum,
 	}
 
-	adapter := ac.selectAdapter(aiModel)
+	adapter := ac.adapters[adapterName]
 
 	response, err := adapter.SendMessage(ctx, req)
 	if err != nil {
@@ -313,17 +333,19 @@ func (ac *AssistantCoordinator) ChatStream(ctx context.Context, aiModel string, 
 	// copy and modify
 	msgs := cleanupMessages(messages)
 
+	modelId, adapterName := splitModelAdapter(aiModel)
+
 	req := &model.ChatRequest{
 		Messages:     msgs,
 		Stream:       true,
 		ToolConfig:   ac.toolConfig,
 		UserId:       userID,
-		Model:        aiModel,
+		Model:        modelId,
 		System:       ac.systemPrompt,
 		SystemAppend: ac.systemPromptAddendum,
 	}
 
-	adapter := ac.selectAdapter(aiModel)
+	adapter := ac.adapters[adapterName]
 
 	res, aux, err := adapter.SendMessageStream(ctx, req)
 	if err != nil {
@@ -368,7 +390,8 @@ func (ac *AssistantCoordinator) ExecuteTool(ctx context.Context, toolName string
 }
 
 func (ac *AssistantCoordinator) Balance(ctx context.Context, aiModel string) (*model.BalanceResponse, error) {
-	adapter := ac.selectAdapter(aiModel)
+	_, adapterName := splitModelAdapter(aiModel)
+	adapter := ac.adapters[adapterName]
 
 	response, err := adapter.GetBalance(ctx)
 	if err != nil {
@@ -379,7 +402,8 @@ func (ac *AssistantCoordinator) Balance(ctx context.Context, aiModel string) (*m
 }
 
 func (ac *AssistantCoordinator) Health(ctx context.Context, aiModel string) (*model.HealthResponse, error) {
-	adapter := ac.selectAdapter(aiModel)
+	_, adapterName := splitModelAdapter(aiModel)
+	adapter := ac.adapters[adapterName]
 
 	response, err := adapter.GetHealth(ctx)
 	if err != nil {

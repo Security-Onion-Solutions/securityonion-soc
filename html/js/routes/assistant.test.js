@@ -295,7 +295,7 @@ test('initAssistant sets assistantEnabled to true when enabled and licensed', as
     thresholdColorRatioMax: 1,
     lowBalanceColorAlert: 500000,
     availableModels: [
-      { id: 'test-model', displayName: "Test Model", contextLimitSmall: 200000, contextLimitLarge: 1000000, lowBalanceColorAlert: 500000, enabled: true }
+      { id: 'test-model', displayName: "Test Model", contextLimitSmall: 200000, contextLimitLarge: 1000000, lowBalanceColorAlert: 500000, enabled: true, adapter: "SOAI" }
     ]
   };
   comp.$root.isLicensed = jest.fn().mockReturnValue(true);
@@ -378,6 +378,7 @@ test('initAssistant corrects contextLimitLarge when smaller than contextLimitSma
         contextLimitLarge: 150000, // Smaller than contextLimitSmall - should be corrected
         lowBalanceColorAlert: 500000,
         enabled: true,
+        adapter: "SOAI"
       },
       {
         id: 'model-2',
@@ -386,6 +387,7 @@ test('initAssistant corrects contextLimitLarge when smaller than contextLimitSma
         contextLimitLarge: 300000, // Larger than contextLimitSmall - should remain unchanged
         lowBalanceColorAlert: 400000,
         enabled: true,
+        adapter: "SOAI"
       },
       {
         id: 'model-3',
@@ -394,10 +396,12 @@ test('initAssistant corrects contextLimitLarge when smaller than contextLimitSma
         contextLimitLarge: 250000, // Equal to contextLimitSmall - should remain unchanged
         lowBalanceColorAlert: 600000,
         enabled: true,
+        adapter: "SOAI"
       },
       {
         id: 'model-4',
         enabled: false,
+        adapter: "SOAI"
       },
     ]
   };
@@ -414,23 +418,23 @@ test('initAssistant corrects contextLimitLarge when smaller than contextLimitSma
   
   // Check that the modelsMap was created correctly
   expect(comp.modelsMap.size).toBe(3);
-  expect(comp.modelsMap.has('model-1')).toBe(true);
-  expect(comp.modelsMap.has('model-2')).toBe(true);
-  expect(comp.modelsMap.has('model-3')).toBe(true);
-  expect(comp.modelsMap.has('model-4')).toBe(false); // Disabled model should not be included
+  expect(comp.modelsMap.has('model-1@SOAI')).toBe(true);
+  expect(comp.modelsMap.has('model-2@SOAI')).toBe(true);
+  expect(comp.modelsMap.has('model-3@SOAI')).toBe(true);
+  expect(comp.modelsMap.has('model-4@SOAI')).toBe(false); // Disabled model should not be included
   
   // Check that contextLimitLarge was corrected for model-1
-  const model1 = comp.modelsMap.get('model-1');
+  const model1 = comp.modelsMap.get('model-1@SOAI');
   expect(model1.contextLimitSmall).toBe(200000);
   expect(model1.contextLimitLarge).toBe(200000); // Should be corrected to match contextLimitSmall
   
   // Check that contextLimitLarge was not changed for model-2 (already larger)
-  const model2 = comp.modelsMap.get('model-2');
+  const model2 = comp.modelsMap.get('model-2@SOAI');
   expect(model2.contextLimitSmall).toBe(100000);
   expect(model2.contextLimitLarge).toBe(300000); // Should remain unchanged
   
   // Check that contextLimitLarge was not changed for model-3 (equal)
-  const model3 = comp.modelsMap.get('model-3');
+  const model3 = comp.modelsMap.get('model-3@SOAI');
   expect(model3.contextLimitSmall).toBe(250000);
   expect(model3.contextLimitLarge).toBe(250000); // Should remain unchanged
 });

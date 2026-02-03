@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
@@ -33,12 +34,13 @@ const (
 )
 
 func init() {
-	adapters[(&GeminiAdapter{}).Name()] = NewGeminiAdapter
+	protocols[(&GeminiAdapter{}).Name()] = NewGeminiAdapter
 }
 
 type GeminiAdapter struct {
-	srv    *server.Server
-	client GeminiClient
+	srv                  *server.Server
+	client               GeminiClient
+	healthTimeoutSeconds int
 	detections.IOManager
 }
 
@@ -48,6 +50,7 @@ func NewGeminiAdapter(ctx context.Context, srv *server.Server, config map[string
 
 	serviceAccountJSON := module.GetStringDefault(config, "serviceAccountJSON", "")
 	serviceAccountLocation := module.GetStringDefault(config, "serviceAccountLocation", "")
+	healthTimeoutSeconds := module.GetIntDefault(config, "healthTimeoutSeconds", DEFAULT_HEALTH_TIMEOUT_SECONDS)
 
 	if serviceAccountJSON != "" && serviceAccountLocation != "" {
 		client, err = BuildClientServiceAccount(ctx, serviceAccountJSON, serviceAccountLocation)
@@ -60,8 +63,9 @@ func NewGeminiAdapter(ctx context.Context, srv *server.Server, config map[string
 	}
 
 	return &GeminiAdapter{
-		srv:    srv,
-		client: NewGeminiClientWrapper(client),
+		srv:                  srv,
+		client:               NewGeminiClientWrapper(client),
+		healthTimeoutSeconds: healthTimeoutSeconds,
 		IOManager: &detections.ResourceManager{
 			Config: srv.Config,
 		},
@@ -330,8 +334,11 @@ func (a *GeminiAdapter) GetBalance(ctx context.Context) (*model.BalanceResponse,
 }
 
 func (a *GeminiAdapter) GetHealth(ctx context.Context) (*model.HealthResponse, error) {
+	healthCtx, cancel := context.WithTimeout(a.srv.Context, time.Second*time.Duration(a.healthTimeoutSeconds))
+	defer cancel()
+
 	return &model.HealthResponse{
-		Status: a.client.CheckHealth(a.srv.Context),
+		Status: a.client.CheckHealth(healthCtx),
 	}, nil
 }
 

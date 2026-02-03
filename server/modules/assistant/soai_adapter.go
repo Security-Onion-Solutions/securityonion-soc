@@ -28,7 +28,7 @@ import (
 )
 
 func init() {
-	adapters[(&SOAiCloudAdapter{}).Name()] = NewSOAiCloudAdapter
+	protocols[(&SOAiCloudAdapter{}).Name()] = NewSOAiCloudAdapter
 }
 
 const (

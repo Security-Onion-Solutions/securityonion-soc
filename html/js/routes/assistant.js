@@ -99,13 +99,14 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.thresholdColorRatioMax = params["thresholdColorRatioMax"];
       this.availableModels = params["availableModels"];
       if (this.availableModels.length > 0) {
+        this.availableModels.forEach(m => m.key = this.buildModelIdentifier(m));
         this.modelsMap = new Map(
-          this.availableModels.filter(m => m.enabled).map(m => [m.id, m])
+          this.availableModels.filter(m => m.enabled).map(m => [m.key, m])
         );
         for (let val of this.modelsMap.values()) {
           if (val.contextLimitLarge < val.contextLimitSmall) val.contextLimitLarge = val.contextLimitSmall;
         }
-        if (!this.currentModel || !this.modelsMap.has(this.currentModel)) this.currentModel = this.availableModels[0].id;
+        if (!this.currentModel || !this.modelsMap.has(this.currentModel)) this.currentModel = this.availableModels[0].key;
       }
       this.updateModelParams();
 
@@ -1878,6 +1879,11 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.contextLimitSmall = this.modelsMap.get(this.currentModel).contextLimitSmall;
       this.contextLimitLarge = this.modelsMap.get(this.currentModel).contextLimitLarge;
       this.lowBalanceColorAlert = this.modelsMap.get(this.currentModel).lowBalanceColorAlert;
+    },
+
+    buildModelIdentifier(model) {
+      if (!model) return '';
+      return `${model.id}@${model.adapter}`;
     },
 
     applyToolSpecificChanges(toolUse, toolRequest) {
