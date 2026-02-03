@@ -34,7 +34,7 @@ const (
 )
 
 func init() {
-	protocols[(&GeminiAdapter{}).Name()] = NewGeminiAdapter
+	protocols[(&GeminiAdapter{}).Protocol()] = NewGeminiAdapter
 }
 
 type GeminiAdapter struct {
@@ -114,7 +114,7 @@ func BuildClientServiceAccount(ctx context.Context, servAccountJSON string, loca
 	})
 }
 
-func (a *GeminiAdapter) Name() string {
+func (a *GeminiAdapter) Protocol() string {
 	return "gemini"
 }
 

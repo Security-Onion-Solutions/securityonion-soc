@@ -21,7 +21,7 @@ type AssistantManager interface {
 }
 
 type AssistantAdapter interface {
-	Name() string
+	Protocol() string
 	SendMessage(ctx context.Context, req *model.ChatRequest) (*model.Message, error)
 	SendMessageStream(ctx context.Context, req *model.ChatRequest) (*http.Response, *model.AuxMessageData, error)
 	GetBalance(ctx context.Context) (*model.BalanceResponse, error)

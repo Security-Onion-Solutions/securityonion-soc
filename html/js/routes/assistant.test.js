@@ -5665,3 +5665,17 @@ test('messageContextValues handles null messages', () => {
 
   expect(result).toEqual([]);
 });
+
+test('buildModelIdentifier', () => {
+  const tests = [
+    { input: { id: 'model', adapter: 'adapter' }, expected: 'model@adapter' },
+    { input: { id: '', adapter: '' }, expected: '@' },
+    { input: {}, expected: '@' },
+    { input: null, expected: '' },
+  ];
+
+  for (let t of tests) {
+    const output = comp.buildModelIdentifier(t.input);
+    expect(output).toBe(t.expected);
+  }
+});

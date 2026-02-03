@@ -219,11 +219,6 @@ func (ac *AssistantCoordinator) IsRunning() bool {
 	return ac.isRunning
 }
 
-// func (ac *AssistantCoordinator) selectAdapter(aiModel string) server.AssistantAdapter {
-// 	_, adapter := splitModelAdapter(aiModel)
-// 	return ac.adapters[adapter]
-// }
-
 func splitModelAdapter(aiModel string) (string, string) {
 	parts := strings.SplitN(aiModel, "@", 2)
 	if len(parts) == 1 {
@@ -251,7 +246,11 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, aiModel string, messag
 		SystemAppend: ac.systemPromptAddendum,
 	}
 
-	adapter := ac.adapters[adapterName]
+	adapter, ok := ac.adapters[adapterName]
+	if !ok {
+		logger.WithField("adapterName", adapterName).Error("assistant adapter not found")
+		return nil, fmt.Errorf("assistant adapter not found: %s", adapterName)
+	}
 
 	response, err := adapter.SendMessage(ctx, req)
 	if err != nil {
@@ -328,6 +327,7 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, aiModel string, messag
 }
 
 func (ac *AssistantCoordinator) ChatStream(ctx context.Context, aiModel string, messages []*model.Message) (*http.Response, *model.AuxMessageData, error) {
+	logger := log.FromContext(ctx)
 	userID := ctx.Value(web.ContextKeyRequestorId).(string)
 
 	// copy and modify
@@ -345,7 +345,11 @@ func (ac *AssistantCoordinator) ChatStream(ctx context.Context, aiModel string, 
 		SystemAppend: ac.systemPromptAddendum,
 	}
 
-	adapter := ac.adapters[adapterName]
+	adapter, ok := ac.adapters[adapterName]
+	if !ok {
+		logger.WithField("adapterName", adapterName).Error("assistant adapter not found")
+		return nil, nil, fmt.Errorf("assistant adapter not found: %s", adapterName)
+	}
 
 	res, aux, err := adapter.SendMessageStream(ctx, req)
 	if err != nil {
@@ -391,7 +395,14 @@ func (ac *AssistantCoordinator) ExecuteTool(ctx context.Context, toolName string
 
 func (ac *AssistantCoordinator) Balance(ctx context.Context, aiModel string) (*model.BalanceResponse, error) {
 	_, adapterName := splitModelAdapter(aiModel)
-	adapter := ac.adapters[adapterName]
+
+	adapter, ok := ac.adapters[adapterName]
+	if !ok {
+		logger := log.FromContext(ctx)
+		logger.WithField("adapterName", adapterName).Error("assistant adapter not found")
+
+		return nil, fmt.Errorf("assistant adapter not found: %s", adapterName)
+	}
 
 	response, err := adapter.GetBalance(ctx)
 	if err != nil {
@@ -403,7 +414,14 @@ func (ac *AssistantCoordinator) Balance(ctx context.Context, aiModel string) (*m
 
 func (ac *AssistantCoordinator) Health(ctx context.Context, aiModel string) (*model.HealthResponse, error) {
 	_, adapterName := splitModelAdapter(aiModel)
-	adapter := ac.adapters[adapterName]
+
+	adapter, ok := ac.adapters[adapterName]
+	if !ok {
+		logger := log.FromContext(ctx)
+		logger.WithField("adapterName", adapterName).Error("assistant adapter not found")
+
+		return nil, fmt.Errorf("assistant adapter not found: %s", adapterName)
+	}
 
 	response, err := adapter.GetHealth(ctx)
 	if err != nil {

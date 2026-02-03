@@ -1154,7 +1154,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     formatMarkdown(text) {
       text = this.applyChoiceButtons(text);
       text = this.$root.performMermaidRegexes(text);
-      md = this.$root.formatMarkdown(text, true);
+      const md = this.$root.formatMarkdown(text, true);
       if (!this.isStreaming) {
         this.$nextTick(() => {
           this.$root.renderMermaid();
@@ -1883,7 +1883,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
 
     buildModelIdentifier(model) {
       if (!model) return '';
-      return `${model.id}@${model.adapter}`;
+      return `${model?.id||''}@${model?.adapter||''}`;
     },
 
     applyToolSpecificChanges(toolUse, toolRequest) {
@@ -1988,9 +1988,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
 
         this.$root.showError({ message: msg });
       }
-    },
-    nbspRegexOp(text) {
-      return text.replace(/^(&nbsp;?[\n]*)/, '');
     },
     focusChatInput() {
       this.$nextTick(() => {

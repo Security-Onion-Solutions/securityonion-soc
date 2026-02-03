@@ -28,7 +28,7 @@ import (
 )
 
 func init() {
-	protocols[(&SOAiCloudAdapter{}).Name()] = NewSOAiCloudAdapter
+	protocols[(&SOAiCloudAdapter{}).Protocol()] = NewSOAiCloudAdapter
 }
 
 const (
@@ -62,7 +62,7 @@ func NewSOAiCloudAdapter(_ context.Context, srv *server.Server, config map[strin
 	}, nil
 }
 
-func (a *SOAiCloudAdapter) Name() string {
+func (a *SOAiCloudAdapter) Protocol() string {
 	return "securityonion_ai_cloud"
 }
 
