@@ -38,7 +38,7 @@ $(document).ready(function () {
   if (preferredInterface === 'modern' && !window.location.pathname.includes('/modern/')) {
     // Basic check to prevent infinite loop if the file doesn't exist but we are trying to go there.
     // In production, we assume /modern/index.html exists.
-    window.location.href = 'modern/index.html';
+    window.location.href = '/modern/index.html';
     return;
   }
 

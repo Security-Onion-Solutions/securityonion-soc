@@ -24,9 +24,11 @@ import { cn } from '../lib/utils'
 import { useFormatters } from '../composables/useFormatters'
 import { useStatusStyles } from '../composables/useStatusStyles'
 import { useTableSort } from '../composables/useTableSort'
+import { useAuth } from '../composables/useAuth'
 
 const { formatDate, formatUptime, formatRelativeTime } = useFormatters()
 const { getNodeStatusColor, getUsageColor, getProgressColor } = useStatusStyles()
+const { isUserAdmin } = useAuth()
 
 interface GridNode {
   id: string
@@ -672,7 +674,7 @@ const hasMonitoringInterface = (node: GridNode) => {
                                     <BarChart2 class="h-3.5 w-3.5" />
                                     Metrics
                                 </button>
-                                <button class="flex items-center gap-1.5 px-3 py-1.5 bg-muted hover:bg-muted/80 rounded border border-border text-xs transition-colors">
+                                <button v-if="isUserAdmin()" class="flex items-center gap-1.5 px-3 py-1.5 bg-muted hover:bg-muted/80 rounded border border-border text-xs transition-colors">
                                     <PlayCircle class="h-3.5 w-3.5" />
                                     Test
                                 </button>
@@ -680,7 +682,7 @@ const hasMonitoringInterface = (node: GridNode) => {
                                     <Upload class="h-3.5 w-3.5" />
                                     Upload
                                 </button>
-                                <button class="flex items-center gap-1.5 px-3 py-1.5 bg-muted hover:bg-muted/80 rounded border border-border text-xs transition-colors text-red-500">
+                                <button v-if="isUserAdmin()" class="flex items-center gap-1.5 px-3 py-1.5 bg-muted hover:bg-muted/80 rounded border border-border text-xs transition-colors text-red-500">
                                     <RotateCcw class="h-3.5 w-3.5" />
                                     Restart
                                 </button>

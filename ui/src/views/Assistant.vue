@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
-import { Bot, Settings, RefreshCw, AlertCircle } from 'lucide-vue-next'
+import { Bot, Settings, RefreshCw, AlertCircle, ShieldOff, ExternalLink } from 'lucide-vue-next'
 import { useAssistant } from '@/composables/useAssistant'
+import { useAuth, FEAT_OAI } from '@/composables/useAuth'
 import SessionSidebar from '@/components/assistant/SessionSidebar.vue'
 import ChatMessage from '@/components/assistant/ChatMessage.vue'
 import ChatInput from '@/components/assistant/ChatInput.vue'
@@ -58,6 +59,13 @@ const {
     setSrvToken,
     generateInvestigationPrompt,
 } = useAssistant()
+
+const { fetchAuth, isLicensed } = useAuth()
+
+// Check if assistant is available (licensed and enabled)
+const assistantAvailable = computed(() => {
+    return isLicensed(FEAT_OAI) && assistantParams.value?.enabled
+})
 
 // Local state
 const chatInputRef = ref<InstanceType<typeof ChatInput> | null>(null)
@@ -216,6 +224,9 @@ function handleAutoApproveChange(value: boolean): void {
 // Initialize
 onMounted(async () => {
     try {
+        // Fetch auth data for license checks
+        await fetchAuth()
+
         // Load assistant parameters and srvToken from API
         const response = await fetch('/api/info')
         if (response.ok) {
@@ -226,6 +237,12 @@ onMounted(async () => {
             }
             // Assistant params are nested under parameters.assistant
             initializeParams(data.parameters?.assistant || null)
+        }
+
+        // Only proceed if assistant is available
+        if (!assistantAvailable.value) {
+            initialized.value = true
+            return
         }
 
         // Load sessions and balance in parallel
@@ -276,7 +293,30 @@ watch(() => props.sessionId, async (newId) => {
 </script>
 
 <template>
-    <div class="flex h-full bg-background">
+    <!-- License/Feature Not Available Message -->
+    <div v-if="initialized && !assistantAvailable" class="flex h-full bg-background items-center justify-center">
+        <div class="max-w-md text-center p-8">
+            <div class="flex items-center justify-center w-16 h-16 mx-auto mb-6 rounded-full bg-muted">
+                <ShieldOff class="h-8 w-8 text-muted-foreground" />
+            </div>
+            <h2 class="text-xl font-semibold text-foreground mb-3">AI Assistant Unavailable</h2>
+            <p class="text-muted-foreground mb-6">
+                This feature requires a valid Security Onion Pro license and Internet connection.
+            </p>
+            <a
+                href="https://securityonion.net/pro"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+            >
+                Learn More About Security Onion Pro
+                <ExternalLink class="h-4 w-4" />
+            </a>
+        </div>
+    </div>
+
+    <!-- Main Assistant UI -->
+    <div v-else class="flex h-full bg-background">
         <!-- Main Chat Area -->
         <div class="flex-1 flex flex-col min-w-0">
             <!-- Header -->

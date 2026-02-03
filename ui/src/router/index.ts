@@ -1,5 +1,14 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
+import { useAuth } from '../composables/useAuth'
+
+declare module 'vue-router' {
+  interface RouteMeta {
+    title?: string
+    showChatWidget?: boolean
+    requiresAdmin?: boolean
+  }
+}
 
 const routes: RouteRecordRaw[] = [
   {
@@ -80,6 +89,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: 'Playbooks', showChatWidget: true }
   },
   {
+    path: '/agents',
+    name: 'agents',
+    component: () => import('../views/AIAgents.vue'),
+    meta: { title: 'AI Agents', requiresAdmin: true }
+  },
+  {
     path: '/jobs',
     name: 'jobs',
     component: () => import('../views/Jobs.vue'),
@@ -101,14 +116,15 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/admin',
     name: 'admin',
-    redirect: '/admin/users'
+    redirect: '/admin/users',
+    meta: { requiresAdmin: true }
   },
   {
     path: '/admin/:tab',
     name: 'administration',
     component: () => import('../views/Administration.vue'),
     props: true,
-    meta: { title: 'Administration' }
+    meta: { title: 'Administration', requiresAdmin: true }
   },
   {
     path: '/login',
@@ -135,6 +151,23 @@ export const router = createRouter({
     // Otherwise scroll to top
     return { top: 0 }
   }
+})
+
+// Navigation guard for admin routes
+router.beforeEach(async (to, from, next) => {
+  if (to.meta.requiresAdmin) {
+    const { fetchAuth, isUserAdmin } = useAuth()
+
+    // Ensure auth data is loaded
+    await fetchAuth()
+
+    if (!isUserAdmin()) {
+      // Redirect non-admins to home
+      next({ name: 'home' })
+      return
+    }
+  }
+  next()
 })
 
 // Update document title on navigation

@@ -22,18 +22,21 @@ import {
   UserCog,
   FileText,
   ChevronDown,
-  BookOpen
+  BookOpen,
+  Cpu
 } from 'lucide-vue-next'
 import ChatWidget from './components/chat-widget/ChatWidget.vue'
 import UserMenu from './components/common/UserMenu.vue'
 
 import { cn } from './lib/utils'
 import { useChatWidget } from './composables/useChatWidget'
+import { useAuth, FEAT_API, FEAT_QRY, FEAT_OAI } from './composables/useAuth'
 
 const route = useRoute()
 const router = useRouter()
 
 const { isOpen: isChatOpen, toggle: toggleChat, collapse: closeChat } = useChatWidget()
+const { fetchAuth, isUserAdmin, isLicensed } = useAuth()
 
 const sidebarOpen = ref(true)
 const adminExpanded = ref(false)
@@ -63,12 +66,16 @@ router.afterEach((to) => {
   })
 })
 
-onMounted(() => {
+onMounted(async () => {
   // Handle login flow redirect
   const params = new URLSearchParams(window.location.search)
   if (params.get('flow')) {
     router.push({ name: 'login', query: { flow: params.get('flow') } })
+    return
   }
+
+  // Fetch auth data for role-based navigation
+  await fetchAuth()
 })
 
 function toggleSidebar() {
@@ -200,7 +207,7 @@ function isActive(routeName: string | string[]): boolean {
           <Bot class="h-5 w-5" />
           <span v-if="sidebarOpen">AI Assistant</span>
         </router-link>
-        <div class="pt-4 border-t border-border mt-4">
+        <div v-if="isUserAdmin()" class="pt-4 border-t border-border mt-4">
              <button
                @click="adminExpanded = !adminExpanded"
                :class="cn('w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-muted-foreground hover:bg-muted hover:text-foreground', isAdminRoute && 'text-primary')"
@@ -226,15 +233,19 @@ function isActive(routeName: string | string[]): boolean {
                   <Key class="h-5 w-5" />
                   <span v-if="sidebarOpen">License</span>
               </router-link>
-               <router-link to="/admin/aimetrics" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', sidebarOpen && 'pl-6', isAdminRoute && currentAdminTab === 'aimetrics' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
+               <router-link v-if="isLicensed(FEAT_OAI)" to="/admin/aimetrics" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', sidebarOpen && 'pl-6', isAdminRoute && currentAdminTab === 'aimetrics' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
                   <Activity class="h-5 w-5" />
                   <span v-if="sidebarOpen">AI Metrics</span>
               </router-link>
-               <router-link to="/admin/clients" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', sidebarOpen && 'pl-6', isAdminRoute && currentAdminTab === 'clients' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
+               <router-link to="/agents" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', sidebarOpen && 'pl-6', currentRouteName === 'agents' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
+                  <Cpu class="h-5 w-5" />
+                  <span v-if="sidebarOpen">AI Agents</span>
+              </router-link>
+               <router-link v-if="isLicensed(FEAT_API)" to="/admin/clients" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', sidebarOpen && 'pl-6', isAdminRoute && currentAdminTab === 'clients' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
                   <UserCog class="h-5 w-5" />
                   <span v-if="sidebarOpen">Clients</span>
               </router-link>
-               <router-link to="/admin/queries" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', sidebarOpen && 'pl-6', isAdminRoute && currentAdminTab === 'queries' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
+               <router-link v-if="isLicensed(FEAT_QRY)" to="/admin/queries" :class="cn('flex items-center gap-3 px-3 py-2 rounded-md transition-colors', sidebarOpen && 'pl-6', isAdminRoute && currentAdminTab === 'queries' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')">
                   <Search class="h-5 w-5" />
                   <span v-if="sidebarOpen">Active Queries</span>
               </router-link>

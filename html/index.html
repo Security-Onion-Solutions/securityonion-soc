@@ -138,7 +138,7 @@
                 </template>
                 <v-list-item-title v-text="i18n.logout"></v-list-item-title>
               </v-list-item>
-              <v-list-item @click.stop="() => { localStorage.setItem('preferred_interface', 'modern'); window.location.href = 'modern/index.html'; }" data-aid="nav_try_modern">
+              <v-list-item @click.stop="() => { localStorage.setItem('preferred_interface', 'modern'); window.location.href = '/modern/index.html'; }" data-aid="nav_try_modern">
                 <template #prepend>
                   <v-icon class="mx-auto text-blue-400">fa-flask</v-icon>
                 </template>
