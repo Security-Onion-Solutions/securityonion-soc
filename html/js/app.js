@@ -889,9 +889,9 @@ $(document).ready(function () {
         },
         colorSeverity(value) {
           if (value == "low_false") return "yellow";
-          if (value == "medium_false") return "amber darken-1";
-          if (value == "high_false") return "red darken-1";
-          if (value == "critical_false") return "red darken-4";
+          if (value == "medium_false") return "orange-darken-1";
+          if (value == "high_false") return "red-lighten-1";
+          if (value == "critical_false") return "red-darken-4";
           return "secondary";
         },
         isNodeInSubgrid(node) {

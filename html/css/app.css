@@ -259,6 +259,7 @@ th:hover, th.is-sorted, .solid {
   white-space: pre-wrap;
   word-break: break-all;
   overflow-x: hidden;
+  overflow-wrap: anywhere;
 }
 
 .semi-transparent {
