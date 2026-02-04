@@ -1004,7 +1004,7 @@ const i18n = {
       settingsSynchronizeFinished: 'Synchronization of module {module} has been completed.',
       settingsSynchronizeFinishedRestarting: 'Synchronization complete and the backend service is restarting. SOC will be available again in just a moment.',
       settingsChangesReady: 'New changes are ready to be applied to the {module} module. Some changes may still require a full grid synchronization.',
-      settingsMultipleChangesReady: 'Changes to multiple modules are ready to be applied.',
+      settingsMultipleChangesReady: 'Changes are ready to be applied.',
       settingsSynchronizeModule: 'Synchronize {module}',
 
       setting_fake_setting_foo: 'Fake Setting Translated',
