@@ -7,6 +7,7 @@ package assistant
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -779,23 +780,31 @@ func TestBuildApiKey(t *testing.T) {
 }
 
 func TestAssistantCoordinator_GetPrompt(t *testing.T) {
+
+	// Convert hex to bytes
+
+	promptHexBytes := "1F8B08000000000000030BC9C82C5600A2928C5485D4DCA4D49494D41485E2CAE292D45C8582A2FCDC82120047F61F0E22000000"
+	promptBytes, err := hex.DecodeString(promptHexBytes)
+	if err != nil {
+		t.Fatalf("failed to decode hex string: %v", err)
+	}
 	testCases := []struct {
 		name           string
-		embeddedPrompt string
+		embeddedPrompt []byte
 		envVarValue    string
 		setupMock      func(*detectionsmock.MockIOManager)
 		expectedPrompt string
 	}{
 		{
 			name:           "embedded prompt provided",
-			embeddedPrompt: "This is the embedded system prompt",
+			embeddedPrompt: promptBytes,
 			envVarValue:    "",
 			setupMock:      func(mockIO *detectionsmock.MockIOManager) {},
 			expectedPrompt: "This is the embedded system prompt",
 		},
 		{
 			name:           "embedded prompt empty, env var set, file loads successfully",
-			embeddedPrompt: "",
+			embeddedPrompt: []byte(""),
 			envVarValue:    "/path/to/prompt.txt",
 			setupMock: func(mockIO *detectionsmock.MockIOManager) {
 				mockIO.EXPECT().ReadFile("/path/to/prompt.txt").Return([]byte("Prompt from file"), nil)
@@ -804,14 +813,14 @@ func TestAssistantCoordinator_GetPrompt(t *testing.T) {
 		},
 		{
 			name:           "embedded prompt empty, env var not set",
-			embeddedPrompt: "",
+			embeddedPrompt: []byte(""),
 			envVarValue:    "",
 			setupMock:      func(mockIO *detectionsmock.MockIOManager) {},
 			expectedPrompt: "",
 		},
 		{
 			name:           "embedded prompt empty, env var set, file read fails",
-			embeddedPrompt: "",
+			embeddedPrompt: []byte(""),
 			envVarValue:    "/path/to/nonexistent.txt",
 			setupMock: func(mockIO *detectionsmock.MockIOManager) {
 				mockIO.EXPECT().ReadFile("/path/to/nonexistent.txt").Return(nil, errors.New("file not found"))
@@ -820,7 +829,7 @@ func TestAssistantCoordinator_GetPrompt(t *testing.T) {
 		},
 		{
 			name:           "embedded prompt empty, env var set, file has invalid UTF-8",
-			embeddedPrompt: "",
+			embeddedPrompt: []byte(""),
 			envVarValue:    "/path/to/invalid.txt",
 			setupMock: func(mockIO *detectionsmock.MockIOManager) {
 				mockIO.EXPECT().ReadFile("/path/to/invalid.txt").Return([]byte{0xff, 0xfe, 0xfd}, nil)

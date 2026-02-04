@@ -11,7 +11,7 @@ now=`date -u +%Y-%m-%dT%H:%M:%S`
 set -e
 
 echo "Running JS unit tests..."
-jest test --config jest.config.js
+jest test --config jest.config.js html/js
 
 echo "Downloading GO dependencies..."
 go get ./...
