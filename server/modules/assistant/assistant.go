@@ -6,11 +6,14 @@
 package assistant
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"sort"
@@ -41,8 +44,8 @@ const (
 	DEFAULT_SYSTEM_PROMPT_ADDENDUM_MAX_LENGTH = 50000
 )
 
-//go:embed SOSystemPrompt.txt
-var embeddedSystemPrompt string
+//go:embed SOSystemPrompt.bin
+var embeddedSystemPrompt []byte
 
 type AssistantCoordinator struct {
 	srv       *server.Server
@@ -176,8 +179,27 @@ func buildToolConfig(functions map[string]Tool) (json.RawMessage, error) {
 }
 
 func (ac *AssistantCoordinator) getPrompt() {
-	if embeddedSystemPrompt != "" {
-		ac.systemPrompt = embeddedSystemPrompt
+	if len(embeddedSystemPrompt) > 0 {
+		// Gunzip the prompt bytes
+		reader, err := gzip.NewReader(bytes.NewReader(embeddedSystemPrompt))
+		if err != nil {
+			log.FromContext(ac.srv.Context).WithError(err).Error("unable to gunzip system prompt, no prompt loaded")
+			return
+		}
+		defer reader.Close()
+
+		raw, err := io.ReadAll(reader)
+		if err != nil {
+			log.FromContext(ac.srv.Context).WithError(err).Error("unable to read gunzipped system prompt, no prompt loaded")
+			return
+		}
+
+		if !utf8.Valid(raw) {
+			log.FromContext(ac.srv.Context).Error("gunzipped system prompt must be in UTF-8 encoding, no prompt loaded")
+			return
+		}
+
+		ac.systemPrompt = string(raw)
 		return
 	}
 
