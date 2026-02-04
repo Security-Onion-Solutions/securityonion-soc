@@ -99,13 +99,14 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.thresholdColorRatioMax = params["thresholdColorRatioMax"];
       this.availableModels = params["availableModels"];
       if (this.availableModels.length > 0) {
+        this.availableModels.forEach(m => m.key = this.buildModelIdentifier(m));
         this.modelsMap = new Map(
-          this.availableModels.filter(m => m.enabled).map(m => [m.id, m])
+          this.availableModels.filter(m => m.enabled).map(m => [m.key, m])
         );
         for (let val of this.modelsMap.values()) {
           if (val.contextLimitLarge < val.contextLimitSmall) val.contextLimitLarge = val.contextLimitSmall;
         }
-        if (!this.currentModel || !this.modelsMap.has(this.currentModel)) this.currentModel = this.availableModels[0].id;
+        if (!this.currentModel || !this.modelsMap.has(this.currentModel)) this.currentModel = this.availableModels[0].key;
       }
       this.updateModelParams();
 
@@ -291,7 +292,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     async loadCredits() {
       try {
-        const response = await this.$root.papi.get('/assistant/balance');
+        const response = await this.$root.papi.get('/assistant/balance/' + this.currentModel);
         if (response.data) {
           if (response.data.health_status === 'healthy') {
             this.creditsRemaining = response.data.credit_balance || 0;
@@ -527,6 +528,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
 
       assistantMessage = {
         role: 'assistant',
+        thought: Vue.ref(''), // MUST be ref
         content: Vue.ref(''), // MUST be ref
         timestamp: new Date().toISOString(),
         usage: Vue.ref(null),
@@ -596,6 +598,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
             this.scrollIfPinned();
           }
         }
+      } else if (c.delta.type === 'thought_delta') {
+        assistantMessage.thought.value += this.nbspRegexOp(c.delta.text);
       }
     },
     
@@ -845,6 +849,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     handleToolExecutionMessageStart(c, assistantMessage, toolUse) {
       assistantMessage = {
         role: 'assistant',
+        thought: Vue.ref(''),
         content: Vue.ref(''),
         timestamp: new Date().toISOString(),
         usage: Vue.ref(null),
@@ -1149,7 +1154,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     formatMarkdown(text) {
       text = this.applyChoiceButtons(text);
       text = this.$root.performMermaidRegexes(text);
-      md = this.$root.formatMarkdown(text, true);
+      const md = this.$root.formatMarkdown(text, true);
       if (!this.isStreaming) {
         this.$nextTick(() => {
           this.$root.renderMermaid();
@@ -1876,6 +1881,11 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.lowBalanceColorAlert = this.modelsMap.get(this.currentModel).lowBalanceColorAlert;
     },
 
+    buildModelIdentifier(model) {
+      if (!model) return '';
+      return `${model?.id||''}@${model?.adapter||''}`;
+    },
+
     applyToolSpecificChanges(toolUse, toolRequest) {
       if (toolUse.name === 'query_cases') {
         const rawMRU = localStorage.getItem('settings.case.mruCases');
@@ -1978,9 +1988,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
 
         this.$root.showError({ message: msg });
       }
-    },
-    nbspRegexOp(text) {
-      return text.replace(/^(&nbsp;?[\n]*)/, '');
     },
     focusChatInput() {
       this.$nextTick(() => {

@@ -244,7 +244,7 @@ func TestAckAlertsTool_Execute_VerifyContextPropagation(t *testing.T) {
 	assert.Equal(t, "test-user-123", contextUserId)
 }
 
-func TestAckAlertTool_Execute_EmptySearchFilter(t *testing.T) {
+func TestAckAlertsTool_Execute_EmptySearchFilter(t *testing.T) {
 	// Test with empty string search_filter
 	mockEventstore := server.NewFakeEventstore()
 	mockEventstore.UpdateResults = []*model.EventUpdateResults{
