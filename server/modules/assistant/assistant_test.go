@@ -288,7 +288,7 @@ func TestAssistantCoordinator_Balance(t *testing.T) {
 							AvailableModels: []model.ModelParameters{
 								{
 									ID:      "model",
-									Adapter: "securityonion_ai_cloud",
+									Adapter: "SOAI",
 								},
 							},
 						},
@@ -300,7 +300,7 @@ func TestAssistantCoordinator_Balance(t *testing.T) {
 				IOManager: mockIO,
 				srv:       srv,
 				adapters: map[string]server.AssistantAdapter{
-					"securityonion_ai_cloud": &SOAiCloudAdapter{
+					"SOAI": &SOAiCloudAdapter{
 						apiUrl:    tc.apiUrl,
 						srv:       srv,
 						IOManager: mockIO,
@@ -310,7 +310,7 @@ func TestAssistantCoordinator_Balance(t *testing.T) {
 
 			ctx := context.Background()
 
-			result, err := ac.Balance(ctx, "model")
+			result, err := ac.Balance(ctx, "model@SOAI")
 
 			if tc.expectedError {
 				assert.Error(t, err)
@@ -490,7 +490,7 @@ func TestAssistantCoordinator_Chat(t *testing.T) {
 					"test_tool": testTool,
 				},
 				adapters: map[string]server.AssistantAdapter{
-					"securityonion_ai_cloud": &SOAiCloudAdapter{
+					"MyAdapter": &SOAiCloudAdapter{
 						apiUrl:    tc.apiUrl,
 						srv:       srv,
 						IOManager: mockIO,
@@ -501,7 +501,7 @@ func TestAssistantCoordinator_Chat(t *testing.T) {
 
 			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
-			result, err := ac.Chat(ctx, "test-model", tc.messages, tc.chatOpts...)
+			result, err := ac.Chat(ctx, "test-model@MyAdapter", tc.messages, tc.chatOpts...)
 
 			if tc.expectedError {
 				assert.Error(t, err)
@@ -603,7 +603,7 @@ func TestAssistantCoordinator_ChatStream(t *testing.T) {
 				toolConfig: []byte(`{"tools": [], "tool_choice": {"auto": {}}}`),
 				srv:        srv,
 				adapters: map[string]server.AssistantAdapter{
-					"securityonion_ai_cloud": &SOAiCloudAdapter{
+					"whatever": &SOAiCloudAdapter{
 						apiUrl:    tc.apiUrl,
 						srv:       srv,
 						IOManager: mockIO,
@@ -613,7 +613,7 @@ func TestAssistantCoordinator_ChatStream(t *testing.T) {
 
 			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
-			result, aux, err := ac.ChatStream(ctx, "test-model", tc.messages)
+			result, aux, err := ac.ChatStream(ctx, "test-model@whatever", tc.messages)
 
 			assert.Nil(t, aux)
 			if tc.expectError {
