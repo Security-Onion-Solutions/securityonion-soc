@@ -599,7 +599,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           }
         }
       } else if (c.delta.type === 'thought_delta') {
-        assistantMessage.thought.value += this.nbspRegexOp(c.delta.text);
+        if (assistantMessage && targetSessionId === this.currentChatId) {
+          assistantMessage.thought.value += this.nbspRegexOp(c.delta.text);
+          this.scrollIfPinned();
+        }
       }
     },
     
@@ -1573,6 +1576,12 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         } else {
           frontendMsg.content = '';
         }
+        
+        // Extract thought from content blocks (for Gemini models)
+        const thoughtBlocks = msg.message.contentBlocks.filter(block => block.type === 'thought');
+        if (thoughtBlocks.length > 0) {
+          frontendMsg.thought = thoughtBlocks.map(block => this.nbspRegexOp(block.text)).join('\n');
+        }
       } else {
         frontendMsg.content = 'Empty message';
       }
@@ -2095,6 +2104,11 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     formatCaseSummary(socCase) {
       return socCase?.title;
+    },
+    getLastThoughtTitle(text) {
+      const titleRegex = /\*\*([^*]+)\*\*(?![\s\S]*\*\*)/;
+      const match = text.match(titleRegex);
+      return match ? match[1] : this.i18n.thinking;
     }
   }
 }});

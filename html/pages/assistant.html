@@ -175,6 +175,22 @@
 											<span class="text-caption text-green" v-if="messageContextValues[index] > 0">{{ formatCount(messageContextValues[index]) }} {{ i18n.tokensLowercase }}</span>
 										</template>
 									</div>
+									
+									<!-- Thought Display -->
+									<div v-if="message.thought && message.thought.length > 0" class="thought-display mb-2">
+										<v-expansion-panels variant="accordion" density="compact">
+											<v-expansion-panel>
+												<v-expansion-panel-title>
+													<v-icon size="small" class="mr-2">fa-lightbulb</v-icon>
+													<span class="font-weight-medium text-body-2">{{ message.content && message.content.length > 0 ? i18n.thoughts : getLastThoughtTitle(message.thought) }}</span>
+												</v-expansion-panel-title>
+												<v-expansion-panel-text>
+													<div class="text-caption" style="white-space: pre-wrap;" v-html="formatMarkdown(message.thought)"></div>
+												</v-expansion-panel-text>
+											</v-expansion-panel>
+										</v-expansion-panels>
+									</div>
+									
 									<div id="message-content" class="text-body-2" :key="message.content" v-html="formatMarkdown(message.content)"></div>
 									
 									<!-- Tool Use Display -->

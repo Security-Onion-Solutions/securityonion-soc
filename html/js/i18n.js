@@ -1099,6 +1099,7 @@ const i18n = {
       tabular: 'Data Export',
       tags: 'Tags',
       thinking: 'Thinking',
+      thoughts: 'Thoughts',
       threshold: 'Threshold',
       thresholdType: 'Threshold Type',
       throttledLogin: 'Excessive login requests detected. Login requests can resume momentarily.',
