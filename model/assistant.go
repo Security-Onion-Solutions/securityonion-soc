@@ -70,6 +70,7 @@ type saveableMessage struct {
 	Role          string         `json:"role"`
 	ContentStr    string         `json:"contentStr"`
 	ContentBlocks []ContentBlock `json:"contentBlocks"`
+	Thoughts      string         `json:"thoughts,omitempty"`
 	StopReason    *string        `json:"stopReason,omitempty"`
 	StopSequence  *string        `json:"stopSequence,omitempty"`
 	Usage         *Usage         `json:"usage,omitempty"`
@@ -90,6 +91,7 @@ func (sm *StoredMessage) MarshalJSON() ([]byte, error) {
 			Role:          sm.Message.Role,
 			ContentStr:    sm.Message.ContentStr,
 			ContentBlocks: sm.Message.ContentBlocks,
+			Thoughts:      sm.Message.Thoughts,
 			StopReason:    sm.Message.StopReason,
 			StopSequence:  sm.Message.StopSequence,
 			Usage:         sm.Message.Usage,
@@ -116,6 +118,7 @@ func (sm *StoredMessage) UnmarshalJSON(data []byte) error {
 		Role:          temp.Message.Role,
 		ContentStr:    temp.Message.ContentStr,
 		ContentBlocks: temp.Message.ContentBlocks,
+		Thoughts:      temp.Message.Thoughts,
 		StopReason:    temp.Message.StopReason,
 		StopSequence:  temp.Message.StopSequence,
 		Usage:         temp.Message.Usage,
@@ -134,6 +137,8 @@ type Message struct {
 	ContentStr string `json:"-"`
 	// The structured content of the message.
 	ContentBlocks []ContentBlock `json:"-"`
+	// The plain text thoughts from the model's response
+	Thoughts string `json:"thoughts,omitempty"`
 	// The reason the message was stopped.
 	StopReason *string `json:"stop_reason,omitempty" example:"user_request"`
 	// The sequence in which the message was stopped.

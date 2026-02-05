@@ -57,6 +57,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     caseMenuVisible: false,
     mruCases: [],
     perMessageStatsEnabled: false,
+    showModelThinking: false,
   }},
   async created() {
     this.loadLocalSettings();
@@ -80,7 +81,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     'restoreLastActive': 'saveLocalSettings',
     'alwaysApproveReadRequests': 'saveLocalSettings',
     'showChatHistory': 'saveLocalSettings',
-    'currentModel': 'saveLocalSettings'
+    'currentModel': 'saveLocalSettings',
+    'showModelThinking': 'saveLocalSettings'
   },
   computed: {
     messageContextValues() {
@@ -528,7 +530,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
 
       assistantMessage = {
         role: 'assistant',
-        thought: Vue.ref(''), // MUST be ref
+        thoughts: Vue.ref(''), // MUST be ref
         content: Vue.ref(''), // MUST be ref
         timestamp: new Date().toISOString(),
         usage: Vue.ref(null),
@@ -584,7 +586,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       
       if (assistantMessage && c.delta.type === 'text_delta' && targetSessionId === this.currentChatId) {
         // Only update UI if this is for the current session
-        assistantMessage.content.value += this.nbspRegexOp(c.delta.text);
+        assistantMessage.content.value = this.nbspRegexOp(assistantMessage.content.value + c.delta.text);
         this.scrollIfPinned();
       } else if (c.delta.type === 'input_json_delta') {
         const idMap = this.getIndexMap(targetSessionId);
@@ -599,7 +601,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           }
         }
       } else if (c.delta.type === 'thought_delta') {
-        assistantMessage.thought.value += this.nbspRegexOp(c.delta.text);
+        if (assistantMessage && targetSessionId === this.currentChatId) {
+          assistantMessage.thoughts.value += this.nbspRegexOp(c.delta.text);
+          this.scrollIfPinned();
+        }
       }
     },
     
@@ -849,7 +854,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     handleToolExecutionMessageStart(c, assistantMessage, toolUse) {
       assistantMessage = {
         role: 'assistant',
-        thought: Vue.ref(''),
+        thoughts: Vue.ref(''),
         content: Vue.ref(''),
         timestamp: new Date().toISOString(),
         usage: Vue.ref(null),
@@ -907,7 +912,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       
       if (assistantMessage && c.delta.type === 'text_delta' && targetSessionId === this.currentChatId) {
         // Only update UI if this is for the current session
-        assistantMessage.content.value += this.nbspRegexOp(c.delta.text);
+        assistantMessage.content.value = this.nbspRegexOp(assistantMessage.content.value + c.delta.text);
         this.scrollIfPinned();
       } else if (c.delta.type === 'input_json_delta') {
         const idMap = this.getIndexMap(targetSessionId);
@@ -920,6 +925,11 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           if (targetSessionId === this.currentChatId) {
             this.scrollIfPinned();
           }
+        }
+      } else if (c.delta.type === 'thought_delta') {
+        if (assistantMessage && targetSessionId === this.currentChatId) {
+          assistantMessage.thoughts.value += this.nbspRegexOp(c.delta.text);
+          this.scrollIfPinned();
         }
       }
     },
@@ -1689,6 +1699,11 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           tags: msg.tags || [],
         };
 
+        // Extract thoughts if present
+        if (msg.message.thoughts) {
+          frontendMsg.thoughts = Vue.ref(msg.message.thoughts);
+        }
+
         // Extract message content using helper method
         this.extractMessageContent(msg, frontendMsg);
         
@@ -1791,7 +1806,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
 
     getCompressColor() {
-      const maxContextLength = this.increaseMaxContextThreshold ? this.contextLimitLarge : this.contextLimitSmall;
+      const maxContextLength = this.increaseContextLimit ? this.contextLimitLarge : this.contextLimitSmall;
       if (this.contextLength >= maxContextLength / 2) {
         return 'primary';
       }
@@ -1817,6 +1832,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.saveSetting('alwaysApproveReadRequests', this.alwaysApproveReadRequests, false);
       this.saveSetting('showChatHistory', this.showChatHistory, true);
       this.saveSetting('currentModel', this.currentModel, '');
+      this.saveSetting('showModelThinking', this.showModelThinking, false);
     },
 
     // Load all local settings
@@ -1828,6 +1844,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       if (localStorage[prefix + '.showChatHistory']) this.showChatHistory = localStorage[prefix + '.showChatHistory'] == 'true';
       if (localStorage[prefix + '.currentModel']) this.currentModel = localStorage[prefix + '.currentModel'];
       if (localStorage[prefix + '.perMessageStatsEnabled']) this.perMessageStatsEnabled = localStorage[prefix + '.perMessageStatsEnabled'] == 'true';
+      if (localStorage[prefix + '.showModelThinking']) this.showModelThinking = localStorage[prefix + '.showModelThinking'] == 'true';
 
       if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
     },
@@ -2095,6 +2112,11 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     formatCaseSummary(socCase) {
       return socCase?.title;
+    },
+    getLastThoughtTitle(text) {
+      const titleRegex = /\*\*([^*]+)\*\*(?![\s\S]*\*\*)/;
+      const match = text.match(titleRegex);
+      return match ? match[1] : this.i18n.thinking;
     }
   }
 }});
