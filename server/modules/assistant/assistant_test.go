@@ -671,6 +671,7 @@ func TestCleanupMessages(t *testing.T) {
 					ContentBlocks: []model.ContentBlock{
 						{Type: "text", Text: "Hi back"},
 					},
+					Thoughts: "Assistant reasoning",
 				},
 			},
 			expectedResults: []*model.Message{
@@ -693,6 +694,7 @@ func TestCleanupMessages(t *testing.T) {
 					ContentBlocks: []model.ContentBlock{
 						{Type: "text", Text: "Hi back"},
 					},
+					Thoughts: "Assistant reasoning",
 				},
 			},
 		},
@@ -756,6 +758,7 @@ func TestCleanupMessages(t *testing.T) {
 					assert.Nil(t, actualMsg.StopSequence)
 					assert.Nil(t, actualMsg.Usage)
 					assert.Equal(t, expectedMsg.ContentBlocks, actualMsg.ContentBlocks)
+					assert.Equal(t, expectedMsg.Thoughts, actualMsg.Thoughts)
 
 					// Verify original messages are not modified
 					if i < len(tc.inputMessages) {

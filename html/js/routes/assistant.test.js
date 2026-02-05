@@ -2464,6 +2464,35 @@ test('convertBackendMessagesToFrontend converts assistant message with text bloc
   expect(comp.updateContextLength).toHaveBeenCalledWith({ input_tokens: 10, output_tokens: 20 }, false);
 });
 
+test('convertBackendMessagesToFrontend converts assistant message with thoughts', () => {
+  comp.resetContextLength = jest.fn();
+  comp.updateContextLength = jest.fn();
+  
+  const backendMessages = [
+    {
+      createTime: '2025-01-01T12:00:00.000Z',
+      message: {
+        role: 'assistant',
+        contentBlocks: [
+          { type: 'text', text: 'I can help you with security analysis.' }
+        ],
+        thoughts: '**Analyzing Request**\n\nProcessing the user query...',
+        usage: { input_tokens: 10, output_tokens: 20 }
+      }
+    }
+  ];
+  
+  const result = comp.convertBackendMessagesToFrontend(backendMessages);
+  
+  expect(result).toHaveLength(1);
+  expect(result[0].role).toBe('assistant');
+  expect(result[0].content).toBe('I can help you with security analysis.');
+  expect(result[0].thoughts.value).toBe('**Analyzing Request**\n\nProcessing the user query...');
+  expect(result[0].timestamp).toBe('2025-01-01T12:00:00.000Z');
+  expect(result[0].usage.value).toEqual({ input_tokens: 10, output_tokens: 20 });
+  expect(comp.updateContextLength).toHaveBeenCalledWith({ input_tokens: 10, output_tokens: 20 }, false);
+});
+
 test('convertBackendMessagesToFrontend handles multiple text blocks', () => {
   comp.resetContextLength = jest.fn();
   
