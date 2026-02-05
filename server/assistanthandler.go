@@ -1014,6 +1014,8 @@ func unstreamResponse(ctx context.Context, rawResponse string, aux *model.AuxMes
 					message.ContentBlocks[sm.Index].Content = message.ContentBlocks[sm.Index].Content.(string) + sm.Delta.Text
 				case "input_json_delta":
 					message.ContentBlocks[sm.Index].Input = json.RawMessage(string(message.ContentBlocks[sm.Index].Input) + *sm.Delta.PartialJson)
+				case "thought_delta":
+					message.Thoughts += sm.Delta.Text
 				}
 			}
 		case "content_block_stop":

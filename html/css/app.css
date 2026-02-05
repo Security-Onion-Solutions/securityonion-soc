@@ -1313,6 +1313,9 @@ ul ul ul {
 .thought-display .v-expansion-panel-text {
   padding: 8px 12px !important;
 }
+.thought-display .v-expansion-panel-text .text-caption p {
+  margin-bottom: 0 !important;
+}
 
 .disclaimer-container {
   display: flex;

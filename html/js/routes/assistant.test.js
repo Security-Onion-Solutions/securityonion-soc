@@ -1231,6 +1231,29 @@ test('handleToolExecutionContentBlockDelta processes input_json_delta for chaine
   expect(comp.scrollIfPinned).toHaveBeenCalled();
 });
 
+test('handleToolExecutionContentBlockDelta processes thought_delta', () => {
+  const sessionId = 'tool-session';
+  const assistantMessage = {
+    thoughts: { value: '**Starting Analysis**\n\n' }
+  };
+  
+  comp.scrollIfPinned = jest.fn();
+  comp.currentChatId = sessionId;
+  comp.nbspRegexOp = jest.fn((text) => text); // Pass through for testing
+  
+  const deltaEvent = {
+    delta: {
+      type: 'thought_delta',
+      text: 'Examining the data...'
+    }
+  };
+  
+  comp.handleToolExecutionContentBlockDelta(deltaEvent, assistantMessage, sessionId);
+  
+  expect(assistantMessage.thoughts.value).toBe('**Starting Analysis**\n\nExamining the data...');
+  expect(comp.scrollIfPinned).toHaveBeenCalled();
+});
+
 test('executeTool captures raw tool result from backend', async () => {
   // wait out any setTimeouts from previous tests
   await new Promise(resolve => setTimeout(resolve, 1100));
@@ -1580,6 +1603,45 @@ test('callAIAPI processes content_block_delta with text_delta', async () => {
   expect(comp.messages).toHaveLength(1);
   expect(comp.messages[0].content.value).toBe('Hello world!');
   expect(comp.scrollToBottom).toHaveBeenCalledTimes(3); // Once for message_start, twice for text deltas
+});
+
+test('callAIAPI processes content_block_delta with thought_delta', async () => {
+  comp.currentChatId = fakeSessionId;
+  comp.scrollToBottom = jest.fn();
+  comp.loadCredits = jest.fn().mockResolvedValue();
+  
+  const messageStartData = JSON.stringify({ type: 'message_start' });
+  const thoughtDeltaData1 = JSON.stringify({
+    type: 'content_block_delta',
+    delta: { type: 'thought_delta', text: '**Analyzing Request**\n\n' }
+  });
+  const thoughtDeltaData2 = JSON.stringify({
+    type: 'content_block_delta',
+    delta: { type: 'thought_delta', text: 'Processing the query...' }
+  });
+  
+  const mockResponse = {
+    ok: true,
+    data: {
+      pipeThrough: jest.fn().mockReturnValue({
+        getReader: jest.fn().mockReturnValue({
+          read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: `data: ${messageStartData}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: `data: ${thoughtDeltaData1}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: `data: ${thoughtDeltaData2}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
+            .mockResolvedValueOnce({ done: true })
+        })
+      })
+    }
+  };
+  mockPapi('post', mockResponse);
+  
+  await comp.callAIAPI('Test message');
+  
+  expect(comp.messages).toHaveLength(1);
+  expect(comp.messages[0].thoughts.value).toBe('**Analyzing Request**\n\nProcessing the query...');
+  expect(comp.scrollToBottom).toHaveBeenCalledTimes(3); // Once for message_start, twice for thought deltas
 });
 
 test('callAIAPI processes content_block_delta with input_json_delta', async () => {
@@ -2274,6 +2336,18 @@ test('formatCount delegates to root', () => {
   
   expect(comp.$root.formatCount).toHaveBeenCalledWith(count);
   expect(result).toBe('1,234');
+});
+
+test('getLastThoughtTitle extracts last bold text from thoughts', () => {
+  const thoughtsWithMultipleBold = '**Analyzing the Request**\n\nI need to process this.\n\n**Formulating Response**\n\nHere is my answer.';
+  const thoughtsWithOneBold = '**Processing Data**\n\nWorking on it...';
+  const thoughtsWithNoBold = 'Just some plain text without bold markers';
+  const emptyThoughts = '';
+  
+  expect(comp.getLastThoughtTitle(thoughtsWithMultipleBold)).toBe('Formulating Response');
+  expect(comp.getLastThoughtTitle(thoughtsWithOneBold)).toBe('Processing Data');
+  expect(comp.getLastThoughtTitle(thoughtsWithNoBold)).toBe(comp.i18n.thinking);
+  expect(comp.getLastThoughtTitle(emptyThoughts)).toBe(comp.i18n.thinking);
 });
 
 // Backend message conversion tests
@@ -3245,28 +3319,30 @@ test('saveSetting handles numeric values', () => {
 
 test('saveLocalSettings saves all assistant settings with correct defaults', () => {
   // Set up component state
-  comp.increaseMaxContextThreshold = true;
+  comp.increaseContextLimit = true;
   comp.restoreLastActive = true;
   comp.alwaysApproveReadRequests = true;
   comp.showChatHistory = false; // Different from default
   comp.currentModel = 'test-model';
+  comp.showModelThinking = true;
   
   // Mock saveSetting to track calls
   comp.saveSetting = jest.fn();
   
   comp.saveLocalSettings();
   
-  expect(comp.saveSetting).toHaveBeenCalledWith('increaseContextLimit', false, false);
+  expect(comp.saveSetting).toHaveBeenCalledWith('increaseContextLimit', true, false);
   expect(comp.saveSetting).toHaveBeenCalledWith('restoreLastActive', true, false);
   expect(comp.saveSetting).toHaveBeenCalledWith('alwaysApproveReadRequests', true, false);
   expect(comp.saveSetting).toHaveBeenCalledWith('showChatHistory', false, true);
   expect(comp.saveSetting).toHaveBeenCalledWith('currentModel', 'test-model', '');
-  expect(comp.saveSetting).toHaveBeenCalledTimes(5);
+  expect(comp.saveSetting).toHaveBeenCalledWith('showModelThinking', true, false);
+  expect(comp.saveSetting).toHaveBeenCalledTimes(6);
 });
 
 test('saveLocalSettings saves default values correctly', () => {
   // Set up component state with default values
-  comp.increaseMaxContextThreshold = false;
+  comp.increaseContextLimit = false;
   comp.restoreLastActive = false;
   comp.alwaysApproveReadRequests = false;
   comp.showChatHistory = true;

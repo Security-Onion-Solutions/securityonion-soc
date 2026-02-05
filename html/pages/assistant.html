@@ -54,6 +54,17 @@
 								color="primary">
 							</v-switch>
 						</span>
+						<span data-aid="assistant_show_model_thinking_toggle">
+							<v-switch
+								id="show-model-thinking"
+								v-model="showModelThinking"
+								density="compact"
+								hide-details
+								class="my-0"
+								:label="i18n.showModelThinking"
+								color="primary">
+							</v-switch>
+						</span>
 						<span data-aid="assistant_model_select">
 							<v-select
 								:disabled="$root.loading"
@@ -177,15 +188,15 @@
 									</div>
 									
 									<!-- Thought Display -->
-									<div v-if="message.thought && message.thought.length > 0" class="thought-display mb-2">
+									<div v-if="showModelThinking && message.thoughts" class="thought-display mb-3 mt-3">
 										<v-expansion-panels variant="accordion" density="compact">
-											<v-expansion-panel>
+											<v-expansion-panel>	
 												<v-expansion-panel-title>
 													<v-icon size="small" class="mr-2">fa-lightbulb</v-icon>
-													<span class="font-weight-medium text-body-2">{{ message.content && message.content.length > 0 ? i18n.thoughts : getLastThoughtTitle(message.thought) }}</span>
+													<span class="font-weight-medium text-body-2">{{ message.content || message.toolUses?.length > 0 ? i18n.thoughts : getLastThoughtTitle(message.thoughts) }}</span>
 												</v-expansion-panel-title>
 												<v-expansion-panel-text>
-													<div class="text-caption" style="white-space: pre-wrap;" v-html="formatMarkdown(message.thought)"></div>
+													<div class="text-caption" style="white-space: pre-wrap;" v-html="formatMarkdown(message.thoughts)"></div>
 												</v-expansion-panel-text>
 											</v-expansion-panel>
 										</v-expansion-panels>

@@ -1054,6 +1054,7 @@ const i18n = {
       showChatHistory: 'Show Chat History',
       showPieChart: 'Show pie chart',
       showBarChart: 'Show bar chart',
+      showModelThinking: 'Show Model Thinking',
       showSankeyChart: 'Show Sankey diagram',
       showTable: 'Show table',
       sidMissingErr: "This Suricata rule is missing its SID.",
