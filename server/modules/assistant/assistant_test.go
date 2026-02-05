@@ -7,6 +7,7 @@ package assistant
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -14,11 +15,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
-	"github.com/security-onion-solutions/securityonion-soc/server/modules/assistant/mock"
 	detectionsmock "github.com/security-onion-solutions/securityonion-soc/server/modules/detections/mock"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 	"github.com/stretchr/testify/assert"
@@ -41,123 +42,6 @@ func TestAssistantCoordinator_PrerequisiteModules(t *testing.T) {
 	modules := ac.PrerequisiteModules()
 
 	assert.Nil(t, modules)
-}
-
-func TestAssistantCoordinator_Init(t *testing.T) {
-	// an expired test key for buildApiKey
-	license := `H4sIAAziJWgC/z2NW4+iQBSE/8qEV2YiCC3gGzcvKALSoONms2mgQZSbNFc3+98XZ5JJ6qFO6qs6fykcxzhs0g5TS2rOzMEHAz5YABlm+aUL9U7hoUpr1KRl8cMsPlgezrklkCa9mALlrwUXh22dNuObVUz4m12XU5ZGU5LUKEzxnwaTJkPBn9cMA1gwxVka4oLgV339Bb3Bb2jKYoyatsaEWv76/U61BNeTZaZ3ZYS/HSlDr86m7kRHqEE/B0mT4qs8nbuw6Ub6wm2eUb6wNUmQK+Q/R77J284zPDXT+dPdcRcFOEjrDd5Vea/LKwuuDgBZUazDLpk57PFuNX3VPZkTUK0EtIdkmHf0eNKGWrwLW6vnxj4k3W5XpAYnMwa5XirVZnucc9sWbV1QrfW4T7vOPaQsvc8VDrXPvSL4RyHbrOJS05HoJP1Je9SEjVMZGJxipot6iLz8qNKFMhb051otF0JM3w4mHYnyeYBzwUEQDHQYHUS1gFgY1MZktoocKMFKSmlxDe73HMbXlSQrSsjbZ4ueXc+fkOgqv9YJseX98NgwXDK2+Ix6ceRZfy88ofGQLG8UzN3xiFwZ841emhpub+LNWxCvz/Kszcx2P7K+thPVI6NwQUcLRmhZCdekz+21daPOCPNNU0vZfjazNdX0g4VuwCowUNQn5AIln547vL+y1xrcOkiaH9LHg+d7/tnVW77zN7JK63UYeD68MOx4+RRNQcCVfXYDseP5EpQKgSa4XE+wthTAtIRd6WJgtqHjHg0mvzm3ZsfZ1L//d3LBEekCAAA=`
-	licensing.Init(license)
-
-	testCases := []struct {
-		name                         string
-		config                       map[string]interface{}
-		expectedApiUrl               string
-		expectedHealthTimeoutSeconds int
-		expectedSystemPromptAddendum string
-		expectError                  bool
-		validateToolConfig           bool
-	}{
-		{
-			name:                         "default config",
-			config:                       map[string]interface{}{},
-			expectedApiUrl:               DEFAULT_APIURL,
-			expectedHealthTimeoutSeconds: DEFAULT_HEALTH_TIMEOUT_SECONDS,
-			expectedSystemPromptAddendum: DEFAULT_SYSTEM_PROMPT_ADDENDUM,
-			expectError:                  false,
-			validateToolConfig:           true,
-		},
-		{
-			name: "custom apiUrl",
-			config: map[string]interface{}{
-				"apiUrl": "https://custom.api.com",
-			},
-			expectedApiUrl:               "https://custom.api.com",
-			expectedHealthTimeoutSeconds: DEFAULT_HEALTH_TIMEOUT_SECONDS,
-			expectedSystemPromptAddendum: DEFAULT_SYSTEM_PROMPT_ADDENDUM,
-			expectError:                  false,
-			validateToolConfig:           true,
-		},
-		{
-			name: "custom healthTimeoutSeconds",
-			config: map[string]interface{}{
-				"healthTimeoutSeconds": float64(10),
-			},
-			expectedApiUrl:               DEFAULT_APIURL,
-			expectedHealthTimeoutSeconds: 10,
-			expectedSystemPromptAddendum: DEFAULT_SYSTEM_PROMPT_ADDENDUM,
-			expectError:                  false,
-			validateToolConfig:           true,
-		},
-		{
-			name: "custom systemPromptAddendum",
-			config: map[string]interface{}{
-				"systemPromptAddendum": "Custom addendum text",
-			},
-			expectedApiUrl:               DEFAULT_APIURL,
-			expectedHealthTimeoutSeconds: DEFAULT_HEALTH_TIMEOUT_SECONDS,
-			expectedSystemPromptAddendum: "Custom addendum text",
-			expectError:                  false,
-			validateToolConfig:           true,
-		},
-		{
-			name: "systemPromptAddendum exceeds max length",
-			config: map[string]interface{}{
-				"systemPromptAddendum":          strings.Repeat("A", 60000),
-				"systemPromptAddendumMaxLength": float64(1000),
-			},
-			expectedApiUrl:               DEFAULT_APIURL,
-			expectedHealthTimeoutSeconds: DEFAULT_HEALTH_TIMEOUT_SECONDS,
-			expectedSystemPromptAddendum: strings.Repeat("A", 1000),
-			expectError:                  false,
-			validateToolConfig:           true,
-		},
-		{
-			name: "all custom config",
-			config: map[string]interface{}{
-				"apiUrl":               "https://another.api.com",
-				"healthTimeoutSeconds": float64(15),
-				"systemPromptAddendum": "Another custom addendum",
-			},
-			expectedApiUrl:               "https://another.api.com",
-			expectedHealthTimeoutSeconds: 15,
-			expectedSystemPromptAddendum: "Another custom addendum",
-			expectError:                  false,
-			validateToolConfig:           true,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			srv := &server.Server{}
-			ac := NewAssistantCoordinator(srv)
-
-			err := ac.Init(tc.config)
-
-			if tc.expectError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tc.expectedApiUrl, ac.apiUrl)
-				assert.Equal(t, tc.expectedHealthTimeoutSeconds, ac.healthTimeoutSeconds)
-				assert.Equal(t, tc.expectedSystemPromptAddendum, ac.systemPromptAddendum)
-				assert.Equal(t, ac, srv.AssistantManager)
-				assert.NotNil(t, ac.FunctionLibrary)
-				assert.Equal(t, knownTools, ac.FunctionLibrary)
-				assert.NotEmpty(t, ac.apiKey)
-				assert.Contains(t, ac.apiKey, "sk-")
-
-				if tc.validateToolConfig {
-					assert.NotNil(t, ac.toolConfig)
-					// Verify the tool config is valid JSON
-					var toolConfig model.ToolConfig
-					err = json.Unmarshal(ac.toolConfig, &toolConfig)
-					assert.NoError(t, err)
-					assert.NotNil(t, toolConfig.Tools)
-					assert.Contains(t, toolConfig.ToolChoice, "auto")
-				}
-			}
-		})
-	}
 }
 
 func TestAssistantCoordinator_StartStopIsRunning(t *testing.T) {
@@ -258,7 +142,7 @@ func TestAssistantCoordinator_ExecuteTool(t *testing.T) {
 		name           string
 		toolName       string
 		params         string
-		setupMocks     func(*mock.MockTool)
+		executeFunc    func(ctx context.Context, srv *server.Server, params string, auxData string) (*model.ToolResponse, error)
 		expectedResult *model.ToolResponse
 		expectedError  error
 	}{
@@ -266,12 +150,12 @@ func TestAssistantCoordinator_ExecuteTool(t *testing.T) {
 			name:     "successful tool execution",
 			toolName: "test_tool",
 			params:   `{"param1": "value1"}`,
-			setupMocks: func(mockTool *mock.MockTool) {
-				mockTool.EXPECT().Execute(gomock.Any(), gomock.Any(), `{"param1": "value1"}`, "").Return(&model.ToolResponse{
+			executeFunc: func(ctx context.Context, srv *server.Server, params string, auxData string) (*model.ToolResponse, error) {
+				return &model.ToolResponse{
 					ToolName:       "test_tool",
 					OnBehalfOfUser: "test-user",
 					Result:         "success",
-				}, nil)
+				}, nil
 			},
 			expectedResult: &model.ToolResponse{
 				ToolName:       "test_tool",
@@ -284,7 +168,7 @@ func TestAssistantCoordinator_ExecuteTool(t *testing.T) {
 			name:           "tool not found",
 			toolName:       "nonexistent_tool",
 			params:         `{}`,
-			setupMocks:     func(mockTool *mock.MockTool) {},
+			executeFunc:    nil,
 			expectedResult: nil,
 			expectedError:  ErrToolNotFound,
 		},
@@ -292,8 +176,8 @@ func TestAssistantCoordinator_ExecuteTool(t *testing.T) {
 			name:     "tool execution error",
 			toolName: "failing_tool",
 			params:   `{"param1": "value1"}`,
-			setupMocks: func(mockTool *mock.MockTool) {
-				mockTool.EXPECT().Execute(gomock.Any(), gomock.Any(), `{"param1": "value1"}`, "").Return(nil, errors.New("tool execution failed"))
+			executeFunc: func(ctx context.Context, srv *server.Server, params string, auxData string) (*model.ToolResponse, error) {
+				return nil, errors.New("tool execution failed")
 			},
 			expectedResult: nil,
 			expectedError:  errors.New("tool execution failed"),
@@ -302,11 +186,10 @@ func TestAssistantCoordinator_ExecuteTool(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
-			mockTool := mock.NewMockTool(ctrl)
-			tc.setupMocks(mockTool)
+			mockTool := &mockTool{
+				name:        tc.toolName,
+				executeFunc: tc.executeFunc,
+			}
 
 			srv := &server.Server{}
 			ac := &AssistantCoordinator{
@@ -398,17 +281,37 @@ func TestAssistantCoordinator_Balance(t *testing.T) {
 			mockIO := detectionsmock.NewMockIOManager(ctrl)
 			tc.setupMocks(mockIO)
 
+			srv := &server.Server{
+				Host: &web.Host{Version: "1.0.0"},
+				Config: &config.ServerConfig{
+					ClientParams: model.ClientParameters{
+						AssistantParams: model.AssistantParameters{
+							AvailableModels: []model.ModelParameters{
+								{
+									ID:      "model",
+									Adapter: "SOAI",
+								},
+							},
+						},
+					},
+				},
+			}
+
 			ac := &AssistantCoordinator{
-				apiUrl:    tc.apiUrl,
 				IOManager: mockIO,
-				srv: &server.Server{
-					Host: &web.Host{Version: "1.0.0"},
+				srv:       srv,
+				adapters: map[string]server.AssistantAdapter{
+					"SOAI": &SOAiCloudAdapter{
+						apiUrl:    tc.apiUrl,
+						srv:       srv,
+						IOManager: mockIO,
+					},
 				},
 			}
 
 			ctx := context.Background()
 
-			result, err := ac.Balance(ctx)
+			result, err := ac.Balance(ctx, "model@SOAI")
 
 			if tc.expectedError {
 				assert.Error(t, err)
@@ -549,37 +452,57 @@ func TestAssistantCoordinator_Chat(t *testing.T) {
 
 			mockIO := detectionsmock.NewMockIOManager(ctrl)
 			mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
-			mockTool := mock.NewMockTool(ctrl)
 
 			tc.setupMocks(mockIO, mockAssistantstore)
 
 			// Setup tool mock for auto-execute cases
+			var testTool Tool
 			if len(tc.chatOpts) > 0 {
-				mockTool.EXPECT().Execute(gomock.Any(), gomock.Any(), gomock.Any(), "").Return(&model.ToolResponse{
-					ToolName:       "test_tool",
-					OnBehalfOfUser: "test-user",
-					Result:         "tool result",
-				}, nil).AnyTimes()
+				testTool = &mockTool{
+					name: "test_tool",
+					executeFunc: func(ctx context.Context, srv *server.Server, params string, auxData string) (*model.ToolResponse, error) {
+						return &model.ToolResponse{
+							ToolName:       "test_tool",
+							OnBehalfOfUser: "test-user",
+							Result:         "tool result",
+						}, nil
+					},
+				}
+			} else {
+				testTool = &mockTool{name: "test_tool"}
 			}
 
 			srv := &server.Server{
 				Assistantstore: mockAssistantstore,
 				Host:           &web.Host{Version: "1.0.0"},
+				Config: &config.ServerConfig{
+					ClientParams: model.ClientParameters{
+						AssistantParams: model.AssistantParameters{
+							AvailableModels: []model.ModelParameters{},
+						},
+					},
+				},
 			}
 
 			ac := &AssistantCoordinator{
 				srv:       srv,
-				apiUrl:    tc.apiUrl,
 				IOManager: mockIO,
 				FunctionLibrary: map[string]Tool{
-					"test_tool": mockTool,
+					"test_tool": testTool,
+				},
+				adapters: map[string]server.AssistantAdapter{
+					"MyAdapter": &SOAiCloudAdapter{
+						apiUrl:    tc.apiUrl,
+						srv:       srv,
+						IOManager: mockIO,
+					},
 				},
 				toolConfig: []byte(`{"tools": [], "tool_choice": {"auto": {}}}`),
 			}
 
 			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
-			result, err := ac.Chat(ctx, "test-model", tc.messages, tc.chatOpts...)
+			result, err := ac.Chat(ctx, "test-model@MyAdapter", tc.messages, tc.chatOpts...)
 
 			if tc.expectedError {
 				assert.Error(t, err)
@@ -613,10 +536,6 @@ func TestAssistantCoordinator_ChatStream(t *testing.T) {
 			},
 			apiUrl: "https://api.example.com",
 			setupMocks: func(mockIO *detectionsmock.MockIOManager) {
-				// mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(&http.Response{
-				// 	StatusCode: 200,
-				// 	Body:       io.NopCloser(strings.NewReader("data: streaming response")),
-				// }, nil)
 				mockIO.EXPECT().MakeRequest(gomock.Any(), true).DoAndReturn(func(req *http.Request, stream bool) (*http.Response, error) {
 					outgoingBody, err := io.ReadAll(req.Body)
 					assert.NoError(t, err)
@@ -628,7 +547,6 @@ func TestAssistantCoordinator_ChatStream(t *testing.T) {
 
 					assert.Len(t, cr.Messages, 1)
 					assert.True(t, cr.Stream)
-					assert.Equal(t, "addendum", cr.SystemAppend)
 					assert.NotEmpty(t, cr.ToolConfig)
 					assert.Equal(t, "test-user", cr.UserId)
 
@@ -670,20 +588,35 @@ func TestAssistantCoordinator_ChatStream(t *testing.T) {
 			mockIO := detectionsmock.NewMockIOManager(ctrl)
 			tc.setupMocks(mockIO)
 
+			srv := &server.Server{
+				Host: &web.Host{Version: "1.0.0"},
+				Config: &config.ServerConfig{
+					ClientParams: model.ClientParameters{
+						AssistantParams: model.AssistantParameters{
+							AvailableModels: []model.ModelParameters{},
+						},
+					},
+				},
+			}
+
 			ac := &AssistantCoordinator{
-				apiUrl:               tc.apiUrl,
-				IOManager:            mockIO,
-				toolConfig:           []byte(`{"tools": [], "tool_choice": {"auto": {}}}`),
-				systemPromptAddendum: "addendum",
-				srv: &server.Server{
-					Host: &web.Host{Version: "1.0.0"},
+				IOManager:  mockIO,
+				toolConfig: []byte(`{"tools": [], "tool_choice": {"auto": {}}}`),
+				srv:        srv,
+				adapters: map[string]server.AssistantAdapter{
+					"whatever": &SOAiCloudAdapter{
+						apiUrl:    tc.apiUrl,
+						srv:       srv,
+						IOManager: mockIO,
+					},
 				},
 			}
 
 			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
-			result, err := ac.ChatStream(ctx, "test-model", tc.messages)
+			result, aux, err := ac.ChatStream(ctx, "test-model@whatever", tc.messages)
 
+			assert.Nil(t, aux)
 			if tc.expectError {
 				assert.Error(t, err)
 				assert.Nil(t, result)
@@ -846,25 +779,97 @@ func TestBuildApiKey(t *testing.T) {
 	assert.Equal(t, key, "sk-46736dfccdc375085dfb8f701ea7f327860c51b4aac3629592649ae8a7bb7e29")
 }
 
-func TestPrepareRequestHeaders(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+func TestAssistantCoordinator_GetPrompt(t *testing.T) {
 
-	ac := &AssistantCoordinator{
-		srv: &server.Server{
-			Host: &web.Host{Version: "1.0.0"},
+	// Convert hex to bytes
+
+	promptHexBytes := "1F8B08000000000000030BC9C82C5600A2928C5485D4DCA4D49494D41485E2CAE292D45C8582A2FCDC82120047F61F0E22000000"
+	promptBytes, err := hex.DecodeString(promptHexBytes)
+	if err != nil {
+		t.Fatalf("failed to decode hex string: %v", err)
+	}
+	testCases := []struct {
+		name           string
+		embeddedPrompt []byte
+		envVarValue    string
+		setupMock      func(*detectionsmock.MockIOManager)
+		expectedPrompt string
+	}{
+		{
+			name:           "embedded prompt provided",
+			embeddedPrompt: promptBytes,
+			envVarValue:    "",
+			setupMock:      func(mockIO *detectionsmock.MockIOManager) {},
+			expectedPrompt: "This is the embedded system prompt",
 		},
-		apiKey: "key",
+		{
+			name:           "embedded prompt empty, env var set, file loads successfully",
+			embeddedPrompt: []byte(""),
+			envVarValue:    "/path/to/prompt.txt",
+			setupMock: func(mockIO *detectionsmock.MockIOManager) {
+				mockIO.EXPECT().ReadFile("/path/to/prompt.txt").Return([]byte("Prompt from file"), nil)
+			},
+			expectedPrompt: "Prompt from file",
+		},
+		{
+			name:           "embedded prompt empty, env var not set",
+			embeddedPrompt: []byte(""),
+			envVarValue:    "",
+			setupMock:      func(mockIO *detectionsmock.MockIOManager) {},
+			expectedPrompt: "",
+		},
+		{
+			name:           "embedded prompt empty, env var set, file read fails",
+			embeddedPrompt: []byte(""),
+			envVarValue:    "/path/to/nonexistent.txt",
+			setupMock: func(mockIO *detectionsmock.MockIOManager) {
+				mockIO.EXPECT().ReadFile("/path/to/nonexistent.txt").Return(nil, errors.New("file not found"))
+			},
+			expectedPrompt: "",
+		},
+		{
+			name:           "embedded prompt empty, env var set, file has invalid UTF-8",
+			embeddedPrompt: []byte(""),
+			envVarValue:    "/path/to/invalid.txt",
+			setupMock: func(mockIO *detectionsmock.MockIOManager) {
+				mockIO.EXPECT().ReadFile("/path/to/invalid.txt").Return([]byte{0xff, 0xfe, 0xfd}, nil)
+			},
+			expectedPrompt: "",
+		},
 	}
 
-	req, err := http.NewRequest("GET", "manager", nil)
-	assert.NoError(t, err)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
 
-	ac.prepareRequestHeaders(req)
+			// Save and restore original embeddedSystemPrompt
+			originalPrompt := embeddedSystemPrompt
+			defer func() {
+				embeddedSystemPrompt = originalPrompt
+			}()
+			embeddedSystemPrompt = tc.embeddedPrompt
 
-	assert.Len(t, req.Header, 2)
-	assert.Equal(t, "key", req.Header.Get("x-api-key"))
-	assert.Equal(t, "1.0.0", req.Header.Get("x-so-version"))
+			mockIO := detectionsmock.NewMockIOManager(ctrl)
+			tc.setupMock(mockIO)
+
+			// Set environment variable (empty string to unset, or actual value)
+			t.Setenv("SO_AI_SYSTEM_PROMPT_PATH", tc.envVarValue)
+
+			srv := &server.Server{
+				Context: context.Background(),
+			}
+
+			ac := &AssistantCoordinator{
+				srv:       srv,
+				IOManager: mockIO,
+			}
+
+			ac.getPrompt()
+
+			assert.Equal(t, tc.expectedPrompt, ac.systemPrompt)
+		})
+	}
 }
 
 // Helper types and functions for testing
@@ -873,6 +878,7 @@ type mockTool struct {
 	name        string
 	description string
 	schema      model.JSONSchema
+	executeFunc func(ctx context.Context, srv *server.Server, params string, auxData string) (*model.ToolResponse, error)
 }
 
 func (m *mockTool) GetName() string {
@@ -888,6 +894,9 @@ func (m *mockTool) GetSchema() model.JSONSchema {
 }
 
 func (m *mockTool) Execute(ctx context.Context, srv *server.Server, params string, auxData string) (*model.ToolResponse, error) {
+	if m.executeFunc != nil {
+		return m.executeFunc(ctx, srv, params, auxData)
+	}
 	return &model.ToolResponse{
 		ToolName: m.name,
 		Result:   "mock result",

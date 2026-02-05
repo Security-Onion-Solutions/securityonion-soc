@@ -1461,6 +1461,7 @@ func (store *Saltstore) SyncSettings(ctx context.Context) error {
 	args := make(map[string]string)
 	args["command"] = "manage-salt"
 	args["operation"] = "highstate"
+	args["minion"] = "*"
 	output, err := store.execCommand(ctx, args)
 	if err == nil {
 		if output == "false" {
