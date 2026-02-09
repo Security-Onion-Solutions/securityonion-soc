@@ -5784,3 +5784,111 @@ test('buildModelIdentifier', () => {
     expect(output).toBe(t.expected);
   }
 });
+
+test('buildGroupedModels - groups models by adapter with headers', () => {
+  // Setup test data
+  comp.modelsMap = new Map([
+    ['claude-3-5-sonnet@Anthropic', {
+      id: 'claude-3-5-sonnet',
+      adapter: 'Anthropic',
+      displayName: 'Claude 3.5 Sonnet',
+      key: 'claude-3-5-sonnet@Anthropic'
+    }],
+    ['claude-3-opus@Anthropic', {
+      id: 'claude-3-opus',
+      adapter: 'Anthropic',
+      displayName: 'Claude 3 Opus',
+      key: 'claude-3-opus@Anthropic'
+    }],
+    ['gpt-4@SOAI', {
+      id: 'gpt-4',
+      adapter: 'SOAI',
+      displayName: 'GPT-4',
+      key: 'gpt-4@SOAI'
+    }],
+    ['gemini-pro@Gemini', {
+      id: 'gemini-pro',
+      adapter: 'Gemini',
+      displayName: 'Gemini Pro',
+      key: 'gemini-pro@Gemini'
+    }]
+  ]);
+
+  const result = comp.buildGroupedModels();
+
+  // Verify structure
+  expect(result).toBeInstanceOf(Array);
+  expect(result.length).toBe(7); // 3 headers + 4 models
+
+  // First group should be Anthropic (alphabetically first, case-sensitive)
+  expect(result[0]).toEqual({ header: 'Anthropic' });
+  expect(result[1].displayName).toBe('Claude 3.5 Sonnet');
+  expect(result[2].displayName).toBe('Claude 3 Opus');
+
+  // Second group should be Gemini
+  expect(result[3]).toEqual({ header: 'Gemini' });
+  expect(result[4].displayName).toBe('Gemini Pro');
+
+  // Third group should be SOAI
+  expect(result[5]).toEqual({ header: 'SOAI' });
+  expect(result[6].displayName).toBe('GPT-4');
+});
+
+test('buildGroupedModels - handles single adapter', () => {
+  comp.modelsMap = new Map([
+    ['model1@Adapter1', {
+      id: 'model1',
+      adapter: 'Adapter1',
+      displayName: 'Model 1',
+      key: 'model1@Adapter1'
+    }],
+    ['model2@Adapter1', {
+      id: 'model2',
+      adapter: 'Adapter1',
+      displayName: 'Model 2',
+      key: 'model2@Adapter1'
+    }]
+  ]);
+
+  const result = comp.buildGroupedModels();
+
+  // Should have header and two models
+  expect(result).toHaveLength(3);
+  expect(result[0]).toEqual({ header: 'Adapter1' });
+  expect(result[1].displayName).toBe('Model 1');
+  expect(result[2].displayName).toBe('Model 2');
+});
+
+test('buildGroupedModels - handles empty modelsMap', () => {
+  comp.modelsMap = new Map();
+
+  const result = comp.buildGroupedModels();
+
+  expect(result).toEqual([]);
+});
+
+test('buildGroupedModels - handles models with no adapter', () => {
+  comp.i18n = { statusUnknown: 'Unknown' };
+  comp.modelsMap = new Map([
+    ['model1@', {
+      id: 'model1',
+      adapter: '',
+      displayName: 'Model 1',
+      key: 'model1@'
+    }],
+    ['model2@Adapter1', {
+      id: 'model2',
+      adapter: 'Adapter1',
+      displayName: 'Model 2',
+      key: 'model2@Adapter1'
+    }]
+  ]);
+
+  const result = comp.buildGroupedModels();
+
+  // Should group empty adapter as 'Unknown' (from i18n)
+  expect(result[0]).toEqual({ header: 'Adapter1' });
+  expect(result[1].displayName).toBe('Model 2');
+  expect(result[2]).toEqual({ header: 'Unknown' });
+  expect(result[3].displayName).toBe('Model 1');
+});
