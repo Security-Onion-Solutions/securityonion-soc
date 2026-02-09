@@ -48,6 +48,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     lowBalanceColorAlert: 0,
     availableModels: [],
     modelsMap: new Map(),
+    groupedModels: [],
     currentModel: '',
     activeStreamingSessionId: null, // Track which session is actively streaming
     autoScrollOnNextRender: false, // gate for programmatic scrolls
@@ -109,6 +110,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           if (val.contextLimitLarge < val.contextLimitSmall) val.contextLimitLarge = val.contextLimitSmall;
         }
         if (!this.currentModel || !this.modelsMap.has(this.currentModel)) this.currentModel = this.availableModels[0].key;
+        this.groupedModels = this.buildGroupedModels();
       }
       this.updateModelParams();
 
@@ -1901,6 +1903,26 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     buildModelIdentifier(model) {
       if (!model) return '';
       return `${model?.id||''}@${model?.adapter||''}`;
+    },
+
+    buildGroupedModels() {
+      const groupedByAdapter = {};
+      for (const model of this.modelsMap.values()) {
+        const adapter = model.adapter || this.i18n.statusUnknown;
+        if (!groupedByAdapter[adapter]) {
+          groupedByAdapter[adapter] = [];
+        }
+        groupedByAdapter[adapter].push(model);
+      }
+      const result = [];
+      const sortedAdapters = Object.keys(groupedByAdapter).sort();
+      for (const adapter of sortedAdapters) {
+        result.push({
+          header: adapter
+        });
+        result.push(...groupedByAdapter[adapter]);
+      }
+      return result;
     },
 
     applyToolSpecificChanges(toolUse, toolRequest) {

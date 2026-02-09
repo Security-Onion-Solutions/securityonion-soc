@@ -70,13 +70,19 @@
 								:disabled="$root.loading"
 								v-model="currentModel"
 								@update:model-value="updateModelParams()"
-								:items="modelsMap.values()"
+								:items="groupedModels"
 								item-title="displayName"
 								item-value="key"
 								:hint="i18n.selectModel"
 								persistent-hint
 								variant="underlined"
 								prepend-icon="fa-microchip">
+								<template v-slot:item="{ props, item }">
+									<v-list-subheader v-if="item.raw.header" class="text-caption">
+										{{ item.raw.header }}
+									</v-list-subheader>
+									<v-list-item v-else v-bind="props"></v-list-item>
+								</template>
 							</v-select>
 						</span>
 					</v-expansion-panel-text>
