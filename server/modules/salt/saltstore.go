@@ -1299,9 +1299,14 @@ func (store *Saltstore) DisableUser(ctx context.Context, id string) error {
 	return err
 }
 
-func (store *Saltstore) AddRole(ctx context.Context, id string, role string) error {
-	if err := store.server.CheckAuthorized(ctx, "write", "users"); err != nil {
-		return err
+func (store *Saltstore) AddRole(ctx context.Context, id string, role string, bypassAuthCheck bool) error {
+	if bypassAuthCheck {
+		logger := log.FromContext(ctx)
+		logger.Debug("Adding role to user without authorization check")
+	} else {
+		if err := store.server.CheckAuthorized(ctx, "write", "users"); err != nil {
+			return err
+		}
 	}
 
 	args := make(map[string]string)

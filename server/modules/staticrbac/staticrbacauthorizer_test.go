@@ -26,7 +26,7 @@ func prepareTest(tester *testing.T, email string, id string) (*StaticRbacAuthori
 	auth := NewStaticRbacAuthorizer(server.NewFakeAuthorizedServer(nil))
 	userFiles := []string{"rbac_users.test"}
 	roleFiles := []string{"rbac_permissions.test", "rbac_roles.test"}
-	auth.Init(userFiles, roleFiles, DEFAULT_SCAN_INTERVAL_MS)
+	auth.Init(userFiles, roleFiles, DEFAULT_SCAN_INTERVAL_MS, "defrole")
 
 	assert.Equal(tester, DEFAULT_SCAN_INTERVAL_MS, auth.scanIntervalMs)
 	assert.Equal(tester, roleFiles, auth.roleFiles)
@@ -183,4 +183,57 @@ func TestGetRoles(tester *testing.T) {
 
 	var expectedRoles = [...]string{"anotherrole", "fifthrole", "somerole", "superuser", "user"}
 	assert.ElementsMatch(tester, expectedRoles, roles)
+}
+
+type MockAdminUserstore struct {
+	AddRoleCalls int
+}
+
+func (m *MockAdminUserstore) AddUser(ctx context.Context, user *model.User) error {
+	return nil
+}
+func (m *MockAdminUserstore) DeleteUser(ctx context.Context, id string) error {
+	return nil
+}
+func (m *MockAdminUserstore) UpdateProfile(ctx context.Context, user *model.User) error {
+	return nil
+}
+func (m *MockAdminUserstore) ResetPassword(ctx context.Context, id string, password string) error {
+	return nil
+}
+func (m *MockAdminUserstore) EnableUser(ctx context.Context, id string) error {
+	return nil
+}
+func (m *MockAdminUserstore) DisableUser(ctx context.Context, id string) error {
+	return nil
+}
+func (m *MockAdminUserstore) AddRole(ctx context.Context, id string, role string, bypassAuthCheck bool) error {
+	m.AddRoleCalls++
+	return nil
+}
+func (m *MockAdminUserstore) DeleteRole(ctx context.Context, id string, role string) error {
+	return nil
+}
+func (m *MockAdminUserstore) SyncUsers(ctx context.Context) error {
+	return nil
+}
+
+func TestEnsureDefaultRoleForUser_CreatesDefaultRole(tester *testing.T) {
+	auth, ctx, user := prepareTest(tester, "newuser@one.invalid", "new-user-id")
+	mockUserstore := &MockAdminUserstore{}
+	auth.server.AdminUserstore = mockUserstore
+
+	// Ensure no existing roles
+	_ = auth.EnsureDefaultRoleForUser(ctx)
+	assert.Equal(tester, 1, mockUserstore.AddRoleCalls)
+	auth.AddRoleToUser(user, "defrole")
+
+	// Verify it was added to memory so next call doesn't hit store again
+	mockUserstore.AddRoleCalls = 0
+	_ = auth.EnsureDefaultRoleForUser(ctx)
+	assert.Equal(tester, 0, mockUserstore.AddRoleCalls)
+
+	// Verify the role is actually returned
+	_, roles := auth.GetRolesForAuthId(ctx, user.Id)
+	assert.Contains(tester, roles, "defrole")
 }

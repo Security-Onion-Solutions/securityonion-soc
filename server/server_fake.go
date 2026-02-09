@@ -57,6 +57,10 @@ func (impl *FakeRolestore) GetRoles(ctx context.Context) []string {
 	return roles
 }
 
+func (impl *FakeRolestore) EnsureDefaultRoleForUser(ctx context.Context) error {
+	return nil
+}
+
 func (impl *FakeRolestore) GetPermissions(ctx context.Context) map[string][]string {
 	perm_map := make(map[string]bool)
 	final_map := make(map[string][]string)
