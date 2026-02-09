@@ -35,6 +35,7 @@ type StaticRbacAuthorizer struct {
 	previousRoleHash [16]byte
 	previousUserHash [16]byte
 	timer            *time.Timer
+	defaultRole      string
 }
 
 func NewStaticRbacAuthorizer(srv *server.Server) *StaticRbacAuthorizer {
@@ -43,7 +44,7 @@ func NewStaticRbacAuthorizer(srv *server.Server) *StaticRbacAuthorizer {
 	}
 }
 
-func (impl *StaticRbacAuthorizer) Init(userFiles []string, roleFiles []string, scanIntervalMs int) error {
+func (impl *StaticRbacAuthorizer) Init(userFiles []string, roleFiles []string, scanIntervalMs int, defaultRole string) error {
 	impl.roleFiles = roleFiles
 	impl.userFiles = userFiles
 
@@ -51,6 +52,7 @@ func (impl *StaticRbacAuthorizer) Init(userFiles []string, roleFiles []string, s
 		return errors.New("scanIntervalMs must be a positive integer")
 	}
 	impl.scanIntervalMs = scanIntervalMs
+	impl.defaultRole = defaultRole
 
 	impl.Reload()
 
@@ -83,10 +85,12 @@ func (impl *StaticRbacAuthorizer) GetAssignments(ctx context.Context) (map[strin
 			impl.mutex.Lock()
 			defer impl.mutex.Unlock()
 
-			roles := impl.userMap[userIdentifier]
-			newRoles := make([]string, len(roles))
-			copy(newRoles, roles)
-			userMap[userIdentifier] = newRoles
+			roles, ok := impl.userMap[userIdentifier]
+			if ok {
+				newRoles := make([]string, len(roles))
+				copy(newRoles, roles)
+				userMap[userIdentifier] = newRoles
+			}
 			logger.WithFields(log.Fields{
 				"user":      userIdentifier,
 				"roles":     roles,
@@ -149,6 +153,39 @@ func (impl *StaticRbacAuthorizer) GetRoles(ctx context.Context) []string {
 		sort.Strings(roles)
 	}
 	return roles
+}
+
+func (impl *StaticRbacAuthorizer) EnsureDefaultRoleForUser(ctx context.Context) error {
+	logger := log.FromContext(ctx)
+
+	requestingUserId, ok := ctx.Value(web.ContextKeyRequestorId).(string)
+	if !ok {
+		return errors.New("requestingUserId not found in context")
+	}
+
+	userMap, _ := impl.GetAssignments(ctx)
+	if _, ok := userMap[requestingUserId]; ok {
+		// User has had roles mapped previously, so do nothing
+		return nil
+	}
+
+	logger.WithFields(log.Fields{
+		"authId": requestingUserId,
+		"role":   impl.defaultRole,
+	}).Info("No roles found for user, auto-assigning default role")
+
+	// Add the default role to the saltstore. Bypass auth check since it's the system adding
+	// the default role.
+	err := impl.server.AdminUserstore.AddRole(ctx, requestingUserId, impl.defaultRole, true)
+	if err != nil {
+		logger.WithFields(log.Fields{
+			"authId": requestingUserId,
+			"role":   impl.defaultRole,
+		}).WithError(err).Error("Failed to add default role to saltstore")
+		return err
+	}
+
+	return nil
 }
 
 func (impl *StaticRbacAuthorizer) GetRolesForAuthId(ctx context.Context, id string) (error, []string) {

@@ -1241,7 +1241,7 @@ func TestManageUser_UpdatePassword(tester *testing.T) {
 func TestManageUser_AddRole(tester *testing.T) {
 	defer Cleanup()
 	salt := NewTestSaltRelayQueue(tester, "ctx_manage-user", "true.resp")
-	err := salt.AddRole(ctx(), "user-id-1", "broker")
+	err := salt.AddRole(ctx(), "user-id-1", "broker", false)
 	assert.NoError(tester, err)
 
 	request := ReadRequest(tester, "ctx_manage-user")
