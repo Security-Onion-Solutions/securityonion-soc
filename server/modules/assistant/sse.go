@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/openai/openai-go/v3/responses"
 	"google.golang.org/genai"
 )
 
@@ -75,12 +76,13 @@ func (w *sseEventWriter) writeError(message string) error {
 
 // streamProcessor processes response chunks and manages streaming state
 type streamProcessor struct {
-	writer            *sseEventWriter
-	model             string
-	wg                *sync.WaitGroup
-	contentBlockIndex int
-	hasOpenBlock      bool
-	firstSend         bool
+	writer               *sseEventWriter
+	model                string
+	wg                   *sync.WaitGroup
+	contentBlockIndex    int
+	hasOpenBlock         bool
+	firstSend            bool
+	writingOpenAIToolUse bool
 }
 
 func newStreamProcessor(writer *sseEventWriter, model string, wg *sync.WaitGroup) *streamProcessor {
@@ -94,9 +96,9 @@ func newStreamProcessor(writer *sseEventWriter, model string, wg *sync.WaitGroup
 	}
 }
 
-// processChunk processes a response chunk and writes appropriate events
+// processGeminiChunk processes a response chunk and writes appropriate events
 // Returns thought signatures, finish reason, and any error that occurred
-func (p *streamProcessor) processChunk(resp *genai.GenerateContentResponse) (map[string][]byte, string, error) {
+func (p *streamProcessor) processGeminiChunk(resp *genai.GenerateContentResponse) (map[string][]byte, string, error) {
 	thoughtSigs := make(map[string][]byte)
 	finishReason := ""
 
@@ -142,7 +144,7 @@ func (p *streamProcessor) processChunk(resp *genai.GenerateContentResponse) (map
 		}
 
 		// Write function calls
-		sigs := p.writeFunctionCalls(functionCalls)
+		sigs := p.writeGeminiFunctionCalls(functionCalls)
 		for id, sig := range sigs {
 			thoughtSigs[id] = sig
 		}
@@ -159,14 +161,55 @@ func (p *streamProcessor) processChunk(resp *genai.GenerateContentResponse) (map
 	return thoughtSigs, finishReason, nil
 }
 
+func (p *streamProcessor) processOpenAIChunk(resp responses.ResponseStreamEventUnion) (map[string][]byte, error) {
+	thoughtSigs := make(map[string][]byte)
+
+	content := resp.Delta
+
+	switch resp.Type {
+	case "response.reasoning_text.delta":
+		if content != "" {
+			p.ensureFirstSend()
+			p.writeThought(content)
+		}
+	case "response.output_text.delta":
+		if content != "" {
+			p.ensureFirstSend()
+			p.writeText(content)
+		}
+	case "response.output_item.added":
+		if resp.Item.Type == "function_call" {
+			if p.hasOpenBlock {
+				p.closeOpenBlock()
+			}
+
+			callId := resp.Item.CallID
+			name := resp.Item.Name
+
+			p.writeOpenAIFunctionHeader(callId, name)
+		}
+	case "response.function_call_arguments.delta":
+		if p.hasOpenBlock {
+			p.writeOpenAIFunctionInput(content)
+		}
+	case "response.output_item.done":
+		if p.writingOpenAIToolUse {
+			p.writeOpenAIFunctionStop()
+		}
+	}
+
+	return thoughtSigs, nil
+
+}
+
 // writeError writes an error event and done message
 func (p *streamProcessor) writeError(err error) {
 	p.writer.writeError(err.Error())
 	p.writer.writeDone()
 }
 
-// finalize closes any open blocks and writes final events
-func (p *streamProcessor) finalize(finishReason string, usage *genai.GenerateContentResponseUsageMetadata) {
+// finalizeGemini closes any open blocks and writes final events
+func (p *streamProcessor) finalizeGemini(finishReason string, usage *genai.GenerateContentResponseUsageMetadata) {
 	if p.hasOpenBlock {
 		p.closeOpenBlock()
 	}
@@ -179,6 +222,23 @@ func (p *streamProcessor) finalize(finishReason string, usage *genai.GenerateCon
 	if usage != nil {
 		p.writer.writeUsage(int64(usage.PromptTokenCount), int64(usage.CandidatesTokenCount))
 	}
+	p.writer.writeMessageStop()
+	p.writer.writeDone()
+}
+
+// finalizeOpenAI closes any open blocks and writes final events
+func (p *streamProcessor) finalizeOpenAI(finishReason string, usage responses.ResponseUsage) {
+	if p.hasOpenBlock {
+		p.closeOpenBlock()
+	}
+
+	if finishReason == "" {
+		finishReason = "end_turn"
+	}
+
+	p.writer.writeStopReason(finishReason)
+	p.writer.writeUsage(int64(usage.InputTokens), int64(usage.OutputTokens))
+
 	p.writer.writeMessageStop()
 	p.writer.writeDone()
 }
@@ -206,8 +266,8 @@ func (p *streamProcessor) writeText(text string) {
 	p.hasOpenBlock = true
 }
 
-// writeFunctionCalls writes function call blocks and returns their thought signatures
-func (p *streamProcessor) writeFunctionCalls(functionCalls []*genai.FunctionCall) map[string][]byte {
+// writeGeminiFunctionCalls writes function call blocks and returns their thought signatures
+func (p *streamProcessor) writeGeminiFunctionCalls(functionCalls []*genai.FunctionCall) map[string][]byte {
 	thoughtSigs := make(map[string][]byte)
 
 	for _, fc := range functionCalls {
@@ -239,6 +299,36 @@ func (p *streamProcessor) writeFunctionCalls(functionCalls []*genai.FunctionCall
 	}
 
 	return thoughtSigs
+}
+
+func (p *streamProcessor) writeOpenAIFunctionHeader(id string, name string) {
+	p.ensureFirstSend()
+
+	if id == "" {
+		id = fmt.Sprintf("toolu_%d", p.contentBlockIndex)
+	}
+
+	toolUseBlock := map[string]any{
+		"type":  "tool_use",
+		"id":    id,
+		"name":  name,
+		"input": map[string]any{},
+	}
+
+	p.writer.writeContentBlockStart(p.contentBlockIndex, toolUseBlock)
+	p.hasOpenBlock = true
+	p.writingOpenAIToolUse = true
+}
+
+func (p *streamProcessor) writeOpenAIFunctionInput(input string) {
+	p.writer.writeInputJsonDelta(p.contentBlockIndex, input)
+}
+
+func (p *streamProcessor) writeOpenAIFunctionStop() {
+	p.writer.writeContentBlockStop(p.contentBlockIndex)
+	p.contentBlockIndex++
+	p.hasOpenBlock = false
+	p.writingOpenAIToolUse = false
 }
 
 // closeOpenBlock closes the currently open text/thought block

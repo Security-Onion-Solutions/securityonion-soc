@@ -121,8 +121,8 @@ func (a *GeminiAdapter) Protocol() string {
 func (a *GeminiAdapter) SendMessage(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
 	logger := log.FromContext(ctx)
 
-	history := convertHistory(req)
-	tools, toolConfig := convertToolConfig(req)
+	history := convertHistoryToGemini(req)
+	tools, toolConfig := convertToolConfigToGemini(req)
 
 	latest := history[len(history)-1]
 	history = history[:len(history)-1]
@@ -231,8 +231,8 @@ func (a *GeminiAdapter) SendMessage(ctx context.Context, req *model.ChatRequest)
 func (a *GeminiAdapter) SendMessageStream(ctx context.Context, req *model.ChatRequest) (response *http.Response, aux *model.AuxMessageData, err error) {
 	logger := log.FromContext(ctx)
 
-	history := convertHistory(req)
-	tools, toolConfig := convertToolConfig(req)
+	history := convertHistoryToGemini(req)
+	tools, toolConfig := convertToolConfigToGemini(req)
 
 	latest := history[len(history)-1]
 	history = history[:len(history)-1]
@@ -294,7 +294,7 @@ func (a *GeminiAdapter) SendMessageStream(ctx context.Context, req *model.ChatRe
 			}
 
 			// Process chunk - automatically handles first send on first delta
-			thoughtSigs, reason, err := processor.processChunk(resp)
+			thoughtSigs, reason, err := processor.processGeminiChunk(resp)
 			if err != nil {
 				// Mid-stream error during processing
 				processor.writeError(err)
@@ -319,7 +319,7 @@ func (a *GeminiAdapter) SendMessageStream(ctx context.Context, req *model.ChatRe
 		}
 
 		// Finalization - processor handles closing blocks and writing final events
-		processor.finalize(finishReason, usage)
+		processor.finalizeGemini(finishReason, usage)
 	}()
 
 	wg.Wait()
@@ -342,7 +342,7 @@ func (a *GeminiAdapter) GetHealth(ctx context.Context) (*model.HealthResponse, e
 	}, nil
 }
 
-func convertHistory(req *model.ChatRequest) []*genai.Content {
+func convertHistoryToGemini(req *model.ChatRequest) []*genai.Content {
 	history := make([]*genai.Content, 0, len(req.Messages))
 
 	prevToolName := ""
@@ -441,7 +441,7 @@ func convertHistory(req *model.ChatRequest) []*genai.Content {
 	return history
 }
 
-func convertToolConfig(req *model.ChatRequest) ([]*genai.Tool, *genai.ToolConfig) {
+func convertToolConfigToGemini(req *model.ChatRequest) ([]*genai.Tool, *genai.ToolConfig) {
 	if req.ToolConfig == nil {
 		return nil, nil
 	}
@@ -597,7 +597,7 @@ func handleStreamError(err error, firstSend bool, writer *sseEventWriter, logger
 
 		// Write to pipe in goroutine to avoid blocking
 		go func() {
-			fmt.Fprint(body, "ERROR_GEMINI_FIRST_RESPONSE")
+			fmt.Fprint(body, "ERROR_FIRST_RESPONSE")
 			body.Close()
 		}()
 
