@@ -91,14 +91,16 @@
 		</v-col>
 		<v-spacer></v-spacer>
 		<v-col cols="12" lg="4" align="end">
-			<h4 data-aid="assistant_credits_remaining">{{ i18n.creditsRemaining }}:
-				<span v-if="!creditsLoaded">
-					<v-progress-circular indeterminate color="primary" size="14" width="3"></v-progress-circular>
-				</span>
-				<span v-else :class="creditsRemaining <= lowBalanceColorAlert ? 'text-error' : 'text-primary'">{{ formatCount(creditsRemaining) }}</span>
-			</h4>
-			<span class="text-caption">{{ i18n.creditsSubjectToExpiration }}</span>
-			<h5 class="ml-5 mt-2" data-aid="assistant_current_model">{{ modelsMap.get(currentModel).displayName }}</h5>
+			<div v-if="modelsMap.get(currentModel)?.adapter === 'SOAI'">
+				<h4 data-aid="assistant_credits_remaining">{{ i18n.creditsRemaining }}:
+					<span v-if="!creditsLoaded">
+						<v-progress-circular indeterminate color="primary" size="14" width="3"></v-progress-circular>
+					</span>
+					<span v-else :class="creditsRemaining <= lowBalanceColorAlert ? 'text-error' : 'text-primary'">{{ formatCount(creditsRemaining) }}</span>
+				</h4>
+				<span class="text-caption">{{ i18n.creditsSubjectToExpiration }}</span>
+			</div>
+			<h5 class="ml-5 mt-2" data-aid="assistant_current_model">{{ modelsMap.get(currentModel)?.displayName }}</h5>
 		</v-col>
 	</v-row>
 	<v-row align="start">
