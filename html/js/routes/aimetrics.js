@@ -74,6 +74,10 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
     creditsRemaining: 0,
     creditsLoaded: false,
     searchFilter: '',
+
+    availableModels: [],
+    modelsMap: new Map(),
+    balanceEndpoint: '',
     
     dateRange: '',
     relativeTimeEnabled: true,
@@ -149,6 +153,17 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
   methods: {
     async initAssistant(params) {
       this.assistantEnabled = params["enabled"] && this.$root.isLicensed('oai');
+      this.availableModels = params["availableModels"];
+      if (this.availableModels.length > 0) {
+        this.availableModels.forEach(m => m.key = this.buildModelIdentifier(m));
+        this.modelsMap = new Map(
+          this.availableModels.filter(m => m.enabled).map(m => [m.key, m])
+        );
+        for (let val of this.modelsMap.values()) {
+          if (val.contextLimitLarge < val.contextLimitSmall) val.contextLimitLarge = val.contextLimitSmall;
+          if (val.adapter === "SOAI" && !this.balanceEndpoint) this.balanceEndpoint = val.key;
+        }
+      }
       this.paramsLoaded = true;
       if (this.assistantEnabled) {
         this.loadData();
@@ -329,8 +344,12 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       return records;
     },
     async loadCredits() {
+      if (!this.balanceEndpoint) {
+        this.creditsLoaded = true;
+        return
+      }
       try {
-        const response = await this.$root.papi.get('/assistant/balance');
+        const response = await this.$root.papi.get(`/assistant/balance/${this.balanceEndpoint}`);
         if (response.data) {
           if (response.data.health_status === 'healthy') {
             this.creditsRemaining = response.data.credit_balance || 0;
@@ -691,6 +710,10 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         data: [],
         label: this.i18n.field_count,
       }];
+    },
+    buildModelIdentifier(model) {
+      if (!model) return '';
+      return `${model?.id||''}@${model?.adapter||''}`;
     }
   }
 }});

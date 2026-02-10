@@ -323,7 +323,7 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, aiModel string, messag
 
 					newMessages = append(newMessages, toolMsg)
 
-					err = ac.srv.Assistantstore.SaveChat(ctx, toolMsg.PrepareForStorage("", []string{"tool_result"}))
+					err = ac.srv.Assistantstore.SaveChat(ctx, toolMsg.PrepareForStorage("", []string{"tool_result"}, aiModel))
 					if err != nil {
 						logger.WithError(err).Error("unable to save tool result message")
 						return nil, err

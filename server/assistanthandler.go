@@ -166,7 +166,7 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 
 	messages := historyToContext(history)
 
-	err = h.server.Assistantstore.SaveChat(ctx, newMsg.PrepareForStorage(incMsg.SessionId, incMsg.Tags))
+	err = h.server.Assistantstore.SaveChat(ctx, newMsg.PrepareForStorage(incMsg.SessionId, incMsg.Tags, incMsg.Model))
 	if err != nil {
 		logger.WithError(err).Error("unable to save chat message")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -191,7 +191,7 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for _, msg := range response {
-			err = h.server.Assistantstore.SaveChat(ctx, msg.PrepareForStorage(incMsg.SessionId, nil))
+			err = h.server.Assistantstore.SaveChat(ctx, msg.PrepareForStorage(incMsg.SessionId, nil, incMsg.Model))
 			if err != nil {
 				logger.WithError(err).Error("unable to save chat message")
 				return
@@ -236,7 +236,7 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if msg != nil {
-			err = h.server.Assistantstore.SaveChat(noTimeOutCtx, msg.PrepareForStorage(incMsg.SessionId, nil))
+			err = h.server.Assistantstore.SaveChat(noTimeOutCtx, msg.PrepareForStorage(incMsg.SessionId, nil, incMsg.Model))
 			if err != nil {
 				logger.WithError(err).Error("unable to save chat message")
 				return
@@ -332,7 +332,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	err = h.server.Assistantstore.SaveChat(ctx, toolMsg.PrepareForStorage(toolReq.SessionId, []string{"tool_result"}))
+	err = h.server.Assistantstore.SaveChat(ctx, toolMsg.PrepareForStorage(toolReq.SessionId, []string{"tool_result"}, toolReq.Model))
 	if err != nil {
 		logger.WithError(err).Error("unable to save tool result message")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -362,7 +362,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 		web.Respond(w, r, http.StatusOK, response)
 
 		for _, msg := range response {
-			err = h.server.Assistantstore.SaveChat(ctx, msg.PrepareForStorage(toolReq.SessionId, nil))
+			err = h.server.Assistantstore.SaveChat(ctx, msg.PrepareForStorage(toolReq.SessionId, nil, toolReq.Model))
 			if err != nil {
 				logger.WithError(err).Error("unable to save tool result response message")
 				return
@@ -405,7 +405,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if msg != nil {
-			err = h.server.Assistantstore.SaveChat(noTimeOutCtx, msg.PrepareForStorage(toolReq.SessionId, nil))
+			err = h.server.Assistantstore.SaveChat(noTimeOutCtx, msg.PrepareForStorage(toolReq.SessionId, nil, toolReq.Model))
 			if err != nil {
 				logger.WithError(err).Error("unable to save chat message")
 				return

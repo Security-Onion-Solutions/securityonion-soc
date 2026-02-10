@@ -61,6 +61,8 @@ type StoredMessage struct {
 	Tags []string `json:"tags,omitempty" example:"investigation"`
 	// What session this message belongs to.
 	SessionId string `json:"session_id" example:"chat_1757086398900_ykhmndscn"`
+	// The model used for this message.
+	Model string `json:"model,omitempty" example:"sonnet-4.5@SOAI"`
 	// The message content.
 	Message *Message `json:"message"`
 }
@@ -81,11 +83,13 @@ func (sm *StoredMessage) MarshalJSON() ([]byte, error) {
 		Auditable
 		SessionId string          `json:"sessionId"`
 		Tags      []string        `json:"tags,omitempty"`
+		Model     string          `json:"model,omitempty"`
 		Message   saveableMessage `json:"message"`
 	}{
 		Auditable: sm.Auditable,
 		SessionId: sm.SessionId,
 		Tags:      sm.Tags,
+		Model:     sm.Model,
 		Message: saveableMessage{
 			Id:            sm.Message.Id,
 			Role:          sm.Message.Role,
@@ -104,6 +108,7 @@ func (sm *StoredMessage) UnmarshalJSON(data []byte) error {
 		Auditable
 		SessionId string          `json:"sessionId"`
 		Tags      []string        `json:"tags,omitempty"`
+		Model     string          `json:"model,omitempty"`
 		Message   saveableMessage `json:"message"`
 	}
 	if err := json.Unmarshal(data, &temp); err != nil {
@@ -113,6 +118,7 @@ func (sm *StoredMessage) UnmarshalJSON(data []byte) error {
 	sm.Auditable = temp.Auditable
 	sm.SessionId = temp.SessionId
 	sm.Tags = temp.Tags
+	sm.Model = temp.Model
 	sm.Message = &Message{
 		Id:            temp.Message.Id,
 		Role:          temp.Message.Role,
@@ -264,11 +270,12 @@ type Usage struct {
 	Credits int `json:"credits" example:"1"`
 }
 
-func (msg *Message) PrepareForStorage(sessionId string, tags []string) *StoredMessage {
+func (msg *Message) PrepareForStorage(sessionId string, tags []string, model string) *StoredMessage {
 	return &StoredMessage{
 		SessionId: sessionId,
 		Message:   msg,
 		Tags:      tags,
+		Model:     model,
 	}
 }
 
@@ -339,6 +346,17 @@ type AssistantSessionDetails struct {
 	History []*StoredMessage `json:"history"`
 }
 
+type ModelUsageStats struct {
+	// The total input tokens used for this model.
+	ModelInputTokens int `json:"modelInputTokens" example:"500"`
+	// The total output tokens used for this model.
+	ModelOutputTokens int `json:"modelOutputTokens" example:"1000"`
+	// The total credits used for this model.
+	ModelCredits int `json:"modelCredits" example:"2"`
+	// The total messages sent using this model.
+	ModelMessages int `json:"modelMessages" example:"10"`
+}
+
 type SessionUsage struct {
 	// The total input tokens used during the session.
 	TotalInputTokens int `json:"totalInputTokens" example:"1500"`
@@ -348,6 +366,8 @@ type SessionUsage struct {
 	TotalCredits int `json:"totalCredits" example:"5"`
 	// The total messages sent during the session.
 	TotalMessages int `json:"totalMessages" example:"25"`
+	// Usage statistics per model@adapter combination.
+	ModelUsage map[string]*ModelUsageStats `json:"modelUsage,omitempty"`
 }
 
 type UserUsage struct {
@@ -363,6 +383,8 @@ type UserUsage struct {
 	TotalSessions int `json:"totalSessions" example:"3"`
 	// The total messages sent and received by the user in the date range.
 	TotalMessages int `json:"totalMessages" example:"25"`
+	// Usage statistics per model@adapter combination.
+	ModelUsage map[string]*ModelUsageStats `json:"modelUsage,omitempty"`
 }
 
 type UpdateSessionRequest struct {
