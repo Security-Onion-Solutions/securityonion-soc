@@ -22,7 +22,7 @@ require (
 require (
 	github.com/GiGurra/sse-parser v0.0.5
 	github.com/eapache/go-resiliency v1.7.0
-	github.com/go-git/go-git/v5 v5.16.2
+	github.com/go-git/go-git/v5 v5.16.5
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/pierrec/lz4/v4 v4.1.22
 	github.com/pkg/errors v0.9.1
