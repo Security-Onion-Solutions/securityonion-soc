@@ -163,6 +163,11 @@ func (impl *StaticRbacAuthorizer) EnsureDefaultRoleForUser(ctx context.Context) 
 		return errors.New("requestingUserId not found in context")
 	}
 
+	// If the user is an API client, do not auto-assign a default role
+	if model.IsClient(requestingUserId) {
+		return nil
+	}
+
 	userMap, _ := impl.GetAssignments(ctx)
 	if _, ok := userMap[requestingUserId]; ok {
 		// User has had roles mapped previously, so do nothing

@@ -237,3 +237,18 @@ func TestEnsureDefaultRoleForUser_CreatesDefaultRole(tester *testing.T) {
 	_, roles := auth.GetRolesForAuthId(ctx, user.Id)
 	assert.Contains(tester, roles, "defrole")
 }
+
+func TestEnsureDefaultRoleForUser_SkipClient(tester *testing.T) {
+	auth, ctx, user := prepareTest(tester, "", "socl_myclient")
+	mockUserstore := &MockAdminUserstore{}
+	auth.server.AdminUserstore = mockUserstore
+
+	// Ensure no existing roles
+	err := auth.EnsureDefaultRoleForUser(ctx)
+	assert.NoError(tester, err)
+	assert.Equal(tester, 0, mockUserstore.AddRoleCalls)
+
+	// Verify the role is NOT returned
+	_, roles := auth.GetRolesForAuthId(ctx, user.Id)
+	assert.NotContains(tester, roles, "defrole")
+}
