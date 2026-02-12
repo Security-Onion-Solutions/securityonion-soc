@@ -68,7 +68,7 @@ func (a *OpenAIAdapter) SendMessage(ctx context.Context, req *model.ChatRequest)
 	logger := log.FromContext(ctx)
 
 	// Convert history and tools (reuse existing functions)
-	history := convertHistoryToOpenAI(req)
+	history := convertHistoryToOpenAI(logger, req)
 	tools := convertToolConfigToOpenAI(req)
 
 	// Build system prompt
@@ -156,7 +156,7 @@ func (a *OpenAIAdapter) SendMessage(ctx context.Context, req *model.ChatRequest)
 func (a *OpenAIAdapter) SendMessageStream(ctx context.Context, req *model.ChatRequest) (response *http.Response, _ *model.AuxMessageData, err error) {
 	logger := log.FromContext(ctx)
 
-	history := convertHistoryToOpenAI(req)
+	history := convertHistoryToOpenAI(logger, req)
 	tools := convertToolConfigToOpenAI(req)
 
 	prompt := req.System
@@ -183,10 +183,9 @@ func (a *OpenAIAdapter) SendMessageStream(ctx context.Context, req *model.ChatRe
 	response, bodyWriter := fabricateResponse(http.StatusOK)
 
 	wg := &sync.WaitGroup{}
-	wg.Add(1)
 
 	// Create SSE writer and stream processor
-	writer := newSSEEventWriter(bodyWriter)
+	writer := newSSEEventWriter(logger, bodyWriter)
 	processor := newStreamProcessor(writer, req.Model, wg)
 
 	err = stream.Err()
@@ -204,6 +203,8 @@ func (a *OpenAIAdapter) SendMessageStream(ctx context.Context, req *model.ChatRe
 
 		return response, nil, err
 	}
+
+	wg.Add(1)
 
 	go func() {
 		defer bodyWriter.Close()
@@ -240,7 +241,7 @@ func (a *OpenAIAdapter) SendMessageStream(ctx context.Context, req *model.ChatRe
 	return response, nil, nil
 }
 
-func convertHistoryToOpenAI(req *model.ChatRequest) responses.ResponseNewParamsInputUnion {
+func convertHistoryToOpenAI(logger log.Interface, req *model.ChatRequest) responses.ResponseNewParamsInputUnion {
 	history := make([]responses.ResponseInputItemUnionParam, 0, len(req.Messages))
 
 	for _, msg := range req.Messages {
@@ -266,6 +267,7 @@ func convertHistoryToOpenAI(req *model.ChatRequest) responses.ResponseNewParamsI
 				if len(block.Input) > 0 {
 					if err := json.Unmarshal(block.Input, &args); err != nil {
 						// If unmarshal fails, skip this block
+						logger.WithError(err).Error("failed to unmarshal tool use input")
 						continue
 					}
 				}

@@ -123,7 +123,7 @@ func TestSSEEventWriter(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf strings.Builder
-			writer := newSSEEventWriter(&buf)
+			writer := newSSEEventWriter(log.Log, &buf)
 
 			err := tt.writeOp(writer)
 			assert.NoError(t, err)
@@ -133,7 +133,7 @@ func TestSSEEventWriter(t *testing.T) {
 
 	t.Run("writeContentBlockStart with complex object", func(t *testing.T) {
 		var buf strings.Builder
-		writer := newSSEEventWriter(&buf)
+		writer := newSSEEventWriter(log.Log, &buf)
 
 		block := map[string]any{
 			"type":  "tool_use",
@@ -155,7 +155,7 @@ func TestSSEEventWriter(t *testing.T) {
 
 	t.Run("full message sequence with thought and text", func(t *testing.T) {
 		var buf strings.Builder
-		writer := newSSEEventWriter(&buf)
+		writer := newSSEEventWriter(log.Log, &buf)
 
 		// Write a complete message stream
 		writer.writeMessageStart("gemini-2.0-flash-exp")
@@ -203,7 +203,7 @@ func TestSSEEventWriter(t *testing.T) {
 
 	t.Run("full message sequence with function call", func(t *testing.T) {
 		var buf strings.Builder
-		writer := newSSEEventWriter(&buf)
+		writer := newSSEEventWriter(log.Log, &buf)
 
 		// Write a message with text followed by a function call
 		writer.writeMessageStart("gemini-2.0-flash-exp")
@@ -306,7 +306,7 @@ func TestStreamProcessorFirstSend(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf strings.Builder
-			writer := newSSEEventWriter(&buf)
+			writer := newSSEEventWriter(log.Log, &buf)
 			wg := &sync.WaitGroup{}
 			wg.Add(1)
 			processor := newStreamProcessor(writer, "test-model", wg)
@@ -410,7 +410,7 @@ func TestStreamProcessorContentProcessing(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf strings.Builder
-			writer := newSSEEventWriter(&buf)
+			writer := newSSEEventWriter(log.Log, &buf)
 			wg := &sync.WaitGroup{}
 			wg.Add(1)
 			processor := newStreamProcessor(writer, "test-model", wg)
@@ -429,7 +429,7 @@ func TestStreamProcessorContentProcessing(t *testing.T) {
 
 func TestStreamProcessorFunctionCallClosesTextBlock(t *testing.T) {
 	var buf strings.Builder
-	writer := newSSEEventWriter(&buf)
+	writer := newSSEEventWriter(log.Log, &buf)
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	processor := newStreamProcessor(writer, "test-model", wg)
@@ -490,7 +490,7 @@ func TestStreamProcessorFunctionCallClosesTextBlock(t *testing.T) {
 
 func TestStreamProcessorFunctionCallWithNoID(t *testing.T) {
 	var buf strings.Builder
-	writer := newSSEEventWriter(&buf)
+	writer := newSSEEventWriter(log.Log, &buf)
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	processor := newStreamProcessor(writer, "test-model", wg)
@@ -529,7 +529,7 @@ func TestStreamProcessorFunctionCallWithNoID(t *testing.T) {
 
 func TestStreamProcessorMultipleFunctionCalls(t *testing.T) {
 	var buf strings.Builder
-	writer := newSSEEventWriter(&buf)
+	writer := newSSEEventWriter(log.Log, &buf)
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	processor := newStreamProcessor(writer, "test-model", wg)
@@ -571,7 +571,7 @@ func TestStreamProcessorMultipleFunctionCalls(t *testing.T) {
 
 func TestStreamProcessorMidStreamError(t *testing.T) {
 	var buf strings.Builder
-	writer := newSSEEventWriter(&buf)
+	writer := newSSEEventWriter(log.Log, &buf)
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	processor := newStreamProcessor(writer, "test-model", wg)
@@ -661,7 +661,7 @@ func TestStreamProcessorFinalize(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf strings.Builder
-			writer := newSSEEventWriter(&buf)
+			writer := newSSEEventWriter(log.Log, &buf)
 			wg := &sync.WaitGroup{}
 			wg.Add(1)
 			processor := newStreamProcessor(writer, "test-model", wg)
@@ -688,7 +688,7 @@ func TestStreamProcessorFinalize(t *testing.T) {
 
 func TestStreamProcessorBlockTransitions(t *testing.T) {
 	var buf strings.Builder
-	writer := newSSEEventWriter(&buf)
+	writer := newSSEEventWriter(log.Log, &buf)
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	processor := newStreamProcessor(writer, "test-model", wg)
@@ -755,7 +755,7 @@ func TestStreamProcessorBlockTransitions(t *testing.T) {
 
 func TestHandleStreamErrorFirstSend(t *testing.T) {
 	var buf strings.Builder
-	writer := newSSEEventWriter(&buf)
+	writer := newSSEEventWriter(log.Log, &buf)
 	logger := log.Log
 
 	response, shouldReturn := handleStreamError(fmt.Errorf("connection failed"), true, writer, logger, "test-model")
@@ -775,7 +775,7 @@ func TestHandleStreamErrorFirstSend(t *testing.T) {
 
 func TestHandleStreamErrorSubsequent(t *testing.T) {
 	var buf strings.Builder
-	writer := newSSEEventWriter(&buf)
+	writer := newSSEEventWriter(log.Log, &buf)
 	logger := log.Log
 
 	response, shouldReturn := handleStreamError(fmt.Errorf("stream interrupted"), false, writer, logger, "test-model")
@@ -891,7 +891,7 @@ func TestProcessOpenAIChunk_ThoughtDelta(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf strings.Builder
-			writer := newSSEEventWriter(&buf)
+			writer := newSSEEventWriter(log.Log, &buf)
 			wg := &sync.WaitGroup{}
 			wg.Add(1)
 			processor := newStreamProcessor(writer, "gpt-4", wg)
@@ -978,7 +978,7 @@ func TestProcessOpenAIChunk_TextDelta(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf strings.Builder
-			writer := newSSEEventWriter(&buf)
+			writer := newSSEEventWriter(log.Log, &buf)
 			wg := &sync.WaitGroup{}
 			wg.Add(1)
 			processor := newStreamProcessor(writer, "gpt-4", wg)
@@ -1101,7 +1101,7 @@ func TestProcessOpenAIChunk_FunctionCalls(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf strings.Builder
-			writer := newSSEEventWriter(&buf)
+			writer := newSSEEventWriter(log.Log, &buf)
 			wg := &sync.WaitGroup{}
 			wg.Add(1)
 			processor := newStreamProcessor(writer, "gpt-4", wg)
@@ -1242,7 +1242,7 @@ func TestFinalizeOpenAI(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf strings.Builder
-			writer := newSSEEventWriter(&buf)
+			writer := newSSEEventWriter(log.Log, &buf)
 			wg := &sync.WaitGroup{}
 			wg.Add(1)
 			processor := newStreamProcessor(writer, "gpt-4", wg)
@@ -1274,7 +1274,7 @@ func TestFinalizeOpenAI(t *testing.T) {
 func TestOpenAIHelperFunctions(t *testing.T) {
 	t.Run("writeOpenAIFunctionHeader", func(t *testing.T) {
 		var buf strings.Builder
-		writer := newSSEEventWriter(&buf)
+		writer := newSSEEventWriter(log.Log, &buf)
 		wg := &sync.WaitGroup{}
 		wg.Add(1)
 		processor := newStreamProcessor(writer, "gpt-4", wg)
@@ -1292,7 +1292,7 @@ func TestOpenAIHelperFunctions(t *testing.T) {
 
 	t.Run("writeOpenAIFunctionHeader with empty ID", func(t *testing.T) {
 		var buf strings.Builder
-		writer := newSSEEventWriter(&buf)
+		writer := newSSEEventWriter(log.Log, &buf)
 		wg := &sync.WaitGroup{}
 		wg.Add(1)
 		processor := newStreamProcessor(writer, "gpt-4", wg)
@@ -1306,7 +1306,7 @@ func TestOpenAIHelperFunctions(t *testing.T) {
 
 	t.Run("writeOpenAIFunctionInput", func(t *testing.T) {
 		var buf strings.Builder
-		writer := newSSEEventWriter(&buf)
+		writer := newSSEEventWriter(log.Log, &buf)
 		wg := &sync.WaitGroup{}
 		wg.Add(1)
 		processor := newStreamProcessor(writer, "gpt-4", wg)
@@ -1323,7 +1323,7 @@ func TestOpenAIHelperFunctions(t *testing.T) {
 
 	t.Run("writeOpenAIFunctionStop", func(t *testing.T) {
 		var buf strings.Builder
-		writer := newSSEEventWriter(&buf)
+		writer := newSSEEventWriter(log.Log, &buf)
 		wg := &sync.WaitGroup{}
 		wg.Add(1)
 		processor := newStreamProcessor(writer, "gpt-4", wg)
@@ -1454,7 +1454,7 @@ func TestOpenAIStreamIntegration(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf strings.Builder
-			writer := newSSEEventWriter(&buf)
+			writer := newSSEEventWriter(log.Log, &buf)
 			wg := &sync.WaitGroup{}
 			wg.Add(1)
 			processor := newStreamProcessor(writer, "gpt-4", wg)

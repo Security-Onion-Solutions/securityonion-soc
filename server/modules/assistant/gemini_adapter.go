@@ -121,7 +121,7 @@ func (a *GeminiAdapter) Protocol() string {
 func (a *GeminiAdapter) SendMessage(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
 	logger := log.FromContext(ctx)
 
-	history := convertHistoryToGemini(req)
+	history := convertHistoryToGemini(logger, req)
 	tools, toolConfig := convertToolConfigToGemini(req)
 
 	latest := history[len(history)-1]
@@ -231,7 +231,7 @@ func (a *GeminiAdapter) SendMessage(ctx context.Context, req *model.ChatRequest)
 func (a *GeminiAdapter) SendMessageStream(ctx context.Context, req *model.ChatRequest) (response *http.Response, aux *model.AuxMessageData, err error) {
 	logger := log.FromContext(ctx)
 
-	history := convertHistoryToGemini(req)
+	history := convertHistoryToGemini(logger, req)
 	tools, toolConfig := convertToolConfigToGemini(req)
 
 	latest := history[len(history)-1]
@@ -269,7 +269,7 @@ func (a *GeminiAdapter) SendMessageStream(ctx context.Context, req *model.ChatRe
 	wg.Add(1)
 
 	// Create SSE writer and stream processor
-	writer := newSSEEventWriter(bodyWriter)
+	writer := newSSEEventWriter(logger, bodyWriter)
 	processor := newStreamProcessor(writer, req.Model, wg)
 
 	go func() {
@@ -342,7 +342,7 @@ func (a *GeminiAdapter) GetHealth(ctx context.Context) (*model.HealthResponse, e
 	}, nil
 }
 
-func convertHistoryToGemini(req *model.ChatRequest) []*genai.Content {
+func convertHistoryToGemini(logger log.Interface, req *model.ChatRequest) []*genai.Content {
 	history := make([]*genai.Content, 0, len(req.Messages))
 
 	prevToolName := ""
@@ -370,6 +370,7 @@ func convertHistoryToGemini(req *model.ChatRequest) []*genai.Content {
 				if len(block.Input) > 0 {
 					if err := json.Unmarshal(block.Input, &args); err != nil {
 						// If unmarshal fails, skip this block
+						logger.WithError(err).Error("failed to unmarshal tool use input")
 						continue
 					}
 				}

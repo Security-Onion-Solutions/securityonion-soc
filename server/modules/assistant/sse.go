@@ -2,11 +2,13 @@ package assistant
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
 	"sync"
 
+	"github.com/apex/log"
 	"github.com/openai/openai-go/v3/responses"
 	"google.golang.org/genai"
 )
@@ -14,10 +16,11 @@ import (
 // sseEventWriter handles writing Server-Sent Events in the expected format
 type sseEventWriter struct {
 	writer io.Writer
+	logger log.Interface
 }
 
-func newSSEEventWriter(writer io.Writer) *sseEventWriter {
-	return &sseEventWriter{writer: writer}
+func newSSEEventWriter(logger log.Interface, writer io.Writer) *sseEventWriter {
+	return &sseEventWriter{writer: writer, logger: logger}
 }
 
 func (w *sseEventWriter) writeMessageStart(model string) error {
@@ -71,6 +74,8 @@ func (w *sseEventWriter) writeDone() error {
 
 func (w *sseEventWriter) writeError(message string) error {
 	_, err := fmt.Fprintf(w.writer, `data: {"type":"error","message":%s}`+"\n\n", strconv.Quote(message))
+	w.logger.WithError(errors.New(message)).Error("writing error event to SSE stream")
+
 	return err
 }
 

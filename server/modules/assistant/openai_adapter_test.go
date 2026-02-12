@@ -18,6 +18,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 
+	"github.com/apex/log"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/pagination"
 	"github.com/openai/openai-go/v3/responses"
@@ -604,7 +605,7 @@ func TestConvertHistoryToOpenAI(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := convertHistoryToOpenAI(tt.req)
+			result := convertHistoryToOpenAI(log.Log, tt.req)
 			if tt.validate != nil {
 				tt.validate(t, result)
 			}
