@@ -737,12 +737,12 @@ func TestAddUpdateScript(t *testing.T) {
 	timeNow := time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)
 
 	criteria := &model.EventUpdateCriteria{}
-	store.addUpdateScripts(criteria, timeNow, false, false, "admin")
+	store.AddUpdateScripts(criteria, timeNow, false, false, false, "admin", "")
 	assert.Len(t, criteria.UpdateScripts, 1)
 	assert.Equal(t, "ctx._source.event.acknowledged = false;", criteria.UpdateScripts[0])
 
 	criteria = &model.EventUpdateCriteria{}
-	store.addUpdateScripts(criteria, timeNow, true, false, "admin")
+	store.AddUpdateScripts(criteria, timeNow, true, false, false, "admin", "")
 	assert.Len(t, criteria.UpdateScripts, 1)
 	expected := `
 			boolean track_timing = false;
@@ -776,7 +776,7 @@ func TestAddUpdateScript(t *testing.T) {
 	assert.Equal(t, expected, criteria.UpdateScripts[0])
 
 	criteria = &model.EventUpdateCriteria{}
-	store.addUpdateScripts(criteria, timeNow, true, true, "admin")
+	store.AddUpdateScripts(criteria, timeNow, true, true, false, "admin", "")
 	assert.Len(t, criteria.UpdateScripts, 1)
 	assert.Contains(t, criteria.UpdateScripts[0], "esc_bool = true")
 	assert.Contains(t, criteria.UpdateScripts[0], "ctx._source.event.escalated_by = 'admin';")

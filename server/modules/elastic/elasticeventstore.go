@@ -1060,7 +1060,7 @@ func (store *ElasticEventstore) addParameterToFilter(json string, key string, fi
 	}
 }
 
-func (store *ElasticEventstore) addUpdateScripts(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, ack bool, esc bool, userId string) {
+func (store *ElasticEventstore) AddUpdateScripts(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, ack bool, esc bool, inv bool, userId string, sessionId ...string) {
 	if ack {
 		trackTiming := strconv.FormatBool(licensing.IsEnabled(licensing.FEAT_RPT))
 		escBool := strconv.FormatBool(esc)
@@ -1095,6 +1095,36 @@ func (store *ElasticEventstore) addUpdateScripts(updateCriteria *model.EventUpda
 				}
 			}
 			`)
+	} else if inv {
+		trackTiming := strconv.FormatBool(licensing.IsEnabled(licensing.FEAT_RPT))
+		nowMillis := timeNow.UnixMilli()
+		nowMillisStr := strconv.FormatInt(nowMillis, 10)
+
+		// Get sessionId if provided
+		sessionIdStr := ""
+		if len(sessionId) > 0 && sessionId[0] != "" {
+			sessionIdStr = sessionId[0]
+		}
+
+		script := `
+			boolean track_timing = ` + trackTiming + `;
+			Instant now_instant = Instant.ofEpochMilli(` + nowMillisStr + `L);
+			ZonedDateTime now_date = ZonedDateTime.ofInstant(now_instant, ZoneId.of('Z'));
+			
+			ctx._source.event.investigated = true;
+			ctx._source.event.investigated_by = '` + userId + `';`
+
+		if sessionIdStr != "" {
+			script += `
+			ctx._source.event.investigation_session_id = '` + sessionIdStr + `';`
+		}
+
+		script += `
+			if (track_timing) {
+				ctx._source.event.investigated_timestamp = now_date;
+			}
+			`
+		updateCriteria.AddUpdateScript(script)
 	} else {
 		updateCriteria.AddUpdateScript(`ctx._source.event.acknowledged = false;`)
 	}
@@ -1115,7 +1145,7 @@ func (store *ElasticEventstore) Acknowledge(ctx context.Context, ackCriteria *mo
 
 			updateCriteria := model.NewEventUpdateCriteria()
 			userId := ctx.Value(web.ContextKeyRequestorId).(string)
-			store.addUpdateScripts(updateCriteria, time.Now(), ackCriteria.Acknowledge, ackCriteria.Escalate, userId)
+			store.AddUpdateScripts(updateCriteria, time.Now(), ackCriteria.Acknowledge, ackCriteria.Escalate, false, userId, "")
 			updateCriteria.Populate(ackCriteria.SearchFilter,
 				ackCriteria.DateRange,
 				ackCriteria.DateRangeFormat,

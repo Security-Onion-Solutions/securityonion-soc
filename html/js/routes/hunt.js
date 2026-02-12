@@ -183,7 +183,6 @@ const huntComponent = {
 
       // AI Investigation tracking
       aiInvestigations: {}, // Maps alert ID to investigation results and chat session IDs
-      aiInvestigatedFilter: false, // Client-side filter for AI investigated alerts
       investigationSessions: [], // Store investigation sessions from backend
     }
   },
@@ -1524,18 +1523,6 @@ const huntComponent = {
       var idx = 0;
       this.groupBys = [];
       while (this.populateGroupByTable(metrics, idx++)) { };
-
-      // Apply AI investigated filter if enabled
-      if (this.aiInvestigatedFilter) {
-        this.groupBys.forEach(group => {
-          if (group.data && group.data.length > 0) {
-            group.data = group.data.filter(item => {
-              const socId = item.soc_id;
-              return socId && this.aiInvestigations[socId];
-            });
-          }
-        });
-      }
     },
     populateGroupByTable(metrics, groupIdx) {
       const route = this;
@@ -1741,14 +1728,6 @@ const huntComponent = {
 
       // Apply any existing AI investigation results to the loaded events
       this.applyAIInvestigationsToEvents();
-
-      // Apply AI investigated filter if enabled
-      if (this.aiInvestigatedFilter) {
-        this.eventData = this.eventData.filter(item => {
-          const socId = item.soc_id;
-          return socId && this.aiInvestigations[socId];
-        });
-      }
     },
     lookupFieldValue(record, field) {
       if (field in record) {
@@ -3275,11 +3254,8 @@ const huntComponent = {
       if (item.count) {
         return '';
       }
-      // For individual alerts, use soc_id as before
-      const socId = item.soc_id;
-      const investigation = this.aiInvestigations[socId];
-
-      if (investigation && investigation.chatSessionId) {
+      // Individual alerts
+      if (item['event.investigated']) {
         return 'secondary';
       }
       // Not investigated
@@ -3292,10 +3268,7 @@ const huntComponent = {
         return this.i18n.aiInvestigateMostRecent;
       }
       // Individual alerts
-      const socId = item.soc_id;
-      const investigation = this.aiInvestigations[socId];
-
-      if (investigation && investigation.chatSessionId) {
+      if (item['event.investigated']) {
         return this.i18n.aiInvestigateView;
       }
       return this.i18n.aiInvestigate;

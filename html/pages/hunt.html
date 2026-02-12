@@ -18,21 +18,13 @@
 								</span>
 								<span v-for="toggle in filterToggles" :key="toggle.name" :data-aid="'filter_toggle_' + category + '_' + toggle.name">
 									<v-switch
+										v-if="toggle.name !== 'investigated' || investigateEnabled"
 										:id="'filterToggle-' + toggle.name"
 										:disabled="loading()"
 										v-model="toggle.enabled"
 										density="compact" hide-details class="my-0"
 										@update:model-value="filterToggled($event, toggle); notifyInputsChanged()"
 										:label="$root.localizeMessage(toggle.name)" color="primary"></v-switch>
-								</span>
-								<span v-if="investigateEnabled" :data-aid="'ai_investigated_toggle_' + category">
-									<v-switch
-										id="aiInvestigatedToggle"
-										:disabled="loading()"
-										v-model="aiInvestigatedFilter"
-										density="compact" hide-details class="my-0"
-										@update:model-value="notifyInputsChanged()"
-										:label="i18n.aiInvestigated" color="primary"></v-switch>
 								</span>
 								<span data-aid="show_detection_panel">
 									<v-switch v-if="isCategory('alerts')" id="detection-panel-toggle" :disabled="loading()" v-model="showDetailsPanel" density="compact" hide-details class="my-0" :label="i18n.showDetailsPanel"></v-switch>

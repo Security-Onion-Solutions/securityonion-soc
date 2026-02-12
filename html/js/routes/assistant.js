@@ -676,7 +676,26 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.activeStreamingSessionId = streamingSessionId;
       
       try {
-        const response = await this.$root.papi.post('/assistant/chat', {
+        // Build the URL with investigationSocId query parameter if present
+        let url = '/assistant/chat';
+        const socId = this.$route.query.socId;
+        if (socId) {
+          url += `?investigationSocId=${encodeURIComponent(socId)}`;
+          // Clear the investigation query params after first use to prevent
+          // marking the alert as investigated on every subsequent message
+          this.$nextTick(() => {
+            const query = { ...this.$route.query };
+            delete query.investigation;
+            delete query.socId;
+            this.$router.replace({
+              name: 'assistant',
+              params: this.$route.params,
+              query: query
+            });
+          });
+        }
+        
+        const response = await this.$root.papi.post(url, {
           msg: userMessage,
           sessionId: streamingSessionId,
           model: this.currentModel,

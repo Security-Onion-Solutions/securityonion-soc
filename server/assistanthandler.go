@@ -68,6 +68,7 @@ func (h *AssistantHandler) checkAssistantAvailable(ctx context.Context, w http.R
 // @Tags         Assistant
 // @Security     bearer[assistant/write_authored]
 // @Param        request  body  object{msg=string,sessionId=string} true "Chat message object with message text and optional session ID"
+// @Param        investigationSocId query string false "corresponding alert's soc_id for investigation sessions"
 // @Accept       json
 // @Produce      json,text/event-stream
 // @Success      200  {array}   model.Message "AI assistant response messages"
@@ -106,6 +107,17 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		incMsg.SessionId = uuid.NewString()
 	}
 
+	// Check for investigationSocId query parameter
+	investigationSocId := r.URL.Query().Get("investigationSocId")
+	if investigationSocId != "" {
+		// Mark the alert as investigated with the session ID
+		err = h.markAlertAsInvestigated(ctx, investigationSocId, incMsg.SessionId)
+		if err != nil {
+			logger.WithError(err).WithField("investigationSocId", investigationSocId).Warn("unable to mark alert as investigated")
+			// Don't fail the request, just log the warning
+		}
+	}
+
 	newMsg := &model.Message{
 		Role: "user",
 		ContentBlocks: []model.ContentBlock{
@@ -130,6 +142,13 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 			SessionId: incMsg.SessionId,
 			Title:     incMsg.Msg,
 		}
+
+		// If this is an investigation session, set the type and entityId
+		if investigationSocId != "" {
+			session.Type = "alert_investigation"
+			session.EntityId = investigationSocId
+		}
+
 		err = h.server.Assistantstore.CreateSession(ctx, session)
 		if err != nil {
 			logger.WithError(err).Error("unable to create session")
@@ -1079,4 +1098,60 @@ func removeAuxData(messages []*model.StoredMessage) {
 			cb.ThoughtSignature = nil
 		}
 	}
+}
+
+func (h *AssistantHandler) markAlertAsInvestigated(ctx context.Context, socId string, sessionId string) error {
+	logger := log.FromContext(ctx)
+
+	err := h.server.CheckAuthorized(ctx, "write", "events")
+	if err != nil {
+		return err
+	}
+
+	logger.WithFields(log.Fields{
+		"socId":     socId,
+		"sessionId": sessionId,
+	}).Info("Marking alert as investigated")
+
+	// Create update criteria to mark the alert as investigated
+	updateCriteria := model.NewEventUpdateCriteria()
+	userId := ctx.Value(web.ContextKeyRequestorId).(string)
+
+	// Use the existing addUpdateScripts method with inv=true and sessionId
+	if h.server.Eventstore != nil {
+		if elasticStore, ok := h.server.Eventstore.(interface {
+			AddUpdateScripts(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, ack bool, esc bool, inv bool, userId string, sessionId ...string)
+		}); ok {
+			elasticStore.AddUpdateScripts(updateCriteria, time.Now(), false, false, true, userId, sessionId)
+		} else {
+			return fmt.Errorf("eventstore does not support investigation updates")
+		}
+	} else {
+		return fmt.Errorf("eventstore is not available")
+	}
+
+	// Create a simple query to match the soc_id
+	updateCriteria.ParsedQuery = model.NewQuery()
+	searchSegment := model.NewSearchSegmentEmpty()
+	searchSegment.AddFilter("soc_id", socId, true, true, false)
+	updateCriteria.ParsedQuery.AddSegment(searchSegment)
+	updateCriteria.Asynchronous = false
+
+	// Execute the update
+	results, err := h.server.Eventstore.Update(ctx, updateCriteria)
+	if err != nil {
+		return err
+	}
+
+	if results.UpdatedCount == 0 && results.UnchangedCount == 0 {
+		return fmt.Errorf("no alert found with soc_id: %s", socId)
+	}
+
+	logger.WithFields(log.Fields{
+		"socId":          socId,
+		"updatedCount":   results.UpdatedCount,
+		"unchangedCount": results.UnchangedCount,
+	}).Info("Successfully marked alert as investigated")
+
+	return nil
 }
