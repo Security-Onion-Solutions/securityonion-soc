@@ -167,7 +167,7 @@ func (p *streamProcessor) processOpenAIChunk(resp responses.ResponseStreamEventU
 	content := resp.Delta
 
 	switch resp.Type {
-	case "response.reasoning_text.delta":
+	case "response.reasoning_text.delta", "response.reasoning_summary_text.delta":
 		if content != "" {
 			p.ensureFirstSend()
 			p.writeThought(content)

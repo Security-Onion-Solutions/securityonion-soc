@@ -14,12 +14,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/openai/openai-go/v3"
-	"github.com/openai/openai-go/v3/packages/pagination"
-	"github.com/openai/openai-go/v3/responses"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
+
+	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/packages/pagination"
+	"github.com/openai/openai-go/v3/responses"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

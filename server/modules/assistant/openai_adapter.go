@@ -8,17 +8,18 @@ import (
 	"sync"
 	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/module"
+	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
+	"github.com/security-onion-solutions/securityonion-soc/web"
+
 	"github.com/apex/log"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/openai/openai-go/v3/shared"
-	"github.com/security-onion-solutions/securityonion-soc/model"
-	"github.com/security-onion-solutions/securityonion-soc/module"
-	"github.com/security-onion-solutions/securityonion-soc/server"
-	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
-	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 func init() {
@@ -192,6 +193,8 @@ func (a *OpenAIAdapter) SendMessageStream(ctx context.Context, req *model.ChatRe
 	if err != nil {
 		bodyWriter.Close()
 
+		logger.WithError(err).Error("error before first response from OpenAI streaming API")
+
 		// shouldReturn is ALWAYS true because processor.firstSend is true at this point
 		// and handleStreamError will return a replacement response
 		replacement, _ := handleStreamError(err, processor.firstSend, writer, logger, req.Model)
@@ -220,6 +223,7 @@ func (a *OpenAIAdapter) SendMessageStream(ctx context.Context, req *model.ChatRe
 			}
 
 			cur := stream.Current()
+
 			_, err = processor.processOpenAIChunk(cur)
 			if err != nil {
 				// Mid-stream error during processing
