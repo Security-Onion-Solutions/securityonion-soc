@@ -695,6 +695,29 @@ func (h *AssistantHandler) DeleteSession(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// Retrieve session details before deletion to check if it's an investigation session
+	sessions, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId))
+	if err != nil {
+		logger.WithError(err).Error("unable to retrieve session before deletion")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	// If this is an investigation session, clear the investigation_session_id from the alert
+	if len(sessions) > 0 {
+		session := sessions[0]
+		if session.Type == "alert_investigation" && session.EntityId != "" {
+			err = h.clearInvestigationSessionFromAlert(ctx, session.EntityId, sessionId)
+			if err != nil {
+				logger.WithError(err).WithFields(log.Fields{
+					"sessionId": sessionId,
+					"entityId":  session.EntityId,
+				}).Warn("unable to clear investigation_session_id from alert")
+				// Continue with deletion even if clearing fails
+			}
+		}
+	}
+
 	err = h.server.Assistantstore.DeleteSession(ctx, sessionId)
 
 	if err != nil {
@@ -1152,6 +1175,51 @@ func (h *AssistantHandler) markAlertAsInvestigated(ctx context.Context, socId st
 		"updatedCount":   results.UpdatedCount,
 		"unchangedCount": results.UnchangedCount,
 	}).Info("Successfully marked alert as investigated")
+
+	return nil
+}
+
+func (h *AssistantHandler) clearInvestigationSessionFromAlert(ctx context.Context, socId string, sessionId string) error {
+	logger := log.FromContext(ctx)
+
+	// Check write permission on events
+	if err := h.server.CheckAuthorized(ctx, "write", "events"); err != nil {
+		return err
+	}
+
+	logger.WithFields(log.Fields{
+		"socId":     socId,
+		"sessionId": sessionId,
+	}).Info("Clearing investigation_session_id from alert")
+
+	// Create update criteria to remove the investigation_session_id field
+	updateCriteria := model.NewEventUpdateCriteria()
+
+	// Add a script to remove the investigation_session_id field
+	updateCriteria.AddUpdateScript(`
+		if (ctx._source.event.containsKey('investigation_session_id')) {
+			ctx._source.event.remove('investigation_session_id');
+		}
+	`)
+
+	// Create a query to match the soc_id
+	updateCriteria.ParsedQuery = model.NewQuery()
+	searchSegment := model.NewSearchSegmentEmpty()
+	searchSegment.AddFilter("soc_id", socId, true, true, false)
+	updateCriteria.ParsedQuery.AddSegment(searchSegment)
+	updateCriteria.Asynchronous = false
+
+	// Execute the update
+	results, err := h.server.Eventstore.Update(ctx, updateCriteria)
+	if err != nil {
+		return err
+	}
+
+	logger.WithFields(log.Fields{
+		"socId":          socId,
+		"updatedCount":   results.UpdatedCount,
+		"unchangedCount": results.UnchangedCount,
+	}).Info("Successfully cleared investigation_session_id from alert")
 
 	return nil
 }

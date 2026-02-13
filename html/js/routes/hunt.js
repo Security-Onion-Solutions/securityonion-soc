@@ -180,10 +180,6 @@ const huntComponent = {
       expandedEvents: [],
       eventColumnWidth: 0,
       expandedPlaybookQuestions: {},
-
-      // AI Investigation tracking
-      aiInvestigations: {}, // Maps alert ID to investigation results and chat session IDs
-      investigationSessions: [], // Store investigation sessions from backend
     }
   },
   created() {
@@ -323,9 +319,6 @@ const huntComponent = {
         this.$nextTick().then(() => {
           this.$root.loadParameters('assistant', this.initAssistant);
           this.investigateEnabled = this.$root.isLicensed('oai') && this.assistantEnabled;
-          if (this.investigateEnabled) {
-            this.loadInvestigationSessions();
-          }
         });
       }
       
@@ -1725,9 +1718,6 @@ const huntComponent = {
 
       this.populateEventHeaders(this.filterVisibleFields(eventModule, eventDataset, fields));
       this.eventData = records;
-
-      // Apply any existing AI investigation results to the loaded events
-      this.applyAIInvestigationsToEvents();
     },
     lookupFieldValue(record, field) {
       if (field in record) {
@@ -2373,53 +2363,6 @@ const huntComponent = {
 
       if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
     },
-
-    async loadInvestigationSessions() {
-      // Load investigation sessions from backend
-      try {
-        const response = await this.$root.papi.get('/assistant/sessions');
-        if (response.data && Array.isArray(response.data)) {
-          // Filter sessions that start with 'investigation_'
-          this.investigationSessions = response.data.filter(session =>
-            session.sessionId && session.sessionId.startsWith('investigation_')
-          );
-
-          // Update aiInvestigations based on session data, keyed by soc_id
-          this.aiInvestigations = {};
-          this.investigationSessions.forEach(session => {
-            // Extract soc_id from session ID: investigation_{soc_id}_{timestamp}
-            const parts = session.sessionId.split('_');
-            if (parts.length >= 3) {
-              const socId = parts.slice(1, -1).join('_'); // Handle soc_ids that might contain underscores
-              this.aiInvestigations[socId] = {
-                chatSessionId: session.sessionId,
-                socId: socId,
-                timestamp: session.createTime || new Date().toISOString()
-              };
-            }
-          });
-        }
-      } catch (error) {
-        this.$root.showError(this.i18n.aiInvestigationCouldNotLoad + ': ' + error.message);
-        this.investigationSessions = [];
-        this.aiInvestigations = {};
-      }
-    },
-
-    applyAIInvestigationsToEvents() {
-      // Apply loaded AI investigation results to current event data
-      if (this.eventData && this.eventData.length > 0) {
-        this.eventData.forEach(item => {
-          const socId = item.soc_id;
-          if (socId && this.aiInvestigations[socId]) {
-            const investigation = this.aiInvestigations[socId];
-            item._aiInvestigated = true;
-            item._aiInvestigationData = investigation;
-          }
-        });
-      }
-    },
-
     toggleShowSection(item) {
       if (this.isExpandedSection(item)) {
         this.collapsedSections.push(item);
@@ -3169,36 +3112,27 @@ const huntComponent = {
       }
 
       // Check if investigation already exists for this specific soc_id
-      const existingInvestigation = this.aiInvestigations[socId];
-      if (existingInvestigation && existingInvestigation.chatSessionId) {
+      if (item['event.investigated'] && item['event.investigation_session_id']) {
         // Check for middle-click (button === 1) to open in new tab
         if (event && event.button === 1) {
           // Middle-click: open in new tab
           const url = this.$router.resolve({
             name: 'assistant',
-            params: { sessionId: existingInvestigation.chatSessionId }
+            params: { sessionId: item['event.investigation_session_id'] }
           }).href;
           window.open(url, '_blank');
         } else {
           // Left-click: navigate in current tab
           this.$router.push({
             name: 'assistant',
-            params: { sessionId: existingInvestigation.chatSessionId }
+            params: { sessionId: item['event.investigation_session_id'] }
           });
         }
         return;
       }
 
       // Generate a unique chat session ID for this investigation using soc_id
-      const chatSessionId = 'investigation_' + socId + '_' + Date.now();
-
-      // Update local tracking using soc_id as key
-      this.aiInvestigations[socId] = {
-        chatSessionId: chatSessionId,
-        socId: socId,
-        ruleUuid: targetItem['rule.uuid'],
-        timestamp: new Date().toISOString()
-      };
+      const chatSessionId = crypto.randomUUID();
 
       // Create the investigation prompt with alert data
       const queryList = this.generateQueryList(targetItem);

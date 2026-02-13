@@ -324,7 +324,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       await this.loadStoredChats();
     },
     generateChatId() {
-      return 'chat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+      return crypto.randomUUID();
     },
     async loadChat(chat) {
       await this.saveCurrentChat();
