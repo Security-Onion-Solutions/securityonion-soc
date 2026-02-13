@@ -17,6 +17,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 
+	"github.com/apex/log"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/genai"
 )
@@ -735,7 +736,7 @@ func TestConvertHistory(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			history := convertHistoryToGemini(tt.req)
+			history := convertHistoryToGemini(log.Log, tt.req)
 			tt.validate(t, history)
 		})
 	}
