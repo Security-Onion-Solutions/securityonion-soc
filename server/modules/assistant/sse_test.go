@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/apex/log"
+	"github.com/openai/openai-go/v3/responses"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/genai"
 )
@@ -122,7 +123,7 @@ func TestSSEEventWriter(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf strings.Builder
-			writer := newSSEEventWriter(&buf)
+			writer := newSSEEventWriter(log.Log, &buf)
 
 			err := tt.writeOp(writer)
 			assert.NoError(t, err)
@@ -132,7 +133,7 @@ func TestSSEEventWriter(t *testing.T) {
 
 	t.Run("writeContentBlockStart with complex object", func(t *testing.T) {
 		var buf strings.Builder
-		writer := newSSEEventWriter(&buf)
+		writer := newSSEEventWriter(log.Log, &buf)
 
 		block := map[string]any{
 			"type":  "tool_use",
@@ -154,7 +155,7 @@ func TestSSEEventWriter(t *testing.T) {
 
 	t.Run("full message sequence with thought and text", func(t *testing.T) {
 		var buf strings.Builder
-		writer := newSSEEventWriter(&buf)
+		writer := newSSEEventWriter(log.Log, &buf)
 
 		// Write a complete message stream
 		writer.writeMessageStart("gemini-2.0-flash-exp")
@@ -202,7 +203,7 @@ func TestSSEEventWriter(t *testing.T) {
 
 	t.Run("full message sequence with function call", func(t *testing.T) {
 		var buf strings.Builder
-		writer := newSSEEventWriter(&buf)
+		writer := newSSEEventWriter(log.Log, &buf)
 
 		// Write a message with text followed by a function call
 		writer.writeMessageStart("gemini-2.0-flash-exp")
@@ -305,12 +306,12 @@ func TestStreamProcessorFirstSend(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf strings.Builder
-			writer := newSSEEventWriter(&buf)
+			writer := newSSEEventWriter(log.Log, &buf)
 			wg := &sync.WaitGroup{}
 			wg.Add(1)
 			processor := newStreamProcessor(writer, "test-model", wg)
 
-			thoughtSigs, reason, err := processor.processChunk(tt.resp)
+			thoughtSigs, reason, err := processor.processGeminiChunk(tt.resp)
 			assert.NoError(t, err)
 			assert.Empty(t, thoughtSigs)
 			assert.Empty(t, reason)
@@ -338,7 +339,7 @@ func TestStreamProcessorFirstSend(t *testing.T) {
 						},
 					},
 				}
-				processor.processChunk(resp2)
+				processor.processGeminiChunk(resp2)
 
 				output = buf.String()
 				count := strings.Count(output, `"type":"message_start"`)
@@ -409,12 +410,12 @@ func TestStreamProcessorContentProcessing(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf strings.Builder
-			writer := newSSEEventWriter(&buf)
+			writer := newSSEEventWriter(log.Log, &buf)
 			wg := &sync.WaitGroup{}
 			wg.Add(1)
 			processor := newStreamProcessor(writer, "test-model", wg)
 
-			processor.processChunk(tt.resp)
+			processor.processGeminiChunk(tt.resp)
 			wg.Wait()
 
 			output := buf.String()
@@ -428,7 +429,7 @@ func TestStreamProcessorContentProcessing(t *testing.T) {
 
 func TestStreamProcessorFunctionCallClosesTextBlock(t *testing.T) {
 	var buf strings.Builder
-	writer := newSSEEventWriter(&buf)
+	writer := newSSEEventWriter(log.Log, &buf)
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	processor := newStreamProcessor(writer, "test-model", wg)
@@ -444,7 +445,7 @@ func TestStreamProcessorFunctionCallClosesTextBlock(t *testing.T) {
 			},
 		},
 	}
-	processor.processChunk(resp1)
+	processor.processGeminiChunk(resp1)
 	wg.Wait()
 
 	initialIndex := processor.contentBlockIndex
@@ -470,7 +471,7 @@ func TestStreamProcessorFunctionCallClosesTextBlock(t *testing.T) {
 		},
 	}
 
-	thoughtSigs, reason, err := processor.processChunk(resp2)
+	thoughtSigs, reason, err := processor.processGeminiChunk(resp2)
 	assert.NoError(t, err)
 	assert.Equal(t, "tool_use", reason)
 	assert.Contains(t, thoughtSigs, "call_123")
@@ -489,7 +490,7 @@ func TestStreamProcessorFunctionCallClosesTextBlock(t *testing.T) {
 
 func TestStreamProcessorFunctionCallWithNoID(t *testing.T) {
 	var buf strings.Builder
-	writer := newSSEEventWriter(&buf)
+	writer := newSSEEventWriter(log.Log, &buf)
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	processor := newStreamProcessor(writer, "test-model", wg)
@@ -513,7 +514,7 @@ func TestStreamProcessorFunctionCallWithNoID(t *testing.T) {
 		},
 	}
 
-	thoughtSigs, _, err := processor.processChunk(resp)
+	thoughtSigs, _, err := processor.processGeminiChunk(resp)
 	assert.NoError(t, err)
 	assert.Len(t, thoughtSigs, 1)
 
@@ -528,7 +529,7 @@ func TestStreamProcessorFunctionCallWithNoID(t *testing.T) {
 
 func TestStreamProcessorMultipleFunctionCalls(t *testing.T) {
 	var buf strings.Builder
-	writer := newSSEEventWriter(&buf)
+	writer := newSSEEventWriter(log.Log, &buf)
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	processor := newStreamProcessor(writer, "test-model", wg)
@@ -558,7 +559,7 @@ func TestStreamProcessorMultipleFunctionCalls(t *testing.T) {
 		},
 	}
 
-	processor.processChunk(resp)
+	processor.processGeminiChunk(resp)
 	wg.Wait()
 
 	output := buf.String()
@@ -570,7 +571,7 @@ func TestStreamProcessorMultipleFunctionCalls(t *testing.T) {
 
 func TestStreamProcessorMidStreamError(t *testing.T) {
 	var buf strings.Builder
-	writer := newSSEEventWriter(&buf)
+	writer := newSSEEventWriter(log.Log, &buf)
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	processor := newStreamProcessor(writer, "test-model", wg)
@@ -586,7 +587,7 @@ func TestStreamProcessorMidStreamError(t *testing.T) {
 			},
 		},
 	}
-	processor.processChunk(resp)
+	processor.processGeminiChunk(resp)
 	wg.Wait()
 
 	processor.writeError(fmt.Errorf("connection lost"))
@@ -620,7 +621,7 @@ func TestStreamProcessorFinalize(t *testing.T) {
 						},
 					},
 				}
-				p.processChunk(resp)
+				p.processGeminiChunk(resp)
 			},
 			finishReason: "end_turn",
 			usage: &genai.GenerateContentResponseUsageMetadata{
@@ -660,7 +661,7 @@ func TestStreamProcessorFinalize(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf strings.Builder
-			writer := newSSEEventWriter(&buf)
+			writer := newSSEEventWriter(log.Log, &buf)
 			wg := &sync.WaitGroup{}
 			wg.Add(1)
 			processor := newStreamProcessor(writer, "test-model", wg)
@@ -672,7 +673,7 @@ func TestStreamProcessorFinalize(t *testing.T) {
 				wg.Wait()
 			}
 
-			processor.finalize(tt.finishReason, tt.usage)
+			processor.finalizeGemini(tt.finishReason, tt.usage)
 
 			output := buf.String()
 			for _, expected := range tt.expectedInOutput {
@@ -687,7 +688,7 @@ func TestStreamProcessorFinalize(t *testing.T) {
 
 func TestStreamProcessorBlockTransitions(t *testing.T) {
 	var buf strings.Builder
-	writer := newSSEEventWriter(&buf)
+	writer := newSSEEventWriter(log.Log, &buf)
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	processor := newStreamProcessor(writer, "test-model", wg)
@@ -704,7 +705,7 @@ func TestStreamProcessorBlockTransitions(t *testing.T) {
 			},
 		},
 	}
-	processor.processChunk(resp1)
+	processor.processGeminiChunk(resp1)
 	wg.Wait()
 	assert.True(t, processor.hasOpenBlock)
 	assert.Equal(t, 0, processor.contentBlockIndex)
@@ -727,7 +728,7 @@ func TestStreamProcessorBlockTransitions(t *testing.T) {
 			},
 		},
 	}
-	processor.processChunk(resp2)
+	processor.processGeminiChunk(resp2)
 	assert.False(t, processor.hasOpenBlock)
 	assert.Equal(t, 2, processor.contentBlockIndex)
 
@@ -743,7 +744,7 @@ func TestStreamProcessorBlockTransitions(t *testing.T) {
 			},
 		},
 	}
-	processor.processChunk(resp3)
+	processor.processGeminiChunk(resp3)
 	assert.True(t, processor.hasOpenBlock)
 
 	output := buf.String()
@@ -754,7 +755,7 @@ func TestStreamProcessorBlockTransitions(t *testing.T) {
 
 func TestHandleStreamErrorFirstSend(t *testing.T) {
 	var buf strings.Builder
-	writer := newSSEEventWriter(&buf)
+	writer := newSSEEventWriter(log.Log, &buf)
 	logger := log.Log
 
 	response, shouldReturn := handleStreamError(fmt.Errorf("connection failed"), true, writer, logger, "test-model")
@@ -766,7 +767,7 @@ func TestHandleStreamErrorFirstSend(t *testing.T) {
 	// Verify body content
 	bodyBytes, err := io.ReadAll(response.Body)
 	assert.NoError(t, err)
-	assert.Equal(t, "ERROR_GEMINI_FIRST_RESPONSE", string(bodyBytes))
+	assert.Equal(t, "ERROR_FIRST_RESPONSE", string(bodyBytes))
 
 	// Buffer should be empty since error response replaced the fabricated one
 	assert.Empty(t, buf.String())
@@ -774,7 +775,7 @@ func TestHandleStreamErrorFirstSend(t *testing.T) {
 
 func TestHandleStreamErrorSubsequent(t *testing.T) {
 	var buf strings.Builder
-	writer := newSSEEventWriter(&buf)
+	writer := newSSEEventWriter(log.Log, &buf)
 	logger := log.Log
 
 	response, shouldReturn := handleStreamError(fmt.Errorf("stream interrupted"), false, writer, logger, "test-model")
@@ -787,4 +788,697 @@ func TestHandleStreamErrorSubsequent(t *testing.T) {
 	assert.Contains(t, output, `"type":"error"`)
 	assert.Contains(t, output, `"message":"stream interrupted"`)
 	assert.Contains(t, output, `data: [DONE]`)
+}
+
+// Helper functions to create mock OpenAI events
+func newThoughtDelta(text string) responses.ResponseStreamEventUnion {
+	return responses.ResponseStreamEventUnion{
+		Type:  "response.reasoning_text.delta",
+		Delta: text,
+	}
+}
+
+func newTextDelta(text string) responses.ResponseStreamEventUnion {
+	return responses.ResponseStreamEventUnion{
+		Type:  "response.output_text.delta",
+		Delta: text,
+	}
+}
+
+func newFunctionCallStart(id, name string) responses.ResponseStreamEventUnion {
+	return responses.ResponseStreamEventUnion{
+		Type: "response.output_item.added",
+		Item: responses.ResponseOutputItemUnion{
+			Type:   "function_call",
+			CallID: id,
+			Name:   name,
+		},
+	}
+}
+
+func newFunctionArgumentsDelta(jsonContent string) responses.ResponseStreamEventUnion {
+	return responses.ResponseStreamEventUnion{
+		Type:  "response.function_call_arguments.delta",
+		Delta: jsonContent,
+	}
+}
+
+func newFunctionCallDone() responses.ResponseStreamEventUnion {
+	return responses.ResponseStreamEventUnion{
+		Type: "response.output_item.done",
+	}
+}
+
+func createMockUsage(inputTokens, outputTokens int64) responses.ResponseUsage {
+	return responses.ResponseUsage{
+		InputTokens:  inputTokens,
+		OutputTokens: outputTokens,
+	}
+}
+
+func TestProcessOpenAIChunk_ThoughtDelta(t *testing.T) {
+	tests := []struct {
+		name             string
+		events           []responses.ResponseStreamEventUnion
+		expectedInOutput []string
+		expectedState    map[string]interface{}
+	}{
+		{
+			name: "single thought delta",
+			events: []responses.ResponseStreamEventUnion{
+				newThoughtDelta("Let me analyze"),
+			},
+			expectedInOutput: []string{
+				`"type":"message_start"`,
+				`"type":"content_block_delta"`,
+				`"type":"thought_delta"`,
+				`"text":"Let me analyze"`,
+			},
+			expectedState: map[string]interface{}{
+				"hasOpenBlock":      true,
+				"contentBlockIndex": 0,
+				"firstSend":         false,
+			},
+		},
+		{
+			name: "multiple thought deltas",
+			events: []responses.ResponseStreamEventUnion{
+				newThoughtDelta("First thought "),
+				newThoughtDelta("second thought"),
+			},
+			expectedInOutput: []string{
+				`"type":"thought_delta"`,
+				`"text":"First thought "`,
+				`"text":"second thought"`,
+			},
+			expectedState: map[string]interface{}{
+				"hasOpenBlock":      true,
+				"contentBlockIndex": 0,
+			},
+		},
+		{
+			name: "empty thought delta",
+			events: []responses.ResponseStreamEventUnion{
+				newThoughtDelta(""),
+			},
+			expectedInOutput: []string{},
+			expectedState: map[string]interface{}{
+				"firstSend": true, // Should still be true since no output
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf strings.Builder
+			writer := newSSEEventWriter(log.Log, &buf)
+			wg := &sync.WaitGroup{}
+			wg.Add(1)
+			processor := newStreamProcessor(writer, "gpt-4", wg)
+
+			for _, event := range tt.events {
+				_, err := processor.processOpenAIChunk(event)
+				assert.NoError(t, err)
+			}
+
+			output := buf.String()
+			for _, expected := range tt.expectedInOutput {
+				assert.Contains(t, output, expected)
+			}
+
+			// Validate processor state
+			if expectedHasOpenBlock, ok := tt.expectedState["hasOpenBlock"].(bool); ok {
+				assert.Equal(t, expectedHasOpenBlock, processor.hasOpenBlock)
+			}
+			if expectedIndex, ok := tt.expectedState["contentBlockIndex"].(int); ok {
+				assert.Equal(t, expectedIndex, processor.contentBlockIndex)
+			}
+			if expectedFirstSend, ok := tt.expectedState["firstSend"].(bool); ok {
+				assert.Equal(t, expectedFirstSend, processor.firstSend)
+			}
+		})
+	}
+}
+
+func TestProcessOpenAIChunk_TextDelta(t *testing.T) {
+	tests := []struct {
+		name             string
+		events           []responses.ResponseStreamEventUnion
+		expectedInOutput []string
+		expectedState    map[string]interface{}
+	}{
+		{
+			name: "single text delta",
+			events: []responses.ResponseStreamEventUnion{
+				newTextDelta("Hello world"),
+			},
+			expectedInOutput: []string{
+				`"type":"message_start"`,
+				`"type":"content_block_delta"`,
+				`"type":"text_delta"`,
+				`"text":"Hello world"`,
+			},
+			expectedState: map[string]interface{}{
+				"hasOpenBlock":      true,
+				"contentBlockIndex": 0,
+				"firstSend":         false,
+			},
+		},
+		{
+			name: "text after thought",
+			events: []responses.ResponseStreamEventUnion{
+				newThoughtDelta("Thinking..."),
+				newTextDelta("Response text"),
+			},
+			expectedInOutput: []string{
+				`"type":"thought_delta"`,
+				`"text":"Thinking..."`,
+				`"type":"text_delta"`,
+				`"text":"Response text"`,
+			},
+			expectedState: map[string]interface{}{
+				"hasOpenBlock":      true,
+				"contentBlockIndex": 0, // Should be same block
+			},
+		},
+		{
+			name: "special characters in text",
+			events: []responses.ResponseStreamEventUnion{
+				newTextDelta(`"quoted" and 'single' with\nnewline`),
+			},
+			expectedInOutput: []string{
+				`"type":"text_delta"`,
+			},
+			expectedState: map[string]interface{}{
+				"hasOpenBlock": true,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf strings.Builder
+			writer := newSSEEventWriter(log.Log, &buf)
+			wg := &sync.WaitGroup{}
+			wg.Add(1)
+			processor := newStreamProcessor(writer, "gpt-4", wg)
+
+			for _, event := range tt.events {
+				_, err := processor.processOpenAIChunk(event)
+				assert.NoError(t, err)
+			}
+
+			output := buf.String()
+			for _, expected := range tt.expectedInOutput {
+				assert.Contains(t, output, expected)
+			}
+
+			// Validate processor state
+			if expectedHasOpenBlock, ok := tt.expectedState["hasOpenBlock"].(bool); ok {
+				assert.Equal(t, expectedHasOpenBlock, processor.hasOpenBlock)
+			}
+			if expectedIndex, ok := tt.expectedState["contentBlockIndex"].(int); ok {
+				assert.Equal(t, expectedIndex, processor.contentBlockIndex)
+			}
+		})
+	}
+}
+
+func TestProcessOpenAIChunk_FunctionCalls(t *testing.T) {
+	tests := []struct {
+		name             string
+		events           []responses.ResponseStreamEventUnion
+		expectedInOutput []string
+		expectedState    map[string]interface{}
+	}{
+		{
+			name: "function call initialization",
+			events: []responses.ResponseStreamEventUnion{
+				newFunctionCallStart("call_123", "get_weather"),
+			},
+			expectedInOutput: []string{
+				`"type":"message_start"`,
+				`"type":"content_block_start"`,
+				`"type":"tool_use"`,
+				`"id":"call_123"`,
+				`"name":"get_weather"`,
+			},
+			expectedState: map[string]interface{}{
+				"hasOpenBlock":         true,
+				"writingOpenAIToolUse": true,
+				"contentBlockIndex":    0,
+			},
+		},
+		{
+			name: "function call with arguments",
+			events: []responses.ResponseStreamEventUnion{
+				newFunctionCallStart("call_456", "search"),
+				newFunctionArgumentsDelta(`{"query": "test"}`),
+			},
+			expectedInOutput: []string{
+				`"type":"tool_use"`,
+				`"name":"search"`,
+				`"type":"input_json_delta"`,
+				`"partial_json":"{\"query\": \"test\"}"`,
+			},
+			expectedState: map[string]interface{}{
+				"hasOpenBlock":         true,
+				"writingOpenAIToolUse": true,
+			},
+		},
+		{
+			name: "complete function call sequence",
+			events: []responses.ResponseStreamEventUnion{
+				newFunctionCallStart("call_789", "calculate"),
+				newFunctionArgumentsDelta(`{"a": 5`),
+				newFunctionArgumentsDelta(`, "b": 10}`),
+				newFunctionCallDone(),
+			},
+			expectedInOutput: []string{
+				`"type":"content_block_start"`,
+				`"type":"input_json_delta"`,
+				`"partial_json":"{\"a\": 5"`,
+				`"partial_json":", \"b\": 10}"`,
+				`"type":"content_block_stop"`,
+			},
+			expectedState: map[string]interface{}{
+				"hasOpenBlock":         false,
+				"writingOpenAIToolUse": false,
+				"contentBlockIndex":    1, // Incremented after done
+			},
+		},
+		{
+			name: "text before function call closes block",
+			events: []responses.ResponseStreamEventUnion{
+				newTextDelta("Here's the result:"),
+				newFunctionCallStart("call_abc", "lookup"),
+			},
+			expectedInOutput: []string{
+				`"type":"text_delta"`,
+				`"type":"content_block_stop"`,  // Text block closed
+				`"type":"content_block_start"`, // Function block started
+				`"type":"tool_use"`,
+			},
+			expectedState: map[string]interface{}{
+				"contentBlockIndex": 1, // Moved to next block
+			},
+		},
+		{
+			name: "missing call ID generates ID",
+			events: []responses.ResponseStreamEventUnion{
+				newFunctionCallStart("", "unnamed_func"),
+			},
+			expectedInOutput: []string{
+				`"id":"toolu_0"`, // Generated ID
+				`"name":"unnamed_func"`,
+			},
+			expectedState: map[string]interface{}{
+				"hasOpenBlock": true,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf strings.Builder
+			writer := newSSEEventWriter(log.Log, &buf)
+			wg := &sync.WaitGroup{}
+			wg.Add(1)
+			processor := newStreamProcessor(writer, "gpt-4", wg)
+
+			for _, event := range tt.events {
+				_, err := processor.processOpenAIChunk(event)
+				assert.NoError(t, err)
+			}
+
+			output := buf.String()
+			for _, expected := range tt.expectedInOutput {
+				assert.Contains(t, output, expected)
+			}
+
+			// Validate processor state
+			if expectedHasOpenBlock, ok := tt.expectedState["hasOpenBlock"].(bool); ok {
+				assert.Equal(t, expectedHasOpenBlock, processor.hasOpenBlock)
+			}
+			if expectedWriting, ok := tt.expectedState["writingOpenAIToolUse"].(bool); ok {
+				assert.Equal(t, expectedWriting, processor.writingOpenAIToolUse)
+			}
+			if expectedIndex, ok := tt.expectedState["contentBlockIndex"].(int); ok {
+				assert.Equal(t, expectedIndex, processor.contentBlockIndex)
+			}
+		})
+	}
+}
+
+func TestFinalizeOpenAI(t *testing.T) {
+	tests := []struct {
+		name             string
+		setupEvents      []responses.ResponseStreamEventUnion
+		finishReason     string
+		usage            responses.ResponseUsage
+		expectedInOutput []string
+		expectedState    map[string]interface{}
+	}{
+		{
+			name: "with open text block",
+			setupEvents: []responses.ResponseStreamEventUnion{
+				newTextDelta("Some text"),
+			},
+			finishReason: "stop",
+			usage:        createMockUsage(100, 50),
+			expectedInOutput: []string{
+				`"type":"content_block_stop"`,
+				`"stop_reason":"stop"`,
+				`"input_tokens":100`,
+				`"output_tokens":50`,
+				`"type":"message_stop"`,
+				`data: [DONE]`,
+			},
+			expectedState: map[string]interface{}{
+				"hasOpenBlock":      false,
+				"contentBlockIndex": 1,
+			},
+		},
+		{
+			name: "with open function block",
+			setupEvents: []responses.ResponseStreamEventUnion{
+				newFunctionCallStart("call_1", "test_func"),
+			},
+			finishReason: "tool_calls",
+			usage:        createMockUsage(200, 75),
+			expectedInOutput: []string{
+				`"type":"content_block_stop"`,
+				`"stop_reason":"tool_calls"`,
+				`"input_tokens":200`,
+				`"output_tokens":75`,
+				`"type":"message_stop"`,
+			},
+			expectedState: map[string]interface{}{
+				"hasOpenBlock":      false,
+				"contentBlockIndex": 1,
+			},
+		},
+		{
+			name:         "without open blocks",
+			setupEvents:  []responses.ResponseStreamEventUnion{},
+			finishReason: "end_turn",
+			usage:        createMockUsage(50, 25),
+			expectedInOutput: []string{
+				`"stop_reason":"end_turn"`,
+				`"input_tokens":50`,
+				`"output_tokens":25`,
+				`"type":"message_stop"`,
+			},
+			expectedState: map[string]interface{}{
+				"hasOpenBlock":      false,
+				"contentBlockIndex": 0,
+			},
+		},
+		{
+			name: "empty finish reason defaults to end_turn",
+			setupEvents: []responses.ResponseStreamEventUnion{
+				newTextDelta("text"),
+			},
+			finishReason: "",
+			usage:        createMockUsage(10, 10),
+			expectedInOutput: []string{
+				`"stop_reason":"end_turn"`,
+			},
+			expectedState: map[string]interface{}{
+				"hasOpenBlock": false,
+			},
+		},
+		{
+			name: "zero usage is valid",
+			setupEvents: []responses.ResponseStreamEventUnion{
+				newTextDelta("quick response"),
+			},
+			finishReason: "stop",
+			usage:        createMockUsage(0, 0),
+			expectedInOutput: []string{
+				`"input_tokens":0`,
+				`"output_tokens":0`,
+			},
+			expectedState: map[string]interface{}{
+				"hasOpenBlock": false,
+			},
+		},
+		{
+			name: "various finish reasons",
+			setupEvents: []responses.ResponseStreamEventUnion{
+				newTextDelta("long output"),
+			},
+			finishReason: "max_tokens",
+			usage:        createMockUsage(1000, 4000),
+			expectedInOutput: []string{
+				`"stop_reason":"max_tokens"`,
+			},
+			expectedState: map[string]interface{}{
+				"hasOpenBlock": false,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf strings.Builder
+			writer := newSSEEventWriter(log.Log, &buf)
+			wg := &sync.WaitGroup{}
+			wg.Add(1)
+			processor := newStreamProcessor(writer, "gpt-4", wg)
+
+			// Setup: process events to establish state
+			for _, event := range tt.setupEvents {
+				processor.processOpenAIChunk(event)
+			}
+
+			// Execute finalization
+			processor.finalizeOpenAI(tt.finishReason, tt.usage)
+
+			output := buf.String()
+			for _, expected := range tt.expectedInOutput {
+				assert.Contains(t, output, expected)
+			}
+
+			// Validate final state
+			if expectedHasOpenBlock, ok := tt.expectedState["hasOpenBlock"].(bool); ok {
+				assert.Equal(t, expectedHasOpenBlock, processor.hasOpenBlock)
+			}
+			if expectedIndex, ok := tt.expectedState["contentBlockIndex"].(int); ok {
+				assert.Equal(t, expectedIndex, processor.contentBlockIndex)
+			}
+		})
+	}
+}
+
+func TestOpenAIHelperFunctions(t *testing.T) {
+	t.Run("writeOpenAIFunctionHeader", func(t *testing.T) {
+		var buf strings.Builder
+		writer := newSSEEventWriter(log.Log, &buf)
+		wg := &sync.WaitGroup{}
+		wg.Add(1)
+		processor := newStreamProcessor(writer, "gpt-4", wg)
+
+		processor.writeOpenAIFunctionHeader("call_xyz", "my_function")
+
+		output := buf.String()
+		assert.Contains(t, output, `"type":"content_block_start"`)
+		assert.Contains(t, output, `"type":"tool_use"`)
+		assert.Contains(t, output, `"id":"call_xyz"`)
+		assert.Contains(t, output, `"name":"my_function"`)
+		assert.True(t, processor.hasOpenBlock)
+		assert.True(t, processor.writingOpenAIToolUse)
+	})
+
+	t.Run("writeOpenAIFunctionHeader with empty ID", func(t *testing.T) {
+		var buf strings.Builder
+		writer := newSSEEventWriter(log.Log, &buf)
+		wg := &sync.WaitGroup{}
+		wg.Add(1)
+		processor := newStreamProcessor(writer, "gpt-4", wg)
+
+		processor.writeOpenAIFunctionHeader("", "unnamed")
+
+		output := buf.String()
+		assert.Contains(t, output, `"id":"toolu_0"`) // Generated ID
+		assert.Contains(t, output, `"name":"unnamed"`)
+	})
+
+	t.Run("writeOpenAIFunctionInput", func(t *testing.T) {
+		var buf strings.Builder
+		writer := newSSEEventWriter(log.Log, &buf)
+		wg := &sync.WaitGroup{}
+		wg.Add(1)
+		processor := newStreamProcessor(writer, "gpt-4", wg)
+
+		processor.writeOpenAIFunctionHeader("call_1", "test")
+		buf.Reset() // Clear header output
+
+		processor.writeOpenAIFunctionInput(`{"key": "value"}`)
+
+		output := buf.String()
+		assert.Contains(t, output, `"type":"input_json_delta"`)
+		assert.Contains(t, output, `"partial_json":"{\"key\": \"value\"}"`)
+	})
+
+	t.Run("writeOpenAIFunctionStop", func(t *testing.T) {
+		var buf strings.Builder
+		writer := newSSEEventWriter(log.Log, &buf)
+		wg := &sync.WaitGroup{}
+		wg.Add(1)
+		processor := newStreamProcessor(writer, "gpt-4", wg)
+
+		processor.writeOpenAIFunctionHeader("call_1", "test")
+		initialIndex := processor.contentBlockIndex
+
+		processor.writeOpenAIFunctionStop()
+
+		output := buf.String()
+		assert.Contains(t, output, `"type":"content_block_stop"`)
+		assert.False(t, processor.hasOpenBlock)
+		assert.False(t, processor.writingOpenAIToolUse)
+		assert.Equal(t, initialIndex+1, processor.contentBlockIndex)
+	})
+}
+
+func TestOpenAIStreamIntegration(t *testing.T) {
+	tests := []struct {
+		name             string
+		events           []responses.ResponseStreamEventUnion
+		finishReason     string
+		usage            responses.ResponseUsage
+		expectedSequence []string
+		expectedBlocks   int
+	}{
+		{
+			name: "thought then text sequence",
+			events: []responses.ResponseStreamEventUnion{
+				newThoughtDelta("Analyzing request..."),
+				newThoughtDelta(" considering options"),
+				newTextDelta("Here is the answer: "),
+				newTextDelta("42"),
+			},
+			finishReason: "stop",
+			usage:        createMockUsage(50, 30),
+			expectedSequence: []string{
+				`"type":"message_start"`,
+				`"type":"content_block_delta"`,
+				`"type":"thought_delta"`,
+				`"text":"Analyzing request..."`,
+				`"text":" considering options"`,
+				`"type":"text_delta"`,
+				`"text":"Here is the answer: "`,
+				`"text":"42"`,
+				`"type":"content_block_stop"`,
+				`"stop_reason":"stop"`,
+				`"type":"message_stop"`,
+			},
+			expectedBlocks: 1, // All in one block
+		},
+		{
+			name: "text to function transition",
+			events: []responses.ResponseStreamEventUnion{
+				newTextDelta("Let me look that up"),
+				newFunctionCallStart("call_search", "web_search"),
+				newFunctionArgumentsDelta(`{"query": "weather"}`),
+				newFunctionCallDone(),
+			},
+			finishReason: "tool_calls",
+			usage:        createMockUsage(100, 50),
+			expectedSequence: []string{
+				`"type":"text_delta"`,
+				`"type":"content_block_stop"`,  // Block 0 closed
+				`"type":"content_block_start"`, // Block 1 started
+				`"type":"tool_use"`,
+				`"name":"web_search"`,
+				`"type":"input_json_delta"`,
+				`"type":"content_block_stop"`, // Block 1 closed
+			},
+			expectedBlocks: 2,
+		},
+		{
+			name: "multiple functions",
+			events: []responses.ResponseStreamEventUnion{
+				newFunctionCallStart("call_1", "func1"),
+				newFunctionArgumentsDelta(`{"x": 1}`),
+				newFunctionCallDone(),
+				newFunctionCallStart("call_2", "func2"),
+				newFunctionArgumentsDelta(`{"y": 2}`),
+				newFunctionCallDone(),
+			},
+			finishReason: "tool_calls",
+			usage:        createMockUsage(200, 100),
+			expectedSequence: []string{
+				`"name":"func1"`,
+				`"partial_json":"{\"x\": 1}"`,
+				`"type":"content_block_stop"`,
+				`"name":"func2"`,
+				`"partial_json":"{\"y\": 2}"`,
+				`"type":"content_block_stop"`,
+			},
+			expectedBlocks: 2,
+		},
+		{
+			name: "mixed content complete flow",
+			events: []responses.ResponseStreamEventUnion{
+				newThoughtDelta("Planning response"),
+				newTextDelta("Based on your request, "),
+				newTextDelta("I will use a tool."),
+				newFunctionCallStart("call_multi", "process"),
+				newFunctionArgumentsDelta(`{"step": 1}`),
+				newFunctionCallDone(),
+			},
+			finishReason: "tool_calls",
+			usage:        createMockUsage(150, 80),
+			expectedSequence: []string{
+				`"type":"message_start"`,
+				`"type":"thought_delta"`,
+				`"text":"Planning response"`,
+				`"type":"text_delta"`,
+				`"text":"Based on your request, "`,
+				`"text":"I will use a tool."`,
+				`"type":"content_block_stop"`,  // Text block closed
+				`"type":"content_block_start"`, // Function started
+				`"type":"tool_use"`,
+				`"name":"process"`,
+				`"type":"input_json_delta"`,
+				`"type":"content_block_stop"`, // Function closed
+				`"stop_reason":"tool_calls"`,
+				`"type":"message_stop"`,
+				`data: [DONE]`,
+			},
+			expectedBlocks: 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf strings.Builder
+			writer := newSSEEventWriter(log.Log, &buf)
+			wg := &sync.WaitGroup{}
+			wg.Add(1)
+			processor := newStreamProcessor(writer, "gpt-4", wg)
+
+			// Process all events
+			for _, event := range tt.events {
+				_, err := processor.processOpenAIChunk(event)
+				assert.NoError(t, err)
+			}
+
+			// Finalize
+			processor.finalizeOpenAI(tt.finishReason, tt.usage)
+
+			output := buf.String()
+
+			// Verify sequence
+			for _, expected := range tt.expectedSequence {
+				assert.Contains(t, output, expected)
+			}
+
+			// Verify block count
+			assert.Equal(t, tt.expectedBlocks, processor.contentBlockIndex)
+			assert.False(t, processor.hasOpenBlock)         // Should be closed
+			assert.False(t, processor.writingOpenAIToolUse) // Should be cleared
+		})
+	}
 }

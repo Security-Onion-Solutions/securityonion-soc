@@ -41,7 +41,7 @@ func RegisterAssistantRoutes(srv *Server, r chi.Router, prefix string) {
 	r.Route(prefix, func(r chi.Router) {
 		r.Post("/chat", h.PostChat)
 		r.Post("/tool/{name}", h.PostTool)
-		r.Get("/balance/{model}", h.GetBalance)
+		r.Get("/balance/*", h.GetBalance)
 		r.Get("/sessions", h.GetSessions)
 		r.Get("/sessions/{sessionId}", h.GetSessionDetails)
 		r.Put("/sessions/{sessionId}", h.UpdateSession)
@@ -373,7 +373,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 	noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRequestorId, ctx.Value(web.ContextKeyRequestorId).(string))
 
 	go func() {
-		msg, err := unstreamResponse(ctx, string(entireResponse), aux)
+		msg, err := unstreamResponse(noTimeOutCtx, string(entireResponse), aux)
 		if err != nil {
 			logger.WithError(err).Error("error unstreaming response")
 			return
@@ -415,7 +415,7 @@ func (h *AssistantHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	model := chi.URLParam(r, "model")
+	model := chi.URLParam(r, "*")
 
 	health, err := h.server.AssistantManager.Health(ctx, model)
 	if err != nil {
