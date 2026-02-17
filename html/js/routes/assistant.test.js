@@ -278,8 +278,8 @@ test('generateChatId creates unique ID', () => {
   const id1 = comp.generateChatId();
   const id2 = comp.generateChatId();
   
-  expect(id1).toMatch(/^chat_\d+_[a-z0-9]+$/);
-  expect(id2).toMatch(/^chat_\d+_[a-z0-9]+$/);
+  expect(id1).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+  expect(id2).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
   expect(id1).not.toBe(id2);
 });
 
@@ -2086,6 +2086,74 @@ test('callAIAPI handles empty chunks and filters correctly', async () => {
   
   expect(comp.messages).toHaveLength(1);
   expect(comp.messages[0].role).toBe('assistant');
+});
+
+test('callAIAPI clears investigation query params after first use', async () => {
+  comp.currentChatId = fakeSessionId;
+  comp.currentModel = 'test-model';
+  comp.loadCredits = jest.fn().mockResolvedValue();
+  comp.scrollToBottom = jest.fn();
+  
+  // Set up route with investigation query params
+  comp.$route.query = {
+    socId: 'alert-123',
+    investigation: 'true',
+    otherParam: 'keep-this'
+  };
+  comp.$route.params = { sessionId: fakeSessionId };
+  
+  // Mock $nextTick to execute callback immediately
+  let nextTickCallback = null;
+  comp.$nextTick = jest.fn((callback) => {
+    if (callback) {
+      nextTickCallback = callback;
+      return Promise.resolve().then(() => callback());
+    }
+    return Promise.resolve();
+  });
+  
+  const mockResponse = {
+    ok: true,
+    data: {
+      pipeThrough: jest.fn().mockReturnValue({
+        getReader: jest.fn().mockReturnValue({
+          read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
+            .mockResolvedValueOnce({ done: true })
+        })
+      })
+    }
+  };
+  const mockPost = mockPapi('post', mockResponse);
+  
+  await comp.callAIAPI('Test message');
+  
+  // Verify the API was called with the socId parameter
+  expect(mockPost).toHaveBeenCalledWith('/assistant/chat?investigationSocId=alert-123', {
+    msg: 'Test message',
+    sessionId: fakeSessionId,
+    model: 'test-model',
+    tags: null,
+  }, {
+    adapter: 'fetch',
+    headers: {
+      'Accept': 'text/event-stream'
+    },
+    responseType: 'stream'
+  });
+  
+  // Verify $nextTick was called (for the query param clearing)
+  expect(comp.$nextTick).toHaveBeenCalled();
+  
+  // Wait for nextTick callback to execute
+  await new Promise(resolve => setTimeout(resolve, 0));
+  
+  // Verify router.replace was called to clear investigation params
+  expect(comp.$router.replace).toHaveBeenCalledWith({
+    name: 'assistant',
+    params: { sessionId: fakeSessionId },
+    query: { otherParam: 'keep-this' } // investigation and socId should be removed
+  });
 });
 
 // Investigation session tests

@@ -780,6 +780,41 @@ func TestAddUpdateScript(t *testing.T) {
 	assert.Len(t, criteria.UpdateScripts, 1)
 	assert.Contains(t, criteria.UpdateScripts[0], "esc_bool = true")
 	assert.Contains(t, criteria.UpdateScripts[0], "ctx._source.event.escalated_by = 'admin';")
+
+	// Test investigation case without session ID
+	criteria = &model.EventUpdateCriteria{}
+	store.AddUpdateScripts(criteria, timeNow, false, false, true, "admin", "")
+	assert.Len(t, criteria.UpdateScripts, 1)
+	expected = `
+			boolean track_timing = false;
+			Instant now_instant = Instant.ofEpochMilli(1257894000000L);
+			ZonedDateTime now_date = ZonedDateTime.ofInstant(now_instant, ZoneId.of('Z'));
+			
+			ctx._source.event.investigated = true;
+			ctx._source.event.investigated_by = 'admin';
+			if (track_timing) {
+				ctx._source.event.investigated_timestamp = now_date;
+			}
+			`
+	assert.Equal(t, expected, criteria.UpdateScripts[0])
+
+	// Test investigation case with session ID
+	criteria = &model.EventUpdateCriteria{}
+	store.AddUpdateScripts(criteria, timeNow, false, false, true, "admin", "test-session-123")
+	assert.Len(t, criteria.UpdateScripts, 1)
+	expected = `
+			boolean track_timing = false;
+			Instant now_instant = Instant.ofEpochMilli(1257894000000L);
+			ZonedDateTime now_date = ZonedDateTime.ofInstant(now_instant, ZoneId.of('Z'));
+			
+			ctx._source.event.investigated = true;
+			ctx._source.event.investigated_by = 'admin';
+			ctx._source.event.investigation_session_id = 'test-session-123';
+			if (track_timing) {
+				ctx._source.event.investigated_timestamp = now_date;
+			}
+			`
+	assert.Equal(t, expected, criteria.UpdateScripts[0])
 }
 
 func TestSearchPermissionsAuthorized(t *testing.T) {

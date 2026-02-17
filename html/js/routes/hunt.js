@@ -3112,20 +3112,20 @@ const huntComponent = {
       }
 
       // Check if investigation already exists for this specific soc_id
-      if (item['event.investigated'] && item['event.investigation_session_id']) {
+      if (targetItem['event.investigated'] && targetItem['event.investigation_session_id']) {
         // Check for middle-click (button === 1) to open in new tab
         if (event && event.button === 1) {
           // Middle-click: open in new tab
           const url = this.$router.resolve({
             name: 'assistant',
-            params: { sessionId: item['event.investigation_session_id'] }
+            params: { sessionId: targetItem['event.investigation_session_id'] }
           }).href;
           window.open(url, '_blank');
         } else {
           // Left-click: navigate in current tab
           this.$router.push({
             name: 'assistant',
-            params: { sessionId: item['event.investigation_session_id'] }
+            params: { sessionId: targetItem['event.investigation_session_id'] }
           });
         }
         return;
