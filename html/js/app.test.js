@@ -469,7 +469,7 @@ test('colorLicenseStatus', () => {
   expect(app.colorLicenseStatus("active")).toBe('success');
 
   app.licenseKey.name = 'Academic Student';
-  expect(app.colorLicenseStatus("active")).toBe('cyan');
+  expect(app.colorLicenseStatus("active")).toBe('yellow');
 
   expect(app.colorLicenseStatus("exceeded")).toBe('error');
   expect(app.colorLicenseStatus("expired")).toBe('warning');
