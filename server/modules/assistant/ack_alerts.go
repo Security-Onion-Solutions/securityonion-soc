@@ -8,6 +8,7 @@ package assistant
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -94,7 +95,8 @@ func (t *AckAlertsTool) Execute(ctx context.Context, server *server.Server, para
 
 	err = json.Unmarshal([]byte(params), args)
 	if err != nil {
-		return nil, err
+		logger.WithError(err).WithField("toolParams", params).Error("failed to unmarshal tool params")
+		return nil, errors.New("ERROR_ASSISTANT_UNMARSHAL_PARAMS")
 	}
 
 	var timeRange string

@@ -8,9 +8,11 @@ package model
 
 import (
 	"errors"
+	"strings"
 	"time"
 )
 
+const API_CLIENT_PREFIX = "socl_"
 const MAX_CLIENT_ID_LEN = 55
 const MAX_CLIENT_NAME_LEN = 50
 const MAX_PERMISSION_LEN = 50
@@ -69,4 +71,8 @@ func (client *Client) Verify() error {
 	}
 
 	return nil
+}
+
+func IsClient(id string) bool {
+	return strings.HasPrefix(id, API_CLIENT_PREFIX)
 }

@@ -21,4 +21,6 @@ type Rolestore interface {
 	GetRoles(ctx context.Context) []string
 
 	GetPermissions(ctx context.Context) map[string][]string
+
+	EnsureDefaultRoleForUser(ctx context.Context) error
 }

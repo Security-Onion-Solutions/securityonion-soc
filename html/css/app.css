@@ -259,6 +259,7 @@ th:hover, th.is-sorted, .solid {
   white-space: pre-wrap;
   word-break: break-all;
   overflow-x: hidden;
+  overflow-wrap: anywhere;
 }
 
 .semi-transparent {
@@ -1294,6 +1295,26 @@ ul ul ul {
   box-sizing: border-box;
   overflow-x: auto;
   word-break: break-all;
+}
+
+/* Thought Display Styling */
+.thought-display {
+  opacity: 0.9;
+}
+.thought-display .v-expansion-panel {
+  background-color: rgba(var(--v-theme-surface), 0.8);
+  border: 1px solid rgba(var(--v-theme-outline), 0.2);
+  border-left: 3px solid rgb(var(--v-theme-secondary));
+}
+.thought-display .v-expansion-panel-title {
+  min-height: 36px !important;
+  padding: 8px 12px !important;
+}
+.thought-display .v-expansion-panel-text {
+  padding: 8px 12px !important;
+}
+.thought-display .v-expansion-panel-text .text-caption p {
+  margin-bottom: 0 !important;
 }
 
 .disclaimer-container {

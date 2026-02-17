@@ -22,7 +22,6 @@ import (
 	socjson "github.com/security-onion-solutions/securityonion-soc/json"
 )
 
-const API_CLIENT_PREFIX = "socl_"
 const LOCAL_GRID_ID = ""
 
 type Subgrid struct {

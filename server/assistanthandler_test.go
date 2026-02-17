@@ -420,8 +420,8 @@ func TestGetBalance(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	// Set up mock expectations
-	mockManager.EXPECT().Health(gomock.Any()).Return(&model.HealthResponse{Status: "healthy"}, nil)
-	mockManager.EXPECT().Balance(gomock.Any()).Return(&model.BalanceResponse{Balance: 10000}, nil)
+	mockManager.EXPECT().Health(gomock.Any(), gomock.Any()).Return(&model.HealthResponse{Status: "healthy"}, nil)
+	mockManager.EXPECT().Balance(gomock.Any(), gomock.Any()).Return(&model.BalanceResponse{Balance: 10000}, nil)
 
 	// Execute the handler
 	handler.GetBalance(w, req)
@@ -466,7 +466,7 @@ func TestGetBalanceUnhealthy(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	// Set up mock expectations
-	mockManager.EXPECT().Health(gomock.Any()).Return(nil, errors.New("service unreachable"))
+	mockManager.EXPECT().Health(gomock.Any(), gomock.Any()).Return(nil, errors.New("service unreachable"))
 
 	// Execute the handler
 	handler.GetBalance(w, req)
@@ -803,7 +803,7 @@ data: {"type":"message_stop"}
 
 data: [DONE]`
 
-	msg, err := unstreamResponse(context.Background(), data)
+	msg, err := unstreamResponse(context.Background(), data, nil)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, msg)
@@ -1648,4 +1648,130 @@ func TestUpdateSessionRemoveTagAttachedToCase(t *testing.T) {
 
 	// Verify response
 	assert.Equal(t, http.StatusConflict, w.Code)
+}
+
+func TestRemoveAuxData(t *testing.T) {
+	tests := []struct {
+		name     string
+		messages []*model.StoredMessage
+		validate func(t *testing.T, messages []*model.StoredMessage)
+	}{
+		{
+			name:     "nil messages slice",
+			messages: nil,
+			validate: func(t *testing.T, messages []*model.StoredMessage) {
+				// Should not panic
+			},
+		},
+		{
+			name:     "empty messages slice",
+			messages: []*model.StoredMessage{},
+			validate: func(t *testing.T, messages []*model.StoredMessage) {
+				// Should not panic
+			},
+		},
+		{
+			name: "message with no content blocks",
+			messages: []*model.StoredMessage{
+				{
+					Message: &model.Message{
+						Id:            "msg-1",
+						Role:          "user",
+						ContentBlocks: []model.ContentBlock{},
+					},
+				},
+			},
+			validate: func(t *testing.T, messages []*model.StoredMessage) {
+				assert.Len(t, messages[0].Message.ContentBlocks, 0)
+			},
+		},
+		{
+			name: "message with content blocks but no ThoughtSignature",
+			messages: []*model.StoredMessage{
+				{
+					Message: &model.Message{
+						Id:   "msg-1",
+						Role: "assistant",
+						ContentBlocks: []model.ContentBlock{
+							{Type: "text", Text: "Hello"},
+							{Type: "text", Text: "World"},
+						},
+					},
+				},
+			},
+			validate: func(t *testing.T, messages []*model.StoredMessage) {
+				for _, block := range messages[0].Message.ContentBlocks {
+					assert.Nil(t, block.ThoughtSignature)
+				}
+			},
+		},
+		{
+			name: "single message with ThoughtSignature",
+			messages: []*model.StoredMessage{
+				{
+					Message: &model.Message{
+						Id:   "msg-1",
+						Role: "assistant",
+						ContentBlocks: []model.ContentBlock{
+							{Type: "tool_use", Name: "test_tool", ThoughtSignature: []byte("signature1")},
+						},
+					},
+				},
+			},
+			validate: func(t *testing.T, messages []*model.StoredMessage) {
+				assert.Len(t, messages[0].Message.ContentBlocks, 1)
+				assert.Nil(t, messages[0].Message.ContentBlocks[0].ThoughtSignature)
+			},
+		},
+		{
+			name: "multiple messages with mixed content blocks",
+			messages: []*model.StoredMessage{
+				{
+					Message: &model.Message{
+						Id:   "msg-1",
+						Role: "user",
+						ContentBlocks: []model.ContentBlock{
+							{Type: "text", Text: "Hello", ThoughtSignature: []byte("sig1")},
+						},
+					},
+				},
+				{
+					Message: &model.Message{
+						Id:   "msg-2",
+						Role: "assistant",
+						ContentBlocks: []model.ContentBlock{
+							{Type: "text", Text: "Response", ThoughtSignature: []byte("sig2")},
+							{Type: "tool_use", Name: "tool1", ThoughtSignature: []byte("sig3")},
+						},
+					},
+				},
+				{
+					Message: &model.Message{
+						Id:   "msg-3",
+						Role: "user",
+						ContentBlocks: []model.ContentBlock{
+							{Type: "tool_result", ToolResult: &model.ToolResult{}, ThoughtSignature: []byte("sig4")},
+						},
+					},
+				},
+			},
+			validate: func(t *testing.T, messages []*model.StoredMessage) {
+				for _, msg := range messages {
+					for _, block := range msg.Message.ContentBlocks {
+						assert.Nil(t, block.ThoughtSignature, "ThoughtSignature should be nil for all blocks")
+					}
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Call the function
+			removeAuxData(tt.messages)
+
+			// Validate the results
+			tt.validate(t, tt.messages)
+		})
+	}
 }

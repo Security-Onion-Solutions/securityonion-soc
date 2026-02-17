@@ -902,6 +902,7 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 	uid := store.parseFirst(json, "log.id.uid")
 	x509id := store.parseFirst(json, "log.id.id")
 	fuid := store.parseFirst(json, "log.id.fuid")
+	store.addParameterToFilter(json, "suricata.capture_file", filter)
 	outputSensorId = gjson.Get(json, "hits.hits.0._source.observer.name").String()
 	duration := int64(store.defaultDurationMs)
 
@@ -945,6 +946,7 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 				}
 
 				uid = store.parseFirst(json, "log.id.uid")
+				store.addParameterToFilter(json, "suricata.capture_file", filter)
 			}
 
 			if len(uid) == 0 {
@@ -986,6 +988,7 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 			return errors.New("Unable to locate Zeek record")
 		}
 
+		store.addParameterToFilter(json, "suricata.capture_file", filter)
 		results := gjson.Get(json, "hits.hits.#._source.\\@timestamp").Array()
 		var closestDeltaNs int64
 		closestDeltaNs = 0
@@ -1047,7 +1050,17 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 	return nil
 }
 
-func (store *ElasticEventstore) addUpdateScripts(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, ack bool, esc bool) {
+func (store *ElasticEventstore) addParameterToFilter(json string, key string, filter *model.Filter) {
+	value := store.parseFirst(json, key)
+
+	// If the key was provided, add it to the filter parameters.
+	// Overwrite if the key already exists
+	if len(value) > 0 {
+		filter.Parameters[key] = value
+	}
+}
+
+func (store *ElasticEventstore) addUpdateScripts(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, ack bool, esc bool, userId string) {
 	if ack {
 		trackTiming := strconv.FormatBool(licensing.IsEnabled(licensing.FEAT_RPT))
 		escBool := strconv.FormatBool(esc)
@@ -1066,6 +1079,7 @@ func (store *ElasticEventstore) addUpdateScripts(updateCriteria *model.EventUpda
 
 			if (ctx._source.event.acknowledged != true) {
 				ctx._source.event.acknowledged = true;
+				ctx._source.event.acknowledged_by = '` + userId + `';
 				if (track_timing) {
 					ctx._source.event.acknowledged_timestamp = now_date;
 					ctx._source.event.acknowledged_elapsed_seconds = elapsed_seconds;
@@ -1074,6 +1088,7 @@ func (store *ElasticEventstore) addUpdateScripts(updateCriteria *model.EventUpda
 
 			if (ctx._source.event.escalated != true && esc_bool) {
 				ctx._source.event.escalated = esc_bool;
+				ctx._source.event.escalated_by = '` + userId + `';
 				if (track_timing) {
 					ctx._source.event.escalated_timestamp = now_date;
 					ctx._source.event.escalated_elapsed_seconds = elapsed_seconds;
@@ -1099,7 +1114,8 @@ func (store *ElasticEventstore) Acknowledge(ctx context.Context, ackCriteria *mo
 			}).Info("Acknowledging event")
 
 			updateCriteria := model.NewEventUpdateCriteria()
-			store.addUpdateScripts(updateCriteria, time.Now(), ackCriteria.Acknowledge, ackCriteria.Escalate)
+			userId := ctx.Value(web.ContextKeyRequestorId).(string)
+			store.addUpdateScripts(updateCriteria, time.Now(), ackCriteria.Acknowledge, ackCriteria.Escalate, userId)
 			updateCriteria.Populate(ackCriteria.SearchFilter,
 				ackCriteria.DateRange,
 				ackCriteria.DateRangeFormat,

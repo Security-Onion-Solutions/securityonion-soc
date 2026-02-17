@@ -195,6 +195,8 @@ type ModelParameters struct {
 	ContextLimitSmall    int    `json:"contextLimitSmall"`
 	ContextLimitLarge    int    `json:"contextLimitLarge"`
 	LowBalanceColorAlert int    `json:"lowBalanceColorAlert"`
+	Origin               string `json:"origin"`
+	Adapter              string `json:"adapter"`
 	Enabled              bool   `json:"enabled"`
 }
 

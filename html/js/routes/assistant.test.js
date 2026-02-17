@@ -295,7 +295,7 @@ test('initAssistant sets assistantEnabled to true when enabled and licensed', as
     thresholdColorRatioMax: 1,
     lowBalanceColorAlert: 500000,
     availableModels: [
-      { id: 'test-model', displayName: "Test Model", contextLimitSmall: 200000, contextLimitLarge: 1000000, lowBalanceColorAlert: 500000, enabled: true }
+      { id: 'test-model', displayName: "Test Model", contextLimitSmall: 200000, contextLimitLarge: 1000000, lowBalanceColorAlert: 500000, enabled: true, adapter: "SOAI" }
     ]
   };
   comp.$root.isLicensed = jest.fn().mockReturnValue(true);
@@ -378,6 +378,7 @@ test('initAssistant corrects contextLimitLarge when smaller than contextLimitSma
         contextLimitLarge: 150000, // Smaller than contextLimitSmall - should be corrected
         lowBalanceColorAlert: 500000,
         enabled: true,
+        adapter: "SOAI"
       },
       {
         id: 'model-2',
@@ -386,6 +387,7 @@ test('initAssistant corrects contextLimitLarge when smaller than contextLimitSma
         contextLimitLarge: 300000, // Larger than contextLimitSmall - should remain unchanged
         lowBalanceColorAlert: 400000,
         enabled: true,
+        adapter: "SOAI"
       },
       {
         id: 'model-3',
@@ -394,10 +396,12 @@ test('initAssistant corrects contextLimitLarge when smaller than contextLimitSma
         contextLimitLarge: 250000, // Equal to contextLimitSmall - should remain unchanged
         lowBalanceColorAlert: 600000,
         enabled: true,
+        adapter: "SOAI"
       },
       {
         id: 'model-4',
         enabled: false,
+        adapter: "SOAI"
       },
     ]
   };
@@ -414,23 +418,23 @@ test('initAssistant corrects contextLimitLarge when smaller than contextLimitSma
   
   // Check that the modelsMap was created correctly
   expect(comp.modelsMap.size).toBe(3);
-  expect(comp.modelsMap.has('model-1')).toBe(true);
-  expect(comp.modelsMap.has('model-2')).toBe(true);
-  expect(comp.modelsMap.has('model-3')).toBe(true);
-  expect(comp.modelsMap.has('model-4')).toBe(false); // Disabled model should not be included
+  expect(comp.modelsMap.has('model-1@SOAI')).toBe(true);
+  expect(comp.modelsMap.has('model-2@SOAI')).toBe(true);
+  expect(comp.modelsMap.has('model-3@SOAI')).toBe(true);
+  expect(comp.modelsMap.has('model-4@SOAI')).toBe(false); // Disabled model should not be included
   
   // Check that contextLimitLarge was corrected for model-1
-  const model1 = comp.modelsMap.get('model-1');
+  const model1 = comp.modelsMap.get('model-1@SOAI');
   expect(model1.contextLimitSmall).toBe(200000);
   expect(model1.contextLimitLarge).toBe(200000); // Should be corrected to match contextLimitSmall
   
   // Check that contextLimitLarge was not changed for model-2 (already larger)
-  const model2 = comp.modelsMap.get('model-2');
+  const model2 = comp.modelsMap.get('model-2@SOAI');
   expect(model2.contextLimitSmall).toBe(100000);
   expect(model2.contextLimitLarge).toBe(300000); // Should remain unchanged
   
   // Check that contextLimitLarge was not changed for model-3 (equal)
-  const model3 = comp.modelsMap.get('model-3');
+  const model3 = comp.modelsMap.get('model-3@SOAI');
   expect(model3.contextLimitSmall).toBe(250000);
   expect(model3.contextLimitLarge).toBe(250000); // Should remain unchanged
 });
@@ -525,10 +529,12 @@ test('restoreLastActiveChat handles error', async () => {
 // Credits and balance tests
 test('loadCredits success', async () => {
   const mock = mockPapi("get", { data: fakeCreditsResponse });
+
+  comp.currentModel = "model";
   
   await comp.loadCredits();
   
-  expect(mock).toHaveBeenCalledWith('/assistant/balance');
+  expect(mock).toHaveBeenCalledWith('/assistant/balance/model');
   expect(comp.creditsRemaining).toBe(100);
   expect(comp.creditsLoaded).toBe(true);
 });
@@ -754,13 +760,13 @@ test('updateContextLength updates total context length', () => {
   const usage2 = { input_tokens: 30, output_tokens: 20 };
   
   comp.updateContextLength(usage1);
-  expect(comp.contextLength).toBe(175); // 100 + 50 + 25
+  expect(comp.contextLength).toBe(75); // 50 + 25
   
   comp.updateContextLength(usage2);
-  expect(comp.contextLength).toBe(225); // 175 + 30 + 20
+  expect(comp.contextLength).toBe(50); // 30 + 20
   
   comp.updateContextLength(null);
-  expect(comp.contextLength).toBe(225); // Should remain unchanged
+  expect(comp.contextLength).toBe(50); // Should remain unchanged
 });
 
 test('checkContextLimitReached returns false when under limit', () => {
@@ -1225,6 +1231,29 @@ test('handleToolExecutionContentBlockDelta processes input_json_delta for chaine
   expect(comp.scrollIfPinned).toHaveBeenCalled();
 });
 
+test('handleToolExecutionContentBlockDelta processes thought_delta', () => {
+  const sessionId = 'tool-session';
+  const assistantMessage = {
+    thoughts: { value: '**Starting Analysis**\n\n' }
+  };
+  
+  comp.scrollIfPinned = jest.fn();
+  comp.currentChatId = sessionId;
+  comp.nbspRegexOp = jest.fn((text) => text); // Pass through for testing
+  
+  const deltaEvent = {
+    delta: {
+      type: 'thought_delta',
+      text: 'Examining the data...'
+    }
+  };
+  
+  comp.handleToolExecutionContentBlockDelta(deltaEvent, assistantMessage, sessionId);
+  
+  expect(assistantMessage.thoughts.value).toBe('**Starting Analysis**\n\nExamining the data...');
+  expect(comp.scrollIfPinned).toHaveBeenCalled();
+});
+
 test('executeTool captures raw tool result from backend', async () => {
   // wait out any setTimeouts from previous tests
   await new Promise(resolve => setTimeout(resolve, 1100));
@@ -1574,6 +1603,45 @@ test('callAIAPI processes content_block_delta with text_delta', async () => {
   expect(comp.messages).toHaveLength(1);
   expect(comp.messages[0].content.value).toBe('Hello world!');
   expect(comp.scrollToBottom).toHaveBeenCalledTimes(3); // Once for message_start, twice for text deltas
+});
+
+test('callAIAPI processes content_block_delta with thought_delta', async () => {
+  comp.currentChatId = fakeSessionId;
+  comp.scrollToBottom = jest.fn();
+  comp.loadCredits = jest.fn().mockResolvedValue();
+  
+  const messageStartData = JSON.stringify({ type: 'message_start' });
+  const thoughtDeltaData1 = JSON.stringify({
+    type: 'content_block_delta',
+    delta: { type: 'thought_delta', text: '**Analyzing Request**\n\n' }
+  });
+  const thoughtDeltaData2 = JSON.stringify({
+    type: 'content_block_delta',
+    delta: { type: 'thought_delta', text: 'Processing the query...' }
+  });
+  
+  const mockResponse = {
+    ok: true,
+    data: {
+      pipeThrough: jest.fn().mockReturnValue({
+        getReader: jest.fn().mockReturnValue({
+          read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: `data: ${messageStartData}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: `data: ${thoughtDeltaData1}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: `data: ${thoughtDeltaData2}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
+            .mockResolvedValueOnce({ done: true })
+        })
+      })
+    }
+  };
+  mockPapi('post', mockResponse);
+  
+  await comp.callAIAPI('Test message');
+  
+  expect(comp.messages).toHaveLength(1);
+  expect(comp.messages[0].thoughts.value).toBe('**Analyzing Request**\n\nProcessing the query...');
+  expect(comp.scrollToBottom).toHaveBeenCalledTimes(3); // Once for message_start, twice for thought deltas
 });
 
 test('callAIAPI processes content_block_delta with input_json_delta', async () => {
@@ -2270,6 +2338,18 @@ test('formatCount delegates to root', () => {
   expect(result).toBe('1,234');
 });
 
+test('getLastThoughtTitle extracts last bold text from thoughts', () => {
+  const thoughtsWithMultipleBold = '**Analyzing the Request**\n\nI need to process this.\n\n**Formulating Response**\n\nHere is my answer.';
+  const thoughtsWithOneBold = '**Processing Data**\n\nWorking on it...';
+  const thoughtsWithNoBold = 'Just some plain text without bold markers';
+  const emptyThoughts = '';
+  
+  expect(comp.getLastThoughtTitle(thoughtsWithMultipleBold)).toBe('Formulating Response');
+  expect(comp.getLastThoughtTitle(thoughtsWithOneBold)).toBe('Processing Data');
+  expect(comp.getLastThoughtTitle(thoughtsWithNoBold)).toBe(comp.i18n.thinking);
+  expect(comp.getLastThoughtTitle(emptyThoughts)).toBe(comp.i18n.thinking);
+});
+
 // Backend message conversion tests
 test('generateTitleFromMessage', () => {
   const session = {
@@ -2381,7 +2461,36 @@ test('convertBackendMessagesToFrontend converts assistant message with text bloc
   expect(result[0].content).toBe('I can help you with security analysis.');
   expect(result[0].timestamp).toBe('2025-01-01T12:00:00.000Z');
   expect(result[0].usage.value).toEqual({ input_tokens: 10, output_tokens: 20 });
-  expect(comp.updateContextLength).toHaveBeenCalledWith({ input_tokens: 10, output_tokens: 20 });
+  expect(comp.updateContextLength).toHaveBeenCalledWith({ input_tokens: 10, output_tokens: 20 }, false);
+});
+
+test('convertBackendMessagesToFrontend converts assistant message with thoughts', () => {
+  comp.resetContextLength = jest.fn();
+  comp.updateContextLength = jest.fn();
+  
+  const backendMessages = [
+    {
+      createTime: '2025-01-01T12:00:00.000Z',
+      message: {
+        role: 'assistant',
+        contentBlocks: [
+          { type: 'text', text: 'I can help you with security analysis.' }
+        ],
+        thoughts: '**Analyzing Request**\n\nProcessing the user query...',
+        usage: { input_tokens: 10, output_tokens: 20 }
+      }
+    }
+  ];
+  
+  const result = comp.convertBackendMessagesToFrontend(backendMessages);
+  
+  expect(result).toHaveLength(1);
+  expect(result[0].role).toBe('assistant');
+  expect(result[0].content).toBe('I can help you with security analysis.');
+  expect(result[0].thoughts.value).toBe('**Analyzing Request**\n\nProcessing the user query...');
+  expect(result[0].timestamp).toBe('2025-01-01T12:00:00.000Z');
+  expect(result[0].usage.value).toEqual({ input_tokens: 10, output_tokens: 20 });
+  expect(comp.updateContextLength).toHaveBeenCalledWith({ input_tokens: 10, output_tokens: 20 }, false);
 });
 
 test('convertBackendMessagesToFrontend handles multiple text blocks', () => {
@@ -3107,7 +3216,7 @@ test('convertBackendMessagesToFrontend calculates context length accurately afte
   
   comp.convertBackendMessagesToFrontend(backendMessages);
   
-  expect(comp.contextLength).toBe(2000);
+  expect(comp.contextLength).toBe(1000);
 });
 
 test('loadChatFromBackend success', async () => {
@@ -3239,28 +3348,30 @@ test('saveSetting handles numeric values', () => {
 
 test('saveLocalSettings saves all assistant settings with correct defaults', () => {
   // Set up component state
-  comp.increaseMaxContextThreshold = true;
+  comp.increaseContextLimit = true;
   comp.restoreLastActive = true;
   comp.alwaysApproveReadRequests = true;
   comp.showChatHistory = false; // Different from default
   comp.currentModel = 'test-model';
+  comp.showModelThinking = true;
   
   // Mock saveSetting to track calls
   comp.saveSetting = jest.fn();
   
   comp.saveLocalSettings();
   
-  expect(comp.saveSetting).toHaveBeenCalledWith('increaseContextLimit', false, false);
+  expect(comp.saveSetting).toHaveBeenCalledWith('increaseContextLimit', true, false);
   expect(comp.saveSetting).toHaveBeenCalledWith('restoreLastActive', true, false);
   expect(comp.saveSetting).toHaveBeenCalledWith('alwaysApproveReadRequests', true, false);
   expect(comp.saveSetting).toHaveBeenCalledWith('showChatHistory', false, true);
   expect(comp.saveSetting).toHaveBeenCalledWith('currentModel', 'test-model', '');
-  expect(comp.saveSetting).toHaveBeenCalledTimes(5);
+  expect(comp.saveSetting).toHaveBeenCalledWith('showModelThinking', true, false);
+  expect(comp.saveSetting).toHaveBeenCalledTimes(6);
 });
 
 test('saveLocalSettings saves default values correctly', () => {
   // Set up component state with default values
-  comp.increaseMaxContextThreshold = false;
+  comp.increaseContextLimit = false;
   comp.restoreLastActive = false;
   comp.alwaysApproveReadRequests = false;
   comp.showChatHistory = true;
@@ -5499,4 +5610,285 @@ test('createCase', async () => {
   expect(result).toBe('123');
 
   resetPapi();
+});
+
+test('calculateContextOfMessage - assistant message', () => {
+  const allMessages = [
+    {
+      role: 'user',
+      usage: {
+        input_tokens: 100,
+        output_tokens: 0
+      }
+    },
+    {
+      role: 'assistant',
+      usage: {
+        input_tokens: 200,
+        output_tokens: 150
+      }
+    }
+  ];
+
+  // the context usage of a single assistant message is given to us
+  // as the output_tokens of that message, no calculation necessary
+  const result = comp.calculateContextOfMessage(allMessages, 1);
+
+  expect(result).toBe(150);
+});
+
+test('calculateContextOfMessage - user message mid-session', () => {
+  const allMessages = [
+    {
+      role: 'assistant',
+      usage: {
+        input_tokens: 100,
+        output_tokens: 50
+      }
+    },
+    {
+      role: 'user',
+      usage: {
+        input_tokens: 0,
+        output_tokens: 0
+      }
+    },
+    {
+      role: 'assistant',
+      usage: {
+        input_tokens: 200,
+        output_tokens: 75
+      }
+    }
+  ];
+
+  // For the user message at index 1:
+  // contextLength = next.input_tokens - (prev.input_tokens + prev.output_tokens)
+  // contextLength = 200 - (100 + 50) = 50
+  const result = comp.calculateContextOfMessage(allMessages, 1);
+
+  expect(result).toBe(50);
+});
+
+test('calculateContextOfMessage - first user message', () => {
+  const allMessages = [
+    {
+      role: 'user',
+      usage: {
+        input_tokens: 0,
+        output_tokens: 0
+      }
+    },
+    {
+      role: 'assistant',
+      usage: {
+        input_tokens: 120,
+        output_tokens: 80
+      }
+    }
+  ];
+
+  // For the first user message (no previous message):
+  // contextLength = next.input_tokens
+  const result = comp.calculateContextOfMessage(allMessages, 0);
+
+  expect(result).toBe(120);
+});
+
+test('calculateContextOfMessage - latest user message without assistant response', () => {
+  const allMessages = [
+    {
+      role: 'user',
+      usage: {
+        input_tokens: 0,
+        output_tokens: 0
+      }
+    }
+  ];
+
+  const result = comp.calculateContextOfMessage(allMessages, 1);
+
+  // the length of this message isn't calculable given what we have. This should
+  // only last for a short time until the model responds to the message.
+  expect(result).toBe(0);
+});
+
+// messageContextValues computed property tests
+test('messageContextValues returns context values for all messages', () => {
+  comp.messages = [
+    {
+      role: 'user',
+      usage: {
+        input_tokens: 0,
+        output_tokens: 0
+      }
+    },
+    {
+      role: 'assistant',
+      usage: {
+        input_tokens: 120,
+        output_tokens: 80
+      }
+    },
+    {
+      role: 'user',
+      usage: {
+        input_tokens: 0,
+        output_tokens: 0
+      }
+    },
+    {
+      role: 'assistant',
+      usage: {
+        input_tokens: 200,
+        output_tokens: 150
+      }
+    }
+  ];
+
+  const result = comp.messageContextValues();
+
+  expect(result).toHaveLength(4);
+  expect(result[0]).toBe(120); // First user message: next.input_tokens = 120
+  expect(result[1]).toBe(80);  // First assistant message: output_tokens = 80
+  expect(result[2]).toBe(0);   // Second user message: next.input_tokens - (prev.input_tokens + prev.output_tokens) = 200 - (120 + 80) = 0
+  expect(result[3]).toBe(150); // Second assistant message: output_tokens = 150
+});
+
+test('messageContextValues handles empty messages array', () => {
+  comp.messages = [];
+
+  const result = comp.messageContextValues();
+
+  expect(result).toEqual([]);
+});
+
+test('messageContextValues handles null messages', () => {
+  comp.messages = null;
+
+  const result = comp.messageContextValues();
+
+  expect(result).toEqual([]);
+});
+
+test('buildModelIdentifier', () => {
+  const tests = [
+    { input: { id: 'model', adapter: 'adapter' }, expected: 'model@adapter' },
+    { input: { id: '', adapter: '' }, expected: '@' },
+    { input: {}, expected: '@' },
+    { input: null, expected: '' },
+  ];
+
+  for (let t of tests) {
+    const output = comp.buildModelIdentifier(t.input);
+    expect(output).toBe(t.expected);
+  }
+});
+
+test('buildGroupedModels - groups models by adapter with headers', () => {
+  // Setup test data
+  comp.modelsMap = new Map([
+    ['claude-3-5-sonnet@Anthropic', {
+      id: 'claude-3-5-sonnet',
+      adapter: 'Anthropic',
+      displayName: 'Claude 3.5 Sonnet',
+      key: 'claude-3-5-sonnet@Anthropic'
+    }],
+    ['claude-3-opus@Anthropic', {
+      id: 'claude-3-opus',
+      adapter: 'Anthropic',
+      displayName: 'Claude 3 Opus',
+      key: 'claude-3-opus@Anthropic'
+    }],
+    ['gpt-4@SOAI', {
+      id: 'gpt-4',
+      adapter: 'SOAI',
+      displayName: 'GPT-4',
+      key: 'gpt-4@SOAI'
+    }],
+    ['gemini-pro@Gemini', {
+      id: 'gemini-pro',
+      adapter: 'Gemini',
+      displayName: 'Gemini Pro',
+      key: 'gemini-pro@Gemini'
+    }]
+  ]);
+
+  const result = comp.buildGroupedModels();
+
+  // Verify structure
+  expect(result).toBeInstanceOf(Array);
+  expect(result.length).toBe(7); // 3 headers + 4 models
+
+  // First group should be Anthropic (alphabetically first, case-sensitive)
+  expect(result[0]).toEqual({ header: 'Anthropic' });
+  expect(result[1].displayName).toBe('Claude 3.5 Sonnet');
+  expect(result[2].displayName).toBe('Claude 3 Opus');
+
+  // Second group should be Gemini
+  expect(result[3]).toEqual({ header: 'Gemini' });
+  expect(result[4].displayName).toBe('Gemini Pro');
+
+  // Third group should be SOAI
+  expect(result[5]).toEqual({ header: 'SOAI' });
+  expect(result[6].displayName).toBe('GPT-4');
+});
+
+test('buildGroupedModels - handles single adapter', () => {
+  comp.modelsMap = new Map([
+    ['model1@Adapter1', {
+      id: 'model1',
+      adapter: 'Adapter1',
+      displayName: 'Model 1',
+      key: 'model1@Adapter1'
+    }],
+    ['model2@Adapter1', {
+      id: 'model2',
+      adapter: 'Adapter1',
+      displayName: 'Model 2',
+      key: 'model2@Adapter1'
+    }]
+  ]);
+
+  const result = comp.buildGroupedModels();
+
+  // Should have header and two models
+  expect(result).toHaveLength(3);
+  expect(result[0]).toEqual({ header: 'Adapter1' });
+  expect(result[1].displayName).toBe('Model 1');
+  expect(result[2].displayName).toBe('Model 2');
+});
+
+test('buildGroupedModels - handles empty modelsMap', () => {
+  comp.modelsMap = new Map();
+
+  const result = comp.buildGroupedModels();
+
+  expect(result).toEqual([]);
+});
+
+test('buildGroupedModels - handles models with no adapter', () => {
+  comp.i18n = { statusUnknown: 'Unknown' };
+  comp.modelsMap = new Map([
+    ['model1@', {
+      id: 'model1',
+      adapter: '',
+      displayName: 'Model 1',
+      key: 'model1@'
+    }],
+    ['model2@Adapter1', {
+      id: 'model2',
+      adapter: 'Adapter1',
+      displayName: 'Model 2',
+      key: 'model2@Adapter1'
+    }]
+  ]);
+
+  const result = comp.buildGroupedModels();
+
+  // Should group empty adapter as 'Unknown' (from i18n)
+  expect(result[0]).toEqual({ header: 'Adapter1' });
+  expect(result[1].displayName).toBe('Model 2');
+  expect(result[2]).toEqual({ header: 'Unknown' });
+  expect(result[3].displayName).toBe('Model 1');
 });

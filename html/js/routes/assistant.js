@@ -48,6 +48,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     lowBalanceColorAlert: 0,
     availableModels: [],
     modelsMap: new Map(),
+    groupedModels: [],
     currentModel: '',
     activeStreamingSessionId: null, // Track which session is actively streaming
     autoScrollOnNextRender: false, // gate for programmatic scrolls
@@ -56,6 +57,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     paramsLoaded: false,
     caseMenuVisible: false,
     mruCases: [],
+    perMessageStatsEnabled: false,
+    showModelThinking: false,
   }},
   async created() {
     this.loadLocalSettings();
@@ -79,7 +82,14 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     'restoreLastActive': 'saveLocalSettings',
     'alwaysApproveReadRequests': 'saveLocalSettings',
     'showChatHistory': 'saveLocalSettings',
-    'currentModel': 'saveLocalSettings'
+    'currentModel': 'saveLocalSettings',
+    'showModelThinking': 'saveLocalSettings'
+  },
+  computed: {
+    messageContextValues() {
+      const msgs = this.messages || [];
+      return msgs.map((_, i) => this.calculateContextOfMessage(msgs, i));
+    }
   },
   methods: {
 
@@ -92,13 +102,15 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.thresholdColorRatioMax = params["thresholdColorRatioMax"];
       this.availableModels = params["availableModels"];
       if (this.availableModels.length > 0) {
+        this.availableModels.forEach(m => m.key = this.buildModelIdentifier(m));
         this.modelsMap = new Map(
-          this.availableModels.filter(m => m.enabled).map(m => [m.id, m])
+          this.availableModels.filter(m => m.enabled).map(m => [m.key, m])
         );
         for (let val of this.modelsMap.values()) {
           if (val.contextLimitLarge < val.contextLimitSmall) val.contextLimitLarge = val.contextLimitSmall;
         }
-        if (!this.currentModel || !this.modelsMap.has(this.currentModel)) this.currentModel = this.availableModels[0].id;
+        if (!this.currentModel || !this.modelsMap.has(this.currentModel)) this.currentModel = this.availableModels[0].key;
+        this.groupedModels = this.buildGroupedModels();
       }
       this.updateModelParams();
 
@@ -118,19 +130,21 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }
     },
     
-    // Calculate context length from usage data (input_tokens + output_tokens)
-    calculateContextFromUsage(usage) {
+    // Calculate context length from usage data (input_tokens + output_tokens),
+    // ignore input tokens if on a context compression message
+    calculateContextFromUsage(usage, ignoreInputTokens) {
       if (!usage) return 0;
       const inputTokens = usage.input_tokens || 0;
       const outputTokens = usage.output_tokens || 0;
-      return inputTokens + outputTokens;
+      
+      return ignoreInputTokens ? outputTokens : inputTokens + outputTokens;
     },
     
     // Update the total context length
-    updateContextLength(usage) {
+    updateContextLength(usage, ignoreInputTokens = false) {
       if (usage) {
-        const messageContext = this.calculateContextFromUsage(usage);
-        this.contextLength += messageContext;
+        const messageContext = this.calculateContextFromUsage(usage, ignoreInputTokens);
+        this.contextLength = messageContext;
       }
     },
 
@@ -282,7 +296,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     async loadCredits() {
       try {
-        const response = await this.$root.papi.get('/assistant/balance');
+        const response = await this.$root.papi.get('/assistant/balance/' + encodeURIComponent(this.currentModel));
         if (response.data) {
           if (response.data.health_status === 'healthy') {
             this.creditsRemaining = response.data.credit_balance || 0;
@@ -518,6 +532,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
 
       assistantMessage = {
         role: 'assistant',
+        thoughts: Vue.ref(''), // MUST be ref
         content: Vue.ref(''), // MUST be ref
         timestamp: new Date().toISOString(),
         usage: Vue.ref(null),
@@ -573,7 +588,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       
       if (assistantMessage && c.delta.type === 'text_delta' && targetSessionId === this.currentChatId) {
         // Only update UI if this is for the current session
-        assistantMessage.content.value += this.nbspRegexOp(c.delta.text);
+        assistantMessage.content.value = this.nbspRegexOp(assistantMessage.content.value + c.delta.text);
         this.scrollIfPinned();
       } else if (c.delta.type === 'input_json_delta') {
         const idMap = this.getIndexMap(targetSessionId);
@@ -586,6 +601,11 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           if (targetSessionId === this.currentChatId) {
             this.scrollIfPinned();
           }
+        }
+      } else if (c.delta.type === 'thought_delta') {
+        if (assistantMessage && targetSessionId === this.currentChatId) {
+          assistantMessage.thoughts.value += this.nbspRegexOp(c.delta.text);
+          this.scrollIfPinned();
         }
       }
     },
@@ -836,6 +856,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     handleToolExecutionMessageStart(c, assistantMessage, toolUse) {
       assistantMessage = {
         role: 'assistant',
+        thoughts: Vue.ref(''),
         content: Vue.ref(''),
         timestamp: new Date().toISOString(),
         usage: Vue.ref(null),
@@ -893,7 +914,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       
       if (assistantMessage && c.delta.type === 'text_delta' && targetSessionId === this.currentChatId) {
         // Only update UI if this is for the current session
-        assistantMessage.content.value += this.nbspRegexOp(c.delta.text);
+        assistantMessage.content.value = this.nbspRegexOp(assistantMessage.content.value + c.delta.text);
         this.scrollIfPinned();
       } else if (c.delta.type === 'input_json_delta') {
         const idMap = this.getIndexMap(targetSessionId);
@@ -906,6 +927,11 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           if (targetSessionId === this.currentChatId) {
             this.scrollIfPinned();
           }
+        }
+      } else if (c.delta.type === 'thought_delta') {
+        if (assistantMessage && targetSessionId === this.currentChatId) {
+          assistantMessage.thoughts.value += this.nbspRegexOp(c.delta.text);
+          this.scrollIfPinned();
         }
       }
     },
@@ -1140,7 +1166,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     formatMarkdown(text) {
       text = this.applyChoiceButtons(text);
       text = this.$root.performMermaidRegexes(text);
-      md = this.$root.formatMarkdown(text, true);
+      const md = this.$root.formatMarkdown(text, true);
       if (!this.isStreaming) {
         this.$nextTick(() => {
           this.$root.renderMermaid();
@@ -1639,9 +1665,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     convertBackendMessagesToFrontend(backendMessages) {
       const processedMessages = [];
       // Reset context length when loading from backend
-      this.contextLength = 0;
       this.creditsUsed = 0;
+      this.contextLength = 0;
       this.contextStartMessageIndex = -1;
+      let justResetContext = false;
       
       let skip_next = false;
 
@@ -1674,6 +1701,11 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           tags: msg.tags || [],
         };
 
+        // Extract thoughts if present
+        if (msg.message.thoughts) {
+          frontendMsg.thoughts = Vue.ref(msg.message.thoughts);
+        }
+
         // Extract message content using helper method
         this.extractMessageContent(msg, frontendMsg);
         
@@ -1689,7 +1721,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         if (msg.message.usage) {
           frontendMsg.usage = Vue.ref(msg.message.usage);
           // Update context length for loaded messages
-          this.updateContextLength(msg.message.usage);
+          this.updateContextLength(msg.message.usage, justResetContext);
           this.updateCreditsUsed(msg.message.usage);
         }
 
@@ -1698,14 +1730,45 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         if (msg.tags && msg.tags.includes(MSGTAG_CONTEXTCOMPRESSION)) {
           // reset context, messages prior to this message are no longer
           // sent to the AI
-          this.contextLength = 0;
+          if (i >= 0 && i < backendMessages.length - 1) {
+            this.contextLength = this.calculateContextOfMessage(backendMessages.map(m => m.message), i);
+          } else {
+            // this context compression is the latest message, can't determine
+            // context size until assistant responds
+            this.contextLength = 0;
+          }
           this.contextStartMessageIndex = processedMessages.length - 1;
+          justResetContext = true;
+        } else {
+          justResetContext = false;
         }
       }
       
       return processedMessages;
     },
+    calculateContextOfMessage(allMessages, msgIndex) {
+      // non-user messages tell us their context in output_tokens
+      if (msgIndex >= 0 && msgIndex < allMessages.length && allMessages[msgIndex].role !== 'user') {
+        // asking about an assistant message, return its output tokens
+        return allMessages[msgIndex].usage ? allMessages[msgIndex].usage.output_tokens : 0;
+      }
 
+      // this is a user message, use nearby message to calculate how many tokens
+      // are in this message
+      let prev, next;
+      if (msgIndex > 0) prev = allMessages[msgIndex - 1];
+      if (msgIndex < allMessages.length - 1) next = allMessages[msgIndex + 1];
+
+      let contextLength = 0;
+      if (prev && prev.usage && next && next.usage) {
+        // use the message before and after to calculate the tokens in this message
+        contextLength = next.usage.input_tokens - (prev.usage.input_tokens + prev.usage.output_tokens);
+      } else if (next && next.usage) {
+        // use the next message's input_tokens as the length of this solitary message
+        contextLength = next.usage.input_tokens;
+      }
+      return contextLength;
+    },
     generateInvestigationPrompt(fields) {
 
       // Prepare the alert data for investigation
@@ -1745,7 +1808,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
 
     getCompressColor() {
-      const maxContextLength = this.increaseMaxContextThreshold ? this.contextLimitLarge : this.contextLimitSmall;
+      const maxContextLength = this.increaseContextLimit ? this.contextLimitLarge : this.contextLimitSmall;
       if (this.contextLength >= maxContextLength / 2) {
         return 'primary';
       }
@@ -1771,6 +1834,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.saveSetting('alwaysApproveReadRequests', this.alwaysApproveReadRequests, false);
       this.saveSetting('showChatHistory', this.showChatHistory, true);
       this.saveSetting('currentModel', this.currentModel, '');
+      this.saveSetting('showModelThinking', this.showModelThinking, false);
     },
 
     // Load all local settings
@@ -1781,6 +1845,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       if (localStorage[prefix + '.alwaysApproveReadRequests']) this.alwaysApproveReadRequests = localStorage[prefix + '.alwaysApproveReadRequests'] == 'true';
       if (localStorage[prefix + '.showChatHistory']) this.showChatHistory = localStorage[prefix + '.showChatHistory'] == 'true';
       if (localStorage[prefix + '.currentModel']) this.currentModel = localStorage[prefix + '.currentModel'];
+      if (localStorage[prefix + '.perMessageStatsEnabled']) this.perMessageStatsEnabled = localStorage[prefix + '.perMessageStatsEnabled'] == 'true';
+      if (localStorage[prefix + '.showModelThinking']) this.showModelThinking = localStorage[prefix + '.showModelThinking'] == 'true';
 
       if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
     },
@@ -1832,6 +1898,31 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.contextLimitSmall = this.modelsMap.get(this.currentModel).contextLimitSmall;
       this.contextLimitLarge = this.modelsMap.get(this.currentModel).contextLimitLarge;
       this.lowBalanceColorAlert = this.modelsMap.get(this.currentModel).lowBalanceColorAlert;
+    },
+
+    buildModelIdentifier(model) {
+      if (!model) return '';
+      return `${model?.id||''}@${model?.adapter||''}`;
+    },
+
+    buildGroupedModels() {
+      const groupedByAdapter = {};
+      for (const model of this.modelsMap.values()) {
+        const adapter = model.adapter || this.i18n.statusUnknown;
+        if (!groupedByAdapter[adapter]) {
+          groupedByAdapter[adapter] = [];
+        }
+        groupedByAdapter[adapter].push(model);
+      }
+      const result = [];
+      const sortedAdapters = Object.keys(groupedByAdapter).sort();
+      for (const adapter of sortedAdapters) {
+        result.push({
+          header: adapter
+        });
+        result.push(...groupedByAdapter[adapter]);
+      }
+      return result;
     },
 
     applyToolSpecificChanges(toolUse, toolRequest) {
@@ -1936,9 +2027,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
 
         this.$root.showError({ message: msg });
       }
-    },
-    nbspRegexOp(text) {
-      return text.replace(/^(&nbsp;?[\n]*)/, '');
     },
     focusChatInput() {
       this.$nextTick(() => {
@@ -2046,6 +2134,11 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     formatCaseSummary(socCase) {
       return socCase?.title;
+    },
+    getLastThoughtTitle(text) {
+      const titleRegex = /\*\*([^*]+)\*\*(?![\s\S]*\*\*)/;
+      const match = text.match(titleRegex);
+      return match ? match[1] : this.i18n.thinking;
     }
   }
 }});

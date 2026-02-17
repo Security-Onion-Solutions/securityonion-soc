@@ -1241,7 +1241,7 @@ func TestManageUser_UpdatePassword(tester *testing.T) {
 func TestManageUser_AddRole(tester *testing.T) {
 	defer Cleanup()
 	salt := NewTestSaltRelayQueue(tester, "ctx_manage-user", "true.resp")
-	err := salt.AddRole(ctx(), "user-id-1", "broker")
+	err := salt.AddRole(ctx(), "user-id-1", "broker", false)
 	assert.NoError(tester, err)
 
 	request := ReadRequest(tester, "ctx_manage-user")
@@ -1275,7 +1275,7 @@ func TestSyncSettings(tester *testing.T) {
 	assert.NoError(tester, err)
 
 	request := ReadRequest(tester, "ctx_manage-salt")
-	assert.Equal(tester, `{"command":"manage-salt","command_id":"ctx_manage-salt","operation":"highstate"}`, request)
+	assert.JSONEq(tester, `{"command":"manage-salt","command_id":"ctx_manage-salt","operation":"highstate","minion":"*"}`, request)
 }
 
 func TestSyncModule(tester *testing.T) {

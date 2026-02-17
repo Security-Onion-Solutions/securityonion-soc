@@ -237,13 +237,13 @@ routes.push({ path: '/grid', name: 'grid', component: {
       this.selectedNode = null;
     },
     canTest(node) {
-      if (node['keywords'] && node['keywords'].indexOf("Sensor") != -1) {
-          return true;
-      }
-      return false;
+      return this.$root.isUserAdmin() && (node['keywords'] && node['keywords'].indexOf("Sensor") != -1);
+    },
+    canRestart(node) {
+      return this.$root.isUserAdmin();
     },
     canUpload(node) {
-      return this.canUploadPCAP(node) || this.canUploadEvtx(node);
+      return (this.canUploadPCAP(node) || this.canUploadEvtx(node));
     },
     canUploadPCAP(node) {
       return !!node['keywords'] && // If keywords don't exist, return false

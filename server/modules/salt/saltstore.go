@@ -1299,9 +1299,14 @@ func (store *Saltstore) DisableUser(ctx context.Context, id string) error {
 	return err
 }
 
-func (store *Saltstore) AddRole(ctx context.Context, id string, role string) error {
-	if err := store.server.CheckAuthorized(ctx, "write", "users"); err != nil {
-		return err
+func (store *Saltstore) AddRole(ctx context.Context, id string, role string, bypassAuthCheck bool) error {
+	if bypassAuthCheck {
+		logger := log.FromContext(ctx)
+		logger.Debug("Adding role to user without authorization check")
+	} else {
+		if err := store.server.CheckAuthorized(ctx, "write", "users"); err != nil {
+			return err
+		}
 	}
 
 	args := make(map[string]string)
@@ -1369,6 +1374,7 @@ func (store *Saltstore) SyncSettings(ctx context.Context) error {
 	args := make(map[string]string)
 	args["command"] = "manage-salt"
 	args["operation"] = "highstate"
+	args["minion"] = "*"
 	output, err := store.execCommand(ctx, args)
 	if err == nil {
 		if output == "false" {

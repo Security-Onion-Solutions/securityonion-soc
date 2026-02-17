@@ -19,7 +19,7 @@ type AdminUserstore interface {
 	ResetPassword(ctx context.Context, id string, password string) error
 	EnableUser(ctx context.Context, id string) error
 	DisableUser(ctx context.Context, id string) error
-	AddRole(ctx context.Context, id string, role string) error
+	AddRole(ctx context.Context, id string, role string, bypassAuthCheck bool) error
 	DeleteRole(ctx context.Context, id string, role string) error
 	SyncUsers(ctx context.Context) error
 }

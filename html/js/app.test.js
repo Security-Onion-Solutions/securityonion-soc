@@ -167,6 +167,38 @@ test('populateUserDetailsAgent', async () => {
   expect(obj.owner).toBe(app.i18n.systemUser);
 });
 
+test('getUserDisplayName', () => {
+  expect(app.getUserDisplayName(null)).toBe("");
+  expect(app.getUserDisplayName({email: 'test@so.net'})).toBe('test@so.net');
+});
+
+test('pickUserInfo', () => {
+  app.users = [{id:'123', email:'test@so.net'}];
+  app.usersLoadedTime = new Date().time;
+  // Field doesn't end in _by
+  expect(app.pickUserInfo('user', '123')).toBe(null);
+  // Field ends in _by, user found
+  expect(app.pickUserInfo('acknowledged_by', '123')).toBe('test@so.net');
+  // Field ends in _by, user not found
+  expect(app.pickUserInfo('acknowledged_by', '456')).toBe(null);
+});
+
+test('tryResolveAlias', () => {
+  app.ip2host = {'1.2.3.4': ['host1']};
+  app.users = [{id:'123', email:'test@so.net'}];
+  app.usersLoadedTime = new Date().time;
+  app.i18n.some_author = "Localized Author";
+
+  // IP alias
+  expect(app.tryResolveAlias('source.ip', '1.2.3.4')).toBe('host1');
+  // Detection author localization
+  expect(app.tryResolveAlias('detection.author', 'some_author')).toBe('Localized Author');
+  // User info via pickUserInfo
+  expect(app.tryResolveAlias('escalated_by', '123')).toBe('test@so.net');
+  // No match
+  expect(app.tryResolveAlias('something', 'else')).toBe(null);
+});
+
 test('isUserAdmin', async () => {
   var user = {id:'123',email:'hi@there.net',roles:['nope', 'peon']};
   app.user = user;
@@ -735,8 +767,8 @@ test('isDetectionEngineStatusUnhealthy', () => {
   app.statusByGridId[''] = { detections: { strelka: { integrityFailure: true }}};
   expect(app.isDetectionEngineStatusUnhealthy('strelka')).toBe(true);
 
-  // Test unknown engine
-  expect(app.isDetectionEngineStatusUnhealthy('unknown')).toBe(true);
+  // Test unknown engine (similar to pending state)
+  expect(app.isDetectionEngineStatusUnhealthy('unknown')).toBe(false);
 });
 
 test('isAttentionNeeded', () => {

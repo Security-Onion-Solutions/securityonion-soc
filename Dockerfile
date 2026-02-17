@@ -34,6 +34,8 @@ RUN if [ "$VERSION" != "0.0.0" ]; then mkdir gitdocs && cd gitdocs && \
 	/tmp/virtualenv/bin/python -m sphinx -T -E -b html -d _build/doctrees -D language=en . _build/html; \
 	else mkdir -p gitdocs/_build/html; fi
 RUN npm install jest jest-environment-jsdom --global
+
+RUN if [ -f "src2/prompt_system.md" ]; then echo "compressing system prompt"; gzip -c src2/prompt_system.md > server/modules/assistant/SOSystemPrompt.bin; fi
 RUN ./build.sh "$VERSION"
 
 
