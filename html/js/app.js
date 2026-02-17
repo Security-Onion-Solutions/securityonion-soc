@@ -707,7 +707,12 @@ $(document).ready(function () {
               (!this.licenseKey.features.length || this.licenseKey.features.indexOf(feat) != -1);
         },
         colorLicenseStatus(value) {
-          if (value == LICENSE_STATUS_ACTIVE) return "success";
+          if (value == LICENSE_STATUS_ACTIVE) {
+            if (this.licenseKey.features.length > 0) {
+              return "cyan";
+            }
+            return "success";
+          }
           if (value == LICENSE_STATUS_EXCEEDED) return "error";
           if (value == LICENSE_STATUS_EXPIRED) return "warning";
           if (value == LICENSE_STATUS_INVALID) return "error";
