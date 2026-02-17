@@ -29,9 +29,11 @@ import (
 // Test doubles to avoid import cycles
 
 type mockOpenAIClient struct {
-	modelsListFunc            func(ctx context.Context) (*pagination.Page[openai.Model], error)
-	responsesNewFunc          func(ctx context.Context, params responses.ResponseNewParams) (*responses.Response, error)
-	responsesNewStreamingFunc func(ctx context.Context, params responses.ResponseNewParams) ResponseStream
+	modelsListFunc                  func(ctx context.Context) (*pagination.Page[openai.Model], error)
+	responsesNewFunc                func(ctx context.Context, params responses.ResponseNewParams) (*responses.Response, error)
+	responsesNewStreamingFunc       func(ctx context.Context, params responses.ResponseNewParams) ResponseStream
+	chatCompletionsNewFunc          func(ctx context.Context, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error)
+	chatCompletionsNewStreamingFunc func(ctx context.Context, params openai.ChatCompletionNewParams) ChatCompletionStream
 }
 
 func (m *mockOpenAIClient) ModelsList(ctx context.Context) (*pagination.Page[openai.Model], error) {
@@ -51,6 +53,20 @@ func (m *mockOpenAIClient) ResponsesNew(ctx context.Context, params responses.Re
 func (m *mockOpenAIClient) ResponsesNewStreaming(ctx context.Context, params responses.ResponseNewParams) ResponseStream {
 	if m.responsesNewStreamingFunc != nil {
 		return m.responsesNewStreamingFunc(ctx, params)
+	}
+	return nil
+}
+
+func (m *mockOpenAIClient) ChatCompletionsNew(ctx context.Context, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
+	if m.chatCompletionsNewFunc != nil {
+		return m.chatCompletionsNewFunc(ctx, params)
+	}
+	return nil, errors.New("not implemented")
+}
+
+func (m *mockOpenAIClient) ChatCompletionsNewStreaming(ctx context.Context, params openai.ChatCompletionNewParams) ChatCompletionStream {
+	if m.chatCompletionsNewStreamingFunc != nil {
+		return m.chatCompletionsNewStreamingFunc(ctx, params)
 	}
 	return nil
 }
@@ -84,6 +100,35 @@ func (m *mockResponseStream) Err() error {
 	return m.err
 }
 
+// mockChatCompletionStream is a simple implementation of ChatCompletionStream for testing
+type mockChatCompletionStream struct {
+	chunks       []openai.ChatCompletionChunk
+	currentIndex int
+	err          error
+}
+
+func (m *mockChatCompletionStream) Next() bool {
+	if m.err != nil {
+		return false
+	}
+	if m.currentIndex >= len(m.chunks) {
+		return false
+	}
+	m.currentIndex++
+	return true
+}
+
+func (m *mockChatCompletionStream) Current() openai.ChatCompletionChunk {
+	if m.currentIndex == 0 || m.currentIndex > len(m.chunks) {
+		return openai.ChatCompletionChunk{}
+	}
+	return m.chunks[m.currentIndex-1]
+}
+
+func (m *mockChatCompletionStream) Err() error {
+	return m.err
+}
+
 // newMockStream creates a mock stream for testing
 func newMockStream(events []responses.ResponseStreamEventUnion, finalUsage responses.ResponseUsage, initialErr error) ResponseStream {
 	// Add a final event with Response.Usage for finalization
@@ -100,6 +145,23 @@ func newMockStream(events []responses.ResponseStreamEventUnion, finalUsage respo
 
 	return &mockResponseStream{
 		events: events,
+		err:    initialErr,
+	}
+}
+
+// newMockChatCompletionStream creates a mock ChatCompletion stream for testing
+func newMockChatCompletionStream(chunks []openai.ChatCompletionChunk, finalUsage openai.CompletionUsage, initialErr error) ChatCompletionStream {
+	// Add a final chunk with usage for finalization
+	// This mimics how the real stream provides usage data at the end
+	if initialErr == nil {
+		finalChunk := openai.ChatCompletionChunk{
+			Usage: finalUsage,
+		}
+		chunks = append(chunks, finalChunk)
+	}
+
+	return &mockChatCompletionStream{
+		chunks: chunks,
 		err:    initialErr,
 	}
 }
@@ -153,7 +215,7 @@ func TestNewOpenAIAdapter(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			srv := server.NewFakeUnauthorizedServer()
-			adapter, err := NewOpenAIAdapter(context.Background(), srv, tt.config)
+			adapter, err := NewOpenAIResponsesAdapter(context.Background(), srv, tt.config)
 
 			if tt.expectError {
 				assert.Error(t, err)
@@ -166,7 +228,7 @@ func TestNewOpenAIAdapter(t *testing.T) {
 				assert.NotNil(t, adapter)
 
 				if tt.validateHealthTimeout {
-					openaiAdapter := adapter.(*OpenAIAdapter)
+					openaiAdapter := adapter.(*OpenAIResponsesAdapter)
 					assert.Equal(t, tt.expectedHealthTimeout, openaiAdapter.healthTimeoutSeconds)
 				}
 			}
@@ -175,12 +237,12 @@ func TestNewOpenAIAdapter(t *testing.T) {
 }
 
 func TestProtocol(t *testing.T) {
-	adapter := &OpenAIAdapter{}
-	assert.Equal(t, "openai", adapter.Protocol())
+	adapter := &OpenAIResponsesAdapter{}
+	assert.Equal(t, "openai_responses", adapter.Protocol())
 }
 
 func TestGetBalance(t *testing.T) {
-	adapter := &OpenAIAdapter{}
+	adapter := &OpenAIResponsesAdapter{}
 	ctx := context.Background()
 
 	balance, err := adapter.GetBalance(ctx)
@@ -1065,7 +1127,7 @@ func TestGetHealth(t *testing.T) {
 	// in external packages that don't have import cycle constraints.
 
 	srv := server.NewFakeUnauthorizedServer()
-	adapter, err := NewOpenAIAdapter(context.Background(), srv, map[string]any{
+	adapter, err := NewOpenAIResponsesAdapter(context.Background(), srv, map[string]any{
 		"baseUrl": "https://api.openai.com/v1",
 		"apiKey":  "test-key",
 	})
@@ -1498,7 +1560,7 @@ func TestOpenAIAdapter_SendMessage(t *testing.T) {
 			}
 
 			srv := server.NewFakeUnauthorizedServer()
-			adapter := &OpenAIAdapter{
+			adapter := &OpenAIResponsesAdapter{
 				srv:    srv,
 				client: mockClient,
 				IOManager: &detections.ResourceManager{
@@ -1755,7 +1817,7 @@ func TestOpenAIAdapter_SendMessage_EdgeCases(t *testing.T) {
 			}
 
 			srv := server.NewFakeUnauthorizedServer()
-			adapter := &OpenAIAdapter{
+			adapter := &OpenAIResponsesAdapter{
 				srv:    srv,
 				client: mockClient,
 				IOManager: &detections.ResourceManager{
@@ -1909,7 +1971,7 @@ func TestOpenAIAdapter_SendMessageStream(t *testing.T) {
 			}
 
 			srv := server.NewFakeUnauthorizedServer()
-			adapter := &OpenAIAdapter{
+			adapter := &OpenAIResponsesAdapter{
 				client: client,
 				srv:    srv,
 				IOManager: &detections.ResourceManager{

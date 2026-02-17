@@ -28,6 +28,19 @@ type ResponseStream interface {
 	Err() error
 }
 
+// ChatCompletionStream is an interface that wraps the ChatCompletion streaming functionality.
+// This allows us to mock ChatCompletion streaming responses for testing.
+type ChatCompletionStream interface {
+	// Next advances to the next event. Returns false when done or on error.
+	Next() bool
+
+	// Current returns the current event after a successful Next() call.
+	Current() openai.ChatCompletionChunk
+
+	// Err returns any error that occurred during streaming.
+	Err() error
+}
+
 // OpenAIClient is an interface that wraps the openai.Client functionality we use.
 // This allows us to mock the OpenAI client for testing.
 type OpenAIClient interface {
@@ -39,6 +52,12 @@ type OpenAIClient interface {
 
 	// ResponsesNewStreaming wraps the Responses.NewStreaming method for streaming calls
 	ResponsesNewStreaming(ctx context.Context, params responses.ResponseNewParams) ResponseStream
+
+	// ChatCompletionsNew wraps the Chat.Completions.New method for non-streaming calls
+	ChatCompletionsNew(ctx context.Context, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error)
+
+	// ChatCompletionsNewStreaming wraps the Chat.Completions.NewStreaming method for streaming calls
+	ChatCompletionsNewStreaming(ctx context.Context, params openai.ChatCompletionNewParams) ChatCompletionStream
 }
 
 //go:generate mockgen -source=openai_client.go -destination=mock/mock_openai_client.go -package=mock
@@ -84,4 +103,32 @@ func (r *realOpenAIClient) ResponsesNew(ctx context.Context, params responses.Re
 func (r *realOpenAIClient) ResponsesNewStreaming(ctx context.Context, params responses.ResponseNewParams) ResponseStream {
 	stream := r.client.Responses.NewStreaming(ctx, params)
 	return &realResponseStream{stream: stream}
+}
+
+// ChatCompletionsNew wraps the client.Chat.Completions.New call.
+func (r *realOpenAIClient) ChatCompletionsNew(ctx context.Context, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
+	return r.client.Chat.Completions.New(ctx, params)
+}
+
+// ChatCompletionsNewStreaming wraps the client.Chat.Completions.NewStreaming call.
+func (r *realOpenAIClient) ChatCompletionsNewStreaming(ctx context.Context, params openai.ChatCompletionNewParams) ChatCompletionStream {
+	stream := r.client.Chat.Completions.NewStreaming(ctx, params)
+	return &realChatCompletionStream{stream: stream}
+}
+
+// realChatCompletionStream wraps a concrete ssestream.Stream to implement ChatCompletionStream interface
+type realChatCompletionStream struct {
+	stream *ssestream.Stream[openai.ChatCompletionChunk]
+}
+
+func (r *realChatCompletionStream) Next() bool {
+	return r.stream.Next()
+}
+
+func (r *realChatCompletionStream) Current() openai.ChatCompletionChunk {
+	return r.stream.Current()
+}
+
+func (r *realChatCompletionStream) Err() error {
+	return r.stream.Err()
 }
