@@ -2456,6 +2456,15 @@ test('getAIInvestigationTooltip - grouped alert', () => {
   expect(tooltip).toBe(comp.i18n.aiInvestigateMostRecent);
 });
 
+test('generateChatId creates unique ID', () => {
+  const id1 = comp.generateChatId();
+  const id2 = comp.generateChatId();
+  
+  expect(id1).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+  expect(id2).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+  expect(id1).not.toBe(id2);
+});
+
 test('populateEventTable - applies AI investigated filter', () => {
   const events = [
     { id: 'alert123', payload: { 'rule.name': 'Rule 1', 'event.investigated': true } },

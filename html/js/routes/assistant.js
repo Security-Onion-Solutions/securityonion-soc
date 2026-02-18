@@ -676,11 +676,11 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.activeStreamingSessionId = streamingSessionId;
       
       try {
-        // Build the URL with investigationSocId query parameter if present
+        // Build the URL with entityType and entityId query parameters if present
         let url = '/assistant/chat';
         const socId = this.$route.query.socId;
         if (socId) {
-          url += `?investigationSocId=${encodeURIComponent(socId)}`;
+          url += `?entityType=alert_investigation&entityId=${encodeURIComponent(socId)}`;
           // Clear the investigation query params after first use to prevent
           // marking the alert as investigated on every subsequent message
           this.$nextTick(() => {

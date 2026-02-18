@@ -2129,7 +2129,7 @@ test('callAIAPI clears investigation query params after first use', async () => 
   await comp.callAIAPI('Test message');
   
   // Verify the API was called with the socId parameter
-  expect(mockPost).toHaveBeenCalledWith('/assistant/chat?investigationSocId=alert-123', {
+  expect(mockPost).toHaveBeenCalledWith('/assistant/chat?entityType=alert_investigation&entityId=alert-123', {
     msg: 'Test message',
     sessionId: fakeSessionId,
     model: 'test-model',

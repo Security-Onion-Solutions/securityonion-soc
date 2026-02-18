@@ -63,12 +63,17 @@ func (h *AssistantHandler) checkAssistantAvailable(ctx context.Context, w http.R
 	return true
 }
 
+type EventstoreUpdater interface {
+	AddUpdateScripts(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, ack bool, esc bool, inv bool, userId string, sessionId ...string)
+}
+
 // @Summary      Send Chat Message
 // @Description  Send a message to the AI assistant and receive a response. Supports both streaming (SSE) and non-streaming responses.
 // @Tags         Assistant
 // @Security     bearer[assistant/write_authored]
 // @Param        request  body  object{msg=string,sessionId=string} true "Chat message object with message text and optional session ID"
-// @Param        investigationSocId query string false "corresponding alert's soc_id for investigation sessions"
+// @Param        entityType query string false "Type of entity associated with this session (e.g., 'alert_investigation')"
+// @Param        entityId query string false "ID of the entity associated with this session (e.g., alert's soc_id)"
 // @Accept       json
 // @Produce      json,text/event-stream
 // @Success      200  {array}   model.Message "AI assistant response messages"
@@ -107,14 +112,15 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		incMsg.SessionId = uuid.NewString()
 	}
 
-	// Check for investigationSocId query parameter
-	investigationSocId := r.URL.Query().Get("investigationSocId")
-	if investigationSocId != "" {
-		// Mark the alert as investigated with the session ID
-		err = h.markAlertAsInvestigated(ctx, investigationSocId, incMsg.SessionId)
+	// Check for entityType and entityId query parameters
+	entityType := r.URL.Query().Get("entityType")
+	entityId := r.URL.Query().Get("entityId")
+
+	// Handle entity-specific association logic
+	if entityType != "" && entityId != "" {
+		err = h.handleEntityAssociation(ctx, entityType, entityId, incMsg.SessionId)
 		if err != nil {
-			logger.WithError(err).WithField("investigationSocId", investigationSocId).Warn("unable to mark alert as investigated")
-			// Don't fail the request, just log the warning
+			// Don't fail the request, just log the warning (already logged in helper)
 		}
 	}
 
@@ -143,10 +149,10 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 			Title:     incMsg.Msg,
 		}
 
-		// If this is an investigation session, set the type and entityId
-		if investigationSocId != "" {
-			session.Type = "alert_investigation"
-			session.EntityId = investigationSocId
+		// If entityType and entityId are provided, set them on the session
+		if entityType != "" && entityId != "" {
+			session.Type = entityType
+			session.EntityId = entityId
 		}
 
 		err = h.server.Assistantstore.CreateSession(ctx, session)
@@ -695,28 +701,8 @@ func (h *AssistantHandler) DeleteSession(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Retrieve session details before deletion to check if it's an investigation session
-	sessions, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId))
-	if err != nil {
-		logger.WithError(err).Error("unable to retrieve session before deletion")
-		web.Respond(w, r, http.StatusInternalServerError, err)
-		return
-	}
-
-	// If this is an investigation session, clear the investigation_session_id from the alert
-	if len(sessions) > 0 {
-		session := sessions[0]
-		if session.Type == "alert_investigation" && session.EntityId != "" {
-			err = h.clearInvestigationSessionFromAlert(ctx, session.EntityId, sessionId)
-			if err != nil {
-				logger.WithError(err).WithFields(log.Fields{
-					"sessionId": sessionId,
-					"entityId":  session.EntityId,
-				}).Warn("unable to clear investigation_session_id from alert")
-				// Continue with deletion even if clearing fails
-			}
-		}
-	}
+	// Clear investigation session from alert if applicable
+	h.handleInvestigationSessionCleanup(ctx, sessionId)
 
 	err = h.server.Assistantstore.DeleteSession(ctx, sessionId)
 
@@ -1123,6 +1109,25 @@ func removeAuxData(messages []*model.StoredMessage) {
 	}
 }
 
+func (h *AssistantHandler) handleEntityAssociation(ctx context.Context, entityType, entityId, sessionId string) error {
+	logger := log.FromContext(ctx)
+
+	// Handle entity-specific logic based on type
+	if entityType == "alert_investigation" && entityId != "" {
+		// Mark the alert as investigated with the session ID
+		err := h.markAlertAsInvestigated(ctx, entityId, sessionId)
+		if err != nil {
+			logger.WithError(err).WithFields(log.Fields{
+				"entityType": entityType,
+				"entityId":   entityId,
+			}).Warn("unable to mark alert as investigated")
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (h *AssistantHandler) markAlertAsInvestigated(ctx context.Context, socId string, sessionId string) error {
 	logger := log.FromContext(ctx)
 
@@ -1142,10 +1147,8 @@ func (h *AssistantHandler) markAlertAsInvestigated(ctx context.Context, socId st
 
 	// Use the existing addUpdateScripts method with inv=true and sessionId
 	if h.server.Eventstore != nil {
-		if elasticStore, ok := h.server.Eventstore.(interface {
-			AddUpdateScripts(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, ack bool, esc bool, inv bool, userId string, sessionId ...string)
-		}); ok {
-			elasticStore.AddUpdateScripts(updateCriteria, time.Now(), false, false, true, userId, sessionId)
+		if updater, ok := h.server.Eventstore.(EventstoreUpdater); ok {
+			updater.AddUpdateScripts(updateCriteria, time.Now(), false, false, true, userId, sessionId)
 		} else {
 			return fmt.Errorf("eventstore does not support investigation updates")
 		}
@@ -1177,6 +1180,32 @@ func (h *AssistantHandler) markAlertAsInvestigated(ctx context.Context, socId st
 	}).Info("Successfully marked alert as investigated")
 
 	return nil
+}
+
+func (h *AssistantHandler) handleInvestigationSessionCleanup(ctx context.Context, sessionId string) {
+	logger := log.FromContext(ctx)
+
+	// Retrieve session details before deletion to check if it's an investigation session
+	sessions, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId))
+	if err != nil {
+		logger.WithError(err).Error("unable to retrieve session before deletion")
+		return
+	}
+
+	// If this is an investigation session, clear the investigation_session_id from the alert
+	if len(sessions) > 0 {
+		session := sessions[0]
+		if session.Type == "alert_investigation" && session.EntityId != "" {
+			err = h.clearInvestigationSessionFromAlert(ctx, session.EntityId, sessionId)
+			if err != nil {
+				logger.WithError(err).WithFields(log.Fields{
+					"sessionId": sessionId,
+					"entityId":  session.EntityId,
+				}).Warn("unable to clear investigation_session_id from alert")
+				// Continue with deletion even if clearing fails
+			}
+		}
+	}
 }
 
 func (h *AssistantHandler) clearInvestigationSessionFromAlert(ctx context.Context, socId string, sessionId string) error {

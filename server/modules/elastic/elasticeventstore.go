@@ -1060,13 +1060,12 @@ func (store *ElasticEventstore) addParameterToFilter(json string, key string, fi
 	}
 }
 
-func (store *ElasticEventstore) AddUpdateScripts(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, ack bool, esc bool, inv bool, userId string, sessionId ...string) {
-	if ack {
-		trackTiming := strconv.FormatBool(licensing.IsEnabled(licensing.FEAT_RPT))
-		escBool := strconv.FormatBool(esc)
-		nowMillis := timeNow.UnixMilli()
-		nowMillisStr := strconv.FormatInt(nowMillis, 10)
-		updateCriteria.AddUpdateScript(`
+func (store *ElasticEventstore) addAcknowledgeScript(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, esc bool, userId string) {
+	trackTiming := strconv.FormatBool(licensing.IsEnabled(licensing.FEAT_RPT))
+	escBool := strconv.FormatBool(esc)
+	nowMillis := timeNow.UnixMilli()
+	nowMillisStr := strconv.FormatInt(nowMillis, 10)
+	updateCriteria.AddUpdateScript(`
 			boolean track_timing = ` + trackTiming + `;
 			boolean esc_bool = ` + escBool + `;
 			Instant now_instant = Instant.ofEpochMilli(` + nowMillisStr + `L);
@@ -1095,18 +1094,20 @@ func (store *ElasticEventstore) AddUpdateScripts(updateCriteria *model.EventUpda
 				}
 			}
 			`)
-	} else if inv {
-		trackTiming := strconv.FormatBool(licensing.IsEnabled(licensing.FEAT_RPT))
-		nowMillis := timeNow.UnixMilli()
-		nowMillisStr := strconv.FormatInt(nowMillis, 10)
+}
 
-		// Get sessionId if provided
-		sessionIdStr := ""
-		if len(sessionId) > 0 && sessionId[0] != "" {
-			sessionIdStr = sessionId[0]
-		}
+func (store *ElasticEventstore) addInvestigateScript(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, userId string, sessionId ...string) {
+	trackTiming := strconv.FormatBool(licensing.IsEnabled(licensing.FEAT_RPT))
+	nowMillis := timeNow.UnixMilli()
+	nowMillisStr := strconv.FormatInt(nowMillis, 10)
 
-		script := `
+	// Get sessionId if provided
+	sessionIdStr := ""
+	if len(sessionId) > 0 && sessionId[0] != "" {
+		sessionIdStr = sessionId[0]
+	}
+
+	script := `
 			boolean track_timing = ` + trackTiming + `;
 			Instant now_instant = Instant.ofEpochMilli(` + nowMillisStr + `L);
 			ZonedDateTime now_date = ZonedDateTime.ofInstant(now_instant, ZoneId.of('Z'));
@@ -1114,19 +1115,30 @@ func (store *ElasticEventstore) AddUpdateScripts(updateCriteria *model.EventUpda
 			ctx._source.event.investigated = true;
 			ctx._source.event.investigated_by = '` + userId + `';`
 
-		if sessionIdStr != "" {
-			script += `
-			ctx._source.event.investigation_session_id = '` + sessionIdStr + `';`
-		}
-
+	if sessionIdStr != "" {
 		script += `
+			ctx._source.event.investigation_session_id = '` + sessionIdStr + `';`
+	}
+
+	script += `
 			if (track_timing) {
 				ctx._source.event.investigated_timestamp = now_date;
 			}
 			`
-		updateCriteria.AddUpdateScript(script)
+	updateCriteria.AddUpdateScript(script)
+}
+
+func (store *ElasticEventstore) addUnacknowledgeScript(updateCriteria *model.EventUpdateCriteria) {
+	updateCriteria.AddUpdateScript(`ctx._source.event.acknowledged = false;`)
+}
+
+func (store *ElasticEventstore) AddUpdateScripts(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, ack bool, esc bool, inv bool, userId string, sessionId ...string) {
+	if ack {
+		store.addAcknowledgeScript(updateCriteria, timeNow, esc, userId)
+	} else if inv {
+		store.addInvestigateScript(updateCriteria, timeNow, userId, sessionId...)
 	} else {
-		updateCriteria.AddUpdateScript(`ctx._source.event.acknowledged = false;`)
+		store.addUnacknowledgeScript(updateCriteria)
 	}
 }
 

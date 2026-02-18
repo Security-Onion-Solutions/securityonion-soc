@@ -3131,8 +3131,7 @@ const huntComponent = {
         return;
       }
 
-      // Generate a unique chat session ID for this investigation using soc_id
-      const chatSessionId = crypto.randomUUID();
+      const chatSessionId = this.generateChatId();
 
       // Create the investigation prompt with alert data
       const queryList = this.generateQueryList(targetItem);
@@ -3206,6 +3205,10 @@ const huntComponent = {
         return this.i18n.aiInvestigateView;
       }
       return this.i18n.aiInvestigate;
+    },
+
+    generateChatId() {
+      return crypto.randomUUID();
     },
   }
 };
