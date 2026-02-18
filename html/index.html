@@ -228,12 +228,15 @@
           <v-spacer></v-spacer>
           <span class="text-no-wrap" data-aid="nav_terms">
             <router-link v-if="isLicenseUnprovisioned()" id="termsLink" to="/terms" class="footer">
-              <span class="d-lg-inline">{{ i18n.license }}:</span>
+              <span class="d-lg-inline pr-2">{{ i18n.license }}:</span>
               <span data-aid="license_unprovisioned"> {{ i18n.licenseShort }}</span>
             </router-link>
+            <router-link v-else-if="licenseStatus == 'active'" id="licenseLink" to="/license" class="footer">
+              <v-chip x-small class="rounded-sm" density="compact" :color="colorLicenseStatus(licenseStatus)" :data-aid="'license_status_' + licenseStatus">{{ licenseKey.name }}</v-chip>
+            </router-link>
             <router-link v-else id="licenseLink" to="/license" class="footer">
-              <span class="d-lg-inline">{{ i18n.license }}:</span>
-              <v-chip x-small density="compact" :color="colorLicenseStatus(licenseStatus)" :data-aid="'license_status_' + licenseStatus">{{ localizeMessage(licenseStatus) }}</v-chip>
+              <span class="d-lg-inline pr-2">{{ i18n.license }}:</span>
+              <v-chip x-small class="rounded-sm" density="compact" :color="colorLicenseStatus(licenseStatus)" :data-aid="'license_status_' + licenseStatus">{{ localizeMessage(licenseStatus) }}</v-chip>
             </router-link>
           </span>
         </v-footer>

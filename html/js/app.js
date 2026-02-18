@@ -15,6 +15,8 @@ const LICENSE_STATUS_INVALID = "invalid";
 const LICENSE_STATUS_PENDING = "pending";
 const LICENSE_STATUS_UNPROVISIONED = "unprovisioned";
 
+const SECURITYONION_PRO = "Security Onion Pro";
+
 const LICENSE_EXPIRES_SOON_DAYS = 45;
 
 const SUBGRID_DISABLED_ROUTES = ['home','settings','assistant','aimetrics'];
@@ -707,7 +709,12 @@ $(document).ready(function () {
               (!this.licenseKey.features.length || this.licenseKey.features.indexOf(feat) != -1);
         },
         colorLicenseStatus(value) {
-          if (value == LICENSE_STATUS_ACTIVE) return "success";
+          if (value == LICENSE_STATUS_ACTIVE) {
+            if (this.licenseKey.name != SECURITYONION_PRO) {
+              return "white";
+            }
+            return "success";
+          }
           if (value == LICENSE_STATUS_EXCEEDED) return "error";
           if (value == LICENSE_STATUS_EXPIRED) return "warning";
           if (value == LICENSE_STATUS_INVALID) return "error";
