@@ -321,6 +321,10 @@ type AssistantSession struct {
 	SessionId string `json:"sessionId" example:"chat_1757086398900_ykhmndscn"`
 	// The time the session was deleted.
 	DeleteTime *time.Time `json:"deleteTime,omitempty" example:"2025-09-05T15:33:00.000Z"`
+	// The type of session (e.g., "alert_investigation").
+	Type string `json:"type,omitempty" example:"alert_investigation"`
+	// The entity ID associated with this session (e.g., alert soc_id).
+	EntityId string `json:"entityId,omitempty" example:"WKhCuTw4GPvrQA-9ksmn"`
 	// Metadata about the session.
 	Tags []string `json:"tags" example:"investigation"`
 	// Usage statistics for the session.
