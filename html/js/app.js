@@ -711,7 +711,7 @@ $(document).ready(function () {
         colorLicenseStatus(value) {
           if (value == LICENSE_STATUS_ACTIVE) {
             if (this.licenseKey.name != SECURITYONION_PRO) {
-              return "yellow";
+              return "white";
             }
             return "success";
           }
