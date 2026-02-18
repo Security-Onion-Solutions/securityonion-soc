@@ -1132,13 +1132,27 @@ func (store *ElasticEventstore) addUnacknowledgeScript(updateCriteria *model.Eve
 	updateCriteria.AddUpdateScript(`ctx._source.event.acknowledged = false;`)
 }
 
-func (store *ElasticEventstore) AddUpdateScripts(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, ack bool, esc bool, inv bool, userId string, sessionId ...string) {
+func (store *ElasticEventstore) addInvestigateDeleteScript(updateCriteria *model.EventUpdateCriteria) {
+	updateCriteria.AddUpdateScript(`
+		if (ctx._source.event.containsKey('investigation_session_id')) {
+			ctx._source.event.remove('investigation_session_id');
+		}
+	`)
+}
+
+func (store *ElasticEventstore) AddAckEscalateUpdateScripts(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, ack bool, esc bool, userId string) {
 	if ack {
 		store.addAcknowledgeScript(updateCriteria, timeNow, esc, userId)
-	} else if inv {
-		store.addInvestigateScript(updateCriteria, timeNow, userId, sessionId...)
 	} else {
 		store.addUnacknowledgeScript(updateCriteria)
+	}
+}
+
+func (store *ElasticEventstore) AddInvestigationUpdateScripts(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, userId string, isDelete bool, sessionId ...string) {
+	if isDelete {
+		store.addInvestigateDeleteScript(updateCriteria)
+	} else {
+		store.addInvestigateScript(updateCriteria, timeNow, userId, sessionId...)
 	}
 }
 
@@ -1157,7 +1171,7 @@ func (store *ElasticEventstore) Acknowledge(ctx context.Context, ackCriteria *mo
 
 			updateCriteria := model.NewEventUpdateCriteria()
 			userId := ctx.Value(web.ContextKeyRequestorId).(string)
-			store.AddUpdateScripts(updateCriteria, time.Now(), ackCriteria.Acknowledge, ackCriteria.Escalate, false, userId, "")
+			store.AddAckEscalateUpdateScripts(updateCriteria, time.Now(), ackCriteria.Acknowledge, ackCriteria.Escalate, userId)
 			updateCriteria.Populate(ackCriteria.SearchFilter,
 				ackCriteria.DateRange,
 				ackCriteria.DateRangeFormat,

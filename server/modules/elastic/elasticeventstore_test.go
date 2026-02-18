@@ -736,13 +736,15 @@ func TestAddUpdateScript(t *testing.T) {
 
 	timeNow := time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)
 
+	// Test unacknowledge (ack=false)
 	criteria := &model.EventUpdateCriteria{}
-	store.AddUpdateScripts(criteria, timeNow, false, false, false, "admin", "")
+	store.AddAckEscalateUpdateScripts(criteria, timeNow, false, false, "admin")
 	assert.Len(t, criteria.UpdateScripts, 1)
 	assert.Equal(t, "ctx._source.event.acknowledged = false;", criteria.UpdateScripts[0])
 
+	// Test acknowledge without escalate
 	criteria = &model.EventUpdateCriteria{}
-	store.AddUpdateScripts(criteria, timeNow, true, false, false, "admin", "")
+	store.AddAckEscalateUpdateScripts(criteria, timeNow, true, false, "admin")
 	assert.Len(t, criteria.UpdateScripts, 1)
 	expected := `
 			boolean track_timing = false;
@@ -775,15 +777,16 @@ func TestAddUpdateScript(t *testing.T) {
 			`
 	assert.Equal(t, expected, criteria.UpdateScripts[0])
 
+	// Test acknowledge with escalate
 	criteria = &model.EventUpdateCriteria{}
-	store.AddUpdateScripts(criteria, timeNow, true, true, false, "admin", "")
+	store.AddAckEscalateUpdateScripts(criteria, timeNow, true, true, "admin")
 	assert.Len(t, criteria.UpdateScripts, 1)
 	assert.Contains(t, criteria.UpdateScripts[0], "esc_bool = true")
 	assert.Contains(t, criteria.UpdateScripts[0], "ctx._source.event.escalated_by = 'admin';")
 
 	// Test investigation case without session ID
 	criteria = &model.EventUpdateCriteria{}
-	store.AddUpdateScripts(criteria, timeNow, false, false, true, "admin", "")
+	store.AddInvestigationUpdateScripts(criteria, timeNow, "admin", false)
 	assert.Len(t, criteria.UpdateScripts, 1)
 	expected = `
 			boolean track_timing = false;
@@ -800,7 +803,7 @@ func TestAddUpdateScript(t *testing.T) {
 
 	// Test investigation case with session ID
 	criteria = &model.EventUpdateCriteria{}
-	store.AddUpdateScripts(criteria, timeNow, false, false, true, "admin", "test-session-123")
+	store.AddInvestigationUpdateScripts(criteria, timeNow, "admin", false, "test-session-123")
 	assert.Len(t, criteria.UpdateScripts, 1)
 	expected = `
 			boolean track_timing = false;
@@ -814,6 +817,17 @@ func TestAddUpdateScript(t *testing.T) {
 				ctx._source.event.investigated_timestamp = now_date;
 			}
 			`
+	assert.Equal(t, expected, criteria.UpdateScripts[0])
+
+	// Test investigation delete case
+	criteria = &model.EventUpdateCriteria{}
+	store.AddInvestigationUpdateScripts(criteria, timeNow, "admin", true)
+	assert.Len(t, criteria.UpdateScripts, 1)
+	expected = `
+		if (ctx._source.event.containsKey('investigation_session_id')) {
+			ctx._source.event.remove('investigation_session_id');
+		}
+	`
 	assert.Equal(t, expected, criteria.UpdateScripts[0])
 }
 

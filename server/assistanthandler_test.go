@@ -32,14 +32,18 @@ import (
 // MockElasticEventstore is a mock that implements both Eventstore and EventstoreUpdater
 type MockElasticEventstore struct {
 	*mock.MockEventstore
-	addUpdateScriptsCalled bool
-	updateFunc             func(context.Context, *model.EventUpdateCriteria) (*model.EventUpdateResults, error)
+	addInvestigationUpdateScriptsCalled bool
+	updateFunc                          func(context.Context, *model.EventUpdateCriteria) (*model.EventUpdateResults, error)
 }
 
-func (m *MockElasticEventstore) AddUpdateScripts(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, ack bool, esc bool, inv bool, userId string, sessionId ...string) {
-	m.addUpdateScriptsCalled = true
+func (m *MockElasticEventstore) AddInvestigationUpdateScripts(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, userId string, isDelete bool, sessionId ...string) {
+	m.addInvestigationUpdateScriptsCalled = true
 	// Add a dummy script to simulate the behavior
-	updateCriteria.AddUpdateScript("ctx._source.event.investigated = true")
+	if isDelete {
+		updateCriteria.AddUpdateScript("ctx._source.event.remove('investigation_session_id')")
+	} else {
+		updateCriteria.AddUpdateScript("ctx._source.event.investigated = true")
+	}
 }
 
 func (m *MockElasticEventstore) Update(ctx context.Context, criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error) {
@@ -2103,8 +2107,19 @@ func TestDeleteSessionInvestigation(t *testing.T) {
 	}
 	ctrl := gomock.NewController(t)
 	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
-	mockEventStore := mock.NewMockEventstore(ctrl)
+	mockBaseEventStore := mock.NewMockEventstore(ctrl)
 	defer ctrl.Finish()
+
+	// Create custom mock that supports AddInvestigationUpdateScripts
+	mockEventStore := &MockElasticEventstore{
+		MockEventstore: mockBaseEventStore,
+		updateFunc: func(ctx context.Context, criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error) {
+			return &model.EventUpdateResults{
+				UpdatedCount:   1,
+				UnchangedCount: 0,
+			}, nil
+		},
+	}
 
 	srv.Assistantstore = mockAssistantStore
 	srv.Eventstore = mockEventStore
@@ -2141,16 +2156,6 @@ func TestDeleteSessionInvestigation(t *testing.T) {
 			EntityId:  entityId,
 		},
 	}, nil)
-
-	// Mock the eventstore Update call to clear investigation_session_id
-	mockEventStore.EXPECT().Update(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error) {
-			return &model.EventUpdateResults{
-				UpdatedCount:   1,
-				UnchangedCount: 0,
-			}, nil
-		},
-	)
 
 	// Mock DeleteSession
 	mockAssistantStore.EXPECT().DeleteSession(gomock.Any(), sessionId).Return(nil)
@@ -2169,8 +2174,16 @@ func TestDeleteSessionInvestigationClearFails(t *testing.T) {
 	}
 	ctrl := gomock.NewController(t)
 	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
-	mockEventStore := mock.NewMockEventstore(ctrl)
+	mockBaseEventStore := mock.NewMockEventstore(ctrl)
 	defer ctrl.Finish()
+
+	// Create custom mock that supports AddInvestigationUpdateScripts but fails on Update
+	mockEventStore := &MockElasticEventstore{
+		MockEventstore: mockBaseEventStore,
+		updateFunc: func(ctx context.Context, criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error) {
+			return nil, errors.New("update failed")
+		},
+	}
 
 	srv.Assistantstore = mockAssistantStore
 	srv.Eventstore = mockEventStore
@@ -2207,9 +2220,6 @@ func TestDeleteSessionInvestigationClearFails(t *testing.T) {
 			EntityId:  entityId,
 		},
 	}, nil)
-
-	// Mock the eventstore Update call to fail - should continue with deletion
-	mockEventStore.EXPECT().Update(gomock.Any(), gomock.Any()).Return(nil, errors.New("update failed"))
 
 	// Mock DeleteSession - should still be called
 	mockAssistantStore.EXPECT().DeleteSession(gomock.Any(), sessionId).Return(nil)
@@ -2300,8 +2310,22 @@ func TestClearInvestigationSessionFromAlert(t *testing.T) {
 		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
 	}
 	ctrl := gomock.NewController(t)
-	mockEventStore := mock.NewMockEventstore(ctrl)
+	mockBaseEventStore := mock.NewMockEventstore(ctrl)
 	defer ctrl.Finish()
+
+	// Create custom mock that supports AddInvestigationUpdateScripts
+	mockEventStore := &MockElasticEventstore{
+		MockEventstore: mockBaseEventStore,
+		updateFunc: func(ctx context.Context, criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error) {
+			// Verify the criteria has the correct query and script
+			assert.NotNil(t, criteria.ParsedQuery)
+			assert.NotEmpty(t, criteria.UpdateScripts)
+			return &model.EventUpdateResults{
+				UpdatedCount:   1,
+				UnchangedCount: 0,
+			}, nil
+		},
+	}
 
 	srv.Eventstore = mockEventStore
 
@@ -2311,19 +2335,6 @@ func TestClearInvestigationSessionFromAlert(t *testing.T) {
 
 	socId := "alert-123"
 	sessionId := "session-456"
-
-	// Mock the eventstore Update call
-	mockEventStore.EXPECT().Update(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error) {
-			// Verify the criteria has the correct query and script
-			assert.NotNil(t, criteria.ParsedQuery)
-			assert.NotEmpty(t, criteria.UpdateScripts)
-			return &model.EventUpdateResults{
-				UpdatedCount:   1,
-				UnchangedCount: 0,
-			}, nil
-		},
-	)
 
 	// Execute the function
 	err := handler.clearInvestigationSessionFromAlert(ctx, socId, sessionId)
@@ -2360,8 +2371,16 @@ func TestClearInvestigationSessionFromAlertUpdateFails(t *testing.T) {
 		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
 	}
 	ctrl := gomock.NewController(t)
-	mockEventStore := mock.NewMockEventstore(ctrl)
+	mockBaseEventStore := mock.NewMockEventstore(ctrl)
 	defer ctrl.Finish()
+
+	// Create custom mock that supports AddInvestigationUpdateScripts but fails on Update
+	mockEventStore := &MockElasticEventstore{
+		MockEventstore: mockBaseEventStore,
+		updateFunc: func(ctx context.Context, criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error) {
+			return nil, errors.New("update failed")
+		},
+	}
 
 	srv.Eventstore = mockEventStore
 
@@ -2371,9 +2390,6 @@ func TestClearInvestigationSessionFromAlertUpdateFails(t *testing.T) {
 
 	socId := "alert-123"
 	sessionId := "session-456"
-
-	// Mock the eventstore Update call to fail
-	mockEventStore.EXPECT().Update(gomock.Any(), gomock.Any()).Return(nil, errors.New("update failed"))
 
 	// Execute the function
 	err := handler.clearInvestigationSessionFromAlert(ctx, socId, sessionId)
@@ -2484,8 +2500,19 @@ func TestHandleInvestigationSessionCleanup(t *testing.T) {
 	}
 	ctrl := gomock.NewController(t)
 	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
-	mockEventStore := mock.NewMockEventstore(ctrl)
+	mockBaseEventStore := mock.NewMockEventstore(ctrl)
 	defer ctrl.Finish()
+
+	// Create custom mock that supports AddInvestigationUpdateScripts
+	mockEventStore := &MockElasticEventstore{
+		MockEventstore: mockBaseEventStore,
+		updateFunc: func(ctx context.Context, criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error) {
+			return &model.EventUpdateResults{
+				UpdatedCount:   1,
+				UnchangedCount: 0,
+			}, nil
+		},
+	}
 
 	srv.Assistantstore = mockAssistantStore
 	srv.Eventstore = mockEventStore
@@ -2508,16 +2535,6 @@ func TestHandleInvestigationSessionCleanup(t *testing.T) {
 			EntityId:  entityId,
 		},
 	}, nil)
-
-	// Mock the eventstore Update call
-	mockEventStore.EXPECT().Update(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error) {
-			return &model.EventUpdateResults{
-				UpdatedCount:   1,
-				UnchangedCount: 0,
-			}, nil
-		},
-	)
 
 	// Execute the function
 	handler.handleInvestigationSessionCleanup(ctx, sessionId)
@@ -2595,8 +2612,16 @@ func TestHandleInvestigationSessionCleanupClearFails(t *testing.T) {
 	}
 	ctrl := gomock.NewController(t)
 	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
-	mockEventStore := mock.NewMockEventstore(ctrl)
+	mockBaseEventStore := mock.NewMockEventstore(ctrl)
 	defer ctrl.Finish()
+
+	// Create custom mock that supports AddInvestigationUpdateScripts but fails on Update
+	mockEventStore := &MockElasticEventstore{
+		MockEventstore: mockBaseEventStore,
+		updateFunc: func(ctx context.Context, criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error) {
+			return nil, errors.New("update failed")
+		},
+	}
 
 	srv.Assistantstore = mockAssistantStore
 	srv.Eventstore = mockEventStore
@@ -2619,9 +2644,6 @@ func TestHandleInvestigationSessionCleanupClearFails(t *testing.T) {
 			EntityId:  entityId,
 		},
 	}, nil)
-
-	// Mock the eventstore Update call to fail
-	mockEventStore.EXPECT().Update(gomock.Any(), gomock.Any()).Return(nil, errors.New("update failed"))
 
 	// Execute the function - should handle error gracefully
 	handler.handleInvestigationSessionCleanup(ctx, sessionId)

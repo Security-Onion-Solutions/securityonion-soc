@@ -64,7 +64,7 @@ func (h *AssistantHandler) checkAssistantAvailable(ctx context.Context, w http.R
 }
 
 type EventstoreUpdater interface {
-	AddUpdateScripts(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, ack bool, esc bool, inv bool, userId string, sessionId ...string)
+	AddInvestigationUpdateScripts(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, userId string, isDelete bool, sessionId ...string)
 }
 
 // @Summary      Send Chat Message
@@ -1145,10 +1145,9 @@ func (h *AssistantHandler) markAlertAsInvestigated(ctx context.Context, socId st
 	updateCriteria := model.NewEventUpdateCriteria()
 	userId := ctx.Value(web.ContextKeyRequestorId).(string)
 
-	// Use the existing addUpdateScripts method with inv=true and sessionId
 	if h.server.Eventstore != nil {
 		if updater, ok := h.server.Eventstore.(EventstoreUpdater); ok {
-			updater.AddUpdateScripts(updateCriteria, time.Now(), false, false, true, userId, sessionId)
+			updater.AddInvestigationUpdateScripts(updateCriteria, time.Now(), userId, false, sessionId)
 		} else {
 			return fmt.Errorf("eventstore does not support investigation updates")
 		}
@@ -1223,13 +1222,17 @@ func (h *AssistantHandler) clearInvestigationSessionFromAlert(ctx context.Contex
 
 	// Create update criteria to remove the investigation_session_id field
 	updateCriteria := model.NewEventUpdateCriteria()
+	userId := ctx.Value(web.ContextKeyRequestorId).(string)
 
-	// Add a script to remove the investigation_session_id field
-	updateCriteria.AddUpdateScript(`
-		if (ctx._source.event.containsKey('investigation_session_id')) {
-			ctx._source.event.remove('investigation_session_id');
+	if h.server.Eventstore != nil {
+		if updater, ok := h.server.Eventstore.(EventstoreUpdater); ok {
+			updater.AddInvestigationUpdateScripts(updateCriteria, time.Now(), userId, true, sessionId)
+		} else {
+			return fmt.Errorf("eventstore does not support investigation updates")
 		}
-	`)
+	} else {
+		return fmt.Errorf("eventstore is not available")
+	}
 
 	// Create a query to match the soc_id
 	updateCriteria.ParsedQuery = model.NewQuery()
