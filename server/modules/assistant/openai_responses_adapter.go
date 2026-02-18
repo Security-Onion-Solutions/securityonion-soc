@@ -23,17 +23,17 @@ import (
 )
 
 func init() {
-	protocols[(&OpenAIAdapter{}).Protocol()] = NewOpenAIAdapter
+	protocols[(&OpenAIResponsesAdapter{}).Protocol()] = NewOpenAIResponsesAdapter
 }
 
-type OpenAIAdapter struct {
+type OpenAIResponsesAdapter struct {
 	srv                  *server.Server
 	client               OpenAIClient
 	healthTimeoutSeconds int
 	detections.IOManager
 }
 
-func NewOpenAIAdapter(ctx context.Context, srv *server.Server, config map[string]any) (server.AssistantAdapter, error) {
+func NewOpenAIResponsesAdapter(ctx context.Context, srv *server.Server, config map[string]any) (server.AssistantAdapter, error) {
 	baseUrl := module.GetStringDefault(config, "baseUrl", "")
 	if baseUrl == "" {
 		return nil, fmt.Errorf("openai adapter requires baseUrl in config")
@@ -50,7 +50,7 @@ func NewOpenAIAdapter(ctx context.Context, srv *server.Server, config map[string
 
 	healthTimeoutSeconds := module.GetIntDefault(config, "healthTimeoutSeconds", DEFAULT_HEALTH_TIMEOUT_SECONDS)
 
-	return &OpenAIAdapter{
+	return &OpenAIResponsesAdapter{
 		srv:                  srv,
 		healthTimeoutSeconds: healthTimeoutSeconds,
 		client:               NewOpenAIClientWrapper(openai.NewClient(opts...)),
@@ -60,11 +60,11 @@ func NewOpenAIAdapter(ctx context.Context, srv *server.Server, config map[string
 	}, nil
 }
 
-func (a *OpenAIAdapter) Protocol() string {
-	return "openai"
+func (a *OpenAIResponsesAdapter) Protocol() string {
+	return "openai_responses"
 }
 
-func (a *OpenAIAdapter) SendMessage(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+func (a *OpenAIResponsesAdapter) SendMessage(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
 	logger := log.FromContext(ctx)
 
 	// Convert history and tools (reuse existing functions)
@@ -153,7 +153,7 @@ func (a *OpenAIAdapter) SendMessage(ctx context.Context, req *model.ChatRequest)
 	return message, nil
 }
 
-func (a *OpenAIAdapter) SendMessageStream(ctx context.Context, req *model.ChatRequest) (response *http.Response, _ *model.AuxMessageData, err error) {
+func (a *OpenAIResponsesAdapter) SendMessageStream(ctx context.Context, req *model.ChatRequest) (response *http.Response, _ *model.AuxMessageData, err error) {
 	logger := log.FromContext(ctx)
 
 	history := convertHistoryToOpenAI(logger, req)
@@ -341,13 +341,13 @@ func convertHistoryToOpenAI(logger log.Interface, req *model.ChatRequest) respon
 	return result
 }
 
-func (a *OpenAIAdapter) GetBalance(ctx context.Context) (*model.BalanceResponse, error) {
+func (a *OpenAIResponsesAdapter) GetBalance(ctx context.Context) (*model.BalanceResponse, error) {
 	return &model.BalanceResponse{
 		Balance: UNUSED_BALANCE,
 	}, nil
 }
 
-func (a *OpenAIAdapter) GetHealth(ctx context.Context) (*model.HealthResponse, error) {
+func (a *OpenAIResponsesAdapter) GetHealth(ctx context.Context) (*model.HealthResponse, error) {
 	healthCtx, cancel := context.WithTimeout(a.srv.Context, time.Second*time.Duration(a.healthTimeoutSeconds))
 	defer cancel()
 
