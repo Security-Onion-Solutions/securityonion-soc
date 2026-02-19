@@ -34,13 +34,13 @@ type OpenAIResponsesAdapter struct {
 }
 
 func NewOpenAIResponsesAdapter(ctx context.Context, srv *server.Server, config map[string]any) (server.AssistantAdapter, error) {
-	baseUrl := module.GetStringDefault(config, "baseUrl", "")
-	if baseUrl == "" {
-		return nil, fmt.Errorf("openai adapter requires baseUrl in config")
+	apiUrl := module.GetStringDefault(config, "apiUrl", "")
+	if apiUrl == "" {
+		return nil, fmt.Errorf("openai adapter requires apiUrl in config")
 	}
 
 	opts := []option.RequestOption{
-		option.WithBaseURL(baseUrl),
+		option.WithBaseURL(apiUrl),
 	}
 
 	apiKey := module.GetStringDefault(config, "apiKey", "")

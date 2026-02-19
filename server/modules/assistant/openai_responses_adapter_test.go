@@ -178,7 +178,7 @@ func TestNewOpenAIAdapter(t *testing.T) {
 		{
 			name: "Success with all config values",
 			config: map[string]any{
-				"baseUrl":              "https://api.openai.com/v1",
+				"apiUrl":               "https://api.openai.com/v1",
 				"apiKey":               "test-key",
 				"healthTimeoutSeconds": float64(6),
 			},
@@ -187,24 +187,24 @@ func TestNewOpenAIAdapter(t *testing.T) {
 			validateHealthTimeout: true,
 		},
 		{
-			name: "Missing baseUrl returns error",
+			name: "Missing apiUrl returns error",
 			config: map[string]any{
 				"apiKey": "test-key",
 			},
 			expectError:   true,
-			errorContains: "baseUrl",
+			errorContains: "apiUrl",
 		},
 		{
 			name: "Without apiKey succeeds",
 			config: map[string]any{
-				"baseUrl": "https://api.openai.com/v1",
+				"apiUrl": "https://api.openai.com/v1",
 			},
 			expectError: false,
 		},
 		{
 			name: "Default health timeout",
 			config: map[string]any{
-				"baseUrl": "https://api.openai.com/v1",
+				"apiUrl": "https://api.openai.com/v1",
 			},
 			expectError:           false,
 			expectedHealthTimeout: DEFAULT_HEALTH_TIMEOUT_SECONDS,
@@ -1128,8 +1128,8 @@ func TestGetHealth(t *testing.T) {
 
 	srv := server.NewFakeUnauthorizedServer()
 	adapter, err := NewOpenAIResponsesAdapter(context.Background(), srv, map[string]any{
-		"baseUrl": "https://api.openai.com/v1",
-		"apiKey":  "test-key",
+		"apiUrl": "https://api.openai.com/v1",
+		"apiKey": "test-key",
 	})
 	require.NoError(t, err)
 
