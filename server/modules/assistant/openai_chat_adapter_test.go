@@ -147,7 +147,7 @@ func TestNewOpenAIChatAdapter(t *testing.T) {
 		{
 			name: "Success with all config values",
 			config: map[string]any{
-				"baseUrl":              "https://api.openai.com/v1",
+				"apiUrl":               "https://api.openai.com/v1",
 				"apiKey":               "test-key",
 				"healthTimeoutSeconds": float64(6),
 			},
@@ -156,24 +156,24 @@ func TestNewOpenAIChatAdapter(t *testing.T) {
 			validateHealthTimeout: true,
 		},
 		{
-			name: "Missing baseUrl returns error",
+			name: "Missing apiUrl returns error",
 			config: map[string]any{
 				"apiKey": "test-key",
 			},
 			expectError:   true,
-			errorContains: "baseUrl",
+			errorContains: "apiUrl",
 		},
 		{
 			name: "Without apiKey succeeds",
 			config: map[string]any{
-				"baseUrl": "https://api.openai.com/v1",
+				"apiUrl": "https://api.openai.com/v1",
 			},
 			expectError: false,
 		},
 		{
 			name: "Default health timeout",
 			config: map[string]any{
-				"baseUrl": "https://api.openai.com/v1",
+				"apiUrl": "https://api.openai.com/v1",
 			},
 			expectError:           false,
 			expectedHealthTimeout: DEFAULT_HEALTH_TIMEOUT_SECONDS,
@@ -811,11 +811,11 @@ func TestConvertToolConfigToChatCompletions(t *testing.T) {
 
 func TestOpenAIChatAdapter_SendMessage(t *testing.T) {
 	tests := []struct {
-		name             string
-		req              *model.ChatRequest
-		mockResponse     *openai.ChatCompletion
-		mockError        error
-		validate         func(*testing.T, *model.Message, error)
+		name         string
+		req          *model.ChatRequest
+		mockResponse *openai.ChatCompletion
+		mockError    error
+		validate     func(*testing.T, *model.Message, error)
 	}{
 		{
 			name: "success with text response",
