@@ -75,8 +75,9 @@ func (a *OpenAIChatAdapter) SendMessage(ctx context.Context, req *model.ChatRequ
 	tools := convertToolConfigToChatCompletions(req)
 
 	params := openai.ChatCompletionNewParams{
-		Model:    req.Model,
-		Messages: messages,
+		Model:             req.Model,
+		Messages:          messages,
+		ParallelToolCalls: openai.Bool(false),
 	}
 
 	if tools != nil {
@@ -148,8 +149,12 @@ func (a *OpenAIChatAdapter) SendMessageStream(ctx context.Context, req *model.Ch
 	tools := convertToolConfigToChatCompletions(req)
 
 	params := openai.ChatCompletionNewParams{
-		Model:    req.Model,
-		Messages: messages,
+		Model:             req.Model,
+		Messages:          messages,
+		ParallelToolCalls: openai.Bool(false),
+		StreamOptions: openai.ChatCompletionStreamOptionsParam{
+			IncludeUsage: openai.Bool(true),
+		},
 	}
 
 	if tools != nil {

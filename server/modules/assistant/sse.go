@@ -351,9 +351,9 @@ func (p *streamProcessor) processChatCompletionChunk(chunk openai.ChatCompletion
 	}
 
 	delta := chunk.Choices[0].Delta
-	reasoning := delta.JSON.ExtraFields["reasoning"].Raw()
+	reasoning, ok := extractReasoning(delta)
 
-	if reasoning != "" {
+	if ok && reasoning != "" {
 		p.ensureFirstSend()
 		p.writeThought(reasoning)
 	}
@@ -441,4 +441,22 @@ func (p *streamProcessor) finalizeChatCompletion(finishReason string, usage *ope
 
 	p.writer.writeMessageStop()
 	p.writer.writeDone()
+}
+
+func extractReasoning(delta openai.ChatCompletionChunkChoiceDelta) (string, bool) {
+	fieldNames := []string{"reasoning", "reasoning_content", "reasoning_summary"}
+	for _, fieldName := range fieldNames {
+		reasoningField, ok := delta.JSON.ExtraFields[fieldName]
+		if ok {
+			reasoning := reasoningField.Raw()
+			if !reasoningField.Valid() {
+				reasoning, _ = strconv.Unquote(reasoning)
+			}
+			if reasoning != "" {
+				return reasoning, true
+			}
+		}
+	}
+
+	return "", false
 }

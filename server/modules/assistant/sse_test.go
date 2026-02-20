@@ -1,6 +1,7 @@
 package assistant
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/apex/log"
+	openai "github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/genai"
@@ -1506,6 +1508,81 @@ func TestOpenAIStreamIntegration(t *testing.T) {
 			assert.Equal(t, tt.expectedBlocks, processor.contentBlockIndex)
 			assert.False(t, processor.hasOpenBlock)         // Should be closed
 			assert.False(t, processor.writingOpenAIToolUse) // Should be cleared
+		})
+	}
+}
+
+func TestExtractReasoning(t *testing.T) {
+	tests := []struct {
+		name              string
+		deltaJSON         string
+		expectedReasoning string
+		expectedFound     bool
+	}{
+		{
+			name:              "no extra fields",
+			deltaJSON:         `{}`,
+			expectedReasoning: "",
+			expectedFound:     false,
+		},
+		{
+			name:              "unrecognized extra field",
+			deltaJSON:         `{"other_field":"value"}`,
+			expectedReasoning: "",
+			expectedFound:     false,
+		},
+		{
+			name:              "reasoning field",
+			deltaJSON:         `{"reasoning":"some thought"}`,
+			expectedReasoning: "some thought",
+			expectedFound:     true,
+		},
+		{
+			name:              "reasoning_content field",
+			deltaJSON:         `{"reasoning_content":"content thought"}`,
+			expectedReasoning: "content thought",
+			expectedFound:     true,
+		},
+		{
+			name:              "reasoning_summary field",
+			deltaJSON:         `{"reasoning_summary":"summary thought"}`,
+			expectedReasoning: "summary thought",
+			expectedFound:     true,
+		},
+		{
+			name:              "reasoning takes priority over reasoning_content",
+			deltaJSON:         `{"reasoning":"first","reasoning_content":"second"}`,
+			expectedReasoning: "first",
+			expectedFound:     true,
+		},
+		{
+			name:              "reasoning_content takes priority over reasoning_summary",
+			deltaJSON:         `{"reasoning_content":"content","reasoning_summary":"summary"}`,
+			expectedReasoning: "content",
+			expectedFound:     true,
+		},
+		{
+			name:              "empty string reasoning",
+			deltaJSON:         `{"reasoning":""}`,
+			expectedReasoning: "",
+			expectedFound:     false,
+		},
+		{
+			name:              "ignore empty for non-empty fields",
+			deltaJSON:         `{"reasoning":"","reasoning_content":"content","reasoning_summary":"summary"}`,
+			expectedReasoning: "content",
+			expectedFound:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var delta openai.ChatCompletionChunkChoiceDelta
+			err := json.Unmarshal([]byte(tt.deltaJSON), &delta)
+			assert.NoError(t, err)
+			reasoning, found := extractReasoning(delta)
+			assert.Equal(t, tt.expectedFound, found)
+			assert.Equal(t, tt.expectedReasoning, reasoning)
 		})
 	}
 }
