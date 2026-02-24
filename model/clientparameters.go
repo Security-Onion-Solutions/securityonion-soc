@@ -240,8 +240,10 @@ func (m *ModelParameters) UnmarshalJSON(data []byte) error {
 	if m.ContextLimitLarge, err = parseToInt(aux.ContextLimitLarge); err != nil {
 		return fmt.Errorf("parsing contextLimitLarge: %w", err)
 	}
-	if m.LowBalanceColorAlert, err = parseToInt(aux.LowBalanceColorAlert); err != nil {
-		return fmt.Errorf("parsing LowBalanceColorAlert: %w", err)
+	if aux.LowBalanceColorAlert != nil {
+		if m.LowBalanceColorAlert, err = parseToInt(aux.LowBalanceColorAlert); err != nil {
+			return fmt.Errorf("parsing LowBalanceColorAlert: %w", err)
+		}
 	}
 
 	return nil
