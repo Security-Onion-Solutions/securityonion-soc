@@ -952,7 +952,7 @@ func (store *Saltstore) coerceMapListFieldTypes(list []map[string]any, uiElement
 				if uiElement.Required {
 					return nil, fmt.Errorf("field %q: %w", uiElement.Field, err)
 				} else {
-					coerced = fieldVal
+					coerced = zeroForType(uiElement.ForcedType)
 				}
 			}
 			m[uiElement.Field] = coerced
@@ -1016,13 +1016,40 @@ func (store *Saltstore) forceType(newValue string, forcedType string) (interface
 		if len(newValue) > 0 {
 			return strings.Split(newValue, "\n"), nil
 		}
-		return make([]string, 0, 0), nil
+		return make([]string, 0), nil
 	case "[][]":
 		return store.alignListList(newValue)
 	case "[]{}":
 		return store.alignMapList(newValue)
 	}
 	return "", errors.New("Unsupported forced type: " + forcedType)
+}
+
+func zeroForType(typ string) any {
+	switch typ {
+	case "float":
+		return float64(0)
+	case "int":
+		return int64(0)
+	case "bool":
+		return false
+	case "string":
+		return ""
+	case "[]int":
+		return make([]int64, 0)
+	case "[]bool":
+		return make([]bool, 0)
+	case "[]float":
+		return make([]float64, 0)
+	case "[]string":
+		return make([]string, 0)
+	case "[][]":
+		return make([][]interface{}, 0)
+	case "[]{}":
+		return make([]map[string]interface{}, 0)
+	}
+
+	return nil
 }
 
 func (store *Saltstore) alignBestGuessList(newValue string) (interface{}, error) {
