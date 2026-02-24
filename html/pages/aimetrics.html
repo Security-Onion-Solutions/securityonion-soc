@@ -138,8 +138,8 @@
           <v-col cols="12" md="6" data-aid="aimetrics_sessions_timeline_credits">
             <line-chart id="aimetrics-sessions-timeline-credits" :height="chartHeight" :key="graphSessionsCreditsData.key" :data="graphSessionsCreditsData" :options="graphSessionsCreditsOptions"></line-chart>
           </v-col>
-          <v-col cols="12" md="6" data-aid="aimetrics_sessions_timelines_messages">
-            <line-chart id="aimetrics-sessions-timeline-messages" :height="chartHeight" :key="graphSessionsMessagesData.key" :data="graphSessionsMessagesData" :options="graphSessionsMessagesOptions"></line-chart>
+          <v-col cols="12" md="6" data-aid="aimetrics_sessions_pie_messages">
+            <pie-chart id="aimetrics-sessions-pie-messages" :height="chartHeight" :key="graphSessionsMessagesData.key" :data="graphSessionsMessagesData" :options="graphSessionsMessagesOptions"></pie-chart>
           </v-col>
         </v-row>
       </div>
@@ -264,6 +264,7 @@
             <td class="text-right">{{ item.inputTokens ? formatCount(item.inputTokens) : '' }}</td>
             <td class="text-right">{{ item.outputTokens ? formatCount(item.outputTokens) : '' }}</td>
             <td class="text-right">{{ item.credits ? formatCount(item.credits) : '' }}</td>
+            <td>{{ item.model || '' }}</td>
           </tr>
         </template>
         <template #expanded-row="{ item }">

@@ -138,7 +138,7 @@ test('component data initialization', () => {
   expect(comp.headers).toHaveLength(3);
   expect(comp.headers[0]).toHaveLength(8); // Users table headers
   expect(comp.headers[1]).toHaveLength(9); // Sessions table headers
-  expect(comp.headers[2]).toHaveLength(7); // Messages table headers
+  expect(comp.headers[2]).toHaveLength(8); // Messages table headers
   expect(comp.expandedFields).toHaveProperty('1');
   expect(comp.sortByUsers).toEqual([{ key: 'totalCredits', order: 'desc' }]);
   expect(comp.sortBySessions).toEqual([{ key: 'createTime', order: 'desc' }]);
@@ -335,7 +335,13 @@ test('loadLocalSettings handles missing localStorage values', () => {
 
 // Assistant initialization tests
 test('initAssistant sets assistantEnabled to true when enabled and licensed', async () => {
-  const mockParams = { enabled: true };
+  const mockParams = {
+    enabled: true,
+    availableModels: [
+      { id: 'gpt-4', adapter: 'OpenAI', enabled: true },
+      { id: 'claude-3', adapter: 'SOAI', enabled: true }
+    ]
+  };
   comp.$root.isLicensed = jest.fn().mockReturnValue(true);
   comp.loadData = jest.fn();
   
@@ -344,10 +350,15 @@ test('initAssistant sets assistantEnabled to true when enabled and licensed', as
   expect(comp.assistantEnabled).toBe(true);
   expect(comp.$root.isLicensed).toHaveBeenCalledWith('oai');
   expect(comp.loadData).toHaveBeenCalled();
+  expect(comp.availableModels).toHaveLength(2);
+  expect(comp.balanceEndpoint).toBe('claude-3@SOAI');
 });
 
 test('initAssistant sets assistantEnabled to false when not enabled', async () => {
-  const mockParams = { enabled: false };
+  const mockParams = {
+    enabled: false,
+    availableModels: []
+  };
   comp.$root.isLicensed = jest.fn().mockReturnValue(true);
   comp.loadData = jest.fn();
   
@@ -358,7 +369,10 @@ test('initAssistant sets assistantEnabled to false when not enabled', async () =
 });
 
 test('initAssistant sets assistantEnabled to false when not licensed', async () => {
-  const mockParams = { enabled: true };
+  const mockParams = {
+    enabled: true,
+    availableModels: []
+  };
   comp.$root.isLicensed = jest.fn().mockReturnValue(false);
   comp.loadData = jest.fn();
   
@@ -585,10 +599,11 @@ test('loadCredits success', async () => {
     }
   };
   const mock = mockPapi("get", mockResponse);
+  comp.balanceEndpoint = 'test-model@SOAI';
   
   await comp.loadCredits();
   
-  expect(mock).toHaveBeenCalledWith('/assistant/balance');
+  expect(mock).toHaveBeenCalledWith('/assistant/balance/test-model@SOAI');
   expect(comp.creditsRemaining).toBe(150);
   expect(comp.creditsLoaded).toBe(true);
 });
@@ -598,6 +613,7 @@ test('loadCredits handles 500 error due to outage', async () => {
   error.response = { status: 500, data: "ERROR_UPSTREAM_SERVICE_ERROR" };
   mockPapi("get", null, error);
   comp.$root.showError = jest.fn();
+  comp.balanceEndpoint = 'test-model@SOAI';
   
   await comp.loadCredits();
   
@@ -609,6 +625,7 @@ test('loadCredits handles error without response', async () => {
   const error = new Error('Network error');
   mockPapi("get", null, error);
   comp.$root.showError = jest.fn();
+  comp.balanceEndpoint = 'test-model@SOAI';
   
   await comp.loadCredits();
   
@@ -625,6 +642,7 @@ test('loadCredits handles unhealthy status', async () => {
   };
   mockPapi("get", mockResponse);
   comp.$root.showError = jest.fn();
+  comp.balanceEndpoint = 'test-model@SOAI';
   
   await comp.loadCredits();
   
@@ -635,10 +653,21 @@ test('loadCredits handles unhealthy status', async () => {
 test('loadCredits handles missing data', async () => {
   const mockResponse = { data: null };
   mockPapi("get", mockResponse);
+  comp.balanceEndpoint = 'test-model@SOAI';
   
   await comp.loadCredits();
   
   expect(comp.creditsRemaining).toBe(0);
+});
+
+test('loadCredits returns early when no balanceEndpoint', async () => {
+  comp.balanceEndpoint = '';
+  const mock = mockPapi("get", {});
+  
+  await comp.loadCredits();
+  
+  expect(mock).not.toHaveBeenCalled();
+  expect(comp.creditsLoaded).toBe(true);
 });
 
 // User lookup tests
@@ -1289,6 +1318,7 @@ test('full data loading flow for users', async () => {
   comp.$root.adjustSubgridColVisibility = jest.fn();
   comp.getStartDate = jest.fn().mockReturnValue(moment('2025-01-01'));
   comp.getEndDate = jest.fn().mockReturnValue(moment('2025-01-02'));
+  comp.balanceEndpoint = 'test-model@SOAI';
   
   // Set assistantEnabled to true to bypass the early return
   comp.assistantEnabled = true;
@@ -1304,6 +1334,7 @@ test('full data loading flow for users', async () => {
   expect(comp.aimetrics[0].usage.totalMessages).toBe(50);
   expect(comp.lookupSocId).toHaveBeenCalledWith('12345678-1234-1234-1234-123456789012');
   expect(comp.creditsRemaining).toBe(1000);
+  expect(comp.creditsLoaded).toBe(true);
 });
 
 test('settings persistence integration', () => {
@@ -1485,14 +1516,14 @@ test('setupCharts initializes all chart configurations', () => {
   
   comp.setupCharts();
   
-  expect(comp.setupPieChart).toHaveBeenCalledTimes(3);
+  expect(comp.setupPieChart).toHaveBeenCalledTimes(4);
   expect(comp.setupPieChart).toHaveBeenCalledWith(comp.graphUsersCreditsOptions, comp.graphUsersCreditsData, comp.i18n.totalCredits);
   expect(comp.setupPieChart).toHaveBeenCalledWith(comp.graphUsersSessionsOptions, comp.graphUsersSessionsData, comp.i18n.totalSessions);
   expect(comp.setupPieChart).toHaveBeenCalledWith(comp.graphUsersMessagesOptions, comp.graphUsersMessagesData, comp.i18n.totalMessages);
+  expect(comp.setupPieChart).toHaveBeenCalledWith(comp.graphSessionsMessagesOptions, comp.graphSessionsMessagesData, comp.i18n.totalMessages);
   
-  expect(comp.setupTimelineChart).toHaveBeenCalledTimes(2);
+  expect(comp.setupTimelineChart).toHaveBeenCalledTimes(1);
   expect(comp.setupTimelineChart).toHaveBeenCalledWith(comp.graphSessionsCreditsOptions, comp.graphSessionsCreditsData, comp.i18n.totalCredits);
-  expect(comp.setupTimelineChart).toHaveBeenCalledWith(comp.graphSessionsMessagesOptions, comp.graphSessionsMessagesData, comp.i18n.totalMessages);
   
   expect(comp.graphUsersCreditsData.key).toBe(0);
   expect(comp.graphUsersSessionsData.key).toBe(0);
@@ -1503,25 +1534,93 @@ test('setupCharts initializes all chart configurations', () => {
 
 test('populateUsersCharts calls populateChart for each user chart', () => {
   comp.populateChart = jest.fn();
+  comp.populateModelsChart = jest.fn();
   comp.aimetrics = [{ totalCredits: 100, totalSessions: 5, totalMessages: 20 }];
   
   comp.populateUsersCharts();
   
-  expect(comp.populateChart).toHaveBeenCalledTimes(3);
+  expect(comp.populateChart).toHaveBeenCalledTimes(2);
   expect(comp.populateChart).toHaveBeenCalledWith(comp.graphUsersCreditsData, comp.aimetrics, 'totalCredits');
   expect(comp.populateChart).toHaveBeenCalledWith(comp.graphUsersSessionsData, comp.aimetrics, 'totalSessions');
-  expect(comp.populateChart).toHaveBeenCalledWith(comp.graphUsersMessagesData, comp.aimetrics, 'totalMessages');
+  expect(comp.populateModelsChart).toHaveBeenCalledWith(comp.graphUsersMessagesData, comp.aimetrics);
 });
 
 test('populateSessionsCharts calls populateChart for each session chart with time field', () => {
   comp.populateChart = jest.fn();
+  comp.populateModelsChart = jest.fn();
   comp.aimetrics = [{ totalCredits: 50, totalMessages: 10, createTime: '2025-01-01T12:00:00Z' }];
   
   comp.populateSessionsCharts();
   
-  expect(comp.populateChart).toHaveBeenCalledTimes(2);
+  expect(comp.populateChart).toHaveBeenCalledTimes(1);
   expect(comp.populateChart).toHaveBeenCalledWith(comp.graphSessionsCreditsData, comp.aimetrics, 'totalCredits', 'createTime');
-  expect(comp.populateChart).toHaveBeenCalledWith(comp.graphSessionsMessagesData, comp.aimetrics, 'totalMessages', 'createTime');
+  expect(comp.populateModelsChart).toHaveBeenCalledWith(comp.graphSessionsMessagesData, comp.aimetrics);
+});
+
+test('populateModelsChart populates chart with model usage data', () => {
+  const chart = { key: 0, labels: [], datasets: [{ data: [] }] };
+  const data = [
+    {
+      usage: {
+        modelUsage: {
+          'gpt-4@OpenAI': { modelMessages: 5 },
+          'claude-3@Anthropic': { modelMessages: 3 }
+        }
+      }
+    },
+    {
+      usage: {
+        modelUsage: {
+          'gpt-4@OpenAI': { modelMessages: 2 }
+        }
+      }
+    }
+  ];
+  
+  comp.populateModelsChart(chart, data);
+  
+  expect(chart.key).toBe(1);
+  expect(chart.labels).toContain('gpt-4@OpenAI');
+  expect(chart.labels).toContain('claude-3@Anthropic');
+  expect(chart.datasets[0].data).toContain(7); // 5 + 2 for gpt-4
+  expect(chart.datasets[0].data).toContain(3); // 3 for claude-3
+});
+
+test('populateModelsChart handles modelUsage at item level', () => {
+  const chart = { key: 0, labels: [], datasets: [{ data: [] }] };
+  const data = [
+    {
+      modelUsage: {
+        'model-1@Provider': { modelMessages: 10 }
+      }
+    }
+  ];
+  
+  comp.populateModelsChart(chart, data);
+  
+  expect(chart.key).toBe(1);
+  expect(chart.labels).toContain('model-1@Provider');
+  expect(chart.datasets[0].data).toContain(10);
+});
+
+test('populateModelsChart handles empty data', () => {
+  const chart = { key: 5, labels: ['old'], datasets: [{ data: [100] }] };
+  
+  comp.populateModelsChart(chart, []);
+  
+  expect(chart.key).toBe(6);
+  expect(chart.labels).toEqual([]);
+  expect(chart.datasets[0].data).toEqual([]);
+});
+
+test('populateModelsChart handles null data', () => {
+  const chart = { key: 3, labels: ['old'], datasets: [{ data: [50] }] };
+  
+  comp.populateModelsChart(chart, null);
+  
+  expect(chart.key).toBe(4);
+  expect(chart.labels).toEqual([]);
+  expect(chart.datasets[0].data).toEqual([]);
 });
 
 test('populateChart increments key and populates data without timefield', () => {
@@ -1698,4 +1797,18 @@ test('calculateCreditPercentage rounds to one decimal place', () => {
   const result = comp.calculateCreditPercentage(33.333, 100);
   
   expect(result).toBe('33.3%');
+});
+
+test('buildModelIdentifier', () => {
+  const tests = [
+    { input: { id: 'model', adapter: 'adapter' }, expected: 'model@adapter' },
+    { input: { id: '', adapter: '' }, expected: '@' },
+    { input: {}, expected: '@' },
+    { input: null, expected: '' },
+  ];
+
+  for (let t of tests) {
+    const output = comp.buildModelIdentifier(t.input);
+    expect(output).toBe(t.expected);
+  }
 });
