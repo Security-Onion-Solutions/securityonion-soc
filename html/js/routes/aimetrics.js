@@ -44,6 +44,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         { title: this.$root.i18n.inputTokens, value: 'inputTokens' },
         { title: this.$root.i18n.outputTokens, value: 'outputTokens' },
         { title: this.$root.i18n.credits, value: 'credits' },
+        { title: this.$root.i18n.model, value: 'model' },
       ],
     ],
     expandedFields: {
@@ -591,18 +592,45 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       this.graphUsersMessagesData.key = 0;
 
       this.setupTimelineChart(this.graphSessionsCreditsOptions, this.graphSessionsCreditsData, this.i18n.totalCredits);
-      this.setupTimelineChart(this.graphSessionsMessagesOptions, this.graphSessionsMessagesData, this.i18n.totalMessages);
+      this.setupPieChart(this.graphSessionsMessagesOptions, this.graphSessionsMessagesData, this.i18n.totalMessages);
       this.graphSessionsCreditsData.key = 0;
       this.graphSessionsMessagesData.key = 0;
     },
     populateUsersCharts() {
       this.populateChart(this.graphUsersCreditsData, this.aimetrics, 'totalCredits');
       this.populateChart(this.graphUsersSessionsData, this.aimetrics, 'totalSessions');
-      this.populateChart(this.graphUsersMessagesData, this.aimetrics, 'totalMessages');
+      this.populateModelsChart(this.graphUsersMessagesData, this.aimetrics);
     },
     populateSessionsCharts() {
       this.populateChart(this.graphSessionsCreditsData, this.aimetrics, 'totalCredits', 'createTime');
-      this.populateChart(this.graphSessionsMessagesData, this.aimetrics, 'totalMessages', 'createTime');
+      this.populateModelsChart(this.graphSessionsMessagesData, this.aimetrics);
+    },
+    populateModelsChart(chart, data) {
+      chart.key++;
+      chart.labels = [];
+      chart.datasets[0].data = [];
+      
+      if (!data || data.length === 0) return;
+      
+      const modelMessageCounts = {};
+      
+      data.forEach(item => {
+        const modelUsage = item.usage?.modelUsage || item.modelUsage;
+        
+        if (modelUsage) {
+          for (const [modelKey, modelData] of Object.entries(modelUsage)) {
+            if (!modelMessageCounts[modelKey]) {
+              modelMessageCounts[modelKey] = 0;
+            }
+            modelMessageCounts[modelKey] += modelData.modelMessages || 0;
+          }
+        }
+      });
+      
+      for (const [modelKey, messageCount] of Object.entries(modelMessageCounts)) {
+        chart.labels.push(modelKey);
+        chart.datasets[0].data.push(messageCount);
+      }
     },
     populateChart(chart, data, field, timefield=null) {
       chart.key++;

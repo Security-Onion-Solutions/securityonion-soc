@@ -271,7 +271,7 @@ func TestPopulateSessionUsage_Success(t *testing.T) {
 					"total_messages": {
 						"value": 10.0
 					},
-					"by_model": {
+					"model_usage": {
 						"buckets": [
 							{
 								"key": "claude-sonnet-4.5@SOAI",
@@ -326,7 +326,7 @@ func TestPopulateSessionUsage_Success(t *testing.T) {
 					"total_messages": {
 						"value": 15.0
 					},
-					"by_model": {
+					"model_usage": {
 						"buckets": [
 							{
 								"key": "claude-sonnet-4.5@SOAI",
@@ -953,7 +953,7 @@ func TestGetUsage(t *testing.T) {
 						"total_sessions": {
 							"value": 3.0
 						},
-						"by_model": {
+						"model_usage": {
 							"buckets": [
 								{
 									"key": "claude-sonnet-4.5@SOAI",
@@ -1006,7 +1006,7 @@ func TestGetUsage(t *testing.T) {
 						"total_sessions": {
 							"value": 5.0
 						},
-						"by_model": {
+						"model_usage": {
 							"buckets": [
 								{
 									"key": "claude-sonnet-4.5@SOAI",

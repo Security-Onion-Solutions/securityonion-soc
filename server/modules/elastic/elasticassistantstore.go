@@ -660,7 +660,7 @@ func (store *ElasticAssistantstore) populateSessionUsage(ctx context.Context, se
 						"field": store.schemaPrefix + "chat.sessionId",
 					},
 				},
-				"by_model": map[string]any{
+				"model_usage": map[string]any{
 					"terms": map[string]any{
 						"field": store.schemaPrefix + "chat.model",
 						"size":  100,
@@ -783,7 +783,7 @@ func (store *ElasticAssistantstore) populateSessionUsage(ctx context.Context, se
 					}
 
 					// Extract per-model usage statistics
-					if byModelAgg, ok := aggs["by_model"].(map[string]any); ok {
+					if byModelAgg, ok := aggs["model_usage"].(map[string]any); ok {
 						if buckets, ok := byModelAgg["buckets"].([]any); ok && len(buckets) > 0 {
 							usage.ModelUsage = make(map[string]*model.ModelUsageStats)
 
@@ -1189,7 +1189,7 @@ func (store *ElasticAssistantstore) GetUsage(ctx context.Context, start time.Tim
 							"field": store.schemaPrefix + "chat.sessionId",
 						},
 					},
-					"by_model": map[string]any{
+					"model_usage": map[string]any{
 						"terms": map[string]any{
 							"field": store.schemaPrefix + "chat.model",
 							"size":  100,
@@ -1309,7 +1309,7 @@ func (store *ElasticAssistantstore) GetUsage(ctx context.Context, start time.Tim
 
 						// Extract per-model usage statistics
 						var modelUsage map[string]*model.ModelUsageStats
-						if byModelAgg, ok := bucket["by_model"].(map[string]any); ok {
+						if byModelAgg, ok := bucket["model_usage"].(map[string]any); ok {
 							if modelBuckets, ok := byModelAgg["buckets"].([]any); ok && len(modelBuckets) > 0 {
 								modelUsage = make(map[string]*model.ModelUsageStats)
 
