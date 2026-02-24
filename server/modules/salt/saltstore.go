@@ -949,7 +949,11 @@ func (store *Saltstore) coerceMapListFieldTypes(list []map[string]any, uiElement
 			}
 			coerced, err := store.forceType(interfaceToString(fieldVal), uiElement.ForcedType)
 			if err != nil {
-				return nil, fmt.Errorf("field %q: %w", uiElement.Field, err)
+				if uiElement.Required {
+					return nil, fmt.Errorf("field %q: %w", uiElement.Field, err)
+				} else {
+					coerced = fieldVal
+				}
 			}
 			m[uiElement.Field] = coerced
 		}
