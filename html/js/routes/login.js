@@ -102,10 +102,7 @@ routes.push({ path: '/:pathMatch(.*)*', name: 'login', component: {
 
         const flow = await this.$root.authApi.get('login/flows?id=' + this.$root.getAuthFlowId());
         if (!flow.data.ui || !flow.data.ui.nodes) {
-          // throw out current flowID and start over
-          localStorage.removeItem('flowID');
           this.$root.showLogin();
-
           return;
         }
 
@@ -142,7 +139,6 @@ routes.push({ path: '/:pathMatch(.*)*', name: 'login', component: {
         }
       } catch (error) {
         if (error.response && error.response.status == 410) {
-          localStorage.removeItem('flowID');
           document.location = "/login";
         } else {
           this.$root.showError(error);
