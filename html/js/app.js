@@ -613,15 +613,7 @@ $(document).ready(function () {
           }
         },
         getAuthFlowId() {
-          let flow = this.getSearchParam('flow');
-
-          if (flow) {
-            localStorage.setItem('flowID', flow);
-          } else {
-            flow = localStorage.getItem('flowID');
-          }
-
-          return flow;
+          return this.getSearchParam('flow');
         },
         getRedirectPage() {
           return this.getSearchParam('r');
