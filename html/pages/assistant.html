@@ -130,22 +130,22 @@
 						fa-file-export
 					</v-icon>
 					<template v-if="currentChatId">
-						<v-icon id="attachToCaseBtn" @click="caseMenuVisible = true">fa-exclamation-triangle</v-icon>
+						<v-icon id="attachToCaseBtn" :title="i18n.assistantAttachToCaseHelp" @click="caseMenuVisible = true">fa-exclamation-triangle</v-icon>
 						<v-menu v-model="caseMenuVisible" target="#attachToCaseBtn" data-aid="assistant_case_attach_menu">
 							<v-list id="assistant-escalate-menu" color="secondary">
-								<v-list-item id="attachToCaseNew" density="compact" v-bind:title.attr="i18n.escalateNewCaseHelp" data-aid="assistant_attach_to_case_new" @click="attachToCase(currentChatId, null);">
+								<v-list-item id="attachToCaseNew" density="compact" v-bind:title.attr="i18n.assistantAttachToNewCaseHelp" data-aid="assistant_attach_to_case_new" @click="attachToCase(currentChatId, null);">
 									<template #prepend>
-										<v-icon :alt="i18n.escalateNewCase">fa-plus</v-icon>
+										<v-icon :alt="i18n.assistantAttachToNewCase">fa-plus</v-icon>
 									</template>
 									<v-list-item-title class="theme-text">
-										{{ i18n.escalateNewCase }}
+										{{ i18n.assistantAttachToNewCase }}
 									</v-list-item-title>
 								</v-list-item>
 								<v-divider></v-divider>
-								<v-list-subheader class="theme-text">{{ i18n.escalateExistingCase }}</v-list-subheader>
-								<v-list-item v-for="socCase in mruCases" density="compact" v-bind:title.attr="i18n.escalateExistingCaseHelp" @click="attachToCase(currentChatId, socCase.id)" :data-aid="'assistant_attach_to_case_existing'">
+								<v-list-subheader class="theme-text">{{ i18n.assistantAttachToExistingCase }}</v-list-subheader>
+								<v-list-item v-for="socCase in mruCases" density="compact" v-bind:title.attr="i18n.assistantAttachToExistingCaseHelp" @click="attachToCase(currentChatId, socCase.id)" :data-aid="'assistant_attach_to_case_existing'">
 									<template #prepend>
-										<v-icon :alt="i18n.escalateExistingCase">fa-link</v-icon>
+										<v-icon :alt="i18n.assistantAttachToExistingCase">fa-link</v-icon>
 									</template>
 									<v-list-item-title class="theme-text">
 										{{ formatCaseSummary(socCase) }}
