@@ -2123,7 +2123,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }
 
       if (caseId === null) { 
-        caseId = this.createCase(session.title);
+        caseId = await this.createCase(session.title);
       }
 
       const payload = {
