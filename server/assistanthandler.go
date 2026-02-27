@@ -419,12 +419,13 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 // @Tags         Assistant
 // @Security     bearer[assistant/read_authored]
 // @Security     bearer[assistant/read_all]
+// @Param        modelAndAdapter  path  string  true  "Model Id (including slashes) and Adapter Name to get balance for" example(qwen/qwen2.5-small@MyOpenAIChatAdapter)
 // @Produce      json
 // @Success      200  {object}  model.Usage "Current assistant balance and usage information"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
-// @Router       /api/assistant/balance [get]
+// @Router       /api/assistant/balance/{modelAndAdapter} [get]
 func (h *AssistantHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
