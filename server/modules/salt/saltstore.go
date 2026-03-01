@@ -1243,6 +1243,28 @@ func (store *Saltstore) Import(ctx context.Context, node string, file string, im
 	return &output, err
 }
 
+func (store *Saltstore) RunTroubleshoot(ctx context.Context, node string, script string) (string, error) {
+	if err := store.server.CheckAuthorized(ctx, "read", "grid"); err != nil {
+		return "", err
+	}
+
+	args := map[string]string{
+		"command": "run-troubleshoot",
+		"node":    node,
+		"script":  script + " --json",
+	}
+
+	// Use long timeout since troubleshoot scripts may take up to 120 seconds
+	ctxTimeout := options.WithTimeoutMs(ctx, store.longRelayTimeoutMs)
+
+	output, err := store.execCommand(ctxTimeout, args)
+	if err != nil {
+		return "", err
+	}
+
+	return output, nil
+}
+
 func (store *Saltstore) lookupEmailFromId(ctx context.Context, id string) string {
 	user, _ := store.server.Userstore.GetUserById(ctx, id)
 	if user != nil && user.Id == id {

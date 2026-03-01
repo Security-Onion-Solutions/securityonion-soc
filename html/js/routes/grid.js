@@ -58,6 +58,10 @@ routes.push({ path: '/grid', name: 'grid', component: {
     gridMemberTestConfirmDialog: false,
     gridMemberRestartConfirmDialog: false,
     gridMemberUploadConfirmDialog: false,
+    troubleshootDialog: false,
+    troubleshootData: null,
+    troubleshootError: null,
+    troubleshootLoading: false,
     uploadForm: { valid: true, attachment: null },
     maxUploadSizeBytes: 25 * 1024 * 1024,
     staleMetricsMs: 120000,
@@ -359,6 +363,46 @@ routes.push({ path: '/grid', name: 'grid', component: {
       }
       this.$root.stopLoading();
       this.hideRestartConfirm();
+    },
+    canTroubleshoot(node) {
+      // Manager-type nodes only
+      return ['so-manager', 'so-managersearch', 'so-standalone'].indexOf(node.role) != -1;
+    },
+    showTroubleshootDialog(node) {
+      this.selectedNode = node;
+      this.troubleshootData = null;
+      this.troubleshootError = null;
+      this.troubleshootDialog = true;
+      this.runTroubleshoot();
+    },
+    hideTroubleshootDialog() {
+      this.troubleshootDialog = false;
+      this.troubleshootData = null;
+      this.troubleshootError = null;
+      this.selectedNode = null;
+    },
+    async runTroubleshoot() {
+      const nodeId = this.getNodeName(this.selectedNode);
+      this.troubleshootLoading = true;
+      this.troubleshootError = null;
+      try {
+        const response = await this.$root.papi.post('gridmembers/' + nodeId + "/estroubleshoot", null, {
+          params: {gridId: this.selectedNode.gridId}
+        });
+        try {
+          this.troubleshootData = JSON.parse(response.data.output);
+        } catch (parseError) {
+          this.troubleshootError = 'Failed to parse troubleshoot output';
+        }
+      } catch (error) {
+        this.troubleshootError = error.message || error;
+      }
+      this.troubleshootLoading = false;
+    },
+    getStatusColor(status) {
+      if (status === 'green' || status === 'ok') return 'success';
+      if (status === 'yellow' || status === 'high') return 'warning';
+      return 'error';
     },
     hasContainer(item, container) {
       return item && item.containers && item.containers.find(function(x) {

@@ -85,6 +85,21 @@ func (mr *MockGridMembersstoreMockRecorder) ManageMember(ctx, operation, id any)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ManageMember", reflect.TypeOf((*MockGridMembersstore)(nil).ManageMember), ctx, operation, id)
 }
 
+// RunTroubleshoot mocks base method.
+func (m *MockGridMembersstore) RunTroubleshoot(ctx context.Context, node, script string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RunTroubleshoot", ctx, node, script)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RunTroubleshoot indicates an expected call of RunTroubleshoot.
+func (mr *MockGridMembersstoreMockRecorder) RunTroubleshoot(ctx, node, script any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunTroubleshoot", reflect.TypeOf((*MockGridMembersstore)(nil).RunTroubleshoot), ctx, node, script)
+}
+
 // SendFile mocks base method.
 func (m *MockGridMembersstore) SendFile(ctx context.Context, node, from, to string, cleanup bool) error {
 	m.ctrl.T.Helper()
