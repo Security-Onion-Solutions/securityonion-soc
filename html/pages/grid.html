@@ -416,7 +416,7 @@
 													<v-btn v-if="canUpload(item)" id="import-minion" icon variant="text" size="small" :title="i18n.uploadPCAPEVTX" @click="showUploadConfirm(item)" class="theme-text" data-aid="grid_node_import">
 														<v-icon class="theme-icon">fa-upload</v-icon>
 													</v-btn>
-													<v-btn id="restart-minion" icon variant="text" size="small" :title="item.osNeedsRestart == 1 ? i18n.restartRequiredHelp : i18n.restartMinionHelp" @click="showRestartConfirm(item)" class="theme-text" data-aid="grid_node_restart">
+													<v-btn v-if="canRestart(item)" id="restart-minion" icon variant="text" size="small" :title="item.osNeedsRestart == 1 ? i18n.restartRequiredHelp : i18n.restartMinionHelp" @click="showRestartConfirm(item)" class="theme-text" data-aid="grid_node_restart">
 														<v-icon :color="item.osNeedsRestart == 1 ? 'info' : ''" :class="{ 'theme-icon': item.osNeedsRestart != 1 }">fa-power-off</v-icon>
 													</v-btn>
 													<v-btn icon variant="text" size="small" :title="i18n.clickForMoreInformation" :href="$root.parameters.docsUrl + 'grid.html'" :target="$root.target('so-help')" class="theme-text" data-aid="grid_node_help">

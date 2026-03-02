@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -736,13 +736,15 @@ func TestAddUpdateScript(t *testing.T) {
 
 	timeNow := time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)
 
+	// Test unacknowledge (ack=false)
 	criteria := &model.EventUpdateCriteria{}
-	store.addUpdateScripts(criteria, timeNow, false, false)
+	store.AddAckEscalateUpdateScripts(criteria, timeNow, false, false, "admin")
 	assert.Len(t, criteria.UpdateScripts, 1)
 	assert.Equal(t, "ctx._source.event.acknowledged = false;", criteria.UpdateScripts[0])
 
+	// Test acknowledge without escalate
 	criteria = &model.EventUpdateCriteria{}
-	store.addUpdateScripts(criteria, timeNow, true, false)
+	store.AddAckEscalateUpdateScripts(criteria, timeNow, true, false, "admin")
 	assert.Len(t, criteria.UpdateScripts, 1)
 	expected := `
 			boolean track_timing = false;
@@ -757,6 +759,7 @@ func TestAddUpdateScript(t *testing.T) {
 
 			if (ctx._source.event.acknowledged != true) {
 				ctx._source.event.acknowledged = true;
+				ctx._source.event.acknowledged_by = 'admin';
 				if (track_timing) {
 					ctx._source.event.acknowledged_timestamp = now_date;
 					ctx._source.event.acknowledged_elapsed_seconds = elapsed_seconds;
@@ -765,6 +768,7 @@ func TestAddUpdateScript(t *testing.T) {
 
 			if (ctx._source.event.escalated != true && esc_bool) {
 				ctx._source.event.escalated = esc_bool;
+				ctx._source.event.escalated_by = 'admin';
 				if (track_timing) {
 					ctx._source.event.escalated_timestamp = now_date;
 					ctx._source.event.escalated_elapsed_seconds = elapsed_seconds;
@@ -773,10 +777,58 @@ func TestAddUpdateScript(t *testing.T) {
 			`
 	assert.Equal(t, expected, criteria.UpdateScripts[0])
 
+	// Test acknowledge with escalate
 	criteria = &model.EventUpdateCriteria{}
-	store.addUpdateScripts(criteria, timeNow, true, true)
+	store.AddAckEscalateUpdateScripts(criteria, timeNow, true, true, "admin")
 	assert.Len(t, criteria.UpdateScripts, 1)
 	assert.Contains(t, criteria.UpdateScripts[0], "esc_bool = true")
+	assert.Contains(t, criteria.UpdateScripts[0], "ctx._source.event.escalated_by = 'admin';")
+
+	// Test investigation case without session ID
+	criteria = &model.EventUpdateCriteria{}
+	store.AddInvestigationUpdateScripts(criteria, timeNow, "admin", false)
+	assert.Len(t, criteria.UpdateScripts, 1)
+	expected = `
+			boolean track_timing = false;
+			Instant now_instant = Instant.ofEpochMilli(1257894000000L);
+			ZonedDateTime now_date = ZonedDateTime.ofInstant(now_instant, ZoneId.of('Z'));
+			
+			ctx._source.event.investigated = true;
+			ctx._source.event.investigated_by = 'admin';
+			if (track_timing) {
+				ctx._source.event.investigated_timestamp = now_date;
+			}
+			`
+	assert.Equal(t, expected, criteria.UpdateScripts[0])
+
+	// Test investigation case with session ID
+	criteria = &model.EventUpdateCriteria{}
+	store.AddInvestigationUpdateScripts(criteria, timeNow, "admin", false, "test-session-123")
+	assert.Len(t, criteria.UpdateScripts, 1)
+	expected = `
+			boolean track_timing = false;
+			Instant now_instant = Instant.ofEpochMilli(1257894000000L);
+			ZonedDateTime now_date = ZonedDateTime.ofInstant(now_instant, ZoneId.of('Z'));
+			
+			ctx._source.event.investigated = true;
+			ctx._source.event.investigated_by = 'admin';
+			ctx._source.event.investigation_session_id = 'test-session-123';
+			if (track_timing) {
+				ctx._source.event.investigated_timestamp = now_date;
+			}
+			`
+	assert.Equal(t, expected, criteria.UpdateScripts[0])
+
+	// Test investigation delete case
+	criteria = &model.EventUpdateCriteria{}
+	store.AddInvestigationUpdateScripts(criteria, timeNow, "admin", true)
+	assert.Len(t, criteria.UpdateScripts, 1)
+	expected = `
+		if (ctx._source.event.containsKey('investigation_session_id')) {
+			ctx._source.event.remove('investigation_session_id');
+		}
+	`
+	assert.Equal(t, expected, criteria.UpdateScripts[0])
 }
 
 func TestSearchPermissionsAuthorized(t *testing.T) {
@@ -930,4 +982,85 @@ func TestSearchPermissionsUnauthorized(t *testing.T) {
 	assert.Equal(t, "read", unauth.Operation)
 	assert.Equal(t, "events", unauth.Target)
 	assert.Nil(t, results2)
+}
+
+func TestAddParameterToFilter(t *testing.T) {
+	store := &ElasticEventstore{}
+	filter := model.NewFilter()
+
+	json := `{"hits":{"hits":[{"_source":{"suricata":{"capture_file":"/path/to/pcap"}}}]}}`
+	store.addParameterToFilter(json, "suricata.capture_file", filter)
+	assert.Equal(t, "/path/to/pcap", filter.Parameters["suricata.capture_file"])
+
+	// Test overwrite
+	json2 := `{"hits":{"hits":[{"_source":{"suricata":{"capture_file":"/new/path"}}}]}}`
+	store.addParameterToFilter(json2, "suricata.capture_file", filter)
+	assert.Equal(t, "/new/path", filter.Parameters["suricata.capture_file"])
+
+	// Test empty value
+	json3 := `{"hits":{"hits":[{"_source":{"suricata":{}}}]}}`
+	store.addParameterToFilter(json3, "suricata.capture_file", filter)
+	assert.Equal(t, "/new/path", filter.Parameters["suricata.capture_file"], "should not have overwritten with empty")
+}
+
+func TestPopulateJobFromDocQuery(t *testing.T) {
+	ctx := context.Background()
+	client, transport := modmock.NewMockClient(t)
+	srv := server.NewFakeAuthorizedServer(nil)
+	store := &ElasticEventstore{
+		esClient:          client,
+		server:            srv,
+		index:             "myIndex",
+		esSearchOffsetMs:  1000,
+		timeShiftMs:       500,
+		defaultDurationMs: 60000,
+	}
+
+	// Primary search response
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(`{
+			"hits" : {
+				"total" : {
+					"value" : 1,
+					"relation" : "eq"
+				},
+				"hits" : [
+					{
+						"_source" : {
+							"@timestamp" : "2024-07-22T15:54:30.269Z",
+							"source" : { "ip": "1.1.1.1", "port": 1111 },
+							"destination" : { "ip": "2.2.2.2", "port": 2222 },
+							"network" : { "transport": "tcp" },
+							"suricata" : { "capture_file": "/path/to/suricata.pcap" },
+							"observer" : { "name": "sensor1" }
+						}
+					}
+				]
+			}
+		}`)),
+	}, nil)
+
+	job := model.NewJob()
+	err := store.PopulateJobFromDocQuery(ctx, "_id", "some-id", "2024-07-22T15:54:30.269Z", job)
+	assert.NoError(t, err)
+	assert.Equal(t, "/path/to/suricata.pcap", job.Filter.Parameters["suricata.capture_file"])
+	assert.Equal(t, "sensor1", job.NodeId)
+	assert.Equal(t, "1.1.1.1", job.Filter.SrcIp)
+	assert.Equal(t, "tcp", job.Filter.Protocol)
+
+	// Check begin/end times
+	// timestamp: 2024-07-22T15:54:30.269Z
+	// duration: 60000ms
+	// timeShift: 500ms
+	// begin = timestamp - 60000 - 500 = timestamp - 60500ms
+	// end = timestamp + 60000 + 500 = timestamp + 60500ms
+	ts, _ := time.Parse(time.RFC3339, "2024-07-22T15:54:30.269Z")
+	expectedBegin := ts.Add(time.Duration(-60500) * time.Millisecond)
+	expectedEnd := ts.Add(time.Duration(60500) * time.Millisecond)
+	assert.True(t, expectedBegin.Equal(job.Filter.BeginTime))
+	assert.True(t, expectedEnd.Equal(job.Filter.EndTime))
 }

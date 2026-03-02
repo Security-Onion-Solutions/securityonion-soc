@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -1161,6 +1161,7 @@ test('getSettingLink', () => {
 
 test('notifyChangedSetting', () => {
   // Test adding new module
+  comp.nodes = [{id: 'onlyone'}];
   comp.changedModules = [];
   const setting = { id: 'module1.setting1' };
   comp.notifyChangedSetting(setting);
@@ -1183,6 +1184,7 @@ test('notifyChangedSetting', () => {
 
 test('notifyChangedSetting with moduleStateMap', () => {
   // Test override with advanced prefix
+  comp.nodes = [{id: 'onlyone'}];
   comp.changedModules = [];
   const settingAdvanced = { id: 'advanced.some.setting' };
   comp.notifyChangedSetting(settingAdvanced);
@@ -1248,6 +1250,56 @@ test('notifyChangedSetting with moduleStateMap', () => {
   comp.notifyChangedSetting(settingBpfZeek); // adds zeek
   comp.notifyChangedSetting(settingAdvanced); // duplicate, should not add again
   expect(comp.changedModules).toEqual(['fake1-to-trigger-highstate', 'fake2-to-trigger-highstate', 'zeek']);
+});
+
+test('notifyChangedSetting_MultiNode', () => {
+  // Setup multi-node environment
+  comp.nodes = [
+    { id: 'master', role: 'manager' },
+    { id: 'worker', role: 'sensor' }
+  ];
+  
+  // Verify isSingleNodeGrid returns false
+  expect(comp.isSingleNodeGrid()).toBe(false);
+
+  const managerOnlyStates = [
+    "backup",
+    "ca",
+    "elastalert",
+    "hydra",
+    "influxdb",
+    "kibana",
+    "kratos",
+    "manager",
+    "registry",
+    "soc",
+    "telegraf"
+  ];
+
+  // Scenario 1: Verify all manager-only states
+  managerOnlyStates.forEach(module => {
+    comp.changedModules = [];
+    const setting = { id: module + '.enabled' };
+    comp.notifyChangedSetting(setting);
+    expect(comp.changedModules).toEqual([module]);
+  });
+
+  const REQUIRE_GRID_HIGHSTATE = ["fake1-to-trigger-highstate", "fake2-to-trigger-highstate"];
+
+  // Scenario 2: Verify removed states trigger highstate
+  ["nginx", "ssl"].forEach(module => {
+    comp.changedModules = [];
+    const setting = { id: module + '.enabled' };
+    comp.notifyChangedSetting(setting);
+    expect(comp.changedModules).toEqual(REQUIRE_GRID_HIGHSTATE);
+  });
+
+  // Scenario 3: Changing a module that is NOT in managerOnlyStates (e.g., unknown)
+  comp.changedModules = [];
+  const settingUnknown = { id: 'unknown.module' };
+  comp.notifyChangedSetting(settingUnknown);
+  // Should escalate to full grid highstate
+  expect(comp.changedModules).toEqual(REQUIRE_GRID_HIGHSTATE);
 });
 
 test('saveLocalSettings', () => {

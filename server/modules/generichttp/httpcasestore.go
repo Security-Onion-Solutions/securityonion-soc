@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -159,4 +159,8 @@ func (store *HttpCasestore) BuildBulkIndexer(ctx context.Context, logger log.Int
 
 func (store *HttpCasestore) ConvertObjectToDocument(ctx context.Context, kind string, obj any, auditable *model.Auditable, isEdit bool, auditDocId *string, op *string) (doc []byte, index string, err error) {
 	return nil, "", errors.New("Unsupported operation by this module")
+}
+
+func (store *HttpCasestore) GetCaseIdsWithArtifact(ctx context.Context, artType string, value string) ([]string, error) {
+	return nil, errors.New("Unsupported operation by this module")
 }

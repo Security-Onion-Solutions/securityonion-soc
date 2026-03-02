@@ -281,6 +281,21 @@ func (mr *MockCasestoreMockRecorder) GetCaseHistory(ctx, caseId any) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCaseHistory", reflect.TypeOf((*MockCasestore)(nil).GetCaseHistory), ctx, caseId)
 }
 
+// GetCaseIdsWithArtifact mocks base method.
+func (m *MockCasestore) GetCaseIdsWithArtifact(ctx context.Context, artType, value string) ([]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetCaseIdsWithArtifact", ctx, artType, value)
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetCaseIdsWithArtifact indicates an expected call of GetCaseIdsWithArtifact.
+func (mr *MockCasestoreMockRecorder) GetCaseIdsWithArtifact(ctx, artType, value any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCaseIdsWithArtifact", reflect.TypeOf((*MockCasestore)(nil).GetCaseIdsWithArtifact), ctx, artType, value)
+}
+
 // GetComment mocks base method.
 func (m *MockCasestore) GetComment(ctx context.Context, commentId string) (*model.Comment, error) {
 	m.ctrl.T.Helper()

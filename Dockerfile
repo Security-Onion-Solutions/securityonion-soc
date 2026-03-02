@@ -1,5 +1,5 @@
 # Copyright 2019 Jason Ertel (github.com/jertel).
-# Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+# Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 # or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 # https://securityonion.net/license; you may not use this file except in compliance with the
 # Elastic License 2.0.
@@ -34,6 +34,8 @@ RUN if [ "$VERSION" != "0.0.0" ]; then mkdir gitdocs && cd gitdocs && \
 	/tmp/virtualenv/bin/python -m sphinx -T -E -b html -d _build/doctrees -D language=en . _build/html; \
 	else mkdir -p gitdocs/_build/html; fi
 RUN npm install jest jest-environment-jsdom --global
+
+RUN if [ -f "src2/prompt_system.md" ]; then echo "compressing system prompt"; gzip -c src2/prompt_system.md > server/modules/assistant/SOSystemPrompt.bin; fi
 RUN ./build.sh "$VERSION"
 
 

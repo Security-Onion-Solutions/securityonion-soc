@@ -1,4 +1,4 @@
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -8,6 +8,7 @@ package assistant
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -94,7 +95,8 @@ func (t *AckAlertsTool) Execute(ctx context.Context, server *server.Server, para
 
 	err = json.Unmarshal([]byte(params), args)
 	if err != nil {
-		return nil, err
+		logger.WithError(err).WithField("toolParams", params).Error("failed to unmarshal tool params")
+		return nil, errors.New("ERROR_ASSISTANT_UNMARSHAL_PARAMS")
 	}
 
 	var timeRange string

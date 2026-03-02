@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -88,6 +88,16 @@ test('formatCount', () => {
   expect(app.formatCount(1234)).toBe("1,234");
 });
 
+test('formatCountMK', () => {
+  expect(app.formatCountMK(null)).toBe('0');
+  expect(app.formatCountMK(1000000)).toBe('1.0m');
+  expect(app.formatCountMK(1240000)).toBe('1.2m');
+  expect(app.formatCountMK(900000)).toBe('900.0k');
+  expect(app.formatCountMK(456456)).toBe('456.5k');
+  expect(app.formatCountMK(999)).toBe('999');
+  expect(app.formatCountMK(0)).toBe('0');
+});
+
 test('formatStringArray', () => {
   expect(app.formatStringArray(['hi','there','foo'])).toBe('hi, there, foo');
   expect(app.formatStringArray(['hi','there'])).toBe('hi, there');
@@ -155,6 +165,38 @@ test('populateUserDetailsAgent', async () => {
   app.usersLoadedTime = new Date().time;
   await app.populateUserDetails(obj, "userId", "owner")
   expect(obj.owner).toBe(app.i18n.systemUser);
+});
+
+test('getUserDisplayName', () => {
+  expect(app.getUserDisplayName(null)).toBe("");
+  expect(app.getUserDisplayName({email: 'test@so.net'})).toBe('test@so.net');
+});
+
+test('pickUserInfo', () => {
+  app.users = [{id:'123', email:'test@so.net'}];
+  app.usersLoadedTime = new Date().time;
+  // Field doesn't end in _by
+  expect(app.pickUserInfo('user', '123')).toBe(null);
+  // Field ends in _by, user found
+  expect(app.pickUserInfo('acknowledged_by', '123')).toBe('test@so.net');
+  // Field ends in _by, user not found
+  expect(app.pickUserInfo('acknowledged_by', '456')).toBe(null);
+});
+
+test('tryResolveAlias', () => {
+  app.ip2host = {'1.2.3.4': ['host1']};
+  app.users = [{id:'123', email:'test@so.net'}];
+  app.usersLoadedTime = new Date().time;
+  app.i18n.some_author = "Localized Author";
+
+  // IP alias
+  expect(app.tryResolveAlias('source.ip', '1.2.3.4')).toBe('host1');
+  // Detection author localization
+  expect(app.tryResolveAlias('detection.author', 'some_author')).toBe('Localized Author');
+  // User info via pickUserInfo
+  expect(app.tryResolveAlias('escalated_by', '123')).toBe('test@so.net');
+  // No match
+  expect(app.tryResolveAlias('something', 'else')).toBe(null);
 });
 
 test('isUserAdmin', async () => {
@@ -421,9 +463,14 @@ test('isLicensed', () => {
 });
 
 test('colorLicenseStatus', () => {
+  app.licenseKey = { name: 'Security Onion Pro' };
   expect(app.colorLicenseStatus('foo')).toBe('info');
   expect(app.colorLicenseStatus(null)).toBe('info');
   expect(app.colorLicenseStatus("active")).toBe('success');
+
+  app.licenseKey.name = 'Academic Student';
+  expect(app.colorLicenseStatus("active")).toBe('white');
+
   expect(app.colorLicenseStatus("exceeded")).toBe('error');
   expect(app.colorLicenseStatus("expired")).toBe('warning');
   expect(app.colorLicenseStatus("invalid")).toBe('error');
@@ -725,8 +772,8 @@ test('isDetectionEngineStatusUnhealthy', () => {
   app.statusByGridId[''] = { detections: { strelka: { integrityFailure: true }}};
   expect(app.isDetectionEngineStatusUnhealthy('strelka')).toBe(true);
 
-  // Test unknown engine
-  expect(app.isDetectionEngineStatusUnhealthy('unknown')).toBe(true);
+  // Test unknown engine (similar to pending state)
+  expect(app.isDetectionEngineStatusUnhealthy('unknown')).toBe(false);
 });
 
 test('isAttentionNeeded', () => {

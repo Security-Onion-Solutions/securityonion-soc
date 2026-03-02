@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -33,4 +33,12 @@ func TestVerifyClient(tester *testing.T) {
 	client.Permissions = []string{"test/read"}
 
 	assert.Nil(tester, client.Verify())
+}
+
+func TestIsClient(tester *testing.T) {
+	assert.True(tester, IsClient("socl_123"))
+	assert.True(tester, IsClient("socl_"))
+	assert.False(tester, IsClient("socl"))
+	assert.False(tester, IsClient("123"))
+	assert.False(tester, IsClient(""))
 }

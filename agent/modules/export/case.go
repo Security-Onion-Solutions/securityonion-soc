@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -56,6 +56,30 @@ func (export *Export) getCaseDetailsFromServer(caseId string) (*CaseTemplateInpu
 		log.WithFields(log.Fields{
 			"caseId": caseId,
 		}).WithError(err).Error("failed to get case observables")
+	}
+
+	for _, attachment := range caseTemplateInput.Attachments {
+		if attachment.ArtifactType == "assistant_chat" {
+			currSessionId := attachment.Value
+			sessionExists := false
+			for _, session := range caseTemplateInput.AssistantSessions {
+				if session.Session.SessionId == currSessionId {
+					sessionExists = true
+					break
+				}
+			}
+			if !sessionExists {
+				sessionDetails := &model.AssistantSessionDetails{}
+				_, err := export.agent.Client.SendAuthorizedObject("GET", fmt.Sprintf("/api/assistant/sessions/%s", currSessionId), nil, sessionDetails)
+				if err != nil {
+					log.WithFields(log.Fields{
+						"sessionId": currSessionId,
+					}).WithError(err).Error("failed to get assistant session for attachment")
+				} else {
+					caseTemplateInput.AssistantSessions = append(caseTemplateInput.AssistantSessions, sessionDetails)
+				}
+			}
+		}
 	}
 
 	// Get related events
@@ -119,14 +143,15 @@ func (export *Export) getCaseDetailsFromServer(caseId string) (*CaseTemplateInpu
 }
 
 type CaseTemplateInput struct {
-	Case          *model.Case
-	Comments      []*model.Comment
-	Attachments   []*model.Artifact
-	Observables   []*model.Artifact
-	Detections    []*model.Detection
-	RelatedEvents []*model.RelatedEvent
-	History       []*model.Auditable
-	TotalHours    float64
+	Case              *model.Case
+	Comments          []*model.Comment
+	Attachments       []*model.Artifact
+	AssistantSessions []*model.AssistantSessionDetails
+	Observables       []*model.Artifact
+	Detections        []*model.Detection
+	RelatedEvents     []*model.RelatedEvent
+	History           []*model.Auditable
+	TotalHours        float64
 }
 
 func (export *Export) generateCaseReport(caseId string) ([]byte, error) {

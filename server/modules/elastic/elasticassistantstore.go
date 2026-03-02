@@ -1,4 +1,4 @@
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -660,6 +660,34 @@ func (store *ElasticAssistantstore) populateSessionUsage(ctx context.Context, se
 						"field": store.schemaPrefix + "chat.sessionId",
 					},
 				},
+				"model_usage": map[string]any{
+					"terms": map[string]any{
+						"field": store.schemaPrefix + "chat.model",
+						"size":  100,
+					},
+					"aggs": map[string]any{
+						"model_input_tokens": map[string]any{
+							"sum": map[string]any{
+								"field": store.schemaPrefix + "chat.message.usage.input_tokens",
+							},
+						},
+						"model_output_tokens": map[string]any{
+							"sum": map[string]any{
+								"field": store.schemaPrefix + "chat.message.usage.output_tokens",
+							},
+						},
+						"model_credits": map[string]any{
+							"sum": map[string]any{
+								"field": store.schemaPrefix + "chat.message.usage.credits",
+							},
+						},
+						"model_messages": map[string]any{
+							"value_count": map[string]any{
+								"field": store.schemaPrefix + "chat.sessionId",
+							},
+						},
+					},
+				},
 			},
 			"size": 0,
 		}
@@ -751,6 +779,52 @@ func (store *ElasticAssistantstore) populateSessionUsage(ctx context.Context, se
 					if messagesAgg, ok := aggs["total_messages"].(map[string]any); ok {
 						if value, ok := messagesAgg["value"].(float64); ok {
 							usage.TotalMessages = int(value)
+						}
+					}
+
+					// Extract per-model usage statistics
+					if byModelAgg, ok := aggs["model_usage"].(map[string]any); ok {
+						if buckets, ok := byModelAgg["buckets"].([]any); ok && len(buckets) > 0 {
+							usage.ModelUsage = make(map[string]*model.ModelUsageStats)
+
+							for _, bucketObj := range buckets {
+								if bucket, ok := bucketObj.(map[string]any); ok {
+									modelKey := ""
+									if key, ok := bucket["key"].(string); ok {
+										modelKey = key
+									}
+
+									if modelKey != "" {
+										modelStats := &model.ModelUsageStats{}
+
+										if inputAgg, ok := bucket["model_input_tokens"].(map[string]any); ok {
+											if value, ok := inputAgg["value"].(float64); ok {
+												modelStats.ModelInputTokens = int(value)
+											}
+										}
+
+										if outputAgg, ok := bucket["model_output_tokens"].(map[string]any); ok {
+											if value, ok := outputAgg["value"].(float64); ok {
+												modelStats.ModelOutputTokens = int(value)
+											}
+										}
+
+										if creditsAgg, ok := bucket["model_credits"].(map[string]any); ok {
+											if value, ok := creditsAgg["value"].(float64); ok {
+												modelStats.ModelCredits = int(value)
+											}
+										}
+
+										if messagesAgg, ok := bucket["model_messages"].(map[string]any); ok {
+											if value, ok := messagesAgg["value"].(float64); ok {
+												modelStats.ModelMessages = int(value)
+											}
+										}
+
+										usage.ModelUsage[modelKey] = modelStats
+									}
+								}
+							}
 						}
 					}
 
@@ -1115,6 +1189,34 @@ func (store *ElasticAssistantstore) GetUsage(ctx context.Context, start time.Tim
 							"field": store.schemaPrefix + "chat.sessionId",
 						},
 					},
+					"model_usage": map[string]any{
+						"terms": map[string]any{
+							"field": store.schemaPrefix + "chat.model",
+							"size":  100,
+						},
+						"aggs": map[string]any{
+							"model_input_tokens": map[string]any{
+								"sum": map[string]any{
+									"field": store.schemaPrefix + "chat.message.usage.input_tokens",
+								},
+							},
+							"model_output_tokens": map[string]any{
+								"sum": map[string]any{
+									"field": store.schemaPrefix + "chat.message.usage.output_tokens",
+								},
+							},
+							"model_credits": map[string]any{
+								"sum": map[string]any{
+									"field": store.schemaPrefix + "chat.message.usage.credits",
+								},
+							},
+							"model_messages": map[string]any{
+								"value_count": map[string]any{
+									"field": store.schemaPrefix + "chat.userId",
+								},
+							},
+						},
+					},
 				},
 			},
 		},
@@ -1205,6 +1307,53 @@ func (store *ElasticAssistantstore) GetUsage(ctx context.Context, start time.Tim
 							}
 						}
 
+						// Extract per-model usage statistics
+						var modelUsage map[string]*model.ModelUsageStats
+						if byModelAgg, ok := bucket["model_usage"].(map[string]any); ok {
+							if modelBuckets, ok := byModelAgg["buckets"].([]any); ok && len(modelBuckets) > 0 {
+								modelUsage = make(map[string]*model.ModelUsageStats)
+
+								for _, modelBucketObj := range modelBuckets {
+									if modelBucket, ok := modelBucketObj.(map[string]any); ok {
+										modelKey := ""
+										if key, ok := modelBucket["key"].(string); ok {
+											modelKey = key
+										}
+
+										if modelKey != "" {
+											modelStats := &model.ModelUsageStats{}
+
+											if inputAgg, ok := modelBucket["model_input_tokens"].(map[string]any); ok {
+												if value, ok := inputAgg["value"].(float64); ok {
+													modelStats.ModelInputTokens = int(value)
+												}
+											}
+
+											if outputAgg, ok := modelBucket["model_output_tokens"].(map[string]any); ok {
+												if value, ok := outputAgg["value"].(float64); ok {
+													modelStats.ModelOutputTokens = int(value)
+												}
+											}
+
+											if creditsAgg, ok := modelBucket["model_credits"].(map[string]any); ok {
+												if value, ok := creditsAgg["value"].(float64); ok {
+													modelStats.ModelCredits = int(value)
+												}
+											}
+
+											if messagesAgg, ok := modelBucket["model_messages"].(map[string]any); ok {
+												if value, ok := messagesAgg["value"].(float64); ok {
+													modelStats.ModelMessages = int(value)
+												}
+											}
+
+											modelUsage[modelKey] = modelStats
+										}
+									}
+								}
+							}
+						}
+
 						userUsage := &model.UserUsage{
 							UserId:            userId,
 							TotalInputTokens:  totalInputTokens,
@@ -1212,6 +1361,7 @@ func (store *ElasticAssistantstore) GetUsage(ctx context.Context, start time.Tim
 							TotalCredits:      totalCredits,
 							TotalMessages:     totalMessages,
 							TotalSessions:     totalSessions,
+							ModelUsage:        modelUsage,
 						}
 						userUsages = append(userUsages, userUsage)
 					}

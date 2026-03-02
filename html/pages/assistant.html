@@ -54,18 +54,35 @@
 								color="primary">
 							</v-switch>
 						</span>
+						<span data-aid="assistant_show_model_thinking_toggle">
+							<v-switch
+								id="show-model-thinking"
+								v-model="showModelThinking"
+								density="compact"
+								hide-details
+								class="my-0"
+								:label="i18n.showModelThinking"
+								color="primary">
+							</v-switch>
+						</span>
 						<span data-aid="assistant_model_select">
 							<v-select
 								:disabled="$root.loading"
 								v-model="currentModel"
 								@update:model-value="updateModelParams()"
-								:items="modelsMap.values()"
+								:items="groupedModels"
 								item-title="displayName"
-								item-value="id"
+								item-value="key"
 								:hint="i18n.selectModel"
 								persistent-hint
 								variant="underlined"
 								prepend-icon="fa-microchip">
+								<template v-slot:item="{ props, item }">
+									<v-list-subheader v-if="item.raw.header" class="text-caption">
+										{{ item.raw.header }}
+									</v-list-subheader>
+									<v-list-item v-else v-bind="props"></v-list-item>
+								</template>
 							</v-select>
 						</span>
 					</v-expansion-panel-text>
@@ -74,14 +91,16 @@
 		</v-col>
 		<v-spacer></v-spacer>
 		<v-col cols="12" lg="4" align="end">
-			<h4 data-aid="assistant_credits_remaining">{{ i18n.creditsRemaining }}:
-				<span v-if="!creditsLoaded">
-					<v-progress-circular indeterminate color="primary" size="14" width="3"></v-progress-circular>
-				</span>
-				<span v-else :class="creditsRemaining <= lowBalanceColorAlert ? 'text-error' : 'text-primary'">{{ formatCount(creditsRemaining) }}</span>
-			</h4>
-			<span class="text-caption">{{ i18n.creditsSubjectToExpiration }}</span>
-			<h5 class="ml-5 mt-2" data-aid="assistant_current_model">{{ modelsMap.get(currentModel).displayName }}</h5>
+			<div v-if="modelsMap.get(currentModel)?.adapter === 'SOAI'">
+				<h4 data-aid="assistant_credits_remaining">{{ i18n.creditsRemaining }}:
+					<span v-if="!creditsLoaded">
+						<v-progress-circular indeterminate color="primary" size="14" width="3"></v-progress-circular>
+					</span>
+					<span v-else :class="creditsRemaining <= lowBalanceColorAlert ? 'text-error' : 'text-primary'">{{ formatCount(creditsRemaining) }}</span>
+				</h4>
+				<span class="text-caption">{{ i18n.creditsSubjectToExpiration }}</span>
+			</div>
+			<h5 class="ml-5 mt-2" data-aid="assistant_current_model">{{ modelsMap.get(currentModel)?.displayName }}</h5>
 		</v-col>
 	</v-row>
 	<v-row align="start">
@@ -104,12 +123,42 @@
 				<v-card-title id="chat-header" class="py-3 d-flex align-center">
 					<v-icon class="mr-2" data-aid="assistant_banner_chat_icon">fa-comments</v-icon>
 					<span class="mr-2">{{ i18n.chatTitle }}</span>
-					<v-icon v-if="currentChatId" @click="toggleSharedSession()" data-aid="assistant_banner_share_toggle" :disabled="$root.user.id !== chatHistoryById?.[currentChatId]?.userId" :title="i18n.assistantLinkTitle">
+					<v-icon v-if="currentChatId" class="mr-2" @click="toggleSharedSession(currentChatId)" data-aid="assistant_banner_share_toggle" :disabled="$root.isMyUser(chatHistoryById?.[currentChatId]?.userId)" :title="i18n.assistantLinkTitle">
 						{{ (chatHistoryById?.[currentChatId]?.tags?.includes('shared')) ? 'fa-link' : 'fa-link-slash' }}
 					</v-icon>
+					<v-icon v-if="currentChatId" class="mr-2" @click.stop="exportSession" data-aid="assistant_banner_export_session" :disabled="!creditsUsed" :title="i18n.exportSessionHelp">
+						fa-file-export
+					</v-icon>
+					<template v-if="currentChatId">
+						<v-icon id="attachToCaseBtn" :title="i18n.assistantAttachToCaseHelp" @click="caseMenuVisible = true">fa-paperclip</v-icon>
+						<v-menu v-model="caseMenuVisible" target="#attachToCaseBtn" data-aid="assistant_case_attach_menu">
+							<v-list id="assistant-escalate-menu" color="secondary">
+								<v-list-item id="attachToCaseNew" density="compact" v-bind:title.attr="i18n.assistantAttachToNewCaseHelp" data-aid="assistant_attach_to_case_new" @click="attachToCase(currentChatId, null);">
+									<template #prepend>
+										<v-icon :alt="i18n.assistantAttachToNewCase">fa-plus</v-icon>
+									</template>
+									<v-list-item-title class="theme-text">
+										{{ i18n.assistantAttachToNewCase }}
+									</v-list-item-title>
+								</v-list-item>
+								<div v-if="mruCases?.length > 0">
+									<v-divider></v-divider>
+									<v-list-subheader class="theme-text">{{ i18n.assistantAttachToExistingCase }}</v-list-subheader>
+									<v-list-item v-for="socCase in mruCases" density="compact" v-bind:title.attr="i18n.assistantAttachToExistingCaseHelp" @click="attachToCase(currentChatId, socCase.id)" :data-aid="'assistant_attach_to_case_existing'">
+										<template #prepend>
+											<v-icon :alt="i18n.assistantAttachToExistingCase">fa-link</v-icon>
+										</template>
+										<v-list-item-title class="theme-text">
+											{{ formatCaseSummary(socCase) }}
+										</v-list-item-title>
+									</v-list-item>
+								</div>
+							</v-list>
+						</v-menu>
+					</template>
 					<v-spacer></v-spacer>
 					<div class="text-wrap mr-4" style="font-size: 14px;">{{ i18n.totalCredits }}: <span class="text-primary">{{ formatCount(creditsUsed) }}</span></div>
-					<div class="text-wrap" style="font-size: 14px;">{{ i18n.contextLength }}: <span :class="getContextColor(contextLength)">{{ formatCount(contextLength) }}</span> / <span class="font-weight-thin">{{ increaseContextLimit ? formatCount(contextLimitLarge) : formatCount(contextLimitSmall) }}</span></div>
+					<div class="text-wrap" style="font-size: 14px;">{{ i18n.contextLength }}: <span :class="getContextColor(contextLength)">{{ $root.formatCountMK(contextLength) }}</span> / <span class="font-weight-thin">{{ increaseContextLimit ? $root.formatCountMK(contextLimitLarge) : $root.formatCountMK(contextLimitSmall) }}</span></div>
 					<v-icon :color="getCompressColor()"
 						class="ml-4"
 						variant="flat"
@@ -123,7 +172,7 @@
 					</v-icon>
 				</v-card-title>
 				<v-divider></v-divider>
-				<v-card-text id="chat-messages" class="chat-messages pa-0" @scroll="onChatScroll">
+				<v-card-text id="chat-messages" class="chat-messages pa-0" @scroll="onChatScroll" @click="onChatClick">
 					<div class="pa-4">
 						<div v-for="(message, index) in messages" :key="index" :id="'message-' + index" :class="['message-item', 'mb-3'].concat(messageClassesFromTags(message.tags || []))">
 							<div v-if="index === contextStartMessageIndex" class="context-divider py-4">
@@ -142,8 +191,27 @@
 									<div id="message-header" class="d-flex align-center mb-1">
 										<span class="font-weight-medium text-body-2 mr-2">{{ message.role === 'user' ? i18n.you : i18n.chat }}</span>
 										<span class="text-caption text-medium-emphasis mr-2">{{ formatTimestamp(message.timestamp) }}</span>
-										<span class="text-caption text-primary" v-if="message.usage && message.usage.credits">{{ message.usage.credits }} {{ i18n.creditsLowercase }}</span>
+										<template v-if="perMessageStatsEnabled">
+											<span class="text-caption text-primary mr-2" v-if="message.usage && message.usage.credits">{{ formatCount(message.usage.credits) }} {{ i18n.creditsLowercase }}</span>
+											<span class="text-caption text-green" v-if="messageContextValues[index] > 0">{{ formatCount(messageContextValues[index]) }} {{ i18n.tokensLowercase }}</span>
+										</template>
 									</div>
+									
+									<!-- Thought Display -->
+									<div v-if="showModelThinking && message.thoughts" class="thought-display mb-3 mt-3">
+										<v-expansion-panels variant="accordion" density="compact">
+											<v-expansion-panel>	
+												<v-expansion-panel-title>
+													<v-icon size="small" class="mr-2">fa-lightbulb</v-icon>
+													<span class="font-weight-medium text-body-2">{{ message.content || message.toolUses?.length > 0 ? i18n.thoughts : getLastThoughtTitle(message.thoughts) }}</span>
+												</v-expansion-panel-title>
+												<v-expansion-panel-text>
+													<div class="text-caption" style="white-space: pre-wrap;" v-html="formatMarkdown(message.thoughts)"></div>
+												</v-expansion-panel-text>
+											</v-expansion-panel>
+										</v-expansion-panels>
+									</div>
+									
 									<div id="message-content" class="text-body-2" :key="message.content" v-html="formatMarkdown(message.content)"></div>
 									
 									<!-- Tool Use Display -->
@@ -282,6 +350,7 @@
 				<v-card-actions class="pa-4 d-flex align-center">
 					<v-textarea
 						id="chat-input-field"
+						ref="chatInputField"
 						v-model="newMessage"
 						:placeholder="i18n.chatPlaceholder"
 						variant="outlined"

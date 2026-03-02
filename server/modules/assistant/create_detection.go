@@ -1,4 +1,4 @@
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -8,7 +8,7 @@ package assistant
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"strings"
 	"time"
 
@@ -70,7 +70,8 @@ func (t *CreateDetectionTool) Execute(ctx context.Context, srv *server.Server, p
 
 	err = srv.CheckAuthorized(ctx, "write", "detections")
 	if err != nil {
-		return nil, fmt.Errorf("user is not authorized to write detections: %w", err)
+		logger.WithError(err).Error("user is not authorized to write detections")
+		return nil, errors.New("ERROR_PERMISSION_DENIED")
 	}
 
 	userId := ctx.Value(web.ContextKeyRequestorId).(string)
@@ -90,7 +91,8 @@ func (t *CreateDetectionTool) Execute(ctx context.Context, srv *server.Server, p
 
 	err = json.Unmarshal([]byte(params), args)
 	if err != nil {
-		return nil, fmt.Errorf("couldn't unmarshal params: %w", err)
+		logger.WithError(err).WithField("toolParams", params).Error("failed to unmarshal tool params")
+		return nil, errors.New("ERROR_ASSISTANT_UNMARSHAL_PARAMS")
 	}
 
 	result.Parameters = args
@@ -114,7 +116,7 @@ func (t *CreateDetectionTool) Execute(ctx context.Context, srv *server.Server, p
 	engInt, ok := srv.DetectionEngines.Load(detect.Engine)
 	if !ok {
 		logger.WithField("detectionEngine", detect.Engine).Error("unsupported engine")
-		return nil, fmt.Errorf("unsupported engine %s", detect.Engine)
+		return nil, errors.New("ERROR_UNSUPPORTED_ENGINE")
 	}
 
 	engine := engInt.(server.DetectionEngine)
@@ -122,7 +124,7 @@ func (t *CreateDetectionTool) Execute(ctx context.Context, srv *server.Server, p
 	_, err = engine.ValidateRule(detect.Content)
 	if err != nil {
 		logger.WithError(err).WithField("detectionContent", detect.Content).Error("invalid rule")
-		return nil, fmt.Errorf("invalid rule (%s): %w", detect.Content, err)
+		return nil, err
 	}
 
 	err = engine.ExtractDetails(detect)
@@ -131,32 +133,32 @@ func (t *CreateDetectionTool) Execute(ctx context.Context, srv *server.Server, p
 			"detectionEngine":   detect.Engine,
 			"detectionPublicId": detect.PublicID,
 		}).Error("unable to extract details from detection")
-		return nil, fmt.Errorf("unable to extract details for detection with Public ID %s and engine %s: %w", detect.PublicID, detect.Engine, err)
+		return nil, err
 	}
 
 	user, err := srv.Userstore.GetUserById(ctx, userId)
 	if err != nil {
-		return nil, fmt.Errorf("unable to retrieve user with ID %s: %w", userId, err)
+		return nil, err
 	}
 	detect.Author = detections.MakeUser(user)
 
 	_, err = engine.ApplyFilters(detect)
 	if err != nil {
 		logger.WithError(err).WithField("detectionPublicId", detect.PublicID).Error("unable to apply filters for detection")
-		return nil, fmt.Errorf("unable to apply filters for detection with Public ID %s: %w", detect.PublicID, err)
+		return nil, err
 	}
 
 	tempPublicId := detect.PublicID
 	detect, err = srv.Detectionstore.CreateDetection(ctx, detect)
 	if err != nil {
 		logger.WithError(err).WithField("detectionPublicId", tempPublicId).Error("failed to create detection")
-		return nil, fmt.Errorf("failed to create detection with Public ID %s: %w", tempPublicId, err)
+		return nil, err
 	}
 
 	errMap, err := engine.SyncLocalDetections(ctx, []*model.Detection{detect})
 	if err != nil {
 		logger.WithError(err).WithField("detectionPublicId", detect.PublicID).Error("unable to sync detection")
-		return nil, fmt.Errorf("unable to sync detection with Public ID %s: %w", detect.PublicID, err)
+		return nil, errors.New("ERROR_DETECTION_SYNC_FAILED")
 	}
 
 	if len(errMap) != 0 {
@@ -164,7 +166,7 @@ func (t *CreateDetectionTool) Execute(ctx context.Context, srv *server.Server, p
 			"detectionPublicId": detect.PublicID,
 			"errMap":            errMap,
 		}).Error("unable to sync detection")
-		return nil, fmt.Errorf("unable to sync detection with Public ID %s: %v", detect.PublicID, errMap)
+		return nil, errors.New("ERROR_DETECTION_SYNC_FAILED")
 	}
 
 	result.Result = detect

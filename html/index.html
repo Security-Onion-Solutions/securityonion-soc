@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -145,7 +145,7 @@
           <v-overlay id="loading" v-model="loading" scrim="#212121" data-aid="overlay_loading">
             <v-container min-height="100vh" min-width="100vw" class="d-flex align-center justify-center">
               <v-progress-circular indeterminate :size="50" color="primary" class="">
-                <v-icon v-if="loadingCancelCallback" @click="loadingCancelCallback">fa-xmark</v-icon>
+                <v-icon v-if="loadingCancelCallback" @click="loadingCancelCallback" data-aid="overlay_loading_cancel">fa-xmark</v-icon>
               </v-progress-circular>
             </v-container>
           </v-overlay>
@@ -228,12 +228,15 @@
           <v-spacer></v-spacer>
           <span class="text-no-wrap" data-aid="nav_terms">
             <router-link v-if="isLicenseUnprovisioned()" id="termsLink" to="/terms" class="footer">
-              <span class="d-lg-inline">{{ i18n.license }}:</span>
+              <span class="d-lg-inline pr-2">{{ i18n.license }}:</span>
               <span data-aid="license_unprovisioned"> {{ i18n.licenseShort }}</span>
             </router-link>
+            <router-link v-else-if="licenseStatus == 'active'" id="licenseLink" to="/license" class="footer">
+              <v-chip x-small class="rounded-sm" density="compact" :color="colorLicenseStatus(licenseStatus)" :data-aid="'license_status_' + licenseStatus">{{ licenseKey.name }}</v-chip>
+            </router-link>
             <router-link v-else id="licenseLink" to="/license" class="footer">
-              <span class="d-lg-inline">{{ i18n.license }}:</span>
-              <v-chip x-small density="compact" :color="colorLicenseStatus(licenseStatus)" :data-aid="'license_status_' + licenseStatus">{{ localizeMessage(licenseStatus) }}</v-chip>
+              <span class="d-lg-inline pr-2">{{ i18n.license }}:</span>
+              <v-chip x-small class="rounded-sm" density="compact" :color="colorLicenseStatus(licenseStatus)" :data-aid="'license_status_' + licenseStatus">{{ localizeMessage(licenseStatus) }}</v-chip>
             </router-link>
           </span>
         </v-footer>
@@ -332,7 +335,7 @@
                 </template>
                 <v-list-item-title v-text="i18n.users"></v-list-item-title>
               </v-list-item>
-              <v-list-item v-if="isLicensed('api')" data-aid="nav_admin_clients" @click="" to="/clients">
+              <v-list-item v-if="isLicensed('api') && $root.isUserAdmin()" data-aid="nav_admin_clients" @click="" to="/clients">
                 <template #prepend>
                   <v-icon>fa-robot</v-icon>
                 </template>
