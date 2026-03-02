@@ -1,6 +1,6 @@
 /*
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -259,6 +259,7 @@ th:hover, th.is-sorted, .solid {
   white-space: pre-wrap;
   word-break: break-all;
   overflow-x: hidden;
+  overflow-wrap: anywhere;
 }
 
 .semi-transparent {
@@ -1296,6 +1297,26 @@ ul ul ul {
   word-break: break-all;
 }
 
+/* Thought Display Styling */
+.thought-display {
+  opacity: 0.9;
+}
+.thought-display .v-expansion-panel {
+  background-color: rgba(var(--v-theme-surface), 0.8);
+  border: 1px solid rgba(var(--v-theme-outline), 0.2);
+  border-left: 3px solid rgb(var(--v-theme-secondary));
+}
+.thought-display .v-expansion-panel-title {
+  min-height: 36px !important;
+  padding: 8px 12px !important;
+}
+.thought-display .v-expansion-panel-text {
+  padding: 8px 12px !important;
+}
+.thought-display .v-expansion-panel-text .text-caption p {
+  margin-bottom: 0 !important;
+}
+
 .disclaimer-container {
   display: flex;
   justify-content: center;
@@ -1448,3 +1469,36 @@ ul ul ul {
 .tiny-link-icon {
   font-size: 12px !important;
 }
+
+.assistant-choice-btn {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+
+  padding: 9px 13px;
+  border-radius: 6px;
+
+  cursor: pointer;
+  user-select: none;
+
+  line-height: 1.3;
+
+  background-color: rgba(25, 118, 210, 0.08);
+  color: var(--v-theme-primary);
+
+  transition:
+    background-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.05s ease;
+}
+
+.assistant-choice-btn:hover {
+  background-color: rgba(25, 118, 210, 0.16);
+}
+
+.assistant-choice-btn:active {
+  transform: translateY(1px);
+  background-color: rgba(25, 118, 210, 0.22);
+}
+

@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -38,6 +38,8 @@ routes.push({ path: '/:pathMatch(.*)*', name: 'login', component: {
     banner: "",
     throttled: false,
     countdown: 0,
+    sessionExpirationTimer: null,
+    sessionExpired: false,
   }},
   created() {
     const throttled = this.$root.getSearchParam("thr");
@@ -100,14 +102,14 @@ routes.push({ path: '/:pathMatch(.*)*', name: 'login', component: {
 
         const flow = await this.$root.authApi.get('login/flows?id=' + this.$root.getAuthFlowId());
         if (!flow.data.ui || !flow.data.ui.nodes) {
-          // throw out current flowID and start over
-          localStorage.removeItem('flowID');
           this.$root.showLogin();
-
           return;
         }
 
         this.csrfToken = flow.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'csrf_token').attributes.value;
+
+        // Check for session expiration
+        this.checkSessionExpiration(flow.data);
 
         this.extractPasswordData(flow);
         this.extractTotpData(flow);
@@ -137,7 +139,6 @@ routes.push({ path: '/:pathMatch(.*)*', name: 'login', component: {
         }
       } catch (error) {
         if (error.response && error.response.status == 410) {
-          localStorage.removeItem('flowID');
           document.location = "/login";
         } else {
           this.$root.showError(error);
@@ -188,5 +189,34 @@ routes.push({ path: '/:pathMatch(.*)*', name: 'login', component: {
         this.totpEnabled = true;
       }
     },
+    checkSessionExpiration(flowData) {
+      // Check if the flow has an expiration time
+      if (flowData && flowData.expires_at) {
+        const expirationTime = new Date(flowData.expires_at);
+        const currentTime = new Date();
+        
+        // If session has already expired, show modal immediately
+        if (currentTime >= expirationTime) {
+          this.showSessionExpiredModal();
+          return;
+        }
+        
+        // Calculate time until expiration
+        const timeUntilExpiration = expirationTime.getTime() - currentTime.getTime();
+        
+        // Set a timer to show the modal when session expires
+        if (this.sessionExpirationTimer) {
+          clearTimeout(this.sessionExpirationTimer);
+        }
+        
+        this.sessionExpirationTimer = setTimeout(() => {
+          this.showSessionExpiredModal();
+        }, timeUntilExpiration);
+      }
+    },
+    showSessionExpiredModal() {
+      this.sessionExpired = true;
+      this.showLoginForm = false;
+    }
   },
 }});

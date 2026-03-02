@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -89,6 +89,15 @@ func main() {
 		signal.Notify(terminateChan, os.Interrupt, syscall.SIGTERM)
 		go func() {
 			<-terminateChan
+			shutdownStart := time.Now()
+
+			go func() {
+				time.Sleep(time.Duration(cfg.ShutdownGracePeriodMs) * time.Millisecond)
+				log.WithField("ShutdownGracePeriodMs", cfg.ShutdownGracePeriodMs).Warn("Shutdown did not exit within grace period; aborting")
+				logFile.Close()
+				os.Exit(1)
+			}()
+
 			log.Warn("Detected shutdown request, waiting for app to shutdown gracefully")
 			if agt != nil {
 				agt.Stop()
@@ -98,10 +107,9 @@ func main() {
 			}
 			licensing.Shutdown()
 
-			time.Sleep(time.Duration(cfg.ShutdownGracePeriodMs) * time.Millisecond)
-			log.WithField("ShutdownGracePeriodMs", cfg.ShutdownGracePeriodMs).Warn("Shutdown did not exit within grace period; aborting")
+			log.WithField("shutdownDurationSeconds", time.Since(shutdownStart).Seconds()).Info("Shutdown complete, exiting")
 			logFile.Close()
-			os.Exit(1)
+			os.Exit(0)
 		}()
 
 		if agt != nil {

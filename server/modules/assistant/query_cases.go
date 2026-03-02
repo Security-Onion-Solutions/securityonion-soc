@@ -1,4 +1,4 @@
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -8,6 +8,7 @@ package assistant
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -38,7 +39,7 @@ func (t *QueryCasesTool) GetName() string {
 
 func (t *QueryCasesTool) GetDescription() string {
 	return "Retrieve Security Onion cases using OQL queries. " +
-		"IMPORTANT: All queries must include `AND _index:\"*:so-case\" AND so_kind:case` (quotes required). " +
+		"IMPORTANT: All queries must end with `_index:\"*:so-case\" AND so_kind:case` (quotes required). " +
 		"Use a 999-day date range. Search so_case.description and so_case.title fields. " +
 		"Results include both query matches and user's recent_cases. " +
 		"Present clear-cut matches directly, or provide multiple options with comparisons for user selection."
@@ -104,7 +105,8 @@ func (t *QueryCasesTool) Execute(ctx context.Context, server *server.Server, par
 
 	err = json.Unmarshal([]byte(params), args)
 	if err != nil {
-		return nil, err
+		logger.WithError(err).WithField("toolParams", params).Error("failed to unmarshal tool params")
+		return nil, errors.New("ERROR_ASSISTANT_UNMARSHAL_PARAMS")
 	}
 
 	result.Parameters = args
@@ -162,10 +164,14 @@ func (t *QueryCasesTool) Execute(ctx context.Context, server *server.Server, par
 	caseEvents := searchResults.Events
 
 	// Parse auxData first, regardless of whether cases are found
+	if auxData == "" {
+		auxData = "[]"
+	}
 	recentCases := []map[string]any{}
 	err = json.Unmarshal([]byte(auxData), &recentCases)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal recent cases from auxData: %w", err)
+		logger.WithError(err).WithField("auxData", auxData).Error("failed to unmarshal recent cases from auxData")
+		return nil, errors.New("ERROR_ASSISTANT_UNMARSHAL_AUXDATA")
 	}
 
 	if len(caseEvents) == 0 && len(recentCases) == 0 {
@@ -187,7 +193,8 @@ func (t *QueryCasesTool) Execute(ctx context.Context, server *server.Server, par
 	// Convert to JSON
 	resultJSON, err := json.MarshalIndent(filteredCases, "", "  ")
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal result: %w", err)
+		logger.WithError(err).WithField("filteredCases", filteredCases).Error("failed to marshal tool result")
+		return nil, errors.New("ERROR_ASSISTANT_MARSHAL_TOOL_RESULT")
 	}
 
 	// Log filtered result size and preview

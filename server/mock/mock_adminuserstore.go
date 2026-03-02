@@ -42,17 +42,17 @@ func (m *MockAdminUserstore) EXPECT() *MockAdminUserstoreMockRecorder {
 }
 
 // AddRole mocks base method.
-func (m *MockAdminUserstore) AddRole(ctx context.Context, id, role string) error {
+func (m *MockAdminUserstore) AddRole(ctx context.Context, id, role string, bypassAuthCheck bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddRole", ctx, id, role)
+	ret := m.ctrl.Call(m, "AddRole", ctx, id, role, bypassAuthCheck)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddRole indicates an expected call of AddRole.
-func (mr *MockAdminUserstoreMockRecorder) AddRole(ctx, id, role any) *gomock.Call {
+func (mr *MockAdminUserstoreMockRecorder) AddRole(ctx, id, role, bypassAuthCheck any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddRole", reflect.TypeOf((*MockAdminUserstore)(nil).AddRole), ctx, id, role)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddRole", reflect.TypeOf((*MockAdminUserstore)(nil).AddRole), ctx, id, role, bypassAuthCheck)
 }
 
 // AddUser mocks base method.

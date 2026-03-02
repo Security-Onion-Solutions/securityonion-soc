@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -320,11 +320,13 @@ func startExpirationMonitor() {
 		}
 		manager.expirationTimer = time.NewTimer(duration)
 		<-manager.expirationTimer.C
-		log.WithFields(log.Fields{
-			"expiration": manager.licenseKey.Expiration,
-			"duration":   duration,
-		}).Warn("License has expired")
-		manager.status = LICENSE_STATUS_EXPIRED
+		if manager.licenseKey.Expiration.Before(time.Now()) {
+			log.WithFields(log.Fields{
+				"expiration": manager.licenseKey.Expiration,
+				"duration":   duration,
+			}).Warn("License has expired")
+			manager.status = LICENSE_STATUS_EXPIRED
+		}
 	}
 	manager.expirationTimer = nil
 }
@@ -426,10 +428,10 @@ func Usable() bool {
 func stopMonitor() {
 	if manager != nil {
 		if manager.expirationTimer != nil {
-			manager.expirationTimer.Stop()
+			manager.expirationTimer.Reset(time.Duration(0))
 		}
 		if manager.effectiveTimer != nil {
-			manager.effectiveTimer.Stop()
+			manager.effectiveTimer.Reset(time.Duration(0))
 		}
 		if manager.pillarTimer != nil {
 			pillarFilename = ""

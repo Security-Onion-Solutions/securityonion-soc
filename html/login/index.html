@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -145,6 +145,18 @@
             </v-col>
           </v-row>
         </v-container>
+
+        <v-container v-if="sessionExpired && !showLoginForm" grid-list-sm class="pa-4">
+          <v-row>
+            <v-col class="mx-auto px-12">
+              <div id="banner" class="mb-4">{{ i18n.sessionExpiredMessage }}</div>
+              <div class="text-center">
+                <v-btn id="reloginExpired" text color="primary" class="text-lg-center" v-text="i18n.login" @click="this.$root.showLogin()" data-aid="login_banner_session_expired"></v-btn>
+              </div>
+            </v-col>
+          </v-row>
+        </v-container>
+
       </v-card>
     </script>
 
