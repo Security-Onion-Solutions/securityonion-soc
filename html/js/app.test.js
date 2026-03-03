@@ -1314,3 +1314,47 @@ graph TD
 
   expect(app.performMermaidRegexes(mermaidWithBothIssues)).toBe(expectedBothFixed);
 });
+
+test('verifyRuleSyntax - implementation', () => {
+  const _old = app.ruleValidators;
+	app.ruleValidators = {
+		engine: [
+			{ pattern: /1/m, message: 'should not have 1', match: true },
+			{ pattern: /2/m, message: 'should have 2', match: false },
+			{ pattern: /3/m, message: 'should not have 3', match: true },
+		],
+	};
+
+	let detect = {
+		content: '1',
+		language: 'engine',
+	};
+	let msg = app.verifyRuleSyntax(detect);
+	expect(msg).toBe('should not have 1');
+
+	detect.content = '2';
+	msg = app.verifyRuleSyntax(detect);
+	expect(msg).toBe(null);
+
+	detect.content = '3';
+	msg = app.verifyRuleSyntax(detect);
+	expect(msg).toBe('should have 2');
+
+	detect.content = '23';
+	msg = app.verifyRuleSyntax(detect);
+	expect(msg).toBe('should not have 3');
+
+	detect.content = '123';
+	msg = app.verifyRuleSyntax(detect);
+	expect(msg).toBe('should not have 1');
+
+	detect.content = '321';
+	msg = app.verifyRuleSyntax(detect);
+	expect(msg).toBe('should not have 1');
+
+	detect.content = '24';
+	msg = app.verifyRuleSyntax(detect);
+	expect(msg).toBe(null);
+
+  app.ruleValidators = _old;
+});

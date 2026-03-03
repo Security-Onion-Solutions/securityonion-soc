@@ -172,19 +172,6 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			},
 			changedKeys: {},
 			changedOverrideKeys: {},
-			ruleValidators: {
-				sigma: [
-					{ pattern: /^id:\s*[^$]+?$/m, message: this.$root.i18n.invalidDetectionElastAlertMissingID, match: false },
-				],
-				suricata: [
-					{ pattern: /\n/, message: this.$root.i18n.invalidDetectionSuricataNewLine, match: true },
-					{ pattern: /sid:\s?(["']?)\d+\1;/, message: this.$root.i18n.invalidDetectionSuricataMissingSID, match: false },
-				],
-				yara: [
-					{ pattern: /rule\s+[a-zA-Z0-9][a-zA-Z0-9_]*/, message: this.$root.i18n.invalidDetectionStrelkaMissingRuleName, match: false },
-					{ pattern: /condition:/m, message: this.$root.i18n.invalidDetectionStrelkaMissingCondition, match: false },
-				],
-			},
 			showUnreviewedAiSummaries: false,
 			MAX_OVERRIDE_NOTE_LENGTH: MAX_OVERRIDE_NOTE_LENGTH,
 			joinedPlaybookSource: '',
@@ -878,19 +865,9 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				this.$root.stopLoading();
 			}
 		},
-		verifyRuleSyntax() {
-			const rules = this.ruleValidators[this.detect.language.toLowerCase()];
-			for (let i = 0; i < rules.length; i++) {
-				if (rules[i].pattern.test(this.detect.content) === rules[i].match) {
-					return rules[i].message;
-				}
-			}
-
-			return null;
-		},
 		validateStrelka() {
 			try {
-				let err = this.verifyRuleSyntax();
+				let err = this.$root.verifyRuleSyntax(this.detect);
 				if (err) {
 					return err;
 				}
@@ -902,7 +879,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		},
 		validateElastAlert() {
 			try {
-				let err = this.verifyRuleSyntax();
+				let err = this.$root.verifyRuleSyntax(this.detect);
 				if (err) {
 					return err;
 				}
@@ -924,7 +901,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		},
 		validateSuricata() {
 			try {
-				let err = this.verifyRuleSyntax();
+				let err = this.$root.verifyRuleSyntax(this.detect);
 				if (err) {
 					return err;
 				}
