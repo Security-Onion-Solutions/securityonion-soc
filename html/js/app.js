@@ -36,6 +36,7 @@ if (typeof global !== 'undefined') {
 
 $(document).ready(function () {
   Promise.all(templatePromises).then(() => {
+    const _i18n = i18n.getLocalizedTranslations(navigator.language);
     const vuetify = Vuetify.createVuetify({
       defaults: {
         VIcon: {
@@ -135,7 +136,7 @@ $(document).ready(function () {
         return {
           timestamp: Date.now(),
           theme: Vuetify.useTheme(),
-          i18n: i18n.getLocalizedTranslations(navigator.language),
+          i18n: _i18n,
           loading: false,
           loadingCancelCallback: null,
           error: false,
@@ -204,6 +205,20 @@ $(document).ready(function () {
           FEAT_RPT: 'rpt',
           FEAT_TTR: 'ttr',
           FEAT_OAI: 'oai',
+          ruleValidators: {
+            sigma: [
+              { pattern: /^id:\s*[^$]+?$/m, message: _i18n.invalidDetectionElastAlertMissingID, match: false },
+            ],
+            suricata: [
+              { pattern: /\n/, message: _i18n.invalidDetectionSuricataNewLine, match: true },
+              { pattern: /sid:\s?(["']?)\d+\1;/, message: _i18n.invalidDetectionSuricataMissingSID, match: false },
+            ],
+            yara: [
+              { pattern: /^rule\s+{/, message: _i18n.invalidDetectionStrelkaMissingRuleName, match: true },
+              { pattern: /^rule\s+[a-zA-Z_][a-zA-Z0-9_]*/, message: _i18n.invalidDetectionStrelkaInvalidRuleName, match: false },
+              { pattern: /condition:/m, message: _i18n.invalidDetectionStrelkaMissingCondition, match: false },
+            ],
+          },
         }
       },
       watch: {
@@ -1731,6 +1746,16 @@ $(document).ready(function () {
             this.showError(error);
           }
           this.stopLoading();
+        },
+        verifyRuleSyntax(det) {
+          const rules = this.ruleValidators[det.language.toLowerCase()];
+          for (let i = 0; i < rules.length; i++) {
+            if (rules[i].pattern.test(det.content) === rules[i].match) {
+              return rules[i].message;
+            }
+          }
+
+          return null;
         },
       },
       created() {

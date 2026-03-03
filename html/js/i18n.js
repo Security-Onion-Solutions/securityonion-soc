@@ -705,6 +705,7 @@ const i18n = {
       invalidDetectionElastAlertMissingID: 'This Sigma rule is missing its ID. An "id" field is required.',
       invalidDetectionStrelkaMissingCondition: 'This YARA rule is missing its condition. A "condition" section is required.',
       invalidDetectionStrelkaMissingRuleName: 'This YARA rule is missing its identifier. An identifier is required.',
+      invalidDetectionStrelkaInvalidRuleName: 'This YARA rule has an invalid identifier. Identifiers must start with a letter or underscore, followed by letters, digits, or underscores.',
       invalidDetectionSuricataSIDMismatch: "The SID in this Suricata rule must match the detection's public Id.",
       invalidDetectionSuricataMissingSID: 'This Suricata rule is missing its SID. A SID is required.',
       invalidDetectionSuricataNewLine: 'Newline characters are not allowed in Suricata rules. The rule must fit on one line.',

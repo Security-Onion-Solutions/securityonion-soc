@@ -389,19 +389,9 @@ components.push({
 					});
 				}
 			},
-			verifyRuleSyntax() {
-				const rules = this.ruleValidators[this.detection.language.toLowerCase()];
-				for (let i = 0; i < rules.length; i++) {
-					if (rules[i].pattern.test(this.detection.content) === rules[i].match) {
-						return rules[i].message;
-					}
-				}
-
-				return null;
-			},
 			validateStrelka() {
 				try {
-					let err = this.verifyRuleSyntax();
+					let err = this.$root.verifyRuleSyntax(this.detection);
 					if (err) {
 						return err;
 					}
@@ -413,7 +403,7 @@ components.push({
 			},
 			validateElastAlert() {
 				try {
-					let err = this.verifyRuleSyntax();
+					let err = this.$root.verifyRuleSyntax(this.detection);
 					if (err) {
 						return err;
 					}
@@ -430,7 +420,7 @@ components.push({
 			},
 			validateSuricata() {
 				try {
-					let err = this.verifyRuleSyntax();
+					let err = this.$root.verifyRuleSyntax(this.detection);
 					if (err) {
 						return err;
 					}
