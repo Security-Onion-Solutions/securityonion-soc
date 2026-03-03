@@ -214,8 +214,8 @@ $(document).ready(function () {
               { pattern: /sid:\s?(["']?)\d+\1;/, message: _i18n.invalidDetectionSuricataMissingSID, match: false },
             ],
             yara: [
-              { pattern: /rule\s+{/, message: _i18n.invalidDetectionStrelkaMissingRuleName, match: true },
-              { pattern: /rule\s+[a-zA-Z_][a-zA-Z0-9_]*/, message: _i18n.invalidDetectionStrelkaInvalidRuleName, match: false },
+              { pattern: /^rule\s+{/, message: _i18n.invalidDetectionStrelkaMissingRuleName, match: true },
+              { pattern: /^rule\s+[a-zA-Z_][a-zA-Z0-9_]*/, message: _i18n.invalidDetectionStrelkaInvalidRuleName, match: false },
               { pattern: /condition:/m, message: _i18n.invalidDetectionStrelkaMissingCondition, match: false },
             ],
           },
