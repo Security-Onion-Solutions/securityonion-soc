@@ -76,7 +76,7 @@ RUN chown 939:939 scripts/*
 RUN find . -name \*.html -exec sed -i -e "s/VERSION_PLACEHOLDER/$VERSION/g" {} \;
 
 RUN bash -c "[[ $VERSION == '0.0.0' ]]" || \
-    wget https://github.com/Security-Onion-Solutions/securityonion-docs/raw/$(echo $VERSION | cut -d'.' -f 1,2)/images/cheat-sheet/Security-Onion-Cheat-Sheet.pdf -O html/docs/cheatsheet.pdf
+    wget https://github.com/Security-Onion-Solutions/docs/raw/$(echo $VERSION | cut -d'.' -f 1)/dev/docs/images/cheat-sheet/Security-Onion-Cheat-Sheet.pdf -O html/docs/cheatsheet.pdf
 
 ENV ELASTIC_VERSION=$ELASTIC_VERSION
 ENV WAZUH_VERSION=$WAZUH_VERSION
