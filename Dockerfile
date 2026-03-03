@@ -8,7 +8,7 @@ FROM ghcr.io/security-onion-solutions/golang:1.25.1-alpine as builder
 ARG VERSION=0.0.0
 ARG ALT_BRANCH=dev
 ARG REVKEYS=
-RUN apk update && apk add libpcap-dev bash git musl-dev gcc npm python3 py3-pip py3-virtualenv python3-dev openssl-dev linux-headers
+RUN apk update && apk add g++ libpcap-dev bash git musl-dev gcc npm python3 py3-pip py3-virtualenv python3-dev openssl-dev linux-headers sed
 COPY . /build
 
 # Mock md2pdf script for testing
@@ -18,20 +18,19 @@ RUN echo "#!/bin/sh" > /build/scripts/md2pdf && \
 
 WORKDIR /build
 RUN if [ "$VERSION" != "0.0.0" ]; then mkdir gitdocs && cd gitdocs && \
-	git clone --no-single-branch --depth 50 https://github.com/Security-Onion-Solutions/securityonion-docs.git . && \
+	git clone --no-single-branch --depth 50 https://github.com/Security-Onion-Solutions/docs.git . && \
 	git checkout --force origin/${ALT_BRANCH} && \
 	git clean -d -f -f && \
-	sed -i "s|'display_github': True|'display_github': False|g" conf.py && \
 	python3 -mvirtualenv /tmp/virtualenv && \
-	/tmp/virtualenv/bin/python -m pip install --exists-action=w --no-cache-dir -r requirements.txt && \
-	for i in /tmp/virtualenv/lib/python*/site-packages/sphinx_rtd_theme/versions.html; do echo > $i; done && \
+	/tmp/virtualenv/bin/python -m pip install --exists-action=w --no-cache-dir mkdocs mkdocs-material mkdocs-glightbox mkdocs-to-pdf neoteroi-mkdocs && \
 	mkdir -p specs && \
 	cd .. && \
 	go install github.com/swaggo/swag/v2/cmd/swag@latest && \
 	swag init -g server/server.go --md docs/api --v3.1 -ot yaml -o gitdocs/specs && \
 	cd gitdocs && \
 	mv specs/swagger.yaml specs/openapi.yaml && \
-	/tmp/virtualenv/bin/python -m sphinx -T -E -b html -d _build/doctrees -D language=en . _build/html; \
+	sed -i '/- to-pdf:/,+3d' mkdocs.yml && \
+	/tmp/virtualenv/bin/mkdocs build -d _build/html; \
 	else mkdir -p gitdocs/_build/html; fi
 RUN npm install jest jest-environment-jsdom --global
 
