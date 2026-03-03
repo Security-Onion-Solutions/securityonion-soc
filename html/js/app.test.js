@@ -463,9 +463,14 @@ test('isLicensed', () => {
 });
 
 test('colorLicenseStatus', () => {
+  app.licenseKey = { name: 'Security Onion Pro' };
   expect(app.colorLicenseStatus('foo')).toBe('info');
   expect(app.colorLicenseStatus(null)).toBe('info');
   expect(app.colorLicenseStatus("active")).toBe('success');
+
+  app.licenseKey.name = 'Academic Student';
+  expect(app.colorLicenseStatus("active")).toBe('white');
+
   expect(app.colorLicenseStatus("exceeded")).toBe('error');
   expect(app.colorLicenseStatus("expired")).toBe('warning');
   expect(app.colorLicenseStatus("invalid")).toBe('error');

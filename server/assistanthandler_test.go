@@ -29,6 +29,30 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
+// MockElasticEventstore is a mock that implements both Eventstore and EventstoreUpdater
+type MockElasticEventstore struct {
+	*mock.MockEventstore
+	addInvestigationUpdateScriptsCalled bool
+	updateFunc                          func(context.Context, *model.EventUpdateCriteria) (*model.EventUpdateResults, error)
+}
+
+func (m *MockElasticEventstore) AddInvestigationUpdateScripts(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, userId string, isDelete bool, sessionId ...string) {
+	m.addInvestigationUpdateScriptsCalled = true
+	// Add a dummy script to simulate the behavior
+	if isDelete {
+		updateCriteria.AddUpdateScript("ctx._source.event.remove('investigation_session_id')")
+	} else {
+		updateCriteria.AddUpdateScript("ctx._source.event.investigated = true")
+	}
+}
+
+func (m *MockElasticEventstore) Update(ctx context.Context, criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error) {
+	if m.updateFunc != nil {
+		return m.updateFunc(ctx, criteria)
+	}
+	return m.MockEventstore.Update(ctx, criteria)
+}
+
 func TestPostChat(t *testing.T) {
 	// Create mock server
 	srv := &Server{
@@ -1774,4 +1798,855 @@ func TestRemoveAuxData(t *testing.T) {
 			tt.validate(t, tt.messages)
 		})
 	}
+}
+
+func TestPostChatWithEntityTypeAndId(t *testing.T) {
+	// Create mock server
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockManager := mock.NewMockAssistantManager(ctrl)
+	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
+	mockBaseEventStore := mock.NewMockEventstore(ctrl)
+	defer ctrl.Finish()
+
+	// Create custom mock that supports AddUpdateScripts
+	mockEventStore := &MockElasticEventstore{
+		MockEventstore: mockBaseEventStore,
+		updateFunc: func(ctx context.Context, criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error) {
+			return &model.EventUpdateResults{
+				UpdatedCount:   1,
+				UnchangedCount: 0,
+			}, nil
+		},
+	}
+
+	srv.AssistantManager = mockManager
+	srv.Assistantstore = mockAssistantStore
+	srv.Eventstore = mockEventStore
+
+	handler := NewAssistantHandler(srv)
+
+	// Test data with entityType and entityId
+	entityType := "alert_investigation"
+	entityId := "alert-123"
+	requestBody := map[string]interface{}{
+		"msg":   "Investigate this alert",
+		"model": "test-model",
+	}
+
+	jsonBody, _ := json.Marshal(requestBody)
+	req := httptest.NewRequest("POST", "/assistant/chat?entityType="+entityType+"&entityId="+entityId, bytes.NewBuffer(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	// Add required context values
+	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "test-user-123")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	ctx = context.WithValue(ctx, web.ContextKeyRequestId, "test-request-123")
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+
+	// Mock GetChatHistory to return empty history for new session
+	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{}, nil)
+
+	// Mock CreateSession - verify it's called with investigation type
+	mockAssistantStore.EXPECT().CreateSession(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, session *model.AssistantSession) error {
+			assert.Equal(t, entityType, session.Type)
+			assert.Equal(t, entityId, session.EntityId)
+			return nil
+		},
+	)
+
+	// Mock Chat
+	mockManager.EXPECT().Chat(gomock.Any(), "test-model", gomock.Any()).Return([]*model.Message{{
+		Role: "assistant",
+		ContentBlocks: []model.ContentBlock{
+			{
+				Type: "text",
+				Text: "I'll help you investigate this alert",
+			},
+		},
+	}}, nil)
+
+	mockAssistantStore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil).Times(2)
+
+	// Execute the handler
+	handler.PostChat(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestPostChatWithEntityTypeAndIdMarkFails(t *testing.T) {
+	// Create mock server
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockManager := mock.NewMockAssistantManager(ctrl)
+	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
+	mockBaseEventStore := mock.NewMockEventstore(ctrl)
+	defer ctrl.Finish()
+
+	// Create custom mock that supports AddUpdateScripts but fails on Update
+	mockEventStore := &MockElasticEventstore{
+		MockEventstore: mockBaseEventStore,
+		updateFunc: func(ctx context.Context, criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error) {
+			return nil, errors.New("update failed")
+		},
+	}
+
+	srv.AssistantManager = mockManager
+	srv.Assistantstore = mockAssistantStore
+	srv.Eventstore = mockEventStore
+
+	handler := NewAssistantHandler(srv)
+
+	// Test data with entityType and entityId
+	entityType := "alert_investigation"
+	entityId := "alert-123"
+	requestBody := map[string]interface{}{
+		"msg":   "Investigate this alert",
+		"model": "test-model",
+	}
+
+	jsonBody, _ := json.Marshal(requestBody)
+	req := httptest.NewRequest("POST", "/assistant/chat?entityType="+entityType+"&entityId="+entityId, bytes.NewBuffer(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	// Add required context values
+	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "test-user-123")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	ctx = context.WithValue(ctx, web.ContextKeyRequestId, "test-request-123")
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+
+	// Mock GetChatHistory to return empty history for new session
+	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{}, nil)
+
+	// Mock CreateSession
+	mockAssistantStore.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil)
+
+	// Mock Chat - should still be called even if marking fails
+	mockManager.EXPECT().Chat(gomock.Any(), "test-model", gomock.Any()).Return([]*model.Message{{
+		Role: "assistant",
+		ContentBlocks: []model.ContentBlock{
+			{
+				Type: "text",
+				Text: "I'll help you investigate this alert",
+			},
+		},
+	}}, nil)
+
+	mockAssistantStore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil).Times(2)
+
+	// Execute the handler
+	handler.PostChat(w, req)
+
+	// Verify response - should still succeed even though marking failed
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestMarkAlertAsInvestigated(t *testing.T) {
+	// Create mock server
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockBaseEventStore := mock.NewMockEventstore(ctrl)
+	defer ctrl.Finish()
+
+	// Create custom mock that supports AddUpdateScripts
+	mockEventStore := &MockElasticEventstore{
+		MockEventstore: mockBaseEventStore,
+		updateFunc: func(ctx context.Context, criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error) {
+			// Verify the criteria has the correct query
+			assert.NotNil(t, criteria.ParsedQuery)
+			return &model.EventUpdateResults{
+				UpdatedCount:   1,
+				UnchangedCount: 0,
+			}, nil
+		},
+	}
+
+	srv.Eventstore = mockEventStore
+
+	handler := NewAssistantHandler(srv)
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user-123")
+
+	socId := "alert-123"
+	sessionId := "session-456"
+
+	// Execute the function
+	err := handler.markAlertAsInvestigated(ctx, socId, sessionId)
+
+	// Verify no error
+	assert.NoError(t, err)
+}
+
+func TestMarkAlertAsInvestigatedUnauthorized(t *testing.T) {
+	// Create mock server with unauthorized user
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: false},
+	}
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	handler := NewAssistantHandler(srv)
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user-123")
+
+	socId := "alert-123"
+	sessionId := "session-456"
+
+	// Execute the function
+	err := handler.markAlertAsInvestigated(ctx, socId, sessionId)
+
+	// Verify error
+	assert.Error(t, err)
+}
+
+func TestMarkAlertAsInvestigatedNoAlert(t *testing.T) {
+	// Create mock server
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockBaseEventStore := mock.NewMockEventstore(ctrl)
+	defer ctrl.Finish()
+
+	// Create custom mock that supports AddUpdateScripts but returns no updates
+	mockEventStore := &MockElasticEventstore{
+		MockEventstore: mockBaseEventStore,
+		updateFunc: func(ctx context.Context, criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error) {
+			return &model.EventUpdateResults{
+				UpdatedCount:   0,
+				UnchangedCount: 0,
+			}, nil
+		},
+	}
+
+	srv.Eventstore = mockEventStore
+
+	handler := NewAssistantHandler(srv)
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user-123")
+
+	socId := "nonexistent-alert"
+	sessionId := "session-456"
+
+	// Execute the function
+	err := handler.markAlertAsInvestigated(ctx, socId, sessionId)
+
+	// Verify error
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "no alert found")
+}
+
+func TestDeleteSession(t *testing.T) {
+	// Create mock server
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
+	defer ctrl.Finish()
+
+	srv.Assistantstore = mockAssistantStore
+
+	handler := NewAssistantHandler(srv)
+
+	// Test data
+	sessionId := "test-session-123"
+
+	req := httptest.NewRequest("DELETE", fmt.Sprintf("/assistant/sessions/%s", sessionId), nil)
+
+	// Set URL params
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("sessionId", sessionId)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	// Add required context values
+	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "test-user-123")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	ctx = context.WithValue(ctx, web.ContextKeyRequestId, "test-request-456")
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+
+	// Mock GetSessions to return a non-investigation session
+	mockAssistantStore.EXPECT().GetSessions(
+		gomock.Any(),
+		gomock.Any(),
+	).Return([]*model.AssistantSession{
+		{
+			SessionId: sessionId,
+			Type:      "general",
+		},
+	}, nil)
+
+	// Mock DeleteSession
+	mockAssistantStore.EXPECT().DeleteSession(gomock.Any(), sessionId).Return(nil)
+
+	// Execute the handler
+	handler.DeleteSession(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusNoContent, w.Code)
+}
+
+func TestDeleteSessionInvestigation(t *testing.T) {
+	// Create mock server
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
+	mockBaseEventStore := mock.NewMockEventstore(ctrl)
+	defer ctrl.Finish()
+
+	// Create custom mock that supports AddInvestigationUpdateScripts
+	mockEventStore := &MockElasticEventstore{
+		MockEventstore: mockBaseEventStore,
+		updateFunc: func(ctx context.Context, criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error) {
+			return &model.EventUpdateResults{
+				UpdatedCount:   1,
+				UnchangedCount: 0,
+			}, nil
+		},
+	}
+
+	srv.Assistantstore = mockAssistantStore
+	srv.Eventstore = mockEventStore
+
+	handler := NewAssistantHandler(srv)
+
+	// Test data
+	sessionId := "test-session-123"
+	entityId := "alert-456"
+
+	req := httptest.NewRequest("DELETE", fmt.Sprintf("/assistant/sessions/%s", sessionId), nil)
+
+	// Set URL params
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("sessionId", sessionId)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	// Add required context values
+	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "test-user-123")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	ctx = context.WithValue(ctx, web.ContextKeyRequestId, "test-request-456")
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+
+	// Mock GetSessions to return an investigation session
+	mockAssistantStore.EXPECT().GetSessions(
+		gomock.Any(),
+		gomock.Any(),
+	).Return([]*model.AssistantSession{
+		{
+			SessionId: sessionId,
+			Type:      "alert_investigation",
+			EntityId:  entityId,
+		},
+	}, nil)
+
+	// Mock DeleteSession
+	mockAssistantStore.EXPECT().DeleteSession(gomock.Any(), sessionId).Return(nil)
+
+	// Execute the handler
+	handler.DeleteSession(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusNoContent, w.Code)
+}
+
+func TestDeleteSessionInvestigationClearFails(t *testing.T) {
+	// Create mock server
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
+	mockBaseEventStore := mock.NewMockEventstore(ctrl)
+	defer ctrl.Finish()
+
+	// Create custom mock that supports AddInvestigationUpdateScripts but fails on Update
+	mockEventStore := &MockElasticEventstore{
+		MockEventstore: mockBaseEventStore,
+		updateFunc: func(ctx context.Context, criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error) {
+			return nil, errors.New("update failed")
+		},
+	}
+
+	srv.Assistantstore = mockAssistantStore
+	srv.Eventstore = mockEventStore
+
+	handler := NewAssistantHandler(srv)
+
+	// Test data
+	sessionId := "test-session-123"
+	entityId := "alert-456"
+
+	req := httptest.NewRequest("DELETE", fmt.Sprintf("/assistant/sessions/%s", sessionId), nil)
+
+	// Set URL params
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("sessionId", sessionId)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	// Add required context values
+	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "test-user-123")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	ctx = context.WithValue(ctx, web.ContextKeyRequestId, "test-request-456")
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+
+	// Mock GetSessions to return an investigation session
+	mockAssistantStore.EXPECT().GetSessions(
+		gomock.Any(),
+		gomock.Any(),
+	).Return([]*model.AssistantSession{
+		{
+			SessionId: sessionId,
+			Type:      "alert_investigation",
+			EntityId:  entityId,
+		},
+	}, nil)
+
+	// Mock DeleteSession - should still be called
+	mockAssistantStore.EXPECT().DeleteSession(gomock.Any(), sessionId).Return(nil)
+
+	// Execute the handler
+	handler.DeleteSession(w, req)
+
+	// Verify response - should still succeed
+	assert.Equal(t, http.StatusNoContent, w.Code)
+}
+
+func TestDeleteSessionMissingSessionId(t *testing.T) {
+	// Create mock server
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
+	defer ctrl.Finish()
+
+	srv.Assistantstore = mockAssistantStore
+
+	handler := NewAssistantHandler(srv)
+
+	req := httptest.NewRequest("DELETE", "/assistant/sessions/", nil)
+
+	// Set URL params with empty sessionId
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("sessionId", "")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	// Add required context values
+	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "test-user-123")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	ctx = context.WithValue(ctx, web.ContextKeyRequestId, "test-request-456")
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+
+	// Execute the handler
+	handler.DeleteSession(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestDeleteSessionUnauthorized(t *testing.T) {
+	// Create mock server with unauthorized user
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: false},
+	}
+	ctrl := gomock.NewController(t)
+	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
+	defer ctrl.Finish()
+
+	srv.Assistantstore = mockAssistantStore
+
+	handler := NewAssistantHandler(srv)
+
+	// Test data
+	sessionId := "test-session-123"
+
+	req := httptest.NewRequest("DELETE", fmt.Sprintf("/assistant/sessions/%s", sessionId), nil)
+
+	// Set URL params
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("sessionId", sessionId)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	// Add required context values
+	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "unauthorized-user")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	ctx = context.WithValue(ctx, web.ContextKeyRequestId, "test-request-456")
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+
+	// Execute the handler
+	handler.DeleteSession(w, req)
+
+	// Verify response
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func TestClearInvestigationSessionFromAlert(t *testing.T) {
+	// Create mock server
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockBaseEventStore := mock.NewMockEventstore(ctrl)
+	defer ctrl.Finish()
+
+	// Create custom mock that supports AddInvestigationUpdateScripts
+	mockEventStore := &MockElasticEventstore{
+		MockEventstore: mockBaseEventStore,
+		updateFunc: func(ctx context.Context, criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error) {
+			// Verify the criteria has the correct query and script
+			assert.NotNil(t, criteria.ParsedQuery)
+			assert.NotEmpty(t, criteria.UpdateScripts)
+			return &model.EventUpdateResults{
+				UpdatedCount:   1,
+				UnchangedCount: 0,
+			}, nil
+		},
+	}
+
+	srv.Eventstore = mockEventStore
+
+	handler := NewAssistantHandler(srv)
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user-123")
+
+	socId := "alert-123"
+	sessionId := "session-456"
+
+	// Execute the function
+	err := handler.clearInvestigationSessionFromAlert(ctx, socId, sessionId)
+
+	// Verify no error
+	assert.NoError(t, err)
+}
+
+func TestClearInvestigationSessionFromAlertUnauthorized(t *testing.T) {
+	// Create mock server with unauthorized user
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: false},
+	}
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	handler := NewAssistantHandler(srv)
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user-123")
+
+	socId := "alert-123"
+	sessionId := "session-456"
+
+	// Execute the function
+	err := handler.clearInvestigationSessionFromAlert(ctx, socId, sessionId)
+
+	// Verify error
+	assert.Error(t, err)
+}
+
+func TestClearInvestigationSessionFromAlertUpdateFails(t *testing.T) {
+	// Create mock server
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockBaseEventStore := mock.NewMockEventstore(ctrl)
+	defer ctrl.Finish()
+
+	// Create custom mock that supports AddInvestigationUpdateScripts but fails on Update
+	mockEventStore := &MockElasticEventstore{
+		MockEventstore: mockBaseEventStore,
+		updateFunc: func(ctx context.Context, criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error) {
+			return nil, errors.New("update failed")
+		},
+	}
+
+	srv.Eventstore = mockEventStore
+
+	handler := NewAssistantHandler(srv)
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user-123")
+
+	socId := "alert-123"
+	sessionId := "session-456"
+
+	// Execute the function
+	err := handler.clearInvestigationSessionFromAlert(ctx, socId, sessionId)
+
+	// Verify error
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "update failed")
+}
+
+func TestHandleEntityAssociation(t *testing.T) {
+	// Create mock server
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockBaseEventStore := mock.NewMockEventstore(ctrl)
+	defer ctrl.Finish()
+
+	// Create custom mock that supports AddUpdateScripts
+	mockEventStore := &MockElasticEventstore{
+		MockEventstore: mockBaseEventStore,
+		updateFunc: func(ctx context.Context, criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error) {
+			return &model.EventUpdateResults{
+				UpdatedCount:   1,
+				UnchangedCount: 0,
+			}, nil
+		},
+	}
+
+	srv.Eventstore = mockEventStore
+
+	handler := NewAssistantHandler(srv)
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user-123")
+
+	entityType := "alert_investigation"
+	entityId := "alert-123"
+	sessionId := "session-456"
+
+	// Execute the function
+	err := handler.handleEntityAssociation(ctx, entityType, entityId, sessionId)
+
+	// Verify no error
+	assert.NoError(t, err)
+}
+
+func TestHandleEntityAssociationNonAlertType(t *testing.T) {
+	// Create mock server
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	handler := NewAssistantHandler(srv)
+
+	ctx := context.Background()
+
+	entityType := "other_type"
+	entityId := "entity-123"
+	sessionId := "session-456"
+
+	// Execute the function - should return nil without doing anything
+	err := handler.handleEntityAssociation(ctx, entityType, entityId, sessionId)
+
+	// Verify no error
+	assert.NoError(t, err)
+}
+
+func TestHandleEntityAssociationMarkFails(t *testing.T) {
+	// Create mock server
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockBaseEventStore := mock.NewMockEventstore(ctrl)
+	defer ctrl.Finish()
+
+	// Create custom mock that fails on Update
+	mockEventStore := &MockElasticEventstore{
+		MockEventstore: mockBaseEventStore,
+		updateFunc: func(ctx context.Context, criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error) {
+			return nil, errors.New("update failed")
+		},
+	}
+
+	srv.Eventstore = mockEventStore
+
+	handler := NewAssistantHandler(srv)
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user-123")
+
+	entityType := "alert_investigation"
+	entityId := "alert-123"
+	sessionId := "session-456"
+
+	// Execute the function
+	err := handler.handleEntityAssociation(ctx, entityType, entityId, sessionId)
+
+	// Verify error is returned
+	assert.Error(t, err)
+}
+
+func TestHandleInvestigationSessionCleanup(t *testing.T) {
+	// Create mock server
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
+	mockBaseEventStore := mock.NewMockEventstore(ctrl)
+	defer ctrl.Finish()
+
+	// Create custom mock that supports AddInvestigationUpdateScripts
+	mockEventStore := &MockElasticEventstore{
+		MockEventstore: mockBaseEventStore,
+		updateFunc: func(ctx context.Context, criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error) {
+			return &model.EventUpdateResults{
+				UpdatedCount:   1,
+				UnchangedCount: 0,
+			}, nil
+		},
+	}
+
+	srv.Assistantstore = mockAssistantStore
+	srv.Eventstore = mockEventStore
+
+	handler := NewAssistantHandler(srv)
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user-123")
+
+	sessionId := "session-456"
+	entityId := "alert-123"
+
+	// Mock GetSessions to return an investigation session
+	mockAssistantStore.EXPECT().GetSessions(
+		gomock.Any(),
+		gomock.Any(),
+	).Return([]*model.AssistantSession{
+		{
+			SessionId: sessionId,
+			Type:      "alert_investigation",
+			EntityId:  entityId,
+		},
+	}, nil)
+
+	// Execute the function
+	handler.handleInvestigationSessionCleanup(ctx, sessionId)
+
+	// No assertions needed - function returns void, just verify no panic
+}
+
+func TestHandleInvestigationSessionCleanupNonInvestigationSession(t *testing.T) {
+	// Create mock server
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
+	defer ctrl.Finish()
+
+	srv.Assistantstore = mockAssistantStore
+
+	handler := NewAssistantHandler(srv)
+
+	ctx := context.Background()
+
+	sessionId := "session-456"
+
+	// Mock GetSessions to return a non-investigation session
+	mockAssistantStore.EXPECT().GetSessions(
+		gomock.Any(),
+		gomock.Any(),
+	).Return([]*model.AssistantSession{
+		{
+			SessionId: sessionId,
+			Type:      "general",
+		},
+	}, nil)
+
+	// Execute the function - should not call clearInvestigationSessionFromAlert
+	handler.handleInvestigationSessionCleanup(ctx, sessionId)
+
+	// No assertions needed - function returns void, just verify no panic
+}
+
+func TestHandleInvestigationSessionCleanupGetSessionsFails(t *testing.T) {
+	// Create mock server
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
+	defer ctrl.Finish()
+
+	srv.Assistantstore = mockAssistantStore
+
+	handler := NewAssistantHandler(srv)
+
+	ctx := context.Background()
+
+	sessionId := "session-456"
+
+	// Mock GetSessions to fail
+	mockAssistantStore.EXPECT().GetSessions(
+		gomock.Any(),
+		gomock.Any(),
+	).Return(nil, errors.New("database error"))
+
+	// Execute the function - should handle error gracefully
+	handler.handleInvestigationSessionCleanup(ctx, sessionId)
+
+	// No assertions needed - function returns void and logs error, just verify no panic
+}
+
+func TestHandleInvestigationSessionCleanupClearFails(t *testing.T) {
+	// Create mock server
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
+	mockBaseEventStore := mock.NewMockEventstore(ctrl)
+	defer ctrl.Finish()
+
+	// Create custom mock that supports AddInvestigationUpdateScripts but fails on Update
+	mockEventStore := &MockElasticEventstore{
+		MockEventstore: mockBaseEventStore,
+		updateFunc: func(ctx context.Context, criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error) {
+			return nil, errors.New("update failed")
+		},
+	}
+
+	srv.Assistantstore = mockAssistantStore
+	srv.Eventstore = mockEventStore
+
+	handler := NewAssistantHandler(srv)
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user-123")
+
+	sessionId := "session-456"
+	entityId := "alert-123"
+
+	// Mock GetSessions to return an investigation session
+	mockAssistantStore.EXPECT().GetSessions(
+		gomock.Any(),
+		gomock.Any(),
+	).Return([]*model.AssistantSession{
+		{
+			SessionId: sessionId,
+			Type:      "alert_investigation",
+			EntityId:  entityId,
+		},
+	}, nil)
+
+	// Execute the function - should handle error gracefully
+	handler.handleInvestigationSessionCleanup(ctx, sessionId)
+
+	// No assertions needed - function returns void and logs error, just verify no panic
 }

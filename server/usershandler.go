@@ -77,6 +77,12 @@ func (h *UsersHandler) usersEnabled(next http.Handler) http.Handler {
 func (h *UsersHandler) getUsers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
+	err := h.server.Rolestore.EnsureDefaultRoleForUser(ctx)
+	if err != nil {
+		web.Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
 	users, err := h.server.Userstore.GetUsers(ctx)
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -155,7 +161,7 @@ func (h *UsersHandler) postAddRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.server.AdminUserstore.AddRole(ctx, id, role)
+	err := h.server.AdminUserstore.AddRole(ctx, id, role, false)
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
 		return

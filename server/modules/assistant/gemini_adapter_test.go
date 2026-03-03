@@ -17,6 +17,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 
+	"github.com/apex/log"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/genai"
 )
@@ -447,7 +448,7 @@ func TestConvertToolConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tools, config := convertToolConfig(tt.req)
+			tools, config := convertToolConfigToGemini(tt.req)
 			tt.validate(t, tools, config)
 		})
 	}
@@ -735,7 +736,7 @@ func TestConvertHistory(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			history := convertHistory(tt.req)
+			history := convertHistoryToGemini(log.Log, tt.req)
 			tt.validate(t, history)
 		})
 	}

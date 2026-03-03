@@ -34,3 +34,11 @@ func TestVerifyClient(tester *testing.T) {
 
 	assert.Nil(tester, client.Verify())
 }
+
+func TestIsClient(tester *testing.T) {
+	assert.True(tester, IsClient("socl_123"))
+	assert.True(tester, IsClient("socl_"))
+	assert.False(tester, IsClient("socl"))
+	assert.False(tester, IsClient("123"))
+	assert.False(tester, IsClient(""))
+}

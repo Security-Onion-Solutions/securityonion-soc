@@ -44,6 +44,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         { title: this.$root.i18n.inputTokens, value: 'inputTokens' },
         { title: this.$root.i18n.outputTokens, value: 'outputTokens' },
         { title: this.$root.i18n.credits, value: 'credits' },
+        { title: this.$root.i18n.model, value: 'model' },
       ],
     ],
     expandedFields: {
@@ -74,6 +75,10 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
     creditsRemaining: 0,
     creditsLoaded: false,
     searchFilter: '',
+
+    availableModels: [],
+    modelsMap: new Map(),
+    balanceEndpoint: '',
     
     dateRange: '',
     relativeTimeEnabled: true,
@@ -149,6 +154,17 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
   methods: {
     async initAssistant(params) {
       this.assistantEnabled = params["enabled"] && this.$root.isLicensed('oai');
+      this.availableModels = params["availableModels"];
+      if (this.availableModels.length > 0) {
+        this.availableModels.forEach(m => m.key = this.buildModelIdentifier(m));
+        this.modelsMap = new Map(
+          this.availableModels.filter(m => m.enabled).map(m => [m.key, m])
+        );
+        for (let val of this.modelsMap.values()) {
+          if (val.contextLimitLarge < val.contextLimitSmall) val.contextLimitLarge = val.contextLimitSmall;
+          if (val.adapter === "SOAI" && !this.balanceEndpoint) this.balanceEndpoint = val.key;
+        }
+      }
       this.paramsLoaded = true;
       if (this.assistantEnabled) {
         this.loadData();
@@ -329,8 +345,12 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       return records;
     },
     async loadCredits() {
+      if (!this.balanceEndpoint) {
+        this.creditsLoaded = true;
+        return
+      }
       try {
-        const response = await this.$root.papi.get('/assistant/balance');
+        const response = await this.$root.papi.get(`/assistant/balance/${this.balanceEndpoint}`);
         if (response.data) {
           if (response.data.health_status === 'healthy') {
             this.creditsRemaining = response.data.credit_balance || 0;
@@ -572,18 +592,45 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       this.graphUsersMessagesData.key = 0;
 
       this.setupTimelineChart(this.graphSessionsCreditsOptions, this.graphSessionsCreditsData, this.i18n.totalCredits);
-      this.setupTimelineChart(this.graphSessionsMessagesOptions, this.graphSessionsMessagesData, this.i18n.totalMessages);
+      this.setupPieChart(this.graphSessionsMessagesOptions, this.graphSessionsMessagesData, this.i18n.totalMessages);
       this.graphSessionsCreditsData.key = 0;
       this.graphSessionsMessagesData.key = 0;
     },
     populateUsersCharts() {
       this.populateChart(this.graphUsersCreditsData, this.aimetrics, 'totalCredits');
       this.populateChart(this.graphUsersSessionsData, this.aimetrics, 'totalSessions');
-      this.populateChart(this.graphUsersMessagesData, this.aimetrics, 'totalMessages');
+      this.populateModelsChart(this.graphUsersMessagesData, this.aimetrics);
     },
     populateSessionsCharts() {
       this.populateChart(this.graphSessionsCreditsData, this.aimetrics, 'totalCredits', 'createTime');
-      this.populateChart(this.graphSessionsMessagesData, this.aimetrics, 'totalMessages', 'createTime');
+      this.populateModelsChart(this.graphSessionsMessagesData, this.aimetrics);
+    },
+    populateModelsChart(chart, data) {
+      chart.key++;
+      chart.labels = [];
+      chart.datasets[0].data = [];
+      
+      if (!data || data.length === 0) return;
+      
+      const modelMessageCounts = {};
+      
+      data.forEach(item => {
+        const modelUsage = item.usage?.modelUsage || item.modelUsage;
+        
+        if (modelUsage) {
+          for (const [modelKey, modelData] of Object.entries(modelUsage)) {
+            if (!modelMessageCounts[modelKey]) {
+              modelMessageCounts[modelKey] = 0;
+            }
+            modelMessageCounts[modelKey] += modelData.modelMessages || 0;
+          }
+        }
+      });
+      
+      for (const [modelKey, messageCount] of Object.entries(modelMessageCounts)) {
+        chart.labels.push(modelKey);
+        chart.datasets[0].data.push(messageCount);
+      }
     },
     populateChart(chart, data, field, timefield=null) {
       chart.key++;
@@ -691,6 +738,10 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         data: [],
         label: this.i18n.field_count,
       }];
+    },
+    buildModelIdentifier(model) {
+      if (!model) return '';
+      return `${model?.id||''}@${model?.adapter||''}`;
     }
   }
 }});

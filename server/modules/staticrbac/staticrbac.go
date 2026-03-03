@@ -40,7 +40,8 @@ func (auth *StaticRbac) Init(cfg module.ModuleConfig) error {
 		userPaths, err = module.GetStringArray(cfg, "userFiles")
 		if err == nil {
 			scanIntervalMs := module.GetIntDefault(cfg, "scanIntervalMs", DEFAULT_SCAN_INTERVAL_MS)
-			err = auth.impl.Init(userPaths, rolePaths, scanIntervalMs)
+			defaultRole := module.GetStringDefault(cfg, "defaultRole", "")
+			err = auth.impl.Init(userPaths, rolePaths, scanIntervalMs, defaultRole)
 			if err == nil {
 				auth.server.Rolestore = auth.impl
 				auth.server.Authorizer = auth.impl

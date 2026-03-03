@@ -1116,13 +1116,12 @@ func (store *ElasticEventstore) addParameterToFilter(json string, key string, fi
 	}
 }
 
-func (store *ElasticEventstore) addUpdateScripts(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, ack bool, esc bool, userId string) {
-	if ack {
-		trackTiming := strconv.FormatBool(licensing.IsEnabled(licensing.FEAT_RPT))
-		escBool := strconv.FormatBool(esc)
-		nowMillis := timeNow.UnixMilli()
-		nowMillisStr := strconv.FormatInt(nowMillis, 10)
-		updateCriteria.AddUpdateScript(`
+func (store *ElasticEventstore) addAcknowledgeScript(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, esc bool, userId string) {
+	trackTiming := strconv.FormatBool(licensing.IsEnabled(licensing.FEAT_RPT))
+	escBool := strconv.FormatBool(esc)
+	nowMillis := timeNow.UnixMilli()
+	nowMillisStr := strconv.FormatInt(nowMillis, 10)
+	updateCriteria.AddUpdateScript(`
 			boolean track_timing = ` + trackTiming + `;
 			boolean esc_bool = ` + escBool + `;
 			Instant now_instant = Instant.ofEpochMilli(` + nowMillisStr + `L);
@@ -1151,8 +1150,65 @@ func (store *ElasticEventstore) addUpdateScripts(updateCriteria *model.EventUpda
 				}
 			}
 			`)
+}
+
+func (store *ElasticEventstore) addInvestigateScript(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, userId string, sessionId ...string) {
+	trackTiming := strconv.FormatBool(licensing.IsEnabled(licensing.FEAT_RPT))
+	nowMillis := timeNow.UnixMilli()
+	nowMillisStr := strconv.FormatInt(nowMillis, 10)
+
+	// Get sessionId if provided
+	sessionIdStr := ""
+	if len(sessionId) > 0 && sessionId[0] != "" {
+		sessionIdStr = sessionId[0]
+	}
+
+	script := `
+			boolean track_timing = ` + trackTiming + `;
+			Instant now_instant = Instant.ofEpochMilli(` + nowMillisStr + `L);
+			ZonedDateTime now_date = ZonedDateTime.ofInstant(now_instant, ZoneId.of('Z'));
+			
+			ctx._source.event.investigated = true;
+			ctx._source.event.investigated_by = '` + userId + `';`
+
+	if sessionIdStr != "" {
+		script += `
+			ctx._source.event.investigation_session_id = '` + sessionIdStr + `';`
+	}
+
+	script += `
+			if (track_timing) {
+				ctx._source.event.investigated_timestamp = now_date;
+			}
+			`
+	updateCriteria.AddUpdateScript(script)
+}
+
+func (store *ElasticEventstore) addUnacknowledgeScript(updateCriteria *model.EventUpdateCriteria) {
+	updateCriteria.AddUpdateScript(`ctx._source.event.acknowledged = false;`)
+}
+
+func (store *ElasticEventstore) addInvestigateDeleteScript(updateCriteria *model.EventUpdateCriteria) {
+	updateCriteria.AddUpdateScript(`
+		if (ctx._source.event.containsKey('investigation_session_id')) {
+			ctx._source.event.remove('investigation_session_id');
+		}
+	`)
+}
+
+func (store *ElasticEventstore) AddAckEscalateUpdateScripts(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, ack bool, esc bool, userId string) {
+	if ack {
+		store.addAcknowledgeScript(updateCriteria, timeNow, esc, userId)
 	} else {
-		updateCriteria.AddUpdateScript(`ctx._source.event.acknowledged = false;`)
+		store.addUnacknowledgeScript(updateCriteria)
+	}
+}
+
+func (store *ElasticEventstore) AddInvestigationUpdateScripts(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, userId string, isDelete bool, sessionId ...string) {
+	if isDelete {
+		store.addInvestigateDeleteScript(updateCriteria)
+	} else {
+		store.addInvestigateScript(updateCriteria, timeNow, userId, sessionId...)
 	}
 }
 
@@ -1177,7 +1233,7 @@ func (store *ElasticEventstore) Acknowledge(ctx context.Context, ackCriteria *mo
 			// - Explicitly unacknowledging (ack=false) without custom field updates
 			// When updateFields is provided with ack=false, we assume user only wants to update fields
 			if ackCriteria.Acknowledge || len(ackCriteria.UpdateFields) == 0 {
-				store.addUpdateScripts(updateCriteria, time.Now(), ackCriteria.Acknowledge, ackCriteria.Escalate, userId)
+				store.AddAckEscalateUpdateScripts(updateCriteria, time.Now(), ackCriteria.Acknowledge, ackCriteria.Escalate, userId)
 			}
 
 			// Add custom field updates if specified

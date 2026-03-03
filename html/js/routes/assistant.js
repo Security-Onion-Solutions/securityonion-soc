@@ -48,6 +48,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     lowBalanceColorAlert: 0,
     availableModels: [],
     modelsMap: new Map(),
+    groupedModels: [],
     currentModel: '',
     activeStreamingSessionId: null, // Track which session is actively streaming
     autoScrollOnNextRender: false, // gate for programmatic scrolls
@@ -57,6 +58,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     caseMenuVisible: false,
     mruCases: [],
     perMessageStatsEnabled: false,
+    showModelThinking: false,
   }},
   async created() {
     this.loadLocalSettings();
@@ -80,7 +82,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     'restoreLastActive': 'saveLocalSettings',
     'alwaysApproveReadRequests': 'saveLocalSettings',
     'showChatHistory': 'saveLocalSettings',
-    'currentModel': 'saveLocalSettings'
+    'currentModel': 'saveLocalSettings',
+    'showModelThinking': 'saveLocalSettings'
   },
   computed: {
     messageContextValues() {
@@ -107,6 +110,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           if (val.contextLimitLarge < val.contextLimitSmall) val.contextLimitLarge = val.contextLimitSmall;
         }
         if (!this.currentModel || !this.modelsMap.has(this.currentModel)) this.currentModel = this.availableModels[0].key;
+        this.groupedModels = this.buildGroupedModels();
       }
       this.updateModelParams();
 
@@ -292,7 +296,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     async loadCredits() {
       try {
-        const response = await this.$root.papi.get('/assistant/balance/' + this.currentModel);
+        const response = await this.$root.papi.get('/assistant/balance/' + encodeURIComponent(this.currentModel));
         if (response.data) {
           if (response.data.health_status === 'healthy') {
             this.creditsRemaining = response.data.credit_balance || 0;
@@ -320,7 +324,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       await this.loadStoredChats();
     },
     generateChatId() {
-      return 'chat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+      return crypto.randomUUID();
     },
     async loadChat(chat) {
       await this.saveCurrentChat();
@@ -528,7 +532,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
 
       assistantMessage = {
         role: 'assistant',
-        thought: Vue.ref(''), // MUST be ref
+        thoughts: Vue.ref(''), // MUST be ref
         content: Vue.ref(''), // MUST be ref
         timestamp: new Date().toISOString(),
         usage: Vue.ref(null),
@@ -584,7 +588,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       
       if (assistantMessage && c.delta.type === 'text_delta' && targetSessionId === this.currentChatId) {
         // Only update UI if this is for the current session
-        assistantMessage.content.value += this.nbspRegexOp(c.delta.text);
+        assistantMessage.content.value = this.nbspRegexOp(assistantMessage.content.value + c.delta.text);
         this.scrollIfPinned();
       } else if (c.delta.type === 'input_json_delta') {
         const idMap = this.getIndexMap(targetSessionId);
@@ -599,7 +603,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           }
         }
       } else if (c.delta.type === 'thought_delta') {
-        assistantMessage.thought.value += this.nbspRegexOp(c.delta.text);
+        if (assistantMessage && targetSessionId === this.currentChatId) {
+          assistantMessage.thoughts.value += this.nbspRegexOp(c.delta.text);
+          this.scrollIfPinned();
+        }
       }
     },
     
@@ -669,7 +676,26 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.activeStreamingSessionId = streamingSessionId;
       
       try {
-        const response = await this.$root.papi.post('/assistant/chat', {
+        // Build the URL with entityType and entityId query parameters if present
+        let url = '/assistant/chat';
+        const socId = this.$route.query.socId;
+        if (socId) {
+          url += `?entityType=alert_investigation&entityId=${encodeURIComponent(socId)}`;
+          // Clear the investigation query params after first use to prevent
+          // marking the alert as investigated on every subsequent message
+          this.$nextTick(() => {
+            const query = { ...this.$route.query };
+            delete query.investigation;
+            delete query.socId;
+            this.$router.replace({
+              name: 'assistant',
+              params: this.$route.params,
+              query: query
+            });
+          });
+        }
+        
+        const response = await this.$root.papi.post(url, {
           msg: userMessage,
           sessionId: streamingSessionId,
           model: this.currentModel,
@@ -853,7 +879,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     handleToolExecutionMessageStart(c, assistantMessage, toolUse) {
       assistantMessage = {
         role: 'assistant',
-        thought: Vue.ref(''),
+        thoughts: Vue.ref(''),
         content: Vue.ref(''),
         timestamp: new Date().toISOString(),
         usage: Vue.ref(null),
@@ -911,7 +937,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       
       if (assistantMessage && c.delta.type === 'text_delta' && targetSessionId === this.currentChatId) {
         // Only update UI if this is for the current session
-        assistantMessage.content.value += this.nbspRegexOp(c.delta.text);
+        assistantMessage.content.value = this.nbspRegexOp(assistantMessage.content.value + c.delta.text);
         this.scrollIfPinned();
       } else if (c.delta.type === 'input_json_delta') {
         const idMap = this.getIndexMap(targetSessionId);
@@ -924,6 +950,11 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           if (targetSessionId === this.currentChatId) {
             this.scrollIfPinned();
           }
+        }
+      } else if (c.delta.type === 'thought_delta') {
+        if (assistantMessage && targetSessionId === this.currentChatId) {
+          assistantMessage.thoughts.value += this.nbspRegexOp(c.delta.text);
+          this.scrollIfPinned();
         }
       }
     },
@@ -1702,6 +1733,11 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           tags: msg.tags || [],
         };
 
+        // Extract thoughts if present
+        if (msg.message.thoughts) {
+          frontendMsg.thoughts = Vue.ref(msg.message.thoughts);
+        }
+
         // Extract message content using helper method
         this.extractMessageContent(msg, frontendMsg);
         
@@ -1804,7 +1840,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
 
     getCompressColor() {
-      const maxContextLength = this.increaseMaxContextThreshold ? this.contextLimitLarge : this.contextLimitSmall;
+      const maxContextLength = this.increaseContextLimit ? this.contextLimitLarge : this.contextLimitSmall;
       if (this.contextLength >= maxContextLength / 2) {
         return 'primary';
       }
@@ -1830,6 +1866,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.saveSetting('alwaysApproveReadRequests', this.alwaysApproveReadRequests, false);
       this.saveSetting('showChatHistory', this.showChatHistory, true);
       this.saveSetting('currentModel', this.currentModel, '');
+      this.saveSetting('showModelThinking', this.showModelThinking, false);
     },
 
     // Load all local settings
@@ -1841,6 +1878,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       if (localStorage[prefix + '.showChatHistory']) this.showChatHistory = localStorage[prefix + '.showChatHistory'] == 'true';
       if (localStorage[prefix + '.currentModel']) this.currentModel = localStorage[prefix + '.currentModel'];
       if (localStorage[prefix + '.perMessageStatsEnabled']) this.perMessageStatsEnabled = localStorage[prefix + '.perMessageStatsEnabled'] == 'true';
+      if (localStorage[prefix + '.showModelThinking']) this.showModelThinking = localStorage[prefix + '.showModelThinking'] == 'true';
 
       if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
     },
@@ -1897,6 +1935,26 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     buildModelIdentifier(model) {
       if (!model) return '';
       return `${model?.id||''}@${model?.adapter||''}`;
+    },
+
+    buildGroupedModels() {
+      const groupedByAdapter = {};
+      for (const model of this.modelsMap.values()) {
+        const adapter = model.adapter || this.i18n.statusUnknown;
+        if (!groupedByAdapter[adapter]) {
+          groupedByAdapter[adapter] = [];
+        }
+        groupedByAdapter[adapter].push(model);
+      }
+      const result = [];
+      const sortedAdapters = Object.keys(groupedByAdapter).sort();
+      for (const adapter of sortedAdapters) {
+        result.push({
+          header: adapter
+        });
+        result.push(...groupedByAdapter[adapter]);
+      }
+      return result;
     },
 
     applyToolSpecificChanges(toolUse, toolRequest) {
@@ -2078,7 +2136,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }
 
       if (caseId === null) { 
-        caseId = this.createCase(session.title);
+        caseId = await this.createCase(session.title);
       }
 
       const payload = {
@@ -2108,6 +2166,11 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     formatCaseSummary(socCase) {
       return socCase?.title;
+    },
+    getLastThoughtTitle(text) {
+      const titleRegex = /\*\*([^*]+)\*\*(?![\s\S]*\*\*)/;
+      const match = text.match(titleRegex);
+      return match ? match[1] : this.i18n.thinking;
     }
   }
 }});

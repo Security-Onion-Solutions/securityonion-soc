@@ -320,11 +320,13 @@ func startExpirationMonitor() {
 		}
 		manager.expirationTimer = time.NewTimer(duration)
 		<-manager.expirationTimer.C
-		log.WithFields(log.Fields{
-			"expiration": manager.licenseKey.Expiration,
-			"duration":   duration,
-		}).Warn("License has expired")
-		manager.status = LICENSE_STATUS_EXPIRED
+		if manager.licenseKey.Expiration.Before(time.Now()) {
+			log.WithFields(log.Fields{
+				"expiration": manager.licenseKey.Expiration,
+				"duration":   duration,
+			}).Warn("License has expired")
+			manager.status = LICENSE_STATUS_EXPIRED
+		}
 	}
 	manager.expirationTimer = nil
 }
@@ -426,10 +428,10 @@ func Usable() bool {
 func stopMonitor() {
 	if manager != nil {
 		if manager.expirationTimer != nil {
-			manager.expirationTimer.Stop()
+			manager.expirationTimer.Reset(time.Duration(0))
 		}
 		if manager.effectiveTimer != nil {
-			manager.effectiveTimer.Stop()
+			manager.effectiveTimer.Reset(time.Duration(0))
 		}
 		if manager.pillarTimer != nil {
 			pillarFilename = ""

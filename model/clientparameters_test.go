@@ -210,6 +210,22 @@ func TestModelParameters_UnmarshalJSON(t *testing.T) {
 			}`,
 			wantErr: true,
 		},
+		{
+			name: "missing optional lowBalanceColorAlert should default to zero",
+			input: `{
+				"id": "abc",
+				"displayName": "Normal",
+				"contextLimitSmall": 512,
+				"contextLimitLarge": 2048
+			}`,
+			want: ModelParameters{
+				ID:                   "abc",
+				DisplayName:          "Normal",
+				ContextLimitSmall:    512,
+				ContextLimitLarge:    2048,
+				LowBalanceColorAlert: 0,
+			},
+		},
 	}
 
 	for _, tt := range tests {

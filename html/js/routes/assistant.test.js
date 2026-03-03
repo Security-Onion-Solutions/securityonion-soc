@@ -278,8 +278,8 @@ test('generateChatId creates unique ID', () => {
   const id1 = comp.generateChatId();
   const id2 = comp.generateChatId();
   
-  expect(id1).toMatch(/^chat_\d+_[a-z0-9]+$/);
-  expect(id2).toMatch(/^chat_\d+_[a-z0-9]+$/);
+  expect(id1).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+  expect(id2).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
   expect(id1).not.toBe(id2);
 });
 
@@ -1231,6 +1231,29 @@ test('handleToolExecutionContentBlockDelta processes input_json_delta for chaine
   expect(comp.scrollIfPinned).toHaveBeenCalled();
 });
 
+test('handleToolExecutionContentBlockDelta processes thought_delta', () => {
+  const sessionId = 'tool-session';
+  const assistantMessage = {
+    thoughts: { value: '**Starting Analysis**\n\n' }
+  };
+  
+  comp.scrollIfPinned = jest.fn();
+  comp.currentChatId = sessionId;
+  comp.nbspRegexOp = jest.fn((text) => text); // Pass through for testing
+  
+  const deltaEvent = {
+    delta: {
+      type: 'thought_delta',
+      text: 'Examining the data...'
+    }
+  };
+  
+  comp.handleToolExecutionContentBlockDelta(deltaEvent, assistantMessage, sessionId);
+  
+  expect(assistantMessage.thoughts.value).toBe('**Starting Analysis**\n\nExamining the data...');
+  expect(comp.scrollIfPinned).toHaveBeenCalled();
+});
+
 test('executeTool captures raw tool result from backend', async () => {
   // wait out any setTimeouts from previous tests
   await new Promise(resolve => setTimeout(resolve, 1100));
@@ -1580,6 +1603,45 @@ test('callAIAPI processes content_block_delta with text_delta', async () => {
   expect(comp.messages).toHaveLength(1);
   expect(comp.messages[0].content.value).toBe('Hello world!');
   expect(comp.scrollToBottom).toHaveBeenCalledTimes(3); // Once for message_start, twice for text deltas
+});
+
+test('callAIAPI processes content_block_delta with thought_delta', async () => {
+  comp.currentChatId = fakeSessionId;
+  comp.scrollToBottom = jest.fn();
+  comp.loadCredits = jest.fn().mockResolvedValue();
+  
+  const messageStartData = JSON.stringify({ type: 'message_start' });
+  const thoughtDeltaData1 = JSON.stringify({
+    type: 'content_block_delta',
+    delta: { type: 'thought_delta', text: '**Analyzing Request**\n\n' }
+  });
+  const thoughtDeltaData2 = JSON.stringify({
+    type: 'content_block_delta',
+    delta: { type: 'thought_delta', text: 'Processing the query...' }
+  });
+  
+  const mockResponse = {
+    ok: true,
+    data: {
+      pipeThrough: jest.fn().mockReturnValue({
+        getReader: jest.fn().mockReturnValue({
+          read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: `data: ${messageStartData}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: `data: ${thoughtDeltaData1}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: `data: ${thoughtDeltaData2}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
+            .mockResolvedValueOnce({ done: true })
+        })
+      })
+    }
+  };
+  mockPapi('post', mockResponse);
+  
+  await comp.callAIAPI('Test message');
+  
+  expect(comp.messages).toHaveLength(1);
+  expect(comp.messages[0].thoughts.value).toBe('**Analyzing Request**\n\nProcessing the query...');
+  expect(comp.scrollToBottom).toHaveBeenCalledTimes(3); // Once for message_start, twice for thought deltas
 });
 
 test('callAIAPI processes content_block_delta with input_json_delta', async () => {
@@ -2026,6 +2088,74 @@ test('callAIAPI handles empty chunks and filters correctly', async () => {
   expect(comp.messages[0].role).toBe('assistant');
 });
 
+test('callAIAPI clears investigation query params after first use', async () => {
+  comp.currentChatId = fakeSessionId;
+  comp.currentModel = 'test-model';
+  comp.loadCredits = jest.fn().mockResolvedValue();
+  comp.scrollToBottom = jest.fn();
+  
+  // Set up route with investigation query params
+  comp.$route.query = {
+    socId: 'alert-123',
+    investigation: 'true',
+    otherParam: 'keep-this'
+  };
+  comp.$route.params = { sessionId: fakeSessionId };
+  
+  // Mock $nextTick to execute callback immediately
+  let nextTickCallback = null;
+  comp.$nextTick = jest.fn((callback) => {
+    if (callback) {
+      nextTickCallback = callback;
+      return Promise.resolve().then(() => callback());
+    }
+    return Promise.resolve();
+  });
+  
+  const mockResponse = {
+    ok: true,
+    data: {
+      pipeThrough: jest.fn().mockReturnValue({
+        getReader: jest.fn().mockReturnValue({
+          read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
+            .mockResolvedValueOnce({ done: true })
+        })
+      })
+    }
+  };
+  const mockPost = mockPapi('post', mockResponse);
+  
+  await comp.callAIAPI('Test message');
+  
+  // Verify the API was called with the socId parameter
+  expect(mockPost).toHaveBeenCalledWith('/assistant/chat?entityType=alert_investigation&entityId=alert-123', {
+    msg: 'Test message',
+    sessionId: fakeSessionId,
+    model: 'test-model',
+    tags: null,
+  }, {
+    adapter: 'fetch',
+    headers: {
+      'Accept': 'text/event-stream'
+    },
+    responseType: 'stream'
+  });
+  
+  // Verify $nextTick was called (for the query param clearing)
+  expect(comp.$nextTick).toHaveBeenCalled();
+  
+  // Wait for nextTick callback to execute
+  await new Promise(resolve => setTimeout(resolve, 0));
+  
+  // Verify router.replace was called to clear investigation params
+  expect(comp.$router.replace).toHaveBeenCalledWith({
+    name: 'assistant',
+    params: { sessionId: fakeSessionId },
+    query: { otherParam: 'keep-this' } // investigation and socId should be removed
+  });
+});
+
 // Investigation session tests
 test('handleRouteSessionId detects investigation session from query parameter', async () => {
   comp.$route.params.sessionId = fakeSessionId;
@@ -2276,6 +2406,18 @@ test('formatCount delegates to root', () => {
   expect(result).toBe('1,234');
 });
 
+test('getLastThoughtTitle extracts last bold text from thoughts', () => {
+  const thoughtsWithMultipleBold = '**Analyzing the Request**\n\nI need to process this.\n\n**Formulating Response**\n\nHere is my answer.';
+  const thoughtsWithOneBold = '**Processing Data**\n\nWorking on it...';
+  const thoughtsWithNoBold = 'Just some plain text without bold markers';
+  const emptyThoughts = '';
+  
+  expect(comp.getLastThoughtTitle(thoughtsWithMultipleBold)).toBe('Formulating Response');
+  expect(comp.getLastThoughtTitle(thoughtsWithOneBold)).toBe('Processing Data');
+  expect(comp.getLastThoughtTitle(thoughtsWithNoBold)).toBe(comp.i18n.thinking);
+  expect(comp.getLastThoughtTitle(emptyThoughts)).toBe(comp.i18n.thinking);
+});
+
 // Backend message conversion tests
 test('generateTitleFromMessage', () => {
   const session = {
@@ -2385,6 +2527,35 @@ test('convertBackendMessagesToFrontend converts assistant message with text bloc
   expect(result).toHaveLength(1);
   expect(result[0].role).toBe('assistant');
   expect(result[0].content).toBe('I can help you with security analysis.');
+  expect(result[0].timestamp).toBe('2025-01-01T12:00:00.000Z');
+  expect(result[0].usage.value).toEqual({ input_tokens: 10, output_tokens: 20 });
+  expect(comp.updateContextLength).toHaveBeenCalledWith({ input_tokens: 10, output_tokens: 20 }, false);
+});
+
+test('convertBackendMessagesToFrontend converts assistant message with thoughts', () => {
+  comp.resetContextLength = jest.fn();
+  comp.updateContextLength = jest.fn();
+  
+  const backendMessages = [
+    {
+      createTime: '2025-01-01T12:00:00.000Z',
+      message: {
+        role: 'assistant',
+        contentBlocks: [
+          { type: 'text', text: 'I can help you with security analysis.' }
+        ],
+        thoughts: '**Analyzing Request**\n\nProcessing the user query...',
+        usage: { input_tokens: 10, output_tokens: 20 }
+      }
+    }
+  ];
+  
+  const result = comp.convertBackendMessagesToFrontend(backendMessages);
+  
+  expect(result).toHaveLength(1);
+  expect(result[0].role).toBe('assistant');
+  expect(result[0].content).toBe('I can help you with security analysis.');
+  expect(result[0].thoughts.value).toBe('**Analyzing Request**\n\nProcessing the user query...');
   expect(result[0].timestamp).toBe('2025-01-01T12:00:00.000Z');
   expect(result[0].usage.value).toEqual({ input_tokens: 10, output_tokens: 20 });
   expect(comp.updateContextLength).toHaveBeenCalledWith({ input_tokens: 10, output_tokens: 20 }, false);
@@ -3245,28 +3416,30 @@ test('saveSetting handles numeric values', () => {
 
 test('saveLocalSettings saves all assistant settings with correct defaults', () => {
   // Set up component state
-  comp.increaseMaxContextThreshold = true;
+  comp.increaseContextLimit = true;
   comp.restoreLastActive = true;
   comp.alwaysApproveReadRequests = true;
   comp.showChatHistory = false; // Different from default
   comp.currentModel = 'test-model';
+  comp.showModelThinking = true;
   
   // Mock saveSetting to track calls
   comp.saveSetting = jest.fn();
   
   comp.saveLocalSettings();
   
-  expect(comp.saveSetting).toHaveBeenCalledWith('increaseContextLimit', false, false);
+  expect(comp.saveSetting).toHaveBeenCalledWith('increaseContextLimit', true, false);
   expect(comp.saveSetting).toHaveBeenCalledWith('restoreLastActive', true, false);
   expect(comp.saveSetting).toHaveBeenCalledWith('alwaysApproveReadRequests', true, false);
   expect(comp.saveSetting).toHaveBeenCalledWith('showChatHistory', false, true);
   expect(comp.saveSetting).toHaveBeenCalledWith('currentModel', 'test-model', '');
-  expect(comp.saveSetting).toHaveBeenCalledTimes(5);
+  expect(comp.saveSetting).toHaveBeenCalledWith('showModelThinking', true, false);
+  expect(comp.saveSetting).toHaveBeenCalledTimes(6);
 });
 
 test('saveLocalSettings saves default values correctly', () => {
   // Set up component state with default values
-  comp.increaseMaxContextThreshold = false;
+  comp.increaseContextLimit = false;
   comp.restoreLastActive = false;
   comp.alwaysApproveReadRequests = false;
   comp.showChatHistory = true;
@@ -5678,4 +5851,112 @@ test('buildModelIdentifier', () => {
     const output = comp.buildModelIdentifier(t.input);
     expect(output).toBe(t.expected);
   }
+});
+
+test('buildGroupedModels - groups models by adapter with headers', () => {
+  // Setup test data
+  comp.modelsMap = new Map([
+    ['claude-3-5-sonnet@Anthropic', {
+      id: 'claude-3-5-sonnet',
+      adapter: 'Anthropic',
+      displayName: 'Claude 3.5 Sonnet',
+      key: 'claude-3-5-sonnet@Anthropic'
+    }],
+    ['claude-3-opus@Anthropic', {
+      id: 'claude-3-opus',
+      adapter: 'Anthropic',
+      displayName: 'Claude 3 Opus',
+      key: 'claude-3-opus@Anthropic'
+    }],
+    ['gpt-4@SOAI', {
+      id: 'gpt-4',
+      adapter: 'SOAI',
+      displayName: 'GPT-4',
+      key: 'gpt-4@SOAI'
+    }],
+    ['gemini-pro@Gemini', {
+      id: 'gemini-pro',
+      adapter: 'Gemini',
+      displayName: 'Gemini Pro',
+      key: 'gemini-pro@Gemini'
+    }]
+  ]);
+
+  const result = comp.buildGroupedModels();
+
+  // Verify structure
+  expect(result).toBeInstanceOf(Array);
+  expect(result.length).toBe(7); // 3 headers + 4 models
+
+  // First group should be Anthropic (alphabetically first, case-sensitive)
+  expect(result[0]).toEqual({ header: 'Anthropic' });
+  expect(result[1].displayName).toBe('Claude 3.5 Sonnet');
+  expect(result[2].displayName).toBe('Claude 3 Opus');
+
+  // Second group should be Gemini
+  expect(result[3]).toEqual({ header: 'Gemini' });
+  expect(result[4].displayName).toBe('Gemini Pro');
+
+  // Third group should be SOAI
+  expect(result[5]).toEqual({ header: 'SOAI' });
+  expect(result[6].displayName).toBe('GPT-4');
+});
+
+test('buildGroupedModels - handles single adapter', () => {
+  comp.modelsMap = new Map([
+    ['model1@Adapter1', {
+      id: 'model1',
+      adapter: 'Adapter1',
+      displayName: 'Model 1',
+      key: 'model1@Adapter1'
+    }],
+    ['model2@Adapter1', {
+      id: 'model2',
+      adapter: 'Adapter1',
+      displayName: 'Model 2',
+      key: 'model2@Adapter1'
+    }]
+  ]);
+
+  const result = comp.buildGroupedModels();
+
+  // Should have header and two models
+  expect(result).toHaveLength(3);
+  expect(result[0]).toEqual({ header: 'Adapter1' });
+  expect(result[1].displayName).toBe('Model 1');
+  expect(result[2].displayName).toBe('Model 2');
+});
+
+test('buildGroupedModels - handles empty modelsMap', () => {
+  comp.modelsMap = new Map();
+
+  const result = comp.buildGroupedModels();
+
+  expect(result).toEqual([]);
+});
+
+test('buildGroupedModels - handles models with no adapter', () => {
+  comp.i18n = { statusUnknown: 'Unknown' };
+  comp.modelsMap = new Map([
+    ['model1@', {
+      id: 'model1',
+      adapter: '',
+      displayName: 'Model 1',
+      key: 'model1@'
+    }],
+    ['model2@Adapter1', {
+      id: 'model2',
+      adapter: 'Adapter1',
+      displayName: 'Model 2',
+      key: 'model2@Adapter1'
+    }]
+  ]);
+
+  const result = comp.buildGroupedModels();
+
+  // Should group empty adapter as 'Unknown' (from i18n)
+  expect(result[0]).toEqual({ header: 'Adapter1' });
+  expect(result[1].displayName).toBe('Model 2');
+  expect(result[2]).toEqual({ header: 'Unknown' });
+  expect(result[3].displayName).toBe('Model 1');
 });

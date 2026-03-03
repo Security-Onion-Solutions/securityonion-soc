@@ -739,6 +739,11 @@ func (store *Saltstore) updateSetting(mapped map[string]interface{}, sections []
 				"forcedType":  setting.ForcedType,
 			}).Info("Forcing setting type")
 			mapped[name], err = store.forceType(value, setting.ForcedType)
+			if err == nil && setting.ForcedType == "[]{}" {
+				if mapList, ok := mapped[name].([]map[string]any); ok {
+					mapped[name], err = store.coerceMapListFieldTypes(mapList, setting.UiElements)
+				}
+			}
 		} else {
 			currentValue := mapped[name]
 			if currentValue == nil && setting.DefaultAvailable {
@@ -826,6 +831,7 @@ func (store *Saltstore) UpdateSetting(ctx context.Context, setting *model.Settin
 			setting.DefaultAvailable = settingDef.DefaultAvailable
 			setting.File = settingDef.File
 			setting.JinjaEscaped = settingDef.JinjaEscaped
+			setting.UiElements = settingDef.UiElements
 		}
 	}
 
@@ -1001,6 +1007,52 @@ func (store *Saltstore) alignMapList(newValue string) ([]map[string]interface{},
 	return newList, nil
 }
 
+func interfaceToString(v any) string {
+	switch val := v.(type) {
+	case string:
+		return val
+	case float64:
+		if val == float64(int64(val)) {
+			return strconv.FormatInt(int64(val), 10)
+		}
+		return strconv.FormatFloat(val, 'f', -1, 64)
+	case bool:
+		return strconv.FormatBool(val)
+	case []any:
+		parts := make([]string, len(val))
+		for i, item := range val {
+			parts[i] = interfaceToString(item)
+		}
+		return strings.Join(parts, "\n")
+	default:
+		return fmt.Sprintf("%v", v)
+	}
+}
+
+func (store *Saltstore) coerceMapListFieldTypes(list []map[string]any, uiElements []model.UiElement) ([]map[string]any, error) {
+	for _, m := range list {
+		for _, uiElement := range uiElements {
+			if uiElement.ForcedType == "" || uiElement.Field == "" {
+				continue
+			}
+			fieldVal, exists := m[uiElement.Field]
+			if !exists {
+				continue
+			}
+			coerced, err := store.forceType(interfaceToString(fieldVal), uiElement.ForcedType)
+			if err != nil {
+				if uiElement.Required {
+					return nil, fmt.Errorf("field %q: %w", uiElement.Field, err)
+				} else {
+					coerced = zeroForType(uiElement.ForcedType)
+				}
+			}
+			m[uiElement.Field] = coerced
+		}
+	}
+	return list, nil
+}
+
 func (store *Saltstore) alignBestGuess(newValue string) interface{} {
 	i, err := strconv.ParseInt(newValue, 10, 64)
 	if err == nil {
@@ -1056,13 +1108,40 @@ func (store *Saltstore) forceType(newValue string, forcedType string) (interface
 		if len(newValue) > 0 {
 			return strings.Split(newValue, "\n"), nil
 		}
-		return make([]string, 0, 0), nil
+		return make([]string, 0), nil
 	case "[][]":
 		return store.alignListList(newValue)
 	case "[]{}":
 		return store.alignMapList(newValue)
 	}
 	return "", errors.New("Unsupported forced type: " + forcedType)
+}
+
+func zeroForType(typ string) any {
+	switch typ {
+	case "float":
+		return float64(0)
+	case "int":
+		return int64(0)
+	case "bool":
+		return false
+	case "string":
+		return ""
+	case "[]int":
+		return make([]int64, 0)
+	case "[]bool":
+		return make([]bool, 0)
+	case "[]float":
+		return make([]float64, 0)
+	case "[]string":
+		return make([]string, 0)
+	case "[][]":
+		return make([][]interface{}, 0)
+	case "[]{}":
+		return make([]map[string]interface{}, 0)
+	}
+
+	return nil
 }
 
 func (store *Saltstore) alignBestGuessList(newValue string) (interface{}, error) {
@@ -1391,9 +1470,14 @@ func (store *Saltstore) DisableUser(ctx context.Context, id string) error {
 	return err
 }
 
-func (store *Saltstore) AddRole(ctx context.Context, id string, role string) error {
-	if err := store.server.CheckAuthorized(ctx, "write", "users"); err != nil {
-		return err
+func (store *Saltstore) AddRole(ctx context.Context, id string, role string, bypassAuthCheck bool) error {
+	if bypassAuthCheck {
+		logger := log.FromContext(ctx)
+		logger.Debug("Adding role to user without authorization check")
+	} else {
+		if err := store.server.CheckAuthorized(ctx, "write", "users"); err != nil {
+			return err
+		}
 	}
 
 	args := make(map[string]string)

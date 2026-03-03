@@ -61,6 +61,8 @@ type StoredMessage struct {
 	Tags []string `json:"tags,omitempty" example:"investigation"`
 	// What session this message belongs to.
 	SessionId string `json:"session_id" example:"chat_1757086398900_ykhmndscn"`
+	// The model used for this message.
+	Model string `json:"model,omitempty" example:"sonnet-4.5@SOAI"`
 	// The message content.
 	Message *Message `json:"message"`
 }
@@ -70,6 +72,7 @@ type saveableMessage struct {
 	Role          string         `json:"role"`
 	ContentStr    string         `json:"contentStr"`
 	ContentBlocks []ContentBlock `json:"contentBlocks"`
+	Thoughts      string         `json:"thoughts,omitempty"`
 	StopReason    *string        `json:"stopReason,omitempty"`
 	StopSequence  *string        `json:"stopSequence,omitempty"`
 	Usage         *Usage         `json:"usage,omitempty"`
@@ -80,16 +83,19 @@ func (sm *StoredMessage) MarshalJSON() ([]byte, error) {
 		Auditable
 		SessionId string          `json:"sessionId"`
 		Tags      []string        `json:"tags,omitempty"`
+		Model     string          `json:"model,omitempty"`
 		Message   saveableMessage `json:"message"`
 	}{
 		Auditable: sm.Auditable,
 		SessionId: sm.SessionId,
 		Tags:      sm.Tags,
+		Model:     sm.Model,
 		Message: saveableMessage{
 			Id:            sm.Message.Id,
 			Role:          sm.Message.Role,
 			ContentStr:    sm.Message.ContentStr,
 			ContentBlocks: sm.Message.ContentBlocks,
+			Thoughts:      sm.Message.Thoughts,
 			StopReason:    sm.Message.StopReason,
 			StopSequence:  sm.Message.StopSequence,
 			Usage:         sm.Message.Usage,
@@ -102,6 +108,7 @@ func (sm *StoredMessage) UnmarshalJSON(data []byte) error {
 		Auditable
 		SessionId string          `json:"sessionId"`
 		Tags      []string        `json:"tags,omitempty"`
+		Model     string          `json:"model,omitempty"`
 		Message   saveableMessage `json:"message"`
 	}
 	if err := json.Unmarshal(data, &temp); err != nil {
@@ -111,11 +118,13 @@ func (sm *StoredMessage) UnmarshalJSON(data []byte) error {
 	sm.Auditable = temp.Auditable
 	sm.SessionId = temp.SessionId
 	sm.Tags = temp.Tags
+	sm.Model = temp.Model
 	sm.Message = &Message{
 		Id:            temp.Message.Id,
 		Role:          temp.Message.Role,
 		ContentStr:    temp.Message.ContentStr,
 		ContentBlocks: temp.Message.ContentBlocks,
+		Thoughts:      temp.Message.Thoughts,
 		StopReason:    temp.Message.StopReason,
 		StopSequence:  temp.Message.StopSequence,
 		Usage:         temp.Message.Usage,
@@ -134,6 +143,8 @@ type Message struct {
 	ContentStr string `json:"-"`
 	// The structured content of the message.
 	ContentBlocks []ContentBlock `json:"-"`
+	// The plain text thoughts from the model's response
+	Thoughts string `json:"thoughts,omitempty"`
 	// The reason the message was stopped.
 	StopReason *string `json:"stop_reason,omitempty" example:"user_request"`
 	// The sequence in which the message was stopped.
@@ -259,11 +270,12 @@ type Usage struct {
 	Credits int `json:"credits" example:"1"`
 }
 
-func (msg *Message) PrepareForStorage(sessionId string, tags []string) *StoredMessage {
+func (msg *Message) PrepareForStorage(sessionId string, tags []string, model string) *StoredMessage {
 	return &StoredMessage{
 		SessionId: sessionId,
 		Message:   msg,
 		Tags:      tags,
+		Model:     model,
 	}
 }
 
@@ -316,6 +328,10 @@ type AssistantSession struct {
 	SessionId string `json:"sessionId" example:"chat_1757086398900_ykhmndscn"`
 	// The time the session was deleted.
 	DeleteTime *time.Time `json:"deleteTime,omitempty" example:"2025-09-05T15:33:00.000Z"`
+	// The type of session (e.g., "alert_investigation").
+	Type string `json:"type,omitempty" example:"alert_investigation"`
+	// The entity ID associated with this session (e.g., alert soc_id).
+	EntityId string `json:"entityId,omitempty" example:"WKhCuTw4GPvrQA-9ksmn"`
 	// Metadata about the session.
 	Tags []string `json:"tags" example:"investigation"`
 	// Usage statistics for the session.
@@ -330,6 +346,17 @@ type AssistantSessionDetails struct {
 	History []*StoredMessage `json:"history"`
 }
 
+type ModelUsageStats struct {
+	// The total input tokens used for this model.
+	ModelInputTokens int `json:"modelInputTokens" example:"500"`
+	// The total output tokens used for this model.
+	ModelOutputTokens int `json:"modelOutputTokens" example:"1000"`
+	// The total credits used for this model.
+	ModelCredits int `json:"modelCredits" example:"2"`
+	// The total messages sent using this model.
+	ModelMessages int `json:"modelMessages" example:"10"`
+}
+
 type SessionUsage struct {
 	// The total input tokens used during the session.
 	TotalInputTokens int `json:"totalInputTokens" example:"1500"`
@@ -339,6 +366,8 @@ type SessionUsage struct {
 	TotalCredits int `json:"totalCredits" example:"5"`
 	// The total messages sent during the session.
 	TotalMessages int `json:"totalMessages" example:"25"`
+	// Usage statistics per model@adapter combination.
+	ModelUsage map[string]*ModelUsageStats `json:"modelUsage,omitempty"`
 }
 
 type UserUsage struct {
@@ -354,6 +383,8 @@ type UserUsage struct {
 	TotalSessions int `json:"totalSessions" example:"3"`
 	// The total messages sent and received by the user in the date range.
 	TotalMessages int `json:"totalMessages" example:"25"`
+	// Usage statistics per model@adapter combination.
+	ModelUsage map[string]*ModelUsageStats `json:"modelUsage,omitempty"`
 }
 
 type UpdateSessionRequest struct {
