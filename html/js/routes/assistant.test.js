@@ -207,7 +207,7 @@ test('component data initialization', () => {
   expect(comp.alwaysApproveReadRequests).toBe(false);
   expect(comp.assistantEnabled).toBe(false);
   expect(comp.isStreaming).toBe(false);
-  expect(comp.showChatHistory).toBe(true);
+  expect(comp.showChatHistory).toBe(true);  
   expect(comp.investigationMsg).toBe('');
   expect(comp.contextLimitSmall).toBe(0);
   expect(comp.contextLimitLarge).toBe(0);

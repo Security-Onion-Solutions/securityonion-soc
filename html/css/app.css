@@ -577,7 +577,7 @@ td {
 }
 
 #config-tree {
-    height: calc(100vh - 325px);
+    height: calc(100vh - 235px);
     overflow-y: auto;
 }
 
@@ -898,7 +898,7 @@ ul ul ul {
 
 .sticky-config {
   position: sticky;
-  top: 154px;
+  top: 64px;
 }
 
 .va-baseline {
@@ -1502,3 +1502,6 @@ ul ul ul {
   background-color: rgba(25, 118, 210, 0.22);
 }
 
+.v-pagination__list>li {
+  list-style: none;
+}

@@ -108,9 +108,8 @@
         </template>
       </v-text-field>
     </v-col>
-    <v-spacer></v-spacer>
   </v-row>
-  <v-row v-if="tableSetting == TABLE_SETTING_USERS || tableSetting == TABLE_SETTING_SESSIONS">
+  <v-row v-if="tableSetting == TABLE_SETTING_USERS || tableSetting == TABLE_SETTING_SESSIONS" class="my-0">
     <v-col id="aimetrics-graphs" data-aid="aimetrics_graphs_tab">
       <v-toolbar density="compact" variant="flat">
         <v-toolbar-title>{{ i18n.graphMetrics }}</v-toolbar-title>
