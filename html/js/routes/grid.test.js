@@ -67,7 +67,6 @@ function testUpdateMetricsEnabled(node1MetricsEnabled, node2MetricsEnabled, expe
 	validateColumn('captureLossAbbr', 'xl', true);
 	validateColumn('zeekLossAbbr', 'xl', true);
 	validateColumn('suricataLossAbbr', 'xl', true);
-	validateColumn('stenoLossAbbr', 'xl', true);
 	validateColumn('pcapRetentionAbbr', 'xl', true);
 }
 
@@ -305,14 +304,6 @@ test('hasMetricstore', () => {
 test('hasQueuestore', () => {
 	var item = {containers: [{Name: 'so-something'}, {Name: 'so-redis'}, {Name: 'so-another'}]};
 	expect(comp.hasQueuestore(item)).toBe(true);
-
-	item = {containers: [{Name: 'so-something'}, {Name: 'so-nope'}, {Name: 'so-another'}]};
-	expect(comp.hasQueuestore(item)).toBe(false);
-});
-
-test('hasSteno', () => {
-	var item = {containers: [{Name: 'so-something'}, {Name: 'so-steno'}, {Name: 'so-another'}]};
-	expect(comp.hasSteno(item)).toBe(true);
 
 	item = {containers: [{Name: 'so-something'}, {Name: 'so-nope'}, {Name: 'so-another'}]};
 	expect(comp.hasQueuestore(item)).toBe(false);
