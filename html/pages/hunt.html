@@ -852,7 +852,7 @@
 						{{ i18n.groupNew }}
 					</v-list-item-title>
 				</v-list-item>
-				<v-list-group density="compact" :value="'numeric'" @click.stop v-if="quickActionVisible && quickActionIsNumeric" :data-aid="'context_menu_compare_' + category">
+				<v-list-group density="compact" value="numeric" @click.stop v-if="quickActionVisible && quickActionIsNumeric" :data-aid="'context_menu_compare_' + category">
 					<template #activator="{ props, isOpen }">
 						<v-list-item v-bind="props" class="v-list-item--active">
 							<template #prepend>
@@ -891,7 +891,7 @@
 						</v-list-item-title>
 					</v-list-item>
 				</v-list-group>
-				<v-list-group density="compact" :value="'clipboard'" @click.stop :data-aid="'context_menu_clipboard_' + category">
+				<v-list-group density="compact" value="clipboard" @click.stop :data-aid="'context_menu_clipboard_' + category">
 					<template #activator="{ props, isOpen }">
 						<v-list-item v-bind="props" class="v-list-item--active">
 							<template #prepend>
@@ -938,7 +938,7 @@
 						</v-list-item-title>
 					</v-list-item>
 				</v-list-group>
-				<v-list-group v-if="!!actions && actions.length" :value="'actions'" density="compact" @click.stop :data-aid="'context_menu_quickaction_' + category">
+				<v-list-group v-if="!!actions && actions.length" value="actions" density="compact" @click.stop :data-aid="'context_menu_quickaction_' + category">
 					<template #activator="{ props, isOpen }">
 						<v-list-item v-bind="props" class="v-list-item--active">
 							<template #prepend>

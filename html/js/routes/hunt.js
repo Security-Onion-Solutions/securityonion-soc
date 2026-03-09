@@ -1368,10 +1368,16 @@ const huntComponent = {
         this.$nextTick(async () => {
           this.quickActionVisible = true;
 
-          // displaying the menu is resetting the "open" array, so we need to un-reset it
-          const openCache = this.quickActionsOpen;
-          await this.$nextTick();
-          this.quickActionsOpen = openCache;
+          // When opening a menu, the router is involved so any groups with :to that
+          // match the current route will be opened as "you're on this page."
+          // We don't want that so we will carry forward all known open groups,
+          // BUT we can't set it on nextTick as that'll start rendering the menu
+          // with the router-chosen groups open, we need to overwrite the array
+          // before the browser paints, so requestAnimationFrame
+          const openCache = [...this.quickActionsOpen];
+          requestAnimationFrame(() => {
+            this.quickActionsOpen = openCache;
+          });
         });
       }
     },
