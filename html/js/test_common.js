@@ -297,7 +297,7 @@ jest.mock('moment', () => {
   return require('./external/moment-2.30.1.min.js');
 }, { virtual: true });
 
-global.moment = require('./external/moment-timezone-with-data-0.5.47.min.js');
+global.moment = require('./external/moment-timezone-with-data-0.6.0.min.js');
 
 moment.tz.setDefault('UTC');
 

@@ -52,10 +52,9 @@
 						</v-expansion-panel>
 					</v-expansion-panels>
 				</v-col>
-				<v-spacer></v-spacer>
 				<v-col cols="12" lg="2" align="end">
 					<div v-if="isCategory('detections') && loaded" :data-aid="'event_health_' + category">
-						<h5 v-for="engine in $root.getDetectionEngines()">
+						<h5 v-for="engine in $root.getDetectionEngines()" class="my-0">
 							{{ i18n['cc_' + engine] }}:
 							<router-link :to="{ name: 'hunt', query: {q: buildDetectionEngineHuntQuery(engine), t: moment().subtract(1, 'hours').format(i18n.timePickerFormat) + ' - ' + moment().format(i18n.timePickerFormat), socExcludeToggle: false, detectionsExcludeToggle: false }}" style="text-decoration: none; cursor: 'pointer'" :class="$root.getDetectionEngineStatusClass(engine)" :data-aid="'detection_engine_status_' + engine" :title="i18n['detectionEngine' + $root.getDetectionEngineStatus(engine) + 'Help']">
 								{{ i18n['detectionEngine' + $root.getDetectionEngineStatus(engine)] }}
@@ -853,7 +852,7 @@
 						{{ i18n.groupNew }}
 					</v-list-item-title>
 				</v-list-item>
-				<v-list-group density="compact" :value="'numeric'" @click.stop v-if="quickActionVisible && quickActionIsNumeric" :data-aid="'context_menu_compare_' + category">
+				<v-list-group density="compact" value="numeric" @click.stop v-if="quickActionVisible && quickActionIsNumeric" :data-aid="'context_menu_compare_' + category">
 					<template #activator="{ props, isOpen }">
 						<v-list-item v-bind="props" class="v-list-item--active">
 							<template #prepend>
@@ -892,7 +891,7 @@
 						</v-list-item-title>
 					</v-list-item>
 				</v-list-group>
-				<v-list-group density="compact" :value="'clipboard'" @click.stop :data-aid="'context_menu_clipboard_' + category">
+				<v-list-group density="compact" value="clipboard" @click.stop :data-aid="'context_menu_clipboard_' + category">
 					<template #activator="{ props, isOpen }">
 						<v-list-item v-bind="props" class="v-list-item--active">
 							<template #prepend>
@@ -939,7 +938,7 @@
 						</v-list-item-title>
 					</v-list-item>
 				</v-list-group>
-				<v-list-group v-if="!!actions && actions.length" :value="'actions'" density="compact" @click.stop :data-aid="'context_menu_quickaction_' + category">
+				<v-list-group v-if="!!actions && actions.length" value="actions" density="compact" @click.stop :data-aid="'context_menu_quickaction_' + category">
 					<template #activator="{ props, isOpen }">
 						<v-list-item v-bind="props" class="v-list-item--active">
 							<template #prepend>
