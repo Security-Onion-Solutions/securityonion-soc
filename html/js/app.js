@@ -874,7 +874,7 @@ $(document).ready(function () {
             mermaid.initialize({
               startOnLoad: false,
               theme: this.$vuetify && this.$vuetify.theme.current.dark ? 'dark' : 'default',
-              securityLevel: 'loose',
+              securityLevel: 'strict',
               fontFamily: 'inherit'
             });
             this.mermaidInitialized = true;
