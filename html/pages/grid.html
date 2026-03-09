@@ -117,9 +117,6 @@
 							<span :id="'nodeSuriLoss_' + item.id">{{ formatDecimal1(item.suriLossPct) }}%</span>
 						</td>
 						<td v-if="metricsEnabled && moreColumns" class="d-none d-xl-table-cell">
-							<span :id="'nodeStenoLoss_' + item.id">{{ formatDecimal1(item.stenoLossPct) }}%</span>
-						</td>
-						<td v-if="metricsEnabled && moreColumns" class="d-none d-xl-table-cell">
 							<span :id="'nodePcapDays_' + item.id">{{ formatDecimal1(item.pcapDays) }} {{ i18n.days }}</span>
 						</td>
 						<td :id="'nodeUptimeSeconds_' + item.id" class="d-none d-lg-table-cell">{{ formatDuration(item.uptimeSeconds) }}</td>
@@ -328,16 +325,6 @@
 													<span class="filter label">{{ i18n.suriRulesReloadTime }}:</span>
 													<span id="node_suriRulesReloadTime" :class="areMetricsCurrent(item) ? 'filter value' : 'filter value stale'">
 														{{ toTZ(item.suriRulesReloadTime) }}
-													</span>
-												</div>
-												<div v-if="item.metricsEnabled && hasSteno(item)" class="text-no-wrap">
-													<span class="filter label">{{ i18n.stenoLoss }}:</span>
-													<span :class="areMetricsCurrent(item) ? 'filter value' : 'filter value stale'">
-														<v-progress-linear id="node_stenoLoss" v-model="item.stenoLossPct" height="15" :color="formatLinearColor(item.stenoLossPct, 0.01, 0.5, 1.5)">
-															<template #default="{ value }">
-																{{ formatDecimal1(item.stenoLossPct) }}%
-															</template>
-														</v-progress-linear>
 													</span>
 												</div>
 												<div v-if="item.metricsEnabled" class="text-no-wrap">
