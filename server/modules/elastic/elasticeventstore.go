@@ -391,7 +391,7 @@ func (store *ElasticEventstore) Scroll(ctx context.Context, criteria *model.Even
 			logger.WithError(scrollErr).Warn("call to close scroll failed, scroll should self-close shortly")
 		}
 
-		if res != nil {
+		if res != nil && res.IsError() && res.StatusCode != 404 {
 			defer res.Body.Close()
 
 			_, respErr := readJsonFromResponse(res)
