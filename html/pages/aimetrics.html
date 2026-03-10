@@ -27,7 +27,7 @@
 				</span>
         <span v-else :class="creditsRemaining <= 0 ? 'text-error' : 'text-primary'">{{ formatCount(creditsRemaining) }}</span>
       </h4>
-      <span class="text-caption">{{ i18n.creditsSubjectToExpiration }}</span>
+      <span class="text-body-small">{{ i18n.creditsSubjectToExpiration }}</span>
     </v-col>
   </v-row>
   <v-row>
