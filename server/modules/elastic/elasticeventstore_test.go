@@ -18,6 +18,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/apex/log"
+	"github.com/apex/log/handlers/memory"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	modmock "github.com/security-onion-solutions/securityonion-soc/server/modules/mock"
@@ -717,6 +719,280 @@ func TestScrollMidScrollError(t *testing.T) {
 
 	// all of the requests are pointers to the same object with the same body,
 	// we can't seek this body so only read/check it once
+	body, err = io.ReadAll(req.Body)
+	assert.Nil(t, err)
+	assert.Equal(t, `{"scroll_id":"MyScrollID"}`, string(body))
+}
+
+func TestScrollClearScroll404(t *testing.T) {
+	ctx := context.Background()
+
+	h := memory.New()
+	log.SetHandler(h)
+	log.SetLevel(log.DebugLevel)
+
+	client, transport := modmock.NewMockClient(t)
+
+	// first response, all good
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(`{
+			"_scroll_id" : "MyScrollID",
+			"took" : 70,
+			"timed_out" : false,
+			"_shards" : {
+				"total" : 1,
+				"successful" : 1,
+				"skipped" : 0,
+				"failed" : 0
+			},
+			"_clusters" : {
+				"total" : 1,
+				"successful" : 1,
+				"skipped" : 0
+			},
+			"hits" : {
+				"total" : {
+					"value" : 3,
+					"relation" : "eq"
+				},
+				"max_score" : 4.279684,
+				"hits" : [
+					{
+						"_index" : "manager:so-detection",
+						"_id" : "crED25ABBp4oOLSg7eY0",
+						"_score" : 4.279684,
+						"_source" : {
+							"@timestamp" : "2024-07-22T15:54:30.269516253Z",
+							"so_detection" : {
+								"createTime" : "2024-07-22T15:16:17.244146895Z",
+								"userId" : "3475de3d-dc89-40fb-b07f-611406dd7fe8",
+								"publicId" : "1",
+								"title" : "Security Onion IDH - REDIS Action Command Attempt",
+								"severity" : "critical",
+								"author" : "Security Onion Solutions",
+								"description" : "Detects instances where a REDIS service on an OpenCanary node has had an action command attempted.",
+								"content" : "",
+								"isEnabled" : true,
+								"isReporting" : false,
+								"isCommunity" : true,
+								"engine" : "suricata",
+								"language" : "suricata",
+								"overrides" : [ ],
+								"tags" : null,
+								"ruleset" : "securityonion-resources",
+								"license" : "Elastic-2.0"
+							},
+							"so_kind" : "detection"
+						}
+					}
+				]
+			}
+		}`)),
+	}, nil)
+
+	// second response, still good
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(`{
+			"_scroll_id" : "MyScrollID",
+			"took" : 52,
+			"timed_out" : false,
+			"_shards" : {
+				"total" : 1,
+				"successful" : 1,
+				"skipped" : 0,
+				"failed" : 0
+			},
+			"_clusters" : {
+				"total" : 1,
+				"successful" : 1,
+				"skipped" : 0
+			},
+			"hits" : {
+				"total" : {
+					"value" : 3,
+					"relation" : "eq"
+				},
+				"max_score" : 4.279684,
+				"hits" : [
+					{
+						"_index" : "manager:so-detection",
+						"_id" : "crED25ABBp4oOLSg7eY0",
+						"_score" : 4.279684,
+						"_source" : {
+							"@timestamp" : "2024-07-22T15:54:30.269516253Z",
+							"so_detection" : {
+								"createTime" : "2024-07-22T15:16:17.244146895Z",
+								"userId" : "3475de3d-dc89-40fb-b07f-611406dd7fe8",
+								"publicId" : "2",
+								"title" : "Security Onion IDH - REDIS Action Command Attempt",
+								"severity" : "critical",
+								"author" : "Security Onion Solutions",
+								"description" : "Detects instances where a REDIS service on an OpenCanary node has had an action command attempted.",
+								"content" : "",
+								"isEnabled" : true,
+								"isReporting" : false,
+								"isCommunity" : true,
+								"engine" : "suricata",
+								"language" : "suricata",
+								"overrides" : [ ],
+								"tags" : null,
+								"ruleset" : "securityonion-resources",
+								"license" : "Elastic-2.0"
+							},
+							"so_kind" : "detection"
+						}
+					}
+				]
+			}
+		}`)),
+	}, nil)
+
+	// third response, last page
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(`{
+			"_scroll_id" : "MyScrollID",
+			"took" : 48,
+			"timed_out" : false,
+			"_shards" : {
+				"total" : 1,
+				"successful" : 1,
+				"skipped" : 0,
+				"failed" : 0
+			},
+			"_clusters" : {
+				"total" : 1,
+				"successful" : 1,
+				"skipped" : 0
+			},
+			"hits" : {
+				"total" : {
+					"value" : 3,
+					"relation" : "eq"
+				},
+				"max_score" : 4.279684,
+				"hits" : [
+					{
+						"_index" : "manager:so-detection",
+						"_id" : "crED25ABBp4oOLSg7eY0",
+						"_score" : 4.279684,
+						"_source" : {
+							"@timestamp" : "2024-07-22T15:54:30.269516253Z",
+							"so_detection" : {
+								"createTime" : "2024-07-22T15:16:17.244146895Z",
+								"userId" : "3475de3d-dc89-40fb-b07f-611406dd7fe8",
+								"publicId" : "3",
+								"title" : "Security Onion IDH - REDIS Action Command Attempt",
+								"severity" : "critical",
+								"author" : "Security Onion Solutions",
+								"description" : "Detects instances where a REDIS service on an OpenCanary node has had an action command attempted.",
+								"content" : "",
+								"isEnabled" : true,
+								"isReporting" : false,
+								"isCommunity" : true,
+								"engine" : "suricata",
+								"language" : "suricata",
+								"overrides" : [ ],
+								"tags" : null,
+								"ruleset" : "securityonion-resources",
+								"license" : "Elastic-2.0"
+							},
+							"so_kind" : "detection"
+						}
+					}
+				]
+			}
+		}`)),
+	}, nil)
+
+	// ClearScroll returns 404
+	transport.AddResponse(&http.Response{
+		StatusCode: 404,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(`{"succeeded":true,"num_freed":0}`)),
+	}, nil)
+
+	store := &ElasticEventstore{
+		esClient:      client,
+		cacheTime:     time.Now().Add(time.Hour),
+		fieldDefs:     make(map[string]*FieldDefinition),
+		maxScrollSize: 10000,
+		maxLogLength:  math.MaxInt,
+		index:         "myIndex",
+	}
+
+	criteria := &model.EventScrollCriteria{
+		ParsedQuery: &model.Query{},
+	}
+	criteria.RawQuery = `_index:"*:so-detection" AND so_kind:"detection" AND so_detection.engine:"suricata" AND so_detection.isCommunity:"true"`
+	err := criteria.ParsedQuery.Parse(criteria.RawQuery)
+	assert.Nil(t, err)
+
+	results, err := store.Scroll(ctx, criteria, nil)
+
+	assert.Nil(t, err)
+	assert.NotNil(t, results)
+	assert.Equal(t, 3, results.TotalEvents)
+	assert.Equal(t, 3, len(results.Events))
+	assert.Equal(t, criteria, results.Criteria)
+	assert.Equal(t, "1", results.Events[0].Payload["so_detection.publicId"])
+	assert.Equal(t, "2", results.Events[1].Payload["so_detection.publicId"])
+	assert.Equal(t, "3", results.Events[2].Payload["so_detection.publicId"])
+
+	// Verify no log entries about scroll close errors
+	for _, entry := range h.Entries {
+		assert.NotContains(t, entry.Message, "call to close scroll failed")
+		assert.NotContains(t, entry.Message, "error closing scroll")
+	}
+
+	reqs := transport.GetRequests()
+
+	assert.Equal(t, 4, len(reqs))
+
+	// Initial search request
+	req := reqs[0]
+	assert.NotNil(t, req)
+	assert.Equal(t, "POST", req.Method)
+	assert.Equal(t, "/myIndex/_search", req.URL.Path)
+	assert.Contains(t, req.URL.RawQuery, "pretty=true")
+	assert.Contains(t, req.URL.RawQuery, "scroll=60000ms")
+	assert.Contains(t, req.URL.RawQuery, "track_total_hits=true")
+
+	body, err := io.ReadAll(req.Body)
+	assert.Nil(t, err)
+	assert.Equal(t, `{"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"_index: \"*:so-detection\" AND so_kind: \"detection\" AND so_detection.engine: \"suricata\" AND so_detection.isCommunity: \"true\""}}],"must_not":[],"should":[]}},"size":10000}`, string(body))
+
+	// Scroll requests
+	for _, req := range reqs[1:3] {
+		assert.NotNil(t, req)
+		assert.Equal(t, "POST", req.Method)
+		assert.Equal(t, "/_search/scroll", req.URL.Path)
+		assert.Contains(t, req.URL.RawQuery, "scroll=60000ms")
+
+		body, err = io.ReadAll(req.Body)
+		assert.Nil(t, err)
+		assert.Equal(t, `{"scroll_id":"MyScrollID"}`, string(body))
+	}
+
+	// ClearScroll request
+	req = reqs[3]
+	assert.NotNil(t, req)
+	assert.Equal(t, "DELETE", req.Method)
+	assert.Equal(t, "/_search/scroll", req.URL.Path)
+
 	body, err = io.ReadAll(req.Body)
 	assert.Nil(t, err)
 	assert.Equal(t, `{"scroll_id":"MyScrollID"}`, string(body))
