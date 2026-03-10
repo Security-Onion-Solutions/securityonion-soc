@@ -5,6 +5,18 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 */
+
+/* Reset default heading margins */
+@layer vuetify-core.base {
+  h1, h2, h3, h4, h5, h6 {
+    margin: 0;
+  }
+}
+
+.v-btn {
+  text-transform: uppercase;
+}
+
 /* Vuetify theme overrides */
 .v-application, html {
   background-color: rgb(var(--v-theme-background)) !important;
@@ -14,7 +26,7 @@
   margin-bottom: 16px;
 }
 
-.v-application a, .theme-primary {
+.v-application a:not(.v-btn[class*="bg-"]), .theme-primary {
   color: rgb(var(--v-theme-primary));
 }
 
@@ -1295,6 +1307,7 @@ ul ul ul {
   box-sizing: border-box;
   overflow-x: auto;
   word-break: break-all;
+  line-height: 1.8;
 }
 
 /* Thought Display Styling */
@@ -1313,7 +1326,7 @@ ul ul ul {
 .thought-display .v-expansion-panel-text {
   padding: 8px 12px !important;
 }
-.thought-display .v-expansion-panel-text .text-caption p {
+.thought-display .v-expansion-panel-text .text-body-small p {
   margin-bottom: 0 !important;
 }
 
