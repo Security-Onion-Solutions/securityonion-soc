@@ -78,8 +78,8 @@
 								variant="underlined"
 								prepend-icon="fa-microchip">
 								<template v-slot:item="{ props, item }">
-									<v-list-subheader v-if="item.raw.header" class="text-body-small">
-										{{ item.raw.header }}
+									<v-list-subheader v-if="item?.header" class="text-body-small">
+										{{ item.header }}
 									</v-list-subheader>
 									<v-list-item v-else v-bind="props"></v-list-item>
 								</template>
