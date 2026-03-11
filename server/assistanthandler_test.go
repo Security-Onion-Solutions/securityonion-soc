@@ -535,7 +535,7 @@ func TestGetBalanceAirgapEnabled(t *testing.T) {
 	// Execute the handler
 	handler.GetBalance(w, req)
 
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 	assert.Equal(t, []byte("\"ERROR_SERVICE_NOT_AVAILABLE\""), w.Body.Bytes())
 }
 
@@ -1012,7 +1012,7 @@ func TestCheckAssistantAvailable_AirgapEnabled(t *testing.T) {
 	// Verify result is false
 	assert.False(t, result)
 
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 	assert.Equal(t, []byte("\"ERROR_SERVICE_NOT_AVAILABLE\""), w.Body.Bytes())
 }
 
