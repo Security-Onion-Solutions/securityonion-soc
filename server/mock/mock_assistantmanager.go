@@ -42,6 +42,20 @@ func (m *MockAssistantManager) EXPECT() *MockAssistantManagerMockRecorder {
 	return m.recorder
 }
 
+// AllowWhenAirgapped mocks base method.
+func (m *MockAssistantManager) AllowWhenAirgapped(ctx context.Context, aiModel string) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AllowWhenAirgapped", ctx, aiModel)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// AllowWhenAirgapped indicates an expected call of AllowWhenAirgapped.
+func (mr *MockAssistantManagerMockRecorder) AllowWhenAirgapped(ctx, aiModel any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AllowWhenAirgapped", reflect.TypeOf((*MockAssistantManager)(nil).AllowWhenAirgapped), ctx, aiModel)
+}
+
 // Balance mocks base method.
 func (m *MockAssistantManager) Balance(ctx context.Context, aiModel string) (*model.BalanceResponse, error) {
 	m.ctrl.T.Helper()
