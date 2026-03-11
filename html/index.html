@@ -62,7 +62,7 @@
             :bg-color="selectedGridId ? 'blue-darken-4' : ''"
             data-aid="main_subgrid_selector">
             <template v-slot:item="{ props: itemProps, item }">
-              <v-list-item v-bind="itemProps" :base-color="getSubgridColor(item.raw.id)" :append-icon="getSubgridIcon(item.raw.id)"></v-list-item>
+              <v-list-item v-bind="itemProps" :base-color="getSubgridColor(item?.id)" :append-icon="getSubgridIcon(item?.id)"></v-list-item>
             </template>
           </v-select>
           <v-menu bottom left offset-y>
