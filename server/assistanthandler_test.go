@@ -500,26 +500,32 @@ func TestGetBalanceUnhealthy(t *testing.T) {
 }
 func TestGetBalanceAirgapEnabled(t *testing.T) {
 	// Create mock server with airgap enabled
-	srv := &Server{
-		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
-		Config: &config.ServerConfig{
-			AirgapEnabled: true,
-		},
-	}
 	ctrl := gomock.NewController(t)
 	mockManager := mock.NewMockAssistantManager(ctrl)
 	defer ctrl.Finish()
 
-	srv.AssistantManager = mockManager
+	srv := &Server{
+		Authorizer:       &rbac.FakeAuthorizer{Authorized: true},
+		AssistantManager: mockManager,
+		Config: &config.ServerConfig{
+			AirgapEnabled: true,
+		},
+	}
+
+	model := "sonnet@SOAI"
+	mockManager.EXPECT().AllowWhenAirgapped(gomock.Any(), model).Return(false)
 
 	handler := NewAssistantHandler(srv)
 
-	req := httptest.NewRequest("GET", "/assistant/balance", nil)
+	req := httptest.NewRequest("GET", "/assistant/balance/"+model, nil)
 
 	// Add required context values
 	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "test-user-123")
 	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
 	ctx = context.WithValue(ctx, web.ContextKeyRequestId, "test-request-123")
+	ctxChi := chi.NewRouteContext()
+	ctxChi.URLParams.Add("*", model)
+	ctx = context.WithValue(ctx, chi.RouteCtxKey, ctxChi)
 	req = req.WithContext(ctx)
 
 	w := httptest.NewRecorder()
@@ -529,7 +535,7 @@ func TestGetBalanceAirgapEnabled(t *testing.T) {
 	// Execute the handler
 	handler.GetBalance(w, req)
 
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 	assert.Equal(t, []byte("\"ERROR_SERVICE_NOT_AVAILABLE\""), w.Body.Bytes())
 }
 
@@ -977,11 +983,19 @@ func TestHistoryToContext(t *testing.T) {
 
 func TestCheckAssistantAvailable_AirgapEnabled(t *testing.T) {
 	// Create mock server with airgap enabled
+	ctrl := gomock.NewController(t)
+	mockAM := mock.NewMockAssistantManager(ctrl)
+	defer ctrl.Finish()
+
 	srv := &Server{
+		AssistantManager: mockAM,
 		Config: &config.ServerConfig{
 			AirgapEnabled: true,
 		},
 	}
+
+	model := "sonnet@SOAI"
+	mockAM.EXPECT().AllowWhenAirgapped(gomock.Any(), model)
 
 	handler := NewAssistantHandler(srv)
 
@@ -993,12 +1007,12 @@ func TestCheckAssistantAvailable_AirgapEnabled(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	// Execute the check
-	result := handler.checkAssistantAvailable(ctx, w, req)
+	result := handler.checkAssistantAvailable(ctx, model, w, req)
 
 	// Verify result is false
 	assert.False(t, result)
 
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 	assert.Equal(t, []byte("\"ERROR_SERVICE_NOT_AVAILABLE\""), w.Body.Bytes())
 }
 
@@ -1019,7 +1033,7 @@ func TestCheckAssistantAvailable_AirgapDisabled(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	// Execute the check
-	result := handler.checkAssistantAvailable(ctx, w, req)
+	result := handler.checkAssistantAvailable(ctx, "gemini@Gemini", w, req)
 
 	// Verify result is true
 	assert.True(t, result)

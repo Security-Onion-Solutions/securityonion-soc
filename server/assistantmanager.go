@@ -18,6 +18,8 @@ type AssistantManager interface {
 	ExecuteTool(ctx context.Context, toolName string, params string, auxData string) (*model.ToolResponse, error)
 	Balance(ctx context.Context, aiModel string) (*model.BalanceResponse, error)
 	Health(ctx context.Context, aiModel string) (*model.HealthResponse, error)
+
+	AllowWhenAirgapped(ctx context.Context, aiModel string) bool
 }
 
 type AssistantAdapter interface {
