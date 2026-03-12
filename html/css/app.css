@@ -962,6 +962,10 @@ ul ul ul {
   width: 100%;
 }
 
+.v-container--fluid {
+  max-width: unset !important;
+}
+
 .component-overlay .v-progress-circular {
   position: sticky;
   top: 50%;
