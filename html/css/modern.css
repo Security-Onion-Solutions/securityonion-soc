@@ -1,0 +1,28 @@
+/*
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
+// https://securityonion.net/license; you may not use this file except in compliance with the
+// Elastic License 2.0.
+*/
+
+.options-bar {
+  border-radius: 0.75rem;
+  border: 1px solid rgba(var(--v-theme-primary), 0.4);
+}
+
+.options-bar.v-expansion-panel--active {
+  border-radius: 0.75rem;
+}
+
+.so-toolbar {
+  border-radius: 0.75rem;
+}
+
+.blue-border {
+  border: 2px solid rgba(var(--v-theme-primary), 0.4);
+}
+
+.theme-text, .theme-links a, .theme-links a:active {
+  color: rgb(var(--v-theme-text)) !important;
+  border-radius: 0.75rem;
+}

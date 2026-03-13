@@ -7,7 +7,7 @@
 				</v-col>
 				<v-col cols="12" lg="5">
 					<v-expansion-panels class="no-print">
-						<v-expansion-panel data-aid="hunt_options">
+						<v-expansion-panel class="options-bar" data-aid="hunt_options">
 							<v-expansion-panel-title id="huntOptionsHeader" expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up">{{i18n.options}}</v-expansion-panel-title>
 							<v-expansion-panel-text>
 								<span :data-aid="'advanced_toggle_' + category">
@@ -69,14 +69,14 @@
 			</v-row>
 			<v-row align="start" v-if="createLink != ''">
 				<v-col cols="12">
-					<v-toolbar class="no-print elevation-0 theme-background-lighten-1" fixed>
+					<v-toolbar class="so-toolbar no-print elevation-0 theme-background-lighten-1" fixed>
 						<router-link :to="createLink" style="text-decoration: none; cursor: 'pointer'" :data-aid="'create_new_record_' + category">
-							<v-btn variant="flat" class="mx-4" id="add-case-button" :title="i18n.create">
+							<v-btn variant="flat" class="mx-4 rounded-lg" id="add-case-button" :title="i18n.create">
 								<v-icon color="primary">fa-plus</v-icon>
 							</v-btn>
 						</router-link>
 						<v-spacer></v-spacer>
-						<v-btn variant="flat" class="mx-4" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + this.category" :title="i18n.contextualDocsBtn" data-aid="hunt_docs">
+						<v-btn variant="flat" class="mx-4 rounded-lg" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + this.category + '.html'" :title="i18n.contextualDocsBtn" data-aid="hunt_docs">
 							<v-icon color="secondary">fa-circle-question</v-icon>
 						</v-btn>
 					</v-toolbar>
@@ -163,7 +163,7 @@
 							</v-btn>
 						</template>
 					</v-text-field>
-					<v-btn id="hunt" class="align-self-start" :class="{'mt-4': !relativeTimeEnabled}" :disabled="loading()" :color="huntPending ? 'light-green accent-4' : (autoRefreshInterval ? 'secondary' : 'primary')" @click.stop="hunt" :data-aid="'run_query_' + category">
+					<v-btn id="hunt" class="align-self-start rounded-lg" :class="{'mt-4': !relativeTimeEnabled}" :disabled="loading()" :color="huntPending ? 'light-green accent-4' : (autoRefreshInterval ? 'secondary' : 'primary')" @click.stop="hunt" :data-aid="'run_query_' + category">
 						<span v-if="isCategory('hunt')" class="d-sm-none d-lg-inline pr-2" v-text="i18n.hunt"></span>
 						<span v-if="!isCategory('hunt')" class="d-sm-none d-lg-inline pr-2" v-text="i18n.refresh"></span>
 						<v-icon v-if="isCategory('hunt') && !autoRefreshInterval">fa-crosshairs</v-icon>
@@ -184,7 +184,7 @@
 			</v-row>
 			<v-row>
 				<v-col id="graphs" v-if="loaded && isAdvanced() && !isCategory('detections')" :data-aid="'graphs_' + category">
-					<v-toolbar density="compact" variant="flat">
+					<v-toolbar class="so-toolbar" density="compact" variant="flat">
 						<v-toolbar-title>{{ i18n.standardMetrics }}</v-toolbar-title>
 						<v-spacer></v-spacer>
 						<v-btn variant="text" size="small" icon class="mr-1" @click="toggleShowSection('hunt-graphs')" :data-aid="'graphs_toggle_' + category">
@@ -216,7 +216,7 @@
 			</v-row>
 			<v-row>
 				<v-col ref="eventColumn" id="group-metrics" v-if="metricsEnabled" :data-aid="'groups_' + category">
-					<v-toolbar v-if="isAdvanced()" density="compact" variant="flat">
+					<v-toolbar class="so-toolbar" v-if="isAdvanced()" density="compact" variant="flat">
 						<v-toolbar-title>{{ i18n.groups }}</v-toolbar-title>
 						<v-spacer></v-spacer>
 						<v-btn variant="text" size="small" icon class="mr-1" @click="toggleShowSection('hunt-groups')" :data-aid="'groups_toggle_' + category">
@@ -483,7 +483,7 @@
 			</v-row>
 			<v-row>
 				<v-col id="events" v-if="loaded && eventsEnabled && (isAdvanced() || !metricsEnabled)" :data-aid="'events_' + category">
-					<v-toolbar v-if="isAdvanced()" density="compact" variant="flat">
+					<v-toolbar v-if="isAdvanced()" class="so-toolbar" density="compact" variant="flat">
 						<v-toolbar-title>{{ isCategory("detections") || isCategory("alerts") || isCategory("cases") ? i18n[category] : i18n.events }}</v-toolbar-title>
 						<v-spacer></v-spacer>
 						<v-btn variant="text" size="small" icon class="mr-1" @click="toggleShowSection('hunt-events')" :data-aid="'events_toggle_' + category">
