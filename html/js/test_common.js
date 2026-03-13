@@ -301,8 +301,8 @@ global.moment = require('./external/moment-timezone-with-data-0.6.0.min.js');
 
 moment.tz.setDefault('UTC');
 
-global.marked = require('./external/marked-16.3.0.min.js');
+global.marked = require('./external/marked-17.0.4.min.js');
 global.DOMPurify = require('./external/purify-3.2.7.min.js');
-global.jsyaml = require('./external/js-yaml.4.1.0.min.js');
+global.jsyaml = require('./external/js-yaml.4.1.1.min.js');
 global.LZString = require('./external/lz-string.1.5.0.min.js');
 global.loadPageTemplate = jest.fn();
