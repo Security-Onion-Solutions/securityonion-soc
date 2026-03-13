@@ -105,12 +105,12 @@
 	<v-row align="start">
 		<v-col cols="12">
 			<v-toolbar class="no-print elevation-0 theme-background-lighten-1" fixed>
-				<v-btn color="primary mx-4" variant="flat" id="chat-new-button" @click="startNewChat" :title="i18n.chatNewChat" data-aid="assistant_banner_create_chat">
-					<v-icon>fa-plus</v-icon>
+				<v-btn variant="flat" id="chat-new-button" @click="startNewChat" :title="i18n.chatNewChat" data-aid="assistant_banner_create_chat" class="mx-4">
+					<v-icon color="primary">fa-plus</v-icon>
 				</v-btn>
 				<v-spacer></v-spacer>
-				<v-btn variant="flat" color="secondary" class="mx-4" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'assistant.html'" :title="i18n.contextualDocsBtn" data-aid="assistant_docs">
-					<v-icon>fa-circle-question</v-icon>
+				<v-btn variant="flat" class="mx-4" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'assistant.html'" :title="i18n.contextualDocsBtn" data-aid="assistant_docs">
+					<v-icon color="secondary">fa-circle-question</v-icon>
 				</v-btn>
 			</v-toolbar>
 		</v-col>
@@ -368,13 +368,12 @@
 					<v-btn
 						id="chat-send-button"
 						ref="sendButton"
-						color="primary"
 						:disabled="!newMessage.trim() || !canChat || checkForActivity() || !creditsLoaded"
 						@click="sendMessage()"
 						data-aid="assistant_chat_send"
 						class="flex-shrink-0"
 					>
-						<v-icon>{{ checkForActivity() ? 'fa-hourglass-half' : 'fa-paper-plane' }}</v-icon>
+						<v-icon color="primary">{{ checkForActivity() ? 'fa-hourglass-half' : 'fa-paper-plane' }}</v-icon>
 					</v-btn>
 				</v-card-actions>
 			</v-card>

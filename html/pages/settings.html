@@ -139,8 +139,8 @@
 									<v-text-field name="webauthn_remove" v-model="key.value" class="d-none"></v-text-field>
 									<div :id="'settingsWebauthnExistingKey_' + key.id" class="ml-2">
 										{{ key.name }}
-										<v-btn icon variant="text" size="small" :id="'settingsWebauthnDelete_' + key.id" type="submit" color="primary" data-aid="user_settings_webauth_unlink" >
-											<v-icon>fa-circle-xmark</v-icon>
+										<v-btn icon variant="text" size="small" :id="'settingsWebauthnDelete_' + key.id" type="submit" data-aid="user_settings_webauth_unlink" >
+											<v-icon color="primary">fa-circle-xmark</v-icon>
 										</v-btn>
 									</div>
 								</v-form>
