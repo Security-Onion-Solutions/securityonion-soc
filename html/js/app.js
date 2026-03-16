@@ -6,6 +6,7 @@
 
 const routes = [];
 const components = [];
+const iconSets = [];
 const templatePromises = [];
 
 const LICENSE_STATUS_ACTIVE = "active";
@@ -31,12 +32,20 @@ const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000';
 if (typeof global !== 'undefined') {
   global.routes = routes;
   global.components = components;
+  global.iconSets = iconSets;
   global.templatePromises = templatePromises;
 }
 
 $(document).ready(function () {
   Promise.all(templatePromises).then(() => {
     const _i18n = i18n.getLocalizedTranslations(navigator.language);
+    
+    let iSets = {};
+    for (const iconSet of iconSets) {
+      const comp = Vue.defineComponent(iconSet.component);
+      iSets[iconSet.name] = { component: comp };
+    }
+
     const vuetify = Vuetify.createVuetify({
       defaults: {
         VIcon: {
@@ -81,7 +90,8 @@ $(document).ready(function () {
         sets: {
           fa: {
             component: Vuetify.components.VClassIcon,
-          }
+          },
+          ...iSets,
         }
       },
       theme: {
