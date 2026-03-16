@@ -34,7 +34,7 @@
           </v-app-bar-title>
         </v-app-bar>
         <v-main>
-          <v-progress-linear v-if="loading" :active="loading" indeterminate></v-progress-linear>
+          <img src="images/loading-logo.svg" class="loading-onion" data-aid="overlay_loading_logo">
           <v-alert dismissible type="error" icon="fa-exclamation-triangle" v-model="error" transition="scale-transition" v-text="errorMessage" data-aid="login_banner_error"></v-alert>
           <v-alert dismissible type="warning" icon="fa-exclamation" v-model="warning" transition="scale-transition" v-text="warningMessage" data-aid="login_banner_warning"></v-alert>
           <v-alert dismissible type="info" icon="fa-info" v-model="info" transition="scale-transition" data-aid="login_banner_info">{{ infoMessage }}</v-alert>

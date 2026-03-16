@@ -26,3 +26,11 @@
   color: rgb(var(--v-theme-text)) !important;
   border-radius: 0.75rem;
 }
+
+.loading-onion {
+  width: 100px;
+}
+
+.loading-cancel {
+  margin-top: -100px;
+}

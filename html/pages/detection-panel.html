@@ -392,7 +392,7 @@
 		</v-expansion-panels>
 		<div id="panel-loading-overlay" class="component-overlay" v-if="loading" data-aid="detection_panel_overlay_loading">
 			<v-container class="d-flex justify-center">
-				<v-progress-circular indeterminate :size="50" color="primary"></v-progress-circular>
+				<img src="images/loading-logo.svg" class="loading-onion" data-aid="overlay_loading_logo">
 			</v-container>
 		</div>
 		<v-dialog v-model="ackExistingDialog" persistent max-width="450">

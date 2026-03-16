@@ -145,9 +145,8 @@
         <v-main>
           <v-overlay id="loading" v-model="loading" scrim="#212121" data-aid="overlay_loading">
             <v-container min-height="100vh" min-width="100vw" class="d-flex align-center justify-center">
-              <v-progress-circular indeterminate :size="50" color="primary" class="">
-                <v-icon v-if="loadingCancelCallback" @click="loadingCancelCallback" data-aid="overlay_loading_cancel">fa-xmark</v-icon>
-              </v-progress-circular>
+              <img src="images/loading-logo.svg" class="loading-onion" data-aid="overlay_loading_logo">
+              <v-icon class="loading-cancel" v-if="loadingCancelCallback" @click="loadingCancelCallback" data-aid="overlay_loading_cancel">fa-xmark</v-icon>
             </v-container>
           </v-overlay>
           <v-snackbar id="error" location="top centered" :timeout="errorTimeout" v-model="error" color="error" data-aid="banner_error">
