@@ -5,6 +5,27 @@
 // Elastic License 2.0.
 */
 
+@font-face {
+  font-family: 'Inter';
+  src: url('./webfonts/Inter-VariableFont_opsz,wght.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Inter';
+  src: url('./webfonts/Inter-Italic-VariableFont_opsz,wght.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  font-optical-sizing: auto;
+}
+
 .options-bar {
   border-radius: 0.75rem;
   border: 1px solid rgba(var(--v-theme-primary), 0.4);
@@ -22,9 +43,10 @@
   border: 2px solid rgba(var(--v-theme-primary), 0.4);
 }
 
-.theme-text, .theme-links a, .theme-links a:active {
+.theme-text, .theme-links a, .theme-links .v-list-group > .v-list-item, .theme-links a:active {
   color: rgb(var(--v-theme-text)) !important;
   border-radius: 0.75rem;
+  margin: 0px 4px;
 }
 
 .loading-onion {
