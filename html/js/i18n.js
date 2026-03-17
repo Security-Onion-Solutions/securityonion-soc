@@ -835,6 +835,7 @@ const i18n = {
       operation: 'Operation',
       operations: 'Operations',
       options: 'Options',
+      or: 'or',
       order: 'Order',
       osUptime: 'OS Uptime',
       other: 'Other',
