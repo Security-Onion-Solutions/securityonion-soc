@@ -177,6 +177,7 @@ const huntComponent = {
       chartResizeTracker: {},
       gridId: null,
       activeTabs: {},
+      gridLayoutExpansions: true,
       expandedEvents: [],
       eventColumnWidth: 0,
       expandedPlaybookQuestions: {},
@@ -254,6 +255,7 @@ const huntComponent = {
     'autoRefreshInterval': 'resetRefreshTimer',
     'showDetailsPanel': 'toggleShowDetailsPanel',
     'advanced': 'saveLocalSettings',
+    'gridLayoutExpansions': 'saveLocalSettings',
   },
   methods: {
     moment: moment,
@@ -2344,6 +2346,7 @@ const huntComponent = {
       this.saveSetting('autohunt', this.autohunt, true);
       this.saveSetting('showDetailsPanel', this.showDetailsPanel, this.isCategory('alerts'));
       this.saveSetting('advanced', this.advanced, false);
+      this.saveSetting('gridLayoutExpansions', this.gridLayoutExpansions, true);
     },
     loadLocalSettings() {
       // Global settings
@@ -2365,6 +2368,7 @@ const huntComponent = {
       if (localStorage[prefix + '.autohunt']) this.autohunt = localStorage[prefix + '.autohunt'] == 'true';
       if (localStorage[prefix + '.showDetailsPanel']) this.showDetailsPanel = localStorage[prefix + '.showDetailsPanel'] == 'true';
       if (localStorage[prefix + '.advanced']) this.advanced = localStorage[prefix + '.advanced'] == 'true';
+      if (localStorage[prefix + '.gridLayoutExpansions']) this.gridLayoutExpansions = localStorage[prefix + '.gridLayoutExpansions'] == 'true';
       if (localStorage[prefix + '.autoRefreshInterval']) this.autoRefreshInterval = parseInt(localStorage[prefix + '.autoRefreshInterval']);
 
       if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);

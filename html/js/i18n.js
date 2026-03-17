@@ -616,6 +616,7 @@ const i18n = {
       grid: 'Grid',
       gridEps: 'Grid EPS:',
       gridId: 'Grid ID',
+      gridLayoutExpansions: 'Enable grid layout for expansions',
       gridLocal: '(local)',
       gridMember: 'Review Grid Member',
       gridMemberConfirmDelete: 'Delete Grid Member',
