@@ -4,7 +4,7 @@
 	</div>
 
 	<v-row class="mx-sm-8 mx-md-12 mx-lg-4 flex-column flex-md-row">
-		<v-col class="main v-col-md-9 v-order-md-1 v-col-12 v-order-2" order="2" order-md="1">
+		<v-col class="main v-order-md-1 v-order-2" order="2" order-md="1" cols="12" md="9">
 			<div v-if="isNew()">
 				<v-form ref="detection" v-model="editForm.valid">
 					<div class="col pa-4 contrast-bg rounded rounded-md">
@@ -109,11 +109,11 @@
 					<v-row>
 						<v-col>
 							<v-toolbar class="elevation-0 theme-background-lighten-1" fixed>
-								<v-btn id="add-comment-button" variant="flat" class="ml-3" :title="i18n.addCommentHelp" color="primary" @click.stop="prepareForInput('comment-input')" data-aid="detection_comments_new">
-									<v-icon>fa-plus</v-icon>
+								<v-btn id="add-comment-button" variant="flat" class="ml-3" :title="i18n.addCommentHelp" @click.stop="prepareForInput('comment-input')" data-aid="detection_comments_new">
+									<v-icon color="primary">fa-plus</v-icon>
 								</v-btn>
-								<v-btn id="refresh-comments-button" variant="flat" class="mx-1" :title="i18n.refreshCommentsHelp" color="secondary" @click.stop="loadComments(true)" data-aid="detection_comments_refresh">
-									<v-icon>fa-sync</v-icon>
+								<v-btn id="refresh-comments-button" variant="flat" class="mx-1" :title="i18n.refreshCommentsHelp" @click.stop="loadComments(true)" data-aid="detection_comments_refresh">
+									<v-icon color="secondary">fa-sync</v-icon>
 								</v-btn>
 							</v-toolbar>
 						</v-col>
@@ -122,7 +122,7 @@
 						<template v-for="(comment, index) in comments">
 							<div class="mb-8" v-if="shouldRenderComment(comment, index)">
 								<div class="d-flex flex-column align-start my-4">
-									<v-col class="d-flex flex-column align-start pt-2 pt-md-0">
+									<v-col class="d-flex flex-column align-start pt-2 pt-md-0 full-width">
 										<div class="mt-1 mt-md-3 pt-1 pb-2 px-2 contrast-bg rounded rounded-md" style="width: 100%;">
 											<div class="d-flex flex-column align-start">
 												<div v-if="!isEdit(`comment-${index}`)" class="case d-block comment-body mt-2" data-aid="detection_comment_display">
@@ -170,11 +170,11 @@
 														{{ i18n.edited }}
 													</div>
 													<div class="ml-1 d-flex mt-1 mt-sm-0">
-														<v-btn variant="text" size="x-small" icon color="primary" v-if="!isEdit(`comment-${index}`)" @click="startCommentEdit(`comment-${index}`, 'comment-input', comment)" data-aid="detection_comment_edit"
+														<v-btn variant="text" size="x-small" icon v-if="!isEdit(`comment-${index}`)" @click="startCommentEdit(`comment-${index}`, 'comment-input', comment)" data-aid="detection_comment_edit"
 															@keypress.space.prevent="startCommentEdit(`comment-${index}`, 'comment-input', comment)">
-															<v-icon class="tiny-icon">fa-edit</v-icon>
+															<v-icon class="tiny-icon" color="primary">fa-edit</v-icon>
 														</v-btn>
-														<v-btn variant="text" size="x-small" icon color="red" @click="deleteComment(comment)"><v-icon class="tiny-icon" data-aid="detection_comment_delete">fa-circle-xmark</v-icon></v-btn>
+														<v-btn variant="text" size="x-small" icon @click="deleteComment(comment)"><v-icon class="tiny-icon" color="red" data-aid="detection_comment_delete">fa-circle-xmark</v-icon></v-btn>
 													</div>
 												</div>
 											</div>
@@ -193,7 +193,7 @@
 						</template>
 					</div>
 					<div class="d-flex flex-column align-start my-4">
-						<v-col id="new-comment" class="d-flex flex-column align-start pt-2 pt-md-0">
+						<v-col id="new-comment" class="d-flex flex-column align-start pt-2 pt-md-0 full-width">
 							<div class="mt-1 mt-md-3 pb-3 pt-1 contrast-bg rounded rounded-md full-width">
 								<div class="d-flex flex-column align-start">
 									<div class="d-inline-flex align-center mt-3 mx-2 mb-4">
@@ -253,8 +253,8 @@
 					<v-row v-if="canAddOverride()">
 						<v-col>
 							<v-toolbar class="elevation-0 theme-background-lighten-1" fixed>
-								<v-btn variant="flat" class="ml-3" color="primary" id="add-override-button" style="text-decoration: none; cursor: 'pointer'" @click="createNewOverride()" data-aid="detection_new_override">
-									<v-icon :title="i18n.create">fa-plus</v-icon>
+								<v-btn variant="flat" class="ml-3" id="add-override-button" style="text-decoration: none; cursor: 'pointer'" @click="createNewOverride()" data-aid="detection_new_override">
+									<v-icon :title="i18n.create" color="primary">fa-plus</v-icon>
 								</v-btn>
 							</v-toolbar>
 						</v-col>
@@ -502,8 +502,8 @@
 											<v-btn variant="text" size="small" icon :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'nids#managing-nids-rules'" :title="i18n.overrideDocumentationHelp" data-aid="detection_override_help_suricata">
 												<v-icon>fa-regular fa-circle-question</v-icon>
 											</v-btn>
-											<v-btn color="red" @click="deleteOverride(item)" variant="text" size="small" icon :title="i18n.overrideDeleteHelp" data-aid="override_edit_delete_suricata">
-												<v-icon>fa-circle-xmark</v-icon>
+											<v-btn @click="deleteOverride(item)" variant="text" size="small" icon :title="i18n.overrideDeleteHelp" data-aid="override_edit_delete_suricata">
+												<v-icon color="red">fa-circle-xmark</v-icon>
 											</v-btn>
 										</div>
 									</div>
@@ -563,8 +563,8 @@
 											<v-btn variant="text" size="small" icon :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'sigma#managing-sigma-rules'" :title="i18n.overrideDocumentationHelp" data-aid="detection_override_help_elastalert">
 												<v-icon>fa-regular fa-circle-question</v-icon>
 											</v-btn>
-											<v-btn color="red" @click="deleteOverride(item)" variant="text" size="small" icon :title="i18n.overrideDeleteHelp" data-aid="override_edit_delete_elastalert">
-												<v-icon>fa-circle-xmark</v-icon>
+											<v-btn @click="deleteOverride(item)" variant="text" size="small" icon :title="i18n.overrideDeleteHelp" data-aid="override_edit_delete_elastalert">
+												<v-icon color="red">fa-circle-xmark</v-icon>
 											</v-btn>
 										</div>
 									</div>
@@ -589,8 +589,8 @@
 					<v-row>
 						<v-col>
 							<v-toolbar class="elevation-0 theme-background-lighten-1 " fixed>
-								<v-btn variant="flat" class="ml-3" :title="i18n.refreshDetectionHistoryHelp" color="secondary" @click.stop="loadHistory(true)" id="refresh-history-button" data-aid="detection_history_refresh">
-									<v-icon>fa-sync</v-icon>
+								<v-btn variant="flat" class="ml-3" :title="i18n.refreshDetectionHistoryHelp" @click.stop="loadHistory(true)" id="refresh-history-button" data-aid="detection_history_refresh">
+									<v-icon color="secondary">fa-sync</v-icon>
 								</v-btn>
 							</v-toolbar>
 						</v-col>
@@ -916,7 +916,7 @@
 				</v-card>
 			</v-dialog>
 		</v-col>
-		<v-col class="v-col-md-3 v-order-md-2 v-col-12 v-order-1" order="1" order-md="2">
+		<v-col class="v-order-md-2 v-order-1" order="1" order-md="2" cols="12" md="3">
 			<v-expansion-panels focusable multiple v-model="panel">
 				<v-expansion-panel v-if="!isNew()" data-aid="detection_metadata_summary">
 					<v-expansion-panel-title>

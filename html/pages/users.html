@@ -11,7 +11,7 @@
 						<v-btn id="users-sync-button" @click.stop="sync()" class="mt-6 mb-1 theme-background-lighten-1" data-aid="users_options_synchronize">
 							{{ i18n.usersSynchronize }}
 						</v-btn>
-						<div class="text-caption" v-text="i18n.usersSynchronizeHelp"></div>
+						<div class="text-body-small" v-text="i18n.usersSynchronizeHelp"></div>
 					</v-expansion-panel-text>
 				</v-expansion-panel>
 			</v-expansion-panels>
@@ -24,15 +24,15 @@
 	<v-row>
 		<v-col>
 			<v-toolbar v-if="$root.isUserAdmin()" class="elevation-0 theme-background-lighten-1">
-				<v-btn variant="flat" id="add-user-button" class="action ml-3" color="blue" @click.stop="showAdd()" data-aid="users_create_new">
-					<v-icon>fa-plus</v-icon>
+				<v-btn variant="flat" id="add-user-button" class="action ml-3" @click.stop="showAdd()" data-aid="users_create_new">
+					<v-icon color="blue">fa-plus</v-icon>
 				</v-btn>
-				<v-btn variant="flat" color="secondary" @click.stop="loadData()" id="users-refresh-button" class="ml-3" data-aid="users_refresh_button">
-					<v-icon>fa-sync</v-icon>
+				<v-btn variant="flat" @click.stop="loadData()" id="users-refresh-button" class="ml-3" data-aid="users_refresh_button">
+					<v-icon color="secondary">fa-sync</v-icon>
 				</v-btn>
 				<v-spacer></v-spacer>
-				<v-btn variant="flat" color="secondary" class="mx-4" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'administration#users'" :title="i18n.contextualDocsBtn" data-aid="users_docs">
-					<v-icon>fa-circle-question</v-icon>
+				<v-btn variant="flat" class="mx-4" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'administration#users'" :title="i18n.contextualDocsBtn" data-aid="users_docs">
+					<v-icon color="secondary">fa-circle-question</v-icon>
 				</v-btn>
 			</v-toolbar>
 			<v-dialog v-model="dialog" persistent width="800px" data-aid="users_create_dialog">

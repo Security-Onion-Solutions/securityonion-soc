@@ -67,8 +67,8 @@
 					<v-row v-if="canAddOverride()">
 						<v-col>
 							<v-toolbar class="elevation-0 theme-background-lighten-1" fixed>
-								<v-btn variant="flat" class="ml-3" color="primary" id="add-override-button" style="text-decoration: none; cursor: 'pointer'" @click="createNewOverride()" data-aid="detection_panel_new_override">
-									<v-icon :title="i18n.create">fa-plus</v-icon>
+								<v-btn variant="flat" class="ml-3" id="add-override-button" style="text-decoration: none; cursor: 'pointer'" @click="createNewOverride()" data-aid="detection_panel_new_override">
+									<v-icon :title="i18n.create" color="primary">fa-plus</v-icon>
 								</v-btn>
 							</v-toolbar>
 						</v-col>
@@ -316,8 +316,8 @@
 											<v-btn variant="text" size="small" icon :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'nids#managing-nids-rules'" :title="i18n.overrideDocumentationHelp" data-aid="detection_override_help_suricata">
 												<v-icon>fa-regular fa-circle-question</v-icon>
 											</v-btn>
-											<v-btn color="red" @click="deleteOverride(item)" variant="text" size="small" icon :title="i18n.overrideDeleteHelp" data-aid="detection_panel_override_edit_delete_suricata">
-												<v-icon>fa-circle-xmark</v-icon>
+											<v-btn @click="deleteOverride(item)" variant="text" size="small" icon :title="i18n.overrideDeleteHelp" @click="deleteOverride(item)" data-aid="detection_panel_override_edit_delete_suricata">
+												<v-icon color="red">fa-circle-xmark</v-icon>
 											</v-btn>
 										</div>
 									</div>
@@ -377,8 +377,8 @@
 											<v-btn variant="text" size="small" icon :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'sigma#managing-sigma-rules'" :title="i18n.overrideDocumentationHelp" data-aid="detection_panel_override_help_elastalert">
 												<v-icon>fa-regular fa-circle-question</v-icon>
 											</v-btn>
-											<v-btn color="red" @click="deleteOverride(item)" variant="text" size="small" icon :title="i18n.overrideDeleteHelp" data-aid="detection_panel_override_edit_delete_elastalert">
-												<v-icon>fa-circle-xmark</v-icon>
+											<v-btn @click="deleteOverride(item)" variant="text" size="small" icon :title="i18n.overrideDeleteHelp" data-aid="detection_panel_override_edit_delete_elastalert">
+												<v-icon color="red">fa-circle-xmark</v-icon>
 											</v-btn>
 										</div>
 									</div>

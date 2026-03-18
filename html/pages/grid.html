@@ -25,12 +25,12 @@
 	<v-row>
 		<v-col>
 			<v-toolbar class="elevation-0 theme-background-lighten-1">
-				<v-btn variant="flat" color="primary" @click.stop="loadData()" id="grid-refresh-button" class="ml-3" data-aid="grid_refresh_button">
-					<v-icon>fa-sync</v-icon>
+				<v-btn variant="flat" @click.stop="loadData()" id="grid-refresh-button" class="ml-3" data-aid="grid_refresh_button">
+					<v-icon color="primary">fa-sync</v-icon>
 				</v-btn>
 				<v-spacer></v-spacer>
-				<v-btn variant="flat" color="secondary" class="mx-4" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'grid'" :title="i18n.contextualDocsBtn" data-aid="grid_docs">
-					<v-icon>fa-circle-question</v-icon>
+				<v-btn variant="flat" class="mx-4" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'grid'" :title="i18n.contextualDocsBtn" data-aid="grid_docs">
+					<v-icon color="secondary">fa-circle-question</v-icon>
 				</v-btn>
 			</v-toolbar>
 			<v-data-table :search="gridFilter" :sort-by="sortBy" @update:sort-by="val => sortBy = val" @update:items-per-page="val => itemsPerPage = val"

@@ -11,18 +11,18 @@
 	<v-row>
 		<v-col>
 			<v-toolbar v-if="$root.isClientAdmin()" class="elevation-0 theme-background-lighten-1">
-				<v-btn variant="flat" id="add-client-button" class="action ml-3" color="blue" @click.stop="showAdd()" data-aid="clients_create_new">
-					<v-icon>fa-plus</v-icon>
+				<v-btn variant="flat" id="add-client-button" class="action ml-3" @click.stop="showAdd()" data-aid="clients_create_new">
+					<v-icon color="blue">fa-plus</v-icon>
 				</v-btn>
-				<v-btn variant="flat" id="download-ca-crt-button" class="action ml-3" color="secondary" href="/so-ca.crt" :title="i18n.caCrtHelp" data-aid="clients_download_ca">
-					<v-icon>fa-download</v-icon>
+				<v-btn variant="flat" id="download-ca-crt-button" class="action ml-3" href="/so-ca.crt" :title="i18n.caCrtHelp" data-aid="clients_download_ca">
+					<v-icon color="secondary">fa-download</v-icon>
 				</v-btn>
-				<v-btn variant="flat" color="secondary" @click.stop="loadData()" id="clients-refresh-button" class="ml-3" data-aid="clients_refresh_button">
-					<v-icon>fa-sync</v-icon>
+				<v-btn variant="flat" @click.stop="loadData()" id="clients-refresh-button" class="ml-3" data-aid="clients_refresh_button">
+					<v-icon color="secondary">fa-sync</v-icon>
 				</v-btn>
 				<v-spacer></v-spacer>
-				<v-btn variant="flat" color="secondary" class="mx-4" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'connect-api'" :title="i18n.contextualDocsBtn" data-aid="clients_docs">
-					<v-icon>fa-circle-question</v-icon>
+				<v-btn variant="flat" class="mx-4" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'connect-api'" :title="i18n.contextualDocsBtn" data-aid="clients_docs">
+					<v-icon color="secondary">fa-circle-question</v-icon>
 				</v-btn>
 			</v-toolbar>
 			<v-dialog v-model="dialog" persistent width="800px" data-aid="clients_create_dialog">

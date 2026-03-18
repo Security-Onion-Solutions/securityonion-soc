@@ -1,7 +1,7 @@
 <v-container fluid data-aid="case_screen">
 	<v-toolbar v-if="$root.isLicensed($root.FEAT_RPT)" class="elevation-0 theme-background-lighten-1" fixed>
-		<v-btn :title="i18n.exportCaseHelp" class="ml-3" variant="flat" color="secondary" @click.stop="exportCase" id="export-case-button" data-aid="case_export">
-			<v-icon>fa-file-export</v-icon>
+		<v-btn :title="i18n.exportCaseHelp" class="ml-3" variant="flat" @click.stop="exportCase" id="export-case-button" data-aid="case_export">
+			<v-icon color="secondary">fa-file-export</v-icon>
 		</v-btn>
 	</v-toolbar>
 	<div class="mx-sm-12 mx-lg-6 mt-2 mb-6 mb-md-1" data-aid="case_title_input">
@@ -85,11 +85,11 @@
 						<v-row>
 							<v-col>
 								<v-toolbar class="elevation-0 theme-background-lighten-1" fixed>
-									<v-btn variant="flat" v-bind:title.attr="i18n.addCommentHelp" color="primary" @click.stop="prepareForInput('comment-input')" id="add-comment-button" data-aid="case_comment_new" class="ml-3">
-										<v-icon>fa-plus</v-icon>
+									<v-btn variant="flat" v-bind:title.attr="i18n.addCommentHelp" @click.stop="prepareForInput('comment-input')" id="add-comment-button" data-aid="case_comment_new" class="ml-3">
+										<v-icon color="primary">fa-plus</v-icon>
 									</v-btn>
-									<v-btn variant="flat" class="mx-2" :title="i18n.refreshCommentsHelp" color="secondary" @click.stop="reloadAssociation('comments', true)" id="refresh-comments-button" data-aid="case_comments_refresh">
-										<v-icon>fa-sync</v-icon>
+									<v-btn variant="flat" class="mx-2" :title="i18n.refreshCommentsHelp" @click.stop="reloadAssociation('comments', true)" id="refresh-comments-button" data-aid="case_comments_refresh">
+										<v-icon color="secondary">fa-sync</v-icon>
 									</v-btn>
 								</v-toolbar>
 							</v-col>
@@ -98,7 +98,7 @@
 							<template v-for="(comment, index) in associations.comments">
 								<div class="mb-8" v-if="shouldRenderAssociationRecord('comments', comment, index)">
 									<div class="d-flex flex-column align-start my-4">
-										<v-col class="d-flex flex-column align-start pt-2 pt-md-0">
+										<v-col class="d-flex flex-column align-start pt-2 pt-md-0 full-width">
 											<div class="mt-1 mt-md-3 pt-1 pb-2 px-2 contrast-bg rounded rounded-md full-width">
 												<div class="d-flex flex-column align-start">
 													<div v-if="!isEdit(`comment-${index}`)" class="case d-block comment-body mt-2" data-aid="case_comment_display">
@@ -171,12 +171,12 @@
 															{{ i18n.edited }}
 														</div>
 														<div class="d-flex">
-															<v-btn variant="text" size="x-small" color="primary" v-if="!isEdit(`comment-${index}`)" @click="startEdit('comment-desc-input', comment.description, `comment-${index}`, 'description', modifyAssociation, ['comments', comment], true)" data-aid="case_comment_edit"
+															<v-btn variant="text" size="x-small" v-if="!isEdit(`comment-${index}`)" @click="startEdit('comment-desc-input', comment.description, `comment-${index}`, 'description', modifyAssociation, ['comments', comment], true)" data-aid="case_comment_edit"
 																@keypress.space.prevent="startEdit('comment-desc-input', comment.description, `comment-${index}`, 'description', modifyAssociation, ['comments', comment], true)">
-																<v-icon class="tiny-icon">fa-edit</v-icon>
+																<v-icon class="tiny-icon" color="primary">fa-edit</v-icon>
 															</v-btn>
-															<v-btn variant="text" size="x-small" color="red" @click="deleteAssociation('comments', comment)" data-aid="case_comment_delete">
-																<v-icon class="tiny-icon">fa-circle-xmark</v-icon>
+															<v-btn variant="text" size="x-small" @click="deleteAssociation('comments', comment)" data-aid="case_comment_delete">
+																<v-icon class="tiny-icon" color="red">fa-circle-xmark</v-icon>
 															</v-btn>
 														</div>
 													</div>
@@ -196,7 +196,7 @@
 							</template>
 						</div>
 						<div class="d-flex flex-column align-start my-4 no-print" data-aid="case_new_comment">
-							<v-col id="new-comment" class="d-flex flex-column align-start pt-2 pt-md-0">
+							<v-col id="new-comment" class="d-flex flex-column align-start pt-2 pt-md-0 full-width">
 								<div class="mt-1 mt-md-3 pb-3 pt-1 contrast-bg rounded rounded-md" style="width: 100%;">
 									<div class="d-flex flex-column align-start">
 										<div class="d-inline-flex align-center mt-3 mx-2 mb-4">
@@ -243,11 +243,11 @@
 						<v-row v-if="!isAdding('attachments')">
 							<v-col>
 								<v-toolbar class="elevation-0 theme-background-lighten-1" fixed>
-									<v-btn :title="i18n.addAttachmentHelp" variant="flat" color="primary" @click.stop="enableAdding('attachments')" id="add-attachment-button" data-aid="case_attachments_new" class="ml-3">
-										<v-icon>fa-plus</v-icon>
+									<v-btn :title="i18n.addAttachmentHelp" variant="flat" @click.stop="enableAdding('attachments')" id="add-attachment-button" data-aid="case_attachments_new" class="ml-3">
+										<v-icon color="primary">fa-plus</v-icon>
 									</v-btn>
-									<v-btn class="mx-2" :title="i18n.refreshAttachmentsHelp" variant="flat" color="secondary" @click.stop="reloadAssociation('attachments', true)" id="refresh-attachments-button" data-aid="case_attachments_refresh">
-										<v-icon>fa-sync</v-icon>
+									<v-btn class="mx-2" :title="i18n.refreshAttachmentsHelp" variant="flat" @click.stop="reloadAssociation('attachments', true)" id="refresh-attachments-button" data-aid="case_attachments_refresh">
+										<v-icon color="secondary">fa-sync</v-icon>
 									</v-btn>
 								</v-toolbar>
 							</v-col>
@@ -524,7 +524,7 @@
 												{{ i18n.edited }}
 											</div>
 											<div class="ml-1 d-flex">
-												<v-btn variant="text" size="x-small" color="red" @click="deleteAssociation('attachments', item)"><v-icon class="tiny-icon" data-aid="case_attachment_delete">fa-circle-xmark</v-icon></v-btn>
+												<v-btn variant="text" size="x-small" @click="deleteAssociation('attachments', item)"><v-icon class="tiny-icon" color="red" data-aid="case_attachment_delete">fa-circle-xmark</v-icon></v-btn>
 											</div>
 										</div>
 									</td>
@@ -545,11 +545,11 @@
 						<v-row v-if="!isAdding('evidence')">
 							<v-col>
 								<v-toolbar class="elevation-0 theme-background-lighten-1" fixed>
-									<v-btn :title="i18n.addObservableHelp" variant="flat" color="primary" @click.stop="enableAdding('evidence')" id="add-evidence-button" class="ml-3" data-aid="case_evidence_new">
-										<v-icon>fa-plus</v-icon>
+									<v-btn :title="i18n.addObservableHelp" variant="flat" @click.stop="enableAdding('evidence')" id="add-evidence-button" class="ml-3" data-aid="case_evidence_new">
+										<v-icon color="primary">fa-plus</v-icon>
 									</v-btn>
-									<v-btn class="mx-2" :title="i18n.refreshObservablesHelp" variant="flat" color="secondary" @click.stop="reloadAssociation('evidence', true)" id="refresh-observables-button" data-aid="case_evidence_refresh">
-										<v-icon>fa-sync</v-icon>
+									<v-btn class="mx-2" :title="i18n.refreshObservablesHelp" variant="flat" @click.stop="reloadAssociation('evidence', true)" id="refresh-observables-button" data-aid="case_evidence_refresh">
+										<v-icon color="secondary">fa-sync</v-icon>
 									</v-btn>
 								</v-toolbar>
 							</v-col>
@@ -877,7 +877,7 @@
 																	{{ formatDateTime(job.completeTime) }}
 																</div>
 																<div class="ml-1 d-flex">
-																	<v-btn variant="text" size="x-small" color="red" @click="deleteAnalyzeJob(job)" icon><v-icon class="tiny-icon" data-aid="case_evidence_analyze_job_delete">fa-circle-xmark</v-icon></v-btn>
+																	<v-btn variant="text" size="x-small" @click="deleteAnalyzeJob(job)" icon><v-icon class="tiny-icon" color="red" data-aid="case_evidence_analyze_job_delete">fa-circle-xmark</v-icon></v-btn>
 																</div>
 																<v-spacer></v-spacer>
 															</div>
@@ -908,7 +908,7 @@
 												{{ i18n.edited }}
 											</div>
 											<div class="ml-1 d-flex">
-												<v-btn variant="text" size="x-small" color="red" @click="deleteAssociation('evidence', item)" icon><v-icon class="tiny-icon" data-aid="case_evidence_delete">fa-circle-xmark</v-icon></v-btn>
+												<v-btn variant="text" size="x-small" @click="deleteAssociation('evidence', item)" icon><v-icon class="tiny-icon" color="red" data-aid="case_evidence_delete">fa-circle-xmark</v-icon></v-btn>
 											</div>
 										</div>
 									</td>
@@ -929,11 +929,11 @@
 						<v-row>
 							<v-col>
 								<v-toolbar class="elevation-0 theme-background-lighten-1" fixed>
-									<v-btn :title="i18n.refreshEventsHelp" variant="flat" color="secondary" @click.stop="reloadAssociation('events', true)" id="refresh-events-button" class="ml-3" data-aid="case_events_refresh">
-										<v-icon>fa-sync</v-icon>
+									<v-btn :title="i18n.refreshEventsHelp" variant="flat" @click.stop="reloadAssociation('events', true)" id="refresh-events-button" class="ml-3" data-aid="case_events_refresh">
+										<v-icon color="secondary">fa-sync</v-icon>
 									</v-btn>
-									<v-btn :title="i18n.huntForCase" variant="flat" color="secondary" id="hunt-events-button" class="ml-3" data-aid="case_events_hunt" :to="huntCase()">
-										<v-icon>fa-crosshairs</v-icon>
+									<v-btn :title="i18n.huntForCase" variant="flat" id="hunt-events-button" class="ml-3" data-aid="case_events_hunt" :to="huntCase()">
+										<v-icon color="secondary">fa-crosshairs</v-icon>
 									</v-btn>
 								</v-toolbar>
 							</v-col>
@@ -1017,7 +1017,7 @@
 												{{ formatDateTime(item.createTime) }}
 											</div>
 											<div class="ml-1 d-flex">
-												<v-btn variant="text" size="small" color="red" @click="deleteAssociation('events', item)" data-aid="case_event_delete"><v-icon class="tiny-icon">fa-circle-xmark</v-icon></v-btn>
+												<v-btn variant="text" size="small" @click="deleteAssociation('events', item)" data-aid="case_event_delete"><v-icon class="tiny-icon" color="red">fa-circle-xmark</v-icon></v-btn>
 											</div>
 										</div>
 									</td>
@@ -1038,8 +1038,8 @@
 						<v-row>
 							<v-col>
 								<v-toolbar class="elevation-0 theme-background-lighten-1" fixed>
-									<v-btn :title="i18n.refreshCaseHistoryHelp" variant="flat" color="secondary" @click.stop="reloadAssociation('history', true)" id="refresh-history-button" class="ml-3" data-aid="case_history_refresh">
-										<v-icon>fa-sync</v-icon>
+									<v-btn :title="i18n.refreshCaseHistoryHelp" variant="flat" @click.stop="reloadAssociation('history', true)" id="refresh-history-button" class="ml-3" data-aid="case_history_refresh">
+										<v-icon color="secondary">fa-sync</v-icon>
 									</v-btn>
 								</v-toolbar>
 							</v-col>

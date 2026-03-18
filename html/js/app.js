@@ -86,9 +86,6 @@ $(document).ready(function () {
       },
       theme: {
         defaultTheme: 'dark',
-        options: {
-          customProperties: true,
-        },
         variations: {
           colors: ['primary', 'secondary', 'drawer_background', 'background'],
           lighten: 3,
@@ -96,6 +93,7 @@ $(document).ready(function () {
         },
         themes: {
           light: {
+            dark: false,
             colors: {
               primary: '#2196f3',
               secondary: '#424242',
@@ -874,7 +872,7 @@ $(document).ready(function () {
             mermaid.initialize({
               startOnLoad: false,
               theme: this.$vuetify && this.$vuetify.theme.current.dark ? 'dark' : 'default',
-              securityLevel: 'loose',
+              securityLevel: 'strict',
               fontFamily: 'inherit'
             });
             this.mermaidInitialized = true;

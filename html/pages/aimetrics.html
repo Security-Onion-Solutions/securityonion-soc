@@ -27,18 +27,18 @@
 				</span>
         <span v-else :class="creditsRemaining <= 0 ? 'text-error' : 'text-primary'">{{ formatCount(creditsRemaining) }}</span>
       </h4>
-      <span class="text-caption">{{ i18n.creditsSubjectToExpiration }}</span>
+      <span class="text-body-small">{{ i18n.creditsSubjectToExpiration }}</span>
     </v-col>
   </v-row>
   <v-row>
     <v-col>
       <v-toolbar class="elevation-0 theme-background-lighten-1" fixed>
-        <v-btn variant="flat" color="primary" @click.stop="loadData()" id="aimetrics-refresh-button" class="ml-3" data-aid="aimetrics_refresh">
-          <v-icon>fa-sync</v-icon>
+        <v-btn variant="flat" @click.stop="loadData()" id="aimetrics-refresh-button" class="ml-3" data-aid="aimetrics_refresh">
+          <v-icon color="primary">fa-sync</v-icon>
         </v-btn>
         <v-spacer></v-spacer>
-        <v-btn variant="flat" color="secondary" class="mx-4" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'assistant'" :title="i18n.contextualDocsBtn" data-aid="aimetrics_docs">
-          <v-icon>fa-circle-question</v-icon>
+        <v-btn variant="flat" class="mx-4" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'assistant'" :title="i18n.contextualDocsBtn" data-aid="aimetrics_docs">
+          <v-icon color="secondary">fa-circle-question</v-icon>
         </v-btn>
       </v-toolbar>
     </v-col>
@@ -108,9 +108,8 @@
         </template>
       </v-text-field>
     </v-col>
-    <v-spacer></v-spacer>
   </v-row>
-  <v-row v-if="tableSetting == TABLE_SETTING_USERS || tableSetting == TABLE_SETTING_SESSIONS">
+  <v-row v-if="tableSetting == TABLE_SETTING_USERS || tableSetting == TABLE_SETTING_SESSIONS" class="my-0">
     <v-col id="aimetrics-graphs" data-aid="aimetrics_graphs_tab">
       <v-toolbar density="compact" variant="flat">
         <v-toolbar-title>{{ i18n.graphMetrics }}</v-toolbar-title>

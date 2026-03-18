@@ -5,6 +5,18 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 */
+
+/* Reset default heading margins */
+@layer vuetify-core.base {
+  h1, h2, h3, h4, h5, h6 {
+    margin: 0;
+  }
+}
+
+.v-btn {
+  text-transform: uppercase;
+}
+
 /* Vuetify theme overrides */
 .v-application, html {
   background-color: rgb(var(--v-theme-background)) !important;
@@ -14,7 +26,7 @@
   margin-bottom: 16px;
 }
 
-.v-application a, .theme-primary {
+.v-application a:not(.v-btn[class*="bg-"]), .theme-primary {
   color: rgb(var(--v-theme-primary));
 }
 
@@ -577,7 +589,7 @@ td {
 }
 
 #config-tree {
-    height: calc(100vh - 325px);
+    height: calc(100vh - 235px);
     overflow-y: auto;
 }
 
@@ -898,7 +910,7 @@ ul ul ul {
 
 .sticky-config {
   position: sticky;
-  top: 154px;
+  top: 64px;
 }
 
 .va-baseline {
@@ -948,6 +960,10 @@ ul ul ul {
 .component-overlay .v-container {
   height: 100%;
   width: 100%;
+}
+
+.v-container--fluid {
+  max-width: unset !important;
 }
 
 .component-overlay .v-progress-circular {
@@ -1295,6 +1311,7 @@ ul ul ul {
   box-sizing: border-box;
   overflow-x: auto;
   word-break: break-all;
+  line-height: 1.8;
 }
 
 /* Thought Display Styling */
@@ -1313,7 +1330,7 @@ ul ul ul {
 .thought-display .v-expansion-panel-text {
   padding: 8px 12px !important;
 }
-.thought-display .v-expansion-panel-text .text-caption p {
+.thought-display .v-expansion-panel-text .text-body-small p {
   margin-bottom: 0 !important;
 }
 
@@ -1502,3 +1519,6 @@ ul ul ul {
   background-color: rgba(25, 118, 210, 0.22);
 }
 
+.v-pagination__list>li {
+  list-style: none;
+}

@@ -8,15 +8,15 @@
 	<v-row>
 		<v-col>
 			<v-toolbar class="elevation-0 theme-background-lighten-1" fixed>
-				<v-btn v-if="canCreate()" variant="flat" color="primary" @click.stop="openNewJobDialog" id="add-pcap-job-button" class="ml-3" data-aid="jobs_create_new">
-					<v-icon>fa-plus</v-icon>
+				<v-btn v-if="canCreate()" variant="flat" @click.stop="openNewJobDialog" id="add-pcap-job-button" class="ml-3" data-aid="jobs_create_new">
+					<v-icon color="primary">fa-plus</v-icon>
 				</v-btn>
-				<v-btn variant="flat" color="secondary" @click.stop="loadData()" id="jobs-refresh-button" class="ml-3" data-aid="jobs_refresh_button">
-					<v-icon>fa-sync</v-icon>
+				<v-btn variant="flat" @click.stop="loadData()" id="jobs-refresh-button" class="ml-3" data-aid="jobs_refresh_button">
+					<v-icon color="secondary">fa-sync</v-icon>
 				</v-btn>
 				<v-spacer></v-spacer>
-				<v-btn variant="flat" color="secondary" class="mx-4" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + (isKind('reports') ? 'reports' : 'pcap')" :title="i18n.contextualDocsBtn" data-aid="jobs_docs">
-					<v-icon>fa-circle-question</v-icon>
+				<v-btn variant="flat" class="mx-4" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + (isKind('reports') ? 'reports' : 'pcap')" :title="i18n.contextualDocsBtn" data-aid="jobs_docs">
+					<v-icon color="secondary">fa-circle-question</v-icon>
 				</v-btn>		  
 			</v-toolbar>
 			<v-data-table :sort-by="sortBy" @update:sort-by="val => sortBy = val" :items-per-page-options="itemsPerPageOptions" v-model:items-per-page="itemsPerPage"
