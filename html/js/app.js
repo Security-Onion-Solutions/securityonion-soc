@@ -123,6 +123,7 @@ $(document).ready(function () {
               error: '#ff5252',
               nav_background: '#4A90D9',
               nav: '#ffffff',
+              table_background: '#ffffff',
               drawer_background: '#f4f4f4',
               background: '#ffffff',
               text: '#000000',
