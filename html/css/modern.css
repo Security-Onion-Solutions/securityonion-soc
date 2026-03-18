@@ -96,7 +96,11 @@ body {
   border: 2px solid rgba(var(--v-theme-primary), 0.4);
 }
 
-.theme-text, .theme-links a, .theme-links .v-list-group > .v-list-item, .theme-links a:active {
+.theme-text {
+  color: rgb(var(--v-theme-text)) !important;
+}
+
+.theme-links a, .theme-links .v-list-group > .v-list-item, .theme-links a:active {
   color: rgb(var(--v-theme-text)) !important;
   border-radius: 0.75rem;
   margin: 0px 4px;
@@ -110,6 +114,10 @@ body {
   margin-top: -100px;
 }
 
+.v-list {
+  background-color: rgb(var(--v-theme-table_background)) !important;
+}
+
 /* ============================================================
    Data Tables — rounded, spacious, softer
    ============================================================ */
@@ -121,8 +129,8 @@ body {
 }
 
 /* Softer row striping */
-.v-data-table tbody tr:nth-of-type(even) {
-  background-color: rgba(var(--v-theme-text), 0.03) !important;
+.v-data-table tbody tr, .v-data-table th, .v-data-table-footer, .v-table tr, .v-data-table-rows-no-data {
+  background-color: rgb(var(--v-theme-table_background)) !important;
 }
 
 /* Spacious cells */
@@ -575,4 +583,20 @@ body {
   border-radius: 0.5rem;
   background-color: rgba(var(--v-theme-text), 0.03);
   border: 1px solid rgba(var(--v-theme-text), 0.06);
+}
+
+/* ============================================================
+   Options Box, may be removed
+   ============================================================ */
+
+.v-theme--dark .v-expansion-panel {
+  background-color: rgb(var(--v-theme-drawer_background)) !important;
+}
+
+/* ============================================================
+   Cards
+   ============================================================ */
+
+.v-theme--dark.v-card {
+  background-color: rgb(var(--v-theme-drawer_background)) !important;  
 }

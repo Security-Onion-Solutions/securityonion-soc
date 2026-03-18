@@ -72,6 +72,7 @@ $(document).ready(function () {
           prevIcon: 'fa-chevron-left',
           nextIcon: 'fa-chevron-right',
           lastIcon: 'fa-forward-step',
+          striped: 'odd',
         },
         VTextField: {
           variant: 'outlined',
@@ -85,6 +86,9 @@ $(document).ready(function () {
         VTreeview: {
           collapseIcon: '',
           expandIcon: 'fas fa-caret-right',
+        },
+        VToolbar: {
+          class: 'theme-background-lighten-1',
         },
         VChip: {
           closeIcon: 'fa-xmark va-baseline',
@@ -117,7 +121,7 @@ $(document).ready(function () {
               secondary: '#424242',
               info: '#2196f3',
               error: '#ff5252',
-              nav_background: '#12110d',
+              nav_background: '#4A90D9',
               nav: '#ffffff',
               drawer_background: '#f4f4f4',
               background: '#ffffff',
@@ -128,16 +132,17 @@ $(document).ready(function () {
           dark: {
             dark: true,
             colors: {
-              primary: '#2196f3',
-              secondary: '#424242',
+              primary: '#0088BF',
+              secondary: '#2C3347',
               info: '#2196f3',
               error: '#ff5252',
-              nav_background: '#12110d',
+              nav_background: '#000000',
               nav: '#ffffff',
-              drawer_background: '#353535',
-              background: '#1e1e1e',
+              table_background: '#1A2030',
+              drawer_background: '#252B3B',
+              background: '#0B1019',
               text: '#ffffff',
-              icon: '#929292',
+              icon: '#8B96A8',
             },
           },
         },

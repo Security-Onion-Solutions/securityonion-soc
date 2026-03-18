@@ -515,7 +515,7 @@
 					<v-expand-transition>
 						<div v-if="isExpandedSection('hunt-events')" ref="eventColumn" style="position: relative;">
 								<v-data-table ref="eventTable" class="hunt-table" :search="eventFilter" :sort-by="sortBy" @update:sort-by="val => sortBy = val" item-value="soc_id" :items-per-page-options="itemsPerPageOptions" :data-aid="'events_table_' + category"
-									v-model:items-per-page="itemsPerPage" must-sort :headers="eventHeaders" :items="eventData" v-model:page="eventPage" show-select :custom-sort="sortEvents" density="compact" @current-items="val => eventCurrentItems = val"
+									v-model:items-per-page="itemsPerPage" must-sort :headers="eventHeaders" :items="eventData" v-model:page="eventPage" show-select density="compact" @current-items="val => eventCurrentItems = val"
 									v-model:expanded="expandedEvents">
 									<template #top="data">
 										<!-- not-fancy way to access the current page of items:
