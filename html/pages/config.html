@@ -36,7 +36,7 @@
 			<v-container class="sticky-config">
 				<v-row>
 					<v-col>
-						<v-text-field variant="underlined" id="filter-input" :label="i18n.filter" v-model="search" clearable :hint="i18n.filterHelp" persistent-hint @click:clear="clearFilter()" @keydown.enter="applySearchFilter()" class="mb-3" data-aid="config_filter_input"></v-text-field>
+						<v-text-field id="filter-input" :label="i18n.filter" v-model="search" clearable :hint="i18n.filterHelp" persistent-hint @click:clear="clearFilter()" @keydown.enter="applySearchFilter()" class="mb-3" data-aid="config_filter_input"></v-text-field>
 					</v-col>
 					<v-col>
 						<div class="mt-3 text-no-wrap overflow-x-hidden">
@@ -269,8 +269,8 @@
 									<v-btn id="config-toggle-default-button" @click="showDefault = !showDefault" v-text="showDefault ? i18n.settingHideDefault : i18n.settingShowDefault" data-aid="config_item_show_default"></v-btn>
 									<div v-if="showDefault" class="mt-8 ml-8">
 										<v-chip v-if="isToggle(selected)" id="default-output" :color="$root.isTrue(selected.default) ? 'primary' : ''" data-aid="config_item_default_display">{{$root.isTrue(selected.default) ? i18n.enabled : i18n.disabled }}</v-chip>
-										<v-textarea v-else-if="isMultiline(selected)" id="default-output" variant="underlined" :label="i18n.settingDefault" v-model="selected.default" readonly class="config-editor" data-aid="config_item_default_display"></v-textarea>
-										<v-text-field v-else id="default-output" variant="underlined" :label="i18n.settingDefault" v-model="selected.default" readonly data-aid="config_item_default_display"></v-text-field>
+										<v-textarea v-else-if="isMultiline(selected)" id="default-output" :label="i18n.settingDefault" v-model="selected.default" readonly class="config-editor" data-aid="config_item_default_display"></v-textarea>
+										<v-text-field v-else id="default-output" :label="i18n.settingDefault" v-model="selected.default" readonly data-aid="config_item_default_display"></v-text-field>
 									</div>
 								</v-col>
 							</v-row>

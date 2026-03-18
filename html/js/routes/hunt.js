@@ -2802,7 +2802,8 @@ const huntComponent = {
       }
     },
     calculateEventColumnWidth() {
-      this.eventColumnWidth = this.$refs?.eventColumn?.$el?.clientWidth || 0;
+      const el = this.$refs?.eventColumn?.$el || this.$refs?.eventColumn;
+      this.eventColumnWidth = el?.clientWidth || 0;
       if (this.eventColumnWidth === 0) {
         setTimeout(() => {
           this.calculateEventColumnWidth();

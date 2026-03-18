@@ -10,10 +10,10 @@
           <v-expansion-panel-title id="aimetrics-options-header" expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up">{{i18n.options}}</v-expansion-panel-title>
           <v-expansion-panel-text>
             <span data-aid="aimetrics_autorefresh_select">
-              <v-select id="aimetrics-auto-refresh" :disabled="$root.loading" v-model="autoRefreshInterval" @update:focused="autoRefreshIntervalChanged" :items="autoRefreshIntervals" :hint="i18n.autoRefresh" persistent-hint variant="underlined" prepend-icon="fa-hourglass-half"></v-select>
+              <v-select id="aimetrics-auto-refresh" :disabled="$root.loading" v-model="autoRefreshInterval" @update:focused="autoRefreshIntervalChanged" :items="autoRefreshIntervals" :hint="i18n.autoRefresh" persistent-hint prepend-icon="fa-hourglass-half"></v-select>
             </span>
             <span data-aid="aimetrics_timezone_select">
-              <v-select :disabled="$root.loading" @update:model-value="zone = $event; saveLocalSettings(); loadData()" v-model="zone" :items="$root.timezones" :hint="i18n.timezoneHelp" persistent-hint variant="underlined" prepend-icon="fa-user-clock"></v-select>
+              <v-select :disabled="$root.loading" @update:model-value="zone = $event; saveLocalSettings(); loadData()" v-model="zone" :items="$root.timezones" :hint="i18n.timezoneHelp" persistent-hint prepend-icon="fa-user-clock"></v-select>
             </span>
           </v-expansion-panel-text>
         </v-expansion-panel>
@@ -48,7 +48,7 @@
     <v-col cols="12" md="5" class="d-flex flex-nowrap align-center" :class="{'mt-4': relativeTimeEnabled}">
       <v-text-field :disabled="$root.loading" v-if="relativeTimeEnabled" id="aimetrics-relative-time-value" @change="notifyInputsChanged" class="mx-2"
         v-model="relativeTimeValue" :hint="i18n.relativeTimeHelp" persistent-hint type="number" data-aid="aimetrics_relative_time_input"
-        variant="underlined" density="compact">
+        density="compact">
         <template #prepend>
           <v-btn v-if="relativeTimeEnabled" icon variant="text" size="x-small" @click="showAbsoluteTime" id="aimetrics-show-absolute-time" data-aid="aimetrics_absolute_time_toggle">
             <v-icon class="theme-icon">fa-history</v-icon>
@@ -64,7 +64,7 @@
           </span>
         </template>
       </v-text-field>
-      <v-text-field variant="underlined" :disabled="$root.loading" v-if="!relativeTimeEnabled" id="aimetrics-date-range" @change="notifyInputsChanged" class="mx-2 closer-prepend"
+      <v-text-field :disabled="$root.loading" v-if="!relativeTimeEnabled" id="aimetrics-date-range" @change="notifyInputsChanged" class="mx-2 closer-prepend"
         v-model="dateRange" :hint="i18n.timePickerHelp" persistent-hint
         data-aid="aimetrics_absolute_time">
         <template #prepend>
@@ -101,16 +101,9 @@
         </v-breadcrumbs>
       </div>
     </v-col>
-    <v-col cols="6">
-      <v-text-field v-model="searchFilter" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="aimetrics_filter" variant="underlined">
-        <template #clear="{ props }">
-          <v-icon v-bind="props">fa-times-circle</v-icon>
-        </template>
-      </v-text-field>
-    </v-col>
   </v-row>
   <v-row v-if="tableSetting == TABLE_SETTING_USERS || tableSetting == TABLE_SETTING_SESSIONS" class="my-0">
-    <v-col id="aimetrics-graphs" data-aid="aimetrics_graphs_tab">
+    <v-col id="aimetrics-graphs" class="section-panel" data-aid="aimetrics_graphs_tab">
       <v-toolbar density="compact" variant="flat">
         <v-toolbar-title>{{ i18n.graphMetrics }}</v-toolbar-title>
         <v-spacer></v-spacer>
@@ -145,11 +138,16 @@
 		</v-col>
   </v-row>
   <v-row>
-    <v-col id="aimetrics-table">
+    <v-col id="aimetrics-table" class="section-panel">
       <v-toolbar density="compact" variant="flat">
         <v-toolbar-title>{{ i18n.tableMetrics }}</v-toolbar-title>
         <v-spacer></v-spacer>
-        <v-btn variant="text" size="small" icon class="mr-1" @click="toggleShowSection('aimetrics-table')" data-aid="aimetrics_table_toggle">
+        <v-text-field class="toolbar-field" style="max-width: 250px;" v-model="searchFilter" clearable prepend-inner-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="aimetrics_filter">
+          <template #clear="{ props }">
+            <v-icon v-bind="props">fa-times-circle</v-icon>
+          </template>
+        </v-text-field>
+        <v-btn variant="text" size="small" icon class="ml-2 mr-1" @click="toggleShowSection('aimetrics-table')" data-aid="aimetrics_table_toggle">
           <v-icon v-if="!isExpandedSection('aimetrics-table')" data-aid="aimetrics_table_expand">fa-angle-down</v-icon>
           <v-icon v-if="isExpandedSection('aimetrics-table')" data-aid="aimetrics_table_collapse">fa-angle-up</v-icon>
         </v-btn>

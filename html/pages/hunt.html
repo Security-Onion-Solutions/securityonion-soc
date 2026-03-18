@@ -29,18 +29,19 @@
 										@update:model-value="filterToggled($event, toggle); notifyInputsChanged()"
 										:label="$root.localizeMessage(toggle.name)" color="primary"></v-switch>
 								</span>
+								<div class="my-4"></div>
 								<span data-aid="show_detection_panel">
 									<v-switch v-if="isCategory('alerts')" id="detection-panel-toggle" :disabled="loading()" v-model="showDetailsPanel" density="compact" hide-details class="my-0" :label="i18n.showDetailsPanel"></v-switch>
 								</span>
 								<span :data-aid="'autorefresh_select_' + category" v-if="!isCategory('detections')">
-									<v-select id="autoRefresh" class="ml-" :disabled="loading()" v-model="autoRefreshInterval" @update:focused="autoRefreshIntervalChanged" :items="autoRefreshIntervals" :hint="i18n.autoRefresh" persistent-hint variant="underlined" prepend-icon="fa-hourglass-half"></v-select>
+									<v-select id="autoRefresh" class="ml-" :disabled="loading()" v-model="autoRefreshInterval" @update:focused="autoRefreshIntervalChanged" :items="autoRefreshIntervals" :label="i18n.autoRefresh" prepend-icon="fa-hourglass-half"></v-select>
 								</span>
 								<span :data-aid="'timezone_select_' + category" v-if="!isCategory('detections')">
-									<v-select :disabled="loading()" @update:model-value="zone = $event; saveTimezone()" v-model="zone" :items="$root.timezones" :hint="i18n.timezoneHelp" persistent-hint variant="underlined" prepend-icon="fa-user-clock"></v-select>
+									<v-select :disabled="loading()" @update:model-value="zone = $event; saveTimezone()" v-model="zone" :items="$root.timezones" :label="i18n.timezoneHelp" prepend-icon="fa-user-clock"></v-select>
 								</span>
 								<div v-if="isCategory('detections')" class="manual-sync">
 									<div data-aid="detections_manualsync_engine_select">
-										<v-select :items="getPresets('manualSync')" v-model="manualSyncTargetEngine" :hint="i18n.manualSyncHint" persistent-hint variant="underlined" prepend-icon="fa-sync"></v-select>
+										<v-select :items="getPresets('manualSync')" v-model="manualSyncTargetEngine" :label="i18n.manualSyncHint" prepend-icon="fa-sync"></v-select>
 									</div>
 									<div class="manual-sync-buttons">
 										<span data-aid="detections_manualsync_differentialupdate">
@@ -90,7 +91,7 @@
 					<v-textarea :clearable="isAdvanced()" :auto-grow="isAdvanced()" :readonly="!isAdvanced()" :disabled="loading()" @input="queryAltered = true"
 						@change="queryModified" class="mx-2" v-model="$data[getDisplayedQueryVar()]" :hint="isAdvanced() ? (queryAltered ? i18n.queryHelp : $data['queryName']) : ''"
 						rows="1" persistent-hint prepend-icon="fa-search" @keydown.enter.prevent="submitQuery" id="hunt-query-input" ref="huntQueryInput" :data-aid="'query_input_' + category"
-						variant="underlined">
+						>
 						<template #prepend-inner>
 							<v-menu density="compact" @update:model-value="saveMenuScrollPos($event, '#hunt-query-dropdown-list')">
 								<template #activator="{ props: menuProps }">
@@ -135,10 +136,10 @@
 						</template>
 					</v-textarea>
 				</v-col>
-				<v-col cols="12" :md="isCategory('detections') ? 2 : 5" class="d-flex flex-nowrap align-center" :class="{'mt-4': relativeTimeEnabled}">
+				<v-col cols="12" :md="isCategory('detections') ? 2 : 5" class="d-flex flex-nowrap align-center">
 					<v-text-field :disabled="loading()" v-if="relativeTimeEnabled && !isCategory('detections')" id="huntrelativetimevalue" @change="notifyInputsChanged" class="mx-2"
 							v-model="relativeTimeValue" :hint="i18n.relativeTimeHelp" persistent-hint type="number" :data-aid="'relative_time_input_' + category"
-							variant="underlined" density="compact">
+							 density="compact">
 						<template #prepend>
 							<v-btn v-if="relativeTimeEnabled" icon variant="text" size="x-small" @click="showAbsoluteTime" id="show-absolute-time" :data-aid="'absolute_time_toggle_' + category">
 								<v-icon class="theme-icon">fa-history</v-icon>
@@ -154,7 +155,7 @@
 							</span>
 						</template>
 					</v-text-field>
-					<v-text-field variant="underlined" :disabled="loading()" v-if="!relativeTimeEnabled && !isCategory('detections')" id="huntdaterange" @change="notifyInputsChanged" class="mx-2 closer-prepend"
+					<v-text-field :disabled="loading()" v-if="!relativeTimeEnabled && !isCategory('detections')" id="huntdaterange" @change="notifyInputsChanged" class="mx-2 closer-prepend"
 						v-model="dateRange" :hint="i18n.timePickerHelp" persistent-hint
 						:data-aid="'absolute_time_' + category">
 						<template #prepend>
@@ -186,7 +187,7 @@
 				</v-col>
 			</v-row>
 			<v-row>
-				<v-col id="graphs" v-if="loaded && isAdvanced() && !isCategory('detections')" :data-aid="'graphs_' + category">
+				<v-col id="graphs" class="section-panel" v-if="loaded && isAdvanced() && !isCategory('detections')" :data-aid="'graphs_' + category">
 					<v-toolbar class="so-toolbar" density="compact" variant="flat">
 						<v-toolbar-title>{{ i18n.standardMetrics }}</v-toolbar-title>
 						<v-spacer></v-spacer>
@@ -218,28 +219,19 @@
 				</v-col>
 			</v-row>
 			<v-row>
-				<v-col ref="eventColumn" id="group-metrics" v-if="metricsEnabled" :data-aid="'groups_' + category">
+				<v-col ref="eventColumn" id="group-metrics" class="section-panel" v-if="metricsEnabled" :data-aid="'groups_' + category">
 					<v-toolbar class="so-toolbar" v-if="isAdvanced()" density="compact" variant="flat">
 						<v-toolbar-title>{{ i18n.groups }}</v-toolbar-title>
 						<v-spacer></v-spacer>
-						<v-btn variant="text" size="small" icon class="mr-1" @click="toggleShowSection('hunt-groups')" :data-aid="'groups_toggle_' + category">
+						<v-select class="toolbar-field no-print" style="max-width: 120px;" :disabled="loading()" @update:model-value="groupByLimit = $event; notifyInputsChanged();" v-model="groupByLimit" :items="groupByLimitOptions" :label="i18n.fetchLimit" hide-details :data-aid="'groups_limit_' + category"></v-select>
+						<v-text-field class="toolbar-field no-print ml-2" style="max-width: 250px;" v-model="groupByFilter" clearable prepend-inner-icon="fa-filter" :label="i18n.filterResults" hide-details :data-aid="'groups_filter_' + category"></v-text-field>
+						<v-btn variant="text" size="small" icon class="ml-2 mr-1" @click="toggleShowSection('hunt-groups')" :data-aid="'groups_toggle_' + category">
 							<v-icon v-if="!isExpandedSection('hunt-groups')" :data-aid="'groups_expand_' + category">fa-angle-down</v-icon>
 							<v-icon v-if="isExpandedSection('hunt-groups')" :data-aid="'groups_collapse_' + category">fa-angle-up</v-icon>
 						</v-btn>
 					</v-toolbar>
 					<v-expand-transition>
-						<v-row v-if="isExpandedSection('hunt-groups')">
-							<v-col cols="12">
-								<v-container fluid>
-									<v-row class="no-print">
-										<v-col cols="4"></v-col>
-										<v-col cols="2" :data-aid="'groups_limit_' + category">
-											<v-select :disabled="loading()" @update:model-value="groupByLimit = $event; notifyInputsChanged();" v-model="groupByLimit" :items="groupByLimitOptions" :label="i18n.fetchLimit" variant="underlined"></v-select>
-										</v-col>
-										<v-col cols="6">
-											<v-text-field v-model="groupByFilter" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details :data-aid="'groups_filter_' + category" variant="underlined"></v-text-field>
-										</v-col>
-									</v-row>
+						<div v-if="isExpandedSection('hunt-groups')">
 									<v-row>
 										<v-col v-for="(group, groupIdx) in groupBys" class="groupBy">
 											<div v-if="group.chart_type" class="chart-container">
@@ -494,61 +486,34 @@
 											</v-data-table>
 										</v-col>
 									</v-row>
-								</v-container>
-							</v-col>
-						</v-row>
+						</div>
 					</v-expand-transition>
 				</v-col>
 			</v-row>
 			<v-row>
-				<v-col id="events" v-if="loaded && eventsEnabled && (isAdvanced() || !metricsEnabled)" :data-aid="'events_' + category">
+				<v-col id="events" class="section-panel" v-if="loaded && eventsEnabled && (isAdvanced() || !metricsEnabled)" :data-aid="'events_' + category">
 					<v-toolbar v-if="isAdvanced()" class="so-toolbar" density="compact" variant="flat">
 						<v-toolbar-title>{{ isCategory("detections") || isCategory("alerts") || isCategory("cases") ? i18n[category] : i18n.events }}</v-toolbar-title>
 						<v-spacer></v-spacer>
-						<v-btn variant="text" size="small" icon class="mr-1" @click="toggleShowSection('hunt-events')" :data-aid="'events_toggle_' + category">
+						<template v-if="isCategory('detections') && (selectAllState || selectAllIndeterminate)">
+							<span class="text-caption mr-2">{{ i18n.selected }}: {{ (selectAllState === true ? totalEvents : selectedCount).toLocaleString() }}</span>
+							<v-btn v-if="selectAllIndeterminate && !selectAllState && isPageSelected() && totalEvents >= itemsPerPage" size="x-small" @click="selectAllEvents(true, true)" class="mr-2" :data-aid="'events_select_all_' + category">{{ i18n.yes }}</v-btn>
+							<v-select class="toolbar-field no-print bulk-actions no-details" style="max-width: 150px;" :disabled="loading()" v-model="selectedAction" :items="bulkActions" hide-details :data-aid="'events_bulk_select_action_' + category"></v-select>
+							<v-btn size="small" class="ml-1 mr-2" @click="bulkAction()" :data-aid="'events_bulk_apply_' + category">{{ i18n.go }}</v-btn>
+						</template>
+						<v-select class="toolbar-field no-print" style="max-width: 120px;" :disabled="loading()" @update:model-value="eventLimit = $event; notifyInputsChanged()" v-model="eventLimit" :items="eventLimitOptions" :label="i18n.fetchLimit" hide-details :data-aid="'events_limit_' + category"></v-select>
+						<v-text-field class="toolbar-field no-print ml-2" style="max-width: 250px;" v-model="eventFilter" clearable prepend-inner-icon="fa-filter" :label="i18n.filterResults" hide-details :data-aid="'events_filter_' + category">
+							<template #clear="{ props }">
+								<v-icon v-bind="props">fa-times-circle</v-icon>
+							</template>
+						</v-text-field>
+						<v-btn variant="text" size="small" icon class="ml-2 mr-1" @click="toggleShowSection('hunt-events')" :data-aid="'events_toggle_' + category">
 							<v-icon v-if="!isExpandedSection('hunt-events')" :data-aid="'events_expand_' + category">fa-angle-down</v-icon>
 							<v-icon v-if="isExpandedSection('hunt-events')" :data-aid="'events_collapse_' + category">fa-angle-up</v-icon>
 						</v-btn>
 					</v-toolbar>
 					<v-expand-transition>
-						<v-row v-if="isExpandedSection('hunt-events')">
-							<template v-if="isAdvanced()" class="no-print">
-								<v-container fluid>
-									<v-row>
-										<v-col cols="4">
-											<template v-if="isCategory('detections') && (selectAllState || selectAllIndeterminate)">
-												<div>
-													{{ i18n.selected }}: {{ (selectAllState === true ? totalEvents : selectedCount).toLocaleString() }}
-													<br/>
-													<span v-if="selectAllIndeterminate && !selectAllState && isPageSelected() && totalEvents >= itemsPerPage" :data-aid="'events_select_all_' + category">
-														{{ i18n.selectAll.replaceAll('[[count]]', totalEvents.toLocaleString()) }}
-														<v-btn @click="selectAllEvents(true, true)">
-															{{ i18n.yes }}
-														</v-btn>
-													</span>
-												</div>
-
-												<span :data-aid="'events_bulk_select_action_' + category">
-													{{ i18n.bulkAction }}
-													<v-select variant="underlined" class="bulk-actions no-details" :disabled="loading()" v-model="selectedAction" :items="bulkActions"></v-select>
-													<v-btn @click="bulkAction()" :data-aid="'events_bulk_apply_' + category">{{ i18n.go }}</v-btn>
-												</span>
-											</template>
-										</v-col>
-										<v-col cols="2" :data-aid="'events_limit_' + category">
-											<v-select :disabled="loading()" @update:model-value="eventLimit = $event; notifyInputsChanged()" v-model="eventLimit" :items="eventLimitOptions" :label="i18n.fetchLimit" variant="underlined"></v-select>
-										</v-col>
-										<v-col cols="6">
-											<v-text-field v-model="eventFilter" variant="underlined" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details :data-aid="'events_filter_' + category">
-												<template #clear="{ props }">
-													<v-icon v-bind="props">fa-times-circle</v-icon>
-												</template>
-											</v-text-field>
-										</v-col>
-									</v-row>
-								</v-container>
-							</template>
-							<v-col ref="eventColumn" cols="12" style="position: relative;">
+						<div v-if="isExpandedSection('hunt-events')" ref="eventColumn" style="position: relative;">
 								<v-data-table ref="eventTable" class="hunt-table" :search="eventFilter" :sort-by="sortBy" @update:sort-by="val => sortBy = val" item-value="soc_id" :items-per-page-options="itemsPerPageOptions" :data-aid="'events_table_' + category"
 									v-model:items-per-page="itemsPerPage" must-sort :headers="eventHeaders" :items="eventData" v-model:page="eventPage" show-select :custom-sort="sortEvents" density="compact" @current-items="val => eventCurrentItems = val"
 									v-model:expanded="expandedEvents">
@@ -789,8 +754,7 @@
 										</tr>
 									</template>
 								</v-data-table>
-							</v-col>
-						</v-row>
+						</div>
 					</v-expand-transition>
 				</v-col>
 			</v-row>
@@ -1037,15 +1001,15 @@
 		<v-card>
 			<v-card-title class="text-h5" v-text="i18n.betweenOp"></v-card-title>
 			<v-container class="d-flex justify-space-between align-center" style="flex-wrap: nowrap;">
-				<v-text-field v-model="betweenStart" id="betweenStart" :label="i18n.start" data-aid="compare_dialog_start_input" max-width="120px" variant="underlined"></v-text-field>
+				<v-text-field v-model="betweenStart" id="betweenStart" :label="i18n.start" data-aid="compare_dialog_start_input" max-width="120px"></v-text-field>
 				<span data-aid="compare_dialog_start_operator">
-					<v-select v-model="betweenStartEquals" id="betweenStartEquals" :items="equalityOperators" max-width="50px" variant="underlined"></v-select>
+					<v-select v-model="betweenStartEquals" id="betweenStartEquals" :items="equalityOperators" max-width="50px"></v-select>
 				</span>
 				<span style="max-width: 290px;" data-aid="compare_dialog_field">{{ quickActionField }}</span>
 				<span data-aid="compare_dialog_end_operator">
-					<v-select v-model="betweenEndEquals" id="betweenEndEquals" :items="equalityOperators" max-width="50px" variant="underlined"></v-select>
+					<v-select v-model="betweenEndEquals" id="betweenEndEquals" :items="equalityOperators" max-width="50px"></v-select>
 				</span>
-				<v-text-field v-model="betweenEnd" id="betweenEnd" :label="i18n.end" max-width="120px" variant="underlined"></v-text-field>
+				<v-text-field v-model="betweenEnd" id="betweenEnd" :label="i18n.end" max-width="120px"></v-text-field>
 			</v-container>
 			<div v-if="betweenError" class="text-red text-center mx-2" data-aid="compare_dialog_error">
 				{{ betweenError }}

@@ -39,6 +39,59 @@ body {
   border-radius: 0.75rem;
 }
 
+/* ============================================================
+   Section Panel — encloses toolbar header + expandable content
+   ============================================================ */
+
+.section-panel {
+  border: 1px solid rgba(var(--v-theme-text), 0.08);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background-color: rgba(var(--v-theme-background-lighten-1), 0.6);
+}
+
+.section-panel > .v-toolbar {
+  border-radius: 0 !important;
+  border-bottom: 1px solid rgba(var(--v-theme-text), 0.06);
+}
+
+.section-panel > .v-toolbar > .v-toolbar__content {
+  min-height: 56px !important;
+  height: auto !important;
+  align-items: center !important;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+.section-panel canvas {
+  padding: 8px;
+}
+
+.section-panel .v-data-table {
+  border-radius: 0 0 0.75rem 0.75rem !important;
+  background-color: rgba(var(--v-theme-background-lighten-1), 0.6);
+}
+
+.section-panel .v-tabs,
+.section-panel .v-tabs-window,
+.section-panel .v-tab {
+  background-color: rgba(var(--v-theme-background-lighten-1), 0.6);
+}
+
+/* ============================================================
+   Text Fields & Selects — rounded globally
+   ============================================================ */
+
+.v-field {
+  border-radius: 0.75rem !important;
+}
+
+/* Pin textarea append slot to top when textarea grows */
+.v-textarea.v-input--horizontal > .v-input__append {
+  align-self: start !important;
+  padding-top: 0 !important;
+}
+
 .blue-border {
   border: 2px solid rgba(var(--v-theme-primary), 0.4);
 }
@@ -68,12 +121,8 @@ body {
 }
 
 /* Softer row striping */
-.v-theme--dark .v-data-table tbody tr:nth-of-type(even) {
-  background-color: rgba(255, 255, 255, 0.025);
-}
-
-.v-theme--light .v-data-table tbody tr:nth-of-type(even) {
-  background-color: rgba(0, 0, 0, 0.02);
+.v-data-table tbody tr:nth-of-type(even) {
+  background-color: rgba(var(--v-theme-text), 0.03) !important;
 }
 
 /* Spacious cells */
@@ -127,6 +176,10 @@ body {
 .v-data-table tr + tr > td.px-0 {
   background-color: rgba(var(--v-theme-background), 0.6);
   padding: 16px 8px !important;
+}
+
+.section-panel .v-data-table tr + tr > td.px-0 {
+  background-color: rgba(var(--v-theme-background-lighten-1), 0.6);
 }
 
 .hunt-table tr + tr > td.px-0 {

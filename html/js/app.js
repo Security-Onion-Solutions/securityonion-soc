@@ -57,6 +57,8 @@ $(document).ready(function () {
           indeterminateIcon: 'mb-1 fa-square-minus'
         },
         VSelect: {
+          variant: 'outlined',
+          density: 'compact',
           menuIcon: 'fas fa-caret-down',
         },
         VCombobox: {
@@ -72,7 +74,13 @@ $(document).ready(function () {
           lastIcon: 'fa-forward-step',
         },
         VTextField: {
+          variant: 'outlined',
+          density: 'compact',
           clearIcon: 'fas fa-circle-xmark',
+        },
+        VTextarea: {
+          variant: 'outlined',
+          density: 'compact',
         },
         VTreeview: {
           collapseIcon: '',

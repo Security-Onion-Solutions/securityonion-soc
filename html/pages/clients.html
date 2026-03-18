@@ -32,8 +32,8 @@
 						<v-container grid-list-sm class="pa-4">
 							<v-row>
 								<v-col xs12>
-									<v-text-field variant="underlined" id="name-input" v-model="form.name" :placeholder="i18n.name" :autofocus="true" :rules="[rules.required, rules.name]" data-aid="clients_create_dialog_name"></v-text-field>
-									<v-text-field variant="underlined" id="note-input" v-model="form.note" :placeholder="i18n.note" :rules="[rules.note]" data-aid="clients_create_dialog_note"></v-text-field>
+									<v-text-field id="name-input" v-model="form.name" :placeholder="i18n.name" :autofocus="true" :rules="[rules.required, rules.name]" data-aid="clients_create_dialog_name"></v-text-field>
+									<v-text-field id="note-input" v-model="form.note" :placeholder="i18n.note" :rules="[rules.note]" data-aid="clients_create_dialog_note"></v-text-field>
 								</v-col>
 							</v-row>
 						</v-container>
@@ -130,9 +130,9 @@
 											<v-card-title v-text="i18n.profile"></v-card-title>
 											<v-card-text>
 												<v-form v-model="form.valid">
-													<v-text-field variant="underlined" id="name-input" v-model="form.name" :placeholder="i18n.name" :rules="[rules.required,rules.name]" data-aid="clients_details_name_input"></v-text-field>
-													<v-text-field variant="underlined" id="note-input" v-model="form.note" :placeholder="i18n.note" :rules="[rules.note]" data-aid="clients_details_note_input"></v-text-field>
-													<v-text-field variant="underlined" id="search-username-input" v-model="form.searchUsername" :placeholder="i18n.searchUsername" persistent-hint :hint="i18n.searchUsernameHelp" :rules="[rules.searchUsername]" data-aid="clients_details_searchusername_input"></v-text-field>
+													<v-text-field id="name-input" v-model="form.name" :placeholder="i18n.name" :rules="[rules.required,rules.name]" data-aid="clients_details_name_input"></v-text-field>
+													<v-text-field id="note-input" v-model="form.note" :placeholder="i18n.note" :rules="[rules.note]" data-aid="clients_details_note_input"></v-text-field>
+													<v-text-field id="search-username-input" v-model="form.searchUsername" :placeholder="i18n.searchUsername" persistent-hint :hint="i18n.searchUsernameHelp" :rules="[rules.searchUsername]" data-aid="clients_details_searchusername_input"></v-text-field>
 													<v-btn :disabled="!form.valid" id="update-client-button" @click="update(item)" v-text="i18n.update" data-aid="clients_details_submit" class="mt-3" ></v-btn>
 												</v-form>
 											</v-card-text>

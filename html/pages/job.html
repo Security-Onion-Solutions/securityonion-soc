@@ -107,7 +107,7 @@
 	<v-row v-if="job.status == 1" data-aid="job_details_completed">
 		<v-col>
 			<v-toolbar fixed class="elevation-0 pl-5">
-				<v-text-field variant="underlined" density="compact" v-model="search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="job_details_filter"></v-text-field>
+				<v-text-field density="compact" v-model="search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="job_details_filter"></v-text-field>
 				<v-spacer></v-spacer>
 				<v-btn-toggle v-model="packetOptions" class="transparent" multiple>
 					<v-btn value="packets" icon :title="i18n.packetStreamHelp" text @click="captureLayoutAsStream()" data-aid="job_details_stream_toggle">

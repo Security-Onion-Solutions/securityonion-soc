@@ -9,10 +9,10 @@
 					<v-expansion-panel-title id="gridOptionsHeader" expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up">{{i18n.options}}</v-expansion-panel-title>
 					<v-expansion-panel-text>
 						<span data-aid="grid_options_timezone_select">
-							<v-select variant="underlined" id="gridTimezone" @update:model-value="zone = $event; saveTimezone()" v-model="zone" :items="$root.timezones" :hint="i18n.timezoneHelp" persistent-hint prepend-icon="fa-user-clock" data-aid="grid_options_timezone_select"></v-select>
+							<v-select id="gridTimezone" @update:model-value="zone = $event; saveTimezone()" v-model="zone" :items="$root.timezones" :hint="i18n.timezoneHelp" persistent-hint prepend-icon="fa-user-clock" data-aid="grid_options_timezone_select"></v-select>
 						</span>
 						<span data-aid="grid_options_more_columns_toggle">
-							<v-checkbox variant="underlined" id="moreColumns" v-model="moreColumns" :hint="i18n.moreColumnsHelp" persistent-hint :label="i18n.moreColumns" data-aid="grid_more_columns_toggle"></v-checkbox>
+							<v-checkbox id="moreColumns" v-model="moreColumns" :hint="i18n.moreColumnsHelp" persistent-hint :label="i18n.moreColumns" data-aid="grid_more_columns_toggle"></v-checkbox>
 						</span>
 					</v-expansion-panel-text>
 				</v-expansion-panel>
@@ -42,7 +42,7 @@
 							<v-col lg="6" class="d-none d-lg-block">
 							</v-col>
 							<v-col cols="12" lg="6">
-								<v-text-field variant="underlined" v-model="gridFilter" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="grid_filter"></v-text-field>
+								<v-text-field v-model="gridFilter" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="grid_filter"></v-text-field>
 							</v-col>
 						</v-row>
 					</v-container>
