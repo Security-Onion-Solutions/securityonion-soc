@@ -91,7 +91,7 @@
 					<v-textarea :clearable="isAdvanced()" :auto-grow="isAdvanced()" :readonly="!isAdvanced()" :disabled="loading()" @input="queryAltered = true"
 						@change="queryModified" class="mx-2" v-model="$data[getDisplayedQueryVar()]" :hint="isAdvanced() ? (queryAltered ? i18n.queryHelp : $data['queryName']) : ''"
 						rows="1" persistent-hint prepend-icon="fa-search" @keydown.enter.prevent="submitQuery" id="hunt-query-input" ref="huntQueryInput" :data-aid="'query_input_' + category"
-						>
+						no-resize>
 						<template #prepend-inner>
 							<v-menu density="compact" @update:model-value="saveMenuScrollPos($event, '#hunt-query-dropdown-list')">
 								<template #activator="{ props: menuProps }">
@@ -299,7 +299,7 @@
 													</tr>
 												</template>
 												<template v-if="!group.maximized" #item="{ item, index, isExpanded, toggleExpand, internalItem }">
-													<tr>
+													<tr :class="{'seamless-expanded-row': isExpanded(internalItem), 'main-row': true}">
 														<td v-if="aggregationActionsEnabled">
 															<v-btn id="expandEvent" v-if="isCategory('alerts')" variant="text" icon size="x-small" @click="toggleExpand(internalItem); if (isExpanded) fetchNewestEvent(item)" class="theme-icon" :aria-label="$root.replaceActionVar(i18n.expandRow, 'expanded_state', (isExpanded(internalItem) ? i18n.expanded : ''))">
 																<v-icon v-if="isExpanded(internalItem)" :alt="i18n.eventExpand" :title="i18n.eventExpandHelp" :data-aid="'group_item_collapse_' + category">fa-angle-down</v-icon>
@@ -346,7 +346,7 @@
 													</tr>
 												</template>
 												<template #expanded-row="{ columns, item, index }">
-													<tr>
+													<tr class="expanded-row">
 														<td :colspan="columns.length" class="px-0" :data-aid="'events_fields_' + category">
 															<div class="expanded-row-wrapper">
 																<v-tabs :height="isCategory('alerts') ? undefined : 0" v-model="activeTabs[item._row_idx_]" @update:model-value="if (activeTabs[item._row_idx_] === 'playbook') loadPlaybook(item.newest, item._row_idx_);">
@@ -387,7 +387,7 @@
 																		</div>
 																		<v-data-table v-else density="compact" hide-default-header hide-default-footer :headers="expandedHeaders" :items="getExpandedData(item.newest)" items-per-page="-1">
 																			<template #item="{ item: kvp }">
-																				<tr :data-aid="'events_field_' + category + '_' + kvp.key" class="pt-3">
+																				<tr :data-aid="'events_field_' + category + '_' + kvp.key" class="pt-3 main-row">
 																					<td class="expansion">
 																						<div class="d-inline-block semi-transparent">
 																							<v-btn :id="'groupby_' + kvp.key" :disabled="!canQuery(kvp.key)" variant="text" size="x-small" icon :to="buildGroupByNewRoute(kvp.key)" :data-aid="'events_field_groupby_toggle_' + category" class="remove-overlay">
@@ -568,7 +568,7 @@
 										</tr>
 									</template>
 									<template #item="{ item, index, isExpanded, toggleExpand, internalItem }">
-										<tr :data-aid="'events_item_' + category">
+										<tr :class="{'seamless-expanded-row': isExpanded(internalItem), 'main-row': true}" :data-aid="'events_item_' + category">
 											<td>
 												<v-btn id="expandEvent" variant="text" icon size="x-small" @click="toggleExpand(internalItem)" class="theme-icon" :aria-label="$root.replaceActionVar(i18n.expandRow, 'expanded_state', (isExpanded(internalItem) ? i18n.expanded : ''))">
 													<v-icon v-if="isExpanded(internalItem)" :alt="i18n.eventExpand" :title="i18n.eventExpandHelp" :data-aid="'events_item_collapse_' + category">fa-angle-down</v-icon>
@@ -616,7 +616,7 @@
 										</tr>
 									</template>
 									<template #expanded-row="{ columns, item, index }">
-										<tr>
+										<tr class="expanded-row">
 											<td :colspan="columns.length" class="px-0" :data-aid="'events_fields_' + category">
 												<div class="expanded-row-wrapper">
 													<v-tabs :height="isCategory('alerts') ? undefined : 0" v-model="activeTabs[item._row_idx_]" @update:model-value="if (activeTabs[item._row_idx_] === 'playbook') loadPlaybook(item, item._row_idx_);">
@@ -657,7 +657,7 @@
 															</div>
 															<v-data-table v-else density="compact" hide-default-header hide-default-footer :headers="expandedHeaders" :items="getExpandedData(item)" items-per-page="-1">
 																<template #item="{ item: kvp }">
-																	<tr :data-aid="'events_field_' + category + '_' + kvp.key" class="pt-3">
+																	<tr :data-aid="'events_field_' + category + '_' + kvp.key" class="pt-3 main-row">
 																		<td class="expansion">
 																			<div class="d-inline-block semi-transparent">
 																				<v-btn :id="'groupby_' + kvp.key" :disabled="!canQuery(kvp.key)" variant="text" size="x-small" icon :to="buildGroupByNewRoute(kvp.key)" :data-aid="'events_field_groupby_toggle_' + category" class="remove-overlay">

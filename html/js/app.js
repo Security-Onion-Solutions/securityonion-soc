@@ -72,7 +72,6 @@ $(document).ready(function () {
           prevIcon: 'fa-chevron-left',
           nextIcon: 'fa-chevron-right',
           lastIcon: 'fa-forward-step',
-          striped: 'odd',
         },
         VTextField: {
           variant: 'outlined',

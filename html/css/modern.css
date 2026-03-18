@@ -134,6 +134,11 @@ body {
   background-color: rgb(var(--v-theme-table_background)) !important;
 }
 
+.v-theme--dark tr:hover,
+.v-theme--light tr:hover {
+  background-color: rgba(var(--v-theme-primary), 0.15) !important;
+}
+
 /* Spacious cells */
 .v-data-table td {
   padding: 12px 16px !important;
@@ -183,12 +188,17 @@ body {
    ============================================================ */
 
 .v-data-table tr + tr > td.px-0 {
-  background-color: rgba(var(--v-theme-background), 0.6);
   padding: 16px 8px !important;
 }
 
-.section-panel .v-data-table tr + tr > td.px-0 {
-  background-color: rgba(var(--v-theme-background-lighten-1), 0.6);
+.v-table__wrapper>table>tbody>tr:nth-child(odd of .main-row),
+.v-table__wrapper>table>tbody>tr:nth-child(odd of .main-row) + tr.expanded-row {
+  /* How Vuetify makes the stripes */
+  background-image: linear-gradient(0deg, rgba(var(--v-border-color), var(--v-hover-opacity)), rgba(var(--v-border-color), var(--v-hover-opacity)));
+}
+
+.seamless-expanded-row td {
+  border-bottom: 0px !important;
 }
 
 .hunt-table tr + tr > td.px-0 {
