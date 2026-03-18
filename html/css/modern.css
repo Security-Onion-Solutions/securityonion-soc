@@ -47,7 +47,7 @@ body {
   border: 1px solid rgba(var(--v-theme-text), 0.08);
   border-radius: 0.75rem;
   overflow: hidden;
-  background-color: rgba(var(--v-theme-background-lighten-1), 0.6);
+  background-color: rgba(var(--v-theme-background-lighten-1));
 }
 
 .section-panel > .v-toolbar {
@@ -61,6 +61,7 @@ body {
   align-items: center !important;
   padding-top: 4px;
   padding-bottom: 4px;
+  background-color: rgba(var(--v-theme-drawer_background));
 }
 
 .section-panel canvas {
