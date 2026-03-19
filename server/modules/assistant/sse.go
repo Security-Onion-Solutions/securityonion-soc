@@ -89,6 +89,7 @@ type streamProcessor struct {
 	hasOpenBlock         bool
 	firstSend            bool
 	writingOpenAIToolUse bool
+	receivedFnArgs       bool
 }
 
 func newStreamProcessor(writer *sseEventWriter, model string, wg *sync.WaitGroup) *streamProcessor {
@@ -192,11 +193,26 @@ func (p *streamProcessor) processOpenAIChunk(resp responses.ResponseStreamEventU
 			callId := resp.Item.CallID
 			name := resp.Item.Name
 
+			p.receivedFnArgs = false
 			p.writeOpenAIFunctionHeader(callId, name)
 		}
 	case "response.function_call_arguments.delta":
-		if p.hasOpenBlock {
+		if content == "" && resp.Arguments != "" {
+			content = resp.Arguments
+		}
+		if p.hasOpenBlock && content != "" {
+			p.receivedFnArgs = true
 			p.writeOpenAIFunctionInput(content)
+		}
+	case "response.function_call_arguments.done":
+		// Only use .done arguments if no deltas were received (some models skip deltas)
+		if !p.receivedFnArgs {
+			if content == "" && resp.Arguments != "" {
+				content = resp.Arguments
+			}
+			if p.hasOpenBlock && content != "" {
+				p.writeOpenAIFunctionInput(content)
+			}
 		}
 	case "response.output_item.done":
 		if p.writingOpenAIToolUse {
@@ -333,6 +349,7 @@ func (p *streamProcessor) writeOpenAIFunctionStop() {
 	p.contentBlockIndex++
 	p.hasOpenBlock = false
 	p.writingOpenAIToolUse = false
+	p.receivedFnArgs = false
 }
 
 // closeOpenBlock closes the currently open text/thought block

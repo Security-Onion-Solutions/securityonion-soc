@@ -852,6 +852,13 @@ func newFunctionArgumentsDelta(jsonContent string) responses.ResponseStreamEvent
 	}
 }
 
+func newFunctionArgumentsDone(jsonContent string) responses.ResponseStreamEventUnion {
+	return responses.ResponseStreamEventUnion{
+		Type:      "response.function_call_arguments.done",
+		Arguments: jsonContent,
+	}
+}
+
 func newFunctionCallDone() responses.ResponseStreamEventUnion {
 	return responses.ResponseStreamEventUnion{
 		Type: "response.output_item.done",
@@ -1125,6 +1132,71 @@ func TestProcessOpenAIChunk_FunctionCalls(t *testing.T) {
 				"hasOpenBlock": true,
 			},
 		},
+		{
+			name: "done after deltas is ignored",
+			events: []responses.ResponseStreamEventUnion{
+				newFunctionCallStart("call_dup", "search"),
+				newFunctionArgumentsDelta(`{"qu`),
+				newFunctionArgumentsDelta(`ery": "test"}`),
+				newFunctionArgumentsDone(`{"query": "test"}`),
+				newFunctionCallDone(),
+			},
+			expectedInOutput: []string{
+				`"name":"search"`,
+				`"partial_json":"{\"qu"`,
+				`"partial_json":"ery\": \"test\"}"`,
+				`"type":"content_block_stop"`,
+			},
+			expectedState: map[string]interface{}{
+				"hasOpenBlock":         false,
+				"writingOpenAIToolUse": false,
+				"contentBlockIndex":    1,
+				"receivedFnArgs":       false, // Reset after stop
+			},
+		},
+		{
+			name: "done without deltas sends args",
+			events: []responses.ResponseStreamEventUnion{
+				newFunctionCallStart("call_nodelta", "lookup"),
+				newFunctionArgumentsDone(`{"id": 42}`),
+				newFunctionCallDone(),
+			},
+			expectedInOutput: []string{
+				`"name":"lookup"`,
+				`"partial_json":"{\"id\": 42}"`,
+				`"type":"content_block_stop"`,
+			},
+			expectedState: map[string]interface{}{
+				"hasOpenBlock":         false,
+				"writingOpenAIToolUse": false,
+				"contentBlockIndex":    1,
+			},
+		},
+		{
+			name: "receivedFnArgs resets between function calls",
+			events: []responses.ResponseStreamEventUnion{
+				// First call: uses deltas, done should be ignored
+				newFunctionCallStart("call_a", "func_a"),
+				newFunctionArgumentsDelta(`{"x": 1}`),
+				newFunctionArgumentsDone(`{"x": 1}`),
+				newFunctionCallDone(),
+				// Second call: no deltas, done should be used
+				newFunctionCallStart("call_b", "func_b"),
+				newFunctionArgumentsDone(`{"y": 2}`),
+				newFunctionCallDone(),
+			},
+			expectedInOutput: []string{
+				`"name":"func_a"`,
+				`"name":"func_b"`,
+				`"partial_json":"{\"x\": 1}"`,
+				`"partial_json":"{\"y\": 2}"`,
+			},
+			expectedState: map[string]interface{}{
+				"hasOpenBlock":         false,
+				"writingOpenAIToolUse": false,
+				"contentBlockIndex":    2,
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -1155,8 +1227,38 @@ func TestProcessOpenAIChunk_FunctionCalls(t *testing.T) {
 			if expectedIndex, ok := tt.expectedState["contentBlockIndex"].(int); ok {
 				assert.Equal(t, expectedIndex, processor.contentBlockIndex)
 			}
+			if expectedReceivedFnArgs, ok := tt.expectedState["receivedFnArgs"].(bool); ok {
+				assert.Equal(t, expectedReceivedFnArgs, processor.receivedFnArgs)
+			}
 		})
 	}
+}
+
+func TestProcessOpenAIChunk_FunctionArgsDedupCount(t *testing.T) {
+	// Verify that when deltas are sent, the done event does NOT add another input_json_delta
+	var buf strings.Builder
+	writer := newSSEEventWriter(log.Log, &buf)
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	processor := newStreamProcessor(writer, "gpt-4", wg)
+
+	events := []responses.ResponseStreamEventUnion{
+		newFunctionCallStart("call_count", "search"),
+		newFunctionArgumentsDelta(`{"query"`),
+		newFunctionArgumentsDelta(`: "test"}`),
+		newFunctionArgumentsDone(`{"query": "test"}`),
+		newFunctionCallDone(),
+	}
+
+	for _, event := range events {
+		_, err := processor.processOpenAIChunk(event)
+		assert.NoError(t, err)
+	}
+
+	output := buf.String()
+	// Should have exactly 2 input_json_delta events (from the two deltas), not 3
+	count := strings.Count(output, `"type":"input_json_delta"`)
+	assert.Equal(t, 2, count, "done event should not add a third input_json_delta when deltas were received")
 }
 
 func TestFinalizeOpenAI(t *testing.T) {
