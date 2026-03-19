@@ -37,6 +37,7 @@ body {
 
 .so-toolbar {
   border-radius: 0.75rem;
+  background-color: rgba(var(--v-theme-drawer_background)) !important;
 }
 
 /* ============================================================
@@ -91,10 +92,6 @@ body {
 .v-textarea.v-input--horizontal > .v-input__append {
   align-self: start !important;
   padding-top: 0 !important;
-}
-
-.blue-border {
-  border: 2px solid rgba(var(--v-theme-primary), 0.4);
 }
 
 .theme-text {
