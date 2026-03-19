@@ -127,7 +127,7 @@ func (a *OpenAIResponsesAdapter) SendMessage(ctx context.Context, req *model.Cha
 				Type:  "tool_use",
 				Id:    toolUseId,
 				Name:  item.Name,
-				Input: json.RawMessage(item.Arguments),
+				Input: json.RawMessage([]byte(item.AsFunctionCall().Arguments)),
 			})
 		}
 	}

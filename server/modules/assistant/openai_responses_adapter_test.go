@@ -1159,12 +1159,18 @@ func createMockTextOutput(text string) responses.ResponseOutputItemUnion {
 }
 
 func createMockFunctionCallOutput(callId, name string, args string) responses.ResponseOutputItemUnion {
-	return responses.ResponseOutputItemUnion{
-		Type:      "function_call",
-		CallID:    callId,
-		Name:      name,
-		Arguments: args,
+	rawJSON, err := json.Marshal(map[string]any{
+		"type": "function_call",
+		"call_id": callId,
+		"name": name,
+		"arguments": args,
+	})
+	if err != nil {
+		panic(err)
 	}
+	var item responses.ResponseOutputItemUnion
+	_ = json.Unmarshal(rawJSON, &item)
+	return item
 }
 
 func createMockOpenAIResponse(outputItems []responses.ResponseOutputItemUnion, usage *responses.ResponseUsage, status string, incompleteReason string) *responses.Response {
