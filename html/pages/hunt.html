@@ -1,8 +1,7 @@
 <v-container fluid data-aid="hunt_screen">
 	<v-row>
 		<v-col :cols="showDetailsPanel ? 9 : 12">
-			<v-row>
-				<v-dialog v-model="showOptionsDialog" max-width="540">
+			<v-dialog v-model="showOptionsDialog" max-width="540">
 					<v-card class="options-dialog">
 						<v-card-title>{{i18n.options}}</v-card-title>
 						<v-card-text data-aid="hunt_options">
@@ -55,21 +54,6 @@
 						</v-card-actions>
 					</v-card>
 				</v-dialog>
-				<v-col cols="12" lg="2" align="end">
-					<div v-if="isCategory('detections') && loaded" :data-aid="'event_health_' + category">
-						<h5 v-for="engine in $root.getDetectionEngines()" class="my-0">
-							{{ i18n['cc_' + engine] }}:
-							<router-link :to="{ name: 'hunt', query: {q: buildDetectionEngineHuntQuery(engine), t: moment().subtract(1, 'hours').format(i18n.timePickerFormat) + ' - ' + moment().format(i18n.timePickerFormat), socExcludeToggle: false, detectionsExcludeToggle: false }}" style="text-decoration: none; cursor: 'pointer'" :class="$root.getDetectionEngineStatusClass(engine)" :data-aid="'detection_engine_status_' + engine" :title="i18n['detectionEngine' + $root.getDetectionEngineStatus(engine) + 'Help']">
-								{{ i18n['detectionEngine' + $root.getDetectionEngineStatus(engine)] }}
-								<v-icon v-if="$root.isDetectionEngineStatusUnhealthy(engine)" :title="i18n.detectionEngineStatusHelp" :data-aid="'detections_engine_status_link_' + engine">fa-crosshairs</v-icon>
-							</router-link>
-						</h5>
-					</div>
-				</v-col>
-				<v-col cols="12" lg="2" align="end">
-					<h4 v-if="loaded" :data-aid="'event_total_' + category">{{ i18n.eventTotal }} {{ totalEvents.toLocaleString() }}</h4>
-				</v-col>
-			</v-row>
 			<v-row align="start" class="no-print" style="gap: 8px; flex-wrap: nowrap;">
 				<v-col style="flex: 1 1 auto; min-width: 0;" class="pa-0">
 					<v-toolbar class="so-toolbar elevation-0" variant="flat">
@@ -177,7 +161,76 @@
 					</v-toolbar>
 				</v-col>
 			</v-row>
-			<v-row v-if="loaded && (queryFilters.length > 0 || queryGroupBys.length > 0 || querySortBys.length > 0)">
+			<v-row v-if="loaded" class="ga-3">
+				<v-col>
+					<div class="so-stat-pill" data-aid="stat_total_alerts">
+						<div class="so-stat-text">
+							<div class="so-stat-label">{{ i18n.eventTotal }}</div>
+							<div class="so-stat-value">{{ totalEvents.toLocaleString() }}</div>
+						</div>
+						<v-icon class="so-stat-icon">fa-circle-check</v-icon>
+					</div>
+				</v-col>
+				<v-col v-if="isCategory('alerts')">
+					<div class="so-stat-pill" data-aid="stat_alert_groups">
+						<div class="so-stat-text">
+							<div class="so-stat-label">{{ i18n.alertGroups }}</div>
+							<div class="so-stat-value">{{ alertGroupCount.toLocaleString() }}</div>
+						</div>
+						<v-icon class="so-stat-icon">fa-layer-group</v-icon>
+					</div>
+				</v-col>
+				<v-col v-if="isCategory('alerts') || isCategory('cases')">
+					<div class="so-stat-pill" data-aid="stat_critical_high">
+						<div class="so-stat-text">
+							<div class="so-stat-label">{{ i18n.criticalHigh }}</div>
+							<div class="so-stat-value">{{ criticalHighCount.toLocaleString() }}</div>
+						</div>
+						<v-icon class="so-stat-icon">fa-exclamation-circle</v-icon>
+					</div>
+				</v-col>
+				<v-col v-if="isCategory('alerts')">
+					<div class="so-stat-pill" data-aid="stat_status">
+						<div class="so-stat-text">
+							<div class="so-stat-label">{{ i18n.status }}</div>
+							<div class="so-stat-value">{{ alertStatus }}</div>
+						</div>
+						<v-icon class="so-stat-icon">fa-bell</v-icon>
+					</div>
+				</v-col>
+				<v-col v-for="engine in (isCategory('detections') ? $root.getDetectionEngines() : [])" :key="engine">
+					<div class="so-stat-pill" :data-aid="'engine_status_' + engine">
+						<div class="so-stat-text">
+							<div class="so-stat-label">{{ i18n['cc_' + engine] }}</div>
+							<div class="so-stat-value">
+								<router-link :to="{ name: 'hunt', query: {q: buildDetectionEngineHuntQuery(engine), t: moment().subtract(1, 'hours').format(i18n.timePickerFormat) + ' - ' + moment().format(i18n.timePickerFormat), socExcludeToggle: false, detectionsExcludeToggle: false }}" style="text-decoration: none; cursor: 'pointer'" :class="$root.getDetectionEngineStatusClass(engine)" :data-aid="'detection_engine_status_' + engine" :title="i18n['detectionEngine' + $root.getDetectionEngineStatus(engine) + 'Help']">
+									{{ i18n['detectionEngine' + $root.getDetectionEngineStatus(engine)] }}
+								</router-link>
+							</div>
+						</div>
+						<v-icon class="so-stat-icon">fa-shield-halved</v-icon>
+					</div>
+				</v-col>
+				<v-col v-if="isCategory('dashboards') || isCategory('hunt')">
+					<div class="so-stat-pill" data-aid="stat_exclude">
+						<div class="so-stat-text">
+							<div class="so-stat-label">{{ i18n.filterExclude }}</div>
+							<div class="so-stat-value">{{ excludeStatus }}</div>
+						</div>
+						<v-icon class="so-stat-icon">fa-ban</v-icon>
+					</div>
+				</v-col>
+				<v-col v-if="isCategory('cases')">
+					<div class="so-stat-pill" data-aid="stat_cases_recently_updated">
+						<div class="so-stat-text">
+							<div class="so-stat-label">{{ i18n.recentlyUpdated }}</div>
+							<div class="so-stat-value">{{ mruCases.length }}</div>
+						</div>
+						<v-icon class="so-stat-icon">fa-clock</v-icon>
+					</div>
+				</v-col>
+			</v-row>
+			<v-row v-if="loaded && (queryFilters.length > 0 || querySortBys.length > 0)">
 				<v-col cols="12">
 					<span v-for="filter in queryFilters" :key="filter" :data-aid="'filter_chip_' + category">
 						<v-chip density="compact" class="filter mx-1 my-1" color="primary" closable="true" @click:close="removeFilter(filter)">{{ formatSafeString(filter) }}</v-chip>
@@ -187,8 +240,8 @@
 					</span>
 				</v-col>
 			</v-row>
-			<v-row>
-				<v-col id="graphs" class="section-panel" v-if="loaded && isAdvanced() && !isCategory('detections')" :data-aid="'graphs_' + category">
+			<v-row v-if="loaded && isAdvanced() && !isCategory('detections')">
+				<v-col id="graphs" class="section-panel" :data-aid="'graphs_' + category">
 					<v-toolbar density="compact" variant="flat">
 						<v-toolbar-title>{{ i18n.standardMetrics }}</v-toolbar-title>
 						<v-spacer></v-spacer>
@@ -219,8 +272,8 @@
 					</v-expand-transition>
 				</v-col>
 			</v-row>
-			<v-row>
-				<v-col ref="eventColumn" id="group-metrics" class="section-panel" v-if="metricsEnabled" :data-aid="'groups_' + category">
+			<v-row v-if="metricsEnabled">
+				<v-col ref="eventColumn" id="group-metrics" class="section-panel" :data-aid="'groups_' + category">
 					<v-toolbar v-if="isAdvanced()" density="compact" variant="flat">
 						<v-toolbar-title>{{ i18n.groups }}</v-toolbar-title>
 						<v-spacer></v-spacer>
@@ -491,8 +544,8 @@
 					</v-expand-transition>
 				</v-col>
 			</v-row>
-			<v-row>
-				<v-col id="events" class="section-panel" v-if="loaded && eventsEnabled && (isAdvanced() || !metricsEnabled)" :data-aid="'events_' + category">
+			<v-row v-if="loaded && eventsEnabled && (isAdvanced() || !metricsEnabled)">
+				<v-col id="events" class="section-panel" :data-aid="'events_' + category">
 					<v-toolbar v-if="isAdvanced()" density="compact" variant="flat">
 						<v-toolbar-title>{{ isCategory("detections") || isCategory("alerts") || isCategory("cases") ? i18n[category] : i18n.events }}</v-toolbar-title>
 						<v-spacer></v-spacer>

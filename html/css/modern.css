@@ -52,6 +52,41 @@ body {
   color: rgba(var(--v-theme-text));
 }
 
+/* Stat pills — small label above, large value below, icon on right */
+.so-stat-pill {
+  border-radius: 0.75rem;
+  background-color: rgba(var(--v-theme-drawer_background));
+  padding: 12px 16px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.so-stat-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.so-stat-label {
+  font-size: 0.85rem;
+  opacity: 0.7;
+  white-space: nowrap;
+  margin-bottom: 4px;
+}
+
+.so-stat-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.so-stat-icon.v-icon {
+  opacity: 0.4;
+  font-size: 1.6rem !important;
+  margin-left: 12px;
+}
+
 /* ============================================================
    Section Panel — encloses toolbar header + expandable content
    ============================================================ */

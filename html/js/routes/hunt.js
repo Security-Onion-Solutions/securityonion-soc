@@ -258,6 +258,59 @@ const huntComponent = {
     'advanced': 'saveLocalSettings',
     'gridLayoutExpansions': 'saveLocalSettings',
   },
+  computed: {
+    alertGroupCount() {
+      return this.groupBys.length > 0 && this.groupBys[0].data ? this.groupBys[0].data.length : 0;
+    },
+    criticalHighCount() {
+      return this.eventData.filter(e => {
+        var sev = (e['event.severity_label'] || e['so_case.severity'] || '').toLowerCase();
+        return sev === 'critical' || sev === 'high';
+      }).length;
+    },
+    alertStatus() {
+      const ackBool = this.isFilterToggleEnabled('acknowledged');
+      const escBool = this.isFilterToggleEnabled('escalated');
+      const invBool = this.isFilterToggleEnabled('investigated');
+      let retStr = "";
+      if (ackBool && escBool) {
+        retStr = this.i18n.escalated;
+      } else if (escBool) {
+        retStr = this.i18n.escalated + ", " + this.i18n.unacknowledged;
+      } else if (ackBool) {
+        retStr = this.i18n.acknowledged;
+      } else {
+        retStr = this.i18n.unacknowledged;
+      }
+      if (invBool) {
+        retStr += ", " + this.i18n.aiInvestigated;
+      }
+      return retStr;
+    },
+    excludeStatus() {
+      const excludeCase = this.isFilterToggleEnabled('caseExcludeToggle');
+      const excludeDet = this.isFilterToggleEnabled('detectionsExcludeToggle');
+      const excludeSoc = this.isFilterToggleEnabled('socExcludeToggle');
+      const excludeAI = this.isFilterToggleEnabled('onionaiExcludeToggle');
+      let retStr = "";
+      if (excludeCase) {
+        retStr = this.i18n.caseData;
+      }
+      if (excludeDet) {
+        retStr = retStr ? retStr + ', ' + this.i18n.detectionsData : this.i18n.detectionsData;
+      }
+      if (excludeSoc) {
+        retStr = retStr ? retStr + ', ' + this.i18n.socLogs : this.i18n.socLogs;
+      }
+      if (excludeAI) {
+        retStr = retStr ? retStr + ', ' + this.i18n.onionaiData : this.i18n.onionaiData;
+      }
+      if (!retStr) {
+        retStr = this.i18n.none;
+      }
+      return retStr;
+    },
+  },
   methods: {
     moment: moment,
     isAdvanced() {
