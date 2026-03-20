@@ -26,18 +26,30 @@ body {
   font-optical-sizing: auto;
 }
 
-.options-bar {
+.options-dialog {
   border-radius: 0.75rem;
-  border: 1px solid rgba(var(--v-theme-primary), 0.4);
-}
-
-.options-bar.v-expansion-panel--active {
-  border-radius: 0.75rem;
+  padding: 8px
 }
 
 .so-toolbar {
   border-radius: 0.75rem;
   background-color: rgba(var(--v-theme-drawer_background)) !important;
+}
+
+.so-toolbar > .v-toolbar__content {
+  height: auto !important;
+  min-height: 64px !important;
+  padding: 8px 12px;
+  align-items: center !important;
+}
+
+.so-toolbar .v-toolbar__content > .v-btn {
+  border-radius: 999px !important;
+}
+
+.create-button, .docs-button, .hunt-button, .options-button {
+  background-color: rgba(var(--v-theme-primary));
+  color: rgba(var(--v-theme-text));
 }
 
 /* ============================================================

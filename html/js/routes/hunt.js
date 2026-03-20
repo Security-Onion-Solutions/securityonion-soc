@@ -108,6 +108,7 @@ const huntComponent = {
 
       autohunt: true,
       showFullQuery: true,
+      showOptionsDialog: false,
 
       filterRouteInclude: "",
       filterRouteExclude: "",

@@ -34,9 +34,10 @@
           </v-app-bar-nav-icon>
           <v-toolbar-title>
             <a href="/" id="title" data-aid="nav_overview">
-              <img class="pt-1" :title="i18n.product" :alt="i18n.product" height="45" src="images/so-logo.svg"></img>
+              <img class="pt-1" :title="i18n.product" :alt="i18n.product" height="36" src="images/so-logo.svg"></img>
             </a>
           </v-toolbar-title>
+          <h2 v-if="i18n[$route.name]" class="app-bar-title" v-text="i18n[$route.name]"></h2>
           <v-spacer></v-spacer>
           <div id="connection-indicator" v-if="!connected || reconnecting">
             <v-icon class="mr-2" color="warning">fa-satellite-dish</v-icon>
@@ -240,7 +241,7 @@
             </router-link>
           </span>
         </v-footer>
-        <v-navigation-drawer v-model="toolbar" width="200" clipped overflow app class="theme-links">
+        <v-navigation-drawer v-model="toolbar" width="205" clipped overflow app class="theme-links">
           <v-list density="compact" :disabled="forceUserOtp">
             <v-list-item data-aid="nav_overview" @click="" to="/">
               <template #prepend>
