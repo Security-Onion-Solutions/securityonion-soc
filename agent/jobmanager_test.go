@@ -7,15 +7,19 @@ package agent
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 	"github.com/stretchr/testify/assert"
@@ -208,4 +212,99 @@ func TestLookupMgmtMac(t *testing.T) {
 	jm := &JobManager{}
 	mac := jm.lookupMgmtMac(nic)
 	assert.Equal(t, "missing", mac)
+}
+
+type concurrentTestProcessor struct {
+	concurrentCount int
+	maxCount        int
+	mu              sync.Mutex
+}
+
+func (jp *concurrentTestProcessor) ProcessJob(job *model.Job, reader io.ReadCloser) (io.ReadCloser, error) {
+	jp.mu.Lock()
+	jp.concurrentCount++
+	if jp.concurrentCount > jp.maxCount {
+		jp.maxCount = jp.concurrentCount
+	}
+	jp.mu.Unlock()
+
+	time.Sleep(100 * time.Millisecond)
+
+	jp.mu.Lock()
+	jp.concurrentCount--
+	jp.mu.Unlock()
+
+	return reader, nil
+}
+
+func (jp *concurrentTestProcessor) CleanupJob(*model.Job) {}
+
+func (jp *concurrentTestProcessor) GetDataEpoch() time.Time {
+	return time.Now()
+}
+
+func TestTaskPoolConcurrency(t *testing.T) {
+	var mu sync.Mutex
+	var pollCount int
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" && strings.HasPrefix(r.URL.Path, "/api/node") {
+			mu.Lock()
+			count := pollCount
+			pollCount++
+			mu.Unlock()
+
+			if count < 3 { // serve 3 jobs total
+				job := model.Job{Id: count + 1}
+				json.NewEncoder(w).Encode(job)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			return
+		} else if strings.HasPrefix(r.URL.Path, "/api/stream") {
+			w.WriteHeader(http.StatusOK)
+		} else if r.Method == "PUT" && strings.HasPrefix(r.URL.Path, "/api/job") {
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	defer ts.Close()
+
+	agentCfg := &config.AgentConfig{
+		TaskPoolSize:   2,
+		PollIntervalMs: 10,
+		ServerUrl:      ts.URL,
+	}
+
+	client := web.NewClient(ts.URL, false)
+	client.Auth = &ClientAuthMock{}
+
+	jm := &JobManager{
+		agent: &Agent{
+			Config: agentCfg,
+			Client: client,
+		},
+		node: &model.Node{},
+	}
+
+	proc := &concurrentTestProcessor{}
+	jm.AddJobProcessor(proc)
+
+	go func() {
+		jm.Start()
+	}()
+
+	// wait longer than it takes to process 3 concurrent jobs with pool
+	time.Sleep(300 * time.Millisecond)
+
+	jm.Stop()
+
+	// Need a small grace period to allow the final HTTP or channels to finish
+	time.Sleep(100 * time.Millisecond)
+
+	proc.mu.Lock()
+	defer proc.mu.Unlock()
+
+	// Pool size is 2, and we have 3 total jobs. Max concurrency shouldn't exceed 2.
+	assert.LessOrEqual(t, proc.maxCount, 2)
+	assert.Greater(t, proc.maxCount, 0)
 }
