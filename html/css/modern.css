@@ -127,6 +127,11 @@ body {
   background-color: rgba(var(--v-theme-background-lighten-1), 0.6);
 }
 
+#details-col .v-expansion-panels,
+#details-col .v-expansion-panel {
+  border-radius: 0.75rem !important;
+}
+
 /* ============================================================
    Text Fields & Selects — rounded globally
    ============================================================ */
