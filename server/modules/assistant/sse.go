@@ -221,7 +221,6 @@ func (p *streamProcessor) processOpenAIChunk(resp responses.ResponseStreamEventU
 	}
 
 	return thoughtSigs, nil
-
 }
 
 // writeError writes an error event and done message

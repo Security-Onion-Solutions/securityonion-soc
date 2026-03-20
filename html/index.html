@@ -233,11 +233,11 @@
               <span data-aid="license_unprovisioned"> {{ i18n.licenseShort }}</span>
             </router-link>
             <router-link v-else-if="licenseStatus == 'active'" id="licenseLink" to="/license" class="footer">
-              <v-chip x-small class="rounded-sm" density="compact" :color="colorLicenseStatus(licenseStatus)" :data-aid="'license_status_' + licenseStatus">{{ licenseKey.name }}</v-chip>
+              <v-chip x-small class="rounded-sm" density="compact" variant="flat" :color="colorLicenseStatus(licenseStatus)" :data-aid="'license_status_' + licenseStatus">{{ licenseKey.name }}</v-chip>
             </router-link>
             <router-link v-else id="licenseLink" to="/license" class="footer">
               <span class="d-lg-inline pr-2">{{ i18n.license }}:</span>
-              <v-chip x-small class="rounded-sm" density="compact" :color="colorLicenseStatus(licenseStatus)" :data-aid="'license_status_' + licenseStatus">{{ localizeMessage(licenseStatus) }}</v-chip>
+              <v-chip x-small class="rounded-sm" density="compact" variant="flat" :color="colorLicenseStatus(licenseStatus)" :data-aid="'license_status_' + licenseStatus">{{ localizeMessage(licenseStatus) }}</v-chip>
             </router-link>
           </span>
         </v-footer>

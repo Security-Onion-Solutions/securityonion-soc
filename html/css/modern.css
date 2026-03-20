@@ -27,8 +27,12 @@ body {
 }
 
 .options-dialog {
-  border-radius: 0.75rem;
+  border-radius: 0.75rem !important;
   padding: 8px
+}
+
+.v-app-bar {
+  background-color: rgb(var(--v-theme-nav_background)) !important;
 }
 
 .so-toolbar {
@@ -49,7 +53,7 @@ body {
 
 .create-button, .docs-button, .hunt-button, .options-button {
   background-color: rgba(var(--v-theme-primary));
-  color: rgba(var(--v-theme-text));
+  color: rgba(var(--v-theme-button_icon_color)) !important;
 }
 
 /* Stat pills — small label above, large value below, icon on right */
@@ -85,6 +89,10 @@ body {
   opacity: 0.4;
   font-size: 1.6rem !important;
   margin-left: 12px;
+}
+
+.v-theme--light.v-footer a {
+  color: rgb(var(--v-theme-primary-darken-3)) !important;
 }
 
 /* ============================================================

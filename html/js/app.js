@@ -110,7 +110,7 @@ $(document).ready(function () {
         variations: {
           colors: ['primary', 'secondary', 'drawer_background', 'background'],
           lighten: 3,
-          darken: 2,
+          darken: 3,
         },
         themes: {
           light: {
@@ -127,6 +127,7 @@ $(document).ready(function () {
               background: '#ffffff',
               text: '#000000',
               icon: '#7f7f7f',
+              button_icon_color: '#ffffff',
             },
           },
           dark: {
@@ -138,11 +139,12 @@ $(document).ready(function () {
               error: '#ff5252',
               nav_background: '#000000',
               nav: '#ffffff',
-              table_background: '#1A2030',
+              table_background: '#222a3f',
               drawer_background: '#252B3B',
               background: '#0B1019',
               text: '#ffffff',
               icon: '#8B96A8',
+              button_icon_color: '#000000',
             },
           },
         },
@@ -741,7 +743,7 @@ $(document).ready(function () {
             if (this.licenseKey.name != SECURITYONION_PRO) {
               return "white";
             }
-            return "success";
+            return 'success';
           }
           if (value == LICENSE_STATUS_EXCEEDED) return "error";
           if (value == LICENSE_STATUS_EXPIRED) return "warning";
