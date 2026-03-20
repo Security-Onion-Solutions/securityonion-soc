@@ -41,16 +41,18 @@ type FileDatastoreImpl struct {
 	nodesById               map[string]*model.Node
 	ready                   bool
 	nextJobId               int
+	jobProcessTime          map[int]time.Time
 	lock                    sync.RWMutex
 }
 
 func NewFileDatastoreImpl(srv *server.Server) *FileDatastoreImpl {
 	return &FileDatastoreImpl{
 		server:       srv,
-		jobsByNodeId: make(map[string][]*model.Job),
-		jobsById:     make(map[int]*model.Job),
-		nodesById:    make(map[string]*model.Node),
-		lock:         sync.RWMutex{},
+		jobsByNodeId:   make(map[string][]*model.Job),
+		jobsById:       make(map[int]*model.Job),
+		nodesById:      make(map[string]*model.Node),
+		jobProcessTime: make(map[int]time.Time),
+		lock:           sync.RWMutex{},
 	}
 }
 
@@ -143,8 +145,8 @@ func (datastore *FileDatastoreImpl) UpdateNode(ctx context.Context, newNode *mod
 }
 
 func (datastore *FileDatastoreImpl) GetNextJob(ctx context.Context, nodeId string) *model.Job {
-	datastore.lock.RLock()
-	defer datastore.lock.RUnlock()
+	datastore.lock.Lock()
+	defer datastore.lock.Unlock()
 	var nextJob *model.Job
 
 	if err := datastore.server.CheckAuthorized(ctx, "process", "jobs"); err == nil {
@@ -158,10 +160,21 @@ func (datastore *FileDatastoreImpl) GetNextJob(ctx context.Context, nodeId strin
 					continue
 				}
 
+				if lastPollTime, ok := datastore.jobProcessTime[job.Id]; ok {
+					if time.Since(lastPollTime) < time.Duration(datastore.server.Config.JobPollRetryIntervalMs)*time.Millisecond {
+						continue
+					}
+				}
+
 				nextJob = job
 			}
 		}
 	}
+
+	if nextJob != nil {
+		datastore.jobProcessTime[nextJob.Id] = time.Now()
+	}
+
 	return nextJob
 }
 
