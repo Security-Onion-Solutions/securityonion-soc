@@ -307,11 +307,10 @@ func TestConvertHistoryToOpenAI(t *testing.T) {
 				resp := result.(responses.ResponseNewParamsInputUnion)
 				require.Len(t, resp.OfInputItemList, 1)
 				item := resp.OfInputItemList[0]
-				require.NotNil(t, item.OfInputMessage)
-				assert.Equal(t, "assistant", item.OfInputMessage.Role)
-				require.Len(t, item.OfInputMessage.Content, 1)
-				require.NotNil(t, item.OfInputMessage.Content[0].OfInputText)
-				assert.Equal(t, "Hi there!", item.OfInputMessage.Content[0].OfInputText.Text)
+				require.NotNil(t, item.OfOutputMessage)
+				require.Len(t, item.OfOutputMessage.Content, 1)
+				require.NotNil(t, item.OfOutputMessage.Content[0].OfOutputText)
+				assert.Equal(t, "Hi there!", item.OfOutputMessage.Content[0].OfOutputText.Text)
 			},
 		},
 		{
@@ -340,9 +339,8 @@ func TestConvertHistoryToOpenAI(t *testing.T) {
 				assert.Equal(t, "user", resp.OfInputItemList[0].OfInputMessage.Role)
 				assert.Equal(t, "First message", resp.OfInputItemList[0].OfInputMessage.Content[0].OfInputText.Text)
 				// Second message
-				assert.NotNil(t, resp.OfInputItemList[1].OfInputMessage)
-				assert.Equal(t, "assistant", resp.OfInputItemList[1].OfInputMessage.Role)
-				assert.Equal(t, "Second message", resp.OfInputItemList[1].OfInputMessage.Content[0].OfInputText.Text)
+				assert.NotNil(t, resp.OfInputItemList[1].OfOutputMessage)
+				assert.Equal(t, "Second message", resp.OfInputItemList[1].OfOutputMessage.Content[0].OfOutputText.Text)
 			},
 		},
 		{
@@ -387,7 +385,7 @@ func TestConvertHistoryToOpenAI(t *testing.T) {
 				require.Len(t, resp.OfInputItemList, 1)
 				item := resp.OfInputItemList[0]
 				require.NotNil(t, item.OfFunctionCall)
-				assert.Equal(t, "call_123", item.OfFunctionCall.ID.Or(""))
+				assert.Equal(t, "call_123", item.OfFunctionCall.CallID)
 				assert.Equal(t, "get_weather", item.OfFunctionCall.Name)
 				assert.JSONEq(t, `{"location": "San Francisco"}`, item.OfFunctionCall.Arguments)
 			},
@@ -411,13 +409,7 @@ func TestConvertHistoryToOpenAI(t *testing.T) {
 			},
 			validate: func(t *testing.T, result interface{}) {
 				resp := result.(responses.ResponseNewParamsInputUnion)
-				// Should have one item but it should be empty since the JSON was invalid and skipped
-				require.Len(t, resp.OfInputItemList, 1)
-				item := resp.OfInputItemList[0]
-				// All fields should be nil since the block was skipped
-				assert.Nil(t, item.OfInputMessage)
-				assert.Nil(t, item.OfFunctionCall)
-				assert.Nil(t, item.OfFunctionCallOutput)
+				require.Len(t, resp.OfInputItemList, 0)
 			},
 		},
 		{
@@ -505,12 +497,7 @@ func TestConvertHistoryToOpenAI(t *testing.T) {
 			},
 			validate: func(t *testing.T, result interface{}) {
 				resp := result.(responses.ResponseNewParamsInputUnion)
-				// Should have one item but it should be empty since content was empty
-				require.Len(t, resp.OfInputItemList, 1)
-				item := resp.OfInputItemList[0]
-				assert.Nil(t, item.OfInputMessage)
-				assert.Nil(t, item.OfFunctionCall)
-				assert.Nil(t, item.OfFunctionCallOutput)
+				require.Len(t, resp.OfInputItemList, 0)
 			},
 		},
 		{
@@ -527,10 +514,7 @@ func TestConvertHistoryToOpenAI(t *testing.T) {
 			},
 			validate: func(t *testing.T, result interface{}) {
 				resp := result.(responses.ResponseNewParamsInputUnion)
-				// Should have one item but no message content (nbsp is filtered out)
-				require.Len(t, resp.OfInputItemList, 1)
-				item := resp.OfInputItemList[0]
-				assert.Nil(t, item.OfInputMessage)
+				require.Len(t, resp.OfInputItemList, 0)
 			},
 		},
 		{
@@ -581,13 +565,15 @@ func TestConvertHistoryToOpenAI(t *testing.T) {
 			},
 			validate: func(t *testing.T, result interface{}) {
 				resp := result.(responses.ResponseNewParamsInputUnion)
-				require.Len(t, resp.OfInputItemList, 1)
-				item := resp.OfInputItemList[0]
-				// Both text message and function call should be present on same item
-				require.NotNil(t, item.OfInputMessage)
-				assert.Equal(t, "Let me check that for you", item.OfInputMessage.Content[0].OfInputText.Text)
-				require.NotNil(t, item.OfFunctionCall)
-				assert.Equal(t, "search", item.OfFunctionCall.Name)
+				require.Len(t, resp.OfInputItemList, 2)
+				// First item: text as output message
+				require.NotNil(t, resp.OfInputItemList[0].OfOutputMessage)
+				assert.Equal(t, "Let me check that for you", resp.OfInputItemList[0].OfOutputMessage.Content[0].OfOutputText.Text)
+				assert.Nil(t, resp.OfInputItemList[0].OfFunctionCall)
+				// Second item: function call
+				require.NotNil(t, resp.OfInputItemList[1].OfFunctionCall)
+				assert.Equal(t, "search", resp.OfInputItemList[1].OfFunctionCall.Name)
+				assert.Nil(t, resp.OfInputItemList[1].OfOutputMessage)
 			},
 		},
 		{
@@ -604,10 +590,7 @@ func TestConvertHistoryToOpenAI(t *testing.T) {
 			},
 			validate: func(t *testing.T, result interface{}) {
 				resp := result.(responses.ResponseNewParamsInputUnion)
-				// Empty string should be filtered out
-				require.Len(t, resp.OfInputItemList, 1)
-				item := resp.OfInputItemList[0]
-				assert.Nil(t, item.OfInputMessage)
+				require.Len(t, resp.OfInputItemList, 0)
 			},
 		},
 		{
@@ -622,11 +605,7 @@ func TestConvertHistoryToOpenAI(t *testing.T) {
 			},
 			validate: func(t *testing.T, result interface{}) {
 				resp := result.(responses.ResponseNewParamsInputUnion)
-				// Should have one empty item
-				require.Len(t, resp.OfInputItemList, 1)
-				item := resp.OfInputItemList[0]
-				assert.Nil(t, item.OfInputMessage)
-				assert.Nil(t, item.OfFunctionCall)
+				require.Len(t, resp.OfInputItemList, 0)
 			},
 		},
 		{
@@ -654,13 +633,14 @@ func TestConvertHistoryToOpenAI(t *testing.T) {
 			},
 			validate: func(t *testing.T, result interface{}) {
 				resp := result.(responses.ResponseNewParamsInputUnion)
-				// Only one OfFunctionCall per history item - last one wins
-				require.Len(t, resp.OfInputItemList, 1)
-				item := resp.OfInputItemList[0]
-				require.NotNil(t, item.OfFunctionCall)
-				// Should be the last tool call since it overwrites previous ones
-				assert.Equal(t, "calculate", item.OfFunctionCall.Name)
-				assert.Equal(t, "call_2", item.OfFunctionCall.ID.Or(""))
+				// Each tool_use becomes its own item
+				require.Len(t, resp.OfInputItemList, 2)
+				require.NotNil(t, resp.OfInputItemList[0].OfFunctionCall)
+				assert.Equal(t, "search", resp.OfInputItemList[0].OfFunctionCall.Name)
+				assert.Equal(t, "call_1", resp.OfInputItemList[0].OfFunctionCall.CallID)
+				require.NotNil(t, resp.OfInputItemList[1].OfFunctionCall)
+				assert.Equal(t, "calculate", resp.OfInputItemList[1].OfFunctionCall.Name)
+				assert.Equal(t, "call_2", resp.OfInputItemList[1].OfFunctionCall.CallID)
 			},
 		},
 	}
