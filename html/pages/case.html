@@ -1,9 +1,4 @@
 <v-container fluid data-aid="case_screen">
-	<v-toolbar v-if="$root.isLicensed($root.FEAT_RPT)" class="elevation-0 theme-background-lighten-1" fixed>
-		<v-btn :title="i18n.exportCaseHelp" class="ml-3" variant="flat" @click.stop="exportCase" id="export-case-button" data-aid="case_export">
-			<v-icon color="secondary">fa-file-export</v-icon>
-		</v-btn>
-	</v-toolbar>
 	<div class="mx-sm-12 mx-lg-6 mt-2 mb-6 mb-md-1" data-aid="case_title_input">
 		<div tabindex="0" class="case detail-field clicktoedit d-flex align-start pa-2" v-if="!isEdit('case-title')"
 			@click="startEdit('case-title-input', caseObj.title, 'case-title', 'title', modifyCase)" @keypress.space.prevent="startEdit('case-title-input', caseObj.title, 'case-title', 'title', modifyCase)">
@@ -38,7 +33,7 @@
 					</div>
 				</div>
 				<div class="d-flex flex-column" v-if="isEdit('case-description')">
-					<div class="mb-2 pt-1 px-2 rounded rounded-md contrast-bg d-flex flex-column">
+					<div class="mb-2 pt-2 pb-3 px-3 rounded rounded-md contrast-bg d-flex flex-column">
 						<div class="d-flex flex-column flex-sm-row align-sm-center align-self-start text-body-2 mb-1 ml-1">
 							<a class="case markdown-icon" href="https://www.markdownguide.org/cheat-sheet/" target="_blank" :title="i18n.markdownFormattingSupported"><v-icon>fab fa-markdown</v-icon></a>
 						</div>
@@ -84,22 +79,25 @@
 					<v-tabs-window-item value="comments" data-aid="case_comments">
 						<v-row>
 							<v-col>
-								<v-toolbar class="elevation-0 theme-background-lighten-1" fixed>
-									<v-btn variant="flat" v-bind:title.attr="i18n.addCommentHelp" @click.stop="prepareForInput('comment-input')" id="add-comment-button" data-aid="case_comment_new" class="ml-3">
-										<v-icon color="primary">fa-plus</v-icon>
+								<v-toolbar class="so-toolbar elevation-0" fixed>
+									<v-btn variant="flat" icon v-bind:title.attr="i18n.addCommentHelp" @click.stop="prepareForInput('comment-input')" id="add-comment-button" data-aid="case_comment_new" class="circle-button mx-2">
+										<v-icon>fa-plus</v-icon>
 									</v-btn>
-									<v-btn variant="flat" class="mx-2" :title="i18n.refreshCommentsHelp" @click.stop="reloadAssociation('comments', true)" id="refresh-comments-button" data-aid="case_comments_refresh">
-										<v-icon color="secondary">fa-sync</v-icon>
+									<v-btn variant="flat" icon class="circle-button mx-2" :title="i18n.refreshCommentsHelp" @click.stop="reloadAssociation('comments', true)" id="refresh-comments-button" data-aid="case_comments_refresh">
+										<v-icon>fa-sync</v-icon>
+									</v-btn>
+									<v-btn v-if="$root.isLicensed($root.FEAT_RPT)" :title="i18n.exportCaseHelp" class="circle-button mx-2" variant="flat" icon @click.stop="exportCase" id="export-case-button" data-aid="case_export">
+										<v-icon>fa-file-export</v-icon>
 									</v-btn>
 								</v-toolbar>
 							</v-col>
 						</v-row>
 						<div id="comment-list">
 							<template v-for="(comment, index) in associations.comments">
-								<div class="mb-8" v-if="shouldRenderAssociationRecord('comments', comment, index)">
+								<div class="mb-4" v-if="shouldRenderAssociationRecord('comments', comment, index)">
 									<div class="d-flex flex-column align-start my-4">
 										<v-col class="d-flex flex-column align-start pt-2 pt-md-0 full-width">
-											<div class="mt-1 mt-md-3 pt-1 pb-2 px-2 contrast-bg rounded rounded-md full-width">
+											<div class="mt-1 mt-md-3 pa-3 contrast-bg rounded rounded-md full-width">
 												<div class="d-flex flex-column align-start">
 													<div v-if="!isEdit(`comment-${index}`)" class="case d-block comment-body mt-2" data-aid="case_comment_display">
 														<div class="mb-2">
@@ -197,7 +195,7 @@
 						</div>
 						<div class="d-flex flex-column align-start my-4 no-print" data-aid="case_new_comment">
 							<v-col id="new-comment" class="d-flex flex-column align-start pt-2 pt-md-0 full-width">
-								<div class="mt-1 mt-md-3 pb-3 pt-1 contrast-bg rounded rounded-md" style="width: 100%;">
+								<div class="mt-1 mt-md-3 px-2 pb-3 pt-1 contrast-bg rounded rounded-md" style="width: 100%;">
 									<div class="d-flex flex-column align-start">
 										<div class="d-inline-flex align-center mt-3 mx-2 mb-4">
 											<v-avatar color="primary" size="28" class="mr-2 white-text" data-aid="case_new_comment_avatar">
@@ -242,19 +240,24 @@
 					<v-tabs-window-item value="attachments" data-aid="case_attachments">
 						<v-row v-if="!isAdding('attachments')">
 							<v-col>
-								<v-toolbar class="elevation-0 theme-background-lighten-1" fixed>
-									<v-btn :title="i18n.addAttachmentHelp" variant="flat" @click.stop="enableAdding('attachments')" id="add-attachment-button" data-aid="case_attachments_new" class="ml-3">
-										<v-icon color="primary">fa-plus</v-icon>
+								<v-toolbar class="so-toolbar elevation-0" fixed>
+									<v-btn :title="i18n.addAttachmentHelp" variant="flat" icon @click.stop="enableAdding('attachments')" id="add-attachment-button" data-aid="case_attachments_new" class="circle-button mx-2">
+										<v-icon>fa-plus</v-icon>
 									</v-btn>
-									<v-btn class="mx-2" :title="i18n.refreshAttachmentsHelp" variant="flat" @click.stop="reloadAssociation('attachments', true)" id="refresh-attachments-button" data-aid="case_attachments_refresh">
-										<v-icon color="secondary">fa-sync</v-icon>
+									<v-btn class="circle-button mx-2" :title="i18n.refreshAttachmentsHelp" variant="flat" icon @click.stop="reloadAssociation('attachments', true)" id="refresh-attachments-button" data-aid="case_attachments_refresh">
+										<v-icon>fa-sync</v-icon>
 									</v-btn>
+									<v-btn v-if="$root.isLicensed($root.FEAT_RPT)" :title="i18n.exportCaseHelp" class="circle-button mx-2" variant="flat" icon @click.stop="exportCase" id="export-case-button" data-aid="case_export">
+										<v-icon>fa-file-export</v-icon>
+									</v-btn>
+									<v-spacer></v-spacer>
+									<v-text-field v-model="associatedTable['attachments'].search" clearable prepend-inner-icon="fa-filter" :label="i18n.filterResults" hide-details class="toolbar-field no-print ml-2" style="max-width: 250px;" data-aid="case_attachments_filter_input"></v-text-field>
 								</v-toolbar>
 							</v-col>
 						</v-row>
 						<v-row v-if="isAdding('attachments')" data-aid="case_attachments_new_display">
 							<v-col>
-								<div class="ml-1 ml-md-3 py-3 px-4 contrast-bg rounded rounded-md" style="width: 100%;">
+								<div class="py-3 px-4 contrast-bg rounded rounded-md" style="width: 100%;">
 									<div class="d-flex flex-column align-start">
 										<div class="d-flex flex-column" style="width: 100%;">
 											<div class="mb-2">
@@ -322,220 +325,221 @@
 								</div>
 							</v-col>
 						</v-row>
-						<v-text-field v-model="associatedTable['attachments'].search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details class="mx-4" data-aid="case_attachments_filter_input"></v-text-field>
-						<v-data-table ref="attachmentsTable" must-sort :sort-by="associatedTable['attachments'].sortBy" v-model:items-per-page="associatedTable['attachments'].itemsPerPage"
-							:search="associatedTable['attachments'].search" :items-per-page-options="associatedTable['attachments'].itemsPerPageOptions" :headers="associatedTable['attachments'].headers"
-							:items="associations['attachments']" item-key="id" :loading="associatedTable['attachments'].loading" class="case-table">
-							<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
-								<tr>
-									<template v-for="header in columns" :key="header.key">
-										<th :class="{'is-sorted': isSorted(header)}" :data-aid="'case_attachments_header_' + header?.value?.toLowerCase()">
-											<span @click="toggleSort(header)">
-												{{ header.title }}
-											</span>
-											<template v-if="isSorted(header)">
-												<v-icon>
-													{{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down'}}
-												</v-icon>
-											</template>
-										</th>
-									</template>
-								</tr>
-							</template>
-							<template #item="{ index, item, isExpanded, toggleExpand, internalItem }">
-								<tr>
-									<td class="associated actions">
-										<v-btn :id="`attachments-${index}-expand`" icon variant="text" size="x-small" icon @click="toggleExpand(internalItem)">
-											<v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_attachments_collapse">fa-angle-down</v-icon>
-											<v-icon v-else :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_attachments_expand">fa-angle-right</v-icon>
-										</v-btn>
-									</td>
-									<td class="associated">{{ formatDateTime(item.createTime) }}</td>
-									<td class="associated">{{ formatDateTime(item.updateTime) }}</td>
-									<td class="associated">{{ item.value }}</td>
-								</tr>
-							</template>
-							<template #expanded-row="{ props, index, item }">
-								<tr>
-									<td :colspan="4" class="case">
-										<v-container fluid class="py-1">
-											<template v-if="item.artifactType != 'assistant_chat'">
-												<a :target="$root.target('soc-download')" :href="`/api/case/artifactstream?id=${item.id}`" class="no-underline" data-aid="case_attachment_download">
-													<v-icon class="theme-text" style="vertical-align: text-top;">fa-download</v-icon>
-													{{ item.value }}
-													({{ formatCount(item.streamLength) }}
-													{{ i18n.bytes }})
-												</a>
-												<div class="mt-4">
-													<div class="font-weight-bold">{{i18n.sha256}}: </div>
-													<div :id="`attachments-${index}-sha256`" class="case">
-														{{ withDefault(item.sha256, i18n.unknown) }}
-														<v-icon class="ml-1" @click="$root.copyToClipboard(item.sha256)" :title="i18n.copyToClipboard" data-aid="case_attachment_copy_sha256">fa-copy</v-icon>
-														<v-icon class="ml-1" @click="populateAddObservableForm('sha256', item.sha256)" :title="i18n.addObservable" data-aid="case_attachment_add_observable_sha256">fa-eye</v-icon>
+						<v-row>
+							<v-data-table ref="attachmentsTable" must-sort :sort-by="associatedTable['attachments'].sortBy" v-model:items-per-page="associatedTable['attachments'].itemsPerPage"
+								:search="associatedTable['attachments'].search" :items-per-page-options="associatedTable['attachments'].itemsPerPageOptions" :headers="associatedTable['attachments'].headers"
+								:items="associations['attachments']" item-key="id" :loading="associatedTable['attachments'].loading" class="case-table">
+								<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
+									<tr>
+										<template v-for="header in columns" :key="header.key">
+											<th :class="{'is-sorted': isSorted(header)}" :data-aid="'case_attachments_header_' + header?.value?.toLowerCase()">
+												<span @click="toggleSort(header)">
+													{{ header.title }}
+												</span>
+												<template v-if="isSorted(header)">
+													<v-icon>
+														{{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down'}}
+													</v-icon>
+												</template>
+											</th>
+										</template>
+									</tr>
+								</template>
+								<template #item="{ index, item, isExpanded, toggleExpand, internalItem }">
+									<tr>
+										<td class="associated actions">
+											<v-btn :id="`attachments-${index}-expand`" icon variant="text" size="x-small" @click="toggleExpand(internalItem)">
+												<v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_attachments_collapse">fa-angle-down</v-icon>
+												<v-icon v-else :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_attachments_expand">fa-angle-right</v-icon>
+											</v-btn>
+										</td>
+										<td class="associated">{{ formatDateTime(item.createTime) }}</td>
+										<td class="associated">{{ formatDateTime(item.updateTime) }}</td>
+										<td class="associated">{{ item.value }}</td>
+									</tr>
+								</template>
+								<template #expanded-row="{ props, index, item }">
+									<tr>
+										<td :colspan="4" class="case">
+											<v-container fluid class="py-1">
+												<template v-if="item.artifactType != 'assistant_chat'">
+													<a :target="$root.target('soc-download')" :href="`/api/case/artifactstream?id=${item.id}`" class="no-underline" data-aid="case_attachment_download">
+														<v-icon class="theme-text" style="vertical-align: text-top;">fa-download</v-icon>
+														{{ item.value }}
+														({{ formatCount(item.streamLength) }}
+														{{ i18n.bytes }})
+													</a>
+													<div class="mt-4">
+														<div class="font-weight-bold">{{i18n.sha256}}: </div>
+														<div :id="`attachments-${index}-sha256`" class="case">
+															{{ withDefault(item.sha256, i18n.unknown) }}
+															<v-icon class="ml-1" @click="$root.copyToClipboard(item.sha256)" :title="i18n.copyToClipboard" data-aid="case_attachment_copy_sha256">fa-copy</v-icon>
+															<v-icon class="ml-1" @click="populateAddObservableForm('sha256', item.sha256)" :title="i18n.addObservable" data-aid="case_attachment_add_observable_sha256">fa-eye</v-icon>
+														</div>
+													</div>
+													<div class="mt-2">
+														<div class="font-weight-bold">{{i18n.sha1}}: </div>
+														<div :id="`attachments-${index}-sha1`" class="case">
+															{{ withDefault(item.sha1, i18n.unknown) }}
+															<v-icon class="ml-1" @click="$root.copyToClipboard(item.sha1)" :title="i18n.copyToClipboard" data-aid="case_attachment_copy_sha1">fa-copy</v-icon>
+															<v-icon class="ml-1" @click="populateAddObservableForm('sha1', item.sha1)" :title="i18n.addObservable" data-aid="case_attachment_add_observable_sha1">fa-eye</v-icon>
+														</div>
+													</div>
+													<div class="mt-2">
+														<div class="font-weight-bold">{{i18n.md5}}: </div>
+														<div :id="`attachments-${index}-md5`" class="case">
+															{{ withDefault(item.md5, i18n.unknown) }}
+															<v-icon class="ml-1" @click="$root.copyToClipboard(item.md5)" :title="i18n.copyToClipboard" data-aid="case_attachment_copy_md5">fa-copy</v-icon>
+															<v-icon class="ml-1" @click="populateAddObservableForm('md5', item.md5)" :title="i18n.addObservable" data-aid="case_attachment_add_observable_md5">fa-eye</v-icon>
+														</div>
+													</div>
+												</template>
+												<template v-else>
+													<router-link :to="{ name: 'assistant', params: {sessionId: item.value} }" target="_blank">{{i18n.openChatSession}}</router-link>
+												</template>
+											</v-container>
+											<v-container fluid class="pt-2 pb-0" data-aid="case_attachment_description_input">
+												<div tabindex="0" class="clicktoedit" @click="startEdit(`attachments-${index}-description-input`, item.description, `attachments-${index}-description`, 'description', modifyAssociation, ['attachments', item], true)"
+													@keypress.space.prevent="startEdit(`attachments-${index}-description-input`, item.description, `attachments-${index}-description`, 'description', modifyAssociation, ['attachments', item], true)">
+													<div class="font-weight-bold">{{i18n.artifactDescription}}: </div>
+													<div :id="`attachments-${index}-description`" class="case detail-field markdown-body" v-if="!isEdit(`attachments-${index}-description`)" v-html="formatMarkdown(item.description)"></div>
+												</div>
+												<div class="d-flex flex-column" v-if="isEdit(`attachments-${index}-description`)">
+													<v-form v-model="editForm.valid" @submit.prevent>
+														<div class="mb-2">
+															<v-textarea variant="outlined" full-width rows="3" multiline :id="`attachments-${index}-description-input`" hide-details="auto" v-model="editForm.val" persistent-hint :hint="i18n.artifactDescriptionHelp"></v-textarea>
+														</div>
+													</v-form>
+													<div class="d-inline-flex justify-end">
+														<v-btn variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit()" data-aid="case_attachment_description_cancel">
+															{{ i18n.cancel }}
+														</v-btn>
+														<v-btn :disabled="!editForm.valid" variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit(true)" data-aid="case_attachment_description_save">
+															{{ i18n.save }}
+														</v-btn>
 													</div>
 												</div>
-												<div class="mt-2">
-													<div class="font-weight-bold">{{i18n.sha1}}: </div>
-													<div :id="`attachments-${index}-sha1`" class="case">
-														{{ withDefault(item.sha1, i18n.unknown) }}
-														<v-icon class="ml-1" @click="$root.copyToClipboard(item.sha1)" :title="i18n.copyToClipboard" data-aid="case_attachment_copy_sha1">fa-copy</v-icon>
-														<v-icon class="ml-1" @click="populateAddObservableForm('sha1', item.sha1)" :title="i18n.addObservable" data-aid="case_attachment_add_observable_sha1">fa-eye</v-icon>
-													</div>
+											</v-container>
+											<v-container fluid class="py-2" data-aid="case_attachments_tlp_select">
+												<div tabindex="0" class="clicktoedit" @click="startEdit(`attachments-${index}-tlp-input`, item.tlp, `attachments-${index}-tlp`, 'tlp', modifyAssociation, ['attachments', item])"
+													@keypress.space.prevent="startEdit(`attachments-${index}-tlp-input`, item.tlp, `attachments-${index}-tlp`, 'tlp', modifyAssociation, ['attachments', item])">
+													<div class="font-weight-bold">{{i18n.caseTlp}}: </div>
+													<v-chip :id="`attachments-${index}-tlp`" density="compact" :color="colorizeChip(item.tlp)" v-if="!isEdit(`attachments-${index}-tlp`)">{{ withDefault(item.tlp, i18n.unknown) }}</v-chip>
 												</div>
-												<div class="mt-2">
-													<div class="font-weight-bold">{{i18n.md5}}: </div>
-													<div :id="`attachments-${index}-md5`" class="case">
-														{{ withDefault(item.md5, i18n.unknown) }}
-														<v-icon class="ml-1" @click="$root.copyToClipboard(item.md5)" :title="i18n.copyToClipboard" data-aid="case_attachment_copy_md5">fa-copy</v-icon>
-														<v-icon class="ml-1" @click="populateAddObservableForm('md5', item.md5)" :title="i18n.addObservable" data-aid="case_attachment_add_observable_md5">fa-eye</v-icon>
-													</div>
-												</div>
-											</template>
-											<template v-else>
-												<router-link :to="{ name: 'assistant', params: {sessionId: item.value} }" target="_blank">{{i18n.openChatSession}}</router-link>
-											</template>
-										</v-container>
-										<v-container fluid class="pt-2 pb-0" data-aid="case_attachment_description_input">
-											<div tabindex="0" class="clicktoedit" @click="startEdit(`attachments-${index}-description-input`, item.description, `attachments-${index}-description`, 'description', modifyAssociation, ['attachments', item], true)"
-												@keypress.space.prevent="startEdit(`attachments-${index}-description-input`, item.description, `attachments-${index}-description`, 'description', modifyAssociation, ['attachments', item], true)">
-												<div class="font-weight-bold">{{i18n.artifactDescription}}: </div>
-												<div :id="`attachments-${index}-description`" class="case detail-field markdown-body" v-if="!isEdit(`attachments-${index}-description`)" v-html="formatMarkdown(item.description)"></div>
-											</div>
-											<div class="d-flex flex-column" v-if="isEdit(`attachments-${index}-description`)">
-												<v-form v-model="editForm.valid" @submit.prevent>
-													<div class="mb-2">
-														<v-textarea variant="outlined" full-width rows="3" multiline :id="`attachments-${index}-description-input`" hide-details="auto" v-model="editForm.val" persistent-hint :hint="i18n.artifactDescriptionHelp"></v-textarea>
-													</div>
-												</v-form>
-												<div class="d-inline-flex justify-end">
-													<v-btn variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit()" data-aid="case_attachment_description_cancel">
-														{{ i18n.cancel }}
-													</v-btn>
-													<v-btn :disabled="!editForm.valid" variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit(true)" data-aid="case_attachment_description_save">
-														{{ i18n.save }}
-													</v-btn>
-												</div>
-											</div>
-										</v-container>
-										<v-container fluid class="py-2" data-aid="case_attachments_tlp_select">
-											<div tabindex="0" class="clicktoedit" @click="startEdit(`attachments-${index}-tlp-input`, item.tlp, `attachments-${index}-tlp`, 'tlp', modifyAssociation, ['attachments', item])"
-												@keypress.space.prevent="startEdit(`attachments-${index}-tlp-input`, item.tlp, `attachments-${index}-tlp`, 'tlp', modifyAssociation, ['attachments', item])">
-												<div class="font-weight-bold">{{i18n.caseTlp}}: </div>
-												<v-chip :id="`attachments-${index}-tlp`" density="compact" :color="colorizeChip(item.tlp)" v-if="!isEdit(`attachments-${index}-tlp`)">{{ withDefault(item.tlp, i18n.unknown) }}</v-chip>
-											</div>
-											<v-select :id="`attachments-${index}-tlp-input`" v-if="isEdit(`attachments-${index}-tlp`) && !isPresetCustomEnabled('tlp')"
-												density="compact" eager variant="outlined" hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseTlpHelp"
-												v-model="editForm.val"
-												:items="selectList('tlp', item.tlp)"
-												@update:model-value="stopEdit(true)"></v-select>
-											<template v-if="isEdit(`attachments-${index}-tlp`) && isPresetCustomEnabled('tlp')">
-												<v-combobox :id="`attachments-${index}-tlp-input`"
+												<v-select :id="`attachments-${index}-tlp-input`" v-if="isEdit(`attachments-${index}-tlp`) && !isPresetCustomEnabled('tlp')"
 													density="compact" eager variant="outlined" hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseTlpHelp"
 													v-model="editForm.val"
 													:items="selectList('tlp', item.tlp)"
-													@keydown.enter="stopEdit(true)"></v-combobox>
-												<div class="d-inline-flex justify-end">
-													<v-btn variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit()" data-aid="case_attachment_tlp_cancel">
-														{{ i18n.cancel }}
-													</v-btn>
-													<v-btn :disabled="!editForm.valid" variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit(true)" data-aid="case_attachment_tlp_save">
-														{{ i18n.save }}
-													</v-btn>
-												</div>
-											</template>
-										</v-container>
-										<v-container fluid class="py-2" data-aid="case_attachments_tags_select">
-											<div tabindex="0" class="clicktoedit" @click="startEdit(`attachments-${index}-tags-input`, item.tags, `attachments-${index}-tags`, 'tags', modifyAssociation, ['attachments', item])"
-												@keypress.space.prevent="startEdit(`attachments-${index}-tags-input`, item.tags, `attachments-${index}-tags`, 'tags', modifyAssociation, ['attachments', item])">
-												<div class="font-weight-bold">{{i18n.caseTags}}: </div>
-												<div :id="`attachments-${index}-tags`" class="case detail-field mt-1" v-if="!isEdit(`attachments-${index}-tags`)">
-													<v-chip density="compact" class="mx-1" v-for="tag in item.tags" color="primary">{{ tag }}</v-chip>
-												</div>
-											</div>
-											<v-select :id="`attachments-${index}-tags-input`" v-if="isEdit(`attachments-${index}-tags`) && !isPresetCustomEnabled('tags')"
-												density="compact" eager variant="outlined" hide-details="auto" class="case-select" multiple persistent-hint :hint="i18n.caseTagsHelp"
-												v-model="editForm.val"
-												:items="selectList('tags', item.tags)"
-												@update:model-value="stopEdit(true)">
-												<template #item="{ props, item }">
-													<v-list-item v-bind="props">
-														<template #prepend>
-															<v-icon>{{ (editForm.val || []).includes(item.value) ? 'mb-1 fa-square-check' : 'mb-1 fa-regular fa-square' }}</v-icon>
-														</template>
-													</v-list-item>
+													@update:model-value="stopEdit(true)"></v-select>
+												<template v-if="isEdit(`attachments-${index}-tlp`) && isPresetCustomEnabled('tlp')">
+													<v-combobox :id="`attachments-${index}-tlp-input`"
+														density="compact" eager variant="outlined" hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseTlpHelp"
+														v-model="editForm.val"
+														:items="selectList('tlp', item.tlp)"
+														@keydown.enter="stopEdit(true)"></v-combobox>
+													<div class="d-inline-flex justify-end">
+														<v-btn variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit()" data-aid="case_attachment_tlp_cancel">
+															{{ i18n.cancel }}
+														</v-btn>
+														<v-btn :disabled="!editForm.valid" variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit(true)" data-aid="case_attachment_tlp_save">
+															{{ i18n.save }}
+														</v-btn>
+													</div>
 												</template>
-												<template #selection="{ item }">
-													<v-chip density="compact" color="primary">{{item.title}}</v-chip>
-												</template>
-											</v-select>
-											<template v-if="isEdit(`attachments-${index}-tags`) && isPresetCustomEnabled('tags')">
-												<v-combobox :id="`attachments-${index}-tags-input`"
+											</v-container>
+											<v-container fluid class="py-2" data-aid="case_attachments_tags_select">
+												<div tabindex="0" class="clicktoedit" @click="startEdit(`attachments-${index}-tags-input`, item.tags, `attachments-${index}-tags`, 'tags', modifyAssociation, ['attachments', item])"
+													@keypress.space.prevent="startEdit(`attachments-${index}-tags-input`, item.tags, `attachments-${index}-tags`, 'tags', modifyAssociation, ['attachments', item])">
+													<div class="font-weight-bold">{{i18n.caseTags}}: </div>
+													<div :id="`attachments-${index}-tags`" class="case detail-field mt-1" v-if="!isEdit(`attachments-${index}-tags`)">
+														<v-chip density="compact" class="mx-1" v-for="tag in item.tags" color="primary">{{ tag }}</v-chip>
+													</div>
+												</div>
+												<v-select :id="`attachments-${index}-tags-input`" v-if="isEdit(`attachments-${index}-tags`) && !isPresetCustomEnabled('tags')"
 													density="compact" eager variant="outlined" hide-details="auto" class="case-select" multiple persistent-hint :hint="i18n.caseTagsHelp"
 													v-model="editForm.val"
 													:items="selectList('tags', item.tags)"
-													@change="stopEdit(true)">
-													<template #selection="{ item }">
-														<v-chip density="compact" color="primary">{{item.title}}</v-chip>
-													</template>
+													@update:model-value="stopEdit(true)">
 													<template #item="{ props, item }">
-														<v-list-item v-bind="props" class="remove-spacer">
+														<v-list-item v-bind="props">
 															<template #prepend>
 																<v-icon>{{ (editForm.val || []).includes(item.value) ? 'mb-1 fa-square-check' : 'mb-1 fa-regular fa-square' }}</v-icon>
 															</template>
 														</v-list-item>
 													</template>
-												</v-combobox>
-												<div class="d-inline-flex justify-end">
-													<v-btn variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit()" data-aid="case_attachment_tags_cancel">
-														{{ i18n.cancel }}
-													</v-btn>
-													<v-btn :disabled="!editForm.valid" variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit(true)" data-aid="case_attachment_tags_save">
-														{{ i18n.save }}
-													</v-btn>
+													<template #selection="{ item }">
+														<v-chip density="compact" color="primary">{{item.title}}</v-chip>
+													</template>
+												</v-select>
+												<template v-if="isEdit(`attachments-${index}-tags`) && isPresetCustomEnabled('tags')">
+													<v-combobox :id="`attachments-${index}-tags-input`"
+														density="compact" eager variant="outlined" hide-details="auto" class="case-select" multiple persistent-hint :hint="i18n.caseTagsHelp"
+														v-model="editForm.val"
+														:items="selectList('tags', item.tags)"
+														@change="stopEdit(true)">
+														<template #selection="{ item }">
+															<v-chip density="compact" color="primary">{{item.title}}</v-chip>
+														</template>
+														<template #item="{ props, item }">
+															<v-list-item v-bind="props" class="remove-spacer">
+																<template #prepend>
+																	<v-icon>{{ (editForm.val || []).includes(item.value) ? 'mb-1 fa-square-check' : 'mb-1 fa-regular fa-square' }}</v-icon>
+																</template>
+															</v-list-item>
+														</template>
+													</v-combobox>
+													<div class="d-inline-flex justify-end">
+														<v-btn variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit()" data-aid="case_attachment_tags_cancel">
+															{{ i18n.cancel }}
+														</v-btn>
+														<v-btn :disabled="!editForm.valid" variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit(true)" data-aid="case_attachment_tags_save">
+															{{ i18n.save }}
+														</v-btn>
+													</div>
+												</template>
+											</v-container>
+											<v-container v-if="item.artifactType != 'assistant_chat'" fluid class="py-2" data-aid="case_attachments_protected_toggle">
+												<div tabindex="0" class="clicktoedit" @click="startEdit(`attachments-${index}-protected-input`, item.protected, `attachments-${index}-protected`, 'protected', modifyAssociation, ['attachments', item])">
+													<div class="font-weight-bold">{{i18n.artifactProtected}}: </div>
+													<div :id="`attachments-${index}-protected`" class="case detail-field" v-if="!isEdit(`attachments-${index}-protected`)">{{ item.protected ? i18n.yes : i18n.no }}</div>
 												</div>
-											</template>
-										</v-container>
-										<v-container v-if="item.artifactType != 'assistant_chat'" fluid class="py-2" data-aid="case_attachments_protected_toggle">
-											<div tabindex="0" class="clicktoedit" @click="startEdit(`attachments-${index}-protected-input`, item.protected, `attachments-${index}-protected`, 'protected', modifyAssociation, ['attachments', item])">
-												<div class="font-weight-bold">{{i18n.artifactProtected}}: </div>
-												<div :id="`attachments-${index}-protected`" class="case detail-field" v-if="!isEdit(`attachments-${index}-protected`)">{{ item.protected ? i18n.yes : i18n.no }}</div>
-											</div>
-											<v-checkbox :id="`attachments-${index}-protected-input`" v-if="isEdit(`attachments-${index}-protected`)" v-model="editForm.val" @change="stopEdit(true)"
-												persistent-hint :hint="i18n.artifactProtectedHint"></v-checkbox>
-										</v-container>
+												<v-checkbox :id="`attachments-${index}-protected-input`" v-if="isEdit(`attachments-${index}-protected`)" v-model="editForm.val" @change="stopEdit(true)"
+													persistent-hint :hint="i18n.artifactProtectedHint"></v-checkbox>
+											</v-container>
 
-										<div class="d-flex flex-column flex-sm-row align-end align-sm-center align-self-end text-body-2">
-											<v-spacer></v-spacer>
-											<v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white-text" data-aid="case_attachment_avatar_display">
-												<div class="case avatar-font" :title="item.owner">
-													{{ $root.getAvatar(item.owner) }}
+											<div class="d-flex flex-column flex-sm-row align-end align-sm-center align-self-end text-body-2">
+												<v-spacer></v-spacer>
+												<v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white-text" data-aid="case_attachment_avatar_display">
+													<div class="case avatar-font" :title="item.owner">
+														{{ $root.getAvatar(item.owner) }}
+													</div>
+												</v-avatar>
+												<div class="mr-1" data-aid="case_attachment_owner_display">
+													{{ item.owner }}
 												</div>
-											</v-avatar>
-											<div class="mr-1" data-aid="case_attachment_owner_display">
-												{{ item.owner }}
+												<div class="mr-1 d-none d-sm-block">
+													&bull;
+												</div>
+												<div data-aid="case_attachments_timestamp_display">
+													{{ formatDateTime(item.createTime) }}
+												</div>
+												<div v-if="isEdited(item)" :title="$root.formatDateTime(item.updateTime)" class="mx-2" data-aid="case_attachment_edited_display">
+													{{ i18n.edited }}
+												</div>
+												<div class="ml-1 d-flex">
+													<v-btn variant="text" size="x-small" @click="deleteAssociation('attachments', item)"><v-icon class="tiny-icon" color="red" data-aid="case_attachment_delete">fa-circle-xmark</v-icon></v-btn>
+												</div>
 											</div>
-											<div class="mr-1 d-none d-sm-block">
-												&bull;
-											</div>
-											<div data-aid="case_attachments_timestamp_display">
-												{{ formatDateTime(item.createTime) }}
-											</div>
-											<div v-if="isEdited(item)" :title="$root.formatDateTime(item.updateTime)" class="mx-2" data-aid="case_attachment_edited_display">
-												{{ i18n.edited }}
-											</div>
-											<div class="ml-1 d-flex">
-												<v-btn variant="text" size="x-small" @click="deleteAssociation('attachments', item)"><v-icon class="tiny-icon" color="red" data-aid="case_attachment_delete">fa-circle-xmark</v-icon></v-btn>
-											</div>
-										</div>
-									</td>
-								</tr>
-							</template>
-							<template #no-data>
-								<v-alert :value="true" color="info" icon="fa-info" data-aid="case_attachments_no_results_display">
-									{{ i18n.noSearchResults }}
-								</v-alert>
-							</template>
-						</v-data-table>
+										</td>
+									</tr>
+								</template>
+								<template #no-data>
+									<v-alert :value="true" color="info" icon="fa-info" data-aid="case_attachments_no_results_display">
+										{{ i18n.noSearchResults }}
+									</v-alert>
+								</template>
+							</v-data-table>
+						</v-row>
 						<div class="text-xs-center pt-2 d-none">
 								<v-btn v-text="i18n.loadMore" @click="loadAssociation('attachments')" data-aid="case_attachments_load_more"></v-btn>
 						</div>
@@ -544,19 +548,24 @@
 					<v-tabs-window-item value="evidence" data-aid="case_evidence">
 						<v-row v-if="!isAdding('evidence')">
 							<v-col>
-								<v-toolbar class="elevation-0 theme-background-lighten-1" fixed>
-									<v-btn :title="i18n.addObservableHelp" variant="flat" @click.stop="enableAdding('evidence')" id="add-evidence-button" class="ml-3" data-aid="case_evidence_new">
-										<v-icon color="primary">fa-plus</v-icon>
+								<v-toolbar class="so-toolbar elevation-0" fixed>
+									<v-btn :title="i18n.addObservableHelp" icon variant="flat" @click.stop="enableAdding('evidence')" id="add-evidence-button" class="circle-button mx-2" data-aid="case_evidence_new">
+										<v-icon>fa-plus</v-icon>
 									</v-btn>
-									<v-btn class="mx-2" :title="i18n.refreshObservablesHelp" variant="flat" @click.stop="reloadAssociation('evidence', true)" id="refresh-observables-button" data-aid="case_evidence_refresh">
-										<v-icon color="secondary">fa-sync</v-icon>
+									<v-btn class="circle-button mx-2" :title="i18n.refreshObservablesHelp" icon variant="flat" @click.stop="reloadAssociation('evidence', true)" id="refresh-observables-button" data-aid="case_evidence_refresh">
+										<v-icon>fa-sync</v-icon>
 									</v-btn>
+									<v-btn v-if="$root.isLicensed($root.FEAT_RPT)" :title="i18n.exportCaseHelp" class="circle-button mx-2" variant="flat" icon @click.stop="exportCase" id="export-case-button" data-aid="case_export">
+										<v-icon>fa-file-export</v-icon>
+									</v-btn>
+									<v-spacer></v-spacer>
+									<v-text-field v-model="associatedTable['evidence'].search" clearable prepend-inner-icon="fa-filter" :label="i18n.filterResults" hide-details class="toolbar-field no-print ml-2" style="max-width: 250px;" data-aid="case_evidence_filter"></v-text-field>
 								</v-toolbar>
 							</v-col>
 						</v-row>
 						<v-row v-if="isAdding('evidence')">
 							<v-col>
-								<div class="ml-1 ml-md-3 py-3 px-4 contrast-bg rounded rounded-md" style="width: 100%;">
+								<div class="py-3 px-4 contrast-bg rounded rounded-md" style="width: 100%;">
 									<div class="d-flex flex-column align-start">
 										<div class="d-flex flex-column" style="width: 100%;">
 											<div class="mb-2">
@@ -622,175 +631,158 @@
 								</div>
 							</v-col>
 						</v-row>
-						<v-text-field v-model="associatedTable['evidence'].search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="case_evidence_filter"></v-text-field>
-						<v-data-table ref="evidenceTable" v-model:sort-by="associatedTable['evidence'].sortBy" v-model:items-per-page="associatedTable['evidence'].itemsPerPage"
-							:search="associatedTable['evidence'].search" must-sort :items-per-page-options="associatedTable['evidence'].itemsPerPageOptions" :headers="associatedTable['evidence'].headers"
-							:items="associations['evidence']" item-key="id" :loading="associatedTable['evidence'].loading" class="case-table">
-							<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
-								<tr>
-									<template v-for="header in columns" :key="header.key">
-										<th :class="{'is-sorted': isSorted(header)}" :data-aid="'case_evidence_header_' + header?.value?.toLowerCase()">
-											<span @click="toggleSort(header)">
-												{{ header.title }}
-											</span>
-											<template v-if="isSorted(header)">
-												<v-icon>
-													{{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down'}}
-												</v-icon>
-											</template>
-										</th>
-									</template>
-								</tr>
-							</template>
-							<template #item="{ index, item, isExpanded, toggleExpand, internalItem}">
-								<tr>
-									<td class="association actions">
-										<v-btn :id="`evidence-${index}-expand`" variant="text" size="x-small" icon @click="toggleExpand(internalItem)">
-											<v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_evidence_collapse">fa-angle-down</v-icon>
-											<v-icon v-else :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_evidence_expand">fa-angle-right</v-icon>
-										</v-btn>
-										<v-btn class="no-underline" variant="text" size="x-small" icon :to="{ name: 'hunt', query: {q: buildHuntQueryForValue(item.value)}}" :title="i18n.huntForEvidence" data-aid="case_evidence_hunt">
-											<v-icon :title="i18n.huntForEvidence" class="theme-text">fa-crosshairs</v-icon>
-										</v-btn>
-										<v-btn :id="`evidence-${index}-analyze`" icon variant="text" size="x-small" @click="analyze(item)" :disabled="analyzeInProgress(item)" data-aid="case_evidence_analyze">
-											<v-icon v-if="analyzeInProgress(item)" :alt="i18n.analyzeInProgress" :title="i18n.analyzeHelp">fa-clock</v-icon>
-											<v-icon v-if="!analyzeInProgress(item)" :alt="i18n.analyze" :title="i18n.analyzeHelp">fa-bolt</v-icon>
-										</v-btn>
-									</td>
-									<td class="associated" data-aid="case_evidence_create_time_display">{{ formatDateTime(item.createTime) }}</td>
-									<td class="associated" data-aid="case_evidence_update_time_display">{{ formatDateTime(item.updateTime) }}</td>
-									<td class="associated" data-aid="case_evidence_type_display">{{ item.artifactType }}</td>
-									<td class="associated" data-aid="case_evidence_value_display">{{ item.value }}<span class="resolved-host" v-if="item.artifactType === 'ip' && $root.pickHostname(item.value)"><br/>- {{ $root.pickHostname(item.value) }}</span></td>
-								</tr>
-							</template>
-							<template #expanded-row="{ index, item }">
-								<tr>
-									<td :colspan="5" class="case">
-										<v-container fluid class="my-2" v-if="item.artifactType == 'file'">
-											<a :target="$root.target('soc-download')" :href="`/api/case/artifactstream?id=${item.id}`" class="no-underline" data-aid="case_evidence_download">
-												<v-icon style="vertical-align: text-top;">fa-download</v-icon>
-												{{ item.value }}
-												({{ formatCount(item.streamLength) }}
-												{{ i18n.bytes }})
-											</a>
-											<div class="mt-4" data-aid="case_evidence_sha256_display">
-												<div class="font-weight-bold">{{i18n.sha256}}: </div>
-												<div :id="`evidence-${index}-sha256`" class="case">
-													{{ withDefault(item.sha256, i18n.unknown) }}
-													<v-icon class="ml-1" @click="$root.copyToClipboard(item.sha256)" :title="i18n.copyToClipboard" data-aid="case_evidence_copy_sha256">fa-copy</v-icon>
-												</div>
-											</div>
-											<div class="mt-2" data-aid="case_evidence_sha1_display">
-												<div class="font-weight-bold">{{i18n.sha1}}: </div>
-												<div :id="`evidence-${index}-sha1`" class="case">
-													{{ withDefault(item.sha1, i18n.unknown) }}
-													<v-icon class="ml-1" @click="$root.copyToClipboard(item.sha1)" :title="i18n.copyToClipboard" data-aid="case_evidence_copy_sha1">fa-copy</v-icon>
-												</div>
-											</div>
-											<div class="mt-2" data-aid="case_evidence_md5_display">
-												<div class="font-weight-bold">{{i18n.md5}}: </div>
-												<div :id="`evidence-${index}-md5`" class="case">
-													{{ withDefault(item.md5, i18n.unknown) }}
-													<v-icon class="ml-1" @click="$root.copyToClipboard(item.md5)" :title="i18n.copyToClipboard" data-aid="case_evidence_copy_md5">fa-copy</v-icon>
-												</div>
-											</div>
-										</v-container>
-										<v-container fluid class="pt-2 pb-0" v-if="item.artifactType != 'file'">
-											<div>
-												<div class="font-weight-bold">{{i18n.artifactValue}}: </div>
-												<div :id="`evidence-${index}-value`" class="case detail-field" data-aid="case_evidence_value_display">{{ item.value }}</div>
-											</div>
-										</v-container>
-										<v-container fluid class="pt-2 pb-0" data-aid="case_evidence_description_display">
-											<div tabindex="0" class="clicktoedit" @click="startEdit(`evidence-${index}-description-input`, item.description, `evidence-${index}-description`, 'description', modifyAssociation, ['evidence', item], true)"
-												@keypress.space.prevent="startEdit(`evidence-${index}-description-input`, item.description, `evidence-${index}-description`, 'description', modifyAssociation, ['evidence', item], true)">
-												<div class="font-weight-bold">{{i18n.artifactDescription}}: </div>
-												<div :id="`evidence-${index}-description`" class="case detail-field markdown-body" v-if="!isEdit(`evidence-${index}-description`)" v-html="formatMarkdown(item.description)"></div>
-											</div>
-											<div class="d-flex flex-column" v-if="isEdit(`evidence-${index}-description`)">
-												<v-form v-model="editForm.valid" @submit.prevent>
-													<div class="mb-2">
-														<v-textarea variant="outlined" full-width rows="3" multiline :id="`evidence-${index}-description-input`" hide-details="auto" v-model="editForm.val" persistent-hint :hint="i18n.artifactDescriptionHelp" data-aid="case_evidence_description_input"></v-textarea>
+						<v-row>
+							<v-data-table ref="evidenceTable" v-model:sort-by="associatedTable['evidence'].sortBy" v-model:items-per-page="associatedTable['evidence'].itemsPerPage"
+								:search="associatedTable['evidence'].search" must-sort :items-per-page-options="associatedTable['evidence'].itemsPerPageOptions" :headers="associatedTable['evidence'].headers"
+								:items="associations['evidence']" item-key="id" :loading="associatedTable['evidence'].loading" class="case-table">
+								<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
+									<tr>
+										<template v-for="header in columns" :key="header.key">
+											<th :class="{'is-sorted': isSorted(header)}" :data-aid="'case_evidence_header_' + header?.value?.toLowerCase()">
+												<span @click="toggleSort(header)">
+													{{ header.title }}
+												</span>
+												<template v-if="isSorted(header)">
+													<v-icon>
+														{{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down'}}
+													</v-icon>
+												</template>
+											</th>
+										</template>
+									</tr>
+								</template>
+								<template #item="{ index, item, isExpanded, toggleExpand, internalItem}">
+									<tr>
+										<td class="association actions">
+											<v-btn :id="`evidence-${index}-expand`" variant="text" size="x-small" icon @click="toggleExpand(internalItem)">
+												<v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_evidence_collapse">fa-angle-down</v-icon>
+												<v-icon v-else :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_evidence_expand">fa-angle-right</v-icon>
+											</v-btn>
+											<v-btn class="no-underline" variant="text" size="x-small" icon :to="{ name: 'hunt', query: {q: buildHuntQueryForValue(item.value)}}" :title="i18n.huntForEvidence" data-aid="case_evidence_hunt">
+												<v-icon :title="i18n.huntForEvidence" class="theme-text">fa-crosshairs</v-icon>
+											</v-btn>
+											<v-btn :id="`evidence-${index}-analyze`" icon variant="text" size="x-small" @click="analyze(item)" :disabled="analyzeInProgress(item)" data-aid="case_evidence_analyze">
+												<v-icon v-if="analyzeInProgress(item)" :alt="i18n.analyzeInProgress" :title="i18n.analyzeHelp">fa-clock</v-icon>
+												<v-icon v-if="!analyzeInProgress(item)" :alt="i18n.analyze" :title="i18n.analyzeHelp">fa-bolt</v-icon>
+											</v-btn>
+										</td>
+										<td class="associated" data-aid="case_evidence_create_time_display">{{ formatDateTime(item.createTime) }}</td>
+										<td class="associated" data-aid="case_evidence_update_time_display">{{ formatDateTime(item.updateTime) }}</td>
+										<td class="associated" data-aid="case_evidence_type_display">{{ item.artifactType }}</td>
+										<td class="associated" data-aid="case_evidence_value_display">{{ item.value }}<span class="resolved-host" v-if="item.artifactType === 'ip' && $root.pickHostname(item.value)"><br/>- {{ $root.pickHostname(item.value) }}</span></td>
+									</tr>
+								</template>
+								<template #expanded-row="{ index, item }">
+									<tr>
+										<td :colspan="5" class="case">
+											<v-container fluid class="my-2" v-if="item.artifactType == 'file'">
+												<a :target="$root.target('soc-download')" :href="`/api/case/artifactstream?id=${item.id}`" class="no-underline" data-aid="case_evidence_download">
+													<v-icon style="vertical-align: text-top;">fa-download</v-icon>
+													{{ item.value }}
+													({{ formatCount(item.streamLength) }}
+													{{ i18n.bytes }})
+												</a>
+												<div class="mt-4" data-aid="case_evidence_sha256_display">
+													<div class="font-weight-bold">{{i18n.sha256}}: </div>
+													<div :id="`evidence-${index}-sha256`" class="case">
+														{{ withDefault(item.sha256, i18n.unknown) }}
+														<v-icon class="ml-1" @click="$root.copyToClipboard(item.sha256)" :title="i18n.copyToClipboard" data-aid="case_evidence_copy_sha256">fa-copy</v-icon>
 													</div>
-												</v-form>
-												<div class="d-inline-flex justify-end">
-													<v-btn variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit()" data-aid="case_evidence_description_cancel">
-														{{ i18n.cancel }}
-													</v-btn>
-													<v-btn :disabled="!editForm.valid" variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit(true)" data-aid="case_evidence_description_save">
-														{{ i18n.save }}
-													</v-btn>
 												</div>
-											</div>
-										</v-container>
-										<v-container fluid class="py-2" data-aid="case_evidence_ioc_toggle">
-											<div tabindex="0" class="clicktoedit" @click="startEdit(`evidence-${index}-ioc-input`, item.ioc, `evidence-${index}-ioc`, 'ioc', modifyAssociation, ['evidence', item])"
-												@keypress.space.prevent="startEdit(`evidence-${index}-ioc-input`, item.ioc, `evidence-${index}-ioc`, 'ioc', modifyAssociation, ['evidence', item])">
-												<div class="font-weight-bold">{{i18n.artifactIoc}}: </div>
-												<div :id="`evidence-${index}-ioc`" class="case detail-field" v-if="!isEdit(`evidence-${index}-ioc`)">{{ item.ioc ? i18n.yes : i18n.no }}</div>
-											</div>
-											<v-checkbox :id="`evidence-${index}-ioc-input`" v-if="isEdit(`evidence-${index}-ioc`)" v-model="editForm.val" @change="stopEdit(true)" persistent-hint :hint="i18n.artifactIocHelp"></v-checkbox>
-										</v-container>
-										<v-container fluid class="py-2" data-aid="case_evidence_tlp_select">
-											<div tabindex="0" class="clicktoedit" @click="startEdit(`evidence-${index}-tlp-input`, item.tlp, `evidence-${index}-tlp`, 'tlp', modifyAssociation, ['evidence', item])"
-												@keypress.space.prevent="startEdit(`evidence-${index}-tlp-input`, item.tlp, `evidence-${index}-tlp`, 'tlp', modifyAssociation, ['evidence', item])">
-												<div class="font-weight-bold">{{i18n.caseTlp}}: </div>
-												<v-chip :id="`evidence-${index}-tlp`" density="compact" :color="colorizeChip(item.tlp)" outlined v-if="!isEdit(`evidence-${index}-tlp`)">{{ withDefault(item.tlp, i18n.unknown) }}</v-chip>
-											</div>
-											<v-select variant="outlined" :id="`evidence-${index}-tlp-input`" v-if="isEdit(`evidence-${index}-tlp`) && !isPresetCustomEnabled('tlp')"
-												density="compact" eager hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseTlpHelp"
-												v-model="editForm.val"
-												:items="selectList('tlp', item.tlp)"
-												@update:model-value="stopEdit(true)"></v-select>
-											<template v-if="isEdit(`evidence-${index}-tlp`) && isPresetCustomEnabled('tlp')">
-												<v-combobox variant="outlined" :id="`evidence-${index}-tlp-input`"
+												<div class="mt-2" data-aid="case_evidence_sha1_display">
+													<div class="font-weight-bold">{{i18n.sha1}}: </div>
+													<div :id="`evidence-${index}-sha1`" class="case">
+														{{ withDefault(item.sha1, i18n.unknown) }}
+														<v-icon class="ml-1" @click="$root.copyToClipboard(item.sha1)" :title="i18n.copyToClipboard" data-aid="case_evidence_copy_sha1">fa-copy</v-icon>
+													</div>
+												</div>
+												<div class="mt-2" data-aid="case_evidence_md5_display">
+													<div class="font-weight-bold">{{i18n.md5}}: </div>
+													<div :id="`evidence-${index}-md5`" class="case">
+														{{ withDefault(item.md5, i18n.unknown) }}
+														<v-icon class="ml-1" @click="$root.copyToClipboard(item.md5)" :title="i18n.copyToClipboard" data-aid="case_evidence_copy_md5">fa-copy</v-icon>
+													</div>
+												</div>
+											</v-container>
+											<v-container fluid class="pt-2 pb-0" v-if="item.artifactType != 'file'">
+												<div>
+													<div class="font-weight-bold">{{i18n.artifactValue}}: </div>
+													<div :id="`evidence-${index}-value`" class="case detail-field" data-aid="case_evidence_value_display">{{ item.value }}</div>
+												</div>
+											</v-container>
+											<v-container fluid class="pt-2 pb-0" data-aid="case_evidence_description_display">
+												<div tabindex="0" class="clicktoedit" @click="startEdit(`evidence-${index}-description-input`, item.description, `evidence-${index}-description`, 'description', modifyAssociation, ['evidence', item], true)"
+													@keypress.space.prevent="startEdit(`evidence-${index}-description-input`, item.description, `evidence-${index}-description`, 'description', modifyAssociation, ['evidence', item], true)">
+													<div class="font-weight-bold">{{i18n.artifactDescription}}: </div>
+													<div :id="`evidence-${index}-description`" class="case detail-field markdown-body" v-if="!isEdit(`evidence-${index}-description`)" v-html="formatMarkdown(item.description)"></div>
+												</div>
+												<div class="d-flex flex-column" v-if="isEdit(`evidence-${index}-description`)">
+													<v-form v-model="editForm.valid" @submit.prevent>
+														<div class="mb-2">
+															<v-textarea variant="outlined" full-width rows="3" multiline :id="`evidence-${index}-description-input`" hide-details="auto" v-model="editForm.val" persistent-hint :hint="i18n.artifactDescriptionHelp" data-aid="case_evidence_description_input"></v-textarea>
+														</div>
+													</v-form>
+													<div class="d-inline-flex justify-end">
+														<v-btn variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit()" data-aid="case_evidence_description_cancel">
+															{{ i18n.cancel }}
+														</v-btn>
+														<v-btn :disabled="!editForm.valid" variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit(true)" data-aid="case_evidence_description_save">
+															{{ i18n.save }}
+														</v-btn>
+													</div>
+												</div>
+											</v-container>
+											<v-container fluid class="py-2" data-aid="case_evidence_ioc_toggle">
+												<div tabindex="0" class="clicktoedit" @click="startEdit(`evidence-${index}-ioc-input`, item.ioc, `evidence-${index}-ioc`, 'ioc', modifyAssociation, ['evidence', item])"
+													@keypress.space.prevent="startEdit(`evidence-${index}-ioc-input`, item.ioc, `evidence-${index}-ioc`, 'ioc', modifyAssociation, ['evidence', item])">
+													<div class="font-weight-bold">{{i18n.artifactIoc}}: </div>
+													<div :id="`evidence-${index}-ioc`" class="case detail-field" v-if="!isEdit(`evidence-${index}-ioc`)">{{ item.ioc ? i18n.yes : i18n.no }}</div>
+												</div>
+												<v-checkbox :id="`evidence-${index}-ioc-input`" v-if="isEdit(`evidence-${index}-ioc`)" v-model="editForm.val" @change="stopEdit(true)" persistent-hint :hint="i18n.artifactIocHelp"></v-checkbox>
+											</v-container>
+											<v-container fluid class="py-2" data-aid="case_evidence_tlp_select">
+												<div tabindex="0" class="clicktoedit" @click="startEdit(`evidence-${index}-tlp-input`, item.tlp, `evidence-${index}-tlp`, 'tlp', modifyAssociation, ['evidence', item])"
+													@keypress.space.prevent="startEdit(`evidence-${index}-tlp-input`, item.tlp, `evidence-${index}-tlp`, 'tlp', modifyAssociation, ['evidence', item])">
+													<div class="font-weight-bold">{{i18n.caseTlp}}: </div>
+													<v-chip :id="`evidence-${index}-tlp`" density="compact" :color="colorizeChip(item.tlp)" outlined v-if="!isEdit(`evidence-${index}-tlp`)">{{ withDefault(item.tlp, i18n.unknown) }}</v-chip>
+												</div>
+												<v-select variant="outlined" :id="`evidence-${index}-tlp-input`" v-if="isEdit(`evidence-${index}-tlp`) && !isPresetCustomEnabled('tlp')"
 													density="compact" eager hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseTlpHelp"
 													v-model="editForm.val"
 													:items="selectList('tlp', item.tlp)"
-													@keydown.enter="stopEdit(true)"
-												></v-combobox>
-												<div class="d-inline-flex justify-end">
-													<v-btn variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit()" data-aid="case_evidence_tlp_cancel">
-														{{ i18n.cancel }}
-													</v-btn>
-													<v-btn :disabled="!editForm.valid" variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit(true)" data-aid="case_evidence_tlp_save">
-														{{ i18n.save }}
-													</v-btn>
-												</div>
-											</template>
-										</v-container>
-										<v-container fluid class="py-2" data-aid="case_evidence_tags_select">
-											<div tabindex="0" class="clicktoedit" @click="startEdit(`evidence-${index}-tags-input`, item.tags, `evidence-${index}-tags`, 'tags', modifyAssociation, ['evidence', item])"
-												@keypress.space.prevent="startEdit(`evidence-${index}-tags-input`, item.tags, `evidence-${index}-tags`, 'tags', modifyAssociation, ['evidence', item])">
-												<div class="font-weight-bold">{{i18n.caseTags}}: </div>
-												<div :id="`evidence-${index}-tags`" class="case detail-field mt-1" v-if="!isEdit(`evidence-${index}-tags`)">
-													<v-chip density="compact" class="mx-1" v-for="tag in item.tags" color="primary">{{ tag }}</v-chip>
-												</div>
-											</div>
-											<v-select :id="`evidence-${index}-tags-input`" v-if="isEdit(`evidence-${index}-tags`) && !isPresetCustomEnabled('tags')"
-												density="compact" eager variant="outlined" hide-details="auto" class="case-select" multiple persistent-hint :hint="i18n.caseTagsHelp"
-												v-model="editForm.val"
-												:items="selectList('tags', item.tags)"
-												@update:model-value="stopEdit(true)">
-												<template #item="{ props, item }">
-													<v-list-item v-bind="props">
-														<template #prepend>
-															<v-icon>{{ (editForm.val || []).includes(item.value) ? 'mb-1 fa-square-check' : 'mb-1 fa-regular fa-square' }}</v-icon>
-														</template>
-													</v-list-item>
+													@update:model-value="stopEdit(true)"></v-select>
+												<template v-if="isEdit(`evidence-${index}-tlp`) && isPresetCustomEnabled('tlp')">
+													<v-combobox variant="outlined" :id="`evidence-${index}-tlp-input`"
+														density="compact" eager hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseTlpHelp"
+														v-model="editForm.val"
+														:items="selectList('tlp', item.tlp)"
+														@keydown.enter="stopEdit(true)"
+													></v-combobox>
+													<div class="d-inline-flex justify-end">
+														<v-btn variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit()" data-aid="case_evidence_tlp_cancel">
+															{{ i18n.cancel }}
+														</v-btn>
+														<v-btn :disabled="!editForm.valid" variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit(true)" data-aid="case_evidence_tlp_save">
+															{{ i18n.save }}
+														</v-btn>
+													</div>
 												</template>
-												<template #selection="{ item }">
-													<v-chip density="compact" color="primary">{{item.title}}</v-chip>
-												</template>
-											</v-select>
-											<template v-if="isEdit(`evidence-${index}-tags`) && isPresetCustomEnabled('tags')">
-												<v-combobox :id="`evidence-${index}-tags-input`"
+											</v-container>
+											<v-container fluid class="py-2" data-aid="case_evidence_tags_select">
+												<div tabindex="0" class="clicktoedit" @click="startEdit(`evidence-${index}-tags-input`, item.tags, `evidence-${index}-tags`, 'tags', modifyAssociation, ['evidence', item])"
+													@keypress.space.prevent="startEdit(`evidence-${index}-tags-input`, item.tags, `evidence-${index}-tags`, 'tags', modifyAssociation, ['evidence', item])">
+													<div class="font-weight-bold">{{i18n.caseTags}}: </div>
+													<div :id="`evidence-${index}-tags`" class="case detail-field mt-1" v-if="!isEdit(`evidence-${index}-tags`)">
+														<v-chip density="compact" class="mx-1" v-for="tag in item.tags" color="primary">{{ tag }}</v-chip>
+													</div>
+												</div>
+												<v-select :id="`evidence-${index}-tags-input`" v-if="isEdit(`evidence-${index}-tags`) && !isPresetCustomEnabled('tags')"
 													density="compact" eager variant="outlined" hide-details="auto" class="case-select" multiple persistent-hint :hint="i18n.caseTagsHelp"
 													v-model="editForm.val"
 													:items="selectList('tags', item.tags)"
-													@change="stopEdit(true)">
+													@update:model-value="stopEdit(true)">
 													<template #item="{ props, item }">
-														<v-list-item v-bind="props" class="remove-spacer">
+														<v-list-item v-bind="props">
 															<template #prepend>
 																<v-icon>{{ (editForm.val || []).includes(item.value) ? 'mb-1 fa-square-check' : 'mb-1 fa-regular fa-square' }}</v-icon>
 															</template>
@@ -799,127 +791,145 @@
 													<template #selection="{ item }">
 														<v-chip density="compact" color="primary">{{item.title}}</v-chip>
 													</template>
-												</v-combobox>
-												<div class="d-inline-flex justify-end">
-													<v-btn variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit()" data-aid="case_attachment_tags_cancel">
-														{{ i18n.cancel }}
-													</v-btn>
-													<v-btn :disabled="!editForm.valid" variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit(true)" data-aid="case_attachment_tags_save">
-														{{ i18n.save }}
-													</v-btn>
-												</div>
-											</template>
-										</v-container>
+												</v-select>
+												<template v-if="isEdit(`evidence-${index}-tags`) && isPresetCustomEnabled('tags')">
+													<v-combobox :id="`evidence-${index}-tags-input`"
+														density="compact" eager variant="outlined" hide-details="auto" class="case-select" multiple persistent-hint :hint="i18n.caseTagsHelp"
+														v-model="editForm.val"
+														:items="selectList('tags', item.tags)"
+														@change="stopEdit(true)">
+														<template #item="{ props, item }">
+															<v-list-item v-bind="props" class="remove-spacer">
+																<template #prepend>
+																	<v-icon>{{ (editForm.val || []).includes(item.value) ? 'mb-1 fa-square-check' : 'mb-1 fa-regular fa-square' }}</v-icon>
+																</template>
+															</v-list-item>
+														</template>
+														<template #selection="{ item }">
+															<v-chip density="compact" color="primary">{{item.title}}</v-chip>
+														</template>
+													</v-combobox>
+													<div class="d-inline-flex justify-end">
+														<v-btn variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit()" data-aid="case_attachment_tags_cancel">
+															{{ i18n.cancel }}
+														</v-btn>
+														<v-btn :disabled="!editForm.valid" variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit(true)" data-aid="case_attachment_tags_save">
+															{{ i18n.save }}
+														</v-btn>
+													</div>
+												</template>
+											</v-container>
 
-										<v-container :id="`evidence-${index}-analyze-container`" fluid class="py-2" v-if="getAnalyzeJobs(item)" data-aid="case_evidence_analyze_jobs">
-											<div>
-												<div class="font-weight-bold">{{i18n.analyzeJobs}}: </div>
-												<v-expansion-panels class="mb-6" hover="true" :multiple="true">
-													<v-expansion-panel v-for="job in getAnalyzeJobs(item)" :id="`evidence-${index}-analyze-job-${job.id}`" data-aid="case_evidence_analyze_job">
-														<v-expansion-panel-title disable-icon-rotate>
-															<v-row>
-																<v-col cols="12" md="4">
-																	{{ i18n.job }}: {{ job.id }}
-																</v-col>
-																<v-col cols="12" md="4">
-																	{{ formatDateTime(job.createTime) }}
-																</v-col>
-																<v-col cols="12" md="4">
-																	{{ i18n.analyzers }}: {{ getAnalyzersInJob(job) }}
-																</v-col>
-															</v-row>
-															<template #actions>
-																<v-icon v-if="job.status == JobStatusPending" color="info">fa-clock</v-icon>
-																<v-icon v-if="job.status == JobStatusCompleted" :title="$root.localizeMessage(getAnalyzeJobDecoration(job).help)" :color="getAnalyzeJobDecoration(job).color">{{ getAnalyzeJobDecoration(job).icon }}</v-icon>
-																<v-icon v-if="job.status == JobStatusIncomplete" color="error">fa-exclamation</v-icon>
-															</template>
-														</v-expansion-panel-title>
-														<v-expansion-panel-text>
+											<v-container :id="`evidence-${index}-analyze-container`" fluid class="py-2" v-if="getAnalyzeJobs(item)" data-aid="case_evidence_analyze_jobs">
+												<div>
+													<div class="font-weight-bold">{{i18n.analyzeJobs}}: </div>
+													<v-expansion-panels class="mb-6" hover="true" :multiple="true">
+														<v-expansion-panel v-for="job in getAnalyzeJobs(item)" :id="`evidence-${index}-analyze-job-${job.id}`" data-aid="case_evidence_analyze_job">
+															<v-expansion-panel-title disable-icon-rotate>
+																<v-row>
+																	<v-col cols="12" md="4">
+																		{{ i18n.job }}: {{ job.id }}
+																	</v-col>
+																	<v-col cols="12" md="4">
+																		{{ formatDateTime(job.createTime) }}
+																	</v-col>
+																	<v-col cols="12" md="4">
+																		{{ i18n.analyzers }}: {{ getAnalyzersInJob(job) }}
+																	</v-col>
+																</v-row>
+																<template #actions>
+																	<v-icon v-if="job.status == JobStatusPending" color="info">fa-clock</v-icon>
+																	<v-icon v-if="job.status == JobStatusCompleted" :title="$root.localizeMessage(getAnalyzeJobDecoration(job).help)" :color="getAnalyzeJobDecoration(job).color">{{ getAnalyzeJobDecoration(job).icon }}</v-icon>
+																	<v-icon v-if="job.status == JobStatusIncomplete" color="error">fa-exclamation</v-icon>
+																</template>
+															</v-expansion-panel-title>
+															<v-expansion-panel-text>
 
-															<v-expansion-panels class="mb-1" flat>
-																<div class="my-4" v-if="job.status == JobStatusCompleted && !job.results">
-																	{{ i18n.analyzersUnavailable }}
-																</div>
-																<v-expansion-panel v-for="analyzer in job.results" :id="`evidence-${index}-analyze-job-${job.id}`" data-aid="case_evidence_analyze_job_expand_toggle">
-																	<v-expansion-panel-title>
-																		<v-row>
-																			<v-col cols="12" md="3" class="font-weight-bold">
-																				{{ analyzer.id }}
-																			</v-col>
-																			<v-col cols="12" md="6">
-																				<v-icon class="mr-2" :title="$root.localizeMessage(getAnalyzerDecoration(analyzer).help)" :color="getAnalyzerDecoration(analyzer).color">{{ getAnalyzerDecoration(analyzer).icon }}</v-icon>
-																				{{ getAnalyzerSummary(analyzer) }}
-																			</v-col>
-																			<v-col cols="12" md="3">
-																				{{ i18n.bytes }}: {{ formatCount(JSON.stringify(analyzer.data).length) }}
-																			</v-col>
-																		</v-row>
-																	</v-expansion-panel-title>
-																	<v-expansion-panel-text data-aid="case_evidence_analyze_job_data_display">
-																		<pre class="hardwrap">{{ analyzer.data }}</pre>
-																	</v-expansion-panel-text>
-																</v-expansion-panel>
-															</v-expansion-panels>
-
-															<div class="d-flex flex-column flex-sm-row align-end align-sm-center align-self-end text-body-2">
-																<v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white-text" data-aid="case_evidence_analyze_job_avatar_display">
-																	<div class="case avatar-font" :title="job.owner">
-																		{{ $root.getAvatar(job.owner) }}
+																<v-expansion-panels class="mb-1" flat>
+																	<div class="my-4" v-if="job.status == JobStatusCompleted && !job.results">
+																		{{ i18n.analyzersUnavailable }}
 																	</div>
-																</v-avatar>
-																<div class="mr-1" data-aid="case_evidence_analyze_job_owner_display">
-																	{{ job.owner }}
-																</div>
-																<div class="mr-1 d-none d-sm-block">
-																	&bull;
-																</div>
-																<div data-aid="case_evidence_analyze_job_timestamp_display">
-																	{{ formatDateTime(job.completeTime) }}
-																</div>
-																<div class="ml-1 d-flex">
-																	<v-btn variant="text" size="x-small" @click="deleteAnalyzeJob(job)" icon><v-icon class="tiny-icon" color="red" data-aid="case_evidence_analyze_job_delete">fa-circle-xmark</v-icon></v-btn>
-																</div>
-																<v-spacer></v-spacer>
-															</div>
+																	<v-expansion-panel v-for="analyzer in job.results" :id="`evidence-${index}-analyze-job-${job.id}`" data-aid="case_evidence_analyze_job_expand_toggle">
+																		<v-expansion-panel-title>
+																			<v-row>
+																				<v-col cols="12" md="3" class="font-weight-bold">
+																					{{ analyzer.id }}
+																				</v-col>
+																				<v-col cols="12" md="6">
+																					<v-icon class="mr-2" :title="$root.localizeMessage(getAnalyzerDecoration(analyzer).help)" :color="getAnalyzerDecoration(analyzer).color">{{ getAnalyzerDecoration(analyzer).icon }}</v-icon>
+																					{{ getAnalyzerSummary(analyzer) }}
+																				</v-col>
+																				<v-col cols="12" md="3">
+																					{{ i18n.bytes }}: {{ formatCount(JSON.stringify(analyzer.data).length) }}
+																				</v-col>
+																			</v-row>
+																		</v-expansion-panel-title>
+																		<v-expansion-panel-text data-aid="case_evidence_analyze_job_data_display">
+																			<pre class="hardwrap">{{ analyzer.data }}</pre>
+																		</v-expansion-panel-text>
+																	</v-expansion-panel>
+																</v-expansion-panels>
 
-														</v-expansion-panel-text>
-													</v-expansion-panel>
-												</v-expansion-panels>
-											</div>
-										</v-container>
+																<div class="d-flex flex-column flex-sm-row align-end align-sm-center align-self-end text-body-2">
+																	<v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white-text" data-aid="case_evidence_analyze_job_avatar_display">
+																		<div class="case avatar-font" :title="job.owner">
+																			{{ $root.getAvatar(job.owner) }}
+																		</div>
+																	</v-avatar>
+																	<div class="mr-1" data-aid="case_evidence_analyze_job_owner_display">
+																		{{ job.owner }}
+																	</div>
+																	<div class="mr-1 d-none d-sm-block">
+																		&bull;
+																	</div>
+																	<div data-aid="case_evidence_analyze_job_timestamp_display">
+																		{{ formatDateTime(job.completeTime) }}
+																	</div>
+																	<div class="ml-1 d-flex">
+																		<v-btn variant="text" size="x-small" @click="deleteAnalyzeJob(job)" icon><v-icon class="tiny-icon" color="red" data-aid="case_evidence_analyze_job_delete">fa-circle-xmark</v-icon></v-btn>
+																	</div>
+																	<v-spacer></v-spacer>
+																</div>
 
-										<div class="d-flex flex-column flex-sm-row align-end align-sm-center align-self-end text-body-2">
-											<v-spacer></v-spacer>
-											<v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white-text" data-aid="case_evidence_avatar_display">
-												<div class="case avatar-font" :title="item.owner">
-													{{ $root.getAvatar(item.owner) }}
+															</v-expansion-panel-text>
+														</v-expansion-panel>
+													</v-expansion-panels>
 												</div>
-											</v-avatar>
-											<div class="mr-1" data-aid="case_evidence_owner_display">
-												{{ item.owner }}
+											</v-container>
+
+											<div class="d-flex flex-column flex-sm-row align-end align-sm-center align-self-end text-body-2">
+												<v-spacer></v-spacer>
+												<v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white-text" data-aid="case_evidence_avatar_display">
+													<div class="case avatar-font" :title="item.owner">
+														{{ $root.getAvatar(item.owner) }}
+													</div>
+												</v-avatar>
+												<div class="mr-1" data-aid="case_evidence_owner_display">
+													{{ item.owner }}
+												</div>
+												<div class="mr-1 d-none d-sm-block">
+													&bull;
+												</div>
+												<div data-aid="case_evidence_timestamp_display">
+													{{ formatDateTime(item.createTime) }}
+												</div>
+												<div v-if="isEdited(item)" :title="$root.formatDateTime(item.updateTime)" class="mx-2" data-aid="case_evidence_edited_display">
+													{{ i18n.edited }}
+												</div>
+												<div class="ml-1 d-flex">
+													<v-btn variant="text" size="x-small" @click="deleteAssociation('evidence', item)" icon><v-icon class="tiny-icon" color="red" data-aid="case_evidence_delete">fa-circle-xmark</v-icon></v-btn>
+												</div>
 											</div>
-											<div class="mr-1 d-none d-sm-block">
-												&bull;
-											</div>
-											<div data-aid="case_evidence_timestamp_display">
-												{{ formatDateTime(item.createTime) }}
-											</div>
-											<div v-if="isEdited(item)" :title="$root.formatDateTime(item.updateTime)" class="mx-2" data-aid="case_evidence_edited_display">
-												{{ i18n.edited }}
-											</div>
-											<div class="ml-1 d-flex">
-												<v-btn variant="text" size="x-small" @click="deleteAssociation('evidence', item)" icon><v-icon class="tiny-icon" color="red" data-aid="case_evidence_delete">fa-circle-xmark</v-icon></v-btn>
-											</div>
-										</div>
-									</td>
-								</tr>
-							</template>
-							<template #no-data>
-								<v-alert :value="true" color="info" icon="fa-info" data-aid="case_evidence_no_results_display">
-									{{ i18n.noSearchResults }}
-								</v-alert>
-							</template>
-						</v-data-table>
+										</td>
+									</tr>
+								</template>
+								<template #no-data>
+									<v-alert :value="true" color="info" icon="fa-info" data-aid="case_evidence_no_results_display">
+										{{ i18n.noSearchResults }}
+									</v-alert>
+								</template>
+							</v-data-table>
+						</v-row>
 						<div class="text-xs-center pt-2 d-none">
 							<v-btn v-text="i18n.loadMore" @click="loadAssociation('evidence')" data-aid="case_evidence_load_more"></v-btn>
 						</div>
@@ -928,107 +938,113 @@
 					<v-tabs-window-item value="events" data-aid="case_events">
 						<v-row>
 							<v-col>
-								<v-toolbar class="elevation-0 theme-background-lighten-1" fixed>
-									<v-btn :title="i18n.refreshEventsHelp" variant="flat" @click.stop="reloadAssociation('events', true)" id="refresh-events-button" class="ml-3" data-aid="case_events_refresh">
-										<v-icon color="secondary">fa-sync</v-icon>
+								<v-toolbar class="so-toolbar elevation-0" fixed>
+									<v-btn :title="i18n.refreshEventsHelp" icon variant="flat" @click.stop="reloadAssociation('events', true)" id="refresh-events-button" class="circle-button mx-2" data-aid="case_events_refresh">
+										<v-icon>fa-sync</v-icon>
 									</v-btn>
-									<v-btn :title="i18n.huntForCase" variant="flat" id="hunt-events-button" class="ml-3" data-aid="case_events_hunt" :to="huntCase()">
-										<v-icon color="secondary">fa-crosshairs</v-icon>
+									<v-btn :title="i18n.huntForCase" icon variant="flat" id="hunt-events-button" class="circle-button mx-2" data-aid="case_events_hunt" :to="huntCase()">
+										<v-icon>fa-crosshairs</v-icon>
 									</v-btn>
+									<v-btn v-if="$root.isLicensed($root.FEAT_RPT)" :title="i18n.exportCaseHelp" class="circle-button mx-2" variant="flat" icon @click.stop="exportCase" id="export-case-button" data-aid="case_export">
+										<v-icon>fa-file-export</v-icon>
+									</v-btn>
+									<v-spacer></v-spacer>
+									<v-text-field v-model="associatedTable['events'].search" clearable prepend-inner-icon="fa-filter" :label="i18n.filterResults" hide-details class="toolbar-field no-print ml-2" style="max-width: 250px;" data-aid="case_events_filter"></v-text-field>
 								</v-toolbar>
 							</v-col>
 						</v-row>
-						<v-text-field v-model="associatedTable['events'].search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="case_events_filter"></v-text-field>
-						<v-data-table ref="eventsTable" :sort-by="associatedTable['events'].sortBy" v-model:items-per-page="associatedTable['events'].itemsPerPage"
-							:search="associatedTable['events'].search" :items-per-page-options="associatedTable['events'].itemsPerPageOptions" must-sort :headers="associatedTable['events'].headers"
-							:items="associations['events']" item-key="id" :loading="associatedTable['events'].loading" :expanded="associatedTable['events'].expanded" class="case-table">
-							<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
-								<tr>
-									<template v-for="header in columns" :key="header.key">
-										<th :class="{'is-sorted': isSorted(header)}" :data-aid="'case_events_header_' + header?.value?.toLowerCase()">
-											<span @click="toggleSort(header)">
-												{{ header.title }}
-											</span>
-											<template v-if="isSorted(header)">
-												<v-icon>
-													{{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down'}}
-												</v-icon>
-											</template>
-										</th>
-									</template>
-								</tr>
-							</template>
-							<template #item="{ index, item, isExpanded, toggleExpand, internalItem }">
-								<tr>
-									<td class="associated actions">
-										<v-btn :id="`events-${index}-expand`" icon variant="text" size="x-small" @click="toggleExpand(internalItem)">
-											<v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_events_collapse">fa-angle-down</v-icon>
-											<v-icon v-else :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_events_expand">fa-angle-right</v-icon>
-										</v-btn>
-										<router-link class="no-underline" :to="{ name: 'hunt', query: { q: buildHuntQuery(item) } }" :title="i18n.huntForEvent" v-if="item.fields['soc_id']" data-aid="case_events_hunt">
-											<v-icon :title="i18n.huntForEvent" class="theme-text">fa-crosshairs</v-icon>
-										</router-link>
-										<router-link class="no-underline mx-2" :to="{ name: 'alerts', query: { q: '_id:' + item.fields.soc_id, escalated: true, acknowledged: true, t: dateToRange(item.fields['@timestamp']), tab: 'playbook', expand: item.fields.soc_id } }"
-											target="_blank" :title="i18n.playbooksPivot" v-if="item.fields.tags.includes('alert')" data-aid="case_events_playbook">
-											<v-icon :title="i18n.playbooksPivot" class="theme-text">fa-book</v-icon>
-										</router-link>
-									</td>
-									<td class="associated" data-aid="case_events_timestamp_display">{{ formatTimestamp(item.fields["soc_timestamp"]) }}</td>
-									<td class="associated" data-aid="case_events_id_display">{{ getEventId(item) }}</td>
-									<td class="associated" data-aid="case_events_category_display">{{ item.fields['event.category'] }}</td>
-									<td class="associated" data-aid="case_events_module_display">{{ item.fields['event.module'] }}</td>
-									<td class="associated" data-aid="case_events_dataset_display">{{ item.fields['event.dataset'] }}</td>
-								</tr>
-							</template>
-							<template #expanded-row="{ index, item }">
-								<tr>
-									<td :colspan="6" class="case">
-										<div class="mt-2">
-											<template v-for="value, key in item.fields">
-												<v-row no-gutters class="py-1 case tabular-row" v-if="!key.startsWith(internalPrefix)">
-													<v-col cols="1">
-														<v-btn :id="`events-${index}-addobservable`" variant="text" size="small" @click="populateAddObservableForm(key, value)" data-aid="case_event_add_observable">
-															<v-icon :title="i18n.addObservable">fa-eye</v-icon>
-														</v-btn>
-														<router-link class="no-underline" :to="{ name: 'hunt', query: {q: buildHuntQueryForValue(value) }}" data-aid="case_event_hunt">
-															<v-icon :title="i18n.huntForFieldValue" class="theme-text">fa-crosshairs</v-icon>
-														</router-link>
-													</v-col>
-													<v-col cols="4"><span class="case tabular-label" data-aid="case_event_field_display">{{ key }}:</span></v-col>
-													<v-col cols="7"><span class="case" data-aid="case_event_value_display">{{ value }}</span></v-col>
-												</v-row>
-											</template>
-										</div>
+						<v-row>
+							<v-data-table ref="eventsTable" :sort-by="associatedTable['events'].sortBy" v-model:items-per-page="associatedTable['events'].itemsPerPage"
+								:search="associatedTable['events'].search" :items-per-page-options="associatedTable['events'].itemsPerPageOptions" must-sort :headers="associatedTable['events'].headers"
+								:items="associations['events']" item-key="id" :loading="associatedTable['events'].loading" :expanded="associatedTable['events'].expanded" class="case-table">
+								<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
+									<tr>
+										<template v-for="header in columns" :key="header.key">
+											<th :class="{'is-sorted': isSorted(header)}" :data-aid="'case_events_header_' + header?.value?.toLowerCase()">
+												<span @click="toggleSort(header)">
+													{{ header.title }}
+												</span>
+												<template v-if="isSorted(header)">
+													<v-icon>
+														{{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down'}}
+													</v-icon>
+												</template>
+											</th>
+										</template>
+									</tr>
+								</template>
+								<template #item="{ index, item, isExpanded, toggleExpand, internalItem }">
+									<tr>
+										<td class="associated actions">
+											<v-btn :id="`events-${index}-expand`" icon variant="text" size="x-small" @click="toggleExpand(internalItem)">
+												<v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_events_collapse">fa-angle-down</v-icon>
+												<v-icon v-else :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_events_expand">fa-angle-right</v-icon>
+											</v-btn>
+											<router-link class="no-underline" :to="{ name: 'hunt', query: { q: buildHuntQuery(item) } }" :title="i18n.huntForEvent" v-if="item.fields['soc_id']" data-aid="case_events_hunt">
+												<v-icon :title="i18n.huntForEvent" class="theme-text">fa-crosshairs</v-icon>
+											</router-link>
+											<router-link class="no-underline mx-2" :to="{ name: 'alerts', query: { q: '_id:' + item.fields.soc_id, escalated: true, acknowledged: true, t: dateToRange(item.fields['@timestamp']), tab: 'playbook', expand: item.fields.soc_id } }"
+												target="_blank" :title="i18n.playbooksPivot" v-if="item.fields.tags.includes('alert')" data-aid="case_events_playbook">
+												<v-icon :title="i18n.playbooksPivot" class="theme-text">fa-book</v-icon>
+											</router-link>
+										</td>
+										<td class="associated" data-aid="case_events_timestamp_display">{{ formatTimestamp(item.fields["soc_timestamp"]) }}</td>
+										<td class="associated" data-aid="case_events_id_display">{{ getEventId(item) }}</td>
+										<td class="associated" data-aid="case_events_category_display">{{ item.fields['event.category'] }}</td>
+										<td class="associated" data-aid="case_events_module_display">{{ item.fields['event.module'] }}</td>
+										<td class="associated" data-aid="case_events_dataset_display">{{ item.fields['event.dataset'] }}</td>
+									</tr>
+								</template>
+								<template #expanded-row="{ index, item }">
+									<tr>
+										<td :colspan="6" class="case">
+											<div class="mt-2">
+												<template v-for="value, key in item.fields">
+													<v-row no-gutters class="py-1 case tabular-row" v-if="!key.startsWith(internalPrefix)">
+														<v-col cols="1">
+															<v-btn :id="`events-${index}-addobservable`" variant="text" size="small" @click="populateAddObservableForm(key, value)" data-aid="case_event_add_observable">
+																<v-icon :title="i18n.addObservable">fa-eye</v-icon>
+															</v-btn>
+															<router-link class="no-underline" :to="{ name: 'hunt', query: {q: buildHuntQueryForValue(value) }}" data-aid="case_event_hunt">
+																<v-icon :title="i18n.huntForFieldValue" class="theme-text">fa-crosshairs</v-icon>
+															</router-link>
+														</v-col>
+														<v-col cols="4"><span class="case tabular-label" data-aid="case_event_field_display">{{ key }}:</span></v-col>
+														<v-col cols="7"><span class="case" data-aid="case_event_value_display">{{ value }}</span></v-col>
+													</v-row>
+												</template>
+											</div>
 
-										<div class="d-flex flex-column flex-sm-row align-end align-sm-center align-self-end text-body-2">
-											<v-spacer></v-spacer>
-											<v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white-text" data-aid="case_event_avatar_display">
-												<div class="case avatar-font" :title="item.owner">
-													{{ $root.getAvatar(item.owner) }}
+											<div class="d-flex flex-column flex-sm-row align-end align-sm-center align-self-end text-body-2">
+												<v-spacer></v-spacer>
+												<v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white-text" data-aid="case_event_avatar_display">
+													<div class="case avatar-font" :title="item.owner">
+														{{ $root.getAvatar(item.owner) }}
+													</div>
+												</v-avatar>
+												<div class="mr-1" data-aid="case_event_owner_display">
+													{{ item.owner }}
 												</div>
-											</v-avatar>
-											<div class="mr-1" data-aid="case_event_owner_display">
-												{{ item.owner }}
+												<div class="mr-1 d-none d-sm-block">
+													&bull;
+												</div>
+												<div data-aid="case_event_timestamp_display">
+													{{ formatDateTime(item.createTime) }}
+												</div>
+												<div class="ml-1 d-flex">
+													<v-btn variant="text" size="small" @click="deleteAssociation('events', item)" data-aid="case_event_delete"><v-icon class="tiny-icon" color="red">fa-circle-xmark</v-icon></v-btn>
+												</div>
 											</div>
-											<div class="mr-1 d-none d-sm-block">
-												&bull;
-											</div>
-											<div data-aid="case_event_timestamp_display">
-												{{ formatDateTime(item.createTime) }}
-											</div>
-											<div class="ml-1 d-flex">
-												<v-btn variant="text" size="small" @click="deleteAssociation('events', item)" data-aid="case_event_delete"><v-icon class="tiny-icon" color="red">fa-circle-xmark</v-icon></v-btn>
-											</div>
-										</div>
-									</td>
-								</tr>
-							</template>
-							<template #no-data>
-								<v-alert :value="true" color="info" icon="fa-info" data-aid="case_events_no_results_display">
-									{{ i18n.noSearchResults }}
-								</v-alert>
-							</template>
-						</v-data-table>
+										</td>
+									</tr>
+								</template>
+								<template #no-data>
+									<v-alert :value="true" color="info" icon="fa-info" data-aid="case_events_no_results_display">
+										{{ i18n.noSearchResults }}
+									</v-alert>
+								</template>
+							</v-data-table>
+						</v-row>
 						<div class="text-xs-center pt-2 d-none">
 								<v-btn v-text="i18n.loadMore" @click="loadAssociation('events')" data-aid="case_events_load_more"></v-btn>
 						</div>
@@ -1037,305 +1053,311 @@
 					<v-tabs-window-item value="history" data-aid="case_history">
 						<v-row>
 							<v-col>
-								<v-toolbar class="elevation-0 theme-background-lighten-1" fixed>
-									<v-btn :title="i18n.refreshCaseHistoryHelp" variant="flat" @click.stop="reloadAssociation('history', true)" id="refresh-history-button" class="ml-3" data-aid="case_history_refresh">
-										<v-icon color="secondary">fa-sync</v-icon>
+								<v-toolbar class="so-toolbar elevation-0" fixed>
+									<v-btn :title="i18n.refreshCaseHistoryHelp" icon variant="flat" @click.stop="reloadAssociation('history', true)" id="refresh-history-button" class="circle-button mx-2" data-aid="case_history_refresh">
+										<v-icon>fa-sync</v-icon>
 									</v-btn>
+									<v-btn v-if="$root.isLicensed($root.FEAT_RPT)" :title="i18n.exportCaseHelp" class="circle-button mx-2" variant="flat" icon @click.stop="exportCase" id="export-case-button" data-aid="case_export">
+										<v-icon>fa-file-export</v-icon>
+									</v-btn>
+									<v-spacer></v-spacer>
+									<v-text-field v-model="associatedTable['history'].search" clearable prepend-inner-icon="fa-filter" :label="i18n.filterResults" hide-details class="toolbar-field no-print ml-2" style="max-width: 250px;" data-aid="case_history_filter_input"></v-text-field>
 								</v-toolbar>
 							</v-col>
 						</v-row>
-						<v-text-field v-model="associatedTable['history'].search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="case_history_filter_input"></v-text-field>
-						<v-data-table id="history" ref="historyTable" :sort-by="associatedTable['history'].sortBy" v-model:items-per-page="associatedTable['history'].itemsPerPage"
-							:search="associatedTable['history'].search" :items-per-page-options="associatedTable['history'].itemsPerPageOptions" must-sort :headers="associatedTable['history'].headers"
-							:items="associations['history']" item-key="id" :loading="associatedTable['history'].loading" :expanded="associatedTable['history'].expanded" class="case-table">
-							<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
-								<tr>
-									<template v-for="header in columns" :key="header.key">
-										<th :class="{'is-sorted': isSorted(header)}" :data-aid="'case_history_header_' + header?.value?.toLowerCase()">
-											<span @click="toggleSort(header)">
-												{{ header.title }}
-											</span>
-											<template v-if="isSorted(header)">
-												<v-icon>
-													{{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down'}}
-												</v-icon>
-											</template>
-										</th>
-									</template>
-								</tr>
-							</template>
-							<template #item="{ index, item, isExpanded, toggleExpand, internalItem }">
-								<tr>
-									<td class="associated actions">
-										<v-btn :id="`history-${index}-expand`" icon variant="text" size="x-small" @click="toggleExpand(internalItem)">
-											<v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_history_collapse">fa-angle-down</v-icon>
-											<v-icon v-else :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_history_expand">fa-angle-right</v-icon>
-										</v-btn>
-									</td>
-									<td class="associated" data-aid="case_history_owner_display">
-										<v-avatar color="primary" class="mr-2 text-white" size="28" data-aid="case_history_avatar_display">
-											<div class="font-weight-bold" :title="item.owner">
-												{{ $root.getAvatar(item.owner) }}
-											</div>
-										</v-avatar>
-										{{ item.owner }}
-									</td>
-									<td class="associated" data-aid="case_history_timestamp_display">{{ formatDateTime(item.updateTime) }}</td>
-									<td class="associated" data-aid="case_history_kind_display">
-										<v-icon v-if="item.kind == i18n.case">fa-briefcase</v-icon>
-										<v-icon v-if="item.kind == i18n.comments">fa-comments</v-icon>
-										<v-icon v-if="item.kind == i18n.attachments">fa-paperclip</v-icon>
-										<v-icon v-if="item.kind == i18n.evidence">fa-eye</v-icon>
-										<v-icon v-if="item.kind == i18n.events">fa-link</v-icon>
-										<span class="rounded ml-2">{{ item.kind }}</span>
-									</td>
-									<td class="associated" data-aid="case_history_operation_display">
-										<v-icon v-if="item.operation == i18n.create">fa-plus</v-icon>
-										<v-icon v-if="item.operation == i18n.delete">fa-circle-xmark</v-icon>
-										<v-icon v-if="item.operation == i18n.update">fa-pencil-alt</v-icon>
-										<span class="rounded ml-2">{{ item.operation }}</span>
-									</td>
-								</tr>
-							</template>
-							<template #expanded-row="{ item }">
-								<tr data-aid="case_history_record">
-									<td colspan="5" class="case">
-										<div class="mt-2">
-											<v-row no-gutters class="py-1 case tabular-row">
-												<v-col cols="4"><span class="case tabular-label">{{ i18n.id }}:</span></v-col>
-												<v-col cols="8"><span class="case">{{ item.id }}</span></v-col>
-											</v-row>
-										</div>
-										<div>
-											<v-row no-gutters class="py-1 case tabular-row">
-												<v-col cols="4"><span class="case tabular-label">{{ i18n.kind }}:</span></v-col>
-												<v-col cols="8"><span class="case">{{ item.kind }}</span></v-col>
-											</v-row>
-										</div>
-										<div>
-											<v-row no-gutters class="py-1 case tabular-row">
-												<v-col cols="4"><span class="case tabular-label">{{ i18n.operation }}:</span></v-col>
-												<v-col cols="8"><span class="case">{{ item.operation }}</span></v-col>
-											</v-row>
-										</div>
-										<div>
-											<v-row no-gutters class="py-1 case tabular-row">
-												<v-col cols="4"><span class="case tabular-label">{{ i18n.dateCreated }}:</span></v-col>
-												<v-col cols="8"><span class="case">{{ formatDateTime(item.createTime) }}</span></v-col>
-											</v-row>
-										</div>
-										<div>
-											<v-row no-gutters class="py-1 case tabular-row">
-												<v-col cols="4"><span class="case tabular-label">{{ i18n.dateModified }}:</span></v-col>
-												<v-col cols="8"><span class="case">{{ formatDateTime(item.updateTime) }}</span></v-col>
-											</v-row>
-										</div>
-										<div v-if="item.kind == i18n.case">
-											<div>
-												<v-row no-gutters class="py-1 case tabular-row">
-													<v-col cols="4"><span class="case tabular-label">{{ i18n.caseTitle }}:</span></v-col>
-													<v-col cols="8"><span class="case">{{ item.title }}</span></v-col>
-												</v-row>
-											</div>
-											<div>
-												<v-row no-gutters class="py-1 case tabular-row">
-													<v-col cols="4"><span class="case tabular-label">{{ i18n.caseDescription }}:</span></v-col>
-													<v-col cols="8"><span class="case">{{ item.description }}</span></v-col>
-												</v-row>
-											</div>
-											<div>
-												<v-row no-gutters class="py-1 case tabular-row">
-													<v-col cols="4"><span class="case tabular-label">{{ i18n.caseAssignee }}:</span></v-col>
-													<v-col cols="8"><span class="case">{{ item.assignee }}</span></v-col>
-												</v-row>
-											</div>
-											<div>
-												<v-row no-gutters class="py-1 case tabular-row">
-													<v-col cols="4"><span class="case tabular-label">{{ i18n.caseStatus }}:</span></v-col>
-													<v-col cols="8"><span class="case">{{ item.status }}</span></v-col>
-												</v-row>
-											</div>
-											<div>
-												<v-row no-gutters class="py-1 case tabular-row">
-													<v-col cols="4"><span class="case tabular-label">{{ i18n.caseSeverity }}:</span></v-col>
-													<v-col cols="8"><span class="case">{{ item.severity }}</span></v-col>
-												</v-row>
-											</div>
-											<div>
-												<v-row no-gutters class="py-1 case tabular-row">
-													<v-col cols="4"><span class="case tabular-label">{{ i18n.casePriority }}:</span></v-col>
-													<v-col cols="8"><span class="case">{{ item.priority }}</span></v-col>
-												</v-row>
-											</div>
-											<div>
-												<v-row no-gutters class="py-1 case tabular-row">
-													<v-col cols="4"><span class="case tabular-label">{{ i18n.caseTlp }}:</span></v-col>
-													<v-col cols="8"><span class="case">{{ item.tlp }}</span></v-col>
-												</v-row>
-											</div>
-											<div>
-												<v-row no-gutters class="py-1 case tabular-row">
-													<v-col cols="4"><span class="case tabular-label">{{ i18n.caseCategory }}:</span></v-col>
-													<v-col cols="8"><span class="case">{{ item.category }}</span></v-col>
-												</v-row>
-											</div>
-											<div>
-												<v-row no-gutters class="py-1 case tabular-row">
-													<v-col cols="4"><span class="case tabular-label">{{ i18n.caseTags }}:</span></v-col>
-													<v-col cols="8"><span class="case">{{ item.tags }}</span></v-col>
-												</v-row>
-											</div>
-										</div>
-										<div v-if="item.kind == i18n.comments">
-											<div>
-												<v-row no-gutters class="py-1 case tabular-row">
-													<v-col cols="4"><span class="case tabular-label">{{ i18n.commentDescription }}:</span></v-col>
-													<v-col cols="8"><span class="case">{{ item.description }}</span></v-col>
-												</v-row>
-											</div>
-											<div v-if="$root.isLicensed($root.FEAT_TTR)">
-												<v-row no-gutters class="py-1 case tabular-row">
-													<v-col cols="4"><span class="case tabular-label">{{ i18n.commentHours }}:</span></v-col>
-													<v-col cols="8"><span class="case">{{ item.hours }}</span></v-col>
-												</v-row>
-											</div>
-										</div>
-										<div v-if="item.kind == i18n.events">
-											<div>
-												<v-row no-gutters class="py-1 case tabular-row">
-													<v-col cols="4"><span class="case tabular-label">{{ i18n.relatedEventId }}:</span></v-col>
-													<v-col cols="8"><span class="case value">
-														<router-link v-if="item.fields.soc_id" class="no-underline" :to="{ name: 'hunt', query: {q: buildHuntQuery(item) }}" data-aid="case_history_record_hunt">
-															{{ item.fields.soc_id }}
-														</router-link>
-														<span v-if="!item.fields.soc_id">
-															{{ i18n.caseEventIdAggregation }}
-														</span>
-													</span></v-col>
-												</v-row>
-											</div>
-										</div>
-										<div v-if="item.kind == i18n.attachments">
-											<div>
-												<v-row no-gutters class="py-1 case tabular-row">
-													<v-col cols="4"><span class="case tabular-label">{{ i18n.artifactGroupType }}:</span></v-col>
-													<v-col cols="8"><span class="case">{{ item.groupType }}</span></v-col>
-												</v-row>
-											</div>
-											<div>
-												<v-row no-gutters class="py-1 case tabular-row">
-													<v-col cols="4"><span class="case tabular-label">{{ i18n.artifactGroupId }}:</span></v-col>
-													<v-col cols="8"><span class="case">{{ item.groupId }}</span></v-col>
-												</v-row>
-											</div>
-											<div>
-												<v-row no-gutters class="py-1 case tabular-row">
-													<v-col cols="4"><span class="case tabular-label">{{ i18n.filename }}:</span></v-col>
-													<v-col cols="8"><span class="case">{{ item.value }}</span></v-col>
-												</v-row>
-											</div>
-											<div>
-												<v-row no-gutters class="py-1 case tabular-row">
-													<v-col cols="4"><span class="case tabular-label">{{ i18n.description }}:</span></v-col>
-													<v-col cols="8"><span class="case">{{ item.description }}</span></v-col>
-												</v-row>
-											</div>
-											<div>
-												<v-row no-gutters class="py-1 case tabular-row">
-													<v-col cols="4"><span class="case tabular-label">{{ i18n.caseTlp }}:</span></v-col>
-													<v-col cols="8"><span class="case">{{ item.tlp }}</span></v-col>
-												</v-row>
-											</div>
-											<div>
-												<v-row no-gutters class="py-1 case tabular-row">
-													<v-col cols="4"><span class="case tabular-label">{{ i18n.caseTags }}:</span></v-col>
-													<v-col cols="8"><span class="case">{{ item.tags }}</span></v-col>
-												</v-row>
-											</div>
-											<div>
-												<v-row no-gutters class="py-1 case tabular-row">
-													<v-col cols="4"><span class="case tabular-label">{{ i18n.artifactProtected }}:</span></v-col>
-													<v-col cols="8"><span class="case">{{ item.protected }}</span></v-col>
-												</v-row>
-											</div>
-										</div>
-										<div v-if="item.kind == i18n.evidence">
-											<div>
-												<v-row no-gutters class="py-1 case tabular-row">
-													<v-col cols="4"><span class="case tabular-label">{{ i18n.artifactGroupType }}:</span></v-col>
-													<v-col cols="8"><span class="case">{{ item.groupType }}</span></v-col>
-												</v-row>
-											</div>
-											<div>
-												<v-row no-gutters class="py-1 case tabular-row">
-													<v-col cols="4"><span class="case tabular-label">{{ i18n.artifactGroupId }}:</span></v-col>
-													<v-col cols="8"><span class="case">{{ item.groupId }}</span></v-col>
-												</v-row>
-											</div>
-											<div>
-												<v-row no-gutters class="py-1 case tabular-row">
-													<v-col cols="4"><span class="case tabular-label">{{ i18n.artifactType }}:</span></v-col>
-													<v-col cols="8"><span class="case">{{ item.artifactType }}</span></v-col>
-												</v-row>
-											</div>
-											<div>
-												<v-row no-gutters class="py-1 case tabular-row">
-													<v-col cols="4"><span class="case tabular-label">{{ i18n.value }}:</span></v-col>
-													<v-col cols="8"><span class="case">{{ item.value }}<span class="resolved-host" v-if="item.artifactType === 'ip' && $root.pickHostname(item.value)"> - {{ $root.pickHostname(item.value) }}</span></span></v-col>
-												</v-row>
-											</div>
-											<div>
-												<v-row no-gutters class="py-1 case tabular-row">
-													<v-col cols="4"><span class="case tabular-label">{{ i18n.description }}:</span></v-col>
-													<v-col cols="8"><span class="case">{{ item.description }}</span></v-col>
-												</v-row>
-											</div>
-											<div>
-												<v-row no-gutters class="py-1 case tabular-row">
-													<v-col cols="4"><span class="case tabular-label">{{ i18n.caseTlp }}:</span></v-col>
-													<v-col cols="8"><span class="case">{{ item.tlp }}</span></v-col>
-												</v-row>
-											</div>
-											<div>
-												<v-row no-gutters class="py-1 case tabular-row">
-													<v-col cols="4"><span class="case tabular-label">{{ i18n.artifactIoc }}:</span></v-col>
-													<v-col cols="8"><span class="case">{{ item.ioc }}</span></v-col>
-												</v-row>
-											</div>
-											<div>
-												<v-row no-gutters class="py-1 case tabular-row">
-													<v-col cols="4"><span class="case tabular-label">{{ i18n.caseTags }}:</span></v-col>
-													<v-col cols="8"><span class="case">{{ item.tags }}</span></v-col>
-												</v-row>
-											</div>
-										</div>
-
-										<div class="d-flex flex-column flex-sm-row align-end align-sm-center align-self-end text-body-2">
-											<v-spacer></v-spacer>
-											<v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white-text" data-aid="case_history_record_avatar_display">
-												<div class="case avatar-font" :title="item.owner">
+						<v-row>
+							<v-data-table id="history" ref="historyTable" :sort-by="associatedTable['history'].sortBy" v-model:items-per-page="associatedTable['history'].itemsPerPage"
+								:search="associatedTable['history'].search" :items-per-page-options="associatedTable['history'].itemsPerPageOptions" must-sort :headers="associatedTable['history'].headers"
+								:items="associations['history']" item-key="id" :loading="associatedTable['history'].loading" :expanded="associatedTable['history'].expanded" class="case-table">
+								<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
+									<tr>
+										<template v-for="header in columns" :key="header.key">
+											<th :class="{'is-sorted': isSorted(header)}" :data-aid="'case_history_header_' + header?.value?.toLowerCase()">
+												<span @click="toggleSort(header)">
+													{{ header.title }}
+												</span>
+												<template v-if="isSorted(header)">
+													<v-icon>
+														{{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down'}}
+													</v-icon>
+												</template>
+											</th>
+										</template>
+									</tr>
+								</template>
+								<template #item="{ index, item, isExpanded, toggleExpand, internalItem }">
+									<tr>
+										<td class="associated actions">
+											<v-btn :id="`history-${index}-expand`" icon variant="text" size="x-small" @click="toggleExpand(internalItem)">
+												<v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_history_collapse">fa-angle-down</v-icon>
+												<v-icon v-else :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_history_expand">fa-angle-right</v-icon>
+											</v-btn>
+										</td>
+										<td class="associated" data-aid="case_history_owner_display">
+											<v-avatar color="primary" class="mr-2 text-white" size="28" data-aid="case_history_avatar_display">
+												<div class="font-weight-bold" :title="item.owner">
 													{{ $root.getAvatar(item.owner) }}
 												</div>
 											</v-avatar>
-											<div class="mr-1" data-aid="case_history_record_owner_display">
-												{{ item.owner }}
+											{{ item.owner }}
+										</td>
+										<td class="associated" data-aid="case_history_timestamp_display">{{ formatDateTime(item.updateTime) }}</td>
+										<td class="associated" data-aid="case_history_kind_display">
+											<v-icon v-if="item.kind == i18n.case">fa-briefcase</v-icon>
+											<v-icon v-if="item.kind == i18n.comments">fa-comments</v-icon>
+											<v-icon v-if="item.kind == i18n.attachments">fa-paperclip</v-icon>
+											<v-icon v-if="item.kind == i18n.evidence">fa-eye</v-icon>
+											<v-icon v-if="item.kind == i18n.events">fa-link</v-icon>
+											<span class="rounded ml-2">{{ item.kind }}</span>
+										</td>
+										<td class="associated" data-aid="case_history_operation_display">
+											<v-icon v-if="item.operation == i18n.create">fa-plus</v-icon>
+											<v-icon v-if="item.operation == i18n.delete">fa-circle-xmark</v-icon>
+											<v-icon v-if="item.operation == i18n.update">fa-pencil-alt</v-icon>
+											<span class="rounded ml-2">{{ item.operation }}</span>
+										</td>
+									</tr>
+								</template>
+								<template #expanded-row="{ item }">
+									<tr data-aid="case_history_record">
+										<td colspan="5" class="case">
+											<div class="mt-2">
+												<v-row no-gutters class="py-1 case tabular-row">
+													<v-col cols="4"><span class="case tabular-label">{{ i18n.id }}:</span></v-col>
+													<v-col cols="8"><span class="case">{{ item.id }}</span></v-col>
+												</v-row>
 											</div>
-											<div class="mr-1 d-none d-sm-block">
-												&bull;
+											<div>
+												<v-row no-gutters class="py-1 case tabular-row">
+													<v-col cols="4"><span class="case tabular-label">{{ i18n.kind }}:</span></v-col>
+													<v-col cols="8"><span class="case">{{ item.kind }}</span></v-col>
+												</v-row>
 											</div>
-											<div data-aid="case_history_record_timestamp_display">
-												{{ formatDateTime(item.updateTime) }}
+											<div>
+												<v-row no-gutters class="py-1 case tabular-row">
+													<v-col cols="4"><span class="case tabular-label">{{ i18n.operation }}:</span></v-col>
+													<v-col cols="8"><span class="case">{{ item.operation }}</span></v-col>
+												</v-row>
 											</div>
-										</div>
-									</td>
-								</tr>
-							</template>
-							<template #no-data>
-								<v-alert :value="true" color="info" icon="fa-info" data-aid="case_history_no_results_display">
-									{{ i18n.noSearchResults }}
-								</v-alert>
-							</template>
-						</v-data-table>
+											<div>
+												<v-row no-gutters class="py-1 case tabular-row">
+													<v-col cols="4"><span class="case tabular-label">{{ i18n.dateCreated }}:</span></v-col>
+													<v-col cols="8"><span class="case">{{ formatDateTime(item.createTime) }}</span></v-col>
+												</v-row>
+											</div>
+											<div>
+												<v-row no-gutters class="py-1 case tabular-row">
+													<v-col cols="4"><span class="case tabular-label">{{ i18n.dateModified }}:</span></v-col>
+													<v-col cols="8"><span class="case">{{ formatDateTime(item.updateTime) }}</span></v-col>
+												</v-row>
+											</div>
+											<div v-if="item.kind == i18n.case">
+												<div>
+													<v-row no-gutters class="py-1 case tabular-row">
+														<v-col cols="4"><span class="case tabular-label">{{ i18n.caseTitle }}:</span></v-col>
+														<v-col cols="8"><span class="case">{{ item.title }}</span></v-col>
+													</v-row>
+												</div>
+												<div>
+													<v-row no-gutters class="py-1 case tabular-row">
+														<v-col cols="4"><span class="case tabular-label">{{ i18n.caseDescription }}:</span></v-col>
+														<v-col cols="8"><span class="case">{{ item.description }}</span></v-col>
+													</v-row>
+												</div>
+												<div>
+													<v-row no-gutters class="py-1 case tabular-row">
+														<v-col cols="4"><span class="case tabular-label">{{ i18n.caseAssignee }}:</span></v-col>
+														<v-col cols="8"><span class="case">{{ item.assignee }}</span></v-col>
+													</v-row>
+												</div>
+												<div>
+													<v-row no-gutters class="py-1 case tabular-row">
+														<v-col cols="4"><span class="case tabular-label">{{ i18n.caseStatus }}:</span></v-col>
+														<v-col cols="8"><span class="case">{{ item.status }}</span></v-col>
+													</v-row>
+												</div>
+												<div>
+													<v-row no-gutters class="py-1 case tabular-row">
+														<v-col cols="4"><span class="case tabular-label">{{ i18n.caseSeverity }}:</span></v-col>
+														<v-col cols="8"><span class="case">{{ item.severity }}</span></v-col>
+													</v-row>
+												</div>
+												<div>
+													<v-row no-gutters class="py-1 case tabular-row">
+														<v-col cols="4"><span class="case tabular-label">{{ i18n.casePriority }}:</span></v-col>
+														<v-col cols="8"><span class="case">{{ item.priority }}</span></v-col>
+													</v-row>
+												</div>
+												<div>
+													<v-row no-gutters class="py-1 case tabular-row">
+														<v-col cols="4"><span class="case tabular-label">{{ i18n.caseTlp }}:</span></v-col>
+														<v-col cols="8"><span class="case">{{ item.tlp }}</span></v-col>
+													</v-row>
+												</div>
+												<div>
+													<v-row no-gutters class="py-1 case tabular-row">
+														<v-col cols="4"><span class="case tabular-label">{{ i18n.caseCategory }}:</span></v-col>
+														<v-col cols="8"><span class="case">{{ item.category }}</span></v-col>
+													</v-row>
+												</div>
+												<div>
+													<v-row no-gutters class="py-1 case tabular-row">
+														<v-col cols="4"><span class="case tabular-label">{{ i18n.caseTags }}:</span></v-col>
+														<v-col cols="8"><span class="case">{{ item.tags }}</span></v-col>
+													</v-row>
+												</div>
+											</div>
+											<div v-if="item.kind == i18n.comments">
+												<div>
+													<v-row no-gutters class="py-1 case tabular-row">
+														<v-col cols="4"><span class="case tabular-label">{{ i18n.commentDescription }}:</span></v-col>
+														<v-col cols="8"><span class="case">{{ item.description }}</span></v-col>
+													</v-row>
+												</div>
+												<div v-if="$root.isLicensed($root.FEAT_TTR)">
+													<v-row no-gutters class="py-1 case tabular-row">
+														<v-col cols="4"><span class="case tabular-label">{{ i18n.commentHours }}:</span></v-col>
+														<v-col cols="8"><span class="case">{{ item.hours }}</span></v-col>
+													</v-row>
+												</div>
+											</div>
+											<div v-if="item.kind == i18n.events">
+												<div>
+													<v-row no-gutters class="py-1 case tabular-row">
+														<v-col cols="4"><span class="case tabular-label">{{ i18n.relatedEventId }}:</span></v-col>
+														<v-col cols="8"><span class="case value">
+															<router-link v-if="item.fields.soc_id" class="no-underline" :to="{ name: 'hunt', query: {q: buildHuntQuery(item) }}" data-aid="case_history_record_hunt">
+																{{ item.fields.soc_id }}
+															</router-link>
+															<span v-if="!item.fields.soc_id">
+																{{ i18n.caseEventIdAggregation }}
+															</span>
+														</span></v-col>
+													</v-row>
+												</div>
+											</div>
+											<div v-if="item.kind == i18n.attachments">
+												<div>
+													<v-row no-gutters class="py-1 case tabular-row">
+														<v-col cols="4"><span class="case tabular-label">{{ i18n.artifactGroupType }}:</span></v-col>
+														<v-col cols="8"><span class="case">{{ item.groupType }}</span></v-col>
+													</v-row>
+												</div>
+												<div>
+													<v-row no-gutters class="py-1 case tabular-row">
+														<v-col cols="4"><span class="case tabular-label">{{ i18n.artifactGroupId }}:</span></v-col>
+														<v-col cols="8"><span class="case">{{ item.groupId }}</span></v-col>
+													</v-row>
+												</div>
+												<div>
+													<v-row no-gutters class="py-1 case tabular-row">
+														<v-col cols="4"><span class="case tabular-label">{{ i18n.filename }}:</span></v-col>
+														<v-col cols="8"><span class="case">{{ item.value }}</span></v-col>
+													</v-row>
+												</div>
+												<div>
+													<v-row no-gutters class="py-1 case tabular-row">
+														<v-col cols="4"><span class="case tabular-label">{{ i18n.description }}:</span></v-col>
+														<v-col cols="8"><span class="case">{{ item.description }}</span></v-col>
+													</v-row>
+												</div>
+												<div>
+													<v-row no-gutters class="py-1 case tabular-row">
+														<v-col cols="4"><span class="case tabular-label">{{ i18n.caseTlp }}:</span></v-col>
+														<v-col cols="8"><span class="case">{{ item.tlp }}</span></v-col>
+													</v-row>
+												</div>
+												<div>
+													<v-row no-gutters class="py-1 case tabular-row">
+														<v-col cols="4"><span class="case tabular-label">{{ i18n.caseTags }}:</span></v-col>
+														<v-col cols="8"><span class="case">{{ item.tags }}</span></v-col>
+													</v-row>
+												</div>
+												<div>
+													<v-row no-gutters class="py-1 case tabular-row">
+														<v-col cols="4"><span class="case tabular-label">{{ i18n.artifactProtected }}:</span></v-col>
+														<v-col cols="8"><span class="case">{{ item.protected }}</span></v-col>
+													</v-row>
+												</div>
+											</div>
+											<div v-if="item.kind == i18n.evidence">
+												<div>
+													<v-row no-gutters class="py-1 case tabular-row">
+														<v-col cols="4"><span class="case tabular-label">{{ i18n.artifactGroupType }}:</span></v-col>
+														<v-col cols="8"><span class="case">{{ item.groupType }}</span></v-col>
+													</v-row>
+												</div>
+												<div>
+													<v-row no-gutters class="py-1 case tabular-row">
+														<v-col cols="4"><span class="case tabular-label">{{ i18n.artifactGroupId }}:</span></v-col>
+														<v-col cols="8"><span class="case">{{ item.groupId }}</span></v-col>
+													</v-row>
+												</div>
+												<div>
+													<v-row no-gutters class="py-1 case tabular-row">
+														<v-col cols="4"><span class="case tabular-label">{{ i18n.artifactType }}:</span></v-col>
+														<v-col cols="8"><span class="case">{{ item.artifactType }}</span></v-col>
+													</v-row>
+												</div>
+												<div>
+													<v-row no-gutters class="py-1 case tabular-row">
+														<v-col cols="4"><span class="case tabular-label">{{ i18n.value }}:</span></v-col>
+														<v-col cols="8"><span class="case">{{ item.value }}<span class="resolved-host" v-if="item.artifactType === 'ip' && $root.pickHostname(item.value)"> - {{ $root.pickHostname(item.value) }}</span></span></v-col>
+													</v-row>
+												</div>
+												<div>
+													<v-row no-gutters class="py-1 case tabular-row">
+														<v-col cols="4"><span class="case tabular-label">{{ i18n.description }}:</span></v-col>
+														<v-col cols="8"><span class="case">{{ item.description }}</span></v-col>
+													</v-row>
+												</div>
+												<div>
+													<v-row no-gutters class="py-1 case tabular-row">
+														<v-col cols="4"><span class="case tabular-label">{{ i18n.caseTlp }}:</span></v-col>
+														<v-col cols="8"><span class="case">{{ item.tlp }}</span></v-col>
+													</v-row>
+												</div>
+												<div>
+													<v-row no-gutters class="py-1 case tabular-row">
+														<v-col cols="4"><span class="case tabular-label">{{ i18n.artifactIoc }}:</span></v-col>
+														<v-col cols="8"><span class="case">{{ item.ioc }}</span></v-col>
+													</v-row>
+												</div>
+												<div>
+													<v-row no-gutters class="py-1 case tabular-row">
+														<v-col cols="4"><span class="case tabular-label">{{ i18n.caseTags }}:</span></v-col>
+														<v-col cols="8"><span class="case">{{ item.tags }}</span></v-col>
+													</v-row>
+												</div>
+											</div>
+
+											<div class="d-flex flex-column flex-sm-row align-end align-sm-center align-self-end text-body-2">
+												<v-spacer></v-spacer>
+												<v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white-text" data-aid="case_history_record_avatar_display">
+													<div class="case avatar-font" :title="item.owner">
+														{{ $root.getAvatar(item.owner) }}
+													</div>
+												</v-avatar>
+												<div class="mr-1" data-aid="case_history_record_owner_display">
+													{{ item.owner }}
+												</div>
+												<div class="mr-1 d-none d-sm-block">
+													&bull;
+												</div>
+												<div data-aid="case_history_record_timestamp_display">
+													{{ formatDateTime(item.updateTime) }}
+												</div>
+											</div>
+										</td>
+									</tr>
+								</template>
+								<template #no-data>
+									<v-alert :value="true" color="info" icon="fa-info" data-aid="case_history_no_results_display">
+										{{ i18n.noSearchResults }}
+									</v-alert>
+								</template>
+							</v-data-table>
+						</v-row>
 						<div class="text-xs-center pt-2 d-none">
 							<v-btn v-text="i18n.loadMore" @click="loadAssociation('history')" data-aid="case_history_load_more"></v-btn>
 						</div>

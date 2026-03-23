@@ -102,11 +102,11 @@
 	<v-row align="start">
 		<v-col cols="12">
 			<v-toolbar class="so-toolbar no-print elevation-0 theme-background-lighten-1" fixed>
-				<v-btn variant="flat" icon id="chat-new-button" @click="startNewChat" :title="i18n.chatNewChat" data-aid="assistant_banner_create_chat" class="create-button mx-2">
+				<v-btn variant="flat" icon id="chat-new-button" @click="startNewChat" :title="i18n.chatNewChat" data-aid="assistant_banner_create_chat" class="circle-button mx-2">
 					<v-icon>fa-plus</v-icon>
 				</v-btn>
 				<v-spacer></v-spacer>
-				<v-btn variant="flat" icon class="docs-button mx-2" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'onion-ai'" :title="i18n.contextualDocsBtn" data-aid="assistant_docs">
+				<v-btn variant="flat" icon class="circle-button mx-2" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'onion-ai'" :title="i18n.contextualDocsBtn" data-aid="assistant_docs">
 					<v-icon>fa-circle-question</v-icon>
 				</v-btn>
 			</v-toolbar>

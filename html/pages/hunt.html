@@ -143,19 +143,19 @@
 				<v-col style="flex: 0 0 auto;" class="pa-0">
 					<v-toolbar class="so-toolbar elevation-0" variant="flat">
 						<router-link v-if="createLink != ''" :to="createLink" style="text-decoration: none; cursor: 'pointer'" :data-aid="'create_new_record_' + category">
-							<v-btn variant="flat" icon class="create-button mx-2" id="add-case-button" :title="i18n.create">
+							<v-btn variant="flat" icon class="circle-button mx-2" id="add-case-button" :title="i18n.create">
 								<v-icon>fa-plus</v-icon>
 							</v-btn>
 						</router-link>
-						<v-btn id="hunt" class="hunt-button mx-2" icon :disabled="loading()" :color="huntPending ? 'light-green accent-4' : (autoRefreshInterval ? 'secondary' : 'primary')" @click.stop="hunt" :data-aid="'run_query_' + category">
+						<v-btn id="hunt" class="circle-button mx-2" icon :disabled="loading()" :color="huntPending ? 'light-green accent-4' : (autoRefreshInterval ? 'secondary' : 'primary')" @click.stop="hunt" :data-aid="'run_query_' + category">
 							<v-icon v-if="isCategory('hunt') && !autoRefreshInterval" :title="i18n.hunt">fa-crosshairs</v-icon>
 							<v-icon v-if="!isCategory('hunt') && !autoRefreshInterval" :title="i18n.refresh">fa-sync</v-icon>
 							<v-icon v-if="autoRefreshInterval">fa-hourglass-half</v-icon>
 						</v-btn>
-						<v-btn variant="flat" icon class="options-button mx-2" :title="i18n.options" @click="showOptionsDialog = true" id="huntOptionsHeader" data-aid="hunt_options_button">
+						<v-btn variant="flat" icon class="circle-button mx-2" :title="i18n.options" @click="showOptionsDialog = true" id="huntOptionsHeader" data-aid="hunt_options_button">
 							<v-icon>fa-gear</v-icon>
 						</v-btn>
-						<v-btn variant="flat" icon class="docs-button mx-2" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + this.category + '.html'" :title="i18n.contextualDocsBtn" data-aid="hunt_docs">
+						<v-btn variant="flat" icon class="circle-button mx-2" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + this.category + '.html'" :title="i18n.contextualDocsBtn" data-aid="hunt_docs">
 							<v-icon>fa-circle-question</v-icon>
 						</v-btn>
 					</v-toolbar>

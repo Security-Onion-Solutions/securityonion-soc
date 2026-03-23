@@ -26,6 +26,11 @@ body {
   font-optical-sizing: auto;
 }
 
+.v-expansion-panels,
+.v-expansion-panel {
+  border-radius: 0.75rem;
+}
+
 .options-dialog {
   border-radius: 0.75rem !important;
   padding: 8px
@@ -51,7 +56,7 @@ body {
   border-radius: 999px !important;
 }
 
-.create-button, .docs-button, .hunt-button, .options-button {
+.circle-button {
   background-color: rgba(var(--v-theme-primary));
   color: rgba(var(--v-theme-button_icon_color)) !important;
 }
@@ -135,8 +140,7 @@ body {
   background-color: rgba(var(--v-theme-background-lighten-1), 0.6);
 }
 
-#details-col .v-expansion-panels,
-#details-col .v-expansion-panel {
+.rounded.rounded-md {
   border-radius: 0.75rem !important;
 }
 
@@ -146,6 +150,10 @@ body {
 
 .v-field {
   border-radius: 0.75rem !important;
+}
+
+.override-form .v-input {
+  margin-bottom: 12px;
 }
 
 /* Pin textarea append slot to top when textarea grows */
