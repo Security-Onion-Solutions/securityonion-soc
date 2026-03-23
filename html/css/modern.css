@@ -665,6 +665,10 @@ body {
    Cards
    ============================================================ */
 
+.v-card {
+  border-radius: 0.75rem;
+}
+
 .v-theme--dark.v-card {
   background-color: rgb(var(--v-theme-drawer_background)) !important;  
 }

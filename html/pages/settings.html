@@ -1,10 +1,5 @@
 <v-container v-if="showSettingsForm" fluid data-aid="user_settings_screen">
-	<v-row>
-		<v-col>
-			<h2 v-text="i18n.settingsTitle"></h2>
-		</v-col>
-	</v-row>
-	<v-row>
+<v-row>
 		<v-col>
 			<v-alert v-if="$root.forceUserOtp" class="mt-2" type="error" icon="fa-shield-halved" border="left" colored-border text dense data-aid="user_settings_force_otp_alert">
 				{{ i18n.forceUserOtp }}

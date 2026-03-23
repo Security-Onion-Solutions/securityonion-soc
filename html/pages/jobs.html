@@ -1,11 +1,5 @@
 <v-container fluid data-aid="jobs_screen">
-	<v-row>
-		<v-col>
-			<h2 v-if="isKind('reports')" v-text="i18n.reports"></h2>
-			<h2 v-else v-text="i18n.pcap"></h2>
-		</v-col>
-	</v-row>
-	<v-row>
+<v-row>
 		<v-col>
 			<v-toolbar class="elevation-0 theme-background-lighten-1" fixed>
 				<v-btn v-if="canCreate()" variant="flat" @click.stop="openNewJobDialog" id="add-pcap-job-button" class="ml-3" data-aid="jobs_create_new">

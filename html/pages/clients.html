@@ -1,8 +1,5 @@
 <v-container fluid data-aid="clients_screen">
 	<v-row>
-		<v-col cols="12" lg="3">
-			<h2 v-text="i18n.clients"></h2>
-		</v-col>
 		<v-spacer></v-spacer>
 		<v-col cols="12" lg="2" align="end" data-aid="clients_summary">
 			<h4 v-if="!$root.loading">{{ i18n.clients }} {{ countClients() }} </h4>

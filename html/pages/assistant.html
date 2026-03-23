@@ -1,9 +1,6 @@
 <v-container v-if="!paramsLoaded" fluid data-aid="assistant_loading_parameters"></v-container>
 <v-container v-else-if="assistantEnabled" fluid data-aid="assistant_screen">
 	<v-row>
-		<v-col cols="12" lg="3">
-			<h2 v-text="i18n.chat"></h2>
-		</v-col>
 		<v-col cols="12" lg="5">
 			<v-expansion-panels>
 				<v-expansion-panel data-aid="assistant_options">
@@ -104,13 +101,13 @@
 	</v-row>
 	<v-row align="start">
 		<v-col cols="12">
-			<v-toolbar class="no-print elevation-0 theme-background-lighten-1" fixed>
-				<v-btn variant="flat" id="chat-new-button" @click="startNewChat" :title="i18n.chatNewChat" data-aid="assistant_banner_create_chat" class="mx-4">
-					<v-icon color="primary">fa-plus</v-icon>
+			<v-toolbar class="so-toolbar no-print elevation-0 theme-background-lighten-1" fixed>
+				<v-btn variant="flat" icon id="chat-new-button" @click="startNewChat" :title="i18n.chatNewChat" data-aid="assistant_banner_create_chat" class="create-button mx-2">
+					<v-icon>fa-plus</v-icon>
 				</v-btn>
 				<v-spacer></v-spacer>
-				<v-btn variant="flat" class="mx-4" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'onion-ai'" :title="i18n.contextualDocsBtn" data-aid="assistant_docs">
-					<v-icon color="secondary">fa-circle-question</v-icon>
+				<v-btn variant="flat" icon class="docs-button mx-2" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'onion-ai'" :title="i18n.contextualDocsBtn" data-aid="assistant_docs">
+					<v-icon>fa-circle-question</v-icon>
 				</v-btn>
 			</v-toolbar>
 		</v-col>
