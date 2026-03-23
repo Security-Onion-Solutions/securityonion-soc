@@ -1,115 +1,129 @@
 <v-container v-if="!paramsLoaded" fluid data-aid="assistant_loading_parameters"></v-container>
 <v-container v-else-if="assistantEnabled" fluid data-aid="assistant_screen">
-	<v-row>
-		<v-col cols="12" lg="5">
-			<v-expansion-panels>
-				<v-expansion-panel data-aid="assistant_options">
-					<v-expansion-panel-title id="chatOptionsHeader" expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up">{{i18n.options}}</v-expansion-panel-title>
-					<v-expansion-panel-text>
-						<span data-aid="assistant_increase_context_limit_toggle">
-							<v-switch
-								v-if="contextLimitLarge > contextLimitSmall"
-								id="increase-context-limit"
-								v-model="increaseContextLimit"
-								density="compact"
-								hide-details
-								class="my-0"
-								:label="i18n.increaseContextLimit"
-								color="primary">
-							</v-switch>
+	<v-dialog v-model="showOptionsDialog" max-width="540">
+		<v-card class="options-dialog">
+			<v-card-title>{{i18n.options}}</v-card-title>
+			<v-card-text data-aid="assistant_options">
+				<span data-aid="assistant_increase_context_limit_toggle">
+					<v-switch
+						v-if="contextLimitLarge > contextLimitSmall"
+						id="increase-context-limit"
+						v-model="increaseContextLimit"
+						density="compact"
+						hide-details
+						class="my-0"
+						:label="i18n.increaseContextLimit"
+						color="primary">
+					</v-switch>
+				</span>
+				<span data-aid="assistant_restore_last_active_toggle">
+					<v-switch
+						id="restore-last-active"
+						v-model="restoreLastActive"
+						density="compact"
+						hide-details
+						class="my-0"
+						:label="i18n.restoreLastActive"
+						color="primary">
+					</v-switch>
+				</span>
+				<span data-aid="assistant_always_approve_reads_toggle">
+					<v-switch
+						id="always-approve-read-requests"
+						v-model="alwaysApproveReadRequests"
+						density="compact"
+						hide-details
+						class="my-0"
+						:label="i18n.alwaysApproveReadRequests"
+						color="primary">
+					</v-switch>
+				</span>
+				<span data-aid="assistant_show_chat_history_toggle">
+					<v-switch
+						id="show-chat-history"
+						v-model="showChatHistory"
+						density="compact"
+						hide-details
+						class="my-0"
+						:label="i18n.showChatHistory"
+						color="primary">
+					</v-switch>
+				</span>
+				<span data-aid="assistant_show_model_thinking_toggle">
+					<v-switch
+						id="show-model-thinking"
+						v-model="showModelThinking"
+						density="compact"
+						hide-details
+						class="my-0"
+						:label="i18n.showModelThinking"
+						color="primary">
+					</v-switch>
+				</span>
+				<div class="my-4"></div>
+				<span data-aid="assistant_model_select">
+					<v-select
+						:disabled="$root.loading"
+						v-model="currentModel"
+						@update:model-value="updateModelParams()"
+						:items="groupedModels"
+						item-title="displayName"
+						item-value="key"
+						:hint="i18n.selectModel"
+						persistent-hint
+						variant="underlined"
+						prepend-icon="fa-microchip">
+						<template v-slot:item="{ props, item }">
+							<v-list-subheader v-if="item?.header" class="text-body-small">
+								{{ item.header }}
+							</v-list-subheader>
+							<v-list-item v-else v-bind="props"></v-list-item>
+						</template>
+					</v-select>
+				</span>
+			</v-card-text>
+			<v-card-actions>
+				<v-spacer></v-spacer>
+				<v-btn variant="text" @click="showOptionsDialog = false">{{ i18n.close }}</v-btn>
+			</v-card-actions>
+		</v-card>
+	</v-dialog>
+	<v-row align="stretch" class="ga-3" style="flex-wrap: nowrap;">
+		<v-col v-if="modelsMap.get(currentModel)?.adapter === 'SOAI'">
+			<div class="so-stat-pill" data-aid="assistant_credits_remaining">
+				<div class="so-stat-text">
+					<div class="so-stat-label">{{ i18n.creditsRemaining }}</div>
+					<div class="so-stat-value">
+						<span v-if="!creditsLoaded">
+							<v-progress-circular indeterminate color="primary" size="14" width="3"></v-progress-circular>
 						</span>
-						<span data-aid="assistant_restore_last_active_toggle">
-							<v-switch
-								id="restore-last-active"
-								v-model="restoreLastActive"
-								density="compact"
-								hide-details
-								class="my-0"
-								:label="i18n.restoreLastActive"
-								color="primary">
-							</v-switch>
-						</span>
-						<span data-aid="assistant_always_approve_reads_toggle">
-							<v-switch
-								id="always-approve-read-requests"
-								v-model="alwaysApproveReadRequests"
-								density="compact"
-								hide-details
-								class="my-0"
-								:label="i18n.alwaysApproveReadRequests"
-								color="primary">
-							</v-switch>
-						</span>
-						<span data-aid="assistant_show_chat_history_toggle">
-							<v-switch
-								id="show-chat-history"
-								v-model="showChatHistory"
-								density="compact"
-								hide-details
-								class="my-0"
-								:label="i18n.showChatHistory"
-								color="primary">
-							</v-switch>
-						</span>
-						<span data-aid="assistant_show_model_thinking_toggle">
-							<v-switch
-								id="show-model-thinking"
-								v-model="showModelThinking"
-								density="compact"
-								hide-details
-								class="my-0"
-								:label="i18n.showModelThinking"
-								color="primary">
-							</v-switch>
-						</span>
-						<span data-aid="assistant_model_select">
-							<v-select
-								:disabled="$root.loading"
-								v-model="currentModel"
-								@update:model-value="updateModelParams()"
-								:items="groupedModels"
-								item-title="displayName"
-								item-value="key"
-								:hint="i18n.selectModel"
-								persistent-hint
-								variant="underlined"
-								prepend-icon="fa-microchip">
-								<template v-slot:item="{ props, item }">
-									<v-list-subheader v-if="item?.header" class="text-body-small">
-										{{ item.header }}
-									</v-list-subheader>
-									<v-list-item v-else v-bind="props"></v-list-item>
-								</template>
-							</v-select>
-						</span>
-					</v-expansion-panel-text>
-				</v-expansion-panel>
-			</v-expansion-panels>
-		</v-col>
-		<v-col cols="12" lg="4" align="end">
-			<div v-if="modelsMap.get(currentModel)?.adapter === 'SOAI'">
-				<h4 data-aid="assistant_credits_remaining">{{ i18n.creditsRemaining }}:
-					<span v-if="!creditsLoaded">
-						<v-progress-circular indeterminate color="primary" size="14" width="3"></v-progress-circular>
-					</span>
-					<span v-else :class="creditsRemaining <= lowBalanceColorAlert ? 'text-error' : 'text-primary'">{{ formatCount(creditsRemaining) }}</span>
-				</h4>
-				<span class="text-body-small">{{ i18n.creditsSubjectToExpiration }}</span>
+						<span v-else :class="creditsRemaining <= lowBalanceColorAlert ? 'text-error' : 'text-primary'">{{ formatCount(creditsRemaining) }}</span>
+					</div>
+				</div>
+				<v-icon class="so-stat-icon">fa-coins</v-icon>
 			</div>
-			<h5 class="ml-5 mt-2" data-aid="assistant_current_model">{{ modelsMap.get(currentModel)?.displayName }}</h5>
 		</v-col>
-	</v-row>
-	<v-row align="start">
-		<v-col cols="12">
-			<v-toolbar class="so-toolbar no-print elevation-0 theme-background-lighten-1" fixed>
-				<v-btn variant="flat" icon id="chat-new-button" @click="startNewChat" :title="i18n.chatNewChat" data-aid="assistant_banner_create_chat" class="circle-button mx-2">
+		<v-col>
+			<div class="so-stat-pill" data-aid="assistant_current_model">
+				<div class="so-stat-text">
+					<div class="so-stat-label">{{ i18n.currentModel }}</div>
+					<div class="so-stat-value">{{ modelsMap.get(currentModel)?.displayName }}</div>
+				</div>
+				<v-icon class="so-stat-icon">fa-microchip</v-icon>
+			</div>
+		</v-col>
+		<v-col style="flex: 0 0 auto;">
+			<div class="so-stat-pill no-print" style="gap: 16px;">
+				<v-btn variant="flat" icon id="chat-new-button" @click="startNewChat" :title="i18n.chatNewChat" data-aid="assistant_banner_create_chat" class="circle-button">
 					<v-icon>fa-plus</v-icon>
 				</v-btn>
-				<v-spacer></v-spacer>
-				<v-btn variant="flat" icon class="circle-button mx-2" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'onion-ai'" :title="i18n.contextualDocsBtn" data-aid="assistant_docs">
+				<v-btn variant="flat" icon class="circle-button" :title="i18n.options" @click="showOptionsDialog = true" id="chatOptionsHeader" data-aid="assistant_options_button">
+					<v-icon>fa-gear</v-icon>
+				</v-btn>
+				<v-btn variant="flat" icon class="circle-button" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'onion-ai'" :title="i18n.contextualDocsBtn" data-aid="assistant_docs">
 					<v-icon>fa-circle-question</v-icon>
 				</v-btn>
-			</v-toolbar>
+			</div>
 		</v-col>
 	</v-row>
 	<v-row>

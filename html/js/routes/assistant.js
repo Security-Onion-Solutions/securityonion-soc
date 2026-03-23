@@ -59,6 +59,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     mruCases: [],
     perMessageStatsEnabled: false,
     showModelThinking: false,
+    showOptionsDialog: false,
   }},
   async created() {
     this.loadLocalSettings();
