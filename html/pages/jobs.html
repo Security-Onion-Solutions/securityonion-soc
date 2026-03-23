@@ -1,68 +1,72 @@
 <v-container fluid data-aid="jobs_screen">
 <v-row>
 		<v-col>
-			<v-toolbar class="elevation-0 theme-background-lighten-1" fixed>
-				<v-btn v-if="canCreate()" variant="flat" @click.stop="openNewJobDialog" id="add-pcap-job-button" class="ml-3" data-aid="jobs_create_new">
-					<v-icon color="primary">fa-plus</v-icon>
-				</v-btn>
-				<v-btn variant="flat" @click.stop="loadData()" id="jobs-refresh-button" class="ml-3" data-aid="jobs_refresh_button">
-					<v-icon color="secondary">fa-sync</v-icon>
-				</v-btn>
-				<v-spacer></v-spacer>
-				<v-btn variant="flat" class="mx-4" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + (isKind('reports') ? 'reports' : 'pcap')" :title="i18n.contextualDocsBtn" data-aid="jobs_docs">
-					<v-icon color="secondary">fa-circle-question</v-icon>
-				</v-btn>		  
-			</v-toolbar>
-			<v-data-table :sort-by="sortBy" @update:sort-by="val => sortBy = val" :items-per-page-options="itemsPerPageOptions" v-model:items-per-page="itemsPerPage"
-				must-sort :headers="getHeaders()" :items="jobs">
-				<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
-					<tr>
-						<template v-for="header in columns" :key="header.key">
-							<th :class="{'is-sorted': isSorted(header)}" v-if="header.value != 'expand' || $root.isUserAdmin()" :data-aid="'jobs_header_' + header?.value?.toLowerCase()">
-								<span @click="toggleSort(header)">
-									{{ header.title }}
-								</span>
-								<template v-if="isSorted(header)">
-									<v-icon>
-										{{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down'}}
-									</v-icon>
-								</template>
-							</th>
-						</template>
-					</tr>
-				</template>
-				<template #item="{ item }">
-					<tr>
-						<td>
-							<router-link v-if="isViewable()" :to="{ name: 'job', params: {jobId: item.id}}" style="cursor: 'pointer'" data-aid="jobs_open_id">
-								{{ item.id }}
-							</router-link>
-							<a v-else-if="isDownloadable() && isDownloadReady(item)" :target="'report-' + item.id" :href="downloadUrl(item)" style="cursor: 'pointer'" data-aid="jobs_download_id">
-								{{ item.id }}
-							</a>
-							<div v-else>
-								{{ item.id }}
-							</div>
-						</td>
-						<td>{{ item.owner }}</td>
-						<td>{{ formatTimestamp(item.createTime) }}</td>
-						<td v-if="isSensorJob()">{{ formatTimestamp(item.completeTime) }}</td>
-						<td v-if="isSensorJob()" v-text="item.nodeId"></td>
-						<td v-else-if="isDownloadable()" v-text="getDescription(item)"></td>
-						<td v-if="isDownloadable()">{{ formatCount(formatDecimal1(item.size / 1000)) }} KB</td>
-						<td><v-chip density="compact" :color="colorJobStatus(item)" data-aid="jobs_status">{{ formatJobStatus(item) }}</v-chip></td>
-						<td>
-							<router-link v-if="isViewable()" :to="{ name: 'job', params: {jobId: item.id}}" style="text-decoration: none; cursor: 'pointer'" data-aid="jobs_open">
-								<v-icon class="mr-2" :title="i18n.view">fa-binoculars</v-icon>
-							</router-link>
-							<a v-if="isDownloadable() && isDownloadReady(item)" :target="'report-' + item.id" :href="downloadUrl(item)" style="text-decoration: none; cursor: 'pointer'" data-aid="jobs_download">
-								<v-icon class="mr-2" :title="i18n.view">fa-download</v-icon>
-							</a>
-							<v-icon class="mr-2" :title="i18n.delete" @click.stop="deleteJob(item)" data-aid="jobs_delete">fa-times-circle</v-icon>
-						</td>
-					</tr>
-				</template>
-			</v-data-table>
+			<v-row>
+				<v-toolbar class="so-toolbar elevation-0" fixed>
+					<v-btn v-if="canCreate()" icon variant="flat" @click.stop="openNewJobDialog" id="add-pcap-job-button" class="circle-button mx-2" data-aid="jobs_create_new">
+						<v-icon>fa-plus</v-icon>
+					</v-btn>
+					<v-btn icon variant="flat" @click.stop="loadData()" id="jobs-refresh-button" class="circle-button mx-2" data-aid="jobs_refresh_button">
+						<v-icon>fa-sync</v-icon>
+					</v-btn>
+					<v-spacer></v-spacer>
+					<v-btn icon variant="flat" class="circle-button mx-2" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + (isKind('reports') ? 'reports' : 'pcap')" :title="i18n.contextualDocsBtn" data-aid="jobs_docs">
+						<v-icon>fa-circle-question</v-icon>
+					</v-btn>		  
+				</v-toolbar>
+			</v-row>
+			<v-row>
+				<v-data-table :sort-by="sortBy" @update:sort-by="val => sortBy = val" :items-per-page-options="itemsPerPageOptions" v-model:items-per-page="itemsPerPage"
+					must-sort :headers="getHeaders()" :items="jobs">
+					<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
+						<tr>
+							<template v-for="header in columns" :key="header.key">
+								<th :class="{'is-sorted': isSorted(header)}" v-if="header.value != 'expand' || $root.isUserAdmin()" :data-aid="'jobs_header_' + header?.value?.toLowerCase()">
+									<span @click="toggleSort(header)">
+										{{ header.title }}
+									</span>
+									<template v-if="isSorted(header)">
+										<v-icon>
+											{{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down'}}
+										</v-icon>
+									</template>
+								</th>
+							</template>
+						</tr>
+					</template>
+					<template #item="{ item }">
+						<tr>
+							<td>
+								<router-link v-if="isViewable()" :to="{ name: 'job', params: {jobId: item.id}}" style="cursor: 'pointer'" data-aid="jobs_open_id">
+									{{ item.id }}
+								</router-link>
+								<a v-else-if="isDownloadable() && isDownloadReady(item)" :target="'report-' + item.id" :href="downloadUrl(item)" style="cursor: 'pointer'" data-aid="jobs_download_id">
+									{{ item.id }}
+								</a>
+								<div v-else>
+									{{ item.id }}
+								</div>
+							</td>
+							<td>{{ item.owner }}</td>
+							<td>{{ formatTimestamp(item.createTime) }}</td>
+							<td v-if="isSensorJob()">{{ formatTimestamp(item.completeTime) }}</td>
+							<td v-if="isSensorJob()" v-text="item.nodeId"></td>
+							<td v-else-if="isDownloadable()" v-text="getDescription(item)"></td>
+							<td v-if="isDownloadable()">{{ formatCount(formatDecimal1(item.size / 1000)) }} KB</td>
+							<td><v-chip density="compact" :color="colorJobStatus(item)" data-aid="jobs_status">{{ formatJobStatus(item) }}</v-chip></td>
+							<td>
+								<router-link v-if="isViewable()" :to="{ name: 'job', params: {jobId: item.id}}" style="text-decoration: none; cursor: 'pointer'" data-aid="jobs_open">
+									<v-icon class="mr-2" :title="i18n.view">fa-binoculars</v-icon>
+								</router-link>
+								<a v-if="isDownloadable() && isDownloadReady(item)" :target="'report-' + item.id" :href="downloadUrl(item)" style="text-decoration: none; cursor: 'pointer'" data-aid="jobs_download">
+									<v-icon class="mr-2" :title="i18n.view">fa-download</v-icon>
+								</a>
+								<v-icon class="mr-2" :title="i18n.delete" @click.stop="deleteJob(item)" data-aid="jobs_delete">fa-times-circle</v-icon>
+							</td>
+						</tr>
+					</template>
+				</v-data-table>
+			</v-row>
 			<v-dialog v-model="dialog" width="800px" data-aid="jobs_create_dialog">
 				<v-card id="pcap-job-dialog">
 					<v-card-title class="lighten-4 py-4 title">{{ i18n.add }} {{ i18n.job }}</v-card-title>

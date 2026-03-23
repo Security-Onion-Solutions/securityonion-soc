@@ -156,6 +156,10 @@ body {
   margin-bottom: 12px;
 }
 
+#pcap-job-dialog .v-text-field {
+  margin-bottom: 12px;
+}
+
 /* Pin textarea append slot to top when textarea grows */
 .v-textarea.v-input--horizontal > .v-input__append {
   align-self: start !important;
@@ -679,4 +683,8 @@ body {
 
 .v-theme--dark.v-card {
   background-color: rgb(var(--v-theme-drawer_background)) !important;  
+}
+
+.toolbar-bold-metric {
+  margin-left: 6px !important;
 }

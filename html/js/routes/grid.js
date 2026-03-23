@@ -19,6 +19,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
   data() { return {
     i18n: this.$root.i18n,
     moment: moment,
+    showOptionsDialog: false,
     nodes: [],
     gridFilter: '',
     headers: [
