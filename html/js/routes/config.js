@@ -12,6 +12,7 @@ routes.push({
     data() {
       return {
         i18n: this.$root.i18n,
+        showOptionsDialog: false,
         settings: [],
         search: "",
         searchFilter: null,

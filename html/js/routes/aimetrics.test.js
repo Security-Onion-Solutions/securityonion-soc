@@ -147,7 +147,6 @@ test('component data initialization', () => {
   expect(comp.itemsPerPageOptions).toEqual([10, 50, 250, 1000]);
   expect(comp.tableSetting).toBe(0);
   expect(comp.expanded).toEqual([]);
-  expect(comp.creditsRemaining).toBe(0);
   expect(comp.searchFilter).toBe('');
   expect(comp.dateRange).toBe('');
   expect(comp.relativeTimeEnabled).toBe(true);
@@ -337,10 +336,6 @@ test('loadLocalSettings handles missing localStorage values', () => {
 test('initAssistant sets assistantEnabled to true when enabled and licensed', async () => {
   const mockParams = {
     enabled: true,
-    availableModels: [
-      { id: 'gpt-4', adapter: 'OpenAI', enabled: true },
-      { id: 'claude-3', adapter: 'SOAI', enabled: true }
-    ]
   };
   comp.$root.isLicensed = jest.fn().mockReturnValue(true);
   comp.loadData = jest.fn();
@@ -350,14 +345,11 @@ test('initAssistant sets assistantEnabled to true when enabled and licensed', as
   expect(comp.assistantEnabled).toBe(true);
   expect(comp.$root.isLicensed).toHaveBeenCalledWith('oai');
   expect(comp.loadData).toHaveBeenCalled();
-  expect(comp.availableModels).toHaveLength(2);
-  expect(comp.balanceEndpoint).toBe('claude-3@SOAI');
 });
 
 test('initAssistant sets assistantEnabled to false when not enabled', async () => {
   const mockParams = {
     enabled: false,
-    availableModels: []
   };
   comp.$root.isLicensed = jest.fn().mockReturnValue(true);
   comp.loadData = jest.fn();
@@ -371,7 +363,6 @@ test('initAssistant sets assistantEnabled to false when not enabled', async () =
 test('initAssistant sets assistantEnabled to false when not licensed', async () => {
   const mockParams = {
     enabled: true,
-    availableModels: []
   };
   comp.$root.isLicensed = jest.fn().mockReturnValue(false);
   comp.loadData = jest.fn();
@@ -413,7 +404,6 @@ test('loadData with no route parameters loads users data', async () => {
   const mock = mockPapi("get", mockResponse);
   comp.loadLocalSettings = jest.fn();
   comp.updateBreadcrumbs = jest.fn();
-  comp.loadCredits = jest.fn().mockResolvedValue();
   comp.resetRefreshTimer = jest.fn();
   comp.lookupSocId = jest.fn().mockResolvedValue('user1@example.com');
   comp.populateUsersCharts = jest.fn();
@@ -448,7 +438,6 @@ test('loadData with no route parameters loads users data', async () => {
   expect(comp.aimetrics[0].usage.totalMessages).toBe(10);
   expect(comp.lookupSocId).toHaveBeenCalledWith('user1');
   expect(comp.$root.stopLoading).toHaveBeenCalled();
-  expect(comp.loadCredits).toHaveBeenCalled();
   expect(comp.resetRefreshTimer).toHaveBeenCalled();
 });
 
@@ -472,7 +461,6 @@ test('loadData with userId parameter loads sessions data', async () => {
   comp.$route.params.userId = 'user1';
   comp.loadLocalSettings = jest.fn();
   comp.updateBreadcrumbs = jest.fn();
-  comp.loadCredits = jest.fn().mockResolvedValue();
   comp.resetRefreshTimer = jest.fn();
   comp.populateSessionsCharts = jest.fn();
   comp.$root.startLoading = jest.fn();
@@ -530,7 +518,6 @@ test('loadData with userId and sessionId parameters loads messages data', async 
   comp.$route.params.sessionId = 'session1';
   comp.loadLocalSettings = jest.fn();
   comp.updateBreadcrumbs = jest.fn();
-  comp.loadCredits = jest.fn().mockResolvedValue();
   comp.resetRefreshTimer = jest.fn();
   comp.formatExpandMessage = jest.fn().mockReturnValue('formatted message');
   comp.$root.startLoading = jest.fn();
@@ -570,7 +557,6 @@ test('loadData handles API error', async () => {
   mockPapi("get", null, error);
   comp.loadLocalSettings = jest.fn();
   comp.updateBreadcrumbs = jest.fn();
-  comp.loadCredits = jest.fn().mockResolvedValue();
   comp.resetRefreshTimer = jest.fn();
   comp.$root.startLoading = jest.fn();
   comp.$root.stopLoading = jest.fn();
@@ -586,88 +572,7 @@ test('loadData handles API error', async () => {
   expect(comp.$root.showError).toHaveBeenCalledWith(error);
   expect(comp.aimetrics).toEqual([]);
   expect(comp.$root.stopLoading).toHaveBeenCalled();
-  expect(comp.loadCredits).toHaveBeenCalled();
   expect(comp.resetRefreshTimer).toHaveBeenCalled();
-});
-
-// Credits loading tests
-test('loadCredits success', async () => {
-  const mockResponse = {
-    data: {
-      health_status: 'healthy',
-      credit_balance: 150
-    }
-  };
-  const mock = mockPapi("get", mockResponse);
-  comp.balanceEndpoint = 'test-model@SOAI';
-  
-  await comp.loadCredits();
-  
-  expect(mock).toHaveBeenCalledWith('/assistant/balance/test-model@SOAI');
-  expect(comp.creditsRemaining).toBe(150);
-  expect(comp.creditsLoaded).toBe(true);
-});
-
-test('loadCredits handles 500 error due to outage', async () => {
-  const error = new Error('Internal Server Error');
-  error.response = { status: 500, data: "ERROR_UPSTREAM_SERVICE_ERROR" };
-  mockPapi("get", null, error);
-  comp.$root.showError = jest.fn();
-  comp.balanceEndpoint = 'test-model@SOAI';
-  
-  await comp.loadCredits();
-  
-  expect(comp.$root.showError).toHaveBeenCalledWith(error);
-  expect(comp.creditsLoaded).toBe(false);
-});
-
-test('loadCredits handles error without response', async () => {
-  const error = new Error('Network error');
-  mockPapi("get", null, error);
-  comp.$root.showError = jest.fn();
-  comp.balanceEndpoint = 'test-model@SOAI';
-  
-  await comp.loadCredits();
-  
-  expect(comp.$root.showError).toHaveBeenCalledWith(error);
-  expect(comp.creditsLoaded).toBe(false);
-});
-
-test('loadCredits handles unhealthy status', async () => {
-  const mockResponse = {
-    data: {
-      health_status: 'unhealthy',
-      credit_balance: 100
-    }
-  };
-  mockPapi("get", mockResponse);
-  comp.$root.showError = jest.fn();
-  comp.balanceEndpoint = 'test-model@SOAI';
-  
-  await comp.loadCredits();
-  
-  expect(comp.$root.showError).toHaveBeenCalledWith(new Error(comp.i18n.assistantBalanceCheckUnhealthy));
-  expect(comp.creditsLoaded).toBe(false);
-});
-
-test('loadCredits handles missing data', async () => {
-  const mockResponse = { data: null };
-  mockPapi("get", mockResponse);
-  comp.balanceEndpoint = 'test-model@SOAI';
-  
-  await comp.loadCredits();
-  
-  expect(comp.creditsRemaining).toBe(0);
-});
-
-test('loadCredits returns early when no balanceEndpoint', async () => {
-  comp.balanceEndpoint = '';
-  const mock = mockPapi("get", {});
-  
-  await comp.loadCredits();
-  
-  expect(mock).not.toHaveBeenCalled();
-  expect(comp.creditsLoaded).toBe(true);
 });
 
 // User lookup tests
@@ -1298,15 +1203,8 @@ test('full data loading flow for users', async () => {
       }
     ]
   };
-  const mockCreditsResponse = {
-    data: {
-      health_status: 'healthy',
-      credit_balance: 1000
-    }
-  };
   
   const usersMock = mockPapi("get", mockUsersResponse);
-  const creditsMock = mockPapi("get", mockCreditsResponse);
   
   comp.loadLocalSettings = jest.fn();
   comp.updateBreadcrumbs = jest.fn();
@@ -1318,7 +1216,6 @@ test('full data loading flow for users', async () => {
   comp.$root.adjustSubgridColVisibility = jest.fn();
   comp.getStartDate = jest.fn().mockReturnValue(moment('2025-01-01'));
   comp.getEndDate = jest.fn().mockReturnValue(moment('2025-01-02'));
-  comp.balanceEndpoint = 'test-model@SOAI';
   
   // Set assistantEnabled to true to bypass the early return
   comp.assistantEnabled = true;
@@ -1333,8 +1230,6 @@ test('full data loading flow for users', async () => {
   expect(comp.aimetrics[0].usage.totalCredits).toBe(500);
   expect(comp.aimetrics[0].usage.totalMessages).toBe(50);
   expect(comp.lookupSocId).toHaveBeenCalledWith('12345678-1234-1234-1234-123456789012');
-  expect(comp.creditsRemaining).toBe(1000);
-  expect(comp.creditsLoaded).toBe(true);
 });
 
 test('settings persistence integration', () => {
@@ -1385,7 +1280,6 @@ test('error handling integration', async () => {
   comp.loadLocalSettings = jest.fn();
   comp.updateBreadcrumbs = jest.fn();
   comp.resetRefreshTimer = jest.fn();
-  comp.loadCredits = jest.fn().mockResolvedValue();
   comp.$root.startLoading = jest.fn();
   comp.$root.stopLoading = jest.fn();
   comp.$root.showError = jest.fn();
@@ -1400,7 +1294,6 @@ test('error handling integration', async () => {
   expect(comp.$root.showError).toHaveBeenCalledWith(apiError);
   expect(comp.aimetrics).toEqual([]);
   expect(comp.$root.stopLoading).toHaveBeenCalled();
-  expect(comp.loadCredits).toHaveBeenCalled();
   expect(comp.resetRefreshTimer).toHaveBeenCalled();
 });
 
@@ -1411,7 +1304,6 @@ test('handles empty API responses', async () => {
   
   comp.loadLocalSettings = jest.fn();
   comp.updateBreadcrumbs = jest.fn();
-  comp.loadCredits = jest.fn().mockResolvedValue();
   comp.resetRefreshTimer = jest.fn();
   comp.$root.startLoading = jest.fn();
   comp.$root.stopLoading = jest.fn();

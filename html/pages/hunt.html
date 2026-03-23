@@ -128,7 +128,7 @@
 						</v-text-field>
 						<v-text-field :disabled="loading()" v-if="!relativeTimeEnabled" id="huntdaterange" @change="notifyInputsChanged" class="mx-2 closer-prepend"
 							v-model="dateRange"
-							:data-aid="'absolute_time_' + category" hide-details style="min-width: 490px; max-width: 560px;">
+							:data-aid="'absolute_time_' + category" hide-details style="min-width: 502px; max-width: 560px;">
 							<template #prepend>
 								<v-btn v-if="!relativeTimeEnabled" icon variant="text" size="x-small" @click="showRelativeTime" id="show-relative-time" :data-aid="'relative_time_toggle_' + category">
 									<v-icon class="theme-icon">fa-calendar-alt</v-icon>

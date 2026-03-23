@@ -1,64 +1,68 @@
 <v-container fluid data-aid="queries_screen">
-  <v-row>
-      <v-col cols="12" lg="5">
-        <v-expansion-panels>
-          <v-expansion-panel data-aid="queries_options_expand">
-            <v-expansion-panel-title id="queries-options-header" expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up">{{i18n.options}}</v-expansion-panel-title>
-            <v-expansion-panel-text>
-              <span data-aid="queries_filter_toggle">
-                <v-switch v-model="filterEnabled" density="compact" hide-details class="my-0" :label="i18n.activeQueriesFilter"></v-switch>
-              </span>
-            </v-expansion-panel-text>
-          </v-expansion-panel>
-        </v-expansion-panels>
-      </v-col>
-      <v-spacer></v-spacer>
-      <v-col cols="12" lg="2" align="end" data-aid="users_summary">
-        <h4>{{ i18n.activeQueriesCount }} {{ queries.length }}</h4>
-      </v-col>
-    </v-row>
+  <v-dialog v-model="showOptionsDialog" max-width="540">
+    <v-card class="options-dialog">
+      <v-card-title>{{i18n.options}}</v-card-title>
+      <v-card-text data-aid="queries_options">
+        <span data-aid="queries_filter_toggle">
+          <v-switch v-model="filterEnabled" density="compact" hide-details class="my-0" :label="i18n.activeQueriesFilter"></v-switch>
+        </span>
+      </v-card-text>
+      <v-card-actions>
+        <v-spacer></v-spacer>
+        <v-btn variant="text" @click="showOptionsDialog = false">{{ i18n.close }}</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
     <v-row>
     <v-col>
-      <v-toolbar class="elevation-0 theme-background-lighten-1" fixed>
-        <v-btn variant="flat" @click.stop="loadData()" id="queries_refresh_button" class="ml-3" data-aid="queries_refresh">
-          <v-icon color="primary">fa-sync</v-icon>
-        </v-btn>
-        <v-spacer></v-spacer>
-        <v-btn variant="flat" class="mx-4" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'active-query-management'" :title="i18n.contextualDocsBtn" data-aid="queries_docs">
-          <v-icon color="secondary">fa-circle-question</v-icon>
-        </v-btn>
-      </v-toolbar>
-      <v-data-table :sort-by="sortBy" @update:sort-by="val => sortBy = val" @update:items-per-page="val => itemsPerPage = val" :items-per-page-options="itemsPerPageOptions"
-      :items-per-page="itemsPerPage" must-sort :headers="headers" :items="queries">
-      <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
-        <tr>
-          <template v-for="header in columns" :key="header.key">
-            <th :class="[ header.align, {'is-sorted': isSorted(header)} ]" :data-aid="'queries_header_' + header?.value?.toLowerCase()">
-              <span @click="toggleSort(header)">
-                {{ header.title }}
-              </span>
-              <template v-if="isSorted(header)">
-                <v-icon>
-                  {{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down'}}
-                </v-icon>
+      <v-row>
+        <v-toolbar class="so-toolbar elevation-0" fixed>
+          <h4 class="toolbar-bold-metric" data-aid="queries_summary">{{ i18n.activeQueriesCount }} {{ queries.length }}</h4>
+          <v-spacer></v-spacer>
+          <v-btn icon variant="flat" @click.stop="loadData()" id="queries_refresh_button" class="circle-button mx-2" data-aid="queries_refresh">
+            <v-icon>fa-sync</v-icon>
+          </v-btn>
+          <v-btn icon variant="flat" class="circle-button mx-2" :title="i18n.options" @click="showOptionsDialog = true" id="queries-options-header" data-aid="queries_options_button">
+            <v-icon>fa-gear</v-icon>
+          </v-btn>
+          <v-btn icon variant="flat" class="circle-button mx-2" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'active-query-management'" :title="i18n.contextualDocsBtn" data-aid="queries_docs">
+            <v-icon>fa-circle-question</v-icon>
+          </v-btn>
+        </v-toolbar>
+      </v-row>
+      <v-row>
+        <v-data-table :sort-by="sortBy" @update:sort-by="val => sortBy = val" @update:items-per-page="val => itemsPerPage = val" :items-per-page-options="itemsPerPageOptions"
+        :items-per-page="itemsPerPage" must-sort :headers="headers" :items="queries">
+          <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
+            <tr>
+              <template v-for="header in columns" :key="header.key">
+                <th :class="[ header.align, {'is-sorted': isSorted(header)} ]" :data-aid="'queries_header_' + header?.value?.toLowerCase()">
+                  <span @click="toggleSort(header)">
+                    {{ header.title }}
+                  </span>
+                  <template v-if="isSorted(header)">
+                    <v-icon>
+                      {{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down'}}
+                    </v-icon>
+                  </template>
+                </th>
               </template>
-            </th>
+            </tr>
           </template>
-        </tr>
-      </template>
-      <template #item="{ item }">
-        <tr>
-          <td>{{ item.taskId }}</td>
-          <td v-if="$root.hasSubgrids()">{{ item.gridId ? item.gridId : i18n.gridLocal }}</td>
-          <td>{{ item.details }}</td>
-          <td :title="formatDateTime(item.startTime)">{{ formatDuration(item.elapsedMs / 1000) }}</td>
-          <td>
-              <v-icon v-if="item.cancelable" class="mr-2" :title="i18n.cancel" @click.stop="showCancelQueryConfirm(item)" data-aid="queries_cancel">fa-times-circle</v-icon>
-          </td>
-        </tr>
-      </template>
-    </v-data-table>
-  </v-col>
+          <template #item="{ item }">
+            <tr>
+              <td>{{ item.taskId }}</td>
+              <td v-if="$root.hasSubgrids()">{{ item.gridId ? item.gridId : i18n.gridLocal }}</td>
+              <td>{{ item.details }}</td>
+              <td :title="formatDateTime(item.startTime)">{{ formatDuration(item.elapsedMs / 1000) }}</td>
+              <td>
+                  <v-icon v-if="item.cancelable" class="mr-2" :title="i18n.cancel" @click.stop="showCancelQueryConfirm(item)" data-aid="queries_cancel">fa-times-circle</v-icon>
+              </td>
+            </tr>
+          </template>
+        </v-data-table>
+      </v-row>
+    </v-col>
   </v-row>
 </v-container>
 

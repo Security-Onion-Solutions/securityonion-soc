@@ -10,6 +10,7 @@ routes.push({ path: '/queries', name: 'queries', component: {
   template: '#page-queries',
   data() { return {
     i18n: this.$root.i18n,
+    showOptionsDialog: false,
     queries: [],
     headers: [
       { title: this.$root.i18n.id, value: 'taskId' },

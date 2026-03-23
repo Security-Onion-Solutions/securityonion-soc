@@ -1,105 +1,89 @@
 <v-container v-if="!paramsLoaded" fluid data-aid="aimetrics_loading_parameters"></v-container>
 <v-container v-else-if="assistantEnabled" fluid data-aid="aimetrics_screen">
-  <v-row>
-    <v-col cols="12" lg="5">
-      <v-expansion-panels class="no-print">
-        <v-expansion-panel data-aid="aimetrics_options">
-          <v-expansion-panel-title id="aimetrics-options-header" expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up">{{i18n.options}}</v-expansion-panel-title>
-          <v-expansion-panel-text>
-            <span data-aid="aimetrics_autorefresh_select">
-              <v-select id="aimetrics-auto-refresh" :disabled="$root.loading" v-model="autoRefreshInterval" @update:focused="autoRefreshIntervalChanged" :items="autoRefreshIntervals" :hint="i18n.autoRefresh" persistent-hint prepend-icon="fa-hourglass-half"></v-select>
-            </span>
-            <span data-aid="aimetrics_timezone_select">
-              <v-select :disabled="$root.loading" @update:model-value="zone = $event; saveLocalSettings(); loadData()" v-model="zone" :items="$root.timezones" :hint="i18n.timezoneHelp" persistent-hint prepend-icon="fa-user-clock"></v-select>
-            </span>
-          </v-expansion-panel-text>
-        </v-expansion-panel>
-      </v-expansion-panels>
+  <v-dialog v-model="showOptionsDialog" max-width="540">
+    <v-card class="options-dialog">
+      <v-card-title>{{i18n.options}}</v-card-title>
+      <v-card-text data-aid="aimetrics_options">
+        <span data-aid="aimetrics_autorefresh_select">
+          <v-select id="aimetrics-auto-refresh" :disabled="$root.loading" v-model="autoRefreshInterval" @update:focused="autoRefreshIntervalChanged" :items="autoRefreshIntervals" :hint="i18n.autoRefresh" persistent-hint prepend-icon="fa-hourglass-half"></v-select>
+        </span>
+        <span data-aid="aimetrics_timezone_select">
+          <v-select :disabled="$root.loading" @update:model-value="zone = $event; saveLocalSettings(); loadData()" v-model="zone" :items="$root.timezones" :hint="i18n.timezoneHelp" persistent-hint prepend-icon="fa-user-clock"></v-select>
+        </span>
+      </v-card-text>
+      <v-card-actions>
+        <v-spacer></v-spacer>
+        <v-btn variant="text" @click="showOptionsDialog = false">{{ i18n.close }}</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
+  <v-row align="center" class="no-print" style="gap: 8px; flex-wrap: nowrap;">
+    <v-col style="flex: 0 0 auto;" class="pa-0 align-self-end" id="aimetrics-breadcrumbs">
+      <v-breadcrumbs :items="breadcrumbs" density="compact" class="py-0">
+        <template #item="{ item }">
+          <v-breadcrumbs-item
+            :to="item.to"
+            :disabled="item.disabled"
+            :data-aid="'aimetrics_breadcrumb_' + item.title"
+          >
+            {{ item.title }}
+          </v-breadcrumbs-item>
+        </template>
+        <template #divider>
+          <v-icon>fa-chevron-right</v-icon>
+        </template>
+      </v-breadcrumbs>
     </v-col>
     <v-spacer></v-spacer>
-    <v-col cols="12" lg="2" align="end">
-      <h4 data-aid="aimetrics_credits_remaining">{{ i18n.creditsRemaining }}:
-        <span v-if="!creditsLoaded">
-					<v-progress-circular indeterminate color="primary" size="14" width="3"></v-progress-circular>
-				</span>
-        <span v-else :class="creditsRemaining <= 0 ? 'text-error' : 'text-primary'">{{ formatCount(creditsRemaining) }}</span>
-      </h4>
-      <span class="text-body-small">{{ i18n.creditsSubjectToExpiration }}</span>
+    <v-col style="flex: 0 0 auto;" class="pa-0">
+      <v-toolbar class="so-toolbar elevation-0" variant="flat">
+        <v-text-field :disabled="$root.loading" v-if="relativeTimeEnabled" id="aimetrics-relative-time-value" @change="notifyInputsChanged" class="mx-2"
+          v-model="relativeTimeValue" type="number" data-aid="aimetrics_relative_time_input"
+          density="compact" hide-details style="min-width: 280px; max-width: 350px;">
+          <template #prepend>
+            <v-btn v-if="relativeTimeEnabled" icon variant="text" size="x-small" @click="showAbsoluteTime" id="aimetrics-show-absolute-time" data-aid="aimetrics_absolute_time_toggle">
+              <v-icon class="theme-icon">fa-history</v-icon>
+            </v-btn>
+            <div v-if="relativeTimeEnabled" class="px-4">
+              {{ i18n.last }}
+            </div>
+          </template>
+          <template #append>
+            <span data-aid="aimetrics_relative_time_units">
+              <v-select id="aimetrics-relative-time-unit" class="my-n1 py-0 no-details align-self-start" :disabled="$root.loading" v-if="relativeTimeEnabled" @update:model-value="relativeTimeUnit = $event; notifyInputsChanged()"
+                v-model="relativeTimeUnit" :items="relativeTimeUnits" variant="plain"></v-select>
+            </span>
+          </template>
+        </v-text-field>
+        <v-text-field :disabled="$root.loading" v-if="!relativeTimeEnabled" id="aimetrics-date-range" @change="notifyInputsChanged" class="mx-2 closer-prepend"
+          v-model="dateRange"
+          data-aid="aimetrics_absolute_time" hide-details style="min-width: 502px; max-width: 560px;">
+          <template #prepend>
+            <v-btn v-if="!relativeTimeEnabled" icon variant="text" size="x-small" @click="showRelativeTime" id="aimetrics-show-relative-time" data-aid="aimetrics_relative_time_toggle">
+              <v-icon class="theme-icon">fa-calendar-alt</v-icon>
+            </v-btn>
+            <v-btn @click="showDateRangePicker()" icon variant="text" size="x-small">
+              <v-icon class="theme-icon">fa-angle-down</v-icon>
+            </v-btn>
+          </template>
+        </v-text-field>
+      </v-toolbar>
     </v-col>
-  </v-row>
-  <v-row>
-    <v-col>
-      <v-toolbar class="elevation-0 theme-background-lighten-1" fixed>
-        <v-btn variant="flat" @click.stop="loadData()" id="aimetrics-refresh-button" class="ml-3" data-aid="aimetrics_refresh">
-          <v-icon color="primary">fa-sync</v-icon>
+    <v-col style="flex: 0 0 auto;" class="pa-0">
+      <v-toolbar class="so-toolbar elevation-0" variant="flat">
+        <v-btn icon variant="flat" @click.stop="loadData()" id="aimetrics-refresh-button" class="circle-button mx-2" data-aid="aimetrics_refresh">
+          <v-icon>fa-sync</v-icon>
         </v-btn>
-        <v-spacer></v-spacer>
-        <v-btn variant="flat" class="mx-4" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'onion-ai'" :title="i18n.contextualDocsBtn" data-aid="aimetrics_docs">
-          <v-icon color="secondary">fa-circle-question</v-icon>
+        <v-btn icon variant="flat" class="circle-button mx-2" :title="i18n.options" @click="showOptionsDialog = true" id="aimetrics-options-header" data-aid="aimetrics_options_button">
+          <v-icon>fa-gear</v-icon>
+        </v-btn>
+        <v-btn icon variant="flat" class="circle-button mx-2" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'onion-ai'" :title="i18n.contextualDocsBtn" data-aid="aimetrics_docs">
+          <v-icon>fa-circle-question</v-icon>
         </v-btn>
       </v-toolbar>
     </v-col>
   </v-row>
-  <v-row align="start">
-    <v-col cols="12" md="7"></v-col>
-    <v-col cols="12" md="5" class="d-flex flex-nowrap align-center" :class="{'mt-4': relativeTimeEnabled}">
-      <v-text-field :disabled="$root.loading" v-if="relativeTimeEnabled" id="aimetrics-relative-time-value" @change="notifyInputsChanged" class="mx-2"
-        v-model="relativeTimeValue" :hint="i18n.relativeTimeHelp" persistent-hint type="number" data-aid="aimetrics_relative_time_input"
-        density="compact">
-        <template #prepend>
-          <v-btn v-if="relativeTimeEnabled" icon variant="text" size="x-small" @click="showAbsoluteTime" id="aimetrics-show-absolute-time" data-aid="aimetrics_absolute_time_toggle">
-            <v-icon class="theme-icon">fa-history</v-icon>
-          </v-btn>
-          <div v-if="relativeTimeEnabled" class="px-4">
-            {{ i18n.last }}
-          </div>
-        </template>
-        <template #append>
-          <span data-aid="aimetrics_relative_time_units">
-            <v-select id="aimetrics-relative-time-unit" class="my-n1 py-0 no-details align-self-start" :disabled="$root.loading" v-if="relativeTimeEnabled" @update:model-value="relativeTimeUnit = $event; notifyInputsChanged()"
-              v-model="relativeTimeUnit" :items="relativeTimeUnits" variant="plain"></v-select>
-          </span>
-        </template>
-      </v-text-field>
-      <v-text-field :disabled="$root.loading" v-if="!relativeTimeEnabled" id="aimetrics-date-range" @change="notifyInputsChanged" class="mx-2 closer-prepend"
-        v-model="dateRange" :hint="i18n.timePickerHelp" persistent-hint
-        data-aid="aimetrics_absolute_time">
-        <template #prepend>
-          <v-btn v-if="!relativeTimeEnabled" icon variant="text" size="x-small" @click="showRelativeTime" id="aimetrics-show-relative-time" data-aid="aimetrics_relative_time_toggle">
-            <v-icon class="theme-icon">fa-calendar-alt</v-icon>
-          </v-btn>
-          <v-btn @click="showDateRangePicker()" icon variant="text" size="x-small">
-            <v-icon class="theme-icon">fa-angle-down</v-icon>
-          </v-btn>
-        </template>
-      </v-text-field>
-      <v-btn id="aimetrics-hunt" class="align-self-start" :class="{'mt-4': !relativeTimeEnabled}" :disabled="$root.loading" color="primary" @click.stop="loadData()" data-aid="aimetrics_run_query">
-        <span class="d-sm-none d-lg-inline pr-2" v-text="i18n.refresh"></span>
-        <v-icon>fa-sync</v-icon>
-      </v-btn>
-    </v-col>
-  </v-row>
-  <v-row>
-    <v-col cols="6" id="aimetrics-breadcrumbs">
-      <div>
-        <v-breadcrumbs :items="breadcrumbs">
-          <template #item="{ item }">
-            <v-breadcrumbs-item
-              :to="item.to"
-              :disabled="item.disabled"
-              :data-aid="'aimetrics_breadcrumb_' + item.title"
-            >
-              {{ item.title }}
-            </v-breadcrumbs-item>
-          </template>
-          <template #divider>
-            <v-icon>fa-chevron-right</v-icon>
-          </template>
-        </v-breadcrumbs>
-      </div>
-    </v-col>
-  </v-row>
-  <v-row v-if="tableSetting == TABLE_SETTING_USERS || tableSetting == TABLE_SETTING_SESSIONS" class="my-0">
+  <v-row v-if="tableSetting == TABLE_SETTING_USERS || tableSetting == TABLE_SETTING_SESSIONS">
     <v-col id="aimetrics-graphs" class="section-panel" data-aid="aimetrics_graphs_tab">
       <v-toolbar density="compact" variant="flat">
         <v-toolbar-title>{{ i18n.graphMetrics }}</v-toolbar-title>

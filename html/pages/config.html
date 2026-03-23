@@ -6,27 +6,30 @@
 			<v-btn v-else @click.stop="sync()" color="warning" :title="i18n.settingsSynchronizeHelp">{{ i18n.settingsSynchronize }}</v-btn>
 		</template>
 	</v-alert>
+	<v-dialog v-model="showOptionsDialog" max-width="540">
+		<v-card class="options-dialog">
+			<v-card-title>{{i18n.options}}</v-card-title>
+			<v-card-text data-aid="config_options">
+				<v-switch id="option-advanced" :disabled="$root.loading" v-model="advanced" dense class="my-0" :label="i18n.settingsAdvanced" :hint="i18n.settingsAdvancedHelp" persistent-hint data-aid="config_option_advanced_toggle"></v-switch>
+				<v-btn id="option-synchronize" @click.stop="sync()" class="mt-6 mb-3" data-aid="config_option_synchronize_button">
+					{{ i18n.settingsSynchronize }}
+				</v-btn>
+				<div class="text-body-small" v-text="i18n.settingsSynchronizeHelp"></div>
+			</v-card-text>
+			<v-card-actions>
+				<v-spacer></v-spacer>
+				<v-btn variant="text" @click="showOptionsDialog = false">{{ i18n.close }}</v-btn>
+			</v-card-actions>
+		</v-card>
+	</v-dialog>
 	<v-row>
-		<v-col cols="12" lg="5">
-			<v-expansion-panels>
-				<v-expansion-panel>
-					<v-expansion-panel-title id="configOptionsHeader" expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up">{{i18n.options}}</v-expansion-panel-title>
-					<v-expansion-panel-text>
-						<v-switch id="option-advanced" :disabled="$root.loading" v-model="advanced" dense class="my-0" :label="i18n.settingsAdvanced" :hint="i18n.settingsAdvancedHelp" persistent-hint data-aid="config_option_advanced_toggle"></v-switch>
-						<v-btn id="option-synchronize" @click.stop="sync()" class="mt-6 mb-1" data-aid="config_option_synchronize_button">
-							{{ i18n.settingsSynchronize }}
-						</v-btn>
-						<div class="text-body-small" v-text="i18n.settingsSynchronizeHelp"></div>
-					</v-expansion-panel-text>
-				</v-expansion-panel>
-			</v-expansion-panels>
-		</v-col>
-		<v-spacer></v-spacer>
-		<v-col cols="12" lg="2" align="end" data-aid="config_summary">
-			<h4 v-if="!$root.loading">{{ i18n.settingsCustomized }} {{ settingsCustomized }} / {{ settingsAvailable }} </h4>
-		</v-col>
-	</v-row>
-	<v-row>
+		<v-toolbar class="so-toolbar elevation-0" fixed>
+			<h4 v-if="!$root.loading" class="toolbar-bold-metric">{{ i18n.settingsCustomized }} {{ settingsCustomized }} / {{ settingsAvailable }} </h4>
+			<v-spacer></v-spacer>
+			<v-btn icon variant="flat" class="circle-button mx-2" :title="i18n.options" @click="showOptionsDialog = true" id="configOptionsHeader" data-aid="config_options_button">
+				<v-icon>fa-gear</v-icon>
+			</v-btn>
+		</v-toolbar>
 	</v-row>
 	<v-row class="flex-nowrap">
 		<v-col cols="12" lg="4" :class="treeVisible ? 'd-block' : 'd-none'">
