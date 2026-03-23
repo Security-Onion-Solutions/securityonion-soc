@@ -161,6 +161,16 @@
 					</v-toolbar>
 				</v-col>
 			</v-row>
+			<v-row v-if="loaded && (queryFilters.length > 0 || querySortBys.length > 0)">
+				<v-col cols="12">
+					<span v-for="filter in queryFilters" :key="filter" :data-aid="'filter_chip_' + category">
+						<v-chip density="compact" class="filter mx-1 my-1" color="primary" closable="true" @click:close="removeFilter(filter)">{{ formatSafeString(filter) }}</v-chip>
+					</span>
+					<span v-for="sortBy in querySortBys" :key="sortBy" :data-aid="'sort_chip_' + category">
+						<v-chip density="compact"class="sortBy mx-1 my-1" color="secondary" closable="true" @click:close="removeSortBy(sortBy)">{{ i18n.sortedBy }} {{ formatSafeString(sortBy) }}</v-chip>
+					</span>
+				</v-col>
+			</v-row>
 			<v-row v-if="loaded" class="ga-3">
 				<v-col>
 					<div class="so-stat-pill" data-aid="stat_total_alerts">
@@ -228,16 +238,6 @@
 						</div>
 						<v-icon class="so-stat-icon">fa-clock</v-icon>
 					</div>
-				</v-col>
-			</v-row>
-			<v-row v-if="loaded && (queryFilters.length > 0 || querySortBys.length > 0)">
-				<v-col cols="12">
-					<span v-for="filter in queryFilters" :key="filter" :data-aid="'filter_chip_' + category">
-						<v-chip density="compact" class="filter mx-1 my-1" color="primary" closable="true" @click:close="removeFilter(filter)">{{ formatSafeString(filter) }}</v-chip>
-					</span>
-					<span v-for="sortBy in querySortBys" :key="sortBy" :data-aid="'sort_chip_' + category">
-						<v-chip density="compact"class="sortBy mx-1 my-1" color="secondary" closable="true" @click:close="removeSortBy(sortBy)">{{ i18n.sortedBy }} {{ formatSafeString(sortBy) }}</v-chip>
-					</span>
 				</v-col>
 			</v-row>
 			<v-row v-if="loaded && isAdvanced() && !isCategory('detections')">
