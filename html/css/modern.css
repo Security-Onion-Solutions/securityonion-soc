@@ -683,5 +683,5 @@ body {
 }
 
 .v-theme--dark.v-card {
-  background-color: rgb(var(--v-theme-drawer_background)) !important;  
+  background-color: rgb(var(--v-theme-drawer_background)) !important;
 }

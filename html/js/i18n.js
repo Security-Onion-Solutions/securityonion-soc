@@ -1116,6 +1116,7 @@ const i18n = {
       tableMetrics: 'Table Metrics',
       tabular: 'Data Export',
       tags: 'Tags',
+      'terms-license': 'Licensing',
       'terms-license-key': 'Licensing',
       thinking: 'Thinking',
       thoughts: 'Thoughts',

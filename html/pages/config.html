@@ -42,7 +42,7 @@
 			</v-btn>
 			<v-spacer></v-spacer>
 			<h4 v-if="!$root.loading" class="mr-0 my-0">{{ i18n.settingsCustomized }} {{ settingsCustomized }} / {{ settingsAvailable }} </h4>
-			<v-btn icon variant="flat" class="circle-button ml-6 mr-2" :title="i18n.options" @click="showOptionsDialog = true" id="configOptionsHeader" data-aid="config_options_button">
+			<v-btn icon variant="flat" class="circle-button ml-5 mr-2" :title="i18n.options" @click="showOptionsDialog = true" id="configOptionsHeader" data-aid="config_options_button">
 				<v-icon>fa-gear</v-icon>
 			</v-btn>
 		</v-toolbar>
@@ -383,7 +383,7 @@
 	</v-row>
 	<v-dialog v-model="cancelDialog" persistent max-width="290" data-aid="config_cancel_dialog">
 		<v-card>
-			<v-card-title class="text-h5" v-text="i18n.settingConfirmCancel"></v-card-title>
+			<v-card-title class="text-headline-small" v-text="i18n.settingConfirmCancel"></v-card-title>
 			<v-card-text v-text="i18n.settingConfirmCancelHelp"></v-card-text>
 			<v-card-actions>
 				<v-spacer></v-spacer>
@@ -394,7 +394,7 @@
 	</v-dialog>
 	<v-dialog v-model="confirmResetDialog" persistent max-width="290" data-aid="config_confirm_reset_dialog">
 		<v-card>
-			<v-card-title class="text-h5" v-text="i18n.settingConfirmReset"></v-card-title>
+			<v-card-title class="text-headline-small" v-text="i18n.settingConfirmReset"></v-card-title>
 			<v-card-text v-text="i18n.settingConfirmResetHelp"></v-card-text>
 			<v-card-actions>
 				<v-spacer></v-spacer>
@@ -405,7 +405,7 @@
 	</v-dialog>
 	<v-dialog v-model="confirmRemoveEntryDialog" persistent max-width="390" data-aid="config_confirm_remove_entry_dialog">
 		<v-card>
-			<v-card-title class="text-h5" v-text="i18n.settingConfirmRemove"></v-card-title>
+			<v-card-title class="text-headline-small" v-text="i18n.settingConfirmRemove"></v-card-title>
 			<v-card-text v-if="confirmRemoveEntryMessage" v-text="confirmRemoveEntryMessage"></v-card-text>
 			<v-card-text v-text="i18n.settingConfirmRemoveHelp"></v-card-text>
 			<v-card-actions>
