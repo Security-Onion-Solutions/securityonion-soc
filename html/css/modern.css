@@ -27,7 +27,8 @@ body {
 }
 
 .v-expansion-panels,
-.v-expansion-panel {
+.v-expansion-panel,
+.v-alert {
   border-radius: 0.75rem;
 }
 

@@ -92,10 +92,13 @@
 	<v-row v-if="job.status == 0" row data-aid="job_details_pending">
 		<v-col>
 			<v-alert :value="true" color="info" icon="fa-info">
-				{{ i18n.jobInProgress }}
-				<v-btn variant="flat" @click.stop="loadData()" id="job-refresh-button" class="ml-3" data-aid="job_refresh_button">
-					<v-icon color="primary">fa-sync</v-icon>
-				</v-btn>
+				<div class="d-flex align-center">
+					{{ i18n.jobInProgress }}
+					<v-spacer></v-spacer>
+					<v-btn icon variant="flat" @click.stop="loadData()" id="job-refresh-button" class="mx-2" color="nav" data-aid="job_refresh_button">
+						<v-icon color="info">fa-sync</v-icon>
+					</v-btn>
+				</div>
 			</v-alert>
 		</v-col>
 	</v-row>
