@@ -685,7 +685,3 @@ body {
 .v-theme--dark.v-card {
   background-color: rgb(var(--v-theme-drawer_background)) !important;  
 }
-
-.toolbar-bold-metric {
-  margin-left: 6px !important;
-}

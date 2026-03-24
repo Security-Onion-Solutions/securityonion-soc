@@ -18,7 +18,7 @@
 		<v-col>
 			<v-row>
 				<v-toolbar v-if="$root.isUserAdmin()" class="so-toolbar elevation-0">
-					<h4 v-if="!$root.loading" class="toolbar-bold-metric" data-aid="users_summary">{{ i18n.usersEnabled }} {{ countUsersEnabled() }} / {{ countUsers() }}</h4>
+					<h4 v-if="!$root.loading" class="ml-2 my-0" data-aid="users_summary">{{ i18n.usersEnabled }} {{ countUsersEnabled() }} / {{ countUsers() }}</h4>
 					<v-spacer></v-spacer>
 					<v-btn icon variant="flat" id="add-user-button" class="circle-button mx-2" @click.stop="showAdd()" data-aid="users_create_new">
 						<v-icon>fa-plus</v-icon>

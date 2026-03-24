@@ -3,7 +3,7 @@
 		<v-col>
 			<v-row>
 				<v-toolbar v-if="$root.isClientAdmin()" class="so-toolbar elevation-0">
-					<h4 class="toolbar-bold-metric" v-if="!$root.loading">{{ i18n.clients }}: {{ countClients() }}</h4>
+					<h4 class="ml-2 my-0" v-if="!$root.loading">{{ i18n.clients }}: {{ countClients() }}</h4>
 					<v-spacer></v-spacer>
 					<v-btn icon variant="flat" id="add-client-button" class="circle-button mx-2" @click.stop="showAdd()" data-aid="clients_create_new">
 						<v-icon>fa-plus</v-icon>

@@ -41,7 +41,7 @@
 				<v-icon color="warning">fa-circle-nodes</v-icon>
 			</v-btn>
 			<v-spacer></v-spacer>
-			<h4 v-if="!$root.loading" class="toolbar-bold-metric">{{ i18n.settingsCustomized }} {{ settingsCustomized }} / {{ settingsAvailable }} </h4>
+			<h4 v-if="!$root.loading" class="mr-0 my-0">{{ i18n.settingsCustomized }} {{ settingsCustomized }} / {{ settingsAvailable }} </h4>
 			<v-btn icon variant="flat" class="circle-button ml-6 mr-2" :title="i18n.options" @click="showOptionsDialog = true" id="configOptionsHeader" data-aid="config_options_button">
 				<v-icon>fa-gear</v-icon>
 			</v-btn>

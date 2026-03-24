@@ -20,7 +20,7 @@
 		<v-col>
 			<v-row>
 				<v-toolbar class="so-toolbar elevation-0">
-					<h4 v-if="metricsEnabled" class="toolbar-bold-metric" data-aid="grid_summary">{{ i18n.gridEps }} {{ formatCount(gridEps) }}</h4>
+					<h4 v-if="metricsEnabled" class="ml-2 my-0" data-aid="grid_summary">{{ i18n.gridEps }} {{ formatCount(gridEps) }}</h4>
 					<v-spacer></v-spacer>
 					<v-text-field v-model="gridFilter" clearable prepend-inner-icon="fa-filter" :label="i18n.filterResults" hide-details class="toolbar-field no-print mx-2" style="max-width: 250px;" data-aid="grid_filter"></v-text-field>
 					<v-btn icon variant="flat" @click.stop="loadData()" id="grid-refresh-button" class="circle-button mx-2" data-aid="grid_refresh_button">
