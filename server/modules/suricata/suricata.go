@@ -30,7 +30,6 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 	"github.com/security-onion-solutions/securityonion-soc/util"
-	"github.com/security-onion-solutions/securityonion-soc/web"
 	"golang.org/x/mod/semver"
 
 	"github.com/apex/log"
@@ -1822,8 +1821,7 @@ func (e *SuricataEngine) DuplicateDetection(ctx context.Context, detection *mode
 	det.Author = detection.Author
 	det.License = detection.License
 
-	userID := ctx.Value(web.ContextKeyRequestorId).(string)
-	user, err := e.srv.Userstore.GetUserById(ctx, userID)
+	user, err := e.srv.TryGetUser(ctx)
 	if err != nil {
 		return nil, err
 	}

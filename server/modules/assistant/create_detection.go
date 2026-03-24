@@ -136,11 +136,15 @@ func (t *CreateDetectionTool) Execute(ctx context.Context, srv *server.Server, p
 		return nil, err
 	}
 
-	user, err := srv.Userstore.GetUserById(ctx, userId)
+	user, err := srv.TryGetUser(ctx)
 	if err != nil {
 		return nil, err
 	}
-	detect.Author = detections.MakeUser(user)
+
+	if user != nil {
+		// Don't trust the client to send the correct author, grab it from the context, unless the user is nil (API client)
+		detect.Author = detections.MakeUser(user)
+	}
 
 	_, err = engine.ApplyFilters(detect)
 	if err != nil {
