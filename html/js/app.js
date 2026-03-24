@@ -63,6 +63,7 @@ $(document).ready(function () {
         },
         VCombobox: {
           menuIcon: 'fas fa-caret-down',
+          variant: 'outlined',
         },
         VFileInput: {
           prependIcon: 'fa-paperclip'

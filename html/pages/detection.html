@@ -7,15 +7,15 @@
 	<v-row class="mx-sm-8 mx-md-12 mx-lg-4 flex-column flex-md-row">
 		<v-col class="main v-order-md-1 v-order-2" order="2" order-md="1" cols="12" md="9">
 			<v-row>
-				<div v-if="isNew()">
+				<div v-if="isNew()" class="full-width">
 					<v-form ref="detection" v-model="editForm.valid">
 						<div class="col pa-4 contrast-bg rounded rounded-md">
-							<div class="header">{{ i18n.add }} {{ i18n.detection }}</div>
-							<span data-aid="detection_new_language_select">
+							<div class="mb-3 header">{{ i18n.add }} {{ i18n.detection }}</div>
+							<span data-aid="detection_new_language_select" class="mb-3 d-block">
 								<v-select id="detection-language-create" v-model="detect.language" :items="getPresets('language')" persistent-hint :hint="i18n.language" :rules="[rules.required]" @update:model-value="onNewDetectionLanguageChange"></v-select>
 							</span>
 
-							<span data-aid="detection_new_license_select">
+							<span data-aid="detection_new_license_select" class="mb-3 d-block">
 								<v-select id="detection-license-create" v-if="!isPresetCustomEnabled('license')" v-model="detect.license" :items="getPresets('license')" persistent-hint :hint="i18n.license" :rules="[rules.required]"></v-select>
 								<v-combobox id="detection-license-create" v-if="isPresetCustomEnabled('license')" v-model="detect.license" :items="getPresets('license')" persistent-hint :hint="i18n.license" :rules="[rules.required]"></v-combobox>
 							</span>
