@@ -173,6 +173,9 @@ const huntComponent = {
       showAckManyDialog: false,
       ackManyArgs: [],
       ackManyVerb: '',
+      fieldValueDialogVisible: false,
+      fieldValueDialogKey: '',
+      fieldValueDialogValue: '',
       menuScrollPos: 0,
       maxEscalate: 100,
       chartResizeTracker: {},
@@ -222,8 +225,12 @@ const huntComponent = {
     if (this.isCategory('alerts')) {
       window.removeEventListener('resize', this.calculateEventColumnWidth);
     }
+
+    window.removeEventListener('resize', this.checkAllFieldTruncation);
   },
   mounted() {
+    window.addEventListener('resize', this.checkAllFieldTruncation);
+
     this.$root.startLoading();
     this.category = this.$route.path.replace("/", "");
     this.$root.loadParameters(this.category, this.initHunt);
@@ -241,6 +248,12 @@ const huntComponent = {
     }
   },
   watch: {
+    expandedEvents() {
+      this.$nextTick(() => this.checkAllFieldTruncation());
+    },
+    gridLayoutExpansions() {
+      this.$nextTick(() => this.checkAllFieldTruncation());
+    },
     '$route': 'loadData',
     'groupBySortBy': 'saveLocalSettings',
     'groupBySortDesc': 'saveLocalSettings',
@@ -2838,6 +2851,26 @@ const huntComponent = {
       this.showAckManyDialog = false;
       this.ackManyArgs = [];
     },
+    checkAllFieldTruncation() {
+      if (!this.gridLayoutExpansions) return;
+      const cards = this.$el.querySelectorAll('.expanded-field-card');
+      cards.forEach(card => {
+        const valueEl = card.querySelector('.expanded-field-value');
+        if (valueEl && valueEl.scrollWidth > valueEl.clientWidth) {
+          card.classList.add('is-truncated');
+        } else {
+          card.classList.remove('is-truncated');
+        }
+      });
+    },
+    showFieldValueDialog(key, value) {
+      this.fieldValueDialogKey = key;
+      this.fieldValueDialogValue = value;
+      this.fieldValueDialogVisible = true;
+    },
+    closeFieldValueDialog() {
+      this.fieldValueDialogVisible = false;
+    },
     async saveMenuScrollPos(isOpen, target) {
       if (isOpen) {
         // target doesn't exist yet, wait for it to be added to DOM
@@ -3082,6 +3115,7 @@ const huntComponent = {
       }
 
       item.newest = this.extractSocValues(response.data.events[0]);
+      this.$nextTick(() => this.checkAllFieldTruncation());
     },
     extractSocValues(event) {
       var record = event.payload;

@@ -13,6 +13,7 @@ beforeEach(() => {
   comp = getComponent("hunt");
   resetPapi();
   comp.$root.initializeCharts = () => { };
+  comp.$el = { querySelectorAll: () => [] };
   comp.created();
 });
 

@@ -426,7 +426,6 @@
 																		<div v-if="gridLayoutExpansions" class="expanded-fields-grid">
 																			<div v-for="kvp in getExpandedData(item.newest)" :key="kvp.key" class="expanded-field-card" :data-aid="'events_field_' + category + '_' + kvp.key">
 																				<div class="expanded-field-header">
-																					<span class="expanded-field-name" :id="'events_fields_' + category + '_' + kvp.key" :data-aid="'events_field_name_' + category">{{ kvp.key }}</span>
 																					<span class="expanded-field-actions semi-transparent">
 																						<v-btn :id="'groupby_' + kvp.key" :disabled="!canQuery(kvp.key)" variant="text" size="x-small" icon :to="buildGroupByNewRoute(kvp.key)" :data-aid="'events_field_groupby_toggle_' + category" class="remove-overlay">
 																							<v-icon :alt="i18n.groupNew" :title="i18n.groupNewHelp" class="theme-text">fa-layer-group</v-icon>
@@ -434,6 +433,10 @@
 																						<v-btn :id="'col_toggle_' + kvp.key" variant="text" size="x-small" icon @click="toggleColumnHeader(kvp.key)" :data-aid="'events_field_header_toggle_' + category">
 																							<v-icon :alt="i18n.addColumnHeader" :color="isColumnHeader(kvp.key) ? 'info' : ''" :title="i18n.addColumnHeaderHelp">fa-table-columns</v-icon>
 																						</v-btn>
+																					</span>
+																					<span class="expanded-field-name-row">
+																						<span class="expanded-field-name" :id="'events_fields_' + category + '_' + kvp.key" :data-aid="'events_field_name_' + category">{{ kvp.key }}</span>
+																						<v-btn variant="text" size="x-small" icon class="expanded-field-expand-btn" @click.stop="showFieldValueDialog(kvp.key, kvp.value)"><v-icon>fa-expand</v-icon></v-btn>
 																					</span>
 																				</div>
 																				<div class="expanded-field-value quick-action-trigger hardwrap" @click="toggleQuickAction($event, item, -1, kvp.key, kvp.value)" :data-aid="'events_field_value_' + category">{{kvp.key.endsWith('detection.author') ? $root.tryLocalize(kvp.value) : kvp.value}}<span class="resolved-host" v-if="$root.tryResolveAlias(kvp.key, kvp.value)"> - {{ $root.tryResolveAlias(kvp.key, kvp.value) }}</span></div>
@@ -696,7 +699,6 @@
 															<div v-if="gridLayoutExpansions" class="expanded-fields-grid">
 																<div v-for="kvp in getExpandedData(item)" :key="kvp.key" class="expanded-field-card" :data-aid="'events_field_' + category + '_' + kvp.key">
 																	<div class="expanded-field-header">
-																		<span class="expanded-field-name" :id="'events_fields_' + category + '_' + kvp.key" :data-aid="'events_field_name_' + category">{{ kvp.key }}</span>
 																		<span class="expanded-field-actions semi-transparent">
 																			<v-btn :id="'groupby_' + kvp.key" :disabled="!canQuery(kvp.key)" variant="text" size="x-small" icon :to="buildGroupByNewRoute(kvp.key)" :data-aid="'events_field_groupby_toggle_' + category" class="remove-overlay">
 																				<v-icon :alt="i18n.groupNew" :title="i18n.groupNewHelp" class="theme-text">fa-layer-group</v-icon>
@@ -704,6 +706,10 @@
 																			<v-btn :id="'col_toggle_' + kvp.key" variant="text" size="x-small" icon @click="toggleColumnHeader(kvp.key)" :data-aid="'events_field_header_toggle_' + category">
 																				<v-icon :alt="i18n.addColumnHeader" :color="isColumnHeader(kvp.key) ? 'info' : ''" :title="i18n.addColumnHeaderHelp">fa-table-columns</v-icon>
 																			</v-btn>
+																		</span>
+																		<span class="expanded-field-name-row">
+																			<span class="expanded-field-name" :id="'events_fields_' + category + '_' + kvp.key" :data-aid="'events_field_name_' + category">{{ kvp.key }}</span>
+																			<v-btn variant="text" size="x-small" icon class="expanded-field-expand-btn" @click.stop="showFieldValueDialog(kvp.key, kvp.value)"><v-icon>fa-expand</v-icon></v-btn>
 																		</span>
 																	</div>
 																	<div class="expanded-field-value quick-action-trigger hardwrap" @click="toggleQuickAction($event, item, -1, kvp.key, kvp.value)" :data-aid="'events_field_value_' + category">{{kvp.key.endsWith('detection.author') ? $root.tryLocalize(kvp.value) : kvp.value}}<span class="resolved-host" v-if="$root.tryResolveAlias(kvp.key, kvp.value)"> - {{ $root.tryResolveAlias(kvp.key, kvp.value) }}</span></div>
@@ -1118,6 +1124,18 @@
 				<v-spacer></v-spacer>
 				<v-btn text id="ack-many-yes" @click="ack(...ackManyArgs)" v-text="i18n.yes" data-aid="ack_many_dialog_confirm"></v-btn>
 				<v-btn text id="ack-many-no" @click="closeAckManyDialog()" v-text="i18n.cancel" data-aid="ack_many_dialog_cancel"></v-btn>
+			</v-card-actions>
+		</v-card>
+	</v-dialog>
+
+	<v-dialog v-model="fieldValueDialogVisible" max-width="800" data-aid="field_value_dialog">
+		<v-card class="pa-2">
+			<v-card-title class="text-headline-small">{{ fieldValueDialogKey }}</v-card-title>
+			<v-card-text class="pa-2 ma-2" style="white-space: pre-wrap; word-break: break-all; user-select: text;">{{ fieldValueDialogValue }}</v-card-text>
+			<v-card-actions class="pa-2">
+				<v-spacer></v-spacer>
+				<v-btn variant="outlined" @click="$root.copyToClipboard(fieldValueDialogValue)" data-aid="field_value_dialog_copy">{{ i18n.copyToClipboard }}</v-btn>
+				<v-btn variant="outlined" @click="closeFieldValueDialog()" v-text="i18n.close" data-aid="field_value_dialog_close"></v-btn>
 			</v-card-actions>
 		</v-card>
 	</v-dialog>

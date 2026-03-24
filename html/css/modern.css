@@ -303,6 +303,10 @@ body {
 }
 
 .expanded-field-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 0 4px;
   padding: 10px 12px;
   border-radius: 0.375rem;
   overflow: hidden;
@@ -310,10 +314,13 @@ body {
 }
 
 .expanded-field-header {
-  display: flex;
+  display: contents;
+}
+
+.expanded-field-name-row {
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
-  margin-bottom: 2px;
+  min-width: 0;
 }
 
 .expanded-field-name {
@@ -330,9 +337,15 @@ body {
   display: inline-flex;
   align-items: center;
   flex-shrink: 0;
+  gap: 0;
+}
+
+.expanded-field-actions .v-btn {
+  margin: 0 -4px;
 }
 
 .expanded-field-value {
+  grid-column: 2;
   font-size: 0.9rem;
   font-weight: 400;
   white-space: nowrap;
@@ -340,10 +353,25 @@ body {
   text-overflow: ellipsis;
   cursor: pointer;
   transition: color 0.12s ease;
+  min-width: 0;
 }
 
 .expanded-field-value:hover {
   color: rgb(var(--v-theme-primary));
+}
+
+.expanded-field-expand-btn {
+  flex-shrink: 0;
+  display: none;
+}
+
+.expanded-field-card.is-truncated .expanded-field-expand-btn {
+  display: inline-flex;
+  opacity: 0.5;
+}
+
+.expanded-field-card.is-truncated .expanded-field-expand-btn:hover {
+  opacity: 1;
 }
 
 /* Inner key-value detail table (fallback if still used elsewhere) */
