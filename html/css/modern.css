@@ -685,3 +685,11 @@ body {
 .v-theme--dark.v-card {
   background-color: rgb(var(--v-theme-drawer_background)) !important;
 }
+
+/* ============================================================
+   Buttons — rounded when they contain text
+   ============================================================ */
+
+.v-btn:not(.v-btn--icon) {
+  border-radius: 0.5rem !important;
+}
