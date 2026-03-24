@@ -33,7 +33,6 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 	"github.com/security-onion-solutions/securityonion-soc/util"
-	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
 	"github.com/google/uuid"
@@ -1199,8 +1198,7 @@ func (e *StrelkaEngine) DuplicateDetection(ctx context.Context, detection *model
 		return nil, err
 	}
 
-	userID := ctx.Value(web.ContextKeyRequestorId).(string)
-	user, err := e.srv.Userstore.GetUserById(ctx, userID)
+	user, err := e.srv.TryGetUser(ctx)
 	if err != nil {
 		return nil, err
 	}

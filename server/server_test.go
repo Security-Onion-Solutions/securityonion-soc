@@ -14,6 +14,7 @@ import (
 
 	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
+	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/rbac"
 	. "github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/mock"
@@ -73,7 +74,7 @@ func NewTestContext(rctx *chi.Context) context.Context {
 
 	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
 	ctx = context.WithValue(ctx, web.ContextKeyRequestId, "00000000-0000-0000-0000-000000000000")
-	ctx = context.WithValue(ctx, web.ContextKeyRequestorId, "00000000-0000-0000-0000-000000000000")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestorId, "11111111-1111-1111-1111-111111111111")
 
 	if rctx != nil {
 		ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
@@ -123,4 +124,35 @@ func TestFailedAuthorization(tester *testing.T) {
 	authErr := srv.CheckAuthorized(context.Background(), "read", "users")
 	assert.Error(tester, authErr)
 	assert.Contains(tester, authErr.Error(), "not authorized to perform operation 'read' on target 'users'")
+}
+
+func TestTryGetUser(tester *testing.T) {
+	ctrl := gomock.NewController(tester)
+	defer ctrl.Finish()
+
+	cfg := &config.ServerConfig{}
+	srv := NewMockServer(tester, ctrl, cfg)
+
+	// Agent Case
+	srv.Agent = &model.User{Id: AGENT_ID, Email: "agent@so.org"}
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, AGENT_ID)
+	user, err := srv.TryGetUser(ctx)
+	assert.NoError(tester, err)
+	assert.Equal(tester, srv.Agent, user)
+
+	// Client Case (starts with socl_)
+	ctx = context.WithValue(context.Background(), web.ContextKeyRequestorId, "socl_client123")
+	user, err = srv.TryGetUser(ctx)
+	assert.NoError(tester, err)
+	assert.Nil(tester, user)
+
+	// Real User Case
+	userID := "11111111-1111-1111-1111-111111111111"
+	ctx = context.WithValue(context.Background(), web.ContextKeyRequestorId, userID)
+	srv.Userstore.(*mock.MockUserstore).EXPECT().GetUserById(gomock.Any(), userID).Return(&model.User{Id: userID, FirstName: "Test"}, nil)
+
+	user, err = srv.TryGetUser(ctx)
+	assert.NoError(tester, err)
+	assert.NotNil(tester, user)
+	assert.Equal(tester, userID, user.Id)
 }

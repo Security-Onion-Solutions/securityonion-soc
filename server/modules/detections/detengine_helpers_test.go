@@ -123,6 +123,19 @@ func TestCheckWriteNoRead(t *testing.T) {
 	assert.False(t, shouldFail)
 }
 
+func TestMakeUser(t *testing.T) {
+	// Test nil user (API client)
+	assert.Equal(t, "", MakeUser(nil))
+
+	// Test real user with names
+	user := &model.User{FirstName: "First", LastName: "Last"}
+	assert.Equal(t, "First Last", MakeUser(user))
+
+	// Test user with only email
+	user = &model.User{Email: "test@so.org"}
+	assert.Equal(t, "test@so.org", MakeUser(user))
+}
+
 func TestAddUser(t *testing.T) {
 	user := model.User{
 		FirstName: "fn",

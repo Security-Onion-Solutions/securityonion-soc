@@ -288,6 +288,10 @@ func CheckWriteNoRead(ctx context.Context, DetStore GetterByPublicId, writeNoRea
 }
 
 func MakeUser(user *model.User) string {
+	if user == nil {
+		// Most likely an API Client
+		return ""
+	}
 	author := strings.Join([]string{user.FirstName, user.LastName}, " ")
 	if len(strings.TrimSpace(author)) == 0 {
 		author = user.Email

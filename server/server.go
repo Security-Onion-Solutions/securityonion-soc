@@ -150,6 +150,23 @@ func (server *Server) CheckAuthorized(ctx context.Context, operation string, tar
 	return err
 }
 
+func (server *Server) TryGetUser(ctx context.Context) (*model.User, error) {
+	requestorID := ctx.Value(web.ContextKeyRequestorId).(string)
+	if requestorID == AGENT_ID {
+		return server.Agent, nil
+	}
+
+	if model.IsClient(requestorID) {
+		return nil, nil
+	}
+
+	user, err := server.Userstore.GetUserById(ctx, requestorID)
+	if err != nil {
+		return nil, err
+	}
+	return user, nil
+}
+
 func (server *Server) GetTimezones() []string {
 	var zones []string = make([]string, 0, 0)
 	bytes, err := exec.Command(server.Config.TimezoneScript).Output()

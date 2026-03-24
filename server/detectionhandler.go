@@ -275,13 +275,16 @@ func (h *DetectionHandler) CreateDetection(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Don't trust the client to send the correct author, grab it from the context
-	userID := ctx.Value(web.ContextKeyRequestorId).(string)
-	user, err := h.server.Userstore.GetUserById(ctx, userID)
+	user, err := h.server.TryGetUser(ctx)
 	if err != nil {
+		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
-	detect.Author = detections.MakeUser(user)
+
+	if user != nil {
+		// Don't trust the client to send the correct author, grab it from the context, unless the user is nil (API client)
+		detect.Author = detections.MakeUser(user)
+	}
 
 	specifiedStatus := detect.IsEnabled
 
