@@ -37,7 +37,6 @@
 }
 
 .loading-onion-spiral, .loading-onion-topper {
-  stroke: black !important;
   stroke-width: 1;
   stroke-linejoin: round;
   stroke-linecap: round;
@@ -47,13 +46,13 @@
 }
 
 .loading-onion-spiral {
-  fill: #000;
+  stroke: #000000;
   stroke-dasharray: 1000;
   animation-name: sync-draw-spiral;
 }
 
 .loading-onion-topper {
-  fill: #1571ff;
+  stroke: #1571ff;
   stroke-dasharray: 200;
   animation-name: sync-draw-blue;
 }

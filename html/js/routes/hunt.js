@@ -653,6 +653,7 @@ const huntComponent = {
       const abortController = new AbortController();
       this.$root.startLoading(() => {
         abortController.abort();
+        this.$root.stopLoading();
       });
       try {
         this.obtainQueryDetails();

@@ -1,4 +1,11 @@
 <div v-if="detection" id="detection-col" class="theme-background theme-text pa-0">
+	<div id="panel-loading-overlay" class="component-overlay" v-if="loading" data-aid="detection_panel_overlay_loading">
+		<v-container class="d-flex justify-center">
+			<div class="loading-container">
+				<img :src="'images/loading-logo' + ($root.theme.global.current.dark ? '-dark' : '') + '.svg'" class="loading-onion" data-aid="overlay_loading_logo">
+			</div>
+		</v-container>
+	</div>
 	<div class="pos-rel">
 		<v-expansion-panels multiple focusable v-model="panels" class="mt-2">
 			<v-expansion-panel>
@@ -390,11 +397,6 @@
 				</v-expansion-panel-text>
 			</v-expansion-panel>
 		</v-expansion-panels>
-		<div id="panel-loading-overlay" class="component-overlay" v-if="loading" data-aid="detection_panel_overlay_loading">
-			<v-container class="d-flex justify-center">
-				<img src="images/loading-logo.svg" class="loading-onion" data-aid="overlay_loading_logo">
-			</v-container>
-		</div>
 		<v-dialog v-model="ackExistingDialog" persistent max-width="450">
 			<v-card>
 				<v-card-title class="text-headline-small" v-text="i18n.acknowledgeExistingAlertsTitle"></v-card-title>
