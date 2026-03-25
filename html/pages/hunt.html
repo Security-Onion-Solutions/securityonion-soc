@@ -865,7 +865,7 @@
 				</v-list-item>
 				<v-list-item density="compact" id="actionFilterExclude" :to="filterRouteExclude" v-bind:title.attr="i18n.filterExcludeHelp" :data-aid="'context_menu_filter_exclude_' + category">
 					<template #prepend>
-						<v-icon :alt="i18n.filterExclude" color="red-darken-1">fa-search-minus</v-icon>
+						<v-icon :alt="i18n.filterExclude" color="red-lighten-1">fa-search-minus</v-icon>
 					</template>
 					<v-list-item-title>
 						{{ i18n.filterExclude }}
@@ -889,7 +889,7 @@
 				</v-list-item>
 				<v-list-item density="compact" id="actionTuneDetection" v-if="quickActionDetId && $root.detectionsEnabled && isCategory('alerts')" :to='{ name: "detection", params: { id: quickActionDetId }, query: { tab: tuneDetectionTabTarget } }' class="v-list-item--active" v-bind:title.attr="i18n.tuneDetectionHelp" :data-aid="'context_menu_tuning_' + category">
 					<template #prepend>
-						<v-icon :alt="i18n.tuneDetection" color="pink-lighten-2">fa-wrench</v-icon>
+						<v-icon :alt="i18n.tuneDetection" color="pink-lighten-3">fa-wrench</v-icon>
 					</template>
 					<v-list-item-title>
 						{{ i18n.tuneDetection }}
@@ -897,7 +897,7 @@
 				</v-list-item>
 				<v-list-item density="compact" id="actionTuneDetection-disabled" v-if="!quickActionDetId && $root.detectionsEnabled && isCategory('alerts')" v-bind:title.attr="i18n.tuneDetectionHelp" :data-aid="'context_menu_tuning_disabled_' + category">
 					<template #prepend>
-						<v-icon :alt="i18n.tuneDetection" color="pink-lighten-2">fa-wrench</v-icon>
+						<v-icon :alt="i18n.tuneDetection" color="pink-lighten-3">fa-wrench</v-icon>
 					</template>
 					<v-list-item-title>
 						{{ i18n.tuneDetection }}
