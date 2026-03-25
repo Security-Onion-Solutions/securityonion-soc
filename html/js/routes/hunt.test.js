@@ -2560,3 +2560,130 @@ fields:
   expect(result).toBe(false);
   expect(q.isAggregate).toBe(false);
 });
+
+// initDefaultTab tests
+test('initDefaultTab sets playbook when showGuidedAnalysisFirst is true on alerts', () => {
+  comp.isCategory = cat => cat === 'alerts';
+  comp.showGuidedAnalysisFirst = true;
+  comp.activeTabs = {};
+  comp.loadPlaybook = jest.fn();
+
+  comp.initDefaultTab(0, { soc_id: '123' });
+
+  expect(comp.activeTabs[0]).toBe('playbook');
+  expect(comp.loadPlaybook).toHaveBeenCalledWith({ soc_id: '123' }, 0);
+});
+
+test('initDefaultTab sets alert when showGuidedAnalysisFirst is false on alerts', () => {
+  comp.isCategory = cat => cat === 'alerts';
+  comp.showGuidedAnalysisFirst = false;
+  comp.activeTabs = {};
+  comp.loadPlaybook = jest.fn();
+
+  comp.initDefaultTab(0, { soc_id: '123' });
+
+  expect(comp.activeTabs[0]).toBe('alert');
+  expect(comp.loadPlaybook).not.toHaveBeenCalled();
+});
+
+test('initDefaultTab does nothing for non-alerts category', () => {
+  comp.isCategory = cat => cat === 'events';
+  comp.showGuidedAnalysisFirst = true;
+  comp.activeTabs = {};
+
+  comp.initDefaultTab(0);
+
+  expect(comp.activeTabs[0]).toBeUndefined();
+});
+
+test('initDefaultTab does nothing when tab already set', () => {
+  comp.isCategory = cat => cat === 'alerts';
+  comp.showGuidedAnalysisFirst = true;
+  comp.activeTabs = { 0: 'alert' };
+
+  comp.initDefaultTab(0);
+
+  expect(comp.activeTabs[0]).toBe('alert');
+});
+
+test('initDefaultTab does not call loadPlaybook without item', () => {
+  comp.isCategory = cat => cat === 'alerts';
+  comp.showGuidedAnalysisFirst = true;
+  comp.activeTabs = {};
+  comp.loadPlaybook = jest.fn();
+
+  comp.initDefaultTab(0);
+
+  expect(comp.activeTabs[0]).toBe('playbook');
+  expect(comp.loadPlaybook).not.toHaveBeenCalled();
+});
+
+// checkAllFieldTruncation tests
+test('checkAllFieldTruncation skips when gridLayoutExpansions is false', () => {
+  comp.gridLayoutExpansions = false;
+  const mockQuerySelectorAll = jest.fn();
+  comp.$el = { querySelectorAll: mockQuerySelectorAll };
+
+  comp.checkAllFieldTruncation();
+
+  expect(mockQuerySelectorAll).not.toHaveBeenCalled();
+});
+
+test('checkAllFieldTruncation adds is-truncated class when value overflows', () => {
+  comp.gridLayoutExpansions = true;
+  const card = {
+    querySelector: () => ({ scrollWidth: 200, clientWidth: 100 }),
+    classList: { add: jest.fn(), remove: jest.fn() },
+  };
+  comp.$el = { querySelectorAll: () => [card] };
+
+  comp.checkAllFieldTruncation();
+
+  expect(card.classList.add).toHaveBeenCalledWith('is-truncated');
+  expect(card.classList.remove).not.toHaveBeenCalled();
+});
+
+test('checkAllFieldTruncation removes is-truncated class when value fits', () => {
+  comp.gridLayoutExpansions = true;
+  const card = {
+    querySelector: () => ({ scrollWidth: 100, clientWidth: 100 }),
+    classList: { add: jest.fn(), remove: jest.fn() },
+  };
+  comp.$el = { querySelectorAll: () => [card] };
+
+  comp.checkAllFieldTruncation();
+
+  expect(card.classList.remove).toHaveBeenCalledWith('is-truncated');
+  expect(card.classList.add).not.toHaveBeenCalled();
+});
+
+test('checkAllFieldTruncation handles card with no value element', () => {
+  comp.gridLayoutExpansions = true;
+  const card = {
+    querySelector: () => null,
+    classList: { add: jest.fn(), remove: jest.fn() },
+  };
+  comp.$el = { querySelectorAll: () => [card] };
+
+  comp.checkAllFieldTruncation();
+
+  expect(card.classList.remove).toHaveBeenCalledWith('is-truncated');
+});
+
+// showFieldValueDialog tests
+test('showFieldValueDialog sets dialog state', () => {
+  comp.showFieldValueDialog('source.ip', '192.168.1.1');
+
+  expect(comp.fieldValueDialogKey).toBe('source.ip');
+  expect(comp.fieldValueDialogValue).toBe('192.168.1.1');
+  expect(comp.fieldValueDialogVisible).toBe(true);
+});
+
+// closeFieldValueDialog tests
+test('closeFieldValueDialog hides dialog', () => {
+  comp.fieldValueDialogVisible = true;
+
+  comp.closeFieldValueDialog();
+
+  expect(comp.fieldValueDialogVisible).toBe(false);
+});
