@@ -857,7 +857,7 @@
 			<v-list id="hunt-quick-action" v-model:opened="quickActionsOpen" class="v-theme--dark">
 				<v-list-item density="compact" id="actionFilterInclude" :to="filterRouteInclude" v-bind:title.attr="i18n.filterIncludeHelp" :data-aid="'context_menu_filter_include_' + category" active-class="">
 					<template #prepend>
-						<v-icon :alt="i18n.filterInclude" class="theme-icon">fa-search-plus</v-icon>
+						<v-icon :alt="i18n.filterInclude" color="green-darken-1">fa-search-plus</v-icon>
 					</template>
 					<v-list-item-title>
 						{{ i18n.filterInclude }}
@@ -865,7 +865,7 @@
 				</v-list-item>
 				<v-list-item density="compact" id="actionFilterExclude" :to="filterRouteExclude" v-bind:title.attr="i18n.filterExcludeHelp" :data-aid="'context_menu_filter_exclude_' + category">
 					<template #prepend>
-						<v-icon :alt="i18n.filterExclude" class="theme-icon">fa-search-minus</v-icon>
+						<v-icon :alt="i18n.filterExclude" color="red-darken-1">fa-search-minus</v-icon>
 					</template>
 					<v-list-item-title>
 						{{ i18n.filterExclude }}
@@ -873,7 +873,7 @@
 				</v-list-item>
 				<v-list-item density="compact" id="actionFilterExact" :to="filterRouteExact" v-bind:title.attr="i18n.filterExactHelp" :data-aid="'context_menu_filter_exact_' + category">
 					<template #prepend>
-						<v-icon :alt="i18n.filterExact" class="theme-icon">fa-search</v-icon>
+						<v-icon :alt="i18n.filterExact" color="blue-darken-1">fa-search</v-icon>
 					</template>
 					<v-list-item-title>
 						{{ i18n.filterExact }}
@@ -881,7 +881,7 @@
 				</v-list-item>
 				<v-list-item density="compact" id="actionDrilldown" :to="filterRouteDrilldown" v-bind:title.attr="i18n.filterDrilldownHelp" v-if="!isAdvanced() && metricsEnabled" :data-aid="'context_menu_drilldown_' + category">
 					<template #prepend>
-						<v-icon :alt="i18n.filterDrilldown" class="theme-icon">fa-angle-double-down</v-icon>
+						<v-icon :alt="i18n.filterDrilldown" color="purple-lighten-1">fa-angle-double-down</v-icon>
 					</template>
 					<v-list-item-title>
 						{{ i18n.filterDrilldown }}
@@ -889,7 +889,7 @@
 				</v-list-item>
 				<v-list-item density="compact" id="actionTuneDetection" v-if="quickActionDetId && $root.detectionsEnabled && isCategory('alerts')" :to='{ name: "detection", params: { id: quickActionDetId }, query: { tab: tuneDetectionTabTarget } }' class="v-list-item--active" v-bind:title.attr="i18n.tuneDetectionHelp" :data-aid="'context_menu_tuning_' + category">
 					<template #prepend>
-						<v-icon :alt="i18n.tuneDetection" class="theme-icon">fa-wrench</v-icon>
+						<v-icon :alt="i18n.tuneDetection" color="pink-lighten-2">fa-wrench</v-icon>
 					</template>
 					<v-list-item-title>
 						{{ i18n.tuneDetection }}
@@ -897,7 +897,7 @@
 				</v-list-item>
 				<v-list-item density="compact" id="actionTuneDetection-disabled" v-if="!quickActionDetId && $root.detectionsEnabled && isCategory('alerts')" v-bind:title.attr="i18n.tuneDetectionHelp" :data-aid="'context_menu_tuning_disabled_' + category">
 					<template #prepend>
-						<v-icon :alt="i18n.tuneDetection" class="theme-icon">fa-wrench</v-icon>
+						<v-icon :alt="i18n.tuneDetection" color="pink-lighten-2">fa-wrench</v-icon>
 					</template>
 					<v-list-item-title>
 						{{ i18n.tuneDetection }}
@@ -905,7 +905,7 @@
 				</v-list-item>
 				<v-list-item density="compact" id="actionGroupBy" :to="groupByRoute" v-bind:title.attr="i18n.groupIncludeHelp" :data-aid="'context_menu_groupby_' + category">
 					<template #prepend>
-						<v-icon :alt="i18n.groupInclude" class="theme-icon">fa-layer-group</v-icon>
+						<v-icon :alt="i18n.groupInclude" color="yellow-darken-2">fa-layer-group</v-icon>
 					</template>
 					<v-list-item-title>
 						{{ i18n.groupInclude }}
@@ -913,7 +913,7 @@
 				</v-list-item>
 				<v-list-item density="compact" id="actionGroupByNew" :to="groupByNewRoute" v-bind:title.attr="i18n.groupNewHelp" :data-aid="'context_menu_groupby_new_' + category">
 					<template #prepend>
-						<v-icon :alt="i18n.groupNew" class="theme-icon">fa-layer-group</v-icon>
+						<v-icon :alt="i18n.groupNew" color="orange-darken-2">fa-layer-group</v-icon>
 					</template>
 					<v-list-item-title>
 						{{ i18n.groupNew }}
