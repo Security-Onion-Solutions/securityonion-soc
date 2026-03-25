@@ -3303,7 +3303,7 @@ const huntComponent = {
       }
       // Individual alerts
       if (item['event.investigated']) {
-        return 'secondary';
+        return 'icon';
       }
       // Not investigated
       return '';
@@ -3315,7 +3315,7 @@ const huntComponent = {
         return this.i18n.aiInvestigateMostRecent;
       }
       // Individual alerts
-      if (item['event.investigated']) {
+      if (item['event.investigation_session_id']) {
         return this.i18n.aiInvestigateView;
       }
       return this.i18n.aiInvestigate;

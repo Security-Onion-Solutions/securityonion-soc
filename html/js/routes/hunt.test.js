@@ -2422,7 +2422,7 @@ test('getAIInvestigationButtonColor - individual alert investigated', () => {
   };
 
   const color = comp.getAIInvestigationButtonColor(item);
-  expect(color).toBe('secondary');
+  expect(color).toBe('icon');
 });
 
 test('getAIInvestigationButtonColor - grouped alert', () => {
@@ -2443,7 +2443,7 @@ test('getAIInvestigationTooltip - individual alert not investigated', () => {
 test('getAIInvestigationTooltip - individual alert investigated', () => {
   const item = {
     soc_id: 'alert123',
-    'event.investigated': true
+    'event.investigation_session_id': 'session_123456'
   };
 
   const tooltip = comp.getAIInvestigationTooltip(item);
