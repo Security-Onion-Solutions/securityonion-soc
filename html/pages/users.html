@@ -40,7 +40,7 @@
 					<v-form v-model="form.valid">
 						<v-container grid-list-sm class="pa-4">
 							<v-row>
-								<v-col xs12 class="d-flex flex-column ga-2">
+								<v-col xs12 class="d-flex flex-column">
 									<v-text-field id="email-input" v-model="form.email" :placeholder="i18n.email" :autofocus="true" :rules="[rules.required,rules.email,rules.lowercase]" data-aid="users_create_dialog_email"></v-text-field>
 									<v-text-field id="password-input" v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'" data-aid="users_create_dialog_password"
 										@click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'"

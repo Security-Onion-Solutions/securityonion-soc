@@ -169,6 +169,11 @@ body {
   border-radius: var(--so-radius-panel) !important;
 }
 
+.v-form > *:not(:last-child) .v-input,
+.v-form > .v-input:not(:last-child) {
+  margin-bottom: 12px;
+}
+
 .override-form .v-input {
   margin-bottom: 12px;
 }

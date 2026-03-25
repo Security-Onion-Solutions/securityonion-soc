@@ -73,9 +73,9 @@
 				<v-expansion-panel-text>
 					<v-row v-if="canAddOverride()">
 						<v-col>
-							<v-toolbar class="elevation-0 theme-background-lighten-1" fixed>
-								<v-btn variant="flat" class="ml-3" id="add-override-button" style="text-decoration: none; cursor: 'pointer'" @click="createNewOverride()" data-aid="detection_panel_new_override">
-									<v-icon :title="i18n.create" color="primary">fa-plus</v-icon>
+							<v-toolbar class="so-toolbar elevation-0" fixed>
+								<v-btn icon variant="flat" class="circle-button mx-2" id="add-override-button" style="text-decoration: none; cursor: 'pointer'" @click="createNewOverride()" data-aid="detection_panel_new_override">
+									<v-icon :title="i18n.create">fa-plus</v-icon>
 								</v-btn>
 							</v-toolbar>
 						</v-col>
