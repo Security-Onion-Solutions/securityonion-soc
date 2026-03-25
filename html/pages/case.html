@@ -287,24 +287,24 @@
 															<template #item="{ props, item }">
 																<v-list-item v-bind="props">
 																	<template #prepend>
-																		<v-icon>{{ associatedForms['attachments'].tags.includes(item.value) ? 'mb-1 fa-square-check' : 'mb-1 fa-regular fa-square' }}</v-icon>
+																		<v-icon class="mb-1">{{ associatedForms['attachments'].tags.includes(item) ? 'fa-square-check' : 'fa-regular fa-square' }}</v-icon>
 																	</template>
 																</v-list-item>
 															</template>
 															<template #selection="{ item }">
-																<v-chip density="compact" color="primary">{{item.title}}</v-chip>
+																<v-chip density="compact" color="primary">{{item}}</v-chip>
 															</template>
 														</v-select>
 														<v-combobox id="attachments-tags" v-if="!isPresetCustomEnabled('tags')" v-model="associatedForms['attachments'].tags" :items="selectList('tags')" persistent-hint :hint="i18n.caseTagsHelp" multiple>
 															<template #item="{ props, item }">
 																<v-list-item v-bind="props">
 																	<template #prepend>
-																		<v-icon>{{ associatedForms['attachments'].tags.includes(item.value) ? 'mb-1 fa-square-check' : 'mb-1 fa-regular fa-square' }}</v-icon>
+																		<v-icon>{{ associatedForms['attachments'].tags.includes(item) ? 'mb-1 fa-square-check' : 'mb-1 fa-regular fa-square' }}</v-icon>
 																	</template>
 																</v-list-item>
 															</template>
 															<template #selection="{ item }">
-																<v-chip density="compact" color="primary">{{item.title}}</v-chip>
+																<v-chip density="compact" color="primary">{{item}}</v-chip>
 															</template>
 														</v-combobox>
 													</span>
@@ -463,12 +463,12 @@
 													<template #item="{ props, item }">
 														<v-list-item v-bind="props">
 															<template #prepend>
-																<v-icon>{{ (editForm.val || []).includes(item.value) ? 'mb-1 fa-square-check' : 'mb-1 fa-regular fa-square' }}</v-icon>
+																<v-icon>{{ (editForm.val || []).includes(item) ? 'mb-1 fa-square-check' : 'mb-1 fa-regular fa-square' }}</v-icon>
 															</template>
 														</v-list-item>
 													</template>
 													<template #selection="{ item }">
-														<v-chip density="compact" color="primary">{{item.title}}</v-chip>
+														<v-chip density="compact" color="primary">{{item}}</v-chip>
 													</template>
 												</v-select>
 												<template v-if="isEdit(`attachments-${index}-tags`) && isPresetCustomEnabled('tags')">
@@ -478,12 +478,12 @@
 														:items="selectList('tags', item.tags)"
 														@change="stopEdit(true)">
 														<template #selection="{ item }">
-															<v-chip density="compact" color="primary">{{item.title}}</v-chip>
+															<v-chip density="compact" color="primary">{{item}}</v-chip>
 														</template>
 														<template #item="{ props, item }">
 															<v-list-item v-bind="props" class="remove-spacer">
 																<template #prepend>
-																	<v-icon>{{ (editForm.val || []).includes(item.value) ? 'mb-1 fa-square-check' : 'mb-1 fa-regular fa-square' }}</v-icon>
+																	<v-icon>{{ (editForm.val || []).includes(item) ? 'mb-1 fa-square-check' : 'mb-1 fa-regular fa-square' }}</v-icon>
 																</template>
 															</v-list-item>
 														</template>
@@ -598,19 +598,19 @@
 													<span data-aid="case_evidence_new_tags_select">
 														<v-select id="evidence-tags" v-if="!isPresetCustomEnabled('tags')" v-model="associatedForms['evidence'].tags" :items="selectList('tags')" persistent-hint :hint="i18n.caseTagsHelp" multiple>
 															<template #selection="{ item }">
-																<v-chip density="compact" color="primary">{{item.title}}</v-chip>
+																<v-chip density="compact" color="primary">{{item}}</v-chip>
 															</template>
 														</v-select>
 														<v-combobox id="evidence-tags" v-if="isPresetCustomEnabled('tags')" v-model="associatedForms['evidence'].tags" :items="selectList('tags')" persistent-hint :hint="i18n.caseTagsHelp" multiple>
 															<template #item="{ props, item }">
 																<v-list-item v-bind="props">
 																	<template #prepend>
-																		<v-icon>{{ (associatedForms['evidence'].tags || []).includes(item.value) ? 'mb-1 fa-square-check' : 'mb-1 fa-regular fa-square' }}</v-icon>
+																		<v-icon>{{ (associatedForms['evidence'].tags || []).includes(item) ? 'mb-1 fa-square-check' : 'mb-1 fa-regular fa-square' }}</v-icon>
 																	</template>
 																</v-list-item>
 															</template>
 															<template #selection="{ item }">
-																<v-chip density="compact" color="primary">{{item.title}}</v-chip>
+																<v-chip density="compact" color="primary">{{item}}</v-chip>
 															</template>
 														</v-combobox>
 													</span>
@@ -784,12 +784,12 @@
 													<template #item="{ props, item }">
 														<v-list-item v-bind="props">
 															<template #prepend>
-																<v-icon>{{ (editForm.val || []).includes(item.value) ? 'mb-1 fa-square-check' : 'mb-1 fa-regular fa-square' }}</v-icon>
+																<v-icon>{{ (editForm.val || []).includes(item) ? 'mb-1 fa-square-check' : 'mb-1 fa-regular fa-square' }}</v-icon>
 															</template>
 														</v-list-item>
 													</template>
 													<template #selection="{ item }">
-														<v-chip density="compact" color="primary">{{item.title}}</v-chip>
+														<v-chip density="compact" color="primary">{{item}}</v-chip>
 													</template>
 												</v-select>
 												<template v-if="isEdit(`evidence-${index}-tags`) && isPresetCustomEnabled('tags')">
@@ -801,12 +801,12 @@
 														<template #item="{ props, item }">
 															<v-list-item v-bind="props" class="remove-spacer">
 																<template #prepend>
-																	<v-icon>{{ (editForm.val || []).includes(item.value) ? 'mb-1 fa-square-check' : 'mb-1 fa-regular fa-square' }}</v-icon>
+																	<v-icon>{{ (editForm.val || []).includes(item) ? 'mb-1 fa-square-check' : 'mb-1 fa-regular fa-square' }}</v-icon>
 																</template>
 															</v-list-item>
 														</template>
 														<template #selection="{ item }">
-															<v-chip density="compact" color="primary">{{item.title}}</v-chip>
+															<v-chip density="compact" color="primary">{{item}}</v-chip>
 														</template>
 													</v-combobox>
 													<div class="d-inline-flex justify-end">
@@ -1565,12 +1565,12 @@
 													<template #item="{ props, item }">
 														<v-list-item v-bind="props">
 															<template #prepend>
-																<v-icon>{{ (editForm.val || []).includes(item.value) ? 'mb-1 fa-square-check' : 'mb-1 fa-regular fa-square' }}</v-icon>
+																<v-icon>{{ (editForm.val || []).includes(item) ? 'mb-1 fa-square-check' : 'mb-1 fa-regular fa-square' }}</v-icon>
 															</template>
 														</v-list-item>
 													</template>
 													<template #selection="{ item }">
-														<v-chip density="compact" color="primary">{{item.title}}</v-chip>
+														<v-chip density="compact" color="primary">{{item}}</v-chip>
 													</template>
 												</v-select>
 												<v-combobox id="case-tags-input" v-else
@@ -1581,12 +1581,12 @@
 													<template #item="{ props, item }">
 														<v-list-item v-bind="props">
 															<template #prepend>
-																<v-icon>{{ (editForm.val || []).includes(item.value) ? 'mb-1 fa-square-check' : 'mb-1 fa-regular fa-square' }}</v-icon>
+																<v-icon>{{ (editForm.val || []).includes(item) ? 'mb-1 fa-square-check' : 'mb-1 fa-regular fa-square' }}</v-icon>
 															</template>
 														</v-list-item>
 													</template>
 													<template #selection="{ item }">
-														<v-chip density="compact" color="primary">{{item.title}}</v-chip>
+														<v-chip density="compact" color="primary">{{item}}</v-chip>
 													</template>
 												</v-combobox>
 												<div class="d-inline-flex justify-end">
