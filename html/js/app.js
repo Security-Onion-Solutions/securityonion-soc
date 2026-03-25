@@ -66,7 +66,8 @@ $(document).ready(function () {
           variant: 'outlined',
         },
         VFileInput: {
-          prependIcon: 'fa-paperclip'
+          prependIcon: 'fa-paperclip',
+          variant: 'outlined',
         },
         VDataTable: {
           firstIcon: 'fa-backward-step',

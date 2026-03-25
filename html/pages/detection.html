@@ -928,7 +928,7 @@
 		</v-col>
 		<v-col class="v-order-md-2 v-order-1" order="1" order-md="2" cols="12" md="3">
 			<v-expansion-panels focusable multiple v-model="panel">
-				<v-expansion-panel v-if="!isNew()" data-aid="detection_metadata_summary">
+				<v-expansion-panel v-if="!isNew()" class="mb-3" data-aid="detection_metadata_summary">
 					<v-expansion-panel-title>
 						<h3 class="my-0">{{ i18n.operations }}</h3>
 					</v-expansion-panel-title>
@@ -951,7 +951,7 @@
 						</div>
 					</v-expansion-panel-text>
 				</v-expansion-panel>
-				<v-expansion-panel v-if="!isNew()" data-aid="detection_metadata_details">
+				<v-expansion-panel v-if="!isNew()" class="mt-0" data-aid="detection_metadata_details">
 					<v-expansion-panel-title id="detection-extracted-details">
 						<h3 class="my-0">{{ i18n.details }}</h3>
 					</v-expansion-panel-title>

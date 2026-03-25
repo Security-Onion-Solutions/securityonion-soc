@@ -7,10 +7,10 @@
 		</v-container>
 	</div>
 	<div class="pos-rel">
-		<v-expansion-panels multiple focusable v-model="panels" class="mt-2">
-			<v-expansion-panel>
+		<v-expansion-panels multiple focusable v-model="panels">
+			<v-expansion-panel class="mb-3">
 				<v-expansion-panel-title expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up" data-aid="detection_panel_overview_header">
-					<h3>
+					<h3 class="my-0">
 						{{ i18n.overview }}
 					</h3>
 				</v-expansion-panel-title>
@@ -64,9 +64,9 @@
 					</div>
 				</v-expansion-panel-text>
 			</v-expansion-panel>
-			<v-expansion-panel>
+			<v-expansion-panel class="mt-0">
 				<v-expansion-panel-title expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up" data-aid="detection_panel_tuning_header">
-					<h3>
+					<h3 class="my-0">
 						{{ i18n.tuning }}
 					</h3>
 				</v-expansion-panel-title>
