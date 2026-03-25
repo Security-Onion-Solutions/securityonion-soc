@@ -1,0 +1,762 @@
+/*
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
+// https://securityonion.net/license; you may not use this file except in compliance with the
+// Elastic License 2.0.
+*/
+
+@font-face {
+  font-family: 'Inter';
+  src: url('./webfonts/Inter-VariableFont_opsz,wght.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Inter';
+  src: url('./webfonts/Inter-Italic-VariableFont_opsz,wght.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+:root {
+  /* Border Radius */
+  --so-radius-panel:    0.75rem;   /* panels, dialogs, toolbars, cards, fields, menus */
+  --so-radius-nested:   0.5rem;    /* nested tables, tabs, expansion panels */
+  --so-radius-pill:     999px;     /* pill-shaped buttons/chips */
+  --so-radius-field:    0.375rem;  /* expanded field cards */
+  --so-radius-markdown: 0.25em;    /* markdown body elements */
+
+  /* Shadows */
+  --so-shadow-menu:       0 8px 24px rgba(0,0,0,0.25), 0 2px 8px rgba(0,0,0,0.15);
+  --so-shadow-chip:       0 1px 3px rgba(0,0,0,0.12);
+  --so-shadow-chip-hover: 0 2px 6px rgba(0,0,0,0.18);
+  --so-shadow-card:       0 3px 1px -2px rgba(0,0,0,.2), 0 2px 2px 0 rgba(0,0,0,.14), 0 1px 5px 0 rgba(0,0,0,.12);
+
+  /* Font Sizes (UI chrome — not the heading scale) */
+  --so-font-size-label: 0.85rem;   /* labels, field names, menu items */
+  --so-font-size-hint:  0.875rem;  /* login subtitle, hint text */
+  --so-font-size-th:    0.75rem;   /* table column headers */
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  font-optical-sizing: auto;
+}
+
+.v-expansion-panels,
+.v-expansion-panel,
+.v-alert {
+  border-radius: var(--so-radius-panel) !important;
+}
+
+.options-dialog {
+  border-radius: var(--so-radius-panel) !important;
+  padding: 8px
+}
+
+.v-app-bar {
+  background-color: rgb(var(--v-theme-nav_background)) !important;
+}
+
+.so-toolbar {
+  border-radius: var(--so-radius-panel);
+  background-color: rgba(var(--v-theme-drawer_background)) !important;
+}
+
+.so-toolbar > .v-toolbar__content {
+  height: auto !important;
+  min-height: 64px !important;
+  padding: 8px 12px;
+  align-items: center !important;
+}
+
+.so-toolbar .v-toolbar__content > .v-btn {
+  border-radius: var(--so-radius-pill) !important;
+}
+
+.circle-button {
+  background-color: rgba(var(--v-theme-primary));
+  color: rgba(var(--v-theme-button_icon_color)) !important;
+}
+
+/* Stat pills — small label above, large value below, icon on right */
+.so-stat-pill {
+  border-radius: var(--so-radius-panel);
+  background-color: rgba(var(--v-theme-drawer_background));
+  padding: 12px 16px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.so-stat-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.so-stat-label {
+  font-size: var(--so-font-size-label);
+  opacity: 0.7;
+  white-space: nowrap;
+  margin-bottom: 4px;
+}
+
+.so-stat-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.so-stat-icon.v-icon {
+  opacity: 0.4;
+  font-size: 1.6rem !important;
+  margin-left: 12px;
+}
+
+/* ============================================================
+   Section Panel — encloses toolbar header + expandable content
+   ============================================================ */
+
+.section-panel {
+  border: 1px solid rgba(var(--v-theme-text), 0.08);
+  border-radius: var(--so-radius-panel);
+  overflow: hidden;
+  background-color: rgba(var(--v-theme-background-lighten-1));
+}
+
+.section-panel > .v-toolbar {
+  border-radius: 0 !important;
+  border-bottom: 1px solid rgba(var(--v-theme-text), 0.06);
+}
+
+.section-panel > .v-toolbar > .v-toolbar__content {
+  min-height: 56px !important;
+  height: auto !important;
+  align-items: center !important;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  background-color: rgba(var(--v-theme-drawer_background));
+}
+
+.section-panel canvas {
+  padding: 8px;
+}
+
+.section-panel .v-data-table {
+  border-radius: 0 0 var(--so-radius-panel) var(--so-radius-panel) !important;
+  background-color: rgba(var(--v-theme-background-lighten-1), 0.6);
+}
+
+.section-panel .v-tabs,
+.section-panel .v-tabs-window,
+.section-panel .v-tab {
+  background-color: rgba(var(--v-theme-background-lighten-1), 0.6);
+}
+
+.rounded.rounded-md {
+  border-radius: var(--so-radius-panel) !important;
+}
+
+/* ============================================================
+   Text Fields & Selects — rounded globally
+   ============================================================ */
+
+.v-field {
+  border-radius: var(--so-radius-panel) !important;
+}
+
+.override-form .v-input {
+  margin-bottom: 12px;
+}
+
+#pcap-job-dialog .v-text-field {
+  margin-bottom: 12px;
+}
+
+/* Pin textarea append slot to top when textarea grows */
+.v-textarea.v-input--horizontal > .v-input__append {
+  align-self: start !important;
+  padding-top: 0 !important;
+}
+
+.theme-text {
+  color: rgb(var(--v-theme-text)) !important;
+}
+
+.theme-links a, .theme-links .v-list-group > .v-list-item, .theme-links a:active {
+  color: rgb(var(--v-theme-text)) !important;
+  border-radius: var(--so-radius-panel);
+  margin: 0px 4px;
+}
+
+.loading-onion {
+  position: relative;
+  width: 50px;
+}
+
+.loading-container {
+  display: flex;
+  position: relative;
+  align-items: center;
+  justify-content: center;
+  width: 125px;
+  height: 125px;
+  border-radius: var(--so-radius-panel);
+  background-color: rgba(var(--v-theme-background), 0.4) !important;
+}
+
+.loading-cancel {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+}
+
+.loading-cancel .v-icon {
+  color: rgb(var(--v-theme-text)) !important;
+}
+
+.v-list {
+  background-color: rgb(var(--v-theme-table_background)) !important;
+}
+
+.component-overlay .loading-container {
+  align-self: center;
+}
+
+#panel-loading-overlay {
+  position: sticky;
+  top: 0;
+  bottom: unset;
+  height: calc(100vh - 64px - 40px - 10px);
+  margin-bottom: calc(-100vh + 64px + 40px + 10px);
+}
+
+/* ============================================================
+   Data Tables — rounded, spacious, softer
+   ============================================================ */
+
+.v-data-table {
+  border-radius: var(--so-radius-panel) !important;
+  overflow: hidden;
+  border: 1px solid rgba(var(--v-theme-text), 0.06);
+}
+
+/* Softer row striping */
+.v-data-table tbody tr, .v-data-table th, .v-data-table-footer, .v-table tr, .v-data-table-rows-no-data {
+  background-color: rgb(var(--v-theme-table_background)) !important;
+}
+
+.v-theme--dark tr:hover,
+.v-theme--light tr:hover {
+  background-color: rgba(var(--v-theme-primary), 0.15) !important;
+}
+
+/* Spacious cells */
+.v-data-table td {
+  padding: 12px 16px !important;
+}
+
+/* Row hover */
+.v-data-table tbody tr {
+  transition: background-color 0.15s ease;
+}
+
+.v-data-table tbody tr:hover {
+  background-color: rgba(var(--v-theme-text), 0.04) !important;
+}
+
+/* Softer header row */
+.v-data-table th {
+  font-size: var(--so-font-size-th) !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+  padding: 14px 16px !important;
+  border-bottom: 1px solid rgba(var(--v-theme-text), 0.08) !important;
+}
+
+.v-data-table th:hover,
+.v-data-table th.is-sorted {
+  opacity: 1 !important;
+}
+
+/* Remove hard internal borders */
+.v-data-table td {
+  border-bottom: 1px solid rgba(var(--v-theme-text), 0.04) !important;
+}
+
+/* Softer footer */
+.v-data-table-footer {
+  border-top: 1px solid rgba(var(--v-theme-text), 0.06) !important;
+  padding: 8px 16px !important;
+}
+
+/* ============================================================
+   Expanded Row Details — 4-column grid layout
+   ============================================================ */
+
+.v-data-table tr + tr > td.px-0 {
+  padding: 16px 8px !important;
+}
+
+.v-table__wrapper>table>tbody>tr:nth-child(odd of .main-row),
+.v-table__wrapper>table>tbody>tr:nth-child(odd of .main-row) + tr.expanded-row {
+  /* How Vuetify makes the stripes */
+  background-image: linear-gradient(0deg, rgba(var(--v-border-color), var(--v-hover-opacity)), rgba(var(--v-border-color), var(--v-hover-opacity)));
+}
+
+.seamless-expanded-row td {
+  border-bottom: 0px !important;
+}
+
+.hunt-table tr + tr > td.px-0 {
+  max-width: 1px;
+  overflow: visible;
+}
+
+/* Constrains expanded content to viewport width, independent of table width */
+.expanded-row-wrapper {
+  max-width: calc(100vw - var(--v-layout-left, 0px) - 48px);
+  overflow-x: auto;
+}
+
+/* 4-column attribute grid — responsive: 4 → 3 → 2 cols, then scroll */
+.expanded-fields-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(200px, 1fr));
+  gap: 2px;
+  padding: 12px 16px;
+}
+
+@media (min-width: 960px) {
+  .expanded-fields-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1280px) {
+  .expanded-fields-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.expanded-field-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 0 4px;
+  padding: 10px 12px;
+  border-radius: var(--so-radius-field);
+  overflow: hidden;
+  min-width: 0;
+}
+
+.expanded-field-header {
+  display: contents;
+}
+
+.expanded-field-name-row {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.expanded-field-name {
+  font-size: var(--so-font-size-label);
+  font-weight: 500;
+  opacity: 0.55;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.expanded-field-actions {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 0;
+}
+
+.expanded-field-actions .v-btn {
+  margin: 0 -4px;
+}
+
+.expanded-field-value {
+  grid-column: 1 / -1;
+  font-size: 0.9rem;
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: color 0.12s ease;
+  min-width: 0;
+  margin-left: 2px;
+}
+
+.expanded-field-value:hover {
+  color: rgb(var(--v-theme-primary));
+}
+
+.expanded-field-expand-btn {
+  flex-shrink: 0;
+  display: none;
+}
+
+.expanded-field-card.is-truncated .expanded-field-expand-btn {
+  display: inline-flex;
+  opacity: 0.5;
+}
+
+.expanded-field-card.is-truncated .expanded-field-expand-btn:hover {
+  opacity: 1;
+}
+
+/* Inner key-value detail table (fallback if still used elsewhere) */
+.v-data-table .v-data-table {
+  border: none !important;
+  border-radius: var(--so-radius-nested) !important;
+  background-color: transparent !important;
+}
+
+.v-data-table .v-data-table td {
+  padding: 8px 12px !important;
+  border-bottom-color: rgba(var(--v-theme-text), 0.03) !important;
+}
+
+/* Tabs inside expanded rows */
+.v-data-table .v-tabs {
+  border-radius: var(--so-radius-nested) var(--so-radius-nested) 0 0;
+}
+
+.v-data-table .v-tab {
+  text-transform: none;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+/* ============================================================
+   Playbook Expansion Panels — softer
+   ============================================================ */
+
+.v-data-table .v-expansion-panels {
+  border-radius: var(--so-radius-nested);
+}
+
+.v-data-table .v-expansion-panel {
+  border-radius: 0 !important;
+  border-bottom: 1px solid rgba(var(--v-theme-text), 0.06);
+}
+
+.v-data-table .v-expansion-panel:first-child {
+  border-radius: var(--so-radius-nested) var(--so-radius-nested) 0 0 !important;
+}
+
+.v-data-table .v-expansion-panel:last-child {
+  border-radius: 0 0 var(--so-radius-nested) var(--so-radius-nested) !important;
+  border-bottom: none;
+}
+
+.v-data-table .v-expansion-panel-title {
+  padding: 16px 20px;
+  min-height: 48px;
+}
+
+.v-data-table .v-expansion-panel-text {
+  padding: 4px 8px 16px;
+}
+
+/* Simple table (instant insights) */
+.simple-table {
+  border-radius: var(--so-radius-nested);
+  overflow: hidden;
+  border: 1px solid rgba(var(--v-theme-text), 0.08);
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.simple-table th,
+.simple-table td {
+  border: none;
+  border-bottom: 1px solid rgba(var(--v-theme-text), 0.06);
+  padding: 10px 14px;
+}
+
+.simple-table tr:last-child td {
+  border-bottom: none;
+}
+
+.simple-table thead tr {
+  background-color: rgba(var(--v-theme-text), 0.04);
+}
+
+/* ============================================================
+   Context Menu — rounded, floating, spacious
+   ============================================================ */
+
+#hunt-quick-action {
+  border-radius: var(--so-radius-panel) !important;
+  overflow: hidden;
+  box-shadow: var(--so-shadow-menu) !important;
+  padding: 6px 0 !important;
+}
+
+#hunt-quick-action .v-list-item {
+  padding: 6px 20px !important;
+  min-height: 40px;
+  transition: background-color 0.12s ease;
+}
+
+#hunt-quick-action .v-list-item:hover {
+  background-color: rgba(var(--v-theme-primary), 0.1) !important;
+}
+
+#hunt-quick-action .v-list-item-title {
+  font-size: var(--so-font-size-label);
+  font-weight: 500;
+}
+
+#hunt-quick-action .v-list-group {
+  border-top: 1px solid rgba(var(--v-theme-text), 0.06);
+}
+
+#hunt-quick-action .v-list-group .v-list-item {
+  padding: 4px 24px !important;
+}
+
+/* ============================================================
+   Escalation Menu — matching context menu style
+   ============================================================ */
+
+#hunt-escalate-menu {
+  border-radius: var(--so-radius-panel) !important;
+  overflow: hidden;
+  box-shadow: var(--so-shadow-menu) !important;
+  padding: 6px 0 !important;
+}
+
+#hunt-escalate-menu .v-list-item {
+  padding: 6px 20px !important;
+  min-height: 40px;
+  transition: background-color 0.12s ease;
+}
+
+#hunt-escalate-menu .v-list-item:hover {
+  background-color: rgba(var(--v-theme-secondary), 0.15) !important;
+}
+
+/* ============================================================
+   Filter / Sort Chips — pill-shaped, softer
+   ============================================================ */
+
+.v-chip.filter,
+.v-chip.sortBy {
+  border-radius: var(--so-radius-pill) !important;
+  padding: 0 14px !important;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  box-shadow: var(--so-shadow-chip);
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.v-chip.filter:hover,
+.v-chip.sortBy:hover {
+  box-shadow: var(--so-shadow-chip-hover);
+  transform: translateY(-1px);
+}
+
+/* ============================================================
+   Login Page — centered, modern, clean
+   ============================================================ */
+
+.login-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px 16px;
+}
+
+.login-alerts {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  width: 100%;
+  max-width: 460px;
+  padding: 0 16px;
+}
+
+.login-alerts .v-alert {
+  border-radius: var(--so-radius-panel) !important;
+  margin-bottom: 8px;
+}
+
+.login-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 440px;
+  border-radius: 1rem;
+  border: 3px solid rgba(var(--v-theme-text), 0.08);
+  padding: 40px 36px 32px;
+  background-color: rgb(var(--v-theme-background));
+}
+
+.v-theme--dark .login-card {
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    0 2px 8px rgba(0, 0, 0, 0.3);
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.v-theme--light .login-card {
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.08),
+    0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.login-logo {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.login-title {
+  text-align: center;
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  margin-bottom: 28px;
+  opacity: 0.9;
+}
+
+.login-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.login-fields {
+  margin-bottom: 8px;
+}
+
+.login-fields .v-text-field:not(.d-none) {
+  margin-bottom: 8px;
+}
+
+.login-subtitle {
+  font-size: var(--so-font-size-hint);
+  font-weight: 500;
+  opacity: 0.7;
+  margin-bottom: 16px;
+  margin-top: 0;
+}
+
+.login-hint {
+  font-size: var(--so-font-size-hint);
+  opacity: 0.6;
+  line-height: 1.5;
+}
+
+.login-submit-btn {
+  font-weight: 600 !important;
+  letter-spacing: 0.04em;
+  margin-top: 4px;
+}
+
+.login-submit-btn.v-btn--disabled {
+  opacity: 0.6 !important;
+}
+
+.login-submit-btn:hover:not(.v-btn--disabled) {
+  background-color: rgb(var(--v-theme-primary-lighten-1)) !important;
+}
+
+.login-oidc-section {
+  margin-bottom: 8px;
+}
+
+.login-oidc-btn {
+  text-transform: none !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.02em;
+  border-color: rgba(var(--v-theme-text), 0.15) !important;
+}
+
+.login-oidc-btn:hover {
+  border-color: rgba(var(--v-theme-primary), 0.5) !important;
+  background-color: rgba(var(--v-theme-primary), 0.04) !important;
+}
+
+.login-divider {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 16px 0;
+  font-size: 0.8rem;
+  opacity: 0.5;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.login-divider::before,
+.login-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background-color: rgba(var(--v-theme-text), 0.3);
+}
+
+.login-countdown {
+  font-size: 3rem;
+  font-weight: 300;
+  opacity: 0.7;
+  margin: 24px 0;
+}
+
+.login-banner {
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  border-radius: var(--so-radius-nested);
+  background-color: rgba(var(--v-theme-text), 0.03);
+  border: 1px solid rgba(var(--v-theme-text), 0.06);
+}
+
+/* ============================================================
+   Options Box, may be removed
+   ============================================================ */
+
+.v-theme--dark .v-expansion-panel {
+  background-color: rgb(var(--v-theme-drawer_background)) !important;
+}
+
+/* ============================================================
+   Cards
+   ============================================================ */
+
+.v-card {
+  border-radius: var(--so-radius-panel);
+}
+
+.v-theme--dark.v-card {
+  background-color: rgb(var(--v-theme-drawer_background)) !important;
+}
+
+/* ============================================================
+   Buttons — rounded when they contain text
+   ============================================================ */
+
+.v-btn:not(.v-btn--icon) {
+  border-radius: 0.5rem !important;
+}

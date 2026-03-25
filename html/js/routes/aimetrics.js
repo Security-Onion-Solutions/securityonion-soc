@@ -13,6 +13,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
     TABLE_SETTING_USERS: 0,
     TABLE_SETTING_SESSIONS: 1,
     TABLE_SETTING_MESSAGES: 2,
+    showOptionsDialog: false,
     aimetrics: [],
     headers: [
       [
@@ -72,13 +73,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       { title: "key", value: "key" },
       { title: "value", value: "value" }
     ],
-    creditsRemaining: 0,
-    creditsLoaded: false,
     searchFilter: '',
-
-    availableModels: [],
-    modelsMap: new Map(),
-    balanceEndpoint: '',
     
     dateRange: '',
     relativeTimeEnabled: true,
@@ -154,17 +149,6 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
   methods: {
     async initAssistant(params) {
       this.assistantEnabled = params["enabled"] && this.$root.isLicensed('oai');
-      this.availableModels = params["availableModels"];
-      if (this.availableModels.length > 0) {
-        this.availableModels.forEach(m => m.key = this.buildModelIdentifier(m));
-        this.modelsMap = new Map(
-          this.availableModels.filter(m => m.enabled).map(m => [m.key, m])
-        );
-        for (let val of this.modelsMap.values()) {
-          if (val.contextLimitLarge < val.contextLimitSmall) val.contextLimitLarge = val.contextLimitSmall;
-          if (val.adapter === "SOAI" && !this.balanceEndpoint) this.balanceEndpoint = val.key;
-        }
-      }
       this.paramsLoaded = true;
       if (this.assistantEnabled) {
         this.loadData();
@@ -286,7 +270,6 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         this.aimetrics = [];
       }
       this.$root.stopLoading();
-      await this.loadCredits();
       this.resetRefreshTimer();
     },
     saveLocalSettings() {
@@ -343,26 +326,6 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         }
       }
       return records;
-    },
-    async loadCredits() {
-      if (!this.balanceEndpoint) {
-        this.creditsLoaded = true;
-        return
-      }
-      try {
-        const response = await this.$root.papi.get(`/assistant/balance/${this.balanceEndpoint}`);
-        if (response.data) {
-          if (response.data.health_status === 'healthy') {
-            this.creditsRemaining = response.data.credit_balance || 0;
-            this.creditsLoaded = true;
-          } else {
-            throw new Error(this.i18n.assistantBalanceCheckUnhealthy);
-          }
-        }
-      } catch (error) {
-        this.creditsLoaded = false;
-        this.$root.showError(error);
-      }
     },
     async lookupSocId(data) {
       if (data && data.length == 36 && data.indexOf("-") == 8) {

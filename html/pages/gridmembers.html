@@ -4,7 +4,6 @@
 			<v-container fluid>
 				<v-row>
 					<v-col cols="12">
-						<h2 v-text="i18n.gridMembers"></h2>
 						<v-list-subheader v-text="i18n.gridMembersHelp" class="my-12 my-lg-3 px-4"></v-list-subheader>
 					</v-col>
 				</v-row>
@@ -13,7 +12,7 @@
 	</v-row>
 	<v-row>
 		<v-col cols="12" lg="6">
-			<v-list class="mb-4 border subtle-border" :opened="['pending']">
+			<v-list class="mb-4 border subtle-border" style="border-radius: var(--so-radius-panel);" :opened="['pending']">
 				<span v-text="i18n.gridMembersPending" class="ml-2"></span>
 				<v-list-subheader v-if="unaccepted.length == 0" v-text="i18n.none"></v-list-subheader>
 				<v-list-group id="gridmembers-pending" value="pending">
@@ -34,7 +33,7 @@
 				</v-list-group>
 			</v-list>
 
-			<v-list class="mb-4 border subtle-border" :opened="['denied']">
+			<v-list class="mb-4 border subtle-border" style="border-radius: var(--so-radius-panel);" :opened="['denied']">
 				<span v-text="i18n.gridMembersDenied" class="ml-2"></span>
 				<v-list-subheader v-if="denied.length == 0" v-text="i18n.none"></v-list-subheader>
 				<v-list-group id="gridmembers-denied" value="denied">
@@ -55,7 +54,7 @@
 				</v-list-group>
 			</v-list>
 
-			<v-list class="mb-4 border subtle-border" :opened="['rejected']">
+			<v-list class="mb-4 border subtle-border" style="border-radius: var(--so-radius-panel);" :opened="['rejected']">
 				<span v-text="i18n.gridMembersRejected" class="ml-2"></span>
 				<v-list-subheader v-if="rejected.length == 0" v-text="i18n.none"></v-list-subheader>
 				<v-list-group id="gridmembers-rejected" value="rejected">
@@ -78,7 +77,7 @@
 
 		</v-col>
 		<v-col cols="12" lg="6">
-			<v-list class="border subtle-border" :opened="['accepted']">
+			<v-list class="border subtle-border" style="border-radius: var(--so-radius-panel);" :opened="['accepted']">
 				<span v-text="i18n.gridMembersAccepted" class="ml-2"></span>
 				<v-list-subheader v-if="accepted.length == 0" v-text="i18n.none"></v-list-subheader>
 				<v-list-group id="gridmembers-accepted" value="accepted">
@@ -101,7 +100,7 @@
 		</v-col>
 	</v-row>
 	<v-dialog v-model="dialog" max-width="600" data-aid="gridmember_dialog">
-		<v-card v-if="selected">
+		<v-card v-if="selected" class="pa-2">
 			<v-card-title class="headline pb-0" v-text="i18n.gridMemberReviewTitle"></v-card-title>
 			<v-card-subtitle v-text="selected.id"></v-card-subtitle>
 			<v-container fluid>
@@ -182,7 +181,7 @@
 	</v-dialog>
 	<v-dialog v-model="confirmDeleteDialog" persistent max-width="575">
 		<v-card>
-			<v-card-title class="text-h5" v-text="i18n.gridMemberConfirmDelete"></v-card-title>
+			<v-card-title class="text-headline-small" v-text="i18n.gridMemberConfirmDelete"></v-card-title>
 			<v-card-text v-html="i18n.gridMemberConfirmDeleteHelp"></v-card-text>
 			<v-card-actions>
 				<v-spacer></v-spacer>

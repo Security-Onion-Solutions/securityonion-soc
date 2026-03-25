@@ -6,13 +6,6 @@
 // Elastic License 2.0.
 */
 
-/* Reset default heading margins */
-@layer vuetify-core.base {
-  h1, h2, h3, h4, h5, h6 {
-    margin: 0;
-  }
-}
-
 .v-btn {
   text-transform: uppercase;
 }
@@ -26,10 +19,6 @@
   margin-bottom: 16px;
 }
 
-.v-application a:not(.v-btn[class*="bg-"]), .theme-primary {
-  color: rgb(var(--v-theme-primary));
-}
-
 .theme-background {
   background-color: rgb(var(--v-theme-background)) !important;
 }
@@ -39,11 +28,23 @@
 }
 
 .card-shadow {
-  box-shadow: 0 3px 1px -2px rgba(0, 0, 0, .2), 0 2px 2px 0 rgba(0, 0, 0, .14), 0 1px 5px 0 rgba(0, 0, 0, .12);
+  box-shadow: var(--so-shadow-card);
 }
 
-.v-app-bar {
-  background-color: rgb(var(--v-theme-nav_background)) !important;
+.v-app-bar::after {
+  content: '';
+  position: absolute;
+  left: 204px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background-color: rgba(var(--v-border-color), var(--v-border-opacity));
+}
+
+.app-bar-title {
+  margin-left: 28px;
+  white-space: nowrap;
+  color: rgb(var(--v-theme-nav)) !important;
 }
 
 .v-main {
@@ -54,9 +55,16 @@
   background-color: rgb(var(--v-theme-drawer_background)) !important;
 }
 
+.v-navigation-drawer .v-list {
+  background: transparent !important;
+}
 
 .v-toolbar-title {
   flex: unset !important;
+}
+
+.v-app-bar .v-toolbar-title {
+  margin-inline-start: 2px !important;
 }
 
 .v-footer {
@@ -247,13 +255,9 @@ th:hover, th.is-sorted, .solid {
   }
 }
 
-.v-theme--dark.v-data-table tr:nth-of-type(even) {
-  background-color: rgba(45, 45, 45, 0.25);
- }
-
- .v-theme--light.v-data-table tr:nth-of-type(even) {
-  background-color: rgba(230, 230, 230, 0.25);
- }
+.v-data-table tr:nth-of-type(even) {
+  background-color: rgba(var(--v-theme-row_stripe), 0.25);
+}
 
 .v-list-item__icon.v-list-group__header__append-icon .v-theme--light{
   color: white !important;
@@ -443,7 +447,7 @@ td {
 
 .comment-body .markdown-body {
   padding: 0.75em 1.25em;
-  border-radius: 0.25em;
+  border-radius: var(--so-radius-markdown);
 }
 
 .comment-body .markdown-body pre,
@@ -523,12 +527,12 @@ td {
 
 .v-theme--light .markdown-body pre {
   background-color: rgba(0,0,0,.05);
-  border-radius: 0.25em;
+  border-radius: var(--so-radius-markdown);
 }
 
 .v-theme--dark .markdown-body pre {
   background-color: hsla(0,0%,100%,.1);
-  border-radius: 0.25em;
+  border-radius: var(--so-radius-markdown);
 }
 
 .case.avatar-font {
@@ -846,12 +850,8 @@ tbody tr:hover {
   background-color: transparent !important;
 }
 
-.v-theme--dark tbody tr:hover:nth-of-type(even) {
-  background-color: rgba(45, 45, 45, 0.25) !important;
-}
-
-.v-theme--light tbody tr:hover:nth-of-type(even) {
-  background-color: rgba(230, 230, 230, 0.25) !important;
+tbody tr:hover:nth-of-type(even) {
+  background-color: rgba(var(--v-theme-row_stripe), 0.25) !important;
 }
 
 .unset-vertical-align {
@@ -866,18 +866,8 @@ tbody tr:hover {
   margin-bottom: 4px;
 }
 
-.v-theme--dark .subtle-border {
-  border-bottom-color: rgba(255, 255, 255, 0.12);
-  border-left-color: rgba(255, 255, 255, 0.12);
-  border-right-color: rgba(255, 255, 255, 0.12);
-  border-top-color: rgba(255, 255, 255, 0.12);
-}
-
-.v-theme--light .subtle-border {
-  border-bottom-color: rgba(0, 0, 0, 0.12);
-  border-left-color: rgba(0, 0, 0, 0.12);
-  border-right-color: rgba(0, 0, 0, 0.12);
-  border-top-color: rgba(0, 0, 0, 0.12);
+.subtle-border {
+  border-color: rgba(var(--v-theme-text), 0.12);
 }
 
 ul {
@@ -1148,7 +1138,7 @@ ul ul ul {
 }
 
 .chat-history-sidebar {
-  height: calc(100vh - 325px) !important;
+  height: calc(100vh - 240px) !important;
   position: sticky;
   top: 20px;
 }
@@ -1428,7 +1418,7 @@ ul ul ul {
 .chat-container {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 325px);
+  height: calc(100vh - 240px);
   overflow: hidden;
 }
 
@@ -1501,7 +1491,7 @@ ul ul ul {
 
   line-height: 1.3;
 
-  background-color: rgba(25, 118, 210, 0.08);
+  background-color: rgba(var(--v-theme-primary), 0.08);
   color: var(--v-theme-primary);
 
   transition:
@@ -1511,12 +1501,12 @@ ul ul ul {
 }
 
 .assistant-choice-btn:hover {
-  background-color: rgba(25, 118, 210, 0.16);
+  background-color: rgba(var(--v-theme-primary), 0.16);
 }
 
 .assistant-choice-btn:active {
   transform: translateY(1px);
-  background-color: rgba(25, 118, 210, 0.22);
+  background-color: rgba(var(--v-theme-primary), 0.22);
 }
 
 .v-pagination__list>li {

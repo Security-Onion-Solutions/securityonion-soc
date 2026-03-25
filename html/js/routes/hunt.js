@@ -108,6 +108,7 @@ const huntComponent = {
 
       autohunt: true,
       showFullQuery: true,
+      showOptionsDialog: false,
 
       filterRouteInclude: "",
       filterRouteExclude: "",
@@ -172,11 +173,16 @@ const huntComponent = {
       showAckManyDialog: false,
       ackManyArgs: [],
       ackManyVerb: '',
+      fieldValueDialogVisible: false,
+      fieldValueDialogKey: '',
+      fieldValueDialogValue: '',
       menuScrollPos: 0,
       maxEscalate: 100,
       chartResizeTracker: {},
       gridId: null,
       activeTabs: {},
+      gridLayoutExpansions: true,
+      showGuidedAnalysisFirst: true,
       expandedEvents: [],
       eventColumnWidth: 0,
       expandedPlaybookQuestions: {},
@@ -220,8 +226,12 @@ const huntComponent = {
     if (this.isCategory('alerts')) {
       window.removeEventListener('resize', this.calculateEventColumnWidth);
     }
+
+    window.removeEventListener('resize', this.checkAllFieldTruncation);
   },
   mounted() {
+    window.addEventListener('resize', this.checkAllFieldTruncation);
+
     this.$root.startLoading();
     this.category = this.$route.path.replace("/", "");
     this.$root.loadParameters(this.category, this.initHunt);
@@ -239,6 +249,12 @@ const huntComponent = {
     }
   },
   watch: {
+    expandedEvents() {
+      this.$nextTick(() => this.checkAllFieldTruncation());
+    },
+    gridLayoutExpansions() {
+      this.$nextTick(() => this.checkAllFieldTruncation());
+    },
     '$route': 'loadData',
     'groupBySortBy': 'saveLocalSettings',
     'groupBySortDesc': 'saveLocalSettings',
@@ -254,6 +270,61 @@ const huntComponent = {
     'autoRefreshInterval': 'resetRefreshTimer',
     'showDetailsPanel': 'toggleShowDetailsPanel',
     'advanced': 'saveLocalSettings',
+    'gridLayoutExpansions': 'saveLocalSettings',
+    'showGuidedAnalysisFirst': 'saveLocalSettings',
+  },
+  computed: {
+    alertGroupCount() {
+      return this.groupBys.length > 0 && this.groupBys[0].data ? this.groupBys[0].data.length : 0;
+    },
+    criticalHighCount() {
+      return this.eventData.filter(e => {
+        var sev = (e['event.severity_label'] || e['so_case.severity'] || '').toLowerCase();
+        return sev === 'critical' || sev === 'high';
+      }).length;
+    },
+    alertStatus() {
+      const ackBool = this.isFilterToggleEnabled('acknowledged');
+      const escBool = this.isFilterToggleEnabled('escalated');
+      const invBool = this.isFilterToggleEnabled('investigated');
+      let retStr = "";
+      if (ackBool && escBool) {
+        retStr = this.i18n.escalated;
+      } else if (escBool) {
+        retStr = this.i18n.escalated + ", " + this.i18n.unacknowledged;
+      } else if (ackBool) {
+        retStr = this.i18n.acknowledged;
+      } else {
+        retStr = this.i18n.unacknowledged;
+      }
+      if (invBool) {
+        retStr += ", " + this.i18n.aiInvestigated;
+      }
+      return retStr;
+    },
+    excludeStatus() {
+      const excludeCase = this.isFilterToggleEnabled('caseExcludeToggle');
+      const excludeDet = this.isFilterToggleEnabled('detectionsExcludeToggle');
+      const excludeSoc = this.isFilterToggleEnabled('socExcludeToggle');
+      const excludeAI = this.isFilterToggleEnabled('onionaiExcludeToggle');
+      let retStr = "";
+      if (excludeCase) {
+        retStr = this.i18n.caseData;
+      }
+      if (excludeDet) {
+        retStr = retStr ? retStr + ', ' + this.i18n.detectionsData : this.i18n.detectionsData;
+      }
+      if (excludeSoc) {
+        retStr = retStr ? retStr + ', ' + this.i18n.socLogs : this.i18n.socLogs;
+      }
+      if (excludeAI) {
+        retStr = retStr ? retStr + ', ' + this.i18n.onionaiData : this.i18n.onionaiData;
+      }
+      if (!retStr) {
+        retStr = this.i18n.none;
+      }
+      return retStr;
+    },
   },
   methods: {
     moment: moment,
@@ -584,6 +655,7 @@ const huntComponent = {
       const abortController = new AbortController();
       this.$root.startLoading(() => {
         abortController.abort();
+        this.$root.stopLoading();
       });
       try {
         this.obtainQueryDetails();
@@ -2344,6 +2416,8 @@ const huntComponent = {
       this.saveSetting('autohunt', this.autohunt, true);
       this.saveSetting('showDetailsPanel', this.showDetailsPanel, this.isCategory('alerts'));
       this.saveSetting('advanced', this.advanced, false);
+      this.saveSetting('gridLayoutExpansions', this.gridLayoutExpansions, true);
+      this.saveSetting('showGuidedAnalysisFirst', this.showGuidedAnalysisFirst, true);
     },
     loadLocalSettings() {
       // Global settings
@@ -2365,6 +2439,8 @@ const huntComponent = {
       if (localStorage[prefix + '.autohunt']) this.autohunt = localStorage[prefix + '.autohunt'] == 'true';
       if (localStorage[prefix + '.showDetailsPanel']) this.showDetailsPanel = localStorage[prefix + '.showDetailsPanel'] == 'true';
       if (localStorage[prefix + '.advanced']) this.advanced = localStorage[prefix + '.advanced'] == 'true';
+      if (localStorage[prefix + '.gridLayoutExpansions']) this.gridLayoutExpansions = localStorage[prefix + '.gridLayoutExpansions'] == 'true';
+      if (localStorage[prefix + '.showGuidedAnalysisFirst']) this.showGuidedAnalysisFirst = localStorage[prefix + '.showGuidedAnalysisFirst'] == 'true';
       if (localStorage[prefix + '.autoRefreshInterval']) this.autoRefreshInterval = parseInt(localStorage[prefix + '.autoRefreshInterval']);
 
       if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
@@ -2780,6 +2856,33 @@ const huntComponent = {
       this.showAckManyDialog = false;
       this.ackManyArgs = [];
     },
+    checkAllFieldTruncation() {
+      if (!this.gridLayoutExpansions) return;
+      const cards = this.$el.querySelectorAll('.expanded-field-card');
+      cards.forEach(card => {
+        const valueEl = card.querySelector('.expanded-field-value');
+        if (valueEl && valueEl.scrollWidth > valueEl.clientWidth) {
+          card.classList.add('is-truncated');
+        } else {
+          card.classList.remove('is-truncated');
+        }
+      });
+    },
+    initDefaultTab(rowIdx, item) {
+      if (!this.isCategory('alerts') || this.activeTabs[rowIdx] !== undefined) return;
+      this.activeTabs[rowIdx] = this.showGuidedAnalysisFirst ? 'playbook' : 'alert';
+      if (this.activeTabs[rowIdx] === 'playbook' && item) {
+        this.loadPlaybook(item, rowIdx);
+      }
+    },
+    showFieldValueDialog(key, value) {
+      this.fieldValueDialogKey = key;
+      this.fieldValueDialogValue = value;
+      this.fieldValueDialogVisible = true;
+    },
+    closeFieldValueDialog() {
+      this.fieldValueDialogVisible = false;
+    },
     async saveMenuScrollPos(isOpen, target) {
       if (isOpen) {
         // target doesn't exist yet, wait for it to be added to DOM
@@ -2798,7 +2901,8 @@ const huntComponent = {
       }
     },
     calculateEventColumnWidth() {
-      this.eventColumnWidth = this.$refs?.eventColumn?.$el?.clientWidth || 0;
+      const el = this.$refs?.eventColumn?.$el || this.$refs?.eventColumn;
+      this.eventColumnWidth = el?.clientWidth || 0;
       if (this.eventColumnWidth === 0) {
         setTimeout(() => {
           this.calculateEventColumnWidth();
@@ -3023,6 +3127,10 @@ const huntComponent = {
       }
 
       item.newest = this.extractSocValues(response.data.events[0]);
+      if (this.activeTabs[item._row_idx_] === 'playbook') {
+        this.loadPlaybook(item.newest, item._row_idx_);
+      }
+      this.$nextTick(() => this.checkAllFieldTruncation());
     },
     extractSocValues(event) {
       var record = event.payload;
@@ -3195,7 +3303,7 @@ const huntComponent = {
       }
       // Individual alerts
       if (item['event.investigated']) {
-        return 'secondary';
+        return 'icon';
       }
       // Not investigated
       return '';
@@ -3207,7 +3315,7 @@ const huntComponent = {
         return this.i18n.aiInvestigateMostRecent;
       }
       // Individual alerts
-      if (item['event.investigated']) {
+      if (item['event.investigation_session_id']) {
         return this.i18n.aiInvestigateView;
       }
       return this.i18n.aiInvestigate;

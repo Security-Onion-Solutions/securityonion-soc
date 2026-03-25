@@ -10,6 +10,7 @@ routes.push({ path: '/users', name: 'users', component: {
   template: '#page-users',
   data() { return {
     i18n: this.$root.i18n,
+    showOptionsDialog: false,
     users: [],
     headers: [
       { value: 'expand' },

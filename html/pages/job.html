@@ -1,10 +1,5 @@
 <v-container fluid @click="jobClickHandler()" data-aid="job_screen">
-	<v-row>
-		<v-col>
-			<h2>{{ i18n.viewJob }}</h2>
-		</v-col>
-	</v-row>
-	<v-row>
+<v-row>
 		<v-col>
 			<v-expansion-panels>
 				<v-expansion-panel data-aid="job_expand_filter">
@@ -97,17 +92,20 @@
 	<v-row v-if="job.status == 0" row data-aid="job_details_pending">
 		<v-col>
 			<v-alert :value="true" color="info" icon="fa-info">
-				{{ i18n.jobInProgress }}
-				<v-btn variant="flat" @click.stop="loadData()" id="job-refresh-button" class="ml-3" data-aid="job_refresh_button">
-					<v-icon color="primary">fa-sync</v-icon>
-				</v-btn>
+				<div class="d-flex align-center">
+					{{ i18n.jobInProgress }}
+					<v-spacer></v-spacer>
+					<v-btn icon variant="flat" @click.stop="loadData()" id="job-refresh-button" class="mx-2" color="nav" data-aid="job_refresh_button">
+						<v-icon color="info">fa-sync</v-icon>
+					</v-btn>
+				</div>
 			</v-alert>
 		</v-col>
 	</v-row>
 	<v-row v-if="job.status == 1" data-aid="job_details_completed">
 		<v-col>
 			<v-toolbar fixed class="elevation-0 pl-5">
-				<v-text-field variant="underlined" density="compact" v-model="search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="job_details_filter"></v-text-field>
+				<v-text-field density="compact" v-model="search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="job_details_filter"></v-text-field>
 				<v-spacer></v-spacer>
 				<v-btn-toggle v-model="packetOptions" class="transparent" multiple>
 					<v-btn value="packets" icon :title="i18n.packetStreamHelp" text @click="captureLayoutAsStream()" data-aid="job_details_stream_toggle">

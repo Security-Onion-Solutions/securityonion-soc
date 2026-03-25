@@ -1,10 +1,5 @@
 <v-container fluid data-aid="home_screen">
-	<v-row>
-		<v-col>
-			<h2 v-text="i18n.home"></h2>
-		</v-col>
-	</v-row>
-	<v-row>
+<v-row>
 		<v-col cols="12" lg="6" class="mx-auto px-12" data-aid="overview_motd_display">
 			<div id="motd" class="markdown-body" v-html="formatMarkdown(motd)"></div>
 		</v-col>

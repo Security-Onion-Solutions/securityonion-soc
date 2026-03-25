@@ -6,6 +6,7 @@
 
 const routes = [];
 const components = [];
+const iconSets = [];
 const templatePromises = [];
 
 const LICENSE_STATUS_ACTIVE = "active";
@@ -31,12 +32,20 @@ const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000';
 if (typeof global !== 'undefined') {
   global.routes = routes;
   global.components = components;
+  global.iconSets = iconSets;
   global.templatePromises = templatePromises;
 }
 
 $(document).ready(function () {
   Promise.all(templatePromises).then(() => {
     const _i18n = i18n.getLocalizedTranslations(navigator.language);
+    
+    let iSets = {};
+    for (const iconSet of iconSets) {
+      const comp = Vue.defineComponent(iconSet.component);
+      iSets[iconSet.name] = { component: comp };
+    }
+
     const vuetify = Vuetify.createVuetify({
       defaults: {
         VIcon: {
@@ -48,13 +57,17 @@ $(document).ready(function () {
           indeterminateIcon: 'mb-1 fa-square-minus'
         },
         VSelect: {
+          variant: 'outlined',
+          density: 'compact',
           menuIcon: 'fas fa-caret-down',
         },
         VCombobox: {
           menuIcon: 'fas fa-caret-down',
+          variant: 'outlined',
         },
         VFileInput: {
-          prependIcon: 'fa-paperclip'
+          prependIcon: 'fa-paperclip',
+          variant: 'outlined',
         },
         VDataTable: {
           firstIcon: 'fa-backward-step',
@@ -63,11 +76,20 @@ $(document).ready(function () {
           lastIcon: 'fa-forward-step',
         },
         VTextField: {
+          variant: 'outlined',
+          density: 'compact',
           clearIcon: 'fas fa-circle-xmark',
+        },
+        VTextarea: {
+          variant: 'outlined',
+          density: 'compact',
         },
         VTreeview: {
           collapseIcon: '',
           expandIcon: 'fas fa-caret-right',
+        },
+        VToolbar: {
+          class: 'theme-background-lighten-1',
         },
         VChip: {
           closeIcon: 'fa-xmark va-baseline',
@@ -81,7 +103,8 @@ $(document).ready(function () {
         sets: {
           fa: {
             component: Vuetify.components.VClassIcon,
-          }
+          },
+          ...iSets,
         }
       },
       theme: {
@@ -89,7 +112,7 @@ $(document).ready(function () {
         variations: {
           colors: ['primary', 'secondary', 'drawer_background', 'background'],
           lighten: 3,
-          darken: 2,
+          darken: 3,
         },
         themes: {
           light: {
@@ -99,27 +122,33 @@ $(document).ready(function () {
               secondary: '#424242',
               info: '#2196f3',
               error: '#ff5252',
-              nav_background: '#12110d',
+              nav_background: '#000000',
               nav: '#ffffff',
+              table_background: '#ffffff',
               drawer_background: '#f4f4f4',
               background: '#ffffff',
               text: '#000000',
               icon: '#7f7f7f',
+              button_icon_color: '#ffffff',
+              row_stripe: '#e6e6e6',
             },
           },
           dark: {
             dark: true,
             colors: {
-              primary: '#2196f3',
-              secondary: '#424242',
+              primary: '#0088BF',
+              secondary: '#2C3347',
               info: '#2196f3',
               error: '#ff5252',
-              nav_background: '#12110d',
+              nav_background: '#000000',
               nav: '#ffffff',
-              drawer_background: '#353535',
-              background: '#1e1e1e',
+              table_background: '#222a3f',
+              drawer_background: '#252B3B',
+              background: '#0B1019',
               text: '#ffffff',
-              icon: '#929292',
+              icon: '#8B96A8',
+              button_icon_color: '#ffffff',
+              row_stripe: '#2d2d2d',
             },
           },
         },
@@ -718,7 +747,7 @@ $(document).ready(function () {
             if (this.licenseKey.name != SECURITYONION_PRO) {
               return "white";
             }
-            return "success";
+            return 'success';
           }
           if (value == LICENSE_STATUS_EXCEEDED) return "error";
           if (value == LICENSE_STATUS_EXPIRED) return "warning";

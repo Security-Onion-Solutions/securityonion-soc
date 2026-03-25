@@ -18,9 +18,10 @@
     <link rel="stylesheet" href="css/external/vuetify-v4.0.2.min.css">
     <link rel="stylesheet" href="css/external/all-7.2.0.min.css">
     <link rel="stylesheet" href="css/external/daterangepicker-3.1.css">
-    <link rel="stylesheet" href="css/external/vue-prism-editor-v1.3.0.min.css">
+    <link rel="stylesheet" href="css/external/vue-prism-editor-v2.0.0-alpha.2.min.css">
     <link rel="stylesheet" href="css/external/prism-custom-dark-v1.29.0.css">
     <link rel="stylesheet" href="css/app.css?v=VERSION_PLACEHOLDER">
+    <link rel="stylesheet" href="css/modern.css?v=VERSION_PLACEHOLDER">
     <title>Security Onion</title>
     <script src="js/analytics.js?v=VERSION_PLACEHOLDER"></script>
   </head>
@@ -33,9 +34,10 @@
           </v-app-bar-nav-icon>
           <v-toolbar-title>
             <a href="/" id="title" data-aid="nav_overview">
-              <img class="pt-1" :title="i18n.product" :alt="i18n.product" height="45" src="images/so-logo.svg"></img>
+              <img class="pt-1" :title="i18n.product" :alt="i18n.product" height="36" src="images/so-logo.svg"></img>
             </a>
           </v-toolbar-title>
+          <h2 v-if="i18n[$route.name]" class="app-bar-title" v-text="i18n[$route.name]"></h2>
           <v-spacer></v-spacer>
           <div id="connection-indicator" v-if="!connected || reconnecting">
             <v-icon class="mr-2" color="warning">fa-satellite-dish</v-icon>
@@ -144,9 +146,10 @@
         <v-main>
           <v-overlay id="loading" v-model="loading" scrim="#212121" data-aid="overlay_loading">
             <v-container min-height="100vh" min-width="100vw" class="d-flex align-center justify-center">
-              <v-progress-circular indeterminate :size="50" color="primary" class="">
-                <v-icon v-if="loadingCancelCallback" @click="loadingCancelCallback" data-aid="overlay_loading_cancel">fa-xmark</v-icon>
-              </v-progress-circular>
+              <div class="loading-container">
+                <img :src="'images/loading-logo' + (theme.global.current.dark ? '-dark' : '') + '.svg'" class="loading-onion" data-aid="overlay_loading_logo">
+                <v-icon class="loading-cancel" v-if="loadingCancelCallback" @click="loadingCancelCallback" data-aid="overlay_loading_cancel">fa-xmark</v-icon>
+              </div>
             </v-container>
           </v-overlay>
           <v-snackbar id="error" location="top centered" :timeout="errorTimeout" v-model="error" color="error" data-aid="banner_error">
@@ -232,15 +235,15 @@
               <span data-aid="license_unprovisioned"> {{ i18n.licenseShort }}</span>
             </router-link>
             <router-link v-else-if="licenseStatus == 'active'" id="licenseLink" to="/license" class="footer">
-              <v-chip x-small class="rounded-sm" density="compact" :color="colorLicenseStatus(licenseStatus)" :data-aid="'license_status_' + licenseStatus">{{ licenseKey.name }}</v-chip>
+              <v-chip x-small class="rounded-sm" density="compact" variant="flat" :color="colorLicenseStatus(licenseStatus)" :data-aid="'license_status_' + licenseStatus">{{ licenseKey.name }}</v-chip>
             </router-link>
             <router-link v-else id="licenseLink" to="/license" class="footer">
               <span class="d-lg-inline pr-2">{{ i18n.license }}:</span>
-              <v-chip x-small class="rounded-sm" density="compact" :color="colorLicenseStatus(licenseStatus)" :data-aid="'license_status_' + licenseStatus">{{ localizeMessage(licenseStatus) }}</v-chip>
+              <v-chip x-small class="rounded-sm" density="compact" variant="flat" :color="colorLicenseStatus(licenseStatus)" :data-aid="'license_status_' + licenseStatus">{{ localizeMessage(licenseStatus) }}</v-chip>
             </router-link>
           </span>
         </v-footer>
-        <v-navigation-drawer v-model="toolbar" width="200" clipped overflow app class="theme-links">
+        <v-navigation-drawer v-model="toolbar" width="205" clipped overflow app class="theme-links">
           <v-list density="compact" :disabled="forceUserOtp">
             <v-list-item data-aid="nav_overview" @click="" to="/">
               <template #prepend>
@@ -390,6 +393,7 @@
     </v-app>
 
     <script src="js/external/jquery-4.0.0.min.js"></script>
+    <script src="js/external/lucide-0.577.0.min.js"></script>
     <script src="js/external/vue-3.5.30.min.js"></script>
     <script src="js/external/vue-router-5.0.3.min.js"></script>
     <script src="js/external/vuetify-v4.0.2.min.js"></script>
@@ -411,6 +415,7 @@
 
     <script src="js/i18n.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/app.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/components/lucide-set.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/components/treeview.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/components/detection-panel.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/case.js?v=VERSION_PLACEHOLDER"></script>
