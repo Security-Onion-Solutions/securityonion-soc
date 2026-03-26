@@ -19,6 +19,10 @@
   margin-bottom: 16px;
 }
 
+.v-application a {
+  color: rgb(var(--v-theme-info));
+}
+
 .theme-background {
   background-color: rgb(var(--v-theme-background)) !important;
 }
