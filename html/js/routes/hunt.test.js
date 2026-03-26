@@ -550,10 +550,14 @@ test('setupPieChart', () => {
         legend: {
           display: true,
           position: 'left',
+          labels: {
+            color: '#515151',
+          },
         },
         title: {
           display: true,
           text: 'some title',
+          color: '#515151',
         }
       }
     });
@@ -595,6 +599,7 @@ test('setupSankeyChart', () => {
         title: {
           display: true,
           text: 'some title',
+          color: '#515151',
         }
       }
     });
@@ -2559,63 +2564,6 @@ fields:
 
   expect(result).toBe(false);
   expect(q.isAggregate).toBe(false);
-});
-
-// initDefaultTab tests
-test('initDefaultTab sets playbook when showGuidedAnalysisFirst is true on alerts', () => {
-  comp.isCategory = cat => cat === 'alerts';
-  comp.showGuidedAnalysisFirst = true;
-  comp.activeTabs = {};
-  comp.loadPlaybook = jest.fn();
-
-  comp.initDefaultTab(0, { soc_id: '123' });
-
-  expect(comp.activeTabs[0]).toBe('playbook');
-  expect(comp.loadPlaybook).toHaveBeenCalledWith({ soc_id: '123' }, 0);
-});
-
-test('initDefaultTab sets alert when showGuidedAnalysisFirst is false on alerts', () => {
-  comp.isCategory = cat => cat === 'alerts';
-  comp.showGuidedAnalysisFirst = false;
-  comp.activeTabs = {};
-  comp.loadPlaybook = jest.fn();
-
-  comp.initDefaultTab(0, { soc_id: '123' });
-
-  expect(comp.activeTabs[0]).toBe('alert');
-  expect(comp.loadPlaybook).not.toHaveBeenCalled();
-});
-
-test('initDefaultTab does nothing for non-alerts category', () => {
-  comp.isCategory = cat => cat === 'events';
-  comp.showGuidedAnalysisFirst = true;
-  comp.activeTabs = {};
-
-  comp.initDefaultTab(0);
-
-  expect(comp.activeTabs[0]).toBeUndefined();
-});
-
-test('initDefaultTab does nothing when tab already set', () => {
-  comp.isCategory = cat => cat === 'alerts';
-  comp.showGuidedAnalysisFirst = true;
-  comp.activeTabs = { 0: 'alert' };
-
-  comp.initDefaultTab(0);
-
-  expect(comp.activeTabs[0]).toBe('alert');
-});
-
-test('initDefaultTab does not call loadPlaybook without item', () => {
-  comp.isCategory = cat => cat === 'alerts';
-  comp.showGuidedAnalysisFirst = true;
-  comp.activeTabs = {};
-  comp.loadPlaybook = jest.fn();
-
-  comp.initDefaultTab(0);
-
-  expect(comp.activeTabs[0]).toBe('playbook');
-  expect(comp.loadPlaybook).not.toHaveBeenCalled();
 });
 
 // checkAllFieldTruncation tests

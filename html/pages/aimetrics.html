@@ -5,10 +5,10 @@
       <v-card-title>{{i18n.options}}</v-card-title>
       <v-card-text data-aid="aimetrics_options">
         <span data-aid="aimetrics_autorefresh_select">
-          <v-select id="aimetrics-auto-refresh" :disabled="$root.loading" v-model="autoRefreshInterval" @update:focused="autoRefreshIntervalChanged" :items="autoRefreshIntervals" :hint="i18n.autoRefresh" persistent-hint prepend-icon="fa-hourglass-half"></v-select>
+          <v-select id="aimetrics-auto-refresh" :disabled="$root.loading" v-model="autoRefreshInterval" @update:focused="autoRefreshIntervalChanged" :items="autoRefreshIntervals" :label="i18n.autoRefresh" prepend-icon="fa-hourglass-half"></v-select>
         </span>
         <span data-aid="aimetrics_timezone_select">
-          <v-select :disabled="$root.loading" @update:model-value="zone = $event; saveLocalSettings(); loadData()" v-model="zone" :items="$root.timezones" :hint="i18n.timezoneHelp" persistent-hint prepend-icon="fa-user-clock"></v-select>
+          <v-select :disabled="$root.loading" @update:model-value="zone = $event; saveLocalSettings(); loadData()" v-model="zone" :items="$root.timezones" :label="i18n.timezoneHelp" prepend-icon="fa-user-clock"></v-select>
         </span>
       </v-card-text>
       <v-card-actions>

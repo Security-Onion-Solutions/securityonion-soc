@@ -181,8 +181,7 @@ const huntComponent = {
       chartResizeTracker: {},
       gridId: null,
       activeTabs: {},
-      gridLayoutExpansions: true,
-      showGuidedAnalysisFirst: true,
+      gridLayoutExpansions: false,
       expandedEvents: [],
       eventColumnWidth: 0,
       expandedPlaybookQuestions: {},
@@ -271,7 +270,6 @@ const huntComponent = {
     'showDetailsPanel': 'toggleShowDetailsPanel',
     'advanced': 'saveLocalSettings',
     'gridLayoutExpansions': 'saveLocalSettings',
-    'showGuidedAnalysisFirst': 'saveLocalSettings',
   },
   computed: {
     alertGroupCount() {
@@ -2164,6 +2162,7 @@ const huntComponent = {
         title: {
           display: true,
           text: title,
+          color: fontColor,
         }
       };
       options.scales = {
@@ -2173,16 +2172,16 @@ const huntComponent = {
           },
           ticks: {
             beginAtZero: true,
-            fontColor: fontColor,
+            color: fontColor,
             precision: 0,
           }
         },
         x: {
-          gridLines: {
+          grid: {
             color: gridColor,
           },
           ticks: {
-            fontColor: fontColor,
+            color: fontColor,
           }
         },
       };
@@ -2203,6 +2202,7 @@ const huntComponent = {
       options.scales.x.type = 'timeseries';
     },
     setupPieChart(options, data, title) {
+      var fontColor = this.$root.getColor("#888888", -40);
       options.onResize = this.debounceChartResize;
       options.responsive = true;
       options.maintainAspectRatio = false;
@@ -2210,10 +2210,14 @@ const huntComponent = {
         legend: {
           display: true,
           position: 'left',
+          labels: {
+            color: fontColor,
+          },
         },
         title: {
           display: true,
           text: title,
+          color: fontColor,
         }
       };
       data.labels = [];
@@ -2237,6 +2241,7 @@ const huntComponent = {
       }];
     },
     setupSankeyChart(options, data, title) {
+      var fontColor = this.$root.getColor("#888888", -40);
       const route = this;
       options.onResize = this.debounceChartResize;
       options.responsive = true;
@@ -2248,6 +2253,7 @@ const huntComponent = {
         title: {
           display: true,
           text: title,
+          color: fontColor,
         }
       };
       data.flowMax = 0; // This is a custom attribute used for color selection
@@ -2416,8 +2422,7 @@ const huntComponent = {
       this.saveSetting('autohunt', this.autohunt, true);
       this.saveSetting('showDetailsPanel', this.showDetailsPanel, this.isCategory('alerts'));
       this.saveSetting('advanced', this.advanced, false);
-      this.saveSetting('gridLayoutExpansions', this.gridLayoutExpansions, true);
-      this.saveSetting('showGuidedAnalysisFirst', this.showGuidedAnalysisFirst, true);
+      this.saveSetting('gridLayoutExpansions', this.gridLayoutExpansions, false);
     },
     loadLocalSettings() {
       // Global settings
@@ -2440,7 +2445,6 @@ const huntComponent = {
       if (localStorage[prefix + '.showDetailsPanel']) this.showDetailsPanel = localStorage[prefix + '.showDetailsPanel'] == 'true';
       if (localStorage[prefix + '.advanced']) this.advanced = localStorage[prefix + '.advanced'] == 'true';
       if (localStorage[prefix + '.gridLayoutExpansions']) this.gridLayoutExpansions = localStorage[prefix + '.gridLayoutExpansions'] == 'true';
-      if (localStorage[prefix + '.showGuidedAnalysisFirst']) this.showGuidedAnalysisFirst = localStorage[prefix + '.showGuidedAnalysisFirst'] == 'true';
       if (localStorage[prefix + '.autoRefreshInterval']) this.autoRefreshInterval = parseInt(localStorage[prefix + '.autoRefreshInterval']);
 
       if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
@@ -2867,13 +2871,6 @@ const huntComponent = {
           card.classList.remove('is-truncated');
         }
       });
-    },
-    initDefaultTab(rowIdx, item) {
-      if (!this.isCategory('alerts') || this.activeTabs[rowIdx] !== undefined) return;
-      this.activeTabs[rowIdx] = this.showGuidedAnalysisFirst ? 'playbook' : 'alert';
-      if (this.activeTabs[rowIdx] === 'playbook' && item) {
-        this.loadPlaybook(item, rowIdx);
-      }
     },
     showFieldValueDialog(key, value) {
       this.fieldValueDialogKey = key;
