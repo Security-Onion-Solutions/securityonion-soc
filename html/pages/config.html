@@ -11,7 +11,7 @@
 			<v-card-title>{{i18n.options}}</v-card-title>
 			<v-card-text data-aid="config_options">
 				<v-switch id="option-advanced" :disabled="$root.loading" v-model="advanced" dense class="my-0" :label="i18n.settingsAdvanced" :hint="i18n.settingsAdvancedHelp" persistent-hint data-aid="config_option_advanced_toggle"></v-switch>
-				<v-btn id="option-synchronize" @click.stop="sync()" class="mt-6 mb-3" data-aid="config_option_synchronize_button">
+				<v-btn variant="tonal" id="option-synchronize" @click.stop="sync()" class="mt-6 mb-3" data-aid="config_option_synchronize_button">
 					{{ i18n.settingsSynchronize }}
 				</v-btn>
 				<div class="text-body-small" v-text="i18n.settingsSynchronizeHelp"></div>

@@ -3,7 +3,7 @@
 		<v-card class="options-dialog">
 			<v-card-title>{{i18n.options}}</v-card-title>
 			<v-card-text data-aid="users_options">
-				<v-btn id="users-sync-button" @click.stop="sync()" class="mt-2 mb-3 theme-background-lighten-1" data-aid="users_options_synchronize">
+				<v-btn variant="tonal" id="users-sync-button" @click.stop="sync()" class="mt-2 mb-3 theme-background-lighten-1" data-aid="users_options_synchronize">
 					{{ i18n.usersSynchronize }}
 				</v-btn>
 				<div class="text-body-small" v-text="i18n.usersSynchronizeHelp"></div>

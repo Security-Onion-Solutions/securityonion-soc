@@ -121,6 +121,22 @@ html, body, * {
   margin-left: 12px;
 }
 
+.no-wrap-err-icon {
+  display: inline;
+  white-space: nowrap;
+}
+
+.no-wrap-err-icon a {
+  display: inline;
+  vertical-align: middle;
+}
+
+#error > .v-snackbar__wrapper,
+#warning > .v-snackbar__wrapper,
+#tip > .v-snackbar__wrapper {
+  border-radius: var(--so-radius-panel) !important;
+}
+
 /* ============================================================
    Section Panel — encloses toolbar header + expandable content
    ============================================================ */

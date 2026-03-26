@@ -166,9 +166,8 @@
               </a>
             </div>
             <div class="mt-2 no-underline">
-              {{ i18n.huntForError }}
-              <router-link :to="{ name: 'hunt', query: {q: i18n.huntForErrorQuery, rt: 5, rtu: 'minutes', socExcludeToggle: false }}" class="text-decoration-none error-hunt" data-aid="nav_hunt_error">
-                <v-icon :title="i18n.huntForError" color="white">fa-crosshairs</v-icon>
+              {{ i18n.huntForError }}<router-link :to="{ name: 'hunt', query: {q: i18n.huntForErrorQuery, rt: 5, rtu: 'minutes', socExcludeToggle: false }}" class="text-decoration-none error-hunt" data-aid="nav_hunt_error"
+              >&nbsp;<v-icon :title="i18n.huntForError" color="white">fa-crosshairs</v-icon>
               </router-link>
             </div>
           </v-snackbar>
