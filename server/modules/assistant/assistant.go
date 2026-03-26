@@ -135,8 +135,8 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 			}).Info("loaded assistant adapter")
 
 			adapterArray = append(adapterArray, model.AdapterParameters{
-				Name:     module.GetStringDefault(adapterEntry, "name", ""),
-				Protocol: module.GetStringDefault(adapterEntry, "protocol", ""),
+				Name:     name,
+				Protocol: protocol,
 			})
 		}
 
