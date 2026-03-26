@@ -778,11 +778,7 @@ td {
 .manual-sync {
   margin: 6px;
   display: flex;
-}
-
-.manual-sync div:first-child {
-  flex-grow: 1;
-  margin-right: 8px;
+  flex-direction: column;
 }
 
 .manual-sync-buttons {
