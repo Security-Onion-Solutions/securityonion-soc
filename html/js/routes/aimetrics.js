@@ -631,6 +631,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         title: {
           display: true,
           text: title,
+          color: fontColor,
         }
       };
       options.scales = {
@@ -640,16 +641,16 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
           },
           ticks: {
             beginAtZero: true,
-            fontColor: fontColor,
+            color: fontColor,
             precision: 0,
           }
         },
         x: {
-          gridLines: {
+          grid: {
             color: gridColor,
           },
           ticks: {
-            fontColor: fontColor,
+            color: fontColor,
           }
         },
       };
@@ -670,16 +671,21 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       options.scales.x.type = 'timeseries';
     },
     setupPieChart(options, data, title) {
+      var fontColor = this.$root.getColor("#888888", -40);
       options.responsive = true;
       options.maintainAspectRatio = false;
       options.plugins = {
         legend: {
           display: true,
           position: 'left',
+          labels: {
+            color: fontColor,
+          },
         },
         title: {
           display: true,
           text: title,
+          color: fontColor,
         }
       };
       data.labels = [];

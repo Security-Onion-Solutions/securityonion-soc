@@ -2164,6 +2164,7 @@ const huntComponent = {
         title: {
           display: true,
           text: title,
+          color: fontColor,
         }
       };
       options.scales = {
@@ -2173,16 +2174,16 @@ const huntComponent = {
           },
           ticks: {
             beginAtZero: true,
-            fontColor: fontColor,
+            color: fontColor,
             precision: 0,
           }
         },
         x: {
-          gridLines: {
+          grid: {
             color: gridColor,
           },
           ticks: {
-            fontColor: fontColor,
+            color: fontColor,
           }
         },
       };
@@ -2203,6 +2204,7 @@ const huntComponent = {
       options.scales.x.type = 'timeseries';
     },
     setupPieChart(options, data, title) {
+      var fontColor = this.$root.getColor("#888888", -40);
       options.onResize = this.debounceChartResize;
       options.responsive = true;
       options.maintainAspectRatio = false;
@@ -2210,10 +2212,14 @@ const huntComponent = {
         legend: {
           display: true,
           position: 'left',
+          labels: {
+            color: fontColor,
+          },
         },
         title: {
           display: true,
           text: title,
+          color: fontColor,
         }
       };
       data.labels = [];
@@ -2237,6 +2243,7 @@ const huntComponent = {
       }];
     },
     setupSankeyChart(options, data, title) {
+      var fontColor = this.$root.getColor("#888888", -40);
       const route = this;
       options.onResize = this.debounceChartResize;
       options.responsive = true;
@@ -2248,6 +2255,7 @@ const huntComponent = {
         title: {
           display: true,
           text: title,
+          color: fontColor,
         }
       };
       data.flowMax = 0; // This is a custom attribute used for color selection

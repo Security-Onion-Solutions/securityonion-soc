@@ -310,7 +310,7 @@
 						</v-row>
 						<v-row>
 							<v-data-table :sort-by="sortBy" @update:sort-by="val => sortBy = val" must-sort :headers="overrideHeaders[detect.engine]"
-								:items="detect.overrides" item-value="index" show-expand :custom-sort="sortOverrides" hide-default-footer items-per-page="-1">
+								:items="detect.overrides" item-value="index" :custom-sort="sortOverrides" hide-default-footer items-per-page="-1">
 								<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
 									<tr>
 										<template v-for="header in columns" :key="header.key">
