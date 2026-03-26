@@ -115,7 +115,7 @@
 						</tr>
 					</template>
 					<template #expanded-row="{ item }">
-						<tr data-aid="grid_node_details">
+						<tr data-aid="grid_node_details" class="no-hover">
 							<td :colspan="headers.length" class="px-0">
 								<v-container fluid grid-list-sm class="pa-4">
 									<v-row>
@@ -408,7 +408,7 @@
 											<v-card>
 												<v-card-title v-text="i18n.containerStatus"></v-card-title>
 												<v-card-text>
-													<v-table v-if="item.statusCode <= 1">
+													<v-table v-if="item.statusCode <= 1" class="no-background">
 														<template #default>
 															<thead>
 																<tr>

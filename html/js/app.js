@@ -131,6 +131,7 @@ $(document).ready(function () {
               icon: '#7f7f7f',
               button_icon_color: '#ffffff',
               row_stripe: '#e6e6e6',
+              row_hover: '#e2e2e2',
             },
           },
           dark: {
@@ -149,6 +150,7 @@ $(document).ready(function () {
               icon: '#8B96A8',
               button_icon_color: '#ffffff',
               row_stripe: '#2d2d2d',
+              row_hover: '#154084'
             },
           },
         },

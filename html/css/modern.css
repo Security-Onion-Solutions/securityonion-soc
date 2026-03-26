@@ -255,13 +255,12 @@ html, body, * {
 }
 
 /* Softer row striping */
-.v-data-table tbody tr, .v-data-table th, .v-data-table-footer, .v-table tr, .v-data-table-rows-no-data {
+.v-data-table tbody tr,
+.v-data-table th,
+.v-data-table-footer,
+.v-table tr,
+.v-data-table-rows-no-data {
   background-color: rgb(var(--v-theme-table_background)) !important;
-}
-
-.v-theme--dark tr:hover,
-.v-theme--light tr:hover {
-  background-color: rgba(var(--v-theme-primary), 0.15) !important;
 }
 
 /* Spacious cells */
@@ -274,8 +273,8 @@ html, body, * {
   transition: background-color 0.15s ease;
 }
 
-.v-data-table tbody tr:hover {
-  background-color: rgba(var(--v-theme-text), 0.04) !important;
+.v-data-table tbody tr:not(.no-hover):hover {
+  background-color: rgb(var(--v-theme-row_hover)) !important;
 }
 
 /* Softer header row */
@@ -302,6 +301,14 @@ html, body, * {
 .v-data-table-footer {
   border-top: 1px solid rgba(var(--v-theme-text), 0.06) !important;
   padding: 8px 16px !important;
+}
+
+.v-table.no-background,
+.v-table.no-background table,
+.v-table.no-background tr,
+.v-table.no-background td,
+.v-table.no-background th {
+  background-color: unset !important;
 }
 
 /* ============================================================
