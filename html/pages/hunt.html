@@ -24,9 +24,6 @@
 									@update:model-value="filterToggled($event, toggle); notifyInputsChanged()"
 									:label="$root.localizeMessage(toggle.name)" color="primary"></v-switch>
 							</span>
-							<span data-aid="guided_analysis_first_toggle">
-								<v-switch v-if="isCategory('alerts')" id="guided-analysis-first-toggle" :disabled="loading()" v-model="showGuidedAnalysisFirst" density="compact" hide-details class="my-0" :label="i18n.showGuidedAnalysisFirst"></v-switch>
-							</span>
 							<span data-aid="show_detection_panel">
 								<v-switch v-if="isCategory('alerts')" id="detection-panel-toggle" :disabled="loading()" v-model="showDetailsPanel" density="compact" hide-details class="my-0" :label="i18n.showDetailsPanel"></v-switch>
 							</span>
@@ -150,10 +147,10 @@
 								<v-icon>fa-plus</v-icon>
 							</v-btn>
 						</router-link>
-						<v-btn id="hunt" class="circle-button mx-2" icon :disabled="loading()" :color="huntPending ? 'light-green accent-4' : (autoRefreshInterval ? 'secondary' : 'primary')" @click.stop="hunt" :data-aid="'run_query_' + category">
-							<v-icon v-if="isCategory('hunt') && !autoRefreshInterval" :title="i18n.hunt">fa-crosshairs</v-icon>
-							<v-icon v-if="!isCategory('hunt') && !autoRefreshInterval" :title="i18n.refresh">fa-sync</v-icon>
-							<v-icon v-if="autoRefreshInterval">fa-hourglass-half</v-icon>
+						<v-btn id="hunt" variant="flat" class="mx-2" icon :disabled="loading()" :color="huntPending ? 'light-green' : (autoRefreshInterval ? 'icon' : 'primary')" @click.stop="hunt" :data-aid="'run_query_' + category">
+							<v-icon v-if="isCategory('hunt') && !autoRefreshInterval" :title="i18n.hunt" color="button_icon_color">fa-crosshairs</v-icon>
+							<v-icon v-if="!isCategory('hunt') && !autoRefreshInterval" :title="i18n.refresh" color="button_icon_color">fa-sync</v-icon>
+							<v-icon v-if="autoRefreshInterval" color="button_icon_color">fa-hourglass-half</v-icon>
 						</v-btn>
 						<v-btn variant="flat" icon class="circle-button mx-2" :title="i18n.options" @click="showOptionsDialog = true" id="huntOptionsHeader" data-aid="hunt_options_button">
 							<v-icon>fa-gear</v-icon>
@@ -358,7 +355,7 @@
 												<template v-if="!group.maximized" #item="{ item, index, isExpanded, toggleExpand, internalItem }">
 													<tr :class="{'seamless-expanded-row': isExpanded(internalItem), 'main-row': true}">
 														<td v-if="aggregationActionsEnabled">
-															<v-btn id="expandEvent" v-if="isCategory('alerts')" variant="text" icon size="x-small" @click="initDefaultTab(item._row_idx_); toggleExpand(internalItem); if (isExpanded) fetchNewestEvent(item)" class="theme-icon" :aria-label="$root.replaceActionVar(i18n.expandRow, 'expanded_state', (isExpanded(internalItem) ? i18n.expanded : ''))">
+															<v-btn id="expandEvent" v-if="isCategory('alerts')" variant="text" icon size="x-small" @click="toggleExpand(internalItem); if (isExpanded) fetchNewestEvent(item)" class="theme-icon" :aria-label="$root.replaceActionVar(i18n.expandRow, 'expanded_state', (isExpanded(internalItem) ? i18n.expanded : ''))">
 																<v-icon v-if="isExpanded(internalItem)" :alt="i18n.eventExpand" :title="i18n.eventExpandHelp" :data-aid="'group_item_collapse_' + category">fa-angle-down</v-icon>
 																<v-icon v-else :alt="i18n.eventExpand" :title="i18n.eventExpandHelp" :data-aid="'group_item_expand_' + category">fa-angle-right</v-icon>
 															</v-btn>
@@ -407,11 +404,11 @@
 														<td :colspan="columns.length" class="px-0" :data-aid="'events_fields_' + category">
 															<div class="expanded-row-wrapper">
 																<v-tabs :height="isCategory('alerts') ? undefined : 0" v-model="activeTabs[item._row_idx_]" @update:model-value="if (activeTabs[item._row_idx_] === 'playbook' && item.newest) loadPlaybook(item.newest, item._row_idx_);">
-																	<v-tab id="alerts_alertsDetailTab" value="alert" :class="{ 'theme-primary': activeTabs[item._row_idx_] === 'alert' }" :style="{ 'width': (eventColumnWidth * 0.5 - 28) + 'px', order: showGuidedAnalysisFirst ? 1 : 0 }" data-aid="alerts_agg_alertDetailsTab">
+																	<v-tab id="alerts_alertsDetailTab" value="alert" :class="{ 'theme-primary': activeTabs[item._row_idx_] === 'alert' }" :style="{ 'width': (eventColumnWidth * 0.5 - 28) + 'px' }" data-aid="alerts_agg_alertDetailsTab">
 																		<v-icon class="tab-icon">fa-bell</v-icon>
 																		<div class="d-none d-lg-block">{{i18n.alertDetails}}</div>
 																	</v-tab>
-																	<v-tab id="alerts_playbookTab" value="playbook" :class="{ 'theme-primary': activeTabs[item._row_idx_] === 'playbook' }" :style="{ 'width': (eventColumnWidth * 0.5 - 28) + 'px', order: showGuidedAnalysisFirst ? 0 : 1 }" data-aid="alerts_agg_playbookTab">
+																	<v-tab id="alerts_playbookTab" value="playbook" :class="{ 'theme-primary': activeTabs[item._row_idx_] === 'playbook' }" :style="{ 'width': (eventColumnWidth * 0.5 - 28) + 'px' }" data-aid="alerts_agg_playbookTab">
 																		<v-icon class="tab-icon">fa-book</v-icon>
 																		<div class="d-none d-lg-block">{{i18n.guidedAnalysis}}</div>
 																		<template #append>
@@ -630,7 +627,7 @@
 									<template #item="{ item, index, isExpanded, toggleExpand, internalItem }">
 										<tr :class="{'seamless-expanded-row': isExpanded(internalItem), 'main-row': true}" :data-aid="'events_item_' + category">
 											<td>
-												<v-btn id="expandEvent" variant="text" icon size="x-small" @click="initDefaultTab(item._row_idx_, item); toggleExpand(internalItem)" class="theme-icon" :aria-label="$root.replaceActionVar(i18n.expandRow, 'expanded_state', (isExpanded(internalItem) ? i18n.expanded : ''))">
+												<v-btn id="expandEvent" variant="text" icon size="x-small" @click="toggleExpand(internalItem)" class="theme-icon" :aria-label="$root.replaceActionVar(i18n.expandRow, 'expanded_state', (isExpanded(internalItem) ? i18n.expanded : ''))">
 													<v-icon v-if="isExpanded(internalItem)" :alt="i18n.eventExpand" :title="i18n.eventExpandHelp" :data-aid="'events_item_collapse_' + category">fa-angle-down</v-icon>
 													<v-icon v-else :alt="i18n.eventExpand" :title="i18n.eventExpandHelp" :data-aid="'events_item_expand_' + category">fa-angle-right</v-icon>
 												</v-btn>
@@ -680,11 +677,11 @@
 											<td :colspan="columns.length" class="px-0" :data-aid="'events_fields_' + category">
 												<div class="expanded-row-wrapper">
 													<v-tabs :height="isCategory('alerts') ? undefined : 0" v-model="activeTabs[item._row_idx_]" @update:model-value="if (activeTabs[item._row_idx_] === 'playbook' && item) loadPlaybook(item, item._row_idx_);">
-														<v-tab id="alerts_alertsDetailTab" value="alert" :class="{ 'theme-primary': activeTabs[item._row_idx_] === 'alert' }" :style="{ 'width': (this.eventColumnWidth / 2) + 'px', order: showGuidedAnalysisFirst ? 1 : 0 }" data-aid="alerts_alertDetailsTab">
+														<v-tab id="alerts_alertsDetailTab" value="alert" :class="{ 'theme-primary': activeTabs[item._row_idx_] === 'alert' }" :style="{ 'width': (this.eventColumnWidth / 2) + 'px' }" data-aid="alerts_alertDetailsTab">
 															<v-icon class="tab-icon">fa-bell</v-icon>
 															<div class="d-none d-lg-block">{{i18n.alertDetails}}</div>
 														</v-tab>
-														<v-tab id="alerts_playbookTab" value="playbook" :class="{ 'theme-primary': activeTabs[item._row_idx_] === 'playbook' }" :style="{ 'width': (this.eventColumnWidth / 2) + 'px', order: showGuidedAnalysisFirst ? 0 : 1 }" data-aid="alerts_playbookTab">
+														<v-tab id="alerts_playbookTab" value="playbook" :class="{ 'theme-primary': activeTabs[item._row_idx_] === 'playbook' }" :style="{ 'width': (this.eventColumnWidth / 2) + 'px' }" data-aid="alerts_playbookTab">
 															<v-icon class="tab-icon">fa-book</v-icon>
 															<div class="d-none d-lg-block">{{i18n.guidedAnalysis}}</div>
 															<template #append>

@@ -182,7 +182,6 @@ const huntComponent = {
       gridId: null,
       activeTabs: {},
       gridLayoutExpansions: true,
-      showGuidedAnalysisFirst: true,
       expandedEvents: [],
       eventColumnWidth: 0,
       expandedPlaybookQuestions: {},
@@ -271,7 +270,6 @@ const huntComponent = {
     'showDetailsPanel': 'toggleShowDetailsPanel',
     'advanced': 'saveLocalSettings',
     'gridLayoutExpansions': 'saveLocalSettings',
-    'showGuidedAnalysisFirst': 'saveLocalSettings',
   },
   computed: {
     alertGroupCount() {
@@ -2425,7 +2423,6 @@ const huntComponent = {
       this.saveSetting('showDetailsPanel', this.showDetailsPanel, this.isCategory('alerts'));
       this.saveSetting('advanced', this.advanced, false);
       this.saveSetting('gridLayoutExpansions', this.gridLayoutExpansions, true);
-      this.saveSetting('showGuidedAnalysisFirst', this.showGuidedAnalysisFirst, true);
     },
     loadLocalSettings() {
       // Global settings
@@ -2448,7 +2445,6 @@ const huntComponent = {
       if (localStorage[prefix + '.showDetailsPanel']) this.showDetailsPanel = localStorage[prefix + '.showDetailsPanel'] == 'true';
       if (localStorage[prefix + '.advanced']) this.advanced = localStorage[prefix + '.advanced'] == 'true';
       if (localStorage[prefix + '.gridLayoutExpansions']) this.gridLayoutExpansions = localStorage[prefix + '.gridLayoutExpansions'] == 'true';
-      if (localStorage[prefix + '.showGuidedAnalysisFirst']) this.showGuidedAnalysisFirst = localStorage[prefix + '.showGuidedAnalysisFirst'] == 'true';
       if (localStorage[prefix + '.autoRefreshInterval']) this.autoRefreshInterval = parseInt(localStorage[prefix + '.autoRefreshInterval']);
 
       if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
@@ -2875,13 +2871,6 @@ const huntComponent = {
           card.classList.remove('is-truncated');
         }
       });
-    },
-    initDefaultTab(rowIdx, item) {
-      if (!this.isCategory('alerts') || this.activeTabs[rowIdx] !== undefined) return;
-      this.activeTabs[rowIdx] = this.showGuidedAnalysisFirst ? 'playbook' : 'alert';
-      if (this.activeTabs[rowIdx] === 'playbook' && item) {
-        this.loadPlaybook(item, rowIdx);
-      }
     },
     showFieldValueDialog(key, value) {
       this.fieldValueDialogKey = key;

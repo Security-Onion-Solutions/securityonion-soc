@@ -1036,7 +1036,6 @@ const i18n = {
       shareSessionLabel: 'Shared',
       showAll: 'Show all...',
       showDetailsPanel: 'Show Details Panel',
-      showGuidedAnalysisFirst: 'Show Guided Analysis tab first',
       'so-desktop': 'Desktop',
       'so-desktop-keywords': 'Analyst, Desktop, sod, windows, wireshark, networkminer, miner, gui, workstation',
       'so-eval': 'Evaluation',
