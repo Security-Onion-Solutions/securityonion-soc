@@ -181,7 +181,7 @@ const huntComponent = {
       chartResizeTracker: {},
       gridId: null,
       activeTabs: {},
-      gridLayoutExpansions: true,
+      gridLayoutExpansions: false,
       expandedEvents: [],
       eventColumnWidth: 0,
       expandedPlaybookQuestions: {},
@@ -2422,7 +2422,7 @@ const huntComponent = {
       this.saveSetting('autohunt', this.autohunt, true);
       this.saveSetting('showDetailsPanel', this.showDetailsPanel, this.isCategory('alerts'));
       this.saveSetting('advanced', this.advanced, false);
-      this.saveSetting('gridLayoutExpansions', this.gridLayoutExpansions, true);
+      this.saveSetting('gridLayoutExpansions', this.gridLayoutExpansions, false);
     },
     loadLocalSettings() {
       // Global settings

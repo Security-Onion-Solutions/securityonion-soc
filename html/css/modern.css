@@ -439,6 +439,19 @@ body {
   border-radius: var(--so-radius-nested) var(--so-radius-nested) 0 0;
 }
 
+@keyframes tab-glow {
+  0%   { background-color: transparent; }
+  15%  { background-color: rgba(var(--v-theme-primary), 0.15); }
+  40%  { background-color: rgba(var(--v-theme-primary), 0.075); }
+  55%  { background-color: rgba(var(--v-theme-primary), 0.15); }
+  100% { background-color: transparent; }
+}
+
+#alerts_playbookTab,
+#alerts_agg_playbookTab {
+  animation: tab-glow 1.5s ease;
+}
+
 .v-data-table .v-tab {
   text-transform: none;
   font-weight: 500;
