@@ -554,7 +554,10 @@
 						<v-spacer></v-spacer>
 						<template v-if="isCategory('detections') && (selectAllState || selectAllIndeterminate)">
 							<span class="text-caption mr-2">{{ i18n.selected }}: {{ (selectAllState === true ? totalEvents : selectedCount).toLocaleString() }}</span>
-							<v-btn v-if="selectAllIndeterminate && !selectAllState && isPageSelected() && totalEvents >= itemsPerPage" size="x-small" @click="selectAllEvents(true, true)" class="mr-2" :data-aid="'events_select_all_' + category">{{ i18n.yes }}</v-btn>
+							<template v-if="selectAllIndeterminate && !selectAllState && isPageSelected() && totalEvents > itemsPerPage">
+								{{ i18n.selectAll.replaceAll('[[count]]', totalEvents.toLocaleString()) }}
+								<v-btn size="x-small" @click="selectAllEvents(true, true)" class="mr-2" :data-aid="'events_select_all_' + category">{{ i18n.yes }}</v-btn>
+							</template>
 							<v-select class="toolbar-field no-print bulk-actions no-details" style="max-width: 150px;" :disabled="loading()" v-model="selectedAction" :items="bulkActions" hide-details :data-aid="'events_bulk_select_action_' + category"></v-select>
 							<v-btn size="small" class="ml-1 mr-2" @click="bulkAction()" :data-aid="'events_bulk_apply_' + category">{{ i18n.go }}</v-btn>
 						</template>
