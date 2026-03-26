@@ -255,7 +255,11 @@ html, body, * {
 }
 
 /* Softer row striping */
-.v-data-table tbody tr, .v-data-table th, .v-data-table-footer, .v-table tr, .v-data-table-rows-no-data {
+.v-data-table tbody tr,
+.v-data-table th,
+.v-data-table-footer,
+.v-table tr,
+.v-data-table-rows-no-data {
   background-color: rgb(var(--v-theme-table_background)) !important;
 }
 
@@ -297,6 +301,14 @@ html, body, * {
 .v-data-table-footer {
   border-top: 1px solid rgba(var(--v-theme-text), 0.06) !important;
   padding: 8px 16px !important;
+}
+
+.v-table.no-background,
+.v-table.no-background table,
+.v-table.no-background tr,
+.v-table.no-background td,
+.v-table.no-background th {
+  background-color: unset !important;
 }
 
 /* ============================================================
