@@ -105,7 +105,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.thresholdColorRatioMax = params["thresholdColorRatioMax"];
       this.availableModels = params["availableModels"];
       this.availableAdapters = params["availableAdapters"];
-      if (this.availableModels.length > 0) {
+      if (this.availableModels && this.availableModels.length > 0) {
         this.availableModels.forEach(m => m.key = this.buildModelIdentifier(m));
         this.modelsMap = new Map(
           this.availableModels.filter(m => m.enabled).map(m => [m.key, m])
@@ -116,7 +116,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         if (!this.currentModel || !this.modelsMap.has(this.currentModel)) this.currentModel = this.availableModels[0].key;
         this.groupedModels = this.buildGroupedModels();
       }
-      if (this.availableAdapters.length > 0) {
+      if (this.availableAdapters && this.availableAdapters.length > 0) {
         this.adaptersMap = new Map(this.availableAdapters.map(a => [a.name, a]));
       }
       this.updateModelParams();

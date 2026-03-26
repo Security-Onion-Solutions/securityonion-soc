@@ -296,6 +296,9 @@ test('initAssistant sets assistantEnabled to true when enabled and licensed', as
     lowBalanceColorAlert: 500000,
     availableModels: [
       { id: 'test-model', displayName: "Test Model", contextLimitSmall: 200000, contextLimitLarge: 1000000, lowBalanceColorAlert: 500000, enabled: true, adapter: "SOAI" }
+    ],
+    availableAdapters: [
+      { name: "SOAI", protocol: "securityonion_ai_cloud" }
     ]
   };
   comp.$root.isLicensed = jest.fn().mockReturnValue(true);
@@ -321,12 +324,13 @@ test('initAssistant sets assistantEnabled to true when enabled and licensed', as
   expect(comp.handleRouteSessionId).toHaveBeenCalled();
   expect(comp.loadCredits).toHaveBeenCalled();
   expect(comp.focusChatInput).toHaveBeenCalled();
+  expect(comp.adaptersMap.size).toBe(1);
+  expect(comp.adaptersMap.get('SOAI')).toEqual({ name: "SOAI", protocol: "securityonion_ai_cloud" });
 });
 
 test('initAssistant sets assistantEnabled to false when not enabled', async () => {
   const mockParams = {
     enabled: false,
-    availableModels: []
   };
   comp.$root.isLicensed = jest.fn().mockReturnValue(true);
   comp.$root.showDisclaimer = jest.fn();
@@ -348,7 +352,6 @@ test('initAssistant sets assistantEnabled to false when not enabled', async () =
 test('initAssistant sets assistantEnabled to false when not licensed', async () => {
   const mockParams = {
     enabled: true,
-    availableModels: []
   };
   comp.$root.isLicensed = jest.fn().mockReturnValue(false);
   comp.$root.showDisclaimer = jest.fn();
@@ -403,7 +406,10 @@ test('initAssistant corrects contextLimitLarge when smaller than contextLimitSma
         enabled: false,
         adapter: "SOAI"
       },
-    ]
+    ],
+    availableAdapters: [
+      { name: "SOAI", protocol: "securityonion_ai_cloud" }
+    ],
   };
   
   comp.$root.isLicensed = jest.fn().mockReturnValue(true);
@@ -439,10 +445,11 @@ test('initAssistant corrects contextLimitLarge when smaller than contextLimitSma
   expect(model3.contextLimitLarge).toBe(250000); // Should remain unchanged
 });
 
-test('initAssistant handles empty availableModels array', async () => {
+test('initAssistant handles empty availableModels and availableAdapters array', async () => {
   const mockParams = {
     enabled: true,
-    availableModels: [] // Empty array
+    availableModels: [], // Empty array
+    availableAdapters: [], // Empty array
   };
   
   comp.$root.isLicensed = jest.fn().mockReturnValue(true);
@@ -457,6 +464,7 @@ test('initAssistant handles empty availableModels array', async () => {
   
   // Check that modelsMap is empty and no correction logic was executed
   expect(comp.modelsMap.size).toBe(0);
+  expect(comp.adaptersMap.size).toBe(0);
   expect(comp.currentModel).toBe(''); // Should remain empty
   expect(comp.updateModelParams).toHaveBeenCalled();
 });
