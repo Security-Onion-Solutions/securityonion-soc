@@ -121,6 +121,16 @@ html, body, * {
   margin-left: 12px;
 }
 
+.no-wrap-err-icon {
+  display: inline;
+  white-space: nowrap;
+}
+
+.no-wrap-err-icon a {
+  display: inline;
+  vertical-align: middle;
+}
+
 /* ============================================================
    Section Panel — encloses toolbar header + expandable content
    ============================================================ */
