@@ -851,14 +851,6 @@ code {
   color: white;
 }
 
-tbody tr:hover {
-  background-color: transparent !important;
-}
-
-tbody tr:hover:nth-of-type(even) {
-  background-color: rgba(var(--v-theme-row_stripe), 0.25) !important;
-}
-
 .unset-vertical-align {
   vertical-align: unset !important;
 }

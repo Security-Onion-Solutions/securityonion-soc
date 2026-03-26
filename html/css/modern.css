@@ -259,11 +259,6 @@ html, body, * {
   background-color: rgb(var(--v-theme-table_background)) !important;
 }
 
-.v-theme--dark tr:hover,
-.v-theme--light tr:hover {
-  background-color: rgba(var(--v-theme-primary), 0.15) !important;
-}
-
 /* Spacious cells */
 .v-data-table td {
   padding: 12px 16px !important;
@@ -274,8 +269,8 @@ html, body, * {
   transition: background-color 0.15s ease;
 }
 
-.v-data-table tbody tr:hover {
-  background-color: rgba(var(--v-theme-text), 0.04) !important;
+.v-data-table tbody tr:not(.no-hover):hover {
+  background-color: rgb(var(--v-theme-row_hover)) !important;
 }
 
 /* Softer header row */
