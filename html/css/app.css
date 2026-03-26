@@ -719,6 +719,7 @@ td {
 .extracted-content > pre {
   text-wrap: wrap;
   word-break: break-word;
+  background: unset !important;
 }
 
 .ops-header {

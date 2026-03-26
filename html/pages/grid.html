@@ -111,7 +111,7 @@
 								<span :id="'nodePcapDays_' + item.id">{{ formatDecimal1(item.pcapDays) }} {{ i18n.days }}</span>
 							</td>
 							<td :id="'nodeUptimeSeconds_' + item.id" class="d-none d-lg-table-cell">{{ formatDuration(item.uptimeSeconds) }}</td>
-							<td><v-chip :id="'nodeStatus_' + item.id" class="nodeStatus" @click="expand(item)" density="compact" :color="colorNodeStatus(item.status, item.nonCriticalNode)" data-aid="grid_node_status_display">{{ $root.localizeMessage(item.status) }}</v-chip></td>
+							<td><v-chip variant='flat' :id="'nodeStatus_' + item.id" class="nodeStatus" @click="expand(item)" density="compact" :color="colorNodeStatus(item.status, item.nonCriticalNode)" data-aid="grid_node_status_display">{{ $root.localizeMessage(item.status) }}</v-chip></td>
 						</tr>
 					</template>
 					<template #expanded-row="{ item }">

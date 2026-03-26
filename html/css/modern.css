@@ -46,6 +46,10 @@ body {
   font-optical-sizing: auto;
 }
 
+html, body, * {
+  scrollbar-color: rgb(var(--v-theme-icon)) rgb(var(--v-theme-background-lighten-1)) !important;
+}
+
 .v-expansion-panels,
 .v-expansion-panel,
 .v-alert {
