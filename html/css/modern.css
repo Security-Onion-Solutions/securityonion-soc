@@ -131,6 +131,12 @@ html, body, * {
   vertical-align: middle;
 }
 
+#error > .v-snackbar__wrapper,
+#warning > .v-snackbar__wrapper,
+#tip > .v-snackbar__wrapper {
+  border-radius: var(--so-radius-panel) !important;
+}
+
 /* ============================================================
    Section Panel — encloses toolbar header + expandable content
    ============================================================ */
