@@ -92,6 +92,7 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 
 	adapterConfig, ok := config["adapters"].([]any)
 	if ok && adapterConfig != nil {
+		adapterArray := make([]model.AdapterParameters, 0, len(adapterConfig))
 		for i, adapterInter := range adapterConfig {
 			adapterEntry, ok := adapterInter.(map[string]any)
 			if !ok {
@@ -132,9 +133,17 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 				"adapter":  name,
 				"protocol": protocol,
 			}).Info("loaded assistant adapter")
+
+			adapterArray = append(adapterArray, model.AdapterParameters{
+				Name:     name,
+				Protocol: protocol,
+			})
 		}
+
+		ac.srv.Config.ClientParams.AssistantParams.AvailableAdapters = adapterArray
 	} else {
 		logger.Warn("no adapter config, no adapters loaded")
+		ac.srv.Config.ClientParams.AssistantParams.AvailableAdapters = []model.AdapterParameters{}
 	}
 
 	ac.getPrompt()

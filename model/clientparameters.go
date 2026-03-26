@@ -180,13 +180,14 @@ type AlertingParameters struct {
 }
 
 type AssistantParameters struct {
-	Enabled                bool              `json:"enabled"`
-	InvestigationPrompt    string            `json:"investigationPrompt"`
-	CompressContextPrompt  string            `json:"compressContextPrompt"`
-	ThresholdColorRatioLow float64           `json:"thresholdColorRatioLow"`
-	ThresholdColorRatioMed float64           `json:"thresholdColorRatioMed"`
-	ThresholdColorRatioMax float64           `json:"thresholdColorRatioMax"`
-	AvailableModels        []ModelParameters `json:"availableModels"`
+	Enabled                bool                `json:"enabled"`
+	InvestigationPrompt    string              `json:"investigationPrompt"`
+	CompressContextPrompt  string              `json:"compressContextPrompt"`
+	ThresholdColorRatioLow float64             `json:"thresholdColorRatioLow"`
+	ThresholdColorRatioMed float64             `json:"thresholdColorRatioMed"`
+	ThresholdColorRatioMax float64             `json:"thresholdColorRatioMax"`
+	AvailableModels        []ModelParameters   `json:"availableModels"`
+	AvailableAdapters      []AdapterParameters `json:"availableAdapters"`
 }
 
 type ModelParameters struct {
@@ -198,6 +199,11 @@ type ModelParameters struct {
 	Origin               string `json:"origin"`
 	Adapter              string `json:"adapter"`
 	Enabled              bool   `json:"enabled"`
+}
+
+type AdapterParameters struct {
+	Name     string `json:"name"`
+	Protocol string `json:"protocol"`
 }
 
 // Custom unmarshal to handle numeric or scientific-notation string fields

@@ -48,6 +48,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     lowBalanceColorAlert: 0,
     availableModels: [],
     modelsMap: new Map(),
+    availableAdapters: [],
+    adaptersMap: new Map(),
     groupedModels: [],
     currentModel: '',
     activeStreamingSessionId: null, // Track which session is actively streaming
@@ -102,6 +104,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.thresholdColorRatioMed = params["thresholdColorRatioMed"];
       this.thresholdColorRatioMax = params["thresholdColorRatioMax"];
       this.availableModels = params["availableModels"];
+      this.availableAdapters = params["availableAdapters"];
       if (this.availableModels.length > 0) {
         this.availableModels.forEach(m => m.key = this.buildModelIdentifier(m));
         this.modelsMap = new Map(
@@ -112,6 +115,9 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         }
         if (!this.currentModel || !this.modelsMap.has(this.currentModel)) this.currentModel = this.availableModels[0].key;
         this.groupedModels = this.buildGroupedModels();
+      }
+      if (this.availableAdapters.length > 0) {
+        this.adaptersMap = new Map(this.availableAdapters.map(a => [a.name, a]));
       }
       this.updateModelParams();
 
