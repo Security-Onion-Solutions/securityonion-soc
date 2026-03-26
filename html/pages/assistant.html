@@ -65,7 +65,7 @@
 					<v-select
 						:disabled="$root.loading"
 						v-model="currentModel"
-						@update:model-value="updateModelParams()"
+						@update:model-value="updateModelParams(); reloadCredits()"
 						:items="groupedModels"
 						item-title="displayName"
 						item-value="key"

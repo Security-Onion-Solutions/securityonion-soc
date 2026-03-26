@@ -295,6 +295,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }
       // If no valid last chat found, keep the default welcome message
     },
+    reloadCredits() {
+      this.creditsLoaded = false;
+      this.loadCredits();
+    },
     async loadCredits() {
       try {
         const response = await this.$root.papi.get('/assistant/balance/' + encodeURIComponent(this.currentModel));
