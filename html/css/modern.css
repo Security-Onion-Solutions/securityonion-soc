@@ -706,8 +706,6 @@ html, body, * {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background-color: #252B3B;
-  border-radius: var(--so-radius-panel);
   padding: 12px 24px;
 }
 
@@ -755,6 +753,7 @@ html, body, * {
   font-weight: 600 !important;
   letter-spacing: 0.04em;
   margin-top: 4px;
+  color: rgb(var(--v-theme-text_button)) !important;
 }
 
 .login-submit-btn.v-btn--disabled {
