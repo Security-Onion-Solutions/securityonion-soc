@@ -905,7 +905,7 @@
 				</v-list-item>
 				<v-list-item density="compact" id="actionGroupBy" :to="groupByRoute" v-bind:title.attr="i18n.groupIncludeHelp" :data-aid="'context_menu_groupby_' + category">
 					<template #prepend>
-						<v-icon :alt="i18n.groupInclude" color="yellow-darken-2">fa-layer-group</v-icon>
+						<v-icon :alt="i18n.groupInclude" color="yellow-darken-2">fa-table-cells-large</v-icon>
 					</template>
 					<v-list-item-title>
 						{{ i18n.groupInclude }}
@@ -913,7 +913,7 @@
 				</v-list-item>
 				<v-list-item density="compact" id="actionGroupByNew" :to="groupByNewRoute" v-bind:title.attr="i18n.groupNewHelp" :data-aid="'context_menu_groupby_new_' + category">
 					<template #prepend>
-						<v-icon :alt="i18n.groupNew" color="orange-darken-2">fa-square-plus</v-icon>
+						<v-icon :alt="i18n.groupNew" color="orange-darken-2">fa-layer-group</v-icon>
 					</template>
 					<v-list-item-title>
 						{{ i18n.groupNew }}
