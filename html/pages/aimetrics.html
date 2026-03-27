@@ -246,7 +246,7 @@
           </tr>
         </template>
         <template #expanded-row="{ item }">
-          <tr>
+          <tr class="expanded-row">
             <td :colspan="headers[tableSetting].length" class="px-4 py-3">
               <div v-if="item.role === 'assistant'" class="expansion va-middle hardwrap-aimetrics" v-html="formatMarkdownMermaid(item.expandMessage)" data-aid="aimetrics_message_content_assistant"></div>
               <div v-else-if="item?.tags?.includes('tool_result')" class="expansion va-middle hardwrap-aimetrics" data-aid="aimetrics_message_content_toolresult" v-html="item.expandMessage"></div>

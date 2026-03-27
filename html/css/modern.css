@@ -289,7 +289,7 @@ html, body, * {
   transition: background-color 0.15s ease;
 }
 
-.v-data-table tbody tr:not(.no-hover):hover {
+.v-data-table tbody tr:not(.expanded-row):hover {
   background-color: rgb(var(--v-theme-row_hover)) !important;
 }
 

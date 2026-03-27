@@ -170,7 +170,7 @@
 					</tr>
 				</template>
 				<template #expanded-row="{ item }">
-					<tr v-if="isOptionEnabled('packets') || item.payloadOffset > 0" data-aid="job_details_packet_bytes">
+					<tr v-if="isOptionEnabled('packets') || item.payloadOffset > 0" class="expanded-row" data-aid="job_details_packet_bytes">
 						<td :colspan="getPacketColumnSpan()" :class="getPacketClass(item)">
 							<pre class="hardwrap">{{ formatPacketView(item) }}</pre>
 						</td>

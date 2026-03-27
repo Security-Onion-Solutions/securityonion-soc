@@ -359,7 +359,7 @@
 									</tr>
 								</template>
 								<template #expanded-row="{ props, index, item }">
-									<tr>
+									<tr class="expanded-row">
 										<td :colspan="4" class="case">
 											<v-container fluid class="py-1">
 												<template v-if="item.artifactType != 'assistant_chat'">
@@ -673,7 +673,7 @@
 									</tr>
 								</template>
 								<template #expanded-row="{ index, item }">
-									<tr>
+									<tr class="expanded-row">
 										<td :colspan="5" class="case">
 											<v-container fluid class="my-2" v-if="item.artifactType == 'file'">
 												<a :target="$root.target('soc-download')" :href="`/api/case/artifactstream?id=${item.id}`" class="no-underline" data-aid="case_evidence_download">
@@ -996,7 +996,7 @@
 									</tr>
 								</template>
 								<template #expanded-row="{ index, item }">
-									<tr>
+									<tr class="expanded-row">
 										<td :colspan="6" class="case">
 											<div class="mt-2">
 												<template v-for="value, key in item.fields">
@@ -1119,7 +1119,7 @@
 									</tr>
 								</template>
 								<template #expanded-row="{ item }">
-									<tr data-aid="case_history_record">
+									<tr class="expanded-row" data-aid="case_history_record">
 										<td colspan="5" class="case">
 											<div class="mt-2">
 												<v-row no-gutters class="py-1 case tabular-row">

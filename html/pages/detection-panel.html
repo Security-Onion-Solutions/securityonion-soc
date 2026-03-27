@@ -165,7 +165,7 @@
 							</tr>
 						</template>
 						<template #expanded-row="{ columns, item }">
-							<tr>
+							<tr class="expanded-row">
 								<td :colspan="columns.length" class="pa-4" v-if="detection.engine === 'suricata'">
 									<div data-aid="detection_panel_override_enabled_toggle">
 										<div class="font-weight-bold mt-4">

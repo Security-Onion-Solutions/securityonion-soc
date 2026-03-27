@@ -349,7 +349,7 @@
 									</tr>
 								</template>
 								<template #expanded-row="{ columns, item }">
-									<tr>
+									<tr class="expanded-row">
 										<td :colspan="columns.length" class="pa-4" v-if="detect.engine === 'suricata'">
 											<div data-aid="detection_override_enabled_toggle">
 												<div class="font-weight-bold mt-4">
@@ -653,7 +653,7 @@
 									</tr>
 								</template>
 								<template #expanded-row="{ item }">
-									<tr>
+									<tr class="expanded-row">
 										<td colspan="5" class="case">
 											<div class="mt-2">
 												<v-row no-gutters class="py-1 case tabular-row">
@@ -783,7 +783,7 @@
 													</tr>
 												</template>
 												<template #expanded-row="{ index, item }">
-													<tr>
+													<tr class="expanded-row">
 														<td colspan="5" class="case">
 															<div class="mt-2">
 																<v-row no-gutters class="py-1 case tabular-row">

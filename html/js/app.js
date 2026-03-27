@@ -150,7 +150,7 @@ $(document).ready(function () {
               icon: '#8B96A8',
               button_icon_color: '#ffffff',
               row_stripe: '#2d2d2d',
-              row_hover: '#154084'
+              row_hover: '#2a3452'
             },
           },
         },
