@@ -262,7 +262,7 @@
 							</v-col>
 						</v-row>
 						<v-row v-if="newOverride != null">
-							<div>
+							<v-col>
 								<v-form ref="OverrideCreate" v-model="newOverrideValid" class="override-form">
 									<span data-aid="detection_new_override_type_select">
 										<v-select id="new-override-type" v-model="newOverride.type" :items="getOverrideTypes()" persistent-hint :hint="i18n.type"></v-select>
@@ -306,7 +306,7 @@
 										</div>
 									</div>
 								</v-form>
-							</div>
+							</v-col>
 						</v-row>
 						<v-row>
 							<v-data-table :sort-by="sortBy" @update:sort-by="val => sortBy = val" must-sort :headers="overrideHeaders[detect.engine]"
