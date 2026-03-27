@@ -65,6 +65,7 @@ routes.push({ path: '/users', name: 'users', component: {
       this.users = await this.$root.getUsers();
       const response = await this.$root.papi.get('roles/');
       if (response.data) {
+        this.roles = [];
         response.data.forEach((role) => {
           if (role != "agent") { // Agent is intended only for services, not humans
             this.roles.push(role);

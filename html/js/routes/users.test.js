@@ -146,3 +146,14 @@ test('loadLocalSettings_defaults', () => {
   expect(comp.sortBy).toEqual([{ key: 'email', order: 'asc' }]);
   expect(comp.itemsPerPage).toBe(10);
 });
+
+test('loadData does not duplicate roles on consecutive calls', async () => {
+  const mockRoles = mockPapi("get", {data: ["admin", "user", "agent", "super"]});
+  comp.roles = ["admin", "old_role"]; // Simulating previous state
+  comp.$root.getUsers = jest.fn().mockReturnValue([{id: 'my-id', status: 'unlocked'}]);
+  
+  await comp.loadData();
+  
+  expect(mockRoles).toHaveBeenCalledWith('roles/');
+  expect(comp.roles).toEqual(["admin", "user", "super"]);
+});
