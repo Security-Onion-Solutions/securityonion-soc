@@ -86,7 +86,8 @@ html, body, * {
   color: rgba(var(--v-theme-button_icon_color)) !important;
 }
 
-.v-theme--light .v-btn.bg-primary {
+.v-theme--light .v-btn.bg-primary,
+.v-theme--light .v-btn.bg-error {
   color: rgba(var(--v-theme-button_icon_color)) !important;
 }
 

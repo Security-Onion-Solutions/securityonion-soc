@@ -945,7 +945,7 @@
 							<v-btn id="detection-duplicate" color="primary" @click="duplicateDetection()" data-aid="detection_metadata_duplicate" class="flex-basis-50">
 								{{i18n.duplicate}}
 							</v-btn>
-							<v-btn :disabled="detect.isCommunity" id="detection-delete" :color="detect.isCommunity ? 'black' : 'error'" @click="deleteDetection()" data-aid="detection_metadata_delete" class="flex-basis-50">
+							<v-btn :disabled="detect.isCommunity" id="detection-delete" :color="detect.isCommunity ? '' : 'error'" @click="deleteDetection()" data-aid="detection_metadata_delete" class="flex-basis-50">
 								{{i18n.delete}}
 							</v-btn>
 						</div>
