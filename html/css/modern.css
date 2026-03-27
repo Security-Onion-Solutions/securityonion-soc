@@ -416,6 +416,10 @@ html, body, * {
   text-overflow: ellipsis;
 }
 
+.expanded-field-name::after {
+  content: ':';
+}
+
 .expanded-field-actions {
   display: inline-flex;
   align-items: center;
