@@ -103,7 +103,7 @@
 						</tr>
 					</template>
 					<template #item="{ item, isExpanded, toggleExpand, internalItem }">
-						<tr>
+						<tr :class="{'seamless-expanded-row': isExpanded(internalItem), 'main-row': true}">
 							<td v-if="$root.isClientAdmin()">
 								<v-btn id="expandNode" icon variant="text" size="small" @click="if (!isExpanded(internalItem)) { updateForm(item); } toggleExpand(internalItem)" data-aid="clients_details_expand">
 									<v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="clients_details_collapse">fa-angle-down</v-icon>
@@ -116,7 +116,7 @@
 						</tr>
 					</template>
 					<template #expanded-row="{ item }">
-						<tr data-aid="clients_details_expanded">
+						<tr class="expanded-row" data-aid="clients_details_expanded">
 							<td :colspan="headers.length + 1" class="px-0">
 								<v-container fluid grid-list-sm class="pa-4">
 									<v-row>

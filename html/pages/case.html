@@ -346,7 +346,7 @@
 									</tr>
 								</template>
 								<template #item="{ index, item, isExpanded, toggleExpand, internalItem }">
-									<tr>
+									<tr :class="{'seamless-expanded-row': isExpanded(internalItem), 'main-row': true}">
 										<td class="associated actions">
 											<v-btn :id="`attachments-${index}-expand`" icon variant="text" size="x-small" @click="toggleExpand(internalItem)">
 												<v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_attachments_collapse">fa-angle-down</v-icon>
@@ -359,7 +359,7 @@
 									</tr>
 								</template>
 								<template #expanded-row="{ props, index, item }">
-									<tr>
+									<tr class="expanded-row">
 										<td :colspan="4" class="case">
 											<v-container fluid class="py-1">
 												<template v-if="item.artifactType != 'assistant_chat'">
@@ -652,7 +652,7 @@
 									</tr>
 								</template>
 								<template #item="{ index, item, isExpanded, toggleExpand, internalItem}">
-									<tr>
+									<tr :class="{'seamless-expanded-row': isExpanded(internalItem), 'main-row': true}">
 										<td class="association actions">
 											<v-btn :id="`evidence-${index}-expand`" variant="text" size="x-small" icon @click="toggleExpand(internalItem)">
 												<v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_evidence_collapse">fa-angle-down</v-icon>
@@ -673,7 +673,7 @@
 									</tr>
 								</template>
 								<template #expanded-row="{ index, item }">
-									<tr>
+									<tr class="expanded-row">
 										<td :colspan="5" class="case">
 											<v-container fluid class="my-2" v-if="item.artifactType == 'file'">
 												<a :target="$root.target('soc-download')" :href="`/api/case/artifactstream?id=${item.id}`" class="no-underline" data-aid="case_evidence_download">
@@ -974,7 +974,7 @@
 									</tr>
 								</template>
 								<template #item="{ index, item, isExpanded, toggleExpand, internalItem }">
-									<tr>
+									<tr :class="{'seamless-expanded-row': isExpanded(internalItem), 'main-row': true}">
 										<td class="associated actions">
 											<v-btn :id="`events-${index}-expand`" icon variant="text" size="x-small" @click="toggleExpand(internalItem)">
 												<v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_events_collapse">fa-angle-down</v-icon>
@@ -996,7 +996,7 @@
 									</tr>
 								</template>
 								<template #expanded-row="{ index, item }">
-									<tr>
+									<tr class="expanded-row">
 										<td :colspan="6" class="case">
 											<div class="mt-2">
 												<template v-for="value, key in item.fields">
@@ -1086,7 +1086,7 @@
 									</tr>
 								</template>
 								<template #item="{ index, item, isExpanded, toggleExpand, internalItem }">
-									<tr>
+									<tr :class="{'seamless-expanded-row': isExpanded(internalItem), 'main-row': true}">
 										<td class="associated actions">
 											<v-btn :id="`history-${index}-expand`" icon variant="text" size="x-small" @click="toggleExpand(internalItem)">
 												<v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_history_collapse">fa-angle-down</v-icon>
@@ -1119,7 +1119,7 @@
 									</tr>
 								</template>
 								<template #expanded-row="{ item }">
-									<tr data-aid="case_history_record">
+									<tr class="expanded-row" data-aid="case_history_record">
 										<td colspan="5" class="case">
 											<div class="mt-2">
 												<v-row no-gutters class="py-1 case tabular-row">

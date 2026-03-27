@@ -258,7 +258,7 @@
 							</v-row>
 							<v-row v-if="!isReadOnly(selected) && selected.defaultAvailable">
 								<v-col>
-									<v-btn id="config-toggle-default-button" @click="showDefault = !showDefault" v-text="showDefault ? i18n.settingHideDefault : i18n.settingShowDefault" data-aid="config_item_show_default"></v-btn>
+									<v-btn id="config-toggle-default-button" color="text_button" @click="showDefault = !showDefault" v-text="showDefault ? i18n.settingHideDefault : i18n.settingShowDefault" data-aid="config_item_show_default"></v-btn>
 									<div v-if="showDefault" class="mt-8 ml-8">
 										<v-chip v-if="isToggle(selected)" id="default-output" :color="$root.isTrue(selected.default) ? 'primary' : ''" data-aid="config_item_default_display">{{$root.isTrue(selected.default) ? i18n.enabled : i18n.disabled }}</v-chip>
 										<v-textarea v-else-if="isMultiline(selected)" id="default-output" :label="i18n.settingDefault" v-model="selected.default" readonly class="config-editor" data-aid="config_item_default_display"></v-textarea>

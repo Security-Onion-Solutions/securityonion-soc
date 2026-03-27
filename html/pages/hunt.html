@@ -40,10 +40,10 @@
 								</div>
 								<div class="manual-sync-buttons">
 									<span data-aid="detections_manualsync_differentialupdate">
-										<v-btn variant="tonal" @click="startManualSync(manualSyncTargetEngine, 'update')">{{i18n.manualSyncUpdate}}</v-btn>
+										<v-btn color="text_button" @click="startManualSync(manualSyncTargetEngine, 'update')">{{i18n.manualSyncUpdate}}</v-btn>
 									</span>
 									<span data-aid="detections_manualsync_fullupdate">
-										<v-btn variant="tonal" @click="startManualSync(manualSyncTargetEngine, 'full')">{{i18n.manualSyncFull}}</v-btn>
+										<v-btn color="text_button" @click="startManualSync(manualSyncTargetEngine, 'full')">{{i18n.manualSyncFull}}</v-btn>
 									</span>
 								</div>
 							</div>
@@ -913,7 +913,7 @@
 				</v-list-item>
 				<v-list-item density="compact" id="actionGroupByNew" :to="groupByNewRoute" v-bind:title.attr="i18n.groupNewHelp" :data-aid="'context_menu_groupby_new_' + category">
 					<template #prepend>
-						<v-icon :alt="i18n.groupNew" color="orange-darken-2">fa-layer-group</v-icon>
+						<v-icon :alt="i18n.groupNew" color="orange-darken-2">fa-square-plus</v-icon>
 					</template>
 					<v-list-item-title>
 						{{ i18n.groupNew }}

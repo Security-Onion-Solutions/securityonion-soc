@@ -1886,27 +1886,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       return ['query_events', 'get_playbooks', 'query_cases', 'query_detections'].includes(toolName) && this.alwaysApproveReadRequests;
     },
 
-    // Open the options menu programmatically
-    openOptionsMenu() {
-      this.$nextTick(() => {
-        // Find the options expansion panel and open it
-        const optionsPanel = this.$el.querySelector('[data-aid="assistant_options"]');
-        if (optionsPanel) {
-          // Trigger click on the expansion panel title to open it
-          const panelTitle = optionsPanel.querySelector('.v-expansion-panel-title');
-          if (panelTitle) {
-            panelTitle.click();
-          }
-        }
-        
-        // Scroll to the options panel
-        const optionsHeader = this.$el.querySelector('#chatOptionsHeader');
-        if (optionsHeader) {
-          optionsHeader.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-      });
-    },
-
     clearStreamingStates() {
       this.activeStreamingSessionId = null;
       this.isTyping = false;
