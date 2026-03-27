@@ -132,6 +132,7 @@ $(document).ready(function () {
               button_icon_color: '#ffffff',
               row_stripe: '#e6e6e6',
               row_hover: '#e2e2e2',
+              text_button: '#e4e4e4',
             },
           },
           dark: {
@@ -150,7 +151,8 @@ $(document).ready(function () {
               icon: '#8B96A8',
               button_icon_color: '#ffffff',
               row_stripe: '#2d2d2d',
-              row_hover: '#2a3452'
+              row_hover: '#2a3452',
+              text_button: '#3f4452',
             },
           },
         },
