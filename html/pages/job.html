@@ -109,13 +109,13 @@
 					<v-text-field density="compact" v-model="search" class="ml-2" clearable prepend-inner-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="job_details_filter"></v-text-field>
 					<v-spacer></v-spacer>
 					<v-btn-toggle v-model="packetOptions" class="transparent" multiple>
-						<v-btn value="packets" class="mx-2" variant="tonal" :title="i18n.packetStreamHelp" @click="captureLayoutAsStream()" data-aid="job_details_stream_toggle">
+						<v-btn value="packets" class="mx-2" color="text_button" :title="i18n.packetStreamHelp" @click="captureLayoutAsStream()" data-aid="job_details_stream_toggle">
 							<v-icon>fa-list</v-icon>
 						</v-btn>
-						<v-btn value="hex" class="mx-2" variant="tonal" :title="i18n.hexHelp" text data-aid="job_details_hex_toggle">
+						<v-btn value="hex" class="mx-2" color="text_button" :title="i18n.hexHelp" text data-aid="job_details_hex_toggle">
 							{{ i18n.hex }}
 						</v-btn>
-						<v-btn value="unwrap" class="mx-2" variant="tonal" :title="i18n.unwrapHelp" @click="toggleWrap" data-aid="job_details_unwrap_toggle">
+						<v-btn value="unwrap" class="mx-2" color="text_button" :title="i18n.unwrapHelp" @click="toggleWrap" data-aid="job_details_unwrap_toggle">
 							<v-icon>fa-envelope-open-text</v-icon>
 						</v-btn>
 					</v-btn-toggle>
@@ -186,7 +186,7 @@
 					</template>
 				</v-data-table>
 				<div class="text-xs-center pt-2">
-					<v-btn v-text="i18n.loadMore" @click="loadPackets()" data-aid="job_details_load_more"></v-btn>
+					<v-btn v-text="i18n.loadMore" color="text_button" @click="loadPackets()" data-aid="job_details_load_more"></v-btn>
 				</div>
 			</v-row>
 		</v-col>
