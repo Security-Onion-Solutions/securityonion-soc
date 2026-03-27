@@ -152,8 +152,8 @@
 						</template>
 					</tr>
 				</template>
-				<template #item="{ item, toggleExpand, internalItem }">
-					<tr @click="toggleExpand(internalItem)" v-if="isOptionEnabled('packets')" data-aid="job_details_expand_packet">
+				<template #item="{ item, isExpanded, toggleExpand, internalItem }">
+					<tr @click="toggleExpand(internalItem)" v-if="isOptionEnabled('packets')" :class="{'seamless-expanded-row': isExpanded(internalItem), 'main-row': true}" data-aid="job_details_expand_packet">
 						<td v-text="item.number"></td>
 						<td>{{ formatTimestamp(item.timestamp) }}</td>
 						<td><v-chip density="compact" :color="colorType(item.type)" data-aid="job_details_packet_type">{{ item.type }}</v-chip></td>

@@ -335,9 +335,14 @@ html, body, * {
   padding: 16px 8px !important;
 }
 
+/* Striping for tables with expandable rows */
 .v-table__wrapper>table>tbody>tr:nth-child(odd of .main-row),
 .v-table__wrapper>table>tbody>tr:nth-child(odd of .main-row) + tr.expanded-row {
-  /* How Vuetify makes the stripes */
+  background-image: linear-gradient(0deg, rgba(var(--v-border-color), var(--v-hover-opacity)), rgba(var(--v-border-color), var(--v-hover-opacity)));
+}
+
+/* Striping for tables without expandable rows */
+.v-table__wrapper>table>tbody:not(:has(.main-row))>tr:nth-child(odd) {
   background-image: linear-gradient(0deg, rgba(var(--v-border-color), var(--v-hover-opacity)), rgba(var(--v-border-color), var(--v-hover-opacity)));
 }
 
