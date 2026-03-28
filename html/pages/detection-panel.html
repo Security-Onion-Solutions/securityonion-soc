@@ -2,7 +2,7 @@
 	<div id="panel-loading-overlay" class="component-overlay" v-if="loading" data-aid="detection_panel_overlay_loading">
 		<v-container class="d-flex justify-center">
 			<div class="loading-container">
-				<img :src="'images/loading-logo' + ($root.theme.global.current.dark ? '-dark' : '') + '.svg'" class="loading-onion" data-aid="overlay_loading_logo">
+				<img :src="'images/loading-logo' + ($root.theme.global.current.dark ? '-dark' : '') + '.svg?v=VERSION_PLACEHOLDER'" class="loading-onion" data-aid="overlay_loading_logo">
 			</div>
 		</v-container>
 	</div>
