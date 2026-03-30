@@ -781,7 +781,6 @@ func (server *Server) GetTimezones() []string {
 }
 
 // @title           Security Onion Connect API
-// @version         1.0
 // @description     Perform SOC operations via server-to-server integration using a client API account via OAuth2.0.
 // @termsOfService  https://securityonion.net/terms/
 
@@ -801,6 +800,8 @@ func (server *Server) GetTimezones() []string {
 
 // @externalDocs.description  Security Onion Documentation Online
 // @externalDocs.url          https://securityonion.net/docs
+
+// @host https://BASE_URL
 
 // @Summary      Obtain Access Token
 // @Description  Exchanges a client ID and client secret for a temporary access token needed for calling Security Onion Connect API methods.
