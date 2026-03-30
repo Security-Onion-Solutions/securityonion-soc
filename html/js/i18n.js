@@ -20,7 +20,7 @@ const i18n = {
       acknowledgeExistingAlertsText: 'Would you also like to acknowledge any existing alerts that match this detection?',
       acknowledgeDetectionsRelatedAlertsTitle: '{ackManyVerb} Events',
       acknowledgeDetectionsRelatedAlertsText: 'Are you sure you want to {ackManyVerb} every event within the selected time range that matches this detection?',
-      acknowledgeDetectionsRelatedAlertsTextWarning: 'Only the newest {maxEscalate} events will be attached to the case. <a href="/#/config?s=soc.config.server.client.alerts.maxBulkEscalateEvents" target="_blank">This limit is configurable.</a>',
+      acknowledgeDetectionsRelatedAlertsTextWarning: 'Only the newest {maxEscalate} events will be attached to the case. <a href="/#/config?s=soc.config.server.client.alerts.maxBulkEscalateEvents" target="_blank" style="color: rgb(var(--v-theme-info))">This limit is configurable.</a>',
       acknowledgeUndo: 'un-acknowledge',
       ackMultipleTip: 'Acknowledging groups of alerts may take a while and will continue in the background.',
       ackPartialSuccess: 'The acknowledge request encountered an unexpected problem. Some events may not have been acknowledged.',
@@ -1286,7 +1286,7 @@ const i18n = {
       ERROR_BULK_COMMUNITY: 'Unable to complete bulk delete. Batch contains Community rules. No rules were deleted.',
       ERROR_DELETE_COMMUNITY: 'Unable to delete Community rule.',
       ERROR_SERVICE_NOT_AVAILABLE: 'The configuration of this grid does not support the requested operation. Contact your administrator for assistance with enabling additional features.',
-      ERROR_UPSTREAM_SERVICE_ERROR: 'Error while communicating with remote, upstream service. Check the <a target="sos" href="https://status.securityonion.net">Security Onion status page</a> for any known incidents.',
+      ERROR_UPSTREAM_SERVICE_ERROR: 'Error while communicating with remote, upstream service. Check the <a class="text-white" target="sos" href="https://status.securityonion.net">Security Onion status page</a> for any known incidents.',
 
       // correct casing
       cc_elastalert: 'ElastAlert',
