@@ -8,7 +8,7 @@ FROM ghcr.io/security-onion-solutions/golang:1.26.1-alpine as builder
 ARG VERSION=0.0.0
 ARG ALT_BRANCH=3/dev
 ARG REVKEYS=
-RUN apk update && apk add g++ libpcap-dev bash git musl-dev gcc npm python3 py3-pip py3-virtualenv python3-dev openssl-dev linux-headers sed
+RUN apk update && apk add g++ libpcap-dev bash git musl-dev gcc npm python3 py3-pip py3-virtualenv python3-dev openssl-dev linux-headers sed glib pango gdk-pixbuf fontconfig ttf-freefont font-noto terminus-font
 COPY . /build
 
 # Mock md2pdf script for testing
@@ -22,7 +22,7 @@ RUN if [ "$VERSION" != "0.0.0" ]; then mkdir gitdocs && cd gitdocs && \
 	git checkout --force origin/${ALT_BRANCH} && \
 	git clean -d -f -f && \
 	python3 -mvirtualenv /tmp/virtualenv && \
-	/tmp/virtualenv/bin/python -m pip install --exists-action=w --no-cache-dir mkdocs mkdocs-material mkdocs-glightbox mkdocs-to-pdf && \
+	/tmp/virtualenv/bin/python -m pip install --exists-action=w --no-cache-dir mkdocs mkdocs-material mkdocs-glightbox mkdocs-to-pdf weasyprint && \
 	mkdir -p specs && \
 	cd .. && \
 	go install github.com/swaggo/swag/v2/cmd/swag@latest && \
