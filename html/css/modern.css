@@ -731,6 +731,10 @@ html, body, * {
   hyphens: none;
 }
 
+.login-fields .v-otp-input {
+  margin: 0 auto;
+}
+
 .login-fields .v-text-field:not(.d-none) {
   margin-bottom: 8px;
 }
