@@ -29,7 +29,6 @@ RUN if [ "$VERSION" != "0.0.0" ]; then mkdir gitdocs && cd gitdocs && \
 	swag init -g server/server.go --md docs/api --v3.1 -ot yaml -o gitdocs/specs && \
 	cd gitdocs && \
 	mv specs/swagger.yaml specs/openapi.yaml && \
-	sed -i '/- to-pdf:/,+1d' mkdocs.yml && \
 	/tmp/virtualenv/bin/mkdocs build -d _build/html && \
 	npx -y @redocly/cli build-docs specs/openapi.yaml -o _build/html/connect-api/so-api-reference.html; \
 	else mkdir -p gitdocs/_build/html; fi
