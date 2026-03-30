@@ -81,7 +81,7 @@ type EventstoreUpdater interface {
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
-// @Router       /api/assistant/chat [post]
+// @Router       /connect/assistant/chat [post]
 func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
@@ -258,7 +258,7 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
-// @Router       /api/assistant/tool/{name} [post]
+// @Router       /connect/assistant/tool/{name} [post]
 func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
@@ -425,7 +425,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
-// @Router       /api/assistant/balance/{modelAndAdapter} [get]
+// @Router       /connect/assistant/balance/{modelAndAdapter} [get]
 func (h *AssistantHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
@@ -477,7 +477,7 @@ func (h *AssistantHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
-// @Router       /api/assistant/sessions [get]
+// @Router       /connect/assistant/sessions [get]
 func (h *AssistantHandler) GetSessions(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
@@ -513,7 +513,7 @@ func (h *AssistantHandler) GetSessions(w http.ResponseWriter, r *http.Request) {
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
-// @Router       /api/assistant/sessions/{sessionId} [get]
+// @Router       /connect/assistant/sessions/{sessionId} [get]
 func (h *AssistantHandler) GetSessionDetails(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
@@ -575,7 +575,7 @@ func (h *AssistantHandler) GetSessionDetails(w http.ResponseWriter, r *http.Requ
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      404           "Session not found"
 // @Failure      500           "Internal SOC error; review SOC logs"
-// @Router       /api/assistant/sessions/{sessionId} [put]
+// @Router       /connect/assistant/sessions/{sessionId} [put]
 func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
@@ -683,7 +683,7 @@ func (h *AssistantHandler) canRemoveTag(ctx context.Context, session *model.Assi
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
-// @Router       /api/assistant/sessions/{sessionId} [delete]
+// @Router       /connect/assistant/sessions/{sessionId} [delete]
 func (h *AssistantHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
@@ -730,7 +730,7 @@ func (h *AssistantHandler) DeleteSession(w http.ResponseWriter, r *http.Request)
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
-// @Router       /api/assistant/admin/stats [get]
+// @Router       /connect/assistant/admin/stats [get]
 func (h *AssistantHandler) GetUsage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
@@ -777,7 +777,7 @@ func (h *AssistantHandler) GetUsage(w http.ResponseWriter, r *http.Request) {
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
-// @Router       /api/assistant/admin/sessions [get]
+// @Router       /connect/assistant/admin/sessions [get]
 func (h *AssistantHandler) getAllSessions(w http.ResponseWriter, r *http.Request) {
 	h.GetSessionsAdmin(w, r)
 }
@@ -792,7 +792,7 @@ func (h *AssistantHandler) getAllSessions(w http.ResponseWriter, r *http.Request
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
-// @Router       /api/assistant/admin/{userId}/sessions [get]
+// @Router       /connect/assistant/admin/{userId}/sessions [get]
 func (h *AssistantHandler) GetSessionsAdmin(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
@@ -853,7 +853,7 @@ func (h *AssistantHandler) GetSessionsAdmin(w http.ResponseWriter, r *http.Reque
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
-// @Router       /api/assistant/admin/{userId}/sessions/{sessionId}/history [get]
+// @Router       /connect/assistant/admin/{userId}/sessions/{sessionId}/history [get]
 func (h *AssistantHandler) ManageSessionHistory(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
