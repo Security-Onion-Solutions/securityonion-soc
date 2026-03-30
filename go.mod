@@ -22,7 +22,7 @@ require (
 require (
 	github.com/GiGurra/sse-parser v0.0.5
 	github.com/eapache/go-resiliency v1.7.0
-	github.com/go-git/go-git/v5 v5.17.0
+	github.com/go-git/go-git/v5 v5.17.1
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/openai/openai-go/v3 v3.24.0
 	github.com/pierrec/lz4/v4 v4.1.25
@@ -65,7 +65,6 @@ require (
 	github.com/kevinburke/ssh_config v1.6.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/oapi-codegen/runtime v1.1.2 // indirect
-	github.com/openai/openai-go v1.12.0 // indirect
 	github.com/pjbgf/sha1cd v0.5.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/sergi/go-diff v1.4.0 // indirect
@@ -74,7 +73,6 @@ require (
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
-	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.65.0 // indirect
 	go.opentelemetry.io/otel v1.40.0 // indirect
