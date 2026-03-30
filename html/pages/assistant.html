@@ -247,7 +247,7 @@
 												<!-- Tool Approval Buttons -->
 												<div v-if="toolUse.status === 'pending_approval'" class="mb-2">
 													<div class="text-body-small text-medium-emphasis mb-1">{{ i18n.toolExecuteQuestion }}</div>
-													<div id="tool-approval-buttons" class="d-flex tool-approval-buttons">
+													<div id="tool-approval-buttons" class="d-flex align-center tool-approval-buttons">
 														<v-btn
 															id="approve-tool-button"
 															color="success"
@@ -277,11 +277,9 @@
 															icon
 															variant="text"
 															size="x-small"
-															height="auto"
-															width="auto"
 															@click="showOptionsDialog = true"
 															data-aid="assistant_tool_use_options"
-															style="min-width: auto;"
+															style="min-width: auto; margin-left: -5px"
 														>
 															<v-icon size="small">fa-cog</v-icon>
 														</v-btn>
