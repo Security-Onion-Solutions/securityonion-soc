@@ -23,6 +23,10 @@
   color: rgb(var(--v-theme-info));
 }
 
+.v-alert a.text-white {
+  color: white !important;
+}
+
 .theme-background {
   background-color: rgb(var(--v-theme-background)) !important;
 }
