@@ -87,8 +87,8 @@
             </v-form>
 
             <v-form v-if="!webauthnForm.continue && !passwordEnabled && totpEnabled" id="loginForm" v-model="form.valid" method="post" :action="authLoginUrl">
-              <p class="login-subtitle">{{ i18n.totp }}</p>
-              <div class="login-fields">
+              <p class="login-subtitle text-center">{{ i18n.totp }}</p>
+              <div class="login-fields text-center">
                 <div class="mb-3 login-hint">{{ i18n.totpCodeHelp }}</div>
                 <v-otp-input id="totp" autofocus="true" autocomplete="off" v-model="form.totpCode" :length="totpCodeLength" @finish="submitTotp" data-aid="login_totp_input"></v-otp-input>
                 <v-text-field name="totp_code" id="totp_code" v-model="form.totpCode" class="d-none"></v-text-field>
