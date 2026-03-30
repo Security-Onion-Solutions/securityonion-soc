@@ -800,7 +800,10 @@ func (server *Server) GetTimezones() []string {
 // @securityDefinitions.basic basic
 
 // @externalDocs.description  Security Onion Documentation Online
-// @externalDocs.url          https://docs.securityonion.net
+// @externalDocs.url          https://securityonion.net/docs
+
+// @host BASE_URL
+// @schemes https
 
 // @Summary      Obtain Access Token
 // @Description  Exchanges a client ID and client secret for a temporary access token needed for calling Security Onion Connect API methods.
