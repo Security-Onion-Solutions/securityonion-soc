@@ -1,4 +1,4 @@
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -270,6 +270,40 @@ func TestPopulateSessionUsage_Success(t *testing.T) {
 					},
 					"total_messages": {
 						"value": 10.0
+					},
+					"model_usage": {
+						"buckets": [
+							{
+								"key": "claude-sonnet-4.5@SOAI",
+								"model_input_tokens": {
+									"value": 1000.0
+								},
+								"model_output_tokens": {
+									"value": 2000.0
+								},
+								"model_credits": {
+									"value": 3.0
+								},
+								"model_messages": {
+									"value": 6.0
+								}
+							},
+							{
+								"key": "gpt-4@OpenAI",
+								"model_input_tokens": {
+									"value": 500.0
+								},
+								"model_output_tokens": {
+									"value": 1000.0
+								},
+								"model_credits": {
+									"value": 2.0
+								},
+								"model_messages": {
+									"value": 4.0
+								}
+							}
+						]
 					}
 				}
 			},
@@ -291,6 +325,25 @@ func TestPopulateSessionUsage_Success(t *testing.T) {
 					},
 					"total_messages": {
 						"value": 15.0
+					},
+					"model_usage": {
+						"buckets": [
+							{
+								"key": "claude-sonnet-4.5@SOAI",
+								"model_input_tokens": {
+									"value": 2500.0
+								},
+								"model_output_tokens": {
+									"value": 4500.0
+								},
+								"model_credits": {
+									"value": 8.0
+								},
+								"model_messages": {
+									"value": 15.0
+								}
+							}
+						]
 					}
 				}
 			}
@@ -315,12 +368,41 @@ func TestPopulateSessionUsage_Success(t *testing.T) {
 	assert.Equal(t, 5, sessions[0].Usage.TotalCredits)
 	assert.Equal(t, 10, sessions[0].Usage.TotalMessages)
 
+	// Verify first session model usage
+	assert.NotNil(t, sessions[0].Usage.ModelUsage)
+	assert.Len(t, sessions[0].Usage.ModelUsage, 2)
+
+	claudeStats := sessions[0].Usage.ModelUsage["claude-sonnet-4.5@SOAI"]
+	assert.NotNil(t, claudeStats)
+	assert.Equal(t, 1000, claudeStats.ModelInputTokens)
+	assert.Equal(t, 2000, claudeStats.ModelOutputTokens)
+	assert.Equal(t, 3, claudeStats.ModelCredits)
+	assert.Equal(t, 6, claudeStats.ModelMessages)
+
+	gptStats := sessions[0].Usage.ModelUsage["gpt-4@OpenAI"]
+	assert.NotNil(t, gptStats)
+	assert.Equal(t, 500, gptStats.ModelInputTokens)
+	assert.Equal(t, 1000, gptStats.ModelOutputTokens)
+	assert.Equal(t, 2, gptStats.ModelCredits)
+	assert.Equal(t, 4, gptStats.ModelMessages)
+
 	// Verify second session usage
 	assert.NotNil(t, sessions[1].Usage)
 	assert.Equal(t, 2500, sessions[1].Usage.TotalInputTokens)
 	assert.Equal(t, 4500, sessions[1].Usage.TotalOutputTokens)
 	assert.Equal(t, 8, sessions[1].Usage.TotalCredits)
 	assert.Equal(t, 15, sessions[1].Usage.TotalMessages)
+
+	// Verify second session model usage
+	assert.NotNil(t, sessions[1].Usage.ModelUsage)
+	assert.Len(t, sessions[1].Usage.ModelUsage, 1)
+
+	claudeStats2 := sessions[1].Usage.ModelUsage["claude-sonnet-4.5@SOAI"]
+	assert.NotNil(t, claudeStats2)
+	assert.Equal(t, 2500, claudeStats2.ModelInputTokens)
+	assert.Equal(t, 4500, claudeStats2.ModelOutputTokens)
+	assert.Equal(t, 8, claudeStats2.ModelCredits)
+	assert.Equal(t, 15, claudeStats2.ModelMessages)
 }
 
 func TestPopulateSessionUsage_WithErrors(t *testing.T) {
@@ -867,6 +949,43 @@ func TestGetUsage(t *testing.T) {
 						},
 						"total_messages": {
 							"value": 10.0
+						},
+						"total_sessions": {
+							"value": 3.0
+						},
+						"model_usage": {
+							"buckets": [
+								{
+									"key": "claude-sonnet-4.5@SOAI",
+									"model_input_tokens": {
+										"value": 1000.0
+									},
+									"model_output_tokens": {
+										"value": 2000.0
+									},
+									"model_credits": {
+										"value": 3.0
+									},
+									"model_messages": {
+										"value": 6.0
+									}
+								},
+								{
+									"key": "gpt-4@OpenAI",
+									"model_input_tokens": {
+										"value": 500.0
+									},
+									"model_output_tokens": {
+										"value": 1000.0
+									},
+									"model_credits": {
+										"value": 2.0
+									},
+									"model_messages": {
+										"value": 4.0
+									}
+								}
+							]
 						}
 					},
 					{
@@ -883,6 +1002,28 @@ func TestGetUsage(t *testing.T) {
 						},
 						"total_messages": {
 							"value": 15.0
+						},
+						"total_sessions": {
+							"value": 5.0
+						},
+						"model_usage": {
+							"buckets": [
+								{
+									"key": "claude-sonnet-4.5@SOAI",
+									"model_input_tokens": {
+										"value": 2500.0
+									},
+									"model_output_tokens": {
+										"value": 4500.0
+									},
+									"model_credits": {
+										"value": 8.0
+									},
+									"model_messages": {
+										"value": 15.0
+									}
+								}
+							]
 						}
 					}
 				]
@@ -905,17 +1046,50 @@ func TestGetUsage(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, usage, 2)
 
+	// Verify user1 usage
 	assert.Equal(t, "user1", usage[0].UserId)
 	assert.Equal(t, 1500, usage[0].TotalInputTokens)
 	assert.Equal(t, 3000, usage[0].TotalOutputTokens)
 	assert.Equal(t, 5, usage[0].TotalCredits)
 	assert.Equal(t, 10, usage[0].TotalMessages)
+	assert.Equal(t, 3, usage[0].TotalSessions)
 
+	// Verify user1 model usage
+	assert.NotNil(t, usage[0].ModelUsage)
+	assert.Len(t, usage[0].ModelUsage, 2)
+
+	claudeStats := usage[0].ModelUsage["claude-sonnet-4.5@SOAI"]
+	assert.NotNil(t, claudeStats)
+	assert.Equal(t, 1000, claudeStats.ModelInputTokens)
+	assert.Equal(t, 2000, claudeStats.ModelOutputTokens)
+	assert.Equal(t, 3, claudeStats.ModelCredits)
+	assert.Equal(t, 6, claudeStats.ModelMessages)
+
+	gptStats := usage[0].ModelUsage["gpt-4@OpenAI"]
+	assert.NotNil(t, gptStats)
+	assert.Equal(t, 500, gptStats.ModelInputTokens)
+	assert.Equal(t, 1000, gptStats.ModelOutputTokens)
+	assert.Equal(t, 2, gptStats.ModelCredits)
+	assert.Equal(t, 4, gptStats.ModelMessages)
+
+	// Verify user2 usage
 	assert.Equal(t, "user2", usage[1].UserId)
 	assert.Equal(t, 2500, usage[1].TotalInputTokens)
 	assert.Equal(t, 4500, usage[1].TotalOutputTokens)
 	assert.Equal(t, 8, usage[1].TotalCredits)
 	assert.Equal(t, 15, usage[1].TotalMessages)
+	assert.Equal(t, 5, usage[1].TotalSessions)
+
+	// Verify user2 model usage
+	assert.NotNil(t, usage[1].ModelUsage)
+	assert.Len(t, usage[1].ModelUsage, 1)
+
+	claudeStats2 := usage[1].ModelUsage["claude-sonnet-4.5@SOAI"]
+	assert.NotNil(t, claudeStats2)
+	assert.Equal(t, 2500, claudeStats2.ModelInputTokens)
+	assert.Equal(t, 4500, claudeStats2.ModelOutputTokens)
+	assert.Equal(t, 8, claudeStats2.ModelCredits)
+	assert.Equal(t, 15, claudeStats2.ModelMessages)
 }
 
 func TestGetChatHistory(t *testing.T) {

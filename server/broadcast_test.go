@@ -137,7 +137,7 @@ func MockBroadcast(t *testing.T, srv *Server, onmsg func(BroadcastMessage)) *Moc
 		t.Fatalf("%v", err)
 	}
 
-	srv.Host.AddConnection("00000000-0000-0000-0000-000000000000", wsconn, "127.0.0.1")
+	srv.Host.AddConnection("11111111-1111-1111-1111-111111111111", wsconn, "127.0.0.1")
 
 	mb.Server = s
 

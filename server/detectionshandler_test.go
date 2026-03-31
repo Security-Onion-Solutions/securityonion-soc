@@ -1,4 +1,4 @@
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -731,7 +731,7 @@ func TestHandlerCreateDetection(t *testing.T) {
 				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
 				eng.EXPECT().ExtractDetails(gomock.Any()).Return(nil)
 
-				mUserStore.EXPECT().GetUserById(gomock.Any(), "00000000-0000-0000-0000-000000000000").Return(&model.User{
+				mUserStore.EXPECT().GetUserById(gomock.Any(), "11111111-1111-1111-1111-111111111111").Return(&model.User{
 					FirstName: "First",
 					LastName:  "Last",
 				}, nil)
@@ -834,7 +834,7 @@ func TestHandlerCreateDetection(t *testing.T) {
 				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
 				eng.EXPECT().ExtractDetails(gomock.Any()).Return(nil)
 
-				mUserStore.EXPECT().GetUserById(gomock.Any(), "00000000-0000-0000-0000-000000000000").Return(&model.User{
+				mUserStore.EXPECT().GetUserById(gomock.Any(), "11111111-1111-1111-1111-111111111111").Return(&model.User{
 					Email: "user@company.com",
 				}, nil)
 
@@ -916,7 +916,7 @@ func TestHandlerCreateDetection(t *testing.T) {
 				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
 				eng.EXPECT().ExtractDetails(gomock.Any()).Return(nil)
 
-				mUserStore.EXPECT().GetUserById(gomock.Any(), "00000000-0000-0000-0000-000000000000").Return(&model.User{
+				mUserStore.EXPECT().GetUserById(gomock.Any(), "11111111-1111-1111-1111-111111111111").Return(&model.User{
 					FirstName: "First",
 					LastName:  "Last",
 				}, nil)

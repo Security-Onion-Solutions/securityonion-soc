@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -307,10 +307,10 @@ func (h *GridMembersHandler) postManageMembers(w http.ResponseWriter, r *http.Re
 }
 
 var roleKeywords = map[string][]string{ // role => capabilities
-	"eval":          {"elastic", "elasticsearch", "fleet", "forward", "ingest", "manager", "master", "search", "sensor", "sensoroni", "soc", "stenographer", "web"},
+	"eval":          {"elastic", "elasticsearch", "fleet", "forward", "ingest", "manager", "master", "search", "sensor", "sensoroni", "soc", "suricata", "web"},
 	"fleet":         {"fleet"},
-	"heavynode":     {"elastic", "elasticsearch", "forward", "ingest", "search", "sensor", "sensoroni", "stenographer"},
-	"helix":         {"helix", "sensor", "sensoroni", "stenographer"},
+	"heavynode":     {"elastic", "elasticsearch", "forward", "ingest", "search", "sensor", "sensoroni", "suricata"},
+	"helix":         {"helix", "sensor", "sensoroni", "suricata"},
 	"hypervisor":    {"hypervisor", "virtualization"},
 	"idh":           {"idh", "intrusion", "detection", "honeypot"},
 	"import":        {"import", "manager", "master", "soc", "web"},
@@ -320,8 +320,8 @@ var roleKeywords = map[string][]string{ // role => capabilities
 	"receiver":      {"receiver"},
 	"search":        {"elastic", "elasticsearch", "ingest", "search"},
 	"searchnode":    {"elastic", "elasticsearch", "ingest", "search"},
-	"sensor":        {"forward", "sensor", "sensoroni", "stenographer"},
-	"standalone":    {"elastic", "elasticsearch", "fleet", "forward", "ingest", "manager", "master", "search", "sensor", "sensoroni", "soc", "stenographer", "web"},
+	"sensor":        {"forward", "sensor", "sensoroni", "suricata"},
+	"standalone":    {"elastic", "elasticsearch", "fleet", "forward", "ingest", "manager", "master", "search", "sensor", "sensoroni", "soc", "suricata", "web"},
 }
 
 func canUploadPcap(node string) bool {

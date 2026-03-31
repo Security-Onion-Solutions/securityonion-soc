@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -13,6 +13,7 @@ beforeEach(() => {
   comp = getComponent("hunt");
   resetPapi();
   comp.$root.initializeCharts = () => { };
+  comp.$el = { querySelectorAll: () => [] };
   comp.created();
 });
 
@@ -549,10 +550,14 @@ test('setupPieChart', () => {
         legend: {
           display: true,
           position: 'left',
+          labels: {
+            color: '#515151',
+          },
         },
         title: {
           display: true,
           text: 'some title',
+          color: '#515151',
         }
       }
     });
@@ -594,6 +599,7 @@ test('setupSankeyChart', () => {
         title: {
           display: true,
           text: 'some title',
+          color: '#515151',
         }
       }
     });
@@ -2253,74 +2259,6 @@ test('getExpandedData', () => {
 });
 
 // AI Investigation Tests
-test('loadInvestigationSessions - success', async () => {
-  const mockSessions = [
-    { sessionId: 'investigation_alert123_1234567890', createTime: '2023-10-01T12:00:00Z' },
-    { sessionId: 'investigation_alert456_1234567891', createTime: '2023-10-01T13:00:00Z' },
-    { sessionId: 'regular_session_123', createTime: '2023-10-01T14:00:00Z' }, // Should be filtered out
-  ];
-
-  const mock = mockPapi('get', { data: mockSessions });
-
-  await comp.loadInvestigationSessions();
-
-  expect(mock).toHaveBeenCalledWith('/assistant/sessions');
-  expect(comp.investigationSessions).toHaveLength(2);
-  expect(comp.investigationSessions[0].sessionId).toBe('investigation_alert123_1234567890');
-  expect(comp.investigationSessions[1].sessionId).toBe('investigation_alert456_1234567891');
-  
-  // Check aiInvestigations mapping
-  expect(comp.aiInvestigations['alert123']).toEqual({
-    chatSessionId: 'investigation_alert123_1234567890',
-    socId: 'alert123',
-    timestamp: '2023-10-01T12:00:00Z'
-  });
-  expect(comp.aiInvestigations['alert456']).toEqual({
-    chatSessionId: 'investigation_alert456_1234567891',
-    socId: 'alert456',
-    timestamp: '2023-10-01T13:00:00Z'
-  });
-
-  resetPapi();
-});
-
-test('loadInvestigationSessions - error handling', async () => {
-  const mock = mockPapi('get', null, new Error('Network error'));
-  comp.$root.showError = jest.fn();
-
-  await comp.loadInvestigationSessions();
-
-  expect(mock).toHaveBeenCalledWith('/assistant/sessions');
-  expect(comp.investigationSessions).toEqual([]);
-  expect(comp.aiInvestigations).toEqual({});
-  expect(comp.$root.showError).toHaveBeenCalledWith(comp.i18n.aiInvestigationCouldNotLoad + ': Network error');
-
-  resetPapi();
-});
-
-test('applyAIInvestigationsToEvents', () => {
-  comp.aiInvestigations = {
-    'alert123': {
-      chatSessionId: 'investigation_alert123_1234567890',
-      socId: 'alert123',
-      timestamp: '2023-10-01T12:00:00Z'
-    }
-  };
-
-  comp.eventData = [
-    { soc_id: 'alert123', 'rule.name': 'Test Rule 1' },
-    { soc_id: 'alert456', 'rule.name': 'Test Rule 2' },
-    { soc_id: 'alert789', 'rule.name': 'Test Rule 3' }
-  ];
-
-  comp.applyAIInvestigationsToEvents();
-
-  expect(comp.eventData[0]._aiInvestigated).toBe(true);
-  expect(comp.eventData[0]._aiInvestigationData).toEqual(comp.aiInvestigations['alert123']);
-  expect(comp.eventData[1]._aiInvestigated).toBeUndefined();
-  expect(comp.eventData[2]._aiInvestigated).toBeUndefined();
-});
-
 test('generateQueryList', () => {
   comp.investigationMsg = 'Investigate alert {socId} with rule {ruleUuid} for potential threats';
 
@@ -2354,24 +2292,12 @@ test('startAIInvestigation - individual alert', async () => {
 
   comp.generateQueryList = jest.fn().mockReturnValue({ investigation: true, socId: 'alert123' });
   comp.$router = { push: jest.fn(), resolve: jest.fn().mockReturnValue({ href: '/assistant/test' }) };
-  
-  // Mock localStorage
-  const mockSetItem = jest.fn();
-  Object.defineProperty(window, 'localStorage', {
-    value: { setItem: mockSetItem },
-    writable: true
-  });
 
   await comp.startAIInvestigation(item);
-
-  expect(comp.aiInvestigations['alert123']).toBeDefined();
-  expect(comp.aiInvestigations['alert123'].socId).toBe('alert123');
-  expect(comp.aiInvestigations['alert123'].ruleUuid).toBe('rule-uuid-123');
-  expect(comp.aiInvestigations['alert123'].chatSessionId).toMatch(/^investigation_alert123_\d+$/);
   
   expect(comp.$router.push).toHaveBeenCalledWith({
     name: 'assistant',
-    params: { sessionId: expect.stringMatching(/^investigation_alert123_\d+$/) },
+    params: { sessionId: expect.any(String) },
     query: { investigation: true, socId: 'alert123' }
   });
 });
@@ -2392,32 +2318,23 @@ test('startAIInvestigation - grouped alert', async () => {
 
   comp.generateQueryList = jest.fn().mockReturnValue({ investigation: true, socId: 'alert456' });
   comp.$router = { push: jest.fn(), resolve: jest.fn().mockReturnValue({ href: '/assistant/test' }) };
-  
-  // Mock localStorage
-  const mockSetItem = jest.fn();
-  Object.defineProperty(window, 'localStorage', {
-    value: { setItem: mockSetItem },
-    writable: true
-  });
 
   await comp.startAIInvestigation(item);
 
   expect(comp.fetchNewestEvent).toHaveBeenCalledWith(item);
-  expect(comp.aiInvestigations['alert456']).toBeDefined();
-  expect(comp.aiInvestigations['alert456'].socId).toBe('alert456');
+  expect(comp.$router.push).toHaveBeenCalledWith({
+    name: 'assistant',
+    params: { sessionId: expect.any(String) },
+    query: { investigation: true, socId: 'alert456' }
+  });
 });
 
 test('startAIInvestigation - existing investigation', async () => {
   const item = {
     soc_id: 'alert123',
-    'rule.uuid': 'rule-uuid-123'
-  };
-
-  comp.aiInvestigations = {
-    'alert123': {
-      chatSessionId: 'existing_session_123',
-      socId: 'alert123'
-    }
+    'rule.uuid': 'rule-uuid-123',
+    'event.investigated': true,
+    'event.investigation_session_id': 'existing_session_123'
   };
 
   comp.$router = { push: jest.fn() };
@@ -2433,14 +2350,9 @@ test('startAIInvestigation - existing investigation', async () => {
 test('startAIInvestigation - middle click opens new tab', async () => {
   const item = {
     soc_id: 'alert123',
-    'rule.uuid': 'rule-uuid-123'
-  };
-
-  comp.aiInvestigations = {
-    'alert123': {
-      chatSessionId: 'existing_session_123',
-      socId: 'alert123'
-    }
+    'rule.uuid': 'rule-uuid-123',
+    'event.investigated': true,
+    'event.investigation_session_id': 'existing_session_123'
   };
 
   comp.$router = { resolve: jest.fn().mockReturnValue({ href: '/assistant/existing_session_123' }) };
@@ -2509,13 +2421,13 @@ test('getAIInvestigationButtonColor - individual alert not investigated', () => 
 });
 
 test('getAIInvestigationButtonColor - individual alert investigated', () => {
-  const item = { soc_id: 'alert123' };
-  comp.aiInvestigations = {
-    'alert123': { chatSessionId: 'session123' }
+  const item = {
+    soc_id: 'alert123',
+    'event.investigated': true
   };
 
   const color = comp.getAIInvestigationButtonColor(item);
-  expect(color).toBe('secondary');
+  expect(color).toBe('icon');
 });
 
 test('getAIInvestigationButtonColor - grouped alert', () => {
@@ -2534,9 +2446,9 @@ test('getAIInvestigationTooltip - individual alert not investigated', () => {
 });
 
 test('getAIInvestigationTooltip - individual alert investigated', () => {
-  const item = { soc_id: 'alert123' };
-  comp.aiInvestigations = {
-    'alert123': { chatSessionId: 'session123' }
+  const item = {
+    soc_id: 'alert123',
+    'event.investigation_session_id': 'session_123456'
   };
 
   const tooltip = comp.getAIInvestigationTooltip(item);
@@ -2550,32 +2462,37 @@ test('getAIInvestigationTooltip - grouped alert', () => {
   expect(tooltip).toBe(comp.i18n.aiInvestigateMostRecent);
 });
 
-test('populateEventTable - applies AI investigated filter', () => {
-  comp.aiInvestigatedFilter = true;
-  comp.aiInvestigations = {
-    'alert123': { chatSessionId: 'session123' }
-  };
+test('generateChatId creates unique ID', () => {
+  const id1 = comp.generateChatId();
+  const id2 = comp.generateChatId();
+  
+  expect(id1).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+  expect(id2).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+  expect(id1).not.toBe(id2);
+});
 
+test('populateEventTable - applies AI investigated filter', () => {
   const events = [
-    { id: 'alert123', payload: { 'rule.name': 'Rule 1' } },
+    { id: 'alert123', payload: { 'rule.name': 'Rule 1', 'event.investigated': true } },
     { id: 'alert456', payload: { 'rule.name': 'Rule 2' } }
   ];
 
   comp.extractSocValues = jest.fn()
-    .mockReturnValueOnce({ soc_id: 'alert123', 'rule.name': 'Rule 1' })
+    .mockReturnValueOnce({ soc_id: 'alert123', 'rule.name': 'Rule 1', 'event.investigated': true })
     .mockReturnValueOnce({ soc_id: 'alert456', 'rule.name': 'Rule 2' });
   comp.lookupSocIds = jest.fn();
   comp.lookupFieldValue = jest.fn().mockReturnValue('');
   comp.filterVisibleFields = jest.fn().mockReturnValue(['rule.name']);
   comp.populateEventHeaders = jest.fn();
-  comp.applyAIInvestigationsToEvents = jest.fn();
   comp.isMultiSelect = jest.fn().mockReturnValue(false);
   comp.$root.batchLookup = jest.fn();
 
   comp.populateEventTable(events);
 
-  expect(comp.eventData).toHaveLength(1); // Only alert123 should remain after filtering
+  // Both events should be in the table (no filtering based on investigation status)
+  expect(comp.eventData).toHaveLength(2);
   expect(comp.eventData[0].soc_id).toBe('alert123');
+  expect(comp.eventData[1].soc_id).toBe('alert456');
 });
 
 test('isQuestionAggregate', () => {
@@ -2647,4 +2564,74 @@ fields:
 
   expect(result).toBe(false);
   expect(q.isAggregate).toBe(false);
+});
+
+// checkAllFieldTruncation tests
+test('checkAllFieldTruncation skips when gridLayoutExpansions is false', () => {
+  comp.gridLayoutExpansions = false;
+  const mockQuerySelectorAll = jest.fn();
+  comp.$el = { querySelectorAll: mockQuerySelectorAll };
+
+  comp.checkAllFieldTruncation();
+
+  expect(mockQuerySelectorAll).not.toHaveBeenCalled();
+});
+
+test('checkAllFieldTruncation adds is-truncated class when value overflows', () => {
+  comp.gridLayoutExpansions = true;
+  const card = {
+    querySelector: () => ({ scrollWidth: 200, clientWidth: 100 }),
+    classList: { add: jest.fn(), remove: jest.fn() },
+  };
+  comp.$el = { querySelectorAll: () => [card] };
+
+  comp.checkAllFieldTruncation();
+
+  expect(card.classList.add).toHaveBeenCalledWith('is-truncated');
+  expect(card.classList.remove).not.toHaveBeenCalled();
+});
+
+test('checkAllFieldTruncation removes is-truncated class when value fits', () => {
+  comp.gridLayoutExpansions = true;
+  const card = {
+    querySelector: () => ({ scrollWidth: 100, clientWidth: 100 }),
+    classList: { add: jest.fn(), remove: jest.fn() },
+  };
+  comp.$el = { querySelectorAll: () => [card] };
+
+  comp.checkAllFieldTruncation();
+
+  expect(card.classList.remove).toHaveBeenCalledWith('is-truncated');
+  expect(card.classList.add).not.toHaveBeenCalled();
+});
+
+test('checkAllFieldTruncation handles card with no value element', () => {
+  comp.gridLayoutExpansions = true;
+  const card = {
+    querySelector: () => null,
+    classList: { add: jest.fn(), remove: jest.fn() },
+  };
+  comp.$el = { querySelectorAll: () => [card] };
+
+  comp.checkAllFieldTruncation();
+
+  expect(card.classList.remove).toHaveBeenCalledWith('is-truncated');
+});
+
+// showFieldValueDialog tests
+test('showFieldValueDialog sets dialog state', () => {
+  comp.showFieldValueDialog('source.ip', '192.168.1.1');
+
+  expect(comp.fieldValueDialogKey).toBe('source.ip');
+  expect(comp.fieldValueDialogValue).toBe('192.168.1.1');
+  expect(comp.fieldValueDialogVisible).toBe(true);
+});
+
+// closeFieldValueDialog tests
+test('closeFieldValueDialog hides dialog', () => {
+  comp.fieldValueDialogVisible = true;
+
+  comp.closeFieldValueDialog();
+
+  expect(comp.fieldValueDialogVisible).toBe(false);
 });

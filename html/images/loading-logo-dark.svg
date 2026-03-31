@@ -1,0 +1,58 @@
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 78.55 94.07"><defs><style>
+.cls-1{fill:#1571ff;}.cls-2{fill:#fff;}
+@keyframes sync-draw-spiral {
+  0% { 
+    stroke-dashoffset: 1000; 
+    fill-opacity: 0; 
+    stroke-opacity: 1;
+  }
+  50% { 
+    stroke-dashoffset: 0; 
+    fill-opacity: 1;
+    stroke-opacity: 1; 
+  }
+  100% { 
+    stroke-dashoffset: 1000; 
+    fill-opacity: 0; 
+    stroke-opacity: 1; 
+  }
+}
+
+@keyframes sync-draw-blue {
+  0% { 
+    stroke-dashoffset: 200; 
+    fill-opacity: 0; 
+    stroke-opacity: 1;
+  }
+  50% { 
+    stroke-dashoffset: 0; 
+    fill-opacity: 1;
+    stroke-opacity: 1; 
+  }
+  100% { 
+    stroke-dashoffset: 200; 
+    fill-opacity: 0; 
+    stroke-opacity: 1; 
+  }
+}
+
+.loading-onion-spiral, .loading-onion-topper {
+  stroke-width: 1;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  animation-duration: 4s;
+  animation-iteration-count: infinite;
+  animation-timing-function: linear;
+}
+
+.loading-onion-spiral {
+  stroke: #ffffff;
+  stroke-dasharray: 1000;
+  animation-name: sync-draw-spiral;
+}
+
+.loading-onion-topper {
+  stroke: #1571ff;
+  stroke-dasharray: 200;
+  animation-name: sync-draw-blue;
+}</style></defs><title>Security Onion Logo</title><path class="cls-2 loading-onion-spiral" d="M38.78,63.78a1.24,1.24,0,0,0,.39-.46,4.23,4.23,0,0,0,.54-2.13c-.1-6.07-.2-11.52-3.54-12.93-3.62-1.53-8.38,2.81-9.57,3.89a17.7,17.7,0,0,0-5.52,11C21,64.08,20.4,71.53,26,77s13.81,5.42,19.42,3.16a19.84,19.84,0,0,0,9.94-9.35c4.75-8.91,1.45-18.16.76-19.94C51.65,39.3,38.76,32.28,26.71,32.89c-1.94.09-14.14.9-21.6,11.1A27.4,27.4,0,0,0,0,60.22c.13,14.43,12,26.38,23.45,31,11.28,4.56,21.46,2.46,25.73,1.47S64.49,89.17,72,79.24a30.79,30.79,0,0,0,6.48-16.5,31.1,31.1,0,0,0-3.06-15.49c-1-2.06-5.5-10.81-15.19-15.16C50.92,27.91,43.38,30.73,40.81,26a7.59,7.59,0,0,1-.36-5.56.94.94,0,0,0-1-1.15l-1.42.05a.93.93,0,0,0-.88.71c-.6,2.24-1,5.39.45,8.2,3.45,6.65,13.2,3.28,22.75,10C67.82,43.42,73,53.17,72.21,62.64a25.11,25.11,0,0,1-5.36,13.1c-6.22,8.08-15.2,10.1-19.51,11.07-3.61.81-11.79,2.56-21-.83-2.38-.87-18.18-7.41-20-22.31-1.17-9.54,5.29-20,15.35-23.51C33.27,36.06,46,42.63,50.34,52c.51,1.12,4.33,9.78-.53,16.74-3.63,5.18-11.69,8.89-17.68,5.37A12.06,12.06,0,0,1,26.82,61c1.27-4.49,5.7-7.8,7.27-7s2.63,5.49,2.73,8.8A1.24,1.24,0,0,0,38.78,63.78Z"/><path class="cls-1 loading-onion-topper" d="M26.67,24.31l-3.38,1a1.22,1.22,0,0,1-1.57-1l-.07-.43a24,24,0,0,0-3.94-9.76,1.21,1.21,0,0,1,.39-1.72l.63-.37a1.21,1.21,0,0,1,1.61.34c.33.47.67.95,1,1.45l1.19,1.77a.11.11,0,0,0,.2,0C25.53,6.4,33.27.11,41.32,0,51.93-.14,58.64,9.54,60.79,15.76a21.18,21.18,0,0,1,.78,3,1,1,0,0,1-1.24,1.13l-2-.55a1.51,1.51,0,0,1-1.08-1.09A17.68,17.68,0,0,0,55.6,14C52.89,9.16,47,4,40.8,4.55c-6.89.62-13.55,8.38-13.28,18.56A1.22,1.22,0,0,1,26.67,24.31Z"/></svg>

@@ -1,11 +1,12 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
 const routes = [];
 const components = [];
+const iconSets = [];
 const templatePromises = [];
 
 const LICENSE_STATUS_ACTIVE = "active";
@@ -14,6 +15,8 @@ const LICENSE_STATUS_EXPIRED = "expired";
 const LICENSE_STATUS_INVALID = "invalid";
 const LICENSE_STATUS_PENDING = "pending";
 const LICENSE_STATUS_UNPROVISIONED = "unprovisioned";
+
+const SECURITYONION_PRO = "Security Onion Pro";
 
 const LICENSE_EXPIRES_SOON_DAYS = 45;
 
@@ -29,11 +32,20 @@ const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000';
 if (typeof global !== 'undefined') {
   global.routes = routes;
   global.components = components;
+  global.iconSets = iconSets;
   global.templatePromises = templatePromises;
 }
 
 $(document).ready(function () {
   Promise.all(templatePromises).then(() => {
+    const _i18n = i18n.getLocalizedTranslations(navigator.language);
+    
+    let iSets = {};
+    for (const iconSet of iconSets) {
+      const comp = Vue.defineComponent(iconSet.component);
+      iSets[iconSet.name] = { component: comp };
+    }
+
     const vuetify = Vuetify.createVuetify({
       defaults: {
         VIcon: {
@@ -45,13 +57,17 @@ $(document).ready(function () {
           indeterminateIcon: 'mb-1 fa-square-minus'
         },
         VSelect: {
+          variant: 'outlined',
+          density: 'compact',
           menuIcon: 'fas fa-caret-down',
         },
         VCombobox: {
           menuIcon: 'fas fa-caret-down',
+          variant: 'outlined',
         },
         VFileInput: {
-          prependIcon: 'fa-paperclip'
+          prependIcon: 'fa-paperclip',
+          variant: 'outlined',
         },
         VDataTable: {
           firstIcon: 'fa-backward-step',
@@ -60,11 +76,20 @@ $(document).ready(function () {
           lastIcon: 'fa-forward-step',
         },
         VTextField: {
+          variant: 'outlined',
+          density: 'compact',
           clearIcon: 'fas fa-circle-xmark',
+        },
+        VTextarea: {
+          variant: 'outlined',
+          density: 'compact',
         },
         VTreeview: {
           collapseIcon: '',
           expandIcon: 'fas fa-caret-right',
+        },
+        VToolbar: {
+          class: 'theme-background-lighten-1',
         },
         VChip: {
           closeIcon: 'fa-xmark va-baseline',
@@ -78,47 +103,56 @@ $(document).ready(function () {
         sets: {
           fa: {
             component: Vuetify.components.VClassIcon,
-          }
+          },
+          ...iSets,
         }
       },
       theme: {
         defaultTheme: 'dark',
-        options: {
-          customProperties: true,
-        },
         variations: {
           colors: ['primary', 'secondary', 'drawer_background', 'background'],
           lighten: 3,
-          darken: 2,
+          darken: 3,
         },
         themes: {
           light: {
+            dark: false,
             colors: {
               primary: '#2196f3',
               secondary: '#424242',
               info: '#2196f3',
               error: '#ff5252',
-              nav_background: '#12110d',
+              nav_background: '#000000',
               nav: '#ffffff',
-              drawer_background: '#f4f4f4',
+              table_background: '#fafafa',
+              drawer_background: '#f0f0f0',
               background: '#ffffff',
               text: '#000000',
               icon: '#7f7f7f',
+              button_icon_color: '#ffffff',
+              row_stripe: '#e6e6e6',
+              row_hover: '#e2e2e2',
+              text_button: '#e4e4e4',
             },
           },
           dark: {
             dark: true,
             colors: {
-              primary: '#2196f3',
-              secondary: '#424242',
+              primary: '#0088BF',
+              secondary: '#2C3347',
               info: '#2196f3',
               error: '#ff5252',
-              nav_background: '#12110d',
+              nav_background: '#000000',
               nav: '#ffffff',
-              drawer_background: '#353535',
-              background: '#1e1e1e',
+              table_background: '#222a3f',
+              drawer_background: '#252B3B',
+              background: '#0B1019',
               text: '#ffffff',
-              icon: '#929292',
+              icon: '#8B96A8',
+              button_icon_color: '#ffffff',
+              row_stripe: '#2d2d2d',
+              row_hover: '#2a3452',
+              text_button: '#3f4452',
             },
           },
         },
@@ -133,7 +167,7 @@ $(document).ready(function () {
         return {
           timestamp: Date.now(),
           theme: Vuetify.useTheme(),
-          i18n: i18n.getLocalizedTranslations(navigator.language),
+          i18n: _i18n,
           loading: false,
           loadingCancelCallback: null,
           error: false,
@@ -202,6 +236,20 @@ $(document).ready(function () {
           FEAT_RPT: 'rpt',
           FEAT_TTR: 'ttr',
           FEAT_OAI: 'oai',
+          ruleValidators: {
+            sigma: [
+              { pattern: /^id:\s*[^$]+?$/m, message: _i18n.invalidDetectionElastAlertMissingID, match: false },
+            ],
+            suricata: [
+              { pattern: /\n/, message: _i18n.invalidDetectionSuricataNewLine, match: true },
+              { pattern: /sid:\s?(["']?)\d+\1;/, message: _i18n.invalidDetectionSuricataMissingSID, match: false },
+            ],
+            yara: [
+              { pattern: /^rule\s+{/, message: _i18n.invalidDetectionStrelkaMissingRuleName, match: true },
+              { pattern: /^rule\s+[a-zA-Z_][a-zA-Z0-9_]*/, message: _i18n.invalidDetectionStrelkaInvalidRuleName, match: false },
+              { pattern: /condition:/m, message: _i18n.invalidDetectionStrelkaMissingCondition, match: false },
+            ],
+          },
         }
       },
       watch: {
@@ -611,15 +659,7 @@ $(document).ready(function () {
           }
         },
         getAuthFlowId() {
-          let flow = this.getSearchParam('flow');
-
-          if (flow) {
-            localStorage.setItem('flowID', flow);
-          } else {
-            flow = localStorage.getItem('flowID');
-          }
-
-          return flow;
+          return this.getSearchParam('flow');
         },
         getRedirectPage() {
           return this.getSearchParam('r');
@@ -707,7 +747,12 @@ $(document).ready(function () {
               (!this.licenseKey.features.length || this.licenseKey.features.indexOf(feat) != -1);
         },
         colorLicenseStatus(value) {
-          if (value == LICENSE_STATUS_ACTIVE) return "success";
+          if (value == LICENSE_STATUS_ACTIVE) {
+            if (this.licenseKey.name != SECURITYONION_PRO) {
+              return "white";
+            }
+            return 'success';
+          }
           if (value == LICENSE_STATUS_EXCEEDED) return "error";
           if (value == LICENSE_STATUS_EXPIRED) return "warning";
           if (value == LICENSE_STATUS_INVALID) return "error";
@@ -787,6 +832,23 @@ $(document).ready(function () {
         formatCount(count) {
           return Number(count).toLocaleString();
         },
+        formatCountMK(count) {
+          let modifiedCount = count;
+          let suffix = '';
+          let countStr;
+          if (Math.abs(count) >= 1000000) {
+            modifiedCount /= 1000000;
+            countStr = this.formatDecimal1(modifiedCount).toLocaleString();
+            suffix = this.i18n.mMillion;
+          } else if (Math.abs(count) >= 1000) {
+            modifiedCount /= 1000;
+            countStr = this.formatDecimal1(modifiedCount).toLocaleString();
+            suffix = this.i18n.kThousand;
+          } else {
+            countStr = this.formatCount(modifiedCount);
+          }
+          return countStr + suffix;
+        },
         formatStringArray(strArray) {
           if (strArray != null && strArray.length > 0) {
             return strArray.join(", ");
@@ -843,7 +905,7 @@ $(document).ready(function () {
             mermaid.initialize({
               startOnLoad: false,
               theme: this.$vuetify && this.$vuetify.theme.current.dark ? 'dark' : 'default',
-              securityLevel: 'loose',
+              securityLevel: 'strict',
               fontFamily: 'inherit'
             });
             this.mermaidInitialized = true;
@@ -863,10 +925,10 @@ $(document).ready(function () {
         },
         colorSeverity(value) {
           if (value == "low_false") return "yellow";
-          if (value == "medium_false") return "amber darken-1";
-          if (value == "high_false") return "red darken-1";
-          if (value == "critical_false") return "red darken-4";
-          return "secondary";
+          if (value == "medium_false") return "orange-darken-1";
+          if (value == "high_false") return "red-lighten-1";
+          if (value == "critical_false") return "red-darken-4";
+          return "secondary-lighten-1";
         },
         isNodeInSubgrid(node) {
           return node.gridId != null && node.gridId.trim().length > 0;
@@ -1352,6 +1414,12 @@ $(document).ready(function () {
           }
           return null;
         },
+        getUserDisplayName(user) {
+          if (!user) {
+            return "";
+          }
+          return user.email;
+        },
         async populateUserDetails(obj, idField, outputField) {
           if (obj[idField] && obj[idField].length > 0) {
             const id = obj[idField];
@@ -1362,10 +1430,11 @@ $(document).ready(function () {
 
             const user = await this.$root.getUserById(id);
             if (user) {
+              const displayName = this.getUserDisplayName(user);
               if (Vue.isRef(obj[outputField])) {
-                obj[outputField].value = user.email;
+                obj[outputField].value = displayName;
               } else {
-                obj[outputField] = user.email;
+                obj[outputField] = displayName;
               }
             } else {
               obj[outputField] = id;
@@ -1449,6 +1518,7 @@ $(document).ready(function () {
             case "Pending":
             case "Syncing":
             case "Healthy":
+            case "Unknown":
               return false;
           }
           return true;
@@ -1640,6 +1710,33 @@ $(document).ready(function () {
         isTrue(b) {
           return b === true || ("" + b).toLowerCase() == "true";
         },
+        tryResolveAlias(field, value) {
+          var alias = this.pickHostname(value);
+          if (alias) {
+            return alias;
+          }
+
+          if (field && field.endsWith('detection.author')) {
+            return this.tryLocalize(value);
+          }
+
+          alias = this.pickUserInfo(field, value);
+          if (alias) {
+            return alias;
+          }
+
+          return null;
+        },
+        pickUserInfo(field, value) {
+          if (field && field.endsWith('_by')) {
+            // try to resolve the username
+            const user = this.getUserByIdViaCache(value);
+            if (user) {
+              return this.getUserDisplayName(user);
+            }
+          }
+          return null;
+        },
         pickHostname(ip) {
           const arr = this.ip2host[ip];
           if (arr && arr.length) {
@@ -1680,6 +1777,16 @@ $(document).ready(function () {
             this.showError(error);
           }
           this.stopLoading();
+        },
+        verifyRuleSyntax(det) {
+          const rules = this.ruleValidators[det.language.toLowerCase()];
+          for (let i = 0; i < rules.length; i++) {
+            if (rules[i].pattern.test(det.content) === rules[i].match) {
+              return rules[i].message;
+            }
+          }
+
+          return null;
         },
       },
       created() {

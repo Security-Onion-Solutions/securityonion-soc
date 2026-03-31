@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -10,6 +10,7 @@ routes.push({ path: '/users', name: 'users', component: {
   template: '#page-users',
   data() { return {
     i18n: this.$root.i18n,
+    showOptionsDialog: false,
     users: [],
     headers: [
       { value: 'expand' },
@@ -64,6 +65,7 @@ routes.push({ path: '/users', name: 'users', component: {
       this.users = await this.$root.getUsers();
       const response = await this.$root.papi.get('roles/');
       if (response.data) {
+        this.roles = [];
         response.data.forEach((role) => {
           if (role != "agent") { // Agent is intended only for services, not humans
             this.roles.push(role);

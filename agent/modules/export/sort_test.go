@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -266,4 +266,167 @@ func TestSortMetrics(t *testing.T) {
 			t.Errorf("sortMetrics(%q, %q) = %v, want %v", tt.field, tt.dir, result, tt.expected)
 		}
 	}
+}
+
+func TestSortAssistantMessages(t *testing.T) {
+	export := NewExport(nil)
+
+	// Helper to create a StoredMessage
+	createMsg := func(id, sessionId, role string, createTime *time.Time) *model.StoredMessage {
+		return &model.StoredMessage{
+			Auditable: model.Auditable{
+				Id:         id,
+				CreateTime: createTime,
+			},
+			SessionId: sessionId,
+			Message:   &model.Message{Role: role},
+		}
+	}
+
+	now := time.Now()
+	time1 := now.Add(-3 * time.Hour)
+	time2 := now.Add(-2 * time.Hour)
+	time3 := now.Add(-1 * time.Hour)
+
+	// Test sorting by ID
+	t.Run("SortById", func(t *testing.T) {
+		list := []*model.StoredMessage{
+			createMsg("msg3", "session1", "user", &time1),
+			createMsg("msg1", "session1", "user", &time2),
+			createMsg("msg2", "session1", "assistant", &time3),
+		}
+		sortedList := export.sortAssistantMessages("id", "asc", list)
+		assert.Equal(t, "msg1", sortedList[0].Id)
+		assert.Equal(t, "msg2", sortedList[1].Id)
+		assert.Equal(t, "msg3", sortedList[2].Id)
+	})
+
+	// Test sorting by CreateTime
+	t.Run("SortByCreateTime", func(t *testing.T) {
+		list := []*model.StoredMessage{
+			createMsg("msg1", "session1", "user", &time2),
+			createMsg("msg2", "session1", "assistant", &time3),
+			createMsg("msg3", "session1", "user", &time1),
+		}
+		sortedList := export.sortAssistantMessages("createtime", "asc", list)
+		assert.Equal(t, "msg3", sortedList[0].Id)
+		assert.Equal(t, "msg1", sortedList[1].Id)
+		assert.Equal(t, "msg2", sortedList[2].Id)
+	})
+
+	// Test sorting by SessionId
+	t.Run("SortBySessionId", func(t *testing.T) {
+		list := []*model.StoredMessage{
+			createMsg("msg1", "session3", "user", &time1),
+			createMsg("msg2", "session1", "assistant", &time2),
+			createMsg("msg3", "session2", "user", &time3),
+		}
+		sortedList := export.sortAssistantMessages("sessionid", "asc", list)
+		assert.Equal(t, "session1", sortedList[0].SessionId)
+		assert.Equal(t, "session2", sortedList[1].SessionId)
+		assert.Equal(t, "session3", sortedList[2].SessionId)
+	})
+
+	// Test sorting by Role
+	t.Run("SortByRole", func(t *testing.T) {
+		list := []*model.StoredMessage{
+			createMsg("msg1", "session1", "user", &time1),
+			createMsg("msg2", "session1", "assistant", &time2),
+			createMsg("msg3", "session1", "user", &time3),
+		}
+		sortedList := export.sortAssistantMessages("role", "asc", list)
+		assert.Equal(t, "assistant", sortedList[0].Message.Role)
+		assert.Equal(t, "user", sortedList[1].Message.Role)
+	})
+
+	// Test handling nil Message
+	t.Run("HandleNilMessage", func(t *testing.T) {
+		list := []*model.StoredMessage{
+			createMsg("msg1", "session1", "user", &time1),
+			{Auditable: model.Auditable{Id: "msg2"}, SessionId: "session1", Message: nil},
+			createMsg("msg3", "session1", "assistant", &time3),
+		}
+		sortedList := export.sortAssistantMessages("role", "asc", list)
+		assert.Nil(t, sortedList[1].Message)
+	})
+
+	// Test descending sort
+	t.Run("SortDescending", func(t *testing.T) {
+		list := []*model.StoredMessage{
+			createMsg("msg1", "session1", "user", &time1),
+			createMsg("msg2", "session1", "assistant", &time2),
+			createMsg("msg3", "session1", "user", &time3),
+		}
+		sortedList := export.sortAssistantMessages("id", "desc", list)
+		assert.Equal(t, "msg3", sortedList[0].Id)
+		assert.Equal(t, "msg2", sortedList[1].Id)
+		assert.Equal(t, "msg1", sortedList[2].Id)
+	})
+}
+
+func TestSortAssistantSessionDetails(t *testing.T) {
+	export := NewExport(nil)
+
+	now := time.Now()
+	time1 := now.Add(-3 * time.Hour)
+	time2 := now.Add(-2 * time.Hour)
+	time3 := now.Add(-1 * time.Hour)
+
+	createSession := func(id, sessionId, title string, createTime *time.Time) *model.AssistantSessionDetails {
+		return &model.AssistantSessionDetails{
+			Session: &model.AssistantSession{
+				Auditable: model.Auditable{Id: id, CreateTime: createTime},
+				SessionId: sessionId,
+				Title:     title,
+			},
+		}
+	}
+
+	t.Run("SortByIdAsc", func(t *testing.T) {
+		list := []*model.AssistantSessionDetails{
+			createSession("session3", "chat_3", "C", &time1),
+			createSession("session1", "chat_1", "A", &time2),
+			createSession("session2", "chat_2", "B", &time3),
+		}
+		sorted := export.SortAssistantSessionDetails("id", "asc", list)
+		assert.Equal(t, "session1", sorted[0].Session.Id)
+		assert.Equal(t, "session2", sorted[1].Session.Id)
+		assert.Equal(t, "session3", sorted[2].Session.Id)
+	})
+
+	t.Run("SortByTitleDesc", func(t *testing.T) {
+		list := []*model.AssistantSessionDetails{
+			createSession("s1", "c1", "Alpha", &time1),
+			createSession("s2", "c2", "Charlie", &time2),
+			createSession("s3", "c3", "Bravo", &time3),
+		}
+		sorted := export.SortAssistantSessionDetails("title", "desc", list)
+		assert.Equal(t, "Charlie", sorted[0].Session.Title)
+		assert.Equal(t, "Bravo", sorted[1].Session.Title)
+		assert.Equal(t, "Alpha", sorted[2].Session.Title)
+	})
+
+	t.Run("SortByCreateTime", func(t *testing.T) {
+		list := []*model.AssistantSessionDetails{
+			createSession("s1", "c1", "A", &time2),
+			createSession("s2", "c2", "B", &time3),
+			createSession("s3", "c3", "C", &time1),
+		}
+		sorted := export.SortAssistantSessionDetails("createtime", "asc", list)
+		assert.Equal(t, "s3", sorted[0].Session.Id)
+		assert.Equal(t, "s1", sorted[1].Session.Id)
+		assert.Equal(t, "s2", sorted[2].Session.Id)
+	})
+
+	t.Run("HandleNilValues", func(t *testing.T) {
+		list := []*model.AssistantSessionDetails{
+			createSession("s1", "c1", "A", &time1),
+			nil,
+			{Session: nil},
+		}
+		sorted := export.SortAssistantSessionDetails("id", "asc", list)
+		assert.NotNil(t, sorted[0].Session)
+		assert.Nil(t, sorted[1])
+		assert.Nil(t, sorted[2].Session)
+	})
 }

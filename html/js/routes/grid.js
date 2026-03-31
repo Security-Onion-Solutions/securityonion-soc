@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -19,6 +19,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
   data() { return {
     i18n: this.$root.i18n,
     moment: moment,
+    showOptionsDialog: false,
     nodes: [],
     gridFilter: '',
     headers: [
@@ -42,7 +43,6 @@ routes.push({ path: '/grid', name: 'grid', component: {
       { title: this.$root.i18n.captureLossAbbr, value: 'captureLossPct', align: ' d-none d-xl-table-cell', moreColumns: true, metricsEnabled: true },
       { title: this.$root.i18n.zeekLossAbbr, value: 'zeekLossPct', align: ' d-none d-xl-table-cell', moreColumns: true, metricsEnabled: true },
       { title: this.$root.i18n.suricataLossAbbr, value: 'suriLossPct', align: ' d-none d-xl-table-cell', moreColumns: true, metricsEnabled: true },
-      { title: this.$root.i18n.stenoLossAbbr, value: 'stenoLossPct', align: ' d-none d-xl-table-cell', moreColumns: true, metricsEnabled: true },
       { title: this.$root.i18n.pcapRetentionAbbr, value: 'pcapDays', align: ' d-none d-xl-table-cell', moreColumns: true, metricsEnabled: true },
       { title: this.$root.i18n.uptime, value: 'uptimeSeconds', align: ' d-none d-lg-table-cell' },
       { title: this.$root.i18n.status, value: 'status' },
@@ -162,7 +162,6 @@ routes.push({ path: '/grid', name: 'grid', component: {
       this.$root.updateColumnClass(this.headers, this.i18n.captureLossAbbr, this.metricsEnabled && this.moreColumns, 'd-xl-table-cell');
       this.$root.updateColumnClass(this.headers, this.i18n.zeekLossAbbr, this.metricsEnabled && this.moreColumns, 'd-xl-table-cell');
       this.$root.updateColumnClass(this.headers, this.i18n.suricataLossAbbr, this.metricsEnabled && this.moreColumns, 'd-xl-table-cell');
-      this.$root.updateColumnClass(this.headers, this.i18n.stenoLossAbbr, this.metricsEnabled && this.moreColumns, 'd-xl-table-cell');
       this.$root.updateColumnClass(this.headers, this.i18n.pcapRetentionAbbr, this.metricsEnabled && this.moreColumns, 'd-xl-table-cell');
     },
     showHeader(header) {
@@ -237,13 +236,13 @@ routes.push({ path: '/grid', name: 'grid', component: {
       this.selectedNode = null;
     },
     canTest(node) {
-      if (node['keywords'] && node['keywords'].indexOf("Sensor") != -1) {
-          return true;
-      }
-      return false;
+      return this.$root.isUserAdmin() && (node['keywords'] && node['keywords'].indexOf("Sensor") != -1);
+    },
+    canRestart(node) {
+      return this.$root.isUserAdmin();
     },
     canUpload(node) {
-      return this.canUploadPCAP(node) || this.canUploadEvtx(node);
+      return (this.canUploadPCAP(node) || this.canUploadEvtx(node));
     },
     canUploadPCAP(node) {
       return !!node['keywords'] && // If keywords don't exist, return false
@@ -376,9 +375,6 @@ routes.push({ path: '/grid', name: 'grid', component: {
     },
     hasMetricstore(item) {
       return this.hasContainer(item, 'so-influxdb');
-    },
-    hasSteno(item) {
-      return this.hasContainer(item, 'so-steno');
     },
     hasSuri(item) {
       return this.hasContainer(item, 'so-suricata');

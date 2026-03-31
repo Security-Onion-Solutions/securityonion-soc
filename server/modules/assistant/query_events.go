@@ -1,4 +1,4 @@
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -8,6 +8,7 @@ package assistant
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -111,7 +112,8 @@ func (t *QueryEventsTool) Execute(ctx context.Context, server *server.Server, pa
 
 	err = json.Unmarshal([]byte(params), args)
 	if err != nil {
-		return nil, err
+		logger.WithError(err).WithField("toolParams", params).Error("failed to unmarshal tool params")
+		return nil, errors.New("ERROR_ASSISTANT_UNMARSHAL_PARAMS")
 	}
 
 	result.Parameters = args
@@ -237,7 +239,8 @@ func (t *QueryEventsTool) Execute(ctx context.Context, server *server.Server, pa
 		// Convert to JSON
 		resultJSON, err := json.MarshalIndent(filteredEvents, "", "  ")
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal result: %w", err)
+			logger.WithError(err).WithField("filteredEvents", filteredEvents).Error("failed to marshal tool result")
+			return nil, errors.New("ERROR_ASSISTANT_MARSHAL_TOOL_RESULT")
 		}
 
 		// Log filtered result size and preview
@@ -267,7 +270,7 @@ func filterEvents(events []*model.EventRecord, extraFields ...string) []map[stri
 		"network.community_id", "network.protocol", "network.transport",
 		"notice.message",
 		"observer.name",
-		"process.name", "process.executable",
+		"process.name", "process.executable", "process.entity_id",
 		"rule.category", "rule.name", "rule.uuid",
 		"software.name", "software.type", "software.version.unparsed",
 		"source.ip", "source.port", "source.geo.country_name",

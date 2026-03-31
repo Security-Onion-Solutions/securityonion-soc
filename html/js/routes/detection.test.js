@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -1056,96 +1056,65 @@ test('saveDetection - statusEffectedByFilter', async () => {
 	expect(comp.extractDetection).toHaveBeenCalledTimes(1);
 });
 
-test('verifyRuleSyntax - implementation', () => {
-	comp.ruleValidators = {
-		engine: [
-			{ pattern: /1/m, message: 'should not have 1', match: true },
-			{ pattern: /2/m, message: 'should have 2', match: false },
-			{ pattern: /3/m, message: 'should not have 3', match: true },
-		],
-	};
-
-	comp.detect = {
-		content: '1',
-		language: 'engine',
-	};
-	let msg = comp.verifyRuleSyntax();
-	expect(msg).toBe('should not have 1');
-
-	comp.detect.content = '2';
-	msg = comp.verifyRuleSyntax();
-	expect(msg).toBe(null);
-
-	comp.detect.content = '3';
-	msg = comp.verifyRuleSyntax();
-	expect(msg).toBe('should have 2');
-
-	comp.detect.content = '23';
-	msg = comp.verifyRuleSyntax();
-	expect(msg).toBe('should not have 3');
-
-	comp.detect.content = '123';
-	msg = comp.verifyRuleSyntax();
-	expect(msg).toBe('should not have 1');
-
-	comp.detect.content = '321';
-	msg = comp.verifyRuleSyntax();
-	expect(msg).toBe('should not have 1');
-
-	comp.detect.content = '24';
-	msg = comp.verifyRuleSyntax();
-	expect(msg).toBe(null);
-});
-
-test('verifyRuleSyntax - Sigma', () => {
+test('validateElastAlert', () => {
 	comp.detect = {
 		language: 'sigma',
 		content: ''
 	};
 
-	let msg = comp.verifyRuleSyntax();
+	let msg = comp.validateElastAlert();
 	expect(msg).toBe(comp.i18n.invalidDetectionElastAlertMissingID);
 
 	comp.detect.content = 'id: 123\n';
-	msg = comp.verifyRuleSyntax();
+	msg = comp.validateElastAlert();
+	expect(msg).toBe(comp.i18n.invalidDetectionElastAlertMissingDetectionLogic);
+
+	comp.detect.content += 'detection: {}'
+	msg = comp.validateElastAlert();
 	expect(msg).toBe(null);
 });
 
-test('verifyRuleSyntax - Suricata', () => {
+test('validateSuricata', () => {
 	comp.detect = {
 		language: 'suricata',
 		content: '\n',
+		publicId: '123',
 	};
 
-	let msg = comp.verifyRuleSyntax();
+	let msg = comp.validateSuricata();
 	expect(msg).toBe(comp.i18n.invalidDetectionSuricataNewLine);
 
 	comp.detect.content = '';
-	msg = comp.verifyRuleSyntax();
+	msg = comp.validateSuricata();
 	expect(msg).toBe(comp.i18n.invalidDetectionSuricataMissingSID);
 
 	comp.detect.content = 'sid: 123;';
-	msg = comp.verifyRuleSyntax();
+	msg = comp.validateSuricata();
 	expect(msg).toBe(null);
 });
 
-test('verifyRuleSyntax - YARA', () => {
+test('validateStrelka', () => {
 	comp.detect = {
 		language: 'yara',
-		content: '',
+		content: 'rule {}',
 	};
 
-	let msg = comp.verifyRuleSyntax();
+	let msg = comp.validateStrelka();
 	expect(msg).toBe(comp.i18n.invalidDetectionStrelkaMissingRuleName);
 
+	comp.detect.content = 'rule 5 {}';
+	msg = comp.validateStrelka();
+	expect(msg).toBe(comp.i18n.invalidDetectionStrelkaInvalidRuleName);
+
 	comp.detect.content = 'rule X {}';
-	msg = comp.verifyRuleSyntax();
+	msg = comp.validateStrelka();
 	expect(msg).toBe(comp.i18n.invalidDetectionStrelkaMissingCondition);
 
 	comp.detect.content = 'rule X { condition: }';
-	msg = comp.verifyRuleSyntax();
+	msg = comp.validateStrelka();
 	expect(msg).toBe(null);
 });
+
 
 test('validateElastAlert', () => {
 	comp.detect = {

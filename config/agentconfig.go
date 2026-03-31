@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -15,6 +15,7 @@ import (
 )
 
 const DEFAULT_POLL_INTERVAL_MS = 1000
+const DEFAULT_TASK_POOL_SIZE = 5
 
 type AgentConfig struct {
 	NodeId                string                 `json:"nodeId"`
@@ -28,12 +29,16 @@ type AgentConfig struct {
 	Modules               module.ModuleConfigMap `json:"modules"`
 	ModuleFailuresIgnored bool                   `json:"moduleFailuresIgnored"`
 	MgmtNic               string                 `json:"mgmtNic"`
+	TaskPoolSize          int                    `json:"taskPoolSize"`
 }
 
 func (config *AgentConfig) Verify() error {
 	var err error
 	if err == nil && config.PollIntervalMs <= 0 {
 		config.PollIntervalMs = DEFAULT_POLL_INTERVAL_MS
+	}
+	if err == nil && config.TaskPoolSize <= 0 {
+		config.TaskPoolSize = DEFAULT_TASK_POOL_SIZE
 	}
 	if err == nil && config.NodeId == "" {
 		config.NodeId, err = os.Hostname()

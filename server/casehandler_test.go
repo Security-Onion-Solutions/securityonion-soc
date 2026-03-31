@@ -62,7 +62,7 @@ func TestHandlerCreateEvents(t *testing.T) {
 					nonAsyncWG.Wait()
 
 					assert.Equal(t, "test", ctx.Value(web.ContextKeyRunAsUsername))
-					assert.Equal(t, "00000000-0000-0000-0000-000000000000", ctx.Value(web.ContextKeyRequestorId))
+					assert.Equal(t, "11111111-1111-1111-1111-111111111111", ctx.Value(web.ContextKeyRequestorId))
 					_, hasDeadline := ctx.Deadline()
 					assert.False(t, hasDeadline)
 
@@ -167,7 +167,7 @@ func TestHandlerCreateEvents(t *testing.T) {
 					nonAsyncWG.Wait()
 
 					assert.Equal(t, "test", ctx.Value(web.ContextKeyRunAsUsername))
-					assert.Equal(t, "00000000-0000-0000-0000-000000000000", ctx.Value(web.ContextKeyRequestorId))
+					assert.Equal(t, "11111111-1111-1111-1111-111111111111", ctx.Value(web.ContextKeyRequestorId))
 					_, hasDeadline := ctx.Deadline()
 					assert.False(t, hasDeadline)
 
@@ -300,7 +300,7 @@ func TestHandlerCreateEvents(t *testing.T) {
 					nonAsyncWG.Wait()
 
 					assert.Equal(t, "test", ctx.Value(web.ContextKeyRunAsUsername))
-					assert.Equal(t, "00000000-0000-0000-0000-000000000000", ctx.Value(web.ContextKeyRequestorId))
+					assert.Equal(t, "11111111-1111-1111-1111-111111111111", ctx.Value(web.ContextKeyRequestorId))
 					_, hasDeadline := ctx.Deadline()
 					assert.False(t, hasDeadline)
 
@@ -409,7 +409,7 @@ func TestHandlerCreateEvents(t *testing.T) {
 					nonAsyncWG.Wait()
 
 					assert.Equal(t, "test", ctx.Value(web.ContextKeyRunAsUsername))
-					assert.Equal(t, "00000000-0000-0000-0000-000000000000", ctx.Value(web.ContextKeyRequestorId))
+					assert.Equal(t, "11111111-1111-1111-1111-111111111111", ctx.Value(web.ContextKeyRequestorId))
 					_, hasDeadline := ctx.Deadline()
 					assert.False(t, hasDeadline)
 
@@ -515,7 +515,7 @@ func TestHandlerCreateEvents(t *testing.T) {
 			ctx = log.NewContext(ctx, l)
 
 			ctx = context.WithValue(ctx, web.ContextKeyRunAsUsername, "test")
-			ctx = context.WithValue(ctx, web.ContextKeyRequestorId, "00000000-0000-0000-0000-000000000000")
+			ctx = context.WithValue(ctx, web.ContextKeyRequestorId, "11111111-1111-1111-1111-111111111111")
 
 			w := httptest.NewRecorder()
 			r := httptest.NewRequestWithContext(ctx, "GET", "/case/events", bytes.NewReader(test.RequestBody))

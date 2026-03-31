@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -145,4 +145,15 @@ test('loadLocalSettings_defaults', () => {
   comp.loadLocalSettings();
   expect(comp.sortBy).toEqual([{ key: 'email', order: 'asc' }]);
   expect(comp.itemsPerPage).toBe(10);
+});
+
+test('loadData does not duplicate roles on consecutive calls', async () => {
+  const mockRoles = mockPapi("get", {data: ["admin", "user", "agent", "super"]});
+  comp.roles = ["admin", "old_role"]; // Simulating previous state
+  comp.$root.getUsers = jest.fn().mockReturnValue([{id: 'my-id', status: 'unlocked'}]);
+  
+  await comp.loadData();
+  
+  expect(mockRoles).toHaveBeenCalledWith('roles/');
+  expect(comp.roles).toEqual(["admin", "user", "super"]);
 });

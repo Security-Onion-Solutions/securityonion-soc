@@ -1,4 +1,4 @@
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -244,7 +244,7 @@ func TestAckAlertsTool_Execute_VerifyContextPropagation(t *testing.T) {
 	assert.Equal(t, "test-user-123", contextUserId)
 }
 
-func TestAckAlertTool_Execute_EmptySearchFilter(t *testing.T) {
+func TestAckAlertsTool_Execute_EmptySearchFilter(t *testing.T) {
 	// Test with empty string search_filter
 	mockEventstore := server.NewFakeEventstore()
 	mockEventstore.UpdateResults = []*model.EventUpdateResults{

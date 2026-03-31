@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -275,13 +275,16 @@ func (h *DetectionHandler) CreateDetection(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Don't trust the client to send the correct author, grab it from the context
-	userID := ctx.Value(web.ContextKeyRequestorId).(string)
-	user, err := h.server.Userstore.GetUserById(ctx, userID)
+	user, err := h.server.TryGetUser(ctx)
 	if err != nil {
+		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
-	detect.Author = detections.MakeUser(user)
+
+	if user != nil {
+		// Don't trust the client to send the correct author, grab it from the context, unless the user is nil (API client)
+		detect.Author = detections.MakeUser(user)
+	}
 
 	specifiedStatus := detect.IsEnabled
 

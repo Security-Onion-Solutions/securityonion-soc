@@ -1,4 +1,4 @@
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -121,6 +121,19 @@ func TestCheckWriteNoRead(t *testing.T) {
 
 	shouldFail = CheckWriteNoRead(ctx, iom, id)
 	assert.False(t, shouldFail)
+}
+
+func TestMakeUser(t *testing.T) {
+	// Test nil user (API client)
+	assert.Equal(t, "", MakeUser(nil))
+
+	// Test real user with names
+	user := &model.User{FirstName: "First", LastName: "Last"}
+	assert.Equal(t, "First Last", MakeUser(user))
+
+	// Test user with only email
+	user = &model.User{Email: "test@so.org"}
+	assert.Equal(t, "test@so.org", MakeUser(user))
 }
 
 func TestAddUser(t *testing.T) {

@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -23,6 +23,7 @@ const DEFAULT_MAX_UPLOAD_SIZE_BYTES = 26214400
 const DEFAULT_SRV_EXP_SECONDS = 600
 const REQUIRED_SRV_KEY_LENGTH = 64
 const DEFAULT_CUSTOM_REPORTS_PATH = "/opt/sensoroni/templates/reports/custom"
+const DEFAULT_JOB_POLL_RETRY_INTERVAL_MS = 600000
 
 type ServerConfig struct {
 	AirgapEnabled           bool                   `json:"airgapEnabled"`
@@ -48,6 +49,7 @@ type ServerConfig struct {
 	Subgrids                []*model.Subgrid       `json:"subgrids"`
 	CustomReportsPath       string                 `json:"customReportsPath"`
 	EnableReverseLookup     bool                   `json:"enableReverseLookup"`
+	JobPollRetryIntervalMs  int                    `json:"jobPollRetryIntervalMs"`
 	SrvKeyBytes             []byte
 }
 
@@ -82,6 +84,9 @@ func (config *ServerConfig) Verify() error {
 	}
 	if config.CustomReportsPath == "" {
 		config.CustomReportsPath = DEFAULT_CUSTOM_REPORTS_PATH
+	}
+	if config.JobPollRetryIntervalMs <= 0 {
+		config.JobPollRetryIntervalMs = DEFAULT_JOB_POLL_RETRY_INTERVAL_MS
 	}
 
 	keyLen := len(config.SrvKey)

@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -108,6 +108,7 @@ const huntComponent = {
 
       autohunt: true,
       showFullQuery: true,
+      showOptionsDialog: false,
 
       filterRouteInclude: "",
       filterRouteExclude: "",
@@ -172,19 +173,18 @@ const huntComponent = {
       showAckManyDialog: false,
       ackManyArgs: [],
       ackManyVerb: '',
+      fieldValueDialogVisible: false,
+      fieldValueDialogKey: '',
+      fieldValueDialogValue: '',
       menuScrollPos: 0,
       maxEscalate: 100,
       chartResizeTracker: {},
       gridId: null,
       activeTabs: {},
+      gridLayoutExpansions: false,
       expandedEvents: [],
       eventColumnWidth: 0,
       expandedPlaybookQuestions: {},
-
-      // AI Investigation tracking
-      aiInvestigations: {}, // Maps alert ID to investigation results and chat session IDs
-      aiInvestigatedFilter: false, // Client-side filter for AI investigated alerts
-      investigationSessions: [], // Store investigation sessions from backend
     }
   },
   created() {
@@ -225,8 +225,12 @@ const huntComponent = {
     if (this.isCategory('alerts')) {
       window.removeEventListener('resize', this.calculateEventColumnWidth);
     }
+
+    window.removeEventListener('resize', this.checkAllFieldTruncation);
   },
   mounted() {
+    window.addEventListener('resize', this.checkAllFieldTruncation);
+
     this.$root.startLoading();
     this.category = this.$route.path.replace("/", "");
     this.$root.loadParameters(this.category, this.initHunt);
@@ -244,6 +248,12 @@ const huntComponent = {
     }
   },
   watch: {
+    expandedEvents() {
+      this.$nextTick(() => this.checkAllFieldTruncation());
+    },
+    gridLayoutExpansions() {
+      this.$nextTick(() => this.checkAllFieldTruncation());
+    },
     '$route': 'loadData',
     'groupBySortBy': 'saveLocalSettings',
     'groupBySortDesc': 'saveLocalSettings',
@@ -259,6 +269,60 @@ const huntComponent = {
     'autoRefreshInterval': 'resetRefreshTimer',
     'showDetailsPanel': 'toggleShowDetailsPanel',
     'advanced': 'saveLocalSettings',
+    'gridLayoutExpansions': 'saveLocalSettings',
+  },
+  computed: {
+    alertGroupCount() {
+      return this.groupBys.length > 0 && this.groupBys[0].data ? this.groupBys[0].data.length : 0;
+    },
+    criticalHighCount() {
+      return this.eventData.filter(e => {
+        var sev = (e['event.severity_label'] || e['so_case.severity'] || '').toLowerCase();
+        return sev === 'critical' || sev === 'high';
+      }).length;
+    },
+    alertStatus() {
+      const ackBool = this.isFilterToggleEnabled('acknowledged');
+      const escBool = this.isFilterToggleEnabled('escalated');
+      const invBool = this.isFilterToggleEnabled('investigated');
+      let retStr = "";
+      if (ackBool && escBool) {
+        retStr = this.i18n.escalated;
+      } else if (escBool) {
+        retStr = this.i18n.escalated + ", " + this.i18n.unacknowledged;
+      } else if (ackBool) {
+        retStr = this.i18n.acknowledged;
+      } else {
+        retStr = this.i18n.unacknowledged;
+      }
+      if (invBool) {
+        retStr += ", " + this.i18n.aiInvestigated;
+      }
+      return retStr;
+    },
+    excludeStatus() {
+      const excludeCase = this.isFilterToggleEnabled('caseExcludeToggle');
+      const excludeDet = this.isFilterToggleEnabled('detectionsExcludeToggle');
+      const excludeSoc = this.isFilterToggleEnabled('socExcludeToggle');
+      const excludeAI = this.isFilterToggleEnabled('onionaiExcludeToggle');
+      let retStr = "";
+      if (excludeCase) {
+        retStr = this.i18n.caseData;
+      }
+      if (excludeDet) {
+        retStr = retStr ? retStr + ', ' + this.i18n.detectionsData : this.i18n.detectionsData;
+      }
+      if (excludeSoc) {
+        retStr = retStr ? retStr + ', ' + this.i18n.socLogs : this.i18n.socLogs;
+      }
+      if (excludeAI) {
+        retStr = retStr ? retStr + ', ' + this.i18n.onionaiData : this.i18n.onionaiData;
+      }
+      if (!retStr) {
+        retStr = this.i18n.none;
+      }
+      return retStr;
+    },
   },
   methods: {
     moment: moment,
@@ -324,9 +388,6 @@ const huntComponent = {
         this.$nextTick().then(() => {
           this.$root.loadParameters('assistant', this.initAssistant);
           this.investigateEnabled = this.$root.isLicensed('oai') && this.assistantEnabled;
-          if (this.investigateEnabled) {
-            this.loadInvestigationSessions();
-          }
         });
       }
       
@@ -592,6 +653,7 @@ const huntComponent = {
       const abortController = new AbortController();
       this.$root.startLoading(() => {
         abortController.abort();
+        this.$root.stopLoading();
       });
       try {
         this.obtainQueryDetails();
@@ -1376,10 +1438,16 @@ const huntComponent = {
         this.$nextTick(async () => {
           this.quickActionVisible = true;
 
-          // displaying the menu is resetting the "open" array, so we need to un-reset it
-          const openCache = this.quickActionsOpen;
-          await this.$nextTick();
-          this.quickActionsOpen = openCache;
+          // When opening a menu, the router is involved so any groups with :to that
+          // match the current route will be opened as "you're on this page."
+          // We don't want that so we will carry forward all known open groups,
+          // BUT we can't set it on nextTick as that'll start rendering the menu
+          // with the router-chosen groups open, we need to overwrite the array
+          // before the browser paints, so requestAnimationFrame
+          const openCache = [...this.quickActionsOpen];
+          requestAnimationFrame(() => {
+            this.quickActionsOpen = openCache;
+          });
         });
       }
     },
@@ -1524,18 +1592,6 @@ const huntComponent = {
       var idx = 0;
       this.groupBys = [];
       while (this.populateGroupByTable(metrics, idx++)) { };
-
-      // Apply AI investigated filter if enabled
-      if (this.aiInvestigatedFilter) {
-        this.groupBys.forEach(group => {
-          if (group.data && group.data.length > 0) {
-            group.data = group.data.filter(item => {
-              const socId = item.soc_id;
-              return socId && this.aiInvestigations[socId];
-            });
-          }
-        });
-      }
     },
     populateGroupByTable(metrics, groupIdx) {
       const route = this;
@@ -1738,17 +1794,6 @@ const huntComponent = {
 
       this.populateEventHeaders(this.filterVisibleFields(eventModule, eventDataset, fields));
       this.eventData = records;
-
-      // Apply any existing AI investigation results to the loaded events
-      this.applyAIInvestigationsToEvents();
-
-      // Apply AI investigated filter if enabled
-      if (this.aiInvestigatedFilter) {
-        this.eventData = this.eventData.filter(item => {
-          const socId = item.soc_id;
-          return socId && this.aiInvestigations[socId];
-        });
-      }
     },
     lookupFieldValue(record, field) {
       if (field in record) {
@@ -2117,6 +2162,7 @@ const huntComponent = {
         title: {
           display: true,
           text: title,
+          color: fontColor,
         }
       };
       options.scales = {
@@ -2126,16 +2172,16 @@ const huntComponent = {
           },
           ticks: {
             beginAtZero: true,
-            fontColor: fontColor,
+            color: fontColor,
             precision: 0,
           }
         },
         x: {
-          gridLines: {
+          grid: {
             color: gridColor,
           },
           ticks: {
-            fontColor: fontColor,
+            color: fontColor,
           }
         },
       };
@@ -2156,6 +2202,7 @@ const huntComponent = {
       options.scales.x.type = 'timeseries';
     },
     setupPieChart(options, data, title) {
+      var fontColor = this.$root.getColor("#888888", -40);
       options.onResize = this.debounceChartResize;
       options.responsive = true;
       options.maintainAspectRatio = false;
@@ -2163,10 +2210,14 @@ const huntComponent = {
         legend: {
           display: true,
           position: 'left',
+          labels: {
+            color: fontColor,
+          },
         },
         title: {
           display: true,
           text: title,
+          color: fontColor,
         }
       };
       data.labels = [];
@@ -2190,6 +2241,7 @@ const huntComponent = {
       }];
     },
     setupSankeyChart(options, data, title) {
+      var fontColor = this.$root.getColor("#888888", -40);
       const route = this;
       options.onResize = this.debounceChartResize;
       options.responsive = true;
@@ -2201,6 +2253,7 @@ const huntComponent = {
         title: {
           display: true,
           text: title,
+          color: fontColor,
         }
       };
       data.flowMax = 0; // This is a custom attribute used for color selection
@@ -2369,6 +2422,7 @@ const huntComponent = {
       this.saveSetting('autohunt', this.autohunt, true);
       this.saveSetting('showDetailsPanel', this.showDetailsPanel, this.isCategory('alerts'));
       this.saveSetting('advanced', this.advanced, false);
+      this.saveSetting('gridLayoutExpansions', this.gridLayoutExpansions, false);
     },
     loadLocalSettings() {
       // Global settings
@@ -2390,57 +2444,11 @@ const huntComponent = {
       if (localStorage[prefix + '.autohunt']) this.autohunt = localStorage[prefix + '.autohunt'] == 'true';
       if (localStorage[prefix + '.showDetailsPanel']) this.showDetailsPanel = localStorage[prefix + '.showDetailsPanel'] == 'true';
       if (localStorage[prefix + '.advanced']) this.advanced = localStorage[prefix + '.advanced'] == 'true';
+      if (localStorage[prefix + '.gridLayoutExpansions']) this.gridLayoutExpansions = localStorage[prefix + '.gridLayoutExpansions'] == 'true';
       if (localStorage[prefix + '.autoRefreshInterval']) this.autoRefreshInterval = parseInt(localStorage[prefix + '.autoRefreshInterval']);
 
       if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
     },
-
-    async loadInvestigationSessions() {
-      // Load investigation sessions from backend
-      try {
-        const response = await this.$root.papi.get('/assistant/sessions');
-        if (response.data && Array.isArray(response.data)) {
-          // Filter sessions that start with 'investigation_'
-          this.investigationSessions = response.data.filter(session =>
-            session.sessionId && session.sessionId.startsWith('investigation_')
-          );
-
-          // Update aiInvestigations based on session data, keyed by soc_id
-          this.aiInvestigations = {};
-          this.investigationSessions.forEach(session => {
-            // Extract soc_id from session ID: investigation_{soc_id}_{timestamp}
-            const parts = session.sessionId.split('_');
-            if (parts.length >= 3) {
-              const socId = parts.slice(1, -1).join('_'); // Handle soc_ids that might contain underscores
-              this.aiInvestigations[socId] = {
-                chatSessionId: session.sessionId,
-                socId: socId,
-                timestamp: session.createTime || new Date().toISOString()
-              };
-            }
-          });
-        }
-      } catch (error) {
-        this.$root.showError(this.i18n.aiInvestigationCouldNotLoad + ': ' + error.message);
-        this.investigationSessions = [];
-        this.aiInvestigations = {};
-      }
-    },
-
-    applyAIInvestigationsToEvents() {
-      // Apply loaded AI investigation results to current event data
-      if (this.eventData && this.eventData.length > 0) {
-        this.eventData.forEach(item => {
-          const socId = item.soc_id;
-          if (socId && this.aiInvestigations[socId]) {
-            const investigation = this.aiInvestigations[socId];
-            item._aiInvestigated = true;
-            item._aiInvestigationData = investigation;
-          }
-        });
-      }
-    },
-
     toggleShowSection(item) {
       if (this.isExpandedSection(item)) {
         this.collapsedSections.push(item);
@@ -2852,6 +2860,26 @@ const huntComponent = {
       this.showAckManyDialog = false;
       this.ackManyArgs = [];
     },
+    checkAllFieldTruncation() {
+      if (!this.gridLayoutExpansions) return;
+      const cards = this.$el.querySelectorAll('.expanded-field-card');
+      cards.forEach(card => {
+        const valueEl = card.querySelector('.expanded-field-value');
+        if (valueEl && valueEl.scrollWidth > valueEl.clientWidth) {
+          card.classList.add('is-truncated');
+        } else {
+          card.classList.remove('is-truncated');
+        }
+      });
+    },
+    showFieldValueDialog(key, value) {
+      this.fieldValueDialogKey = key;
+      this.fieldValueDialogValue = value;
+      this.fieldValueDialogVisible = true;
+    },
+    closeFieldValueDialog() {
+      this.fieldValueDialogVisible = false;
+    },
     async saveMenuScrollPos(isOpen, target) {
       if (isOpen) {
         // target doesn't exist yet, wait for it to be added to DOM
@@ -2870,7 +2898,8 @@ const huntComponent = {
       }
     },
     calculateEventColumnWidth() {
-      this.eventColumnWidth = this.$refs?.eventColumn?.$el?.clientWidth || 0;
+      const el = this.$refs?.eventColumn?.$el || this.$refs?.eventColumn;
+      this.eventColumnWidth = el?.clientWidth || 0;
       if (this.eventColumnWidth === 0) {
         setTimeout(() => {
           this.calculateEventColumnWidth();
@@ -3095,6 +3124,10 @@ const huntComponent = {
       }
 
       item.newest = this.extractSocValues(response.data.events[0]);
+      if (this.activeTabs[item._row_idx_] === 'playbook') {
+        this.loadPlaybook(item.newest, item._row_idx_);
+      }
+      this.$nextTick(() => this.checkAllFieldTruncation());
     },
     extractSocValues(event) {
       var record = event.payload;
@@ -3190,36 +3223,26 @@ const huntComponent = {
       }
 
       // Check if investigation already exists for this specific soc_id
-      const existingInvestigation = this.aiInvestigations[socId];
-      if (existingInvestigation && existingInvestigation.chatSessionId) {
+      if (targetItem['event.investigated'] && targetItem['event.investigation_session_id']) {
         // Check for middle-click (button === 1) to open in new tab
         if (event && event.button === 1) {
           // Middle-click: open in new tab
           const url = this.$router.resolve({
             name: 'assistant',
-            params: { sessionId: existingInvestigation.chatSessionId }
+            params: { sessionId: targetItem['event.investigation_session_id'] }
           }).href;
           window.open(url, '_blank');
         } else {
           // Left-click: navigate in current tab
           this.$router.push({
             name: 'assistant',
-            params: { sessionId: existingInvestigation.chatSessionId }
+            params: { sessionId: targetItem['event.investigation_session_id'] }
           });
         }
         return;
       }
 
-      // Generate a unique chat session ID for this investigation using soc_id
-      const chatSessionId = 'investigation_' + socId + '_' + Date.now();
-
-      // Update local tracking using soc_id as key
-      this.aiInvestigations[socId] = {
-        chatSessionId: chatSessionId,
-        socId: socId,
-        ruleUuid: targetItem['rule.uuid'],
-        timestamp: new Date().toISOString()
-      };
+      const chatSessionId = this.generateChatId();
 
       // Create the investigation prompt with alert data
       const queryList = this.generateQueryList(targetItem);
@@ -3275,12 +3298,9 @@ const huntComponent = {
       if (item.count) {
         return '';
       }
-      // For individual alerts, use soc_id as before
-      const socId = item.soc_id;
-      const investigation = this.aiInvestigations[socId];
-
-      if (investigation && investigation.chatSessionId) {
-        return 'secondary';
+      // Individual alerts
+      if (item['event.investigated']) {
+        return 'icon';
       }
       // Not investigated
       return '';
@@ -3292,13 +3312,14 @@ const huntComponent = {
         return this.i18n.aiInvestigateMostRecent;
       }
       // Individual alerts
-      const socId = item.soc_id;
-      const investigation = this.aiInvestigations[socId];
-
-      if (investigation && investigation.chatSessionId) {
+      if (item['event.investigation_session_id']) {
         return this.i18n.aiInvestigateView;
       }
       return this.i18n.aiInvestigate;
+    },
+
+    generateChatId() {
+      return crypto.randomUUID();
     },
   }
 };

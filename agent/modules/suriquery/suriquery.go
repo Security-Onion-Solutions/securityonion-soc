@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -116,7 +116,24 @@ func (suri *SuriQuery) ProcessJob(job *model.Job, reader io.ReadCloser) (io.Read
 		log.WithFields(log.Fields{
 			"jobId": job.Id,
 		}).Debug("Starting to process new Suricata PCAP job")
-		pcapFiles := suri.findFilesInTimeRange(job.Filter.BeginTime, job.Filter.EndTime)
+
+		var pcapFiles []string
+		if pcapPath, ok := job.Filter.Parameters["suricata.capture_file"]; ok {
+			log.WithFields(log.Fields{
+				"jobId":    job.Id,
+				"pcapPath": pcapPath,
+			}).Debug("Processing Suricata PCAP job with specific pcap file")
+			if pcapPathStr, ok := pcapPath.(string); ok {
+				pcapFiles = []string{pcapPathStr}
+			} else {
+				return reader, errors.New("invalid pcap path")
+			}
+		} else {
+			log.WithFields(log.Fields{
+				"jobId": job.Id,
+			}).Debug("Processing Suricata PCAP job with date range")
+			pcapFiles = suri.findFilesInTimeRange(job.Filter.BeginTime, job.Filter.EndTime)
+		}
 		var newReader io.ReadCloser
 		var size int
 		newReader, size, err = suri.streamPacketsInPcaps(pcapFiles, job.Filter)

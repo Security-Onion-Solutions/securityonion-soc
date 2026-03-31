@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -18,6 +18,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/apex/log"
+	"github.com/apex/log/handlers/memory"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	modmock "github.com/security-onion-solutions/securityonion-soc/server/modules/mock"
@@ -722,6 +724,280 @@ func TestScrollMidScrollError(t *testing.T) {
 	assert.Equal(t, `{"scroll_id":"MyScrollID"}`, string(body))
 }
 
+func TestScrollClearScroll404(t *testing.T) {
+	ctx := context.Background()
+
+	h := memory.New()
+	log.SetHandler(h)
+	log.SetLevel(log.DebugLevel)
+
+	client, transport := modmock.NewMockClient(t)
+
+	// first response, all good
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(`{
+			"_scroll_id" : "MyScrollID",
+			"took" : 70,
+			"timed_out" : false,
+			"_shards" : {
+				"total" : 1,
+				"successful" : 1,
+				"skipped" : 0,
+				"failed" : 0
+			},
+			"_clusters" : {
+				"total" : 1,
+				"successful" : 1,
+				"skipped" : 0
+			},
+			"hits" : {
+				"total" : {
+					"value" : 3,
+					"relation" : "eq"
+				},
+				"max_score" : 4.279684,
+				"hits" : [
+					{
+						"_index" : "manager:so-detection",
+						"_id" : "crED25ABBp4oOLSg7eY0",
+						"_score" : 4.279684,
+						"_source" : {
+							"@timestamp" : "2024-07-22T15:54:30.269516253Z",
+							"so_detection" : {
+								"createTime" : "2024-07-22T15:16:17.244146895Z",
+								"userId" : "3475de3d-dc89-40fb-b07f-611406dd7fe8",
+								"publicId" : "1",
+								"title" : "Security Onion IDH - REDIS Action Command Attempt",
+								"severity" : "critical",
+								"author" : "Security Onion Solutions",
+								"description" : "Detects instances where a REDIS service on an OpenCanary node has had an action command attempted.",
+								"content" : "",
+								"isEnabled" : true,
+								"isReporting" : false,
+								"isCommunity" : true,
+								"engine" : "suricata",
+								"language" : "suricata",
+								"overrides" : [ ],
+								"tags" : null,
+								"ruleset" : "securityonion-resources",
+								"license" : "Elastic-2.0"
+							},
+							"so_kind" : "detection"
+						}
+					}
+				]
+			}
+		}`)),
+	}, nil)
+
+	// second response, still good
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(`{
+			"_scroll_id" : "MyScrollID",
+			"took" : 52,
+			"timed_out" : false,
+			"_shards" : {
+				"total" : 1,
+				"successful" : 1,
+				"skipped" : 0,
+				"failed" : 0
+			},
+			"_clusters" : {
+				"total" : 1,
+				"successful" : 1,
+				"skipped" : 0
+			},
+			"hits" : {
+				"total" : {
+					"value" : 3,
+					"relation" : "eq"
+				},
+				"max_score" : 4.279684,
+				"hits" : [
+					{
+						"_index" : "manager:so-detection",
+						"_id" : "crED25ABBp4oOLSg7eY0",
+						"_score" : 4.279684,
+						"_source" : {
+							"@timestamp" : "2024-07-22T15:54:30.269516253Z",
+							"so_detection" : {
+								"createTime" : "2024-07-22T15:16:17.244146895Z",
+								"userId" : "3475de3d-dc89-40fb-b07f-611406dd7fe8",
+								"publicId" : "2",
+								"title" : "Security Onion IDH - REDIS Action Command Attempt",
+								"severity" : "critical",
+								"author" : "Security Onion Solutions",
+								"description" : "Detects instances where a REDIS service on an OpenCanary node has had an action command attempted.",
+								"content" : "",
+								"isEnabled" : true,
+								"isReporting" : false,
+								"isCommunity" : true,
+								"engine" : "suricata",
+								"language" : "suricata",
+								"overrides" : [ ],
+								"tags" : null,
+								"ruleset" : "securityonion-resources",
+								"license" : "Elastic-2.0"
+							},
+							"so_kind" : "detection"
+						}
+					}
+				]
+			}
+		}`)),
+	}, nil)
+
+	// third response, last page
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(`{
+			"_scroll_id" : "MyScrollID",
+			"took" : 48,
+			"timed_out" : false,
+			"_shards" : {
+				"total" : 1,
+				"successful" : 1,
+				"skipped" : 0,
+				"failed" : 0
+			},
+			"_clusters" : {
+				"total" : 1,
+				"successful" : 1,
+				"skipped" : 0
+			},
+			"hits" : {
+				"total" : {
+					"value" : 3,
+					"relation" : "eq"
+				},
+				"max_score" : 4.279684,
+				"hits" : [
+					{
+						"_index" : "manager:so-detection",
+						"_id" : "crED25ABBp4oOLSg7eY0",
+						"_score" : 4.279684,
+						"_source" : {
+							"@timestamp" : "2024-07-22T15:54:30.269516253Z",
+							"so_detection" : {
+								"createTime" : "2024-07-22T15:16:17.244146895Z",
+								"userId" : "3475de3d-dc89-40fb-b07f-611406dd7fe8",
+								"publicId" : "3",
+								"title" : "Security Onion IDH - REDIS Action Command Attempt",
+								"severity" : "critical",
+								"author" : "Security Onion Solutions",
+								"description" : "Detects instances where a REDIS service on an OpenCanary node has had an action command attempted.",
+								"content" : "",
+								"isEnabled" : true,
+								"isReporting" : false,
+								"isCommunity" : true,
+								"engine" : "suricata",
+								"language" : "suricata",
+								"overrides" : [ ],
+								"tags" : null,
+								"ruleset" : "securityonion-resources",
+								"license" : "Elastic-2.0"
+							},
+							"so_kind" : "detection"
+						}
+					}
+				]
+			}
+		}`)),
+	}, nil)
+
+	// ClearScroll returns 404
+	transport.AddResponse(&http.Response{
+		StatusCode: 404,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(`{"succeeded":true,"num_freed":0}`)),
+	}, nil)
+
+	store := &ElasticEventstore{
+		esClient:      client,
+		cacheTime:     time.Now().Add(time.Hour),
+		fieldDefs:     make(map[string]*FieldDefinition),
+		maxScrollSize: 10000,
+		maxLogLength:  math.MaxInt,
+		index:         "myIndex",
+	}
+
+	criteria := &model.EventScrollCriteria{
+		ParsedQuery: &model.Query{},
+	}
+	criteria.RawQuery = `_index:"*:so-detection" AND so_kind:"detection" AND so_detection.engine:"suricata" AND so_detection.isCommunity:"true"`
+	err := criteria.ParsedQuery.Parse(criteria.RawQuery)
+	assert.Nil(t, err)
+
+	results, err := store.Scroll(ctx, criteria, nil)
+
+	assert.Nil(t, err)
+	assert.NotNil(t, results)
+	assert.Equal(t, 3, results.TotalEvents)
+	assert.Equal(t, 3, len(results.Events))
+	assert.Equal(t, criteria, results.Criteria)
+	assert.Equal(t, "1", results.Events[0].Payload["so_detection.publicId"])
+	assert.Equal(t, "2", results.Events[1].Payload["so_detection.publicId"])
+	assert.Equal(t, "3", results.Events[2].Payload["so_detection.publicId"])
+
+	// Verify no log entries about scroll close errors
+	for _, entry := range h.Entries {
+		assert.NotContains(t, entry.Message, "call to close scroll failed")
+		assert.NotContains(t, entry.Message, "error closing scroll")
+	}
+
+	reqs := transport.GetRequests()
+
+	assert.Equal(t, 4, len(reqs))
+
+	// Initial search request
+	req := reqs[0]
+	assert.NotNil(t, req)
+	assert.Equal(t, "POST", req.Method)
+	assert.Equal(t, "/myIndex/_search", req.URL.Path)
+	assert.Contains(t, req.URL.RawQuery, "pretty=true")
+	assert.Contains(t, req.URL.RawQuery, "scroll=60000ms")
+	assert.Contains(t, req.URL.RawQuery, "track_total_hits=true")
+
+	body, err := io.ReadAll(req.Body)
+	assert.Nil(t, err)
+	assert.Equal(t, `{"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"_index: \"*:so-detection\" AND so_kind: \"detection\" AND so_detection.engine: \"suricata\" AND so_detection.isCommunity: \"true\""}}],"must_not":[],"should":[]}},"size":10000}`, string(body))
+
+	// Scroll requests
+	for _, req := range reqs[1:3] {
+		assert.NotNil(t, req)
+		assert.Equal(t, "POST", req.Method)
+		assert.Equal(t, "/_search/scroll", req.URL.Path)
+		assert.Contains(t, req.URL.RawQuery, "scroll=60000ms")
+
+		body, err = io.ReadAll(req.Body)
+		assert.Nil(t, err)
+		assert.Equal(t, `{"scroll_id":"MyScrollID"}`, string(body))
+	}
+
+	// ClearScroll request
+	req = reqs[3]
+	assert.NotNil(t, req)
+	assert.Equal(t, "DELETE", req.Method)
+	assert.Equal(t, "/_search/scroll", req.URL.Path)
+
+	body, err = io.ReadAll(req.Body)
+	assert.Nil(t, err)
+	assert.Equal(t, `{"scroll_id":"MyScrollID"}`, string(body))
+}
+
 func TestAddUpdateScript(t *testing.T) {
 	client, _ := modmock.NewMockClient(t)
 
@@ -736,13 +1012,15 @@ func TestAddUpdateScript(t *testing.T) {
 
 	timeNow := time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)
 
+	// Test unacknowledge (ack=false)
 	criteria := &model.EventUpdateCriteria{}
-	store.addUpdateScripts(criteria, timeNow, false, false)
+	store.AddAckEscalateUpdateScripts(criteria, timeNow, false, false, "admin")
 	assert.Len(t, criteria.UpdateScripts, 1)
 	assert.Equal(t, "ctx._source.event.acknowledged = false;", criteria.UpdateScripts[0])
 
+	// Test acknowledge without escalate
 	criteria = &model.EventUpdateCriteria{}
-	store.addUpdateScripts(criteria, timeNow, true, false)
+	store.AddAckEscalateUpdateScripts(criteria, timeNow, true, false, "admin")
 	assert.Len(t, criteria.UpdateScripts, 1)
 	expected := `
 			boolean track_timing = false;
@@ -757,6 +1035,7 @@ func TestAddUpdateScript(t *testing.T) {
 
 			if (ctx._source.event.acknowledged != true) {
 				ctx._source.event.acknowledged = true;
+				ctx._source.event.acknowledged_by = 'admin';
 				if (track_timing) {
 					ctx._source.event.acknowledged_timestamp = now_date;
 					ctx._source.event.acknowledged_elapsed_seconds = elapsed_seconds;
@@ -765,6 +1044,7 @@ func TestAddUpdateScript(t *testing.T) {
 
 			if (ctx._source.event.escalated != true && esc_bool) {
 				ctx._source.event.escalated = esc_bool;
+				ctx._source.event.escalated_by = 'admin';
 				if (track_timing) {
 					ctx._source.event.escalated_timestamp = now_date;
 					ctx._source.event.escalated_elapsed_seconds = elapsed_seconds;
@@ -773,10 +1053,58 @@ func TestAddUpdateScript(t *testing.T) {
 			`
 	assert.Equal(t, expected, criteria.UpdateScripts[0])
 
+	// Test acknowledge with escalate
 	criteria = &model.EventUpdateCriteria{}
-	store.addUpdateScripts(criteria, timeNow, true, true)
+	store.AddAckEscalateUpdateScripts(criteria, timeNow, true, true, "admin")
 	assert.Len(t, criteria.UpdateScripts, 1)
 	assert.Contains(t, criteria.UpdateScripts[0], "esc_bool = true")
+	assert.Contains(t, criteria.UpdateScripts[0], "ctx._source.event.escalated_by = 'admin';")
+
+	// Test investigation case without session ID
+	criteria = &model.EventUpdateCriteria{}
+	store.AddInvestigationUpdateScripts(criteria, timeNow, "admin", false)
+	assert.Len(t, criteria.UpdateScripts, 1)
+	expected = `
+			boolean track_timing = false;
+			Instant now_instant = Instant.ofEpochMilli(1257894000000L);
+			ZonedDateTime now_date = ZonedDateTime.ofInstant(now_instant, ZoneId.of('Z'));
+			
+			ctx._source.event.investigated = true;
+			ctx._source.event.investigated_by = 'admin';
+			if (track_timing) {
+				ctx._source.event.investigated_timestamp = now_date;
+			}
+			`
+	assert.Equal(t, expected, criteria.UpdateScripts[0])
+
+	// Test investigation case with session ID
+	criteria = &model.EventUpdateCriteria{}
+	store.AddInvestigationUpdateScripts(criteria, timeNow, "admin", false, "test-session-123")
+	assert.Len(t, criteria.UpdateScripts, 1)
+	expected = `
+			boolean track_timing = false;
+			Instant now_instant = Instant.ofEpochMilli(1257894000000L);
+			ZonedDateTime now_date = ZonedDateTime.ofInstant(now_instant, ZoneId.of('Z'));
+			
+			ctx._source.event.investigated = true;
+			ctx._source.event.investigated_by = 'admin';
+			ctx._source.event.investigation_session_id = 'test-session-123';
+			if (track_timing) {
+				ctx._source.event.investigated_timestamp = now_date;
+			}
+			`
+	assert.Equal(t, expected, criteria.UpdateScripts[0])
+
+	// Test investigation delete case
+	criteria = &model.EventUpdateCriteria{}
+	store.AddInvestigationUpdateScripts(criteria, timeNow, "admin", true)
+	assert.Len(t, criteria.UpdateScripts, 1)
+	expected = `
+		if (ctx._source.event.containsKey('investigation_session_id')) {
+			ctx._source.event.remove('investigation_session_id');
+		}
+	`
+	assert.Equal(t, expected, criteria.UpdateScripts[0])
 }
 
 func TestSearchPermissionsAuthorized(t *testing.T) {
@@ -930,4 +1258,85 @@ func TestSearchPermissionsUnauthorized(t *testing.T) {
 	assert.Equal(t, "read", unauth.Operation)
 	assert.Equal(t, "events", unauth.Target)
 	assert.Nil(t, results2)
+}
+
+func TestAddParameterToFilter(t *testing.T) {
+	store := &ElasticEventstore{}
+	filter := model.NewFilter()
+
+	json := `{"hits":{"hits":[{"_source":{"suricata":{"capture_file":"/path/to/pcap"}}}]}}`
+	store.addParameterToFilter(json, "suricata.capture_file", filter)
+	assert.Equal(t, "/path/to/pcap", filter.Parameters["suricata.capture_file"])
+
+	// Test overwrite
+	json2 := `{"hits":{"hits":[{"_source":{"suricata":{"capture_file":"/new/path"}}}]}}`
+	store.addParameterToFilter(json2, "suricata.capture_file", filter)
+	assert.Equal(t, "/new/path", filter.Parameters["suricata.capture_file"])
+
+	// Test empty value
+	json3 := `{"hits":{"hits":[{"_source":{"suricata":{}}}]}}`
+	store.addParameterToFilter(json3, "suricata.capture_file", filter)
+	assert.Equal(t, "/new/path", filter.Parameters["suricata.capture_file"], "should not have overwritten with empty")
+}
+
+func TestPopulateJobFromDocQuery(t *testing.T) {
+	ctx := context.Background()
+	client, transport := modmock.NewMockClient(t)
+	srv := server.NewFakeAuthorizedServer(nil)
+	store := &ElasticEventstore{
+		esClient:          client,
+		server:            srv,
+		index:             "myIndex",
+		esSearchOffsetMs:  1000,
+		timeShiftMs:       500,
+		defaultDurationMs: 60000,
+	}
+
+	// Primary search response
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(`{
+			"hits" : {
+				"total" : {
+					"value" : 1,
+					"relation" : "eq"
+				},
+				"hits" : [
+					{
+						"_source" : {
+							"@timestamp" : "2024-07-22T15:54:30.269Z",
+							"source" : { "ip": "1.1.1.1", "port": 1111 },
+							"destination" : { "ip": "2.2.2.2", "port": 2222 },
+							"network" : { "transport": "tcp" },
+							"suricata" : { "capture_file": "/path/to/suricata.pcap" },
+							"observer" : { "name": "sensor1" }
+						}
+					}
+				]
+			}
+		}`)),
+	}, nil)
+
+	job := model.NewJob()
+	err := store.PopulateJobFromDocQuery(ctx, "_id", "some-id", "2024-07-22T15:54:30.269Z", job)
+	assert.NoError(t, err)
+	assert.Equal(t, "/path/to/suricata.pcap", job.Filter.Parameters["suricata.capture_file"])
+	assert.Equal(t, "sensor1", job.NodeId)
+	assert.Equal(t, "1.1.1.1", job.Filter.SrcIp)
+	assert.Equal(t, "tcp", job.Filter.Protocol)
+
+	// Check begin/end times
+	// timestamp: 2024-07-22T15:54:30.269Z
+	// duration: 60000ms
+	// timeShift: 500ms
+	// begin = timestamp - 60000 - 500 = timestamp - 60500ms
+	// end = timestamp + 60000 + 500 = timestamp + 60500ms
+	ts, _ := time.Parse(time.RFC3339, "2024-07-22T15:54:30.269Z")
+	expectedBegin := ts.Add(time.Duration(-60500) * time.Millisecond)
+	expectedEnd := ts.Add(time.Duration(60500) * time.Millisecond)
+	assert.True(t, expectedBegin.Equal(job.Filter.BeginTime))
+	assert.True(t, expectedEnd.Equal(job.Filter.EndTime))
 }

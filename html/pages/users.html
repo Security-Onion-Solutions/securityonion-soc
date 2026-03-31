@@ -1,57 +1,56 @@
 <v-container fluid data-aid="users_screen">
-	<v-row>
-		<v-col cols="12" lg="3">
-			<h2 v-text="i18n.users"></h2>
-		</v-col>
-		<v-col cols="12" lg="5">
-			<v-expansion-panels v-if="$root.isUserAdmin()">
-				<v-expansion-panel data-aid="users_options_expand">
-					<v-expansion-panel-title id="users-options-header" expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up">{{i18n.options}}</v-expansion-panel-title>
-					<v-expansion-panel-text>
-						<v-btn id="users-sync-button" @click.stop="sync()" class="mt-6 mb-1 theme-background-lighten-1" data-aid="users_options_synchronize">
-							{{ i18n.usersSynchronize }}
-						</v-btn>
-						<div class="text-caption" v-text="i18n.usersSynchronizeHelp"></div>
-					</v-expansion-panel-text>
-				</v-expansion-panel>
-			</v-expansion-panels>
-		</v-col>
-		<v-spacer></v-spacer>
-		<v-col cols="12" lg="2" align="end" data-aid="users_summary">
-			<h4 v-if="!$root.loading">{{ i18n.usersEnabled }} {{ countUsersEnabled() }} / {{ countUsers() }} </h4>
-		</v-col>
-	</v-row>
+	<v-dialog v-if="$root.isUserAdmin()" v-model="showOptionsDialog" max-width="540">
+		<v-card class="options-dialog">
+			<v-card-title>{{i18n.options}}</v-card-title>
+			<v-card-text data-aid="users_options">
+				<v-btn variant="tonal" id="users-sync-button" @click.stop="sync()" class="mt-2 mb-3 theme-background-lighten-1" data-aid="users_options_synchronize">
+					{{ i18n.usersSynchronize }}
+				</v-btn>
+				<div class="text-body-small" v-text="i18n.usersSynchronizeHelp"></div>
+			</v-card-text>
+			<v-card-actions>
+				<v-spacer></v-spacer>
+				<v-btn variant="text" @click="showOptionsDialog = false">{{ i18n.close }}</v-btn>
+			</v-card-actions>
+		</v-card>
+	</v-dialog>
 	<v-row>
 		<v-col>
-			<v-toolbar v-if="$root.isUserAdmin()" class="elevation-0 theme-background-lighten-1">
-				<v-btn variant="flat" id="add-user-button" class="action ml-3" color="blue" @click.stop="showAdd()" data-aid="users_create_new">
-					<v-icon>fa-plus</v-icon>
-				</v-btn>
-				<v-btn variant="flat" color="secondary" @click.stop="loadData()" id="users-refresh-button" class="ml-3" data-aid="users_refresh_button">
-					<v-icon>fa-sync</v-icon>
-				</v-btn>
-				<v-spacer></v-spacer>
-				<v-btn variant="flat" color="secondary" class="mx-4" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'administration.html#users'" :title="i18n.contextualDocsBtn" data-aid="users_docs">
-					<v-icon>fa-circle-question</v-icon>
-				</v-btn>
-			</v-toolbar>
+			<v-row>
+				<v-toolbar v-if="$root.isUserAdmin()" class="so-toolbar elevation-0">
+					<h4 v-if="!$root.loading" class="ml-2 my-0" data-aid="users_summary">{{ i18n.usersEnabled }} {{ countUsersEnabled() }} / {{ countUsers() }}</h4>
+					<v-spacer></v-spacer>
+					<v-btn icon variant="flat" id="add-user-button" class="circle-button mx-2" @click.stop="showAdd()" data-aid="users_create_new">
+						<v-icon>fa-plus</v-icon>
+					</v-btn>
+					<v-btn icon variant="flat" @click.stop="loadData()" id="users-refresh-button" class="circle-button mx-2" data-aid="users_refresh_button">
+						<v-icon>fa-sync</v-icon>
+					</v-btn>
+					<v-btn icon variant="flat" class="circle-button mx-2" :title="i18n.options" @click="showOptionsDialog = true" id="users-options-header" data-aid="users_options_button">
+						<v-icon>fa-gear</v-icon>
+					</v-btn>
+					<v-btn icon variant="flat" class="circle-button mx-2" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'administration#users'" :title="i18n.contextualDocsBtn" data-aid="users_docs">
+						<v-icon>fa-circle-question</v-icon>
+					</v-btn>
+				</v-toolbar>
+			</v-row>
 			<v-dialog v-model="dialog" persistent width="800px" data-aid="users_create_dialog">
 				<v-card>
 					<v-card-title class="lighten-4 py-4 title">{{ i18n.add }} {{ i18n.user }}</v-card-title>
 					<v-form v-model="form.valid">
 						<v-container grid-list-sm class="pa-4">
 							<v-row>
-								<v-col xs12>
-									<v-text-field variant="underlined" id="email-input" v-model="form.email" :placeholder="i18n.email" :autofocus="true" :rules="[rules.required,rules.email,rules.lowercase]" data-aid="users_create_dialog_email"></v-text-field>
-									<v-text-field variant="underlined" id="password-input" v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'" data-aid="users_create_dialog_password"
+								<v-col xs12 class="d-flex flex-column">
+									<v-text-field id="email-input" v-model="form.email" :placeholder="i18n.email" :autofocus="true" :rules="[rules.required,rules.email,rules.lowercase]" data-aid="users_create_dialog_email"></v-text-field>
+									<v-text-field id="password-input" v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'" data-aid="users_create_dialog_password"
 										@click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'"
 										:rules="[rules.required, rules.maxpasslen, rules.minpasslen, rules.badpasschs]"></v-text-field>
 									<span data-aid="users_create_dialog_roles">
-										<v-select variant="underlined" id="roles-select" v-model="form.role" :items="roles" :label="i18n.role" :rules="[rules.required]"></v-select>
+										<v-select id="roles-select" v-model="form.role" :items="roles" :label="i18n.role" :rules="[rules.required]"></v-select>
 									</span>
-									<v-text-field variant="underlined" id="firstname-input" v-model="form.firstName" :placeholder="i18n.firstName" :rules="[rules.name]" data-aid="users_create_dialog_firstname"></v-text-field>
-									<v-text-field variant="underlined" id="lastname-input" v-model="form.lastName" :placeholder="i18n.lastName" :rules="[rules.name]" data-aid="users_create_dialog_lastname"></v-text-field>
-									<v-text-field variant="underlined" id="note-input" v-model="form.note" :placeholder="i18n.note" :rules="[rules.note]" data-aid="users_create_dialog_note"></v-text-field>
+									<v-text-field id="firstname-input" v-model="form.firstName" :placeholder="i18n.firstName" :rules="[rules.name]" data-aid="users_create_dialog_firstname"></v-text-field>
+									<v-text-field id="lastname-input" v-model="form.lastName" :placeholder="i18n.lastName" :rules="[rules.name]" data-aid="users_create_dialog_lastname"></v-text-field>
+									<v-text-field id="note-input" v-model="form.note" :placeholder="i18n.note" :rules="[rules.note]" data-aid="users_create_dialog_note"></v-text-field>
 								</v-col>
 							</v-row>
 						</v-container>
@@ -76,104 +75,106 @@
 					</v-card-actions>
 				</v-card>
 			</v-dialog>
-			<v-data-table :sort-by="sortBy" @update:sort-by="val => sortBy = val" @update:items-per-page="val => itemsPerPage = val" :items-per-page-options="itemsPerPageOptions" data-aid="users_details"
-				v-model:items-per-page="itemsPerPage" must-sort :headers="headers" :items="users" v-model:expanded="expanded">
-				<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
-					<tr>
-						<template v-for="header in columns" :key="header.key">
-							<th :class="{'is-sorted': isSorted(header)}" v-if="header.value != 'expand' || $root.isUserAdmin()" :data-aid="'users_details_header_' + header?.value?.toLowerCase()">
-								<span @click="toggleSort(header)">
-									{{ header.title }}
-								</span>
-								<template v-if="isSorted(header)">
-									<v-icon>
-										{{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down'}}
-									</v-icon>
-								</template>
-							</th>
-						</template>
-					</tr>
-				</template>
-				<template #item="{ item, isExpanded, toggleExpand, internalItem }">
-					<tr>
-						<td v-if="$root.isUserAdmin()">
-							<v-btn id="expandNode" icon variant="text" size="small" @click="if (!isExpanded(internalItem)) { updateForm(item); } toggleExpand(internalItem)" data-aid="users_details_expand">
-								<v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="users_details_collapse">fa-angle-down</v-icon>
-								<v-icon v-else :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="users_details_expand">fa-angle-right</v-icon>
-							</v-btn>
-						</td>
-						<td v-text="item.email"></td>
-						<td v-text="item.firstName" class="d-none d-lg-table-cell"></td>
-						<td v-text="item.lastName" class="d-none d-lg-table-cell"></td>
-						<td v-text="item.note" class="d-none d-lg-table-cell"></td>
-						<td v-text="$root.formatStringArray(item.roles)" class="d-none d-lg-table-cell"></td>
-						<td>
-							<div v-if="$root.isUserAdmin() || $root.isMyUser(item)">
-								<v-icon v-if="item.oidcStatus == 'enabled'" color="info" class="px-1" :title="i18n.oidcLinked" data-aid="users_details_link_indicator">fa-link</v-icon>
-								<v-icon v-if="item.totpStatus == 'enabled'" color="info" :title="i18n.totpActive" data-aid="users_details_totp_indicator">fa-user-shield</v-icon>
-								<v-icon v-if="item.webauthnStatus == 'unused-due-to-always-showing-enabled'" color="info" class="px-1" :title="i18n.webauthnActive" data-aid="users_details_webauthn_indicator">fa-fingerprint</v-icon>
-								<v-icon v-if="item.status == 'locked'" color="grey" :title="i18n.loginDisabled" data-aid="users_details_locked_indicator">fa-user-slash</v-icon>
-								<v-icon v-if="!item.passwordChanged && item.oidcStatus != 'enabled'" color="warning" class="px-1" :title="i18n.passwordNeedsChanged" data-aid="users_details_unmodified_indicator">fa-exclamation-triangle</v-icon>
-							</div>
-						</td>
-					</tr>
-				</template>
-				<template #expanded-row="{ item }">
-					<tr data-aid="users_details_expanded">
-						<td :colspan="headers.length + 1" class="px-0">
-							<v-container fluid grid-list-sm class="pa-4">
-								<v-row>
-									<v-col cols="12" lg="4">
-										<v-card>
-											<v-card-title v-text="i18n.profile"></v-card-title>
-											<v-card-text>
-												<v-form v-model="form.valid">
-													<v-text-field variant="underlined" id="firstname-input" v-model="form.firstName" :placeholder="i18n.firstName" :rules="[rules.name]" data-aid="users_details_firstname_input"></v-text-field>
-													<v-text-field variant="underlined" id="lastname-input" v-model="form.lastName" :placeholder="i18n.lastName" :rules="[rules.name]" data-aid="users_details_lastname_input"></v-text-field>
-													<v-text-field variant="underlined" id="note-input" v-model="form.note" :placeholder="i18n.note" :rules="[rules.note]" data-aid="users_details_note_input"></v-text-field>
+			<v-row>
+				<v-data-table :sort-by="sortBy" @update:sort-by="val => sortBy = val" @update:items-per-page="val => itemsPerPage = val" :items-per-page-options="itemsPerPageOptions" data-aid="users_details"
+					v-model:items-per-page="itemsPerPage" must-sort :headers="headers" :items="users" v-model:expanded="expanded">
+					<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
+						<tr>
+							<template v-for="header in columns" :key="header.key">
+								<th :class="{'is-sorted': isSorted(header)}" v-if="header.value != 'expand' || $root.isUserAdmin()" :data-aid="'users_details_header_' + header?.value?.toLowerCase()">
+									<span @click="toggleSort(header)">
+										{{ header.title }}
+									</span>
+									<template v-if="isSorted(header)">
+										<v-icon>
+											{{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down'}}
+										</v-icon>
+									</template>
+								</th>
+							</template>
+						</tr>
+					</template>
+					<template #item="{ item, isExpanded, toggleExpand, internalItem }">
+						<tr :class="{'seamless-expanded-row': isExpanded(internalItem), 'main-row': true}">
+							<td v-if="$root.isUserAdmin()">
+								<v-btn id="expandNode" icon variant="text" size="small" @click="if (!isExpanded(internalItem)) { updateForm(item); } toggleExpand(internalItem)" data-aid="users_details_expand">
+									<v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="users_details_collapse">fa-angle-down</v-icon>
+									<v-icon v-else :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="users_details_expand">fa-angle-right</v-icon>
+								</v-btn>
+							</td>
+							<td v-text="item.email"></td>
+							<td v-text="item.firstName" class="d-none d-lg-table-cell"></td>
+							<td v-text="item.lastName" class="d-none d-lg-table-cell"></td>
+							<td v-text="item.note" class="d-none d-lg-table-cell"></td>
+							<td v-text="$root.formatStringArray(item.roles)" class="d-none d-lg-table-cell"></td>
+							<td>
+								<div v-if="$root.isUserAdmin() || $root.isMyUser(item)">
+									<v-icon v-if="item.oidcStatus == 'enabled'" color="info" class="px-1" :title="i18n.oidcLinked" data-aid="users_details_link_indicator">fa-link</v-icon>
+									<v-icon v-if="item.totpStatus == 'enabled'" color="info" :title="i18n.totpActive" data-aid="users_details_totp_indicator">fa-user-shield</v-icon>
+									<v-icon v-if="item.webauthnStatus == 'unused-due-to-always-showing-enabled'" color="info" class="px-1" :title="i18n.webauthnActive" data-aid="users_details_webauthn_indicator">fa-fingerprint</v-icon>
+									<v-icon v-if="item.status == 'locked'" color="grey" :title="i18n.loginDisabled" data-aid="users_details_locked_indicator">fa-user-slash</v-icon>
+									<v-icon v-if="!item.passwordChanged && item.oidcStatus != 'enabled'" color="warning" class="px-1" :title="i18n.passwordNeedsChanged" data-aid="users_details_unmodified_indicator">fa-exclamation-triangle</v-icon>
+								</div>
+							</td>
+						</tr>
+					</template>
+					<template #expanded-row="{ item }">
+						<tr class="expanded-row" data-aid="users_details_expanded">
+							<td :colspan="headers.length + 1" class="px-0">
+								<v-container fluid grid-list-sm class="pa-4">
+									<v-row>
+										<v-col cols="12" lg="4">
+											<v-card>
+												<v-card-title v-text="i18n.profile"></v-card-title>
+												<v-card-text>
+													<v-form v-model="form.valid">
+														<v-text-field id="firstname-input" v-model="form.firstName" :placeholder="i18n.firstName" :rules="[rules.name]" data-aid="users_details_firstname_input"></v-text-field>
+														<v-text-field id="lastname-input" v-model="form.lastName" :placeholder="i18n.lastName" :rules="[rules.name]" data-aid="users_details_lastname_input"></v-text-field>
+														<v-text-field id="note-input" v-model="form.note" :placeholder="i18n.note" :rules="[rules.note]" data-aid="users_details_note_input"></v-text-field>
 
-													<v-btn id="update-profile-button" :disabled="!form.valid" @click="updateProfile(item)" v-text="i18n.update" data-aid="users_details_submit"></v-btn>
-												</v-form>
-											</v-card-text>
-										</v-card>
-									</v-col>
-									<v-col cols="12" lg="4">
-										<v-card>
-											<v-card-title>{{ i18n.roles }}</v-card-title>
-											<v-card-text data-aid="users_details_role_toggle">
-												<template v-for="role in roles" :key="role">
-													<span :data-aid="'users_details_role_toggle_' + role">
-														<v-checkbox :id="'role-checkbox-' + role" density="compact" class="no-details" :model-value="hasRole(item, role)" :label="role" @click.stop="toggleRole(item, role)"></v-checkbox>
-													</span>
-												</template>
-											</v-card-text>
-										</v-card>
-									</v-col>
-									<v-col cols="12" lg="4">
-										<v-card>
-											<v-card-title>{{ i18n.access }}</v-card-title>
-											<v-card-text>
-												<v-alert v-if="item.oidcStatus == 'enabled'" class="mt-2 multi-line" type="warning" icon="fa-shield-halved" variant="text" density="compact" data-aid="users_details_reset_password_help">
-													{{ i18n.oidcResetPasswordHelp }}
-												</v-alert>
+														<v-btn id="update-profile-button" :disabled="!form.valid" @click="updateProfile(item)" v-text="i18n.update" data-aid="users_details_submit"></v-btn>
+													</v-form>
+												</v-card-text>
+											</v-card>
+										</v-col>
+										<v-col cols="12" lg="4">
+											<v-card>
+												<v-card-title>{{ i18n.roles }}</v-card-title>
+												<v-card-text data-aid="users_details_role_toggle">
+													<template v-for="role in roles" :key="role">
+														<span :data-aid="'users_details_role_toggle_' + role">
+															<v-checkbox :id="'role-checkbox-' + role" density="compact" class="no-details" :model-value="hasRole(item, role)" :label="role" @click.stop="toggleRole(item, role)"></v-checkbox>
+														</span>
+													</template>
+												</v-card-text>
+											</v-card>
+										</v-col>
+										<v-col cols="12" lg="4">
+											<v-card>
+												<v-card-title>{{ i18n.access }}</v-card-title>
+												<v-card-text>
+													<v-alert v-if="item.oidcStatus == 'enabled'" class="mt-2 multi-line" type="warning" icon="fa-shield-halved" variant="text" density="compact" data-aid="users_details_reset_password_help">
+														{{ i18n.oidcResetPasswordHelp }}
+													</v-alert>
 
-												<v-form v-model="form.valid">
-													<v-text-field variant="underlined" id="password-input" v-model="form.password" :placeholder="i18n.passwordChange" :type="showPassword ? 'text' : 'password'" data-aid="users_details_password_input"
-														@click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'"
-														:rules="[rules.required, rules.maxpasslen, rules.minpasslen, rules.badpasschs]"></v-text-field>
-												</v-form>
-												<v-btn id="update-password-button" :disabled="!form.valid" @click="updatePassword(item)" v-text="i18n.passwordReset" class="mr-2 mb-2" data-aid="users_details_password_update"></v-btn>
-												<v-btn id="toggle-locked-button" v-text="item.status == 'locked' ? i18n.unlock : i18n.lock" @click.stop="toggleStatus(item)" class="mr-2 mb-2" data-aid="users_details_lock_toggle"></v-btn>
-												<v-btn id="delete-user-button" v-text="i18n.delete" color="error" @click.stop="showDeleteConfirm()" class="mb-2" data-aid="users_details_delete"></v-btn>
-											</v-card-text>
-										</v-card>
-									</v-col>
-								</v-row>
-							</v-container>
-						</td>
-					</tr>
-				</template>
-			</v-data-table>
+													<v-form v-model="form.valid">
+														<v-text-field id="password-input" v-model="form.password" :placeholder="i18n.passwordChange" :type="showPassword ? 'text' : 'password'" data-aid="users_details_password_input"
+															@click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'"
+															:rules="[rules.required, rules.maxpasslen, rules.minpasslen, rules.badpasschs]"></v-text-field>
+													</v-form>
+													<v-btn id="update-password-button" :disabled="!form.valid" @click="updatePassword(item)" v-text="i18n.passwordReset" class="mr-2 mb-2" data-aid="users_details_password_update"></v-btn>
+													<v-btn id="toggle-locked-button" v-text="item.status == 'locked' ? i18n.unlock : i18n.lock" @click.stop="toggleStatus(item)" class="mr-2 mb-2" data-aid="users_details_lock_toggle"></v-btn>
+													<v-btn id="delete-user-button" v-text="i18n.delete" color="error" @click.stop="showDeleteConfirm()" class="mb-2" data-aid="users_details_delete"></v-btn>
+												</v-card-text>
+											</v-card>
+										</v-col>
+									</v-row>
+								</v-container>
+							</td>
+						</tr>
+					</template>
+				</v-data-table>
+			</v-row>
 		</v-col>
 	</v-row>
 </v-container>

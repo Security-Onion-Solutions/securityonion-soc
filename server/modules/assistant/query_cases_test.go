@@ -1,4 +1,4 @@
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -28,7 +28,7 @@ func TestQueryCasesTool_Execute(t *testing.T) {
 		{
 			name:    "basic case query",
 			params:  `{"oql_query": "so_case.title:malware AND _index:\"*:so-case\" AND so_kind:case", "limit": 10}`,
-			auxData: `[]`,
+			auxData: ``,
 			mockResults: &model.EventSearchResults{
 				Events: []*model.EventRecord{
 					{
@@ -137,7 +137,7 @@ func TestQueryCasesTool_Execute(t *testing.T) {
 		{
 			name:    "query with time range",
 			params:  `{"oql_query": "so_case.status:closed AND _index:\"*:so-case\" AND so_kind:case", "range_start": "-7d", "range_end": "now", "limit": 20}`,
-			auxData: `[]`,
+			auxData: ``,
 			mockResults: &model.EventSearchResults{
 				Events: []*model.EventRecord{
 					{
@@ -172,7 +172,7 @@ func TestQueryCasesTool_Execute(t *testing.T) {
 		{
 			name:    "query with absolute time range",
 			params:  `{"oql_query": "so_case.priority:critical AND _index:\"*:so-case\" AND so_kind:case", "range_start": "2024/01/01 10:00:00 AM", "range_end": "2024/01/01 11:00:00 AM", "limit": 15}`,
-			auxData: `[]`,
+			auxData: ``,
 			mockResults: &model.EventSearchResults{
 				Events: []*model.EventRecord{
 					{

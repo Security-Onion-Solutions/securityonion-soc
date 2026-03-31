@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -11,6 +11,7 @@ import (
 
 	"github.com/apex/log"
 	"github.com/go-chi/chi/v5"
+	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
@@ -53,9 +54,10 @@ func (h *GridHandler) getStatus(w http.ResponseWriter, r *http.Request) {
 	log.WithFields(log.Fields{
 		"assignedGridId": assignedGridId,
 	}).Debug("assigning grid id to status")
-	status.GridId = assignedGridId
+	statusCopy := *status
+	statusCopy.GridId = assignedGridId
 
-	web.Respond(w, r, http.StatusOK, status)
+	web.Respond(w, r, http.StatusOK, statusCopy)
 }
 
 // @Summary      Get Grid Nodes
@@ -74,6 +76,7 @@ func (h *GridHandler) getNodes(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	nodes := h.server.Datastore.GetNodes(ctx)
+	newNodes := make([]model.Node, 0)
 
 	assignedGridId := r.URL.Query().Get("assignedGridId")
 	for _, node := range nodes {
@@ -81,8 +84,10 @@ func (h *GridHandler) getNodes(w http.ResponseWriter, r *http.Request) {
 			"nodeId":         node.Id,
 			"assignedGridId": assignedGridId,
 		}).Debug("assigning grid id to node")
-		node.GridId = assignedGridId
+		nodeCopy := *node
+		nodeCopy.GridId = assignedGridId
+		newNodes = append(newNodes, nodeCopy)
 	}
 
-	web.Respond(w, r, http.StatusOK, nodes)
+	web.Respond(w, r, http.StatusOK, newNodes)
 }

@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -40,7 +40,8 @@ func (auth *StaticRbac) Init(cfg module.ModuleConfig) error {
 		userPaths, err = module.GetStringArray(cfg, "userFiles")
 		if err == nil {
 			scanIntervalMs := module.GetIntDefault(cfg, "scanIntervalMs", DEFAULT_SCAN_INTERVAL_MS)
-			err = auth.impl.Init(userPaths, rolePaths, scanIntervalMs)
+			defaultRole := module.GetStringDefault(cfg, "defaultRole", "")
+			err = auth.impl.Init(userPaths, rolePaths, scanIntervalMs, defaultRole)
 			if err == nil {
 				auth.server.Rolestore = auth.impl
 				auth.server.Authorizer = auth.impl

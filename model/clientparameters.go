@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -180,13 +180,14 @@ type AlertingParameters struct {
 }
 
 type AssistantParameters struct {
-	Enabled                bool              `json:"enabled"`
-	InvestigationPrompt    string            `json:"investigationPrompt"`
-	CompressContextPrompt  string            `json:"compressContextPrompt"`
-	ThresholdColorRatioLow float64           `json:"thresholdColorRatioLow"`
-	ThresholdColorRatioMed float64           `json:"thresholdColorRatioMed"`
-	ThresholdColorRatioMax float64           `json:"thresholdColorRatioMax"`
-	AvailableModels        []ModelParameters `json:"availableModels"`
+	Enabled                bool                `json:"enabled"`
+	InvestigationPrompt    string              `json:"investigationPrompt"`
+	CompressContextPrompt  string              `json:"compressContextPrompt"`
+	ThresholdColorRatioLow float64             `json:"thresholdColorRatioLow"`
+	ThresholdColorRatioMed float64             `json:"thresholdColorRatioMed"`
+	ThresholdColorRatioMax float64             `json:"thresholdColorRatioMax"`
+	AvailableModels        []ModelParameters   `json:"availableModels"`
+	AvailableAdapters      []AdapterParameters `json:"availableAdapters"`
 }
 
 type ModelParameters struct {
@@ -195,7 +196,14 @@ type ModelParameters struct {
 	ContextLimitSmall    int    `json:"contextLimitSmall"`
 	ContextLimitLarge    int    `json:"contextLimitLarge"`
 	LowBalanceColorAlert int    `json:"lowBalanceColorAlert"`
+	Origin               string `json:"origin"`
+	Adapter              string `json:"adapter"`
 	Enabled              bool   `json:"enabled"`
+}
+
+type AdapterParameters struct {
+	Name     string `json:"name"`
+	Protocol string `json:"protocol"`
 }
 
 // Custom unmarshal to handle numeric or scientific-notation string fields
@@ -238,8 +246,10 @@ func (m *ModelParameters) UnmarshalJSON(data []byte) error {
 	if m.ContextLimitLarge, err = parseToInt(aux.ContextLimitLarge); err != nil {
 		return fmt.Errorf("parsing contextLimitLarge: %w", err)
 	}
-	if m.LowBalanceColorAlert, err = parseToInt(aux.LowBalanceColorAlert); err != nil {
-		return fmt.Errorf("parsing LowBalanceColorAlert: %w", err)
+	if aux.LowBalanceColorAlert != nil {
+		if m.LowBalanceColorAlert, err = parseToInt(aux.LowBalanceColorAlert); err != nil {
+			return fmt.Errorf("parsing LowBalanceColorAlert: %w", err)
+		}
 	}
 
 	return nil

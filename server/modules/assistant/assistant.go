@@ -1,4 +1,4 @@
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -7,20 +7,19 @@ package assistant
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
-	"path"
+	"os"
 	"sort"
-	"time"
+	"strings"
+	"unicode/utf8"
 
-	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -32,27 +31,32 @@ import (
 	"github.com/google/uuid"
 )
 
+type ProtocolConstructor func(context.Context, *server.Server, map[string]any) (server.AssistantAdapter, error)
+
+var protocols = map[string]ProtocolConstructor{}
+
+var (
+	ErrToolNotFound = errors.New("ERROR_ASSISTANT_TOOL_NOT_FOUND")
+)
+
 const (
-	DEFAULT_APIURL                            = "https://onionai.securityonion.net/"
-	DEFAULT_HEALTH_TIMEOUT_SECONDS            = 3
 	DEFAULT_SYSTEM_PROMPT_ADDENDUM            = ""
 	DEFAULT_SYSTEM_PROMPT_ADDENDUM_MAX_LENGTH = 50000
 )
 
-var (
-	ErrToolNotFound = errors.New("tool not found")
-)
+//go:embed SOSystemPrompt.bin
+var embeddedSystemPrompt []byte
 
 type AssistantCoordinator struct {
-	srv                  *server.Server
-	apiKey               string
-	apiUrl               string
-	healthTimeoutSeconds int
-	systemPromptAddendum string
-	isRunning            bool
+	srv       *server.Server
+	isRunning bool
 
 	FunctionLibrary map[string]Tool
 	toolConfig      json.RawMessage
+	adapters        map[string]server.AssistantAdapter
+
+	systemPrompt         string
+	systemPromptAddendum string
 
 	detections.IOManager
 }
@@ -69,30 +73,82 @@ func (ac *AssistantCoordinator) PrerequisiteModules() []string {
 }
 
 func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
+	logger := log.FromContext(ac.srv.Context)
+
 	ac.srv.AssistantManager = ac
 	ac.FunctionLibrary = knownTools
 
-	ac.apiUrl = module.GetStringDefault(config, "apiUrl", DEFAULT_APIURL)
-	ac.healthTimeoutSeconds = module.GetIntDefault(config, "healthTimeoutSeconds", DEFAULT_HEALTH_TIMEOUT_SECONDS)
-	ac.systemPromptAddendum = module.GetStringDefault(config, "systemPromptAddendum", DEFAULT_SYSTEM_PROMPT_ADDENDUM)
-
-	maxLength := module.GetIntDefault(config, "systemPromptAddendumMaxLength", DEFAULT_SYSTEM_PROMPT_ADDENDUM_MAX_LENGTH)
-	if len(ac.systemPromptAddendum) > maxLength {
-		ac.systemPromptAddendum = ac.systemPromptAddendum[:maxLength]
-	}
-
 	ac.toolConfig, err = buildToolConfig(ac.FunctionLibrary)
 
-	ac.apiKey = buildApiKey()
+	systemPromptAddendum := module.GetStringDefault(config, "systemPromptAddendum", DEFAULT_SYSTEM_PROMPT_ADDENDUM)
+
+	maxLength := module.GetIntDefault(config, "systemPromptAddendumMaxLength", DEFAULT_SYSTEM_PROMPT_ADDENDUM_MAX_LENGTH)
+	if len(systemPromptAddendum) > maxLength {
+		systemPromptAddendum = systemPromptAddendum[:maxLength]
+	}
+
+	ac.systemPromptAddendum = systemPromptAddendum
+	ac.adapters = map[string]server.AssistantAdapter{}
+
+	adapterConfig, ok := config["adapters"].([]any)
+	if ok && adapterConfig != nil {
+		adapterArray := make([]model.AdapterParameters, 0, len(adapterConfig))
+		for i, adapterInter := range adapterConfig {
+			adapterEntry, ok := adapterInter.(map[string]any)
+			if !ok {
+				logger.Errorf("adapter entry at index %d is not a valid object, skipping", i)
+				continue
+			}
+
+			name, err := module.GetString(adapterEntry, "name")
+			if err != nil {
+				logger.WithError(err).Errorf("adapter entry at index %d missing name field, skipping", i)
+				continue
+			}
+
+			protocol, err := module.GetString(adapterEntry, "protocol")
+			if err != nil {
+				logger.WithError(err).WithField("adapter", name).Warn("adapter missing protocol field, skipping")
+				continue
+			}
+
+			ctor, ok := protocols[protocol]
+			if !ok {
+				logger.WithField("protocol", protocol).Warn("unknown protocol, skipping")
+				continue
+			}
+
+			adapt, err := ctor(ac.srv.Context, ac.srv, adapterEntry)
+			if err != nil {
+				logger.WithError(err).WithFields(log.Fields{
+					"adapter":  name,
+					"protocol": protocol,
+				}).Error("unable to initialize adapter")
+
+				continue
+			}
+
+			ac.adapters[name] = adapt
+			logger.WithFields(log.Fields{
+				"adapter":  name,
+				"protocol": protocol,
+			}).Info("loaded assistant adapter")
+
+			adapterArray = append(adapterArray, model.AdapterParameters{
+				Name:     name,
+				Protocol: protocol,
+			})
+		}
+
+		ac.srv.Config.ClientParams.AssistantParams.AvailableAdapters = adapterArray
+	} else {
+		logger.Warn("no adapter config, no adapters loaded")
+		ac.srv.Config.ClientParams.AssistantParams.AvailableAdapters = []model.AdapterParameters{}
+	}
+
+	ac.getPrompt()
 
 	return err
-}
-
-func buildApiKey() string {
-	key := licensing.GetLicenseKey()
-	hash := sha256.Sum256([]byte(key.Signature))
-
-	return fmt.Sprintf("sk-%s", hex.EncodeToString(hash[:]))
 }
 
 func buildToolConfig(functions map[string]Tool) (json.RawMessage, error) {
@@ -118,8 +174,8 @@ func buildToolConfig(functions map[string]Tool) (json.RawMessage, error) {
 
 	tc := &model.ToolConfig{
 		Tools: toolSpecs,
-		ToolChoice: map[string]any{
-			"auto": map[string]any{},
+		ToolChoice: map[string]model.JSONSchema{
+			"auto": {},
 		},
 	}
 
@@ -129,6 +185,53 @@ func buildToolConfig(functions map[string]Tool) (json.RawMessage, error) {
 	}
 
 	return result, nil
+}
+
+func (ac *AssistantCoordinator) getPrompt() {
+	if len(embeddedSystemPrompt) > 0 {
+		// Gunzip the prompt bytes
+		reader, err := gzip.NewReader(bytes.NewReader(embeddedSystemPrompt))
+		if err != nil {
+			log.FromContext(ac.srv.Context).WithError(err).Error("unable to gunzip system prompt, no prompt loaded")
+			return
+		}
+		defer reader.Close()
+
+		raw, err := io.ReadAll(reader)
+		if err != nil {
+			log.FromContext(ac.srv.Context).WithError(err).Error("unable to read gunzipped system prompt, no prompt loaded")
+			return
+		}
+
+		if !utf8.Valid(raw) {
+			log.FromContext(ac.srv.Context).Error("gunzipped system prompt must be in UTF-8 encoding, no prompt loaded")
+			return
+		}
+
+		ac.systemPrompt = string(raw)
+		return
+	}
+
+	logger := log.FromContext(ac.srv.Context)
+
+	path := os.Getenv("SO_AI_SYSTEM_PROMPT_PATH")
+	if path == "" {
+		logger.Warn("no prompt loaded")
+		return
+	}
+
+	raw, err := ac.ReadFile(path)
+	if err != nil {
+		logger.WithError(err).WithField("path", path).Error("unable to read system prompt from file, no prompt loaded")
+		return
+	}
+
+	if !utf8.Valid(raw) {
+		logger.WithError(err).WithField("path", path).Error("system prompt must be in UTF-8 encoding, no prompt loaded")
+		return
+	}
+
+	ac.systemPrompt = string(raw)
 }
 
 func (ac *AssistantCoordinator) Start() error {
@@ -147,6 +250,15 @@ func (ac *AssistantCoordinator) IsRunning() bool {
 	return ac.isRunning
 }
 
+func splitModelAdapter(aiModel string) (string, string) {
+	parts := strings.SplitN(aiModel, "@", 2)
+	if len(parts) == 1 {
+		parts = append(parts, "SOAI")
+	}
+
+	return parts[0], parts[1]
+}
+
 func (ac *AssistantCoordinator) Chat(ctx context.Context, aiModel string, messages []*model.Message, opts ...model.ChatOpt) ([]*model.Message, error) {
 	logger := log.FromContext(ctx)
 	userID := ctx.Value(web.ContextKeyRequestorId).(string)
@@ -154,66 +266,26 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, aiModel string, messag
 
 	msgs := cleanupMessages(messages)
 
+	modelId, adapterName := splitModelAdapter(aiModel)
+
 	req := &model.ChatRequest{
 		Messages:     msgs,
 		ToolConfig:   ac.toolConfig,
 		UserId:       userID,
+		Model:        modelId,
+		System:       ac.systemPrompt,
 		SystemAppend: ac.systemPromptAddendum,
-		Model:        aiModel,
 	}
 
-	u, err := url.Parse(ac.apiUrl)
+	adapter, ok := ac.adapters[adapterName]
+	if !ok {
+		logger.WithField("adapterName", adapterName).Error("assistant adapter not found")
+		return nil, fmt.Errorf("assistant adapter not found: %s", adapterName)
+	}
+
+	response, err := adapter.SendMessage(ctx, req)
 	if err != nil {
-		logger.WithError(err).WithField("apiUrl", ac.apiUrl).Error("unable to parse apiUrl")
-
-		return nil, err
-	}
-
-	u.Path = path.Join(u.Path, "/api/chat")
-	endpoint := u.String()
-
-	var buf bytes.Buffer
-
-	err = json.NewEncoder(&buf).Encode(req)
-	if err != nil {
-		logger.WithError(err).WithField("chatrequest", req).Error("unable to encode ChatRequest")
-		return nil, err
-	}
-
-	httpReq, err := http.NewRequest(http.MethodPost, endpoint, &buf)
-	if err != nil {
-		logger.WithError(err).WithField("apiEndpoint", endpoint).Error("unable to make request object")
-
-		return nil, err
-	}
-
-	httpReq.Header.Add("Content-Type", "application/json")
-	ac.prepareRequestHeaders(httpReq)
-
-	res, err := ac.MakeRequest(httpReq, false)
-	if res != nil && res.Body != nil {
-		defer res.Body.Close()
-	}
-	if err != nil {
-		logger.WithError(err).Error("unable to execute request")
-
-		return nil, err
-	}
-
-	resBody, err := io.ReadAll(res.Body)
-	if err != nil {
-		logger.WithError(err).Error("unable to read response body")
-
-		return nil, err
-	}
-
-	logger.WithField("rawChatResponseBody", string(resBody)).Debug("chat response received")
-
-	response := &model.Message{}
-
-	err = json.Unmarshal(resBody, &response)
-	if err != nil {
-		logger.WithError(err).WithField("rawChatResponseBody", string(resBody)).Error("unable to unmarshal JSON response")
+		logger.WithError(err).Error("unable to send message to assistant")
 		return nil, err
 	}
 
@@ -260,7 +332,7 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, aiModel string, messag
 
 					newMessages = append(newMessages, toolMsg)
 
-					err = ac.srv.Assistantstore.SaveChat(ctx, toolMsg.PrepareForStorage("", []string{"tool_result"}))
+					err = ac.srv.Assistantstore.SaveChat(ctx, toolMsg.PrepareForStorage("", []string{"tool_result"}, aiModel))
 					if err != nil {
 						logger.WithError(err).Error("unable to save tool result message")
 						return nil, err
@@ -285,65 +357,37 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, aiModel string, messag
 	return newMessages, nil
 }
 
-func (ac *AssistantCoordinator) ChatStream(ctx context.Context, aiModel string, messages []*model.Message) (*http.Response, error) {
+func (ac *AssistantCoordinator) ChatStream(ctx context.Context, aiModel string, messages []*model.Message) (*http.Response, *model.AuxMessageData, error) {
 	logger := log.FromContext(ctx)
 	userID := ctx.Value(web.ContextKeyRequestorId).(string)
 
 	// copy and modify
 	msgs := cleanupMessages(messages)
 
+	modelId, adapterName := splitModelAdapter(aiModel)
+
 	req := &model.ChatRequest{
 		Messages:     msgs,
 		Stream:       true,
 		ToolConfig:   ac.toolConfig,
 		UserId:       userID,
+		Model:        modelId,
+		System:       ac.systemPrompt,
 		SystemAppend: ac.systemPromptAddendum,
-		Model:        aiModel,
 	}
 
-	u, err := url.Parse(ac.apiUrl)
+	adapter, ok := ac.adapters[adapterName]
+	if !ok {
+		logger.WithField("adapterName", adapterName).Error("assistant adapter not found")
+		return nil, nil, fmt.Errorf("assistant adapter not found: %s", adapterName)
+	}
+
+	res, aux, err := adapter.SendMessageStream(ctx, req)
 	if err != nil {
-		logger.WithError(err).WithField("apiUrl", ac.apiUrl).Error("unable to parse apiUrl")
-
-		return nil, err
+		return nil, nil, err
 	}
 
-	u.Path = path.Join(u.Path, "/api/chat")
-	endpoint := u.String()
-
-	var buf bytes.Buffer
-
-	err = json.NewEncoder(&buf).Encode(req)
-	if err != nil {
-		logger.WithError(err).WithField("chatrequest", req).Error("unable to encode ChatRequest")
-		return nil, err
-	}
-
-	logger.WithField("outgoingChatBodySize", buf.Len()).Info("outgoing chat request body")
-
-	httpReq, err := http.NewRequest(http.MethodPost, endpoint, &buf)
-	if err != nil {
-		logger.WithError(err).WithField("apiEndpoint", endpoint).Error("unable to make request object")
-
-		return nil, err
-	}
-
-	httpReq.Header.Add("Content-Type", "application/json")
-	httpReq.Header.Add("Accept", "text/event-stream")
-	ac.prepareRequestHeaders(httpReq)
-
-	res, err := ac.MakeRequest(httpReq, true)
-	if err != nil {
-		if res != nil && res.Body != nil {
-			defer res.Body.Close()
-		}
-
-		logger.WithError(err).Error("unable to execute request")
-
-		return nil, err
-	}
-
-	return res, nil
+	return res, aux, nil
 }
 
 func (ac *AssistantCoordinator) ExecuteTool(ctx context.Context, toolName string, params string, auxData string) (*model.ToolResponse, error) {
@@ -380,116 +424,42 @@ func (ac *AssistantCoordinator) ExecuteTool(ctx context.Context, toolName string
 	return result, nil
 }
 
-func (ac *AssistantCoordinator) Balance(ctx context.Context) (*model.BalanceResponse, error) {
-	logger := log.FromContext(ctx)
+func (ac *AssistantCoordinator) Balance(ctx context.Context, aiModel string) (*model.BalanceResponse, error) {
+	_, adapterName := splitModelAdapter(aiModel)
 
-	u, err := url.Parse(ac.apiUrl)
-	if err != nil {
-		logger.WithError(err).WithField("apiUrl", ac.apiUrl).Error("unable to parse apiUrl")
+	adapter, ok := ac.adapters[adapterName]
+	if !ok {
+		logger := log.FromContext(ctx)
+		logger.WithField("adapterName", adapterName).Error("assistant adapter not found")
 
-		return nil, err
+		return nil, fmt.Errorf("assistant adapter not found: %s", adapterName)
 	}
 
-	u.Path = path.Join(u.Path, "/api/balance")
-	endpoint := u.String()
-
-	httpReq, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	response, err := adapter.GetBalance(ctx)
 	if err != nil {
-		logger.WithError(err).Error("unable to make request object")
-
-		return nil, err
-	}
-
-	ac.prepareRequestHeaders(httpReq)
-
-	res, err := ac.MakeRequest(httpReq, false)
-	if res != nil && res.Body != nil {
-		defer res.Body.Close()
-	}
-	if err != nil {
-		logger.WithError(err).WithField("apiEndpoint", endpoint).Error("unable to execute request")
-
-		return nil, err
-	}
-
-	resBody, err := io.ReadAll(res.Body)
-	if err != nil {
-		logger.WithError(err).Error("unable to read response body")
-
-		return nil, err
-	}
-
-	logger.WithField("rawBalanceResponseBody", string(resBody)).Debug("balance response received")
-
-	response := &model.BalanceResponse{}
-
-	err = json.Unmarshal(resBody, response)
-	if err != nil {
-		logger.WithError(err).WithField("rawBalanceResponseBody", string(resBody)).Error("unable to unmarshal JSON response")
 		return nil, err
 	}
 
 	return response, nil
 }
 
-func (ac *AssistantCoordinator) Health(ctx context.Context) (*model.HealthResponse, error) {
-	logger := log.FromContext(ctx)
+func (ac *AssistantCoordinator) Health(ctx context.Context, aiModel string) (*model.HealthResponse, error) {
+	_, adapterName := splitModelAdapter(aiModel)
 
-	u, err := url.Parse(ac.apiUrl)
-	if err != nil {
-		logger.WithError(err).WithField("apiUrl", ac.apiUrl).Error("unable to parse apiUrl")
+	adapter, ok := ac.adapters[adapterName]
+	if !ok {
+		logger := log.FromContext(ctx)
+		logger.WithField("adapterName", adapterName).Error("assistant adapter not found")
 
-		return nil, err
+		return nil, fmt.Errorf("assistant adapter not found: %s", adapterName)
 	}
 
-	u.Path = path.Join(u.Path, "/health")
-	endpoint := u.String()
-
-	shortLived, cancel := context.WithTimeout(ctx, time.Second*time.Duration(ac.healthTimeoutSeconds))
-	defer cancel()
-
-	httpReq, err := http.NewRequestWithContext(shortLived, http.MethodGet, endpoint, nil)
+	response, err := adapter.GetHealth(ctx)
 	if err != nil {
-		logger.WithError(err).Error("unable to make request object")
-
-		return nil, err
-	}
-
-	ac.prepareRequestHeaders(httpReq)
-
-	res, err := ac.MakeRequest(httpReq, false)
-	if res != nil && res.Body != nil {
-		defer res.Body.Close()
-	}
-	if err != nil {
-		logger.WithError(err).WithField("apiEndpoint", endpoint).Error("unable to execute request")
-
-		return nil, err
-	}
-
-	resBody, err := io.ReadAll(res.Body)
-	if err != nil {
-		logger.WithError(err).Error("unable to read response body")
-
-		return nil, err
-	}
-
-	logger.WithField("rawHealthResponseBody", string(resBody)).Debug("health response received")
-
-	response := &model.HealthResponse{}
-
-	err = json.Unmarshal(resBody, response)
-	if err != nil {
-		logger.WithError(err).WithField("rawHealthResponseBody", string(resBody)).Error("unable to unmarshal JSON response")
 		return nil, err
 	}
 
 	return response, nil
-}
-
-func (ac *AssistantCoordinator) prepareRequestHeaders(httpReq *http.Request) {
-	httpReq.Header.Add("x-api-key", ac.apiKey)
-	httpReq.Header.Add("x-so-version", ac.srv.Host.Version)
 }
 
 func cleanupMessages(messages []*model.Message) []*model.Message {

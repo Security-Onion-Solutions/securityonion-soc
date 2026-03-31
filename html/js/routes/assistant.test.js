@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -207,7 +207,7 @@ test('component data initialization', () => {
   expect(comp.alwaysApproveReadRequests).toBe(false);
   expect(comp.assistantEnabled).toBe(false);
   expect(comp.isStreaming).toBe(false);
-  expect(comp.showChatHistory).toBe(true);
+  expect(comp.showChatHistory).toBe(true);  
   expect(comp.investigationMsg).toBe('');
   expect(comp.contextLimitSmall).toBe(0);
   expect(comp.contextLimitLarge).toBe(0);
@@ -278,8 +278,8 @@ test('generateChatId creates unique ID', () => {
   const id1 = comp.generateChatId();
   const id2 = comp.generateChatId();
   
-  expect(id1).toMatch(/^chat_\d+_[a-z0-9]+$/);
-  expect(id2).toMatch(/^chat_\d+_[a-z0-9]+$/);
+  expect(id1).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+  expect(id2).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
   expect(id1).not.toBe(id2);
 });
 
@@ -295,7 +295,10 @@ test('initAssistant sets assistantEnabled to true when enabled and licensed', as
     thresholdColorRatioMax: 1,
     lowBalanceColorAlert: 500000,
     availableModels: [
-      { id: 'test-model', displayName: "Test Model", contextLimitSmall: 200000, contextLimitLarge: 1000000, lowBalanceColorAlert: 500000, enabled: true }
+      { id: 'test-model', displayName: "Test Model", contextLimitSmall: 200000, contextLimitLarge: 1000000, lowBalanceColorAlert: 500000, enabled: true, adapter: "SOAI" }
+    ],
+    availableAdapters: [
+      { name: "SOAI", protocol: "securityonion_ai_cloud" }
     ]
   };
   comp.$root.isLicensed = jest.fn().mockReturnValue(true);
@@ -304,6 +307,7 @@ test('initAssistant sets assistantEnabled to true when enabled and licensed', as
   comp.handleRouteSessionId = jest.fn().mockResolvedValue();
   comp.loadCredits = jest.fn().mockResolvedValue();
   comp.$root.disclaimer = false;
+  comp.focusChatInput = jest.fn();
   
   await comp.initAssistant(mockParams);
   
@@ -319,18 +323,21 @@ test('initAssistant sets assistantEnabled to true when enabled and licensed', as
   expect(comp.loadStoredChats).toHaveBeenCalled();
   expect(comp.handleRouteSessionId).toHaveBeenCalled();
   expect(comp.loadCredits).toHaveBeenCalled();
+  expect(comp.focusChatInput).toHaveBeenCalled();
+  expect(comp.adaptersMap.size).toBe(1);
+  expect(comp.adaptersMap.get('SOAI')).toEqual({ name: "SOAI", protocol: "securityonion_ai_cloud" });
 });
 
 test('initAssistant sets assistantEnabled to false when not enabled', async () => {
   const mockParams = {
     enabled: false,
-    availableModels: []
   };
   comp.$root.isLicensed = jest.fn().mockReturnValue(true);
   comp.$root.showDisclaimer = jest.fn();
   comp.loadStoredChats = jest.fn();
   comp.handleRouteSessionId = jest.fn();
   comp.loadCredits = jest.fn();
+  comp.focusChatInput = jest.fn();
   
   await comp.initAssistant(mockParams);
   
@@ -339,18 +346,19 @@ test('initAssistant sets assistantEnabled to false when not enabled', async () =
   expect(comp.loadStoredChats).not.toHaveBeenCalled();
   expect(comp.handleRouteSessionId).not.toHaveBeenCalled();
   expect(comp.loadCredits).not.toHaveBeenCalled();
+  expect(comp.focusChatInput).not.toHaveBeenCalled();
 });
 
 test('initAssistant sets assistantEnabled to false when not licensed', async () => {
   const mockParams = {
     enabled: true,
-    availableModels: []
   };
   comp.$root.isLicensed = jest.fn().mockReturnValue(false);
   comp.$root.showDisclaimer = jest.fn();
   comp.loadStoredChats = jest.fn();
   comp.handleRouteSessionId = jest.fn();
   comp.loadCredits = jest.fn();
+  comp.focusChatInput = jest.fn();
   
   await comp.initAssistant(mockParams);
   
@@ -359,6 +367,7 @@ test('initAssistant sets assistantEnabled to false when not licensed', async () 
   expect(comp.loadStoredChats).not.toHaveBeenCalled();
   expect(comp.handleRouteSessionId).not.toHaveBeenCalled();
   expect(comp.loadCredits).not.toHaveBeenCalled();
+  expect(comp.focusChatInput).not.toHaveBeenCalled();
 });
 
 test('initAssistant corrects contextLimitLarge when smaller than contextLimitSmall', async () => {
@@ -372,6 +381,7 @@ test('initAssistant corrects contextLimitLarge when smaller than contextLimitSma
         contextLimitLarge: 150000, // Smaller than contextLimitSmall - should be corrected
         lowBalanceColorAlert: 500000,
         enabled: true,
+        adapter: "SOAI"
       },
       {
         id: 'model-2',
@@ -380,6 +390,7 @@ test('initAssistant corrects contextLimitLarge when smaller than contextLimitSma
         contextLimitLarge: 300000, // Larger than contextLimitSmall - should remain unchanged
         lowBalanceColorAlert: 400000,
         enabled: true,
+        adapter: "SOAI"
       },
       {
         id: 'model-3',
@@ -388,12 +399,17 @@ test('initAssistant corrects contextLimitLarge when smaller than contextLimitSma
         contextLimitLarge: 250000, // Equal to contextLimitSmall - should remain unchanged
         lowBalanceColorAlert: 600000,
         enabled: true,
+        adapter: "SOAI"
       },
       {
         id: 'model-4',
         enabled: false,
+        adapter: "SOAI"
       },
-    ]
+    ],
+    availableAdapters: [
+      { name: "SOAI", protocol: "securityonion_ai_cloud" }
+    ],
   };
   
   comp.$root.isLicensed = jest.fn().mockReturnValue(true);
@@ -408,31 +424,32 @@ test('initAssistant corrects contextLimitLarge when smaller than contextLimitSma
   
   // Check that the modelsMap was created correctly
   expect(comp.modelsMap.size).toBe(3);
-  expect(comp.modelsMap.has('model-1')).toBe(true);
-  expect(comp.modelsMap.has('model-2')).toBe(true);
-  expect(comp.modelsMap.has('model-3')).toBe(true);
-  expect(comp.modelsMap.has('model-4')).toBe(false); // Disabled model should not be included
+  expect(comp.modelsMap.has('model-1@SOAI')).toBe(true);
+  expect(comp.modelsMap.has('model-2@SOAI')).toBe(true);
+  expect(comp.modelsMap.has('model-3@SOAI')).toBe(true);
+  expect(comp.modelsMap.has('model-4@SOAI')).toBe(false); // Disabled model should not be included
   
   // Check that contextLimitLarge was corrected for model-1
-  const model1 = comp.modelsMap.get('model-1');
+  const model1 = comp.modelsMap.get('model-1@SOAI');
   expect(model1.contextLimitSmall).toBe(200000);
   expect(model1.contextLimitLarge).toBe(200000); // Should be corrected to match contextLimitSmall
   
   // Check that contextLimitLarge was not changed for model-2 (already larger)
-  const model2 = comp.modelsMap.get('model-2');
+  const model2 = comp.modelsMap.get('model-2@SOAI');
   expect(model2.contextLimitSmall).toBe(100000);
   expect(model2.contextLimitLarge).toBe(300000); // Should remain unchanged
   
   // Check that contextLimitLarge was not changed for model-3 (equal)
-  const model3 = comp.modelsMap.get('model-3');
+  const model3 = comp.modelsMap.get('model-3@SOAI');
   expect(model3.contextLimitSmall).toBe(250000);
   expect(model3.contextLimitLarge).toBe(250000); // Should remain unchanged
 });
 
-test('initAssistant handles empty availableModels array', async () => {
+test('initAssistant handles empty availableModels and availableAdapters array', async () => {
   const mockParams = {
     enabled: true,
-    availableModels: [] // Empty array
+    availableModels: [], // Empty array
+    availableAdapters: [], // Empty array
   };
   
   comp.$root.isLicensed = jest.fn().mockReturnValue(true);
@@ -447,6 +464,7 @@ test('initAssistant handles empty availableModels array', async () => {
   
   // Check that modelsMap is empty and no correction logic was executed
   expect(comp.modelsMap.size).toBe(0);
+  expect(comp.adaptersMap.size).toBe(0);
   expect(comp.currentModel).toBe(''); // Should remain empty
   expect(comp.updateModelParams).toHaveBeenCalled();
 });
@@ -456,11 +474,13 @@ test('handleRouteSessionId returns early when assistantEnabled is false', async 
   comp.$route.params.sessionId = fakeSessionId;
   comp.loadChatFromBackend = jest.fn();
   comp.clearStreamingStates = jest.fn();
+  comp.focusChatInput = jest.fn();
   
   await comp.handleRouteSessionId();
   
   expect(comp.clearStreamingStates).toHaveBeenCalled();
   expect(comp.loadChatFromBackend).not.toHaveBeenCalled();
+  expect(comp.focusChatInput).not.toHaveBeenCalled();
 });
 
 // Session management tests
@@ -468,20 +488,24 @@ test('handleRouteSessionId with existing session', async () => {
   comp.$route.params.sessionId = fakeSessionId;
   comp.loadChatFromBackend = jest.fn().mockResolvedValue();
   comp.assistantEnabled = true;
+  comp.focusChatInput = jest.fn();
   
   await comp.handleRouteSessionId();
   
   expect(comp.loadChatFromBackend).toHaveBeenCalledWith(fakeSessionId);
+  expect(comp.focusChatInput).toHaveBeenCalled();
 });
 
 test('handleRouteSessionId with non-existent session', async () => {
   comp.$route.params.sessionId = fakeSessionId;
   comp.loadChatFromBackend = jest.fn().mockRejectedValue(new Error('Session not found'));
   comp.assistantEnabled = true;
+  comp.focusChatInput = jest.fn();
   
   await comp.handleRouteSessionId();
   
   expect(comp.currentChatId).toBe(fakeSessionId);
+  expect(comp.focusChatInput).toHaveBeenCalled();
 });
 
 
@@ -513,10 +537,12 @@ test('restoreLastActiveChat handles error', async () => {
 // Credits and balance tests
 test('loadCredits success', async () => {
   const mock = mockPapi("get", { data: fakeCreditsResponse });
+
+  comp.currentModel = "model";
   
   await comp.loadCredits();
   
-  expect(mock).toHaveBeenCalledWith('/assistant/balance');
+  expect(mock).toHaveBeenCalledWith('/assistant/balance/model');
   expect(comp.creditsRemaining).toBe(100);
   expect(comp.creditsLoaded).toBe(true);
 });
@@ -634,6 +660,7 @@ test('startNewChat', async () => {
   comp.saveCurrentChat = jest.fn().mockResolvedValue();
   comp.saveCurrentChatId = jest.fn();
   comp.loadNewChatScreen = jest.fn();
+  comp.focusChatInput = jest.fn();
   comp.currentChatId = fakeSessionId;
   
   await comp.startNewChat();
@@ -643,6 +670,7 @@ test('startNewChat', async () => {
   expect(comp.saveCurrentChatId).toHaveBeenCalled();
   expect(comp.loadNewChatScreen).toHaveBeenCalled();
   expect(comp.$router.push).toHaveBeenCalledWith({ name: 'assistant' });
+  expect(comp.focusChatInput).toHaveBeenCalled();
 });
 
 test('updateUrlWithSessionId updates route', () => {
@@ -740,13 +768,13 @@ test('updateContextLength updates total context length', () => {
   const usage2 = { input_tokens: 30, output_tokens: 20 };
   
   comp.updateContextLength(usage1);
-  expect(comp.contextLength).toBe(175); // 100 + 50 + 25
+  expect(comp.contextLength).toBe(75); // 50 + 25
   
   comp.updateContextLength(usage2);
-  expect(comp.contextLength).toBe(225); // 175 + 30 + 20
+  expect(comp.contextLength).toBe(50); // 30 + 20
   
   comp.updateContextLength(null);
-  expect(comp.contextLength).toBe(225); // Should remain unchanged
+  expect(comp.contextLength).toBe(50); // Should remain unchanged
 });
 
 test('checkContextLimitReached returns false when under limit', () => {
@@ -1211,6 +1239,29 @@ test('handleToolExecutionContentBlockDelta processes input_json_delta for chaine
   expect(comp.scrollIfPinned).toHaveBeenCalled();
 });
 
+test('handleToolExecutionContentBlockDelta processes thought_delta', () => {
+  const sessionId = 'tool-session';
+  const assistantMessage = {
+    thoughts: { value: '**Starting Analysis**\n\n' }
+  };
+  
+  comp.scrollIfPinned = jest.fn();
+  comp.currentChatId = sessionId;
+  comp.nbspRegexOp = jest.fn((text) => text); // Pass through for testing
+  
+  const deltaEvent = {
+    delta: {
+      type: 'thought_delta',
+      text: 'Examining the data...'
+    }
+  };
+  
+  comp.handleToolExecutionContentBlockDelta(deltaEvent, assistantMessage, sessionId);
+  
+  expect(assistantMessage.thoughts.value).toBe('**Starting Analysis**\n\nExamining the data...');
+  expect(comp.scrollIfPinned).toHaveBeenCalled();
+});
+
 test('executeTool captures raw tool result from backend', async () => {
   // wait out any setTimeouts from previous tests
   await new Promise(resolve => setTimeout(resolve, 1100));
@@ -1560,6 +1611,45 @@ test('callAIAPI processes content_block_delta with text_delta', async () => {
   expect(comp.messages).toHaveLength(1);
   expect(comp.messages[0].content.value).toBe('Hello world!');
   expect(comp.scrollToBottom).toHaveBeenCalledTimes(3); // Once for message_start, twice for text deltas
+});
+
+test('callAIAPI processes content_block_delta with thought_delta', async () => {
+  comp.currentChatId = fakeSessionId;
+  comp.scrollToBottom = jest.fn();
+  comp.loadCredits = jest.fn().mockResolvedValue();
+  
+  const messageStartData = JSON.stringify({ type: 'message_start' });
+  const thoughtDeltaData1 = JSON.stringify({
+    type: 'content_block_delta',
+    delta: { type: 'thought_delta', text: '**Analyzing Request**\n\n' }
+  });
+  const thoughtDeltaData2 = JSON.stringify({
+    type: 'content_block_delta',
+    delta: { type: 'thought_delta', text: 'Processing the query...' }
+  });
+  
+  const mockResponse = {
+    ok: true,
+    data: {
+      pipeThrough: jest.fn().mockReturnValue({
+        getReader: jest.fn().mockReturnValue({
+          read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: `data: ${messageStartData}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: `data: ${thoughtDeltaData1}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: `data: ${thoughtDeltaData2}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
+            .mockResolvedValueOnce({ done: true })
+        })
+      })
+    }
+  };
+  mockPapi('post', mockResponse);
+  
+  await comp.callAIAPI('Test message');
+  
+  expect(comp.messages).toHaveLength(1);
+  expect(comp.messages[0].thoughts.value).toBe('**Analyzing Request**\n\nProcessing the query...');
+  expect(comp.scrollToBottom).toHaveBeenCalledTimes(3); // Once for message_start, twice for thought deltas
 });
 
 test('callAIAPI processes content_block_delta with input_json_delta', async () => {
@@ -2006,6 +2096,74 @@ test('callAIAPI handles empty chunks and filters correctly', async () => {
   expect(comp.messages[0].role).toBe('assistant');
 });
 
+test('callAIAPI clears investigation query params after first use', async () => {
+  comp.currentChatId = fakeSessionId;
+  comp.currentModel = 'test-model';
+  comp.loadCredits = jest.fn().mockResolvedValue();
+  comp.scrollToBottom = jest.fn();
+  
+  // Set up route with investigation query params
+  comp.$route.query = {
+    socId: 'alert-123',
+    investigation: 'true',
+    otherParam: 'keep-this'
+  };
+  comp.$route.params = { sessionId: fakeSessionId };
+  
+  // Mock $nextTick to execute callback immediately
+  let nextTickCallback = null;
+  comp.$nextTick = jest.fn((callback) => {
+    if (callback) {
+      nextTickCallback = callback;
+      return Promise.resolve().then(() => callback());
+    }
+    return Promise.resolve();
+  });
+  
+  const mockResponse = {
+    ok: true,
+    data: {
+      pipeThrough: jest.fn().mockReturnValue({
+        getReader: jest.fn().mockReturnValue({
+          read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
+            .mockResolvedValueOnce({ done: true })
+        })
+      })
+    }
+  };
+  const mockPost = mockPapi('post', mockResponse);
+  
+  await comp.callAIAPI('Test message');
+  
+  // Verify the API was called with the socId parameter
+  expect(mockPost).toHaveBeenCalledWith('/assistant/chat?entityType=alert_investigation&entityId=alert-123', {
+    msg: 'Test message',
+    sessionId: fakeSessionId,
+    model: 'test-model',
+    tags: null,
+  }, {
+    adapter: 'fetch',
+    headers: {
+      'Accept': 'text/event-stream'
+    },
+    responseType: 'stream'
+  });
+  
+  // Verify $nextTick was called (for the query param clearing)
+  expect(comp.$nextTick).toHaveBeenCalled();
+  
+  // Wait for nextTick callback to execute
+  await new Promise(resolve => setTimeout(resolve, 0));
+  
+  // Verify router.replace was called to clear investigation params
+  expect(comp.$router.replace).toHaveBeenCalledWith({
+    name: 'assistant',
+    params: { sessionId: fakeSessionId },
+    query: { otherParam: 'keep-this' } // investigation and socId should be removed
+  });
+});
+
 // Investigation session tests
 test('handleRouteSessionId detects investigation session from query parameter', async () => {
   comp.$route.params.sessionId = fakeSessionId;
@@ -2256,6 +2414,18 @@ test('formatCount delegates to root', () => {
   expect(result).toBe('1,234');
 });
 
+test('getLastThoughtTitle extracts last bold text from thoughts', () => {
+  const thoughtsWithMultipleBold = '**Analyzing the Request**\n\nI need to process this.\n\n**Formulating Response**\n\nHere is my answer.';
+  const thoughtsWithOneBold = '**Processing Data**\n\nWorking on it...';
+  const thoughtsWithNoBold = 'Just some plain text without bold markers';
+  const emptyThoughts = '';
+  
+  expect(comp.getLastThoughtTitle(thoughtsWithMultipleBold)).toBe('Formulating Response');
+  expect(comp.getLastThoughtTitle(thoughtsWithOneBold)).toBe('Processing Data');
+  expect(comp.getLastThoughtTitle(thoughtsWithNoBold)).toBe(comp.i18n.thinking);
+  expect(comp.getLastThoughtTitle(emptyThoughts)).toBe(comp.i18n.thinking);
+});
+
 // Backend message conversion tests
 test('generateTitleFromMessage', () => {
   const session = {
@@ -2367,7 +2537,36 @@ test('convertBackendMessagesToFrontend converts assistant message with text bloc
   expect(result[0].content).toBe('I can help you with security analysis.');
   expect(result[0].timestamp).toBe('2025-01-01T12:00:00.000Z');
   expect(result[0].usage.value).toEqual({ input_tokens: 10, output_tokens: 20 });
-  expect(comp.updateContextLength).toHaveBeenCalledWith({ input_tokens: 10, output_tokens: 20 });
+  expect(comp.updateContextLength).toHaveBeenCalledWith({ input_tokens: 10, output_tokens: 20 }, false);
+});
+
+test('convertBackendMessagesToFrontend converts assistant message with thoughts', () => {
+  comp.resetContextLength = jest.fn();
+  comp.updateContextLength = jest.fn();
+  
+  const backendMessages = [
+    {
+      createTime: '2025-01-01T12:00:00.000Z',
+      message: {
+        role: 'assistant',
+        contentBlocks: [
+          { type: 'text', text: 'I can help you with security analysis.' }
+        ],
+        thoughts: '**Analyzing Request**\n\nProcessing the user query...',
+        usage: { input_tokens: 10, output_tokens: 20 }
+      }
+    }
+  ];
+  
+  const result = comp.convertBackendMessagesToFrontend(backendMessages);
+  
+  expect(result).toHaveLength(1);
+  expect(result[0].role).toBe('assistant');
+  expect(result[0].content).toBe('I can help you with security analysis.');
+  expect(result[0].thoughts.value).toBe('**Analyzing Request**\n\nProcessing the user query...');
+  expect(result[0].timestamp).toBe('2025-01-01T12:00:00.000Z');
+  expect(result[0].usage.value).toEqual({ input_tokens: 10, output_tokens: 20 });
+  expect(comp.updateContextLength).toHaveBeenCalledWith({ input_tokens: 10, output_tokens: 20 }, false);
 });
 
 test('convertBackendMessagesToFrontend handles multiple text blocks', () => {
@@ -3093,7 +3292,7 @@ test('convertBackendMessagesToFrontend calculates context length accurately afte
   
   comp.convertBackendMessagesToFrontend(backendMessages);
   
-  expect(comp.contextLength).toBe(2000);
+  expect(comp.contextLength).toBe(1000);
 });
 
 test('loadChatFromBackend success', async () => {
@@ -3225,28 +3424,30 @@ test('saveSetting handles numeric values', () => {
 
 test('saveLocalSettings saves all assistant settings with correct defaults', () => {
   // Set up component state
-  comp.increaseMaxContextThreshold = true;
+  comp.increaseContextLimit = true;
   comp.restoreLastActive = true;
   comp.alwaysApproveReadRequests = true;
   comp.showChatHistory = false; // Different from default
   comp.currentModel = 'test-model';
+  comp.showModelThinking = true;
   
   // Mock saveSetting to track calls
   comp.saveSetting = jest.fn();
   
   comp.saveLocalSettings();
   
-  expect(comp.saveSetting).toHaveBeenCalledWith('increaseContextLimit', false, false);
+  expect(comp.saveSetting).toHaveBeenCalledWith('increaseContextLimit', true, false);
   expect(comp.saveSetting).toHaveBeenCalledWith('restoreLastActive', true, false);
   expect(comp.saveSetting).toHaveBeenCalledWith('alwaysApproveReadRequests', true, false);
   expect(comp.saveSetting).toHaveBeenCalledWith('showChatHistory', false, true);
   expect(comp.saveSetting).toHaveBeenCalledWith('currentModel', 'test-model', '');
-  expect(comp.saveSetting).toHaveBeenCalledTimes(5);
+  expect(comp.saveSetting).toHaveBeenCalledWith('showModelThinking', true, false);
+  expect(comp.saveSetting).toHaveBeenCalledTimes(6);
 });
 
 test('saveLocalSettings saves default values correctly', () => {
   // Set up component state with default values
-  comp.increaseMaxContextThreshold = false;
+  comp.increaseContextLimit = false;
   comp.restoreLastActive = false;
   comp.alwaysApproveReadRequests = false;
   comp.showChatHistory = true;
@@ -3381,193 +3582,6 @@ test('loadLocalSettings integration with actual localStorage access', () => {
   expect(comp.restoreLastActive).toBe(true);
   expect(comp.alwaysApproveReadRequests).toBe(true);
   expect(comp.showChatHistory).toBe(false);
-});
-
-test('openOptionsMenu finds and clicks expansion panel', () => {
-  const mockPanelTitle = {
-    click: jest.fn()
-  };
-  const mockOptionsPanel = {
-    querySelector: jest.fn().mockReturnValue(mockPanelTitle)
-  };
-  const mockOptionsHeader = {
-    scrollIntoView: jest.fn()
-  };
-  
-  // Mock querySelector to return different elements based on selector
-  comp.$el.querySelector = jest.fn((selector) => {
-    if (selector === '[data-aid="assistant_options"]') {
-      return mockOptionsPanel;
-    } else if (selector === '#chatOptionsHeader') {
-      return mockOptionsHeader;
-    }
-    return null;
-  });
-  
-  comp.openOptionsMenu();
-  
-  expect(comp.$nextTick).toHaveBeenCalled();
-  
-  // Execute the nextTick callback manually for testing
-  const nextTickCallback = comp.$nextTick.mock.calls[0][0];
-  if (nextTickCallback) {
-    nextTickCallback();
-  }
-  
-  expect(comp.$el.querySelector).toHaveBeenCalledWith('[data-aid="assistant_options"]');
-  expect(mockOptionsPanel.querySelector).toHaveBeenCalledWith('.v-expansion-panel-title');
-  expect(mockPanelTitle.click).toHaveBeenCalled();
-  expect(comp.$el.querySelector).toHaveBeenCalledWith('#chatOptionsHeader');
-  expect(mockOptionsHeader.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
-});
-
-test('openOptionsMenu handles missing options panel', () => {
-  const mockOptionsHeader = {
-    scrollIntoView: jest.fn()
-  };
-  
-  comp.$el.querySelector = jest.fn((selector) => {
-    if (selector === '[data-aid="assistant_options"]') {
-      return null; // Panel not found
-    } else if (selector === '#chatOptionsHeader') {
-      return mockOptionsHeader;
-    }
-    return null;
-  });
-  
-  comp.openOptionsMenu();
-  
-  expect(comp.$nextTick).toHaveBeenCalled();
-  
-  // Execute the nextTick callback manually for testing
-  const nextTickCallback = comp.$nextTick.mock.calls[0][0];
-  if (nextTickCallback) {
-    nextTickCallback();
-  }
-  
-  expect(comp.$el.querySelector).toHaveBeenCalledWith('[data-aid="assistant_options"]');
-  expect(comp.$el.querySelector).toHaveBeenCalledWith('#chatOptionsHeader');
-  expect(mockOptionsHeader.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
-  // Should not throw error when panel is missing
-});
-
-test('openOptionsMenu handles missing panel title', () => {
-  const mockOptionsPanel = {
-    querySelector: jest.fn().mockReturnValue(null) // Panel title not found
-  };
-  const mockOptionsHeader = {
-    scrollIntoView: jest.fn()
-  };
-  
-  comp.$el.querySelector = jest.fn((selector) => {
-    if (selector === '[data-aid="assistant_options"]') {
-      return mockOptionsPanel;
-    } else if (selector === '#chatOptionsHeader') {
-      return mockOptionsHeader;
-    }
-    return null;
-  });
-  
-  comp.openOptionsMenu();
-  
-  expect(comp.$nextTick).toHaveBeenCalled();
-  
-  // Execute the nextTick callback manually for testing
-  const nextTickCallback = comp.$nextTick.mock.calls[0][0];
-  if (nextTickCallback) {
-    nextTickCallback();
-  }
-  
-  expect(comp.$el.querySelector).toHaveBeenCalledWith('[data-aid="assistant_options"]');
-  expect(mockOptionsPanel.querySelector).toHaveBeenCalledWith('.v-expansion-panel-title');
-  expect(comp.$el.querySelector).toHaveBeenCalledWith('#chatOptionsHeader');
-  expect(mockOptionsHeader.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
-  // Should not throw error when panel title is missing
-});
-
-test('openOptionsMenu handles missing options header', () => {
-  const mockPanelTitle = {
-    click: jest.fn()
-  };
-  const mockOptionsPanel = {
-    querySelector: jest.fn().mockReturnValue(mockPanelTitle)
-  };
-  
-  comp.$el.querySelector = jest.fn((selector) => {
-    if (selector === '[data-aid="assistant_options"]') {
-      return mockOptionsPanel;
-    } else if (selector === '#chatOptionsHeader') {
-      return null; // Header not found
-    }
-    return null;
-  });
-  
-  comp.openOptionsMenu();
-  
-  expect(comp.$nextTick).toHaveBeenCalled();
-  
-  // Execute the nextTick callback manually for testing
-  const nextTickCallback = comp.$nextTick.mock.calls[0][0];
-  if (nextTickCallback) {
-    nextTickCallback();
-  }
-  
-  expect(comp.$el.querySelector).toHaveBeenCalledWith('[data-aid="assistant_options"]');
-  expect(mockOptionsPanel.querySelector).toHaveBeenCalledWith('.v-expansion-panel-title');
-  expect(mockPanelTitle.click).toHaveBeenCalled();
-  expect(comp.$el.querySelector).toHaveBeenCalledWith('#chatOptionsHeader');
-  // Should not throw error when header is missing
-});
-
-test('openOptionsMenu handles complete DOM element absence', () => {
-  comp.$el.querySelector = jest.fn().mockReturnValue(null);
-  
-  comp.openOptionsMenu();
-  
-  expect(comp.$nextTick).toHaveBeenCalled();
-  
-  // Execute the nextTick callback manually for testing
-  const nextTickCallback = comp.$nextTick.mock.calls[0][0];
-  if (nextTickCallback) {
-    nextTickCallback();
-  }
-  
-  expect(comp.$el.querySelector).toHaveBeenCalledWith('[data-aid="assistant_options"]');
-  expect(comp.$el.querySelector).toHaveBeenCalledWith('#chatOptionsHeader');
-  // Should not throw error when all elements are missing
-});
-
-test('openOptionsMenu uses nextTick for DOM manipulation timing', () => {
-  comp.openOptionsMenu();
-  
-  expect(comp.$nextTick).toHaveBeenCalledTimes(1);
-  expect(typeof comp.$nextTick.mock.calls[0][0]).toBe('function');
-});
-
-test('openOptionsMenu scrollIntoView uses correct options', () => {
-  const mockOptionsHeader = {
-    scrollIntoView: jest.fn()
-  };
-  
-  comp.$el.querySelector = jest.fn((selector) => {
-    if (selector === '#chatOptionsHeader') {
-      return mockOptionsHeader;
-    }
-    return null;
-  });
-  
-  comp.openOptionsMenu();
-  
-  // Execute the nextTick callback manually for testing
-  const nextTickCallback = comp.$nextTick.mock.calls[0][0];
-  if (nextTickCallback) {
-    nextTickCallback();
-  }
-  
-  expect(mockOptionsHeader.scrollIntoView).toHaveBeenCalledWith({
-    behavior: 'smooth',
-    block: 'center'
-  });
 });
 
 // Integration tests for settings functionality
@@ -5058,7 +5072,7 @@ test('toggleSharedSession', async () => {
   };
   comp.$root.user = { id: 'me' };
 
-  await comp.toggleSharedSession();
+  await comp.toggleSharedSession(comp.currentChatId);
 
   expect(comp.updateSessionTag).toHaveBeenCalledTimes(1);
   expect(comp.updateSessionTag).toHaveBeenCalledWith(comp.currentChatId, 'remove', 'shared');
@@ -5070,7 +5084,7 @@ test('toggleSharedSession', async () => {
 
   comp.chatHistoryById[comp.currentChatId].userId = 'u';
 
-  await comp.toggleSharedSession();
+  await comp.toggleSharedSession(comp.currentChatId);
 
   expect(comp.updateSessionTag).toHaveBeenCalledTimes(0);
   expect(comp.loadStoredChats).toHaveBeenCalledTimes(0);
@@ -5082,7 +5096,7 @@ test('toggleSharedSession', async () => {
 
   comp.chatHistoryById[comp.currentChatId].tags = ['a', 'b', 'c'];
 
-  await comp.toggleSharedSession();
+  await comp.toggleSharedSession(comp.currentChatId);
 
   expect(comp.updateSessionTag).toHaveBeenCalledTimes(1);
   expect(comp.updateSessionTag).toHaveBeenCalledWith(comp.currentChatId, 'add', 'shared');
@@ -5094,7 +5108,7 @@ test('toggleSharedSession', async () => {
 
   comp.chatHistoryById = { 'other-session': {}};
 
-  await comp.toggleSharedSession();
+  await comp.toggleSharedSession(comp.currentChatId);
 
   expect(comp.updateSessionTag).toHaveBeenCalledTimes(0);
   expect(comp.loadStoredChats).toHaveBeenCalledTimes(0);
@@ -5112,4 +5126,658 @@ test('nbspRegexOp', () => {
   expect(comp.nbspRegexOp('&nbspHelloWorld')).toBe('HelloWorld');
   expect(comp.nbspRegexOp('Hello World')).toBe('Hello World');
   expect(comp.nbspRegexOp('')).toBe('');
+});
+
+test('focusChatInput focuses the chat input textarea', () => {
+  const mockTextarea = {
+    focus: jest.fn()
+  };
+  const mockInputField = {
+    $el: {
+      querySelector: jest.fn().mockReturnValue(mockTextarea)
+    }
+  };
+  comp.$refs = {
+    chatInputField: mockInputField
+  };
+  comp.focusChatInput();
+  expect(comp.$nextTick).toHaveBeenCalled();
+  const nextTickCallback = comp.$nextTick.mock.calls[0][0];
+  if (nextTickCallback) {
+    nextTickCallback();
+  }
+  expect(mockInputField.$el.querySelector).toHaveBeenCalledWith('textarea');
+  expect(mockTextarea.focus).toHaveBeenCalled();
+});
+
+// Credits tracking tests
+test('updateCreditsUsed updates total credits used', () => {
+  comp.creditsUsed = 100;
+  const usage1 = { credits: 50 };
+  const usage2 = { credits: 25 };
+  
+  comp.updateCreditsUsed(usage1);
+  expect(comp.creditsUsed).toBe(150);
+  
+  comp.updateCreditsUsed(usage2);
+  expect(comp.creditsUsed).toBe(175);
+  
+  comp.updateCreditsUsed(null);
+  expect(comp.creditsUsed).toBe(175);
+});
+
+test('updateCreditsUsed handles missing credits field', () => {
+  comp.creditsUsed = 100;
+  const usage = { input_tokens: 10, output_tokens: 20 };
+  
+  comp.updateCreditsUsed(usage);
+  expect(comp.creditsUsed).toBe(100);
+});
+
+// Floating tool tests
+test('sendMessage marks floating tool as skipped when sending new message', async () => {
+  const floatingTool = {
+    id: 'tool_floating',
+    name: 'query_events',
+    status: 'pending_approval',
+    approved: null
+  };
+  
+  comp.messages = [fakeAssistantMessage, fakeMessage];
+  comp.currentChatId = 'test-session';
+  comp.mostRecentFloatingTool = new Map();
+  comp.mostRecentFloatingTool.set('test-session', floatingTool);
+  comp.newMessage = 'New message';
+  comp.canChat = true;
+  comp.assistantEnabled = true;
+  comp.creditsRemaining = 100;
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
+  comp.callAIAPI = jest.fn().mockResolvedValue();
+  comp.loadStoredChats = jest.fn().mockResolvedValue();
+  comp.scrollToBottom = jest.fn();
+  
+  await comp.sendMessage();
+  
+  expect(floatingTool.status).toBe('skipped');
+  expect(comp.mostRecentFloatingTool.has('test-session')).toBe(false);
+});
+
+test('sendMessage does not mark floating tool as skipped when only welcome message', async () => {
+  const floatingTool = {
+    id: 'tool_floating',
+    name: 'query_events',
+    status: 'pending_approval',
+    approved: null
+  };
+  
+  comp.messages = [fakeAssistantMessage];
+  comp.currentChatId = 'test-session';
+  comp.mostRecentFloatingTool = new Map();
+  comp.mostRecentFloatingTool.set('test-session', floatingTool);
+  comp.newMessage = 'First message';
+  comp.canChat = true;
+  comp.assistantEnabled = true;
+  comp.creditsRemaining = 100;
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
+  comp.callAIAPI = jest.fn().mockResolvedValue();
+  comp.loadStoredChats = jest.fn().mockResolvedValue();
+  comp.scrollToBottom = jest.fn();
+  
+  await comp.sendMessage();
+  
+  expect(floatingTool.status).toBe('pending_approval');
+});
+
+// Context compression tests
+test('compressCurrentSession sends compression message and reloads chat', async () => {
+  comp.currentChatId = 'test-session';
+  comp.newMessage = 'Original message';
+  comp.compressContextMsg = 'Compress the context';
+  comp.contextLength = 5000;
+  comp.sendMessage = jest.fn().mockResolvedValue();
+  comp.loadChatFromBackend = jest.fn().mockResolvedValue();
+  
+  await comp.compressCurrentSession();
+  
+  expect(comp.newMessage).toBe('Original message');
+  expect(comp.contextLength).toBe(0);
+  expect(comp.sendMessage).toHaveBeenCalledWith([MSGTAG_CONTEXTCOMPRESSION]);
+  expect(comp.loadChatFromBackend).toHaveBeenCalledWith('test-session');
+});
+
+// Choice buttons tests
+test('applyChoiceButtons converts choice markers to buttons', () => {
+  const text = 'Choose an option: [[CHOICE]]Option 1[[/CHOICE]] or [[CHOICE]]Option 2[[/CHOICE]]';
+  
+  const result = comp.applyChoiceButtons(text);
+  
+  expect(result).toContain('class="assistant-choice-btn"');
+  expect(result).toContain('data-choice="Option 1"');
+  expect(result).toContain('data-choice="Option 2"');
+});
+
+test('applyChoiceButtons handles empty choice markers', () => {
+  const text = 'Text with [[CHOICE]][[/CHOICE]] empty choice';
+  
+  const result = comp.applyChoiceButtons(text);
+  
+  expect(result).toBe('Text with  empty choice');
+});
+
+test('applyChoiceButtons handles text without choice markers', () => {
+  const text = 'Regular text without choices';
+  
+  const result = comp.applyChoiceButtons(text);
+  
+  expect(result).toBe('Regular text without choices');
+});
+
+test('applyChoiceButtons handles null text', () => {
+  const result = comp.applyChoiceButtons(null);
+  
+  expect(result).toBe(null);
+});
+
+test('applyChoiceButtons strips newlines from choice labels', () => {
+  const text = '[[CHOICE]]\n\nOption with newlines\n\n[[/CHOICE]]';
+  
+  const result = comp.applyChoiceButtons(text);
+  
+  expect(result).toContain('data-choice="Option with newlines"');
+});
+
+test('onChatClick handles choice button click', () => {
+  const mockButton = {
+    getAttribute: jest.fn().mockReturnValue('Selected choice')
+  };
+  const mockEvent = {
+    target: {
+      closest: jest.fn().mockReturnValue(mockButton)
+    },
+    preventDefault: jest.fn()
+  };
+  
+  comp.canChat = true;
+  comp.checkForActivity = jest.fn().mockReturnValue(false);
+  comp.creditsLoaded = true;
+  comp.focusChatInput = jest.fn();
+  comp.sendMessage = jest.fn();
+  
+  comp.onChatClick(mockEvent);
+  
+  expect(mockEvent.preventDefault).toHaveBeenCalled();
+  expect(comp.newMessage).toBe('Selected choice');
+  expect(comp.$nextTick).toHaveBeenCalled();
+});
+
+test('onChatClick ignores non-button clicks', () => {
+  const mockEvent = {
+    target: {
+      closest: jest.fn().mockReturnValue(null)
+    },
+    preventDefault: jest.fn()
+  };
+  
+  comp.sendMessage = jest.fn();
+  
+  comp.onChatClick(mockEvent);
+  
+  expect(mockEvent.preventDefault).not.toHaveBeenCalled();
+  expect(comp.sendMessage).not.toHaveBeenCalled();
+});
+
+test('onChatClick does not send when activity in progress', () => {
+  const mockButton = {
+    getAttribute: jest.fn().mockReturnValue('Choice')
+  };
+  const mockEvent = {
+    target: {
+      closest: jest.fn().mockReturnValue(mockButton)
+    },
+    preventDefault: jest.fn()
+  };
+  
+  comp.canChat = true;
+  comp.checkForActivity = jest.fn().mockReturnValue(true);
+  comp.creditsLoaded = true;
+  comp.sendMessage = jest.fn();
+  
+  comp.onChatClick(mockEvent);
+  
+  expect(comp.sendMessage).not.toHaveBeenCalled();
+});
+
+test('onChatClick does not send when canChat is false', () => {
+  const mockButton = {
+    getAttribute: jest.fn().mockReturnValue('Choice')
+  };
+  const mockEvent = {
+    target: {
+      closest: jest.fn().mockReturnValue(mockButton)
+    },
+    preventDefault: jest.fn()
+  };
+  
+  comp.canChat = false;
+  comp.checkForActivity = jest.fn().mockReturnValue(false);
+  comp.creditsLoaded = true;
+  comp.sendMessage = jest.fn();
+  
+  comp.onChatClick(mockEvent);
+  
+  expect(comp.sendMessage).not.toHaveBeenCalled();
+});
+
+test('stripHtml removes HTML tags', () => {
+  expect(comp.stripHtml('<p>Hello <strong>World</strong></p>')).toBe('Hello World');
+  expect(comp.stripHtml('<div><span>Test</span></div>')).toBe('Test');
+  expect(comp.stripHtml('No tags')).toBe('No tags');
+});
+
+test('stripNewlines removes leading and trailing newlines', () => {
+  expect(comp.stripNewlines('\n\nHello World\n\n')).toBe('Hello World');
+  expect(comp.stripNewlines('  \n\nText\n\n  ')).toBe('Text');
+  expect(comp.stripNewlines('No newlines')).toBe('No newlines');
+});
+
+test('stripNewlines handles non-string input', () => {
+  expect(comp.stripNewlines(null)).toBe(null);
+  expect(comp.stripNewlines(undefined)).toBe(undefined);
+  expect(comp.stripNewlines(123)).toBe(123);
+});
+
+// Session tag update tests
+test('updateSessionTag sends correct API request for add action', async () => {
+  const sessionId = 'test-session';
+  const mockPut = mockPapi('put');
+  
+  await comp.updateSessionTag(sessionId, 'add', 'shared');
+  
+  expect(mockPut).toHaveBeenCalledWith(`/assistant/sessions/${sessionId}`, {
+    action: 'add',
+    tag: 'shared'
+  });
+});
+
+test('updateSessionTag sends correct API request for remove action', async () => {
+  const sessionId = 'test-session';
+  const mockPut = mockPapi('put');
+  
+  await comp.updateSessionTag(sessionId, 'remove', 'shared');
+  
+  expect(mockPut).toHaveBeenCalledWith(`/assistant/sessions/${sessionId}`, {
+    action: 'remove',
+    tag: 'shared'
+  });
+});
+
+test('updateSessionTag handles API error', async () => {
+  const sessionId = 'test-session';
+  const showErrorMock = mockShowError();
+  mockPapi('put', null, { response: { data: "Update failed"} });
+  
+  await comp.updateSessionTag(sessionId, 'add', 'shared');
+  
+  expect(showErrorMock).toHaveBeenCalledWith({ message: "Update failed" });
+});
+
+test('updateSessionTag', async () => {
+  const sessionId = 'session_123';
+  const action = 'remove';
+  const tag = 'shared';
+  const showError = jest.fn();
+  comp.$root.showError = showError;
+  let put = mockPapi('put', {});
+
+  await comp.updateSessionTag(sessionId, action, tag);
+
+  expect(put).toHaveBeenCalledWith(`/assistant/sessions/${sessionId}`, { action: action, tag: tag });
+  expect(showError).not.toHaveBeenCalled();
+
+  put = mockPapi('put', {}, { response: { data: 'ERROR_SESSION_ATTACHED_TO_CASES 2' } });
+
+  await comp.updateSessionTag(sessionId, action, tag);
+
+  expect(put).toHaveBeenCalledWith(`/assistant/sessions/${sessionId}`, { action: action, tag: tag });
+  expect(showError).toHaveBeenCalledWith({ message: 'Unable to unshare session. The session is attached to 2 case(s).' });
+});
+
+test('attachToCase', async () => {
+  comp.caseMenuVisible = true;
+
+  const sessionId = 'sessionId';
+  const caseId = 'caseId';
+
+  comp.chatHistoryById = {
+    [sessionId]: {
+      title: 'AI Session',
+      tags: ['context_compress'],
+      userId: 'me',
+    },
+  };
+
+  const _origtoggleSharedSession = comp.toggleSharedSession;
+  comp.toggleSharedSession = jest.fn();
+
+  const _origcreateCase = comp.createCase;
+  comp.createCase = jest.fn();
+
+  await comp.attachToCase(sessionId, caseId)
+
+  expect(comp.caseMenuVisible).toBe(false);
+  expect(comp.toggleSharedSession).toHaveBeenCalledWith(sessionId);
+  expect(comp.createCase).toHaveBeenCalledTimes(0);
+
+  comp.caseMenuVisible = true;
+  comp.chatHistoryById[sessionId].tags = ['shared'];
+  comp.toggleSharedSession.mockClear();
+  comp.createCase.mockClear();
+
+  await comp.attachToCase(sessionId, caseId);
+
+  expect(comp.caseMenuVisible).toBe(false);
+  expect(comp.toggleSharedSession).toHaveBeenCalledTimes(0);
+  expect(comp.createCase).toHaveBeenCalledTimes(0);
+
+  await comp.attachToCase(sessionId, null);
+
+  expect(comp.caseMenuVisible).toBe(false);
+  expect(comp.toggleSharedSession).toHaveBeenCalledTimes(0);
+  expect(comp.createCase).toHaveBeenCalledWith('AI Session');
+
+  comp.toggleSharedSession = _origtoggleSharedSession;
+  comp.createCase = _origcreateCase;
+  resetPapi();
+});
+
+test('createCase', async () => {
+  const post = mockPapi('post', { data: { id: '123' } });
+
+  const result = await comp.createCase('title');
+
+  expect(post).toHaveBeenCalledWith('case/', { title: 'title', description: comp.i18n.caseEscalatedDescription });
+  expect(result).toBe('123');
+
+  resetPapi();
+});
+
+test('calculateContextOfMessage - assistant message', () => {
+  const allMessages = [
+    {
+      role: 'user',
+      usage: {
+        input_tokens: 100,
+        output_tokens: 0
+      }
+    },
+    {
+      role: 'assistant',
+      usage: {
+        input_tokens: 200,
+        output_tokens: 150
+      }
+    }
+  ];
+
+  // the context usage of a single assistant message is given to us
+  // as the output_tokens of that message, no calculation necessary
+  const result = comp.calculateContextOfMessage(allMessages, 1);
+
+  expect(result).toBe(150);
+});
+
+test('calculateContextOfMessage - user message mid-session', () => {
+  const allMessages = [
+    {
+      role: 'assistant',
+      usage: {
+        input_tokens: 100,
+        output_tokens: 50
+      }
+    },
+    {
+      role: 'user',
+      usage: {
+        input_tokens: 0,
+        output_tokens: 0
+      }
+    },
+    {
+      role: 'assistant',
+      usage: {
+        input_tokens: 200,
+        output_tokens: 75
+      }
+    }
+  ];
+
+  // For the user message at index 1:
+  // contextLength = next.input_tokens - (prev.input_tokens + prev.output_tokens)
+  // contextLength = 200 - (100 + 50) = 50
+  const result = comp.calculateContextOfMessage(allMessages, 1);
+
+  expect(result).toBe(50);
+});
+
+test('calculateContextOfMessage - first user message', () => {
+  const allMessages = [
+    {
+      role: 'user',
+      usage: {
+        input_tokens: 0,
+        output_tokens: 0
+      }
+    },
+    {
+      role: 'assistant',
+      usage: {
+        input_tokens: 120,
+        output_tokens: 80
+      }
+    }
+  ];
+
+  // For the first user message (no previous message):
+  // contextLength = next.input_tokens
+  const result = comp.calculateContextOfMessage(allMessages, 0);
+
+  expect(result).toBe(120);
+});
+
+test('calculateContextOfMessage - latest user message without assistant response', () => {
+  const allMessages = [
+    {
+      role: 'user',
+      usage: {
+        input_tokens: 0,
+        output_tokens: 0
+      }
+    }
+  ];
+
+  const result = comp.calculateContextOfMessage(allMessages, 1);
+
+  // the length of this message isn't calculable given what we have. This should
+  // only last for a short time until the model responds to the message.
+  expect(result).toBe(0);
+});
+
+// messageContextValues computed property tests
+test('messageContextValues returns context values for all messages', () => {
+  comp.messages = [
+    {
+      role: 'user',
+      usage: {
+        input_tokens: 0,
+        output_tokens: 0
+      }
+    },
+    {
+      role: 'assistant',
+      usage: {
+        input_tokens: 120,
+        output_tokens: 80
+      }
+    },
+    {
+      role: 'user',
+      usage: {
+        input_tokens: 0,
+        output_tokens: 0
+      }
+    },
+    {
+      role: 'assistant',
+      usage: {
+        input_tokens: 200,
+        output_tokens: 150
+      }
+    }
+  ];
+
+  const result = comp.messageContextValues();
+
+  expect(result).toHaveLength(4);
+  expect(result[0]).toBe(120); // First user message: next.input_tokens = 120
+  expect(result[1]).toBe(80);  // First assistant message: output_tokens = 80
+  expect(result[2]).toBe(0);   // Second user message: next.input_tokens - (prev.input_tokens + prev.output_tokens) = 200 - (120 + 80) = 0
+  expect(result[3]).toBe(150); // Second assistant message: output_tokens = 150
+});
+
+test('messageContextValues handles empty messages array', () => {
+  comp.messages = [];
+
+  const result = comp.messageContextValues();
+
+  expect(result).toEqual([]);
+});
+
+test('messageContextValues handles null messages', () => {
+  comp.messages = null;
+
+  const result = comp.messageContextValues();
+
+  expect(result).toEqual([]);
+});
+
+test('buildModelIdentifier', () => {
+  const tests = [
+    { input: { id: 'model', adapter: 'adapter' }, expected: 'model@adapter' },
+    { input: { id: '', adapter: '' }, expected: '@' },
+    { input: {}, expected: '@' },
+    { input: null, expected: '' },
+  ];
+
+  for (let t of tests) {
+    const output = comp.buildModelIdentifier(t.input);
+    expect(output).toBe(t.expected);
+  }
+});
+
+test('buildGroupedModels - groups models by adapter with headers', () => {
+  // Setup test data
+  comp.modelsMap = new Map([
+    ['claude-3-5-sonnet@Anthropic', {
+      id: 'claude-3-5-sonnet',
+      adapter: 'Anthropic',
+      displayName: 'Claude 3.5 Sonnet',
+      key: 'claude-3-5-sonnet@Anthropic'
+    }],
+    ['claude-3-opus@Anthropic', {
+      id: 'claude-3-opus',
+      adapter: 'Anthropic',
+      displayName: 'Claude 3 Opus',
+      key: 'claude-3-opus@Anthropic'
+    }],
+    ['gpt-4@SOAI', {
+      id: 'gpt-4',
+      adapter: 'SOAI',
+      displayName: 'GPT-4',
+      key: 'gpt-4@SOAI'
+    }],
+    ['gemini-pro@Gemini', {
+      id: 'gemini-pro',
+      adapter: 'Gemini',
+      displayName: 'Gemini Pro',
+      key: 'gemini-pro@Gemini'
+    }]
+  ]);
+
+  const result = comp.buildGroupedModels();
+
+  // Verify structure
+  expect(result).toBeInstanceOf(Array);
+  expect(result.length).toBe(7); // 3 headers + 4 models
+
+  // First group should be Anthropic (alphabetically first, case-sensitive)
+  expect(result[0]).toEqual({ header: 'Anthropic' });
+  expect(result[1].displayName).toBe('Claude 3.5 Sonnet');
+  expect(result[2].displayName).toBe('Claude 3 Opus');
+
+  // Second group should be Gemini
+  expect(result[3]).toEqual({ header: 'Gemini' });
+  expect(result[4].displayName).toBe('Gemini Pro');
+
+  // Third group should be SOAI
+  expect(result[5]).toEqual({ header: 'SOAI' });
+  expect(result[6].displayName).toBe('GPT-4');
+});
+
+test('buildGroupedModels - handles single adapter', () => {
+  comp.modelsMap = new Map([
+    ['model1@Adapter1', {
+      id: 'model1',
+      adapter: 'Adapter1',
+      displayName: 'Model 1',
+      key: 'model1@Adapter1'
+    }],
+    ['model2@Adapter1', {
+      id: 'model2',
+      adapter: 'Adapter1',
+      displayName: 'Model 2',
+      key: 'model2@Adapter1'
+    }]
+  ]);
+
+  const result = comp.buildGroupedModels();
+
+  // Should have header and two models
+  expect(result).toHaveLength(3);
+  expect(result[0]).toEqual({ header: 'Adapter1' });
+  expect(result[1].displayName).toBe('Model 1');
+  expect(result[2].displayName).toBe('Model 2');
+});
+
+test('buildGroupedModels - handles empty modelsMap', () => {
+  comp.modelsMap = new Map();
+
+  const result = comp.buildGroupedModels();
+
+  expect(result).toEqual([]);
+});
+
+test('buildGroupedModels - handles models with no adapter', () => {
+  comp.i18n = { statusUnknown: 'Unknown' };
+  comp.modelsMap = new Map([
+    ['model1@', {
+      id: 'model1',
+      adapter: '',
+      displayName: 'Model 1',
+      key: 'model1@'
+    }],
+    ['model2@Adapter1', {
+      id: 'model2',
+      adapter: 'Adapter1',
+      displayName: 'Model 2',
+      key: 'model2@Adapter1'
+    }]
+  ]);
+
+  const result = comp.buildGroupedModels();
+
+  // Should group empty adapter as 'Unknown' (from i18n)
+  expect(result[0]).toEqual({ header: 'Adapter1' });
+  expect(result[1].displayName).toBe('Model 2');
+  expect(result[2]).toEqual({ header: 'Unknown' });
+  expect(result[3].displayName).toBe('Model 1');
 });

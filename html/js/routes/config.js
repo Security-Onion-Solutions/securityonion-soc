@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -12,6 +12,7 @@ routes.push({
     data() {
       return {
         i18n: this.$root.i18n,
+        showOptionsDialog: false,
         settings: [],
         search: "",
         searchFilter: null,
@@ -790,17 +791,22 @@ routes.push({
       }
     },
     notifyChangedSetting(setting) {
+      const REQUIRE_GRID_HIGHSTATE = ["fake1-to-trigger-highstate", "fake2-to-trigger-highstate"];
+
       const moduleStateMap = new Map();
-      moduleStateMap.set("advanced", ["fake1-to-trigger-highstate", "fake2-to-trigger-highstate"]);
+
+      // Some modules do not map directly to a similarly named salt state.
+      // These modules are mapped to a list of states that should be run to apply the changes.
+      moduleStateMap.set("advanced", REQUIRE_GRID_HIGHSTATE);
       moduleStateMap.set("bpf.zeek", ["zeek"]);
       moduleStateMap.set("bpf.pcap", ["pcap"]);
       moduleStateMap.set("bpf.suricata", ["suricata"]);
       moduleStateMap.set("elastic_fleet_package_registry", ["elastic-fleet-package-registry"]);
-      moduleStateMap.set("global", ["fake1-to-trigger-highstate", "fake2-to-trigger-highstate"]);
-      moduleStateMap.set("host", ["fake1-to-trigger-highstate", "fake2-to-trigger-highstate"]);
+      moduleStateMap.set("global", REQUIRE_GRID_HIGHSTATE);
+      moduleStateMap.set("host", REQUIRE_GRID_HIGHSTATE);
       moduleStateMap.set("patch", ["patch.os"]);
       moduleStateMap.set("vm", ["vm.user"]);
-
+      
       var override = false;
       moduleStateMap.forEach((modules, prefix) => {
         if (setting.id.startsWith(prefix)) {
@@ -818,6 +824,32 @@ routes.push({
       }
 
       this.changedModules = [...new Set(this.changedModules)].sort();
+
+      // If multiple modules are changed, require a full grid highstate.
+      // Otherwise, if this is a multi-node grid we need perform more checks.
+      if (this.changedModules.length == 1 && !this.isSingleNodeGrid()) {
+        // Perform second stage check to verify that the changed module is 
+        // only found on the manager node. If not, require a full grid highstate.
+        managerOnlyStates = [
+          "backup",
+          "ca",
+          "elastalert",
+          "hydra",
+          "influxdb",
+          "kibana",
+          "kratos",
+          "manager",
+          "registry",
+          "soc",
+          "telegraf"
+        ]
+
+        const mappedSetting = this.changedModules[0];
+        const mappedSettingPrefix = mappedSetting.split(".")[0];
+        if (!managerOnlyStates.includes(mappedSettingPrefix)) {
+          this.changedModules = [...REQUIRE_GRID_HIGHSTATE];
+        }
+      }
     },
     async sync() {
       this.$root.startLoading();
@@ -1024,6 +1056,10 @@ routes.push({
     loadLocalSettings() {
       if (localStorage['settings.config.advanced']) this.advanced = localStorage['settings.config.advanced'] == "true";
     },
+
+    isSingleNodeGrid() {
+      return this.nodes.length == 1;
+    }
 
   }
 }});

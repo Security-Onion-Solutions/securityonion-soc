@@ -1,4 +1,4 @@
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -8,6 +8,7 @@ package assistant
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -127,7 +128,8 @@ func (t *AddOverridesTool) Execute(ctx context.Context, srv *server.Server, para
 
 	err = srv.CheckAuthorized(ctx, "write", "detections")
 	if err != nil {
-		return nil, fmt.Errorf("user is not authorized to write detections: %w", err)
+		logger.WithError(err).Error("user is not authorized to write detections")
+		return nil, errors.New("ERROR_PERMISSION_DENIED")
 	}
 
 	userId := ctx.Value(web.ContextKeyRequestorId).(string)
@@ -147,7 +149,8 @@ func (t *AddOverridesTool) Execute(ctx context.Context, srv *server.Server, para
 
 	err = json.Unmarshal([]byte(params), args)
 	if err != nil {
-		return nil, fmt.Errorf("couldn't unmarshal params: %w", err)
+		logger.WithError(err).WithField("toolParams", params).Error("failed to unmarshal tool params")
+		return nil, errors.New("ERROR_ASSISTANT_UNMARSHAL_PARAMS")
 	}
 
 	result.Parameters = args
@@ -171,12 +174,13 @@ func (t *AddOverridesTool) Execute(ctx context.Context, srv *server.Server, para
 
 	detectEvents, err := srv.Detectionstore.QueryWithRange(ctx, query, args.RangeStart, args.RangeEnd, args.RangeFormat, detectLimit)
 	if err != nil {
-		return nil, fmt.Errorf("unable to search for detections with query %s: %w", query, err)
+		return nil, err
 	}
 
 	detects, err := srv.Detectionstore.ConvertEventsToDetections(ctx, detectEvents)
 	if err != nil {
-		return nil, fmt.Errorf("unable to convert events to detections: %w", err)
+		logger.WithError(err).WithField("detectEvents", detectEvents).Error("unable to convert events to detections")
+		return nil, errors.New("ERROR_ASSISTANT_CONVERT_EVENTS_TO_DETECTIONS")
 	}
 
 	if len(detects) == 0 {
@@ -189,7 +193,7 @@ func (t *AddOverridesTool) Execute(ctx context.Context, srv *server.Server, para
 	engInt, ok := srv.DetectionEngines.Load(detects[0].Engine)
 	if !ok {
 		logger.WithField("detectionEngine", detects[0].Engine).Error("unsupported engine")
-		return nil, fmt.Errorf("unsupported engine %s", detects[0].Engine)
+		return nil, errors.New("ERROR_UNSUPPORTED_ENGINE")
 	}
 
 	engine := engInt.(server.DetectionEngine)
@@ -197,7 +201,7 @@ func (t *AddOverridesTool) Execute(ctx context.Context, srv *server.Server, para
 	bulkStats, err := srv.Detectionstore.BulkAddOverrides(ctx, newOverrides, detects, logger)
 	if err != nil {
 		logger.WithError(err).Error("error adding overrides")
-		return nil, fmt.Errorf("error adding overrides: %w", err)
+		return nil, err
 	}
 
 	syncDetects := bulkStats.NeedToSync
@@ -205,13 +209,13 @@ func (t *AddOverridesTool) Execute(ctx context.Context, srv *server.Server, para
 
 	errMap, err := engine.SyncLocalDetections(ctx, syncDetects)
 	if err != nil {
-		logger.WithError(err).Error("unable to sync detection")
-		return nil, fmt.Errorf("unable to sync detections: %w", err)
+		logger.WithError(err).Error("unable to sync detections")
+		return nil, errors.New("ERROR_DETECTION_SYNC_FAILED")
 	}
 
 	if len(errMap) != 0 {
-		logger.WithField("errMap", errMap).Error("unable to sync detection")
-		return nil, fmt.Errorf("unable to sync detections: %v", errMap)
+		logger.WithField("errMap", errMap).Error("unable to sync detections")
+		return nil, errors.New("ERROR_DETECTION_SYNC_FAILED")
 	}
 
 	syncDur := time.Since(syncStart)

@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -54,7 +54,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
           { title: this.$root.i18n.actions, width: '10.0em' },
           { title: this.$root.i18n.dateCreated, value: 'createTime' },
           { title: this.$root.i18n.dateModified, value: 'updateTime' },
-          { title: this.$root.i18n.filename, value: 'value' },
+          { title: this.$root.i18n.name, value: 'value' },
         ],
         itemsPerPage: 10,
         itemsPerPageOptions: [10,50,250,1000],

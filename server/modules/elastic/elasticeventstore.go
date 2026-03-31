@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -391,7 +391,7 @@ func (store *ElasticEventstore) Scroll(ctx context.Context, criteria *model.Even
 			logger.WithError(scrollErr).Warn("call to close scroll failed, scroll should self-close shortly")
 		}
 
-		if res != nil {
+		if res != nil && res.IsError() && res.StatusCode != 404 {
 			defer res.Body.Close()
 
 			_, respErr := readJsonFromResponse(res)
@@ -902,6 +902,7 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 	uid := store.parseFirst(json, "log.id.uid")
 	x509id := store.parseFirst(json, "log.id.id")
 	fuid := store.parseFirst(json, "log.id.fuid")
+	store.addParameterToFilter(json, "suricata.capture_file", filter)
 	outputSensorId = gjson.Get(json, "hits.hits.0._source.observer.name").String()
 	duration := int64(store.defaultDurationMs)
 
@@ -945,6 +946,7 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 				}
 
 				uid = store.parseFirst(json, "log.id.uid")
+				store.addParameterToFilter(json, "suricata.capture_file", filter)
 			}
 
 			if len(uid) == 0 {
@@ -986,6 +988,7 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 			return errors.New("Unable to locate Zeek record")
 		}
 
+		store.addParameterToFilter(json, "suricata.capture_file", filter)
 		results := gjson.Get(json, "hits.hits.#._source.\\@timestamp").Array()
 		var closestDeltaNs int64
 		closestDeltaNs = 0
@@ -1047,13 +1050,22 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 	return nil
 }
 
-func (store *ElasticEventstore) addUpdateScripts(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, ack bool, esc bool) {
-	if ack {
-		trackTiming := strconv.FormatBool(licensing.IsEnabled(licensing.FEAT_RPT))
-		escBool := strconv.FormatBool(esc)
-		nowMillis := timeNow.UnixMilli()
-		nowMillisStr := strconv.FormatInt(nowMillis, 10)
-		updateCriteria.AddUpdateScript(`
+func (store *ElasticEventstore) addParameterToFilter(json string, key string, filter *model.Filter) {
+	value := store.parseFirst(json, key)
+
+	// If the key was provided, add it to the filter parameters.
+	// Overwrite if the key already exists
+	if len(value) > 0 {
+		filter.Parameters[key] = value
+	}
+}
+
+func (store *ElasticEventstore) addAcknowledgeScript(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, esc bool, userId string) {
+	trackTiming := strconv.FormatBool(licensing.IsEnabled(licensing.FEAT_RPT))
+	escBool := strconv.FormatBool(esc)
+	nowMillis := timeNow.UnixMilli()
+	nowMillisStr := strconv.FormatInt(nowMillis, 10)
+	updateCriteria.AddUpdateScript(`
 			boolean track_timing = ` + trackTiming + `;
 			boolean esc_bool = ` + escBool + `;
 			Instant now_instant = Instant.ofEpochMilli(` + nowMillisStr + `L);
@@ -1066,6 +1078,7 @@ func (store *ElasticEventstore) addUpdateScripts(updateCriteria *model.EventUpda
 
 			if (ctx._source.event.acknowledged != true) {
 				ctx._source.event.acknowledged = true;
+				ctx._source.event.acknowledged_by = '` + userId + `';
 				if (track_timing) {
 					ctx._source.event.acknowledged_timestamp = now_date;
 					ctx._source.event.acknowledged_elapsed_seconds = elapsed_seconds;
@@ -1074,14 +1087,72 @@ func (store *ElasticEventstore) addUpdateScripts(updateCriteria *model.EventUpda
 
 			if (ctx._source.event.escalated != true && esc_bool) {
 				ctx._source.event.escalated = esc_bool;
+				ctx._source.event.escalated_by = '` + userId + `';
 				if (track_timing) {
 					ctx._source.event.escalated_timestamp = now_date;
 					ctx._source.event.escalated_elapsed_seconds = elapsed_seconds;
 				}
 			}
 			`)
+}
+
+func (store *ElasticEventstore) addInvestigateScript(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, userId string, sessionId ...string) {
+	trackTiming := strconv.FormatBool(licensing.IsEnabled(licensing.FEAT_RPT))
+	nowMillis := timeNow.UnixMilli()
+	nowMillisStr := strconv.FormatInt(nowMillis, 10)
+
+	// Get sessionId if provided
+	sessionIdStr := ""
+	if len(sessionId) > 0 && sessionId[0] != "" {
+		sessionIdStr = sessionId[0]
+	}
+
+	script := `
+			boolean track_timing = ` + trackTiming + `;
+			Instant now_instant = Instant.ofEpochMilli(` + nowMillisStr + `L);
+			ZonedDateTime now_date = ZonedDateTime.ofInstant(now_instant, ZoneId.of('Z'));
+			
+			ctx._source.event.investigated = true;
+			ctx._source.event.investigated_by = '` + userId + `';`
+
+	if sessionIdStr != "" {
+		script += `
+			ctx._source.event.investigation_session_id = '` + sessionIdStr + `';`
+	}
+
+	script += `
+			if (track_timing) {
+				ctx._source.event.investigated_timestamp = now_date;
+			}
+			`
+	updateCriteria.AddUpdateScript(script)
+}
+
+func (store *ElasticEventstore) addUnacknowledgeScript(updateCriteria *model.EventUpdateCriteria) {
+	updateCriteria.AddUpdateScript(`ctx._source.event.acknowledged = false;`)
+}
+
+func (store *ElasticEventstore) addInvestigateDeleteScript(updateCriteria *model.EventUpdateCriteria) {
+	updateCriteria.AddUpdateScript(`
+		if (ctx._source.event.containsKey('investigation_session_id')) {
+			ctx._source.event.remove('investigation_session_id');
+		}
+	`)
+}
+
+func (store *ElasticEventstore) AddAckEscalateUpdateScripts(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, ack bool, esc bool, userId string) {
+	if ack {
+		store.addAcknowledgeScript(updateCriteria, timeNow, esc, userId)
 	} else {
-		updateCriteria.AddUpdateScript(`ctx._source.event.acknowledged = false;`)
+		store.addUnacknowledgeScript(updateCriteria)
+	}
+}
+
+func (store *ElasticEventstore) AddInvestigationUpdateScripts(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, userId string, isDelete bool, sessionId ...string) {
+	if isDelete {
+		store.addInvestigateDeleteScript(updateCriteria)
+	} else {
+		store.addInvestigateScript(updateCriteria, timeNow, userId, sessionId...)
 	}
 }
 
@@ -1099,7 +1170,8 @@ func (store *ElasticEventstore) Acknowledge(ctx context.Context, ackCriteria *mo
 			}).Info("Acknowledging event")
 
 			updateCriteria := model.NewEventUpdateCriteria()
-			store.addUpdateScripts(updateCriteria, time.Now(), ackCriteria.Acknowledge, ackCriteria.Escalate)
+			userId := ctx.Value(web.ContextKeyRequestorId).(string)
+			store.AddAckEscalateUpdateScripts(updateCriteria, time.Now(), ackCriteria.Acknowledge, ackCriteria.Escalate, userId)
 			updateCriteria.Populate(ackCriteria.SearchFilter,
 				ackCriteria.DateRange,
 				ackCriteria.DateRangeFormat,

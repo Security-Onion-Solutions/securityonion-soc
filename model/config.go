@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -73,7 +73,7 @@ type Setting struct {
 	// (metadata) Indicates whether this setting should only be shown when the 'Show advanced settings' option is enabled in the user interface.
 	Advanced bool `json:"advanced" example:"false"`
 	// (metadata) An HTML page, relative to the doc URL, that may assist the user in understanding the purpose of this setting.
-	HelpLink string `json:"helpLink" example:"elastalert.html"`
+	HelpLink string `json:"helpLink" example:"elastalert"`
 	// (metadata) An optional syntax designator for validating the given setting value.
 	Syntax string `json:"syntax" example:"yaml"`
 	// (metadata) The type that the value will be converted to internally before applied to the component that uses it.

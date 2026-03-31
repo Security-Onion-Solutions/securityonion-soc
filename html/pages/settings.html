@@ -1,10 +1,5 @@
 <v-container v-if="showSettingsForm" fluid data-aid="user_settings_screen">
-	<v-row>
-		<v-col>
-			<h2 v-text="i18n.settingsTitle"></h2>
-		</v-col>
-	</v-row>
-	<v-row>
+<v-row>
 		<v-col>
 			<v-alert v-if="$root.forceUserOtp" class="mt-2" type="error" icon="fa-shield-halved" border="left" colored-border text dense data-aid="user_settings_force_otp_alert">
 				{{ i18n.forceUserOtp }}
@@ -42,12 +37,12 @@
 						<v-card-title>{{ i18n.profileDetails }}</v-card-title>
 						<v-card-text>
 							<v-form v-model="profileForm.valid" method="post" :action="authSettingsUrl">
-								<v-text-field variant="underlined" name="traits.email" v-model="profileForm.email" :placeholder="i18n.email" :rules="[rules.required, rules.minemaillen]" class="d-none" data-aid="user_settings_email"></v-text-field>
-								<v-text-field variant="underlined" name="traits.firstName" v-model="profileForm.firstName" :placeholder="i18n.firstName" type="text":rules="[rules.maxlen]" data-aid="user_settings_firstname"></v-text-field>
-								<v-text-field variant="underlined" name="traits.lastName" v-model="profileForm.lastName" :placeholder="i18n.lastName" type="text" :rules="[rules.maxlen]" data-aid="user_settings_lastname"></v-text-field>
-								<v-text-field variant="underlined" name="traits.note" v-model="profileForm.note" :placeholder="i18n.note" type="text" :rules="[rules.maxlen]" data-aid="user_settings_note"></v-text-field>
-								<v-text-field variant="underlined" name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
-								<v-text-field variant="underlined" name="method" value="profile" class="d-none"></v-text-field>
+								<v-text-field name="traits.email" v-model="profileForm.email" :placeholder="i18n.email" :rules="[rules.required, rules.minemaillen]" class="d-none" data-aid="user_settings_email"></v-text-field>
+								<v-text-field name="traits.firstName" v-model="profileForm.firstName" :placeholder="i18n.firstName" type="text":rules="[rules.maxlen]" data-aid="user_settings_firstname"></v-text-field>
+								<v-text-field name="traits.lastName" v-model="profileForm.lastName" :placeholder="i18n.lastName" type="text" :rules="[rules.maxlen]" data-aid="user_settings_lastname"></v-text-field>
+								<v-text-field name="traits.note" v-model="profileForm.note" :placeholder="i18n.note" type="text" :rules="[rules.maxlen]" data-aid="user_settings_note"></v-text-field>
+								<v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
+								<v-text-field name="method" value="profile" class="d-none"></v-text-field>
 								<v-btn id="settingsProfileChangeSubmit" type="submit" color="primary" :disabled="!profileForm.valid" v-text="i18n.save"></v-btn>
 							</v-form>
 						</v-card-text>
@@ -73,13 +68,13 @@
 
 					<v-card v-if="passwordEnabled" class="my-4 border subtle-border">
 						<v-card-title>{{ i18n.password }}</v-card-title>
-						<v-card-subtitle v-text="i18n.passwordInstructions"></v-card-subtitle>
+						<v-card-subtitle class="mb-3" v-text="i18n.passwordInstructions"></v-card-subtitle>
 						<v-card-text>
 							<v-form v-model="passwordForm.valid" method="post" :action="authSettingsUrl">
-								<v-text-field variant="underlined" name="password" v-model="passwordForm.password" :placeholder="i18n.passwordChange" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required, rules.minpasslen, rules.maxpasslen, rules.badpasschs]" data-aid="user_settings_password_input"></v-text-field>
-								<v-text-field variant="underlined" :placeholder="i18n.passwordConfirm" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required, rules.maxpasslen, rules.matches, rules.badpasschs]" data-aid="user_settings_password_confirm_input"></v-text-field>
-								<v-text-field variant="underlined" name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
-								<v-text-field variant="underlined" name="method" value="password" class="d-none"></v-text-field>
+								<v-text-field name="password" v-model="passwordForm.password" :placeholder="i18n.passwordChange" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required, rules.minpasslen, rules.maxpasslen, rules.badpasschs]" data-aid="user_settings_password_input"></v-text-field>
+								<v-text-field :placeholder="i18n.passwordConfirm" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required, rules.maxpasslen, rules.matches, rules.badpasschs]" data-aid="user_settings_password_confirm_input"></v-text-field>
+								<v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
+								<v-text-field name="method" value="password" class="d-none"></v-text-field>
 								<v-btn id="settingsPasswordChangeSubmit" type="submit" color="primary" :disabled="!passwordForm.valid" v-text="i18n.save"></v-btn>
 							</v-form>
 						</v-card-text>
@@ -99,9 +94,9 @@
 									{{ totpForm.secret }}
 									<v-icon class="ml-1" @click="$root.copyToClipboard(totpForm.secret)" :title="i18n.copyToClipboard" data-aid="user_settings_security_totp_secret_copy">fa-copy</v-icon>
 								</div>
-								<v-text-field variant="underlined" name="totp_code" autocomplete="off" v-model="totpForm.code" :placeholder="i18n.totpCodeHelp" type="text" :rules="[rules.required, rules.mintotplen, rules.maxtotplen]" data-aid="user_settings_security_totp_input"></v-text-field>
-								<v-text-field variant="underlined" name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
-								<v-text-field variant="underlined" name="method" value="totp" class="d-none"></v-text-field>
+								<v-text-field name="totp_code" autocomplete="off" v-model="totpForm.code" :placeholder="i18n.totpCodeHelp" type="text" :rules="[rules.required, rules.mintotplen, rules.maxtotplen]" data-aid="user_settings_security_totp_input"></v-text-field>
+								<v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
+								<v-text-field name="method" value="totp" class="d-none"></v-text-field>
 								<v-btn id="settingsTotpActivateSubmit" type="submit" color="primary" :disabled="!totpForm.valid" v-text="i18n.totpActivate"></v-btn>
 							</v-form>
 						</v-card-text>
@@ -112,8 +107,8 @@
 						<v-card-text>
 							<v-form method="post" :action="authSettingsUrl">
 								<div class="mb-4" v-text="i18n.totpUnlinkInstructions"></div>
-								<v-text-field variant="underlined" name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
-								<v-text-field variant="underlined" name="totp_unlink" value="true" class="d-none"></v-text-field>
+								<v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
+								<v-text-field name="totp_unlink" value="true" class="d-none"></v-text-field>
 								<v-btn id="settingsTotpDeactivateSubmit" type="submit" color="primary" v-text="i18n.totpDeactivate"></v-btn>
 							</v-form>
 						</v-card-text>
@@ -121,12 +116,12 @@
 
 					<v-card v-if="webauthnForm.script" outlined class="my-4 border subtle-border">
 						<v-card-title>{{ i18n.webauthn }}</v-card-title>
-						<v-card-subtitle v-text="i18n.webauthnInstructions"></v-card-subtitle>
+						<v-card-subtitle class="mb-3" v-text="i18n.webauthnInstructions"></v-card-subtitle>
 						<v-card-text>
 							<v-form v-model="webauthnForm.valid" method="post" :action="authSettingsUrl">
-								<v-text-field variant="underlined" name="webauthn_register_displayname" autocomplete="off" v-model="webauthnForm.name" :placeholder="i18n.webauthnNameHelp" type="text" :rules="[rules.required]" data-aid="user_settings_webauth_name_input"></v-text-field>
-								<v-text-field variant="underlined" name="webauthn_register" v-model="webauthnForm.key" class="d-none"></v-text-field>
-								<v-text-field variant="underlined" name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
+								<v-text-field name="webauthn_register_displayname" autocomplete="off" v-model="webauthnForm.name" :placeholder="i18n.webauthnNameHelp" type="text" :rules="[rules.required]" data-aid="user_settings_webauth_name_input"></v-text-field>
+								<v-text-field name="webauthn_register" v-model="webauthnForm.key" class="d-none"></v-text-field>
+								<v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
 								<v-btn class="mb-4" name="webauthn_register_trigger" id="settingsWebauthnActivate" type="button" color="primary" v-text="i18n.webauthnAddKey" :disabled="!webauthnForm.valid" @click="runWebauthn()" data-aid="user_settings_webauth_add"></v-btn>
 							</v-form>
 						</v-card-text>
@@ -139,8 +134,8 @@
 									<v-text-field name="webauthn_remove" v-model="key.value" class="d-none"></v-text-field>
 									<div :id="'settingsWebauthnExistingKey_' + key.id" class="ml-2">
 										{{ key.name }}
-										<v-btn icon variant="text" size="small" :id="'settingsWebauthnDelete_' + key.id" type="submit" color="primary" data-aid="user_settings_webauth_unlink" >
-											<v-icon>fa-circle-xmark</v-icon>
+										<v-btn icon variant="text" size="small" :id="'settingsWebauthnDelete_' + key.id" type="submit" data-aid="user_settings_webauth_unlink" >
+											<v-icon color="primary">fa-circle-xmark</v-icon>
 										</v-btn>
 									</div>
 								</v-form>

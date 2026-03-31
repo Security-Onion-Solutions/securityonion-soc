@@ -1,4 +1,4 @@
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -406,7 +406,7 @@ func TestSigmaToElastAlertSunnyDay(t *testing.T) {
 	}
 
 	det := &model.Detection{
-		PublicID: "00000000-0000-0000-0000-000000000000",
+		PublicID: "11111111-1111-1111-1111-111111111111",
 		Content:  `{"detection": {"condition": "*"}}`,
 		Title:    "Test Detection",
 		Severity: model.SeverityHigh,
@@ -429,7 +429,7 @@ func TestSigmaToElastAlertSunnyDay(t *testing.T) {
 	assert.NoError(t, err)
 
 	expected := `detection_title: Test Detection
-detection_public_id: 00000000-0000-0000-0000-000000000000
+detection_public_id: 11111111-1111-1111-1111-111111111111
 event.module: sigma
 event.dataset: sigma.alert
 event.severity: 4
@@ -437,7 +437,7 @@ sigma_level: high
 alert:
     - modules.so.securityonion-es.SecurityOnionESAlerter
 index: .ds-logs-*
-name: Test Detection -- 00000000-0000-0000-0000-000000000000
+name: Test Detection -- 11111111-1111-1111-1111-111111111111
 realert:
     seconds: 0
 type: any
@@ -478,7 +478,7 @@ func TestSigmaToElastAlertSunnyDayLicensed(t *testing.T) {
 	}
 
 	det := &model.Detection{
-		PublicID: "00000000-0000-0000-0000-000000000000",
+		PublicID: "11111111-1111-1111-1111-111111111111",
 		Content:  "totally good sigma",
 		Title:    "Test Detection",
 		Severity: model.SeverityHigh,
@@ -494,7 +494,7 @@ func TestSigmaToElastAlertSunnyDayLicensed(t *testing.T) {
 	assert.NoError(t, err)
 
 	expected := `detection_title: Test Detection
-detection_public_id: 00000000-0000-0000-0000-000000000000
+detection_public_id: 11111111-1111-1111-1111-111111111111
 event.module: sigma
 event.dataset: sigma.alert
 event.severity: 4
@@ -504,7 +504,7 @@ alert:
     - email
     - slack
 index: .ds-logs-*
-name: Test Detection -- 00000000-0000-0000-0000-000000000000
+name: Test Detection -- 11111111-1111-1111-1111-111111111111
 type: any
 realert:
     seconds: 0
@@ -551,10 +551,10 @@ func TestSigmaToElastAlertCustomNotificationLicensed(t *testing.T) {
 	}
 
 	det := &model.Detection{
-		PublicID: "00000000-0000-0000-0000-000000000000",
+		PublicID: "11111111-1111-1111-1111-111111111111",
 		Content: `
 title: Test Detection
-id: 00000000-0000-0000-0000-000000000000
+id: 11111111-1111-1111-1111-111111111111
 logsource:
     product: linux
     service: auth
@@ -584,7 +584,7 @@ tags:
 	assert.NoError(t, err)
 
 	expected := `detection_title: Test Detection
-detection_public_id: 00000000-0000-0000-0000-000000000000
+detection_public_id: 11111111-1111-1111-1111-111111111111
 event.module: sigma
 event.dataset: sigma.alert
 event.severity: 4
@@ -593,7 +593,7 @@ alert:
     - modules.so.securityonion-es.SecurityOnionESAlerter
     - post2
 index: .ds-logs-*
-name: Test Detection -- 00000000-0000-0000-0000-000000000000
+name: Test Detection -- 11111111-1111-1111-1111-111111111111
 type: any
 realert:
     seconds: 0
@@ -640,10 +640,10 @@ func TestSigmaToElastAlertCustomNotificationUnlicensed(t *testing.T) {
 	}
 
 	det := &model.Detection{
-		PublicID: "00000000-0000-0000-0000-000000000000",
+		PublicID: "11111111-1111-1111-1111-111111111111",
 		Content: `
 title: Test Detection
-id: 00000000-0000-0000-0000-000000000000
+id: 11111111-1111-1111-1111-111111111111
 logsource:
     product: linux
     service: auth
@@ -670,7 +670,7 @@ tags:
 	assert.NoError(t, err)
 
 	expected := `detection_title: Test Detection
-detection_public_id: 00000000-0000-0000-0000-000000000000
+detection_public_id: 11111111-1111-1111-1111-111111111111
 event.module: sigma
 event.dataset: sigma.alert
 event.severity: 4
@@ -678,7 +678,7 @@ sigma_level: high
 alert:
     - modules.so.securityonion-es.SecurityOnionESAlerter
 index: .ds-logs-*
-name: Test Detection -- 00000000-0000-0000-0000-000000000000
+name: Test Detection -- 11111111-1111-1111-1111-111111111111
 type: any
 realert:
     seconds: 0
@@ -719,10 +719,10 @@ func TestSigmaToElastAlertNotificationOnlyLicensed(t *testing.T) {
 	}
 
 	det := &model.Detection{
-		PublicID: "00000000-0000-0000-0000-000000000000",
+		PublicID: "11111111-1111-1111-1111-111111111111",
 		Content: `
 title: Test Detection
-id: 00000000-0000-0000-0000-000000000000
+id: 11111111-1111-1111-1111-111111111111
 logsource:
     product: linux
     service: auth
@@ -751,7 +751,7 @@ tags:
 	assert.NoError(t, err)
 
 	expected := `detection_title: Test Detection
-detection_public_id: 00000000-0000-0000-0000-000000000000
+detection_public_id: 11111111-1111-1111-1111-111111111111
 event.module: sigma
 event.dataset: sigma.alert
 event.severity: 4
@@ -760,7 +760,7 @@ alert:
     - email
     - slack
 index: .ds-logs-*
-name: Test Detection -- 00000000-0000-0000-0000-000000000000
+name: Test Detection -- 11111111-1111-1111-1111-111111111111
 type: any
 realert:
     seconds: 0
@@ -802,10 +802,10 @@ func TestSigmaToElastAlertNotificationOnlyUnlicensed(t *testing.T) {
 	}
 
 	det := &model.Detection{
-		PublicID: "00000000-0000-0000-0000-000000000000",
+		PublicID: "11111111-1111-1111-1111-111111111111",
 		Content: `
 title: Test Detection
-id: 00000000-0000-0000-0000-000000000000
+id: 11111111-1111-1111-1111-111111111111
 logsource:
     product: linux
     service: auth
@@ -831,14 +831,14 @@ tags:
 	assert.NoError(t, err)
 
 	expected := `detection_title: Test Detection
-detection_public_id: 00000000-0000-0000-0000-000000000000
+detection_public_id: 11111111-1111-1111-1111-111111111111
 event.module: sigma
 event.dataset: sigma.alert
 event.severity: 4
 sigma_level: high
 alert: []
 index: .ds-logs-*
-name: Test Detection -- 00000000-0000-0000-0000-000000000000
+name: Test Detection -- 11111111-1111-1111-1111-111111111111
 type: any
 realert:
     seconds: 0
@@ -932,7 +932,7 @@ func TestSigmaToElastAlertError(t *testing.T) {
 
 	det := &model.Detection{
 		Auditable: model.Auditable{
-			Id: "00000000-0000-0000-0000-000000000000",
+			Id: "11111111-1111-1111-1111-111111111111",
 		},
 		Content:  "totally good sigma",
 		Title:    "Test Detection",
@@ -2597,7 +2597,7 @@ func TestWriteFileWithCleanup(t *testing.T) {
 			defer ctrl.Finish()
 
 			mockIOManager := mock.NewMockIOManager(ctrl)
-			
+
 			engine := &ElastAlertEngine{
 				IOManager: mockIOManager,
 			}
@@ -2608,7 +2608,7 @@ func TestWriteFileWithCleanup(t *testing.T) {
 
 			// Setup expectations
 			mockIOManager.EXPECT().WriteFile(path, data, perm).Return(tt.writeErr)
-			
+
 			if tt.writeErr != nil {
 				mockIOManager.EXPECT().DeleteFile(path).Return(tt.deleteErr)
 			}

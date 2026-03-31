@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -297,12 +297,12 @@ jest.mock('moment', () => {
   return require('./external/moment-2.30.1.min.js');
 }, { virtual: true });
 
-global.moment = require('./external/moment-timezone-with-data-0.5.47.min.js');
+global.moment = require('./external/moment-timezone-with-data-0.6.0.min.js');
 
 moment.tz.setDefault('UTC');
 
-global.marked = require('./external/marked-16.3.0.min.js');
+global.marked = require('./external/marked-17.0.4.min.js');
 global.DOMPurify = require('./external/purify-3.2.7.min.js');
-global.jsyaml = require('./external/js-yaml.4.1.0.min.js');
+global.jsyaml = require('./external/js-yaml.4.1.1.min.js');
 global.LZString = require('./external/lz-string.1.5.0.min.js');
 global.loadPageTemplate = jest.fn();

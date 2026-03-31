@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -56,7 +56,6 @@ type InfluxDBMetrics struct {
 	swapTotalGB              map[string]float64
 	swapUsedPct              map[string]float64
 	pcapDays                 map[string]float64
-	stenoLossPct             map[string]float64
 	suriLossPct              map[string]float64
 	suriRulesLoaded          map[string]int
 	suriRulesFailed          map[string]int
@@ -328,7 +327,6 @@ func (metrics *InfluxDBMetrics) updateOsStatus() {
 		metrics.swapTotalGB = metrics.convertValuesToFloat64(metrics.fetchLatestValuesByHost("swap", "total", "", ""), bytesToGB)
 		metrics.swapUsedPct = metrics.convertValuesToFloat64(metrics.fetchLatestValuesByHost("swap", "used_percent", "", ""), identity)
 		metrics.pcapDays = metrics.convertValuesToFloat64(metrics.fetchLatestValuesByHost("pcapage", "seconds", "", ""), secondsToDays)
-		metrics.stenoLossPct = metrics.convertValuesToFloat64(metrics.fetchLatestValuesByHost("stenodrop", "drop", "", ""), identity)
 		metrics.suriLossPct = metrics.convertValuesToFloat64(metrics.fetchLatestValuesByHost("suridrop", "drop", "", ""), toPercent)
 		metrics.suriRulesLoaded = metrics.convertValuesToInt(metrics.fetchLatestValuesByHost("surirules", "loaded", "", ""))
 		metrics.suriRulesFailed = metrics.convertValuesToInt(metrics.fetchLatestValuesByHost("surirules", "failed", "", ""))
@@ -495,7 +493,6 @@ func (metrics *InfluxDBMetrics) UpdateNodeMetrics(ctx context.Context, node *mod
 		node.SwapTotalGB = metrics.swapTotalGB[node.Id]
 		node.SwapUsedPct = metrics.swapUsedPct[node.Id]
 		node.PcapDays = metrics.pcapDays[node.Id]
-		node.StenoLossPct = metrics.stenoLossPct[node.Id]
 		node.SuriLossPct = metrics.suriLossPct[node.Id]
 		node.SuriRulesLoaded = metrics.suriRulesLoaded[node.Id]
 		node.SuriRulesFailed = metrics.suriRulesFailed[node.Id]

@@ -1,4 +1,4 @@
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -288,6 +288,10 @@ func CheckWriteNoRead(ctx context.Context, DetStore GetterByPublicId, writeNoRea
 }
 
 func MakeUser(user *model.User) string {
+	if user == nil {
+		// Most likely an API Client
+		return ""
+	}
 	author := strings.Join([]string{user.FirstName, user.LastName}, " ")
 	if len(strings.TrimSpace(author)) == 0 {
 		author = user.Email

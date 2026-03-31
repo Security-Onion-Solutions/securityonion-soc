@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -18,7 +18,6 @@ func TestBuildModuleMap(tester *testing.T) {
 	findModule(tester, mm, "export")
 	findModule(tester, mm, "importer")
 	findModule(tester, mm, "statickeyauth")
-	findModule(tester, mm, "stenoquery")
 	findModule(tester, mm, "suriquery")
 }
 

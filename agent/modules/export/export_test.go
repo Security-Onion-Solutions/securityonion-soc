@@ -1,6 +1,7 @@
 package export
 
 import (
+	"encoding/json"
 	"net/http"
 	"os"
 	"strings"
@@ -188,6 +189,178 @@ func TestGetCaseDetailsFromServer(t *testing.T) {
 	templateInput, err = export.getCaseDetailsFromServer(caseId)
 	assert.Nil(t, err) // Error is logged but not returned for comments, attachments, observables, events, history
 	assert.NotNil(t, templateInput)
+}
+
+func TestGetCaseDetailsFromServer_SessionAttachments(t *testing.T) {
+	export := NewExport(agent.NewAgent(&config.AgentConfig{}, "test-version"))
+	export.agent.Client = web.NewClient("http://localhost:8080", true)
+	export.agent.Client.Auth = FakeClientAuth{}
+
+	caseId := "test-case-with-sessions"
+
+	// Mock attachments JSON with assistant_chat artifacts
+	attachmentsWithSessionsJson := `[{
+		"id":"attachment1",
+		"createTime": "2025-07-01T16:41:09.698562704-04:00",
+		"updateTime": "2025-07-01T16:41:09.698562704-04:00",
+		"description": "This is a test file",
+		"artifactType": "file"
+	},{
+		"id":"attachment2",
+		"createTime": "2025-07-01T16:42:09.698562704-04:00",
+		"updateTime": "2025-07-01T16:42:09.698562704-04:00",
+		"description": "Assistant chat session 1",
+		"artifactType": "assistant_chat",
+		"value": "chat_session_123"
+	},{
+		"id":"attachment3",
+		"createTime": "2025-07-01T16:43:09.698562704-04:00",
+		"updateTime": "2025-07-01T16:43:09.698562704-04:00",
+		"description": "Assistant chat session 2",
+		"artifactType": "assistant_chat",
+		"value": "chat_session_456"
+	},{
+		"id":"attachment4",
+		"createTime": "2025-07-01T16:44:09.698562704-04:00",
+		"updateTime": "2025-07-01T16:44:09.698562704-04:00",
+		"description": "Duplicate session reference",
+		"artifactType": "assistant_chat",
+		"value": "chat_session_123"
+	}]`
+
+	sessionDetails1Json := `{
+		"session": {
+			"id": "session1",
+			"createTime": "2025-07-01T16:41:09.698562704-04:00",
+			"updateTime": "2025-07-01T16:41:09.698562704-04:00",
+			"sessionId": "chat_session_123",
+			"title": "First Assistant Session",
+			"tags": ["investigation"]
+		},
+		"history": [
+			{
+				"id": "msg1",
+				"createTime": "2025-07-01T16:41:09.698562704-04:00",
+				"updateTime": "2025-07-01T16:41:09.698562704-04:00",
+				"sessionId": "chat_session_123",
+				"message": {
+					"id": "msg1",
+					"role": "user",
+					"contentStr": "What is this alert about?"
+				}
+			}
+		]
+	}`
+
+	sessionDetails2Json := `{
+		"session": {
+			"id": "session2",
+			"createTime": "2025-07-01T16:42:09.698562704-04:00",
+			"updateTime": "2025-07-01T16:42:09.698562704-04:00",
+			"sessionId": "chat_session_456",
+			"title": "Second Assistant Session",
+			"tags": ["analysis"]
+		},
+		"history": [
+			{
+				"id": "msg2",
+				"createTime": "2025-07-01T16:42:09.698562704-04:00",
+				"updateTime": "2025-07-01T16:42:09.698562704-04:00",
+				"sessionId": "chat_session_456",
+				"message": {
+					"id": "msg2",
+					"role": "user",
+					"contentStr": "Can you help analyze this?"
+				}
+			}
+		]
+	}`
+
+	// Mock successful responses - order matters based on the sequence of API calls in getCaseDetailsFromServer
+	export.agent.Client.MockStringResponse(caseJson, 200, nil)                    // Get Case
+	export.agent.Client.MockStringResponse(commentJson, 200, nil)                 // Get Case Comments
+	export.agent.Client.MockStringResponse(attachmentsWithSessionsJson, 200, nil) // Get Case Attachments with sessions
+	export.agent.Client.MockStringResponse(observablesJson, 200, nil)             // Get Case Observables
+	export.agent.Client.MockStringResponse(sessionDetails1Json, 200, nil)         // Get Assistant Session 1 (chat_session_123)
+	export.agent.Client.MockStringResponse(sessionDetails2Json, 200, nil)         // Get Assistant Session 2 (chat_session_456) - duplicate chat_session_123 should not trigger another call
+	export.agent.Client.MockStringResponse(eventsJson, 200, nil)                  // Get Case Related Events
+	export.agent.Client.MockStringResponse(detectionJson, 200, nil)               // Get Detection for Event
+	export.agent.Client.MockStringResponse(historyJson, 200, nil)                 // Get Case History
+
+	templateInput, err := export.getCaseDetailsFromServer(caseId)
+	assert.Nil(t, err)
+	assert.NotNil(t, templateInput)
+
+	// Verify basic case data
+	assert.Equal(t, "case1", templateInput.Case.Id)
+	assert.Len(t, templateInput.Comments, 1)
+	assert.Len(t, templateInput.Attachments, 4) // 1 file + 3 assistant_chat attachments
+
+	// Verify assistant sessions were fetched
+	assert.Len(t, templateInput.AssistantSessions, 2) // Only 2 unique sessions despite 3 assistant_chat attachments
+
+	// Verify session details
+	sessionIds := make(map[string]bool)
+	for _, session := range templateInput.AssistantSessions {
+		sessionIds[session.Session.SessionId] = true
+	}
+	assert.True(t, sessionIds["chat_session_123"])
+	assert.True(t, sessionIds["chat_session_456"])
+
+	// Verify session titles
+	var session1, session2 *model.AssistantSessionDetails
+	for _, session := range templateInput.AssistantSessions {
+		if session.Session.SessionId == "chat_session_123" {
+			session1 = session
+		} else if session.Session.SessionId == "chat_session_456" {
+			session2 = session
+		}
+	}
+	assert.NotNil(t, session1)
+	assert.NotNil(t, session2)
+	assert.Equal(t, "First Assistant Session", session1.Session.Title)
+	assert.Equal(t, "Second Assistant Session", session2.Session.Title)
+	assert.Len(t, session1.History, 1)
+	assert.Len(t, session2.History, 1)
+}
+
+func TestGetCaseDetailsFromServer_SessionAttachmentError(t *testing.T) {
+	export := NewExport(agent.NewAgent(&config.AgentConfig{}, "test-version"))
+	export.agent.Client = web.NewClient("http://localhost:8080", true)
+	export.agent.Client.Auth = FakeClientAuth{}
+
+	caseId := "test-case-session-error"
+
+	// Mock attachments JSON with assistant_chat artifact
+	attachmentsWithSessionJson := `[{
+		"id":"attachment1",
+		"createTime": "2025-07-01T16:41:09.698562704-04:00",
+		"updateTime": "2025-07-01T16:41:09.698562704-04:00",
+		"description": "Assistant chat session",
+		"artifactType": "assistant_chat",
+		"value": "chat_session_error"
+	}]`
+
+	// Mock successful responses for case data, but error for session
+	export.agent.Client.MockStringResponse(caseJson, 200, nil)                   // Get Case
+	export.agent.Client.MockStringResponse(commentJson, 200, nil)                // Get Case Comments
+	export.agent.Client.MockStringResponse(attachmentsWithSessionJson, 200, nil) // Get Case Attachments
+	export.agent.Client.MockStringResponse("", 500, assert.AnError)              // Get Assistant Session fails
+	export.agent.Client.MockStringResponse(observablesJson, 200, nil)            // Get Case Observables
+	export.agent.Client.MockStringResponse(eventsJson, 200, nil)                 // Get Case Related Events
+	export.agent.Client.MockStringResponse(detectionJson, 200, nil)              // Get Detection for Event
+	export.agent.Client.MockStringResponse(historyJson, 200, nil)                // Get Case History
+
+	templateInput, err := export.getCaseDetailsFromServer(caseId)
+	assert.Nil(t, err) // Error is logged but not returned
+	assert.NotNil(t, templateInput)
+
+	// Verify case data is still returned
+	assert.Equal(t, "case1", templateInput.Case.Id)
+	assert.Len(t, templateInput.Attachments, 1)
+
+	// Verify no assistant sessions were added due to error
+	assert.Len(t, templateInput.AssistantSessions, 0)
 }
 
 func TestPrerequisiteModules(t *testing.T) {
@@ -881,6 +1054,90 @@ valueA,,true,event2,0,,2025-07-01T11:00:00Z,
 	})
 }
 
+func TestProcessJob_AssistantSessionReport(t *testing.T) {
+	export := NewExport(agent.NewAgent(&config.AgentConfig{}, "test-version"))
+
+	// Create a temporary directory for test templates
+	tmpDir, err := os.MkdirTemp("", "export_templates_test")
+	assert.Nil(t, err)
+	defer os.RemoveAll(tmpDir) // Clean up after tests
+
+	export.templatePath = tmpDir
+
+	// Create standard template directory
+	stdDir := tmpDir + "/standard"
+	err = os.MkdirAll(stdDir, 0755)
+	assert.Nil(t, err)
+
+	// Create fake assistant session report template
+	err = os.WriteFile(stdDir+"/assistant_session_report.md", []byte("# Assistant Session Report\n\nSession: {{ .Session.SessionId }}\nTitle: {{ .Session.Title }}"), 0644)
+	assert.Nil(t, err)
+
+	config := module.ModuleConfig{}
+	config["executablePath"] = "../../../scripts/md2pdf"
+	config["templatePath"] = tmpDir
+	export.Init(config)
+	export.agent.Client = web.NewClient("http://localhost:8080", true)
+	export.agent.Client.Auth = FakeClientAuth{}
+
+	// Mock responses for users and assistant session details
+	export.agent.Client.MockStringResponse(`[{"id":"xyz"}]`, 200, nil) // Get Users
+
+	sessionDetailsJson := `{
+		"session": {
+			"id": "session1",
+			"createTime": "2025-07-01T16:41:09.698562704-04:00",
+			"updateTime": "2025-07-01T16:41:09.698562704-04:00",
+			"sessionId": "chat_1757086398900_ykhmndscn",
+			"title": "Test Assistant Session",
+			"tags": ["investigation"]
+		},
+		"history": [
+			{
+				"id": "msg1",
+				"createTime": "2025-07-01T16:41:09.698562704-04:00",
+				"updateTime": "2025-07-01T16:41:09.698562704-04:00",
+				"sessionId": "chat_1757086398900_ykhmndscn",
+				"message": {
+					"id": "msg1",
+					"role": "user",
+					"contentStr": "Hello, can you help me?"
+				}
+			},
+			{
+				"id": "msg2",
+				"createTime": "2025-07-01T16:42:09.698562704-04:00",
+				"updateTime": "2025-07-01T16:42:09.698562704-04:00",
+				"sessionId": "chat_1757086398900_ykhmndscn",
+				"message": {
+					"id": "msg2",
+					"role": "assistant",
+					"contentStr": "Of course! How can I assist you today?"
+				}
+			}
+		]
+	}`
+	export.agent.Client.MockStringResponse(sessionDetailsJson, 200, nil) // Get Assistant Session Details
+
+	job := model.NewJob()
+	job.Kind = model.JOB_KIND_EXPORT
+	job.Filter.Parameters = map[string]interface{}{
+		"type": "assistant_session",
+		"id":   "chat_1757086398900_ykhmndscn",
+	}
+
+	reader, err := export.ProcessJob(job, nil)
+	assert.Nil(t, err)
+	assert.NotNil(t, reader)
+
+	// Read the output and check for expected content
+	output, err := io.ReadAll(reader)
+	assert.Nil(t, err)
+	assert.Contains(t, string(output), "Helvetica") // A valid PDF should contain a font name
+	assert.Equal(t, "pdf", job.FileExtension)
+	assert.Greater(t, job.Size, 0)
+}
+
 func TestGetMetricLimit(t *testing.T) {
 	tests := []struct {
 		name              string
@@ -1541,6 +1798,209 @@ func TestParseJobParameterInt(t *testing.T) {
 			result, valid := export.parseJobParameterInt(job, tt.paramName)
 			assert.Equal(t, tt.expected, result)
 			assert.Equal(t, tt.valid, valid)
+		})
+	}
+}
+
+func TestParseJSON(t *testing.T) {
+	export := NewExport(nil)
+
+	tests := []struct {
+		name     string
+		input    interface{}
+		expected map[string]interface{}
+	}{
+		{
+			name:     "Valid JSON bytes",
+			input:    []byte(`{"key1":"value1","key2":123,"key3":true}`),
+			expected: map[string]interface{}{"key1": "value1", "key2": float64(123), "key3": true},
+		},
+		{
+			name:     "Valid JSON string",
+			input:    `{"name":"test","count":5}`,
+			expected: map[string]interface{}{"name": "test", "count": float64(5)},
+		},
+		{
+			name:     "Valid JSON RawMessage",
+			input:    json.RawMessage(`{"foo":"bar"}`),
+			expected: map[string]interface{}{"foo": "bar"},
+		},
+		{
+			name:     "Empty JSON bytes",
+			input:    []byte{},
+			expected: map[string]interface{}{},
+		},
+		{
+			name:     "Empty JSON string",
+			input:    "",
+			expected: map[string]interface{}{},
+		},
+		{
+			name:     "Invalid JSON",
+			input:    []byte(`{invalid json}`),
+			expected: map[string]interface{}{},
+		},
+		{
+			name:     "Unexpected type",
+			input:    12345,
+			expected: map[string]interface{}{},
+		},
+		{
+			name:     "Nil input",
+			input:    nil,
+			expected: map[string]interface{}{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := export.parseJSON(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestToJSON(t *testing.T) {
+	export := NewExport(nil)
+
+	tests := []struct {
+		name     string
+		input    interface{}
+		expected string
+	}{
+		{
+			name:     "Simple map",
+			input:    map[string]interface{}{"key": "value", "number": 42},
+			expected: "{\n  \"key\": \"value\",\n  \"number\": 42\n}",
+		},
+		{
+			name:     "Nested structure",
+			input:    map[string]interface{}{"outer": map[string]interface{}{"inner": "value"}},
+			expected: "{\n  \"outer\": {\n    \"inner\": \"value\"\n  }\n}",
+		},
+		{
+			name:     "Array",
+			input:    []string{"a", "b", "c"},
+			expected: "[\n  \"a\",\n  \"b\",\n  \"c\"\n]",
+		},
+		{
+			name:     "Nil input",
+			input:    nil,
+			expected: "",
+		},
+		{
+			name:     "Empty map",
+			input:    map[string]interface{}{},
+			expected: "{}",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := export.toJSON(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestAdd(t *testing.T) {
+	export := NewExport(nil)
+
+	tests := []struct {
+		name     string
+		a        int
+		b        int
+		expected int
+	}{
+		{
+			name:     "Positive numbers",
+			a:        5,
+			b:        3,
+			expected: 8,
+		},
+		{
+			name:     "Negative numbers",
+			a:        -5,
+			b:        -3,
+			expected: -8,
+		},
+		{
+			name:     "Mixed signs",
+			a:        10,
+			b:        -3,
+			expected: 7,
+		},
+		{
+			name:     "Zero values",
+			a:        0,
+			b:        0,
+			expected: 0,
+		},
+		{
+			name:     "Add to zero",
+			a:        0,
+			b:        5,
+			expected: 5,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := export.add(tt.a, tt.b)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestStripEmoji(t *testing.T) {
+	export := NewExport(nil)
+
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "Text with emoji",
+			input:    "Hello 😀 World 🌍",
+			expected: "Hello  World ",
+		},
+		{
+			name:     "Computer emoji",
+			input:    "Server 🖥️ is running",
+			expected: "Server  is running",
+		},
+		{
+			name:     "Multiple emojis",
+			input:    "🎉🎊🎈 Party time! 🥳",
+			expected: " Party time! ",
+		},
+		{
+			name:     "No emojis",
+			input:    "Plain text without emojis",
+			expected: "Plain text without emojis",
+		},
+		{
+			name:     "Empty string",
+			input:    "",
+			expected: "",
+		},
+		{
+			name:     "Only emojis",
+			input:    "😀😃😄😁",
+			expected: "",
+		},
+		{
+			name:     "Mixed content",
+			input:    "Check ✅ this out 👀",
+			expected: "Check  this out ",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := export.stripEmoji(tt.input)
+			assert.Equal(t, tt.expected, result)
 		})
 	}
 }

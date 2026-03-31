@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -10,6 +10,7 @@ import (
 	"context"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
@@ -388,3 +389,51 @@ func TestGetMimeTypeForFileExtension(tester *testing.T) {
 	assert.Equal(tester, "application/octet-stream", ds.getMimeTypeForFileExtension("jpg"))
 	assert.Equal(tester, "application/octet-stream", ds.getMimeTypeForFileExtension(""))
 }
+
+func TestGetNextJobThrottling(tester *testing.T) {
+	defer cleanup()
+	// Set interval to a very large value for testing
+	ds, _ := createDatastore(true, []byte(""))
+	ds.server.Config.JobPollRetryIntervalMs = 10000
+
+	ctx := newContext()
+	nodeId := "foo"
+
+	// Create 3 jobs for the same node
+	job1 := &model.Job{Id: 1, NodeId: nodeId}
+	job2 := &model.Job{Id: 2, NodeId: nodeId}
+	job3 := &model.Job{Id: 3, NodeId: nodeId}
+
+	ds.addJob(job1)
+	ds.addJob(job2)
+	ds.addJob(job3)
+
+	// first pull should return job 1
+	gotJob1 := ds.GetNextJob(ctx, nodeId)
+	assert.NotNil(tester, gotJob1)
+	assert.Equal(tester, 1, gotJob1.Id)
+
+	// subsequent pull immediately should return job 2 (since job 1 is now throttled)
+	gotJob2 := ds.GetNextJob(ctx, nodeId)
+	assert.NotNil(tester, gotJob2)
+	assert.Equal(tester, 2, gotJob2.Id)
+
+	// subsequent pull immediately should return job 3
+	gotJob3 := ds.GetNextJob(ctx, nodeId)
+	assert.NotNil(tester, gotJob3)
+	assert.Equal(tester, 3, gotJob3.Id)
+
+	// no more jobs available
+	gotNilJob := ds.GetNextJob(ctx, nodeId)
+	assert.Nil(tester, gotNilJob)
+
+	// Now shorten interval and wait
+	ds.server.Config.JobPollRetryIntervalMs = 10
+	time.Sleep(20 * time.Millisecond)
+
+	// Now it should pick up job 1 again as it is the oldest
+	gotJob1Again := ds.GetNextJob(ctx, nodeId)
+	assert.NotNil(tester, gotJob1Again)
+	assert.Equal(tester, 1, gotJob1Again.Id)
+}
+
