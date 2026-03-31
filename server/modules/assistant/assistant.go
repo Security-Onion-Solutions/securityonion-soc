@@ -453,6 +453,21 @@ func (ac *AssistantCoordinator) Health(ctx context.Context, aiModel string) (*mo
 	return response, nil
 }
 
+func (ac *AssistantCoordinator) AllowWhenAirgapped(ctx context.Context, aiModel string) bool {
+	_, adapterName := splitModelAdapter(aiModel)
+
+	adapter, ok := ac.adapters[adapterName]
+	if !ok {
+		logger := log.FromContext(ctx)
+		logger.WithField("adapterName", adapterName).Error("assistant adapter not found")
+
+		return false
+	}
+
+	// the only adapter not allowed when airgapped is the SOAI adapter
+	return adapter.Protocol() != (&SOAiCloudAdapter{}).Protocol()
+}
+
 func cleanupMessages(messages []*model.Message) []*model.Message {
 	msgs := make([]*model.Message, 0, len(messages))
 	for _, msg := range messages {

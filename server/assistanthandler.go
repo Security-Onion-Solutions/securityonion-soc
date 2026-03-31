@@ -54,12 +54,14 @@ func RegisterAssistantRoutes(srv *Server, r chi.Router, prefix string) {
 	})
 }
 
-func (h *AssistantHandler) checkAssistantAvailable(ctx context.Context, w http.ResponseWriter, r *http.Request) bool {
-	if h.server != nil && h.server.Config != nil && h.server.Config.AirgapEnabled {
+func (h *AssistantHandler) checkAssistantAvailable(ctx context.Context, aiModel string, w http.ResponseWriter, r *http.Request) bool {
+	if h.server != nil && h.server.Config != nil && h.server.Config.AirgapEnabled && !h.server.AssistantManager.AllowWhenAirgapped(ctx, aiModel) {
 		log.FromContext(ctx).Error("unable to use assistant on airgap installation")
-		web.Respond(w, r, http.StatusInternalServerError, "ERROR_SERVICE_NOT_AVAILABLE")
+		web.Respond(w, r, http.StatusServiceUnavailable, "ERROR_SERVICE_NOT_AVAILABLE")
+
 		return false
 	}
+
 	return true
 }
 
@@ -92,13 +94,6 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !h.checkAssistantAvailable(ctx, w, r) {
-		return
-	}
-
-	accept := strings.TrimSpace(r.Header.Get("Accept"))
-	streaming := strings.EqualFold(accept, "text/event-stream")
-
 	incMsg := &model.IncomingMessage{}
 	err = json.NewDecoder(r.Body).Decode(incMsg)
 	if err != nil {
@@ -107,6 +102,13 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 
 		return
 	}
+
+	if !h.checkAssistantAvailable(ctx, incMsg.Model, w, r) {
+		return
+	}
+
+	accept := strings.TrimSpace(r.Header.Get("Accept"))
+	streaming := strings.EqualFold(accept, "text/event-stream")
 
 	if incMsg.SessionId == "" {
 		incMsg.SessionId = uuid.NewString()
@@ -269,13 +271,6 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !h.checkAssistantAvailable(ctx, w, r) {
-		return
-	}
-
-	accept := strings.TrimSpace(r.Header.Get("Accept"))
-	streaming := strings.EqualFold(accept, "text/event-stream")
-
 	toolName := chi.URLParam(r, "name")
 	toolReq := &model.ToolRequest{}
 
@@ -286,6 +281,13 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 
 		return
 	}
+
+	if !h.checkAssistantAvailable(ctx, toolReq.Model, w, r) {
+		return
+	}
+
+	accept := strings.TrimSpace(r.Header.Get("Accept"))
+	streaming := strings.EqualFold(accept, "text/event-stream")
 
 	result, toolErr := h.server.AssistantManager.ExecuteTool(ctx, toolName, string(toolReq.Params), string(toolReq.AuxData))
 	if toolErr != nil {
@@ -437,11 +439,11 @@ func (h *AssistantHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !h.checkAssistantAvailable(ctx, w, r) {
+	model := chi.URLParam(r, "*")
+
+	if !h.checkAssistantAvailable(ctx, model, w, r) {
 		return
 	}
-
-	model := chi.URLParam(r, "*")
 
 	health, err := h.server.AssistantManager.Health(ctx, model)
 	if err != nil {

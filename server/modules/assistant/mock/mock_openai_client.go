@@ -15,10 +15,142 @@ import (
 
 	openai "github.com/openai/openai-go/v3"
 	pagination "github.com/openai/openai-go/v3/packages/pagination"
-	ssestream "github.com/openai/openai-go/v3/packages/ssestream"
 	responses "github.com/openai/openai-go/v3/responses"
+	assistant "github.com/security-onion-solutions/securityonion-soc/server/modules/assistant"
 	gomock "go.uber.org/mock/gomock"
 )
+
+// MockResponseStream is a mock of ResponseStream interface.
+type MockResponseStream struct {
+	ctrl     *gomock.Controller
+	recorder *MockResponseStreamMockRecorder
+	isgomock struct{}
+}
+
+// MockResponseStreamMockRecorder is the mock recorder for MockResponseStream.
+type MockResponseStreamMockRecorder struct {
+	mock *MockResponseStream
+}
+
+// NewMockResponseStream creates a new mock instance.
+func NewMockResponseStream(ctrl *gomock.Controller) *MockResponseStream {
+	mock := &MockResponseStream{ctrl: ctrl}
+	mock.recorder = &MockResponseStreamMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockResponseStream) EXPECT() *MockResponseStreamMockRecorder {
+	return m.recorder
+}
+
+// Current mocks base method.
+func (m *MockResponseStream) Current() responses.ResponseStreamEventUnion {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Current")
+	ret0, _ := ret[0].(responses.ResponseStreamEventUnion)
+	return ret0
+}
+
+// Current indicates an expected call of Current.
+func (mr *MockResponseStreamMockRecorder) Current() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Current", reflect.TypeOf((*MockResponseStream)(nil).Current))
+}
+
+// Err mocks base method.
+func (m *MockResponseStream) Err() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Err")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Err indicates an expected call of Err.
+func (mr *MockResponseStreamMockRecorder) Err() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Err", reflect.TypeOf((*MockResponseStream)(nil).Err))
+}
+
+// Next mocks base method.
+func (m *MockResponseStream) Next() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Next")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// Next indicates an expected call of Next.
+func (mr *MockResponseStreamMockRecorder) Next() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Next", reflect.TypeOf((*MockResponseStream)(nil).Next))
+}
+
+// MockChatCompletionStream is a mock of ChatCompletionStream interface.
+type MockChatCompletionStream struct {
+	ctrl     *gomock.Controller
+	recorder *MockChatCompletionStreamMockRecorder
+	isgomock struct{}
+}
+
+// MockChatCompletionStreamMockRecorder is the mock recorder for MockChatCompletionStream.
+type MockChatCompletionStreamMockRecorder struct {
+	mock *MockChatCompletionStream
+}
+
+// NewMockChatCompletionStream creates a new mock instance.
+func NewMockChatCompletionStream(ctrl *gomock.Controller) *MockChatCompletionStream {
+	mock := &MockChatCompletionStream{ctrl: ctrl}
+	mock.recorder = &MockChatCompletionStreamMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockChatCompletionStream) EXPECT() *MockChatCompletionStreamMockRecorder {
+	return m.recorder
+}
+
+// Current mocks base method.
+func (m *MockChatCompletionStream) Current() openai.ChatCompletionChunk {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Current")
+	ret0, _ := ret[0].(openai.ChatCompletionChunk)
+	return ret0
+}
+
+// Current indicates an expected call of Current.
+func (mr *MockChatCompletionStreamMockRecorder) Current() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Current", reflect.TypeOf((*MockChatCompletionStream)(nil).Current))
+}
+
+// Err mocks base method.
+func (m *MockChatCompletionStream) Err() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Err")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Err indicates an expected call of Err.
+func (mr *MockChatCompletionStreamMockRecorder) Err() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Err", reflect.TypeOf((*MockChatCompletionStream)(nil).Err))
+}
+
+// Next mocks base method.
+func (m *MockChatCompletionStream) Next() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Next")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// Next indicates an expected call of Next.
+func (mr *MockChatCompletionStreamMockRecorder) Next() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Next", reflect.TypeOf((*MockChatCompletionStream)(nil).Next))
+}
 
 // MockOpenAIClient is a mock of OpenAIClient interface.
 type MockOpenAIClient struct {
@@ -42,6 +174,35 @@ func NewMockOpenAIClient(ctrl *gomock.Controller) *MockOpenAIClient {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockOpenAIClient) EXPECT() *MockOpenAIClientMockRecorder {
 	return m.recorder
+}
+
+// ChatCompletionsNew mocks base method.
+func (m *MockOpenAIClient) ChatCompletionsNew(ctx context.Context, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ChatCompletionsNew", ctx, params)
+	ret0, _ := ret[0].(*openai.ChatCompletion)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ChatCompletionsNew indicates an expected call of ChatCompletionsNew.
+func (mr *MockOpenAIClientMockRecorder) ChatCompletionsNew(ctx, params any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChatCompletionsNew", reflect.TypeOf((*MockOpenAIClient)(nil).ChatCompletionsNew), ctx, params)
+}
+
+// ChatCompletionsNewStreaming mocks base method.
+func (m *MockOpenAIClient) ChatCompletionsNewStreaming(ctx context.Context, params openai.ChatCompletionNewParams) assistant.ChatCompletionStream {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ChatCompletionsNewStreaming", ctx, params)
+	ret0, _ := ret[0].(assistant.ChatCompletionStream)
+	return ret0
+}
+
+// ChatCompletionsNewStreaming indicates an expected call of ChatCompletionsNewStreaming.
+func (mr *MockOpenAIClientMockRecorder) ChatCompletionsNewStreaming(ctx, params any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChatCompletionsNewStreaming", reflect.TypeOf((*MockOpenAIClient)(nil).ChatCompletionsNewStreaming), ctx, params)
 }
 
 // ModelsList mocks base method.
@@ -75,10 +236,10 @@ func (mr *MockOpenAIClientMockRecorder) ResponsesNew(ctx, params any) *gomock.Ca
 }
 
 // ResponsesNewStreaming mocks base method.
-func (m *MockOpenAIClient) ResponsesNewStreaming(ctx context.Context, params responses.ResponseNewParams) *ssestream.Stream[responses.ResponseStreamEventUnion] {
+func (m *MockOpenAIClient) ResponsesNewStreaming(ctx context.Context, params responses.ResponseNewParams) assistant.ResponseStream {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ResponsesNewStreaming", ctx, params)
-	ret0, _ := ret[0].(*ssestream.Stream[responses.ResponseStreamEventUnion])
+	ret0, _ := ret[0].(assistant.ResponseStream)
 	return ret0
 }
 
