@@ -41,16 +41,16 @@
 						<v-container grid-list-sm class="pa-4">
 							<v-row>
 								<v-col xs12 class="d-flex flex-column">
-									<v-text-field id="email-input" v-model="form.email" :placeholder="i18n.email" :autofocus="true" :rules="[rules.required,rules.email,rules.lowercase]" data-aid="users_create_dialog_email"></v-text-field>
+									<v-text-field id="email-input" v-model="form.email" :placeholder="i18n.email" :autofocus="true" :rules="[$root.validators.required, $root.validators.maxLength(100), $root.validators.lowercase]" data-aid="users_create_dialog_email"></v-text-field>
 									<v-text-field id="password-input" v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'" data-aid="users_create_dialog_password"
 										@click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'"
-										:rules="[rules.required, rules.maxpasslen, rules.minpasslen, rules.badpasschs]"></v-text-field>
+										:rules="[$root.validators.required, $root.validators.maxPassLen, $root.validators.minPassLen, $root.validators.badPassChars]"></v-text-field>
 									<span data-aid="users_create_dialog_roles">
-										<v-select id="roles-select" v-model="form.role" :items="roles" :label="i18n.role" :rules="[rules.required]"></v-select>
+										<v-select id="roles-select" v-model="form.role" :items="roles" :label="i18n.role" :rules="[$root.validators.required]"></v-select>
 									</span>
-									<v-text-field id="firstname-input" v-model="form.firstName" :placeholder="i18n.firstName" :rules="[rules.name]" data-aid="users_create_dialog_firstname"></v-text-field>
-									<v-text-field id="lastname-input" v-model="form.lastName" :placeholder="i18n.lastName" :rules="[rules.name]" data-aid="users_create_dialog_lastname"></v-text-field>
-									<v-text-field id="note-input" v-model="form.note" :placeholder="i18n.note" :rules="[rules.note]" data-aid="users_create_dialog_note"></v-text-field>
+									<v-text-field id="firstname-input" v-model="form.firstName" :placeholder="i18n.firstName" :rules="[$root.validators.maxLength(100)]" data-aid="users_create_dialog_firstname"></v-text-field>
+									<v-text-field id="lastname-input" v-model="form.lastName" :placeholder="i18n.lastName" :rules="[$root.validators.maxLength(100)]" data-aid="users_create_dialog_lastname"></v-text-field>
+									<v-text-field id="note-input" v-model="form.note" :placeholder="i18n.note" :rules="[$root.validators.maxLength(100)]" data-aid="users_create_dialog_note"></v-text-field>
 								</v-col>
 							</v-row>
 						</v-container>
@@ -128,9 +128,9 @@
 												<v-card-title v-text="i18n.profile"></v-card-title>
 												<v-card-text>
 													<v-form v-model="form.valid">
-														<v-text-field id="firstname-input" v-model="form.firstName" :placeholder="i18n.firstName" :rules="[rules.name]" data-aid="users_details_firstname_input"></v-text-field>
-														<v-text-field id="lastname-input" v-model="form.lastName" :placeholder="i18n.lastName" :rules="[rules.name]" data-aid="users_details_lastname_input"></v-text-field>
-														<v-text-field id="note-input" v-model="form.note" :placeholder="i18n.note" :rules="[rules.note]" data-aid="users_details_note_input"></v-text-field>
+														<v-text-field id="firstname-input" v-model="form.firstName" :placeholder="i18n.firstName" :rules="[$root.validators.maxLength(100)]" data-aid="users_details_firstname_input"></v-text-field>
+														<v-text-field id="lastname-input" v-model="form.lastName" :placeholder="i18n.lastName" :rules="[$root.validators.maxLength(100)]" data-aid="users_details_lastname_input"></v-text-field>
+														<v-text-field id="note-input" v-model="form.note" :placeholder="i18n.note" :rules="[$root.validators.maxLength(100)]" data-aid="users_details_note_input"></v-text-field>
 
 														<v-btn id="update-profile-button" :disabled="!form.valid" @click="updateProfile(item)" v-text="i18n.update" data-aid="users_details_submit"></v-btn>
 													</v-form>
@@ -160,7 +160,7 @@
 													<v-form v-model="form.valid">
 														<v-text-field id="password-input" v-model="form.password" :placeholder="i18n.passwordChange" :type="showPassword ? 'text' : 'password'" data-aid="users_details_password_input"
 															@click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'"
-															:rules="[rules.required, rules.maxpasslen, rules.minpasslen, rules.badpasschs]"></v-text-field>
+															:rules="[$root.validators.required, $root.validators.maxPassLen, $root.validators.minPassLen, $root.validators.badPassChars]"></v-text-field>
 													</v-form>
 													<v-btn id="update-password-button" :disabled="!form.valid" @click="updatePassword(item)" v-text="i18n.passwordReset" class="mr-2 mb-2" data-aid="users_details_password_update"></v-btn>
 													<v-btn id="toggle-locked-button" v-text="item.status == 'locked' ? i18n.unlock : i18n.lock" @click.stop="toggleStatus(item)" class="mr-2 mb-2" data-aid="users_details_lock_toggle"></v-btn>
