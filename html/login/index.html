@@ -78,8 +78,8 @@
 
             <v-form v-if="!webauthnForm.continue && passwordEnabled" id="loginForm" v-model="form.valid" method="post" :action="authLoginUrl">
               <div class="login-fields">
-                <v-text-field id="password_identifier" name="identifier" v-model="form.email" :label="i18n.email" :hint="i18n.emailHelp" :autofocus="true" :rules="[rules.required]" variant="outlined" density="comfortable" class="rounded-lg" data-aid="login_email_input"></v-text-field>
-                <v-text-field name="password" v-model="form.password" :label="i18n.password" :type="showPassword ? 'text' : 'password'" :rules="[rules.required]" variant="outlined" density="comfortable" class="rounded-lg" :append-inner-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" @click:append-inner="showPassword = !showPassword" data-aid="login_password_input"></v-text-field>
+                <v-text-field id="password_identifier" name="identifier" v-model="form.email" :label="i18n.email" :hint="i18n.emailHelp" :autofocus="true" :rules="[$root.validators.required]" variant="outlined" density="comfortable" class="rounded-lg" data-aid="login_email_input"></v-text-field>
+                <v-text-field name="password" v-model="form.password" :label="i18n.password" :type="showPassword ? 'text' : 'password'" :rules="[$root.validators.required]" variant="outlined" density="comfortable" class="rounded-lg" :append-inner-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" @click:append-inner="showPassword = !showPassword" data-aid="login_password_input"></v-text-field>
                 <v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
                 <v-text-field name="method" value="password" class="d-none"></v-text-field>
               </div>
@@ -105,7 +105,7 @@
             <v-form v-if="webauthnForm.enabled && !webauthnForm.continue" id="loginWebAuthnForm" v-model="webauthnForm.valid" method="post" :action="authLoginUrl">
               <p class="login-subtitle">{{ i18n.webauthnLoginMethod }}</p>
               <div class="login-fields">
-                <v-text-field id="webauthn_identifier" name="identifier" v-model="webauthnForm.email" :label="i18n.email" :hint="i18n.emailHelp" :rules="[rules.required]" variant="outlined" density="comfortable" class="rounded-lg"></v-text-field>
+                <v-text-field id="webauthn_identifier" name="identifier" v-model="webauthnForm.email" :label="i18n.email" :hint="i18n.emailHelp" :rules="[$root.validators.required]" variant="outlined" density="comfortable" class="rounded-lg"></v-text-field>
                 <v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
                 <v-text-field name="method" value="webauthn" class="d-none"></v-text-field>
               </div>

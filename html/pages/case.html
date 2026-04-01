@@ -7,7 +7,7 @@
 		<div class="d-flex flex-column" v-if="isEdit('case-title')">
 			<div class="mb-2">
 				<v-form v-model="editForm.valid" @submit.prevent>
-					<v-text-field id="case-title-input" hide-details="auto" variant="outlined" v-model="editForm.val" :rules="[rules.required]" persistent-hint :hint="i18n.caseTitleHelp"></v-text-field>
+					<v-text-field id="case-title-input" hide-details="auto" variant="outlined" v-model="editForm.val" :rules="[$root.validators.required]" persistent-hint :hint="i18n.caseTitleHelp"></v-text-field>
 				</v-form>
 			</div>
 			<div class="d-inline-flex justify-end">
@@ -38,7 +38,7 @@
 							<a class="case markdown-icon" href="https://www.markdownguide.org/cheat-sheet/" target="_blank" :title="i18n.markdownFormattingSupported"><v-icon>fab fa-markdown</v-icon></a>
 						</div>
 						<v-form v-model="editForm.valid" @submit.prevent>
-							<v-textarea id="case-desc-input" solo variant="outlined" hide-details="auto" rows="5" density="compact" color="black-text" v-model="editForm.val" :rules="[rules.required]" persistent-hint :hint="i18n.caseDescriptionHelp"></v-textarea>
+							<v-textarea id="case-desc-input" solo variant="outlined" hide-details="auto" rows="5" density="compact" color="black-text" v-model="editForm.val" :rules="[$root.validators.required]" persistent-hint :hint="i18n.caseDescriptionHelp"></v-textarea>
 						</v-form>
 					</div>
 					<div class="d-inline-flex justify-end">
@@ -110,7 +110,7 @@
 														</div>
 														<div class="mb-3">
 															<v-form v-model="editForm.valid" @submit.prevent>
-																<v-textarea id="comment-desc-input" variant="outlined" hide-details="auto" rows="5" dense color="black-text" v-model="editForm.val" class="mb-1" :rules="[rules.required]" data-aid="case_comment_edit_input"></v-textarea>
+																<v-textarea id="comment-desc-input" variant="outlined" hide-details="auto" rows="5" dense color="black-text" v-model="editForm.val" class="mb-1" :rules="[$root.validators.required]" data-aid="case_comment_edit_input"></v-textarea>
 															</v-form>
 															<div class="d-inline-flex justify-end">
 																<v-btn variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit()" data-aid="case_comment_cancel">
@@ -134,7 +134,7 @@
 														<div v-else class="d-flex flex-column" style="width: 100%;" data-aid="case_comment_hours_edit">
 															<div class="mb-3">
 																<v-form v-model="editForm.valid" @submit.prevent>
-																	<v-text-field id="comment-hours-input" variant="outlined" color="black-text" v-model="editForm.val" class="mb-1" :rules="[rules.hours]" data-aid="case_comment_hours_input"></v-text-field>
+																	<v-text-field id="comment-hours-input" variant="outlined" color="black-text" v-model="editForm.val" class="mb-1" :rules="[$root.validators.hours]" data-aid="case_comment_hours_input"></v-text-field>
 																</v-form>
 																<div class="d-inline-flex justify-end">
 																	<v-btn variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit()" data-aid="case_comment_hours_cancel">
@@ -211,10 +211,10 @@
 											</div>
 											<div class="mx-2">
 												<v-form ref="comments" v-model="associatedForms['comments'].valid" @submit.prevent>
-													<v-textarea id="comment-input" variant="outlined" hide-details="auto" rows="5" v-model="associatedForms['comments'].description" :rules="[rules.required]" class="mb-1" persistent-hint :hint="i18n.commentDescriptionHelp" data-aid="case_new_comment_input"></v-textarea>
+													<v-textarea id="comment-input" variant="outlined" hide-details="auto" rows="5" v-model="associatedForms['comments'].description" :rules="[$root.validators.required]" class="mb-1" persistent-hint :hint="i18n.commentDescriptionHelp" data-aid="case_new_comment_input"></v-textarea>
 													<v-row v-if="$root.isLicensed($root.FEAT_TTR)">
 														<v-col cols="4">
-															<v-text-field id="comment-hours-input" variant="outlined" v-model="associatedForms['comments'].hours" class="mb-1" persistent-hint :hint="i18n.commentHoursHelp" :rules="[rules.hours]" data-aid="case_new_comment_hours_input"></v-text-field>
+															<v-text-field id="comment-hours-input" variant="outlined" v-model="associatedForms['comments'].hours" class="mb-1" persistent-hint :hint="i18n.commentHoursHelp" :rules="[$root.validators.hours]" data-aid="case_new_comment_hours_input"></v-text-field>
 														</v-col>
 														<v-col cols="8"></v-col>
 													</v-row>
@@ -271,7 +271,7 @@
 												</div>
 												<v-form ref="attachments" v-model="associatedForms['attachments'].valid" @submit.prevent>
 													<v-file-input id="attachments-file" show-size v-model="attachment" persistent-hint :hint="getAttachmentHelp()"
-													:rules="[rules.fileSizeLimit, rules.fileNotEmpty]"
+													:rules="[$root.validators.fileSizeLimit(maxUploadSizeBytes, $root.formatCount), $root.validators.fileNotEmpty]"
 														data-aid="case_attachments_new_file_input"></v-file-input>
 													<span data-aid="case_attachment_protected_toggle">
 														<v-checkbox v-model="associatedForms['attachments'].protected" id="attachments-protect" :label="i18n.artifactProtected" persistent-hint :hint="i18n.artifactProtectedHint"></v-checkbox>
@@ -582,8 +582,8 @@
 														<v-select id="evidence-type" v-if="!isPresetCustomEnabled('artifactType')" v-model="associatedForms['evidence'].artifactType" :items="selectList('artifactType')" persistent-hint :hint="i18n.artifactTypeHelp"></v-select>
 														<v-combobox id="evidence-type" v-if="isPresetCustomEnabled('artifactType')" v-model="associatedForms['evidence'].artifactType" :items="selectList('artifactType')" persistent-hint :hint="i18n.artifactTypeHelp"></v-combobox>
 													</span>
-													<v-file-input id="evidence-value" v-if="associatedForms['evidence'].artifactType == 'file'" show-size v-model="attachment" persistent-hint :hint="getAttachmentHelp()" :rules="[rules.fileSizeLimit, rules.fileNotEmpty, rules.fileRequired]" data-aid="case_evidence_new_file_input"></v-file-input>
-													<v-textarea id="evidence-value" v-if="associatedForms['evidence'].artifactType != 'file'" rows="2" v-model="associatedForms['evidence'].value" :rules="[rules.required]" :placeholder="i18n.artifactValue" persistent-hint :hint="i18n.artifactValueHelp"></v-textarea>
+													<v-file-input id="evidence-value" v-if="associatedForms['evidence'].artifactType == 'file'" show-size v-model="attachment" persistent-hint :hint="getAttachmentHelp()" :rules="[$root.validators.fileSizeLimit(maxUploadSizeBytes, $root.formatCount), $root.validators.fileNotEmpty, $root.validators.fileRequired]" data-aid="case_evidence_new_file_input"></v-file-input>
+													<v-textarea id="evidence-value" v-if="associatedForms['evidence'].artifactType != 'file'" rows="2" v-model="associatedForms['evidence'].value" :rules="[$root.validators.required]" :placeholder="i18n.artifactValue" persistent-hint :hint="i18n.artifactValueHelp"></v-textarea>
 													<span data-aid="case_evidence_new_bulk_toggle">
 														<v-checkbox v-if="isEvidenceBulkCapable()" id="evidence-bulk" v-model="associatedForms['evidence'].bulk" persistent-hint :hint="i18n.artifactBulkHelp"></v-checkbox>
 													</span>
@@ -1456,7 +1456,7 @@
 											<div v-if="isEdit('case-priority')">
 												<v-form v-model="editForm.valid" @submit.prevent>
 													<div class="mb-2">
-														<v-text-field id="case-priority-input" variant="outlined" hide-details="auto" rows="3" density="compact" no-resize v-model="editForm.val" :rules="[rules.number]" persistent-hint :hint="i18n.casePriorityHelp" data-aid="case_metadata_priority_input"></v-text-field>
+														<v-text-field id="case-priority-input" variant="outlined" hide-details="auto" rows="3" density="compact" no-resize v-model="editForm.val" :rules="[$root.validators.number]" persistent-hint :hint="i18n.casePriorityHelp" data-aid="case_metadata_priority_input"></v-text-field>
 													</div>
 												</v-form>
 												<div class="d-inline-flex justify-end">

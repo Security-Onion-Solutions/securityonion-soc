@@ -498,7 +498,7 @@
 					{{ i18n.maxUploadSize }}: {{ formatCount(maxUploadSizeBytes) }} {{ i18n.bytes }}
 				</v-alert>
 				<v-form ref="gridUpload" v-model="uploadForm.valid" @submit.prevent>
-					<v-file-input id="import-value" v-model="uploadForm.attachment" show-size :accept="pickUploadDialogAccept()" :rules="[rules.fileSizeLimit, rules.fileNotEmpty, rules.fileRequired]" data-aid="grid_import_file"></v-file-input>
+					<v-file-input id="import-value" v-model="uploadForm.attachment" show-size :accept="pickUploadDialogAccept()" :rules="[$root.validators.fileSizeLimit(maxUploadSizeBytes, $root.formatCount), $root.validators.fileNotEmpty, $root.validators.fileRequired]" data-aid="grid_import_file"></v-file-input>
 				</v-form>
 			</v-card-text>
 			<v-card-actions>
