@@ -135,7 +135,7 @@
 					<v-icon v-if="currentChatId" class="mr-2" @click="toggleSharedSession(currentChatId)" data-aid="assistant_banner_share_toggle" :disabled="$root.isMyUser(chatHistoryById?.[currentChatId]?.userId)" :title="i18n.assistantLinkTitle">
 						{{ (chatHistoryById?.[currentChatId]?.tags?.includes('shared')) ? 'fa-link' : 'fa-link-slash' }}
 					</v-icon>
-					<v-icon v-if="currentChatId" class="mr-2" @click.stop="exportSession" data-aid="assistant_banner_export_session" :disabled="!creditsUsed" :title="i18n.exportSessionHelp">
+					<v-icon v-if="currentChatId" class="mr-2" @click.stop="exportSession" data-aid="assistant_banner_export_session" :disabled="checkForActivity() || !messages.some(m => m.role === 'user')" :title="i18n.exportSessionHelp">
 						fa-file-export
 					</v-icon>
 					<template v-if="currentChatId">
