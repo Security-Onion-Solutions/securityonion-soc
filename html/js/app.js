@@ -955,7 +955,7 @@ $(document).ready(function () {
           if (value == "medium_false") return "orange-darken-1";
           if (value == "high_false") return "red-lighten-1";
           if (value == "critical_false") return "red-darken-4";
-          return "secondary-lighten-1";
+          return "icon";
         },
         isNodeInSubgrid(node) {
           return node.gridId != null && node.gridId.trim().length > 0;
