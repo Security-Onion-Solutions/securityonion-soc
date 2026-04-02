@@ -172,15 +172,6 @@
 				</v-col>
 			</v-row>
 			<v-row v-if="loaded" class="ga-3">
-				<v-col>
-					<div class="so-stat-pill" data-aid="stat_total_alerts">
-						<div class="so-stat-text">
-							<div class="so-stat-label">{{ i18n.eventTotal }}</div>
-							<div class="so-stat-value">{{ totalEvents.toLocaleString() }}</div>
-						</div>
-						<v-icon class="so-stat-icon">fa-circle-check</v-icon>
-					</div>
-				</v-col>
 				<v-col v-if="isCategory('hunt') || isCategory('dashboards')">
 					<div class="so-stat-pill" data-aid="stat_total_alerts">
 						<div class="so-stat-text">
@@ -188,6 +179,15 @@
 							<div class="so-stat-value">{{ queryName }}</div>
 						</div>
 						<v-icon class="so-stat-icon">fa-clipboard-question</v-icon>
+					</div>
+				</v-col>
+				<v-col>
+					<div class="so-stat-pill" data-aid="stat_total_alerts">
+						<div class="so-stat-text">
+							<div class="so-stat-label">{{ i18n.eventTotal }}</div>
+							<div class="so-stat-value">{{ totalEvents.toLocaleString() }}</div>
+						</div>
+						<v-icon class="so-stat-icon">fa-circle-check</v-icon>
 					</div>
 				</v-col>
 				<v-col v-if="isCategory('alerts')">

@@ -111,10 +111,10 @@
 						<v-row>
 							<v-col>
 								<v-toolbar class="so-toolbar elevation-0" fixed>
-									<v-btn id="add-comment-button" icon variant="flat" class="circle-button mx-2" :title="i18n.addCommentHelp" @click.stop="prepareForInput('comment-input')" data-aid="detection_comments_new">
+									<v-btn id="add-comment-button" icon variant="flat" class="circle-button mx-2" :title="i18n.addDetectionCommentHelp" @click.stop="prepareForInput('comment-input')" data-aid="detection_comments_new">
 										<v-icon>fa-plus</v-icon>
 									</v-btn>
-									<v-btn id="refresh-comments-button" icon variant="flat" class="circle-button mx-2" :title="i18n.refreshCommentsHelp" @click.stop="loadComments(true)" data-aid="detection_comments_refresh">
+									<v-btn id="refresh-comments-button" icon variant="flat" class="circle-button mx-2" :title="i18n.refreshDetectionCommentsHelp" @click.stop="loadComments(true)" data-aid="detection_comments_refresh">
 										<v-icon>fa-sync</v-icon>
 									</v-btn>
 								</v-toolbar>
