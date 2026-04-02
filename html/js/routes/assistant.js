@@ -250,14 +250,13 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         try {
           await this.loadChatFromBackend(urlSessionId);
         } catch (error) {
-          // Session ID in URL doesn't exist, start new chat with this ID
-          this.currentChatId = urlSessionId;
-          this.saveCurrentChatId();
-          
           // Check if this is an investigation session
           const isInvestigation = this.$route.query.investigation === 'true';
-          
+
           if (isInvestigation) {
+            // Investigation sessions are allowed to create new sessions with the URL session ID
+            this.currentChatId = urlSessionId;
+            this.saveCurrentChatId();
             try {
               const investigationPrompt = this.generateInvestigationPrompt(this.$route.query);
               // This is a new investigation session, start with investigation prompt
@@ -267,9 +266,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
             } catch (error) {
               this.$root.showError(this.i18n.assistantUnableToParseInvestigation + ': ' + error.message);
             }
-            
-          } else if (this.messages.length > 1) {
-            this.loadNewChatScreen();
+          } else if (urlSessionId !== this.currentChatId) {
+            // Session ID doesn't exist, not an investigation, and not our own navigation — redirect to base assistant page
+            await this.$router.replace({ name: 'assistant' });
+            return;
           }
         } finally {
           this.$root.stopLoading();
@@ -1893,8 +1893,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     
     checkIfDeleted(session) {
-      const sessionInHistory = this.chatHistory.some(s => s.sessionId === session.sessionId);
-      if (!sessionInHistory) {
+      if (session?.deleteTime) {
         this.canChat = false;
         this.$root.showWarning(this.i18n.assistantChatNoResume);
       } else {
@@ -2112,8 +2111,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         await this.toggleSharedSession(sessionId)
       }
 
-      if (caseId === null) { 
+      let caseTip = this.i18n.assistantAttachToCaseTipExisting;
+      if (caseId === null) {
         caseId = await this.createCase(session.title);
+        caseTip = this.i18n.assistantAttachToCaseTipNew;
       }
 
       const payload = {
@@ -2126,6 +2127,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
 
       try {
         this.$root.papi.post('/case/artifacts', payload);
+        this.$root.showTip(caseTip);
       } catch (err) { 
         this.$root.showError(this.i18n.assistantAttachToCaseFail);
       }

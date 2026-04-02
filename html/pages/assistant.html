@@ -135,7 +135,7 @@
 					<v-icon v-if="currentChatId" class="mr-2" @click="toggleSharedSession(currentChatId)" data-aid="assistant_banner_share_toggle" :disabled="$root.isMyUser(chatHistoryById?.[currentChatId]?.userId)" :title="i18n.assistantLinkTitle">
 						{{ (chatHistoryById?.[currentChatId]?.tags?.includes('shared')) ? 'fa-link' : 'fa-link-slash' }}
 					</v-icon>
-					<v-icon v-if="currentChatId" class="mr-2" @click.stop="exportSession" data-aid="assistant_banner_export_session" :disabled="!creditsUsed" :title="i18n.exportSessionHelp">
+					<v-icon v-if="currentChatId" class="mr-2" @click.stop="exportSession" data-aid="assistant_banner_export_session" :disabled="checkForActivity() || !messages.some(m => m.role === 'user')" :title="i18n.exportSessionHelp">
 						fa-file-export
 					</v-icon>
 					<template v-if="currentChatId">
@@ -192,7 +192,7 @@
 								<div class="spacer spacer-right"></div>
 							</div>
 							<div class="d-flex align-start">
-								<v-avatar id="message-avatar" size="32" class="mr-3" :color="message.role === 'user' ? 'primary' : 'secondary'">
+								<v-avatar id="message-avatar" size="32" class="mr-3" :color="message.role === 'user' ? 'primary' : 'secondary-lighten-1'">
 									<v-icon v-if="message.role === 'user'" class="text-white" size="small">fa-user</v-icon>
 									<img v-else src="images/favicon/onion.png" alt="Assistant" style="width: 24px; height: 24px;">
 								</v-avatar>
@@ -336,7 +336,7 @@
 						</div>
 						<div id="typing-indicator" v-if="isTyping" class="message-item mb-3">
 							<div class="d-flex align-start">
-								<v-avatar size="32" class="mr-3" color="secondary">
+								<v-avatar size="32" class="mr-3" color="secondary-lighten-1">
 									<img src="images/favicon/onion.png" alt="Assistant" style="width: 24px; height: 24px;">
 								</v-avatar>
 								<div class="flex-grow-1">
@@ -345,7 +345,7 @@
 										<span class="text-body-small text-medium-emphasis">{{ i18n.typing }}...</span>
 									</div>
 									<div class="text-body-2">
-										<v-progress-linear indeterminate color="secondary" height="2"></v-progress-linear>
+										<v-progress-linear indeterminate color="secondary-lighten-1" height="2"></v-progress-linear>
 										<span class="text-body-small text-medium-emphasis">{{ i18n.thinking }}...</span>
 									</div>
 								</div>

@@ -504,8 +504,7 @@ test('handleRouteSessionId with non-existent session', async () => {
   
   await comp.handleRouteSessionId();
   
-  expect(comp.currentChatId).toBe(fakeSessionId);
-  expect(comp.focusChatInput).toHaveBeenCalled();
+  expect(comp.currentChatId).toBe(null);
 });
 
 
@@ -2186,20 +2185,16 @@ test('handleRouteSessionId detects investigation session from query parameter', 
   expect(comp.$route.query.investigation).toBe('true');
 });
 
-test('handleRouteSessionId handles non-investigation session with existing messages', async () => {
+test('handleRouteSessionId handles existing session', async () => {
   comp.$route.params.sessionId = fakeSessionId;
-  comp.$route.query.investigation = 'false'; // Not an investigation
-  comp.loadChatFromBackend = jest.fn().mockRejectedValue(new Error('Session not found'));
-  comp.loadNewChatScreen = jest.fn();
-  comp.saveCurrentChatId = jest.fn();
-  comp.messages = [fakeMessage, fakeAssistantMessage]; // More than 1 message
+  comp.loadChatFromBackend = jest.fn().mockResolvedValue();
+  comp.focusChatInput = jest.fn();
   comp.assistantEnabled = true;
-  
+
   await comp.handleRouteSessionId();
-  
-  expect(comp.currentChatId).toBe(fakeSessionId);
-  expect(comp.saveCurrentChatId).toHaveBeenCalled();
-  expect(comp.loadNewChatScreen).toHaveBeenCalled();
+
+  expect(comp.loadChatFromBackend).toHaveBeenCalledWith(fakeSessionId);
+  expect(comp.focusChatInput).toHaveBeenCalled();
 });
 
 test('startInvestigationSession clears messages and sets up investigation prompt', async () => {
@@ -4406,34 +4401,22 @@ test('clearStreamingStates resets streaming-related state', () => {
   expect(comp.isStreaming).toBe(false);
 });
 
-test('checkIfDeleted sets canChat to false when session not in history', () => {
-  const sessionId = 'missing-session';
-  comp.chatHistory = [
-    { sessionId: 'session1' },
-    { sessionId: 'session2' }
-  ];
-  comp.canChat = true;
-  const showWarningMock = jest.fn();
-  comp.$root.showWarning = showWarningMock;
-  
-  comp.checkIfDeleted(sessionId);
-  
-  expect(comp.canChat).toBe(false);
-  expect(showWarningMock).toHaveBeenCalledWith(comp.i18n.assistantChatNoResume);
+test('checkIfDeleted sets canChat to true when session is not deleted', () => {
+  comp.canChat = false;
+
+  comp.checkIfDeleted({ sessionId: 'existing-session' });
+
+  expect(comp.canChat).toBe(true);
 });
 
-test('checkIfDeleted sets canChat to true when session exists in history', () => {
-  const sessionId = { sessionId: 'existing-session' };
-  comp.chatHistory = [
-    { sessionId: 'session1' },
-    { sessionId: 'existing-session' },
-    { sessionId: 'session2' }
-  ];
-  comp.canChat = false;
-  
-  comp.checkIfDeleted(sessionId);
-  
-  expect(comp.canChat).toBe(true);
+test('checkIfDeleted sets canChat to false when session is deleted', () => {
+  comp.canChat = true;
+  comp.$root.showWarning = jest.fn();
+
+  comp.checkIfDeleted({ sessionId: 'existing-session', deleteTime: '2026-01-01T00:00:00Z' });
+
+  expect(comp.canChat).toBe(false);
+  expect(comp.$root.showWarning).toHaveBeenCalled();
 });
 
 // Auto-approval functionality tests

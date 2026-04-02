@@ -369,7 +369,7 @@
 														@click="toggleEscalationMenu($event, item, groupIdx)"
 														:data-aid="'groups_escalate_' + category" :aria-label="i18n.escalate">
 														<v-icon :title="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate"
-															:color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'secondary' : 'primary'">fa-exclamation-triangle</v-icon>
+															:color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'icon' : 'primary'">fa-exclamation-triangle</v-icon>
 													</v-btn>
 													<v-btn id="aiInvestigateButton" v-if="investigateEnabled && item['rule.uuid']" variant="text" size="x-small" icon
 														@mousedown="startAIInvestigation(item, $event)"
@@ -644,7 +644,7 @@
 												@click="toggleEscalationMenu($event, item, -1)"
 												:data-aid="'events_escalate_' + category"
 												:aria-label="i18n.escalate">
-												<v-icon :title="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate" :color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'secondary' : 'primary'">fa-exclamation-triangle</v-icon>
+												<v-icon :title="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate" :color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'icon' : 'primary'">fa-exclamation-triangle</v-icon>
 											</v-btn>
 											<v-btn id="aiInvestigateButton" v-if="investigateEnabled && item['rule.uuid']" variant="text" icon size="x-small"
 												@mousedown="startAIInvestigation(item, $event)"
