@@ -454,8 +454,8 @@
 															<v-icon class="mb-2">fa-circle-question</v-icon>
 														</a>
 													</span>
-													<div><img class="rounded-lg elevation-5" style="max-width: 100%; height: auto;" v-if="item.imageFront" :src="'images/appliances/' + item.imageFront"></div>
-													<div class="mt-2"><img class="rounded-lg elevation-5" style="max-width: 100%; height: auto;" v-if="item.imageBack" :src="'images/appliances/' + item.imageBack"></div>
+													<div><img class="appliance-image elevation-5" v-if="item.imageFront" :src="'images/appliances/' + item.imageFront"></div>
+													<div class="mt-2"><img class="appliance-image elevation-5" v-if="item.imageBack" :src="'images/appliances/' + item.imageBack"></div>
 												</v-card-text>
 											</v-card>
 										</v-col>

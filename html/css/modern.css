@@ -845,3 +845,9 @@ html, body, * {
 .v-btn:not(.v-btn--icon) {
   border-radius: 0.5rem !important;
 }
+
+.appliance-image {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--so-radius-nested);
+}
