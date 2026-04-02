@@ -2111,8 +2111,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         await this.toggleSharedSession(sessionId)
       }
 
-      if (caseId === null) { 
+      let caseTip = this.i18n.assistantAttachToCaseTipExisting;
+      if (caseId === null) {
         caseId = await this.createCase(session.title);
+        caseTip = this.i18n.assistantAttachToCaseTipNew;
       }
 
       const payload = {
@@ -2125,6 +2127,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
 
       try {
         this.$root.papi.post('/case/artifacts', payload);
+        this.$root.showTip(caseTip);
       } catch (err) { 
         this.$root.showError(this.i18n.assistantAttachToCaseFail);
       }

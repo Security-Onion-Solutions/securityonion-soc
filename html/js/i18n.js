@@ -160,6 +160,8 @@ const i18n = {
       assistant: 'Onion AI',
       assistantAttachToCaseFail: 'Failed to attach chat session to case',
       assistantAttachToCaseHelp: 'Attach session to a case',
+      assistantAttachToCaseTipExisting: 'Attached session to existing case.',
+      assistantAttachToCaseTipNew: 'Attached session to a new case.',
       assistantAttachToExistingCase: 'Attach session to a recently viewed case:',
       assistantAttachToExistingCaseHelp: 'Attach session to this existing case',
       assistantAttachToNewCase: 'Attach to new case',
