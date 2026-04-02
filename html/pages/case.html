@@ -80,10 +80,10 @@
 						<v-row>
 							<v-col>
 								<v-toolbar class="so-toolbar elevation-0" fixed>
-									<v-btn variant="flat" icon v-bind:title.attr="i18n.addCommentHelp" @click.stop="prepareForInput('comment-input')" id="add-comment-button" data-aid="case_comment_new" class="circle-button mx-2">
+									<v-btn variant="flat" icon v-bind:title.attr="i18n.addCaseCommentHelp" @click.stop="prepareForInput('comment-input')" id="add-comment-button" data-aid="case_comment_new" class="circle-button mx-2">
 										<v-icon>fa-plus</v-icon>
 									</v-btn>
-									<v-btn variant="flat" icon class="circle-button mx-2" :title="i18n.refreshCommentsHelp" @click.stop="reloadAssociation('comments', true)" id="refresh-comments-button" data-aid="case_comments_refresh">
+									<v-btn variant="flat" icon class="circle-button mx-2" :title="i18n.refreshCaseCommentsHelp" @click.stop="reloadAssociation('comments', true)" id="refresh-comments-button" data-aid="case_comments_refresh">
 										<v-icon>fa-sync</v-icon>
 									</v-btn>
 									<v-btn v-if="$root.isLicensed($root.FEAT_RPT)" :title="i18n.exportCaseHelp" class="circle-button mx-2" variant="flat" icon @click.stop="exportCase" id="export-case-button" data-aid="case_export">
