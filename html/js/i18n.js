@@ -903,6 +903,7 @@ const i18n = {
       queryCancelConfirmText: 'Canceling active queries should be avoided in most situations due to the risk of affecting the various components that interact with Elasticsearch. Would you like to continue anyway?',
       queryCanceled: 'The query cancelation has been submitted. Refresh the query list for updated results.',
       queryHelp: 'Specify a query in Onion Query Language (OQL)',
+      queryName: 'Query Name',
       quickActions: 'Actions',
       quickDrilldown: 'Quick Drilldown',
       rawToolResult: 'Raw Tool Result',

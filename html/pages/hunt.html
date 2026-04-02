@@ -58,9 +58,9 @@
 				<v-col style="flex: 1 1 auto; min-width: 0;" class="pa-0">
 					<v-toolbar class="so-toolbar elevation-0" variant="flat">
 						<v-textarea :clearable="isAdvanced()" :auto-grow="isAdvanced()" :readonly="!isAdvanced()" :disabled="loading()" @input="queryAltered = true"
-							@change="queryModified" class="mx-2" v-model="$data[getDisplayedQueryVar()]" persistent-hint :hint="isAdvanced() ? (queryAltered ? i18n.queryHelp : $data['queryName']) : ''"
+							@change="queryModified" class="mx-2" v-model="$data[getDisplayedQueryVar()]" :hint="isAdvanced() && queryAltered ? i18n.queryHelp : ''"
 							rows="1" prepend-icon="fa-search" @keydown.enter.prevent="submitQuery" id="hunt-query-input" ref="huntQueryInput" :data-aid="'query_input_' + category"
-							no-resize :hide-details="isCategory('alerts') || isCategory('cases')">
+							no-resize hide-details>
 							<template #prepend-inner>
 								<v-menu density="compact" @update:model-value="saveMenuScrollPos($event, '#hunt-query-dropdown-list')">
 									<template #activator="{ props: menuProps }">
@@ -179,6 +179,15 @@
 							<div class="so-stat-value">{{ totalEvents.toLocaleString() }}</div>
 						</div>
 						<v-icon class="so-stat-icon">fa-circle-check</v-icon>
+					</div>
+				</v-col>
+				<v-col v-if="isCategory('hunt') || isCategory('dashboards')">
+					<div class="so-stat-pill" data-aid="stat_total_alerts">
+						<div class="so-stat-text">
+							<div class="so-stat-label">{{ i18n.queryName }}</div>
+							<div class="so-stat-value">{{ queryName }}</div>
+						</div>
+						<v-icon class="so-stat-icon">fa-clipboard-question</v-icon>
 					</div>
 				</v-col>
 				<v-col v-if="isCategory('alerts')">
