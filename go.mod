@@ -50,6 +50,7 @@ require (
 	github.com/elastic/elastic-transport-go/v8 v8.9.0 // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
+	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-git/go-billy/v5 v5.8.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
@@ -67,6 +68,8 @@ require (
 	github.com/oapi-codegen/runtime v1.3.0 // indirect
 	github.com/pjbgf/sha1cd v0.5.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/richardlehane/mscfb v1.0.6 // indirect
+	github.com/richardlehane/msoleps v1.0.3 // indirect
 	github.com/sergi/go-diff v1.4.0 // indirect
 	github.com/skeema/knownhosts v1.3.2 // indirect
 	github.com/tidwall/match v1.2.0 // indirect

@@ -10,6 +10,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/agent"
 	"github.com/security-onion-solutions/securityonion-soc/agent/modules/analyze"
 	"github.com/security-onion-solutions/securityonion-soc/agent/modules/export"
+	"github.com/security-onion-solutions/securityonion-soc/agent/modules/fileanalyze"
 	"github.com/security-onion-solutions/securityonion-soc/agent/modules/importer"
 	"github.com/security-onion-solutions/securityonion-soc/agent/modules/statickeyauth"
 	"github.com/security-onion-solutions/securityonion-soc/agent/modules/suriquery"
@@ -23,5 +24,6 @@ func BuildModuleMap(agt *agent.Agent) map[string]module.Module {
 	moduleMap["importer"] = importer.NewImporter(agt)
 	moduleMap["statickeyauth"] = statickeyauth.NewStaticKeyAuth(agt)
 	moduleMap["suriquery"] = suriquery.NewSuriQuery(agt)
+	moduleMap["fileanalyze"] = fileanalyze.NewFileAnalyze(agt)
 	return moduleMap
 }
