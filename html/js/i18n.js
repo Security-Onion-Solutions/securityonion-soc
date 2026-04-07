@@ -183,6 +183,7 @@ const i18n = {
       assistantLoadContextError: 'Failed to load context theshold setting',
       assistantLoadRecentError: 'Failed to load restore last active setting',
       assistantLoadReadApprovalError: 'Failed to load read request approval setting',
+      assistantMessageTooLong: 'Message is too long. Please shorten your message, compress the context, or start a new chat.',
       assistantNoHistoryFound: 'No chat history found for session',
       assistantNoRawToolResult: 'Could not capture raw tool result',
       assistantNoResponse: 'Failed to get AI response',

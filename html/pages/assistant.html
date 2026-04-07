@@ -362,7 +362,10 @@
 						:placeholder="i18n.chatPlaceholder"
 						variant="outlined"
 						density="compact"
-						hide-details
+						:hide-details="!isMessageTooLong"
+						:hint="isMessageTooLong ? i18n.assistantMessageTooLong : ''"
+						:persistent-hint="isMessageTooLong"
+						:error="isMessageTooLong"
 						auto-grow
 						rows="1"
 						max-rows="8"
@@ -376,7 +379,7 @@
 					<v-btn
 						id="chat-send-button"
 						ref="sendButton"
-						:disabled="!newMessage.trim() || !canChat || checkForActivity() || !creditsLoaded"
+						:disabled="!newMessage.trim() || !canChat || checkForActivity() || !creditsLoaded || isMessageTooLong"
 						@click="sendMessage()"
 						data-aid="assistant_chat_send"
 						class="flex-shrink-0"
