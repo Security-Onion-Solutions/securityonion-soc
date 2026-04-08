@@ -731,7 +731,6 @@ test('sendMessage creates session ID and updates URL', async () => {
   comp.assistantEnabled = true;
   comp.canChat = true;
   comp.isMessageTooLong = false;
-  comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
 
   await comp.sendMessage();
