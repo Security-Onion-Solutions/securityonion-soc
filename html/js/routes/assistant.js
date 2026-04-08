@@ -95,7 +95,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       return msgs.map((_, i) => this.calculateContextOfMessage(msgs, i));
     },
     isMessageTooLong() {
-      if (!this.charsPerTokenEstimate || !this.newMessage) return false;
+      if (this.charsPerTokenEstimate <= 0 || !this.newMessage) return false;
       const contextLimit = this.increaseContextLimit ? this.contextLimitLarge : this.contextLimitSmall;
       const maxChars = contextLimit * this.charsPerTokenEstimate * 1.1;
       const usedChars = this.newMessage.length + (this.contextLength * this.charsPerTokenEstimate);

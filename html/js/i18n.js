@@ -1262,6 +1262,7 @@ const i18n = {
 
       WARN_STATUS_EFFECTED_BY_FILTER: 'Saved successfully but the status of this detection is controlled by the current regex filter settings and was reverted. <a href="/#/config?s=soc.config.server.modules.suricataengine" data-aid="warning_update_configure_filters">Click here to configure those filters.</a>',
 
+      ERROR_ASSISTANT_REQUEST_TOO_LARGE: 'The request is too large for the current session and model. Please shorten your message, compress the context, or start a new chat.',
       ERROR_CASE_EVENT_ALREADY_ATTACHED: 'The event is already attached to the selected case.',
       ERROR_CASE_MODULE_NOT_ENABLED: 'A case module has not been configured for this installation. Unable to proceed with request.',
       ERROR_JINJA_NOT_SUPPORTED: 'For security reasons Jinja syntax cannot be specified in configuration values.',
