@@ -658,7 +658,7 @@
 												<v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_evidence_collapse">fa-angle-down</v-icon>
 												<v-icon v-else :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_evidence_expand">fa-angle-right</v-icon>
 											</v-btn>
-											<v-btn class="no-underline" variant="text" size="x-small" icon :to="{ name: 'hunt', query: {q: buildHuntQueryForValue(item.value)}}" :title="i18n.huntForEvidence" data-aid="case_evidence_hunt">
+											<v-btn class="no-underline" variant="text" size="x-small" icon v-bind="getHuntActionProps(item.value)" :title="i18n.huntForEvidence" data-aid="case_evidence_hunt">
 												<v-icon :title="i18n.huntForEvidence" class="theme-text">fa-crosshairs</v-icon>
 											</v-btn>
 											<v-btn :id="`evidence-${index}-analyze`" icon variant="text" size="x-small" @click="analyze(item)" :disabled="analyzeInProgress(item)" data-aid="case_evidence_analyze">
