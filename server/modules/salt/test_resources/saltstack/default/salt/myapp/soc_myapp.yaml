@@ -7,6 +7,18 @@ myapp:
   ro:
     description: read only setting
     readonly: True
+  ui_map_typed:
+    description: Map list with typed UI elements
+    forcedType: "[]{}"
+    uiElements:
+    - field: port
+      label: Port
+      forcedType: int
+    - field: enabled
+      label: Enabled
+      forcedType: bool
+    - field: name
+      label: Name
   ui_json:
     description: UI elements for JSON packing
     uiElements:

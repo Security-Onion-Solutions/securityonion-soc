@@ -6,6 +6,7 @@
 
 const routes = [];
 const components = [];
+const iconSets = [];
 const templatePromises = [];
 
 const LICENSE_STATUS_ACTIVE = "active";
@@ -14,6 +15,8 @@ const LICENSE_STATUS_EXPIRED = "expired";
 const LICENSE_STATUS_INVALID = "invalid";
 const LICENSE_STATUS_PENDING = "pending";
 const LICENSE_STATUS_UNPROVISIONED = "unprovisioned";
+
+const SECURITYONION_PRO = "Security Onion Pro";
 
 const LICENSE_EXPIRES_SOON_DAYS = 45;
 
@@ -24,16 +27,28 @@ const USER_PASSWORD_LENGTH_MIN = 8;
 const USER_PASSWORD_LENGTH_MAX = 72;
 const USER_PASSWORD_INVALID_RX = /["'$&!]/;
 
+const MAX_OVERRIDE_NOTE_LENGTH = 150;
+
 const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000';
 
 if (typeof global !== 'undefined') {
   global.routes = routes;
   global.components = components;
+  global.iconSets = iconSets;
   global.templatePromises = templatePromises;
+  global.MAX_OVERRIDE_NOTE_LENGTH = MAX_OVERRIDE_NOTE_LENGTH;
 }
 
 $(document).ready(function () {
   Promise.all(templatePromises).then(() => {
+    const _i18n = i18n.getLocalizedTranslations(navigator.language);
+    
+    let iSets = {};
+    for (const iconSet of iconSets) {
+      const comp = Vue.defineComponent(iconSet.component);
+      iSets[iconSet.name] = { component: comp };
+    }
+
     const vuetify = Vuetify.createVuetify({
       defaults: {
         VIcon: {
@@ -45,13 +60,17 @@ $(document).ready(function () {
           indeterminateIcon: 'mb-1 fa-square-minus'
         },
         VSelect: {
+          variant: 'outlined',
+          density: 'compact',
           menuIcon: 'fas fa-caret-down',
         },
         VCombobox: {
           menuIcon: 'fas fa-caret-down',
+          variant: 'outlined',
         },
         VFileInput: {
-          prependIcon: 'fa-paperclip'
+          prependIcon: 'fa-paperclip',
+          variant: 'outlined',
         },
         VDataTable: {
           firstIcon: 'fa-backward-step',
@@ -60,11 +79,20 @@ $(document).ready(function () {
           lastIcon: 'fa-forward-step',
         },
         VTextField: {
+          variant: 'outlined',
+          density: 'compact',
           clearIcon: 'fas fa-circle-xmark',
+        },
+        VTextarea: {
+          variant: 'outlined',
+          density: 'compact',
         },
         VTreeview: {
           collapseIcon: '',
           expandIcon: 'fas fa-caret-right',
+        },
+        VToolbar: {
+          class: 'theme-background-lighten-1',
         },
         VChip: {
           closeIcon: 'fa-xmark va-baseline',
@@ -78,47 +106,56 @@ $(document).ready(function () {
         sets: {
           fa: {
             component: Vuetify.components.VClassIcon,
-          }
+          },
+          ...iSets,
         }
       },
       theme: {
         defaultTheme: 'dark',
-        options: {
-          customProperties: true,
-        },
         variations: {
           colors: ['primary', 'secondary', 'drawer_background', 'background'],
           lighten: 3,
-          darken: 2,
+          darken: 3,
         },
         themes: {
           light: {
+            dark: false,
             colors: {
               primary: '#2196f3',
               secondary: '#424242',
               info: '#2196f3',
               error: '#ff5252',
-              nav_background: '#12110d',
+              nav_background: '#000000',
               nav: '#ffffff',
-              drawer_background: '#f4f4f4',
+              table_background: '#fafafa',
+              drawer_background: '#f0f0f0',
               background: '#ffffff',
               text: '#000000',
               icon: '#7f7f7f',
+              button_icon_color: '#ffffff',
+              row_stripe: '#e6e6e6',
+              row_hover: '#e2e2e2',
+              text_button: '#e4e4e4',
             },
           },
           dark: {
             dark: true,
             colors: {
-              primary: '#2196f3',
-              secondary: '#424242',
+              primary: '#0088BF',
+              secondary: '#2C3347',
               info: '#2196f3',
               error: '#ff5252',
-              nav_background: '#12110d',
+              nav_background: '#000000',
               nav: '#ffffff',
-              drawer_background: '#353535',
-              background: '#1e1e1e',
+              table_background: '#222a3f',
+              drawer_background: '#252B3B',
+              background: '#0B1019',
               text: '#ffffff',
-              icon: '#929292',
+              icon: '#8B96A8',
+              button_icon_color: '#ffffff',
+              row_stripe: '#2d2d2d',
+              row_hover: '#2a3452',
+              text_button: '#3f4452',
             },
           },
         },
@@ -133,7 +170,7 @@ $(document).ready(function () {
         return {
           timestamp: Date.now(),
           theme: Vuetify.useTheme(),
-          i18n: i18n.getLocalizedTranslations(navigator.language),
+          i18n: _i18n,
           loading: false,
           loadingCancelCallback: null,
           error: false,
@@ -202,6 +239,44 @@ $(document).ready(function () {
           FEAT_RPT: 'rpt',
           FEAT_TTR: 'ttr',
           FEAT_OAI: 'oai',
+          validators: {
+            required: value => !!value || _i18n.required,
+            number: value => (!isNaN(+value) && Number.isInteger(parseFloat(value))) || _i18n.required,
+            hours: value => (!value || /^\d{1,4}(\.\d{1,4})?$/.test(value)) || _i18n.invalidHours,
+            shortLengthLimit: value => (value.length < 100) || _i18n.required,
+            longLengthLimit: value => (encodeURI(value).split(/%..|./).length - 1 < 10000000) || _i18n.required,
+            noteLengthLimit: value => (value.length <= MAX_OVERRIDE_NOTE_LENGTH) || _i18n.ruleMaxLen,
+            fileNotEmpty: value => (value == null || value.size > 0) || _i18n.fileEmpty,
+            fileRequired: value => (value != null && value.length != 0) || _i18n.required,
+            cidrFormat: value => (!value ||
+              /^!?\$[a-z_][a-z0-9_]*$/i.test(value) ||
+              /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\/(3[0-2]|[12]\d|\d)$/.test(value) ||
+              /^((([0-9a-f]{1,4}:){7}([0-9a-f]{1,4}|:))|(([0-9a-f]{1,4}:){6}(:[0-9a-f]{1,4}|((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9a-f]{1,4}:){5}(((:[0-9a-f]{1,4}){1,2})|:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9a-f]{1,4}:){4}(((:[0-9a-f]{1,4}){1,3})|((:[0-9a-f]{1,4})?:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){3}(((:[0-9a-f]{1,4}){1,4})|((:[0-9a-f]{1,4}){0,2}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){2}(((:[0-9a-f]{1,4}){1,5})|((:[0-9a-f]{1,4}){0,3}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){1}(((:[0-9a-f]{1,4}){1,6})|((:[0-9a-f]{1,4}){0,4}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(:(((:[0-9a-f]{1,4}){1,7})|((:[0-9a-f]{1,4}){0,5}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:)))(%.+)?\s*(\/([0-9]|[1-9][0-9]|1[0-1][0-9]|12[0-8]))$/i.test(value)
+            ) || _i18n.invalidCidrOrVar,
+            lowercase: value => !value || value.toLowerCase() == value || _i18n.lowercaseRequired,
+            minPassLen: value => (!value || value.length >= USER_PASSWORD_LENGTH_MIN) || _i18n.ruleMinLen,
+            maxPassLen: value => (!value || value.length <= USER_PASSWORD_LENGTH_MAX) || _i18n.ruleMaxLen,
+            badPassChars: value => (!value || !value.match(USER_PASSWORD_INVALID_RX)) || _i18n.rulePassBadChars,
+            minLength: limit => value => (value && value.length >= limit) || _i18n.ruleMinLen,
+            maxLength: limit => value => (!value || value.length < limit) || _i18n.ruleMaxLen,
+            fileSizeLimit: (maxBytes, formatFn) => value =>
+              (value == null || value.size < maxBytes) || _i18n.fileTooLarge.replace("{maxUploadSizeBytes}", formatFn(maxBytes)),
+            matches: expected => value => (!!value && value == expected) || _i18n.passwordMustMatch,
+          },
+          ruleValidators: {
+            sigma: [
+              { pattern: /^id:\s*[^$]+?$/m, message: _i18n.invalidDetectionElastAlertMissingID, match: false },
+            ],
+            suricata: [
+              { pattern: /\n/, message: _i18n.invalidDetectionSuricataNewLine, match: true },
+              { pattern: /sid:\s?(["']?)\d+\1;/, message: _i18n.invalidDetectionSuricataMissingSID, match: false },
+            ],
+            yara: [
+              { pattern: /^rule\s+{/, message: _i18n.invalidDetectionStrelkaMissingRuleName, match: true },
+              { pattern: /^rule\s+[a-zA-Z_][a-zA-Z0-9_]*/, message: _i18n.invalidDetectionStrelkaInvalidRuleName, match: false },
+              { pattern: /condition:/m, message: _i18n.invalidDetectionStrelkaMissingCondition, match: false },
+            ],
+          },
         }
       },
       watch: {
@@ -611,15 +686,7 @@ $(document).ready(function () {
           }
         },
         getAuthFlowId() {
-          let flow = this.getSearchParam('flow');
-
-          if (flow) {
-            localStorage.setItem('flowID', flow);
-          } else {
-            flow = localStorage.getItem('flowID');
-          }
-
-          return flow;
+          return this.getSearchParam('flow');
         },
         getRedirectPage() {
           return this.getSearchParam('r');
@@ -707,7 +774,12 @@ $(document).ready(function () {
               (!this.licenseKey.features.length || this.licenseKey.features.indexOf(feat) != -1);
         },
         colorLicenseStatus(value) {
-          if (value == LICENSE_STATUS_ACTIVE) return "success";
+          if (value == LICENSE_STATUS_ACTIVE) {
+            if (this.licenseKey.name != SECURITYONION_PRO) {
+              return "white";
+            }
+            return 'success';
+          }
           if (value == LICENSE_STATUS_EXCEEDED) return "error";
           if (value == LICENSE_STATUS_EXPIRED) return "warning";
           if (value == LICENSE_STATUS_INVALID) return "error";
@@ -860,7 +932,7 @@ $(document).ready(function () {
             mermaid.initialize({
               startOnLoad: false,
               theme: this.$vuetify && this.$vuetify.theme.current.dark ? 'dark' : 'default',
-              securityLevel: 'loose',
+              securityLevel: 'strict',
               fontFamily: 'inherit'
             });
             this.mermaidInitialized = true;
@@ -883,7 +955,7 @@ $(document).ready(function () {
           if (value == "medium_false") return "orange-darken-1";
           if (value == "high_false") return "red-lighten-1";
           if (value == "critical_false") return "red-darken-4";
-          return "secondary";
+          return "icon";
         },
         isNodeInSubgrid(node) {
           return node.gridId != null && node.gridId.trim().length > 0;
@@ -1732,6 +1804,16 @@ $(document).ready(function () {
             this.showError(error);
           }
           this.stopLoading();
+        },
+        verifyRuleSyntax(det) {
+          const rules = this.ruleValidators[det.language.toLowerCase()];
+          for (let i = 0; i < rules.length; i++) {
+            if (rules[i].pattern.test(det.content) === rules[i].match) {
+              return rules[i].message;
+            }
+          }
+
+          return null;
         },
       },
       created() {

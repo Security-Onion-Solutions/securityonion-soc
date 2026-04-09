@@ -493,80 +493,6 @@ test('onNewDetectionLanguageChange', async () => {
 	expect(comp.detect.content).toBe('c X');
 });
 
-test('cidrFormat', () => {
-	const cidrFormat = comp.rules.cidrFormat;
-
-	expect(cidrFormat('$HOME_NET')).toBe(true);
-	expect(cidrFormat('$Home_Net')).toBe(true);
-	expect(cidrFormat('!$DNS')).toBe(true);
-	expect(cidrFormat('!$_')).toBe(true);
-	expect(cidrFormat('0.0.0.0/16')).toBe(true);
-	expect(cidrFormat('0::0/32')).toBe(true);
-	expect(cidrFormat('2001:DB88:3333:4444:CCCC:DDDD:EEEE:FFFF/64')).toBe(true);
-	expect(cidrFormat('2001:db88:3333:4444:cccc:dddd:eeee:ffff/64')).toBe(true);
-
-	expect(cidrFormat('x')).toBe(comp.i18n.invalidCidrOrVar);
-	expect(cidrFormat('#')).toBe(comp.i18n.invalidCidrOrVar);
-	expect(cidrFormat('!#')).toBe(comp.i18n.invalidCidrOrVar);
-	expect(cidrFormat('#1')).toBe(comp.i18n.invalidCidrOrVar);
-	expect(cidrFormat('!#1')).toBe(comp.i18n.invalidCidrOrVar);
-	expect(cidrFormat('_')).toBe(comp.i18n.invalidCidrOrVar);
-	expect(cidrFormat('1.2.3.4')).toBe(comp.i18n.invalidCidrOrVar);
-	expect(cidrFormat('0::0')).toBe(comp.i18n.invalidCidrOrVar);
-	expect(cidrFormat('256.256.256.256/32')).toBe(comp.i18n.invalidCidrOrVar);
-	expect(cidrFormat('0::0::0/16')).toBe(comp.i18n.invalidCidrOrVar);
-	expect(cidrFormat('google.com')).toBe(comp.i18n.invalidCidrOrVar);
-});
-
-test('rule: required', () => {
-	const required = comp.rules.required;
-
-	expect(required('')).toBe(comp.$root.i18n.required);
-	expect(required('a')).toBe(true);
-});
-
-test('rule: number', () => {
-	const number = comp.rules.number;
-
-	expect(number('a')).toBe(comp.$root.i18n.required);
-	expect(number('1')).toBe(true);
-	expect(number(1)).toBe(true);
-	expect(number(1.0)).toBe(true);
-	expect(number('1.0')).toBe(true);
-	expect(number(1.1)).toBe(comp.$root.i18n.required);
-	expect(number('1.1')).toBe(comp.$root.i18n.required);
-});
-
-test('rule: hours', () => {
-	const hours = comp.rules.hours;
-
-	expect(hours('a')).toBe(comp.$root.i18n.invalidHours);
-	expect(hours('11111')).toBe(comp.$root.i18n.invalidHours);
-	expect(hours('0.11111')).toBe(comp.$root.i18n.invalidHours);
-	expect(hours('1.1.1')).toBe(comp.$root.i18n.invalidHours);
-	expect(hours('1')).toBe(true);
-	expect(hours('1111.1111')).toBe(true);
-});
-
-test('rule: minLength', () => {
-	const minLength = comp.rules.minLength;
-	const withLimit = minLength(1);
-
-	expect(withLimit('')).toBe(comp.$root.i18n.ruleMinLen);
-	expect(withLimit('a')).toBe(true);
-	expect(withLimit('aa')).toBe(true);
-});
-
-test('rule: shortLengthLimit', () => {
-	const shortLengthLimit = comp.rules.shortLengthLimit;
-	const valLen99 = 'a'.repeat(99);
-	const valLen100 = 'a'.repeat(100);
-
-	expect(shortLengthLimit('a')).toBe(true);
-	expect(shortLengthLimit(valLen99)).toBe(true);
-	expect(shortLengthLimit(valLen100)).toBe(comp.$root.i18n.required);
-});
-
 test('getDefaultPreset', () => {
 	comp.presets = {
 		"language": {
@@ -1056,96 +982,65 @@ test('saveDetection - statusEffectedByFilter', async () => {
 	expect(comp.extractDetection).toHaveBeenCalledTimes(1);
 });
 
-test('verifyRuleSyntax - implementation', () => {
-	comp.ruleValidators = {
-		engine: [
-			{ pattern: /1/m, message: 'should not have 1', match: true },
-			{ pattern: /2/m, message: 'should have 2', match: false },
-			{ pattern: /3/m, message: 'should not have 3', match: true },
-		],
-	};
-
-	comp.detect = {
-		content: '1',
-		language: 'engine',
-	};
-	let msg = comp.verifyRuleSyntax();
-	expect(msg).toBe('should not have 1');
-
-	comp.detect.content = '2';
-	msg = comp.verifyRuleSyntax();
-	expect(msg).toBe(null);
-
-	comp.detect.content = '3';
-	msg = comp.verifyRuleSyntax();
-	expect(msg).toBe('should have 2');
-
-	comp.detect.content = '23';
-	msg = comp.verifyRuleSyntax();
-	expect(msg).toBe('should not have 3');
-
-	comp.detect.content = '123';
-	msg = comp.verifyRuleSyntax();
-	expect(msg).toBe('should not have 1');
-
-	comp.detect.content = '321';
-	msg = comp.verifyRuleSyntax();
-	expect(msg).toBe('should not have 1');
-
-	comp.detect.content = '24';
-	msg = comp.verifyRuleSyntax();
-	expect(msg).toBe(null);
-});
-
-test('verifyRuleSyntax - Sigma', () => {
+test('validateElastAlert', () => {
 	comp.detect = {
 		language: 'sigma',
 		content: ''
 	};
 
-	let msg = comp.verifyRuleSyntax();
+	let msg = comp.validateElastAlert();
 	expect(msg).toBe(comp.i18n.invalidDetectionElastAlertMissingID);
 
 	comp.detect.content = 'id: 123\n';
-	msg = comp.verifyRuleSyntax();
+	msg = comp.validateElastAlert();
+	expect(msg).toBe(comp.i18n.invalidDetectionElastAlertMissingDetectionLogic);
+
+	comp.detect.content += 'detection: {}'
+	msg = comp.validateElastAlert();
 	expect(msg).toBe(null);
 });
 
-test('verifyRuleSyntax - Suricata', () => {
+test('validateSuricata', () => {
 	comp.detect = {
 		language: 'suricata',
 		content: '\n',
+		publicId: '123',
 	};
 
-	let msg = comp.verifyRuleSyntax();
+	let msg = comp.validateSuricata();
 	expect(msg).toBe(comp.i18n.invalidDetectionSuricataNewLine);
 
 	comp.detect.content = '';
-	msg = comp.verifyRuleSyntax();
+	msg = comp.validateSuricata();
 	expect(msg).toBe(comp.i18n.invalidDetectionSuricataMissingSID);
 
 	comp.detect.content = 'sid: 123;';
-	msg = comp.verifyRuleSyntax();
+	msg = comp.validateSuricata();
 	expect(msg).toBe(null);
 });
 
-test('verifyRuleSyntax - YARA', () => {
+test('validateStrelka', () => {
 	comp.detect = {
 		language: 'yara',
-		content: '',
+		content: 'rule {}',
 	};
 
-	let msg = comp.verifyRuleSyntax();
+	let msg = comp.validateStrelka();
 	expect(msg).toBe(comp.i18n.invalidDetectionStrelkaMissingRuleName);
 
+	comp.detect.content = 'rule 5 {}';
+	msg = comp.validateStrelka();
+	expect(msg).toBe(comp.i18n.invalidDetectionStrelkaInvalidRuleName);
+
 	comp.detect.content = 'rule X {}';
-	msg = comp.verifyRuleSyntax();
+	msg = comp.validateStrelka();
 	expect(msg).toBe(comp.i18n.invalidDetectionStrelkaMissingCondition);
 
 	comp.detect.content = 'rule X { condition: }';
-	msg = comp.verifyRuleSyntax();
+	msg = comp.validateStrelka();
 	expect(msg).toBe(null);
 });
+
 
 test('validateElastAlert', () => {
 	comp.detect = {

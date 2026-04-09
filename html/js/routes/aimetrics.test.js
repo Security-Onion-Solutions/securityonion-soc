@@ -138,7 +138,7 @@ test('component data initialization', () => {
   expect(comp.headers).toHaveLength(3);
   expect(comp.headers[0]).toHaveLength(8); // Users table headers
   expect(comp.headers[1]).toHaveLength(9); // Sessions table headers
-  expect(comp.headers[2]).toHaveLength(7); // Messages table headers
+  expect(comp.headers[2]).toHaveLength(8); // Messages table headers
   expect(comp.expandedFields).toHaveProperty('1');
   expect(comp.sortByUsers).toEqual([{ key: 'totalCredits', order: 'desc' }]);
   expect(comp.sortBySessions).toEqual([{ key: 'createTime', order: 'desc' }]);
@@ -147,7 +147,6 @@ test('component data initialization', () => {
   expect(comp.itemsPerPageOptions).toEqual([10, 50, 250, 1000]);
   expect(comp.tableSetting).toBe(0);
   expect(comp.expanded).toEqual([]);
-  expect(comp.creditsRemaining).toBe(0);
   expect(comp.searchFilter).toBe('');
   expect(comp.dateRange).toBe('');
   expect(comp.relativeTimeEnabled).toBe(true);
@@ -335,7 +334,9 @@ test('loadLocalSettings handles missing localStorage values', () => {
 
 // Assistant initialization tests
 test('initAssistant sets assistantEnabled to true when enabled and licensed', async () => {
-  const mockParams = { enabled: true };
+  const mockParams = {
+    enabled: true,
+  };
   comp.$root.isLicensed = jest.fn().mockReturnValue(true);
   comp.loadData = jest.fn();
   
@@ -347,7 +348,9 @@ test('initAssistant sets assistantEnabled to true when enabled and licensed', as
 });
 
 test('initAssistant sets assistantEnabled to false when not enabled', async () => {
-  const mockParams = { enabled: false };
+  const mockParams = {
+    enabled: false,
+  };
   comp.$root.isLicensed = jest.fn().mockReturnValue(true);
   comp.loadData = jest.fn();
   
@@ -358,7 +361,9 @@ test('initAssistant sets assistantEnabled to false when not enabled', async () =
 });
 
 test('initAssistant sets assistantEnabled to false when not licensed', async () => {
-  const mockParams = { enabled: true };
+  const mockParams = {
+    enabled: true,
+  };
   comp.$root.isLicensed = jest.fn().mockReturnValue(false);
   comp.loadData = jest.fn();
   
@@ -399,7 +404,6 @@ test('loadData with no route parameters loads users data', async () => {
   const mock = mockPapi("get", mockResponse);
   comp.loadLocalSettings = jest.fn();
   comp.updateBreadcrumbs = jest.fn();
-  comp.loadCredits = jest.fn().mockResolvedValue();
   comp.resetRefreshTimer = jest.fn();
   comp.lookupSocId = jest.fn().mockResolvedValue('user1@example.com');
   comp.populateUsersCharts = jest.fn();
@@ -434,7 +438,6 @@ test('loadData with no route parameters loads users data', async () => {
   expect(comp.aimetrics[0].usage.totalMessages).toBe(10);
   expect(comp.lookupSocId).toHaveBeenCalledWith('user1');
   expect(comp.$root.stopLoading).toHaveBeenCalled();
-  expect(comp.loadCredits).toHaveBeenCalled();
   expect(comp.resetRefreshTimer).toHaveBeenCalled();
 });
 
@@ -458,7 +461,6 @@ test('loadData with userId parameter loads sessions data', async () => {
   comp.$route.params.userId = 'user1';
   comp.loadLocalSettings = jest.fn();
   comp.updateBreadcrumbs = jest.fn();
-  comp.loadCredits = jest.fn().mockResolvedValue();
   comp.resetRefreshTimer = jest.fn();
   comp.populateSessionsCharts = jest.fn();
   comp.$root.startLoading = jest.fn();
@@ -516,7 +518,6 @@ test('loadData with userId and sessionId parameters loads messages data', async 
   comp.$route.params.sessionId = 'session1';
   comp.loadLocalSettings = jest.fn();
   comp.updateBreadcrumbs = jest.fn();
-  comp.loadCredits = jest.fn().mockResolvedValue();
   comp.resetRefreshTimer = jest.fn();
   comp.formatExpandMessage = jest.fn().mockReturnValue('formatted message');
   comp.$root.startLoading = jest.fn();
@@ -556,7 +557,6 @@ test('loadData handles API error', async () => {
   mockPapi("get", null, error);
   comp.loadLocalSettings = jest.fn();
   comp.updateBreadcrumbs = jest.fn();
-  comp.loadCredits = jest.fn().mockResolvedValue();
   comp.resetRefreshTimer = jest.fn();
   comp.$root.startLoading = jest.fn();
   comp.$root.stopLoading = jest.fn();
@@ -572,73 +572,7 @@ test('loadData handles API error', async () => {
   expect(comp.$root.showError).toHaveBeenCalledWith(error);
   expect(comp.aimetrics).toEqual([]);
   expect(comp.$root.stopLoading).toHaveBeenCalled();
-  expect(comp.loadCredits).toHaveBeenCalled();
   expect(comp.resetRefreshTimer).toHaveBeenCalled();
-});
-
-// Credits loading tests
-test('loadCredits success', async () => {
-  const mockResponse = {
-    data: {
-      health_status: 'healthy',
-      credit_balance: 150
-    }
-  };
-  const mock = mockPapi("get", mockResponse);
-  
-  await comp.loadCredits();
-  
-  expect(mock).toHaveBeenCalledWith('/assistant/balance');
-  expect(comp.creditsRemaining).toBe(150);
-  expect(comp.creditsLoaded).toBe(true);
-});
-
-test('loadCredits handles 500 error due to outage', async () => {
-  const error = new Error('Internal Server Error');
-  error.response = { status: 500, data: "ERROR_UPSTREAM_SERVICE_ERROR" };
-  mockPapi("get", null, error);
-  comp.$root.showError = jest.fn();
-  
-  await comp.loadCredits();
-  
-  expect(comp.$root.showError).toHaveBeenCalledWith(error);
-  expect(comp.creditsLoaded).toBe(false);
-});
-
-test('loadCredits handles error without response', async () => {
-  const error = new Error('Network error');
-  mockPapi("get", null, error);
-  comp.$root.showError = jest.fn();
-  
-  await comp.loadCredits();
-  
-  expect(comp.$root.showError).toHaveBeenCalledWith(error);
-  expect(comp.creditsLoaded).toBe(false);
-});
-
-test('loadCredits handles unhealthy status', async () => {
-  const mockResponse = {
-    data: {
-      health_status: 'unhealthy',
-      credit_balance: 100
-    }
-  };
-  mockPapi("get", mockResponse);
-  comp.$root.showError = jest.fn();
-  
-  await comp.loadCredits();
-  
-  expect(comp.$root.showError).toHaveBeenCalledWith(new Error(comp.i18n.assistantBalanceCheckUnhealthy));
-  expect(comp.creditsLoaded).toBe(false);
-});
-
-test('loadCredits handles missing data', async () => {
-  const mockResponse = { data: null };
-  mockPapi("get", mockResponse);
-  
-  await comp.loadCredits();
-  
-  expect(comp.creditsRemaining).toBe(0);
 });
 
 // User lookup tests
@@ -1269,15 +1203,8 @@ test('full data loading flow for users', async () => {
       }
     ]
   };
-  const mockCreditsResponse = {
-    data: {
-      health_status: 'healthy',
-      credit_balance: 1000
-    }
-  };
   
   const usersMock = mockPapi("get", mockUsersResponse);
-  const creditsMock = mockPapi("get", mockCreditsResponse);
   
   comp.loadLocalSettings = jest.fn();
   comp.updateBreadcrumbs = jest.fn();
@@ -1303,7 +1230,6 @@ test('full data loading flow for users', async () => {
   expect(comp.aimetrics[0].usage.totalCredits).toBe(500);
   expect(comp.aimetrics[0].usage.totalMessages).toBe(50);
   expect(comp.lookupSocId).toHaveBeenCalledWith('12345678-1234-1234-1234-123456789012');
-  expect(comp.creditsRemaining).toBe(1000);
 });
 
 test('settings persistence integration', () => {
@@ -1354,7 +1280,6 @@ test('error handling integration', async () => {
   comp.loadLocalSettings = jest.fn();
   comp.updateBreadcrumbs = jest.fn();
   comp.resetRefreshTimer = jest.fn();
-  comp.loadCredits = jest.fn().mockResolvedValue();
   comp.$root.startLoading = jest.fn();
   comp.$root.stopLoading = jest.fn();
   comp.$root.showError = jest.fn();
@@ -1369,7 +1294,6 @@ test('error handling integration', async () => {
   expect(comp.$root.showError).toHaveBeenCalledWith(apiError);
   expect(comp.aimetrics).toEqual([]);
   expect(comp.$root.stopLoading).toHaveBeenCalled();
-  expect(comp.loadCredits).toHaveBeenCalled();
   expect(comp.resetRefreshTimer).toHaveBeenCalled();
 });
 
@@ -1380,7 +1304,6 @@ test('handles empty API responses', async () => {
   
   comp.loadLocalSettings = jest.fn();
   comp.updateBreadcrumbs = jest.fn();
-  comp.loadCredits = jest.fn().mockResolvedValue();
   comp.resetRefreshTimer = jest.fn();
   comp.$root.startLoading = jest.fn();
   comp.$root.stopLoading = jest.fn();
@@ -1485,14 +1408,14 @@ test('setupCharts initializes all chart configurations', () => {
   
   comp.setupCharts();
   
-  expect(comp.setupPieChart).toHaveBeenCalledTimes(3);
+  expect(comp.setupPieChart).toHaveBeenCalledTimes(4);
   expect(comp.setupPieChart).toHaveBeenCalledWith(comp.graphUsersCreditsOptions, comp.graphUsersCreditsData, comp.i18n.totalCredits);
   expect(comp.setupPieChart).toHaveBeenCalledWith(comp.graphUsersSessionsOptions, comp.graphUsersSessionsData, comp.i18n.totalSessions);
   expect(comp.setupPieChart).toHaveBeenCalledWith(comp.graphUsersMessagesOptions, comp.graphUsersMessagesData, comp.i18n.totalMessages);
+  expect(comp.setupPieChart).toHaveBeenCalledWith(comp.graphSessionsMessagesOptions, comp.graphSessionsMessagesData, comp.i18n.totalMessages);
   
-  expect(comp.setupTimelineChart).toHaveBeenCalledTimes(2);
+  expect(comp.setupTimelineChart).toHaveBeenCalledTimes(1);
   expect(comp.setupTimelineChart).toHaveBeenCalledWith(comp.graphSessionsCreditsOptions, comp.graphSessionsCreditsData, comp.i18n.totalCredits);
-  expect(comp.setupTimelineChart).toHaveBeenCalledWith(comp.graphSessionsMessagesOptions, comp.graphSessionsMessagesData, comp.i18n.totalMessages);
   
   expect(comp.graphUsersCreditsData.key).toBe(0);
   expect(comp.graphUsersSessionsData.key).toBe(0);
@@ -1503,25 +1426,93 @@ test('setupCharts initializes all chart configurations', () => {
 
 test('populateUsersCharts calls populateChart for each user chart', () => {
   comp.populateChart = jest.fn();
+  comp.populateModelsChart = jest.fn();
   comp.aimetrics = [{ totalCredits: 100, totalSessions: 5, totalMessages: 20 }];
   
   comp.populateUsersCharts();
   
-  expect(comp.populateChart).toHaveBeenCalledTimes(3);
+  expect(comp.populateChart).toHaveBeenCalledTimes(2);
   expect(comp.populateChart).toHaveBeenCalledWith(comp.graphUsersCreditsData, comp.aimetrics, 'totalCredits');
   expect(comp.populateChart).toHaveBeenCalledWith(comp.graphUsersSessionsData, comp.aimetrics, 'totalSessions');
-  expect(comp.populateChart).toHaveBeenCalledWith(comp.graphUsersMessagesData, comp.aimetrics, 'totalMessages');
+  expect(comp.populateModelsChart).toHaveBeenCalledWith(comp.graphUsersMessagesData, comp.aimetrics);
 });
 
 test('populateSessionsCharts calls populateChart for each session chart with time field', () => {
   comp.populateChart = jest.fn();
+  comp.populateModelsChart = jest.fn();
   comp.aimetrics = [{ totalCredits: 50, totalMessages: 10, createTime: '2025-01-01T12:00:00Z' }];
   
   comp.populateSessionsCharts();
   
-  expect(comp.populateChart).toHaveBeenCalledTimes(2);
+  expect(comp.populateChart).toHaveBeenCalledTimes(1);
   expect(comp.populateChart).toHaveBeenCalledWith(comp.graphSessionsCreditsData, comp.aimetrics, 'totalCredits', 'createTime');
-  expect(comp.populateChart).toHaveBeenCalledWith(comp.graphSessionsMessagesData, comp.aimetrics, 'totalMessages', 'createTime');
+  expect(comp.populateModelsChart).toHaveBeenCalledWith(comp.graphSessionsMessagesData, comp.aimetrics);
+});
+
+test('populateModelsChart populates chart with model usage data', () => {
+  const chart = { key: 0, labels: [], datasets: [{ data: [] }] };
+  const data = [
+    {
+      usage: {
+        modelUsage: {
+          'gpt-4@OpenAI': { modelMessages: 5 },
+          'claude-3@Anthropic': { modelMessages: 3 }
+        }
+      }
+    },
+    {
+      usage: {
+        modelUsage: {
+          'gpt-4@OpenAI': { modelMessages: 2 }
+        }
+      }
+    }
+  ];
+  
+  comp.populateModelsChart(chart, data);
+  
+  expect(chart.key).toBe(1);
+  expect(chart.labels).toContain('gpt-4@OpenAI');
+  expect(chart.labels).toContain('claude-3@Anthropic');
+  expect(chart.datasets[0].data).toContain(7); // 5 + 2 for gpt-4
+  expect(chart.datasets[0].data).toContain(3); // 3 for claude-3
+});
+
+test('populateModelsChart handles modelUsage at item level', () => {
+  const chart = { key: 0, labels: [], datasets: [{ data: [] }] };
+  const data = [
+    {
+      modelUsage: {
+        'model-1@Provider': { modelMessages: 10 }
+      }
+    }
+  ];
+  
+  comp.populateModelsChart(chart, data);
+  
+  expect(chart.key).toBe(1);
+  expect(chart.labels).toContain('model-1@Provider');
+  expect(chart.datasets[0].data).toContain(10);
+});
+
+test('populateModelsChart handles empty data', () => {
+  const chart = { key: 5, labels: ['old'], datasets: [{ data: [100] }] };
+  
+  comp.populateModelsChart(chart, []);
+  
+  expect(chart.key).toBe(6);
+  expect(chart.labels).toEqual([]);
+  expect(chart.datasets[0].data).toEqual([]);
+});
+
+test('populateModelsChart handles null data', () => {
+  const chart = { key: 3, labels: ['old'], datasets: [{ data: [50] }] };
+  
+  comp.populateModelsChart(chart, null);
+  
+  expect(chart.key).toBe(4);
+  expect(chart.labels).toEqual([]);
+  expect(chart.datasets[0].data).toEqual([]);
 });
 
 test('populateChart increments key and populates data without timefield', () => {
@@ -1698,4 +1689,18 @@ test('calculateCreditPercentage rounds to one decimal place', () => {
   const result = comp.calculateCreditPercentage(33.333, 100);
   
   expect(result).toBe('33.3%');
+});
+
+test('buildModelIdentifier', () => {
+  const tests = [
+    { input: { id: 'model', adapter: 'adapter' }, expected: 'model@adapter' },
+    { input: { id: '', adapter: '' }, expected: '@' },
+    { input: {}, expected: '@' },
+    { input: null, expected: '' },
+  ];
+
+  for (let t of tests) {
+    const output = comp.buildModelIdentifier(t.input);
+    expect(output).toBe(t.expected);
+  }
 });

@@ -37,7 +37,6 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 	"github.com/security-onion-solutions/securityonion-soc/util"
-	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
 	"github.com/elastic/go-elasticsearch/v8/esutil"
@@ -1735,8 +1734,7 @@ func (e *ElastAlertEngine) DuplicateDetection(ctx context.Context, detection *mo
 		return nil, err
 	}
 
-	userID := ctx.Value(web.ContextKeyRequestorId).(string)
-	user, err := e.srv.Userstore.GetUserById(ctx, userID)
+	user, err := e.srv.TryGetUser(ctx)
 	if err != nil {
 		return nil, err
 	}

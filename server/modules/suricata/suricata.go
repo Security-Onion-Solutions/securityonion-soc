@@ -30,7 +30,6 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 	"github.com/security-onion-solutions/securityonion-soc/util"
-	"github.com/security-onion-solutions/securityonion-soc/web"
 	"golang.org/x/mod/semver"
 
 	"github.com/apex/log"
@@ -732,8 +731,7 @@ func (e *SuricataEngine) Sync(logger *log.Entry, forceSync bool) error {
 
 	// Write threshold configuration
 	if err := e.writeThresholdFile(allDetections); err != nil {
-		logger.WithError(err).Warn("failed to write threshold file (non-fatal)")
-		// Don't fail sync for threshold file issues, just log
+		return e.handleSyncError(err, "failed to write threshold file", logger)
 	}
 
 	// Update detection store with bulk indexer
@@ -1039,10 +1037,16 @@ func (e *SuricataEngine) writeThresholdFile(detections []*model.Detection) error
 			switch override.Type {
 			case model.OverrideTypeThreshold:
 				// Format: threshold gen_id <gid>, sig_id <sid>, type <type>, track <track>, count <count>, seconds <seconds>
+				if override.ThresholdType == nil || override.Track == nil || override.Count == nil || override.Seconds == nil {
+					return fmt.Errorf("invalid threshold override for SID %s: missing required fields", det.PublicID)
+				}
 				thresholds.WriteString(fmt.Sprintf("threshold gen_id 1, sig_id %s, type %s, track %s, count %d, seconds %d\n",
 					det.PublicID, *override.ThresholdType, *override.Track, *override.Count, *override.Seconds))
 			case model.OverrideTypeSuppress:
 				// Format: suppress gen_id <gid>, sig_id <sid>, track <track_by>, ip <ip_address>
+				if override.Track == nil || override.IP == nil {
+					return fmt.Errorf("invalid suppress override for SID %s: missing required fields", det.PublicID)
+				}
 				thresholds.WriteString(fmt.Sprintf("suppress gen_id 1, sig_id %s, track %s, ip %s\n",
 					det.PublicID, *override.Track, *override.IP))
 			}
@@ -1817,8 +1821,7 @@ func (e *SuricataEngine) DuplicateDetection(ctx context.Context, detection *mode
 	det.Author = detection.Author
 	det.License = detection.License
 
-	userID := ctx.Value(web.ContextKeyRequestorId).(string)
-	user, err := e.srv.Userstore.GetUserById(ctx, userID)
+	user, err := e.srv.TryGetUser(ctx)
 	if err != nil {
 		return nil, err
 	}

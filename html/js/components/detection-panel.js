@@ -56,16 +56,6 @@ components.push({
 						{ title: this.$root.i18n.dateModified, value: 'updatedAt', format: true },
 					],
 				},
-				rules: {
-					required: value => (value && value.length > 0) || this.$root.i18n.required,
-					number: value => (!isNaN(+value) && Number.isInteger(parseFloat(value))) || this.$root.i18n.required,
-					noteLengthLimit: value => (value.length <= MAX_OVERRIDE_NOTE_LENGTH) || this.$root.i18n.ruleMaxLen,
-					cidrFormat: value => (!value ||
-						/^!?\$[a-z_][a-z0-9_]*$/i.test(value) || // Suricata variable
-						/^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\/(3[0-2]|[12]\d|\d)$/.test(value) || // IPv4 CIDR
-						/^((([0-9a-f]{1,4}:){7}([0-9a-f]{1,4}|:))|(([0-9a-f]{1,4}:){6}(:[0-9a-f]{1,4}|((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9a-f]{1,4}:){5}(((:[0-9a-f]{1,4}){1,2})|:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9a-f]{1,4}:){4}(((:[0-9a-f]{1,4}){1,3})|((:[0-9a-f]{1,4})?:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){3}(((:[0-9a-f]{1,4}){1,4})|((:[0-9a-f]{1,4}){0,2}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){2}(((:[0-9a-f]{1,4}){1,5})|((:[0-9a-f]{1,4}){0,3}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){1}(((:[0-9a-f]{1,4}){1,6})|((:[0-9a-f]{1,4}){0,4}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(:(((:[0-9a-f]{1,4}){1,7})|((:[0-9a-f]{1,4}){0,5}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:)))(%.+)?\s*(\/([0-9]|[1-9][0-9]|1[0-1][0-9]|12[0-8]))$/i.test(value) // IPv6 CIDR
-					) || this.i18n.invalidCidrOrVar,
-				},
 				ruleValidators: {
 					sigma: [
 						{ pattern: /^id:\s*[^$]+?$/m, message: this.$root.i18n.invalidDetectionElastAlertMissingID, match: false },
@@ -389,19 +379,9 @@ components.push({
 					});
 				}
 			},
-			verifyRuleSyntax() {
-				const rules = this.ruleValidators[this.detection.language.toLowerCase()];
-				for (let i = 0; i < rules.length; i++) {
-					if (rules[i].pattern.test(this.detection.content) === rules[i].match) {
-						return rules[i].message;
-					}
-				}
-
-				return null;
-			},
 			validateStrelka() {
 				try {
-					let err = this.verifyRuleSyntax();
+					let err = this.$root.verifyRuleSyntax(this.detection);
 					if (err) {
 						return err;
 					}
@@ -413,7 +393,7 @@ components.push({
 			},
 			validateElastAlert() {
 				try {
-					let err = this.verifyRuleSyntax();
+					let err = this.$root.verifyRuleSyntax(this.detection);
 					if (err) {
 						return err;
 					}
@@ -430,7 +410,7 @@ components.push({
 			},
 			validateSuricata() {
 				try {
-					let err = this.verifyRuleSyntax();
+					let err = this.$root.verifyRuleSyntax(this.detection);
 					if (err) {
 						return err;
 					}

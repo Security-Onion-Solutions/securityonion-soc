@@ -7,6 +7,7 @@
 require('./test_common.js');
 
 const app = global.getApp();
+const _i18n = global.i18n.getLocalizedTranslations('en-US');
 
 test('escape', () => {
   expect(app.escape('')).toBe('');
@@ -463,9 +464,14 @@ test('isLicensed', () => {
 });
 
 test('colorLicenseStatus', () => {
+  app.licenseKey = { name: 'Security Onion Pro' };
   expect(app.colorLicenseStatus('foo')).toBe('info');
   expect(app.colorLicenseStatus(null)).toBe('info');
   expect(app.colorLicenseStatus("active")).toBe('success');
+
+  app.licenseKey.name = 'Academic Student';
+  expect(app.colorLicenseStatus("active")).toBe('white');
+
   expect(app.colorLicenseStatus("exceeded")).toBe('error');
   expect(app.colorLicenseStatus("expired")).toBe('warning');
   expect(app.colorLicenseStatus("invalid")).toBe('error');
@@ -1308,4 +1314,220 @@ graph TD
 \`\`\``;
 
   expect(app.performMermaidRegexes(mermaidWithBothIssues)).toBe(expectedBothFixed);
+});
+
+test('verifyRuleSyntax - implementation', () => {
+  const _old = app.ruleValidators;
+	app.ruleValidators = {
+		engine: [
+			{ pattern: /1/m, message: 'should not have 1', match: true },
+			{ pattern: /2/m, message: 'should have 2', match: false },
+			{ pattern: /3/m, message: 'should not have 3', match: true },
+		],
+	};
+
+	let detect = {
+		content: '1',
+		language: 'engine',
+	};
+	let msg = app.verifyRuleSyntax(detect);
+	expect(msg).toBe('should not have 1');
+
+	detect.content = '2';
+	msg = app.verifyRuleSyntax(detect);
+	expect(msg).toBe(null);
+
+	detect.content = '3';
+	msg = app.verifyRuleSyntax(detect);
+	expect(msg).toBe('should have 2');
+
+	detect.content = '23';
+	msg = app.verifyRuleSyntax(detect);
+	expect(msg).toBe('should not have 3');
+
+	detect.content = '123';
+	msg = app.verifyRuleSyntax(detect);
+	expect(msg).toBe('should not have 1');
+
+	detect.content = '321';
+	msg = app.verifyRuleSyntax(detect);
+	expect(msg).toBe('should not have 1');
+
+	detect.content = '24';
+	msg = app.verifyRuleSyntax(detect);
+	expect(msg).toBe(null);
+
+  app.ruleValidators = _old;
+});
+
+test('validator: required', () => {
+  const v = app.validators.required;
+  expect(v('')).toBe(_i18n.required);
+  expect(v(null)).toBe(_i18n.required);
+  expect(v(undefined)).toBe(_i18n.required);
+  expect(v(0)).toBe(_i18n.required);
+  expect(v(false)).toBe(_i18n.required);
+  expect(v('a')).toBe(true);
+  expect(v('hello')).toBe(true);
+  expect(v(1)).toBe(true);
+});
+
+test('validator: number', () => {
+  const v = app.validators.number;
+  expect(v('a')).toBe(_i18n.required);
+  expect(v('1.1')).toBe(_i18n.required);
+  expect(v(1.1)).toBe(_i18n.required);
+  expect(v('1')).toBe(true);
+  expect(v(1)).toBe(true);
+  expect(v(1.0)).toBe(true);
+  expect(v('1.0')).toBe(true);
+  expect(v('0')).toBe(true);
+});
+
+test('validator: hours', () => {
+  const v = app.validators.hours;
+  expect(v('a')).toBe(_i18n.invalidHours);
+  expect(v('11111')).toBe(_i18n.invalidHours);
+  expect(v('0.11111')).toBe(_i18n.invalidHours);
+  expect(v('1.1.1')).toBe(_i18n.invalidHours);
+  expect(v('')).toBe(true);
+  expect(v(null)).toBe(true);
+  expect(v('1')).toBe(true);
+  expect(v('1111.1111')).toBe(true);
+});
+
+test('validator: shortLengthLimit', () => {
+  const v = app.validators.shortLengthLimit;
+  expect(v('a')).toBe(true);
+  expect(v('a'.repeat(99))).toBe(true);
+  expect(v('a'.repeat(100))).toBe(_i18n.required);
+  expect(v('a'.repeat(200))).toBe(_i18n.required);
+});
+
+test('validator: longLengthLimit', () => {
+  const v = app.validators.longLengthLimit;
+  expect(v('a')).toBe(true);
+  expect(v('a'.repeat(1000))).toBe(true);
+});
+
+test('validator: noteLengthLimit', () => {
+  const v = app.validators.noteLengthLimit;
+  expect(v('a')).toBe(true);
+  expect(v('a'.repeat(150))).toBe(true);
+  expect(v('a'.repeat(151))).toBe(_i18n.ruleMaxLen);
+});
+
+test('validator: fileNotEmpty', () => {
+  const v = app.validators.fileNotEmpty;
+  expect(v(null)).toBe(true);
+  expect(v({ size: 100 })).toBe(true);
+  expect(v({ size: 0 })).toBe(_i18n.fileEmpty);
+});
+
+test('validator: fileRequired', () => {
+  const v = app.validators.fileRequired;
+  expect(v(null)).toBe(_i18n.required);
+  expect(v({ length: 0 })).toBe(_i18n.required);
+  expect(v({ length: 1 })).toBe(true);
+  expect(v('file.txt')).toBe(true);
+});
+
+test('validator: cidrFormat', () => {
+  const v = app.validators.cidrFormat;
+  expect(v('')).toBe(true);
+  expect(v(null)).toBe(true);
+  expect(v('$HOME_NET')).toBe(true);
+  expect(v('$Home_Net')).toBe(true);
+  expect(v('!$DNS')).toBe(true);
+  expect(v('!$_')).toBe(true);
+  expect(v('0.0.0.0/16')).toBe(true);
+  expect(v('192.168.1.0/24')).toBe(true);
+  expect(v('0::0/32')).toBe(true);
+  expect(v('2001:DB88:3333:4444:CCCC:DDDD:EEEE:FFFF/64')).toBe(true);
+  expect(v('2001:db88:3333:4444:cccc:dddd:eeee:ffff/64')).toBe(true);
+  expect(v('x')).toBe(_i18n.invalidCidrOrVar);
+  expect(v('#')).toBe(_i18n.invalidCidrOrVar);
+  expect(v('!#')).toBe(_i18n.invalidCidrOrVar);
+  expect(v('#1')).toBe(_i18n.invalidCidrOrVar);
+  expect(v('!#1')).toBe(_i18n.invalidCidrOrVar);
+  expect(v('_')).toBe(_i18n.invalidCidrOrVar);
+  expect(v('1.2.3.4')).toBe(_i18n.invalidCidrOrVar);
+  expect(v('0::0')).toBe(_i18n.invalidCidrOrVar);
+  expect(v('256.256.256.256/32')).toBe(_i18n.invalidCidrOrVar);
+  expect(v('0::0::0/16')).toBe(_i18n.invalidCidrOrVar);
+  expect(v('google.com')).toBe(_i18n.invalidCidrOrVar);
+});
+
+test('validator: lowercase', () => {
+  const v = app.validators.lowercase;
+  expect(v('')).toBe(true);
+  expect(v(null)).toBe(true);
+  expect(v('abc')).toBe(true);
+  expect(v('ABC')).toBe(_i18n.lowercaseRequired);
+  expect(v('Abc')).toBe(_i18n.lowercaseRequired);
+});
+
+test('validator: minPassLen', () => {
+  const v = app.validators.minPassLen;
+  expect(v('')).toBe(true);
+  expect(v(null)).toBe(true);
+  expect(v('a'.repeat(7))).toBe(_i18n.ruleMinLen);
+  expect(v('a'.repeat(8))).toBe(true);
+  expect(v('a'.repeat(20))).toBe(true);
+});
+
+test('validator: maxPassLen', () => {
+  const v = app.validators.maxPassLen;
+  expect(v('')).toBe(true);
+  expect(v(null)).toBe(true);
+  expect(v('a'.repeat(72))).toBe(true);
+  expect(v('a'.repeat(73))).toBe(_i18n.ruleMaxLen);
+});
+
+test('validator: badPassChars', () => {
+  const v = app.validators.badPassChars;
+  expect(v('')).toBe(true);
+  expect(v(null)).toBe(true);
+  expect(v('abc123')).toBe(true);
+  expect(v('pass"word')).toBe(_i18n.rulePassBadChars);
+  expect(v("pass'word")).toBe(_i18n.rulePassBadChars);
+  expect(v('pass$word')).toBe(_i18n.rulePassBadChars);
+  expect(v('pass&word')).toBe(_i18n.rulePassBadChars);
+  expect(v('pass!word')).toBe(_i18n.rulePassBadChars);
+});
+
+test('validator: minLength factory', () => {
+  const v5 = app.validators.minLength(5);
+  expect(v5('')).toBe(_i18n.ruleMinLen);
+  expect(v5(null)).toBe(_i18n.ruleMinLen);
+  expect(v5('abcd')).toBe(_i18n.ruleMinLen);
+  expect(v5('abcde')).toBe(true);
+  expect(v5('abcdef')).toBe(true);
+});
+
+test('validator: maxLength factory', () => {
+  const v5 = app.validators.maxLength(5);
+  expect(v5('')).toBe(true);
+  expect(v5(null)).toBe(true);
+  expect(v5('abcd')).toBe(true);
+  expect(v5('abcde')).toBe(_i18n.ruleMaxLen);
+  expect(v5('abcdef')).toBe(_i18n.ruleMaxLen);
+});
+
+test('validator: fileSizeLimit factory', () => {
+  const formatFn = (n) => n + ' bytes';
+  const v = app.validators.fileSizeLimit(1000, formatFn);
+  expect(v(null)).toBe(true);
+  expect(v({ size: 500 })).toBe(true);
+  expect(v({ size: 999 })).toBe(true);
+  expect(v({ size: 1000 })).toBe(_i18n.fileTooLarge.replace('{maxUploadSizeBytes}', '1000 bytes'));
+  expect(v({ size: 2000 })).toBe(_i18n.fileTooLarge.replace('{maxUploadSizeBytes}', '1000 bytes'));
+});
+
+test('validator: matches factory', () => {
+  const v = app.validators.matches('secret');
+  expect(v('')).toBe(_i18n.passwordMustMatch);
+  expect(v(null)).toBe(_i18n.passwordMustMatch);
+  expect(v('wrong')).toBe(_i18n.passwordMustMatch);
+  expect(v('secret')).toBe(true);
 });

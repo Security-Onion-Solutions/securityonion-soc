@@ -150,6 +150,23 @@ func (server *Server) CheckAuthorized(ctx context.Context, operation string, tar
 	return err
 }
 
+func (server *Server) TryGetUser(ctx context.Context) (*model.User, error) {
+	requestorID := ctx.Value(web.ContextKeyRequestorId).(string)
+	if requestorID == AGENT_ID {
+		return server.Agent, nil
+	}
+
+	if model.IsClient(requestorID) {
+		return nil, nil
+	}
+
+	user, err := server.Userstore.GetUserById(ctx, requestorID)
+	if err != nil {
+		return nil, err
+	}
+	return user, nil
+}
+
 func (server *Server) GetTimezones() []string {
 	var zones []string = make([]string, 0, 0)
 	bytes, err := exec.Command(server.Config.TimezoneScript).Output()
@@ -764,7 +781,6 @@ func (server *Server) GetTimezones() []string {
 }
 
 // @title           Security Onion Connect API
-// @version         1.0
 // @description     Perform SOC operations via server-to-server integration using a client API account via OAuth2.0.
 // @termsOfService  https://securityonion.net/terms/
 
@@ -783,7 +799,9 @@ func (server *Server) GetTimezones() []string {
 // @securityDefinitions.basic basic
 
 // @externalDocs.description  Security Onion Documentation Online
-// @externalDocs.url          https://docs.securityonion.net
+// @externalDocs.url          https://securityonion.net/docs
+
+// @host https://BASE_URL
 
 // @Summary      Obtain Access Token
 // @Description  Exchanges a client ID and client secret for a temporary access token needed for calling Security Onion Connect API methods.

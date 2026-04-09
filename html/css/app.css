@@ -5,6 +5,11 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 */
+
+.v-btn {
+  text-transform: uppercase;
+}
+
 /* Vuetify theme overrides */
 .v-application, html {
   background-color: rgb(var(--v-theme-background)) !important;
@@ -14,8 +19,12 @@
   margin-bottom: 16px;
 }
 
-.v-application a, .theme-primary {
-  color: rgb(var(--v-theme-primary));
+.v-application a {
+  color: rgb(var(--v-theme-info));
+}
+
+.v-alert a.text-white {
+  color: white !important;
 }
 
 .theme-background {
@@ -27,11 +36,23 @@
 }
 
 .card-shadow {
-  box-shadow: 0 3px 1px -2px rgba(0, 0, 0, .2), 0 2px 2px 0 rgba(0, 0, 0, .14), 0 1px 5px 0 rgba(0, 0, 0, .12);
+  box-shadow: var(--so-shadow-card);
 }
 
-.v-app-bar {
-  background-color: rgb(var(--v-theme-nav_background)) !important;
+.v-app-bar::after {
+  content: '';
+  position: absolute;
+  left: 204px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background-color: rgba(var(--v-border-color), var(--v-border-opacity));
+}
+
+.app-bar-title {
+  margin-left: 28px;
+  white-space: nowrap;
+  color: rgb(var(--v-theme-nav)) !important;
 }
 
 .v-main {
@@ -42,9 +63,16 @@
   background-color: rgb(var(--v-theme-drawer_background)) !important;
 }
 
+.v-navigation-drawer .v-list {
+  background: transparent !important;
+}
 
 .v-toolbar-title {
   flex: unset !important;
+}
+
+.v-app-bar .v-toolbar-title {
+  margin-inline-start: 2px !important;
 }
 
 .v-footer {
@@ -235,13 +263,9 @@ th:hover, th.is-sorted, .solid {
   }
 }
 
-.v-theme--dark.v-data-table tr:nth-of-type(even) {
-  background-color: rgba(45, 45, 45, 0.25);
- }
-
- .v-theme--light.v-data-table tr:nth-of-type(even) {
-  background-color: rgba(230, 230, 230, 0.25);
- }
+.v-data-table tr:nth-of-type(even) {
+  background-color: rgba(var(--v-theme-row_stripe), 0.25);
+}
 
 .v-list-item__icon.v-list-group__header__append-icon .v-theme--light{
   color: white !important;
@@ -431,7 +455,7 @@ td {
 
 .comment-body .markdown-body {
   padding: 0.75em 1.25em;
-  border-radius: 0.25em;
+  border-radius: var(--so-radius-markdown);
 }
 
 .comment-body .markdown-body pre,
@@ -511,12 +535,12 @@ td {
 
 .v-theme--light .markdown-body pre {
   background-color: rgba(0,0,0,.05);
-  border-radius: 0.25em;
+  border-radius: var(--so-radius-markdown);
 }
 
 .v-theme--dark .markdown-body pre {
   background-color: hsla(0,0%,100%,.1);
-  border-radius: 0.25em;
+  border-radius: var(--so-radius-markdown);
 }
 
 .case.avatar-font {
@@ -577,7 +601,7 @@ td {
 }
 
 #config-tree {
-    height: calc(100vh - 325px);
+    height: calc(100vh - 235px);
     overflow-y: auto;
 }
 
@@ -699,6 +723,7 @@ td {
 .extracted-content > pre {
   text-wrap: wrap;
   word-break: break-word;
+  background: unset !important;
 }
 
 .ops-header {
@@ -757,11 +782,7 @@ td {
 .manual-sync {
   margin: 6px;
   display: flex;
-}
-
-.manual-sync div:first-child {
-  flex-grow: 1;
-  margin-right: 8px;
+  flex-direction: column;
 }
 
 .manual-sync-buttons {
@@ -830,18 +851,6 @@ code {
   color: white;
 }
 
-tbody tr:hover {
-  background-color: transparent !important;
-}
-
-.v-theme--dark tbody tr:hover:nth-of-type(even) {
-  background-color: rgba(45, 45, 45, 0.25) !important;
-}
-
-.v-theme--light tbody tr:hover:nth-of-type(even) {
-  background-color: rgba(230, 230, 230, 0.25) !important;
-}
-
 .unset-vertical-align {
   vertical-align: unset !important;
 }
@@ -854,18 +863,8 @@ tbody tr:hover {
   margin-bottom: 4px;
 }
 
-.v-theme--dark .subtle-border {
-  border-bottom-color: rgba(255, 255, 255, 0.12);
-  border-left-color: rgba(255, 255, 255, 0.12);
-  border-right-color: rgba(255, 255, 255, 0.12);
-  border-top-color: rgba(255, 255, 255, 0.12);
-}
-
-.v-theme--light .subtle-border {
-  border-bottom-color: rgba(0, 0, 0, 0.12);
-  border-left-color: rgba(0, 0, 0, 0.12);
-  border-right-color: rgba(0, 0, 0, 0.12);
-  border-top-color: rgba(0, 0, 0, 0.12);
+.subtle-border {
+  border-color: rgba(var(--v-theme-text), 0.12);
 }
 
 ul {
@@ -898,7 +897,7 @@ ul ul ul {
 
 .sticky-config {
   position: sticky;
-  top: 154px;
+  top: 64px;
 }
 
 .va-baseline {
@@ -948,6 +947,10 @@ ul ul ul {
 .component-overlay .v-container {
   height: 100%;
   width: 100%;
+}
+
+.v-container--fluid {
+  max-width: unset !important;
 }
 
 .component-overlay .v-progress-circular {
@@ -1132,7 +1135,7 @@ ul ul ul {
 }
 
 .chat-history-sidebar {
-  height: calc(100vh - 325px) !important;
+  height: calc(100vh - 240px) !important;
   position: sticky;
   top: 20px;
 }
@@ -1295,6 +1298,7 @@ ul ul ul {
   box-sizing: border-box;
   overflow-x: auto;
   word-break: break-all;
+  line-height: 1.8;
 }
 
 /* Thought Display Styling */
@@ -1313,7 +1317,7 @@ ul ul ul {
 .thought-display .v-expansion-panel-text {
   padding: 8px 12px !important;
 }
-.thought-display .v-expansion-panel-text .text-caption p {
+.thought-display .v-expansion-panel-text .text-body-small p {
   margin-bottom: 0 !important;
 }
 
@@ -1411,7 +1415,7 @@ ul ul ul {
 .chat-container {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 325px);
+  height: calc(100vh - 240px);
   overflow: hidden;
 }
 
@@ -1484,7 +1488,7 @@ ul ul ul {
 
   line-height: 1.3;
 
-  background-color: rgba(25, 118, 210, 0.08);
+  background-color: rgba(var(--v-theme-primary), 0.08);
   color: var(--v-theme-primary);
 
   transition:
@@ -1494,11 +1498,14 @@ ul ul ul {
 }
 
 .assistant-choice-btn:hover {
-  background-color: rgba(25, 118, 210, 0.16);
+  background-color: rgba(var(--v-theme-primary), 0.16);
 }
 
 .assistant-choice-btn:active {
   transform: translateY(1px);
-  background-color: rgba(25, 118, 210, 0.22);
+  background-color: rgba(var(--v-theme-primary), 0.22);
 }
 
+.v-pagination__list>li {
+  list-style: none;
+}

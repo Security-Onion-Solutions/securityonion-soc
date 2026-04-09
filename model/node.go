@@ -92,8 +92,6 @@ type Node struct {
 	SwapUsedPct float64 `json:"swapUsedPct" example:"63.27341235800379"`
 	// The number of days of PCAP storage available to this node
 	PcapDays float64 `json:"pcapDays" example:"1.8762268518518517"`
-	// The current percentage packet loss experienced by Stenographer, if applicable to this node
-	StenoLossPct float64 `json:"stenoLossPct" example:"0"`
 	// The current percentage packet loss experienced by Suricata, if applicable to this node
 	SuriLossPct float64 `json:"suriLossPct" example:"1.1345"`
 	// The number of Suricata rules currently loaded, if applicable to this node

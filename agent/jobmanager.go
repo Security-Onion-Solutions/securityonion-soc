@@ -26,12 +26,15 @@ type JobManager struct {
 	running       bool
 	jobProcessors []JobProcessor
 	lock          sync.RWMutex
+	jobsLock      sync.Mutex
+	inProcessJobs map[int]bool
 }
 
 func NewJobManager(agent *Agent) *JobManager {
 	mgr := &JobManager{
-		agent: agent,
-		node:  model.NewNode(agent.Config.NodeId),
+		agent:         agent,
+		node:          model.NewNode(agent.Config.NodeId),
+		inProcessJobs: make(map[int]bool),
 	}
 
 	// Any field/value added to this list must be manually copied to the
@@ -60,8 +63,25 @@ func (mgr *JobManager) lookupMgmtMac(nic string) string {
 }
 
 func (mgr *JobManager) Start() {
+	if mgr.inProcessJobs == nil {
+		mgr.inProcessJobs = make(map[int]bool)
+	}
 	mgr.running = true
 	mgr.updateOnlineTime("/nsm/pcapout")
+
+	jobsChan := make(chan *model.Job)
+	var wg sync.WaitGroup
+
+	for i := 0; i < mgr.agent.Config.TaskPoolSize; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for job := range jobsChan {
+				mgr.runJob(job)
+			}
+		}()
+	}
+
 	for mgr.running {
 		mgr.updateDataEpoch()
 		job, err := mgr.PollPendingJobs()
@@ -72,31 +92,62 @@ func (mgr *JobManager) Start() {
 			log.Debug("No pending jobs available")
 			time.Sleep(time.Duration(mgr.agent.Config.PollIntervalMs) * time.Millisecond)
 		} else {
-			log.WithField("jobId", job.Id).Info("Discovered pending job")
-			var reader io.ReadCloser
-			reader, err = mgr.ProcessJob(job)
-			if err == nil {
-				if reader != nil {
-					defer reader.Close()
-					err = mgr.StreamJobResults(job, reader)
-				} else {
-					log.WithField("jobId", job.Id).Debug("Job completed without stream result")
-				}
+			mgr.jobsLock.Lock()
+			inProcess := mgr.inProcessJobs[job.Id]
+			if !inProcess {
+				mgr.inProcessJobs[job.Id] = true
 			}
-			if err == nil {
-				job.Complete()
-			} else {
-				log.WithError(err).WithField("jobId", job.Id).Error("Job failed")
-				job.Fail(err)
-			}
-			mgr.CleanupJob(job)
-			err = mgr.UpdateJob(job)
-			if err != nil {
-				log.WithError(err).WithField("jobId", job.Id).Error("Failed to update job")
+			mgr.jobsLock.Unlock()
+
+			if inProcess {
+				log.WithField("jobId", job.Id).Debug("Job is already in progress, skipping")
+				job = nil
 				time.Sleep(time.Duration(mgr.agent.Config.PollIntervalMs) * time.Millisecond)
+			} else {
+				select {
+				case jobsChan <- job:
+				default:
+					mgr.jobsLock.Lock()
+					delete(mgr.inProcessJobs, job.Id)
+					mgr.jobsLock.Unlock()
+					log.WithField("jobId", job.Id).Debug("Workers are busy, discarding job")
+					time.Sleep(time.Duration(mgr.agent.Config.PollIntervalMs) * time.Millisecond)
+				}
 			}
 		}
 	}
+	close(jobsChan)
+	wg.Wait()
+}
+
+func (mgr *JobManager) runJob(job *model.Job) {
+	log.WithField("jobId", job.Id).Info("Discovered pending job")
+	var reader io.ReadCloser
+
+	reader, err := mgr.ProcessJob(job)
+	if err == nil {
+		if reader != nil {
+			defer reader.Close()
+			err = mgr.StreamJobResults(job, reader)
+		} else {
+			log.WithField("jobId", job.Id).Debug("Job completed without stream result")
+		}
+	}
+	if err == nil {
+		job.Complete()
+	} else {
+		log.WithError(err).WithField("jobId", job.Id).Error("Job failed")
+		job.Fail(err)
+	}
+	mgr.CleanupJob(job)
+	err = mgr.UpdateJob(job)
+	if err != nil {
+		log.WithError(err).WithField("jobId", job.Id).Error("Failed to update job")
+	}
+
+	mgr.jobsLock.Lock()
+	delete(mgr.inProcessJobs, job.Id)
+	mgr.jobsLock.Unlock()
 }
 
 func (mgr *JobManager) Stop() {

@@ -18,10 +18,12 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
 	detectionsmock "github.com/security-onion-solutions/securityonion-soc/server/modules/detections/mock"
 	"github.com/security-onion-solutions/securityonion-soc/web"
+
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 )
@@ -875,7 +877,234 @@ func TestAssistantCoordinator_GetPrompt(t *testing.T) {
 	}
 }
 
+func TestAssistantCoordinator_Init(t *testing.T) {
+	const fakeProtocol = "fake_protocol"
+	const failProtocol = "fail_protocol"
+
+	// Save and restore the protocols map and embeddedSystemPrompt.
+	origProtocols := protocols
+	origPrompt := embeddedSystemPrompt
+	t.Cleanup(func() {
+		protocols = origProtocols
+		embeddedSystemPrompt = origPrompt
+	})
+
+	// Disable embedded prompt so getPrompt() is a no-op.
+	embeddedSystemPrompt = []byte{}
+
+	protocols = map[string]ProtocolConstructor{
+		fakeProtocol: func(_ context.Context, _ *server.Server, cfg map[string]any) (server.AssistantAdapter, error) {
+			return &mockAdapter{protocol: fakeProtocol}, nil
+		},
+		failProtocol: func(_ context.Context, _ *server.Server, cfg map[string]any) (server.AssistantAdapter, error) {
+			return nil, errors.New("constructor failed")
+		},
+	}
+
+	validAdapter := func(name, proto string) map[string]any {
+		return map[string]any{"name": name, "protocol": proto}
+	}
+
+	testCases := []struct {
+		name                  string
+		config                module.ModuleConfig
+		expectedAdapterNames  []string
+		expectedAvailAdapters []model.AdapterParameters
+		expectedAddendum      string
+	}{
+		{
+			name:                  "no adapters key in config",
+			config:                module.ModuleConfig{},
+			expectedAdapterNames:  nil,
+			expectedAvailAdapters: []model.AdapterParameters{},
+			expectedAddendum:      "",
+		},
+		{
+			name:                  "adapters key is nil",
+			config:                module.ModuleConfig{"adapters": nil},
+			expectedAdapterNames:  nil,
+			expectedAvailAdapters: []model.AdapterParameters{},
+			expectedAddendum:      "",
+		},
+		{
+			name:                  "empty adapters array",
+			config:                module.ModuleConfig{"adapters": []any{}},
+			expectedAdapterNames:  nil,
+			expectedAvailAdapters: []model.AdapterParameters{},
+			expectedAddendum:      "",
+		},
+		{
+			name: "single valid adapter",
+			config: module.ModuleConfig{
+				"adapters": []any{
+					validAdapter("myAdapter", fakeProtocol),
+				},
+			},
+			expectedAdapterNames: []string{"myAdapter"},
+			expectedAvailAdapters: []model.AdapterParameters{
+				{Name: "myAdapter", Protocol: fakeProtocol},
+			},
+			expectedAddendum: "",
+		},
+		{
+			name: "multiple valid adapters",
+			config: module.ModuleConfig{
+				"adapters": []any{
+					validAdapter("first", fakeProtocol),
+					validAdapter("second", fakeProtocol),
+				},
+			},
+			expectedAdapterNames: []string{"first", "second"},
+			expectedAvailAdapters: []model.AdapterParameters{
+				{Name: "first", Protocol: fakeProtocol},
+				{Name: "second", Protocol: fakeProtocol},
+			},
+			expectedAddendum: "",
+		},
+		{
+			name: "adapter entry is not a map - skipped",
+			config: module.ModuleConfig{
+				"adapters": []any{
+					"not-a-map",
+					validAdapter("good", fakeProtocol),
+				},
+			},
+			expectedAdapterNames: []string{"good"},
+			expectedAvailAdapters: []model.AdapterParameters{
+				{Name: "good", Protocol: fakeProtocol},
+			},
+			expectedAddendum: "",
+		},
+		{
+			name: "missing name field - skipped",
+			config: module.ModuleConfig{
+				"adapters": []any{
+					map[string]any{"protocol": fakeProtocol},
+					validAdapter("good", fakeProtocol),
+				},
+			},
+			expectedAdapterNames: []string{"good"},
+			expectedAvailAdapters: []model.AdapterParameters{
+				{Name: "good", Protocol: fakeProtocol},
+			},
+			expectedAddendum: "",
+		},
+		{
+			name: "missing protocol field - skipped",
+			config: module.ModuleConfig{
+				"adapters": []any{
+					map[string]any{"name": "noProto"},
+					validAdapter("good", fakeProtocol),
+				},
+			},
+			expectedAdapterNames: []string{"good"},
+			expectedAvailAdapters: []model.AdapterParameters{
+				{Name: "good", Protocol: fakeProtocol},
+			},
+			expectedAddendum: "",
+		},
+		{
+			name: "unknown protocol - skipped",
+			config: module.ModuleConfig{
+				"adapters": []any{
+					validAdapter("unknown", "no_such_protocol"),
+					validAdapter("good", fakeProtocol),
+				},
+			},
+			expectedAdapterNames: []string{"good"},
+			expectedAvailAdapters: []model.AdapterParameters{
+				{Name: "good", Protocol: fakeProtocol},
+			},
+			expectedAddendum: "",
+		},
+		{
+			name: "constructor returns error - skipped",
+			config: module.ModuleConfig{
+				"adapters": []any{
+					validAdapter("broken", failProtocol),
+					validAdapter("good", fakeProtocol),
+				},
+			},
+			expectedAdapterNames: []string{"good"},
+			expectedAvailAdapters: []model.AdapterParameters{
+				{Name: "good", Protocol: fakeProtocol},
+			},
+			expectedAddendum: "",
+		},
+		{
+			name: "systemPromptAddendum within limit",
+			config: module.ModuleConfig{
+				"systemPromptAddendum": "custom addendum",
+			},
+			expectedAdapterNames:  nil,
+			expectedAvailAdapters: []model.AdapterParameters{},
+			expectedAddendum:      "custom addendum",
+		},
+		{
+			name: "systemPromptAddendum truncated to maxLength",
+			config: module.ModuleConfig{
+				"systemPromptAddendum":          "abcdefghij",
+				"systemPromptAddendumMaxLength": float64(5),
+			},
+			expectedAdapterNames:  nil,
+			expectedAvailAdapters: []model.AdapterParameters{},
+			expectedAddendum:      "abcde",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := &server.Server{
+				Context: context.Background(),
+				Config: &config.ServerConfig{
+					ClientParams: model.ClientParameters{
+						AssistantParams: model.AssistantParameters{},
+					},
+				},
+			}
+
+			ac := NewAssistantCoordinator(srv)
+
+			err := ac.Init(tc.config)
+			assert.NoError(t, err)
+
+			// AssistantManager should be set to the coordinator.
+			assert.Equal(t, ac, srv.AssistantManager)
+
+			// Verify loaded adapters map.
+			if tc.expectedAdapterNames == nil {
+				assert.Empty(t, ac.adapters)
+			} else {
+				assert.Len(t, ac.adapters, len(tc.expectedAdapterNames))
+				for _, name := range tc.expectedAdapterNames {
+					assert.Contains(t, ac.adapters, name)
+				}
+			}
+
+			// Verify AvailableAdapters on server config.
+			assert.Equal(t, tc.expectedAvailAdapters, srv.Config.ClientParams.AssistantParams.AvailableAdapters)
+
+			// Verify systemPromptAddendum.
+			assert.Equal(t, tc.expectedAddendum, ac.systemPromptAddendum)
+		})
+	}
+}
+
 // Helper types and functions for testing
+
+type mockAdapter struct {
+	protocol string
+}
+
+func (m *mockAdapter) Protocol() string { return m.protocol }
+func (m *mockAdapter) SendMessage(context.Context, *model.ChatRequest) (*model.Message, error) {
+	return nil, nil
+}
+func (m *mockAdapter) SendMessageStream(context.Context, *model.ChatRequest) (*http.Response, *model.AuxMessageData, error) {
+	return nil, nil, nil
+}
+func (m *mockAdapter) GetBalance(context.Context) (*model.BalanceResponse, error) { return nil, nil }
+func (m *mockAdapter) GetHealth(context.Context) (*model.HealthResponse, error)   { return nil, nil }
 
 type mockTool struct {
 	name        string
@@ -904,4 +1133,183 @@ func (m *mockTool) Execute(ctx context.Context, srv *server.Server, params strin
 		ToolName: m.name,
 		Result:   "mock result",
 	}, nil
+}
+
+func TestEstimateRequestChars(t *testing.T) {
+	tests := []struct {
+		name     string
+		req      *model.ChatRequest
+		expected int
+	}{
+		{
+			name: "empty request",
+			req:  &model.ChatRequest{},
+			expected: 0,
+		},
+		{
+			name: "system prompt only",
+			req: &model.ChatRequest{
+				System:       "You are a helpful assistant.",
+				SystemAppend: "Additional context.",
+			},
+			expected: len("You are a helpful assistant.") + len("Additional context."),
+		},
+		{
+			name: "messages with text blocks",
+			req: &model.ChatRequest{
+				System: "System",
+				Messages: []*model.Message{
+					{
+						ContentBlocks: []model.ContentBlock{
+							{Type: "text", Text: "Hello"},
+						},
+					},
+					{
+						ContentBlocks: []model.ContentBlock{
+							{Type: "text", Text: "Hi there!"},
+						},
+					},
+				},
+			},
+			expected: len("System") + len("Hello") + len("Hi there!"),
+		},
+		{
+			name: "message with content string",
+			req: &model.ChatRequest{
+				Messages: []*model.Message{
+					{ContentStr: "Plain text message"},
+				},
+			},
+			expected: len("Plain text message"),
+		},
+		{
+			name: "message with tool result",
+			req: &model.ChatRequest{
+				Messages: []*model.Message{
+					{
+						ContentBlocks: []model.ContentBlock{
+							{
+								ToolResult: &model.ToolResult{
+									Content: []model.ToolResultContent{
+										{Text: "tool output data"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: len("tool output data"),
+		},
+		{
+			name: "tool config included",
+			req: &model.ChatRequest{
+				ToolConfig: json.RawMessage(`{"tools": [{"name": "query_events"}]}`),
+			},
+			expected: len(`{"tools": [{"name": "query_events"}]}`),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := estimateRequestChars(tc.req)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
+
+func TestCheckRequestSize(t *testing.T) {
+	tests := []struct {
+		name        string
+		req         *model.ChatRequest
+		models      []model.ModelParameters
+		modelId     string
+		adapterName string
+		expectError bool
+	}{
+		{
+			name:        "no model params found, skip check",
+			req:         &model.ChatRequest{System: strings.Repeat("a", 10000)},
+			models:      []model.ModelParameters{},
+			modelId:     "unknown",
+			adapterName: "SOAI",
+			expectError: false,
+		},
+		{
+			name: "charsPerTokenEstimate is zero, skip check",
+			req:  &model.ChatRequest{System: strings.Repeat("a", 10000)},
+			models: []model.ModelParameters{
+				{ID: "model1", Adapter: "SOAI", ContextLimitSmall: 1000, CharsPerTokenEstimate: 0},
+			},
+			modelId:     "model1",
+			adapterName: "SOAI",
+			expectError: false,
+		},
+		{
+			name: "within limit",
+			req:  &model.ChatRequest{System: strings.Repeat("a", 100)},
+			models: []model.ModelParameters{
+				{ID: "model1", Adapter: "SOAI", ContextLimitLarge: 1000, CharsPerTokenEstimate: 4.0},
+			},
+			modelId:     "model1",
+			adapterName: "SOAI",
+			// maxChars = 1000 * 4.0 * 1.1 = 4400, usedChars = 100
+			expectError: false,
+		},
+		{
+			name: "exceeds limit",
+			req:  &model.ChatRequest{System: strings.Repeat("a", 5000)},
+			models: []model.ModelParameters{
+				{ID: "model1", Adapter: "SOAI", ContextLimitLarge: 1000, CharsPerTokenEstimate: 4.0},
+			},
+			modelId:     "model1",
+			adapterName: "SOAI",
+			// maxChars = 1000 * 4.0 * 1.1 = 4400, usedChars = 5000
+			expectError: true,
+		},
+		{
+			name: "falls back to small context limit",
+			req:  &model.ChatRequest{System: strings.Repeat("a", 500)},
+			models: []model.ModelParameters{
+				{ID: "model1", Adapter: "SOAI", ContextLimitSmall: 100, CharsPerTokenEstimate: 4.0},
+			},
+			modelId:     "model1",
+			adapterName: "SOAI",
+			// maxChars = 100 * 4.0 * 1.1 = 440, usedChars = 500
+			expectError: true,
+		},
+		{
+			name: "context limits both zero, skip check",
+			req:  &model.ChatRequest{System: strings.Repeat("a", 10000)},
+			models: []model.ModelParameters{
+				{ID: "model1", Adapter: "SOAI", CharsPerTokenEstimate: 4.0},
+			},
+			modelId:     "model1",
+			adapterName: "SOAI",
+			expectError: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ac := &AssistantCoordinator{
+				srv: &server.Server{
+					Config: &config.ServerConfig{
+						ClientParams: model.ClientParameters{
+							AssistantParams: model.AssistantParameters{
+								AvailableModels: tc.models,
+							},
+						},
+					},
+				},
+			}
+
+			err := ac.checkRequestSize(tc.req, tc.modelId, tc.adapterName)
+			if tc.expectError {
+				assert.ErrorIs(t, err, ErrRequestTooLarge)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }

@@ -34,9 +34,6 @@ const jobsComponent = {
       { title: this.$root.i18n.status, value: 'status' },
       { title: this.$root.i18n.actions },
     ],
-    rules: {
-      required: value => !!value || this.$root.i18n.required,
-    },
     sortBy: [{ key: 'id', order: 'asc' }],
     itemsPerPage: 10,
     dialog: false,

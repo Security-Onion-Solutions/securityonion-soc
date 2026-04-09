@@ -114,14 +114,16 @@ func TestModelParameters_UnmarshalJSON(t *testing.T) {
 				"displayName": "Normal",
 				"contextLimitSmall": 512,
 				"contextLimitLarge": 2048,
+				"charsPerTokenEstimate": 3.6,
 				"lowBalanceColorAlert": 7
 			}`,
 			want: ModelParameters{
-				ID:                   "abc",
-				DisplayName:          "Normal",
-				ContextLimitSmall:    512,
-				ContextLimitLarge:    2048,
-				LowBalanceColorAlert: 7,
+				ID:                    "abc",
+				DisplayName:           "Normal",
+				ContextLimitSmall:     512,
+				ContextLimitLarge:     2048,
+				CharsPerTokenEstimate: 3.6,
+				LowBalanceColorAlert:  7,
 			},
 		},
 		{
@@ -192,11 +194,12 @@ func TestModelParameters_UnmarshalJSON(t *testing.T) {
 				"displayName": "Missing Fields"
 			}`,
 			want: ModelParameters{
-				ID:                   "missing",
-				DisplayName:          "Missing Fields",
-				ContextLimitSmall:    0,
-				ContextLimitLarge:    0,
-				LowBalanceColorAlert: 0,
+				ID:                    "missing",
+				DisplayName:           "Missing Fields",
+				ContextLimitSmall:     0,
+				ContextLimitLarge:     0,
+				CharsPerTokenEstimate: 0,
+				LowBalanceColorAlert:  0,
 			},
 		},
 		{
@@ -209,6 +212,22 @@ func TestModelParameters_UnmarshalJSON(t *testing.T) {
 				"lowBalanceColorAlert": undefined
 			}`,
 			wantErr: true,
+		},
+		{
+			name: "missing optional lowBalanceColorAlert should default to zero",
+			input: `{
+				"id": "abc",
+				"displayName": "Normal",
+				"contextLimitSmall": 512,
+				"contextLimitLarge": 2048
+			}`,
+			want: ModelParameters{
+				ID:                   "abc",
+				DisplayName:          "Normal",
+				ContextLimitSmall:    512,
+				ContextLimitLarge:    2048,
+				LowBalanceColorAlert: 0,
+			},
 		},
 	}
 

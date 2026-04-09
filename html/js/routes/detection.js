@@ -17,8 +17,6 @@ function debounce(fn, wait) {
 	}
 }
 
-const MAX_OVERRIDE_NOTE_LENGTH = 150;
-
 loadPageTemplate('page-detection', 'pages/detection.html');
 
 routes.push({ path: '/detection/:id', name: 'detection', component: {
@@ -40,23 +38,6 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			editOverride: null, // the override we're currently editing
 			editForm: { valid: true },
 			commentsForm: { valid: true, value: '' },
-			rules: {
-				required: value => (value && value.length > 0) || this.$root.i18n.required,
-				number: value => (!isNaN(+value) && Number.isInteger(parseFloat(value))) || this.$root.i18n.required,
-				hours: value => (!value || /^\d{1,4}(\.\d{1,4})?$/.test(value)) || this.$root.i18n.invalidHours,
-				minLength: limit => value => (value && value.length >= limit) || this.$root.i18n.ruleMinLen,
-				shortLengthLimit: value => (value.length < 100) || this.$root.i18n.required,
-				noteLengthLimit: value => (value.length <= MAX_OVERRIDE_NOTE_LENGTH) || this.$root.i18n.ruleMaxLen,
-				longLengthLimit: value => (encodeURI(value).split(/%..|./).length - 1 < 10000000) || this.$root.i18n.required,
-				fileSizeLimit: value => (value == null || value.length == 0 || value[0].size < this.maxUploadSizeBytes) || this.$root.i18n.fileTooLarge.replace("{maxUploadSizeBytes}", this.$root.formatCount(this.maxUploadSizeBytes)),
-				fileNotEmpty: value => (value == null || value.length == 0 || value[0].size > 0) || this.$root.i18n.fileEmpty,
-				fileRequired: value => (value != null && value.length != 0) || this.$root.i18n.required,
-				cidrFormat: value => (!value ||
-					/^!?\$[a-z_][a-z0-9_]*$/i.test(value) || // Suricata variable
-					/^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\/(3[0-2]|[12]\d|\d)$/.test(value) || // IPv4 CIDR
-					/^((([0-9a-f]{1,4}:){7}([0-9a-f]{1,4}|:))|(([0-9a-f]{1,4}:){6}(:[0-9a-f]{1,4}|((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9a-f]{1,4}:){5}(((:[0-9a-f]{1,4}){1,2})|:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9a-f]{1,4}:){4}(((:[0-9a-f]{1,4}){1,3})|((:[0-9a-f]{1,4})?:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){3}(((:[0-9a-f]{1,4}){1,4})|((:[0-9a-f]{1,4}){0,2}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){2}(((:[0-9a-f]{1,4}){1,5})|((:[0-9a-f]{1,4}){0,3}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){1}(((:[0-9a-f]{1,4}){1,6})|((:[0-9a-f]{1,4}){0,4}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(:(((:[0-9a-f]{1,4}){1,7})|((:[0-9a-f]{1,4}){0,5}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:)))(%.+)?\s*(\/([0-9]|[1-9][0-9]|1[0-1][0-9]|12[0-8]))$/i.test(value) // IPv6 CIDR
-				) || this.i18n.invalidCidrOrVar,
-			},
 			panel: [0, 1, 2],
 			activeTab: '',
 			sidExtract: /\bsid: ?['"]?(.*?)['"]?;/, // option
@@ -172,19 +153,6 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			},
 			changedKeys: {},
 			changedOverrideKeys: {},
-			ruleValidators: {
-				sigma: [
-					{ pattern: /^id:\s*[^$]+?$/m, message: this.$root.i18n.invalidDetectionElastAlertMissingID, match: false },
-				],
-				suricata: [
-					{ pattern: /\n/, message: this.$root.i18n.invalidDetectionSuricataNewLine, match: true },
-					{ pattern: /sid:\s?(["']?)\d+\1;/, message: this.$root.i18n.invalidDetectionSuricataMissingSID, match: false },
-				],
-				yara: [
-					{ pattern: /rule\s+[a-zA-Z0-9][a-zA-Z0-9_]*/, message: this.$root.i18n.invalidDetectionStrelkaMissingRuleName, match: false },
-					{ pattern: /condition:/m, message: this.$root.i18n.invalidDetectionStrelkaMissingCondition, match: false },
-				],
-			},
 			showUnreviewedAiSummaries: false,
 			MAX_OVERRIDE_NOTE_LENGTH: MAX_OVERRIDE_NOTE_LENGTH,
 			joinedPlaybookSource: '',
@@ -878,19 +846,9 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				this.$root.stopLoading();
 			}
 		},
-		verifyRuleSyntax() {
-			const rules = this.ruleValidators[this.detect.language.toLowerCase()];
-			for (let i = 0; i < rules.length; i++) {
-				if (rules[i].pattern.test(this.detect.content) === rules[i].match) {
-					return rules[i].message;
-				}
-			}
-
-			return null;
-		},
 		validateStrelka() {
 			try {
-				let err = this.verifyRuleSyntax();
+				let err = this.$root.verifyRuleSyntax(this.detect);
 				if (err) {
 					return err;
 				}
@@ -902,7 +860,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		},
 		validateElastAlert() {
 			try {
-				let err = this.verifyRuleSyntax();
+				let err = this.$root.verifyRuleSyntax(this.detect);
 				if (err) {
 					return err;
 				}
@@ -924,7 +882,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		},
 		validateSuricata() {
 			try {
-				let err = this.verifyRuleSyntax();
+				let err = this.$root.verifyRuleSyntax(this.detect);
 				if (err) {
 					return err;
 				}

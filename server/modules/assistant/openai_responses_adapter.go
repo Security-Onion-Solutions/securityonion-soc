@@ -23,24 +23,24 @@ import (
 )
 
 func init() {
-	protocols[(&OpenAIAdapter{}).Protocol()] = NewOpenAIAdapter
+	protocols[(&OpenAIResponsesAdapter{}).Protocol()] = NewOpenAIResponsesAdapter
 }
 
-type OpenAIAdapter struct {
+type OpenAIResponsesAdapter struct {
 	srv                  *server.Server
 	client               OpenAIClient
 	healthTimeoutSeconds int
 	detections.IOManager
 }
 
-func NewOpenAIAdapter(ctx context.Context, srv *server.Server, config map[string]any) (server.AssistantAdapter, error) {
-	baseUrl := module.GetStringDefault(config, "baseUrl", "")
-	if baseUrl == "" {
-		return nil, fmt.Errorf("openai adapter requires baseUrl in config")
+func NewOpenAIResponsesAdapter(ctx context.Context, srv *server.Server, config map[string]any) (server.AssistantAdapter, error) {
+	apiUrl := module.GetStringDefault(config, "apiUrl", "")
+	if apiUrl == "" {
+		return nil, fmt.Errorf("openai adapter requires apiUrl in config")
 	}
 
 	opts := []option.RequestOption{
-		option.WithBaseURL(baseUrl),
+		option.WithBaseURL(apiUrl),
 	}
 
 	apiKey := module.GetStringDefault(config, "apiKey", "")
@@ -50,7 +50,7 @@ func NewOpenAIAdapter(ctx context.Context, srv *server.Server, config map[string
 
 	healthTimeoutSeconds := module.GetIntDefault(config, "healthTimeoutSeconds", DEFAULT_HEALTH_TIMEOUT_SECONDS)
 
-	return &OpenAIAdapter{
+	return &OpenAIResponsesAdapter{
 		srv:                  srv,
 		healthTimeoutSeconds: healthTimeoutSeconds,
 		client:               NewOpenAIClientWrapper(openai.NewClient(opts...)),
@@ -60,11 +60,11 @@ func NewOpenAIAdapter(ctx context.Context, srv *server.Server, config map[string
 	}, nil
 }
 
-func (a *OpenAIAdapter) Protocol() string {
-	return "openai"
+func (a *OpenAIResponsesAdapter) Protocol() string {
+	return "openai_responses"
 }
 
-func (a *OpenAIAdapter) SendMessage(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+func (a *OpenAIResponsesAdapter) SendMessage(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
 	logger := log.FromContext(ctx)
 
 	// Convert history and tools (reuse existing functions)
@@ -127,7 +127,7 @@ func (a *OpenAIAdapter) SendMessage(ctx context.Context, req *model.ChatRequest)
 				Type:  "tool_use",
 				Id:    toolUseId,
 				Name:  item.Name,
-				Input: json.RawMessage(item.Arguments),
+				Input: json.RawMessage([]byte(item.AsFunctionCall().Arguments)),
 			})
 		}
 	}
@@ -153,7 +153,7 @@ func (a *OpenAIAdapter) SendMessage(ctx context.Context, req *model.ChatRequest)
 	return message, nil
 }
 
-func (a *OpenAIAdapter) SendMessageStream(ctx context.Context, req *model.ChatRequest) (response *http.Response, _ *model.AuxMessageData, err error) {
+func (a *OpenAIResponsesAdapter) SendMessageStream(ctx context.Context, req *model.ChatRequest) (response *http.Response, _ *model.AuxMessageData, err error) {
 	logger := log.FromContext(ctx)
 
 	history := convertHistoryToOpenAI(logger, req)
@@ -232,6 +232,17 @@ func (a *OpenAIAdapter) SendMessageStream(ctx context.Context, req *model.ChatRe
 				return
 			}
 		}
+		// Check if the stream ended due to an error
+		if err := stream.Err(); err != nil {
+			replacement, shouldReturn := handleStreamError(err, processor.firstSend, writer, logger, req.Model)
+			if shouldReturn {
+				if replacement != nil {
+					response = replacement
+				}
+				return
+			}
+		}
+
 		// Finalization - processor handles closing blocks and writing final events
 		processor.finalizeOpenAI(finishReason, stream.Current().Response.Usage)
 	}()
@@ -246,8 +257,7 @@ func convertHistoryToOpenAI(logger log.Interface, req *model.ChatRequest) respon
 
 	for _, msg := range req.Messages {
 		content := ""
-
-		h := responses.ResponseInputItemUnionParam{}
+		items := make([]responses.ResponseInputItemUnionParam, 0)
 
 		// Process each content block in the message
 		for _, block := range msg.ContentBlocks {
@@ -272,35 +282,42 @@ func convertHistoryToOpenAI(logger log.Interface, req *model.ChatRequest) respon
 					}
 				}
 
-				h.OfFunctionCall = &responses.ResponseFunctionToolCallParam{
-					ID:        openai.String(block.Id),
-					Name:      block.Name,
-					Arguments: string(block.Input),
-				}
+				items = append(items, responses.ResponseInputItemUnionParam{
+					OfFunctionCall: &responses.ResponseFunctionToolCallParam{
+						CallID:    block.Id,
+						Name:      block.Name,
+						Arguments: string(block.Input),
+					},
+				})
 			case "tool_result":
 				// Handle tool results (responses from user with tool execution results)
 				if block.ToolResult != nil && len(block.ToolResult.Content) != 0 {
 					if block.ToolResult.IsError {
-						h.OfFunctionCallOutput = &responses.ResponseInputItemFunctionCallOutputParam{
-							CallID: block.ToolResult.ToolUseId,
-							Output: responses.ResponseInputItemFunctionCallOutputOutputUnionParam{
-								OfString: openai.String(fmt.Sprintf(`{"error": "%s"}`, block.ToolResult.Content[0].Text)),
+						errText, _ := json.Marshal(block.ToolResult.Content[0].Text)
+						items = append(items, responses.ResponseInputItemUnionParam{
+							OfFunctionCallOutput: &responses.ResponseInputItemFunctionCallOutputParam{
+								CallID: block.ToolResult.ToolUseId,
+								Output: responses.ResponseInputItemFunctionCallOutputOutputUnionParam{
+									OfString: openai.String(fmt.Sprintf(`{"error": %s}`, string(errText))),
+								},
+								Status: "completed",
 							},
-							Status: "completed",
-						}
+						})
 					} else {
 						jsonBytes, err := json.Marshal(block.ToolResult.Content[0].Json)
 						if err != nil {
 							jsonBytes = []byte(`{ "error": "failed to marshal tool result content" }`)
 						}
 
-						h.OfFunctionCallOutput = &responses.ResponseInputItemFunctionCallOutputParam{
-							CallID: block.ToolResult.ToolUseId,
-							Output: responses.ResponseInputItemFunctionCallOutputOutputUnionParam{
-								OfString: openai.String(string(jsonBytes)),
+						items = append(items, responses.ResponseInputItemUnionParam{
+							OfFunctionCallOutput: &responses.ResponseInputItemFunctionCallOutputParam{
+								CallID: block.ToolResult.ToolUseId,
+								Output: responses.ResponseInputItemFunctionCallOutputOutputUnionParam{
+									OfString: openai.String(string(jsonBytes)),
+								},
+								Status: "completed",
 							},
-							Status: "completed",
-						}
+						})
 					}
 				}
 			default:
@@ -315,19 +332,38 @@ func convertHistoryToOpenAI(logger log.Interface, req *model.ChatRequest) respon
 		// contain text, however openai will yell at you for including text (the
 		// filler &nbsp;) alongside a function call.
 		if content != "" && content != "&nbsp;" {
-			h.OfInputMessage = &responses.ResponseInputItemMessageParam{
-				Role: msg.Role,
-				Content: responses.ResponseInputMessageContentListParam{
-					{
-						OfInputText: &responses.ResponseInputTextParam{
-							Text: content,
+			var textItem responses.ResponseInputItemUnionParam
+			if msg.Role == "user" {
+				textItem = responses.ResponseInputItemUnionParam{
+					OfInputMessage: &responses.ResponseInputItemMessageParam{
+						Role: msg.Role,
+						Content: responses.ResponseInputMessageContentListParam{
+							{
+								OfInputText: &responses.ResponseInputTextParam{
+									Text: content,
+								},
+							},
 						},
 					},
-				},
+				}
+			} else {
+				textItem = responses.ResponseInputItemUnionParam{
+					OfOutputMessage: &responses.ResponseOutputMessageParam{
+						Content: []responses.ResponseOutputMessageContentUnionParam{
+							{
+								OfOutputText: &responses.ResponseOutputTextParam{
+									Text: content,
+								},
+							},
+						},
+					},
+				}
 			}
+			// Prepend text before tool items to preserve natural ordering
+			items = append([]responses.ResponseInputItemUnionParam{textItem}, items...)
 		}
 
-		history = append(history, h)
+		history = append(history, items...)
 	}
 
 	result := responses.ResponseNewParamsInputUnion{
@@ -341,13 +377,13 @@ func convertHistoryToOpenAI(logger log.Interface, req *model.ChatRequest) respon
 	return result
 }
 
-func (a *OpenAIAdapter) GetBalance(ctx context.Context) (*model.BalanceResponse, error) {
+func (a *OpenAIResponsesAdapter) GetBalance(ctx context.Context) (*model.BalanceResponse, error) {
 	return &model.BalanceResponse{
 		Balance: UNUSED_BALANCE,
 	}, nil
 }
 
-func (a *OpenAIAdapter) GetHealth(ctx context.Context) (*model.HealthResponse, error) {
+func (a *OpenAIResponsesAdapter) GetHealth(ctx context.Context) (*model.HealthResponse, error) {
 	healthCtx, cancel := context.WithTimeout(a.srv.Context, time.Second*time.Duration(a.healthTimeoutSeconds))
 	defer cancel()
 

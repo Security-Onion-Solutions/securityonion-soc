@@ -29,9 +29,11 @@ import (
 // Test doubles to avoid import cycles
 
 type mockOpenAIClient struct {
-	modelsListFunc            func(ctx context.Context) (*pagination.Page[openai.Model], error)
-	responsesNewFunc          func(ctx context.Context, params responses.ResponseNewParams) (*responses.Response, error)
-	responsesNewStreamingFunc func(ctx context.Context, params responses.ResponseNewParams) ResponseStream
+	modelsListFunc                  func(ctx context.Context) (*pagination.Page[openai.Model], error)
+	responsesNewFunc                func(ctx context.Context, params responses.ResponseNewParams) (*responses.Response, error)
+	responsesNewStreamingFunc       func(ctx context.Context, params responses.ResponseNewParams) ResponseStream
+	chatCompletionsNewFunc          func(ctx context.Context, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error)
+	chatCompletionsNewStreamingFunc func(ctx context.Context, params openai.ChatCompletionNewParams) ChatCompletionStream
 }
 
 func (m *mockOpenAIClient) ModelsList(ctx context.Context) (*pagination.Page[openai.Model], error) {
@@ -51,6 +53,20 @@ func (m *mockOpenAIClient) ResponsesNew(ctx context.Context, params responses.Re
 func (m *mockOpenAIClient) ResponsesNewStreaming(ctx context.Context, params responses.ResponseNewParams) ResponseStream {
 	if m.responsesNewStreamingFunc != nil {
 		return m.responsesNewStreamingFunc(ctx, params)
+	}
+	return nil
+}
+
+func (m *mockOpenAIClient) ChatCompletionsNew(ctx context.Context, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
+	if m.chatCompletionsNewFunc != nil {
+		return m.chatCompletionsNewFunc(ctx, params)
+	}
+	return nil, errors.New("not implemented")
+}
+
+func (m *mockOpenAIClient) ChatCompletionsNewStreaming(ctx context.Context, params openai.ChatCompletionNewParams) ChatCompletionStream {
+	if m.chatCompletionsNewStreamingFunc != nil {
+		return m.chatCompletionsNewStreamingFunc(ctx, params)
 	}
 	return nil
 }
@@ -84,6 +100,35 @@ func (m *mockResponseStream) Err() error {
 	return m.err
 }
 
+// mockChatCompletionStream is a simple implementation of ChatCompletionStream for testing
+type mockChatCompletionStream struct {
+	chunks       []openai.ChatCompletionChunk
+	currentIndex int
+	err          error
+}
+
+func (m *mockChatCompletionStream) Next() bool {
+	if m.err != nil {
+		return false
+	}
+	if m.currentIndex >= len(m.chunks) {
+		return false
+	}
+	m.currentIndex++
+	return true
+}
+
+func (m *mockChatCompletionStream) Current() openai.ChatCompletionChunk {
+	if m.currentIndex == 0 || m.currentIndex > len(m.chunks) {
+		return openai.ChatCompletionChunk{}
+	}
+	return m.chunks[m.currentIndex-1]
+}
+
+func (m *mockChatCompletionStream) Err() error {
+	return m.err
+}
+
 // newMockStream creates a mock stream for testing
 func newMockStream(events []responses.ResponseStreamEventUnion, finalUsage responses.ResponseUsage, initialErr error) ResponseStream {
 	// Add a final event with Response.Usage for finalization
@@ -104,6 +149,23 @@ func newMockStream(events []responses.ResponseStreamEventUnion, finalUsage respo
 	}
 }
 
+// newMockChatCompletionStream creates a mock ChatCompletion stream for testing
+func newMockChatCompletionStream(chunks []openai.ChatCompletionChunk, finalUsage openai.CompletionUsage, initialErr error) ChatCompletionStream {
+	// Add a final chunk with usage for finalization
+	// This mimics how the real stream provides usage data at the end
+	if initialErr == nil {
+		finalChunk := openai.ChatCompletionChunk{
+			Usage: finalUsage,
+		}
+		chunks = append(chunks, finalChunk)
+	}
+
+	return &mockChatCompletionStream{
+		chunks: chunks,
+		err:    initialErr,
+	}
+}
+
 func TestNewOpenAIAdapter(t *testing.T) {
 	tests := []struct {
 		name                  string
@@ -116,7 +178,7 @@ func TestNewOpenAIAdapter(t *testing.T) {
 		{
 			name: "Success with all config values",
 			config: map[string]any{
-				"baseUrl":              "https://api.openai.com/v1",
+				"apiUrl":               "https://api.openai.com/v1",
 				"apiKey":               "test-key",
 				"healthTimeoutSeconds": float64(6),
 			},
@@ -125,24 +187,24 @@ func TestNewOpenAIAdapter(t *testing.T) {
 			validateHealthTimeout: true,
 		},
 		{
-			name: "Missing baseUrl returns error",
+			name: "Missing apiUrl returns error",
 			config: map[string]any{
 				"apiKey": "test-key",
 			},
 			expectError:   true,
-			errorContains: "baseUrl",
+			errorContains: "apiUrl",
 		},
 		{
 			name: "Without apiKey succeeds",
 			config: map[string]any{
-				"baseUrl": "https://api.openai.com/v1",
+				"apiUrl": "https://api.openai.com/v1",
 			},
 			expectError: false,
 		},
 		{
 			name: "Default health timeout",
 			config: map[string]any{
-				"baseUrl": "https://api.openai.com/v1",
+				"apiUrl": "https://api.openai.com/v1",
 			},
 			expectError:           false,
 			expectedHealthTimeout: DEFAULT_HEALTH_TIMEOUT_SECONDS,
@@ -153,7 +215,7 @@ func TestNewOpenAIAdapter(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			srv := server.NewFakeUnauthorizedServer()
-			adapter, err := NewOpenAIAdapter(context.Background(), srv, tt.config)
+			adapter, err := NewOpenAIResponsesAdapter(context.Background(), srv, tt.config)
 
 			if tt.expectError {
 				assert.Error(t, err)
@@ -166,7 +228,7 @@ func TestNewOpenAIAdapter(t *testing.T) {
 				assert.NotNil(t, adapter)
 
 				if tt.validateHealthTimeout {
-					openaiAdapter := adapter.(*OpenAIAdapter)
+					openaiAdapter := adapter.(*OpenAIResponsesAdapter)
 					assert.Equal(t, tt.expectedHealthTimeout, openaiAdapter.healthTimeoutSeconds)
 				}
 			}
@@ -175,12 +237,12 @@ func TestNewOpenAIAdapter(t *testing.T) {
 }
 
 func TestProtocol(t *testing.T) {
-	adapter := &OpenAIAdapter{}
-	assert.Equal(t, "openai", adapter.Protocol())
+	adapter := &OpenAIResponsesAdapter{}
+	assert.Equal(t, "openai_responses", adapter.Protocol())
 }
 
 func TestGetBalance(t *testing.T) {
-	adapter := &OpenAIAdapter{}
+	adapter := &OpenAIResponsesAdapter{}
 	ctx := context.Background()
 
 	balance, err := adapter.GetBalance(ctx)
@@ -245,11 +307,10 @@ func TestConvertHistoryToOpenAI(t *testing.T) {
 				resp := result.(responses.ResponseNewParamsInputUnion)
 				require.Len(t, resp.OfInputItemList, 1)
 				item := resp.OfInputItemList[0]
-				require.NotNil(t, item.OfInputMessage)
-				assert.Equal(t, "assistant", item.OfInputMessage.Role)
-				require.Len(t, item.OfInputMessage.Content, 1)
-				require.NotNil(t, item.OfInputMessage.Content[0].OfInputText)
-				assert.Equal(t, "Hi there!", item.OfInputMessage.Content[0].OfInputText.Text)
+				require.NotNil(t, item.OfOutputMessage)
+				require.Len(t, item.OfOutputMessage.Content, 1)
+				require.NotNil(t, item.OfOutputMessage.Content[0].OfOutputText)
+				assert.Equal(t, "Hi there!", item.OfOutputMessage.Content[0].OfOutputText.Text)
 			},
 		},
 		{
@@ -278,9 +339,8 @@ func TestConvertHistoryToOpenAI(t *testing.T) {
 				assert.Equal(t, "user", resp.OfInputItemList[0].OfInputMessage.Role)
 				assert.Equal(t, "First message", resp.OfInputItemList[0].OfInputMessage.Content[0].OfInputText.Text)
 				// Second message
-				assert.NotNil(t, resp.OfInputItemList[1].OfInputMessage)
-				assert.Equal(t, "assistant", resp.OfInputItemList[1].OfInputMessage.Role)
-				assert.Equal(t, "Second message", resp.OfInputItemList[1].OfInputMessage.Content[0].OfInputText.Text)
+				assert.NotNil(t, resp.OfInputItemList[1].OfOutputMessage)
+				assert.Equal(t, "Second message", resp.OfInputItemList[1].OfOutputMessage.Content[0].OfOutputText.Text)
 			},
 		},
 		{
@@ -325,7 +385,7 @@ func TestConvertHistoryToOpenAI(t *testing.T) {
 				require.Len(t, resp.OfInputItemList, 1)
 				item := resp.OfInputItemList[0]
 				require.NotNil(t, item.OfFunctionCall)
-				assert.Equal(t, "call_123", item.OfFunctionCall.ID.Or(""))
+				assert.Equal(t, "call_123", item.OfFunctionCall.CallID)
 				assert.Equal(t, "get_weather", item.OfFunctionCall.Name)
 				assert.JSONEq(t, `{"location": "San Francisco"}`, item.OfFunctionCall.Arguments)
 			},
@@ -349,13 +409,7 @@ func TestConvertHistoryToOpenAI(t *testing.T) {
 			},
 			validate: func(t *testing.T, result interface{}) {
 				resp := result.(responses.ResponseNewParamsInputUnion)
-				// Should have one item but it should be empty since the JSON was invalid and skipped
-				require.Len(t, resp.OfInputItemList, 1)
-				item := resp.OfInputItemList[0]
-				// All fields should be nil since the block was skipped
-				assert.Nil(t, item.OfInputMessage)
-				assert.Nil(t, item.OfFunctionCall)
-				assert.Nil(t, item.OfFunctionCallOutput)
+				require.Len(t, resp.OfInputItemList, 0)
 			},
 		},
 		{
@@ -443,12 +497,7 @@ func TestConvertHistoryToOpenAI(t *testing.T) {
 			},
 			validate: func(t *testing.T, result interface{}) {
 				resp := result.(responses.ResponseNewParamsInputUnion)
-				// Should have one item but it should be empty since content was empty
-				require.Len(t, resp.OfInputItemList, 1)
-				item := resp.OfInputItemList[0]
-				assert.Nil(t, item.OfInputMessage)
-				assert.Nil(t, item.OfFunctionCall)
-				assert.Nil(t, item.OfFunctionCallOutput)
+				require.Len(t, resp.OfInputItemList, 0)
 			},
 		},
 		{
@@ -465,10 +514,7 @@ func TestConvertHistoryToOpenAI(t *testing.T) {
 			},
 			validate: func(t *testing.T, result interface{}) {
 				resp := result.(responses.ResponseNewParamsInputUnion)
-				// Should have one item but no message content (nbsp is filtered out)
-				require.Len(t, resp.OfInputItemList, 1)
-				item := resp.OfInputItemList[0]
-				assert.Nil(t, item.OfInputMessage)
+				require.Len(t, resp.OfInputItemList, 0)
 			},
 		},
 		{
@@ -519,13 +565,15 @@ func TestConvertHistoryToOpenAI(t *testing.T) {
 			},
 			validate: func(t *testing.T, result interface{}) {
 				resp := result.(responses.ResponseNewParamsInputUnion)
-				require.Len(t, resp.OfInputItemList, 1)
-				item := resp.OfInputItemList[0]
-				// Both text message and function call should be present on same item
-				require.NotNil(t, item.OfInputMessage)
-				assert.Equal(t, "Let me check that for you", item.OfInputMessage.Content[0].OfInputText.Text)
-				require.NotNil(t, item.OfFunctionCall)
-				assert.Equal(t, "search", item.OfFunctionCall.Name)
+				require.Len(t, resp.OfInputItemList, 2)
+				// First item: text as output message
+				require.NotNil(t, resp.OfInputItemList[0].OfOutputMessage)
+				assert.Equal(t, "Let me check that for you", resp.OfInputItemList[0].OfOutputMessage.Content[0].OfOutputText.Text)
+				assert.Nil(t, resp.OfInputItemList[0].OfFunctionCall)
+				// Second item: function call
+				require.NotNil(t, resp.OfInputItemList[1].OfFunctionCall)
+				assert.Equal(t, "search", resp.OfInputItemList[1].OfFunctionCall.Name)
+				assert.Nil(t, resp.OfInputItemList[1].OfOutputMessage)
 			},
 		},
 		{
@@ -542,10 +590,7 @@ func TestConvertHistoryToOpenAI(t *testing.T) {
 			},
 			validate: func(t *testing.T, result interface{}) {
 				resp := result.(responses.ResponseNewParamsInputUnion)
-				// Empty string should be filtered out
-				require.Len(t, resp.OfInputItemList, 1)
-				item := resp.OfInputItemList[0]
-				assert.Nil(t, item.OfInputMessage)
+				require.Len(t, resp.OfInputItemList, 0)
 			},
 		},
 		{
@@ -560,11 +605,7 @@ func TestConvertHistoryToOpenAI(t *testing.T) {
 			},
 			validate: func(t *testing.T, result interface{}) {
 				resp := result.(responses.ResponseNewParamsInputUnion)
-				// Should have one empty item
-				require.Len(t, resp.OfInputItemList, 1)
-				item := resp.OfInputItemList[0]
-				assert.Nil(t, item.OfInputMessage)
-				assert.Nil(t, item.OfFunctionCall)
+				require.Len(t, resp.OfInputItemList, 0)
 			},
 		},
 		{
@@ -592,13 +633,14 @@ func TestConvertHistoryToOpenAI(t *testing.T) {
 			},
 			validate: func(t *testing.T, result interface{}) {
 				resp := result.(responses.ResponseNewParamsInputUnion)
-				// Only one OfFunctionCall per history item - last one wins
-				require.Len(t, resp.OfInputItemList, 1)
-				item := resp.OfInputItemList[0]
-				require.NotNil(t, item.OfFunctionCall)
-				// Should be the last tool call since it overwrites previous ones
-				assert.Equal(t, "calculate", item.OfFunctionCall.Name)
-				assert.Equal(t, "call_2", item.OfFunctionCall.ID.Or(""))
+				// Each tool_use becomes its own item
+				require.Len(t, resp.OfInputItemList, 2)
+				require.NotNil(t, resp.OfInputItemList[0].OfFunctionCall)
+				assert.Equal(t, "search", resp.OfInputItemList[0].OfFunctionCall.Name)
+				assert.Equal(t, "call_1", resp.OfInputItemList[0].OfFunctionCall.CallID)
+				require.NotNil(t, resp.OfInputItemList[1].OfFunctionCall)
+				assert.Equal(t, "calculate", resp.OfInputItemList[1].OfFunctionCall.Name)
+				assert.Equal(t, "call_2", resp.OfInputItemList[1].OfFunctionCall.CallID)
 			},
 		},
 	}
@@ -1065,9 +1107,9 @@ func TestGetHealth(t *testing.T) {
 	// in external packages that don't have import cycle constraints.
 
 	srv := server.NewFakeUnauthorizedServer()
-	adapter, err := NewOpenAIAdapter(context.Background(), srv, map[string]any{
-		"baseUrl": "https://api.openai.com/v1",
-		"apiKey":  "test-key",
+	adapter, err := NewOpenAIResponsesAdapter(context.Background(), srv, map[string]any{
+		"apiUrl": "https://api.openai.com/v1",
+		"apiKey": "test-key",
 	})
 	require.NoError(t, err)
 
@@ -1097,12 +1139,18 @@ func createMockTextOutput(text string) responses.ResponseOutputItemUnion {
 }
 
 func createMockFunctionCallOutput(callId, name string, args string) responses.ResponseOutputItemUnion {
-	return responses.ResponseOutputItemUnion{
-		Type:      "function_call",
-		CallID:    callId,
-		Name:      name,
-		Arguments: args,
+	rawJSON, err := json.Marshal(map[string]any{
+		"type": "function_call",
+		"call_id": callId,
+		"name": name,
+		"arguments": args,
+	})
+	if err != nil {
+		panic(err)
 	}
+	var item responses.ResponseOutputItemUnion
+	_ = json.Unmarshal(rawJSON, &item)
+	return item
 }
 
 func createMockOpenAIResponse(outputItems []responses.ResponseOutputItemUnion, usage *responses.ResponseUsage, status string, incompleteReason string) *responses.Response {
@@ -1498,7 +1546,7 @@ func TestOpenAIAdapter_SendMessage(t *testing.T) {
 			}
 
 			srv := server.NewFakeUnauthorizedServer()
-			adapter := &OpenAIAdapter{
+			adapter := &OpenAIResponsesAdapter{
 				srv:    srv,
 				client: mockClient,
 				IOManager: &detections.ResourceManager{
@@ -1755,7 +1803,7 @@ func TestOpenAIAdapter_SendMessage_EdgeCases(t *testing.T) {
 			}
 
 			srv := server.NewFakeUnauthorizedServer()
-			adapter := &OpenAIAdapter{
+			adapter := &OpenAIResponsesAdapter{
 				srv:    srv,
 				client: mockClient,
 				IOManager: &detections.ResourceManager{
@@ -1909,7 +1957,7 @@ func TestOpenAIAdapter_SendMessageStream(t *testing.T) {
 			}
 
 			srv := server.NewFakeUnauthorizedServer()
-			adapter := &OpenAIAdapter{
+			adapter := &OpenAIResponsesAdapter{
 				client: client,
 				srv:    srv,
 				IOManager: &detections.ResourceManager{

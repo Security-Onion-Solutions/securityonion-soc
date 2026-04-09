@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/apex/log"
+	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
 	"google.golang.org/genai"
 )
@@ -29,7 +30,7 @@ func (w *sseEventWriter) writeMessageStart(model string) error {
 }
 
 func (w *sseEventWriter) writeContentBlockDelta(index int, deltaType string, text string) error {
-	_, err := fmt.Fprintf(w.writer, `data: {"type":"content_block_delta","index":%d,"delta":{"type":%s,"text":%s}}`+"\n\n", index, strconv.Quote(deltaType), text)
+	_, err := fmt.Fprintf(w.writer, `data: {"type":"content_block_delta","index":%d,"delta":{"type":%s,"text":%s}}`+"\n\n", index, strconv.Quote(deltaType), strconv.Quote(text))
 	return err
 }
 
@@ -88,6 +89,7 @@ type streamProcessor struct {
 	hasOpenBlock         bool
 	firstSend            bool
 	writingOpenAIToolUse bool
+	receivedFnArgs       bool
 }
 
 func newStreamProcessor(writer *sseEventWriter, model string, wg *sync.WaitGroup) *streamProcessor {
@@ -191,11 +193,26 @@ func (p *streamProcessor) processOpenAIChunk(resp responses.ResponseStreamEventU
 			callId := resp.Item.CallID
 			name := resp.Item.Name
 
+			p.receivedFnArgs = false
 			p.writeOpenAIFunctionHeader(callId, name)
 		}
 	case "response.function_call_arguments.delta":
-		if p.hasOpenBlock {
+		if content == "" && resp.Arguments != "" {
+			content = resp.Arguments
+		}
+		if p.hasOpenBlock && content != "" {
+			p.receivedFnArgs = true
 			p.writeOpenAIFunctionInput(content)
+		}
+	case "response.function_call_arguments.done":
+		// Only use .done arguments if no deltas were received (some models skip deltas)
+		if !p.receivedFnArgs {
+			if content == "" && resp.Arguments != "" {
+				content = resp.Arguments
+			}
+			if p.hasOpenBlock && content != "" {
+				p.writeOpenAIFunctionInput(content)
+			}
 		}
 	case "response.output_item.done":
 		if p.writingOpenAIToolUse {
@@ -204,7 +221,6 @@ func (p *streamProcessor) processOpenAIChunk(resp responses.ResponseStreamEventU
 	}
 
 	return thoughtSigs, nil
-
 }
 
 // writeError writes an error event and done message
@@ -259,15 +275,13 @@ func (p *streamProcessor) ensureFirstSend() {
 
 // writeThought writes a thought delta
 func (p *streamProcessor) writeThought(thought string) {
-	escapedText := strconv.Quote(thought)
-	p.writer.writeContentBlockDelta(p.contentBlockIndex, "thought_delta", escapedText)
+	p.writer.writeContentBlockDelta(p.contentBlockIndex, "thought_delta", thought)
 	p.hasOpenBlock = true
 }
 
 // writeText writes a text delta
 func (p *streamProcessor) writeText(text string) {
-	escapedText := strconv.Quote(text)
-	p.writer.writeContentBlockDelta(p.contentBlockIndex, "text_delta", escapedText)
+	p.writer.writeContentBlockDelta(p.contentBlockIndex, "text_delta", text)
 	p.hasOpenBlock = true
 }
 
@@ -334,6 +348,7 @@ func (p *streamProcessor) writeOpenAIFunctionStop() {
 	p.contentBlockIndex++
 	p.hasOpenBlock = false
 	p.writingOpenAIToolUse = false
+	p.receivedFnArgs = false
 }
 
 // closeOpenBlock closes the currently open text/thought block
@@ -343,4 +358,121 @@ func (p *streamProcessor) closeOpenBlock() {
 		p.contentBlockIndex++
 		p.hasOpenBlock = false
 	}
+}
+
+// processChatCompletionChunk processes a ChatCompletionChunk and writes appropriate events
+func (p *streamProcessor) processChatCompletionChunk(chunk openai.ChatCompletionChunk) error {
+	if len(chunk.Choices) == 0 {
+		return nil
+	}
+
+	delta := chunk.Choices[0].Delta
+	reasoning, ok := extractReasoning(delta)
+
+	if ok && reasoning != "" {
+		p.ensureFirstSend()
+		p.writeThought(reasoning)
+	}
+
+	// Handle text content delta
+	if delta.Content != "" {
+		p.ensureFirstSend()
+		p.writeText(delta.Content)
+	}
+
+	// Handle tool calls
+	if len(delta.ToolCalls) > 0 {
+		for _, toolCall := range delta.ToolCalls {
+			// Check if this is a new tool call (has ID and Name)
+			if toolCall.ID != "" && toolCall.Function.Name != "" {
+				// Close any open text block
+				if p.hasOpenBlock {
+					p.closeOpenBlock()
+				}
+
+				p.writeChatCompletionFunctionHeader(toolCall.ID, toolCall.Function.Name)
+			}
+			if toolCall.Function.Arguments != "" {
+				// This is a delta for function arguments
+				p.writeChatCompletionFunctionInput(toolCall.Function.Arguments)
+			}
+		}
+	}
+
+	return nil
+}
+
+// writeChatCompletionFunctionHeader writes the start of a function call for ChatCompletion streaming
+func (p *streamProcessor) writeChatCompletionFunctionHeader(id string, name string) {
+	p.ensureFirstSend()
+
+	if id == "" {
+		id = fmt.Sprintf("toolu_%d", p.contentBlockIndex)
+	}
+
+	toolUseBlock := map[string]any{
+		"type":  "tool_use",
+		"id":    id,
+		"name":  name,
+		"input": map[string]any{},
+	}
+
+	p.writer.writeContentBlockStart(p.contentBlockIndex, toolUseBlock)
+	p.hasOpenBlock = true
+	p.writingOpenAIToolUse = true
+}
+
+// writeChatCompletionFunctionInput writes function arguments delta for ChatCompletion streaming
+func (p *streamProcessor) writeChatCompletionFunctionInput(arguments string) {
+	p.writer.writeInputJsonDelta(p.contentBlockIndex, arguments)
+}
+
+// writeChatCompletionFunctionStop closes a function call block for ChatCompletion streaming
+func (p *streamProcessor) writeChatCompletionFunctionStop() {
+	p.writer.writeContentBlockStop(p.contentBlockIndex)
+	p.contentBlockIndex++
+	p.hasOpenBlock = false
+	p.writingOpenAIToolUse = false
+}
+
+// finalizeChatCompletion closes any open blocks and writes final events for ChatCompletion streaming
+func (p *streamProcessor) finalizeChatCompletion(finishReason string, usage *openai.CompletionUsage) {
+	if p.hasOpenBlock {
+		if p.writingOpenAIToolUse {
+			p.writeChatCompletionFunctionStop()
+		} else {
+			p.closeOpenBlock()
+		}
+	}
+
+	if finishReason == "" || finishReason == "stop" {
+		finishReason = "end_turn"
+	}
+
+	p.writer.writeStopReason(finishReason)
+
+	if usage != nil && (usage.PromptTokens > 0 || usage.CompletionTokens > 0) {
+		p.writer.writeUsage(usage.PromptTokens, usage.CompletionTokens)
+	}
+
+	p.writer.writeMessageStop()
+	p.writer.writeDone()
+}
+
+func extractReasoning(delta openai.ChatCompletionChunkChoiceDelta) (string, bool) {
+	fieldNames := []string{"reasoning", "reasoning_content", "reasoning_summary"}
+	for _, fieldName := range fieldNames {
+		reasoningField, ok := delta.JSON.ExtraFields[fieldName]
+		if ok {
+			reasoning := reasoningField.Raw()
+			if !reasoningField.Valid() {
+				reasoning, _ = strconv.Unquote(reasoning)
+			}
+			if reasoning != "" {
+				return reasoning, true
+			}
+		}
+	}
+
+	return "", false
 }

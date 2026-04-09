@@ -36,7 +36,8 @@ type ProtocolConstructor func(context.Context, *server.Server, map[string]any) (
 var protocols = map[string]ProtocolConstructor{}
 
 var (
-	ErrToolNotFound = errors.New("ERROR_ASSISTANT_TOOL_NOT_FOUND")
+	ErrToolNotFound    = errors.New("ERROR_ASSISTANT_TOOL_NOT_FOUND")
+	ErrRequestTooLarge = errors.New("ERROR_ASSISTANT_REQUEST_TOO_LARGE")
 )
 
 const (
@@ -92,6 +93,7 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 
 	adapterConfig, ok := config["adapters"].([]any)
 	if ok && adapterConfig != nil {
+		adapterArray := make([]model.AdapterParameters, 0, len(adapterConfig))
 		for i, adapterInter := range adapterConfig {
 			adapterEntry, ok := adapterInter.(map[string]any)
 			if !ok {
@@ -132,9 +134,17 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 				"adapter":  name,
 				"protocol": protocol,
 			}).Info("loaded assistant adapter")
+
+			adapterArray = append(adapterArray, model.AdapterParameters{
+				Name:     name,
+				Protocol: protocol,
+			})
 		}
+
+		ac.srv.Config.ClientParams.AssistantParams.AvailableAdapters = adapterArray
 	} else {
 		logger.Warn("no adapter config, no adapters loaded")
+		ac.srv.Config.ClientParams.AssistantParams.AvailableAdapters = []model.AdapterParameters{}
 	}
 
 	ac.getPrompt()
@@ -250,6 +260,53 @@ func splitModelAdapter(aiModel string) (string, string) {
 	return parts[0], parts[1]
 }
 
+func estimateRequestChars(req *model.ChatRequest) int {
+	total := len(req.System) + len(req.SystemAppend) + len(req.ToolConfig)
+	for _, msg := range req.Messages {
+		total += len(msg.ContentStr)
+		for _, block := range msg.ContentBlocks {
+			total += len(block.Text) + len(block.Input)
+			if block.ToolResult != nil {
+				for _, c := range block.ToolResult.Content {
+					total += len(c.Text)
+				}
+			}
+		}
+	}
+	return total
+}
+
+func (ac *AssistantCoordinator) findModelParams(modelId string, adapterName string) *model.ModelParameters {
+	for _, m := range ac.srv.Config.ClientParams.AssistantParams.AvailableModels {
+		if m.ID == modelId && m.Adapter == adapterName {
+			return &m
+		}
+	}
+	return nil
+}
+
+func (ac *AssistantCoordinator) checkRequestSize(req *model.ChatRequest, modelId string, adapterName string) error {
+	params := ac.findModelParams(modelId, adapterName)
+	if params == nil || params.CharsPerTokenEstimate <= 0 {
+		return nil
+	}
+
+	contextLimit := params.ContextLimitLarge
+	if contextLimit <= 0 {
+		contextLimit = params.ContextLimitSmall
+	}
+	if contextLimit <= 0 {
+		return nil
+	}
+
+	maxChars := float64(contextLimit) * params.CharsPerTokenEstimate * 1.1
+	usedChars := float64(estimateRequestChars(req))
+	if usedChars >= maxChars {
+		return ErrRequestTooLarge
+	}
+	return nil
+}
+
 func (ac *AssistantCoordinator) Chat(ctx context.Context, aiModel string, messages []*model.Message, opts ...model.ChatOpt) ([]*model.Message, error) {
 	logger := log.FromContext(ctx)
 	userID := ctx.Value(web.ContextKeyRequestorId).(string)
@@ -266,6 +323,11 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, aiModel string, messag
 		Model:        modelId,
 		System:       ac.systemPrompt,
 		SystemAppend: ac.systemPromptAddendum,
+	}
+
+	if err := ac.checkRequestSize(req, modelId, adapterName); err != nil {
+		logger.WithFields(log.Fields{"modelId": modelId, "adapterName": adapterName, "estimatedChars": estimateRequestChars(req)}).Error("request exceeds estimated context limit")
+		return nil, err
 	}
 
 	adapter, ok := ac.adapters[adapterName]
@@ -323,7 +385,7 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, aiModel string, messag
 
 					newMessages = append(newMessages, toolMsg)
 
-					err = ac.srv.Assistantstore.SaveChat(ctx, toolMsg.PrepareForStorage("", []string{"tool_result"}))
+					err = ac.srv.Assistantstore.SaveChat(ctx, toolMsg.PrepareForStorage("", []string{"tool_result"}, aiModel))
 					if err != nil {
 						logger.WithError(err).Error("unable to save tool result message")
 						return nil, err
@@ -365,6 +427,11 @@ func (ac *AssistantCoordinator) ChatStream(ctx context.Context, aiModel string, 
 		Model:        modelId,
 		System:       ac.systemPrompt,
 		SystemAppend: ac.systemPromptAddendum,
+	}
+
+	if err := ac.checkRequestSize(req, modelId, adapterName); err != nil {
+		logger.WithFields(log.Fields{"modelId": modelId, "adapterName": adapterName, "estimatedChars": estimateRequestChars(req)}).Error("request exceeds estimated context limit")
+		return nil, nil, err
 	}
 
 	adapter, ok := ac.adapters[adapterName]

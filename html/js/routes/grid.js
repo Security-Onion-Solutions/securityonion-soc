@@ -19,6 +19,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
   data() { return {
     i18n: this.$root.i18n,
     moment: moment,
+    showOptionsDialog: false,
     nodes: [],
     gridFilter: '',
     headers: [
@@ -42,7 +43,6 @@ routes.push({ path: '/grid', name: 'grid', component: {
       { title: this.$root.i18n.captureLossAbbr, value: 'captureLossPct', align: ' d-none d-xl-table-cell', moreColumns: true, metricsEnabled: true },
       { title: this.$root.i18n.zeekLossAbbr, value: 'zeekLossPct', align: ' d-none d-xl-table-cell', moreColumns: true, metricsEnabled: true },
       { title: this.$root.i18n.suricataLossAbbr, value: 'suriLossPct', align: ' d-none d-xl-table-cell', moreColumns: true, metricsEnabled: true },
-      { title: this.$root.i18n.stenoLossAbbr, value: 'stenoLossPct', align: ' d-none d-xl-table-cell', moreColumns: true, metricsEnabled: true },
       { title: this.$root.i18n.pcapRetentionAbbr, value: 'pcapDays', align: ' d-none d-xl-table-cell', moreColumns: true, metricsEnabled: true },
       { title: this.$root.i18n.uptime, value: 'uptimeSeconds', align: ' d-none d-lg-table-cell' },
       { title: this.$root.i18n.status, value: 'status' },
@@ -61,11 +61,6 @@ routes.push({ path: '/grid', name: 'grid', component: {
     uploadForm: { valid: true, attachment: null },
     maxUploadSizeBytes: 25 * 1024 * 1024,
     staleMetricsMs: 120000,
-    rules: {
-      fileSizeLimit: value => (value == null || value.size < this.maxUploadSizeBytes) || this.$root.i18n.fileTooLarge.replace("{maxUploadSizeBytes}", this.$root.formatCount(this.maxUploadSizeBytes)),
-      fileNotEmpty: value => (value == null || value.size > 0) || this.$root.i18n.fileEmpty,
-      fileRequired: value => !!value || this.$root.i18n.required,
-    },
     attachment: null,
     zone: '',
     moreColumns: false,
@@ -162,7 +157,6 @@ routes.push({ path: '/grid', name: 'grid', component: {
       this.$root.updateColumnClass(this.headers, this.i18n.captureLossAbbr, this.metricsEnabled && this.moreColumns, 'd-xl-table-cell');
       this.$root.updateColumnClass(this.headers, this.i18n.zeekLossAbbr, this.metricsEnabled && this.moreColumns, 'd-xl-table-cell');
       this.$root.updateColumnClass(this.headers, this.i18n.suricataLossAbbr, this.metricsEnabled && this.moreColumns, 'd-xl-table-cell');
-      this.$root.updateColumnClass(this.headers, this.i18n.stenoLossAbbr, this.metricsEnabled && this.moreColumns, 'd-xl-table-cell');
       this.$root.updateColumnClass(this.headers, this.i18n.pcapRetentionAbbr, this.metricsEnabled && this.moreColumns, 'd-xl-table-cell');
     },
     showHeader(header) {
@@ -376,9 +370,6 @@ routes.push({ path: '/grid', name: 'grid', component: {
     },
     hasMetricstore(item) {
       return this.hasContainer(item, 'so-influxdb');
-    },
-    hasSteno(item) {
-      return this.hasContainer(item, 'so-steno');
     },
     hasSuri(item) {
       return this.hasContainer(item, 'so-suricata');

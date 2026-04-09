@@ -207,7 +207,7 @@ test('component data initialization', () => {
   expect(comp.alwaysApproveReadRequests).toBe(false);
   expect(comp.assistantEnabled).toBe(false);
   expect(comp.isStreaming).toBe(false);
-  expect(comp.showChatHistory).toBe(true);
+  expect(comp.showChatHistory).toBe(true);  
   expect(comp.investigationMsg).toBe('');
   expect(comp.contextLimitSmall).toBe(0);
   expect(comp.contextLimitLarge).toBe(0);
@@ -278,8 +278,8 @@ test('generateChatId creates unique ID', () => {
   const id1 = comp.generateChatId();
   const id2 = comp.generateChatId();
   
-  expect(id1).toMatch(/^chat_\d+_[a-z0-9]+$/);
-  expect(id2).toMatch(/^chat_\d+_[a-z0-9]+$/);
+  expect(id1).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+  expect(id2).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
   expect(id1).not.toBe(id2);
 });
 
@@ -296,6 +296,9 @@ test('initAssistant sets assistantEnabled to true when enabled and licensed', as
     lowBalanceColorAlert: 500000,
     availableModels: [
       { id: 'test-model', displayName: "Test Model", contextLimitSmall: 200000, contextLimitLarge: 1000000, lowBalanceColorAlert: 500000, enabled: true, adapter: "SOAI" }
+    ],
+    availableAdapters: [
+      { name: "SOAI", protocol: "securityonion_ai_cloud" }
     ]
   };
   comp.$root.isLicensed = jest.fn().mockReturnValue(true);
@@ -321,12 +324,13 @@ test('initAssistant sets assistantEnabled to true when enabled and licensed', as
   expect(comp.handleRouteSessionId).toHaveBeenCalled();
   expect(comp.loadCredits).toHaveBeenCalled();
   expect(comp.focusChatInput).toHaveBeenCalled();
+  expect(comp.adaptersMap.size).toBe(1);
+  expect(comp.adaptersMap.get('SOAI')).toEqual({ name: "SOAI", protocol: "securityonion_ai_cloud" });
 });
 
 test('initAssistant sets assistantEnabled to false when not enabled', async () => {
   const mockParams = {
     enabled: false,
-    availableModels: []
   };
   comp.$root.isLicensed = jest.fn().mockReturnValue(true);
   comp.$root.showDisclaimer = jest.fn();
@@ -348,7 +352,6 @@ test('initAssistant sets assistantEnabled to false when not enabled', async () =
 test('initAssistant sets assistantEnabled to false when not licensed', async () => {
   const mockParams = {
     enabled: true,
-    availableModels: []
   };
   comp.$root.isLicensed = jest.fn().mockReturnValue(false);
   comp.$root.showDisclaimer = jest.fn();
@@ -403,7 +406,10 @@ test('initAssistant corrects contextLimitLarge when smaller than contextLimitSma
         enabled: false,
         adapter: "SOAI"
       },
-    ]
+    ],
+    availableAdapters: [
+      { name: "SOAI", protocol: "securityonion_ai_cloud" }
+    ],
   };
   
   comp.$root.isLicensed = jest.fn().mockReturnValue(true);
@@ -439,10 +445,11 @@ test('initAssistant corrects contextLimitLarge when smaller than contextLimitSma
   expect(model3.contextLimitLarge).toBe(250000); // Should remain unchanged
 });
 
-test('initAssistant handles empty availableModels array', async () => {
+test('initAssistant handles empty availableModels and availableAdapters array', async () => {
   const mockParams = {
     enabled: true,
-    availableModels: [] // Empty array
+    availableModels: [], // Empty array
+    availableAdapters: [], // Empty array
   };
   
   comp.$root.isLicensed = jest.fn().mockReturnValue(true);
@@ -457,6 +464,7 @@ test('initAssistant handles empty availableModels array', async () => {
   
   // Check that modelsMap is empty and no correction logic was executed
   expect(comp.modelsMap.size).toBe(0);
+  expect(comp.adaptersMap.size).toBe(0);
   expect(comp.currentModel).toBe(''); // Should remain empty
   expect(comp.updateModelParams).toHaveBeenCalled();
 });
@@ -496,8 +504,7 @@ test('handleRouteSessionId with non-existent session', async () => {
   
   await comp.handleRouteSessionId();
   
-  expect(comp.currentChatId).toBe(fakeSessionId);
-  expect(comp.focusChatInput).toHaveBeenCalled();
+  expect(comp.currentChatId).toBe(null);
 });
 
 
@@ -693,6 +700,7 @@ test('sendMessage with insufficient credits', async () => {
   comp.creditsRemaining = 0;
   comp.assistantEnabled = true;
   comp.canChat = true;
+  comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
   
   await comp.sendMessage();
@@ -722,10 +730,11 @@ test('sendMessage creates session ID and updates URL', async () => {
   comp.scrollToBottom = jest.fn();
   comp.assistantEnabled = true;
   comp.canChat = true;
+  comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
-  
+
   await comp.sendMessage();
-  
+
   expect(comp.generateChatId).toHaveBeenCalled();
   expect(comp.currentChatId).toBe(fakeSessionId);
   expect(comp.saveCurrentChatId).toHaveBeenCalled();
@@ -919,6 +928,7 @@ test('approveTool queues tool for execution', async () => {
   const toolUse = { ...fakeToolUse };
   comp.queueTool = jest.fn();
   comp.scrollToBottom = jest.fn();
+  comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
   comp.mostRecentFloatingTool = new Map();
   comp.mostRecentFloatingTool.set(comp.currentChatId, toolUse);
@@ -938,6 +948,7 @@ test('approveTool handles execution error', async () => {
     throw new Error('Execution failed');
   });
   comp.scrollToBottom = jest.fn();
+  comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
   comp.mostRecentFloatingTool = new Map();
   
@@ -951,6 +962,7 @@ test('rejectTool marks as rejected', async () => {
   const toolUse = { ...fakeToolUse };
   comp.scrollToBottom = jest.fn();
   comp.callAIAPI = jest.fn().mockResolvedValue();
+  comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
   
   await comp.rejectTool(toolUse);
@@ -2088,6 +2100,74 @@ test('callAIAPI handles empty chunks and filters correctly', async () => {
   expect(comp.messages[0].role).toBe('assistant');
 });
 
+test('callAIAPI clears investigation query params after first use', async () => {
+  comp.currentChatId = fakeSessionId;
+  comp.currentModel = 'test-model';
+  comp.loadCredits = jest.fn().mockResolvedValue();
+  comp.scrollToBottom = jest.fn();
+  
+  // Set up route with investigation query params
+  comp.$route.query = {
+    socId: 'alert-123',
+    investigation: 'true',
+    otherParam: 'keep-this'
+  };
+  comp.$route.params = { sessionId: fakeSessionId };
+  
+  // Mock $nextTick to execute callback immediately
+  let nextTickCallback = null;
+  comp.$nextTick = jest.fn((callback) => {
+    if (callback) {
+      nextTickCallback = callback;
+      return Promise.resolve().then(() => callback());
+    }
+    return Promise.resolve();
+  });
+  
+  const mockResponse = {
+    ok: true,
+    data: {
+      pipeThrough: jest.fn().mockReturnValue({
+        getReader: jest.fn().mockReturnValue({
+          read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
+            .mockResolvedValueOnce({ done: true })
+        })
+      })
+    }
+  };
+  const mockPost = mockPapi('post', mockResponse);
+  
+  await comp.callAIAPI('Test message');
+  
+  // Verify the API was called with the socId parameter
+  expect(mockPost).toHaveBeenCalledWith('/assistant/chat?entityType=alert_investigation&entityId=alert-123', {
+    msg: 'Test message',
+    sessionId: fakeSessionId,
+    model: 'test-model',
+    tags: null,
+  }, {
+    adapter: 'fetch',
+    headers: {
+      'Accept': 'text/event-stream'
+    },
+    responseType: 'stream'
+  });
+  
+  // Verify $nextTick was called (for the query param clearing)
+  expect(comp.$nextTick).toHaveBeenCalled();
+  
+  // Wait for nextTick callback to execute
+  await new Promise(resolve => setTimeout(resolve, 0));
+  
+  // Verify router.replace was called to clear investigation params
+  expect(comp.$router.replace).toHaveBeenCalledWith({
+    name: 'assistant',
+    params: { sessionId: fakeSessionId },
+    query: { otherParam: 'keep-this' } // investigation and socId should be removed
+  });
+});
+
 // Investigation session tests
 test('handleRouteSessionId detects investigation session from query parameter', async () => {
   comp.$route.params.sessionId = fakeSessionId;
@@ -2110,20 +2190,16 @@ test('handleRouteSessionId detects investigation session from query parameter', 
   expect(comp.$route.query.investigation).toBe('true');
 });
 
-test('handleRouteSessionId handles non-investigation session with existing messages', async () => {
+test('handleRouteSessionId handles existing session', async () => {
   comp.$route.params.sessionId = fakeSessionId;
-  comp.$route.query.investigation = 'false'; // Not an investigation
-  comp.loadChatFromBackend = jest.fn().mockRejectedValue(new Error('Session not found'));
-  comp.loadNewChatScreen = jest.fn();
-  comp.saveCurrentChatId = jest.fn();
-  comp.messages = [fakeMessage, fakeAssistantMessage]; // More than 1 message
+  comp.loadChatFromBackend = jest.fn().mockResolvedValue();
+  comp.focusChatInput = jest.fn();
   comp.assistantEnabled = true;
-  
+
   await comp.handleRouteSessionId();
-  
-  expect(comp.currentChatId).toBe(fakeSessionId);
-  expect(comp.saveCurrentChatId).toHaveBeenCalled();
-  expect(comp.loadNewChatScreen).toHaveBeenCalled();
+
+  expect(comp.loadChatFromBackend).toHaveBeenCalledWith(fakeSessionId);
+  expect(comp.focusChatInput).toHaveBeenCalled();
 });
 
 test('startInvestigationSession clears messages and sets up investigation prompt', async () => {
@@ -3508,193 +3584,6 @@ test('loadLocalSettings integration with actual localStorage access', () => {
   expect(comp.showChatHistory).toBe(false);
 });
 
-test('openOptionsMenu finds and clicks expansion panel', () => {
-  const mockPanelTitle = {
-    click: jest.fn()
-  };
-  const mockOptionsPanel = {
-    querySelector: jest.fn().mockReturnValue(mockPanelTitle)
-  };
-  const mockOptionsHeader = {
-    scrollIntoView: jest.fn()
-  };
-  
-  // Mock querySelector to return different elements based on selector
-  comp.$el.querySelector = jest.fn((selector) => {
-    if (selector === '[data-aid="assistant_options"]') {
-      return mockOptionsPanel;
-    } else if (selector === '#chatOptionsHeader') {
-      return mockOptionsHeader;
-    }
-    return null;
-  });
-  
-  comp.openOptionsMenu();
-  
-  expect(comp.$nextTick).toHaveBeenCalled();
-  
-  // Execute the nextTick callback manually for testing
-  const nextTickCallback = comp.$nextTick.mock.calls[0][0];
-  if (nextTickCallback) {
-    nextTickCallback();
-  }
-  
-  expect(comp.$el.querySelector).toHaveBeenCalledWith('[data-aid="assistant_options"]');
-  expect(mockOptionsPanel.querySelector).toHaveBeenCalledWith('.v-expansion-panel-title');
-  expect(mockPanelTitle.click).toHaveBeenCalled();
-  expect(comp.$el.querySelector).toHaveBeenCalledWith('#chatOptionsHeader');
-  expect(mockOptionsHeader.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
-});
-
-test('openOptionsMenu handles missing options panel', () => {
-  const mockOptionsHeader = {
-    scrollIntoView: jest.fn()
-  };
-  
-  comp.$el.querySelector = jest.fn((selector) => {
-    if (selector === '[data-aid="assistant_options"]') {
-      return null; // Panel not found
-    } else if (selector === '#chatOptionsHeader') {
-      return mockOptionsHeader;
-    }
-    return null;
-  });
-  
-  comp.openOptionsMenu();
-  
-  expect(comp.$nextTick).toHaveBeenCalled();
-  
-  // Execute the nextTick callback manually for testing
-  const nextTickCallback = comp.$nextTick.mock.calls[0][0];
-  if (nextTickCallback) {
-    nextTickCallback();
-  }
-  
-  expect(comp.$el.querySelector).toHaveBeenCalledWith('[data-aid="assistant_options"]');
-  expect(comp.$el.querySelector).toHaveBeenCalledWith('#chatOptionsHeader');
-  expect(mockOptionsHeader.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
-  // Should not throw error when panel is missing
-});
-
-test('openOptionsMenu handles missing panel title', () => {
-  const mockOptionsPanel = {
-    querySelector: jest.fn().mockReturnValue(null) // Panel title not found
-  };
-  const mockOptionsHeader = {
-    scrollIntoView: jest.fn()
-  };
-  
-  comp.$el.querySelector = jest.fn((selector) => {
-    if (selector === '[data-aid="assistant_options"]') {
-      return mockOptionsPanel;
-    } else if (selector === '#chatOptionsHeader') {
-      return mockOptionsHeader;
-    }
-    return null;
-  });
-  
-  comp.openOptionsMenu();
-  
-  expect(comp.$nextTick).toHaveBeenCalled();
-  
-  // Execute the nextTick callback manually for testing
-  const nextTickCallback = comp.$nextTick.mock.calls[0][0];
-  if (nextTickCallback) {
-    nextTickCallback();
-  }
-  
-  expect(comp.$el.querySelector).toHaveBeenCalledWith('[data-aid="assistant_options"]');
-  expect(mockOptionsPanel.querySelector).toHaveBeenCalledWith('.v-expansion-panel-title');
-  expect(comp.$el.querySelector).toHaveBeenCalledWith('#chatOptionsHeader');
-  expect(mockOptionsHeader.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
-  // Should not throw error when panel title is missing
-});
-
-test('openOptionsMenu handles missing options header', () => {
-  const mockPanelTitle = {
-    click: jest.fn()
-  };
-  const mockOptionsPanel = {
-    querySelector: jest.fn().mockReturnValue(mockPanelTitle)
-  };
-  
-  comp.$el.querySelector = jest.fn((selector) => {
-    if (selector === '[data-aid="assistant_options"]') {
-      return mockOptionsPanel;
-    } else if (selector === '#chatOptionsHeader') {
-      return null; // Header not found
-    }
-    return null;
-  });
-  
-  comp.openOptionsMenu();
-  
-  expect(comp.$nextTick).toHaveBeenCalled();
-  
-  // Execute the nextTick callback manually for testing
-  const nextTickCallback = comp.$nextTick.mock.calls[0][0];
-  if (nextTickCallback) {
-    nextTickCallback();
-  }
-  
-  expect(comp.$el.querySelector).toHaveBeenCalledWith('[data-aid="assistant_options"]');
-  expect(mockOptionsPanel.querySelector).toHaveBeenCalledWith('.v-expansion-panel-title');
-  expect(mockPanelTitle.click).toHaveBeenCalled();
-  expect(comp.$el.querySelector).toHaveBeenCalledWith('#chatOptionsHeader');
-  // Should not throw error when header is missing
-});
-
-test('openOptionsMenu handles complete DOM element absence', () => {
-  comp.$el.querySelector = jest.fn().mockReturnValue(null);
-  
-  comp.openOptionsMenu();
-  
-  expect(comp.$nextTick).toHaveBeenCalled();
-  
-  // Execute the nextTick callback manually for testing
-  const nextTickCallback = comp.$nextTick.mock.calls[0][0];
-  if (nextTickCallback) {
-    nextTickCallback();
-  }
-  
-  expect(comp.$el.querySelector).toHaveBeenCalledWith('[data-aid="assistant_options"]');
-  expect(comp.$el.querySelector).toHaveBeenCalledWith('#chatOptionsHeader');
-  // Should not throw error when all elements are missing
-});
-
-test('openOptionsMenu uses nextTick for DOM manipulation timing', () => {
-  comp.openOptionsMenu();
-  
-  expect(comp.$nextTick).toHaveBeenCalledTimes(1);
-  expect(typeof comp.$nextTick.mock.calls[0][0]).toBe('function');
-});
-
-test('openOptionsMenu scrollIntoView uses correct options', () => {
-  const mockOptionsHeader = {
-    scrollIntoView: jest.fn()
-  };
-  
-  comp.$el.querySelector = jest.fn((selector) => {
-    if (selector === '#chatOptionsHeader') {
-      return mockOptionsHeader;
-    }
-    return null;
-  });
-  
-  comp.openOptionsMenu();
-  
-  // Execute the nextTick callback manually for testing
-  const nextTickCallback = comp.$nextTick.mock.calls[0][0];
-  if (nextTickCallback) {
-    nextTickCallback();
-  }
-  
-  expect(mockOptionsHeader.scrollIntoView).toHaveBeenCalledWith({
-    behavior: 'smooth',
-    block: 'center'
-  });
-});
-
 // Integration tests for settings functionality
 test('settings integration: save and load cycle', () => {
   // Set up initial state
@@ -4517,34 +4406,22 @@ test('clearStreamingStates resets streaming-related state', () => {
   expect(comp.isStreaming).toBe(false);
 });
 
-test('checkIfDeleted sets canChat to false when session not in history', () => {
-  const sessionId = 'missing-session';
-  comp.chatHistory = [
-    { sessionId: 'session1' },
-    { sessionId: 'session2' }
-  ];
-  comp.canChat = true;
-  const showWarningMock = jest.fn();
-  comp.$root.showWarning = showWarningMock;
-  
-  comp.checkIfDeleted(sessionId);
-  
-  expect(comp.canChat).toBe(false);
-  expect(showWarningMock).toHaveBeenCalledWith(comp.i18n.assistantChatNoResume);
+test('checkIfDeleted sets canChat to true when session is not deleted', () => {
+  comp.canChat = false;
+
+  comp.checkIfDeleted({ sessionId: 'existing-session' });
+
+  expect(comp.canChat).toBe(true);
 });
 
-test('checkIfDeleted sets canChat to true when session exists in history', () => {
-  const sessionId = { sessionId: 'existing-session' };
-  comp.chatHistory = [
-    { sessionId: 'session1' },
-    { sessionId: 'existing-session' },
-    { sessionId: 'session2' }
-  ];
-  comp.canChat = false;
-  
-  comp.checkIfDeleted(sessionId);
-  
-  expect(comp.canChat).toBe(true);
+test('checkIfDeleted sets canChat to false when session is deleted', () => {
+  comp.canChat = true;
+  comp.$root.showWarning = jest.fn();
+
+  comp.checkIfDeleted({ sessionId: 'existing-session', deleteTime: '2026-01-01T00:00:00Z' });
+
+  expect(comp.canChat).toBe(false);
+  expect(comp.$root.showWarning).toHaveBeenCalled();
 });
 
 // Auto-approval functionality tests
@@ -4599,6 +4476,7 @@ test('sendMessage checks context limit before proceeding', async () => {
   comp.canChat = true;
   comp.assistantEnabled = true;
   comp.creditsRemaining = 100;
+  comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(true);
   comp.callAIAPI = jest.fn();
   
@@ -4613,12 +4491,13 @@ test('sendMessage checks context limit before proceeding, but allows context_com
   comp.canChat = true;
   comp.assistantEnabled = true;
   comp.creditsRemaining = 100;
+  comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(true);
   comp.callAIAPI = jest.fn();
   
   await comp.sendMessage([MSGTAG_CONTEXTCOMPRESSION]);
-  
-  expect(comp.checkContextLimitReached).toHaveBeenCalled();
+
+  expect(comp.checkContextLimitReached).not.toHaveBeenCalled();
   expect(comp.callAIAPI).toHaveBeenCalled();
   expect(comp.callAIAPI).toHaveBeenCalledWith('Summarize the conversation so far for context preservation', [MSGTAG_CONTEXTCOMPRESSION]);
 });
@@ -4638,6 +4517,7 @@ test('sendMessage clears welcome message when starting first real conversation',
   comp.callAIAPI = jest.fn().mockResolvedValue();
   comp.loadStoredChats = jest.fn().mockResolvedValue();
   comp.scrollToBottom = jest.fn();
+  comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
   
   await comp.sendMessage();
@@ -4798,6 +4678,7 @@ test('handleContentBlockStop processes tool completion with auto-approval', () =
   comp.getSessionToolMap = jest.fn().mockReturnValue(mockToolMap);
   comp.getIndexMap = jest.fn().mockReturnValue(mockIndexMap);
   comp.shouldAutoApproveTool = jest.fn().mockReturnValue(true);
+  comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
   comp.queueTool = jest.fn();
   
@@ -4883,6 +4764,7 @@ test('handleToolExecutionContentBlockStop processes chained tool with auto-appro
   comp.getSessionToolMap = jest.fn().mockReturnValue(mockToolMap);
   comp.getIndexMap = jest.fn().mockReturnValue(mockIndexMap);
   comp.shouldAutoApproveTool = jest.fn().mockReturnValue(true);
+  comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
   comp.queueTool = jest.fn();
   
@@ -5302,6 +5184,7 @@ test('sendMessage marks floating tool as skipped when sending new message', asyn
   comp.canChat = true;
   comp.assistantEnabled = true;
   comp.creditsRemaining = 100;
+  comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
   comp.callAIAPI = jest.fn().mockResolvedValue();
   comp.loadStoredChats = jest.fn().mockResolvedValue();
@@ -5329,6 +5212,7 @@ test('sendMessage does not mark floating tool as skipped when only welcome messa
   comp.canChat = true;
   comp.assistantEnabled = true;
   comp.creditsRemaining = 100;
+  comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
   comp.callAIAPI = jest.fn().mockResolvedValue();
   comp.loadStoredChats = jest.fn().mockResolvedValue();
@@ -5769,6 +5653,78 @@ test('messageContextValues handles null messages', () => {
   const result = comp.messageContextValues();
 
   expect(result).toEqual([]);
+});
+
+// isMessageTooLong computed property tests
+test('isMessageTooLong returns false when charsPerTokenEstimate is 0', () => {
+  comp.charsPerTokenEstimate = 0;
+  comp.newMessage = 'Hello';
+  comp.contextLength = 0;
+  comp.contextLimitSmall = 1000;
+
+  expect(comp.isMessageTooLong()).toBe(false);
+});
+
+test('isMessageTooLong returns false when newMessage is empty', () => {
+  comp.charsPerTokenEstimate = 3.6;
+  comp.newMessage = '';
+  comp.contextLength = 0;
+  comp.contextLimitSmall = 1000;
+
+  expect(comp.isMessageTooLong()).toBe(false);
+});
+
+test('isMessageTooLong returns false when within limit', () => {
+  comp.charsPerTokenEstimate = 4;
+  comp.newMessage = 'Short message';
+  comp.contextLength = 0;
+  comp.increaseContextLimit = false;
+  comp.contextLimitSmall = 1000;
+
+  // maxChars = 1000 * 4 * 1.1 = 4400
+  // usedChars = 13 + 0 = 13
+  expect(comp.isMessageTooLong()).toBe(false);
+});
+
+test('isMessageTooLong returns true when message exceeds limit', () => {
+  comp.charsPerTokenEstimate = 4;
+  comp.newMessage = 'a'.repeat(4400);
+  comp.contextLength = 0;
+  comp.increaseContextLimit = false;
+  comp.contextLimitSmall = 1000;
+
+  // maxChars = 1000 * 4 * 1.1 = 4400
+  // usedChars = 4400 + 0 = 4400
+  expect(comp.isMessageTooLong()).toBe(true);
+});
+
+test('isMessageTooLong accounts for context length', () => {
+  comp.charsPerTokenEstimate = 4;
+  comp.newMessage = 'Hello';
+  comp.contextLength = 1000;
+  comp.increaseContextLimit = false;
+  comp.contextLimitSmall = 1000;
+
+  // maxChars = 1000 * 4 * 1.1 = 4400
+  // usedChars = 5 + (1000 * 4) = 4005
+  expect(comp.isMessageTooLong()).toBe(false);
+
+  comp.contextLength = 1100;
+  // usedChars = 5 + (1100 * 4) = 4405
+  expect(comp.isMessageTooLong()).toBe(true);
+});
+
+test('isMessageTooLong uses large context limit when toggled', () => {
+  comp.charsPerTokenEstimate = 4;
+  comp.newMessage = 'a'.repeat(4400);
+  comp.contextLength = 0;
+  comp.increaseContextLimit = true;
+  comp.contextLimitSmall = 1000;
+  comp.contextLimitLarge = 2000;
+
+  // maxChars = 2000 * 4 * 1.1 = 8800
+  // usedChars = 4400
+  expect(comp.isMessageTooLong()).toBe(false);
 });
 
 test('buildModelIdentifier', () => {

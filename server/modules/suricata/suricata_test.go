@@ -1855,6 +1855,62 @@ func TestWriteThresholdFileMultipleTypes(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// Test writeThresholdFile returns error for overrides with nil fields
+func TestWriteThresholdFileNilOverrideFields(t *testing.T) {
+	eng := &SuricataEngine{
+		thresholdFile: "/opt/sensoroni/nids/threshold.conf",
+	}
+
+	tests := []struct {
+		name      string
+		detection *model.Detection
+		errMsg    string
+	}{
+		{
+			name: "nil Track in suppress",
+			detection: &model.Detection{
+				PublicID: "1001",
+				Overrides: []*model.Override{
+					{
+						Type:      model.OverrideTypeSuppress,
+						IsEnabled: true,
+						OverrideParameters: model.OverrideParameters{
+							Track: nil,
+							IP:    util.Ptr("192.168.1.0/24"),
+						},
+					},
+				},
+			},
+			errMsg: "invalid suppress override for SID 1001",
+		},
+		{
+			name: "nil IP in suppress",
+			detection: &model.Detection{
+				PublicID: "1002",
+				Overrides: []*model.Override{
+					{
+						Type:      model.OverrideTypeSuppress,
+						IsEnabled: true,
+						OverrideParameters: model.OverrideParameters{
+							Track: util.Ptr("by_src"),
+							IP:    nil,
+						},
+					},
+				},
+			},
+			errMsg: "invalid suppress override for SID 1002",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := eng.writeThresholdFile([]*model.Detection{tt.detection})
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), tt.errMsg)
+		})
+	}
+}
+
 // Test hasDetectionChanged method
 func TestHasDetectionChanged(t *testing.T) {
 	eng := &SuricataEngine{}

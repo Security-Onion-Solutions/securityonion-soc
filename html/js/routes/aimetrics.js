@@ -13,6 +13,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
     TABLE_SETTING_USERS: 0,
     TABLE_SETTING_SESSIONS: 1,
     TABLE_SETTING_MESSAGES: 2,
+    showOptionsDialog: false,
     aimetrics: [],
     headers: [
       [
@@ -44,6 +45,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         { title: this.$root.i18n.inputTokens, value: 'inputTokens' },
         { title: this.$root.i18n.outputTokens, value: 'outputTokens' },
         { title: this.$root.i18n.credits, value: 'credits' },
+        { title: this.$root.i18n.model, value: 'model' },
       ],
     ],
     expandedFields: {
@@ -71,8 +73,6 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       { title: "key", value: "key" },
       { title: "value", value: "value" }
     ],
-    creditsRemaining: 0,
-    creditsLoaded: false,
     searchFilter: '',
     
     dateRange: '',
@@ -270,7 +270,6 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         this.aimetrics = [];
       }
       this.$root.stopLoading();
-      await this.loadCredits();
       this.resetRefreshTimer();
     },
     saveLocalSettings() {
@@ -327,22 +326,6 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         }
       }
       return records;
-    },
-    async loadCredits() {
-      try {
-        const response = await this.$root.papi.get('/assistant/balance');
-        if (response.data) {
-          if (response.data.health_status === 'healthy') {
-            this.creditsRemaining = response.data.credit_balance || 0;
-            this.creditsLoaded = true;
-          } else {
-            throw new Error(this.i18n.assistantBalanceCheckUnhealthy);
-          }
-        }
-      } catch (error) {
-        this.creditsLoaded = false;
-        this.$root.showError(error);
-      }
     },
     async lookupSocId(data) {
       if (data && data.length == 36 && data.indexOf("-") == 8) {
@@ -572,18 +555,45 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       this.graphUsersMessagesData.key = 0;
 
       this.setupTimelineChart(this.graphSessionsCreditsOptions, this.graphSessionsCreditsData, this.i18n.totalCredits);
-      this.setupTimelineChart(this.graphSessionsMessagesOptions, this.graphSessionsMessagesData, this.i18n.totalMessages);
+      this.setupPieChart(this.graphSessionsMessagesOptions, this.graphSessionsMessagesData, this.i18n.totalMessages);
       this.graphSessionsCreditsData.key = 0;
       this.graphSessionsMessagesData.key = 0;
     },
     populateUsersCharts() {
       this.populateChart(this.graphUsersCreditsData, this.aimetrics, 'totalCredits');
       this.populateChart(this.graphUsersSessionsData, this.aimetrics, 'totalSessions');
-      this.populateChart(this.graphUsersMessagesData, this.aimetrics, 'totalMessages');
+      this.populateModelsChart(this.graphUsersMessagesData, this.aimetrics);
     },
     populateSessionsCharts() {
       this.populateChart(this.graphSessionsCreditsData, this.aimetrics, 'totalCredits', 'createTime');
-      this.populateChart(this.graphSessionsMessagesData, this.aimetrics, 'totalMessages', 'createTime');
+      this.populateModelsChart(this.graphSessionsMessagesData, this.aimetrics);
+    },
+    populateModelsChart(chart, data) {
+      chart.key++;
+      chart.labels = [];
+      chart.datasets[0].data = [];
+      
+      if (!data || data.length === 0) return;
+      
+      const modelMessageCounts = {};
+      
+      data.forEach(item => {
+        const modelUsage = item.usage?.modelUsage || item.modelUsage;
+        
+        if (modelUsage) {
+          for (const [modelKey, modelData] of Object.entries(modelUsage)) {
+            if (!modelMessageCounts[modelKey]) {
+              modelMessageCounts[modelKey] = 0;
+            }
+            modelMessageCounts[modelKey] += modelData.modelMessages || 0;
+          }
+        }
+      });
+      
+      for (const [modelKey, messageCount] of Object.entries(modelMessageCounts)) {
+        chart.labels.push(modelKey);
+        chart.datasets[0].data.push(messageCount);
+      }
     },
     populateChart(chart, data, field, timefield=null) {
       chart.key++;
@@ -621,6 +631,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         title: {
           display: true,
           text: title,
+          color: fontColor,
         }
       };
       options.scales = {
@@ -630,16 +641,16 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
           },
           ticks: {
             beginAtZero: true,
-            fontColor: fontColor,
+            color: fontColor,
             precision: 0,
           }
         },
         x: {
-          gridLines: {
+          grid: {
             color: gridColor,
           },
           ticks: {
-            fontColor: fontColor,
+            color: fontColor,
           }
         },
       };
@@ -660,16 +671,21 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       options.scales.x.type = 'timeseries';
     },
     setupPieChart(options, data, title) {
+      var fontColor = this.$root.getColor("#888888", -40);
       options.responsive = true;
       options.maintainAspectRatio = false;
       options.plugins = {
         legend: {
           display: true,
           position: 'left',
+          labels: {
+            color: fontColor,
+          },
         },
         title: {
           display: true,
           text: title,
+          color: fontColor,
         }
       };
       data.labels = [];
@@ -691,6 +707,10 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         data: [],
         label: this.i18n.field_count,
       }];
+    },
+    buildModelIdentifier(model) {
+      if (!model) return '';
+      return `${model?.id||''}@${model?.adapter||''}`;
     }
   }
 }});

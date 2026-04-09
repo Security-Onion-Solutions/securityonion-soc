@@ -6,58 +6,50 @@
 			<v-btn v-else @click.stop="sync()" color="warning" :title="i18n.settingsSynchronizeHelp">{{ i18n.settingsSynchronize }}</v-btn>
 		</template>
 	</v-alert>
+	<v-dialog v-model="showOptionsDialog" max-width="540">
+		<v-card class="options-dialog">
+			<v-card-title>{{i18n.options}}</v-card-title>
+			<v-card-text data-aid="config_options">
+				<v-switch id="option-advanced" :disabled="$root.loading" v-model="advanced" dense class="my-0" :label="i18n.settingsAdvanced" :hint="i18n.settingsAdvancedHelp" persistent-hint data-aid="config_option_advanced_toggle"></v-switch>
+				<v-btn variant="tonal" id="option-synchronize" @click.stop="sync()" class="mt-6 mb-3" data-aid="config_option_synchronize_button">
+					{{ i18n.settingsSynchronize }}
+				</v-btn>
+				<div class="text-body-small" v-text="i18n.settingsSynchronizeHelp"></div>
+			</v-card-text>
+			<v-card-actions>
+				<v-spacer></v-spacer>
+				<v-btn variant="text" @click="showOptionsDialog = false">{{ i18n.close }}</v-btn>
+			</v-card-actions>
+		</v-card>
+	</v-dialog>
 	<v-row>
-		<v-col cols="12" lg="3">
-			<h2 v-text="i18n.configTitle"></h2>
-		</v-col>
-		<v-col cols="12" lg="5">
-			<v-expansion-panels>
-				<v-expansion-panel>
-					<v-expansion-panel-title id="configOptionsHeader" expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up">{{i18n.options}}</v-expansion-panel-title>
-					<v-expansion-panel-text>
-						<v-switch id="option-advanced" :disabled="$root.loading" v-model="advanced" dense class="my-0" :label="i18n.settingsAdvanced" :hint="i18n.settingsAdvancedHelp" persistent-hint data-aid="config_option_advanced_toggle"></v-switch>
-						<v-btn id="option-synchronize" @click.stop="sync()" class="mt-6 mb-1" data-aid="config_option_synchronize_button">
-							{{ i18n.settingsSynchronize }}
-						</v-btn>
-						<div class="text-caption" v-text="i18n.settingsSynchronizeHelp"></div>
-					</v-expansion-panel-text>
-				</v-expansion-panel>
-			</v-expansion-panels>
-		</v-col>
-		<v-spacer></v-spacer>
-		<v-col cols="12" lg="2" align="end" data-aid="config_summary">
-			<h4 v-if="!$root.loading">{{ i18n.settingsCustomized }} {{ settingsCustomized }} / {{ settingsAvailable }} </h4>
-		</v-col>
+		<v-toolbar class="so-toolbar elevation-0" fixed>
+			<v-text-field id="filter-input" :label="i18n.filter" v-model="search" clearable :hint="i18n.filterHelp" persistent-hint @click:clear="clearFilter()" @keydown.enter="applySearchFilter()" class="mx-2" style="max-width: 240px" density="compact" hide-details data-aid="config_filter_input"></v-text-field>
+			<v-btn variant="text" size="small" id="apply-search-button" icon @click="applySearchFilter()" :title="i18n.search" data-aid="config_apply_search_filter">
+				<v-icon class="theme-icon">fa-magnifying-glass</v-icon>
+			</v-btn>
+			<v-btn variant="text" size="small" id="expand-all-button" icon @click="expand()" :title="i18n.expandAll" data-aid="config_expand_all">
+				<v-icon class="theme-icon">fa-angles-down</v-icon>
+			</v-btn>
+			<v-btn variant="text" size="small" id="collapse-all-button" icon @click="collapse()" :title="i18n.collapseAll" data-aid="config_collapse_all">
+				<v-icon class="theme-icon">fa-angles-up</v-icon>
+			</v-btn>
+			<v-btn variant="text" size="small" id="show-modified-button" icon @click="expand(null, isSettingModified)" :title="i18n.settingIsModifiedHelp" data-aid="config_show_modified">
+				<v-icon color="primary">fa-pencil</v-icon>
+			</v-btn>
+			<v-btn variant="text" size="small" id="show-node-modified-button" icon @click="expand(null, isSettingModifiedPerNode)" :title="i18n.settingHasNodeValuesHelp" data-aid="config_show_node_modified">
+				<v-icon color="warning">fa-circle-nodes</v-icon>
+			</v-btn>
+			<v-spacer></v-spacer>
+			<h4 v-if="!$root.loading" class="mr-0 my-0">{{ i18n.settingsCustomized }} {{ settingsCustomized }} / {{ settingsAvailable }} </h4>
+			<v-btn icon variant="flat" class="circle-button ml-5 mr-2" :title="i18n.options" @click="showOptionsDialog = true" id="configOptionsHeader" data-aid="config_options_button">
+				<v-icon>fa-gear</v-icon>
+			</v-btn>
+		</v-toolbar>
 	</v-row>
-	<v-row>
-	</v-row>
-	<v-row>
+	<v-row class="flex-nowrap">
 		<v-col cols="12" lg="4" :class="treeVisible ? 'd-block' : 'd-none'">
 			<v-container class="sticky-config">
-				<v-row>
-					<v-col>
-						<v-text-field variant="underlined" id="filter-input" :label="i18n.filter" v-model="search" clearable :hint="i18n.filterHelp" persistent-hint @click:clear="clearFilter()" @keydown.enter="applySearchFilter()" class="mb-3" data-aid="config_filter_input"></v-text-field>
-					</v-col>
-					<v-col>
-						<div class="mt-3 text-no-wrap overflow-x-hidden">
-							<v-btn variant="text" size="small" id="apply-search-button" icon @click="applySearchFilter()" :title="i18n.search" data-aid="config_apply_search_filter">
-								<v-icon class="theme-icon">fa-magnifying-glass</v-icon>
-							</v-btn>
-							<v-btn variant="text" size="small" id="expand-all-button" icon @click="expand()" :title="i18n.expandAll" data-aid="config_expand_all">
-								<v-icon class="theme-icon">fa-angles-down</v-icon>
-							</v-btn>
-							<v-btn variant="text" size="small" id="collapse-all-button" icon @click="collapse()" :title="i18n.collapseAll" data-aid="config_collapse_all">
-								<v-icon class="theme-icon">fa-angles-up</v-icon>
-							</v-btn>
-							<v-btn variant="text" size="small" id="show-modified-button" icon @click="expand(null, isSettingModified)" :title="i18n.settingIsModifiedHelp" data-aid="config_show_modified">
-								<v-icon color="primary">fa-pencil</v-icon>
-							</v-btn>
-							<v-btn variant="text" size="small" id="show-node-modified-button" icon @click="expand(null, isSettingModifiedPerNode)" :title="i18n.settingHasNodeValuesHelp" data-aid="config_show_node_modified">
-								<v-icon color="warning">fa-circle-nodes</v-icon>
-							</v-btn>
-						</div>
-					</v-col>
-				</v-row>
 
 			<!-- <v-treeview
 				id="config-tree"
@@ -86,7 +78,7 @@
 			</v-container>
 		</v-col>
 		<v-divider vertical class="vert-divider"></v-divider>
-		<v-col cols="12" :lg="treeVisible ? 8 : 12">
+		<v-col cols="12" :lg="treeVisible ? 8 : 12" style="min-width: 0; flex: 1 1 0">
 			<v-fade-transition mode="out-in" duration="100">
 				<div v-if="!selected" id="config-quick-links">
 					<v-alert v-text="i18n.settingSelect" type="info"></v-alert>
@@ -185,7 +177,7 @@
 								{{i18n.configQLBPFHeader}}
 								<ul>
 									<li>
-										<router-link data-aid="config_quicklink_steno" :to="{name: 'config', query: {s: 'bpf.pcap'}}">{{i18n.configQLPCAP}}</router-link>
+										<router-link data-aid="config_quicklink_pcap" :to="{name: 'config', query: {s: 'bpf.pcap'}}">{{i18n.configQLPCAP}}</router-link>
 									</li>
 									<li>
 										<router-link data-aid="config_quicklink_suricata" :to="{name: 'config', query: {s: 'bpf.suricata'}}">{{i18n.configQLSuricata}}</router-link>
@@ -220,8 +212,8 @@
 				</div>
 				<v-card v-else :key="selected?.id" class="mx-auto config-setting" flat>
 					<v-card-text>
-						<div class="d-inline-flex mb-4 " style="width: 100%">
-							<span class="text-caption font-weight-thin" data-aid="config_breadcrumbs">
+						<div class="d-inline-flex mb-4" style="width: 100%">
+							<span class="text-body-small font-weight-thin" data-aid="config_breadcrumbs">
 								{{ getSettingBreadcrumbs(selected) }}
 								<v-btn icon variant="text" size="small" @click.stop="$root.copyToClipboard(getSettingBreadcrumbs(selected))" :title="i18n.copyBreadcrumbToClipboard" data-aid="config_breadcrumb_copy">
 									<v-icon>fa-copy</v-icon>
@@ -241,10 +233,10 @@
 								</v-btn>
 							</span>
 						</div>
-						<div class="text-subtitle-1 mb-4" data-aid="config_item_help" >
+						<div class="text-subtitle-1 mb-4 d-flex align-center" data-aid="config_item_help" >
 							<div class="markdown-body" v-html="formatMarkdown(getSettingDescription(selected))"></div>
-							<a v-if="selected.helpLink" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + selected.helpLink" style="text-decoration: none; cursor: 'pointer'" :title="i18n.settingHelp">
-								<v-icon color="info" class="mb-2">fa-circle-question</v-icon>
+							<a v-if="selected.helpLink" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + selected.helpLink" style="text-decoration: none; cursor: pointer" :title="i18n.settingHelp" class="ml-2">
+								<v-icon color="info">fa-circle-question</v-icon>
 							</a>
 						</div>
 						<div v-if="isReadOnly(selected)" :title="i18n.settingReadOnlyHelp" data-aid="config_item_readonly_warning">
@@ -266,11 +258,11 @@
 							</v-row>
 							<v-row v-if="!isReadOnly(selected) && selected.defaultAvailable">
 								<v-col>
-									<v-btn id="config-toggle-default-button" @click="showDefault = !showDefault" v-text="showDefault ? i18n.settingHideDefault : i18n.settingShowDefault" data-aid="config_item_show_default"></v-btn>
+									<v-btn id="config-toggle-default-button" color="text_button" @click="showDefault = !showDefault" v-text="showDefault ? i18n.settingHideDefault : i18n.settingShowDefault" data-aid="config_item_show_default"></v-btn>
 									<div v-if="showDefault" class="mt-8 ml-8">
 										<v-chip v-if="isToggle(selected)" id="default-output" :color="$root.isTrue(selected.default) ? 'primary' : ''" data-aid="config_item_default_display">{{$root.isTrue(selected.default) ? i18n.enabled : i18n.disabled }}</v-chip>
-										<v-textarea v-else-if="isMultiline(selected)" id="default-output" variant="underlined" :label="i18n.settingDefault" v-model="selected.default" readonly class="config-editor" data-aid="config_item_default_display"></v-textarea>
-										<v-text-field v-else id="default-output" variant="underlined" :label="i18n.settingDefault" v-model="selected.default" readonly data-aid="config_item_default_display"></v-text-field>
+										<v-textarea v-else-if="isMultiline(selected)" id="default-output" :label="i18n.settingDefault" v-model="selected.default" readonly class="config-editor" data-aid="config_item_default_display"></v-textarea>
+										<v-text-field v-else id="default-output" :label="i18n.settingDefault" v-model="selected.default" readonly data-aid="config_item_default_display"></v-text-field>
 									</div>
 								</v-col>
 							</v-row>
@@ -391,7 +383,7 @@
 	</v-row>
 	<v-dialog v-model="cancelDialog" persistent max-width="290" data-aid="config_cancel_dialog">
 		<v-card>
-			<v-card-title class="text-h5" v-text="i18n.settingConfirmCancel"></v-card-title>
+			<v-card-title class="text-headline-small" v-text="i18n.settingConfirmCancel"></v-card-title>
 			<v-card-text v-text="i18n.settingConfirmCancelHelp"></v-card-text>
 			<v-card-actions>
 				<v-spacer></v-spacer>
@@ -402,7 +394,7 @@
 	</v-dialog>
 	<v-dialog v-model="confirmResetDialog" persistent max-width="290" data-aid="config_confirm_reset_dialog">
 		<v-card>
-			<v-card-title class="text-h5" v-text="i18n.settingConfirmReset"></v-card-title>
+			<v-card-title class="text-headline-small" v-text="i18n.settingConfirmReset"></v-card-title>
 			<v-card-text v-text="i18n.settingConfirmResetHelp"></v-card-text>
 			<v-card-actions>
 				<v-spacer></v-spacer>
@@ -413,7 +405,7 @@
 	</v-dialog>
 	<v-dialog v-model="confirmRemoveEntryDialog" persistent max-width="390" data-aid="config_confirm_remove_entry_dialog">
 		<v-card>
-			<v-card-title class="text-h5" v-text="i18n.settingConfirmRemove"></v-card-title>
+			<v-card-title class="text-headline-small" v-text="i18n.settingConfirmRemove"></v-card-title>
 			<v-card-text v-if="confirmRemoveEntryMessage" v-text="confirmRemoveEntryMessage"></v-card-text>
 			<v-card-text v-text="i18n.settingConfirmRemoveHelp"></v-card-text>
 			<v-card-actions>

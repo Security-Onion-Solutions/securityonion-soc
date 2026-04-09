@@ -25,7 +25,7 @@ import (
 const TMP_SALTSTACK_PATH = "/tmp/gotest-soc-saltstore"
 const TMP_QUEUE_DIR = "/tmp/gotest-soc-salt-relay-queue"
 const TMP_REQUEST_FILE = "req"
-const TEST_SETTINGS_COUNT = 27
+const TEST_SETTINGS_COUNT = 28
 
 func Cleanup() {
 	exec.Command("rm", "-fr", TMP_SALTSTACK_PATH).Run()
@@ -348,6 +348,13 @@ func TestGetSettings(tester *testing.T) {
 	assert.Equal(tester, "myapp.ui_json", settings[count].Id)
 	assert.Equal(tester, "{\"something\":\"here\",\"another\":\"else\"},{\"something\":\"here2\",\"another\":\"else2\"}", settings[count].Value)
 	assert.Equal(tester, "", settings[count].NodeId)
+	count++
+
+	assert.Equal(tester, "myapp.ui_map_typed", settings[count].Id)
+	assert.Equal(tester, "", settings[count].Value)
+	assert.Equal(tester, "", settings[count].NodeId)
+	assert.Equal(tester, "[]{}", settings[count].ForcedType)
+	assert.Equal(tester, 3, len(settings[count].UiElements))
 	count++
 
 	assert.Equal(tester, "myapp.zdef", settings[count].Id)
@@ -1388,6 +1395,40 @@ func TestImportFile(t *testing.T) {
 	assert.JSONEq(t, `{"command":"import-file","command_id":"ctx_import-file","node":"manager_standalone","file":"/nsm/soc/uploads/file.pcap","importer":"pcap"}`, request)
 }
 
+func TestUpdateSetting_ForceMapListFieldTypes_StringInput(tester *testing.T) {
+	defer Cleanup()
+	salt := NewTestSalt()
+
+	// UI sends int and bool fields as strings inside the JSON objects
+	setting := model.NewSetting("myapp.ui_map_typed")
+	setting.Value = "{\"enabled\":\"true\",\"name\":\"alpha\",\"port\":\"8080\"}\n{\"enabled\":\"false\",\"name\":\"beta\",\"port\":\"9090\"}"
+	err := salt.UpdateSetting(ctx(), setting, false)
+	assert.NoError(tester, err)
+
+	settings, get_err := salt.GetSettings(ctx(), true)
+	assert.NoError(tester, get_err)
+	updated := findSetting(settings, "myapp.ui_map_typed", "")
+	// After coercion, port must be a JSON number and enabled a JSON bool (not quoted strings)
+	assert.Equal(tester, "{\"enabled\":true,\"name\":\"alpha\",\"port\":8080}\n{\"enabled\":false,\"name\":\"beta\",\"port\":9090}\n", updated.Value)
+}
+
+func TestUpdateSetting_ForceMapListFieldTypes_NumericInput(tester *testing.T) {
+	defer Cleanup()
+	salt := NewTestSalt()
+
+	// UI sends properly-typed JSON (numbers as numbers, bools as bools)
+	setting := model.NewSetting("myapp.ui_map_typed")
+	setting.Value = "{\"enabled\":true,\"name\":\"alpha\",\"port\":8080}"
+	err := salt.UpdateSetting(ctx(), setting, false)
+	assert.NoError(tester, err)
+
+	settings, get_err := salt.GetSettings(ctx(), true)
+	assert.NoError(tester, get_err)
+	updated := findSetting(settings, "myapp.ui_map_typed", "")
+	// float64(8080) from JSON parse must be coerced to int64 so YAML stores it as an integer
+	assert.Equal(tester, "{\"enabled\":true,\"name\":\"alpha\",\"port\":8080}\n", updated.Value)
+}
+
 func TestReadSetting_UiElements(tester *testing.T) {
 	defer Cleanup()
 	salt := NewTestSalt()
@@ -1415,4 +1456,162 @@ func TestReadSetting_UiElements(tester *testing.T) {
 	assert.Equal(tester, true, setting.UiElements[2].Multiline)
 	assert.Equal(tester, "^abc$", setting.UiElements[2].Regex)
 	assert.Equal(tester, "must conform", setting.UiElements[2].RegexFailureMessage)
+}
+
+func TestCoerceMapListFieldTypes(tester *testing.T) {
+	store := &Saltstore{}
+
+	testCases := []struct {
+		name            string
+		list            []map[string]any
+		uiElements      []model.UiElement
+		wantEmptyResult bool   // assert result is empty (empty list case)
+		checkField      string // field in result[0] to assert on
+		expected        any
+		errContains     string // non-empty → expect error containing this
+	}{
+		// skip / trivial
+		{name: "empty list", list: []map[string]any{}, uiElements: []model.UiElement{{Field: "port", ForcedType: "int"}}, wantEmptyResult: true},
+		{name: "empty uiElements unchanged", list: []map[string]any{{"port": "8080"}}, uiElements: []model.UiElement{}, checkField: "port", expected: "8080"},
+		{name: "uiElement no ForcedType skipped", list: []map[string]any{{"port": "8080"}}, uiElements: []model.UiElement{{Field: "port", ForcedType: ""}}, checkField: "port", expected: "8080"},
+		{name: "uiElement no Field skipped", list: []map[string]any{{"port": "8080"}}, uiElements: []model.UiElement{{Field: "", ForcedType: "int"}}, checkField: "port", expected: "8080"},
+		{name: "field missing from map skipped", list: []map[string]any{{"name": "alpha"}}, uiElements: []model.UiElement{{Field: "port", ForcedType: "int"}}, checkField: "name", expected: "alpha"},
+
+		// string → scalar (primary focus: UI sends everything as a string)
+		{name: "string to int", list: []map[string]any{{"port": "8080"}}, uiElements: []model.UiElement{{Field: "port", ForcedType: "int"}}, checkField: "port", expected: int64(8080)},
+		{name: "string to bool true", list: []map[string]any{{"enabled": "true"}}, uiElements: []model.UiElement{{Field: "enabled", ForcedType: "bool"}}, checkField: "enabled", expected: true},
+		{name: "string to bool false", list: []map[string]any{{"enabled": "false"}}, uiElements: []model.UiElement{{Field: "enabled", ForcedType: "bool"}}, checkField: "enabled", expected: false},
+		{name: "string to float", list: []map[string]any{{"ratio": "3.14"}}, uiElements: []model.UiElement{{Field: "ratio", ForcedType: "float"}}, checkField: "ratio", expected: float64(3.14)},
+		{name: "string to string", list: []map[string]any{{"name": "alpha"}}, uiElements: []model.UiElement{{Field: "name", ForcedType: "string"}}, checkField: "name", expected: "alpha"},
+
+		// string → list types
+		{name: "string to []int", list: []map[string]any{{"ports": "80\n443\n8080"}}, uiElements: []model.UiElement{{Field: "ports", ForcedType: "[]int"}}, checkField: "ports", expected: []int64{80, 443, 8080}},
+		{name: "string to []bool", list: []map[string]any{{"flags": "true\nfalse\ntrue"}}, uiElements: []model.UiElement{{Field: "flags", ForcedType: "[]bool"}}, checkField: "flags", expected: []bool{true, false, true}},
+		{name: "string to []float", list: []map[string]any{{"ratios": "1.1\n2.2\n3.3"}}, uiElements: []model.UiElement{{Field: "ratios", ForcedType: "[]float"}}, checkField: "ratios", expected: []float64{1.1, 2.2, 3.3}},
+		{name: "string to []string", list: []map[string]any{{"tags": "a\nb\nc"}}, uiElements: []model.UiElement{{Field: "tags", ForcedType: "[]string"}}, checkField: "tags", expected: []string{"a", "b", "c"}},
+
+		// non-string input (float64/bool from JSON parse) round-tripped through interfaceToString
+		{name: "float64 to int", list: []map[string]any{{"port": float64(8080)}}, uiElements: []model.UiElement{{Field: "port", ForcedType: "int"}}, checkField: "port", expected: int64(8080)},
+		{name: "float64 to float", list: []map[string]any{{"ratio": float64(3.14)}}, uiElements: []model.UiElement{{Field: "ratio", ForcedType: "float"}}, checkField: "ratio", expected: float64(3.14)},
+		{name: "bool to bool", list: []map[string]any{{"enabled": true}}, uiElements: []model.UiElement{{Field: "enabled", ForcedType: "bool"}}, checkField: "enabled", expected: true},
+
+		// error handling
+		{name: "invalid int not required uses zero value", list: []map[string]any{{"port": "abc"}}, uiElements: []model.UiElement{{Field: "port", ForcedType: "int", Required: false}}, checkField: "port", expected: int64(0)},
+		{name: "invalid int required returns error", list: []map[string]any{{"port": "abc"}}, uiElements: []model.UiElement{{Field: "port", ForcedType: "int", Required: true}}, errContains: "port"},
+		{name: "invalid bool required returns error", list: []map[string]any{{"enabled": "maybe"}}, uiElements: []model.UiElement{{Field: "enabled", ForcedType: "bool", Required: true}}, errContains: "enabled"},
+		{name: "required empty value returns error", list: []map[string]any{{"port": ""}}, uiElements: []model.UiElement{{Field: "port", ForcedType: "int", Required: true}}, errContains: "port"},
+		{name: "unsupported type not required uses zero value", list: []map[string]any{{"id": "some-uuid"}}, uiElements: []model.UiElement{{Field: "id", ForcedType: "uuid", Required: false}}, checkField: "id", expected: nil},
+		{name: "unsupported type required returns error", list: []map[string]any{{"id": "some-uuid"}}, uiElements: []model.UiElement{{Field: "id", ForcedType: "uuid", Required: true}}, errContains: "id"},
+		{name: "error in second object", list: []map[string]any{{"port": "8080"}, {"port": "abc"}}, uiElements: []model.UiElement{{Field: "port", ForcedType: "int", Required: true}}, errContains: "port"},
+	}
+
+	for _, tc := range testCases {
+		tester.Run(tc.name, func(t *testing.T) {
+			result, err := store.coerceMapListFieldTypes(tc.list, tc.uiElements)
+			if tc.errContains != "" {
+				assert.ErrorContains(t, err, tc.errContains)
+			} else {
+				assert.NoError(t, err)
+				if tc.wantEmptyResult {
+					assert.Empty(t, result)
+				} else if tc.checkField != "" {
+					assert.Equal(t, tc.expected, result[0][tc.checkField])
+				}
+			}
+		})
+	}
+}
+
+func TestCoerceMapListFieldTypes_MultipleFields_AllStrings(t *testing.T) {
+	store := &Saltstore{}
+	list := []map[string]any{
+		{"port": "8080", "enabled": "true", "name": "alpha"},
+	}
+	uiElements := []model.UiElement{
+		{Field: "port", ForcedType: "int"},
+		{Field: "enabled", ForcedType: "bool"},
+		{Field: "name"}, // no ForcedType — should remain a string
+	}
+	result, err := store.coerceMapListFieldTypes(list, uiElements)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(8080), result[0]["port"])
+	assert.Equal(t, true, result[0]["enabled"])
+	assert.Equal(t, "alpha", result[0]["name"])
+}
+
+func TestCoerceMapListFieldTypes_MultipleObjects_AllStrings(t *testing.T) {
+	store := &Saltstore{}
+	list := []map[string]any{
+		{"port": "8080", "enabled": "true", "name": "alpha"},
+		{"port": "9090", "enabled": "false", "name": "beta"},
+		{"port": "443", "enabled": "true", "name": "gamma"},
+	}
+	uiElements := []model.UiElement{
+		{Field: "port", ForcedType: "int"},
+		{Field: "enabled", ForcedType: "bool"},
+	}
+	result, err := store.coerceMapListFieldTypes(list, uiElements)
+	assert.NoError(t, err)
+
+	assert.Equal(t, int64(8080), result[0]["port"])
+	assert.Equal(t, true, result[0]["enabled"])
+	assert.Equal(t, "alpha", result[0]["name"])
+
+	assert.Equal(t, int64(9090), result[1]["port"])
+	assert.Equal(t, false, result[1]["enabled"])
+	assert.Equal(t, "beta", result[1]["name"])
+
+	assert.Equal(t, int64(443), result[2]["port"])
+	assert.Equal(t, true, result[2]["enabled"])
+	assert.Equal(t, "gamma", result[2]["name"])
+}
+
+func TestCoerceMapListFieldTypes_AllScalarStringTypes(t *testing.T) {
+	store := &Saltstore{}
+	list := []map[string]any{
+		{
+			"port":    "8080",
+			"enabled": "true",
+			"ratio":   "2.718",
+			"name":    "delta",
+		},
+	}
+	uiElements := []model.UiElement{
+		{Field: "port", ForcedType: "int"},
+		{Field: "enabled", ForcedType: "bool"},
+		{Field: "ratio", ForcedType: "float"},
+		{Field: "name", ForcedType: "string"},
+	}
+	result, err := store.coerceMapListFieldTypes(list, uiElements)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(8080), result[0]["port"])
+	assert.Equal(t, true, result[0]["enabled"])
+	assert.Equal(t, float64(2.718), result[0]["ratio"])
+	assert.Equal(t, "delta", result[0]["name"])
+}
+
+func TestZeroForType(t *testing.T) {
+	testCases := []struct {
+		typ      string
+		expected any
+	}{
+		{typ: "float", expected: float64(0)},
+		{typ: "int", expected: int64(0)},
+		{typ: "bool", expected: false},
+		{typ: "string", expected: ""},
+		{typ: "[]int", expected: []int64{}},
+		{typ: "[]bool", expected: []bool{}},
+		{typ: "[]float", expected: []float64{}},
+		{typ: "[]string", expected: []string{}},
+		{typ: "[][]", expected: [][]interface{}{}},
+		{typ: "[]{}", expected: []map[string]interface{}{}},
+		{typ: "unknown", expected: nil},
+		{typ: "", expected: nil},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.typ, func(t *testing.T) {
+			assert.Equal(t, tc.expected, zeroForType(tc.typ))
+		})
+	}
 }

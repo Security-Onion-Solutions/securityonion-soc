@@ -1,119 +1,128 @@
 <v-container v-if="!paramsLoaded" fluid data-aid="assistant_loading_parameters"></v-container>
 <v-container v-else-if="assistantEnabled" fluid data-aid="assistant_screen">
-	<v-row>
-		<v-col cols="12" lg="3">
-			<h2 v-text="i18n.chat"></h2>
-		</v-col>
-		<v-col cols="12" lg="5">
-			<v-expansion-panels>
-				<v-expansion-panel data-aid="assistant_options">
-					<v-expansion-panel-title id="chatOptionsHeader" expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up">{{i18n.options}}</v-expansion-panel-title>
-					<v-expansion-panel-text>
-						<span data-aid="assistant_increase_context_limit_toggle">
-							<v-switch
-								v-if="contextLimitLarge > contextLimitSmall"
-								id="increase-context-limit"
-								v-model="increaseContextLimit"
-								density="compact"
-								hide-details
-								class="my-0"
-								:label="i18n.increaseContextLimit"
-								color="primary">
-							</v-switch>
+	<v-dialog v-model="showOptionsDialog" max-width="540">
+		<v-card class="options-dialog">
+			<v-card-title>{{i18n.options}}</v-card-title>
+			<v-card-text data-aid="assistant_options">
+				<span data-aid="assistant_increase_context_limit_toggle">
+					<v-switch
+						v-if="contextLimitLarge > contextLimitSmall"
+						id="increase-context-limit"
+						v-model="increaseContextLimit"
+						density="compact"
+						hide-details
+						class="my-0"
+						:label="i18n.increaseContextLimit"
+						color="primary">
+					</v-switch>
+				</span>
+				<span data-aid="assistant_restore_last_active_toggle">
+					<v-switch
+						id="restore-last-active"
+						v-model="restoreLastActive"
+						density="compact"
+						hide-details
+						class="my-0"
+						:label="i18n.restoreLastActive"
+						color="primary">
+					</v-switch>
+				</span>
+				<span data-aid="assistant_always_approve_reads_toggle">
+					<v-switch
+						id="always-approve-read-requests"
+						v-model="alwaysApproveReadRequests"
+						density="compact"
+						hide-details
+						class="my-0"
+						:label="i18n.alwaysApproveReadRequests"
+						color="primary">
+					</v-switch>
+				</span>
+				<span data-aid="assistant_show_chat_history_toggle">
+					<v-switch
+						id="show-chat-history"
+						v-model="showChatHistory"
+						density="compact"
+						hide-details
+						class="my-0"
+						:label="i18n.showChatHistory"
+						color="primary">
+					</v-switch>
+				</span>
+				<span data-aid="assistant_show_model_thinking_toggle">
+					<v-switch
+						id="show-model-thinking"
+						v-model="showModelThinking"
+						density="compact"
+						hide-details
+						class="my-0"
+						:label="i18n.showModelThinking"
+						color="primary">
+					</v-switch>
+				</span>
+				<div class="my-4"></div>
+				<span data-aid="assistant_model_select">
+					<v-select
+						:disabled="$root.loading"
+						v-model="currentModel"
+						@update:model-value="updateModelParams(); reloadCredits()"
+						:items="groupedModels"
+						item-title="displayName"
+						item-value="key"
+						:hint="i18n.selectModel"
+						persistent-hint
+						prepend-icon="fa-microchip">
+						<template v-slot:item="{ props, item }">
+							<v-list-subheader v-if="item?.header" class="text-body-small">
+								{{ item.header }}
+							</v-list-subheader>
+							<v-list-item v-else v-bind="props"></v-list-item>
+						</template>
+					</v-select>
+				</span>
+			</v-card-text>
+			<v-card-actions>
+				<v-spacer></v-spacer>
+				<v-btn variant="text" @click="showOptionsDialog = false">{{ i18n.close }}</v-btn>
+			</v-card-actions>
+		</v-card>
+	</v-dialog>
+	<v-row align="stretch" class="ga-3" style="flex-wrap: nowrap;">
+		<v-col v-if="adaptersMap.get(modelsMap.get(currentModel)?.adapter)?.protocol === 'securityonion_ai_cloud'">
+			<div class="so-stat-pill" data-aid="assistant_credits_remaining">
+				<div class="so-stat-text">
+					<div class="so-stat-label">{{ i18n.creditsRemaining }}</div>
+					<div class="so-stat-value">
+						<span v-if="!creditsLoaded">
+							<v-progress-circular indeterminate color="primary" size="14" width="3"></v-progress-circular>
 						</span>
-						<span data-aid="assistant_restore_last_active_toggle">
-							<v-switch
-								id="restore-last-active"
-								v-model="restoreLastActive"
-								density="compact"
-								hide-details
-								class="my-0"
-								:label="i18n.restoreLastActive"
-								color="primary">
-							</v-switch>
-						</span>
-						<span data-aid="assistant_always_approve_reads_toggle">
-							<v-switch
-								id="always-approve-read-requests"
-								v-model="alwaysApproveReadRequests"
-								density="compact"
-								hide-details
-								class="my-0"
-								:label="i18n.alwaysApproveReadRequests"
-								color="primary">
-							</v-switch>
-						</span>
-						<span data-aid="assistant_show_chat_history_toggle">
-							<v-switch
-								id="show-chat-history"
-								v-model="showChatHistory"
-								density="compact"
-								hide-details
-								class="my-0"
-								:label="i18n.showChatHistory"
-								color="primary">
-							</v-switch>
-						</span>
-						<span data-aid="assistant_show_model_thinking_toggle">
-							<v-switch
-								id="show-model-thinking"
-								v-model="showModelThinking"
-								density="compact"
-								hide-details
-								class="my-0"
-								:label="i18n.showModelThinking"
-								color="primary">
-							</v-switch>
-						</span>
-						<span data-aid="assistant_model_select">
-							<v-select
-								:disabled="$root.loading"
-								v-model="currentModel"
-								@update:model-value="updateModelParams()"
-								:items="groupedModels"
-								item-title="displayName"
-								item-value="key"
-								:hint="i18n.selectModel"
-								persistent-hint
-								variant="underlined"
-								prepend-icon="fa-microchip">
-								<template v-slot:item="{ props, item }">
-									<v-list-subheader v-if="item.raw.header" class="text-caption">
-										{{ item.raw.header }}
-									</v-list-subheader>
-									<v-list-item v-else v-bind="props"></v-list-item>
-								</template>
-							</v-select>
-						</span>
-					</v-expansion-panel-text>
-				</v-expansion-panel>
-			</v-expansion-panels>
-		</v-col>
-		<v-spacer></v-spacer>
-		<v-col cols="12" lg="4" align="end">
-			<div v-if="modelsMap.get(currentModel)?.adapter === 'SOAI'">
-				<h4 data-aid="assistant_credits_remaining">{{ i18n.creditsRemaining }}:
-					<span v-if="!creditsLoaded">
-						<v-progress-circular indeterminate color="primary" size="14" width="3"></v-progress-circular>
-					</span>
-					<span v-else :class="creditsRemaining <= lowBalanceColorAlert ? 'text-error' : 'text-primary'">{{ formatCount(creditsRemaining) }}</span>
-				</h4>
-				<span class="text-caption">{{ i18n.creditsSubjectToExpiration }}</span>
+						<span v-else :class="creditsRemaining <= lowBalanceColorAlert ? 'text-error' : 'text-primary'">{{ formatCount(creditsRemaining) }}</span>
+					</div>
+				</div>
+				<v-icon class="so-stat-icon">fa-coins</v-icon>
 			</div>
-			<h5 class="ml-5 mt-2" data-aid="assistant_current_model">{{ modelsMap.get(currentModel)?.displayName }}</h5>
 		</v-col>
-	</v-row>
-	<v-row align="start">
-		<v-col cols="12">
-			<v-toolbar class="no-print elevation-0 theme-background-lighten-1" fixed>
-				<v-btn color="primary mx-4" variant="flat" id="chat-new-button" @click="startNewChat" :title="i18n.chatNewChat" data-aid="assistant_banner_create_chat">
+		<v-col>
+			<div class="so-stat-pill" data-aid="assistant_current_model">
+				<div class="so-stat-text">
+					<div class="so-stat-label">{{ i18n.currentModel }}</div>
+					<div class="so-stat-value">{{ modelsMap.get(currentModel)?.displayName }}</div>
+				</div>
+				<v-icon class="so-stat-icon">fa-microchip</v-icon>
+			</div>
+		</v-col>
+		<v-col style="flex: 0 0 auto;">
+			<div class="so-stat-pill no-print" style="gap: 16px;">
+				<v-btn variant="flat" icon id="chat-new-button" @click="startNewChat" :title="i18n.chatNewChat" data-aid="assistant_banner_create_chat" class="circle-button">
 					<v-icon>fa-plus</v-icon>
 				</v-btn>
-				<v-spacer></v-spacer>
-				<v-btn variant="flat" color="secondary" class="mx-4" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'assistant.html'" :title="i18n.contextualDocsBtn" data-aid="assistant_docs">
+				<v-btn variant="flat" icon class="circle-button" :title="i18n.options" @click="showOptionsDialog = true" id="chatOptionsHeader" data-aid="assistant_options_button">
+					<v-icon>fa-gear</v-icon>
+				</v-btn>
+				<v-btn variant="flat" icon class="circle-button" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'onion-ai'" :title="i18n.contextualDocsBtn" data-aid="assistant_docs">
 					<v-icon>fa-circle-question</v-icon>
 				</v-btn>
-			</v-toolbar>
+			</div>
 		</v-col>
 	</v-row>
 	<v-row>
@@ -126,31 +135,33 @@
 					<v-icon v-if="currentChatId" class="mr-2" @click="toggleSharedSession(currentChatId)" data-aid="assistant_banner_share_toggle" :disabled="$root.isMyUser(chatHistoryById?.[currentChatId]?.userId)" :title="i18n.assistantLinkTitle">
 						{{ (chatHistoryById?.[currentChatId]?.tags?.includes('shared')) ? 'fa-link' : 'fa-link-slash' }}
 					</v-icon>
-					<v-icon v-if="currentChatId" class="mr-2" @click.stop="exportSession" data-aid="assistant_banner_export_session" :disabled="!creditsUsed" :title="i18n.exportSessionHelp">
+					<v-icon v-if="currentChatId" class="mr-2" @click.stop="exportSession" data-aid="assistant_banner_export_session" :disabled="checkForActivity() || !messages.some(m => m.role === 'user')" :title="i18n.exportSessionHelp">
 						fa-file-export
 					</v-icon>
 					<template v-if="currentChatId">
-						<v-icon id="attachToCaseBtn" @click="caseMenuVisible = true">fa-exclamation-triangle</v-icon>
+						<v-icon id="attachToCaseBtn" :title="i18n.assistantAttachToCaseHelp" @click="caseMenuVisible = true">fa-paperclip</v-icon>
 						<v-menu v-model="caseMenuVisible" target="#attachToCaseBtn" data-aid="assistant_case_attach_menu">
 							<v-list id="assistant-escalate-menu" color="secondary">
-								<v-list-item id="attachToCaseNew" density="compact" v-bind:title.attr="i18n.escalateNewCaseHelp" data-aid="assistant_attach_to_case_new" @click="attachToCase(currentChatId, null);">
+								<v-list-item id="attachToCaseNew" density="compact" v-bind:title.attr="i18n.assistantAttachToNewCaseHelp" data-aid="assistant_attach_to_case_new" @click="attachToCase(currentChatId, null);">
 									<template #prepend>
-										<v-icon :alt="i18n.escalateNewCase">fa-plus</v-icon>
+										<v-icon :alt="i18n.assistantAttachToNewCase">fa-plus</v-icon>
 									</template>
 									<v-list-item-title class="theme-text">
-										{{ i18n.escalateNewCase }}
+										{{ i18n.assistantAttachToNewCase }}
 									</v-list-item-title>
 								</v-list-item>
-								<v-divider></v-divider>
-								<v-list-subheader class="theme-text">{{ i18n.escalateExistingCase }}</v-list-subheader>
-								<v-list-item v-for="socCase in mruCases" density="compact" v-bind:title.attr="i18n.escalateExistingCaseHelp" @click="attachToCase(currentChatId, socCase.id)" :data-aid="'assistant_attach_to_case_existing'">
-									<template #prepend>
-										<v-icon :alt="i18n.escalateExistingCase">fa-link</v-icon>
-									</template>
-									<v-list-item-title class="theme-text">
-										{{ formatCaseSummary(socCase) }}
-									</v-list-item-title>
-								</v-list-item>
+								<div v-if="mruCases?.length > 0">
+									<v-divider></v-divider>
+									<v-list-subheader class="theme-text">{{ i18n.assistantAttachToExistingCase }}</v-list-subheader>
+									<v-list-item v-for="socCase in mruCases" density="compact" v-bind:title.attr="i18n.assistantAttachToExistingCaseHelp" @click="attachToCase(currentChatId, socCase.id)" :data-aid="'assistant_attach_to_case_existing'">
+										<template #prepend>
+											<v-icon :alt="i18n.assistantAttachToExistingCase">fa-link</v-icon>
+										</template>
+										<v-list-item-title class="theme-text">
+											{{ formatCaseSummary(socCase) }}
+										</v-list-item-title>
+									</v-list-item>
+								</div>
 							</v-list>
 						</v-menu>
 					</template>
@@ -181,17 +192,17 @@
 								<div class="spacer spacer-right"></div>
 							</div>
 							<div class="d-flex align-start">
-								<v-avatar id="message-avatar" size="32" class="mr-3" :color="message.role === 'user' ? 'primary' : 'secondary'">
+								<v-avatar id="message-avatar" size="32" class="mr-3" :color="message.role === 'user' ? 'primary' : 'secondary-lighten-1'">
 									<v-icon v-if="message.role === 'user'" class="text-white" size="small">fa-user</v-icon>
 									<img v-else src="images/favicon/onion.png" alt="Assistant" style="width: 24px; height: 24px;">
 								</v-avatar>
 								<div class="flex-grow-1">
 									<div id="message-header" class="d-flex align-center mb-1">
 										<span class="font-weight-medium text-body-2 mr-2">{{ message.role === 'user' ? i18n.you : i18n.chat }}</span>
-										<span class="text-caption text-medium-emphasis mr-2">{{ formatTimestamp(message.timestamp) }}</span>
+										<span class="text-body-small text-medium-emphasis mr-2">{{ formatTimestamp(message.timestamp) }}</span>
 										<template v-if="perMessageStatsEnabled">
-											<span class="text-caption text-primary mr-2" v-if="message.usage && message.usage.credits">{{ formatCount(message.usage.credits) }} {{ i18n.creditsLowercase }}</span>
-											<span class="text-caption text-green" v-if="messageContextValues[index] > 0">{{ formatCount(messageContextValues[index]) }} {{ i18n.tokensLowercase }}</span>
+											<span class="text-body-small text-primary mr-2" v-if="message.usage && message.usage.credits">{{ formatCount(message.usage.credits) }} {{ i18n.creditsLowercase }}</span>
+											<span class="text-body-small text-green" v-if="messageContextValues[index] > 0">{{ formatCount(messageContextValues[index]) }} {{ i18n.tokensLowercase }}</span>
 										</template>
 									</div>
 									
@@ -204,7 +215,7 @@
 													<span class="font-weight-medium text-body-2">{{ message.content || message.toolUses?.length > 0 ? i18n.thoughts : getLastThoughtTitle(message.thoughts) }}</span>
 												</v-expansion-panel-title>
 												<v-expansion-panel-text>
-													<div class="text-caption" style="white-space: pre-wrap;" v-html="formatMarkdown(message.thoughts)"></div>
+													<div class="text-body-small" style="white-space: pre-wrap;" v-html="formatMarkdown(message.thoughts)"></div>
 												</v-expansion-panel-text>
 											</v-expansion-panel>
 										</v-expansion-panels>
@@ -229,14 +240,14 @@
 												
 												<!-- Tool Parameters -->
 												<div v-if="Object.keys(toolUse.input).length > 0" class="mb-2">
-													<div class="text-caption text-medium-emphasis mb-1">{{ i18n.parameters }}:</div>
-													<v-code class="text-caption">{{ JSON.stringify(toolUse.input, null, 2) }}</v-code>
+													<div class="text-body-small text-medium-emphasis mb-1">{{ i18n.parameters }}:</div>
+													<v-code class="text-body-small">{{ JSON.stringify(toolUse.input, null, 2) }}</v-code>
 												</div>
 												
 												<!-- Tool Approval Buttons -->
 												<div v-if="toolUse.status === 'pending_approval'" class="mb-2">
-													<div class="text-caption text-medium-emphasis mb-1">{{ i18n.toolExecuteQuestion }}</div>
-													<div id="tool-approval-buttons" class="d-flex tool-approval-buttons">
+													<div class="text-body-small text-medium-emphasis mb-1">{{ i18n.toolExecuteQuestion }}</div>
+													<div id="tool-approval-buttons" class="d-flex align-center tool-approval-buttons">
 														<v-btn
 															id="approve-tool-button"
 															color="success"
@@ -266,11 +277,9 @@
 															icon
 															variant="text"
 															size="x-small"
-															height="auto"
-															width="auto"
-															@click="openOptionsMenu"
+															@click="showOptionsDialog = true"
 															data-aid="assistant_tool_use_options"
-															style="min-width: auto;"
+															style="min-width: auto; margin-left: -5px"
 														>
 															<v-icon size="small">fa-cog</v-icon>
 														</v-btn>
@@ -287,7 +296,7 @@
 															width="2"
 															class="mr-2"
 														></v-progress-circular>
-														<span class="text-caption text-medium-emphasis">{{ i18n.toolExecuting }}</span>
+														<span class="text-body-small text-medium-emphasis">{{ i18n.toolExecuting }}</span>
 													</div>
 												</div>
 												
@@ -295,11 +304,11 @@
 												<div v-if="toolUse.rawResult && toolUse.status === 'completed'" class="mb-2">
 													<v-expansion-panels id="tool-result-expansion" variant="accordion" class="tool-result-expansion">
 														<v-expansion-panel id="tool-result-panel">
-															<v-expansion-panel-title id="tool-result-header" class="text-caption" expand-icon="fa-angle-down" collapse-icon="fa-angle-up">
+															<v-expansion-panel-title id="tool-result-header" class="text-body-small" expand-icon="fa-angle-down" collapse-icon="fa-angle-up">
 																{{ i18n.rawToolResult }}
 															</v-expansion-panel-title>
 															<v-expansion-panel-text id="tool-result-content">
-																<v-code id="tool-result-code" class="text-caption d-block" style="white-space: pre-wrap; max-height: 300px; overflow-y: auto; width: 100%; max-width: 100%; overflow-x: auto;">{{ toolUse.rawResult }}</v-code>
+																<v-code id="tool-result-code" class="text-body-small d-block" style="white-space: pre-wrap; max-height: 300px; overflow-y: auto; width: 100%; max-width: 100%; overflow-x: auto;">{{ toolUse.rawResult }}</v-code>
 															</v-expansion-panel-text>
 														</v-expansion-panel>
 													</v-expansion-panels>
@@ -307,12 +316,12 @@
 												
 												<!-- Tool Error -->
 												<div v-if="(toolUse.status === 'error' || toolUse.status === 'rejected') && toolUse.error" class="mb-2">
-													<div class="text-caption text-medium-emphasis mb-1">{{ toolUse.status === 'rejected' ? 'Rejected:' : 'Error:' }}</div>
+													<div class="text-body-small text-medium-emphasis mb-1">{{ toolUse.status === 'rejected' ? 'Rejected:' : 'Error:' }}</div>
 													<div class="text-error text-body-2">{{ toolUse.error }}</div>
 												</div>
 												
 												<!-- Execution Time -->
-												<div v-if="toolUse.completedAt" class="text-caption text-medium-emphasis">
+												<div v-if="toolUse.completedAt" class="text-body-small text-medium-emphasis">
 													{{ i18n.completed }}: {{ formatTimestamp(toolUse.completedAt) }}
 												</div>
 											</v-card>
@@ -327,17 +336,17 @@
 						</div>
 						<div id="typing-indicator" v-if="isTyping" class="message-item mb-3">
 							<div class="d-flex align-start">
-								<v-avatar size="32" class="mr-3" color="secondary">
+								<v-avatar size="32" class="mr-3" color="secondary-lighten-1">
 									<img src="images/favicon/onion.png" alt="Assistant" style="width: 24px; height: 24px;">
 								</v-avatar>
 								<div class="flex-grow-1">
 									<div class="d-flex align-center mb-1">
 										<span class="font-weight-medium text-body-2 mr-2">{{ i18n.chat }}</span>
-										<span class="text-caption text-medium-emphasis">{{ i18n.typing }}...</span>
+										<span class="text-body-small text-medium-emphasis">{{ i18n.typing }}...</span>
 									</div>
 									<div class="text-body-2">
-										<v-progress-linear indeterminate color="secondary" height="2"></v-progress-linear>
-										<span class="text-caption text-medium-emphasis">{{ i18n.thinking }}...</span>
+										<v-progress-linear indeterminate color="secondary-lighten-1" height="2"></v-progress-linear>
+										<span class="text-body-small text-medium-emphasis">{{ i18n.thinking }}...</span>
 									</div>
 								</div>
 							</div>
@@ -353,7 +362,10 @@
 						:placeholder="i18n.chatPlaceholder"
 						variant="outlined"
 						density="compact"
-						hide-details
+						:hide-details="!isMessageTooLong"
+						:hint="isMessageTooLong ? i18n.assistantMessageTooLong : ''"
+						:persistent-hint="isMessageTooLong"
+						:error="isMessageTooLong"
 						auto-grow
 						rows="1"
 						max-rows="8"
@@ -367,13 +379,12 @@
 					<v-btn
 						id="chat-send-button"
 						ref="sendButton"
-						color="primary"
-						:disabled="!newMessage.trim() || !canChat || checkForActivity() || !creditsLoaded"
+						:disabled="!newMessage.trim() || !canChat || checkForActivity() || !creditsLoaded || isMessageTooLong"
 						@click="sendMessage()"
 						data-aid="assistant_chat_send"
 						class="flex-shrink-0"
 					>
-						<v-icon>{{ checkForActivity() ? 'fa-hourglass-half' : 'fa-paper-plane' }}</v-icon>
+						<v-icon color="primary">{{ checkForActivity() ? 'fa-hourglass-half' : 'fa-paper-plane' }}</v-icon>
 					</v-btn>
 				</v-card-actions>
 			</v-card>
@@ -449,6 +460,6 @@
 		flex-direction: column;
 	">
 	<div class="my-8" v-html="i18n.assistantUnavailable"></div>
-		<video src="../images/videos/onionai-demo-xs.mp4" autoplay muted loop controls style="width: 80%; max-width: 1408px;" data-aid="assistant_needs_pro_video"></video>
+		<video src="../images/videos/onionai_3.mp4" autoplay muted loop controls style="width: 80%; max-width: 1408px;" data-aid="assistant_needs_pro_video"></video>
 	</div>
 </v-container>

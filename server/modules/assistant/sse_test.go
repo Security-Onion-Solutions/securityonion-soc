@@ -1,6 +1,7 @@
 package assistant
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/apex/log"
+	openai "github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/genai"
@@ -37,21 +39,21 @@ func TestSSEEventWriter(t *testing.T) {
 		{
 			name: "writeContentBlockDelta text",
 			writeOp: func(w *sseEventWriter) error {
-				return w.writeContentBlockDelta(0, "text_delta", `"Hello World"`)
+				return w.writeContentBlockDelta(0, "text_delta", "Hello World")
 			},
 			expected: `data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello World"}}` + "\n\n",
 		},
 		{
 			name: "writeContentBlockDelta thought",
 			writeOp: func(w *sseEventWriter) error {
-				return w.writeContentBlockDelta(0, "thought_delta", `"Thinking about it"`)
+				return w.writeContentBlockDelta(0, "thought_delta", "Thinking about it")
 			},
 			expected: `data: {"type":"content_block_delta","index":0,"delta":{"type":"thought_delta","text":"Thinking about it"}}` + "\n\n",
 		},
 		{
 			name: "writeContentBlockDelta with newlines",
 			writeOp: func(w *sseEventWriter) error {
-				return w.writeContentBlockDelta(1, "text_delta", `"Line 1\nLine 2\tTabbed"`)
+				return w.writeContentBlockDelta(1, "text_delta", "Line 1\nLine 2\tTabbed")
 			},
 			expected: `data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"Line 1\nLine 2\tTabbed"}}` + "\n\n",
 		},
@@ -131,119 +133,146 @@ func TestSSEEventWriter(t *testing.T) {
 		})
 	}
 
-	t.Run("writeContentBlockStart with complex object", func(t *testing.T) {
-		var buf strings.Builder
-		writer := newSSEEventWriter(log.Log, &buf)
+	// Sequence tests - these test multiple operations in sequence with flexible validation
+	sequenceTests := []struct {
+		name          string
+		writeOps      []func(*sseEventWriter) error
+		contains      []string
+		orderedChecks []string
+	}{
+		{
+			name: "writeContentBlockStart with complex object",
+			writeOps: []func(*sseEventWriter) error{
+				func(w *sseEventWriter) error {
+					block := map[string]any{
+						"type":  "tool_use",
+						"id":    "toolu_123",
+						"name":  "search",
+						"input": map[string]any{},
+					}
+					return w.writeContentBlockStart(1, block)
+				},
+			},
+			contains: []string{
+				`"type":"content_block_start"`,
+				`"index":1`,
+				`"type":"tool_use"`,
+				`"id":"toolu_123"`,
+				`"name":"search"`,
+			},
+		},
+		{
+			name: "full message sequence with thought and text",
+			writeOps: []func(*sseEventWriter) error{
+				func(w *sseEventWriter) error { return w.writeMessageStart("gemini-2.0-flash-exp") },
+				func(w *sseEventWriter) error {
+					return w.writeContentBlockDelta(0, "thought_delta", "Let me think about this...")
+				},
+				func(w *sseEventWriter) error {
+					return w.writeContentBlockDelta(0, "thought_delta", " analyzing the request")
+				},
+				func(w *sseEventWriter) error {
+					return w.writeContentBlockDelta(0, "text_delta", "Here is the answer: ")
+				},
+				func(w *sseEventWriter) error { return w.writeContentBlockDelta(0, "text_delta", "42") },
+				func(w *sseEventWriter) error { return w.writeContentBlockStop(0) },
+				func(w *sseEventWriter) error { return w.writeStopReason("end_turn") },
+				func(w *sseEventWriter) error { return w.writeUsage(50, 15) },
+				func(w *sseEventWriter) error { return w.writeMessageStop() },
+				func(w *sseEventWriter) error { return w.writeDone() },
+			},
+			contains: []string{
+				`"type":"message_start"`,
+				`"model":"gemini-2.0-flash-exp"`,
+				`"type":"thought_delta","text":"Let me think about this..."`,
+				`"type":"thought_delta","text":" analyzing the request"`,
+				`"type":"text_delta","text":"Here is the answer: "`,
+				`"type":"text_delta","text":"42"`,
+				`"type":"content_block_stop","index":0`,
+				`"stop_reason":"end_turn"`,
+				`"input_tokens":50,"output_tokens":15`,
+				`"type":"message_stop"`,
+				`data: [DONE]`,
+			},
+			orderedChecks: []string{
+				"thought_delta",
+				"text_delta",
+				"content_block_stop",
+				"[DONE]",
+			},
+		},
+		{
+			name: "full message sequence with function call",
+			writeOps: []func(*sseEventWriter) error{
+				func(w *sseEventWriter) error { return w.writeMessageStart("gemini-2.0-flash-exp") },
+				func(w *sseEventWriter) error {
+					return w.writeContentBlockDelta(0, "text_delta", "I'll search for that.")
+				},
+				func(w *sseEventWriter) error { return w.writeContentBlockStop(0) },
+				func(w *sseEventWriter) error {
+					toolBlock := map[string]any{
+						"type":  "tool_use",
+						"id":    "toolu_abc123",
+						"name":  "web_search",
+						"input": map[string]any{},
+					}
+					return w.writeContentBlockStart(1, toolBlock)
+				},
+				func(w *sseEventWriter) error {
+					return w.writeInputJsonDelta(1, `{"query":"test search"}`)
+				},
+				func(w *sseEventWriter) error { return w.writeContentBlockStop(1) },
+				func(w *sseEventWriter) error { return w.writeStopReason("tool_use") },
+				func(w *sseEventWriter) error { return w.writeUsage(30, 25) },
+				func(w *sseEventWriter) error { return w.writeMessageStop() },
+				func(w *sseEventWriter) error { return w.writeDone() },
+			},
+			contains: []string{
+				`"type":"message_start"`,
+				`"type":"text_delta","text":"I'll search for that."`,
+				`"type":"content_block_stop","index":0`,
+				`"type":"content_block_start"`,
+				`"type":"tool_use"`,
+				`"id":"toolu_abc123"`,
+				`"name":"web_search"`,
+				`"input_json_delta"`,
+				`"type":"content_block_stop","index":1`,
+				`"stop_reason":"tool_use"`,
+				`data: [DONE]`,
+			},
+		},
+	}
 
-		block := map[string]any{
-			"type":  "tool_use",
-			"id":    "toolu_123",
-			"name":  "search",
-			"input": map[string]any{},
-		}
+	for _, tt := range sequenceTests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf strings.Builder
+			writer := newSSEEventWriter(log.Log, &buf)
 
-		err := writer.writeContentBlockStart(1, block)
-		assert.NoError(t, err)
+			// Execute sequence of operations
+			for _, op := range tt.writeOps {
+				err := op(writer)
+				assert.NoError(t, err)
+			}
 
-		result := buf.String()
-		assert.Contains(t, result, `"type":"content_block_start"`)
-		assert.Contains(t, result, `"index":1`)
-		assert.Contains(t, result, `"type":"tool_use"`)
-		assert.Contains(t, result, `"id":"toolu_123"`)
-		assert.Contains(t, result, `"name":"search"`)
-	})
+			result := buf.String()
 
-	t.Run("full message sequence with thought and text", func(t *testing.T) {
-		var buf strings.Builder
-		writer := newSSEEventWriter(log.Log, &buf)
+			// Validate contains
+			for _, expected := range tt.contains {
+				assert.Contains(t, result, expected)
+			}
 
-		// Write a complete message stream
-		writer.writeMessageStart("gemini-2.0-flash-exp")
-		writer.writeContentBlockDelta(0, "thought_delta", `"Let me think about this..."`)
-		writer.writeContentBlockDelta(0, "thought_delta", `" analyzing the request"`)
-		writer.writeContentBlockDelta(0, "text_delta", `"Here is the answer: "`)
-		writer.writeContentBlockDelta(0, "text_delta", `"42"`)
-		writer.writeContentBlockStop(0)
-		writer.writeStopReason("end_turn")
-		writer.writeUsage(50, 15)
-		writer.writeMessageStop()
-		writer.writeDone()
-
-		result := buf.String()
-
-		// Verify each event is present in order
-		assert.Contains(t, result, `"type":"message_start"`)
-		assert.Contains(t, result, `"model":"gemini-2.0-flash-exp"`)
-
-		// Verify thought deltas
-		assert.Contains(t, result, `"type":"thought_delta","text":"Let me think about this..."`)
-		assert.Contains(t, result, `"type":"thought_delta","text":" analyzing the request"`)
-
-		// Verify text deltas
-		assert.Contains(t, result, `"type":"text_delta","text":"Here is the answer: "`)
-		assert.Contains(t, result, `"type":"text_delta","text":"42"`)
-
-		// Verify closure
-		assert.Contains(t, result, `"type":"content_block_stop","index":0`)
-		assert.Contains(t, result, `"stop_reason":"end_turn"`)
-		assert.Contains(t, result, `"input_tokens":50,"output_tokens":15`)
-		assert.Contains(t, result, `"type":"message_stop"`)
-		assert.Contains(t, result, `data: [DONE]`)
-
-		// Verify sequence order
-		thoughtIndex := strings.Index(result, "thought_delta")
-		textIndex := strings.Index(result, "text_delta")
-		stopIndex := strings.Index(result, "content_block_stop")
-		doneIndex := strings.Index(result, "[DONE]")
-
-		assert.Less(t, thoughtIndex, textIndex, "thought should come before text")
-		assert.Less(t, textIndex, stopIndex, "text should come before stop")
-		assert.Less(t, stopIndex, doneIndex, "stop should come before done")
-	})
-
-	t.Run("full message sequence with function call", func(t *testing.T) {
-		var buf strings.Builder
-		writer := newSSEEventWriter(log.Log, &buf)
-
-		// Write a message with text followed by a function call
-		writer.writeMessageStart("gemini-2.0-flash-exp")
-		writer.writeContentBlockDelta(0, "text_delta", `"I'll search for that."`)
-		writer.writeContentBlockStop(0)
-
-		toolBlock := map[string]any{
-			"type":  "tool_use",
-			"id":    "toolu_abc123",
-			"name":  "web_search",
-			"input": map[string]any{},
-		}
-		writer.writeContentBlockStart(1, toolBlock)
-		writer.writeInputJsonDelta(1, `{"query":"test search"}`)
-		writer.writeContentBlockStop(1)
-
-		writer.writeStopReason("tool_use")
-		writer.writeUsage(30, 25)
-		writer.writeMessageStop()
-		writer.writeDone()
-
-		result := buf.String()
-
-		// Verify message structure
-		assert.Contains(t, result, `"type":"message_start"`)
-		assert.Contains(t, result, `"type":"text_delta","text":"I'll search for that."`)
-		assert.Contains(t, result, `"type":"content_block_stop","index":0`)
-
-		// Verify function call block
-		assert.Contains(t, result, `"type":"content_block_start"`)
-		assert.Contains(t, result, `"type":"tool_use"`)
-		assert.Contains(t, result, `"id":"toolu_abc123"`)
-		assert.Contains(t, result, `"name":"web_search"`)
-		assert.Contains(t, result, `"input_json_delta"`)
-		assert.Contains(t, result, `"type":"content_block_stop","index":1`)
-
-		// Verify closure with tool_use stop reason
-		assert.Contains(t, result, `"stop_reason":"tool_use"`)
-		assert.Contains(t, result, `data: [DONE]`)
-	})
+			// Validate ordering if specified
+			if len(tt.orderedChecks) > 0 {
+				lastIndex := -1
+				for _, expected := range tt.orderedChecks {
+					currentIndex := strings.Index(result, expected)
+					assert.Less(t, lastIndex, currentIndex,
+						fmt.Sprintf("%s should come after previous element", expected))
+					lastIndex = currentIndex
+				}
+			}
+		})
+	}
 }
 
 func TestStreamProcessorFirstSend(t *testing.T) {
@@ -823,6 +852,13 @@ func newFunctionArgumentsDelta(jsonContent string) responses.ResponseStreamEvent
 	}
 }
 
+func newFunctionArgumentsDone(jsonContent string) responses.ResponseStreamEventUnion {
+	return responses.ResponseStreamEventUnion{
+		Type:      "response.function_call_arguments.done",
+		Arguments: jsonContent,
+	}
+}
+
 func newFunctionCallDone() responses.ResponseStreamEventUnion {
 	return responses.ResponseStreamEventUnion{
 		Type: "response.output_item.done",
@@ -1096,6 +1132,71 @@ func TestProcessOpenAIChunk_FunctionCalls(t *testing.T) {
 				"hasOpenBlock": true,
 			},
 		},
+		{
+			name: "done after deltas is ignored",
+			events: []responses.ResponseStreamEventUnion{
+				newFunctionCallStart("call_dup", "search"),
+				newFunctionArgumentsDelta(`{"qu`),
+				newFunctionArgumentsDelta(`ery": "test"}`),
+				newFunctionArgumentsDone(`{"query": "test"}`),
+				newFunctionCallDone(),
+			},
+			expectedInOutput: []string{
+				`"name":"search"`,
+				`"partial_json":"{\"qu"`,
+				`"partial_json":"ery\": \"test\"}"`,
+				`"type":"content_block_stop"`,
+			},
+			expectedState: map[string]interface{}{
+				"hasOpenBlock":         false,
+				"writingOpenAIToolUse": false,
+				"contentBlockIndex":    1,
+				"receivedFnArgs":       false, // Reset after stop
+			},
+		},
+		{
+			name: "done without deltas sends args",
+			events: []responses.ResponseStreamEventUnion{
+				newFunctionCallStart("call_nodelta", "lookup"),
+				newFunctionArgumentsDone(`{"id": 42}`),
+				newFunctionCallDone(),
+			},
+			expectedInOutput: []string{
+				`"name":"lookup"`,
+				`"partial_json":"{\"id\": 42}"`,
+				`"type":"content_block_stop"`,
+			},
+			expectedState: map[string]interface{}{
+				"hasOpenBlock":         false,
+				"writingOpenAIToolUse": false,
+				"contentBlockIndex":    1,
+			},
+		},
+		{
+			name: "receivedFnArgs resets between function calls",
+			events: []responses.ResponseStreamEventUnion{
+				// First call: uses deltas, done should be ignored
+				newFunctionCallStart("call_a", "func_a"),
+				newFunctionArgumentsDelta(`{"x": 1}`),
+				newFunctionArgumentsDone(`{"x": 1}`),
+				newFunctionCallDone(),
+				// Second call: no deltas, done should be used
+				newFunctionCallStart("call_b", "func_b"),
+				newFunctionArgumentsDone(`{"y": 2}`),
+				newFunctionCallDone(),
+			},
+			expectedInOutput: []string{
+				`"name":"func_a"`,
+				`"name":"func_b"`,
+				`"partial_json":"{\"x\": 1}"`,
+				`"partial_json":"{\"y\": 2}"`,
+			},
+			expectedState: map[string]interface{}{
+				"hasOpenBlock":         false,
+				"writingOpenAIToolUse": false,
+				"contentBlockIndex":    2,
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -1126,8 +1227,38 @@ func TestProcessOpenAIChunk_FunctionCalls(t *testing.T) {
 			if expectedIndex, ok := tt.expectedState["contentBlockIndex"].(int); ok {
 				assert.Equal(t, expectedIndex, processor.contentBlockIndex)
 			}
+			if expectedReceivedFnArgs, ok := tt.expectedState["receivedFnArgs"].(bool); ok {
+				assert.Equal(t, expectedReceivedFnArgs, processor.receivedFnArgs)
+			}
 		})
 	}
+}
+
+func TestProcessOpenAIChunk_FunctionArgsDedupCount(t *testing.T) {
+	// Verify that when deltas are sent, the done event does NOT add another input_json_delta
+	var buf strings.Builder
+	writer := newSSEEventWriter(log.Log, &buf)
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	processor := newStreamProcessor(writer, "gpt-4", wg)
+
+	events := []responses.ResponseStreamEventUnion{
+		newFunctionCallStart("call_count", "search"),
+		newFunctionArgumentsDelta(`{"query"`),
+		newFunctionArgumentsDelta(`: "test"}`),
+		newFunctionArgumentsDone(`{"query": "test"}`),
+		newFunctionCallDone(),
+	}
+
+	for _, event := range events {
+		_, err := processor.processOpenAIChunk(event)
+		assert.NoError(t, err)
+	}
+
+	output := buf.String()
+	// Should have exactly 2 input_json_delta events (from the two deltas), not 3
+	count := strings.Count(output, `"type":"input_json_delta"`)
+	assert.Equal(t, 2, count, "done event should not add a third input_json_delta when deltas were received")
 }
 
 func TestFinalizeOpenAI(t *testing.T) {
@@ -1479,6 +1610,81 @@ func TestOpenAIStreamIntegration(t *testing.T) {
 			assert.Equal(t, tt.expectedBlocks, processor.contentBlockIndex)
 			assert.False(t, processor.hasOpenBlock)         // Should be closed
 			assert.False(t, processor.writingOpenAIToolUse) // Should be cleared
+		})
+	}
+}
+
+func TestExtractReasoning(t *testing.T) {
+	tests := []struct {
+		name              string
+		deltaJSON         string
+		expectedReasoning string
+		expectedFound     bool
+	}{
+		{
+			name:              "no extra fields",
+			deltaJSON:         `{}`,
+			expectedReasoning: "",
+			expectedFound:     false,
+		},
+		{
+			name:              "unrecognized extra field",
+			deltaJSON:         `{"other_field":"value"}`,
+			expectedReasoning: "",
+			expectedFound:     false,
+		},
+		{
+			name:              "reasoning field",
+			deltaJSON:         `{"reasoning":"some thought"}`,
+			expectedReasoning: "some thought",
+			expectedFound:     true,
+		},
+		{
+			name:              "reasoning_content field",
+			deltaJSON:         `{"reasoning_content":"content thought"}`,
+			expectedReasoning: "content thought",
+			expectedFound:     true,
+		},
+		{
+			name:              "reasoning_summary field",
+			deltaJSON:         `{"reasoning_summary":"summary thought"}`,
+			expectedReasoning: "summary thought",
+			expectedFound:     true,
+		},
+		{
+			name:              "reasoning takes priority over reasoning_content",
+			deltaJSON:         `{"reasoning":"first","reasoning_content":"second"}`,
+			expectedReasoning: "first",
+			expectedFound:     true,
+		},
+		{
+			name:              "reasoning_content takes priority over reasoning_summary",
+			deltaJSON:         `{"reasoning_content":"content","reasoning_summary":"summary"}`,
+			expectedReasoning: "content",
+			expectedFound:     true,
+		},
+		{
+			name:              "empty string reasoning",
+			deltaJSON:         `{"reasoning":""}`,
+			expectedReasoning: "",
+			expectedFound:     false,
+		},
+		{
+			name:              "ignore empty for non-empty fields",
+			deltaJSON:         `{"reasoning":"","reasoning_content":"content","reasoning_summary":"summary"}`,
+			expectedReasoning: "content",
+			expectedFound:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var delta openai.ChatCompletionChunkChoiceDelta
+			err := json.Unmarshal([]byte(tt.deltaJSON), &delta)
+			assert.NoError(t, err)
+			reasoning, found := extractReasoning(delta)
+			assert.Equal(t, tt.expectedFound, found)
+			assert.Equal(t, tt.expectedReasoning, reasoning)
 		})
 	}
 }

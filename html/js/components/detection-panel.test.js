@@ -267,7 +267,7 @@ test('validateStrelka success', () => {
 
 test('validateStrelka missing rule name', () => {
   comp.detection.language = 'yara';
-  comp.detection.content = 'condition: true';
+  comp.detection.content = 'rule { condition: true }';
   expect(comp.validateStrelka()).toBe(comp.i18n.invalidDetectionStrelkaMissingRuleName);
 });
 

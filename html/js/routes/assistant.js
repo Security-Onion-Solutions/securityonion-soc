@@ -42,12 +42,15 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     contextStartMessageIndex: -1,
     contextLimitSmall: 0,
     contextLimitLarge: 0,
+    charsPerTokenEstimate: 0,
     thresholdColorRatioLow: 0.5,
     thresholdColorRatioMed: 0.75,
     thresholdColorRatioMax: 1,
     lowBalanceColorAlert: 0,
     availableModels: [],
     modelsMap: new Map(),
+    availableAdapters: [],
+    adaptersMap: new Map(),
     groupedModels: [],
     currentModel: '',
     activeStreamingSessionId: null, // Track which session is actively streaming
@@ -59,6 +62,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     mruCases: [],
     perMessageStatsEnabled: false,
     showModelThinking: false,
+    showOptionsDialog: false,
   }},
   async created() {
     this.loadLocalSettings();
@@ -89,7 +93,14 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     messageContextValues() {
       const msgs = this.messages || [];
       return msgs.map((_, i) => this.calculateContextOfMessage(msgs, i));
-    }
+    },
+    isMessageTooLong() {
+      if (this.charsPerTokenEstimate <= 0 || !this.newMessage) return false;
+      const contextLimit = this.increaseContextLimit ? this.contextLimitLarge : this.contextLimitSmall;
+      const maxChars = contextLimit * this.charsPerTokenEstimate * 1.1;
+      const usedChars = this.newMessage.length + (this.contextLength * this.charsPerTokenEstimate);
+      return usedChars >= maxChars;
+    },
   },
   methods: {
 
@@ -101,7 +112,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.thresholdColorRatioMed = params["thresholdColorRatioMed"];
       this.thresholdColorRatioMax = params["thresholdColorRatioMax"];
       this.availableModels = params["availableModels"];
-      if (this.availableModels.length > 0) {
+      this.availableAdapters = params["availableAdapters"];
+      if (this.availableModels && this.availableModels.length > 0) {
         this.availableModels.forEach(m => m.key = this.buildModelIdentifier(m));
         this.modelsMap = new Map(
           this.availableModels.filter(m => m.enabled).map(m => [m.key, m])
@@ -111,6 +123,9 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         }
         if (!this.currentModel || !this.modelsMap.has(this.currentModel)) this.currentModel = this.availableModels[0].key;
         this.groupedModels = this.buildGroupedModels();
+      }
+      if (this.availableAdapters && this.availableAdapters.length > 0) {
+        this.adaptersMap = new Map(this.availableAdapters.map(a => [a.name, a]));
       }
       this.updateModelParams();
 
@@ -164,7 +179,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }
       return false;
     },
-    
+
     async loadNewChatScreen() {
       try {
         // Initialize with a welcome message from the AI Assistant
@@ -243,14 +258,13 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         try {
           await this.loadChatFromBackend(urlSessionId);
         } catch (error) {
-          // Session ID in URL doesn't exist, start new chat with this ID
-          this.currentChatId = urlSessionId;
-          this.saveCurrentChatId();
-          
           // Check if this is an investigation session
           const isInvestigation = this.$route.query.investigation === 'true';
-          
+
           if (isInvestigation) {
+            // Investigation sessions are allowed to create new sessions with the URL session ID
+            this.currentChatId = urlSessionId;
+            this.saveCurrentChatId();
             try {
               const investigationPrompt = this.generateInvestigationPrompt(this.$route.query);
               // This is a new investigation session, start with investigation prompt
@@ -260,9 +274,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
             } catch (error) {
               this.$root.showError(this.i18n.assistantUnableToParseInvestigation + ': ' + error.message);
             }
-            
-          } else if (this.messages.length > 1) {
-            this.loadNewChatScreen();
+          } else if (urlSessionId !== this.currentChatId) {
+            // Session ID doesn't exist, not an investigation, and not our own navigation — redirect to base assistant page
+            await this.$router.replace({ name: 'assistant' });
+            return;
           }
         } finally {
           this.$root.stopLoading();
@@ -294,6 +309,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }
       // If no valid last chat found, keep the default welcome message
     },
+    reloadCredits() {
+      this.creditsLoaded = false;
+      this.loadCredits();
+    },
     async loadCredits() {
       try {
         const response = await this.$root.papi.get('/assistant/balance/' + encodeURIComponent(this.currentModel));
@@ -324,7 +343,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       await this.loadStoredChats();
     },
     generateChatId() {
-      return 'chat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+      return crypto.randomUUID();
     },
     async loadChat(chat) {
       await this.saveCurrentChat();
@@ -395,8 +414,11 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         return;
       }
 
+      const isCompressing = tags && tags.includes(MSGTAG_CONTEXTCOMPRESSION);
+      // Check if message + context exceeds estimated token limit
+      if (!isCompressing && this.isMessageTooLong) return;
       // Check if context length has reached the limit
-      if (this.checkContextLimitReached() && (!tags || !tags.includes(MSGTAG_CONTEXTCOMPRESSION))) return;
+      if (!isCompressing && this.checkContextLimitReached()) return;
       
       // Check if user has credits
       if (this.creditsRemaining <= 0) {
@@ -676,7 +698,26 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.activeStreamingSessionId = streamingSessionId;
       
       try {
-        const response = await this.$root.papi.post('/assistant/chat', {
+        // Build the URL with entityType and entityId query parameters if present
+        let url = '/assistant/chat';
+        const socId = this.$route.query.socId;
+        if (socId) {
+          url += `?entityType=alert_investigation&entityId=${encodeURIComponent(socId)}`;
+          // Clear the investigation query params after first use to prevent
+          // marking the alert as investigated on every subsequent message
+          this.$nextTick(() => {
+            const query = { ...this.$route.query };
+            delete query.investigation;
+            delete query.socId;
+            this.$router.replace({
+              name: 'assistant',
+              params: this.$route.params,
+              query: query
+            });
+          });
+        }
+        
+        const response = await this.$root.papi.post(url, {
           msg: userMessage,
           sessionId: streamingSessionId,
           model: this.currentModel,
@@ -1856,27 +1897,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       return ['query_events', 'get_playbooks', 'query_cases', 'query_detections'].includes(toolName) && this.alwaysApproveReadRequests;
     },
 
-    // Open the options menu programmatically
-    openOptionsMenu() {
-      this.$nextTick(() => {
-        // Find the options expansion panel and open it
-        const optionsPanel = this.$el.querySelector('[data-aid="assistant_options"]');
-        if (optionsPanel) {
-          // Trigger click on the expansion panel title to open it
-          const panelTitle = optionsPanel.querySelector('.v-expansion-panel-title');
-          if (panelTitle) {
-            panelTitle.click();
-          }
-        }
-        
-        // Scroll to the options panel
-        const optionsHeader = this.$el.querySelector('#chatOptionsHeader');
-        if (optionsHeader) {
-          optionsHeader.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-      });
-    },
-
     clearStreamingStates() {
       this.activeStreamingSessionId = null;
       this.isTyping = false;
@@ -1884,8 +1904,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     
     checkIfDeleted(session) {
-      const sessionInHistory = this.chatHistory.some(s => s.sessionId === session.sessionId);
-      if (!sessionInHistory) {
+      if (session?.deleteTime) {
         this.canChat = false;
         this.$root.showWarning(this.i18n.assistantChatNoResume);
       } else {
@@ -1897,6 +1916,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       if (!this.currentModel || this.modelsMap.size == 0) return;
       this.contextLimitSmall = this.modelsMap.get(this.currentModel).contextLimitSmall;
       this.contextLimitLarge = this.modelsMap.get(this.currentModel).contextLimitLarge;
+      this.charsPerTokenEstimate = this.modelsMap.get(this.currentModel).charsPerTokenEstimate;
       this.lowBalanceColorAlert = this.modelsMap.get(this.currentModel).lowBalanceColorAlert;
     },
 
@@ -2103,8 +2123,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         await this.toggleSharedSession(sessionId)
       }
 
-      if (caseId === null) { 
-        caseId = this.createCase(session.title);
+      let caseTip = this.i18n.assistantAttachToCaseTipExisting;
+      if (caseId === null) {
+        caseId = await this.createCase(session.title);
+        caseTip = this.i18n.assistantAttachToCaseTipNew;
       }
 
       const payload = {
@@ -2117,6 +2139,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
 
       try {
         this.$root.papi.post('/case/artifacts', payload);
+        this.$root.showTip(caseTip);
       } catch (err) { 
         this.$root.showError(this.i18n.assistantAttachToCaseFail);
       }
