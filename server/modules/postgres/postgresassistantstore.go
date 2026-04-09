@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"slices"
 	"time"
 
@@ -22,6 +23,8 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
+var isValidId = regexp.MustCompile(`^[A-Za-z0-9-_]{5,50}$`).MatchString
+
 type PostgresAssistantstore struct {
 	server *server.Server
 	pool   *pgxpool.Pool
@@ -34,13 +37,79 @@ func NewPostgresAssistantstore(srv *server.Server, pool *pgxpool.Pool) *Postgres
 	}
 }
 
+func (store *PostgresAssistantstore) validateId(id string, label string) error {
+	if !isValidId(id) {
+		return fmt.Errorf("invalid ID for %s", label)
+	}
+	return nil
+}
+
+func (store *PostgresAssistantstore) validateChat(chat *model.StoredMessage) error {
+	if chat == nil || chat.Message == nil {
+		return fmt.Errorf("chat and message must not be nil")
+	}
+
+	if err := store.validateId(chat.SessionId, "SessionId"); err != nil {
+		return err
+	}
+
+	contentCount := 0
+	if len(chat.Message.ContentBlocks) != 0 {
+		contentCount++
+		keepers := make([]model.ContentBlock, 0, len(chat.Message.ContentBlocks))
+		filtered := false
+
+		for _, cb := range chat.Message.ContentBlocks {
+			if cb.Type == "" && cb.ToolResult == nil {
+				return fmt.Errorf("every content block must have a type")
+			}
+
+			if !(cb.Type == "text" && cb.Text == "") {
+				keepers = append(keepers, cb)
+			} else {
+				filtered = true
+			}
+		}
+
+		if filtered {
+			chat.Message.ContentBlocks = keepers
+		}
+	}
+
+	if chat.Message.ContentStr != "" {
+		contentCount++
+	}
+
+	if contentCount != 1 {
+		return fmt.Errorf("message must have exactly one content type: either ContentBlocks or ContentStr")
+	}
+
+	return nil
+}
+
+func (store *PostgresAssistantstore) validateSession(session *model.AssistantSession) error {
+	if session == nil {
+		return fmt.Errorf("session must not be nil")
+	}
+
+	if err := store.validateId(session.SessionId, "SessionId"); err != nil {
+		return err
+	}
+
+	if session.Title == "" {
+		return fmt.Errorf("Title is too short")
+	}
+
+	return nil
+}
+
 func (store *PostgresAssistantstore) SaveChat(ctx context.Context, chat *model.StoredMessage) error {
 	if err := store.server.CheckAuthorized(ctx, "write_authored", "assistant"); err != nil {
 		return err
 	}
 
-	if chat == nil || chat.Message == nil {
-		return fmt.Errorf("chat and message must not be nil")
+	if err := store.validateChat(chat); err != nil {
+		return err
 	}
 
 	userId, _ := ctx.Value(web.ContextKeyRequestorId).(string)
@@ -133,8 +202,8 @@ func (store *PostgresAssistantstore) CreateSession(ctx context.Context, session 
 		return err
 	}
 
-	if session == nil {
-		return fmt.Errorf("session must not be nil")
+	if err := store.validateSession(session); err != nil {
+		return err
 	}
 
 	userId, _ := ctx.Value(web.ContextKeyRequestorId).(string)
@@ -224,11 +293,38 @@ func (store *PostgresAssistantstore) GetSessions(ctx context.Context, opts ...mo
 
 	if options.Usage() {
 		if err := store.populateSessionUsage(ctx, sessions); err != nil {
-			log.WithError(err).Warn("Failed to populate session usage")
+			return nil, err
 		}
 	}
 
+	if err := store.addUpdateTimeFromMessages(ctx, sessions); err != nil {
+		return nil, err
+	}
+
 	return sessions, rows.Err()
+}
+
+// addUpdateTimeFromMessages sets each session's UpdateTime to the latest message timestamp,
+// matching the ES behavior where UpdateTime reflects the most recent chat activity.
+func (store *PostgresAssistantstore) addUpdateTimeFromMessages(ctx context.Context, sessions []*model.AssistantSession) error {
+	if len(sessions) == 0 {
+		return nil
+	}
+
+	for _, session := range sessions {
+		var maxTime *time.Time
+		err := store.pool.QueryRow(ctx,
+			`SELECT MAX(create_time) FROM assistant_messages WHERE session_id = $1`,
+			session.SessionId).Scan(&maxTime)
+		if err != nil {
+			return err
+		}
+		if maxTime != nil {
+			session.UpdateTime = maxTime
+		}
+	}
+
+	return nil
 }
 
 func (store *PostgresAssistantstore) filterSessionsByRbac(ctx context.Context, sessions []*model.AssistantSession) []*model.AssistantSession {

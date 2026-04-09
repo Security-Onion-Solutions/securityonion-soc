@@ -72,6 +72,73 @@ func TestSaveChatNilMessage(t *testing.T) {
 	err := store.SaveChat(ctx, nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "chat and message must not be nil")
+
+	// Valid session ID but missing content
+	err = store.SaveChat(ctx, &model.StoredMessage{
+		SessionId: "chat_123456",
+		Message:   &model.Message{},
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "message must have exactly one content type")
+}
+
+func TestValidateId(t *testing.T) {
+	srv := server.NewFakeAuthorizedServer(nil)
+	store := NewPostgresAssistantstore(srv, nil)
+
+	assert.NoError(t, store.validateId("chat_123456", "test"))
+	assert.NoError(t, store.validateId("a-b-c_d-e_f", "test"))
+	assert.Error(t, store.validateId("", "test"))
+	assert.Error(t, store.validateId("bad", "test"))
+	assert.Error(t, store.validateId("invalid@id", "test"))
+}
+
+func TestValidateChat(t *testing.T) {
+	srv := server.NewFakeAuthorizedServer(nil)
+	store := NewPostgresAssistantstore(srv, nil)
+
+	// Valid with ContentStr
+	err := store.validateChat(&model.StoredMessage{
+		SessionId: "chat_123456",
+		Message:   &model.Message{ContentStr: "hello"},
+	})
+	assert.NoError(t, err)
+
+	// Valid with ContentBlocks
+	err = store.validateChat(&model.StoredMessage{
+		SessionId: "chat_123456",
+		Message: &model.Message{
+			ContentBlocks: []model.ContentBlock{{Type: "text", Text: "hello"}},
+		},
+	})
+	assert.NoError(t, err)
+
+	// Invalid: both ContentStr and ContentBlocks
+	err = store.validateChat(&model.StoredMessage{
+		SessionId: "chat_123456",
+		Message: &model.Message{
+			ContentStr:    "hello",
+			ContentBlocks: []model.ContentBlock{{Type: "text", Text: "hello"}},
+		},
+	})
+	assert.Error(t, err)
+
+	// Invalid: bad session ID
+	err = store.validateChat(&model.StoredMessage{
+		SessionId: "bad",
+		Message:   &model.Message{ContentStr: "hello"},
+	})
+	assert.Error(t, err)
+}
+
+func TestValidateSession(t *testing.T) {
+	srv := server.NewFakeAuthorizedServer(nil)
+	store := NewPostgresAssistantstore(srv, nil)
+
+	assert.NoError(t, store.validateSession(&model.AssistantSession{SessionId: "chat_123456", Title: "Test"}))
+	assert.Error(t, store.validateSession(nil))
+	assert.Error(t, store.validateSession(&model.AssistantSession{SessionId: "bad", Title: "Test"}))
+	assert.Error(t, store.validateSession(&model.AssistantSession{SessionId: "chat_123456", Title: ""}))
 }
 
 func TestCreateSessionUnauthorized(t *testing.T) {
@@ -97,6 +164,11 @@ func TestCreateSessionNil(t *testing.T) {
 	err := store.CreateSession(ctx, nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "session must not be nil")
+
+	// Invalid: missing title
+	err = store.CreateSession(ctx, &model.AssistantSession{SessionId: "chat_123456"})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "Title is too short")
 }
 
 func TestGetChatHistoryEmptySessionId(t *testing.T) {
