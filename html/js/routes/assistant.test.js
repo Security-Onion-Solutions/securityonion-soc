@@ -700,6 +700,7 @@ test('sendMessage with insufficient credits', async () => {
   comp.creditsRemaining = 0;
   comp.assistantEnabled = true;
   comp.canChat = true;
+  comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
   
   await comp.sendMessage();
@@ -729,10 +730,11 @@ test('sendMessage creates session ID and updates URL', async () => {
   comp.scrollToBottom = jest.fn();
   comp.assistantEnabled = true;
   comp.canChat = true;
+  comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
-  
+
   await comp.sendMessage();
-  
+
   expect(comp.generateChatId).toHaveBeenCalled();
   expect(comp.currentChatId).toBe(fakeSessionId);
   expect(comp.saveCurrentChatId).toHaveBeenCalled();
@@ -926,6 +928,7 @@ test('approveTool queues tool for execution', async () => {
   const toolUse = { ...fakeToolUse };
   comp.queueTool = jest.fn();
   comp.scrollToBottom = jest.fn();
+  comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
   comp.mostRecentFloatingTool = new Map();
   comp.mostRecentFloatingTool.set(comp.currentChatId, toolUse);
@@ -945,6 +948,7 @@ test('approveTool handles execution error', async () => {
     throw new Error('Execution failed');
   });
   comp.scrollToBottom = jest.fn();
+  comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
   comp.mostRecentFloatingTool = new Map();
   
@@ -958,6 +962,7 @@ test('rejectTool marks as rejected', async () => {
   const toolUse = { ...fakeToolUse };
   comp.scrollToBottom = jest.fn();
   comp.callAIAPI = jest.fn().mockResolvedValue();
+  comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
   
   await comp.rejectTool(toolUse);
@@ -4471,6 +4476,7 @@ test('sendMessage checks context limit before proceeding', async () => {
   comp.canChat = true;
   comp.assistantEnabled = true;
   comp.creditsRemaining = 100;
+  comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(true);
   comp.callAIAPI = jest.fn();
   
@@ -4485,12 +4491,13 @@ test('sendMessage checks context limit before proceeding, but allows context_com
   comp.canChat = true;
   comp.assistantEnabled = true;
   comp.creditsRemaining = 100;
+  comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(true);
   comp.callAIAPI = jest.fn();
   
   await comp.sendMessage([MSGTAG_CONTEXTCOMPRESSION]);
-  
-  expect(comp.checkContextLimitReached).toHaveBeenCalled();
+
+  expect(comp.checkContextLimitReached).not.toHaveBeenCalled();
   expect(comp.callAIAPI).toHaveBeenCalled();
   expect(comp.callAIAPI).toHaveBeenCalledWith('Summarize the conversation so far for context preservation', [MSGTAG_CONTEXTCOMPRESSION]);
 });
@@ -4510,6 +4517,7 @@ test('sendMessage clears welcome message when starting first real conversation',
   comp.callAIAPI = jest.fn().mockResolvedValue();
   comp.loadStoredChats = jest.fn().mockResolvedValue();
   comp.scrollToBottom = jest.fn();
+  comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
   
   await comp.sendMessage();
@@ -4670,6 +4678,7 @@ test('handleContentBlockStop processes tool completion with auto-approval', () =
   comp.getSessionToolMap = jest.fn().mockReturnValue(mockToolMap);
   comp.getIndexMap = jest.fn().mockReturnValue(mockIndexMap);
   comp.shouldAutoApproveTool = jest.fn().mockReturnValue(true);
+  comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
   comp.queueTool = jest.fn();
   
@@ -4755,6 +4764,7 @@ test('handleToolExecutionContentBlockStop processes chained tool with auto-appro
   comp.getSessionToolMap = jest.fn().mockReturnValue(mockToolMap);
   comp.getIndexMap = jest.fn().mockReturnValue(mockIndexMap);
   comp.shouldAutoApproveTool = jest.fn().mockReturnValue(true);
+  comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
   comp.queueTool = jest.fn();
   
@@ -5174,6 +5184,7 @@ test('sendMessage marks floating tool as skipped when sending new message', asyn
   comp.canChat = true;
   comp.assistantEnabled = true;
   comp.creditsRemaining = 100;
+  comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
   comp.callAIAPI = jest.fn().mockResolvedValue();
   comp.loadStoredChats = jest.fn().mockResolvedValue();
@@ -5201,6 +5212,7 @@ test('sendMessage does not mark floating tool as skipped when only welcome messa
   comp.canChat = true;
   comp.assistantEnabled = true;
   comp.creditsRemaining = 100;
+  comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
   comp.callAIAPI = jest.fn().mockResolvedValue();
   comp.loadStoredChats = jest.fn().mockResolvedValue();
@@ -5641,6 +5653,78 @@ test('messageContextValues handles null messages', () => {
   const result = comp.messageContextValues();
 
   expect(result).toEqual([]);
+});
+
+// isMessageTooLong computed property tests
+test('isMessageTooLong returns false when charsPerTokenEstimate is 0', () => {
+  comp.charsPerTokenEstimate = 0;
+  comp.newMessage = 'Hello';
+  comp.contextLength = 0;
+  comp.contextLimitSmall = 1000;
+
+  expect(comp.isMessageTooLong()).toBe(false);
+});
+
+test('isMessageTooLong returns false when newMessage is empty', () => {
+  comp.charsPerTokenEstimate = 3.6;
+  comp.newMessage = '';
+  comp.contextLength = 0;
+  comp.contextLimitSmall = 1000;
+
+  expect(comp.isMessageTooLong()).toBe(false);
+});
+
+test('isMessageTooLong returns false when within limit', () => {
+  comp.charsPerTokenEstimate = 4;
+  comp.newMessage = 'Short message';
+  comp.contextLength = 0;
+  comp.increaseContextLimit = false;
+  comp.contextLimitSmall = 1000;
+
+  // maxChars = 1000 * 4 * 1.1 = 4400
+  // usedChars = 13 + 0 = 13
+  expect(comp.isMessageTooLong()).toBe(false);
+});
+
+test('isMessageTooLong returns true when message exceeds limit', () => {
+  comp.charsPerTokenEstimate = 4;
+  comp.newMessage = 'a'.repeat(4400);
+  comp.contextLength = 0;
+  comp.increaseContextLimit = false;
+  comp.contextLimitSmall = 1000;
+
+  // maxChars = 1000 * 4 * 1.1 = 4400
+  // usedChars = 4400 + 0 = 4400
+  expect(comp.isMessageTooLong()).toBe(true);
+});
+
+test('isMessageTooLong accounts for context length', () => {
+  comp.charsPerTokenEstimate = 4;
+  comp.newMessage = 'Hello';
+  comp.contextLength = 1000;
+  comp.increaseContextLimit = false;
+  comp.contextLimitSmall = 1000;
+
+  // maxChars = 1000 * 4 * 1.1 = 4400
+  // usedChars = 5 + (1000 * 4) = 4005
+  expect(comp.isMessageTooLong()).toBe(false);
+
+  comp.contextLength = 1100;
+  // usedChars = 5 + (1100 * 4) = 4405
+  expect(comp.isMessageTooLong()).toBe(true);
+});
+
+test('isMessageTooLong uses large context limit when toggled', () => {
+  comp.charsPerTokenEstimate = 4;
+  comp.newMessage = 'a'.repeat(4400);
+  comp.contextLength = 0;
+  comp.increaseContextLimit = true;
+  comp.contextLimitSmall = 1000;
+  comp.contextLimitLarge = 2000;
+
+  // maxChars = 2000 * 4 * 1.1 = 8800
+  // usedChars = 4400
+  expect(comp.isMessageTooLong()).toBe(false);
 });
 
 test('buildModelIdentifier', () => {

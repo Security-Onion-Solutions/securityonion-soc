@@ -42,6 +42,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     contextStartMessageIndex: -1,
     contextLimitSmall: 0,
     contextLimitLarge: 0,
+    charsPerTokenEstimate: 0,
     thresholdColorRatioLow: 0.5,
     thresholdColorRatioMed: 0.75,
     thresholdColorRatioMax: 1,
@@ -92,7 +93,14 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     messageContextValues() {
       const msgs = this.messages || [];
       return msgs.map((_, i) => this.calculateContextOfMessage(msgs, i));
-    }
+    },
+    isMessageTooLong() {
+      if (this.charsPerTokenEstimate <= 0 || !this.newMessage) return false;
+      const contextLimit = this.increaseContextLimit ? this.contextLimitLarge : this.contextLimitSmall;
+      const maxChars = contextLimit * this.charsPerTokenEstimate * 1.1;
+      const usedChars = this.newMessage.length + (this.contextLength * this.charsPerTokenEstimate);
+      return usedChars >= maxChars;
+    },
   },
   methods: {
 
@@ -171,7 +179,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }
       return false;
     },
-    
+
     async loadNewChatScreen() {
       try {
         // Initialize with a welcome message from the AI Assistant
@@ -406,8 +414,11 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         return;
       }
 
+      const isCompressing = tags && tags.includes(MSGTAG_CONTEXTCOMPRESSION);
+      // Check if message + context exceeds estimated token limit
+      if (!isCompressing && this.isMessageTooLong) return;
       // Check if context length has reached the limit
-      if (this.checkContextLimitReached() && (!tags || !tags.includes(MSGTAG_CONTEXTCOMPRESSION))) return;
+      if (!isCompressing && this.checkContextLimitReached()) return;
       
       // Check if user has credits
       if (this.creditsRemaining <= 0) {
@@ -1905,6 +1916,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       if (!this.currentModel || this.modelsMap.size == 0) return;
       this.contextLimitSmall = this.modelsMap.get(this.currentModel).contextLimitSmall;
       this.contextLimitLarge = this.modelsMap.get(this.currentModel).contextLimitLarge;
+      this.charsPerTokenEstimate = this.modelsMap.get(this.currentModel).charsPerTokenEstimate;
       this.lowBalanceColorAlert = this.modelsMap.get(this.currentModel).lowBalanceColorAlert;
     },
 
