@@ -46,8 +46,8 @@ func (pg *Postgres) Init(cfg module.ModuleConfig) error {
 	sslMode := module.GetStringDefault(cfg, "sslMode", "require")
 	assistantEnabled := module.GetBoolDefault(cfg, "assistantEnabled", true)
 
-	connStr := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
-		username, password, host, port, dbname, sslMode)
+	connStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+		host, port, username, password, dbname, sslMode)
 
 	poolConfig, err := pgxpool.ParseConfig(connStr)
 	if err != nil {
