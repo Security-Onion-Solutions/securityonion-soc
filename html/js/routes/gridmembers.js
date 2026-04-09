@@ -23,9 +23,6 @@ routes.push({ path: '/gridmembers', name: 'gridmembers', component: {
     selected: null,
     dialog: false,
     confirmDeleteDialog: false,
-    rules: {
-      required: value => !!value || this.$root.i18n.required,
-    },
     GridMemberAccepted: GridMemberAccepted,
     GridMemberUnaccepted: GridMemberUnaccepted,
     GridMemberRejected: GridMemberRejected,

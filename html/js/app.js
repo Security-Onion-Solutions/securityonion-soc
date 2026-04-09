@@ -27,6 +27,8 @@ const USER_PASSWORD_LENGTH_MIN = 8;
 const USER_PASSWORD_LENGTH_MAX = 72;
 const USER_PASSWORD_INVALID_RX = /["'$&!]/;
 
+const MAX_OVERRIDE_NOTE_LENGTH = 150;
+
 const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000';
 
 if (typeof global !== 'undefined') {
@@ -34,6 +36,7 @@ if (typeof global !== 'undefined') {
   global.components = components;
   global.iconSets = iconSets;
   global.templatePromises = templatePromises;
+  global.MAX_OVERRIDE_NOTE_LENGTH = MAX_OVERRIDE_NOTE_LENGTH;
 }
 
 $(document).ready(function () {
@@ -236,6 +239,30 @@ $(document).ready(function () {
           FEAT_RPT: 'rpt',
           FEAT_TTR: 'ttr',
           FEAT_OAI: 'oai',
+          validators: {
+            required: value => !!value || _i18n.required,
+            number: value => (!isNaN(+value) && Number.isInteger(parseFloat(value))) || _i18n.required,
+            hours: value => (!value || /^\d{1,4}(\.\d{1,4})?$/.test(value)) || _i18n.invalidHours,
+            shortLengthLimit: value => (value.length < 100) || _i18n.required,
+            longLengthLimit: value => (encodeURI(value).split(/%..|./).length - 1 < 10000000) || _i18n.required,
+            noteLengthLimit: value => (value.length <= MAX_OVERRIDE_NOTE_LENGTH) || _i18n.ruleMaxLen,
+            fileNotEmpty: value => (value == null || value.size > 0) || _i18n.fileEmpty,
+            fileRequired: value => (value != null && value.length != 0) || _i18n.required,
+            cidrFormat: value => (!value ||
+              /^!?\$[a-z_][a-z0-9_]*$/i.test(value) ||
+              /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\/(3[0-2]|[12]\d|\d)$/.test(value) ||
+              /^((([0-9a-f]{1,4}:){7}([0-9a-f]{1,4}|:))|(([0-9a-f]{1,4}:){6}(:[0-9a-f]{1,4}|((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9a-f]{1,4}:){5}(((:[0-9a-f]{1,4}){1,2})|:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9a-f]{1,4}:){4}(((:[0-9a-f]{1,4}){1,3})|((:[0-9a-f]{1,4})?:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){3}(((:[0-9a-f]{1,4}){1,4})|((:[0-9a-f]{1,4}){0,2}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){2}(((:[0-9a-f]{1,4}){1,5})|((:[0-9a-f]{1,4}){0,3}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){1}(((:[0-9a-f]{1,4}){1,6})|((:[0-9a-f]{1,4}){0,4}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(:(((:[0-9a-f]{1,4}){1,7})|((:[0-9a-f]{1,4}){0,5}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:)))(%.+)?\s*(\/([0-9]|[1-9][0-9]|1[0-1][0-9]|12[0-8]))$/i.test(value)
+            ) || _i18n.invalidCidrOrVar,
+            lowercase: value => !value || value.toLowerCase() == value || _i18n.lowercaseRequired,
+            minPassLen: value => (!value || value.length >= USER_PASSWORD_LENGTH_MIN) || _i18n.ruleMinLen,
+            maxPassLen: value => (!value || value.length <= USER_PASSWORD_LENGTH_MAX) || _i18n.ruleMaxLen,
+            badPassChars: value => (!value || !value.match(USER_PASSWORD_INVALID_RX)) || _i18n.rulePassBadChars,
+            minLength: limit => value => (value && value.length >= limit) || _i18n.ruleMinLen,
+            maxLength: limit => value => (!value || value.length < limit) || _i18n.ruleMaxLen,
+            fileSizeLimit: (maxBytes, formatFn) => value =>
+              (value == null || value.size < maxBytes) || _i18n.fileTooLarge.replace("{maxUploadSizeBytes}", formatFn(maxBytes)),
+            matches: expected => value => (!!value && value == expected) || _i18n.passwordMustMatch,
+          },
           ruleValidators: {
             sigma: [
               { pattern: /^id:\s*[^$]+?$/m, message: _i18n.invalidDetectionElastAlertMissingID, match: false },
@@ -928,7 +955,7 @@ $(document).ready(function () {
           if (value == "medium_false") return "orange-darken-1";
           if (value == "high_false") return "red-lighten-1";
           if (value == "critical_false") return "red-darken-4";
-          return "secondary-lighten-1";
+          return "icon";
         },
         isNodeInSubgrid(node) {
           return node.gridId != null && node.gridId.trim().length > 0;

@@ -30,12 +30,6 @@ routes.push({ path: '/clients', name: 'clients', component: {
       note: null,
       searchUsername: null,
     },
-    rules: {
-      required: value => !!value || this.$root.i18n.required,
-      name: value => !value || value.length < 50 || this.$root.i18n.ruleMaxLen,
-      note: value => !value || value.length < 100 || this.$root.i18n.ruleMaxLen,
-      searchUsername: value => !value || value.length < 50 || this.$root.i18n.ruleMaxLen,
-    },
     itemsPerPageOptions: [10,50,250,1000],
     expanded: [],
     perms: [],
