@@ -74,8 +74,8 @@ func (pg *Postgres) Init(cfg module.ModuleConfig) error {
 			existingStore := pg.server.Assistantstore
 			assiststore := NewPostgresAssistantstore(pg.server, pg.pool)
 
-			if err := migrateAssistantData(context.Background(), existingStore, assiststore); err != nil {
-				log.WithError(err).Warn("Failed to migrate assistant data from Elasticsearch, continuing with empty postgres store")
+			if err := migrateAssistantData(context.Background(), pg.pool, existingStore, assiststore); err != nil {
+				log.WithError(err).Warn("Failed to migrate assistant data from Elasticsearch, continuing with existing postgres data")
 			}
 
 			pg.server.Assistantstore = assiststore
@@ -138,6 +138,11 @@ func (pg *Postgres) initSchema(ctx context.Context) error {
 		CREATE INDEX IF NOT EXISTS idx_assistant_messages_session_id ON assistant_messages(session_id);
 		CREATE INDEX IF NOT EXISTS idx_assistant_messages_create_time ON assistant_messages(create_time);
 		CREATE INDEX IF NOT EXISTS idx_assistant_messages_user_id ON assistant_messages(user_id);
+
+		CREATE TABLE IF NOT EXISTS migrations (
+			name TEXT PRIMARY KEY,
+			completed_time TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
 	`
 
 	_, err := pg.pool.Exec(ctx, schema)

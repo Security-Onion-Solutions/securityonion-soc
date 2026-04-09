@@ -9,46 +9,64 @@ import (
 	"context"
 
 	"github.com/apex/log"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 )
 
+const migrationAssistantData = "assistant_data_from_elasticsearch"
+
+// isMigrationComplete checks whether a named migration has already been recorded as complete.
+func isMigrationComplete(ctx context.Context, pool *pgxpool.Pool, name string) (bool, error) {
+	var exists bool
+	err := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM migrations WHERE name = $1)`, name).Scan(&exists)
+	return exists, err
+}
+
+// markMigrationComplete records that a named migration has completed successfully.
+func markMigrationComplete(ctx context.Context, pool *pgxpool.Pool, name string) error {
+	_, err := pool.Exec(ctx, `INSERT INTO migrations (name) VALUES ($1) ON CONFLICT (name) DO NOTHING`, name)
+	return err
+}
+
 // migrateAssistantData migrates existing assistant data from Elasticsearch to PostgreSQL.
-// It reads all sessions and chat messages from the existing Assistantstore (ES) and inserts
-// them into the new PostgreSQL store. This runs once during Init — after migration,
-// postgres takes over as the sole Assistantstore.
-func migrateAssistantData(ctx context.Context, esStore server.Assistantstore, pgStore *PostgresAssistantstore) error {
-	// Check if postgres already has data (migration already done)
-	existing, err := pgStore.GetSessions(ctx, model.GetSessionsWithIncludeDeleted(true))
+// It uses a migrations table to track completion — the migration runs exactly once.
+// Individual sessions and messages use ON CONFLICT DO NOTHING for idempotency,
+// so a partial failure can be safely retried.
+func migrateAssistantData(ctx context.Context, pool *pgxpool.Pool, esStore server.Assistantstore, pgStore *PostgresAssistantstore) error {
+	done, err := isMigrationComplete(ctx, pool, migrationAssistantData)
 	if err != nil {
 		return err
 	}
-	if len(existing) > 0 {
-		log.WithField("sessionCount", len(existing)).Info("PostgreSQL already has assistant data, skipping migration")
+	if done {
+		log.Info("Assistant data migration already completed, skipping")
 		return nil
 	}
 
-	// Get all sessions from ES (including deleted)
+	// Get all sessions from ES (including deleted ones).
+	// We pass GetSessionsWithIncludeDeleted to capture everything.
 	sessions, err := esStore.GetSessions(ctx, model.GetSessionsWithIncludeDeleted(true))
 	if err != nil {
 		return err
 	}
 
 	if len(sessions) == 0 {
-		log.Info("No assistant sessions found in Elasticsearch, nothing to migrate")
-		return nil
+		log.Info("No assistant sessions found in Elasticsearch, marking migration complete")
+		return markMigrationComplete(ctx, pool, migrationAssistantData)
 	}
 
 	log.WithField("sessionCount", len(sessions)).Info("Migrating assistant sessions from Elasticsearch to PostgreSQL")
 
+	migratedSessions := 0
+	migratedMessages := 0
+
 	for _, session := range sessions {
-		// Insert session directly into postgres (bypass the context-based userId)
 		if err := pgStore.insertSessionDirect(ctx, session); err != nil {
 			log.WithError(err).WithField("sessionId", session.SessionId).Warn("Failed to migrate session, skipping")
 			continue
 		}
+		migratedSessions++
 
-		// Get chat history for this session from ES
 		history, err := esStore.GetChatHistory(ctx, session.SessionId)
 		if err != nil {
 			log.WithError(err).WithField("sessionId", session.SessionId).Warn("Failed to get chat history for migration, skipping messages")
@@ -60,9 +78,15 @@ func migrateAssistantData(ctx context.Context, esStore server.Assistantstore, pg
 				log.WithError(err).WithField("messageId", msg.Id).Warn("Failed to migrate message, skipping")
 				continue
 			}
+			migratedMessages++
 		}
 	}
 
-	log.WithField("sessionCount", len(sessions)).Info("Assistant data migration complete")
-	return nil
+	log.WithFields(log.Fields{
+		"migratedSessions": migratedSessions,
+		"migratedMessages": migratedMessages,
+		"totalSessions":    len(sessions),
+	}).Info("Assistant data migration complete")
+
+	return markMigrationComplete(ctx, pool, migrationAssistantData)
 }
