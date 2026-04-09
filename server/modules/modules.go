@@ -20,6 +20,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/kratos"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/navigator"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/playbook"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/postgres"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/salt"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/sostatus"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/statickeyauth"
@@ -47,6 +48,7 @@ func BuildModuleMap(srv *server.Server) map[string]module.Module {
 	moduleMap["elastalertengine"] = elastalert.NewElastAlertEngine(srv)
 	moduleMap["strelkaengine"] = strelka.NewStrelkaEngine(srv)
 	moduleMap["navigator"] = navigator.NewNavigator(srv)
+	moduleMap["postgres"] = postgres.NewPostgres(srv)
 	moduleMap["playbook"] = playbook.NewPlaybookDiskManager(srv)
 	moduleMap["assistant"] = assistant.NewAssistantCoordinator(srv)
 
