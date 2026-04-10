@@ -7,7 +7,6 @@ package postgres
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/apex/log"
@@ -19,10 +18,11 @@ import (
 const DEFAULT_PORT = 5432
 
 type Postgres struct {
-	config  module.ModuleConfig
-	server  *server.Server
-	pool    *pgxpool.Pool
-	running bool
+	config           module.ModuleConfig
+	server           *server.Server
+	pool             *pgxpool.Pool
+	running          bool
+	assistantEnabled bool
 }
 
 func NewPostgres(srv *server.Server) *Postgres {
@@ -101,27 +101,32 @@ func (pg *Postgres) Init(cfg module.ModuleConfig) error {
 
 	log.Info("Connected to PostgreSQL as app user")
 
-	if assistantEnabled {
-		if pg.server.Assistantstore != nil {
-			existingStore := pg.server.Assistantstore
-			assiststore := NewPostgresAssistantstore(pg.server, pg.pool)
-
-			if err := migrateAssistantData(context.Background(), pg.pool, existingStore, assiststore); err != nil {
-				log.WithError(err).Warn("Failed to migrate assistant data from Elasticsearch, continuing with existing postgres data")
-			}
-
-			pg.server.Assistantstore = assiststore
-			log.Info("PostgreSQL Assistantstore enabled (replaced Elasticsearch)")
-		} else {
-			return errors.New("postgres assistantEnabled requires elastic module to be initialized first")
-		}
-	}
+	pg.assistantEnabled = assistantEnabled
 
 	return nil
 }
 
 func (pg *Postgres) Start() error {
 	pg.running = true
+
+	// Deferred to Start() because module initialization order is not guaranteed —
+	// by the time Start() runs, all modules (including elastic) have completed Init().
+	if pg.assistantEnabled {
+		assiststore := NewPostgresAssistantstore(pg.server, pg.pool)
+
+		if pg.server.Assistantstore != nil {
+			existingStore := pg.server.Assistantstore
+			if err := migrateAssistantData(context.Background(), pg.pool, existingStore, assiststore); err != nil {
+				log.WithError(err).Warn("Failed to migrate assistant data from Elasticsearch, continuing with existing postgres data")
+			}
+			log.Info("PostgreSQL Assistantstore enabled (replaced Elasticsearch)")
+		} else {
+			log.Info("PostgreSQL Assistantstore enabled (no prior Elasticsearch store found)")
+		}
+
+		pg.server.Assistantstore = assiststore
+	}
+
 	return nil
 }
 
