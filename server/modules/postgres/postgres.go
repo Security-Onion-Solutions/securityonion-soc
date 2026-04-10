@@ -7,7 +7,6 @@ package postgres
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/apex/log"
@@ -19,10 +18,12 @@ import (
 const DEFAULT_PORT = 5432
 
 type Postgres struct {
-	config  module.ModuleConfig
-	server  *server.Server
-	pool    *pgxpool.Pool
-	running bool
+	config           module.ModuleConfig
+	server           *server.Server
+	pool             *pgxpool.Pool
+	running          bool
+	assistantEnabled bool
+	esMigrationCfg   *esMigrationConfig
 }
 
 func NewPostgres(srv *server.Server) *Postgres {
@@ -101,19 +102,21 @@ func (pg *Postgres) Init(cfg module.ModuleConfig) error {
 
 	log.Info("Connected to PostgreSQL as app user")
 
-	if assistantEnabled {
-		if pg.server.Assistantstore != nil {
-			existingStore := pg.server.Assistantstore
-			assiststore := NewPostgresAssistantstore(pg.server, pg.pool)
+	pg.assistantEnabled = assistantEnabled
 
-			if err := migrateAssistantData(context.Background(), pg.pool, existingStore, assiststore); err != nil {
-				log.WithError(err).Warn("Failed to migrate assistant data from Elasticsearch, continuing with existing postgres data")
-			}
-
-			pg.server.Assistantstore = assiststore
-			log.Info("PostgreSQL Assistantstore enabled (replaced Elasticsearch)")
-		} else {
-			return errors.New("postgres assistantEnabled requires elastic module to be initialized first")
+	// Capture elasticsearch config for migration (queries ES directly via HTTP,
+	// bypassing the Assistantstore interface which requires a user context for RBAC)
+	esHostUrl := module.GetStringDefault(cfg, "esHostUrl", "")
+	esUsername := module.GetStringDefault(cfg, "esUsername", "")
+	esPassword := module.GetStringDefault(cfg, "esPassword", "")
+	if esHostUrl != "" {
+		pg.esMigrationCfg = &esMigrationConfig{
+			HostUrl:      esHostUrl,
+			Username:     esUsername,
+			Password:     esPassword,
+			ChatIndex:    module.GetStringDefault(cfg, "esChatIndex", "*:so-assistant-chat"),
+			SessionIndex: module.GetStringDefault(cfg, "esSessionIndex", "*:so-assistant-session"),
+			SchemaPrefix: module.GetStringDefault(cfg, "esSchemaPrefix", "so_"),
 		}
 	}
 
@@ -122,6 +125,20 @@ func (pg *Postgres) Init(cfg module.ModuleConfig) error {
 
 func (pg *Postgres) Start() error {
 	pg.running = true
+
+	// Deferred to Start() because module initialization order is not guaranteed —
+	// by the time Start() runs, all modules have completed Init().
+	if pg.assistantEnabled {
+		assiststore := NewPostgresAssistantstore(pg.server, pg.pool)
+
+		if err := migrateAssistantData(context.Background(), pg.pool, pg.esMigrationCfg, assiststore); err != nil {
+			log.WithError(err).Warn("Failed to migrate assistant data from Elasticsearch, continuing with existing postgres data")
+		}
+
+		pg.server.Assistantstore = assiststore
+		log.Info("PostgreSQL Assistantstore enabled")
+	}
+
 	return nil
 }
 
