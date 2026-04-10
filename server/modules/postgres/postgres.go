@@ -42,14 +42,50 @@ func (pg *Postgres) Init(cfg module.ModuleConfig) error {
 	port := module.GetIntDefault(cfg, "port", DEFAULT_PORT)
 	username := module.GetStringDefault(cfg, "username", "so_postgres")
 	password := module.GetStringDefault(cfg, "password", "")
+	adminUser := module.GetStringDefault(cfg, "adminUser", "postgres")
+	adminPassword := module.GetStringDefault(cfg, "adminPassword", "")
 	dbname := module.GetStringDefault(cfg, "dbname", "securityonion")
 	sslMode := module.GetStringDefault(cfg, "sslMode", "require")
 	assistantEnabled := module.GetBoolDefault(cfg, "assistantEnabled", true)
 
-	connStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+	// Use superuser for schema initialization (PG 15+ restricts CREATE TABLE on public schema)
+	adminConnStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+		host, port, adminUser, adminPassword, dbname, sslMode)
+
+	adminPool, err := pgxpool.NewWithConfig(context.Background(), func() *pgxpool.Config {
+		cfg, _ := pgxpool.ParseConfig(adminConnStr)
+		return cfg
+	}())
+	if err != nil {
+		return fmt.Errorf("unable to create postgres admin connection: %w", err)
+	}
+
+	if err := adminPool.Ping(context.Background()); err != nil {
+		adminPool.Close()
+		return fmt.Errorf("unable to connect to postgres as admin: %w", err)
+	}
+
+	log.Info("Connected to PostgreSQL as admin")
+
+	if err := pg.initSchema(context.Background(), adminPool); err != nil {
+		adminPool.Close()
+		return fmt.Errorf("unable to initialize postgres schema: %w", err)
+	}
+
+	// Grant privileges to app user on all tables
+	if _, err := adminPool.Exec(context.Background(),
+		fmt.Sprintf("GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO %q", username)); err != nil {
+		adminPool.Close()
+		return fmt.Errorf("unable to grant privileges to app user: %w", err)
+	}
+
+	adminPool.Close()
+
+	// Now connect as the application user for normal operations
+	appConnStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
 		host, port, username, password, dbname, sslMode)
 
-	poolConfig, err := pgxpool.ParseConfig(connStr)
+	poolConfig, err := pgxpool.ParseConfig(appConnStr)
 	if err != nil {
 		return fmt.Errorf("unable to parse postgres connection string: %w", err)
 	}
@@ -63,11 +99,7 @@ func (pg *Postgres) Init(cfg module.ModuleConfig) error {
 		return fmt.Errorf("unable to connect to postgres: %w", err)
 	}
 
-	log.Info("Connected to PostgreSQL")
-
-	if err := pg.initSchema(context.Background()); err != nil {
-		return fmt.Errorf("unable to initialize postgres schema: %w", err)
-	}
+	log.Info("Connected to PostgreSQL as app user")
 
 	if assistantEnabled {
 		if pg.server.Assistantstore != nil {
@@ -105,7 +137,7 @@ func (pg *Postgres) IsRunning() bool {
 	return pg.running
 }
 
-func (pg *Postgres) initSchema(ctx context.Context) error {
+func (pg *Postgres) initSchema(ctx context.Context, adminPool *pgxpool.Pool) error {
 	schema := `
 		CREATE TABLE IF NOT EXISTS assistant_sessions (
 			id TEXT PRIMARY KEY,
@@ -145,6 +177,6 @@ func (pg *Postgres) initSchema(ctx context.Context) error {
 		);
 	`
 
-	_, err := pg.pool.Exec(ctx, schema)
+	_, err := adminPool.Exec(ctx, schema)
 	return err
 }
