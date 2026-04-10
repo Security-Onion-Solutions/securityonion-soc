@@ -23,6 +23,7 @@ type Postgres struct {
 	pool             *pgxpool.Pool
 	running          bool
 	assistantEnabled bool
+	esMigrationCfg   *esMigrationConfig
 }
 
 func NewPostgres(srv *server.Server) *Postgres {
@@ -103,6 +104,22 @@ func (pg *Postgres) Init(cfg module.ModuleConfig) error {
 
 	pg.assistantEnabled = assistantEnabled
 
+	// Capture elasticsearch config for migration (queries ES directly via HTTP,
+	// bypassing the Assistantstore interface which requires a user context for RBAC)
+	esHostUrl := module.GetStringDefault(cfg, "esHostUrl", "")
+	esUsername := module.GetStringDefault(cfg, "esUsername", "")
+	esPassword := module.GetStringDefault(cfg, "esPassword", "")
+	if esHostUrl != "" {
+		pg.esMigrationCfg = &esMigrationConfig{
+			HostUrl:      esHostUrl,
+			Username:     esUsername,
+			Password:     esPassword,
+			ChatIndex:    module.GetStringDefault(cfg, "esChatIndex", "*:so-assistant-chat"),
+			SessionIndex: module.GetStringDefault(cfg, "esSessionIndex", "*:so-assistant-session"),
+			SchemaPrefix: module.GetStringDefault(cfg, "esSchemaPrefix", "so_"),
+		}
+	}
+
 	return nil
 }
 
@@ -110,21 +127,16 @@ func (pg *Postgres) Start() error {
 	pg.running = true
 
 	// Deferred to Start() because module initialization order is not guaranteed —
-	// by the time Start() runs, all modules (including elastic) have completed Init().
+	// by the time Start() runs, all modules have completed Init().
 	if pg.assistantEnabled {
 		assiststore := NewPostgresAssistantstore(pg.server, pg.pool)
 
-		if pg.server.Assistantstore != nil {
-			existingStore := pg.server.Assistantstore
-			if err := migrateAssistantData(context.Background(), pg.pool, existingStore, assiststore); err != nil {
-				log.WithError(err).Warn("Failed to migrate assistant data from Elasticsearch, continuing with existing postgres data")
-			}
-			log.Info("PostgreSQL Assistantstore enabled (replaced Elasticsearch)")
-		} else {
-			log.Info("PostgreSQL Assistantstore enabled (no prior Elasticsearch store found)")
+		if err := migrateAssistantData(context.Background(), pg.pool, pg.esMigrationCfg, assiststore); err != nil {
+			log.WithError(err).Warn("Failed to migrate assistant data from Elasticsearch, continuing with existing postgres data")
 		}
 
 		pg.server.Assistantstore = assiststore
+		log.Info("PostgreSQL Assistantstore enabled")
 	}
 
 	return nil
