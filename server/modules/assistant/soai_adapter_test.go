@@ -117,14 +117,27 @@ func TestSOAiConstructorWithLicense(t *testing.T) {
 	licensing.Init(license)
 
 	srv := &server.Server{}
-	config := map[string]interface{}{}
-	adapter, err := NewSOAiCloudAdapter(context.Background(), srv, config)
 
-	assert.NoError(t, err)
-	br := adapter.(*SOAiCloudAdapter)
-	assert.Equal(t, "https://license.api.com", br.apiUrl)
+	t.Run("license URL used when config is default", func(t *testing.T) {
+		config := map[string]interface{}{}
+		adapter, err := NewSOAiCloudAdapter(context.Background(), srv, config)
+
+		assert.NoError(t, err)
+		br := adapter.(*SOAiCloudAdapter)
+		assert.Equal(t, "https://license.api.com", br.apiUrl)
+	})
+
+	t.Run("custom config overrides license URL", func(t *testing.T) {
+		config := map[string]interface{}{
+			"apiUrl": "https://custom.api.com",
+		}
+		adapter, err := NewSOAiCloudAdapter(context.Background(), srv, config)
+
+		assert.NoError(t, err)
+		br := adapter.(*SOAiCloudAdapter)
+		assert.Equal(t, "https://custom.api.com", br.apiUrl)
+	})
 }
-
 
 func TestSOAiGetHealth(t *testing.T) {
 	// an expired test key for buildApiKey
