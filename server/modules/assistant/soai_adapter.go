@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
@@ -46,7 +47,17 @@ type SOAiCloudAdapter struct {
 
 func NewSOAiCloudAdapter(_ context.Context, srv *server.Server, config map[string]any) (server.AssistantAdapter, error) {
 	// apiUrl string, apiKey string, healthTimeoutSeconds int
+
 	apiUrl := module.GetStringDefault(config, "apiUrl", DEFAULT_APIURL)
+	if apiUrl == DEFAULT_APIURL && licensing.GetLicenseKey() != nil && licensing.GetLicenseKey().AiGatewayUrl != "" {
+		apiUrl = licensing.GetLicenseKey().AiGatewayUrl
+		if !strings.HasPrefix(apiUrl, "http://") && !strings.HasPrefix(apiUrl, "https://") {
+			apiUrl = "https://" + apiUrl
+		}
+		log.WithField("aiGatewayUrl", apiUrl).Info("using aiGatewayUrl from license")
+	} else {
+		log.WithField("aiGatewayUrl", apiUrl).Info("using configured API URL")
+	}
 	healthTimeoutSeconds := module.GetIntDefault(config, "healthTimeoutSeconds", DEFAULT_HEALTH_TIMEOUT_SECONDS)
 
 	apiKey := buildApiKey()
