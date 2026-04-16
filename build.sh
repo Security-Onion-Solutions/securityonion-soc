@@ -53,16 +53,9 @@ if [[ "$version" != "0.0.0" ]]; then
     }
     ' package.json > package-lock.json
 
-    set +e
     go install github.com/google/osv-scanner/v2/cmd/osv-scanner@latest
-    osv-scanner scan --format json -r . > osv-scan.json
-    set -e
-    jq -r '["PACKAGE", "VERSION", "ID", "SCORE", "SEVERITY", "SUMMARY"], ([.results[].packages[] as $pkg | $pkg.groups[] | (.max_severity | tonumber? // 0) as $score | select($score >= 7.0) | $pkg.vulnerabilities[] | select(.id as $vid | $pkg.groups[] | select(.ids | any(. == $vid)) | .max_severity == ($score | tostring)) | [ $pkg.package.name, $pkg.package.version, .id, $score, (if $score >= 9.0 then "CRITICAL" else "HIGH" end), .summary ]] | unique[]) | @tsv' osv-scan.json | column -t -s $'\t'
-    if ! jq -e '[.results[].packages[].groups[] | select((.max_severity | tonumber? // 0) >= 9.0)] | length == 0' osv-scan.json > /dev/null; then
-        echo "Found contains critical vulnerabilities"
-        exit 1
-    fi
-    rm -f package.json package-lock.json osv-scan.json
+    osv-scanner scan source --config osv-scanner.toml -r .
+    rm -f package.json package-lock.json
 fi
 
 echo "Building application..."
