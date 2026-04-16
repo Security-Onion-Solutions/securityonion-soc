@@ -8,7 +8,7 @@ FROM ghcr.io/security-onion-solutions/golang:1.26.1-alpine as builder
 ARG VERSION=0.0.0
 ARG ALT_BRANCH=3/dev
 ARG REVKEYS=
-RUN apk update && apk add g++ libpcap-dev bash git musl-dev gcc npm python3 py3-pip py3-virtualenv python3-dev openssl-dev linux-headers sed glib pango gdk-pixbuf fontconfig ttf-freefont font-noto terminus-font
+RUN apk update && apk add g++ libpcap-dev bash git musl-dev gcc npm python3 py3-pip py3-virtualenv python3-dev openssl-dev linux-headers sed glib pango gdk-pixbuf fontconfig ttf-freefont font-noto terminus-font jq util-linux-misc
 COPY . /build
 
 # Mock md2pdf script for testing
