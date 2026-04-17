@@ -89,7 +89,7 @@ const i18n = {
       ariaNodeImageBack: 'Back image of appliance',
       ariaOverrideStatus: 'Override status',
       ariaPieChartFor: 'Pie chart for {title}',
-      ariaProVideoDescription: '',
+      ariaProVideoDescription: 'A brief video showing off Onion AI analyzing alerts, tuning detection overrides, acknowledging alerts, and creating detections.',
       ariaQueryDropdown: 'Query dropdown',
       ariaRelativeTime: 'Relative time',
       ariaRelativeTimeToggle: 'Toggle to relative time input',
