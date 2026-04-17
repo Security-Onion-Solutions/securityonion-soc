@@ -69,8 +69,7 @@
 						:items="groupedModels"
 						item-title="displayName"
 						item-value="key"
-						:hint="i18n.selectModel"
-						persistent-hint
+						:label="i18n.selectModel"
 						prepend-icon="fa-microchip">
 						<template v-slot:item="{ props, item }">
 							<v-list-subheader v-if="item?.header" class="text-body-small">
@@ -132,14 +131,14 @@
 				<v-card-title id="chat-header" class="py-3 d-flex align-center">
 					<v-icon class="mr-2" data-aid="assistant_banner_chat_icon">fa-comments</v-icon>
 					<span class="mr-2">{{ i18n.chatTitle }}</span>
-					<v-icon v-if="currentChatId" class="mr-2" @click="toggleSharedSession(currentChatId)" data-aid="assistant_banner_share_toggle" :disabled="$root.isMyUser(chatHistoryById?.[currentChatId]?.userId)" :title="i18n.assistantLinkTitle">
+					<v-icon v-if="currentChatId" class="mr-2" @click="toggleSharedSession(currentChatId)" data-aid="assistant_banner_share_toggle" :disabled="$root.isMyUser(chatHistoryById?.[currentChatId]?.userId)" :title="i18n.assistantLinkTitle" :aria-label="(chatHistoryById?.[currentChatId]?.tags?.includes('shared')) ? i18n.ariaLinkToCase : i18n.ariaUnlinkFromCase">
 						{{ (chatHistoryById?.[currentChatId]?.tags?.includes('shared')) ? 'fa-link' : 'fa-link-slash' }}
 					</v-icon>
-					<v-icon v-if="currentChatId" class="mr-2" @click.stop="exportSession" data-aid="assistant_banner_export_session" :disabled="checkForActivity() || !messages.some(m => m.role === 'user')" :title="i18n.exportSessionHelp">
+					<v-icon v-if="currentChatId" class="mr-2" @click.stop="exportSession" data-aid="assistant_banner_export_session" :disabled="checkForActivity() || !messages.some(m => m.role === 'user')" :title="i18n.exportSessionHelp" :aria-label="i18n.ariaExportSession">
 						fa-file-export
 					</v-icon>
 					<template v-if="currentChatId">
-						<v-icon id="attachToCaseBtn" :title="i18n.assistantAttachToCaseHelp" @click="caseMenuVisible = true">fa-paperclip</v-icon>
+						<v-icon id="attachToCaseBtn" :title="i18n.assistantAttachToCaseHelp" @click="caseMenuVisible = true" :aria-label="i18n.ariaAttachToCase">fa-paperclip</v-icon>
 						<v-menu v-model="caseMenuVisible" target="#attachToCaseBtn" data-aid="assistant_case_attach_menu">
 							<v-list id="assistant-escalate-menu" color="secondary">
 								<v-list-item id="attachToCaseNew" density="compact" v-bind:title.attr="i18n.assistantAttachToNewCaseHelp" data-aid="assistant_attach_to_case_new" @click="attachToCase(currentChatId, null);">
@@ -192,7 +191,7 @@
 								<div class="spacer spacer-right"></div>
 							</div>
 							<div class="d-flex align-start">
-								<v-avatar id="message-avatar" size="32" class="mr-3" :color="message.role === 'user' ? 'primary' : 'secondary-lighten-1'">
+								<v-avatar id="message-avatar" size="32" class="mr-3" :color="message.role === 'user' ? 'primary' : 'transparent'">
 									<v-icon v-if="message.role === 'user'" class="text-white" size="small">fa-user</v-icon>
 									<img v-else src="images/favicon/onion.png" alt="Assistant" style="width: 24px; height: 24px;">
 								</v-avatar>
@@ -280,6 +279,7 @@
 															@click="showOptionsDialog = true"
 															data-aid="assistant_tool_use_options"
 															style="min-width: auto; margin-left: -5px"
+															:aria-label="i18n.ariaAssistantOptions"
 														>
 															<v-icon size="small">fa-cog</v-icon>
 														</v-btn>
@@ -383,6 +383,7 @@
 						@click="sendMessage()"
 						data-aid="assistant_chat_send"
 						class="flex-shrink-0"
+						:aria-label="i18n.ariaSendMessage"
 					>
 						<v-icon color="primary">{{ checkForActivity() ? 'fa-hourglass-half' : 'fa-paper-plane' }}</v-icon>
 					</v-btn>
@@ -413,7 +414,7 @@
 								<v-icon v-if="chat?.tags?.includes('shared')" class="ml-1 tiny-link-icon" title="Shared Session">fa-link</v-icon>
 							</v-list-item-subtitle>
 							<template #append>
-								<v-btn id="chat-delete-button" icon variant="text" size="small" @click.stop="deleteChat(chat.sessionId)" data-aid="assistant_chat_history_delete">
+								<v-btn id="chat-delete-button" icon variant="text" size="small" @click.stop="deleteChat(chat.sessionId)" data-aid="assistant_chat_history_delete" :aria-label="i18n.ariaDeleteChat">
 									<v-icon size="small" color="error">fa-trash</v-icon>
 								</v-btn>
 							</template>
@@ -446,7 +447,8 @@
 			<v-icon class="mr-2 theme-icon" :title="i18n.visitConfigEntry">fa-gear</v-icon>
 		</router-link>
 	</div>
-		<video src="../images/videos/onionai_3.mp4" autoplay muted loop controls style="width: 80%; max-width: 1408px;" data-aid="assistant_needs_enabled_video"></video>
+		<video src="../images/videos/onionai_3.mp4" autoplay muted loop controls style="width: 80%; max-width: 1408px;" data-aid="assistant_needs_enabled_video" aria-describedby="promo-desc"></video>
+		<p id="promo-desc" class="d-sr-only">{{ i18n.ariaProVideoDescription }}</p>
 	</div>
 </v-container>
 
@@ -460,6 +462,7 @@
 		flex-direction: column;
 	">
 	<div class="my-8" v-html="i18n.assistantUnavailable"></div>
-		<video src="../images/videos/onionai_3.mp4" autoplay muted loop controls style="width: 80%; max-width: 1408px;" data-aid="assistant_needs_pro_video"></video>
+		<video src="../images/videos/onionai_3.mp4" autoplay muted loop controls style="width: 80%; max-width: 1408px;" data-aid="assistant_needs_pro_video" aria-describedby="promo-desc"></video>
+		<p id="promo-desc" class="sr-only">{{ i18n.ariaProVideoDescription }}</p>
 	</div>
 </v-container>

@@ -7,7 +7,7 @@
 		<div class="d-flex flex-column" v-if="isEdit('case-title')">
 			<div class="mb-2">
 				<v-form v-model="editForm.valid" @submit.prevent>
-					<v-text-field id="case-title-input" hide-details="auto" variant="outlined" v-model="editForm.val" :rules="[$root.validators.required]" persistent-hint :hint="i18n.caseTitleHelp"></v-text-field>
+					<v-text-field id="case-title-input" hide-details="auto" variant="outlined" v-model="editForm.val" :rules="[$root.validators.required]" :label="i18n.ariaCaseTitle" :hint="i18n.caseTitleHelp"></v-text-field>
 				</v-form>
 			</div>
 			<div class="d-inline-flex justify-end">
@@ -38,7 +38,7 @@
 							<a class="case markdown-icon" href="https://www.markdownguide.org/cheat-sheet/" target="_blank" :title="i18n.markdownFormattingSupported"><v-icon>fab fa-markdown</v-icon></a>
 						</div>
 						<v-form v-model="editForm.valid" @submit.prevent>
-							<v-textarea id="case-desc-input" solo variant="outlined" hide-details="auto" rows="5" density="compact" color="black-text" v-model="editForm.val" :rules="[$root.validators.required]" persistent-hint :hint="i18n.caseDescriptionHelp"></v-textarea>
+							<v-textarea id="case-desc-input" solo variant="outlined" hide-details="auto" rows="5" density="compact" color="black-text" v-model="editForm.val" :rules="[$root.validators.required]" :label="i18n.ariaCaseDescription" :hint="i18n.caseDescriptionHelp"></v-textarea>
 						</v-form>
 					</div>
 					<div class="d-inline-flex justify-end">
@@ -110,7 +110,7 @@
 														</div>
 														<div class="mb-3">
 															<v-form v-model="editForm.valid" @submit.prevent>
-																<v-textarea id="comment-desc-input" variant="outlined" hide-details="auto" rows="5" dense color="black-text" v-model="editForm.val" class="mb-1" :rules="[$root.validators.required]" data-aid="case_comment_edit_input"></v-textarea>
+																<v-textarea id="comment-desc-input" variant="outlined" hide-details="auto" rows="5" dense color="black-text" v-model="editForm.val" class="mb-1" :rules="[$root.validators.required]" data-aid="case_comment_edit_input" :aria-label="i18n.ariaEditComment"></v-textarea>
 															</v-form>
 															<div class="d-inline-flex justify-end">
 																<v-btn variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit()" data-aid="case_comment_cancel">
@@ -134,7 +134,7 @@
 														<div v-else class="d-flex flex-column" style="width: 100%;" data-aid="case_comment_hours_edit">
 															<div class="mb-3">
 																<v-form v-model="editForm.valid" @submit.prevent>
-																	<v-text-field id="comment-hours-input" variant="outlined" color="black-text" v-model="editForm.val" class="mb-1" :rules="[$root.validators.hours]" data-aid="case_comment_hours_input"></v-text-field>
+																	<v-text-field id="comment-hours-input" variant="outlined" color="black-text" v-model="editForm.val" class="mb-1" :rules="[$root.validators.hours]" data-aid="case_comment_hours_input" :aria-label="i18n.ariaCommentHours"></v-text-field>
 																</v-form>
 																<div class="d-inline-flex justify-end">
 																	<v-btn variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit()" data-aid="case_comment_hours_cancel">
@@ -169,11 +169,11 @@
 															{{ i18n.edited }}
 														</div>
 														<div class="d-flex">
-															<v-btn variant="text" size="x-small" v-if="!isEdit(`comment-${index}`)" @click="startEdit('comment-desc-input', comment.description, `comment-${index}`, 'description', modifyAssociation, ['comments', comment], true)" data-aid="case_comment_edit"
+															<v-btn variant="text" size="x-small" v-if="!isEdit(`comment-${index}`)" @click="startEdit('comment-desc-input', comment.description, `comment-${index}`, 'description', modifyAssociation, ['comments', comment], true)" data-aid="case_comment_edit" :aria-label="i18n.ariaEditComment"
 																@keypress.space.prevent="startEdit('comment-desc-input', comment.description, `comment-${index}`, 'description', modifyAssociation, ['comments', comment], true)">
 																<v-icon class="tiny-icon" color="primary">fa-edit</v-icon>
 															</v-btn>
-															<v-btn variant="text" size="x-small" @click="deleteAssociation('comments', comment)" data-aid="case_comment_delete">
+															<v-btn variant="text" size="x-small" @click="deleteAssociation('comments', comment)" data-aid="case_comment_delete" :aria-label="i18n.ariaDeleteComment">
 																<v-icon class="tiny-icon" color="red">fa-circle-xmark</v-icon>
 															</v-btn>
 														</div>
@@ -211,10 +211,10 @@
 											</div>
 											<div class="mx-2">
 												<v-form ref="comments" v-model="associatedForms['comments'].valid" @submit.prevent>
-													<v-textarea id="comment-input" variant="outlined" hide-details="auto" rows="5" v-model="associatedForms['comments'].description" :rules="[$root.validators.required]" class="mb-1" persistent-hint :hint="i18n.commentDescriptionHelp" data-aid="case_new_comment_input"></v-textarea>
+													<v-textarea id="comment-input" variant="outlined" hide-details="auto" rows="5" v-model="associatedForms['comments'].description" :rules="[$root.validators.required]" class="mb-1" :label="i18n.ariaCaseComment" :hint="i18n.commentDescriptionHelp" data-aid="case_new_comment_input"></v-textarea>
 													<v-row v-if="$root.isLicensed($root.FEAT_TTR)">
 														<v-col cols="4">
-															<v-text-field id="comment-hours-input" variant="outlined" v-model="associatedForms['comments'].hours" class="mb-1" persistent-hint :hint="i18n.commentHoursHelp" :rules="[$root.validators.hours]" data-aid="case_new_comment_hours_input"></v-text-field>
+															<v-text-field id="comment-hours-input" variant="outlined" v-model="associatedForms['comments'].hours" class="mb-1" persistent-hint :hint="i18n.commentHoursHelp" :rules="[$root.validators.hours]" :label="i18n.ariaCommentHours" data-aid="case_new_comment_hours_input"></v-text-field>
 														</v-col>
 														<v-col cols="8"></v-col>
 													</v-row>
@@ -272,18 +272,18 @@
 												<v-form ref="attachments" v-model="associatedForms['attachments'].valid" @submit.prevent>
 													<v-file-input id="attachments-file" show-size v-model="attachment" persistent-hint :hint="getAttachmentHelp()"
 													:rules="[$root.validators.fileSizeLimit(maxUploadSizeBytes, $root.formatCount), $root.validators.fileNotEmpty]"
-														data-aid="case_attachments_new_file_input"></v-file-input>
+														data-aid="case_attachments_new_file_input" :label="i18n.ariaCaseFileAttachment"></v-file-input>
 													<span data-aid="case_attachment_protected_toggle">
 														<v-checkbox v-model="associatedForms['attachments'].protected" id="attachments-protect" :label="i18n.artifactProtected" persistent-hint :hint="i18n.artifactProtectedHint"></v-checkbox>
 													</span>
 													<v-textarea id="attachments-description" rows="2" v-model="associatedForms['attachments'].description" data-aid="case_attachments_new_description_input"
-														:placeholder="i18n.artifactDescription" persistent-hint :hint="i18n.artifactDescriptionHelp"></v-textarea>
+														:placeholder="i18n.artifactDescription" :label="i18n.ariaDescription" :hint="i18n.artifactDescriptionHelp"></v-textarea>
 													<span data-aid="case_attachments_tlp_select">
-														<v-select id="attachments-tlp" v-if="!isPresetCustomEnabled('tlp')" v-model="associatedForms['attachments'].tlp" :items="selectList('tlp')" persistent-hint :hint="i18n.caseTlpHelp"></v-select>
-														<v-combobox id="attachments-tlp" v-if="isPresetCustomEnabled('tlp')" v-model="associatedForms['attachments'].tlp" :items="selectList('tlp')" persistent-hint :hint="i18n.caseTlpHelp"></v-combobox>
+														<v-select id="attachments-tlp" v-if="!isPresetCustomEnabled('tlp')" v-model="associatedForms['attachments'].tlp" :items="selectList('tlp')" :label="i18n.caseTlpHelp"></v-select>
+														<v-combobox id="attachments-tlp" v-if="isPresetCustomEnabled('tlp')" v-model="associatedForms['attachments'].tlp" :items="selectList('tlp')" :label="i18n.caseTlpHelp"></v-combobox>
 													</span>
 													<span data-aid="case_attachments_tags_select">
-														<v-select id="attachments-tags" v-if="isPresetCustomEnabled('tags')" v-model="associatedForms['attachments'].tags" :items="selectList('tags')" persistent-hint :hint="i18n.caseTagsHelp" multiple>
+														<v-select id="attachments-tags" v-if="isPresetCustomEnabled('tags')" v-model="associatedForms['attachments'].tags" :items="selectList('tags')" :label="i18n.ariaCaseAttachmentTags" :hint="i18n.caseTagsHelp" multiple>
 															<template #item="{ props, item }">
 																<v-list-item v-bind="props">
 																	<template #prepend>
@@ -295,7 +295,7 @@
 																<v-chip density="compact" color="primary">{{item}}</v-chip>
 															</template>
 														</v-select>
-														<v-combobox id="attachments-tags" v-if="!isPresetCustomEnabled('tags')" v-model="associatedForms['attachments'].tags" :items="selectList('tags')" persistent-hint :hint="i18n.caseTagsHelp" multiple>
+														<v-combobox id="attachments-tags" v-if="!isPresetCustomEnabled('tags')" v-model="associatedForms['attachments'].tags" :items="selectList('tags')" :label="i18n.ariaCaseAttachmentTags" :hint="i18n.caseTagsHelp" multiple>
 															<template #item="{ props, item }">
 																<v-list-item v-bind="props">
 																	<template #prepend>
@@ -348,7 +348,7 @@
 								<template #item="{ index, item, isExpanded, toggleExpand, internalItem }">
 									<tr :class="{'seamless-expanded-row': isExpanded(internalItem), 'main-row': true}">
 										<td class="associated actions">
-											<v-btn :id="`attachments-${index}-expand`" icon variant="text" size="x-small" @click="toggleExpand(internalItem)">
+											<v-btn :id="`attachments-${index}-expand`" icon variant="text" size="x-small" @click="toggleExpand(internalItem)" :aria-expanded="isExpanded(internalItem)" :aria-label="i18n.ariaExpandAttachment">
 												<v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_attachments_collapse">fa-angle-down</v-icon>
 												<v-icon v-else :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_attachments_expand">fa-angle-right</v-icon>
 											</v-btn>
@@ -406,8 +406,8 @@
 												</div>
 												<div class="d-flex flex-column" v-if="isEdit(`attachments-${index}-description`)">
 													<v-form v-model="editForm.valid" @submit.prevent>
-														<div class="mb-2">
-															<v-textarea variant="outlined" full-width rows="3" multiline :id="`attachments-${index}-description-input`" hide-details="auto" v-model="editForm.val" persistent-hint :hint="i18n.artifactDescriptionHelp"></v-textarea>
+														<div class="my-2">
+															<v-textarea variant="outlined" full-width rows="3" multiline :id="`attachments-${index}-description-input`" hide-details="auto" v-model="editForm.val" :label="i18n.ariaDescription" :hint="i18n.artifactDescriptionHelp"></v-textarea>
 														</div>
 													</v-form>
 													<div class="d-inline-flex justify-end">
@@ -427,13 +427,13 @@
 													<v-chip :id="`attachments-${index}-tlp`" density="compact" :color="colorizeChip(item.tlp)" v-if="!isEdit(`attachments-${index}-tlp`)">{{ withDefault(item.tlp, i18n.unknown) }}</v-chip>
 												</div>
 												<v-select :id="`attachments-${index}-tlp-input`" v-if="isEdit(`attachments-${index}-tlp`) && !isPresetCustomEnabled('tlp')"
-													density="compact" eager variant="outlined" hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseTlpHelp"
+													density="compact" eager variant="outlined" hide-details="auto" class="case-select mt-2" :label="i18n.caseTlpHelp"
 													v-model="editForm.val"
 													:items="selectList('tlp', item.tlp)"
 													@update:model-value="stopEdit(true)"></v-select>
 												<template v-if="isEdit(`attachments-${index}-tlp`) && isPresetCustomEnabled('tlp')">
 													<v-combobox :id="`attachments-${index}-tlp-input`"
-														density="compact" eager variant="outlined" hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseTlpHelp"
+														density="compact" eager variant="outlined" hide-details="auto" class="case-select mt-2" :label="i18n.caseTlpHelp"
 														v-model="editForm.val"
 														:items="selectList('tlp', item.tlp)"
 														@keydown.enter="stopEdit(true)"></v-combobox>
@@ -456,7 +456,7 @@
 													</div>
 												</div>
 												<v-select :id="`attachments-${index}-tags-input`" v-if="isEdit(`attachments-${index}-tags`) && !isPresetCustomEnabled('tags')"
-													density="compact" eager variant="outlined" hide-details="auto" class="case-select" multiple persistent-hint :hint="i18n.caseTagsHelp"
+													density="compact" eager variant="outlined" hide-details="auto" class="case-select mt-2" multiple :label="i18n.caseTagsHelp"
 													v-model="editForm.val"
 													:items="selectList('tags', item.tags)"
 													@update:model-value="stopEdit(true)">
@@ -473,7 +473,7 @@
 												</v-select>
 												<template v-if="isEdit(`attachments-${index}-tags`) && isPresetCustomEnabled('tags')">
 													<v-combobox :id="`attachments-${index}-tags-input`"
-														density="compact" eager variant="outlined" hide-details="auto" class="case-select" multiple persistent-hint :hint="i18n.caseTagsHelp"
+														density="compact" eager variant="outlined" hide-details="auto" class="case-select mt-2" multiple persistent-hint :hint="i18n.caseTagsHelp"
 														v-model="editForm.val"
 														:items="selectList('tags', item.tags)"
 														@change="stopEdit(true)">
@@ -504,7 +504,7 @@
 													<div :id="`attachments-${index}-protected`" class="case detail-field" v-if="!isEdit(`attachments-${index}-protected`)">{{ item.protected ? i18n.yes : i18n.no }}</div>
 												</div>
 												<v-checkbox :id="`attachments-${index}-protected-input`" v-if="isEdit(`attachments-${index}-protected`)" v-model="editForm.val" @change="stopEdit(true)"
-													persistent-hint :hint="i18n.artifactProtectedHint"></v-checkbox>
+													:label="i18n.artifactProtectedHint"></v-checkbox>
 											</v-container>
 
 											<div class="d-flex flex-column flex-sm-row align-end align-sm-center align-self-end text-body-2">
@@ -527,7 +527,9 @@
 													{{ i18n.edited }}
 												</div>
 												<div class="ml-1 d-flex">
-													<v-btn variant="text" size="x-small" @click="deleteAssociation('attachments', item)"><v-icon class="tiny-icon" color="red" data-aid="case_attachment_delete">fa-circle-xmark</v-icon></v-btn>
+													<v-btn variant="text" size="x-small" @click="deleteAssociation('attachments', item)" :aria-label="i18n.ariaDeleteAttachment">
+														<v-icon class="tiny-icon" color="red" data-aid="case_attachment_delete">fa-circle-xmark</v-icon>
+													</v-btn>
 												</div>
 											</div>
 										</td>
@@ -579,29 +581,29 @@
 												</div>
 												<v-form ref="evidence" v-model="associatedForms['evidence'].valid" @submit.prevent>
 													<span data-aid="case_evidence_new_type_select">
-														<v-select id="evidence-type" v-if="!isPresetCustomEnabled('artifactType')" v-model="associatedForms['evidence'].artifactType" :items="selectList('artifactType')" persistent-hint :hint="i18n.artifactTypeHelp"></v-select>
-														<v-combobox id="evidence-type" v-if="isPresetCustomEnabled('artifactType')" v-model="associatedForms['evidence'].artifactType" :items="selectList('artifactType')" persistent-hint :hint="i18n.artifactTypeHelp"></v-combobox>
+														<v-select id="evidence-type" v-if="!isPresetCustomEnabled('artifactType')" v-model="associatedForms['evidence'].artifactType" :items="selectList('artifactType')" :label="i18n.artifactTypeHelp"></v-select>
+														<v-combobox id="evidence-type" v-if="isPresetCustomEnabled('artifactType')" v-model="associatedForms['evidence'].artifactType" :items="selectList('artifactType')" :label="i18n.artifactTypeHelp"></v-combobox>
 													</span>
-													<v-file-input id="evidence-value" v-if="associatedForms['evidence'].artifactType == 'file'" show-size v-model="attachment" persistent-hint :hint="getAttachmentHelp()" :rules="[$root.validators.fileSizeLimit(maxUploadSizeBytes, $root.formatCount), $root.validators.fileNotEmpty, $root.validators.fileRequired]" data-aid="case_evidence_new_file_input"></v-file-input>
-													<v-textarea id="evidence-value" v-if="associatedForms['evidence'].artifactType != 'file'" rows="2" v-model="associatedForms['evidence'].value" :rules="[$root.validators.required]" :placeholder="i18n.artifactValue" persistent-hint :hint="i18n.artifactValueHelp"></v-textarea>
+													<v-file-input id="evidence-value" v-if="associatedForms['evidence'].artifactType == 'file'" show-size v-model="attachment" :label="getAttachmentHelp()" :rules="[$root.validators.fileSizeLimit(maxUploadSizeBytes, $root.formatCount), $root.validators.fileNotEmpty, $root.validators.fileRequired]" data-aid="case_evidence_new_file_input"></v-file-input>
+													<v-textarea id="evidence-value" v-if="associatedForms['evidence'].artifactType != 'file'" rows="2" v-model="associatedForms['evidence'].value" :rules="[$root.validators.required]" :label="i18n.artifactValue" :hint="i18n.artifactValueHelp"></v-textarea>
 													<span data-aid="case_evidence_new_bulk_toggle">
-														<v-checkbox v-if="isEvidenceBulkCapable()" id="evidence-bulk" v-model="associatedForms['evidence'].bulk" persistent-hint :hint="i18n.artifactBulkHelp"></v-checkbox>
+														<v-checkbox v-if="isEvidenceBulkCapable()" id="evidence-bulk" v-model="associatedForms['evidence'].bulk" persistent-hint :hint="i18n.artifactBulkHelp" :label="i18n.ariaBulkSelect"></v-checkbox>
 													</span>
-													<v-textarea id="evidence-description" rows="2" v-model="associatedForms['evidence'].description" :placeholder="i18n.artifactDescription" persistent-hint :hint="i18n.artifactDescriptionHelp" data-aid="case_evidence_new_description_input"></v-textarea>
+													<v-textarea id="evidence-description" rows="2" v-model="associatedForms['evidence'].description" :label="i18n.artifactDescription" :hint="i18n.artifactDescriptionHelp" data-aid="case_evidence_new_description_input"></v-textarea>
 													<span data-aid="case_evidence_new_ioc_toggle">
-														<v-checkbox id="evidence-ioc" v-model="associatedForms['evidence'].ioc" persistent-hint :hint="i18n.artifactIocHelp"></v-checkbox>
+														<v-checkbox id="evidence-ioc" v-model="associatedForms['evidence'].ioc" persistent-hint :hint="i18n.artifactIocHelp" :label="i18n.ariaIoc"></v-checkbox>
 													</span>
 													<span data-aid="case_evidence_new_tlp_select">
-														<v-select id="evidence-tlp" v-if="!isPresetCustomEnabled('tlp')" v-model="associatedForms['evidence'].tlp" :items="selectList('tlp')" persistent-hint :hint="i18n.caseTlpHelp"></v-select>
-														<v-combobox id="evidence-tlp" v-if="isPresetCustomEnabled('tlp')" v-model="associatedForms['evidence'].tlp" :items="selectList('tlp')" persistent-hint :hint="i18n.caseTlpHelp"></v-combobox>
+														<v-select id="evidence-tlp" v-if="!isPresetCustomEnabled('tlp')" v-model="associatedForms['evidence'].tlp" :items="selectList('tlp')" :label="i18n.caseTlpHelp"></v-select>
+														<v-combobox id="evidence-tlp" v-if="isPresetCustomEnabled('tlp')" v-model="associatedForms['evidence'].tlp" :items="selectList('tlp')" :label="i18n.caseTlpHelp"></v-combobox>
 													</span>
 													<span data-aid="case_evidence_new_tags_select">
-														<v-select id="evidence-tags" v-if="!isPresetCustomEnabled('tags')" v-model="associatedForms['evidence'].tags" :items="selectList('tags')" persistent-hint :hint="i18n.caseTagsHelp" multiple>
+														<v-select id="evidence-tags" v-if="!isPresetCustomEnabled('tags')" v-model="associatedForms['evidence'].tags" :items="selectList('tags')" :label="i18n.caseTagsHelp" multiple>
 															<template #selection="{ item }">
 																<v-chip density="compact" color="primary">{{item}}</v-chip>
 															</template>
 														</v-select>
-														<v-combobox id="evidence-tags" v-if="isPresetCustomEnabled('tags')" v-model="associatedForms['evidence'].tags" :items="selectList('tags')" persistent-hint :hint="i18n.caseTagsHelp" multiple>
+														<v-combobox id="evidence-tags" v-if="isPresetCustomEnabled('tags')" v-model="associatedForms['evidence'].tags" :items="selectList('tags')" :label="i18n.caseTagsHelp" multiple>
 															<template #item="{ props, item }">
 																<v-list-item v-bind="props">
 																	<template #prepend>
@@ -654,14 +656,14 @@
 								<template #item="{ index, item, isExpanded, toggleExpand, internalItem}">
 									<tr :class="{'seamless-expanded-row': isExpanded(internalItem), 'main-row': true}">
 										<td class="association actions">
-											<v-btn :id="`evidence-${index}-expand`" variant="text" size="x-small" icon @click="toggleExpand(internalItem)">
+											<v-btn :id="`evidence-${index}-expand`" variant="text" size="x-small" icon @click="toggleExpand(internalItem)" :aria-expanded="isExpanded(internalItem)" :aria-label="i18n.ariaExpandObservable">
 												<v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_evidence_collapse">fa-angle-down</v-icon>
 												<v-icon v-else :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_evidence_expand">fa-angle-right</v-icon>
 											</v-btn>
-											<v-btn class="no-underline" variant="text" size="x-small" icon v-bind="getHuntActionProps(item.value)" :title="i18n.huntForEvidence" data-aid="case_evidence_hunt">
+											<v-btn class="no-underline" variant="text" size="x-small" icon v-bind="getHuntActionProps(item.value)" :title="i18n.huntForEvidence" data-aid="case_evidence_hunt" :aria-label="i18n.ariaHuntForObservable">
 												<v-icon :title="i18n.huntForEvidence" class="theme-text">fa-crosshairs</v-icon>
 											</v-btn>
-											<v-btn :id="`evidence-${index}-analyze`" icon variant="text" size="x-small" @click="analyze(item)" :disabled="analyzeInProgress(item)" data-aid="case_evidence_analyze">
+											<v-btn :id="`evidence-${index}-analyze`" icon variant="text" size="x-small" @click="analyze(item)" :disabled="analyzeInProgress(item)" data-aid="case_evidence_analyze" :aria-label="analyzeInProgress(item) ? i18n.ariaAnalyzeInProgress : i18n.ariaAnalyzeObservable">
 												<v-icon v-if="analyzeInProgress(item)" :alt="i18n.analyzeInProgress" :title="i18n.analyzeHelp">fa-clock</v-icon>
 												<v-icon v-if="!analyzeInProgress(item)" :alt="i18n.analyze" :title="i18n.analyzeHelp">fa-bolt</v-icon>
 											</v-btn>
@@ -718,8 +720,8 @@
 												</div>
 												<div class="d-flex flex-column" v-if="isEdit(`evidence-${index}-description`)">
 													<v-form v-model="editForm.valid" @submit.prevent>
-														<div class="mb-2">
-															<v-textarea variant="outlined" full-width rows="3" multiline :id="`evidence-${index}-description-input`" hide-details="auto" v-model="editForm.val" persistent-hint :hint="i18n.artifactDescriptionHelp" data-aid="case_evidence_description_input"></v-textarea>
+														<div class="my-2">
+															<v-textarea variant="outlined" full-width rows="3" multiline :id="`evidence-${index}-description-input`" hide-details="auto" v-model="editForm.val" :label="i18n.ariaDescription" :hint="i18n.artifactDescriptionHelp" data-aid="case_evidence_description_input"></v-textarea>
 														</div>
 													</v-form>
 													<div class="d-inline-flex justify-end">
@@ -738,7 +740,7 @@
 													<div class="font-weight-bold">{{i18n.artifactIoc}}: </div>
 													<div :id="`evidence-${index}-ioc`" class="case detail-field" v-if="!isEdit(`evidence-${index}-ioc`)">{{ item.ioc ? i18n.yes : i18n.no }}</div>
 												</div>
-												<v-checkbox :id="`evidence-${index}-ioc-input`" v-if="isEdit(`evidence-${index}-ioc`)" v-model="editForm.val" @change="stopEdit(true)" persistent-hint :hint="i18n.artifactIocHelp"></v-checkbox>
+												<v-checkbox :id="`evidence-${index}-ioc-input`" v-if="isEdit(`evidence-${index}-ioc`)" v-model="editForm.val" @change="stopEdit(true)" :label="i18n.artifactIocHelp"></v-checkbox>
 											</v-container>
 											<v-container fluid class="py-2" data-aid="case_evidence_tlp_select">
 												<div tabindex="0" class="clicktoedit" @click="startEdit(`evidence-${index}-tlp-input`, item.tlp, `evidence-${index}-tlp`, 'tlp', modifyAssociation, ['evidence', item])"
@@ -747,13 +749,13 @@
 													<v-chip :id="`evidence-${index}-tlp`" density="compact" :color="colorizeChip(item.tlp)" outlined v-if="!isEdit(`evidence-${index}-tlp`)">{{ withDefault(item.tlp, i18n.unknown) }}</v-chip>
 												</div>
 												<v-select variant="outlined" :id="`evidence-${index}-tlp-input`" v-if="isEdit(`evidence-${index}-tlp`) && !isPresetCustomEnabled('tlp')"
-													density="compact" eager hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseTlpHelp"
+													density="compact" eager hide-details="auto" class="case-select mt-2" :label="i18n.caseTlpHelp"
 													v-model="editForm.val"
 													:items="selectList('tlp', item.tlp)"
 													@update:model-value="stopEdit(true)"></v-select>
 												<template v-if="isEdit(`evidence-${index}-tlp`) && isPresetCustomEnabled('tlp')">
 													<v-combobox variant="outlined" :id="`evidence-${index}-tlp-input`"
-														density="compact" eager hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseTlpHelp"
+														density="compact" eager hide-details="auto" class="case-select mt-2" :label="i18n.caseTlpHelp"
 														v-model="editForm.val"
 														:items="selectList('tlp', item.tlp)"
 														@keydown.enter="stopEdit(true)"
@@ -777,7 +779,7 @@
 													</div>
 												</div>
 												<v-select :id="`evidence-${index}-tags-input`" v-if="isEdit(`evidence-${index}-tags`) && !isPresetCustomEnabled('tags')"
-													density="compact" eager variant="outlined" hide-details="auto" class="case-select" multiple persistent-hint :hint="i18n.caseTagsHelp"
+													density="compact" eager variant="outlined" hide-details="auto" class="case-select mt-2" multiple :label="i18n.caseTagsHelp"
 													v-model="editForm.val"
 													:items="selectList('tags', item.tags)"
 													@update:model-value="stopEdit(true)">
@@ -794,7 +796,7 @@
 												</v-select>
 												<template v-if="isEdit(`evidence-${index}-tags`) && isPresetCustomEnabled('tags')">
 													<v-combobox :id="`evidence-${index}-tags-input`"
-														density="compact" eager variant="outlined" hide-details="auto" class="case-select" multiple persistent-hint :hint="i18n.caseTagsHelp"
+														density="compact" eager variant="outlined" hide-details="auto" class="case-select mt-2" multiple :label="i18n.ariaTags" :hint="i18n.caseTagsHelp"
 														v-model="editForm.val"
 														:items="selectList('tags', item.tags)"
 														@change="stopEdit(true)">
@@ -886,7 +888,9 @@
 																		{{ formatDateTime(job.completeTime) }}
 																	</div>
 																	<div class="ml-1 d-flex">
-																		<v-btn variant="text" size="x-small" @click="deleteAnalyzeJob(job)" icon><v-icon class="tiny-icon" color="red" data-aid="case_evidence_analyze_job_delete">fa-circle-xmark</v-icon></v-btn>
+																		<v-btn variant="text" size="x-small" @click="deleteAnalyzeJob(job)" icon :aria-label="i18n.ariaDeleteJob">
+																			<v-icon class="tiny-icon" color="red" data-aid="case_evidence_analyze_job_delete">fa-circle-xmark</v-icon>
+																		</v-btn>
 																	</div>
 																	<v-spacer></v-spacer>
 																</div>
@@ -917,7 +921,9 @@
 													{{ i18n.edited }}
 												</div>
 												<div class="ml-1 d-flex">
-													<v-btn variant="text" size="x-small" @click="deleteAssociation('evidence', item)" icon><v-icon class="tiny-icon" color="red" data-aid="case_evidence_delete">fa-circle-xmark</v-icon></v-btn>
+													<v-btn variant="text" size="x-small" @click="deleteAssociation('evidence', item)" icon :aria-label="i18n.ariaDeleteObservable">
+														<v-icon class="tiny-icon" color="red" data-aid="case_evidence_delete">fa-circle-xmark</v-icon>
+													</v-btn>
 												</div>
 											</div>
 										</td>
@@ -976,7 +982,7 @@
 								<template #item="{ index, item, isExpanded, toggleExpand, internalItem }">
 									<tr :class="{'seamless-expanded-row': isExpanded(internalItem), 'main-row': true}">
 										<td class="associated actions">
-											<v-btn :id="`events-${index}-expand`" icon variant="text" size="x-small" @click="toggleExpand(internalItem)">
+											<v-btn :id="`events-${index}-expand`" icon variant="text" size="x-small" @click="toggleExpand(internalItem)" :aria-expanded="isExpanded(internalItem)" :aria-label="i18n.ariaExpandEvent">
 												<v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_events_collapse">fa-angle-down</v-icon>
 												<v-icon v-else :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_events_expand">fa-angle-right</v-icon>
 											</v-btn>
@@ -1032,7 +1038,9 @@
 													{{ formatDateTime(item.createTime) }}
 												</div>
 												<div class="ml-1 d-flex">
-													<v-btn variant="text" size="small" @click="deleteAssociation('events', item)" data-aid="case_event_delete"><v-icon class="tiny-icon" color="red">fa-circle-xmark</v-icon></v-btn>
+													<v-btn variant="text" size="small" @click="deleteAssociation('events', item)" data-aid="case_event_delete" :aria-label="i18n.ariaDeleteEvent">
+														<v-icon class="tiny-icon" color="red">fa-circle-xmark</v-icon>
+													</v-btn>
 												</div>
 											</div>
 										</td>
@@ -1088,7 +1096,7 @@
 								<template #item="{ index, item, isExpanded, toggleExpand, internalItem }">
 									<tr :class="{'seamless-expanded-row': isExpanded(internalItem), 'main-row': true}">
 										<td class="associated actions">
-											<v-btn :id="`history-${index}-expand`" icon variant="text" size="x-small" @click="toggleExpand(internalItem)">
+											<v-btn :id="`history-${index}-expand`" icon variant="text" size="x-small" @click="toggleExpand(internalItem)" :aria-expanded="isExpanded(internalItem)" :aria-label="i18n.ariaExpandHistory">
 												<v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_history_collapse">fa-angle-down</v-icon>
 												<v-icon v-else :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_history_expand">fa-angle-right</v-icon>
 											</v-btn>
@@ -1379,10 +1387,10 @@
 											<v-col cols="12">
 												<div tabindex="0" class="clicktoedit" @click="startEdit('case-assignee-input', caseObj.assigneeId, 'case-assignee', 'assigneeId', modifyCase)" data-aid="case_assignee_select"
 													@keypress.space.prevent="startEdit('case-assignee-input', caseObj.assigneeId, 'case-assignee', 'assigneeId', modifyCase)">
-													<div class="font-weight-bold">{{i18n.caseAssignee}}: </div>
+													<div id="assignee-label" class="font-weight-bold">{{i18n.caseAssignee}}: </div>
 													<div id='case-assignee' class="case detail-field" v-if="!isEdit('case-assignee')">{{ withDefault(caseObj.assignee, i18n.unassigned) }}</div>
 													<v-select id='case-assignee-input' v-if="isEdit('case-assignee')"
-														density="compact" eager variant="outlined" hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseAssigneeHelp"
+														density="compact" eager variant="outlined" hide-details="auto" class="case-select" aria-labelledby="assignee-label" :hint="i18n.caseAssigneeHelp"
 														v-model="editForm.val"
 														:items="userList"
 														item-title="email"
@@ -1395,15 +1403,15 @@
 											<v-col cols="12">
 												<div tabindex="0" class="clicktoedit" @click="startEdit('case-status-input', caseObj.status, 'case-status', 'status', modifyCase)" data-aid="case_status_select"
 													@keypress.space.prevent="startEdit('case-status-input', caseObj.status, 'case-status', 'status', modifyCase)">
-													<div class="font-weight-bold">{{i18n.status}}: </div>
+													<div id="status-label" class="font-weight-bold">{{i18n.status}}: </div>
 													<div id="case-status" class="case detail-field" v-if="!isEdit('case-status')">{{ withDefault(caseObj.status, i18n.unknown) }}</div>
 													<v-select id="case-status-input" v-if="isEdit('case-status') && !isPresetCustomEnabled('status')"
-														density="compact" eager variant="outlined" hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseStatusHelp"
+														density="compact" eager variant="outlined" hide-details="auto" class="case-select" aria-labelledby="status-label" :hint="i18n.caseStatusHelp"
 														v-model="editForm.val"
 														:items="selectList('status', caseObj.status)"
 														@update:model-value="stopEdit(true)"></v-select>
 													<v-combobox id="case-status-input" v-if="isEdit('case-status') && isPresetCustomEnabled('status')"
-														density="compact" eager variant="outlined" hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseStatusHelp"
+														density="compact" eager variant="outlined" hide-details="auto" class="case-select" aria-labelledby="status-label" :hint="i18n.caseStatusHelp"
 														v-model="editForm.val"
 														:items="selectList('status', caseObj.status)"
 														@change="stopEdit(true)"></v-combobox>
@@ -1413,8 +1421,8 @@
 										<v-row v-if="$root.isLicensed($root.FEAT_TTR)">
 											<v-col cols="12">
 												<div>
-													<div class="font-weight-bold">{{ i18n.caseHours }}: </div>
-													<div id="total-hours" class="case detail-field">{{ formatHours(sumHours()) }} {{ i18n.hours }}</div>
+													<div id="hours-label" class="font-weight-bold">{{ i18n.caseHours }}: </div>
+													<div id="total-hours" class="case detail-field" aria-labelledby="hours-label">{{ formatHours(sumHours()) }} {{ i18n.hours }}</div>
 												</div>
 											</v-col>
 										</v-row>
@@ -1431,16 +1439,16 @@
 										<v-col cols="12" data-aid="case_severity_select">
 											<div tabindex="0" class="clicktoedit" @click="startEdit('case-severity-input', caseObj.severity, 'case-severity', 'severity', modifyCase)"
 												@keypress.space.prevent="startEdit('case-severity-input', caseObj.severity, 'case-severity', 'severity', modifyCase)">
-												<div class="font-weight-bold">{{i18n.caseSeverity}}: </div>
+												<div id="case-severity-label" class="font-weight-bold">{{i18n.caseSeverity}}: </div>
 												<div id="case-severity" class="case detail-field" v-if="!isEdit('case-severity')">{{ withDefault(caseObj.severity, i18n.unknown) }}</div>
 											</div>
 											<v-select id="case-severity-input" v-if="isEdit('case-severity') && !isPresetCustomEnabled('severity')"
-												density="compact" eager variant="outlined" hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseSeverityHelp"
+												density="compact" eager variant="outlined" hide-details="auto" class="case-select" aria-labelledby="case-severity-label" :hint="i18n.caseSeverityHelp"
 												v-model="editForm.val"
 												:items="selectList('severity', caseObj.severity)"
 												@update:model-value="stopEdit(true)"></v-select>
 											<v-combobox id="case-severity-input" v-if="isEdit('case-severity') && isPresetCustomEnabled('severity')"
-												density="compact" eager variant="outlined" hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseSeverityHelp"
+												density="compact" eager variant="outlined" hide-details="auto" class="case-select" aria-labelledby="case-severity-label" :hint="i18n.caseSeverityHelp"
 												v-model="editForm.val"
 												:items="selectList('severity', caseObj.severity)"
 												@change="stopEdit(true)"></v-combobox>
@@ -1450,13 +1458,13 @@
 										<v-col cols="12" data-aid="case_priority_select">
 											<div tabindex="0" class="clicktoedit" @click="startEdit('case-priority-input', caseObj.priority, 'case-priority', 'priority', modifyCase)"
 												@keypress.space.prevent="startEdit('case-priority-input', caseObj.priority, 'case-priority', 'priority', modifyCase)">
-												<div class="font-weight-bold">{{i18n.casePriority}}: </div>
+												<div id="case-priority-label" class="font-weight-bold">{{i18n.casePriority}}: </div>
 												<div id="case-priority" class="case detail-field" v-if="!isEdit('case-priority')">{{ caseObj.priority }}</div>
 											</div>
 											<div v-if="isEdit('case-priority')">
 												<v-form v-model="editForm.valid" @submit.prevent>
 													<div class="mb-2">
-														<v-text-field id="case-priority-input" variant="outlined" hide-details="auto" rows="3" density="compact" no-resize v-model="editForm.val" :rules="[$root.validators.number]" persistent-hint :hint="i18n.casePriorityHelp" data-aid="case_metadata_priority_input"></v-text-field>
+														<v-text-field id="case-priority-input" variant="outlined" hide-details="auto" rows="3" density="compact" no-resize v-model="editForm.val" :rules="[$root.validators.number]" persistent-hint :hint="i18n.casePriorityHelp" aria-labelledby="case-priority-label" data-aid="case_metadata_priority_input"></v-text-field>
 													</div>
 												</v-form>
 												<div class="d-inline-flex justify-end">
@@ -1474,17 +1482,17 @@
 										<v-col cols="12" data-aid="case_tlp_select">
 											<div tabindex="0" class="clicktoedit" @click="startEdit('case-tlp-input', caseObj.tlp, 'case-tlp', 'tlp', modifyCase)"
 												@keypress.space.prevent="startEdit('case-tlp-input', caseObj.tlp, 'case-tlp', 'tlp', modifyCase)">
-												<div class="font-weight-bold">{{i18n.caseTlp}}: </div>
-												<v-chip density="compact" :color="colorizeChip(caseObj.tlp)" variant="outlined" id="case-tlp" v-if="!isEdit('case-tlp')">{{ withDefault(caseObj.tlp, i18n.unknown) }}</v-chip>
+												<div id="tlp-label" class="font-weight-bold">{{i18n.caseTlp}}: </div>
+												<v-chip density="compact" :color="colorizeChip(caseObj.tlp)" variant="outlined" id="case-tlp" aria-labelledby="tlp-label" v-if="!isEdit('case-tlp')">{{ withDefault(caseObj.tlp, i18n.unknown) }}</v-chip>
 											</div>
 											<v-select id="case-tlp-input" v-if="isEdit('case-tlp') && !isPresetCustomEnabled('tlp')"
-												density="compact" eager variant="outlined" hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseTlpHelp"
+												density="compact" eager variant="outlined" hide-details="auto" class="case-select" aria-labelledby="tlp-label" :hint="i18n.caseTlpHelp"
 												v-model="editForm.val"
 												:items="selectList('tlp', caseObj.tlp)"
 												@update:model-value="stopEdit(true)"></v-select>
 											<template v-if="isEdit('case-tlp') && isPresetCustomEnabled('tlp')">
 												<v-combobox id="case-tlp-input"
-													density="compact" eager variant="outlined" hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseTlpHelp"
+													density="compact" eager variant="outlined" hide-details="auto" class="case-select" aria-labelledby="tlp-label" :hint="i18n.caseTlpHelp"
 													v-model="editForm.val"
 													:items="selectList('tlp', caseObj.tlp)"
 													@keydown.enter="stopEdit(true)"></v-combobox>
@@ -1503,16 +1511,16 @@
 										<v-col cols="12" data-aid="case_pap_select">
 											<div tabindex="0" class="clicktoedit" @click="startEdit('case-pap-input', caseObj.pap, 'case-pap', 'pap', modifyCase)"
 												@keypress.space.prevent="startEdit('case-pap-input', caseObj.pap, 'case-pap', 'pap', modifyCase)">
-												<div class="font-weight-bold">{{i18n.casePap}}: </div>
-												<v-chip density="compact" :color="colorizeChip(caseObj.pap)" variant="outlined" id="case-pap" v-if="!isEdit('case-pap')">{{ withDefault(caseObj.pap, i18n.unknown) }}</v-chip>
+												<div id="pap-label" class="font-weight-bold">{{i18n.casePap}}: </div>
+												<v-chip density="compact" :color="colorizeChip(caseObj.pap)" variant="outlined" id="case-pap" aria-labelledby="pap-label" v-if="!isEdit('case-pap')">{{ withDefault(caseObj.pap, i18n.unknown) }}</v-chip>
 											</div>
 											<v-select id="case-pap-input" v-if="isEdit('case-pap') && !isPresetCustomEnabled('pap')"
-												density="compact" eager variant="outlined" hide-details="auto" class="case-select" persistent-hint :hint="i18n.casePapHelp"
+												density="compact" eager variant="outlined" hide-details="auto" class="case-select" aria-labelledby="pap-label" :hint="i18n.casePapHelp"
 												v-model="editForm.val"
 												:items="selectList('pap', caseObj.pap)"
 												@update:model-value="stopEdit(true)"></v-select>
 											<v-combobox id="case-pap-input" v-if="isEdit('case-pap') && isPresetCustomEnabled('pap')"
-												density="compact" eager variant="outlined" hide-details="auto" class="case-select" persistent-hint :hint="i18n.casePapHelp"
+												density="compact" eager variant="outlined" hide-details="auto" class="case-select" aria-labelledby="pap-label" :hint="i18n.casePapHelp"
 												v-model="editForm.val"
 												:items="selectList('pap', caseObj.pap)"
 												@change="stopEdit(true)"></v-combobox>
@@ -1522,17 +1530,17 @@
 										<v-col cols="12" data-aid="case_category_select">
 											<div tabindex="0" class="clicktoedit" @click="startEdit('case-category-input', caseObj.category, 'case-category', 'category', modifyCase)"
 												@keypress.space.prevent="startEdit('case-category-input', caseObj.category, 'case-category', 'category', modifyCase)">
-												<div class="font-weight-bold">{{i18n.caseCategory}}: </div>
+												<div id="category-label" class="font-weight-bold">{{i18n.caseCategory}}: </div>
 												<div id="case-category" class="case detail-field" v-if="!isEdit('case-category')">{{ withDefault(caseObj.category, i18n.unknown) }}</div>
 											</div>
 											<v-select id="case-category-input" v-if="isEdit('case-category') && !isPresetCustomEnabled('category')"
-												density="compact" eager variant="outlined" hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseCategoryHelp"
+												density="compact" eager variant="outlined" hide-details="auto" class="case-select" aria-labelledby="category-label" :hint="i18n.caseCategoryHelp"
 												v-model="editForm.val"
 												:items="selectList('category', caseObj.category)"
 												@update:model-value="stopEdit(true)"></v-select>
 											<template v-if="isEdit('case-category') && isPresetCustomEnabled('category')">
 												<v-combobox id="case-category-input"
-													density="compact" eager variant="outlined" hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseCategoryHelp"
+													density="compact" eager variant="outlined" hide-details="auto" class="case-select" aria-labelledby="category-label" :hint="i18n.caseCategoryHelp"
 													v-model="editForm.val"
 													:items="selectList('category', caseObj.category)"
 													@change="stopEdit(true)"></v-combobox>
@@ -1551,14 +1559,14 @@
 										<v-col cols="12" data-aid="case_tags_select">
 											<div tabindex="0" class="clicktoedit" @click="startEdit('case-tags-input', caseObj.tags, 'case-tags', 'tags', modifyCase)"
 												@keypress.space.prevent="startEdit('case-tags-input', caseObj.tags, 'case-tags', 'tags', modifyCase)">
-												<div class="font-weight-bold">{{i18n.caseTags}}: </div>
+												<div id="tags-label" class="font-weight-bold">{{i18n.caseTags}}: </div>
 												<div id="case-tags" class="case detail-field mt-1" v-if="!isEdit('case-tags')">
-													<v-chip density="compact" class="mx-1" v-for="tag in caseObj.tags" color="primary">{{ tag }}</v-chip>
+													<v-chip density="compact" class="mx-1" v-for="tag in caseObj.tags" aria-labelledby="tags-label" color="primary">{{ tag }}</v-chip>
 												</div>
 											</div>
 											<div v-if="isEdit('case-tags')">
 												<v-select id="case-tags-input" v-if="!isPresetCustomEnabled('tags')"
-													density="compact" eager variant="outlined" hide-details="auto" class="case-select" multiple persistent-hint :hint="i18n.caseTagsHelp"
+													density="compact" eager variant="outlined" hide-details="auto" class="case-select" multiple aria-labelledby="tags-label" :hint="i18n.caseTagsHelp"
 													v-model="editForm.val"
 													:items="selectList('tags', caseObj.tags)"
 													@update:model-value="stopEdit(true)">
@@ -1574,7 +1582,7 @@
 													</template>
 												</v-select>
 												<v-combobox id="case-tags-input" v-else
-													density="compact" eager variant="outlined" hide-details="auto" class="case-select" multiple persistent-hint :hint="i18n.caseTagsHelp"
+													density="compact" eager variant="outlined" hide-details="auto" class="case-select" multiple aria-labelledby="tags-label" :hint="i18n.caseTagsHelp"
 													v-model="editForm.val"
 													:items="selectList('tags', caseObj.tags)"
 													@change="stopEdit(true)">

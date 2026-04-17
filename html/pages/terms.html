@@ -20,7 +20,7 @@
 								{{ i18n.licenseKey }}
 							</span>
 							<router-link v-if="$root.isUserAdmin()" :to="{ name: 'config', query: {s: 'soc.config.licenseKey'}}" style="text-decoration: none; cursor: 'pointer'">
-								<v-btn icon variant="text" size="small" data-aid="terms_license_edit">
+								<v-btn icon variant="text" size="small" data-aid="terms_license_edit" :aria-label="i18n.ariaEditInSettings">
 									<v-icon class="mx-2 theme-icon" :title="i18n.view">fa-pencil</v-icon>
 								</v-btn>
 							</router-link>
@@ -41,7 +41,7 @@
 											<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.mgmtMac }}:</v-col>
 											<v-col cols="9" class="pa-1">
 												{{ $root.getSelectedGridInfo().mgmtMac }}
-												<v-btn v-if="$root.getSelectedGridInfo().mgmtMac" icon variant="text" class="mx-2" density="compact" size="small" @click="$root.copyToClipboard($root.getSelectedGridInfo().mgmtMac)" data-aid="terms_license_copy_mac">
+												<v-btn v-if="$root.getSelectedGridInfo().mgmtMac" icon variant="text" class="mx-2" density="compact" size="small" @click="$root.copyToClipboard($root.getSelectedGridInfo().mgmtMac)" data-aid="terms_license_copy_mac" :aria-label="i18n.ariaCopyManagerMac">
 													<v-icon>fa-copy</v-icon>
 												</v-btn>
 											</v-col>

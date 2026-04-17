@@ -8,6 +8,7 @@ const routes = [];
 const components = [];
 const iconSets = [];
 const templatePromises = [];
+const directives = [];
 
 const LICENSE_STATUS_ACTIVE = "active";
 const LICENSE_STATUS_EXCEEDED = "exceeded";
@@ -37,6 +38,7 @@ if (typeof global !== 'undefined') {
   global.components = components;
   global.iconSets = iconSets;
   global.templatePromises = templatePromises;
+  global.directives = directives;
   global.MAX_OVERRIDE_NOTE_LENGTH = MAX_OVERRIDE_NOTE_LENGTH;
 }
 
@@ -52,25 +54,16 @@ $(document).ready(function () {
 
     const vuetify = Vuetify.createVuetify({
       defaults: {
-        VIcon: {
-          class: 'fa',
-        },
         VCheckbox: {
           trueIcon: 'mb-1 fa-square-check',
           falseIcon: 'mb-1 fa-regular fa-square',
           indeterminateIcon: 'mb-1 fa-square-minus'
         },
-        VSelect: {
-          variant: 'outlined',
-          density: 'compact',
-          menuIcon: 'fas fa-caret-down',
+        VChip: {
+          closeIcon: 'fa-xmark va-baseline',
         },
         VCombobox: {
           menuIcon: 'fas fa-caret-down',
-          variant: 'outlined',
-        },
-        VFileInput: {
-          prependIcon: 'fa-paperclip',
           variant: 'outlined',
         },
         VDataTable: {
@@ -79,27 +72,36 @@ $(document).ready(function () {
           nextIcon: 'fa-chevron-right',
           lastIcon: 'fa-forward-step',
         },
-        VTextField: {
+        VFileInput: {
+          prependIcon: 'fa-paperclip',
+          variant: 'outlined',
+        },
+        VIcon: {
+          class: 'fa',
+        },
+        VSelect: {
           variant: 'outlined',
           density: 'compact',
-          clearIcon: 'fas fa-circle-xmark',
+          menuIcon: 'fas fa-caret-down',
+        },
+        VSwitch: {
+          color: 'primary'
         },
         VTextarea: {
           variant: 'outlined',
           density: 'compact',
         },
-        VTreeview: {
-          collapseIcon: '',
-          expandIcon: 'fas fa-caret-right',
+        VTextField: {
+          variant: 'outlined',
+          density: 'compact',
+          clearIcon: 'fas fa-circle-xmark',
         },
         VToolbar: {
           class: 'theme-background-lighten-1',
         },
-        VChip: {
-          closeIcon: 'fa-xmark va-baseline',
-        },
-        VSwitch: {
-          color: 'primary'
+        VTreeview: {
+          collapseIcon: '',
+          expandIcon: 'fas fa-caret-right',
         },
       },
       icons: {
@@ -1864,6 +1866,10 @@ $(document).ready(function () {
 
     for (let i = 0; i < components.length; i++) {
       app.component(components[i].name, components[i].component);
+    }
+
+    for (let i = 0; i < directives.length; i++) {
+      app.directive(directives[i].name, directives[i].directive);
     }
 
     app.mount('#app');

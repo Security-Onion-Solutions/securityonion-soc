@@ -217,10 +217,30 @@ html, body, * {
   color: rgb(var(--v-theme-text)) !important;
 }
 
-.theme-links a, .theme-links .v-list-group > .v-list-item, .theme-links a:active {
+.theme-links a, .theme-links a:active {
   color: rgb(var(--v-theme-text)) !important;
+}
+
+.theme-links .v-list-item {
   border-radius: var(--so-radius-panel);
   margin: 0px 4px;
+  color: rgb(var(--v-theme-text)) !important;
+}
+
+.theme-links .v-list-item:hover {
+  background-color: rgba(var(--v-theme-text), var(--v-hover-opacity, 0.04));
+}
+
+.theme-links .v-list-item:focus-within {
+  background-color: rgba(var(--v-theme-text), var(--v-focus-opacity, 0.12));
+}
+
+.theme-links .v-list-item:has(a.router-link-active) {
+  background-color: rgba(var(--v-theme-text), var(--v-activated-opacity, 0.12));
+}
+
+.theme-links .v-list-item:has(a.router-link-active):hover {
+  background-color: rgba(var(--v-theme-text), calc(var(--v-activated-opacity, 0.12) + var(--v-hover-opacity, 0.04)));
 }
 
 .loading-onion {

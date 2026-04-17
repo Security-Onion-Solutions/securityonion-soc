@@ -20,10 +20,10 @@
 				<v-toolbar v-if="$root.isUserAdmin()" class="so-toolbar elevation-0">
 					<h4 v-if="!$root.loading" class="ml-2 my-0" data-aid="users_summary">{{ i18n.usersEnabled }} {{ countUsersEnabled() }} / {{ countUsers() }}</h4>
 					<v-spacer></v-spacer>
-					<v-btn icon variant="flat" id="add-user-button" class="circle-button mx-2" @click.stop="showAdd()" data-aid="users_create_new">
+					<v-btn icon variant="flat" id="add-user-button" class="circle-button mx-2" @click.stop="showAdd()" data-aid="users_create_new" :aria-label="i18n.ariaCreateUser">
 						<v-icon>fa-plus</v-icon>
 					</v-btn>
-					<v-btn icon variant="flat" @click.stop="loadData()" id="users-refresh-button" class="circle-button mx-2" data-aid="users_refresh_button">
+					<v-btn icon variant="flat" @click.stop="loadData()" id="users-refresh-button" class="circle-button mx-2" data-aid="users_refresh_button" :aria-label="i18n.ariaReloadData">
 						<v-icon>fa-sync</v-icon>
 					</v-btn>
 					<v-btn icon variant="flat" class="circle-button mx-2" :title="i18n.options" @click="showOptionsDialog = true" id="users-options-header" data-aid="users_options_button">
@@ -41,16 +41,16 @@
 						<v-container grid-list-sm class="pa-4">
 							<v-row>
 								<v-col xs12 class="d-flex flex-column">
-									<v-text-field id="email-input" v-model="form.email" :placeholder="i18n.email" :autofocus="true" :rules="[$root.validators.required, $root.validators.maxLength(100), $root.validators.lowercase]" data-aid="users_create_dialog_email"></v-text-field>
-									<v-text-field id="password-input" v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'" data-aid="users_create_dialog_password"
+									<v-text-field id="email-input" v-model="form.email" :label="i18n.email" :autofocus="true" :rules="[$root.validators.required, $root.validators.maxLength(100), $root.validators.lowercase]" data-aid="users_create_dialog_email"></v-text-field>
+									<v-text-field id="password-input" v-model="form.password" :label="i18n.password" :type="showPassword ? 'text' : 'password'" data-aid="users_create_dialog_password"
 										@click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'"
 										:rules="[$root.validators.required, $root.validators.maxPassLen, $root.validators.minPassLen, $root.validators.badPassChars]"></v-text-field>
 									<span data-aid="users_create_dialog_roles">
 										<v-select id="roles-select" v-model="form.role" :items="roles" :label="i18n.role" :rules="[$root.validators.required]"></v-select>
 									</span>
-									<v-text-field id="firstname-input" v-model="form.firstName" :placeholder="i18n.firstName" :rules="[$root.validators.maxLength(100)]" data-aid="users_create_dialog_firstname"></v-text-field>
-									<v-text-field id="lastname-input" v-model="form.lastName" :placeholder="i18n.lastName" :rules="[$root.validators.maxLength(100)]" data-aid="users_create_dialog_lastname"></v-text-field>
-									<v-text-field id="note-input" v-model="form.note" :placeholder="i18n.note" :rules="[$root.validators.maxLength(100)]" data-aid="users_create_dialog_note"></v-text-field>
+									<v-text-field id="firstname-input" v-model="form.firstName" :label="i18n.firstName" :rules="[$root.validators.maxLength(100)]" data-aid="users_create_dialog_firstname"></v-text-field>
+									<v-text-field id="lastname-input" v-model="form.lastName" :label="i18n.lastName" :rules="[$root.validators.maxLength(100)]" data-aid="users_create_dialog_lastname"></v-text-field>
+									<v-text-field id="note-input" v-model="form.note" :label="i18n.note" :rules="[$root.validators.maxLength(100)]" data-aid="users_create_dialog_note"></v-text-field>
 								</v-col>
 							</v-row>
 						</v-container>
@@ -97,7 +97,7 @@
 					<template #item="{ item, isExpanded, toggleExpand, internalItem }">
 						<tr :class="{'seamless-expanded-row': isExpanded(internalItem), 'main-row': true}">
 							<td v-if="$root.isUserAdmin()">
-								<v-btn id="expandNode" icon variant="text" size="small" @click="if (!isExpanded(internalItem)) { updateForm(item); } toggleExpand(internalItem)" data-aid="users_details_expand">
+								<v-btn id="expandNode" icon variant="text" size="small" @click="if (!isExpanded(internalItem)) { updateForm(item); } toggleExpand(internalItem)" data-aid="users_details_expand" :aria-expanded="isExpanded(internalItem)" :aria-label="i18n.ariaExpandUser">
 									<v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="users_details_collapse">fa-angle-down</v-icon>
 									<v-icon v-else :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="users_details_expand">fa-angle-right</v-icon>
 								</v-btn>
@@ -128,9 +128,9 @@
 												<v-card-title v-text="i18n.profile"></v-card-title>
 												<v-card-text>
 													<v-form v-model="form.valid">
-														<v-text-field id="firstname-input" v-model="form.firstName" :placeholder="i18n.firstName" :rules="[$root.validators.maxLength(100)]" data-aid="users_details_firstname_input"></v-text-field>
-														<v-text-field id="lastname-input" v-model="form.lastName" :placeholder="i18n.lastName" :rules="[$root.validators.maxLength(100)]" data-aid="users_details_lastname_input"></v-text-field>
-														<v-text-field id="note-input" v-model="form.note" :placeholder="i18n.note" :rules="[$root.validators.maxLength(100)]" data-aid="users_details_note_input"></v-text-field>
+														<v-text-field id="firstname-input" v-model="form.firstName" :label="i18n.firstName" :rules="[$root.validators.maxLength(100)]" data-aid="users_details_firstname_input"></v-text-field>
+														<v-text-field id="lastname-input" v-model="form.lastName" :label="i18n.lastName" :rules="[$root.validators.maxLength(100)]" data-aid="users_details_lastname_input"></v-text-field>
+														<v-text-field id="note-input" v-model="form.note" :label="i18n.note" :rules="[$root.validators.maxLength(100)]" data-aid="users_details_note_input"></v-text-field>
 
 														<v-btn id="update-profile-button" :disabled="!form.valid" @click="updateProfile(item)" v-text="i18n.update" data-aid="users_details_submit"></v-btn>
 													</v-form>
@@ -158,7 +158,7 @@
 													</v-alert>
 
 													<v-form v-model="form.valid">
-														<v-text-field id="password-input" v-model="form.password" :placeholder="i18n.passwordChange" :type="showPassword ? 'text' : 'password'" data-aid="users_details_password_input"
+														<v-text-field id="password-input" v-model="form.password" :label="i18n.passwordChange" :type="showPassword ? 'text' : 'password'" data-aid="users_details_password_input"
 															@click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'"
 															:rules="[$root.validators.required, $root.validators.maxPassLen, $root.validators.minPassLen, $root.validators.badPassChars]"></v-text-field>
 													</v-form>

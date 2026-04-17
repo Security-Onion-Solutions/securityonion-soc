@@ -39,9 +39,10 @@
       <v-toolbar class="so-toolbar elevation-0" variant="flat">
         <v-text-field :disabled="$root.loading" v-if="relativeTimeEnabled" id="aimetrics-relative-time-value" @change="notifyInputsChanged" class="mx-2"
           v-model="relativeTimeValue" type="number" data-aid="aimetrics_relative_time_input"
-          density="compact" hide-details style="min-width: 280px; max-width: 350px;">
+          density="compact" hide-details style="min-width: 280px; max-width: 350px;" :aria-label="i18n.ariaRelativeTime">
           <template #prepend>
-            <v-btn v-if="relativeTimeEnabled" icon variant="text" size="x-small" @click="showAbsoluteTime" id="aimetrics-show-absolute-time" data-aid="aimetrics_absolute_time_toggle">
+            <v-btn v-if="relativeTimeEnabled" icon variant="text" size="x-small" @click="showAbsoluteTime"
+            id="aimetrics-show-absolute-time" data-aid="aimetrics_absolute_time_toggle" :aria-label="i18n.ariaAbsoluteTimeToggle">
               <v-icon class="theme-icon">fa-history</v-icon>
             </v-btn>
             <div v-if="relativeTimeEnabled" class="px-4">
@@ -51,18 +52,19 @@
           <template #append>
             <span data-aid="aimetrics_relative_time_units">
               <v-select id="aimetrics-relative-time-unit" class="my-n1 py-0 no-details align-self-start" :disabled="$root.loading" v-if="relativeTimeEnabled" @update:model-value="relativeTimeUnit = $event; notifyInputsChanged()"
-                v-model="relativeTimeUnit" :items="relativeTimeUnits" variant="plain"></v-select>
+                v-model="relativeTimeUnit" :items="relativeTimeUnits" variant="plain" :aria-label="i18n.ariaRelativeTimeUnits"></v-select>
             </span>
           </template>
         </v-text-field>
         <v-text-field :disabled="$root.loading" v-if="!relativeTimeEnabled" id="aimetrics-date-range" @change="notifyInputsChanged" class="mx-2 closer-prepend"
-          v-model="dateRange"
+          v-model="dateRange" :aria-label="i18n.ariaAbsoluteTime"
           data-aid="aimetrics_absolute_time" hide-details style="min-width: 502px; max-width: 560px;">
           <template #prepend>
-            <v-btn v-if="!relativeTimeEnabled" icon variant="text" size="x-small" @click="showRelativeTime" id="aimetrics-show-relative-time" data-aid="aimetrics_relative_time_toggle">
+            <v-btn v-if="!relativeTimeEnabled" icon variant="text" size="x-small" @click="showRelativeTime"
+              id="aimetrics-show-relative-time" data-aid="aimetrics_relative_time_toggle" :aria-label="i18n.ariaRelativeTimeToggle">
               <v-icon class="theme-icon">fa-calendar-alt</v-icon>
             </v-btn>
-            <v-btn @click="showDateRangePicker()" icon variant="text" size="x-small">
+            <v-btn @click="showDateRangePicker()" icon variant="text" size="x-small" :aria-label="i18n.ariaShowDateRangePicker">
               <v-icon class="theme-icon">fa-angle-down</v-icon>
             </v-btn>
           </template>
@@ -71,7 +73,7 @@
     </v-col>
     <v-col style="flex: 0 0 auto;" class="pa-0">
       <v-toolbar class="so-toolbar elevation-0" variant="flat">
-        <v-btn icon variant="flat" @click.stop="loadData()" id="aimetrics-refresh-button" class="circle-button mx-2" data-aid="aimetrics_refresh">
+        <v-btn icon variant="flat" @click.stop="loadData()" id="aimetrics-refresh-button" class="circle-button mx-2" data-aid="aimetrics_refresh" :aria-label="i18n.ariaReloadData">
           <v-icon>fa-sync</v-icon>
         </v-btn>
         <v-btn icon variant="flat" class="circle-button mx-2" :title="i18n.options" @click="showOptionsDialog = true" id="aimetrics-options-header" data-aid="aimetrics_options_button">
@@ -88,7 +90,7 @@
       <v-toolbar density="compact" variant="flat">
         <v-toolbar-title>{{ i18n.graphMetrics }}</v-toolbar-title>
         <v-spacer></v-spacer>
-        <v-btn variant="text" size="small" icon class="mr-1" @click="toggleShowSection('aimetrics-graphs')" data-aid="aimetrics_graphs_toggle">
+        <v-btn variant="text" size="small" icon class="mr-1" @click="toggleShowSection('aimetrics-graphs')" data-aid="aimetrics_graphs_toggle" :aria-expanded="isExpandedSection('aimetrics-graphs')" :aria-label="i18n.ariaExpandGraphs">
           <v-icon v-if="!isExpandedSection('aimetrics-graphs')" data-aid="aimetrics_graphs_expand">fa-angle-down</v-icon>
           <v-icon v-if="isExpandedSection('aimetrics-graphs')" data-aid="aimetrics_graphs_collapse">fa-angle-up</v-icon>
         </v-btn>
@@ -96,13 +98,13 @@
       <div v-if="tableSetting == TABLE_SETTING_USERS && isExpandedSection('aimetrics-graphs')">
         <v-row>
           <v-col cols="12" md="4" data-aid="aimetrics_users_pie_credits">
-            <pie-chart id="aimetrics-users-pie-credits" :height="chartHeight" :key="graphUsersCreditsData.key" :data="graphUsersCreditsData" :options="graphUsersCreditsOptions"></pie-chart>
+            <pie-chart id="aimetrics-users-pie-credits" :height="chartHeight" :key="graphUsersCreditsData.key" :data="graphUsersCreditsData" :options="graphUsersCreditsOptions" :aria-label="$root.replaceActionVar(i18n.ariaPieChartFor, 'title', graphUsersCreditsOptions.plugins.title.text)"></pie-chart>
           </v-col>
           <v-col cols="12" md="4" data-aid="aimetrics_users_pie_sessions">
-            <pie-chart id="aimetrics-users-pie-sessions" :height="chartHeight" :key="graphUsersSessionsData.key" :data="graphUsersSessionsData" :options="graphUsersSessionsOptions"></pie-chart>
+            <pie-chart id="aimetrics-users-pie-sessions" :height="chartHeight" :key="graphUsersSessionsData.key" :data="graphUsersSessionsData" :options="graphUsersSessionsOptions" :aria-label="$root.replaceActionVar(i18n.ariaPieChartFor, 'title', graphUsersSessionsOptions.plugins.title.text)"></pie-chart>
           </v-col>
           <v-col cols="12" md="4" data-aid="aimetrics_users_pie_messages">
-            <pie-chart id="aimetrics-users-pie-messages" :height="chartHeight" :key="graphUsersMessagesData.key" :data="graphUsersMessagesData" :options="graphUsersMessagesOptions"></pie-chart>
+            <pie-chart id="aimetrics-users-pie-messages" :height="chartHeight" :key="graphUsersMessagesData.key" :data="graphUsersMessagesData" :options="graphUsersMessagesOptions" :aria-label="$root.replaceActionVar(i18n.ariaPieChartFor, 'title', graphUsersMessagesOptions.plugins.title.text)"></pie-chart>
           </v-col>
         </v-row>
       </div>
@@ -128,7 +130,7 @@
             <v-icon v-bind="props">fa-times-circle</v-icon>
           </template>
         </v-text-field>
-        <v-btn variant="text" size="small" icon class="ml-2 mr-1" @click="toggleShowSection('aimetrics-table')" data-aid="aimetrics_table_toggle">
+        <v-btn variant="text" size="small" icon class="ml-2 mr-1" @click="toggleShowSection('aimetrics-table')" data-aid="aimetrics_table_toggle" :aria-expanded="isExpandedSection('aimetrics-table')" :aria-label="i18n.ariaExpandTable">
           <v-icon v-if="!isExpandedSection('aimetrics-table')" data-aid="aimetrics_table_expand">fa-angle-down</v-icon>
           <v-icon v-if="isExpandedSection('aimetrics-table')" data-aid="aimetrics_table_collapse">fa-angle-up</v-icon>
         </v-btn>
@@ -162,8 +164,8 @@
             <td class="text-right">{{ item.totalSessions ? formatCount(item.totalSessions) : 0 }}</td>
             <td class="text-right">{{ item.totalMessages ? formatCount(item.totalMessages) : 0 }}</td>
             <td>
-              <router-link :to="buildUserLink(item.userId)" class="no-print" style="text-decoration: none; cursor: 'pointer'" data-aid="aimetrics_open_user">
-                <v-icon class="mr-2 theme-icon" :title="i18n.viewSessions">fa-binoculars</v-icon>
+              <router-link :to="buildUserLink(item.userId)" class="no-print" style="text-decoration: none; cursor: 'pointer'" data-aid="aimetrics_open_user" :title="i18n.viewSessions">
+                <v-icon class="mr-2 theme-icon">fa-binoculars</v-icon>
               </router-link>
             </td>
           </tr>

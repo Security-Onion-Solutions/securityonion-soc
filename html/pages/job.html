@@ -95,7 +95,7 @@
 				<div class="d-flex align-center">
 					{{ i18n.jobInProgress }}
 					<v-spacer></v-spacer>
-					<v-btn icon variant="flat" @click.stop="loadData()" id="job-refresh-button" class="mx-2" color="nav" data-aid="job_refresh_button">
+					<v-btn icon variant="flat" @click.stop="loadData()" id="job-refresh-button" class="mx-2" color="nav" data-aid="job_refresh_button" :aria-label="i18n.ariaReloadData">
 						<v-icon color="info">fa-sync</v-icon>
 					</v-btn>
 				</div>

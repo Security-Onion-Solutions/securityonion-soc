@@ -23,7 +23,7 @@
 					<h4 v-if="metricsEnabled" class="ml-2 my-0" data-aid="grid_summary">{{ i18n.gridEps }} {{ formatCount(gridEps) }}</h4>
 					<v-spacer></v-spacer>
 					<v-text-field v-model="gridFilter" clearable prepend-inner-icon="fa-filter" :label="i18n.filterResults" hide-details class="toolbar-field no-print mx-2" style="max-width: 250px;" data-aid="grid_filter"></v-text-field>
-					<v-btn icon variant="flat" @click.stop="loadData()" id="grid-refresh-button" class="circle-button mx-2" data-aid="grid_refresh_button">
+					<v-btn icon variant="flat" @click.stop="loadData()" id="grid-refresh-button" class="circle-button mx-2" data-aid="grid_refresh_button" :aria-label="i18n.ariaGridRefresh">
 						<v-icon>fa-sync</v-icon>
 					</v-btn>
 					<v-btn icon variant="flat" class="circle-button mx-2" :title="i18n.options" @click="showOptionsDialog = true" id="gridOptionsHeader" data-aid="grid_options_button">
@@ -57,7 +57,7 @@
 					<template #item="{ item, isExpanded, toggleExpand, internalItem }">
 						<tr color="error" :class="{'stale': !areMetricsCurrent(item), 'seamless-expanded-row': isExpanded(internalItem), 'main-row': true}">
 							<td>
-								<v-btn :id="'expandNode_' + item.id" icon variant="text" size="small" @click="toggleExpand(internalItem)">
+								<v-btn :id="'expandNode_' + item.id" icon variant="text" size="small" @click="toggleExpand(internalItem)" :aria-expanded="isExpanded(internalItem)" :aria-label="i18n.ariaExpandNode">
 									<v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="grid_node_collapse">fa-angle-down</v-icon>
 									<v-icon v-else :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="grid_node_expand">fa-angle-right</v-icon>
 								</v-btn>
@@ -454,8 +454,8 @@
 															<v-icon class="mb-2">fa-circle-question</v-icon>
 														</a>
 													</span>
-													<div><img class="appliance-image elevation-5" v-if="item.imageFront" :src="'images/appliances/' + item.imageFront"></div>
-													<div class="mt-2"><img class="appliance-image elevation-5" v-if="item.imageBack" :src="'images/appliances/' + item.imageBack"></div>
+													<div><img class="appliance-image elevation-5" v-if="item.imageFront" :src="'images/appliances/' + item.imageFront" :alt="i18n.ariaNodeImageFront"></div>
+													<div class="mt-2"><img class="appliance-image elevation-5" v-if="item.imageBack" :src="'images/appliances/' + item.imageBack" :alt="i18n.ariaNodeImageBack"></div>
 												</v-card-text>
 											</v-card>
 										</v-col>
@@ -498,7 +498,9 @@
 					{{ i18n.maxUploadSize }}: {{ formatCount(maxUploadSizeBytes) }} {{ i18n.bytes }}
 				</v-alert>
 				<v-form ref="gridUpload" v-model="uploadForm.valid" @submit.prevent>
-					<v-file-input id="import-value" v-model="uploadForm.attachment" show-size :accept="pickUploadDialogAccept()" :rules="[$root.validators.fileSizeLimit(maxUploadSizeBytes, $root.formatCount), $root.validators.fileNotEmpty, $root.validators.fileRequired]" data-aid="grid_import_file"></v-file-input>
+					<v-file-input id="import-value" v-model="uploadForm.attachment" show-size :accept="pickUploadDialogAccept()"
+						:rules="[$root.validators.fileSizeLimit(maxUploadSizeBytes, $root.formatCount), $root.validators.fileNotEmpty, $root.validators.fileRequired]"
+						data-aid="grid_import_file" :label="i18n.ariaGridUploadFile"></v-file-input>
 				</v-form>
 			</v-card-text>
 			<v-card-actions>

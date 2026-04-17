@@ -3,14 +3,14 @@
 		<v-col>
 			<v-row>
 				<v-toolbar class="so-toolbar elevation-0" fixed>
-					<v-btn v-if="canCreate()" icon variant="flat" @click.stop="openNewJobDialog" id="add-pcap-job-button" class="circle-button mx-2" data-aid="jobs_create_new">
+					<v-btn v-if="canCreate()" icon variant="flat" @click.stop="openNewJobDialog" id="add-pcap-job-button" class="circle-button mx-2" data-aid="jobs_create_new" :aria-label="i18n.ariaCreateJob">
 						<v-icon>fa-plus</v-icon>
 					</v-btn>
-					<v-btn icon variant="flat" @click.stop="loadData()" id="jobs-refresh-button" class="circle-button mx-2" data-aid="jobs_refresh_button">
+					<v-btn icon variant="flat" @click.stop="loadData()" id="jobs-refresh-button" class="circle-button mx-2" data-aid="jobs_refresh_button" :aria-label="i18n.ariaReloadData">
 						<v-icon>fa-sync</v-icon>
 					</v-btn>
 					<v-spacer></v-spacer>
-					<v-btn icon variant="flat" class="circle-button mx-2" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + (isKind('reports') ? 'reports' : 'pcap')" :title="i18n.contextualDocsBtn" data-aid="jobs_docs">
+					<v-btn icon variant="flat" class="circle-button mx-2" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + (isKind('reports') ? 'reports' : 'pcap')" :title="i18n.ariaJobsHelp" data-aid="jobs_docs" :aria-label="i18n.ariaJobsHelp">
 						<v-icon>fa-circle-question</v-icon>
 					</v-btn>		  
 				</v-toolbar>
@@ -74,15 +74,15 @@
 						<v-container grid-list-sm class="pa-4">
 							<v-row>
 								<v-col xs12>
-									<v-text-field v-if="isKind('pcap')" v-model="form.sensorId" :placeholder="i18n.sensorId" persistent-hint :hint="i18n.sensorIdHelp" data-aid="jobs_create_dialog_sensor_id"></v-text-field>
-									<v-text-field v-if="isKind('pcap')" v-model="form.importId" :placeholder="i18n.importId" persistent-hint :hint="i18n.importIdHelp" data-aid="jobs_create_dialog_import_id"></v-text-field>
-									<v-text-field v-if="isKind('pcap')" v-model="form.protocol" :placeholder="i18n.protocol" persistent-hint :hint="i18n.protocolHelp" data-aid="jobs_create_dialog_protocol"></v-text-field>
-									<v-text-field v-if="isKind('pcap')" v-model="form.srcIp" :placeholder="i18n.srcIp" persistent-hint :hint="i18n.srcIpHelp" data-aid="jobs_create_dialog_src_ip"></v-text-field>
-									<v-text-field v-if="isKind('pcap')" v-model="form.srcPort" :placeholder="i18n.srcPort" persistent-hint :hint="i18n.srcPortHelp" data-aid="jobs_create_dialog_src_port"></v-text-field>
-									<v-text-field v-if="isKind('pcap')" v-model="form.dstIp" :placeholder="i18n.dstIp" persistent-hint :hint="i18n.dstIpHelp" data-aid="jobs_create_dialog_dst_ip"></v-text-field>
-									<v-text-field v-if="isKind('pcap')" v-model="form.dstPort" :placeholder="i18n.dstPort" persistent-hint :hint="i18n.dstPortHelp" data-aid="jobs_create_dialog_dst_port"></v-text-field>
-									<v-select v-if="isKind('reports')" :items="getReportTypes()" v-model="form.type" :rules="[$root.validators.required]" :placeholder="i18n.reportTypePlaceholder" persistent-hint :hint="i18n.reportTypeHelp" data-aid="jobs_create_dialog_kind"></v-select>
-									<v-text-field id="jobtimeframe" v-model="form.timeframe" :placeholder="i18n.timeFrame" persistent-hint :hint="isKind('reports') ? i18n.timeFrameReportsHelp : i18n.timeFrameHelp" data-aid="jobs_create_dialog_timeframe"></v-text-field>
+									<v-text-field v-if="isKind('pcap')" v-model="form.sensorId" :label="i18n.sensorId" persistent-hint :hint="i18n.sensorIdHelp" data-aid="jobs_create_dialog_sensor_id"></v-text-field>
+									<v-text-field v-if="isKind('pcap')" v-model="form.importId" :label="i18n.importId" persistent-hint :hint="i18n.importIdHelp" data-aid="jobs_create_dialog_import_id"></v-text-field>
+									<v-text-field v-if="isKind('pcap')" v-model="form.protocol" :label="i18n.protocol" persistent-hint :hint="i18n.protocolHelp" data-aid="jobs_create_dialog_protocol"></v-text-field>
+									<v-text-field v-if="isKind('pcap')" v-model="form.srcIp" :label="i18n.srcIp" persistent-hint :hint="i18n.srcIpHelp" data-aid="jobs_create_dialog_src_ip"></v-text-field>
+									<v-text-field v-if="isKind('pcap')" v-model="form.srcPort" :label="i18n.srcPort" persistent-hint :hint="i18n.srcPortHelp" data-aid="jobs_create_dialog_src_port"></v-text-field>
+									<v-text-field v-if="isKind('pcap')" v-model="form.dstIp" :label="i18n.dstIp" persistent-hint :hint="i18n.dstIpHelp" data-aid="jobs_create_dialog_dst_ip"></v-text-field>
+									<v-text-field v-if="isKind('pcap')" v-model="form.dstPort" :label="i18n.dstPort" persistent-hint :hint="i18n.dstPortHelp" data-aid="jobs_create_dialog_dst_port"></v-text-field>
+									<v-select v-if="isKind('reports')" :items="getReportTypes()" v-model="form.type" :rules="[$root.validators.required]" :label="i18n.reportTypePlaceholder" persistent-hint :hint="i18n.reportTypeHelp" data-aid="jobs_create_dialog_kind"></v-select>
+									<v-text-field id="jobtimeframe" v-model="form.timeframe" :label="i18n.timeFrame" persistent-hint :hint="isKind('reports') ? i18n.timeFrameReportsHelp : i18n.timeFrameHelp" data-aid="jobs_create_dialog_timeframe"></v-text-field>
 								</v-col>
 							</v-row>
 						</v-container>
