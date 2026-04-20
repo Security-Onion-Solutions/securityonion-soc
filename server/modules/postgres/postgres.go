@@ -80,6 +80,13 @@ func (pg *Postgres) Init(cfg module.ModuleConfig) error {
 		return fmt.Errorf("unable to grant privileges to app user: %w", err)
 	}
 
+	// BIGSERIAL/SERIAL columns create implicit sequences that also need USAGE/SELECT granted to the app user.
+	if _, err := adminPool.Exec(context.Background(),
+		fmt.Sprintf("GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO %q", username)); err != nil {
+		adminPool.Close()
+		return fmt.Errorf("unable to grant sequence privileges to app user: %w", err)
+	}
+
 	adminPool.Close()
 
 	// Now connect as the application user for normal operations
@@ -117,6 +124,7 @@ func (pg *Postgres) Init(cfg module.ModuleConfig) error {
 			ChatIndex:    module.GetStringDefault(cfg, "esChatIndex", "*:so-assistant-chat"),
 			SessionIndex: module.GetStringDefault(cfg, "esSessionIndex", "*:so-assistant-session"),
 			SchemaPrefix: module.GetStringDefault(cfg, "esSchemaPrefix", "so_"),
+			PageSize:     module.GetIntDefault(cfg, "esMigrationPageSize", 1000),
 		}
 	}
 
@@ -192,6 +200,18 @@ func (pg *Postgres) initSchema(ctx context.Context, adminPool *pgxpool.Pool) err
 			name TEXT PRIMARY KEY,
 			completed_time TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		);
+
+		CREATE TABLE IF NOT EXISTS assistant_migration_failures (
+			id BIGSERIAL PRIMARY KEY,
+			hit_type TEXT NOT NULL,
+			es_id TEXT,
+			session_id TEXT,
+			error_message TEXT NOT NULL,
+			raw_hit JSONB NOT NULL,
+			failed_time TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_assistant_migration_failures_hit_type ON assistant_migration_failures(hit_type);
 	`
 
 	_, err := adminPool.Exec(ctx, schema)
