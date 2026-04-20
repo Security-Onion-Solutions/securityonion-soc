@@ -113,6 +113,9 @@ func (store *PostgresAssistantstore) SaveChat(ctx context.Context, chat *model.S
 	}
 
 	userId, _ := ctx.Value(web.ContextKeyRequestorId).(string)
+	if userId == "" {
+		return fmt.Errorf("missing user context")
+	}
 	if chat.Id == "" {
 		chat.Id = uuid.New().String()
 	}
@@ -156,6 +159,9 @@ func (store *PostgresAssistantstore) GetChatHistory(ctx context.Context, session
 
 	session := existing[0]
 	userId, _ := ctx.Value(web.ContextKeyRequestorId).(string)
+	if userId == "" {
+		return nil, fmt.Errorf("missing user context")
+	}
 
 	if session.UserId == userId {
 		if err := store.server.CheckAuthorized(ctx, "read_authored", "assistant"); err != nil {
@@ -207,6 +213,9 @@ func (store *PostgresAssistantstore) CreateSession(ctx context.Context, session 
 	}
 
 	userId, _ := ctx.Value(web.ContextKeyRequestorId).(string)
+	if userId == "" {
+		return fmt.Errorf("missing user context")
+	}
 	if session.Id == "" {
 		session.Id = uuid.New().String()
 	}
@@ -386,6 +395,9 @@ func (store *PostgresAssistantstore) UpdateSessionTags(ctx context.Context, sess
 	}
 
 	userId, _ := ctx.Value(web.ContextKeyRequestorId).(string)
+	if userId == "" {
+		return fmt.Errorf("missing user context")
+	}
 
 	tagsJSON, err := json.Marshal(tags)
 	if err != nil {
@@ -402,7 +414,7 @@ func (store *PostgresAssistantstore) UpdateSessionTags(ctx context.Context, sess
 	}
 
 	if result.RowsAffected() == 0 {
-		return fmt.Errorf("session not found or not owned by user: %s", sessionId)
+		return fmt.Errorf("session not found")
 	}
 
 	return nil
@@ -418,6 +430,9 @@ func (store *PostgresAssistantstore) DeleteSession(ctx context.Context, sessionI
 	}
 
 	userId, _ := ctx.Value(web.ContextKeyRequestorId).(string)
+	if userId == "" {
+		return fmt.Errorf("missing user context")
+	}
 
 	now := time.Now()
 	result, err := store.pool.Exec(ctx,
@@ -429,13 +444,17 @@ func (store *PostgresAssistantstore) DeleteSession(ctx context.Context, sessionI
 	}
 
 	if result.RowsAffected() == 0 {
-		return fmt.Errorf("session not found or not owned by user: %s", sessionId)
+		return fmt.Errorf("session not found")
 	}
 
 	return nil
 }
 
 func (store *PostgresAssistantstore) GetUsage(ctx context.Context, start time.Time, end time.Time) ([]*model.UserUsage, error) {
+	if err := store.server.CheckAuthorized(ctx, "read_all", "assistant"); err != nil {
+		return nil, err
+	}
+
 	rows, err := store.pool.Query(ctx,
 		`SELECT
 			m.user_id,
@@ -551,7 +570,13 @@ func (store *PostgresAssistantstore) populateSessionUsage(ctx context.Context, s
 }
 
 // insertSessionDirect inserts a session with its original metadata (used during migration).
+// Runs the same invariant checks as CreateSession so ES-sourced docs with out-of-spec
+// SessionId or empty Title are quarantined by the caller instead of landing in PG.
 func (store *PostgresAssistantstore) insertSessionDirect(ctx context.Context, session *model.AssistantSession) error {
+	if err := store.validateSession(session); err != nil {
+		return err
+	}
+
 	tagsJSON, err := json.Marshal(session.Tags)
 	if err != nil {
 		tagsJSON = []byte("[]")
@@ -568,7 +593,13 @@ func (store *PostgresAssistantstore) insertSessionDirect(ctx context.Context, se
 }
 
 // insertMessageDirect inserts a message with its original metadata (used during migration).
+// Runs the same invariant checks as SaveChat so malformed ES-sourced messages are
+// quarantined by the caller instead of bypassing the validation the API enforces.
 func (store *PostgresAssistantstore) insertMessageDirect(ctx context.Context, msg *model.StoredMessage) error {
+	if err := store.validateChat(msg); err != nil {
+		return err
+	}
+
 	messageJSON, err := json.Marshal(msg.Message)
 	if err != nil {
 		return fmt.Errorf("failed to marshal message: %w", err)

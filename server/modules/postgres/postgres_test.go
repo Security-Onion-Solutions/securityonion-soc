@@ -228,6 +228,62 @@ func TestDeleteSessionEmptySessionId(t *testing.T) {
 	assert.Contains(t, err.Error(), "sessionId must not be empty")
 }
 
+func TestGetUsageUnauthorized(t *testing.T) {
+	srv := server.NewFakeUnauthorizedServer()
+	store := NewPostgresAssistantstore(srv, nil)
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "user-1")
+	_, err := store.GetUsage(ctx, time.Time{}, time.Time{})
+	assert.Error(t, err)
+}
+
+func TestSaveChatMissingUserContext(t *testing.T) {
+	srv := server.NewFakeAuthorizedServer(nil)
+	store := NewPostgresAssistantstore(srv, nil)
+
+	// No ContextKeyRequestorId set — must not fall through to insert with empty UserId.
+	ctx := context.Background()
+	err := store.SaveChat(ctx, &model.StoredMessage{
+		SessionId: "chat_123456",
+		Message:   &model.Message{ContentStr: "hello"},
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "missing user context")
+}
+
+func TestCreateSessionMissingUserContext(t *testing.T) {
+	srv := server.NewFakeAuthorizedServer(nil)
+	store := NewPostgresAssistantstore(srv, nil)
+
+	ctx := context.Background()
+	err := store.CreateSession(ctx, &model.AssistantSession{
+		SessionId: "chat_123456",
+		Title:     "Test",
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "missing user context")
+}
+
+func TestUpdateSessionTagsMissingUserContext(t *testing.T) {
+	srv := server.NewFakeAuthorizedServer(nil)
+	store := NewPostgresAssistantstore(srv, nil)
+
+	ctx := context.Background()
+	err := store.UpdateSessionTags(ctx, "chat_123456", []string{"shared"})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "missing user context")
+}
+
+func TestDeleteSessionMissingUserContext(t *testing.T) {
+	srv := server.NewFakeAuthorizedServer(nil)
+	store := NewPostgresAssistantstore(srv, nil)
+
+	ctx := context.Background()
+	err := store.DeleteSession(ctx, "chat_123456")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "missing user context")
+}
+
 func TestFilterSessionsByRbacOwned(t *testing.T) {
 	srv := server.NewFakeAuthorizedServer(nil)
 	store := NewPostgresAssistantstore(srv, nil)

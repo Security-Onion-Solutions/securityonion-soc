@@ -35,6 +35,7 @@ type esMigrationConfig struct {
 	SessionIndex string
 	SchemaPrefix string
 	PageSize     int
+	VerifyCert   bool
 }
 
 // isMigrationComplete checks whether a named migration has already been recorded as complete.
@@ -104,7 +105,7 @@ func migrateAssistantData(ctx context.Context, pool *pgxpool.Pool, esCfg *esMigr
 	client := &http.Client{
 		Timeout: 30 * time.Second,
 		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: !esCfg.VerifyCert},
 		},
 	}
 

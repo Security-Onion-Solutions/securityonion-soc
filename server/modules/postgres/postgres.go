@@ -125,6 +125,7 @@ func (pg *Postgres) Init(cfg module.ModuleConfig) error {
 			SessionIndex: module.GetStringDefault(cfg, "esSessionIndex", "*:so-assistant-session"),
 			SchemaPrefix: module.GetStringDefault(cfg, "esSchemaPrefix", "so_"),
 			PageSize:     module.GetIntDefault(cfg, "esMigrationPageSize", 1000),
+			VerifyCert:   module.GetBoolDefault(cfg, "esVerifyCert", true),
 		}
 	}
 
