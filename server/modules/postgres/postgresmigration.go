@@ -22,6 +22,8 @@ import (
 
 const migrationAssistantData = "assistant_data_from_elasticsearch"
 
+const defaultPageSize = 1000
+
 // esMigrationConfig holds the connection info needed to query Elasticsearch directly
 // for the chat migration. We bypass the Assistantstore interface because it enforces
 // RBAC which requires a user context that doesn't exist during module startup.
@@ -32,6 +34,8 @@ type esMigrationConfig struct {
 	ChatIndex    string
 	SessionIndex string
 	SchemaPrefix string
+	PageSize     int
+	VerifyCert   bool
 }
 
 // isMigrationComplete checks whether a named migration has already been recorded as complete.
@@ -47,9 +51,37 @@ func markMigrationComplete(ctx context.Context, pool *pgxpool.Pool, name string)
 	return err
 }
 
+// recordMigrationFailure writes a single bad hit to the quarantine table. Used so that parse
+// or insert failures on one record don't cause silent data loss — the raw source is preserved
+// for later inspection. Errors writing to quarantine are logged but not propagated; we don't
+// want quarantine itself to block the migration.
+func recordMigrationFailure(ctx context.Context, pool *pgxpool.Pool, hitType, esId, sessionId, errMsg string, rawHit map[string]interface{}) {
+	raw, err := json.Marshal(rawHit)
+	if err != nil {
+		raw = []byte("{}")
+	}
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO assistant_migration_failures (hit_type, es_id, session_id, error_message, raw_hit)
+		 VALUES ($1, $2, $3, $4, $5)`,
+		hitType, esId, sessionId, errMsg, raw); err != nil {
+		log.WithError(err).WithFields(log.Fields{
+			"hitType":   hitType,
+			"esId":      esId,
+			"sessionId": sessionId,
+		}).Warn("Failed to record migration failure in quarantine table")
+	}
+}
+
 // migrateAssistantData migrates existing assistant data from Elasticsearch to PostgreSQL.
-// It uses a migrations table to track completion — the migration runs exactly once.
-// Queries ES directly via HTTP to bypass RBAC which requires a user context.
+// It uses a migrations table to track completion — the migration runs exactly once per
+// successful drain. Queries ES directly via HTTP to bypass RBAC which requires a user context.
+//
+// Error semantics:
+//   - Transport/HTTP errors from Elasticsearch return an error and do NOT mark the migration
+//     complete, so a transient outage retries on the next startup. Inserts are idempotent
+//     (ON CONFLICT DO NOTHING) so retry-from-scratch is safe.
+//   - Parse and per-record insert errors are written to assistant_migration_failures and the
+//     migration continues. A summary log line reports the counts at the end.
 func migrateAssistantData(ctx context.Context, pool *pgxpool.Pool, esCfg *esMigrationConfig, pgStore *PostgresAssistantstore) error {
 	done, err := isMigrationComplete(ctx, pool, migrationAssistantData)
 	if err != nil {
@@ -65,145 +97,182 @@ func migrateAssistantData(ctx context.Context, pool *pgxpool.Pool, esCfg *esMigr
 		return markMigrationComplete(ctx, pool, migrationAssistantData)
 	}
 
+	pageSize := esCfg.PageSize
+	if pageSize <= 0 {
+		pageSize = defaultPageSize
+	}
+
 	client := &http.Client{
 		Timeout: 30 * time.Second,
 		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: !esCfg.VerifyCert},
 		},
 	}
 
-	sessions, err := fetchSessionsFromES(ctx, client, esCfg)
-	if err != nil {
-		log.WithError(err).Warn("Failed to fetch sessions from Elasticsearch, marking migration complete anyway")
-		return markMigrationComplete(ctx, pool, migrationAssistantData)
+	log.Info("Starting assistant data migration from Elasticsearch to PostgreSQL")
+
+	var migratedSessions, migratedMessages, parseFailures, insertFailures int
+
+	sessionQuery := map[string]interface{}{
+		"query": map[string]interface{}{
+			"term": map[string]interface{}{
+				esCfg.SchemaPrefix + "kind": "session",
+			},
+		},
 	}
 
-	if len(sessions) == 0 {
-		log.Info("No assistant sessions found in Elasticsearch, marking migration complete")
-		return markMigrationComplete(ctx, pool, migrationAssistantData)
+	// Stable sort: @timestamp is written on every so-* document; _id breaks ties.
+	sort := []interface{}{
+		map[string]interface{}{"@timestamp": map[string]interface{}{"order": "asc"}},
+		map[string]interface{}{"_id": map[string]interface{}{"order": "asc"}},
 	}
 
-	log.WithField("sessionCount", len(sessions)).Info("Migrating assistant sessions from Elasticsearch to PostgreSQL")
+	err = esSearchPaged(ctx, client, esCfg, esCfg.SessionIndex, sessionQuery, sort, pageSize, func(hit map[string]interface{}) error {
+		esId, _ := hit["_id"].(string)
 
-	migratedSessions := 0
-	migratedMessages := 0
+		session, err := parseSessionFromHit(hit, esCfg.SchemaPrefix)
+		if err != nil {
+			parseFailures++
+			recordMigrationFailure(ctx, pool, "session", esId, "", err.Error(), hit)
+			return nil
+		}
 
-	for _, session := range sessions {
 		if err := pgStore.insertSessionDirect(ctx, session); err != nil {
-			log.WithError(err).WithField("sessionId", session.SessionId).Warn("Failed to migrate session, skipping")
-			continue
+			insertFailures++
+			recordMigrationFailure(ctx, pool, "session", esId, session.SessionId, err.Error(), hit)
+			return nil
 		}
 		migratedSessions++
 
-		messages, err := fetchMessagesFromES(ctx, client, esCfg, session.SessionId)
-		if err != nil {
-			log.WithError(err).WithField("sessionId", session.SessionId).Warn("Failed to fetch messages, skipping")
-			continue
-		}
-
-		for _, msg := range messages {
-			if err := pgStore.insertMessageDirect(ctx, msg); err != nil {
-				log.WithError(err).WithField("messageId", msg.Id).Warn("Failed to migrate message, skipping")
-				continue
-			}
-			migratedMessages++
-		}
-	}
-
-	log.WithFields(log.Fields{
-		"migratedSessions": migratedSessions,
-		"migratedMessages": migratedMessages,
-		"totalSessions":    len(sessions),
-	}).Info("Assistant data migration complete")
-
-	return markMigrationComplete(ctx, pool, migrationAssistantData)
-}
-
-// fetchSessionsFromES queries Elasticsearch directly for all assistant sessions.
-func fetchSessionsFromES(ctx context.Context, client *http.Client, cfg *esMigrationConfig) ([]*model.AssistantSession, error) {
-	query := map[string]interface{}{
-		"query": map[string]interface{}{
-			"term": map[string]interface{}{
-				cfg.SchemaPrefix + "kind": "session",
-			},
-		},
-		"size": 10000,
-	}
-
-	hits, err := esSearch(ctx, client, cfg, cfg.SessionIndex, query)
-	if err != nil {
-		return nil, err
-	}
-
-	sessions := make([]*model.AssistantSession, 0, len(hits))
-	for _, hit := range hits {
-		session, err := parseSessionFromHit(hit, cfg.SchemaPrefix)
-		if err != nil {
-			log.WithError(err).Warn("Failed to parse session from ES hit, skipping")
-			continue
-		}
-		sessions = append(sessions, session)
-	}
-
-	return sessions, nil
-}
-
-// fetchMessagesFromES queries Elasticsearch directly for all messages in a session.
-func fetchMessagesFromES(ctx context.Context, client *http.Client, cfg *esMigrationConfig, sessionId string) ([]*model.StoredMessage, error) {
-	query := map[string]interface{}{
-		"query": map[string]interface{}{
-			"bool": map[string]interface{}{
-				"must": []interface{}{
-					map[string]interface{}{
-						"term": map[string]interface{}{
-							cfg.SchemaPrefix + "kind": "chat",
+		msgQuery := map[string]interface{}{
+			"query": map[string]interface{}{
+				"bool": map[string]interface{}{
+					"must": []interface{}{
+						map[string]interface{}{
+							"term": map[string]interface{}{
+								esCfg.SchemaPrefix + "kind": "chat",
+							},
 						},
-					},
-					map[string]interface{}{
-						"term": map[string]interface{}{
-							cfg.SchemaPrefix + "chat.sessionId": sessionId,
+						map[string]interface{}{
+							"term": map[string]interface{}{
+								esCfg.SchemaPrefix + "chat.sessionId": session.SessionId,
+							},
 						},
 					},
 				},
 			},
-		},
-		"size": 10000,
-		"sort": []interface{}{
-			map[string]interface{}{
-				"@timestamp": map[string]interface{}{"order": "asc"},
-			},
-		},
-	}
-
-	hits, err := esSearch(ctx, client, cfg, cfg.ChatIndex, query)
-	if err != nil {
-		return nil, err
-	}
-
-	messages := make([]*model.StoredMessage, 0, len(hits))
-	for _, hit := range hits {
-		msg, err := parseMessageFromHit(hit, cfg.SchemaPrefix)
-		if err != nil {
-			log.WithError(err).Warn("Failed to parse message from ES hit, skipping")
-			continue
 		}
-		messages = append(messages, msg)
+
+		msgErr := esSearchPaged(ctx, client, esCfg, esCfg.ChatIndex, msgQuery, sort, pageSize, func(msgHit map[string]interface{}) error {
+			msgEsId, _ := msgHit["_id"].(string)
+
+			msg, err := parseMessageFromHit(msgHit, esCfg.SchemaPrefix)
+			if err != nil {
+				parseFailures++
+				recordMigrationFailure(ctx, pool, "message", msgEsId, session.SessionId, err.Error(), msgHit)
+				return nil
+			}
+
+			if err := pgStore.insertMessageDirect(ctx, msg); err != nil {
+				insertFailures++
+				recordMigrationFailure(ctx, pool, "message", msgEsId, session.SessionId, err.Error(), msgHit)
+				return nil
+			}
+			migratedMessages++
+			return nil
+		})
+
+		if msgErr != nil {
+			// Transport-level failure fetching this session's messages — abort the whole migration.
+			// Returning an error aborts the outer session pager and propagates upward.
+			return fmt.Errorf("failed to page messages for session %s: %w", session.SessionId, msgErr)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return err
 	}
 
-	return messages, nil
+	summary := log.Fields{
+		"migratedSessions": migratedSessions,
+		"migratedMessages": migratedMessages,
+		"parseFailures":    parseFailures,
+		"insertFailures":   insertFailures,
+	}
+	log.WithFields(summary).Info("Assistant data migration complete")
+	if parseFailures > 0 || insertFailures > 0 {
+		log.WithFields(summary).Warn("Assistant data migration had failures — see assistant_migration_failures table for details")
+	}
+
+	return markMigrationComplete(ctx, pool, migrationAssistantData)
 }
 
-// esSearch performs a raw HTTP search against Elasticsearch.
-func esSearch(ctx context.Context, client *http.Client, cfg *esMigrationConfig, index string, query map[string]interface{}) ([]map[string]interface{}, error) {
+// esSearchPaged repeatedly POSTs /_search with search_after until the index is drained.
+// The baseQuery must NOT contain "size", "sort", or "search_after" — the pager owns those.
+// handler is invoked once per hit in document order; returning an error aborts the scan
+// and is propagated to the caller (distinguishable from transport errors only by context).
+func esSearchPaged(
+	ctx context.Context,
+	client *http.Client,
+	cfg *esMigrationConfig,
+	index string,
+	baseQuery map[string]interface{},
+	sort []interface{},
+	pageSize int,
+	handler func(hit map[string]interface{}) error,
+) error {
+	var searchAfter []interface{}
+
+	for {
+		query := make(map[string]interface{}, len(baseQuery)+3)
+		for k, v := range baseQuery {
+			query[k] = v
+		}
+		query["size"] = pageSize
+		query["sort"] = sort
+		if searchAfter != nil {
+			query["search_after"] = searchAfter
+		}
+
+		hits, lastSort, err := esSearchOnePage(ctx, client, cfg, index, query)
+		if err != nil {
+			return err
+		}
+
+		for _, hit := range hits {
+			if err := handler(hit); err != nil {
+				return err
+			}
+		}
+
+		if len(hits) < pageSize {
+			return nil
+		}
+		if lastSort == nil {
+			// Defensive: if ES returned a full page but no sort values on the last hit,
+			// we'd loop forever. Treat as end-of-stream and log — shouldn't happen given
+			// our sort keys are always populated.
+			log.WithField("index", index).Warn("esSearchPaged: last hit missing sort values, stopping pagination")
+			return nil
+		}
+		searchAfter = lastSort
+	}
+}
+
+// esSearchOnePage runs a single _search against Elasticsearch and returns the hits plus the
+// sort values of the last hit (for use as the next search_after cursor).
+func esSearchOnePage(ctx context.Context, client *http.Client, cfg *esMigrationConfig, index string, query map[string]interface{}) ([]map[string]interface{}, []interface{}, error) {
 	body, err := json.Marshal(query)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	url := fmt.Sprintf("%s/%s/_search", cfg.HostUrl, index)
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if cfg.Username != "" {
@@ -212,17 +281,17 @@ func esSearch(ctx context.Context, client *http.Client, cfg *esMigrationConfig, 
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("ES search failed: %d - %s", resp.StatusCode, string(respBody))
+		return nil, nil, fmt.Errorf("ES search failed: %d - %s", resp.StatusCode, string(respBody))
 	}
 
 	var result struct {
@@ -230,24 +299,27 @@ func esSearch(ctx context.Context, client *http.Client, cfg *esMigrationConfig, 
 			Hits []struct {
 				Source map[string]interface{} `json:"_source"`
 				Id     string                 `json:"_id"`
+				Sort   []interface{}          `json:"sort"`
 			} `json:"hits"`
 		} `json:"hits"`
 	}
 
 	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	hits := make([]map[string]interface{}, 0, len(result.Hits.Hits))
+	var lastSort []interface{}
 	for _, h := range result.Hits.Hits {
 		if h.Source == nil {
 			continue
 		}
 		h.Source["_id"] = h.Id
 		hits = append(hits, h.Source)
+		lastSort = h.Sort
 	}
 
-	return hits, nil
+	return hits, lastSort, nil
 }
 
 // parseSessionFromHit converts an ES _source document to an AssistantSession.
