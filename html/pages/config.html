@@ -23,7 +23,7 @@
 		</v-card>
 	</v-dialog>
 	<v-row>
-		<v-toolbar class="so-toolbar elevation-0" fixed>
+		<v-toolbar class="so-toolbar elevation-0" fixed :aria-label="i18n.ariaSettingsToolbar" role="toolbar">
 			<v-text-field id="filter-input" :label="i18n.filter" v-model="search" clearable :hint="i18n.filterHelp" persistent-hint @click:clear="clearFilter()" @keydown.enter="applySearchFilter()" class="mx-2" style="max-width: 240px" density="compact" hide-details data-aid="config_filter_input"></v-text-field>
 			<v-btn variant="text" size="small" id="apply-search-button" icon @click="applySearchFilter()" :title="i18n.search" data-aid="config_apply_search_filter">
 				<v-icon class="theme-icon">fa-magnifying-glass</v-icon>
@@ -41,7 +41,7 @@
 				<v-icon color="warning">fa-circle-nodes</v-icon>
 			</v-btn>
 			<v-spacer></v-spacer>
-			<h4 v-if="!$root.loading" class="mr-0 my-0">{{ i18n.settingsCustomized }} {{ settingsCustomized }} / {{ settingsAvailable }} </h4>
+			<span v-if="!$root.loading" class="mr-0 my-0 font-weight-bold">{{ i18n.settingsCustomized }} {{ settingsCustomized }} / {{ settingsAvailable }}</span>
 			<v-btn icon variant="flat" class="circle-button ml-5 mr-2" :title="i18n.options" @click="showOptionsDialog = true" id="configOptionsHeader" data-aid="config_options_button">
 				<v-icon>fa-gear</v-icon>
 			</v-btn>
@@ -83,11 +83,11 @@
 				<div v-if="!selected" id="config-quick-links">
 					<v-alert v-text="i18n.settingSelect" type="info"></v-alert>
 					<div class="mt-4">
-						<p class="font-weight-bold">{{i18n.configQLGridTitle}}</p>
-						<ul>
+						<p id="grid-quick-links-label" class="font-weight-bold">{{i18n.configQLGridTitle}}</p>
+						<ul aria-labelledby="grid-quick-links-label">
 							<li>
-								{{i18n.configQLElasticsearchHeader}}
-								<ul>
+								<span id="elastic-quick-links-label">{{i18n.configQLElasticsearchHeader}}</span>
+								<ul aria-labelledby="elastic-quick-links-label">
 									<li>
 										<router-link data-aid="config_quicklink_es_warm" :to="{ name: 'config', query: {s: 'elasticsearch.index_settings.global_overrides.policy.phases.warm.min_age', x: 1}}">{{i18n.configQLElasticsearchWarm}}</router-link>
 									</li>
@@ -100,16 +100,16 @@
 								</ul>
 							</li>
 							<li>
-								{{i18n.configQLNTPHeader}}
-								<ul>
+								<span id="ntp-quick-links-label">{{i18n.configQLNTPHeader}}</span>
+								<ul aria-labelledby="ntp-quick-links-label">
 									<li>
 										<router-link data-aid="config_quicklink_ntp" :to="{ name: 'config', query: {s: 'ntp.config.servers'}}">{{i18n.configQLNTP}}</router-link>
 									</li>
 								</ul>
 							</li>
 							<li>
-								{{i18n.configQLFirewallHeader}}
-								<ul>
+								<span id="firewall-quick-links-label">{{i18n.configQLFirewallHeader}}</span>
+								<ul aria-labelledby="firewall-quick-links-label">
 									<li>
 										<router-link data-aid="config_quicklink_fw_analyst" :to="{name: 'config', query: {s: 'firewall.hostgroups.analyst'}}">{{i18n.configQLFirewallWebInterface}}</router-link>
 									</li>
@@ -138,19 +138,19 @@
 							</li>
 						</ul>
 						<br/>
-						<p class="font-weight-bold">{{i18n.configQLAnalystTitle}}</p>
-						<ul>
+						<p id="analyst-quick-links-label" class="font-weight-bold">{{i18n.configQLAnalystTitle}}</p>
+						<ul aria-labelledby="analyst-quick-links-label">
 							<li>
-								{{i18n.configQLSigmaHeader}}
-								<ul>
+								<span id="sigma-quick-links-label">{{i18n.configQLSigmaHeader}}</span>
+								<ul aria-labelledby="sigma-quick-links-label">
 									<li>
 										<router-link data-aid="config_quicklink_sigma_rules" :to="{name: 'config', query: {s: 'soc.config.server.modules.elastalertengine.sigmaRulePackages'}}">{{i18n.configQLSigmaRuleset}}</router-link>
 									</li>
 								</ul>
 							</li>
 							<li>
-								{{i18n.configQLSuricataHeader}}
-								<ul>
+								<span id="suricata-quick-links-label">{{i18n.configQLSuricataHeader}}</span>
+								<ul aria-labelledby="suricata-quick-links-label">
 										<li>
 										<router-link data-aid="config_quicklink_suricata_home_net" :to="{name: 'config', query: {s: 'suricata.config.vars.address-groups.HOME_NET'}}">{{i18n.configQLHomeNet}}</router-link>
 									</li>
@@ -163,8 +163,8 @@
 								</ul>
 							</li>
 							<li>
-								{{i18n.configQLZeekHeader}}
-								<ul>
+								<span id="zeek-quick-links-label">{{i18n.configQLZeekHeader}}</span>
+								<ul aria-labelledby="zeek-quick-links-label">
 									<li>
 										<router-link data-aid="config_quicklink_zeek_homenet" :to="{name: 'config', query: {s: 'zeek.config.networks.HOME_NET'}}">{{i18n.configQLZeekHomeNet}}</router-link>
 									</li>
@@ -174,8 +174,8 @@
 								</ul>
 							</li>
 							<li>
-								{{i18n.configQLBPFHeader}}
-								<ul>
+								<span id="bpf-quick-links-label">{{i18n.configQLBPFHeader}}</span>
+								<ul aria-labelledby="bpf-quick-links-label">
 									<li>
 										<router-link data-aid="config_quicklink_pcap" :to="{name: 'config', query: {s: 'bpf.pcap'}}">{{i18n.configQLPCAP}}</router-link>
 									</li>
@@ -188,8 +188,8 @@
 								</ul>
 							</li>
 							<li>
-								{{i18n.configQLSOCHeader}}
-								<ul>
+								<span id="soc-quick-links-label">{{i18n.configQLSOCHeader}}</span>
+								<ul aria-labelledby="soc-quick-links-label">
 									<li>
 										<router-link data-aid="config_quicklink_actions" :to="{name: 'config', query: {s: 'soc.config.actions'}}">{{i18n.configQLSOCActions}}</router-link>
 									</li>
@@ -213,18 +213,24 @@
 				<v-card v-else :key="selected?.id" class="mx-auto config-setting" flat>
 					<v-card-text>
 						<div class="d-inline-flex mb-4" style="width: 100%">
-							<span class="text-body-small font-weight-thin" data-aid="config_breadcrumbs">
-								{{ getSettingBreadcrumbs(selected) }}
-								<v-btn icon variant="text" size="small" @click.stop="$root.copyToClipboard(getSettingBreadcrumbs(selected))" :title="i18n.copyBreadcrumbToClipboard" data-aid="config_breadcrumb_copy">
+							<div>
+								<nav class="text-body-small font-weight-thin" data-aid="config_breadcrumbs" :aria-label="i18n.ariaBreadcrumbs">
+									<ol class="breadcrumb-list" v-for="segments in [getSettingBreadcrumbs(selected)]">
+										<li v-for="(crumb, i) in segments" :aria-current="i === segments.length - 1 ? 'page' : null">
+											{{ crumb }}
+										</li>
+									</ol>
+								</nav>
+								<v-btn icon variant="text" size="small" @click.stop="$root.copyToClipboard(getSettingBreadcrumbs(selected).join(' > '))" :title="i18n.copyBreadcrumbToClipboard" data-aid="config_breadcrumb_copy">
 									<v-icon>fa-copy</v-icon>
 								</v-btn>
 								<v-btn icon variant="text" size="small" @click.stop="$root.copyToClipboard(getSettingLink(selected))" :title="i18n.copyLinkToClipboard" data-aid="config_breadcrumb_copy_link">
 									<v-icon>fa-link</v-icon>
 								</v-btn>
-							</span>
+							</div>
 							<v-spacer></v-spacer>
 							<span class="justify-end">
-								<v-btn icon variant="text" size="small" :title="i18n.toggleFullsizeHelp" @click="treeVisible = !treeVisible" data-aid="config_toggle_treeview">
+								<v-btn icon variant="text" size="small" :title="i18n.toggleFullsizeHelp" @click="treeVisible = !treeVisible" data-aid="config_toggle_treeview" :aria-pressed="!treeVisible">
 									<v-icon v-if="treeVisible">fa-up-right-and-down-left-from-center</v-icon>
 									<v-icon v-else color="primary">fa-down-left-and-up-right-to-center</v-icon>
 								</v-btn>
@@ -282,13 +288,13 @@
 									<v-expansion-panels v-if="hasUiElements(selected)" v-model="form.entriesExpanded">
 										<v-expansion-panel v-for="(entry, entryIdx) in form.entries" :key="entryIdx" @group:selected="edit(selected)" data-aid="config_item_entry_title">
 											<v-expansion-panel-title hide-actions="true">
-												{{ entry._title }}
-												<v-chip v-if="!!entry._status" :color="entry._statusColor ? entry._statusColor : 'secondary'" variant="elevated" density="compact" rounted="xs" class="mx-4" v-text="entry._status"></v-chip>
+												<span class="entry-heading" role="heading" :aria-level="3">{{ entry._title }}</span>
+												<v-chip v-if="!!entry._status" :color="entry._statusColor ? entry._statusColor : 'secondary'" variant="elevated" density="compact" rounded="xs" class="mx-4" v-text="entry._status" :aria-label="$root.replaceActionVar(i18n.ariaStatus, 'status', entry._status)"></v-chip>
 												<div v-if="entry._title != '+'" class="float-right ml-2">
-													<v-btn class="ma-1" size="small" rounded="sm" @click.stop="moveEntry(selected, entryIdx, true)" :disabled="!canMoveEntry(entryIdx, true)" data-aid="config_entry_move_up">
+													<v-btn class="ma-1" size="small" rounded="sm" @click.stop="moveEntry(selected, entryIdx, true)" :disabled="!canMoveEntry(entryIdx, true)" data-aid="config_entry_move_up" :aria-label="i18n.ariaMoveEntryUp">
 														<v-icon>fa-arrow-up</v-icon>
 													</v-btn>
-													<v-btn class="ma-1" size="small" rounded="sm" @click.stop="moveEntry(selected, entryIdx, false)" :disabled="!canMoveEntry(entryIdx, false)" data-aid="config_entry_move_down">
+													<v-btn class="ma-1" size="small" rounded="sm" @click.stop="moveEntry(selected, entryIdx, false)" :disabled="!canMoveEntry(entryIdx, false)" data-aid="config_entry_move_down" :aria-label="i18n.ariaMoveEntryDown">
 														<v-icon>fa-arrow-down</v-icon>
 													</v-btn>
 												</div>
@@ -296,10 +302,10 @@
 											<v-expansion-panel-text>
 												<v-form v-model="uiElementsValid">
 													<div class="my-1" v-for="(element, elementIdx) in selected.uiElements" :key="elementIdx">
-														<v-textarea v-if="isMultiline(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" @update:model-value="markDirtyEntries" variant="outlined" :label="getElementLabel(element)" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="editing config-editor" :data-aid="'config_item_entry_' + element.field"></v-textarea>
-														<v-switch v-else-if="isToggle(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" inset @update:model-value="markDirtyEntries" variant="outlined" :label="getElementLabel(element)" :readonly="isUiElementReadonly(entry, element)" v-model="entry[element.field]" class="no-details" :data-aid="'config_item_entry_' + element.field"></v-switch>
-														<v-select v-else-if="isSelectList(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" :items="element.options" :multiple="hasMultipleValues(element)" inset @update:model-value="markDirtyEntries" :label="getElementLabel(element)" variant="outlined" :label="element.label" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="no-details mb-6" :data-aid="'config_item_entry_' + element.field"></v-select>
-														<v-text-field v-else :id="'setting-entry-' + entryIdx + '-input-' + element.field" @update:model-value="markDirtyEntries" variant="outlined" :label="getElementLabel(element)" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="editing" :data-aid="'config_item_entry_' + element.field"></v-text-field>
+														<v-textarea v-if="isMultiline(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" @update:model-value="markDirtyEntries" variant="outlined" :label="getElementLabel(element)" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="editing config-editor" :data-aid="'config_item_entry_' + element.field" :aria-required="element.required"></v-textarea>
+														<v-switch v-else-if="isToggle(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" inset @update:model-value="markDirtyEntries" variant="outlined" :label="getElementLabel(element)" :readonly="isUiElementReadonly(entry, element)" v-model="entry[element.field]" class="no-details" :data-aid="'config_item_entry_' + element.field" :aria-required="element.required"></v-switch>
+														<v-select v-else-if="isSelectList(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" :items="element.options" :multiple="hasMultipleValues(element)" inset @update:model-value="markDirtyEntries" :label="getElementLabel(element)" variant="outlined" :label="element.label" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="no-details mb-6" :data-aid="'config_item_entry_' + element.field" :aria-required="element.required"></v-select>
+														<v-text-field v-else :id="'setting-entry-' + entryIdx + '-input-' + element.field" @update:model-value="markDirtyEntries" variant="outlined" :label="getElementLabel(element)" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="editing" :data-aid="'config_item_entry_' + element.field" :aria-required="element.required"></v-text-field>
 													</div>
 												</v-form>
 												<p>* {{ i18n.requiredField }}</p>
@@ -373,9 +379,9 @@
 								</v-col>
 							</v-row>
 						</v-container>
-						<span data-aid="config_item_customize_node_select">
+						<div data-aid="config_item_customize_node_select">
 							<v-select v-if="(selected.node || !selected.global) && availableNodes.length > 0" variant="outlined" id="config-select-node" :label="i18n.settingSelectNode" :items="availableNodes" :title="i18n.settingSelectNodeHelp" @update:model-value="addNode(selected, $event)" v-model="selectedNode"></v-select>
-						</span>
+						</div>
 					</v-card-text>
 				</v-card>
 			</v-fade-transition>

@@ -25,62 +25,49 @@
 						<v-container fluid grid-list-sm class="pa-4">
 							<v-row>
 								<v-col>
-									<div>
-										<span class="filter label">{{ i18n.job }}:</span>
-										<span class="filter value">{{ job.id }}</span>
-									</div>
-									<div>
-										<span class="filter label">{{ i18n.owner }}:</span>
-										<span class="filter value">{{ job.owner }}</span>
-									</div>
-									<div>
-										<span class="filter label">{{ i18n.sensorId }}:</span>
-										<span class="filter value">{{ job.nodeId }}</span>
-									</div>
-									<div>
-										<span class="filter label">{{ i18n.importId }}:</span>
-										<span v-if="job.filter" class="filter value">{{ job.filter.importId }}&nbsp;</span>
-									</div>
-									<div>
-										<span class="filter label">{{ i18n.protocol }}:</span>
-										<span v-if="job.filter" class="filter value">{{ job.filter.protocol }}&nbsp;</span>
-									</div>
-									<div>
-										<span class="filter label">{{ i18n.srcIp }}:</span>
-										<span v-if="job.filter" class="filter value">{{ job.filter.srcIp }}&nbsp;<span class="resolved-host" v-if="$root.pickHostname(job.filter.srcIp)"> - {{ $root.pickHostname(job.filter.srcIp) }}</span></span>
-									</div>
-									<div>
-										<span class="filter label">{{ i18n.srcPort }}:</span>
-										<span v-if="job.filter" class="filter value">{{ job.filter.srcPort }}&nbsp;</span>
-									</div>
-									<div>
-										<span class="filter label">{{ i18n.dstIp }}:</span>
-										<span v-if="job.filter" class="filter value">{{ job.filter.dstIp }}&nbsp;<span class="resolved-host" v-if="$root.pickHostname(job.filter.dstIp)"> - {{ $root.pickHostname(job.filter.dstIp) }}</span></span>
-									</div>
-									<div>
-										<span class="filter label">{{ i18n.dstPort }}:</span>
-										<span v-if="job.filter" class="filter value">{{ job.filter.dstPort }}&nbsp;</span>
-									</div>
-									<div>
-										<span class="filter label">{{ i18n.dateQueued }}:</span>
-										<span class="filter value">{{ formatDateTime(job.createTime)}}&nbsp;</span>
-									</div>
-									<div>
-										<span class="filter label">{{ i18n.dateCompleted }}:</span>
-										<span class="filter value">{{ formatDateTime(job.completeTime)}}&nbsp;</span>
-									</div>
-									<div>
-										<span class="filter label">{{ i18n.dateFailed }}:</span>
-										<span class="filter value">{{ formatDateTime(job.failTime)}}&nbsp;</span>
-									</div>
-									<div>
-										<span class="filter label">{{ i18n.beginTime }}:</span>
-										<span v-if="job.filter" class="filter value">{{ formatTimestamp(job.filter.beginTime) }}&nbsp;</span>
-									</div>
-									<div>
-										<span class="filter label">{{ i18n.endTime }}:</span>
-										<span v-if="job.filter" class="filter value">{{ formatTimestamp(job.filter.endTime) }}&nbsp;</span>
-									</div>
+									<dl>
+										<dt class="filter label">{{ i18n.job }}:</span>
+										<dd class="filter value">{{ job.id }}</span>
+										
+										<dt class="filter label">{{ i18n.owner }}:</span>
+										<dd class="filter value">{{ job.owner }}</span>
+										
+										<dt class="filter label">{{ i18n.sensorId }}:</span>
+										<dd class="filter value">{{ job.nodeId }}</span>
+										
+										<dt class="filter label">{{ i18n.importId }}:</span>
+										<dd v-if="job.filter" class="filter value">{{ job.filter.importId }}&nbsp;</span>
+										
+										<dt class="filter label">{{ i18n.protocol }}:</span>
+										<dd v-if="job.filter" class="filter value">{{ job.filter.protocol }}&nbsp;</span>
+										
+										<dt class="filter label">{{ i18n.srcIp }}:</span>
+										<dd v-if="job.filter" class="filter value">{{ job.filter.srcIp }}&nbsp;<span class="resolved-host" v-if="$root.pickHostname(job.filter.srcIp)"> - {{ $root.pickHostname(job.filter.srcIp) }}</span></span>
+										
+										<dt class="filter label">{{ i18n.srcPort }}:</span>
+										<dd v-if="job.filter" class="filter value">{{ job.filter.srcPort }}&nbsp;</span>
+										
+										<dt class="filter label">{{ i18n.dstIp }}:</span>
+										<dd v-if="job.filter" class="filter value">{{ job.filter.dstIp }}&nbsp;<span class="resolved-host" v-if="$root.pickHostname(job.filter.dstIp)"> - {{ $root.pickHostname(job.filter.dstIp) }}</span></span>
+								
+										<dt class="filter label">{{ i18n.dstPort }}:</span>
+										<dd v-if="job.filter" class="filter value">{{ job.filter.dstPort }}&nbsp;</span>
+									
+										<dt class="filter label">{{ i18n.dateQueued }}:</span>
+										<dd class="filter value">{{ formatDateTime(job.createTime)}}&nbsp;</span>
+										
+										<dt class="filter label">{{ i18n.dateCompleted }}:</span>
+										<dd class="filter value">{{ formatDateTime(job.completeTime)}}&nbsp;</span>
+										
+										<dt class="filter label">{{ i18n.dateFailed }}:</span>
+										<dd class="filter value">{{ formatDateTime(job.failTime)}}&nbsp;</span>
+										
+										<dt class="filter label">{{ i18n.beginTime }}:</span>
+										<dd v-if="job.filter" class="filter value">{{ formatTimestamp(job.filter.beginTime) }}&nbsp;</span>
+										
+										<dt class="filter label">{{ i18n.endTime }}:</span>
+										<dd v-if="job.filter" class="filter value">{{ formatTimestamp(job.filter.endTime) }}&nbsp;</span>
+									</dl>
 								</v-col>
 							</v-row>
 						</v-container>
@@ -142,7 +129,7 @@
 					<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
 						<tr>
 							<template v-for="header in columns" :key="header.key">
-								<th :class="{'is-sorted': isSorted(header)}" :data-aid="'job_packet_table_header_' + header?.value?.toLowerCase()">
+								<th :class="{'is-sorted': isSorted(header)}" :data-aid="'job_packet_table_header_' + header?.value?.toLowerCase()" scope="col">
 									<span @click="toggleSort(header)">
 										{{ header.title }}
 									</span>

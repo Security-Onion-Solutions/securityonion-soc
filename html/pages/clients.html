@@ -135,14 +135,16 @@
 										</v-col>
 										<v-col cols="12" lg="4">
 											<v-card>
-												<v-card-title>{{ i18n.permissions }}</v-card-title>
+												<v-card-title id="permissions-label">{{ i18n.permissions }}</v-card-title>
 												<v-card-text data-aid="clients_details_permission_toggle">
-													<template v-for="(privileges, resource) in perms" :key="resource">
-														<h4 class="text-capitalize mt-3">{{ resource }}</h4>
-														<span v-for="priv in privileges" :key="priv" :data-aid="'clients_details_permission_toggle_' + resource + '_' + priv">
-															<v-checkbox :id="'perm-checkbox-' + resource + '-' + priv" density="compact" class="text-capitalize ml-5 no-details" :model-value="hasPermission(item, resource, priv)" :label="priv" @click.stop="togglePermission(item, resource, priv)"></v-checkbox>
-														</span>
-													</template>
+													<fieldset aria-labelledby="permissions-label" class="no-border">
+														<template v-for="(privileges, resource) in perms" :key="resource">
+															<legend class="text-capitalize mt-3">{{ resource }}</legend>
+															<span v-for="priv in privileges" :key="priv" :data-aid="'clients_details_permission_toggle_' + resource + '_' + priv">
+																<v-checkbox :id="'perm-checkbox-' + resource + '-' + priv" density="compact" class="text-capitalize ml-5 no-details" :model-value="hasPermission(item, resource, priv)" :label="priv" @click.stop="togglePermission(item, resource, priv)"></v-checkbox>
+															</span>
+														</template>
+													</fieldset>
 												</v-card-text>
 											</v-card>
 										</v-col>

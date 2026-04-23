@@ -1,8 +1,8 @@
 <v-container fluid data-aid="case_screen">
 	<div class="mx-sm-12 mx-lg-6 mt-2 mb-6 mb-md-1" data-aid="case_title_input">
 		<div tabindex="0" class="case detail-field clicktoedit d-flex align-start pa-2" v-if="!isEdit('case-title')"
-			@click="startEdit('case-title-input', caseObj.title, 'case-title', 'title', modifyCase)" @keypress.space.prevent="startEdit('case-title-input', caseObj.title, 'case-title', 'title', modifyCase)">
-			<h2 id="case-title" class="rounded">{{ caseObj.title }}</h2>
+			@click="startEdit('case-title-input', caseObj.title, 'case-title', 'title', modifyCase)" @keypress.space.prevent="startEdit('case-title-input', caseObj.title, 'case-title', 'title', modifyCase)" role="button">
+			<h1 id="case-title" class="rounded">{{ caseObj.title }}</h1>
 		</div>
 		<div class="d-flex flex-column" v-if="isEdit('case-title')">
 			<div class="mb-2">
@@ -23,11 +23,11 @@
 	<v-row class="mx-sm-8 mx-md-12 mx-lg-4 flex-column flex-md-row">
 		<v-col cols="12" md="9" class="case main" order="2" order-md="1" data-aid="case_description_input">
 			<div class="d-block d-md-none">
-				<h2>{{ i18n.description }}</h2>
+				<h2 id="case-description-label">{{ i18n.description }}</h2>
 			</div>
 			<div class="mb-6 mb-md-3">
 				<div tabindex="0" class="clicktoedit d-flex align-start pa-2" v-if="!isEdit('case-description')" @click="startEdit('case-desc-input',  caseObj.description, 'case-description', 'description', modifyCase, [], true)"
-					@keypress.space.prevent="startEdit('case-desc-input',  caseObj.description, 'case-description', 'description', modifyCase, [], true)">
+					@keypress.space.prevent="startEdit('case-desc-input',  caseObj.description, 'case-description', 'description', modifyCase, [], true)" role="button" aria-labelledby="case-description-label">
 					<div class="d-block" style="width: 100%;">
 						<div id="case-description" class="rounded case detail-field markdown-body" v-html="formatMarkdown(caseObj.description)"></div>
 					</div>
@@ -35,7 +35,7 @@
 				<div class="d-flex flex-column" v-if="isEdit('case-description')">
 					<div class="mb-2 pt-2 pb-3 px-3 rounded rounded-md contrast-bg d-flex flex-column">
 						<div class="d-flex flex-column flex-sm-row align-sm-center align-self-start text-body-2 mb-1 ml-1">
-							<a class="case markdown-icon" href="https://www.markdownguide.org/cheat-sheet/" target="_blank" :title="i18n.markdownFormattingSupported"><v-icon>fab fa-markdown</v-icon></a>
+							<a class="case markdown-icon" href="https://www.markdownguide.org/cheat-sheet/" target="_blank" :title="i18n.markdownFormattingSupported" :aria-label="i18n.markdownFormattingSupported" data-aid="case_description_markdown_help"><v-icon>fab fa-markdown</v-icon></a>
 						</div>
 						<v-form v-model="editForm.valid" @submit.prevent>
 							<v-textarea id="case-desc-input" solo variant="outlined" hide-details="auto" rows="5" density="compact" color="black-text" v-model="editForm.val" :rules="[$root.validators.required]" :label="i18n.ariaCaseDescription" :hint="i18n.caseDescriptionHelp"></v-textarea>
@@ -79,7 +79,7 @@
 					<v-tabs-window-item value="comments" data-aid="case_comments">
 						<v-row>
 							<v-col>
-								<v-toolbar class="so-toolbar elevation-0" fixed>
+								<v-toolbar class="so-toolbar elevation-0" fixed role="toolbar" :aria-label="i18n.ariaCaseToolbar">
 									<v-btn variant="flat" icon v-bind:title.attr="i18n.addCaseCommentHelp" @click.stop="prepareForInput('comment-input')" id="add-comment-button" data-aid="case_comment_new" class="circle-button mx-2">
 										<v-icon>fa-plus</v-icon>
 									</v-btn>
@@ -106,7 +106,7 @@
 													</div>
 													<div v-else class="d-flex flex-column full-width" data-aid="case_comment_edit">
 														<div class="d-flex flex-column flex-sm-row align-sm-center align-self-start text-body-2 mb-1 ml-1">
-															<a class="case markdown-icon" href="https://www.markdownguide.org/cheat-sheet/" :target="$root.target('_blank')" :title="i18n.markdownFormattingSupported" data-aid="case_comment_markdown_help"><v-icon>fab fa-markdown</v-icon></a>
+															<a class="case markdown-icon" href="https://www.markdownguide.org/cheat-sheet/" :target="$root.target('_blank')" :title="i18n.markdownFormattingSupported" :aria-label="i18n.markdownFormattingSupported" data-aid="case_comment_markdown_help"><v-icon>fab fa-markdown</v-icon></a>
 														</div>
 														<div class="mb-3">
 															<v-form v-model="editForm.valid" @submit.prevent>
@@ -159,7 +159,7 @@
 																{{ comment.owner }}
 															</div>
 														</div>
-														<div class=" d-none d-sm-block">
+														<div class="d-none d-sm-block" aria-hidden="true">
 															&bull;
 														</div>
 														<div class="ml-1" data-aid="case_comment_timestamp_display">
@@ -203,11 +203,11 @@
 												{{ $root.getAvatar($root.username) }}
 												</div>
 											</v-avatar>
-											<h3 class="primary-text my-0">{{ i18n.commentAdd }}</h3>
+											<h2 class="primary-text my-0">{{ i18n.commentAdd }}</h2>
 										</div>
 										<div class="d-flex flex-column" style="width: 100%;">
 											<div class="d-flex flex-column flex-sm-row align-sm-center align-self-start text-body-2 mb-1 ml-3">
-												<a class="case markdown-icon" href="https://www.markdownguide.org/cheat-sheet/" :target="$root.target('_blank')" :title="i18n.markdownFormattingSupported" data-aid="case_new_comment_markdown_help"><v-icon>fab fa-markdown</v-icon></a>
+												<a class="case markdown-icon" href="https://www.markdownguide.org/cheat-sheet/" :target="$root.target('_blank')" :title="i18n.markdownFormattingSupported" :aria-label="i18n.markdownFormattingSupported" data-aid="case_new_comment_markdown_help"><v-icon>fab fa-markdown</v-icon></a>
 											</div>
 											<div class="mx-2">
 												<v-form ref="comments" v-model="associatedForms['comments'].valid" @submit.prevent>
@@ -240,7 +240,7 @@
 					<v-tabs-window-item value="attachments" data-aid="case_attachments">
 						<v-row v-if="!isAdding('attachments')">
 							<v-col>
-								<v-toolbar class="so-toolbar elevation-0" fixed>
+								<v-toolbar class="so-toolbar elevation-0" fixed role="toolbar" :aria-label="i18n.ariaCaseAttachmentsToolbar">
 									<v-btn :title="i18n.addAttachmentHelp" variant="flat" icon @click.stop="enableAdding('attachments')" id="add-attachment-button" data-aid="case_attachments_new" class="circle-button mx-2">
 										<v-icon>fa-plus</v-icon>
 									</v-btn>
@@ -267,7 +267,7 @@
 														{{ $root.getAvatar($root.username) }}
 														</div>
 													</v-avatar>
-													<h3 class="primary-text my-1">{{ i18n.attachmentAdd }}</h3>
+													<h2 class="primary-text my-1">{{ i18n.attachmentAdd }}</h2>
 												</div>
 												<v-form ref="attachments" v-model="associatedForms['attachments'].valid" @submit.prevent>
 													<v-file-input id="attachments-file" show-size v-model="attachment" persistent-hint :hint="getAttachmentHelp()"
@@ -332,8 +332,8 @@
 								<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
 									<tr>
 										<template v-for="header in columns" :key="header.key">
-											<th :class="{'is-sorted': isSorted(header)}" :data-aid="'case_attachments_header_' + header?.value?.toLowerCase()">
-												<span @click="toggleSort(header)">
+											<th :class="{'is-sorted': isSorted(header)}" :data-aid="'case_attachments_header_' + header?.value?.toLowerCase()" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'">
+												<span @click="toggleSort(header)" @keydown.enter.space.prevent="toggleSort(header)" role="button" tabindex="0">
 													{{ header.title }}
 												</span>
 												<template v-if="isSorted(header)">
@@ -370,27 +370,27 @@
 														{{ i18n.bytes }})
 													</a>
 													<div class="mt-4">
-														<div class="font-weight-bold">{{i18n.sha256}}: </div>
-														<div :id="`attachments-${index}-sha256`" class="case">
+														<div :id="`attachments-${index}-sha256-label`" class="font-weight-bold">{{i18n.sha256}}: </div>
+														<div :id="`attachments-${index}-sha256`" class="case" :aria-labelledby="`attachments-${index}-sha256-label`">
 															{{ withDefault(item.sha256, i18n.unknown) }}
-															<v-icon class="ml-1" @click="$root.copyToClipboard(item.sha256)" :title="i18n.copyToClipboard" data-aid="case_attachment_copy_sha256">fa-copy</v-icon>
-															<v-icon class="ml-1" @click="populateAddObservableForm('sha256', item.sha256)" :title="i18n.addObservable" data-aid="case_attachment_add_observable_sha256">fa-eye</v-icon>
+															<v-icon class="ml-1" @click="$root.copyToClipboard(item.sha256)" :title="i18n.copyToClipboard" data-aid="case_attachment_copy_sha256" role="button">fa-copy</v-icon>
+															<v-icon class="ml-1" @click="populateAddObservableForm('sha256', item.sha256)" :title="i18n.addObservable" data-aid="case_attachment_add_observable_sha256" role="button">fa-eye</v-icon>
 														</div>
 													</div>
 													<div class="mt-2">
-														<div class="font-weight-bold">{{i18n.sha1}}: </div>
-														<div :id="`attachments-${index}-sha1`" class="case">
+														<div :id="`attachments-${index}-sha1-label`" class="font-weight-bold">{{i18n.sha1}}: </div>
+														<div :id="`attachments-${index}-sha1`" class="case" :aria-labelledby="`attachments-${index}-sha1-label`">
 															{{ withDefault(item.sha1, i18n.unknown) }}
-															<v-icon class="ml-1" @click="$root.copyToClipboard(item.sha1)" :title="i18n.copyToClipboard" data-aid="case_attachment_copy_sha1">fa-copy</v-icon>
-															<v-icon class="ml-1" @click="populateAddObservableForm('sha1', item.sha1)" :title="i18n.addObservable" data-aid="case_attachment_add_observable_sha1">fa-eye</v-icon>
+															<v-icon class="ml-1" @click="$root.copyToClipboard(item.sha1)" :title="i18n.copyToClipboard" data-aid="case_attachment_copy_sha1" role="button">fa-copy</v-icon>
+															<v-icon class="ml-1" @click="populateAddObservableForm('sha1', item.sha1)" :title="i18n.addObservable" data-aid="case_attachment_add_observable_sha1" role="button">fa-eye</v-icon>
 														</div>
 													</div>
 													<div class="mt-2">
-														<div class="font-weight-bold">{{i18n.md5}}: </div>
-														<div :id="`attachments-${index}-md5`" class="case">
+														<div :id="`attachments-${index}-md5-label`" class="font-weight-bold">{{i18n.md5}}: </div>
+														<div :id="`attachments-${index}-md5`" class="case" :aria-labelledby="`attachments-${index}-md5-label`">
 															{{ withDefault(item.md5, i18n.unknown) }}
-															<v-icon class="ml-1" @click="$root.copyToClipboard(item.md5)" :title="i18n.copyToClipboard" data-aid="case_attachment_copy_md5">fa-copy</v-icon>
-															<v-icon class="ml-1" @click="populateAddObservableForm('md5', item.md5)" :title="i18n.addObservable" data-aid="case_attachment_add_observable_md5">fa-eye</v-icon>
+															<v-icon class="ml-1" @click="$root.copyToClipboard(item.md5)" :title="i18n.copyToClipboard" data-aid="case_attachment_copy_md5" role="button">fa-copy</v-icon>
+															<v-icon class="ml-1" @click="populateAddObservableForm('md5', item.md5)" :title="i18n.addObservable" data-aid="case_attachment_add_observable_md5" role="button">fa-eye</v-icon>
 														</div>
 													</div>
 												</template>
@@ -400,9 +400,9 @@
 											</v-container>
 											<v-container fluid class="pt-2 pb-0" data-aid="case_attachment_description_input">
 												<div tabindex="0" class="clicktoedit" @click="startEdit(`attachments-${index}-description-input`, item.description, `attachments-${index}-description`, 'description', modifyAssociation, ['attachments', item], true)"
-													@keypress.space.prevent="startEdit(`attachments-${index}-description-input`, item.description, `attachments-${index}-description`, 'description', modifyAssociation, ['attachments', item], true)">
-													<div class="font-weight-bold">{{i18n.artifactDescription}}: </div>
-													<div :id="`attachments-${index}-description`" class="case detail-field markdown-body" v-if="!isEdit(`attachments-${index}-description`)" v-html="formatMarkdown(item.description)"></div>
+													@keypress.space.prevent="startEdit(`attachments-${index}-description-input`, item.description, `attachments-${index}-description`, 'description', modifyAssociation, ['attachments', item], true)" role="button">
+													<div :id="`attachments-${index}-description-label`" class="font-weight-bold">{{i18n.artifactDescription}}: </div>
+													<div :id="`attachments-${index}-description`" class="case detail-field markdown-body" v-if="!isEdit(`attachments-${index}-description`)" v-html="formatMarkdown(item.description)" :aria-labelledby="`attachments-${index}-description-label`"></div>
 												</div>
 												<div class="d-flex flex-column" v-if="isEdit(`attachments-${index}-description`)">
 													<v-form v-model="editForm.valid" @submit.prevent>
@@ -422,9 +422,9 @@
 											</v-container>
 											<v-container fluid class="py-2" data-aid="case_attachments_tlp_select">
 												<div tabindex="0" class="clicktoedit" @click="startEdit(`attachments-${index}-tlp-input`, item.tlp, `attachments-${index}-tlp`, 'tlp', modifyAssociation, ['attachments', item])"
-													@keypress.space.prevent="startEdit(`attachments-${index}-tlp-input`, item.tlp, `attachments-${index}-tlp`, 'tlp', modifyAssociation, ['attachments', item])">
-													<div class="font-weight-bold">{{i18n.caseTlp}}: </div>
-													<v-chip :id="`attachments-${index}-tlp`" density="compact" :color="colorizeChip(item.tlp)" v-if="!isEdit(`attachments-${index}-tlp`)">{{ withDefault(item.tlp, i18n.unknown) }}</v-chip>
+													@keypress.space.prevent="startEdit(`attachments-${index}-tlp-input`, item.tlp, `attachments-${index}-tlp`, 'tlp', modifyAssociation, ['attachments', item])" role="button">
+													<div :id="`attachments-${index}-tlp-label`" class="font-weight-bold">{{i18n.caseTlp}}: </div>
+													<v-chip :id="`attachments-${index}-tlp`" density="compact" :color="colorizeChip(item.tlp)" v-if="!isEdit(`attachments-${index}-tlp`)" :aria-labelledby="`attachments-${index}-tlp-label`">{{ withDefault(item.tlp, i18n.unknown) }}</v-chip>
 												</div>
 												<v-select :id="`attachments-${index}-tlp-input`" v-if="isEdit(`attachments-${index}-tlp`) && !isPresetCustomEnabled('tlp')"
 													density="compact" eager variant="outlined" hide-details="auto" class="case-select mt-2" :label="i18n.caseTlpHelp"
@@ -449,10 +449,10 @@
 											</v-container>
 											<v-container fluid class="py-2" data-aid="case_attachments_tags_select">
 												<div tabindex="0" class="clicktoedit" @click="startEdit(`attachments-${index}-tags-input`, item.tags, `attachments-${index}-tags`, 'tags', modifyAssociation, ['attachments', item])"
-													@keypress.space.prevent="startEdit(`attachments-${index}-tags-input`, item.tags, `attachments-${index}-tags`, 'tags', modifyAssociation, ['attachments', item])">
-													<div class="font-weight-bold">{{i18n.caseTags}}: </div>
-													<div :id="`attachments-${index}-tags`" class="case detail-field mt-1" v-if="!isEdit(`attachments-${index}-tags`)">
-														<v-chip density="compact" class="mx-1" v-for="tag in item.tags" color="primary">{{ tag }}</v-chip>
+													@keypress.space.prevent="startEdit(`attachments-${index}-tags-input`, item.tags, `attachments-${index}-tags`, 'tags', modifyAssociation, ['attachments', item])" role="button">
+													<div :id="`attachments-${index}-tags-label`" class="font-weight-bold">{{i18n.caseTags}}: </div>
+													<div :id="`attachments-${index}-tags`" class="case detail-field mt-1" v-if="!isEdit(`attachments-${index}-tags`)" :aria-labelledby="`attachments-${index}-tags-label`" role="list">
+														<v-chip density="compact" class="mx-1" v-for="tag in item.tags" color="primary" role="listitem">{{ tag }}</v-chip>
 													</div>
 												</div>
 												<v-select :id="`attachments-${index}-tags-input`" v-if="isEdit(`attachments-${index}-tags`) && !isPresetCustomEnabled('tags')"
@@ -499,9 +499,9 @@
 												</template>
 											</v-container>
 											<v-container v-if="item.artifactType != 'assistant_chat'" fluid class="py-2" data-aid="case_attachments_protected_toggle">
-												<div tabindex="0" class="clicktoedit" @click="startEdit(`attachments-${index}-protected-input`, item.protected, `attachments-${index}-protected`, 'protected', modifyAssociation, ['attachments', item])">
-													<div class="font-weight-bold">{{i18n.artifactProtected}}: </div>
-													<div :id="`attachments-${index}-protected`" class="case detail-field" v-if="!isEdit(`attachments-${index}-protected`)">{{ item.protected ? i18n.yes : i18n.no }}</div>
+												<div tabindex="0" class="clicktoedit" @click="startEdit(`attachments-${index}-protected-input`, item.protected, `attachments-${index}-protected`, 'protected', modifyAssociation, ['attachments', item])" role="button">
+													<div :id="`attachments-${index}-protected-label`" class="font-weight-bold">{{i18n.artifactProtected}}: </div>
+													<div :id="`attachments-${index}-protected`" class="case detail-field" v-if="!isEdit(`attachments-${index}-protected`)" :aria-labelledby="`attachments-${index}-protected-label`">{{ item.protected ? i18n.yes : i18n.no }}</div>
 												</div>
 												<v-checkbox :id="`attachments-${index}-protected-input`" v-if="isEdit(`attachments-${index}-protected`)" v-model="editForm.val" @change="stopEdit(true)"
 													:label="i18n.artifactProtectedHint"></v-checkbox>
@@ -517,7 +517,7 @@
 												<div class="mr-1" data-aid="case_attachment_owner_display">
 													{{ item.owner }}
 												</div>
-												<div class="mr-1 d-none d-sm-block">
+												<div class="mr-1 d-none d-sm-block" aria-hidden="true">
 													&bull;
 												</div>
 												<div data-aid="case_attachments_timestamp_display">
@@ -550,7 +550,7 @@
 					<v-tabs-window-item value="evidence" data-aid="case_evidence">
 						<v-row v-if="!isAdding('evidence')">
 							<v-col>
-								<v-toolbar class="so-toolbar elevation-0" fixed>
+								<v-toolbar class="so-toolbar elevation-0" fixed role="toolbar" :aria-label="i18n.ariaCaseEvidenceToolbar">
 									<v-btn :title="i18n.addObservableHelp" icon variant="flat" @click.stop="enableAdding('evidence')" id="add-evidence-button" class="circle-button mx-2" data-aid="case_evidence_new">
 										<v-icon>fa-plus</v-icon>
 									</v-btn>
@@ -577,7 +577,7 @@
 														{{ $root.getAvatar($root.username) }}
 														</div>
 													</v-avatar>
-													<h3 class="primary-text my-1">{{ i18n.evidenceAdd }}</h3>
+													<h2 class="primary-text my-1">{{ i18n.evidenceAdd }}</h2>
 												</div>
 												<v-form ref="evidence" v-model="associatedForms['evidence'].valid" @submit.prevent>
 													<span data-aid="case_evidence_new_type_select">
@@ -640,8 +640,8 @@
 								<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
 									<tr>
 										<template v-for="header in columns" :key="header.key">
-											<th :class="{'is-sorted': isSorted(header)}" :data-aid="'case_evidence_header_' + header?.value?.toLowerCase()">
-												<span @click="toggleSort(header)">
+											<th :class="{'is-sorted': isSorted(header)}" :data-aid="'case_evidence_header_' + header?.value?.toLowerCase()" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'">
+												<span @click="toggleSort(header)" @keydown.enter.space.prevent="toggleSort(header)" role="button" tabindex="0">
 													{{ header.title }}
 												</span>
 												<template v-if="isSorted(header)">
@@ -685,38 +685,38 @@
 													{{ i18n.bytes }})
 												</a>
 												<div class="mt-4" data-aid="case_evidence_sha256_display">
-													<div class="font-weight-bold">{{i18n.sha256}}: </div>
-													<div :id="`evidence-${index}-sha256`" class="case">
+													<div :id="`evidence-${index}-sha256-label`" class="font-weight-bold">{{i18n.sha256}}: </div>
+													<div :id="`evidence-${index}-sha256`" class="case" :aria-labelledby="`evidence-${index}-sha256-label`">
 														{{ withDefault(item.sha256, i18n.unknown) }}
-														<v-icon class="ml-1" @click="$root.copyToClipboard(item.sha256)" :title="i18n.copyToClipboard" data-aid="case_evidence_copy_sha256">fa-copy</v-icon>
+														<v-icon class="ml-1" @click="$root.copyToClipboard(item.sha256)" :title="i18n.copyToClipboard" data-aid="case_evidence_copy_sha256" role="button">fa-copy</v-icon>
 													</div>
 												</div>
 												<div class="mt-2" data-aid="case_evidence_sha1_display">
-													<div class="font-weight-bold">{{i18n.sha1}}: </div>
-													<div :id="`evidence-${index}-sha1`" class="case">
+													<div :id="`evidence-${index}-sha1-label`" class="font-weight-bold">{{i18n.sha1}}: </div>
+													<div :id="`evidence-${index}-sha1`" class="case" :aria-labelledby="`evidence-${index}-sha1-label`">
 														{{ withDefault(item.sha1, i18n.unknown) }}
-														<v-icon class="ml-1" @click="$root.copyToClipboard(item.sha1)" :title="i18n.copyToClipboard" data-aid="case_evidence_copy_sha1">fa-copy</v-icon>
+														<v-icon class="ml-1" @click="$root.copyToClipboard(item.sha1)" :title="i18n.copyToClipboard" data-aid="case_evidence_copy_sha1" role="button">fa-copy</v-icon>
 													</div>
 												</div>
 												<div class="mt-2" data-aid="case_evidence_md5_display">
-													<div class="font-weight-bold">{{i18n.md5}}: </div>
-													<div :id="`evidence-${index}-md5`" class="case">
+													<div :id="`evidence-${index}-md5-label`" class="font-weight-bold">{{i18n.md5}}: </div>
+													<div :id="`evidence-${index}-md5`" class="case" :aria-labelledby="`evidence-${index}-md5-label`">
 														{{ withDefault(item.md5, i18n.unknown) }}
-														<v-icon class="ml-1" @click="$root.copyToClipboard(item.md5)" :title="i18n.copyToClipboard" data-aid="case_evidence_copy_md5">fa-copy</v-icon>
+														<v-icon class="ml-1" @click="$root.copyToClipboard(item.md5)" :title="i18n.copyToClipboard" data-aid="case_evidence_copy_md5" role="button">fa-copy</v-icon>
 													</div>
 												</div>
 											</v-container>
 											<v-container fluid class="pt-2 pb-0" v-if="item.artifactType != 'file'">
 												<div>
-													<div class="font-weight-bold">{{i18n.artifactValue}}: </div>
-													<div :id="`evidence-${index}-value`" class="case detail-field" data-aid="case_evidence_value_display">{{ item.value }}</div>
+													<div :id="`evidence-${index}-value-label`" class="font-weight-bold">{{i18n.artifactValue}}: </div>
+													<div :id="`evidence-${index}-value`" class="case detail-field" data-aid="case_evidence_value_display" :aria-labelledby="`evidence-${index}-value-label`">{{ item.value }}</div>
 												</div>
 											</v-container>
 											<v-container fluid class="pt-2 pb-0" data-aid="case_evidence_description_display">
 												<div tabindex="0" class="clicktoedit" @click="startEdit(`evidence-${index}-description-input`, item.description, `evidence-${index}-description`, 'description', modifyAssociation, ['evidence', item], true)"
-													@keypress.space.prevent="startEdit(`evidence-${index}-description-input`, item.description, `evidence-${index}-description`, 'description', modifyAssociation, ['evidence', item], true)">
-													<div class="font-weight-bold">{{i18n.artifactDescription}}: </div>
-													<div :id="`evidence-${index}-description`" class="case detail-field markdown-body" v-if="!isEdit(`evidence-${index}-description`)" v-html="formatMarkdown(item.description)"></div>
+													@keypress.space.prevent="startEdit(`evidence-${index}-description-input`, item.description, `evidence-${index}-description`, 'description', modifyAssociation, ['evidence', item], true)" role="button">
+													<div :id="`evidence-${index}-description-label`" class="font-weight-bold">{{i18n.artifactDescription}}: </div>
+													<div :id="`evidence-${index}-description`" class="case detail-field markdown-body" v-if="!isEdit(`evidence-${index}-description`)" :aria-labelledby="`evidence-${index}-description-label`" v-html="formatMarkdown(item.description)"></div>
 												</div>
 												<div class="d-flex flex-column" v-if="isEdit(`evidence-${index}-description`)">
 													<v-form v-model="editForm.valid" @submit.prevent>
@@ -736,17 +736,17 @@
 											</v-container>
 											<v-container fluid class="py-2" data-aid="case_evidence_ioc_toggle">
 												<div tabindex="0" class="clicktoedit" @click="startEdit(`evidence-${index}-ioc-input`, item.ioc, `evidence-${index}-ioc`, 'ioc', modifyAssociation, ['evidence', item])"
-													@keypress.space.prevent="startEdit(`evidence-${index}-ioc-input`, item.ioc, `evidence-${index}-ioc`, 'ioc', modifyAssociation, ['evidence', item])">
-													<div class="font-weight-bold">{{i18n.artifactIoc}}: </div>
-													<div :id="`evidence-${index}-ioc`" class="case detail-field" v-if="!isEdit(`evidence-${index}-ioc`)">{{ item.ioc ? i18n.yes : i18n.no }}</div>
+													@keypress.space.prevent="startEdit(`evidence-${index}-ioc-input`, item.ioc, `evidence-${index}-ioc`, 'ioc', modifyAssociation, ['evidence', item])" role="button">
+													<div :id="`evidence-${index}-ioc-label`" class="font-weight-bold">{{i18n.artifactIoc}}: </div>
+													<div :id="`evidence-${index}-ioc`" class="case detail-field" v-if="!isEdit(`evidence-${index}-ioc`)" :aria-labelledby="`evidence-${index}-ioc-label`">{{ item.ioc ? i18n.yes : i18n.no }}</div>
 												</div>
 												<v-checkbox :id="`evidence-${index}-ioc-input`" v-if="isEdit(`evidence-${index}-ioc`)" v-model="editForm.val" @change="stopEdit(true)" :label="i18n.artifactIocHelp"></v-checkbox>
 											</v-container>
 											<v-container fluid class="py-2" data-aid="case_evidence_tlp_select">
 												<div tabindex="0" class="clicktoedit" @click="startEdit(`evidence-${index}-tlp-input`, item.tlp, `evidence-${index}-tlp`, 'tlp', modifyAssociation, ['evidence', item])"
-													@keypress.space.prevent="startEdit(`evidence-${index}-tlp-input`, item.tlp, `evidence-${index}-tlp`, 'tlp', modifyAssociation, ['evidence', item])">
-													<div class="font-weight-bold">{{i18n.caseTlp}}: </div>
-													<v-chip :id="`evidence-${index}-tlp`" density="compact" :color="colorizeChip(item.tlp)" outlined v-if="!isEdit(`evidence-${index}-tlp`)">{{ withDefault(item.tlp, i18n.unknown) }}</v-chip>
+													@keypress.space.prevent="startEdit(`evidence-${index}-tlp-input`, item.tlp, `evidence-${index}-tlp`, 'tlp', modifyAssociation, ['evidence', item])" role="button">
+													<div :id="`evidence-${index}-tlp-label`" class="font-weight-bold">{{i18n.caseTlp}}: </div>
+													<v-chip :id="`evidence-${index}-tlp`" density="compact" :color="colorizeChip(item.tlp)" outlined v-if="!isEdit(`evidence-${index}-tlp`)" :aria-labelledby="`evidence-${index}-tlp-label`">{{ withDefault(item.tlp, i18n.unknown) }}</v-chip>
 												</div>
 												<v-select variant="outlined" :id="`evidence-${index}-tlp-input`" v-if="isEdit(`evidence-${index}-tlp`) && !isPresetCustomEnabled('tlp')"
 													density="compact" eager hide-details="auto" class="case-select mt-2" :label="i18n.caseTlpHelp"
@@ -772,10 +772,10 @@
 											</v-container>
 											<v-container fluid class="py-2" data-aid="case_evidence_tags_select">
 												<div tabindex="0" class="clicktoedit" @click="startEdit(`evidence-${index}-tags-input`, item.tags, `evidence-${index}-tags`, 'tags', modifyAssociation, ['evidence', item])"
-													@keypress.space.prevent="startEdit(`evidence-${index}-tags-input`, item.tags, `evidence-${index}-tags`, 'tags', modifyAssociation, ['evidence', item])">
-													<div class="font-weight-bold">{{i18n.caseTags}}: </div>
-													<div :id="`evidence-${index}-tags`" class="case detail-field mt-1" v-if="!isEdit(`evidence-${index}-tags`)">
-														<v-chip density="compact" class="mx-1" v-for="tag in item.tags" color="primary">{{ tag }}</v-chip>
+													@keypress.space.prevent="startEdit(`evidence-${index}-tags-input`, item.tags, `evidence-${index}-tags`, 'tags', modifyAssociation, ['evidence', item])" role="button">
+													<div :id="`evidence-${index}-tags-label`" class="font-weight-bold">{{i18n.caseTags}}: </div>
+													<div :id="`evidence-${index}-tags`" class="case detail-field mt-1" v-if="!isEdit(`evidence-${index}-tags`)" role="list" :aria-labelledby="`evidence-${index}-tags-label`">
+														<v-chip density="compact" class="mx-1" v-for="tag in item.tags" color="primary" role="listitem">{{ tag }}</v-chip>
 													</div>
 												</div>
 												<v-select :id="`evidence-${index}-tags-input`" v-if="isEdit(`evidence-${index}-tags`) && !isPresetCustomEnabled('tags')"
@@ -824,8 +824,8 @@
 
 											<v-container :id="`evidence-${index}-analyze-container`" fluid class="py-2" v-if="getAnalyzeJobs(item)" data-aid="case_evidence_analyze_jobs">
 												<div>
-													<div class="font-weight-bold">{{i18n.analyzeJobs}}: </div>
-													<v-expansion-panels class="mb-6" hover="true" :multiple="true">
+													<div :id="`evidence-${index}-analyze-label`" class="font-weight-bold">{{i18n.analyzeJobs}}: </div>
+													<v-expansion-panels class="mb-6" hover="true" :multiple="true" :aria-labelledby="`evidence-${index}-analyze-label`">
 														<v-expansion-panel v-for="job in getAnalyzeJobs(item)" :id="`evidence-${index}-analyze-job-${job.id}`" data-aid="case_evidence_analyze_job">
 															<v-expansion-panel-title disable-icon-rotate>
 																<v-row>
@@ -881,7 +881,7 @@
 																	<div class="mr-1" data-aid="case_evidence_analyze_job_owner_display">
 																		{{ job.owner }}
 																	</div>
-																	<div class="mr-1 d-none d-sm-block">
+																	<div class="mr-1 d-none d-sm-block" aria-hidden="true">
 																		&bull;
 																	</div>
 																	<div data-aid="case_evidence_analyze_job_timestamp_display">
@@ -911,7 +911,7 @@
 												<div class="mr-1" data-aid="case_evidence_owner_display">
 													{{ item.owner }}
 												</div>
-												<div class="mr-1 d-none d-sm-block">
+												<div class="mr-1 d-none d-sm-block" aria-hidden="true">
 													&bull;
 												</div>
 												<div data-aid="case_evidence_timestamp_display">
@@ -944,7 +944,7 @@
 					<v-tabs-window-item value="events" data-aid="case_events">
 						<v-row>
 							<v-col>
-								<v-toolbar class="so-toolbar elevation-0" fixed>
+								<v-toolbar class="so-toolbar elevation-0" fixed role="toolbar" data-aid="case_events_toolbar" :aria-label="i18n.ariaCaseEventsToolbar">
 									<v-btn :title="i18n.refreshEventsHelp" icon variant="flat" @click.stop="reloadAssociation('events', true)" id="refresh-events-button" class="circle-button mx-2" data-aid="case_events_refresh">
 										<v-icon>fa-sync</v-icon>
 									</v-btn>
@@ -966,8 +966,8 @@
 								<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
 									<tr>
 										<template v-for="header in columns" :key="header.key">
-											<th :class="{'is-sorted': isSorted(header)}" :data-aid="'case_events_header_' + header?.value?.toLowerCase()">
-												<span @click="toggleSort(header)">
+											<th :class="{'is-sorted': isSorted(header)}" :data-aid="'case_events_header_' + header?.value?.toLowerCase()" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'">
+												<span @click="toggleSort(header)" @keydown.enter.space.prevent="toggleSort(header)" role="button" tabindex="0">
 													{{ header.title }}
 												</span>
 												<template v-if="isSorted(header)">
@@ -1015,8 +1015,8 @@
 																<v-icon :title="i18n.huntForFieldValue" class="theme-text">fa-crosshairs</v-icon>
 															</router-link>
 														</v-col>
-														<v-col cols="4"><span class="case tabular-label" data-aid="case_event_field_display">{{ key }}:</span></v-col>
-														<v-col cols="7"><span class="case" data-aid="case_event_value_display">{{ value }}</span></v-col>
+														<v-col cols="4"><span :id="`events-${index}-field-${key}`" class="case tabular-label" data-aid="case_event_field_display">{{ key }}:</span></v-col>
+														<v-col cols="7"><span class="case" :aria-labelledby="`events-${index}-field-${key}`" data-aid="case_event_value_display">{{ value }}</span></v-col>
 													</v-row>
 												</template>
 											</div>
@@ -1031,7 +1031,7 @@
 												<div class="mr-1" data-aid="case_event_owner_display">
 													{{ item.owner }}
 												</div>
-												<div class="mr-1 d-none d-sm-block">
+												<div class="mr-1 d-none d-sm-block" aria-hidden="true">
 													&bull;
 												</div>
 												<div data-aid="case_event_timestamp_display">
@@ -1061,7 +1061,7 @@
 					<v-tabs-window-item value="history" data-aid="case_history">
 						<v-row>
 							<v-col>
-								<v-toolbar class="so-toolbar elevation-0" fixed>
+								<v-toolbar class="so-toolbar elevation-0" fixed role="toolbar" data-aid="case_history_toolbar" :aria-label="i18n.ariaCaseHistoryToolbar">
 									<v-btn :title="i18n.refreshCaseHistoryHelp" icon variant="flat" @click.stop="reloadAssociation('history', true)" id="refresh-history-button" class="circle-button mx-2" data-aid="case_history_refresh">
 										<v-icon>fa-sync</v-icon>
 									</v-btn>
@@ -1080,8 +1080,8 @@
 								<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
 									<tr>
 										<template v-for="header in columns" :key="header.key">
-											<th :class="{'is-sorted': isSorted(header)}" :data-aid="'case_history_header_' + header?.value?.toLowerCase()">
-												<span @click="toggleSort(header)">
+											<th :class="{'is-sorted': isSorted(header)}" :data-aid="'case_history_header_' + header?.value?.toLowerCase()" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'">
+												<span @click="toggleSort(header)" @keydown.enter.space.prevent="toggleSort(header)" role="button" tabindex="0">
 													{{ header.title }}
 												</span>
 												<template v-if="isSorted(header)">
@@ -1126,114 +1126,114 @@
 										</td>
 									</tr>
 								</template>
-								<template #expanded-row="{ item }">
+								<template #expanded-row="{ item, index }">
 									<tr class="expanded-row" data-aid="case_history_record">
 										<td colspan="5" class="case">
 											<div class="mt-2">
 												<v-row no-gutters class="py-1 case tabular-row">
-													<v-col cols="4"><span class="case tabular-label">{{ i18n.id }}:</span></v-col>
-													<v-col cols="8"><span class="case">{{ item.id }}</span></v-col>
+													<v-col cols="4"><span :id="`history-${index}-id-label`" class="case tabular-label">{{ i18n.id }}:</span></v-col>
+													<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-id-label`">{{ item.id }}</span></v-col>
 												</v-row>
 											</div>
 											<div>
 												<v-row no-gutters class="py-1 case tabular-row">
-													<v-col cols="4"><span class="case tabular-label">{{ i18n.kind }}:</span></v-col>
-													<v-col cols="8"><span class="case">{{ item.kind }}</span></v-col>
+													<v-col cols="4"><span :id="`history-${index}-kind-label`" class="case tabular-label">{{ i18n.kind }}:</span></v-col>
+													<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-kind-label`">{{ item.kind }}</span></v-col>
 												</v-row>
 											</div>
 											<div>
 												<v-row no-gutters class="py-1 case tabular-row">
-													<v-col cols="4"><span class="case tabular-label">{{ i18n.operation }}:</span></v-col>
-													<v-col cols="8"><span class="case">{{ item.operation }}</span></v-col>
+													<v-col cols="4"><span :id="`history-${index}-operation-label`" class="case tabular-label">{{ i18n.operation }}:</span></v-col>
+													<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-operation-label`">{{ item.operation }}</span></v-col>
 												</v-row>
 											</div>
 											<div>
 												<v-row no-gutters class="py-1 case tabular-row">
-													<v-col cols="4"><span class="case tabular-label">{{ i18n.dateCreated }}:</span></v-col>
-													<v-col cols="8"><span class="case">{{ formatDateTime(item.createTime) }}</span></v-col>
+													<v-col cols="4"><span :id="`history-${index}-date-created-label`" class="case tabular-label">{{ i18n.dateCreated }}:</span></v-col>
+													<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-date-created-label`">{{ formatDateTime(item.createTime) }}</span></v-col>
 												</v-row>
 											</div>
 											<div>
 												<v-row no-gutters class="py-1 case tabular-row">
-													<v-col cols="4"><span class="case tabular-label">{{ i18n.dateModified }}:</span></v-col>
-													<v-col cols="8"><span class="case">{{ formatDateTime(item.updateTime) }}</span></v-col>
+													<v-col cols="4"><span :id="`history-${index}-date-modified-label`" class="case tabular-label">{{ i18n.dateModified }}:</span></v-col>
+													<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-date-modified-label`">{{ formatDateTime(item.updateTime) }}</span></v-col>
 												</v-row>
 											</div>
 											<div v-if="item.kind == i18n.case">
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
-														<v-col cols="4"><span class="case tabular-label">{{ i18n.caseTitle }}:</span></v-col>
-														<v-col cols="8"><span class="case">{{ item.title }}</span></v-col>
+														<v-col cols="4"><span :id="`history-${index}-case-title-label`" class="case tabular-label">{{ i18n.caseTitle }}:</span></v-col>
+														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-case-title-label`">{{ item.title }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
-														<v-col cols="4"><span class="case tabular-label">{{ i18n.caseDescription }}:</span></v-col>
-														<v-col cols="8"><span class="case">{{ item.description }}</span></v-col>
+														<v-col cols="4"><span :id="`history-${index}-case-description-label`" class="case tabular-label">{{ i18n.caseDescription }}:</span></v-col>
+														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-case-description-label`">{{ item.description }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
-														<v-col cols="4"><span class="case tabular-label">{{ i18n.caseAssignee }}:</span></v-col>
-														<v-col cols="8"><span class="case">{{ item.assignee }}</span></v-col>
+														<v-col cols="4"><span :id="`history-${index}-case-assignee-label`" class="case tabular-label">{{ i18n.caseAssignee }}:</span></v-col>
+														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-case-assignee-label`">{{ item.assignee }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
-														<v-col cols="4"><span class="case tabular-label">{{ i18n.caseStatus }}:</span></v-col>
-														<v-col cols="8"><span class="case">{{ item.status }}</span></v-col>
+														<v-col cols="4"><span :id="`history-${index}-case-status-label`" class="case tabular-label">{{ i18n.caseStatus }}:</span></v-col>
+														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-case-status-label`">{{ item.status }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
-														<v-col cols="4"><span class="case tabular-label">{{ i18n.caseSeverity }}:</span></v-col>
-														<v-col cols="8"><span class="case">{{ item.severity }}</span></v-col>
+														<v-col cols="4"><span :id="`history-${index}-case-severity-label`" class="case tabular-label">{{ i18n.caseSeverity }}:</span></v-col>
+														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-case-severity-label`">{{ item.severity }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
-														<v-col cols="4"><span class="case tabular-label">{{ i18n.casePriority }}:</span></v-col>
-														<v-col cols="8"><span class="case">{{ item.priority }}</span></v-col>
+														<v-col cols="4"><span :id="`history-${index}-case-priority-label`" class="case tabular-label">{{ i18n.casePriority }}:</span></v-col>
+														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-case-priority-label`">{{ item.priority }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
-														<v-col cols="4"><span class="case tabular-label">{{ i18n.caseTlp }}:</span></v-col>
-														<v-col cols="8"><span class="case">{{ item.tlp }}</span></v-col>
+														<v-col cols="4"><span :id="`history-${index}-case-tlp-label`" class="case tabular-label">{{ i18n.caseTlp }}:</span></v-col>
+														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-case-tlp-label`">{{ item.tlp }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
-														<v-col cols="4"><span class="case tabular-label">{{ i18n.caseCategory }}:</span></v-col>
-														<v-col cols="8"><span class="case">{{ item.category }}</span></v-col>
+														<v-col cols="4"><span :id="`history-${index}-case-category-label`" class="case tabular-label">{{ i18n.caseCategory }}:</span></v-col>
+														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-case-category-label`">{{ item.category }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
-														<v-col cols="4"><span class="case tabular-label">{{ i18n.caseTags }}:</span></v-col>
-														<v-col cols="8"><span class="case">{{ item.tags }}</span></v-col>
+														<v-col cols="4"><span :id="`history-${index}-case-tags-label`" class="case tabular-label">{{ i18n.caseTags }}:</span></v-col>
+														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-case-tags-label`">{{ item.tags }}</span></v-col>
 													</v-row>
 												</div>
 											</div>
 											<div v-if="item.kind == i18n.comments">
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
-														<v-col cols="4"><span class="case tabular-label">{{ i18n.commentDescription }}:</span></v-col>
-														<v-col cols="8"><span class="case">{{ item.description }}</span></v-col>
+														<v-col cols="4"><span :id="`history-${index}-comment-description-label`" class="case tabular-label">{{ i18n.commentDescription }}:</span></v-col>
+														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-comment-description-label`">{{ item.description }}</span></v-col>
 													</v-row>
 												</div>
 												<div v-if="$root.isLicensed($root.FEAT_TTR)">
 													<v-row no-gutters class="py-1 case tabular-row">
-														<v-col cols="4"><span class="case tabular-label">{{ i18n.commentHours }}:</span></v-col>
-														<v-col cols="8"><span class="case">{{ item.hours }}</span></v-col>
+														<v-col cols="4"><span :id="`history-${index}-comment-hours-label`" class="case tabular-label">{{ i18n.commentHours }}:</span></v-col>
+														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-comment-hours-label`">{{ item.hours }}</span></v-col>
 													</v-row>
 												</div>
 											</div>
 											<div v-if="item.kind == i18n.events">
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
-														<v-col cols="4"><span class="case tabular-label">{{ i18n.relatedEventId }}:</span></v-col>
-														<v-col cols="8"><span class="case value">
+														<v-col cols="4"><span :id="`history-${index}-related-event-id-label`" class="case tabular-label">{{ i18n.relatedEventId }}:</span></v-col>
+														<v-col cols="8"><span class="case value" :aria-labelledby="`history-${index}-related-event-id-label`">
 															<router-link v-if="item.fields.soc_id" class="no-underline" :to="{ name: 'hunt', query: {q: buildHuntQuery(item) }}" data-aid="case_history_record_hunt">
 																{{ item.fields.soc_id }}
 															</router-link>
@@ -1247,94 +1247,94 @@
 											<div v-if="item.kind == i18n.attachments">
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
-														<v-col cols="4"><span class="case tabular-label">{{ i18n.artifactGroupType }}:</span></v-col>
-														<v-col cols="8"><span class="case">{{ item.groupType }}</span></v-col>
+														<v-col cols="4"><span :id="`history-${index}-artifact-group-type-label`" class="case tabular-label">{{ i18n.artifactGroupType }}:</span></v-col>
+														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-artifact-group-type-label`">{{ item.groupType }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
-														<v-col cols="4"><span class="case tabular-label">{{ i18n.artifactGroupId }}:</span></v-col>
-														<v-col cols="8"><span class="case">{{ item.groupId }}</span></v-col>
+														<v-col cols="4"><span :id="`history-${index}-artifact-group-id-label`" class="case tabular-label">{{ i18n.artifactGroupId }}:</span></v-col>
+														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-artifact-group-id-label`">{{ item.groupId }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
-														<v-col cols="4"><span class="case tabular-label">{{ i18n.filename }}:</span></v-col>
-														<v-col cols="8"><span class="case">{{ item.value }}</span></v-col>
+														<v-col cols="4"><span :id="`history-${index}-filename-label`" class="case tabular-label">{{ i18n.filename }}:</span></v-col>
+														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-filename-label`">{{ item.value }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
-														<v-col cols="4"><span class="case tabular-label">{{ i18n.description }}:</span></v-col>
-														<v-col cols="8"><span class="case">{{ item.description }}</span></v-col>
+														<v-col cols="4"><span :id="`history-${index}-description-label`" class="case tabular-label">{{ i18n.description }}:</span></v-col>
+														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-description-label`">{{ item.description }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
-														<v-col cols="4"><span class="case tabular-label">{{ i18n.caseTlp }}:</span></v-col>
-														<v-col cols="8"><span class="case">{{ item.tlp }}</span></v-col>
+														<v-col cols="4"><span :id="`history-${index}-case-tlp-label`" class="case tabular-label">{{ i18n.caseTlp }}:</span></v-col>
+														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-case-tlp-label`">{{ item.tlp }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
-														<v-col cols="4"><span class="case tabular-label">{{ i18n.caseTags }}:</span></v-col>
-														<v-col cols="8"><span class="case">{{ item.tags }}</span></v-col>
+														<v-col cols="4"><span :id="`history-${index}-case-tags-label`" class="case tabular-label">{{ i18n.caseTags }}:</span></v-col>
+														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-case-tags-label`">{{ item.tags }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
-														<v-col cols="4"><span class="case tabular-label">{{ i18n.artifactProtected }}:</span></v-col>
-														<v-col cols="8"><span class="case">{{ item.protected }}</span></v-col>
+														<v-col cols="4"><span :id="`history-${index}-artifact-protected-label`" class="case tabular-label">{{ i18n.artifactProtected }}:</span></v-col>
+														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-artifact-protected-label`">{{ item.protected }}</span></v-col>
 													</v-row>
 												</div>
 											</div>
 											<div v-if="item.kind == i18n.evidence">
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
-														<v-col cols="4"><span class="case tabular-label">{{ i18n.artifactGroupType }}:</span></v-col>
-														<v-col cols="8"><span class="case">{{ item.groupType }}</span></v-col>
+														<v-col cols="4"><span :id="`history-${index}-artifact-group-type-label`" class="case tabular-label">{{ i18n.artifactGroupType }}:</span></v-col>
+														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-artifact-group-type-label`">{{ item.groupType }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
-														<v-col cols="4"><span class="case tabular-label">{{ i18n.artifactGroupId }}:</span></v-col>
-														<v-col cols="8"><span class="case">{{ item.groupId }}</span></v-col>
+														<v-col cols="4"><span :id="`history-${index}-artifact-group-id-label`" class="case tabular-label">{{ i18n.artifactGroupId }}:</span></v-col>
+														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-artifact-group-id-label`">{{ item.groupId }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
-														<v-col cols="4"><span class="case tabular-label">{{ i18n.artifactType }}:</span></v-col>
-														<v-col cols="8"><span class="case">{{ item.artifactType }}</span></v-col>
+														<v-col cols="4"><span :id="`history-${index}-artifact-type-label`" class="case tabular-label">{{ i18n.artifactType }}:</span></v-col>
+														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-artifact-type-label`">{{ item.artifactType }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
-														<v-col cols="4"><span class="case tabular-label">{{ i18n.value }}:</span></v-col>
-														<v-col cols="8"><span class="case">{{ item.value }}<span class="resolved-host" v-if="item.artifactType === 'ip' && $root.pickHostname(item.value)"> - {{ $root.pickHostname(item.value) }}</span></span></v-col>
+														<v-col cols="4"><span :id="`history-${index}-artifact-value-label`" class="case tabular-label">{{ i18n.value }}:</span></v-col>
+														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-artifact-value-label`">{{ item.value }}<span class="resolved-host" v-if="item.artifactType === 'ip' && $root.pickHostname(item.value)"> - {{ $root.pickHostname(item.value) }}</span></span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
-														<v-col cols="4"><span class="case tabular-label">{{ i18n.description }}:</span></v-col>
-														<v-col cols="8"><span class="case">{{ item.description }}</span></v-col>
+														<v-col cols="4"><span :id="`history-${index}-artifact-description-label`" class="case tabular-label">{{ i18n.description }}:</span></v-col>
+														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-artifact-description-label`">{{ item.description }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
-														<v-col cols="4"><span class="case tabular-label">{{ i18n.caseTlp }}:</span></v-col>
-														<v-col cols="8"><span class="case">{{ item.tlp }}</span></v-col>
+														<v-col cols="4"><span :id="`history-${index}-case-tlp-label`" class="case tabular-label">{{ i18n.caseTlp }}:</span></v-col>
+														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-case-tlp-label`">{{ item.tlp }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
-														<v-col cols="4"><span class="case tabular-label">{{ i18n.artifactIoc }}:</span></v-col>
-														<v-col cols="8"><span class="case">{{ item.ioc }}</span></v-col>
+														<v-col cols="4"><span :id="`history-${index}-artifact-ioc-label`" class="case tabular-label">{{ i18n.artifactIoc }}:</span></v-col>
+														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-artifact-ioc-label`">{{ item.ioc }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
-														<v-col cols="4"><span class="case tabular-label">{{ i18n.caseTags }}:</span></v-col>
-														<v-col cols="8"><span class="case">{{ item.tags }}</span></v-col>
+														<v-col cols="4"><span :id="`history-${index}-case-tags-label`" class="case tabular-label">{{ i18n.caseTags }}:</span></v-col>
+														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-case-tags-label`">{{ item.tags }}</span></v-col>
 													</v-row>
 												</div>
 											</div>
@@ -1349,7 +1349,7 @@
 												<div class="mr-1" data-aid="case_history_record_owner_display">
 													{{ item.owner }}
 												</div>
-												<div class="mr-1 d-none d-sm-block">
+												<div class="mr-1 d-none d-sm-block" aria-hidden="true">
 													&bull;
 												</div>
 												<div data-aid="case_history_record_timestamp_display">
@@ -1386,9 +1386,9 @@
 										<v-row>
 											<v-col cols="12">
 												<div tabindex="0" class="clicktoedit" @click="startEdit('case-assignee-input', caseObj.assigneeId, 'case-assignee', 'assigneeId', modifyCase)" data-aid="case_assignee_select"
-													@keypress.space.prevent="startEdit('case-assignee-input', caseObj.assigneeId, 'case-assignee', 'assigneeId', modifyCase)">
+													@keypress.space.prevent="startEdit('case-assignee-input', caseObj.assigneeId, 'case-assignee', 'assigneeId', modifyCase)" role="button">
 													<div id="assignee-label" class="font-weight-bold">{{i18n.caseAssignee}}: </div>
-													<div id='case-assignee' class="case detail-field" v-if="!isEdit('case-assignee')">{{ withDefault(caseObj.assignee, i18n.unassigned) }}</div>
+													<div id='case-assignee' class="case detail-field" v-if="!isEdit('case-assignee')" aria-labelledby="assignee-label">{{ withDefault(caseObj.assignee, i18n.unassigned) }}</div>
 													<v-select id='case-assignee-input' v-if="isEdit('case-assignee')"
 														density="compact" eager variant="outlined" hide-details="auto" class="case-select" aria-labelledby="assignee-label" :hint="i18n.caseAssigneeHelp"
 														v-model="editForm.val"
@@ -1402,16 +1402,16 @@
 										<v-row>
 											<v-col cols="12">
 												<div tabindex="0" class="clicktoedit" @click="startEdit('case-status-input', caseObj.status, 'case-status', 'status', modifyCase)" data-aid="case_status_select"
-													@keypress.space.prevent="startEdit('case-status-input', caseObj.status, 'case-status', 'status', modifyCase)">
-													<div id="status-label" class="font-weight-bold">{{i18n.status}}: </div>
-													<div id="case-status" class="case detail-field" v-if="!isEdit('case-status')">{{ withDefault(caseObj.status, i18n.unknown) }}</div>
+													@keypress.space.prevent="startEdit('case-status-input', caseObj.status, 'case-status', 'status', modifyCase)" role="button">
+													<div id="case-status-label" class="font-weight-bold">{{i18n.status}}: </div>
+													<div id="case-status" class="case detail-field" v-if="!isEdit('case-status')" aria-labelledby="case-status-label">{{ withDefault(caseObj.status, i18n.unknown) }}</div>
 													<v-select id="case-status-input" v-if="isEdit('case-status') && !isPresetCustomEnabled('status')"
-														density="compact" eager variant="outlined" hide-details="auto" class="case-select" aria-labelledby="status-label" :hint="i18n.caseStatusHelp"
+														density="compact" eager variant="outlined" hide-details="auto" class="case-select" aria-labelledby="case-status-label" :hint="i18n.caseStatusHelp"
 														v-model="editForm.val"
 														:items="selectList('status', caseObj.status)"
 														@update:model-value="stopEdit(true)"></v-select>
 													<v-combobox id="case-status-input" v-if="isEdit('case-status') && isPresetCustomEnabled('status')"
-														density="compact" eager variant="outlined" hide-details="auto" class="case-select" aria-labelledby="status-label" :hint="i18n.caseStatusHelp"
+														density="compact" eager variant="outlined" hide-details="auto" class="case-select" aria-labelledby="case-status-label" :hint="i18n.caseStatusHelp"
 														v-model="editForm.val"
 														:items="selectList('status', caseObj.status)"
 														@change="stopEdit(true)"></v-combobox>
@@ -1438,9 +1438,9 @@
 									<v-row>
 										<v-col cols="12" data-aid="case_severity_select">
 											<div tabindex="0" class="clicktoedit" @click="startEdit('case-severity-input', caseObj.severity, 'case-severity', 'severity', modifyCase)"
-												@keypress.space.prevent="startEdit('case-severity-input', caseObj.severity, 'case-severity', 'severity', modifyCase)">
+												@keypress.space.prevent="startEdit('case-severity-input', caseObj.severity, 'case-severity', 'severity', modifyCase)" role="button">
 												<div id="case-severity-label" class="font-weight-bold">{{i18n.caseSeverity}}: </div>
-												<div id="case-severity" class="case detail-field" v-if="!isEdit('case-severity')">{{ withDefault(caseObj.severity, i18n.unknown) }}</div>
+												<div id="case-severity" class="case detail-field" v-if="!isEdit('case-severity')" aria-labelledby="case-severity-label">{{ withDefault(caseObj.severity, i18n.unknown) }}</div>
 											</div>
 											<v-select id="case-severity-input" v-if="isEdit('case-severity') && !isPresetCustomEnabled('severity')"
 												density="compact" eager variant="outlined" hide-details="auto" class="case-select" aria-labelledby="case-severity-label" :hint="i18n.caseSeverityHelp"
@@ -1457,9 +1457,9 @@
 									<v-row>
 										<v-col cols="12" data-aid="case_priority_select">
 											<div tabindex="0" class="clicktoedit" @click="startEdit('case-priority-input', caseObj.priority, 'case-priority', 'priority', modifyCase)"
-												@keypress.space.prevent="startEdit('case-priority-input', caseObj.priority, 'case-priority', 'priority', modifyCase)">
+												@keypress.space.prevent="startEdit('case-priority-input', caseObj.priority, 'case-priority', 'priority', modifyCase)" role="button">
 												<div id="case-priority-label" class="font-weight-bold">{{i18n.casePriority}}: </div>
-												<div id="case-priority" class="case detail-field" v-if="!isEdit('case-priority')">{{ caseObj.priority }}</div>
+												<div id="case-priority" class="case detail-field" v-if="!isEdit('case-priority')" aria-labelledby="case-priority-label">{{ caseObj.priority }}</div>
 											</div>
 											<div v-if="isEdit('case-priority')">
 												<v-form v-model="editForm.valid" @submit.prevent>
@@ -1481,7 +1481,7 @@
 									<v-row>
 										<v-col cols="12" data-aid="case_tlp_select">
 											<div tabindex="0" class="clicktoedit" @click="startEdit('case-tlp-input', caseObj.tlp, 'case-tlp', 'tlp', modifyCase)"
-												@keypress.space.prevent="startEdit('case-tlp-input', caseObj.tlp, 'case-tlp', 'tlp', modifyCase)">
+												@keypress.space.prevent="startEdit('case-tlp-input', caseObj.tlp, 'case-tlp', 'tlp', modifyCase)" role="button">
 												<div id="tlp-label" class="font-weight-bold">{{i18n.caseTlp}}: </div>
 												<v-chip density="compact" :color="colorizeChip(caseObj.tlp)" variant="outlined" id="case-tlp" aria-labelledby="tlp-label" v-if="!isEdit('case-tlp')">{{ withDefault(caseObj.tlp, i18n.unknown) }}</v-chip>
 											</div>
@@ -1510,7 +1510,7 @@
 									<v-row>
 										<v-col cols="12" data-aid="case_pap_select">
 											<div tabindex="0" class="clicktoedit" @click="startEdit('case-pap-input', caseObj.pap, 'case-pap', 'pap', modifyCase)"
-												@keypress.space.prevent="startEdit('case-pap-input', caseObj.pap, 'case-pap', 'pap', modifyCase)">
+												@keypress.space.prevent="startEdit('case-pap-input', caseObj.pap, 'case-pap', 'pap', modifyCase)" role="button">
 												<div id="pap-label" class="font-weight-bold">{{i18n.casePap}}: </div>
 												<v-chip density="compact" :color="colorizeChip(caseObj.pap)" variant="outlined" id="case-pap" aria-labelledby="pap-label" v-if="!isEdit('case-pap')">{{ withDefault(caseObj.pap, i18n.unknown) }}</v-chip>
 											</div>
@@ -1529,9 +1529,9 @@
 									<v-row>
 										<v-col cols="12" data-aid="case_category_select">
 											<div tabindex="0" class="clicktoedit" @click="startEdit('case-category-input', caseObj.category, 'case-category', 'category', modifyCase)"
-												@keypress.space.prevent="startEdit('case-category-input', caseObj.category, 'case-category', 'category', modifyCase)">
+												@keypress.space.prevent="startEdit('case-category-input', caseObj.category, 'case-category', 'category', modifyCase)" role="button">
 												<div id="category-label" class="font-weight-bold">{{i18n.caseCategory}}: </div>
-												<div id="case-category" class="case detail-field" v-if="!isEdit('case-category')">{{ withDefault(caseObj.category, i18n.unknown) }}</div>
+												<div id="case-category" class="case detail-field" v-if="!isEdit('case-category')" aria-labelledby="category-label">{{ withDefault(caseObj.category, i18n.unknown) }}</div>
 											</div>
 											<v-select id="case-category-input" v-if="isEdit('case-category') && !isPresetCustomEnabled('category')"
 												density="compact" eager variant="outlined" hide-details="auto" class="case-select" aria-labelledby="category-label" :hint="i18n.caseCategoryHelp"
@@ -1558,10 +1558,10 @@
 									<v-row>
 										<v-col cols="12" data-aid="case_tags_select">
 											<div tabindex="0" class="clicktoedit" @click="startEdit('case-tags-input', caseObj.tags, 'case-tags', 'tags', modifyCase)"
-												@keypress.space.prevent="startEdit('case-tags-input', caseObj.tags, 'case-tags', 'tags', modifyCase)">
+												@keypress.space.prevent="startEdit('case-tags-input', caseObj.tags, 'case-tags', 'tags', modifyCase)" role="button">
 												<div id="tags-label" class="font-weight-bold">{{i18n.caseTags}}: </div>
-												<div id="case-tags" class="case detail-field mt-1" v-if="!isEdit('case-tags')">
-													<v-chip density="compact" class="mx-1" v-for="tag in caseObj.tags" aria-labelledby="tags-label" color="primary">{{ tag }}</v-chip>
+												<div id="case-tags" class="case detail-field mt-1" v-if="!isEdit('case-tags')" role="list" aria-labelledby="tags-label">
+													<v-chip density="compact" class="mx-1" v-for="tag in caseObj.tags" color="primary" role="listitem">{{ tag }}</v-chip>
 												</div>
 											</div>
 											<div v-if="isEdit('case-tags')">
@@ -1615,24 +1615,24 @@
 
 					<div class="ml-2 mt-2">
 						<div class="case summary">
-							<span class="case label">{{ i18n.caseId }}:</span>
-							<span class="case value" data-aid="case_metadata_id_display">{{ caseObj.id }}</span>
+							<span id="summary-id-label" class="case label">{{ i18n.caseId }}:</span>
+							<span class="case value" data-aid="case_metadata_id_display" aria-labelledby="summary-id-label">{{ caseObj.id }}</span>
 						</div>
 						<div class="case summary">
-							<span class="case label">{{ i18n.socUser }}:</span>
-							<span class="case value" data-aid="case_metadata_owner_display">{{ caseObj.owner }}</span>
+							<span id="summary-owner-label" class="case label">{{ i18n.socUser }}:</span>
+							<span class="case value" data-aid="case_metadata_owner_display" aria-labelledby="summary-owner-label">{{ caseObj.owner }}</span>
 						</div>
 						<div class="case summary">
-							<span class="case label">{{ i18n.dateCreated }}:</span>
-							<span class="case value" data-aid="case_metadata_create_time_display">{{ formatDateTime(caseObj.createTime)}}</span>
+							<span id="summary-date-created-label" class="case label">{{ i18n.dateCreated }}:</span>
+							<span class="case value" data-aid="case_metadata_create_time_display" aria-labelledby="summary-date-created-label">{{ formatDateTime(caseObj.createTime)}}</span>
 						</div>
 						<div class="case summary">
-							<span class="case label">{{ i18n.dateModified }}:</span>
-							<span class="case value" data-aid="case_metadata_update_time_display">{{ formatDateTime(caseObj.updateTime)}}</span>
+							<span id="summary-date-modified-label" class="case label">{{ i18n.dateModified }}:</span>
+							<span class="case value" data-aid="case_metadata_update_time_display" aria-labelledby="summary-date-modified-label">{{ formatDateTime(caseObj.updateTime)}}</span>
 						</div>
 						<div class="case summary" v-if="$root.formatDateTime(caseObj.completeTime) !== ''">
-							<span class="case label">{{ i18n.dateClosed }}:</span>
-							<span class="case value" data-aid="case_metadata_complete_time_display">{{ formatDateTime(caseObj.completeTime)}}</span>
+							<span id="summary-date-closed-label" class="case label">{{ i18n.dateClosed }}:</span>
+							<span class="case value" data-aid="case_metadata_complete_time_display" aria-labelledby="summary-date-closed-label">{{ formatDateTime(caseObj.completeTime)}}</span>
 						</div>
 					</div>
 				</v-col>

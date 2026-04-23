@@ -871,3 +871,33 @@ html, body, * {
   height: auto;
   border-radius: var(--so-radius-nested);
 }
+
+.no-border {
+  border: none !important;
+}
+
+nav {
+    display: inline-block;
+}
+
+.breadcrumb-list {
+    display: inline-block;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.breadcrumb-list li {
+    display: inline-block;
+}
+
+.breadcrumb-list li + li::before {
+    content: ">";
+    padding: 0 0.25em;
+}
+
+.entry-heading {
+  font-size: inherit;
+  font-weight: inherit;
+  margin: 0;
+}

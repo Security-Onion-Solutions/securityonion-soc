@@ -139,13 +139,15 @@
 										</v-col>
 										<v-col cols="12" lg="4">
 											<v-card>
-												<v-card-title>{{ i18n.roles }}</v-card-title>
+												<v-card-title id="roles-label">{{ i18n.roles }}</v-card-title>
 												<v-card-text data-aid="users_details_role_toggle">
-													<template v-for="role in roles" :key="role">
-														<span :data-aid="'users_details_role_toggle_' + role">
-															<v-checkbox :id="'role-checkbox-' + role" density="compact" class="no-details" :model-value="hasRole(item, role)" :label="role" @click.stop="toggleRole(item, role)"></v-checkbox>
-														</span>
-													</template>
+													<fieldset aria-labelledby="roles-label" class="no-border">
+														<template v-for="role in roles" :key="role">
+															<span :data-aid="'users_details_role_toggle_' + role">
+																<v-checkbox :id="'role-checkbox-' + role" density="compact" class="no-details" :model-value="hasRole(item, role)" :label="role" @click.stop="toggleRole(item, role)"></v-checkbox>
+															</span>
+														</template>
+													</fieldset>
 												</v-card-text>
 											</v-card>
 										</v-col>

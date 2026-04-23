@@ -245,8 +245,8 @@
 												
 												<!-- Tool Approval Buttons -->
 												<div v-if="toolUse.status === 'pending_approval'" class="mb-2">
-													<div class="text-body-small text-medium-emphasis mb-1">{{ i18n.toolExecuteQuestion }}</div>
-													<div id="tool-approval-buttons" class="d-flex align-center tool-approval-buttons">
+													<div :id="'tool-use-question-' + toolUse.id" class="text-body-small text-medium-emphasis mb-1">{{ i18n.toolExecuteQuestion }}</div>
+													<div id="tool-approval-buttons" :aria-labelledby="'tool-use-question-' + toolUse.id" role="group" class="d-flex align-center tool-approval-buttons">
 														<v-btn
 															id="approve-tool-button"
 															color="success"
