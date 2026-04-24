@@ -165,6 +165,7 @@ type SuricataEngine struct {
 	enableRegex                    []*regexp.Regexp
 	disableRegex                   []*regexp.Regexp
 	aiSummaries                    *sync.Map // map[string]*detections.AiSummary{}
+	aiSummaryCount                 int
 	showAiSummaries                bool
 	aiRepoUrl                      string
 	aiRepoBranch                   string
@@ -1843,6 +1844,7 @@ func (e *SuricataEngine) LoadAuxiliaryData(summaries []*model.AiSummary) error {
 	}
 
 	e.aiSummaries = sum
+	e.aiSummaryCount = len(summaries)
 
 	e.logger().WithFields(log.Fields{
 		"aiSummaryCount": len(summaries),
@@ -1864,6 +1866,16 @@ func (e *SuricataEngine) MergeAuxiliaryData(detect *model.Detection) error {
 				AiSummaryReviewed: summary.Reviewed,
 				IsAiSummaryStale:  !strings.EqualFold(summary.RuleBodyHash, hexSig),
 			}
+
+			e.logger().WithFields(log.Fields{
+				"publicId":      detect.PublicID,
+				"summaryLength": len(summary.Summary),
+			}).Info("merged AI summary")
+		} else {
+			e.logger().WithFields(log.Fields{
+				"publicId":       detect.PublicID,
+				"aiSummaryCount": e.aiSummaryCount,
+			}).Info("no AI summary found")
 		}
 	}
 
