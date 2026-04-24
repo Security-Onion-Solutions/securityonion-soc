@@ -50,8 +50,8 @@ func NewSOAiCloudAdapter(_ context.Context, srv *server.Server, config map[strin
 
 	apiUrl := module.GetStringDefault(config, "apiUrl", DEFAULT_APIURL)
 
-	// Check if the current apiUrl is essentially the default one by comparing hostnames.
-	isDefaultUrl := apiUrl == DEFAULT_APIURL
+	// Check if the current apiUrl is essentially the default one by comparing hostnames or looking for invalid URLs.
+	isDefaultUrl := apiUrl == DEFAULT_APIURL || !strings.Contains(apiUrl, "://")
 	if !isDefaultUrl {
 		u, _ := url.Parse(apiUrl)
 		d, _ := url.Parse(DEFAULT_APIURL)
