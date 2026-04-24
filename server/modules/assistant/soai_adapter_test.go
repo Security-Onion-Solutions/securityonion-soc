@@ -137,6 +137,41 @@ func TestSOAiConstructorWithLicense(t *testing.T) {
 		br := adapter.(*SOAiCloudAdapter)
 		assert.Equal(t, "https://custom.api.com", br.apiUrl)
 	})
+
+	t.Run("license URL used when config is almost default (no trailing slash)", func(t *testing.T) {
+		// DEFAULT_APIURL is "https://onionai.securityonion.net/"
+		config := map[string]interface{}{
+			"apiUrl": "https://onionai.securityonion.net",
+		}
+		adapter, err := NewSOAiCloudAdapter(context.Background(), srv, config)
+
+		assert.NoError(t, err)
+		br := adapter.(*SOAiCloudAdapter)
+		// Should be overridden by license URL: https://license.api.com
+		assert.Equal(t, "https://license.api.com", br.apiUrl)
+	})
+
+	t.Run("license URL used when config has different scheme but same hostname", func(t *testing.T) {
+		config := map[string]interface{}{
+			"apiUrl": "http://onionai.securityonion.net/",
+		}
+		adapter, err := NewSOAiCloudAdapter(context.Background(), srv, config)
+
+		assert.NoError(t, err)
+		br := adapter.(*SOAiCloudAdapter)
+		assert.Equal(t, "https://license.api.com", br.apiUrl)
+	})
+
+	t.Run("license URL used when config has no scheme but same hostname", func(t *testing.T) {
+		config := map[string]interface{}{
+			"apiUrl": "onionai.securityonion.net",
+		}
+		adapter, err := NewSOAiCloudAdapter(context.Background(), srv, config)
+
+		assert.NoError(t, err)
+		br := adapter.(*SOAiCloudAdapter)
+		assert.Equal(t, "https://license.api.com", br.apiUrl)
+	})
 }
 
 func TestSOAiGetHealth(t *testing.T) {
