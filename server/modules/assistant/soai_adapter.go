@@ -49,7 +49,18 @@ func NewSOAiCloudAdapter(_ context.Context, srv *server.Server, config map[strin
 	// apiUrl string, apiKey string, healthTimeoutSeconds int
 
 	apiUrl := module.GetStringDefault(config, "apiUrl", DEFAULT_APIURL)
-	if apiUrl == DEFAULT_APIURL && licensing.GetLicenseKey() != nil && licensing.GetLicenseKey().AiGatewayUrl != "" {
+
+	// Check if the current apiUrl is essentially the default one by comparing hostnames.
+	isDefaultUrl := apiUrl == DEFAULT_APIURL
+	if !isDefaultUrl {
+		u, _ := url.Parse(apiUrl)
+		d, _ := url.Parse(DEFAULT_APIURL)
+		if u != nil && d != nil && u.Hostname() != "" && u.Hostname() == d.Hostname() {
+			isDefaultUrl = true
+		}
+	}
+
+	if isDefaultUrl && licensing.GetLicenseKey() != nil && licensing.GetLicenseKey().AiGatewayUrl != "" {
 		apiUrl = licensing.GetLicenseKey().AiGatewayUrl
 		if !strings.HasPrefix(apiUrl, "http://") && !strings.HasPrefix(apiUrl, "https://") {
 			apiUrl = "https://" + apiUrl
