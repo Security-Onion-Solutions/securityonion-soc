@@ -5,20 +5,24 @@
 				<v-expansion-panel data-aid="job_expand_filter">
 					<v-expansion-panel-title id="job-details" expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up">
 						<v-chip label class="mx-2">
-							<v-icon class="mb-1 mr-2">fa-hashtag</v-icon>
-							<span id="jobDetailsId">{{ job.id }}</span>
+							<v-icon class="mb-1 mr-2" aria-hidden="true">fa-hashtag</v-icon>
+							<span id="job-id-label" class="d-sr-only">{{i18n.job}}</span>
+							<span id="jobDetailsId" aria-labelledby="job-id-label">{{ job.id }}</span>
 						</v-chip>
 						<v-chip label class="mx-2">
-							<v-icon class="mb-1 mr-2">fa-ethernet</v-icon>
-							<span id="jobDetailsSensorId">{{ job.nodeId }}</span>
+							<v-icon class="mb-1 mr-2" aria-hidden="true">fa-ethernet</v-icon>
+							<span id="job-sensor-label" class="d-sr-only">{{i18n.sensorId}}</span>
+							<span id="jobDetailsSensorId" aria-labelledby="job-sensor-label">{{ job.nodeId }}</span>
 						</v-chip>
 						<v-chip v-if="job.filter" label class="mx-2">
-							<v-icon class="mb-1 mr-2">fa-file-export</v-icon>
-							<span id="jobDetailsSrc">{{ job.filter.srcIp }}<span v-if="job.filter.srcPort != 0">:{{ job.filter.srcPort }}</span><span class="resolved-host" v-if="$root.pickHostname(job.filter.srcIp)"> - {{ $root.pickHostname(job.filter.srcIp) }}</span></span>
+							<v-icon class="mb-1 mr-2" aria-hidden="true">fa-file-export</v-icon>
+							<span id="job-src-label" class="d-sr-only">{{i18n.srcIp}}</span>
+							<span id="jobDetailsSrc" aria-labelledby="job-src-label">{{ job.filter.srcIp }}<span v-if="job.filter.srcPort != 0">:{{ job.filter.srcPort }}</span><span class="resolved-host" v-if="$root.pickHostname(job.filter.srcIp)"> - {{ $root.pickHostname(job.filter.srcIp) }}</span></span>
 						</v-chip>
 						<v-chip v-if="job.filter" label class="mx-2">
-							<v-icon class="mb-1 mr-2">fa-file-import</v-icon>
-							<span id="jobDetailsDst">{{ job.filter.dstIp }}<span v-if="job.filter.dstPort != 0">:{{ job.filter.dstPort }}</span><span class="resolved-host" v-if="$root.pickHostname(job.filter.dstIp)"> - {{ $root.pickHostname(job.filter.dstIp) }}</span></span>
+							<v-icon class="mb-1 mr-2" aria-hidden="true">fa-file-import</v-icon>
+							<span id="job-dst-label" class="d-sr-only">{{i18n.dstIp}}</span>
+							<span id="jobDetailsDst" aria-labelledby="job-dst-label">{{ job.filter.dstIp }}<span v-if="job.filter.dstPort != 0">:{{ job.filter.dstPort }}</span><span class="resolved-host" v-if="$root.pickHostname(job.filter.dstIp)"> - {{ $root.pickHostname(job.filter.dstIp) }}</span></span>
 						</v-chip>
 					</v-expansion-panel-title>
 					<v-expansion-panel-text>
@@ -26,47 +30,47 @@
 							<v-row>
 								<v-col>
 									<dl>
-										<dt class="filter label">{{ i18n.job }}:</span>
-										<dd class="filter value">{{ job.id }}</span>
+										<dt class="filter label">{{ i18n.job }}:</dt>
+										<dd class="filter value">{{ job.id }}</dd>
 										
-										<dt class="filter label">{{ i18n.owner }}:</span>
-										<dd class="filter value">{{ job.owner }}</span>
+										<dt class="filter label">{{ i18n.owner }}:</dt>
+										<dd class="filter value">{{ job.owner }}</dd>
 										
-										<dt class="filter label">{{ i18n.sensorId }}:</span>
-										<dd class="filter value">{{ job.nodeId }}</span>
+										<dt class="filter label">{{ i18n.sensorId }}:</dt>
+										<dd class="filter value">{{ job.nodeId }}</dd>
 										
-										<dt class="filter label">{{ i18n.importId }}:</span>
-										<dd v-if="job.filter" class="filter value">{{ job.filter.importId }}&nbsp;</span>
+										<dt class="filter label">{{ i18n.importId }}:</dt>
+										<dd v-if="job.filter" class="filter value">{{ job.filter.importId }}&nbsp;</dd>
 										
-										<dt class="filter label">{{ i18n.protocol }}:</span>
-										<dd v-if="job.filter" class="filter value">{{ job.filter.protocol }}&nbsp;</span>
+										<dt class="filter label">{{ i18n.protocol }}:</dt>
+										<dd v-if="job.filter" class="filter value">{{ job.filter.protocol }}&nbsp;</dd>
 										
-										<dt class="filter label">{{ i18n.srcIp }}:</span>
-										<dd v-if="job.filter" class="filter value">{{ job.filter.srcIp }}&nbsp;<span class="resolved-host" v-if="$root.pickHostname(job.filter.srcIp)"> - {{ $root.pickHostname(job.filter.srcIp) }}</span></span>
+										<dt class="filter label">{{ i18n.srcIp }}:</dt>
+										<dd v-if="job.filter" class="filter value">{{ job.filter.srcIp }}&nbsp;<span class="resolved-host" v-if="$root.pickHostname(job.filter.srcIp)"> - {{ $root.pickHostname(job.filter.srcIp) }}</span></dd>
 										
-										<dt class="filter label">{{ i18n.srcPort }}:</span>
-										<dd v-if="job.filter" class="filter value">{{ job.filter.srcPort }}&nbsp;</span>
+										<dt class="filter label">{{ i18n.srcPort }}:</dt>
+										<dd v-if="job.filter" class="filter value">{{ job.filter.srcPort }}&nbsp;</dd>
 										
-										<dt class="filter label">{{ i18n.dstIp }}:</span>
-										<dd v-if="job.filter" class="filter value">{{ job.filter.dstIp }}&nbsp;<span class="resolved-host" v-if="$root.pickHostname(job.filter.dstIp)"> - {{ $root.pickHostname(job.filter.dstIp) }}</span></span>
+										<dt class="filter label">{{ i18n.dstIp }}:</dt>
+										<dd v-if="job.filter" class="filter value">{{ job.filter.dstIp }}&nbsp;<span class="resolved-host" v-if="$root.pickHostname(job.filter.dstIp)"> - {{ $root.pickHostname(job.filter.dstIp) }}</span></dd>
 								
-										<dt class="filter label">{{ i18n.dstPort }}:</span>
-										<dd v-if="job.filter" class="filter value">{{ job.filter.dstPort }}&nbsp;</span>
+										<dt class="filter label">{{ i18n.dstPort }}:</dt>
+										<dd v-if="job.filter" class="filter value">{{ job.filter.dstPort }}&nbsp;</dd>
 									
-										<dt class="filter label">{{ i18n.dateQueued }}:</span>
-										<dd class="filter value">{{ formatDateTime(job.createTime)}}&nbsp;</span>
+										<dt class="filter label">{{ i18n.dateQueued }}:</dt>
+										<dd class="filter value">{{ formatDateTime(job.createTime)}}&nbsp;</dd>
 										
-										<dt class="filter label">{{ i18n.dateCompleted }}:</span>
-										<dd class="filter value">{{ formatDateTime(job.completeTime)}}&nbsp;</span>
+										<dt class="filter label">{{ i18n.dateCompleted }}:</dt>
+										<dd class="filter value">{{ formatDateTime(job.completeTime)}}&nbsp;</dd>
 										
-										<dt class="filter label">{{ i18n.dateFailed }}:</span>
-										<dd class="filter value">{{ formatDateTime(job.failTime)}}&nbsp;</span>
+										<dt class="filter label">{{ i18n.dateFailed }}:</dt>
+										<dd class="filter value">{{ formatDateTime(job.failTime)}}&nbsp;</dd>
 										
-										<dt class="filter label">{{ i18n.beginTime }}:</span>
-										<dd v-if="job.filter" class="filter value">{{ formatTimestamp(job.filter.beginTime) }}&nbsp;</span>
+										<dt class="filter label">{{ i18n.beginTime }}:</dt>
+										<dd v-if="job.filter" class="filter value">{{ formatTimestamp(job.filter.beginTime) }}&nbsp;</dd>
 										
-										<dt class="filter label">{{ i18n.endTime }}:</span>
-										<dd v-if="job.filter" class="filter value">{{ formatTimestamp(job.filter.endTime) }}&nbsp;</span>
+										<dt class="filter label">{{ i18n.endTime }}:</dt>
+										<dd v-if="job.filter" class="filter value">{{ formatTimestamp(job.filter.endTime) }}&nbsp;</dd>
 									</dl>
 								</v-col>
 							</v-row>
@@ -95,7 +99,7 @@
 				<v-toolbar fixed class="so-toolbar elevation-0">
 					<v-text-field density="compact" v-model="search" class="ml-2" clearable prepend-inner-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="job_details_filter"></v-text-field>
 					<v-spacer></v-spacer>
-					<v-btn-toggle v-model="packetOptions" class="transparent" multiple>
+					<v-btn-toggle v-model="packetOptions" class="transparent" multiple :aria-label="i18n.packetDisplayOptions">
 						<v-btn value="packets" class="mx-2" color="text_button" :title="i18n.packetStreamHelp" @click="captureLayoutAsStream()" data-aid="job_details_stream_toggle">
 							<v-icon>fa-list</v-icon>
 						</v-btn>
@@ -129,7 +133,7 @@
 					<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
 						<tr>
 							<template v-for="header in columns" :key="header.key">
-								<th :class="{'is-sorted': isSorted(header)}" :data-aid="'job_packet_table_header_' + header?.value?.toLowerCase()" scope="col">
+								<th :class="{'is-sorted': isSorted(header)}" :data-aid="'job_packet_table_header_' + header?.value?.toLowerCase()" scope="col" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'">
 									<span @click="toggleSort(header)">
 										{{ header.title }}
 									</span>

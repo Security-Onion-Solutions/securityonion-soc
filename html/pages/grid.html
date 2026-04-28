@@ -45,7 +45,7 @@
 									<span @click="toggleSort(header)">
 										{{ header.title }}
 									</span>
-									<template v-if="isSorted(header)">
+									<template v-if="isSorted(header)" scope="col" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'">
 										<v-icon>
 											{{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down'}}
 										</v-icon>
@@ -121,7 +121,7 @@
 									<v-row>
 										<v-col cols="12" lg="4" data-aid="grid_node_metrics">
 											<v-card>
-												<v-card-title v-text="i18n.nodeStatus"></v-card-title>
+												<v-card-title v-text="i18n.nodeStatus" role="heading" aria-level="3"></v-card-title>
 												<v-card-text>
 													<dl class="ws-normal">
 														<template v-if="$root.hasSubgrids">
@@ -147,7 +147,7 @@
 														<dt class="filter label">{{ i18n.dateOnline }}:</dt>
 														<dd id="node_createTime" class="filter value">{{ toTZ(item.onlineTime) }}</dd>
 													
-														<dt class="filter label">{{ i18n.dateDataEpoch }}:</span>
+														<dt class="filter label">{{ i18n.dateDataEpoch }}:</dt>
 														<dd id="node_dataEpoch" class="filter value">{{ toTZ(item.epochTime) }}</dd>
 
 														<dt class="filter label">{{ i18n.dateUpdated }}:</dt>
@@ -384,43 +384,41 @@
 															<dd :class="areMetricsCurrent(item) ? 'filter value' : 'filter value stale'" id="node_trafficManIn">{{ formatDecimal1(item.trafficManInMbs) }} {{ i18n.mbps }}</dd>
 														</template>
 
-														<tempalte v-if="item.metricsEnabled">
+														<template v-if="item.metricsEnabled">
 															<dt class="filter label">{{ i18n.trafficManOut }}:</dt>
 															<dd :class="areMetricsCurrent(item) ? 'filter value' : 'filter value stale'" id="node_trafficManOut">{{ formatDecimal1(item.trafficManOutMbs) }} {{ i18n.mbps }}</dd>
-														</tempalte>
+														</template>
 
 														<dt class="filter label">{{ i18n.keywords }}:</dt>
 														<dd class="filter value text-wrap" id="node_keywords">{{ item.keywords }}</dd>
 
 														<dt class="filter label">{{ i18n.description }}:</dt>
 														<dd class="filter value text-wrap" id="node_desc">{{ item.description }}</dd>
-														
-														<p></p>
-
-														<div class="text-justify">
-															<v-btn id="dashboard-link" icon variant="text" size="small" :title="i18n.nodeDashboard" :href="item.dashboardLink" :target="$root.target('influxdb')" :disabled="$root.isNodeInSubgrid(item)" class="theme-text" data-aid="grid_node_nav_influx">
-																<v-icon class="theme-icon">fa-chart-line</v-icon>
-															</v-btn>
-															<v-btn v-if="canTest(item)" id="test-minion" icon variant="text" size="small" :title="i18n.nodeTest" @click="showTestConfirm(item)" class="theme-text" data-aid="grid_node_test">
-																<v-icon class="theme-icon">fa-file-import</v-icon>
-															</v-btn>
-															<v-btn v-if="canUpload(item)" id="import-minion" icon variant="text" size="small" :title="i18n.uploadPCAPEVTX" @click="showUploadConfirm(item)" class="theme-text" data-aid="grid_node_import">
-																<v-icon class="theme-icon">fa-upload</v-icon>
-															</v-btn>
-															<v-btn v-if="canRestart(item)" id="restart-minion" icon variant="text" size="small" :title="item.osNeedsRestart == 1 ? i18n.restartRequiredHelp : i18n.restartMinionHelp" @click="showRestartConfirm(item)" class="theme-text" data-aid="grid_node_restart">
-																<v-icon :color="item.osNeedsRestart == 1 ? 'info' : ''" :class="{ 'theme-icon': item.osNeedsRestart != 1 }">fa-power-off</v-icon>
-															</v-btn>
-															<v-btn icon variant="text" size="small" :title="i18n.clickForMoreInformation" :href="$root.parameters.docsUrl + 'grid'" :target="$root.target('so-help')" class="theme-text" data-aid="grid_node_help">
-																<v-icon class="theme-icon">fa-circle-question</v-icon>
-															</v-btn>
-														</div>
 													</dl>
+													
+													<div class="text-justify">
+														<v-btn id="dashboard-link" icon variant="text" size="small" :title="i18n.nodeDashboard" :href="item.dashboardLink" :target="$root.target('influxdb')" :disabled="$root.isNodeInSubgrid(item)" class="theme-text" data-aid="grid_node_nav_influx">
+															<v-icon class="theme-icon">fa-chart-line</v-icon>
+														</v-btn>
+														<v-btn v-if="canTest(item)" id="test-minion" icon variant="text" size="small" :title="i18n.nodeTest" @click="showTestConfirm(item)" class="theme-text" data-aid="grid_node_test">
+															<v-icon class="theme-icon">fa-file-import</v-icon>
+														</v-btn>
+														<v-btn v-if="canUpload(item)" id="import-minion" icon variant="text" size="small" :title="i18n.uploadPCAPEVTX" @click="showUploadConfirm(item)" class="theme-text" data-aid="grid_node_import">
+															<v-icon class="theme-icon">fa-upload</v-icon>
+														</v-btn>
+														<v-btn v-if="canRestart(item)" id="restart-minion" icon variant="text" size="small" :title="item.osNeedsRestart == 1 ? i18n.restartRequiredHelp : i18n.restartMinionHelp" @click="showRestartConfirm(item)" class="theme-text" data-aid="grid_node_restart">
+															<v-icon :color="item.osNeedsRestart == 1 ? 'info' : ''" :class="{ 'theme-icon': item.osNeedsRestart != 1 }">fa-power-off</v-icon>
+														</v-btn>
+														<v-btn icon variant="text" size="small" :title="i18n.clickForMoreInformation" :href="$root.parameters.docsUrl + 'grid'" :target="$root.target('so-help')" class="theme-text" data-aid="grid_node_help">
+															<v-icon class="theme-icon">fa-circle-question</v-icon>
+														</v-btn>
+													</div>
 												</v-card-text>
 											</v-card>
 										</v-col>
 										<v-col cols="12" lg="4" data-aid="grid_node_containers">
 											<v-card>
-												<v-card-title v-text="i18n.containerStatus"></v-card-title>
+												<v-card-title v-text="i18n.containerStatus" role="heading" aria-level="3"></v-card-title>
 												<v-card-text>
 													<v-table v-if="item.statusCode <= 1" class="no-background">
 														<template #default>
@@ -438,8 +436,8 @@
 																		{{ container.Name }}
 																	</td>
 																	<td class="text-center">
-																		<router-link :to="generateContainerLink(item, container)" :class="'theme-text text-decoration-none hunt-logs-' + container.Name" :data-aid="'grid_node_hunt_' + container.Name">
-																			<v-icon :title="i18n.huntForError" class="theme-icon">fa-crosshairs</v-icon>
+																		<router-link :to="generateContainerLink(item, container)" :class="'theme-text text-decoration-none hunt-logs-' + container.Name" :data-aid="'grid_node_hunt_' + container.Name" :aria-label="i18n.huntForError + ' — ' + container.Name">
+																			<v-icon :title="i18n.huntForError" class="theme-icon" >fa-crosshairs</v-icon>
 																		</router-link>
 																	</td>
 																	<td :class="areMetricsCurrent(item) ? 'text-left text-' + colorContainerStatus(container.Status) : 'stale text-left'">
@@ -460,7 +458,7 @@
 										</v-col>
 										<v-col cols="12" lg="4" data-aid="grid_node_other">
 											<v-card>
-												<v-card-title v-text="i18n.nodeImages"></v-card-title>
+												<v-card-title v-text="i18n.nodeImages" role="heading" aria-level="3"></v-card-title>
 												<v-card-text>
 													<span v-if="!item.imageFront">
 														{{ i18n.nodeImageUnavailable }}

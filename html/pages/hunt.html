@@ -14,16 +14,18 @@
 							<span data-aid="grid_expansions_toggle">
 								<v-switch id="grid-expansions-toggle" :disabled="loading()" v-model="gridLayoutExpansions" density="compact" hide-details class="my-0" :label="i18n.gridLayoutExpansions"></v-switch>
 							</span>
-							<span v-for="toggle in filterToggles" :key="toggle.name" :data-aid="'filter_toggle_' + category + '_' + toggle.name">
-								<v-switch
-									v-if="toggle.name !== 'investigated' || investigateEnabled"
-									:id="'filterToggle-' + toggle.name"
-									:disabled="loading()"
-									v-model="toggle.enabled"
-									density="compact" hide-details class="my-0"
-									@update:model-value="filterToggled($event, toggle); notifyInputsChanged()"
-									:label="$root.localizeMessage(toggle.name)" color="primary"></v-switch>
-							</span>
+							<div role="group" :aria-label="i18n.filterToggles">
+								<span v-for="toggle in filterToggles" :key="toggle.name" :data-aid="'filter_toggle_' + category + '_' + toggle.name">
+									<v-switch
+										v-if="toggle.name !== 'investigated' || investigateEnabled"
+										:id="'filterToggle-' + toggle.name"
+										:disabled="loading()"
+										v-model="toggle.enabled"
+										density="compact" hide-details class="my-0"
+										@update:model-value="filterToggled($event, toggle); notifyInputsChanged()"
+										:label="$root.localizeMessage(toggle.name)" color="primary"></v-switch>
+								</span>
+							</div>
 							<span data-aid="show_detection_panel">
 								<v-switch v-if="isCategory('alerts')" id="detection-panel-toggle" :disabled="loading()" v-model="showDetailsPanel" density="compact" hide-details class="my-0" :label="i18n.showDetailsPanel"></v-switch>
 							</span>
@@ -160,11 +162,11 @@
 				</v-col>
 			</v-row>
 			<v-row v-if="loaded && (queryFilters.length > 0 || querySortBys.length > 0)">
-				<v-col cols="12">
-					<span v-for="filter in queryFilters" :key="filter" :data-aid="'filter_chip_' + category">
+				<v-col cols="12" role="list">
+					<span v-for="filter in queryFilters" :key="filter" :data-aid="'filter_chip_' + category" role="listitem">
 						<v-chip density="compact" class="filter mx-1 my-1" color="primary" closable="true" @click:close="removeFilter(filter)">{{ formatSafeString(filter) }}</v-chip>
 					</span>
-					<span v-for="sortBy in querySortBys" :key="sortBy" :data-aid="'sort_chip_' + category">
+					<span v-for="sortBy in querySortBys" :key="sortBy" :data-aid="'sort_chip_' + category" role="listitem">
 						<v-chip density="compact"class="sortBy mx-1 my-1" color="secondary" closable="true" @click:close="removeSortBy(sortBy)">{{ i18n.sortedBy }} {{ formatSafeString(sortBy) }}</v-chip>
 					</span>
 				</v-col>
@@ -173,8 +175,8 @@
 				<v-col v-if="isCategory('hunt') || isCategory('dashboards')">
 					<div class="so-stat-pill" data-aid="stat_query_name">
 						<div class="so-stat-text">
-							<div class="so-stat-label">{{ i18n.queryName }}</div>
-							<div class="so-stat-value">{{ queryName }}</div>
+							<div class="so-stat-label" id="stat-label-query-name">{{ i18n.queryName }}</div>
+							<div class="so-stat-value" aria-labelledby="stat-label-query-name">{{ queryName }}</div>
 						</div>
 						<v-icon class="so-stat-icon">fa-clipboard-question</v-icon>
 					</div>
@@ -182,8 +184,8 @@
 				<v-col>
 					<div class="so-stat-pill" data-aid="stat_total_alerts">
 						<div class="so-stat-text">
-							<div class="so-stat-label">{{ i18n.eventTotal }}</div>
-							<div class="so-stat-value">{{ totalEvents.toLocaleString() }}</div>
+							<div class="so-stat-label" id="stat-label-event-total">{{ i18n.eventTotal }}</div>
+							<div class="so-stat-value" aria-labelledby="stat-label-event-total">{{ totalEvents.toLocaleString() }}</div>
 						</div>
 						<v-icon class="so-stat-icon">fa-circle-check</v-icon>
 					</div>
@@ -191,8 +193,8 @@
 				<v-col v-if="isCategory('alerts')">
 					<div class="so-stat-pill" data-aid="stat_alert_groups">
 						<div class="so-stat-text">
-							<div class="so-stat-label">{{ i18n.alertGroups }}</div>
-							<div class="so-stat-value">{{ alertGroupCount.toLocaleString() }}</div>
+							<div class="so-stat-label" id="stat-label-alert-groups">{{ i18n.alertGroups }}</div>
+							<div class="so-stat-value" aria-labelledby="stat-label-alert-groups">{{ alertGroupCount.toLocaleString() }}</div>
 						</div>
 						<v-icon class="so-stat-icon">fa-layer-group</v-icon>
 					</div>
@@ -200,8 +202,8 @@
 				<v-col v-if="isCategory('alerts') || isCategory('cases')">
 					<div class="so-stat-pill" data-aid="stat_critical_high">
 						<div class="so-stat-text">
-							<div class="so-stat-label">{{ i18n.criticalHigh }}</div>
-							<div class="so-stat-value">{{ criticalHighCount.toLocaleString() }}</div>
+							<div class="so-stat-label" id="stat-label-critical-high">{{ i18n.criticalHigh }}</div>
+							<div class="so-stat-value" aria-labelledby="stat-label-critical-high">{{ criticalHighCount.toLocaleString() }}</div>
 						</div>
 						<v-icon class="so-stat-icon">fa-exclamation-circle</v-icon>
 					</div>
@@ -209,8 +211,8 @@
 				<v-col v-if="isCategory('alerts')">
 					<div class="so-stat-pill" data-aid="stat_status">
 						<div class="so-stat-text">
-							<div class="so-stat-label">{{ i18n.status }}</div>
-							<div class="so-stat-value">{{ alertStatus }}</div>
+							<div class="so-stat-label" id="stat-label-status">{{ i18n.status }}</div>
+							<div class="so-stat-value" aria-labelledby="stat-label-status">{{ alertStatus }}</div>
 						</div>
 						<v-icon class="so-stat-icon">fa-bell</v-icon>
 					</div>
@@ -218,8 +220,8 @@
 				<v-col v-for="engine in (isCategory('detections') ? $root.getDetectionEngines() : [])" :key="engine">
 					<div class="so-stat-pill" :data-aid="'engine_status_' + engine">
 						<div class="so-stat-text">
-							<div class="so-stat-label">{{ i18n['cc_' + engine] }}</div>
-							<div class="so-stat-value">
+							<div class="so-stat-label" :id="'stat-label-' + engine">{{ i18n['cc_' + engine] }}</div>
+							<div class="so-stat-value" :aria-labelledby="'stat-label-' + engine">
 								<router-link :to="{ name: 'hunt', query: {q: buildDetectionEngineHuntQuery(engine), t: moment().subtract(1, 'hours').format(i18n.timePickerFormat) + ' - ' + moment().format(i18n.timePickerFormat), socExcludeToggle: false, detectionsExcludeToggle: false }}" style="text-decoration: none; cursor: 'pointer'" :class="$root.getDetectionEngineStatusClass(engine)" :data-aid="'detection_engine_status_' + engine" :title="i18n['detectionEngine' + $root.getDetectionEngineStatus(engine) + 'Help']">
 									{{ i18n['detectionEngine' + $root.getDetectionEngineStatus(engine)] }}
 								</router-link>
@@ -231,8 +233,8 @@
 				<v-col v-if="isCategory('dashboards') || isCategory('hunt')">
 					<div class="so-stat-pill" data-aid="stat_exclude">
 						<div class="so-stat-text">
-							<div class="so-stat-label">{{ i18n.filterExclude }}</div>
-							<div class="so-stat-value">{{ excludeStatus }}</div>
+							<div class="so-stat-label" id="stat-label-filter-exclude">{{ i18n.filterExclude }}</div>
+							<div class="so-stat-value" aria-labelledby="stat-label-filter-exclude">{{ excludeStatus }}</div>
 						</div>
 						<v-icon class="so-stat-icon">fa-ban</v-icon>
 					</div>
@@ -240,8 +242,8 @@
 				<v-col v-if="isCategory('cases')">
 					<div class="so-stat-pill" data-aid="stat_cases_recently_updated">
 						<div class="so-stat-text">
-							<div class="so-stat-label">{{ i18n.recentlyUpdated }}</div>
-							<div class="so-stat-value">{{ mruCases.length }}</div>
+							<div class="so-stat-label" id="stat-label-cases-recently-updated">{{ i18n.recentlyUpdated }}</div>
+							<div class="so-stat-value" aria-labelledby="stat-label-cases-recently-updated">{{ mruCases.length }}</div>
 						</div>
 						<v-icon class="so-stat-icon">fa-clock</v-icon>
 					</div>
@@ -250,7 +252,7 @@
 			<v-row v-if="loaded && isAdvanced() && !isCategory('detections')">
 				<v-col id="graphs" class="section-panel" :data-aid="'graphs_' + category">
 					<v-toolbar density="compact" variant="flat">
-						<v-toolbar-title>{{ i18n.standardMetrics }}</v-toolbar-title>
+						<v-toolbar-title role="heading" aria-level="2">{{ i18n.standardMetrics }}</v-toolbar-title>
 						<v-spacer></v-spacer>
 						<v-btn variant="text" size="small" icon class="mr-1" @click="toggleShowSection('hunt-graphs')" :data-aid="'graphs_toggle_' + category" :aria-expanded="isExpandedSection('hunt-graphs')" :aria-label="i18n.ariaExpandGraphs">
 							<v-icon v-if="!isExpandedSection('hunt-graphs')" :data-aid="'graphs_expand_' + category">fa-angle-down</v-icon>
@@ -282,7 +284,7 @@
 			<v-row v-if="metricsEnabled">
 				<v-col ref="eventColumn" id="group-metrics" class="section-panel" :data-aid="'groups_' + category">
 					<v-toolbar v-if="isAdvanced()" density="compact" variant="flat">
-						<v-toolbar-title>{{ i18n.groups }}</v-toolbar-title>
+						<v-toolbar-title role="heading" aria-level="2">{{ i18n.groups }}</v-toolbar-title>
 						<v-spacer></v-spacer>
 						<v-select class="toolbar-field no-print" style="max-width: 120px;" :disabled="loading()" @update:model-value="groupByLimit = $event; notifyInputsChanged();" v-model="groupByLimit" :items="groupByLimitOptions" :label="i18n.fetchLimit" hide-details :data-aid="'groups_limit_' + category"></v-select>
 						<v-text-field class="toolbar-field no-print ml-2" style="max-width: 250px;" v-model="groupByFilter" clearable prepend-inner-icon="fa-filter" :label="i18n.filterResults" hide-details :data-aid="'groups_filter_' + category"></v-text-field>
@@ -326,7 +328,7 @@
 										<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
 											<tr>
 												<template v-for="(header, headerIdx) in columns" :key="header.key">
-													<th :class="{'is-sorted': isSorted(header)}">
+													<th :class="{'is-sorted': isSorted(header)}" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'">
 														<span @click="toggleSort(header)">
 															{{ header.title }}
 														</span>
@@ -445,13 +447,13 @@
 																				<v-btn variant="text" size="x-small" icon class="expanded-field-expand-btn" @click.stop="showFieldValueDialog(kvp.key, kvp.value)" :data-aid="'events_field_grid_expand_' + kvp.key" :aria-label="i18n.ariaInspectField"><v-icon>fa-expand</v-icon></v-btn>
 																			</span>
 																		</div>
-																		<div class="expanded-field-value quick-action-trigger hardwrap" @click="toggleQuickAction($event, item, -1, kvp.key, kvp.value)" :data-aid="'events_field_grid_value_' + category">{{kvp.key.endsWith('detection.author') ? $root.tryLocalize(kvp.value) : kvp.value}}<span class="resolved-host" v-if="$root.tryResolveAlias(kvp.key, kvp.value)"> - {{ $root.tryResolveAlias(kvp.key, kvp.value) }}</span></div>
+																		<div class="expanded-field-value quick-action-trigger hardwrap" @click="toggleQuickAction($event, item, -1, kvp.key, kvp.value)" :data-aid="'events_field_grid_value_' + category" :aria-labelledby="'events_fields_' + category + '_' + kvp.key">{{kvp.key.endsWith('detection.author') ? $root.tryLocalize(kvp.value) : kvp.value}}<span class="resolved-host" v-if="$root.tryResolveAlias(kvp.key, kvp.value)"> - {{ $root.tryResolveAlias(kvp.key, kvp.value) }}</span></div>
 																	</div>
 																</div>
 																<v-data-table v-else density="compact" hide-default-header hide-default-footer :headers="expandedHeaders" :items="getExpandedData(item.newest)" items-per-page="-1">
 																	<template #item="{ item: kvp }">
 																		<tr :data-aid="'events_field_' + category + '_' + kvp.key" class="pt-3 main-row">
-																			<td class="expansion">
+																			<th scope="row" class="expansion">
 																				<div class="d-inline-block semi-transparent">
 																					<v-btn :id="'groupby_' + kvp.key" :disabled="!canQuery(kvp.key)" variant="text" size="x-small" icon :to="buildGroupByNewRoute(kvp.key)" :data-aid="'events_field_groupby_toggle_' + category" class="remove-overlay" :aria-label="i18n.ariaGroupBy">
 																						<v-icon :alt="i18n.groupNew" :title="i18n.groupNewHelp" class="theme-text">fa-layer-group</v-icon>
@@ -461,7 +463,7 @@
 																					</v-btn>
 																				</div>
 																				<div :id="'events_fields_' + category + '_' + kvp.key" class="d-inline-block expansion va-middle" v-text="kvp.key" :data-aid="'events_field_name_' + category"></div>
-																			</td>
+																			</th>
 																			<td class="expansion va-middle" :data-aid="'events_field_value_' + category">
 																				<div class="quick-action-trigger d-inline-block expansion hardwrap" @click="toggleQuickAction($event, item, -1, kvp.key, kvp.value)">{{kvp.key.endsWith('detection.author') ? $root.tryLocalize(kvp.value) : kvp.value}}<span class="resolved-host" v-if="$root.tryResolveAlias(kvp.key, kvp.value)"> - {{ $root.tryResolveAlias(kvp.key, kvp.value) }}</span></div>
 																			</td>
@@ -476,7 +478,7 @@
 																		<span v-html="i18n.playbooksAi"  data-aid="playbook_grouped_ai_text"></span>
 																	</div>
 																	<v-expansion-panels @update:model-value="expandedPlaybookQuestions[item._row_idx_] = $event" :model-value="expandedPlaybookQuestions[item._row_idx_]" variant="accordion" multiple static="true">
-																		<v-expansion-panel v-for="question in item.newest.questions">
+																		<v-expansion-panel v-for="(question, index) in item.newest.questions">
 																			<v-expansion-panel-title :class="['italic', 'ws-normal', 'spacious-lines', 'font-weight-bold', pickQuestionColor(question)]" #default="{ expanded }">
 																				<v-icon class="theme-icon mx-4" data-aid="playbook_grouped_question_title">
 																					<template v-if="expanded">fa-angle-down</template>
@@ -485,8 +487,8 @@
 																				{{question.question}}
 																			</v-expansion-panel-title>
 																			<v-expansion-panel-text class="ws-normal" style="padding-left: 52px;">
-																				<div class="font-weight-bold font-italic" data-aid="playbook_grouped_question_context_label">{{i18n.context}}</div>
-																				<div class="italic" data-aid="playbook_grouped_question_context">{{question.context}}</div>
+																				<div :id="`playbook_grouped_question_context_label_${index}`" class="font-weight-bold font-italic" data-aid="playbook_grouped_question_context_label">{{i18n.context}}</div>
+																				<div :aria-labelledby="`playbook_grouped_question_context_label_${index}`" class="italic" data-aid="playbook_grouped_question_context">{{question.context}}</div>
 																				<div class="italic my-4" data-aid="playbook_grouped_question_daterange">{{i18n.dateRange}}: {{question.range || i18n.event}}</div>
 																				<v-row no-gutters class="mb-5">
 																					<v-col cols="auto">
@@ -499,7 +501,7 @@
 																					</v-col>
 																				</v-row>
 																				<template v-if="question.queryResults">
-																					<span class="font-weight-bold font-italic">
+																					<span class="font-weight-bold font-italic" role="heading" aria-level="4">
 																						{{ i18n.instantInsight }}
 																					</span>
 																					<br/>
@@ -556,7 +558,7 @@
 			<v-row v-if="loaded && eventsEnabled && (isAdvanced() || !metricsEnabled)">
 				<v-col id="events" class="section-panel" :data-aid="'events_' + category">
 					<v-toolbar v-if="isAdvanced()" density="compact" variant="flat">
-						<v-toolbar-title>{{ isCategory("detections") || isCategory("alerts") || isCategory("cases") ? i18n[category] : i18n.events }}</v-toolbar-title>
+						<v-toolbar-title role="heading" aria-level="2">{{ isCategory("detections") || isCategory("alerts") || isCategory("cases") ? i18n[category] : i18n.events }}</v-toolbar-title>
 						<v-spacer></v-spacer>
 						<template v-if="isCategory('detections') && (selectAllState || selectAllIndeterminate)">
 							<span class="text-caption mr-2">{{ i18n.selected }}: {{ (selectAllState === true ? totalEvents : selectedCount).toLocaleString() }}</span>
@@ -592,7 +594,7 @@
 								<template #headers="{ props, columns, isSorted, getSortIcon, toggleSort }">
 									<tr>
 										<template v-for="header in columns" :key="header.key">
-											<th :class="{'is-sorted': isSorted(header)}" @click="toggleSort(header)">
+											<th :class="{'is-sorted': isSorted(header)}" @click="toggleSort(header)" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'">
 												<template v-if="header.key === 'data-table-select'">
 													<div class="no-print multiselect-container ml-8">
 														<v-checkbox v-if="isMultiSelect()" id="multiselect-checkbox" class="no-details" :class="{ 'text-blue': selectAllState || selectAllIndeterminate }"
@@ -722,13 +724,13 @@
 																		<v-btn variant="text" size="x-small" icon class="expanded-field-expand-btn" @click.stop="showFieldValueDialog(kvp.key, kvp.value)" :data-aid="'events_field_grid_expand_' + kvp.key" :aria-label="i18n.ariaInspectField"><v-icon>fa-expand</v-icon></v-btn>
 																	</span>
 																</div>
-																<div class="expanded-field-value quick-action-trigger hardwrap" @click="toggleQuickAction($event, item, -1, kvp.key, kvp.value)" :data-aid="'events_field_grid_value_' + category">{{kvp.key.endsWith('detection.author') ? $root.tryLocalize(kvp.value) : kvp.value}}<span class="resolved-host" v-if="$root.tryResolveAlias(kvp.key, kvp.value)"> - {{ $root.tryResolveAlias(kvp.key, kvp.value) }}</span></div>
+																<div class="expanded-field-value quick-action-trigger hardwrap" @click="toggleQuickAction($event, item, -1, kvp.key, kvp.value)" :data-aid="'events_field_grid_value_' + category" :aria-labelledby="'events_fields_' + category + '_' + kvp.key">{{kvp.key.endsWith('detection.author') ? $root.tryLocalize(kvp.value) : kvp.value}}<span class="resolved-host" v-if="$root.tryResolveAlias(kvp.key, kvp.value)"> - {{ $root.tryResolveAlias(kvp.key, kvp.value) }}</span></div>
 															</div>
 														</div>
 														<v-data-table v-else density="compact" hide-default-header hide-default-footer :headers="expandedHeaders" :items="getExpandedData(item)" items-per-page="-1">
 															<template #item="{ item: kvp }">
 																<tr :data-aid="'events_field_' + category + '_' + kvp.key" class="pt-3 main-row">
-																	<td class="expansion">
+																	<th scope="row" class="expansion">
 																		<div class="d-inline-block semi-transparent">
 																			<v-btn :id="'groupby_' + kvp.key" :disabled="!canQuery(kvp.key)" variant="text" size="x-small" icon :to="buildGroupByNewRoute(kvp.key)" :data-aid="'events_field_groupby_toggle_' + category" class="remove-overlay" :aria-label="i18n.ariaGroupBy">
 																				<v-icon :alt="i18n.groupNew" :title="i18n.groupNewHelp" class="theme-text">fa-layer-group</v-icon>
@@ -738,7 +740,7 @@
 																			</v-btn>
 																		</div>
 																		<div :id="'events_fields_' + category + '_' + kvp.key" class="d-inline-block expansion va-middle" v-text="kvp.key" :data-aid="'events_field_name_' + category"></div>
-																	</td>
+																	</th>
 																	<td class="expansion va-middle" :data-aid="'events_field_value_' + category">
 																		<div class="quick-action-trigger d-inline-block expansion hardwrap" @click="toggleQuickAction($event, item, -1, kvp.key, kvp.value)">{{kvp.key.endsWith('detection.author') ? $root.tryLocalize(kvp.value) : kvp.value}}<span class="resolved-host" v-if="$root.tryResolveAlias(kvp.key, kvp.value)"> - {{ $root.tryResolveAlias(kvp.key, kvp.value) }}</span></div>
 																	</td>
@@ -753,7 +755,7 @@
 																<span v-html="i18n.playbooksAi" data-aid="playbook_ai_text"></span>
 															</div>
 															<v-expansion-panels @update:model-value="expandedPlaybookQuestions[item._row_idx_] = $event" :model-value="expandedPlaybookQuestions[item._row_idx_]" variant="accordion" multiple static="true">
-																<v-expansion-panel v-for="question in item.questions">
+																<v-expansion-panel v-for="(question, index) in item.questions">
 																	<v-expansion-panel-title :class="['italic', 'ws-normal', 'spacious-lines', 'font-weight-bold', pickQuestionColor(question)]" #default="{ expanded }">
 																		<v-icon class="theme-icon mx-4" data-aid="playbook_question_title">
 																			<template v-if="expanded">fa-angle-down</template>
@@ -762,8 +764,8 @@
 																		{{question.question}}
 																	</v-expansion-panel-title>
 																	<v-expansion-panel-text class="ws-normal" style="padding-left: 52px;">
-																		<div class="font-weight-bold font-italic" data-aid="playbook_question_context_label">{{i18n.context}}</div>
-																		<div class="italic" data-aid="playbook_question_context">{{question.context}}</div>
+																		<div :id="`playbook_question_context_label_${index}`" class="font-weight-bold font-italic" data-aid="playbook_question_context_label">{{i18n.context}}</div>
+																		<div :aria-labelledby="`playbook_question_context_label_${index}`" class="italic" data-aid="playbook_question_context">{{question.context}}</div>
 																		<div class="italic my-4" data-aid="playbook_question_daterange">{{i18n.dateRange}}: {{question.range || i18n.event}}</div>
 																		<v-row no-gutters class="mb-5">
 																			<v-col cols="auto">
@@ -776,7 +778,7 @@
 																			</v-col>
 																		</v-row>
 																		<template v-if="question.queryResults">
-																			<span class="font-weight-bold font-italic">
+																			<span class="font-weight-bold font-italic" role="heading" aria-level="4">
 																				{{i18n.instantInsight}}
 																			</span>
 																			<br/>
@@ -1055,15 +1057,17 @@
 				</v-list-item-title>
 			</v-list-item>
 			<v-divider></v-divider>
-			<v-list-subheader class="theme-text">{{ i18n.escalateExistingCase }}</v-list-subheader>
-			<v-list-item v-for="socCase in mruCases" density="compact" v-bind:title.attr="i18n.escalateExistingCaseHelp" @click="ack(escalationItem, true, true, socCase.id, escalationGroupIdx, escalatingDetectionEvents)" :data-aid="'escalate_menu_existing_' + category">
-				<template #prepend>
-					<v-icon :alt="i18n.escalateExistingCase">fa-link</v-icon>
-				</template>
-				<v-list-item-title class="theme-text">
-					{{ formatCaseSummary(socCase) }}
-				</v-list-item-title>
-			</v-list-item>
+			<v-list-subheader id="escalate-existing-label" class="theme-text">{{ i18n.escalateExistingCase }}</v-list-subheader>
+			<div role="group" aria-labelledby="escalate-existing-label">
+				<v-list-item v-for="socCase in mruCases" density="compact" v-bind:title.attr="i18n.escalateExistingCaseHelp" @click="ack(escalationItem, true, true, socCase.id, escalationGroupIdx, escalatingDetectionEvents)" :data-aid="'escalate_menu_existing_' + category">
+					<template #prepend>
+						<v-icon :alt="i18n.escalateExistingCase">fa-link</v-icon>
+					</template>
+					<v-list-item-title class="theme-text">
+						{{ formatCaseSummary(socCase) }}
+					</v-list-item-title>
+				</v-list-item>
+			</div>
 		</v-list>
 	</v-menu>
 

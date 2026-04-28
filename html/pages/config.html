@@ -8,7 +8,7 @@
 	</v-alert>
 	<v-dialog v-model="showOptionsDialog" max-width="540">
 		<v-card class="options-dialog">
-			<v-card-title>{{i18n.options}}</v-card-title>
+			<v-card-title role="heading" aria-level="2">{{i18n.options}}</v-card-title>
 			<v-card-text data-aid="config_options">
 				<v-switch id="option-advanced" :disabled="$root.loading" v-model="advanced" dense class="my-0" :label="i18n.settingsAdvanced" :hint="i18n.settingsAdvancedHelp" persistent-hint data-aid="config_option_advanced_toggle"></v-switch>
 				<v-btn variant="tonal" id="option-synchronize" @click.stop="sync()" class="mt-6 mb-3" data-aid="config_option_synchronize_button">
@@ -83,10 +83,10 @@
 				<div v-if="!selected" id="config-quick-links">
 					<v-alert v-text="i18n.settingSelect" type="info"></v-alert>
 					<div class="mt-4">
-						<p id="grid-quick-links-label" class="font-weight-bold">{{i18n.configQLGridTitle}}</p>
+						<p id="grid-quick-links-label" class="font-weight-bold" role="heading" aria-level="4">{{i18n.configQLGridTitle}}</p>
 						<ul aria-labelledby="grid-quick-links-label">
 							<li>
-								<span id="elastic-quick-links-label">{{i18n.configQLElasticsearchHeader}}</span>
+								<span id="elastic-quick-links-label" role="heading" aria-level="4">{{i18n.configQLElasticsearchHeader}}</span>
 								<ul aria-labelledby="elastic-quick-links-label">
 									<li>
 										<router-link data-aid="config_quicklink_es_warm" :to="{ name: 'config', query: {s: 'elasticsearch.index_settings.global_overrides.policy.phases.warm.min_age', x: 1}}">{{i18n.configQLElasticsearchWarm}}</router-link>
@@ -100,7 +100,7 @@
 								</ul>
 							</li>
 							<li>
-								<span id="ntp-quick-links-label">{{i18n.configQLNTPHeader}}</span>
+								<span id="ntp-quick-links-label" role="heading" aria-level="4">{{i18n.configQLNTPHeader}}</span>
 								<ul aria-labelledby="ntp-quick-links-label">
 									<li>
 										<router-link data-aid="config_quicklink_ntp" :to="{ name: 'config', query: {s: 'ntp.config.servers'}}">{{i18n.configQLNTP}}</router-link>
@@ -108,7 +108,7 @@
 								</ul>
 							</li>
 							<li>
-								<span id="firewall-quick-links-label">{{i18n.configQLFirewallHeader}}</span>
+								<span id="firewall-quick-links-label" role="heading" aria-level="4">{{i18n.configQLFirewallHeader}}</span>
 								<ul aria-labelledby="firewall-quick-links-label">
 									<li>
 										<router-link data-aid="config_quicklink_fw_analyst" :to="{name: 'config', query: {s: 'firewall.hostgroups.analyst'}}">{{i18n.configQLFirewallWebInterface}}</router-link>
@@ -138,10 +138,10 @@
 							</li>
 						</ul>
 						<br/>
-						<p id="analyst-quick-links-label" class="font-weight-bold">{{i18n.configQLAnalystTitle}}</p>
+						<p id="analyst-quick-links-label" class="font-weight-bold" role="heading" aria-level="3">{{i18n.configQLAnalystTitle}}</p>
 						<ul aria-labelledby="analyst-quick-links-label">
 							<li>
-								<span id="sigma-quick-links-label">{{i18n.configQLSigmaHeader}}</span>
+								<span id="sigma-quick-links-label" role="heading" aria-level="4">{{i18n.configQLSigmaHeader}}</span>
 								<ul aria-labelledby="sigma-quick-links-label">
 									<li>
 										<router-link data-aid="config_quicklink_sigma_rules" :to="{name: 'config', query: {s: 'soc.config.server.modules.elastalertengine.sigmaRulePackages'}}">{{i18n.configQLSigmaRuleset}}</router-link>
@@ -149,7 +149,7 @@
 								</ul>
 							</li>
 							<li>
-								<span id="suricata-quick-links-label">{{i18n.configQLSuricataHeader}}</span>
+								<span id="suricata-quick-links-label" role="heading" aria-level="4">{{i18n.configQLSuricataHeader}}</span>
 								<ul aria-labelledby="suricata-quick-links-label">
 										<li>
 										<router-link data-aid="config_quicklink_suricata_home_net" :to="{name: 'config', query: {s: 'suricata.config.vars.address-groups.HOME_NET'}}">{{i18n.configQLHomeNet}}</router-link>
@@ -163,7 +163,7 @@
 								</ul>
 							</li>
 							<li>
-								<span id="zeek-quick-links-label">{{i18n.configQLZeekHeader}}</span>
+								<span id="zeek-quick-links-label" role="heading" aria-level="4">{{i18n.configQLZeekHeader}}</span>
 								<ul aria-labelledby="zeek-quick-links-label">
 									<li>
 										<router-link data-aid="config_quicklink_zeek_homenet" :to="{name: 'config', query: {s: 'zeek.config.networks.HOME_NET'}}">{{i18n.configQLZeekHomeNet}}</router-link>
@@ -174,7 +174,7 @@
 								</ul>
 							</li>
 							<li>
-								<span id="bpf-quick-links-label">{{i18n.configQLBPFHeader}}</span>
+								<span id="bpf-quick-links-label" role="heading" aria-level="4">{{i18n.configQLBPFHeader}}</span>
 								<ul aria-labelledby="bpf-quick-links-label">
 									<li>
 										<router-link data-aid="config_quicklink_pcap" :to="{name: 'config', query: {s: 'bpf.pcap'}}">{{i18n.configQLPCAP}}</router-link>
@@ -188,7 +188,7 @@
 								</ul>
 							</li>
 							<li>
-								<span id="soc-quick-links-label">{{i18n.configQLSOCHeader}}</span>
+								<span id="soc-quick-links-label" role="heading" aria-level="4">{{i18n.configQLSOCHeader}}</span>
 								<ul aria-labelledby="soc-quick-links-label">
 									<li>
 										<router-link data-aid="config_quicklink_actions" :to="{name: 'config', query: {s: 'soc.config.actions'}}">{{i18n.configQLSOCActions}}</router-link>
@@ -266,7 +266,7 @@
 								<v-col>
 									<v-btn id="config-toggle-default-button" color="text_button" @click="showDefault = !showDefault" v-text="showDefault ? i18n.settingHideDefault : i18n.settingShowDefault" data-aid="config_item_show_default"></v-btn>
 									<div v-if="showDefault" class="mt-8 ml-8">
-										<v-chip v-if="isToggle(selected)" id="default-output" :color="$root.isTrue(selected.default) ? 'primary' : ''" data-aid="config_item_default_display">{{$root.isTrue(selected.default) ? i18n.enabled : i18n.disabled }}</v-chip>
+										<v-chip v-if="isToggle(selected)" id="default-output" :color="$root.isTrue(selected.default) ? 'primary' : ''" data-aid="config_item_default_display" :aria-label="i18n.settingDefault">{{$root.isTrue(selected.default) ? i18n.enabled : i18n.disabled }}</v-chip>
 										<v-textarea v-else-if="isMultiline(selected)" id="default-output" :label="i18n.settingDefault" v-model="selected.default" readonly class="config-editor" data-aid="config_item_default_display"></v-textarea>
 										<v-text-field v-else id="default-output" :label="i18n.settingDefault" v-model="selected.default" readonly data-aid="config_item_default_display"></v-text-field>
 									</div>
@@ -304,7 +304,7 @@
 													<div class="my-1" v-for="(element, elementIdx) in selected.uiElements" :key="elementIdx">
 														<v-textarea v-if="isMultiline(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" @update:model-value="markDirtyEntries" variant="outlined" :label="getElementLabel(element)" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="editing config-editor" :data-aid="'config_item_entry_' + element.field" :aria-required="element.required"></v-textarea>
 														<v-switch v-else-if="isToggle(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" inset @update:model-value="markDirtyEntries" variant="outlined" :label="getElementLabel(element)" :readonly="isUiElementReadonly(entry, element)" v-model="entry[element.field]" class="no-details" :data-aid="'config_item_entry_' + element.field" :aria-required="element.required"></v-switch>
-														<v-select v-else-if="isSelectList(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" :items="element.options" :multiple="hasMultipleValues(element)" inset @update:model-value="markDirtyEntries" :label="getElementLabel(element)" variant="outlined" :label="element.label" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="no-details mb-6" :data-aid="'config_item_entry_' + element.field" :aria-required="element.required"></v-select>
+														<v-select v-else-if="isSelectList(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" :items="element.options" :multiple="hasMultipleValues(element)" inset @update:model-value="markDirtyEntries" :label="getElementLabel(element)" variant="outlined" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="no-details mb-6" :data-aid="'config_item_entry_' + element.field" :aria-required="element.required"></v-select>
 														<v-text-field v-else :id="'setting-entry-' + entryIdx + '-input-' + element.field" @update:model-value="markDirtyEntries" variant="outlined" :label="getElementLabel(element)" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="editing" :data-aid="'config_item_entry_' + element.field" :aria-required="element.required"></v-text-field>
 													</div>
 												</v-form>
@@ -318,15 +318,15 @@
 									<div v-else>
 										<div v-if="isToggle(selected)">
 											<div v-if="form.key != selected.id || isReadOnly(selected)">
-												<v-chip id="value-output" :color="$root.isTrue(selected.value) ? 'primary' : ''" append-icon="fa-pencil" @click="edit(selected)" data-aid="config_item_customize_slider_display">{{$root.isTrue(selected.value) ? i18n.enabled : i18n.disabled }}</v-chip>
-												<span class="setting_label mx-4">{{ i18n.settingGlobal }}</span>
+												<v-chip id="value-output" :color="$root.isTrue(selected.value) ? 'primary' : ''" append-icon="fa-pencil" @click="edit(selected)" data-aid="config_item_customize_slider_display" :aria-labelledby="'node-value-label-' + item[0]">{{$root.isTrue(selected.value) ? i18n.enabled : i18n.disabled }}</v-chip>
+												<span :id="'node-value-label-' + item[0]" class="setting_label mx-4">{{ i18n.settingGlobal }}</span>
 											</div>
 											<v-switch v-else id="value-input" :label="i18n.settingGlobal" true-value="true" v-model="form.value" class="editing config-editor no-details" data-aid="config_item_customize_slider_input"></v-switch>
 										</div>
 										<div v-else-if="isSelectList(selected)">
 											<div v-if="form.key != selected.id || isReadOnly(selected)">
-												<v-chip id="value-output" append-icon="fa-pencil" @click="edit(selected)" :data-aid="config_item_customize_select_display">{{selected.value}}</v-chip>
-												<span class="setting_label mx-4">{{ i18n.settingGlobal }}</span>
+												<v-chip id="value-output" append-icon="fa-pencil" @click="edit(selected)" :data-aid="config_item_customize_select_display" :aria-labelledby="'node-value-label-' + item[0]">{{selected.value}}</v-chip>
+												<span :id="'node-value-label-' + item[0]" class="setting_label mx-4">{{ i18n.settingGlobal }}</span>
 											</div>
 											<v-select v-else id="value-input" :items="selected.options" :multiple="hasMultipleValues(selected)" :label="i18n.settingGlobal" v-model="form.value" :rules="buildInputRules(selected)" class="editing config-editor no-details" :data-aid="config_item_customize_select_input"></v-select>
 										</div>
@@ -356,15 +356,15 @@
 									</div>
 									<div v-if="isToggle(selected)">
 										<div v-if="form.key != item[0] || isReadOnly(selected)">
-											<v-chip :id="'node-value-output-' + item[0]" :color="$root.isTrue(item[1]) ? 'primary' : 'secondary'" append-icon="fa-pencil" @click="edit(selected, item[0])" data-aid="config_item_customize_node_slider_display">{{$root.isTrue(item[1]) ? i18n.enabled : i18n.disabled }}</v-chip>
-											<span class="setting_label mx-4">{{ item[0] }}</span>
+											<v-chip :id="'node-value-output-' + item[0]" :color="$root.isTrue(item[1]) ? 'primary' : 'secondary'" append-icon="fa-pencil" @click="edit(selected, item[0])" data-aid="config_item_customize_node_slider_display" :aria-labelledby="'node-value-label-' + item[0]">{{$root.isTrue(item[1]) ? i18n.enabled : i18n.disabled }}</v-chip>
+											<span :id="'node-value-label-' + item[0]" class="setting_label mx-4">{{ item[0] }}</span>
 										</div>
 										<v-switch v-else :id="'node-value-input-' + item[0]" :label="item[0]" true-value="true" v-model="form.value" class="editing config-editor no-details" data-aid="config_item_customize_node_slider_input"></v-switch>
 									</div>
 									<div v-else-if="isSelectList(selected)">
 										<div v-if="form.key != item[0] || isReadOnly(selected)">
-											<v-chip :id="'node-value-output-' + item[0]" append-icon="fa-pencil" @click="edit(selected, item[0])" :data-aid="config_item_customize_node_select_display">{{item[1]}}</v-chip>
-											<span class="setting_label mx-4">{{ item[0] }}</span>
+											<v-chip :id="'node-value-output-' + item[0]" append-icon="fa-pencil" @click="edit(selected, item[0])" :data-aid="config_item_customize_node_select_display" :aria-labelledby="'node-value-label-' + item[0]">{{item[1]}}</v-chip>
+											<span :id="'node-value-label-' + item[0]" class="setting_label mx-4">{{ item[0] }}</span>
 										</div>
 										<v-select v-else :id="'node-value-input-' + item[0]" :items="selected.options" :multiple="hasMultipleValues(selected)" :label="item[0]" v-model="form.value" :rules="buildInputRules(selected)" class="editing config-editor no-details" :data-aid="config_item_customize_node_select_input"></v-select>
 									</div>

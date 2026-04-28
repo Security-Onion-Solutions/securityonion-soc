@@ -53,23 +53,23 @@
 			</div>
 			<v-row>
 				<v-tabs grow v-model="activeTab" class="full-width">
-					<v-tab id="case_commentsTab" value="comments" :class="{ 'theme-primary': activeTab === 'comments'}" data-aid="case_comments_tab">
+					<v-tab id="case_commentsTab" value="comments" :class="{ 'theme-primary': activeTab === 'comments'}" :aria-label="i18n.comments" data-aid="case_comments_tab">
 						<v-icon class="mr-2">fa-comments</v-icon>
 						<div class="d-none d-lg-block">{{ i18n.comments }}</div>
 					</v-tab>
-					<v-tab id="case_attachmentTab" value="attachments" :class="{ 'theme-primary': activeTab === 'attachments'}" data-aid="case_attachments_tab">
+					<v-tab id="case_attachmentTab" value="attachments" :class="{ 'theme-primary': activeTab === 'attachments'}" :aria-label="i18n.attachments" data-aid="case_attachments_tab">
 						<v-icon class="mr-2">fa-paperclip</v-icon>
 						<div class="d-none d-lg-block">{{ i18n.attachments }}</div>
 					</v-tab>
-					<v-tab id="case_evidenceTab" value="evidence" :class="{ 'theme-primary': activeTab === 'evidence'}" data-aid="case_evidence_tab">
+					<v-tab id="case_evidenceTab" value="evidence" :class="{ 'theme-primary': activeTab === 'evidence'}" :aria-label="i18n.evidence" data-aid="case_evidence_tab">
 						<v-icon class="mr-2">fa-eye</v-icon>
 						<div class="d-none d-lg-block">{{ i18n.evidence }}</div>
 					</v-tab>
-					<v-tab id="case_eventsTab" value="events" :class="{ 'theme-primary': activeTab === 'events'}" data-aid="case_events_tab">
+					<v-tab id="case_eventsTab" value="events" :class="{ 'theme-primary': activeTab === 'events'}" :aria-label="i18n.events" data-aid="case_events_tab">
 						<v-icon class="mr-2">fa-link</v-icon>
 						<div class="d-none d-lg-block">{{ i18n.events }}</div>
 					</v-tab>
-					<v-tab id="case_historyTab" value="history" :class="{ 'theme-primary': activeTab === 'history'}" data-aid="case_history_tab">
+					<v-tab id="case_historyTab" value="history" :class="{ 'theme-primary': activeTab === 'history'}" :aria-label="i18n.history" data-aid="case_history_tab">
 						<v-icon class="mr-2">fa-history</v-icon>
 						<div class="d-none d-lg-block">{{ i18n.history }}</div>
 					</v-tab>
