@@ -15,12 +15,12 @@
 					</h3>
 				</v-expansion-panel-title>
 				<v-expansion-panel-text>
-					<h3 class="my-2 hard-wrap" data-aid="detection_panel_title">
+					<h4 class="my-2 hard-wrap" data-aid="detection_panel_title">
 						<v-icon class="va-baseline" color="success" data-aid="detection_panel_title_thumbtack">fa-thumbtack</v-icon>
 						{{detection.title}}
-					</h3>
+					</h4>
 					<div class="contrast-bg pa-4">
-						<div class="header">{{i18n.summary}} <v-icon v-if="showAiSummary()" :title="i18n.aiGenSummary" class="unset-vertical-align" data-aid="detection_summary_ai_indicator">fa-flask</v-icon></div>
+						<div class="header" role="heading" aria-level="4">{{i18n.summary}} <v-icon v-if="showAiSummary()" :title="i18n.aiGenSummary" class="unset-vertical-align" data-aid="detection_summary_ai_indicator">fa-flask</v-icon></div>
 						<div class="summary hard-wrap" data-aid="detection_panel_ai_summary_display" v-if="showAiSummary()">
 							{{ detection.aiSummary }}
 							<div class="font-weight-thin mt-2" v-if="detection.isAiSummaryStale" data-aid="detection_panel_summary_stale">
@@ -54,11 +54,11 @@
 					</div>
 					<div class="pa-4">
 						<span>
-							<div class="ops-header mt-0">
+							<div id="status-label" class="ops-header mt-0">
 								{{ i18n.status }}: {{ detection.isEnabled ? i18n.enabled : i18n.disabled }}
 							</div>
 							<div data-aid="detection_panel_enabled_toggle">
-								<v-switch id="detection-enabled-edit" inset v-model="detection.isEnabled" class="no-details" @change="toggleStatus()" :aria-label="i18n.ariaDetectionStatus"></v-switch>
+								<v-switch id="detection-enabled-edit" inset v-model="detection.isEnabled" class="no-details" @change="toggleStatus()" aria-labelledby="status-label"></v-switch>
 							</div>
 						</span>
 					</div>
@@ -130,7 +130,7 @@
 						<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
 							<tr>
 								<template v-for="header in columns" :key="header.key">
-									<th :class="{'is-sorted': isSorted(header)}" :data-aid="'detections_panel_overrides_' + header?.value?.toLowerCase()">
+									<th :class="{'is-sorted': isSorted(header)}" :data-aid="'detections_panel_overrides_' + header?.value?.toLowerCase()" scope="col" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'">
 										<template v-if="header.key">
 											<span @click="toggleSort(header)">
 												{{ header.title }}
@@ -168,17 +168,17 @@
 							<tr class="expanded-row">
 								<td :colspan="columns.length" class="pa-4" v-if="detection.engine === 'suricata'">
 									<div data-aid="detection_panel_override_enabled_toggle">
-										<div class="font-weight-bold mt-4">
+										<div id="enabled-label" class="font-weight-bold mt-4">
 											{{i18n.enabled}}: {{item.isEnabled}}
 										</div>
 										<v-switch id="override-enabled-edit" ref="override-enabled" hide-details="auto" v-model="item.isEnabled"
-											inset @change="saveDetection(false)" :aria-label="i18n.ariaOverrideEnabled"></v-switch>
+											inset @change="saveDetection(false)" aria-labelledby="enabled-label"></v-switch>
 									</div>
 									<div v-if="item.type === 'modify'" @click="startOverrideEdit('override-regex', item, 'regex')" :class="{ clicktoedit: !isOverrideEdit('override-regex') }">
 										<div id="regex-label" class="font-weight-bold mt-4">
 											{{i18n.regex}}:
 										</div>
-										<span id="override-regex" v-if="!isOverrideEdit('override-regex')">
+										<span id="override-regex" v-if="!isOverrideEdit('override-regex')" aria-labelledby="regex-label">
 											{{item.regex}}
 										</span>
 										<span v-else>
@@ -198,7 +198,7 @@
 										<div id="value-label" class="font-weight-bold mt-4">
 											{{i18n.value}}:
 										</div>
-										<span id="override-value" v-if="!isOverrideEdit('override-value')">
+										<span id="override-value" v-if="!isOverrideEdit('override-value')" aria-labelledby="value-label">
 											{{item.value}}
 										</span>
 										<span v-else>
@@ -218,7 +218,7 @@
 										<div id="threshold-type-label" class="font-weight-bold mt-4">
 											{{i18n.type}}:
 										</div>
-										<span id="override-threshold-type" v-if="!isOverrideEdit('override-threshold-type')">
+										<span id="override-threshold-type" v-if="!isOverrideEdit('override-threshold-type')" aria-labelledby="threshold-type-label">
 											{{item.thresholdType}}
 										</span>
 										<v-select v-else id="override-threshold-type-edit" ref="override-threshold-type" v-model="item.thresholdType" :items="thresholdTypes" :rules="[$root.validators.required]" aria-labelledby="threshold-type-label" @update:model-value="stopOverrideEdit(true)"></v-select>
@@ -227,7 +227,7 @@
 										<div id="track-label" class="font-weight-bold mt-4">
 											{{i18n.track}}:
 										</div>
-										<span id="override-track" v-if="!isOverrideEdit('override-track')">
+										<span id="override-track" v-if="!isOverrideEdit('override-track')" aria-labelledby="track-label">
 											{{item.track}}
 										</span>
 										<v-select v-else id="override-track-edit" ref="override-track" v-model="item.track" :items="trackOptions[item.type]" :rules="[$root.validators.required]" aria-labelledby="track-label" @update:model-value="stopOverrideEdit(true)"></v-select>
@@ -236,7 +236,7 @@
 										<div id="ip-label" class="font-weight-bold mt-4">
 											{{i18n.ip}}:
 										</div>
-										<span id="override-ip" v-if="!isOverrideEdit('override-ip')">
+										<span id="override-ip" v-if="!isOverrideEdit('override-ip')" aria-labelledby="ip-label">
 											{{item.ip}}
 										</span>
 										<span v-else>
@@ -262,7 +262,7 @@
 										<div id="count-label" class="font-weight-bold mt-4">
 											{{i18n.count}}:
 										</div>
-										<span id="override-count" v-if="!isOverrideEdit('override-count')">
+										<span id="override-count" v-if="!isOverrideEdit('override-count')" aria-labelledby="count-label">
 											{{item.count}}
 										</span>
 										<span v-else>
@@ -282,7 +282,7 @@
 										<div id="seconds-label" class="font-weight-bold mt-4">
 											{{i18n.secondsLabel}}:
 										</div>
-										<span id="override-seconds" v-if="!isOverrideEdit('override-seconds')">
+										<span id="override-seconds" v-if="!isOverrideEdit('override-seconds')" aria-labelledby="seconds-label">
 											{{item.seconds}}
 										</span>
 										<span v-else>
@@ -302,7 +302,7 @@
 										<div id="note-label" class="font-weight-bold mt-4">
 											{{i18n.note}}:
 										</div>
-										<span id="override-note" v-if="!isOverrideEdit('override-note')">
+										<span id="override-note" v-if="!isOverrideEdit('override-note')" aria-labelledby="note-label">
 											{{item.note}}
 										</span>
 										<span v-else>
@@ -331,17 +331,17 @@
 								</td>
 								<td :colspan="overrideHeaders[detection.engine].length" class="pa-4" v-else-if="detection.engine === 'elastalert'">
 									<div @click="startOverrideEdit('override-enabled', item, 'isEnabled')" :class="{ clicktoedit: !isOverrideEdit('override-enabled') }" data-aid="detection_panel_override_enabled_toggle">
-										<div class="font-weight-bold mt-2">
+										<div id="enabled-label" class="font-weight-bold mt-2">
 											{{i18n.enabled}}: {{item.isEnabled}}
 										</div>
 										<v-switch id="override-enabled-edit" ref="override-enabled" hide-details="auto" v-model="item.isEnabled"
-											inset @change="saveDetection(false)" :aria-label="i18n.ariaOverrideEnabled"></v-switch>
+											inset @change="saveDetection(false)" :aria-label="i18n.ariaOverrideEnabled" aria-labelledby="enabled-label"></v-switch>
 									</div>
 									<div @click="startOverrideEdit('override-custom-filter', item, 'customFilter')" :class="{ clicktoedit: !isOverrideEdit('override-custom-filter') }">
 										<div id="custom-filter-label" class="font-weight-bold mt-2">
 											{{i18n.customFilter}}:
 										</div>
-										<span id="override-custom-filter" v-if="!isOverrideEdit('override-custom-filter')">
+										<span id="override-custom-filter" v-if="!isOverrideEdit('override-custom-filter')" aria-labelledby="custom-filter-label">
 											<pre>{{item.customFilter}}</pre>
 										</span>
 										<span v-else>
@@ -363,7 +363,7 @@
 										<div id="note-label" class="font-weight-bold mt-4">
 											{{i18n.note}}:
 										</div>
-										<span id="override-note" v-if="!isOverrideEdit('override-note')">
+										<span id="override-note" v-if="!isOverrideEdit('override-note')" aria-labelledby="note-label">
 											{{item.note}}
 										</span>
 										<span v-else>
@@ -399,7 +399,7 @@
 		</v-expansion-panels>
 		<v-dialog v-model="ackExistingDialog" persistent max-width="450">
 			<v-card>
-				<v-card-title class="text-headline-small" v-text="i18n.acknowledgeExistingAlertsTitle"></v-card-title>
+				<v-card-title class="text-headline-small" v-text="i18n.acknowledgeExistingAlertsTitle" role="heading" aria-level="2"></v-card-title>
 				<v-card-text v-html="i18n.acknowledgeExistingAlertsText"></v-card-text>
 				<v-card-actions>
 					<v-spacer></v-spacer>

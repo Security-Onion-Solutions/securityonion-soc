@@ -901,3 +901,8 @@ nav {
   font-weight: inherit;
   margin: 0;
 }
+
+dfn {
+  font-weight: bold;
+  font-style: normal;
+}

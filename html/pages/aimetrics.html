@@ -2,7 +2,7 @@
 <v-container v-else-if="assistantEnabled" fluid data-aid="aimetrics_screen">
   <v-dialog v-model="showOptionsDialog" max-width="540">
     <v-card class="options-dialog">
-      <v-card-title>{{i18n.options}}</v-card-title>
+      <v-card-title role="heading" aria-level="2">{{i18n.options}}</v-card-title>
       <v-card-text data-aid="aimetrics_options">
         <span data-aid="aimetrics_autorefresh_select">
           <v-select id="aimetrics-auto-refresh" :disabled="$root.loading" v-model="autoRefreshInterval" @update:focused="autoRefreshIntervalChanged" :items="autoRefreshIntervals" :label="i18n.autoRefresh" prepend-icon="fa-hourglass-half"></v-select>
@@ -88,7 +88,7 @@
   <v-row v-if="tableSetting == TABLE_SETTING_USERS || tableSetting == TABLE_SETTING_SESSIONS">
     <v-col id="aimetrics-graphs" class="section-panel" data-aid="aimetrics_graphs_tab">
       <v-toolbar density="compact" variant="flat">
-        <v-toolbar-title>{{ i18n.graphMetrics }}</v-toolbar-title>
+        <v-toolbar-title role="heading" aria-level="2">{{ i18n.graphMetrics }}</v-toolbar-title>
         <v-spacer></v-spacer>
         <v-btn variant="text" size="small" icon class="mr-1" @click="toggleShowSection('aimetrics-graphs')" data-aid="aimetrics_graphs_toggle" :aria-expanded="isExpandedSection('aimetrics-graphs')" :aria-label="i18n.ariaExpandGraphs">
           <v-icon v-if="!isExpandedSection('aimetrics-graphs')" data-aid="aimetrics_graphs_expand">fa-angle-down</v-icon>
@@ -123,7 +123,7 @@
   <v-row>
     <v-col id="aimetrics-table" class="section-panel">
       <v-toolbar density="compact" variant="flat">
-        <v-toolbar-title>{{ i18n.tableMetrics }}</v-toolbar-title>
+        <v-toolbar-title role="heading" aria-level="2">{{ i18n.tableMetrics }}</v-toolbar-title>
         <v-spacer></v-spacer>
         <v-text-field class="toolbar-field" style="max-width: 250px;" v-model="searchFilter" clearable prepend-inner-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="aimetrics_filter">
           <template #clear="{ props }">
@@ -141,7 +141,7 @@
         <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
           <tr>
             <template v-for="header in columns" :key="header.key">
-              <th :class="[ header.align, {'is-sorted': isSorted(header)}, rightShiftedHeaders[tableSetting].includes(header?.value) ? 'text-right' : '' ]" :data-aid="'aimetrics_header_' + header?.value?.toLowerCase()">
+              <th :class="[ header.align, {'is-sorted': isSorted(header)}, rightShiftedHeaders[tableSetting].includes(header?.value) ? 'text-right' : '' ]" :data-aid="'aimetrics_header_' + header?.value?.toLowerCase()" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'" scope="col">
                 <span @click="toggleSort(header)">
                   {{ header.title }}
                 </span>
@@ -164,7 +164,7 @@
             <td class="text-right">{{ item.totalSessions ? formatCount(item.totalSessions) : 0 }}</td>
             <td class="text-right">{{ item.totalMessages ? formatCount(item.totalMessages) : 0 }}</td>
             <td>
-              <router-link :to="buildUserLink(item.userId)" class="no-print" style="text-decoration: none; cursor: 'pointer'" data-aid="aimetrics_open_user" :title="i18n.viewSessions">
+              <router-link :to="buildUserLink(item.userId)" class="no-print" style="text-decoration: none; cursor: 'pointer'" data-aid="aimetrics_open_user" :title="i18n.viewSessions" :aria-label="i18n.viewSessions + ' - ' + item.email">
                 <v-icon class="mr-2 theme-icon">fa-binoculars</v-icon>
               </router-link>
             </td>
@@ -177,7 +177,7 @@
         <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
           <tr>
             <template v-for="header in columns" :key="header.key">
-              <th :class="[ header.align, {'is-sorted': isSorted(header)}, rightShiftedHeaders[tableSetting].includes(header?.value) ? 'text-right' : '' ]" :data-aid="'aimetrics_header_' + header?.value?.toLowerCase()">
+              <th :class="[ header.align, {'is-sorted': isSorted(header)}, rightShiftedHeaders[tableSetting].includes(header?.value) ? 'text-right' : '' ]" :data-aid="'aimetrics_header_' + header?.value?.toLowerCase()" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'" scope="col">
                 <span @click="toggleSort(header)">
                   {{ header.title }}
                 </span>
@@ -201,10 +201,10 @@
             <td class="text-right">{{ item.creditsPerMinute ? formatCount(item.creditsPerMinute) : 0 }}</td>
             <td class="text-right">{{ item.totalMessages ? formatCount(item.totalMessages) : 0 }}</td>
             <td>
-              <router-link :to="buildSessionLink(item.sessionId)" class="no-print" style="text-decoration: none; cursor: 'pointer'" data-aid="aimetrics_open_session">
+              <router-link :to="buildSessionLink(item.sessionId)" class="no-print" style="text-decoration: none; cursor: 'pointer'" data-aid="aimetrics_open_session" :aria-label="i18n.viewMessages">
                 <v-icon class="mr-2 theme-icon" :title="i18n.viewMessages">fa-binoculars</v-icon>
               </router-link>
-              <router-link v-if="$root.user?.id === item.userId" :to="buildAssistantLink(item.sessionId)" class="no-print" style="text-decoration: none; cursor: 'pointer'" data-aid="aimetrics_open_assistant">
+              <router-link v-if="$root.user?.id === item.userId" :to="buildAssistantLink(item.sessionId)" class="no-print" style="text-decoration: none; cursor: 'pointer'" data-aid="aimetrics_open_assistant" :aria-label="i18n.openSession">
                 <v-icon class="mr-2 theme-icon" :title="i18n.openSession">fa-arrow-up-right-from-square</v-icon>
               </router-link>
             </td>
@@ -217,7 +217,7 @@
         <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
           <tr>
             <template v-for="header in columns" :key="header.key">
-              <th :class="[ header.align, {'is-sorted': isSorted(header)}, rightShiftedHeaders[tableSetting].includes(header?.value) ? 'text-right' : '' ]" :data-aid="'aimetrics_header_' + header?.value?.toLowerCase()">
+              <th :class="[ header.align, {'is-sorted': isSorted(header)}, rightShiftedHeaders[tableSetting].includes(header?.value) ? 'text-right' : '' ]" :data-aid="'aimetrics_header_' + header?.value?.toLowerCase()" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'" scope="col">
                 <span @click="toggleSort(header)">
                   {{ header.title }}
                 </span>
@@ -233,7 +233,7 @@
         <template #item="{ item, isExpanded, toggleExpand, internalItem }">
           <tr :class="{'seamless-expanded-row': isExpanded(internalItem), 'main-row': true}">
             <td>
-              <v-btn id="aimetrics-expand-node" icon variant="text" size="small" @click="toggleExpand(internalItem)" data-aid="aimetrics_details_expand">
+              <v-btn id="aimetrics-expand-node" icon variant="text" size="small" @click="toggleExpand(internalItem)" data-aid="aimetrics_details_expand" :aria-label="$root.replaceActionVar(i18n.expandRow, 'expanded_state', isExpanded(internalItem) ? i18n.expanded : '')" :aria-expanded="isExpanded(internalItem)">
                 <v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="aimetrics_details_collapse">fa-angle-down</v-icon>
                 <v-icon v-else :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="aimetrics_details_expand">fa-angle-right</v-icon>
               </v-btn>
