@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
-	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
@@ -16,7 +15,6 @@ import (
 
 	"github.com/apex/log"
 	"github.com/openai/openai-go/v3"
-	"github.com/openai/openai-go/v3/option"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/openai/openai-go/v3/shared"
@@ -39,13 +37,10 @@ func NewOpenAIResponsesAdapter(ctx context.Context, srv *server.Server, config m
 		return nil, fmt.Errorf("openai adapter requires apiUrl in config")
 	}
 
-	opts := []option.RequestOption{
-		option.WithBaseURL(apiUrl),
-	}
-
 	apiKey := module.GetStringDefault(config, "apiKey", "")
-	if apiKey != "" {
-		opts = append(opts, option.WithAPIKey(apiKey))
+	opts, err := buildOpenAIClientOptions(apiUrl, apiKey)
+	if err != nil {
+		return nil, fmt.Errorf("openai adapter config error: %w", err)
 	}
 
 	healthTimeoutSeconds := module.GetIntDefault(config, "healthTimeoutSeconds", DEFAULT_HEALTH_TIMEOUT_SECONDS)
@@ -384,19 +379,7 @@ func (a *OpenAIResponsesAdapter) GetBalance(ctx context.Context) (*model.Balance
 }
 
 func (a *OpenAIResponsesAdapter) GetHealth(ctx context.Context) (*model.HealthResponse, error) {
-	healthCtx, cancel := context.WithTimeout(a.srv.Context, time.Second*time.Duration(a.healthTimeoutSeconds))
-	defer cancel()
-
-	status := "unhealthy"
-
-	res, err := a.client.ModelsList(healthCtx)
-	if err == nil && len(res.Data) > 0 {
-		status = "healthy"
-	}
-
-	return &model.HealthResponse{
-		Status: status,
-	}, nil
+	return checkOpenAIHealth(ctx, a.srv.Context, a.client, a.healthTimeoutSeconds)
 }
 
 func convertToolConfigToOpenAI(req *model.ChatRequest) []responses.ToolUnionParam {
