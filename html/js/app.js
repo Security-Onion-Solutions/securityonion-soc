@@ -718,7 +718,7 @@ $(document).ready(function () {
           }
         },
         toggleTheme() {
-          this.theme.global.name = this.theme.global.current.dark ? 'light' : 'dark';
+          this.theme.change(this.theme.global.current.dark ? 'light' : 'dark');
           this.timestamp = Date.now();
           this.updateEditorTheme();
         },
@@ -1124,7 +1124,7 @@ $(document).ready(function () {
         },
         loadLocalSettings() {
           if (localStorage['settings.app.dark'] != undefined) {
-            this.theme.global.name = localStorage['settings.app.dark'] == 'true' ? 'dark' : 'light';
+            this.theme.change(localStorage['settings.app.dark'] == 'true' ? 'dark' : 'light');
             this.updateEditorTheme();
           }
           if (localStorage['settings.app.navbar'] != undefined) {
