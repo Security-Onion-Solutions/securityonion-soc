@@ -1,5 +1,0 @@
-[[PackageOverrides]]
-name = "stdlib"
-ecosystem = "Go"
-ignore = true
-reason = "Standard library vulnerabilities are managed via Go toolchain updates."

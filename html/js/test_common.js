@@ -115,7 +115,23 @@ global.Vue.isRef = isRef;
 global.Vuetify = {
   components: { VClassIcon: {} },
   createVuetify: () => { },
-  useTheme: () => { return { global: { name: 'dark' } } },
+  useTheme: () => {
+    const theme = {
+      global: {
+        name: { value: 'dark' },
+        current: { dark: false }
+      },
+      change: (mode) => {
+        const isDark = mode == 'dark';
+        theme.global.name.value = mode;
+        theme.global.current.dark = isDark;
+        if (app && app.$vuetify && app.$vuetify.theme) {
+          app.$vuetify.theme.current.dark = isDark;
+        }
+      }
+    };
+    return theme;
+  },
 };
 global.VueRouter = {
   createRouter: () => { },
