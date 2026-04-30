@@ -13,17 +13,19 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/salt"
 )
 
 const DEFAULT_PORT = 5432
 
 type Postgres struct {
-	config           module.ModuleConfig
-	server           *server.Server
-	pool             *pgxpool.Pool
-	running          bool
-	assistantEnabled bool
-	esMigrationCfg   *esMigrationConfig
+	config             module.ModuleConfig
+	server             *server.Server
+	pool               *pgxpool.Pool
+	running            bool
+	assistantEnabled   bool
+	configstoreEnabled bool
+	esMigrationCfg     *esMigrationConfig
 }
 
 func NewPostgres(srv *server.Server) *Postgres {
@@ -48,6 +50,7 @@ func (pg *Postgres) Init(cfg module.ModuleConfig) error {
 	dbname := module.GetStringDefault(cfg, "dbname", "securityonion")
 	sslMode := module.GetStringDefault(cfg, "sslMode", "require")
 	assistantEnabled := module.GetBoolDefault(cfg, "assistantEnabled", true)
+	configstoreEnabled := module.GetBoolDefault(cfg, "configstoreEnabled", false)
 
 	// Use superuser for schema initialization (PG 15+ restricts CREATE TABLE on public schema)
 	adminConnStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
@@ -110,6 +113,7 @@ func (pg *Postgres) Init(cfg module.ModuleConfig) error {
 	log.Info("Connected to PostgreSQL as app user")
 
 	pg.assistantEnabled = assistantEnabled
+	pg.configstoreEnabled = configstoreEnabled
 
 	// Capture elasticsearch config for migration (queries ES directly via HTTP,
 	// bypassing the Assistantstore interface which requires a user context for RBAC)
@@ -146,6 +150,20 @@ func (pg *Postgres) Start() error {
 
 		pg.server.Assistantstore = assiststore
 		log.Info("PostgreSQL Assistantstore enabled")
+	}
+
+	if pg.configstoreEnabled {
+		// The salt module's Init() set server.Configstore to a *salt.Saltstore.
+		// Wrap it: PostgresConfigstore handles GetSettings/UpdateSetting via
+		// Postgres while the embedded Saltstore continues to serve
+		// SyncSettings/SyncModule (and the Grid/AdminUser/AdminClient stores
+		// that share the same Saltstore impl).
+		if saltStore, ok := pg.server.Configstore.(*salt.Saltstore); ok {
+			pg.server.Configstore = NewPostgresConfigstore(pg.server, saltStore, pg.pool)
+			log.Info("PostgreSQL Configstore enabled — pillar reads/writes go to so_pillar.* schema")
+		} else {
+			log.Warn("configstoreEnabled=true but server.Configstore is not a *salt.Saltstore; leaving as-is")
+		}
 	}
 
 	return nil

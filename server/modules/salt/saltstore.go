@@ -237,6 +237,16 @@ func (store *Saltstore) GetSettings(ctx context.Context, advanced bool) ([]*mode
 	return store.sortSettings(store.filter(settings, advanced)), err
 }
 
+// FilterAndSort applies the same post-processing, filter, and sort that
+// GetSettings performs on its way out. Exposed for use by alternate
+// configstore implementations (e.g. PostgresConfigstore in the postgres module)
+// that build the settings list themselves and need the canonical filter/sort
+// pass before returning to handlers.
+func (store *Saltstore) FilterAndSort(settings []*model.Setting, advanced bool) []*model.Setting {
+	store.postProcess(settings)
+	return store.sortSettings(store.filter(settings, advanced))
+}
+
 func (store *Saltstore) postProcess(settings []*model.Setting) {
 	for _, setting := range settings {
 		// Mark all settings missing descriptions as advanced
