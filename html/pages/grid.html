@@ -4,7 +4,7 @@
 			<v-card-title>{{i18n.options}}</v-card-title>
 			<v-card-text data-aid="grid_options">
 				<span data-aid="grid_options_timezone_select">
-					<v-select id="gridTimezone" @update:model-value="zone = $event; saveTimezone()" v-model="zone" :items="$root.timezones" :hint="i18n.timezoneHelp" persistent-hint prepend-icon="fa-user-clock" data-aid="grid_options_timezone_select"></v-select>
+					<v-select id="gridTimezone" @update:model-value="zone = $event; saveTimezone()" v-model="zone" :items="$root.timezones" :hint="i18n.timezoneHelp" persistent-hint prepend-icon="fa-user-clock" data-aid="grid_options_timezone_select" :aria-label="i18n.ariaGridTimezone"></v-select>
 				</span>
 				<span data-aid="grid_options_more_columns_toggle">
 					<v-checkbox id="moreColumns" v-model="moreColumns" :hint="i18n.moreColumnsHelp" persistent-hint :label="i18n.moreColumns" data-aid="grid_more_columns_toggle"></v-checkbox>

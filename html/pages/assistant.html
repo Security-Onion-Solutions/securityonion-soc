@@ -378,6 +378,7 @@
 						@keydown.enter.exact.prevent="$refs.sendButton.$el.click()"
 						:disabled="!canChat || !creditsLoaded"
 						data-aid="assistant_chat_input"
+						:aria-label="i18n.ariaMessageAi"
 					></v-textarea>
 					<v-btn
 						id="chat-send-button"

@@ -484,7 +484,8 @@
 														density="compact" eager variant="outlined" hide-details="auto" class="case-select mt-2" multiple persistent-hint :hint="i18n.caseTagsHelp"
 														v-model="editForm.val"
 														:items="selectList('tags', item.tags)"
-														@change="stopEdit(true)">
+														@change="stopEdit(true)"
+														:aria-label="i18n.ariaAttachmentTags">
 														<template #selection="{ item }">
 															<v-chip density="compact" color="primary">{{item}}</v-chip>
 														</template>

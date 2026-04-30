@@ -90,7 +90,7 @@
               <p class="login-subtitle text-center">{{ i18n.totp }}</p>
               <div class="login-fields text-center">
                 <div class="mb-3 login-hint">{{ i18n.totpCodeHelp }}</div>
-                <v-otp-input id="totp" autofocus="true" autocomplete="off" v-model="form.totpCode" :length="totpCodeLength" @finish="submitTotp" data-aid="login_totp_input"></v-otp-input>
+                <v-otp-input id="totp" autofocus="true" autocomplete="off" v-model="form.totpCode" :length="totpCodeLength" @finish="submitTotp" data-aid="login_totp_input" :aria-label="i18n.ariaOtpInput"></v-otp-input>
                 <v-text-field name="totp_code" id="totp_code" v-model="form.totpCode" class="d-none"></v-text-field>
                 <v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
                 <v-text-field name="method" value="totp" class="d-none"></v-text-field>
