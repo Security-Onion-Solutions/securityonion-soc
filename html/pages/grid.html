@@ -26,10 +26,10 @@
 					<v-btn icon variant="flat" @click.stop="loadData()" id="grid-refresh-button" class="circle-button mx-2" data-aid="grid_refresh_button" :aria-label="i18n.ariaGridRefresh">
 						<v-icon>fa-sync</v-icon>
 					</v-btn>
-					<v-btn icon variant="flat" class="circle-button mx-2" :title="i18n.options" @click="showOptionsDialog = true" id="gridOptionsHeader" data-aid="grid_options_button">
+					<v-btn icon variant="flat" class="circle-button mx-2" :title="i18n.options" @click="showOptionsDialog = true" id="gridOptionsHeader" data-aid="grid_options_button" :aria-label="i18n.options">
 						<v-icon>fa-gear</v-icon>
 					</v-btn>
-					<v-btn icon variant="flat" class="circle-button mx-2" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'grid'" :title="i18n.contextualDocsBtn" data-aid="grid_docs">
+					<v-btn icon variant="flat" class="circle-button mx-2" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'grid'" :title="i18n.contextualDocsBtn" data-aid="grid_docs" :aria-label="i18n.contextualDocsBtn">
 						<v-icon>fa-circle-question</v-icon>
 					</v-btn>
 				</v-toolbar>
@@ -41,11 +41,11 @@
 					<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
 						<tr>
 							<template v-for="header in columns" :key="header.key">
-								<th :class="[ header.align, {'is-sorted': isSorted(header)} ]" v-if="showHeader(header)" :data-aid="'grid_header_' + header?.value?.toLowerCase()">
+								<th :class="[ header.align, {'is-sorted': isSorted(header)} ]" v-if="showHeader(header)" :data-aid="'grid_header_' + header?.value?.toLowerCase()" scope="col" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'">
 									<span @click="toggleSort(header)">
 										{{ header.title }}
 									</span>
-									<template v-if="isSorted(header)" scope="col" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'">
+									<template v-if="isSorted(header)">
 										<v-icon>
 											{{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down'}}
 										</v-icon>
@@ -126,7 +126,7 @@
 													<dl class="ws-normal">
 														<template v-if="$root.hasSubgrids">
 															<dt class="filter label">{{ i18n.gridId }}:</dt>
-															<dd id="node_grid_id" class="filter value">{{ item.gridId ? item.gridId : i18n.gridLocal }}</>
+															<dd id="node_grid_id" class="filter value">{{ item.gridId ? item.gridId : i18n.gridLocal }}</dd>
 														</template>
 														
 														<dt class="filter label">{{ i18n.id }}:</dt>
@@ -397,19 +397,19 @@
 													</dl>
 													
 													<div class="text-justify">
-														<v-btn id="dashboard-link" icon variant="text" size="small" :title="i18n.nodeDashboard" :href="item.dashboardLink" :target="$root.target('influxdb')" :disabled="$root.isNodeInSubgrid(item)" class="theme-text" data-aid="grid_node_nav_influx">
+														<v-btn id="dashboard-link" icon variant="text" size="small" :title="i18n.nodeDashboard" :href="item.dashboardLink" :target="$root.target('influxdb')" :disabled="$root.isNodeInSubgrid(item)" class="theme-text" data-aid="grid_node_nav_influx" :aria-label="i18n.nodeDashboard">
 															<v-icon class="theme-icon">fa-chart-line</v-icon>
 														</v-btn>
-														<v-btn v-if="canTest(item)" id="test-minion" icon variant="text" size="small" :title="i18n.nodeTest" @click="showTestConfirm(item)" class="theme-text" data-aid="grid_node_test">
+														<v-btn v-if="canTest(item)" id="test-minion" icon variant="text" size="small" :title="i18n.nodeTest" @click="showTestConfirm(item)" class="theme-text" data-aid="grid_node_test" :aria-label="i18n.nodeTest">
 															<v-icon class="theme-icon">fa-file-import</v-icon>
 														</v-btn>
-														<v-btn v-if="canUpload(item)" id="import-minion" icon variant="text" size="small" :title="i18n.uploadPCAPEVTX" @click="showUploadConfirm(item)" class="theme-text" data-aid="grid_node_import">
+														<v-btn v-if="canUpload(item)" id="import-minion" icon variant="text" size="small" :title="i18n.uploadPCAPEVTX" @click="showUploadConfirm(item)" class="theme-text" data-aid="grid_node_import" :aria-label="i18n.uploadPCAPEVTX">
 															<v-icon class="theme-icon">fa-upload</v-icon>
 														</v-btn>
-														<v-btn v-if="canRestart(item)" id="restart-minion" icon variant="text" size="small" :title="item.osNeedsRestart == 1 ? i18n.restartRequiredHelp : i18n.restartMinionHelp" @click="showRestartConfirm(item)" class="theme-text" data-aid="grid_node_restart">
+														<v-btn v-if="canRestart(item)" id="restart-minion" icon variant="text" size="small" :title="item.osNeedsRestart == 1 ? i18n.restartRequiredHelp : i18n.restartMinionHelp" @click="showRestartConfirm(item)" class="theme-text" data-aid="grid_node_restart" :aria-label="i18n.restartMinionHelp">
 															<v-icon :color="item.osNeedsRestart == 1 ? 'info' : ''" :class="{ 'theme-icon': item.osNeedsRestart != 1 }">fa-power-off</v-icon>
 														</v-btn>
-														<v-btn icon variant="text" size="small" :title="i18n.clickForMoreInformation" :href="$root.parameters.docsUrl + 'grid'" :target="$root.target('so-help')" class="theme-text" data-aid="grid_node_help">
+														<v-btn icon variant="text" size="small" :title="i18n.clickForMoreInformation" :href="$root.parameters.docsUrl + 'grid'" :target="$root.target('so-help')" class="theme-text" data-aid="grid_node_help" :aria-label="i18n.ariaHelpLink">
 															<v-icon class="theme-icon">fa-circle-question</v-icon>
 														</v-btn>
 													</div>
@@ -424,10 +424,10 @@
 														<template #default>
 															<thead>
 																<tr>
-																	<th class="text-right" v-text="i18n.container"></th>
-																	<th class="text-center" v-text="i18n.hunt"></th>
-																	<th class="text-left" v-text="i18n.status"></th>
-																	<th class="text-left d-none d-lg-table-cell" v-text="i18n.details"></th>
+																	<th class="text-right" v-text="i18n.container" scope="col"></th>
+																	<th class="text-center" v-text="i18n.hunt" scope="col"></th>
+																	<th class="text-left" v-text="i18n.status" scope="col"></th>
+																	<th class="text-left d-none d-lg-table-cell" v-text="i18n.details" scope="col"></th>
 																</tr>
 															</thead>
 															<tbody>
@@ -462,7 +462,7 @@
 												<v-card-text>
 													<span v-if="!item.imageFront">
 														{{ i18n.nodeImageUnavailable }}
-														<a :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'grid'" style="text-decoration: none; cursor: 'pointer'"  :title="i18n.clickForMoreInformation" data-aid="grid_node_other_help">
+														<a :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'grid'" style="text-decoration: none; cursor: 'pointer'"  :title="i18n.clickForMoreInformation" data-aid="grid_node_other_help" :aria-label="i18n.ariaHelpLink">
 															<v-icon class="mb-2">fa-circle-question</v-icon>
 														</a>
 													</span>

@@ -76,10 +76,10 @@
         <v-btn icon variant="flat" @click.stop="loadData()" id="aimetrics-refresh-button" class="circle-button mx-2" data-aid="aimetrics_refresh" :aria-label="i18n.ariaReloadData">
           <v-icon>fa-sync</v-icon>
         </v-btn>
-        <v-btn icon variant="flat" class="circle-button mx-2" :title="i18n.options" @click="showOptionsDialog = true" id="aimetrics-options-header" data-aid="aimetrics_options_button">
+        <v-btn icon variant="flat" class="circle-button mx-2" :title="i18n.options" @click="showOptionsDialog = true" id="aimetrics-options-header" data-aid="aimetrics_options_button" :aria-label="i18n.options">
           <v-icon>fa-gear</v-icon>
         </v-btn>
-        <v-btn icon variant="flat" class="circle-button mx-2" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'onion-ai'" :title="i18n.contextualDocsBtn" data-aid="aimetrics_docs">
+        <v-btn icon variant="flat" class="circle-button mx-2" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'onion-ai'" :title="i18n.contextualDocsBtn" data-aid="aimetrics_docs" :aria-label="i18n.ariaAssistantDocs">
           <v-icon>fa-circle-question</v-icon>
         </v-btn>
       </v-toolbar>
@@ -272,7 +272,7 @@
 	">
     <div class="my-8" style="display: flex; gap: 8px; align-items: center;">
       <div>{{ i18n.assistantDisabled }}</div>
-      <router-link v-if="$root.isUserAdmin()" :to="{name: 'config', query: {s: 'soc.config.server.client.assistant.enabled'}}" class="no-print" style="text-decoration: none; cursor: 'pointer'" data-aid="aimetrics_config_entry_enabled">
+      <router-link v-if="$root.isUserAdmin()" :to="{name: 'config', query: {s: 'soc.config.server.client.assistant.enabled'}}" class="no-print" style="text-decoration: none; cursor: 'pointer'" data-aid="aimetrics_config_entry_enabled" :aria-label="i18n.ariaVisitConfigEntry">
         <v-icon class="mr-2 theme-icon" :title="i18n.visitConfigEntry">fa-gear</v-icon>
       </router-link>
     </div>

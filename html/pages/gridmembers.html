@@ -137,7 +137,7 @@
 					<v-col cols="8" class="pa-0">
 						<v-card-text>
 							{{ selected.fingerprint }}
-							<v-icon id="fingerprintCopyValue" class="mx-1" color="white" dense @click.stop="$root.copyToClipboard(selected.fingerprint)" :title="i18n.copyToClipboard" :aria-label="i18n.ariaCopy">
+							<v-icon id="fingerprintCopyValue" class="mx-1" color="white" dense @click.stop="$root.copyToClipboard(selected.fingerprint)" @keydown.enter.space.stop="$root.copyToClipboard(selected.fingerprint)" :title="i18n.copyToClipboard" :aria-label="i18n.ariaCopy" role="button" tabindex="0">
 								fa-copy
 							</v-icon>
 						</v-card-text>

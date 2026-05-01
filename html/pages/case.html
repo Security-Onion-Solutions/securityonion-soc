@@ -1,7 +1,7 @@
 <v-container fluid data-aid="case_screen">
 	<div class="mx-sm-12 mx-lg-6 mt-2 mb-6 mb-md-1" data-aid="case_title_input">
 		<div tabindex="0" class="case detail-field clicktoedit d-flex align-start pa-2" v-if="!isEdit('case-title')"
-			@click="startEdit('case-title-input', caseObj.title, 'case-title', 'title', modifyCase)" @keypress.space.prevent="startEdit('case-title-input', caseObj.title, 'case-title', 'title', modifyCase)" role="button">
+			@click="startEdit('case-title-input', caseObj.title, 'case-title', 'title', modifyCase)" @keypress.enter.space.prevent="startEdit('case-title-input', caseObj.title, 'case-title', 'title', modifyCase)" role="button">
 			<h1 id="case-title" class="rounded">{{ caseObj.title }}</h1>
 		</div>
 		<div class="d-flex flex-column" v-if="isEdit('case-title')">
@@ -35,7 +35,7 @@
 			</div>
 			<div class="mb-6 mb-md-3">
 				<div tabindex="0" class="clicktoedit d-flex align-start pa-2" v-if="!isEdit('case-description')" @click="startEdit('case-desc-input',  caseObj.description, 'case-description', 'description', modifyCase, [], true)"
-					@keypress.space.prevent="startEdit('case-desc-input',  caseObj.description, 'case-description', 'description', modifyCase, [], true)" role="button" aria-labelledby="case-description-label">
+					@keypress.enter.space.prevent="startEdit('case-desc-input',  caseObj.description, 'case-description', 'description', modifyCase, [], true)" role="button" aria-labelledby="case-description-label">
 					<div class="d-block" style="width: 100%;">
 						<div id="case-description" class="rounded case detail-field markdown-body" v-html="formatMarkdown(caseObj.description)"></div>
 					</div>
@@ -88,13 +88,13 @@
 						<v-row>
 							<v-col>
 								<v-toolbar class="so-toolbar elevation-0" fixed role="toolbar" :aria-label="i18n.ariaCaseToolbar">
-									<v-btn variant="flat" icon v-bind:title.attr="i18n.addCaseCommentHelp" @click.stop="prepareForInput('comment-input')" id="add-comment-button" data-aid="case_comment_new" class="circle-button mx-2">
+									<v-btn variant="flat" icon v-bind:title.attr="i18n.addCaseCommentHelp" @click.stop="prepareForInput('comment-input')" id="add-comment-button" data-aid="case_comment_new" class="circle-button mx-2" :aria-label="i18n.ariaCreateNew">
 										<v-icon>fa-plus</v-icon>
 									</v-btn>
-									<v-btn variant="flat" icon class="circle-button mx-2" :title="i18n.refreshCaseCommentsHelp" @click.stop="reloadAssociation('comments', true)" id="refresh-comments-button" data-aid="case_comments_refresh">
+									<v-btn variant="flat" icon class="circle-button mx-2" :title="i18n.refreshCaseCommentsHelp" @click.stop="reloadAssociation('comments', true)" id="refresh-comments-button" data-aid="case_comments_refresh" :aria-label="i18n.ariaCommentsRefresh">
 										<v-icon>fa-sync</v-icon>
 									</v-btn>
-									<v-btn v-if="$root.isLicensed($root.FEAT_RPT)" :title="i18n.exportCaseHelp" class="circle-button mx-2" variant="flat" icon @click.stop="exportCase" id="export-case-button" data-aid="case_export">
+									<v-btn v-if="$root.isLicensed($root.FEAT_RPT)" :title="i18n.exportCaseHelp" class="circle-button mx-2" variant="flat" icon @click.stop="exportCase" id="export-case-button-comments" data-aid="case_export" :aria-label="i18n.ariaExportCase">
 										<v-icon>fa-file-export</v-icon>
 									</v-btn>
 								</v-toolbar>
@@ -133,7 +133,7 @@
 
 													<div v-if="$root.isLicensed($root.FEAT_TTR)">
 														<div v-if="!isEdit(`comment-hours-${index}`)" class="case d-block comment-body mt-2" data-aid="case_comment_hours_display">
-															<div class="ml-2 mb-2 clicktoedit" @click="startEdit('comment-hours-input', comment.hours, `comment-hours-${index}`, 'hours', modifyAssociation, ['comments', comment], false)" @keypress.space.prevent="startEdit('comment-hours-input', comment.hours, `comment-hours-${index}`, 'hours', modifyAssociation, ['comments', comment], false)">
+															<div class="ml-2 mb-2 clicktoedit" @click="startEdit('comment-hours-input', comment.hours, `comment-hours-${index}`, 'hours', modifyAssociation, ['comments', comment], false)" @keypress.enter.space.prevent="startEdit('comment-hours-input', comment.hours, `comment-hours-${index}`, 'hours', modifyAssociation, ['comments', comment], false)" role="button" tabindex="0">
 																<div :id="`comment-hours-${index}`">
 																	<v-icon class="mr-2">fa-clock</v-icon>{{ formatHours(comment.hours) }} {{ i18n.hours }}
 																</div>
@@ -178,7 +178,7 @@
 														</div>
 														<div class="d-flex">
 															<v-btn variant="text" size="x-small" v-if="!isEdit(`comment-${index}`)" @click="startEdit('comment-desc-input', comment.description, `comment-${index}`, 'description', modifyAssociation, ['comments', comment], true)" data-aid="case_comment_edit" :aria-label="i18n.ariaEditComment"
-																@keypress.space.prevent="startEdit('comment-desc-input', comment.description, `comment-${index}`, 'description', modifyAssociation, ['comments', comment], true)">
+																@keypress.enter.space.prevent="startEdit('comment-desc-input', comment.description, `comment-${index}`, 'description', modifyAssociation, ['comments', comment], true)">
 																<v-icon class="tiny-icon" color="primary">fa-edit</v-icon>
 															</v-btn>
 															<v-btn variant="text" size="x-small" @click="deleteAssociation('comments', comment)" data-aid="case_comment_delete" :aria-label="i18n.ariaDeleteComment">
@@ -249,13 +249,13 @@
 						<v-row v-if="!isAdding('attachments')">
 							<v-col>
 								<v-toolbar class="so-toolbar elevation-0" fixed role="toolbar" :aria-label="i18n.ariaCaseAttachmentsToolbar">
-									<v-btn :title="i18n.addAttachmentHelp" variant="flat" icon @click.stop="enableAdding('attachments')" id="add-attachment-button" data-aid="case_attachments_new" class="circle-button mx-2">
+									<v-btn :title="i18n.addAttachmentHelp" variant="flat" icon @click.stop="enableAdding('attachments')" id="add-attachment-button" data-aid="case_attachments_new" class="circle-button mx-2" :aria-label="i18n.attachmentAdd">
 										<v-icon>fa-plus</v-icon>
 									</v-btn>
-									<v-btn class="circle-button mx-2" :title="i18n.refreshAttachmentsHelp" variant="flat" icon @click.stop="reloadAssociation('attachments', true)" id="refresh-attachments-button" data-aid="case_attachments_refresh">
+									<v-btn class="circle-button mx-2" :title="i18n.refreshAttachmentsHelp" variant="flat" icon @click.stop="reloadAssociation('attachments', true)" id="refresh-attachments-button" data-aid="case_attachments_refresh" :aria-label="i18n.ariaAttachmentRefresh">
 										<v-icon>fa-sync</v-icon>
 									</v-btn>
-									<v-btn v-if="$root.isLicensed($root.FEAT_RPT)" :title="i18n.exportCaseHelp" class="circle-button mx-2" variant="flat" icon @click.stop="exportCase" id="export-case-button" data-aid="case_export">
+									<v-btn v-if="$root.isLicensed($root.FEAT_RPT)" :title="i18n.exportCaseHelp" class="circle-button mx-2" variant="flat" icon @click.stop="exportCase" id="export-case-button-attachments" data-aid="case_export" :aria-label="i18n.ariaExportCase">
 										<v-icon>fa-file-export</v-icon>
 									</v-btn>
 									<v-spacer></v-spacer>
@@ -340,7 +340,7 @@
 								<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
 									<tr>
 										<template v-for="header in columns" :key="header.key">
-											<th :class="{'is-sorted': isSorted(header)}" :data-aid="'case_attachments_header_' + header?.value?.toLowerCase()" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'">
+											<th :class="{'is-sorted': isSorted(header)}" :data-aid="'case_attachments_header_' + header?.value?.toLowerCase()" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'" scope="col">
 												<span @click="toggleSort(header)" @keydown.enter.space.prevent="toggleSort(header)" role="button" tabindex="0">
 													{{ header.title }}
 												</span>
@@ -381,24 +381,24 @@
 														<div :id="`attachments-${index}-sha256-label`" class="font-weight-bold">{{i18n.sha256}}: </div>
 														<div :id="`attachments-${index}-sha256`" class="case" :aria-labelledby="`attachments-${index}-sha256-label`">
 															{{ withDefault(item.sha256, i18n.unknown) }}
-															<v-icon class="ml-1" @click="$root.copyToClipboard(item.sha256)" :title="i18n.copyToClipboard" data-aid="case_attachment_copy_sha256" role="button">fa-copy</v-icon>
-															<v-icon class="ml-1" @click="populateAddObservableForm('sha256', item.sha256)" :title="i18n.addObservable" data-aid="case_attachment_add_observable_sha256" role="button">fa-eye</v-icon>
+															<v-icon class="ml-1" @click="$root.copyToClipboard(item.sha256)" @keydown.space.enter.stop="$root.copyToClipboard(item.sha256)" :title="i18n.copyToClipboard" data-aid="case_attachment_copy_sha256" role="button" tabindex="0" :aria-label="i18n.ariaSha256Copy">fa-copy</v-icon>
+															<v-icon class="ml-1" @click="populateAddObservableForm('sha256', item.sha256)" @keydown.space.enter.stop="populateAddObservableForm('sha256', item.sha256)" :title="i18n.addObservable" data-aid="case_attachment_add_observable_sha256" role="button" tabindex="0" :aria-label="i18n.ariaSha256AddObservable">fa-eye</v-icon>
 														</div>
 													</div>
 													<div class="mt-2">
 														<div :id="`attachments-${index}-sha1-label`" class="font-weight-bold">{{i18n.sha1}}: </div>
 														<div :id="`attachments-${index}-sha1`" class="case" :aria-labelledby="`attachments-${index}-sha1-label`">
 															{{ withDefault(item.sha1, i18n.unknown) }}
-															<v-icon class="ml-1" @click="$root.copyToClipboard(item.sha1)" :title="i18n.copyToClipboard" data-aid="case_attachment_copy_sha1" role="button">fa-copy</v-icon>
-															<v-icon class="ml-1" @click="populateAddObservableForm('sha1', item.sha1)" :title="i18n.addObservable" data-aid="case_attachment_add_observable_sha1" role="button">fa-eye</v-icon>
+															<v-icon class="ml-1" @click="$root.copyToClipboard(item.sha1)" @keydown.space.enter.stop="$root.copyToClipboard(item.sha1)" :title="i18n.copyToClipboard" data-aid="case_attachment_copy_sha1" role="button" tabindex="0" :aria-label="i18n.ariaSha1Copy">fa-copy</v-icon>
+															<v-icon class="ml-1" @click="populateAddObservableForm('sha1', item.sha1)" @keydown.space.enter.stop="populateAddObservableForm('sha1', item.sha1)" :title="i18n.addObservable" data-aid="case_attachment_add_observable_sha1" role="button" tabindex="0" :aria-label="i18n.ariaSha1AddObservable">fa-eye</v-icon>
 														</div>
 													</div>
 													<div class="mt-2">
 														<div :id="`attachments-${index}-md5-label`" class="font-weight-bold">{{i18n.md5}}: </div>
 														<div :id="`attachments-${index}-md5`" class="case" :aria-labelledby="`attachments-${index}-md5-label`">
 															{{ withDefault(item.md5, i18n.unknown) }}
-															<v-icon class="ml-1" @click="$root.copyToClipboard(item.md5)" :title="i18n.copyToClipboard" data-aid="case_attachment_copy_md5" role="button">fa-copy</v-icon>
-															<v-icon class="ml-1" @click="populateAddObservableForm('md5', item.md5)" :title="i18n.addObservable" data-aid="case_attachment_add_observable_md5" role="button">fa-eye</v-icon>
+															<v-icon class="ml-1" @click="$root.copyToClipboard(item.md5)" @keydown.space.enter.stop="$root.copyToClipboard(item.md5)" :title="i18n.copyToClipboard" data-aid="case_attachment_copy_md5" role="button" tabindex="0" :aria-label="i18n.ariaMd5Copy">fa-copy</v-icon>
+															<v-icon class="ml-1" @click="populateAddObservableForm('md5', item.md5)" @keydown.space.enter.stop="populateAddObservableForm('md5', item.md5)" :title="i18n.addObservable" data-aid="case_attachment_add_observable_md5" role="button" tabindex="0" :aria-label="i18n.ariaMd5AddObservable">fa-eye</v-icon>
 														</div>
 													</div>
 												</template>
@@ -408,7 +408,7 @@
 											</v-container>
 											<v-container fluid class="pt-2 pb-0" data-aid="case_attachment_description_input">
 												<div tabindex="0" class="clicktoedit" @click="startEdit(`attachments-${index}-description-input`, item.description, `attachments-${index}-description`, 'description', modifyAssociation, ['attachments', item], true)"
-													@keypress.space.prevent="startEdit(`attachments-${index}-description-input`, item.description, `attachments-${index}-description`, 'description', modifyAssociation, ['attachments', item], true)" role="button">
+													@keypress.enter.space.prevent="startEdit(`attachments-${index}-description-input`, item.description, `attachments-${index}-description`, 'description', modifyAssociation, ['attachments', item], true)" role="button">
 													<div :id="`attachments-${index}-description-label`" class="font-weight-bold">{{i18n.artifactDescription}}: </div>
 													<div :id="`attachments-${index}-description`" class="case detail-field markdown-body" v-if="!isEdit(`attachments-${index}-description`)" v-html="formatMarkdown(item.description)" :aria-labelledby="`attachments-${index}-description-label`"></div>
 												</div>
@@ -430,7 +430,7 @@
 											</v-container>
 											<v-container fluid class="py-2" data-aid="case_attachments_tlp_select">
 												<div tabindex="0" class="clicktoedit" @click="startEdit(`attachments-${index}-tlp-input`, item.tlp, `attachments-${index}-tlp`, 'tlp', modifyAssociation, ['attachments', item])"
-													@keypress.space.prevent="startEdit(`attachments-${index}-tlp-input`, item.tlp, `attachments-${index}-tlp`, 'tlp', modifyAssociation, ['attachments', item])" role="button">
+													@keypress.enter.space.prevent="startEdit(`attachments-${index}-tlp-input`, item.tlp, `attachments-${index}-tlp`, 'tlp', modifyAssociation, ['attachments', item])" role="button">
 													<div :id="`attachments-${index}-tlp-label`" class="font-weight-bold">{{i18n.caseTlp}}: </div>
 													<v-chip :id="`attachments-${index}-tlp`" density="compact" :color="colorizeChip(item.tlp)" v-if="!isEdit(`attachments-${index}-tlp`)" :aria-labelledby="`attachments-${index}-tlp-label`">{{ withDefault(item.tlp, i18n.unknown) }}</v-chip>
 												</div>
@@ -457,7 +457,7 @@
 											</v-container>
 											<v-container fluid class="py-2" data-aid="case_attachments_tags_select">
 												<div tabindex="0" class="clicktoedit" @click="startEdit(`attachments-${index}-tags-input`, item.tags, `attachments-${index}-tags`, 'tags', modifyAssociation, ['attachments', item])"
-													@keypress.space.prevent="startEdit(`attachments-${index}-tags-input`, item.tags, `attachments-${index}-tags`, 'tags', modifyAssociation, ['attachments', item])" role="button">
+													@keypress.enter.space.prevent="startEdit(`attachments-${index}-tags-input`, item.tags, `attachments-${index}-tags`, 'tags', modifyAssociation, ['attachments', item])" role="button">
 													<div :id="`attachments-${index}-tags-label`" class="font-weight-bold">{{i18n.caseTags}}: </div>
 													<div :id="`attachments-${index}-tags`" class="case detail-field mt-1" v-if="!isEdit(`attachments-${index}-tags`)" :aria-labelledby="`attachments-${index}-tags-label`" role="list">
 														<v-chip density="compact" class="mx-1" v-for="tag in item.tags" color="primary" role="listitem">{{ tag }}</v-chip>
@@ -560,13 +560,13 @@
 						<v-row v-if="!isAdding('evidence')">
 							<v-col>
 								<v-toolbar class="so-toolbar elevation-0" fixed role="toolbar" :aria-label="i18n.ariaCaseEvidenceToolbar">
-									<v-btn :title="i18n.addObservableHelp" icon variant="flat" @click.stop="enableAdding('evidence')" id="add-evidence-button" class="circle-button mx-2" data-aid="case_evidence_new">
+									<v-btn :title="i18n.addObservableHelp" icon variant="flat" @click.stop="enableAdding('evidence')" id="add-evidence-button" class="circle-button mx-2" data-aid="case_evidence_new" :aria-label="i18n.evidenceAdd">
 										<v-icon>fa-plus</v-icon>
 									</v-btn>
-									<v-btn class="circle-button mx-2" :title="i18n.refreshObservablesHelp" icon variant="flat" @click.stop="reloadAssociation('evidence', true)" id="refresh-observables-button" data-aid="case_evidence_refresh">
+									<v-btn class="circle-button mx-2" :title="i18n.refreshObservablesHelp" icon variant="flat" @click.stop="reloadAssociation('evidence', true)" id="refresh-observables-button" data-aid="case_evidence_refresh" :aria-label="i18n.ariaAttachmentRefresh">
 										<v-icon>fa-sync</v-icon>
 									</v-btn>
-									<v-btn v-if="$root.isLicensed($root.FEAT_RPT)" :title="i18n.exportCaseHelp" class="circle-button mx-2" variant="flat" icon @click.stop="exportCase" id="export-case-button" data-aid="case_export">
+									<v-btn v-if="$root.isLicensed($root.FEAT_RPT)" :title="i18n.exportCaseHelp" class="circle-button mx-2" variant="flat" icon @click.stop="exportCase" id="export-case-button-observables" data-aid="case_export" :aria-label="i18n.ariaExportCase">
 										<v-icon>fa-file-export</v-icon>
 									</v-btn>
 									<v-spacer></v-spacer>
@@ -649,7 +649,7 @@
 								<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
 									<tr>
 										<template v-for="header in columns" :key="header.key">
-											<th :class="{'is-sorted': isSorted(header)}" :data-aid="'case_evidence_header_' + header?.value?.toLowerCase()" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'">
+											<th :class="{'is-sorted': isSorted(header)}" :data-aid="'case_evidence_header_' + header?.value?.toLowerCase()" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'" scope="col">
 												<span @click="toggleSort(header)" @keydown.enter.space.prevent="toggleSort(header)" role="button" tabindex="0">
 													{{ header.title }}
 												</span>
@@ -673,7 +673,7 @@
 												<v-icon :title="i18n.huntForEvidence" class="theme-text">fa-crosshairs</v-icon>
 											</v-btn>
 											<v-btn :id="`evidence-${index}-analyze`" icon variant="text" size="x-small" @click="analyze(item)" :disabled="analyzeInProgress(item)" data-aid="case_evidence_analyze" :aria-label="analyzeInProgress(item) ? i18n.ariaAnalyzeInProgress : i18n.ariaAnalyzeObservable">
-												<v-icon v-if="analyzeInProgress(item)" :alt="i18n.analyzeInProgress" :title="i18n.analyzeHelp">fa-clock</v-icon>
+												<v-icon v-if="analyzeInProgress(item)" :alt="i18n.ariaAnalyzeInProgress" :title="i18n.analyzeHelp">fa-clock</v-icon>
 												<v-icon v-if="!analyzeInProgress(item)" :alt="i18n.analyze" :title="i18n.analyzeHelp">fa-bolt</v-icon>
 											</v-btn>
 										</td>
@@ -697,21 +697,21 @@
 													<div :id="`evidence-${index}-sha256-label`" class="font-weight-bold">{{i18n.sha256}}: </div>
 													<div :id="`evidence-${index}-sha256`" class="case" :aria-labelledby="`evidence-${index}-sha256-label`">
 														{{ withDefault(item.sha256, i18n.unknown) }}
-														<v-icon class="ml-1" @click="$root.copyToClipboard(item.sha256)" :title="i18n.copyToClipboard" data-aid="case_evidence_copy_sha256" role="button">fa-copy</v-icon>
+														<v-icon class="ml-1" @click="$root.copyToClipboard(item.sha256)" @keydown.space.enter.stop="$root.copyToClipboard(item.sha256)" :title="i18n.copyToClipboard" data-aid="case_evidence_copy_sha256" role="button" tabindex="0" :aria-label="i18n.ariaSha256Copy">fa-copy</v-icon>
 													</div>
 												</div>
 												<div class="mt-2" data-aid="case_evidence_sha1_display">
 													<div :id="`evidence-${index}-sha1-label`" class="font-weight-bold">{{i18n.sha1}}: </div>
 													<div :id="`evidence-${index}-sha1`" class="case" :aria-labelledby="`evidence-${index}-sha1-label`">
 														{{ withDefault(item.sha1, i18n.unknown) }}
-														<v-icon class="ml-1" @click="$root.copyToClipboard(item.sha1)" :title="i18n.copyToClipboard" data-aid="case_evidence_copy_sha1" role="button">fa-copy</v-icon>
+														<v-icon class="ml-1" @click="$root.copyToClipboard(item.sha1)" @keydown.space.enter.stop="$root.copyToClipboard(item.sha1)" :title="i18n.copyToClipboard" data-aid="case_evidence_copy_sha1" role="button" tabindex="0" :aria-label="i18n.ariaSha1Copy">fa-copy</v-icon>
 													</div>
 												</div>
 												<div class="mt-2" data-aid="case_evidence_md5_display">
 													<div :id="`evidence-${index}-md5-label`" class="font-weight-bold">{{i18n.md5}}: </div>
 													<div :id="`evidence-${index}-md5`" class="case" :aria-labelledby="`evidence-${index}-md5-label`">
 														{{ withDefault(item.md5, i18n.unknown) }}
-														<v-icon class="ml-1" @click="$root.copyToClipboard(item.md5)" :title="i18n.copyToClipboard" data-aid="case_evidence_copy_md5" role="button">fa-copy</v-icon>
+														<v-icon class="ml-1" @click="$root.copyToClipboard(item.md5)" @keydown.space.enter.stop="$root.copyToClipboard(item.md5)" :title="i18n.copyToClipboard" data-aid="case_evidence_copy_md5" role="button" tabindex="0" :aria-label="i18n.ariaMd5Copy">fa-copy</v-icon>
 													</div>
 												</div>
 											</v-container>
@@ -723,7 +723,7 @@
 											</v-container>
 											<v-container fluid class="pt-2 pb-0" data-aid="case_evidence_description_display">
 												<div tabindex="0" class="clicktoedit" @click="startEdit(`evidence-${index}-description-input`, item.description, `evidence-${index}-description`, 'description', modifyAssociation, ['evidence', item], true)"
-													@keypress.space.prevent="startEdit(`evidence-${index}-description-input`, item.description, `evidence-${index}-description`, 'description', modifyAssociation, ['evidence', item], true)" role="button">
+													@keypress.enter.space.prevent="startEdit(`evidence-${index}-description-input`, item.description, `evidence-${index}-description`, 'description', modifyAssociation, ['evidence', item], true)" role="button">
 													<div :id="`evidence-${index}-description-label`" class="font-weight-bold">{{i18n.artifactDescription}}: </div>
 													<div :id="`evidence-${index}-description`" class="case detail-field markdown-body" v-if="!isEdit(`evidence-${index}-description`)" :aria-labelledby="`evidence-${index}-description-label`" v-html="formatMarkdown(item.description)"></div>
 												</div>
@@ -745,7 +745,7 @@
 											</v-container>
 											<v-container fluid class="py-2" data-aid="case_evidence_ioc_toggle">
 												<div tabindex="0" class="clicktoedit" @click="startEdit(`evidence-${index}-ioc-input`, item.ioc, `evidence-${index}-ioc`, 'ioc', modifyAssociation, ['evidence', item])"
-													@keypress.space.prevent="startEdit(`evidence-${index}-ioc-input`, item.ioc, `evidence-${index}-ioc`, 'ioc', modifyAssociation, ['evidence', item])" role="button">
+													@keypress.enter.space.prevent="startEdit(`evidence-${index}-ioc-input`, item.ioc, `evidence-${index}-ioc`, 'ioc', modifyAssociation, ['evidence', item])" role="button">
 													<div :id="`evidence-${index}-ioc-label`" class="font-weight-bold">{{i18n.artifactIoc}}: </div>
 													<div :id="`evidence-${index}-ioc`" class="case detail-field" v-if="!isEdit(`evidence-${index}-ioc`)" :aria-labelledby="`evidence-${index}-ioc-label`">{{ item.ioc ? i18n.yes : i18n.no }}</div>
 												</div>
@@ -753,7 +753,7 @@
 											</v-container>
 											<v-container fluid class="py-2" data-aid="case_evidence_tlp_select">
 												<div tabindex="0" class="clicktoedit" @click="startEdit(`evidence-${index}-tlp-input`, item.tlp, `evidence-${index}-tlp`, 'tlp', modifyAssociation, ['evidence', item])"
-													@keypress.space.prevent="startEdit(`evidence-${index}-tlp-input`, item.tlp, `evidence-${index}-tlp`, 'tlp', modifyAssociation, ['evidence', item])" role="button">
+													@keypress.enter.space.prevent="startEdit(`evidence-${index}-tlp-input`, item.tlp, `evidence-${index}-tlp`, 'tlp', modifyAssociation, ['evidence', item])" role="button">
 													<div :id="`evidence-${index}-tlp-label`" class="font-weight-bold">{{i18n.caseTlp}}: </div>
 													<v-chip :id="`evidence-${index}-tlp`" density="compact" :color="colorizeChip(item.tlp)" outlined v-if="!isEdit(`evidence-${index}-tlp`)" :aria-labelledby="`evidence-${index}-tlp-label`">{{ withDefault(item.tlp, i18n.unknown) }}</v-chip>
 												</div>
@@ -781,7 +781,7 @@
 											</v-container>
 											<v-container fluid class="py-2" data-aid="case_evidence_tags_select">
 												<div tabindex="0" class="clicktoedit" @click="startEdit(`evidence-${index}-tags-input`, item.tags, `evidence-${index}-tags`, 'tags', modifyAssociation, ['evidence', item])"
-													@keypress.space.prevent="startEdit(`evidence-${index}-tags-input`, item.tags, `evidence-${index}-tags`, 'tags', modifyAssociation, ['evidence', item])" role="button">
+													@keypress.enter.space.prevent="startEdit(`evidence-${index}-tags-input`, item.tags, `evidence-${index}-tags`, 'tags', modifyAssociation, ['evidence', item])" role="button">
 													<div :id="`evidence-${index}-tags-label`" class="font-weight-bold">{{i18n.caseTags}}: </div>
 													<div :id="`evidence-${index}-tags`" class="case detail-field mt-1" v-if="!isEdit(`evidence-${index}-tags`)" role="list" :aria-labelledby="`evidence-${index}-tags-label`">
 														<v-chip density="compact" class="mx-1" v-for="tag in item.tags" color="primary" role="listitem">{{ tag }}</v-chip>
@@ -954,13 +954,13 @@
 						<v-row>
 							<v-col>
 								<v-toolbar class="so-toolbar elevation-0" fixed role="toolbar" data-aid="case_events_toolbar" :aria-label="i18n.ariaCaseEventsToolbar">
-									<v-btn :title="i18n.refreshEventsHelp" icon variant="flat" @click.stop="reloadAssociation('events', true)" id="refresh-events-button" class="circle-button mx-2" data-aid="case_events_refresh">
+									<v-btn :title="i18n.refreshEventsHelp" icon variant="flat" @click.stop="reloadAssociation('events', true)" id="refresh-events-button" class="circle-button mx-2" data-aid="case_events_refresh" :aria-label="i18n.ariaEventsRefresh">
 										<v-icon>fa-sync</v-icon>
 									</v-btn>
-									<v-btn :title="i18n.huntForCase" icon variant="flat" id="hunt-events-button" class="circle-button mx-2" data-aid="case_events_hunt" :to="huntCase()">
+									<v-btn :title="i18n.huntForCase" icon variant="flat" id="hunt-events-button" class="circle-button mx-2" data-aid="case_events_hunt" :to="huntCase()" :aria-label="i18n.huntForCase">
 										<v-icon>fa-crosshairs</v-icon>
 									</v-btn>
-									<v-btn v-if="$root.isLicensed($root.FEAT_RPT)" :title="i18n.exportCaseHelp" class="circle-button mx-2" variant="flat" icon @click.stop="exportCase" id="export-case-button" data-aid="case_export">
+									<v-btn v-if="$root.isLicensed($root.FEAT_RPT)" :title="i18n.exportCaseHelp" class="circle-button mx-2" variant="flat" icon @click.stop="exportCase" id="export-case-button-events" data-aid="case_export" :aria-label="i18n.ariaExportCase">
 										<v-icon>fa-file-export</v-icon>
 									</v-btn>
 									<v-spacer></v-spacer>
@@ -975,7 +975,7 @@
 								<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
 									<tr>
 										<template v-for="header in columns" :key="header.key">
-											<th :class="{'is-sorted': isSorted(header)}" :data-aid="'case_events_header_' + header?.value?.toLowerCase()" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'">
+											<th :class="{'is-sorted': isSorted(header)}" :data-aid="'case_events_header_' + header?.value?.toLowerCase()" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'" scope="col">
 												<span @click="toggleSort(header)" @keydown.enter.space.prevent="toggleSort(header)" role="button" tabindex="0">
 													{{ header.title }}
 												</span>
@@ -995,11 +995,11 @@
 												<v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_events_collapse">fa-angle-down</v-icon>
 												<v-icon v-else :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_events_expand">fa-angle-right</v-icon>
 											</v-btn>
-											<router-link class="no-underline" :to="{ name: 'hunt', query: { q: buildHuntQuery(item) } }" :title="i18n.huntForEvent" v-if="item.fields['soc_id']" data-aid="case_events_hunt">
+											<router-link class="no-underline" :to="{ name: 'hunt', query: { q: buildHuntQuery(item) } }" :title="i18n.huntForEvent" v-if="item.fields['soc_id']" data-aid="case_events_hunt" :aria-label="i18n.huntForEvent">
 												<v-icon :title="i18n.huntForEvent" class="theme-text">fa-crosshairs</v-icon>
 											</router-link>
 											<router-link class="no-underline mx-2" :to="{ name: 'alerts', query: { q: '_id:' + item.fields.soc_id, escalated: true, acknowledged: true, t: dateToRange(item.fields['@timestamp']), tab: 'playbook', expand: item.fields.soc_id } }"
-												target="_blank" :title="i18n.playbooksPivot" v-if="item.fields.tags.includes('alert')" data-aid="case_events_playbook">
+												target="_blank" :title="i18n.playbooksPivot" v-if="item.fields.tags.includes('alert')" data-aid="case_events_playbook" :aria-label="i18n.playbooksPivot">
 												<v-icon :title="i18n.playbooksPivot" class="theme-text">fa-book</v-icon>
 											</router-link>
 										</td>
@@ -1017,11 +1017,11 @@
 												<template v-for="value, key in item.fields">
 													<v-row no-gutters class="py-1 case tabular-row" v-if="!key.startsWith(internalPrefix)">
 														<v-col cols="1">
-															<v-btn :id="`events-${index}-addobservable`" variant="text" size="small" @click="populateAddObservableForm(key, value)" data-aid="case_event_add_observable">
+															<v-btn :id="`events-${index}-addobservable`" variant="text" size="small" @click="populateAddObservableForm(key, value)" data-aid="case_event_add_observable" :aria-label="i18n.addObservable">
 																<v-icon :title="i18n.addObservable">fa-eye</v-icon>
 															</v-btn>
-															<router-link class="no-underline" :to="{ name: 'hunt', query: {q: buildHuntQueryForValue(value) }}" data-aid="case_event_hunt">
-																<v-icon :title="i18n.huntForFieldValue" class="theme-text">fa-crosshairs</v-icon>
+															<router-link class="no-underline" :title="i18n.huntForFieldValue" :to="{ name: 'hunt', query: {q: buildHuntQueryForValue(value) }}" data-aid="case_event_hunt" :aria-label="i18n.huntForFieldValue">
+																<v-icon class="theme-text">fa-crosshairs</v-icon>
 															</router-link>
 														</v-col>
 														<v-col cols="4"><span :id="`events-${index}-field-${key}`" class="case tabular-label" data-aid="case_event_field_display">{{ key }}:</span></v-col>
@@ -1071,10 +1071,10 @@
 						<v-row>
 							<v-col>
 								<v-toolbar class="so-toolbar elevation-0" fixed role="toolbar" data-aid="case_history_toolbar" :aria-label="i18n.ariaCaseHistoryToolbar">
-									<v-btn :title="i18n.refreshCaseHistoryHelp" icon variant="flat" @click.stop="reloadAssociation('history', true)" id="refresh-history-button" class="circle-button mx-2" data-aid="case_history_refresh">
+									<v-btn :title="i18n.refreshCaseHistoryHelp" icon variant="flat" @click.stop="reloadAssociation('history', true)" id="refresh-history-button" class="circle-button mx-2" data-aid="case_history_refresh" :aria-label="i18n.ariaHistoryRefresh">
 										<v-icon>fa-sync</v-icon>
 									</v-btn>
-									<v-btn v-if="$root.isLicensed($root.FEAT_RPT)" :title="i18n.exportCaseHelp" class="circle-button mx-2" variant="flat" icon @click.stop="exportCase" id="export-case-button" data-aid="case_export">
+									<v-btn v-if="$root.isLicensed($root.FEAT_RPT)" :title="i18n.exportCaseHelp" class="circle-button mx-2" variant="flat" icon @click.stop="exportCase" id="export-case-button-history" data-aid="case_export" :aria-label="i18n.ariaExportCase">
 										<v-icon>fa-file-export</v-icon>
 									</v-btn>
 									<v-spacer></v-spacer>
@@ -1089,7 +1089,7 @@
 								<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
 									<tr>
 										<template v-for="header in columns" :key="header.key">
-											<th :class="{'is-sorted': isSorted(header)}" :data-aid="'case_history_header_' + header?.value?.toLowerCase()" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'">
+											<th :class="{'is-sorted': isSorted(header)}" :data-aid="'case_history_header_' + header?.value?.toLowerCase()" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'" scope="col">
 												<span @click="toggleSort(header)" @keydown.enter.space.prevent="toggleSort(header)" role="button" tabindex="0">
 													{{ header.title }}
 												</span>

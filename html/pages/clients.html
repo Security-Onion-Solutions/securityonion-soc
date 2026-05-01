@@ -3,7 +3,7 @@
 		<v-col>
 			<v-row>
 				<v-toolbar v-if="$root.isClientAdmin()" class="so-toolbar elevation-0">
-					<h4 class="ml-2 my-0" v-if="!$root.loading">{{ i18n.clients }}: {{ countClients() }}</h4>
+					<h4 class="ml-2 my-0" v-if="!$root.loading" role="heading" aria-level="2">{{ i18n.clients }}: {{ countClients() }}</h4>
 					<v-spacer></v-spacer>
 					<v-btn icon variant="flat" id="add-client-button" class="circle-button mx-2" @click.stop="showAdd()" :aria-label="i18n.ariaClientsNew" data-aid="clients_create_new">
 						<v-icon>fa-plus</v-icon>
@@ -26,7 +26,7 @@
 						<v-container grid-list-sm class="pa-4">
 							<v-row>
 								<v-col xs12>
-									<v-text-field id="name-input" v-model="form.name" :label="i18n.name" :placeholder="i18n.name" :autofocus="true" :rules="[$root.validators.required, $root.validators.maxLength(50)]" data-aid="clients_create_dialog_name"></v-text-field>
+									<v-text-field id="name-input" v-model="form.name" :label="i18n.name" :placeholder="i18n.name" :autofocus="true" :rules="[$root.validators.required, $root.validators.maxLength(50)]" required data-aid="clients_create_dialog_name"></v-text-field>
 									<v-text-field id="note-input" v-model="form.note" :label="i18n.note" :placeholder="i18n.note" :rules="[$root.validators.maxLength(100)]" data-aid="clients_create_dialog_note"></v-text-field>
 								</v-col>
 							</v-row>
@@ -125,7 +125,7 @@
 												<v-card-title v-text="i18n.profile" role="heading" aria-level="3"></v-card-title>
 												<v-card-text>
 													<v-form v-model="form.valid">
-														<v-text-field id="name-input" v-model="form.name" :label="i18n.name" :placeholder="i18n.name" :rules="[$root.validators.required, $root.validators.maxLength(50)]" data-aid="clients_details_name_input"></v-text-field>
+														<v-text-field id="name-input" v-model="form.name" :label="i18n.name" :placeholder="i18n.name" :rules="[$root.validators.required, $root.validators.maxLength(50)]" required data-aid="clients_details_name_input"></v-text-field>
 														<v-text-field id="note-input" v-model="form.note" :label="i18n.note" :placeholder="i18n.note" :rules="[$root.validators.maxLength(100)]" data-aid="clients_details_note_input"></v-text-field>
 														<v-text-field id="search-username-input" v-model="form.searchUsername" :label="i18n.searchUsername" :placeholder="i18n.searchUsername" persistent-hint :hint="i18n.searchUsernameHelp" :rules="[$root.validators.maxLength(50)]" data-aid="clients_details_searchusername_input"></v-text-field>
 														<v-btn :disabled="!form.valid" id="update-client-button" @click="update(item)" v-text="i18n.update" data-aid="clients_details_submit" class="mt-3" ></v-btn>

@@ -32,7 +32,7 @@
 						</div>
 					</div>
 					<div class="quicklinks pt-2">
-						<v-btn id="detection-panel-ack" icon variant="text" size="small" @click="ack(false)" data-aid="detection_panel_ack" :title="i18n.alertAcknowledge">
+						<v-btn id="detection-panel-ack" icon variant="text" size="small" @click="ack(false)" data-aid="detection_panel_ack" :title="i18n.alertAcknowledge" :aria-label="i18n.alertAcknowledge">
 							<v-icon :color="ackColor">
 								<span>
 									<i class="fas fa-bell fa-stack-1x"></i>
@@ -40,7 +40,7 @@
 								</span>
 							</v-icon>
 						</v-btn>
-						<v-btn id="detection-panel-escalate" icon variant="text" size="small" @click="escalate($event)" data-aid="detection_panel_escalate" :title="i18n.escalate">
+						<v-btn id="detection-panel-escalate" icon variant="text" size="small" @click="escalate($event)" data-aid="detection_panel_escalate" :title="i18n.escalate" :aria-label="i18n.escalate">
 							<v-icon color="primary">
 								<span>
 									<i class="fas fa-triangle-exclamation fa-stack-1x"></i>
@@ -48,7 +48,7 @@
 								</span>
 							</v-icon>
 						</v-btn>
-						<v-btn id="detection-panel-open" icon variant="text" size="small" class="no-link" :to="{name:'detection',params: {id:detection.id}}" target="_blank" data-aid="detection_panel_open_detection" :title="i18n.viewDetection">
+						<v-btn id="detection-panel-open" icon variant="text" size="small" class="no-link" :to="{name:'detection',params: {id:detection.id}}" target="_blank" data-aid="detection_panel_open_detection" :title="i18n.viewDetection" :aria-label="i18n.viewDetection">
 							<v-icon color="primary">fa-magnifying-glass</v-icon>
 						</v-btn>
 					</div>
@@ -96,7 +96,7 @@
 								</span>
 								<v-text-field v-if="newOverride.type === 'suppress'" id="new-override-ip-edit" v-model="newOverride.ip" :rules="[$root.validators.required, $root.validators.cidrFormat]" :label="i18n.ipCidr" data-aid="detection_panel_new_override_suppress_ip_input">
 									<template #append>
-										<router-link class="theme-icon" :to="{ name: 'config', query: { s: 'suricata.config.vars', a: '1', e: '1' }}" target="_blank" data-aid="detection_panel_new_override_ip_edit_config_shortcut">
+										<router-link class="theme-icon" :to="{ name: 'config', query: { s: 'suricata.config.vars', a: '1', e: '1' }}" target="_blank" data-aid="detection_panel_new_override_ip_edit_config_shortcut" :aria-label="i18n.ariaSuricataVars">
 											<v-icon>fa fa-gear</v-icon>
 										</router-link>
 									</template>
@@ -118,7 +118,7 @@
 									<v-btn v-if="newOverride.type" id="detection-create-create" :disabled="!newOverrideValid" variant="text" size="small" color="primary" class="align-self-end" @click="addNewOverride()" data-aid="detection_panel_new_override_save">
 										{{ i18n.create }}
 									</v-btn>
-									<v-btn variant="text" size="small" icon class="theme-text" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'detections#managing-detections'" :title="i18n.overrideDocumentationHelp" data-aid="detection_panel_override_help_new">
+									<v-btn variant="text" size="small" icon class="theme-text" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'detections#managing-detections'" :title="i18n.overrideDocumentationHelp" data-aid="detection_panel_override_help_new" :aria-label="i18n.ariaHelpLink">
 										<v-icon class="mb-1">fa-regular fa-circle-question</v-icon>
 									</v-btn>
 								</div>
@@ -243,7 +243,7 @@
 											<v-text-field id="override-ip-edit" ref="override-ip" hide-details="auto" variant="outlined" v-model="item.ip" :rules="[$root.validators.required, $root.validators.cidrFormat]"
 												aria-labelledby="ip-label" @keyup.enter="isFieldValid('override-ip') && stopOverrideEdit(true)" @keyup.esc="stopOverrideEdit(false)" data-aid="detection_panel_override_suppress_ip_input">
 											<template #append>
-												<router-link class="theme-icon" :to="{ name: 'config', query: { s: 'suricata.config.vars', a: '1', e: '1' }}" target="_blank" data-aid="detection_panel_override_ip_edit_config_shortcut">
+												<router-link class="theme-icon" :to="{ name: 'config', query: { s: 'suricata.config.vars', a: '1', e: '1' }}" target="_blank" data-aid="detection_panel_override_ip_edit_config_shortcut" :aria-label="i18n.ariaSuricataVars">
 													<v-icon>fa fa-gear</v-icon>
 												</router-link>
 											</template>
@@ -320,10 +320,10 @@
 									</div>
 									<div class="d-flex justify-end text-body-2 mt-4">
 										<div class="d-inline-flex">
-											<v-btn variant="text" size="small" icon :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'nids#managing-nids-rules'" :title="i18n.overrideDocumentationHelp" data-aid="detection_override_help_suricata">
+											<v-btn variant="text" size="small" icon :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'nids#managing-nids-rules'" :title="i18n.overrideDocumentationHelp" data-aid="detection_override_help_suricata" :aria-label="i18n.ariaHelpLink">
 												<v-icon>fa-regular fa-circle-question</v-icon>
 											</v-btn>
-											<v-btn @click="deleteOverride(item)" variant="text" size="small" icon :title="i18n.overrideDeleteHelp" @click="deleteOverride(item)" data-aid="detection_panel_override_edit_delete_suricata">
+											<v-btn @click="deleteOverride(item)" variant="text" size="small" icon :title="i18n.overrideDeleteHelp" @click="deleteOverride(item)" data-aid="detection_panel_override_edit_delete_suricata" :aria-label="i18n.ariaOverrideDelete">
 												<v-icon color="red">fa-circle-xmark</v-icon>
 											</v-btn>
 										</div>
@@ -335,7 +335,7 @@
 											{{i18n.enabled}}: {{item.isEnabled}}
 										</div>
 										<v-switch id="override-enabled-edit" ref="override-enabled" hide-details="auto" v-model="item.isEnabled"
-											inset @change="saveDetection(false)" :aria-label="i18n.ariaOverrideEnabled" aria-labelledby="enabled-label"></v-switch>
+											inset @change="saveDetection(false)" :aria-label="i18n.ariaOverrideStatus" aria-labelledby="enabled-label"></v-switch>
 									</div>
 									<div @click="startOverrideEdit('override-custom-filter', item, 'customFilter')" :class="{ clicktoedit: !isOverrideEdit('override-custom-filter') }">
 										<div id="custom-filter-label" class="font-weight-bold mt-2">
@@ -381,10 +381,10 @@
 									</div>
 									<div class="d-flex justify-end text-body-2 mt-2">
 										<div class="d-inline-flex">
-											<v-btn variant="text" size="small" icon :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'sigma#managing-sigma-rules'" :title="i18n.overrideDocumentationHelp" data-aid="detection_panel_override_help_elastalert">
+											<v-btn variant="text" size="small" icon :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'sigma#managing-sigma-rules'" :title="i18n.overrideDocumentationHelp" data-aid="detection_panel_override_help_elastalert" :aria-label="i18n.ariaHelpLink">
 												<v-icon>fa-regular fa-circle-question</v-icon>
 											</v-btn>
-											<v-btn @click="deleteOverride(item)" variant="text" size="small" icon :title="i18n.overrideDeleteHelp" data-aid="detection_panel_override_edit_delete_elastalert">
+											<v-btn @click="deleteOverride(item)" variant="text" size="small" icon :title="i18n.overrideDeleteHelp" data-aid="detection_panel_override_edit_delete_elastalert" :aria-label="i18n.ariaOverrideDelete">
 												<v-icon color="red">fa-circle-xmark</v-icon>
 											</v-btn>
 										</div>

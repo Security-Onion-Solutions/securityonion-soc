@@ -161,12 +161,12 @@
             <div v-html="errorMessage"></div>
             <div class="mt-2 no-underline">
               {{ i18n.errorHelp }}
-              <a :target="$root.target('so-help')" :href="parameters.docsUrl + 'help'" class="text-decoration-none" data-aid="nav_docs_error">
+              <a :target="$root.target('so-help')" :href="parameters.docsUrl + 'help'" class="text-decoration-none" data-aid="nav_docs_error" :aria-label="i18n.ariaHelpLink">
                 <v-icon color="white">fa-life-ring</v-icon>
               </a>
             </div>
             <div class="mt-2 no-underline">
-              {{ i18n.huntForError }}<router-link :to="{ name: 'hunt', query: {q: i18n.huntForErrorQuery, rt: 5, rtu: 'minutes', socExcludeToggle: false }}" class="text-decoration-none error-hunt" data-aid="nav_hunt_error"
+              {{ i18n.huntForError }}<router-link :to="{ name: 'hunt', query: {q: i18n.huntForErrorQuery, rt: 5, rtu: 'minutes', socExcludeToggle: false }}" class="text-decoration-none error-hunt" data-aid="nav_hunt_error" :aria-label="i18n.ariaHuntForError"
               >&nbsp;<v-icon :title="i18n.huntForError" color="white">fa-crosshairs</v-icon>
               </router-link>
             </div>

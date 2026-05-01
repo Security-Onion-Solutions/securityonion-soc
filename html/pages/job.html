@@ -99,29 +99,29 @@
 				<v-toolbar fixed class="so-toolbar elevation-0">
 					<v-text-field density="compact" v-model="search" class="ml-2" clearable prepend-inner-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="job_details_filter"></v-text-field>
 					<v-spacer></v-spacer>
-					<v-btn-toggle v-model="packetOptions" class="transparent" multiple :aria-label="i18n.packetDisplayOptions">
-						<v-btn value="packets" class="mx-2" color="text_button" :title="i18n.packetStreamHelp" @click="captureLayoutAsStream()" data-aid="job_details_stream_toggle">
+					<v-btn-toggle v-model="packetOptions" class="transparent" multiple :aria-label="i18n.ariaPacketDisplayOptions">
+						<v-btn value="packets" class="mx-2" color="text_button" :title="i18n.packetStreamHelp" @click="captureLayoutAsStream()" data-aid="job_details_stream_toggle" :aria-label="i18n.ariaPacketStream" :aria-pressed="packetOptions.includes('packets')">
 							<v-icon>fa-list</v-icon>
 						</v-btn>
-						<v-btn value="hex" class="mx-2" color="text_button" :title="i18n.hexHelp" text data-aid="job_details_hex_toggle">
+						<v-btn value="hex" class="mx-2" color="text_button" :title="i18n.hexHelp" text data-aid="job_details_hex_toggle" :aria-label="i18n.ariaHex" :aria-pressed="packetOptions.includes('hex')">
 							{{ i18n.hex }}
 						</v-btn>
-						<v-btn value="unwrap" class="mx-2" color="text_button" :title="i18n.unwrapHelp" @click="toggleWrap" data-aid="job_details_unwrap_toggle">
+						<v-btn value="unwrap" class="mx-2" color="text_button" :title="i18n.unwrapHelp" @click="toggleWrap" data-aid="job_details_unwrap_toggle" :aria-label="i18n.unwrapHelp" :aria-pressed="packetOptions.includes('unwrap')">
 							<v-icon>fa-envelope-open-text</v-icon>
 						</v-btn>
 					</v-btn-toggle>
 					<v-spacer></v-spacer>
-					<v-btn icon @click="expandPackets(false)" :title="i18n.collapseHelp" text data-aid="job_details_collapse_all_packets">
+					<v-btn icon @click="expandPackets(false)" :title="i18n.collapseHelp" text data-aid="job_details_collapse_all_packets" :aria-label="i18n.collapseAll">
 						<v-icon>fa-window-minimize</v-icon>
 					</v-btn>
-					<v-btn icon @click="expandPackets(true)" :title="i18n.expandHelp" text data-aid="job_details_expand_all_packets">
+					<v-btn icon @click="expandPackets(true)" :title="i18n.expandHelp" text data-aid="job_details_expand_all_packets" :aria-label="i18n.expandAll">
 						<v-icon>fa-window-maximize</v-icon>
 					</v-btn>
 					<v-spacer></v-spacer>
-					<v-btn text icon @click="transcriptCyberChef()" :title="i18n.transcriptCyberChefHelp" data-aid="job_details_cyberchef">
+					<v-btn text icon @click="transcriptCyberChef()" :title="i18n.transcriptCyberChefHelp" data-aid="job_details_cyberchef" :aria-label="i18n.transcriptCyberChefHelp">
 						<v-icon>fas fa-bread-slice</v-icon>
 					</v-btn>
-					<v-btn text plain icon :href="downloadUrl()" download :title="i18n.downloadPackets" data-aid="job_details_download" class="no-link">
+					<v-btn text plain icon :href="downloadUrl()" download :title="i18n.downloadPackets" data-aid="job_details_download" class="no-link" :aria-label="i18n.download">
 						<v-icon class="theme-text">fa-download</v-icon>
 					</v-btn>
 				</v-toolbar>

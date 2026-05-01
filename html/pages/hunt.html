@@ -14,7 +14,7 @@
 							<span data-aid="grid_expansions_toggle">
 								<v-switch id="grid-expansions-toggle" :disabled="loading()" v-model="gridLayoutExpansions" density="compact" hide-details class="my-0" :label="i18n.gridLayoutExpansions"></v-switch>
 							</span>
-							<div role="group" :aria-label="i18n.filterToggles">
+							<div role="group" :aria-label="i18n.ariaFilterToggles">
 								<span v-for="toggle in filterToggles" :key="toggle.name" :data-aid="'filter_toggle_' + category + '_' + toggle.name">
 									<v-switch
 										v-if="toggle.name !== 'investigated' || investigateEnabled"
@@ -95,12 +95,12 @@
 								</v-menu>
 							</template>
 							<template v-if="isAdvanced()" #append-inner>
-								<v-btn variant="text" id="toggle-full-query-button" :title="i18n.toggleFullQueryHelp" @click="showFullQuery = !showFullQuery" :disabled="queryAltered" :data-aid="'toggle_full_query_' + category">
+								<v-btn variant="text" id="toggle-full-query-button" :title="i18n.toggleFullQueryHelp" @click="showFullQuery = !showFullQuery" :disabled="queryAltered" :data-aid="'toggle_full_query_' + category" :aria-label="i18n.ariaToggleFullQuery">
 									<v-icon>fa-ellipsis</v-icon>
 								</v-btn>
 							</template>
 							<template v-if="!isCategory('hunt')" #append>
-								<v-btn variant="text" size="small" icon id="switch-to-hunt-button" :title="i18n.huntHelp" @click="switchToHunt()" :data-aid="'nav_hunt_' + category">
+								<v-btn variant="text" size="small" icon id="switch-to-hunt-button" :title="i18n.huntHelp" @click="switchToHunt()" :data-aid="'nav_hunt_' + category" :aria-label="i18n.ariaSwitchToHunt">
 									<v-icon class="theme-icon">fa-crosshairs</v-icon>
 								</v-btn>
 							</template>
@@ -143,7 +143,7 @@
 				<v-col style="flex: 0 0 auto;" class="pa-0">
 					<v-toolbar class="so-toolbar elevation-0" variant="flat">
 						<router-link v-if="createLink != ''" :to="createLink" style="text-decoration: none; cursor: 'pointer'" :data-aid="'create_new_record_' + category">
-							<v-btn variant="flat" icon class="circle-button mx-2" id="add-case-button" :title="i18n.create">
+							<v-btn variant="flat" icon class="circle-button mx-2" id="add-case-button" :title="i18n.create" :aria-label="i18n.ariaCreateNew">
 								<v-icon>fa-plus</v-icon>
 							</v-btn>
 						</router-link>
@@ -152,10 +152,10 @@
 							<v-icon v-if="!isCategory('hunt') && !autoRefreshInterval" :title="i18n.refresh" color="button_icon_color">fa-sync</v-icon>
 							<v-icon v-if="autoRefreshInterval" color="button_icon_color">fa-hourglass-half</v-icon>
 						</v-btn>
-						<v-btn variant="flat" icon class="circle-button mx-2" :title="i18n.options" @click="showOptionsDialog = true" id="huntOptionsHeader" data-aid="hunt_options_button">
+						<v-btn variant="flat" icon class="circle-button mx-2" :title="i18n.options" @click="showOptionsDialog = true" id="huntOptionsHeader" data-aid="hunt_options_button" :aria-label="i18n.options">
 							<v-icon>fa-gear</v-icon>
 						</v-btn>
-						<v-btn variant="flat" icon class="circle-button mx-2" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + this.category" :title="i18n.contextualDocsBtn" data-aid="hunt_docs">
+						<v-btn variant="flat" icon class="circle-button mx-2" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + this.category" :title="i18n.contextualDocsBtn" data-aid="hunt_docs" :aria-label="i18n.ariaHelpLink">
 							<v-icon>fa-circle-question</v-icon>
 						</v-btn>
 					</v-toolbar>
@@ -164,10 +164,10 @@
 			<v-row v-if="loaded && (queryFilters.length > 0 || querySortBys.length > 0)">
 				<v-col cols="12" role="list">
 					<span v-for="filter in queryFilters" :key="filter" :data-aid="'filter_chip_' + category" role="listitem">
-						<v-chip density="compact" class="filter mx-1 my-1" color="primary" closable="true" @click:close="removeFilter(filter)">{{ formatSafeString(filter) }}</v-chip>
+						<v-chip density="compact" class="filter mx-1 my-1" color="primary" :closable="true" @click:close="removeFilter(filter)">{{ formatSafeString(filter) }}</v-chip>
 					</span>
 					<span v-for="sortBy in querySortBys" :key="sortBy" :data-aid="'sort_chip_' + category" role="listitem">
-						<v-chip density="compact"class="sortBy mx-1 my-1" color="secondary" closable="true" @click:close="removeSortBy(sortBy)">{{ i18n.sortedBy }} {{ formatSafeString(sortBy) }}</v-chip>
+						<v-chip density="compact"class="sortBy mx-1 my-1" color="secondary" :closable="true" @click:close="removeSortBy(sortBy)">{{ i18n.sortedBy }} {{ formatSafeString(sortBy) }}</v-chip>
 					</span>
 				</v-col>
 			</v-row>
@@ -298,19 +298,19 @@
 							<v-row>
 								<v-col v-for="(group, groupIdx) in groupBys" class="groupBy">
 									<div v-if="group.chart_type" class="chart-container">
-										<router-link class="mx-1" :to="buildGroupWithoutOptionsRoute(groupIdx)" :title="i18n.showTable" style="text-decoration: none; cursor: 'pointer'" :data-aid="'groups_table_toggle_' + category">
+										<router-link class="mx-1" :to="buildGroupWithoutOptionsRoute(groupIdx)" :title="i18n.showTable" style="text-decoration: none; cursor: 'pointer'" :data-aid="'groups_table_toggle_' + category" :aria-label="i18n.showTable">
 											<v-icon class="theme-icon">fa-table-cells</v-icon>
 										</router-link>
-										<router-link class="mx-1" :to="buildToggleLegendRoute(group, groupIdx)" :title="i18n.toggleLegend" style="text-decoration: none; cursor: 'pointer'" :data-aid="'groups_legend_toggle_' + category">
+										<router-link class="mx-1" :to="buildToggleLegendRoute(group, groupIdx)" :title="i18n.toggleLegend" style="text-decoration: none; cursor: 'pointer'" :data-aid="'groups_legend_toggle_' + category" :aria-label="i18n.toggleLegend">
 											<v-icon class="theme-icon">fa-list</v-icon>
 										</router-link>
-										<router-link class="mx-1" :to="buildMaximizeRoute(group, groupIdx)" :title="i18n.maximize" style="text-decoration: none; cursor: 'pointer'" :data-aid="'groups_maximize_toggle_' + category">
+										<router-link class="mx-1" :to="buildMaximizeRoute(group, groupIdx)" :title="i18n.maximize" style="text-decoration: none; cursor: 'pointer'" :data-aid="'groups_maximize_toggle_' + category" :aria-label="i18n.maximize">
 											<v-icon class="theme-icon">fa-expand</v-icon>
 										</router-link>
-										<v-btn v-if="$root.isLicensed($root.FEAT_RPT)" :title="i18n.exportMetricsHelp" variant="text" size="x-small" @click.stop="exportMetrics(group, groupIdx)" data-aid="events_chart_metrics">
+										<v-btn v-if="$root.isLicensed($root.FEAT_RPT)" :title="i18n.exportMetricsHelp" variant="text" size="x-small" @click.stop="exportMetrics(group, groupIdx)" data-aid="events_chart_metrics" :aria-label="i18n.exportMetricsHelp">
 											<v-icon class="theme-icon tiny-icon">fa-file-export</v-icon>
 										</v-btn>
-										<v-btn variant="text" size="x-small" @click="removeGroupBy(groupIdx, -1)" :title="i18n.remove" :data-aid="'groups_graph_remove_' + category">
+										<v-btn variant="text" size="x-small" @click="removeGroupBy(groupIdx, -1)" :title="i18n.remove" :data-aid="'groups_graph_remove_' + category" :aria-label="i18n.remove">
 											<v-icon class="tiny-icon theme-icon">fa-circle-xmark</v-icon>
 										</v-btn>
 										<div :id="'group-' + groupIdx">
@@ -328,27 +328,27 @@
 										<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
 											<tr>
 												<template v-for="(header, headerIdx) in columns" :key="header.key">
-													<th :class="{'is-sorted': isSorted(header)}" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'">
+													<th :class="{'is-sorted': isSorted(header)}" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'" scope="col">
 														<span @click="toggleSort(header)">
 															{{ header.title }}
 														</span>
 														<span class="table-header-actions ml-2">
-															<router-link v-if="header.value == 'count' && isAdvanced()" :to="buildGroupOptionRoute(groupIdx, [], 'pie')" :title="i18n.showPieChart" style="text-decoration: none; cursor: 'pointer'" :data-aid="'groups_pie_toggle_' + category">
+															<router-link v-if="header.value == 'count' && isAdvanced()" :to="buildGroupOptionRoute(groupIdx, [], 'pie')" :title="i18n.showPieChart" style="text-decoration: none; cursor: 'pointer'" :data-aid="'groups_pie_toggle_' + category" :aria-label="i18n.showPieChart">
 																<v-icon class="theme-icon">fa-chart-pie</v-icon>
 															</router-link>
-															<router-link v-if="header.value == 'count' && isAdvanced()" :to="buildGroupOptionRoute(groupIdx, [], 'bar')" :title="i18n.showBarChart" style="text-decoration: none; cursor: 'pointer'" :data-aid="'groups_bar_toggle_' + category">
+															<router-link v-if="header.value == 'count' && isAdvanced()" :to="buildGroupOptionRoute(groupIdx, [], 'bar')" :title="i18n.showBarChart" style="text-decoration: none; cursor: 'pointer'" :data-aid="'groups_bar_toggle_' + category" :aria-label="i18n.showBarChart">
 																<v-icon class="theme-icon">fa-chart-column</v-icon>
 															</router-link>
-															<router-link v-if="header.value == 'count' && isAdvanced() && isGroupSankeyCapable(group, groupIdx)" icon x-small :to="buildGroupOptionRoute(groupIdx, [], 'sankey')" :title="i18n.showSankeyChart" style="text-decoration: none; cursor: 'pointer'" :data-aid="'groups_sankey_toggle_' + category">
+															<router-link v-if="header.value == 'count' && isAdvanced() && isGroupSankeyCapable(group, groupIdx)" icon x-small :to="buildGroupOptionRoute(groupIdx, [], 'sankey')" :title="i18n.showSankeyChart" style="text-decoration: none; cursor: 'pointer'" :data-aid="'groups_sankey_toggle_' + category" :aria-label="i18n.showSankeyChart">
 																<v-icon class="theme-icon">fa-diagram-project</v-icon>
 															</router-link>
-															<router-link v-if="header.value == 'count' && isAdvanced()" class="mx-1" :to="buildMaximizeRoute(group, groupIdx)" :title="i18n.maximize" style="text-decoration: none; cursor: 'pointer'" :data-aid="'groups_maximize_toggle_' + category">
+															<router-link v-if="header.value == 'count' && isAdvanced()" class="mx-1" :to="buildMaximizeRoute(group, groupIdx)" :title="i18n.maximize" style="text-decoration: none; cursor: 'pointer'" :data-aid="'groups_maximize_toggle_' + category" :aria-label="i18n.maximize">
 																<v-icon class="theme-icon">fa-expand</v-icon>
 															</router-link>
-															<v-btn  v-if="$root.isLicensed($root.FEAT_RPT) && ((header.value == 'count' && isAdvanced() && !aggregationActionsEnabled) || (header.value == '' && aggregationActionsEnabled))" :title="i18n.exportMetricsHelp" variant="text" size="x-small" @click.stop="exportMetrics(group, groupIdx)" data-aid="events_table_metrics">
+															<v-btn  v-if="$root.isLicensed($root.FEAT_RPT) && ((header.value == 'count' && isAdvanced() && !aggregationActionsEnabled) || (header.value == '' && aggregationActionsEnabled))" :title="i18n.exportMetricsHelp" variant="text" size="x-small" @click.stop="exportMetrics(group, groupIdx)" data-aid="events_table_metrics" :aria-label="i18n.exportMetricsHelp">
 																<v-icon class="theme-icon">fa-file-export</v-icon>
 															</v-btn>
-															<v-btn v-if="header.value != 'count' && header.value != ''" variant="text" size="x-small" @click.stop="removeGroupBy(groupIdx,headerIdx - getGroupByFieldStartIndex())" :title="i18n.remove" :data-aid="'groups_table_remove_' + category">
+															<v-btn v-if="header.value != 'count' && header.value != ''" variant="text" size="x-small" @click.stop="removeGroupBy(groupIdx,headerIdx - getGroupByFieldStartIndex())" :title="i18n.remove" :data-aid="'groups_table_remove_' + category" :aria-label="i18n.ariaRemoveGroup">
 																<v-icon class="theme-icon tiny-icon">fa-circle-xmark</v-icon>
 															</v-btn>
 														</span>
@@ -365,8 +365,8 @@
 											<tr :class="{'seamless-expanded-row': isExpanded(internalItem), 'main-row': true}">
 												<td v-if="aggregationActionsEnabled">
 													<v-btn id="expandEvent" v-if="isCategory('alerts')" variant="text" icon size="x-small" @click="toggleExpand(internalItem); if (isExpanded) fetchNewestEvent(item)" class="theme-icon" :aria-label="$root.replaceActionVar(i18n.expandRow, 'expanded_state', (isExpanded(internalItem) ? i18n.expanded : ''))">
-														<v-icon v-if="isExpanded(internalItem)" :alt="i18n.eventExpand" :title="i18n.eventExpandHelp" :data-aid="'group_item_collapse_' + category">fa-angle-down</v-icon>
-														<v-icon v-else :alt="i18n.eventExpand" :title="i18n.eventExpandHelp" :data-aid="'group_item_expand_' + category">fa-angle-right</v-icon>
+														<v-icon v-if="isExpanded(internalItem)" :alt="i18n.eventExpandHelp" :title="i18n.eventExpandHelp" :data-aid="'group_item_collapse_' + category">fa-angle-down</v-icon>
+														<v-icon v-else :alt="i18n.eventExpandHelp" :title="i18n.eventExpandHelp" :data-aid="'group_item_expand_' + category">fa-angle-right</v-icon>
 													</v-btn>
 													<v-btn id="alertButton" v-if="ackEnabled && item['event.severity_label']" variant="text" size="x-small" icon
 														@click="ack(item, !isFilterToggleEnabled('acknowledged'), false, null, groupIdx)"
@@ -420,10 +420,10 @@
 																<v-icon class="tab-icon">fa-book</v-icon>
 																<div class="d-none d-lg-block">{{i18n.guidedAnalysis}}</div>
 																<template #append>
-																	<v-btn class="ml-9" variant="text" size="small" icon @click="toggleAllQuestions(item, item._row_idx_, false)" aria-label="collapse all" data-aid="alerts_agg_playbooks_collapseAll">
+																	<v-btn class="ml-9" variant="text" size="small" icon @click="toggleAllQuestions(item, item._row_idx_, false)" :aria-label="i18n.collapseAll" data-aid="alerts_agg_playbooks_collapseAll">
 																		<v-icon>fa-window-minimize</v-icon>
 																	</v-btn>
-																	<v-btn variant="text" size="small" icon @click="toggleAllQuestions(item, item._row_idx_, true)" aria-label="expand all" data-aid="alerts_agg_playbooks_expandAll">
+																	<v-btn variant="text" size="small" icon @click="toggleAllQuestions(item, item._row_idx_, true)" :aria-label="i18n.expandAll" data-aid="alerts_agg_playbooks_expandAll">
 																		<v-icon>fa-window-maximize</v-icon>
 																	</v-btn>
 																</template>
@@ -594,7 +594,7 @@
 								<template #headers="{ props, columns, isSorted, getSortIcon, toggleSort }">
 									<tr>
 										<template v-for="header in columns" :key="header.key">
-											<th :class="{'is-sorted': isSorted(header)}" @click="toggleSort(header)" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'">
+											<th :class="{'is-sorted': isSorted(header)}" @click="toggleSort(header)" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'" scope="col">
 												<template v-if="header.key === 'data-table-select'">
 													<div class="no-print multiselect-container ml-8">
 														<v-checkbox v-if="isMultiSelect()" id="multiselect-checkbox" class="no-details" :class="{ 'text-blue': selectAllState || selectAllIndeterminate }"
@@ -606,12 +606,12 @@
 															:data-aid="'events_checkbox_' + category"
 															:aria-label="i18n.ariaSelectAllEvents"
 														></v-checkbox>
-														<v-icon v-if="$root.isLicensed($root.FEAT_RPT)" :title="i18n.exportEventsHelp" class="ml-1 mt-2 theme-icon no-print" @click.stop="exportEvents" id="export-events-button" data-aid="events_export" :aria-label="i18n.ariaExportEvents">fa-file-export</v-icon>
+														<v-icon v-if="$root.isLicensed($root.FEAT_RPT)" :title="i18n.exportEventsHelp" class="ml-1 mt-2 theme-icon no-print" @click.stop="exportEvents" @keydown.space.enter.stop="exportEvents" id="export-events-button" data-aid="events_export" :aria-label="i18n.ariaExportEvents" role="button" tabindex="0">fa-file-export</v-icon>
 													</div>
 												</template>
 												<template v-else>
 													<span class="table-header-actions" :data-aid="'events_col_move_left_' + category">
-														<v-btn :id="'col_move_left_' + header.value" variant="text" size="x-small" @click.stop="moveColumnHeader(header.value, true)" :title="i18n.moveLeft">
+														<v-btn :id="'col_move_left_' + header.value" variant="text" size="x-small" @click.stop="moveColumnHeader(header.value, true)" :title="i18n.moveLeft" :aria-label="i18n.moveLeft">
 															<v-icon class="tiny-icon">fa-caret-left</v-icon>
 														</v-btn>
 													</span>
@@ -619,10 +619,10 @@
 														{{ header.title }}
 													</span>
 													<span class="table-header-actions">
-														<v-btn :id="'col_move_right_' + header.value" variant="text" size="x-small" @click.stop="moveColumnHeader(header.value, false)" :title="i18n.moveRight" :data-aid="'events_move_right_' + category">
+														<v-btn :id="'col_move_right_' + header.value" variant="text" size="x-small" @click.stop="moveColumnHeader(header.value, false)" :title="i18n.moveRight" :data-aid="'events_move_right_' + category" :aria-label="i18n.moveRight">
 															<v-icon class="tiny-icon">fa-caret-right</v-icon>
 														</v-btn>
-														<v-btn :id="'col_del_' + header.value" variant="text" size="x-small" @click.stop="removeColumnHeader(header.value)" :title="i18n.remove" :data-aid="'events_col_del_' + category">
+														<v-btn :id="'col_del_' + header.value" variant="text" size="x-small" @click.stop="removeColumnHeader(header.value)" :title="i18n.remove" :data-aid="'events_col_del_' + category" :aria-label="i18n.ariaRemoveColumn">
 															<v-icon class="tiny-icon">fa-circle-xmark</v-icon>
 														</v-btn>
 													</span>
@@ -640,8 +640,8 @@
 									<tr :class="{'seamless-expanded-row': isExpanded(internalItem), 'main-row': true}" :data-aid="'events_item_' + category">
 										<td>
 											<v-btn id="expandEvent" variant="text" icon size="x-small" @click="toggleExpand(internalItem)" class="theme-icon" :aria-label="$root.replaceActionVar(i18n.expandRow, 'expanded_state', (isExpanded(internalItem) ? i18n.expanded : ''))">
-												<v-icon v-if="isExpanded(internalItem)" :alt="i18n.eventExpand" :title="i18n.eventExpandHelp" :data-aid="'events_item_collapse_' + category">fa-angle-down</v-icon>
-												<v-icon v-else :alt="i18n.eventExpand" :title="i18n.eventExpandHelp" :data-aid="'events_item_expand_' + category">fa-angle-right</v-icon>
+												<v-icon v-if="isExpanded(internalItem)" :alt="i18n.eventExpandHelp" :title="i18n.eventExpandHelp" :data-aid="'events_item_collapse_' + category">fa-angle-down</v-icon>
+												<v-icon v-else :alt="i18n.eventExpandHelp" :title="i18n.eventExpandHelp" :data-aid="'events_item_expand_' + category">fa-angle-right</v-icon>
 											</v-btn>
 											<v-btn id="alertButton" v-if="ackEnabled && item['event.severity_label']" variant="text" icon size="x-small"
 												:data-aid="'events_ack_' + category"
@@ -668,10 +668,10 @@
 												<v-checkbox class="detection-selection no-details" density="compact" color="primary" @change="updateBulkSelector(item)" v-if="isMultiSelect()" v-model="item._isSelected" :aria-label="i18n.ariaBulkSelect">
 												</v-checkbox>
 											</span>
-											<router-link :to="{ name: 'case', params: {id: item.soc_id}}" class="no-print" v-if="viewEnabled && category === 'cases'" :data-aid="'events_open_' + category" :title="i18n.view">
+											<router-link :to="{ name: 'case', params: {id: item.soc_id}}" class="no-print" v-if="viewEnabled && category === 'cases'" :data-aid="'events_open_' + category" :title="i18n.view" :aria-label="i18n.view">
 												<v-icon class="mr-2 theme-icon">fa-binoculars</v-icon>
 											</router-link>
-											<router-link :to="{ name: 'detection', params: {id: item.soc_id}}" class="no-print" v-if="viewEnabled && category === 'detections'" :data-aid="'events_open_' + category" :title="i18n.view">
+											<router-link :to="{ name: 'detection', params: {id: item.soc_id}}" class="no-print" v-if="viewEnabled && category === 'detections'" :data-aid="'events_open_' + category" :title="i18n.view" :aria-label="i18n.view">
 												<v-icon class="mr-2 theme-icon">fa-binoculars</v-icon>
 											</router-link>
 										</td>
@@ -697,10 +697,10 @@
 														<v-icon class="tab-icon">fa-book</v-icon>
 														<div class="d-none d-lg-block">{{i18n.guidedAnalysis}}</div>
 														<template #append>
-															<v-btn class="ml-9" variant="text" size="small" icon @click="toggleAllQuestions(item, item._row_idx_, false)" aria-label="collapse all" data-aid="alerts_playbooks_collapseAll">
+															<v-btn class="ml-9" variant="text" size="small" icon @click="toggleAllQuestions(item, item._row_idx_, false)" :aria-label="i18n.collapseAll" data-aid="alerts_playbooks_collapseAll">
 																<v-icon>fa-window-minimize</v-icon>
 															</v-btn>
-															<v-btn variant="text" size="small" icon @click="toggleAllQuestions(item, item._row_idx_, true)" aria-label="expand all" data-aid="alerts_playbooks_expandAll">
+															<v-btn variant="text" size="small" icon @click="toggleAllQuestions(item, item._row_idx_, true)" :aria-label="i18n.expandAll" data-aid="alerts_playbooks_expandAll">
 																<v-icon>fa-window-maximize</v-icon>
 															</v-btn>
 														</template>
@@ -788,7 +788,7 @@
 																			<table class="simple-table">
 																				<thead>
 																					<tr>
-																						<th v-for="field in question.fields" :key="field" :data-aid="'playbook_instantinsights_header_' + field">
+																						<th v-for="field in question.fields" :key="field" :data-aid="'playbook_instantinsights_header_' + field" scope="col">
 																							{{ field }}
 																						</th>
 																					</tr>

@@ -11,7 +11,7 @@
 								<v-row>
 									<v-col cols="12">
 										<div tabindex="0" class="clicktoedit" @click="startEdit('case-assignee-input', caseObj.assigneeId, 'case-assignee', 'assigneeId')" data-aid="case_assignee_select"
-											@keypress.space.prevent="startEdit('case-assignee-input', caseObj.assigneeId, 'case-assignee', 'assigneeId')" role="button">
+											@keypress.enter.space.prevent="startEdit('case-assignee-input', caseObj.assigneeId, 'case-assignee', 'assigneeId')" role="button">
 											<div id="assignee-label" class="font-weight-bold">{{i18n.caseAssignee}}: </div>
 											<div id='case-assignee' class="case detail-field" v-if="!isEdit('case-assignee')" aria-labelledby="assignee-label">{{ withDefault(caseObj.assignee, i18n.unassigned) }}</div>
 											<v-select id='case-assignee-input' v-if="isEdit('case-assignee')"
@@ -27,7 +27,7 @@
 								<v-row>
 									<v-col cols="12">
 										<div tabindex="0" class="clicktoedit" @click="startEdit('case-status-input', caseObj.status, 'case-status', 'status')" data-aid="case_status_select"
-											@keypress.space.prevent="startEdit('case-status-input', caseObj.status, 'case-status', 'status')" role="button">
+											@keypress.enter.space.prevent="startEdit('case-status-input', caseObj.status, 'case-status', 'status')" role="button">
 											<div id="case-status-label" class="font-weight-bold">{{i18n.status}}: </div>
 											<div id="case-status" class="case detail-field" v-if="!isEdit('case-status')" aria-labelledby="case-status-label">{{ withDefault(caseObj.status, i18n.unknown) }}</div>
 											<v-select id="case-status-input" v-if="isEdit('case-status') && !isPresetCustomEnabled('status')"
@@ -63,7 +63,7 @@
 							<v-row>
 								<v-col cols="12" data-aid="case_severity_select">
 									<div tabindex="0" class="clicktoedit" @click="startEdit('case-severity-input', caseObj.severity, 'case-severity', 'severity')"
-										@keypress.space.prevent="startEdit('case-severity-input', caseObj.severity, 'case-severity', 'severity')" role="button">
+										@keypress.enter.space.prevent="startEdit('case-severity-input', caseObj.severity, 'case-severity', 'severity')" role="button">
 										<div id="case-severity-label" class="font-weight-bold">{{i18n.caseSeverity}}: </div>
 										<div id="case-severity" class="case detail-field" v-if="!isEdit('case-severity')" aria-labelledby="case-severity-label">{{ withDefault(caseObj.severity, i18n.unknown) }}</div>
 									</div>
@@ -82,7 +82,7 @@
 							<v-row>
 								<v-col cols="12" data-aid="case_priority_select">
 									<div tabindex="0" class="clicktoedit" @click="startEdit('case-priority-input', caseObj.priority, 'case-priority', 'priority')"
-										@keypress.space.prevent="startEdit('case-priority-input', caseObj.priority, 'case-priority', 'priority')" role="button">
+										@keypress.enter.space.prevent="startEdit('case-priority-input', caseObj.priority, 'case-priority', 'priority')" role="button">
 										<div id="case-priority-label" class="font-weight-bold">{{i18n.casePriority}}: </div>
 										<div id="case-priority" class="case detail-field" v-if="!isEdit('case-priority')" aria-labelledby="case-priority-label">{{ caseObj.priority }}</div>
 									</div>
@@ -106,7 +106,7 @@
 							<v-row>
 								<v-col cols="12" data-aid="case_tlp_select">
 									<div tabindex="0" class="clicktoedit" @click="startEdit('case-tlp-input', caseObj.tlp, 'case-tlp', 'tlp')"
-										@keypress.space.prevent="startEdit('case-tlp-input', caseObj.tlp, 'case-tlp', 'tlp')" role="button">
+										@keypress.enter.space.prevent="startEdit('case-tlp-input', caseObj.tlp, 'case-tlp', 'tlp')" role="button">
 										<div id="tlp-label" class="font-weight-bold">{{i18n.caseTlp}}: </div>
 										<v-chip density="compact" :color="colorizeChip(caseObj.tlp)" variant="outlined" id="case-tlp" aria-labelledby="tlp-label" v-if="!isEdit('case-tlp')">{{ withDefault(caseObj.tlp, i18n.unknown) }}</v-chip>
 									</div>
@@ -135,7 +135,7 @@
 							<v-row>
 								<v-col cols="12" data-aid="case_pap_select">
 									<div tabindex="0" class="clicktoedit" @click="startEdit('case-pap-input', caseObj.pap, 'case-pap', 'pap')"
-										@keypress.space.prevent="startEdit('case-pap-input', caseObj.pap, 'case-pap', 'pap')" role="button">
+										@keypress.enter.space.prevent="startEdit('case-pap-input', caseObj.pap, 'case-pap', 'pap')" role="button">
 										<div id="pap-label" class="font-weight-bold">{{i18n.casePap}}: </div>
 										<v-chip density="compact" :color="colorizeChip(caseObj.pap)" variant="outlined" id="case-pap" aria-labelledby="pap-label" v-if="!isEdit('case-pap')">{{ withDefault(caseObj.pap, i18n.unknown) }}</v-chip>
 									</div>
@@ -154,7 +154,7 @@
 							<v-row>
 								<v-col cols="12" data-aid="case_category_select">
 									<div tabindex="0" class="clicktoedit" @click="startEdit('case-category-input', caseObj.category, 'case-category', 'category')"
-										@keypress.space.prevent="startEdit('case-category-input', caseObj.category, 'case-category', 'category')" role="button">
+										@keypress.enter.space.prevent="startEdit('case-category-input', caseObj.category, 'case-category', 'category')" role="button">
 										<div id="category-label" class="font-weight-bold">{{i18n.caseCategory}}: </div>
 										<div id="case-category" class="case detail-field" v-if="!isEdit('case-category')" aria-labelledby="category-label">{{ withDefault(caseObj.category, i18n.unknown) }}</div>
 									</div>
@@ -183,7 +183,7 @@
 							<v-row>
 								<v-col cols="12" data-aid="case_tags_select">
 									<div tabindex="0" class="clicktoedit" @click="startEdit('case-tags-input', caseObj.tags, 'case-tags', 'tags')"
-										@keypress.space.prevent="startEdit('case-tags-input', caseObj.tags, 'case-tags', 'tags')" role="button">
+										@keypress.enter.space.prevent="startEdit('case-tags-input', caseObj.tags, 'case-tags', 'tags')" role="button">
 										<div id="tags-label" class="font-weight-bold">{{i18n.caseTags}}: </div>
 										<div id="case-tags" class="case detail-field mt-1" v-if="!isEdit('case-tags')" role="list" aria-labelledby="tags-label">
 											<v-chip density="compact" class="mx-1" v-for="tag in caseObj.tags" color="primary" role="listitem">{{ tag }}</v-chip>

@@ -18,7 +18,7 @@
 		<v-col>
 			<v-row>
 				<v-toolbar v-if="$root.isUserAdmin()" class="so-toolbar elevation-0">
-					<h4 v-if="!$root.loading" class="ml-2 my-0" data-aid="users_summary" role="heading">{{ i18n.usersEnabled }} {{ countUsersEnabled() }} / {{ countUsers() }}</h4>
+					<h4 v-if="!$root.loading" class="ml-2 my-0" data-aid="users_summary" role="heading" aria-level="2">{{ i18n.usersEnabled }} {{ countUsersEnabled() }} / {{ countUsers() }}</h4>
 					<v-spacer></v-spacer>
 					<v-btn icon variant="flat" id="add-user-button" class="circle-button mx-2" @click.stop="showAdd()" data-aid="users_create_new" :aria-label="i18n.ariaCreateUser">
 						<v-icon>fa-plus</v-icon>
@@ -26,10 +26,10 @@
 					<v-btn icon variant="flat" @click.stop="loadData()" id="users-refresh-button" class="circle-button mx-2" data-aid="users_refresh_button" :aria-label="i18n.ariaReloadData">
 						<v-icon>fa-sync</v-icon>
 					</v-btn>
-					<v-btn icon variant="flat" class="circle-button mx-2" :title="i18n.options" @click="showOptionsDialog = true" id="users-options-header" data-aid="users_options_button">
+					<v-btn icon variant="flat" class="circle-button mx-2" :title="i18n.options" @click="showOptionsDialog = true" id="users-options-header" data-aid="users_options_button" :aria-label="i18n.options">
 						<v-icon>fa-gear</v-icon>
 					</v-btn>
-					<v-btn icon variant="flat" class="circle-button mx-2" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'administration#users'" :title="i18n.contextualDocsBtn" data-aid="users_docs">
+					<v-btn icon variant="flat" class="circle-button mx-2" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'administration#users'" :title="i18n.contextualDocsBtn" data-aid="users_docs" :aria-label="i18n.contextualDocsBtn">
 						<v-icon>fa-circle-question</v-icon>
 					</v-btn>
 				</v-toolbar>

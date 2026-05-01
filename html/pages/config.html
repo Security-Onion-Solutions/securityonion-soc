@@ -25,24 +25,24 @@
 	<v-row>
 		<v-toolbar class="so-toolbar elevation-0" fixed :aria-label="i18n.ariaSettingsToolbar" role="toolbar">
 			<v-text-field id="filter-input" :label="i18n.filter" v-model="search" clearable :hint="i18n.filterHelp" persistent-hint @click:clear="clearFilter()" @keydown.enter="applySearchFilter()" class="mx-2" style="max-width: 240px" density="compact" hide-details data-aid="config_filter_input"></v-text-field>
-			<v-btn variant="text" size="small" id="apply-search-button" icon @click="applySearchFilter()" :title="i18n.search" data-aid="config_apply_search_filter">
+			<v-btn variant="text" size="small" id="apply-search-button" icon @click="applySearchFilter()" :title="i18n.search" data-aid="config_apply_search_filter" :aria-label="i18n.search">
 				<v-icon class="theme-icon">fa-magnifying-glass</v-icon>
 			</v-btn>
-			<v-btn variant="text" size="small" id="expand-all-button" icon @click="expand()" :title="i18n.expandAll" data-aid="config_expand_all">
+			<v-btn variant="text" size="small" id="expand-all-button" icon @click="expand()" :title="i18n.expandAll" data-aid="config_expand_all" :aria-label="i18n.expandAll">
 				<v-icon class="theme-icon">fa-angles-down</v-icon>
 			</v-btn>
-			<v-btn variant="text" size="small" id="collapse-all-button" icon @click="collapse()" :title="i18n.collapseAll" data-aid="config_collapse_all">
+			<v-btn variant="text" size="small" id="collapse-all-button" icon @click="collapse()" :title="i18n.collapseAll" data-aid="config_collapse_all" :aria-label="i18n.collapseAll">
 				<v-icon class="theme-icon">fa-angles-up</v-icon>
 			</v-btn>
-			<v-btn variant="text" size="small" id="show-modified-button" icon @click="expand(null, isSettingModified)" :title="i18n.settingIsModifiedHelp" data-aid="config_show_modified">
+			<v-btn variant="text" size="small" id="show-modified-button" icon @click="expand(null, isSettingModified)" :title="i18n.settingIsModifiedHelp" data-aid="config_show_modified" :aria-label="i18n.ariaShowModified">
 				<v-icon color="primary">fa-pencil</v-icon>
 			</v-btn>
-			<v-btn variant="text" size="small" id="show-node-modified-button" icon @click="expand(null, isSettingModifiedPerNode)" :title="i18n.settingHasNodeValuesHelp" data-aid="config_show_node_modified">
+			<v-btn variant="text" size="small" id="show-node-modified-button" icon @click="expand(null, isSettingModifiedPerNode)" :title="i18n.settingHasNodeValuesHelp" data-aid="config_show_node_modified" :aria-label="i18n.settingHasNodeValuesHelp">
 				<v-icon color="warning">fa-circle-nodes</v-icon>
 			</v-btn>
 			<v-spacer></v-spacer>
 			<span v-if="!$root.loading" class="mr-0 my-0 font-weight-bold">{{ i18n.settingsCustomized }} {{ settingsCustomized }} / {{ settingsAvailable }}</span>
-			<v-btn icon variant="flat" class="circle-button ml-5 mr-2" :title="i18n.options" @click="showOptionsDialog = true" id="configOptionsHeader" data-aid="config_options_button">
+			<v-btn icon variant="flat" class="circle-button ml-5 mr-2" :title="i18n.options" @click="showOptionsDialog = true" id="configOptionsHeader" data-aid="config_options_button" :aria-label="i18n.options">
 				<v-icon>fa-gear</v-icon>
 			</v-btn>
 		</v-toolbar>
@@ -221,16 +221,16 @@
 										</li>
 									</ol>
 								</nav>
-								<v-btn icon variant="text" size="small" @click.stop="$root.copyToClipboard(getSettingBreadcrumbs(selected).join(' > '))" :title="i18n.copyBreadcrumbToClipboard" data-aid="config_breadcrumb_copy">
+								<v-btn icon variant="text" size="small" @click.stop="$root.copyToClipboard(getSettingBreadcrumbs(selected).join(' > '))" :title="i18n.copyBreadcrumbToClipboard" data-aid="config_breadcrumb_copy" :aria-label="i18n.copyBreadcrumbToClipboard">
 									<v-icon>fa-copy</v-icon>
 								</v-btn>
-								<v-btn icon variant="text" size="small" @click.stop="$root.copyToClipboard(getSettingLink(selected))" :title="i18n.copyLinkToClipboard" data-aid="config_breadcrumb_copy_link">
+								<v-btn icon variant="text" size="small" @click.stop="$root.copyToClipboard(getSettingLink(selected))" :title="i18n.copyLinkToClipboard" data-aid="config_breadcrumb_copy_link" :aria-label="i18n.copyLinkToClipboard">
 									<v-icon>fa-link</v-icon>
 								</v-btn>
 							</div>
 							<v-spacer></v-spacer>
 							<span class="justify-end">
-								<v-btn icon variant="text" size="small" :title="i18n.toggleFullsizeHelp" @click="treeVisible = !treeVisible" data-aid="config_toggle_treeview" :aria-pressed="!treeVisible">
+								<v-btn icon variant="text" size="small" :title="i18n.toggleFullsizeHelp" @click="treeVisible = !treeVisible" data-aid="config_toggle_treeview" :aria-pressed="!treeVisible" :aria-label="i18n.toggleFullsizeHelp">
 									<v-icon v-if="treeVisible">fa-up-right-and-down-left-from-center</v-icon>
 									<v-icon v-else color="primary">fa-down-left-and-up-right-to-center</v-icon>
 								</v-btn>
@@ -241,7 +241,7 @@
 						</div>
 						<div class="text-subtitle-1 mb-4 d-flex align-center" data-aid="config_item_help" >
 							<div class="markdown-body" v-html="formatMarkdown(getSettingDescription(selected))"></div>
-							<a v-if="selected.helpLink" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + selected.helpLink" style="text-decoration: none; cursor: pointer" :title="i18n.settingHelp" class="ml-2">
+							<a v-if="selected.helpLink" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + selected.helpLink" style="text-decoration: none; cursor: pointer" :title="i18n.settingHelp" class="ml-2" :aria-label="i18n.ariaHelpLink">
 								<v-icon color="info">fa-circle-question</v-icon>
 							</a>
 						</div>
@@ -275,13 +275,13 @@
 							<v-row v-if="selected.global || !selected.node">
 								<v-col>
 									<div v-if="!isReadOnly(selected)" class="mb-n1 text-right">
-										<v-btn id="setting-global-reset" icon variant="text" size="small" @click="remove(selected)" :title="i18n.settingResetHelp" :disabled="!isSettingModified(selected) || isPendingSave(selected)" data-aid="config_item_reset" >
+										<v-btn id="setting-global-reset" icon variant="text" size="small" @click="remove(selected)" :title="i18n.settingResetHelp" :disabled="!isSettingModified(selected) || isPendingSave(selected)" data-aid="config_item_reset" :aria-label="i18n.settingResetHelp">
 											<v-icon color="primary">fa-circle-arrow-left</v-icon>
 										</v-btn>
-										<v-btn id="setting-global-save" icon variant="text" size="small" @click="save(selected)" :disabled="!isPendingSave(selected)" :title="i18n.settingSaveHelp" data-aid="config_item_save">
+										<v-btn id="setting-global-save" icon variant="text" size="small" @click="save(selected)" :disabled="!isPendingSave(selected)" :title="i18n.settingSaveHelp" data-aid="config_item_save" :aria-label="i18n.settingSaveHelp">
 											<v-icon color="success">fa-check</v-icon>
 										</v-btn>
-										<v-btn id="setting-global-cancel" icon variant="text" size="small" @click="userCancel()" :disabled="!isPendingSave(selected)" :title="i18n.settingCancelHelp" data-aid="config_item_cancel">
+										<v-btn id="setting-global-cancel" icon variant="text" size="small" @click="userCancel()" :disabled="!isPendingSave(selected)" :title="i18n.settingCancelHelp" data-aid="config_item_cancel" :aria-label="i18n.settingCancelHelp">
 											<v-icon color="error">fa-xmark</v-icon>
 										</v-btn>
 									</div>
@@ -309,7 +309,7 @@
 													</div>
 												</v-form>
 												<p>* {{ i18n.requiredField }}</p>
-												<v-btn v-if="!isEntryEmpty(selected, entry)" id="'setting-element-' + entryIdx + '-delete-' + entry['field']" icon variant="text" size="small" @click="showClearEntryDialog(selected, entryIdx)" :title="i18n.settingDeleteEntryHelp" data-aid="config_item_delete_entry">
+												<v-btn v-if="!isEntryEmpty(selected, entry)" id="'setting-element-' + entryIdx + '-delete-' + entry['field']" icon variant="text" size="small" @click="showClearEntryDialog(selected, entryIdx)" :title="i18n.settingDeleteEntryHelp" data-aid="config_item_delete_entry" :aria-label="i18n.settingDeleteEntryHelp">
 													<v-icon color="error">fa-trash</v-icon>
 												</v-btn>
 											</v-expansion-panel-text>
@@ -344,13 +344,13 @@
 							<v-row v-for="item in selected.nodeValues" :key="item[0]">
 								<v-col>
 									<div class="mb-n1 text-right">
-										<v-btn :id="'setting-node-reset-' + item[0]" icon variant="text" size="small" @click="remove(selected, item[0])" :title="i18n.settingRemoveHelp" :disabled="isPendingSave(selected, item[0])" data-aid="config_item_node_remove" >
+										<v-btn :id="'setting-node-reset-' + item[0]" icon variant="text" size="small" @click="remove(selected, item[0])" :title="i18n.settingRemoveHelp" :disabled="isPendingSave(selected, item[0])" data-aid="config_item_node_remove" :aria-label="i18n.settingRemoveHelp">
 											<v-icon color="warning">fa-circle-xmark</v-icon>
 										</v-btn>
-										<v-btn :id="'setting-node-save-' + item[0]" icon variant="text" size="small" @click="save(selected, item[0])" :disabled="!isPendingSave(selected, item[0])" :title="i18n.settingSaveHelp" data-aid="config_item_node_save">
+										<v-btn :id="'setting-node-save-' + item[0]" icon variant="text" size="small" @click="save(selected, item[0])" :disabled="!isPendingSave(selected, item[0])" :title="i18n.settingSaveHelp" data-aid="config_item_node_save" :aria-label="i18n.settingSaveHelp">
 											<v-icon color="success">fa-check</v-icon>
 										</v-btn>
-										<v-btn :id="'setting-node-cancel-' + item[0]" icon variant="text" size="small" @click="userCancel(true)" :disabled="!isPendingSave(selected, item[0])" :title="i18n.settingCancelHelp" data-aid="config_item_node_cancel">
+										<v-btn :id="'setting-node-cancel-' + item[0]" icon variant="text" size="small" @click="userCancel(true)" :disabled="!isPendingSave(selected, item[0])" :title="i18n.settingCancelHelp" data-aid="config_item_node_cancel" :aria-label="i18n.settingCancelHelp">
 											<v-icon color="error">fa-xmark</v-icon>
 										</v-btn>
 									</div>

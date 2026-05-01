@@ -112,13 +112,13 @@
 		</v-col>
 		<v-col style="flex: 0 0 auto;">
 			<div class="so-stat-pill no-print" style="gap: 16px;">
-				<v-btn variant="flat" icon id="chat-new-button" @click="startNewChat" :title="i18n.chatNewChat" data-aid="assistant_banner_create_chat" class="circle-button">
+				<v-btn variant="flat" icon id="chat-new-button" @click="startNewChat" :title="i18n.chatNewChat" data-aid="assistant_banner_create_chat" class="circle-button" :aria-label="i18n.chatNewChat">
 					<v-icon>fa-plus</v-icon>
 				</v-btn>
-				<v-btn variant="flat" icon class="circle-button" :title="i18n.options" @click="showOptionsDialog = true" id="chatOptionsHeader" data-aid="assistant_options_button">
+				<v-btn variant="flat" icon class="circle-button" :title="i18n.options" @click="showOptionsDialog = true" id="chatOptionsHeader" data-aid="assistant_options_button" :aria-label="i18n.ariaAssistantOptions">
 					<v-icon>fa-gear</v-icon>
 				</v-btn>
-				<v-btn variant="flat" icon class="circle-button" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'onion-ai'" :title="i18n.contextualDocsBtn" data-aid="assistant_docs">
+				<v-btn variant="flat" icon class="circle-button" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'onion-ai'" :title="i18n.contextualDocsBtn" data-aid="assistant_docs" :aria-label="i18n.ariaHelpLink">
 					<v-icon>fa-circle-question</v-icon>
 				</v-btn>
 			</div>
@@ -447,7 +447,7 @@
 	">
 	<div class="my-8" style="display: flex; gap: 8px; align-items: center;">
 		<div>{{ i18n.assistantDisabled }}</div>
-		<router-link v-if="$root.isUserAdmin()" :to="{name: 'config', query: {s: 'soc.config.server.client.assistant.enabled'}}" class="no-print" style="text-decoration: none; cursor: 'pointer'" data-aid="assistant_config_entry_enable">
+		<router-link v-if="$root.isUserAdmin()" :to="{name: 'config', query: {s: 'soc.config.server.client.assistant.enabled'}}" class="no-print" data-aid="assistant_config_entry_enable" :aria-label="i18n.ariaVisitConfigEntry">
 			<v-icon class="mr-2 theme-icon" :title="i18n.visitConfigEntry">fa-gear</v-icon>
 		</router-link>
 	</div>

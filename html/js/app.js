@@ -803,9 +803,6 @@ $(document).ready(function () {
         formatTimestamp(date) {
           return this.formatDate(date, this.i18n.timestampFormat, this.i18n.dateUnknown);
         },
-        formatTimelineLabel(date) {
-          return this.formatDate(date, this.i18n.timelineFormat, date);
-        },
         formatDate(date, format, dflt) {
           var formatted = dflt;
           if (date) {
