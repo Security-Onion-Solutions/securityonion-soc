@@ -103,6 +103,7 @@ const i18n = {
       ariaLineChartFor: 'Line chart for {title}',
       ariaLinkToCase: 'Link to case',
       ariaLoading: 'Loading',
+      ariaLoadingCredits: 'Loading credits',
       ariaLowerBound: 'Lower bound value',
       ariaLowerBoundOperator: 'Lower bound operator',
       ariaMd5AddObservable: 'Add MD5 hash as observable',

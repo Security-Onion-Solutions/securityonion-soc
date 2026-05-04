@@ -906,3 +906,15 @@ dfn {
   font-weight: bold;
   font-style: normal;
 }
+
+.v-col.groupBy {
+  overflow-x: auto;
+  container-type: inline-size;
+}
+
+.split-toolbar {
+  position: sticky;
+  top: 0;
+  width: 100cqw;
+  box-sizing: border-box;
+}

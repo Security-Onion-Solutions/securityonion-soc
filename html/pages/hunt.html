@@ -263,7 +263,7 @@
 						<div v-if="isExpandedSection('hunt-graphs')">
 							<v-row v-if="!metricsEnabled" :data-aid="'timeline_' + category">
 								<v-col cols="12">
-									<line-chart id="timelineChart" :height="chartHeight" :data="timelineChartData" :options="timelineChartOptions"></line-chart>
+									<line-chart id="timelineChart" :height="chartHeight" :data="timelineChartData" :options="timelineChartOptions" :aria-label="i18n.chartTitleTimeline"></line-chart>
 								</v-col>
 							</v-row>
 							<v-row v-if="metricsEnabled">
@@ -386,7 +386,7 @@
 														<v-icon :title="getAIInvestigationTooltip(item)"
 															:color="getAIInvestigationButtonColor(item)">fa-microchip</v-icon>
 													</v-btn>
-													<v-btn id="infoButton" v-if="item['rule.uuid'] && showDetailsPanel" variant="text" size="x-small" icon @click="highlightDetection(item['rule.uuid'], item, groupIdx)" :aria-label="$root.replaceActionVar(i18n.displayInfo, 'display_state', (highlightedDetection && highlightedDetection.publicId === item['rule.uuid'] ? i18n.displayed : ''))">
+													<v-btn id="info-button-group" v-if="item['rule.uuid'] && showDetailsPanel" variant="text" size="x-small" icon @click="highlightDetection(item['rule.uuid'], item, groupIdx)" :aria-label="$root.replaceActionVar(i18n.displayInfo, 'display_state', (highlightedDetection && highlightedDetection.publicId === item['rule.uuid'] ? i18n.displayed : ''))">
 														<v-icon v-if="highlightedDetection && highlightedDetection.publicId === item['rule.uuid']" color="success">fa-thumbtack</v-icon>
 														<v-icon v-else>fa-info</v-icon>
 													</v-btn>
@@ -411,24 +411,27 @@
 											<tr class="expanded-row">
 												<td :colspan="columns.length" class="px-0" :data-aid="'events_fields_' + category">
 													<div class="expanded-row-wrapper">
-														<v-tabs :height="isCategory('alerts') ? undefined : 0" v-model="activeTabs[item._row_idx_]" @update:model-value="if (activeTabs[item._row_idx_] === 'playbook' && item.newest) loadPlaybook(item.newest, item._row_idx_);">
-															<v-tab id="alerts_alertsDetailTab" value="alert" :class="{ 'theme-primary': activeTabs[item._row_idx_] === 'alert' }" :style="{ 'width': (eventColumnWidth * 0.5 - 28) + 'px' }" data-aid="alerts_agg_alertDetailsTab">
-																<v-icon class="tab-icon">fa-bell</v-icon>
-																<div class="d-none d-lg-block">{{i18n.alertDetails}}</div>
-															</v-tab>
-															<v-tab id="alerts_playbookTab" value="playbook" :class="{ 'theme-primary': activeTabs[item._row_idx_] === 'playbook' }" :style="{ 'width': (eventColumnWidth * 0.5 - 28) + 'px' }" data-aid="alerts_agg_playbookTab">
-																<v-icon class="tab-icon">fa-book</v-icon>
-																<div class="d-none d-lg-block">{{i18n.guidedAnalysis}}</div>
-																<template #append>
-																	<v-btn class="ml-9" variant="text" size="small" icon @click="toggleAllQuestions(item, item._row_idx_, false)" :aria-label="i18n.collapseAll" data-aid="alerts_agg_playbooks_collapseAll">
-																		<v-icon>fa-window-minimize</v-icon>
-																	</v-btn>
-																	<v-btn variant="text" size="small" icon @click="toggleAllQuestions(item, item._row_idx_, true)" :aria-label="i18n.expandAll" data-aid="alerts_agg_playbooks_expandAll">
-																		<v-icon>fa-window-maximize</v-icon>
-																	</v-btn>
-																</template>
-															</v-tab>
-														</v-tabs>
+														<div class="d-flex split-toolbar">
+															<v-tabs :height="isCategory('alerts') ? undefined : 0" v-model="activeTabs[item._row_idx_]" @update:model-value="if (activeTabs[item._row_idx_] === 'playbook' && item.newest) loadPlaybook(item.newest, item._row_idx_);" class="flex-grow-0">
+																<v-tab id="alerts_alertsDetailTab" value="alert" :class="{ 'theme-primary': activeTabs[item._row_idx_] === 'alert' }" data-aid="alerts_agg_alertDetailsTab">
+																	<v-icon class="tab-icon">fa-bell</v-icon>
+																	<div class="d-none d-lg-block">{{i18n.alertDetails}}</div>
+																</v-tab>
+																<v-tab id="alerts_playbookTab" value="playbook" :class="{ 'theme-primary': activeTabs[item._row_idx_] === 'playbook' }" data-aid="alerts_agg_playbookTab">
+																	<v-icon class="tab-icon">fa-book</v-icon>
+																	<div class="d-none d-lg-block">{{i18n.guidedAnalysis}}</div>
+																</v-tab>
+															</v-tabs>
+															<v-spacer></v-spacer>
+															<div v-if="activeTabs[item._row_idx_] === 'playbook'" class="mr-4">
+																<v-btn class="ml-9" variant="text" size="small" icon @click="toggleAllQuestions(item, item._row_idx_, false)" :aria-label="i18n.collapseAll" data-aid="alerts_agg_playbooks_collapseAll">
+																	<v-icon>fa-window-minimize</v-icon>
+																</v-btn>
+																<v-btn variant="text" size="small" icon @click="toggleAllQuestions(item, item._row_idx_, true)" :aria-label="i18n.expandAll" data-aid="alerts_agg_playbooks_expandAll">
+																	<v-icon>fa-window-maximize</v-icon>
+																</v-btn>
+															</div>
+														</div>
 														<v-tabs-window v-model="activeTabs[item._row_idx_]">
 															<v-tabs-window-item value="alert">
 																<div v-if="gridLayoutExpansions" class="expanded-fields-grid">
@@ -447,7 +450,7 @@
 																				<v-btn variant="text" size="x-small" icon class="expanded-field-expand-btn" @click.stop="showFieldValueDialog(kvp.key, kvp.value)" :data-aid="'events_field_grid_expand_' + kvp.key" :aria-label="i18n.ariaInspectField"><v-icon>fa-expand</v-icon></v-btn>
 																			</span>
 																		</div>
-																		<div class="expanded-field-value quick-action-trigger hardwrap" @click="toggleQuickAction($event, item, -1, kvp.key, kvp.value)" :data-aid="'events_field_grid_value_' + category" :aria-labelledby="'events_fields_' + category + '_' + kvp.key">{{kvp.key.endsWith('detection.author') ? $root.tryLocalize(kvp.value) : kvp.value}}<span class="resolved-host" v-if="$root.tryResolveAlias(kvp.key, kvp.value)"> - {{ $root.tryResolveAlias(kvp.key, kvp.value) }}</span></div>
+																		<div class="expanded-field-value quick-action-trigger hardwrap" @click="toggleQuickAction($event, item, -1, kvp.key, kvp.value)" :data-aid="'events_field_grid_value_' + category" :aria-labelledby="'events_fields_' + category + '_' + kvp.key" role="button">{{kvp.key.endsWith('detection.author') ? $root.tryLocalize(kvp.value) : kvp.value}}<span class="resolved-host" v-if="$root.tryResolveAlias(kvp.key, kvp.value)"> - {{ $root.tryResolveAlias(kvp.key, kvp.value) }}</span></div>
 																	</div>
 																</div>
 																<v-data-table v-else density="compact" hide-default-header hide-default-footer :headers="expandedHeaders" :items="getExpandedData(item.newest)" items-per-page="-1">
@@ -660,7 +663,7 @@
 												:data-aid="'events_ai_investigate_' + category" :aria-label="'AI Investigation'">
 												<v-icon :title="getAIInvestigationTooltip(item)" :color="getAIInvestigationButtonColor(item)">fa-microchip</v-icon>
 											</v-btn>
-											<v-btn id="infoButton" v-if="item['rule.uuid'] && showDetailsPanel" variant="text" size="x-small" icon @click="highlightDetection(item['rule.uuid'], item, groupIdx)" :title="i18n.openInPanel" :aria-label="$root.replaceActionVar(i18n.displayInfo, 'display_state', (highlightedDetection && highlightedDetection.publicId === item['rule.uuid'] ? i18n.displayed : ''))">
+											<v-btn id="info-button-single" v-if="item['rule.uuid'] && showDetailsPanel" variant="text" size="x-small" icon @click="highlightDetection(item['rule.uuid'], item, groupIdx)" :title="i18n.openInPanel" :aria-label="$root.replaceActionVar(i18n.displayInfo, 'display_state', (highlightedDetection && highlightedDetection.publicId === item['rule.uuid'] ? i18n.displayed : ''))">
 												<v-icon v-if="highlightedDetection && highlightedDetection.publicId === item['rule.uuid']" color="success">fa-thumbtack</v-icon>
 												<v-icon v-else>fa-info</v-icon>
 											</v-btn>
@@ -688,24 +691,27 @@
 									<tr class="expanded-row">
 										<td :colspan="columns.length" class="px-0" :data-aid="'events_fields_' + category">
 											<div class="expanded-row-wrapper">
-												<v-tabs :height="isCategory('alerts') ? undefined : 0" v-model="activeTabs[item._row_idx_]" @update:model-value="if (activeTabs[item._row_idx_] === 'playbook' && item) loadPlaybook(item, item._row_idx_);">
-													<v-tab id="alerts_alertsDetailTab" value="alert" :class="{ 'theme-primary': activeTabs[item._row_idx_] === 'alert' }" :style="{ 'width': (this.eventColumnWidth / 2) + 'px' }" data-aid="alerts_alertDetailsTab">
-														<v-icon class="tab-icon">fa-bell</v-icon>
-														<div class="d-none d-lg-block">{{i18n.alertDetails}}</div>
-													</v-tab>
-													<v-tab id="alerts_playbookTab" value="playbook" :class="{ 'theme-primary': activeTabs[item._row_idx_] === 'playbook' }" :style="{ 'width': (this.eventColumnWidth / 2) + 'px' }" data-aid="alerts_playbookTab">
-														<v-icon class="tab-icon">fa-book</v-icon>
-														<div class="d-none d-lg-block">{{i18n.guidedAnalysis}}</div>
-														<template #append>
-															<v-btn class="ml-9" variant="text" size="small" icon @click="toggleAllQuestions(item, item._row_idx_, false)" :aria-label="i18n.collapseAll" data-aid="alerts_playbooks_collapseAll">
-																<v-icon>fa-window-minimize</v-icon>
-															</v-btn>
-															<v-btn variant="text" size="small" icon @click="toggleAllQuestions(item, item._row_idx_, true)" :aria-label="i18n.expandAll" data-aid="alerts_playbooks_expandAll">
-																<v-icon>fa-window-maximize</v-icon>
-															</v-btn>
-														</template>
-													</v-tab>
-												</v-tabs>
+												<div>
+													<v-tabs :height="isCategory('alerts') ? undefined : 0" v-model="activeTabs[item._row_idx_]" @update:model-value="if (activeTabs[item._row_idx_] === 'playbook' && item) loadPlaybook(item, item._row_idx_);" class="flex-grow-0">
+														<v-tab id="alerts_alertsDetailTab" value="alert" :class="{ 'theme-primary': activeTabs[item._row_idx_] === 'alert' }" :style="{ 'width': (this.eventColumnWidth / 2) + 'px' }" data-aid="alerts_alertDetailsTab">
+															<v-icon class="tab-icon">fa-bell</v-icon>
+															<div class="d-none d-lg-block">{{i18n.alertDetails}}</div>
+														</v-tab>
+														<v-tab id="alerts_playbookTab" value="playbook" :class="{ 'theme-primary': activeTabs[item._row_idx_] === 'playbook' }" :style="{ 'width': (this.eventColumnWidth / 2) + 'px' }" data-aid="alerts_playbookTab">
+															<v-icon class="tab-icon">fa-book</v-icon>
+															<div class="d-none d-lg-block">{{i18n.guidedAnalysis}}</div>
+														</v-tab>
+													</v-tabs>
+													<v-spacer></v-spacer>
+													<div v-if="activeTabs[item._row_idx_] === 'playbook'">
+														<v-btn class="ml-9" variant="text" size="small" icon @click="toggleAllQuestions(item, item._row_idx_, false)" :aria-label="i18n.collapseAll" data-aid="alerts_playbooks_collapseAll">
+															<v-icon>fa-window-minimize</v-icon>
+														</v-btn>
+														<v-btn variant="text" size="small" icon @click="toggleAllQuestions(item, item._row_idx_, true)" :aria-label="i18n.expandAll" data-aid="alerts_playbooks_expandAll">
+															<v-icon>fa-window-maximize</v-icon>
+														</v-btn>
+													</div>
+												</div>
 												<v-tabs-window v-model="activeTabs[item._row_idx_]">
 													<v-tabs-window-item value="alert">
 														<div v-if="gridLayoutExpansions" class="expanded-fields-grid">

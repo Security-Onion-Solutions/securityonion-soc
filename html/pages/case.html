@@ -1020,7 +1020,7 @@
 															<v-btn :id="`events-${index}-addobservable`" variant="text" size="small" @click="populateAddObservableForm(key, value)" data-aid="case_event_add_observable" :aria-label="i18n.addObservable">
 																<v-icon :title="i18n.addObservable">fa-eye</v-icon>
 															</v-btn>
-															<router-link class="no-underline" :title="i18n.huntForFieldValue" :to="{ name: 'hunt', query: {q: buildHuntQueryForValue(value) }}" data-aid="case_event_hunt" :aria-label="i18n.huntForFieldValue">
+															<router-link class="no-underline" :title="i18n.huntForFieldValue" :to="{ name: 'hunt', query: {q: getHuntActionProps(value) }}" data-aid="case_event_hunt" :aria-label="i18n.huntForFieldValue">
 																<v-icon class="theme-text">fa-crosshairs</v-icon>
 															</router-link>
 														</v-col>
@@ -1141,86 +1141,86 @@
 											<div class="mt-2">
 												<v-row no-gutters class="py-1 case tabular-row">
 													<v-col cols="4"><span :id="`history-${index}-id-label`" class="case tabular-label">{{ i18n.id }}:</span></v-col>
-													<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-id-label`">{{ item.id }}</span></v-col>
+													<v-col cols="8"><span class="case" role="definition" :aria-labelledby="`history-${index}-id-label`">{{ item.id }}</span></v-col>
 												</v-row>
 											</div>
 											<div>
 												<v-row no-gutters class="py-1 case tabular-row">
 													<v-col cols="4"><span :id="`history-${index}-kind-label`" class="case tabular-label">{{ i18n.kind }}:</span></v-col>
-													<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-kind-label`">{{ item.kind }}</span></v-col>
+													<v-col cols="8"><span class="case" role="definition" :aria-labelledby="`history-${index}-kind-label`">{{ item.kind }}</span></v-col>
 												</v-row>
 											</div>
 											<div>
 												<v-row no-gutters class="py-1 case tabular-row">
 													<v-col cols="4"><span :id="`history-${index}-operation-label`" class="case tabular-label">{{ i18n.operation }}:</span></v-col>
-													<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-operation-label`">{{ item.operation }}</span></v-col>
+													<v-col cols="8"><span class="case" role="definition" :aria-labelledby="`history-${index}-operation-label`">{{ item.operation }}</span></v-col>
 												</v-row>
 											</div>
 											<div>
 												<v-row no-gutters class="py-1 case tabular-row">
 													<v-col cols="4"><span :id="`history-${index}-date-created-label`" class="case tabular-label">{{ i18n.dateCreated }}:</span></v-col>
-													<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-date-created-label`">{{ formatDateTime(item.createTime) }}</span></v-col>
+													<v-col cols="8"><span class="case" role="definition" :aria-labelledby="`history-${index}-date-created-label`">{{ formatDateTime(item.createTime) }}</span></v-col>
 												</v-row>
 											</div>
 											<div>
 												<v-row no-gutters class="py-1 case tabular-row">
 													<v-col cols="4"><span :id="`history-${index}-date-modified-label`" class="case tabular-label">{{ i18n.dateModified }}:</span></v-col>
-													<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-date-modified-label`">{{ formatDateTime(item.updateTime) }}</span></v-col>
+													<v-col cols="8"><span class="case" role="definition" :aria-labelledby="`history-${index}-date-modified-label`">{{ formatDateTime(item.updateTime) }}</span></v-col>
 												</v-row>
 											</div>
 											<div v-if="item.kind == i18n.case">
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
 														<v-col cols="4"><span :id="`history-${index}-case-title-label`" class="case tabular-label">{{ i18n.caseTitle }}:</span></v-col>
-														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-case-title-label`">{{ item.title }}</span></v-col>
+														<v-col cols="8"><span class="case" role="definition" :aria-labelledby="`history-${index}-case-title-label`">{{ item.title }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
 														<v-col cols="4"><span :id="`history-${index}-case-description-label`" class="case tabular-label">{{ i18n.caseDescription }}:</span></v-col>
-														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-case-description-label`">{{ item.description }}</span></v-col>
+														<v-col cols="8"><span class="case" role="definition" :aria-labelledby="`history-${index}-case-description-label`">{{ item.description }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
 														<v-col cols="4"><span :id="`history-${index}-case-assignee-label`" class="case tabular-label">{{ i18n.caseAssignee }}:</span></v-col>
-														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-case-assignee-label`">{{ item.assignee }}</span></v-col>
+														<v-col cols="8"><span class="case" role="definition" :aria-labelledby="`history-${index}-case-assignee-label`">{{ item.assignee }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
 														<v-col cols="4"><span :id="`history-${index}-case-status-label`" class="case tabular-label">{{ i18n.caseStatus }}:</span></v-col>
-														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-case-status-label`">{{ item.status }}</span></v-col>
+														<v-col cols="8"><span class="case" role="definition" :aria-labelledby="`history-${index}-case-status-label`">{{ item.status }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
 														<v-col cols="4"><span :id="`history-${index}-case-severity-label`" class="case tabular-label">{{ i18n.caseSeverity }}:</span></v-col>
-														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-case-severity-label`">{{ item.severity }}</span></v-col>
+														<v-col cols="8"><span class="case" role="definition" :aria-labelledby="`history-${index}-case-severity-label`">{{ item.severity }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
 														<v-col cols="4"><span :id="`history-${index}-case-priority-label`" class="case tabular-label">{{ i18n.casePriority }}:</span></v-col>
-														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-case-priority-label`">{{ item.priority }}</span></v-col>
+														<v-col cols="8"><span class="case" role="definition" :aria-labelledby="`history-${index}-case-priority-label`">{{ item.priority }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
 														<v-col cols="4"><span :id="`history-${index}-case-tlp-label`" class="case tabular-label">{{ i18n.caseTlp }}:</span></v-col>
-														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-case-tlp-label`">{{ item.tlp }}</span></v-col>
+														<v-col cols="8"><span class="case" role="definition" :aria-labelledby="`history-${index}-case-tlp-label`">{{ item.tlp }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
 														<v-col cols="4"><span :id="`history-${index}-case-category-label`" class="case tabular-label">{{ i18n.caseCategory }}:</span></v-col>
-														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-case-category-label`">{{ item.category }}</span></v-col>
+														<v-col cols="8"><span class="case" role="definition" :aria-labelledby="`history-${index}-case-category-label`">{{ item.category }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
 														<v-col cols="4"><span :id="`history-${index}-case-tags-label`" class="case tabular-label">{{ i18n.caseTags }}:</span></v-col>
-														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-case-tags-label`">{{ item.tags }}</span></v-col>
+														<v-col cols="8"><span class="case" role="definition" :aria-labelledby="`history-${index}-case-tags-label`">{{ item.tags }}</span></v-col>
 													</v-row>
 												</div>
 											</div>
@@ -1228,13 +1228,13 @@
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
 														<v-col cols="4"><span :id="`history-${index}-comment-description-label`" class="case tabular-label">{{ i18n.commentDescription }}:</span></v-col>
-														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-comment-description-label`">{{ item.description }}</span></v-col>
+														<v-col cols="8"><span class="case" role="definition" :aria-labelledby="`history-${index}-comment-description-label`">{{ item.description }}</span></v-col>
 													</v-row>
 												</div>
 												<div v-if="$root.isLicensed($root.FEAT_TTR)">
 													<v-row no-gutters class="py-1 case tabular-row">
 														<v-col cols="4"><span :id="`history-${index}-comment-hours-label`" class="case tabular-label">{{ i18n.commentHours }}:</span></v-col>
-														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-comment-hours-label`">{{ item.hours }}</span></v-col>
+														<v-col cols="8"><span class="case" role="definition" :aria-labelledby="`history-${index}-comment-hours-label`">{{ item.hours }}</span></v-col>
 													</v-row>
 												</div>
 											</div>
@@ -1242,7 +1242,7 @@
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
 														<v-col cols="4"><span :id="`history-${index}-related-event-id-label`" class="case tabular-label">{{ i18n.relatedEventId }}:</span></v-col>
-														<v-col cols="8"><span class="case value" :aria-labelledby="`history-${index}-related-event-id-label`">
+														<v-col cols="8"><span class="case value" role="definition" :aria-labelledby="`history-${index}-related-event-id-label`">
 															<router-link v-if="item.fields.soc_id" class="no-underline" :to="{ name: 'hunt', query: {q: buildHuntQuery(item) }}" data-aid="case_history_record_hunt">
 																{{ item.fields.soc_id }}
 															</router-link>
@@ -1257,43 +1257,43 @@
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
 														<v-col cols="4"><span :id="`history-${index}-artifact-group-type-label`" class="case tabular-label">{{ i18n.artifactGroupType }}:</span></v-col>
-														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-artifact-group-type-label`">{{ item.groupType }}</span></v-col>
+														<v-col cols="8"><span class="case" role="definition" :aria-labelledby="`history-${index}-artifact-group-type-label`">{{ item.groupType }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
 														<v-col cols="4"><span :id="`history-${index}-artifact-group-id-label`" class="case tabular-label">{{ i18n.artifactGroupId }}:</span></v-col>
-														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-artifact-group-id-label`">{{ item.groupId }}</span></v-col>
+														<v-col cols="8"><span class="case" role="definition" :aria-labelledby="`history-${index}-artifact-group-id-label`">{{ item.groupId }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
 														<v-col cols="4"><span :id="`history-${index}-filename-label`" class="case tabular-label">{{ i18n.filename }}:</span></v-col>
-														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-filename-label`">{{ item.value }}</span></v-col>
+														<v-col cols="8"><span class="case" role="definition" :aria-labelledby="`history-${index}-filename-label`">{{ item.value }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
 														<v-col cols="4"><span :id="`history-${index}-description-label`" class="case tabular-label">{{ i18n.description }}:</span></v-col>
-														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-description-label`">{{ item.description }}</span></v-col>
+														<v-col cols="8"><span class="case" role="definition" :aria-labelledby="`history-${index}-description-label`">{{ item.description }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
 														<v-col cols="4"><span :id="`history-${index}-case-tlp-label`" class="case tabular-label">{{ i18n.caseTlp }}:</span></v-col>
-														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-case-tlp-label`">{{ item.tlp }}</span></v-col>
+														<v-col cols="8"><span class="case" role="definition" :aria-labelledby="`history-${index}-case-tlp-label`">{{ item.tlp }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
 														<v-col cols="4"><span :id="`history-${index}-case-tags-label`" class="case tabular-label">{{ i18n.caseTags }}:</span></v-col>
-														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-case-tags-label`">{{ item.tags }}</span></v-col>
+														<v-col cols="8"><span class="case" role="definition" :aria-labelledby="`history-${index}-case-tags-label`">{{ item.tags }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
 														<v-col cols="4"><span :id="`history-${index}-artifact-protected-label`" class="case tabular-label">{{ i18n.artifactProtected }}:</span></v-col>
-														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-artifact-protected-label`">{{ item.protected }}</span></v-col>
+														<v-col cols="8"><span class="case" role="definition" :aria-labelledby="`history-${index}-artifact-protected-label`">{{ item.protected }}</span></v-col>
 													</v-row>
 												</div>
 											</div>
@@ -1301,49 +1301,49 @@
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
 														<v-col cols="4"><span :id="`history-${index}-artifact-group-type-label`" class="case tabular-label">{{ i18n.artifactGroupType }}:</span></v-col>
-														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-artifact-group-type-label`">{{ item.groupType }}</span></v-col>
+														<v-col cols="8"><span class="case" role="definition" :aria-labelledby="`history-${index}-artifact-group-type-label`">{{ item.groupType }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
 														<v-col cols="4"><span :id="`history-${index}-artifact-group-id-label`" class="case tabular-label">{{ i18n.artifactGroupId }}:</span></v-col>
-														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-artifact-group-id-label`">{{ item.groupId }}</span></v-col>
+														<v-col cols="8"><span class="case" role="definition" :aria-labelledby="`history-${index}-artifact-group-id-label`">{{ item.groupId }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
 														<v-col cols="4"><span :id="`history-${index}-artifact-type-label`" class="case tabular-label">{{ i18n.artifactType }}:</span></v-col>
-														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-artifact-type-label`">{{ item.artifactType }}</span></v-col>
+														<v-col cols="8"><span class="case" role="definition" :aria-labelledby="`history-${index}-artifact-type-label`">{{ item.artifactType }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
 														<v-col cols="4"><span :id="`history-${index}-artifact-value-label`" class="case tabular-label">{{ i18n.value }}:</span></v-col>
-														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-artifact-value-label`">{{ item.value }}<span class="resolved-host" v-if="item.artifactType === 'ip' && $root.pickHostname(item.value)"> - {{ $root.pickHostname(item.value) }}</span></span></v-col>
+														<v-col cols="8"><span class="case" role="definition" :aria-labelledby="`history-${index}-artifact-value-label`">{{ item.value }}<span class="resolved-host" v-if="item.artifactType === 'ip' && $root.pickHostname(item.value)"> - {{ $root.pickHostname(item.value) }}</span></span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
 														<v-col cols="4"><span :id="`history-${index}-artifact-description-label`" class="case tabular-label">{{ i18n.description }}:</span></v-col>
-														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-artifact-description-label`">{{ item.description }}</span></v-col>
+														<v-col cols="8"><span class="case" role="definition" :aria-labelledby="`history-${index}-artifact-description-label`">{{ item.description }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
 														<v-col cols="4"><span :id="`history-${index}-case-tlp-label`" class="case tabular-label">{{ i18n.caseTlp }}:</span></v-col>
-														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-case-tlp-label`">{{ item.tlp }}</span></v-col>
+														<v-col cols="8"><span class="case" role="definition" :aria-labelledby="`history-${index}-case-tlp-label`">{{ item.tlp }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
 														<v-col cols="4"><span :id="`history-${index}-artifact-ioc-label`" class="case tabular-label">{{ i18n.artifactIoc }}:</span></v-col>
-														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-artifact-ioc-label`">{{ item.ioc }}</span></v-col>
+														<v-col cols="8"><span class="case" role="definition" :aria-labelledby="`history-${index}-artifact-ioc-label`">{{ item.ioc }}</span></v-col>
 													</v-row>
 												</div>
 												<div>
 													<v-row no-gutters class="py-1 case tabular-row">
 														<v-col cols="4"><span :id="`history-${index}-case-tags-label`" class="case tabular-label">{{ i18n.caseTags }}:</span></v-col>
-														<v-col cols="8"><span class="case" :aria-labelledby="`history-${index}-case-tags-label`">{{ item.tags }}</span></v-col>
+														<v-col cols="8"><span class="case" role="definition" :aria-labelledby="`history-${index}-case-tags-label`">{{ item.tags }}</span></v-col>
 													</v-row>
 												</div>
 											</div>

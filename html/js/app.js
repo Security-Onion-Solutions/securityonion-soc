@@ -124,9 +124,10 @@ $(document).ready(function () {
           light: {
             dark: false,
             colors: {
-              primary: '#2196f3',
+              success: '#3A833C',
+              primary: '#0B78D0',
               secondary: '#424242',
-              info: '#2196f3',
+              info: '#0B78D0',
               error: '#ff5252',
               nav_background: '#000000',
               nav: '#ffffff',
@@ -144,9 +145,10 @@ $(document).ready(function () {
           dark: {
             dark: true,
             colors: {
+              success: '#3A833C',
               primary: '#0088BF',
               secondary: '#2C3347',
-              info: '#2196f3',
+              info: '#0B78D0',
               error: '#ff5252',
               nav_background: '#000000',
               nav: '#ffffff',

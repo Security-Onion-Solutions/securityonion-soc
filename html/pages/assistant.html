@@ -93,7 +93,7 @@
 					<div id="stat-label-credits-remaining" class="so-stat-label">{{ i18n.creditsRemaining }}</div>
 					<div class="so-stat-value" aria-labelledby="stat-label-credits-remaining">
 						<span v-if="!creditsLoaded">
-							<v-progress-circular indeterminate color="primary" size="14" width="3"></v-progress-circular>
+							<v-progress-circular indeterminate color="primary" size="14" width="3" :aria-label="i18n.ariaLoadingCredits"></v-progress-circular>
 						</span>
 						<span v-else :class="creditsRemaining <= lowBalanceColorAlert ? 'text-error' : 'text-primary'">{{ formatCount(creditsRemaining) }}</span>
 					</div>
