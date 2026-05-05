@@ -30,6 +30,7 @@ const USER_PASSWORD_INVALID_RX = /["'$&!]/;
 const MAX_OVERRIDE_NOTE_LENGTH = 150;
 
 const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000';
+const AGENT_USER_ID = '00000000-0000-0000-0000-000000000001';
 
 if (typeof global !== 'undefined') {
   global.routes = routes;
@@ -1450,7 +1451,7 @@ $(document).ready(function () {
         async populateUserDetails(obj, idField, outputField) {
           if (obj[idField] && obj[idField].length > 0) {
             const id = obj[idField];
-            if (id === SYSTEM_USER_ID || id === "agent") {
+            if (id === SYSTEM_USER_ID || id === AGENT_USER_ID || id === "agent") {
               obj[outputField] = this.i18n.systemUser;
               return
             }

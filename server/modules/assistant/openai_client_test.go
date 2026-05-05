@@ -40,10 +40,10 @@ func (s *stubOpenAIClient) ChatCompletionsNewStreaming(ctx context.Context, para
 
 func TestBuildOpenAIClientOptions(t *testing.T) {
 	tests := []struct {
-		name       string
-		apiUrl     string
-		apiKey     string
-		expectErr  bool
+		name      string
+		apiUrl    string
+		apiKey    string
+		expectErr bool
 	}{
 		{
 			name:      "Valid URL with no query params and API key",
@@ -120,7 +120,7 @@ func TestCheckOpenAIHealth(t *testing.T) {
 			},
 		}
 
-		health, err := checkOpenAIHealth(ctx, ctx, client, 5)
+		health, err := checkOpenAIHealth(ctx, client, 5)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -142,7 +142,7 @@ func TestCheckOpenAIHealth(t *testing.T) {
 			},
 		}
 
-		health, err := checkOpenAIHealth(ctx, ctx, client, 5)
+		health, err := checkOpenAIHealth(ctx, client, 5)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -161,7 +161,7 @@ func TestCheckOpenAIHealth(t *testing.T) {
 			},
 		}
 
-		health, err := checkOpenAIHealth(ctx, ctx, client, 5)
+		health, err := checkOpenAIHealth(ctx, client, 5)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}

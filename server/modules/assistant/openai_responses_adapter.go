@@ -379,7 +379,7 @@ func (a *OpenAIResponsesAdapter) GetBalance(ctx context.Context) (*model.Balance
 }
 
 func (a *OpenAIResponsesAdapter) GetHealth(ctx context.Context) (*model.HealthResponse, error) {
-	return checkOpenAIHealth(ctx, a.srv.Context, a.client, a.healthTimeoutSeconds)
+	return checkOpenAIHealth(ctx, a.client, a.healthTimeoutSeconds)
 }
 
 func convertToolConfigToOpenAI(req *model.ChatRequest) []responses.ToolUnionParam {

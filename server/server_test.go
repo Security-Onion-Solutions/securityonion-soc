@@ -53,6 +53,7 @@ func NewMockServer(t *testing.T, ctrl *gomock.Controller, cfg *config.ServerConf
 		Metrics:          &FakeMetrics{},
 		Authorizer:       &rbac.FakeAuthorizer{},
 		Agent:            nil,
+		System:           nil,
 		Context:          context.Background(),
 		DetectionEngines: sync.Map{}, // map[model.EngineName]DetectionEngine{},
 	}
@@ -133,12 +134,17 @@ func TestTryGetUser(tester *testing.T) {
 	cfg := &config.ServerConfig{}
 	srv := NewMockServer(tester, ctrl, cfg)
 
-	// Agent Case
 	srv.Agent = &model.User{Id: AGENT_ID, Email: "agent@so.org"}
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, AGENT_ID)
 	user, err := srv.TryGetUser(ctx)
 	assert.NoError(tester, err)
 	assert.Equal(tester, srv.Agent, user)
+
+	srv.System = &model.User{Id: SYSTEM_ID, Email: "system@so.org"}
+	ctx = context.WithValue(context.Background(), web.ContextKeyRequestorId, SYSTEM_ID)
+	user, err = srv.TryGetUser(ctx)
+	assert.NoError(tester, err)
+	assert.Equal(tester, srv.System, user)
 
 	// Client Case (starts with socl_)
 	ctx = context.WithValue(context.Background(), web.ContextKeyRequestorId, "socl_client123")
