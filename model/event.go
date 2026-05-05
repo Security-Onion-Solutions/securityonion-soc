@@ -150,12 +150,16 @@ type EventUpdateCriteria struct {
 	EventSearchCriteria
 	// Any scripts used in the event update
 	UpdateScripts []string `json:"updateScripts" example:"<Painless Script Syntax>"`
+	// Any parameters used in the event update scripts
+	Params map[string]any `json:"params" example:"{\"userId\": \"admin\"}"`
 	// Whether the update was performed asynchronously or not
 	Asynchronous bool `json:"async" example:"false"`
 }
 
 func NewEventUpdateCriteria() *EventUpdateCriteria {
-	criteria := &EventUpdateCriteria{}
+	criteria := &EventUpdateCriteria{
+		Params: make(map[string]any),
+	}
 	criteria.initSearchCriteria()
 	return criteria
 }
