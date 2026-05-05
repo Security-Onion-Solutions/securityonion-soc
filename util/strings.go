@@ -76,3 +76,15 @@ func ToUUID(s string) string {
 	// 00000000-0000-4000-b000-000000000000
 	return fmt.Sprintf("%s-%s-4%s-b%s-%s", hx[:8], hx[8:12], hx[12:15], hx[15:18], hx[18:])
 }
+
+func EscapeLucene(value string) string {
+	value = strings.ReplaceAll(value, "\\", "\\\\")
+	value = strings.ReplaceAll(value, "\"", "\\\"")
+	return value
+}
+
+func EscapePainless(value string) string {
+	value = strings.ReplaceAll(value, "\\", "\\\\")
+	value = strings.ReplaceAll(value, "'", "\\'")
+	return value
+}
