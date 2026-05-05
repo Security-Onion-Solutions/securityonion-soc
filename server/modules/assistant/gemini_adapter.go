@@ -334,7 +334,7 @@ func (a *GeminiAdapter) GetBalance(ctx context.Context) (*model.BalanceResponse,
 }
 
 func (a *GeminiAdapter) GetHealth(ctx context.Context) (*model.HealthResponse, error) {
-	healthCtx, cancel := context.WithTimeout(a.srv.Context, time.Second*time.Duration(a.healthTimeoutSeconds))
+	healthCtx, cancel := context.WithTimeout(ctx, time.Second*time.Duration(a.healthTimeoutSeconds))
 	defer cancel()
 
 	return &model.HealthResponse{

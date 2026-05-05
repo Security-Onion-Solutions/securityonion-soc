@@ -237,7 +237,7 @@ func (a *OpenAIChatAdapter) GetBalance(ctx context.Context) (*model.BalanceRespo
 }
 
 func (a *OpenAIChatAdapter) GetHealth(ctx context.Context) (*model.HealthResponse, error) {
-	return checkOpenAIHealth(ctx, a.srv.Context, a.client, a.healthTimeoutSeconds)
+	return checkOpenAIHealth(ctx, a.client, a.healthTimeoutSeconds)
 }
 
 func convertHistoryToChatCompletions(logger log.Interface, req *model.ChatRequest) []openai.ChatCompletionMessageParamUnion {

@@ -16,9 +16,10 @@ import (
 	"github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/openai/openai-go/v3/responses"
 
+	"time"
+
 	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/model"
-	"time"
 )
 
 // ResponseStream is an interface that wraps the streaming functionality we use.
@@ -168,8 +169,8 @@ func buildOpenAIClientOptions(apiUrl, apiKey string) ([]option.RequestOption, er
 	return opts, nil
 }
 
-func checkOpenAIHealth(ctx context.Context, serverCtx context.Context, client OpenAIClient, timeoutSeconds int) (*model.HealthResponse, error) {
-	healthCtx, cancel := context.WithTimeout(serverCtx, time.Second*time.Duration(timeoutSeconds))
+func checkOpenAIHealth(ctx context.Context, client OpenAIClient, timeoutSeconds int) (*model.HealthResponse, error) {
+	healthCtx, cancel := context.WithTimeout(ctx, time.Second*time.Duration(timeoutSeconds))
 	defer cancel()
 
 	logger := log.FromContext(ctx)
