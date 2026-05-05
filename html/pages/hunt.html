@@ -869,7 +869,7 @@
 	</v-row>
 	<v-menu v-model="quickActionVisible" :target="quickActionTarget" :data-aid="'context_menu_' + category">
 		<div class="d-flex">
-			<v-list id="hunt-quick-action" v-model:opened="quickActionsOpen">
+			<v-list id="hunt-quick-action" v-model:opened="quickActionsOpen" v-fix-group-role>
 				<v-list-item density="compact" id="actionFilterInclude" :to="filterRouteInclude" v-bind:title.attr="i18n.filterIncludeHelp" :data-aid="'context_menu_filter_include_' + category" active-class="">
 					<template #prepend>
 						<v-icon :alt="i18n.filterInclude" color="green-darken-1">fa-search-plus</v-icon>
