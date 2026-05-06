@@ -806,7 +806,7 @@ test('setupDateRangePicker configures date picker when relative time disabled', 
   
   comp.setupDateRangePicker();
   
-  expect(global.$).toHaveBeenCalledWith('#aimetricsdaterange');
+  expect(global.$).toHaveBeenCalledWith('#aimetrics-date-range');
   expect(mockDateRangePicker).toHaveBeenCalledWith({
     ranges: {},
     timePicker: true,
@@ -837,7 +837,7 @@ test('showDateRangePicker triggers click when relative time disabled', () => {
   
   comp.showDateRangePicker();
   
-  expect(global.$).toHaveBeenCalledWith('#aimetricsdaterange');
+  expect(global.$).toHaveBeenCalledWith('#aimetrics-date-range');
   expect(mockClick).toHaveBeenCalled();
 });
 

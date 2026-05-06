@@ -2130,6 +2130,9 @@ const huntComponent = {
       $('#huntdaterange').on('hide.daterangepicker', function (ev, picker) {
         route.hideDateRangePicker();
       });
+      $('#huntdaterange').on('show.daterangepicker', function (ev, picker) {
+        route.$root.applyDateRangePickerAriaLabels(picker);
+      });
     },
     showAbsoluteTime() {
       this.relativeTimeEnabled = false;

@@ -1000,6 +1000,17 @@ $(document).ready(function () {
           preselects[this.i18n.datePreselect30dToNow] = [moment().subtract(30, 'days'), moment()];
           return preselects;
         },
+        applyDateRangePickerAriaLabels(picker) {
+          const $c = picker.container;
+          $c.find('.drp-calendar.left .hourselect').attr('aria-label', this.i18n.ariaPickerStartHour);
+          $c.find('.drp-calendar.left .minuteselect').attr('aria-label', this.i18n.ariaPickerStartMinute);
+          $c.find('.drp-calendar.left .secondselect').attr('aria-label', this.i18n.ariaPickerStartSecond);
+          $c.find('.drp-calendar.left .ampmselect').attr('aria-label', this.i18n.ariaPickerStartAmPm);
+          $c.find('.drp-calendar.right .hourselect').attr('aria-label', this.i18n.ariaPickerEndHour);
+          $c.find('.drp-calendar.right .minuteselect').attr('aria-label', this.i18n.ariaPickerEndMinute);
+          $c.find('.drp-calendar.right .secondselect').attr('aria-label', this.i18n.ariaPickerEndSecond);
+          $c.find('.drp-calendar.right .ampmselect').attr('aria-label', this.i18n.ariaPickerEndAmPm);
+        },
         localizeMessage(origMsg, vars = null) {
           if (!origMsg) return "";
           var msg = origMsg;

@@ -220,10 +220,6 @@ th:hover, th.is-sorted, .solid {
   opacity: 1 !important;
 }
 
-.daterangepicker, .daterangepicker .calendar-time select {
-  color: black !important;
-}
-
 .stale {
   opacity: 0.3;
 }
