@@ -18,6 +18,7 @@ import (
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/common/config"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 	"github.com/stretchr/testify/assert"
 )
@@ -1110,63 +1111,6 @@ func TestUpdateSetting_AlignBlankStringListType(tester *testing.T) {
 	assert.Equal(tester, "", updated_setting.Value)
 }
 
-func TestRelPathFromId(tester *testing.T) {
-	defer Cleanup()
-	salt := NewTestSalt()
-
-	assert.Equal(tester, "foo/bar/test.md", salt.relPathFromId("foo.bar.test__md"))
-	assert.Equal(tester, "____/____/____/etc/passwd", salt.relPathFromId("____.____.____.etc.passwd"))
-	assert.Equal(tester, "____./____./____./etc/passwd", salt.relPathFromId("______.______.______.etc.passwd"))
-}
-
-func TestUpdateSettingWithAnnotation(tester *testing.T) {
-	defer Cleanup()
-	salt := NewTestSalt()
-
-	setting := model.NewSetting("myapp.some_file__txt")
-	annotations := make(map[string]interface{})
-	annotations["multiline"] = true
-	annotations["sensitive"] = true
-	annotations["global"] = true
-	annotations["node"] = true
-	annotations["file"] = true
-	annotations["advanced"] = true
-	annotations["readonly"] = true
-	annotations["readonlyUi"] = true
-	annotations["description"] = "My Desc"
-	annotations["title"] = "My Title"
-	annotations["regex"] = "My Regex"
-	annotations["regexFailureMessage"] = "My Failure Message"
-	annotations["helpLink"] = "My help link"
-	annotations["syntax"] = "yaml"
-	annotations["duplicates"] = true
-	annotations["jinjaEscaped"] = true
-	annotations["uiElementsDeleteMessage"] = "hi"
-
-	assert.False(tester, setting.Multiline)
-	salt.updateSettingWithAnnotation(setting, annotations)
-	assert.True(tester, setting.Multiline)
-	assert.True(tester, setting.Sensitive)
-	assert.True(tester, setting.Global)
-	assert.True(tester, setting.Node)
-	assert.True(tester, setting.File)
-	assert.True(tester, setting.Advanced)
-	assert.True(tester, setting.Readonly)
-	assert.True(tester, setting.ReadonlyUi)
-	assert.Equal(tester, "My Desc", setting.Description)
-	assert.Equal(tester, "My Title", setting.Title)
-	assert.Equal(tester, "My Regex", setting.Regex)
-	assert.Equal(tester, "My Failure Message", setting.RegexFailureMessage)
-	assert.Equal(tester, "My help link", setting.HelpLink)
-	assert.True(tester, setting.DefaultAvailable)
-	assert.Equal(tester, "some default", setting.Default)
-	assert.Equal(tester, "some local", setting.Value)
-	assert.Equal(tester, "yaml", setting.Syntax)
-	assert.True(tester, setting.Duplicates)
-	assert.True(tester, setting.JinjaEscaped)
-	assert.Equal(tester, "hi", setting.UiElementsDeleteMessage)
-}
-
 func TestManageUser_AddUser(tester *testing.T) {
 	defer Cleanup()
 	salt := NewTestSaltRelayQueue(tester, "ctx_manage-user", "true.resp")
@@ -1332,47 +1276,6 @@ func TestSyncModuleUnauthorized(tester *testing.T) {
 	assert.ErrorContains(tester, err, "Subject 'fake-subject' is not authorized to perform operation 'write' on target 'config'")
 }
 
-func TestForceType(tester *testing.T) {
-	store := NewTestSalt()
-
-	testCases := []struct {
-		value       string
-		forcedType  string
-		expected    interface{}
-		errorString string
-	}{
-		{value: "44", forcedType: "int", expected: int64(44), errorString: ""},
-		{value: "44", forcedType: "[]int", expected: []int64{44}, errorString: ""},
-		{value: "44\n55", forcedType: "[]int", expected: []int64{44, 55}, errorString: ""},
-		{value: "blah", forcedType: "[]int", expected: []int64{}, errorString: "invalid syntax"},
-		{value: "44.4", forcedType: "float", expected: float64(44.4), errorString: ""},
-		{value: "44.3", forcedType: "[]float", expected: []float64{44.3}, errorString: ""},
-		{value: "44.2\n55", forcedType: "[]float", expected: []float64{44.2, 55}, errorString: ""},
-		{value: "blah", forcedType: "[]float", expected: []float64{}, errorString: "invalid syntax"},
-		{value: "true", forcedType: "bool", expected: true, errorString: ""},
-		{value: "true", forcedType: "[]bool", expected: []bool{true}, errorString: ""},
-		{value: "true\nfalse", forcedType: "[]bool", expected: []bool{true, false}, errorString: ""},
-		{value: "blah", forcedType: "[]bool", expected: []bool{}, errorString: "invalid syntax"},
-		{value: "hello", forcedType: "string", expected: "hello", errorString: ""},
-		{value: "", forcedType: "[]string", expected: []string{}, errorString: ""},
-		{value: "hello\nthere", forcedType: "[]string", expected: []string{"hello", "there"}, errorString: ""},
-		{value: "blah", forcedType: "[]string", expected: []string{"blah"}, errorString: ""},
-		{value: "[\"hello\"]", forcedType: "[][]", expected: [][]interface{}([][]interface{}{[]interface{}{"hello"}}), errorString: ""},
-		{value: "[\"hello\"]\n[\"there\"]", forcedType: "[][]", expected: [][]interface{}([][]interface{}{[]interface{}{"hello"}, []interface{}{"there"}}), errorString: ""},
-		{value: "{\"name\":\"hello\"}", forcedType: "[]{}", expected: []map[string]interface{}([]map[string]interface{}{map[string]interface{}{"name": "hello"}}), errorString: ""},
-		{value: "{\"name\":\"hello\"}\n{\"name\":\"there\"}", forcedType: "[]{}", expected: []map[string]interface{}([]map[string]interface{}{map[string]interface{}{"name": "hello"}, map[string]interface{}{"name": "there"}}), errorString: ""},
-	}
-
-	for _, testCase := range testCases {
-		actual, err := store.forceType(testCase.value, testCase.forcedType)
-		if testCase.errorString != "" {
-			assert.ErrorContains(tester, err, testCase.errorString)
-		} else {
-			assert.Equal(tester, testCase.expected, actual)
-		}
-	}
-}
-
 func TestSendFile(t *testing.T) {
 	defer Cleanup()
 	salt := NewTestSaltRelayQueue(t, "ctx_send-file", "true.resp")
@@ -1459,8 +1362,6 @@ func TestReadSetting_UiElements(tester *testing.T) {
 }
 
 func TestCoerceMapListFieldTypes(tester *testing.T) {
-	store := &Saltstore{}
-
 	testCases := []struct {
 		name            string
 		list            []map[string]any
@@ -1478,36 +1379,11 @@ func TestCoerceMapListFieldTypes(tester *testing.T) {
 		{name: "field missing from map skipped", list: []map[string]any{{"name": "alpha"}}, uiElements: []model.UiElement{{Field: "port", ForcedType: "int"}}, checkField: "name", expected: "alpha"},
 
 		// string → scalar (primary focus: UI sends everything as a string)
-		{name: "string to int", list: []map[string]any{{"port": "8080"}}, uiElements: []model.UiElement{{Field: "port", ForcedType: "int"}}, checkField: "port", expected: int64(8080)},
-		{name: "string to bool true", list: []map[string]any{{"enabled": "true"}}, uiElements: []model.UiElement{{Field: "enabled", ForcedType: "bool"}}, checkField: "enabled", expected: true},
-		{name: "string to bool false", list: []map[string]any{{"enabled": "false"}}, uiElements: []model.UiElement{{Field: "enabled", ForcedType: "bool"}}, checkField: "enabled", expected: false},
-		{name: "string to float", list: []map[string]any{{"ratio": "3.14"}}, uiElements: []model.UiElement{{Field: "ratio", ForcedType: "float"}}, checkField: "ratio", expected: float64(3.14)},
-		{name: "string to string", list: []map[string]any{{"name": "alpha"}}, uiElements: []model.UiElement{{Field: "name", ForcedType: "string"}}, checkField: "name", expected: "alpha"},
-
-		// string → list types
-		{name: "string to []int", list: []map[string]any{{"ports": "80\n443\n8080"}}, uiElements: []model.UiElement{{Field: "ports", ForcedType: "[]int"}}, checkField: "ports", expected: []int64{80, 443, 8080}},
-		{name: "string to []bool", list: []map[string]any{{"flags": "true\nfalse\ntrue"}}, uiElements: []model.UiElement{{Field: "flags", ForcedType: "[]bool"}}, checkField: "flags", expected: []bool{true, false, true}},
-		{name: "string to []float", list: []map[string]any{{"ratios": "1.1\n2.2\n3.3"}}, uiElements: []model.UiElement{{Field: "ratios", ForcedType: "[]float"}}, checkField: "ratios", expected: []float64{1.1, 2.2, 3.3}},
-		{name: "string to []string", list: []map[string]any{{"tags": "a\nb\nc"}}, uiElements: []model.UiElement{{Field: "tags", ForcedType: "[]string"}}, checkField: "tags", expected: []string{"a", "b", "c"}},
-
-		// non-string input (float64/bool from JSON parse) round-tripped through interfaceToString
-		{name: "float64 to int", list: []map[string]any{{"port": float64(8080)}}, uiElements: []model.UiElement{{Field: "port", ForcedType: "int"}}, checkField: "port", expected: int64(8080)},
-		{name: "float64 to float", list: []map[string]any{{"ratio": float64(3.14)}}, uiElements: []model.UiElement{{Field: "ratio", ForcedType: "float"}}, checkField: "ratio", expected: float64(3.14)},
-		{name: "bool to bool", list: []map[string]any{{"enabled": true}}, uiElements: []model.UiElement{{Field: "enabled", ForcedType: "bool"}}, checkField: "enabled", expected: true},
-
-		// error handling
-		{name: "invalid int not required uses zero value", list: []map[string]any{{"port": "abc"}}, uiElements: []model.UiElement{{Field: "port", ForcedType: "int", Required: false}}, checkField: "port", expected: int64(0)},
-		{name: "invalid int required returns error", list: []map[string]any{{"port": "abc"}}, uiElements: []model.UiElement{{Field: "port", ForcedType: "int", Required: true}}, errContains: "port"},
-		{name: "invalid bool required returns error", list: []map[string]any{{"enabled": "maybe"}}, uiElements: []model.UiElement{{Field: "enabled", ForcedType: "bool", Required: true}}, errContains: "enabled"},
-		{name: "required empty value returns error", list: []map[string]any{{"port": ""}}, uiElements: []model.UiElement{{Field: "port", ForcedType: "int", Required: true}}, errContains: "port"},
-		{name: "unsupported type not required uses zero value", list: []map[string]any{{"id": "some-uuid"}}, uiElements: []model.UiElement{{Field: "id", ForcedType: "uuid", Required: false}}, checkField: "id", expected: nil},
-		{name: "unsupported type required returns error", list: []map[string]any{{"id": "some-uuid"}}, uiElements: []model.UiElement{{Field: "id", ForcedType: "uuid", Required: true}}, errContains: "id"},
-		{name: "error in second object", list: []map[string]any{{"port": "8080"}, {"port": "abc"}}, uiElements: []model.UiElement{{Field: "port", ForcedType: "int", Required: true}}, errContains: "port"},
 	}
 
 	for _, tc := range testCases {
 		tester.Run(tc.name, func(t *testing.T) {
-			result, err := store.coerceMapListFieldTypes(tc.list, tc.uiElements)
+			result, err := config.CoerceMapListFieldTypes(tc.list, tc.uiElements)
 			if tc.errContains != "" {
 				assert.ErrorContains(t, err, tc.errContains)
 			} else {
@@ -1518,100 +1394,6 @@ func TestCoerceMapListFieldTypes(tester *testing.T) {
 					assert.Equal(t, tc.expected, result[0][tc.checkField])
 				}
 			}
-		})
-	}
-}
-
-func TestCoerceMapListFieldTypes_MultipleFields_AllStrings(t *testing.T) {
-	store := &Saltstore{}
-	list := []map[string]any{
-		{"port": "8080", "enabled": "true", "name": "alpha"},
-	}
-	uiElements := []model.UiElement{
-		{Field: "port", ForcedType: "int"},
-		{Field: "enabled", ForcedType: "bool"},
-		{Field: "name"}, // no ForcedType — should remain a string
-	}
-	result, err := store.coerceMapListFieldTypes(list, uiElements)
-	assert.NoError(t, err)
-	assert.Equal(t, int64(8080), result[0]["port"])
-	assert.Equal(t, true, result[0]["enabled"])
-	assert.Equal(t, "alpha", result[0]["name"])
-}
-
-func TestCoerceMapListFieldTypes_MultipleObjects_AllStrings(t *testing.T) {
-	store := &Saltstore{}
-	list := []map[string]any{
-		{"port": "8080", "enabled": "true", "name": "alpha"},
-		{"port": "9090", "enabled": "false", "name": "beta"},
-		{"port": "443", "enabled": "true", "name": "gamma"},
-	}
-	uiElements := []model.UiElement{
-		{Field: "port", ForcedType: "int"},
-		{Field: "enabled", ForcedType: "bool"},
-	}
-	result, err := store.coerceMapListFieldTypes(list, uiElements)
-	assert.NoError(t, err)
-
-	assert.Equal(t, int64(8080), result[0]["port"])
-	assert.Equal(t, true, result[0]["enabled"])
-	assert.Equal(t, "alpha", result[0]["name"])
-
-	assert.Equal(t, int64(9090), result[1]["port"])
-	assert.Equal(t, false, result[1]["enabled"])
-	assert.Equal(t, "beta", result[1]["name"])
-
-	assert.Equal(t, int64(443), result[2]["port"])
-	assert.Equal(t, true, result[2]["enabled"])
-	assert.Equal(t, "gamma", result[2]["name"])
-}
-
-func TestCoerceMapListFieldTypes_AllScalarStringTypes(t *testing.T) {
-	store := &Saltstore{}
-	list := []map[string]any{
-		{
-			"port":    "8080",
-			"enabled": "true",
-			"ratio":   "2.718",
-			"name":    "delta",
-		},
-	}
-	uiElements := []model.UiElement{
-		{Field: "port", ForcedType: "int"},
-		{Field: "enabled", ForcedType: "bool"},
-		{Field: "ratio", ForcedType: "float"},
-		{Field: "name", ForcedType: "string"},
-	}
-	result, err := store.coerceMapListFieldTypes(list, uiElements)
-	assert.NoError(t, err)
-	assert.Equal(t, int64(8080), result[0]["port"])
-	assert.Equal(t, true, result[0]["enabled"])
-	assert.Equal(t, float64(2.718), result[0]["ratio"])
-	assert.Equal(t, "delta", result[0]["name"])
-}
-
-func TestZeroForType(t *testing.T) {
-	testCases := []struct {
-		typ      string
-		expected any
-	}{
-		{typ: "float", expected: float64(0)},
-		{typ: "int", expected: int64(0)},
-		{typ: "bool", expected: false},
-		{typ: "string", expected: ""},
-		{typ: "[]int", expected: []int64{}},
-		{typ: "[]bool", expected: []bool{}},
-		{typ: "[]float", expected: []float64{}},
-		{typ: "[]string", expected: []string{}},
-		{typ: "[][]", expected: [][]interface{}{}},
-		{typ: "[]{}", expected: []map[string]interface{}{}},
-		{typ: "unknown", expected: nil},
-		{typ: "", expected: nil},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.typ, func(t *testing.T) {
-			assert.Equal(t, tc.expected, zeroForType(tc.typ))
 		})
 	}
 }

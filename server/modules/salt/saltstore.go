@@ -22,6 +22,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/json"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/common/config"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/salt/options"
 	"github.com/security-onion-solutions/securityonion-soc/syntax"
 	"github.com/security-onion-solutions/securityonion-soc/web"
@@ -218,7 +219,20 @@ func (store *Saltstore) GetSettings(ctx context.Context, advanced bool) ([]*mode
 				var mapped map[string]interface{}
 				mapped, err = store.parseYaml(path)
 				if err == nil {
-					settings, _ = store.recursivelyParseAnnotations(path, settings, mapped, "")
+					fileLoader := func(id string) (string, string, bool) {
+						relpath := config.RelPathFromId(id)
+						var err error
+						defaultValue, err := store.readFile(fmt.Sprintf("%s/default/salt/%s", store.saltstackDir, relpath))
+						if err != nil {
+							return "", "", false
+						}
+						value, _ := store.readFile(fmt.Sprintf("%s/local/salt/%s", store.saltstackDir, relpath))
+						return defaultValue, value, true
+					}
+					applyFn := func(setting *model.Setting, annotations map[string]interface{}) {
+						config.ApplyAnnotations(setting, annotations, fileLoader)
+					}
+					settings, _ = config.RecursivelyParseAnnotations(settings, mapped, "", applyFn)
 				}
 			}
 
@@ -402,173 +416,9 @@ func (store *Saltstore) recursivelyParseSettings(
 	return settings
 }
 
-func (store *Saltstore) recursivelyParseAnnotations(
-	path string,
-	settings []*model.Setting,
-	mapped map[string]interface{},
-	prefix string,
-) ([]*model.Setting, bool) {
 
-	foundAnnotation := false
-	for id, value := range mapped {
 
-		newPrefix := prefix
-		if newPrefix != "" {
-			newPrefix = newPrefix + "."
-		}
 
-		newId := newPrefix + id
-
-		switch value.(type) {
-		case map[string]interface{}:
-			var endOfBranch bool
-			settings, endOfBranch = store.recursivelyParseAnnotations(path, settings, value.(map[string]interface{}), newId)
-			if endOfBranch {
-				foundExisting := false
-				for _, setting := range settings {
-					if setting.Id == newId {
-						store.updateSettingWithAnnotation(setting, value.(map[string]interface{}))
-
-						// Do not allow settings that are marked as sensitive to be transmitted to remote API clients.
-						if setting.Sensitive {
-							setting.Value = "******"
-							setting.Default = ""
-						}
-						foundExisting = true
-					}
-				}
-				if !foundExisting {
-					// Add a new setting since there is no existing setting for this annotation
-					setting := model.NewSetting(newId)
-					store.updateSettingWithAnnotation(setting, value.(map[string]interface{}))
-					settings = append(settings, setting)
-					log.WithFields(log.Fields{
-						id: newId,
-					}).Debug("Found annotation without a setting")
-				}
-			}
-		default:
-			foundAnnotation = true
-		}
-	}
-	return settings, foundAnnotation
-}
-
-func (store *Saltstore) updateSettingWithAnnotation(setting *model.Setting, annotations map[string]interface{}) {
-	for key, value := range annotations {
-		switch key {
-		case "title":
-			setting.Title = fmt.Sprintf("%v", value)
-		case "description":
-			setting.Description = fmt.Sprintf("%v", value)
-		case "readonly":
-			setting.Readonly = value.(bool)
-		case "readonlyUi":
-			setting.ReadonlyUi = value.(bool)
-		case "global":
-			setting.Global = value.(bool)
-		case "multiline":
-			setting.Multiline = value.(bool)
-		case "node":
-			setting.Node = value.(bool)
-		case "sensitive":
-			setting.Sensitive = value.(bool)
-		case "regex":
-			setting.Regex = fmt.Sprintf("%v", value)
-		case "regexFailureMessage":
-			setting.RegexFailureMessage = fmt.Sprintf("%v", value)
-		case "advanced":
-			setting.Advanced = value.(bool)
-		case "helpLink":
-			setting.HelpLink = fmt.Sprintf("%v", value)
-		case "syntax":
-			setting.Syntax = fmt.Sprintf("%v", value)
-		case "forcedType":
-			setting.ForcedType = fmt.Sprintf("%v", value)
-		case "file":
-			// This is a special type of annotation. It allows the contents
-			// of any salt file to become a setting.
-			setting.File = value.(bool)
-			if setting.File {
-				setting.Multiline = true
-
-				relpath := store.relPathFromId(setting.Id)
-				var err error
-				setting.Default, err = store.readFile(fmt.Sprintf("%s/default/salt/%s", store.saltstackDir, relpath))
-				if err == nil {
-					setting.DefaultAvailable = true
-				}
-				setting.Value, _ = store.readFile(fmt.Sprintf("%s/local/salt/%s", store.saltstackDir, relpath))
-				if setting.Value == "" {
-					setting.Value = setting.Default
-				}
-			}
-		case "duplicates":
-			setting.Duplicates = value.(bool)
-		case "jinjaEscaped":
-			setting.JinjaEscaped = value.(bool)
-		case "options":
-			setting.Options = store.castToStringArray(value)
-		case "optionSeparator":
-			setting.OptionSeparator = value.(string)
-		case "required":
-			setting.Required = value.(bool)
-		case "uiElements":
-			tmpElements := value.([]interface{})
-			for _, tmp := range tmpElements {
-				if tmpMap, ok := tmp.(map[string]interface{}); ok {
-					var element model.UiElement
-					for key, value := range tmpMap {
-						switch key {
-						case "field":
-							element.Field = value.(string)
-						case "label":
-							element.Label = value.(string)
-						case "forcedType":
-							element.ForcedType = value.(string)
-						case "multiline":
-							element.Multiline = value.(bool)
-						case "options":
-							element.Options = store.castToStringArray(value)
-						case "default":
-							element.Default = value
-						case "required":
-							element.Required = value.(bool)
-						case "readonly":
-							element.Readonly = value.(bool)
-						case "regex":
-							element.Regex = fmt.Sprintf("%v", value)
-						case "regexFailureMessage":
-							element.RegexFailureMessage = value.(string)
-						}
-					}
-					setting.UiElements = append(setting.UiElements, element)
-				} else {
-					log.Error("Invalid annotation; cannot cast to map")
-				}
-			}
-		case "uiElementsDeleteMessage":
-			setting.UiElementsDeleteMessage = value.(string)
-		}
-	}
-}
-
-func (store *Saltstore) castToStringArray(value interface{}) []string {
-	values := make([]string, 0)
-	tmpArray := value.([]interface{})
-	for _, tmp := range tmpArray {
-		values = append(values, tmp.(string))
-	}
-	return values
-}
-
-func (store *Saltstore) relPathFromId(id string) string {
-	// Example of an ID conversion to path: soc.files.soc.banner_md -> soc/files/soc/banner.md
-	relpath := strings.ReplaceAll(id, ".", "/")
-	relpath = strings.ReplaceAll(relpath, "__", ".")
-	relpath = strings.ReplaceAll(relpath, "..", "____") // Shenannigans
-	return relpath
-}
 
 func (store *Saltstore) readFile(path string) (string, error) {
 	content, err := os.ReadFile(path)
@@ -646,19 +496,19 @@ func (store *Saltstore) updateSetting(mapped map[string]interface{}, sections []
 				"settingName": name,
 				"forcedType":  setting.ForcedType,
 			}).Info("Forcing setting type")
-			mapped[name], err = store.forceType(value, setting.ForcedType)
+			mapped[name], err = config.ForceType(value, setting.ForcedType)
 			if err == nil && setting.ForcedType == "[]{}" {
 				if mapList, ok := mapped[name].([]map[string]any); ok {
-					mapped[name], err = store.coerceMapListFieldTypes(mapList, setting.UiElements)
+					mapped[name], err = config.CoerceMapListFieldTypes(mapList, setting.UiElements)
 				}
 			}
 		} else {
 			currentValue := mapped[name]
 			if currentValue == nil && setting.DefaultAvailable {
-				currentValue = store.alignBestGuess(setting.Default)
+				currentValue = config.AlignBestGuess(setting.Default)
 			}
 			value = strings.TrimSpace(value)
-			mapped[name], err = store.alignType(currentValue, value)
+			mapped[name], err = config.AlignType(currentValue, value)
 		}
 	}
 
@@ -780,7 +630,7 @@ func (store *Saltstore) UpdateSetting(ctx context.Context, setting *model.Settin
 		os.WriteFile(path, []byte(setting.Value), 0600)
 
 	} else if setting.File {
-		path := fmt.Sprintf("%s/local/salt/%s", store.saltstackDir, store.relPathFromId(setting.Id))
+		path := fmt.Sprintf("%s/local/salt/%s", store.saltstackDir, config.RelPathFromId(setting.Id))
 		if !remove {
 			logger.WithFields(log.Fields{
 				"settingId":     setting.Id,
@@ -831,296 +681,6 @@ func (store *Saltstore) UpdateSetting(ctx context.Context, setting *model.Settin
 	}
 
 	return err
-}
-
-func (store *Saltstore) alignInt64List(newValue string) ([]int64, error) {
-	var newList []int64
-	if len(newValue) > 0 {
-		tmp := strings.Split(newValue, "\n")
-		newList = make([]int64, 0)
-		for _, str := range tmp {
-			i, err := strconv.ParseInt(str, 10, 64)
-			if err != nil {
-				return nil, err
-			}
-			newList = append(newList, i)
-		}
-	}
-	return newList, nil
-}
-
-func (store *Saltstore) alignBoolList(newValue string) ([]bool, error) {
-	var newList []bool
-	if len(newValue) > 0 {
-		tmp := strings.Split(newValue, "\n")
-		newList = make([]bool, 0)
-		for _, str := range tmp {
-			b, err := strconv.ParseBool(str)
-			if err != nil {
-				return nil, err
-			}
-			newList = append(newList, b)
-		}
-	}
-	return newList, nil
-}
-
-func (store *Saltstore) alignFloat64List(newValue string) ([]float64, error) {
-	var newList []float64
-	if len(newValue) > 0 {
-		tmp := strings.Split(newValue, "\n")
-		newList = make([]float64, 0)
-		for _, str := range tmp {
-			f, err := strconv.ParseFloat(str, 64)
-			if err != nil {
-				return nil, err
-			}
-			newList = append(newList, f)
-		}
-	}
-	return newList, nil
-}
-
-func (store *Saltstore) alignListList(newValue string) ([][]interface{}, error) {
-	var newList [][]interface{}
-	if len(newValue) > 0 {
-		tmp := strings.Split(newValue, "\n")
-		newList = make([][]interface{}, 0)
-		for _, str := range tmp {
-			l := make([]interface{}, 0)
-			err := json.LoadJson([]byte(str), &l)
-			if err != nil {
-				return nil, err
-			}
-			newList = append(newList, l)
-		}
-	}
-	return newList, nil
-}
-
-func (store *Saltstore) alignMapList(newValue string) ([]map[string]interface{}, error) {
-	var newList []map[string]interface{}
-	if len(newValue) > 0 {
-		tmp := strings.Split(newValue, "\n")
-		newList = make([]map[string]interface{}, 0)
-		for _, str := range tmp {
-			m := make(map[string]interface{})
-			err := json.LoadJson([]byte(str), &m)
-			if err != nil {
-				return nil, err
-			}
-			newList = append(newList, m)
-		}
-	}
-	return newList, nil
-}
-
-func interfaceToString(v any) string {
-	switch val := v.(type) {
-	case string:
-		return val
-	case float64:
-		if val == float64(int64(val)) {
-			return strconv.FormatInt(int64(val), 10)
-		}
-		return strconv.FormatFloat(val, 'f', -1, 64)
-	case bool:
-		return strconv.FormatBool(val)
-	case []any:
-		parts := make([]string, len(val))
-		for i, item := range val {
-			parts[i] = interfaceToString(item)
-		}
-		return strings.Join(parts, "\n")
-	default:
-		return fmt.Sprintf("%v", v)
-	}
-}
-
-func (store *Saltstore) coerceMapListFieldTypes(list []map[string]any, uiElements []model.UiElement) ([]map[string]any, error) {
-	for _, m := range list {
-		for _, uiElement := range uiElements {
-			if uiElement.ForcedType == "" || uiElement.Field == "" {
-				continue
-			}
-			fieldVal, exists := m[uiElement.Field]
-			if !exists {
-				continue
-			}
-			coerced, err := store.forceType(interfaceToString(fieldVal), uiElement.ForcedType)
-			if err != nil {
-				if uiElement.Required {
-					return nil, fmt.Errorf("field %q: %w", uiElement.Field, err)
-				} else {
-					coerced = zeroForType(uiElement.ForcedType)
-				}
-			}
-			m[uiElement.Field] = coerced
-		}
-	}
-	return list, nil
-}
-
-func (store *Saltstore) alignBestGuess(newValue string) interface{} {
-	i, err := strconv.ParseInt(newValue, 10, 64)
-	if err == nil {
-		return i
-	}
-	f, err := strconv.ParseFloat(newValue, 64)
-	if err == nil {
-		return f
-	}
-	b, err := strconv.ParseBool(newValue)
-	if err == nil {
-		return b
-	}
-	if strings.Contains(newValue, "\n") {
-		output, _ := store.alignBestGuessList(newValue)
-		return output
-	}
-
-	if strings.HasPrefix(newValue, "{") && strings.HasSuffix(newValue, "}") {
-		tmp := make(map[string]interface{})
-		err := json.LoadJson([]byte(newValue), &tmp)
-		if err == nil {
-			return tmp
-		}
-	}
-	if strings.HasPrefix(newValue, "[") && strings.HasSuffix(newValue, "]") {
-		tmp := make([]interface{}, 0)
-		err := json.LoadJson([]byte(newValue), &tmp)
-		if err == nil {
-			return tmp
-		}
-	}
-	return newValue
-}
-
-func (store *Saltstore) forceType(newValue string, forcedType string) (interface{}, error) {
-	switch forcedType {
-	case "float":
-		return strconv.ParseFloat(newValue, 64)
-	case "int":
-		return strconv.ParseInt(newValue, 10, 64)
-	case "bool":
-		return strconv.ParseBool(newValue)
-	case "string":
-		return newValue, nil
-	case "[]int":
-		return store.alignInt64List(newValue)
-	case "[]bool":
-		return store.alignBoolList(newValue)
-	case "[]float":
-		return store.alignFloat64List(newValue)
-	case "[]string":
-		if len(newValue) > 0 {
-			return strings.Split(newValue, "\n"), nil
-		}
-		return make([]string, 0), nil
-	case "[][]":
-		return store.alignListList(newValue)
-	case "[]{}":
-		return store.alignMapList(newValue)
-	}
-	return "", errors.New("Unsupported forced type: " + forcedType)
-}
-
-func zeroForType(typ string) any {
-	switch typ {
-	case "float":
-		return float64(0)
-	case "int":
-		return int64(0)
-	case "bool":
-		return false
-	case "string":
-		return ""
-	case "[]int":
-		return make([]int64, 0)
-	case "[]bool":
-		return make([]bool, 0)
-	case "[]float":
-		return make([]float64, 0)
-	case "[]string":
-		return make([]string, 0)
-	case "[][]":
-		return make([][]interface{}, 0)
-	case "[]{}":
-		return make([]map[string]interface{}, 0)
-	}
-
-	return nil
-}
-
-func (store *Saltstore) alignBestGuessList(newValue string) (interface{}, error) {
-	var newList []string
-	if len(newValue) > 0 {
-		newList = strings.Split(newValue, "\n")
-		if len(newList) > 0 {
-			firstValue := newList[0]
-			bestGuess := store.alignBestGuess(firstValue)
-			switch bestGuess.(type) {
-			case int:
-				return store.alignInt64List(newValue)
-			case int64:
-				return store.alignInt64List(newValue)
-			case bool:
-				return store.alignBoolList(newValue)
-			case float32:
-				return store.alignFloat64List(newValue)
-			case float64:
-				return store.alignFloat64List(newValue)
-			case []interface{}:
-				return store.alignListList(newValue)
-			case map[string]interface{}:
-				return store.alignMapList(newValue)
-			}
-		}
-	}
-	return newList, nil
-}
-
-func (store *Saltstore) alignType(oldValue interface{}, newValue string) (interface{}, error) {
-	if oldValue != nil {
-		switch oldValue.(type) {
-		case float64:
-			return strconv.ParseFloat(newValue, 64)
-		case int:
-			return strconv.ParseInt(newValue, 10, 64)
-		case bool:
-			return strconv.ParseBool(newValue)
-		case []interface{}:
-			newList := oldValue.([]interface{})
-			if len(newList) > 0 {
-				switch newList[0].(type) {
-				case int:
-					return store.alignInt64List(newValue)
-				case int64:
-					return store.alignInt64List(newValue)
-				case bool:
-					return store.alignBoolList(newValue)
-				case float32:
-					return store.alignFloat64List(newValue)
-				case float64:
-					return store.alignFloat64List(newValue)
-				case []interface{}:
-					return store.alignListList(newValue)
-				case map[string]interface{}:
-					return store.alignMapList(newValue)
-				}
-			}
-			return store.alignBestGuessList(newValue)
-		case []string:
-			return strings.Split(newValue, "\n"), nil
-		case []int64:
-			return store.alignInt64List(newValue)
-		case []bool:
-			return store.alignBoolList(newValue)
-		case []float64:
-			return store.alignFloat64List(newValue)
-		}
-	}
-	return store.alignBestGuess(newValue), nil
 }
 
 type ListResponse struct {
