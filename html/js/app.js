@@ -33,6 +33,18 @@ const MAX_OVERRIDE_NOTE_LENGTH = 150;
 const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000';
 const AGENT_USER_ID = '00000000-0000-0000-0000-000000000001';
 
+function moveAriaToPrismTextarea(wrapperEl) {
+  const textarea = wrapperEl.querySelector('.prism-editor__textarea');
+  if (!textarea) return;
+  ['aria-label', 'aria-labelledby', 'aria-describedby'].forEach((attr) => {
+    const value = wrapperEl.getAttribute(attr);
+    if (value) {
+      textarea.setAttribute(attr, value);
+      wrapperEl.removeAttribute(attr);
+    }
+  });
+}
+
 if (typeof global !== 'undefined') {
   global.routes = routes;
   global.components = components;
@@ -125,10 +137,13 @@ $(document).ready(function () {
             dark: false,
             colors: {
               success: '#3A833C',
+              lightsuccess: '#3A833C',
               primary: '#0B78D0',
+              lightprimary: '#0B78D0',
               secondary: '#424242',
               info: '#0B78D0',
               error: '#ff5252',
+              lighterror: '#ff5252',
               nav_background: '#000000',
               nav: '#ffffff',
               table_background: '#fafafa',
@@ -146,10 +161,13 @@ $(document).ready(function () {
             dark: true,
             colors: {
               success: '#3A833C',
-              primary: '#0088BF',
+              lightsuccess: '#49A74B',
+              primary: '#007CAD',
+              lightprimary: '#039CD8',
               secondary: '#2C3347',
               info: '#0B78D0',
-              error: '#ff5252',
+              error: '#EB0000',
+              lighterror: '#ff5252',
               nav_background: '#000000',
               nav: '#ffffff',
               table_background: '#222a3f',
@@ -1351,6 +1369,10 @@ $(document).ready(function () {
         registerEditor() {
           const app = Vue.getCurrentInstance().appContext.app;
           app.component('prism-editor', PrismEditor.PrismEditor);
+          app.directive('aria-textarea', {
+            mounted(el) { moveAriaToPrismTextarea(el); },
+            updated(el) { moveAriaToPrismTextarea(el); },
+          });
         },
         initializeEditor() {
           if (this.editorInitialized) return;

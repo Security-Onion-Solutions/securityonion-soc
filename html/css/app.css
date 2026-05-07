@@ -19,10 +19,6 @@
   margin-bottom: 16px;
 }
 
-.v-application a {
-  color: rgb(var(--v-theme-info));
-}
-
 .v-alert a.text-white {
   color: white !important;
 }
@@ -105,7 +101,7 @@
   padding-top: 0;
 }
 
-.v-list-item > .v-list-item__prepend > i.fa {
+.v-list-item > .v-list-item__prepend i.fa {
   margin-right: 16px !important;
 }
 

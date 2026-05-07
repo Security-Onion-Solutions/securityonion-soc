@@ -41,7 +41,7 @@
 				<v-icon color="warning">fa-circle-nodes</v-icon>
 			</v-btn>
 			<v-spacer></v-spacer>
-			<span v-if="!$root.loading" class="mr-0 my-0 font-weight-bold">{{ i18n.settingsCustomized }} {{ settingsCustomized }} / {{ settingsAvailable }}</span>
+			<span v-if="!$root.loading" class="mr-0 my-0 font-weight-bold" data-aid="config_settings_customized_count">{{ i18n.settingsCustomized }} {{ settingsCustomized }} / {{ settingsAvailable }}</span>
 			<v-btn icon variant="flat" class="circle-button ml-5 mr-2" :title="i18n.options" @click="showOptionsDialog = true" id="configOptionsHeader" data-aid="config_options_button" :aria-label="i18n.options">
 				<v-icon>fa-gear</v-icon>
 			</v-btn>
@@ -318,15 +318,15 @@
 									<div v-else>
 										<div v-if="isToggle(selected)">
 											<div v-if="form.key != selected.id || isReadOnly(selected)">
-												<v-chip id="value-output" :color="$root.isTrue(selected.value) ? 'primary' : ''" append-icon="fa-pencil" @click="edit(selected)" data-aid="config_item_customize_slider_display" :aria-labelledby="'node-value-label-' + item[0]">{{$root.isTrue(selected.value) ? i18n.enabled : i18n.disabled }}</v-chip>
-												<span :id="'node-value-label-' + item[0]" class="setting_label mx-4">{{ i18n.settingGlobal }}</span>
+												<v-chip id="value-output" :color="$root.isTrue(selected.value) ? 'primary' : ''" append-icon="fa-pencil" @click="edit(selected)" data-aid="config_item_customize_slider_display" aria-labelledby="node-value-label-global">{{$root.isTrue(selected.value) ? i18n.enabled : i18n.disabled }}</v-chip>
+												<span id="node-value-label-global" class="setting_label mx-4">{{ i18n.settingGlobal }}</span>
 											</div>
 											<v-switch v-else id="value-input" :label="i18n.settingGlobal" true-value="true" v-model="form.value" class="editing config-editor no-details" data-aid="config_item_customize_slider_input"></v-switch>
 										</div>
 										<div v-else-if="isSelectList(selected)">
 											<div v-if="form.key != selected.id || isReadOnly(selected)">
-												<v-chip id="value-output" append-icon="fa-pencil" @click="edit(selected)" :data-aid="config_item_customize_select_display" :aria-labelledby="'node-value-label-' + item[0]">{{selected.value}}</v-chip>
-												<span :id="'node-value-label-' + item[0]" class="setting_label mx-4">{{ i18n.settingGlobal }}</span>
+												<v-chip id="value-output" append-icon="fa-pencil" @click="edit(selected)" :data-aid="config_item_customize_select_display" aria-labelledby="node-value-label-global">{{selected.value}}</v-chip>
+												<span id="node-value-label-global" class="setting_label mx-4">{{ i18n.settingGlobal }}</span>
 											</div>
 											<v-select v-else id="value-input" :items="selected.options" :multiple="hasMultipleValues(selected)" :label="i18n.settingGlobal" v-model="form.value" :rules="buildInputRules(selected)" class="editing config-editor no-details" :data-aid="config_item_customize_select_input"></v-select>
 										</div>

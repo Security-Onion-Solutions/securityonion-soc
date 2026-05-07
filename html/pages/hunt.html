@@ -296,7 +296,7 @@
 					<v-expand-transition>
 						<div v-if="isExpandedSection('hunt-groups')">
 							<v-row>
-								<v-col v-for="(group, groupIdx) in groupBys" class="groupBy">
+								<v-col v-for="(group, groupIdx) in groupBys" :class="['groupBy', { 'known-width': isCategory('alerts') }]">
 									<div v-if="group.chart_type" class="chart-container">
 										<router-link class="mx-1" :to="buildGroupWithoutOptionsRoute(groupIdx)" :title="i18n.showTable" style="text-decoration: none; cursor: 'pointer'" :data-aid="'groups_table_toggle_' + category" :aria-label="i18n.showTable">
 											<v-icon class="theme-icon">fa-table-cells</v-icon>
@@ -566,11 +566,10 @@
 						<template v-if="isCategory('detections') && (selectAllState || selectAllIndeterminate)">
 							<span class="text-caption mr-2">{{ i18n.selected }}: {{ (selectAllState === true ? totalEvents : selectedCount).toLocaleString() }}</span>
 							<template v-if="selectAllIndeterminate && !selectAllState && isPageSelected() && totalEvents > itemsPerPage">
-								{{ i18n.selectAll.replaceAll('[[count]]', totalEvents.toLocaleString()) }}
-								<v-btn size="x-small" @click="selectAllEvents(true, true)" class="mr-2" :data-aid="'events_select_all_' + category">{{ i18n.yes }}</v-btn>
+								<v-btn variant="flat" color="primary" @click="selectAllEvents(true, true)" class="mr-2" :data-aid="'events_select_all_' + category">{{ $root.replaceActionVar(i18n.selectAll, 'count', totalEvents.toLocaleString()) }}</v-btn>
 							</template>
 							<v-select class="toolbar-field no-print bulk-actions no-details" style="max-width: 150px;" :disabled="loading()" v-model="selectedAction" :items="bulkActions" hide-details :data-aid="'events_bulk_select_action_' + category" :aria-label="i18n.ariaBulkSelectAction"></v-select>
-							<v-btn size="small" class="ml-1 mr-2" @click="bulkAction()" :data-aid="'events_bulk_apply_' + category">{{ i18n.go }}</v-btn>
+							<v-btn variant="flat" color="primary" class="ml-1 mr-8" @click="bulkAction()" :data-aid="'events_bulk_apply_' + category">{{ i18n.go }}</v-btn>
 						</template>
 						<v-select class="toolbar-field no-print" style="max-width: 120px;" :disabled="loading()" @update:model-value="eventLimit = $event; notifyInputsChanged()" v-model="eventLimit" :items="eventLimitOptions" :label="i18n.fetchLimit" hide-details :data-aid="'events_limit_' + category"></v-select>
 						<v-text-field class="toolbar-field no-print ml-2" style="max-width: 250px;" v-model="eventFilter" clearable prepend-inner-icon="fa-filter" :label="i18n.filterResults" hide-details :data-aid="'events_filter_' + category">

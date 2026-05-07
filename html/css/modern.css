@@ -907,7 +907,7 @@ dfn {
   font-style: normal;
 }
 
-.v-col.groupBy {
+.known-width {
   overflow-x: auto;
   container-type: inline-size;
 }
@@ -1088,4 +1088,20 @@ dfn {
 .daterangepicker.show-ranges.single.ltr .drp-calendar.left,
 .daterangepicker.show-ranges.single.rtl .drp-calendar.left {
   border-color: rgba(var(--v-theme-text), 0.08) !important;
+}
+
+.v-application a {
+  color: rgb(var(--v-theme-primary-lighten-1));
+}
+
+.text-success {
+  color: rgb(var(--v-theme-lightsuccess)) !important;
+}
+
+.text-primary {
+  color: rgb(var(--v-theme-lightprimary)) !important;
+}
+
+.text-error {
+  color: rgb(var(--v-theme-lighterror)) !important;
 }

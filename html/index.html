@@ -246,7 +246,9 @@
           <v-list density="compact" :disabled="forceUserOtp">
             <v-list-item data-aid="nav_overview">
               <template #prepend>
-                <v-icon>fa-home</v-icon>
+                <router-link to="/" class="text-decoration-none" aria-hidden="true" tabindex="-1">
+                  <v-icon>fa-home</v-icon>
+                </router-link>
               </template>
               <router-link to="/" class="text-decoration-none d-block">
                 <v-list-item-title v-text="i18n.home"></v-list-item-title>
@@ -254,7 +256,9 @@
             </v-list-item>
             <v-list-item data-aid="nav_assistant">
               <template #prepend>
-                <v-icon>fa-microchip</v-icon>
+                <router-link to="/assistant" class="text-decoration-none" aria-hidden="true" tabindex="-1">
+                  <v-icon>fa-microchip</v-icon>
+                </router-link>
               </template>
               <router-link to="/assistant" class="text-decoration-none d-block">
                 <v-list-item-title v-text="i18n.chat"></v-list-item-title>
@@ -262,7 +266,9 @@
             </v-list-item>
             <v-list-item data-aid="nav_alerts">
               <template #prepend>
-                <v-icon>fa-bell</v-icon>
+                <router-link to="/alerts" class="text-decoration-none" aria-hidden="true" tabindex="-1">
+                  <v-icon>fa-bell</v-icon>
+                </router-link>
               </template>
               <template #append v-if="isNewAlert()">
                 <v-icon color="warning">fa-exclamation</v-icon>
@@ -273,7 +279,9 @@
             </v-list-item>
             <v-list-item data-aid="nav_dashboards">
               <template #prepend>
-                <v-icon>fa-chart-pie</v-icon>
+                <router-link to="/dashboards" class="text-decoration-none" aria-hidden="true" tabindex="-1">
+                  <v-icon>fa-chart-pie</v-icon>
+                </router-link>
               </template>
               <router-link to="/dashboards" class="text-decoration-none d-block">
                 <v-list-item-title v-text="i18n.dashboards"></v-list-item-title>
@@ -281,7 +289,9 @@
             </v-list-item>
             <v-list-item data-aid="nav_hunt">
               <template #prepend>
-                <v-icon>fa-crosshairs</v-icon>
+                <router-link to="/hunt" class="text-decoration-none" aria-hidden="true" tabindex="-1">
+                  <v-icon>fa-crosshairs</v-icon>
+                </router-link>
               </template>
               <router-link to="/hunt" class="text-decoration-none d-block">
                 <v-list-item-title v-text="i18n.hunt"></v-list-item-title>
@@ -289,7 +299,9 @@
             </v-list-item>
             <v-list-item data-aid="nav_cases" v-if="casesEnabled">
               <template #prepend>
-                <v-icon>fa-briefcase</v-icon>
+                <router-link to="/cases" class="text-decoration-none" aria-hidden="true" tabindex="-1">
+                  <v-icon>fa-briefcase</v-icon>
+                </router-link>
               </template>
               <router-link to="/cases" class="text-decoration-none d-block">
                 <v-list-item-title v-text="i18n.cases"></v-list-item-title>
@@ -297,7 +309,9 @@
             </v-list-item>
             <v-list-item data-aid="nav_detections" v-if="detectionsEnabled" class="short-spacer">
               <template #prepend>
-                <v-icon>fa-magnifying-glass</v-icon>
+                <router-link to="/detections" class="text-decoration-none" aria-hidden="true" tabindex="-1">
+                  <v-icon>fa-magnifying-glass</v-icon>
+                </router-link>
               </template>
               <template #append v-if="isDetectionsUnhealthy()">
                 <v-icon color="warning">fa-exclamation</v-icon>
@@ -311,7 +325,9 @@
             </v-list-item>
             <v-list-item data-aid="nav_jobs">
               <template #prepend>
-                <v-icon>fa-stream</v-icon>
+                <router-link to="/jobs" class="text-decoration-none" aria-hidden="true" tabindex="-1">
+                  <v-icon>fa-stream</v-icon>
+                </router-link>
               </template>
               <router-link to="/jobs" class="text-decoration-none d-block">
                 <v-list-item-title v-text="i18n.jobs"></v-list-item-title>
@@ -319,7 +335,9 @@
             </v-list-item>
             <v-list-item data-aid="nav_grid" class="short-spacer">
               <template #prepend>
-                <v-icon>fa-network-wired</v-icon>
+                <router-link to="/grid" class="text-decoration-none" aria-hidden="true" tabindex="-1">
+                  <v-icon>fa-network-wired</v-icon>
+                </router-link>
               </template>
               <template #append v-if="isUnhealthy()">
                 <v-icon color="warning">fa-exclamation</v-icon>
@@ -330,7 +348,9 @@
             </v-list-item>
             <v-list-item data-aid="nav_downloads">
               <template #prepend>
-                <v-icon>fa-download</v-icon>
+                <router-link to="/downloads" class="text-decoration-none" aria-hidden="true" tabindex="-1">
+                  <v-icon>fa-download</v-icon>
+                </router-link>
               </template>
               <router-link to="/downloads" class="text-decoration-none d-block">
                 <v-list-item-title v-text="i18n.downloads"></v-list-item-title>
@@ -338,7 +358,9 @@
             </v-list-item>
             <v-list-item v-if="isLicensed(FEAT_RPT)" data-aid="nav_reports">
               <template #prepend>
-                <v-icon>fa-file-export</v-icon>
+                <router-link to="/reports" class="text-decoration-none" aria-hidden="true" tabindex="-1">
+                  <v-icon>fa-file-export</v-icon>
+                </router-link>
               </template>
               <router-link to="/reports" class="text-decoration-none d-block">
                 <v-list-item-title v-text="i18n.reports"></v-list-item-title>
@@ -355,7 +377,9 @@
               </template>
               <v-list-item data-aid="nav_admin_users">
                 <template #prepend>
-                  <v-icon>fa-users</v-icon>
+                  <router-link to="/users" class="text-decoration-none" aria-hidden="true" tabindex="-1">
+                    <v-icon>fa-users</v-icon>
+                  </router-link>
                 </template>
                 <router-link to="/users" class="text-decoration-none d-block">
                   <v-list-item-title v-text="i18n.users"></v-list-item-title>
@@ -363,7 +387,9 @@
               </v-list-item>
               <v-list-item v-if="isLicensed('api') && $root.isUserAdmin()" data-aid="nav_admin_clients">
                 <template #prepend>
-                  <v-icon>fa-robot</v-icon>
+                  <router-link to="/clients" class="text-decoration-none" aria-hidden="true" tabindex="-1">
+                    <v-icon>fa-robot</v-icon>
+                  </router-link>
                 </template>
                 <router-link to="/clients" class="text-decoration-none d-block">
                   <v-list-item-title v-text="i18n.clients"></v-list-item-title>
@@ -371,7 +397,9 @@
               </v-list-item>
               <v-list-item v-if="isLicensed('qry') && $root.isUserAdmin()" data-aid="nav_admin_active_queries">
                 <template #prepend>
-                  <v-icon>fa-clock</v-icon>
+                  <router-link to="/queries" class="text-decoration-none" aria-hidden="true" tabindex="-1">
+                    <v-icon>fa-clock</v-icon>
+                  </router-link>
                 </template>
                 <router-link to="/queries" class="text-decoration-none d-block">
                   <v-list-item-title v-text="i18n.activeQueries"></v-list-item-title>
@@ -379,7 +407,9 @@
               </v-list-item>
               <v-list-item data-aid="nav_admin_members" v-if="$root.isUserAdmin()">
                 <template #prepend>
-                  <v-icon>fa-circle-nodes</v-icon>
+                  <router-link to="/gridmembers" class="text-decoration-none" aria-hidden="true" tabindex="-1">
+                    <v-icon>fa-circle-nodes</v-icon>
+                  </router-link>
                 </template>
                 <router-link to="/gridmembers" class="text-decoration-none d-block">
                   <v-list-item-title v-text="i18n.gridMembers"></v-list-item-title>
@@ -387,7 +417,9 @@
               </v-list-item>
               <v-list-item data-aid="nav_admin_config" v-if="$root.isUserAdmin()">
                 <template #prepend>
-                  <v-icon>fa-gear</v-icon>
+                  <router-link to="/config" class="text-decoration-none" aria-hidden="true" tabindex="-1">
+                    <v-icon>fa-gear</v-icon>
+                  </router-link>
                 </template>
                 <router-link to="/config" class="text-decoration-none d-block">
                   <v-list-item-title v-text="i18n.config"></v-list-item-title>
@@ -395,7 +427,9 @@
               </v-list-item>
               <v-list-item data-aid="nav_admin_license" v-if="$root.isUserAdmin()">
                 <template #prepend>
-                  <v-icon>fa-key</v-icon>
+                  <router-link to="/licensekey" class="text-decoration-none" aria-hidden="true" tabindex="-1">
+                    <v-icon>fa-key</v-icon>
+                  </router-link>
                 </template>
                 <router-link to="/licensekey" class="text-decoration-none d-block">
                   <v-list-item-title v-text="i18n.licenseKey"></v-list-item-title>
@@ -403,7 +437,9 @@
               </v-list-item>
               <v-list-item data-aid="nav_admin_aimetrics" v-if="$root.isUserAdmin() && isLicensed('oai')">
                 <template #prepend>
-                  <v-icon>fa-microchip</v-icon>
+                  <router-link to="/aimetrics" class="text-decoration-none" aria-hidden="true" tabindex="-1">
+                    <v-icon>fa-microchip</v-icon>
+                  </router-link>
                 </template>
                 <router-link to="/aimetrics" class="text-decoration-none d-block">
                   <v-list-item-title v-text="i18n.aiMetrics"></v-list-item-title>
@@ -417,7 +453,9 @@
             <template v-for="tool in tools">
               <v-list-item v-if="tool.enabled" :key="tool.name" :id="tool.name" :data-aid="'nav_tool_' + tool.name">
                 <template #prepend>
-                  <v-icon>{{tool.icon}}</v-icon>
+                  <a :href="tool.link" :target="$root.target(tool.target)" aria-hidden="true" tabindex="-1" class="text-decoration-none">
+                    <v-icon>{{tool.icon}}</v-icon>
+                  </a>
                 </template>
                 <a :href="tool.link" :target="$root.target(tool.target)" v-bind:title.attr="$root.localizeMessage(tool.description)" class="text-decoration-none d-block">
                   <v-list-item-title v-text="$root.localizeMessage(tool.name)"></v-list-item-title>
