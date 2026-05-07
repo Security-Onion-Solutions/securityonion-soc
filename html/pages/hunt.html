@@ -559,7 +559,7 @@
 				</v-col>
 			</v-row>
 			<v-row v-if="loaded && eventsEnabled && (isAdvanced() || !metricsEnabled)">
-				<v-col id="events" class="section-panel" :data-aid="'events_' + category">
+				<v-col id="events" :class="['section-panel', { 'known-width': isCategory('alerts') }]" :data-aid="'events_' + category">
 					<v-toolbar v-if="isAdvanced()" density="compact" variant="flat">
 						<v-toolbar-title role="heading" aria-level="2">{{ isCategory("detections") || isCategory("alerts") || isCategory("cases") ? i18n[category] : i18n.events }}</v-toolbar-title>
 						<v-spacer></v-spacer>
@@ -690,19 +690,19 @@
 									<tr class="expanded-row">
 										<td :colspan="columns.length" class="px-0" :data-aid="'events_fields_' + category">
 											<div class="expanded-row-wrapper">
-												<div>
+												<div class="d-flex split-toolbar">
 													<v-tabs :height="isCategory('alerts') ? undefined : 0" v-model="activeTabs[item._row_idx_]" @update:model-value="if (activeTabs[item._row_idx_] === 'playbook' && item) loadPlaybook(item, item._row_idx_);" class="flex-grow-0">
-														<v-tab id="alerts_alertsDetailTab" value="alert" :class="{ 'theme-primary': activeTabs[item._row_idx_] === 'alert' }" :style="{ 'width': (this.eventColumnWidth / 2) + 'px' }" data-aid="alerts_alertDetailsTab">
+														<v-tab id="alerts_alertsDetailTab" value="alert" :class="{ 'theme-primary': activeTabs[item._row_idx_] === 'alert' }" data-aid="alerts_alertDetailsTab">
 															<v-icon class="tab-icon">fa-bell</v-icon>
 															<div class="d-none d-lg-block">{{i18n.alertDetails}}</div>
 														</v-tab>
-														<v-tab id="alerts_playbookTab" value="playbook" :class="{ 'theme-primary': activeTabs[item._row_idx_] === 'playbook' }" :style="{ 'width': (this.eventColumnWidth / 2) + 'px' }" data-aid="alerts_playbookTab">
+														<v-tab id="alerts_playbookTab" value="playbook" :class="{ 'theme-primary': activeTabs[item._row_idx_] === 'playbook' }" data-aid="alerts_playbookTab">
 															<v-icon class="tab-icon">fa-book</v-icon>
 															<div class="d-none d-lg-block">{{i18n.guidedAnalysis}}</div>
 														</v-tab>
 													</v-tabs>
 													<v-spacer></v-spacer>
-													<div v-if="activeTabs[item._row_idx_] === 'playbook'">
+													<div v-if="activeTabs[item._row_idx_] === 'playbook'" class="mr-4">
 														<v-btn class="ml-9" variant="text" size="small" icon @click="toggleAllQuestions(item, item._row_idx_, false)" :aria-label="i18n.collapseAll" data-aid="alerts_playbooks_collapseAll">
 															<v-icon>fa-window-minimize</v-icon>
 														</v-btn>
