@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -22,7 +21,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/json"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
-	"github.com/security-onion-solutions/securityonion-soc/server/modules/common/config"
+
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/salt/options"
 	"github.com/security-onion-solutions/securityonion-soc/syntax"
 	"github.com/security-onion-solutions/securityonion-soc/web"
@@ -38,7 +37,8 @@ type Saltstore struct {
 	longRelayTimeoutMs int
 	saltstackDir       string
 	queueDir           string
-	bypassErrors       bool
+	bypassEnabled      bool
+	annotations        map[string]map[string]interface{}
 }
 
 func NewSaltstore(server *server.Server) *Saltstore {
@@ -47,12 +47,45 @@ func NewSaltstore(server *server.Server) *Saltstore {
 	}
 }
 
-func (store *Saltstore) Init(timeoutMs int, longRelayTimeoutMs int, saltstackDir string, queueDir string, bypassErrors bool) error {
+func (store *Saltstore) Init(timeoutMs int, longRelayTimeoutMs int, saltstackDir string, queueDir string, bypassEnabled bool) error {
 	store.timeoutMs = timeoutMs
 	store.longRelayTimeoutMs = longRelayTimeoutMs
 	store.saltstackDir = strings.TrimSuffix(saltstackDir, "/")
 	store.queueDir = queueDir
-	store.bypassErrors = bypassErrors
+	store.bypassEnabled = bypassEnabled
+
+	if store.bypassEnabled {
+		go store.PreloadConfiguration()
+	} else {
+		return store.PreloadConfiguration()
+	}
+
+	return nil
+}
+
+func (store *Saltstore) PreloadConfiguration() error {
+	// Pre-load annotations and default settings from the default pillar directory
+	var err error
+	defaultDir := store.saltstackDir + "/default"
+	if _, statErr := os.Stat(defaultDir); statErr == nil {
+		var defaults map[string]string
+		store.annotations, defaults, err = LoadStaticConfiguration(defaultDir, store.parseYaml)
+		if err == nil {
+			HydrateAnnotations(store.annotations, defaults, func(id string) (string, bool) {
+				relpath := RelPathFromId(id)
+				content, err := store.readFile(fmt.Sprintf("%s/default/salt/%s", store.saltstackDir, relpath))
+				return content, err == nil
+			})
+		}
+	}
+
+	if err != nil {
+		log.WithError(err).Warn("Failed to load pillar data")
+		if !store.bypassEnabled {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -126,7 +159,168 @@ func (store *Saltstore) execCommand(ctx context.Context, args map[string]string)
 	return response, err
 }
 
-func (store *Saltstore) GetSetting(settings []*model.Setting, id string) *model.Setting {
+func (store *Saltstore) getFilteredSettings(ctx context.Context, filterId string) ([]*model.Setting, error) {
+	logger := log.FromContext(ctx)
+	settings := make([]*model.Setting, 0)
+
+	paths := []string{store.saltstackDir + "/local/pillar"}
+	if filterId != "" {
+		sections := strings.Split(filterId, ".")
+		paths = []string{
+			fmt.Sprintf("%s/local/pillar/%s", store.saltstackDir, sections[0]),
+			fmt.Sprintf("%s/local/pillar/minions", store.saltstackDir),
+		}
+	}
+
+	var err error
+	for _, walkPath := range paths {
+		if filterId != "" {
+			if _, statErr := os.Stat(walkPath); statErr != nil {
+				continue
+			}
+		}
+
+		walkErr := store.traversePillars(walkPath, &settings)
+		if walkErr != nil {
+			err = walkErr
+			if !store.bypassEnabled {
+				return nil, err
+			}
+		}
+	}
+
+	logger.Info("Loaded settings, preparing to apply annotations")
+	// Apply the static pillar annotations, to provide supporting details to the parsed settings above.
+	fileLoader := func(id string) (string, string, bool) {
+		relpath := RelPathFromId(id)
+		// Default is already pre-loaded in the annotations, so we only need to load the local override here.
+		value, _ := store.readFile(fmt.Sprintf("%s/local/salt/%s", store.saltstackDir, relpath))
+		return "", value, true
+	}
+
+	if filterId != "" {
+		if ann, ok := store.annotations[filterId]; ok {
+			found := false
+			for _, setting := range settings {
+				if setting.Id == filterId {
+					ApplyAnnotations(setting, ann, fileLoader)
+					ApplySensitiveMask(setting)
+					found = true
+				}
+			}
+			if !found {
+				// Add a new setting since there is no existing setting for this annotation
+				setting := model.NewSetting(filterId)
+				ApplyAnnotations(setting, ann, fileLoader)
+				ApplySensitiveMask(setting)
+				settings = append(settings, setting)
+			}
+		}
+		// If a filterId was provided, narrow the result to only that ID.
+		settings = slices.DeleteFunc(settings, func(s *model.Setting) bool {
+			return s.Id != filterId
+		})
+	} else {
+		for id, ann := range store.annotations {
+			found := false
+			for _, setting := range settings {
+				if setting.Id == id {
+					ApplyAnnotations(setting, ann, fileLoader)
+					ApplySensitiveMask(setting)
+					found = true
+				}
+			}
+			if !found {
+				// Add a new setting since there is no existing setting for this annotation
+				setting := model.NewSetting(id)
+				ApplyAnnotations(setting, ann, fileLoader)
+				ApplySensitiveMask(setting)
+				settings = append(settings, setting)
+			}
+		}
+	}
+
+	PostProcess(settings)
+	return settings, err
+}
+
+func (store *Saltstore) traversePillars(basePath string, settings *[]*model.Setting) error {
+	entries, err := os.ReadDir(basePath)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		path := filepath.Join(basePath, entry.Name())
+		if entry.IsDir() {
+			subEntries, err := os.ReadDir(path)
+			if err != nil {
+				if !store.bypassEnabled {
+					return err
+				}
+				continue
+			}
+			for _, subEntry := range subEntries {
+				if !subEntry.IsDir() && strings.HasSuffix(subEntry.Name(), ".sls") {
+					subPath := filepath.Join(path, subEntry.Name())
+					info, _ := subEntry.Info()
+					store.processPillarFile(subPath, info, settings)
+				}
+			}
+		} else if strings.HasSuffix(entry.Name(), ".sls") {
+			info, _ := entry.Info()
+			store.processPillarFile(path, info, settings)
+		}
+	}
+	return nil
+}
+
+func (store *Saltstore) processPillarFile(path string, info os.FileInfo, settings *[]*model.Setting) {
+	setting_id := strings.TrimSuffix(info.Name(), ".sls")
+	minion_id := ""
+
+	is_minion := strings.Contains(path, "/minions/")
+
+	if strings.HasPrefix(setting_id, "adv_") {
+		setting_id = strings.TrimPrefix(setting_id, "adv_")
+
+		if is_minion {
+			minion_id = setting_id
+			setting_id = "advanced"
+		} else {
+			setting_id = setting_id + ".advanced"
+		}
+
+		if info.Size() == 0 {
+			// Optimization: avoid reading 0-byte file, just create the empty setting
+			setting := model.NewSetting(setting_id)
+			if minion_id != "" {
+				setting.Global = false
+				setting.Node = true
+			} else {
+				setting.Global = true
+				setting.Node = false
+			}
+			setting.Value = ""
+			setting.NodeId = minion_id
+			setting.Multiline = true
+			setting.Syntax = "yaml"
+			*settings = append(*settings, setting)
+		} else {
+			*settings = store.parseAdvanced(path, *settings, minion_id, setting_id)
+		}
+	} else if (strings.HasPrefix(setting_id, "soc_") || is_minion) && info.Size() > 0 {
+		if is_minion {
+			minion_id = setting_id
+		}
+		var mapped map[string]interface{}
+		mapped, _ = store.parseYaml(path)
+		if mapped != nil {
+			*settings = store.recursivelyParseSettings(path, *settings, mapped, "", minion_id, true)
+		}
+	}
+}
+
+func (store *Saltstore) findSetting(settings []*model.Setting, id string) *model.Setting {
 	for _, setting := range settings {
 		if setting.Id == id {
 			return setting
@@ -135,151 +329,29 @@ func (store *Saltstore) GetSetting(settings []*model.Setting, id string) *model.
 	return nil
 }
 
-func (store *Saltstore) GetSettings(ctx context.Context, advanced bool) ([]*model.Setting, error) {
-	logger := log.FromContext(ctx)
+func (store *Saltstore) GetSetting(ctx context.Context, id string) (*model.Setting, error) {
+	settings, err := store.getFilteredSettings(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if len(settings) > 0 {
+		return settings[0], nil
+	}
+	return nil, nil
+}
 
+func (store *Saltstore) GetSettings(ctx context.Context, advanced bool) ([]*model.Setting, error) {
 	var err error
 	if err = store.server.CheckAuthorized(ctx, "read", "config"); err != nil {
 		return nil, err
 	}
 
-	settings := make([]*model.Setting, 0)
-
-	// Parse the default values first.
-	err = filepath.Walk(store.saltstackDir+"/default", func(path string, info os.FileInfo, err error) error {
-		if (store.bypassErrors || err == nil) && !info.IsDir() && info.Name() == "defaults.yaml" {
-			var mapped map[string]interface{}
-			mapped, err = store.parseYaml(path)
-			if err == nil {
-				settings = store.recursivelyParseSettings(path, settings, mapped, "", "", false)
-			}
-		}
-
-		if store.bypassErrors {
-			if err != nil {
-				logger.WithField("path", path).WithError(err).Warn("Bypassing error while parsing defaults")
-			}
-			return nil
-		}
-		return err
-	})
-
-	// Since these are the defaults, set all settings' values as their defaults, so that users can easily revert
-	// overrides.
-	for _, setting := range settings {
-		setting.Default = setting.Value
-		setting.DefaultAvailable = true
+	settings, err := store.getFilteredSettings(ctx, "")
+	if err != nil {
+		return nil, err
 	}
 
-	// Now parse the local pillar overrides
-	if store.bypassErrors || err == nil {
-		err = filepath.Walk(store.saltstackDir+"/local", func(path string, info os.FileInfo, err error) error {
-			if (store.bypassErrors || err == nil) && !info.IsDir() && strings.HasSuffix(info.Name(), ".sls") {
-				setting_id := strings.TrimSuffix(info.Name(), ".sls")
-				minion_id := ""
-
-				is_minion := strings.Contains(path, "/minions/")
-
-				if strings.HasPrefix(setting_id, "adv_") {
-					setting_id = strings.TrimPrefix(setting_id, "adv_")
-
-					if is_minion {
-						minion_id = setting_id
-						setting_id = "advanced"
-					} else {
-						setting_id = setting_id + ".advanced"
-					}
-					settings = store.parseAdvanced(path, settings, minion_id, setting_id)
-				} else if strings.HasPrefix(setting_id, "soc_") || is_minion {
-					if is_minion {
-						minion_id = setting_id
-					}
-					var mapped map[string]interface{}
-					mapped, err = store.parseYaml(path)
-					if err == nil {
-						settings = store.recursivelyParseSettings(path, settings, mapped, "", minion_id, true)
-					}
-				}
-			}
-
-			if store.bypassErrors {
-				if err != nil {
-					logger.WithField("path", path).WithError(err).Warn("Bypassing error while parsing local pillars")
-				}
-				return nil
-			}
-			return err
-		})
-	}
-
-	// Parse the static pillar annotations, to provide supporting details to the parsed settings above.
-	if store.bypassErrors || err == nil {
-		err = filepath.Walk(store.saltstackDir+"/default", func(path string, info os.FileInfo, err error) error {
-			if (store.bypassErrors || err == nil) && !info.IsDir() && strings.HasPrefix(info.Name(), "soc_") && strings.HasSuffix(info.Name(), ".yaml") {
-				var mapped map[string]interface{}
-				mapped, err = store.parseYaml(path)
-				if err == nil {
-					fileLoader := func(id string) (string, string, bool) {
-						relpath := config.RelPathFromId(id)
-						var err error
-						defaultValue, err := store.readFile(fmt.Sprintf("%s/default/salt/%s", store.saltstackDir, relpath))
-						if err != nil {
-							return "", "", false
-						}
-						value, _ := store.readFile(fmt.Sprintf("%s/local/salt/%s", store.saltstackDir, relpath))
-						return defaultValue, value, true
-					}
-					applyFn := func(setting *model.Setting, annotations map[string]interface{}) {
-						config.ApplyAnnotations(setting, annotations, fileLoader)
-					}
-					settings, _ = config.RecursivelyParseAnnotations(settings, mapped, "", applyFn)
-				}
-			}
-
-			if store.bypassErrors {
-				if err != nil {
-					logger.WithField("path", path).WithError(err).Warn("Bypassing error while parsing annotations")
-				}
-				return nil
-			}
-			return err
-		})
-	}
-
-	store.postProcess(settings)
-
-	return store.sortSettings(store.filter(settings, advanced)), err
-}
-
-func (store *Saltstore) postProcess(settings []*model.Setting) {
-	for _, setting := range settings {
-		// Mark all settings missing descriptions as advanced
-		if len(setting.Description) == 0 {
-			setting.Advanced = true
-		}
-
-		if setting.SupportsJinja() {
-			setting.Value = syntax.UnescapeJinja(setting.Value)
-		}
-	}
-}
-
-func (store *Saltstore) filter(settings []*model.Setting, advanced bool) []*model.Setting {
-	if advanced {
-		// No need to filter anything, caller wants everything
-		return settings
-	}
-	return slices.DeleteFunc(settings, func(setting *model.Setting) bool {
-		return setting.Advanced
-	})
-}
-
-func (store *Saltstore) sortSettings(settings []*model.Setting) []*model.Setting {
-	sort.Slice(settings, func(idx_a, idx_b int) bool {
-		return (settings[idx_a].Id < settings[idx_b].Id && !strings.HasSuffix(settings[idx_a].Id, "advanced")) ||
-			strings.HasSuffix(settings[idx_b].Id, "advanced")
-	})
-	return settings
+	return Sort(Filter(settings, advanced)), err
 }
 
 func (store *Saltstore) parseYaml(path string) (map[string]interface{}, error) {
@@ -357,13 +429,13 @@ func (store *Saltstore) recursivelyParseSettings(
 			newPrefix = newPrefix + "."
 		}
 
-		switch value.(type) {
+		switch val := value.(type) {
 		case map[string]interface{}:
 			foundSetting = false
-			settings = store.recursivelyParseSettings(path, settings, value.(map[string]interface{}), newPrefix+id, minion, merge)
+			settings = store.recursivelyParseSettings(path, settings, val, newPrefix+id, minion, merge)
 		case []interface{}:
 			multiline = true
-			for _, item := range value.([]interface{}) {
+			for _, item := range val {
 
 				var str string
 				switch item.(type) {
@@ -416,10 +488,6 @@ func (store *Saltstore) recursivelyParseSettings(
 	return settings
 }
 
-
-
-
-
 func (store *Saltstore) readFile(path string) (string, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {
@@ -471,12 +539,12 @@ func (store *Saltstore) updateSetting(mapped map[string]interface{}, sections []
 	}
 
 	if child != nil {
-		switch child.(type) {
+		switch child := child.(type) {
 		case map[string]interface{}:
 			if len(sections) == 1 {
 				return errors.New("Unexpected setting value of map type during update")
 			}
-			return store.updateSetting(child.(map[string]interface{}), sections[1:], setting)
+			return store.updateSetting(child, sections[1:], setting)
 		}
 	}
 
@@ -496,19 +564,19 @@ func (store *Saltstore) updateSetting(mapped map[string]interface{}, sections []
 				"settingName": name,
 				"forcedType":  setting.ForcedType,
 			}).Info("Forcing setting type")
-			mapped[name], err = config.ForceType(value, setting.ForcedType)
+			mapped[name], err = ForceType(value, setting.ForcedType)
 			if err == nil && setting.ForcedType == "[]{}" {
 				if mapList, ok := mapped[name].([]map[string]any); ok {
-					mapped[name], err = config.CoerceMapListFieldTypes(mapList, setting.UiElements)
+					mapped[name], err = CoerceMapListFieldTypes(mapList, setting.UiElements)
 				}
 			}
 		} else {
 			currentValue := mapped[name]
 			if currentValue == nil && setting.DefaultAvailable {
-				currentValue = config.AlignBestGuess(setting.Default)
+				currentValue = AlignBestGuess(setting.Default)
 			}
 			value = strings.TrimSpace(value)
-			mapped[name], err = config.AlignType(currentValue, value)
+			mapped[name], err = AlignType(currentValue, value)
 		}
 	}
 
@@ -524,14 +592,14 @@ func (store *Saltstore) deleteSetting(mapped map[string]interface{}, sections []
 	name := sections[0]
 	child := mapped[name]
 	if child != nil {
-		switch child.(type) {
+		switch child := child.(type) {
 		case map[string]interface{}:
 			if len(sections) == 1 {
 				return false, errors.New("Unexpected setting value of map type during delete")
 			}
 
 			var empty bool
-			empty, err = store.deleteSetting(child.(map[string]interface{}), sections[1:])
+			empty, err = store.deleteSetting(child, sections[1:])
 			if empty && err == nil {
 				log.WithFields(log.Fields{
 					"settingName": name,
@@ -564,13 +632,10 @@ func (store *Saltstore) UpdateSetting(ctx context.Context, setting *model.Settin
 		return errors.New("Invalid setting id: " + setting.Id)
 	}
 
-	// always pull advanced settings on update since incoming setting may not be properly flagged as advanced
-	advanced := true
-	settings, err := store.GetSettings(ctx, advanced)
+	settingDef, err := store.GetSetting(ctx, setting.Id)
 	if err != nil {
 		return err
 	} else {
-		settingDef := store.GetSetting(settings, setting.Id)
 		if settingDef == nil {
 			logger.WithFields(log.Fields{
 				"settingId": setting.Id,
@@ -630,7 +695,7 @@ func (store *Saltstore) UpdateSetting(ctx context.Context, setting *model.Settin
 		os.WriteFile(path, []byte(setting.Value), 0600)
 
 	} else if setting.File {
-		path := fmt.Sprintf("%s/local/salt/%s", store.saltstackDir, config.RelPathFromId(setting.Id))
+		path := fmt.Sprintf("%s/local/salt/%s", store.saltstackDir, RelPathFromId(setting.Id))
 		if !remove {
 			logger.WithFields(log.Fields{
 				"settingId":     setting.Id,

@@ -18,7 +18,7 @@ import (
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
-	"github.com/security-onion-solutions/securityonion-soc/server/modules/common/config"
+
 	"github.com/security-onion-solutions/securityonion-soc/web"
 	"github.com/stretchr/testify/assert"
 )
@@ -195,7 +195,7 @@ func TestGetSettings_BadSaltstackPath(tester *testing.T) {
 	srv := server.NewFakeAuthorizedServer(nil)
 	salt := NewSaltstore(srv)
 	_, err := salt.GetSettings(ctx(), true)
-	assert.EqualError(tester, err, "lstat /default: no such file or directory")
+	assert.ErrorContains(tester, err, "open /local/pillar: no such file or directory")
 }
 
 func TestGetSettings(tester *testing.T) {
@@ -385,7 +385,7 @@ func TestUpdateSetting_MissingSettingFile(tester *testing.T) {
 	salt := NewSaltstore(srv)
 	setting := model.NewSetting("some.setting")
 	err := salt.UpdateSetting(ctx(), setting, false)
-	assert.EqualError(tester, err, "lstat /default: no such file or directory")
+	assert.ErrorContains(tester, err, "open /local/pillar/some/soc_some.sls: no such file or directory")
 }
 
 func findSetting(settings []*model.Setting, id string, nodeId string) *model.Setting {
@@ -1383,7 +1383,7 @@ func TestCoerceMapListFieldTypes(tester *testing.T) {
 
 	for _, tc := range testCases {
 		tester.Run(tc.name, func(t *testing.T) {
-			result, err := config.CoerceMapListFieldTypes(tc.list, tc.uiElements)
+			result, err := CoerceMapListFieldTypes(tc.list, tc.uiElements)
 			if tc.errContains != "" {
 				assert.ErrorContains(t, err, tc.errContains)
 			} else {
@@ -1396,4 +1396,25 @@ func TestCoerceMapListFieldTypes(tester *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGetFilteredSettings(tester *testing.T) {
+	defer Cleanup()
+	salt := NewTestSalt()
+
+	// Test with no filter
+	settings, err := salt.getFilteredSettings(ctx(), "")
+	assert.NoError(tester, err)
+	assert.NotEmpty(tester, settings)
+
+	// Test with specific filter
+	settings, err = salt.getFilteredSettings(ctx(), "myapp.foo__txt")
+	assert.NoError(tester, err)
+	assert.Len(tester, settings, 1)
+	assert.Equal(tester, "myapp.foo__txt", settings[0].Id)
+
+	// Test with non-existent filter
+	settings, err = salt.getFilteredSettings(ctx(), "nonexistent.setting")
+	assert.NoError(tester, err)
+	assert.Empty(tester, settings)
 }

@@ -15,7 +15,7 @@ const DEFAULT_TIMEOUT_MS = 30000
 const LONG_TIMEOUT_MS = 120000
 const DEFAULT_SALTSTACK_DIR = "/opt/so/saltstack"
 const DEFAULT_QUEUE_DIR = "/opt/so/conf/soc/queue"
-const DEFAULT_BYPASS_ERRORS = false
+const DEFAULT_BYPASS_ENABLED = false
 
 type Salt struct {
 	config module.ModuleConfig
@@ -40,8 +40,8 @@ func (mod *Salt) Init(cfg module.ModuleConfig) error {
 	longRelayTimeoutMs := module.GetIntDefault(cfg, "longRelayTimeoutMs", LONG_TIMEOUT_MS)
 	saltstackDir := module.GetStringDefault(cfg, "saltstackDir", DEFAULT_SALTSTACK_DIR)
 	queueDir := module.GetStringDefault(cfg, "queueDir", DEFAULT_QUEUE_DIR)
-	bypassErrors := module.GetBoolDefault(cfg, "bypassErrors", DEFAULT_BYPASS_ERRORS)
-	err := mod.impl.Init(timeoutMs, longRelayTimeoutMs, saltstackDir, queueDir, bypassErrors)
+	bypassEnabled := module.GetBoolDefault(cfg, "bypassEnabled", DEFAULT_BYPASS_ENABLED)
+	err := mod.impl.Init(timeoutMs, longRelayTimeoutMs, saltstackDir, queueDir, bypassEnabled)
 	if err == nil {
 		mod.server.Configstore = mod.impl
 		mod.server.GridMembersstore = mod.impl
