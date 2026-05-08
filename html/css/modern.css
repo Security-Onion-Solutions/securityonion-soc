@@ -1105,3 +1105,11 @@ dfn {
 .text-error {
   color: rgb(var(--v-theme-lighterror)) !important;
 }
+
+/* ============================================================
+   Items Per Page Select
+   ============================================================ */
+
+.v-data-table-footer__items-per-page > .v-select {
+  width: 7rem;
+}
