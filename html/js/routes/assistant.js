@@ -295,7 +295,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         return;
       }
       const lastChatId = this.loadCurrentChatId();
-      if (lastChatId && this.chatHistory.length > 0) {
+      if (lastChatId && this.chatHistory.some(c => c.sessionId === lastChatId)) {
         this.$root.startLoading();
         try {
           // Update URL to reflect the current session
@@ -420,6 +420,12 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       // Check if context length has reached the limit
       if (!isCompressing && this.checkContextLimitReached()) return;
       
+      // Bail out if the model wasn't reachable when credits were last fetched
+      if (!this.creditsLoaded) {
+        this.$root.showError(this.i18n.assistantBalanceCheckUnhealthy);
+        return;
+      }
+
       // Check if user has credits
       if (this.creditsRemaining <= 0) {
         this.$root.showError(this.i18n.assistantOutOfCredits);
@@ -1471,16 +1477,27 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.scrollToBottom();
     },
     async startInvestigationSession(investigationPrompt) {
-      
+      if (!this.creditsLoaded) {
+        await this.loadCredits();
+      }
+      if (!this.creditsLoaded) {
+        this.currentChatId = null;
+        this.saveCurrentChatId();
+        if (this.$route.params.sessionId) {
+          await this.$router.replace({ name: 'assistant' });
+        }
+        return;
+      }
+
       // Clear the welcome message for investigations (similar to normal chats)
       this.messages = [];
-      
+
       // Set the investigation prompt directly (no decoding needed)
       this.newMessage = investigationPrompt;
-      
+
       // Wait for the UI to update again
       await this.$nextTick();
-      
+
       // Send the message after a delay to ensure everything is ready
       setTimeout(async () => {
         if (this.newMessage && this.newMessage.trim()) {
