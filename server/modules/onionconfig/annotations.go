@@ -165,7 +165,6 @@ func ApplySensitiveMask(setting *model.Setting) {
 	}
 }
 
-
 // LoadStaticConfiguration walks a directory tree and collects both annotations and default values in a single pass.
 func LoadStaticConfiguration(dir string, parseYaml func(string) (map[string]interface{}, error)) (map[string]map[string]interface{}, map[string]string, error) {
 	annotations := make(map[string]map[string]interface{})
@@ -242,58 +241,4 @@ func HydrateAnnotations(annotations map[string]map[string]interface{}, defaults 
 			ann["default"] = defVal
 		}
 	}
-}
-
-// RecursivelyParseAnnotations parses a nested map of annotations and applies them to the provided settings list.
-// Deprecated: Use FlattenAnnotations and ApplyAnnotations instead for better performance and caching.
-func RecursivelyParseAnnotations(
-	settings []*model.Setting,
-	mapped map[string]interface{},
-	prefix string,
-	applyFn func(setting *model.Setting, annotations map[string]interface{}),
-) ([]*model.Setting, bool) {
-
-	foundAnnotation := false
-	for id, value := range mapped {
-
-		newPrefix := prefix
-		if newPrefix != "" {
-			newPrefix = newPrefix + "."
-		}
-
-		newId := newPrefix + id
-
-		switch value := value.(type) {
-		case map[string]interface{}:
-			var endOfBranch bool
-			settings, endOfBranch = RecursivelyParseAnnotations(settings, value, newId, applyFn)
-			if endOfBranch {
-				foundExisting := false
-				for _, setting := range settings {
-					if setting.Id == newId {
-						applyFn(setting, value)
-
-						// Do not allow settings that are marked as sensitive to be transmitted to remote API clients.
-						if setting.Sensitive {
-							setting.Value = "******"
-							setting.Default = ""
-						}
-						foundExisting = true
-					}
-				}
-				if !foundExisting {
-					// Add a new setting since there is no existing setting for this annotation
-					setting := model.NewSetting(newId)
-					applyFn(setting, value)
-					settings = append(settings, setting)
-					log.WithFields(log.Fields{
-						"id": newId,
-					}).Debug("Found annotation without a setting")
-				}
-			}
-		default:
-			foundAnnotation = true
-		}
-	}
-	return settings, foundAnnotation
 }

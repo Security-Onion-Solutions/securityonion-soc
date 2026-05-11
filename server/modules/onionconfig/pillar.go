@@ -422,6 +422,9 @@ func DeleteSettingMap(mapped map[string]interface{}, sections []string) (bool, e
 
 func ParseYaml(path string) (map[string]interface{}, error) {
 	var mapped map[string]interface{}
+	log.WithFields(log.Fields{
+		"path": path,
+	}).Debug("Parsing yaml file")
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
