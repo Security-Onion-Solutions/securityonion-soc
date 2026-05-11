@@ -455,7 +455,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         if (response && response.data && response.data.id) {
           await this.$router.replace({ name: 'case', params: { id: response.data.id }, query: this.$route.query });
         } else {
-          this.$root.showError(i18n.createFailed);
+          this.$root.showError(i18n.caseCreateFailed);
         }
       }
       catch (error) {
@@ -511,6 +511,20 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       return form;
     },
 
+    async onDetailsSave({ field, value }) {
+      const savedEditForm = this.editForm;
+      this.editForm = {
+        valid: true,
+        field: field,
+        val: value,
+        orig: this.caseObj[field],
+      };
+      try {
+        await this.modifyCase();
+      } finally {
+        this.editForm = savedEditForm;
+      }
+    },
     async modifyCase() {
       let success = false;
       this.$root.startLoading();
@@ -1049,7 +1063,6 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       });
       return hours;
     },
-
     saveLocalSettings() {
       localStorage['settings.case.mruCases'] = JSON.stringify(this.mruCases);
     },

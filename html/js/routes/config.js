@@ -354,16 +354,16 @@ routes.push({
       return link;
     },
     getSettingBreadcrumbs(setting) {
-      var breadcrumbs = setting.id.replaceAll(".", " > ");
+      var breadcrumbs = setting.id.split(".");
       if (setting.title) {
-        breadcrumbs = breadcrumbs.replace(/\s>\s[^>]+$/, " > " + setting.title);
+        breadcrumbs[breadcrumbs.length - 1] = setting.title;
       }
       var modifiers = []
       if (setting.advanced) {
         modifiers.push(this.i18n.configAdvancedTag);
       }
       if (modifiers.length > 0) {
-        breadcrumbs = breadcrumbs + " [" + modifiers.join(", ") + "]";
+        breadcrumbs[breadcrumbs.length - 1] = breadcrumbs[breadcrumbs.length - 1] + " [" + modifiers.join(", ") + "]";
       }
       return breadcrumbs;
     },

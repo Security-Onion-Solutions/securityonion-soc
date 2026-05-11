@@ -5,82 +5,73 @@
 				<v-expansion-panel data-aid="job_expand_filter">
 					<v-expansion-panel-title id="job-details" expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up">
 						<v-chip label class="mx-2">
-							<v-icon class="mb-1 mr-2">fa-hashtag</v-icon>
-							<span id="jobDetailsId">{{ job.id }}</span>
+							<v-icon class="mb-1 mr-2" aria-hidden="true">fa-hashtag</v-icon>
+							<span id="job-id-label" class="d-sr-only">{{i18n.job}}</span>
+							<span id="jobDetailsId" aria-labelledby="job-id-label">{{ job.id }}</span>
 						</v-chip>
 						<v-chip label class="mx-2">
-							<v-icon class="mb-1 mr-2">fa-ethernet</v-icon>
-							<span id="jobDetailsSensorId">{{ job.nodeId }}</span>
+							<v-icon class="mb-1 mr-2" aria-hidden="true">fa-ethernet</v-icon>
+							<span id="job-sensor-label" class="d-sr-only">{{i18n.sensorId}}</span>
+							<span id="jobDetailsSensorId" aria-labelledby="job-sensor-label">{{ job.nodeId }}</span>
 						</v-chip>
 						<v-chip v-if="job.filter" label class="mx-2">
-							<v-icon class="mb-1 mr-2">fa-file-export</v-icon>
-							<span id="jobDetailsSrc">{{ job.filter.srcIp }}<span v-if="job.filter.srcPort != 0">:{{ job.filter.srcPort }}</span><span class="resolved-host" v-if="$root.pickHostname(job.filter.srcIp)"> - {{ $root.pickHostname(job.filter.srcIp) }}</span></span>
+							<v-icon class="mb-1 mr-2" aria-hidden="true">fa-file-export</v-icon>
+							<span id="job-src-label" class="d-sr-only">{{i18n.srcIp}}</span>
+							<span id="jobDetailsSrc" aria-labelledby="job-src-label">{{ job.filter.srcIp }}<span v-if="job.filter.srcPort != 0">:{{ job.filter.srcPort }}</span><span class="resolved-host" v-if="$root.pickHostname(job.filter.srcIp)"> - {{ $root.pickHostname(job.filter.srcIp) }}</span></span>
 						</v-chip>
 						<v-chip v-if="job.filter" label class="mx-2">
-							<v-icon class="mb-1 mr-2">fa-file-import</v-icon>
-							<span id="jobDetailsDst">{{ job.filter.dstIp }}<span v-if="job.filter.dstPort != 0">:{{ job.filter.dstPort }}</span><span class="resolved-host" v-if="$root.pickHostname(job.filter.dstIp)"> - {{ $root.pickHostname(job.filter.dstIp) }}</span></span>
+							<v-icon class="mb-1 mr-2" aria-hidden="true">fa-file-import</v-icon>
+							<span id="job-dst-label" class="d-sr-only">{{i18n.dstIp}}</span>
+							<span id="jobDetailsDst" aria-labelledby="job-dst-label">{{ job.filter.dstIp }}<span v-if="job.filter.dstPort != 0">:{{ job.filter.dstPort }}</span><span class="resolved-host" v-if="$root.pickHostname(job.filter.dstIp)"> - {{ $root.pickHostname(job.filter.dstIp) }}</span></span>
 						</v-chip>
 					</v-expansion-panel-title>
 					<v-expansion-panel-text>
 						<v-container fluid grid-list-sm class="pa-4">
 							<v-row>
 								<v-col>
-									<div>
-										<span class="filter label">{{ i18n.job }}:</span>
-										<span class="filter value">{{ job.id }}</span>
-									</div>
-									<div>
-										<span class="filter label">{{ i18n.owner }}:</span>
-										<span class="filter value">{{ job.owner }}</span>
-									</div>
-									<div>
-										<span class="filter label">{{ i18n.sensorId }}:</span>
-										<span class="filter value">{{ job.nodeId }}</span>
-									</div>
-									<div>
-										<span class="filter label">{{ i18n.importId }}:</span>
-										<span v-if="job.filter" class="filter value">{{ job.filter.importId }}&nbsp;</span>
-									</div>
-									<div>
-										<span class="filter label">{{ i18n.protocol }}:</span>
-										<span v-if="job.filter" class="filter value">{{ job.filter.protocol }}&nbsp;</span>
-									</div>
-									<div>
-										<span class="filter label">{{ i18n.srcIp }}:</span>
-										<span v-if="job.filter" class="filter value">{{ job.filter.srcIp }}&nbsp;<span class="resolved-host" v-if="$root.pickHostname(job.filter.srcIp)"> - {{ $root.pickHostname(job.filter.srcIp) }}</span></span>
-									</div>
-									<div>
-										<span class="filter label">{{ i18n.srcPort }}:</span>
-										<span v-if="job.filter" class="filter value">{{ job.filter.srcPort }}&nbsp;</span>
-									</div>
-									<div>
-										<span class="filter label">{{ i18n.dstIp }}:</span>
-										<span v-if="job.filter" class="filter value">{{ job.filter.dstIp }}&nbsp;<span class="resolved-host" v-if="$root.pickHostname(job.filter.dstIp)"> - {{ $root.pickHostname(job.filter.dstIp) }}</span></span>
-									</div>
-									<div>
-										<span class="filter label">{{ i18n.dstPort }}:</span>
-										<span v-if="job.filter" class="filter value">{{ job.filter.dstPort }}&nbsp;</span>
-									</div>
-									<div>
-										<span class="filter label">{{ i18n.dateQueued }}:</span>
-										<span class="filter value">{{ formatDateTime(job.createTime)}}&nbsp;</span>
-									</div>
-									<div>
-										<span class="filter label">{{ i18n.dateCompleted }}:</span>
-										<span class="filter value">{{ formatDateTime(job.completeTime)}}&nbsp;</span>
-									</div>
-									<div>
-										<span class="filter label">{{ i18n.dateFailed }}:</span>
-										<span class="filter value">{{ formatDateTime(job.failTime)}}&nbsp;</span>
-									</div>
-									<div>
-										<span class="filter label">{{ i18n.beginTime }}:</span>
-										<span v-if="job.filter" class="filter value">{{ formatTimestamp(job.filter.beginTime) }}&nbsp;</span>
-									</div>
-									<div>
-										<span class="filter label">{{ i18n.endTime }}:</span>
-										<span v-if="job.filter" class="filter value">{{ formatTimestamp(job.filter.endTime) }}&nbsp;</span>
-									</div>
+									<dl>
+										<dt class="filter label">{{ i18n.job }}:</dt>
+										<dd class="filter value">{{ job.id }}</dd>
+										
+										<dt class="filter label">{{ i18n.owner }}:</dt>
+										<dd class="filter value">{{ job.owner }}</dd>
+										
+										<dt class="filter label">{{ i18n.sensorId }}:</dt>
+										<dd class="filter value">{{ job.nodeId }}</dd>
+										
+										<dt class="filter label">{{ i18n.importId }}:</dt>
+										<dd v-if="job.filter" class="filter value">{{ job.filter.importId }}&nbsp;</dd>
+										
+										<dt class="filter label">{{ i18n.protocol }}:</dt>
+										<dd v-if="job.filter" class="filter value">{{ job.filter.protocol }}&nbsp;</dd>
+										
+										<dt class="filter label">{{ i18n.srcIp }}:</dt>
+										<dd v-if="job.filter" class="filter value">{{ job.filter.srcIp }}&nbsp;<span class="resolved-host" v-if="$root.pickHostname(job.filter.srcIp)"> - {{ $root.pickHostname(job.filter.srcIp) }}</span></dd>
+										
+										<dt class="filter label">{{ i18n.srcPort }}:</dt>
+										<dd v-if="job.filter" class="filter value">{{ job.filter.srcPort }}&nbsp;</dd>
+										
+										<dt class="filter label">{{ i18n.dstIp }}:</dt>
+										<dd v-if="job.filter" class="filter value">{{ job.filter.dstIp }}&nbsp;<span class="resolved-host" v-if="$root.pickHostname(job.filter.dstIp)"> - {{ $root.pickHostname(job.filter.dstIp) }}</span></dd>
+								
+										<dt class="filter label">{{ i18n.dstPort }}:</dt>
+										<dd v-if="job.filter" class="filter value">{{ job.filter.dstPort }}&nbsp;</dd>
+									
+										<dt class="filter label">{{ i18n.dateQueued }}:</dt>
+										<dd class="filter value">{{ formatDateTime(job.createTime)}}&nbsp;</dd>
+										
+										<dt class="filter label">{{ i18n.dateCompleted }}:</dt>
+										<dd class="filter value">{{ formatDateTime(job.completeTime)}}&nbsp;</dd>
+										
+										<dt class="filter label">{{ i18n.dateFailed }}:</dt>
+										<dd class="filter value">{{ formatDateTime(job.failTime)}}&nbsp;</dd>
+										
+										<dt class="filter label">{{ i18n.beginTime }}:</dt>
+										<dd v-if="job.filter" class="filter value">{{ formatTimestamp(job.filter.beginTime) }}&nbsp;</dd>
+										
+										<dt class="filter label">{{ i18n.endTime }}:</dt>
+										<dd v-if="job.filter" class="filter value">{{ formatTimestamp(job.filter.endTime) }}&nbsp;</dd>
+									</dl>
 								</v-col>
 							</v-row>
 						</v-container>
@@ -95,7 +86,7 @@
 				<div class="d-flex align-center">
 					{{ i18n.jobInProgress }}
 					<v-spacer></v-spacer>
-					<v-btn icon variant="flat" @click.stop="loadData()" id="job-refresh-button" class="mx-2" color="nav" data-aid="job_refresh_button">
+					<v-btn icon variant="flat" @click.stop="loadData()" id="job-refresh-button" class="mx-2" color="nav" data-aid="job_refresh_button" :aria-label="i18n.ariaReloadData">
 						<v-icon color="info">fa-sync</v-icon>
 					</v-btn>
 				</div>
@@ -108,29 +99,29 @@
 				<v-toolbar fixed class="so-toolbar elevation-0">
 					<v-text-field density="compact" v-model="search" class="ml-2" clearable prepend-inner-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="job_details_filter"></v-text-field>
 					<v-spacer></v-spacer>
-					<v-btn-toggle v-model="packetOptions" class="transparent" multiple>
-						<v-btn value="packets" class="mx-2" color="text_button" :title="i18n.packetStreamHelp" @click="captureLayoutAsStream()" data-aid="job_details_stream_toggle">
+					<v-btn-toggle v-model="packetOptions" class="transparent" multiple :aria-label="i18n.ariaPacketDisplayOptions">
+						<v-btn value="packets" class="mx-2" color="text_button" :title="i18n.packetStreamHelp" @click="captureLayoutAsStream()" data-aid="job_details_stream_toggle" :aria-label="i18n.ariaPacketStream" :aria-pressed="packetOptions.includes('packets')">
 							<v-icon>fa-list</v-icon>
 						</v-btn>
-						<v-btn value="hex" class="mx-2" color="text_button" :title="i18n.hexHelp" text data-aid="job_details_hex_toggle">
+						<v-btn value="hex" class="mx-2" color="text_button" :title="i18n.hexHelp" text data-aid="job_details_hex_toggle" :aria-label="i18n.ariaHex" :aria-pressed="packetOptions.includes('hex')">
 							{{ i18n.hex }}
 						</v-btn>
-						<v-btn value="unwrap" class="mx-2" color="text_button" :title="i18n.unwrapHelp" @click="toggleWrap" data-aid="job_details_unwrap_toggle">
+						<v-btn value="unwrap" class="mx-2" color="text_button" :title="i18n.unwrapHelp" @click="toggleWrap" data-aid="job_details_unwrap_toggle" :aria-label="i18n.unwrapHelp" :aria-pressed="packetOptions.includes('unwrap')">
 							<v-icon>fa-envelope-open-text</v-icon>
 						</v-btn>
 					</v-btn-toggle>
 					<v-spacer></v-spacer>
-					<v-btn icon @click="expandPackets(false)" :title="i18n.collapseHelp" text data-aid="job_details_collapse_all_packets">
+					<v-btn icon @click="expandPackets(false)" :title="i18n.collapseHelp" text data-aid="job_details_collapse_all_packets" :aria-label="i18n.collapseAll">
 						<v-icon>fa-window-minimize</v-icon>
 					</v-btn>
-					<v-btn icon @click="expandPackets(true)" :title="i18n.expandHelp" text data-aid="job_details_expand_all_packets">
+					<v-btn icon @click="expandPackets(true)" :title="i18n.expandHelp" text data-aid="job_details_expand_all_packets" :aria-label="i18n.expandAll">
 						<v-icon>fa-window-maximize</v-icon>
 					</v-btn>
 					<v-spacer></v-spacer>
-					<v-btn text icon @click="transcriptCyberChef()" :title="i18n.transcriptCyberChefHelp" data-aid="job_details_cyberchef">
+					<v-btn text icon @click="transcriptCyberChef()" :title="i18n.transcriptCyberChefHelp" data-aid="job_details_cyberchef" :aria-label="i18n.transcriptCyberChefHelp">
 						<v-icon>fas fa-bread-slice</v-icon>
 					</v-btn>
-					<v-btn text plain icon :href="downloadUrl()" download :title="i18n.downloadPackets" data-aid="job_details_download" class="no-link">
+					<v-btn text plain icon :href="downloadUrl()" download :title="i18n.downloadPackets" data-aid="job_details_download" class="no-link" :aria-label="i18n.download">
 						<v-icon class="theme-text">fa-download</v-icon>
 					</v-btn>
 				</v-toolbar>
@@ -142,7 +133,7 @@
 					<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
 						<tr>
 							<template v-for="header in columns" :key="header.key">
-								<th :class="{'is-sorted': isSorted(header)}" :data-aid="'job_packet_table_header_' + header?.value?.toLowerCase()">
+								<th :class="{'is-sorted': isSorted(header)}" :data-aid="'job_packet_table_header_' + header?.value?.toLowerCase()" scope="col" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'">
 									<span @click="toggleSort(header)">
 										{{ header.title }}
 									</span>

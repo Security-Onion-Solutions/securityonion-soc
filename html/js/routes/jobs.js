@@ -308,6 +308,9 @@ const jobsComponent = {
         route.form.timeframe = value;
         $(this).val(value);
       });
+      $('#jobtimeframe').on('show.daterangepicker', function (ev, picker) {
+        route.$root.applyDateRangePickerAriaLabels(picker);
+      });
     },
     isComplete(job) {
       return job.status == JobStatusCompleted;

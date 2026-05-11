@@ -2,7 +2,7 @@
 <v-container v-else-if="assistantEnabled" fluid data-aid="assistant_screen">
 	<v-dialog v-model="showOptionsDialog" max-width="540">
 		<v-card class="options-dialog">
-			<v-card-title>{{i18n.options}}</v-card-title>
+			<v-card-title role="heading" aria-level="2">{{i18n.options}}</v-card-title>
 			<v-card-text data-aid="assistant_options">
 				<span data-aid="assistant_increase_context_limit_toggle">
 					<v-switch
@@ -69,8 +69,7 @@
 						:items="groupedModels"
 						item-title="displayName"
 						item-value="key"
-						:hint="i18n.selectModel"
-						persistent-hint
+						:label="i18n.selectModel"
 						prepend-icon="fa-microchip">
 						<template v-slot:item="{ props, item }">
 							<v-list-subheader v-if="item?.header" class="text-body-small">
@@ -91,10 +90,10 @@
 		<v-col v-if="adaptersMap.get(modelsMap.get(currentModel)?.adapter)?.protocol === 'securityonion_ai_cloud'">
 			<div class="so-stat-pill" data-aid="assistant_credits_remaining">
 				<div class="so-stat-text">
-					<div class="so-stat-label">{{ i18n.creditsRemaining }}</div>
-					<div class="so-stat-value">
+					<div id="stat-label-credits-remaining" class="so-stat-label">{{ i18n.creditsRemaining }}</div>
+					<div class="so-stat-value" aria-labelledby="stat-label-credits-remaining">
 						<span v-if="!creditsLoaded">
-							<v-progress-circular indeterminate color="primary" size="14" width="3"></v-progress-circular>
+							<v-progress-circular indeterminate color="primary" size="14" width="3" :aria-label="i18n.ariaLoadingCredits"></v-progress-circular>
 						</span>
 						<span v-else :class="creditsRemaining <= lowBalanceColorAlert ? 'text-error' : 'text-primary'">{{ formatCount(creditsRemaining) }}</span>
 					</div>
@@ -105,21 +104,21 @@
 		<v-col>
 			<div class="so-stat-pill" data-aid="assistant_current_model">
 				<div class="so-stat-text">
-					<div class="so-stat-label">{{ i18n.currentModel }}</div>
-					<div class="so-stat-value">{{ modelsMap.get(currentModel)?.displayName }}</div>
+					<div id="stat-label-current-model" class="so-stat-label">{{ i18n.currentModel }}</div>
+					<div class="so-stat-value" aria-labelledby="stat-label-current-model">{{ modelsMap.get(currentModel)?.displayName }}</div>
 				</div>
 				<v-icon class="so-stat-icon">fa-microchip</v-icon>
 			</div>
 		</v-col>
 		<v-col style="flex: 0 0 auto;">
 			<div class="so-stat-pill no-print" style="gap: 16px;">
-				<v-btn variant="flat" icon id="chat-new-button" @click="startNewChat" :title="i18n.chatNewChat" data-aid="assistant_banner_create_chat" class="circle-button">
+				<v-btn variant="flat" icon id="chat-new-button" @click="startNewChat" :title="i18n.chatNewChat" data-aid="assistant_banner_create_chat" class="circle-button" :aria-label="i18n.chatNewChat">
 					<v-icon>fa-plus</v-icon>
 				</v-btn>
-				<v-btn variant="flat" icon class="circle-button" :title="i18n.options" @click="showOptionsDialog = true" id="chatOptionsHeader" data-aid="assistant_options_button">
+				<v-btn variant="flat" icon class="circle-button" :title="i18n.options" @click="showOptionsDialog = true" id="chatOptionsHeader" data-aid="assistant_options_button" :aria-label="i18n.ariaAssistantOptions">
 					<v-icon>fa-gear</v-icon>
 				</v-btn>
-				<v-btn variant="flat" icon class="circle-button" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'onion-ai'" :title="i18n.contextualDocsBtn" data-aid="assistant_docs">
+				<v-btn variant="flat" icon class="circle-button" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'onion-ai'" :title="i18n.contextualDocsBtn" data-aid="assistant_docs" :aria-label="i18n.ariaHelpLink">
 					<v-icon>fa-circle-question</v-icon>
 				</v-btn>
 			</div>
@@ -129,17 +128,17 @@
 		<!-- Main Chat Area -->
 		<v-col cols="12" :lg="!showChatHistory ? 12 : 9">
 			<v-card id="chat-container" class="chat-container">
-				<v-card-title id="chat-header" class="py-3 d-flex align-center">
+				<v-card-title id="chat-header" class="py-3 d-flex align-center" role="heading" aria-level="2">
 					<v-icon class="mr-2" data-aid="assistant_banner_chat_icon">fa-comments</v-icon>
 					<span class="mr-2">{{ i18n.chatTitle }}</span>
-					<v-icon v-if="currentChatId" class="mr-2" @click="toggleSharedSession(currentChatId)" data-aid="assistant_banner_share_toggle" :disabled="$root.isMyUser(chatHistoryById?.[currentChatId]?.userId)" :title="i18n.assistantLinkTitle">
+					<v-icon v-if="currentChatId" class="mr-2" @click="toggleSharedSession(currentChatId)" @keydown.enter.space.stop="toggleSharedSession(currentChatId)" data-aid="assistant_banner_share_toggle" :disabled="$root.isMyUser(chatHistoryById?.[currentChatId]?.userId)" :title="i18n.assistantLinkTitle" :aria-label="(chatHistoryById?.[currentChatId]?.tags?.includes('shared')) ? i18n.ariaLinkToCase : i18n.ariaUnlinkFromCase" role="button" tabindex="0">
 						{{ (chatHistoryById?.[currentChatId]?.tags?.includes('shared')) ? 'fa-link' : 'fa-link-slash' }}
 					</v-icon>
-					<v-icon v-if="currentChatId" class="mr-2" @click.stop="exportSession" data-aid="assistant_banner_export_session" :disabled="checkForActivity() || !messages.some(m => m.role === 'user')" :title="i18n.exportSessionHelp">
+					<v-icon v-if="currentChatId" class="mr-2" @click.stop="exportSession" @keydown.enter.space.stop="exportSession" data-aid="assistant_banner_export_session" :disabled="checkForActivity() || !messages.some(m => m.role === 'user')" :title="i18n.exportSessionHelp" :aria-label="i18n.ariaExportSession" role="button" tabindex="0">
 						fa-file-export
 					</v-icon>
 					<template v-if="currentChatId">
-						<v-icon id="attachToCaseBtn" :title="i18n.assistantAttachToCaseHelp" @click="caseMenuVisible = true">fa-paperclip</v-icon>
+						<v-icon id="attachToCaseBtn" :title="i18n.assistantAttachToCaseHelp" @click="caseMenuVisible = true" @keydown.enter.space.stop="caseMenuVisible = true" :aria-label="i18n.ariaAttachToCase" role="button" tabindex="0">fa-paperclip</v-icon>
 						<v-menu v-model="caseMenuVisible" target="#attachToCaseBtn" data-aid="assistant_case_attach_menu">
 							<v-list id="assistant-escalate-menu" color="secondary">
 								<v-list-item id="attachToCaseNew" density="compact" v-bind:title.attr="i18n.assistantAttachToNewCaseHelp" data-aid="assistant_attach_to_case_new" @click="attachToCase(currentChatId, null);">
@@ -152,8 +151,8 @@
 								</v-list-item>
 								<div v-if="mruCases?.length > 0">
 									<v-divider></v-divider>
-									<v-list-subheader class="theme-text">{{ i18n.assistantAttachToExistingCase }}</v-list-subheader>
-									<v-list-item v-for="socCase in mruCases" density="compact" v-bind:title.attr="i18n.assistantAttachToExistingCaseHelp" @click="attachToCase(currentChatId, socCase.id)" :data-aid="'assistant_attach_to_case_existing'">
+									<v-list-subheader id="assistant-attach-existing-label" class="theme-text">{{ i18n.assistantAttachToExistingCase }}</v-list-subheader>
+									<v-list-item v-for="socCase in mruCases" density="compact" v-bind:title.attr="i18n.assistantAttachToExistingCaseHelp" @click="attachToCase(currentChatId, socCase.id)" :data-aid="'assistant_attach_to_case_existing'" role="group" aria-labelledby="assistant-attach-existing-label">
 										<template #prepend>
 											<v-icon :alt="i18n.assistantAttachToExistingCase">fa-link</v-icon>
 										</template>
@@ -173,9 +172,12 @@
 						variant="flat"
 						id="compress-context"
 						@click="compressCurrentSession()"
+						@keydown.enter.space.stop="compressCurrentSession()"
 						:disabled="!canChat || checkForActivity() || !creditsLoaded"
 						:title="i18n.compressContext"
 						data-aid="assistant_banner_compress_context"
+						role="button" tabindex="0"
+						:aria-label="i18n.compressContext"
 					>
 						fa-arrows-to-circle
 					</v-icon>
@@ -192,13 +194,13 @@
 								<div class="spacer spacer-right"></div>
 							</div>
 							<div class="d-flex align-start">
-								<v-avatar id="message-avatar" size="32" class="mr-3" :color="message.role === 'user' ? 'primary' : 'secondary-lighten-1'">
+								<v-avatar id="message-avatar" size="32" class="mr-3" :color="message.role === 'user' ? 'primary' : 'transparent'">
 									<v-icon v-if="message.role === 'user'" class="text-white" size="small">fa-user</v-icon>
 									<img v-else src="images/favicon/onion.png" alt="Assistant" style="width: 24px; height: 24px;">
 								</v-avatar>
 								<div class="flex-grow-1">
-									<div id="message-header" class="d-flex align-center mb-1">
-										<span class="font-weight-medium text-body-2 mr-2">{{ message.role === 'user' ? i18n.you : i18n.chat }}</span>
+									<div :id="`message-header-${index}`" class="d-flex align-center mb-1">
+										<strong class="text-body-2 mr-2">{{ message.role === 'user' ? i18n.you : i18n.chat }}</strong>
 										<span class="text-body-small text-medium-emphasis mr-2">{{ formatTimestamp(message.timestamp) }}</span>
 										<template v-if="perMessageStatsEnabled">
 											<span class="text-body-small text-primary mr-2" v-if="message.usage && message.usage.credits">{{ formatCount(message.usage.credits) }} {{ i18n.creditsLowercase }}</span>
@@ -240,14 +242,14 @@
 												
 												<!-- Tool Parameters -->
 												<div v-if="Object.keys(toolUse.input).length > 0" class="mb-2">
-													<div class="text-body-small text-medium-emphasis mb-1">{{ i18n.parameters }}:</div>
-													<v-code class="text-body-small">{{ JSON.stringify(toolUse.input, null, 2) }}</v-code>
+													<div :id="`tool-params-label-${toolUse.id}`" class="text-body-small text-medium-emphasis mb-1">{{ i18n.parameters }}:</div>
+													<v-code class="text-body-small" :aria-labelledby="`tool-params-label-${toolUse.id}`">{{ JSON.stringify(toolUse.input, null, 2) }}</v-code>
 												</div>
 												
 												<!-- Tool Approval Buttons -->
 												<div v-if="toolUse.status === 'pending_approval'" class="mb-2">
-													<div class="text-body-small text-medium-emphasis mb-1">{{ i18n.toolExecuteQuestion }}</div>
-													<div id="tool-approval-buttons" class="d-flex align-center tool-approval-buttons">
+													<div :id="'tool-use-question-' + toolUse.id" class="text-body-small text-medium-emphasis mb-1">{{ i18n.toolExecuteQuestion }}</div>
+													<div id="tool-approval-buttons" :aria-labelledby="'tool-use-question-' + toolUse.id" role="group" class="d-flex align-center tool-approval-buttons">
 														<v-btn
 															id="approve-tool-button"
 															color="success"
@@ -280,6 +282,7 @@
 															@click="showOptionsDialog = true"
 															data-aid="assistant_tool_use_options"
 															style="min-width: auto; margin-left: -5px"
+															:aria-label="i18n.ariaAssistantOptions"
 														>
 															<v-icon size="small">fa-cog</v-icon>
 														</v-btn>
@@ -316,8 +319,8 @@
 												
 												<!-- Tool Error -->
 												<div v-if="(toolUse.status === 'error' || toolUse.status === 'rejected') && toolUse.error" class="mb-2">
-													<div class="text-body-small text-medium-emphasis mb-1">{{ toolUse.status === 'rejected' ? 'Rejected:' : 'Error:' }}</div>
-													<div class="text-error text-body-2">{{ toolUse.error }}</div>
+													<div :id="`tool-problem-label-${toolUse.id}`" class="text-body-small text-medium-emphasis mb-1">{{ toolUse.status === 'rejected' ? 'Rejected:' : 'Error:' }}</div>
+													<div class="text-error text-body-2" :aria-labelledby="`tool-problem-label-${toolUse.id}`">{{ toolUse.error }}</div>
 												</div>
 												
 												<!-- Execution Time -->
@@ -375,6 +378,7 @@
 						@keydown.enter.exact.prevent="$refs.sendButton.$el.click()"
 						:disabled="!canChat || !creditsLoaded"
 						data-aid="assistant_chat_input"
+						:aria-label="i18n.ariaMessageAi"
 					></v-textarea>
 					<v-btn
 						id="chat-send-button"
@@ -383,6 +387,7 @@
 						@click="sendMessage()"
 						data-aid="assistant_chat_send"
 						class="flex-shrink-0"
+						:aria-label="i18n.ariaSendMessage"
 					>
 						<v-icon color="primary">{{ checkForActivity() ? 'fa-hourglass-half' : 'fa-paper-plane' }}</v-icon>
 					</v-btn>
@@ -393,7 +398,7 @@
 		<!-- Recent Chats Sidebar -->
 		<v-col v-if="showChatHistory" cols="12" lg="3">
 			<v-card id="chat-history-sidebar" class="chat-history-sidebar">
-				<v-card-title id="chat-history-header" class="py-3 d-flex align-center">
+				<v-card-title id="chat-history-header" class="py-3 d-flex align-center" role="heading" aria-level="2">
 					<v-icon class="mr-2">fa-history</v-icon>
 					<span class="flex-grow-1">{{ i18n.chatHistory }}</span>
 				</v-card-title>
@@ -413,7 +418,7 @@
 								<v-icon v-if="chat?.tags?.includes('shared')" class="ml-1 tiny-link-icon" title="Shared Session">fa-link</v-icon>
 							</v-list-item-subtitle>
 							<template #append>
-								<v-btn id="chat-delete-button" icon variant="text" size="small" @click.stop="deleteChat(chat.sessionId)" data-aid="assistant_chat_history_delete">
+								<v-btn id="chat-delete-button" icon variant="text" size="small" @click.stop="deleteChat(chat.sessionId)" data-aid="assistant_chat_history_delete" :aria-label="i18n.ariaDeleteChat">
 									<v-icon size="small" color="error">fa-trash</v-icon>
 								</v-btn>
 							</template>
@@ -442,11 +447,12 @@
 	">
 	<div class="my-8" style="display: flex; gap: 8px; align-items: center;">
 		<div>{{ i18n.assistantDisabled }}</div>
-		<router-link v-if="$root.isUserAdmin()" :to="{name: 'config', query: {s: 'soc.config.server.client.assistant.enabled'}}" class="no-print" style="text-decoration: none; cursor: 'pointer'" data-aid="assistant_config_entry_enable">
+		<router-link v-if="$root.isUserAdmin()" :to="{name: 'config', query: {s: 'soc.config.server.client.assistant.enabled'}}" class="no-print" data-aid="assistant_config_entry_enable" :aria-label="i18n.ariaVisitConfigEntry">
 			<v-icon class="mr-2 theme-icon" :title="i18n.visitConfigEntry">fa-gear</v-icon>
 		</router-link>
 	</div>
-		<video src="../images/videos/onionai_3.mp4" autoplay muted loop controls style="width: 80%; max-width: 1408px;" data-aid="assistant_needs_enabled_video"></video>
+		<video src="../images/videos/onionai_3.mp4" autoplay muted loop controls style="width: 80%; max-width: 1408px;" data-aid="assistant_needs_enabled_video" aria-describedby="promo-desc"></video>
+		<p id="promo-desc" class="d-sr-only">{{ i18n.ariaProVideoDescription }}</p>
 	</div>
 </v-container>
 
@@ -460,6 +466,7 @@
 		flex-direction: column;
 	">
 	<div class="my-8" v-html="i18n.assistantUnavailable"></div>
-		<video src="../images/videos/onionai_3.mp4" autoplay muted loop controls style="width: 80%; max-width: 1408px;" data-aid="assistant_needs_pro_video"></video>
+		<video src="../images/videos/onionai_3.mp4" autoplay muted loop controls style="width: 80%; max-width: 1408px;" data-aid="assistant_needs_pro_video" aria-describedby="promo-desc"></video>
+		<p id="promo-desc" class="d-sr-only">{{ i18n.ariaProVideoDescription }}</p>
 	</div>
 </v-container>

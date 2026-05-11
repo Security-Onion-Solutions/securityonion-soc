@@ -367,7 +367,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
     setupDateRangePicker() {
       if (this.relativeTimeEnabled) return;
 
-      $('#aimetricsdaterange').daterangepicker({
+      $('#aimetrics-date-range').daterangepicker({
         ranges: this.$root.generateDatePickerPreselects(),
         timePicker: true,
         timePickerSeconds: true,
@@ -379,19 +379,22 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       });
       var route = this;
       if (route.dateRange == '') {
-        route.dateRange = $('#aimetricsdaterange')[0].value;
+        route.dateRange = $('#aimetrics-date-range')[0].value;
       }
-      $('#aimetricsdaterange').on('hide.daterangepicker', function (ev, picker) {
+      $('#aimetrics-date-range').on('hide.daterangepicker', function (ev, picker) {
         route.hideDateRangePicker();
+      });
+      $('#aimetrics-date-range').on('show.daterangepicker', function (ev, picker) {
+        route.$root.applyDateRangePickerAriaLabels(picker);
       });
     },
     showDateRangePicker() {
       if (this.relativeTimeEnabled) return;
-      $('#aimetricsdaterange').click();
+      $('#aimetrics-date-range').click();
     },
     hideDateRangePicker() {
       if (this.relativeTimeEnabled) return;
-      this.dateRange = $('#aimetricsdaterange')[0].value;
+      this.dateRange = $('#aimetrics-date-range')[0].value;
       this.loadData();
     },
     showAbsoluteTime() {
