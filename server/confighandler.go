@@ -11,6 +11,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
@@ -48,6 +49,11 @@ func (h *ConfigHandler) configEnabled(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if h.server.Configstore == nil {
 			web.Respond(w, r, http.StatusMethodNotAllowed, errors.New("Config module not enabled"))
+			return
+		}
+
+		if (r.URL.Path == "/api/config/sync" || strings.HasPrefix(r.URL.Path, "/api/config/sync/")) && h.server.AdminConfigstore == nil {
+			web.Respond(w, r, http.StatusMethodNotAllowed, errors.New("Admin Config module not enabled"))
 			return
 		}
 
@@ -132,7 +138,7 @@ func (h *ConfigHandler) putSetting(w http.ResponseWriter, r *http.Request) {
 func (h *ConfigHandler) putSync(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	err := h.server.Configstore.SyncSettings(ctx)
+	err := h.server.AdminConfigstore.SyncSettings(ctx)
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
@@ -158,7 +164,7 @@ func (h *ConfigHandler) putSyncModule(w http.ResponseWriter, r *http.Request) {
 	module := chi.URLParam(r, "module")
 	async := r.URL.Query().Get("async") == "true"
 
-	err := h.server.Configstore.SyncModule(ctx, module, async)
+	err := h.server.AdminConfigstore.SyncModule(ctx, module, async)
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
 		return

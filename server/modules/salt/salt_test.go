@@ -22,6 +22,6 @@ func TestInit(tester *testing.T) {
 	cfg := make(module.ModuleConfig)
 	err := salt.Init(cfg)
 	if assert.Nil(tester, err) {
-		assert.NotNil(tester, salt.server.Configstore)
+		assert.NotNil(tester, salt.server.AdminConfigstore)
 	}
 }

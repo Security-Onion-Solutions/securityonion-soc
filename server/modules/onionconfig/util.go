@@ -4,7 +4,7 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
-package salt
+package onionconfig
 
 import (
 	"strings"

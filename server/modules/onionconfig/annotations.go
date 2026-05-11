@@ -4,7 +4,7 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
-package salt
+package onionconfig
 
 import (
 	"fmt"
@@ -25,7 +25,7 @@ func PostProcess(settings []*model.Setting) {
 			setting.Advanced = true
 		}
 
-		if setting.SupportsJinja() {
+		if setting.File || setting.SupportsJinja() {
 			setting.Value = syntax.UnescapeJinja(setting.Value)
 		}
 	}

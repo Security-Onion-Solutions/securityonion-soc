@@ -40,6 +40,7 @@ type Server struct {
 	Detectionstore   Detectionstore
 	Assistantstore   Assistantstore
 	Configstore      Configstore
+	AdminConfigstore AdminConfigstore
 	GridMembersstore GridMembersstore
 	Metrics          Metrics
 	stoppedChan      chan bool

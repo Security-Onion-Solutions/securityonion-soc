@@ -38,12 +38,10 @@ func (mod *Salt) Init(cfg module.ModuleConfig) error {
 	mod.config = cfg
 	timeoutMs := module.GetIntDefault(cfg, "timeoutMs", DEFAULT_TIMEOUT_MS)
 	longRelayTimeoutMs := module.GetIntDefault(cfg, "longRelayTimeoutMs", LONG_TIMEOUT_MS)
-	saltstackDir := module.GetStringDefault(cfg, "saltstackDir", DEFAULT_SALTSTACK_DIR)
 	queueDir := module.GetStringDefault(cfg, "queueDir", DEFAULT_QUEUE_DIR)
-	bypassEnabled := module.GetBoolDefault(cfg, "bypassEnabled", DEFAULT_BYPASS_ENABLED)
-	err := mod.impl.Init(timeoutMs, longRelayTimeoutMs, saltstackDir, queueDir, bypassEnabled)
+	err := mod.impl.Init(timeoutMs, longRelayTimeoutMs, queueDir)
 	if err == nil {
-		mod.server.Configstore = mod.impl
+		mod.server.AdminConfigstore = mod.impl
 		mod.server.GridMembersstore = mod.impl
 		mod.server.AdminUserstore = mod.impl
 		mod.server.AdminClientstore = mod.impl
