@@ -8,7 +8,7 @@ FROM ghcr.io/security-onion-solutions/golang:1.26.1-alpine as builder
 ARG VERSION=0.0.0
 ARG ALT_BRANCH=3/dev
 ARG REVKEYS=
-RUN apk update && apk add g++ libpcap-dev bash git musl-dev gcc npm python3 py3-pip py3-virtualenv python3-dev openssl-dev linux-headers sed glib pango gdk-pixbuf fontconfig ttf-freefont font-noto terminus-font
+RUN apk update && apk add g++ libpcap-dev bash git musl-dev gcc npm python3 py3-pip py3-virtualenv python3-dev openssl-dev linux-headers sed glib pango gdk-pixbuf fontconfig ttf-freefont font-noto terminus-font jq util-linux-misc
 COPY . /build
 
 # Mock md2pdf script for testing
@@ -52,7 +52,7 @@ RUN apt install -y --no-install-recommends bash tzdata ca-certificates wget curl
 RUN pip3 install pysigma==0.11.20 sigma-cli==1.0.5 pysigma-backend-elasticsearch pysigma-pipeline-windows --break-system-packages
 ADD dep/pysigma_backend_securityonion-0.1.0-py3-none-any.whl /tmp
 RUN pip3 install /tmp/pysigma_backend_securityonion-0.1.0-py3-none-any.whl
-RUN pip3 install yara-python==4.3.1
+RUN pip3 install yara-python==4.5.4
 RUN apt-get -y remove gcc python3-dev libssl-dev && apt-get -y autoremove
 RUN rm /tmp/pysigma_backend_securityonion-0.1.0-py3-none-any.whl
 
@@ -77,6 +77,9 @@ RUN find . -name \*.html -exec sed -i -e "s/VERSION_PLACEHOLDER/$VERSION/g" {} \
 
 RUN bash -c "[[ $VERSION == '0.0.0' ]]" || \
     wget https://github.com/Security-Onion-Solutions/docs/raw/$(echo $VERSION | cut -d'.' -f 1)/dev/docs/images/cheat-sheet/Security-Onion-Cheat-Sheet.pdf -O html/docs/cheatsheet.pdf
+
+RUN mkdir -p html/images/videos && \
+    curl https://preview.securityonionsolutions.com/videos/onionai_3.mp4 -o html/images/videos/onionai_3.mp4
 
 ENV ELASTIC_VERSION=$ELASTIC_VERSION
 ENV WAZUH_VERSION=$WAZUH_VERSION

@@ -353,7 +353,7 @@ func (store *ElasticCasestore) delete(ctx context.Context, obj interface{}, kind
 }
 
 func (store *ElasticCasestore) get(ctx context.Context, id string, kind string) (interface{}, error) {
-	query := fmt.Sprintf(`_index:"%s" AND %skind:"%s" AND _id:"%s"`, store.index, store.schemaPrefix, kind, id)
+	query := fmt.Sprintf(`_index:"%s" AND %skind:"%s" AND _id:"%s"`, store.index, store.schemaPrefix, util.EscapeLucene(kind), util.EscapeLucene(id))
 	objects, err := store.getAll(ctx, query, 1)
 	if err == nil {
 		if len(objects) > 0 {
@@ -475,7 +475,7 @@ func (store *ElasticCasestore) GetCaseHistory(ctx context.Context, caseId string
 	err = store.validateId(caseId, "caseId")
 	if err == nil {
 		query := fmt.Sprintf(`_index:"%s" AND (%s%s:"%s" OR %scomment.caseId:"%s" OR %srelated.caseId:"%s" OR %sartifact.caseId:"%s") | sortby @timestamp^`,
-			store.auditIndex, store.schemaPrefix, AUDIT_DOC_ID, caseId, store.schemaPrefix, caseId, store.schemaPrefix, caseId, store.schemaPrefix, caseId)
+			store.auditIndex, store.schemaPrefix, AUDIT_DOC_ID, util.EscapeLucene(caseId), store.schemaPrefix, util.EscapeLucene(caseId), store.schemaPrefix, util.EscapeLucene(caseId), store.schemaPrefix, util.EscapeLucene(caseId))
 		history, err = store.getAll(ctx, query, store.maxAssociations)
 	}
 	return history, err
@@ -746,7 +746,7 @@ func (store *ElasticCasestore) GetRelatedEvents(ctx context.Context, caseId stri
 		events = make([]*model.RelatedEvent, 0)
 		// JBE 10/20/2022: Remove sortby due to issue with Elastic 8.4 causing incompatible sort field types
 		//  | sortby %srelated.fields.timestamp^
-		query := fmt.Sprintf(`_index:"%s" AND %skind:"related" AND %srelated.caseId:"%s"`, store.index, store.schemaPrefix, store.schemaPrefix, caseId)
+		query := fmt.Sprintf(`_index:"%s" AND %skind:"related" AND %srelated.caseId:"%s"`, store.index, store.schemaPrefix, store.schemaPrefix, util.EscapeLucene(caseId))
 		var objects []interface{}
 		objects, err = store.getAll(ctx, query, store.maxAssociations)
 		if err == nil {
@@ -836,7 +836,7 @@ func (store *ElasticCasestore) GetComments(ctx context.Context, caseId string) (
 	err = store.validateId(caseId, "caseId")
 	if err == nil {
 		comments = make([]*model.Comment, 0)
-		query := fmt.Sprintf(`_index:"%s" AND %skind:"comment" AND %scomment.caseId:"%s" | sortby %scomment.createTime^`, store.index, store.schemaPrefix, store.schemaPrefix, caseId, store.schemaPrefix)
+		query := fmt.Sprintf(`_index:"%s" AND %skind:"comment" AND %scomment.caseId:"%s" | sortby %scomment.createTime^`, store.index, store.schemaPrefix, store.schemaPrefix, util.EscapeLucene(caseId), store.schemaPrefix)
 		var objects []interface{}
 		objects, err = store.getAll(ctx, query, store.maxAssociations)
 		if err == nil {
@@ -944,10 +944,10 @@ func (store *ElasticCasestore) GetArtifacts(ctx context.Context, caseId string, 
 				artifacts = make([]*model.Artifact, 0)
 				var groupIdTerm string
 				if len(groupId) > 0 {
-					groupIdTerm = fmt.Sprintf(`AND %sartifact.groupId:"%s" `, store.schemaPrefix, groupId)
+					groupIdTerm = fmt.Sprintf(`AND %sartifact.groupId:"%s" `, store.schemaPrefix, util.EscapeLucene(groupId))
 				}
 				query := fmt.Sprintf(`_index:"%s" AND %skind:"artifact" AND %sartifact.caseId:"%s" AND %sartifact.groupType:"%s" %s| sortby %sartifact.createTime^`,
-					store.index, store.schemaPrefix, store.schemaPrefix, caseId, store.schemaPrefix, groupType, groupIdTerm, store.schemaPrefix)
+					store.index, store.schemaPrefix, store.schemaPrefix, util.EscapeLucene(caseId), store.schemaPrefix, util.EscapeLucene(groupType), groupIdTerm, store.schemaPrefix)
 				var objects []interface{}
 				objects, err = store.getAll(ctx, query, store.maxAssociations)
 				if err == nil {
@@ -1093,9 +1093,9 @@ func (store *ElasticCasestore) GetCaseIdsWithArtifact(ctx context.Context, artTy
 	}
 
 	caseIds = make([]string, 0)
-	query := fmt.Sprintf(`_index:"%s" AND %skind:"artifact" AND %sartifact.artifactType:"%s" AND %sartifact.value:"%s"`, store.index, store.schemaPrefix, store.schemaPrefix, artType, store.schemaPrefix, value)
+	query := fmt.Sprintf(`_index:"%s" AND %skind:"artifact" AND %sartifact.artifactType:"%s" AND %sartifact.value:"%s"`, store.index, store.schemaPrefix, store.schemaPrefix, util.EscapeLucene(artType), store.schemaPrefix, util.EscapeLucene(value))
 	var objects []interface{}
-	objects, err = store.getAll(store.server.Context, query, store.maxAssociations)
+	objects, err = store.getAll(ctx, query, store.maxAssociations)
 	if err == nil {
 		// Use a map to track unique case IDs
 		caseIdMap := make(map[string]struct{})

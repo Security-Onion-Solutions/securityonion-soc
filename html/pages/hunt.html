@@ -58,7 +58,7 @@
 				<v-col style="flex: 1 1 auto; min-width: 0;" class="pa-0">
 					<v-toolbar class="so-toolbar elevation-0" variant="flat">
 						<v-textarea :clearable="isAdvanced()" :auto-grow="isAdvanced()" :readonly="!isAdvanced()" :disabled="loading()" @input="queryAltered = true"
-							@change="queryModified" class="mx-2" v-model="$data[getDisplayedQueryVar()]" :hint="isAdvanced() ? (queryAltered ? i18n.queryHelp : $data['queryName']) : ''"
+							@change="queryModified" class="mx-2" v-model="$data[getDisplayedQueryVar()]" :hint="isAdvanced() && queryAltered ? i18n.queryHelp : ''"
 							rows="1" prepend-icon="fa-search" @keydown.enter.prevent="submitQuery" id="hunt-query-input" ref="huntQueryInput" :data-aid="'query_input_' + category"
 							no-resize hide-details>
 							<template #prepend-inner>
@@ -172,6 +172,15 @@
 				</v-col>
 			</v-row>
 			<v-row v-if="loaded" class="ga-3">
+				<v-col v-if="isCategory('hunt') || isCategory('dashboards')">
+					<div class="so-stat-pill" data-aid="stat_query_name">
+						<div class="so-stat-text">
+							<div class="so-stat-label">{{ i18n.queryName }}</div>
+							<div class="so-stat-value">{{ queryName }}</div>
+						</div>
+						<v-icon class="so-stat-icon">fa-clipboard-question</v-icon>
+					</div>
+				</v-col>
 				<v-col>
 					<div class="so-stat-pill" data-aid="stat_total_alerts">
 						<div class="so-stat-text">
@@ -369,7 +378,7 @@
 														@click="toggleEscalationMenu($event, item, groupIdx)"
 														:data-aid="'groups_escalate_' + category" :aria-label="i18n.escalate">
 														<v-icon :title="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate"
-															:color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'secondary' : 'primary'">fa-exclamation-triangle</v-icon>
+															:color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'icon' : 'primary'">fa-exclamation-triangle</v-icon>
 													</v-btn>
 													<v-btn id="aiInvestigateButton" v-if="investigateEnabled && item['rule.uuid']" variant="text" size="x-small" icon
 														@mousedown="startAIInvestigation(item, $event)"
@@ -644,7 +653,7 @@
 												@click="toggleEscalationMenu($event, item, -1)"
 												:data-aid="'events_escalate_' + category"
 												:aria-label="i18n.escalate">
-												<v-icon :title="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate" :color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'secondary' : 'primary'">fa-exclamation-triangle</v-icon>
+												<v-icon :title="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate" :color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'icon' : 'primary'">fa-exclamation-triangle</v-icon>
 											</v-btn>
 											<v-btn id="aiInvestigateButton" v-if="investigateEnabled && item['rule.uuid']" variant="text" icon size="x-small"
 												@mousedown="startAIInvestigation(item, $event)"

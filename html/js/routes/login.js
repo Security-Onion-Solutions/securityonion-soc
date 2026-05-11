@@ -31,9 +31,6 @@ routes.push({ path: '/:pathMatch(.*)*', name: 'login', component: {
     totpEnabled: false,
     oidc: [],
     totpCodeLength: 6,
-    rules: {
-      required: value => !!value || this.$root.i18n.required,
-    },
     authLoginUrl: null,
     banner: "",
     throttled: false,

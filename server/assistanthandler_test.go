@@ -320,21 +320,7 @@ func TestPostTool(t *testing.T) {
 	}
 	mockManager.EXPECT().ExecuteTool(gomock.Any(), "query_events", `{"query":"test query"}`, "").Return(mockToolResponse, nil)
 
-	// Mock saving the tool result message
-	mockAssistantStore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Do(
-		func(ctx context.Context, msg *model.StoredMessage) {
-			assert.Equal(t, sessionId, msg.SessionId)
-			assert.Equal(t, []string{"tool_result"}, msg.Tags)
-			assert.Equal(t, "user", msg.Message.Role)
-			assert.Len(t, msg.Message.ContentBlocks, 1)
-			assert.NotNil(t, msg.Message.ContentBlocks[0].ToolResult)
-			assert.Equal(t, "tooluse_test_123", msg.Message.ContentBlocks[0].ToolResult.ToolUseId)
-			assert.False(t, msg.Message.ContentBlocks[0].ToolResult.IsError)
-			assert.Equal(t, map[string]any{"result": mockToolResponse.Result}, msg.Message.ContentBlocks[0].ToolResult.Content[0].Json)
-		},
-	).Return(nil)
-
-	// Mock the history lookup to return previous messages including the new tool result
+	// Mock the history lookup to return previous messages (tool result not yet saved)
 	mockHistoryMessages := []*model.StoredMessage{
 		{
 			SessionId: sessionId,
@@ -344,26 +330,6 @@ func TestPostTool(t *testing.T) {
 					{
 						Type: "text",
 						Text: "Get me some events",
-					},
-				},
-			},
-		},
-		{
-			SessionId: sessionId,
-			Message: &model.Message{
-				Role: "user",
-				ContentBlocks: []model.ContentBlock{
-					{
-						Type: "tool_result",
-						ToolResult: &model.ToolResult{
-							ToolUseId: toolUseId,
-							Content: []model.ToolResultContent{
-								{
-									Json: map[string]any{"result": mockToolResponse.Result},
-								},
-							},
-							IsError: false,
-						},
 					},
 				},
 			},
@@ -387,6 +353,20 @@ func TestPostTool(t *testing.T) {
 			}}, nil
 		},
 	)
+
+	// Mock saving the tool result message (saved after successful chat)
+	mockAssistantStore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Do(
+		func(ctx context.Context, msg *model.StoredMessage) {
+			assert.Equal(t, sessionId, msg.SessionId)
+			assert.Equal(t, []string{"tool_result"}, msg.Tags)
+			assert.Equal(t, "user", msg.Message.Role)
+			assert.Len(t, msg.Message.ContentBlocks, 1)
+			assert.NotNil(t, msg.Message.ContentBlocks[0].ToolResult)
+			assert.Equal(t, "tooluse_test_123", msg.Message.ContentBlocks[0].ToolResult.ToolUseId)
+			assert.False(t, msg.Message.ContentBlocks[0].ToolResult.IsError)
+			assert.Equal(t, map[string]any{"result": mockToolResponse.Result}, msg.Message.ContentBlocks[0].ToolResult.Content[0].Json)
+		},
+	).Return(nil)
 
 	// Mock saving the assistant response
 	mockAssistantStore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Do(

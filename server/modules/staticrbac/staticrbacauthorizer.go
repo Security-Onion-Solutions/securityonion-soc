@@ -365,9 +365,7 @@ func (impl *StaticRbacAuthorizer) scanNow() {
 
 		// Ensure agent user/role exists
 		impl.AddRoleToUser(impl.server.Agent, "agent")
-		impl.AddRoleToUser(impl.server.Agent, "config-admin")
-		impl.AddRoleToUser(impl.server.Agent, "event-monitor")
-		impl.AddRoleToUser(impl.server.Agent, "playbook-monitor")
+		impl.AddRoleToUser(impl.server.System, "superuser")
 
 		impl.previousUserHash = hash
 	}

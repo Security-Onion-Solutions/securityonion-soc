@@ -25,6 +25,10 @@ import (
 
 const ALL_GRIDS = "_all"
 
+var csrfExemptPaths = []string{
+	"/api/util/reverse-lookup",
+}
+
 func Middleware(host *Host, isWS bool, subgrids []*model.Subgrid) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -88,6 +92,12 @@ func validateRequest(ctx context.Context, host *Host, request *http.Request) err
 		exempt := ctx.Value(ContextKeyRequestCSRFExempt).(bool)
 		if exempt {
 			return nil
+		}
+
+		for _, path := range csrfExemptPaths {
+			if request.URL.Path == path {
+				return nil
+			}
 		}
 
 		token := request.Header.Get("x-srv-token")

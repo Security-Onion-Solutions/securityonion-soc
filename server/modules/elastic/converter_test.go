@@ -218,7 +218,7 @@ func TestConvertToElasticUpdateRequest(t *testing.T) {
 	actualJson, err := convertToElasticUpdateRequest(NewTestStore(), criteria)
 	assert.Nil(t, err)
 
-	expectedJson := `{"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"event.dataset:alerts"}},{"range":{"@timestamp":{"format":"strict_date_optional_time","gte":"2020-09-24T10:11:12-04:00","lte":"2020-09-24T12:14:15-04:00"}}}],"must_not":[],"should":[]}},"script":{"inline":"ctx._source.event.acknowledged=true; ctx._source.event.escalated=true","lang":"painless"}}`
+	expectedJson := `{"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"event.dataset:alerts"}},{"range":{"@timestamp":{"format":"strict_date_optional_time","gte":"2020-09-24T10:11:12-04:00","lte":"2020-09-24T12:14:15-04:00"}}}],"must_not":[],"should":[]}},"script":{"lang":"painless","source":"ctx._source.event.acknowledged=true; ctx._source.event.escalated=true"}}`
 	assert.Equal(t, expectedJson, actualJson)
 }
 

@@ -20,6 +20,8 @@ routes.push({ path: '/case/:id', name: 'case', component: {
   template: '#page-case',
   data() { return {
     i18n: this.$root.i18n,
+    params: {},
+    huntActionLink: '',
     caseObj: {},
     associations: {
       comments: [],
@@ -137,16 +139,6 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     mruCaseLimit: 5,
     mruCases: [],
     presets: {},
-    rules: {
-      required: value => (value && value.length > 0) || this.$root.i18n.required,
-      number: value => (! isNaN(+value) && Number.isInteger(parseFloat(value))) || this.$root.i18n.required,
-      hours: value => (!value || /^\d{1,4}(\.\d{1,4})?$/.test(value)) || this.$root.i18n.invalidHours,
-      shortLengthLimit: value => (value.length < 100) || this.$root.i18n.required,
-      longLengthLimit: value => (encodeURI(value).split(/%..|./).length - 1 < 10000000) || this.$root.i18n.required,
-      fileSizeLimit: value => (value == null || value.length == 0 || value[0].size < this.maxUploadSizeBytes) || this.$root.i18n.fileTooLarge.replace("{maxUploadSizeBytes}", this.$root.formatCount(this.maxUploadSizeBytes)),
-      fileNotEmpty: value => (value == null || value.length == 0 || value[0].size > 0) || this.$root.i18n.fileEmpty,
-      fileRequired: value => (value != null && value.length != 0) || this.$root.i18n.required,
-    },
     attachment: null,
     maxUploadSizeBytes: 26214400,
     addingAssociation: null,
@@ -205,6 +197,15 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       this.resetForm('comments');
 
       this.loadUrlParameters();
+
+      this.$root.loadParameters('cases', (params) => {
+        if (params && params.actions) {
+          const action = params.actions.find((a) => a.name === 'actionHunt');
+          if (action && action.links && action.links.length > 0) {
+            this.huntActionLink = action.links[0];
+          }
+        }
+      });
     },
     loadUrlParameters() {
       if (this.$route.query.type) {
@@ -827,9 +828,19 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       var value = this.escapeQueryValue(event.fields["soc_id"]);
       return '_id: "' + value + '"';
     },
-    buildHuntQueryForValue(value) {
-      var value = this.escapeQueryValue(value);
-      return '"' + value + '" | groupby event.module event.dataset';
+    getHuntActionProps(value) {
+      if (this.huntActionLink) {
+        const link = this.$root.formatActionContent(this.huntActionLink, {}, '', value, true);
+        if (link.startsWith('http') || link.includes('://')) {
+          return { href: link, target: '_blank' };
+        }
+        if (link.startsWith('#') || link.startsWith('/#')) {
+          return { to: link.replace(/^#/, '').replace(/^\/#/, '') };
+        }
+        return { href: link };
+      }
+      const escapedValue = this.escapeQueryValue(value);
+      return { to: { name: 'hunt', query: { q: '"' + escapedValue + '" | groupby event.module event.dataset' } } };
     },
     getEventId(event) {
       var id = event.fields['soc_id'];
