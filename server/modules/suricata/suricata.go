@@ -7,6 +7,7 @@ package suricata
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/md5"
 	"crypto/sha256"
@@ -18,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1034,16 +1036,13 @@ func (e *SuricataEngine) writeThresholdFile(detections []*model.Detection) error
 		}
 		sorted = append(sorted, det)
 	}
-	sort.Slice(sorted, func(i, j int) bool {
-		return sorted[i].PublicID < sorted[j].PublicID
+	slices.SortFunc(sorted, func(a, b *model.Detection) int {
+		return cmp.Compare(a.PublicID, b.PublicID)
 	})
 
 	for _, det := range sorted {
-		overrides := make([]*model.Override, len(det.Overrides))
-		copy(overrides, det.Overrides)
-		sort.SliceStable(overrides, func(i, j int) bool {
-			return overrideSortKey(overrides[i]) < overrideSortKey(overrides[j])
-		})
+		overrides := slices.Clone(det.Overrides)
+		slices.SortStableFunc(overrides, compareOverrides)
 
 		for _, override := range overrides {
 			if !override.IsEnabled {
@@ -1072,29 +1071,29 @@ func (e *SuricataEngine) writeThresholdFile(detections []*model.Detection) error
 	return e.IOManager.WriteFile(e.thresholdFile, thresholds.Bytes(), 0644)
 }
 
-// overrideSortKey returns a stable sort key for an Override. Nil pointers
-// are treated as empty so two equivalent overrides always produce the same key.
-func overrideSortKey(o *model.Override) string {
-	deref := func(s *string) string {
+// compareOverrides orders overrides by their semantic fields so two equivalent
+// overrides always sort identically. Nil pointers are treated as zero values.
+func compareOverrides(a, b *model.Override) int {
+	derefStr := func(s *string) string {
 		if s == nil {
 			return ""
 		}
 		return *s
 	}
-	derefInt := func(n *int) string {
+	derefInt := func(n *int) int {
 		if n == nil {
-			return ""
+			return 0
 		}
-		return strconv.Itoa(*n)
+		return *n
 	}
-	return strings.Join([]string{
-		string(o.Type),
-		deref(o.ThresholdType),
-		deref(o.Track),
-		deref(o.IP),
-		derefInt(o.Count),
-		derefInt(o.Seconds),
-	}, "\x00")
+	return cmp.Or(
+		cmp.Compare(a.Type, b.Type),
+		cmp.Compare(derefStr(a.ThresholdType), derefStr(b.ThresholdType)),
+		cmp.Compare(derefStr(a.Track), derefStr(b.Track)),
+		cmp.Compare(derefStr(a.IP), derefStr(b.IP)),
+		cmp.Compare(derefInt(a.Count), derefInt(b.Count)),
+		cmp.Compare(derefInt(a.Seconds), derefInt(b.Seconds)),
+	)
 }
 
 // updateDetectionStore updates Elasticsearch with the synced detections
