@@ -13,7 +13,7 @@
 	<v-row>
 		<v-col cols="12" lg="6">
 			<v-list class="mb-4 border subtle-border" style="border-radius: var(--so-radius-panel);" :opened="['pending']">
-				<span id="pending-label" v-text="i18n.gridMembersPending" class="ml-2" role="heading" aria-level="2"></span>
+				<span id="pending-label" v-text="i18n.gridMembersPending" class="ml-2"></span>
 				<v-list-subheader v-if="unaccepted.length == 0" v-text="i18n.none"></v-list-subheader>
 				<v-list-group id="gridmembers-pending" value="pending" v-fix-group-role aria-labelledby="pending-label">
 					<v-list-item v-for="node in unaccepted" @click="show(node)" data-aid="gridmembers_review_unaccepted">
@@ -34,7 +34,7 @@
 			</v-list>
 
 			<v-list class="mb-4 border subtle-border" style="border-radius: var(--so-radius-panel);" :opened="['denied']">
-				<span id="denied-label" v-text="i18n.gridMembersDenied" class="ml-2"  role="heading" aria-level="2"></span>
+				<span id="denied-label" v-text="i18n.gridMembersDenied" class="ml-2"></span>
 				<v-list-subheader v-if="denied.length == 0" v-text="i18n.none"></v-list-subheader>
 				<v-list-group id="gridmembers-denied" value="denied" v-fix-group-role aria-labelledby="denied-label">
 					<v-list-item v-for="node in denied" @click="show(node)" data-aid="gridmembers_review_denied">
@@ -55,7 +55,7 @@
 			</v-list>
 
 			<v-list class="mb-4 border subtle-border" style="border-radius: var(--so-radius-panel);" :opened="['rejected']">
-				<span id="rejected-label" v-text="i18n.gridMembersRejected" class="ml-2"  role="heading" aria-level="2"></span>
+				<span id="rejected-label" v-text="i18n.gridMembersRejected" class="ml-2"></span>
 				<v-list-subheader v-if="rejected.length == 0" v-text="i18n.none"></v-list-subheader>
 				<v-list-group id="gridmembers-rejected" value="rejected" v-fix-group-role aria-labelledby="rejected-label">
 					<v-list-item v-for="node in rejected" @click="show(node)" data-aid="gridmembers_review_rejected">
@@ -78,7 +78,7 @@
 		</v-col>
 		<v-col cols="12" lg="6">
 			<v-list class="border subtle-border" style="border-radius: var(--so-radius-panel);" :opened="['accepted']">
-				<span id="accepted-label" v-text="i18n.gridMembersAccepted" class="ml-2"  role="heading" aria-level="2"></span>
+				<span id="accepted-label" v-text="i18n.gridMembersAccepted" class="ml-2"></span>
 				<v-list-subheader v-if="accepted.length == 0" v-text="i18n.none"></v-list-subheader>
 				<v-list-group id="gridmembers-accepted" value="accepted" v-fix-group-role aria-labelledby="accepted-label">
 					<v-list-item v-for="node in accepted" @click="show(node)" data-aid="gridmembers_review_accepted">
