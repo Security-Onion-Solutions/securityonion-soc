@@ -164,7 +164,7 @@ $(document).ready(function () {
               success: '#3A833C',
               lightsuccess: '#49A74B',
               primary: '#007CAD',
-              lightprimary: '#039CD8',
+              lightprimary: '#039FDD',
               secondary: '#2C3347',
               info: '#0B78D0',
               lightinfo: '#2597F4',
