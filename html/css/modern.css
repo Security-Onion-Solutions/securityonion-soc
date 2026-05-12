@@ -1091,7 +1091,7 @@ dfn {
 }
 
 .v-application a {
-  color: rgb(var(--v-theme-primary-lighten-1));
+  color: rgb(var(--v-theme-lightprimary));
 }
 
 .text-success {

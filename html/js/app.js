@@ -139,7 +139,7 @@ $(document).ready(function () {
               success: '#3A833C',
               lightsuccess: '#3A833C',
               primary: '#0B78D0',
-              lightprimary: '#0B78D0',
+              lightprimary: '#096DBC',
               secondary: '#424242',
               info: '#0B78D0',
               error: '#ff5252',
