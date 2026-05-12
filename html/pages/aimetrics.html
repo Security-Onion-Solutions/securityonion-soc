@@ -111,10 +111,10 @@
       <div v-else-if="tableSetting == TABLE_SETTING_SESSIONS && isExpandedSection('aimetrics-graphs')">
         <v-row>
           <v-col cols="12" md="6" data-aid="aimetrics_sessions_timeline_credits">
-            <line-chart id="aimetrics-sessions-timeline-credits" :height="chartHeight" :key="graphSessionsCreditsData.key" :data="graphSessionsCreditsData" :options="graphSessionsCreditsOptions"></line-chart>
+            <line-chart id="aimetrics-sessions-timeline-credits" :height="chartHeight" :key="graphSessionsCreditsData.key" :data="graphSessionsCreditsData" :options="graphSessionsCreditsOptions" :aria-label="i18n.ariaChartCreditsUsage"></line-chart>
           </v-col>
           <v-col cols="12" md="6" data-aid="aimetrics_sessions_pie_messages">
-            <pie-chart id="aimetrics-sessions-pie-messages" :height="chartHeight" :key="graphSessionsMessagesData.key" :data="graphSessionsMessagesData" :options="graphSessionsMessagesOptions"></pie-chart>
+            <pie-chart id="aimetrics-sessions-pie-messages" :height="chartHeight" :key="graphSessionsMessagesData.key" :data="graphSessionsMessagesData" :options="graphSessionsMessagesOptions" :aria-label="i18n.ariaChartTotalMessages"></pie-chart>
           </v-col>
         </v-row>
       </div>

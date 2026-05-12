@@ -100,7 +100,7 @@
 								<div class="header">{{i18n.references}}</div>
 								<div class="reference-links" data-aid="detection_references_display">
 									<div v-for="r in extractedReferences">
-										<a :href="r.link" v-if="r.type==='url'" target="_blank">{{r.text}}</a>
+										<a :href="r.link" v-if="r.type==='url'" target="_blank" class="text-info">{{r.text}}</a>
 										<span v-else>{{r.text}}</span>
 									</div>
 									<span v-if="extractedReferences === null || extractedReferences.length === 0">

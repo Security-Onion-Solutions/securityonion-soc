@@ -1106,6 +1106,10 @@ dfn {
   color: rgb(var(--v-theme-lighterror)) !important;
 }
 
+.text-info {
+  color: rgb(var(--v-theme-lightinfo)) !important;
+}
+
 /* ============================================================
    Items Per Page Select
    ============================================================ */
