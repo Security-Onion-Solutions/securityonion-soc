@@ -2028,6 +2028,115 @@ func TestWriteThresholdFileDeterministicOrder(t *testing.T) {
 		"threshold.conf must be byte-identical regardless of detection/override input order")
 }
 
+// Test that multiple overrides of the same type on a single SID — distinguished
+// only by their inner fields — also emit in a stable order. The sort key must
+// disambiguate within a Type bucket, not just between Types.
+func TestWriteThresholdFileSameSIDSameTypeDifferentFields(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	iom := mock.NewMockIOManager(ctrl)
+
+	eng := &SuricataEngine{
+		IOManager:     iom,
+		thresholdFile: "/opt/sensoroni/nids/threshold.conf",
+	}
+
+	// One SID, multiple threshold overrides differing only by inner fields,
+	// plus multiple suppress overrides differing only by IP/Track.
+	makeDetection := func() *model.Detection {
+		return &model.Detection{
+			PublicID:  "5000",
+			IsEnabled: true,
+			Overrides: []*model.Override{
+				{
+					Type:      model.OverrideTypeThreshold,
+					IsEnabled: true,
+					OverrideParameters: model.OverrideParameters{
+						ThresholdType: util.Ptr("threshold"),
+						Track:         util.Ptr("by_src"),
+						Count:         util.Ptr(20),
+						Seconds:       util.Ptr(60),
+					},
+				},
+				{
+					Type:      model.OverrideTypeSuppress,
+					IsEnabled: true,
+					OverrideParameters: model.OverrideParameters{
+						Track: util.Ptr("by_dst"),
+						IP:    util.Ptr("10.0.0.5"),
+					},
+				},
+				{
+					Type:      model.OverrideTypeThreshold,
+					IsEnabled: true,
+					OverrideParameters: model.OverrideParameters{
+						ThresholdType: util.Ptr("limit"),
+						Track:         util.Ptr("by_src"),
+						Count:         util.Ptr(5),
+						Seconds:       util.Ptr(60),
+					},
+				},
+				{
+					Type:      model.OverrideTypeSuppress,
+					IsEnabled: true,
+					OverrideParameters: model.OverrideParameters{
+						Track: util.Ptr("by_src"),
+						IP:    util.Ptr("10.0.0.1"),
+					},
+				},
+				{
+					Type:      model.OverrideTypeThreshold,
+					IsEnabled: true,
+					OverrideParameters: model.OverrideParameters{
+						ThresholdType: util.Ptr("both"),
+						Track:         util.Ptr("by_dst"),
+						Count:         util.Ptr(10),
+						Seconds:       util.Ptr(120),
+					},
+				},
+				{
+					Type:      model.OverrideTypeSuppress,
+					IsEnabled: true,
+					OverrideParameters: model.OverrideParameters{
+						Track: util.Ptr("by_src"),
+						IP:    util.Ptr("192.168.1.0/24"),
+					},
+				},
+			},
+		}
+	}
+
+	var captured [][]byte
+	iom.EXPECT().WriteFile("/opt/sensoroni/nids/threshold.conf", gomock.Any(), fs.FileMode(0644)).
+		DoAndReturn(func(_ string, content []byte, _ fs.FileMode) error {
+			buf := make([]byte, len(content))
+			copy(buf, content)
+			captured = append(captured, buf)
+			return nil
+		}).Times(2)
+
+	first := makeDetection()
+	assert.NoError(t, eng.writeThresholdFile([]*model.Detection{first}))
+
+	second := makeDetection()
+	for i, j := 0, len(second.Overrides)-1; i < j; i, j = i+1, j-1 {
+		second.Overrides[i], second.Overrides[j] = second.Overrides[j], second.Overrides[i]
+	}
+	assert.NoError(t, eng.writeThresholdFile([]*model.Detection{second}))
+
+	assert.Equal(t, 2, len(captured), "expected two captured writes")
+	assert.Equal(t, string(captured[0]), string(captured[1]),
+		"threshold.conf must be byte-identical when same-type overrides differ only by inner fields")
+
+	// Sanity check: every override produced exactly one line.
+	contentStr := string(captured[0])
+	assert.Equal(t, 3, strings.Count(contentStr, "threshold gen_id 1, sig_id 5000"),
+		"all three threshold overrides should appear")
+	assert.Equal(t, 3, strings.Count(contentStr, "suppress gen_id 1, sig_id 5000"),
+		"all three suppress overrides should appear")
+}
+
 // Test hasDetectionChanged method
 func TestHasDetectionChanged(t *testing.T) {
 	eng := &SuricataEngine{}
