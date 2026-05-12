@@ -16,6 +16,7 @@ import (
 	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/onionconfig/database"
 )
 
 type OnionConfig struct {
@@ -23,6 +24,7 @@ type OnionConfig struct {
 	saltstackDir  string
 	bypassEnabled bool
 	annotations   map[string]map[string]interface{}
+	store         *database.Store
 }
 
 func NewOnionConfig(server *server.Server) *OnionConfig {
@@ -31,9 +33,10 @@ func NewOnionConfig(server *server.Server) *OnionConfig {
 	}
 }
 
-func (c *OnionConfig) Init(saltstackDir string, bypassEnabled bool) error {
+func (c *OnionConfig) Init(saltstackDir string, bypassEnabled bool, store *database.Store) error {
 	c.saltstackDir = strings.TrimSuffix(saltstackDir, "/")
 	c.bypassEnabled = bypassEnabled
+	c.store = store
 
 	if c.bypassEnabled {
 		go c.PreloadConfiguration()
@@ -45,7 +48,6 @@ func (c *OnionConfig) Init(saltstackDir string, bypassEnabled bool) error {
 }
 
 func (c *OnionConfig) PreloadConfiguration() error {
-	// Pre-load annotations and default settings from the default pillar directory
 	var err error
 	defaultDir := c.saltstackDir + "/default"
 	if _, statErr := os.Stat(defaultDir); statErr == nil {
@@ -71,7 +73,7 @@ func (c *OnionConfig) PreloadConfiguration() error {
 }
 
 func (c *OnionConfig) GetSetting(ctx context.Context, id string) (*model.Setting, error) {
-	settings, err := LoadLocalSettings(c.saltstackDir, id, c.annotations, c.bypassEnabled)
+	settings, err := c.loadAllSettings(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +88,7 @@ func (c *OnionConfig) GetSettings(ctx context.Context, advanced bool) ([]*model.
 		return nil, err
 	}
 
-	settings, err := LoadLocalSettings(c.saltstackDir, "", c.annotations, c.bypassEnabled)
+	settings, err := c.loadAllSettings(ctx, "")
 	if err != nil {
 		return nil, err
 	}
@@ -104,28 +106,118 @@ func (c *OnionConfig) UpdateSetting(ctx context.Context, setting *model.Setting,
 	settingDef, err := c.GetSetting(ctx, setting.Id)
 	if err != nil {
 		return err
+	}
+
+	var oldValue string
+	if settingDef == nil {
+		logger.WithFields(log.Fields{
+			"settingId": setting.Id,
+		}).Info("Setting definition not found; assuming new, undefined setting")
 	} else {
-		if settingDef == nil {
-			logger.WithFields(log.Fields{
-				"settingId": setting.Id,
-			}).Info("Setting definition not found; assuming new, undefined setting")
+		if settingDef.Readonly {
+			return errors.New("Unable to modify or remove a readonly setting")
+		}
+		oldValue = settingDef.Value
+		setting.Syntax = settingDef.Syntax
+		setting.Description = settingDef.Description
+		setting.Title = settingDef.Title
+		setting.Multiline = settingDef.Multiline
+		setting.Advanced = settingDef.Advanced
+		setting.ForcedType = settingDef.ForcedType
+		setting.Default = settingDef.Default
+		setting.DefaultAvailable = settingDef.DefaultAvailable
+		setting.File = settingDef.File
+		setting.JinjaEscaped = settingDef.JinjaEscaped
+		setting.UiElements = settingDef.UiElements
+		// Carry the origin forward so we know where to route the write.
+		setting.Origin = settingDef.Origin
+		setting.DuplicatedFromID = settingDef.DuplicatedFromID
+	}
+
+	return c.routeUpdate(ctx, setting, oldValue, remove, logger)
+}
+
+// routeUpdate dispatches a setting write to DB or yaml based on origin rules:
+//   - default (no existing value yet) → DB
+//   - db origin → DB
+//   - yaml origin → yaml
+func (c *OnionConfig) routeUpdate(ctx context.Context, setting *model.Setting, oldValue string, remove bool, logger log.Interface) error {
+	userID := userIDFromContext(ctx)
+
+	switch setting.Origin {
+	case model.SettingOriginDB:
+		if c.store == nil {
+			return errors.New("database not configured; cannot update DB setting")
+		}
+		return updateSettingInDB(ctx, c.store, setting, oldValue, remove, userID)
+
+	case model.SettingOriginYaml:
+		return UpdatePillarSetting(c.saltstackDir, setting, remove)
+
+	default:
+		// New / default setting: store in DB when available, fall back to yaml.
+		if c.store != nil {
+			setting.Origin = model.SettingOriginDB
+			return updateSettingInDB(ctx, c.store, setting, oldValue, remove, userID)
+		}
+		logger.WithFields(log.Fields{"settingId": setting.Id}).Debug("No DB configured; writing new setting to yaml")
+		return UpdatePillarSetting(c.saltstackDir, setting, remove)
+	}
+}
+
+// loadAllSettings merges DB settings on top of yaml settings then applies annotations.
+func (c *OnionConfig) loadAllSettings(ctx context.Context, filterId string) ([]*model.Setting, error) {
+	// 1. Load yaml settings (existing flow).
+	yamlSettings, err := LoadLocalSettings(c.saltstackDir, filterId, c.annotations, c.bypassEnabled)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. Load DB settings (if available) and merge on top of yaml.
+	if c.store != nil {
+		dbSettings, dbErr := loadDBSettings(ctx, c.store)
+		if dbErr != nil {
+			log.WithError(dbErr).Warn("Failed to load settings from database; falling back to yaml-only")
 		} else {
-			if settingDef.Readonly {
-				return errors.New("Unable to modify or remove a readonly setting")
+			// Filter DB settings when a specific ID is requested.
+			if filterId != "" {
+				filtered := dbSettings[:0]
+				for _, s := range dbSettings {
+					if s.Id == filterId {
+						filtered = append(filtered, s)
+					}
+				}
+				dbSettings = filtered
 			}
-			setting.Syntax = settingDef.Syntax
-			setting.Description = settingDef.Description
-			setting.Title = settingDef.Title
-			setting.Multiline = settingDef.Multiline
-			setting.Advanced = settingDef.Advanced
-			setting.ForcedType = settingDef.ForcedType
-			setting.Default = settingDef.Default
-			setting.DefaultAvailable = settingDef.DefaultAvailable
-			setting.File = settingDef.File
-			setting.JinjaEscaped = settingDef.JinjaEscaped
-			setting.UiElements = settingDef.UiElements
+			yamlSettings = mergeDBIntoYaml(dbSettings, yamlSettings)
 		}
 	}
 
-	return UpdatePillarSetting(c.saltstackDir, setting, remove)
+	// 3. Re-apply annotations and masks to all settings to ensure DB-sourced values
+	// are properly decorated and sensitive values are masked.
+	for _, s := range yamlSettings {
+		if ann, ok := c.annotations[s.Id]; ok {
+			ApplyAnnotations(s, ann, nil)
+		}
+		if s.DuplicatedFromID != "" {
+			if ann, ok := c.annotations[s.DuplicatedFromID]; ok {
+				ApplyAnnotations(s, ann, nil)
+			}
+		}
+		ApplySensitiveMask(s)
+	}
+
+	PostProcess(yamlSettings)
+
+	return yamlSettings, nil
+}
+
+// userIDFromContext extracts a user identifier from the context, returning "unknown" if unavailable.
+func userIDFromContext(ctx context.Context) string {
+	if user := ctx.Value("userId"); user != nil {
+		if uid, ok := user.(string); ok && uid != "" {
+			return uid
+		}
+	}
+	return "unknown"
 }

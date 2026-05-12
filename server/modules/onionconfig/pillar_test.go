@@ -237,7 +237,7 @@ func TestUpdatePillarSetting_Readonly(tester *testing.T) {
 	saltstackDir := SetupTestPillar()
 	srv := server.NewFakeAuthorizedServer(nil)
 	oc := NewOnionConfig(srv)
-	oc.Init(saltstackDir, false)
+	oc.Init(saltstackDir, false, nil)
 
 	setting := model.NewSetting("myapp.ro")
 	err := oc.UpdateSetting(srv.Context, setting, false)

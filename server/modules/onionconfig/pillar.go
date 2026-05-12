@@ -71,6 +71,7 @@ func LoadLocalSettings(saltstackDir string, filterId string, annotations map[str
 			if !found {
 				// Add a new setting since there is no existing setting for this annotation
 				setting := model.NewSetting(filterId)
+				setting.Origin = model.SettingOriginDefault
 				ApplyAnnotations(setting, ann, fileLoader)
 				ApplySensitiveMask(setting)
 				settings = append(settings, setting)
@@ -93,6 +94,7 @@ func LoadLocalSettings(saltstackDir string, filterId string, annotations map[str
 			if !found {
 				// Add a new setting since there is no existing setting for this annotation
 				setting := model.NewSetting(id)
+				setting.Origin = model.SettingOriginDefault
 				ApplyAnnotations(setting, ann, fileLoader)
 				ApplySensitiveMask(setting)
 				settings = append(settings, setting)
@@ -164,6 +166,7 @@ func ProcessPillarFile(path string, info os.FileInfo, settings *[]*model.Setting
 			setting.NodeId = minion_id
 			setting.Multiline = true
 			setting.Syntax = "yaml"
+			setting.Origin = model.SettingOriginYaml
 			*settings = append(*settings, setting)
 		} else {
 			*settings = ParseAdvanced(path, *settings, minion_id, setting_id)
@@ -247,6 +250,7 @@ func RecursivelyParseSettings(
 				setting.Value = newValue
 				setting.NodeId = minion
 				setting.Multiline = multiline
+				setting.Origin = model.SettingOriginYaml
 				settings = append(settings, setting)
 			}
 		}
@@ -269,6 +273,7 @@ func ParseAdvanced(path string, settings []*model.Setting, minion string, id str
 		setting.NodeId = minion
 		setting.Multiline = true
 		setting.Syntax = "yaml"
+		setting.Origin = model.SettingOriginYaml
 		settings = append(settings, setting)
 	}
 

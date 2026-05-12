@@ -10,6 +10,15 @@ import (
 	"regexp"
 )
 
+// SettingOrigin indicates where a setting value was loaded from.
+type SettingOrigin string
+
+const (
+	SettingOriginDefault SettingOrigin = "default" // value not yet customised
+	SettingOriginDB      SettingOrigin = "db"      // stored in Postgres
+	SettingOriginYaml    SettingOrigin = "yaml"    // stored in a pillar YAML file
+)
+
 type UiElement struct {
 	// (metadata) The field name to save this value as
 	Field string `json:"field" example:"some_key"`
@@ -90,6 +99,10 @@ type Setting struct {
 	UiElements []UiElement `json:"uiElements"`
 	// (metadata) Confirmation message to show when user clicks the delete button on a ui element. If omitted, no message will be shown.
 	UiElementsDeleteMessage string `json:"uiElementsDeleteMessage"`
+	// Origin indicates where the setting's current value was loaded from.
+	Origin SettingOrigin `json:"origin"`
+	// DuplicatedFromID is the setting ID this setting was duplicated from, if any.
+	DuplicatedFromID string `json:"duplicatedFromId,omitempty"`
 }
 
 func NewSetting(id string) *Setting {
@@ -109,8 +122,9 @@ func (setting *Setting) SupportsJinja() bool {
 }
 
 func (setting *Setting) IsDuplicatedSetting() bool {
-	// Assume descriptionless settings are duplicated, since annotations are lost for duplicated settings
-	return len(setting.Description) == 0
+	// A setting is duplicated if it explicitly carries a source ID (DB-sourced),
+	// or if it has no description (heuristic for yaml-sourced duplicates).
+	return setting.DuplicatedFromID != "" || len(setting.Description) == 0
 }
 
 func IsValidMinionId(id string) bool {
