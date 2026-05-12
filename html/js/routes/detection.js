@@ -38,7 +38,6 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			editOverride: null, // the override we're currently editing
 			editForm: { valid: true },
 			commentsForm: { valid: true, value: '' },
-			panel: [0, 1, 2],
 			activeTab: '',
 			sidExtract: /\bsid: ?['"]?(.*?)['"]?;/, // option
 			severityExtract: /\bsignature_severity ['"]?(.*?)['"]?[,;]/, // metadata
@@ -143,7 +142,6 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			origComment: null,
 			showSigmaDialog: false,
 			convertedRule: '',
-			confirmDeleteDialog: false,
 			showDirtySourceDialog: false,
 			ruleTemplates: {},
 			languageToEngine: {
@@ -817,29 +815,10 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				this.$root.showError(error);
 			}
 		},
-		deleteDetection() {
-			this.confirmDeleteDialog = true;
-		},
-		cancelDeleteDetection() {
-			this.confirmDeleteDialog = false;
-		},
 		async saveOverrideNote(item) {
 			try {
 				this.$root.startLoading();
 				await this.$root.papi.put('/detection/' + this.detect.id + '/override/' + item.index + '/note', { note: item.note });
-			} catch (error) {
-				this.$root.showError(error);
-			} finally {
-				this.$root.stopLoading();
-			}
-		},
-		async confirmDeleteDetection() {
-			this.cancelDeleteDetection();
-			try {
-				this.$root.startLoading();
-				await this.$root.papi.delete('/detection/' + encodeURIComponent(this.$route.params.id));
-				this.$router.push({ name: 'detections' });
-				this.$root.showTip(this.i18n.detectionDeleteSuccessful);
 			} catch (error) {
 				this.$root.showError(error);
 			} finally {

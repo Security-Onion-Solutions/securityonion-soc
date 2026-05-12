@@ -259,7 +259,6 @@ func CheckWriteNoRead(ctx context.Context, DetStore GetterByPublicId, writeNoRea
 
 	log.WithField("detectionPublicId", *writeNoRead).Error("detection was written but not read back, attempting read before continuing")
 
-	// det, err := e.srv.Detectionstore.GetDetectionByPublicId(e.srv.Context, *writeNoRead)
 	det, err := DetStore.GetDetectionByPublicId(ctx, *writeNoRead)
 	if err != nil {
 		log.WithError(err).WithField("detectionPublicId", *writeNoRead).Error("failed to read back detection")

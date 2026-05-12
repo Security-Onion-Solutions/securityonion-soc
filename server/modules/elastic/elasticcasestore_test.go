@@ -1642,3 +1642,111 @@ func TestGetCaseIdsWithArtifactInvalidParams(tester *testing.T) {
 	assert.Error(tester, err)
 	assert.Contains(tester, err.Error(), "value")
 }
+
+func TestGetCaseIdsWithArtifact_InjectionAttack(t *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil), nil)
+	store.Init("myIndex", "myAuditIndex", 45, "so_", nil, -1)
+	fakeEventStore := server.NewFakeEventstore()
+	store.server.Eventstore = fakeEventStore
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+
+	attackValue := `myValue" OR so_artifact.value:"otherValue`
+	_, _ = store.GetCaseIdsWithArtifact(ctx, "ip", attackValue)
+
+	assert.Len(t, fakeEventStore.InputSearchCriterias, 1)
+	query := fakeEventStore.InputSearchCriterias[0].RawQuery
+	// The attack string should be escaped
+	assert.Contains(t, query, `so_artifact.value:"myValue\" OR so_artifact.value:\"otherValue"`)
+}
+
+func TestGetRelatedEvents_InjectionAttack(t *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil), nil)
+	store.Init("myIndex", "myAuditIndex", 45, "so_", nil, -1)
+	fakeEventStore := server.NewFakeEventstore()
+	store.server.Eventstore = fakeEventStore
+	ctx := context.Background()
+
+	// This attack should be caught by validation
+	attackCaseID := `some-case-id" OR so_related.caseId:"other-case-id`
+	_, err := store.GetRelatedEvents(ctx, attackCaseID)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid ID")
+	assert.Empty(t, fakeEventStore.InputSearchCriterias)
+}
+
+func TestGetCaseIdsWithArtifact_InjectionAttack_2(t *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil), nil)
+	store.Init("myIndex", "myAuditIndex", 45, "so_", nil, -1)
+	fakeEventStore := server.NewFakeEventstore()
+	store.server.Eventstore = fakeEventStore
+	ctx := context.Background()
+
+	attackType := `ip" OR so_artifact.artifactType:"other`
+	attackValue := `1.1.1.1" OR so_artifact.value:"2.2.2.2`
+	_, _ = store.GetCaseIdsWithArtifact(ctx, attackType, attackValue)
+
+	assert.Len(t, fakeEventStore.InputSearchCriterias, 1)
+	query := fakeEventStore.InputSearchCriterias[0].RawQuery
+	assert.Contains(t, query, `so_artifact.artifactType:"ip\" OR so_artifact.artifactType:\"other"`)
+	assert.Contains(t, query, `so_artifact.value:"1.1.1.1\" OR so_artifact.value:\"2.2.2.2"`)
+}
+
+func TestGetCase_InjectionAttack(t *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil), nil)
+	store.Init("myIndex", "myAuditIndex", 45, "so_", nil, -1)
+	fakeEventStore := server.NewFakeEventstore()
+	store.server.Eventstore = fakeEventStore
+	ctx := context.Background()
+
+	// This attack should be caught by validation
+	attackID := `some-id" OR _id:"other-id`
+	_, err := store.GetCase(ctx, attackID)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid ID")
+	assert.Empty(t, fakeEventStore.InputSearchCriterias)
+}
+
+func TestGetCaseHistory_InjectionAttack(t *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil), nil)
+	store.Init("myIndex", "myAuditIndex", 45, "so_", nil, -1)
+	fakeEventStore := server.NewFakeEventstore()
+	store.server.Eventstore = fakeEventStore
+	ctx := context.Background()
+
+	// This attack should be caught by validation
+	attackCaseID := `some-id" OR so_comment.caseId:"other-id`
+	_, err := store.GetCaseHistory(ctx, attackCaseID)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid ID")
+	assert.Empty(t, fakeEventStore.InputSearchCriterias)
+}
+
+func TestGetComments_InjectionAttack_Case(t *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil), nil)
+	store.Init("myIndex", "myAuditIndex", 45, "so_", nil, -1)
+	fakeEventStore := server.NewFakeEventstore()
+	store.server.Eventstore = fakeEventStore
+	ctx := context.Background()
+
+	// This attack should be caught by validation
+	attackCaseID := `some-id" OR so_comment.caseId:"other-id`
+	_, err := store.GetComments(ctx, attackCaseID)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid ID")
+	assert.Empty(t, fakeEventStore.InputSearchCriterias)
+}
+
+func TestGetArtifacts_InjectionAttack_Case(t *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil), nil)
+	store.Init("myIndex", "myAuditIndex", 45, "so_", nil, -1)
+	fakeEventStore := server.NewFakeEventstore()
+	store.server.Eventstore = fakeEventStore
+	ctx := context.Background()
+
+	// This attack should be caught by validation
+	attackCaseID := `some-case-id" OR so_artifact.caseId:"other-case-id`
+	_, err := store.GetArtifacts(ctx, attackCaseID, "evidence", "group1")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid ID")
+	assert.Empty(t, fakeEventStore.InputSearchCriterias)
+}

@@ -153,7 +153,13 @@ test('populateUserDetails', async () => {
 });
 
 test('populateUserDetailsSystem', async () => {
-  const obj = {userId:'00000000-0000-0000-0000-000000000000'};
+  let obj = {userId:'00000000-0000-0000-0000-000000000000'};
+  app.users = [{id:'123',email:'hi@there.net'}];
+  app.usersLoadedTime = new Date().time;
+  await app.populateUserDetails(obj, "userId", "owner")
+  expect(obj.owner).toBe(app.i18n.systemUser);
+
+  obj = {userId:'00000000-0000-0000-0000-000000000001'};
   app.users = [{id:'123',email:'hi@there.net'}];
   app.usersLoadedTime = new Date().time;
   await app.populateUserDetails(obj, "userId", "owner")
