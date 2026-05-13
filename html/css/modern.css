@@ -50,6 +50,31 @@ html, body, * {
   scrollbar-color: rgb(var(--v-theme-icon)) rgb(var(--v-theme-background-lighten-1)) !important;
 }
 
+.v-application a {
+  color: rgb(var(--v-theme-lightprimary));
+}
+
+.text-success {
+  color: rgb(var(--v-theme-lightsuccess)) !important;
+}
+
+.text-primary {
+  color: rgb(var(--v-theme-lightprimary)) !important;
+}
+
+.text-error {
+  color: rgb(var(--v-theme-lighterror)) !important;
+}
+
+.text-info {
+  color: rgb(var(--v-theme-lightinfo)) !important;
+}
+
+.v-input--error, .v-field--error, .v-field--error .v-field__append-inner > .v-icon{
+  --v-theme-error: var(--v-theme-lighterror) !important;
+  --v-field-color: var(--v-theme-lighterror) !important;
+}
+
 .v-expansion-panels,
 .v-expansion-panel,
 .v-alert {
@@ -1088,26 +1113,6 @@ dfn {
 .daterangepicker.show-ranges.single.ltr .drp-calendar.left,
 .daterangepicker.show-ranges.single.rtl .drp-calendar.left {
   border-color: rgba(var(--v-theme-text), 0.08) !important;
-}
-
-.v-application a {
-  color: rgb(var(--v-theme-lightprimary));
-}
-
-.text-success {
-  color: rgb(var(--v-theme-lightsuccess)) !important;
-}
-
-.text-primary {
-  color: rgb(var(--v-theme-lightprimary)) !important;
-}
-
-.text-error {
-  color: rgb(var(--v-theme-lighterror)) !important;
-}
-
-.text-info {
-  color: rgb(var(--v-theme-lightinfo)) !important;
 }
 
 /* ============================================================
