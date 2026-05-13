@@ -99,6 +99,8 @@ type Setting struct {
 	UiElements []UiElement `json:"uiElements"`
 	// (metadata) Confirmation message to show when user clicks the delete button on a ui element. If omitted, no message will be shown.
 	UiElementsDeleteMessage string `json:"uiElementsDeleteMessage"`
+	// (metadata) The preferred storage location for this setting.
+	Storage string `json:"storage" example:"db,omitempty"`
 	// Origin indicates where the setting's current value was loaded from.
 	Origin SettingOrigin `json:"origin"`
 	// DuplicatedFromID is the setting ID this setting was duplicated from, if any.

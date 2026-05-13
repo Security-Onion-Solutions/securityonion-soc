@@ -17,6 +17,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/onionconfig/database"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type OnionConfig struct {
@@ -25,26 +26,30 @@ type OnionConfig struct {
 	bypassEnabled bool
 	annotations   map[string]map[string]interface{}
 	store         *database.Store
+	ready         chan struct{}
 }
 
 func NewOnionConfig(server *server.Server) *OnionConfig {
 	return &OnionConfig{
 		server: server,
+		ready:  make(chan struct{}),
 	}
 }
 
-func (c *OnionConfig) Init(saltstackDir string, bypassEnabled bool, store *database.Store) error {
+func (c *OnionConfig) Init(saltstackDir string, bypassEnabled bool) {
 	c.saltstackDir = strings.TrimSuffix(saltstackDir, "/")
 	c.bypassEnabled = bypassEnabled
+}
+
+func (c *OnionConfig) Start(store *database.Store) error {
 	c.store = store
+	err := c.PreloadConfiguration()
+	close(c.ready)
+	return err
+}
 
-	if c.bypassEnabled {
-		go c.PreloadConfiguration()
-	} else {
-		return c.PreloadConfiguration()
-	}
-
-	return nil
+func (c *OnionConfig) waitReady() {
+	<-c.ready
 }
 
 func (c *OnionConfig) PreloadConfiguration() error {
@@ -73,6 +78,7 @@ func (c *OnionConfig) PreloadConfiguration() error {
 }
 
 func (c *OnionConfig) GetSetting(ctx context.Context, id string) (*model.Setting, error) {
+	c.waitReady()
 	settings, err := c.loadAllSettings(ctx, id)
 	if err != nil {
 		return nil, err
@@ -84,6 +90,7 @@ func (c *OnionConfig) GetSetting(ctx context.Context, id string) (*model.Setting
 }
 
 func (c *OnionConfig) GetSettings(ctx context.Context, advanced bool) ([]*model.Setting, error) {
+	c.waitReady()
 	if err := c.server.CheckAuthorized(ctx, "read", "config"); err != nil {
 		return nil, err
 	}
@@ -97,6 +104,7 @@ func (c *OnionConfig) GetSettings(ctx context.Context, advanced bool) ([]*model.
 }
 
 func (c *OnionConfig) UpdateSetting(ctx context.Context, setting *model.Setting, remove bool) (err error) {
+	c.waitReady()
 	logger := log.FromContext(ctx)
 
 	if err = c.server.CheckAuthorized(ctx, "write", "config"); err != nil {
@@ -138,31 +146,25 @@ func (c *OnionConfig) UpdateSetting(ctx context.Context, setting *model.Setting,
 }
 
 // routeUpdate dispatches a setting write to DB or yaml based on origin rules:
-//   - default (no existing value yet) → DB
 //   - db origin → DB
-//   - yaml origin → yaml
+//   - yaml or unassigned origin → yaml
 func (c *OnionConfig) routeUpdate(ctx context.Context, setting *model.Setting, oldValue string, remove bool, logger log.Interface) error {
 	userID := userIDFromContext(ctx)
 
-	switch setting.Origin {
-	case model.SettingOriginDB:
+	if setting.Origin == model.SettingOriginDB {
 		if c.store == nil {
 			return errors.New("database not configured; cannot update DB setting")
 		}
 		return updateSettingInDB(ctx, c.store, setting, oldValue, remove, userID)
-
-	case model.SettingOriginYaml:
-		return UpdatePillarSetting(c.saltstackDir, setting, remove)
-
-	default:
-		// New / default setting: store in DB when available, fall back to yaml.
-		if c.store != nil {
-			setting.Origin = model.SettingOriginDB
-			return updateSettingInDB(ctx, c.store, setting, oldValue, remove, userID)
-		}
-		logger.WithFields(log.Fields{"settingId": setting.Id}).Debug("No DB configured; writing new setting to yaml")
-		return UpdatePillarSetting(c.saltstackDir, setting, remove)
 	}
+
+	err := UpdatePillarSetting(c.saltstackDir, setting, remove)
+	if err == nil && c.store != nil {
+		if auditErr := auditSettingOnly(ctx, c.store, setting, oldValue, remove, userID); auditErr != nil {
+			logger.WithError(auditErr).Warn("Failed to record YAML setting update audit")
+		}
+	}
+	return err
 }
 
 // loadAllSettings merges DB settings on top of yaml settings then applies annotations.
@@ -214,10 +216,8 @@ func (c *OnionConfig) loadAllSettings(ctx context.Context, filterId string) ([]*
 
 // userIDFromContext extracts a user identifier from the context, returning "unknown" if unavailable.
 func userIDFromContext(ctx context.Context) string {
-	if user := ctx.Value("userId"); user != nil {
-		if uid, ok := user.(string); ok && uid != "" {
-			return uid
-		}
+	if uid, ok := ctx.Value(web.ContextKeyRequestorId).(string); ok && uid != "" {
+		return uid
 	}
 	return "unknown"
 }

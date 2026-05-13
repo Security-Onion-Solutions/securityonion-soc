@@ -4,14 +4,14 @@ CREATE TABLE IF NOT EXISTS settings (
     setting_id         VARCHAR(1024) NOT NULL,
     value              JSONB,
     duplicated_from_id VARCHAR(1024),
-    node_id            VARCHAR(128),
-    PRIMARY KEY (setting_id, COALESCE(node_id, ''))
+    node_id            VARCHAR(128)  NOT NULL DEFAULT '',
+    PRIMARY KEY (setting_id, node_id)
 );
 
 CREATE TABLE IF NOT EXISTS audit_settings (
     id         BIGSERIAL     PRIMARY KEY,
     setting_id VARCHAR(1024) NOT NULL,
-    node_id    VARCHAR(128),
+    node_id    VARCHAR(128)  NOT NULL DEFAULT '',
     ts         TIMESTAMPTZ   NOT NULL DEFAULT now(),
     user_id    VARCHAR(128)  NOT NULL,
     old_value  JSONB,

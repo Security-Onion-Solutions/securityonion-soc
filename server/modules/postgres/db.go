@@ -18,12 +18,15 @@ import (
 	"github.com/apex/log"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/security-onion-solutions/securityonion-soc/db"
 )
 
 // DB wraps a pgxpool.Pool and provides migration support.
 type DB struct {
 	pool *pgxpool.Pool
 }
+
+var _ db.DB = (*DB)(nil)
 
 // Config holds the parameters required to open a Postgres connection pool.
 type Config struct {
@@ -70,8 +73,12 @@ func (db *DB) Close() {
 }
 
 // Begin starts a new transaction.
-func (db *DB) Begin(ctx context.Context) (pgx.Tx, error) {
-	return db.pool.Begin(ctx)
+func (db *DB) Begin(ctx context.Context) (db.Tx, error) {
+	tx, err := db.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &postgresTx{tx: tx}, nil
 }
 
 // Pool returns the underlying connection pool for direct use.
@@ -86,13 +93,38 @@ func (db *DB) Exec(ctx context.Context, sql string, args ...any) error {
 }
 
 // QueryRow executes a query expected to return at most one row.
-func (db *DB) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
+func (db *DB) QueryRow(ctx context.Context, sql string, args ...any) db.Row {
 	return db.pool.QueryRow(ctx, sql, args...)
 }
 
 // Query executes a query that returns multiple rows.
-func (db *DB) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
+func (db *DB) Query(ctx context.Context, sql string, args ...any) (db.Rows, error) {
 	return db.pool.Query(ctx, sql, args...)
+}
+
+type postgresTx struct {
+	tx pgx.Tx
+}
+
+func (p *postgresTx) Commit(ctx context.Context) error {
+	return p.tx.Commit(ctx)
+}
+
+func (p *postgresTx) Rollback(ctx context.Context) error {
+	return p.tx.Rollback(ctx)
+}
+
+func (p *postgresTx) Exec(ctx context.Context, sql string, args ...any) error {
+	_, err := p.tx.Exec(ctx, sql, args...)
+	return err
+}
+
+func (p *postgresTx) QueryRow(ctx context.Context, sql string, args ...any) db.Row {
+	return p.tx.QueryRow(ctx, sql, args...)
+}
+
+func (p *postgresTx) Query(ctx context.Context, sql string, args ...any) (db.Rows, error) {
+	return p.tx.Query(ctx, sql, args...)
 }
 
 // Migrate applies all pending migrations from the provided embedded FS.

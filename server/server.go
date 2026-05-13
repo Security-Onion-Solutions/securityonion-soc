@@ -15,6 +15,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/security-onion-solutions/securityonion-soc/config"
+	"github.com/security-onion-solutions/securityonion-soc/db"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/rbac"
@@ -29,6 +30,7 @@ const AGENT_ID = "00000000-0000-0000-0000-000000000001"
 type Server struct {
 	Config           *config.ServerConfig
 	Host             *web.Host
+	DB               db.DB
 	Datastore        Datastore
 	AdminClientstore AdminClientstore
 	AdminUserstore   AdminUserstore

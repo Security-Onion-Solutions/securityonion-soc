@@ -22,7 +22,8 @@ type fakeMutator struct {
 		audit  database.AuditEntry
 		remove bool
 	}
-	err error
+	audited []database.AuditEntry
+	err     error
 }
 
 func (f *fakeMutator) UpdateSettingWithAudit(_ context.Context, row database.SettingRow, audit database.AuditEntry, remove bool) error {
@@ -34,6 +35,14 @@ func (f *fakeMutator) UpdateSettingWithAudit(_ context.Context, row database.Set
 		audit  database.AuditEntry
 		remove bool
 	}{row, audit, remove})
+	return nil
+}
+
+func (f *fakeMutator) RecordAudit(_ context.Context, audit database.AuditEntry) error {
+	if f.err != nil {
+		return f.err
+	}
+	f.audited = append(f.audited, audit)
 	return nil
 }
 
@@ -78,4 +87,16 @@ func TestEncodeOldValue_Empty(t *testing.T) {
 
 func TestEncodeOldValue_String(t *testing.T) {
 	assert.Equal(t, `"foo"`, encodeOldValue("foo"))
+}
+
+func TestAuditSettingOnly(t *testing.T) {
+	mutator := &fakeMutator{}
+	s := model.NewSetting("yaml.key")
+	s.Value = "yamlval"
+
+	err := auditSettingOnly(context.Background(), mutator, s, "oldyaml", false, "user3")
+	assert.NoError(t, err)
+	assert.Len(t, mutator.audited, 1)
+	assert.Equal(t, "yaml.key", mutator.audited[0].SettingID)
+	assert.Equal(t, "user3", mutator.audited[0].UserID)
 }

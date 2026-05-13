@@ -16,8 +16,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-	pgcommon "github.com/security-onion-solutions/securityonion-soc/db/postgres"
+	"github.com/security-onion-solutions/securityonion-soc/db"
 )
 
 //go:embed migrations/*.sql
@@ -27,7 +26,7 @@ const moduleName = "onionconfig"
 
 // Store encapsulates all Postgres operations for onionconfig.
 type Store struct {
-	db *pgcommon.DB
+	db db.DB
 }
 
 // SettingRow is the raw DB representation of a setting.
@@ -49,22 +48,12 @@ type AuditEntry struct {
 	Note      string
 }
 
-// New opens a connection pool and runs pending migrations.
-func New(ctx context.Context, cfg pgcommon.Config) (*Store, error) {
-	db, err := pgcommon.Open(ctx, cfg)
-	if err != nil {
-		return nil, fmt.Errorf("database: connect: %w", err)
-	}
-	if err := db.Migrate(ctx, migrationFS, moduleName); err != nil {
-		db.Close()
+// New wraps an existing DB connection and runs pending migrations.
+func New(ctx context.Context, database db.DB) (*Store, error) {
+	if err := database.Migrate(ctx, migrationFS, moduleName); err != nil {
 		return nil, fmt.Errorf("database: migrate: %w", err)
 	}
-	return &Store{db: db}, nil
-}
-
-// Close releases the underlying connection pool.
-func (s *Store) Close() {
-	s.db.Close()
+	return &Store{db: database}, nil
 }
 
 // GetAllSettings returns every row from the settings table.
@@ -73,7 +62,7 @@ func (s *Store) GetAllSettings(ctx context.Context) ([]SettingRow, error) {
 		SELECT setting_id,
 		       COALESCE(value::text, 'null'),
 		       COALESCE(duplicated_from_id, ''),
-		       COALESCE(node_id, '')
+		       node_id
 		FROM settings
 		ORDER BY setting_id, node_id`)
 	if err != nil {
@@ -95,18 +84,14 @@ func (s *Store) GetAllSettings(ctx context.Context) ([]SettingRow, error) {
 // GetSetting returns a single setting by ID and optional nodeID (empty string = global).
 func (s *Store) GetSetting(ctx context.Context, settingID, nodeID string) (*SettingRow, error) {
 	var r SettingRow
-	var nid *string
-	if nodeID != "" {
-		nid = &nodeID
-	}
 	err := s.db.QueryRow(ctx, `
 		SELECT setting_id,
 		       COALESCE(value::text, 'null'),
 		       COALESCE(duplicated_from_id, ''),
-		       COALESCE(node_id, '')
+		       node_id
 		FROM settings
-		WHERE setting_id = $1 AND node_id IS NOT DISTINCT FROM $2`,
-		settingID, nid,
+		WHERE setting_id = $1 AND node_id = $2`,
+		settingID, nodeID,
 	).Scan(&r.SettingID, &r.Value, &r.DuplicatedFromID, &r.NodeID)
 	if err != nil {
 		return nil, err
@@ -139,44 +124,51 @@ func (s *Store) UpdateSettingWithAudit(ctx context.Context, row SettingRow, audi
 	return tx.Commit(ctx)
 }
 
-func (s *Store) upsertSetting(ctx context.Context, tx pgx.Tx, row SettingRow) error {
-	valJSON, err := encodeValue(row.Value)
+// RecordAudit inserts an audit record into the database.
+func (s *Store) RecordAudit(ctx context.Context, entry AuditEntry) error {
+	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return err
 	}
-	var nodeID *string
-	if row.NodeID != "" {
-		nodeID = &row.NodeID
+	defer tx.Rollback(ctx)
+
+	if err := s.insertAudit(ctx, tx, entry); err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
+}
+
+func (s *Store) upsertSetting(ctx context.Context, tx db.Tx, row SettingRow) error {
+	valJSON, err := encodeValue(row.Value)
+	if err != nil {
+		return err
 	}
 	var dupID *string
 	if row.DuplicatedFromID != "" {
 		dupID = &row.DuplicatedFromID
 	}
-	_, err = tx.Exec(ctx, `
+	err = tx.Exec(ctx, `
 		INSERT INTO settings (setting_id, value, duplicated_from_id, node_id)
 		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (setting_id, COALESCE(node_id, ''))
+		ON CONFLICT (setting_id, node_id)
 		DO UPDATE SET value = EXCLUDED.value,
 		              duplicated_from_id = EXCLUDED.duplicated_from_id`,
-		row.SettingID, valJSON, dupID, nodeID,
+		row.SettingID, valJSON, dupID, row.NodeID,
 	)
 	return err
 }
 
-func (s *Store) deleteSetting(ctx context.Context, tx pgx.Tx, settingID, nodeID string) error {
-	var nid *string
-	if nodeID != "" {
-		nid = &nodeID
-	}
-	_, err := tx.Exec(ctx, `
+func (s *Store) deleteSetting(ctx context.Context, tx db.Tx, settingID, nodeID string) error {
+	err := tx.Exec(ctx, `
 		DELETE FROM settings
-		WHERE setting_id = $1 AND node_id IS NOT DISTINCT FROM $2`,
-		settingID, nid,
+		WHERE setting_id = $1 AND node_id = $2`,
+		settingID, nodeID,
 	)
 	return err
 }
 
-func (s *Store) insertAudit(ctx context.Context, tx pgx.Tx, entry AuditEntry) error {
+func (s *Store) insertAudit(ctx context.Context, tx db.Tx, entry AuditEntry) error {
 	oldJSON, err := encodeValue(entry.OldValue)
 	if err != nil {
 		return err
@@ -185,14 +177,10 @@ func (s *Store) insertAudit(ctx context.Context, tx pgx.Tx, entry AuditEntry) er
 	if err != nil {
 		return err
 	}
-	var nid *string
-	if entry.NodeID != "" {
-		nid = &entry.NodeID
-	}
-	_, err = tx.Exec(ctx, `
+	err = tx.Exec(ctx, `
 		INSERT INTO audit_settings (setting_id, node_id, ts, user_id, old_value, new_value, note)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-		entry.SettingID, nid, entry.Timestamp.UTC(), entry.UserID, oldJSON, newJSON, entry.Note,
+		entry.SettingID, entry.NodeID, entry.Timestamp.UTC(), entry.UserID, oldJSON, newJSON, entry.Note,
 	)
 	return err
 }

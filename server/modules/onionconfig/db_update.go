@@ -17,6 +17,7 @@ import (
 // dbSettingsMutator abstracts the DB write operations so they can be mocked.
 type dbSettingsMutator interface {
 	UpdateSettingWithAudit(ctx context.Context, row database.SettingRow, audit database.AuditEntry, remove bool) error
+	RecordAudit(ctx context.Context, audit database.AuditEntry) error
 }
 
 // updateSettingInDB writes (or removes) a setting in the DB and records an audit entry,
@@ -37,6 +38,25 @@ func updateSettingInDB(ctx context.Context, store dbSettingsMutator, setting *mo
 	}
 
 	return store.UpdateSettingWithAudit(ctx, settingToDBRow(setting), entry, remove)
+}
+
+// auditSettingOnly records an audit entry in the DB for a setting that was modified elsewhere (e.g. YAML).
+func auditSettingOnly(ctx context.Context, store dbSettingsMutator, setting *model.Setting, oldValue string, remove bool, userID string) error {
+	newVal := ""
+	if !remove {
+		newVal = encodeSettingValue(setting)
+	}
+
+	entry := database.AuditEntry{
+		SettingID: setting.Id,
+		NodeID:    setting.NodeId,
+		Timestamp: time.Now().UTC(),
+		UserID:    userID,
+		OldValue:  encodeOldValue(oldValue),
+		NewValue:  newVal,
+	}
+
+	return store.RecordAudit(ctx, entry)
 }
 
 func encodeOldValue(v string) string {

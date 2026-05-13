@@ -28,6 +28,17 @@ func PostProcess(settings []*model.Setting) {
 		if setting.File || setting.SupportsJinja() {
 			setting.Value = syntax.UnescapeJinja(setting.Value)
 		}
+
+		if setting.Storage == "db" {
+			if setting.Origin == "" || setting.Origin == model.SettingOriginDefault {
+				setting.Origin = model.SettingOriginDB
+			} else if setting.Origin != model.SettingOriginDB {
+				// TODO: Remove this else when we remove the default from the UI
+				log.WithFields(log.Fields{"setting": setting.Id, "origin": setting.Origin}).Warn("Setting storage is set to DB, but origin is not DB or default")
+			}
+		} else if setting.Origin == "" || setting.Origin == model.SettingOriginDefault || setting.Origin == model.SettingOriginYaml {
+			setting.Origin = model.SettingOriginYaml
+		}
 	}
 }
 
@@ -132,6 +143,8 @@ func ApplyAnnotations(setting *model.Setting, annotations map[string]interface{}
 			}
 		case "uiElementsDeleteMessage":
 			setting.UiElementsDeleteMessage = value.(string)
+		case "storage":
+			setting.Storage = fmt.Sprintf("%v", value)
 		}
 	}
 }
