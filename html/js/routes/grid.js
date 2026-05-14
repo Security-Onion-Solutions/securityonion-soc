@@ -61,11 +61,6 @@ routes.push({ path: '/grid', name: 'grid', component: {
     uploadForm: { valid: true, attachment: null },
     maxUploadSizeBytes: 25 * 1024 * 1024,
     staleMetricsMs: 120000,
-    rules: {
-      fileSizeLimit: value => (value == null || value.size < this.maxUploadSizeBytes) || this.$root.i18n.fileTooLarge.replace("{maxUploadSizeBytes}", this.$root.formatCount(this.maxUploadSizeBytes)),
-      fileNotEmpty: value => (value == null || value.size > 0) || this.$root.i18n.fileEmpty,
-      fileRequired: value => !!value || this.$root.i18n.required,
-    },
     attachment: null,
     zone: '',
     moreColumns: false,

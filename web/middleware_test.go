@@ -93,6 +93,12 @@ func TestValidateRequest(tester *testing.T) {
 	ctx = context.WithValue(ctx, ContextKeyRequestorId, "nonExemptId")
 	err = validateRequest(ctx, host, request)
 	assert.NoError(tester, err)
+
+	// Test path exemption - success
+	request = MustRequest(tester, http.MethodPost, "/api/util/reverse-lookup", nil)
+	ctx = context.WithValue(context.Background(), ContextKeyRequestCSRFExempt, false)
+	err = validateRequest(ctx, host, request)
+	assert.NoError(tester, err)
 }
 
 func TestRespond(t *testing.T) {

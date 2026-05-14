@@ -42,6 +42,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     contextStartMessageIndex: -1,
     contextLimitSmall: 0,
     contextLimitLarge: 0,
+    charsPerTokenEstimate: 0,
     thresholdColorRatioLow: 0.5,
     thresholdColorRatioMed: 0.75,
     thresholdColorRatioMax: 1,
@@ -92,7 +93,14 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     messageContextValues() {
       const msgs = this.messages || [];
       return msgs.map((_, i) => this.calculateContextOfMessage(msgs, i));
-    }
+    },
+    isMessageTooLong() {
+      if (this.charsPerTokenEstimate <= 0 || !this.newMessage) return false;
+      const contextLimit = this.increaseContextLimit ? this.contextLimitLarge : this.contextLimitSmall;
+      const maxChars = contextLimit * this.charsPerTokenEstimate * 1.1;
+      const usedChars = this.newMessage.length + (this.contextLength * this.charsPerTokenEstimate);
+      return usedChars >= maxChars;
+    },
   },
   methods: {
 
@@ -171,7 +179,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }
       return false;
     },
-    
+
     async loadNewChatScreen() {
       try {
         // Initialize with a welcome message from the AI Assistant
@@ -250,14 +258,13 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         try {
           await this.loadChatFromBackend(urlSessionId);
         } catch (error) {
-          // Session ID in URL doesn't exist, start new chat with this ID
-          this.currentChatId = urlSessionId;
-          this.saveCurrentChatId();
-          
           // Check if this is an investigation session
           const isInvestigation = this.$route.query.investigation === 'true';
-          
+
           if (isInvestigation) {
+            // Investigation sessions are allowed to create new sessions with the URL session ID
+            this.currentChatId = urlSessionId;
+            this.saveCurrentChatId();
             try {
               const investigationPrompt = this.generateInvestigationPrompt(this.$route.query);
               // This is a new investigation session, start with investigation prompt
@@ -267,9 +274,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
             } catch (error) {
               this.$root.showError(this.i18n.assistantUnableToParseInvestigation + ': ' + error.message);
             }
-            
-          } else if (this.messages.length > 1) {
-            this.loadNewChatScreen();
+          } else if (urlSessionId !== this.currentChatId) {
+            // Session ID doesn't exist, not an investigation, and not our own navigation — redirect to base assistant page
+            await this.$router.replace({ name: 'assistant' });
+            return;
           }
         } finally {
           this.$root.stopLoading();
@@ -287,7 +295,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         return;
       }
       const lastChatId = this.loadCurrentChatId();
-      if (lastChatId && this.chatHistory.length > 0) {
+      if (lastChatId && this.chatHistory.some(c => c.sessionId === lastChatId)) {
         this.$root.startLoading();
         try {
           // Update URL to reflect the current session
@@ -406,9 +414,18 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         return;
       }
 
+      const isCompressing = tags && tags.includes(MSGTAG_CONTEXTCOMPRESSION);
+      // Check if message + context exceeds estimated token limit
+      if (!isCompressing && this.isMessageTooLong) return;
       // Check if context length has reached the limit
-      if (this.checkContextLimitReached() && (!tags || !tags.includes(MSGTAG_CONTEXTCOMPRESSION))) return;
+      if (!isCompressing && this.checkContextLimitReached()) return;
       
+      // Bail out if the model wasn't reachable when credits were last fetched
+      if (!this.creditsLoaded) {
+        this.$root.showError(this.i18n.assistantBalanceCheckUnhealthy);
+        return;
+      }
+
       // Check if user has credits
       if (this.creditsRemaining <= 0) {
         this.$root.showError(this.i18n.assistantOutOfCredits);
@@ -1460,16 +1477,27 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.scrollToBottom();
     },
     async startInvestigationSession(investigationPrompt) {
-      
+      if (!this.creditsLoaded) {
+        await this.loadCredits();
+      }
+      if (!this.creditsLoaded) {
+        this.currentChatId = null;
+        this.saveCurrentChatId();
+        if (this.$route.params.sessionId) {
+          await this.$router.replace({ name: 'assistant' });
+        }
+        return;
+      }
+
       // Clear the welcome message for investigations (similar to normal chats)
       this.messages = [];
-      
+
       // Set the investigation prompt directly (no decoding needed)
       this.newMessage = investigationPrompt;
-      
+
       // Wait for the UI to update again
       await this.$nextTick();
-      
+
       // Send the message after a delay to ensure everything is ready
       setTimeout(async () => {
         if (this.newMessage && this.newMessage.trim()) {
@@ -1893,8 +1921,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     
     checkIfDeleted(session) {
-      const sessionInHistory = this.chatHistory.some(s => s.sessionId === session.sessionId);
-      if (!sessionInHistory) {
+      if (session?.deleteTime) {
         this.canChat = false;
         this.$root.showWarning(this.i18n.assistantChatNoResume);
       } else {
@@ -1906,6 +1933,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       if (!this.currentModel || this.modelsMap.size == 0) return;
       this.contextLimitSmall = this.modelsMap.get(this.currentModel).contextLimitSmall;
       this.contextLimitLarge = this.modelsMap.get(this.currentModel).contextLimitLarge;
+      this.charsPerTokenEstimate = this.modelsMap.get(this.currentModel).charsPerTokenEstimate;
       this.lowBalanceColorAlert = this.modelsMap.get(this.currentModel).lowBalanceColorAlert;
     },
 
@@ -2112,8 +2140,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         await this.toggleSharedSession(sessionId)
       }
 
-      if (caseId === null) { 
+      let caseTip = this.i18n.assistantAttachToCaseTipExisting;
+      if (caseId === null) {
         caseId = await this.createCase(session.title);
+        caseTip = this.i18n.assistantAttachToCaseTipNew;
       }
 
       const payload = {
@@ -2126,6 +2156,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
 
       try {
         this.$root.papi.post('/case/artifacts', payload);
+        this.$root.showTip(caseTip);
       } catch (err) { 
         this.$root.showError(this.i18n.assistantAttachToCaseFail);
       }

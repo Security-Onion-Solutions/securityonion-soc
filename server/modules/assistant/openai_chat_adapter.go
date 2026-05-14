@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
-	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
@@ -21,7 +20,6 @@ import (
 
 	"github.com/apex/log"
 	"github.com/openai/openai-go/v3"
-	"github.com/openai/openai-go/v3/option"
 	"github.com/openai/openai-go/v3/packages/param"
 )
 
@@ -42,13 +40,10 @@ func NewOpenAIChatAdapter(ctx context.Context, srv *server.Server, config map[st
 		return nil, fmt.Errorf("openai_chat adapter requires apiUrl in config")
 	}
 
-	opts := []option.RequestOption{
-		option.WithBaseURL(apiUrl),
-	}
-
 	apiKey := module.GetStringDefault(config, "apiKey", "")
-	if apiKey != "" {
-		opts = append(opts, option.WithAPIKey(apiKey))
+	opts, err := buildOpenAIClientOptions(apiUrl, apiKey)
+	if err != nil {
+		return nil, fmt.Errorf("openai_chat adapter config error: %w", err)
 	}
 
 	healthTimeoutSeconds := module.GetIntDefault(config, "healthTimeoutSeconds", DEFAULT_HEALTH_TIMEOUT_SECONDS)
@@ -242,19 +237,7 @@ func (a *OpenAIChatAdapter) GetBalance(ctx context.Context) (*model.BalanceRespo
 }
 
 func (a *OpenAIChatAdapter) GetHealth(ctx context.Context) (*model.HealthResponse, error) {
-	healthCtx, cancel := context.WithTimeout(a.srv.Context, time.Second*time.Duration(a.healthTimeoutSeconds))
-	defer cancel()
-
-	status := "unhealthy"
-
-	res, err := a.client.ModelsList(healthCtx)
-	if err == nil && len(res.Data) > 0 {
-		status = "healthy"
-	}
-
-	return &model.HealthResponse{
-		Status: status,
-	}, nil
+	return checkOpenAIHealth(ctx, a.client, a.healthTimeoutSeconds)
 }
 
 func convertHistoryToChatCompletions(logger log.Interface, req *model.ChatRequest) []openai.ChatCompletionMessageParamUnion {

@@ -1134,3 +1134,182 @@ func (m *mockTool) Execute(ctx context.Context, srv *server.Server, params strin
 		Result:   "mock result",
 	}, nil
 }
+
+func TestEstimateRequestChars(t *testing.T) {
+	tests := []struct {
+		name     string
+		req      *model.ChatRequest
+		expected int
+	}{
+		{
+			name: "empty request",
+			req:  &model.ChatRequest{},
+			expected: 0,
+		},
+		{
+			name: "system prompt only",
+			req: &model.ChatRequest{
+				System:       "You are a helpful assistant.",
+				SystemAppend: "Additional context.",
+			},
+			expected: len("You are a helpful assistant.") + len("Additional context."),
+		},
+		{
+			name: "messages with text blocks",
+			req: &model.ChatRequest{
+				System: "System",
+				Messages: []*model.Message{
+					{
+						ContentBlocks: []model.ContentBlock{
+							{Type: "text", Text: "Hello"},
+						},
+					},
+					{
+						ContentBlocks: []model.ContentBlock{
+							{Type: "text", Text: "Hi there!"},
+						},
+					},
+				},
+			},
+			expected: len("System") + len("Hello") + len("Hi there!"),
+		},
+		{
+			name: "message with content string",
+			req: &model.ChatRequest{
+				Messages: []*model.Message{
+					{ContentStr: "Plain text message"},
+				},
+			},
+			expected: len("Plain text message"),
+		},
+		{
+			name: "message with tool result",
+			req: &model.ChatRequest{
+				Messages: []*model.Message{
+					{
+						ContentBlocks: []model.ContentBlock{
+							{
+								ToolResult: &model.ToolResult{
+									Content: []model.ToolResultContent{
+										{Text: "tool output data"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: len("tool output data"),
+		},
+		{
+			name: "tool config included",
+			req: &model.ChatRequest{
+				ToolConfig: json.RawMessage(`{"tools": [{"name": "query_events"}]}`),
+			},
+			expected: len(`{"tools": [{"name": "query_events"}]}`),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := estimateRequestChars(tc.req)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
+
+func TestCheckRequestSize(t *testing.T) {
+	tests := []struct {
+		name        string
+		req         *model.ChatRequest
+		models      []model.ModelParameters
+		modelId     string
+		adapterName string
+		expectError bool
+	}{
+		{
+			name:        "no model params found, skip check",
+			req:         &model.ChatRequest{System: strings.Repeat("a", 10000)},
+			models:      []model.ModelParameters{},
+			modelId:     "unknown",
+			adapterName: "SOAI",
+			expectError: false,
+		},
+		{
+			name: "charsPerTokenEstimate is zero, skip check",
+			req:  &model.ChatRequest{System: strings.Repeat("a", 10000)},
+			models: []model.ModelParameters{
+				{ID: "model1", Adapter: "SOAI", ContextLimitSmall: 1000, CharsPerTokenEstimate: 0},
+			},
+			modelId:     "model1",
+			adapterName: "SOAI",
+			expectError: false,
+		},
+		{
+			name: "within limit",
+			req:  &model.ChatRequest{System: strings.Repeat("a", 100)},
+			models: []model.ModelParameters{
+				{ID: "model1", Adapter: "SOAI", ContextLimitLarge: 1000, CharsPerTokenEstimate: 4.0},
+			},
+			modelId:     "model1",
+			adapterName: "SOAI",
+			// maxChars = 1000 * 4.0 * 1.1 = 4400, usedChars = 100
+			expectError: false,
+		},
+		{
+			name: "exceeds limit",
+			req:  &model.ChatRequest{System: strings.Repeat("a", 5000)},
+			models: []model.ModelParameters{
+				{ID: "model1", Adapter: "SOAI", ContextLimitLarge: 1000, CharsPerTokenEstimate: 4.0},
+			},
+			modelId:     "model1",
+			adapterName: "SOAI",
+			// maxChars = 1000 * 4.0 * 1.1 = 4400, usedChars = 5000
+			expectError: true,
+		},
+		{
+			name: "falls back to small context limit",
+			req:  &model.ChatRequest{System: strings.Repeat("a", 500)},
+			models: []model.ModelParameters{
+				{ID: "model1", Adapter: "SOAI", ContextLimitSmall: 100, CharsPerTokenEstimate: 4.0},
+			},
+			modelId:     "model1",
+			adapterName: "SOAI",
+			// maxChars = 100 * 4.0 * 1.1 = 440, usedChars = 500
+			expectError: true,
+		},
+		{
+			name: "context limits both zero, skip check",
+			req:  &model.ChatRequest{System: strings.Repeat("a", 10000)},
+			models: []model.ModelParameters{
+				{ID: "model1", Adapter: "SOAI", CharsPerTokenEstimate: 4.0},
+			},
+			modelId:     "model1",
+			adapterName: "SOAI",
+			expectError: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ac := &AssistantCoordinator{
+				srv: &server.Server{
+					Config: &config.ServerConfig{
+						ClientParams: model.ClientParameters{
+							AssistantParams: model.AssistantParameters{
+								AvailableModels: tc.models,
+							},
+						},
+					},
+				},
+			}
+
+			err := ac.checkRequestSize(tc.req, tc.modelId, tc.adapterName)
+			if tc.expectError {
+				assert.ErrorIs(t, err, ErrRequestTooLarge)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}

@@ -34,9 +34,6 @@ const jobsComponent = {
       { title: this.$root.i18n.status, value: 'status' },
       { title: this.$root.i18n.actions },
     ],
-    rules: {
-      required: value => !!value || this.$root.i18n.required,
-    },
     sortBy: [{ key: 'id', order: 'asc' }],
     itemsPerPage: 10,
     dialog: false,
@@ -310,6 +307,9 @@ const jobsComponent = {
         const value = picker.startDate.format(route.i18n.timePickerFormat) + ' - ' + picker.endDate.format(route.i18n.timePickerFormat)
         route.form.timeframe = value;
         $(this).val(value);
+      });
+      $('#jobtimeframe').on('show.daterangepicker', function (ev, picker) {
+        route.$root.applyDateRangePickerAriaLabels(picker);
       });
     },
     isComplete(job) {

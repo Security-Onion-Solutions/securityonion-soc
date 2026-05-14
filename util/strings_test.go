@@ -182,3 +182,56 @@ func TestToUUID_ConsistencyCheck(t *testing.T) {
 		assert.Equal(t, got, ToUUID("repeat-test"))
 	}
 }
+
+func TestEscapeLucene(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"Empty", "", ""},
+		{"Simple", "simple", "simple"},
+		{"Backslash", `back\slash`, `back\\slash`},
+		{"Quote", `quote"me`, `quote\"me`},
+		{"Multiple Quotes", `""quote""`, `\"\"quote\"\"`},
+		{"Mixed", `\"quote\"\\`, `\\\"quote\\\"\\\\`},
+		{"Attack - OR", `foo" OR 1=1`, `foo\" OR 1=1`},
+		{"Attack - AND", `foo" AND "bar"="bar`, `foo\" AND \"bar\"=\"bar`},
+		{"Attack - Wildcard", `foo" *`, `foo\" *`},
+		{"Attack - Semicolon", `foo"; DROP INDEX index;`, `foo\"; DROP INDEX index;`},
+		{"Attack - Path Traversal", `../../etc/passwd"`, `../../etc/passwd\"`},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := EscapeLucene(test.input)
+			assert.Equal(t, test.expected, got)
+		})
+	}
+}
+
+func TestEscapePainless(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"Empty", "", ""},
+		{"Simple", "simple", "simple"},
+		{"Backslash", `back\slash`, `back\\slash`},
+		{"Single Quote", `it's me`, `it\'s me`},
+		{"Double Quotes", `quote "me"`, `quote "me"`}, // Painless uses single quotes for strings in our usage
+		{"Mixed", `\'quote\'\\`, `\\\'quote\\\'\\\\`},
+		{"Attack - Escape", `'; ctx._source.event.severity = 'critical'; '`, `\'; ctx._source.event.severity = \'critical\'; \'`},
+		{"Attack - System Exit", `'; System.exit(0); '`, `\'; System.exit(0); \'`},
+		{"Attack - Loop", `'; while(true); '`, `\'; while(true); \'`},
+		{"Attack - Comments", `'; // comment`, `\'; // comment`},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := EscapePainless(test.input)
+			assert.Equal(t, test.expected, got)
+		})
+	}
+}
