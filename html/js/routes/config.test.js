@@ -769,14 +769,16 @@ test('processRouteParameters', () => {
 
 test('getSettingBreadcrumbs', () => {
   setting = { id: "foo.bar.car", advanced: false };
-  expect(comp.getSettingBreadcrumbs(setting)).toBe("foo > bar > car");
+  expect(comp.getSettingBreadcrumbs(setting)).toStrictEqual(['foo', 'bar', 'car']);
 
   setting = { id: "foo.bar.car", advanced: false, title: "Carbine" };
-  expect(comp.getSettingBreadcrumbs(setting)).toBe("foo > bar > Carbine");
+  expect(comp.getSettingBreadcrumbs(setting)).toStrictEqual(['foo', 'bar', 'Carbine']);
 
   setting = { id: "foo.bar.car", advanced: true };
-  expect(comp.getSettingBreadcrumbs(setting)).toBe("foo > bar > car [adv]");
+  expect(comp.getSettingBreadcrumbs(setting)).toStrictEqual(['foo', 'bar', 'car [adv]']);
 
+  setting = { id: "foo.bar.car", advanced: true, title: "Carbine" };
+  expect(comp.getSettingBreadcrumbs(setting)).toStrictEqual(['foo', 'bar', 'Carbine [adv]']);
 });
 
 test('hasUiElements', () => {

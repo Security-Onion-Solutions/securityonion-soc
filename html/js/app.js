@@ -8,6 +8,7 @@ const routes = [];
 const components = [];
 const iconSets = [];
 const templatePromises = [];
+const directives = [];
 
 const LICENSE_STATUS_ACTIVE = "active";
 const LICENSE_STATUS_EXCEEDED = "exceeded";
@@ -32,11 +33,24 @@ const MAX_OVERRIDE_NOTE_LENGTH = 150;
 const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000';
 const AGENT_USER_ID = '00000000-0000-0000-0000-000000000001';
 
+function moveAriaToPrismTextarea(wrapperEl) {
+  const textarea = wrapperEl.querySelector('.prism-editor__textarea');
+  if (!textarea) return;
+  ['aria-label', 'aria-labelledby', 'aria-describedby'].forEach((attr) => {
+    const value = wrapperEl.getAttribute(attr);
+    if (value) {
+      textarea.setAttribute(attr, value);
+      wrapperEl.removeAttribute(attr);
+    }
+  });
+}
+
 if (typeof global !== 'undefined') {
   global.routes = routes;
   global.components = components;
   global.iconSets = iconSets;
   global.templatePromises = templatePromises;
+  global.directives = directives;
   global.MAX_OVERRIDE_NOTE_LENGTH = MAX_OVERRIDE_NOTE_LENGTH;
 }
 
@@ -52,25 +66,16 @@ $(document).ready(function () {
 
     const vuetify = Vuetify.createVuetify({
       defaults: {
-        VIcon: {
-          class: 'fa',
-        },
         VCheckbox: {
           trueIcon: 'mb-1 fa-square-check',
           falseIcon: 'mb-1 fa-regular fa-square',
           indeterminateIcon: 'mb-1 fa-square-minus'
         },
-        VSelect: {
-          variant: 'outlined',
-          density: 'compact',
-          menuIcon: 'fas fa-caret-down',
+        VChip: {
+          closeIcon: 'fa-xmark va-baseline',
         },
         VCombobox: {
           menuIcon: 'fas fa-caret-down',
-          variant: 'outlined',
-        },
-        VFileInput: {
-          prependIcon: 'fa-paperclip',
           variant: 'outlined',
         },
         VDataTable: {
@@ -79,27 +84,36 @@ $(document).ready(function () {
           nextIcon: 'fa-chevron-right',
           lastIcon: 'fa-forward-step',
         },
-        VTextField: {
+        VFileInput: {
+          prependIcon: 'fa-paperclip',
+          variant: 'outlined',
+        },
+        VIcon: {
+          class: 'fa',
+        },
+        VSelect: {
           variant: 'outlined',
           density: 'compact',
-          clearIcon: 'fas fa-circle-xmark',
+          menuIcon: 'fas fa-caret-down',
+        },
+        VSwitch: {
+          color: 'primary'
         },
         VTextarea: {
           variant: 'outlined',
           density: 'compact',
         },
-        VTreeview: {
-          collapseIcon: '',
-          expandIcon: 'fas fa-caret-right',
+        VTextField: {
+          variant: 'outlined',
+          density: 'compact',
+          clearIcon: 'fas fa-circle-xmark',
         },
         VToolbar: {
           class: 'theme-background-lighten-1',
         },
-        VChip: {
-          closeIcon: 'fa-xmark va-baseline',
-        },
-        VSwitch: {
-          color: 'primary'
+        VTreeview: {
+          collapseIcon: '',
+          expandIcon: 'fas fa-caret-right',
         },
       },
       icons: {
@@ -122,10 +136,15 @@ $(document).ready(function () {
           light: {
             dark: false,
             colors: {
-              primary: '#2196f3',
+              success: '#3A833C',
+              lightsuccess: '#3A833C',
+              primary: '#0B78D0',
+              lightprimary: '#096DBC',
               secondary: '#424242',
-              info: '#2196f3',
-              error: '#ff5252',
+              info: '#0B78D0',
+              lightinfo: '#0B78D0',
+              error: '#EB0000',
+              lighterror: '#EB0000',
               nav_background: '#000000',
               nav: '#ffffff',
               table_background: '#fafafa',
@@ -142,10 +161,15 @@ $(document).ready(function () {
           dark: {
             dark: true,
             colors: {
-              primary: '#0088BF',
+              success: '#3A833C',
+              lightsuccess: '#49A74B',
+              primary: '#007CAD',
+              lightprimary: '#039FDD',
               secondary: '#2C3347',
-              info: '#2196f3',
-              error: '#ff5252',
+              info: '#0B78D0',
+              lightinfo: '#2597F4',
+              error: '#EB0000',
+              lighterror: '#FF5757',
               nav_background: '#000000',
               nav: '#ffffff',
               table_background: '#222a3f',
@@ -801,9 +825,6 @@ $(document).ready(function () {
         formatTimestamp(date) {
           return this.formatDate(date, this.i18n.timestampFormat, this.i18n.dateUnknown);
         },
-        formatTimelineLabel(date) {
-          return this.formatDate(date, this.i18n.timelineFormat, date);
-        },
         formatDate(date, format, dflt) {
           var formatted = dflt;
           if (date) {
@@ -998,6 +1019,17 @@ $(document).ready(function () {
           preselects[this.i18n.datePreselect7dToNow] = [moment().subtract(7, 'days'), moment()];
           preselects[this.i18n.datePreselect30dToNow] = [moment().subtract(30, 'days'), moment()];
           return preselects;
+        },
+        applyDateRangePickerAriaLabels(picker) {
+          const $c = picker.container;
+          $c.find('.drp-calendar.left .hourselect').attr('aria-label', this.i18n.ariaPickerStartHour);
+          $c.find('.drp-calendar.left .minuteselect').attr('aria-label', this.i18n.ariaPickerStartMinute);
+          $c.find('.drp-calendar.left .secondselect').attr('aria-label', this.i18n.ariaPickerStartSecond);
+          $c.find('.drp-calendar.left .ampmselect').attr('aria-label', this.i18n.ariaPickerStartAmPm);
+          $c.find('.drp-calendar.right .hourselect').attr('aria-label', this.i18n.ariaPickerEndHour);
+          $c.find('.drp-calendar.right .minuteselect').attr('aria-label', this.i18n.ariaPickerEndMinute);
+          $c.find('.drp-calendar.right .secondselect').attr('aria-label', this.i18n.ariaPickerEndSecond);
+          $c.find('.drp-calendar.right .ampmselect').attr('aria-label', this.i18n.ariaPickerEndAmPm);
         },
         localizeMessage(origMsg, vars = null) {
           if (!origMsg) return "";
@@ -1339,6 +1371,10 @@ $(document).ready(function () {
         registerEditor() {
           const app = Vue.getCurrentInstance().appContext.app;
           app.component('prism-editor', PrismEditor.PrismEditor);
+          app.directive('aria-textarea', {
+            mounted(el) { moveAriaToPrismTextarea(el); },
+            updated(el) { moveAriaToPrismTextarea(el); },
+          });
         },
         initializeEditor() {
           if (this.editorInitialized) return;
@@ -1864,6 +1900,10 @@ $(document).ready(function () {
 
     for (let i = 0; i < components.length; i++) {
       app.component(components[i].name, components[i].component);
+    }
+
+    for (let i = 0; i < directives.length; i++) {
+      app.directive(directives[i].name, directives[i].directive);
     }
 
     app.mount('#app');

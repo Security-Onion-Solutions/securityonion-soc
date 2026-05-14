@@ -1,7 +1,7 @@
 <v-container fluid data-aid="users_screen">
 	<v-dialog v-if="$root.isUserAdmin()" v-model="showOptionsDialog" max-width="540">
 		<v-card class="options-dialog">
-			<v-card-title>{{i18n.options}}</v-card-title>
+			<v-card-title role="heading" aria-level="2">{{i18n.options}}</v-card-title>
 			<v-card-text data-aid="users_options">
 				<v-btn variant="tonal" id="users-sync-button" @click.stop="sync()" class="mt-2 mb-3 theme-background-lighten-1" data-aid="users_options_synchronize">
 					{{ i18n.usersSynchronize }}
@@ -18,39 +18,39 @@
 		<v-col>
 			<v-row>
 				<v-toolbar v-if="$root.isUserAdmin()" class="so-toolbar elevation-0">
-					<h4 v-if="!$root.loading" class="ml-2 my-0" data-aid="users_summary">{{ i18n.usersEnabled }} {{ countUsersEnabled() }} / {{ countUsers() }}</h4>
+					<h4 v-if="!$root.loading" class="ml-2 my-0" data-aid="users_summary" role="heading" aria-level="2">{{ i18n.usersEnabled }} {{ countUsersEnabled() }} / {{ countUsers() }}</h4>
 					<v-spacer></v-spacer>
-					<v-btn icon variant="flat" id="add-user-button" class="circle-button mx-2" @click.stop="showAdd()" data-aid="users_create_new">
+					<v-btn icon variant="flat" id="add-user-button" class="circle-button mx-2" @click.stop="showAdd()" data-aid="users_create_new" :aria-label="i18n.ariaCreateUser">
 						<v-icon>fa-plus</v-icon>
 					</v-btn>
-					<v-btn icon variant="flat" @click.stop="loadData()" id="users-refresh-button" class="circle-button mx-2" data-aid="users_refresh_button">
+					<v-btn icon variant="flat" @click.stop="loadData()" id="users-refresh-button" class="circle-button mx-2" data-aid="users_refresh_button" :aria-label="i18n.ariaReloadData">
 						<v-icon>fa-sync</v-icon>
 					</v-btn>
-					<v-btn icon variant="flat" class="circle-button mx-2" :title="i18n.options" @click="showOptionsDialog = true" id="users-options-header" data-aid="users_options_button">
+					<v-btn icon variant="flat" class="circle-button mx-2" :title="i18n.options" @click="showOptionsDialog = true" id="users-options-header" data-aid="users_options_button" :aria-label="i18n.options">
 						<v-icon>fa-gear</v-icon>
 					</v-btn>
-					<v-btn icon variant="flat" class="circle-button mx-2" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'administration#users'" :title="i18n.contextualDocsBtn" data-aid="users_docs">
+					<v-btn icon variant="flat" class="circle-button mx-2" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'administration#users'" :title="i18n.contextualDocsBtn" data-aid="users_docs" :aria-label="i18n.contextualDocsBtn">
 						<v-icon>fa-circle-question</v-icon>
 					</v-btn>
 				</v-toolbar>
 			</v-row>
 			<v-dialog v-model="dialog" persistent width="800px" data-aid="users_create_dialog">
 				<v-card>
-					<v-card-title class="lighten-4 py-4 title">{{ i18n.add }} {{ i18n.user }}</v-card-title>
+					<v-card-title class="lighten-4 py-4 title" role="heading" aria-level="2">{{ i18n.add }} {{ i18n.user }}</v-card-title>
 					<v-form v-model="form.valid">
 						<v-container grid-list-sm class="pa-4">
 							<v-row>
 								<v-col xs12 class="d-flex flex-column">
-									<v-text-field id="email-input" v-model="form.email" :placeholder="i18n.email" :autofocus="true" :rules="[$root.validators.required, $root.validators.maxLength(100), $root.validators.lowercase]" data-aid="users_create_dialog_email"></v-text-field>
-									<v-text-field id="password-input" v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'" data-aid="users_create_dialog_password"
+									<v-text-field id="email-input" v-model="form.email" :label="i18n.email" :autofocus="true" :rules="[$root.validators.required, $root.validators.maxLength(100), $root.validators.lowercase]" data-aid="users_create_dialog_email"></v-text-field>
+									<v-text-field id="password-input" v-model="form.password" :label="i18n.password" :type="showPassword ? 'text' : 'password'" data-aid="users_create_dialog_password"
 										@click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'"
 										:rules="[$root.validators.required, $root.validators.maxPassLen, $root.validators.minPassLen, $root.validators.badPassChars]"></v-text-field>
 									<span data-aid="users_create_dialog_roles">
 										<v-select id="roles-select" v-model="form.role" :items="roles" :label="i18n.role" :rules="[$root.validators.required]"></v-select>
 									</span>
-									<v-text-field id="firstname-input" v-model="form.firstName" :placeholder="i18n.firstName" :rules="[$root.validators.maxLength(100)]" data-aid="users_create_dialog_firstname"></v-text-field>
-									<v-text-field id="lastname-input" v-model="form.lastName" :placeholder="i18n.lastName" :rules="[$root.validators.maxLength(100)]" data-aid="users_create_dialog_lastname"></v-text-field>
-									<v-text-field id="note-input" v-model="form.note" :placeholder="i18n.note" :rules="[$root.validators.maxLength(100)]" data-aid="users_create_dialog_note"></v-text-field>
+									<v-text-field id="firstname-input" v-model="form.firstName" :label="i18n.firstName" :rules="[$root.validators.maxLength(100)]" data-aid="users_create_dialog_firstname"></v-text-field>
+									<v-text-field id="lastname-input" v-model="form.lastName" :label="i18n.lastName" :rules="[$root.validators.maxLength(100)]" data-aid="users_create_dialog_lastname"></v-text-field>
+									<v-text-field id="note-input" v-model="form.note" :label="i18n.note" :rules="[$root.validators.maxLength(100)]" data-aid="users_create_dialog_note"></v-text-field>
 								</v-col>
 							</v-row>
 						</v-container>
@@ -64,7 +64,7 @@
 			</v-dialog>
 			<v-dialog v-model="deleteUserDialog" persistent max-width="390" data-aid="users_delete_dialog">
 				<v-card>
-					<v-card-title class="headline" v-text="i18n.deleteUserTitle"></v-card-title>
+					<v-card-title class="headline" v-text="i18n.deleteUserTitle" role="heading" aria-level="2"></v-card-title>
 					<v-card-text v-text="i18n.deleteUserConfirm"></v-card-text>
 					<v-card-text id="email-output" v-text="form.email" class="font-weight-bold"></v-card-text>
 					<v-card-text v-text="i18n.continue"></v-card-text>
@@ -81,7 +81,7 @@
 					<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
 						<tr>
 							<template v-for="header in columns" :key="header.key">
-								<th :class="{'is-sorted': isSorted(header)}" v-if="header.value != 'expand' || $root.isUserAdmin()" :data-aid="'users_details_header_' + header?.value?.toLowerCase()">
+								<th :class="{'is-sorted': isSorted(header)}" v-if="header.value != 'expand' || $root.isUserAdmin()" :data-aid="'users_details_header_' + header?.value?.toLowerCase()" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'" scope="col">
 									<span @click="toggleSort(header)">
 										{{ header.title }}
 									</span>
@@ -97,7 +97,7 @@
 					<template #item="{ item, isExpanded, toggleExpand, internalItem }">
 						<tr :class="{'seamless-expanded-row': isExpanded(internalItem), 'main-row': true}">
 							<td v-if="$root.isUserAdmin()">
-								<v-btn id="expandNode" icon variant="text" size="small" @click="if (!isExpanded(internalItem)) { updateForm(item); } toggleExpand(internalItem)" data-aid="users_details_expand">
+								<v-btn id="expandNode" icon variant="text" size="small" @click="if (!isExpanded(internalItem)) { updateForm(item); } toggleExpand(internalItem)" data-aid="users_details_expand" :aria-expanded="isExpanded(internalItem)" :aria-label="i18n.ariaExpandUser">
 									<v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="users_details_collapse">fa-angle-down</v-icon>
 									<v-icon v-else :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="users_details_expand">fa-angle-right</v-icon>
 								</v-btn>
@@ -109,11 +109,16 @@
 							<td v-text="$root.formatStringArray(item.roles)" class="d-none d-lg-table-cell"></td>
 							<td>
 								<div v-if="$root.isUserAdmin() || $root.isMyUser(item)">
-									<v-icon v-if="item.oidcStatus == 'enabled'" color="info" class="px-1" :title="i18n.oidcLinked" data-aid="users_details_link_indicator">fa-link</v-icon>
-									<v-icon v-if="item.totpStatus == 'enabled'" color="info" :title="i18n.totpActive" data-aid="users_details_totp_indicator">fa-user-shield</v-icon>
-									<v-icon v-if="item.webauthnStatus == 'unused-due-to-always-showing-enabled'" color="info" class="px-1" :title="i18n.webauthnActive" data-aid="users_details_webauthn_indicator">fa-fingerprint</v-icon>
-									<v-icon v-if="item.status == 'locked'" color="grey" :title="i18n.loginDisabled" data-aid="users_details_locked_indicator">fa-user-slash</v-icon>
-									<v-icon v-if="!item.passwordChanged && item.oidcStatus != 'enabled'" color="warning" class="px-1" :title="i18n.passwordNeedsChanged" data-aid="users_details_unmodified_indicator">fa-exclamation-triangle</v-icon>
+									<v-icon v-if="item.oidcStatus == 'enabled'" color="info" class="px-1" :title="i18n.oidcLinked" data-aid="users_details_link_indicator" aria-hidden="true">fa-link</v-icon>
+									<span class="d-sr-only">{{i18n.oidcLinked}}</span>
+									<v-icon v-if="item.totpStatus == 'enabled'" color="info" :title="i18n.totpActive" data-aid="users_details_totp_indicator" aria-hidden="true">fa-user-shield</v-icon>
+									<span class="d-sr-only">{{i18n.totpActive}}</span>
+									<v-icon v-if="item.webauthnStatus == 'unused-due-to-always-showing-enabled'" color="info" class="px-1" :title="i18n.webauthnActive" data-aid="users_details_webauthn_indicator" aria-hidden="true">fa-fingerprint</v-icon>
+									<span class="d-sr-only">{{i18n.webauthnActive}}</span>
+									<v-icon v-if="item.status == 'locked'" color="grey" :title="i18n.loginDisabled" data-aid="users_details_locked_indicator" aria-hidden="true">fa-user-slash</v-icon>
+									<span class="d-sr-only">{{i18n.loginDisabled}}</span>
+									<v-icon v-if="!item.passwordChanged && item.oidcStatus != 'enabled'" color="warning" class="px-1" :title="i18n.passwordNeedsChanged" data-aid="users_details_unmodified_indicator" aria-hidden="true">fa-exclamation-triangle</v-icon>
+									<span class="d-sr-only">{{i18n.passwordNeedsChanged}}</span>
 								</div>
 							</td>
 						</tr>
@@ -125,12 +130,12 @@
 									<v-row>
 										<v-col cols="12" lg="4">
 											<v-card>
-												<v-card-title v-text="i18n.profile"></v-card-title>
+												<v-card-title v-text="i18n.profile" role="heading" aria-level="3"></v-card-title>
 												<v-card-text>
 													<v-form v-model="form.valid">
-														<v-text-field id="firstname-input" v-model="form.firstName" :placeholder="i18n.firstName" :rules="[$root.validators.maxLength(100)]" data-aid="users_details_firstname_input"></v-text-field>
-														<v-text-field id="lastname-input" v-model="form.lastName" :placeholder="i18n.lastName" :rules="[$root.validators.maxLength(100)]" data-aid="users_details_lastname_input"></v-text-field>
-														<v-text-field id="note-input" v-model="form.note" :placeholder="i18n.note" :rules="[$root.validators.maxLength(100)]" data-aid="users_details_note_input"></v-text-field>
+														<v-text-field id="firstname-input" v-model="form.firstName" :label="i18n.firstName" :rules="[$root.validators.maxLength(100)]" data-aid="users_details_firstname_input"></v-text-field>
+														<v-text-field id="lastname-input" v-model="form.lastName" :label="i18n.lastName" :rules="[$root.validators.maxLength(100)]" data-aid="users_details_lastname_input"></v-text-field>
+														<v-text-field id="note-input" v-model="form.note" :label="i18n.note" :rules="[$root.validators.maxLength(100)]" data-aid="users_details_note_input"></v-text-field>
 
 														<v-btn id="update-profile-button" :disabled="!form.valid" @click="updateProfile(item)" v-text="i18n.update" data-aid="users_details_submit"></v-btn>
 													</v-form>
@@ -139,26 +144,28 @@
 										</v-col>
 										<v-col cols="12" lg="4">
 											<v-card>
-												<v-card-title>{{ i18n.roles }}</v-card-title>
+												<v-card-title id="roles-label" role="heading" aria-level="3">{{ i18n.roles }}</v-card-title>
 												<v-card-text data-aid="users_details_role_toggle">
-													<template v-for="role in roles" :key="role">
-														<span :data-aid="'users_details_role_toggle_' + role">
-															<v-checkbox :id="'role-checkbox-' + role" density="compact" class="no-details" :model-value="hasRole(item, role)" :label="role" @click.stop="toggleRole(item, role)"></v-checkbox>
-														</span>
-													</template>
+													<fieldset aria-labelledby="roles-label" class="no-border">
+														<template v-for="role in roles" :key="role">
+															<span :data-aid="'users_details_role_toggle_' + role">
+																<v-checkbox :id="'role-checkbox-' + role" density="compact" class="no-details" :model-value="hasRole(item, role)" :label="role" @click.stop="toggleRole(item, role)"></v-checkbox>
+															</span>
+														</template>
+													</fieldset>
 												</v-card-text>
 											</v-card>
 										</v-col>
 										<v-col cols="12" lg="4">
 											<v-card>
-												<v-card-title>{{ i18n.access }}</v-card-title>
+												<v-card-title role="heading" aria-level="3">{{ i18n.access }}</v-card-title>
 												<v-card-text>
 													<v-alert v-if="item.oidcStatus == 'enabled'" class="mt-2 multi-line" type="warning" icon="fa-shield-halved" variant="text" density="compact" data-aid="users_details_reset_password_help">
 														{{ i18n.oidcResetPasswordHelp }}
 													</v-alert>
 
 													<v-form v-model="form.valid">
-														<v-text-field id="password-input" v-model="form.password" :placeholder="i18n.passwordChange" :type="showPassword ? 'text' : 'password'" data-aid="users_details_password_input"
+														<v-text-field id="password-input" v-model="form.password" :label="i18n.passwordChange" :type="showPassword ? 'text' : 'password'" data-aid="users_details_password_input"
 															@click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'"
 															:rules="[$root.validators.required, $root.validators.maxPassLen, $root.validators.minPassLen, $root.validators.badPassChars]"></v-text-field>
 													</v-form>

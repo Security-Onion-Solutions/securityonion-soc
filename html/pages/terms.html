@@ -15,12 +15,12 @@
 			<v-tabs-window v-model="tab">
 				<v-tabs-window-item value="key">
 					<v-card variant="outlined" class="my-2 pt-2 pb-10 subtle-border">
-						<v-card-title>
+						<v-card-title role="heading" aria-level="2">
 							<span class="mr-2">
 								{{ i18n.licenseKey }}
 							</span>
 							<router-link v-if="$root.isUserAdmin()" :to="{ name: 'config', query: {s: 'soc.config.licenseKey'}}" style="text-decoration: none; cursor: 'pointer'">
-								<v-btn icon variant="text" size="small" data-aid="terms_license_edit">
+								<v-btn icon variant="text" size="small" data-aid="terms_license_edit" :aria-label="i18n.ariaEditInSettings">
 									<v-icon class="mx-2 theme-icon" :title="i18n.view">fa-pencil</v-icon>
 								</v-btn>
 							</router-link>
@@ -30,46 +30,46 @@
 								<v-container fluid id="licenseDetails1" class="licenseDetails">
 									<div>
 										<v-row class="my-1">
-											<v-col cols="3" class="pa-1 text-right font-weight-bold">{{ i18n.licenseStatus }}:</v-col>
-											<v-col cols="9" class="px-1 py-0">
+											<v-col id="license-status-label" cols="3" class="pa-1 text-right font-weight-bold">{{ i18n.licenseStatus }}:</v-col>
+											<v-col cols="9" class="px-1 py-0" aria-labelledby="license-status-label">
 												<v-chip density="compact" small :color="$root.colorLicenseStatus($root.getSelectedGridInfo().licenseStatus)">
 													{{ $root.localizeMessage($root.getSelectedGridInfo().licenseStatus) }}
 												</v-chip>
 											</v-col>
 										</v-row>
 										<v-row class="my-1">
-											<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.mgmtMac }}:</v-col>
-											<v-col cols="9" class="pa-1">
+											<v-col id="mgmt-mac-label" cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.mgmtMac }}:</v-col>
+											<v-col cols="9" class="pa-1" aria-labelledby="mgmt-mac-label">
 												{{ $root.getSelectedGridInfo().mgmtMac }}
-												<v-btn v-if="$root.getSelectedGridInfo().mgmtMac" icon variant="text" class="mx-2" density="compact" size="small" @click="$root.copyToClipboard($root.getSelectedGridInfo().mgmtMac)" data-aid="terms_license_copy_mac">
+												<v-btn v-if="$root.getSelectedGridInfo().mgmtMac" icon variant="text" class="mx-2" density="compact" size="small" @click="$root.copyToClipboard($root.getSelectedGridInfo().mgmtMac)" data-aid="terms_license_copy_mac" :aria-label="i18n.ariaCopyManagerMac">
 													<v-icon>fa-copy</v-icon>
 												</v-btn>
 											</v-col>
 										</v-row>
 										<span v-if="$root.getSelectedGridInfo().licenseKey && ($root.getSelectedGridInfo().licenseStatus != LICENSE_STATUS_UNPROVISIONED && $root.getSelectedGridInfo().licenseStatus != LICENSE_STATUS_INVALID)">
 											<v-row class="my-1">
-												<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.licenseId }}:</v-col>
-												<v-col cols="9" class="pa-1">{{ $root.getSelectedGridInfo().licenseKey.id }}</v-col>
+												<v-col id="license-id-label" cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.licenseId }}:</v-col>
+												<v-col cols="9" class="pa-1" aria-labelledby="license-id-label">{{ $root.getSelectedGridInfo().licenseKey.id }}</v-col>
 											</v-row>
 											<v-row class="my-1">
-												<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.licenseName }}:</v-col>
-												<v-col cols="9" class="pa-1">{{ $root.getSelectedGridInfo().licenseKey.name }}</v-col>
+												<v-col id="license-name-label" cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.licenseName }}:</v-col>
+												<v-col cols="9" class="pa-1" aria-labelledby="license-name-label">{{ $root.getSelectedGridInfo().licenseKey.name }}</v-col>
 											</v-row>
 											<v-row class="my-1">
-												<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.licensee }}:</v-col>
-												<v-col cols="9" class="pa-1">{{ $root.getSelectedGridInfo().licenseKey.licensee }}</v-col>
+												<v-col id="licensee-label" cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.licensee }}:</v-col>
+												<v-col cols="9" class="pa-1" aria-labelledby="licensee-label">{{ $root.getSelectedGridInfo().licenseKey.licensee }}</v-col>
 											</v-row>
 											<v-row class="my-1">
-												<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.licenseEffective }}:</v-col>
-												<v-col cols="9" class="pa-1">{{ formatDateTime($root.getSelectedGridInfo().licenseKey.effective) }}</v-col>
+												<v-col id="license-effective-label" cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.licenseEffective }}:</v-col>
+												<v-col cols="9" class="pa-1" aria-labelledby="license-effective-label">{{ formatDateTime($root.getSelectedGridInfo().licenseKey.effective) }}</v-col>
 											</v-row>
 											<v-row class="my-1">
-												<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.licenseExpiration }}:</v-col>
-												<v-col cols="9" class="pa-1">{{ formatDateTime($root.getSelectedGridInfo().licenseKey.expiration) }}</v-col>
+												<v-col id="license-expiration-label" cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.licenseExpiration }}:</v-col>
+												<v-col cols="9" class="pa-1" aria-labelledby="license-expiration-label">{{ formatDateTime($root.getSelectedGridInfo().licenseKey.expiration) }}</v-col>
 											</v-row>
 										</span>
 										<v-sheet v-else id="proFeatures" rounded="lg" class="marketing pa-4 ma-4 mx-auto" elevation="10" style="max-width: 1300px;">
-											<h3>You're missing out on some Pro features!</h3>
+											<h2>You're missing out on some Pro features!</h2>
 											<ul class="my-2">
 												<li>Onion AI</li>
 												<li>OpenID Connect 3rd-party authentication</li>
@@ -83,60 +83,64 @@
 												<li>Active Query Management</li>
 												<li>Reporting & CSV Exports</li>
 												<li>AI/LLM MCP Server</li>
-												<li>Manager of Managers*</li>
-												<li>Splunk App†</li>
-												<li>Hardware Virtualization‡</li>
+												<li>Manager of Managers<sup aria-describedby="footnote-asterisk">*</sup></li>
+												<li>Splunk App<sup aria-describedby="footnote-dagger">†</sup></li>
+												<li>Hardware Virtualization<sup aria-describedby="footnote-double-dagger">‡</sup></li>
 											</ul>
 											To learn more about these Pro features, please visit our website:
 											<a href="https://securityonion.com/pro">https://securityonion.com/pro</a>
-											<p class="mt-2">
-												* Additional licensing requirements may apply
-												<br/>
-												† Security Onion Solutions does not provide support for this feature
-												<br/>
-												‡ Available on select server hardware
-											</p>
+											<dl class="mt-2">
+												<li id="footnote-asterisk">
+													* Additional licensing requirements may apply
+												</li>
+												<li id="footnote-dagger">
+													† Security Onion Solutions does not provide support for this feature
+												</li>
+												<li id="footnote-double-dagger">
+													‡ Available on select server hardware
+												</li>
+											</dl>
 										</v-sheet>
 									</div>
 								</v-container>
 								<v-container v-if="$root.getSelectedGridInfo().licenseKey && ($root.getSelectedGridInfo().licenseStatus != LICENSE_STATUS_UNPROVISIONED && $root.getSelectedGridInfo().licenseStatus != LICENSE_STATUS_INVALID)" fluid id="licenseDetails2" class="licenseDetails">
 									<v-row class="my-1">
-										<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.userLimit }}:</v-col>
-										<v-col v-if="$root.getSelectedGridInfo().licenseKey.users > 0" cols="9" class="pa-1">{{ $root.getSelectedGridInfo().licenseKey.users }}</v-col>
-										<v-col v-else cols="9" class="pa-1">{{ i18n.unlimited }}</v-col>
+										<v-col id="user-limit-label" cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.userLimit }}:</v-col>
+										<v-col v-if="$root.getSelectedGridInfo().licenseKey.users > 0" cols="9" class="pa-1" aria-labelledby="user-limit-label">{{ $root.getSelectedGridInfo().licenseKey.users }}</v-col>
+										<v-col v-else cols="9" class="pa-1" aria-labelledby="user-limit-label">{{ i18n.unlimited }}</v-col>
 									</v-row>
 									<v-row class="my-1">
-										<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.pinnedMac }}:</v-col>
-										<v-col v-if="$root.getSelectedGridInfo().licenseKey.mgmtMac" cols="9" class="pa-1">{{ $root.getSelectedGridInfo().licenseKey.mgmtMac }}</v-col>
-										<v-col v-else cols="9" class="pa-1">{{ i18n.unlocked }}</v-col>
+										<v-col id="pinned-mac-label" cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.pinnedMac }}:</v-col>
+										<v-col v-if="$root.getSelectedGridInfo().licenseKey.mgmtMac" cols="9" class="pa-1" aria-labelledby="pinned-mac-label">{{ $root.getSelectedGridInfo().licenseKey.mgmtMac }}</v-col>
+										<v-col v-else cols="9" class="pa-1" aria-labelledby="pinned-mac-label">{{ i18n.unlocked }}</v-col>
 									</v-row>
 									<v-row class="my-1">
-										<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.nodeLimit }}:</v-col>
-										<v-col v-if="$root.getSelectedGridInfo().licenseKey.nodes > 0" cols="9" class="pa-1">{{ $root.getSelectedGridInfo().licenseKey.nodes }}</v-col>
-										<v-col v-else cols="9" class="pa-1">{{ i18n.unlimited }}</v-col>
+										<v-col id="node-limit-label" cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.nodeLimit }}:</v-col>
+										<v-col v-if="$root.getSelectedGridInfo().licenseKey.nodes > 0" cols="9" class="pa-1" aria-labelledby="node-limit-label">{{ $root.getSelectedGridInfo().licenseKey.nodes }}</v-col>
+										<v-col v-else cols="9" class="pa-1" aria-labelledby="node-limit-label">{{ i18n.unlimited }}</v-col>
 									</v-row>
 									<v-row class="my-1">
-										<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.subgridLimit }}:</v-col>
-										<v-col cols="9" class="pa-1">{{ $root.getSelectedGridInfo().licenseKey.subgrids }}</v-col>
+										<v-col id="subgrid-limit-label" cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.subgridLimit }}:</v-col>
+										<v-col cols="9" class="pa-1" aria-labelledby="subgrid-limit-label">{{ $root.getSelectedGridInfo().licenseKey.subgrids }}</v-col>
 									</v-row>
 									<v-row class="my-1">
-										<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.socUrl }}:</v-col>
-										<v-col v-if="$root.getSelectedGridInfo().licenseKey.socUrl" cols="9" class="pa-1">{{ $root.getSelectedGridInfo().licenseKey.socUrl }}</v-col>
-										<v-col v-else cols="9" class="pa-1">{{ i18n.unlocked }}</v-col>
+										<v-col id="soc-url-label" cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.socUrl }}:</v-col>
+										<v-col v-if="$root.getSelectedGridInfo().licenseKey.socUrl" cols="9" class="pa-1" aria-labelledby="soc-url-label">{{ $root.getSelectedGridInfo().licenseKey.socUrl }}</v-col>
+										<v-col v-else cols="9" class="pa-1" aria-labelledby="soc-url-label">{{ i18n.unlocked }}</v-col>
 									</v-row>
 									<v-row class="my-1">
-										<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.dataUrl }}:</v-col>
-										<v-col v-if="$root.getSelectedGridInfo().licenseKey.dataUrl" cols="9" class="pa-1">{{ $root.getSelectedGridInfo().licenseKey.dataUrl }}</v-col>
-										<v-col v-else cols="9" class="pa-1">{{ i18n.unlocked }}</v-col>
+										<v-col id="data-url-label" cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.dataUrl }}:</v-col>
+										<v-col v-if="$root.getSelectedGridInfo().licenseKey.dataUrl" cols="9" class="pa-1" aria-labelledby="data-url-label">{{ $root.getSelectedGridInfo().licenseKey.dataUrl }}</v-col>
+										<v-col v-else cols="9" class="pa-1" aria-labelledby="data-url-label">{{ i18n.unlocked }}</v-col>
 									</v-row>
 									<v-row class="my-1">
-										<v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.features }}:</v-col>
-										<v-col v-if="$root.getSelectedGridInfo().licenseKey.features" cols="9" class="pa-1">
+										<v-col id="features-label" cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.features }}:</v-col>
+										<v-col v-if="$root.getSelectedGridInfo().licenseKey.features" cols="9" class="pa-1" aria-labelledby="features-label">
 											<v-chip v-for="feature in $root.getSelectedGridInfo().licenseKey.features" v-if="$root.localizeMessage(feature) != feature" small density="compact" class="ma-1">
 												{{ $root.localizeMessage(feature) }}
 											</v-chip>
 										</v-col>
-										<v-col v-else cols="9" class="pa-1">{{ i18n.all }}</v-col>
+										<v-col v-else cols="9" class="pa-1" aria-labelledby="features-label">{{ i18n.all }}</v-col>
 									</v-row>
 								</v-container>
 							</div>
@@ -145,70 +149,70 @@
 				<v-tabs-window-item value="terms">
 					<v-card variant="outlined" class="my-4 subtle-border">
 						<v-card-text>
-							<div class="text-headline-small mt-8 mb-3">
+							<h1 class="mt-8 mb-3">
 								Elastic License 2.0 (ELv2) Terms
-							</div>
+							</h1>
 
-							<div class="text-title-large mt-8 mb-3">
+							<h2 class="mt-8 mb-3">
 								Acceptance
-							</div>
+							</h2>
 							By using the software, you agree to all of the terms and conditions below.
 
-							<div class="text-title-large mt-8 mb-3">
+							<h2 class="mt-8 mb-3">
 								Copyright License
-							</div>
+							</h2>
 							The licensor grants you a non-exclusive, royalty-free, worldwide, non-sublicensable, non-transferable license to use, copy, distribute, make available, and prepare derivative works of the software, in each case subject to the limitations and conditions below.
 
-							<div class="text-title-large mt-8 mb-3">
+							<h2 class="mt-8 mb-3">
 								Limitations
-							</div>
+							</h2>
 							You may not provide the software to third parties as a hosted or managed service, where the service provides users with access to any substantial set of the features or functionality of the software.
 							<p class="mb-3"></p>
 							You may not move, change, disable, or circumvent the license key functionality in the software, and you may not remove or obscure any functionality in the software that is protected by the license key.
 							<p class="mb-3"></p>
 							You may not alter, remove, or obscure any licensing, copyright, or other notices of the licensor in the software. Any use of the licensor’s trademarks is subject to applicable law.
 
-							<div class="text-title-large mt-8 mb-3">
+							<h2 class="mt-8 mb-3">
 								Patents
-							</div>
+							</h2>
 							The licensor grants you a license, under any patent claims the licensor can license, or becomes able to license, to make, have made, use, sell, offer for sale, import and have imported the software, in each case subject to the limitations and conditions in this license. This license does not cover any patent claims that you cause to be infringed by modifications or additions to the software. If you or your company make any written claim that the software infringes or contributes to infringement of any patent, your patent license for the software granted under these terms ends immediately. If your company makes such a claim, your patent license ends immediately for work on behalf of your company.
 
-							<div class="text-title-large mt-8 mb-3">
+							<h2 class="mt-8 mb-3">
 								Notices
-							</div>
+							</h2>
 							You must ensure that anyone who gets a copy of any part of the software from you also gets a copy of these terms.
 							<p class="mb-3"></p>
 							If you modify the software, you must include in any modified copies of the software prominent notices stating that you have modified the software.
 
-							<div class="text-title-large mt-8 mb-3">
+							<h2 class="mt-8 mb-3">
 								No Other Rights
-							</div>
+							</h2>
 							These terms do not imply any licenses other than those expressly granted in these terms.
 
-							<div class="text-title-large mt-8 mb-3">
+							<h2 class="mt-8 mb-3">
 								Termination
-							</div>
+							</h2>
 							If you use the software in violation of these terms, such use is not licensed, and your licenses will automatically terminate. If the licensor provides you with a notice of your violation, and you cease all violation of this license no later than 30 days after you receive that notice, your licenses will be reinstated retroactively. However, if you violate these terms after such reinstatement, any additional violation of these terms will cause your licenses to terminate automatically and permanently.
 
-							<div class="text-title-large mt-8 mb-3">
+							<h2 class="mt-8 mb-3">
 								No Liability
-							</div>
-							<b><i>As far as the law allows, the software comes as is, without any warranty or condition, and the licensor will not be liable to you for any damages arising out of these terms or the use or nature of the software, under any kind of legal claim.</i></b>
+							</h2>
+							<strong><em>As far as the law allows, the software comes as is, without any warranty or condition, and the licensor will not be liable to you for any damages arising out of these terms or the use or nature of the software, under any kind of legal claim.</em></strong>
 
-							<div class="text-title-large mt-8 mb-3">
+							<h2 class="mt-8 mb-3">
 								Definitions
-							</div>
-							The <b>licensor</b> is the entity offering these terms, and the <b>software</b> is the software the licensor makes available under these terms, including any portion of it.
+							</h2>
+							The <dfn>licensor</dfn> is the entity offering these terms, and the <dfn>software</dfn> is the software the licensor makes available under these terms, including any portion of it.
 							<p class="mb-3"></p>
-							<b>you</b> refers to the individual or entity agreeing to these terms.
+							<dfn>you</dfn> refers to the individual or entity agreeing to these terms.
 							<p class="mb-3"></p>
-							<b>your company</b> is any legal entity, sole proprietorship, or other kind of organization that you work for, plus all organizations that have control over, are under the control of, or are under common control with that organization. <b>control</b> means ownership of substantially all the assets of an entity, or the power to direct its management and policies by vote, contract, or otherwise. Control can be direct or indirect.
+							<dfn>your company</dfn> is any legal entity, sole proprietorship, or other kind of organization that you work for, plus all organizations that have control over, are under the control of, or are under common control with that organization. <dfn>control</dfn> means ownership of substantially all the assets of an entity, or the power to direct its management and policies by vote, contract, or otherwise. Control can be direct or indirect.
 							<p class="mb-3"></p>
-							<b>your licenses</b> are all the licenses granted to you for the software under these terms.
+							<dfn>your licenses</dfn> are all the licenses granted to you for the software under these terms.
 							<p class="mb-3"></p>
-							<b>use</b> means anything you do with the software requiring one of your licenses.
+							<dfn>use</dfn> means anything you do with the software requiring one of your licenses.
 							<p class="mb-3"></p>
-							<b>trademark</b> means trademarks, service marks, and similar rights.
+							<dfn>trademark</dfn> means trademarks, service marks, and similar rights.
 						</v-card-text>
 					</v-card>
 				</v-tabs-window-item>
