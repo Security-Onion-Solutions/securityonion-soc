@@ -480,7 +480,7 @@
 																		<v-icon class="mr-3" data-aid="playbook_grouped_ai_indicator">fa-flask</v-icon>
 																		<span v-html="i18n.playbooksAi"  data-aid="playbook_grouped_ai_text"></span>
 																	</div>
-																	<v-expansion-panels @update:model-value="expandedPlaybookQuestions[item._row_idx_] = $event" :model-value="expandedPlaybookQuestions[item._row_idx_]" variant="accordion" multiple static="true">
+																	<v-expansion-panels @update:model-value="expandedPlaybookQuestions[item._row_idx_] = $event" :model-value="expandedPlaybookQuestions[item._row_idx_]" variant="accordion" multiple :static="true">
 																		<v-expansion-panel v-for="(question, index) in item.newest.questions">
 																			<v-expansion-panel-title :class="['italic', 'ws-normal', 'spacious-lines', 'font-weight-bold', pickQuestionColor(question)]" #default="{ expanded }">
 																				<v-icon class="theme-icon mx-4" data-aid="playbook_grouped_question_title">
@@ -522,7 +522,7 @@
 																						<tbody>
 																							<tr v-for="result in question.queryResults">
 																								<td v-for="value in question.fields" data-aid="playbook_grouped_instantinsights_answer">
-																									{{ translateValue(result.payload[value]) }}<span class="resolved-host" v-if="$root.tryResolveAlias(field, value)"> - {{ $root.tryResolveAlias(field, value) }}</span>
+																									{{ translateValue(result.payload[value]) }}<span class="resolved-host" v-if="$root.tryResolveAlias(value, result.payload[value])"> - {{ $root.tryResolveAlias(value, result.payload[value]) }}</span>
 																								</td>
 																							</tr>
 																							<tr v-if="question.queryResults && question.queryResults.length === 0">
@@ -759,7 +759,7 @@
 																<v-icon class="mr-3" data-aid="playbook_ai_indicator">fa-flask</v-icon>
 																<span v-html="i18n.playbooksAi" data-aid="playbook_ai_text"></span>
 															</div>
-															<v-expansion-panels @update:model-value="expandedPlaybookQuestions[item._row_idx_] = $event" :model-value="expandedPlaybookQuestions[item._row_idx_]" variant="accordion" multiple static="true">
+															<v-expansion-panels @update:model-value="expandedPlaybookQuestions[item._row_idx_] = $event" :model-value="expandedPlaybookQuestions[item._row_idx_]" variant="accordion" multiple :static="true">
 																<v-expansion-panel v-for="(question, index) in item.questions">
 																	<v-expansion-panel-title :class="['italic', 'ws-normal', 'spacious-lines', 'font-weight-bold', pickQuestionColor(question)]" #default="{ expanded }">
 																		<v-icon class="theme-icon mx-4" data-aid="playbook_question_title">
@@ -801,7 +801,7 @@
 																				<tbody>
 																					<tr v-for="result in question.queryResults">
 																						<td v-for="value in question.fields" data-aid="playbook_instantinsights_answer">
-																							{{ translateValue(result.payload[value]) }}<span class="resolved-host" v-if="$root.tryResolveAlias(field, value)"> - {{ $root.tryResolveAlias(field, value) }}</span>
+																							{{ translateValue(result.payload[value]) }}<span class="resolved-host" v-if="$root.tryResolveAlias(value, result.payload[value])"> - {{ $root.tryResolveAlias(value, result.payload[value]) }}</span>
 																						</td>
 																					</tr>
 																					<tr v-if="question.queryResults && question.queryResults.length === 0">
