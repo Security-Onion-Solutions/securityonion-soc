@@ -105,6 +105,8 @@ type Setting struct {
 	Origin SettingOrigin `json:"origin"`
 	// DuplicatedFromID is the setting ID this setting was duplicated from, if any.
 	DuplicatedFromID string `json:"duplicatedFromId,omitempty"`
+	// An optional note explaining the reason for this configuration change.
+	Note string `json:"note,omitempty" example:"Enabling this for the new site deployment"`
 }
 
 func NewSetting(id string) *Setting {

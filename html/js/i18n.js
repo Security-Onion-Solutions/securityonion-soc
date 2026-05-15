@@ -1140,6 +1140,8 @@ const i18n = {
       settingConfirmRemoveHelp: 'Proceeding will clear out this entry\'s form values. For existing entries the final deletion will occur once the Save button (green checkmark) is pressed. Would you like to proceed?',
       settingConfirmReset: 'Reset Value',
       settingConfirmResetHelp: 'Delete this custom setting, and reset to default if available?',
+      settingNoteTitle: 'Configuration Change',
+      settingNoteHelp: 'Reason for this configuration change (optional)',
       settingAdvanced: 'Provide optional, custom configuration in YAML format. Note that improper customizations often are the cause of grid malfunctions.',
       settingDefault: 'Default Value',
       settingDeleted: 'Setting deleted/reset successfully. Changes typically apply within 15 minutes.',

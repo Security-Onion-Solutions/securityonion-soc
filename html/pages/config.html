@@ -421,4 +421,26 @@
 			</v-card-actions>
 		</v-card>
 	</v-dialog>
+	<v-dialog v-model="showNoteDialog" persistent max-width="500" data-aid="config_note_dialog">
+		<v-card>
+			<v-card-title class="text-headline-small" v-text="i18n.settingNoteTitle"></v-card-title>
+			<v-card-text>
+				<v-textarea
+					id="setting-note-input"
+					v-model="note"
+					:label="i18n.settingNoteHelp"
+					counter="4096"
+					maxlength="4096"
+					variant="outlined"
+					auto-grow
+					data-aid="config_note_input"
+				></v-textarea>
+			</v-card-text>
+			<v-card-actions>
+				<v-spacer></v-spacer>
+				<v-btn variant="text" id="config-note-save-button" @click="save()" v-text="i18n.save" data-aid="config_note_dialog_confirm"></v-btn>
+				<v-btn variant="text" id="config-note-cancel-button" @click="showNoteDialog = false; pendingSave = null" v-text="i18n.cancel" data-aid="config_note_dialog_abort"></v-btn>
+			</v-card-actions>
+		</v-card>
+	</v-dialog>
 </v-container>

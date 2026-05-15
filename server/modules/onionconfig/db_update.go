@@ -35,6 +35,7 @@ func updateSettingInDB(ctx context.Context, store dbSettingsMutator, setting *mo
 		UserID:    userID,
 		OldValue:  encodeOldValue(oldValue),
 		NewValue:  newVal,
+		Note:      setting.Note,
 	}
 
 	return store.UpdateSettingWithAudit(ctx, settingToDBRow(setting), entry, remove)
@@ -54,6 +55,7 @@ func auditSettingOnly(ctx context.Context, store dbSettingsMutator, setting *mod
 		UserID:    userID,
 		OldValue:  encodeOldValue(oldValue),
 		NewValue:  newVal,
+		Note:      setting.Note,
 	}
 
 	return store.RecordAudit(ctx, entry)

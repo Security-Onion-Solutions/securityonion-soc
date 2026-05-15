@@ -54,6 +54,9 @@ routes.push({
         confirmRemoveEntryIdx: 0,
         oldGridId: null,
         changedModules: [],
+        showNoteDialog: false,
+        note: "",
+        pendingSave: null,
       }
     },
     mounted() {
@@ -714,41 +717,53 @@ routes.push({
       this.cancel(true);
     },
     async save(setting, nodeId) {
-      if (!nodeId) {
-        if (this.form.key != setting.id) return;
-      } else {
-        if (this.form.key != nodeId) return;
+      if (!this.showNoteDialog) {
+        this.note = "";
+        this.pendingSave = { setting, nodeId };
+        this.showNoteDialog = true;
+        return;
       }
 
-      if (setting) {
+      this.showNoteDialog = false;
+      if (!this.pendingSave) return;
+      const { setting: s, nodeId: n } = this.pendingSave;
+      this.pendingSave = null;
+
+      if (!n) {
+        if (this.form.key != s.id) return;
+      } else {
+        if (this.form.key != n) return;
+      }
+
+      if (s) {
         if (this.form.value instanceof Array) {
-          this.form.value = this.form.value.join(setting.optionSeparator ? setting.optionSeparator : "\n");
-        } 
+          this.form.value = this.form.value.join(s.optionSeparator ? s.optionSeparator : "\n");
+        }
         this.form.value = "" + this.form.value; // ensure string
         this.form.value = this.form.value.trim();
-        if (!this.uiElementsHaveValidInputs(setting)) {
+        if (!this.uiElementsHaveValidInputs(s)) {
           this.$root.showWarning(this.i18n.settingIncomplete)
           return;
         }
         try {
-          this.pack(setting);
+          this.pack(s);
         } catch (e) {
           this.$root.showError(this.i18n.settingValidationFailed);
           return;
         }
-        if (setting.required && !this.form.value) {
+        if (s.required && !this.form.value) {
           this.$root.showError(this.i18n.settingValidationFailed);
           return;
         }
-        if (setting.regex) {
+        if (s.regex) {
           var test_values = [this.form.value];
-          if (setting.multiline) {
+          if (s.multiline) {
             test_values = this.form.value.split("\n");
           }
           for (var idx = 0; idx < test_values.length; idx++) {
-            const re = new RegExp(setting.regex);
+            const re = new RegExp(s.regex);
             if (!re.test(test_values[idx])) {
-              this.$root.showError(setting.regexFailureMessage ? setting.regexFailureMessage : this.i18n.settingValidationFailed);
+              this.$root.showError(s.regexFailureMessage ? s.regexFailureMessage : this.i18n.settingValidationFailed);
               return;
             }
           }
@@ -756,30 +771,31 @@ routes.push({
         this.$root.startLoading();
         try {
           const server_setting = {
-            id: setting.id,
-            nodeId: nodeId,
+            id: s.id,
+            nodeId: n,
             value: this.form.value,
-            file: setting.file,
-            syntax: setting.syntax,
+            file: s.file,
+            syntax: s.syntax,
+            note: this.note,
           };
           await this.$root.papi.put('config/', server_setting);
 
           // Update UI
-          if (!nodeId) {
-            setting.value = this.form.value
+          if (!n) {
+            s.value = this.form.value
           } else {
-            setting.nodeValues.set(nodeId, this.form.value);
+            s.nodeValues.set(n, this.form.value);
           }
 
           // Do not exit edit mode when working with UI Elements
-          if (!setting.uiElements) {
+          if (!s.uiElements) {
             this.cancel(true);
           } else {
-            this.unpack(setting);
+            this.unpack(s);
           }
 
           this.countCustomized();
-          this.notifyChangedSetting(setting);
+          this.notifyChangedSetting(s);
         } catch (error) {
           var msg = this.i18n.settingSaveError;
           if (error.response && error.response.data && error.response.data.startsWith("ERROR_")) {

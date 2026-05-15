@@ -100,3 +100,27 @@ func TestAuditSettingOnly(t *testing.T) {
 	assert.Equal(t, "yaml.key", mutator.audited[0].SettingID)
 	assert.Equal(t, "user3", mutator.audited[0].UserID)
 }
+
+func TestUpdateSettingInDB_WithNote(t *testing.T) {
+	mutator := &fakeMutator{}
+	s := model.NewSetting("soc.key")
+	s.Value = "newval"
+	s.Note = "test note"
+
+	err := updateSettingInDB(context.Background(), mutator, s, "oldval", false, "user1")
+	assert.NoError(t, err)
+	assert.Len(t, mutator.updated, 1)
+	assert.Equal(t, "test note", mutator.updated[0].audit.Note)
+}
+
+func TestAuditSettingOnly_WithNote(t *testing.T) {
+	mutator := &fakeMutator{}
+	s := model.NewSetting("yaml.key")
+	s.Value = "yamlval"
+	s.Note = "yaml note"
+
+	err := auditSettingOnly(context.Background(), mutator, s, "oldyaml", false, "user3")
+	assert.NoError(t, err)
+	assert.Len(t, mutator.audited, 1)
+	assert.Equal(t, "yaml note", mutator.audited[0].Note)
+}

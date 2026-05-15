@@ -468,10 +468,12 @@ test('save', async () => {
   comp.form.key = "s-id";
   var mock = mockPapi("put");
   await comp.save(comp.settings[0], null);
+  expect(comp.showNoteDialog).toBe(true);
+  await comp.save();
   expect(comp.settings[0].value).toBe("test-value")
   expect(comp.cancelDialog).toBe(false);
   expect(comp.form.key).toBe(null);
-  expect(mock).toHaveBeenCalledWith('config/', {"id": "s-id", "nodeId": null, "value": "test-value"});
+  expect(mock).toHaveBeenCalledWith('config/', {"id": "s-id", "nodeId": null, "value": "test-value", "note": "", "file": undefined, "syntax": undefined});
 
   // Node save
   setupSettings();
@@ -479,6 +481,8 @@ test('save', async () => {
   comp.form.key = "n2";
   mock = mockPapi("put");
   await comp.save(comp.settings[0], "n2");
+  expect(comp.showNoteDialog).toBe(true);
+  await comp.save();
   expect(comp.settings[0].value).toBe("orig-value")
   expectedNodeValues = new Map();
   expectedNodeValues.set("n1a", "abc");
@@ -487,7 +491,20 @@ test('save', async () => {
   expect(comp.settings[0].nodeValues).toStrictEqual(expectedNodeValues);
   expect(comp.cancelDialog).toBe(false);
   expect(comp.form.key).toBe(null);
-  expect(mock).toHaveBeenCalledWith('config/', {"id": "s-id", "nodeId": "n2", "value": "test-value"});
+  expect(mock).toHaveBeenCalledWith('config/', {"id": "s-id", "nodeId": "n2", "value": "test-value", "note": "", "file": undefined, "syntax": undefined});
+});
+
+test('save_with_note', async () => {
+  setupSettings();
+  comp.form.value = "test-value";
+  comp.form.key = "s-id";
+  var mock = mockPapi("put");
+  await comp.save(comp.settings[0], null);
+  expect(comp.showNoteDialog).toBe(true);
+  comp.note = "test note";
+  await comp.save();
+  expect(comp.settings[0].value).toBe("test-value")
+  expect(mock).toHaveBeenCalledWith('config/', {"id": "s-id", "nodeId": null, "value": "test-value", "note": "test note", "file": undefined, "syntax": undefined});
 });
 
 test('saveBool', async () => {
@@ -496,8 +513,10 @@ test('saveBool', async () => {
   comp.form.key = "s-id";
   var mock = mockPapi("put");
   await comp.save(comp.settings[0], null);
+  expect(comp.showNoteDialog).toBe(true);
+  await comp.save();
   expect(comp.settings[0].value).toBe("true")
-  expect(mock).toHaveBeenCalledWith('config/', {"id": "s-id", "nodeId": null, "value": "true"});
+  expect(mock).toHaveBeenCalledWith('config/', {"id": "s-id", "nodeId": null, "value": "true", "note": "", "file": undefined, "syntax": undefined});
 });
 
 test('saveRegexFailure', async () => {
@@ -557,12 +576,14 @@ test('saveRegexValidMultiline', async () => {
   const showErrorMock = mockShowError(true);
   const mock = mockPapi("put");
   await comp.save(comp.settings[0], null);
+  expect(comp.showNoteDialog).toBe(true);
+  await comp.save();
 
   expect(showErrorMock).toHaveBeenCalledTimes(0);
   expect(comp.settings[0].value).toBe("123\n456")
   expect(comp.cancelDialog).toBe(false);
   expect(comp.form.key).toBe(null);
-  expect(mock).toHaveBeenCalledWith('config/', {"id": "test.id", "nodeId": null, "value": "123\n456"});
+  expect(mock).toHaveBeenCalledWith('config/', {"id": "test.id", "nodeId": null, "value": "123\n456", "note": "", "file": undefined, "syntax": undefined});
 });
 
 test('edit', async () => {
