@@ -219,7 +219,7 @@
 											</div>
 											<div class="mx-2">
 												<v-form ref="comments" v-model="associatedForms['comments'].valid" @submit.prevent>
-													<v-textarea id="comment-input" variant="outlined" hide-details="auto" rows="5" v-model="associatedForms['comments'].description" :rules="[$root.validators.required]" class="mb-1" :label="i18n.ariaCaseComment" :hint="i18n.commentDescriptionHelp" data-aid="case_new_comment_input"></v-textarea>
+													<v-textarea id="comment-input" variant="outlined" hide-details="auto" rows="5" v-model="associatedForms['comments'].description" :rules="[$root.validators.required]" class="mb-1" :label="i18n.ariaCaseComment" persistent-hint :hint="i18n.commentDescriptionHelp" data-aid="case_new_comment_input"></v-textarea>
 													<v-row v-if="$root.isLicensed($root.FEAT_TTR)">
 														<v-col cols="4">
 															<v-text-field id="comment-hours-input" variant="outlined" v-model="associatedForms['comments'].hours" class="mb-1" persistent-hint :hint="i18n.commentHoursHelp" :rules="[$root.validators.hours]" :label="i18n.ariaCommentHours" data-aid="case_new_comment_hours_input"></v-text-field>
