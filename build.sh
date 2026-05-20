@@ -8,6 +8,8 @@
 version=${1:-dev}
 now=`date -u +%Y-%m-%dT%H:%M:%S`
 
+echo "Building $version ($now)"
+
 set -e
 
 echo "Running JS unit tests..."

@@ -1,7 +1,7 @@
 <v-container fluid data-aid="downloads_screen">
 <v-row>
 		<v-col>
-			<h3 class="my-2" v-text="i18n.downloadsElasticAgent" id="download-elasticagent"></h3>
+			<h2 class="my-2" v-text="i18n.downloadsElasticAgent" id="download-elasticagent"></h2>
 			<div class="mt-2">
 				<v-alert v-if="remoteAgentSupported && !$root.selectedGridId" id="firewallTip" type="info" v-html="i18n.downloadsFirewallTip" data-aid="downloads_fw_tip"></v-alert>
 				<v-alert v-else type="warning" id="agentUnavailable" v-html="i18n.downloadsAgentUnavailable" data-aid="downloads_agent_unavailable"></v-alert>

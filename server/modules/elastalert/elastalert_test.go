@@ -126,8 +126,12 @@ func TestCheckEnabledSigmaRule(t *testing.T) {
 }
 
 func TestElastAlertModule(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	detStore := servermock.NewMockDetectionstore(ctrl)
 	srv := &server.Server{
 		DetectionEngines: sync.Map{}, // map[model.EngineName]server.DetectionEngine{},
+		Detectionstore:   detStore,
 	}
 	mod := NewElastAlertEngine(srv)
 

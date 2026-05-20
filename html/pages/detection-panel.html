@@ -2,7 +2,7 @@
 	<div id="panel-loading-overlay" class="component-overlay" v-if="loading" data-aid="detection_panel_overlay_loading">
 		<v-container class="d-flex justify-center">
 			<div class="loading-container">
-				<img :src="'images/loading-logo' + ($root.theme.global.current.dark ? '-dark' : '') + '.svg?v=VERSION_PLACEHOLDER'" class="loading-onion" data-aid="overlay_loading_logo">
+				<img :src="'images/loading-logo' + ($root.theme.global.current.dark ? '-dark' : '') + '.svg?v=VERSION_PLACEHOLDER'" class="loading-onion" data-aid="overlay_loading_logo" :alt="i18n.ariaLoading">
 			</div>
 		</v-container>
 	</div>
@@ -15,12 +15,12 @@
 					</h3>
 				</v-expansion-panel-title>
 				<v-expansion-panel-text>
-					<h3 class="my-2 hard-wrap" data-aid="detection_panel_title">
+					<h4 class="my-2 hard-wrap" data-aid="detection_panel_title">
 						<v-icon class="va-baseline" color="success" data-aid="detection_panel_title_thumbtack">fa-thumbtack</v-icon>
 						{{detection.title}}
-					</h3>
+					</h4>
 					<div class="contrast-bg pa-4">
-						<div class="header">{{i18n.summary}} <v-icon v-if="showAiSummary()" :title="i18n.aiGenSummary" class="unset-vertical-align" data-aid="detection_summary_ai_indicator">fa-flask</v-icon></div>
+						<div class="header" role="heading" aria-level="4">{{i18n.summary}} <v-icon v-if="showAiSummary()" :title="i18n.aiGenSummary" class="unset-vertical-align" data-aid="detection_summary_ai_indicator">fa-flask</v-icon></div>
 						<div class="summary hard-wrap" data-aid="detection_panel_ai_summary_display" v-if="showAiSummary()">
 							{{ detection.aiSummary }}
 							<div class="font-weight-thin mt-2" v-if="detection.isAiSummaryStale" data-aid="detection_panel_summary_stale">
@@ -32,7 +32,7 @@
 						</div>
 					</div>
 					<div class="quicklinks pt-2">
-						<v-btn id="detection-panel-ack" icon variant="text" size="small" @click="ack(false)" data-aid="detection_panel_ack" :title="i18n.alertAcknowledge">
+						<v-btn id="detection-panel-ack" icon variant="text" size="small" @click="ack(false)" data-aid="detection_panel_ack" :title="i18n.alertAcknowledge" :aria-label="i18n.alertAcknowledge">
 							<v-icon :color="ackColor">
 								<span>
 									<i class="fas fa-bell fa-stack-1x"></i>
@@ -40,7 +40,7 @@
 								</span>
 							</v-icon>
 						</v-btn>
-						<v-btn id="detection-panel-escalate" icon variant="text" size="small" @click="escalate($event)" data-aid="detection_panel_escalate" :title="i18n.escalate">
+						<v-btn id="detection-panel-escalate" icon variant="text" size="small" @click="escalate($event)" data-aid="detection_panel_escalate" :title="i18n.escalate" :aria-label="i18n.escalate">
 							<v-icon color="primary">
 								<span>
 									<i class="fas fa-triangle-exclamation fa-stack-1x"></i>
@@ -48,17 +48,17 @@
 								</span>
 							</v-icon>
 						</v-btn>
-						<v-btn id="detection-panel-open" icon variant="text" size="small" class="no-link" :to="{name:'detection',params: {id:detection.id}}" target="_blank" data-aid="detection_panel_open_detection" :title="i18n.viewDetection">
+						<v-btn id="detection-panel-open" icon variant="text" size="small" class="no-link" :to="{name:'detection',params: {id:detection.id}}" target="_blank" data-aid="detection_panel_open_detection" :title="i18n.viewDetection" :aria-label="i18n.viewDetection">
 							<v-icon color="primary">fa-magnifying-glass</v-icon>
 						</v-btn>
 					</div>
 					<div class="pa-4">
 						<span>
-							<div class="ops-header mt-0">
+							<div id="status-label" class="ops-header mt-0">
 								{{ i18n.status }}: {{ detection.isEnabled ? i18n.enabled : i18n.disabled }}
 							</div>
 							<div data-aid="detection_panel_enabled_toggle">
-								<v-switch id="detection-enabled-edit" inset v-model="detection.isEnabled" class="no-details" @change="toggleStatus()"></v-switch>
+								<v-switch id="detection-enabled-edit" inset v-model="detection.isEnabled" class="no-details" @change="toggleStatus()" aria-labelledby="status-label"></v-switch>
 							</div>
 						</span>
 					</div>
@@ -74,7 +74,7 @@
 					<v-row v-if="canAddOverride()">
 						<v-col>
 							<v-toolbar class="so-toolbar elevation-0" fixed>
-								<v-btn icon variant="flat" class="circle-button mx-2" id="add-override-button" style="text-decoration: none; cursor: 'pointer'" @click="createNewOverride()" data-aid="detection_panel_new_override">
+								<v-btn icon variant="flat" class="circle-button mx-2" id="add-override-button" @click="createNewOverride()" data-aid="detection_panel_new_override" :aria-label="i18n.ariaCreateOverride">
 									<v-icon :title="i18n.create">fa-plus</v-icon>
 								</v-btn>
 							</v-toolbar>
@@ -83,32 +83,32 @@
 					<div v-if="newOverride != null" class="ma-3">
 						<v-form ref="OverrideCreate" v-model="newOverrideValid">
 							<span data-aid="detection_panel_new_override_type_select">
-								<v-select id="new-override-type" v-model="newOverride.type" :items="overrideTypes[this.detection.engine]" persistent-hint :hint="i18n.type"></v-select>
+								<v-select id="new-override-type" v-model="newOverride.type" :items="overrideTypes[this.detection.engine]" :label="i18n.type"></v-select>
 							</span>
 							<div v-if="!!newOverride.type && detection.engine === 'suricata'">
-								<v-text-field v-if="newOverride.type === 'modify'" id="new-override-regex-edit" v-model="newOverride.regex" :rules="[rules.required]" persistent-hint :hint="i18n.regex" data-aid="detection_panel_new_override_regex_input"></v-text-field>
-								<v-text-field v-if="newOverride.type === 'modify'" id="new-override-value-edit" v-model="newOverride.value" :rules="[rules.required]" persistent-hint :hint="i18n.value" data-aid="detection_panel_new_override_value_input"></v-text-field>
+								<v-text-field v-if="newOverride.type === 'modify'" id="new-override-regex-edit" v-model="newOverride.regex" :rules="[$root.validators.required]" :label="i18n.regex" data-aid="detection_panel_new_override_regex_input"></v-text-field>
+								<v-text-field v-if="newOverride.type === 'modify'" id="new-override-value-edit" v-model="newOverride.value" :rules="[$root.validators.required]" :label="i18n.value" data-aid="detection_panel_new_override_value_input"></v-text-field>
 								<span data-aid="detection_panel_new_override_threshold_type_select">
-									<v-select v-if="newOverride.type === 'threshold'" id="new-override-threshold-type-edit" v-model="newOverride.thresholdType" :items="thresholdTypes" :rules="[rules.required]" persistent-hint :hint="i18n.thresholdType"></v-select>
+									<v-select v-if="newOverride.type === 'threshold'" id="new-override-threshold-type-edit" v-model="newOverride.thresholdType" :items="thresholdTypes" :rules="[$root.validators.required]" :label="i18n.thresholdType"></v-select>
 								</span>
 								<span data-aid="detection_panel_new_override_track_type_select">
-									<v-select v-if="['threshold', 'suppress'].includes(newOverride.type)" id="new-override-track-edit" v-model="newOverride.track" :items="trackOptions[newOverride.type]" :rules="[rules.required]" persistent-hint :hint="i18n.track"></v-select>
+									<v-select v-if="['threshold', 'suppress'].includes(newOverride.type)" id="new-override-track-edit" v-model="newOverride.track" :items="trackOptions[newOverride.type]" :rules="[$root.validators.required]" :label="i18n.track"></v-select>
 								</span>
-								<v-text-field v-if="newOverride.type === 'suppress'" id="new-override-ip-edit" v-model="newOverride.ip" :rules="[rules.required, rules.cidrFormat]" persistent-hint :hint="i18n.ipCidr" data-aid="detection_panel_new_override_suppress_ip_input">
+								<v-text-field v-if="newOverride.type === 'suppress'" id="new-override-ip-edit" v-model="newOverride.ip" :rules="[$root.validators.required, $root.validators.cidrFormat]" :label="i18n.ipCidr" data-aid="detection_panel_new_override_suppress_ip_input">
 									<template #append>
-										<router-link class="theme-icon" :to="{ name: 'config', query: { s: 'suricata.config.vars', a: '1', e: '1' }}" target="_blank" data-aid="detection_panel_new_override_ip_edit_config_shortcut">
+										<router-link class="theme-icon" :to="{ name: 'config', query: { s: 'suricata.config.vars', a: '1', e: '1' }}" target="_blank" data-aid="detection_panel_new_override_ip_edit_config_shortcut" :aria-label="i18n.ariaSuricataVars">
 											<v-icon>fa fa-gear</v-icon>
 										</router-link>
 									</template>
 								</v-text-field>
-								<v-text-field v-if="newOverride.type === 'threshold'" id="new-override-count-edit" v-model="newOverride.count" :rules="[rules.required, rules.number]" persistent-hint :hint="i18n.count" data-aid="detection_panel_new_override_threshold_count_input"></v-text-field>
-								<v-text-field v-if="newOverride.type === 'threshold'" id="new-override-seconds-edit" v-model="newOverride.seconds" :rules="[rules.required, rules.number]" persistent-hint :hint="i18n.secondsLabel" data-aid="detection_panel_new_override_threshold_seconds_input"></v-text-field>
+								<v-text-field v-if="newOverride.type === 'threshold'" id="new-override-count-edit" v-model="newOverride.count" :rules="[$root.validators.required, $root.validators.number]" :label="i18n.count" data-aid="detection_panel_new_override_threshold_count_input"></v-text-field>
+								<v-text-field v-if="newOverride.type === 'threshold'" id="new-override-seconds-edit" v-model="newOverride.seconds" :rules="[$root.validators.required, $root.validators.number]" :label="i18n.secondsLabel" data-aid="detection_panel_new_override_threshold_seconds_input"></v-text-field>
 							</div>
 							<div v-if="!!newOverride.type && detection.engine === 'elastalert'">
-								<v-textarea v-if="newOverride.type === 'customFilter'" id="new-override-custom-filter-edit" v-model="newOverride.customFilter" :rules="[rules.required]" auto-grow rows="2" persistent-hint :hint="i18n.customFilter" data-aid="detection_panel_new_override_filter_input"></v-textarea>
+								<v-textarea v-if="newOverride.type === 'customFilter'" id="new-override-custom-filter-edit" v-model="newOverride.customFilter" :rules="[$root.validators.required]" auto-grow rows="2" :label="i18n.customFilter" data-aid="detection_panel_new_override_filter_input"></v-textarea>
 							</div>
 							<div v-if="!!newOverride.type">
-								<v-text-field id="new-override-note-edit" v-model="newOverride.note" :rules="[rules.noteLengthLimit]" persistent-hint :hint="i18n.note" data-aid="detection_panel_new_override_note_input"></v-text-field>
+								<v-text-field id="new-override-note-edit" v-model="newOverride.note" :rules="[$root.validators.noteLengthLimit]" :label="i18n.note" data-aid="detection_panel_new_override_note_input"></v-text-field>
 							</div>
 							<div v-if="newOverride" class="d-flex align-center align-self-end text-body-2 mt-2">
 								<div class="justify-end">
@@ -118,7 +118,7 @@
 									<v-btn v-if="newOverride.type" id="detection-create-create" :disabled="!newOverrideValid" variant="text" size="small" color="primary" class="align-self-end" @click="addNewOverride()" data-aid="detection_panel_new_override_save">
 										{{ i18n.create }}
 									</v-btn>
-									<v-btn variant="text" size="small" icon class="theme-text" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'detections#managing-detections'" :title="i18n.overrideDocumentationHelp" data-aid="detection_panel_override_help_new">
+									<v-btn variant="text" size="small" icon class="theme-text" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'detections#managing-detections'" :title="i18n.overrideDocumentationHelp" data-aid="detection_panel_override_help_new" :aria-label="i18n.ariaHelpLink">
 										<v-icon class="mb-1">fa-regular fa-circle-question</v-icon>
 									</v-btn>
 								</div>
@@ -130,7 +130,7 @@
 						<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
 							<tr>
 								<template v-for="header in columns" :key="header.key">
-									<th :class="{'is-sorted': isSorted(header)}" :data-aid="'detections_panel_overrides_' + header?.value?.toLowerCase()">
+									<th :class="{'is-sorted': isSorted(header)}" :data-aid="'detections_panel_overrides_' + header?.value?.toLowerCase()" scope="col" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'">
 										<template v-if="header.key">
 											<span @click="toggleSort(header)">
 												{{ header.title }}
@@ -148,7 +148,7 @@
 						<template #item="{ item, index, isExpanded, toggleExpand, internalItem }">
 							<tr :class="{'seamless-expanded-row': isExpanded(internalItem), 'main-row': true}">
 								<td>
-									<v-btn id="expandOverrideArrow" icon variant="text" size="small" @click="toggleExpand(internalItem)">
+									<v-btn id="expandOverrideArrow" icon variant="text" size="small" @click="toggleExpand(internalItem)" :aria-expanded="isExpanded(internalItem)" :aria-label="i18n.ariaExpandOverride">
 										<v-icon v-if="isExpanded(internalItem)" :alt="i18n.overrideExpand" :title="i18n.eventExpandHelp" data-aid="detection_panel_overrides_collapse">fa-angle-down</v-icon>
 										<v-icon v-else :alt="i18n.overrideExpand" :title="i18n.eventExpandHelp" data-aid="detection_panel_overrides_expand">fa-angle-right</v-icon>
 									</v-btn>
@@ -168,22 +168,22 @@
 							<tr class="expanded-row">
 								<td :colspan="columns.length" class="pa-4" v-if="detection.engine === 'suricata'">
 									<div data-aid="detection_panel_override_enabled_toggle">
-										<div class="font-weight-bold mt-4">
+										<div id="enabled-label" class="font-weight-bold mt-4">
 											{{i18n.enabled}}: {{item.isEnabled}}
 										</div>
 										<v-switch id="override-enabled-edit" ref="override-enabled" hide-details="auto" v-model="item.isEnabled"
-											inset @change="saveDetection(false)"></v-switch>
+											inset @change="saveDetection(false)" aria-labelledby="enabled-label"></v-switch>
 									</div>
 									<div v-if="item.type === 'modify'" @click="startOverrideEdit('override-regex', item, 'regex')" :class="{ clicktoedit: !isOverrideEdit('override-regex') }">
-										<div class="font-weight-bold mt-4">
+										<div id="regex-label" class="font-weight-bold mt-4">
 											{{i18n.regex}}:
 										</div>
-										<span id="override-regex" v-if="!isOverrideEdit('override-regex')">
+										<span id="override-regex" v-if="!isOverrideEdit('override-regex')" aria-labelledby="regex-label">
 											{{item.regex}}
 										</span>
 										<span v-else>
-											<v-text-field id="override-regex-edit" ref="override-regex" hide-details="auto" outlined v-model="item.regex" :rules="[rules.required]"
-												persistent-hint :hint="i18n.regex" @keyup.enter="isFieldValid('override-regex') && stopOverrideEdit(true)" @keyup.esc="stopOverrideEdit(false)" data-aid="detection_panel_override_regex_input"></v-text-field>
+											<v-text-field id="override-regex-edit" ref="override-regex" hide-details="auto" outlined v-model="item.regex" :rules="[$root.validators.required]"
+												aria-labelledby="regex-label" @keyup.enter="isFieldValid('override-regex') && stopOverrideEdit(true)" @keyup.esc="stopOverrideEdit(false)" data-aid="detection_panel_override_regex_input"></v-text-field>
 											<div id="override-count-regex-buttons">
 												<v-btn @click.stop="stopOverrideEdit(false)" variant="text" size="small" class="align-self-end" data-aid="detection_panel_override_regex_cancel">
 													{{ i18n.cancel }}
@@ -195,15 +195,15 @@
 										</span>
 									</div>
 									<div v-if="item.type === 'modify'" @click="startOverrideEdit('override-value', item, 'value')" :class="{ clicktoedit: !isOverrideEdit('override-value') }">
-										<div class="font-weight-bold mt-4">
+										<div id="value-label" class="font-weight-bold mt-4">
 											{{i18n.value}}:
 										</div>
-										<span id="override-value" v-if="!isOverrideEdit('override-value')">
+										<span id="override-value" v-if="!isOverrideEdit('override-value')" aria-labelledby="value-label">
 											{{item.value}}
 										</span>
 										<span v-else>
-											<v-text-field variant="outlined" id="override-value-edit" ref="override-value" hide-details="auto" v-model="item.value" :rules="[rules.required]"
-												persistent-hint :hint="i18n.value" @keyup.enter="isFieldValid('override-value') && stopOverrideEdit(true)" @keyup.esc="stopOverrideEdit(false)" data-aid="detection_panel_override_value_input"></v-text-field>
+											<v-text-field variant="outlined" id="override-value-edit" ref="override-value" hide-details="auto" v-model="item.value" :rules="[$root.validators.required]"
+												aria-labelledby="value-label" @keyup.enter="isFieldValid('override-value') && stopOverrideEdit(true)" @keyup.esc="stopOverrideEdit(false)" data-aid="detection_panel_override_value_input"></v-text-field>
 											<div id="override-value-edit-buttons">
 												<v-btn @click.stop="stopOverrideEdit(false)" variant="text" size="small" class="align-self-end" data-aid="detection_panel_override_value_cancel">
 													{{ i18n.cancel }}
@@ -215,35 +215,35 @@
 										</span>
 									</div>
 									<div v-if="item.type === 'threshold'" @click="startOverrideEdit('override-threshold-type', item, 'thresholdType')" :class="{ clicktoedit: !isOverrideEdit('override-threshold-type') }" data-aid="detection_panel_override_threshold_type_select">
-										<div class="font-weight-bold mt-4">
+										<div id="threshold-type-label" class="font-weight-bold mt-4">
 											{{i18n.type}}:
 										</div>
-										<span id="override-threshold-type" v-if="!isOverrideEdit('override-threshold-type')">
+										<span id="override-threshold-type" v-if="!isOverrideEdit('override-threshold-type')" aria-labelledby="threshold-type-label">
 											{{item.thresholdType}}
 										</span>
-										<v-select v-else id="override-threshold-type-edit" ref="override-threshold-type" v-model="item.thresholdType" :items="thresholdTypes" :rules="[rules.required]" persistent-hint :hint="i18n.type" @update:model-value="stopOverrideEdit(true)"></v-select>
+										<v-select v-else id="override-threshold-type-edit" ref="override-threshold-type" v-model="item.thresholdType" :items="thresholdTypes" :rules="[$root.validators.required]" aria-labelledby="threshold-type-label" @update:model-value="stopOverrideEdit(true)"></v-select>
 									</div>
 									<div v-if="['suppress', 'threshold'].includes(item.type)" @click="startOverrideEdit('override-track', item, 'track')" :class="{ clicktoedit: !isOverrideEdit('override-track') }" data-aid="detection_panel_override_threshold_track_select">
-										<div class="font-weight-bold mt-4">
+										<div id="track-label" class="font-weight-bold mt-4">
 											{{i18n.track}}:
 										</div>
-										<span id="override-track" v-if="!isOverrideEdit('override-track')">
+										<span id="override-track" v-if="!isOverrideEdit('override-track')" aria-labelledby="track-label">
 											{{item.track}}
 										</span>
-										<v-select v-else id="override-track-edit" ref="override-track" v-model="item.track" :items="trackOptions[item.type]" :rules="[rules.required]" persistent-hint :hint="i18n.type" @update:model-value="stopOverrideEdit(true)"></v-select>
+										<v-select v-else id="override-track-edit" ref="override-track" v-model="item.track" :items="trackOptions[item.type]" :rules="[$root.validators.required]" aria-labelledby="track-label" @update:model-value="stopOverrideEdit(true)"></v-select>
 									</div>
 									<div v-if="item.type === 'suppress'" @click="startOverrideEdit('override-ip', item, 'ip')" :class="{ clicktoedit: !isOverrideEdit('override-ip') }">
-										<div class="font-weight-bold mt-4">
+										<div id="ip-label" class="font-weight-bold mt-4">
 											{{i18n.ip}}:
 										</div>
-										<span id="override-ip" v-if="!isOverrideEdit('override-ip')">
+										<span id="override-ip" v-if="!isOverrideEdit('override-ip')" aria-labelledby="ip-label">
 											{{item.ip}}
 										</span>
 										<span v-else>
-											<v-text-field id="override-ip-edit" ref="override-ip" hide-details="auto" variant="outlined" v-model="item.ip" :rules="[rules.required, rules.cidrFormat]"
-												persistent-hint :hint="i18n.ipCidr" @keyup.enter="isFieldValid('override-ip') && stopOverrideEdit(true)" @keyup.esc="stopOverrideEdit(false)" data-aid="detection_panel_override_suppress_ip_input">
+											<v-text-field id="override-ip-edit" ref="override-ip" hide-details="auto" variant="outlined" v-model="item.ip" :rules="[$root.validators.required, $root.validators.cidrFormat]"
+												aria-labelledby="ip-label" @keyup.enter="isFieldValid('override-ip') && stopOverrideEdit(true)" @keyup.esc="stopOverrideEdit(false)" data-aid="detection_panel_override_suppress_ip_input">
 											<template #append>
-												<router-link class="theme-icon" :to="{ name: 'config', query: { s: 'suricata.config.vars', a: '1', e: '1' }}" target="_blank" data-aid="detection_panel_override_ip_edit_config_shortcut">
+												<router-link class="theme-icon" :to="{ name: 'config', query: { s: 'suricata.config.vars', a: '1', e: '1' }}" target="_blank" data-aid="detection_panel_override_ip_edit_config_shortcut" :aria-label="i18n.ariaSuricataVars">
 													<v-icon>fa fa-gear</v-icon>
 												</router-link>
 											</template>
@@ -259,15 +259,15 @@
 										</span>
 									</div>
 									<div v-if="item.type === 'threshold'" @click="startOverrideEdit('override-count', item, 'count')" :class="{ clicktoedit: !isOverrideEdit('override-count') }">
-										<div class="font-weight-bold mt-4">
+										<div id="count-label" class="font-weight-bold mt-4">
 											{{i18n.count}}:
 										</div>
-										<span id="override-count" v-if="!isOverrideEdit('override-count')">
+										<span id="override-count" v-if="!isOverrideEdit('override-count')" aria-labelledby="count-label">
 											{{item.count}}
 										</span>
 										<span v-else>
-											<v-text-field id="override-count-edit" ref="override-count" hide-details="auto" variant="outlined" v-model="item.count" :rules="[rules.required, rules.number]"
-												persistent-hint :hint="i18n.count" @keyup.enter="isFieldValid('override-count') && stopOverrideEdit(true)" @keyup.esc="stopOverrideEdit(false)" data-aid="detection_panel_override_threshold_count_input"></v-text-field>
+											<v-text-field id="override-count-edit" ref="override-count" hide-details="auto" variant="outlined" v-model="item.count" :rules="[$root.validators.required, $root.validators.number]"
+												aria-labelledby="count-label" @keyup.enter="isFieldValid('override-count') && stopOverrideEdit(true)" @keyup.esc="stopOverrideEdit(false)" data-aid="detection_panel_override_threshold_count_input"></v-text-field>
 											<div id="override-count-edit-buttons">
 												<v-btn @click.stop="stopOverrideEdit(false)" variant="text" size="small" class="align-self-end" data-aid="detection_panel_override_count_cancel">
 													{{ i18n.cancel }}
@@ -279,15 +279,15 @@
 										</span>
 									</div>
 									<div v-if="item.type === 'threshold'" @click="startOverrideEdit('override-seconds', item, 'seconds')" :class="{ clicktoedit: !isOverrideEdit('override-seconds') }">
-										<div class="font-weight-bold mt-4">
+										<div id="seconds-label" class="font-weight-bold mt-4">
 											{{i18n.secondsLabel}}:
 										</div>
-										<span id="override-seconds" v-if="!isOverrideEdit('override-seconds')">
+										<span id="override-seconds" v-if="!isOverrideEdit('override-seconds')" aria-labelledby="seconds-label">
 											{{item.seconds}}
 										</span>
 										<span v-else>
-											<v-text-field id="override-seconds-edit" ref="override-seconds" hide-details="auto" variant="outlined" v-model="item.seconds" :rules="[rules.required, rules.number]"
-												persistent-hint :hint="i18n.secondsLabel" @keyup.enter="isFieldValid('override-seconds') && stopOverrideEdit(true)" @keyup.esc="stopOverrideEdit(false)" data-aid="detection_panel_override_threshold_seconds_input"></v-text-field>
+											<v-text-field id="override-seconds-edit" ref="override-seconds" hide-details="auto" variant="outlined" v-model="item.seconds" :rules="[$root.validators.required, $root.validators.number]"
+												aria-labelledby="seconds-label" @keyup.enter="isFieldValid('override-seconds') && stopOverrideEdit(true)" @keyup.esc="stopOverrideEdit(false)" data-aid="detection_panel_override_threshold_seconds_input"></v-text-field>
 											<div id="override-seconds-edit-buttons">
 												<v-btn @click.stop="stopOverrideEdit(false)" variant="text" size="small" class="align-self-end" data-aid="detection_panel_override_seconds_cancel">
 													{{ i18n.cancel }}
@@ -299,15 +299,15 @@
 										</span>
 									</div>
 									<div @click="startOverrideEdit('override-note', item, 'note')" :class="{ clicktoedit: !isOverrideEdit('override-note') }">
-										<div class="font-weight-bold mt-4">
+										<div id="note-label" class="font-weight-bold mt-4">
 											{{i18n.note}}:
 										</div>
-										<span id="override-note" v-if="!isOverrideEdit('override-note')">
+										<span id="override-note" v-if="!isOverrideEdit('override-note')" aria-labelledby="note-label">
 											{{item.note}}
 										</span>
 										<span v-else>
-											<v-text-field variant="outlined" id="override-note-edit" ref="override-note" hide-details="auto" v-model="item.note" :rules="[rules.noteLengthLimit]"
-												persistent-hint :hint="i18n.note" @keyup.enter="isFieldValid('override-note') && stopOverrideEdit(true, () => { this.saveOverrideNote(item) })" @keyup.esc="stopOverrideEdit(false)" data-aid="detection_panel_override_note_input"></v-text-field>
+											<v-text-field variant="outlined" id="override-note-edit" ref="override-note" hide-details="auto" v-model="item.note" :rules="[$root.validators.noteLengthLimit]"
+												aria-labelledby="note-label" @keyup.enter="isFieldValid('override-note') && stopOverrideEdit(true, () => { this.saveOverrideNote(item) })" @keyup.esc="stopOverrideEdit(false)" data-aid="detection_panel_override_note_input"></v-text-field>
 											<div id="override-note-edit-buttons">
 												<v-btn @click.stop="stopOverrideEdit(false)" variant="text" size="small" class="align-self-end" data-aid="detection_panel_override_note_cancel">
 													{{ i18n.cancel }}
@@ -320,10 +320,10 @@
 									</div>
 									<div class="d-flex justify-end text-body-2 mt-4">
 										<div class="d-inline-flex">
-											<v-btn variant="text" size="small" icon :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'nids#managing-nids-rules'" :title="i18n.overrideDocumentationHelp" data-aid="detection_override_help_suricata">
+											<v-btn variant="text" size="small" icon :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'nids#managing-nids-rules'" :title="i18n.overrideDocumentationHelp" data-aid="detection_override_help_suricata" :aria-label="i18n.ariaHelpLink">
 												<v-icon>fa-regular fa-circle-question</v-icon>
 											</v-btn>
-											<v-btn @click="deleteOverride(item)" variant="text" size="small" icon :title="i18n.overrideDeleteHelp" @click="deleteOverride(item)" data-aid="detection_panel_override_edit_delete_suricata">
+											<v-btn @click="deleteOverride(item)" variant="text" size="small" icon :title="i18n.overrideDeleteHelp" @click="deleteOverride(item)" data-aid="detection_panel_override_edit_delete_suricata" :aria-label="i18n.ariaOverrideDelete">
 												<v-icon color="red">fa-circle-xmark</v-icon>
 											</v-btn>
 										</div>
@@ -331,23 +331,23 @@
 								</td>
 								<td :colspan="overrideHeaders[detection.engine].length" class="pa-4" v-else-if="detection.engine === 'elastalert'">
 									<div @click="startOverrideEdit('override-enabled', item, 'isEnabled')" :class="{ clicktoedit: !isOverrideEdit('override-enabled') }" data-aid="detection_panel_override_enabled_toggle">
-										<div class="font-weight-bold mt-2">
+										<div id="enabled-label" class="font-weight-bold mt-2">
 											{{i18n.enabled}}: {{item.isEnabled}}
 										</div>
 										<v-switch id="override-enabled-edit" ref="override-enabled" hide-details="auto" v-model="item.isEnabled"
-											inset @change="saveDetection(false)"></v-switch>
+											inset @change="saveDetection(false)" :aria-label="i18n.ariaOverrideStatus" aria-labelledby="enabled-label"></v-switch>
 									</div>
 									<div @click="startOverrideEdit('override-custom-filter', item, 'customFilter')" :class="{ clicktoedit: !isOverrideEdit('override-custom-filter') }">
-										<div class="font-weight-bold mt-2">
+										<div id="custom-filter-label" class="font-weight-bold mt-2">
 											{{i18n.customFilter}}:
 										</div>
-										<span id="override-custom-filter" v-if="!isOverrideEdit('override-custom-filter')">
+										<span id="override-custom-filter" v-if="!isOverrideEdit('override-custom-filter')" aria-labelledby="custom-filter-label">
 											<pre>{{item.customFilter}}</pre>
 										</span>
 										<span v-else>
 											<span data-aid="detection_panel_override_filter_input">
-												<v-textarea id="override-custom-filter-edit" ref="override-custom-filter" hide-details="auto" rows="2" auto-grow v-model="item.customFilter" :rules="[rules.required]"
-												persistent-hint :hint="i18n.customFilter" @keyup.esc="stopOverrideEdit(false)"></v-textarea>
+												<v-textarea id="override-custom-filter-edit" ref="override-custom-filter" hide-details="auto" rows="2" auto-grow v-model="item.customFilter" :rules="[$root.validators.required]"
+												aria-labelledby="custom-filter-label" @keyup.esc="stopOverrideEdit(false)"></v-textarea>
 											</span>
 											<div id="override-filter-edit-buttons">
 												<v-btn @click.stop="stopOverrideEdit(false)" variant="text" size="small" class="align-self-end" data-aid="detection_panel_override_filter_cancel">
@@ -360,15 +360,15 @@
 										</span>
 									</div>
 									<div @click="startOverrideEdit('override-note', item, 'note')" :class="{ clicktoedit: !isOverrideEdit('override-note') }">
-										<div class="font-weight-bold mt-4">
+										<div id="note-label" class="font-weight-bold mt-4">
 											{{i18n.note}}:
 										</div>
-										<span id="override-note" v-if="!isOverrideEdit('override-note')">
+										<span id="override-note" v-if="!isOverrideEdit('override-note')" aria-labelledby="note-label">
 											{{item.note}}
 										</span>
 										<span v-else>
-											<v-text-field variant="outlined" id="override-note-edit" ref="override-note" hide-details="auto" v-model="item.note" :rules="[rules.noteLengthLimit]"
-												persistent-hint :hint="i18n.note" @keyup.enter="isFieldValid('override-note') && stopOverrideEdit(true, () => { this.saveOverrideNote(item) })" @keyup.esc="stopOverrideEdit(false)" data-aid="detection_panel_override_note_input" :maxlength="MAX_OVERRIDE_NOTE_LENGTH"></v-text-field>
+											<v-text-field variant="outlined" id="override-note-edit" ref="override-note" hide-details="auto" v-model="item.note" :rules="[$root.validators.noteLengthLimit]"
+												aria-labelledby="note-label" @keyup.enter="isFieldValid('override-note') && stopOverrideEdit(true, () => { this.saveOverrideNote(item) })" @keyup.esc="stopOverrideEdit(false)" data-aid="detection_panel_override_note_input" :maxlength="MAX_OVERRIDE_NOTE_LENGTH"></v-text-field>
 											<div id="override-note-edit-buttons">
 												<v-btn @click.stop="stopOverrideEdit(false)" variant="text" size="small" class="align-self-end" data-aid="detection_panel_override_note_cancel">
 													{{ i18n.cancel }}
@@ -381,10 +381,10 @@
 									</div>
 									<div class="d-flex justify-end text-body-2 mt-2">
 										<div class="d-inline-flex">
-											<v-btn variant="text" size="small" icon :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'sigma#managing-sigma-rules'" :title="i18n.overrideDocumentationHelp" data-aid="detection_panel_override_help_elastalert">
+											<v-btn variant="text" size="small" icon :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'sigma#managing-sigma-rules'" :title="i18n.overrideDocumentationHelp" data-aid="detection_panel_override_help_elastalert" :aria-label="i18n.ariaHelpLink">
 												<v-icon>fa-regular fa-circle-question</v-icon>
 											</v-btn>
-											<v-btn @click="deleteOverride(item)" variant="text" size="small" icon :title="i18n.overrideDeleteHelp" data-aid="detection_panel_override_edit_delete_elastalert">
+											<v-btn @click="deleteOverride(item)" variant="text" size="small" icon :title="i18n.overrideDeleteHelp" data-aid="detection_panel_override_edit_delete_elastalert" :aria-label="i18n.ariaOverrideDelete">
 												<v-icon color="red">fa-circle-xmark</v-icon>
 											</v-btn>
 										</div>
@@ -399,7 +399,7 @@
 		</v-expansion-panels>
 		<v-dialog v-model="ackExistingDialog" persistent max-width="450">
 			<v-card>
-				<v-card-title class="text-headline-small" v-text="i18n.acknowledgeExistingAlertsTitle"></v-card-title>
+				<v-card-title class="text-headline-small" v-text="i18n.acknowledgeExistingAlertsTitle" role="heading" aria-level="2"></v-card-title>
 				<v-card-text v-html="i18n.acknowledgeExistingAlertsText"></v-card-text>
 				<v-card-actions>
 					<v-spacer></v-spacer>

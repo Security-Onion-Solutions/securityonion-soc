@@ -142,38 +142,9 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(history) == 0 {
-		// create new session
-		session := &model.AssistantSession{
-			SessionId: incMsg.SessionId,
-			Title:     incMsg.Msg,
-		}
-
-		// If entityType and entityId are provided, set them on the session
-		if entityType != "" && entityId != "" {
-			session.Type = entityType
-			session.EntityId = entityId
-		}
-
-		err = h.server.Assistantstore.CreateSession(ctx, session)
-		if err != nil {
-			logger.WithError(err).Error("unable to create session")
-			web.Respond(w, r, http.StatusInternalServerError, err)
-
-			return
-		}
-	}
+	isNewSession := len(history) == 0
 
 	messages := historyToContext(history)
-
-	err = h.server.Assistantstore.SaveChat(ctx, newMsg.PrepareForStorage(incMsg.SessionId, incMsg.Tags, incMsg.Model))
-	if err != nil {
-		logger.WithError(err).Error("unable to save chat message")
-		web.Respond(w, r, http.StatusInternalServerError, err)
-
-		return
-	}
-
 	messages = append(messages, newMsg)
 
 	_, ok := w.(http.Flusher)
@@ -185,7 +156,36 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		response, err := h.server.AssistantManager.Chat(ctx, incMsg.Model, messages)
 		if err != nil {
 			logger.WithError(err).Error("unable to chat with assistant")
-			web.Respond(w, r, http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR")
+			if err.Error() == "ERROR_ASSISTANT_REQUEST_TOO_LARGE" {
+				web.Respond(w, r, http.StatusBadRequest, err.Error())
+			} else {
+				web.Respond(w, r, http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR")
+			}
+
+			return
+		}
+
+		if isNewSession {
+			session := &model.AssistantSession{
+				SessionId: incMsg.SessionId,
+				Title:     incMsg.Msg,
+			}
+			if entityType != "" && entityId != "" {
+				session.Type = entityType
+				session.EntityId = entityId
+			}
+			err = h.server.Assistantstore.CreateSession(ctx, session)
+			if err != nil {
+				logger.WithError(err).Error("unable to create session for non-streaming chat")
+				web.Respond(w, r, http.StatusInternalServerError, err)
+				return
+			}
+		}
+
+		err = h.server.Assistantstore.SaveChat(ctx, newMsg.PrepareForStorage(incMsg.SessionId, incMsg.Tags, incMsg.Model))
+		if err != nil {
+			logger.WithError(err).Error("unable to save user message for non-streaming chat")
+			web.Respond(w, r, http.StatusInternalServerError, err)
 
 			return
 		}
@@ -193,7 +193,7 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		for _, msg := range response {
 			err = h.server.Assistantstore.SaveChat(ctx, msg.PrepareForStorage(incMsg.SessionId, nil, incMsg.Model))
 			if err != nil {
-				logger.WithError(err).Error("unable to save chat message")
+				logger.WithError(err).Error("unable to save assistant response (non-streaming)")
 				return
 			}
 		}
@@ -215,7 +215,36 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	response, aux, err := h.server.AssistantManager.ChatStream(noTimeOutCtx, incMsg.Model, messages)
 	if err != nil {
 		logger.WithError(err).Error("unable to chat (stream) with assistant")
-		web.Respond(w, r, http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR")
+		if err.Error() == "ERROR_ASSISTANT_REQUEST_TOO_LARGE" {
+			web.Respond(w, r, http.StatusBadRequest, err.Error())
+		} else {
+			web.Respond(w, r, http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR")
+		}
+
+		return
+	}
+
+	if isNewSession {
+		session := &model.AssistantSession{
+			SessionId: incMsg.SessionId,
+			Title:     incMsg.Msg,
+		}
+		if entityType != "" && entityId != "" {
+			session.Type = entityType
+			session.EntityId = entityId
+		}
+		err = h.server.Assistantstore.CreateSession(noTimeOutCtx, session)
+		if err != nil {
+			logger.WithError(err).Error("unable to create session for streaming chat")
+			web.Respond(w, r, http.StatusInternalServerError, err)
+			return
+		}
+	}
+
+	err = h.server.Assistantstore.SaveChat(noTimeOutCtx, newMsg.PrepareForStorage(incMsg.SessionId, incMsg.Tags, incMsg.Model))
+	if err != nil {
+		logger.WithError(err).Error("unable to save user message before streaming response")
+		web.Respond(w, r, http.StatusInternalServerError, err)
 
 		return
 	}
@@ -332,14 +361,6 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	err = h.server.Assistantstore.SaveChat(ctx, toolMsg.PrepareForStorage(toolReq.SessionId, []string{"tool_result"}, toolReq.Model))
-	if err != nil {
-		logger.WithError(err).Error("unable to save tool result message")
-		web.Respond(w, r, http.StatusInternalServerError, err)
-
-		return
-	}
-
 	history, err := h.server.Assistantstore.GetChatHistory(ctx, toolReq.SessionId)
 	if err != nil {
 		logger.WithError(err).Error("unable to get chat history")
@@ -349,12 +370,25 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 	}
 
 	messages := historyToContext(history)
+	messages = append(messages, toolMsg)
 
 	if !streaming {
 		response, err := h.server.AssistantManager.Chat(ctx, toolReq.Model, messages)
 		if err != nil {
 			logger.WithError(err).Error("unable to chat with assistant after tool execution")
-			web.Respond(w, r, http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR")
+			if err.Error() == "ERROR_ASSISTANT_REQUEST_TOO_LARGE" {
+				web.Respond(w, r, http.StatusBadRequest, err.Error())
+			} else {
+				web.Respond(w, r, http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR")
+			}
+
+			return
+		}
+
+		err = h.server.Assistantstore.SaveChat(ctx, toolMsg.PrepareForStorage(toolReq.SessionId, []string{"tool_result"}, toolReq.Model))
+		if err != nil {
+			logger.WithError(err).Error("unable to save tool result message for non-streaming chat")
+			web.Respond(w, r, http.StatusInternalServerError, err)
 
 			return
 		}
@@ -364,7 +398,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 		for _, msg := range response {
 			err = h.server.Assistantstore.SaveChat(ctx, msg.PrepareForStorage(toolReq.SessionId, nil, toolReq.Model))
 			if err != nil {
-				logger.WithError(err).Error("unable to save tool result response message")
+				logger.WithError(err).Error("unable to save tool result response message (non-streaming)")
 				return
 			}
 		}
@@ -375,7 +409,19 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 	response, aux, err := h.server.AssistantManager.ChatStream(ctx, toolReq.Model, messages)
 	if err != nil {
 		logger.WithError(err).Error("unable to chat (stream) with assistant after tool execution")
-		web.Respond(w, r, http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR")
+		if err.Error() == "ERROR_ASSISTANT_REQUEST_TOO_LARGE" {
+			web.Respond(w, r, http.StatusBadRequest, err.Error())
+		} else {
+			web.Respond(w, r, http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR")
+		}
+
+		return
+	}
+
+	err = h.server.Assistantstore.SaveChat(ctx, toolMsg.PrepareForStorage(toolReq.SessionId, []string{"tool_result"}, toolReq.Model))
+	if err != nil {
+		logger.WithError(err).Error("unable to save tool result message before streaming response")
+		web.Respond(w, r, http.StatusInternalServerError, err)
 
 		return
 	}

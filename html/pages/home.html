@@ -6,18 +6,24 @@
 		<v-col cols="12" lg="6" class="mx-auto text-center" data-aid="sponsors_display">
 			<div v-html="i18n.sponsorsIntro" class="mb-6"></div>
 			<a :target="$root.target('sos')" href="https://securityonionsolutions.com/" class="text-decoration-none" data-aid="nav_sos">
-				<img v-if="!$vuetify.theme.current.dark" height="100" src="images/sos-logo.svg">
-				<img v-if="$vuetify.theme.current.dark" height="100" src="images/sos-logo-white.svg">
+				<img v-if="!$vuetify.theme.current.dark" height="100" src="images/sos-logo.svg" :alt="i18n.ariaSecurityOnionSolutionsLogo">
+				<img v-if="$vuetify.theme.current.dark" height="100" src="images/sos-logo-white.svg" :alt="i18n.ariaSecurityOnionSolutionsLogo">
 			</a>
 			<v-list class="my-10 w-33 mx-auto">
-				<v-list-item :target="$root.target('sos')" href="https://securityonionsolutions.com/pro" data-aid="overview_pro">
-					<v-list-item-title v-text="i18n.pro"></v-list-item-title>
+				<v-list-item data-aid="overview_pro">
+					<a :target="$root.target('sos')" href="https://securityonionsolutions.com/pro"  class="text-decoration-none">
+						<v-list-item-title v-text="i18n.pro"></v-list-item-title>
+					</a>
 				</v-list-item>
-				<v-list-item :target="$root.target('sos')" href="https://securityonionsolutions.com/hardware" data-aid="overview_appliances">
-					<v-list-item-title v-text="i18n.appliances"></v-list-item-title>
+				<v-list-item data-aid="overview_appliances">
+					<a :target="$root.target('sos')" href="https://securityonionsolutions.com/hardware"  class="text-decoration-none">
+						<v-list-item-title v-text="i18n.appliances"></v-list-item-title>
+					</a>
 				</v-list-item>
-				<v-list-item :target="$root.target('sos')" href="https://securityonionsolutions.com/support" data-aid="overview_support">
-					<v-list-item-title v-text="i18n.premiumSupport"></v-list-item-title>
+				<v-list-item data-aid="overview_support">
+					<a :target="$root.target('sos')" href="https://securityonionsolutions.com/support" class="text-decoration-none">
+						<v-list-item-title v-text="i18n.premiumSupport"></v-list-item-title>
+					</a>
 				</v-list-item>
 			</v-list>
 		</v-col>

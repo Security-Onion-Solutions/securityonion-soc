@@ -8,6 +8,7 @@ const routes = [];
 const components = [];
 const iconSets = [];
 const templatePromises = [];
+const directives = [];
 
 const LICENSE_STATUS_ACTIVE = "active";
 const LICENSE_STATUS_EXCEEDED = "exceeded";
@@ -27,13 +28,30 @@ const USER_PASSWORD_LENGTH_MIN = 8;
 const USER_PASSWORD_LENGTH_MAX = 72;
 const USER_PASSWORD_INVALID_RX = /["'$&!]/;
 
+const MAX_OVERRIDE_NOTE_LENGTH = 150;
+
 const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000';
+const AGENT_USER_ID = '00000000-0000-0000-0000-000000000001';
+
+function moveAriaToPrismTextarea(wrapperEl) {
+  const textarea = wrapperEl.querySelector('.prism-editor__textarea');
+  if (!textarea) return;
+  ['aria-label', 'aria-labelledby', 'aria-describedby'].forEach((attr) => {
+    const value = wrapperEl.getAttribute(attr);
+    if (value) {
+      textarea.setAttribute(attr, value);
+      wrapperEl.removeAttribute(attr);
+    }
+  });
+}
 
 if (typeof global !== 'undefined') {
   global.routes = routes;
   global.components = components;
   global.iconSets = iconSets;
   global.templatePromises = templatePromises;
+  global.directives = directives;
+  global.MAX_OVERRIDE_NOTE_LENGTH = MAX_OVERRIDE_NOTE_LENGTH;
 }
 
 $(document).ready(function () {
@@ -48,25 +66,16 @@ $(document).ready(function () {
 
     const vuetify = Vuetify.createVuetify({
       defaults: {
-        VIcon: {
-          class: 'fa',
-        },
         VCheckbox: {
           trueIcon: 'mb-1 fa-square-check',
           falseIcon: 'mb-1 fa-regular fa-square',
           indeterminateIcon: 'mb-1 fa-square-minus'
         },
-        VSelect: {
-          variant: 'outlined',
-          density: 'compact',
-          menuIcon: 'fas fa-caret-down',
+        VChip: {
+          closeIcon: 'fa-xmark va-baseline',
         },
         VCombobox: {
           menuIcon: 'fas fa-caret-down',
-          variant: 'outlined',
-        },
-        VFileInput: {
-          prependIcon: 'fa-paperclip',
           variant: 'outlined',
         },
         VDataTable: {
@@ -75,27 +84,36 @@ $(document).ready(function () {
           nextIcon: 'fa-chevron-right',
           lastIcon: 'fa-forward-step',
         },
-        VTextField: {
+        VFileInput: {
+          prependIcon: 'fa-paperclip',
+          variant: 'outlined',
+        },
+        VIcon: {
+          class: 'fa',
+        },
+        VSelect: {
           variant: 'outlined',
           density: 'compact',
-          clearIcon: 'fas fa-circle-xmark',
+          menuIcon: 'fas fa-caret-down',
+        },
+        VSwitch: {
+          color: 'primary'
         },
         VTextarea: {
           variant: 'outlined',
           density: 'compact',
         },
-        VTreeview: {
-          collapseIcon: '',
-          expandIcon: 'fas fa-caret-right',
+        VTextField: {
+          variant: 'outlined',
+          density: 'compact',
+          clearIcon: 'fas fa-circle-xmark',
         },
         VToolbar: {
           class: 'theme-background-lighten-1',
         },
-        VChip: {
-          closeIcon: 'fa-xmark va-baseline',
-        },
-        VSwitch: {
-          color: 'primary'
+        VTreeview: {
+          collapseIcon: '',
+          expandIcon: 'fas fa-caret-right',
         },
       },
       icons: {
@@ -118,10 +136,15 @@ $(document).ready(function () {
           light: {
             dark: false,
             colors: {
-              primary: '#2196f3',
+              success: '#3A833C',
+              lightsuccess: '#3A833C',
+              primary: '#0B78D0',
+              lightprimary: '#096DBC',
               secondary: '#424242',
-              info: '#2196f3',
-              error: '#ff5252',
+              info: '#0B78D0',
+              lightinfo: '#0B78D0',
+              error: '#EB0000',
+              lighterror: '#EB0000',
               nav_background: '#000000',
               nav: '#ffffff',
               table_background: '#fafafa',
@@ -138,10 +161,15 @@ $(document).ready(function () {
           dark: {
             dark: true,
             colors: {
-              primary: '#0088BF',
+              success: '#3A833C',
+              lightsuccess: '#49A74B',
+              primary: '#007CAD',
+              lightprimary: '#039FDD',
               secondary: '#2C3347',
-              info: '#2196f3',
-              error: '#ff5252',
+              info: '#0B78D0',
+              lightinfo: '#2597F4',
+              error: '#EB0000',
+              lighterror: '#FF5757',
               nav_background: '#000000',
               nav: '#ffffff',
               table_background: '#222a3f',
@@ -236,6 +264,30 @@ $(document).ready(function () {
           FEAT_RPT: 'rpt',
           FEAT_TTR: 'ttr',
           FEAT_OAI: 'oai',
+          validators: {
+            required: value => !!value || _i18n.required,
+            number: value => (!isNaN(+value) && Number.isInteger(parseFloat(value))) || _i18n.required,
+            hours: value => (!value || /^\d{1,4}(\.\d{1,4})?$/.test(value)) || _i18n.invalidHours,
+            shortLengthLimit: value => (value.length < 100) || _i18n.required,
+            longLengthLimit: value => (encodeURI(value).split(/%..|./).length - 1 < 10000000) || _i18n.required,
+            noteLengthLimit: value => (value.length <= MAX_OVERRIDE_NOTE_LENGTH) || _i18n.ruleMaxLen,
+            fileNotEmpty: value => (value == null || value.size > 0) || _i18n.fileEmpty,
+            fileRequired: value => (value != null && value.length != 0) || _i18n.required,
+            cidrFormat: value => (!value ||
+              /^!?\$[a-z_][a-z0-9_]*$/i.test(value) ||
+              /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\/(3[0-2]|[12]\d|\d)$/.test(value) ||
+              /^((([0-9a-f]{1,4}:){7}([0-9a-f]{1,4}|:))|(([0-9a-f]{1,4}:){6}(:[0-9a-f]{1,4}|((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9a-f]{1,4}:){5}(((:[0-9a-f]{1,4}){1,2})|:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9a-f]{1,4}:){4}(((:[0-9a-f]{1,4}){1,3})|((:[0-9a-f]{1,4})?:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){3}(((:[0-9a-f]{1,4}){1,4})|((:[0-9a-f]{1,4}){0,2}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){2}(((:[0-9a-f]{1,4}){1,5})|((:[0-9a-f]{1,4}){0,3}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){1}(((:[0-9a-f]{1,4}){1,6})|((:[0-9a-f]{1,4}){0,4}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(:(((:[0-9a-f]{1,4}){1,7})|((:[0-9a-f]{1,4}){0,5}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:)))(%.+)?\s*(\/([0-9]|[1-9][0-9]|1[0-1][0-9]|12[0-8]))$/i.test(value)
+            ) || _i18n.invalidCidrOrVar,
+            lowercase: value => !value || value.toLowerCase() == value || _i18n.lowercaseRequired,
+            minPassLen: value => (!value || value.length >= USER_PASSWORD_LENGTH_MIN) || _i18n.ruleMinLen,
+            maxPassLen: value => (!value || value.length <= USER_PASSWORD_LENGTH_MAX) || _i18n.ruleMaxLen,
+            badPassChars: value => (!value || !value.match(USER_PASSWORD_INVALID_RX)) || _i18n.rulePassBadChars,
+            minLength: limit => value => (value && value.length >= limit) || _i18n.ruleMinLen,
+            maxLength: limit => value => (!value || value.length < limit) || _i18n.ruleMaxLen,
+            fileSizeLimit: (maxBytes, formatFn) => value =>
+              (value == null || value.size < maxBytes) || _i18n.fileTooLarge.replace("{maxUploadSizeBytes}", formatFn(maxBytes)),
+            matches: expected => value => (!!value && value == expected) || _i18n.passwordMustMatch,
+          },
           ruleValidators: {
             sigma: [
               { pattern: /^id:\s*[^$]+?$/m, message: _i18n.invalidDetectionElastAlertMissingID, match: false },
@@ -691,7 +743,7 @@ $(document).ready(function () {
           }
         },
         toggleTheme() {
-          this.theme.global.name = this.theme.global.current.dark ? 'light' : 'dark';
+          this.theme.change(this.theme.global.current.dark ? 'light' : 'dark');
           this.timestamp = Date.now();
           this.updateEditorTheme();
         },
@@ -772,9 +824,6 @@ $(document).ready(function () {
         },
         formatTimestamp(date) {
           return this.formatDate(date, this.i18n.timestampFormat, this.i18n.dateUnknown);
-        },
-        formatTimelineLabel(date) {
-          return this.formatDate(date, this.i18n.timelineFormat, date);
         },
         formatDate(date, format, dflt) {
           var formatted = dflt;
@@ -928,7 +977,7 @@ $(document).ready(function () {
           if (value == "medium_false") return "orange-darken-1";
           if (value == "high_false") return "red-lighten-1";
           if (value == "critical_false") return "red-darken-4";
-          return "secondary-lighten-1";
+          return "icon";
         },
         isNodeInSubgrid(node) {
           return node.gridId != null && node.gridId.trim().length > 0;
@@ -970,6 +1019,17 @@ $(document).ready(function () {
           preselects[this.i18n.datePreselect7dToNow] = [moment().subtract(7, 'days'), moment()];
           preselects[this.i18n.datePreselect30dToNow] = [moment().subtract(30, 'days'), moment()];
           return preselects;
+        },
+        applyDateRangePickerAriaLabels(picker) {
+          const $c = picker.container;
+          $c.find('.drp-calendar.left .hourselect').attr('aria-label', this.i18n.ariaPickerStartHour);
+          $c.find('.drp-calendar.left .minuteselect').attr('aria-label', this.i18n.ariaPickerStartMinute);
+          $c.find('.drp-calendar.left .secondselect').attr('aria-label', this.i18n.ariaPickerStartSecond);
+          $c.find('.drp-calendar.left .ampmselect').attr('aria-label', this.i18n.ariaPickerStartAmPm);
+          $c.find('.drp-calendar.right .hourselect').attr('aria-label', this.i18n.ariaPickerEndHour);
+          $c.find('.drp-calendar.right .minuteselect').attr('aria-label', this.i18n.ariaPickerEndMinute);
+          $c.find('.drp-calendar.right .secondselect').attr('aria-label', this.i18n.ariaPickerEndSecond);
+          $c.find('.drp-calendar.right .ampmselect').attr('aria-label', this.i18n.ariaPickerEndAmPm);
         },
         localizeMessage(origMsg, vars = null) {
           if (!origMsg) return "";
@@ -1097,7 +1157,7 @@ $(document).ready(function () {
         },
         loadLocalSettings() {
           if (localStorage['settings.app.dark'] != undefined) {
-            this.theme.global.name = localStorage['settings.app.dark'] == 'true' ? 'dark' : 'light';
+            this.theme.change(localStorage['settings.app.dark'] == 'true' ? 'dark' : 'light');
             this.updateEditorTheme();
           }
           if (localStorage['settings.app.navbar'] != undefined) {
@@ -1311,6 +1371,10 @@ $(document).ready(function () {
         registerEditor() {
           const app = Vue.getCurrentInstance().appContext.app;
           app.component('prism-editor', PrismEditor.PrismEditor);
+          app.directive('aria-textarea', {
+            mounted(el) { moveAriaToPrismTextarea(el); },
+            updated(el) { moveAriaToPrismTextarea(el); },
+          });
         },
         initializeEditor() {
           if (this.editorInitialized) return;
@@ -1423,7 +1487,7 @@ $(document).ready(function () {
         async populateUserDetails(obj, idField, outputField) {
           if (obj[idField] && obj[idField].length > 0) {
             const id = obj[idField];
-            if (id === SYSTEM_USER_ID || id === "agent") {
+            if (id === SYSTEM_USER_ID || id === AGENT_USER_ID || id === "agent") {
               obj[outputField] = this.i18n.systemUser;
               return
             }
@@ -1836,6 +1900,10 @@ $(document).ready(function () {
 
     for (let i = 0; i < components.length; i++) {
       app.component(components[i].name, components[i].component);
+    }
+
+    for (let i = 0; i < directives.length; i++) {
+      app.directive(directives[i].name, directives[i].directive);
     }
 
     app.mount('#app');

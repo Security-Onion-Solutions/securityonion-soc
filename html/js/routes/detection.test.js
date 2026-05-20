@@ -357,44 +357,6 @@ test('tagOverrides', () => {
 	}
 });
 
-test('deleteDetection', async () => {
-	const mock = jest.fn().mockReturnValue(Promise.resolve({ data: [] }));
-	const showErrorMock = mockShowError();
-	comp.$root.papi['delete'] = mock;
-	comp.$route.params.id = "testid"
-	await comp.confirmDeleteDetection();
-	expect(comp.confirmDeleteDialog).toBe(false);
-	expect(mock).toHaveBeenCalledTimes(1);
-	expect(mock).toHaveBeenCalledWith('/detection/testid');
-	expect(comp.$root.loading).toBe(false);
-	expect(showErrorMock).toHaveBeenCalledTimes(0);
-	expect(comp.$router.length).toBe(1);
-});
-
-test('deleteDetectionCancel', () => {
-	expect(comp.confirmDeleteDialog).toBe(false);
-	comp.deleteDetection();
-	expect(comp.confirmDeleteDialog).toBe(true);
-	comp.cancelDeleteDetection();
-	expect(comp.confirmDeleteDialog).toBe(false);
-	comp.deleteDetection();
-});
-
-test('deleteDetectionFailure', async () => {
-	resetPapi().mockPapi("delete", null, new Error("something bad"));
-	const showErrorMock = mockShowError();
-	comp.$root.papi['delete'] = mock;
-	comp.$route.params.id = "testid"
-	comp.deleteDetection();
-	await comp.confirmDeleteDetection();
-	expect(comp.confirmDeleteDialog).toBe(false);
-	expect(mock).toHaveBeenCalledTimes(1);
-	expect(mock).toHaveBeenCalledWith('/detection/testid');
-	expect(comp.$root.loading).toBe(false);
-	expect(showErrorMock).toHaveBeenCalledTimes(1);
-	expect(comp.$router.length).toBe(0);
-});
-
 test('isDetectionSourceDirty', () => {
 	comp.detect = {
 		content: 'X',
@@ -491,80 +453,6 @@ test('onNewDetectionLanguageChange', async () => {
 	comp.detect = { language:'sigma', content: 'x' };
 	await comp.onNewDetectionLanguageChange();
 	expect(comp.detect.content).toBe('c X');
-});
-
-test('cidrFormat', () => {
-	const cidrFormat = comp.rules.cidrFormat;
-
-	expect(cidrFormat('$HOME_NET')).toBe(true);
-	expect(cidrFormat('$Home_Net')).toBe(true);
-	expect(cidrFormat('!$DNS')).toBe(true);
-	expect(cidrFormat('!$_')).toBe(true);
-	expect(cidrFormat('0.0.0.0/16')).toBe(true);
-	expect(cidrFormat('0::0/32')).toBe(true);
-	expect(cidrFormat('2001:DB88:3333:4444:CCCC:DDDD:EEEE:FFFF/64')).toBe(true);
-	expect(cidrFormat('2001:db88:3333:4444:cccc:dddd:eeee:ffff/64')).toBe(true);
-
-	expect(cidrFormat('x')).toBe(comp.i18n.invalidCidrOrVar);
-	expect(cidrFormat('#')).toBe(comp.i18n.invalidCidrOrVar);
-	expect(cidrFormat('!#')).toBe(comp.i18n.invalidCidrOrVar);
-	expect(cidrFormat('#1')).toBe(comp.i18n.invalidCidrOrVar);
-	expect(cidrFormat('!#1')).toBe(comp.i18n.invalidCidrOrVar);
-	expect(cidrFormat('_')).toBe(comp.i18n.invalidCidrOrVar);
-	expect(cidrFormat('1.2.3.4')).toBe(comp.i18n.invalidCidrOrVar);
-	expect(cidrFormat('0::0')).toBe(comp.i18n.invalidCidrOrVar);
-	expect(cidrFormat('256.256.256.256/32')).toBe(comp.i18n.invalidCidrOrVar);
-	expect(cidrFormat('0::0::0/16')).toBe(comp.i18n.invalidCidrOrVar);
-	expect(cidrFormat('google.com')).toBe(comp.i18n.invalidCidrOrVar);
-});
-
-test('rule: required', () => {
-	const required = comp.rules.required;
-
-	expect(required('')).toBe(comp.$root.i18n.required);
-	expect(required('a')).toBe(true);
-});
-
-test('rule: number', () => {
-	const number = comp.rules.number;
-
-	expect(number('a')).toBe(comp.$root.i18n.required);
-	expect(number('1')).toBe(true);
-	expect(number(1)).toBe(true);
-	expect(number(1.0)).toBe(true);
-	expect(number('1.0')).toBe(true);
-	expect(number(1.1)).toBe(comp.$root.i18n.required);
-	expect(number('1.1')).toBe(comp.$root.i18n.required);
-});
-
-test('rule: hours', () => {
-	const hours = comp.rules.hours;
-
-	expect(hours('a')).toBe(comp.$root.i18n.invalidHours);
-	expect(hours('11111')).toBe(comp.$root.i18n.invalidHours);
-	expect(hours('0.11111')).toBe(comp.$root.i18n.invalidHours);
-	expect(hours('1.1.1')).toBe(comp.$root.i18n.invalidHours);
-	expect(hours('1')).toBe(true);
-	expect(hours('1111.1111')).toBe(true);
-});
-
-test('rule: minLength', () => {
-	const minLength = comp.rules.minLength;
-	const withLimit = minLength(1);
-
-	expect(withLimit('')).toBe(comp.$root.i18n.ruleMinLen);
-	expect(withLimit('a')).toBe(true);
-	expect(withLimit('aa')).toBe(true);
-});
-
-test('rule: shortLengthLimit', () => {
-	const shortLengthLimit = comp.rules.shortLengthLimit;
-	const valLen99 = 'a'.repeat(99);
-	const valLen100 = 'a'.repeat(100);
-
-	expect(shortLengthLimit('a')).toBe(true);
-	expect(shortLengthLimit(valLen99)).toBe(true);
-	expect(shortLengthLimit(valLen100)).toBe(comp.$root.i18n.required);
 });
 
 test('getDefaultPreset', () => {

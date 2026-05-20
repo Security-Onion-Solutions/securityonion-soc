@@ -1,0 +1,265 @@
+<div id="component-case-details-col">
+	<v-row no-gutters>
+		<v-col class="d-flex flex-column justify-center text-truncate">
+
+				<v-expansion-panels multiple focusable v-model="expanded">
+					<v-expansion-panel class="mb-3" data-aid="case_metadata_summary_toggle">
+						<v-expansion-panel-title>
+							<h3 class="my-0">{{ i18n.summary }}</h3>
+						</v-expansion-panel-title>
+						<v-expansion-panel-text class="my-2">
+								<v-row>
+									<v-col cols="12">
+										<div tabindex="0" class="clicktoedit" @click="startEdit('case-assignee-input', caseObj.assigneeId, 'case-assignee', 'assigneeId')" data-aid="case_assignee_select"
+											@keypress.enter.space.prevent="startEdit('case-assignee-input', caseObj.assigneeId, 'case-assignee', 'assigneeId')" role="button">
+											<div id="assignee-label" class="font-weight-bold">{{i18n.caseAssignee}}: </div>
+											<div id='case-assignee' class="case detail-field" v-if="!isEdit('case-assignee')" aria-labelledby="assignee-label">{{ withDefault(caseObj.assignee, i18n.unassigned) }}</div>
+											<v-select id='case-assignee-input' v-if="isEdit('case-assignee')"
+												density="compact" eager variant="outlined" hide-details="auto" class="case-select" aria-labelledby="assignee-label" :hint="i18n.caseAssigneeHelp"
+												v-model="editForm.val"
+												:items="userList"
+												item-title="email"
+												item-value="id"
+												@update:model-value="stopEdit(true)"></v-select>
+										</div>
+									</v-col>
+								</v-row>
+								<v-row>
+									<v-col cols="12">
+										<div tabindex="0" class="clicktoedit" @click="startEdit('case-status-input', caseObj.status, 'case-status', 'status')" data-aid="case_status_select"
+											@keypress.enter.space.prevent="startEdit('case-status-input', caseObj.status, 'case-status', 'status')" role="button">
+											<div id="case-status-label" class="font-weight-bold">{{i18n.status}}: </div>
+											<div id="case-status" class="case detail-field" v-if="!isEdit('case-status')" aria-labelledby="case-status-label">{{ withDefault(caseObj.status, i18n.unknown) }}</div>
+											<v-select id="case-status-input" v-if="isEdit('case-status') && !isPresetCustomEnabled('status')"
+												density="compact" eager variant="outlined" hide-details="auto" class="case-select" aria-labelledby="case-status-label" :hint="i18n.caseStatusHelp"
+												v-model="editForm.val"
+												:items="selectList('status', caseObj.status)"
+												@update:model-value="stopEdit(true)"></v-select>
+											<v-combobox id="case-status-input" v-if="isEdit('case-status') && isPresetCustomEnabled('status')"
+												density="compact" eager variant="outlined" hide-details="auto" class="case-select" aria-labelledby="case-status-label" :hint="i18n.caseStatusHelp"
+												v-model="editForm.val"
+												:items="selectList('status', caseObj.status)"
+												@change="stopEdit(true)"></v-combobox>
+										</div>
+									</v-col>
+								</v-row>
+								<v-row v-if="$root.isLicensed($root.FEAT_TTR)">
+									<v-col cols="12">
+										<div>
+											<div id="hours-label" class="font-weight-bold">{{ i18n.caseHours }}: </div>
+											<div id="total-hours" class="case detail-field" aria-labelledby="hours-label">{{ $root.formatHours(hoursTotal) }} {{ i18n.hours }}</div>
+										</div>
+									</v-col>
+								</v-row>
+						</v-expansion-panel-text>
+					</v-expansion-panel>
+
+					<v-expansion-panel class="mt-0" data-aid="case_metadata_details_toggle">
+						<v-expansion-panel-title>
+							<h3 class="my-0">{{ i18n.details }}</h3>
+						</v-expansion-panel-title>
+						<v-expansion-panel-text class="my-2">
+
+							<v-row>
+								<v-col cols="12" data-aid="case_severity_select">
+									<div tabindex="0" class="clicktoedit" @click="startEdit('case-severity-input', caseObj.severity, 'case-severity', 'severity')"
+										@keypress.enter.space.prevent="startEdit('case-severity-input', caseObj.severity, 'case-severity', 'severity')" role="button">
+										<div id="case-severity-label" class="font-weight-bold">{{i18n.caseSeverity}}: </div>
+										<div id="case-severity" class="case detail-field" v-if="!isEdit('case-severity')" aria-labelledby="case-severity-label">{{ withDefault(caseObj.severity, i18n.unknown) }}</div>
+									</div>
+									<v-select id="case-severity-input" v-if="isEdit('case-severity') && !isPresetCustomEnabled('severity')"
+										density="compact" eager variant="outlined" hide-details="auto" class="case-select" aria-labelledby="case-severity-label" :hint="i18n.caseSeverityHelp"
+										v-model="editForm.val"
+										:items="selectList('severity', caseObj.severity)"
+										@update:model-value="stopEdit(true)"></v-select>
+									<v-combobox id="case-severity-input" v-if="isEdit('case-severity') && isPresetCustomEnabled('severity')"
+										density="compact" eager variant="outlined" hide-details="auto" class="case-select" aria-labelledby="case-severity-label" :hint="i18n.caseSeverityHelp"
+										v-model="editForm.val"
+										:items="selectList('severity', caseObj.severity)"
+										@change="stopEdit(true)"></v-combobox>
+								</v-col>
+							</v-row>
+							<v-row>
+								<v-col cols="12" data-aid="case_priority_select">
+									<div tabindex="0" class="clicktoedit" @click="startEdit('case-priority-input', caseObj.priority, 'case-priority', 'priority')"
+										@keypress.enter.space.prevent="startEdit('case-priority-input', caseObj.priority, 'case-priority', 'priority')" role="button">
+										<div id="case-priority-label" class="font-weight-bold">{{i18n.casePriority}}: </div>
+										<div id="case-priority" class="case detail-field" v-if="!isEdit('case-priority')" aria-labelledby="case-priority-label">{{ caseObj.priority }}</div>
+									</div>
+									<div v-if="isEdit('case-priority')">
+										<v-form v-model="editForm.valid" @submit.prevent>
+											<div class="mb-2">
+												<v-text-field id="case-priority-input" variant="outlined" hide-details="auto" rows="3" density="compact" no-resize v-model="editForm.val" :rules="[$root.validators.number]" persistent-hint :hint="i18n.casePriorityHelp" aria-labelledby="case-priority-label" data-aid="case_metadata_priority_input"></v-text-field>
+											</div>
+										</v-form>
+										<div class="d-inline-flex justify-end">
+											<v-btn variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit()" data-aid="case_metadata_priority_cancel">
+												{{ i18n.cancel }}
+											</v-btn>
+											<v-btn :disabled="!editForm.valid" variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit(true)" data-aid="case_metadata_priority_save">
+												{{ i18n.save }}
+											</v-btn>
+										</div>
+									</div>
+								</v-col>
+							</v-row>
+							<v-row>
+								<v-col cols="12" data-aid="case_tlp_select">
+									<div tabindex="0" class="clicktoedit" @click="startEdit('case-tlp-input', caseObj.tlp, 'case-tlp', 'tlp')"
+										@keypress.enter.space.prevent="startEdit('case-tlp-input', caseObj.tlp, 'case-tlp', 'tlp')" role="button">
+										<div id="tlp-label" class="font-weight-bold">{{i18n.caseTlp}}: </div>
+										<v-chip density="compact" :color="colorizeChip(caseObj.tlp)" variant="outlined" id="case-tlp" aria-labelledby="tlp-label" v-if="!isEdit('case-tlp')">{{ withDefault(caseObj.tlp, i18n.unknown) }}</v-chip>
+									</div>
+									<v-select id="case-tlp-input" v-if="isEdit('case-tlp') && !isPresetCustomEnabled('tlp')"
+										density="compact" eager variant="outlined" hide-details="auto" class="case-select" aria-labelledby="tlp-label" :hint="i18n.caseTlpHelp"
+										v-model="editForm.val"
+										:items="selectList('tlp', caseObj.tlp)"
+										@update:model-value="stopEdit(true)"></v-select>
+									<template v-if="isEdit('case-tlp') && isPresetCustomEnabled('tlp')">
+										<v-combobox id="case-tlp-input"
+											density="compact" eager variant="outlined" hide-details="auto" class="case-select" aria-labelledby="tlp-label" :hint="i18n.caseTlpHelp"
+											v-model="editForm.val"
+											:items="selectList('tlp', caseObj.tlp)"
+											@keydown.enter="stopEdit(true)"></v-combobox>
+										<div class="d-inline-flex justify-end">
+											<v-btn variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit()" data-aid="case_tlp_cancel">
+												{{ i18n.cancel }}
+											</v-btn>
+											<v-btn :disabled="!editForm.valid" variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit(true)" data-aid="case_tlp_save">
+												{{ i18n.save }}
+											</v-btn>
+										</div>
+									</template>
+								</v-col>
+							</v-row>
+							<v-row>
+								<v-col cols="12" data-aid="case_pap_select">
+									<div tabindex="0" class="clicktoedit" @click="startEdit('case-pap-input', caseObj.pap, 'case-pap', 'pap')"
+										@keypress.enter.space.prevent="startEdit('case-pap-input', caseObj.pap, 'case-pap', 'pap')" role="button">
+										<div id="pap-label" class="font-weight-bold">{{i18n.casePap}}: </div>
+										<v-chip density="compact" :color="colorizeChip(caseObj.pap)" variant="outlined" id="case-pap" aria-labelledby="pap-label" v-if="!isEdit('case-pap')">{{ withDefault(caseObj.pap, i18n.unknown) }}</v-chip>
+									</div>
+									<v-select id="case-pap-input" v-if="isEdit('case-pap') && !isPresetCustomEnabled('pap')"
+										density="compact" eager variant="outlined" hide-details="auto" class="case-select" aria-labelledby="pap-label" :hint="i18n.casePapHelp"
+										v-model="editForm.val"
+										:items="selectList('pap', caseObj.pap)"
+										@update:model-value="stopEdit(true)"></v-select>
+									<v-combobox id="case-pap-input" v-if="isEdit('case-pap') && isPresetCustomEnabled('pap')"
+										density="compact" eager variant="outlined" hide-details="auto" class="case-select" aria-labelledby="pap-label" :hint="i18n.casePapHelp"
+										v-model="editForm.val"
+										:items="selectList('pap', caseObj.pap)"
+										@change="stopEdit(true)"></v-combobox>
+								</v-col>
+							</v-row>
+							<v-row>
+								<v-col cols="12" data-aid="case_category_select">
+									<div tabindex="0" class="clicktoedit" @click="startEdit('case-category-input', caseObj.category, 'case-category', 'category')"
+										@keypress.enter.space.prevent="startEdit('case-category-input', caseObj.category, 'case-category', 'category')" role="button">
+										<div id="category-label" class="font-weight-bold">{{i18n.caseCategory}}: </div>
+										<div id="case-category" class="case detail-field" v-if="!isEdit('case-category')" aria-labelledby="category-label">{{ withDefault(caseObj.category, i18n.unknown) }}</div>
+									</div>
+									<v-select id="case-category-input" v-if="isEdit('case-category') && !isPresetCustomEnabled('category')"
+										density="compact" eager variant="outlined" hide-details="auto" class="case-select" aria-labelledby="category-label" :hint="i18n.caseCategoryHelp"
+										v-model="editForm.val"
+										:items="selectList('category', caseObj.category)"
+										@update:model-value="stopEdit(true)"></v-select>
+									<template v-if="isEdit('case-category') && isPresetCustomEnabled('category')">
+										<v-combobox id="case-category-input"
+											density="compact" eager variant="outlined" hide-details="auto" class="case-select" aria-labelledby="category-label" :hint="i18n.caseCategoryHelp"
+											v-model="editForm.val"
+											:items="selectList('category', caseObj.category)"
+											@change="stopEdit(true)"></v-combobox>
+										<div class="d-inline-flex justify-end">
+											<v-btn variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit()" data-aid="case_category_cancel">
+												{{ i18n.cancel }}
+											</v-btn>
+											<v-btn :disabled="!editForm.valid" variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit(true)" data-aid="case_category_save">
+												{{ i18n.save }}
+											</v-btn>
+										</div>
+									</template>
+								</v-col>
+							</v-row>
+							<v-row>
+								<v-col cols="12" data-aid="case_tags_select">
+									<div tabindex="0" class="clicktoedit" @click="startEdit('case-tags-input', caseObj.tags, 'case-tags', 'tags')"
+										@keypress.enter.space.prevent="startEdit('case-tags-input', caseObj.tags, 'case-tags', 'tags')" role="button">
+										<div id="tags-label" class="font-weight-bold">{{i18n.caseTags}}: </div>
+										<div id="case-tags" class="case detail-field mt-1" v-if="!isEdit('case-tags')" role="list" aria-labelledby="tags-label">
+											<v-chip density="compact" class="mx-1" v-for="tag in caseObj.tags" color="primary" role="listitem">{{ tag }}</v-chip>
+										</div>
+									</div>
+									<div v-if="isEdit('case-tags')">
+										<v-select id="case-tags-input" v-if="!isPresetCustomEnabled('tags')"
+											density="compact" eager variant="outlined" hide-details="auto" class="case-select" multiple aria-labelledby="tags-label" :hint="i18n.caseTagsHelp"
+											v-model="editForm.val"
+											:items="selectList('tags', caseObj.tags)"
+											@update:model-value="stopEdit(true)">
+											<template #item="{ props, item }">
+												<v-list-item v-bind="props">
+													<template #prepend>
+														<v-icon>{{ (editForm.val || []).includes(item) ? 'mb-1 fa-square-check' : 'mb-1 fa-regular fa-square' }}</v-icon>
+													</template>
+												</v-list-item>
+											</template>
+											<template #selection="{ item }">
+												<v-chip density="compact" color="primary">{{item}}</v-chip>
+											</template>
+										</v-select>
+										<v-combobox id="case-tags-input" v-else
+											density="compact" eager variant="outlined" hide-details="auto" class="case-select" multiple aria-labelledby="tags-label" :hint="i18n.caseTagsHelp"
+											v-model="editForm.val"
+											:items="selectList('tags', caseObj.tags)"
+											@change="stopEdit(true)">
+											<template #item="{ props, item }">
+												<v-list-item v-bind="props">
+													<template #prepend>
+														<v-icon>{{ (editForm.val || []).includes(item) ? 'mb-1 fa-square-check' : 'mb-1 fa-regular fa-square' }}</v-icon>
+													</template>
+												</v-list-item>
+											</template>
+											<template #selection="{ item }">
+												<v-chip density="compact" color="primary">{{item}}</v-chip>
+											</template>
+										</v-combobox>
+										<div class="d-inline-flex justify-end">
+											<v-btn variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit()" data-aid="case_metadata_tags_cancel">
+												{{ i18n.cancel }}
+											</v-btn>
+											<v-btn :disabled="!editForm.valid" variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit(true)" data-aid="case_metadata_tags_save">
+												{{ i18n.save }}
+											</v-btn>
+										</div>
+									</div>
+								</v-col>
+							</v-row>
+
+						</v-expansion-panel-text>
+					</v-expansion-panel>
+				</v-expansion-panels>
+
+			<div class="ml-2 mt-2">
+				<div class="case summary">
+					<span id="summary-id-label" class="case label">{{ i18n.caseId }}:</span>
+					<span class="case value" data-aid="case_metadata_id_display" aria-labelledby="summary-id-label">{{ caseObj.id }}</span>
+				</div>
+				<div class="case summary">
+					<span id="summary-owner-label" class="case label">{{ i18n.socUser }}:</span>
+					<span class="case value" data-aid="case_metadata_owner_display" aria-labelledby="summary-owner-label">{{ caseObj.owner }}</span>
+				</div>
+				<div class="case summary">
+					<span id="summary-date-created-label" class="case label">{{ i18n.dateCreated }}:</span>
+					<span class="case value" data-aid="case_metadata_create_time_display" aria-labelledby="summary-date-created-label">{{ $root.formatDateTime(caseObj.createTime)}}</span>
+				</div>
+				<div class="case summary">
+					<span id="summary-date-modified-label" class="case label">{{ i18n.dateModified }}:</span>
+					<span class="case value" data-aid="case_metadata_update_time_display" aria-labelledby="summary-date-modified-label">{{ $root.formatDateTime(caseObj.updateTime)}}</span>
+				</div>
+				<div class="case summary" v-if="$root.formatDateTime(caseObj.completeTime) !== ''">
+					<span id="summary-date-closed-label" class="case label">{{ i18n.dateClosed }}:</span>
+					<span class="case value" data-aid="case_metadata_complete_time_display" aria-labelledby="summary-date-closed-label">{{ $root.formatDateTime(caseObj.completeTime)}}</span>
+				</div>
+			</div>
+		</v-col>
+	</v-row>
+</div>

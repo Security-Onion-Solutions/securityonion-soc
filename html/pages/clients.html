@@ -3,31 +3,31 @@
 		<v-col>
 			<v-row>
 				<v-toolbar v-if="$root.isClientAdmin()" class="so-toolbar elevation-0">
-					<h4 class="ml-2 my-0" v-if="!$root.loading">{{ i18n.clients }}: {{ countClients() }}</h4>
+					<h4 class="ml-2 my-0" v-if="!$root.loading" role="heading" aria-level="2">{{ i18n.clients }}: {{ countClients() }}</h4>
 					<v-spacer></v-spacer>
-					<v-btn icon variant="flat" id="add-client-button" class="circle-button mx-2" @click.stop="showAdd()" data-aid="clients_create_new">
+					<v-btn icon variant="flat" id="add-client-button" class="circle-button mx-2" @click.stop="showAdd()" :aria-label="i18n.ariaClientsNew" data-aid="clients_create_new">
 						<v-icon>fa-plus</v-icon>
 					</v-btn>
-					<v-btn icon variant="flat" @click.stop="loadData()" id="clients-refresh-button" class="circle-button mx-2" data-aid="clients_refresh_button">
+					<v-btn icon variant="flat" @click.stop="loadData()" id="clients-refresh-button" class="circle-button mx-2" :aria-label="i18n.ariaClientsRefresh" data-aid="clients_refresh_button">
 						<v-icon>fa-sync</v-icon>
 					</v-btn>
-					<v-btn icon variant="flat" id="download-ca-crt-button" class="circle-button mx-2" href="/so-ca.crt" :title="i18n.caCrtHelp" data-aid="clients_download_ca">
+					<v-btn icon variant="flat" id="download-ca-crt-button" class="circle-button mx-2" href="/so-ca.crt" :title="i18n.caCrtHelp" :aria-label="i18n.ariaClientsDownloadCert" data-aid="clients_download_ca">
 						<v-icon>fa-download</v-icon>
 					</v-btn>
-					<v-btn icon variant="flat" class="circle-button mx-2" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'connect-api'" :title="i18n.contextualDocsBtn" data-aid="clients_docs">
+					<v-btn icon variant="flat" class="circle-button mx-2" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'connect-api'" :title="i18n.contextualDocsBtn" :aria-label="i18n.ariaClientsConnectAPIHelp" data-aid="clients_docs">
 						<v-icon>fa-circle-question</v-icon>
 					</v-btn>
 				</v-toolbar>
 			</v-row>
 			<v-dialog v-model="dialog" persistent width="800px" data-aid="clients_create_dialog">
 				<v-card>
-					<v-card-title class="lighten-4 py-4 title">{{ i18n.add }} {{ i18n.client }}</v-card-title>
+					<v-card-title class="lighten-4 py-4 title" role="heading" aria-level="2">{{ i18n.add }} {{ i18n.client }}</v-card-title>
 					<v-form v-model="form.valid">
 						<v-container grid-list-sm class="pa-4">
 							<v-row>
 								<v-col xs12>
-									<v-text-field id="name-input" v-model="form.name" :placeholder="i18n.name" :autofocus="true" :rules="[rules.required, rules.name]" data-aid="clients_create_dialog_name"></v-text-field>
-									<v-text-field id="note-input" v-model="form.note" :placeholder="i18n.note" :rules="[rules.note]" data-aid="clients_create_dialog_note"></v-text-field>
+									<v-text-field id="name-input" v-model="form.name" :label="i18n.name" :placeholder="i18n.name" :autofocus="true" :rules="[$root.validators.required, $root.validators.maxLength(50)]" required data-aid="clients_create_dialog_name"></v-text-field>
+									<v-text-field id="note-input" v-model="form.note" :label="i18n.note" :placeholder="i18n.note" :rules="[$root.validators.maxLength(100)]" data-aid="clients_create_dialog_note"></v-text-field>
 								</v-col>
 							</v-row>
 						</v-container>
@@ -41,7 +41,7 @@
 			</v-dialog>
 			<v-dialog v-model="deleteClientDialog" persistent max-width="390" data-aid="clients_delete_dialog">
 				<v-card>
-					<v-card-title class="headline" v-text="i18n.deleteClientTitle"></v-card-title>
+					<v-card-title class="headline" v-text="i18n.deleteClientTitle" role="heading" aria-level="2"></v-card-title>
 					<v-card-text v-text="i18n.deleteClientConfirm"></v-card-text>
 					<v-card-text id="name-output" v-text="form.name" class="font-weight-bold"></v-card-text>
 					<v-card-text id="id-output" v-text="form.id"></v-card-text>
@@ -55,22 +55,22 @@
 			</v-dialog>
 			<v-dialog v-model="showCredentialsDialog" persistent max-width="450" data-aid="clients_credentials_dialog">
 				<v-card>
-					<v-card-title class="headline" v-text="i18n.clientCredentialsTitle"></v-card-title>
+					<v-card-title class="headline" v-text="i18n.clientCredentialsTitle" role="heading" aria-level="2"></v-card-title>
 					<v-card-text v-text="i18n.clientCredentialsHelp"></v-card-text>
 					<v-card-text>
-						<div class="font-weight-bold">{{ i18n.clientId }}:</div>
+						<div id="client-id-label" class="font-weight-bold">{{ i18n.clientId }}:</div>
 						<div>
-							<span id="credentials-id-output" data-aid="clients-credentials-id-output">{{ new_client_credentials.id }}</span>
-							<v-btn icon variant="text" size="small" @click="$root.copyToClipboard(new_client_credentials.id)" data-aid="clients_credentials-copy-id">
+							<span id="credentials-id-output" data-aid="clients-credentials-id-output" aria-labelledby="client-id-label">{{ new_client_credentials.id }}</span>
+							<v-btn icon variant="text" size="small" @click="$root.copyToClipboard(new_client_credentials.id)" :aria-label="i18n.ariaClientsCopyId" data-aid="clients_credentials-copy-id">
 								<v-icon>fa-copy</v-icon>
 							</v-btn>
 					</div>
 					</v-card-text>
 					<v-card-text>
-						<div class="font-weight-bold">{{ i18n.clientSecret }}:</div>
+						<div id="clients-credentials-secret-label" class="font-weight-bold">{{ i18n.clientSecret }}:</div>
 						<div>
-							<span id="credentials-secret-output" data-aid="clients-credentials-secret-output">{{ new_client_credentials.secret }}</span>
-							<v-btn icon variant="text" size="small" @click="$root.copyToClipboard(new_client_credentials.secret)" data-aid="clients_credentials-copy-secret">
+							<span id="credentials-secret-output" data-aid="clients-credentials-secret-output" aria-labelledby="clients-credentials-secret-label">{{ new_client_credentials.secret }}</span>
+							<v-btn icon variant="text" size="small" @click="$root.copyToClipboard(new_client_credentials.secret)" :aria-label="i18n.ariaClientsCopyCredentials" data-aid="clients_credentials-copy-secret">
 								<v-icon>fa-copy</v-icon>
 							</v-btn>
 						</div>
@@ -89,7 +89,7 @@
 					<template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
 						<tr>
 							<template v-for="header in columns" :key="header.key">
-								<th :class="{'is-sorted': isSorted(header)}" v-if="header.value != 'expand' || $root.isClientAdmin()" :data-aid="'clients_details_header_' + header?.value?.toLowerCase()">
+								<th :class="{'is-sorted': isSorted(header)}" v-if="header.value != 'expand' || $root.isClientAdmin()" :data-aid="'clients_details_header_' + header?.value?.toLowerCase()" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'" scope="col">
 									<span @click="toggleSort(header)">
 										{{ header.title }}
 									</span>
@@ -105,7 +105,7 @@
 					<template #item="{ item, isExpanded, toggleExpand, internalItem }">
 						<tr :class="{'seamless-expanded-row': isExpanded(internalItem), 'main-row': true}">
 							<td v-if="$root.isClientAdmin()">
-								<v-btn id="expandNode" icon variant="text" size="small" @click="if (!isExpanded(internalItem)) { updateForm(item); } toggleExpand(internalItem)" data-aid="clients_details_expand">
+								<v-btn id="expandNode" icon variant="text" size="small" @click="if (!isExpanded(internalItem)) { updateForm(item); } toggleExpand(internalItem)" data-aid="clients_details_expand" :aria-expanded="isExpanded(internalItem)" :aria-label="i18n.ariaExpandClient">
 									<v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="clients_details_collapse">fa-angle-down</v-icon>
 									<v-icon v-else :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="clients_details_expand">fa-angle-right</v-icon>
 								</v-btn>
@@ -122,12 +122,12 @@
 									<v-row>
 										<v-col cols="12" lg="4">
 											<v-card>
-												<v-card-title v-text="i18n.profile"></v-card-title>
+												<v-card-title v-text="i18n.profile" role="heading" aria-level="3"></v-card-title>
 												<v-card-text>
 													<v-form v-model="form.valid">
-														<v-text-field id="name-input" v-model="form.name" :placeholder="i18n.name" :rules="[rules.required,rules.name]" data-aid="clients_details_name_input"></v-text-field>
-														<v-text-field id="note-input" v-model="form.note" :placeholder="i18n.note" :rules="[rules.note]" data-aid="clients_details_note_input"></v-text-field>
-														<v-text-field id="search-username-input" v-model="form.searchUsername" :placeholder="i18n.searchUsername" persistent-hint :hint="i18n.searchUsernameHelp" :rules="[rules.searchUsername]" data-aid="clients_details_searchusername_input"></v-text-field>
+														<v-text-field id="name-input" v-model="form.name" :label="i18n.name" :placeholder="i18n.name" :rules="[$root.validators.required, $root.validators.maxLength(50)]" required data-aid="clients_details_name_input"></v-text-field>
+														<v-text-field id="note-input" v-model="form.note" :label="i18n.note" :placeholder="i18n.note" :rules="[$root.validators.maxLength(100)]" data-aid="clients_details_note_input"></v-text-field>
+														<v-text-field id="search-username-input" v-model="form.searchUsername" :label="i18n.searchUsername" :placeholder="i18n.searchUsername" persistent-hint :hint="i18n.searchUsernameHelp" :rules="[$root.validators.maxLength(50)]" data-aid="clients_details_searchusername_input"></v-text-field>
 														<v-btn :disabled="!form.valid" id="update-client-button" @click="update(item)" v-text="i18n.update" data-aid="clients_details_submit" class="mt-3" ></v-btn>
 													</v-form>
 												</v-card-text>
@@ -135,20 +135,22 @@
 										</v-col>
 										<v-col cols="12" lg="4">
 											<v-card>
-												<v-card-title>{{ i18n.permissions }}</v-card-title>
+												<v-card-title id="permissions-label" role="heading" aria-level="3">{{ i18n.permissions }}</v-card-title>
 												<v-card-text data-aid="clients_details_permission_toggle">
 													<template v-for="(privileges, resource) in perms" :key="resource">
-														<h4 class="text-capitalize mt-3">{{ resource }}</h4>
-														<span v-for="priv in privileges" :key="priv" :data-aid="'clients_details_permission_toggle_' + resource + '_' + priv">
-															<v-checkbox :id="'perm-checkbox-' + resource + '-' + priv" density="compact" class="text-capitalize ml-5 no-details" :model-value="hasPermission(item, resource, priv)" :label="priv" @click.stop="togglePermission(item, resource, priv)"></v-checkbox>
-														</span>
+														<fieldset class="no-border">
+															<legend class="text-capitalize mt-3">{{ resource }}</legend>
+															<span v-for="priv in privileges" :key="priv" :data-aid="'clients_details_permission_toggle_' + resource + '_' + priv">
+																<v-checkbox :id="'perm-checkbox-' + resource + '-' + priv" density="compact" class="text-capitalize ml-5 no-details" :model-value="hasPermission(item, resource, priv)" :label="priv" @click.stop="togglePermission(item, resource, priv)"></v-checkbox>
+															</span>
+														</fieldset>
 													</template>
 												</v-card-text>
 											</v-card>
 										</v-col>
 										<v-col cols="12" lg="4">
 											<v-card>
-												<v-card-title>{{ i18n.access }}</v-card-title>
+												<v-card-title role="heading" aria-level="3">{{ i18n.access }}</v-card-title>
 												<v-card-text>
 													<v-btn id="generate-secret-button" v-text="i18n.generateSecret" color="primary" @click.stop="generateSecret(item)" class="mr-2 mb-2" data-aid="clients_details_generate_secret"></v-btn>
 													<v-btn id="delete-client-button" v-text="i18n.delete" color="error" @click.stop="showDeleteConfirm()" class="mb-2" data-aid="clients_details_delete"></v-btn>

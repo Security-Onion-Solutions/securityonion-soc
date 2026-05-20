@@ -7,11 +7,19 @@ package assistant
 
 import (
 	"context"
+	"fmt"
+	"net/url"
 
 	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/option"
 	"github.com/openai/openai-go/v3/packages/pagination"
 	"github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/openai/openai-go/v3/responses"
+
+	"time"
+
+	"github.com/apex/log"
+	"github.com/security-onion-solutions/securityonion-soc/model"
 )
 
 // ResponseStream is an interface that wraps the streaming functionality we use.
@@ -131,4 +139,59 @@ func (r *realChatCompletionStream) Current() openai.ChatCompletionChunk {
 
 func (r *realChatCompletionStream) Err() error {
 	return r.stream.Err()
+}
+
+func buildOpenAIClientOptions(apiUrl, apiKey string) ([]option.RequestOption, error) {
+	parsedUrl, err := url.Parse(apiUrl)
+	if err != nil {
+		return nil, fmt.Errorf("invalid apiUrl: %w", err)
+	}
+
+	opts := make([]option.RequestOption, 0)
+
+	// Extract query params and add as WithQueryAdd options
+	query := parsedUrl.Query()
+	for key, values := range query {
+		for _, val := range values {
+			opts = append(opts, option.WithQueryAdd(key, val))
+		}
+	}
+
+	// Remove query params from the URL
+	parsedUrl.RawQuery = ""
+
+	opts = append(opts, option.WithBaseURL(parsedUrl.String()))
+
+	if apiKey != "" {
+		opts = append(opts, option.WithAPIKey(apiKey))
+	}
+
+	return opts, nil
+}
+
+func checkOpenAIHealth(ctx context.Context, client OpenAIClient, timeoutSeconds int) (*model.HealthResponse, error) {
+	healthCtx, cancel := context.WithTimeout(ctx, time.Second*time.Duration(timeoutSeconds))
+	defer cancel()
+
+	logger := log.FromContext(ctx)
+
+	status := "unhealthy"
+
+	res, err := client.ModelsList(healthCtx)
+	if err != nil {
+		logger.WithError(err).Error("error getting models list from OpenAI API")
+	} else if len(res.Data) > 0 {
+		modelNames := make([]string, len(res.Data))
+		for i, m := range res.Data {
+			modelNames[i] = m.ID
+		}
+		logger.WithFields(log.Fields{
+			"models": modelNames,
+		}).Info("OpenAI API is healthy")
+		status = "healthy"
+	}
+
+	return &model.HealthResponse{
+		Status: status,
+	}, nil
 }

@@ -79,7 +79,7 @@ func TestPreprocess(tester *testing.T) {
 		assert.Zero(tester, statusCode)
 		if assert.NotNil(tester, ctx) {
 			requestorId := ctx.Value(web.ContextKeyRequestorId)
-			assert.Equal(tester, "00000000-0000-0000-0000-000000000000", requestorId)
+			assert.Equal(tester, server.AGENT_ID, requestorId)
 		}
 	}
 

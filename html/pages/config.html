@@ -8,7 +8,7 @@
 	</v-alert>
 	<v-dialog v-model="showOptionsDialog" max-width="540">
 		<v-card class="options-dialog">
-			<v-card-title>{{i18n.options}}</v-card-title>
+			<v-card-title role="heading" aria-level="2">{{i18n.options}}</v-card-title>
 			<v-card-text data-aid="config_options">
 				<v-switch id="option-advanced" :disabled="$root.loading" v-model="advanced" dense class="my-0" :label="i18n.settingsAdvanced" :hint="i18n.settingsAdvancedHelp" persistent-hint data-aid="config_option_advanced_toggle"></v-switch>
 				<v-btn variant="tonal" id="option-synchronize" @click.stop="sync()" class="mt-6 mb-3" data-aid="config_option_synchronize_button">
@@ -23,26 +23,26 @@
 		</v-card>
 	</v-dialog>
 	<v-row>
-		<v-toolbar class="so-toolbar elevation-0" fixed>
+		<v-toolbar class="so-toolbar elevation-0" fixed :aria-label="i18n.ariaSettingsToolbar" role="toolbar">
 			<v-text-field id="filter-input" :label="i18n.filter" v-model="search" clearable :hint="i18n.filterHelp" persistent-hint @click:clear="clearFilter()" @keydown.enter="applySearchFilter()" class="mx-2" style="max-width: 240px" density="compact" hide-details data-aid="config_filter_input"></v-text-field>
-			<v-btn variant="text" size="small" id="apply-search-button" icon @click="applySearchFilter()" :title="i18n.search" data-aid="config_apply_search_filter">
+			<v-btn variant="text" size="small" id="apply-search-button" icon @click="applySearchFilter()" :title="i18n.search" data-aid="config_apply_search_filter" :aria-label="i18n.search">
 				<v-icon class="theme-icon">fa-magnifying-glass</v-icon>
 			</v-btn>
-			<v-btn variant="text" size="small" id="expand-all-button" icon @click="expand()" :title="i18n.expandAll" data-aid="config_expand_all">
+			<v-btn variant="text" size="small" id="expand-all-button" icon @click="expand()" :title="i18n.expandAll" data-aid="config_expand_all" :aria-label="i18n.expandAll">
 				<v-icon class="theme-icon">fa-angles-down</v-icon>
 			</v-btn>
-			<v-btn variant="text" size="small" id="collapse-all-button" icon @click="collapse()" :title="i18n.collapseAll" data-aid="config_collapse_all">
+			<v-btn variant="text" size="small" id="collapse-all-button" icon @click="collapse()" :title="i18n.collapseAll" data-aid="config_collapse_all" :aria-label="i18n.collapseAll">
 				<v-icon class="theme-icon">fa-angles-up</v-icon>
 			</v-btn>
-			<v-btn variant="text" size="small" id="show-modified-button" icon @click="expand(null, isSettingModified)" :title="i18n.settingIsModifiedHelp" data-aid="config_show_modified">
+			<v-btn variant="text" size="small" id="show-modified-button" icon @click="expand(null, isSettingModified)" :title="i18n.settingIsModifiedHelp" data-aid="config_show_modified" :aria-label="i18n.ariaShowModified">
 				<v-icon color="primary">fa-pencil</v-icon>
 			</v-btn>
-			<v-btn variant="text" size="small" id="show-node-modified-button" icon @click="expand(null, isSettingModifiedPerNode)" :title="i18n.settingHasNodeValuesHelp" data-aid="config_show_node_modified">
+			<v-btn variant="text" size="small" id="show-node-modified-button" icon @click="expand(null, isSettingModifiedPerNode)" :title="i18n.settingHasNodeValuesHelp" data-aid="config_show_node_modified" :aria-label="i18n.settingHasNodeValuesHelp">
 				<v-icon color="warning">fa-circle-nodes</v-icon>
 			</v-btn>
 			<v-spacer></v-spacer>
-			<h4 v-if="!$root.loading" class="mr-0 my-0">{{ i18n.settingsCustomized }} {{ settingsCustomized }} / {{ settingsAvailable }} </h4>
-			<v-btn icon variant="flat" class="circle-button ml-5 mr-2" :title="i18n.options" @click="showOptionsDialog = true" id="configOptionsHeader" data-aid="config_options_button">
+			<span v-if="!$root.loading" class="mr-0 my-0 font-weight-bold" data-aid="config_settings_customized_count">{{ i18n.settingsCustomized }} {{ settingsCustomized }} / {{ settingsAvailable }}</span>
+			<v-btn icon variant="flat" class="circle-button ml-5 mr-2" :title="i18n.options" @click="showOptionsDialog = true" id="configOptionsHeader" data-aid="config_options_button" :aria-label="i18n.options">
 				<v-icon>fa-gear</v-icon>
 			</v-btn>
 		</v-toolbar>
@@ -83,11 +83,11 @@
 				<div v-if="!selected" id="config-quick-links">
 					<v-alert v-text="i18n.settingSelect" type="info"></v-alert>
 					<div class="mt-4">
-						<p class="font-weight-bold">{{i18n.configQLGridTitle}}</p>
-						<ul>
+						<p id="grid-quick-links-label" class="font-weight-bold" role="heading" aria-level="4">{{i18n.configQLGridTitle}}</p>
+						<ul aria-labelledby="grid-quick-links-label">
 							<li>
-								{{i18n.configQLElasticsearchHeader}}
-								<ul>
+								<span id="elastic-quick-links-label" role="heading" aria-level="4">{{i18n.configQLElasticsearchHeader}}</span>
+								<ul aria-labelledby="elastic-quick-links-label">
 									<li>
 										<router-link data-aid="config_quicklink_es_warm" :to="{ name: 'config', query: {s: 'elasticsearch.index_settings.global_overrides.policy.phases.warm.min_age', x: 1}}">{{i18n.configQLElasticsearchWarm}}</router-link>
 									</li>
@@ -100,16 +100,16 @@
 								</ul>
 							</li>
 							<li>
-								{{i18n.configQLNTPHeader}}
-								<ul>
+								<span id="ntp-quick-links-label" role="heading" aria-level="4">{{i18n.configQLNTPHeader}}</span>
+								<ul aria-labelledby="ntp-quick-links-label">
 									<li>
 										<router-link data-aid="config_quicklink_ntp" :to="{ name: 'config', query: {s: 'ntp.config.servers'}}">{{i18n.configQLNTP}}</router-link>
 									</li>
 								</ul>
 							</li>
 							<li>
-								{{i18n.configQLFirewallHeader}}
-								<ul>
+								<span id="firewall-quick-links-label" role="heading" aria-level="4">{{i18n.configQLFirewallHeader}}</span>
+								<ul aria-labelledby="firewall-quick-links-label">
 									<li>
 										<router-link data-aid="config_quicklink_fw_analyst" :to="{name: 'config', query: {s: 'firewall.hostgroups.analyst'}}">{{i18n.configQLFirewallWebInterface}}</router-link>
 									</li>
@@ -138,19 +138,19 @@
 							</li>
 						</ul>
 						<br/>
-						<p class="font-weight-bold">{{i18n.configQLAnalystTitle}}</p>
-						<ul>
+						<p id="analyst-quick-links-label" class="font-weight-bold" role="heading" aria-level="3">{{i18n.configQLAnalystTitle}}</p>
+						<ul aria-labelledby="analyst-quick-links-label">
 							<li>
-								{{i18n.configQLSigmaHeader}}
-								<ul>
+								<span id="sigma-quick-links-label" role="heading" aria-level="4">{{i18n.configQLSigmaHeader}}</span>
+								<ul aria-labelledby="sigma-quick-links-label">
 									<li>
 										<router-link data-aid="config_quicklink_sigma_rules" :to="{name: 'config', query: {s: 'soc.config.server.modules.elastalertengine.sigmaRulePackages'}}">{{i18n.configQLSigmaRuleset}}</router-link>
 									</li>
 								</ul>
 							</li>
 							<li>
-								{{i18n.configQLSuricataHeader}}
-								<ul>
+								<span id="suricata-quick-links-label" role="heading" aria-level="4">{{i18n.configQLSuricataHeader}}</span>
+								<ul aria-labelledby="suricata-quick-links-label">
 										<li>
 										<router-link data-aid="config_quicklink_suricata_home_net" :to="{name: 'config', query: {s: 'suricata.config.vars.address-groups.HOME_NET'}}">{{i18n.configQLHomeNet}}</router-link>
 									</li>
@@ -163,8 +163,8 @@
 								</ul>
 							</li>
 							<li>
-								{{i18n.configQLZeekHeader}}
-								<ul>
+								<span id="zeek-quick-links-label" role="heading" aria-level="4">{{i18n.configQLZeekHeader}}</span>
+								<ul aria-labelledby="zeek-quick-links-label">
 									<li>
 										<router-link data-aid="config_quicklink_zeek_homenet" :to="{name: 'config', query: {s: 'zeek.config.networks.HOME_NET'}}">{{i18n.configQLZeekHomeNet}}</router-link>
 									</li>
@@ -174,8 +174,8 @@
 								</ul>
 							</li>
 							<li>
-								{{i18n.configQLBPFHeader}}
-								<ul>
+								<span id="bpf-quick-links-label" role="heading" aria-level="4">{{i18n.configQLBPFHeader}}</span>
+								<ul aria-labelledby="bpf-quick-links-label">
 									<li>
 										<router-link data-aid="config_quicklink_pcap" :to="{name: 'config', query: {s: 'bpf.pcap'}}">{{i18n.configQLPCAP}}</router-link>
 									</li>
@@ -188,8 +188,8 @@
 								</ul>
 							</li>
 							<li>
-								{{i18n.configQLSOCHeader}}
-								<ul>
+								<span id="soc-quick-links-label" role="heading" aria-level="4">{{i18n.configQLSOCHeader}}</span>
+								<ul aria-labelledby="soc-quick-links-label">
 									<li>
 										<router-link data-aid="config_quicklink_actions" :to="{name: 'config', query: {s: 'soc.config.actions'}}">{{i18n.configQLSOCActions}}</router-link>
 									</li>
@@ -213,29 +213,35 @@
 				<v-card v-else :key="selected?.id" class="mx-auto config-setting" flat>
 					<v-card-text>
 						<div class="d-inline-flex mb-4" style="width: 100%">
-							<span class="text-body-small font-weight-thin" data-aid="config_breadcrumbs">
-								{{ getSettingBreadcrumbs(selected) }}
-								<v-btn icon variant="text" size="small" @click.stop="$root.copyToClipboard(getSettingBreadcrumbs(selected))" :title="i18n.copyBreadcrumbToClipboard" data-aid="config_breadcrumb_copy">
+							<div>
+								<nav class="text-body-small font-weight-thin" data-aid="config_breadcrumbs" :aria-label="i18n.ariaBreadcrumbs">
+									<ol class="breadcrumb-list" v-for="segments in [getSettingBreadcrumbs(selected)]">
+										<li v-for="(crumb, i) in segments" :aria-current="i === segments.length - 1 ? 'page' : null">
+											{{ crumb }}
+										</li>
+									</ol>
+								</nav>
+								<v-btn icon variant="text" size="small" @click.stop="$root.copyToClipboard(getSettingBreadcrumbs(selected).join(' > '))" :title="i18n.copyBreadcrumbToClipboard" data-aid="config_breadcrumb_copy" :aria-label="i18n.copyBreadcrumbToClipboard">
 									<v-icon>fa-copy</v-icon>
 								</v-btn>
-								<v-btn icon variant="text" size="small" @click.stop="$root.copyToClipboard(getSettingLink(selected))" :title="i18n.copyLinkToClipboard" data-aid="config_breadcrumb_copy_link">
+								<v-btn icon variant="text" size="small" @click.stop="$root.copyToClipboard(getSettingLink(selected))" :title="i18n.copyLinkToClipboard" data-aid="config_breadcrumb_copy_link" :aria-label="i18n.copyLinkToClipboard">
 									<v-icon>fa-link</v-icon>
 								</v-btn>
-							</span>
+							</div>
 							<v-spacer></v-spacer>
 							<span class="justify-end">
-								<v-btn icon variant="text" size="small" :title="i18n.toggleFullsizeHelp" @click="treeVisible = !treeVisible" data-aid="config_toggle_treeview">
+								<v-btn icon variant="text" size="small" :title="i18n.toggleFullsizeHelp" @click="treeVisible = !treeVisible" data-aid="config_toggle_treeview" :aria-pressed="!treeVisible" :aria-label="i18n.toggleFullsizeHelp">
 									<v-icon v-if="treeVisible">fa-up-right-and-down-left-from-center</v-icon>
 									<v-icon v-else color="primary">fa-down-left-and-up-right-to-center</v-icon>
 								</v-btn>
-								<v-btn icon variant="text" size="small" @click="closeSetting()" data-aid="config_close_setting">
+								<v-btn icon variant="text" size="small" @click="closeSetting()" :aria-label="i18n.ariaCloseSetting" data-aid="config_close_setting">
 									<v-icon>fa-times</v-icon>
 								</v-btn>
 							</span>
 						</div>
 						<div class="text-subtitle-1 mb-4 d-flex align-center" data-aid="config_item_help" >
 							<div class="markdown-body" v-html="formatMarkdown(getSettingDescription(selected))"></div>
-							<a v-if="selected.helpLink" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + selected.helpLink" style="text-decoration: none; cursor: pointer" :title="i18n.settingHelp" class="ml-2">
+							<a v-if="selected.helpLink" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + selected.helpLink" style="text-decoration: none; cursor: pointer" :title="i18n.settingHelp" class="ml-2" :aria-label="i18n.ariaHelpLink">
 								<v-icon color="info">fa-circle-question</v-icon>
 							</a>
 						</div>
@@ -260,7 +266,7 @@
 								<v-col>
 									<v-btn id="config-toggle-default-button" color="text_button" @click="showDefault = !showDefault" v-text="showDefault ? i18n.settingHideDefault : i18n.settingShowDefault" data-aid="config_item_show_default"></v-btn>
 									<div v-if="showDefault" class="mt-8 ml-8">
-										<v-chip v-if="isToggle(selected)" id="default-output" :color="$root.isTrue(selected.default) ? 'primary' : ''" data-aid="config_item_default_display">{{$root.isTrue(selected.default) ? i18n.enabled : i18n.disabled }}</v-chip>
+										<v-chip v-if="isToggle(selected)" id="default-output" :color="$root.isTrue(selected.default) ? 'primary' : ''" data-aid="config_item_default_display" :aria-label="i18n.settingDefault">{{$root.isTrue(selected.default) ? i18n.enabled : i18n.disabled }}</v-chip>
 										<v-textarea v-else-if="isMultiline(selected)" id="default-output" :label="i18n.settingDefault" v-model="selected.default" readonly class="config-editor" data-aid="config_item_default_display"></v-textarea>
 										<v-text-field v-else id="default-output" :label="i18n.settingDefault" v-model="selected.default" readonly data-aid="config_item_default_display"></v-text-field>
 									</div>
@@ -269,26 +275,26 @@
 							<v-row v-if="selected.global || !selected.node">
 								<v-col>
 									<div v-if="!isReadOnly(selected)" class="mb-n1 text-right">
-										<v-btn id="setting-global-reset" icon variant="text" size="small" @click="remove(selected)" :title="i18n.settingResetHelp" :disabled="!isSettingModified(selected) || isPendingSave(selected)" data-aid="config_item_reset" >
+										<v-btn id="setting-global-reset" icon variant="text" size="small" @click="remove(selected)" :title="i18n.settingResetHelp" :disabled="!isSettingModified(selected) || isPendingSave(selected)" data-aid="config_item_reset" :aria-label="i18n.settingResetHelp">
 											<v-icon color="primary">fa-circle-arrow-left</v-icon>
 										</v-btn>
-										<v-btn id="setting-global-save" icon variant="text" size="small" @click="save(selected)" :disabled="!isPendingSave(selected)" :title="i18n.settingSaveHelp" data-aid="config_item_save">
+										<v-btn id="setting-global-save" icon variant="text" size="small" @click="save(selected)" :disabled="!isPendingSave(selected)" :title="i18n.settingSaveHelp" data-aid="config_item_save" :aria-label="i18n.settingSaveHelp">
 											<v-icon color="success">fa-check</v-icon>
 										</v-btn>
-										<v-btn id="setting-global-cancel" icon variant="text" size="small" @click="userCancel()" :disabled="!isPendingSave(selected)" :title="i18n.settingCancelHelp" data-aid="config_item_cancel">
+										<v-btn id="setting-global-cancel" icon variant="text" size="small" @click="userCancel()" :disabled="!isPendingSave(selected)" :title="i18n.settingCancelHelp" data-aid="config_item_cancel" :aria-label="i18n.settingCancelHelp">
 											<v-icon color="error">fa-xmark</v-icon>
 										</v-btn>
 									</div>
 									<v-expansion-panels v-if="hasUiElements(selected)" v-model="form.entriesExpanded">
 										<v-expansion-panel v-for="(entry, entryIdx) in form.entries" :key="entryIdx" @group:selected="edit(selected)" data-aid="config_item_entry_title">
 											<v-expansion-panel-title hide-actions="true">
-												{{ entry._title }}
-												<v-chip v-if="!!entry._status" :color="entry._statusColor ? entry._statusColor : 'secondary'" variant="elevated" density="compact" rounted="xs" class="mx-4" v-text="entry._status"></v-chip>
+												<span class="entry-heading" role="heading" :aria-level="3">{{ entry._title }}</span>
+												<v-chip v-if="!!entry._status" :color="entry._statusColor ? entry._statusColor : 'secondary'" variant="elevated" density="compact" rounded="xs" class="mx-4" v-text="entry._status" :aria-label="$root.replaceActionVar(i18n.ariaStatus, 'status', entry._status)"></v-chip>
 												<div v-if="entry._title != '+'" class="float-right ml-2">
-													<v-btn class="ma-1" size="small" rounded="sm" @click.stop="moveEntry(selected, entryIdx, true)" :disabled="!canMoveEntry(entryIdx, true)" data-aid="config_entry_move_up">
+													<v-btn class="ma-1" size="small" rounded="sm" @click.stop="moveEntry(selected, entryIdx, true)" :disabled="!canMoveEntry(entryIdx, true)" data-aid="config_entry_move_up" :aria-label="i18n.ariaMoveEntryUp">
 														<v-icon>fa-arrow-up</v-icon>
 													</v-btn>
-													<v-btn class="ma-1" size="small" rounded="sm" @click.stop="moveEntry(selected, entryIdx, false)" :disabled="!canMoveEntry(entryIdx, false)" data-aid="config_entry_move_down">
+													<v-btn class="ma-1" size="small" rounded="sm" @click.stop="moveEntry(selected, entryIdx, false)" :disabled="!canMoveEntry(entryIdx, false)" data-aid="config_entry_move_down" :aria-label="i18n.ariaMoveEntryDown">
 														<v-icon>fa-arrow-down</v-icon>
 													</v-btn>
 												</div>
@@ -296,14 +302,14 @@
 											<v-expansion-panel-text>
 												<v-form v-model="uiElementsValid">
 													<div class="my-1" v-for="(element, elementIdx) in selected.uiElements" :key="elementIdx">
-														<v-textarea v-if="isMultiline(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" @update:model-value="markDirtyEntries" variant="outlined" :label="getElementLabel(element)" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="editing config-editor" :data-aid="'config_item_entry_' + element.field"></v-textarea>
-														<v-switch v-else-if="isToggle(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" inset @update:model-value="markDirtyEntries" variant="outlined" :label="getElementLabel(element)" :readonly="isUiElementReadonly(entry, element)" v-model="entry[element.field]" class="no-details" :data-aid="'config_item_entry_' + element.field"></v-switch>
-														<v-select v-else-if="isSelectList(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" :items="element.options" :multiple="hasMultipleValues(element)" inset @update:model-value="markDirtyEntries" :label="getElementLabel(element)" variant="outlined" :label="element.label" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="no-details mb-6" :data-aid="'config_item_entry_' + element.field"></v-select>
-														<v-text-field v-else :id="'setting-entry-' + entryIdx + '-input-' + element.field" @update:model-value="markDirtyEntries" variant="outlined" :label="getElementLabel(element)" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="editing" :data-aid="'config_item_entry_' + element.field"></v-text-field>
+														<v-textarea v-if="isMultiline(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" @update:model-value="markDirtyEntries" variant="outlined" :label="getElementLabel(element)" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="editing config-editor" :data-aid="'config_item_entry_' + element.field" :aria-required="element.required"></v-textarea>
+														<v-switch v-else-if="isToggle(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" inset @update:model-value="markDirtyEntries" variant="outlined" :label="getElementLabel(element)" :readonly="isUiElementReadonly(entry, element)" v-model="entry[element.field]" class="no-details" :data-aid="'config_item_entry_' + element.field" :aria-required="element.required"></v-switch>
+														<v-select v-else-if="isSelectList(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" :items="element.options" :multiple="hasMultipleValues(element)" inset @update:model-value="markDirtyEntries" :label="getElementLabel(element)" variant="outlined" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="no-details mb-6" :data-aid="'config_item_entry_' + element.field" :aria-required="element.required"></v-select>
+														<v-text-field v-else :id="'setting-entry-' + entryIdx + '-input-' + element.field" @update:model-value="markDirtyEntries" variant="outlined" :label="getElementLabel(element)" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="editing" :data-aid="'config_item_entry_' + element.field" :aria-required="element.required"></v-text-field>
 													</div>
 												</v-form>
 												<p>* {{ i18n.requiredField }}</p>
-												<v-btn v-if="!isEntryEmpty(selected, entry)" id="'setting-element-' + entryIdx + '-delete-' + entry['field']" icon variant="text" size="small" @click="showClearEntryDialog(selected, entryIdx)" :title="i18n.settingDeleteEntryHelp" data-aid="config_item_delete_entry">
+												<v-btn v-if="!isEntryEmpty(selected, entry)" id="'setting-element-' + entryIdx + '-delete-' + entry['field']" icon variant="text" size="small" @click="showClearEntryDialog(selected, entryIdx)" :title="i18n.settingDeleteEntryHelp" data-aid="config_item_delete_entry" :aria-label="i18n.settingDeleteEntryHelp">
 													<v-icon color="error">fa-trash</v-icon>
 												</v-btn>
 											</v-expansion-panel-text>
@@ -312,15 +318,15 @@
 									<div v-else>
 										<div v-if="isToggle(selected)">
 											<div v-if="form.key != selected.id || isReadOnly(selected)">
-												<v-chip id="value-output" :color="$root.isTrue(selected.value) ? 'primary' : ''" append-icon="fa-pencil" @click="edit(selected)" data-aid="config_item_customize_slider_display">{{$root.isTrue(selected.value) ? i18n.enabled : i18n.disabled }}</v-chip>
-												<span class="setting_label mx-4">{{ i18n.settingGlobal }}</span>
+												<v-chip id="value-output" :color="$root.isTrue(selected.value) ? 'primary' : ''" append-icon="fa-pencil" @click="edit(selected)" data-aid="config_item_customize_slider_display" aria-labelledby="node-value-label-global">{{$root.isTrue(selected.value) ? i18n.enabled : i18n.disabled }}</v-chip>
+												<span id="node-value-label-global" class="setting_label mx-4">{{ i18n.settingGlobal }}</span>
 											</div>
 											<v-switch v-else id="value-input" :label="i18n.settingGlobal" true-value="true" v-model="form.value" class="editing config-editor no-details" data-aid="config_item_customize_slider_input"></v-switch>
 										</div>
 										<div v-else-if="isSelectList(selected)">
 											<div v-if="form.key != selected.id || isReadOnly(selected)">
-												<v-chip id="value-output" append-icon="fa-pencil" @click="edit(selected)" :data-aid="config_item_customize_select_display">{{selected.value}}</v-chip>
-												<span class="setting_label mx-4">{{ i18n.settingGlobal }}</span>
+												<v-chip id="value-output" append-icon="fa-pencil" @click="edit(selected)" :data-aid="config_item_customize_select_display" aria-labelledby="node-value-label-global">{{selected.value}}</v-chip>
+												<span id="node-value-label-global" class="setting_label mx-4">{{ i18n.settingGlobal }}</span>
 											</div>
 											<v-select v-else id="value-input" :items="selected.options" :multiple="hasMultipleValues(selected)" :label="i18n.settingGlobal" v-model="form.value" :rules="buildInputRules(selected)" class="editing config-editor no-details" :data-aid="config_item_customize_select_input"></v-select>
 										</div>
@@ -338,27 +344,27 @@
 							<v-row v-for="item in selected.nodeValues" :key="item[0]">
 								<v-col>
 									<div class="mb-n1 text-right">
-										<v-btn :id="'setting-node-reset-' + item[0]" icon variant="text" size="small" @click="remove(selected, item[0])" :title="i18n.settingRemoveHelp" :disabled="isPendingSave(selected, item[0])" data-aid="config_item_node_remove" >
+										<v-btn :id="'setting-node-reset-' + item[0]" icon variant="text" size="small" @click="remove(selected, item[0])" :title="i18n.settingRemoveHelp" :disabled="isPendingSave(selected, item[0])" data-aid="config_item_node_remove" :aria-label="i18n.settingRemoveHelp">
 											<v-icon color="warning">fa-circle-xmark</v-icon>
 										</v-btn>
-										<v-btn :id="'setting-node-save-' + item[0]" icon variant="text" size="small" @click="save(selected, item[0])" :disabled="!isPendingSave(selected, item[0])" :title="i18n.settingSaveHelp" data-aid="config_item_node_save">
+										<v-btn :id="'setting-node-save-' + item[0]" icon variant="text" size="small" @click="save(selected, item[0])" :disabled="!isPendingSave(selected, item[0])" :title="i18n.settingSaveHelp" data-aid="config_item_node_save" :aria-label="i18n.settingSaveHelp">
 											<v-icon color="success">fa-check</v-icon>
 										</v-btn>
-										<v-btn :id="'setting-node-cancel-' + item[0]" icon variant="text" size="small" @click="userCancel(true)" :disabled="!isPendingSave(selected, item[0])" :title="i18n.settingCancelHelp" data-aid="config_item_node_cancel">
+										<v-btn :id="'setting-node-cancel-' + item[0]" icon variant="text" size="small" @click="userCancel(true)" :disabled="!isPendingSave(selected, item[0])" :title="i18n.settingCancelHelp" data-aid="config_item_node_cancel" :aria-label="i18n.settingCancelHelp">
 											<v-icon color="error">fa-xmark</v-icon>
 										</v-btn>
 									</div>
 									<div v-if="isToggle(selected)">
 										<div v-if="form.key != item[0] || isReadOnly(selected)">
-											<v-chip :id="'node-value-output-' + item[0]" :color="$root.isTrue(item[1]) ? 'primary' : 'secondary'" append-icon="fa-pencil" @click="edit(selected, item[0])" data-aid="config_item_customize_node_slider_display">{{$root.isTrue(item[1]) ? i18n.enabled : i18n.disabled }}</v-chip>
-											<span class="setting_label mx-4">{{ item[0] }}</span>
+											<v-chip :id="'node-value-output-' + item[0]" :color="$root.isTrue(item[1]) ? 'primary' : 'secondary'" append-icon="fa-pencil" @click="edit(selected, item[0])" data-aid="config_item_customize_node_slider_display" :aria-labelledby="'node-value-label-' + item[0]">{{$root.isTrue(item[1]) ? i18n.enabled : i18n.disabled }}</v-chip>
+											<span :id="'node-value-label-' + item[0]" class="setting_label mx-4">{{ item[0] }}</span>
 										</div>
 										<v-switch v-else :id="'node-value-input-' + item[0]" :label="item[0]" true-value="true" v-model="form.value" class="editing config-editor no-details" data-aid="config_item_customize_node_slider_input"></v-switch>
 									</div>
 									<div v-else-if="isSelectList(selected)">
 										<div v-if="form.key != item[0] || isReadOnly(selected)">
-											<v-chip :id="'node-value-output-' + item[0]" append-icon="fa-pencil" @click="edit(selected, item[0])" :data-aid="config_item_customize_node_select_display">{{item[1]}}</v-chip>
-											<span class="setting_label mx-4">{{ item[0] }}</span>
+											<v-chip :id="'node-value-output-' + item[0]" append-icon="fa-pencil" @click="edit(selected, item[0])" :data-aid="config_item_customize_node_select_display" :aria-labelledby="'node-value-label-' + item[0]">{{item[1]}}</v-chip>
+											<span :id="'node-value-label-' + item[0]" class="setting_label mx-4">{{ item[0] }}</span>
 										</div>
 										<v-select v-else :id="'node-value-input-' + item[0]" :items="selected.options" :multiple="hasMultipleValues(selected)" :label="item[0]" v-model="form.value" :rules="buildInputRules(selected)" class="editing config-editor no-details" :data-aid="config_item_customize_node_select_input"></v-select>
 									</div>
@@ -373,9 +379,9 @@
 								</v-col>
 							</v-row>
 						</v-container>
-						<span data-aid="config_item_customize_node_select">
+						<div data-aid="config_item_customize_node_select">
 							<v-select v-if="(selected.node || !selected.global) && availableNodes.length > 0" variant="outlined" id="config-select-node" :label="i18n.settingSelectNode" :items="availableNodes" :title="i18n.settingSelectNodeHelp" @update:model-value="addNode(selected, $event)" v-model="selectedNode"></v-select>
-						</span>
+						</div>
 					</v-card-text>
 				</v-card>
 			</v-fade-transition>

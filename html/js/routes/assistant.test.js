@@ -504,8 +504,7 @@ test('handleRouteSessionId with non-existent session', async () => {
   
   await comp.handleRouteSessionId();
   
-  expect(comp.currentChatId).toBe(fakeSessionId);
-  expect(comp.focusChatInput).toHaveBeenCalled();
+  expect(comp.currentChatId).toBe(null);
 });
 
 
@@ -699,13 +698,31 @@ test('sendMessage with insufficient credits', async () => {
   const showErrorMock = mockShowError();
   comp.newMessage = 'Test message';
   comp.creditsRemaining = 0;
+  comp.creditsLoaded = true;
   comp.assistantEnabled = true;
   comp.canChat = true;
+  comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
-  
+
   await comp.sendMessage();
-  
+
   expect(showErrorMock).toHaveBeenCalledWith('Insufficient credits. Please contact your administrator to purchase more credits.');
+  expect(comp.newMessage).toBe('Test message'); // Should not clear message
+});
+
+test('sendMessage shows unhealthy error when credits could not be loaded', async () => {
+  const showErrorMock = mockShowError();
+  comp.newMessage = 'Test message';
+  comp.creditsRemaining = 100; // would otherwise pass the credits check
+  comp.creditsLoaded = false;
+  comp.assistantEnabled = true;
+  comp.canChat = true;
+  comp.isMessageTooLong = false;
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
+
+  await comp.sendMessage();
+
+  expect(showErrorMock).toHaveBeenCalledWith('The AI model could not be reached or did not provide the expected response.');
   expect(comp.newMessage).toBe('Test message'); // Should not clear message
 });
 
@@ -721,6 +738,7 @@ test('sendMessage with empty message', async () => {
 test('sendMessage creates session ID and updates URL', async () => {
   comp.newMessage = 'Test message';
   comp.creditsRemaining = 100;
+  comp.creditsLoaded = true;
   comp.currentChatId = null;
   comp.generateChatId = jest.fn().mockReturnValue(fakeSessionId);
   comp.saveCurrentChatId = jest.fn();
@@ -730,10 +748,11 @@ test('sendMessage creates session ID and updates URL', async () => {
   comp.scrollToBottom = jest.fn();
   comp.assistantEnabled = true;
   comp.canChat = true;
+  comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
-  
+
   await comp.sendMessage();
-  
+
   expect(comp.generateChatId).toHaveBeenCalled();
   expect(comp.currentChatId).toBe(fakeSessionId);
   expect(comp.saveCurrentChatId).toHaveBeenCalled();
@@ -927,6 +946,7 @@ test('approveTool queues tool for execution', async () => {
   const toolUse = { ...fakeToolUse };
   comp.queueTool = jest.fn();
   comp.scrollToBottom = jest.fn();
+  comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
   comp.mostRecentFloatingTool = new Map();
   comp.mostRecentFloatingTool.set(comp.currentChatId, toolUse);
@@ -946,6 +966,7 @@ test('approveTool handles execution error', async () => {
     throw new Error('Execution failed');
   });
   comp.scrollToBottom = jest.fn();
+  comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
   comp.mostRecentFloatingTool = new Map();
   
@@ -959,6 +980,7 @@ test('rejectTool marks as rejected', async () => {
   const toolUse = { ...fakeToolUse };
   comp.scrollToBottom = jest.fn();
   comp.callAIAPI = jest.fn().mockResolvedValue();
+  comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
   
   await comp.rejectTool(toolUse);
@@ -2186,30 +2208,27 @@ test('handleRouteSessionId detects investigation session from query parameter', 
   expect(comp.$route.query.investigation).toBe('true');
 });
 
-test('handleRouteSessionId handles non-investigation session with existing messages', async () => {
+test('handleRouteSessionId handles existing session', async () => {
   comp.$route.params.sessionId = fakeSessionId;
-  comp.$route.query.investigation = 'false'; // Not an investigation
-  comp.loadChatFromBackend = jest.fn().mockRejectedValue(new Error('Session not found'));
-  comp.loadNewChatScreen = jest.fn();
-  comp.saveCurrentChatId = jest.fn();
-  comp.messages = [fakeMessage, fakeAssistantMessage]; // More than 1 message
+  comp.loadChatFromBackend = jest.fn().mockResolvedValue();
+  comp.focusChatInput = jest.fn();
   comp.assistantEnabled = true;
-  
+
   await comp.handleRouteSessionId();
-  
-  expect(comp.currentChatId).toBe(fakeSessionId);
-  expect(comp.saveCurrentChatId).toHaveBeenCalled();
-  expect(comp.loadNewChatScreen).toHaveBeenCalled();
+
+  expect(comp.loadChatFromBackend).toHaveBeenCalledWith(fakeSessionId);
+  expect(comp.focusChatInput).toHaveBeenCalled();
 });
 
 test('startInvestigationSession clears messages and sets up investigation prompt', async () => {
   const investigationPrompt = 'Investigate suspicious network activity from IP 10.0.0.1';
   comp.messages = [fakeAssistantMessage]; // Start with welcome message
   comp.sendMessage = jest.fn().mockResolvedValue();
-  
+  comp.creditsLoaded = true;
+
   // Mock setTimeout to execute immediately for testing
   jest.useFakeTimers();
-  
+
   await comp.startInvestigationSession(investigationPrompt);
   
   expect(comp.messages).toEqual([]); // Should clear messages
@@ -2228,9 +2247,10 @@ test('startInvestigationSession handles empty prompt', async () => {
   const investigationPrompt = '';
   comp.messages = [fakeAssistantMessage];
   comp.sendMessage = jest.fn().mockResolvedValue();
-  
+  comp.creditsLoaded = true;
+
   jest.useFakeTimers();
-  
+
   await comp.startInvestigationSession(investigationPrompt);
   
   expect(comp.messages).toEqual([]);
@@ -2249,9 +2269,10 @@ test('startInvestigationSession handles whitespace-only prompt', async () => {
   const investigationPrompt = '   \n\t   ';
   comp.messages = [fakeAssistantMessage];
   comp.sendMessage = jest.fn().mockResolvedValue();
-  
+  comp.creditsLoaded = true;
+
   jest.useFakeTimers();
-  
+
   await comp.startInvestigationSession(investigationPrompt);
   
   expect(comp.messages).toEqual([]);
@@ -2271,9 +2292,10 @@ test('startInvestigationSession handles sendMessage error', async () => {
   const investigationPrompt = 'Investigate malware detection on host server-01';
   comp.messages = [fakeAssistantMessage];
   comp.sendMessage = jest.fn().mockRejectedValue(new Error('Network error'));
-  
+  comp.creditsLoaded = true;
+
   jest.useFakeTimers();
-  
+
   await comp.startInvestigationSession(investigationPrompt);
   
   expect(comp.messages).toEqual([]);
@@ -2301,20 +2323,21 @@ Please analyze the logs and provide recommendations.`;
   
   comp.messages = [fakeAssistantMessage];
   comp.sendMessage = jest.fn().mockResolvedValue();
-  
+  comp.creditsLoaded = true;
+
   jest.useFakeTimers();
-  
+
   await comp.startInvestigationSession(investigationPrompt);
-  
+
   expect(comp.messages).toEqual([]);
   expect(comp.newMessage).toBe(investigationPrompt);
   expect(comp.$nextTick).toHaveBeenCalled();
-  
+
   // Fast-forward the setTimeout
   jest.advanceTimersByTime(2000);
-  
+
   expect(comp.sendMessage).toHaveBeenCalled();
-  
+
   jest.useRealTimers();
 });
 
@@ -2322,9 +2345,10 @@ test('investigation session integrates with existing chat functionality', async 
   const investigationPrompt = 'Investigate DDoS attack patterns';
   comp.messages = [fakeAssistantMessage];
   comp.sendMessage = jest.fn().mockResolvedValue();
-  
+  comp.creditsLoaded = true;
+
   jest.useFakeTimers();
-  
+
   await comp.startInvestigationSession(investigationPrompt);
   
   // Verify immediate state changes
@@ -2334,10 +2358,61 @@ test('investigation session integrates with existing chat functionality', async 
   
   // Fast-forward the setTimeout to trigger sendMessage
   jest.advanceTimersByTime(2000);
-  
+
   // Verify the investigation prompt was processed through sendMessage
   expect(comp.sendMessage).toHaveBeenCalled();
-  
+
+  jest.useRealTimers();
+});
+
+test('startInvestigationSession does not populate input when model is unreachable', async () => {
+  const investigationPrompt = 'Investigate suspicious network activity from IP 10.0.0.1';
+  comp.messages = [fakeAssistantMessage];
+  comp.newMessage = '';
+  comp.sendMessage = jest.fn().mockResolvedValue();
+  comp.creditsLoaded = false;
+  comp.currentChatId = fakeSessionId; // handleRouteSessionId set this before us
+  comp.saveCurrentChatId = jest.fn();
+  comp.$route.params.sessionId = fakeSessionId;
+  // loadCredits fails to recover the unhealthy state — leave creditsLoaded false
+  comp.loadCredits = jest.fn().mockImplementation(async () => { comp.creditsLoaded = false; });
+
+  jest.useFakeTimers();
+
+  await comp.startInvestigationSession(investigationPrompt);
+
+  expect(comp.loadCredits).toHaveBeenCalled();
+  expect(comp.messages).toEqual([fakeAssistantMessage]); // Should not clear messages
+  expect(comp.newMessage).toBe(''); // Should not write the prompt into the disabled input
+  // Should reset the URL/session bookkeeping so we land back on the base /assistant page.
+  expect(comp.currentChatId).toBeNull();
+  expect(comp.saveCurrentChatId).toHaveBeenCalled();
+  expect(comp.$router.replace).toHaveBeenCalledWith({ name: 'assistant' });
+
+  jest.advanceTimersByTime(2000);
+  expect(comp.sendMessage).not.toHaveBeenCalled();
+
+  jest.useRealTimers();
+});
+
+test('startInvestigationSession proceeds after lazily loading credits', async () => {
+  const investigationPrompt = 'Investigate suspicious network activity from IP 10.0.0.1';
+  comp.messages = [fakeAssistantMessage];
+  comp.sendMessage = jest.fn().mockResolvedValue();
+  comp.creditsLoaded = false;
+  comp.loadCredits = jest.fn().mockImplementation(async () => { comp.creditsLoaded = true; });
+
+  jest.useFakeTimers();
+
+  await comp.startInvestigationSession(investigationPrompt);
+
+  expect(comp.loadCredits).toHaveBeenCalled();
+  expect(comp.messages).toEqual([]);
+  expect(comp.newMessage).toBe(investigationPrompt);
+
+  jest.advanceTimersByTime(2000);
+  expect(comp.sendMessage).toHaveBeenCalled();
+
   jest.useRealTimers();
 });
 
@@ -4406,34 +4481,22 @@ test('clearStreamingStates resets streaming-related state', () => {
   expect(comp.isStreaming).toBe(false);
 });
 
-test('checkIfDeleted sets canChat to false when session not in history', () => {
-  const sessionId = 'missing-session';
-  comp.chatHistory = [
-    { sessionId: 'session1' },
-    { sessionId: 'session2' }
-  ];
-  comp.canChat = true;
-  const showWarningMock = jest.fn();
-  comp.$root.showWarning = showWarningMock;
-  
-  comp.checkIfDeleted(sessionId);
-  
-  expect(comp.canChat).toBe(false);
-  expect(showWarningMock).toHaveBeenCalledWith(comp.i18n.assistantChatNoResume);
+test('checkIfDeleted sets canChat to true when session is not deleted', () => {
+  comp.canChat = false;
+
+  comp.checkIfDeleted({ sessionId: 'existing-session' });
+
+  expect(comp.canChat).toBe(true);
 });
 
-test('checkIfDeleted sets canChat to true when session exists in history', () => {
-  const sessionId = { sessionId: 'existing-session' };
-  comp.chatHistory = [
-    { sessionId: 'session1' },
-    { sessionId: 'existing-session' },
-    { sessionId: 'session2' }
-  ];
-  comp.canChat = false;
-  
-  comp.checkIfDeleted(sessionId);
-  
-  expect(comp.canChat).toBe(true);
+test('checkIfDeleted sets canChat to false when session is deleted', () => {
+  comp.canChat = true;
+  comp.$root.showWarning = jest.fn();
+
+  comp.checkIfDeleted({ sessionId: 'existing-session', deleteTime: '2026-01-01T00:00:00Z' });
+
+  expect(comp.canChat).toBe(false);
+  expect(comp.$root.showWarning).toHaveBeenCalled();
 });
 
 // Auto-approval functionality tests
@@ -4488,6 +4551,7 @@ test('sendMessage checks context limit before proceeding', async () => {
   comp.canChat = true;
   comp.assistantEnabled = true;
   comp.creditsRemaining = 100;
+  comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(true);
   comp.callAIAPI = jest.fn();
   
@@ -4502,12 +4566,14 @@ test('sendMessage checks context limit before proceeding, but allows context_com
   comp.canChat = true;
   comp.assistantEnabled = true;
   comp.creditsRemaining = 100;
+  comp.creditsLoaded = true;
+  comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(true);
   comp.callAIAPI = jest.fn();
   
   await comp.sendMessage([MSGTAG_CONTEXTCOMPRESSION]);
-  
-  expect(comp.checkContextLimitReached).toHaveBeenCalled();
+
+  expect(comp.checkContextLimitReached).not.toHaveBeenCalled();
   expect(comp.callAIAPI).toHaveBeenCalled();
   expect(comp.callAIAPI).toHaveBeenCalledWith('Summarize the conversation so far for context preservation', [MSGTAG_CONTEXTCOMPRESSION]);
 });
@@ -4523,10 +4589,12 @@ test('sendMessage clears welcome message when starting first real conversation',
   comp.canChat = true;
   comp.assistantEnabled = true;
   comp.creditsRemaining = 100;
+  comp.creditsLoaded = true;
   comp.currentChatId = 'test-session';
   comp.callAIAPI = jest.fn().mockResolvedValue();
   comp.loadStoredChats = jest.fn().mockResolvedValue();
   comp.scrollToBottom = jest.fn();
+  comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
   
   await comp.sendMessage();
@@ -4687,6 +4755,7 @@ test('handleContentBlockStop processes tool completion with auto-approval', () =
   comp.getSessionToolMap = jest.fn().mockReturnValue(mockToolMap);
   comp.getIndexMap = jest.fn().mockReturnValue(mockIndexMap);
   comp.shouldAutoApproveTool = jest.fn().mockReturnValue(true);
+  comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
   comp.queueTool = jest.fn();
   
@@ -4772,6 +4841,7 @@ test('handleToolExecutionContentBlockStop processes chained tool with auto-appro
   comp.getSessionToolMap = jest.fn().mockReturnValue(mockToolMap);
   comp.getIndexMap = jest.fn().mockReturnValue(mockIndexMap);
   comp.shouldAutoApproveTool = jest.fn().mockReturnValue(true);
+  comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
   comp.queueTool = jest.fn();
   
@@ -5191,13 +5261,15 @@ test('sendMessage marks floating tool as skipped when sending new message', asyn
   comp.canChat = true;
   comp.assistantEnabled = true;
   comp.creditsRemaining = 100;
+  comp.creditsLoaded = true;
+  comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
   comp.callAIAPI = jest.fn().mockResolvedValue();
   comp.loadStoredChats = jest.fn().mockResolvedValue();
   comp.scrollToBottom = jest.fn();
-  
+
   await comp.sendMessage();
-  
+
   expect(floatingTool.status).toBe('skipped');
   expect(comp.mostRecentFloatingTool.has('test-session')).toBe(false);
 });
@@ -5218,6 +5290,7 @@ test('sendMessage does not mark floating tool as skipped when only welcome messa
   comp.canChat = true;
   comp.assistantEnabled = true;
   comp.creditsRemaining = 100;
+  comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
   comp.callAIAPI = jest.fn().mockResolvedValue();
   comp.loadStoredChats = jest.fn().mockResolvedValue();
@@ -5658,6 +5731,78 @@ test('messageContextValues handles null messages', () => {
   const result = comp.messageContextValues();
 
   expect(result).toEqual([]);
+});
+
+// isMessageTooLong computed property tests
+test('isMessageTooLong returns false when charsPerTokenEstimate is 0', () => {
+  comp.charsPerTokenEstimate = 0;
+  comp.newMessage = 'Hello';
+  comp.contextLength = 0;
+  comp.contextLimitSmall = 1000;
+
+  expect(comp.isMessageTooLong()).toBe(false);
+});
+
+test('isMessageTooLong returns false when newMessage is empty', () => {
+  comp.charsPerTokenEstimate = 3.6;
+  comp.newMessage = '';
+  comp.contextLength = 0;
+  comp.contextLimitSmall = 1000;
+
+  expect(comp.isMessageTooLong()).toBe(false);
+});
+
+test('isMessageTooLong returns false when within limit', () => {
+  comp.charsPerTokenEstimate = 4;
+  comp.newMessage = 'Short message';
+  comp.contextLength = 0;
+  comp.increaseContextLimit = false;
+  comp.contextLimitSmall = 1000;
+
+  // maxChars = 1000 * 4 * 1.1 = 4400
+  // usedChars = 13 + 0 = 13
+  expect(comp.isMessageTooLong()).toBe(false);
+});
+
+test('isMessageTooLong returns true when message exceeds limit', () => {
+  comp.charsPerTokenEstimate = 4;
+  comp.newMessage = 'a'.repeat(4400);
+  comp.contextLength = 0;
+  comp.increaseContextLimit = false;
+  comp.contextLimitSmall = 1000;
+
+  // maxChars = 1000 * 4 * 1.1 = 4400
+  // usedChars = 4400 + 0 = 4400
+  expect(comp.isMessageTooLong()).toBe(true);
+});
+
+test('isMessageTooLong accounts for context length', () => {
+  comp.charsPerTokenEstimate = 4;
+  comp.newMessage = 'Hello';
+  comp.contextLength = 1000;
+  comp.increaseContextLimit = false;
+  comp.contextLimitSmall = 1000;
+
+  // maxChars = 1000 * 4 * 1.1 = 4400
+  // usedChars = 5 + (1000 * 4) = 4005
+  expect(comp.isMessageTooLong()).toBe(false);
+
+  comp.contextLength = 1100;
+  // usedChars = 5 + (1100 * 4) = 4405
+  expect(comp.isMessageTooLong()).toBe(true);
+});
+
+test('isMessageTooLong uses large context limit when toggled', () => {
+  comp.charsPerTokenEstimate = 4;
+  comp.newMessage = 'a'.repeat(4400);
+  comp.contextLength = 0;
+  comp.increaseContextLimit = true;
+  comp.contextLimitSmall = 1000;
+  comp.contextLimitLarge = 2000;
+
+  // maxChars = 2000 * 4 * 1.1 = 8800
+  // usedChars = 4400
+  expect(comp.isMessageTooLong()).toBe(false);
 });
 
 test('buildModelIdentifier', () => {
