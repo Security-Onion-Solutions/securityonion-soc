@@ -298,7 +298,7 @@ func (store *ElasticDetectionstore) deleteDocument(ctx context.Context, index st
 }
 
 func (store *ElasticDetectionstore) get(ctx context.Context, id string, kind string) (interface{}, error) {
-	query := fmt.Sprintf(`_index:"%s" AND %skind:"%s" AND _id:"%s"`, store.index, store.schemaPrefix, kind, id)
+	query := fmt.Sprintf(`_index:"%s" AND %skind:"%s" AND _id:"%s"`, store.index, store.schemaPrefix, util.EscapeLucene(kind), util.EscapeLucene(id))
 
 	objects, err := store.Query(ctx, query, 1)
 	if err == nil {
@@ -546,7 +546,7 @@ func (store *ElasticDetectionstore) CreateDetection(ctx context.Context, detect 
 		return nil, errors.New("Unexpected ID found in new comment")
 	}
 
-	duplicates, err := store.getAll(ctx, fmt.Sprintf(`_index:"%s" AND %skind:"%s" AND %sdetection.publicId:"%s" AND %sdetection.engine:"%s"`, store.index, store.schemaPrefix, "detection", store.schemaPrefix, detect.PublicID, store.schemaPrefix, detect.Engine), 1)
+	duplicates, err := store.getAll(ctx, fmt.Sprintf(`_index:"%s" AND %skind:"%s" AND %sdetection.publicId:"%s" AND %sdetection.engine:"%s"`, store.index, store.schemaPrefix, "detection", store.schemaPrefix, util.EscapeLucene(detect.PublicID), store.schemaPrefix, util.EscapeLucene(string(detect.Engine))), 1)
 	if err != nil {
 		return nil, err
 	}
@@ -592,7 +592,7 @@ func (store *ElasticDetectionstore) GetDetectionByPublicId(ctx context.Context, 
 		return nil, err
 	}
 
-	obj, err := store.Query(ctx, fmt.Sprintf(`_index:"%s" AND %skind:"detection" AND %sdetection.publicId:"%s"`, store.index, store.schemaPrefix, store.schemaPrefix, publicId), 1)
+	obj, err := store.Query(ctx, fmt.Sprintf(`_index:"%s" AND %skind:"detection" AND %sdetection.publicId:"%s"`, store.index, store.schemaPrefix, store.schemaPrefix, util.EscapeLucene(publicId)), 1)
 	if err == nil && len(obj) > 0 {
 		detect = obj[0].(*model.Detection)
 	}
@@ -1021,7 +1021,7 @@ func (store *ElasticDetectionstore) GetAllDetections(ctx context.Context, opts .
 }
 
 func (store *ElasticDetectionstore) GetDetectionHistory(ctx context.Context, detectID string) ([]interface{}, error) {
-	query := fmt.Sprintf(`_index:"%s" AND (%s%s:"%s" OR %sdetectioncomment.detectionId:"%s") | sortby @timestamp^`, store.auditIndex, store.schemaPrefix, AUDIT_DOC_ID, detectID, store.schemaPrefix, detectID)
+	query := fmt.Sprintf(`_index:"%s" AND (%s%s:"%s" OR %sdetectioncomment.detectionId:"%s") | sortby @timestamp^`, store.auditIndex, store.schemaPrefix, AUDIT_DOC_ID, util.EscapeLucene(detectID), store.schemaPrefix, util.EscapeLucene(detectID))
 	history, err := store.Query(ctx, query, store.maxAssociations)
 
 	return history, err
@@ -1174,7 +1174,7 @@ func (store *ElasticDetectionstore) GetComments(ctx context.Context, detectionId
 	}
 
 	comments := []*model.DetectionComment{}
-	query := fmt.Sprintf(`_index:"%s" AND %skind:"detectioncomment" AND %sdetectioncomment.detectionId:"%s" | sortby %sdetectioncomment.createTime^`, store.index, store.schemaPrefix, store.schemaPrefix, detectionId, store.schemaPrefix)
+	query := fmt.Sprintf(`_index:"%s" AND %skind:"detectioncomment" AND %sdetectioncomment.detectionId:"%s" | sortby %sdetectioncomment.createTime^`, store.index, store.schemaPrefix, store.schemaPrefix, util.EscapeLucene(detectionId), store.schemaPrefix)
 
 	objects, err := store.getAll(ctx, query, store.maxAssociations)
 	if err != nil {

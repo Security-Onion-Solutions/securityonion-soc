@@ -412,3 +412,13 @@ func TestInitRevKey(tester *testing.T) {
 	Init(EXPIRED_KEY)
 	assert.Equal(tester, LICENSE_STATUS_INVALID, GetStatus())
 }
+
+func TestAiGatewayUrl(tester *testing.T) {
+	defer setup()()
+
+	Init("")
+	manager.licenseKey.AiGatewayUrl = "http://test-ai.securityonion.net"
+	key := GetLicenseKey()
+	assert.Equal(tester, "http://test-ai.securityonion.net", key.AiGatewayUrl)
+}
+

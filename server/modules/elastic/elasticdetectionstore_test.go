@@ -1885,3 +1885,88 @@ func TestParseRangeAllowRelativeDefaults(t *testing.T) {
 	assert.NotEmpty(t, parts[0])
 	assert.NotEmpty(t, parts[1])
 }
+
+func TestGetDetectionHistory_InjectionAttack(t *testing.T) {
+	fakesrv := server.NewFakeAuthorizedServer(nil)
+	fakeStore := server.NewFakeEventstore()
+	fakesrv.Eventstore = fakeStore
+	store := NewElasticDetectionstore(fakesrv, nil, 100)
+	store.Init("myIndex", "myAuditIndex", 45, "so_", 10)
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+
+	attackID := `myDetectID" OR _id:"otherID`
+	_, _ = store.GetDetectionHistory(ctx, attackID)
+
+	assert.Len(t, fakeStore.InputSearchCriterias, 1)
+	query := fakeStore.InputSearchCriterias[0].RawQuery
+	// The attack string should be escaped
+	assert.Contains(t, query, `so_audit_doc_id:"myDetectID\" OR _id:\"otherID"`)
+	assert.Contains(t, query, `so_detectioncomment.detectionId:"myDetectID\" OR _id:\"otherID"`)
+}
+
+func TestGetDetection_InjectionAttack(t *testing.T) {
+	fakesrv := server.NewFakeAuthorizedServer(nil)
+	fakeStore := server.NewFakeEventstore()
+	fakesrv.Eventstore = fakeStore
+	store := NewElasticDetectionstore(fakesrv, nil, 100)
+	store.Init("myIndex", "myAuditIndex", 45, "so_", 10)
+	ctx := context.Background()
+
+	// This attack should be caught by validation
+	attackPublicID := `some-id" OR so_detection.publicId:"other-id`
+	_, err := store.GetDetection(ctx, attackPublicID)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid ID")
+	assert.Empty(t, fakeStore.InputSearchCriterias)
+}
+
+func TestGetComments_InjectionAttack(t *testing.T) {
+	fakesrv := server.NewFakeAuthorizedServer(nil)
+	fakeStore := server.NewFakeEventstore()
+	fakesrv.Eventstore = fakeStore
+	store := NewElasticDetectionstore(fakesrv, nil, 100)
+	store.Init("myIndex", "myAuditIndex", 45, "so_", 10)
+	ctx := context.Background()
+
+	// This attack should be caught by validation
+	attackDetectionID := `some-id" OR so_detectioncomment.detectionId:"other-id`
+	_, err := store.GetComments(ctx, attackDetectionID)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid ID")
+	assert.Empty(t, fakeStore.InputSearchCriterias)
+}
+
+func TestCreateDetection_DuplicateCheck_InjectionAttack(t *testing.T) {
+	fakesrv := server.NewFakeAuthorizedServer(nil)
+	fakeStore := server.NewFakeEventstore()
+	fakesrv.Eventstore = fakeStore
+	store := NewElasticDetectionstore(fakesrv, nil, 100)
+	store.Init("myIndex", "myAuditIndex", 45, "so_", 10)
+	ctx := context.Background()
+
+	// Malicious PublicID should be caught by validation
+	detect := &model.Detection{
+		PublicID: `some-id" OR so_detection.publicId:"other-id`,
+		Engine:   "suricata",
+	}
+	_, err := store.CreateDetection(ctx, detect)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid ID")
+	assert.Empty(t, fakeStore.InputSearchCriterias)
+}
+
+func TestGetDetectionByPublicId_InjectionAttack(t *testing.T) {
+	fakesrv := server.NewFakeAuthorizedServer(nil)
+	fakeStore := server.NewFakeEventstore()
+	fakesrv.Eventstore = fakeStore
+	store := NewElasticDetectionstore(fakesrv, nil, 100)
+	store.Init("myIndex", "myAuditIndex", 45, "so_", 10)
+	ctx := context.Background()
+
+	// Malicious PublicID should be caught by validation
+	attackPublicID := `some-id" OR so_detection.publicId:"other-id`
+	_, err := store.GetDetectionByPublicId(ctx, attackPublicID)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid ID")
+	assert.Empty(t, fakeStore.InputSearchCriterias)
+}

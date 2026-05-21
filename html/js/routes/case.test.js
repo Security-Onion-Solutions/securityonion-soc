@@ -64,10 +64,18 @@ test('initParams', async () => {
   const mock = jest.fn().mockReturnValue(Promise.resolve({ data: [] }));
   comp.$root.papi['get'] = mock;
 
+  comp.$root.parametersLoaded = true;
+  comp.$root.parameters = {
+    cases: {
+      actions: [{ name: 'actionHunt', links: ['/#/target?q={value}'] }]
+    }
+  };
+
   await comp.initCase({"foo":"bar", "mostRecentlyUsedLimit": 23});
   expect(comp.params.foo).toBe("bar");
   expect(comp.mruCaseLimit).toBe(23);
   expect(comp.mruCases.length).toBe(2);
+  expect(comp.huntActionLink).toBe('/#/target?q={value}');
   expect(mock).toHaveBeenCalledTimes(7);
 });
 
@@ -711,8 +719,21 @@ test('buildHuntQuery', () => {
   expect(comp.buildHuntQuery(fakeEvent)).toBe('_id: "xyz"');
 });
 
-test('buildHuntQueryForValue', () => {
-  expect(comp.buildHuntQueryForValue("foo")).toBe('"foo" | groupby event.module event.dataset');
+test('getHuntActionProps', () => {
+  const expected = { to: { name: 'hunt', query: { q: '"foo" | groupby event.module event.dataset' } } };
+  expect(comp.getHuntActionProps("foo")).toStrictEqual(expected);
+});
+
+test('getHuntActionPropsConfigured', () => {
+  comp.huntActionLink = '/#/target?q={value}';
+  const expected = { to: '/target?q=foo' };
+  expect(comp.getHuntActionProps("foo")).toStrictEqual(expected);
+});
+
+test('getHuntActionPropsExternal', () => {
+  comp.huntActionLink = 'https://google.com?q={value}';
+  const expected = { href: 'https://google.com?q=foo', target: '_blank' };
+  expect(comp.getHuntActionProps("foo")).toStrictEqual(expected);
 });
 
 test('getEventId', () => {

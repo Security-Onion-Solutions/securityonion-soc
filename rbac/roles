@@ -14,7 +14,7 @@ client-monitor:    auditor
 client-admin:      superuser
 config-admin:      superuser
 detection-monitor: limited-analyst auditor limited-auditor
-detection-admin:   agent analyst superuser
+detection-admin:   analyst superuser
 event-admin:       analyst limited-analyst superuser
 event-monitor:     agent auditor limited-auditor
 grid-admin:        superuser

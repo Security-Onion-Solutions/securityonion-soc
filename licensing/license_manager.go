@@ -112,7 +112,8 @@ type LicenseKey struct {
 
 type SignedLicenseKey struct {
 	*LicenseKey
-	Signature string `json:"signature"`
+	Signature    string `json:"signature"`
+	AiGatewayUrl string `json:"aiGatewayUrl"`
 }
 
 var mutex sync.Mutex
@@ -498,8 +499,9 @@ func GetLicenseKey() *SignedLicenseKey {
 	}
 	keyCopy := *(manager.licenseKey.LicenseKey)
 	ret := SignedLicenseKey{
-		LicenseKey: &keyCopy,
-		Signature:  manager.licenseKey.Signature,
+		LicenseKey:   &keyCopy,
+		Signature:    manager.licenseKey.Signature,
+		AiGatewayUrl: manager.licenseKey.AiGatewayUrl,
 	}
 	ret.Features = ListEnabledFeatures()
 	return &ret

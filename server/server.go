@@ -23,7 +23,8 @@ import (
 	"github.com/apex/log"
 )
 
-const AGENT_ID = "00000000-0000-0000-0000-000000000000"
+const SYSTEM_ID = "00000000-0000-0000-0000-000000000000"
+const AGENT_ID = "00000000-0000-0000-0000-000000000001"
 
 type Server struct {
 	Config           *config.ServerConfig
@@ -44,6 +45,7 @@ type Server struct {
 	stoppedChan      chan bool
 	Authorizer       rbac.Authorizer
 	Agent            *model.User
+	System           *model.User
 	Context          context.Context
 	Playbookstore    Playbookstore
 	DetectionEngines sync.Map // map[model.EngineName]DetectionEngine
@@ -78,12 +80,17 @@ func NewServer(cfg *config.ServerConfig, version string) *Server {
 }
 
 func (server *Server) initContext() {
-	// Server will retain the role of an agent until there's a need for higher privileges
+	// System User for internal scheduled tasks
+	server.System = model.NewUser()
+	server.System.Id = SYSTEM_ID
+	server.System.Email = server.System.Id
+
+	// Agent User for Sensoroni agent API calls (used by statickeyauth module)
 	server.Agent = model.NewUser()
 	server.Agent.Id = AGENT_ID
 	server.Agent.Email = server.Agent.Id
 
-	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, AGENT_ID)
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, SYSTEM_ID)
 	ctx = context.WithValue(ctx, web.ContextKeyRequestCSRFExempt, true)
 
 	server.Context = ctx
@@ -154,6 +161,10 @@ func (server *Server) TryGetUser(ctx context.Context) (*model.User, error) {
 	requestorID := ctx.Value(web.ContextKeyRequestorId).(string)
 	if requestorID == AGENT_ID {
 		return server.Agent, nil
+	}
+
+	if requestorID == SYSTEM_ID {
+		return server.System, nil
 	}
 
 	if model.IsClient(requestorID) {

@@ -2130,6 +2130,9 @@ const huntComponent = {
       $('#huntdaterange').on('hide.daterangepicker', function (ev, picker) {
         route.hideDateRangePicker();
       });
+      $('#huntdaterange').on('show.daterangepicker', function (ev, picker) {
+        route.$root.applyDateRangePickerAriaLabels(picker);
+      });
     },
     showAbsoluteTime() {
       this.relativeTimeEnabled = false;
@@ -2317,7 +2320,7 @@ const huntComponent = {
           if (clickedValue && clickedValue.length > 0) {
             if (this.canQuery(clickedValue)) {
               var chartGroupByField = this.groupBys[groupIdx].fields[0];
-              this.toggleQuickAction(e, {}, groupIdx, chartGroupByField, clickedValue);
+              this.toggleQuickAction(e?.native ?? e, {}, groupIdx, chartGroupByField, clickedValue);
             }
           }
           return true;

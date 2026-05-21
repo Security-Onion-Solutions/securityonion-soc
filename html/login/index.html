@@ -16,7 +16,7 @@
     <link rel="mask-icon" href="images/favicon/onion.svg?v=VERSION_PLACEHOLDER">
     <link rel="alternate icon" class="so-favicon" type="image/png" href="images/favicon/onion.png?v=VERSION_PLACEHOLDER">
     <link rel="icon" class="so-favicon" type="image/svg+xml" href="images/favicon/onion.svg?v=VERSION_PLACEHOLDER">
-    <link rel="stylesheet" href="css/external/vuetify-v4.0.2.min.css">
+    <link rel="stylesheet" href="css/external/vuetify-v4.0.6.min.css">
     <link rel="stylesheet" href="css/external/all-7.2.0.min.css">
     <link rel="stylesheet" href="css/app.css?v=VERSION_PLACEHOLDER">
     <link rel="stylesheet" href="css/modern.css?v=VERSION_PLACEHOLDER">
@@ -78,8 +78,8 @@
 
             <v-form v-if="!webauthnForm.continue && passwordEnabled" id="loginForm" v-model="form.valid" method="post" :action="authLoginUrl">
               <div class="login-fields">
-                <v-text-field id="password_identifier" name="identifier" v-model="form.email" :label="i18n.email" :hint="i18n.emailHelp" :autofocus="true" :rules="[rules.required]" variant="outlined" density="comfortable" class="rounded-lg" data-aid="login_email_input"></v-text-field>
-                <v-text-field name="password" v-model="form.password" :label="i18n.password" :type="showPassword ? 'text' : 'password'" :rules="[rules.required]" variant="outlined" density="comfortable" class="rounded-lg" :append-inner-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" @click:append-inner="showPassword = !showPassword" data-aid="login_password_input"></v-text-field>
+                <v-text-field id="password_identifier" name="identifier" v-model="form.email" :label="i18n.email" :hint="i18n.emailHelp" :autofocus="true" :rules="[$root.validators.required]" required variant="outlined" density="comfortable" class="rounded-lg" data-aid="login_email_input"></v-text-field>
+                <v-text-field name="password" v-model="form.password" :label="i18n.password" :type="showPassword ? 'text' : 'password'" :rules="[$root.validators.required]" required variant="outlined" density="comfortable" class="rounded-lg" :append-inner-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" @click:append-inner="showPassword = !showPassword" data-aid="login_password_input"></v-text-field>
                 <v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
                 <v-text-field name="method" value="password" class="d-none"></v-text-field>
               </div>
@@ -90,7 +90,7 @@
               <p class="login-subtitle text-center">{{ i18n.totp }}</p>
               <div class="login-fields text-center">
                 <div class="mb-3 login-hint">{{ i18n.totpCodeHelp }}</div>
-                <v-otp-input id="totp" autofocus="true" autocomplete="off" v-model="form.totpCode" :length="totpCodeLength" @finish="submitTotp" data-aid="login_totp_input"></v-otp-input>
+                <v-otp-input id="totp" autofocus="true" autocomplete="off" v-model="form.totpCode" :length="totpCodeLength" @finish="submitTotp" data-aid="login_totp_input" :aria-label="i18n.ariaOtpInput"></v-otp-input>
                 <v-text-field name="totp_code" id="totp_code" v-model="form.totpCode" class="d-none"></v-text-field>
                 <v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
                 <v-text-field name="method" value="totp" class="d-none"></v-text-field>
@@ -105,7 +105,7 @@
             <v-form v-if="webauthnForm.enabled && !webauthnForm.continue" id="loginWebAuthnForm" v-model="webauthnForm.valid" method="post" :action="authLoginUrl">
               <p class="login-subtitle">{{ i18n.webauthnLoginMethod }}</p>
               <div class="login-fields">
-                <v-text-field id="webauthn_identifier" name="identifier" v-model="webauthnForm.email" :label="i18n.email" :hint="i18n.emailHelp" :rules="[rules.required]" variant="outlined" density="comfortable" class="rounded-lg"></v-text-field>
+                <v-text-field id="webauthn_identifier" name="identifier" v-model="webauthnForm.email" required :label="i18n.email" :hint="i18n.emailHelp" :rules="[$root.validators.required]" variant="outlined" density="comfortable" class="rounded-lg"></v-text-field>
                 <v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
                 <v-text-field name="method" value="webauthn" class="d-none"></v-text-field>
               </div>
@@ -144,13 +144,13 @@
 
     <script src="js/external/jquery-4.0.0.min.js"></script>
     <script src="js/external/lucide-0.577.0.min.js"></script>
-    <script src="js/external/vue-3.5.30.min.js"></script>
-    <script src="js/external/vue-router-5.0.3.min.js"></script>
-    <script src="js/external/vuetify-v4.0.2.min.js"></script>
-    <script src="js/external/axios-1.13.6.min.js"></script>
+    <script src="js/external/vue-3.5.34.global.prod.js"></script>
+    <script src="js/external/vue-router-5.0.6.min.js"></script>
+    <script src="js/external/vuetify-v4.0.6.min.js"></script>
+    <script src="js/external/axios-1.15.2.min.js"></script>
     <script src="js/external/moment-2.30.1.min.js"></script>
-    <script src="js/external/marked-17.0.4.min.js"></script>
-    <script src="js/external/purify-3.2.7.min.js"></script>
+    <script src="js/external/marked-18.0.2.min.js"></script>
+    <script src="js/external/dompurify-3.4.2.min.js"></script>
 
     <script src="js/i18n.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/app.js?v=VERSION_PLACEHOLDER"></script>

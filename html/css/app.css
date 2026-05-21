@@ -19,10 +19,6 @@
   margin-bottom: 16px;
 }
 
-.v-application a {
-  color: rgb(var(--v-theme-info));
-}
-
 .v-alert a.text-white {
   color: white !important;
 }
@@ -105,8 +101,9 @@
   padding-top: 0;
 }
 
-.v-list-item > .v-list-item__prepend > i.fa {
-  margin-right: 16px !important;
+.v-list-item > .v-list-item__prepend i.fa {
+  margin-right: 8px !important;
+  margin-left: -4px !important;
 }
 
 .v-navigation-drawer__content .v-list-item--active {
@@ -218,10 +215,6 @@ th {
 
 th:hover, th.is-sorted, .solid {
   opacity: 1 !important;
-}
-
-.daterangepicker, .daterangepicker .calendar-time select {
-  color: black !important;
 }
 
 .stale {

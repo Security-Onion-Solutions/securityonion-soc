@@ -1013,19 +1013,19 @@ func TestAddUpdateScript(t *testing.T) {
 	timeNow := time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)
 
 	// Test unacknowledge (ack=false)
-	criteria := &model.EventUpdateCriteria{}
+	criteria := model.NewEventUpdateCriteria()
 	store.AddAckEscalateUpdateScripts(criteria, timeNow, false, false, "admin")
 	assert.Len(t, criteria.UpdateScripts, 1)
 	assert.Equal(t, "ctx._source.event.acknowledged = false;", criteria.UpdateScripts[0])
 
 	// Test acknowledge without escalate
-	criteria = &model.EventUpdateCriteria{}
+	criteria = model.NewEventUpdateCriteria()
 	store.AddAckEscalateUpdateScripts(criteria, timeNow, true, false, "admin")
 	assert.Len(t, criteria.UpdateScripts, 1)
 	expected := `
-			boolean track_timing = false;
-			boolean esc_bool = false;
-			Instant now_instant = Instant.ofEpochMilli(1257894000000L);
+			boolean track_timing = params.trackTiming;
+			boolean esc_bool = params.escBool;
+			Instant now_instant = Instant.ofEpochMilli(params.nowMillis);
 			ZonedDateTime now_date = ZonedDateTime.ofInstant(now_instant, ZoneId.of('Z'));
 			long elapsed_seconds = 0;
 			if (ctx._source.containsKey('@timestamp')) {
@@ -1035,7 +1035,7 @@ func TestAddUpdateScript(t *testing.T) {
 
 			if (ctx._source.event.acknowledged != true) {
 				ctx._source.event.acknowledged = true;
-				ctx._source.event.acknowledged_by = 'admin';
+				ctx._source.event.acknowledged_by = params.userId;
 				if (track_timing) {
 					ctx._source.event.acknowledged_timestamp = now_date;
 					ctx._source.event.acknowledged_elapsed_seconds = elapsed_seconds;
@@ -1044,7 +1044,7 @@ func TestAddUpdateScript(t *testing.T) {
 
 			if (ctx._source.event.escalated != true && esc_bool) {
 				ctx._source.event.escalated = esc_bool;
-				ctx._source.event.escalated_by = 'admin';
+				ctx._source.event.escalated_by = params.userId;
 				if (track_timing) {
 					ctx._source.event.escalated_timestamp = now_date;
 					ctx._source.event.escalated_elapsed_seconds = elapsed_seconds;
@@ -1052,51 +1052,56 @@ func TestAddUpdateScript(t *testing.T) {
 			}
 			`
 	assert.Equal(t, expected, criteria.UpdateScripts[0])
+	assert.Equal(t, "admin", criteria.Params["userId"])
+	assert.Equal(t, int64(1257894000000), criteria.Params["nowMillis"])
 
 	// Test acknowledge with escalate
-	criteria = &model.EventUpdateCriteria{}
+	criteria = model.NewEventUpdateCriteria()
 	store.AddAckEscalateUpdateScripts(criteria, timeNow, true, true, "admin")
 	assert.Len(t, criteria.UpdateScripts, 1)
-	assert.Contains(t, criteria.UpdateScripts[0], "esc_bool = true")
-	assert.Contains(t, criteria.UpdateScripts[0], "ctx._source.event.escalated_by = 'admin';")
+	assert.Equal(t, true, criteria.Params["escBool"])
+	assert.Contains(t, criteria.UpdateScripts[0], "esc_bool = params.escBool")
+	assert.Contains(t, criteria.UpdateScripts[0], "ctx._source.event.escalated_by = params.userId;")
 
 	// Test investigation case without session ID
-	criteria = &model.EventUpdateCriteria{}
+	criteria = model.NewEventUpdateCriteria()
 	store.AddInvestigationUpdateScripts(criteria, timeNow, "admin", false)
 	assert.Len(t, criteria.UpdateScripts, 1)
 	expected = `
-			boolean track_timing = false;
-			Instant now_instant = Instant.ofEpochMilli(1257894000000L);
+			boolean track_timing = params.trackTiming;
+			Instant now_instant = Instant.ofEpochMilli(params.nowMillis);
 			ZonedDateTime now_date = ZonedDateTime.ofInstant(now_instant, ZoneId.of('Z'));
 			
 			ctx._source.event.investigated = true;
-			ctx._source.event.investigated_by = 'admin';
+			ctx._source.event.investigated_by = params.userId;
 			if (track_timing) {
 				ctx._source.event.investigated_timestamp = now_date;
 			}
 			`
 	assert.Equal(t, expected, criteria.UpdateScripts[0])
+	assert.Equal(t, "admin", criteria.Params["userId"])
 
 	// Test investigation case with session ID
-	criteria = &model.EventUpdateCriteria{}
+	criteria = model.NewEventUpdateCriteria()
 	store.AddInvestigationUpdateScripts(criteria, timeNow, "admin", false, "test-session-123")
 	assert.Len(t, criteria.UpdateScripts, 1)
 	expected = `
-			boolean track_timing = false;
-			Instant now_instant = Instant.ofEpochMilli(1257894000000L);
+			boolean track_timing = params.trackTiming;
+			Instant now_instant = Instant.ofEpochMilli(params.nowMillis);
 			ZonedDateTime now_date = ZonedDateTime.ofInstant(now_instant, ZoneId.of('Z'));
 			
 			ctx._source.event.investigated = true;
-			ctx._source.event.investigated_by = 'admin';
-			ctx._source.event.investigation_session_id = 'test-session-123';
+			ctx._source.event.investigated_by = params.userId;
+			ctx._source.event.investigation_session_id = params.sessionId;
 			if (track_timing) {
 				ctx._source.event.investigated_timestamp = now_date;
 			}
 			`
 	assert.Equal(t, expected, criteria.UpdateScripts[0])
+	assert.Equal(t, "test-session-123", criteria.Params["sessionId"])
 
 	// Test investigation delete case
-	criteria = &model.EventUpdateCriteria{}
+	criteria = model.NewEventUpdateCriteria()
 	store.AddInvestigationUpdateScripts(criteria, timeNow, "admin", true)
 	assert.Len(t, criteria.UpdateScripts, 1)
 	expected = `
@@ -1339,4 +1344,263 @@ func TestPopulateJobFromDocQuery(t *testing.T) {
 	expectedEnd := ts.Add(time.Duration(60500) * time.Millisecond)
 	assert.True(t, expectedBegin.Equal(job.Filter.BeginTime))
 	assert.True(t, expectedEnd.Equal(job.Filter.EndTime))
+}
+
+func TestPopulateJobFromDocQuery_InjectionAttack(t *testing.T) {
+	ctx := context.Background()
+	client, transport := modmock.NewMockClient(t)
+	srv := server.NewFakeAuthorizedServer(nil)
+	store := &ElasticEventstore{
+		esClient:          client,
+		server:            srv,
+		index:             "myIndex",
+		esSearchOffsetMs:  1000,
+		timeShiftMs:       500,
+		defaultDurationMs: 60000,
+	}
+
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header:     http.Header{"X-Elastic-Product": []string{"Elasticsearch"}},
+		Body:       io.NopCloser(strings.NewReader(`{"hits":{"total":{"value":0}}}`)),
+	}, nil)
+
+	job := model.NewJob()
+	attackID := `some-id" }, "must_not": [ { "match_all": {} } ], "filter": { "match": { "secret": "leaked`
+	err := store.PopulateJobFromDocQuery(ctx, "_id", attackID, "2024-07-22T15:54:30.269Z", job)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid ID")
+
+	reqs := transport.GetRequests()
+	assert.Equal(t, 0, len(reqs))
+}
+
+func TestAddAcknowledgeScript_InjectionAttack(t *testing.T) {
+	updateCriteria := model.NewEventUpdateCriteria()
+	store := &ElasticEventstore{}
+
+	attackUser := `admin'; ctx._source.secret = 'leaked`
+	store.addAcknowledgeScript(updateCriteria, time.Now(), true, attackUser)
+
+	script := updateCriteria.UpdateScripts[0]
+	assert.Contains(t, script, `ctx._source.event.acknowledged_by = params.userId;`)
+	assert.Equal(t, attackUser, updateCriteria.Params["userId"])
+}
+
+func TestAddInvestigateScript_InjectionAttack(t *testing.T) {
+	updateCriteria := model.NewEventUpdateCriteria()
+	store := &ElasticEventstore{}
+
+	attackUser := `admin'; ctx._source.secret = 'leaked`
+	attackSession := `session'; ctx._source.other = 'leaked`
+	store.addInvestigateScript(updateCriteria, time.Now(), attackUser, attackSession)
+
+	script := updateCriteria.UpdateScripts[0]
+	assert.Contains(t, script, `ctx._source.event.investigated_by = params.userId;`)
+	assert.Contains(t, script, `ctx._source.event.investigation_session_id = params.sessionId;`)
+	assert.Equal(t, attackUser, updateCriteria.Params["userId"])
+	assert.Equal(t, attackSession, updateCriteria.Params["sessionId"])
+}
+
+func TestPopulateJobFromDocQuery_TunnelPath(t *testing.T) {
+	ctx := context.Background()
+	client, transport := modmock.NewMockClient(t)
+	srv := server.NewFakeAuthorizedServer(nil)
+	store := &ElasticEventstore{
+		esClient:          client,
+		server:            srv,
+		index:             "myIndex",
+		lookupTunnelParent: true,
+	}
+
+	// 1. Initial response with tunnel parent
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header:     http.Header{"X-Elastic-Product": []string{"Elasticsearch"}},
+		Body: io.NopCloser(strings.NewReader(`{
+			"hits": {"total": {"value": 1}, "hits": [{
+				"_source": {
+					"log": { "id": { "tunnel_parents": ["tunnel-uid-123"] } },
+					"@timestamp": "2024-07-22T15:54:30.269Z"
+				}
+			}]}
+		}`)),
+	}, nil)
+
+	// 2. Tunnel lookup response
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header:     http.Header{"X-Elastic-Product": []string{"Elasticsearch"}},
+		Body: io.NopCloser(strings.NewReader(`{
+			"hits": {"total": {"value": 1}, "hits": [{
+				"_source": {
+					"source": { "ip": "10.0.0.1", "port": 1234 },
+					"destination": { "ip": "10.0.0.2", "port": 80 },
+					"network": { "transport": "tcp" }
+				}
+			}]}
+		}`)),
+	}, nil)
+
+	job := model.NewJob()
+	err := store.PopulateJobFromDocQuery(ctx, "_id", "some-id", "2024-07-22T15:54:30.269Z", job)
+	assert.NoError(t, err)
+	assert.Equal(t, "10.0.0.1", job.Filter.SrcIp)
+	assert.Equal(t, "10.0.0.2", job.Filter.DstIp)
+}
+
+func TestPopulateJobFromDocQuery_ZeekPath_Injection(t *testing.T) {
+	ctx := context.Background()
+	client, transport := modmock.NewMockClient(t)
+	srv := server.NewFakeAuthorizedServer(nil)
+	store := &ElasticEventstore{
+		esClient:          client,
+		server:            srv,
+		index:             "myIndex",
+	}
+
+	// 1. Initial response with missing IP/Port and malicious fuid
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header:     http.Header{"X-Elastic-Product": []string{"Elasticsearch"}},
+		Body: io.NopCloser(strings.NewReader(`{
+			"hits": {"total": {"value": 1}, "hits": [{
+				"_source": {
+					"log": { "id": { "fuid": "F-attack\"; ctx._source.secret='leaked" } },
+					"network": { "transport": "tcp" },
+					"@timestamp": "2024-07-22T15:54:30.269Z"
+				}
+			}]}
+		}`)),
+	}, nil)
+
+	// 2. Zeek File search (should be called with escaped query)
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header:     http.Header{"X-Elastic-Product": []string{"Elasticsearch"}},
+		Body:       io.NopCloser(strings.NewReader(`{"hits":{"total":{"value":0}}}`)),
+	}, nil)
+
+	job := model.NewJob()
+	_ = store.PopulateJobFromDocQuery(ctx, "_id", "some-id", "2024-07-22T15:54:30.269Z", job)
+
+	reqs := transport.GetRequests()
+	assert.GreaterOrEqual(t, len(reqs), 2)
+	body, _ := io.ReadAll(reqs[1].Body)
+	// Check that the Zeek File query is escaped
+	assert.Contains(t, string(body), `F-attack\\\"; ctx._source.secret='leaked`)
+}
+
+func TestMSearch_Index_Injection(t *testing.T) {
+	srv := server.NewFakeAuthorizedServer(nil)
+	client, transport := modmock.NewMockClient(t)
+	store := &ElasticEventstore{
+		esClient: client,
+		server:   srv,
+	}
+	ctx := context.Background()
+
+	attackIndex := `my-index" OR { "injected": "header" }`
+	criteria := []*model.EventMSearchCriteria{
+		{
+			Index:    attackIndex,
+			RawQuery: "*",
+		},
+	}
+	criteria[0].ParsedQuery = model.NewQuery()
+	criteria[0].ParsedQuery.Parse(criteria[0].RawQuery)
+
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header:     http.Header{"X-Elastic-Product": []string{"Elasticsearch"}},
+		Body:       io.NopCloser(strings.NewReader(`{"responses":[]}`)),
+	}, nil)
+
+	_, _ = store.MSearch(ctx, criteria)
+
+	reqs := transport.GetRequests()
+	assert.NotEmpty(t, reqs)
+	
+	var foundReq *http.Request
+	for _, req := range reqs {
+		if req.Body != nil {
+			foundReq = req
+			break
+		}
+	}
+	assert.NotNil(t, foundReq)
+	body, _ := io.ReadAll(foundReq.Body)
+	assert.Contains(t, string(body), `{"index":"my-index\" OR { \"injected\": \"header\" }"}`)
+}
+
+func TestScroll_InjectionAttacks(t *testing.T) {
+	srv := server.NewFakeAuthorizedServer(nil)
+	client, transport := modmock.NewMockClient(t)
+	store := &ElasticEventstore{
+		esClient:      client,
+		server:        srv,
+		index:         "events",
+		maxScrollSize: 100,
+	}
+	ctx := context.Background()
+
+	criteria := &model.EventScrollCriteria{}
+	criteria.RawQuery = "*"
+	criteria.ParsedQuery = model.NewQuery()
+	criteria.ParsedQuery.Parse(criteria.RawQuery)
+
+	attackIndex := `my-index" OR { "injected": "index" }`
+	attackScrollID := `my-scroll-id" OR { "injected": "scroll" }`
+
+	// 1. Mock field caps
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header:     http.Header{"X-Elastic-Product": []string{"Elasticsearch"}},
+		Body:       io.NopCloser(strings.NewReader(`{"fields":{}}`)),
+	}, nil)
+
+	// 2. Initial search response
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header:     http.Header{"X-Elastic-Product": []string{"Elasticsearch"}},
+		Body: io.NopCloser(strings.NewReader(fmt.Sprintf(`{
+			"took": 1, 
+			"timed_out": false, 
+			"_shards": {"total": 1, "successful": 1, "failed": 0}, 
+			"_scroll_id": %q, 
+			"hits":{"total":2, "hits":[{"_index":"events", "_id":"1", "_source":{"@timestamp":"2024-07-22T15:54:30.269Z"}}]}
+		}`, attackScrollID))),
+	}, nil)
+
+	// 3. Subsequent scroll response
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header:     http.Header{"X-Elastic-Product": []string{"Elasticsearch"}},
+		Body: io.NopCloser(strings.NewReader(`{"took": 1, "timed_out": false, "_shards": {"total": 1, "successful": 1, "failed": 0}, "hits":{"total":2, "hits":[]}}`)),
+	}, nil)
+
+	_, err := store.Scroll(ctx, criteria, []string{attackIndex})
+	assert.NoError(t, err)
+
+	reqs := transport.GetRequests()
+	var searchReq, scrollReq *http.Request
+	for _, req := range reqs {
+		if strings.Contains(req.URL.Path, "_search") && !strings.Contains(req.URL.Path, "scroll") {
+			searchReq = req
+		} else if strings.Contains(req.URL.Path, "scroll") {
+			scrollReq = req
+		}
+	}
+
+	assert.NotNil(t, searchReq, "Should have found a Search request")
+	if searchReq != nil {
+		// Verify the index is in the URL path (unescaped in the mock, but proving it's passed)
+		assert.Contains(t, searchReq.URL.Path, `my-index"`)
+	}
+
+	assert.NotNil(t, scrollReq, "Should have found a Scroll request")
+	if scrollReq != nil {
+		body, _ := io.ReadAll(scrollReq.Body)
+		assert.Contains(t, string(body), `"scroll_id":"my-scroll-id\" OR { \"injected\": \"scroll\" }"`)
+	}
 }

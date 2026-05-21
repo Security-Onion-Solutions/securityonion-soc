@@ -1,6 +1,6 @@
 <div v-bind="$attrs">
 	<template v-for="item in items" :key="item.id">
-		<div v-if="filter(item)" @click="click(item)" class="d-flex pa-3 treeview-item" :class="{ 'treeview-item--active': item.id === this.selectedId }" style="cursor: pointer; user-select: none;" :style="{ 'padding-left': calcGutter() + ' !important' }">
+		<div v-if="filter(item)" @click="click(item)" @keydown.enter.space.stop="click(item)" class="d-flex pa-3 treeview-item" :class="{ 'treeview-item--active': item.id === this.selectedId }" style="cursor: pointer; user-select: none;" :style="{ 'padding-left': calcGutter() + ' !important' }" role="button" tabindex="0">
 			<span v-if="item.children">
 				<v-icon v-if="item.open" variant="text" size="small" icon>fas fa-caret-down</v-icon>
 				<v-icon v-else variant="text" size="small" icon>fas fa-caret-right</v-icon>

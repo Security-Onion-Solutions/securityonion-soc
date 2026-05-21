@@ -37,6 +37,7 @@ components.push({
 				extractedSummary: '',
 				newOverride: null,
 				newOverrideValid: false,
+				sortBy: [{ key: 'createdAt', order: 'asc' }],
 				overrideHeaders: {
 					'elastalert': [
 						{},
@@ -55,16 +56,6 @@ components.push({
 						{ title: this.$root.i18n.dateCreated, value: 'createdAt', format: true },
 						{ title: this.$root.i18n.dateModified, value: 'updatedAt', format: true },
 					],
-				},
-				rules: {
-					required: value => (value && value.length > 0) || this.$root.i18n.required,
-					number: value => (!isNaN(+value) && Number.isInteger(parseFloat(value))) || this.$root.i18n.required,
-					noteLengthLimit: value => (value.length <= MAX_OVERRIDE_NOTE_LENGTH) || this.$root.i18n.ruleMaxLen,
-					cidrFormat: value => (!value ||
-						/^!?\$[a-z_][a-z0-9_]*$/i.test(value) || // Suricata variable
-						/^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\/(3[0-2]|[12]\d|\d)$/.test(value) || // IPv4 CIDR
-						/^((([0-9a-f]{1,4}:){7}([0-9a-f]{1,4}|:))|(([0-9a-f]{1,4}:){6}(:[0-9a-f]{1,4}|((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9a-f]{1,4}:){5}(((:[0-9a-f]{1,4}){1,2})|:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9a-f]{1,4}:){4}(((:[0-9a-f]{1,4}){1,3})|((:[0-9a-f]{1,4})?:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){3}(((:[0-9a-f]{1,4}){1,4})|((:[0-9a-f]{1,4}){0,2}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){2}(((:[0-9a-f]{1,4}){1,5})|((:[0-9a-f]{1,4}){0,3}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){1}(((:[0-9a-f]{1,4}){1,6})|((:[0-9a-f]{1,4}){0,4}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(:(((:[0-9a-f]{1,4}){1,7})|((:[0-9a-f]{1,4}){0,5}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:)))(%.+)?\s*(\/([0-9]|[1-9][0-9]|1[0-1][0-9]|12[0-8]))$/i.test(value) // IPv6 CIDR
-					) || this.i18n.invalidCidrOrVar,
 				},
 				ruleValidators: {
 					sigma: [
@@ -541,6 +532,25 @@ components.push({
 			},
 			closeDetectionPanel() {
 				this.emit('close');
+			},
+			defaultSort(a, b, isDesc) {
+				if (!isDesc) {
+					return a < b ? -1 : 1;
+				}
+				return b < a ? -1 : 1;
+			},
+			sortOverrides(items, index, isDesc) {
+				const route = this;
+				if (index && index.length > 0) {
+					index = index[0];
+				}
+				if (isDesc && isDesc.length > 0) {
+					isDesc = isDesc[0];
+				}
+				items.sort((a, b) => {
+					return route.defaultSort(a[index], b[index], isDesc);
+				});
+				return items;
 			},
 		},
 	}
