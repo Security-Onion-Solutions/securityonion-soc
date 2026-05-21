@@ -559,3 +559,44 @@ test('initParams', () => {
   });
   expect(comp.showUnreviewedAiSummaries).toBe(true);
 });
+
+test('defaultSort ascending', () => {
+  expect(comp.defaultSort(1, 2, false)).toBe(-1);
+  expect(comp.defaultSort(2, 1, false)).toBe(1);
+  expect(comp.defaultSort('a', 'b', false)).toBe(-1);
+  expect(comp.defaultSort('b', 'a', false)).toBe(1);
+});
+
+test('defaultSort descending', () => {
+  expect(comp.defaultSort(1, 2, true)).toBe(1);
+  expect(comp.defaultSort(2, 1, true)).toBe(-1);
+  expect(comp.defaultSort('a', 'b', true)).toBe(1);
+  expect(comp.defaultSort('b', 'a', true)).toBe(-1);
+});
+
+test('sortOverrides ascending', () => {
+  const items = [
+    { createdAt: '2026-03-01' },
+    { createdAt: '2026-01-01' },
+    { createdAt: '2026-02-01' },
+  ];
+  const sorted = comp.sortOverrides(items, ['createdAt'], [false]);
+  expect(sorted.map(i => i.createdAt)).toEqual(['2026-01-01', '2026-02-01', '2026-03-01']);
+});
+
+test('sortOverrides descending', () => {
+  const items = [
+    { createdAt: '2026-01-01' },
+    { createdAt: '2026-03-01' },
+    { createdAt: '2026-02-01' },
+  ];
+  const sorted = comp.sortOverrides(items, ['createdAt'], [true]);
+  expect(sorted.map(i => i.createdAt)).toEqual(['2026-03-01', '2026-02-01', '2026-01-01']);
+});
+
+test('sortOverrides handles empty index array', () => {
+  const items = [{ createdAt: '2026-01-01' }, { createdAt: '2026-02-01' }];
+  const sorted = comp.sortOverrides(items, [], []);
+  expect(sorted).toBe(items);
+  expect(sorted.length).toBe(2);
+});

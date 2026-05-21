@@ -37,6 +37,7 @@ components.push({
 				extractedSummary: '',
 				newOverride: null,
 				newOverrideValid: false,
+				sortBy: [{ key: 'createdAt', order: 'asc' }],
 				overrideHeaders: {
 					'elastalert': [
 						{},
@@ -531,6 +532,25 @@ components.push({
 			},
 			closeDetectionPanel() {
 				this.emit('close');
+			},
+			defaultSort(a, b, isDesc) {
+				if (!isDesc) {
+					return a < b ? -1 : 1;
+				}
+				return b < a ? -1 : 1;
+			},
+			sortOverrides(items, index, isDesc) {
+				const route = this;
+				if (index && index.length > 0) {
+					index = index[0];
+				}
+				if (isDesc && isDesc.length > 0) {
+					isDesc = isDesc[0];
+				}
+				items.sort((a, b) => {
+					return route.defaultSort(a[index], b[index], isDesc);
+				});
+				return items;
 			},
 		},
 	}
