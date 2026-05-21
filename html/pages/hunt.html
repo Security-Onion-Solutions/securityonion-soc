@@ -56,8 +56,8 @@
 						</v-card-actions>
 					</v-card>
 				</v-dialog>
-			<v-row align="start" class="no-print" style="gap: 8px; flex-wrap: nowrap;">
-				<v-col style="flex: 1 1 auto; min-width: 0;" class="pa-0">
+			<v-row align="start" class="no-print toolbar-container">
+				<v-col class="toolbar-col pa-0">
 					<v-toolbar class="so-toolbar elevation-0" variant="flat">
 						<v-textarea :clearable="isAdvanced()" :auto-grow="isAdvanced()" :readonly="!isAdvanced()" :disabled="loading()" @input="queryAltered = true"
 							@change="queryModified" class="mx-2" v-model="$data[getDisplayedQueryVar()]" :hint="isAdvanced() && queryAltered ? i18n.queryHelp : ''"
