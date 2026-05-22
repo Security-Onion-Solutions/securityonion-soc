@@ -41,7 +41,7 @@ const i18n = {
       ariaChartTotalMessages: 'Total messages chart',
       ariaClientsCopyId: 'Copy client ID to clipboard',
       ariaClientsCopyCredentials: 'Copy credentials to clipboard',
-      ariaClientsConnectAPIHelp: 'Connect API Docs',
+      ariaClientsConnectAPIHelp: 'Security Onion API Docs',
       ariaClientsDownloadCert: "Download this grid's TLS certificate",
       ariaClientsNew: 'New API client',
       ariaClientsRefresh: 'Refresh API clients list',
@@ -292,7 +292,7 @@ const i18n = {
       analyzer_urlhaus_invalid_url: 'Invalid URL',
       analyzer_urlhaus_malware_download: 'Malware download',
 
-      api: 'Connect API',
+      api: 'Security Onion API',
       appliances: 'Enterprise Appliances',
       approve: 'Approve',
       artifactBulk: 'Bulk Add',
