@@ -763,13 +763,6 @@ func cacheFields(fieldDefs map[string]*FieldDefinition, name gjson.Result, detai
 		if fieldDefs[fieldName] == nil || !fieldDef.aggregatable {
 			fieldDefs[fieldName] = fieldDef
 		}
-
-		// log.WithFields(log.Fields{
-		// 	"fieldName":    name,
-		// 	"fieldType":    fieldType,
-		// 	"aggregatable": fieldDef.aggregatable,
-		// 	"searchable":   fieldDef.searchable,
-		// }).Debug("Added field definition")
 	}
 	return true
 }
