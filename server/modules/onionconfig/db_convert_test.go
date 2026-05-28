@@ -14,34 +14,39 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestDecodeJSONBValue_Empty(t *testing.T) {
-	assert.Equal(t, "", decodeJSONBValue(""))
+func sp(s string) *string {
+	return &s
+}
+
+func TestDecodeJSONBValue_Nil(t *testing.T) {
+	assert.Equal(t, "", decodeJSONBValue(nil))
 }
 
 func TestDecodeJSONBValue_Null(t *testing.T) {
-	assert.Equal(t, "", decodeJSONBValue("null"))
+	assert.Equal(t, "", decodeJSONBValue(sp("null")))
 }
 
 func TestDecodeJSONBValue_StringJSON(t *testing.T) {
-	assert.Equal(t, "hello", decodeJSONBValue(`"hello"`))
+	assert.Equal(t, "hello", decodeJSONBValue(sp(`"hello"`)))
 }
 
 func TestDecodeJSONBValue_NumberJSON(t *testing.T) {
-	assert.Equal(t, "42", decodeJSONBValue("42"))
+	assert.Equal(t, "42", decodeJSONBValue(sp("42")))
 }
 
 func TestDecodeJSONBValue_BoolJSON(t *testing.T) {
-	assert.Equal(t, "true", decodeJSONBValue("true"))
+	assert.Equal(t, "true", decodeJSONBValue(sp("true")))
 }
 
 func TestDecodeJSONBValue_ObjectJSON(t *testing.T) {
-	assert.Equal(t, `{"a":1}`, decodeJSONBValue(`{"a":1}`))
+	assert.Equal(t, `{"a":1}`, decodeJSONBValue(sp(`{"a":1}`)))
 }
 
 func TestEncodeSettingValue_Empty(t *testing.T) {
 	s := model.NewSetting("test")
 	s.Value = ""
-	assert.Equal(t, "null", encodeSettingValue(s))
+	// settingToDBRow handles the empty -> nil conversion, encodeSettingValue just marshals.
+	assert.Equal(t, `""`, encodeSettingValue(s))
 }
 
 func TestEncodeSettingValue_PlainString(t *testing.T) {
@@ -59,13 +64,14 @@ func TestEncodeSettingValue_ValidJSON(t *testing.T) {
 func TestEncodeSettingValue_BoolJSON(t *testing.T) {
 	s := model.NewSetting("test")
 	s.Value = "true"
-	assert.Equal(t, "true", encodeSettingValue(s))
+	// Now marshaled to JSON string "true" instead of JSON boolean true
+	assert.Equal(t, `"true"`, encodeSettingValue(s))
 }
 
 func TestDbRowToSetting(t *testing.T) {
 	row := database.SettingRow{
 		SettingID:        "soc.config.key",
-		Value:            `"myvalue"`,
+		Value:            sp(`"myvalue"`),
 		DuplicatedFromID: "soc.config.orig",
 		NodeID:           "node1",
 	}
@@ -85,7 +91,14 @@ func TestSettingToDBRow(t *testing.T) {
 
 	row := settingToDBRow(s)
 	assert.Equal(t, "soc.config.key", row.SettingID)
-	assert.Equal(t, `"hello"`, row.Value)
+	assert.Equal(t, `"hello"`, *row.Value)
 	assert.Equal(t, "node2", row.NodeID)
 	assert.Equal(t, "soc.config.orig", row.DuplicatedFromID)
+}
+
+func TestSettingToDBRow_Empty(t *testing.T) {
+	s := model.NewSetting("soc.config.key")
+	s.Value = ""
+	row := settingToDBRow(s)
+	assert.Nil(t, row.Value)
 }

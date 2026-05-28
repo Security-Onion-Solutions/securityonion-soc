@@ -9,6 +9,7 @@ package onionconfig
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/onionconfig/database"
@@ -28,9 +29,14 @@ func dbRowToSetting(row database.SettingRow) *model.Setting {
 
 // settingToDBRow converts a model.Setting into the SettingRow format for DB storage.
 func settingToDBRow(setting *model.Setting) database.SettingRow {
+	var val *string
+	if setting.Value != "" {
+		v := encodeSettingValue(setting)
+		val = &v
+	}
 	return database.SettingRow{
 		SettingID:        setting.Id,
-		Value:            encodeSettingValue(setting),
+		Value:            val,
 		DuplicatedFromID: setting.DuplicatedFromID,
 		NodeID:           setting.NodeId,
 	}
@@ -38,28 +44,33 @@ func settingToDBRow(setting *model.Setting) database.SettingRow {
 
 // decodeJSONBValue turns a JSONB-encoded string back into the flat string
 // representation used by the rest of the onionconfig system.
-func decodeJSONBValue(jsonVal string) string {
-	if jsonVal == "" || jsonVal == "null" {
+func decodeJSONBValue(jsonVal *string) string {
+	if jsonVal == nil {
+		return ""
+	}
+	val := *jsonVal
+	if val == "null" {
 		return ""
 	}
 	// If it's a JSON string, unwrap the quotes.
 	var s string
-	if err := json.Unmarshal([]byte(jsonVal), &s); err == nil {
+	if err := json.Unmarshal([]byte(val), &s); err == nil {
 		return s
 	}
 	// For other JSON types (number, bool, object, array) return as-is.
-	return jsonVal
+	return val
 }
 
 // encodeSettingValue converts a setting's Value into a JSON representation
 // suitable for storage as JSONB.
 func encodeSettingValue(setting *model.Setting) string {
-	if setting.Value == "" {
-		return "null"
-	}
-	// If the value is already valid JSON (object, array, number, bool), pass through.
-	if json.Valid([]byte(setting.Value)) {
-		return setting.Value
+	trimmed := strings.TrimSpace(setting.Value)
+	// If the value is a JSON object or array, pass it through directly.
+	if (strings.HasPrefix(trimmed, "{") && strings.HasSuffix(trimmed, "}")) ||
+		(strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]")) {
+		if json.Valid([]byte(setting.Value)) {
+			return setting.Value
+		}
 	}
 	// Otherwise treat as a plain string and marshal it.
 	b, err := json.Marshal(setting.Value)

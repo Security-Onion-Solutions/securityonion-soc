@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -111,12 +112,13 @@ func (c *OnionConfig) UpdateSetting(ctx context.Context, setting *model.Setting,
 		return err
 	}
 
-	settingDef, err := c.GetSetting(ctx, setting.Id)
+	allSettings, err := c.loadAllSettings(ctx, setting.Id)
 	if err != nil {
 		return err
 	}
 
-	var oldValue string
+	settingDef, oldValue := resolveExistingSetting(allSettings, setting.Id, setting.NodeId)
+
 	if settingDef == nil {
 		logger.WithFields(log.Fields{
 			"settingId": setting.Id,
@@ -125,7 +127,6 @@ func (c *OnionConfig) UpdateSetting(ctx context.Context, setting *model.Setting,
 		if settingDef.Readonly {
 			return errors.New("Unable to modify or remove a readonly setting")
 		}
-		oldValue = settingDef.Value
 		setting.Syntax = settingDef.Syntax
 		setting.Description = settingDef.Description
 		setting.Title = settingDef.Title
@@ -145,9 +146,6 @@ func (c *OnionConfig) UpdateSetting(ctx context.Context, setting *model.Setting,
 	return c.routeUpdate(ctx, setting, oldValue, remove, logger)
 }
 
-// routeUpdate dispatches a setting write to DB or yaml based on origin rules:
-//   - db origin → DB
-//   - yaml or unassigned origin → yaml
 func (c *OnionConfig) routeUpdate(ctx context.Context, setting *model.Setting, oldValue string, remove bool, logger log.Interface) error {
 	userID := userIDFromContext(ctx)
 
@@ -165,6 +163,191 @@ func (c *OnionConfig) routeUpdate(ctx context.Context, setting *model.Setting, o
 		}
 	}
 	return err
+}
+
+func (c *OnionConfig) GetAuditHistory(ctx context.Context, settingID, nodeID string, limit, offset int, sort, order string) (*server.ConfigHistory, error) {
+	c.waitReady()
+	if err := c.server.CheckAuthorized(ctx, "read", "config"); err != nil {
+		return nil, err
+	}
+	if c.store == nil {
+		return nil, errors.New("database not configured")
+	}
+
+	isSensitive := c.isSensitive(settingID)
+
+	entries, total, err := c.store.GetAuditHistory(ctx, settingID, nodeID, limit, offset, sort, order)
+	if err != nil {
+		return nil, err
+	}
+
+	history := make([]model.AuditHistory, 0, len(entries))
+	for _, e := range entries {
+		oldVal, newVal := decodeAndMaskAuditValues(isSensitive, e.OldValue, e.NewValue)
+		history = append(history, model.AuditHistory{
+			Timestamp: e.Timestamp.Format(time.RFC3339),
+			UserID:    e.UserID,
+			OldValue:  oldVal,
+			NewValue:  newVal,
+			Note:      e.Note,
+			SettingID: e.SettingID,
+			NodeID:    e.NodeID,
+		})
+	}
+
+	return &server.ConfigHistory{History: history, Total: total}, nil
+}
+
+func (c *OnionConfig) GetAllAuditHistory(ctx context.Context, limit, offset int, sort, order string) (*server.ConfigHistory, error) {
+	c.waitReady()
+	if err := c.server.CheckAuthorized(ctx, "read", "config"); err != nil {
+		return nil, err
+	}
+	if c.store == nil {
+		return nil, errors.New("database not configured")
+	}
+
+	entries, total, err := c.store.GetAllAuditHistory(ctx, limit, offset, sort, order)
+	if err != nil {
+		return nil, err
+	}
+
+	history := make([]model.AuditHistory, 0, len(entries))
+	for _, e := range entries {
+		oldVal, newVal := decodeAndMaskAuditValues(c.isSensitive(e.SettingID), e.OldValue, e.NewValue)
+		history = append(history, model.AuditHistory{
+			Timestamp: e.Timestamp.Format(time.RFC3339),
+			UserID:    e.UserID,
+			OldValue:  oldVal,
+			NewValue:  newVal,
+			Note:      e.Note,
+			SettingID: e.SettingID,
+			NodeID:    e.NodeID,
+		})
+	}
+
+	return &server.ConfigHistory{History: history, Total: total}, nil
+}
+
+func (c *OnionConfig) RevertSetting(ctx context.Context, settingID, nodeID string, ts time.Time, note string) error {
+	c.waitReady()
+	if err := c.server.CheckAuthorized(ctx, "write", "config"); err != nil {
+		return err
+	}
+	if c.store == nil {
+		return errors.New("database not configured")
+	}
+
+	entry, err := c.store.GetAuditEntryAtTimestamp(ctx, settingID, nodeID, ts)
+	if err != nil {
+		return err
+	}
+
+	revertValue := decodeJSONBValue(entry.OldValue)
+
+	allSettings, err := c.loadAllSettings(ctx, settingID)
+	if err != nil {
+		return err
+	}
+	_, currentValue := resolveExistingSetting(allSettings, settingID, nodeID)
+
+	if revertValue == currentValue {
+		return nil
+	}
+
+	setting := model.NewSetting(settingID)
+	setting.NodeId = nodeID
+	setting.Value = revertValue
+	setting.Note = note
+
+	return c.UpdateSetting(ctx, setting, entry.OldValue == nil)
+}
+
+func (c *OnionConfig) RevertAllSettings(ctx context.Context, ts time.Time, note string) (int, error) {
+	c.waitReady()
+	if err := c.server.CheckAuthorized(ctx, "write", "config"); err != nil {
+		return 0, err
+	}
+	if c.store == nil {
+		return 0, errors.New("database not configured")
+	}
+
+	rows, err := c.store.GetRevertState(ctx, ts)
+	if err != nil {
+		return 0, err
+	}
+
+	filtered, err := c.filterUnchangedReverts(ctx, rows)
+	if err != nil {
+		return 0, err
+	}
+
+	changedCount := 0
+	for _, r := range filtered {
+		setting := model.NewSetting(r.SettingID)
+		setting.NodeId = r.NodeID
+		setting.Value = decodeJSONBValue(r.Value)
+		setting.Note = note
+
+		if err := c.UpdateSetting(ctx, setting, r.Value == nil); err != nil {
+			return changedCount, err
+		}
+		changedCount++
+	}
+
+	return changedCount, nil
+}
+
+func (c *OnionConfig) GetRevertCount(ctx context.Context, ts time.Time) (int, error) {
+	c.waitReady()
+	if err := c.server.CheckAuthorized(ctx, "read", "config"); err != nil {
+		return 0, err
+	}
+	if c.store == nil {
+		return 0, errors.New("database not configured")
+	}
+
+	rows, err := c.store.GetRevertState(ctx, ts)
+	if err != nil {
+		return 0, err
+	}
+
+	filtered, err := c.filterUnchangedReverts(ctx, rows)
+	if err != nil {
+		return 0, err
+	}
+	return len(filtered), nil
+}
+
+func (c *OnionConfig) filterUnchangedReverts(ctx context.Context, rows []database.SettingRow) ([]database.SettingRow, error) {
+	allSettings, err := c.loadAllSettings(ctx, "")
+	if err != nil {
+		return nil, err
+	}
+
+	currentValues := make(map[string]string)
+	for _, s := range allSettings {
+		currentValues[s.Id+"\x00"+s.NodeId] = s.Value
+	}
+
+	var filtered []database.SettingRow
+	for _, r := range rows {
+		if decodeJSONBValue(r.Value) == currentValues[r.SettingID+"\x00"+r.NodeID] {
+			continue
+		}
+		filtered = append(filtered, r)
+	}
+	return filtered, nil
+}
+
+// isSensitive returns true if the given setting ID is marked as sensitive in the static annotations.
+func (c *OnionConfig) isSensitive(id string) bool {
+	if ann, ok := c.annotations[id]; ok {
+		if s, ok := ann["sensitive"].(bool); ok {
+			return s
+		}
+	}
+	return false
 }
 
 // loadAllSettings merges DB settings on top of yaml settings then applies annotations.
@@ -220,4 +403,32 @@ func userIDFromContext(ctx context.Context) string {
 		return uid
 	}
 	return "unknown"
+}
+
+func decodeAndMaskAuditValues(isSensitive bool, oldVal, newVal *string) (string, string) {
+	o := decodeJSONBValue(oldVal)
+	n := decodeJSONBValue(newVal)
+	if isSensitive {
+		if oldVal != nil {
+			o = "******"
+		}
+		if newVal != nil {
+			n = "******"
+		}
+	}
+	return o, n
+}
+
+func resolveExistingSetting(allSettings []*model.Setting, settingID, nodeID string) (settingDef *model.Setting, oldValue string) {
+	for _, s := range allSettings {
+		if s.Id == settingID {
+			if settingDef == nil {
+				settingDef = s
+			}
+			if s.NodeId == nodeID {
+				oldValue = s.Value
+			}
+		}
+	}
+	return
 }

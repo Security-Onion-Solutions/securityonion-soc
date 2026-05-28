@@ -24,6 +24,7 @@ func loadDBSettings(ctx context.Context, loader dbSettingsLoader) ([]*model.Sett
 	if err != nil {
 		return nil, err
 	}
+
 	settings := make([]*model.Setting, 0, len(rows))
 	for _, row := range rows {
 		settings = append(settings, dbRowToSetting(row))

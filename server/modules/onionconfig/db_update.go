@@ -23,9 +23,10 @@ type dbSettingsMutator interface {
 // updateSettingInDB writes (or removes) a setting in the DB and records an audit entry,
 // wrapping both operations in a single transaction.
 func updateSettingInDB(ctx context.Context, store dbSettingsMutator, setting *model.Setting, oldValue string, remove bool, userID string) error {
-	newVal := ""
+	var newVal *string
 	if !remove {
-		newVal = encodeSettingValue(setting)
+		v := encodeSettingValue(setting)
+		newVal = &v
 	}
 
 	entry := database.AuditEntry{
@@ -43,9 +44,10 @@ func updateSettingInDB(ctx context.Context, store dbSettingsMutator, setting *mo
 
 // auditSettingOnly records an audit entry in the DB for a setting that was modified elsewhere (e.g. YAML).
 func auditSettingOnly(ctx context.Context, store dbSettingsMutator, setting *model.Setting, oldValue string, remove bool, userID string) error {
-	newVal := ""
+	var newVal *string
 	if !remove {
-		newVal = encodeSettingValue(setting)
+		v := encodeSettingValue(setting)
+		newVal = &v
 	}
 
 	entry := database.AuditEntry{
@@ -61,9 +63,10 @@ func auditSettingOnly(ctx context.Context, store dbSettingsMutator, setting *mod
 	return store.RecordAudit(ctx, entry)
 }
 
-func encodeOldValue(v string) string {
+func encodeOldValue(v string) *string {
 	if v == "" {
-		return "null"
+		return nil
 	}
-	return encodeSettingValue(&model.Setting{Value: v})
+	encoded := encodeSettingValue(&model.Setting{Value: v})
+	return &encoded
 }

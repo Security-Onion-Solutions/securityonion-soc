@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
@@ -32,6 +33,13 @@ func RegisterConfigRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Use(h.configEnabled)
 
 		r.Get("/", h.getConfig)
+		r.Get("/history", h.getGlobalHistory)
+		r.Get("/history/{id}", h.getHistory)
+		r.Get("/history/{id}/{minion}", h.getHistory)
+		r.Post("/history/revert/all", h.postRevertAll)
+		r.Get("/history/revert/all/count", h.getRevertAllCount)
+		r.Post("/history/revert/{id}", h.postRevertSetting)
+		r.Post("/history/revert/{id}/{minion}", h.postRevertSetting)
 
 		r.Put("/", h.putSetting)
 		r.Post("/", h.putSetting)
@@ -215,5 +223,112 @@ func (h *ConfigHandler) deleteConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	web.Respond(w, r, http.StatusOK, nil)
+}
+
+func (h *ConfigHandler) getHistory(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id := chi.URLParam(r, "id")
+	minion := chi.URLParam(r, "minion")
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	sort := r.URL.Query().Get("sort")
+	order := r.URL.Query().Get("order")
+
+	if limit <= 0 {
+		limit = 25
+	}
+
+	history, err := h.server.Configstore.GetAuditHistory(ctx, id, minion, limit, offset, sort, order)
+	if err != nil {
+		web.Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, history)
+}
+
+func (h *ConfigHandler) getGlobalHistory(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	sort := r.URL.Query().Get("sort")
+	order := r.URL.Query().Get("order")
+
+	if limit <= 0 {
+		limit = 25
+	}
+
+	history, err := h.server.Configstore.GetAllAuditHistory(ctx, limit, offset, sort, order)
+	if err != nil {
+		web.Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, history)
+}
+
+func (h *ConfigHandler) postRevertAll(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	var body struct {
+		Timestamp string `json:"timestamp"`
+		Note      string `json:"note"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+	ts, err := time.Parse(time.RFC3339, body.Timestamp)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+	count, err := h.server.Configstore.RevertAllSettings(ctx, ts, body.Note)
+	if err != nil {
+		web.Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+	web.Respond(w, r, http.StatusOK, map[string]int{"count": count})
+}
+
+func (h *ConfigHandler) getRevertAllCount(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tsStr := r.URL.Query().Get("timestamp")
+	ts, err := time.Parse(time.RFC3339, tsStr)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	count, err := h.server.Configstore.GetRevertCount(ctx, ts)
+	if err != nil {
+		web.Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+	web.Respond(w, r, http.StatusOK, map[string]int{"count": count})
+}
+
+func (h *ConfigHandler) postRevertSetting(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id := chi.URLParam(r, "id")
+	minion := chi.URLParam(r, "minion")
+	var body struct {
+		Timestamp string `json:"timestamp"`
+		Note      string `json:"note"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+	ts, err := time.Parse(time.RFC3339, body.Timestamp)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+	err = h.server.Configstore.RevertSetting(ctx, id, minion, ts, body.Note)
+	if err != nil {
+		web.Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
 	web.Respond(w, r, http.StatusOK, nil)
 }

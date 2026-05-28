@@ -9,6 +9,7 @@ package onionconfig
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/onionconfig/database"
@@ -17,12 +18,16 @@ import (
 
 // fakeLoader implements dbSettingsLoader for tests.
 type fakeLoader struct {
-	rows []database.SettingRow
-	err  error
+	rows  []database.SettingRow
+	err   error
 }
 
 func (f *fakeLoader) GetAllSettings(_ context.Context) ([]database.SettingRow, error) {
 	return f.rows, f.err
+}
+
+func testTime(year, month, day, hour, min int) time.Time {
+	return time.Date(year, time.Month(month), day, hour, min, 0, 0, time.UTC)
 }
 
 func TestLoadDBSettings_Empty(t *testing.T) {
@@ -34,7 +39,7 @@ func TestLoadDBSettings_Empty(t *testing.T) {
 
 func TestLoadDBSettings_Single(t *testing.T) {
 	loader := &fakeLoader{rows: []database.SettingRow{
-		{SettingID: "soc.key", Value: `"val"`, NodeID: ""},
+		{SettingID: "soc.key", Value: sp(`"val"`), NodeID: ""},
 	}}
 	settings, err := loadDBSettings(context.Background(), loader)
 	assert.NoError(t, err)

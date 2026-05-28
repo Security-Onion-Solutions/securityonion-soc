@@ -70,7 +70,7 @@ func TestUpdateSettingInDB_Delete(t *testing.T) {
 	assert.Len(t, mutator.updated, 1)
 	assert.Equal(t, true, mutator.updated[0].remove)
 	assert.Equal(t, "node1", mutator.updated[0].row.NodeID)
-	assert.Equal(t, "", mutator.updated[0].audit.NewValue)
+	assert.Nil(t, mutator.updated[0].audit.NewValue)
 }
 
 func TestUpdateSettingInDB_Error(t *testing.T) {
@@ -82,11 +82,11 @@ func TestUpdateSettingInDB_Error(t *testing.T) {
 }
 
 func TestEncodeOldValue_Empty(t *testing.T) {
-	assert.Equal(t, "null", encodeOldValue(""))
+	assert.Nil(t, encodeOldValue(""))
 }
 
 func TestEncodeOldValue_String(t *testing.T) {
-	assert.Equal(t, `"foo"`, encodeOldValue("foo"))
+	assert.Equal(t, `"foo"`, *encodeOldValue("foo"))
 }
 
 func TestAuditSettingOnly(t *testing.T) {

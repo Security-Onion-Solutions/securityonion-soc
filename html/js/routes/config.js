@@ -57,6 +57,27 @@ routes.push({
         showNoteDialog: false,
         note: "",
         pendingSave: null,
+        showHistoryDialog: false,
+        isGlobalHistory: false,
+        historySetting: null,
+        historyNodeId: null,
+        auditHistory: [],
+        historyPage: 1,
+        historyTotal: 0,
+        pageSize: 25,
+        historySort: 'ts',
+        historyOrder: 'desc',
+        confirmRevertDialog: false,
+        confirmRevertEntry: null,
+        confirmRevertAllCount: 0,
+        confirmRevertAllInput: '',
+        revertAllSettings: false,
+        restoreNote: '',
+        restoreNoteDefault: '',
+        expandedHistoryRows: new Set(),
+        historySearch: '',
+        appliedHistorySearch: '',
+        historyFilteredTotal: 0,
       }
     },
     mounted() {
@@ -68,10 +89,24 @@ routes.push({
       "active": "selectSetting",
       "advanced": "toggleAdvanced",
       '$route': "onRouteUpdate",
+      revertAllSettings(val) {
+        if (this.confirmRevertEntry && this.restoreNote === this.restoreNoteDefault) {
+          const key = val ? 'settingRevertNoteDefaultAll' : 'settingRevertNoteDefault';
+          this.restoreNote = this.i18n[key].replace('{timestamp}', this.$root.formatDateTime(this.confirmRevertEntry?.timestamp));
+          this.restoreNoteDefault = this.restoreNote;
+        }
+      },
   },
   computed: {
     selected() {
       return this.findActiveSetting();
+    },
+    filteredAuditHistory() {
+      return this.getFilteredAuditHistory();
+    },
+    historyTotalPages() {
+      if (this.historyFilteredTotal <= 0) return 1;
+      return Math.ceil(this.historyFilteredTotal / this.pageSize);
     },
   },
   methods: {
@@ -205,6 +240,177 @@ routes.push({
           route.settingsCustomized++;
         }
       });
+    },
+    showHistory(setting = null, nodeId = "") {
+      this.historySetting = setting;
+      this.historyNodeId = nodeId;
+      this.isGlobalHistory = !setting;
+      this.historyPage = 1;
+      this.expandedHistoryRows = new Set();
+      this.historySearch = '';
+      this.appliedHistorySearch = '';
+      return this.fetchHistory();
+    },
+    async fetchHistory() {
+      this.$root.startLoading();
+      try {
+        const offset = (this.historyPage - 1) * this.pageSize;
+        let url = 'config/history';
+        if (!this.isGlobalHistory && this.historySetting) {
+          url += `/${this.historySetting.id}${this.historyNodeId ? "/" + this.historyNodeId : ""}`;
+        }
+        const res = await this.$root.papi.get(url, {
+          params: { limit: this.pageSize, offset, sort: this.historySort, order: this.historyOrder }
+        });
+        this.auditHistory = res.data.history || [];
+        for (let i = 0; i < this.auditHistory.length; i++) {
+          if (this.$root && typeof this.$root.populateUserDetails === 'function') {
+            await this.$root.populateUserDetails(this.auditHistory[i], 'userId', 'userName');
+          } else {
+            this.auditHistory[i].userName = this.auditHistory[i].userId;
+          }
+        }
+        this.historyTotal = res.data.total;
+        this.historyFilteredTotal = this.auditHistory.length;
+        this.showHistoryDialog = true;
+      } catch (e) {
+        this.$root.showError(this.i18n.settingHistoryError);
+      } finally {
+        this.$root.stopLoading();
+      }
+    },
+    showGlobalHistory() {
+      this.showHistory();
+    },
+    toggleHistoryRow(index) {
+      const next = new Set(this.expandedHistoryRows);
+      if (next.has(index)) {
+        next.delete(index);
+      } else {
+        next.add(index);
+      }
+      this.expandedHistoryRows = next;
+    },
+    getFirstLine(note) {
+      if (!note) return '-';
+      return note.split('\n')[0];
+    },
+    getSortLabel(col) {
+      switch (col) {
+        case 'ts': return 'Time';
+        case 'settingId': return 'Setting ID';
+        case 'user': return 'User';
+        case 'nodeId': return 'Node';
+        default: return col;
+      }
+    },
+    goToSetting(settingId) {
+      this.active = [settingId];
+      this.showHistoryDialog = false;
+    },
+    updateHistorySort(col) {
+      if (this.historySort === col) {
+        this.historyOrder = this.historyOrder === 'asc' ? 'desc' : 'asc';
+      } else {
+        this.historySort = col;
+        this.historyOrder = 'desc';
+      }
+      this.historyPage = 1;
+      this.fetchHistory();
+    },
+    goToFirstPage() {
+      this.historyPage = 1;
+      this.fetchHistory();
+    },
+    goToLastPage() {
+      this.historyPage = Math.ceil(this.historyTotal / this.pageSize) || 1;
+      this.fetchHistory();
+    },
+    applyHistoryFilter() {
+      this.appliedHistorySearch = this.historySearch || '';
+      this.historyFilteredTotal = this.getFilteredAuditHistory().length;
+      if (this.historyPage > this.historyTotalPages()) {
+        this.historyPage = this.historyTotalPages();
+      }
+    },
+    getFilteredAuditHistory() {
+      if (!this.appliedHistorySearch || this.appliedHistorySearch.trim() === '') {
+        return this.auditHistory;
+      }
+      const search = this.appliedHistorySearch.toLowerCase();
+      return this.auditHistory.filter(entry => {
+        const settingId = (entry?.settingId || '').toLowerCase();
+        const newValue = (entry?.newValue || '').toLowerCase();
+        const oldValue = (entry?.oldValue || '').toLowerCase();
+        const nodeId = (entry?.nodeId || '').toLowerCase();
+        const userName = (entry?.userName || '').toLowerCase();
+        const userId = (entry?.userId || '').toLowerCase();
+        return settingId.includes(search) ||
+               newValue.includes(search) ||
+               oldValue.includes(search) ||
+               nodeId.includes(search) ||
+               userName.includes(search) ||
+               userId.includes(search);
+      });
+    },
+    async revertSetting(entry) {
+      this.confirmRevertEntry = entry;
+      this.revertAllSettings = false;
+      this.confirmRevertAllInput = '';
+      this.restoreNote = this.i18n.settingRevertNoteDefault.replace('{timestamp}', this.$root.formatDateTime(entry?.timestamp));
+      this.restoreNoteDefault = this.restoreNote;
+      
+      this.$root.startLoading();
+      try {
+        const res = await this.$root.papi.get('config/history/revert/all/count', {
+          params: { timestamp: entry?.timestamp }
+        });
+        this.confirmRevertAllCount = res.data.count;
+      } catch (e) {
+        this.confirmRevertAllCount = 0;
+      } finally {
+        this.$root.stopLoading();
+      }
+      this.confirmRevertDialog = true;
+    },
+    async confirmRevert() {
+      this.$root.startLoading();
+      try {
+        if (this.revertAllSettings) {
+          if (this.confirmRevertAllCount > 1 && this.confirmRevertAllInput != this.confirmRevertAllCount) {
+            return;
+          }
+          await this.$root.papi.post('config/history/revert/all', {
+            timestamp: this.confirmRevertEntry?.timestamp,
+            note: this.restoreNote
+          });
+          await this.loadData();
+        } else {
+          await this.$root.papi.post(`config/history/revert/${this.confirmRevertEntry.settingId}${this.confirmRevertEntry.nodeId ? "/" + this.confirmRevertEntry.nodeId : ""}`, {
+            timestamp: this.confirmRevertEntry?.timestamp,
+            note: this.restoreNote
+          });
+          const setting = this.settings.find(s => s.id === this.confirmRevertEntry.settingId);
+          if (setting) {
+            if (this.confirmRevertEntry.nodeId) {
+              if (this.confirmRevertEntry.oldValue === null) {
+                setting.nodeValues.delete(this.confirmRevertEntry.nodeId);
+              } else {
+                setting.nodeValues.set(this.confirmRevertEntry.nodeId, this.confirmRevertEntry.oldValue);
+              }
+            } else {
+              setting.value = this.confirmRevertEntry.oldValue;
+            }
+          }
+        }
+        this.confirmRevertDialog = false;
+        this.showHistoryDialog = false;
+        this.$root.showTip(this.i18n.settingReverted);
+      } catch (e) {
+        this.$root.showError(this.i18n.settingRevertError);
+      } finally {
+        this.$root.stopLoading();
+      }
     },
     create(setting) {
       const created = {
@@ -718,6 +924,40 @@ routes.push({
     },
     async save(setting, nodeId) {
       if (!this.showNoteDialog) {
+        if (setting) {
+          if (this.form.value instanceof Array) {
+            this.form.value = this.form.value.join(setting.optionSeparator ? setting.optionSeparator : "\n");
+          }
+          this.form.value = "" + this.form.value; // ensure string
+          this.form.value = this.form.value.trim();
+          if (!this.uiElementsHaveValidInputs(setting)) {
+            this.$root.showWarning(this.i18n.settingIncomplete)
+            return;
+          }
+          try {
+            this.pack(setting);
+          } catch (e) {
+            this.$root.showError(this.i18n.settingValidationFailed);
+            return;
+          }
+          if (setting.required && !this.form.value) {
+            this.$root.showError(this.i18n.settingValidationFailed);
+            return;
+          }
+          if (setting.regex) {
+            var test_values = [this.form.value];
+            if (setting.multiline) {
+              test_values = this.form.value.split("\n");
+            }
+            for (var idx = 0; idx < test_values.length; idx++) {
+              const re = new RegExp(setting.regex);
+              if (!re.test(test_values[idx])) {
+                this.$root.showError(setting.regexFailureMessage ? setting.regexFailureMessage : this.i18n.settingValidationFailed);
+                return;
+              }
+            }
+          }
+        }
         this.note = "";
         this.pendingSave = { setting, nodeId };
         this.showNoteDialog = true;
@@ -736,38 +976,6 @@ routes.push({
       }
 
       if (s) {
-        if (this.form.value instanceof Array) {
-          this.form.value = this.form.value.join(s.optionSeparator ? s.optionSeparator : "\n");
-        }
-        this.form.value = "" + this.form.value; // ensure string
-        this.form.value = this.form.value.trim();
-        if (!this.uiElementsHaveValidInputs(s)) {
-          this.$root.showWarning(this.i18n.settingIncomplete)
-          return;
-        }
-        try {
-          this.pack(s);
-        } catch (e) {
-          this.$root.showError(this.i18n.settingValidationFailed);
-          return;
-        }
-        if (s.required && !this.form.value) {
-          this.$root.showError(this.i18n.settingValidationFailed);
-          return;
-        }
-        if (s.regex) {
-          var test_values = [this.form.value];
-          if (s.multiline) {
-            test_values = this.form.value.split("\n");
-          }
-          for (var idx = 0; idx < test_values.length; idx++) {
-            const re = new RegExp(s.regex);
-            if (!re.test(test_values[idx])) {
-              this.$root.showError(s.regexFailureMessage ? s.regexFailureMessage : this.i18n.settingValidationFailed);
-              return;
-            }
-          }
-        }
         this.$root.startLoading();
         try {
           const server_setting = {

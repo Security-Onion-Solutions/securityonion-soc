@@ -33,6 +33,26 @@ func (f *FakeConfigstore) UpdateSetting(ctx context.Context, setting *model.Sett
 	return nil
 }
 
+func (f *FakeConfigstore) GetAuditHistory(ctx context.Context, settingID, nodeID string, limit, offset int, sort, order string) (*ConfigHistory, error) {
+	return &ConfigHistory{}, nil
+}
+
+func (f *FakeConfigstore) GetAllAuditHistory(ctx context.Context, limit, offset int, sort, order string) (*ConfigHistory, error) {
+	return &ConfigHistory{}, nil
+}
+
+func (f *FakeConfigstore) RevertSetting(ctx context.Context, settingID, nodeID string, timestamp time.Time, note string) error {
+	return nil
+}
+
+func (f *FakeConfigstore) RevertAllSettings(ctx context.Context, timestamp time.Time, note string) (int, error) {
+	return 0, nil
+}
+
+func (f *FakeConfigstore) GetRevertCount(ctx context.Context, timestamp time.Time) (int, error) {
+	return 0, nil
+}
+
 type FakeAdminConfigstore struct {
 	SyncModuleError error
 }

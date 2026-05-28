@@ -107,7 +107,20 @@ type Setting struct {
 	DuplicatedFromID string `json:"duplicatedFromId,omitempty"`
 	// An optional note explaining the reason for this configuration change.
 	Note string `json:"note,omitempty" example:"Enabling this for the new site deployment"`
+	// History of changes to this setting.
+	History []AuditHistory `json:"history,omitempty"`
 }
+
+type AuditHistory struct {
+	Timestamp string `json:"timestamp"`
+	UserID    string `json:"userId"`
+	OldValue  string `json:"oldValue"`
+	NewValue  string `json:"newValue"`
+	Note      string `json:"note"`
+	SettingID string `json:"settingId,omitempty"`
+	NodeID    string `json:"nodeId,omitempty"`
+}
+
 
 func NewSetting(id string) *Setting {
 	setting := &Setting{}

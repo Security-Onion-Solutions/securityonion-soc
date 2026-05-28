@@ -88,17 +88,20 @@ func (db *DB) Pool() *pgxpool.Pool {
 
 // Exec executes a statement that returns no rows.
 func (db *DB) Exec(ctx context.Context, sql string, args ...any) error {
+	log.WithField("sql", sql).Debug("Executing SQL")
 	_, err := db.pool.Exec(ctx, sql, args...)
 	return err
 }
 
 // QueryRow executes a query expected to return at most one row.
 func (db *DB) QueryRow(ctx context.Context, sql string, args ...any) db.Row {
+	log.WithField("sql", sql).Debug("Executing SQL")
 	return db.pool.QueryRow(ctx, sql, args...)
 }
 
 // Query executes a query that returns multiple rows.
 func (db *DB) Query(ctx context.Context, sql string, args ...any) (db.Rows, error) {
+	log.WithField("sql", sql).Debug("Executing SQL")
 	return db.pool.Query(ctx, sql, args...)
 }
 
@@ -115,15 +118,18 @@ func (p *postgresTx) Rollback(ctx context.Context) error {
 }
 
 func (p *postgresTx) Exec(ctx context.Context, sql string, args ...any) error {
+	log.WithField("sql", sql).Debug("Executing SQL")
 	_, err := p.tx.Exec(ctx, sql, args...)
 	return err
 }
 
 func (p *postgresTx) QueryRow(ctx context.Context, sql string, args ...any) db.Row {
+	log.WithField("sql", sql).Debug("Executing SQL")
 	return p.tx.QueryRow(ctx, sql, args...)
 }
 
 func (p *postgresTx) Query(ctx context.Context, sql string, args ...any) (db.Rows, error) {
+	log.WithField("sql", sql).Debug("Executing SQL")
 	return p.tx.Query(ctx, sql, args...)
 }
 
