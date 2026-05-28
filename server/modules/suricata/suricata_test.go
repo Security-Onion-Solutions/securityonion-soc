@@ -270,7 +270,7 @@ func TestValidate(t *testing.T) {
 		{
 			Name:        "Invalid Direction",
 			Input:       `alert http any any <-> any any (msg:"This rule has an invalid direction";)`,
-			ExpectedErr: "invalid direction, must be '<>' or '->', got <->",
+			ExpectedErr: "invalid direction, must be '<>', '->', or '=>', got <->",
 		},
 		{
 			Name:        "Unexpected Suffix",
@@ -403,6 +403,26 @@ func TestParse(t *testing.T) {
 					Title:     "RULE B",
 					Severity:  model.SeverityUnknown,
 					Content:   FlowbitsRuleB,
+					IsEnabled: true,
+					Engine:    model.EngineNameSuricata,
+					Language:  model.SigLangSuricata,
+					Ruleset:   ruleset,
+					License:   "Unknown",
+				},
+			},
+		},
+		{
+			Name: "Transactional Rule",
+			Lines: []string{
+				`alert http any any => any any (msg:"transactional"; sid:1;)`,
+			},
+			ExpectedDetections: []*model.Detection{
+				{
+					Author:    ruleset,
+					PublicID:  "1",
+					Title:     "transactional",
+					Severity:  model.SeverityUnknown,
+					Content:   `alert http any any => any any (msg:"transactional"; sid:1;)`,
 					IsEnabled: true,
 					Engine:    model.EngineNameSuricata,
 					Language:  model.SigLangSuricata,

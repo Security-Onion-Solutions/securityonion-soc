@@ -39,9 +39,24 @@ func TestParseSuricata(t *testing.T) {
 			},
 		},
 		{
+			Name:  "Transactional Rule",
+			Input: `alert http any any => any any (msg:"transactional"; sid:1;)`,
+			Output: &SuricataRule{
+				Action:      "alert",
+				Protocol:    "http",
+				Source:      "any any",
+				Direction:   "=>",
+				Destination: "any any",
+				Options: []*RuleOption{
+					{Name: "msg", Value: util.Ptr(`"transactional"`)},
+					{Name: "sid", Value: util.Ptr("1")},
+				},
+			},
+		},
+		{
 			Name:  "Bad Direction",
 			Input: `a b source port <- destination port ()`,
-			Error: util.Ptr("invalid direction, must be '<>' or '->', got <-"),
+			Error: util.Ptr("invalid direction, must be '<>', '->', or '=>', got <-"),
 		},
 		{
 			Name:  "Unnecessary Suffix",
