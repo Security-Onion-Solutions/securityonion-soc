@@ -1502,3 +1502,31 @@ ul ul ul {
 .v-pagination__list>li {
   list-style: none;
 }
+
+.min-w-0 {
+  min-width: 0;
+}
+
+.history-close-btn {
+  top: 12px;
+  right: 12px;
+  z-index: 10;
+}
+
+.history-scroll-container {
+  max-height: 550px;
+  overflow-y: auto;
+  background-color: rgba(var(--v-theme-on-surface), 0.025);
+}
+
+@media (max-width: 599px) {
+  .history-scroll-container {
+    max-height: calc(100vh - 240px);
+  }
+}
+
+.history-entry-card {
+  border-left: 4px solid rgb(var(--v-theme-primary)) !important;
+}
+
+
