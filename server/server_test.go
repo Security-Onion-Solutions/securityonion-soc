@@ -49,6 +49,7 @@ func NewMockServer(t *testing.T, ctrl *gomock.Controller, cfg *config.ServerConf
 		Casestore:        mock.NewMockCasestore(ctrl),
 		Detectionstore:   mock.NewMockDetectionstore(ctrl),
 		Configstore:      &MemConfigStore{},
+		AdminConfigstore: &MemConfigStore{},
 		GridMembersstore: mock.NewMockGridMembersstore(ctrl),
 		Metrics:          &FakeMetrics{},
 		Authorizer:       &rbac.FakeAuthorizer{},

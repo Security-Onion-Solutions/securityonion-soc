@@ -357,13 +357,13 @@ func (store *ElasticEventstore) Scroll(ctx context.Context, criteria *model.Even
 
 			batchNum++
 
-				scrollBody := map[string]string{"scroll_id": scrollId}
-				scrollJSON, _ := json.Marshal(scrollBody)
-				res, err = store.esClient.Scroll(
-					store.esClient.Scroll.WithContext(ctx),
-					store.esClient.Scroll.WithScroll(time.Minute),
-					store.esClient.Scroll.WithBody(bytes.NewReader(scrollJSON)),
-				)
+			scrollBody := map[string]string{"scroll_id": scrollId}
+			scrollJSON, _ := json.Marshal(scrollBody)
+			res, err = store.esClient.Scroll(
+				store.esClient.Scroll.WithContext(ctx),
+				store.esClient.Scroll.WithScroll(time.Minute),
+				store.esClient.Scroll.WithBody(bytes.NewReader(scrollJSON)),
+			)
 			if err != nil {
 				break
 			}
@@ -763,13 +763,6 @@ func cacheFields(fieldDefs map[string]*FieldDefinition, name gjson.Result, detai
 		if fieldDefs[fieldName] == nil || !fieldDef.aggregatable {
 			fieldDefs[fieldName] = fieldDef
 		}
-
-		log.WithFields(log.Fields{
-			"fieldName":    name,
-			"fieldType":    fieldType,
-			"aggregatable": fieldDef.aggregatable,
-			"searchable":   fieldDef.searchable,
-		}).Debug("Added field definition")
 	}
 	return true
 }
@@ -824,8 +817,8 @@ func (store *ElasticEventstore) buildRangeFilter(timestampStr string) (map[strin
 				"timestampStr": timestampStr,
 			}).WithError(err).Error("Unable to parse document timestamp")
 		}
-		startTime := timestamp.Add(time.Duration(-store.esSearchOffsetMs) * time.Millisecond).Unix() * 1000
-		endTime := timestamp.Add(time.Duration(store.esSearchOffsetMs) * time.Millisecond).Unix() * 1000
+		startTime := timestamp.Add(time.Duration(-store.esSearchOffsetMs)*time.Millisecond).Unix() * 1000
+		endTime := timestamp.Add(time.Duration(store.esSearchOffsetMs)*time.Millisecond).Unix() * 1000
 		filter := map[string]any{
 			"range": map[string]any{
 				"@timestamp": map[string]any{

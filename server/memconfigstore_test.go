@@ -23,6 +23,7 @@ func TestMemConfigStoreNew(t *testing.T) {
 	mCfgStore := NewMemConfigStore(origSettings)
 
 	assert.Implements(t, (*Configstore)(nil), mCfgStore)
+	assert.Implements(t, (*AdminConfigstore)(nil), mCfgStore)
 
 	ctx := context.Background()
 

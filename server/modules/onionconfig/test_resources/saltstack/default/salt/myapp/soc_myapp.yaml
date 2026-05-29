@@ -1,0 +1,45 @@
+myapp:
+  my_def:
+    jinjaEscaped: True
+  foo__txt:
+    description: Test file annotation
+    file: True
+  ro:
+    description: read only setting
+    readonly: True
+  ui_map_typed:
+    description: Map list with typed UI elements
+    forcedType: "[]{}"
+    uiElements:
+    - field: port
+      label: Port
+      forcedType: int
+    - field: enabled
+      label: Enabled
+      forcedType: bool
+    - field: name
+      label: Name
+  ui_json:
+    description: UI elements for JSON packing
+    uiElements:
+    - field: something
+      label: something nice
+      forcedType: bool
+      multiline: false
+      default: true
+      required: false
+      readonly: true
+    - field: another
+      label: another thing
+      forcedType: "[]string"
+      options:
+      - blue
+      - red
+      - green
+      default: red
+    - field: one more
+      label: But wait there's more
+      multiline: True
+      required: true
+      regex: "^abc$"
+      regexFailureMessage: must conform

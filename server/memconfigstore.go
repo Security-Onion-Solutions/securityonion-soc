@@ -7,6 +7,7 @@ package server
 
 import (
 	"context"
+	"time"
 
 	"github.com/samber/lo"
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -44,6 +45,26 @@ func (m *MemConfigStore) UpdateSetting(ctx context.Context, setting *model.Setti
 	}
 
 	return nil
+}
+
+func (m *MemConfigStore) GetAuditHistory(ctx context.Context, settingID, nodeID string, limit, offset int, sort, order string) (*ConfigHistory, error) {
+	return &ConfigHistory{}, nil
+}
+
+func (m *MemConfigStore) GetAllAuditHistory(ctx context.Context, limit, offset int, sort, order string) (*ConfigHistory, error) {
+	return &ConfigHistory{}, nil
+}
+
+func (m *MemConfigStore) RevertSetting(ctx context.Context, settingID, nodeID string, timestamp time.Time, note string) error {
+	return nil
+}
+
+func (m *MemConfigStore) RevertAllSettings(ctx context.Context, timestamp time.Time, note string) (int, error) {
+	return 0, nil
+}
+
+func (m *MemConfigStore) GetRevertCount(ctx context.Context, timestamp time.Time) (int, error) {
+	return 0, nil
 }
 
 func (m *MemConfigStore) SyncSettings(ctx context.Context) error {
