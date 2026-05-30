@@ -717,7 +717,6 @@ test('updateHistorySort_differentColumn', async () => {
 });
 
 test('revertSetting_nonGlobal', async () => {
-  mockPapi("get", { data: { count: 3 } });
   comp.isGlobalHistory = false;
   const entry = { timestamp: '2025-01-01T00:00:00Z', settingId: 'test.setting' };
 
@@ -726,25 +725,23 @@ test('revertSetting_nonGlobal', async () => {
   expect(comp.confirmRevertEntry).toBe(entry);
   expect(comp.revertAllSettings).toBe(false);
   expect(comp.confirmRevertAllInput).toBe('');
-  expect(comp.confirmRevertAllCount).toBe(3);
+  expect(comp.confirmRevertAllCount).toBe(0);
   expect(comp.confirmRevertDialog).toBe(true);
   expect(comp.restoreNote).toContain('Reverting setting to state prior to');
   expect(comp.restoreNoteDefault).toBe(comp.restoreNote);
 });
 
 test('revertSetting_global_withCount', async () => {
-  mockPapi("get", { data: { count: 5 } });
   comp.isGlobalHistory = true;
   const entry = { timestamp: '2025-01-01T00:00:00Z' };
 
   await comp.revertSetting(entry);
 
-  expect(comp.confirmRevertAllCount).toBe(5);
+  expect(comp.confirmRevertAllCount).toBe(0);
   expect(comp.confirmRevertDialog).toBe(true);
 });
 
 test('revertSetting_global_error', async () => {
-  mockPapi("get", null, new Error('fail'));
   comp.isGlobalHistory = true;
   const entry = { timestamp: '2025-01-01T00:00:00Z' };
 
@@ -896,13 +893,19 @@ test('revertAllSettings_watcher_updatesNote_whenNotCustomized', async () => {
   comp.confirmRevertEntry = entry;
   comp.restoreNote = 'Reverting setting to state prior to 2025-01-01T00:00:00Z';
   comp.restoreNoteDefault = comp.restoreNote;
+  comp.$root.startLoading = jest.fn();
+  comp.$root.stopLoading = jest.fn();
+  comp.$root.papi.get = jest.fn().mockResolvedValue({ data: { count: 3 } });
 
-  comp.watch.revertAllSettings.call(comp, true);
+  await comp.watch.revertAllSettings.call(comp, true);
 
   expect(comp.restoreNote).toContain('Reverting all settings to state prior to');
   expect(comp.restoreNoteDefault).toBe(comp.restoreNote);
+  expect(comp.confirmRevertAllCount).toBe(3);
+  expect(comp.revertAllCountLoading).toBe(false);
 
-  comp.watch.revertAllSettings.call(comp, false);
+  comp.$root.papi.get = jest.fn().mockResolvedValue({ data: { count: 0 } });
+  await comp.watch.revertAllSettings.call(comp, false);
 
   expect(comp.restoreNote).toContain('Reverting setting to state prior to');
   expect(comp.restoreNoteDefault).toBe(comp.restoreNote);
@@ -913,10 +916,51 @@ test('revertAllSettings_watcher_preservesNote_whenCustomized', async () => {
   comp.confirmRevertEntry = entry;
   comp.restoreNote = 'my custom note';
   comp.restoreNoteDefault = 'Reverting setting to state prior to 2025-01-01T00:00:00Z';
+  comp.$root.startLoading = jest.fn();
+  comp.$root.stopLoading = jest.fn();
+  comp.$root.papi.get = jest.fn().mockResolvedValue({ data: { count: 2 } });
 
-  comp.watch.revertAllSettings.call(comp, true);
+  await comp.watch.revertAllSettings.call(comp, true);
 
   expect(comp.restoreNote).toBe('my custom note');
+});
+
+test('fetchRevertAllCount_success', async () => {
+  comp.confirmRevertEntry = { timestamp: '2025-01-01T00:00:00Z' };
+  comp.$root.startLoading = jest.fn();
+  comp.$root.stopLoading = jest.fn();
+  comp.$root.papi.get = jest.fn().mockResolvedValue({ data: { count: 7 } });
+
+  await comp.fetchRevertAllCount();
+
+  expect(comp.confirmRevertAllCount).toBe(7);
+  expect(comp.revertAllCountLoading).toBe(false);
+  expect(comp.$root.startLoading).toHaveBeenCalled();
+  expect(comp.$root.stopLoading).toHaveBeenCalled();
+});
+
+test('fetchRevertAllCount_error', async () => {
+  comp.confirmRevertEntry = { timestamp: '2025-01-01T00:00:00Z' };
+  comp.$root.startLoading = jest.fn();
+  comp.$root.stopLoading = jest.fn();
+  comp.$root.papi.get = jest.fn().mockRejectedValue(new Error('fail'));
+
+  await comp.fetchRevertAllCount();
+
+  expect(comp.confirmRevertAllCount).toBe(0);
+  expect(comp.revertAllCountLoading).toBe(false);
+  expect(comp.$root.stopLoading).toHaveBeenCalled();
+});
+
+test('revertAllSettings_watcher_doesNotFetch_whenUnchecked', async () => {
+  comp.confirmRevertEntry = { timestamp: '2025-01-01T00:00:00Z' };
+  comp.$root.startLoading = jest.fn();
+  comp.$root.stopLoading = jest.fn();
+  comp.$root.papi.get = jest.fn();
+
+  await comp.watch.revertAllSettings.call(comp, false);
+
+  expect(comp.$root.papi.get).not.toHaveBeenCalled();
 });
 
 test('onRestoreNoteInput_removed', () => {

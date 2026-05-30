@@ -72,6 +72,7 @@ routes.push({
         confirmRevertAllCount: 0,
         confirmRevertAllInput: '',
         revertAllSettings: false,
+        revertAllCountLoading: false,
         restoreNote: '',
         restoreNoteDefault: '',
         expandedHistoryRows: new Set(),
@@ -94,6 +95,9 @@ routes.push({
           const key = val ? 'settingRevertNoteDefaultAll' : 'settingRevertNoteDefault';
           this.restoreNote = this.i18n[key].replace('{timestamp}', this.$root.formatDateTime(this.confirmRevertEntry?.timestamp));
           this.restoreNoteDefault = this.restoreNote;
+        }
+        if (val && this.confirmRevertEntry) {
+          this.fetchRevertAllCount();
         }
       },
   },
@@ -353,24 +357,28 @@ routes.push({
                userId.includes(search);
       });
     },
-    async revertSetting(entry) {
-      this.confirmRevertEntry = entry;
-      this.revertAllSettings = false;
-      this.confirmRevertAllInput = '';
-      this.restoreNote = this.i18n.settingRevertNoteDefault.replace('{timestamp}', this.$root.formatDateTime(entry?.timestamp));
-      this.restoreNoteDefault = this.restoreNote;
-      
+    async fetchRevertAllCount() {
+      this.revertAllCountLoading = true;
       this.$root.startLoading();
       try {
         const res = await this.$root.papi.get('config/history/revert/all/count', {
-          params: { timestamp: entry?.timestamp }
+          params: { timestamp: this.confirmRevertEntry?.timestamp }
         });
         this.confirmRevertAllCount = res.data.count;
       } catch (e) {
         this.confirmRevertAllCount = 0;
       } finally {
+        this.revertAllCountLoading = false;
         this.$root.stopLoading();
       }
+    },
+    async revertSetting(entry) {
+      this.confirmRevertEntry = entry;
+      this.revertAllSettings = false;
+      this.confirmRevertAllInput = '';
+      this.confirmRevertAllCount = 0;
+      this.restoreNote = this.i18n.settingRevertNoteDefault.replace('{timestamp}', this.$root.formatDateTime(entry?.timestamp));
+      this.restoreNoteDefault = this.restoreNote;
       this.confirmRevertDialog = true;
     },
     async confirmRevert() {
