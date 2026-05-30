@@ -687,22 +687,29 @@
 
 				<v-expand-transition>
 					<div v-show="revertAllSettings" class="mt-2">
-						<v-alert type="warning" variant="tonal" border="start" density="compact" class="mb-4">
-							{{ i18n.settingRevertAllAffected.replace('{count}', confirmRevertAllCount) }}
-						</v-alert>
-						
-						<div v-if="confirmRevertAllCount > 1" class="mb-4">
-							<div class="mb-2 text-caption font-weight-medium">
-								{{ i18n.settingRevertAllConfirm.replace('{count}', confirmRevertAllCount) }}
+						<template v-if="revertAllCountLoading">
+							<div class="d-flex align-center justify-center py-4">
+								<v-progress-circular indeterminate size="24" width="3" color="primary"></v-progress-circular>
 							</div>
-							<v-text-field
-								v-model="confirmRevertAllInput"
-								variant="outlined"
-								density="compact"
-								hide-details
-								data-aid="config_revert_all_confirm_input"
-							></v-text-field>
-						</div>
+						</template>
+						<template v-else>
+							<v-alert type="warning" variant="tonal" border="start" density="compact" class="mb-4">
+								{{ i18n.settingRevertAllAffected.replace('{count}', confirmRevertAllCount) }}
+							</v-alert>
+							
+							<div v-if="confirmRevertAllCount > 1" class="mb-4">
+								<div class="mb-2 text-caption font-weight-medium">
+									{{ i18n.settingRevertAllConfirm.replace('{count}', confirmRevertAllCount) }}
+								</div>
+								<v-text-field
+									v-model="confirmRevertAllInput"
+									variant="outlined"
+									density="compact"
+									hide-details
+									data-aid="config_revert_all_confirm_input"
+								></v-text-field>
+							</div>
+						</template>
 					</div>
 				</v-expand-transition>
 			</v-card-text>
@@ -712,7 +719,7 @@
 					variant="text" 
 					@click="confirmRevert()" 
 					:color="revertAllSettings ? 'error' : 'primary'"
-					:disabled="revertAllSettings && confirmRevertAllCount > 1 && confirmRevertAllInput != confirmRevertAllCount"
+					:disabled="revertAllCountLoading || (revertAllSettings && confirmRevertAllCount > 1 && confirmRevertAllInput != confirmRevertAllCount)"
 				>
 					{{ i18n.confirm }}
 				</v-btn>
