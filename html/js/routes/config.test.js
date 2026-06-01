@@ -248,6 +248,17 @@ test('getSettingName', () => {
   expect(comp.getSettingName({id:"fake.setting.untranslated"})).toBe(undefined);
 });
 
+test('getSettingName_duplicatedFromID', () => {
+  expect(comp.getSettingName({id:"fake.setting.foo", name: "foo", duplicatedFromID: "original.id"})).toBe("foo");
+  expect(comp.getSettingName({id:"fake.setting.foo", duplicatedFromID: "original.id"})).toBe(undefined);
+  expect(comp.getSettingName({id:"fake.setting.untranslated", name: "myname", title: "Title", duplicatedFromID: "orig"})).toBe("myname");
+});
+
+test('getSettingName_noTitle_noTranslation', () => {
+  expect(comp.getSettingName({id:"nonexistent.setting", name: "setting"})).toBe("setting");
+  expect(comp.getSettingName({id:"nonexistent.setting", name: "setting", title: "My Title"})).toBe("My Title");
+});
+
 test('getSettingDescription', () => {
   expect(comp.getSettingDescription({id:"fake.setting.foo"})).toBe("This is a transalated fake setting description.");
   expect(comp.getSettingDescription({id:"fake.setting.untranslated", description: "some description"})).toBe("some description");
@@ -2084,4 +2095,42 @@ test('loadLocalSettings', () => {
   delete localStorage['settings.config.advanced'];
   comp.loadLocalSettings();
   expect(comp.advanced).toBe(false); // default value
+});
+
+test('toggleAdvanced_skipsLoadData_whenSkipAdvancedReload', async () => {
+  comp.skipAdvancedReload = true;
+  comp.advanced = true;
+  const loadMock = mockPapi("get", { data: [] });
+  comp.loadData = jest.fn();
+
+  comp.toggleAdvanced();
+
+  expect(comp.loadData).not.toHaveBeenCalled();
+  expect(comp.skipAdvancedReload).toBe(false);
+  expect(localStorage['settings.config.advanced']).toBe('true');
+});
+
+test('toggleAdvanced_callsLoadData_whenNotSkipAdvancedReload', async () => {
+  comp.skipAdvancedReload = false;
+  comp.advanced = true;
+  const loadMock = mockPapi("get", { data: [] });
+  comp.loadData = jest.fn();
+
+  comp.toggleAdvanced();
+
+  expect(comp.loadData).toHaveBeenCalled();
+  expect(comp.skipAdvancedReload).toBe(false);
+  expect(localStorage['settings.config.advanced']).toBe('true');
+});
+
+test('toggleAdvanced_skipsOnlyOnce_onPageLoad', async () => {
+  comp.skipAdvancedReload = true;
+  comp.loadData = jest.fn();
+
+  comp.toggleAdvanced();
+  expect(comp.loadData).not.toHaveBeenCalled();
+  expect(comp.skipAdvancedReload).toBe(false);
+
+  comp.toggleAdvanced();
+  expect(comp.loadData).toHaveBeenCalledTimes(1);
 });

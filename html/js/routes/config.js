@@ -79,9 +79,11 @@ routes.push({
         historySearch: '',
         appliedHistorySearch: '',
         historyFilteredTotal: 0,
+        skipAdvancedReload: false,
       }
     },
     mounted() {
+      this.skipAdvancedReload = true;
       this.loadLocalSettings();
       this.processRouteParameters();
       this.loadData();
@@ -126,7 +128,11 @@ routes.push({
       }
     },
     toggleAdvanced() {
-      this.loadData();
+      if (this.skipAdvancedReload) {
+        this.skipAdvancedReload = false;
+      } else {
+        this.loadData();
+      }
       this.saveLocalSettings();
     },
     processRouteParameters() {
@@ -539,9 +545,11 @@ routes.push({
     },
     getSettingName(setting) {
       var name = setting.name;
-      var title = this.translate("setting_", setting.id, setting.title);
-      if (title) {
-        return title;
+      if (!setting.duplicatedFromID) {
+        var title = this.translate("setting_", setting.id, setting.title);
+        if (title) {
+          name = title;
+        }
       }
       return name;
     },
