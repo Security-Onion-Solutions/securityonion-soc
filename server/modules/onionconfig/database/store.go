@@ -38,13 +38,14 @@ type SettingRow struct {
 
 // AuditEntry records a change to a setting.
 type AuditEntry struct {
-	SettingID string
-	NodeID    string
-	Timestamp time.Time
-	UserID    string
-	OldValue  *string // JSON-encoded
-	NewValue  *string // JSON-encoded
-	Note      string
+	SettingID        string
+	NodeID           string
+	Timestamp        time.Time
+	UserID           string
+	OldValue         *string // JSON-encoded
+	NewValue         *string // JSON-encoded
+	Note             string
+	DuplicatedFromID string
 }
 
 // New wraps an existing DB connection and runs pending migrations.
@@ -114,7 +115,8 @@ func (s *Store) GetAuditHistory(ctx context.Context, settingID, nodeID string, l
 		       user_id,
 		       old_value,
 		       new_value,
-		       COALESCE(note, '')
+		       COALESCE(note, ''),
+		       COALESCE(duplicated_from_id, '')
 		FROM audit_settings
 		WHERE setting_id = $1 AND node_id = $2
 		ORDER BY %s
@@ -129,7 +131,7 @@ func (s *Store) GetAuditHistory(ctx context.Context, settingID, nodeID string, l
 	var result []AuditEntry
 	for rows.Next() {
 		var a AuditEntry
-		if err := rows.Scan(&a.SettingID, &a.NodeID, &a.Timestamp, &a.UserID, &a.OldValue, &a.NewValue, &a.Note); err != nil {
+		if err := rows.Scan(&a.SettingID, &a.NodeID, &a.Timestamp, &a.UserID, &a.OldValue, &a.NewValue, &a.Note, &a.DuplicatedFromID); err != nil {
 			return nil, 0, err
 		}
 		result = append(result, a)
@@ -153,7 +155,8 @@ func (s *Store) GetAllAuditHistory(ctx context.Context, limit, offset int, sort,
 		       user_id,
 		       old_value,
 		       new_value,
-		       COALESCE(note, '')
+		       COALESCE(note, ''),
+		       COALESCE(duplicated_from_id, '')
 		FROM audit_settings
 		ORDER BY %s
 		LIMIT $1 OFFSET $2`, orderBy),
@@ -167,7 +170,7 @@ func (s *Store) GetAllAuditHistory(ctx context.Context, limit, offset int, sort,
 	var result []AuditEntry
 	for rows.Next() {
 		var a AuditEntry
-		if err := rows.Scan(&a.SettingID, &a.NodeID, &a.Timestamp, &a.UserID, &a.OldValue, &a.NewValue, &a.Note); err != nil {
+		if err := rows.Scan(&a.SettingID, &a.NodeID, &a.Timestamp, &a.UserID, &a.OldValue, &a.NewValue, &a.Note, &a.DuplicatedFromID); err != nil {
 			return nil, 0, err
 		}
 		result = append(result, a)
@@ -202,7 +205,7 @@ func (s *Store) mapSort(sort, order string) string {
 func (s *Store) GetRevertState(ctx context.Context, ts time.Time) ([]SettingRow, error) {
 	rows, err := s.db.Query(ctx, `
 		SELECT DISTINCT ON (setting_id, node_id)
-			setting_id, node_id, old_value
+			setting_id, node_id, old_value, COALESCE(duplicated_from_id, '')
 		FROM audit_settings
 		WHERE ts >= $1
 		ORDER BY setting_id, node_id, ts ASC`,
@@ -216,7 +219,7 @@ func (s *Store) GetRevertState(ctx context.Context, ts time.Time) ([]SettingRow,
 	var result []SettingRow
 	for rows.Next() {
 		var r SettingRow
-		if err := rows.Scan(&r.SettingID, &r.NodeID, &r.Value); err != nil {
+		if err := rows.Scan(&r.SettingID, &r.NodeID, &r.Value, &r.DuplicatedFromID); err != nil {
 			return nil, err
 		}
 		result = append(result, r)
@@ -274,13 +277,14 @@ func (s *Store) GetAuditEntryAtTimestamp(ctx context.Context, settingID, nodeID 
 		       user_id,
 		       old_value,
 		       new_value,
-		       COALESCE(note, '')
+		       COALESCE(note, ''),
+		       COALESCE(duplicated_from_id, '')
 		FROM audit_settings
 		WHERE setting_id = $1 AND node_id = $2 AND ts <= $3::timestamptz + interval '1 second'
 		ORDER BY ts DESC
 		LIMIT 1`,
 		settingID, nodeID, ts.UTC(),
-	).Scan(&a.SettingID, &a.NodeID, &a.Timestamp, &a.UserID, &a.OldValue, &a.NewValue, &a.Note)
+	).Scan(&a.SettingID, &a.NodeID, &a.Timestamp, &a.UserID, &a.OldValue, &a.NewValue, &a.Note, &a.DuplicatedFromID)
 	if err != nil {
 		return nil, err
 	}
@@ -313,10 +317,12 @@ func (s *Store) deleteSetting(ctx context.Context, tx db.Tx, settingID, nodeID s
 }
 
 func (s *Store) insertAudit(ctx context.Context, tx db.Tx, entry AuditEntry) error {
-	err := tx.Exec(ctx, `
-		INSERT INTO audit_settings (setting_id, node_id, ts, user_id, old_value, new_value, note)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-		entry.SettingID, entry.NodeID, entry.Timestamp.UTC(), entry.UserID, entry.OldValue, entry.NewValue, entry.Note,
-	)
-	return err
+	var dupID *string
+	if entry.DuplicatedFromID != "" {
+		dupID = &entry.DuplicatedFromID
+	}
+	return tx.Exec(ctx, `
+		INSERT INTO audit_settings (setting_id, node_id, ts, user_id, old_value, new_value, note, duplicated_from_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+		entry.SettingID, entry.NodeID, entry.Timestamp.UTC(), entry.UserID, entry.OldValue, entry.NewValue, entry.Note, dupID)
 }

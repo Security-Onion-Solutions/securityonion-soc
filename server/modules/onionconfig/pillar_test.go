@@ -19,7 +19,7 @@ import (
 )
 
 const TMP_SALTSTACK_PATH = "/tmp/gotest-soc-onionconfig"
-const TEST_SETTINGS_COUNT = 28
+const TEST_SETTINGS_COUNT = 29
 
 func Cleanup() {
 	exec.Command("rm", "-fr", TMP_SALTSTACK_PATH).Run()
@@ -196,6 +196,11 @@ func TestLoadLocalSettings(tester *testing.T) {
 	assert.Equal(tester, "", settings[count].NodeId)
 	count++
 
+	assert.Equal(tester, "myapp.setting", settings[count].Id)
+	assert.Equal(tester, "test_value", settings[count].Value)
+	assert.Equal(tester, "", settings[count].NodeId)
+	count++
+
 	assert.Equal(tester, "myapp.str", settings[count].Id)
 	assert.Equal(tester, "my_str", settings[count].Value)
 	assert.Equal(tester, "", settings[count].NodeId)
@@ -332,7 +337,7 @@ func TestUpdatePillarSetting_AddGlobal(tester *testing.T) {
 	HydrateAnnotations(annotations, defaults, nil)
 
 	// Add new setting
-	setting := model.NewSetting("myapp.setting")
+	setting := model.NewSetting("myapp.new_setting")
 	setting.Value = "new setting"
 	err := UpdatePillarSetting(saltstackDir, setting, false)
 	assert.NoError(tester, err)
@@ -342,7 +347,7 @@ func TestUpdatePillarSetting_AddGlobal(tester *testing.T) {
 	assert.NoError(tester, get_err)
 	assert.Equal(tester, TEST_SETTINGS_COUNT+1, len(settings))
 
-	new_setting := findSetting(settings, "myapp.setting", "")
+	new_setting := findSetting(settings, "myapp.new_setting", "")
 	assert.Equal(tester, "new setting", new_setting.Value)
 }
 

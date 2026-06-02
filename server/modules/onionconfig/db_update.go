@@ -30,13 +30,14 @@ func updateSettingInDB(ctx context.Context, store dbSettingsMutator, setting *mo
 	}
 
 	entry := database.AuditEntry{
-		SettingID: setting.Id,
-		NodeID:    setting.NodeId,
-		Timestamp: time.Now().UTC(),
-		UserID:    userID,
-		OldValue:  encodeOldValue(oldValue),
-		NewValue:  newVal,
-		Note:      setting.Note,
+		SettingID:        setting.Id,
+		NodeID:           setting.NodeId,
+		Timestamp:        time.Now().UTC(),
+		UserID:           userID,
+		OldValue:         encodeOldValue(oldValue),
+		NewValue:         newVal,
+		Note:             setting.Note,
+		DuplicatedFromID: setting.DuplicatedFromID,
 	}
 
 	return store.UpdateSettingWithAudit(ctx, settingToDBRow(setting), entry, remove)
@@ -51,13 +52,14 @@ func auditSettingOnly(ctx context.Context, store dbSettingsMutator, setting *mod
 	}
 
 	entry := database.AuditEntry{
-		SettingID: setting.Id,
-		NodeID:    setting.NodeId,
-		Timestamp: time.Now().UTC(),
-		UserID:    userID,
-		OldValue:  encodeOldValue(oldValue),
-		NewValue:  newVal,
-		Note:      setting.Note,
+		SettingID:        setting.Id,
+		NodeID:           setting.NodeId,
+		Timestamp:        time.Now().UTC(),
+		UserID:           userID,
+		OldValue:         encodeOldValue(oldValue),
+		NewValue:         newVal,
+		Note:             setting.Note,
+		DuplicatedFromID: setting.DuplicatedFromID,
 	}
 
 	return store.RecordAudit(ctx, entry)
