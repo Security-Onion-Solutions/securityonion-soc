@@ -396,7 +396,11 @@ func (c *OnionConfig) loadAllSettings(ctx context.Context, filterId string) ([]*
 	for _, s := range yamlSettings {
 		if ann, ok := c.annotations[s.Id]; ok {
 			ApplyAnnotations(s, ann, nil)
-		} else if s.Origin != model.SettingOriginDB && s.DuplicatedFromID == "" && c.store != nil {
+		} else if s.Origin != model.SettingOriginDB && s.DuplicatedFromID == "" && c.store != nil && !strings.HasSuffix(s.Id, ".advanced") {
+			log.WithFields(log.Fields{
+				"id":     s.Id,
+				"nodeId": s.NodeId,
+			}).Debug("Checking unexpected setting's audit history for duplicated setting ID")
 			entries, _, err := c.store.GetAuditHistory(ctx, s.Id, "", 1, 0, "timestamp", "desc")
 			if err == nil && len(entries) > 0 {
 				if entries[0].DuplicatedFromID != "" {

@@ -2231,3 +2231,47 @@ test('toggleAdvanced_skipsOnlyOnce_onPageLoad', async () => {
   comp.toggleAdvanced();
   expect(comp.loadData).toHaveBeenCalledTimes(1);
 });
+
+test('onRouteUpdate_setsSkipAdvancedReloadBeforeLoadData', async () => {
+  comp.oldGridId = null;
+  comp.$route.query = { gridId: 'new-grid' };
+  const loadMock = mockPapi("get", { data: [] });
+  comp.loadData = jest.fn();
+
+  comp.onRouteUpdate();
+
+  expect(comp.skipAdvancedReload).toBe(true);
+  expect(comp.loadData).toHaveBeenCalled();
+});
+
+test('onRouteUpdate_doesNotSetSkipReload_whenNoRouteChange', async () => {
+  comp.oldGridId = 'same-grid';
+  comp.$route.query = { gridId: 'same-grid' };
+  comp.refreshTree = jest.fn();
+  comp.skipAdvancedReload = false;
+
+  comp.onRouteUpdate();
+
+  expect(comp.skipAdvancedReload).toBe(false);
+  expect(comp.refreshTree).toHaveBeenCalled();
+});
+
+test('loadData_resetsSkipAdvancedReload_inFinally', async () => {
+  comp.skipAdvancedReload = true;
+  mockPapi("get", { data: [] });
+  mockPapi("get", { data: [] });
+
+  await comp.loadData();
+
+  expect(comp.skipAdvancedReload).toBe(false);
+});
+
+test('loadData_resetsSkipAdvancedReload_evenOnError', async () => {
+  comp.skipAdvancedReload = true;
+  mockPapi("get", { data: [] });
+  mockPapi("get", null, new Error('api fail'));
+
+  await comp.loadData();
+
+  expect(comp.skipAdvancedReload).toBe(false);
+});
