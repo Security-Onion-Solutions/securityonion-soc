@@ -122,6 +122,7 @@ routes.push({
           // Override the tip timeout duration due to this relatively complex messaging being displayed.
           this.$root.showTip(this.i18n.settingChangeInProgress, 30000);
         }
+        this.skipAdvancedReload = true;
         this.loadData();
       } else {
         this.refreshTree();
@@ -541,6 +542,8 @@ routes.push({
         this.refreshTree();
       } catch (error) {
         this.$root.showError(error);
+      } finally {
+        this.skipAdvancedReload = false;
       }
       this.$root.stopLoading();
     },

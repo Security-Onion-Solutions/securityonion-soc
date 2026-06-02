@@ -90,18 +90,6 @@ func (c *OnionConfig) PreloadConfiguration() error {
 	return nil
 }
 
-func (c *OnionConfig) GetSetting(ctx context.Context, id string) (*model.Setting, error) {
-	c.waitReady()
-	settings, err := c.loadAllSettings(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	if len(settings) > 0 {
-		return settings[0], nil
-	}
-	return nil, nil
-}
-
 func (c *OnionConfig) GetSettings(ctx context.Context, advanced bool) ([]*model.Setting, error) {
 	c.waitReady()
 	if err := c.server.CheckAuthorized(ctx, "read", "config"); err != nil {
@@ -408,7 +396,11 @@ func (c *OnionConfig) loadAllSettings(ctx context.Context, filterId string) ([]*
 	for _, s := range yamlSettings {
 		if ann, ok := c.annotations[s.Id]; ok {
 			ApplyAnnotations(s, ann, nil)
-		} else if s.Origin != model.SettingOriginDB && s.DuplicatedFromID == "" && c.store != nil {
+		} else if s.Origin != model.SettingOriginDB && s.DuplicatedFromID == "" && c.store != nil && !strings.HasSuffix(s.Id, ".advanced") {
+			log.WithFields(log.Fields{
+				"id":     s.Id,
+				"nodeId": s.NodeId,
+			}).Debug("Checking unexpected setting's audit history for duplicated setting ID")
 			entries, _, err := c.store.GetAuditHistory(ctx, s.Id, "", 1, 0, "timestamp", "desc")
 			if err == nil && len(entries) > 0 {
 				if entries[0].DuplicatedFromID != "" {
