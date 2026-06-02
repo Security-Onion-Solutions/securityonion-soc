@@ -81,24 +81,6 @@ func (s *Store) GetAllSettings(ctx context.Context) ([]SettingRow, error) {
 	return result, rows.Err()
 }
 
-// GetSetting returns a single setting by ID and optional nodeID (empty string = global).
-func (s *Store) GetSetting(ctx context.Context, settingID, nodeID string) (*SettingRow, error) {
-	var r SettingRow
-	err := s.db.QueryRow(ctx, `
-		SELECT setting_id,
-		       COALESCE(value::text, 'null'),
-		       COALESCE(duplicated_from_id, ''),
-		       node_id
-		FROM settings
-		WHERE setting_id = $1 AND node_id = $2`,
-		settingID, nodeID,
-	).Scan(&r.SettingID, &r.Value, &r.DuplicatedFromID, &r.NodeID)
-	if err != nil {
-		return nil, err
-	}
-	return &r, nil
-}
-
 // GetAuditHistory returns paged audit records for a specific setting and node.
 func (s *Store) GetAuditHistory(ctx context.Context, settingID, nodeID string, limit, offset int, sort, order string) ([]AuditEntry, int, error) {
 	var total int

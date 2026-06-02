@@ -90,18 +90,6 @@ func (c *OnionConfig) PreloadConfiguration() error {
 	return nil
 }
 
-func (c *OnionConfig) GetSetting(ctx context.Context, id string) (*model.Setting, error) {
-	c.waitReady()
-	settings, err := c.loadAllSettings(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	if len(settings) > 0 {
-		return settings[0], nil
-	}
-	return nil, nil
-}
-
 func (c *OnionConfig) GetSettings(ctx context.Context, advanced bool) ([]*model.Setting, error) {
 	c.waitReady()
 	if err := c.server.CheckAuthorized(ctx, "read", "config"); err != nil {
