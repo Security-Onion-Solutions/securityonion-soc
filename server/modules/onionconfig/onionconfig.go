@@ -26,8 +26,18 @@ type OnionConfig struct {
 	saltstackDir  string
 	bypassEnabled bool
 	annotations   map[string]map[string]interface{}
-	store         *database.Store
+	store         storeProvider
 	ready         chan struct{}
+}
+
+// storeProvider abstracts all database operations for onionconfig.
+type storeProvider interface {
+	dbSettingsLoader
+	dbSettingsMutator
+	GetAuditHistory(ctx context.Context, settingID, nodeID string, limit, offset int, sort, order string) ([]database.AuditEntry, int, error)
+	GetAllAuditHistory(ctx context.Context, limit, offset int, sort, order string) ([]database.AuditEntry, int, error)
+	GetAuditEntryAtTimestamp(ctx context.Context, settingID, nodeID string, ts time.Time) (*database.AuditEntry, error)
+	GetRevertState(ctx context.Context, ts time.Time) ([]database.SettingRow, error)
 }
 
 func NewOnionConfig(server *server.Server) *OnionConfig {
@@ -43,7 +53,9 @@ func (c *OnionConfig) Init(saltstackDir string, bypassEnabled bool) {
 }
 
 func (c *OnionConfig) Start(store *database.Store) error {
-	c.store = store
+	if store != nil {
+		c.store = store
+	}
 	err := c.PreloadConfiguration()
 	close(c.ready)
 	return err
@@ -119,6 +131,13 @@ func (c *OnionConfig) UpdateSetting(ctx context.Context, setting *model.Setting,
 
 	settingDef, oldValue := resolveExistingSetting(allSettings, setting.Id, setting.NodeId)
 
+	if settingDef == nil && setting.DuplicatedFromID != "" {
+		origSettings, origErr := c.loadAllSettings(ctx, setting.DuplicatedFromID)
+		if origErr == nil {
+			settingDef, _ = resolveExistingSetting(origSettings, setting.DuplicatedFromID, setting.NodeId)
+		}
+	}
+
 	if settingDef == nil {
 		logger.WithFields(log.Fields{
 			"settingId": setting.Id,
@@ -140,7 +159,9 @@ func (c *OnionConfig) UpdateSetting(ctx context.Context, setting *model.Setting,
 		setting.UiElements = settingDef.UiElements
 		// Carry the origin forward so we know where to route the write.
 		setting.Origin = settingDef.Origin
-		setting.DuplicatedFromID = settingDef.DuplicatedFromID
+		if setting.DuplicatedFromID == "" {
+			setting.DuplicatedFromID = settingDef.DuplicatedFromID
+		}
 	}
 
 	return c.routeUpdate(ctx, setting, oldValue, remove, logger)
@@ -185,13 +206,14 @@ func (c *OnionConfig) GetAuditHistory(ctx context.Context, settingID, nodeID str
 	for _, e := range entries {
 		oldVal, newVal := decodeAndMaskAuditValues(isSensitive, e.OldValue, e.NewValue)
 		history = append(history, model.AuditHistory{
-			Timestamp: e.Timestamp.Format(time.RFC3339),
-			UserID:    e.UserID,
-			OldValue:  oldVal,
-			NewValue:  newVal,
-			Note:      e.Note,
-			SettingID: e.SettingID,
-			NodeID:    e.NodeID,
+			Timestamp:        e.Timestamp.Format(time.RFC3339),
+			UserID:           e.UserID,
+			OldValue:         oldVal,
+			NewValue:         newVal,
+			Note:             e.Note,
+			SettingID:        e.SettingID,
+			NodeID:           e.NodeID,
+			DuplicatedFromID: e.DuplicatedFromID,
 		})
 	}
 
@@ -216,13 +238,14 @@ func (c *OnionConfig) GetAllAuditHistory(ctx context.Context, limit, offset int,
 	for _, e := range entries {
 		oldVal, newVal := decodeAndMaskAuditValues(c.isSensitive(e.SettingID), e.OldValue, e.NewValue)
 		history = append(history, model.AuditHistory{
-			Timestamp: e.Timestamp.Format(time.RFC3339),
-			UserID:    e.UserID,
-			OldValue:  oldVal,
-			NewValue:  newVal,
-			Note:      e.Note,
-			SettingID: e.SettingID,
-			NodeID:    e.NodeID,
+			Timestamp:        e.Timestamp.Format(time.RFC3339),
+			UserID:           e.UserID,
+			OldValue:         oldVal,
+			NewValue:         newVal,
+			Note:             e.Note,
+			SettingID:        e.SettingID,
+			NodeID:           e.NodeID,
+			DuplicatedFromID: e.DuplicatedFromID,
 		})
 	}
 
@@ -259,6 +282,7 @@ func (c *OnionConfig) RevertSetting(ctx context.Context, settingID, nodeID strin
 	setting.NodeId = nodeID
 	setting.Value = revertValue
 	setting.Note = note
+	setting.DuplicatedFromID = entry.DuplicatedFromID
 
 	return c.UpdateSetting(ctx, setting, entry.OldValue == nil)
 }
@@ -288,6 +312,7 @@ func (c *OnionConfig) RevertAllSettings(ctx context.Context, ts time.Time, note 
 		setting.NodeId = r.NodeID
 		setting.Value = decodeJSONBValue(r.Value)
 		setting.Note = note
+		setting.DuplicatedFromID = r.DuplicatedFromID
 
 		if err := c.UpdateSetting(ctx, setting, r.Value == nil); err != nil {
 			return changedCount, err
@@ -383,6 +408,13 @@ func (c *OnionConfig) loadAllSettings(ctx context.Context, filterId string) ([]*
 	for _, s := range yamlSettings {
 		if ann, ok := c.annotations[s.Id]; ok {
 			ApplyAnnotations(s, ann, nil)
+		} else if s.Origin != model.SettingOriginDB && s.DuplicatedFromID == "" && c.store != nil {
+			entries, _, err := c.store.GetAuditHistory(ctx, s.Id, "", 1, 0, "timestamp", "desc")
+			if err == nil && len(entries) > 0 {
+				if entries[0].DuplicatedFromID != "" {
+					s.DuplicatedFromID = entries[0].DuplicatedFromID
+				}
+			}
 		}
 		if s.DuplicatedFromID != "" {
 			if ann, ok := c.annotations[s.DuplicatedFromID]; ok {

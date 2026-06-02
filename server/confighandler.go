@@ -313,8 +313,9 @@ func (h *ConfigHandler) postRevertSetting(w http.ResponseWriter, r *http.Request
 	id := chi.URLParam(r, "id")
 	minion := chi.URLParam(r, "minion")
 	var body struct {
-		Timestamp string `json:"timestamp"`
-		Note      string `json:"note"`
+		Timestamp        string `json:"timestamp"`
+		Note             string `json:"note"`
+		DuplicatedFromID string `json:"duplicatedFromId"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		web.Respond(w, r, http.StatusBadRequest, err)

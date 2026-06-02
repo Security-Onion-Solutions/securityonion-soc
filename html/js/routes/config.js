@@ -79,9 +79,11 @@ routes.push({
         historySearch: '',
         appliedHistorySearch: '',
         historyFilteredTotal: 0,
+        skipAdvancedReload: false,
       }
     },
     mounted() {
+      this.skipAdvancedReload = true;
       this.loadLocalSettings();
       this.processRouteParameters();
       this.loadData();
@@ -126,7 +128,11 @@ routes.push({
       }
     },
     toggleAdvanced() {
-      this.loadData();
+      if (this.skipAdvancedReload) {
+        this.skipAdvancedReload = false;
+      } else {
+        this.loadData();
+      }
       this.saveLocalSettings();
     },
     processRouteParameters() {
@@ -396,10 +402,18 @@ routes.push({
         } else {
           await this.$root.papi.post(`config/history/revert/${this.confirmRevertEntry.settingId}${this.confirmRevertEntry.nodeId ? "/" + this.confirmRevertEntry.nodeId : ""}`, {
             timestamp: this.confirmRevertEntry?.timestamp,
-            note: this.restoreNote
+            note: this.restoreNote,
+            duplicatedFromId: this.confirmRevertEntry?.duplicatedFromId || ''
           });
           const setting = this.settings.find(s => s.id === this.confirmRevertEntry.settingId);
-          if (setting) {
+          const entryDuplicatedFromId = this.confirmRevertEntry?.duplicatedFromId || '';
+          const needReload = !setting ||
+            (setting.duplicatedFromId && !this.confirmRevertEntry.oldValue) ||
+            (entryDuplicatedFromId !== (setting.duplicatedFromId || ''));
+          if (needReload) {
+            await this.loadData();
+          } else if (setting) {
+            setting.duplicatedFromId = entryDuplicatedFromId;
             if (this.confirmRevertEntry.nodeId) {
               if (this.confirmRevertEntry.oldValue === null) {
                 setting.nodeValues.delete(this.confirmRevertEntry.nodeId);
@@ -448,6 +462,7 @@ routes.push({
         options: setting.options,
         optionSeparator: setting.optionSeparator,
         required: setting.required,
+        duplicatedFromId: setting.duplicatedFromId || '',
       };
       this.merge(created, setting);
       return created;
@@ -539,9 +554,11 @@ routes.push({
     },
     getSettingName(setting) {
       var name = setting.name;
-      var title = this.translate("setting_", setting.id, setting.title);
-      if (title) {
-        return title;
+      if (!setting.duplicatedFromId) {
+        var title = this.translate("setting_", setting.id, setting.title);
+        if (title) {
+          name = title;
+        }
       }
       return name;
     },
@@ -993,6 +1010,7 @@ routes.push({
             file: s.file,
             syntax: s.syntax,
             note: this.note,
+            duplicatedFromId: s.duplicatedFromId || '',
           };
           await this.$root.papi.put('config/', server_setting);
 
@@ -1202,6 +1220,7 @@ routes.push({
       var new_setting = structuredClone(Vue.toRaw(setting));
       new_setting.id = new_id;
       new_setting.name = new_name;
+      new_setting.duplicatedFromId = setting.duplicatedFromId || setting.id;
       this.settings.push(new_setting);
       this.settings.sort((a,b) => { if (a.id > b.id) return 1; else if (a.id < b.id) return -1; else return 0 });
       this.refreshTree();

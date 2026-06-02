@@ -37,3 +37,4 @@ myapp:
   bool: true
   zdef: chocolate
   ui_json: "{\"something\":\"here\",\"another\":\"else\"},{\"something\":\"here2\",\"another\":\"else2\"}"
+  setting: test_value

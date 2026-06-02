@@ -112,13 +112,14 @@ type Setting struct {
 }
 
 type AuditHistory struct {
-	Timestamp string `json:"timestamp"`
-	UserID    string `json:"userId"`
-	OldValue  string `json:"oldValue"`
-	NewValue  string `json:"newValue"`
-	Note      string `json:"note"`
-	SettingID string `json:"settingId,omitempty"`
-	NodeID    string `json:"nodeId,omitempty"`
+	Timestamp        string `json:"timestamp"`
+	UserID           string `json:"userId"`
+	OldValue         string `json:"oldValue"`
+	NewValue         string `json:"newValue"`
+	Note             string `json:"note"`
+	SettingID        string `json:"settingId,omitempty"`
+	NodeID           string `json:"nodeId,omitempty"`
+	DuplicatedFromID string `json:"duplicatedFromId,omitempty"`
 }
 
 

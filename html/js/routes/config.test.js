@@ -69,6 +69,7 @@ test('loadData', async () => {
       "readonlyUi": undefined,
       "regex": "True|False",
       "regexFailureMessage": "Wrong!",
+      "duplicatedFromId": '',
       "required": undefined,
       "sensitive": undefined,
       "syntax": undefined,
@@ -98,6 +99,7 @@ test('loadData', async () => {
       "readonlyUi": undefined,
       "regex": undefined,
       "regexFailureMessage": undefined,
+      "duplicatedFromId": '',
       "required": undefined,
       "sensitive": undefined,
       "syntax": undefined,
@@ -127,6 +129,7 @@ test('loadData', async () => {
       "readonlyUi": undefined,
       "regex": undefined,
       "regexFailureMessage": undefined,
+      "duplicatedFromId": '',
       "required": undefined,
       "sensitive": undefined,
       "syntax": undefined,
@@ -163,6 +166,7 @@ test('loadData', async () => {
               "readonlyUi": undefined,
               "regex": "True|False",
               "regexFailureMessage": "Wrong!",
+              "duplicatedFromId": '',
               "required": undefined,
               "sensitive": undefined,
               "syntax": undefined,
@@ -192,6 +196,7 @@ test('loadData', async () => {
               "readonlyUi": undefined,
               "regex": undefined,
               "regexFailureMessage": undefined,
+              "duplicatedFromId": '',
               "required": undefined,
               "sensitive": undefined,
               "syntax": undefined,
@@ -229,6 +234,7 @@ test('loadData', async () => {
       "readonlyUi": undefined,
       "regex": undefined,
       "regexFailureMessage": undefined,
+      "duplicatedFromId": '',
       "required": undefined,
       "sensitive": undefined,
       "syntax": undefined,
@@ -246,6 +252,17 @@ test('getSettingName', () => {
   expect(comp.getSettingName({id:"fake.setting.foo", title: 'fake'})).toBe("Fake Setting Translated");
   expect(comp.getSettingName({id:"fake.setting.untranslated", title: "Untranslated Name"})).toBe("Untranslated Name");
   expect(comp.getSettingName({id:"fake.setting.untranslated"})).toBe(undefined);
+});
+
+test('getSettingName_duplicatedFromId', () => {
+  expect(comp.getSettingName({id:"fake.setting.foo", name: "foo", duplicatedFromId: "original.id"})).toBe("foo");
+  expect(comp.getSettingName({id:"fake.setting.foo", duplicatedFromId: "original.id"})).toBe(undefined);
+  expect(comp.getSettingName({id:"fake.setting.untranslated", name: "myname", title: "Title", duplicatedFromId: "orig"})).toBe("myname");
+});
+
+test('getSettingName_noTitle_noTranslation', () => {
+  expect(comp.getSettingName({id:"nonexistent.setting", name: "setting"})).toBe("setting");
+  expect(comp.getSettingName({id:"nonexistent.setting", name: "setting", title: "My Title"})).toBe("My Title");
 });
 
 test('getSettingDescription', () => {
@@ -798,7 +815,8 @@ test('confirmRevert_singleSetting_globalValue', async () => {
 
   expect(postMock).toHaveBeenCalledWith('config/history/revert/test.id', {
     timestamp: '2025-01-01T00:00:00Z',
-    note: 'reverting'
+    note: 'reverting',
+    duplicatedFromId: ''
   });
   expect(comp.settings[0].value).toBe('oldVal');
   expect(comp.confirmRevertDialog).toBe(false);
@@ -819,7 +837,8 @@ test('confirmRevert_singleSetting_nodeValue', async () => {
 
   expect(postMock).toHaveBeenCalledWith('config/history/revert/test.id/node1', {
     timestamp: '2025-01-01T00:00:00Z',
-    note: 'reverting'
+    note: 'reverting',
+    duplicatedFromId: ''
   });
   expect(comp.settings[0].nodeValues.get('node1')).toBe('oldNodeVal');
 });
@@ -860,10 +879,98 @@ test('confirmRevert_settingNotFound', async () => {
   comp.confirmRevertEntry = { settingId: 'missing.id', nodeId: null, oldValue: 'old', timestamp: '2025-01-01T00:00:00Z' };
   comp.restoreNote = 'reverting';
   comp.settings = [{ id: 'other.id', value: 'val', nodeValues: new Map() }];
+  comp.loadData = jest.fn();
 
   await comp.confirmRevert();
 
   expect(postMock).toHaveBeenCalled();
+  expect(comp.loadData).toHaveBeenCalled();
+  expect(comp.confirmRevertDialog).toBe(false);
+});
+
+test('confirmRevert_duplicatedSettingRevertedToNull_reloadsTree', async () => {
+  const postMock = mockPapi("post", {});
+  comp.isGlobalHistory = false;
+  comp.revertAllSettings = false;
+  comp.confirmRevertEntry = { settingId: 'dup.setting', nodeId: null, oldValue: null, timestamp: '2025-01-01T00:00:00Z' };
+  comp.restoreNote = 'reverting';
+  comp.settings = [{ id: 'dup.setting', value: 'current', duplicatedFromId: 'original.setting', nodeValues: new Map() }];
+  comp.loadData = jest.fn();
+
+  await comp.confirmRevert();
+
+  expect(postMock).toHaveBeenCalledWith('config/history/revert/dup.setting', {
+    timestamp: '2025-01-01T00:00:00Z',
+    note: 'reverting',
+    duplicatedFromId: ''
+  });
+  expect(comp.loadData).toHaveBeenCalled();
+  expect(comp.confirmRevertDialog).toBe(false);
+  expect(comp.showHistoryDialog).toBe(false);
+});
+
+test('confirmRevert_duplicatedSettingRevertedToNonNull_noReload', async () => {
+  const postMock = mockPapi("post", {});
+  comp.isGlobalHistory = false;
+  comp.revertAllSettings = false;
+  comp.confirmRevertEntry = { settingId: 'dup.setting', nodeId: null, oldValue: 'previousValue', timestamp: '2025-01-01T00:00:00Z', duplicatedFromId: 'original.setting' };
+  comp.restoreNote = 'reverting';
+  comp.settings = [{ id: 'dup.setting', value: 'current', duplicatedFromId: 'original.setting', nodeValues: new Map() }];
+  comp.loadData = jest.fn();
+
+  await comp.confirmRevert();
+
+  expect(postMock).toHaveBeenCalledWith('config/history/revert/dup.setting', {
+    timestamp: '2025-01-01T00:00:00Z',
+    note: 'reverting',
+    duplicatedFromId: 'original.setting'
+  });
+  expect(comp.loadData).not.toHaveBeenCalled();
+  expect(comp.settings[0].value).toBe('previousValue');
+  expect(comp.confirmRevertDialog).toBe(false);
+});
+
+test('confirmRevert_duplicatedSettingRevertedToNull_withNodeId_reloadsTree', async () => {
+  const postMock = mockPapi("post", {});
+  comp.isGlobalHistory = false;
+  comp.revertAllSettings = false;
+  comp.confirmRevertEntry = { settingId: 'dup.setting', nodeId: 'node1', oldValue: null, timestamp: '2025-01-01T00:00:00Z', duplicatedFromId: 'original.setting' };
+  comp.restoreNote = 'reverting';
+  const nv = new Map();
+  nv.set('node1', 'currentNodeVal');
+  comp.settings = [{ id: 'dup.setting', value: 'globalVal', duplicatedFromId: 'original.setting', nodeValues: nv }];
+  comp.loadData = jest.fn();
+
+  await comp.confirmRevert();
+
+  expect(postMock).toHaveBeenCalledWith('config/history/revert/dup.setting/node1', {
+    timestamp: '2025-01-01T00:00:00Z',
+    note: 'reverting',
+    duplicatedFromId: 'original.setting'
+  });
+  expect(comp.loadData).toHaveBeenCalled();
+  expect(comp.confirmRevertDialog).toBe(false);
+  expect(comp.showHistoryDialog).toBe(false);
+});
+
+test('confirmRevert_nonDuplicatedSettingRevertedToNull_noReload', async () => {
+  const postMock = mockPapi("post", {});
+  comp.isGlobalHistory = false;
+  comp.revertAllSettings = false;
+  comp.confirmRevertEntry = { settingId: 'normal.setting', nodeId: null, oldValue: null, timestamp: '2025-01-01T00:00:00Z' };
+  comp.restoreNote = 'reverting';
+  comp.settings = [{ id: 'normal.setting', value: 'current', nodeValues: new Map() }];
+  comp.loadData = jest.fn();
+
+  await comp.confirmRevert();
+
+  expect(postMock).toHaveBeenCalledWith('config/history/revert/normal.setting', {
+    timestamp: '2025-01-01T00:00:00Z',
+    note: 'reverting',
+    duplicatedFromId: ''
+  });
+  expect(comp.loadData).not.toHaveBeenCalled();
+  expect(comp.settings[0].value).toBe(null);
   expect(comp.confirmRevertDialog).toBe(false);
 });
 
@@ -1081,7 +1188,7 @@ test('save', async () => {
   expect(comp.settings[0].value).toBe("test-value")
   expect(comp.cancelDialog).toBe(false);
   expect(comp.form.key).toBe(null);
-  expect(mock).toHaveBeenCalledWith('config/', {"id": "s-id", "nodeId": null, "value": "test-value", "note": "", "file": undefined, "syntax": undefined});
+  expect(mock).toHaveBeenCalledWith('config/', {"id": "s-id", "nodeId": null, "value": "test-value", "note": "", "file": undefined, "syntax": undefined, "duplicatedFromId": ''});
 
   // Node save
   setupSettings();
@@ -1099,7 +1206,7 @@ test('save', async () => {
   expect(comp.settings[0].nodeValues).toStrictEqual(expectedNodeValues);
   expect(comp.cancelDialog).toBe(false);
   expect(comp.form.key).toBe(null);
-  expect(mock).toHaveBeenCalledWith('config/', {"id": "s-id", "nodeId": "n2", "value": "test-value", "note": "", "file": undefined, "syntax": undefined});
+  expect(mock).toHaveBeenCalledWith('config/', {"id": "s-id", "nodeId": "n2", "value": "test-value", "note": "", "file": undefined, "syntax": undefined, "duplicatedFromId": ''});
 });
 
 test('save_with_note', async () => {
@@ -1112,7 +1219,7 @@ test('save_with_note', async () => {
   comp.note = "test note";
   await comp.save();
   expect(comp.settings[0].value).toBe("test-value")
-  expect(mock).toHaveBeenCalledWith('config/', {"id": "s-id", "nodeId": null, "value": "test-value", "note": "test note", "file": undefined, "syntax": undefined});
+  expect(mock).toHaveBeenCalledWith('config/', {"id": "s-id", "nodeId": null, "value": "test-value", "note": "test note", "file": undefined, "syntax": undefined, "duplicatedFromId": ''});
 });
 
 test('saveBool', async () => {
@@ -1124,7 +1231,7 @@ test('saveBool', async () => {
   expect(comp.showNoteDialog).toBe(true);
   await comp.save();
   expect(comp.settings[0].value).toBe("true")
-  expect(mock).toHaveBeenCalledWith('config/', {"id": "s-id", "nodeId": null, "value": "true", "note": "", "file": undefined, "syntax": undefined});
+  expect(mock).toHaveBeenCalledWith('config/', {"id": "s-id", "nodeId": null, "value": "true", "note": "", "file": undefined, "syntax": undefined, "duplicatedFromId": ''});
 });
 
 test('saveRegexFailure', async () => {
@@ -1191,7 +1298,7 @@ test('saveRegexValidMultiline', async () => {
   expect(comp.settings[0].value).toBe("123\n456")
   expect(comp.cancelDialog).toBe(false);
   expect(comp.form.key).toBe(null);
-  expect(mock).toHaveBeenCalledWith('config/', {"id": "test.id", "nodeId": null, "value": "123\n456", "note": "", "file": undefined, "syntax": undefined});
+  expect(mock).toHaveBeenCalledWith('config/', {"id": "test.id", "nodeId": null, "value": "123\n456", "note": "", "file": undefined, "syntax": undefined, "duplicatedFromId": ''});
 });
 
 test('saveRequiredEmptyValue', async () => {
@@ -1291,7 +1398,7 @@ test('saveArrayWithSeparator', async () => {
   await comp.save();
 
   expect(comp.settings[0].value).toBe("a,b,c");
-  expect(mock).toHaveBeenCalledWith('config/', {"id": "test.id", "nodeId": null, "value": "a,b,c", "note": "", "file": undefined, "syntax": undefined});
+  expect(mock).toHaveBeenCalledWith('config/', {"id": "test.id", "nodeId": null, "value": "a,b,c", "note": "", "file": undefined, "syntax": undefined, "duplicatedFromId": ''});
 });
 
 test('saveArrayWithDefaultSeparator', async () => {
@@ -1309,7 +1416,7 @@ test('saveArrayWithDefaultSeparator', async () => {
   await comp.save();
 
   expect(comp.settings[0].value).toBe("x\ny");
-  expect(mock).toHaveBeenCalledWith('config/', {"id": "test.id", "nodeId": null, "value": "x\ny", "note": "", "file": undefined, "syntax": undefined});
+  expect(mock).toHaveBeenCalledWith('config/', {"id": "test.id", "nodeId": null, "value": "x\ny", "note": "", "file": undefined, "syntax": undefined, "duplicatedFromId": ''});
 });
 
 test('saveNullSetting', async () => {
@@ -1432,6 +1539,7 @@ test('duplicate', () => {
   expect(comp.settings.length).toBe(2);
   expect(comp.settings[1].id).toBe("a.b.foo");
   expect(comp.settings[1].name).toBe("foo");
+  expect(comp.settings[1].duplicatedFromId).toBe("a.b.c");
 });
 
 test('applySearchFilter', () => {
@@ -2084,4 +2192,42 @@ test('loadLocalSettings', () => {
   delete localStorage['settings.config.advanced'];
   comp.loadLocalSettings();
   expect(comp.advanced).toBe(false); // default value
+});
+
+test('toggleAdvanced_skipsLoadData_whenSkipAdvancedReload', async () => {
+  comp.skipAdvancedReload = true;
+  comp.advanced = true;
+  const loadMock = mockPapi("get", { data: [] });
+  comp.loadData = jest.fn();
+
+  comp.toggleAdvanced();
+
+  expect(comp.loadData).not.toHaveBeenCalled();
+  expect(comp.skipAdvancedReload).toBe(false);
+  expect(localStorage['settings.config.advanced']).toBe('true');
+});
+
+test('toggleAdvanced_callsLoadData_whenNotSkipAdvancedReload', async () => {
+  comp.skipAdvancedReload = false;
+  comp.advanced = true;
+  const loadMock = mockPapi("get", { data: [] });
+  comp.loadData = jest.fn();
+
+  comp.toggleAdvanced();
+
+  expect(comp.loadData).toHaveBeenCalled();
+  expect(comp.skipAdvancedReload).toBe(false);
+  expect(localStorage['settings.config.advanced']).toBe('true');
+});
+
+test('toggleAdvanced_skipsOnlyOnce_onPageLoad', async () => {
+  comp.skipAdvancedReload = true;
+  comp.loadData = jest.fn();
+
+  comp.toggleAdvanced();
+  expect(comp.loadData).not.toHaveBeenCalled();
+  expect(comp.skipAdvancedReload).toBe(false);
+
+  comp.toggleAdvanced();
+  expect(comp.loadData).toHaveBeenCalledTimes(1);
 });

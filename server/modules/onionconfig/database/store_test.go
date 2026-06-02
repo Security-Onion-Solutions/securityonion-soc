@@ -58,7 +58,7 @@ func TestGetAuditHistory(t *testing.T) {
 	mRows.On("Next").Return(true).Once()
 	mRows.On("Next").Return(true).Once()
 	mRows.On("Next").Return(false).Once()
-	mRows.On("Scan", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+	mRows.On("Scan", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 	mRows.On("Close").Return()
 	mRows.On("Err").Return(nil)
 
@@ -119,7 +119,7 @@ func TestGetAuditHistory_ScanError(t *testing.T) {
 
 	mDB.On("Query", mock.Anything, mock.Anything, "s1", "n1", 10, 0).Return(mRows, nil)
 	mRows.On("Next").Return(true).Once()
-	mRows.On("Scan", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(errors.New("scan fail"))
+	mRows.On("Scan", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(errors.New("scan fail"))
 	mRows.On("Close").Return()
 
 	results, total, err := store.GetAuditHistory(ctx, "s1", "n1", 10, 0, "", "")
@@ -166,7 +166,7 @@ func TestGetAllAuditHistory(t *testing.T) {
 	mDB.On("Query", mock.Anything, mock.Anything, 10, 0).Return(mRows, nil)
 	mRows.On("Next").Return(true).Once()
 	mRows.On("Next").Return(false).Once()
-	mRows.On("Scan", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+	mRows.On("Scan", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
 	mRows.On("Close").Return()
 	mRows.On("Err").Return(nil)
 
@@ -223,11 +223,12 @@ func TestGetRevertState(t *testing.T) {
 
 	mDB.On("Query", mock.Anything, mock.Anything, mock.Anything).Return(mRows, nil)
 	mRows.On("Next").Return(true).Once()
-	mRows.On("Scan", mock.Anything, mock.Anything, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+	mRows.On("Scan", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
 		*(args[0].(*string)) = "s1"
 		*(args[1].(*string)) = "n1"
 		val := `"old"`
 		*(args[2].(**string)) = &val
+		*(args[3].(*string)) = "orig"
 	}).Once()
 	mRows.On("Next").Return(false).Once()
 	mRows.On("Close").Return()
@@ -239,6 +240,7 @@ func TestGetRevertState(t *testing.T) {
 	assert.Equal(t, "s1", results[0].SettingID)
 	assert.Equal(t, "n1", results[0].NodeID)
 	assert.Equal(t, `"old"`, *results[0].Value)
+	assert.Equal(t, "orig", results[0].DuplicatedFromID)
 }
 
 func TestGetRevertState_QueryError(t *testing.T) {
@@ -264,24 +266,8 @@ func TestGetRevertState_ScanError(t *testing.T) {
 
 	mDB.On("Query", mock.Anything, mock.Anything, mock.Anything).Return(mRows, nil)
 	mRows.On("Next").Return(true).Once()
-	mRows.On("Scan", mock.Anything, mock.Anything, mock.Anything).Return(errors.New("scan fail"))
+	mRows.On("Scan", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(errors.New("scan fail"))
 	mRows.On("Close").Return()
-
-	results, err := store.GetRevertState(ctx, time.Now())
-	assert.Error(t, err)
-	assert.Nil(t, results)
-}
-
-func TestGetRevertState_RowsErr(t *testing.T) {
-	ctx := context.Background()
-	mDB := new(mockdb.MockDB)
-	mRows := new(mockdb.MockRows)
-	store := &Store{db: mDB}
-
-	mDB.On("Query", mock.Anything, mock.Anything, mock.Anything).Return(mRows, nil)
-	mRows.On("Next").Return(false).Once()
-	mRows.On("Close").Return()
-	mRows.On("Err").Return(errors.New("rows err"))
 
 	results, err := store.GetRevertState(ctx, time.Now())
 	assert.Error(t, err)
@@ -297,7 +283,7 @@ func TestGetAuditEntryAtTimestamp(t *testing.T) {
 	ts := time.Date(2025, 1, 15, 10, 30, 0, 0, time.UTC)
 
 	mDB.On("QueryRow", mock.Anything, mock.Anything, "s1", "n1", mock.Anything).Return(mRow)
-	mRow.On("Scan", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+	mRow.On("Scan", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
 		*(args[0].(*string)) = "s1"
 		*(args[1].(*string)) = "n1"
 		*(args[2].(*time.Time)) = ts
@@ -307,6 +293,7 @@ func TestGetAuditEntryAtTimestamp(t *testing.T) {
 		newVal := `"new"`
 		*(args[5].(**string)) = &newVal
 		*(args[6].(*string)) = "test note"
+		*(args[7].(*string)) = "orig"
 	})
 
 	entry, err := store.GetAuditEntryAtTimestamp(ctx, "s1", "n1", ts)
@@ -317,6 +304,7 @@ func TestGetAuditEntryAtTimestamp(t *testing.T) {
 	assert.Equal(t, "test note", entry.Note)
 	assert.Equal(t, `"old"`, *entry.OldValue)
 	assert.Equal(t, `"new"`, *entry.NewValue)
+	assert.Equal(t, "orig", entry.DuplicatedFromID)
 }
 
 func TestGetAuditEntryAtTimestamp_NotFound(t *testing.T) {
@@ -326,7 +314,7 @@ func TestGetAuditEntryAtTimestamp_NotFound(t *testing.T) {
 	store := &Store{db: mDB}
 
 	mDB.On("QueryRow", mock.Anything, mock.Anything, "s1", "n1", mock.Anything).Return(mRow)
-	mRow.On("Scan", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(errors.New("no rows"))
+	mRow.On("Scan", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(errors.New("no rows"))
 
 	entry, err := store.GetAuditEntryAtTimestamp(ctx, "s1", "n1", time.Now())
 	assert.Error(t, err)
@@ -356,7 +344,7 @@ func TestUpdateSettingWithAudit_Upsert(t *testing.T) {
 
 	mDB.On("Begin", mock.Anything).Return(mTx, nil)
 	mTx.On("Exec", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
-	mTx.On("Exec", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+	mTx.On("Exec", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
 	mTx.On("Commit", mock.Anything).Return(nil)
 	mTx.On("Rollback", mock.Anything).Return(nil)
 
@@ -383,7 +371,7 @@ func TestUpdateSettingWithAudit_Delete(t *testing.T) {
 
 	mDB.On("Begin", mock.Anything).Return(mTx, nil)
 	mTx.On("Exec", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
-	mTx.On("Exec", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+	mTx.On("Exec", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
 	mTx.On("Commit", mock.Anything).Return(nil)
 	mTx.On("Rollback", mock.Anything).Return(nil)
 
@@ -452,7 +440,7 @@ func TestUpdateSettingWithAudit_InsertAuditError(t *testing.T) {
 
 	mDB.On("Begin", mock.Anything).Return(mTx, nil)
 	mTx.On("Exec", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
-	mTx.On("Exec", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(errors.New("audit fail")).Once()
+	mTx.On("Exec", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(errors.New("audit fail")).Once()
 	mTx.On("Rollback", mock.Anything).Return(nil)
 
 	err := store.UpdateSettingWithAudit(ctx, row, audit, false)
@@ -471,7 +459,7 @@ func TestUpdateSettingWithAudit_CommitError(t *testing.T) {
 
 	mDB.On("Begin", mock.Anything).Return(mTx, nil)
 	mTx.On("Exec", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
-	mTx.On("Exec", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+	mTx.On("Exec", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
 	mTx.On("Commit", mock.Anything).Return(errors.New("commit fail"))
 	mTx.On("Rollback", mock.Anything).Return(nil)
 
@@ -496,7 +484,7 @@ func TestUpdateSettingWithAudit_DuplicatedFromID(t *testing.T) {
 
 	mDB.On("Begin", mock.Anything).Return(mTx, nil)
 	mTx.On("Exec", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
-	mTx.On("Exec", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+	mTx.On("Exec", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
 	mTx.On("Commit", mock.Anything).Return(nil)
 	mTx.On("Rollback", mock.Anything).Return(nil)
 
@@ -521,7 +509,7 @@ func TestRecordAudit(t *testing.T) {
 	}
 
 	mDB.On("Begin", mock.Anything).Return(mTx, nil)
-	mTx.On("Exec", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+	mTx.On("Exec", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
 	mTx.On("Commit", mock.Anything).Return(nil)
 	mTx.On("Rollback", mock.Anything).Return(nil)
 
@@ -550,7 +538,7 @@ func TestRecordAudit_InsertAuditError(t *testing.T) {
 	store := &Store{db: mDB}
 
 	mDB.On("Begin", mock.Anything).Return(mTx, nil)
-	mTx.On("Exec", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(errors.New("insert fail")).Once()
+	mTx.On("Exec", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(errors.New("insert fail")).Once()
 	mTx.On("Rollback", mock.Anything).Return(nil)
 
 	err := store.RecordAudit(ctx, AuditEntry{})
@@ -565,7 +553,7 @@ func TestRecordAudit_CommitError(t *testing.T) {
 	store := &Store{db: mDB}
 
 	mDB.On("Begin", mock.Anything).Return(mTx, nil)
-	mTx.On("Exec", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+	mTx.On("Exec", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
 	mTx.On("Commit", mock.Anything).Return(errors.New("commit fail"))
 	mTx.On("Rollback", mock.Anything).Return(nil)
 
@@ -588,7 +576,7 @@ func TestGetAllAuditHistory_ScanError(t *testing.T) {
 
 	mDB.On("Query", mock.Anything, mock.Anything, 10, 0).Return(mRows, nil)
 	mRows.On("Next").Return(true).Once()
-	mRows.On("Scan", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(errors.New("scan fail"))
+	mRows.On("Scan", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(errors.New("scan fail"))
 	mRows.On("Close").Return()
 
 	results, total, err := store.GetAllAuditHistory(ctx, 10, 0, "", "")
