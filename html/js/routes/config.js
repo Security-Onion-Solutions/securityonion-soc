@@ -1044,6 +1044,11 @@ routes.push({
       }
     },
     notifyChangedSetting(setting) {
+      this.$root.showTip(this.i18n.settingsSynchronizing, 15000);
+
+      // Module change detection for collecting list of modules that have been 
+      // modified or are affected by recent UI changes.
+
       const REQUIRE_GRID_HIGHSTATE = ["fake1-to-trigger-highstate", "fake2-to-trigger-highstate"];
 
       const moduleStateMap = new Map();

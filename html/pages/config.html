@@ -1,7 +1,4 @@
 <v-container fluid data-aid="grid_config_screen">
-	<v-alert v-if="changedModules.length > 0" type="info" prominent class="mb-4">
-		{{ i18n.settings.settingsSynchronizing }}
-	</v-alert>
 	<v-dialog v-model="showOptionsDialog" max-width="540">
 		<v-card class="options-dialog">
 			<v-card-title role="heading" aria-level="2">{{i18n.options}}</v-card-title>
