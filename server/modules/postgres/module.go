@@ -40,8 +40,8 @@ func (mod *PostgresModule) Init(cfg module.ModuleConfig) error {
 	dbCfg := Config{
 		Host:     host,
 		Port:     module.GetIntDefault(cfg, "port", 5432),
-		Database: module.GetStringDefault(cfg, "name", "so_soc"),
-		Username: module.GetStringDefault(cfg, "user", "postgres"),
+		Database: module.GetStringDefault(cfg, "name", ""),
+		Username: module.GetStringDefault(cfg, "user", ""),
 		Password: module.GetStringDefault(cfg, "password", ""),
 		SSLMode:  module.GetStringDefault(cfg, "sslMode", "allow"),
 	}
