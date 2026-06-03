@@ -1231,6 +1231,7 @@ const i18n = {
       settingsChangesReady: 'New changes are ready to be applied to the {module} module. Some changes may still require a full grid synchronization.',
       settingsMultipleChangesReady: 'Changes are ready to be applied.',
       settingsSynchronizeModule: 'Synchronize {module}',
+      settingsSynchronizing: 'Changes will be synchronized in the background momentarily.',
 
       setting_fake_setting_foo: 'Fake Setting Translated',
       settingHelp_fake_setting_foo: 'This is a transalated fake setting description.',
