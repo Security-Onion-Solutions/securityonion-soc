@@ -1,11 +1,4 @@
 <v-container fluid data-aid="grid_config_screen">
-	<v-alert v-if="changedModules.length > 0" type="info" prominent class="mb-4">
-		{{ changedModules.length > 1 ? i18n.settingsMultipleChangesReady : $root.localizeMessage(i18n.settingsChangesReady, {module: changedModules[0]}) }}
-		<template #append>
-			<v-btn v-if="changedModules.length == 1" color="warning" @click.stop="syncModule(changedModules[0])" class="mr-2" data-aid="config_option_synchronize_module">{{ $root.localizeMessage(i18n.settingsSynchronizeModule, {module: changedModules[0] }) }}</v-btn>
-			<v-btn v-else @click.stop="sync()" color="warning" :title="i18n.settingsSynchronizeHelp">{{ i18n.settingsSynchronize }}</v-btn>
-		</template>
-	</v-alert>
 	<v-dialog v-model="showOptionsDialog" max-width="540">
 		<v-card class="options-dialog">
 			<v-card-title role="heading" aria-level="2">{{i18n.options}}</v-card-title>
