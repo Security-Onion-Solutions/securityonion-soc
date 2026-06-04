@@ -939,9 +939,6 @@ routes.push({
 
           this.countCustomized();
           this.notifyChangedSetting(this.resetSetting);
-
-          // Show update to user
-          this.$root.showTip(this.i18n.settingDeleted);
         } catch (error) {
           this.$root.showError(this.i18n.settingDeleteError);
         }
