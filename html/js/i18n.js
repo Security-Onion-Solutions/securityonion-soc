@@ -878,6 +878,7 @@ const i18n = {
       invalidDetectionSuricataNewLine: 'Newline characters are not allowed in Suricata rules. The rule must fit on one line.',
       ioWait: 'I/O Wait',
       invalidCidrOrVar: 'Invalid CIDR Notation or Suricata Variable',
+      investigated: 'Investigated',
       ip: 'IP',
       ipCidr: 'IP - CIDR Notation or Suricata Variable',
       job: 'Job',

@@ -296,7 +296,7 @@
 					<v-expand-transition>
 						<div v-if="isExpandedSection('hunt-groups')">
 							<v-row>
-								<v-col v-for="(group, groupIdx) in groupBys" :class="['groupBy', { 'known-width': isCategory('alerts') }]">
+								<v-col v-for="(group, groupIdx) in groupBys" class="group-metrics-col">
 									<div v-if="group.chart_type" class="chart-container">
 										<router-link class="mx-1" :to="buildGroupWithoutOptionsRoute(groupIdx)" :title="i18n.showTable" style="text-decoration: none; cursor: 'pointer'" :data-aid="'groups_table_toggle_' + category" :aria-label="i18n.showTable">
 											<v-icon class="theme-icon">fa-table-cells</v-icon>
