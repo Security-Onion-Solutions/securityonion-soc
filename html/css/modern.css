@@ -937,6 +937,12 @@ dfn {
   container-type: inline-size;
 }
 
+.group-metrics-col:has(.expanded-row) {
+  flex: 0 0 100%;
+  max-width: 100%;
+  container-type: inline-size;
+}
+
 .split-toolbar {
   position: sticky;
   top: 0;
