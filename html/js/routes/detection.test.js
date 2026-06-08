@@ -1183,3 +1183,51 @@ test('loadPlaybooks', async () => {
 
 	resetPapi();
 });
+
+test('convertDetection and runQueryInDiscover', async () => {
+	const mock = mockPapi('post', { data: { query: 'FROM logs-*', useEsql: true } });
+	comp.detect = { language: 'sigma', engine: 'elastalert' };
+	await comp.convertDetection();
+
+	expect(comp.convertedRule).toBe('FROM logs-*');
+	expect(comp.isEsql).toBe(true);
+	expect(comp.showSigmaDialog).toBe(true);
+
+	const originalOpen = window.open;
+	window.open = jest.fn();
+
+	const originalCompress = LZString.compressToEncodedURIComponent;
+	LZString.compressToEncodedURIComponent = jest.fn().mockReturnValue('compressed_query');
+
+	comp.runQueryInDiscover();
+
+	expect(window.open).toHaveBeenCalledWith(
+		'/kibana/app/dev_tools#/console?load_from=data:text/plain,compressed_query',
+		'_blank'
+	);
+
+	const expectedQuery = `POST /_query
+{
+	"query": """
+	FROM logs-*
+	"""
+}`;
+	expect(LZString.compressToEncodedURIComponent).toHaveBeenCalledWith(expectedQuery);
+
+	comp.isEsql = false;
+	comp.convertedRule = 'some eql query';
+	comp.runQueryInDiscover();
+
+	const expectedEqlQuery = `GET /.ds-logs-*/_eql/search
+{
+	"query": """
+	some eql query
+	"""
+}`;
+	expect(LZString.compressToEncodedURIComponent).toHaveBeenCalledWith(expectedEqlQuery);
+
+	window.open = originalOpen;
+	LZString.compressToEncodedURIComponent = originalCompress;
+	resetPapi();
+});
+

@@ -142,6 +142,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			origComment: null,
 			showSigmaDialog: false,
 			convertedRule: '',
+			isEsql: false,
 			showDirtySourceDialog: false,
 			ruleTemplates: {},
 			languageToEngine: {
@@ -1341,6 +1342,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				const response = await this.$root.papi.post('detection/convert', this.detect);
 				if (response && response.data) {
 					this.convertedRule = response.data.query;
+					this.isEsql = response.data.useEsql;
 					this.showSigmaDialog = true;
 				}
 			} catch (error) {
@@ -1351,18 +1353,29 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		},
 		cancelConvert() {
 			this.convertedRule = '';
+			this.isEsql = false;
 			this.showSigmaDialog = false;
 		},
 		copyConvertToClipboard() {
 			this.$root.copyToClipboard(this.convertedRule);
 		},
 		runQueryInDiscover() {
-			let query = `GET /.ds-logs-*/_eql/search
+			let query;
+			if (this.isEsql) {
+				query = `POST /_query
 {
 	"query": """
 	${this.convertedRule}
 	"""
 }`;
+			} else {
+				query = `GET /.ds-logs-*/_eql/search
+{
+	"query": """
+	${this.convertedRule}
+	"""
+}`;
+			}
 			const compress = LZString.compressToEncodedURIComponent(query);
 			const url = `/kibana/app/dev_tools#/console?load_from=data:text/plain,${compress}`;
 			window.open(url, '_blank');

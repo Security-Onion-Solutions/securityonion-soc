@@ -451,6 +451,88 @@ filter:
 	assert.YAMLEq(t, expected, wrappedRule)
 }
 
+func TestElastAlertInitUseEsql(t *testing.T) {
+	srv := &server.Server{Config: &config.ServerConfig{}}
+	mod := NewElastAlertEngine(srv)
+	err := mod.Init(module.ModuleConfig{"useEsql": true})
+	assert.NoError(t, err)
+	assert.True(t, mod.UseEsql())
+}
+
+func TestSigmaToElastAlertESQL(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	iom := mock.NewMockIOManager(ctrl)
+
+	iom.EXPECT().ExecCommand(gomock.Cond(func(x any) bool {
+		cmd := x.(*exec.Cmd)
+
+		if !strings.HasSuffix(cmd.Path, "sigma") {
+			return false
+		}
+
+		if !slices.Contains(cmd.Args, "convert") {
+			return false
+		}
+
+		// Verify that the "-t esql" target is passed
+		hasEsqlTarget := false
+		for i, arg := range cmd.Args {
+			if arg == "-t" && i+1 < len(cmd.Args) && cmd.Args[i+1] == "esql" {
+				hasEsqlTarget = true
+				break
+			}
+		}
+		if !hasEsqlTarget {
+			return false
+		}
+
+		if cmd.Stdin == nil {
+			return false
+		}
+
+		return true
+	})).Return([]byte("<esql>"), 0, time.Duration(0), nil)
+
+	engine := ElastAlertEngine{
+		IOManager: iom,
+		useEsql:   true,
+	}
+
+	det := &model.Detection{
+		PublicID: "11111111-1111-1111-1111-111111111111",
+		Content:  `{"detection": {"condition": "*"}}`,
+		Title:    "Test Detection",
+		Severity: model.SeverityHigh,
+	}
+
+	query, err := engine.sigmaToElastAlert(context.Background(), det)
+	assert.NoError(t, err)
+	assert.Equal(t, "<esql>", query)
+
+	wrappedRule, err := engine.wrapRule(det, query)
+	assert.NoError(t, err)
+
+	expected := `detection_title: Test Detection
+detection_public_id: 11111111-1111-1111-1111-111111111111
+event.module: sigma
+event.dataset: sigma.alert
+event.severity: 4
+sigma_level: high
+alert:
+    - modules.so.securityonion-es.SecurityOnionESAlerter
+index: .ds-logs-*
+name: Test Detection -- 11111111-1111-1111-1111-111111111111
+realert:
+    seconds: 0
+type: any
+filter:
+    - esql: <esql>
+`
+	assert.YAMLEq(t, expected, wrappedRule)
+}
+
 func TestSigmaToElastAlertSunnyDayLicensed(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
