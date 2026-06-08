@@ -16,6 +16,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -31,6 +32,12 @@ import (
 	"github.com/google/uuid"
 )
 
+//go:embed hunter.txt
+var hunterPrompt string
+
+//go:embed agent.txt
+var agentPrompt string
+
 type ProtocolConstructor func(context.Context, *server.Server, map[string]any) (server.AssistantAdapter, error)
 
 var protocols = map[string]ProtocolConstructor{}
@@ -38,6 +45,7 @@ var protocols = map[string]ProtocolConstructor{}
 var (
 	ErrToolNotFound    = errors.New("ERROR_ASSISTANT_TOOL_NOT_FOUND")
 	ErrRequestTooLarge = errors.New("ERROR_ASSISTANT_REQUEST_TOO_LARGE")
+	ErrInvalidModel    = errors.New("ERROR_ASSISTANT_INVALID_MODEL")
 )
 
 const (
@@ -52,9 +60,10 @@ type AssistantCoordinator struct {
 	srv       *server.Server
 	isRunning bool
 
-	FunctionLibrary map[string]Tool
-	toolConfig      json.RawMessage
-	adapters        map[string]server.AssistantAdapter
+	FunctionLibrary   map[string]Tool
+	DelegationLibrary map[string]Tool
+	toolConfig        json.RawMessage
+	adapters          map[string]server.AssistantAdapter
 
 	systemPrompt         string
 	systemPromptAddendum string
@@ -76,10 +85,41 @@ func (ac *AssistantCoordinator) PrerequisiteModules() []string {
 func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 	logger := log.FromContext(ac.srv.Context)
 
+	ac.srv.Config.ClientParams.AssistantParams.AvailableModels = []model.ModelParameters{
+		{
+			ID:                    "gemini-3.5-flash",
+			DisplayName:           "Agent Gemini",
+			Adapter:               "Gemini",
+			ContextLimitSmall:     500000,
+			ContextLimitLarge:     500000,
+			CharsPerTokenEstimate: 4,
+			IsAgentic:             true,
+			IsOrchestrator:        true,
+			AllowedTools:          []string{},
+			CanDelegateTo:         []string{"gemini-3-flash-preview@Gemini"},
+			Enabled:               true,
+			AgentPrompt:           agentPrompt,
+		}, {
+			ID:                    "gemini-3-flash-preview",
+			DisplayName:           "Hunter",
+			Adapter:               "Gemini",
+			ContextLimitSmall:     500000,
+			ContextLimitLarge:     500000,
+			CharsPerTokenEstimate: 4,
+			IsAgentic:             true,
+			AllowedTools:          []string{"query_events"},
+			CanDelegateTo:         []string{},
+			Enabled:               true,
+			AgentPrompt:           hunterPrompt,
+			AgentDescription:      "An agent specialized in querying and analyzing security event data to uncover insights, patterns, and potential threats. Hunter is adept at formulating complex queries, interpreting results, and providing actionable intelligence based on security event logs.",
+		},
+	}
+
 	ac.srv.AssistantManager = ac
 	ac.FunctionLibrary = knownTools
+	ac.DelegationLibrary = map[string]Tool{}
 
-	ac.toolConfig, err = buildToolConfig(ac.FunctionLibrary)
+	ac.toolConfig, err = buildToolConfig(ac.FunctionLibrary, nil, nil, nil)
 
 	systemPromptAddendum := module.GetStringDefault(config, "systemPromptAddendum", DEFAULT_SYSTEM_PROMPT_ADDENDUM)
 
@@ -147,12 +187,34 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 		ac.srv.Config.ClientParams.AssistantParams.AvailableAdapters = []model.AdapterParameters{}
 	}
 
+	// iterate through models creating delegates
+	for _, model := range ac.srv.Config.ClientParams.AssistantParams.AvailableModels {
+		if model.Enabled && model.IsAgentic {
+			id := model.ID + "@" + model.Adapter
+			delegate := NewDelegateTool(id, model.DisplayName, model.AgentDescription)
+
+			ac.DelegationLibrary[id] = delegate
+			ac.DelegationLibrary[delegate.GetName()] = delegate
+
+			logger.WithFields(log.Fields{
+				"modelId": id,
+				"adapter": model.Adapter,
+			}).Info("created delegate tool for agentic model")
+		}
+	}
+
 	ac.getPrompt()
 
 	return err
 }
 
-func buildToolConfig(functions map[string]Tool) (json.RawMessage, error) {
+// buildToolConfig assembles the tool spec sent to the adapter from the function
+// and delegation libraries. The filters are tri-state: a nil filter includes
+// every tool in that library, while a non-nil filter (including an empty,
+// non-nil slice) includes only the named tools — so an empty slice means "expose
+// none". This lets a non-agentic caller pass nil for all tools while an agent
+// scopes itself to an explicit (possibly empty) allow-list.
+func buildToolConfig(functions map[string]Tool, delegates map[string]Tool, toolFilter []string, delegateFilter []string) (json.RawMessage, error) {
 	keys := []string{}
 	for key := range functions {
 		keys = append(keys, key)
@@ -163,14 +225,36 @@ func buildToolConfig(functions map[string]Tool) (json.RawMessage, error) {
 
 	for _, key := range keys {
 		tool := functions[key]
+		name := tool.GetName()
 
-		toolSpecs = append(toolSpecs, &model.ToolSpec{
-			Spec: model.ToolDefinition{
-				Name:        tool.GetName(),
-				Description: tool.GetDescription(),
-				InputSchema: tool.GetSchema(),
-			},
-		})
+		if toolFilter == nil || slices.Contains(toolFilter, name) {
+			toolSpecs = append(toolSpecs, &model.ToolSpec{
+				Spec: model.ToolDefinition{
+					Name:        name,
+					Description: tool.GetDescription(),
+					InputSchema: tool.GetSchema(),
+				},
+			})
+		}
+	}
+
+	keys = []string{}
+	for key := range delegates {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		if delegateFilter == nil || slices.Contains(delegateFilter, key) {
+			tool := delegates[key]
+			toolSpecs = append(toolSpecs, &model.ToolSpec{
+				Spec: model.ToolDefinition{
+					Name:        tool.GetName(),
+					Description: tool.GetDescription(),
+					InputSchema: tool.GetSchema(),
+				},
+			})
+		}
 	}
 
 	tc := &model.ToolConfig{
@@ -276,10 +360,14 @@ func estimateRequestChars(req *model.ChatRequest) int {
 	return total
 }
 
+// findModelParams returns the configured parameters for the given model/adapter
+// pair, or nil if no matching model is configured. Callers must handle the nil
+// case (a model may have a registered adapter without an AvailableModels entry).
 func (ac *AssistantCoordinator) findModelParams(modelId string, adapterName string) *model.ModelParameters {
-	for _, m := range ac.srv.Config.ClientParams.AssistantParams.AvailableModels {
-		if m.ID == modelId && m.Adapter == adapterName {
-			return &m
+	models := ac.srv.Config.ClientParams.AssistantParams.AvailableModels
+	for i := range models {
+		if models[i].ID == modelId && models[i].Adapter == adapterName {
+			return &models[i]
 		}
 	}
 	return nil
@@ -307,7 +395,7 @@ func (ac *AssistantCoordinator) checkRequestSize(req *model.ChatRequest, modelId
 	return nil
 }
 
-func (ac *AssistantCoordinator) Chat(ctx context.Context, aiModel string, messages []*model.Message, opts ...model.ChatOpt) ([]*model.Message, error) {
+func (ac *AssistantCoordinator) Send(ctx context.Context, aiModel string, messages []*model.Message, opts ...model.ChatOpt) ([]*model.Message, error) {
 	logger := log.FromContext(ctx)
 	userID := ctx.Value(web.ContextKeyRequestorId).(string)
 	config := model.ApplyChatOpts(opts...)
@@ -317,12 +405,9 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, aiModel string, messag
 	modelId, adapterName := splitModelAdapter(aiModel)
 
 	req := &model.ChatRequest{
-		Messages:     msgs,
-		ToolConfig:   ac.toolConfig,
-		UserId:       userID,
-		Model:        modelId,
-		System:       ac.systemPrompt,
-		SystemAppend: ac.systemPromptAddendum,
+		Messages: msgs,
+		UserId:   userID,
+		Model:    modelId,
 	}
 
 	if err := ac.checkRequestSize(req, modelId, adapterName); err != nil {
@@ -334,6 +419,25 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, aiModel string, messag
 	if !ok {
 		logger.WithField("adapterName", adapterName).Error("assistant adapter not found")
 		return nil, fmt.Errorf("assistant adapter not found: %s", adapterName)
+	}
+
+	modelParams := ac.findModelParams(modelId, adapterName)
+	if modelParams == nil {
+		// The requested model is not configured; there is no sensible fallback, so
+		// surface it as a client error (mapped to HTTP 400 by the handler).
+		logger.WithField("model", aiModel).Error("requested model is not configured")
+		return nil, ErrInvalidModel
+	}
+
+	if modelParams.IsAgentic {
+		err := ac.setupAgent(req, modelParams)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		req.ToolConfig = ac.toolConfig
+		req.System = ac.systemPrompt
+		req.SystemAppend = ac.systemPromptAddendum
 	}
 
 	response, err := adapter.SendMessage(ctx, req)
@@ -351,7 +455,7 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, aiModel string, messag
 			for _, content := range responses[i].ContentBlocks {
 				if content.Type == "tool_use" {
 					// Execute the tool and add result back to conversation
-					result, err := ac.ExecuteTool(ctx, content.Name, string(content.Input), "")
+					result, err := ac.ExecuteTool(ctx, content.Name, &model.ToolRequest{Params: content.Input, Model: aiModel})
 					if err != nil {
 						logger.WithError(err).WithField("toolName", content.Name).Error("failed to execute tool")
 						continue
@@ -394,7 +498,7 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, aiModel string, messag
 					// append to message history and recurse to send the tool result back with context
 					messages = append(messages, toolMsg)
 
-					toolResponse, err := ac.Chat(ctx, aiModel, messages, model.WithAutoExecuteTools(true))
+					toolResponse, err := ac.Send(ctx, aiModel, messages, model.WithAutoExecuteTools(true))
 					if err != nil {
 						logger.WithError(err).Error("failed to chat with assistant after tool execution")
 						return nil, err
@@ -410,7 +514,7 @@ func (ac *AssistantCoordinator) Chat(ctx context.Context, aiModel string, messag
 	return newMessages, nil
 }
 
-func (ac *AssistantCoordinator) ChatStream(ctx context.Context, aiModel string, messages []*model.Message) (*http.Response, *model.AuxMessageData, error) {
+func (ac *AssistantCoordinator) SendStream(ctx context.Context, aiModel string, messages []*model.Message) (*http.Response, *model.AuxMessageData, error) {
 	logger := log.FromContext(ctx)
 	userID := ctx.Value(web.ContextKeyRequestorId).(string)
 
@@ -420,13 +524,10 @@ func (ac *AssistantCoordinator) ChatStream(ctx context.Context, aiModel string, 
 	modelId, adapterName := splitModelAdapter(aiModel)
 
 	req := &model.ChatRequest{
-		Messages:     msgs,
-		Stream:       true,
-		ToolConfig:   ac.toolConfig,
-		UserId:       userID,
-		Model:        modelId,
-		System:       ac.systemPrompt,
-		SystemAppend: ac.systemPromptAddendum,
+		Messages: msgs,
+		Stream:   true,
+		UserId:   userID,
+		Model:    modelId,
 	}
 
 	if err := ac.checkRequestSize(req, modelId, adapterName); err != nil {
@@ -440,6 +541,25 @@ func (ac *AssistantCoordinator) ChatStream(ctx context.Context, aiModel string, 
 		return nil, nil, fmt.Errorf("assistant adapter not found: %s", adapterName)
 	}
 
+	modelParams := ac.findModelParams(modelId, adapterName)
+	if modelParams == nil {
+		// The requested model is not configured; there is no sensible fallback, so
+		// surface it as a client error (mapped to HTTP 400 by the handler).
+		logger.WithField("model", aiModel).Error("requested model is not configured")
+		return nil, nil, ErrInvalidModel
+	}
+
+	if modelParams.IsAgentic {
+		err := ac.setupAgent(req, modelParams)
+		if err != nil {
+			return nil, nil, err
+		}
+	} else {
+		req.ToolConfig = ac.toolConfig
+		req.System = ac.systemPrompt
+		req.SystemAppend = ac.systemPromptAddendum
+	}
+
 	res, aux, err := adapter.SendMessageStream(ctx, req)
 	if err != nil {
 		return nil, nil, err
@@ -448,7 +568,7 @@ func (ac *AssistantCoordinator) ChatStream(ctx context.Context, aiModel string, 
 	return res, aux, nil
 }
 
-func (ac *AssistantCoordinator) ExecuteTool(ctx context.Context, toolName string, params string, auxData string) (*model.ToolResponse, error) {
+func (ac *AssistantCoordinator) ExecuteTool(ctx context.Context, toolName string, toolReq *model.ToolRequest) (*model.ToolResponse, error) {
 	logger := log.FromContext(ctx).WithFields(log.Fields{
 		"toolName":  toolName,
 		"toolUseId": uuid.New().String(),
@@ -456,8 +576,11 @@ func (ac *AssistantCoordinator) ExecuteTool(ctx context.Context, toolName string
 
 	tool, ok := ac.FunctionLibrary[toolName]
 	if !ok {
-		logger.Error("tool not found")
-		return nil, ErrToolNotFound
+		tool, ok = ac.DelegationLibrary[toolName]
+		if !ok {
+			logger.Error("tool not found")
+			return nil, ErrToolNotFound
+		}
 	}
 
 	assistantCtx := modcontext.WriteIsAssistant(ctx, true)
@@ -469,7 +592,7 @@ func (ac *AssistantCoordinator) ExecuteTool(ctx context.Context, toolName string
 		"userId":   userID,
 	}).Info("executing tool for assistant")
 
-	result, err := tool.Execute(assistantCtx, ac.srv, params, auxData)
+	result, err := tool.Execute(assistantCtx, ac.srv, toolReq)
 	if err != nil {
 		logger.WithError(err).Error("error executing tool")
 		return nil, err
@@ -518,6 +641,482 @@ func (ac *AssistantCoordinator) Health(ctx context.Context, aiModel string) (*mo
 	}
 
 	return response, nil
+}
+
+// ToolInSession is the non-streaming counterpart to ToolStreamInSession. It runs
+// the requested tool, then drives the resulting turn — and any delegated
+// sub-agent turns it triggers — synchronously to a stopping point, returning the
+// assistant response messages for the handler to write back to the requester.
+//
+// The stopping point mirrors the streaming chaining loop (see PostTool): a turn
+// that requests a tool is returned for approval (parking the session), while a
+// text-only turn from a sub-agent is folded back into its parent's delegate
+// tool_use and the parent is resumed, repeating until a top-level turn completes
+// or a tool needs approval. Nothing is streamed; the whole chain runs in one call.
+func (ac *AssistantCoordinator) ToolInSession(ctx context.Context, toolReq *model.ToolRequest, toolName string) ([]*model.Message, error) {
+	logger := log.FromContext(ctx)
+
+	result, toolErr := ac.ExecuteTool(ctx, toolName, toolReq)
+	if toolErr != nil {
+		logger.WithError(toolErr).Error("unable to execute tool")
+	}
+
+	if result == nil && toolErr == nil {
+		// async tool with neither a result nor an error
+		return nil, nil
+	}
+
+	// Build the initial turn. A delegation kickoff starts the sub-agent's session
+	// and runs its first turn; any other tool result is folded into the current
+	// session and the assistant's continuation is run.
+	var response []*model.Message
+	var sessionId string
+	var err error
+
+	if kickoff, ok := delegationKickoff(result); ok {
+		response, sessionId, err = ac.startDelegationSync(ctx, toolReq, kickoff)
+	} else {
+		// A tool error (nil result, non-nil error) is wrapped as an error tool_result
+		// so the conversation can continue.
+		toolMsg := buildToolResultMessage(toolReq.ToolUseId, result, toolErr)
+		// Continue on the session's own model rather than the client-supplied model.
+		sessionId = toolReq.SessionId
+		aiModel := ac.sessionModel(ctx, toolReq.SessionId, toolReq.Model)
+		response, err = ac.continueWithToolResultSync(ctx, sessionId, aiModel, toolMsg)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	// Chain turns while a delegated sub-agent finishes (text-only) and its result
+	// folds back into the parent. Stop when a turn needs tool approval or a
+	// top-level turn completes. This is the non-streaming twin of the PostTool loop.
+	for {
+		last := response[len(response)-1]
+		if messageHasToolUse(last) {
+			// A tool request hands control back to the client (approve and POST again).
+			// This legitimately parks a (sub-)agent mid-task, so do not resolve here.
+			return response, nil
+		}
+
+		sess := ac.loadSession(ctx, sessionId)
+		if sess == nil || sess.ParentSessionId == "" {
+			// Top-level conversation completed (or the session can't be loaded, in
+			// which case we can't tell it's a sub-agent, so we stop chaining).
+			return response, nil
+		}
+
+		// The session that just finished is a delegated sub-agent. Resolve it into its
+		// parent and continue with the parent's turn.
+		response, sessionId, err = ac.resolveDelegationSync(ctx, sess, messageText(last))
+		if err != nil {
+			return nil, err
+		}
+	}
+}
+
+// continueWithToolResultSync is the non-streaming twin of continueWithToolResult.
+// It appends a tool_result (or delegation result) message to the given session,
+// dispatches the conversation to Send, persists the tool_result, and persists and
+// returns the assistant's response messages.
+func (ac *AssistantCoordinator) continueWithToolResultSync(ctx context.Context, sessionId, aiModel string, toolMsg *model.Message) ([]*model.Message, error) {
+	logger := log.FromContext(ctx)
+
+	// A full delegation chains several sequential model calls in one request, so
+	// run free of the per-request timeout like the streaming path does.
+	noTimeOutCtx := buildNoTimeoutCtx(ctx)
+
+	messages, _, err := ac.loadHistory(noTimeOutCtx, sessionId)
+	if err != nil {
+		return nil, err
+	}
+	messages = append(messages, toolMsg)
+
+	response, err := ac.Send(noTimeOutCtx, aiModel, messages)
+	if err != nil {
+		return nil, err
+	}
+
+	toolStored := toolMsg.PrepareForStorage(sessionId, []string{"tool_result"}, aiModel)
+	if err := ac.srv.Assistantstore.SaveChat(noTimeOutCtx, toolStored); err != nil {
+		logger.WithError(err).Error("unable to save tool result message for non-streaming chat")
+		return nil, err
+	}
+
+	for _, msg := range response {
+		stored := msg.PrepareForStorage(sessionId, nil, aiModel)
+		if err := ac.srv.Assistantstore.SaveChat(noTimeOutCtx, stored); err != nil {
+			logger.WithError(err).Error("unable to save tool result response message (non-streaming)")
+			return nil, err
+		}
+	}
+
+	return response, nil
+}
+
+// ToolStreamInSession is the streaming counterpart to ToolInSession. It runs the
+// requested tool and returns the resulting streamed turn. When the tool is a
+// delegation kickoff it instead starts the sub-agent's session and streams its
+// first turn (leaving the parent's delegate tool_use parked); otherwise it folds
+// the tool result into the session and streams the assistant's continuation.
+func (ac *AssistantCoordinator) ToolStreamInSession(ctx context.Context, toolReq *model.ToolRequest, toolName string) (*model.StreamedTurn, error) {
+	logger := log.FromContext(ctx)
+
+	result, toolErr := ac.ExecuteTool(ctx, toolName, toolReq)
+	if toolErr != nil {
+		logger.WithError(toolErr).Error("unable to execute tool")
+	}
+
+	// Delegation kickoff: start the sub-agent's session instead of resolving the
+	// parent's delegate tool_use. The parent stays parked until the sub-agent
+	// finishes and the backend folds its result back in (see ResolveDelegationStream).
+	if result != nil {
+		if kickoff, ok := result.Result.(model.DelegationKickoff); ok {
+			return ac.startDelegation(ctx, toolReq, kickoff)
+		}
+	}
+
+	toolMsg := buildToolResultMessage(toolReq.ToolUseId, result, toolErr)
+
+	// Resume on the session's own model (Hunter's model for a sub-agent session),
+	// not the client-supplied model, so the right agent/prompt continues the turn.
+	aiModel := ac.sessionModel(ctx, toolReq.SessionId, toolReq.Model)
+
+	return ac.continueWithToolResult(ctx, toolReq.SessionId, aiModel, toolMsg)
+}
+
+// continueWithToolResult appends a tool_result (or delegation result) message to
+// the given session, dispatches the conversation to SendStream, persists the
+// tool_result, and returns the streamed turn with a finalize callback that
+// persists the assistant's response once streaming completes.
+func (ac *AssistantCoordinator) continueWithToolResult(ctx context.Context, sessionId, aiModel string, toolMsg *model.Message) (*model.StreamedTurn, error) {
+	logger := log.FromContext(ctx)
+
+	messages, _, err := ac.loadHistory(ctx, sessionId)
+	if err != nil {
+		return nil, err
+	}
+	messages = append(messages, toolMsg)
+
+	noTimeOutCtx := buildNoTimeoutCtx(ctx)
+
+	response, aux, err := ac.SendStream(noTimeOutCtx, aiModel, messages)
+	if err != nil {
+		return nil, err
+	}
+
+	toolStored := toolMsg.PrepareForStorage(sessionId, []string{"tool_result"}, aiModel)
+	if err := ac.srv.Assistantstore.SaveChat(noTimeOutCtx, toolStored); err != nil {
+		logger.WithError(err).Error("unable to save tool result message before streaming response")
+		return nil, err
+	}
+
+	finalize := func(rawResponse []byte) error {
+		msg, err := server.UnstreamResponse(noTimeOutCtx, string(rawResponse), aux)
+		if err != nil {
+			return err
+		}
+		if msg == nil {
+			return nil
+		}
+		return ac.srv.Assistantstore.SaveChat(noTimeOutCtx, msg.PrepareForStorage(sessionId, nil, aiModel))
+	}
+
+	return &model.StreamedTurn{
+		Response:  response,
+		Aux:       aux,
+		Finalize:  finalize,
+		SessionId: sessionId,
+		Model:     aiModel,
+	}, nil
+}
+
+// sessionModel returns the model/adapter a session runs on, derived from the
+// session record itself rather than trusting a client-supplied value. Legacy
+// sessions saved before AssistantSession.Model existed (or a session that can't
+// be loaded) fall back to the provided model so existing conversations keep
+// working unchanged.
+func (ac *AssistantCoordinator) sessionModel(ctx context.Context, sessionId, fallback string) string {
+	sessions, err := ac.srv.Assistantstore.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId))
+	if err != nil || len(sessions) == 0 {
+		return fallback
+	}
+	if sessions[0].Model == "" {
+		return fallback
+	}
+	return sessions[0].Model
+}
+
+// startDelegation creates the linked child session for a delegation, seeds the
+// objective as the child's first user message, and streams the sub-agent's first
+// turn. The returned turn carries a delegation_start marker so the UI nests the
+// sub-agent's output under the parent's delegate tool block. The parent's
+// delegate tool_use is intentionally left unresolved here.
+func (ac *AssistantCoordinator) startDelegation(ctx context.Context, toolReq *model.ToolRequest, kickoff model.DelegationKickoff) (*model.StreamedTurn, error) {
+	logger := log.FromContext(ctx)
+	noTimeOutCtx := buildNoTimeoutCtx(ctx)
+
+	session := ac.newDelegationSession(noTimeOutCtx, toolReq, kickoff)
+	if err := ac.srv.Assistantstore.CreateSession(noTimeOutCtx, session); err != nil {
+		logger.WithError(err).Error("unable to create delegated child session")
+		return nil, err
+	}
+
+	userMsg := newUserMessage(kickoff.Objective)
+	if err := ac.srv.Assistantstore.SaveChat(noTimeOutCtx, userMsg.PrepareForStorage(kickoff.ChildSessionId, nil, kickoff.ChildModel)); err != nil {
+		logger.WithError(err).Error("unable to save delegated objective message")
+		return nil, err
+	}
+
+	response, aux, err := ac.SendStream(noTimeOutCtx, kickoff.ChildModel, []*model.Message{userMsg})
+	if err != nil {
+		return nil, err
+	}
+
+	finalize := func(rawResponse []byte) error {
+		msg, err := server.UnstreamResponse(noTimeOutCtx, string(rawResponse), aux)
+		if err != nil {
+			return err
+		}
+		if msg == nil {
+			return nil
+		}
+		return ac.srv.Assistantstore.SaveChat(noTimeOutCtx, msg.PrepareForStorage(kickoff.ChildSessionId, nil, kickoff.ChildModel))
+	}
+
+	return &model.StreamedTurn{
+		Response:  response,
+		Aux:       aux,
+		Finalize:  finalize,
+		SessionId: kickoff.ChildSessionId,
+		Model:     kickoff.ChildModel,
+		Marker: &model.DelegationMarker{
+			Type:            model.DelegationMarkerStart,
+			ChildSessionId:  kickoff.ChildSessionId,
+			ParentToolUseId: toolReq.ToolUseId,
+			AgentName:       kickoff.AgentName,
+		},
+	}, nil
+}
+
+// ResolveDelegationStream is called when a delegated sub-agent has finished (its
+// turn came back text-only). It folds the sub-agent's final answer into a
+// tool_result for the parent's delegate tool_use, resumes the parent session, and
+// returns the parent's streamed turn carrying a delegation_resolved marker so the
+// UI un-nests and renders the parent's continuation.
+func (ac *AssistantCoordinator) ResolveDelegationStream(ctx context.Context, childSession *model.AssistantSession, childFinalText string) (*model.StreamedTurn, error) {
+	toolMsg := buildDelegationResultMessage(childSession.ParentToolUseId, childFinalText)
+
+	// Prefer the parent session's live stored model; fall back to the snapshot
+	// taken at delegation time for legacy children created before Model existed.
+	parentModel := ac.sessionModel(ctx, childSession.ParentSessionId, childSession.ParentModel)
+
+	turn, err := ac.continueWithToolResult(ctx, childSession.ParentSessionId, parentModel, toolMsg)
+	if err != nil {
+		return nil, err
+	}
+
+	turn.Marker = &model.DelegationMarker{
+		Type:            model.DelegationMarkerResolved,
+		ParentSessionId: childSession.ParentSessionId,
+		ParentToolUseId: childSession.ParentToolUseId,
+	}
+
+	return turn, nil
+}
+
+// newDelegationSession builds the linked child session record for a delegation,
+// shared by the streaming and non-streaming kickoff paths.
+func (ac *AssistantCoordinator) newDelegationSession(ctx context.Context, toolReq *model.ToolRequest, kickoff model.DelegationKickoff) *model.AssistantSession {
+	return &model.AssistantSession{
+		SessionId:       kickoff.ChildSessionId,
+		Title:           kickoff.Objective,
+		Type:            "delegation",
+		Model:           kickoff.ChildModel,
+		DelegateAgent:   kickoff.AgentName,
+		ParentSessionId: toolReq.SessionId,
+		ParentToolUseId: toolReq.ToolUseId,
+		// Snapshot the parent's own stored model (not the client-supplied model) so
+		// the parent resumes on the right agent even if the user switched models
+		// while the sub-agent was running.
+		ParentModel: ac.sessionModel(ctx, toolReq.SessionId, toolReq.Model),
+	}
+}
+
+// startDelegationSync is the non-streaming twin of startDelegation. It creates the
+// linked child session, seeds the objective as the child's first user message,
+// runs the sub-agent's first turn via Send, persists it, and returns the child's
+// response messages together with the child session id so the caller can drive
+// the delegation chain. The parent's delegate tool_use is left unresolved here.
+func (ac *AssistantCoordinator) startDelegationSync(ctx context.Context, toolReq *model.ToolRequest, kickoff model.DelegationKickoff) ([]*model.Message, string, error) {
+	logger := log.FromContext(ctx)
+	noTimeOutCtx := buildNoTimeoutCtx(ctx)
+
+	session := ac.newDelegationSession(noTimeOutCtx, toolReq, kickoff)
+	if err := ac.srv.Assistantstore.CreateSession(noTimeOutCtx, session); err != nil {
+		logger.WithError(err).Error("unable to create delegated child session")
+		return nil, "", err
+	}
+
+	userMsg := newUserMessage(kickoff.Objective)
+	if err := ac.srv.Assistantstore.SaveChat(noTimeOutCtx, userMsg.PrepareForStorage(kickoff.ChildSessionId, nil, kickoff.ChildModel)); err != nil {
+		logger.WithError(err).Error("unable to save delegated objective message")
+		return nil, "", err
+	}
+
+	response, err := ac.Send(noTimeOutCtx, kickoff.ChildModel, []*model.Message{userMsg})
+	if err != nil {
+		return nil, "", err
+	}
+
+	for _, msg := range response {
+		stored := msg.PrepareForStorage(kickoff.ChildSessionId, nil, kickoff.ChildModel)
+		if err := ac.srv.Assistantstore.SaveChat(noTimeOutCtx, stored); err != nil {
+			logger.WithError(err).Error("unable to save delegated sub-agent response (non-streaming)")
+			return nil, "", err
+		}
+	}
+
+	return response, kickoff.ChildSessionId, nil
+}
+
+// resolveDelegationSync is the non-streaming twin of ResolveDelegationStream. It
+// folds a finished sub-agent's final answer into a tool_result for the parent's
+// delegate tool_use, resumes the parent session via Send, and returns the
+// parent's response messages together with the parent session id.
+func (ac *AssistantCoordinator) resolveDelegationSync(ctx context.Context, childSession *model.AssistantSession, childFinalText string) ([]*model.Message, string, error) {
+	toolMsg := buildDelegationResultMessage(childSession.ParentToolUseId, childFinalText)
+
+	// Prefer the parent session's live stored model; fall back to the snapshot
+	// taken at delegation time for legacy children created before Model existed.
+	parentModel := ac.sessionModel(ctx, childSession.ParentSessionId, childSession.ParentModel)
+
+	response, err := ac.continueWithToolResultSync(ctx, childSession.ParentSessionId, parentModel, toolMsg)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return response, childSession.ParentSessionId, nil
+}
+
+// buildDelegationResultMessage wraps a sub-agent's final answer as the tool_result
+// for the parent's delegate tool_use. An empty answer becomes an error result so
+// the parent can react rather than continue on nothing.
+func buildDelegationResultMessage(parentToolUseId, childFinalText string) *model.Message {
+	if strings.TrimSpace(childFinalText) == "" {
+		return buildToolResultMessage(parentToolUseId, nil, errors.New("ERROR_DELEGATION_NO_RESULT"))
+	}
+	resp := &model.ToolResponse{
+		ToolName: "delegation",
+		Result:   childFinalText,
+	}
+	return buildToolResultMessage(parentToolUseId, resp, nil)
+}
+
+// delegationKickoff returns the DelegationKickoff carried by a tool result, if any.
+func delegationKickoff(result *model.ToolResponse) (model.DelegationKickoff, bool) {
+	if result == nil {
+		return model.DelegationKickoff{}, false
+	}
+	kickoff, ok := result.Result.(model.DelegationKickoff)
+	return kickoff, ok
+}
+
+// messageHasToolUse reports whether an assistant turn requested a tool.
+func messageHasToolUse(msg *model.Message) bool {
+	for _, cb := range msg.ContentBlocks {
+		if cb.Type == "tool_use" {
+			return true
+		}
+	}
+	return false
+}
+
+// messageText concatenates the text content of an assistant turn, used as the
+// delegated sub-agent's final answer when resolving a delegation.
+func messageText(msg *model.Message) string {
+	var b strings.Builder
+	for _, cb := range msg.ContentBlocks {
+		if cb.Text != "" {
+			b.WriteString(cb.Text)
+		}
+	}
+	return b.String()
+}
+
+// loadSession returns the session with the given id, or nil if it can't be found.
+func (ac *AssistantCoordinator) loadSession(ctx context.Context, sessionId string) *model.AssistantSession {
+	sessions, err := ac.srv.Assistantstore.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId))
+	if err != nil || len(sessions) == 0 {
+		return nil
+	}
+	return sessions[0]
+}
+
+func buildToolResultMessage(toolUseId string, result *model.ToolResponse, toolErr error) *model.Message {
+	var toolResult *model.ToolResult
+	if toolErr != nil {
+		toolResult = &model.ToolResult{
+			ToolUseId: toolUseId,
+			Status:    "error",
+			IsError:   true,
+			Content: []model.ToolResultContent{
+				{Text: toolErr.Error()},
+			},
+		}
+	} else {
+		var res any
+		var name string
+		if result != nil {
+			res = map[string]any{
+				"result": result.Result,
+			}
+			name = result.ToolName
+		}
+		toolResult = &model.ToolResult{
+			Name:      name,
+			ToolUseId: toolUseId,
+			Content: []model.ToolResultContent{
+				{Json: res},
+			},
+		}
+	}
+
+	return &model.Message{
+		Id:   uuid.NewString(),
+		Role: "user",
+		ContentBlocks: []model.ContentBlock{
+			{ToolResult: toolResult},
+		},
+	}
+}
+
+func (ac *AssistantCoordinator) setupAgent(req *model.ChatRequest, modelParams *model.ModelParameters) (err error) {
+	req.System = modelParams.AgentPrompt // build system prompt for this agent
+	req.SystemAppend = ""
+
+	req.ToolConfig, err = buildToolConfig(ac.FunctionLibrary, ac.DelegationLibrary, modelParams.AllowedTools, modelParams.CanDelegateTo) // build tools for this agent
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// HistoryToContext converts stored message history into the message list sent
+// as context to the model. Messages preceding a context-compression marker are
+// dropped so only the compressed summary and what follows it are kept.
+func HistoryToContext(history []*model.StoredMessage) []*model.Message {
+	messages := make([]*model.Message, 0, len(history))
+	for _, msg := range history {
+		if slices.Contains(msg.Tags, model.MessageTagContextCompression) {
+			messages = messages[:0]
+		}
+
+		messages = append(messages, msg.Message)
+	}
+
+	return messages
 }
 
 func cleanupMessages(messages []*model.Message) []*model.Message {

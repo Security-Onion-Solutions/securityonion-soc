@@ -1134,7 +1134,7 @@ test('executeTool processes content_block_delta with text', async () => {
   await comp.executeTool(toolUse);
   
   expect(comp.messages).toHaveLength(1);
-  expect(comp.messages[0].content.value).toBe('Tool result: Success');
+  expect(comp.messages[0].content).toBe('Tool result: Success');
   expect(comp.scrollToBottom).toHaveBeenCalledTimes(2); // Once for message_start, once for text delta
 });
 
@@ -1175,7 +1175,7 @@ test('executeTool processes message_stop with usage', async () => {
   await comp.executeTool(toolUse);
   
   expect(comp.messages).toHaveLength(1);
-  expect(comp.messages[0].usage.value).toEqual({ input_tokens: 15, output_tokens: 25 });
+  expect(comp.messages[0].usage).toEqual({ input_tokens: 15, output_tokens: 25 });
   expect(comp.updateContextLength).toHaveBeenCalledWith({ input_tokens: 15, output_tokens: 25 });
   expect(comp.$forceUpdate).toHaveBeenCalled();
 });
@@ -1220,10 +1220,10 @@ test('executeTool handles chained tool use in response', async () => {
   await comp.executeTool(toolUse);
   
   expect(comp.messages).toHaveLength(1);
-  expect(comp.messages[0].toolUses.value).toHaveLength(1);
-  expect(comp.messages[0].toolUses.value[0].id).toBe('chained_tool_456');
-  expect(comp.messages[0].toolUses.value[0].name).toBe('analyze_data');
-  expect(comp.messages[0].toolUses.value[0].status).toBe('preparing');
+  expect(comp.messages[0].toolUses).toHaveLength(1);
+  expect(comp.messages[0].toolUses[0].id).toBe('chained_tool_456');
+  expect(comp.messages[0].toolUses[0].name).toBe('analyze_data');
+  expect(comp.messages[0].toolUses[0].status).toBe('preparing');
   expect(comp.getSessionToolMap).toHaveBeenCalledWith(fakeSessionId);
   expect(comp.getIndexMap).toHaveBeenCalledWith(fakeSessionId);
 });
@@ -1264,23 +1264,23 @@ test('handleToolExecutionContentBlockDelta processes input_json_delta for chaine
 test('handleToolExecutionContentBlockDelta processes thought_delta', () => {
   const sessionId = 'tool-session';
   const assistantMessage = {
-    thoughts: { value: '**Starting Analysis**\n\n' }
+    thoughts: '**Starting Analysis**\n\n'
   };
-  
+
   comp.scrollIfPinned = jest.fn();
   comp.currentChatId = sessionId;
   comp.nbspRegexOp = jest.fn((text) => text); // Pass through for testing
-  
+
   const deltaEvent = {
     delta: {
       type: 'thought_delta',
       text: 'Examining the data...'
     }
   };
-  
+
   comp.handleToolExecutionContentBlockDelta(deltaEvent, assistantMessage, sessionId);
   
-  expect(assistantMessage.thoughts.value).toBe('**Starting Analysis**\n\nExamining the data...');
+  expect(assistantMessage.thoughts).toBe('**Starting Analysis**\n\nExamining the data...');
   expect(comp.scrollIfPinned).toHaveBeenCalled();
 });
 
@@ -1400,6 +1400,59 @@ test('executeTool handles tool result with error', async () => {
   
   expect(toolUse.error).toBe('something went wrong');
   expect(toolUse.status).toBe('error');
+}, 30000);
+
+test('executeTool completes a tool whose result has empty content (no stuck spinner)', async () => {
+  resetPapi();
+
+  const toolUse = { ...fakeToolUse };
+  comp.currentChatId = fakeSessionId;
+  comp.scrollToBottom = jest.fn();
+  comp.loadCredits = jest.fn().mockResolvedValue();
+
+  // A non-error tool_result with an empty content array. Previously this left the
+  // status gated on content.length, so the tool spun forever; it must now complete.
+  const backendResponse = [
+    {
+      createTime: '2025-01-01T12:00:00.000Z',
+      tags: ['tool_result'],
+      message: {
+        contentBlocks: [
+          {
+            toolResult: {
+              toolUseId: 'tool_123',
+              content: []
+            }
+          }
+        ]
+      }
+    }
+  ];
+  mockPapi('get', { data: { session: {}, history: backendResponse } });
+
+  const messageStartData = JSON.stringify({ type: 'message_start' });
+  const mockResponse = {
+    ok: true,
+    data: {
+      pipeThrough: jest.fn().mockReturnValue({
+        getReader: jest.fn().mockReturnValue({
+          read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: `data: ${messageStartData}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
+            .mockResolvedValueOnce({ done: true })
+        })
+      })
+    }
+  };
+  mockPapi('post', mockResponse);
+
+  await comp.executeTool(toolUse);
+
+  // Wait for the setTimeout to complete
+  await new Promise(resolve => setTimeout(resolve, 1100));
+
+  expect(toolUse.status).toBe('completed');
+  expect(toolUse.rawResult).toBeNull();
 }, 30000);
 
 test('executeTool handles partial JSON chunks', async () => {
@@ -1543,9 +1596,9 @@ test('callAIAPI processes message_start event', async () => {
   expect(comp.isTyping).toBe(false);
   expect(comp.messages).toHaveLength(1);
   expect(comp.messages[0].role).toBe('assistant');
-  expect(comp.messages[0].content.value).toBe('');
-  expect(comp.messages[0].usage.value).toBe(null); // Usage set later in message_stop
-  expect(comp.messages[0].toolUses.value).toEqual([]);
+  expect(comp.messages[0].content).toBe('');
+  expect(comp.messages[0].usage).toBe(null); // Usage set later in message_stop
+  expect(comp.messages[0].toolUses).toEqual([]);
   expect(comp.scrollToBottom).toHaveBeenCalled();
 });
 
@@ -1587,11 +1640,11 @@ test('callAIAPI processes content_block_start with tool_use', async () => {
   await comp.callAIAPI('Test message');
   
   expect(comp.messages).toHaveLength(1);
-  expect(comp.messages[0].toolUses.value).toHaveLength(1);
-  expect(comp.messages[0].toolUses.value[0].id).toBe('tool_456');
-  expect(comp.messages[0].toolUses.value[0].name).toBe('search_data');
-  expect(comp.messages[0].toolUses.value[0].input).toEqual({ query: 'test query' });
-  expect(comp.messages[0].toolUses.value[0].status).toBe('preparing');
+  expect(comp.messages[0].toolUses).toHaveLength(1);
+  expect(comp.messages[0].toolUses[0].id).toBe('tool_456');
+  expect(comp.messages[0].toolUses[0].name).toBe('search_data');
+  expect(comp.messages[0].toolUses[0].input).toEqual({ query: 'test query' });
+  expect(comp.messages[0].toolUses[0].status).toBe('preparing');
   expect(comp.getSessionToolMap).toHaveBeenCalledWith(fakeSessionId);
   expect(comp.getIndexMap).toHaveBeenCalledWith(fakeSessionId);
 });
@@ -1631,7 +1684,7 @@ test('callAIAPI processes content_block_delta with text_delta', async () => {
   await comp.callAIAPI('Test message');
   
   expect(comp.messages).toHaveLength(1);
-  expect(comp.messages[0].content.value).toBe('Hello world!');
+  expect(comp.messages[0].content).toBe('Hello world!');
   expect(comp.scrollToBottom).toHaveBeenCalledTimes(3); // Once for message_start, twice for text deltas
 });
 
@@ -1670,7 +1723,7 @@ test('callAIAPI processes content_block_delta with thought_delta', async () => {
   await comp.callAIAPI('Test message');
   
   expect(comp.messages).toHaveLength(1);
-  expect(comp.messages[0].thoughts.value).toBe('**Analyzing Request**\n\nProcessing the query...');
+  expect(comp.messages[0].thoughts).toBe('**Analyzing Request**\n\nProcessing the query...');
   expect(comp.scrollToBottom).toHaveBeenCalledTimes(3); // Once for message_start, twice for thought deltas
 });
 
@@ -1951,7 +2004,7 @@ test('callAIAPI processes message_stop with usage', async () => {
   await comp.callAIAPI('Test message');
   
   expect(comp.messages).toHaveLength(1);
-  expect(comp.messages[0].usage.value).toEqual({ input_tokens: 20, output_tokens: 30 });
+  expect(comp.messages[0].usage).toEqual({ input_tokens: 20, output_tokens: 30 });
   expect(comp.updateContextLength).toHaveBeenCalledWith({ input_tokens: 20, output_tokens: 30 });
   expect(comp.$forceUpdate).toHaveBeenCalled();
 });
@@ -1990,7 +2043,7 @@ test('callAIAPI processes message_delta with usage', async () => {
   await comp.callAIAPI('Test message');
   
   expect(comp.messages).toHaveLength(1);
-  expect(comp.messages[0].usage.value).toEqual({ input_tokens: 25, output_tokens: 35 });
+  expect(comp.messages[0].usage).toEqual({ input_tokens: 25, output_tokens: 35 });
   expect(comp.updateContextLength).toHaveBeenCalledWith({ input_tokens: 25, output_tokens: 35 });
 });
 
@@ -2051,7 +2104,7 @@ test('callAIAPI handles concatenated JSON objects', async () => {
   
   expect(comp.messages).toHaveLength(1);
   expect(comp.messages[0].role).toBe('assistant');
-  expect(comp.messages[0].content.value).toBe('Hello');
+  expect(comp.messages[0].content).toBe('Hello');
 });
 
 test('callAIAPI handles unhandled event types with usage', async () => {
@@ -2088,7 +2141,7 @@ test('callAIAPI handles unhandled event types with usage', async () => {
   await comp.callAIAPI('Test message');
   
   expect(comp.messages).toHaveLength(1);
-  expect(comp.messages[0].usage.value).toEqual({ input_tokens: 12, output_tokens: 18 });
+  expect(comp.messages[0].usage).toEqual({ input_tokens: 12, output_tokens: 18 });
   expect(comp.updateContextLength).toHaveBeenCalledWith({ input_tokens: 12, output_tokens: 18 });
 });
 
@@ -2611,7 +2664,7 @@ test('convertBackendMessagesToFrontend converts assistant message with text bloc
   expect(result[0].role).toBe('assistant');
   expect(result[0].content).toBe('I can help you with security analysis.');
   expect(result[0].timestamp).toBe('2025-01-01T12:00:00.000Z');
-  expect(result[0].usage.value).toEqual({ input_tokens: 10, output_tokens: 20 });
+  expect(result[0].usage).toEqual({ input_tokens: 10, output_tokens: 20 });
   expect(comp.updateContextLength).toHaveBeenCalledWith({ input_tokens: 10, output_tokens: 20 }, false);
 });
 
@@ -2638,9 +2691,9 @@ test('convertBackendMessagesToFrontend converts assistant message with thoughts'
   expect(result).toHaveLength(1);
   expect(result[0].role).toBe('assistant');
   expect(result[0].content).toBe('I can help you with security analysis.');
-  expect(result[0].thoughts.value).toBe('**Analyzing Request**\n\nProcessing the user query...');
+  expect(result[0].thoughts).toBe('**Analyzing Request**\n\nProcessing the user query...');
   expect(result[0].timestamp).toBe('2025-01-01T12:00:00.000Z');
-  expect(result[0].usage.value).toEqual({ input_tokens: 10, output_tokens: 20 });
+  expect(result[0].usage).toEqual({ input_tokens: 10, output_tokens: 20 });
   expect(comp.updateContextLength).toHaveBeenCalledWith({ input_tokens: 10, output_tokens: 20 }, false);
 });
 
@@ -2749,13 +2802,13 @@ test('convertBackendMessagesToFrontend handles tool_use blocks with completed st
   expect(result[0].content).toBe('');
   // Tool uses should be created since there's a next message and no rejection
   expect(result[0]).toHaveProperty('toolUses');
-  expect(result[0].toolUses.value).toHaveLength(1);
-  expect(result[0].toolUses.value[0].id).toBe('tool_123');
-  expect(result[0].toolUses.value[0].name).toBe('query_events');
-  expect(result[0].toolUses.value[0].input).toEqual({ query: 'test' });
-  expect(result[0].toolUses.value[0].status).toBe('completed');
-  expect(result[0].toolUses.value[0].approved).toBe(true);
-  expect(result[0].toolUses.value[0].rawResult).toEqual({ result: 'success' });
+  expect(result[0].toolUses).toHaveLength(1);
+  expect(result[0].toolUses[0].id).toBe('tool_123');
+  expect(result[0].toolUses[0].name).toBe('query_events');
+  expect(result[0].toolUses[0].input).toEqual({ query: 'test' });
+  expect(result[0].toolUses[0].status).toBe('completed');
+  expect(result[0].toolUses[0].approved).toBe(true);
+  expect(result[0].toolUses[0].rawResult).toEqual({ result: 'success' });
 });
 
 test('convertBackendMessagesToFrontend handles tool_use blocks with rejected status', () => {
@@ -2791,11 +2844,11 @@ test('convertBackendMessagesToFrontend handles tool_use blocks with rejected sta
   const result = comp.convertBackendMessagesToFrontend(backendMessages);
   
   expect(result).toHaveLength(1); // Second message should be skipped
-  expect(result[0].toolUses.value).toHaveLength(1);
-  expect(result[0].toolUses.value[0].id).toBe('tool_456');
-  expect(result[0].toolUses.value[0].status).toBe('rejected');
-  expect(result[0].toolUses.value[0].approved).toBe(false);
-  expect(result[0].toolUses.value[0].error).toBe('Tool execution rejected by user');
+  expect(result[0].toolUses).toHaveLength(1);
+  expect(result[0].toolUses[0].id).toBe('tool_456');
+  expect(result[0].toolUses[0].status).toBe('rejected');
+  expect(result[0].toolUses[0].approved).toBe(false);
+  expect(result[0].toolUses[0].error).toBe('Tool execution rejected by user');
 });
 
 test('convertBackendMessagesToFrontend handles tool_use blocks with null/undefined input', () => {
@@ -2840,7 +2893,7 @@ test('convertBackendMessagesToFrontend handles tool_use blocks with null/undefin
   
   expect(result).toHaveLength(1);
   expect(result[0]).toHaveProperty('toolUses');
-  expect(result[0].toolUses.value[0].input).toEqual({}); // Should default to empty object
+  expect(result[0].toolUses[0].input).toEqual({}); // Should default to empty object
 });
 
 test('convertBackendMessagesToFrontend handles tool_use blocks at end of session with pending_approval status', () => {
@@ -2871,9 +2924,9 @@ test('convertBackendMessagesToFrontend handles tool_use blocks at end of session
   
   expect(result).toHaveLength(1);
   expect(result[0]).toHaveProperty('toolUses');
-  expect(result[0].toolUses.value).toHaveLength(1);
+  expect(result[0].toolUses).toHaveLength(1);
   
-  const toolUse = result[0].toolUses.value[0];
+  const toolUse = result[0].toolUses[0];
   expect(toolUse.id).toBe('tool_end_session');
   expect(toolUse.name).toBe('query_events');
   expect(toolUse.input).toEqual({ query: 'test query at end' });
@@ -2920,10 +2973,10 @@ test('convertBackendMessagesToFrontend handles multiple tool_use blocks at end o
   
   expect(result).toHaveLength(1);
   expect(result[0]).toHaveProperty('toolUses');
-  expect(result[0].toolUses.value).toHaveLength(2);
+  expect(result[0].toolUses).toHaveLength(2);
   
   // Both tools should have pending_approval status
-  result[0].toolUses.value.forEach((toolUse, index) => {
+  result[0].toolUses.forEach((toolUse, index) => {
     expect(toolUse.status).toBe('pending_approval');
     expect(toolUse.approved).toBe(null);
     expect(toolUse.sessionId).toBe('multi_tool_session');
@@ -2958,9 +3011,9 @@ test('convertBackendMessagesToFrontend handles tool_use blocks at end with missi
   
   expect(result).toHaveLength(1);
   expect(result[0]).toHaveProperty('toolUses');
-  expect(result[0].toolUses.value).toHaveLength(1);
+  expect(result[0].toolUses).toHaveLength(1);
   
-  const toolUse = result[0].toolUses.value[0];
+  const toolUse = result[0].toolUses[0];
   expect(toolUse.status).toBe('pending_approval');
   expect(toolUse.input).toEqual({}); // Should default to empty object
   expect(toolUse.approved).toBe(null);
@@ -2992,9 +3045,9 @@ test('convertBackendMessagesToFrontend handles tool_use blocks at end with missi
   
   expect(result).toHaveLength(1);
   expect(result[0]).toHaveProperty('toolUses');
-  expect(result[0].toolUses.value).toHaveLength(1);
+  expect(result[0].toolUses).toHaveLength(1);
   
-  const toolUse = result[0].toolUses.value[0];
+  const toolUse = result[0].toolUses[0];
   expect(toolUse.status).toBe('pending_approval');
   expect(toolUse.id).toBe('unknown'); // Should default to 'unknown'
   expect(toolUse.name).toBe('unknown'); // Should default to 'unknown'
@@ -3039,9 +3092,9 @@ test('convertBackendMessagesToFrontend filters out legacy format tool result mes
   const result = comp.convertBackendMessagesToFrontend(backendMessages);
   
   expect(result).toHaveLength(1); // Tool result message should be filtered out
-  expect(result[0].toolUses.value[0].rawResult).toBe('{"events": 5}, Error: <nil>');
-  expect(result[0].toolUses.value[0].completedAt).toBe('2025-01-01T12:01:00.000Z');
-  expect(result[0].toolUses.value[0].status).toBe('completed'); // No error since Error is <nil>
+  expect(result[0].toolUses[0].rawResult).toBe('{"events": 5}, Error: <nil>');
+  expect(result[0].toolUses[0].completedAt).toBe('2025-01-01T12:01:00.000Z');
+  expect(result[0].toolUses[0].status).toBe('completed'); // No error since Error is <nil>
 });
 
 test('convertBackendMessagesToFrontend handles legacy format tool result with error', () => {
@@ -3080,9 +3133,9 @@ test('convertBackendMessagesToFrontend handles legacy format tool result with er
   const result = comp.convertBackendMessagesToFrontend(backendMessages);
   
   expect(result).toHaveLength(1);
-  expect(result[0].toolUses.value[0].rawResult).toBe('null, Error: Connection timeout');
-  expect(result[0].toolUses.value[0].error).toBe('Connection timeout');
-  expect(result[0].toolUses.value[0].status).toBe('error');
+  expect(result[0].toolUses[0].rawResult).toBe('null, Error: Connection timeout');
+  expect(result[0].toolUses[0].error).toBe('Connection timeout');
+  expect(result[0].toolUses[0].status).toBe('error');
 });
 
 test('convertBackendMessagesToFrontend filters out old format tool result messages', () => {
@@ -3130,7 +3183,7 @@ test('convertBackendMessagesToFrontend filters out old format tool result messag
   
   expect(result).toHaveLength(1); // Tool result message should be filtered out
   expect(result[0]).toHaveProperty('toolUses');
-  expect(result[0].toolUses.value[0].rawResult).toBe('Raw tool result data');
+  expect(result[0].toolUses[0].rawResult).toBe('Raw tool result data');
 });
 
 test('convertBackendMessagesToFrontend handles malformed tool result parsing', () => {
@@ -3170,7 +3223,7 @@ test('convertBackendMessagesToFrontend handles malformed tool result parsing', (
   
   expect(result).toHaveLength(1);
   // Should not crash, tool use should remain without rawResult
-  expect(result[0].toolUses.value[0].rawResult).toBeNull();
+  expect(result[0].toolUses[0].rawResult).toBeNull();
 });
 
 test('convertBackendMessagesToFrontend handles missing createTime', () => {
@@ -3237,8 +3290,8 @@ test('convertBackendMessagesToFrontend handles complex message flow with skip_ne
   
   expect(result).toHaveLength(1); // Middle message should be skipped due to rejection, and user message becomes rawResult
   expect(result[0].content).toBe('I will use a tool now.');
-  expect(result[0].toolUses.value[0].status).toBe('rejected');
-  expect(result[0].toolUses.value[0].rawResult).toBe('I understand, let me try a different approach.');
+  expect(result[0].toolUses[0].status).toBe('rejected');
+  expect(result[0].toolUses[0].rawResult).toBe('I understand, let me try a different approach.');
 });
 
 test('convertBackendMessagesToFrontend handles tool use followed by user message (skipped status)', () => {
@@ -3275,7 +3328,7 @@ test('convertBackendMessagesToFrontend handles tool use followed by user message
   const result = comp.convertBackendMessagesToFrontend(backendMessages);
   
   expect(result).toHaveLength(2);
-  const toolUse = result[0].toolUses.value[0];
+  const toolUse = result[0].toolUses[0];
   expect(toolUse.status).toBe('skipped');
   expect(toolUse.approved).toBe(false);
 });
@@ -4820,9 +4873,107 @@ test('handleContentBlockStop handles JSON parsing error', () => {
   mockIndexMap.set(0, 'tool_789');
   
   comp.handleContentBlockStop({ index: 0 }, sessionId);
-  
+
   expect(mockToolUse.status).toBe('error');
   expect(mockToolUse.error).toContain('Failed to parse tool input');
+});
+
+test('handleDelegationContentBlockStop auto-approves read-only sub-agent tool', () => {
+  const childSessionId = 'child-session';
+  const mockToolMap = new Map();
+  const mockIndexMap = new Map();
+  const mockToolUse = {
+    id: 'tool_123',
+    name: 'query_events',
+    inputJson: '{"oql_query": "event.module: suricata"}',
+    status: 'preparing',
+    input: {},
+    approved: null,
+    sessionId: childSessionId
+  };
+
+  comp.getSessionToolMap = jest.fn().mockReturnValue(mockToolMap);
+  comp.getIndexMap = jest.fn().mockReturnValue(mockIndexMap);
+  comp.shouldAutoApproveTool = jest.fn().mockReturnValue(true);
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
+  comp.queueTool = jest.fn();
+  comp.mostRecentFloatingTool = new Map();
+  comp.scrollIfPinned = jest.fn();
+
+  mockToolMap.set('tool_123', mockToolUse);
+  mockIndexMap.set(0, 'tool_123');
+
+  comp.handleDelegationContentBlockStop({ index: 0 }, childSessionId);
+
+  expect(mockToolUse.input).toEqual({ oql_query: "event.module: suricata" });
+  expect(mockToolUse.approved).toBe(true);
+  expect(mockToolUse.status).not.toBe('pending_approval');
+  expect(comp.queueTool).toHaveBeenCalledWith(childSessionId, 'tool_123');
+  expect(comp.mostRecentFloatingTool.has(childSessionId)).toBe(false);
+});
+
+test('handleDelegationContentBlockStop prompts for non-auto-approved sub-agent tool', () => {
+  const childSessionId = 'child-session';
+  const mockToolMap = new Map();
+  const mockIndexMap = new Map();
+  const mockToolUse = {
+    id: 'tool_456',
+    name: 'dangerous_tool',
+    inputJson: '{"action": "delete"}',
+    status: 'preparing',
+    input: {},
+    approved: null,
+    sessionId: childSessionId
+  };
+
+  comp.getSessionToolMap = jest.fn().mockReturnValue(mockToolMap);
+  comp.getIndexMap = jest.fn().mockReturnValue(mockIndexMap);
+  comp.shouldAutoApproveTool = jest.fn().mockReturnValue(false);
+  comp.queueTool = jest.fn();
+  comp.mostRecentFloatingTool = new Map();
+  comp.scrollIfPinned = jest.fn();
+
+  mockToolMap.set('tool_456', mockToolUse);
+  mockIndexMap.set(0, 'tool_456');
+
+  comp.handleDelegationContentBlockStop({ index: 0 }, childSessionId);
+
+  expect(mockToolUse.input).toEqual({ action: "delete" });
+  expect(mockToolUse.status).toBe('pending_approval');
+  expect(mockToolUse.approved).toBe(null);
+  expect(comp.mostRecentFloatingTool.get(childSessionId)).toBe(mockToolUse);
+  expect(comp.queueTool).not.toHaveBeenCalled();
+});
+
+test('handleDelegationContentBlockStop handles JSON parsing error', () => {
+  const childSessionId = 'child-session';
+  const mockToolMap = new Map();
+  const mockIndexMap = new Map();
+  const mockToolUse = {
+    id: 'tool_789',
+    name: 'query_events',
+    inputJson: '{"invalid": json}',
+    status: 'preparing',
+    input: {},
+    error: null,
+    sessionId: childSessionId
+  };
+
+  comp.getSessionToolMap = jest.fn().mockReturnValue(mockToolMap);
+  comp.getIndexMap = jest.fn().mockReturnValue(mockIndexMap);
+  comp.shouldAutoApproveTool = jest.fn().mockReturnValue(true);
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
+  comp.queueTool = jest.fn();
+  comp.scrollIfPinned = jest.fn();
+
+  mockToolMap.set('tool_789', mockToolUse);
+  mockIndexMap.set(0, 'tool_789');
+
+  comp.handleDelegationContentBlockStop({ index: 0 }, childSessionId);
+
+  expect(mockToolUse.status).toBe('error');
+  expect(mockToolUse.error).toContain('Failed to parse tool input');
+  expect(comp.queueTool).not.toHaveBeenCalled();
 });
 
 test('handleToolExecutionContentBlockStop processes chained tool with auto-approval', () => {

@@ -7,6 +7,7 @@ package model
 
 import (
 	"encoding/json"
+	"net/http"
 	"time"
 )
 
@@ -336,6 +337,68 @@ type AssistantSession struct {
 	Tags []string `json:"tags" example:"investigation"`
 	// Usage statistics for the session.
 	Usage *SessionUsage `json:"usage,omitempty"`
+	// The model/adapter this session itself runs on (the agent id for delegated
+	// sessions). Used to resume the session server-side without trusting the
+	// client-supplied model. Empty for legacy sessions created before this field
+	// existed, in which case the caller falls back to the request/parent model.
+	Model string `json:"model,omitempty" example:"AgentClaude@SOAI"`
+	// For delegated sub-agent sessions, the session that delegated to this one.
+	ParentSessionId string `json:"parentSessionId,omitempty" example:"chat_1757086398900_ykhmndscn"`
+	// For delegated sub-agent sessions, the tool_use id in the parent session that
+	// this delegation resolves when the sub-agent finishes.
+	ParentToolUseId string `json:"parentToolUseId,omitempty" example:"tooluse_mT45or7ISwSEUivo63nqow"`
+	// For delegated sub-agent sessions, the model the parent session uses, so the
+	// parent can be resumed once the sub-agent's result is ready.
+	ParentModel string `json:"parentModel,omitempty" example:"AgentClaude@SOAI"`
+	// For delegated sub-agent sessions, the display name of the delegated agent.
+	DelegateAgent string `json:"delegateAgent,omitempty" example:"Hunter"`
+}
+
+const (
+	// DelegationMarkerStart is the SSE event type emitted at the start of a
+	// delegated sub-agent's stream so the UI can nest the sub-agent's activity
+	// under the parent's delegate tool block.
+	DelegationMarkerStart = "delegation_start"
+	// DelegationMarkerResolved is the SSE event type emitted when a sub-agent
+	// finishes and its result is folded back into the parent session, so the UI
+	// can un-nest and render the parent's resumed turn.
+	DelegationMarkerResolved = "delegation_resolved"
+)
+
+// DelegationKickoff is returned by DelegateTool.Execute (as ToolResponse.Result)
+// to signal that a delegation should begin. The coordinator recognizes this
+// marker, creates the linked child session, seeds the objective as the child's
+// first user message, and streams the sub-agent's first turn rather than
+// resolving the parent's delegate tool_use.
+type DelegationKickoff struct {
+	ChildSessionId string `json:"childSessionId"`
+	ChildModel     string `json:"childModel"`
+	Objective      string `json:"objective"`
+	AgentName      string `json:"agentName"`
+}
+
+// DelegationMarker is a synthetic SSE event injected into a tool stream to tell
+// the UI to nest (start) or un-nest (resolved) a delegated sub-agent's output.
+type DelegationMarker struct {
+	Type            string `json:"type"`
+	ChildSessionId  string `json:"childSessionId,omitempty"`
+	ParentSessionId string `json:"parentSessionId,omitempty"`
+	ParentToolUseId string `json:"parentToolUseId,omitempty"`
+	AgentName       string `json:"agentName,omitempty"`
+}
+
+// StreamedTurn is a single streamed model turn produced by the assistant. The
+// handler streams Response to the client, then uses SessionId/Model to decide
+// whether to chain another turn (e.g. resolving a delegated sub-agent back into
+// its parent). Marker, when set, is a synthetic SSE event written to the client
+// before the turn so the UI can nest/un-nest delegated sub-agent output.
+type StreamedTurn struct {
+	Response  *http.Response
+	Aux       *AuxMessageData
+	Finalize  func(rawResponse []byte) error
+	SessionId string
+	Model     string
+	Marker    *DelegationMarker
 }
 
 // @Description Detailed information about an Assistant session, including its messages.
@@ -344,6 +407,9 @@ type AssistantSessionDetails struct {
 	Session *AssistantSession `json:"session"`
 	// The messages in the session.
 	History []*StoredMessage `json:"history"`
+	// Delegated sub-sessions descending from this session (any depth), each with
+	// their own messages. Used to reconstruct nested sub-agent activity on reload.
+	SubSessions []*AssistantSessionDetails `json:"subSessions,omitempty"`
 }
 
 type ModelUsageStats struct {

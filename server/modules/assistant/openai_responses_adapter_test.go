@@ -1389,7 +1389,8 @@ func TestOpenAIAdapter_SendMessage(t *testing.T) {
 				assert.NotNil(t, message)
 				assert.Len(t, message.ContentBlocks, 1)
 				assert.Equal(t, "tool_use", message.ContentBlocks[0].Type)
-				assert.Equal(t, "toolu_0", message.ContentBlocks[0].Id) // Generated ID
+				assert.True(t, strings.HasPrefix(message.ContentBlocks[0].Id, "toolu_")) // Generated unique ID
+				assert.Greater(t, len(message.ContentBlocks[0].Id), len("toolu_"))
 				assert.Equal(t, "test_func", message.ContentBlocks[0].Name)
 			},
 		},

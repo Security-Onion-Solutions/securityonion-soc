@@ -326,6 +326,8 @@ const i18n = {
       assistantChatNoResume: 'This session cannot be resumed.',
       assistantContextLimitPt1: 'Context length limit reached',
       assistantContextLimitPt2: 'You may try compressing your context to continue, or start a new chat.',
+      assistantDelegateAgent: 'Sub-agent',
+      assistantSubAgentApprovalRequest: 'Sub-agent {name} requests approval to run {tool}.',
       assistantDisabled: 'This feature is not enabled on this grid. Contact your Security Onion administrator.',
       assistantDisclaimerMessage: `Use of this feature requires AI requests which can contain event data and will be sent to the OnionAI API in the US.<br><br>No Query Logging: OnionAI API does not record or store input prompts, queries, or generated outputs. No context is stored on the API.<br><br>Token Tracking: The API tracks usage metrics limited to token counts for billing and operational purposes.<br><br>Local Retention: Prompts and responses are stored in the local grid's Elasticsearch data store.`,
       assistantDisclaimerTitle: 'Data Privacy Notice',

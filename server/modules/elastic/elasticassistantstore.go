@@ -456,7 +456,48 @@ func (store *ElasticAssistantstore) GetSessions(ctx context.Context, opts ...mod
 		boolQuery["must"] = mustQuery
 	}
 
-	// Convert query to JSON
+	sessions, err := store.searchSessions(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	logger.WithFields(log.Fields{
+		"sessionCount": len(sessions),
+		"userId":       opt.UserId(),
+		"requestId":    ctx.Value(web.ContextKeyRequestId),
+	}).Debug("Found first messages for sessions")
+
+	sessions = store.filterSharedSessions(ctx, sessions)
+
+	if opt.Descendants() && len(sessions) > 0 {
+		descendants, err := store.fetchDescendantSessions(ctx, sessions, opt.IncludeDeleted())
+		if err != nil {
+			logger.WithError(err).Error("Failed to fetch descendant sessions")
+			return nil, err
+		}
+		sessions = append(sessions, store.filterSharedSessions(ctx, descendants)...)
+	}
+
+	if opt.Usage() {
+		if err := store.populateSessionUsage(ctx, sessions); err != nil {
+			logger.WithError(err).Error("Failed to populate session usage")
+			return nil, err
+		}
+	}
+
+	if err := store.addMetaFromMessages(ctx, sessions); err != nil {
+		logger.WithError(err).Error("Failed to populate session update time")
+		return nil, err
+	}
+
+	return sessions, nil
+}
+
+// searchSessions executes a session-index query and deserializes the hits into
+// AssistantSession values.
+func (store *ElasticAssistantstore) searchSessions(ctx context.Context, query map[string]any) ([]*model.AssistantSession, error) {
+	logger := log.FromContext(ctx)
+
 	queryJSON, err := json.Marshal(query)
 	if err != nil {
 		logger.WithError(err).Error("Failed to marshal Elasticsearch query")
@@ -466,9 +507,8 @@ func (store *ElasticAssistantstore) GetSessions(ctx context.Context, opts ...mod
 	logger.WithFields(log.Fields{
 		"query":     store.truncate(string(queryJSON)),
 		"requestId": ctx.Value(web.ContextKeyRequestId),
-	}).Debug("Searching for first messages of each session")
+	}).Debug("Searching sessions")
 
-	// Execute search
 	res, err := store.esClient.Search(
 		store.esClient.Search.WithContext(ctx),
 		store.esClient.Search.WithIndex(store.sessionIndex),
@@ -480,19 +520,12 @@ func (store *ElasticAssistantstore) GetSessions(ctx context.Context, opts ...mod
 	}
 	defer res.Body.Close()
 
-	// Read response
 	responseJSON, err := readJsonFromResponse(res)
 	if err != nil {
 		logger.WithError(err).Error("Failed to read Elasticsearch response")
 		return nil, err
 	}
 
-	logger.WithFields(log.Fields{
-		"getSessionsResponseLength": len(responseJSON),
-		"requestId":                 ctx.Value(web.ContextKeyRequestId),
-	}).Debug("Received Elasticsearch response")
-
-	// Parse response
 	var response map[string]any
 	if err := json.Unmarshal([]byte(responseJSON), &response); err != nil {
 		logger.WithError(err).Error("Failed to unmarshal Elasticsearch response")
@@ -506,7 +539,6 @@ func (store *ElasticAssistantstore) GetSessions(ctx context.Context, opts ...mod
 				if hit, ok := hitObj.(map[string]any); ok {
 					if source, ok := hit["_source"].(map[string]any); ok {
 						if sess, ok := source[store.schemaPrefix+"session"].(map[string]any); ok {
-							// Convert the source to an AssistantSession
 							sourceJSON, err := json.Marshal(sess)
 							if err != nil {
 								logger.WithError(err).Error("Failed to marshal session source")
@@ -530,27 +562,66 @@ func (store *ElasticAssistantstore) GetSessions(ctx context.Context, opts ...mod
 		}
 	}
 
-	logger.WithFields(log.Fields{
-		"sessionCount": len(sessions),
-		"userId":       opt.UserId(),
-		"requestId":    ctx.Value(web.ContextKeyRequestId),
-	}).Debug("Found first messages for sessions")
+	return sessions, nil
+}
 
-	sessions = store.filterSharedSessions(ctx, sessions)
+// fetchDescendantSessions breadth-first walks the delegation tree rooted at the
+// given sessions, returning every descendant session linked by parentSessionId, to
+// any depth. A seen set guards against cycles.
+func (store *ElasticAssistantstore) fetchDescendantSessions(ctx context.Context, roots []*model.AssistantSession, includeDeleted bool) ([]*model.AssistantSession, error) {
+	seen := map[string]bool{}
+	frontier := []string{}
+	for _, s := range roots {
+		if s.SessionId == "" || seen[s.SessionId] {
+			continue
+		}
+		seen[s.SessionId] = true
+		frontier = append(frontier, s.SessionId)
+	}
 
-	if opt.Usage() {
-		if err := store.populateSessionUsage(ctx, sessions); err != nil {
-			logger.WithError(err).Error("Failed to populate session usage")
+	descendants := []*model.AssistantSession{}
+	for len(frontier) > 0 {
+		ids := make([]any, 0, len(frontier))
+		for _, id := range frontier {
+			ids = append(ids, id)
+		}
+
+		boolQuery := map[string]any{
+			"must": []map[string]any{
+				{"term": map[string]any{store.schemaPrefix + "kind": "session"}},
+				{"terms": map[string]any{store.schemaPrefix + "session.parentSessionId": ids}},
+			},
+		}
+		if !includeDeleted {
+			boolQuery["must_not"] = []any{
+				map[string]any{"exists": map[string]any{"field": store.schemaPrefix + "session.deleteTime"}},
+			}
+		}
+
+		query := map[string]any{
+			"query": map[string]any{"bool": boolQuery},
+			"sort":  []map[string]any{{"@timestamp": map[string]any{"order": "asc"}}},
+			"size":  10000,
+		}
+
+		children, err := store.searchSessions(ctx, query)
+		if err != nil {
 			return nil, err
 		}
+
+		nextFrontier := []string{}
+		for _, c := range children {
+			if c.SessionId == "" || seen[c.SessionId] {
+				continue
+			}
+			seen[c.SessionId] = true
+			descendants = append(descendants, c)
+			nextFrontier = append(nextFrontier, c.SessionId)
+		}
+		frontier = nextFrontier
 	}
 
-	if err := store.addMetaFromMessages(ctx, sessions); err != nil {
-		logger.WithError(err).Error("Failed to populate session update time")
-		return nil, err
-	}
-
-	return sessions, nil
+	return descendants, nil
 }
 
 func (store *ElasticAssistantstore) filterSharedSessions(ctx context.Context, sessions []*model.AssistantSession) []*model.AssistantSession {

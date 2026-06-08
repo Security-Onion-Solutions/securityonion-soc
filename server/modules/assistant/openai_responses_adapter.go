@@ -16,6 +16,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
+	"github.com/google/uuid"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
@@ -117,7 +118,8 @@ func (a *OpenAIResponsesAdapter) SendMessage(ctx context.Context, req *model.Cha
 			// Handle function calls (tool use)
 			toolUseId := item.CallID
 			if toolUseId == "" {
-				toolUseId = fmt.Sprintf("toolu_%d", len(message.ContentBlocks))
+				// Fallback id must be unique across the conversation (frontend keys by id).
+				toolUseId = "toolu_" + uuid.NewString()
 			}
 
 			message.ContentBlocks = append(message.ContentBlocks, model.ContentBlock{

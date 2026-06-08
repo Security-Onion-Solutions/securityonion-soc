@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/apex/log"
+	"github.com/google/uuid"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
 	"google.golang.org/genai"
@@ -131,29 +132,16 @@ func (p *streamProcessor) processGeminiChunk(resp *genai.GenerateContentResponse
 			p.closeOpenBlock()
 		}
 
-		// Collect thought signatures from candidates
+		// Write each function-call block and collect its thought signature keyed by
+		// the same id the block was assigned, so UnstreamResponse can re-attach it.
 		for _, cand := range resp.Candidates {
-			for _, part := range cand.Content.Parts {
-				if part.FunctionCall != nil {
-					toolUseId := part.FunctionCall.ID
-					if toolUseId == "" {
-						toolUseId = fmt.Sprintf("toolu_%d", p.contentBlockIndex)
-					}
-					if part.ThoughtSignature != nil {
-						thoughtSigs[toolUseId] = part.ThoughtSignature
-					}
-				}
+			if cand.Content == nil {
+				continue
 			}
-
-			if cand.FinishReason != "" {
-				finishReason = string(cand.FinishReason)
+			sigs := p.writeGeminiFunctionCalls(cand.Content.Parts)
+			for id, sig := range sigs {
+				thoughtSigs[id] = sig
 			}
-		}
-
-		// Write function calls
-		sigs := p.writeGeminiFunctionCalls(functionCalls)
-		for id, sig := range sigs {
-			thoughtSigs[id] = sig
 		}
 	}
 
@@ -285,16 +273,28 @@ func (p *streamProcessor) writeText(text string) {
 	p.hasOpenBlock = true
 }
 
-// writeGeminiFunctionCalls writes function call blocks and returns their thought signatures
-func (p *streamProcessor) writeGeminiFunctionCalls(functionCalls []*genai.FunctionCall) map[string][]byte {
+// writeGeminiFunctionCalls writes a content block for each function-call part and
+// returns the parts' thought signatures keyed by the id assigned to each block.
+// It takes the raw parts (not just the function calls) because the thought
+// signature lives on the part alongside its function call: minting the id here and
+// keying the signature by that same id keeps the block id and the signature key in
+// lockstep, which is what UnstreamResponse relies on to re-attach signatures.
+func (p *streamProcessor) writeGeminiFunctionCalls(parts []*genai.Part) map[string][]byte {
 	thoughtSigs := make(map[string][]byte)
 
-	for _, fc := range functionCalls {
+	for _, part := range parts {
+		fc := part.FunctionCall
+		if fc == nil {
+			continue
+		}
 		p.ensureFirstSend()
 
 		toolUseId := fc.ID
 		if toolUseId == "" {
-			toolUseId = fmt.Sprintf("toolu_%d", p.contentBlockIndex)
+			// Gemini doesn't supply call ids; mint a unique one so the frontend's
+			// id-keyed lookups don't collide across turns. Generated once here and
+			// reused below as the thought-signature key, so the two always agree.
+			toolUseId = "toolu_" + uuid.NewString()
 		}
 
 		toolUseBlock := map[string]any{
@@ -315,6 +315,10 @@ func (p *streamProcessor) writeGeminiFunctionCalls(functionCalls []*genai.Functi
 
 		p.writer.writeContentBlockStop(p.contentBlockIndex)
 		p.contentBlockIndex++
+
+		if part.ThoughtSignature != nil {
+			thoughtSigs[toolUseId] = part.ThoughtSignature
+		}
 	}
 
 	return thoughtSigs
@@ -324,7 +328,7 @@ func (p *streamProcessor) writeOpenAIFunctionHeader(id string, name string) {
 	p.ensureFirstSend()
 
 	if id == "" {
-		id = fmt.Sprintf("toolu_%d", p.contentBlockIndex)
+		id = "toolu_" + uuid.NewString()
 	}
 
 	toolUseBlock := map[string]any{
@@ -407,7 +411,7 @@ func (p *streamProcessor) writeChatCompletionFunctionHeader(id string, name stri
 	p.ensureFirstSend()
 
 	if id == "" {
-		id = fmt.Sprintf("toolu_%d", p.contentBlockIndex)
+		id = "toolu_" + uuid.NewString()
 	}
 
 	toolUseBlock := map[string]any{

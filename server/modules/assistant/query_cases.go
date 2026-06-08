@@ -83,10 +83,10 @@ type queryCasesArgs struct {
 	Limit       int    `json:"limit"`
 }
 
-func (t *QueryCasesTool) Execute(ctx context.Context, server *server.Server, params string, auxData string) (result *model.ToolResponse, err error) {
+func (t *QueryCasesTool) Execute(ctx context.Context, server *server.Server, req *model.ToolRequest) (result *model.ToolResponse, err error) {
 	logger := log.FromContext(ctx)
 
-	logger.WithField("toolParameters", params).Info("running tool for assistant")
+	logger.WithField("toolParameters", req.Params).Info("running tool for assistant")
 
 	userId := ctx.Value(web.ContextKeyRequestorId).(string)
 
@@ -103,9 +103,9 @@ func (t *QueryCasesTool) Execute(ctx context.Context, server *server.Server, par
 		}
 	}()
 
-	err = json.Unmarshal([]byte(params), args)
+	err = json.Unmarshal([]byte(req.Params), args)
 	if err != nil {
-		logger.WithError(err).WithField("toolParams", params).Error("failed to unmarshal tool params")
+		logger.WithError(err).WithField("toolParams", req.Params).Error("failed to unmarshal tool params")
 		return nil, errors.New("ERROR_ASSISTANT_UNMARSHAL_PARAMS")
 	}
 
@@ -164,6 +164,7 @@ func (t *QueryCasesTool) Execute(ctx context.Context, server *server.Server, par
 	caseEvents := searchResults.Events
 
 	// Parse auxData first, regardless of whether cases are found
+	auxData := string(req.AuxData)
 	if auxData == "" {
 		auxData = "[]"
 	}

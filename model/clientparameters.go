@@ -200,6 +200,13 @@ type ModelParameters struct {
 	Origin                string  `json:"origin"`
 	Adapter               string  `json:"adapter"`
 	Enabled               bool    `json:"enabled"`
+
+	IsAgentic        bool     `json:"isAgentic"`
+	IsOrchestrator   bool     `json:"isOrchestrator"`
+	CanDelegateTo    []string `json:"canDelegateTo"`
+	AllowedTools     []string `json:"allowedTools"`
+	AgentPrompt      string   `json:"agentPrompt"`
+	AgentDescription string   `json:"agentDescription"`
 }
 
 type AdapterParameters struct {

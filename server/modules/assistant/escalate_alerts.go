@@ -77,10 +77,10 @@ type escalateAlertArgs struct {
 	RangeFormat  string `json:"range_format,omitempty"`
 }
 
-func (t *EscalateAlertsTool) Execute(ctx context.Context, server *server.Server, params string, auxData string) (result *model.ToolResponse, err error) {
+func (t *EscalateAlertsTool) Execute(ctx context.Context, server *server.Server, req *model.ToolRequest) (result *model.ToolResponse, err error) {
 	logger := log.FromContext(ctx)
 
-	logger.WithField("toolParameters", params).Info("running tool for assistant")
+	logger.WithField("toolParameters", req.Params).Info("running tool for assistant")
 
 	userId := ctx.Value(web.ContextKeyRequestorId).(string)
 
@@ -97,9 +97,9 @@ func (t *EscalateAlertsTool) Execute(ctx context.Context, server *server.Server,
 		}
 	}()
 
-	err = json.Unmarshal([]byte(params), args)
+	err = json.Unmarshal([]byte(req.Params), args)
 	if err != nil {
-		logger.WithError(err).WithField("toolParams", params).Error("failed to unmarshal tool params")
+		logger.WithError(err).WithField("toolParams", req.Params).Error("failed to unmarshal tool params")
 		return nil, errors.New("ERROR_ASSISTANT_UNMARSHAL_PARAMS")
 	}
 

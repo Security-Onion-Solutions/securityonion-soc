@@ -1140,3 +1140,31 @@ dfn {
 .v-data-table-footer__items-per-page > .v-select {
   width: 7rem;
 }
+/* ============================================================
+   Assistant — delegated sub-agent (nested) rendering
+   ============================================================ */
+
+.delegation-child {
+  border-left: 2px solid rgba(var(--v-theme-primary), 0.5);
+  padding-left: 0.75rem;
+  margin-left: 0.25rem;
+}
+
+.delegation-child-header {
+  display: flex;
+  align-items: center;
+  font-weight: 500;
+}
+
+.delegation-child-thoughts {
+  white-space: pre-wrap;
+}
+
+.delegation-child-raw-result {
+  white-space: pre-wrap;
+  max-height: 300px;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: auto;
+}

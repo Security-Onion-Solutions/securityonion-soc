@@ -7,6 +7,7 @@ package assistant
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"testing"
@@ -441,7 +442,7 @@ func TestUpdateDetectionContentTool_Execute(t *testing.T) {
 
 			// Create tool and execute
 			tool := &UpdateDetectionContentTool{}
-			result, err := tool.Execute(ctx, mockServer, tc.params, "")
+			result, err := tool.Execute(ctx, mockServer, &model.ToolRequest{Params: json.RawMessage(tc.params)})
 
 			// Assert error expectations
 			if tc.expectedError {
@@ -516,7 +517,7 @@ func TestUpdateDetectionContentTool_Execute_VerifyContextPropagation(t *testing.
 	mockDetectionEngine.EXPECT().MergeAuxiliaryData(gomock.Any()).Return(nil)
 
 	tool := &UpdateDetectionContentTool{}
-	_, err := tool.Execute(ctx, mockServer, `{"soc_id": "test-detection-id", "content": "title: Updated Test Rule"}`, "")
+	_, err := tool.Execute(ctx, mockServer, &model.ToolRequest{Params: json.RawMessage(`{"soc_id": "test-detection-id", "content": "title: Updated Test Rule"}`)})
 
 	assert.NoError(t, err)
 }
@@ -587,7 +588,7 @@ func TestUpdateDetectionContentTool_Execute_ContentUpdate(t *testing.T) {
 	tool := &UpdateDetectionContentTool{}
 	// Use fmt.Sprintf with %q to properly escape the JSON content
 	params := fmt.Sprintf(`{"soc_id": "test-detection-id", "content": %q}`, updatedContent)
-	result, err := tool.Execute(ctx, mockServer, params, "")
+	result, err := tool.Execute(ctx, mockServer, &model.ToolRequest{Params: json.RawMessage(params)})
 
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
@@ -641,7 +642,7 @@ func TestUpdateDetectionContentTool_Execute_TimeToExecute(t *testing.T) {
 	mockDetectionEngine.EXPECT().MergeAuxiliaryData(gomock.Any()).Return(nil)
 
 	tool := &UpdateDetectionContentTool{}
-	result, err := tool.Execute(ctx, mockServer, `{"soc_id": "test-detection-id", "content": "title: Updated Test Rule"}`, "")
+	result, err := tool.Execute(ctx, mockServer, &model.ToolRequest{Params: json.RawMessage(`{"soc_id": "test-detection-id", "content": "title: Updated Test Rule"}`)})
 
 	assert.NoError(t, err)
 	assert.NotNil(t, result)

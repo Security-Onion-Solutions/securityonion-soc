@@ -556,6 +556,68 @@ func TestStreamProcessorFunctionCallWithNoID(t *testing.T) {
 	assert.True(t, foundGeneratedID)
 }
 
+// Regression: an empty-id Gemini function call must record its thought signature
+// under the SAME id emitted on the SSE content block. UnstreamResponse re-attaches
+// signatures by content-block id, so if these two diverge the signature is dropped
+// and Gemini rejects the next request ("missing a thought_signature").
+func TestStreamProcessorFunctionCallNoIDSignatureKeyMatchesBlockID(t *testing.T) {
+	var buf strings.Builder
+	writer := newSSEEventWriter(log.Log, &buf)
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	processor := newStreamProcessor(writer, "test-model", wg)
+
+	resp := &genai.GenerateContentResponse{
+		Candidates: []*genai.Candidate{
+			{
+				Content: &genai.Content{
+					Parts: []*genai.Part{
+						{
+							FunctionCall: &genai.FunctionCall{
+								ID:   "",
+								Name: "query_events",
+								Args: map[string]any{},
+							},
+							ThoughtSignature: []byte("sig"),
+						},
+					},
+				},
+			},
+		},
+	}
+
+	thoughtSigs, _, err := processor.processGeminiChunk(resp)
+	assert.NoError(t, err)
+	assert.Len(t, thoughtSigs, 1)
+
+	// Pull the id the block was actually emitted with from the SSE output.
+	var blockID string
+	for _, line := range strings.Split(buf.String(), "\n") {
+		data, ok := strings.CutPrefix(line, "data: ")
+		if !ok {
+			continue
+		}
+		var ev struct {
+			Type         string `json:"type"`
+			ContentBlock struct {
+				Type string `json:"type"`
+				Id   string `json:"id"`
+			} `json:"content_block"`
+		}
+		if err := json.Unmarshal([]byte(data), &ev); err != nil {
+			continue
+		}
+		if ev.Type == "content_block_start" && ev.ContentBlock.Type == "tool_use" {
+			blockID = ev.ContentBlock.Id
+			break
+		}
+	}
+
+	assert.NotEmpty(t, blockID, "expected a tool_use content_block_start in SSE output")
+	_, ok := thoughtSigs[blockID]
+	assert.True(t, ok, "thought signature must be keyed by the emitted block id %q; keys=%v", blockID, thoughtSigs)
+}
+
 func TestStreamProcessorMultipleFunctionCalls(t *testing.T) {
 	var buf strings.Builder
 	writer := newSSEEventWriter(log.Log, &buf)
@@ -1125,7 +1187,7 @@ func TestProcessOpenAIChunk_FunctionCalls(t *testing.T) {
 				newFunctionCallStart("", "unnamed_func"),
 			},
 			expectedInOutput: []string{
-				`"id":"toolu_0"`, // Generated ID
+				`"id":"toolu_`, // Generated unique ID (uuid suffix)
 				`"name":"unnamed_func"`,
 			},
 			expectedState: map[string]interface{}{
@@ -1431,8 +1493,44 @@ func TestOpenAIHelperFunctions(t *testing.T) {
 		processor.writeOpenAIFunctionHeader("", "unnamed")
 
 		output := buf.String()
-		assert.Contains(t, output, `"id":"toolu_0"`) // Generated ID
+		assert.Contains(t, output, `"id":"toolu_`) // Generated unique ID (uuid suffix)
 		assert.Contains(t, output, `"name":"unnamed"`)
+	})
+
+	t.Run("empty-ID fallback ids are unique across responses", func(t *testing.T) {
+		// Each generated fallback id must be globally unique, not reset per turn:
+		// the frontend keys lookups by tool_use id, so two delegations across turns
+		// must not collide (regression test for repeat-delegation rendering bug).
+		idFor := func() string {
+			var buf strings.Builder
+			writer := newSSEEventWriter(log.Log, &buf)
+			wg := &sync.WaitGroup{}
+			wg.Add(1)
+			processor := newStreamProcessor(writer, "gpt-4", wg)
+			processor.writeOpenAIFunctionHeader("", "unnamed")
+
+			var ev struct {
+				ContentBlock struct {
+					Id string `json:"id"`
+				} `json:"content_block"`
+			}
+			for _, line := range strings.Split(buf.String(), "\n") {
+				data, ok := strings.CutPrefix(line, "data: ")
+				if !ok {
+					continue
+				}
+				if err := json.Unmarshal([]byte(data), &ev); err == nil && ev.ContentBlock.Id != "" {
+					return ev.ContentBlock.Id
+				}
+			}
+			return ""
+		}
+
+		first := idFor()
+		second := idFor()
+		assert.True(t, strings.HasPrefix(first, "toolu_"))
+		assert.True(t, strings.HasPrefix(second, "toolu_"))
+		assert.NotEqual(t, first, second, "fallback tool_use ids must be unique across responses")
 	})
 
 	t.Run("writeOpenAIFunctionInput", func(t *testing.T) {

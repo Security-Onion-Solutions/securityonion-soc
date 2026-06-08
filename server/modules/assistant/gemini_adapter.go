@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -185,7 +186,9 @@ func (a *GeminiAdapter) SendMessage(ctx context.Context, req *model.ChatRequest)
 
 		toolUseId := fc.ID
 		if toolUseId == "" {
-			toolUseId = fmt.Sprintf("toolu_%d", len(message.ContentBlocks))
+			// Providers without a call id (e.g. Gemini) need a fallback id that is
+			// unique across the conversation, since the frontend keys lookups by id.
+			toolUseId = "toolu_" + uuid.NewString()
 		}
 
 		// Find thought signature for this tool use
