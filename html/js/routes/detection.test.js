@@ -1184,50 +1184,431 @@ test('loadPlaybooks', async () => {
 	resetPapi();
 });
 
-test('convertDetection and runQueryInDiscover', async () => {
-	const mock = mockPapi('post', { data: { query: 'FROM logs-*', useEsql: true } });
-	comp.detect = { language: 'sigma', engine: 'elastalert' };
-	await comp.convertDetection();
+	test('convertDetection and runQueryInDiscover', async () => {
+		const mock = mockPapi('post', { data: { query: 'FROM logs-*', useEsql: true } });
+		comp.detect = { language: 'sigma', engine: 'elastalert' };
+		await comp.convertDetection();
 
-	expect(comp.convertedRule).toBe('FROM logs-*');
-	expect(comp.isEsql).toBe(true);
-	expect(comp.showSigmaDialog).toBe(true);
+		expect(comp.convertedRule).toBe('FROM logs-*');
+		expect(comp.isEsql).toBe(true);
+		expect(comp.showSigmaDialog).toBe(true);
 
-	const originalOpen = window.open;
-	window.open = jest.fn();
+		const originalOpen = window.open;
+		window.open = jest.fn();
 
-	const originalCompress = LZString.compressToEncodedURIComponent;
-	LZString.compressToEncodedURIComponent = jest.fn().mockReturnValue('compressed_query');
+		const originalCompress = LZString.compressToEncodedURIComponent;
+		LZString.compressToEncodedURIComponent = jest.fn().mockReturnValue('compressed_query');
 
-	comp.runQueryInDiscover();
+		comp.runQueryInDiscover();
 
-	expect(window.open).toHaveBeenCalledWith(
-		'/kibana/app/dev_tools#/console?load_from=data:text/plain,compressed_query',
-		'_blank'
-	);
+		expect(window.open).toHaveBeenCalledWith(
+			'/kibana/app/dev_tools#/console?load_from=data:text/plain,compressed_query',
+			'_blank'
+		);
 
-	const expectedQuery = `POST /_query
+		const expectedQuery = `POST /_query
 {
 	"query": """
 	FROM logs-*
 	"""
 }`;
-	expect(LZString.compressToEncodedURIComponent).toHaveBeenCalledWith(expectedQuery);
+		expect(LZString.compressToEncodedURIComponent).toHaveBeenCalledWith(expectedQuery);
 
-	comp.isEsql = false;
-	comp.convertedRule = 'some eql query';
-	comp.runQueryInDiscover();
+		comp.isEsql = false;
+		comp.convertedRule = 'some eql query';
+		comp.runQueryInDiscover();
 
-	const expectedEqlQuery = `GET /.ds-logs-*/_eql/search
+		const expectedEqlQuery = `GET /.ds-logs-*/_eql/search
 {
 	"query": """
 	some eql query
 	"""
 }`;
-	expect(LZString.compressToEncodedURIComponent).toHaveBeenCalledWith(expectedEqlQuery);
+		expect(LZString.compressToEncodedURIComponent).toHaveBeenCalledWith(expectedEqlQuery);
 
-	window.open = originalOpen;
-	LZString.compressToEncodedURIComponent = originalCompress;
-	resetPapi();
-});
+		window.open = originalOpen;
+		LZString.compressToEncodedURIComponent = originalCompress;
+		resetPapi();
+	});
+
+	test('extract elastalert with multi-doc YAML', () => {
+		comp.detect = {
+			engine: 'elastalert',
+			content: `title: Multiple Failed SOC Logins From One Source IP In A Short Window
+id: 1a4f6b22-9c07-4d3e-8b51-0e9a7d2c4f88
+status: experimental
+description: |
+  Detects two or more failed SOC logins from
+  the same client IP within 30 seconds.
+references:
+    - https://attack.mitre.org/techniques/T1110/
+author: SOS
+date: 2026-06-08
+falsepositives:
+    - TBD
+level: medium
+---
+title: Failed SOC Console Login
+id: 0b8e3f51-7a26-4c9d-9f10-3d5b8e6a1c72
+name: failed_login
+logsource:
+    product: securityonion
+    service: kratos
+detection:
+    selection:
+        service_name: 'Ory Kratos'
+        event.action: 'Encountered self-service login error.'
+    condition: selection
+`,
+			title: 'Title',
+		};
+		comp.$route = { params: { id: '123' } };
+
+		comp.extractSummary();
+		comp.extractReferences();
+		comp.extractLogic();
+
+		expect(comp.extractedSummary).toBe('Detects two or more failed SOC logins from\nthe same client IP within 30 seconds.\n');
+		expect(comp.extractedReferences).toEqual([
+			{ type: 'url', text: 'https://attack.mitre.org/techniques/T1110/', link: 'https://attack.mitre.org/techniques/T1110/' },
+		]);
+		expect(comp.extractedLogic).toBe('{}');
+		expect(comp.extractedLogicClass).toBe('language-yaml');
+	});
+
+	test('extract elastalert public ID from multi-doc YAML', () => {
+		comp.detect = {
+			engine: 'elastalert',
+			content: `title: Test Rule
+id: abc123-def456
+status: experimental
+description: Test description
+level: medium
+---
+title: Sub Rule
+name: sub_rule
+logsource:
+    product: test
+detection:
+    selection:
+        field: value
+    condition: selection
+`,
+		};
+
+		const id = comp.extractElastAlertPublicID();
+		expect(id).toBe('abc123-def456');
+	});
+
+	test('findHistoryChange with multi-doc elastalert content', () => {
+		comp.history = [
+			{
+				"id": "hist1",
+				"createTime": "2024-06-21T17:17:14.951585268-04:00",
+				"updateTime": "2024-06-21T17:17:14.951616529-04:00",
+				"userId": "5ac4acbe-6299-463d-9449-9a728ec48ab8",
+				"kind": "detection",
+				"operation": "create",
+				"publicId": "multi-doc-test",
+				"title": "multi-doc test",
+				"severity": "high",
+				"description": "Description",
+				"content": "title: 'Original Title'\nid: abc123\nstatus: 'experimental'\ndescription: |\n    Original description\nlevel: 'high'\n---\ntitle: Sub Rule\nname: sub_rule\nlogsource:\n  product: windows\n  category: process_creation\ndetection:\n  selection:\n    Image: 'original.exe'\n  condition: selection\n",
+				"isEnabled": false,
+				"engine": "elastalert",
+				"language": "sigma",
+				"overrides": [],
+			},
+			{
+				"id": "hist2",
+				"createTime": "2024-06-21T17:17:14.951585268-04:00",
+				"updateTime": "2024-06-21T17:17:27.563141416-04:00",
+				"userId": "5ac4acbe-6299-463d-9449-9a728ec48ab8",
+				"kind": "detection",
+				"operation": "update",
+				"publicId": "multi-doc-test",
+				"title": "multi-doc test",
+				"severity": "high",
+				"description": "Description",
+				"content": "title: 'Updated Title'\nid: abc123\nstatus: 'experimental'\ndescription: |\n    Updated description\nlevel: 'high'\n---\ntitle: Sub Rule\nname: sub_rule\nlogsource:\n  product: windows\n  category: process_creation\ndetection:\n  selection:\n    Image: 'updated.exe'\n  condition: selection\n",
+				"isEnabled": false,
+				"engine": "elastalert",
+				"language": "sigma",
+				"overrides": [],
+			},
+		];
+		comp.changedKeys = {};
+		const id = comp.history[1]['id'];
+		comp.findHistoryChange(id);
+		expect(comp.changedKeys[id]).toContain('content');
+
+		comp.history = [
+			{
+				"id": "hist3",
+				"createTime": "2024-06-21T17:17:14.951585268-04:00",
+				"updateTime": "2024-06-21T17:17:14.951616529-04:00",
+				"userId": "5ac4acbe-6299-463d-9449-9a728ec48ab8",
+				"kind": "detection",
+				"operation": "create",
+				"publicId": "multi-doc-test",
+				"title": "multi-doc test",
+				"severity": "high",
+				"description": "Description",
+				"content": "title: 'Original Title'\nid: abc123\nstatus: 'experimental'\ndescription: |\n    Original description\nlevel: 'high'\n---\ntitle: Sub Rule\nname: sub_rule\nlogsource:\n  product: windows\n  category: process_creation\ndetection:\n  selection:\n    Image: 'same.exe'\n  condition: selection\n",
+				"isEnabled": false,
+				"engine": "elastalert",
+				"language": "sigma",
+				"overrides": [],
+			},
+			{
+				"id": "hist4",
+				"createTime": "2024-06-21T17:17:14.951585268-04:00",
+				"updateTime": "2024-06-21T17:17:27.563141416-04:00",
+				"userId": "5ac4acbe-6299-463d-9449-9a728ec48ab8",
+				"kind": "detection",
+				"operation": "update",
+				"publicId": "multi-doc-test",
+				"title": "multi-doc test",
+				"severity": "high",
+				"description": "Description",
+				"content": "title: 'Updated Title'\nid: abc123\nstatus: 'experimental'\ndescription: |\n    Updated description\nlevel: 'high'\n---\ntitle: Sub Rule\nname: sub_rule\nlogsource:\n  product: windows\n  category: process_creation\ndetection:\n  selection:\n    Image: 'same.exe'\n  condition: selection\n",
+				"isEnabled": false,
+				"engine": "elastalert",
+				"language": "sigma",
+				"overrides": [],
+			},
+		];
+		comp.changedKeys = {};
+		const id2 = comp.history[1]['id'];
+		comp.findHistoryChange(id2);
+		expect(comp.changedKeys[id2]).not.toContain('content');
+	});
+
+	test('findHistoryChange with multi-doc elastalert - metadata only change', () => {
+		comp.history = [
+			{
+				"id": "hist5",
+				"createTime": "2024-06-21T17:17:14.951585268-04:00",
+				"updateTime": "2024-06-21T17:17:14.951616529-04:00",
+				"userId": "5ac4acbe-6299-463d-9449-9a728ec48ab8",
+				"kind": "detection",
+				"operation": "create",
+				"publicId": "multi-doc-test",
+				"title": "multi-doc test",
+				"severity": "high",
+				"description": "Description",
+				"content": "title: 'Original Title'\nid: abc123\nstatus: 'experimental'\ndescription: |\n    Original description\nlevel: 'high'\n---\ntitle: Sub Rule\nname: sub_rule\nlogsource:\n  product: windows\n  category: process_creation\ndetection:\n  selection:\n    Image: 'same.exe'\n    service_name: 'Ory Kratos'\n    event.action: 'Encountered self-service login error.'\n  condition: selection\n",
+				"isEnabled": false,
+				"engine": "elastalert",
+				"language": "sigma",
+				"overrides": [],
+			},
+			{
+				"id": "hist6",
+				"createTime": "2024-06-21T17:17:14.951585268-04:00",
+				"updateTime": "2024-06-21T17:17:27.563141416-04:00",
+				"userId": "5ac4acbe-6299-463d-9449-9a728ec48ab8",
+				"kind": "detection",
+				"operation": "update",
+				"publicId": "multi-doc-test",
+				"title": "multi-doc test",
+				"severity": "high",
+				"description": "Description",
+				"content": "title: 'Original Title'\nid: abc123\nstatus: 'experimental'\ndescription: |\n    Original description\nlevel: 'medium'\n---\ntitle: Sub Rule\nname: sub_rule\nlogsource:\n  product: windows\n  category: process_creation\ndetection:\n  selection:\n    Image: 'same.exe'\n    service_name: 'Ory Kratos'\n    event.action: 'Encountered self-service login error.'\n  condition: selection\n",
+				"isEnabled": false,
+				"engine": "elastalert",
+				"language": "sigma",
+				"overrides": [],
+			},
+		];
+		comp.changedKeys = {};
+		const id3 = comp.history[1]['id'];
+		comp.findHistoryChange(id3);
+		expect(comp.changedKeys[id3]).not.toContain('content');
+	});
+
+	test('findHistoryChange with multi-doc elastalert - status change detected', () => {
+		comp.history = [
+			{
+				"id": "hist7",
+				"createTime": "2024-06-21T17:17:14.951585268-04:00",
+				"updateTime": "2024-06-21T17:17:14.951616529-04:00",
+				"userId": "5ac4acbe-6299-463d-9449-9a728ec48ab8",
+				"kind": "detection",
+				"operation": "create",
+				"publicId": "multi-doc-test",
+				"title": "multi-doc test",
+				"severity": "high",
+				"description": "Description",
+				"content": "title: 'Original Title'\nid: abc123\nstatus: 'experimental'\ndescription: |\n    Original description\nlevel: 'high'\n---\ntitle: Sub Rule\nname: sub_rule\nlogsource:\n  product: windows\n  category: process_creation\ndetection:\n  selection:\n    Image: 'same.exe'\n  condition: selection\n",
+				"isEnabled": false,
+				"engine": "elastalert",
+				"language": "sigma",
+				"overrides": [],
+			},
+			{
+				"id": "hist8",
+				"createTime": "2024-06-21T17:17:14.951585268-04:00",
+				"updateTime": "2024-06-21T17:17:27.563141416-04:00",
+				"userId": "5ac4acbe-6299-463d-9449-9a728ec48ab8",
+				"kind": "detection",
+				"operation": "update",
+				"publicId": "multi-doc-test",
+				"title": "multi-doc test",
+				"severity": "high",
+				"description": "Description",
+				"content": "title: 'Original Title'\nid: abc123\nstatus: 'stable'\ndescription: |\n    Original description\nlevel: 'high'\n---\ntitle: Sub Rule\nname: sub_rule\nlogsource:\n  product: windows\n  category: process_creation\ndetection:\n  selection:\n    Image: 'same.exe'\n  condition: selection\n",
+				"isEnabled": false,
+				"engine": "elastalert",
+				"language": "sigma",
+				"overrides": [],
+			},
+		];
+		comp.changedKeys = {};
+		const id4 = comp.history[1]['id'];
+		comp.findHistoryChange(id4);
+		expect(comp.changedKeys[id4]).toContain('content');
+	});
+
+	test('extractElastAlertLogic with multi-doc YAML', () => {
+		comp.detect = {
+			engine: 'elastalert',
+			content: `title: Multiple Failed SOC Logins From One Source IP In A Short Window
+id: 1a4f6b22-9c07-4d3e-8b51-0e9a7d2c4f88
+status: experimental
+description: |
+  Detects two or more failed SOC logins from
+  the same client IP within 30 seconds.
+logsource:
+    product: securityonion
+    service: kratos
+detection:
+    selection:
+        service_name: 'Ory Kratos'
+        event.action: 'Encountered self-service login error.'
+    condition: selection
+falsepositives:
+    - TBD
+level: medium
+---
+title: Failed SOC Console Login
+id: 0b8e3f51-7a26-4c9d-9f10-3d5b8e6a1c72
+name: failed_login
+`,
+		};
+
+		comp.extractedLogic = '';
+		comp.extractElastAlertLogic();
+
+		expect(comp.extractedLogic).toContain('logsource:');
+		expect(comp.extractedLogic).toContain('detection:');
+		expect(comp.extractedLogic).toContain('product: securityonion');
+		expect(comp.extractedLogic).toContain('service: kratos');
+	});
+
+	test('extractElastAlertLogic with correlation in first doc', () => {
+		comp.detect = {
+			engine: 'elastalert',
+			content: `title: Multiple Failed SOC Logins From One Source IP In A Short Window
+id: 1a4f6b22-9c07-4d3e-8b51-0e9a7d2c4f88
+status: experimental
+description: |
+  Detects two or more failed SOC logins from
+  the same client IP within 30 seconds.
+correlation:
+    type: event_count
+    rules:
+        - failed_login
+    group-by:
+        - http.request.headers.x-real-ip
+    timespan: 30s
+    condition:
+        gte: 2
+falsepositives:
+    - TBD
+level: medium
+---
+title: Failed SOC Console Login
+id: 0b8e3f51-7a26-4c9d-9f10-3d5b8e6a1c72
+name: failed_login
+logsource:
+    product: securityonion
+    service: kratos
+detection:
+    selection:
+        service_name: 'Ory Kratos'
+        event.action: 'Encountered self-service login error.'
+    condition: selection
+`,
+		};
+
+		comp.extractedLogic = '';
+		comp.extractElastAlertLogic();
+
+		expect(comp.extractedLogic).not.toContain('correlation:');
+		expect(comp.extractedLogic).toContain('type: event_count');
+		expect(comp.extractedLogic).toContain('rules:');
+		expect(comp.extractedLogic).toContain('failed_login');
+		expect(comp.extractedLogic).not.toContain('logsource:');
+	});
+
+	test('extractElastAlertDetection with correlation in first doc', () => {
+		comp.detect = {
+			engine: 'elastalert',
+			content: `title: Test Rule
+id: abc123
+correlation:
+    type: event_count
+    rules:
+        - failed_login
+    group-by:
+        - http.request.headers.x-real-ip
+    timespan: 30s
+    condition:
+        gte: 2
+detection:
+    selection:
+        service_name: 'Ory Kratos'
+    condition: selection
+`,
+		};
+
+		const det = comp.extractElastAlertDetection();
+		expect(det).toEqual({
+			type: 'event_count',
+			rules: ['failed_login'],
+			'group-by': ['http.request.headers.x-real-ip'],
+			timespan: '30s',
+			condition: { gte: 2 },
+		});
+	});
+
+	test('extractElastAlertDetection with detection in first doc', () => {
+		comp.detect = {
+			engine: 'elastalert',
+			content: `title: Test Rule
+id: abc123
+detection:
+    selection:
+        service_name: 'Ory Kratos'
+    condition: selection
+`,
+		};
+
+		const det = comp.extractElastAlertDetection();
+		expect(det).toEqual({
+			selection: { service_name: 'Ory Kratos' },
+			condition: 'selection',
+		});
+	});
+
+	test('extractElastAlertDetection with no first doc', () => {
+		comp.detect = {
+			engine: 'elastalert',
+			content: '',
+		};
+
+		const det = comp.extractElastAlertDetection();
+		expect(det).toBeUndefined();
+	});
 

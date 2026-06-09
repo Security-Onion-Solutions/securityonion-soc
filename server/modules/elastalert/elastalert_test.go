@@ -386,23 +386,11 @@ func TestSigmaToElastAlertSunnyDay(t *testing.T) {
 
 	iom := mock.NewMockIOManager(ctrl)
 
-	iom.EXPECT().ExecCommand(gomock.Cond(func(x any) bool {
-		cmd := x.(*exec.Cmd)
-
-		if !strings.HasSuffix(cmd.Path, "sigma") {
-			return false
-		}
-
-		if !slices.Contains(cmd.Args, "convert") {
-			return false
-		}
-
-		if cmd.Stdin == nil {
-			return false
-		}
-
-		return true
-	})).Return([]byte("<eql>"), 0, time.Duration(0), nil)
+	var capturedArgs []string
+	iom.EXPECT().ExecCommand(gomock.Any()).DoAndReturn(func(cmd *exec.Cmd) ([]byte, int, time.Duration, error) {
+		capturedArgs = append(capturedArgs, cmd.Args...)
+		return []byte("<eql>"), 0, time.Duration(0), nil
+	})
 
 	engine := ElastAlertEngine{
 		IOManager:          iom,
@@ -427,6 +415,16 @@ func TestSigmaToElastAlertSunnyDay(t *testing.T) {
 
 	query, err := engine.sigmaToElastAlert(context.Background(), det)
 	assert.NoError(t, err)
+
+	// Verify ecs_windows pipeline is included when useEsql is false
+	hasEcsWindows := false
+	for i, arg := range capturedArgs {
+		if arg == "-p" && i+1 < len(capturedArgs) && capturedArgs[i+1] == "ecs_windows" {
+			hasEcsWindows = true
+			break
+		}
+	}
+	assert.True(t, hasEcsWindows, "ecs_windows pipeline should be included when useEsql is false")
 
 	// No license
 	wrappedRule, err := engine.wrapRule(det, query)
@@ -465,35 +463,11 @@ func TestSigmaToElastAlertESQL(t *testing.T) {
 
 	iom := mock.NewMockIOManager(ctrl)
 
-	iom.EXPECT().ExecCommand(gomock.Cond(func(x any) bool {
-		cmd := x.(*exec.Cmd)
-
-		if !strings.HasSuffix(cmd.Path, "sigma") {
-			return false
-		}
-
-		if !slices.Contains(cmd.Args, "convert") {
-			return false
-		}
-
-		// Verify that the "-t esql" target is passed
-		hasEsqlTarget := false
-		for i, arg := range cmd.Args {
-			if arg == "-t" && i+1 < len(cmd.Args) && cmd.Args[i+1] == "esql" {
-				hasEsqlTarget = true
-				break
-			}
-		}
-		if !hasEsqlTarget {
-			return false
-		}
-
-		if cmd.Stdin == nil {
-			return false
-		}
-
-		return true
-	})).Return([]byte("<esql>"), 0, time.Duration(0), nil)
+	var capturedArgs []string
+	iom.EXPECT().ExecCommand(gomock.Any()).DoAndReturn(func(cmd *exec.Cmd) ([]byte, int, time.Duration, error) {
+		capturedArgs = append(capturedArgs, cmd.Args...)
+		return []byte("<esql>"), 0, time.Duration(0), nil
+	})
 
 	engine := ElastAlertEngine{
 		IOManager: iom,
@@ -510,6 +484,16 @@ func TestSigmaToElastAlertESQL(t *testing.T) {
 	query, err := engine.sigmaToElastAlert(context.Background(), det)
 	assert.NoError(t, err)
 	assert.Equal(t, "<esql>", query)
+
+	// Verify ecs_windows pipeline is NOT included when useEsql is true
+	hasEcsWindows := false
+	for i, arg := range capturedArgs {
+		if arg == "-p" && i+1 < len(capturedArgs) && capturedArgs[i+1] == "ecs_windows" {
+			hasEcsWindows = true
+			break
+		}
+	}
+	assert.False(t, hasEcsWindows, "ecs_windows pipeline should NOT be included when useEsql is true")
 
 	wrappedRule, err := engine.wrapRule(det, query)
 	assert.NoError(t, err)

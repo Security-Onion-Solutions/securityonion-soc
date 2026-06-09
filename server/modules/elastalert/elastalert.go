@@ -1666,7 +1666,12 @@ func (e *ElastAlertEngine) sigmaToElastAlert(ctx context.Context, det *model.Det
 	if e.useEsql {
 		target = "esql"
 	}
-	args := []string{"convert", "-t", target, "-p", "/opt/sensoroni/sigma_final_pipeline.yaml", "-p", "/opt/sensoroni/sigma_so_pipeline.yaml", "-p", "windows-logsources", "-p", "ecs_windows", "/dev/stdin"}
+	args := []string{"convert", "-t", target, "-p", "/opt/sensoroni/sigma_final_pipeline.yaml", "-p", "/opt/sensoroni/sigma_so_pipeline.yaml", "-p", "windows-logsources"}
+
+	if !e.useEsql {
+		args = append(args, "-p", "ecs_windows")
+	}
+	args = append(args, "/dev/stdin")
 
 	cmd := exec.CommandContext(ctx, "sigma", args...)
 	cmd.Stdin = strings.NewReader(rule)

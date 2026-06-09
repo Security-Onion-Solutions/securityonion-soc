@@ -17,6 +17,16 @@ function debounce(fn, wait) {
 	}
 }
 
+function parseMultiDocYaml(content) {
+	const docs = [];
+	jsyaml.loadAll(content, (doc) => {
+		if (doc !== null) {
+			docs.push(doc);
+		}
+	});
+	return docs;
+}
+
 loadPageTemplate('page-detection', 'pages/detection.html');
 
 routes.push({ path: '/detection/:id', name: 'detection', component: {
@@ -265,9 +275,9 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 					break;
 				case 'elastalert':
-					const yaml = jsyaml.load(this.detect.content, { schema: jsyaml.FAILSAFE_SCHEMA });
-					if (yaml.description) {
-						this.extractedSummary = yaml.description;
+					const docs = parseMultiDocYaml(this.detect.content);
+					if (docs.length > 0 && docs[0].description) {
+						this.extractedSummary = docs[0].description;
 						break;
 					}
 					// else fall through
@@ -323,12 +333,12 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			}
 		},
 		extractElastAlertReferences() {
-			const yaml = jsyaml.load(this.detect.content, {schema: jsyaml.FAILSAFE_SCHEMA});
-			if (!yaml['references']) {
+			const docs = parseMultiDocYaml(this.detect.content);
+			if (docs.length === 0 || !docs[0]['references']) {
 				return;
 			}
 
-			this.extractedReferences = yaml['references'].map(r => {
+			this.extractedReferences = docs[0]['references'].map(r => {
 				if (this.isValidUrl(r)) {
 					return { type: "url", text: r, link: this.fixProtocol(r) };
 				} else {
@@ -449,9 +459,18 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			this.extractedLogic = lines.map(l => l.length >= min ? l.substring(min) : l).join('\n');
 		},
 		extractElastAlertLogic() {
-			const yaml = jsyaml.load(this.detect.content, { schema: jsyaml.FAILSAFE_SCHEMA });
-			const logSource = yaml['logsource'];
-			const detection = yaml['detection'];
+			const docs = parseMultiDocYaml(this.detect.content);
+			if (docs.length === 0) {
+				this.extractedLogic = '';
+				return;
+			}
+			const doc = docs[0];
+			if (doc['correlation']) {
+				this.extractedLogic = jsyaml.dump(doc['correlation']).trim();
+				return;
+			}
+			const logSource = doc['logsource'];
+			const detection = doc['detection'];
 
 			this.extractedLogic = jsyaml.dump({ logsource: logSource, detection: detection }).trim();
 		},
@@ -482,18 +501,29 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				let releventKeys = ['title', 'description', 'isEnabled', 'severity', 'content'];
 
 				if (oldDict['engine'] === 'elastalert') {
-					contentJsonOld = jsyaml.load(oldDict['content'], { schema: jsyaml.FAILSAFE_SCHEMA });
-					contentJsonNew = jsyaml.load(newDict['content'], { schema: jsyaml.FAILSAFE_SCHEMA });
+					const docsOld = parseMultiDocYaml(oldDict['content']);
+					const docsNew = parseMultiDocYaml(newDict['content']);
 
-					delete contentJsonOld['title'];
-					delete contentJsonOld['description'];
-					delete contentJsonOld['level'];
-					delete contentJsonNew['title'];
-					delete contentJsonNew['description'];
-					delete contentJsonNew['level'];
+					const keysToDelete = ['title', 'description', 'level'];
 
-					oldDict['content'] = JSON.stringify(contentJsonOld);
-					newDict['content'] = JSON.stringify(contentJsonNew);
+					const combinedOld = docsOld.map(doc => {
+						const filtered = {...doc};
+						for (const key of keysToDelete) {
+							delete filtered[key];
+						}
+						return filtered;
+					});
+
+					const combinedNew = docsNew.map(doc => {
+						const filtered = {...doc};
+						for (const key of keysToDelete) {
+							delete filtered[key];
+						}
+						return filtered;
+					});
+
+					oldDict['content'] = combinedOld.map(doc => JSON.stringify(doc)).join('\n');
+					newDict['content'] = combinedNew.map(doc => JSON.stringify(doc)).join('\n');
 
 				} else if (oldDict['engine'] === 'suricata'){
 					let sev1 = oldDict['severity'];
@@ -942,20 +972,31 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			return sev;
 		},
 		extractElastAlertPublicID() {
-			const yaml = jsyaml.load(this.detect.content, {schema: jsyaml.FAILSAFE_SCHEMA});
-			return yaml['id'];
+			const docs = parseMultiDocYaml(this.detect.content);
+			if (docs.length > 0) {
+				return docs[0]['id'];
+			}
+			return undefined;
 		},
 		extractElastAlertDetection() {
-			const yaml = jsyaml.load(this.detect.content, {schema: jsyaml.FAILSAFE_SCHEMA});
-			return yaml['detection'];
+			const docs = parseMultiDocYaml(this.detect.content);
+			if (docs.length === 0) {
+				return undefined;
+			}
+			const doc = docs[0];
+			if (doc['correlation']) {
+				return doc['correlation'];
+			}
+			return doc['detection'];
 		},
 		extractElastAlertSeverity() {
-			const yaml = jsyaml.load(this.detect.content, {schema: jsyaml.FAILSAFE_SCHEMA});
-			const level = yaml['level'];
-
-			for (let lvl in this.presets['severity'].labels) {
-				if (this.presets['severity'].labels[lvl].toUpperCase() === level.toUpperCase()) {
-					return this.presets['severity'].labels[lvl];
+			const docs = parseMultiDocYaml(this.detect.content);
+			if (docs.length > 0) {
+				const level = docs[0]['level'];
+				for (let lvl in this.presets['severity'].labels) {
+					if (this.presets['severity'].labels[lvl].toUpperCase() === level.toUpperCase()) {
+						return this.presets['severity'].labels[lvl];
+					}
 				}
 			}
 		},
