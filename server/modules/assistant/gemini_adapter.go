@@ -591,7 +591,7 @@ func handleStreamError(err error, firstSend bool, writer *sseEventWriter, logger
 		// No response sent to client yet - fabricate error response
 		logger.WithFields(log.Fields{
 			"model": model,
-		}).WithError(err).Error("first response error from gemini")
+		}).WithError(err).Error("first response error from the LLM")
 
 		var body *io.PipeWriter
 		response, body := fabricateResponse(http.StatusInternalServerError)
@@ -608,7 +608,7 @@ func handleStreamError(err error, firstSend bool, writer *sseEventWriter, logger
 	// Error after partial response sent to client
 	logger.WithFields(log.Fields{
 		"model": model,
-	}).WithError(err).Error("subsequent response error from gemini")
+	}).WithError(err).Error("subsequent response error from the LLM")
 
 	writer.writeError(err.Error())
 	writer.writeDone()
