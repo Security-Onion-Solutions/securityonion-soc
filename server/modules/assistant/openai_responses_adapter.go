@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"slices"
+	"strings"
 	"sync"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -435,7 +437,11 @@ func convertToolConfigToOpenAI(req *model.ChatRequest) []responses.ToolUnionPara
 
 func convertPropertyToOpenAI(prop *model.ToolSchemaProperty) map[string]any {
 	result := map[string]any{
-		"type": prop.Type,
+		"type": []string{prop.Type},
+	}
+
+	if strings.EqualFold(prop.Type, "object") {
+		result["additionalProperties"] = false
 	}
 
 	if prop.Description != "" {
@@ -450,10 +456,19 @@ func convertPropertyToOpenAI(prop *model.ToolSchemaProperty) map[string]any {
 	if len(prop.Items) > 0 {
 		if prop.Type == "object" {
 			items := make(map[string]any)
+			names := make([]string, 0, len(prop.Items))
 			for itemName, itemSchema := range prop.Items {
-				items[itemName] = convertPropertyToOpenAI(&itemSchema)
+				names = append(names, itemName)
+				child := convertPropertyToOpenAI(&itemSchema)
+				// strict mode lists every property in `required`; the schema model
+				// can't express per-field optionality at the nested level, so make
+				// each field nullable to keep optional fields satisfiable.
+				child["type"] = append(child["type"].([]string), "null")
+				items[itemName] = child
 			}
+			slices.Sort(names)
 			result["properties"] = items
+			result["required"] = names
 		} else if prop.Type == "array" {
 			for _, itemSchema := range prop.Items {
 				result["items"] = convertPropertyToOpenAI(&itemSchema)
@@ -474,17 +489,25 @@ func convertJSONSchemaToOpenAI(schema *model.ToolSchema) map[string]any {
 		"type": schema.Type,
 	}
 
+	allPropNames := make([]string, 0, len(schema.Properties))
+
 	if len(schema.Properties) > 0 {
 		properties := make(map[string]any)
 		for propName, propSchema := range schema.Properties {
-			properties[propName] = convertPropertyToOpenAI(&propSchema)
+			allPropNames = append(allPropNames, propName)
+			prop := convertPropertyToOpenAI(&propSchema)
+			if !slices.Contains(schema.Required, propName) {
+				prop["type"] = append(prop["type"].([]string), "null")
+			}
+			properties[propName] = prop
 		}
 		result["properties"] = properties
 	}
 
-	if len(schema.Required) > 0 {
-		result["required"] = schema.Required
-	}
+	slices.Sort(allPropNames)
+	result["required"] = allPropNames
+
+	result["additionalProperties"] = false
 
 	return result
 }

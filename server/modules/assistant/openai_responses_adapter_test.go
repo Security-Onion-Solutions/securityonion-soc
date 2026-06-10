@@ -878,7 +878,7 @@ func TestConvertPropertyToOpenAI(t *testing.T) {
 				Type: "string",
 			},
 			want: map[string]any{
-				"type": "string",
+				"type": []string{"string"},
 			},
 		},
 		{
@@ -887,7 +887,7 @@ func TestConvertPropertyToOpenAI(t *testing.T) {
 				Type: "integer",
 			},
 			want: map[string]any{
-				"type": "integer",
+				"type": []string{"integer"},
 			},
 		},
 		{
@@ -896,7 +896,7 @@ func TestConvertPropertyToOpenAI(t *testing.T) {
 				Type: "boolean",
 			},
 			want: map[string]any{
-				"type": "boolean",
+				"type": []string{"boolean"},
 			},
 		},
 		{
@@ -905,7 +905,7 @@ func TestConvertPropertyToOpenAI(t *testing.T) {
 				Type: "number",
 			},
 			want: map[string]any{
-				"type": "number",
+				"type": []string{"number"},
 			},
 		},
 		{
@@ -915,7 +915,7 @@ func TestConvertPropertyToOpenAI(t *testing.T) {
 				Description: "The user's name",
 			},
 			want: map[string]any{
-				"type":        "string",
+				"type":        []string{"string"},
 				"description": "The user's name",
 			},
 		},
@@ -926,11 +926,14 @@ func TestConvertPropertyToOpenAI(t *testing.T) {
 				Default: "default_value",
 			},
 			want: map[string]any{
-				"type":    "string",
+				"type":    []string{"string"},
 				"default": "default_value",
 			},
 		},
 		{
+			// Strict mode: a nested object must declare additionalProperties:false,
+			// list every field in required, and make each field nullable so the
+			// model may omit semantically-optional fields by passing null.
 			name: "object with properties",
 			prop: &model.ToolSchemaProperty{
 				Type: "object",
@@ -940,11 +943,13 @@ func TestConvertPropertyToOpenAI(t *testing.T) {
 				},
 			},
 			want: map[string]any{
-				"type": "object",
+				"type":                 []string{"object"},
+				"additionalProperties": false,
 				"properties": map[string]any{
-					"name": map[string]any{"type": "string"},
-					"age":  map[string]any{"type": "integer"},
+					"name": map[string]any{"type": []string{"string", "null"}},
+					"age":  map[string]any{"type": []string{"integer", "null"}},
 				},
+				"required": []string{"age", "name"},
 			},
 		},
 		{
@@ -956,8 +961,38 @@ func TestConvertPropertyToOpenAI(t *testing.T) {
 				},
 			},
 			want: map[string]any{
-				"type":  "array",
-				"items": map[string]any{"type": "string"},
+				"type":  []string{"array"},
+				"items": map[string]any{"type": []string{"string"}},
+			},
+		},
+		{
+			// Mirrors the add_overrides schema: an array whose items are an object.
+			// The item object must carry additionalProperties/required and nullable
+			// fields, which is the case that originally tripped OpenAI strict mode.
+			name: "array of objects",
+			prop: &model.ToolSchemaProperty{
+				Type: "array",
+				Items: map[string]model.ToolSchemaProperty{
+					"override": {
+						Type: "object",
+						Items: map[string]model.ToolSchemaProperty{
+							"type":  {Type: "string"},
+							"count": {Type: "integer"},
+						},
+					},
+				},
+			},
+			want: map[string]any{
+				"type": []string{"array"},
+				"items": map[string]any{
+					"type":                 []string{"object"},
+					"additionalProperties": false,
+					"properties": map[string]any{
+						"type":  map[string]any{"type": []string{"string", "null"}},
+						"count": map[string]any{"type": []string{"integer", "null"}},
+					},
+					"required": []string{"count", "type"},
+				},
 			},
 		},
 		{
@@ -974,15 +1009,19 @@ func TestConvertPropertyToOpenAI(t *testing.T) {
 				},
 			},
 			want: map[string]any{
-				"type": "object",
+				"type":                 []string{"object"},
+				"additionalProperties": false,
 				"properties": map[string]any{
 					"config": map[string]any{
-						"type": "object",
+						"type":                 []string{"object", "null"},
+						"additionalProperties": false,
 						"properties": map[string]any{
-							"settings": map[string]any{"type": "string"},
+							"settings": map[string]any{"type": []string{"string", "null"}},
 						},
+						"required": []string{"settings"},
 					},
 				},
+				"required": []string{"config"},
 			},
 		},
 		{
@@ -992,7 +1031,8 @@ func TestConvertPropertyToOpenAI(t *testing.T) {
 				Items: map[string]model.ToolSchemaProperty{},
 			},
 			want: map[string]any{
-				"type": "object",
+				"type":                 []string{"object"},
+				"additionalProperties": false,
 			},
 		},
 	}
@@ -1017,15 +1057,21 @@ func TestConvertJSONSchemaToOpenAI(t *testing.T) {
 			want:   nil,
 		},
 		{
+			// Strict mode always emits required + additionalProperties, even with
+			// no properties (required is then the empty set).
 			name: "simple schema with type only",
 			schema: &model.ToolSchema{
 				Type: "object",
 			},
 			want: map[string]any{
-				"type": "object",
+				"type":                 "object",
+				"required":             []string{},
+				"additionalProperties": false,
 			},
 		},
 		{
+			// No Required list: every property is optional, so each becomes
+			// nullable, but all are still listed in required for strict mode.
 			name: "schema with properties",
 			schema: &model.ToolSchema{
 				Type: "object",
@@ -1037,23 +1083,30 @@ func TestConvertJSONSchemaToOpenAI(t *testing.T) {
 			want: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"name": map[string]any{"type": "string"},
-					"age":  map[string]any{"type": "integer"},
+					"name": map[string]any{"type": []string{"string", "null"}},
+					"age":  map[string]any{"type": []string{"integer", "null"}},
 				},
+				"required":             []string{"age", "name"},
+				"additionalProperties": false,
 			},
 		},
 		{
-			name: "schema with required fields",
+			// Required is only meaningful relative to declared properties; with no
+			// properties there is nothing to require.
+			name: "schema with required fields but no properties",
 			schema: &model.ToolSchema{
 				Type:     "object",
 				Required: []string{"name", "email"},
 			},
 			want: map[string]any{
-				"type":     "object",
-				"required": []string{"name", "email"},
+				"type":                 "object",
+				"required":             []string{},
+				"additionalProperties": false,
 			},
 		},
 		{
+			// "name" is required (kept non-nullable); "email" is optional and so is
+			// made nullable. Both appear in required.
 			name: "schema with both properties and required",
 			schema: &model.ToolSchema{
 				Type: "object",
@@ -1066,10 +1119,11 @@ func TestConvertJSONSchemaToOpenAI(t *testing.T) {
 			want: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"name":  map[string]any{"type": "string"},
-					"email": map[string]any{"type": "string"},
+					"name":  map[string]any{"type": []string{"string"}},
+					"email": map[string]any{"type": []string{"string", "null"}},
 				},
-				"required": []string{"name"},
+				"required":             []string{"email", "name"},
+				"additionalProperties": false,
 			},
 		},
 		{
@@ -1079,7 +1133,9 @@ func TestConvertJSONSchemaToOpenAI(t *testing.T) {
 				Properties: map[string]model.ToolSchemaProperty{},
 			},
 			want: map[string]any{
-				"type": "object",
+				"type":                 "object",
+				"required":             []string{},
+				"additionalProperties": false,
 			},
 		},
 	}
