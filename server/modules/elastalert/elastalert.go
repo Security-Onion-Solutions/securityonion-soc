@@ -1887,11 +1887,12 @@ type CustomWrapper struct {
 	SigmaLevel        string   `yaml:"sigma_level"`
 	Alert             []string `yaml:"alert"`
 
-	Index   string                   `yaml:"index"`
-	Name    string                   `yaml:"name"`
-	Realert *TimeFrame               `yaml:"realert,omitempty"` // or 0
-	Type    string                   `yaml:"type"`
-	Filter  []map[string]interface{} `yaml:"filter"`
+	Index          string                   `yaml:"index"`
+	Name           string                   `yaml:"name"`
+	Realert        *TimeFrame               `yaml:"realert,omitempty"` // or 0
+	Type           string                   `yaml:"type"`
+	Filter         []map[string]interface{} `yaml:"filter"`
+	TimestampField string                   `yaml:"timestamp_field,omitempty"`
 }
 
 type TimeFrame struct {
@@ -2037,6 +2038,7 @@ func (e *ElastAlertEngine) wrapRule(det *model.Detection, rule string) (string, 
 	realert := TimeFrame{}
 	realert.SetSeconds(0)
 
+	timestampField := "@timestamp"
 	filterType := "eql"
 	if e.useEsql {
 		filterType = "esql"
@@ -2058,6 +2060,7 @@ func (e *ElastAlertEngine) wrapRule(det *model.Detection, rule string) (string, 
 		Realert:           &realert,
 		Type:              "any",
 		Filter:            []map[string]interface{}{{filterType: rule}},
+		TimestampField:    timestampField,
 	}
 
 	if slices.Contains(sigmaTags, "so.notification") {
@@ -2086,6 +2089,10 @@ func (e *ElastAlertEngine) wrapRule(det *model.Detection, rule string) (string, 
 			strYaml += "\n" + params + "\n"
 		}
 	}
+
+	// ES|QL sigma converter rename hardcoded timebucket refs to @timestamp
+	strYaml = strings.ReplaceAll(strYaml, " | eval timebucket", " | eval "+timestampField)
+	strYaml = strings.ReplaceAll(strYaml, " by timebucket", " by "+timestampField)
 
 	if len(wrapper.Alert) == 0 {
 		log.WithFields(log.Fields{

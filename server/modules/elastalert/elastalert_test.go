@@ -445,6 +445,7 @@ realert:
 type: any
 filter:
     - eql: <eql>
+timestamp_field: '@timestamp'
 `
 	assert.YAMLEq(t, expected, wrappedRule)
 }
@@ -455,6 +456,131 @@ func TestElastAlertInitUseEsql(t *testing.T) {
 	err := mod.Init(module.ModuleConfig{"useEsql": true})
 	assert.NoError(t, err)
 	assert.True(t, mod.UseEsql())
+}
+
+func TestCustomWrapperTimestampFieldDefault(t *testing.T) {
+	t.Parallel()
+
+	wrapper := &CustomWrapper{
+		DetectionTitle:    "Test Rule",
+		DetectionPublicId: "test-id",
+		EventSeverity:     4,
+		SigmaLevel:        "high",
+		Index:             ".ds-logs-*",
+		Name:              "Test Rule -- test-id",
+		Type:              "any",
+		TimestampField:    "@timestamp",
+	}
+
+	yml, err := yaml.Marshal(wrapper)
+	assert.NoError(t, err)
+
+	assert.Contains(t, string(yml), "timestamp_field:")
+	assert.True(t, strings.Contains(string(yml), "@timestamp") || strings.Contains(string(yml), "'@timestamp'"))
+}
+
+func TestCustomWrapperTimestampFieldOmittedWhenEmpty(t *testing.T) {
+	t.Parallel()
+
+	wrapper := &CustomWrapper{
+		DetectionTitle:    "Test Rule",
+		DetectionPublicId: "test-id",
+		EventSeverity:     4,
+		SigmaLevel:        "high",
+		Index:             ".ds-logs-*",
+		Name:              "Test Rule -- test-id",
+		Type:              "any",
+		TimestampField:    "",
+	}
+
+	yml, err := yaml.Marshal(wrapper)
+	assert.NoError(t, err)
+
+	assert.NotContains(t, string(yml), "timestamp_field")
+}
+
+func TestCustomWrapperTimestampFieldEsql(t *testing.T) {
+	t.Parallel()
+
+	wrapper := &CustomWrapper{
+		DetectionTitle:    "Test Rule",
+		DetectionPublicId: "test-id",
+		EventSeverity:     4,
+		SigmaLevel:        "high",
+		Index:             ".ds-logs-*",
+		Name:              "Test Rule -- test-id",
+		Type:              "any",
+		TimestampField:    "timebucket",
+	}
+
+	yml, err := yaml.Marshal(wrapper)
+	assert.NoError(t, err)
+
+	assert.Contains(t, string(yml), "timestamp_field: timebucket")
+}
+
+func TestCustomWrapperTimestampFieldYamlRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	original := &CustomWrapper{
+		DetectionTitle:    "Test Rule",
+		DetectionPublicId: "test-id",
+		EventSeverity:     4,
+		SigmaLevel:        "high",
+		Index:             ".ds-logs-*",
+		Name:              "Test Rule -- test-id",
+		Type:              "any",
+		TimestampField:    "@timestamp",
+		Filter:            []map[string]interface{}{map[string]interface{}{"eql": "test filter"}},
+	}
+
+	yml, err := yaml.Marshal(original)
+	assert.NoError(t, err)
+
+	var decoded CustomWrapper
+	err = yaml.Unmarshal(yml, &decoded)
+	assert.NoError(t, err)
+
+	assert.Equal(t, original.TimestampField, decoded.TimestampField)
+}
+
+func TestWrapRuleTimestampFieldDefault(t *testing.T) {
+	t.Parallel()
+
+	engine := ElastAlertEngine{
+		useEsql: false,
+	}
+
+	det := &model.Detection{
+		PublicID: "11111111-1111-1111-1111-111111111111",
+		Content:  `{"detection": {"condition": "*"}}`,
+		Title:    "Test Detection",
+		Severity: model.SeverityHigh,
+	}
+
+	wrapped, err := engine.wrapRule(det, "test filter")
+	assert.NoError(t, err)
+	assert.Contains(t, wrapped, "timestamp_field:")
+	assert.True(t, strings.Contains(wrapped, "@timestamp") || strings.Contains(wrapped, "'@timestamp'"))
+}
+
+func TestWrapRuleTimestampFieldEsql(t *testing.T) {
+	t.Parallel()
+
+	engine := ElastAlertEngine{
+		useEsql: true,
+	}
+
+	det := &model.Detection{
+		PublicID: "11111111-1111-1111-1111-111111111111",
+		Content:  `{"detection": {"condition": "*"}}`,
+		Title:    "Test Detection",
+		Severity: model.SeverityHigh,
+	}
+
+	wrapped, err := engine.wrapRule(det, "test filter")
+	assert.NoError(t, err)
+	assert.Contains(t, wrapped, "timestamp_field: '@timestamp'")
 }
 
 func TestSigmaToElastAlertESQL(t *testing.T) {
@@ -513,6 +639,7 @@ realert:
 type: any
 filter:
     - esql: <esql>
+timestamp_field: "@timestamp"
 `
 	assert.YAMLEq(t, expected, wrappedRule)
 }
@@ -581,6 +708,7 @@ realert:
 filter:
     - eql: <eql>
 foo: bar
+timestamp_field: '@timestamp'
 `
 	assert.YAMLEq(t, expected, wrappedRule)
 }
@@ -670,6 +798,7 @@ realert:
 filter:
     - eql: <eql>
 foo: car
+timestamp_field: '@timestamp'
 `
 	assert.YAMLEq(t, expected, wrappedRule)
 }
@@ -754,6 +883,7 @@ realert:
     seconds: 0
 filter:
     - eql: <eql>
+timestamp_field: '@timestamp'
 `
 	assert.YAMLEq(t, expected, wrappedRule)
 }
@@ -837,6 +967,7 @@ realert:
 filter:
     - eql: <eql>
 foo: bar
+timestamp_field: '@timestamp'
 `
 	assert.YAMLEq(t, expected, wrappedRule)
 }
@@ -914,6 +1045,7 @@ realert:
     seconds: 0
 filter:
     - eql: <eql>
+timestamp_field: '@timestamp'
 is_enabled: False
 `
 	assert.YAMLEq(t, expected, wrappedRule)
@@ -1380,7 +1512,7 @@ func TestSyncElastAlert(t *testing.T) {
 				// sigmaToElastAlert
 				m.EXPECT().ExecCommand(gomock.Any()).Return([]byte("[sigma rule]"), 0, time.Duration(0), nil)
 				// WriteFile when enabling
-				m.EXPECT().WriteFile(SimpleRuleSID+".yml", []byte("detection_title: TEST\ndetection_public_id: "+SimpleRuleSID+"\nevent.module: sigma\nevent.dataset: sigma.alert\nevent.severity: 3\nsigma_level: medium\nalert:\n    - modules.so.securityonion-es.SecurityOnionESAlerter\nindex: .ds-logs-*\nname: TEST -- "+SimpleRuleSID+"\nrealert:\n    seconds: 0\ntype: any\nfilter:\n    - eql: '[sigma rule]'\n"), fs.FileMode(0644)).Return(nil)
+				m.EXPECT().WriteFile(SimpleRuleSID+".yml", []byte("detection_title: TEST\ndetection_public_id: "+SimpleRuleSID+"\nevent.module: sigma\nevent.dataset: sigma.alert\nevent.severity: 3\nsigma_level: medium\nalert:\n    - modules.so.securityonion-es.SecurityOnionESAlerter\nindex: .ds-logs-*\nname: TEST -- "+SimpleRuleSID+"\nrealert:\n    seconds: 0\ntype: any\nfilter:\n    - eql: '[sigma rule]'\ntimestamp_field: '@timestamp'\n"), fs.FileMode(0644)).Return(nil)
 			},
 		},
 		{
@@ -1441,7 +1573,7 @@ sofilter_hosts:
 				// sigmaToElastAlert
 				m.EXPECT().ExecCommand(gomock.Any()).Return([]byte(`any where process.command_line:"*\\local\\temp\\*" and process.command_line:"*//b /e:jscript*" and process.command_line:"*.txt*"`), 0, time.Duration(0), nil)
 				// WriteFile when enabling
-				m.EXPECT().WriteFile(SimpleRuleSID+".yml", []byte("detection_title: TEST\ndetection_public_id: "+SimpleRuleSID+"\nevent.module: sigma\nevent.dataset: sigma.alert\nevent.severity: 3\nsigma_level: medium\nalert:\n    - modules.so.securityonion-es.SecurityOnionESAlerter\nindex: .ds-logs-*\nname: TEST -- "+SimpleRuleSID+"\nrealert:\n    seconds: 0\ntype: any\nfilter:\n    - eql: any where process.command_line:\"*\\\\local\\\\temp\\\\*\" and process.command_line:\"*//b /e:jscript*\" and process.command_line:\"*.txt*\"\n"), fs.FileMode(0644)).Return(nil)
+				m.EXPECT().WriteFile(SimpleRuleSID+".yml", []byte("detection_title: TEST\ndetection_public_id: "+SimpleRuleSID+"\nevent.module: sigma\nevent.dataset: sigma.alert\nevent.severity: 3\nsigma_level: medium\nalert:\n    - modules.so.securityonion-es.SecurityOnionESAlerter\nindex: .ds-logs-*\nname: TEST -- "+SimpleRuleSID+"\nrealert:\n    seconds: 0\ntype: any\nfilter:\n    - eql: any where process.command_line:\"*\\\\local\\\\temp\\\\*\" and process.command_line:\"*//b /e:jscript*\" and process.command_line:\"*.txt*\"\ntimestamp_field: '@timestamp'\n"), fs.FileMode(0644)).Return(nil)
 			},
 		},
 	}
