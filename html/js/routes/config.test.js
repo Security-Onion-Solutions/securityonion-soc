@@ -50,6 +50,7 @@ test('loadData', async () => {
   m1.set('mia-test-001', 'hi');
   const expectedSettings = [{
       "advanced": undefined,
+      "allowedNodeTypes": undefined,
       "default": null,
       "defaultAvailable": false,
       "description": "Nearby",
@@ -80,6 +81,7 @@ test('loadData', async () => {
     },
     {
       "advanced": undefined,
+      "allowedNodeTypes": undefined,
       "default": undefined,
       "defaultAvailable": undefined,
       "description": "NADA",
@@ -110,6 +112,7 @@ test('loadData', async () => {
     },
     {
       "advanced": undefined,
+      "allowedNodeTypes": undefined,
       "default": undefined,
       "defaultAvailable": undefined,
       "description": "Cocoa",
@@ -147,6 +150,7 @@ test('loadData', async () => {
           "children": [
             {
               "advanced": undefined,
+              "allowedNodeTypes": undefined,
               "default": null,
               "defaultAvailable": false,
               "description": "Nearby",
@@ -177,6 +181,7 @@ test('loadData', async () => {
             },
             {
               "advanced": undefined,
+              "allowedNodeTypes": undefined,
               "default": undefined,
               "defaultAvailable": undefined,
               "description": "Cocoa",
@@ -215,6 +220,7 @@ test('loadData', async () => {
     },
     {
       "advanced": undefined,
+      "allowedNodeTypes": undefined,
       "default": undefined,
       "defaultAvailable": undefined,
       "description": "NADA",
