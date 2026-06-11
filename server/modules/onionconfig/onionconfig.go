@@ -449,7 +449,7 @@ func resolveExistingSetting(allSettings []*model.Setting, settingID, nodeID stri
 			if settingDef == nil {
 				settingDef = s
 			}
-			if s.NodeId == nodeID {
+			if s.NodeId == nodeID && s.Value != s.Default {
 				oldValue = s.Value
 			}
 		}

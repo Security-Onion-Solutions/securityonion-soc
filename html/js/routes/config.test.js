@@ -2275,3 +2275,41 @@ test('loadData_resetsSkipAdvancedReload_evenOnError', async () => {
 
   expect(comp.skipAdvancedReload).toBe(false);
 });
+
+test('confirmRevert_globalValue_nullOldValue_withDefault', async () => {
+  const postMock = mockPapi("post", {});
+  comp.isGlobalHistory = false;
+  comp.revertAllSettings = false;
+  comp.confirmRevertEntry = { settingId: 'test.id', nodeId: null, oldValue: null, timestamp: '2025-01-01T00:00:00Z' };
+  comp.restoreNote = 'reverting';
+  comp.settings = [{ id: 'test.id', value: 'currentVal', default: 'defaultVal', nodeValues: new Map() }];
+
+  await comp.confirmRevert();
+
+  expect(postMock).toHaveBeenCalledWith('config/history/revert/test.id', {
+    timestamp: '2025-01-01T00:00:00Z',
+    note: 'reverting',
+    duplicatedFromId: ''
+  });
+  expect(comp.settings[0].value).toBe('defaultVal');
+  expect(comp.confirmRevertDialog).toBe(false);
+  expect(comp.showHistoryDialog).toBe(false);
+});
+
+test('confirmRevert_globalValue_nullOldValue_noDefault', async () => {
+  const postMock = mockPapi("post", {});
+  comp.isGlobalHistory = false;
+  comp.revertAllSettings = false;
+  comp.confirmRevertEntry = { settingId: 'test.id', nodeId: null, oldValue: null, timestamp: '2025-01-01T00:00:00Z' };
+  comp.restoreNote = 'reverting';
+  comp.settings = [{ id: 'test.id', value: 'currentVal', nodeValues: new Map() }];
+
+  await comp.confirmRevert();
+
+  expect(postMock).toHaveBeenCalledWith('config/history/revert/test.id', {
+    timestamp: '2025-01-01T00:00:00Z',
+    note: 'reverting',
+    duplicatedFromId: ''
+  });
+  expect(comp.settings[0].value).toBe(null);
+});

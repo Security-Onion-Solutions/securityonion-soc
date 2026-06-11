@@ -421,6 +421,8 @@ routes.push({
               } else {
                 setting.nodeValues.set(this.confirmRevertEntry.nodeId, this.confirmRevertEntry.oldValue);
               }
+            } else if (!this.confirmRevertEntry.oldValue && setting.default) {
+              setting.value = setting.default
             } else {
               setting.value = this.confirmRevertEntry.oldValue;
             }

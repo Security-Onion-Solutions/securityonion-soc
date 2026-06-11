@@ -298,6 +298,45 @@ func TestResolveExistingSetting(t *testing.T) {
 		assert.Nil(t, settingDef)
 		assert.Equal(t, "", oldValue)
 	})
+
+	t.Run("NodeValueEqualsDefault_NotReturned", func(t *testing.T) {
+		settings := []*model.Setting{
+			{Id: "myapp.str", NodeId: "", Value: "global_val", Default: "default_val"},
+			{Id: "myapp.str", NodeId: "node1", Value: "default_val", Default: "default_val"},
+		}
+		settingDef, oldValue := resolveExistingSetting(settings, "myapp.str", "node1")
+		assert.NotNil(t, settingDef)
+		assert.Equal(t, "", oldValue)
+	})
+
+	t.Run("NodeValueEqualsDefault_GlobalOnly", func(t *testing.T) {
+		settings := []*model.Setting{
+			{Id: "myapp.str", NodeId: "", Value: "default_val", Default: "default_val"},
+		}
+		settingDef, oldValue := resolveExistingSetting(settings, "myapp.str", "")
+		assert.NotNil(t, settingDef)
+		assert.Equal(t, "", oldValue)
+	})
+
+	t.Run("NodeValueDiffersFromDefault_Returned", func(t *testing.T) {
+		settings := []*model.Setting{
+			{Id: "myapp.str", NodeId: "", Value: "global_val", Default: "default_val"},
+			{Id: "myapp.str", NodeId: "node1", Value: "custom_val", Default: "default_val"},
+		}
+		settingDef, oldValue := resolveExistingSetting(settings, "myapp.str", "node1")
+		assert.NotNil(t, settingDef)
+		assert.Equal(t, "custom_val", oldValue)
+	})
+
+	t.Run("NodeDefaultEmpty_ValueReturned", func(t *testing.T) {
+		settings := []*model.Setting{
+			{Id: "myapp.str", NodeId: "", Value: "global_val"},
+			{Id: "myapp.str", NodeId: "node1", Value: "node_val"},
+		}
+		settingDef, oldValue := resolveExistingSetting(settings, "myapp.str", "node1")
+		assert.NotNil(t, settingDef)
+		assert.Equal(t, "node_val", oldValue)
+	})
 }
 
 func TestFilterUnchangedReverts(t *testing.T) {
