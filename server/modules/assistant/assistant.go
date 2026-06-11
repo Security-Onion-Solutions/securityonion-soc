@@ -165,27 +165,60 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 
 	if ac.isAgentic {
 		ac.setupAgentic()
+	}
 
-		// iterate through models creating delegates
-		for _, model := range ac.srv.Config.ClientParams.AssistantParams.AvailableModels {
-			if model.Enabled && model.IsAgentic {
-				id := model.ID + "@" + model.Adapter
-				delegate := NewDelegateTool(id, model.DisplayName, model.AgentDescription)
+	ac.validateModelSelectors()
 
-				ac.DelegationLibrary[id] = delegate
-				ac.DelegationLibrary[delegate.GetName()] = delegate
-
-				logger.WithFields(log.Fields{
-					"modelId": id,
-					"adapter": model.Adapter,
-				}).Info("created delegate tool for agentic model")
-			}
-		}
+	if ac.isAgentic {
+		ac.registerDelegateTools()
 	}
 
 	ac.getPrompt()
 
 	return err
+}
+
+// registerDelegateTools creates a delegate tool for every enabled agentic
+// model, registered in the DelegationLibrary under both its canonical selector
+// and its tool name. A model whose selector or sanitized tool name is already
+// claimed is skipped with an error log (first registration wins), enforcing
+// the duplicate policy reported by validateModelSelectors.
+func (ac *AssistantCoordinator) registerDelegateTools() {
+	logger := log.FromContext(ac.srv.Context)
+
+	for _, m := range ac.srv.Config.ClientParams.AssistantParams.AvailableModels {
+		if m.Enabled && m.IsAgentic {
+			selector := m.Selector()
+			delegate := NewDelegateTool(selector, m.DisplayName, m.AgentDescription)
+			toolName := delegate.GetName()
+
+			if _, exists := ac.DelegationLibrary[selector]; exists {
+				logger.WithFields(log.Fields{
+					"agent":   selector,
+					"modelId": m.ID,
+					"adapter": m.Adapter,
+				}).Error("duplicate agent selector; skipping delegate registration")
+				continue
+			}
+
+			if _, exists := ac.DelegationLibrary[toolName]; exists {
+				logger.WithFields(log.Fields{
+					"agent":    selector,
+					"toolName": toolName,
+				}).Error("delegate tool name collides with an already-registered delegate; skipping registration")
+				continue
+			}
+
+			ac.DelegationLibrary[selector] = delegate
+			ac.DelegationLibrary[toolName] = delegate
+
+			logger.WithFields(log.Fields{
+				"agent":   selector,
+				"modelId": m.ID,
+				"adapter": m.Adapter,
+			}).Info("created delegate tool for agentic model")
+		}
+	}
 }
 
 // buildToolConfig assembles the tool spec sent to the adapter from the function
@@ -224,9 +257,19 @@ func buildToolConfig(functions map[string]Tool, delegates map[string]Tool, toolF
 	}
 	sort.Strings(keys)
 
+	// Each delegate is registered under multiple keys (selector and tool name),
+	// so dedupe by tool name to avoid sending the same tool spec twice.
+	seenDelegates := map[string]struct{}{}
 	for _, key := range keys {
 		if delegateFilter == nil || slices.Contains(delegateFilter, key) {
 			tool := delegates[key]
+
+			_, ok := seenDelegates[tool.GetName()]
+			if ok {
+				continue
+			}
+			seenDelegates[tool.GetName()] = struct{}{}
+
 			toolSpecs = append(toolSpecs, &model.ToolSpec{
 				Spec: model.ToolDefinition{
 					Name:        tool.GetName(),
@@ -340,21 +383,94 @@ func estimateRequestChars(req *model.ChatRequest) int {
 	return total
 }
 
-// findModelParams returns the configured parameters for the given model/adapter
-// pair, or nil if no matching model is configured. Callers must handle the nil
-// case (a model may have a registered adapter without an AvailableModels entry).
-func (ac *AssistantCoordinator) findModelParams(modelId string, adapterName string) *model.ModelParameters {
+// validateModelSelectors logs configuration problems with model selectors at
+// startup. Policy is log-and-continue, matching how bad adapter config is
+// handled above: the first model to claim a selector wins (resolveModel is
+// first-match) and its duplicates are skipped during delegate registration;
+// nothing here prevents the module from loading.
+func (ac *AssistantCoordinator) validateModelSelectors() {
+	logger := log.FromContext(ac.srv.Context)
 	models := ac.srv.Config.ClientParams.AssistantParams.AvailableModels
+
+	seen := map[string]string{}
+	for i := range models {
+		m := &models[i]
+		if !m.Enabled {
+			continue
+		}
+
+		if strings.Contains(m.DisplayName, "@") {
+			logger.WithField("displayName", m.DisplayName).Warn("model displayName contains '@', which is ambiguous with the legacy id@adapter selector format")
+		}
+
+		selector := m.Selector()
+		if owner, dup := seen[selector]; dup {
+			logger.WithFields(log.Fields{
+				"selector":      selector,
+				"firstModel":    owner,
+				"shadowedModel": m.LegacySelector(),
+			}).Error("duplicate model selector; the first configured model wins and this one is unreachable")
+			continue
+		}
+		seen[selector] = m.LegacySelector()
+
+		// A DisplayName matching another model's legacy id@adapter selector
+		// shadows that model's stored sessions (canonical resolution wins).
+		if m.DisplayName != "" {
+			for j := range models {
+				if i != j && models[j].Enabled && m.DisplayName == models[j].LegacySelector() {
+					logger.WithFields(log.Fields{
+						"displayName":   m.DisplayName,
+						"shadowedModel": models[j].LegacySelector(),
+					}).Warn("model displayName matches another model's legacy id@adapter selector and will shadow it")
+				}
+			}
+		}
+	}
+}
+
+// resolveModel resolves a client-supplied model selector to its configured
+// parameters. The canonical selector is the model's DisplayName; the legacy
+// "id@adapter" form (stored in old sessions and browser settings) is resolved
+// as a fallback so existing conversations keep working. Returns nil when
+// nothing matches; callers must handle the nil case (a model may have a
+// registered adapter without an AvailableModels entry).
+func (ac *AssistantCoordinator) resolveModel(selector string) *model.ModelParameters {
+	models := ac.srv.Config.ClientParams.AssistantParams.AvailableModels
+
+	// Pass 1: canonical selector (DisplayName, or id@adapter when DisplayName is
+	// empty). Runs before any splitting so a DisplayName containing "@" resolves.
+	for i := range models {
+		if models[i].Selector() == selector {
+			return &models[i]
+		}
+	}
+
+	// Pass 2: legacy id@adapter.
+	modelId, adapterName := splitModelAdapter(selector)
 	for i := range models {
 		if models[i].ID == modelId && models[i].Adapter == adapterName {
 			return &models[i]
 		}
 	}
+
 	return nil
 }
 
-func (ac *AssistantCoordinator) checkRequestSize(req *model.ChatRequest, modelId string, adapterName string) error {
-	params := ac.findModelParams(modelId, adapterName)
+// resolveAdapterName returns the adapter a selector routes to. Selectors that
+// resolve to no configured model fall back to the legacy split so a registered
+// adapter without an AvailableModels entry can still answer (Balance/Health).
+func (ac *AssistantCoordinator) resolveAdapterName(selector string) string {
+	if params := ac.resolveModel(selector); params != nil {
+		return params.Adapter
+	}
+
+	_, adapterName := splitModelAdapter(selector)
+
+	return adapterName
+}
+
+func (ac *AssistantCoordinator) checkRequestSize(req *model.ChatRequest, params *model.ModelParameters) error {
 	if params == nil || params.CharsPerTokenEstimate <= 0 {
 		return nil
 	}
@@ -382,32 +498,30 @@ func (ac *AssistantCoordinator) Send(ctx context.Context, aiModel string, messag
 
 	msgs := cleanupMessages(messages)
 
-	modelId, adapterName := splitModelAdapter(aiModel)
-
-	req := &model.ChatRequest{
-		Messages:  msgs,
-		UserId:    userID,
-		Model:     modelId,
-		MaxTokens: config.MaxTokens,
-	}
-
-	if err := ac.checkRequestSize(req, modelId, adapterName); err != nil {
-		logger.WithFields(log.Fields{"modelId": modelId, "adapterName": adapterName, "estimatedChars": estimateRequestChars(req)}).Error("request exceeds estimated context limit")
-		return nil, err
-	}
-
-	adapter, ok := ac.adapters[adapterName]
-	if !ok {
-		logger.WithField("adapterName", adapterName).Error("assistant adapter not found")
-		return nil, fmt.Errorf("assistant adapter not found: %s", adapterName)
-	}
-
-	modelParams := ac.findModelParams(modelId, adapterName)
+	modelParams := ac.resolveModel(aiModel)
 	if modelParams == nil {
 		// The requested model is not configured; there is no sensible fallback, so
 		// surface it as a client error (mapped to HTTP 400 by the handler).
 		logger.WithField("model", aiModel).Error("requested model is not configured")
 		return nil, ErrInvalidModel
+	}
+
+	req := &model.ChatRequest{
+		Messages:  msgs,
+		UserId:    userID,
+		Model:     modelParams.ID,
+		MaxTokens: config.MaxTokens,
+	}
+
+	if err := ac.checkRequestSize(req, modelParams); err != nil {
+		logger.WithFields(log.Fields{"modelId": modelParams.ID, "adapterName": modelParams.Adapter, "estimatedChars": estimateRequestChars(req)}).Error("request exceeds estimated context limit")
+		return nil, err
+	}
+
+	adapter, ok := ac.adapters[modelParams.Adapter]
+	if !ok {
+		logger.WithField("adapterName", modelParams.Adapter).Error("assistant adapter not found")
+		return nil, fmt.Errorf("assistant adapter not found: %s", modelParams.Adapter)
 	}
 
 	if ac.isAgentic && modelParams.IsAgentic {
@@ -503,33 +617,31 @@ func (ac *AssistantCoordinator) SendStream(ctx context.Context, aiModel string, 
 	// copy and modify
 	msgs := cleanupMessages(messages)
 
-	modelId, adapterName := splitModelAdapter(aiModel)
-
-	req := &model.ChatRequest{
-		Messages:  msgs,
-		Stream:    true,
-		UserId:    userID,
-		Model:     modelId,
-		MaxTokens: config.MaxTokens,
-	}
-
-	if err := ac.checkRequestSize(req, modelId, adapterName); err != nil {
-		logger.WithFields(log.Fields{"modelId": modelId, "adapterName": adapterName, "estimatedChars": estimateRequestChars(req)}).Error("request exceeds estimated context limit")
-		return nil, nil, err
-	}
-
-	adapter, ok := ac.adapters[adapterName]
-	if !ok {
-		logger.WithField("adapterName", adapterName).Error("assistant adapter not found")
-		return nil, nil, fmt.Errorf("assistant adapter not found: %s", adapterName)
-	}
-
-	modelParams := ac.findModelParams(modelId, adapterName)
+	modelParams := ac.resolveModel(aiModel)
 	if modelParams == nil {
 		// The requested model is not configured; there is no sensible fallback, so
 		// surface it as a client error (mapped to HTTP 400 by the handler).
 		logger.WithField("model", aiModel).Error("requested model is not configured")
 		return nil, nil, ErrInvalidModel
+	}
+
+	req := &model.ChatRequest{
+		Messages:  msgs,
+		Stream:    true,
+		UserId:    userID,
+		Model:     modelParams.ID,
+		MaxTokens: config.MaxTokens,
+	}
+
+	if err := ac.checkRequestSize(req, modelParams); err != nil {
+		logger.WithFields(log.Fields{"modelId": modelParams.ID, "adapterName": modelParams.Adapter, "estimatedChars": estimateRequestChars(req)}).Error("request exceeds estimated context limit")
+		return nil, nil, err
+	}
+
+	adapter, ok := ac.adapters[modelParams.Adapter]
+	if !ok {
+		logger.WithField("adapterName", modelParams.Adapter).Error("assistant adapter not found")
+		return nil, nil, fmt.Errorf("assistant adapter not found: %s", modelParams.Adapter)
 	}
 
 	if ac.isAgentic && modelParams.IsAgentic {
@@ -589,7 +701,7 @@ func (ac *AssistantCoordinator) ExecuteTool(ctx context.Context, toolName string
 }
 
 func (ac *AssistantCoordinator) Balance(ctx context.Context, aiModel string) (*model.BalanceResponse, error) {
-	_, adapterName := splitModelAdapter(aiModel)
+	adapterName := ac.resolveAdapterName(aiModel)
 
 	adapter, ok := ac.adapters[adapterName]
 	if !ok {
@@ -608,7 +720,7 @@ func (ac *AssistantCoordinator) Balance(ctx context.Context, aiModel string) (*m
 }
 
 func (ac *AssistantCoordinator) Health(ctx context.Context, aiModel string) (*model.HealthResponse, error) {
-	_, adapterName := splitModelAdapter(aiModel)
+	adapterName := ac.resolveAdapterName(aiModel)
 
 	adapter, ok := ac.adapters[adapterName]
 	if !ok {

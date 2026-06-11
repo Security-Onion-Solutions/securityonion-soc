@@ -29,11 +29,11 @@ func (ac *AssistantCoordinator) setupAgentic() {
 			IsAgentic:             true,
 			IsOrchestrator:        true,
 			AllowedTools:          []string{},
-			CanDelegateTo:         []string{"gemini-3-flash-preview@Gemini"},
+			CanDelegateTo:         []string{"Hunter"},
 			Enabled:               true,
 			AgentPrompt:           agentPrompt,
 		}, {
-			ID:                    "gemini-3-flash-preview",
+			ID:                    "gemini-3.5-flash",
 			DisplayName:           "Hunter",
 			Adapter:               "Gemini",
 			ContextLimitSmall:     500000,

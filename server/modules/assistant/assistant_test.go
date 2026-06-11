@@ -24,6 +24,8 @@ import (
 	detectionsmock "github.com/security-onion-solutions/securityonion-soc/server/modules/detections/mock"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
+	"github.com/apex/log"
+	"github.com/apex/log/handlers/memory"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 )
@@ -1238,6 +1240,71 @@ func TestAssistantCoordinator_ToolStreamInSession_DelegationKickoff(t *testing.T
 	assert.Equal(t, "Hunter", turn.Marker.AgentName)
 	assert.Equal(t, turn.SessionId, turn.Marker.ChildSessionId)
 	assert.NotEqual(t, "parent-session", turn.SessionId)
+
+	turn.Response.Body.Close()
+}
+
+// Same kickoff flow, but the delegated agent is addressed by its canonical
+// DisplayName selector: the child session stores the DisplayName as its model
+// and the child's first turn resolves it back to the real model/adapter pair.
+func TestAssistantCoordinator_ToolStreamInSession_DelegationKickoffDisplayName(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockIO := detectionsmock.NewMockIOManager(ctrl)
+	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+
+	mockAssistantstore.EXPECT().CreateSession(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, s *model.AssistantSession) error {
+			// The child session records the DisplayName selector as its model so it
+			// resumes as the right agent even when agents share an id@adapter pair.
+			assert.Equal(t, "Test Hunter", s.Model)
+			assert.Equal(t, "Test Hunter", s.DelegateAgent)
+			assert.Equal(t, "delegation", s.Type)
+			return nil
+		})
+
+	mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil)
+
+	// The child's first turn reaches the adapter with the real model id, proving
+	// the DisplayName stored on the child session resolved through SendStream.
+	mockIO.EXPECT().MakeRequest(gomock.Any(), true).DoAndReturn(func(req *http.Request, _ bool) (*http.Response, error) {
+		body, err := io.ReadAll(req.Body)
+		assert.NoError(t, err)
+		cr := &model.ChatRequest{}
+		assert.NoError(t, json.Unmarshal(body, cr))
+		assert.Equal(t, "test-model", cr.Model)
+		return &http.Response{
+			StatusCode: 200,
+			Body:       io.NopCloser(strings.NewReader("data: stream")),
+		}, nil
+	})
+
+	ac := newChatInSessionCoordinator(t, ctrl, mockAssistantstore, mockIO, "https://api.example.com")
+	ac.srv.Config.ClientParams.AssistantParams.AvailableModels = []model.ModelParameters{
+		{ID: "test-model", DisplayName: "Test Hunter", Adapter: "MyAdapter"},
+	}
+
+	delegate := NewDelegateTool("Test Hunter", "Test Hunter", "an event hunting agent")
+	assert.Equal(t, "delegate_to_Test_Hunter", delegate.GetName())
+	ac.DelegationLibrary = map[string]Tool{delegate.GetName(): delegate}
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+	turn, err := ac.ToolStreamInSession(ctx, &model.ToolRequest{
+		SessionId: "parent-session",
+		ToolUseId: "delegate-tooluse",
+		Params:    json.RawMessage(`{"objective":"find DNS beacons","context":"c","expected_output":"o"}`),
+		Model:     "AgentClaude@SOAI",
+	}, delegate.GetName())
+
+	assert.NoError(t, err)
+	assert.NotNil(t, turn)
+	assert.NotNil(t, turn.Response)
+	assert.Equal(t, "Test Hunter", turn.Model)
+	assert.NotNil(t, turn.Marker)
+	assert.Equal(t, model.DelegationMarkerStart, turn.Marker.Type)
+	assert.Equal(t, "Test Hunter", turn.Marker.AgentName)
 
 	turn.Response.Body.Close()
 }
@@ -2555,16 +2622,14 @@ func TestCheckRequestSize(t *testing.T) {
 		name        string
 		req         *model.ChatRequest
 		models      []model.ModelParameters
-		modelId     string
-		adapterName string
+		selector    string
 		expectError bool
 	}{
 		{
 			name:        "no model params found, skip check",
 			req:         &model.ChatRequest{System: strings.Repeat("a", 10000)},
 			models:      []model.ModelParameters{},
-			modelId:     "unknown",
-			adapterName: "SOAI",
+			selector:    "unknown@SOAI",
 			expectError: false,
 		},
 		{
@@ -2573,8 +2638,7 @@ func TestCheckRequestSize(t *testing.T) {
 			models: []model.ModelParameters{
 				{ID: "model1", Adapter: "SOAI", ContextLimitSmall: 1000, CharsPerTokenEstimate: 0},
 			},
-			modelId:     "model1",
-			adapterName: "SOAI",
+			selector:    "model1@SOAI",
 			expectError: false,
 		},
 		{
@@ -2583,8 +2647,7 @@ func TestCheckRequestSize(t *testing.T) {
 			models: []model.ModelParameters{
 				{ID: "model1", Adapter: "SOAI", ContextLimitLarge: 1000, CharsPerTokenEstimate: 4.0},
 			},
-			modelId:     "model1",
-			adapterName: "SOAI",
+			selector: "model1@SOAI",
 			// maxChars = 1000 * 4.0 * 1.1 = 4400, usedChars = 100
 			expectError: false,
 		},
@@ -2594,8 +2657,17 @@ func TestCheckRequestSize(t *testing.T) {
 			models: []model.ModelParameters{
 				{ID: "model1", Adapter: "SOAI", ContextLimitLarge: 1000, CharsPerTokenEstimate: 4.0},
 			},
-			modelId:     "model1",
-			adapterName: "SOAI",
+			selector: "model1@SOAI",
+			// maxChars = 1000 * 4.0 * 1.1 = 4400, usedChars = 5000
+			expectError: true,
+		},
+		{
+			name: "exceeds limit, resolved by display name",
+			req:  &model.ChatRequest{System: strings.Repeat("a", 5000)},
+			models: []model.ModelParameters{
+				{ID: "model1", DisplayName: "Model One", Adapter: "SOAI", ContextLimitLarge: 1000, CharsPerTokenEstimate: 4.0},
+			},
+			selector: "Model One",
 			// maxChars = 1000 * 4.0 * 1.1 = 4400, usedChars = 5000
 			expectError: true,
 		},
@@ -2605,8 +2677,7 @@ func TestCheckRequestSize(t *testing.T) {
 			models: []model.ModelParameters{
 				{ID: "model1", Adapter: "SOAI", ContextLimitSmall: 100, CharsPerTokenEstimate: 4.0},
 			},
-			modelId:     "model1",
-			adapterName: "SOAI",
+			selector: "model1@SOAI",
 			// maxChars = 100 * 4.0 * 1.1 = 440, usedChars = 500
 			expectError: true,
 		},
@@ -2616,8 +2687,7 @@ func TestCheckRequestSize(t *testing.T) {
 			models: []model.ModelParameters{
 				{ID: "model1", Adapter: "SOAI", CharsPerTokenEstimate: 4.0},
 			},
-			modelId:     "model1",
-			adapterName: "SOAI",
+			selector:    "model1@SOAI",
 			expectError: false,
 		},
 	}
@@ -2636,7 +2706,7 @@ func TestCheckRequestSize(t *testing.T) {
 				},
 			}
 
-			err := ac.checkRequestSize(tc.req, tc.modelId, tc.adapterName)
+			err := ac.checkRequestSize(tc.req, ac.resolveModel(tc.selector))
 			if tc.expectError {
 				assert.ErrorIs(t, err, ErrRequestTooLarge)
 			} else {
@@ -2644,6 +2714,437 @@ func TestCheckRequestSize(t *testing.T) {
 			}
 		})
 	}
+}
+
+func newResolveTestCoordinator(models []model.ModelParameters) *AssistantCoordinator {
+	return &AssistantCoordinator{
+		srv: &server.Server{
+			Config: &config.ServerConfig{
+				ClientParams: model.ClientParameters{
+					AssistantParams: model.AssistantParameters{
+						AvailableModels: models,
+					},
+				},
+			},
+		},
+	}
+}
+
+func TestResolveModel(t *testing.T) {
+	models := []model.ModelParameters{
+		{ID: "gemini-3.5-flash", DisplayName: "Agent Gemini", Adapter: "Gemini"},
+		{ID: "gemini-3.5-flash", DisplayName: "Hunter", Adapter: "Gemini"},
+		{ID: "legacy-model", Adapter: "SOAI"},
+		{ID: "at-model", DisplayName: "weird@name", Adapter: "SOAI"},
+	}
+	ac := newResolveTestCoordinator(models)
+
+	t.Run("display name resolves to its own agent", func(t *testing.T) {
+		params := ac.resolveModel("Hunter")
+		assert.NotNil(t, params)
+		assert.Equal(t, "Hunter", params.DisplayName)
+	})
+
+	t.Run("two agents sharing id@adapter resolve independently", func(t *testing.T) {
+		a := ac.resolveModel("Agent Gemini")
+		b := ac.resolveModel("Hunter")
+		assert.NotNil(t, a)
+		assert.NotNil(t, b)
+		assert.NotEqual(t, a.DisplayName, b.DisplayName)
+		assert.Equal(t, a.ID, b.ID)
+	})
+
+	t.Run("legacy id@adapter still resolves, first match wins", func(t *testing.T) {
+		params := ac.resolveModel("gemini-3.5-flash@Gemini")
+		assert.NotNil(t, params)
+		assert.Equal(t, "Agent Gemini", params.DisplayName)
+	})
+
+	t.Run("empty display name keeps id@adapter as its canonical selector", func(t *testing.T) {
+		params := ac.resolveModel("legacy-model@SOAI")
+		assert.NotNil(t, params)
+		assert.Equal(t, "legacy-model", params.ID)
+	})
+
+	t.Run("display name containing @ resolves before legacy splitting", func(t *testing.T) {
+		params := ac.resolveModel("weird@name")
+		assert.NotNil(t, params)
+		assert.Equal(t, "at-model", params.ID)
+	})
+
+	t.Run("unknown selector resolves to nil", func(t *testing.T) {
+		assert.Nil(t, ac.resolveModel("nope@Nowhere"))
+		assert.Nil(t, ac.resolveModel("Nope"))
+	})
+}
+
+func TestResolveAdapterName(t *testing.T) {
+	ac := newResolveTestCoordinator([]model.ModelParameters{
+		{ID: "gemini-3.5-flash", DisplayName: "Agent Gemini", Adapter: "Gemini"},
+	})
+
+	// Canonical selector routes through the configured model.
+	assert.Equal(t, "Gemini", ac.resolveAdapterName("Agent Gemini"))
+	// Legacy selector for the same model.
+	assert.Equal(t, "Gemini", ac.resolveAdapterName("gemini-3.5-flash@Gemini"))
+	// Unconfigured model falls back to the legacy split so a registered adapter
+	// without an AvailableModels entry can still answer.
+	assert.Equal(t, "MyAdapter", ac.resolveAdapterName("other@MyAdapter"))
+	// Bare selector with no match keeps the historical SOAI default.
+	assert.Equal(t, "SOAI", ac.resolveAdapterName("unknown"))
+}
+
+// captureAdapter records the ChatRequest handed to it so tests can assert what
+// would be sent upstream.
+type captureAdapter struct {
+	lastReq *model.ChatRequest
+}
+
+func (a *captureAdapter) Protocol() string { return "capture" }
+
+func (a *captureAdapter) SendMessage(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+	a.lastReq = req
+	return &model.Message{Role: "assistant", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "ok"}}}, nil
+}
+
+func (a *captureAdapter) SendMessageStream(ctx context.Context, req *model.ChatRequest) (*http.Response, *model.AuxMessageData, error) {
+	a.lastReq = req
+	return &http.Response{
+		StatusCode: 200,
+		Body:       io.NopCloser(strings.NewReader("")),
+	}, &model.AuxMessageData{}, nil
+}
+
+func (a *captureAdapter) GetBalance(ctx context.Context) (*model.BalanceResponse, error) {
+	return &model.BalanceResponse{}, nil
+}
+
+func (a *captureAdapter) GetHealth(ctx context.Context) (*model.HealthResponse, error) {
+	return &model.HealthResponse{Status: "ok"}, nil
+}
+
+// Selecting an agent by DisplayName must send the real model id upstream, never
+// the display name.
+func TestAssistantCoordinator_Send_DisplayNameSelector(t *testing.T) {
+	adapter := &captureAdapter{}
+
+	ac := newResolveTestCoordinator([]model.ModelParameters{
+		{ID: "test-model", DisplayName: "Agent Test", Adapter: "MyAdapter"},
+	})
+	ac.adapters = map[string]server.AssistantAdapter{"MyAdapter": adapter}
+	ac.toolConfig = []byte(`{"tools": [], "tool_choice": {"auto": {}}}`)
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+	result, err := ac.Send(ctx, "Agent Test", []*model.Message{
+		{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "hi"}}},
+	})
+
+	assert.NoError(t, err)
+	assert.Len(t, result, 1)
+	assert.NotNil(t, adapter.lastReq)
+	assert.Equal(t, "test-model", adapter.lastReq.Model)
+}
+
+// A delegate registered under multiple keys (selector + tool name) must appear
+// only once in the tool spec sent to the model.
+func TestBuildToolConfig_DedupesDelegates(t *testing.T) {
+	delegate := NewDelegateTool("Hunter", "Hunter", "desc")
+	delegates := map[string]Tool{
+		"Hunter":           delegate,
+		delegate.GetName(): delegate,
+	}
+
+	countDelegateSpecs := func(raw json.RawMessage) int {
+		var tc model.ToolConfig
+		assert.NoError(t, json.Unmarshal(raw, &tc))
+		count := 0
+		for _, spec := range tc.Tools {
+			if spec.Spec.Name == delegate.GetName() {
+				count++
+			}
+		}
+		return count
+	}
+
+	t.Run("nil filter includes the delegate once", func(t *testing.T) {
+		raw, err := buildToolConfig(map[string]Tool{}, delegates, nil, nil)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, countDelegateSpecs(raw))
+	})
+
+	t.Run("filter matching both keys includes the delegate once", func(t *testing.T) {
+		raw, err := buildToolConfig(map[string]Tool{}, delegates, []string{}, []string{"Hunter", delegate.GetName()})
+		assert.NoError(t, err)
+		assert.Equal(t, 1, countDelegateSpecs(raw))
+	})
+}
+
+// newSelectorLogCoordinator builds a coordinator whose srv.Context logs to an
+// in-memory handler so tests can assert on the entries emitted by selector
+// validation and delegate registration.
+func newSelectorLogCoordinator(models []model.ModelParameters) (*AssistantCoordinator, *memory.Handler) {
+	h := memory.New()
+	ctx := log.NewContext(context.Background(), &log.Logger{Handler: h, Level: log.DebugLevel})
+
+	ac := newResolveTestCoordinator(models)
+	ac.srv.Context = ctx
+	ac.DelegationLibrary = map[string]Tool{}
+
+	return ac, h
+}
+
+// logMessagesAt returns the messages of all captured entries at the given level.
+func logMessagesAt(h *memory.Handler, level log.Level) []string {
+	msgs := []string{}
+	for _, e := range h.Entries {
+		if e.Level == level {
+			msgs = append(msgs, e.Message)
+		}
+	}
+	return msgs
+}
+
+func TestValidateModelSelectors(t *testing.T) {
+	t.Run("clean config logs nothing", func(t *testing.T) {
+		ac, h := newSelectorLogCoordinator([]model.ModelParameters{
+			{ID: "model-a", DisplayName: "Agent A", Adapter: "SOAI", Enabled: true},
+			{ID: "model-b", DisplayName: "Agent B", Adapter: "SOAI", Enabled: true},
+			{ID: "model-c", Adapter: "SOAI", Enabled: true}, // no displayName is fine
+		})
+
+		ac.validateModelSelectors()
+
+		assert.Empty(t, h.Entries)
+	})
+
+	t.Run("duplicate enabled selectors log an error, first wins", func(t *testing.T) {
+		ac, h := newSelectorLogCoordinator([]model.ModelParameters{
+			{ID: "model-a", DisplayName: "Hunter", Adapter: "A", Enabled: true},
+			{ID: "model-b", DisplayName: "Hunter", Adapter: "B", Enabled: true},
+		})
+
+		ac.validateModelSelectors()
+
+		errors := logMessagesAt(h, log.ErrorLevel)
+		assert.Len(t, errors, 1)
+		assert.Contains(t, errors[0], "duplicate model selector")
+	})
+
+	t.Run("duplicate involving a disabled model logs nothing", func(t *testing.T) {
+		ac, h := newSelectorLogCoordinator([]model.ModelParameters{
+			{ID: "model-a", DisplayName: "Hunter", Adapter: "A", Enabled: true},
+			{ID: "model-b", DisplayName: "Hunter", Adapter: "B", Enabled: false},
+		})
+
+		ac.validateModelSelectors()
+
+		assert.Empty(t, h.Entries)
+	})
+
+	t.Run("displayName containing @ warns", func(t *testing.T) {
+		ac, h := newSelectorLogCoordinator([]model.ModelParameters{
+			{ID: "model-a", DisplayName: "weird@name", Adapter: "SOAI", Enabled: true},
+		})
+
+		ac.validateModelSelectors()
+
+		warns := logMessagesAt(h, log.WarnLevel)
+		assert.Len(t, warns, 1)
+		assert.Contains(t, warns[0], "contains '@'")
+	})
+
+	t.Run("displayName shadowing another model's legacy selector warns", func(t *testing.T) {
+		ac, h := newSelectorLogCoordinator([]model.ModelParameters{
+			{ID: "real-model", DisplayName: "Agent Real", Adapter: "SOAI", Enabled: true},
+			{ID: "other-model", DisplayName: "real-model@SOAI", Adapter: "SOAI", Enabled: true},
+		})
+
+		ac.validateModelSelectors()
+
+		warns := logMessagesAt(h, log.WarnLevel)
+		// The shadowing displayName also contains "@", so both warnings fire.
+		shadowWarns := 0
+		for _, w := range warns {
+			if strings.Contains(w, "will shadow it") {
+				shadowWarns++
+			}
+		}
+		assert.Equal(t, 1, shadowWarns)
+	})
+
+	t.Run("displayName shadowing a model with no displayName is a duplicate error", func(t *testing.T) {
+		// When the shadowed model has no DisplayName its canonical selector IS the
+		// legacy form, so the collision surfaces as the (stronger) duplicate error
+		// rather than the shadow warning.
+		ac, h := newSelectorLogCoordinator([]model.ModelParameters{
+			{ID: "real-model", Adapter: "SOAI", Enabled: true},
+			{ID: "other-model", DisplayName: "real-model@SOAI", Adapter: "SOAI", Enabled: true},
+		})
+
+		ac.validateModelSelectors()
+
+		errors := logMessagesAt(h, log.ErrorLevel)
+		assert.Len(t, errors, 1)
+		assert.Contains(t, errors[0], "duplicate model selector")
+	})
+}
+
+func TestRegisterDelegateTools(t *testing.T) {
+	t.Run("duplicate display name registers only the first", func(t *testing.T) {
+		ac, h := newSelectorLogCoordinator([]model.ModelParameters{
+			{ID: "model-a", DisplayName: "Hunter", Adapter: "A", Enabled: true, IsAgentic: true, AgentDescription: "first"},
+			{ID: "model-b", DisplayName: "Hunter", Adapter: "B", Enabled: true, IsAgentic: true, AgentDescription: "second"},
+		})
+
+		ac.registerDelegateTools()
+
+		assert.Len(t, ac.DelegationLibrary, 2)
+		assert.Contains(t, ac.DelegationLibrary, "Hunter")
+		assert.Contains(t, ac.DelegationLibrary, "delegate_to_Hunter")
+		assert.Contains(t, ac.DelegationLibrary["Hunter"].GetDescription(), "first")
+
+		errors := logMessagesAt(h, log.ErrorLevel)
+		assert.Len(t, errors, 1)
+		assert.Contains(t, errors[0], "duplicate agent selector")
+	})
+
+	t.Run("sanitized tool name collision skips the second entirely", func(t *testing.T) {
+		// "A B" and "A_B" are distinct selectors but sanitize to the same tool name.
+		ac, h := newSelectorLogCoordinator([]model.ModelParameters{
+			{ID: "model-a", DisplayName: "A B", Adapter: "X", Enabled: true, IsAgentic: true},
+			{ID: "model-b", DisplayName: "A_B", Adapter: "X", Enabled: true, IsAgentic: true},
+		})
+
+		ac.registerDelegateTools()
+
+		assert.Len(t, ac.DelegationLibrary, 2)
+		assert.Contains(t, ac.DelegationLibrary, "A B")
+		assert.Contains(t, ac.DelegationLibrary, "delegate_to_A_B")
+		assert.NotContains(t, ac.DelegationLibrary, "A_B")
+
+		errors := logMessagesAt(h, log.ErrorLevel)
+		assert.Len(t, errors, 1)
+		assert.Contains(t, errors[0], "delegate tool name collides")
+	})
+
+	t.Run("disabled and non-agentic models register nothing", func(t *testing.T) {
+		ac, _ := newSelectorLogCoordinator([]model.ModelParameters{
+			{ID: "model-a", DisplayName: "Disabled Agent", Adapter: "A", Enabled: false, IsAgentic: true},
+			{ID: "model-b", DisplayName: "Plain Model", Adapter: "A", Enabled: true, IsAgentic: false},
+		})
+
+		ac.registerDelegateTools()
+
+		assert.Empty(t, ac.DelegationLibrary)
+	})
+
+	t.Run("empty display name registers under legacy keys", func(t *testing.T) {
+		ac, _ := newSelectorLogCoordinator([]model.ModelParameters{
+			{ID: "model-a", Adapter: "SOAI", Enabled: true, IsAgentic: true},
+		})
+
+		ac.registerDelegateTools()
+
+		assert.Len(t, ac.DelegationLibrary, 2)
+		assert.Contains(t, ac.DelegationLibrary, "model-a@SOAI")
+		assert.Contains(t, ac.DelegationLibrary, "delegate_to_model-a_at_SOAI")
+	})
+}
+
+// Streaming twin of TestAssistantCoordinator_Send_DisplayNameSelector: the
+// DisplayName selector resolves and the adapter receives the real model id.
+func TestAssistantCoordinator_SendStream_DisplayNameSelector(t *testing.T) {
+	adapter := &captureAdapter{}
+
+	ac := newResolveTestCoordinator([]model.ModelParameters{
+		{ID: "test-model", DisplayName: "Agent Test", Adapter: "MyAdapter"},
+	})
+	ac.adapters = map[string]server.AssistantAdapter{"MyAdapter": adapter}
+	ac.toolConfig = []byte(`{"tools": [], "tool_choice": {"auto": {}}}`)
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+	res, _, err := ac.SendStream(ctx, "Agent Test", []*model.Message{
+		{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "hi"}}},
+	})
+
+	assert.NoError(t, err)
+	assert.NotNil(t, res)
+	res.Body.Close()
+	assert.NotNil(t, adapter.lastReq)
+	assert.Equal(t, "test-model", adapter.lastReq.Model)
+	assert.True(t, adapter.lastReq.Stream)
+}
+
+// Balance and Health accept any selector form: the canonical DisplayName, the
+// legacy id@adapter, and (leniently) an id@adapter with no configured model.
+func TestAssistantCoordinator_BalanceAndHealth_SelectorResolution(t *testing.T) {
+	newAC := func() *AssistantCoordinator {
+		ac := newResolveTestCoordinator([]model.ModelParameters{
+			{ID: "gemini-x", DisplayName: "Agent Gemini", Adapter: "Gemini"},
+		})
+		ac.adapters = map[string]server.AssistantAdapter{"Gemini": &captureAdapter{}}
+		return ac
+	}
+
+	ctx := context.Background()
+
+	t.Run("balance resolves display name and legacy selectors", func(t *testing.T) {
+		ac := newAC()
+		for _, selector := range []string{"Agent Gemini", "gemini-x@Gemini"} {
+			res, err := ac.Balance(ctx, selector)
+			assert.NoError(t, err, selector)
+			assert.NotNil(t, res, selector)
+		}
+	})
+
+	t.Run("balance errors for an unknown adapter", func(t *testing.T) {
+		ac := newAC()
+		res, err := ac.Balance(ctx, "whatever@Missing")
+		assert.ErrorContains(t, err, "assistant adapter not found")
+		assert.Nil(t, res)
+	})
+
+	t.Run("health resolves display name and legacy selectors", func(t *testing.T) {
+		ac := newAC()
+		for _, selector := range []string{"Agent Gemini", "gemini-x@Gemini"} {
+			res, err := ac.Health(ctx, selector)
+			assert.NoError(t, err, selector)
+			assert.NotNil(t, res, selector)
+			assert.Equal(t, "ok", res.Status)
+		}
+	})
+
+	t.Run("health errors for an unknown adapter", func(t *testing.T) {
+		ac := newAC()
+		res, err := ac.Health(ctx, "whatever@Missing")
+		assert.ErrorContains(t, err, "assistant adapter not found")
+		assert.Nil(t, res)
+	})
+}
+
+// A selector that resolves to a configured model whose adapter is not
+// registered fails with an adapter error (after resolution, before any send).
+func TestAssistantCoordinator_SendAndSendStream_AdapterNotFound(t *testing.T) {
+	ac := newResolveTestCoordinator([]model.ModelParameters{
+		{ID: "test-model", DisplayName: "Ghost Agent", Adapter: "Ghost"},
+	})
+	ac.adapters = map[string]server.AssistantAdapter{}
+	ac.toolConfig = []byte(`{"tools": [], "tool_choice": {"auto": {}}}`)
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+	msgs := []*model.Message{
+		{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "hi"}}},
+	}
+
+	result, err := ac.Send(ctx, "Ghost Agent", msgs)
+	assert.ErrorContains(t, err, "assistant adapter not found")
+	assert.Nil(t, result)
+
+	res, _, err := ac.SendStream(ctx, "Ghost Agent", msgs)
+	assert.ErrorContains(t, err, "assistant adapter not found")
+	assert.Nil(t, res)
 }
 
 func TestBuildToolResultMessage_NilResultNoError(t *testing.T) {

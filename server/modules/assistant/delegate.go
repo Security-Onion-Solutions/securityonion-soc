@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -39,8 +40,26 @@ func NewDelegateTool(agentName, agentDisplay, agentDesc string) *DelegateTool {
 	}
 }
 
+var invalidToolNameChars = regexp.MustCompile(`[^a-zA-Z0-9_-]`)
+
+// sanitizeDelegateToolName builds a provider-valid tool name
+// (^[a-zA-Z0-9_-]{1,64}$) from an agent selector. The "@" -> "_at_" mapping
+// runs first so a legacy id@adapter selector produces the same tool name as
+// previous releases.
+func sanitizeDelegateToolName(selector string) string {
+	name := strings.ReplaceAll(selector, "@", "_at_")
+	name = invalidToolNameChars.ReplaceAllString(name, "_")
+
+	const prefix = "delegate_to_"
+	if len(prefix)+len(name) > 64 {
+		name = name[:64-len(prefix)]
+	}
+
+	return prefix + name
+}
+
 func (t *DelegateTool) GetName() string {
-	return "delegate_to_" + strings.ReplaceAll(t.agentName, "@", "_at_")
+	return sanitizeDelegateToolName(t.agentName)
 }
 
 func (t *DelegateTool) GetDescription() string {

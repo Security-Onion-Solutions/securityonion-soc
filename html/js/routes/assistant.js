@@ -137,12 +137,20 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.availableModels = params["availableModels"];
       this.availableAdapters = params["availableAdapters"];
       if (this.availableModels && this.availableModels.length > 0) {
-        this.availableModels.forEach(m => m.key = this.buildModelIdentifier(m));
+        this.availableModels.forEach(m => m.key = m.displayName || this.buildModelIdentifier(m));
         this.modelsMap = new Map(
           this.availableModels.filter(m => m.enabled).map(m => [m.key, m])
         );
         for (let val of this.modelsMap.values()) {
           if (val.contextLimitLarge < val.contextLimitSmall) val.contextLimitLarge = val.contextLimitSmall;
+        }
+        // Selectors restored from localStorage may still be in the legacy
+        // id@adapter form; silently migrate them to the model's current key.
+        let legacyModelKeys = new Map(
+          this.availableModels.filter(m => m.enabled).map(m => [this.buildModelIdentifier(m), m.key])
+        );
+        if (this.currentModel && !this.modelsMap.has(this.currentModel) && legacyModelKeys.has(this.currentModel)) {
+          this.currentModel = legacyModelKeys.get(this.currentModel);
         }
         if (!this.currentModel || !this.modelsMap.has(this.currentModel)) this.currentModel = this.availableModels[0].key;
         this.groupedModels = this.buildGroupedModels();
@@ -2410,6 +2418,9 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.lowBalanceColorAlert = this.modelsMap.get(this.currentModel).lowBalanceColorAlert;
     },
 
+    // Legacy id@adapter selector, used as the model key only when a model has
+    // no displayName and to migrate selectors saved before displayName became
+    // the canonical identifier.
     buildModelIdentifier(model) {
       if (!model) return '';
       return `${model?.id||''}@${model?.adapter||''}`;

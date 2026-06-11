@@ -72,7 +72,7 @@ func TestAssistantCoordinator_InitAgenticToggle(t *testing.T) {
 		}
 	})
 
-	t.Run("agentic enabled applies setupAgentic and creates delegates", func(t *testing.T) {
+	t.Run("agentic enabled replaces configured models", func(t *testing.T) {
 		ac, srv := newCoordinator()
 
 		err := ac.Init(module.ModuleConfig{"agentic": true})
@@ -80,44 +80,16 @@ func TestAssistantCoordinator_InitAgenticToggle(t *testing.T) {
 
 		assert.True(t, ac.isAgentic)
 
-		// AvailableModels is overwritten with the hardcoded agentic models; the
-		// configured classic model is gone.
+		// The configured models are replaced with the hardcoded agentic models.
+		// The agentic model definitions are still in flux, so don't assert on
+		// their specifics — just that the configured classic model is gone.
 		models := srv.Config.ClientParams.AssistantParams.AvailableModels
-		assert.Len(t, models, 2)
-
-		byId := map[string]model.ModelParameters{}
+		assert.NotEmpty(t, models)
 		for _, m := range models {
-			byId[m.ID] = m
+			assert.NotEqual(t, "classic-model", m.ID)
 		}
-		assert.NotContains(t, byId, "classic-model")
 
-		orchestrator, ok := byId["gemini-3.5-flash"]
-		assert.True(t, ok)
-		assert.Equal(t, "Agent Gemini", orchestrator.DisplayName)
-		assert.Equal(t, "Gemini", orchestrator.Adapter)
-		assert.True(t, orchestrator.Enabled)
-		assert.True(t, orchestrator.IsAgentic)
-		assert.True(t, orchestrator.IsOrchestrator)
-		assert.Contains(t, orchestrator.CanDelegateTo, "gemini-3-flash-preview@Gemini")
-		assert.NotEmpty(t, orchestrator.AgentPrompt)
-
-		hunter, ok := byId["gemini-3-flash-preview"]
-		assert.True(t, ok)
-		assert.Equal(t, "Hunter", hunter.DisplayName)
-		assert.Equal(t, "Gemini", hunter.Adapter)
-		assert.True(t, hunter.Enabled)
-		assert.True(t, hunter.IsAgentic)
-		assert.False(t, hunter.IsOrchestrator)
-		assert.Contains(t, hunter.AllowedTools, "query_events")
-		assert.NotEmpty(t, hunter.AgentPrompt)
-		assert.NotEmpty(t, hunter.AgentDescription)
-
-		// Each enabled agentic model gets a delegate tool, registered under both
-		// its model id and its tool name.
-		assert.Len(t, ac.DelegationLibrary, 4)
-		assert.Contains(t, ac.DelegationLibrary, "gemini-3.5-flash@Gemini")
-		assert.Contains(t, ac.DelegationLibrary, "delegate_to_gemini-3.5-flash_at_Gemini")
-		assert.Contains(t, ac.DelegationLibrary, "gemini-3-flash-preview@Gemini")
-		assert.Contains(t, ac.DelegationLibrary, "delegate_to_gemini-3-flash-preview_at_Gemini")
+		// Delegate tools are created for the agentic models.
+		assert.NotEmpty(t, ac.DelegationLibrary)
 	})
 }

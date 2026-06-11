@@ -350,7 +350,7 @@ func writeResolvedMarker(w http.ResponseWriter, parentSessionId, parentToolUseId
 // @Tags         Assistant
 // @Security     bearer[assistant/read_authored]
 // @Security     bearer[assistant/read_all]
-// @Param        modelAndAdapter  path  string  true  "Model Id (including slashes) and Adapter Name to get balance for" example(qwen/qwen2.5-small@MyOpenAIChatAdapter)
+// @Param        modelAndAdapter  path  string  true  "Model selector to get balance for: the model's display name, or the legacy id@adapter form (including slashes)" example(Agent Gemini)
 // @Produce      json
 // @Success      200  {object}  model.Usage "Current assistant balance and usage information"
 // @Failure      401           "Request was not properly authenticated"

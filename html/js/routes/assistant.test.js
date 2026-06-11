@@ -422,27 +422,127 @@ test('initAssistant corrects contextLimitLarge when smaller than contextLimitSma
   
   await comp.initAssistant(mockParams);
   
-  // Check that the modelsMap was created correctly
+  // Check that the modelsMap was created correctly, keyed by displayName
   expect(comp.modelsMap.size).toBe(3);
-  expect(comp.modelsMap.has('model-1@SOAI')).toBe(true);
-  expect(comp.modelsMap.has('model-2@SOAI')).toBe(true);
-  expect(comp.modelsMap.has('model-3@SOAI')).toBe(true);
+  expect(comp.modelsMap.has('Model 1')).toBe(true);
+  expect(comp.modelsMap.has('Model 2')).toBe(true);
+  expect(comp.modelsMap.has('Model 3')).toBe(true);
   expect(comp.modelsMap.has('model-4@SOAI')).toBe(false); // Disabled model should not be included
-  
+
   // Check that contextLimitLarge was corrected for model-1
-  const model1 = comp.modelsMap.get('model-1@SOAI');
+  const model1 = comp.modelsMap.get('Model 1');
   expect(model1.contextLimitSmall).toBe(200000);
   expect(model1.contextLimitLarge).toBe(200000); // Should be corrected to match contextLimitSmall
-  
+
   // Check that contextLimitLarge was not changed for model-2 (already larger)
-  const model2 = comp.modelsMap.get('model-2@SOAI');
+  const model2 = comp.modelsMap.get('Model 2');
   expect(model2.contextLimitSmall).toBe(100000);
   expect(model2.contextLimitLarge).toBe(300000); // Should remain unchanged
-  
+
   // Check that contextLimitLarge was not changed for model-3 (equal)
-  const model3 = comp.modelsMap.get('model-3@SOAI');
+  const model3 = comp.modelsMap.get('Model 3');
   expect(model3.contextLimitSmall).toBe(250000);
   expect(model3.contextLimitLarge).toBe(250000); // Should remain unchanged
+});
+
+test('initAssistant migrates a legacy id@adapter currentModel to the displayName key', async () => {
+  const mockParams = {
+    enabled: true,
+    availableModels: [
+      { id: 'model-1', displayName: 'Model 1', enabled: true, adapter: 'SOAI' },
+      { id: 'model-2', displayName: 'Model 2', enabled: true, adapter: 'SOAI' },
+    ],
+    availableAdapters: [{ name: 'SOAI', protocol: 'securityonion_ai_cloud' }],
+  };
+
+  comp.$root.isLicensed = jest.fn().mockReturnValue(true);
+  comp.$root.showDisclaimer = jest.fn();
+  comp.loadStoredChats = jest.fn().mockResolvedValue();
+  comp.handleRouteSessionId = jest.fn().mockResolvedValue();
+  comp.loadCredits = jest.fn().mockResolvedValue();
+  comp.updateModelParams = jest.fn();
+  comp.$root.disclaimer = false;
+
+  // As restored from localStorage by a browser that saved the old format.
+  comp.currentModel = 'model-2@SOAI';
+
+  await comp.initAssistant(mockParams);
+
+  expect(comp.currentModel).toBe('Model 2');
+});
+
+test('initAssistant does not migrate a legacy selector for a disabled model', async () => {
+  const mockParams = {
+    enabled: true,
+    availableModels: [
+      { id: 'model-1', displayName: 'Model 1', enabled: true, adapter: 'SOAI' },
+      { id: 'model-2', displayName: 'Model 2', enabled: false, adapter: 'SOAI' },
+    ],
+    availableAdapters: [{ name: 'SOAI', protocol: 'securityonion_ai_cloud' }],
+  };
+
+  comp.$root.isLicensed = jest.fn().mockReturnValue(true);
+  comp.$root.showDisclaimer = jest.fn();
+  comp.loadStoredChats = jest.fn().mockResolvedValue();
+  comp.handleRouteSessionId = jest.fn().mockResolvedValue();
+  comp.loadCredits = jest.fn().mockResolvedValue();
+  comp.updateModelParams = jest.fn();
+  comp.$root.disclaimer = false;
+
+  // Legacy saved selector pointing at a model that is now disabled: disabled
+  // models are not migrated, so selection falls back to the first model.
+  comp.currentModel = 'model-2@SOAI';
+
+  await comp.initAssistant(mockParams);
+
+  expect(comp.currentModel).toBe('Model 1');
+});
+
+test('initAssistant falls back to id@adapter key when displayName is absent', async () => {
+  const mockParams = {
+    enabled: true,
+    availableModels: [
+      { id: 'model-1', enabled: true, adapter: 'SOAI' },
+    ],
+    availableAdapters: [{ name: 'SOAI', protocol: 'securityonion_ai_cloud' }],
+  };
+
+  comp.$root.isLicensed = jest.fn().mockReturnValue(true);
+  comp.$root.showDisclaimer = jest.fn();
+  comp.loadStoredChats = jest.fn().mockResolvedValue();
+  comp.handleRouteSessionId = jest.fn().mockResolvedValue();
+  comp.loadCredits = jest.fn().mockResolvedValue();
+  comp.updateModelParams = jest.fn();
+  comp.$root.disclaimer = false;
+
+  await comp.initAssistant(mockParams);
+
+  expect(comp.modelsMap.has('model-1@SOAI')).toBe(true);
+  expect(comp.currentModel).toBe('model-1@SOAI');
+});
+
+test('initAssistant defaults an unknown currentModel to the first model', async () => {
+  const mockParams = {
+    enabled: true,
+    availableModels: [
+      { id: 'model-1', displayName: 'Model 1', enabled: true, adapter: 'SOAI' },
+    ],
+    availableAdapters: [{ name: 'SOAI', protocol: 'securityonion_ai_cloud' }],
+  };
+
+  comp.$root.isLicensed = jest.fn().mockReturnValue(true);
+  comp.$root.showDisclaimer = jest.fn();
+  comp.loadStoredChats = jest.fn().mockResolvedValue();
+  comp.handleRouteSessionId = jest.fn().mockResolvedValue();
+  comp.loadCredits = jest.fn().mockResolvedValue();
+  comp.updateModelParams = jest.fn();
+  comp.$root.disclaimer = false;
+
+  comp.currentModel = 'gone-model@Nowhere';
+
+  await comp.initAssistant(mockParams);
+
+  expect(comp.currentModel).toBe('Model 1');
 });
 
 test('initAssistant handles empty availableModels and availableAdapters array', async () => {

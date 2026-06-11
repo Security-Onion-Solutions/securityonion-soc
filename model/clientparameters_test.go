@@ -244,3 +244,14 @@ func TestModelParameters_UnmarshalJSON(t *testing.T) {
 		})
 	}
 }
+
+func TestModelParameters_Selector(t *testing.T) {
+	named := &ModelParameters{ID: "gemini-3.5-flash", DisplayName: "Agent Gemini", Adapter: "Gemini"}
+	assert.Equal(t, "Agent Gemini", named.Selector())
+	assert.Equal(t, "gemini-3.5-flash@Gemini", named.LegacySelector())
+
+	// Without a DisplayName the legacy form remains the canonical selector.
+	unnamed := &ModelParameters{ID: "qwen/qwen2.5-small", Adapter: "MyOpenAIChatAdapter"}
+	assert.Equal(t, "qwen/qwen2.5-small@MyOpenAIChatAdapter", unnamed.Selector())
+	assert.Equal(t, "qwen/qwen2.5-small@MyOpenAIChatAdapter", unnamed.LegacySelector())
+}
