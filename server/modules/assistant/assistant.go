@@ -33,12 +33,6 @@ import (
 	"github.com/google/uuid"
 )
 
-//go:embed hunter.txt
-var hunterPrompt string
-
-//go:embed agent.txt
-var agentPrompt string
-
 type ProtocolConstructor func(context.Context, *server.Server, map[string]any) (server.AssistantAdapter, error)
 
 var protocols = map[string]ProtocolConstructor{}
@@ -70,6 +64,7 @@ type AssistantCoordinator struct {
 	DelegationLibrary map[string]Tool
 	toolConfig        json.RawMessage
 	adapters          map[string]server.AssistantAdapter
+	isAgentic         bool
 
 	systemPrompt         string
 	systemPromptAddendum string
@@ -94,36 +89,6 @@ func (ac *AssistantCoordinator) PrerequisiteModules() []string {
 func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 	logger := log.FromContext(ac.srv.Context)
 
-	ac.srv.Config.ClientParams.AssistantParams.AvailableModels = []model.ModelParameters{
-		{
-			ID:                    "gemini-3.5-flash",
-			DisplayName:           "Agent Gemini",
-			Adapter:               "Gemini",
-			ContextLimitSmall:     500000,
-			ContextLimitLarge:     500000,
-			CharsPerTokenEstimate: 4,
-			IsAgentic:             true,
-			IsOrchestrator:        true,
-			AllowedTools:          []string{},
-			CanDelegateTo:         []string{"gemini-3-flash-preview@Gemini"},
-			Enabled:               true,
-			AgentPrompt:           agentPrompt,
-		}, {
-			ID:                    "gemini-3-flash-preview",
-			DisplayName:           "Hunter",
-			Adapter:               "Gemini",
-			ContextLimitSmall:     500000,
-			ContextLimitLarge:     500000,
-			CharsPerTokenEstimate: 4,
-			IsAgentic:             true,
-			AllowedTools:          []string{"query_events"},
-			CanDelegateTo:         []string{},
-			Enabled:               true,
-			AgentPrompt:           hunterPrompt,
-			AgentDescription:      "An agent specialized in querying and analyzing security event data to uncover insights, patterns, and potential threats. Hunter is adept at formulating complex queries, interpreting results, and providing actionable intelligence based on security event logs.",
-		},
-	}
-
 	ac.srv.AssistantManager = ac
 	ac.FunctionLibrary = knownTools
 	ac.DelegationLibrary = map[string]Tool{}
@@ -131,6 +96,7 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 	ac.toolConfig, err = buildToolConfig(ac.FunctionLibrary, nil, nil, nil)
 
 	systemPromptAddendum := module.GetStringDefault(config, "systemPromptAddendum", DEFAULT_SYSTEM_PROMPT_ADDENDUM)
+	ac.isAgentic = module.GetBoolDefault(config, "agentic", false)
 
 	maxLength := module.GetIntDefault(config, "systemPromptAddendumMaxLength", DEFAULT_SYSTEM_PROMPT_ADDENDUM_MAX_LENGTH)
 	if len(systemPromptAddendum) > maxLength {
@@ -197,19 +163,23 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 		ac.srv.Config.ClientParams.AssistantParams.AvailableAdapters = []model.AdapterParameters{}
 	}
 
-	// iterate through models creating delegates
-	for _, model := range ac.srv.Config.ClientParams.AssistantParams.AvailableModels {
-		if model.Enabled && model.IsAgentic {
-			id := model.ID + "@" + model.Adapter
-			delegate := NewDelegateTool(id, model.DisplayName, model.AgentDescription)
+	if ac.isAgentic {
+		ac.setupAgentic()
 
-			ac.DelegationLibrary[id] = delegate
-			ac.DelegationLibrary[delegate.GetName()] = delegate
+		// iterate through models creating delegates
+		for _, model := range ac.srv.Config.ClientParams.AssistantParams.AvailableModels {
+			if model.Enabled && model.IsAgentic {
+				id := model.ID + "@" + model.Adapter
+				delegate := NewDelegateTool(id, model.DisplayName, model.AgentDescription)
 
-			logger.WithFields(log.Fields{
-				"modelId": id,
-				"adapter": model.Adapter,
-			}).Info("created delegate tool for agentic model")
+				ac.DelegationLibrary[id] = delegate
+				ac.DelegationLibrary[delegate.GetName()] = delegate
+
+				logger.WithFields(log.Fields{
+					"modelId": id,
+					"adapter": model.Adapter,
+				}).Info("created delegate tool for agentic model")
+			}
 		}
 	}
 
@@ -440,7 +410,7 @@ func (ac *AssistantCoordinator) Send(ctx context.Context, aiModel string, messag
 		return nil, ErrInvalidModel
 	}
 
-	if modelParams.IsAgentic {
+	if ac.isAgentic && modelParams.IsAgentic {
 		err := ac.setupAgent(req, modelParams)
 		if err != nil {
 			return nil, err
@@ -562,7 +532,7 @@ func (ac *AssistantCoordinator) SendStream(ctx context.Context, aiModel string, 
 		return nil, nil, ErrInvalidModel
 	}
 
-	if modelParams.IsAgentic {
+	if ac.isAgentic && modelParams.IsAgentic {
 		err := ac.setupAgent(req, modelParams)
 		if err != nil {
 			return nil, nil, err

@@ -9,7 +9,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"sync"
 	"time"
@@ -577,50 +576,4 @@ func getThought(resp *genai.GenerateContentResponse) (thought string) {
 	}
 
 	return thought
-}
-
-func fabricateResponse(code int) (*http.Response, *io.PipeWriter) {
-	bodyReader, bodyWriter := io.Pipe()
-
-	response := &http.Response{
-		StatusCode: code,
-		Body:       bodyReader,
-		Header:     make(http.Header),
-	}
-
-	response.Header.Add("Content-Type", "text/event-stream")
-
-	return response, bodyWriter
-}
-
-// handleStreamError handles errors during streaming
-// Returns a replacement response (if first send error) and whether the caller should return
-func handleStreamError(err error, firstSend bool, writer *sseEventWriter, logger log.Interface, model string) (*http.Response, bool) {
-	if firstSend {
-		// No response sent to client yet - fabricate error response
-		logger.WithFields(log.Fields{
-			"model": model,
-		}).WithError(err).Error("first response error from the LLM")
-
-		var body *io.PipeWriter
-		response, body := fabricateResponse(http.StatusInternalServerError)
-
-		// Write to pipe in goroutine to avoid blocking
-		go func() {
-			fmt.Fprint(body, "ERROR_FIRST_RESPONSE")
-			body.Close()
-		}()
-
-		return response, true
-	}
-
-	// Error after partial response sent to client
-	logger.WithFields(log.Fields{
-		"model": model,
-	}).WithError(err).Error("subsequent response error from the LLM")
-
-	writer.writeError(err.Error())
-	writer.writeDone()
-
-	return nil, true
 }

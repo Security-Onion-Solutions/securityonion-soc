@@ -9,7 +9,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"iter"
 	"testing"
 
@@ -195,66 +194,6 @@ func TestGetThought(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := getThought(tt.response)
 			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestFabricateResponse(t *testing.T) {
-	tests := []struct {
-		name           string
-		statusCode     int
-		expectedStatus int
-	}{
-		{
-			name:           "HTTP 200 status code",
-			statusCode:     200,
-			expectedStatus: 200,
-		},
-		{
-			name:           "HTTP 500 status code",
-			statusCode:     500,
-			expectedStatus: 500,
-		},
-		{
-			name:           "HTTP 404 status code",
-			statusCode:     404,
-			expectedStatus: 404,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			resp, writer := fabricateResponse(tt.statusCode)
-
-			// Verify status code
-			assert.Equal(t, tt.expectedStatus, resp.StatusCode)
-
-			// Verify Content-Type header
-			assert.Equal(t, "text/event-stream", resp.Header.Get("Content-Type"))
-
-			// Verify Body is not nil
-			assert.NotNil(t, resp.Body)
-
-			// Verify writer is not nil
-			assert.NotNil(t, writer)
-
-			// Test write and read interaction
-			testData := "test data"
-			go func() {
-				writer.Write([]byte(testData))
-				writer.Close()
-			}()
-
-			buf := make([]byte, len(testData))
-			n, err := resp.Body.Read(buf)
-
-			assert.NoError(t, err)
-			assert.Equal(t, len(testData), n)
-			assert.Equal(t, testData, string(buf))
-
-			// Verify EOF after close
-			_, err = resp.Body.Read(buf)
-			assert.Equal(t, io.EOF, err)
 		})
 	}
 }

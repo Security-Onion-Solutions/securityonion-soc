@@ -1444,6 +1444,7 @@ func TestAssistantCoordinator_SendStream_Agentic(t *testing.T) {
 		IOManager:       mockIO,
 		toolConfig:      []byte(`{"tools": [], "tool_choice": {"auto": {}}}`),
 		srv:             srv,
+		isAgentic:       true,
 		FunctionLibrary: map[string]Tool{"query_events": &mockTool{name: "query_events", description: "events"}},
 		adapters: map[string]server.AssistantAdapter{
 			"whatever": &SOAiCloudAdapter{apiUrl: "https://api.example.com", srv: srv, IOManager: mockIO},
