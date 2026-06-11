@@ -1087,6 +1087,113 @@ test('selectSetting', () => {
   expect(comp.form.entriesExpanded).toBeNull();
 });
 
+test('recomputeAvailableNodes_noAllowedNodeTypes_showsAll', () => {
+  comp.nodes = [
+    {id: "n1", name: "node1", role: "manager", status: GridMemberAccepted},
+    {id: "n2", name: "node2", role: "worker", status: GridMemberAccepted},
+    {id: "n3", name: "node3", role: "standalone", status: GridMemberAccepted},
+  ];
+
+  const nodeValues = new Map();
+  const setting = {id: "s-id", nodeValues: nodeValues};
+
+  comp.recomputeAvailableNodes(setting);
+
+  expect(comp.availableNodes).toStrictEqual([
+    {title: "node1 (manager)", value: "n1"},
+    {title: "node2 (worker)", value: "n2"},
+    {title: "node3 (standalone)", value: "n3"},
+  ]);
+});
+
+test('recomputeAvailableNodes_withAllowedNodeTypes_filtersNodes', () => {
+  comp.nodes = [
+    {id: "n1", name: "node1", role: "manager", status: GridMemberAccepted},
+    {id: "n2", name: "node2", role: "worker", status: GridMemberAccepted},
+    {id: "n3", name: "node3", role: "standalone", status: GridMemberAccepted},
+  ];
+
+  const nodeValues = new Map();
+  const setting = {id: "s-id", nodeValues: nodeValues, allowedNodeTypes: ["manager"]};
+
+  comp.recomputeAvailableNodes(setting);
+
+  expect(comp.availableNodes).toStrictEqual([
+    {title: "node1 (manager)", value: "n1"},
+  ]);
+});
+
+test('recomputeAvailableNodes_withMultipleAllowedNodeTypes_filtersNodes', () => {
+  comp.nodes = [
+    {id: "n1", name: "node1", role: "manager", status: GridMemberAccepted},
+    {id: "n2", name: "node2", role: "worker", status: GridMemberAccepted},
+    {id: "n3", name: "node3", role: "standalone", status: GridMemberAccepted},
+  ];
+
+  const nodeValues = new Map();
+  const setting = {id: "s-id", nodeValues: nodeValues, allowedNodeTypes: ["manager", "worker"]};
+
+  comp.recomputeAvailableNodes(setting);
+
+  expect(comp.availableNodes).toStrictEqual([
+    {title: "node1 (manager)", value: "n1"},
+    {title: "node2 (worker)", value: "n2"},
+  ]);
+});
+
+test('recomputeAvailableNodes_excludesAlreadyConfiguredNodes', () => {
+  comp.nodes = [
+    {id: "n1", name: "node1", role: "manager", status: GridMemberAccepted},
+    {id: "n2", name: "node2", role: "worker", status: GridMemberAccepted},
+  ];
+
+  const nodeValues = new Map();
+  nodeValues.set("n1", "value1");
+  const setting = {id: "s-id", nodeValues: nodeValues, allowedNodeTypes: ["manager", "worker"]};
+
+  comp.recomputeAvailableNodes(setting);
+
+  expect(comp.availableNodes).toStrictEqual([
+    {title: "node2 (worker)", value: "n2"},
+  ]);
+});
+
+test('recomputeAvailableNodes_excludesUnacceptedNodes', () => {
+  comp.nodes = [
+    {id: "n1", name: "node1", role: "manager", status: GridMemberAccepted},
+    {id: "n2", name: "node2", role: "worker", status: "pending"},
+  ];
+
+  const nodeValues = new Map();
+  const setting = {id: "s-id", nodeValues: nodeValues, allowedNodeTypes: ["manager", "worker"]};
+
+  comp.recomputeAvailableNodes(setting);
+
+  expect(comp.availableNodes).toStrictEqual([
+    {title: "node1 (manager)", value: "n1"},
+  ]);
+});
+
+test('recomputeAvailableNodes_noMatch_returnsEmpty', () => {
+  comp.nodes = [
+    {id: "n1", name: "node1", role: "manager", status: GridMemberAccepted},
+    {id: "n2", name: "node2", role: "worker", status: GridMemberAccepted},
+  ];
+
+  const nodeValues = new Map();
+  const setting = {id: "s-id", nodeValues: nodeValues, allowedNodeTypes: ["elastic"]};
+
+  comp.recomputeAvailableNodes(setting);
+
+  expect(comp.availableNodes).toStrictEqual([]);
+});
+
+test('recomputeAvailableNodes_nullSetting_doesNothing', () => {
+  comp.availableNodes = [{title: "existing", value: "n1"}];
+  comp.recomputeAvailableNodes(null);
+  expect(comp.availableNodes).toStrictEqual([{title: "existing", value: "n1"}]);
+});
+
 test('cancel', () => {
   comp.form.entriesExpanded = 12;
   comp.active = ["cancel-id"];

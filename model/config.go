@@ -109,6 +109,9 @@ type Setting struct {
 	Note string `json:"note,omitempty" example:"Enabling this for the new site deployment"`
 	// History of changes to this setting.
 	History []AuditHistory `json:"history,omitempty"`
+	// AllowedNodeTypes is a list of node types that are allowed for per-node configuration.
+	// When set and the setting supports per-node configuration, only nodes with matching roles are shown.
+	AllowedNodeTypes []string `json:"allowedNodeTypes,omitempty"`
 }
 
 type AuditHistory struct {

@@ -441,6 +441,7 @@ routes.push({
       const created = {
         id: setting.id,
         global: setting.global,
+        allowedNodeTypes: setting.allowedNodeTypes,
         node: setting.node,
         title: setting.title,
         description: setting.description,
@@ -1201,8 +1202,14 @@ routes.push({
     },
     recomputeAvailableNodes(setting) {
       if (!setting) return;
+      const allowedTypes = setting.allowedNodeTypes;
       const eligible = this.nodes.filter(n => {
-        return n.status == GridMemberAccepted && !setting.nodeValues.has(n.id);
+        if (n.status != GridMemberAccepted) return false;
+        if (setting.nodeValues.has(n.id)) return false;
+        if (allowedTypes && allowedTypes.length > 0) {
+          return allowedTypes.includes(n.role);
+        }
+        return true;
       });
       this.availableNodes = eligible.map(n => { return { title: n.name + " (" + n.role + ")", value: n.id } });
     },

@@ -145,6 +145,8 @@ func ApplyAnnotations(setting *model.Setting, annotations map[string]interface{}
 			setting.UiElementsDeleteMessage = value.(string)
 		case "storage":
 			setting.Storage = fmt.Sprintf("%v", value)
+		case "allowedNodeTypes":
+			setting.AllowedNodeTypes = CastToStringArray(value)
 		}
 	}
 }

@@ -390,3 +390,87 @@ func TestFilterUnchangedReverts(t *testing.T) {
 		assert.Empty(t, filtered)
 	})
 }
+
+func TestApplyAnnotations_AllowedNodeTypes(t *testing.T) {
+	t.Run("SetsAllowedNodeTypes", func(t *testing.T) {
+		setting := &model.Setting{Id: "test.setting"}
+		annotations := map[string]interface{}{
+			"node": true,
+			"allowedNodeTypes": []interface{}{"manager", "worker"},
+		}
+		ApplyAnnotations(setting, annotations, nil)
+		assert.Equal(t, []string{"manager", "worker"}, setting.AllowedNodeTypes)
+	})
+
+	t.Run("EmptyAllowedNodeTypes", func(t *testing.T) {
+		setting := &model.Setting{Id: "test.setting"}
+		annotations := map[string]interface{}{
+			"node": true,
+			"allowedNodeTypes": []interface{}{},
+		}
+		ApplyAnnotations(setting, annotations, nil)
+		assert.Empty(t, setting.AllowedNodeTypes)
+	})
+
+	t.Run("NoAllowedNodeTypesAnnotation", func(t *testing.T) {
+		setting := &model.Setting{Id: "test.setting"}
+		annotations := map[string]interface{}{
+			"node": true,
+		}
+		ApplyAnnotations(setting, annotations, nil)
+		assert.Empty(t, setting.AllowedNodeTypes)
+	})
+
+	t.Run("SingleNodeType", func(t *testing.T) {
+		setting := &model.Setting{Id: "test.setting"}
+		annotations := map[string]interface{}{
+			"node": true,
+			"allowedNodeTypes": []interface{}{"manager"},
+		}
+		ApplyAnnotations(setting, annotations, nil)
+		assert.Equal(t, []string{"manager"}, setting.AllowedNodeTypes)
+	})
+}
+
+func TestValidateAllowedNodeTypes(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(dir+"/local/pillar", 0755))
+
+	srv := server.NewFakeAuthorizedServer(nil)
+	ready := make(chan struct{})
+	close(ready)
+	oc := &OnionConfig{
+		server:       srv,
+		saltstackDir: dir,
+		ready:        ready,
+	}
+
+	t.Run("NoAllowedTypes_returnsNil", func(t *testing.T) {
+		setting := &model.Setting{Id: "test.setting", NodeId: "node1"}
+		settingDef := &model.Setting{Id: "test.setting", AllowedNodeTypes: nil}
+		err := oc.validateAllowedNodeTypes(setting, settingDef)
+		assert.NoError(t, err)
+	})
+
+	t.Run("EmptyAllowedTypes_returnsNil", func(t *testing.T) {
+		setting := &model.Setting{Id: "test.setting", NodeId: "node1"}
+		settingDef := &model.Setting{Id: "test.setting", AllowedNodeTypes: []string{}}
+		err := oc.validateAllowedNodeTypes(setting, settingDef)
+		assert.NoError(t, err)
+	})
+
+	t.Run("NoNodeId_returnsNil", func(t *testing.T) {
+		setting := &model.Setting{Id: "test.setting", NodeId: ""}
+		settingDef := &model.Setting{Id: "test.setting", AllowedNodeTypes: []string{"manager"}}
+		err := oc.validateAllowedNodeTypes(setting, settingDef)
+		assert.NoError(t, err)
+	})
+
+	t.Run("NoGridMembersStore_returnsNil", func(t *testing.T) {
+		setting := &model.Setting{Id: "test.setting", NodeId: "node1"}
+		settingDef := &model.Setting{Id: "test.setting", AllowedNodeTypes: []string{"manager"}}
+		oc.server.GridMembersstore = nil
+		err := oc.validateAllowedNodeTypes(setting, settingDef)
+		assert.NoError(t, err)
+	})
+}
