@@ -145,6 +145,9 @@ func (a *GeminiAdapter) SendMessage(ctx context.Context, req *model.ChatRequest)
 		ThinkingConfig: &genai.ThinkingConfig{
 			IncludeThoughts: true,
 		},
+		// MaxTokens (when set, e.g. by a per-sub-session budget) caps output tokens.
+		// Omitted when 0, leaving the model's own default in effect.
+		MaxOutputTokens: int32(req.MaxTokens),
 	}, history)
 	if err != nil {
 		return nil, err
@@ -257,6 +260,9 @@ func (a *GeminiAdapter) SendMessageStream(ctx context.Context, req *model.ChatRe
 		ThinkingConfig: &genai.ThinkingConfig{
 			IncludeThoughts: true,
 		},
+		// MaxTokens (when set, e.g. by a per-sub-session budget) caps output tokens.
+		// Omitted when 0, leaving the model's own default in effect.
+		MaxOutputTokens: int32(req.MaxTokens),
 	}, history)
 	if err != nil {
 		return nil, nil, err

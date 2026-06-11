@@ -2680,3 +2680,139 @@ func TestBuildToolResultMessage_Result(t *testing.T) {
 	assert.False(t, tr.IsError)
 	assert.NotNil(t, tr.Content[0].Json)
 }
+
+func TestAssistantCoordinator_subSessionOutputBudget(t *testing.T) {
+	tests := []struct {
+		name              string
+		maxSubSession     int
+		sessionId         string
+		sessions          []*model.AssistantSession
+		getErr            error
+		expectLookup      bool
+		expectedIsSub     bool
+		expectedRemaining int
+	}{
+		{
+			name:          "budget disabled does not look up usage",
+			maxSubSession: 0,
+			sessionId:     "child",
+			expectLookup:  false,
+		},
+		{
+			name:          "empty session id does not look up usage",
+			maxSubSession: 1000,
+			sessionId:     "",
+			expectLookup:  false,
+		},
+		{
+			name:          "top-level session is not capped",
+			maxSubSession: 1000,
+			sessionId:     "top",
+			expectLookup:  true,
+			sessions: []*model.AssistantSession{
+				{SessionId: "top", Usage: &model.SessionUsage{TotalOutputTokens: 500}},
+			},
+			expectedIsSub: false,
+		},
+		{
+			name:          "sub-session reports remaining output budget",
+			maxSubSession: 1000,
+			sessionId:     "child",
+			expectLookup:  true,
+			sessions: []*model.AssistantSession{
+				{SessionId: "child", ParentSessionId: "top", Usage: &model.SessionUsage{TotalOutputTokens: 300}},
+			},
+			expectedIsSub:     true,
+			expectedRemaining: 700,
+		},
+		{
+			name:          "exhausted sub-session reports non-positive remaining",
+			maxSubSession: 1000,
+			sessionId:     "child",
+			expectLookup:  true,
+			sessions: []*model.AssistantSession{
+				{SessionId: "child", ParentSessionId: "top", Usage: &model.SessionUsage{TotalOutputTokens: 1200}},
+			},
+			expectedIsSub:     true,
+			expectedRemaining: -200,
+		},
+		{
+			name:          "sub-session with no usage yet has full budget",
+			maxSubSession: 1000,
+			sessionId:     "child",
+			expectLookup:  true,
+			sessions: []*model.AssistantSession{
+				{SessionId: "child", ParentSessionId: "top"},
+			},
+			expectedIsSub:     true,
+			expectedRemaining: 1000,
+		},
+		{
+			name:          "lookup error disables the cap",
+			maxSubSession: 1000,
+			sessionId:     "child",
+			expectLookup:  true,
+			getErr:        errors.New("boom"),
+			expectedIsSub: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+			if tc.expectLookup {
+				mockAssistantstore.EXPECT().GetSessions(gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.sessions, tc.getErr)
+			}
+
+			ac := &AssistantCoordinator{
+				srv:                 &server.Server{Assistantstore: mockAssistantstore},
+				maxSubSessionTokens: tc.maxSubSession,
+			}
+
+			isSub, remaining := ac.subSessionOutputBudget(context.Background(), tc.sessionId)
+
+			assert.Equal(t, tc.expectedIsSub, isSub)
+			if tc.expectedIsSub {
+				assert.Equal(t, tc.expectedRemaining, remaining)
+			}
+		})
+	}
+}
+
+// continueWithToolResultSync halts an exhausted sub-session: it persists the tool
+// result and a budget-exhausted notice as the final turn and returns that notice
+// (which the chaining loop folds back to the parent) WITHOUT making a model call.
+func TestAssistantCoordinator_continueWithToolResultSync_HardStop(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+
+	// The sub-session has already spent its budget (1000 > 500).
+	mockAssistantstore.EXPECT().
+		GetSessions(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return([]*model.AssistantSession{
+			{SessionId: "child", ParentSessionId: "parent", Usage: &model.SessionUsage{TotalOutputTokens: 1000}},
+		}, nil)
+
+	// Exactly two writes: the pending tool result, then the halt notice. No model call.
+	mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil).Times(2)
+
+	ac := &AssistantCoordinator{
+		srv:                 &server.Server{Assistantstore: mockAssistantstore},
+		maxSubSessionTokens: 500,
+	}
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+	toolMsg := buildToolResultMessage("tu_1", &model.ToolResponse{ToolName: "x", Result: "r"}, nil)
+
+	resp, err := ac.continueWithToolResultSync(ctx, "child", "model@Adapter", toolMsg)
+
+	assert.NoError(t, err)
+	assert.Len(t, resp, 1)
+	assert.Equal(t, "assistant", resp[0].Role)
+	assert.Contains(t, messageText(resp[0]), "halted")
+}

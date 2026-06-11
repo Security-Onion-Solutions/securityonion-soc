@@ -155,9 +155,13 @@ func (mr *MockAssistantManagerMockRecorder) Send(ctx, aiModel, messages any, opt
 }
 
 // SendStream mocks base method.
-func (m *MockAssistantManager) SendStream(ctx context.Context, aiModel string, messages []*model.Message) (*http.Response, *model.AuxMessageData, error) {
+func (m *MockAssistantManager) SendStream(ctx context.Context, aiModel string, messages []*model.Message, opts ...model.ChatOpt) (*http.Response, *model.AuxMessageData, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SendStream", ctx, aiModel, messages)
+	varargs := []any{ctx, aiModel, messages}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "SendStream", varargs...)
 	ret0, _ := ret[0].(*http.Response)
 	ret1, _ := ret[1].(*model.AuxMessageData)
 	ret2, _ := ret[2].(error)
@@ -165,9 +169,10 @@ func (m *MockAssistantManager) SendStream(ctx context.Context, aiModel string, m
 }
 
 // SendStream indicates an expected call of SendStream.
-func (mr *MockAssistantManagerMockRecorder) SendStream(ctx, aiModel, messages any) *gomock.Call {
+func (mr *MockAssistantManagerMockRecorder) SendStream(ctx, aiModel, messages any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendStream", reflect.TypeOf((*MockAssistantManager)(nil).SendStream), ctx, aiModel, messages)
+	varargs := append([]any{ctx, aiModel, messages}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendStream", reflect.TypeOf((*MockAssistantManager)(nil).SendStream), varargs...)
 }
 
 // ToolInSession mocks base method.

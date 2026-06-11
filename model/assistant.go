@@ -302,11 +302,22 @@ type ChatOpt func(*ChatConfig)
 
 type ChatConfig struct {
 	AutoExecuteTools bool
+	// MaxTokens, when > 0, caps the number of output tokens the model may generate
+	// for this request. Used to enforce a per-sub-session output-token budget.
+	MaxTokens int
 }
 
 func WithAutoExecuteTools(autoExecute bool) ChatOpt {
 	return func(config *ChatConfig) {
 		config.AutoExecuteTools = autoExecute
+	}
+}
+
+// WithMaxTokens caps the output tokens for a single chat request. A value <= 0
+// leaves the request uncapped.
+func WithMaxTokens(maxTokens int) ChatOpt {
+	return func(config *ChatConfig) {
+		config.MaxTokens = maxTokens
 	}
 }
 

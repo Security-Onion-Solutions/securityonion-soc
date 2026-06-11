@@ -2070,3 +2070,49 @@ func TestOpenAIAdapter_SendMessageStream(t *testing.T) {
 		})
 	}
 }
+
+// SendMessage maps ChatRequest.MaxTokens (the per-sub-session budget cap) onto the
+// Responses API MaxOutputTokens param, leaving it unset when zero.
+func TestOpenAIResponsesAdapter_SendMessage_MaxTokens(t *testing.T) {
+	cases := []struct {
+		name      string
+		maxTokens int
+		wantValid bool
+		wantVal   int64
+	}{
+		{name: "cap forwarded when set", maxTokens: 1234, wantValid: true, wantVal: 1234},
+		{name: "unset when zero", maxTokens: 0, wantValid: false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var gotParams responses.ResponseNewParams
+
+			mockClient := &mockOpenAIClient{
+				responsesNewFunc: func(ctx context.Context, params responses.ResponseNewParams) (*responses.Response, error) {
+					gotParams = params
+					return &responses.Response{}, nil
+				},
+			}
+
+			srv := server.NewFakeUnauthorizedServer()
+			adapter := &OpenAIResponsesAdapter{
+				srv:       srv,
+				client:    mockClient,
+				IOManager: &detections.ResourceManager{Config: srv.Config},
+			}
+
+			_, err := adapter.SendMessage(context.Background(), &model.ChatRequest{
+				Model:     "gpt-4o",
+				MaxTokens: tc.maxTokens,
+				Messages:  []*model.Message{{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "hi"}}}},
+			})
+
+			assert.NoError(t, err)
+			assert.Equal(t, tc.wantValid, gotParams.MaxOutputTokens.Valid())
+			if tc.wantValid {
+				assert.Equal(t, tc.wantVal, gotParams.MaxOutputTokens.Or(0))
+			}
+		})
+	}
+}

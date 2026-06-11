@@ -75,8 +75,7 @@ func (a *OpenAIResponsesAdapter) SendMessage(ctx context.Context, req *model.Cha
 		prompt += "\n" + req.SystemAppend
 	}
 
-	// Call non-streaming API
-	resp, err := a.client.ResponsesNew(ctx, responses.ResponseNewParams{
+	params := responses.ResponseNewParams{
 		Model:        req.Model,
 		Input:        history,
 		Instructions: openai.String(prompt),
@@ -85,7 +84,15 @@ func (a *OpenAIResponsesAdapter) SendMessage(ctx context.Context, req *model.Cha
 		Reasoning: shared.ReasoningParam{
 			Summary: "auto",
 		},
-	})
+	}
+
+	// MaxTokens (when set, e.g. by a per-sub-session budget) caps output tokens.
+	if req.MaxTokens > 0 {
+		params.MaxOutputTokens = openai.Int(int64(req.MaxTokens))
+	}
+
+	// Call non-streaming API
+	resp, err := a.client.ResponsesNew(ctx, params)
 	if err != nil {
 		logger.WithFields(log.Fields{
 			"model": req.Model,
@@ -168,7 +175,7 @@ func (a *OpenAIResponsesAdapter) SendMessageStream(ctx context.Context, req *mod
 	noTimeoutContext := context.WithValue(context.Background(), web.ContextKeyRequestId, ctx.Value(web.ContextKeyRequestId))
 	noTimeoutContext = context.WithValue(noTimeoutContext, web.ContextKeyRequestorId, ctx.Value(web.ContextKeyRequestorId))
 
-	stream := a.client.ResponsesNewStreaming(noTimeoutContext, responses.ResponseNewParams{
+	params := responses.ResponseNewParams{
 		Model:        req.Model,
 		Input:        history,
 		Instructions: openai.String(prompt),
@@ -177,7 +184,14 @@ func (a *OpenAIResponsesAdapter) SendMessageStream(ctx context.Context, req *mod
 		Reasoning: shared.ReasoningParam{
 			Summary: "auto",
 		},
-	})
+	}
+
+	// MaxTokens (when set, e.g. by a per-sub-session budget) caps output tokens.
+	if req.MaxTokens > 0 {
+		params.MaxOutputTokens = openai.Int(int64(req.MaxTokens))
+	}
+
+	stream := a.client.ResponsesNewStreaming(noTimeoutContext, params)
 
 	response, bodyWriter := fabricateResponse(http.StatusOK)
 

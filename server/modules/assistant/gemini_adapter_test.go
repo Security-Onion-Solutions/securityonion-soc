@@ -1206,3 +1206,46 @@ func TestGeminiAdapterSendMessage(t *testing.T) {
 		})
 	}
 }
+
+// SendMessage maps ChatRequest.MaxTokens (the per-sub-session budget cap) onto the
+// Gemini GenerateContentConfig.MaxOutputTokens, omitting it (0) when unset.
+func TestGeminiAdapterSendMessage_MaxTokens(t *testing.T) {
+	cases := []struct {
+		name      string
+		maxTokens int
+		want      int32
+	}{
+		{name: "cap forwarded when set", maxTokens: 1234, want: 1234},
+		{name: "omitted when zero", maxTokens: 0, want: 0},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var gotConfig *genai.GenerateContentConfig
+
+			mockSession := &mockGeminiSession{
+				sendMessageFunc: func(ctx context.Context, part genai.Part) (*genai.GenerateContentResponse, error) {
+					return &genai.GenerateContentResponse{}, nil
+				},
+			}
+			mockClient := &mockGeminiClient{
+				createSessionFunc: func(ctx context.Context, model string, config *genai.GenerateContentConfig, history []*genai.Content) (GeminiSession, error) {
+					gotConfig = config
+					return mockSession, nil
+				},
+			}
+
+			adapter := &GeminiAdapter{client: mockClient}
+
+			_, err := adapter.SendMessage(context.Background(), &model.ChatRequest{
+				Model:     "gemini-x",
+				MaxTokens: tc.maxTokens,
+				Messages:  []*model.Message{{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "hi"}}}},
+			})
+
+			assert.NoError(t, err)
+			assert.NotNil(t, gotConfig)
+			assert.Equal(t, tc.want, gotConfig.MaxOutputTokens)
+		})
+	}
+}

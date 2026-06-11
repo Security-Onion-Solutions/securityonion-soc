@@ -19,6 +19,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -51,6 +52,11 @@ var (
 const (
 	DEFAULT_SYSTEM_PROMPT_ADDENDUM            = ""
 	DEFAULT_SYSTEM_PROMPT_ADDENDUM_MAX_LENGTH = 50000
+
+	// DEFAULT_MAX_SUBSESSION_TOKENS is the default per-sub-session output-token
+	// budget. 0 disables the budget (sub-sessions are uncapped) unless an operator
+	// configures "maxSubSessionTokens".
+	DEFAULT_MAX_SUBSESSION_TOKENS = 0
 )
 
 //go:embed SOSystemPrompt.bin
@@ -67,6 +73,9 @@ type AssistantCoordinator struct {
 
 	systemPrompt         string
 	systemPromptAddendum string
+
+	// maxSubSessionTokens is the per-sub-session output-token budget. 0 disables it.
+	maxSubSessionTokens int
 
 	detections.IOManager
 }
@@ -129,6 +138,7 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 	}
 
 	ac.systemPromptAddendum = systemPromptAddendum
+	ac.maxSubSessionTokens = module.GetIntDefault(config, "maxSubSessionTokens", DEFAULT_MAX_SUBSESSION_TOKENS)
 	ac.adapters = map[string]server.AssistantAdapter{}
 
 	adapterConfig, ok := config["adapters"].([]any)
@@ -405,9 +415,10 @@ func (ac *AssistantCoordinator) Send(ctx context.Context, aiModel string, messag
 	modelId, adapterName := splitModelAdapter(aiModel)
 
 	req := &model.ChatRequest{
-		Messages: msgs,
-		UserId:   userID,
-		Model:    modelId,
+		Messages:  msgs,
+		UserId:    userID,
+		Model:     modelId,
+		MaxTokens: config.MaxTokens,
 	}
 
 	if err := ac.checkRequestSize(req, modelId, adapterName); err != nil {
@@ -514,9 +525,10 @@ func (ac *AssistantCoordinator) Send(ctx context.Context, aiModel string, messag
 	return newMessages, nil
 }
 
-func (ac *AssistantCoordinator) SendStream(ctx context.Context, aiModel string, messages []*model.Message) (*http.Response, *model.AuxMessageData, error) {
+func (ac *AssistantCoordinator) SendStream(ctx context.Context, aiModel string, messages []*model.Message, opts ...model.ChatOpt) (*http.Response, *model.AuxMessageData, error) {
 	logger := log.FromContext(ctx)
 	userID := ctx.Value(web.ContextKeyRequestorId).(string)
+	config := model.ApplyChatOpts(opts...)
 
 	// copy and modify
 	msgs := cleanupMessages(messages)
@@ -524,10 +536,11 @@ func (ac *AssistantCoordinator) SendStream(ctx context.Context, aiModel string, 
 	modelId, adapterName := splitModelAdapter(aiModel)
 
 	req := &model.ChatRequest{
-		Messages: msgs,
-		Stream:   true,
-		UserId:   userID,
-		Model:    modelId,
+		Messages:  msgs,
+		Stream:    true,
+		UserId:    userID,
+		Model:     modelId,
+		MaxTokens: config.MaxTokens,
 	}
 
 	if err := ac.checkRequestSize(req, modelId, adapterName); err != nil {
@@ -726,13 +739,24 @@ func (ac *AssistantCoordinator) continueWithToolResultSync(ctx context.Context, 
 	// run free of the per-request timeout like the streaming path does.
 	noTimeOutCtx := buildNoTimeoutCtx(ctx)
 
+	// Enforce the per-sub-session output-token budget (see continueWithToolResult).
+	isSub, remaining := ac.subSessionOutputBudget(noTimeOutCtx, sessionId)
+	if isSub && remaining <= 0 {
+		return ac.haltSubSessionSync(noTimeOutCtx, sessionId, aiModel, toolMsg)
+	}
+
 	messages, _, err := ac.loadHistory(noTimeOutCtx, sessionId)
 	if err != nil {
 		return nil, err
 	}
 	messages = append(messages, toolMsg)
 
-	response, err := ac.Send(noTimeOutCtx, aiModel, messages)
+	var sendOpts []model.ChatOpt
+	if isSub {
+		sendOpts = append(sendOpts, model.WithMaxTokens(remaining))
+	}
+
+	response, err := ac.Send(noTimeOutCtx, aiModel, messages, sendOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -792,6 +816,14 @@ func (ac *AssistantCoordinator) ToolStreamInSession(ctx context.Context, toolReq
 func (ac *AssistantCoordinator) continueWithToolResult(ctx context.Context, sessionId, aiModel string, toolMsg *model.Message) (*model.StreamedTurn, error) {
 	logger := log.FromContext(ctx)
 
+	// Enforce the per-sub-session output-token budget. When a sub-agent has spent
+	// its budget, halt it instead of running another model turn; otherwise cap this
+	// turn's output at the remaining budget.
+	isSub, remaining := ac.subSessionOutputBudget(ctx, sessionId)
+	if isSub && remaining <= 0 {
+		return ac.haltSubSessionStream(ctx, sessionId, aiModel, toolMsg)
+	}
+
 	messages, _, err := ac.loadHistory(ctx, sessionId)
 	if err != nil {
 		return nil, err
@@ -800,7 +832,12 @@ func (ac *AssistantCoordinator) continueWithToolResult(ctx context.Context, sess
 
 	noTimeOutCtx := buildNoTimeoutCtx(ctx)
 
-	response, aux, err := ac.SendStream(noTimeOutCtx, aiModel, messages)
+	var sendOpts []model.ChatOpt
+	if isSub {
+		sendOpts = append(sendOpts, model.WithMaxTokens(remaining))
+	}
+
+	response, aux, err := ac.SendStream(noTimeOutCtx, aiModel, messages, sendOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -847,6 +884,152 @@ func (ac *AssistantCoordinator) sessionModel(ctx context.Context, sessionId, fal
 	return sessions[0].Model
 }
 
+// subSessionOutputBudget reports the per-sub-session output-token budget state for
+// a session: whether it is a delegated sub-agent and, if so, how many output
+// tokens remain (the configured limit minus output tokens already generated in the
+// sub-session). remaining can be <= 0 once the budget is spent. For top-level
+// sessions, when no budget is configured, or when usage can't be determined,
+// isSub is false and remaining is 0 (no cap).
+func (ac *AssistantCoordinator) subSessionOutputBudget(ctx context.Context, sessionId string) (isSub bool, remaining int) {
+	if ac.maxSubSessionTokens <= 0 || sessionId == "" {
+		return false, 0
+	}
+
+	sessions, err := ac.srv.Assistantstore.GetSessions(ctx,
+		model.GetSessionsWithSessionId(sessionId),
+		model.GetSessionsWithUsage(true),
+	)
+	if err != nil || len(sessions) == 0 {
+		// Can't determine usage; don't cap rather than risk truncating a turn.
+		return false, 0
+	}
+
+	sess := sessions[0]
+	if sess.ParentSessionId == "" {
+		return false, 0 // top-level conversation; the budget applies only to sub-agents
+	}
+
+	used := 0
+	if sess.Usage != nil {
+		used = sess.Usage.TotalOutputTokens
+	}
+
+	return true, ac.maxSubSessionTokens - used
+}
+
+// subSessionStartOpts returns the chat options that cap a sub-agent's first turn
+// at the full per-sub-session budget (none has been spent yet). It returns no
+// options when the budget is disabled.
+func (ac *AssistantCoordinator) subSessionStartOpts() []model.ChatOpt {
+	if ac.maxSubSessionTokens <= 0 {
+		return nil
+	}
+	return []model.ChatOpt{model.WithMaxTokens(ac.maxSubSessionTokens)}
+}
+
+// subSessionBudgetNotice is the text returned to the parent when a sub-agent is
+// halted for exhausting its output-token budget.
+func subSessionBudgetNotice(limit int) string {
+	return fmt.Sprintf("This delegated sub-agent was halted because it reached its output-token budget (%d tokens) for this delegation. Returning with the work completed so far.", limit)
+}
+
+// haltSubSessionStream terminates a sub-agent that has exhausted its output-token
+// budget without running another model turn. It persists the pending tool result
+// for a clean history, then synthesizes a text-only streamed turn carrying the
+// halt notice (reusing the SSE machinery the adapters use) so the existing chaining
+// loop streams it and folds it back into the parent as the delegation's result.
+func (ac *AssistantCoordinator) haltSubSessionStream(ctx context.Context, sessionId, aiModel string, toolMsg *model.Message) (*model.StreamedTurn, error) {
+	logger := log.FromContext(ctx)
+	noTimeOutCtx := buildNoTimeoutCtx(ctx)
+
+	logger.WithFields(log.Fields{
+		"sessionId": sessionId,
+		"budget":    ac.maxSubSessionTokens,
+	}).Info("sub-session output-token budget exhausted; halting")
+
+	if toolMsg != nil {
+		toolStored := toolMsg.PrepareForStorage(sessionId, []string{"tool_result"}, aiModel)
+		if err := ac.srv.Assistantstore.SaveChat(noTimeOutCtx, toolStored); err != nil {
+			logger.WithError(err).Error("unable to save tool result before halting sub-session")
+			return nil, err
+		}
+	}
+
+	notice := subSessionBudgetNotice(ac.maxSubSessionTokens)
+
+	response, bodyWriter := fabricateResponse(http.StatusOK)
+	aux := &model.AuxMessageData{ThoughtSignatures: map[string][]byte{}}
+
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	processor := newStreamProcessor(newSSEEventWriter(logger, bodyWriter), aiModel, wg)
+
+	go func() {
+		defer bodyWriter.Close()
+		processor.ensureFirstSend()
+		processor.writeText(notice)
+		processor.finalizeGemini("end_turn", nil)
+	}()
+	wg.Wait()
+
+	finalize := func(rawResponse []byte) error {
+		msg, err := server.UnstreamResponse(noTimeOutCtx, string(rawResponse), aux)
+		if err != nil {
+			return err
+		}
+		if msg == nil {
+			return nil
+		}
+		return ac.srv.Assistantstore.SaveChat(noTimeOutCtx, msg.PrepareForStorage(sessionId, []string{"subsession_halted"}, aiModel))
+	}
+
+	return &model.StreamedTurn{
+		Response:  response,
+		Aux:       aux,
+		Finalize:  finalize,
+		SessionId: sessionId,
+		Model:     aiModel,
+	}, nil
+}
+
+// haltSubSessionSync is the non-streaming twin of haltSubSessionStream. It persists
+// the pending tool result and a synthetic halt notice as the sub-agent's final
+// turn, returning the notice so the chaining loop resolves it into the parent.
+func (ac *AssistantCoordinator) haltSubSessionSync(ctx context.Context, sessionId, aiModel string, toolMsg *model.Message) ([]*model.Message, error) {
+	logger := log.FromContext(ctx)
+	noTimeOutCtx := buildNoTimeoutCtx(ctx)
+
+	logger.WithFields(log.Fields{
+		"sessionId": sessionId,
+		"budget":    ac.maxSubSessionTokens,
+	}).Info("sub-session output-token budget exhausted; halting")
+
+	if toolMsg != nil {
+		toolStored := toolMsg.PrepareForStorage(sessionId, []string{"tool_result"}, aiModel)
+		if err := ac.srv.Assistantstore.SaveChat(noTimeOutCtx, toolStored); err != nil {
+			logger.WithError(err).Error("unable to save tool result before halting sub-session")
+			return nil, err
+		}
+	}
+
+	stopReason := "end_turn"
+	notice := &model.Message{
+		Id:   uuid.NewString(),
+		Role: "assistant",
+		ContentBlocks: []model.ContentBlock{
+			{Type: "text", Text: subSessionBudgetNotice(ac.maxSubSessionTokens)},
+		},
+		StopReason: &stopReason,
+	}
+
+	if err := ac.srv.Assistantstore.SaveChat(noTimeOutCtx, notice.PrepareForStorage(sessionId, []string{"subsession_halted"}, aiModel)); err != nil {
+		logger.WithError(err).Error("unable to save halt notice for sub-session")
+		return nil, err
+	}
+
+	return []*model.Message{notice}, nil
+}
+
 // startDelegation creates the linked child session for a delegation, seeds the
 // objective as the child's first user message, and streams the sub-agent's first
 // turn. The returned turn carries a delegation_start marker so the UI nests the
@@ -868,7 +1051,9 @@ func (ac *AssistantCoordinator) startDelegation(ctx context.Context, toolReq *mo
 		return nil, err
 	}
 
-	response, aux, err := ac.SendStream(noTimeOutCtx, kickoff.ChildModel, []*model.Message{userMsg})
+	// The child's first turn has spent none of its budget; cap it at the full
+	// per-sub-session limit (a no-op when the budget is disabled).
+	response, aux, err := ac.SendStream(noTimeOutCtx, kickoff.ChildModel, []*model.Message{userMsg}, ac.subSessionStartOpts()...)
 	if err != nil {
 		return nil, err
 	}
@@ -964,7 +1149,9 @@ func (ac *AssistantCoordinator) startDelegationSync(ctx context.Context, toolReq
 		return nil, "", err
 	}
 
-	response, err := ac.Send(noTimeOutCtx, kickoff.ChildModel, []*model.Message{userMsg})
+	// The child's first turn has spent none of its budget; cap it at the full
+	// per-sub-session limit (a no-op when the budget is disabled).
+	response, err := ac.Send(noTimeOutCtx, kickoff.ChildModel, []*model.Message{userMsg}, ac.subSessionStartOpts()...)
 	if err != nil {
 		return nil, "", err
 	}
