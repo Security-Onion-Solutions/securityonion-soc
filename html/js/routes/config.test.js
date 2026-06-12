@@ -561,6 +561,23 @@ test('filteredAuditHistory_filterByOldValue', () => {
   expect(comp.filteredAuditHistory()[0].settingId).toBe('foo.bar');
 });
 
+test('filteredAuditHistory_filterByDefaultNone', () => {
+  comp.appliedHistorySearch = 'default';
+  comp.auditHistory = [
+    { settingId: 'foo.bar', newValue: 'val1', oldValue: 'val0', nodeId: 'node1', userId: 'user1', userName: 'User One' },
+    { settingId: 'baz.qux', newValue: 'val2', oldValue: null, nodeId: 'node2', userId: 'user2', userName: 'User Two' },
+  ];
+  expect(comp.filteredAuditHistory().length).toBe(1);
+  expect(comp.filteredAuditHistory()[0].settingId).toBe('baz.qux');
+
+  comp.appliedHistorySearch = 'none';
+  comp.auditHistory = [
+    { settingId: 'foo.bar', newValue: '', oldValue: 'val0', nodeId: 'node1', userId: 'user1', userName: 'User One' },
+  ];
+  expect(comp.filteredAuditHistory().length).toBe(1);
+  expect(comp.filteredAuditHistory()[0].settingId).toBe('foo.bar');
+});
+
 test('filteredAuditHistory_filterByNodeId', () => {
   comp.appliedHistorySearch = 'node2';
   comp.auditHistory = [

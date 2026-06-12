@@ -351,8 +351,8 @@ routes.push({
       const search = this.appliedHistorySearch.toLowerCase();
       return this.auditHistory.filter(entry => {
         const settingId = (entry?.settingId || '').toLowerCase();
-        const newValue = (entry?.newValue || '').toLowerCase();
-        const oldValue = (entry?.oldValue || '').toLowerCase();
+        const newValue = (entry?.newValue === null || entry?.newValue === '' ? (this.i18n?.settingDefaultNone || '(default/none)') : entry?.newValue).toLowerCase();
+        const oldValue = (entry?.oldValue === null || entry?.oldValue === '' ? (this.i18n?.settingDefaultNone || '(default/none)') : entry?.oldValue).toLowerCase();
         const nodeId = (entry?.nodeId || '').toLowerCase();
         const userName = (entry?.userName || '').toLowerCase();
         const userId = (entry?.userId || '').toLowerCase();

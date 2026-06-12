@@ -1146,6 +1146,7 @@ const i18n = {
       settingNoteHelp: 'Reason for this configuration change (optional)',
       settingAdvanced: 'Provide optional, custom configuration in YAML format. Note that improper customizations often are the cause of grid malfunctions.',
       settingDefault: 'Default Value',
+      settingDefaultNone: '(default/none)',
       settingDeleteEntryHelp: 'Delete this setting entry',
       settingDeleteError: 'Setting could not be deleted.',
       settingDuplicate: 'Duplicate',

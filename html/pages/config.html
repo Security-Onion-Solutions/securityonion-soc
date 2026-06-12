@@ -571,7 +571,7 @@
 								<!-- Value (without label, collapsing around itself) -->
 								<div class="d-flex align-center overflow-hidden min-w-0" :title="entry?.newValue">
 								<v-chip size="small" variant="outlined" color="success" class="font-code text-truncate min-w-0 flex-shrink-1">
-									{{ entry?.newValue === null || entry?.newValue === '' ? 'null' : entry?.newValue }}
+									{{ entry?.newValue === null || entry?.newValue === '' ? i18n.settingDefaultNone : entry?.newValue }}
 								</v-chip>
 									<v-btn v-if="entry?.newValue !== null && entry?.newValue?.trim() !== ''" icon variant="text" size="x-small" class="ml-1 text-grey flex-shrink-0" @click.stop="$root.copyToClipboard(entry?.newValue === null ? 'null' : entry?.newValue)" :title="i18n.copyToClipboard">
 										<v-icon size="x-small">fa-copy</v-icon>
@@ -598,7 +598,7 @@
 											</v-btn>
 										</div>
 									<v-chip size="small" variant="outlined" color="error" class="font-code text-truncate" :title="entry?.oldValue">
-										{{ entry?.oldValue === null || entry?.oldValue === '' ? 'null' : entry?.oldValue }}
+										{{ entry?.oldValue === null || entry?.oldValue === '' ? i18n.settingDefaultNone : entry?.oldValue }}
 									</v-chip>
 									</div>
 
