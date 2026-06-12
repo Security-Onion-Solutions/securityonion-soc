@@ -154,6 +154,8 @@ func buildNoTimeoutCtx(ctx context.Context) context.Context {
 			noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRunAsUsername, username)
 		}
 	}
-	noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRequestorId, ctx.Value(web.ContextKeyRequestorId).(string))
+	if requestorId, ok := ctx.Value(web.ContextKeyRequestorId).(string); ok {
+		noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRequestorId, requestorId)
+	}
 	return noTimeOutCtx
 }

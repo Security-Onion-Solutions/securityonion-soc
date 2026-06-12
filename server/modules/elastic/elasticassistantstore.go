@@ -224,8 +224,6 @@ func (store *ElasticAssistantstore) SaveChat(ctx context.Context, chat *model.St
 }
 
 func (store *ElasticAssistantstore) GetChatHistory(ctx context.Context, sessionId string) ([]*model.StoredMessage, error) {
-	logger := log.FromContext(ctx)
-
 	existing, err := store.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithIncludeDeleted(true))
 	if err != nil {
 		return nil, err
@@ -235,9 +233,21 @@ func (store *ElasticAssistantstore) GetChatHistory(ctx context.Context, sessionI
 		return nil, fmt.Errorf("Object not found")
 	}
 
-	session := existing[0]
+	return store.GetChatMessages(ctx, existing[0])
+}
 
-	userId := ctx.Value(web.ContextKeyRequestorId).(string)
+// GetChatMessages returns the messages for an already-loaded session, applying
+// the same read authorization as GetChatHistory but without re-fetching the
+// session record. Callers that already hold the session (e.g. the per-turn
+// continuation path) use this to avoid a redundant session lookup.
+func (store *ElasticAssistantstore) GetChatMessages(ctx context.Context, session *model.AssistantSession) ([]*model.StoredMessage, error) {
+	logger := log.FromContext(ctx)
+	sessionId := session.SessionId
+
+	// A missing requestor id (only possible on a non-HTTP call path) leaves
+	// userId empty: never the owner, so access falls through to the read_shared
+	// or read_all authorization checks below.
+	userId, _ := ctx.Value(web.ContextKeyRequestorId).(string)
 	if session.UserId == userId {
 		// they own it, can the user read_authored?
 		err := store.server.CheckAuthorized(ctx, "read_authored", "assistant")
@@ -485,9 +495,11 @@ func (store *ElasticAssistantstore) GetSessions(ctx context.Context, opts ...mod
 		}
 	}
 
-	if err := store.addMetaFromMessages(ctx, sessions); err != nil {
-		logger.WithError(err).Error("Failed to populate session update time")
-		return nil, err
+	if opt.MessageMeta() {
+		if err := store.addMetaFromMessages(ctx, sessions); err != nil {
+			logger.WithError(err).Error("Failed to populate session update time")
+			return nil, err
+		}
 	}
 
 	return sessions, nil

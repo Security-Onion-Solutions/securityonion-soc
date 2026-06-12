@@ -6177,3 +6177,237 @@ test('buildGroupedModels - handles models with no adapter', () => {
   expect(result[2]).toEqual({ header: 'Unknown' });
   expect(result[3].displayName).toBe('Model 1');
 });
+
+// --- captureToolResult (merged own-session / child-session result capture) ---
+
+function toolResultHistoryMsg(toolResult, createTime) {
+  return {
+    createTime,
+    tags: ['tool_result'],
+    message: { role: 'user', contentBlocks: [{ toolResult }] },
+  };
+}
+
+test('captureToolResult captures the newest own-session result', async () => {
+  jest.useFakeTimers();
+  comp.currentChatId = 'sess-own';
+  const toolUse = { id: 'tu-1', status: 'running' };
+  comp.$root.papi.get = jest.fn().mockResolvedValue({
+    data: {
+      history: [
+        toolResultHistoryMsg({ toolUseId: 'tu-old', content: [{ json: { old: true } }] }, '2025-01-01T12:00:00.000Z'),
+        toolResultHistoryMsg({ toolUseId: 'tu-1', content: [{ json: { hits: 3 } }] }, '2025-01-01T12:05:00.000Z'),
+      ],
+    },
+  });
+
+  comp.captureToolResult(toolUse);
+  expect(comp.pendingResultTimers.size).toBe(1);
+
+  await jest.advanceTimersByTimeAsync(1000);
+
+  expect(comp.$root.papi.get).toHaveBeenCalledWith('/assistant/sessions/sess-own');
+  expect(toolUse.status).toBe('completed');
+  expect(toolUse.rawResult).toEqual({ hits: 3 });
+  expect(toolUse.completedAt).toBe('2025-01-01T12:05:00.000Z');
+  expect(comp.pendingResultTimers.size).toBe(0);
+  jest.useRealTimers();
+});
+
+test('captureToolResult matches a child-session result by tool use id', async () => {
+  jest.useFakeTimers();
+  comp.currentChatId = 'sess-own';
+  const toolUse = { id: 'tu-child', status: 'running' };
+  comp.$root.papi.get = jest.fn().mockResolvedValue({
+    data: {
+      history: [
+        toolResultHistoryMsg({ toolUseId: 'tu-child', content: [{ json: { found: 1 } }] }, '2025-01-01T12:00:00.000Z'),
+        // Newer result for a DIFFERENT tool must be skipped when matching by id.
+        toolResultHistoryMsg({ toolUseId: 'tu-other', content: [{ json: { wrong: true } }] }, '2025-01-01T12:05:00.000Z'),
+      ],
+    },
+  });
+
+  comp.captureToolResult(toolUse, { sessionId: 'sess-child', matchById: true });
+  await jest.advanceTimersByTimeAsync(1000);
+
+  expect(comp.$root.papi.get).toHaveBeenCalledWith('/assistant/sessions/sess-child');
+  expect(toolUse.status).toBe('completed');
+  expect(toolUse.rawResult).toEqual({ found: 1 });
+  jest.useRealTimers();
+});
+
+test('captureToolResult surfaces an error tool_result as tool error status', async () => {
+  jest.useFakeTimers();
+  comp.currentChatId = 'sess-own';
+  const toolUse = { id: 'tu-1', status: 'running' };
+  comp.$root.papi.get = jest.fn().mockResolvedValue({
+    data: {
+      history: [
+        toolResultHistoryMsg({ toolUseId: 'tu-1', isError: true, content: [{ text: 'query exploded' }] }, '2025-01-01T12:05:00.000Z'),
+      ],
+    },
+  });
+
+  comp.captureToolResult(toolUse);
+  await jest.advanceTimersByTimeAsync(1000);
+
+  expect(toolUse.status).toBe('error');
+  expect(toolUse.error).toBe('query exploded');
+  expect(toolUse.rawResult).toBe(null);
+  jest.useRealTimers();
+});
+
+// --- pendingSubAgentApprovals / subAgentApprovalAnnouncement ---
+
+test('pendingSubAgentApprovals lists child tools awaiting approval on active delegations only', () => {
+  comp.messages = [
+    {
+      role: 'assistant',
+      toolUses: [
+        {
+          // Active delegation with a pending child tool: announced.
+          name: 'delegate_to_Hunter',
+          status: 'running',
+          childSession: {
+            agentName: 'Hunter',
+            messages: [
+              { toolUses: [{ name: 'query_events', status: 'pending_approval' }] },
+              { toolUses: [{ name: 'ack_alerts', status: 'completed' }] },
+            ],
+          },
+        },
+        {
+          // Closed delegation: its children can no longer be awaiting approval.
+          name: 'delegate_to_Scout',
+          status: 'completed',
+          childSession: {
+            agentName: 'Scout',
+            messages: [
+              { toolUses: [{ name: 'query_cases', status: 'pending_approval' }] },
+            ],
+          },
+        },
+        // Plain (non-delegate) tool: ignored.
+        { name: 'query_events', status: 'pending_approval' },
+      ],
+    },
+  ];
+
+  expect(comp.pendingSubAgentApprovals()).toEqual([
+    { agentName: 'Hunter', toolName: 'query_events' },
+  ]);
+});
+
+test('subAgentApprovalAnnouncement formats one message per pending approval', () => {
+  // The harness flattens computeds into functions; provide the dependent
+  // computed's value directly, as Vue would.
+  comp.pendingSubAgentApprovals = [
+    { agentName: 'Hunter', toolName: 'query_events' },
+    { agentName: 'Scout', toolName: 'query_cases' },
+  ];
+
+  expect(comp.subAgentApprovalAnnouncement()).toBe(
+    'Sub-agent Hunter requests approval to run query_events. Sub-agent Scout requests approval to run query_cases.'
+  );
+});
+
+// --- executeTool delegation flow (ownership derived from delegationChildren) ---
+
+function sseChunk(obj) {
+  return `data: ${JSON.stringify(obj)}\n\n`;
+}
+
+function mockToolStream(chunks, { failWith = null } = {}) {
+  const read = jest.fn();
+  chunks.forEach((c) => read.mockResolvedValueOnce({ done: false, value: c }));
+  if (failWith) {
+    read.mockRejectedValueOnce(failWith);
+  } else {
+    read.mockResolvedValueOnce({ done: true });
+  }
+  return {
+    data: {
+      pipeThrough: jest.fn().mockReturnValue({
+        getReader: jest.fn().mockReturnValue({ read, cancel: jest.fn().mockResolvedValue() }),
+      }),
+    },
+  };
+}
+
+test('executeTool nests delegation output and completes the delegate on resolution', async () => {
+  const toolUse = { ...fakeToolUse, name: 'delegate_to_Hunter' };
+  comp.currentChatId = fakeSessionId;
+  comp.currentModel = 'test-model';
+  comp.loadCredits = jest.fn().mockResolvedValue();
+
+  mockPapi('post', mockToolStream([
+    sseChunk({ type: 'delegation_start', childSessionId: 'child-1', parentToolUseId: toolUse.id, agentName: 'Hunter' }),
+    sseChunk({ type: 'message_start', message: { role: 'assistant' } }),
+    sseChunk({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'childtext' } }),
+    sseChunk({ type: 'delegation_resolved', parentSessionId: fakeSessionId, parentToolUseId: toolUse.id }),
+    sseChunk({ type: 'message_start', message: { role: 'assistant' } }),
+    sseChunk({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'parentwrap' } }),
+    'data: [DONE]\n\n',
+  ]));
+
+  await comp.executeTool(toolUse);
+
+  // Sub-agent output rendered nested under the delegate tool.
+  expect(toolUse.childSession).toBeTruthy();
+  expect(toolUse.childSession.agentName).toBe('Hunter');
+  expect(toolUse.childSession.messages[0].content).toBe('childtext');
+
+  // Resolution completed the delegate card and removed the live child entry.
+  expect(toolUse.status).toBe('completed');
+  expect(toolUse.completedAt).toBeTruthy();
+  expect(comp.delegationChildren.size).toBe(0);
+
+  // The resumed parent turn rendered top-level, not nested.
+  const parentMsg = comp.messages[comp.messages.length - 1];
+  expect(parentMsg.content).toBe('parentwrap');
+});
+
+test('executeTool errors the active delegate card when the stream dies mid-delegation', async () => {
+  const toolUse = { ...fakeToolUse, name: 'delegate_to_Hunter' };
+  comp.currentChatId = fakeSessionId;
+  comp.currentModel = 'test-model';
+  comp.messages = [];
+
+  mockPapi('post', mockToolStream([
+    sseChunk({ type: 'delegation_start', childSessionId: 'child-1', parentToolUseId: toolUse.id, agentName: 'Hunter' }),
+    sseChunk({ type: 'message_start', message: { role: 'assistant' } }),
+  ], { failWith: new Error('stream died') }));
+
+  await comp.executeTool(toolUse);
+
+  // The delegate card closed with the error instead of spinning forever, and the
+  // live child entry was cleaned up.
+  expect(toolUse.status).toBe('error');
+  expect(toolUse.error).toBe('stream died');
+  expect(toolUse.completedAt).toBeTruthy();
+  expect(comp.delegationChildren.size).toBe(0);
+
+  // The failure belongs to the delegate card; no top-level error message is pushed.
+  expect(comp.messages).toEqual([]);
+});
+
+test('executeTool reports a top-level error when the stream dies after resolution', async () => {
+  const toolUse = { ...fakeToolUse, name: 'delegate_to_Hunter' };
+  comp.currentChatId = fakeSessionId;
+  comp.currentModel = 'test-model';
+  comp.messages = [];
+
+  mockPapi('post', mockToolStream([
+    sseChunk({ type: 'delegation_start', childSessionId: 'child-1', parentToolUseId: toolUse.id, agentName: 'Hunter' }),
+    sseChunk({ type: 'delegation_resolved', parentSessionId: fakeSessionId, parentToolUseId: toolUse.id }),
+  ], { failWith: new Error('late failure') }));
+
+  await comp.executeTool(toolUse);
+
+  // The delegation boundary was already closed, so no delegate card owns this
+  // failure: the error surfaces as a top-level chat message instead.
+  expect(comp.delegationChildren.size).toBe(0);
+  const lastMsg = comp.messages[comp.messages.length - 1];
+  expect(lastMsg.content).toContain('late failure');
+});

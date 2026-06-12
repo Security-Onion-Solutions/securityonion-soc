@@ -3,13 +3,14 @@ package model
 import "time"
 
 type GetSessionsOpts struct {
-	includeDeleted bool
-	userId         string
-	sessionId      string
-	usage          bool
-	descendants    bool
-	start          time.Time
-	end            time.Time
+	includeDeleted  bool
+	userId          string
+	sessionId       string
+	usage           bool
+	descendants     bool
+	skipMessageMeta bool
+	start           time.Time
+	end             time.Time
 }
 
 func (gso *GetSessionsOpts) IncludeDeleted() bool {
@@ -36,6 +37,13 @@ func (gso *GetSessionsOpts) Usage() bool {
 // sub-sessions descending from the matched session (recursively, any depth).
 func (gso *GetSessionsOpts) Descendants() bool {
 	return gso.descendants
+}
+
+// MessageMeta reports whether the store should derive per-session metadata from
+// the session's messages (e.g. update time). On by default; internal callers
+// that only need the session record itself opt out to save a query.
+func (gso *GetSessionsOpts) MessageMeta() bool {
+	return !gso.skipMessageMeta
 }
 
 type GetSessionsOpt func(*GetSessionsOpts)
@@ -77,5 +85,13 @@ func GetSessionsWithUsage(usage bool) GetSessionsOpt {
 func GetSessionsWithDescendants(descendants bool) GetSessionsOpt {
 	return func(gso *GetSessionsOpts) {
 		gso.descendants = descendants
+	}
+}
+
+// GetSessionsWithMessageMeta(false) skips deriving per-session metadata from the
+// session's messages, saving a query when only the session record is needed.
+func GetSessionsWithMessageMeta(messageMeta bool) GetSessionsOpt {
+	return func(gso *GetSessionsOpts) {
+		gso.skipMessageMeta = !messageMeta
 	}
 }

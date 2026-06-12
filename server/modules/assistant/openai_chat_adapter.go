@@ -195,6 +195,7 @@ func (a *OpenAIChatAdapter) SendMessageStream(ctx context.Context, req *model.Ch
 
 	go func() {
 		defer bodyWriter.Close()
+		defer processor.releaseCaller()
 
 		var finishReason string
 		var usage openai.CompletionUsage

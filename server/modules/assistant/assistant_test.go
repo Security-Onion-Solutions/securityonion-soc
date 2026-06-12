@@ -713,11 +713,13 @@ func TestAssistantCoordinator_SendStream(t *testing.T) {
 func newChatInSessionCoordinator(t *testing.T, ctrl *gomock.Controller, mockAssistantstore *servermock.MockAssistantstore, mockIO *detectionsmock.MockIOManager, apiUrl string) *AssistantCoordinator {
 	t.Helper()
 
-	// The continuation paths derive their model from the session record via
-	// sessionModel(). Default to "no stored model" so these existing tests fall
-	// back to the request/parent model exactly as before; tests that exercise the
-	// stored-model behavior build their own coordinator with a specific return.
-	mockAssistantstore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+	// The continuation paths load the session record once per turn via
+	// loadTurnSession(). Default to a bare record with no stored model so these
+	// existing tests fall back to the request/parent model exactly as before;
+	// tests that exercise the stored-model behavior build their own coordinator
+	// with a specific return.
+	mockAssistantstore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).Return(
+		[]*model.AssistantSession{{SessionId: "default-session"}}, nil).AnyTimes()
 
 	srv := &server.Server{
 		Assistantstore: mockAssistantstore,
@@ -991,7 +993,7 @@ func TestAssistantCoordinator_ToolInSession(t *testing.T) {
 		mockIO := detectionsmock.NewMockIOManager(ctrl)
 		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 
-		mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return([]*model.StoredMessage{}, nil)
+		mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{}, nil)
 
 		mockIO.EXPECT().MakeRequest(gomock.Any(), false).DoAndReturn(func(req *http.Request, _ bool) (*http.Response, error) {
 			body, err := io.ReadAll(req.Body)
@@ -1049,7 +1051,7 @@ func TestAssistantCoordinator_ToolInSession(t *testing.T) {
 		mockIO := detectionsmock.NewMockIOManager(ctrl)
 		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 
-		mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return([]*model.StoredMessage{}, nil)
+		mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{}, nil)
 
 		mockIO.EXPECT().MakeRequest(gomock.Any(), false).DoAndReturn(func(req *http.Request, _ bool) (*http.Response, error) {
 			body, _ := io.ReadAll(req.Body)
@@ -1089,7 +1091,7 @@ func TestAssistantCoordinator_ToolInSession(t *testing.T) {
 		mockIO := detectionsmock.NewMockIOManager(ctrl)
 		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 
-		mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return([]*model.StoredMessage{}, nil)
+		mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{}, nil)
 		mockIO.EXPECT().MakeRequest(gomock.Any(), false).Return(nil, errors.New("network error"))
 
 		ac := newChatInSessionCoordinator(t, ctrl, mockAssistantstore, mockIO, "https://api.example.com")
@@ -1117,7 +1119,7 @@ func TestAssistantCoordinator_ToolStreamInSession_FinalizeSavesResponse(t *testi
 	mockIO := detectionsmock.NewMockIOManager(ctrl)
 	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 
-	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return([]*model.StoredMessage{}, nil)
+	mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{}, nil)
 	mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, stored *model.StoredMessage) error {
 			assert.Equal(t, sessionId, stored.SessionId)
@@ -1358,7 +1360,7 @@ func TestAssistantCoordinator_ToolStreamInSession_UsesSessionModel(t *testing.T)
 		mockAssistantstore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).Return([]*model.AssistantSession{
 			{SessionId: "child-session", Model: "test-model@MyAdapter"},
 		}, nil)
-		mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), "child-session").Return(nil, nil)
+		mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return(nil, nil)
 		mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil)
 		mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(&http.Response{
 			StatusCode: 200,
@@ -1391,7 +1393,7 @@ func TestAssistantCoordinator_ToolStreamInSession_UsesSessionModel(t *testing.T)
 		mockAssistantstore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).Return([]*model.AssistantSession{
 			{SessionId: "legacy-session"},
 		}, nil)
-		mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), "legacy-session").Return(nil, nil)
+		mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return(nil, nil)
 		mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil)
 		mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(&http.Response{
 			StatusCode: 200,
@@ -1422,7 +1424,7 @@ func TestAssistantCoordinator_ResolveDelegationStream(t *testing.T) {
 	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 
 	// Parent history still has the unanswered delegate tool_use.
-	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), "parent-session").Return([]*model.StoredMessage{
+	mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
 		{Message: &model.Message{Role: "assistant", ContentBlocks: []model.ContentBlock{
 			{Type: "tool_use", Id: "delegate-tooluse", Name: "delegate_to_Hunter"},
 		}}},
@@ -1668,7 +1670,7 @@ func TestAssistantCoordinator_ToolInSession_EdgeCases(t *testing.T) {
 
 		mockIO := detectionsmock.NewMockIOManager(ctrl)
 		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
-		mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return(nil, errors.New("network error"))
+		mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return(nil, errors.New("network error"))
 
 		ac := newChatInSessionCoordinator(t, ctrl, mockAssistantstore, mockIO, "https://api.example.com")
 		ac.FunctionLibrary = map[string]Tool{
@@ -1693,7 +1695,7 @@ func TestAssistantCoordinator_ToolInSession_EdgeCases(t *testing.T) {
 
 		mockIO := detectionsmock.NewMockIOManager(ctrl)
 		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
-		mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return([]*model.StoredMessage{}, nil)
+		mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{}, nil)
 		mockIO.EXPECT().MakeRequest(gomock.Any(), false).Return(&http.Response{
 			StatusCode: 200,
 			Body: io.NopCloser(strings.NewReader(
@@ -1722,8 +1724,8 @@ func TestAssistantCoordinator_ToolInSession_EdgeCases(t *testing.T) {
 
 // newDelegationSyncCoordinator builds a coordinator wired with a delegate tool,
 // used by the non-streaming delegation chain tests. Tests supply their own
-// session-aware GetSessions expectation so loadSession/sessionModel can link a
-// child back to its parent.
+// session-aware GetSessions expectation so loadTurnSession can link a child
+// back to its parent.
 func newDelegationSyncCoordinator(mockAssistantstore *servermock.MockAssistantstore, mockIO *detectionsmock.MockIOManager) *AssistantCoordinator {
 	srv := &server.Server{
 		Assistantstore: mockAssistantstore,
@@ -1800,7 +1802,7 @@ func TestAssistantCoordinator_ToolInSession_Delegation(t *testing.T) {
 
 		mockAssistantstore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).DoAndReturn(sessions).AnyTimes()
 		mockAssistantstore.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil)
-		mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), "parent-session").Return(nil, nil)
+		mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return(nil, nil)
 		mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 		turn := 0
@@ -1841,7 +1843,7 @@ func TestAssistantCoordinator_ToolInSession_Delegation(t *testing.T) {
 
 		mockAssistantstore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).DoAndReturn(sessions).AnyTimes()
 		mockAssistantstore.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil)
-		mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), "parent-session").Return(nil, nil)
+		mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return(nil, nil)
 		mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 		turn := 0
@@ -1975,6 +1977,9 @@ data: [DONE]`
 
 func TestAssistantCoordinator_ContinueWithToolResult_ErrorPaths(t *testing.T) {
 	const sessionId = "session-continue-err"
+	sess := func() *model.AssistantSession {
+		return &model.AssistantSession{SessionId: sessionId}
+	}
 	toolMsg := func() *model.Message {
 		return buildToolResultMessage("tu1", &model.ToolResponse{ToolName: "query_events", Result: "ok"}, nil)
 	}
@@ -1985,12 +1990,12 @@ func TestAssistantCoordinator_ContinueWithToolResult_ErrorPaths(t *testing.T) {
 
 		mockIO := detectionsmock.NewMockIOManager(ctrl)
 		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
-		mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return(nil, errors.New("network error"))
+		mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return(nil, errors.New("network error"))
 
 		ac := newChatInSessionCoordinator(t, ctrl, mockAssistantstore, mockIO, "https://api.example.com")
 		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
-		_, err := ac.continueWithToolResult(ctx, sessionId, "test-model@MyAdapter", toolMsg())
+		_, err := ac.continueWithToolResult(ctx, sess(), sessionId, "test-model@MyAdapter", toolMsg())
 		assert.Error(t, err)
 	})
 
@@ -2000,13 +2005,13 @@ func TestAssistantCoordinator_ContinueWithToolResult_ErrorPaths(t *testing.T) {
 
 		mockIO := detectionsmock.NewMockIOManager(ctrl)
 		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
-		mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return([]*model.StoredMessage{}, nil)
+		mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{}, nil)
 		mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(nil, errors.New("network error"))
 
 		ac := newChatInSessionCoordinator(t, ctrl, mockAssistantstore, mockIO, "https://api.example.com")
 		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
-		_, err := ac.continueWithToolResult(ctx, sessionId, "test-model@MyAdapter", toolMsg())
+		_, err := ac.continueWithToolResult(ctx, sess(), sessionId, "test-model@MyAdapter", toolMsg())
 		assert.Error(t, err)
 	})
 
@@ -2016,7 +2021,7 @@ func TestAssistantCoordinator_ContinueWithToolResult_ErrorPaths(t *testing.T) {
 
 		mockIO := detectionsmock.NewMockIOManager(ctrl)
 		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
-		mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return([]*model.StoredMessage{}, nil)
+		mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{}, nil)
 		mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(&http.Response{
 			StatusCode: 200,
 			Body:       io.NopCloser(strings.NewReader("data: stream")),
@@ -2026,7 +2031,7 @@ func TestAssistantCoordinator_ContinueWithToolResult_ErrorPaths(t *testing.T) {
 		ac := newChatInSessionCoordinator(t, ctrl, mockAssistantstore, mockIO, "https://api.example.com")
 		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
-		_, err := ac.continueWithToolResult(ctx, sessionId, "test-model@MyAdapter", toolMsg())
+		_, err := ac.continueWithToolResult(ctx, sess(), sessionId, "test-model@MyAdapter", toolMsg())
 		assert.Error(t, err)
 	})
 }
@@ -2760,10 +2765,13 @@ func TestResolveModel(t *testing.T) {
 		assert.Equal(t, "Agent Gemini", params.DisplayName)
 	})
 
-	t.Run("empty display name keeps id@adapter as its canonical selector", func(t *testing.T) {
+	t.Run("model without display name resolves only via the legacy form", func(t *testing.T) {
 		params := ac.resolveModel("legacy-model@SOAI")
 		assert.NotNil(t, params)
 		assert.Equal(t, "legacy-model", params.ID)
+
+		// An empty request selector must never match its empty canonical selector.
+		assert.Nil(t, ac.resolveModel(""))
 	})
 
 	t.Run("display name containing @ resolves before legacy splitting", func(t *testing.T) {
@@ -2910,12 +2918,30 @@ func TestValidateModelSelectors(t *testing.T) {
 		ac, h := newSelectorLogCoordinator([]model.ModelParameters{
 			{ID: "model-a", DisplayName: "Agent A", Adapter: "SOAI", Enabled: true},
 			{ID: "model-b", DisplayName: "Agent B", Adapter: "SOAI", Enabled: true},
-			{ID: "model-c", Adapter: "SOAI", Enabled: true}, // no displayName is fine
 		})
 
 		ac.validateModelSelectors()
 
 		assert.Empty(t, h.Entries)
+	})
+
+	t.Run("missing displayName logs an error and disables the model", func(t *testing.T) {
+		models := []model.ModelParameters{
+			{ID: "model-a", DisplayName: "Agent A", Adapter: "SOAI", Enabled: true},
+			{ID: "model-c", Adapter: "SOAI", Enabled: true},
+		}
+		ac, h := newSelectorLogCoordinator(models)
+
+		ac.validateModelSelectors()
+
+		errors := logMessagesAt(h, log.ErrorLevel)
+		assert.Len(t, errors, 1)
+		assert.Contains(t, errors[0], "missing required displayName")
+
+		// The disable must land in the config slice the frontend is served from.
+		stored := ac.srv.Config.ClientParams.AssistantParams.AvailableModels
+		assert.True(t, stored[0].Enabled)
+		assert.False(t, stored[1].Enabled)
 	})
 
 	t.Run("duplicate enabled selectors log an error, first wins", func(t *testing.T) {
@@ -2973,10 +2999,10 @@ func TestValidateModelSelectors(t *testing.T) {
 		assert.Equal(t, 1, shadowWarns)
 	})
 
-	t.Run("displayName shadowing a model with no displayName is a duplicate error", func(t *testing.T) {
-		// When the shadowed model has no DisplayName its canonical selector IS the
-		// legacy form, so the collision surfaces as the (stronger) duplicate error
-		// rather than the shadow warning.
+	t.Run("shadowing a model that was disabled for a missing displayName logs no shadow warning", func(t *testing.T) {
+		// The no-displayName model is disabled by validation before the shadow
+		// check runs, so only the missing-displayName error (and the "@" warning
+		// for the other model's name) surfaces.
 		ac, h := newSelectorLogCoordinator([]model.ModelParameters{
 			{ID: "real-model", Adapter: "SOAI", Enabled: true},
 			{ID: "other-model", DisplayName: "real-model@SOAI", Adapter: "SOAI", Enabled: true},
@@ -2986,7 +3012,11 @@ func TestValidateModelSelectors(t *testing.T) {
 
 		errors := logMessagesAt(h, log.ErrorLevel)
 		assert.Len(t, errors, 1)
-		assert.Contains(t, errors[0], "duplicate model selector")
+		assert.Contains(t, errors[0], "missing required displayName")
+
+		for _, w := range logMessagesAt(h, log.WarnLevel) {
+			assert.NotContains(t, w, "will shadow it")
+		}
 	})
 }
 
@@ -3039,16 +3069,20 @@ func TestRegisterDelegateTools(t *testing.T) {
 		assert.Empty(t, ac.DelegationLibrary)
 	})
 
-	t.Run("empty display name registers under legacy keys", func(t *testing.T) {
-		ac, _ := newSelectorLogCoordinator([]model.ModelParameters{
+	t.Run("empty display name registers nothing", func(t *testing.T) {
+		// validateModelSelectors normally disables such a model first; this
+		// guards the standalone path so the library can never hold "" keys.
+		ac, h := newSelectorLogCoordinator([]model.ModelParameters{
 			{ID: "model-a", Adapter: "SOAI", Enabled: true, IsAgentic: true},
 		})
 
 		ac.registerDelegateTools()
 
-		assert.Len(t, ac.DelegationLibrary, 2)
-		assert.Contains(t, ac.DelegationLibrary, "model-a@SOAI")
-		assert.Contains(t, ac.DelegationLibrary, "delegate_to_model-a_at_SOAI")
+		assert.Empty(t, ac.DelegationLibrary)
+
+		errors := logMessagesAt(h, log.ErrorLevel)
+		assert.Len(t, errors, 1)
+		assert.Contains(t, errors[0], "missing required displayName")
 	})
 }
 
@@ -3147,6 +3181,27 @@ func TestAssistantCoordinator_SendAndSendStream_AdapterNotFound(t *testing.T) {
 	assert.Nil(t, res)
 }
 
+// A context missing the requestor id (only possible on a non-HTTP call path)
+// must surface as an error from request preparation, not a panic.
+func TestAssistantCoordinator_SendAndSendStream_MissingRequestorId(t *testing.T) {
+	ac := newResolveTestCoordinator([]model.ModelParameters{
+		{ID: "test-model", DisplayName: "Agent Test", Adapter: "MyAdapter"},
+	})
+	ac.toolConfig = []byte(`{"tools": [], "tool_choice": {"auto": {}}}`)
+
+	msgs := []*model.Message{
+		{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "hi"}}},
+	}
+
+	result, err := ac.Send(context.Background(), "Agent Test", msgs)
+	assert.ErrorContains(t, err, "missing requestor id")
+	assert.Nil(t, result)
+
+	res, _, err := ac.SendStream(context.Background(), "Agent Test", msgs)
+	assert.ErrorContains(t, err, "missing requestor id")
+	assert.Nil(t, res)
+}
+
 func TestBuildToolResultMessage_NilResultNoError(t *testing.T) {
 	// A tool that returns neither a result nor an error (e.g. an async tool) must
 	// not panic when its tool_result message is built on the streaming path.
@@ -3183,98 +3238,113 @@ func TestBuildToolResultMessage_Result(t *testing.T) {
 	assert.NotNil(t, tr.Content[0].Json)
 }
 
-func TestAssistantCoordinator_subSessionOutputBudget(t *testing.T) {
-	tests := []struct {
-		name              string
-		maxSubSession     int
-		sessionId         string
-		sessions          []*model.AssistantSession
-		getErr            error
-		expectLookup      bool
-		expectedIsSub     bool
-		expectedRemaining int
+// loadTurnSession issues exactly one GetSessions call per turn, skipping the
+// message-meta query and requesting usage aggregation only when the sub-session
+// budget is enabled.
+func TestAssistantCoordinator_loadTurnSession(t *testing.T) {
+	cases := []struct {
+		name          string
+		maxSubSession int
+		wantUsage     bool
 	}{
-		{
-			name:          "budget disabled does not look up usage",
-			maxSubSession: 0,
-			sessionId:     "child",
-			expectLookup:  false,
-		},
-		{
-			name:          "empty session id does not look up usage",
-			maxSubSession: 1000,
-			sessionId:     "",
-			expectLookup:  false,
-		},
-		{
-			name:          "top-level session is not capped",
-			maxSubSession: 1000,
-			sessionId:     "top",
-			expectLookup:  true,
-			sessions: []*model.AssistantSession{
-				{SessionId: "top", Usage: &model.SessionUsage{TotalOutputTokens: 500}},
-			},
-			expectedIsSub: false,
-		},
-		{
-			name:          "sub-session reports remaining output budget",
-			maxSubSession: 1000,
-			sessionId:     "child",
-			expectLookup:  true,
-			sessions: []*model.AssistantSession{
-				{SessionId: "child", ParentSessionId: "top", Usage: &model.SessionUsage{TotalOutputTokens: 300}},
-			},
-			expectedIsSub:     true,
-			expectedRemaining: 700,
-		},
-		{
-			name:          "exhausted sub-session reports non-positive remaining",
-			maxSubSession: 1000,
-			sessionId:     "child",
-			expectLookup:  true,
-			sessions: []*model.AssistantSession{
-				{SessionId: "child", ParentSessionId: "top", Usage: &model.SessionUsage{TotalOutputTokens: 1200}},
-			},
-			expectedIsSub:     true,
-			expectedRemaining: -200,
-		},
-		{
-			name:          "sub-session with no usage yet has full budget",
-			maxSubSession: 1000,
-			sessionId:     "child",
-			expectLookup:  true,
-			sessions: []*model.AssistantSession{
-				{SessionId: "child", ParentSessionId: "top"},
-			},
-			expectedIsSub:     true,
-			expectedRemaining: 1000,
-		},
-		{
-			name:          "lookup error disables the cap",
-			maxSubSession: 1000,
-			sessionId:     "child",
-			expectLookup:  true,
-			getErr:        errors.New("boom"),
-			expectedIsSub: false,
-		},
+		{name: "budget disabled skips usage aggregation", maxSubSession: 0, wantUsage: false},
+		{name: "budget enabled requests usage aggregation", maxSubSession: 500, wantUsage: true},
 	}
 
-	for _, tc := range tests {
+	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
 			mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
-			if tc.expectLookup {
-				mockAssistantstore.EXPECT().GetSessions(gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.sessions, tc.getErr)
-			}
+			mockAssistantstore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, opts ...model.GetSessionsOpt) ([]*model.AssistantSession, error) {
+					o := &model.GetSessionsOpts{}
+					for _, opt := range opts {
+						opt(o)
+					}
+					assert.Equal(t, "sess-1", o.SessionId())
+					assert.True(t, o.IncludeDeleted())
+					assert.False(t, o.MessageMeta())
+					assert.Equal(t, tc.wantUsage, o.Usage())
+					return []*model.AssistantSession{{SessionId: "sess-1"}}, nil
+				}).Times(1)
 
 			ac := &AssistantCoordinator{
 				srv:                 &server.Server{Assistantstore: mockAssistantstore},
 				maxSubSessionTokens: tc.maxSubSession,
 			}
 
-			isSub, remaining := ac.subSessionOutputBudget(context.Background(), tc.sessionId)
+			sess := ac.loadTurnSession(context.Background(), "sess-1")
+			assert.NotNil(t, sess)
+			assert.Equal(t, "sess-1", sess.SessionId)
+		})
+	}
+
+	t.Run("empty session id makes no store call", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+		mockAssistantstore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).Times(0)
+
+		ac := &AssistantCoordinator{srv: &server.Server{Assistantstore: mockAssistantstore}}
+
+		assert.Nil(t, ac.loadTurnSession(context.Background(), ""))
+	})
+}
+
+func TestAssistantCoordinator_subSessionOutputBudget(t *testing.T) {
+	tests := []struct {
+		name              string
+		maxSubSession     int
+		sess              *model.AssistantSession
+		expectedIsSub     bool
+		expectedRemaining int
+	}{
+		{
+			name:          "budget disabled is never capped",
+			maxSubSession: 0,
+			sess:          &model.AssistantSession{SessionId: "child", ParentSessionId: "top"},
+		},
+		{
+			name:          "nil session (not found or lookup error) disables the cap",
+			maxSubSession: 1000,
+			sess:          nil,
+		},
+		{
+			name:          "top-level session is not capped",
+			maxSubSession: 1000,
+			sess:          &model.AssistantSession{SessionId: "top", Usage: &model.SessionUsage{TotalOutputTokens: 500}},
+		},
+		{
+			name:              "sub-session reports remaining output budget",
+			maxSubSession:     1000,
+			sess:              &model.AssistantSession{SessionId: "child", ParentSessionId: "top", Usage: &model.SessionUsage{TotalOutputTokens: 300}},
+			expectedIsSub:     true,
+			expectedRemaining: 700,
+		},
+		{
+			name:              "exhausted sub-session reports non-positive remaining",
+			maxSubSession:     1000,
+			sess:              &model.AssistantSession{SessionId: "child", ParentSessionId: "top", Usage: &model.SessionUsage{TotalOutputTokens: 1200}},
+			expectedIsSub:     true,
+			expectedRemaining: -200,
+		},
+		{
+			name:              "sub-session with no usage yet has full budget",
+			maxSubSession:     1000,
+			sess:              &model.AssistantSession{SessionId: "child", ParentSessionId: "top"},
+			expectedIsSub:     true,
+			expectedRemaining: 1000,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ac := &AssistantCoordinator{maxSubSessionTokens: tc.maxSubSession}
+
+			isSub, remaining := ac.subSessionOutputBudget(tc.sess)
 
 			assert.Equal(t, tc.expectedIsSub, isSub)
 			if tc.expectedIsSub {
@@ -3293,14 +3363,8 @@ func TestAssistantCoordinator_continueWithToolResultSync_HardStop(t *testing.T) 
 
 	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 
-	// The sub-session has already spent its budget (1000 > 500).
-	mockAssistantstore.EXPECT().
-		GetSessions(gomock.Any(), gomock.Any(), gomock.Any()).
-		Return([]*model.AssistantSession{
-			{SessionId: "child", ParentSessionId: "parent", Usage: &model.SessionUsage{TotalOutputTokens: 1000}},
-		}, nil)
-
-	// Exactly two writes: the pending tool result, then the halt notice. No model call.
+	// Exactly two writes: the pending tool result, then the halt notice. No model
+	// call and no session lookup — the turn's session record is passed in.
 	mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil).Times(2)
 
 	ac := &AssistantCoordinator{
@@ -3311,7 +3375,9 @@ func TestAssistantCoordinator_continueWithToolResultSync_HardStop(t *testing.T) 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 	toolMsg := buildToolResultMessage("tu_1", &model.ToolResponse{ToolName: "x", Result: "r"}, nil)
 
-	resp, err := ac.continueWithToolResultSync(ctx, "child", "model@Adapter", toolMsg)
+	// The sub-session has already spent its budget (1000 > 500).
+	sess := &model.AssistantSession{SessionId: "child", ParentSessionId: "parent", Usage: &model.SessionUsage{TotalOutputTokens: 1000}}
+	resp, err := ac.continueWithToolResultSync(ctx, sess, "child", "model@Adapter", toolMsg)
 
 	assert.NoError(t, err)
 	assert.Len(t, resp, 1)

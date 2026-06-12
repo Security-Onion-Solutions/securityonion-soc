@@ -221,6 +221,7 @@ func (a *OpenAIResponsesAdapter) SendMessageStream(ctx context.Context, req *mod
 
 	go func() {
 		defer bodyWriter.Close()
+		defer processor.releaseCaller()
 
 		finishReason := "end_turn"
 

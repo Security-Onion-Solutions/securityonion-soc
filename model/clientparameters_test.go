@@ -250,8 +250,10 @@ func TestModelParameters_Selector(t *testing.T) {
 	assert.Equal(t, "Agent Gemini", named.Selector())
 	assert.Equal(t, "gemini-3.5-flash@Gemini", named.LegacySelector())
 
-	// Without a DisplayName the legacy form remains the canonical selector.
+	// DisplayName is required; a model without one has no canonical selector
+	// (validateModelSelectors disables it at startup). LegacySelector exists
+	// only for resolving old stored sessions.
 	unnamed := &ModelParameters{ID: "qwen/qwen2.5-small", Adapter: "MyOpenAIChatAdapter"}
-	assert.Equal(t, "qwen/qwen2.5-small@MyOpenAIChatAdapter", unnamed.Selector())
+	assert.Equal(t, "", unnamed.Selector())
 	assert.Equal(t, "qwen/qwen2.5-small@MyOpenAIChatAdapter", unnamed.LegacySelector())
 }

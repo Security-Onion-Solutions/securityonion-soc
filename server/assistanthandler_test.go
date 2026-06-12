@@ -345,13 +345,13 @@ func TestPostTool_StreamingTopLevelStops(t *testing.T) {
 	srv.AssistantManager = mockManager
 	srv.Assistantstore = mockStore
 
+	// The turn carries its session record; it has no parent, so the loop stops
+	// without any store lookup.
 	mockManager.EXPECT().ToolStreamInSession(gomock.Any(), gomock.Any(), "query_events").Return(
-		&model.StreamedTurn{Response: sseTextResponse("done"), SessionId: "top", Model: "test-model", Finalize: noopFinalize}, nil)
+		&model.StreamedTurn{Response: sseTextResponse("done"), SessionId: "top", Model: "test-model", Finalize: noopFinalize,
+			Session: &model.AssistantSession{SessionId: "top"}}, nil)
 
-	// The finished session has no parent, so the loop stops.
-	mockStore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).Return(
-		[]*model.AssistantSession{{SessionId: "top"}}, nil)
-
+	mockStore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).Times(0)
 	mockManager.EXPECT().ResolveDelegationStream(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
 
 	req, w := newToolStreamRequest(t, "top", "query_events")
@@ -374,19 +374,16 @@ func TestPostTool_StreamingDelegationResolves(t *testing.T) {
 	srv.AssistantManager = mockManager
 	srv.Assistantstore = mockStore
 
-	// First turn: the child sub-agent answers with text only.
+	// First turn: the child sub-agent answers with text only. The turn carries the
+	// child's session record with its parent linkage — no store lookups needed.
 	mockManager.EXPECT().ToolStreamInSession(gomock.Any(), gomock.Any(), "query_events").Return(
-		&model.StreamedTurn{Response: sseTextResponse("child answer"), SessionId: "child", Model: "sonnet", Finalize: noopFinalize}, nil)
+		&model.StreamedTurn{Response: sseTextResponse("child answer"), SessionId: "child", Model: "sonnet", Finalize: noopFinalize,
+			Session: &model.AssistantSession{SessionId: "child", ParentSessionId: "parent", ParentToolUseId: "delegate-tu", ParentModel: "agent"}}, nil)
 
-	// loadSession(child) reveals the parent linkage; loadSession(parent) has none.
-	gomock.InOrder(
-		mockStore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).Return(
-			[]*model.AssistantSession{{SessionId: "child", ParentSessionId: "parent", ParentToolUseId: "delegate-tu", ParentModel: "agent"}}, nil),
-		mockStore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).Return(
-			[]*model.AssistantSession{{SessionId: "parent"}}, nil),
-	)
+	mockStore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).Times(0)
 
-	// The backend resolves the delegation and streams the parent's turn.
+	// The backend resolves the delegation and streams the parent's turn, which
+	// carries the parent's (top-level) session record so the loop stops after it.
 	mockManager.EXPECT().ResolveDelegationStream(gomock.Any(), gomock.Any(), "child answer").DoAndReturn(
 		func(_ context.Context, sess *model.AssistantSession, finalText string) (*model.StreamedTurn, error) {
 			assert.Equal(t, "child", sess.SessionId)
@@ -395,6 +392,7 @@ func TestPostTool_StreamingDelegationResolves(t *testing.T) {
 				SessionId: "parent",
 				Model:     "agent",
 				Finalize:  noopFinalize,
+				Session:   &model.AssistantSession{SessionId: "parent"},
 				Marker:    &model.DelegationMarker{Type: model.DelegationMarkerResolved, ParentSessionId: "parent", ParentToolUseId: "delegate-tu"},
 			}, nil
 		})
@@ -422,13 +420,13 @@ func TestPostTool_StreamingDelegationResolveErrorStillCloses(t *testing.T) {
 	srv.AssistantManager = mockManager
 	srv.Assistantstore = mockStore
 
-	// The child sub-agent answers with text only.
+	// The child sub-agent answers with text only; its turn carries the child's
+	// session record with the parent linkage.
 	mockManager.EXPECT().ToolStreamInSession(gomock.Any(), gomock.Any(), "query_events").Return(
-		&model.StreamedTurn{Response: sseTextResponse("child answer"), SessionId: "child", Model: "sonnet", Finalize: noopFinalize}, nil)
+		&model.StreamedTurn{Response: sseTextResponse("child answer"), SessionId: "child", Model: "sonnet", Finalize: noopFinalize,
+			Session: &model.AssistantSession{SessionId: "child", ParentSessionId: "parent", ParentToolUseId: "delegate-tu", ParentModel: "agent"}}, nil)
 
-	// loadSession(child) reveals the parent linkage.
-	mockStore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).Return(
-		[]*model.AssistantSession{{SessionId: "child", ParentSessionId: "parent", ParentToolUseId: "delegate-tu", ParentModel: "agent"}}, nil)
+	mockStore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).Times(0)
 
 	// Resolution fails, but the boundary must still be closed on the client.
 	mockManager.EXPECT().ResolveDelegationStream(gomock.Any(), gomock.Any(), "child answer").Return(
@@ -2954,10 +2952,10 @@ func TestPostTool_StreamingDelegationResolveError(t *testing.T) {
 	srv.Assistantstore = mockStore
 
 	mockManager.EXPECT().ToolStreamInSession(gomock.Any(), gomock.Any(), "query_events").Return(
-		&model.StreamedTurn{Response: sseTextResponse("child answer"), SessionId: "child", Model: "sonnet", Finalize: noopFinalize}, nil)
+		&model.StreamedTurn{Response: sseTextResponse("child answer"), SessionId: "child", Model: "sonnet", Finalize: noopFinalize,
+			Session: &model.AssistantSession{SessionId: "child", ParentSessionId: "parent", ParentToolUseId: "delegate-tu", ParentModel: "agent"}}, nil)
 
-	mockStore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).Return(
-		[]*model.AssistantSession{{SessionId: "child", ParentSessionId: "parent", ParentToolUseId: "delegate-tu", ParentModel: "agent"}}, nil)
+	mockStore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).Times(0)
 
 	mockManager.EXPECT().ResolveDelegationStream(gomock.Any(), gomock.Any(), "child answer").Return(nil, errors.New("resolve failed"))
 

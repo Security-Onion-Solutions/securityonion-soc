@@ -298,12 +298,14 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 
-		sess := h.loadSession(ctx, turn.SessionId)
+		// The turn carries its session record (loaded once at turn start; the
+		// parent-link fields are immutable), so no re-fetch is needed here.
+		sess := turn.Session
 		if sess == nil {
 			// We can't tell whether this finished turn was a delegated sub-agent, so
 			// we can't close its boundary. Log it so a stuck delegate card is
 			// diagnosable, then stop chaining.
-			logger.WithField("sessionId", turn.SessionId).Warn("unable to load session after streamed turn; cannot resolve possible delegation")
+			logger.WithField("sessionId", turn.SessionId).Warn("no session loaded for streamed turn; cannot resolve possible delegation")
 			break
 		}
 		if sess.ParentSessionId == "" {
@@ -995,15 +997,6 @@ func messageText(msg *model.Message) string {
 		}
 	}
 	return b.String()
-}
-
-// loadSession returns the session with the given id, or nil if it can't be found.
-func (h *AssistantHandler) loadSession(ctx context.Context, sessionId string) *model.AssistantSession {
-	sessions, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId))
-	if err != nil || len(sessions) == 0 {
-		return nil
-	}
-	return sessions[0]
 }
 
 // UnstreamResponse parses a buffered SSE response stream from the assistant

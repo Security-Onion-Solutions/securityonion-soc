@@ -125,7 +125,9 @@ func (p *streamProcessor) processGeminiChunk(resp *genai.GenerateContentResponse
 		p.writeText(text)
 	}
 
-	// Extract function calls
+	// Extract function calls from the first candidate only, matching the SDK helpers
+	// (Text(), FunctionCalls()) — additional candidates are alternative completions,
+	// not parts of this response.
 	functionCalls := resp.FunctionCalls()
 	if len(functionCalls) > 0 {
 		// Close any open text/thought block
@@ -135,23 +137,13 @@ func (p *streamProcessor) processGeminiChunk(resp *genai.GenerateContentResponse
 
 		// Write each function-call block and collect its thought signature keyed by
 		// the same id the block was assigned, so UnstreamResponse can re-attach it.
-		for _, cand := range resp.Candidates {
-			if cand.Content == nil {
-				continue
-			}
-			sigs := p.writeGeminiFunctionCalls(cand.Content.Parts)
-			for id, sig := range sigs {
-				thoughtSigs[id] = sig
-			}
-		}
+		// The FunctionCalls() gate above guarantees Candidates[0].Content is non-nil.
+		thoughtSigs = p.writeGeminiFunctionCalls(resp.Candidates[0].Content.Parts)
 	}
 
-	// Check for finish reason in candidates
-	for _, cand := range resp.Candidates {
-		if cand.FinishReason != "" {
-			finishReason = string(cand.FinishReason)
-			break
-		}
+	// Check for finish reason
+	if len(resp.Candidates) > 0 && resp.Candidates[0].FinishReason != "" {
+		finishReason = string(resp.Candidates[0].FinishReason)
 	}
 
 	return thoughtSigs, finishReason, nil
@@ -214,12 +206,21 @@ func (p *streamProcessor) processOpenAIChunk(resp responses.ResponseStreamEventU
 
 // writeError writes an error event and done message
 func (p *streamProcessor) writeError(err error) {
+	// Pipe writes block until the caller starts reading the response body, so
+	// the caller must be released before the first write on every path.
+	p.releaseCaller()
+
 	p.writer.writeError(err.Error())
 	p.writer.writeDone()
 }
 
 // finalizeGemini closes any open blocks and writes final events
 func (p *streamProcessor) finalizeGemini(finishReason string, usage *genai.GenerateContentResponseUsageMetadata) {
+	// An empty stream reaches finalize without any content event; emit the
+	// message_start (which also releases the blocked caller) so the SSE stream
+	// stays well-formed for UnstreamResponse.
+	p.ensureFirstSend()
+
 	if p.hasOpenBlock {
 		p.closeOpenBlock()
 	}
@@ -238,6 +239,10 @@ func (p *streamProcessor) finalizeGemini(finishReason string, usage *genai.Gener
 
 // finalizeOpenAI closes any open blocks and writes final events
 func (p *streamProcessor) finalizeOpenAI(finishReason string, usage responses.ResponseUsage) {
+	// See finalizeGemini: empty streams must still release the caller and emit
+	// a well-formed message_start.
+	p.ensureFirstSend()
+
 	if p.hasOpenBlock {
 		p.closeOpenBlock()
 	}
@@ -256,9 +261,20 @@ func (p *streamProcessor) finalizeOpenAI(finishReason string, usage responses.Re
 // ensureFirstSend handles first send ceremony (only once)
 func (p *streamProcessor) ensureFirstSend() {
 	if p.firstSend {
-		p.wg.Done()
-		p.firstSend = false
+		p.releaseCaller()
 		p.writer.writeMessageStart(p.model)
+	}
+}
+
+// releaseCaller unblocks the SendMessageStream caller waiting on wg for the
+// first event. ensureFirstSend covers the normal path; adapters must ALSO
+// defer this in their stream goroutine so exits before any content — a
+// first-chunk error or an empty stream — can't leave the caller blocked on
+// wg.Wait forever. Safe to call more than once.
+func (p *streamProcessor) releaseCaller() {
+	if p.firstSend {
+		p.firstSend = false
+		p.wg.Done()
 	}
 }
 
@@ -442,6 +458,10 @@ func (p *streamProcessor) writeChatCompletionFunctionStop() {
 
 // finalizeChatCompletion closes any open blocks and writes final events for ChatCompletion streaming
 func (p *streamProcessor) finalizeChatCompletion(finishReason string, usage *openai.CompletionUsage) {
+	// See finalizeGemini: empty streams must still release the caller and emit
+	// a well-formed message_start.
+	p.ensureFirstSend()
+
 	if p.hasOpenBlock {
 		if p.writingOpenAIToolUse {
 			p.writeChatCompletionFunctionStop()

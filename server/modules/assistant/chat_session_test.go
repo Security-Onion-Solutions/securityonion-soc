@@ -111,6 +111,12 @@ func TestBuildNoTimeoutCtx(t *testing.T) {
 		assert.Equal(t, "user-1", out.Value(web.ContextKeyRequestorId))
 		assert.Equal(t, "admin", out.Value(web.ContextKeyRunAsUsername))
 	})
+
+	t.Run("missing requestor id does not panic", func(t *testing.T) {
+		out := buildNoTimeoutCtx(context.Background())
+
+		assert.Nil(t, out.Value(web.ContextKeyRequestorId))
+	})
 }
 
 func TestAssistantCoordinator_ChatInSession_ErrorPaths(t *testing.T) {

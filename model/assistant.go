@@ -410,6 +410,11 @@ type StreamedTurn struct {
 	SessionId string
 	Model     string
 	Marker    *DelegationMarker
+	// Session is the record for SessionId, loaded once at the start of the turn.
+	// The handler's chaining decision reads ParentSessionId/ParentToolUseId from
+	// it (immutable after creation) instead of re-fetching. May be nil when the
+	// session could not be loaded.
+	Session *AssistantSession
 }
 
 // @Description Detailed information about an Assistant session, including its messages.

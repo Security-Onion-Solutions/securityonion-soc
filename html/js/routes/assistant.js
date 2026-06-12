@@ -103,26 +103,34 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       const usedChars = this.newMessage.length + (this.contextLength * this.charsPerTokenEstimate);
       return usedChars >= maxChars;
     },
-    // Polite-live-region text for screen readers: summarizes any sub-agent tool
-    // approvals currently awaiting the user. Changes only when the pending set
-    // changes (not while prose streams), so it announces appearance, not tokens.
-    subAgentApprovalAnnouncement() {
-      const announcements = [];
+    // Sub-agent tools currently awaiting the user's approval, as
+    // {agentName, toolName} pairs. Re-evaluates when the message/tool structure
+    // or a child tool's status changes; closed delegations (the delegate tool
+    // reached a terminal status) are skipped so the walk stays bounded by the
+    // active delegations rather than the whole transcript.
+    pendingSubAgentApprovals() {
+      const pending = [];
       for (const m of (this.messages || [])) {
         const toolUses = m && m.toolUses;
         if (!Array.isArray(toolUses)) continue;
         for (const t of toolUses) {
           if (!t.childSession) continue;
+          if (t.status === 'completed' || t.status === 'error') continue;
           const agentName = t.childSession.agentName || this.i18n.assistantDelegateAgent;
           for (const ct of this.pendingChildTools(t)) {
-            let msg = this.$root.replaceActionVar(this.i18n.assistantSubAgentApprovalRequest, 'name', agentName)
-            msg = this.$root.replaceActionVar(msg, 'tool', ct.name);
-            
-            announcements.push(msg);
+            pending.push({ agentName, toolName: ct.name });
           }
         }
       }
-      return announcements.join(' ');
+      return pending;
+    },
+    // Polite-live-region text for screen readers: summarizes any sub-agent tool
+    // approvals currently awaiting the user, so it announces appearance, not tokens.
+    subAgentApprovalAnnouncement() {
+      return this.pendingSubAgentApprovals.map(({ agentName, toolName }) => {
+        let msg = this.$root.replaceActionVar(this.i18n.assistantSubAgentApprovalRequest, 'name', agentName);
+        return this.$root.replaceActionVar(msg, 'tool', toolName);
+      }).join(' ');
     },
   },
   methods: {
@@ -1242,74 +1250,33 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }
     },
 
-    // Helper method to capture raw tool result from backend
-    captureRawToolResult(toolUse) {
-      const timer = setTimeout(async () => {
-        this.pendingResultTimers.delete(timer);
-        try {
-          // Reload the chat history to get the raw result that was just saved
-          const response = await this.$root.papi.get(`/assistant/sessions/${this.currentChatId}`);
-          if (response.data) {
-            // Find the last tool result message for this tool
-            const messages = response.data.history;
-            for (let i = messages.length - 1; i >= 0; i--) {
-              const msg = messages[i];
-              if (msg.tags && msg.tags.includes('tool_result')) {
-                let rawResult = null;
-                let toolError = '<nil>';
-                const resultBlock = msg.message.contentBlocks.find(block => block.toolResult);
-                // Always advance status when a matching tool_result exists, even when
-                // its content is empty; otherwise the tool card spins forever.
-                if (resultBlock?.toolResult?.isError || resultBlock?.toolResult?.status === 'error') {
-                  toolError = resultBlock.toolResult.content?.[0]?.text || this.i18n.assistantToolUnknownError;
-                } else {
-                  rawResult = resultBlock?.toolResult?.content?.[0]?.json ?? null;
-                }
-                // This is a tool result - associate it with our tool use
-                toolUse.rawResult = rawResult;
-                toolUse.completedAt = msg.createTime;
-                if (toolError != "<nil>") {
-                  toolUse.error = toolError;
-                  toolUse.status = "error";
-                } else {
-                  toolUse.status = "completed";
-                }
-                break;
-              }
-            }
-          }
-        } catch (error) {
-          this.$root.showError(this.i18n.assistantNoRawToolResult + ': ' + error.message);
-        }
-      }, 1000); // Wait 1 second for the backend to save the result
-      this.pendingResultTimers.add(timer);
-    },
-
-    // Capture the raw result of an embedded (delegated sub-agent) tool by reading
-    // the child session's history and matching on the tool's use id. Mirrors
-    // captureRawToolResult, but the result lives in the child session rather than
-    // the currently viewed one, so it is matched explicitly by id.
-    captureChildToolResult(toolUse, sessionId) {
+    // Capture the raw tool result the backend persists shortly after a tool runs,
+    // by re-reading the session's history. By default the newest tool_result in
+    // the currently viewed session is assumed to be ours; for tools inside a
+    // delegated sub-agent, pass the child sessionId and matchById so the result
+    // is matched explicitly on the tool's use id.
+    captureToolResult(toolUse, { sessionId = this.currentChatId, matchById = false } = {}) {
       const timer = setTimeout(async () => {
         this.pendingResultTimers.delete(timer);
         try {
           const response = await this.$root.papi.get(`/assistant/sessions/${sessionId}`);
           if (response.data && response.data.history) {
+            // Find the most recent matching tool result message for this tool.
             const messages = response.data.history;
             for (let i = messages.length - 1; i >= 0; i--) {
               const msg = messages[i];
               if (!(msg.tags && msg.tags.includes('tool_result'))) continue;
               const resultBlock = msg.message.contentBlocks.find(block => block.toolResult);
-              if (!resultBlock || resultBlock.toolResult?.toolUseId !== toolUse.id) continue;
+              if (matchById && resultBlock?.toolResult?.toolUseId !== toolUse.id) continue;
 
               let rawResult = null;
               let toolError = '<nil>';
               // Always advance status when a matching tool_result exists, even when
               // its content is empty; otherwise the tool card spins forever.
-              if (resultBlock.toolResult?.isError || resultBlock.toolResult?.status === 'error') {
+              if (resultBlock?.toolResult?.isError || resultBlock?.toolResult?.status === 'error') {
                 toolError = resultBlock.toolResult.content?.[0]?.text || this.i18n.assistantToolUnknownError;
               } else {
-                rawResult = resultBlock.toolResult?.content?.[0]?.json ?? null;
+                rawResult = resultBlock?.toolResult?.content?.[0]?.json ?? null;
               }
               toolUse.rawResult = rawResult;
               toolUse.completedAt = msg.createTime;
@@ -1325,7 +1292,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         } catch (error) {
           this.$root.showError(this.i18n.assistantNoRawToolResult + ': ' + error.message);
         }
-      }, 1000); // Wait for the backend to save the result
+      }, 1000); // Wait 1 second for the backend to save the result
       this.pendingResultTimers.add(timer);
     },
 
@@ -1481,12 +1448,11 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       // Use the tool's session ID if available, otherwise use current session
       let toolStreamingSessionId = toolUse.sessionId || this.currentChatId;
 
-      // If this tool belongs to a delegated sub-agent, its turns render nested
-      // under the parent's delegate tool block instead of in the main thread.
-      let delegateToolUse = this.delegationChildren.get(toolStreamingSessionId)?.parentToolUse || null;
-      // When delegateToolUse is already set at entry, this call is executing an
-      // embedded sub-agent tool; capture its raw result for the collapsed dropdown.
-      const isChildToolCall = !!delegateToolUse;
+      // When this tool's session is a live child entry at entry time, this call is
+      // executing an embedded sub-agent tool; capture its raw result for the
+      // collapsed dropdown. The delegationChildren map is the single source of
+      // truth for delegation ownership — always derived, never copied to a local.
+      const isChildToolCall = this.delegationChildren.has(toolStreamingSessionId);
       let childResultCaptured = false;
       // Tracks whether this stream involved a delegation (a child tool call, or a
       // kickoff that emitted delegation_start). When it did, the normal-path raw
@@ -1525,7 +1491,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         const stream = response.data;
         reader = stream.pipeThrough(new TextDecoderStream()).getReader();
 
-        if (this.currentChatId === toolStreamingSessionId || delegateToolUse) {
+        if (this.currentChatId === toolStreamingSessionId || this.delegationChildren.has(toolStreamingSessionId)) {
           this.isStreaming = true;
         }
         let assistantMessage = null;
@@ -1584,7 +1550,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
               // A delegation_start is only ever emitted in the stream executing that
               // delegate tool, so the owner is this stream's tool.
               const owner = toolUse;
-              delegateToolUse = owner;
               this.delegationChildren.set(c.childSessionId, {
                 parentToolUse: owner,
                 parentSessionId: owner.sessionId,
@@ -1601,7 +1566,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
               // session so nothing that streams afterward (the resumed parent turn)
               // can be misattributed back under this delegate.
               const resolvedChild = this.delegationChildren.get(toolStreamingSessionId);
-              const owner = (resolvedChild && resolvedChild.parentToolUse) || delegateToolUse;
+              const owner = resolvedChild && resolvedChild.parentToolUse;
               if (owner) {
                 owner.status = 'completed';
                 owner.completedAt = new Date().toISOString();
@@ -1611,21 +1576,19 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
                 this.executingToolsBySession.delete(toolStreamingSessionId);
                 this.toolIndexToIdBySession.delete(toolStreamingSessionId);
               }
-              delegateToolUse = null;
               childMsg = null;
               assistantMessage = null;
               toolStreamingSessionId = c.parentSessionId;
               continue;
             }
 
-            // Decide nesting purely from the delegationChildren map, never from a local
-            // flag. A chunk renders nested under the delegate tool only while its session
-            // id is still a live child entry. delegation_resolved (above) deletes that
-            // entry, so the parent's resumed turn falls through to top-level rendering
-            // automatically — even if delegateToolUse was left set, the map lookup wins.
+            // Decide nesting purely from the delegationChildren map. A chunk renders
+            // nested under the delegate tool only while its session id is still a live
+            // child entry. delegation_resolved (above) deletes that entry, so the
+            // parent's resumed turn falls through to top-level rendering automatically.
             const activeChild = this.delegationChildren.get(toolStreamingSessionId);
             if (activeChild) {
-              const owner = activeChild.parentToolUse || delegateToolUse;
+              const owner = activeChild.parentToolUse;
               switch (c.type) {
                 case 'error':
                   this.$root.showError(this.i18n.assistantToolUseFail + ': ' + c.error.message);
@@ -1634,7 +1597,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
                   // The embedded tool's result is now saved in the child session;
                   // capture it once for the collapsed raw-result dropdown.
                   if (isChildToolCall && !childResultCaptured) {
-                    this.captureChildToolResult(toolUse, toolUse.sessionId);
+                    this.captureToolResult(toolUse, { sessionId: toolUse.sessionId, matchById: true });
                     childResultCaptured = true;
                   }
                   childMsg = this.handleDelegationMessageStart(owner);
@@ -1665,7 +1628,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
                   // stream involved a delegation: the resumed parent turn must not
                   // attach the delegation tool_result to the (child) tool card.
                   if (!sawDelegation) {
-                    this.captureRawToolResult(toolUse);
+                    this.captureToolResult(toolUse);
                   }
 
                   const startResult = this.handleToolExecutionMessageStart(c, assistantMessage, toolUse);
@@ -1727,14 +1690,16 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         toolUse.error = error.message;
         this.isStreaming = false;
 
-        // If a delegation was in flight, the delegate card and child session are
-        // still open. Close them here so a dropped/aborted stream can't leave the
-        // delegate tool spinning forever (the backend may not have emitted a
-        // delegation_resolved marker).
-        if (delegateToolUse) {
-          delegateToolUse.status = 'error';
-          delegateToolUse.error = error.message;
-          delegateToolUse.completedAt = new Date().toISOString();
+        // If a delegation was still in flight (its session has a live child entry),
+        // the delegate card and child session are still open. Close them here so a
+        // dropped/aborted stream can't leave the delegate tool spinning forever (the
+        // backend may not have emitted a delegation_resolved marker). Derived from
+        // the map before the cleanup below deletes the entry.
+        const activeDelegate = this.delegationChildren.get(toolStreamingSessionId)?.parentToolUse;
+        if (activeDelegate) {
+          activeDelegate.status = 'error';
+          activeDelegate.error = error.message;
+          activeDelegate.completedAt = new Date().toISOString();
         }
         if (this.delegationChildren.has(toolStreamingSessionId)) {
           this.delegationChildren.delete(toolStreamingSessionId);
@@ -1744,7 +1709,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
 
         const isCurrentSession = this.currentChatId === (toolUse.sessionId || this.currentChatId);
 
-        if (isCurrentSession && !delegateToolUse) {
+        if (isCurrentSession && !activeDelegate) {
           // Add error message to chat
           const errorMessage = {
             role: 'assistant',

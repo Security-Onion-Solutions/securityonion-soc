@@ -9,8 +9,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"iter"
+	"net/http"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -151,7 +155,7 @@ func TestGetThought(t *testing.T) {
 			expected: "This is a thought",
 		},
 		{
-			name: "multiple candidates with thought parts",
+			name: "multiple candidates only uses the first",
 			response: &genai.GenerateContentResponse{
 				Candidates: []*genai.Candidate{
 					{
@@ -170,7 +174,16 @@ func TestGetThought(t *testing.T) {
 					},
 				},
 			},
-			expected: "First candidate thought second candidate thought",
+			expected: "First candidate thought",
+		},
+		{
+			name: "candidate with nil content",
+			response: &genai.GenerateContentResponse{
+				Candidates: []*genai.Candidate{
+					{Content: nil},
+				},
+			},
+			expected: "",
 		},
 		{
 			name: "empty text in thought part",
@@ -1103,6 +1116,100 @@ func TestGeminiAdapterSendMessage(t *testing.T) {
 				assert.Equal(t, "analyze", message.ContentBlocks[1].Name)
 			},
 		},
+		{
+			// Gemini supplies no call ids, so the signature can't be re-associated
+			// after the fact: each block must take the signature from its own part.
+			name: "multiple function calls without ids keep their own thought signatures",
+			req: &model.ChatRequest{
+				Model: "gemini-1.5-pro",
+				Messages: []*model.Message{
+					{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "Search and analyze"}}},
+				},
+			},
+			mockResponse: &genai.GenerateContentResponse{
+				Candidates: []*genai.Candidate{
+					{
+						Content: &genai.Content{
+							Parts: []*genai.Part{
+								{
+									FunctionCall: &genai.FunctionCall{
+										Name: "search",
+										Args: map[string]any{"query": "test1"},
+									},
+									ThoughtSignature: []byte("sig-search"),
+								},
+								{
+									FunctionCall: &genai.FunctionCall{
+										Name: "analyze",
+										Args: map[string]any{"data": "test2"},
+									},
+									ThoughtSignature: []byte("sig-analyze"),
+								},
+							},
+						},
+					},
+				},
+			},
+			validate: func(t *testing.T, message *model.Message, err error) {
+				assert.NoError(t, err)
+				assert.NotNil(t, message)
+				assert.Len(t, message.ContentBlocks, 2)
+				assert.Equal(t, []byte("sig-search"), message.ContentBlocks[0].ThoughtSignature)
+				assert.Equal(t, []byte("sig-analyze"), message.ContentBlocks[1].ThoughtSignature)
+				assert.True(t, strings.HasPrefix(message.ContentBlocks[0].Id, "toolu_"))
+				assert.True(t, strings.HasPrefix(message.ContentBlocks[1].Id, "toolu_"))
+				assert.NotEqual(t, message.ContentBlocks[0].Id, message.ContentBlocks[1].Id)
+			},
+		},
+		{
+			name: "secondary candidates are ignored",
+			req: &model.ChatRequest{
+				Model: "gemini-1.5-pro",
+				Messages: []*model.Message{
+					{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "Search"}}},
+				},
+			},
+			mockResponse: &genai.GenerateContentResponse{
+				Candidates: []*genai.Candidate{
+					{
+						Content: &genai.Content{
+							Parts: []*genai.Part{
+								{
+									FunctionCall: &genai.FunctionCall{
+										ID:   "call-primary",
+										Name: "search",
+										Args: map[string]any{"query": "test1"},
+									},
+								},
+							},
+						},
+						FinishReason: "end_turn",
+					},
+					{
+						Content: &genai.Content{
+							Parts: []*genai.Part{
+								{
+									FunctionCall: &genai.FunctionCall{
+										ID:   "call-secondary",
+										Name: "analyze",
+										Args: map[string]any{"data": "test2"},
+									},
+								},
+							},
+						},
+						FinishReason: "max_tokens",
+					},
+				},
+			},
+			validate: func(t *testing.T, message *model.Message, err error) {
+				assert.NoError(t, err)
+				assert.NotNil(t, message)
+				assert.Len(t, message.ContentBlocks, 1)
+				assert.Equal(t, "call-primary", message.ContentBlocks[0].Id)
+				assert.NotNil(t, message.StopReason)
+				assert.Equal(t, "end_turn", *message.StopReason)
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -1187,4 +1294,140 @@ func TestGeminiAdapterSendMessage_MaxTokens(t *testing.T) {
 			assert.Equal(t, tc.want, gotConfig.MaxOutputTokens)
 		})
 	}
+}
+
+// Both send paths read only the first candidate, so they must explicitly request a
+// single candidate rather than rely on the API default.
+func TestGeminiAdapterCandidateCount(t *testing.T) {
+	req := func() *model.ChatRequest {
+		return &model.ChatRequest{
+			Model:    "gemini-x",
+			Messages: []*model.Message{{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "hi"}}}},
+		}
+	}
+
+	t.Run("SendMessage", func(t *testing.T) {
+		var gotConfig *genai.GenerateContentConfig
+
+		mockSession := &mockGeminiSession{
+			sendMessageFunc: func(ctx context.Context, part genai.Part) (*genai.GenerateContentResponse, error) {
+				return &genai.GenerateContentResponse{}, nil
+			},
+		}
+		mockClient := &mockGeminiClient{
+			createSessionFunc: func(ctx context.Context, model string, config *genai.GenerateContentConfig, history []*genai.Content) (GeminiSession, error) {
+				gotConfig = config
+				return mockSession, nil
+			},
+		}
+
+		adapter := &GeminiAdapter{client: mockClient}
+
+		_, err := adapter.SendMessage(context.Background(), req())
+		assert.NoError(t, err)
+		assert.NotNil(t, gotConfig)
+		assert.Equal(t, int32(1), gotConfig.CandidateCount)
+	})
+
+	t.Run("SendMessageStream", func(t *testing.T) {
+		var gotConfig *genai.GenerateContentConfig
+
+		mockSession := &mockGeminiSession{
+			sendMessageStreamFunc: func(ctx context.Context, part genai.Part) iter.Seq2[*genai.GenerateContentResponse, error] {
+				return func(yield func(*genai.GenerateContentResponse, error) bool) {
+					yield(&genai.GenerateContentResponse{
+						Candidates: []*genai.Candidate{
+							{Content: &genai.Content{Parts: []*genai.Part{{Text: "hello"}}}},
+						},
+					}, nil)
+				}
+			},
+		}
+		mockClient := &mockGeminiClient{
+			createSessionFunc: func(ctx context.Context, model string, config *genai.GenerateContentConfig, history []*genai.Content) (GeminiSession, error) {
+				gotConfig = config
+				return mockSession, nil
+			},
+		}
+
+		adapter := &GeminiAdapter{client: mockClient}
+
+		response, _, err := adapter.SendMessageStream(context.Background(), req())
+		assert.NoError(t, err)
+
+		// Drain the fabricated response body so the writer goroutine can finish.
+		_, _ = io.ReadAll(response.Body)
+
+		assert.NotNil(t, gotConfig)
+		assert.Equal(t, int32(1), gotConfig.CandidateCount)
+	})
+}
+
+// streamGeminiAdapter builds an adapter whose stream yields the given sequence.
+func streamGeminiAdapter(seq iter.Seq2[*genai.GenerateContentResponse, error]) *GeminiAdapter {
+	mockSession := &mockGeminiSession{
+		sendMessageStreamFunc: func(ctx context.Context, part genai.Part) iter.Seq2[*genai.GenerateContentResponse, error] {
+			return seq
+		},
+	}
+	return &GeminiAdapter{client: &mockGeminiClient{
+		createSessionFunc: func(ctx context.Context, model string, config *genai.GenerateContentConfig, history []*genai.Content) (GeminiSession, error) {
+			return mockSession, nil
+		},
+	}}
+}
+
+// Regression: SendMessageStream blocks on a WaitGroup that historically was only
+// released by the first content event. A stream that fails on its first chunk or
+// ends without yielding anything must still release the caller instead of
+// deadlocking the request goroutine.
+func TestGeminiAdapterSendMessageStream_ReleasesCallerWithoutContent(t *testing.T) {
+	req := &model.ChatRequest{
+		Model:    "gemini-x",
+		Messages: []*model.Message{{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "hi"}}}},
+	}
+
+	run := func(t *testing.T, seq iter.Seq2[*genai.GenerateContentResponse, error], validate func(t *testing.T, response *http.Response, body string)) {
+		adapter := streamGeminiAdapter(seq)
+
+		type result struct {
+			response *http.Response
+			body     string
+		}
+		done := make(chan result, 1)
+		go func() {
+			response, _, err := adapter.SendMessageStream(context.Background(), req)
+			assert.NoError(t, err)
+			body, _ := io.ReadAll(response.Body)
+			done <- result{response: response, body: string(body)}
+		}()
+
+		select {
+		case res := <-done:
+			validate(t, res.response, res.body)
+		case <-time.After(5 * time.Second):
+			t.Fatal("SendMessageStream deadlocked: caller was never released")
+		}
+	}
+
+	t.Run("error on first chunk", func(t *testing.T) {
+		seq := func(yield func(*genai.GenerateContentResponse, error) bool) {
+			yield(nil, errors.New("quota exceeded"))
+		}
+		run(t, seq, func(t *testing.T, response *http.Response, body string) {
+			assert.Equal(t, http.StatusInternalServerError, response.StatusCode)
+			assert.Equal(t, "ERROR_FIRST_RESPONSE", body)
+		})
+	})
+
+	t.Run("empty stream", func(t *testing.T) {
+		seq := func(yield func(*genai.GenerateContentResponse, error) bool) {}
+		run(t, seq, func(t *testing.T, response *http.Response, body string) {
+			assert.Equal(t, http.StatusOK, response.StatusCode)
+			// The SSE stream must still be well-formed for UnstreamResponse.
+			assert.Contains(t, body, `"type":"message_start"`)
+			assert.Contains(t, body, `"type":"message_stop"`)
+			assert.Contains(t, body, "data: [DONE]")
+		})
+	})
 }

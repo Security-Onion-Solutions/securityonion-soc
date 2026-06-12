@@ -209,15 +209,17 @@ type ModelParameters struct {
 	AgentDescription string   `json:"agentDescription"`
 }
 
-// Selector returns the canonical client-facing selector for this model: the
-// DisplayName, falling back to the legacy "id@adapter" form when no
-// DisplayName is configured.
+// Selector returns the canonical client-facing selector for this model: its
+// DisplayName, which is required configuration. There is deliberately no
+// fallback — a model without a DisplayName is misconfigured and gets disabled
+// at startup (see validateModelSelectors).
 func (m *ModelParameters) Selector() string {
 	return m.DisplayName
 }
 
-// LegacySelector returns the historical "id@adapter" selector form, still
-// found in stored sessions and browser-side settings.
+// LegacySelector returns the historical "id@adapter" selector form. It exists
+// only so old stored sessions and browser-side settings still resolve
+// (resolveModel pass 2); it is never a model's canonical selector.
 func (m *ModelParameters) LegacySelector() string {
 	return m.ID + "@" + m.Adapter
 }

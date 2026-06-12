@@ -660,6 +660,66 @@ func TestStreamProcessorMultipleFunctionCalls(t *testing.T) {
 	assert.Contains(t, output, `"name":"calculate"`)
 }
 
+// Additional candidates are alternative completions of the same turn, not parts of
+// this response: only the first candidate's function calls, signature, and finish
+// reason may be emitted.
+func TestStreamProcessorIgnoresSecondaryCandidates(t *testing.T) {
+	var buf strings.Builder
+	writer := newSSEEventWriter(log.Log, &buf)
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	processor := newStreamProcessor(writer, "test-model", wg)
+
+	resp := &genai.GenerateContentResponse{
+		Candidates: []*genai.Candidate{
+			{
+				Content: &genai.Content{
+					Parts: []*genai.Part{
+						{
+							FunctionCall: &genai.FunctionCall{
+								ID:   "call_primary",
+								Name: "search",
+								Args: map[string]any{"query": "foo"},
+							},
+							ThoughtSignature: []byte("sig-primary"),
+						},
+					},
+				},
+				FinishReason: "end_turn",
+			},
+			{
+				Content: &genai.Content{
+					Parts: []*genai.Part{
+						{
+							FunctionCall: &genai.FunctionCall{
+								ID:   "call_secondary",
+								Name: "calculate",
+								Args: map[string]any{"expr": "2+2"},
+							},
+							ThoughtSignature: []byte("sig-secondary"),
+						},
+					},
+				},
+				FinishReason: "max_tokens",
+			},
+		},
+	}
+
+	thoughtSigs, reason, err := processor.processGeminiChunk(resp)
+	assert.NoError(t, err)
+	wg.Wait()
+
+	output := buf.String()
+	assert.Equal(t, 1, strings.Count(output, `"type":"tool_use"`))
+	assert.Contains(t, output, `"id":"call_primary"`)
+	assert.NotContains(t, output, `"id":"call_secondary"`)
+
+	assert.Len(t, thoughtSigs, 1)
+	assert.Equal(t, []byte("sig-primary"), thoughtSigs["call_primary"])
+
+	assert.Equal(t, "end_turn", reason)
+}
+
 func TestStreamProcessorMidStreamError(t *testing.T) {
 	var buf strings.Builder
 	writer := newSSEEventWriter(log.Log, &buf)
@@ -758,13 +818,11 @@ func TestStreamProcessorFinalize(t *testing.T) {
 			processor := newStreamProcessor(writer, "test-model", wg)
 
 			tt.setupProcessor(processor)
-			if processor.firstSend {
-				wg.Done()
-			} else {
-				wg.Wait()
-			}
 
+			// finalizeGemini releases the caller itself (via ensureFirstSend)
+			// when no content event has done so yet.
 			processor.finalizeGemini(tt.finishReason, tt.usage)
+			wg.Wait()
 
 			output := buf.String()
 			for _, expected := range tt.expectedInOutput {
