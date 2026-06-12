@@ -1108,6 +1108,10 @@ func TestReadSetting_UiElements(tester *testing.T) {
 	assert.Equal(tester, true, setting.UiElements[2].Multiline)
 	assert.Equal(tester, "^abc$", setting.UiElements[2].Regex)
 	assert.Equal(tester, "must conform", setting.UiElements[2].RegexFailureMessage)
+
+	// Call ApplyAnnotations again to verify no duplicate elements are created
+	ApplyAnnotations(setting, annotations["myapp.ui_json"], nil)
+	assert.Equal(tester, 3, len(setting.UiElements))
 }
 
 func TestCoerceMapListFieldTypes(tester *testing.T) {
