@@ -23,7 +23,7 @@ function parseMultiDocYaml(content) {
 		if (doc !== null) {
 			docs.push(doc);
 		}
-	});
+	}, { schema: jsyaml.FAILSAFE_SCHEMA });
 	return docs;
 }
 

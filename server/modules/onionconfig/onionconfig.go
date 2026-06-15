@@ -134,7 +134,7 @@ func (c *OnionConfig) UpdateSetting(ctx context.Context, setting *model.Setting,
 		if settingDef.Readonly {
 			return errors.New("Unable to modify or remove a readonly setting")
 		}
-		if err := c.validateAllowedNodeTypes(setting, settingDef); err != nil {
+		if err := c.validateAllowedNodeTypes(ctx, setting, settingDef); err != nil {
 			return err
 		}
 		setting.Syntax = settingDef.Syntax
@@ -460,7 +460,7 @@ func resolveExistingSetting(allSettings []*model.Setting, settingID, nodeID stri
 	return
 }
 
-func (c *OnionConfig) validateAllowedNodeTypes(setting *model.Setting, settingDef *model.Setting) error {
+func (c *OnionConfig) validateAllowedNodeTypes(ctx context.Context, setting *model.Setting, settingDef *model.Setting) error {
 	allowedTypes := settingDef.AllowedNodeTypes
 	if allowedTypes == nil || len(allowedTypes) == 0 {
 		return nil
@@ -474,7 +474,7 @@ func (c *OnionConfig) validateAllowedNodeTypes(setting *model.Setting, settingDe
 		return nil
 	}
 
-	members, err := c.server.GridMembersstore.GetMembers(c.server.Context)
+	members, err := c.server.GridMembersstore.GetMembers(ctx)
 	if err != nil {
 		return nil
 	}

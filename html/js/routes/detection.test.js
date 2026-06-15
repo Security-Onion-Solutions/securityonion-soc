@@ -1579,7 +1579,7 @@ detection:
 			rules: ['failed_login'],
 			'group-by': ['http.request.headers.x-real-ip'],
 			timespan: '30s',
-			condition: { gte: 2 },
+			condition: { gte: '2' },
 		});
 	});
 

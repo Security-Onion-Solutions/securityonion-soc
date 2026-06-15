@@ -448,21 +448,21 @@ func TestValidateAllowedNodeTypes(t *testing.T) {
 	t.Run("NoAllowedTypes_returnsNil", func(t *testing.T) {
 		setting := &model.Setting{Id: "test.setting", NodeId: "node1"}
 		settingDef := &model.Setting{Id: "test.setting", AllowedNodeTypes: nil}
-		err := oc.validateAllowedNodeTypes(setting, settingDef)
+		err := oc.validateAllowedNodeTypes(context.Background(), setting, settingDef)
 		assert.NoError(t, err)
 	})
 
 	t.Run("EmptyAllowedTypes_returnsNil", func(t *testing.T) {
 		setting := &model.Setting{Id: "test.setting", NodeId: "node1"}
 		settingDef := &model.Setting{Id: "test.setting", AllowedNodeTypes: []string{}}
-		err := oc.validateAllowedNodeTypes(setting, settingDef)
+		err := oc.validateAllowedNodeTypes(context.Background(), setting, settingDef)
 		assert.NoError(t, err)
 	})
 
 	t.Run("NoNodeId_returnsNil", func(t *testing.T) {
 		setting := &model.Setting{Id: "test.setting", NodeId: ""}
 		settingDef := &model.Setting{Id: "test.setting", AllowedNodeTypes: []string{"manager"}}
-		err := oc.validateAllowedNodeTypes(setting, settingDef)
+		err := oc.validateAllowedNodeTypes(context.Background(), setting, settingDef)
 		assert.NoError(t, err)
 	})
 
@@ -470,7 +470,7 @@ func TestValidateAllowedNodeTypes(t *testing.T) {
 		setting := &model.Setting{Id: "test.setting", NodeId: "node1"}
 		settingDef := &model.Setting{Id: "test.setting", AllowedNodeTypes: []string{"manager"}}
 		oc.server.GridMembersstore = nil
-		err := oc.validateAllowedNodeTypes(setting, settingDef)
+		err := oc.validateAllowedNodeTypes(context.Background(), setting, settingDef)
 		assert.NoError(t, err)
 	})
 }

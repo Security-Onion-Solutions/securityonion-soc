@@ -351,8 +351,8 @@ routes.push({
       const search = this.appliedHistorySearch.toLowerCase();
       return this.auditHistory.filter(entry => {
         const settingId = (entry?.settingId || '').toLowerCase();
-        const newValue = formatValueWithDefault(entry?.newValue, this.i18n.settingDefaultNone).toLowerCase();
-        const oldValue = formatValueWithDefault(entry?.oldValue, this.i18n.settingDefaultNone).toLowerCase();
+        const newValue = this.$root.formatValueWithDefault(entry?.newValue, this.i18n.settingDefaultNone).toLowerCase();
+        const oldValue = this.$root.formatValueWithDefault(entry?.oldValue, this.i18n.settingDefaultNone).toLowerCase();
         const nodeId = (entry?.nodeId || '').toLowerCase();
         const userName = (entry?.userName || '').toLowerCase();
         const userId = (entry?.userId || '').toLowerCase();
