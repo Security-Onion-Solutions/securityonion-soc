@@ -51,6 +51,11 @@ const (
 	// budget. 0 disables the budget (sub-sessions are uncapped) unless an operator
 	// configures "maxSubSessionTokens".
 	DEFAULT_MAX_SUBSESSION_TOKENS = 0
+
+	// DEFAULT_MAX_DELEGATION_DEPTH is the default maximum delegation nesting depth
+	// for sub-sessions. 0 disables the limit (delegation depth is unbounded) unless
+	// an operator configures "maxDelegationDepth".
+	DEFAULT_MAX_DELEGATION_DEPTH = 0
 )
 
 //go:embed SOSystemPrompt.bin
@@ -71,6 +76,9 @@ type AssistantCoordinator struct {
 
 	// maxSubSessionTokens is the per-sub-session output-token budget. 0 disables it.
 	maxSubSessionTokens int
+
+	// maxDelegationDepth is the maximum delegation nesting depth. 0 disables it.
+	maxDelegationDepth int
 
 	detections.IOManager
 }
@@ -105,6 +113,7 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 
 	ac.systemPromptAddendum = systemPromptAddendum
 	ac.maxSubSessionTokens = module.GetIntDefault(config, "maxSubSessionTokens", DEFAULT_MAX_SUBSESSION_TOKENS)
+	ac.maxDelegationDepth = module.GetIntDefault(config, "maxDelegationDepth", DEFAULT_MAX_DELEGATION_DEPTH)
 	ac.adapters = map[string]server.AssistantAdapter{}
 
 	adapterConfig, ok := config["adapters"].([]any)
@@ -774,7 +783,15 @@ func (ac *AssistantCoordinator) ToolInSession(ctx context.Context, toolReq *mode
 	var err error
 
 	if kickoff, ok := delegationKickoff(result); ok {
-		response, sess, err = ac.startDelegationSync(ctx, toolReq, kickoff)
+		// Refuse the delegation if it would exceed the depth limit: resolve the
+		// delegating session's delegate tool_use with a notice and resume it
+		// instead of nesting another sub-agent.
+		if refusal := ac.delegationDepthRefusal(ctx, toolReq); refusal != nil {
+			sess = ac.loadTurnSession(ctx, toolReq.SessionId)
+			response, err = ac.continueWithToolResultSync(ctx, sess, toolReq.SessionId, modelForSession(sess, toolReq.Model), refusal)
+		} else {
+			response, sess, err = ac.startDelegationSync(ctx, toolReq, kickoff)
+		}
 	} else {
 		// A tool error (nil result, non-nil error) is wrapped as an error tool_result
 		// so the conversation can continue.
@@ -884,6 +901,13 @@ func (ac *AssistantCoordinator) ToolStreamInSession(ctx context.Context, toolReq
 	// finishes and the backend folds its result back in (see ResolveDelegationStream).
 	if result != nil {
 		if kickoff, ok := result.Result.(model.DelegationKickoff); ok {
+			// Refuse the delegation if it would exceed the depth limit: resolve the
+			// delegating session's delegate tool_use with a notice and resume it
+			// instead of nesting another sub-agent.
+			if refusal := ac.delegationDepthRefusal(ctx, toolReq); refusal != nil {
+				sess := ac.loadTurnSession(ctx, toolReq.SessionId)
+				return ac.continueWithToolResult(ctx, sess, toolReq.SessionId, modelForSession(sess, toolReq.Model), refusal)
+			}
 			return ac.startDelegation(ctx, toolReq, kickoff)
 		}
 	}
@@ -1241,9 +1265,53 @@ func (ac *AssistantCoordinator) ResolveDelegationStream(ctx context.Context, chi
 	return turn, nil
 }
 
+// delegationDepthNotice is the tool_result text returned to a delegating session
+// when a delegation is refused for exceeding maxDelegationDepth.
+func delegationDepthNotice(limit int) string {
+	return fmt.Sprintf("Delegation was refused because it would exceed the maximum delegation depth (%d) for this conversation. Continue and complete the work without delegating.", limit)
+}
+
+// delegationDepthRefusal returns a tool_result refusing a delegation when the new
+// sub-agent would exceed maxDelegationDepth, or nil to allow it. The refusal
+// resolves the delegating session's delegate tool_use so it resumes instead of
+// nesting another sub-agent. A limit of 0 disables the check.
+func (ac *AssistantCoordinator) delegationDepthRefusal(ctx context.Context, toolReq *model.ToolRequest) *model.Message {
+	if ac.maxDelegationDepth <= 0 {
+		return nil
+	}
+
+	parentDepth := 0
+	if parent := ac.loadSession(ctx, toolReq.SessionId); parent != nil {
+		parentDepth = parent.Depth
+	}
+
+	// The child would be one level deeper than the delegating session.
+	if parentDepth+1 <= ac.maxDelegationDepth {
+		return nil
+	}
+
+	log.FromContext(ctx).WithFields(log.Fields{
+		"sessionId":          toolReq.SessionId,
+		"delegatingDepth":    parentDepth,
+		"maxDelegationDepth": ac.maxDelegationDepth,
+	}).Info("delegation refused; would exceed maximum delegation depth")
+
+	return buildToolResultMessage(toolReq.ToolUseId, &model.ToolResponse{
+		ToolName: "delegation",
+		Result:   delegationDepthNotice(ac.maxDelegationDepth),
+	}, nil)
+}
+
 // newDelegationSession builds the linked child session record for a delegation,
 // shared by the streaming and non-streaming kickoff paths.
 func (ac *AssistantCoordinator) newDelegationSession(ctx context.Context, toolReq *model.ToolRequest, kickoff model.DelegationKickoff) *model.AssistantSession {
+	parent := ac.loadSession(ctx, toolReq.SessionId)
+
+	parentDepth := 0
+	if parent != nil {
+		parentDepth = parent.Depth
+	}
+
 	return &model.AssistantSession{
 		SessionId:       kickoff.ChildSessionId,
 		Title:           kickoff.Objective,
@@ -1252,10 +1320,13 @@ func (ac *AssistantCoordinator) newDelegationSession(ctx context.Context, toolRe
 		DelegateAgent:   kickoff.AgentName,
 		ParentSessionId: toolReq.SessionId,
 		ParentToolUseId: toolReq.ToolUseId,
+		// One level deeper than the delegating session (top-level = 0); drives the
+		// delegation depth limit.
+		Depth: parentDepth + 1,
 		// Snapshot the parent's own stored model (not the client-supplied model) so
 		// the parent resumes on the right agent even if the user switched models
 		// while the sub-agent was running.
-		ParentModel: modelForSession(ac.loadSession(ctx, toolReq.SessionId), toolReq.Model),
+		ParentModel: modelForSession(parent, toolReq.Model),
 	}
 }
 

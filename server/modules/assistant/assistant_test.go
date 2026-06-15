@@ -3384,3 +3384,74 @@ func TestAssistantCoordinator_continueWithToolResultSync_HardStop(t *testing.T) 
 	assert.Equal(t, "assistant", resp[0].Role)
 	assert.Contains(t, messageText(resp[0]), "halted")
 }
+
+// newDelegationSession stamps the child's delegation depth as parent depth + 1.
+func TestAssistantCoordinator_newDelegationSession_Depth(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+	mockAssistantstore.EXPECT().
+		GetSessions(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return([]*model.AssistantSession{{SessionId: "parent", Depth: 2, Model: "m@A"}}, nil)
+
+	ac := &AssistantCoordinator{srv: &server.Server{Assistantstore: mockAssistantstore}}
+
+	child := ac.newDelegationSession(
+		context.Background(),
+		&model.ToolRequest{SessionId: "parent", ToolUseId: "tu", Model: "m@A"},
+		model.DelegationKickoff{ChildSessionId: "child", ChildModel: "c@A", AgentName: "Hunter", Objective: "obj"},
+	)
+
+	assert.Equal(t, 3, child.Depth)
+	assert.Equal(t, "parent", child.ParentSessionId)
+}
+
+// delegationDepthRefusal refuses a delegation only when the new child (delegating
+// depth + 1) would exceed maxDelegationDepth, and is a no-op when the limit is off.
+func TestAssistantCoordinator_delegationDepthRefusal(t *testing.T) {
+	tests := []struct {
+		name          string
+		maxDepth      int
+		parentDepth   int
+		expectLookup  bool
+		expectRefusal bool
+	}{
+		{name: "disabled does not look up", maxDepth: 0, parentDepth: 5, expectLookup: false, expectRefusal: false},
+		{name: "under limit allowed", maxDepth: 3, parentDepth: 1, expectLookup: true, expectRefusal: false},
+		{name: "child equal to limit allowed", maxDepth: 3, parentDepth: 2, expectLookup: true, expectRefusal: false},
+		{name: "child over limit refused", maxDepth: 3, parentDepth: 3, expectLookup: true, expectRefusal: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+			if tc.expectLookup {
+				mockAssistantstore.EXPECT().
+					GetSessions(gomock.Any(), gomock.Any(), gomock.Any()).
+					Return([]*model.AssistantSession{{SessionId: "s", Depth: tc.parentDepth}}, nil)
+			}
+
+			ac := &AssistantCoordinator{
+				srv:                &server.Server{Assistantstore: mockAssistantstore},
+				maxDelegationDepth: tc.maxDepth,
+			}
+
+			refusal := ac.delegationDepthRefusal(context.Background(), &model.ToolRequest{SessionId: "s", ToolUseId: "tu"})
+
+			if !tc.expectRefusal {
+				assert.Nil(t, refusal)
+				return
+			}
+
+			assert.NotNil(t, refusal)
+			assert.Equal(t, "delegation", refusal.ContentBlocks[0].ToolResult.Name)
+			resultMap, ok := refusal.ContentBlocks[0].ToolResult.Content[0].Json.(map[string]any)
+			assert.True(t, ok)
+			assert.Contains(t, resultMap["result"].(string), "depth")
+		})
+	}
+}

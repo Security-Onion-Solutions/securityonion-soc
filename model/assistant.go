@@ -353,6 +353,10 @@ type AssistantSession struct {
 	// client-supplied model. Empty for legacy sessions created before this field
 	// existed, in which case the caller falls back to the request/parent model.
 	Model string `json:"model,omitempty" example:"AgentClaude@SOAI"`
+	// The delegation nesting depth of this session: 0 for a top-level conversation,
+	// parent depth + 1 for a delegated sub-agent. Used to enforce a delegation depth
+	// limit. Absent (0) for legacy sessions created before this field existed.
+	Depth int `json:"depth,omitempty" example:"1"`
 	// For delegated sub-agent sessions, the session that delegated to this one.
 	ParentSessionId string `json:"parentSessionId,omitempty" example:"chat_1757086398900_ykhmndscn"`
 	// For delegated sub-agent sessions, the tool_use id in the parent session that
