@@ -50,6 +50,7 @@ test('loadData', async () => {
   m1.set('mia-test-001', 'hi');
   const expectedSettings = [{
       "advanced": undefined,
+      "allowedNodeTypes": undefined,
       "default": null,
       "defaultAvailable": false,
       "description": "Nearby",
@@ -80,6 +81,7 @@ test('loadData', async () => {
     },
     {
       "advanced": undefined,
+      "allowedNodeTypes": undefined,
       "default": undefined,
       "defaultAvailable": undefined,
       "description": "NADA",
@@ -110,6 +112,7 @@ test('loadData', async () => {
     },
     {
       "advanced": undefined,
+      "allowedNodeTypes": undefined,
       "default": undefined,
       "defaultAvailable": undefined,
       "description": "Cocoa",
@@ -147,6 +150,7 @@ test('loadData', async () => {
           "children": [
             {
               "advanced": undefined,
+              "allowedNodeTypes": undefined,
               "default": null,
               "defaultAvailable": false,
               "description": "Nearby",
@@ -177,6 +181,7 @@ test('loadData', async () => {
             },
             {
               "advanced": undefined,
+              "allowedNodeTypes": undefined,
               "default": undefined,
               "defaultAvailable": undefined,
               "description": "Cocoa",
@@ -215,6 +220,7 @@ test('loadData', async () => {
     },
     {
       "advanced": undefined,
+      "allowedNodeTypes": undefined,
       "default": undefined,
       "defaultAvailable": undefined,
       "description": "NADA",
@@ -550,6 +556,23 @@ test('filteredAuditHistory_filterByOldValue', () => {
   comp.auditHistory = [
     { settingId: 'foo.bar', newValue: 'val1', oldValue: 'val0', nodeId: 'node1', userId: 'user1', userName: 'User One' },
     { settingId: 'baz.qux', newValue: 'val2', oldValue: null, nodeId: 'node2', userId: 'user2', userName: 'User Two' },
+  ];
+  expect(comp.filteredAuditHistory().length).toBe(1);
+  expect(comp.filteredAuditHistory()[0].settingId).toBe('foo.bar');
+});
+
+test('filteredAuditHistory_filterByDefaultNone', () => {
+  comp.appliedHistorySearch = 'default';
+  comp.auditHistory = [
+    { settingId: 'foo.bar', newValue: 'val1', oldValue: 'val0', nodeId: 'node1', userId: 'user1', userName: 'User One' },
+    { settingId: 'baz.qux', newValue: 'val2', oldValue: null, nodeId: 'node2', userId: 'user2', userName: 'User Two' },
+  ];
+  expect(comp.filteredAuditHistory().length).toBe(1);
+  expect(comp.filteredAuditHistory()[0].settingId).toBe('baz.qux');
+
+  comp.appliedHistorySearch = 'none';
+  comp.auditHistory = [
+    { settingId: 'foo.bar', newValue: '', oldValue: 'val0', nodeId: 'node1', userId: 'user1', userName: 'User One' },
   ];
   expect(comp.filteredAuditHistory().length).toBe(1);
   expect(comp.filteredAuditHistory()[0].settingId).toBe('foo.bar');
@@ -1085,6 +1108,113 @@ test('selectSetting', () => {
   expect(comp.cancelDialog).toBe(false);
   expect(comp.confirmResetDialog).toBe(false);
   expect(comp.form.entriesExpanded).toBeNull();
+});
+
+test('recomputeAvailableNodes_noAllowedNodeTypes_showsAll', () => {
+  comp.nodes = [
+    {id: "n1", name: "node1", role: "manager", status: GridMemberAccepted},
+    {id: "n2", name: "node2", role: "worker", status: GridMemberAccepted},
+    {id: "n3", name: "node3", role: "standalone", status: GridMemberAccepted},
+  ];
+
+  const nodeValues = new Map();
+  const setting = {id: "s-id", nodeValues: nodeValues};
+
+  comp.recomputeAvailableNodes(setting);
+
+  expect(comp.availableNodes).toStrictEqual([
+    {title: "node1 (manager)", value: "n1"},
+    {title: "node2 (worker)", value: "n2"},
+    {title: "node3 (standalone)", value: "n3"},
+  ]);
+});
+
+test('recomputeAvailableNodes_withAllowedNodeTypes_filtersNodes', () => {
+  comp.nodes = [
+    {id: "n1", name: "node1", role: "manager", status: GridMemberAccepted},
+    {id: "n2", name: "node2", role: "worker", status: GridMemberAccepted},
+    {id: "n3", name: "node3", role: "standalone", status: GridMemberAccepted},
+  ];
+
+  const nodeValues = new Map();
+  const setting = {id: "s-id", nodeValues: nodeValues, allowedNodeTypes: ["manager"]};
+
+  comp.recomputeAvailableNodes(setting);
+
+  expect(comp.availableNodes).toStrictEqual([
+    {title: "node1 (manager)", value: "n1"},
+  ]);
+});
+
+test('recomputeAvailableNodes_withMultipleAllowedNodeTypes_filtersNodes', () => {
+  comp.nodes = [
+    {id: "n1", name: "node1", role: "manager", status: GridMemberAccepted},
+    {id: "n2", name: "node2", role: "worker", status: GridMemberAccepted},
+    {id: "n3", name: "node3", role: "standalone", status: GridMemberAccepted},
+  ];
+
+  const nodeValues = new Map();
+  const setting = {id: "s-id", nodeValues: nodeValues, allowedNodeTypes: ["manager", "worker"]};
+
+  comp.recomputeAvailableNodes(setting);
+
+  expect(comp.availableNodes).toStrictEqual([
+    {title: "node1 (manager)", value: "n1"},
+    {title: "node2 (worker)", value: "n2"},
+  ]);
+});
+
+test('recomputeAvailableNodes_excludesAlreadyConfiguredNodes', () => {
+  comp.nodes = [
+    {id: "n1", name: "node1", role: "manager", status: GridMemberAccepted},
+    {id: "n2", name: "node2", role: "worker", status: GridMemberAccepted},
+  ];
+
+  const nodeValues = new Map();
+  nodeValues.set("n1", "value1");
+  const setting = {id: "s-id", nodeValues: nodeValues, allowedNodeTypes: ["manager", "worker"]};
+
+  comp.recomputeAvailableNodes(setting);
+
+  expect(comp.availableNodes).toStrictEqual([
+    {title: "node2 (worker)", value: "n2"},
+  ]);
+});
+
+test('recomputeAvailableNodes_excludesUnacceptedNodes', () => {
+  comp.nodes = [
+    {id: "n1", name: "node1", role: "manager", status: GridMemberAccepted},
+    {id: "n2", name: "node2", role: "worker", status: "pending"},
+  ];
+
+  const nodeValues = new Map();
+  const setting = {id: "s-id", nodeValues: nodeValues, allowedNodeTypes: ["manager", "worker"]};
+
+  comp.recomputeAvailableNodes(setting);
+
+  expect(comp.availableNodes).toStrictEqual([
+    {title: "node1 (manager)", value: "n1"},
+  ]);
+});
+
+test('recomputeAvailableNodes_noMatch_returnsEmpty', () => {
+  comp.nodes = [
+    {id: "n1", name: "node1", role: "manager", status: GridMemberAccepted},
+    {id: "n2", name: "node2", role: "worker", status: GridMemberAccepted},
+  ];
+
+  const nodeValues = new Map();
+  const setting = {id: "s-id", nodeValues: nodeValues, allowedNodeTypes: ["elastic"]};
+
+  comp.recomputeAvailableNodes(setting);
+
+  expect(comp.availableNodes).toStrictEqual([]);
+});
+
+test('recomputeAvailableNodes_nullSetting_doesNothing', () => {
+  comp.availableNodes = [{title: "existing", value: "n1"}];
+  comp.recomputeAvailableNodes(null);
+  expect(comp.availableNodes).toStrictEqual([{title: "existing", value: "n1"}]);
 });
 
 test('cancel', () => {
@@ -2274,4 +2404,42 @@ test('loadData_resetsSkipAdvancedReload_evenOnError', async () => {
   await comp.loadData();
 
   expect(comp.skipAdvancedReload).toBe(false);
+});
+
+test('confirmRevert_globalValue_nullOldValue_withDefault', async () => {
+  const postMock = mockPapi("post", {});
+  comp.isGlobalHistory = false;
+  comp.revertAllSettings = false;
+  comp.confirmRevertEntry = { settingId: 'test.id', nodeId: null, oldValue: null, timestamp: '2025-01-01T00:00:00Z' };
+  comp.restoreNote = 'reverting';
+  comp.settings = [{ id: 'test.id', value: 'currentVal', default: 'defaultVal', nodeValues: new Map() }];
+
+  await comp.confirmRevert();
+
+  expect(postMock).toHaveBeenCalledWith('config/history/revert/test.id', {
+    timestamp: '2025-01-01T00:00:00Z',
+    note: 'reverting',
+    duplicatedFromId: ''
+  });
+  expect(comp.settings[0].value).toBe('defaultVal');
+  expect(comp.confirmRevertDialog).toBe(false);
+  expect(comp.showHistoryDialog).toBe(false);
+});
+
+test('confirmRevert_globalValue_nullOldValue_noDefault', async () => {
+  const postMock = mockPapi("post", {});
+  comp.isGlobalHistory = false;
+  comp.revertAllSettings = false;
+  comp.confirmRevertEntry = { settingId: 'test.id', nodeId: null, oldValue: null, timestamp: '2025-01-01T00:00:00Z' };
+  comp.restoreNote = 'reverting';
+  comp.settings = [{ id: 'test.id', value: 'currentVal', nodeValues: new Map() }];
+
+  await comp.confirmRevert();
+
+  expect(postMock).toHaveBeenCalledWith('config/history/revert/test.id', {
+    timestamp: '2025-01-01T00:00:00Z',
+    note: 'reverting',
+    duplicatedFromId: ''
+  });
+  expect(comp.settings[0].value).toBe(null);
 });

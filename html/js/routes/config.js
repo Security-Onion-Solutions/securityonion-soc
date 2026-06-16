@@ -351,8 +351,8 @@ routes.push({
       const search = this.appliedHistorySearch.toLowerCase();
       return this.auditHistory.filter(entry => {
         const settingId = (entry?.settingId || '').toLowerCase();
-        const newValue = (entry?.newValue || '').toLowerCase();
-        const oldValue = (entry?.oldValue || '').toLowerCase();
+        const newValue = this.$root.formatValueWithDefault(entry?.newValue, this.i18n.settingDefaultNone).toLowerCase();
+        const oldValue = this.$root.formatValueWithDefault(entry?.oldValue, this.i18n.settingDefaultNone).toLowerCase();
         const nodeId = (entry?.nodeId || '').toLowerCase();
         const userName = (entry?.userName || '').toLowerCase();
         const userId = (entry?.userId || '').toLowerCase();
@@ -421,6 +421,8 @@ routes.push({
               } else {
                 setting.nodeValues.set(this.confirmRevertEntry.nodeId, this.confirmRevertEntry.oldValue);
               }
+            } else if (!this.confirmRevertEntry.oldValue && setting.default) {
+              setting.value = setting.default
             } else {
               setting.value = this.confirmRevertEntry.oldValue;
             }
@@ -439,6 +441,7 @@ routes.push({
       const created = {
         id: setting.id,
         global: setting.global,
+        allowedNodeTypes: setting.allowedNodeTypes,
         node: setting.node,
         title: setting.title,
         description: setting.description,
@@ -1199,8 +1202,14 @@ routes.push({
     },
     recomputeAvailableNodes(setting) {
       if (!setting) return;
+      const allowedTypes = setting.allowedNodeTypes;
       const eligible = this.nodes.filter(n => {
-        return n.status == GridMemberAccepted && !setting.nodeValues.has(n.id);
+        if (n.status != GridMemberAccepted) return false;
+        if (setting.nodeValues.has(n.id)) return false;
+        if (allowedTypes && allowedTypes.length > 0) {
+          return allowedTypes.includes(n.role);
+        }
+        return true;
       });
       this.availableNodes = eligible.map(n => { return { title: n.name + " (" + n.role + ")", value: n.id } });
     },

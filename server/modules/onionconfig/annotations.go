@@ -108,6 +108,7 @@ func ApplyAnnotations(setting *model.Setting, annotations map[string]interface{}
 		case "required":
 			setting.Required = value.(bool)
 		case "uiElements":
+			setting.UiElements = nil
 			tmpElements := value.([]interface{})
 			for _, tmp := range tmpElements {
 				if tmpMap, ok := tmp.(map[string]interface{}); ok {
@@ -145,6 +146,8 @@ func ApplyAnnotations(setting *model.Setting, annotations map[string]interface{}
 			setting.UiElementsDeleteMessage = value.(string)
 		case "storage":
 			setting.Storage = fmt.Sprintf("%v", value)
+		case "allowedNodeTypes":
+			setting.AllowedNodeTypes = CastToStringArray(value)
 		}
 	}
 }

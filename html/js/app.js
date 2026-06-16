@@ -814,6 +814,9 @@ $(document).ready(function () {
         makeHeader(label, value) {
           return { text: label, value: value };
         },
+        formatValueWithDefault(value, defaultValue) {
+          return (value === null || value === '' ? defaultValue : String(value));
+        },
         formatDateTime(date) {
           return this.formatDate(date, this.i18n.dateTimeFormat, this.i18n.dateUnknown);
         },

@@ -298,6 +298,45 @@ func TestResolveExistingSetting(t *testing.T) {
 		assert.Nil(t, settingDef)
 		assert.Equal(t, "", oldValue)
 	})
+
+	t.Run("NodeValueEqualsDefault_NotReturned", func(t *testing.T) {
+		settings := []*model.Setting{
+			{Id: "myapp.str", NodeId: "", Value: "global_val", Default: "default_val"},
+			{Id: "myapp.str", NodeId: "node1", Value: "default_val", Default: "default_val"},
+		}
+		settingDef, oldValue := resolveExistingSetting(settings, "myapp.str", "node1")
+		assert.NotNil(t, settingDef)
+		assert.Equal(t, "", oldValue)
+	})
+
+	t.Run("NodeValueEqualsDefault_GlobalOnly", func(t *testing.T) {
+		settings := []*model.Setting{
+			{Id: "myapp.str", NodeId: "", Value: "default_val", Default: "default_val"},
+		}
+		settingDef, oldValue := resolveExistingSetting(settings, "myapp.str", "")
+		assert.NotNil(t, settingDef)
+		assert.Equal(t, "", oldValue)
+	})
+
+	t.Run("NodeValueDiffersFromDefault_Returned", func(t *testing.T) {
+		settings := []*model.Setting{
+			{Id: "myapp.str", NodeId: "", Value: "global_val", Default: "default_val"},
+			{Id: "myapp.str", NodeId: "node1", Value: "custom_val", Default: "default_val"},
+		}
+		settingDef, oldValue := resolveExistingSetting(settings, "myapp.str", "node1")
+		assert.NotNil(t, settingDef)
+		assert.Equal(t, "custom_val", oldValue)
+	})
+
+	t.Run("NodeDefaultEmpty_ValueReturned", func(t *testing.T) {
+		settings := []*model.Setting{
+			{Id: "myapp.str", NodeId: "", Value: "global_val"},
+			{Id: "myapp.str", NodeId: "node1", Value: "node_val"},
+		}
+		settingDef, oldValue := resolveExistingSetting(settings, "myapp.str", "node1")
+		assert.NotNil(t, settingDef)
+		assert.Equal(t, "node_val", oldValue)
+	})
 }
 
 func TestFilterUnchangedReverts(t *testing.T) {
@@ -349,5 +388,89 @@ func TestFilterUnchangedReverts(t *testing.T) {
 		filtered, err := oc.filterUnchangedReverts(context.Background(), nil)
 		assert.NoError(t, err)
 		assert.Empty(t, filtered)
+	})
+}
+
+func TestApplyAnnotations_AllowedNodeTypes(t *testing.T) {
+	t.Run("SetsAllowedNodeTypes", func(t *testing.T) {
+		setting := &model.Setting{Id: "test.setting"}
+		annotations := map[string]interface{}{
+			"node": true,
+			"allowedNodeTypes": []interface{}{"manager", "worker"},
+		}
+		ApplyAnnotations(setting, annotations, nil)
+		assert.Equal(t, []string{"manager", "worker"}, setting.AllowedNodeTypes)
+	})
+
+	t.Run("EmptyAllowedNodeTypes", func(t *testing.T) {
+		setting := &model.Setting{Id: "test.setting"}
+		annotations := map[string]interface{}{
+			"node": true,
+			"allowedNodeTypes": []interface{}{},
+		}
+		ApplyAnnotations(setting, annotations, nil)
+		assert.Empty(t, setting.AllowedNodeTypes)
+	})
+
+	t.Run("NoAllowedNodeTypesAnnotation", func(t *testing.T) {
+		setting := &model.Setting{Id: "test.setting"}
+		annotations := map[string]interface{}{
+			"node": true,
+		}
+		ApplyAnnotations(setting, annotations, nil)
+		assert.Empty(t, setting.AllowedNodeTypes)
+	})
+
+	t.Run("SingleNodeType", func(t *testing.T) {
+		setting := &model.Setting{Id: "test.setting"}
+		annotations := map[string]interface{}{
+			"node": true,
+			"allowedNodeTypes": []interface{}{"manager"},
+		}
+		ApplyAnnotations(setting, annotations, nil)
+		assert.Equal(t, []string{"manager"}, setting.AllowedNodeTypes)
+	})
+}
+
+func TestValidateAllowedNodeTypes(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(dir+"/local/pillar", 0755))
+
+	srv := server.NewFakeAuthorizedServer(nil)
+	ready := make(chan struct{})
+	close(ready)
+	oc := &OnionConfig{
+		server:       srv,
+		saltstackDir: dir,
+		ready:        ready,
+	}
+
+	t.Run("NoAllowedTypes_returnsNil", func(t *testing.T) {
+		setting := &model.Setting{Id: "test.setting", NodeId: "node1"}
+		settingDef := &model.Setting{Id: "test.setting", AllowedNodeTypes: nil}
+		err := oc.validateAllowedNodeTypes(context.Background(), setting, settingDef)
+		assert.NoError(t, err)
+	})
+
+	t.Run("EmptyAllowedTypes_returnsNil", func(t *testing.T) {
+		setting := &model.Setting{Id: "test.setting", NodeId: "node1"}
+		settingDef := &model.Setting{Id: "test.setting", AllowedNodeTypes: []string{}}
+		err := oc.validateAllowedNodeTypes(context.Background(), setting, settingDef)
+		assert.NoError(t, err)
+	})
+
+	t.Run("NoNodeId_returnsNil", func(t *testing.T) {
+		setting := &model.Setting{Id: "test.setting", NodeId: ""}
+		settingDef := &model.Setting{Id: "test.setting", AllowedNodeTypes: []string{"manager"}}
+		err := oc.validateAllowedNodeTypes(context.Background(), setting, settingDef)
+		assert.NoError(t, err)
+	})
+
+	t.Run("NoGridMembersStore_returnsNil", func(t *testing.T) {
+		setting := &model.Setting{Id: "test.setting", NodeId: "node1"}
+		settingDef := &model.Setting{Id: "test.setting", AllowedNodeTypes: []string{"manager"}}
+		oc.server.GridMembersstore = nil
+		err := oc.validateAllowedNodeTypes(context.Background(), setting, settingDef)
+		assert.NoError(t, err)
 	})
 }

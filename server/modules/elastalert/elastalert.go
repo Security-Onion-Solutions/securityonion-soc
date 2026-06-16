@@ -133,6 +133,7 @@ type ElastAlertEngine struct {
 	aiRepoPath                         string
 	customAlerters                     *map[string]interface{}
 	autoUpdateEnabled                  bool
+	useEsql                            bool
 	detections.SyncSchedulerParams
 	detections.IntegrityCheckerData
 	detections.IOManager
@@ -244,6 +245,10 @@ func (e *ElastAlertEngine) GetState() *model.EngineState {
 	return util.Ptr(e.EngineState)
 }
 
+func (e *ElastAlertEngine) UseEsql() bool {
+	return e.useEsql
+}
+
 func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.SyncThread = &sync.WaitGroup{}
 	e.InterruptChan = make(chan bool, 1)
@@ -277,6 +282,7 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.criticalSeverityAlerters = module.GetStringArrayDefault(config, "additionalSev5Alerters", []string{})
 	e.criticalSeverityAlerterParams = module.GetStringDefault(config, "additionalSev5AlertersParams", "")
 	e.autoUpdateEnabled = module.GetBoolDefault(config, "autoUpdateEnabled", DEFAULT_AUTO_UPDATE_ENABLED)
+	e.useEsql = module.GetBoolDefault(config, "useEsql", false)
 
 	if custom, ok := config["additionalUserDefinedNotifications"]; ok {
 		switch ct := custom.(type) {
@@ -1656,7 +1662,16 @@ func (e *ElastAlertEngine) sigmaToElastAlert(ctx context.Context, det *model.Det
 		rule = string(raw)
 	}
 
-	args := []string{"convert", "-t", "eql", "-p", "/opt/sensoroni/sigma_final_pipeline.yaml", "-p", "/opt/sensoroni/sigma_so_pipeline.yaml", "-p", "windows-logsources", "-p", "ecs_windows", "/dev/stdin"}
+	target := "eql"
+	if e.useEsql {
+		target = "esql"
+	}
+	args := []string{"convert", "-t", target, "-p", "/opt/sensoroni/sigma_final_pipeline.yaml", "-p", "/opt/sensoroni/sigma_so_pipeline.yaml", "-p", "windows-logsources"}
+
+	if !e.useEsql {
+		args = append(args, "-p", "ecs_windows")
+	}
+	args = append(args, "/dev/stdin")
 
 	cmd := exec.CommandContext(ctx, "sigma", args...)
 	cmd.Stdin = strings.NewReader(rule)
@@ -1872,11 +1887,12 @@ type CustomWrapper struct {
 	SigmaLevel        string   `yaml:"sigma_level"`
 	Alert             []string `yaml:"alert"`
 
-	Index   string                   `yaml:"index"`
-	Name    string                   `yaml:"name"`
-	Realert *TimeFrame               `yaml:"realert,omitempty"` // or 0
-	Type    string                   `yaml:"type"`
-	Filter  []map[string]interface{} `yaml:"filter"`
+	Index          string                   `yaml:"index"`
+	Name           string                   `yaml:"name"`
+	Realert        *TimeFrame               `yaml:"realert,omitempty"` // or 0
+	Type           string                   `yaml:"type"`
+	Filter         []map[string]interface{} `yaml:"filter"`
+	TimestampField string                   `yaml:"timestamp_field,omitempty"`
 }
 
 type TimeFrame struct {
@@ -2022,6 +2038,12 @@ func (e *ElastAlertEngine) wrapRule(det *model.Detection, rule string) (string, 
 	realert := TimeFrame{}
 	realert.SetSeconds(0)
 
+	timestampField := "@timestamp"
+	filterType := "eql"
+	if e.useEsql {
+		filterType = "esql"
+	}
+
 	wrapper := &CustomWrapper{
 		DetectionTitle:    det.Title,
 		DetectionPublicId: det.PublicID,
@@ -2037,7 +2059,8 @@ func (e *ElastAlertEngine) wrapRule(det *model.Detection, rule string) (string, 
 		Name:              fmt.Sprintf("%s -- %s", det.Title, det.PublicID),
 		Realert:           &realert,
 		Type:              "any",
-		Filter:            []map[string]interface{}{{"eql": rule}},
+		Filter:            []map[string]interface{}{{filterType: rule}},
+		TimestampField:    timestampField,
 	}
 
 	if slices.Contains(sigmaTags, "so.notification") {
@@ -2066,6 +2089,10 @@ func (e *ElastAlertEngine) wrapRule(det *model.Detection, rule string) (string, 
 			strYaml += "\n" + params + "\n"
 		}
 	}
+
+	// ES|QL sigma converter rename hardcoded timebucket refs to @timestamp
+	strYaml = strings.ReplaceAll(strYaml, " | eval timebucket", " | eval "+timestampField)
+	strYaml = strings.ReplaceAll(strYaml, " by timebucket", " by "+timestampField)
 
 	if len(wrapper.Alert) == 0 {
 		log.WithFields(log.Fields{

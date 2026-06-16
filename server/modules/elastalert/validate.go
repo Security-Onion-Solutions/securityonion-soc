@@ -58,6 +58,7 @@ type SigmaRule struct {
 	Tags           []string               `yaml:"tags,omitempty"`
 	LogSource      LogSource              `yaml:"logsource"`
 	Detection      SigmaDetection         `yaml:"detection"`
+	Correlation    *SigmaCorrelation      `yaml:"correlation,omitempty"`
 	Fields         []string               `yaml:"fields,omitempty"`
 	FalsePositives OneOrMore[string]      `yaml:"falsepositives,omitempty"`
 	Level          *SigmaLevel            `yaml:"level"`
@@ -117,6 +118,19 @@ type RelatedRule struct {
 	Type RelatedRuleType `yaml:"type"`
 }
 
+type SigmaCorrelation struct {
+	Type     string        `yaml:"type"`
+	Rules    []string      `yaml:"rules,omitempty"`
+	GroupBy  []string      `yaml:"group-by,omitempty"`
+	Timespan *string       `yaml:"timespan,omitempty"`
+	Condition map[string]int `yaml:"condition,omitempty"`
+	Rest     map[string]interface{} `yaml:",inline"`
+}
+
+func (c *SigmaCorrelation) HasRequiredFields() bool {
+	return c.Type != "" && c.Rules != nil && c.Timespan != nil
+}
+
 func ParseElastAlertRule(data []byte) (*SigmaRule, error) {
 	rule := &SigmaRule{}
 
@@ -147,18 +161,43 @@ func (e *SigmaRule) Validate() error {
 		requiredFields = append(requiredFields, "title")
 	}
 
-	if e.LogSource == (LogSource{}) {
-		requiredFields = append(requiredFields, "logsource")
+	hasCorrelation := e.Correlation != nil && e.Correlation.HasRequiredFields()
+
+	if hasCorrelation {
+		return checkNoError(requiredFields)
 	}
 
-	if len(e.Detection.Condition.Values) == 0 && e.Detection.Condition.Value == "" {
-		requiredFields = append(requiredFields, "detection.condition")
+	if e.Correlation != nil {
+		correlation := e.Correlation
+		if correlation.Type == "" {
+			requiredFields = append(requiredFields, "correlation.type")
+		}
+		if correlation.Rules == nil {
+			requiredFields = append(requiredFields, "correlation.rules")
+		}
+		if correlation.Timespan == nil || *correlation.Timespan == "" {
+			requiredFields = append(requiredFields, "correlation.timespan")
+		}
+	} else {
+		if e.LogSource == (LogSource{}) {
+			requiredFields = append(requiredFields, "logsource")
+		}
+		if len(e.Detection.Condition.Values) == 0 && e.Detection.Condition.Value == "" {
+			requiredFields = append(requiredFields, "detection.condition")
+		}
 	}
 
 	if len(requiredFields) > 0 {
 		return fmt.Errorf("missing required fields: %s", strings.Join(requiredFields, ", "))
 	}
 
+	return nil
+}
+
+func checkNoError(requiredFields []string) error {
+	if len(requiredFields) > 0 {
+		return fmt.Errorf("missing required fields: %s", strings.Join(requiredFields, ", "))
+	}
 	return nil
 }
 
