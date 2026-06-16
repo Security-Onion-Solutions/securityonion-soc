@@ -1999,7 +1999,7 @@ func TestOpenAIAdapter_SendMessageStream(t *testing.T) {
 		{
 			name:             "initial stream error",
 			initialStreamErr: errors.New("stream connection failed"),
-			expectedStatus:   500,
+			expectedStatus:   200,
 			expectError:      true,
 		},
 	}
@@ -2043,9 +2043,10 @@ func TestOpenAIAdapter_SendMessageStream(t *testing.T) {
 				assert.Error(t, err)
 				assert.NotNil(t, resp)
 				assert.Equal(t, tt.expectedStatus, resp.StatusCode)
-				// Read body to verify error message
+				// Read body to verify the real error rides in a parseable SSE error event.
 				body := readResponseBody(t, resp)
-				assert.Contains(t, body, "ERROR_FIRST_RESPONSE")
+				assert.Contains(t, body, `"type":"error"`)
+				assert.Contains(t, body, "stream connection failed")
 				return
 			}
 

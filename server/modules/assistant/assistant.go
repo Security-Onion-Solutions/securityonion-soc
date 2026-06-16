@@ -764,6 +764,9 @@ func (ac *AssistantCoordinator) Health(ctx context.Context, aiModel string) (*mo
 func (ac *AssistantCoordinator) ToolInSession(ctx context.Context, toolReq *model.ToolRequest, toolName string) ([]*model.Message, error) {
 	logger := log.FromContext(ctx)
 
+	// Detach for the whole turn
+	ctx = buildNoTimeoutCtx(ctx)
+
 	result, toolErr := ac.ExecuteTool(ctx, toolName, toolReq)
 	if toolErr != nil {
 		logger.WithError(toolErr).Error("unable to execute tool")
@@ -891,6 +894,9 @@ func (ac *AssistantCoordinator) continueWithToolResultSync(ctx context.Context, 
 func (ac *AssistantCoordinator) ToolStreamInSession(ctx context.Context, toolReq *model.ToolRequest, toolName string) (*model.StreamedTurn, error) {
 	logger := log.FromContext(ctx)
 
+	// Detach for the whole turn
+	ctx = buildNoTimeoutCtx(ctx)
+
 	result, toolErr := ac.ExecuteTool(ctx, toolName, toolReq)
 	if toolErr != nil {
 		logger.WithError(toolErr).Error("unable to execute tool")
@@ -932,21 +938,22 @@ func (ac *AssistantCoordinator) ToolStreamInSession(ctx context.Context, toolReq
 func (ac *AssistantCoordinator) continueWithToolResult(ctx context.Context, sess *model.AssistantSession, sessionId, aiModel string, toolMsg *model.Message) (*model.StreamedTurn, error) {
 	logger := log.FromContext(ctx)
 
+	// Detach up front
+	noTimeOutCtx := buildNoTimeoutCtx(ctx)
+
 	// Enforce the per-sub-session output-token budget. When a sub-agent has spent
 	// its budget, halt it instead of running another model turn; otherwise cap this
 	// turn's output at the remaining budget.
 	isSub, remaining := ac.subSessionOutputBudget(sess)
 	if isSub && remaining <= 0 {
-		return ac.haltSubSessionStream(ctx, sess, aiModel, toolMsg)
+		return ac.haltSubSessionStream(noTimeOutCtx, sess, aiModel, toolMsg)
 	}
 
-	messages, err := ac.loadSessionHistory(ctx, sess)
+	messages, err := ac.loadSessionHistory(noTimeOutCtx, sess)
 	if err != nil {
 		return nil, err
 	}
 	messages = append(messages, toolMsg)
-
-	noTimeOutCtx := buildNoTimeoutCtx(ctx)
 
 	var sendOpts []model.ChatOpt
 	if isSub {
@@ -1227,7 +1234,7 @@ func (ac *AssistantCoordinator) startDelegation(ctx context.Context, toolReq *mo
 		Finalize:  finalize,
 		SessionId: kickoff.ChildSessionId,
 		Model:     kickoff.ChildModel,
-		Session: session,
+		Session:   session,
 		Marker: &model.DelegationMarker{
 			Type:            model.DelegationMarkerStart,
 			ChildSessionId:  kickoff.ChildSessionId,
@@ -1243,6 +1250,9 @@ func (ac *AssistantCoordinator) startDelegation(ctx context.Context, toolReq *mo
 // returns the parent's streamed turn carrying a delegation_resolved marker so the
 // UI un-nests and renders the parent's continuation.
 func (ac *AssistantCoordinator) ResolveDelegationStream(ctx context.Context, childSession *model.AssistantSession, childFinalText string) (*model.StreamedTurn, error) {
+	// Detach before loading the parent
+	ctx = buildNoTimeoutCtx(ctx)
+
 	toolMsg := buildDelegationResultMessage(childSession.ParentToolUseId, childFinalText)
 
 	// Load the parent session once for the whole turn. Prefer its live stored
@@ -1376,6 +1386,9 @@ func (ac *AssistantCoordinator) startDelegationSync(ctx context.Context, toolReq
 // parent's response messages together with the parent session record so the
 // caller can keep chaining without re-fetching it.
 func (ac *AssistantCoordinator) resolveDelegationSync(ctx context.Context, childSession *model.AssistantSession, childFinalText string) ([]*model.Message, *model.AssistantSession, error) {
+	// Detach before loading the parent
+	ctx = buildNoTimeoutCtx(ctx)
+
 	toolMsg := buildDelegationResultMessage(childSession.ParentToolUseId, childFinalText)
 
 	// Load the parent session once for the whole turn. Prefer its live stored

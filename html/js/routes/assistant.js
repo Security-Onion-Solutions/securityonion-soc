@@ -2028,20 +2028,25 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         // Allows tool use blocks at the end of a session to persist even when the user clicks away
         } else {
           frontendMsg.toolUses = toolBlocks.map(block => {
+            // A delegate that spawned a sub-session is running, not awaiting approval:
+            // re-prompting would spawn a duplicate sub-session.
+            const inFlightDelegation = !!(this._loadSubSessions && this._loadSubSessions.byParentToolUseId.has(block.id));
             const toolUse = {
               id: block.id || 'unknown',
               name: block.name || 'unknown',
               input: block.input || {}, // Ensure input is always an object, never null/undefined
-              status: 'pending_approval',
+              status: inFlightDelegation ? 'executing' : 'pending_approval',
               result: null,
               error: null,
               rawResult: null, // Will be populated by subsequent tool result message
               timestamp: msg.createTime || new Date().toISOString(),
-              approved: null,
+              approved: inFlightDelegation ? true : null,
               sessionId: this.currentChatId
             };
             this.getSessionToolMap(this.currentChatId).set(toolUse.id, toolUse);
-            this.mostRecentFloatingTool.set(this.currentChatId, toolUse);
+            if (!inFlightDelegation) {
+              this.mostRecentFloatingTool.set(this.currentChatId, toolUse);
+            }
             return toolUse;
           });
         }
@@ -2079,20 +2084,24 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       for (const toolUse of toolUses) {
         if (!toolUse.name || !toolUse.name.startsWith('delegate_to_')) continue;
         const sub = index.byParentToolUseId.get(toolUse.id);
-        if (sub) this.reconstructChildSession(toolUse, sub, index);
+        if (sub) this.reconstructChildSession(toolUse, sub, index, this.currentChatId);
       }
     },
 
     // Populate a delegate tool's childSession from a stored sub-session's history:
     // the sub-agent's prose becomes a collapsed thought, its tool calls become nested
     // tool cards (with raw results), recursing into deeper delegations.
-    reconstructChildSession(delegateToolUse, sub, index) {
+    reconstructChildSession(delegateToolUse, sub, index, ownerSessionId) {
       const agentName = (sub.session && sub.session.delegateAgent) || '';
       const childSessionId = sub.session && sub.session.sessionId;
       const cs = this.ensureChildSession(delegateToolUse, agentName);
 
+      // The backend marks which tool_use in this sub-session awaits approval.
+      const pendingToolUseId = sub.pendingApproval && sub.pendingApproval.toolUseId;
+
       const history = Array.isArray(sub.history) ? sub.history : [];
       const toolUseById = new Map();
+      const delegateChildTools = []; // grandchild delegations, recursed after statuses are set
       const childMessages = [];
 
       for (const sm of history) {
@@ -2111,6 +2120,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
                 t.status = 'error';
               } else {
                 t.rawResult = cb && cb.json;
+                t.status = 'completed';
               }
               t.completedAt = sm.createTime;
             }
@@ -2133,7 +2143,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
               id: b.id || 'unknown',
               name: b.name || 'unknown',
               input: b.input || {},
-              status: 'completed',
+              status: 'completed', // provisional; finalized below
               result: null,
               error: null,
               rawResult: null,
@@ -2144,10 +2154,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
             childMsg.toolUses.push(childTool);
             toolUseById.set(childTool.id, childTool);
 
-            // Nested delegation (grandchild and deeper): recurse.
+            // Defer grandchild recursion until this tool's status is finalized below.
             if (childTool.name.startsWith('delegate_to_')) {
               const gchild = index.byParentToolUseId.get(childTool.id);
-              if (gchild) this.reconstructChildSession(childTool, gchild, index);
+              if (gchild) delegateChildTools.push({ childTool, gchild });
             }
           }
         }
@@ -2155,7 +2165,38 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         childMessages.push(childMsg);
       }
 
+      // Finalize tools with no tool_result: a delegate that spawned a sub-session is
+      // running; the backend-flagged tool_use awaits approval; anything else stays.
+      for (const t of toolUseById.values()) {
+        if (t.rawResult != null || t.status === 'error') continue; // resolved
+        if (index.byParentToolUseId.has(t.id)) {
+          t.status = 'executing';
+          t.approved = true;
+        } else if (t.id === pendingToolUseId) {
+          t.status = 'pending_approval';
+          t.approved = null;
+          // Register so the queue runner can resolve and fire it, like the live path.
+          this.getSessionToolMap(childSessionId).set(t.id, t);
+        }
+      }
+
       cs.messages = childMessages;
+
+      // While the delegation is running, re-register it as a live delegation child so
+      // the approval's response streams nested and resolves back into its parent.
+      if (delegateToolUse.status === 'executing' && childSessionId) {
+        this.delegationChildren.set(childSessionId, {
+          parentToolUse: delegateToolUse,
+          parentSessionId: ownerSessionId || this.currentChatId,
+          parentToolUseId: delegateToolUse.id,
+          agentName,
+        });
+      }
+
+      // Recurse into grandchild delegations now that statuses are finalized.
+      for (const { childTool, gchild } of delegateChildTools) {
+        this.reconstructChildSession(childTool, gchild, index, childSessionId);
+      }
     },
 
     // Helper method to convert backend message format to frontend format

@@ -1415,8 +1415,11 @@ func TestGeminiAdapterSendMessageStream_ReleasesCallerWithoutContent(t *testing.
 			yield(nil, errors.New("quota exceeded"))
 		}
 		run(t, seq, func(t *testing.T, response *http.Response, body string) {
-			assert.Equal(t, http.StatusInternalServerError, response.StatusCode)
-			assert.Equal(t, "ERROR_FIRST_RESPONSE", body)
+			// A first-chunk error is now delivered as a parseable SSE error event
+			// (200) carrying the real message, not an opaque sentinel body.
+			assert.Equal(t, http.StatusOK, response.StatusCode)
+			assert.Contains(t, body, `"type":"error"`)
+			assert.Contains(t, body, "quota exceeded")
 		})
 	})
 

@@ -430,6 +430,23 @@ type AssistantSessionDetails struct {
 	// Delegated sub-sessions descending from this session (any depth), each with
 	// their own messages. Used to reconstruct nested sub-agent activity on reload.
 	SubSessions []*AssistantSessionDetails `json:"subSessions,omitempty"`
+	// The tool_use in this sub-session awaiting the user's approval, if any (a
+	// trailing tool_use with no tool_result that did not itself spawn a sub-session).
+	// Derived server-side so the client resumes by POSTing these exact values rather
+	// than re-deriving which nested tool is pending. Only populated for sub-sessions
+	// (see GetSessionDetails); the root session's pending tool is re-derived
+	// client-side from its trailing message.
+	PendingApproval *PendingToolApproval `json:"pendingApproval,omitempty"`
+}
+
+// PendingToolApproval identifies a tool_use awaiting the user's approval in a
+// (sub-)session: the exact values the client must POST to /assistant/tool/{toolName}
+// to resume that turn.
+type PendingToolApproval struct {
+	SessionId string          `json:"sessionId"`
+	ToolUseId string          `json:"toolUseId"`
+	ToolName  string          `json:"toolName"`
+	Input     json.RawMessage `json:"input,omitempty"`
 }
 
 type ModelUsageStats struct {

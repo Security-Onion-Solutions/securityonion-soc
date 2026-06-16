@@ -2871,6 +2871,78 @@ data: [DONE]`
 		assert.NotNil(t, msg)
 		assert.Equal(t, []byte("sig-123"), msg.ContentBlocks[0].ThoughtSignature)
 	})
+
+	// A first-chunk LLM failure now arrives as an SSE error event (see
+	// handleStreamError); it must surface as a real error, not a nil-deref panic.
+	t.Run("error event surfaces the real message", func(t *testing.T) {
+		data := `data: {"type":"error","error":{"type":"error","message":"quota exceeded"}}
+
+data: [DONE]`
+		msg, err := UnstreamResponse(context.Background(), data, nil)
+		assert.Error(t, err)
+		assert.Nil(t, msg)
+		assert.Contains(t, err.Error(), "quota exceeded")
+	})
+
+	// Backstop: a message-less stream (empty / no message_start) must never panic,
+	// even with a non-nil aux (the exact shape that previously crashed the handler).
+	t.Run("message-less stream with aux returns nil without panicking", func(t *testing.T) {
+		aux := &model.AuxMessageData{ThoughtSignatures: map[string][]byte{"t1": []byte("sig")}}
+		for _, data := range []string{"", "data: [DONE]", "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"orphan\"}}\n\ndata: [DONE]"} {
+			msg, err := UnstreamResponse(context.Background(), data, aux)
+			assert.NoError(t, err)
+			assert.Nil(t, msg)
+		}
+	})
+}
+
+func assistantMsg(blocks ...model.ContentBlock) *model.StoredMessage {
+	return &model.StoredMessage{Message: &model.Message{Role: "assistant", ContentBlocks: blocks}}
+}
+
+func toolResultMsg(toolUseId string) *model.StoredMessage {
+	return &model.StoredMessage{
+		Tags:    []string{"tool_result"},
+		Message: &model.Message{Role: "user", ContentBlocks: []model.ContentBlock{{ToolResult: &model.ToolResult{ToolUseId: toolUseId}}}},
+	}
+}
+
+func TestPendingToolApproval(t *testing.T) {
+	toolUse := model.ContentBlock{Type: "tool_use", Id: "tu-1", Name: "query_events", Input: json.RawMessage(`{"q":"dns"}`)}
+
+	t.Run("trailing unresolved tool_use is pending", func(t *testing.T) {
+		history := []*model.StoredMessage{
+			{Message: &model.Message{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "go"}}}},
+			assistantMsg(toolUse),
+		}
+		pending := pendingToolApproval("child-1", history, nil)
+		assert.NotNil(t, pending)
+		assert.Equal(t, "child-1", pending.SessionId)
+		assert.Equal(t, "tu-1", pending.ToolUseId)
+		assert.Equal(t, "query_events", pending.ToolName)
+		assert.JSONEq(t, `{"q":"dns"}`, string(pending.Input))
+	})
+
+	t.Run("tool_use with a following tool_result is resolved (nil)", func(t *testing.T) {
+		history := []*model.StoredMessage{
+			assistantMsg(toolUse),
+			toolResultMsg("tu-1"),
+			assistantMsg(model.ContentBlock{Type: "text", Text: "done"}),
+		}
+		assert.Nil(t, pendingToolApproval("child-1", history, nil))
+	})
+
+	t.Run("delegate tool_use that spawned a sub-session is running, not pending (nil)", func(t *testing.T) {
+		delegate := model.ContentBlock{Type: "tool_use", Id: "del-1", Name: "delegate_to_Hunter", Input: json.RawMessage(`{}`)}
+		history := []*model.StoredMessage{assistantMsg(delegate)}
+		delegated := map[string]struct{}{"del-1": {}}
+		assert.Nil(t, pendingToolApproval("parent", history, delegated))
+	})
+
+	t.Run("no tool_use yields nil", func(t *testing.T) {
+		history := []*model.StoredMessage{assistantMsg(model.ContentBlock{Type: "text", Text: "hi"})}
+		assert.Nil(t, pendingToolApproval("s", history, nil))
+	})
 }
 
 func TestPostTool_StreamingUpstreamErrors(t *testing.T) {
@@ -2964,4 +3036,128 @@ func TestPostTool_StreamingDelegationResolveError(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Contains(t, w.Body.String(), "child answer")
+}
+
+// disconnectingWriter is an http.ResponseWriter+Flusher that fails every Write,
+// simulating a client that disconnected (e.g. a browser refresh) before any bytes
+// of the turn could be delivered. It records the status code only.
+type disconnectingWriter struct {
+	header http.Header
+	code   int
+}
+
+func (d *disconnectingWriter) Header() http.Header {
+	if d.header == nil {
+		d.header = http.Header{}
+	}
+	return d.header
+}
+func (d *disconnectingWriter) WriteHeader(code int)      { d.code = code }
+func (d *disconnectingWriter) Write([]byte) (int, error) { return 0, errors.New("client disconnected") }
+func (d *disconnectingWriter) Flush()                    {}
+
+// paddedSSE prefixes a real SSE body with a >1KB message_start whose id is huge, so
+// the body spans multiple 1024-byte reads. This is what makes the disconnect tests
+// meaningful: the meaningful events sit beyond the first read, so a streamBody that
+// abandoned the upstream read on the first failed client write would buffer only a
+// truncated, unparseable prefix.
+func paddedSSE(eventsAfterStart string) *http.Response {
+	bigId := strings.Repeat("x", 2000)
+	body := "data: {\"type\":\"message_start\",\"message\":{\"id\":\"" + bigId + "\",\"role\":\"assistant\",\"content\":[]}}\n\n" +
+		eventsAfterStart +
+		"data: [DONE]\n\n"
+	return &http.Response{
+		StatusCode: 200,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+		Body:       io.NopCloser(strings.NewReader(body)),
+	}
+}
+
+// A client that disconnects mid-turn must not cost us the turn: streamBody keeps
+// draining the upstream body so finalize receives the FULL response and the parse
+// correctly classifies it. This is the regression behind the "dead sub-session /
+// never-resolving delegation" bug. Two shapes are exercised:
+//   - the sub-agent's continuation requests another tool: the loop must recognize the
+//     tool_use (parse the full body) and break WITHOUT resolving the delegation, so a
+//     pending tool is left for the user to resume on reload.
+//   - the sub-agent's continuation is final text: the full text must reach
+//     ResolveDelegationStream so the delegation folds back into its parent.
+func TestPostTool_StreamingClientDisconnectStillPersistsTurn(t *testing.T) {
+	subSession := func() *model.AssistantSession {
+		return &model.AssistantSession{SessionId: "child", ParentSessionId: "parent", ParentToolUseId: "delegate-tu", ParentModel: "agent"}
+	}
+
+	t.Run("tool_use continuation: full turn finalized, no premature resolution", func(t *testing.T) {
+		srv := &Server{Authorizer: &rbac.FakeAuthorizer{Authorized: true}}
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockManager := mock.NewMockAssistantManager(ctrl)
+		srv.AssistantManager = mockManager
+
+		finalized := make(chan []byte, 1)
+		toolUseResp := paddedSSE(
+			"data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"t2\",\"name\":\"query_events\"}}\n\n" +
+				"data: {\"type\":\"content_block_stop\",\"index\":0}\n\n")
+
+		mockManager.EXPECT().ToolStreamInSession(gomock.Any(), gomock.Any(), "query_events").Return(
+			&model.StreamedTurn{Response: toolUseResp, SessionId: "child", Model: "sonnet", Session: subSession(),
+				Finalize: func(raw []byte) error { finalized <- raw; return nil }}, nil)
+
+		// The continuation requests a tool, so the chain must NOT resolve the delegation.
+		mockManager.EXPECT().ResolveDelegationStream(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+		req, _ := newToolStreamRequest(t, "parent", "query_events")
+		w := &disconnectingWriter{}
+		NewAssistantHandler(srv).PostTool(w, req)
+
+		select {
+		case raw := <-finalized:
+			msg, err := UnstreamResponse(context.Background(), string(raw), nil)
+			assert.NoError(t, err)
+			if assert.NotNil(t, msg, "finalize must receive the full turn even though the client was gone") {
+				assert.True(t, messageHasToolUse(msg), "the persisted turn must contain the sub-agent's tool_use")
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("finalize was never called with the turn")
+		}
+	})
+
+	t.Run("final-text continuation: full child text reaches delegation resolution", func(t *testing.T) {
+		srv := &Server{Authorizer: &rbac.FakeAuthorizer{Authorized: true}}
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockManager := mock.NewMockAssistantManager(ctrl)
+		srv.AssistantManager = mockManager
+
+		textResp := paddedSSE(
+			"data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"child answer\"}}\n\n" +
+				"data: {\"type\":\"content_block_stop\",\"index\":0}\n\n")
+
+		mockManager.EXPECT().ToolStreamInSession(gomock.Any(), gomock.Any(), "query_events").Return(
+			&model.StreamedTurn{Response: textResp, SessionId: "child", Model: "sonnet", Session: subSession(), Finalize: noopFinalize}, nil)
+
+		// The full child text must survive the disconnect and drive resolution. A
+		// truncated read would deliver empty/partial text and fail this matcher.
+		resolved := make(chan string, 1)
+		mockManager.EXPECT().ResolveDelegationStream(gomock.Any(), gomock.Any(), "child answer").DoAndReturn(
+			func(_ context.Context, _ *model.AssistantSession, childText string) (*model.StreamedTurn, error) {
+				resolved <- childText
+				// A top-level parent turn ends the chain.
+				return &model.StreamedTurn{Response: paddedSSE(""), SessionId: "parent", Model: "agent",
+					Session: &model.AssistantSession{SessionId: "parent"}, Finalize: noopFinalize}, nil
+			})
+
+		req, _ := newToolStreamRequest(t, "parent", "query_events")
+		w := &disconnectingWriter{}
+		NewAssistantHandler(srv).PostTool(w, req)
+
+		select {
+		case childText := <-resolved:
+			assert.Equal(t, "child answer", childText)
+		case <-time.After(2 * time.Second):
+			t.Fatal("ResolveDelegationStream was never called")
+		}
+	})
 }

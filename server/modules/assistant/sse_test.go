@@ -111,14 +111,14 @@ func TestSSEEventWriter(t *testing.T) {
 			writeOp: func(w *sseEventWriter) error {
 				return w.writeError("Something went wrong")
 			},
-			expected: `data: {"type":"error","message":"Something went wrong"}` + "\n\n",
+			expected: `data: {"type":"error","error":{"type":"error","message":"Something went wrong"}}` + "\n\n",
 		},
 		{
 			name: "writeError with special characters",
 			writeOp: func(w *sseEventWriter) error {
 				return w.writeError(`Error: "API" failed\nLine 2`)
 			},
-			expected: `data: {"type":"error","message":"Error: \"API\" failed\\nLine 2"}` + "\n\n",
+			expected: `data: {"type":"error","error":{"type":"error","message":"Error: \"API\" failed\\nLine 2"}}` + "\n\n",
 		},
 	}
 
@@ -911,14 +911,20 @@ func TestHandleStreamErrorFirstSend(t *testing.T) {
 
 	assert.True(t, shouldReturn)
 	assert.NotNil(t, response)
-	assert.Equal(t, http.StatusInternalServerError, response.StatusCode)
+	// 200 so the client reads the stream; the error rides in an SSE "error" event so
+	// UnstreamResponse parses it (instead of nil-panicking on a message-less body).
+	assert.Equal(t, http.StatusOK, response.StatusCode)
 
-	// Verify body content
+	// Verify body carries the real error as a parseable SSE error event.
 	bodyBytes, err := io.ReadAll(response.Body)
 	assert.NoError(t, err)
-	assert.Equal(t, "ERROR_FIRST_RESPONSE", string(bodyBytes))
+	body := string(bodyBytes)
+	assert.Contains(t, body, `"type":"error"`)
+	assert.Contains(t, body, `"message":"connection failed"`)
+	assert.Contains(t, body, `data: [DONE]`)
 
-	// Buffer should be empty since error response replaced the fabricated one
+	// Buffer should be empty since the error was written to the fabricated response,
+	// not the passed-in writer.
 	assert.Empty(t, buf.String())
 }
 

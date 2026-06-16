@@ -67,15 +67,16 @@ func (ac *AssistantCoordinator) ChatInSession(ctx context.Context, incMsg *model
 func (ac *AssistantCoordinator) ChatStreamInSession(ctx context.Context, incMsg *model.IncomingMessage, entityType, entityId string) (*http.Response, *model.AuxMessageData, func(rawResponse []byte) error, error) {
 	logger := log.FromContext(ctx)
 
-	messages, isNewSession, err := ac.loadHistory(ctx, incMsg.SessionId)
+	// Detach up front
+	noTimeOutCtx := buildNoTimeoutCtx(ctx)
+
+	messages, isNewSession, err := ac.loadHistory(noTimeOutCtx, incMsg.SessionId)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
 	newMsg := newUserMessage(incMsg.Msg)
 	messages = append(messages, newMsg)
-
-	noTimeOutCtx := buildNoTimeoutCtx(ctx)
 
 	response, aux, err := ac.SendStream(noTimeOutCtx, incMsg.Model, messages)
 	if err != nil {
@@ -147,6 +148,8 @@ func (ac *AssistantCoordinator) createSessionIfNeeded(ctx context.Context, incMs
 	return ac.srv.Assistantstore.CreateSession(ctx, session)
 }
 
+// buildNoTimeoutCtx returns a context detached from the request's cancellation and
+// timeout, carrying over the requestor identity and request-scoped logger.
 func buildNoTimeoutCtx(ctx context.Context) context.Context {
 	noTimeOutCtx := context.Background()
 	if val := ctx.Value(web.ContextKeyRunAsUsername); val != nil {
@@ -157,5 +160,6 @@ func buildNoTimeoutCtx(ctx context.Context) context.Context {
 	if requestorId, ok := ctx.Value(web.ContextKeyRequestorId).(string); ok {
 		noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRequestorId, requestorId)
 	}
+	noTimeOutCtx = log.NewContext(noTimeOutCtx, log.FromContext(ctx))
 	return noTimeOutCtx
 }

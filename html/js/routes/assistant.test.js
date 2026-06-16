@@ -6411,3 +6411,147 @@ test('executeTool reports a top-level error when the stream dies after resolutio
   const lastMsg = comp.messages[comp.messages.length - 1];
   expect(lastMsg.content).toContain('late failure');
 });
+
+// --- Reload reconstruction of an in-flight delegation (backend-driven) ---
+// On refresh, GET /sessions/{id} returns sub-sessions each with a backend-derived
+// `pendingApproval`. The reload must render the delegate as running, the sub-agent's
+// pending tool as actionable, register it, and repopulate delegationChildren so the
+// subsequent approval streams nested and resolves.
+
+test('reload renders a paused delegation: delegate running, sub-agent tool actionable, wired to fire', () => {
+  comp.resetContextLength = jest.fn();
+  comp.currentChatId = 'parent-session';
+  comp.delegationChildren = new Map();
+  global.Vue = { ref: jest.fn((value) => ({ value })) };
+
+  const parentHistory = [
+    { createTime: '2025-01-01T12:00:00.000Z', message: { role: 'user', contentBlocks: [{ type: 'text', text: 'investigate' }] } },
+    { createTime: '2025-01-01T12:00:01.000Z', message: { role: 'assistant', contentBlocks: [
+      { type: 'tool_use', id: 'delegate-1', name: 'delegate_to_Hunter', input: { objective: 'find beacons' } },
+    ] } },
+  ];
+  const subSessions = [
+    {
+      session: { sessionId: 'child-1', parentToolUseId: 'delegate-1', delegateAgent: 'Hunter' },
+      pendingApproval: { sessionId: 'child-1', toolUseId: 'child-tool-1', toolName: 'query_events', input: { q: 'dns' } },
+      history: [
+        { message: { role: 'user', contentBlocks: [{ type: 'text', text: 'find beacons' }] } },
+        { createTime: '2025-01-01T12:00:02.000Z', message: { role: 'assistant', contentBlocks: [
+          { type: 'tool_use', id: 'child-tool-1', name: 'query_events', input: { q: 'dns' } },
+        ] } },
+      ],
+    },
+  ];
+
+  comp._loadSubSessions = comp.indexSubSessions(subSessions);
+  const result = comp.convertBackendMessagesToFrontend(parentHistory);
+  comp._loadSubSessions = null;
+
+  const delegateTool = result[result.length - 1].toolUses[0];
+  expect(delegateTool.id).toBe('delegate-1');
+  // Running, not pending approval (no re-prompt → no duplicate sub-session).
+  expect(delegateTool.status).toBe('executing');
+  expect(comp.mostRecentFloatingTool.has('parent-session')).toBe(false);
+  expect(delegateTool.childSession).toBeTruthy();
+
+  // The sub-agent's pending tool is actionable.
+  const pending = comp.pendingChildTools(delegateTool);
+  expect(pending).toHaveLength(1);
+  expect(pending[0].id).toBe('child-tool-1');
+  expect(pending[0].status).toBe('pending_approval');
+  expect(pending[0].sessionId).toBe('child-1');
+
+  // Registered so the queue runner can resolve + fire it, and delegationChildren is
+  // repopulated so the approval response nests under the delegate.
+  expect(comp.getSessionToolMap('child-1').get('child-tool-1')).toBe(pending[0]);
+  expect(comp.delegationChildren.has('child-1')).toBe(true);
+  const entry = comp.delegationChildren.get('child-1');
+  expect(entry.parentToolUseId).toBe('delegate-1');
+  expect(entry.parentSessionId).toBe('parent-session');
+  expect(entry.parentToolUse).toBe(delegateTool);
+});
+
+test('reload of a resolved delegation is unchanged (no pendingApproval): delegate + child completed', () => {
+  comp.resetContextLength = jest.fn();
+  comp.currentChatId = 'parent-session';
+  comp.delegationChildren = new Map();
+  global.Vue = { ref: jest.fn((value) => ({ value })) };
+
+  const parentHistory = [
+    { createTime: '2025-01-01T12:00:01.000Z', message: { role: 'assistant', contentBlocks: [
+      { type: 'tool_use', id: 'delegate-1', name: 'delegate_to_Hunter', input: {} },
+    ] } },
+    { createTime: '2025-01-01T12:00:03.000Z', tags: ['tool_result'], message: { role: 'user', contentBlocks: [
+      { toolResult: { toolUseId: 'delegate-1', content: [{ json: { result: 'done' } }] } },
+    ] } },
+    { createTime: '2025-01-01T12:00:04.000Z', message: { role: 'assistant', contentBlocks: [{ type: 'text', text: 'final answer' }] } },
+  ];
+  const subSessions = [
+    {
+      session: { sessionId: 'child-1', parentToolUseId: 'delegate-1', delegateAgent: 'Hunter' },
+      // resolved → backend returns no pendingApproval
+      history: [
+        { message: { role: 'user', contentBlocks: [{ type: 'text', text: 'obj' }] } },
+        { message: { role: 'assistant', contentBlocks: [{ type: 'tool_use', id: 'child-tool-1', name: 'query_events', input: {} }] } },
+        { tags: ['tool_result'], message: { role: 'user', contentBlocks: [{ toolResult: { toolUseId: 'child-tool-1', content: [{ json: { r: 1 } }] } }] } },
+        { message: { role: 'assistant', contentBlocks: [{ type: 'text', text: 'child done' }] } },
+      ],
+    },
+  ];
+
+  comp._loadSubSessions = comp.indexSubSessions(subSessions);
+  const result = comp.convertBackendMessagesToFrontend(parentHistory);
+  comp._loadSubSessions = null;
+
+  const delegateTool = result[0].toolUses[0];
+  expect(delegateTool.status).toBe('completed');
+  const childTool = delegateTool.childSession.messages.flatMap(m => m.toolUses)[0];
+  expect(childTool.status).toBe('completed');
+  expect(childTool.rawResult).toEqual({ r: 1 });
+  expect(comp.pendingChildTools(delegateTool)).toHaveLength(0);
+  expect(comp.delegationChildren.has('child-1')).toBe(false);
+});
+
+test('approving a reconstructed sub-agent tool resolves it from the session map and executes it', async () => {
+  comp.resetContextLength = jest.fn();
+  comp.currentChatId = 'parent-session';
+  comp.delegationChildren = new Map();
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
+  global.Vue = { ref: jest.fn((value) => ({ value })) };
+
+  const parentHistory = [
+    { createTime: '2025-01-01T12:00:01.000Z', message: { role: 'assistant', contentBlocks: [
+      { type: 'tool_use', id: 'delegate-1', name: 'delegate_to_Hunter', input: {} },
+    ] } },
+  ];
+  const subSessions = [
+    {
+      session: { sessionId: 'child-1', parentToolUseId: 'delegate-1', delegateAgent: 'Hunter' },
+      pendingApproval: { sessionId: 'child-1', toolUseId: 'child-tool-1', toolName: 'query_events', input: { q: 'dns' } },
+      history: [
+        { message: { role: 'user', contentBlocks: [{ type: 'text', text: 'find beacons' }] } },
+        { createTime: '2025-01-01T12:00:02.000Z', message: { role: 'assistant', contentBlocks: [
+          { type: 'tool_use', id: 'child-tool-1', name: 'query_events', input: { q: 'dns' } },
+        ] } },
+      ],
+    },
+  ];
+
+  comp._loadSubSessions = comp.indexSubSessions(subSessions);
+  const result = comp.convertBackendMessagesToFrontend(parentHistory);
+  comp._loadSubSessions = null;
+
+  const delegateTool = result[result.length - 1].toolUses[0];
+  const pending = comp.pendingChildTools(delegateTool)[0];
+
+  // Before the wiring, the queue runner couldn't resolve the reconstructed tool, so
+  // executeTool (which fires the POST) was never called. Spy to prove it now is.
+  comp.executeTool = jest.fn().mockResolvedValue();
+
+  await comp.approveTool(pending);
+  await new Promise((r) => setTimeout(r, 0)); // let the fire-and-forget queue drain
+
+  expect(comp.executeTool).toHaveBeenCalledTimes(1);
+  expect(comp.executeTool.mock.calls[0][0].id).toBe('child-tool-1');
+  expect(comp.executeTool.mock.calls[0][0].sessionId).toBe('child-1');
+});

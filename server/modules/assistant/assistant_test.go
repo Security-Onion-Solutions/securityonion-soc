@@ -1475,6 +1475,114 @@ func TestAssistantCoordinator_ResolveDelegationStream(t *testing.T) {
 	turn.Response.Body.Close()
 }
 
+// A client that disconnects while a sub-agent is still running cancels the request
+// context. Folding the finished sub-agent's answer back into its parent must still
+// happen, so ResolveDelegationStream detaches before any elastic read or persistence.
+// We prove it by cancelling the inbound context up front and asserting every
+// store/upstream call receives a live (non-cancelled) context.
+func TestAssistantCoordinator_ResolveDelegationStream_DetachesFromRequestCtx(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockIO := detectionsmock.NewMockIOManager(ctrl)
+	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+
+	mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, _ *model.AssistantSession) ([]*model.StoredMessage, error) {
+			assert.NoError(t, ctx.Err(), "history load must run on a detached, non-cancelled context")
+			return []*model.StoredMessage{}, nil
+		})
+
+	mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(&http.Response{
+		StatusCode: 200,
+		Body:       io.NopCloser(strings.NewReader("data: stream")),
+	}, nil)
+
+	mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, _ *model.StoredMessage) error {
+			assert.NoError(t, ctx.Err(), "tool_result persistence must run on a detached, non-cancelled context")
+			return nil
+		})
+
+	ac := newChatInSessionCoordinator(t, ctrl, mockAssistantstore, mockIO, "https://api.example.com")
+
+	ctx, cancel := context.WithCancel(context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user"))
+	cancel() // simulate the client disconnecting before resolution runs
+
+	childSession := &model.AssistantSession{
+		SessionId:       "child-session",
+		ParentSessionId: "parent-session",
+		ParentToolUseId: "delegate-tooluse",
+		ParentModel:     "test-model@MyAdapter",
+	}
+
+	turn, err := ac.ResolveDelegationStream(ctx, childSession, "found 3 suspicious domains")
+	assert.NoError(t, err)
+	assert.NotNil(t, turn)
+	assert.Equal(t, "parent-session", turn.SessionId)
+
+	turn.Response.Body.Close()
+}
+
+// ToolStreamInSession must also detach up front so that, on an early client
+// disconnect, the tool still executes to completion and its tool_result is persisted
+// (no dangling tool_use). Cancel the inbound context and assert the tool execution,
+// history load, and persistence all see a live context.
+func TestAssistantCoordinator_ToolStreamInSession_DetachesFromRequestCtx(t *testing.T) {
+	const sessionId = "session-tool-detach"
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockIO := detectionsmock.NewMockIOManager(ctrl)
+	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+
+	mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, _ *model.AssistantSession) ([]*model.StoredMessage, error) {
+			assert.NoError(t, ctx.Err(), "history load must run on a detached, non-cancelled context")
+			return []*model.StoredMessage{}, nil
+		})
+
+	mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, _ *model.StoredMessage) error {
+			assert.NoError(t, ctx.Err(), "tool_result persistence must run on a detached, non-cancelled context")
+			return nil
+		})
+
+	mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(&http.Response{
+		StatusCode: 200,
+		Body:       io.NopCloser(strings.NewReader("data: stream")),
+	}, nil)
+
+	toolExecuted := false
+	ac := newChatInSessionCoordinator(t, ctrl, mockAssistantstore, mockIO, "https://api.example.com")
+	ac.FunctionLibrary = map[string]Tool{
+		"query_events": &mockTool{
+			name: "query_events",
+			executeFunc: func(ctx context.Context, _ *server.Server, _ *model.ToolRequest) (*model.ToolResponse, error) {
+				toolExecuted = true
+				assert.NoError(t, ctx.Err(), "tool execution must run on a detached, non-cancelled context")
+				return &model.ToolResponse{ToolName: "query_events", Result: "ok"}, nil
+			},
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user"))
+	cancel() // simulate the client disconnecting mid-turn
+
+	turn, err := ac.ToolStreamInSession(ctx, &model.ToolRequest{
+		SessionId: sessionId,
+		ToolUseId: "tool-use-1",
+		Params:    json.RawMessage(`{"q":"x"}`),
+		Model:     "test-model@MyAdapter",
+	}, "query_events")
+	assert.NoError(t, err)
+	assert.NotNil(t, turn)
+	assert.True(t, toolExecuted, "tool should execute despite the cancelled request context")
+
+	turn.Response.Body.Close()
+}
+
 // An agentic model routes through setupAgent (per-agent prompt + tool config)
 // rather than the coordinator's shared prompt/tools.
 func TestAssistantCoordinator_SendStream_Agentic(t *testing.T) {

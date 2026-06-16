@@ -76,7 +76,9 @@ func (w *sseEventWriter) writeDone() error {
 }
 
 func (w *sseEventWriter) writeError(message string) error {
-	_, err := fmt.Fprintf(w.writer, `data: {"type":"error","message":%s}`+"\n\n", strconv.Quote(message))
+	// Nest the message under "error" so both server.UnstreamResponse (sm.Error.Message)
+	// and the UI's SSE handler (c.error.message) can read it.
+	_, err := fmt.Fprintf(w.writer, `data: {"type":"error","error":{"type":"error","message":%s}}`+"\n\n", strconv.Quote(message))
 	w.logger.WithError(errors.New(message)).Error("writing error event to SSE stream")
 
 	return err
@@ -520,17 +522,20 @@ func fabricateResponse(code int) (*http.Response, *io.PipeWriter) {
 // Returns a replacement response (if first send error) and whether the caller should return
 func handleStreamError(err error, firstSend bool, writer *sseEventWriter, logger log.Interface, model string) (*http.Response, bool) {
 	if firstSend {
-		// No response sent to client yet - fabricate error response
+		// No response sent yet: fabricate a 200 SSE stream carrying the real error as an
+		// "error" event so UnstreamResponse parses it and the UI can render it, rather
+		// than an opaque sentinel body.
 		logger.WithFields(log.Fields{
 			"model": model,
 		}).WithError(err).Error("first response error from the LLM")
 
-		var body *io.PipeWriter
-		response, body := fabricateResponse(http.StatusInternalServerError)
+		response, body := fabricateResponse(http.StatusOK)
+		errWriter := newSSEEventWriter(logger, body)
 
 		// Write to pipe in goroutine to avoid blocking
 		go func() {
-			fmt.Fprint(body, "ERROR_FIRST_RESPONSE")
+			errWriter.writeError(err.Error())
+			errWriter.writeDone()
 			body.Close()
 		}()
 

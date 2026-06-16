@@ -235,6 +235,11 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Detachment is owned by the assistant module (ToolStreamInSession and the
+	// resolution it drives run on a no-timeout context; each finalize persists on it),
+	// so the handler keeps the request context — it must not re-detach here (it can't,
+	// without an import cycle). streamBody keeps draining the upstream to persist the
+	// turn after the client disconnects.
 	turn, err := h.server.AssistantManager.ToolStreamInSession(ctx, toolReq, toolName)
 	if err != nil {
 		logger.WithError(err).Error("unable to chat (stream) with assistant after tool execution")
@@ -264,9 +269,10 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 	// when a sub-session exhausts its token budget.
 	for {
 		if turn.Marker != nil {
+			// The marker is only a UI hint; a failed write (client gone) must not abort
+			// the chain — the turn below still needs draining and finalizing to persist.
 			if err := writeDelegationMarker(w, turn.Marker); err != nil {
-				logger.WithError(err).Error("unable to write delegation marker")
-				break
+				logger.WithError(err).Warn("unable to write delegation marker (client likely disconnected); continuing to persist the turn")
 			}
 		}
 
@@ -510,6 +516,18 @@ func (h *AssistantHandler) GetSessionDetails(w http.ResponseWriter, r *http.Requ
 
 	removeAuxData(history)
 
+	// A tool_use that spawned a sub-session is a delegation in progress ("running"),
+	// not a pending approval. Collect those ids so the derivation below excludes them.
+	delegatedToolUseIds := make(map[string]struct{}, len(subSessions))
+	for _, sub := range subSessions {
+		if sub.ParentToolUseId != "" {
+			delegatedToolUseIds[sub.ParentToolUseId] = struct{}{}
+		}
+	}
+
+	// PendingApproval is derived server-side only for sub-sessions (the client can't
+	// easily re-derive which nested tool_use is pending); the root's is re-derived
+	// client-side from its trailing message.
 	details := &model.AssistantSessionDetails{
 		Session: root,
 		History: history,
@@ -523,12 +541,57 @@ func (h *AssistantHandler) GetSessionDetails(w http.ResponseWriter, r *http.Requ
 		}
 		removeAuxData(subHistory)
 		details.SubSessions = append(details.SubSessions, &model.AssistantSessionDetails{
-			Session: sub,
-			History: subHistory,
+			Session:         sub,
+			History:         subHistory,
+			PendingApproval: pendingToolApproval(sub.SessionId, subHistory, delegatedToolUseIds),
 		})
 	}
 
 	web.Respond(w, r, http.StatusOK, details)
+}
+
+// pendingToolApproval returns the tool_use in a session's history that is awaiting the
+// user's approval: the last assistant tool_use with no matching tool_result that did
+// not itself spawn a sub-session (a delegate tool_use is "running", not pending). It
+// returns the exact values the client must POST to resume the turn, or nil if none.
+func pendingToolApproval(sessionId string, history []*model.StoredMessage, delegatedToolUseIds map[string]struct{}) *model.PendingToolApproval {
+	resolved := make(map[string]struct{})
+	for _, sm := range history {
+		if sm.Message == nil {
+			continue
+		}
+		for _, cb := range sm.Message.ContentBlocks {
+			if cb.ToolResult != nil {
+				resolved[cb.ToolResult.ToolUseId] = struct{}{}
+			}
+		}
+	}
+
+	var pending *model.PendingToolApproval
+	for _, sm := range history {
+		if sm.Message == nil || sm.Message.Role != "assistant" {
+			continue
+		}
+		for _, cb := range sm.Message.ContentBlocks {
+			if cb.Type != "tool_use" {
+				continue
+			}
+			if _, ok := resolved[cb.Id]; ok {
+				continue
+			}
+			if _, ok := delegatedToolUseIds[cb.Id]; ok {
+				continue
+			}
+			pending = &model.PendingToolApproval{
+				SessionId: sessionId,
+				ToolUseId: cb.Id,
+				ToolName:  cb.Name,
+				Input:     cb.Input,
+			}
+		}
+	}
+
+	return pending
 }
 
 // @Summary      Update metadata for a Session
@@ -896,7 +959,9 @@ func writeStreamHeaders(w http.ResponseWriter, response *http.Response) {
 
 // streamBody streams an upstream response body to the client as fast as it
 // arrives, returning the full buffered response. It does not write headers, so it
-// is safe to call repeatedly for successive turns on the same HTTP response.
+// is safe to call repeatedly for successive turns on the same HTTP response. A
+// client disconnect does not abort the read: it keeps draining response.Body so the
+// caller still gets the full turn to persist and parse.
 func streamBody(ctx context.Context, w http.ResponseWriter, response *http.Response) (entireResponse []byte, err error) {
 	logger := log.FromContext(ctx)
 	flusher, ok := w.(http.Flusher)
@@ -909,6 +974,7 @@ func streamBody(ctx context.Context, w http.ResponseWriter, response *http.Respo
 	buf := make([]byte, 1024)
 	last := time.Now()
 	entireResponse = []byte{}
+	clientGone := false
 
 	for {
 		n, err = response.Body.Read(buf)
@@ -916,22 +982,24 @@ func streamBody(ctx context.Context, w http.ResponseWriter, response *http.Respo
 			total += n
 			entireResponse = append(entireResponse, buf[:n]...)
 
-			_, writeErr := w.Write(buf[:n])
-			if writeErr != nil {
-				logger.WithError(writeErr).Error("client appears to have closed the connection")
-				break
+			// Client gone: stop writing/flushing but keep reading so the turn is buffered.
+			if !clientGone {
+				if _, writeErr := w.Write(buf[:n]); writeErr != nil {
+					logger.WithError(writeErr).Warn("client closed the connection; draining upstream to persist the turn")
+					clientGone = true
+				} else {
+					flusher.Flush()
+
+					since := time.Since(last)
+					last = time.Now()
+
+					logger.WithFields(log.Fields{
+						"mostRecentBufferSize": n,
+						"totalTransferred":     total,
+						"timeSinceLastChunk":   since.String(),
+					}).Debug("streaming AI response")
+				}
 			}
-
-			flusher.Flush()
-
-			since := time.Since(last)
-			last = time.Now()
-
-			logger.WithFields(log.Fields{
-				"mostRecentBufferSize": n,
-				"totalTransferred":     total,
-				"timeSinceLastChunk":   since.String(),
-			}).Debug("streaming AI response")
 		}
 		if err != nil {
 			break // EOF or error, exit loop
@@ -1062,6 +1130,9 @@ func UnstreamResponse(ctx context.Context, rawResponse string, aux *model.AuxMes
 				}
 			}
 		case "content_block_start":
+			if message == nil {
+				continue // no message_start yet
+			}
 			for sm.Index >= len(message.ContentBlocks) {
 				message.ContentBlocks = append(message.ContentBlocks, model.ContentBlock{})
 			}
@@ -1073,6 +1144,9 @@ func UnstreamResponse(ctx context.Context, rawResponse string, aux *model.AuxMes
 				message.ContentBlocks[sm.Index] = *sm.ContentBlock
 			}
 		case "content_block_delta":
+			if message == nil {
+				continue // no message_start yet
+			}
 			if sm.Delta != nil {
 				switch sm.Delta.Type {
 				case "text_delta":
@@ -1094,6 +1168,9 @@ func UnstreamResponse(ctx context.Context, rawResponse string, aux *model.AuxMes
 				}
 			}
 		case "content_block_stop":
+			if message == nil {
+				continue // no message_start yet
+			}
 			for sm.Index >= len(message.ContentBlocks) {
 				message.ContentBlocks = append(message.ContentBlocks, model.ContentBlock{})
 			}
@@ -1107,6 +1184,9 @@ func UnstreamResponse(ctx context.Context, rawResponse string, aux *model.AuxMes
 				message.ContentBlocks[sm.Index].Content = nil
 			}
 		case "message_delta":
+			if message == nil {
+				continue // no message_start yet
+			}
 			if sm.Usage != nil {
 				message.Usage = sm.Usage
 			}
@@ -1115,6 +1195,14 @@ func UnstreamResponse(ctx context.Context, rawResponse string, aux *model.AuxMes
 				*message.StopReason = *sm.Delta.StopReason
 			}
 		}
+	}
+
+	// A stream with no message_start leaves message nil; return nil rather than
+	// dereference it. The PostTool loop and finalize closures treat a nil turn as
+	// abnormal (a first-chunk error arrives as an SSE "error" event, handled above).
+	if message == nil {
+		log.FromContext(ctx).Warn("streamed response contained no message_start; returning nil message")
+		return nil, nil
 	}
 
 	if aux != nil {
