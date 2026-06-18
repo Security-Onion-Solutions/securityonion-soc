@@ -67,29 +67,70 @@ func TestAssistantCoordinator_InitAgenticToggle(t *testing.T) {
 			// The original config values shine through unchanged.
 			assert.Equal(t, configuredModels(), srv.Config.ClientParams.AssistantParams.AvailableModels)
 
-			// No delegate tools are created.
+			// Nothing agent-related is set up or exposed.
 			assert.Empty(t, ac.DelegationLibrary)
+			assert.Empty(t, ac.agents)
+			assert.False(t, srv.Config.ClientParams.AssistantParams.Agentic)
+			assert.Empty(t, srv.Config.ClientParams.AssistantParams.AvailableAgents)
 		}
 	})
 
-	t.Run("agentic enabled replaces configured models", func(t *testing.T) {
+	t.Run("agentic enabled maps agents onto configured models", func(t *testing.T) {
 		ac, srv := newCoordinator()
 
-		err := ac.Init(module.ModuleConfig{"agentic": true})
+		// Map both hardcoded agents onto the deployment's configured model.
+		err := ac.Init(module.ModuleConfig{
+			"agentic": true,
+			"agentMapping": map[string]any{
+				"Orchestrator": "Classic",
+				"Hunter":       "Classic",
+			},
+		})
 		assert.NoError(t, err)
 
 		assert.True(t, ac.isAgentic)
 
-		// The configured models are replaced with the hardcoded agentic models.
-		// The agentic model definitions are still in flux, so don't assert on
-		// their specifics — just that the configured classic model is gone.
-		models := srv.Config.ClientParams.AssistantParams.AvailableModels
-		assert.NotEmpty(t, models)
-		for _, m := range models {
-			assert.NotEqual(t, "classic-model", m.ID)
-		}
+		// Configured models are left in place; agents map onto them.
+		assert.Equal(t, configuredModels(), srv.Config.ClientParams.AssistantParams.AvailableModels)
 
-		// Delegate tools are created for the agentic models.
+		// The hardcoded agents are defined and their mapping loaded.
+		assert.Len(t, ac.agents, 2)
+		assert.Equal(t, "Classic", ac.agentMapping["Orchestrator"])
+		assert.Equal(t, "Classic", ac.agentMapping["Hunter"])
+
+		// The agentic flag, agent list, and mapping are exposed to clients.
+		assert.True(t, srv.Config.ClientParams.AssistantParams.Agentic)
+		assert.Len(t, srv.Config.ClientParams.AssistantParams.AvailableAgents, 2)
+		assert.Equal(t, map[string]string{
+			"Orchestrator": "Classic",
+			"Hunter":       "Classic",
+		}, srv.Config.ClientParams.AssistantParams.AgentMapping)
+
+		// Delegate tools are created for the agents.
 		assert.NotEmpty(t, ac.DelegationLibrary)
+	})
+
+	t.Run("agentic enabled drops agents with no valid mapping", func(t *testing.T) {
+		ac, srv := newCoordinator()
+
+		// Only Hunter is mapped; Orchestrator and a bogus model mapping are dropped.
+		err := ac.Init(module.ModuleConfig{
+			"agentic": true,
+			"agentMapping": map[string]any{
+				"Hunter": "Classic",
+			},
+		})
+		assert.NoError(t, err)
+
+		assert.True(t, ac.isAgentic)
+
+		// Only the validly-mapped agent survives.
+		assert.Len(t, ac.agents, 1)
+		_, hasHunter := ac.agents["Hunter"]
+		assert.True(t, hasHunter)
+		assert.Len(t, srv.Config.ClientParams.AssistantParams.AvailableAgents, 1)
+
+		// The exposed mapping only includes the surviving agent.
+		assert.Equal(t, map[string]string{"Hunter": "Classic"}, srv.Config.ClientParams.AssistantParams.AgentMapping)
 	})
 }

@@ -1583,8 +1583,9 @@ func TestAssistantCoordinator_ToolStreamInSession_DetachesFromRequestCtx(t *test
 	turn.Response.Body.Close()
 }
 
-// An agentic model routes through setupAgent (per-agent prompt + tool config)
-// rather than the coordinator's shared prompt/tools.
+// An agentic request routes through the agent->model mapping and setupAgent
+// (per-agent prompt + tool config) rather than the coordinator's shared
+// prompt/tools.
 func TestAssistantCoordinator_SendStream_Agentic(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -1610,7 +1611,7 @@ func TestAssistantCoordinator_SendStream_Agentic(t *testing.T) {
 			ClientParams: model.ClientParameters{
 				AssistantParams: model.AssistantParameters{
 					AvailableModels: []model.ModelParameters{
-						{ID: "test-model", Adapter: "whatever", IsAgentic: true, AgentPrompt: "You are a hunting agent.", AllowedTools: []string{"query_events"}},
+						{ID: "test-model", DisplayName: "TestModel", Adapter: "whatever", Enabled: true},
 					},
 				},
 			},
@@ -1623,6 +1624,10 @@ func TestAssistantCoordinator_SendStream_Agentic(t *testing.T) {
 		srv:             srv,
 		isAgentic:       true,
 		FunctionLibrary: map[string]Tool{"query_events": &mockTool{name: "query_events", description: "events"}},
+		agents: map[string]model.AgentParameters{
+			"Hunter": {Name: "Hunter", Prompt: "You are a hunting agent.", AllowedTools: []string{"query_events"}},
+		},
+		agentMapping: map[string]string{"Hunter": "TestModel"},
 		adapters: map[string]server.AssistantAdapter{
 			"whatever": &SOAiCloudAdapter{apiUrl: "https://api.example.com", srv: srv, IOManager: mockIO},
 		},
@@ -1630,7 +1635,7 @@ func TestAssistantCoordinator_SendStream_Agentic(t *testing.T) {
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
-	res, _, err := ac.SendStream(ctx, "test-model@whatever", []*model.Message{
+	res, _, err := ac.SendStream(ctx, "Hunter", []*model.Message{
 		{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "hi"}}},
 	})
 	assert.NoError(t, err)
@@ -1685,13 +1690,13 @@ func TestAssistantCoordinator_SetupAgent(t *testing.T) {
 	}
 
 	req := &model.ChatRequest{SystemAppend: "leftover"}
-	modelParams := &model.ModelParameters{
-		AgentPrompt:   "You are a hunting agent.",
+	agentParams := &model.AgentParameters{
+		Prompt:        "You are a hunting agent.",
 		AllowedTools:  []string{"query_events"},
 		CanDelegateTo: []string{"delegate_to_Hunter"},
 	}
 
-	err := ac.setupAgent(req, modelParams)
+	err := ac.setupAgent(req, agentParams)
 	assert.NoError(t, err)
 	// The agent's own prompt replaces the system prompt and clears any append.
 	assert.Equal(t, "You are a hunting agent.", req.System)
@@ -3129,30 +3134,28 @@ func TestValidateModelSelectors(t *testing.T) {
 }
 
 func TestRegisterDelegateTools(t *testing.T) {
-	t.Run("duplicate display name registers only the first", func(t *testing.T) {
-		ac, h := newSelectorLogCoordinator([]model.ModelParameters{
-			{ID: "model-a", DisplayName: "Hunter", Adapter: "A", Enabled: true, IsAgentic: true, AgentDescription: "first"},
-			{ID: "model-b", DisplayName: "Hunter", Adapter: "B", Enabled: true, IsAgentic: true, AgentDescription: "second"},
-		})
+	t.Run("registers a delegate under the agent name and tool name", func(t *testing.T) {
+		ac, _ := newSelectorLogCoordinator(nil)
+		ac.agents = map[string]model.AgentParameters{
+			"Hunter": {Name: "Hunter", Description: "an event hunter"},
+		}
 
 		ac.registerDelegateTools()
 
 		assert.Len(t, ac.DelegationLibrary, 2)
 		assert.Contains(t, ac.DelegationLibrary, "Hunter")
 		assert.Contains(t, ac.DelegationLibrary, "delegate_to_Hunter")
-		assert.Contains(t, ac.DelegationLibrary["Hunter"].GetDescription(), "first")
-
-		errors := logMessagesAt(h, log.ErrorLevel)
-		assert.Len(t, errors, 1)
-		assert.Contains(t, errors[0], "duplicate agent selector")
+		assert.Contains(t, ac.DelegationLibrary["Hunter"].GetDescription(), "an event hunter")
 	})
 
 	t.Run("sanitized tool name collision skips the second entirely", func(t *testing.T) {
-		// "A B" and "A_B" are distinct selectors but sanitize to the same tool name.
-		ac, h := newSelectorLogCoordinator([]model.ModelParameters{
-			{ID: "model-a", DisplayName: "A B", Adapter: "X", Enabled: true, IsAgentic: true},
-			{ID: "model-b", DisplayName: "A_B", Adapter: "X", Enabled: true, IsAgentic: true},
-		})
+		// "A B" and "A_B" are distinct agent names but sanitize to the same
+		// tool name. Registration is sorted, so "A B" wins and "A_B" collides.
+		ac, h := newSelectorLogCoordinator(nil)
+		ac.agents = map[string]model.AgentParameters{
+			"A B": {Name: "A B"},
+			"A_B": {Name: "A_B"},
+		}
 
 		ac.registerDelegateTools()
 
@@ -3166,31 +3169,13 @@ func TestRegisterDelegateTools(t *testing.T) {
 		assert.Contains(t, errors[0], "delegate tool name collides")
 	})
 
-	t.Run("disabled and non-agentic models register nothing", func(t *testing.T) {
-		ac, _ := newSelectorLogCoordinator([]model.ModelParameters{
-			{ID: "model-a", DisplayName: "Disabled Agent", Adapter: "A", Enabled: false, IsAgentic: true},
-			{ID: "model-b", DisplayName: "Plain Model", Adapter: "A", Enabled: true, IsAgentic: false},
-		})
+	t.Run("no agents registers nothing", func(t *testing.T) {
+		ac, _ := newSelectorLogCoordinator(nil)
+		ac.agents = map[string]model.AgentParameters{}
 
 		ac.registerDelegateTools()
 
 		assert.Empty(t, ac.DelegationLibrary)
-	})
-
-	t.Run("empty display name registers nothing", func(t *testing.T) {
-		// validateModelSelectors normally disables such a model first; this
-		// guards the standalone path so the library can never hold "" keys.
-		ac, h := newSelectorLogCoordinator([]model.ModelParameters{
-			{ID: "model-a", Adapter: "SOAI", Enabled: true, IsAgentic: true},
-		})
-
-		ac.registerDelegateTools()
-
-		assert.Empty(t, ac.DelegationLibrary)
-
-		errors := logMessagesAt(h, log.ErrorLevel)
-		assert.Len(t, errors, 1)
-		assert.Contains(t, errors[0], "missing required displayName")
 	})
 }
 

@@ -49,6 +49,9 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     thresholdColorRatioMed: 0.75,
     thresholdColorRatioMax: 1,
     lowBalanceColorAlert: 0,
+    agentic: false,
+    availableAgents: [],
+    agentMapping: {},
     availableModels: [],
     modelsMap: new Map(),
     availableAdapters: [],
@@ -142,26 +145,57 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.thresholdColorRatioLow = params["thresholdColorRatioLow"];
       this.thresholdColorRatioMed = params["thresholdColorRatioMed"];
       this.thresholdColorRatioMax = params["thresholdColorRatioMax"];
-      this.availableModels = params["availableModels"];
+      this.agentic = params["agentic"] || false;
       this.availableAdapters = params["availableAdapters"];
-      if (this.availableModels && this.availableModels.length > 0) {
-        this.availableModels.forEach(m => m.key = m.displayName || this.buildModelIdentifier(m));
-        this.modelsMap = new Map(
-          this.availableModels.filter(m => m.enabled).map(m => [m.key, m])
-        );
-        for (let val of this.modelsMap.values()) {
-          if (val.contextLimitLarge < val.contextLimitSmall) val.contextLimitLarge = val.contextLimitSmall;
+      if (this.agentic) {
+        // in agentic mode, use agent names rather than model names
+        this.availableAgents = params["availableAgents"] || [];
+        this.agentMapping = params["agentMapping"] || {};
+        const modelsByName = new Map((params["availableModels"] || []).map(m => [m.displayName, m]));
+        this.availableModels = this.availableAgents.map(a => {
+          const mapped = modelsByName.get(this.agentMapping[a.name]);
+          return {
+            ...a,
+            key: a.name,
+            displayName: a.name,
+            adapter: 'Agents',
+            mappedModelName: mapped?.displayName || '',
+            contextLimitSmall: mapped?.contextLimitSmall || 0,
+            contextLimitLarge: mapped?.contextLimitLarge || 0,
+            charsPerTokenEstimate: mapped?.charsPerTokenEstimate || 0,
+            lowBalanceColorAlert: mapped?.lowBalanceColorAlert || 0,
+          };
+        });
+        this.modelsMap = new Map(this.availableModels.map(a => [a.key, a]));
+        // When the stored selector isn't a known agent (or none was stored),
+        // default to the orchestrator the user talks to first, not just the
+        // first agent in the list.
+        if (!this.currentModel || !this.modelsMap.has(this.currentModel)) {
+          const orchestrator = this.availableModels.find(a => a.isOrchestrator);
+          this.currentModel = (orchestrator || this.availableModels[0])?.key || '';
         }
-        // Selectors restored from localStorage may still be in the legacy
-        // id@adapter form; silently migrate them to the model's current key.
-        let legacyModelKeys = new Map(
-          this.availableModels.filter(m => m.enabled).map(m => [this.buildModelIdentifier(m), m.key])
-        );
-        if (this.currentModel && !this.modelsMap.has(this.currentModel) && legacyModelKeys.has(this.currentModel)) {
-          this.currentModel = legacyModelKeys.get(this.currentModel);
-        }
-        if (!this.currentModel || !this.modelsMap.has(this.currentModel)) this.currentModel = this.availableModels[0].key;
         this.groupedModels = this.buildGroupedModels();
+      } else {
+        this.availableModels = params["availableModels"];
+        if (this.availableModels && this.availableModels.length > 0) {
+          this.availableModels.forEach(m => m.key = m.displayName || this.buildModelIdentifier(m));
+          this.modelsMap = new Map(
+            this.availableModels.filter(m => m.enabled).map(m => [m.key, m])
+          );
+          for (let val of this.modelsMap.values()) {
+            if (val.contextLimitLarge < val.contextLimitSmall) val.contextLimitLarge = val.contextLimitSmall;
+          }
+          // Selectors restored from localStorage may still be in the legacy
+          // id@adapter form; silently migrate them to the model's current key.
+          let legacyModelKeys = new Map(
+            this.availableModels.filter(m => m.enabled).map(m => [this.buildModelIdentifier(m), m.key])
+          );
+          if (this.currentModel && !this.modelsMap.has(this.currentModel) && legacyModelKeys.has(this.currentModel)) {
+            this.currentModel = legacyModelKeys.get(this.currentModel);
+          }
+          if (!this.currentModel || !this.modelsMap.has(this.currentModel)) this.currentModel = this.availableModels[0].key;
+          this.groupedModels = this.buildGroupedModels();
+        }
       }
       if (this.availableAdapters && this.availableAdapters.length > 0) {
         this.adaptersMap = new Map(this.availableAdapters.map(a => [a.name, a]));
@@ -2427,12 +2461,28 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }
     },
 
+    // Label for the "Current Model" info block. In agentic mode the picker
+    // value is an agent name, so append the model it runs on (e.g.
+    // "Orchestrator - Claude Sonnet"); otherwise it's just the model name.
+    currentModelLabel() {
+      const entry = this.modelsMap.get(this.currentModel);
+      if (!entry) return '';
+      if (this.agentic && entry.mappedModelName) {
+        return `${entry.displayName} - ${entry.mappedModelName}`;
+      }
+      return entry.displayName;
+    },
+
     updateModelParams() {
       if (!this.currentModel || this.modelsMap.size == 0) return;
-      this.contextLimitSmall = this.modelsMap.get(this.currentModel).contextLimitSmall;
-      this.contextLimitLarge = this.modelsMap.get(this.currentModel).contextLimitLarge;
-      this.charsPerTokenEstimate = this.modelsMap.get(this.currentModel).charsPerTokenEstimate;
-      this.lowBalanceColorAlert = this.modelsMap.get(this.currentModel).lowBalanceColorAlert;
+      const m = this.modelsMap.get(this.currentModel);
+      if (!m) return;
+      // Agent entries carry no context fields (they resolve to a model
+      // server-side), so fall back to 0 until editable agents land.
+      this.contextLimitSmall = m.contextLimitSmall || 0;
+      this.contextLimitLarge = m.contextLimitLarge || 0;
+      this.charsPerTokenEstimate = m.charsPerTokenEstimate || 0;
+      this.lowBalanceColorAlert = m.lowBalanceColorAlert || 0;
     },
 
     // Legacy id@adapter selector, used as the model key only when a model has

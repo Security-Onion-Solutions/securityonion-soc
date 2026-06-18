@@ -188,6 +188,9 @@ type AssistantParameters struct {
 	ThresholdColorRatioMax float64             `json:"thresholdColorRatioMax"`
 	AvailableModels        []ModelParameters   `json:"availableModels"`
 	AvailableAdapters      []AdapterParameters `json:"availableAdapters"`
+	Agentic                bool                `json:"agentic"`
+	AvailableAgents        []AgentParameters   `json:"availableAgents"`
+	AgentMapping           map[string]string   `json:"agentMapping"`
 }
 
 type ModelParameters struct {
@@ -200,13 +203,6 @@ type ModelParameters struct {
 	Origin                string  `json:"origin"`
 	Adapter               string  `json:"adapter"`
 	Enabled               bool    `json:"enabled"`
-
-	IsAgentic        bool     `json:"isAgentic"`
-	IsOrchestrator   bool     `json:"isOrchestrator"`
-	CanDelegateTo    []string `json:"canDelegateTo"`
-	AllowedTools     []string `json:"allowedTools"`
-	AgentPrompt      string   `json:"agentPrompt"`
-	AgentDescription string   `json:"agentDescription"`
 }
 
 // Selector returns the canonical client-facing selector for this model: its
@@ -222,6 +218,16 @@ func (m *ModelParameters) Selector() string {
 // (resolveModel pass 2); it is never a model's canonical selector.
 func (m *ModelParameters) LegacySelector() string {
 	return m.ID + "@" + m.Adapter
+}
+
+type AgentParameters struct {
+	Name           string   `json:"name"`
+	IsOrchestrator bool     `json:"isOrchestrator"`
+	CanDelegateTo  []string `json:"canDelegateTo"`
+	AllowedTools   []string `json:"allowedTools"`
+	// Prompt is the agent's system prompt; never serialized to the browser.
+	Prompt      string `json:"-"`
+	Description string `json:"agentDescription"`
 }
 
 type AdapterParameters struct {

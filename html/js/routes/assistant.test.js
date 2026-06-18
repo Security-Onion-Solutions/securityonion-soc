@@ -569,6 +569,102 @@ test('initAssistant handles empty availableModels and availableAdapters array', 
   expect(comp.updateModelParams).toHaveBeenCalled();
 });
 
+// Shared agentic params: two agents mapped onto two real models with distinct
+// context limits, so context enrichment and the model label can be asserted.
+const agenticParams = () => ({
+  enabled: true,
+  agentic: true,
+  availableAgents: [
+    { name: 'Hunter', agentDescription: 'hunts events' },
+    { name: 'Orchestrator', isOrchestrator: true, agentDescription: 'coordinates' },
+  ],
+  agentMapping: { Orchestrator: 'Claude Sonnet', Hunter: 'Claude Haiku' },
+  availableModels: [
+    { id: 'sonnet', displayName: 'Claude Sonnet', contextLimitSmall: 200000, contextLimitLarge: 1000000, charsPerTokenEstimate: 4, lowBalanceColorAlert: 500, enabled: true, adapter: 'SOAI' },
+    { id: 'haiku', displayName: 'Claude Haiku', contextLimitSmall: 100000, contextLimitLarge: 100000, charsPerTokenEstimate: 3, lowBalanceColorAlert: 100, enabled: true, adapter: 'SOAI' },
+  ],
+  availableAdapters: [{ name: 'SOAI', protocol: 'securityonion_ai_cloud' }],
+});
+
+const stubInitDeps = () => {
+  comp.$root.isLicensed = jest.fn().mockReturnValue(true);
+  comp.$root.showDisclaimer = jest.fn();
+  comp.loadStoredChats = jest.fn().mockResolvedValue();
+  comp.handleRouteSessionId = jest.fn().mockResolvedValue();
+  comp.loadCredits = jest.fn().mockResolvedValue();
+  comp.focusChatInput = jest.fn();
+  comp.$root.disclaimer = false;
+};
+
+test('initAssistant builds the picker from availableAgents in agentic mode', async () => {
+  stubInitDeps();
+
+  await comp.initAssistant(agenticParams());
+
+  expect(comp.agentic).toBe(true);
+  // The picker lists agents keyed by name; the raw models are not picker entries.
+  expect(comp.modelsMap.size).toBe(2);
+  expect(comp.modelsMap.has('Orchestrator')).toBe(true);
+  expect(comp.modelsMap.has('Hunter')).toBe(true);
+  expect(comp.modelsMap.has('Claude Sonnet')).toBe(false);
+  // No stored selector: default to the orchestrator even though it isn't first.
+  expect(comp.currentModel).toBe('Orchestrator');
+});
+
+test('initAssistant defaults a stale stored selector to the orchestrator agent', async () => {
+  stubInitDeps();
+  comp.currentModel = 'Some Old Model'; // not a known agent
+
+  await comp.initAssistant(agenticParams());
+
+  expect(comp.currentModel).toBe('Orchestrator');
+});
+
+test('initAssistant keeps a valid stored agent selector', async () => {
+  stubInitDeps();
+  comp.currentModel = 'Hunter';
+
+  await comp.initAssistant(agenticParams());
+
+  expect(comp.currentModel).toBe('Hunter');
+});
+
+test('initAssistant enriches agents with their mapped model context limits', async () => {
+  stubInitDeps();
+
+  await comp.initAssistant(agenticParams());
+  comp.updateModelParams();
+
+  // Orchestrator -> Claude Sonnet limits.
+  expect(comp.contextLimitSmall).toBe(200000);
+  expect(comp.contextLimitLarge).toBe(1000000);
+  expect(comp.charsPerTokenEstimate).toBe(4);
+  expect(comp.lowBalanceColorAlert).toBe(500);
+});
+
+test('currentModelLabel shows agent and its mapped model in agentic mode', async () => {
+  stubInitDeps();
+
+  await comp.initAssistant(agenticParams());
+
+  expect(comp.currentModelLabel()).toBe('Orchestrator - Claude Sonnet');
+});
+
+test('currentModelLabel is the plain model displayName in non-agentic mode', async () => {
+  stubInitDeps();
+
+  await comp.initAssistant({
+    enabled: true,
+    availableModels: [
+      { id: 'test-model', displayName: 'Test Model', enabled: true, adapter: 'SOAI' }
+    ],
+    availableAdapters: [{ name: 'SOAI', protocol: 'securityonion_ai_cloud' }],
+  });
+
+  expect(comp.agentic).toBe(false);
+  expect(comp.currentModelLabel()).toBe('Test Model');
+});
+
 test('handleRouteSessionId returns early when assistantEnabled is false', async () => {
   comp.assistantEnabled = false;
   comp.$route.params.sessionId = fakeSessionId;

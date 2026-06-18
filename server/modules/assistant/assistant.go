@@ -41,6 +41,7 @@ var (
 	ErrToolNotFound    = errors.New("ERROR_ASSISTANT_TOOL_NOT_FOUND")
 	ErrRequestTooLarge = errors.New("ERROR_ASSISTANT_REQUEST_TOO_LARGE")
 	ErrInvalidModel    = errors.New("ERROR_ASSISTANT_INVALID_MODEL")
+	ErrInvalidAgent    = errors.New("ERROR_ASSISTANT_INVALID_AGENT")
 )
 
 const (
@@ -70,6 +71,8 @@ type AssistantCoordinator struct {
 	toolConfig        json.RawMessage
 	adapters          map[string]server.AssistantAdapter
 	isAgentic         bool
+	agents            map[string]model.AgentParameters
+	agentMapping      map[string]string // map[agentName]modelDisplayName
 
 	systemPrompt         string
 	systemPromptAddendum string
@@ -172,14 +175,19 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 		ac.srv.Config.ClientParams.AssistantParams.AvailableAdapters = []model.AdapterParameters{}
 	}
 
+	ac.srv.Config.ClientParams.AssistantParams.Agentic = ac.isAgentic
+
 	if ac.isAgentic {
 		ac.setupAgentic()
+		ac.agentMapping = ac.loadAgentMapping(config)
 	}
 
 	ac.validateModelSelectors()
 
 	if ac.isAgentic {
+		ac.validateAgentMappings()
 		ac.registerDelegateTools()
+		ac.exposeAgents()
 	}
 
 	ac.getPrompt()
@@ -187,58 +195,44 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 	return err
 }
 
-// registerDelegateTools creates a delegate tool for every enabled agentic
-// model, registered in the DelegationLibrary under both its canonical selector
-// and its tool name. A model whose selector or sanitized tool name is already
-// claimed is skipped with an error log (first registration wins), enforcing
-// the duplicate policy reported by validateModelSelectors.
+// registerDelegateTools creates a delegate tool for every validated agent,
+// registered in the DelegationLibrary under both the agent name and its
+// sanitized tool name. An agent whose name or tool name is already claimed is
+// skipped with an error log (first registration wins). Runs after
+// validateAgentMappings, so ac.agents holds only agents with a valid model.
 func (ac *AssistantCoordinator) registerDelegateTools() {
 	logger := log.FromContext(ac.srv.Context)
 
-	for _, m := range ac.srv.Config.ClientParams.AssistantParams.AvailableModels {
-		if m.Enabled && m.IsAgentic {
-			selector := m.Selector()
+	// Stable iteration order so first-wins on any collision is deterministic.
+	names := make([]string, 0, len(ac.agents))
+	for name := range ac.agents {
+		names = append(names, name)
+	}
+	sort.Strings(names)
 
-			// validateModelSelectors disables models with no DisplayName before
-			// this runs; this guard keeps the function safe standalone so the
-			// library can never hold "" / bare-prefix keys.
-			if selector == "" {
-				logger.WithFields(log.Fields{
-					"modelId": m.ID,
-					"adapter": m.Adapter,
-				}).Error("agentic model is missing required displayName; skipping delegate registration")
-				continue
-			}
+	for _, name := range names {
+		agent := ac.agents[name]
 
-			delegate := NewDelegateTool(selector, m.DisplayName, m.AgentDescription)
-			toolName := delegate.GetName()
+		delegate := NewDelegateTool(name, name, agent.Description)
+		toolName := delegate.GetName()
 
-			if _, exists := ac.DelegationLibrary[selector]; exists {
-				logger.WithFields(log.Fields{
-					"agent":   selector,
-					"modelId": m.ID,
-					"adapter": m.Adapter,
-				}).Error("duplicate agent selector; skipping delegate registration")
-				continue
-			}
-
-			if _, exists := ac.DelegationLibrary[toolName]; exists {
-				logger.WithFields(log.Fields{
-					"agent":    selector,
-					"toolName": toolName,
-				}).Error("delegate tool name collides with an already-registered delegate; skipping registration")
-				continue
-			}
-
-			ac.DelegationLibrary[selector] = delegate
-			ac.DelegationLibrary[toolName] = delegate
-
-			logger.WithFields(log.Fields{
-				"agent":   selector,
-				"modelId": m.ID,
-				"adapter": m.Adapter,
-			}).Info("created delegate tool for agentic model")
+		if _, exists := ac.DelegationLibrary[name]; exists {
+			logger.WithField("agent", name).Error("duplicate agent name; skipping delegate registration")
+			continue
 		}
+
+		if _, exists := ac.DelegationLibrary[toolName]; exists {
+			logger.WithFields(log.Fields{
+				"agent":    name,
+				"toolName": toolName,
+			}).Error("delegate tool name collides with an already-registered delegate; skipping registration")
+			continue
+		}
+
+		ac.DelegationLibrary[name] = delegate
+		ac.DelegationLibrary[toolName] = delegate
+
+		logger.WithField("agent", name).Info("created delegate tool for agent")
 	}
 }
 
@@ -489,10 +483,42 @@ func (ac *AssistantCoordinator) resolveModel(selector string) *model.ModelParame
 	return nil
 }
 
+// resolveAgent resolves an agent name to its definition and the model that
+// executes it. The model is found by mapping the agent name through
+// ac.agentMapping to a model DisplayName and then resolveModel. Returns
+// ErrInvalidAgent when the agent is unknown or its mapped model is missing;
+// callers surface this as a client error. Only meaningful in agentic mode.
+func (ac *AssistantCoordinator) resolveAgent(name string) (*model.AgentParameters, *model.ModelParameters, error) {
+	agent, ok := ac.agents[name]
+	if !ok {
+		return nil, nil, ErrInvalidAgent
+	}
+
+	displayName, mapped := ac.agentMapping[name]
+	if !mapped {
+		return nil, nil, ErrInvalidAgent
+	}
+
+	modelParams := ac.resolveModel(displayName)
+	if modelParams == nil {
+		return nil, nil, ErrInvalidAgent
+	}
+
+	return &agent, modelParams, nil
+}
+
 // resolveAdapterName returns the adapter a selector routes to. Selectors that
 // resolve to no configured model fall back to the legacy split so a registered
 // adapter without an AvailableModels entry can still answer (Balance/Health).
 func (ac *AssistantCoordinator) resolveAdapterName(selector string) string {
+	// In agentic mode the selector is an agent name; route to its mapped model's
+	// adapter so balance/health checks hit the right backend.
+	if ac.isAgentic {
+		if _, modelParams, err := ac.resolveAgent(selector); err == nil {
+			return modelParams.Adapter
+		}
+	}
+
 	if params := ac.resolveModel(selector); params != nil {
 		return params.Adapter
 	}
@@ -537,12 +563,29 @@ func (ac *AssistantCoordinator) prepareChatRequest(ctx context.Context, aiModel 
 		return nil, nil, errors.New("missing requestor id in context")
 	}
 
-	modelParams := ac.resolveModel(aiModel)
-	if modelParams == nil {
-		// The requested model is not configured; there is no sensible fallback, so
-		// surface it as a client error (mapped to HTTP 400 by the handler).
-		logger.WithField("model", aiModel).Error("requested model is not configured")
-		return nil, nil, ErrInvalidModel
+	// In agentic mode the selector is an agent name, resolved through the
+	// agent->model mapping. Otherwise it is a model selector (DisplayName or
+	// legacy id@adapter). agentParams is non-nil only in the agentic path.
+	var (
+		agentParams *model.AgentParameters
+		modelParams *model.ModelParameters
+		err         error
+	)
+
+	if ac.isAgentic {
+		agentParams, modelParams, err = ac.resolveAgent(aiModel)
+		if err != nil {
+			logger.WithField("agent", aiModel).Error("requested agent is not configured")
+			return nil, nil, err
+		}
+	} else {
+		modelParams = ac.resolveModel(aiModel)
+		if modelParams == nil {
+			// The requested model is not configured; there is no sensible fallback, so
+			// surface it as a client error (mapped to HTTP 400 by the handler).
+			logger.WithField("model", aiModel).Error("requested model is not configured")
+			return nil, nil, ErrInvalidModel
+		}
 	}
 
 	req := &model.ChatRequest{
@@ -564,8 +607,8 @@ func (ac *AssistantCoordinator) prepareChatRequest(ctx context.Context, aiModel 
 		return nil, nil, fmt.Errorf("assistant adapter not found: %s", modelParams.Adapter)
 	}
 
-	if ac.isAgentic && modelParams.IsAgentic {
-		if err := ac.setupAgent(req, modelParams); err != nil {
+	if agentParams != nil {
+		if err := ac.setupAgent(req, agentParams); err != nil {
 			return nil, nil, err
 		}
 	} else {
@@ -1501,11 +1544,11 @@ func buildToolResultMessage(toolUseId string, result *model.ToolResponse, toolEr
 	}
 }
 
-func (ac *AssistantCoordinator) setupAgent(req *model.ChatRequest, modelParams *model.ModelParameters) (err error) {
-	req.System = modelParams.AgentPrompt // build system prompt for this agent
+func (ac *AssistantCoordinator) setupAgent(req *model.ChatRequest, agent *model.AgentParameters) (err error) {
+	req.System = agent.Prompt // build system prompt for this agent
 	req.SystemAppend = ""
 
-	req.ToolConfig, err = buildToolConfig(ac.FunctionLibrary, ac.DelegationLibrary, modelParams.AllowedTools, modelParams.CanDelegateTo) // build tools for this agent
+	req.ToolConfig, err = buildToolConfig(ac.FunctionLibrary, ac.DelegationLibrary, agent.AllowedTools, agent.CanDelegateTo) // build tools for this agent
 	if err != nil {
 		return err
 	}
