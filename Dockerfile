@@ -4,7 +4,7 @@
 # https://securityonion.net/license; you may not use this file except in compliance with the
 # Elastic License 2.0.
 
-FROM ghcr.io/security-onion-solutions/golang:1.26.1-alpine as builder
+FROM ghcr.io/security-onion-solutions/golang:1.26.4-alpine as builder
 ARG VERSION=0.0.0
 ARG ALT_BRANCH=3/dev
 ARG REVKEYS=
@@ -38,7 +38,7 @@ RUN if [ -f "src2/prompt_system.md" ]; then echo "compressing system prompt"; gz
 RUN ./build.sh "$VERSION"
 
 
-FROM ghcr.io/security-onion-solutions/python:3.14.3-slim
+FROM ghcr.io/security-onion-solutions/python:3.14.6-trixie
 
 ARG UID=939
 ARG GID=939
