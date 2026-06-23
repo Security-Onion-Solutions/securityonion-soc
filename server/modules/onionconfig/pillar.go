@@ -14,7 +14,6 @@ import (
 	"strings"
 
 	"github.com/apex/log"
-	"github.com/security-onion-solutions/securityonion-soc/json"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/syntax"
 	"gopkg.in/yaml.v3"
@@ -206,20 +205,7 @@ func RecursivelyParseSettings(
 			settings = RecursivelyParseSettings(settings, val, newPrefix+id, minion)
 		case []interface{}:
 			multiline = true
-			for _, item := range val {
-				var str string
-				switch item.(type) {
-				case []interface{}, map[string]interface{}:
-					bytes, _ := json.WriteJson(item)
-					str = string(bytes)
-				default:
-					str = fmt.Sprintf("%v", item)
-				}
-
-				if str != "" {
-					newValue = newValue + str + "\n"
-				}
-			}
+			newValue = FlattenInterfaceSliceToString(val)
 		default:
 			newValue = fmt.Sprintf("%v", value)
 		}

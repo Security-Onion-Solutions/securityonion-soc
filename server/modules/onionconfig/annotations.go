@@ -58,7 +58,9 @@ func ApplyAnnotations(setting *model.Setting, annotations map[string]interface{}
 		case "global":
 			setting.Global = value.(bool)
 		case "multiline":
-			setting.Multiline = value.(bool)
+			if !setting.Multiline {
+				setting.Multiline = value.(bool)
+			}
 		case "node":
 			setting.Node = value.(bool)
 		case "sensitive":
@@ -72,7 +74,9 @@ func ApplyAnnotations(setting *model.Setting, annotations map[string]interface{}
 		case "helpLink":
 			setting.HelpLink = fmt.Sprintf("%v", value)
 		case "syntax":
-			setting.Syntax = fmt.Sprintf("%v", value)
+			if setting.Syntax == "" {
+				setting.Syntax = fmt.Sprintf("%v", value)
+			}
 		case "forcedType":
 			setting.ForcedType = fmt.Sprintf("%v", value)
 		case "default":
@@ -182,9 +186,9 @@ func ApplySensitiveMask(setting *model.Setting) {
 }
 
 // LoadStaticConfiguration walks a directory tree and collects both annotations and default values in a single pass.
-func LoadStaticConfiguration(dir string, parseYaml func(string) (map[string]interface{}, error)) (map[string]map[string]interface{}, map[string]string, error) {
+func LoadStaticConfiguration(dir string, parseYaml func(string) (map[string]interface{}, error)) (map[string]map[string]interface{}, map[string]interface{}, error) {
 	annotations := make(map[string]map[string]interface{})
-	defaults := make(map[string]string)
+	defaults := make(map[string]interface{})
 
 	subdirs := []string{"pillar", "salt"}
 	for _, subdir := range subdirs {
@@ -238,7 +242,7 @@ func LoadStaticConfiguration(dir string, parseYaml func(string) (map[string]inte
 }
 
 // HydrateAnnotations merges default pillar values and file-based defaults into the annotations map.
-func HydrateAnnotations(annotations map[string]map[string]interface{}, defaults map[string]string, fileReader func(id string) (string, bool)) {
+func HydrateAnnotations(annotations map[string]map[string]interface{}, defaults map[string]interface{}, fileReader func(id string) (string, bool)) {
 	// 1. Ensure all defaults have at least a blank annotation map
 	for id := range defaults {
 		if _, exists := annotations[id]; !exists {
@@ -255,6 +259,17 @@ func HydrateAnnotations(annotations map[string]map[string]interface{}, defaults 
 			}
 		} else if defVal, exists := defaults[id]; exists {
 			ann["default"] = defVal
+		}
+
+		if isFile, _ := ann["file"].(bool); !isFile {
+			if val, ok := ann["default"]; ok && val != nil {
+				if list, ok := val.([]interface{}); ok {
+					ann["default"] = FlattenInterfaceSliceToString(list)
+					ann["multiline"] = true
+				} else {
+					ann["default"] = fmt.Sprintf("%v", val)
+				}
+			}
 		}
 	}
 }
