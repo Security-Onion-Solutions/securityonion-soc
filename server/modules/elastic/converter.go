@@ -1059,6 +1059,21 @@ func convertFromElasticUpdateResults(store *ElasticEventstore, esJson string, re
 	return err
 }
 
+// convertFromElasticAsyncUpdateResults parses the response returned by an UpdateByQuery
+// submitted with wait_for_completion=false, which has the shape {"task":"nodeId:taskId"}.
+func convertFromElasticAsyncUpdateResults(esJson string) (string, error) {
+	esResults := make(map[string]interface{})
+	err := json.LoadJson([]byte(esJson), &esResults)
+	if err != nil {
+		return "", err
+	}
+	taskId, ok := esResults["task"].(string)
+	if !ok || taskId == "" {
+		return "", errors.New("Elasticsearch response did not contain an async task id")
+	}
+	return taskId, nil
+}
+
 func ConvertObjectToDocumentMap(name string, obj interface{}, schemaPrefix string) map[string]interface{} {
 	doc := make(map[string]interface{})
 	doc[schemaPrefix+name] = obj

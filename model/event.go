@@ -176,6 +176,21 @@ type EventUpdateResults struct {
 	UpdatedCount int `json:"updatedCount" example:"1"`
 	// The number of events the were left unmodified
 	UnchangedCount int `json:"unchangedCount" example:"0"`
+	// The Elasticsearch task ids when the update runs asynchronously (one per host); empty for synchronous updates
+	TaskIds []string `json:"taskIds,omitempty"`
+}
+
+// EventAckStatus is broadcast to clients when an asynchronous acknowledge/update task
+// completes. Clients correlate it to their originating request via TaskIds.
+type EventAckStatus struct {
+	// The Elasticsearch task ids (one per host) that this status pertains to
+	TaskIds []string `json:"taskIds"`
+	// Whether the asynchronous update completed without any errors
+	Success bool `json:"success"`
+	// The total number of events that were updated
+	Updated int `json:"updated"`
+	// Any errors encountered while completing the asynchronous update
+	Errors []string `json:"errors"`
 }
 
 func NewEventUpdateResults() *EventUpdateResults {

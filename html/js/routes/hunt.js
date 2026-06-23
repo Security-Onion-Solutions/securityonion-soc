@@ -173,6 +173,7 @@ const huntComponent = {
       showAckManyDialog: false,
       ackManyArgs: [],
       ackManyVerb: '',
+      runningAckTasks: [],
       fieldValueDialogVisible: false,
       fieldValueDialogKey: '',
       fieldValueDialogValue: '',
@@ -221,6 +222,7 @@ const huntComponent = {
     this.stopRefreshTimer();
     this.$root.unsubscribe('detections:bulkUpdate', this.bulkUpdateReport);
     this.$root.unsubscribe('related:bulkCreate', this.bulkUpdateReport);
+    this.$root.unsubscribe('events:ack', this.ackTaskReport);
 
     if (this.isCategory('alerts')) {
       window.removeEventListener('resize', this.calculateEventColumnWidth);
@@ -245,6 +247,7 @@ const huntComponent = {
 
     if (this.isCategory('alerts')) {
       window.addEventListener('resize', this.calculateEventColumnWidth);
+      this.$root.subscribe('events:ack', this.ackTaskReport);
     }
   },
   watch: {
@@ -912,6 +915,11 @@ const huntComponent = {
           });
           if (response.data && response.data.errors && response.data.errors.length > 0) {
             this.$root.showWarning(this.i18n.ackPartialSuccess);
+          }
+          // When the ack runs asynchronously the backend returns a task id per host; track
+          // them so we can report the outcome when the 'events:ack' broadcast arrives.
+          if (response.data && response.data.taskIds && response.data.taskIds.length > 0) {
+            this.runningAckTasks.push(...response.data.taskIds);
           }
         }
         if (this.isCategory('alerts')) {
@@ -2802,6 +2810,23 @@ const huntComponent = {
 
           this.$root.showInfo(msg, true);
         }
+      }
+    },
+    ackTaskReport(status) {
+      // ignore broadcasts for other clients.
+      const ids = status.taskIds || [];
+      if (!ids.some(id => this.runningAckTasks.includes(id))) return;
+
+      // One action spans every host's task; clear them all and report once.
+      this.runningAckTasks = this.runningAckTasks.filter(id => !ids.includes(id));
+
+      if (status.success) {
+        const msg = this.$root.replaceActionVar(this.i18n.ackTaskSuccess, 'count', (status.updated || 0).toLocaleString())
+        this.$root.showInfo(msg, true);
+      } else {
+        let errors = (status.errors || []).join('; ');
+        const msg = this.$root.replaceActionVar(this.i18n.ackTaskError, 'errors', errors);
+        this.$root.showError(msg);
       }
     },
     startManualSync(engine, type) {

@@ -31,7 +31,16 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-const MAX_ERROR_LENGTH = 4096
+const (
+	MAX_ERROR_LENGTH = 4096
+	// ASYNC_UPDATE_MAX_WAIT bounds how long a single async update task will be watched before giving up.
+	ASYNC_UPDATE_MAX_WAIT = 30 * time.Minute
+	// ASYNC_UPDATE_POLL_TIMEOUT is how long each Tasks.Get call blocks server-side waiting for completion.
+	ASYNC_UPDATE_POLL_TIMEOUT = 30 * time.Second
+	ASYNC_UPDATE_PAUSE        = time.Second
+	// ASYNC_UPDATE_MAX_ERRORS caps how many individual errors are broadcast to the client
+	ASYNC_UPDATE_MAX_ERRORS = 5
+)
 
 type FieldDefinition struct {
 	name         string
@@ -448,6 +457,7 @@ func (store *ElasticEventstore) Update(ctx context.Context, criteria *model.Even
 		query, err = convertToElasticUpdateRequest(store, criteria)
 		if err == nil {
 			var response string
+			var asyncTasks []asyncTaskRef
 
 			for idx, client := range store.esAllClients {
 				logger.WithField("clientHost", store.hostUrls[idx]).Debug("Sending request to client")
@@ -462,11 +472,44 @@ func (store *ElasticEventstore) Update(ctx context.Context, criteria *model.Even
 							logger.WithError(err).WithField("clientHost", store.hostUrls[idx]).Error("Encountered error while updating elasticsearch")
 							results.Errors = append(results.Errors, err.Error())
 						}
+					} else {
+						// The update is running asynchronously; capture the node-specific task id
+						// so a background goroutine can watch it to completion and report the outcome.
+						taskId, taskErr := convertFromElasticAsyncUpdateResults(response)
+						if taskErr == nil {
+							asyncTasks = append(asyncTasks, asyncTaskRef{client: client, hostUrl: store.hostUrls[idx], taskId: taskId})
+						} else {
+							logger.WithError(taskErr).WithField("clientHost", store.hostUrls[idx]).Error("Encountered error while parsing asynchronous elasticsearch update response")
+							results.Errors = append(results.Errors, taskErr.Error())
+						}
 					}
 				} else {
 					logger.WithError(err).WithField("clientHost", store.hostUrls[idx]).Error("Encountered error while updating elasticsearch")
 					results.Errors = append(results.Errors, err.Error())
 				}
+			}
+
+			if criteria.Asynchronous && len(asyncTasks) > 0 {
+				// The returned task ids are the correlation tokens the client tracks (one per
+				// host); the watcher polls every node's task and broadcasts a single aggregated
+				// result carrying all of them.
+				taskIds := make([]string, len(asyncTasks))
+				for i, task := range asyncTasks {
+					taskIds[i] = task.taskId
+				}
+				results.TaskIds = taskIds
+
+				noTimeOutCtx := context.Background()
+				val := ctx.Value(web.ContextKeyRunAsUsername)
+				if val != nil {
+					if username, ok := val.(string); ok {
+						noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRunAsUsername, username)
+					}
+				}
+				noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRequestorId, ctx.Value(web.ContextKeyRequestorId).(string))
+				noTimeOutCtx = log.NewContext(noTimeOutCtx, log.FromContext(ctx))
+
+				go store.watchAsyncUpdate(noTimeOutCtx, asyncTasks, taskIds)
 			}
 		}
 
@@ -695,6 +738,150 @@ func (store *ElasticEventstore) updateDocuments(ctx context.Context, client *ela
 	}).Debug("Update finished")
 
 	return jsonStr, err
+}
+
+// asyncTaskRef pairs an Elasticsearch task id with the client that submitted it. Task ids are
+// node-specific, so the task must be polled on the same client that created it.
+type asyncTaskRef struct {
+	client  *elasticsearch.Client
+	hostUrl string
+	taskId  string
+}
+
+// watchAsyncUpdate watches all of the supplied asynchronous update tasks to completion, then
+// broadcasts a single aggregated result so the initiating client can report success or failure.
+func (store *ElasticEventstore) watchAsyncUpdate(ctx context.Context, tasks []asyncTaskRef, taskIds []string) {
+	logger := log.FromContext(ctx).WithField("taskIds", taskIds)
+
+	status := store.aggregateAsyncUpdate(ctx, tasks, taskIds)
+
+	logger.WithFields(log.Fields{
+		"success": status.Success,
+		"updated": status.Updated,
+		"errors":  status.Errors,
+	}).Info("Asynchronous event update task finished; broadcasting result")
+
+	store.server.Host.Broadcast("events:ack", "events", status)
+}
+
+// aggregateAsyncUpdate watches every supplied task to completion and combines their results into a
+// single status carrying the total updated count and any errors across all hosts.
+func (store *ElasticEventstore) aggregateAsyncUpdate(ctx context.Context, tasks []asyncTaskRef, taskIds []string) model.EventAckStatus {
+	status := model.EventAckStatus{
+		TaskIds: taskIds,
+		Success: true,
+		Errors:  make([]string, 0),
+	}
+
+	for _, task := range tasks {
+		updated, errs := store.waitForUpdateTask(ctx, task)
+		status.Updated += updated
+		if len(errs) > 0 {
+			status.Success = false
+			status.Errors = append(status.Errors, errs...)
+		}
+	}
+
+	// Avoid broadcasting an unbounded error string; the full set is preserved in the server logs.
+	if len(status.Errors) > ASYNC_UPDATE_MAX_ERRORS {
+		remaining := len(status.Errors) - ASYNC_UPDATE_MAX_ERRORS
+		status.Errors = append(status.Errors[:ASYNC_UPDATE_MAX_ERRORS:ASYNC_UPDATE_MAX_ERRORS],
+			fmt.Sprintf("...and %d more error(s)", remaining))
+	}
+
+	return status
+}
+
+// waitForUpdateTask polls a single update task until it completes (or times out) and returns the
+// number of updated documents along with any errors encountered.
+func (store *ElasticEventstore) waitForUpdateTask(ctx context.Context, task asyncTaskRef) (int, []string) {
+	deadline := time.Now().Add(ASYNC_UPDATE_MAX_WAIT)
+	for {
+		time.Sleep(ASYNC_UPDATE_PAUSE)
+
+		res, err := task.client.Tasks.Get(
+			task.taskId,
+			task.client.Tasks.Get.WithContext(ctx),
+			task.client.Tasks.Get.WithWaitForCompletion(true),
+			task.client.Tasks.Get.WithTimeout(ASYNC_UPDATE_POLL_TIMEOUT),
+		)
+		if err != nil {
+			return 0, []string{err.Error()}
+		}
+
+		body, readErr := io.ReadAll(res.Body)
+		res.Body.Close()
+		if readErr != nil {
+			return 0, []string{readErr.Error()}
+		}
+
+		if res.IsError() {
+			return 0, []string{fmt.Sprintf("error retrieving task %s: %s", task.taskId, store.truncate(string(body)))}
+		}
+
+		parsed := gjson.ParseBytes(body)
+		if !parsed.Get("completed").Bool() {
+			if time.Now().After(deadline) {
+				return 0, []string{fmt.Sprintf("timed out waiting for task %s to complete", task.taskId)}
+			}
+			// Tasks.Get returned before the task finished (server-side poll timeout); keep waiting.
+			continue
+		}
+
+		updated, errs, rawErrs := parseAsyncUpdateOutcome(parsed)
+		if len(rawErrs) > 0 {
+			// Preserve the verbatim Elasticsearch error/failure JSON in the server logs while the
+			// client only receives the human-readable reasons in errs.
+			log.FromContext(ctx).WithFields(log.Fields{
+				"taskId": task.taskId,
+				"errors": rawErrs,
+			}).Error("Asynchronous Elasticsearch update reported errors")
+		}
+		return updated, errs
+	}
+}
+
+// parseAsyncUpdateOutcome extracts the updated count and any errors from a completed Tasks.Get
+// response (shape: {"completed":true,"task":{...},"response":{...},"error":{...}}). The returned
+// errs are human-readable messages safe to surface to clients; rawErrs carries the verbatim
+// Elasticsearch error/failure JSON for server-side logging.
+func parseAsyncUpdateOutcome(parsed gjson.Result) (updated int, errs []string, rawErrs []string) {
+	errs = make([]string, 0)
+	rawErrs = make([]string, 0)
+
+	if topErr := parsed.Get("error"); topErr.Exists() {
+		rawErrs = append(rawErrs, topErr.Raw)
+		errs = append(errs, asyncErrorReason(topErr))
+	}
+
+	resp := parsed.Get("response")
+	updated = int(resp.Get("updated").Int())
+
+	if resp.Get("timed_out").Bool() {
+		errs = append(errs, "timeout while updating documents in Elasticsearch")
+	}
+	for _, f := range resp.Get("failures").Array() {
+		rawErrs = append(rawErrs, f.Raw)
+		errs = append(errs, asyncErrorReason(f))
+	}
+
+	return updated, errs, rawErrs
+}
+
+// asyncErrorReason returns a concise, human-readable message from an Elasticsearch error object.
+// Bulk failures nest the detail under "cause"; top-level task errors are flat. It falls back to a
+// generic message when neither a reason nor a type is present.
+func asyncErrorReason(errObj gjson.Result) string {
+	if cause := errObj.Get("cause"); cause.Exists() {
+		errObj = cause
+	}
+	if reason := errObj.Get("reason").String(); reason != "" {
+		return reason
+	}
+	if errType := errObj.Get("type").String(); errType != "" {
+		return errType
+	}
+	return "an unexpected error occurred while updating events in Elasticsearch"
 }
 
 func (store *ElasticEventstore) refreshCache(ctx context.Context) {
