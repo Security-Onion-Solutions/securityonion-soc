@@ -224,7 +224,7 @@ type AgentParameters struct {
 	Name           string   `json:"name"`
 	IsOrchestrator bool     `json:"isOrchestrator"`
 	CanDelegateTo  []string `json:"canDelegateTo"`
-	AllowedTools   []string `json:"allowedTools"`
+	AllowedSkills  []string `json:"allowedSkills"`
 	// Prompt is the agent's system prompt; never serialized to the browser.
 	Prompt      string `json:"-"`
 	Description string `json:"agentDescription"`

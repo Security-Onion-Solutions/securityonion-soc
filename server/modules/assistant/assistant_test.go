@@ -1624,8 +1624,11 @@ func TestAssistantCoordinator_SendStream_Agentic(t *testing.T) {
 		srv:             srv,
 		isAgentic:       true,
 		FunctionLibrary: map[string]Tool{"query_events": &mockTool{name: "query_events", description: "events"}},
+		SkillLibrary: map[string]model.Skill{
+			"Hunt": {Name: "Hunt", Tools: []string{"query_events"}},
+		},
 		agents: map[string]model.AgentParameters{
-			"Hunter": {Name: "Hunter", Prompt: "You are a hunting agent.", AllowedTools: []string{"query_events"}},
+			"Hunter": {Name: "Hunter", Prompt: "You are a hunting agent.", AllowedSkills: []string{"Hunt"}},
 		},
 		agentMapping: map[string]string{"Hunter": "TestModel"},
 		adapters: map[string]server.AssistantAdapter{
@@ -1687,25 +1690,82 @@ func TestAssistantCoordinator_SetupAgent(t *testing.T) {
 		DelegationLibrary: map[string]Tool{
 			"delegate_to_Hunter": &mockTool{name: "delegate_to_Hunter", description: "hunter"},
 		},
+		SkillLibrary: map[string]model.Skill{
+			"Hunt": {Name: "Hunt", Tools: []string{"query_events"}, AdditionalPrompt: "Hunt skill prompt."},
+		},
 	}
 
 	req := &model.ChatRequest{SystemAppend: "leftover"}
 	agentParams := &model.AgentParameters{
 		Prompt:        "You are a hunting agent.",
-		AllowedTools:  []string{"query_events"},
+		AllowedSkills: []string{"Hunt"},
 		CanDelegateTo: []string{"delegate_to_Hunter"},
 	}
 
-	err := ac.setupAgent(req, agentParams)
+	err := ac.setupAgent(context.Background(), req, agentParams)
 	assert.NoError(t, err)
-	// The agent's own prompt replaces the system prompt and clears any append.
+	// The agent's own prompt replaces the system prompt, and the append is rebuilt
+	// from the agent's skill prompts (plus any systemPromptAddendum).
 	assert.Equal(t, "You are a hunting agent.", req.System)
-	assert.Empty(t, req.SystemAppend)
+	assert.Contains(t, req.SystemAppend, "Hunt skill prompt.")
 	assert.NotEmpty(t, req.ToolConfig)
 
 	var tc model.ToolConfig
 	assert.NoError(t, json.Unmarshal(req.ToolConfig, &tc))
-	assert.Len(t, tc.Tools, 2) // the allowed tool + the allowed delegate
+	assert.Len(t, tc.Tools, 2) // the skill's tool + the allowed delegate
+}
+
+func TestAssistantCoordinator_SetupAgent_UnknownSkill(t *testing.T) {
+	ac := &AssistantCoordinator{
+		FunctionLibrary: map[string]Tool{
+			"query_events": &mockTool{name: "query_events", description: "events"},
+		},
+		SkillLibrary: map[string]model.Skill{
+			"Hunt": {Name: "Hunt", Tools: []string{"query_events"}, AdditionalPrompt: "Hunt skill prompt."},
+		},
+	}
+
+	req := &model.ChatRequest{SystemAppend: "leftover"}
+	agentParams := &model.AgentParameters{
+		Prompt:        "You are a hunting agent.",
+		AllowedSkills: []string{"Bogus"},
+	}
+
+	err := ac.setupAgent(context.Background(), req, agentParams)
+	assert.NoError(t, err)
+	// The unknown skill is dropped: it contributes no prompt and no tools.
+	assert.Equal(t, "You are a hunting agent.", req.System)
+	assert.Empty(t, req.SystemAppend)
+
+	var tc model.ToolConfig
+	assert.NoError(t, json.Unmarshal(req.ToolConfig, &tc))
+	assert.Len(t, tc.Tools, 0)
+}
+
+func TestAssistantCoordinator_SetupAgent_DuplicateSkill(t *testing.T) {
+	ac := &AssistantCoordinator{
+		FunctionLibrary: map[string]Tool{
+			"query_events": &mockTool{name: "query_events", description: "events"},
+		},
+		SkillLibrary: map[string]model.Skill{
+			"Hunt": {Name: "Hunt", Tools: []string{"query_events"}, AdditionalPrompt: "Hunt skill prompt."},
+		},
+	}
+
+	req := &model.ChatRequest{SystemAppend: "leftover"}
+	agentParams := &model.AgentParameters{
+		Prompt:        "You are a hunting agent.",
+		AllowedSkills: []string{"Hunt", "Hunt"},
+	}
+
+	err := ac.setupAgent(context.Background(), req, agentParams)
+	assert.NoError(t, err)
+	// The duplicate skill is dropped: its prompt and tool appear only once.
+	assert.Equal(t, 1, strings.Count(req.SystemAppend, "Hunt skill prompt."))
+
+	var tc model.ToolConfig
+	assert.NoError(t, json.Unmarshal(req.ToolConfig, &tc))
+	assert.Len(t, tc.Tools, 1)
 }
 
 func TestAssistantCoordinator_ToolInSession_EdgeCases(t *testing.T) {

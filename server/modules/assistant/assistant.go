@@ -68,6 +68,7 @@ type AssistantCoordinator struct {
 
 	FunctionLibrary   map[string]Tool
 	DelegationLibrary map[string]Tool
+	SkillLibrary      map[string]model.Skill
 	toolConfig        json.RawMessage
 	adapters          map[string]server.AssistantAdapter
 	isAgentic         bool
@@ -608,7 +609,7 @@ func (ac *AssistantCoordinator) prepareChatRequest(ctx context.Context, aiModel 
 	}
 
 	if agentParams != nil {
-		if err := ac.setupAgent(req, agentParams); err != nil {
+		if err := ac.setupAgent(ctx, req, agentParams); err != nil {
 			return nil, nil, err
 		}
 	} else {
@@ -1544,11 +1545,59 @@ func buildToolResultMessage(toolUseId string, result *model.ToolResponse, toolEr
 	}
 }
 
-func (ac *AssistantCoordinator) setupAgent(req *model.ChatRequest, agent *model.AgentParameters) (err error) {
-	req.System = agent.Prompt // build system prompt for this agent
-	req.SystemAppend = ""
+func (ac *AssistantCoordinator) setupAgent(ctx context.Context, req *model.ChatRequest, agent *model.AgentParameters) (err error) {
+	logger := log.FromContext(ctx)
 
-	req.ToolConfig, err = buildToolConfig(ac.FunctionLibrary, ac.DelegationLibrary, agent.AllowedTools, agent.CanDelegateTo) // build tools for this agent
+	req.System = agent.Prompt // build system prompt for this agent
+
+	allowedTools := map[string]struct{}{}
+	seenSkills := map[string]struct{}{}
+	prompts := make([]string, 0, len(agent.AllowedSkills)+1)
+
+	for _, skillName := range agent.AllowedSkills {
+		skill, ok := ac.SkillLibrary[skillName]
+		if !ok {
+			logger.WithFields(log.Fields{
+				"skillName": skillName,
+				"agentName": agent.Name,
+			}).Warn("agent has been assigned an unknown skill, dropping it")
+
+			continue
+		}
+
+		_, seen := seenSkills[skillName]
+		if seen {
+			logger.WithFields(log.Fields{
+				"skillName": skillName,
+				"agentName": agent.Name,
+			}).Warn("agent has been assigned a duplicate skill, dropping it")
+
+			continue
+		}
+
+		seenSkills[skillName] = struct{}{}
+
+		if skill.AdditionalPrompt != "" {
+			prompts = append(prompts, skill.AdditionalPrompt)
+		}
+
+		for _, tool := range skill.Tools {
+			allowedTools[tool] = struct{}{}
+		}
+	}
+
+	if ac.systemPromptAddendum != "" {
+		prompts = append(prompts, ac.systemPromptAddendum)
+	}
+
+	req.SystemAppend = strings.Join(prompts, "\n\n")
+
+	tools := make([]string, 0, len(allowedTools))
+	for tool := range allowedTools {
+		tools = append(tools, tool)
+	}
+
+	req.ToolConfig, err = buildToolConfig(ac.FunctionLibrary, ac.DelegationLibrary, tools, agent.CanDelegateTo) // build tools for this agent
 	if err != nil {
 		return err
 	}

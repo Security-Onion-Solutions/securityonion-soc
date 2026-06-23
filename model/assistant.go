@@ -494,3 +494,9 @@ type UpdateSessionRequest struct {
 	Action string `json:"action" example:"add" enum:"add,remove"`
 	Tag    string `json:"tag" example:"shared"`
 }
+
+type Skill struct {
+	Name             string
+	Tools            []string
+	AdditionalPrompt string
+}

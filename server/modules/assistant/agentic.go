@@ -15,11 +15,20 @@ import (
 	"github.com/apex/log"
 )
 
-//go:embed hunter.txt
+//go:embed so-agent-hunter.txt
 var hunterPrompt string
 
-//go:embed agent.txt
+//go:embed so-agent-orchestrator.txt
 var agentPrompt string
+
+//go:embed so-skill-cases.txt
+var casesPrompt string
+
+//go:embed so-skill-detections.txt
+var detectionsPrompt string
+
+//go:embed so-skill-hunt.txt
+var huntPrompt string
 
 // setupAgentic defines the fixed set of agents the coordinator exposes when
 // agentic mode is enabled. The agent set is hardcoded for now; only the
@@ -32,16 +41,34 @@ func (ac *AssistantCoordinator) setupAgentic() {
 		"Orchestrator": {
 			Name:           "Orchestrator",
 			IsOrchestrator: true,
-			AllowedTools:   []string{},
+			AllowedSkills:  []string{},
 			CanDelegateTo:  []string{"Hunter"},
 			Prompt:         agentPrompt,
 		},
 		"Hunter": {
 			Name:          "Hunter",
-			AllowedTools:  []string{"query_events"},
+			AllowedSkills: []string{"Hunt"},
 			CanDelegateTo: []string{},
 			Prompt:        hunterPrompt,
 			Description:   "An agent specialized in querying and analyzing security event data to uncover insights, patterns, and potential threats. Hunter is adept at formulating complex queries, interpreting results, and providing actionable intelligence based on security event logs.",
+		},
+	}
+
+	ac.SkillLibrary = map[string]model.Skill{
+		"Cases": {
+			Name:             "Cases",
+			Tools:            []string{"query_cases", "escalate_alerts"},
+			AdditionalPrompt: casesPrompt,
+		},
+		"Detections": {
+			Name:             "Detections",
+			Tools:            []string{"add_overrides", "create_detection", "query_detections", "toggle_detections", "update_detection_content", "update_overrides"},
+			AdditionalPrompt: detectionsPrompt,
+		},
+		"Hunt": {
+			Name:             "Hunt",
+			Tools:            []string{"query_events"},
+			AdditionalPrompt: huntPrompt,
 		},
 	}
 }
