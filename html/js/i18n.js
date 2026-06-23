@@ -176,6 +176,8 @@ const i18n = {
       ackMultipleTip: 'Acknowledging groups of alerts may take a while and will continue in the background.',
       ackPartialSuccess: 'The acknowledge request encountered an unexpected problem. Some events may not have been acknowledged.',
       ackSingleTip: 'Acknowledged alert and removed from view.',
+      ackTaskError: 'Error acknowledging alerts: {errors}',
+      ackTaskSuccess: 'Successfully acknowledged {count} alerts.',
       ackUndoMultipleTip: 'Reverting acknowledgment on groups of alerts may take a while and will continue in the background.',
       ackUndoSingleTip: 'Reverted acknowledgement and removed from view.',
       actions: 'Actions',

@@ -1446,6 +1446,48 @@ test('getDisplayedQueryVar', () => {
   expect(comp.getDisplayedQueryVar()).toBe('querySearch');
 });
 
+test('ackTaskReport - ignores untracked task', () => {
+  comp.runningAckTasks = ['task-a'];
+  comp.$root.info = false;
+  comp.$root.error = false;
+
+  comp.ackTaskReport({ taskIds: ['task-b'], success: true, updated: 5, errors: [] });
+
+  expect(comp.$root.info).toBe(false);
+  expect(comp.$root.error).toBe(false);
+  expect(comp.runningAckTasks).toEqual(['task-a']);
+});
+
+test('ackTaskReport - success shows count and removes task', () => {
+  comp.runningAckTasks = ['task-a', 'task-b'];
+
+  comp.ackTaskReport({ taskIds: ['task-a'], success: true, updated: 1234, errors: [] });
+
+  expect(comp.$root.info).toBe(true);
+  expect(comp.$root.infoMessage).toBe('Successfully acknowledged 1,234 alerts.');
+  expect(comp.runningAckTasks).toEqual(['task-b']);
+});
+
+test('ackTaskReport - failure shows error breakdown and removes task', () => {
+  comp.runningAckTasks = ['task-a'];
+
+  comp.ackTaskReport({ taskIds: ['task-a'], success: false, updated: 0, errors: ['boom', 'kaboom'] });
+
+  expect(comp.$root.error).toBe(true);
+  expect(comp.$root.errorMessage).toBe('Error acknowledging alerts: boom; kaboom');
+  expect(comp.runningAckTasks).toEqual([]);
+});
+
+test('ackTaskReport - multi-host clears every tracked id with one banner', () => {
+  comp.runningAckTasks = ['nodeA:1', 'nodeB:7', 'other'];
+
+  comp.ackTaskReport({ taskIds: ['nodeA:1', 'nodeB:7'], success: true, updated: 1200, errors: [] });
+
+  expect(comp.$root.info).toBe(true);
+  expect(comp.$root.infoMessage).toBe('Successfully acknowledged 1,200 alerts.');
+  expect(comp.runningAckTasks).toEqual(['other']);
+});
+
 test('bulkUpdateReport - error', () => {
   let stats = {
     error: 1,
