@@ -38,7 +38,7 @@ RUN if [ -f "src2/prompt_system.md" ]; then echo "compressing system prompt"; gz
 RUN ./build.sh "$VERSION"
 
 
-FROM ghcr.io/security-onion-solutions/python:3.14.6-trixie
+FROM ghcr.io/security-onion-solutions/ubi9:9.7
 
 ARG UID=939
 ARG GID=939
@@ -46,19 +46,20 @@ ARG VERSION=0.0.0
 ARG ELASTIC_VERSION=0.0.0
 ARG WAZUH_VERSION=0.0.0
 
-RUN apt update -y && apt upgrade -y
-RUN apt install -y --no-install-recommends bash tzdata ca-certificates wget curl tcpdump unzip git gcc python3-dev libssl-dev && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
-RUN pip3 install pysigma==0.11.20 sigma-cli==1.0.5 pysigma-backend-elasticsearch pysigma-pipeline-windows --break-system-packages
+RUN dnf update -y && \
+    dnf install -y --nodocs wget tcpdump unzip git gcc python3.14-devel python3.14-pip openssl-devel && \
+    dnf clean all
+RUN ln -s /usr/bin/python3.14 /usr/local/bin/python3 && ln -s /usr/bin/pip3.14 /usr/local/bin/pip3
+RUN pip3 install pysigma==0.11.20 sigma-cli==1.0.5 pysigma-backend-elasticsearch pysigma-pipeline-windows
 ADD dep/pysigma_backend_securityonion-0.1.0-py3-none-any.whl /tmp
 RUN pip3 install /tmp/pysigma_backend_securityonion-0.1.0-py3-none-any.whl
 RUN pip3 install yara-python==4.5.4
-RUN apt-get -y remove gcc python3-dev libssl-dev && apt-get -y autoremove
+RUN dnf remove -y gcc python3-devel openssl-devel && dnf autoremove -y && dnf clean all
 RUN rm /tmp/pysigma_backend_securityonion-0.1.0-py3-none-any.whl
 
-RUN update-ca-certificates
-RUN addgroup --gid "$GID" socore
-RUN adduser --disabled-password --uid "$UID" --ingroup socore --gecos '' socore
+RUN update-ca-trust
+RUN groupadd --gid "$GID" socore && \
+    useradd --uid "$UID" --gid "$GID" socore
 RUN mkdir -p /opt/sensoroni/jobs && chown socore:socore /opt/sensoroni/jobs
 RUN mkdir -p /opt/sensoroni/logs && chown socore:socore /opt/sensoroni/logs
 WORKDIR /opt/sensoroni
