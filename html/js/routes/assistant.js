@@ -14,6 +14,10 @@ const CHOICE_MARKER_REGEX = /\[\[CHOICE\]\]([\s\S]*?)\[\[\/CHOICE\]\]/g;
 
 routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
   template: '#page-assistant',
+  // `tool-use-card` and the recursive `delegation-child` (js/components/) are
+  // registered globally; the page only provides its instance as `delegationCtx` so
+  // those components (and every nested level) reach page state/helpers via `ctx`.
+  provide() { return { delegationCtx: this }; },
   data() { return {
     i18n: this.$root.i18n,
     messages: [],
@@ -24,13 +28,13 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     currentChatId: null,
     creditsRemaining: 0,
     creditsLoaded: false,
-    executingToolsBySession: new Map(), // Map<sessionId, Map<toolUseId, toolUse>>
-    toolIndexToIdBySession: new Map(), // Map<sessionId, Map<index, toolUseId>>
-    toolQueues: new Map(), // Map<sessionId, Array<toolUseId>>
-    toolRunnerBusy: new Set(), // Set<sessionId>
-    mostRecentFloatingTool: new Map(), // Map<sessionId, toolUse>
+    // Per-session tool-execution state, one record per session id. Consolidates what
+    // were five parallel structures: the tools-by-id map, the stream block-index ->
+    // tool-id map, the approval queue, the runner-busy flag, and the floating
+    // (pending-approval) tool shown above a collapsed delegate. Read/create a record
+    // with sessionTools(id).
+    sessionToolState: new Map(), // Map<sessionId, {toolsById:Map, indexToId:Map, queue:[], busy:bool, floatingTool}>
     delegationChildren: new Map(), // Map<childSessionId, {parentToolUse, parentSessionId, parentToolUseId, agentName}>
-    pendingResultTimers: new Set(), // Set<timeoutId> for deferred raw-result captures, cleared on session switch
     contextLength: 0, // Track total context length
     creditsUsed: 0, // Track total accumulated credits used for a session
     increaseContextLimit: false, // Toggle for max context threshold
@@ -529,10 +533,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         this.messages = [];
       }
 
-      if (this.messages.length > 1 && this.mostRecentFloatingTool.get(this.currentChatId)) {
-        let floatingTool = this.mostRecentFloatingTool.get(this.currentChatId);
-        floatingTool.status = 'skipped';
-        this.mostRecentFloatingTool.delete(this.currentChatId);
+      const floatingState = this.sessionToolState.get(this.currentChatId);
+      if (this.messages.length > 1 && floatingState && floatingState.floatingTool) {
+        floatingState.floatingTool.status = 'skipped';
+        floatingState.floatingTool = null;
       }
 
       // Add user message to chat
@@ -655,110 +659,110 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       return { assistantMessage, messageUsage };
     },
     
-    // Helper method to handle content_block_start event
-    handleContentBlockStart(c, assistantMessage, sessionId = null) {
-      // Handle tool use blocks
-      if (c.content_block && c.content_block.type === 'tool_use') {
-        const targetSessionId = sessionId || this.currentChatId;
-        const toolUse = {
-          id: c.content_block.id,
-          name: c.content_block.name,
-          input: c.content_block.input || {},
-          inputJson: '', // Accumulate input JSON from deltas
-          status: 'preparing', // Start as preparing, not executing
-          result: null,
-          error: null,
-          rawResult: null, // Will store the raw tool result
-          timestamp: new Date().toISOString(),
-          blockIndex: c.index, // Store the block index for tracking
-          approved: null, // null = pending, true = approved, false = rejected
-          sessionId: targetSessionId // Track which session this belongs to
-        };
+    // --- Unified content-block stream handlers ---
+    // A streamed content block (a tool_use, or a text/thought/input delta) is applied
+    // the same way in all three streaming contexts -- the orchestrator's own turn, a
+    // chained tool-result turn, and a delegated sub-agent's turn. The only differences
+    // are captured in `target`:
+    //   message   - the message to append content/thoughts/toolUses to (null = don't render)
+    //   sessionId - the session whose tool maps own this block
+    //   visible   - whether that session is on screen (drives scroll-if-pinned)
+    // The handle*ContentBlock* methods are thin adapters that build `target` for their
+    // context; these apply* methods hold the one real implementation.
+    applyBlockStart(c, target) {
+      if (!(c.content_block && c.content_block.type === 'tool_use')) return;
+      const toolUse = {
+        id: c.content_block.id,
+        name: c.content_block.name,
+        input: c.content_block.input || {},
+        inputJson: '', // Accumulate input JSON from deltas
+        status: 'preparing', // Start as preparing, not executing
+        result: null,
+        error: null,
+        rawResult: null, // Will store the raw tool result
+        timestamp: new Date().toISOString(),
+        blockIndex: c.index, // Store the block index for tracking
+        approved: null, // null = pending, true = approved, false = rejected
+        sessionId: target.sessionId, // Track which session this belongs to
+      };
 
-        // Push into the reactive message first, then track the reactive instance in
-        // the session map so later mutations (status, input, childSession) notify.
-        let tracked = toolUse;
-        if (assistantMessage && targetSessionId === this.currentChatId) {
-          assistantMessage.toolUses.push(toolUse);
-          tracked = assistantMessage.toolUses[assistantMessage.toolUses.length - 1];
-          this.scrollIfPinned();
-        }
-        this.getSessionToolMap(targetSessionId).set(toolUse.id, tracked);
-        this.getIndexMap(targetSessionId).set(c.index, toolUse.id);
+      // Push into the reactive message first, then track that reactive instance in the
+      // session map so later mutations (status, input, childSession) notify the view.
+      let tracked = toolUse;
+      if (target.message) {
+        target.message.toolUses.push(toolUse);
+        tracked = target.message.toolUses[target.message.toolUses.length - 1];
+        if (target.visible) this.scrollIfPinned();
       }
+      this.getSessionToolMap(target.sessionId).set(toolUse.id, tracked);
+      this.getIndexMap(target.sessionId).set(c.index, toolUse.id);
     },
-
-    // Helper method to handle content_block_delta event
-    handleContentBlockDelta(c, assistantMessage, sessionId = null) {
-      const targetSessionId = sessionId || this.currentChatId;
-      
-      if (assistantMessage && c.delta.type === 'text_delta' && targetSessionId === this.currentChatId) {
-        // Only update UI if this is for the current session
-        assistantMessage.content = this.nbspRegexOp(assistantMessage.content + c.delta.text);
-        this.scrollIfPinned();
+    applyBlockDelta(c, target) {
+      if (c.delta.type === 'text_delta') {
+        if (target.message) {
+          target.message.content = this.nbspRegexOp(target.message.content + c.delta.text);
+          if (target.visible) this.scrollIfPinned();
+        }
       } else if (c.delta.type === 'input_json_delta') {
-        const idMap = this.getIndexMap(targetSessionId);
-        const toolId = idMap.get(c.index);
-        const toolUse = this.getSessionToolMap(targetSessionId).get(toolId);
+        const toolId = this.getIndexMap(target.sessionId).get(c.index);
+        const toolUse = this.getSessionToolMap(target.sessionId).get(toolId);
         if (toolUse) {
           toolUse.inputJson += c.delta.partial_json;
           toolUse.status = 'preparing';
-          // Only update UI if this is for the current session
-          if (targetSessionId === this.currentChatId) {
-            this.scrollIfPinned();
-          }
+          if (target.visible) this.scrollIfPinned();
         }
       } else if (c.delta.type === 'thought_delta') {
-        if (assistantMessage && targetSessionId === this.currentChatId) {
-          assistantMessage.thoughts += this.nbspRegexOp(c.delta.text);
-          this.scrollIfPinned();
+        if (target.message) {
+          target.message.thoughts += this.nbspRegexOp(c.delta.text);
+          if (target.visible) this.scrollIfPinned();
         }
       }
     },
-
-    // Helper method to handle content_block_stop event
-    handleContentBlockStop(c, sessionId = null) {
+    applyBlockStop(c, target) {
       let messageUsage = null;
-      const targetSessionId = sessionId || this.currentChatId;
-      
-      const idMap = this.getIndexMap(targetSessionId);
-      const toolId = idMap.get(c.index);
-      const toolUse = this.getSessionToolMap(targetSessionId).get(toolId);
+      const toolId = this.getIndexMap(target.sessionId).get(c.index);
+      const toolUse = this.getSessionToolMap(target.sessionId).get(toolId);
       if (toolUse && toolUse.status === 'preparing') {
         try {
           // Parse the accumulated JSON input
           if (toolUse.inputJson) {
             toolUse.input = JSON.parse(toolUse.inputJson);
           }
-          // Check if this tool should be auto-approved
+          // Read-only tools honor the auto-approval setting; everything else prompts.
           if (this.shouldAutoApproveTool(toolUse.name)) {
-            if (this.checkContextLimitReached()) return;
-            // Auto-approve the tool
+            if (this.checkContextLimitReached()) return messageUsage;
             toolUse.approved = true;
-            this.queueTool(targetSessionId, toolUse.id);
+            this.queueTool(target.sessionId, toolUse.id);
           } else {
-            // Set status to pending approval instead of executing
             toolUse.status = 'pending_approval';
             toolUse.approved = null;
-            this.mostRecentFloatingTool.set(targetSessionId, toolUse);
+            this.sessionTools(target.sessionId).floatingTool = toolUse;
           }
         } catch (error) {
           toolUse.status = 'error';
           toolUse.error = this.i18n.assistantToolParseInputError + ': ' + error.message;
         }
-        
-        // Only update UI if this is for the current session
-        if (targetSessionId === this.currentChatId) {
-          this.scrollIfPinned();
-        }
+        if (target.visible) this.scrollIfPinned();
       }
-      
-      // Sometimes usage comes here
+      // Usage sometimes rides the content_block_stop event.
       if (c.usage) {
         messageUsage = c.usage;
       }
-      
       return messageUsage;
+    },
+
+    // Adapter: the orchestrator's own turn renders into the current session's message.
+    handleContentBlockStart(c, assistantMessage, sessionId = null) {
+      const sid = sessionId || this.currentChatId;
+      this.applyBlockStart(c, { message: assistantMessage, sessionId: sid, visible: sid === this.currentChatId });
+    },
+    handleContentBlockDelta(c, assistantMessage, sessionId = null) {
+      const sid = sessionId || this.currentChatId;
+      this.applyBlockDelta(c, { message: assistantMessage, sessionId: sid, visible: sid === this.currentChatId });
+    },
+    handleContentBlockStop(c, sessionId = null) {
+      const sid = sessionId || this.currentChatId;
+      return this.applyBlockStop(c, { sessionId: sid, visible: sid === this.currentChatId });
     },
     
     // Helper method to handle message_stop event
@@ -1014,122 +1018,19 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       return { assistantMessage, messageUsage };
     },
     
-    // Helper method to handle content_block_start event for tool execution (chained tools)
+    // Adapter: a chained tool-result turn renders the same way as the orchestrator's
+    // own turn, so it reuses the unified content-block handlers verbatim.
     handleToolExecutionContentBlockStart(c, assistantMessage, sessionId = null) {
-      // Handle tool use blocks in the response after tool execution
-      if (c.content_block && c.content_block.type === 'tool_use') {
-        const targetSessionId = sessionId || this.currentChatId;
-        const newToolUse = {
-          id: c.content_block.id,
-          name: c.content_block.name,
-          input: c.content_block.input || {},
-          inputJson: '', // Accumulate input JSON from deltas
-          status: 'preparing',
-          result: null,
-          error: null,
-          rawResult: null, // Will store the raw tool result
-          timestamp: new Date().toISOString(),
-          blockIndex: c.index,
-          approved: null,
-          sessionId: targetSessionId // Track which session this belongs to
-        };
-
-        // Push into the reactive message first, then track the reactive instance.
-        let tracked = newToolUse;
-        if (assistantMessage && targetSessionId === this.currentChatId) {
-          assistantMessage.toolUses.push(newToolUse);
-          tracked = assistantMessage.toolUses[assistantMessage.toolUses.length - 1];
-          this.scrollIfPinned();
-        }
-        this.getSessionToolMap(targetSessionId).set(newToolUse.id, tracked);
-        this.getIndexMap(targetSessionId).set(c.index, newToolUse.id);
-      }
+      const sid = sessionId || this.currentChatId;
+      this.applyBlockStart(c, { message: assistantMessage, sessionId: sid, visible: sid === this.currentChatId });
     },
-    
-    // Helper method to handle content_block_delta event for tool execution
     handleToolExecutionContentBlockDelta(c, assistantMessage, sessionId = null) {
-      const targetSessionId = sessionId || this.currentChatId;
-      
-      if (assistantMessage && c.delta.type === 'text_delta' && targetSessionId === this.currentChatId) {
-        // Only update UI if this is for the current session
-        assistantMessage.content = this.nbspRegexOp(assistantMessage.content + c.delta.text);
-        this.scrollIfPinned();
-      } else if (c.delta.type === 'input_json_delta') {
-        const idMap = this.getIndexMap(targetSessionId);
-        const toolId = idMap.get(c.index);
-        const chainedToolUse = this.getSessionToolMap(targetSessionId).get(toolId);
-        if (chainedToolUse) {
-          chainedToolUse.inputJson += c.delta.partial_json;
-          chainedToolUse.status = 'preparing';
-          // Only update UI if this is for the current session
-          if (targetSessionId === this.currentChatId) {
-            this.scrollIfPinned();
-          }
-        }
-      } else if (c.delta.type === 'thought_delta') {
-        if (assistantMessage && targetSessionId === this.currentChatId) {
-          assistantMessage.thoughts += this.nbspRegexOp(c.delta.text);
-          this.scrollIfPinned();
-        }
-      }
+      const sid = sessionId || this.currentChatId;
+      this.applyBlockDelta(c, { message: assistantMessage, sessionId: sid, visible: sid === this.currentChatId });
     },
-
-    // Helper method to handle content_block_stop event for tool execution (chained tools)
     handleToolExecutionContentBlockStop(c, sessionId = null) {
-      let messageUsage = null;
-      const targetSessionId = sessionId || this.currentChatId;
-      
-      // Handle tool input completion for chained tools
-      const idMap = this.getIndexMap(targetSessionId);
-      const toolId = idMap.get(c.index);
-      const chainedToolUse = this.getSessionToolMap(targetSessionId).get(toolId);
-      if (chainedToolUse && chainedToolUse.status === 'preparing') {
-        try {
-          // Parse the accumulated JSON input
-          if (chainedToolUse.inputJson) {
-            chainedToolUse.input = JSON.parse(chainedToolUse.inputJson);
-          }
-          
-          // Check if this chained tool should be auto-approved
-          if (this.shouldAutoApproveTool(chainedToolUse.name)) {
-            if (this.checkContextLimitReached()) return;
-            chainedToolUse.approved = true;
-            this.queueTool(targetSessionId, chainedToolUse.id);
-          } else {
-            // Set status to pending approval
-            chainedToolUse.status = 'pending_approval';
-            chainedToolUse.approved = null;
-            this.mostRecentFloatingTool.set(targetSessionId, chainedToolUse);
-          }
-        } catch (error) {
-          chainedToolUse.status = 'error';
-          chainedToolUse.error = this.i18n.assistantToolParseInputError + ': ' + error.message;
-        }
-        
-        // Only update UI if this is for the current session
-        if (targetSessionId === this.currentChatId) {
-          this.scrollIfPinned();
-        }
-      }
-      
-      // Sometimes usage comes here
-      if (c.usage) {
-        messageUsage = c.usage;
-      }
-      
-      return messageUsage;
-    },
-    
-    // Helper method to handle message_stop event for tool execution
-    handleToolExecutionMessageStop(assistantMessage, messageUsage) {
-      if (assistantMessage && messageUsage) {
-        assistantMessage.usage = messageUsage;
-        // Update context length for tool result messages too
-        this.updateContextLength(messageUsage);
-        this.updateCreditsUsed(messageUsage);
-        this.$forceUpdate();
-      }
-      return { assistantMessage: null, messageUsage: null };
+      const sid = sessionId || this.currentChatId;
+      return this.applyBlockStop(c, { sessionId: sid, visible: sid === this.currentChatId });
     },
 
     // --- Delegation (sub-agent) streaming helpers ---
@@ -1201,87 +1102,17 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       return delegateToolUse.childSession.messages[delegateToolUse.childSession.messages.length - 1];
     },
 
+    // Adapter: a delegated sub-agent's turn renders into its nested childMsg. Its
+    // transcript is always on screen (collapsed under the parent's agent panel), so
+    // visible is always true; tool approvals route back to the child session id.
     handleDelegationContentBlockStart(c, childSessionId, childMsg) {
-      if (c.content_block && c.content_block.type === 'tool_use') {
-        const toolUse = {
-          id: c.content_block.id,
-          name: c.content_block.name,
-          input: c.content_block.input || {},
-          inputJson: '',
-          status: 'preparing',
-          result: null,
-          error: null,
-          rawResult: null,
-          timestamp: new Date().toISOString(),
-          blockIndex: c.index,
-          approved: null,
-          sessionId: childSessionId, // approvals route back to the child session
-        };
-        // Push into the reactive nested message first, then track the reactive
-        // instance so its status -> pending_approval transition surfaces the
-        // approval card live.
-        let tracked = toolUse;
-        if (childMsg) {
-          childMsg.toolUses.push(toolUse);
-          tracked = childMsg.toolUses[childMsg.toolUses.length - 1];
-          this.scrollIfPinned();
-        }
-        this.getSessionToolMap(childSessionId).set(toolUse.id, tracked);
-        this.getIndexMap(childSessionId).set(c.index, toolUse.id);
-      }
+      this.applyBlockStart(c, { message: childMsg, sessionId: childSessionId, visible: true });
     },
-
     handleDelegationContentBlockDelta(c, childSessionId, childMsg) {
-      if (c.delta.type === 'text_delta') {
-        // Sub-agent response text is real prose, not a thought. The whole sub-agent
-        // transcript is already collapsed under the parent's agent panel, so render
-        // response text directly as content (reasoning still routes to thoughts below).
-        if (childMsg) {
-          childMsg.content += this.nbspRegexOp(c.delta.text);
-          this.scrollIfPinned();
-        }
-      } else if (c.delta.type === 'input_json_delta') {
-        const toolId = this.getIndexMap(childSessionId).get(c.index);
-        const toolUse = this.getSessionToolMap(childSessionId).get(toolId);
-        if (toolUse) {
-          toolUse.inputJson += c.delta.partial_json;
-          toolUse.status = 'preparing';
-        }
-      } else if (c.delta.type === 'thought_delta') {
-        if (childMsg) {
-          childMsg.thoughts += this.nbspRegexOp(c.delta.text);
-          this.scrollIfPinned();
-        }
-      }
+      this.applyBlockDelta(c, { message: childMsg, sessionId: childSessionId, visible: true });
     },
-
-    // Sub-agent read-only tools honor the same auto-approval setting as the
-    // main orchestrator; everything else still prompts for approval.
     handleDelegationContentBlockStop(c, childSessionId) {
-      const toolId = this.getIndexMap(childSessionId).get(c.index);
-      const toolUse = this.getSessionToolMap(childSessionId).get(toolId);
-      if (toolUse && toolUse.status === 'preparing') {
-        try {
-          if (toolUse.inputJson) {
-            toolUse.input = JSON.parse(toolUse.inputJson);
-          }
-          // Check if this tool should be auto-approved
-          if (this.shouldAutoApproveTool(toolUse.name)) {
-            if (this.checkContextLimitReached()) return;
-            // Auto-approve the tool, routing execution to the child session
-            toolUse.approved = true;
-            this.queueTool(childSessionId, toolUse.id);
-          } else {
-            toolUse.status = 'pending_approval';
-            toolUse.approved = null;
-            this.mostRecentFloatingTool.set(childSessionId, toolUse);
-          }
-        } catch (error) {
-          toolUse.status = 'error';
-          toolUse.error = this.i18n.assistantToolParseInputError + ': ' + error.message;
-        }
-        this.scrollIfPinned();
-      }
+      this.applyBlockStop(c, { sessionId: childSessionId, visible: true });
     },
 
     // Capture the raw tool result the backend persists shortly after a tool runs,
@@ -1289,45 +1120,26 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     // the currently viewed session is assumed to be ours; for tools inside a
     // delegated sub-agent, pass the child sessionId and matchById so the result
     // is matched explicitly on the tool's use id.
-    captureToolResult(toolUse, { sessionId = this.currentChatId, matchById = false } = {}) {
-      const timer = setTimeout(async () => {
-        this.pendingResultTimers.delete(timer);
-        try {
-          const response = await this.$root.papi.get(`/assistant/sessions/${sessionId}`);
-          if (response.data && response.data.history) {
-            // Find the most recent matching tool result message for this tool.
-            const messages = response.data.history;
-            for (let i = messages.length - 1; i >= 0; i--) {
-              const msg = messages[i];
-              if (!(msg.tags && msg.tags.includes('tool_result'))) continue;
-              const resultBlock = msg.message.contentBlocks.find(block => block.toolResult);
-              if (matchById && resultBlock?.toolResult?.toolUseId !== toolUse.id) continue;
-
-              let rawResult = null;
-              let toolError = '<nil>';
-              // Always advance status when a matching tool_result exists, even when
-              // its content is empty; otherwise the tool card spins forever.
-              if (resultBlock?.toolResult?.isError || resultBlock?.toolResult?.status === 'error') {
-                toolError = resultBlock.toolResult.content?.[0]?.text || this.i18n.assistantToolUnknownError;
-              } else {
-                rawResult = resultBlock?.toolResult?.content?.[0]?.json ?? null;
-              }
-              toolUse.rawResult = rawResult;
-              toolUse.completedAt = msg.createTime;
-              if (toolError != '<nil>') {
-                toolUse.error = toolError;
-                toolUse.status = 'error';
-              } else {
-                toolUse.status = 'completed';
-              }
-              break;
-            }
-          }
-        } catch (error) {
-          this.$root.showError(this.i18n.assistantNoRawToolResult + ': ' + error.message);
-        }
-      }, 1000); // Wait 1 second for the backend to save the result
-      this.pendingResultTimers.add(timer);
+    // applyStreamedToolResult attaches a tool's result to its card and advances its
+    // status to completed/error. The result is delivered inline by the backend's
+    // synthetic tool_result SSE event (see executeTool), so no session re-fetch is
+    // needed. Empty content still advances status, otherwise the card spins forever.
+    applyStreamedToolResult(toolUse, toolResult) {
+      toolUse.completedAt = new Date().toISOString();
+      // A declined tool reports a 'rejected' result; keep the rejected card (not error).
+      if (toolResult.status === 'rejected') {
+        toolUse.status = 'rejected';
+        toolUse.error = toolResult.content?.[0]?.text || this.i18n.assistantToolUseReject;
+        return;
+      }
+      if (toolResult.isError || toolResult.status === 'error') {
+        toolUse.rawResult = null;
+        toolUse.error = toolResult.content?.[0]?.text || this.i18n.assistantToolUnknownError;
+        toolUse.status = 'error';
+      } else {
+        toolUse.rawResult = toolResult.content?.[0]?.json ?? null;
+        toolUse.status = 'completed';
+      }
     },
 
     isNearBottom(container, thresholdPx = 48) {
@@ -1482,30 +1294,22 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       // Use the tool's session ID if available, otherwise use current session
       let toolStreamingSessionId = toolUse.sessionId || this.currentChatId;
 
-      // When this tool's session is a live child entry at entry time, this call is
-      // executing an embedded sub-agent tool; capture its raw result for the
-      // collapsed dropdown. The delegationChildren map is the single source of
-      // truth for delegation ownership — always derived, never copied to a local.
-      const isChildToolCall = this.delegationChildren.has(toolStreamingSessionId);
-      let childResultCaptured = false;
-      // Tracks whether this stream involved a delegation (a child tool call, or a
-      // kickoff that emitted delegation_start). When it did, the normal-path raw
-      // result capture must be skipped: the parent's resumed turn would otherwise
-      // attach the delegation tool_result to the wrong tool card.
-      let sawDelegation = isChildToolCall;
       let childMsg = null;
       let reader = null;
 
       try {
-        // Create ToolRequest object with history and params
+        // Create ToolRequest object with history and params. A rejected tool is not
+        // executed: the backend records an error tool_result so the turn resolves.
+        const rejected = toolUse.approved === false;
         const toolRequest = {
           sessionId: toolStreamingSessionId,
           toolUseId: toolUse.id,
           params: toolUse.input,
           model: this.currentModel,
+          rejected,
         };
 
-        this.applyToolSpecificChanges(toolUse, toolRequest);
+        if (!rejected) this.applyToolSpecificChanges(toolUse, toolRequest);
 
         // Use streaming for tool results
         const response = await this.$root.papi.post(`/assistant/tool/${toolUse.name}`, toolRequest, {
@@ -1516,8 +1320,9 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           adapter: 'fetch',
         });
 
-        // Update tool status to executing only if visible in the current session
-        if (this.currentChatId === toolStreamingSessionId) {
+        // Update tool status to executing only if visible in the current session. A
+        // rejected tool was never executing; keep its 'rejected' status.
+        if (!rejected && this.currentChatId === toolStreamingSessionId) {
           toolUse.status = 'executing';
         }
 
@@ -1577,10 +1382,20 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
             const c = parseResult.data;
             const isCurrentSession = this.currentChatId === toolStreamingSessionId;
 
+            // The executed tool's result arrives inline as a synthetic tool_result
+            // event; attach it to the tool card here rather than re-fetching the
+            // session. Only direct execution emits it (delegations resolve via the
+            // markers below), and it always targets this stream's tool.
+            if (c.type === 'tool_result') {
+              if (c.toolResult && c.toolResult.toolUseId === toolUse.id) {
+                this.applyStreamedToolResult(toolUse, c.toolResult);
+              }
+              continue;
+            }
+
             // Delegation markers retarget the stream between the sub-agent's nested
             // session and the parent thread (the backend chains both onto one response).
             if (c.type === 'delegation_start') {
-              sawDelegation = true;
               // A delegation_start is only ever emitted in the stream executing that
               // delegate tool, so the owner is this stream's tool.
               const owner = toolUse;
@@ -1607,8 +1422,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
               }
               if (this.delegationChildren.has(toolStreamingSessionId)) {
                 this.delegationChildren.delete(toolStreamingSessionId);
-                this.executingToolsBySession.delete(toolStreamingSessionId);
-                this.toolIndexToIdBySession.delete(toolStreamingSessionId);
+                this.sessionToolState.delete(toolStreamingSessionId);
               }
               childMsg = null;
               assistantMessage = null;
@@ -1628,12 +1442,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
                   this.$root.showError(this.i18n.assistantToolUseFail + ': ' + c.error.message);
                   break;
                 case 'message_start':
-                  // The embedded tool's result is now saved in the child session;
-                  // capture it once for the collapsed raw-result dropdown.
-                  if (isChildToolCall && !childResultCaptured) {
-                    this.captureToolResult(toolUse, { sessionId: toolUse.sessionId, matchById: true });
-                    childResultCaptured = true;
-                  }
                   childMsg = this.handleDelegationMessageStart(owner);
                   break;
                 case 'content_block_start':
@@ -1658,13 +1466,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
                 break;
               case 'message_start':
                 if (isCurrentSession) {
-                  // Capture raw tool result using helper method. Skip when this
-                  // stream involved a delegation: the resumed parent turn must not
-                  // attach the delegation tool_result to the (child) tool card.
-                  if (!sawDelegation) {
-                    this.captureToolResult(toolUse);
-                  }
-
                   const startResult = this.handleToolExecutionMessageStart(c, assistantMessage, toolUse);
                   assistantMessage = startResult.assistantMessage;
                   if (startResult.messageUsage) {
@@ -1690,7 +1491,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
 
               case 'message_stop':
                 if (isCurrentSession) {
-                  const stopResult = this.handleToolExecutionMessageStop(assistantMessage, messageUsage);
+                  const stopResult = this.handleMessageStop(assistantMessage, messageUsage);
                   assistantMessage = stopResult.assistantMessage;
                   messageUsage = stopResult.messageUsage;
                 }
@@ -1737,8 +1538,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         }
         if (this.delegationChildren.has(toolStreamingSessionId)) {
           this.delegationChildren.delete(toolStreamingSessionId);
-          this.executingToolsBySession.delete(toolStreamingSessionId);
-          this.toolIndexToIdBySession.delete(toolStreamingSessionId);
+          this.sessionToolState.delete(toolStreamingSessionId);
         }
 
         const isCurrentSession = this.currentChatId === (toolUse.sessionId || this.currentChatId);
@@ -1769,12 +1569,37 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         }
       }
     },
+    // displayStatus is the status to render for a tool, which can differ from its raw
+    // status. A delegate stays 'executing' while its sub-agent is parked on a tool
+    // awaiting the user's approval (it must remain non-approvable so re-prompting can't
+    // spawn a duplicate sub-session), but it isn't actually working -- surface
+    // 'action_needed' so the card shows a "needs you" indicator, not a busy spinner.
+    displayStatus(toolUse) {
+      if (toolUse.status === 'executing' && this.hasPendingDescendantApproval(toolUse)) {
+        return 'action_needed';
+      }
+      return toolUse.status;
+    },
+    // Whether any tool nested under this delegate (at any depth) is awaiting approval.
+    hasPendingDescendantApproval(toolUse) {
+      const cs = toolUse && toolUse.childSession;
+      if (!cs || !Array.isArray(cs.messages)) return false;
+      for (const m of cs.messages) {
+        if (!m || !Array.isArray(m.toolUses)) continue;
+        for (const t of m.toolUses) {
+          if (t.status === 'pending_approval') return true;
+          if (this.hasPendingDescendantApproval(t)) return true;
+        }
+      }
+      return false;
+    },
     getToolStatusIcon(status) {
       switch (status) {
         case 'preparing': return 'fa-cog';
         case 'queued': return 'fa-cog';
         case 'skipped': return 'fa-circle-info';
         case 'pending_approval': return 'fa-question-circle';
+        case 'action_needed': return 'fa-user-clock';
         case 'executing': return 'fa-hourglass-half';
         case 'completed': return 'fa-check-circle';
         case 'error': return 'fa-exclamation-triangle';
@@ -1788,6 +1613,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         case 'queued': return 'info';
         case 'skipped': return 'info';
         case 'pending_approval': return 'warning';
+        case 'action_needed': return 'warning';
         case 'executing': return 'warning';
         case 'completed': return 'success';
         case 'error': return 'error';
@@ -1801,6 +1627,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         case 'queued': return this.i18n.preparing;
         case 'skipped': return this.i18n.skipped;
         case 'pending_approval': return this.i18n.pendingApproval;
+        case 'action_needed': return this.i18n.actionNeeded;
         case 'executing': return this.i18n.executing;
         case 'completed': return this.i18n.completed;
         case 'error': return this.i18n.error;
@@ -1808,31 +1635,36 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         default: return this.i18n.statusUnknown;
       }
     },
+    // A tool is top-level when it belongs to the viewed conversation rather than a
+    // nested sub-agent session; only those should drive the main view's scroll.
+    isTopLevelTool(toolUse) {
+      return !toolUse.sessionId || toolUse.sessionId === this.currentChatId;
+    },
     async approveTool(toolUse) {
       try {
         if (this.checkContextLimitReached()) return;
         toolUse.approved = true;
         toolUse.status = 'preparing';
-        this.mostRecentFloatingTool.delete(toolUse.sessionId || this.currentChatId);
+        this.clearFloatingTool(toolUse.sessionId || this.currentChatId);
         this.queueTool(toolUse.sessionId || this.currentChatId, toolUse.id);
       } catch (error) {
         toolUse.status = 'error';
         toolUse.error = this.i18n.assistantToolUseFail + ': ' + error.message;
       }
-      this.scrollToBottom();
+      if (this.isTopLevelTool(toolUse)) this.scrollToBottom();
     },
     async rejectTool(toolUse) {
       if (this.checkContextLimitReached()) return;
       toolUse.approved = false;
       toolUse.status = 'rejected';
-      this.mostRecentFloatingTool.delete(toolUse.sessionId || this.currentChatId);
       toolUse.error = this.i18n.assistantToolUseReject;
-      
-      // Add a message indicating the tool was rejected
-      const rejectionMessage = this.$root.localizeMessage(this.i18n.assistantToolUseRejectMessage, {toolName: toolUse.name});
-      await this.callAIAPI(rejectionMessage);
+      this.clearFloatingTool(toolUse.sessionId || this.currentChatId);
 
-      this.scrollToBottom();
+      // Submit the rejection as a tool_result (the backend records an error result and
+      // resumes the turn). Routing it through the same queue as approvals keeps a
+      // parallel turn's tools serialized, so its coalescing resolves correctly.
+      this.queueTool(toolUse.sessionId || this.currentChatId, toolUse.id);
+      if (this.isTopLevelTool(toolUse)) this.scrollToBottom();
     },
     async startInvestigationSession(investigationPrompt) {
       if (!this.creditsLoaded) {
@@ -1927,13 +1759,15 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       let rawResult = null;
       let toolUseId = null;
       let toolError = null;
-      
+      let rejected = false;
+
       if (msg.message.contentBlocks && msg.message.contentBlocks.length > 0) {
         // proper tool use approach
         const toolResultBlock = msg.message.contentBlocks.find(block => block.toolResult);
         if (toolResultBlock && toolResultBlock.toolResult.content?.length) {
           const cb = toolResultBlock.toolResult.content[0];
-          if (toolResultBlock.toolResult.isError || toolResultBlock.toolResult.status === 'error') {
+          rejected = toolResultBlock.toolResult.status === 'rejected';
+          if (toolResultBlock.toolResult.isError || toolResultBlock.toolResult.status === 'error' || rejected) {
             toolError = cb.text || this.i18n.assistantToolUnknownError;
             rawResult = '<nil>';
           } else {
@@ -1973,7 +1807,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
               matchingToolUse.completedAt = msg.createTime;
               if (toolError != "<nil>") {
                 matchingToolUse.error = toolError;
-                matchingToolUse.status = "error";
+                matchingToolUse.status = rejected ? "rejected" : "error";
               }
               break;
             }
@@ -2016,82 +1850,96 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     // Helper method to process tool use blocks
     processToolUseBlocks(msg, frontendMsg, backendMessages, i) {
       const toolBlocks = msg.message.contentBlocks.filter(block => block.type === 'tool_use');
-      let skip_next = false;
-      
-      if (toolBlocks.length > 0) {
-        if (i < backendMessages.length - 1 && (!backendMessages[i + 1].tags || !backendMessages[i + 1].tags.includes('tool_result'))) {
-          const nextMessage = backendMessages[i + 1];
-          if (nextMessage.message.contentBlocks[0].text && nextMessage.message.contentBlocks[0].text.includes('rejected by the user')) {
-            frontendMsg.toolUses = toolBlocks.map(block => ({
-              id: block.id || 'unknown',
-              name: block.name || 'unknown',
-              input: block.input || {}, // Ensure input is always an object, never null/undefined
-              status: 'rejected',
-              result: null,
-              error: this.i18n.assistantToolUseReject,
-              rawResult: null,
-              timestamp: msg.createTime || new Date().toISOString(),
-              approved: false
-            }));
-            skip_next = true;
-          } else if (nextMessage.message.role === 'user') {
-            frontendMsg.toolUses = toolBlocks.map(block => ({
-              id: block.id || 'unknown',
-              name: block.name || 'unknown',
-              input: block.input || {}, // Ensure input is always an object, never null/undefined
-              status: 'skipped',
-              result: null,
-              error: null,
-              timestamp: msg.createTime || new Date().toISOString(),
-              approved: false
-            }));
-          }
-        // Using "else if" instead of "else" prevents tool uses that haven't been interacted with from appearing as completed after refreshing
-        } else if (i < backendMessages.length - 1) {
-          frontendMsg.toolUses = toolBlocks.map(block => ({
-            id: block.id || 'unknown',
-            name: block.name || 'unknown',
-            input: block.input || {}, // Ensure input is always an object, never null/undefined
-            status: 'completed', // Assume completed since it's from history
-            result: null,
-            error: null,
-            rawResult: null, // Will be populated by subsequent tool result message
-            timestamp: msg.createTime || new Date().toISOString(),
-            approved: true
-          }));
-        // Allows tool use blocks at the end of a session to persist even when the user clicks away
-        } else {
-          frontendMsg.toolUses = toolBlocks.map(block => {
-            // A delegate that spawned a sub-session is running, not awaiting approval:
-            // re-prompting would spawn a duplicate sub-session.
-            const inFlightDelegation = !!(this._loadSubSessions && this._loadSubSessions.byParentToolUseId.has(block.id));
-            const toolUse = {
-              id: block.id || 'unknown',
-              name: block.name || 'unknown',
-              input: block.input || {}, // Ensure input is always an object, never null/undefined
-              status: inFlightDelegation ? 'executing' : 'pending_approval',
-              result: null,
-              error: null,
-              rawResult: null, // Will be populated by subsequent tool result message
-              timestamp: msg.createTime || new Date().toISOString(),
-              approved: inFlightDelegation ? true : null,
-              sessionId: this.currentChatId
-            };
-            this.getSessionToolMap(this.currentChatId).set(toolUse.id, toolUse);
-            if (!inFlightDelegation) {
-              this.mostRecentFloatingTool.set(this.currentChatId, toolUse);
-            }
-            return toolUse;
-          });
+      if (toolBlocks.length === 0) return;
+
+      // Status is decided PER TOOL, mirroring the sub-agent reload (reconstructChildSession):
+      // a single assistant turn can request several tools in parallel whose results are
+      // persisted as separate tool_result messages, so one turn may hold a mix of
+      // resolved, pending, and skipped tools. A declined tool is just a resolved
+      // tool_result (status 'rejected'): it lands in the resolved branch below and is
+      // refined to 'rejected' by processToolResultMessage.
+      const resolvedIds = this.collectResolvedToolUseIds(backendMessages);
+
+      // An unresolved tool is still awaiting approval only while this turn is the
+      // conversation's active tail (everything after it is a tool_result answering it --
+      // the model has not continued and the user has not moved on). Once a non-tool_result
+      // message follows, an unanswered tool was abandoned (skipped). This is the top-level
+      // analogue of the sub-agent path's "turn holding the backend-flagged pending tool".
+      const active = this.isActiveToolTurn(backendMessages, i);
+
+      frontendMsg.toolUses = toolBlocks.map(block => {
+        const base = {
+          id: block.id || 'unknown',
+          name: block.name || 'unknown',
+          input: block.input || {}, // Ensure input is always an object, never null/undefined
+          result: null,
+          error: null,
+          rawResult: null, // Populated by the matching tool_result message, if any
+          timestamp: msg.createTime || new Date().toISOString(),
+        };
+
+        // Resolved: a tool_result exists. Status/result are refined by processToolResultMessage.
+        if (resolvedIds.has(base.id)) {
+          return { ...base, status: 'completed', approved: true };
         }
-      }
+        // Unresolved but still at the active tail: awaiting approval. A delegate that
+        // already spawned a sub-session is running, not pending -- re-prompting would
+        // spawn a duplicate sub-session.
+        if (active) {
+          const inFlightDelegation = !!(this._loadSubSessions && this._loadSubSessions.byParentToolUseId.has(base.id));
+          const toolUse = {
+            ...base,
+            status: inFlightDelegation ? 'executing' : 'pending_approval',
+            approved: inFlightDelegation ? true : null,
+            sessionId: this.currentChatId,
+          };
+          this.getSessionToolMap(this.currentChatId).set(toolUse.id, toolUse);
+          if (!inFlightDelegation && !this.sessionTools(this.currentChatId).floatingTool) {
+            this.sessionTools(this.currentChatId).floatingTool = toolUse;
+          }
+          return toolUse;
+        }
+        // Unanswered and the conversation moved on without it.
+        return { ...base, status: 'skipped', approved: false };
+      });
 
       // Rebuild nested sub-agent activity for any delegate tool blocks.
       if (frontendMsg.toolUses) {
         this.reconstructDelegateChildSessions(frontendMsg.toolUses);
       }
+    },
 
-      return skip_next;
+    // Collect every tool_use id that has a persisted tool_result, so a reloaded turn can
+    // tell which of its (possibly parallel) tools are resolved vs still pending.
+    collectResolvedToolUseIds(backendMessages) {
+      const ids = new Set();
+      for (const m of backendMessages) {
+        if (!m || !m.tags || !m.tags.includes('tool_result')) continue;
+        const blocks = m.message && m.message.contentBlocks;
+        if (!Array.isArray(blocks)) continue;
+        for (const b of blocks) {
+          if (b.toolResult && b.toolResult.toolUseId) {
+            ids.add(b.toolResult.toolUseId);
+          } else if (b.type === 'text' && b.text) {
+            // Legacy "ToolUseId: <id>, Result: ..." text-encoded tool_result.
+            const match = b.text.match(/ToolUseId:\s*([^,]+)/);
+            if (match) ids.add(match[1].trim());
+          }
+        }
+      }
+      return ids;
+    },
+
+    // Whether the assistant turn at index i is still the conversation's active tool turn:
+    // every message after it is a tool_result (answering this turn's tools), so the model
+    // has not continued and the user has not moved on. Once a non-tool_result message
+    // follows, any unanswered tool from the turn was abandoned, not pending.
+    isActiveToolTurn(backendMessages, i) {
+      for (let j = i + 1; j < backendMessages.length; j++) {
+        const m = backendMessages[j];
+        if (!m || !m.tags || !m.tags.includes('tool_result')) return false;
+      }
+      return true;
     },
 
     // Build a lookup of delegated sub-sessions returned with a loaded conversation,
@@ -2149,7 +1997,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
             const t = toolUseById.get(block.toolResult.toolUseId);
             if (t) {
               const cb = block.toolResult.content && block.toolResult.content[0];
-              if (block.toolResult.isError || block.toolResult.status === 'error') {
+              if (block.toolResult.status === 'rejected') {
+                t.error = (cb && cb.text) || this.i18n.assistantToolUseReject;
+                t.status = 'rejected';
+              } else if (block.toolResult.isError || block.toolResult.status === 'error') {
                 t.error = (cb && cb.text) || this.i18n.assistantToolUnknownError;
                 t.status = 'error';
               } else {
@@ -2165,19 +2016,29 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         // Only the sub-agent's assistant turns render nested; skip the objective/user msgs.
         if (m.role !== 'assistant') continue;
 
-        const childMsg = { thoughts: '', toolUses: [] };
+        const childMsg = { role: 'assistant', thoughts: '', content: '', toolUses: [], timestamp: sm.createTime };
 
-        // Fold the sub-agent's response text and reasoning into a single collapsed thought.
-        let thoughtText = m.thoughts || '';
+        // Split the sub-agent's turn the same way the live stream and the top-level
+        // reload do: response prose renders as content, reasoning as thoughts. Folding
+        // prose into thoughts here would hide the sub-agent's answer after a reload
+        // (thoughts only show when "show thinking" is on), unlike the live view.
+        let contentText = '';
+        const thoughtText = m.thoughts || '';
         for (const b of (m.contentBlocks || [])) {
           if (b.type === 'text' && b.text) {
-            thoughtText += b.text;
+            contentText += b.text;
           } else if (b.type === 'tool_use') {
             const childTool = {
               id: b.id || 'unknown',
               name: b.name || 'unknown',
               input: b.input || {},
-              status: 'completed', // provisional; finalized below
+              // Default for a tool_use with no result: it was requested but never
+              // produced a result (the sub-agent stopped/errored). Finalized below to
+              // completed/error when a result exists, or executing/pending_approval
+              // when it's a live delegation or the backend-flagged pending tool. Must
+              // NOT default to 'completed' -- that would show a false checkmark for a
+              // tool that never ran (mirrors the top-level reload guard).
+              status: 'skipped',
               result: null,
               error: null,
               rawResult: null,
@@ -2196,17 +2057,28 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           }
         }
         childMsg.thoughts = thoughtText;
+        childMsg.content = contentText;
         childMessages.push(childMsg);
       }
 
+      // The backend flags a single pending tool_use, but that tool's turn may have
+      // requested several in parallel -- all of its unresolved siblings are equally
+      // awaiting approval, not skipped. Treat the whole turn holding the flagged tool
+      // as active; unresolved tools in earlier turns were genuinely abandoned.
+      let activeTurnToolIds = null;
+      if (pendingToolUseId) {
+        const activeMsg = childMessages.find(m => m.toolUses.some(t => t.id === pendingToolUseId));
+        if (activeMsg) activeTurnToolIds = new Set(activeMsg.toolUses.map(t => t.id));
+      }
+
       // Finalize tools with no tool_result: a delegate that spawned a sub-session is
-      // running; the backend-flagged tool_use awaits approval; anything else stays.
+      // running; tools in the active (flagged) turn await approval; anything else stays.
       for (const t of toolUseById.values()) {
         if (t.rawResult != null || t.status === 'error') continue; // resolved
         if (index.byParentToolUseId.has(t.id)) {
           t.status = 'executing';
           t.approved = true;
-        } else if (t.id === pendingToolUseId) {
+        } else if (activeTurnToolIds && activeTurnToolIds.has(t.id)) {
           t.status = 'pending_approval';
           t.approved = null;
           // Register so the queue runner can resolve and fire it, like the live path.
@@ -2233,6 +2105,47 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       }
     },
 
+    // A delegation that has settled -- its delegate tool carries a result, errored, was
+    // rejected, or was skipped -- must not present its sub-agent as live.
+    // reconstructChildSession runs while the delegate tool_use message is processed --
+    // BEFORE the delegate's own tool_result is processed -- so it can't know the outcome
+    // and may leave child tools executing/pending. This post-pass, run once the whole
+    // conversation is rebuilt, makes a settled delegation inert: any leftover
+    // executing/pending sub-agent tool is marked skipped and unregistered (from the
+    // session tool map and the live delegation linkage), so it is never actionable.
+    // Settlement propagates downward -- a settled ancestor settles every descendant.
+    finalizeResolvedDelegations(messages) {
+      const visit = (toolUses, ancestorSettled) => {
+        if (!Array.isArray(toolUses)) return;
+        for (const t of toolUses) {
+          const cs = t.childSession;
+          if (!cs || !Array.isArray(cs.messages)) continue;
+
+          const childTools = cs.messages.flatMap(m => (Array.isArray(m.toolUses) ? m.toolUses : []));
+          // Terminal delegate states (no longer running): a result folded in, or an
+          // error/rejected/skipped outcome. A live-rejected delegate carries no
+          // rawResult, so its status must be checked explicitly.
+          const settled = ancestorSettled || t.rawResult != null
+            || t.status === 'error' || t.status === 'rejected' || t.status === 'skipped';
+
+          if (settled) {
+            for (const ct of childTools) {
+              if (ct.status === 'pending_approval' || ct.status === 'executing') {
+                ct.status = 'skipped';
+                ct.approved = false;
+                if (ct.sessionId) this.getSessionToolMap(ct.sessionId).delete(ct.id);
+              }
+              // Drop the live-delegation linkage so nothing tries to resume this child session.
+              if (ct.sessionId) this.delegationChildren.delete(ct.sessionId);
+            }
+          }
+
+          visit(childTools, settled);
+        }
+      };
+      visit(messages.flatMap(m => (Array.isArray(m.toolUses) ? m.toolUses : [])), false);
+    },
+
     // Helper method to convert backend message format to frontend format
     convertBackendMessagesToFrontend(backendMessages) {
       const processedMessages = [];
@@ -2241,16 +2154,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.contextLength = 0;
       this.contextStartMessageIndex = -1;
       let justResetContext = false;
-      
-      let skip_next = false;
 
       for (let i = 0; i < backendMessages.length; i++) {
-        
-        if (skip_next) {
-          skip_next = false;
-          continue
-        }
-        
         const msg = backendMessages[i];
         
         // Check if this is a tool result message (new format with tags)
@@ -2283,10 +2188,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         
         // Process tool use blocks if present
         if (msg.message.contentBlocks && msg.message.contentBlocks.length > 0) {
-          const toolSkipNext = this.processToolUseBlocks(msg, frontendMsg, backendMessages, i);
-          if (toolSkipNext) {
-            skip_next = true;
-          }
+          this.processToolUseBlocks(msg, frontendMsg, backendMessages, i);
         }
 
         // Handle usage information if present
@@ -2315,7 +2217,11 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
           justResetContext = false;
         }
       }
-      
+
+      // Now that every delegate tool's resolution is known, settle finished
+      // delegations so their sub-agent tools aren't left executing/actionable.
+      this.finalizeResolvedDelegations(processedMessages);
+
       return processedMessages;
     },
     calculateContextOfMessage(allMessages, msgIndex) {
@@ -2446,10 +2352,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       // Drop delegated sub-agent linkage so stale child sessions from a previous
       // conversation can't mis-nest output after switching/loading/deleting chats.
       this.delegationChildren.clear();
-      // Cancel any deferred raw-result captures so they can't fire (and surface a
-      // late error toast) against a conversation the user has navigated away from.
-      this.pendingResultTimers.forEach(clearTimeout);
-      this.pendingResultTimers.clear();
     },
     
     checkIfDeleted(session) {
@@ -2522,53 +2424,80 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         }
       }
     },
-    getSessionToolMap(sessionId) {
-      let m = this.executingToolsBySession.get(sessionId);
-      if (!m) {
-        m = new Map();
-        this.executingToolsBySession.set(sessionId, m);
+    // sessionTools returns the per-session tool-execution state, creating it on first
+    // use. One record consolidates the tools-by-id map, the stream block-index ->
+    // tool-id map, the approval queue, the runner-busy flag, and the floating
+    // (pending-approval) tool shown above a collapsed delegate.
+    sessionTools(sessionId) {
+      let s = this.sessionToolState.get(sessionId);
+      if (!s) {
+        s = { toolsById: new Map(), indexToId: new Map(), queue: [], busy: false, floatingTool: null };
+        this.sessionToolState.set(sessionId, s);
       }
-      return m;
+      return s;
+    },
+    getSessionToolMap(sessionId) {
+      return this.sessionTools(sessionId).toolsById;
     },
     getIndexMap(sessionId) {
-      let m = this.toolIndexToIdBySession.get(sessionId);
-      if (!m) {
-        m = new Map();
-        this.toolIndexToIdBySession.set(sessionId, m);
-      }
-      return m;
+      return this.sessionTools(sessionId).indexToId;
+    },
+    // clearFloatingTool drops the pending-approval tool a session was surfacing above
+    // its collapsed delegate, without disturbing the rest of that session's state.
+    clearFloatingTool(sessionId) {
+      const s = this.sessionToolState.get(sessionId);
+      if (s) s.floatingTool = null;
     },
     queueTool(sessionId, toolUseId) {
-      const q = this.toolQueues.get(sessionId) || [];
-      q.push(toolUseId);
-      this.toolQueues.set(sessionId, q);
+      this.sessionTools(sessionId).queue.push(toolUseId);
       this.runToolQueue(sessionId);
     },
     async runToolQueue(sessionId) {
-      if (this.toolRunnerBusy.has(sessionId)) return;
-      this.toolRunnerBusy.add(sessionId);
+      const s = this.sessionTools(sessionId);
+      if (s.busy) return;
+      s.busy = true;
       try {
-        let q = this.toolQueues.get(sessionId) || [];
-        const toolMap = this.getSessionToolMap(sessionId);
-        while (q.length) {
-          const toolUseId = q[0];
-          const toolUse = toolMap.get(toolUseId);
-          if (!toolUse || ['completed','error','rejected'].includes(toolUse.status)) {
-            q.shift();
+        // Re-read the record each iteration: a session's state can be torn down
+        // mid-run (e.g. a resolved delegation), which ends the loop just as the old
+        // per-session map deletes did.
+        while (true) {
+          const cur = this.sessionToolState.get(sessionId);
+          if (!cur || cur.queue.length === 0) break;
+          const toolUseId = cur.queue[0];
+          const toolUse = cur.toolsById.get(toolUseId);
+          // A rejected tool (approved === false) still needs its declination submitted
+          // to the backend, so it bypasses the resolved skip-list; everything else that
+          // is already terminal is dropped.
+          const isReject = toolUse && toolUse.approved === false;
+          if (!toolUse || (!isReject && ['completed','error','rejected'].includes(toolUse.status))) {
+            cur.queue.shift();
             continue;
           }
-          toolUse.status = 'executing';
+          // executeTool keeps a reject's 'rejected' status; only an approved tool runs.
+          if (!isReject) toolUse.status = 'executing';
           await this.executeTool(toolUse);
-          q.shift();
-          q = this.toolQueues.get(sessionId) || [];
+          cur.queue.shift();
         }
       } finally {
-        this.toolRunnerBusy.delete(sessionId);
+        const cur = this.sessionToolState.get(sessionId);
+        if (cur) cur.busy = false;
       }
     },
     checkForActivity() {
-      const tQ = this.toolQueues.get(this.currentChatId) || [];
-      return this.isStreaming || this.isTyping || tQ.length > 0;
+      if (this.isStreaming || this.isTyping) return true;
+      // Tool queues are per session: a delegation runs its sub-agent's tools under the
+      // child session, not the current one. Count queued work in the current session or
+      // any live delegation child (tracked in delegationChildren) as activity, so the
+      // send/export controls stay disabled while a sub-agent's tools are still running.
+      const queued = (sessionId) => {
+        const s = this.sessionToolState.get(sessionId);
+        return !!(s && s.queue.length > 0);
+      };
+      if (queued(this.currentChatId)) return true;
+      for (const childSessionId of this.delegationChildren.keys()) {
+        if (queued(childSessionId)) return true;
+      }
+      return false;
     },
     async compressCurrentSession() {
       const oldMsg = this.newMessage;

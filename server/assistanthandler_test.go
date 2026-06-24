@@ -3161,3 +3161,92 @@ func TestPostTool_StreamingClientDisconnectStillPersistsTurn(t *testing.T) {
 		}
 	})
 }
+
+func TestWriteToolResultEvent(t *testing.T) {
+	t.Run("success result", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		tr := &model.ToolResult{
+			Name:      "query_events",
+			ToolUseId: "tool-use-1",
+			Content:   []model.ToolResultContent{{Json: map[string]any{"result": "ok"}}},
+		}
+		assert.NoError(t, writeToolResultEvent(w, tr))
+
+		out := w.Body.String()
+		assert.True(t, strings.HasPrefix(out, "data: "))
+		assert.True(t, strings.HasSuffix(out, "\n\n"))
+
+		var payload struct {
+			Type       string            `json:"type"`
+			ToolResult *model.ToolResult `json:"toolResult"`
+		}
+		assert.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(strings.TrimPrefix(out, "data: "))), &payload))
+		assert.Equal(t, "tool_result", payload.Type)
+		if assert.NotNil(t, payload.ToolResult) {
+			assert.Equal(t, "tool-use-1", payload.ToolResult.ToolUseId)
+			assert.False(t, payload.ToolResult.IsError)
+		}
+	})
+
+	t.Run("error result", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		tr := &model.ToolResult{
+			ToolUseId: "tool-use-2",
+			Status:    "error",
+			IsError:   true,
+			Content:   []model.ToolResultContent{{Text: "boom"}},
+		}
+		assert.NoError(t, writeToolResultEvent(w, tr))
+
+		var payload struct {
+			Type       string            `json:"type"`
+			ToolResult *model.ToolResult `json:"toolResult"`
+		}
+		assert.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(strings.TrimPrefix(w.Body.String(), "data: "))), &payload))
+		assert.Equal(t, "tool_result", payload.Type)
+		if assert.NotNil(t, payload.ToolResult) {
+			assert.True(t, payload.ToolResult.IsError)
+			assert.Equal(t, "boom", payload.ToolResult.Content[0].Text)
+		}
+	})
+}
+
+// HTTP/2 forbids hop-by-hop headers; forwarding them (or a per-turn Content-Length,
+// which the chained multi-turn response would violate) makes the client reset the
+// stream with PROTOCOL_ERROR. writeStreamHeaders must drop them while preserving the
+// content type and any benign headers.
+func TestWriteStreamHeaders_StripsHopByHopHeaders(t *testing.T) {
+	upstream := &http.Response{
+		StatusCode: http.StatusOK,
+		Header: http.Header{
+			"Content-Type":      []string{"text/event-stream"},
+			"Connection":        []string{"keep-alive"},
+			"Keep-Alive":        []string{"timeout=5"},
+			"Transfer-Encoding": []string{"chunked"},
+			"Content-Length":    []string{"1234"},
+			"Upgrade":           []string{"h2c"},
+			"X-Request-Id":      []string{"abc"},
+		},
+	}
+
+	w := httptest.NewRecorder()
+	writeStreamHeaders(w, upstream)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "text/event-stream", w.Header().Get("Content-Type"))
+	assert.Equal(t, "abc", w.Header().Get("X-Request-Id"))
+	for _, h := range []string{"Connection", "Keep-Alive", "Transfer-Encoding", "Content-Length", "Upgrade"} {
+		assert.Empty(t, w.Header().Get(h), "hop-by-hop header %q must not be forwarded", h)
+	}
+}
+
+// The persist-only SSE response must not set the HTTP/2-forbidden Connection header.
+func TestWriteSSEHeaders_OmitsConnectionHeader(t *testing.T) {
+	w := httptest.NewRecorder()
+	writeSSEHeaders(w)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "text/event-stream", w.Header().Get("Content-Type"))
+	assert.Equal(t, "no-cache", w.Header().Get("Cache-Control"))
+	assert.Empty(t, w.Header().Get("Connection"))
+}

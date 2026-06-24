@@ -1,0 +1,37 @@
+<div class="delegation-child mb-2">
+  <v-expansion-panels v-if="ctx.delegationHasCollapsedContent(toolUse)" variant="accordion" density="compact" class="delegation-child-panel">
+    <v-expansion-panel>
+      <v-expansion-panel-title>
+        <v-icon size="small" class="mr-2">fa-user-secret</v-icon>
+        <span class="font-weight-medium text-body-2">{{ toolUse.childSession.agentName || ctx.i18n.assistantDelegateAgent }}</span>
+      </v-expansion-panel-title>
+      <v-expansion-panel-text>
+        <div v-for="(childM, ci) in toolUse.childSession.messages" :key="ci" class="delegation-child-message mb-2">
+          <div v-if="ctx.showModelThinking && childM.thoughts" class="thought-display mb-2">
+            <v-expansion-panels variant="accordion" density="compact">
+              <v-expansion-panel>
+                <v-expansion-panel-title>
+                  <v-icon size="small" class="mr-2">fa-lightbulb</v-icon>
+                  <span class="font-weight-medium text-body-2">{{ ctx.i18n.thoughts }}</span>
+                </v-expansion-panel-title>
+                <v-expansion-panel-text>
+                  <div class="text-body-small delegation-child-thoughts" v-html="ctx.formatMarkdown(childM.thoughts)"></div>
+                </v-expansion-panel-text>
+              </v-expansion-panel>
+            </v-expansion-panels>
+          </div>
+          <div v-if="childM.content" class="text-body-2 mb-2" v-html="ctx.formatMarkdown(childM.content)"></div>
+          <div v-if="childM.toolUses && childM.toolUses.length > 0">
+            <template v-for="childTool in childM.toolUses" :key="childTool.id">
+              <tool-use-card v-if="childTool.status !== 'pending_approval'" :tool-use="childTool" nested></tool-use-card>
+            </template>
+          </div>
+        </div>
+      </v-expansion-panel-text>
+    </v-expansion-panel>
+  </v-expansion-panels>
+
+  <!-- Pending sub-agent tool calls render outside the collapsed transcript so they
+       stay visible and actionable. -->
+  <tool-use-card v-for="childTool in ctx.pendingChildTools(toolUse)" :key="childTool.id" :tool-use="childTool" nested></tool-use-card>
+</div>

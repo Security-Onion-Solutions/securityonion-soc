@@ -419,6 +419,12 @@ type StreamedTurn struct {
 	// it (immutable after creation) instead of re-fetching. May be nil when the
 	// session could not be loaded.
 	Session *AssistantSession
+	// ToolResult, when set, is the result of the tool that produced this turn. The
+	// handler emits it as a synthetic tool_result SSE event before the turn so the
+	// UI can attach the result to its tool card inline, without re-fetching the
+	// session. Only set for direct tool execution (ToolStreamInSession); a
+	// delegation kickoff leaves it nil because it has no immediate result.
+	ToolResult *ToolResult
 }
 
 // @Description Detailed information about an Assistant session, including its messages.

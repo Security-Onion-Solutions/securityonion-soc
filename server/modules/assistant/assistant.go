@@ -20,6 +20,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf8"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -878,6 +879,106 @@ func (ac *AssistantCoordinator) ToolInSession(ctx context.Context, toolReq *mode
 	}
 }
 
+// allToolUsesResolved reports whether every tool_use in the conversation has a
+// matching tool_result. Used to coalesce parallel tool calls: a turn must not be
+// continued until all of its tool_use blocks are answered (the model API rejects a
+// turn carrying an unanswered tool_use). A parked delegate tool_use counts as
+// unresolved, so the parent correctly waits for the sub-agent to resolve.
+func allToolUsesResolved(messages []*model.Message) bool {
+	resolved := make(map[string]struct{})
+	for _, m := range messages {
+		if m == nil {
+			continue
+		}
+		for _, cb := range m.ContentBlocks {
+			if cb.ToolResult != nil && cb.ToolResult.ToolUseId != "" {
+				resolved[cb.ToolResult.ToolUseId] = struct{}{}
+			}
+		}
+	}
+	for _, m := range messages {
+		if m == nil || m.Role != "assistant" {
+			continue
+		}
+		for _, cb := range m.ContentBlocks {
+			if cb.Type == "tool_use" {
+				if _, ok := resolved[cb.Id]; !ok {
+					return false
+				}
+			}
+		}
+	}
+	return true
+}
+
+// firstToolResult returns the ToolResult of a tool_result message, or nil.
+func firstToolResult(toolMsg *model.Message) *model.ToolResult {
+	if toolMsg == nil || len(toolMsg.ContentBlocks) == 0 {
+		return nil
+	}
+	return toolMsg.ContentBlocks[0].ToolResult
+}
+
+// toolUseInHistory reports whether any assistant turn in the history carries a
+// tool_use with the given id -- i.e. the turn that requested this tool has been
+// persisted.
+func toolUseInHistory(messages []*model.Message, toolUseId string) bool {
+	if toolUseId == "" {
+		return false
+	}
+	for _, m := range messages {
+		if m == nil || m.Role != "assistant" {
+			continue
+		}
+		for _, cb := range m.ContentBlocks {
+			if cb.Type == "tool_use" && cb.Id == toolUseId {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// toolUseTurnDelay is the backoff between reloads while awaiting the assistant
+// tool_use turn to become visible (var so tests can shrink it).
+var toolUseTurnDelay = 150 * time.Millisecond
+
+// awaitToolUseTurn ensures the assistant turn that requested toolUseId is present
+// in the loaded history before a tool_result continuation acts on it. The turn that
+// emits a tool_use is persisted asynchronously -- the stream's finalize runs in a
+// goroutine after the turn streams to the client, while the client (which sees the
+// tool_use mid-stream) fires the tool execution immediately. A delegation widens
+// this window: the sub-agent's tool_use turn is saved only when its delegate stream
+// breaks, so a sub-agent tool's continuation routinely arrives first. Without its
+// own tool_use in history, allToolUsesResolved would vacuously pass and we would
+// SendStream an orphaned tool_result that the model API rejects. Reload with a short
+// bounded backoff until the turn lands; return the freshest history and whether the
+// tool_use was found. A nil session yields the input unchanged.
+func (ac *AssistantCoordinator) awaitToolUseTurn(ctx context.Context, sess *model.AssistantSession, toolUseId string, messages []*model.Message) ([]*model.Message, bool) {
+	if toolUseInHistory(messages, toolUseId) {
+		return messages, true
+	}
+	if sess == nil {
+		return messages, false
+	}
+	for attempt := 0; attempt < 10; attempt++ {
+		select {
+		case <-ctx.Done():
+			return messages, toolUseInHistory(messages, toolUseId)
+		case <-time.After(toolUseTurnDelay):
+		}
+		reloaded, err := ac.loadSessionHistory(ctx, sess)
+		if err != nil {
+			continue
+		}
+		messages = reloaded
+		if toolUseInHistory(messages, toolUseId) {
+			return messages, true
+		}
+	}
+	return messages, false
+}
+
 // continueWithToolResultSync is the non-streaming twin of continueWithToolResult.
 // It appends a tool_result (or delegation result) message to the given session,
 // dispatches the conversation to Send, persists the tool_result, and persists and
@@ -901,7 +1002,27 @@ func (ac *AssistantCoordinator) continueWithToolResultSync(ctx context.Context, 
 	if err != nil {
 		return nil, err
 	}
+
+	// Wait for this result's own tool_use turn to be persisted (see
+	// continueWithToolResult) before deciding, so we never send an orphaned result.
+	turnPresent := true
+	if tr := firstToolResult(toolMsg); tr != nil {
+		messages, turnPresent = ac.awaitToolUseTurn(noTimeOutCtx, sess, tr.ToolUseId, messages)
+	}
 	messages = append(messages, toolMsg)
+
+	// Coalesce parallel tool calls (see continueWithToolResult): wait until every
+	// tool_use in the turn is answered -- and this result's tool_use turn is
+	// persisted -- before continuing. Persist this result and return nothing while
+	// siblings remain unresolved or the turn has not yet landed.
+	if !turnPresent || !allToolUsesResolved(messages) {
+		toolStored := toolMsg.PrepareForStorage(sessionId, []string{"tool_result"}, aiModel)
+		if err := ac.srv.Assistantstore.SaveChat(noTimeOutCtx, toolStored); err != nil {
+			logger.WithError(err).Error("unable to save tool result while awaiting sibling tool results")
+			return nil, err
+		}
+		return []*model.Message{}, nil
+	}
 
 	var sendOpts []model.ChatOpt
 	if isSub {
@@ -941,6 +1062,20 @@ func (ac *AssistantCoordinator) ToolStreamInSession(ctx context.Context, toolReq
 	// Detach for the whole turn
 	ctx = buildNoTimeoutCtx(ctx)
 
+	// A rejected tool is not executed: fold an error tool_result in so the turn
+	// resolves (letting a parallel turn's other tools continue) with this tool
+	// declined, then resume the assistant exactly as a normal tool result would.
+	if toolReq.Rejected {
+		toolMsg := buildRejectionResultMessage(toolReq.ToolUseId)
+		sess := ac.loadTurnSession(ctx, toolReq.SessionId)
+		aiModel := modelForSession(sess, toolReq.Model)
+		turn, err := ac.continueWithToolResult(ctx, sess, toolReq.SessionId, aiModel, toolMsg)
+		if err == nil && turn != nil && len(toolMsg.ContentBlocks) > 0 {
+			turn.ToolResult = toolMsg.ContentBlocks[0].ToolResult
+		}
+		return turn, err
+	}
+
 	result, toolErr := ac.ExecuteTool(ctx, toolName, toolReq)
 	if toolErr != nil {
 		logger.WithError(toolErr).Error("unable to execute tool")
@@ -970,7 +1105,15 @@ func (ac *AssistantCoordinator) ToolStreamInSession(ctx context.Context, toolReq
 	sess := ac.loadTurnSession(ctx, toolReq.SessionId)
 	aiModel := modelForSession(sess, toolReq.Model)
 
-	return ac.continueWithToolResult(ctx, sess, toolReq.SessionId, aiModel, toolMsg)
+	turn, err := ac.continueWithToolResult(ctx, sess, toolReq.SessionId, aiModel, toolMsg)
+	if err == nil && turn != nil && len(toolMsg.ContentBlocks) > 0 {
+		// Surface the tool result so the handler can stream it to the UI inline,
+		// sparing the client a session re-fetch to recover the result. Only the
+		// direct-execution path reaches here; the delegation-kickoff branch above
+		// returned early, so a delegate tool_use carries no result event.
+		turn.ToolResult = toolMsg.ContentBlocks[0].ToolResult
+	}
+	return turn, err
 }
 
 // continueWithToolResult appends a tool_result (or delegation result) message to
@@ -997,7 +1140,38 @@ func (ac *AssistantCoordinator) continueWithToolResult(ctx context.Context, sess
 	if err != nil {
 		return nil, err
 	}
+
+	// Wait for this result's own tool_use turn to be persisted before deciding. The
+	// turn is saved asynchronously after it streams, so a fast continuation can load
+	// history that lacks its tool_use; sending then would orphan the result.
+	turnPresent := true
+	if tr := firstToolResult(toolMsg); tr != nil {
+		messages, turnPresent = ac.awaitToolUseTurn(noTimeOutCtx, sess, tr.ToolUseId, messages)
+	}
 	messages = append(messages, toolMsg)
+
+	// Coalesce parallel tool calls: a single model turn can emit several tool_use
+	// blocks, each executed/resolved by its own request. The model API requires every
+	// tool_use in a turn to be answered before the next turn, so continue only once
+	// the last sibling resolves. While any sibling (or a parked delegate) is still
+	// unresolved -- or this result's tool_use turn has not yet been persisted --
+	// persist this result and wait; sending now would orphan a tool_result (gateway
+	// error: "Expected toolResult blocks ..." / "exceeds the number of toolUse blocks").
+	if !turnPresent || !allToolUsesResolved(messages) {
+		toolStored := toolMsg.PrepareForStorage(sessionId, []string{"tool_result"}, aiModel)
+		if err := ac.srv.Assistantstore.SaveChat(noTimeOutCtx, toolStored); err != nil {
+			logger.WithError(err).Error("unable to save tool result while awaiting sibling tool results")
+			return nil, err
+		}
+		// A nil Response signals a persist-only turn: the handler emits the result so
+		// the UI marks this tool done, then closes without continuing the model turn.
+		return &model.StreamedTurn{
+			SessionId:  sessionId,
+			Model:      aiModel,
+			Session:    sess,
+			ToolResult: firstToolResult(toolMsg),
+		}, nil
+	}
 
 	var sendOpts []model.ChatOpt
 	if isSub {
@@ -1258,7 +1432,13 @@ func (ac *AssistantCoordinator) startDelegation(ctx context.Context, toolReq *mo
 	// per-sub-session limit (a no-op when the budget is disabled).
 	response, aux, err := ac.SendStream(noTimeOutCtx, kickoff.ChildModel, []*model.Message{userMsg}, ac.subSessionStartOpts()...)
 	if err != nil {
-		return nil, err
+		// The sub-agent's first turn failed to start (e.g. its mapped model is
+		// unavailable). The child session already exists but will never produce a
+		// result, so resolve the parent's delegate tool_use with an error rather than
+		// leaving it parked on a sub-agent that can't run -- otherwise the delegate
+		// card spins "executing" forever after a reload.
+		logger.WithError(err).Error("delegated sub-agent failed to start; resolving parent delegate with error")
+		return ac.resolveFailedDelegation(noTimeOutCtx, toolReq, err)
 	}
 
 	finalize := func(rawResponse []byte) error {
@@ -1286,6 +1466,26 @@ func (ac *AssistantCoordinator) startDelegation(ctx context.Context, toolReq *mo
 			AgentName:       kickoff.AgentName,
 		},
 	}, nil
+}
+
+// resolveFailedDelegation folds an error tool_result onto the parent's delegate
+// tool_use and resumes the parent session, used when a sub-agent can't run (its
+// first turn failed to start). This guarantees the delegation resolves rather than
+// leaving the parent parked on a sub-agent that will never produce a result. The
+// error result is also surfaced on the turn so the handler streams it inline (Part
+// of the tool_result SSE event), updating the delegate card to "error" live as well
+// as in storage. No delegation_start was emitted, so no resolved marker is needed.
+func (ac *AssistantCoordinator) resolveFailedDelegation(ctx context.Context, toolReq *model.ToolRequest, cause error) (*model.StreamedTurn, error) {
+	toolMsg := buildToolResultMessage(toolReq.ToolUseId, nil, fmt.Errorf("the delegated sub-agent could not be started: %w", cause))
+
+	parentSess := ac.loadTurnSession(ctx, toolReq.SessionId)
+	parentModel := modelForSession(parentSess, toolReq.Model)
+
+	turn, err := ac.continueWithToolResult(ctx, parentSess, toolReq.SessionId, parentModel, toolMsg)
+	if err == nil && turn != nil && len(toolMsg.ContentBlocks) > 0 {
+		turn.ToolResult = toolMsg.ContentBlocks[0].ToolResult
+	}
+	return turn, err
 }
 
 // ResolveDelegationStream is called when a delegated sub-agent has finished (its
@@ -1507,6 +1707,29 @@ func (ac *AssistantCoordinator) loadSession(ctx context.Context, sessionId strin
 	return sessions[0]
 }
 
+// rejectionNotice is recorded as a rejected tool's result. It reads as the tool's
+// outcome so the model continues without it instead of retrying.
+const rejectionNotice = "Tool execution was rejected by the user."
+
+// buildRejectionResultMessage builds the tool_result for a tool the user declined.
+// It resolves the tool_use -- so a parallel turn's coalescing can complete -- and is
+// flagged "rejected" for the UI while carrying is_error so the model treats the tool
+// as not run.
+func buildRejectionResultMessage(toolUseId string) *model.Message {
+	return &model.Message{
+		Id:   uuid.NewString(),
+		Role: "user",
+		ContentBlocks: []model.ContentBlock{
+			{ToolResult: &model.ToolResult{
+				ToolUseId: toolUseId,
+				Status:    "rejected",
+				IsError:   true,
+				Content:   []model.ToolResultContent{{Text: rejectionNotice}},
+			}},
+		},
+	}
+}
+
 func buildToolResultMessage(toolUseId string, result *model.ToolResponse, toolErr error) *model.Message {
 	var toolResult *model.ToolResult
 	if toolErr != nil {
@@ -1628,6 +1851,21 @@ func cleanupMessages(messages []*model.Message) []*model.Message {
 		m.StopReason = nil
 		m.StopSequence = nil
 		m.Usage = nil
+		// Collapse internal tool_result statuses (e.g. "rejected") onto the success/error
+		// vocabulary every model provider accepts. Done once here so no adapter has to.
+		m.ContentBlocks = wireCanonicalToolResults(m.ContentBlocks)
+
+		// Coalesce parallel tool calls: the results answering one multi-tool assistant
+		// turn are persisted as separate messages (one per tool, executed by its own
+		// request), but the model API requires all of a turn's tool_results in a single
+		// user turn. Merge a tool_result-only message into the previous one when both
+		// are tool_result-only -- otherwise the adapter emits consecutive user turns,
+		// each with one result, which the model/gateway rejects.
+		if isToolResultOnly(&m) && len(msgs) > 0 && isToolResultOnly(msgs[len(msgs)-1]) {
+			prev := msgs[len(msgs)-1]
+			prev.ContentBlocks = append(prev.ContentBlocks, m.ContentBlocks...)
+			continue
+		}
 
 		// ToolUse-only messages, while given out by the AI, are not accepted by the AI
 		// add text to the ToolUse body to placate the AI's validation.
@@ -1644,4 +1882,66 @@ func cleanupMessages(messages []*model.Message) []*model.Message {
 	}
 
 	return msgs
+}
+
+// wireCanonicalToolResults returns content blocks whose tool_result statuses are
+// valid to send to any model provider. A tool result is conceptually success-or-error
+// everywhere (Bedrock, OpenAI, Gemini, ...), and those providers accept only
+// "success"/"error" (or none) -- so internal UI markers like "rejected" are collapsed
+// onto that binary using IsError, the provider-independent error signal. Already
+// canonical statuses pass through untouched, and originals are never mutated (a block
+// is copied only when its status changes) so storage and the inline tool_result event
+// keep the real status.
+func wireCanonicalToolResults(blocks []model.ContentBlock) []model.ContentBlock {
+	out := blocks
+	copied := false
+	for i := range blocks {
+		tr := blocks[i].ToolResult
+		if tr == nil {
+			continue
+		}
+		ws := wireToolResultStatus(tr)
+		if ws == tr.Status {
+			continue
+		}
+		if !copied {
+			out = make([]model.ContentBlock, len(blocks))
+			copy(out, blocks)
+			copied = true
+		}
+		trCopy := *tr
+		trCopy.Status = ws
+		out[i].ToolResult = &trCopy
+	}
+	return out
+}
+
+// wireToolResultStatus maps a tool_result's status to the value model providers
+// accept: canonical statuses are kept; anything else collapses to error/success per
+// IsError.
+func wireToolResultStatus(tr *model.ToolResult) string {
+	switch tr.Status {
+	case "", "success", "error":
+		return tr.Status
+	default:
+		if tr.IsError {
+			return "error"
+		}
+		return "success"
+	}
+}
+
+// isToolResultOnly reports whether a message consists solely of tool_result blocks
+// (an answer to one or more tool_use calls), so adjacent ones can be merged into a
+// single user turn.
+func isToolResultOnly(m *model.Message) bool {
+	if m == nil || len(m.ContentBlocks) == 0 {
+		return false
+	}
+	for _, cb := range m.ContentBlocks {
+		if cb.ToolResult == nil {
+			return false
+		}
+	}
+	return true
 }

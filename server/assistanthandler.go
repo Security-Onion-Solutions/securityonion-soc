@@ -258,11 +258,37 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A persist-only turn (no Response) means the tool's result was saved but the
+	// model turn is not continued yet -- sibling tool_use blocks from the same model
+	// turn are still unresolved (parallel tool calls). Emit the result so the UI marks
+	// this tool done, then close; the last sibling's request drives the continuation.
+	if turn.Response == nil {
+		writeSSEHeaders(w)
+		if turn.ToolResult != nil {
+			if err := writeToolResultEvent(w, turn.ToolResult); err != nil {
+				logger.WithError(err).Warn("unable to write tool result event for persist-only turn")
+			}
+		}
+		writeSSEDone(w)
+		return
+	}
+
 	// Stream the tool's turn, then keep chaining turns on this same response while a
 	// delegated sub-agent finishes (a text-only turn) and the backend folds its
 	// result back into the parent. We stop and hand control back to the client as
 	// soon as a turn requests a tool (needs approval) or a top-level turn completes.
 	writeStreamHeaders(w, turn.Response)
+
+	// Emit the executed tool's result up front so the UI can attach it to the tool
+	// card inline (no session re-fetch). Set only for direct tool execution; a
+	// delegation kickoff leaves it nil and resolves through the marker path instead.
+	// A failed write (client gone) must not abort the chain — the turn below still
+	// needs draining and finalizing to persist.
+	if turn.ToolResult != nil {
+		if err := writeToolResultEvent(w, turn.ToolResult); err != nil {
+			logger.WithError(err).Warn("unable to write tool result event (client likely disconnected); continuing to persist the turn")
+		}
+	}
 
 	// Keep chaining turns on this response while delegated sub-agents resolve. The
 	// chain terminates on a tool_use, a top-level session, a stream/parse error, or
@@ -274,6 +300,22 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 			if err := writeDelegationMarker(w, turn.Marker); err != nil {
 				logger.WithError(err).Warn("unable to write delegation marker (client likely disconnected); continuing to persist the turn")
 			}
+		}
+
+		// A persist-only resolution (no Response) means the parent could not be
+		// continued yet: it still has unresolved sibling tool_uses (parallel tool
+		// calls), or its tool_use turn has not landed. The resolved marker above already
+		// closed the delegate card; surface the parent's tool_result and stop chaining,
+		// letting the parent resume when its remaining tools resolve. Streaming or
+		// finalizing a nil Response here would panic and reset the client's HTTP/2
+		// stream (surfacing as ERR_HTTP2_PROTOCOL_ERROR / an opaque client error).
+		if turn.Response == nil {
+			if turn.ToolResult != nil {
+				if err := writeToolResultEvent(w, turn.ToolResult); err != nil {
+					logger.WithError(err).Warn("unable to write tool result event for persist-only resolution")
+				}
+			}
+			break
 		}
 
 		entireResponse, streamErr := streamBody(ctx, w, turn.Response)
@@ -947,8 +989,28 @@ func streamResponse(ctx context.Context, w http.ResponseWriter, r *http.Request,
 // writeStreamHeaders copies the upstream response headers and writes the status
 // code. It must be called exactly once per HTTP response; when chaining multiple
 // streamed turns onto a single response, only the first turn's headers are written.
+// hopByHopHeaders are connection-specific headers that must not be forwarded onto
+// our response. They are illegal in HTTP/2 (a client receiving them resets the
+// stream with PROTOCOL_ERROR). Content-Length is also dropped: one client response
+// chains several upstream turns, so any single turn's length would be violated as
+// soon as the next turn streams.
+var hopByHopHeaders = map[string]struct{}{
+	"connection":          {},
+	"keep-alive":          {},
+	"proxy-authenticate":  {},
+	"proxy-authorization": {},
+	"te":                  {},
+	"trailer":             {},
+	"transfer-encoding":   {},
+	"upgrade":             {},
+	"content-length":      {},
+}
+
 func writeStreamHeaders(w http.ResponseWriter, response *http.Response) {
 	for k, v := range response.Header {
+		if _, skip := hopByHopHeaders[strings.ToLower(k)]; skip {
+			continue
+		}
 		for _, val := range v {
 			w.Header().Add(k, val)
 		}
@@ -1029,6 +1091,46 @@ func writeDelegationMarker(w http.ResponseWriter, marker *model.DelegationMarker
 		f.Flush()
 	}
 	return nil
+}
+
+// writeToolResultEvent writes a synthetic tool_result SSE event into the stream so
+// the UI can attach a tool's result to its tool card inline, without re-fetching the
+// session to recover it. Like delegation markers, it is written directly to the
+// client and is never part of the buffered response parsed by UnstreamResponse.
+func writeToolResultEvent(w http.ResponseWriter, result *model.ToolResult) error {
+	payload := struct {
+		Type       string            `json:"type"`
+		ToolResult *model.ToolResult `json:"toolResult"`
+	}{Type: "tool_result", ToolResult: result}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "data: %s\n\n", data); err != nil {
+		return err
+	}
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
+	}
+	return nil
+}
+
+// writeSSEHeaders writes the headers for a server-sent event stream when there is
+// no upstream response to copy them from (a persist-only tool turn).
+func writeSSEHeaders(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	// No "Connection" header: it is a hop-by-hop header forbidden in HTTP/2, where
+	// setting it makes the client reset the stream with PROTOCOL_ERROR.
+	w.WriteHeader(http.StatusOK)
+}
+
+// writeSSEDone writes the terminal [DONE] event and flushes.
+func writeSSEDone(w http.ResponseWriter) {
+	_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
+	}
 }
 
 // messageHasToolUse reports whether the assistant turn requested any tools (and
