@@ -39,11 +39,11 @@ RUN go mod download
 RUN go build -tags sqlite -ldflags="-X 'github.com/ory/kratos/driver/config.Version=${VERSION}' -X 'github.com/ory/kratos/driver/config.Date=$(date -I)' -X 'github.com/ory/kratos/driver/config.Commit=$(git rev-parse --short HEAD)'"
 
 
-FROM ghcr.io/security-onion-solutions/ubuntu:26.04
+FROM ghcr.io/security-onion-solutions/ubi9:9.7
 
-RUN apt-get update && apt-get upgrade -y
-
-RUN apt-get update && apt-get install -y ca-certificates
+RUN dnf update -y && \
+    dnf install -y --nodocs ca-certificates && \
+    dnf clean all
 
 ENV DSN=sqlite:///kratos-data/db.sqlite?_fk=true
 
@@ -51,8 +51,8 @@ ARG UID=928
 ARG GID=928
 ARG OWNER=ory
 
-RUN groupadd --system kratos --gid "$GID" ; \
-    useradd --system kratos --no-create-home -g kratos --uid "$UID"
+RUN groupadd --gid "$GID" kratos && \
+    useradd --uid "$UID" --gid kratos --no-create-home kratos
 
 RUN echo "#!/bin/sh" > /start-kratos.sh
 RUN echo "kratos -c /kratos-conf/kratos.yaml migrate sql -e --yes >> /kratos-log/kratos-migrate.log 2>&1" >> /start-kratos.sh
