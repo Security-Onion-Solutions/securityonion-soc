@@ -470,9 +470,9 @@ func (query *Query) Parse(str string) error {
 				currentTermBuilder.Reset()
 				grouping = 0
 			} else {
-				if ch == '(' {
+				if !escaping && ch == '(' {
 					grouping++
-				} else if ch == ')' {
+				} else if !escaping && ch == ')' {
 					grouping--
 				}
 				currentTermBuilder.WriteRune(ch)

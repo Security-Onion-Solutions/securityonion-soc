@@ -84,6 +84,10 @@ func TestQueries(tester *testing.T) {
 	validateQuery(tester, "abc (d e f", "ERROR_QUERY_INVALID__GROUP_INCOMPLETE")
 	validateQuery(tester, "abc (d e f | ghi 'jkl' | mno", "ERROR_QUERY_INVALID__GROUP_INCOMPLETE")
 
+	// an escaped paren inside a group must NOT count toward grouping depth
+	validateQuery(tester, `abc (def\(ghi)`)
+	validateQuery(tester, `f:(*a\(* OR *b*)`, `(f:*a\(* OR *b*)`)
+
 	validateQuery(tester, "abc (d e f) | groupby 'jkl' | mno", "ERROR_QUERY_INVALID__SEGMENT_UNSUPPORTED")
 
 	validateQuery(tester, "", "ERROR_QUERY_INVALID__SEARCH_MISSING")
