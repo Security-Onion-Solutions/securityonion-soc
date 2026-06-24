@@ -32,11 +32,11 @@ RUN go mod download
 RUN go build -tags sqlite -ldflags="-X 'github.com/ory/hydra/driver/config.Version=${VERSION}' -X 'github.com/ory/hydra/driver/config.Date=$(date -I)' -X 'github.com/ory/hydra/driver/config.Commit=$(git rev-parse --short HEAD)'"
 
 
-FROM ghcr.io/security-onion-solutions/ubuntu:26.04
+FROM ghcr.io/security-onion-solutions/ubi9:9.7
 
-RUN apt-get update && apt-get upgrade -y
-
-RUN apt-get update && apt-get install -y ca-certificates
+RUN dnf update -y && \
+    dnf install -y --nodocs ca-certificates && \
+    dnf clean all
 
 ENV DSN=sqlite:///hydra-data/db.sqlite?_fk=true
 
@@ -44,8 +44,8 @@ ARG UID=928
 ARG GID=928
 ARG OWNER=ory
 
-RUN groupadd --system hydra --gid "$GID" ; \
-    useradd --system hydra --no-create-home -g hydra --uid "$UID"
+RUN groupadd --gid "$GID" hydra && \
+    useradd --uid "$UID" --gid hydra --no-create-home hydra
 
 RUN echo "#!/bin/sh" > /start-hydra.sh
 RUN echo "hydra -c /hydra-conf/hydra.yaml migrate sql -e --yes >> /hydra-log/hydra-migrate.log 2>&1" >> /start-hydra.sh
