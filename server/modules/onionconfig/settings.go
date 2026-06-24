@@ -7,18 +7,15 @@
 package onionconfig
 
 import (
-	"fmt"
 	"slices"
 	"sort"
 	"strings"
 
-	"github.com/security-onion-solutions/securityonion-soc/json"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 )
 
-// FlattenPillar recursively walks a pillar map and flattens it into a map of setting ID to string value.
-// It handles nested maps and lists by converting them to appropriate string representations.
-func FlattenPillar(mapped map[string]interface{}, prefix string, result map[string]string) {
+// FlattenPillar recursively walks a pillar map and flattens it into a map of setting ID to value.
+func FlattenPillar(mapped map[string]interface{}, prefix string, result map[string]interface{}) {
 	for id, value := range mapped {
 		newPrefix := prefix
 		if newPrefix != "" {
@@ -29,24 +26,8 @@ func FlattenPillar(mapped map[string]interface{}, prefix string, result map[stri
 		switch v := value.(type) {
 		case map[string]interface{}:
 			FlattenPillar(v, newId, result)
-		case []interface{}:
-			var newValue string
-			for _, item := range v {
-				var str string
-				switch item.(type) {
-				case []interface{}, map[string]interface{}:
-					bytes, _ := json.WriteJson(item)
-					str = string(bytes)
-				default:
-					str = fmt.Sprintf("%v", item)
-				}
-				if str != "" {
-					newValue = newValue + str + "\n"
-				}
-			}
-			result[newId] = newValue
 		default:
-			result[newId] = fmt.Sprintf("%v", value)
+			result[newId] = value
 		}
 	}
 }

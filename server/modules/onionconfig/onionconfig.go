@@ -69,7 +69,7 @@ func (c *OnionConfig) PreloadConfiguration() error {
 	var err error
 	defaultDir := c.saltstackDir + "/default"
 	if _, statErr := os.Stat(defaultDir); statErr == nil {
-		var defaults map[string]string
+		var defaults map[string]interface{}
 		c.annotations, defaults, err = LoadStaticConfiguration(defaultDir, ParseYaml)
 		if err == nil {
 			HydrateAnnotations(c.annotations, defaults, func(id string) (string, bool) {

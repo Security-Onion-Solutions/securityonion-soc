@@ -432,6 +432,91 @@ func TestApplyAnnotations_AllowedNodeTypes(t *testing.T) {
 	})
 }
 
+func TestApplyAnnotations_MultilinePreservation(t *testing.T) {
+	t.Run("MultilineAnnotationSetsTrue", func(t *testing.T) {
+		setting := &model.Setting{Id: "test.setting"}
+		annotations := map[string]interface{}{
+			"multiline": true,
+		}
+		ApplyAnnotations(setting, annotations, nil)
+		assert.True(t, setting.Multiline)
+	})
+
+	t.Run("MultilineAnnotationWithFalseValue", func(t *testing.T) {
+		setting := &model.Setting{Id: "test.setting", Multiline: true}
+		annotations := map[string]interface{}{
+			"multiline": false,
+		}
+		ApplyAnnotations(setting, annotations, nil)
+		assert.True(t, setting.Multiline)
+	})
+
+	t.Run("MultilineAlreadyTruePreserved", func(t *testing.T) {
+		setting := &model.Setting{Id: "test.setting", Multiline: true}
+		annotations := map[string]interface{}{
+			"multiline": true,
+		}
+		ApplyAnnotations(setting, annotations, nil)
+		assert.True(t, setting.Multiline)
+	})
+
+	t.Run("MultilineAlreadyFalseRemainsFalse", func(t *testing.T) {
+		setting := &model.Setting{Id: "test.setting", Multiline: false}
+		annotations := map[string]interface{}{
+			"multiline": false,
+		}
+		ApplyAnnotations(setting, annotations, nil)
+		assert.False(t, setting.Multiline)
+	})
+
+	t.Run("NoMultilineAnnotationLeavesFalse", func(t *testing.T) {
+		setting := &model.Setting{Id: "test.setting", Multiline: false}
+		annotations := map[string]interface{}{
+			"node": true,
+		}
+		ApplyAnnotations(setting, annotations, nil)
+		assert.False(t, setting.Multiline)
+	})
+}
+
+func TestApplyAnnotations_SyntaxPreservation(t *testing.T) {
+	t.Run("SyntaxAnnotationSetsValue", func(t *testing.T) {
+		setting := &model.Setting{Id: "test.setting"}
+		annotations := map[string]interface{}{
+			"syntax": "yaml",
+		}
+		ApplyAnnotations(setting, annotations, nil)
+		assert.Equal(t, "yaml", setting.Syntax)
+	})
+
+	t.Run("SyntaxAnnotationPreservesExistingValue", func(t *testing.T) {
+		setting := &model.Setting{Id: "test.setting", Syntax: "json"}
+		annotations := map[string]interface{}{
+			"syntax": "yaml",
+		}
+		ApplyAnnotations(setting, annotations, nil)
+		assert.Equal(t, "json", setting.Syntax)
+	})
+
+	t.Run("SyntaxAnnotationOverwritesEmptyValue", func(t *testing.T) {
+		setting := &model.Setting{Id: "test.setting", Syntax: ""}
+		annotations := map[string]interface{}{
+			"syntax": "xml",
+		}
+		ApplyAnnotations(setting, annotations, nil)
+		assert.Equal(t, "xml", setting.Syntax)
+	})
+
+	t.Run("NoSyntaxAnnotationLeavesEmpty", func(t *testing.T) {
+		setting := &model.Setting{Id: "test.setting"}
+		annotations := map[string]interface{}{
+			"node": true,
+		}
+		ApplyAnnotations(setting, annotations, nil)
+		assert.Equal(t, "", setting.Syntax)
+	})
+}
+
 func TestValidateAllowedNodeTypes(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.MkdirAll(dir+"/local/pillar", 0755))
