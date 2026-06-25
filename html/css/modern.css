@@ -250,6 +250,13 @@ html, body, * {
   border-radius: var(--so-radius-panel);
   margin: 0px 4px;
   color: rgb(var(--v-theme-text)) !important;
+  position: relative;
+}
+
+.theme-links .v-list-item__content > a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
 }
 
 .theme-links .v-list-item:hover {
