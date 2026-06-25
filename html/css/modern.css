@@ -259,6 +259,11 @@ html, body, * {
   inset: 0;
 }
 
+.theme-links .v-list-item__prepend a {
+  position: relative;
+  z-index: 1;
+}
+
 .theme-links .v-list-item:hover {
   background-color: rgba(var(--v-theme-text), var(--v-hover-opacity, 0.04));
 }
