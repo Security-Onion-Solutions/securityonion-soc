@@ -40,14 +40,17 @@ RUN ./build.sh "$VERSION"
 
 FROM ghcr.io/security-onion-solutions/ubi9:9.7
 
+RUN dnf update -y && \
+    dnf install -y --nodocs ca-certificates && \
+    dnf clean all
+
 ARG UID=939
 ARG GID=939
 ARG VERSION=0.0.0
 ARG ELASTIC_VERSION=0.0.0
 ARG WAZUH_VERSION=0.0.0
 
-RUN dnf update -y && \
-    dnf install -y --nodocs wget tcpdump unzip git gcc python3.14 python3.14-devel python3.14-pip openssl-devel && \
+RUN dnf install -y --nodocs wget tcpdump unzip git gcc python3.14 python3.14-devel python3.14-pip openssl-devel && \
     dnf clean all
 RUN ln -s /usr/bin/python3.14 /usr/local/bin/python3 && ln -s /usr/bin/pip3.14 /usr/local/bin/pip3
 RUN pip3 install pysigma==0.11.20 sigma-cli==1.0.5 pysigma-backend-elasticsearch pysigma-pipeline-windows
