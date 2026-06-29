@@ -531,7 +531,7 @@ const i18n = {
       continue: 'Would you like to continue?',
       contributors: 'Contributors',
       convert: 'Convert',
-      convertToElasticsearch: 'Convert to EQL',
+      convertToElasticsearch: 'Convert to query',
       copyBreadcrumbToClipboard: 'Copy breadcrumb to clipboard',
       copyEventToClipboardAsJson: 'Copy full event as JSON',
       copyEventToClipboardAsKvp: 'Copy full event as field:value pairs',
