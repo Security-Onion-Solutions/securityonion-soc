@@ -4,7 +4,7 @@
 # https://securityonion.net/license; you may not use this file except in compliance with the
 # Elastic License 2.0.
 
-FROM ghcr.io/security-onion-solutions/golang:1.26.4-alpine as builder
+FROM ghcr.io/security-onion-solutions/golang:1.26.4-alpine AS builder
 ARG VERSION=0.0.0
 ARG ALT_BRANCH=3/dev
 ARG REVKEYS=
@@ -53,6 +53,7 @@ ARG WAZUH_VERSION=0.0.0
 RUN dnf install -y --nodocs wget tcpdump unzip git gcc python3.14 python3.14-devel python3.14-pip openssl-devel && \
     dnf clean all
 RUN ln -s /usr/bin/python3.14 /usr/local/bin/python3 && ln -s /usr/bin/pip3.14 /usr/local/bin/pip3
+RUN ln -s /usr/bin/python3.14 /usr/local/bin/python && ln -s /usr/bin/pip3.14 /usr/local/bin/pip
 RUN pip3 install pysigma==0.11.20 sigma-cli==1.0.5 pysigma-backend-elasticsearch pysigma-pipeline-windows
 ADD dep/pysigma_backend_securityonion-0.1.0-py3-none-any.whl /tmp
 RUN pip3 install /tmp/pysigma_backend_securityonion-0.1.0-py3-none-any.whl
