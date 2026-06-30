@@ -676,19 +676,47 @@ func TestConvertQuestions(t *testing.T) {
 		IOManager: iom,
 	}
 
+	var capturedVarsPath string
+	var capturedVarsContents string
+
+	// ConvertQuestions writes the per-event vars to a temp file, passes it to sigma
+	// convert via -p, then deletes it.
+	iom.EXPECT().WriteFile(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(path string, contents []byte, perm fs.FileMode) error {
+			capturedVarsPath = path
+			capturedVarsContents = string(contents)
+			assert.Equal(t, fs.FileMode(0600), perm)
+			return nil
+		})
+
 	iom.EXPECT().ExecCommand(gomock.Any()).DoAndReturn(func(cmd *exec.Cmd) ([]byte, int, time.Duration, error) {
 		assert.True(t, strings.HasSuffix(cmd.Path, "sigma"))
-		assert.Equal(t, []string{"sigma", "convert", "-t", "security_onion", "-p", "/opt/sensoroni/sigma_final_pipeline.yaml", "-p", "/opt/sensoroni/sigma_so_pipeline.yaml", "-p", "windows-logsources", "-p", "ecs_windows", "--disable-pipeline-check", "/dev/stdin"}, cmd.Args)
+		assert.Equal(t, []string{"sigma", "convert", "-t", "security_onion", "-p", "SecurityOnion_playbook_placeholders", "-p", capturedVarsPath, "-p", "/opt/sensoroni/sigma_final_pipeline.yaml", "-p", "/opt/sensoroni/sigma_so_pipeline.yaml", "-p", "/opt/sensoroni/sigma_playbook_pipeline.yaml", "-p", "windows-logsources", "-p", "ecs_windows", "--disable-pipeline-check", "/dev/stdin"}, cmd.Args)
 
 		in, err := io.ReadAll(cmd.Stdin)
 		assert.NoError(t, err)
-		assert.Equal(t, "query1\n---\nquery2", string(in))
+		// each title-less query gets a synthetic title injected before conversion
+		assert.Equal(t, "title: Playbook Question\nquery1\n---\ntitle: Playbook Question\nquery2", string(in))
 
 		return []byte("Converted Queries:\n" + `{"query": "query1", "fields": ["a", "b"]}` + "\n\n" + `{"query": "query2", "fields": ["b", "c"]}` + "\n\n"), 0, time.Second, nil
 	})
 
-	converted, err := pdm.ConvertQuestions(context.Background(), []string{"query1", "query2"})
+	iom.EXPECT().DeleteFile(gomock.Any()).DoAndReturn(func(path string) error {
+		assert.Equal(t, capturedVarsPath, path)
+		return nil
+	})
+
+	event := &model.EventRecord{Payload: map[string]interface{}{
+		"event_data.process.entity_id": "{guid-123}",
+	}}
+	bindings := map[string]string{"ProcessGuid": "event_data.process.entity_id"}
+
+	converted, err := pdm.ConvertQuestions(context.Background(), []string{"query1", "query2"}, event, bindings, nil)
 	assert.NoError(t, err)
+
+	// the placeholder's value was resolved from the event into the vars file
+	assert.Contains(t, capturedVarsContents, "ProcessGuid:")
+	assert.Contains(t, capturedVarsContents, "{guid-123}")
 	assert.Equal(t, 2, len(converted))
 	assert.Equal(t, "query1", converted[0].Query)
 	assert.Equal(t, "query2", converted[1].Query)
@@ -782,6 +810,79 @@ func TestReadPlaybooks(t *testing.T) {
 	assert.Equal(t, "success", pdm.playbooksOnDisk["repo1-pb1"])
 	assert.Equal(t, "repo2-playbook1.yaml", pdm.playbooksOnDisk["repo2-pb1"])
 	assert.Equal(t, "repo2-playbook2.yaml", pdm.playbooksOnDisk["repo2-pb2"])
+}
+
+// loadPlaceholderMap must be non-fatal: a missing/malformed/empty map yields an empty map
+// (never an error) so a bad config file can't abort Init
+func TestLoadPlaceholderMap(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	iom := mock.NewMockIOManager(ctrl)
+	pdm := &PlaybookDiskManager{IOManager: iom}
+
+	// unreadable/missing file -> empty (non-nil) map, never fatal
+	iom.EXPECT().ReadFile("/missing").Return(nil, errors.New("no such file"))
+	m := pdm.loadPlaceholderMap("/missing")
+	assert.NotNil(t, m)
+	assert.Empty(t, m)
+
+	// malformed YAML (a sequence, not a map) -> empty map
+	iom.EXPECT().ReadFile("/bad").Return([]byte("- not\n- a\n- map"), nil)
+	assert.Empty(t, pdm.loadPlaceholderMap("/bad"))
+
+	// empty file -> empty map (hits the len==0 warn path)
+	iom.EXPECT().ReadFile("/empty").Return([]byte(""), nil)
+	assert.Empty(t, pdm.loadPlaceholderMap("/empty"))
+
+	// valid map -> populated
+	iom.EXPECT().ReadFile("/ok").Return([]byte("src_ip: source.ip\nUser: user.name\n"), nil)
+	m = pdm.loadPlaceholderMap("/ok")
+	assert.Equal(t, "source.ip", m["src_ip"])
+	assert.Equal(t, "user.name", m["User"])
+}
+
+// A *.placeholders.yaml config file in a repo is parsed (not registered as a playbook) and
+// its bindings are attached to every playbook the repo ships.
+func TestReadPlaybooks_ConfigFileBindings(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	iom := mock.NewMockIOManager(ctrl)
+	pdm := PlaybookDiskManager{isRunning: true, playbookRepoPath: "/tmp/playbooks", IOManager: iom}
+
+	repos := []*detections.RepoOnDisk{{
+		Repo: &model.Repo{RepoUrl: "file:///repo"},
+		Path: "/tmp/playbooks/repo",
+	}}
+
+	iom.EXPECT().WalkDir("/tmp/playbooks/repo", gomock.Any()).DoAndReturn(func(path string, fn func(p string, dir fs.DirEntry, err error) error) error {
+		// config file is walked BEFORE the playbook it serves (binding attach happens post-walk)
+		iom.EXPECT().ReadFile("cf.placeholders.yaml").Return([]byte("actor_email: user.email\nclient_ip: source.ip\n"), nil)
+		err := fn("cf.placeholders.yaml", &handmock.MockDirEntry{Filename: "cf.placeholders.yaml"}, nil)
+		assert.NoError(t, err)
+
+		iom.EXPECT().ReadFile("cf-login.yaml").Return([]byte("id: cf-login-1"), nil)
+		err = fn("cf-login.yaml", &handmock.MockDirEntry{Filename: "cf-login.yaml"}, nil)
+		assert.NoError(t, err)
+		return nil
+	})
+
+	h := memory.New()
+	logger := (&log.Logger{Handler: h, Level: log.DebugLevel}).WithField("test", true)
+
+	pbs, err := pdm.readPlaybooks(logger, repos)
+	assert.NoError(t, err)
+	assert.Len(t, pbs, 1, "the config file is not counted as a playbook")
+
+	// the repo's config-file bindings are attached to its playbook (keyed by lowercased id)
+	bindings := pdm.playbookBindings["cf-login-1"]
+	assert.Equal(t, "user.email", bindings["actor_email"])
+	assert.Equal(t, "source.ip", bindings["client_ip"])
+
+	// the config file itself is not registered as a playbook
+	_, isPlaybook := pdm.playbooksOnDisk["cf.placeholders.yaml"]
+	assert.False(t, isPlaybook)
 }
 
 func TestGetPlaybooksForDetection_BaseCategoryMatching(t *testing.T) {
@@ -1118,6 +1219,9 @@ func TestExecutePlaybookSearches(t *testing.T) {
 
 			// Set up ConvertQuestions expectations
 			if tc.convertResults != nil || tc.convertError != nil {
+				// ConvertQuestions writes a per-event vars temp file, then deletes it
+				iom.EXPECT().WriteFile(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				iom.EXPECT().DeleteFile(gomock.Any()).Return(nil).AnyTimes()
 				// Mock ExecCommand for ConvertQuestions
 				iom.EXPECT().ExecCommand(gomock.Any()).DoAndReturn(func(cmd *exec.Cmd) ([]byte, int, time.Duration, error) {
 					if tc.convertError != nil {
