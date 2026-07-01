@@ -37,6 +37,7 @@ const (
 	DEFAULT_PLAYBOOK_IMPORT_ERROR_SECONDS     = 10 * 60
 	DEFAULT_PLAYBOOK_REPO_PATH                = "/opt/sensoroni/playbooks"
 	DEFAULT_PLACEHOLDER_MAP_PATH              = "/opt/sensoroni/playbook_placeholder_map.yaml"
+	DEFAULT_USER_PLACEHOLDER_MAP_PATH         = "/opt/sensoroni/playbook_placeholder_map_custom.yaml"
 )
 
 var ( // treat as constant
@@ -63,14 +64,12 @@ type PlaybookDiskManager struct {
 	playbookImportFrequencySeconds int
 	playbookImportErrorSeconds     int
 
-	// placeholderMap is the global base layer: it maps a Sigma placeholder name (%name%) to
-	// the event field its value resolves from (via lookupEventValue).
-	placeholderMap     map[string]string
-	placeholderMapPath string
-
-	// holds per-playbook custom placeholder bindings, merged from *.placeholders.yaml config files
-	// in each playbook's repo. Overlays placeholderMap for that playbook.
-	playbookBindings map[string]map[string]string // map[Playbook.Id]map[placeholderToken]eventFieldPath
+	// placeholderMap maps a Sigma placeholder name (%name%) to the event field its value
+	// resolves from (via lookupEventValue). It is the shipped global map overlaid with the
+	// editable user map
+	placeholderMap         map[string]string
+	placeholderMapPath     string // shipped defaults, overwritten on upgrade
+	userPlaceholderMapPath string // grid-editable overrides, preserved across upgrades
 
 	PlaybooksByDetectionId map[string][]string
 	PlaybooksByCategory    map[string][]string
@@ -106,7 +105,26 @@ func (pdm *PlaybookDiskManager) Init(config module.ModuleConfig) (err error) {
 	}
 
 	pdm.placeholderMapPath = module.GetStringDefault(config, "placeholderMapPath", DEFAULT_PLACEHOLDER_MAP_PATH)
-	pdm.placeholderMap = pdm.loadPlaceholderMap(pdm.placeholderMapPath)
+	pdm.userPlaceholderMapPath = module.GetStringDefault(config, "userPlaceholderMapPath", DEFAULT_USER_PLACEHOLDER_MAP_PATH)
+
+	// The combined map is the shipped global map overlaid with the editable user map
+	// (user entries win). Both are optional; a missing file just contributes nothing.
+	globalMap := pdm.loadPlaceholderMap(pdm.placeholderMapPath)
+	userMap := pdm.loadPlaceholderMap(pdm.userPlaceholderMapPath)
+	pdm.placeholderMap = mergePlaceholderMaps(globalMap, userMap)
+
+	if len(pdm.placeholderMap) == 0 {
+		log.WithFields(log.Fields{
+			"globalMapPath": pdm.placeholderMapPath,
+			"userMapPath":   pdm.userPlaceholderMapPath,
+		}).Warn("no playbook placeholder tokens declared")
+	} else {
+		log.WithFields(log.Fields{
+			"globalTokens": len(globalMap),
+			"userTokens":   len(userMap),
+			"totalTokens":  len(pdm.placeholderMap),
+		}).Info("loaded playbook placeholder maps")
+	}
 
 	return nil
 }
@@ -266,7 +284,6 @@ func (pdm *PlaybookDiskManager) readPlaybooks(logger log.Interface, repos []*det
 	byCategory := make(map[string][]string)
 	byEngine := make(map[string][]string)
 	types := make(map[string]string)
-	bindingsByPlaybook := make(map[string]map[string]string)
 
 	total := 0
 	playbooks := []*model.Playbook{}
@@ -278,11 +295,6 @@ func (pdm *PlaybookDiskManager) readPlaybooks(logger log.Interface, repos []*det
 		if pbRepo.Repo.Folder != nil {
 			targetDir = filepath.Join(targetDir, *pbRepo.Repo.Folder)
 		}
-
-		// Placeholder bindings are scoped to the repo: collect every *.placeholders.yaml
-		// config file in this repo, then attach the merged set to each playbook it ships.
-		repoBind := map[string]string{}
-		repoPlaybookIds := []string{}
 
 		err := pdm.IOManager.WalkDir(targetDir, func(p string, dir fs.DirEntry, err error) error {
 			if !pdm.isRunning {
@@ -328,22 +340,6 @@ func (pdm *PlaybookDiskManager) readPlaybooks(logger log.Interface, repos []*det
 				return nil
 			}
 
-			// A *.placeholders.yaml config file carries custom placeholder bindings for this
-			// repo, not a playbook document — merge it and move on.
-			if isBindingFile(strings.ToLower(info.Name())) {
-				bindings, problems := parseBindings(contents)
-				for _, prob := range problems {
-					logger.WithError(prob).WithField("bindingPath", p).Warn("dropping invalid placeholder binding")
-				}
-				for token, field := range bindings {
-					if existing, dup := repoBind[token]; dup && existing != field {
-						logger.WithFields(log.Fields{"token": token, "bindingPath": p}).Warn("duplicate placeholder binding token; last wins")
-					}
-					repoBind[token] = field
-				}
-				return nil
-			}
-
 			pb := &model.Playbook{}
 
 			err = yaml.Unmarshal(contents, &pb)
@@ -359,7 +355,6 @@ func (pdm *PlaybookDiskManager) readPlaybooks(logger log.Interface, repos []*det
 			id := strings.ToLower(pb.Id)
 			playbooks = append(playbooks, pb)
 			files++
-			repoPlaybookIds = append(repoPlaybookIds, id)
 
 			if pb.DetectionType != "" {
 				types[id] = strings.ToLower(pb.DetectionType)
@@ -402,15 +397,9 @@ func (pdm *PlaybookDiskManager) readPlaybooks(logger log.Interface, repos []*det
 			return nil, err
 		}
 
-		// Attach this repo's merged bindings to every playbook it shipped
-		for _, id := range repoPlaybookIds {
-			bindingsByPlaybook[id] = repoBind
-		}
-
 		logger.WithFields(log.Fields{
 			"playbookDir":     targetDir,
 			"playbooksLoaded": files,
-			"bindingTokens":   len(repoBind),
 		}).Info("read playbooks")
 
 		total += files
@@ -427,7 +416,6 @@ func (pdm *PlaybookDiskManager) readPlaybooks(logger log.Interface, repos []*det
 	pdm.PlaybooksByDetectionId = byDetId
 	pdm.playbooksOnDisk = onDisk
 	pdm.playbookTypes = types
-	pdm.playbookBindings = bindingsByPlaybook
 
 	pdm.pbUpdateMutex.Unlock()
 
@@ -664,7 +652,7 @@ func (pdm *PlaybookDiskManager) GetEventSpecificPlaybook(ctx context.Context, id
 // ruleTitleRegex matches a top-level `title:` key in a Sigma rule document.
 var ruleTitleRegex = regexp.MustCompile(`(?m)^title:`)
 
-func (pdm *PlaybookDiskManager) ConvertQuestions(ctx context.Context, queries []string, event *model.EventRecord, bindings map[string]string, used map[string]bool) ([]*model.ConvertedQuery, error) {
+func (pdm *PlaybookDiskManager) ConvertQuestions(ctx context.Context, queries []string, event *model.EventRecord) ([]*model.ConvertedQuery, error) {
 	logger := log.FromContext(ctx)
 
 	err := pdm.srv.CheckAuthorized(ctx, "read", "playbooks")
@@ -674,7 +662,10 @@ func (pdm *PlaybookDiskManager) ConvertQuestions(ctx context.Context, queries []
 
 	// Resolve %placeholder% values from this alert's event via a per-call `vars:` pipeline.
 	// SecurityOnion_playbook_placeholders reads pipeline.vars; pySigma merges the -p pipelines.
-	varsYaml, err := yaml.Marshal(map[string]interface{}{"vars": pdm.buildVarsFromEvent(event, bindings, used)})
+	// The combined placeholder map declares the known tokens; any token used in a query but
+	// undeclared is resolved by name against the event (see buildVarsFromEvent).
+	used := extractPlaceholders(queries...)
+	varsYaml, err := yaml.Marshal(map[string]interface{}{"vars": pdm.buildVarsFromEvent(event, pdm.placeholderMap, used)})
 	if err != nil {
 		return nil, fmt.Errorf("unable to marshal placeholder vars: %w", err)
 	}
@@ -767,9 +758,7 @@ func (pdm *PlaybookDiskManager) ExecutePlaybookSearches(ctx context.Context, eve
 			return q.FilledQuery
 		})
 
-		bindings := pdm.effectiveBindings(strings.ToLower(pb.Id))
-		used := extractPlaceholders(filled...)
-		converted, err := pdm.ConvertQuestions(ctx, filled, event, bindings, used)
+		converted, err := pdm.ConvertQuestions(ctx, filled, event)
 		if err != nil {
 			logger.WithError(err).WithFields(log.Fields{"playbookId": pb.Id, "eventId": event.Id}).Warn("unable to convert questions")
 			return err

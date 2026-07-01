@@ -42,18 +42,18 @@ func (m *MockPlaybookstore) EXPECT() *MockPlaybookstoreMockRecorder {
 }
 
 // ConvertQuestions mocks base method.
-func (m *MockPlaybookstore) ConvertQuestions(ctx context.Context, queries []string, event *model.EventRecord, bindings map[string]string, used map[string]bool) ([]*model.ConvertedQuery, error) {
+func (m *MockPlaybookstore) ConvertQuestions(ctx context.Context, queries []string, event *model.EventRecord) ([]*model.ConvertedQuery, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ConvertQuestions", ctx, queries, event, bindings, used)
+	ret := m.ctrl.Call(m, "ConvertQuestions", ctx, queries, event)
 	ret0, _ := ret[0].([]*model.ConvertedQuery)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ConvertQuestions indicates an expected call of ConvertQuestions.
-func (mr *MockPlaybookstoreMockRecorder) ConvertQuestions(ctx, queries, event, bindings, used any) *gomock.Call {
+func (mr *MockPlaybookstoreMockRecorder) ConvertQuestions(ctx, queries, event any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConvertQuestions", reflect.TypeOf((*MockPlaybookstore)(nil).ConvertQuestions), ctx, queries, event, bindings, used)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConvertQuestions", reflect.TypeOf((*MockPlaybookstore)(nil).ConvertQuestions), ctx, queries, event)
 }
 
 // ExecutePlaybookSearches mocks base method.

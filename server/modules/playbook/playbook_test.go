@@ -672,8 +672,9 @@ func TestConvertQuestions(t *testing.T) {
 
 	iom := mock.NewMockIOManager(ctrl)
 	pdm := PlaybookDiskManager{
-		srv:       server.NewFakeAuthorizedServer(nil),
-		IOManager: iom,
+		srv:            server.NewFakeAuthorizedServer(nil),
+		IOManager:      iom,
+		placeholderMap: map[string]string{"ProcessGuid": "event_data.process.entity_id"},
 	}
 
 	var capturedVarsPath string
@@ -709,9 +710,8 @@ func TestConvertQuestions(t *testing.T) {
 	event := &model.EventRecord{Payload: map[string]interface{}{
 		"event_data.process.entity_id": "{guid-123}",
 	}}
-	bindings := map[string]string{"ProcessGuid": "event_data.process.entity_id"}
 
-	converted, err := pdm.ConvertQuestions(context.Background(), []string{"query1", "query2"}, event, bindings, nil)
+	converted, err := pdm.ConvertQuestions(context.Background(), []string{"query1", "query2"}, event)
 	assert.NoError(t, err)
 
 	// the placeholder's value was resolved from the event into the vars file
@@ -812,8 +812,8 @@ func TestReadPlaybooks(t *testing.T) {
 	assert.Equal(t, "repo2-playbook2.yaml", pdm.playbooksOnDisk["repo2-pb2"])
 }
 
-// loadPlaceholderMap must be non-fatal: a missing/malformed/empty map yields an empty map
-// (never an error) so a bad config file can't abort Init
+// loadPlaceholderMap must be non-fatal: a missing/malformed/empty map file yields an empty map
+// (never an error) so a bad map file can't abort Init
 func TestLoadPlaceholderMap(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -831,7 +831,7 @@ func TestLoadPlaceholderMap(t *testing.T) {
 	iom.EXPECT().ReadFile("/bad").Return([]byte("- not\n- a\n- map"), nil)
 	assert.Empty(t, pdm.loadPlaceholderMap("/bad"))
 
-	// empty file -> empty map (hits the len==0 warn path)
+	// empty file -> empty map (an empty layer is normal, e.g. the user map with only comments)
 	iom.EXPECT().ReadFile("/empty").Return([]byte(""), nil)
 	assert.Empty(t, pdm.loadPlaceholderMap("/empty"))
 
@@ -840,49 +840,6 @@ func TestLoadPlaceholderMap(t *testing.T) {
 	m = pdm.loadPlaceholderMap("/ok")
 	assert.Equal(t, "source.ip", m["src_ip"])
 	assert.Equal(t, "user.name", m["User"])
-}
-
-// A *.placeholders.yaml config file in a repo is parsed (not registered as a playbook) and
-// its bindings are attached to every playbook the repo ships.
-func TestReadPlaybooks_ConfigFileBindings(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	iom := mock.NewMockIOManager(ctrl)
-	pdm := PlaybookDiskManager{isRunning: true, playbookRepoPath: "/tmp/playbooks", IOManager: iom}
-
-	repos := []*detections.RepoOnDisk{{
-		Repo: &model.Repo{RepoUrl: "file:///repo"},
-		Path: "/tmp/playbooks/repo",
-	}}
-
-	iom.EXPECT().WalkDir("/tmp/playbooks/repo", gomock.Any()).DoAndReturn(func(path string, fn func(p string, dir fs.DirEntry, err error) error) error {
-		// config file is walked BEFORE the playbook it serves (binding attach happens post-walk)
-		iom.EXPECT().ReadFile("cf.placeholders.yaml").Return([]byte("actor_email: user.email\nclient_ip: source.ip\n"), nil)
-		err := fn("cf.placeholders.yaml", &handmock.MockDirEntry{Filename: "cf.placeholders.yaml"}, nil)
-		assert.NoError(t, err)
-
-		iom.EXPECT().ReadFile("cf-login.yaml").Return([]byte("id: cf-login-1"), nil)
-		err = fn("cf-login.yaml", &handmock.MockDirEntry{Filename: "cf-login.yaml"}, nil)
-		assert.NoError(t, err)
-		return nil
-	})
-
-	h := memory.New()
-	logger := (&log.Logger{Handler: h, Level: log.DebugLevel}).WithField("test", true)
-
-	pbs, err := pdm.readPlaybooks(logger, repos)
-	assert.NoError(t, err)
-	assert.Len(t, pbs, 1, "the config file is not counted as a playbook")
-
-	// the repo's config-file bindings are attached to its playbook (keyed by lowercased id)
-	bindings := pdm.playbookBindings["cf-login-1"]
-	assert.Equal(t, "user.email", bindings["actor_email"])
-	assert.Equal(t, "source.ip", bindings["client_ip"])
-
-	// the config file itself is not registered as a playbook
-	_, isPlaybook := pdm.playbooksOnDisk["cf.placeholders.yaml"]
-	assert.False(t, isPlaybook)
 }
 
 func TestGetPlaybooksForDetection_BaseCategoryMatching(t *testing.T) {

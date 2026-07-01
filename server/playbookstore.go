@@ -15,7 +15,7 @@ type Playbookstore interface {
 	Interrupt(ctx context.Context, force bool) error
 	GetPlaybooksForDetection(ctx context.Context, detectId string, detectCategory string, detectEngine model.EngineName) ([]*model.Playbook, error)
 	GetPlaybookById(ctx context.Context, id string) (*model.Playbook, error)
-	ConvertQuestions(ctx context.Context, queries []string, event *model.EventRecord, bindings map[string]string, used map[string]bool) ([]*model.ConvertedQuery, error)
+	ConvertQuestions(ctx context.Context, queries []string, event *model.EventRecord) ([]*model.ConvertedQuery, error)
 	ExecutePlaybookSearches(ctx context.Context, event *model.EventRecord, pbs []*model.Playbook) error
 	GetEventSpecificPlaybook(ctx context.Context, id string) ([]*model.Playbook, error)
 }

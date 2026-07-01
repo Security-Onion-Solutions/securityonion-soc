@@ -68,24 +68,24 @@ func TestLookupEventValue(t *testing.T) {
 	assert.Equal(t, "1.2.3.4", v)
 }
 
-func TestEffectiveBindings(t *testing.T) {
-	pdm := &PlaybookDiskManager{
-		placeholderMap: map[string]string{"a": "field.a", "b": "field.b.global"},
-		playbookBindings: map[string]map[string]string{
-			"pb-1": {"b": "field.b.override", "c": "field.c"}, // config file overrides b, adds c
-		},
-	}
+func TestMergePlaceholderMaps(t *testing.T) {
+	global := map[string]string{"a": "field.a", "b": "field.b.global"}
+	user := map[string]string{"b": "field.b.override", "c": "field.c"} // overrides b, adds c
 
-	got := pdm.effectiveBindings("pb-1")
+	got := mergePlaceholderMaps(global, user)
 	assert.Equal(t, "field.a", got["a"], "global-only token survives")
-	assert.Equal(t, "field.b.override", got["b"], "repo config file wins on conflict")
-	assert.Equal(t, "field.c", got["c"], "repo config file adds custom vocabulary")
+	assert.Equal(t, "field.b.override", got["b"], "user map wins on conflict")
+	assert.Equal(t, "field.c", got["c"], "user map adds custom vocabulary")
 
-	// a playbook with no config file resolves against the global map only
-	got = pdm.effectiveBindings("pb-none")
-	assert.Equal(t, "field.b.global", got["b"])
-	_, hasC := got["c"]
-	assert.False(t, hasC, "another repo's config-file vocabulary is not visible")
+	// inputs are not mutated
+	assert.Equal(t, "field.b.global", global["b"], "global input is left untouched")
+	_, globalHasC := global["c"]
+	assert.False(t, globalHasC, "global input is left untouched")
+
+	// nil inputs are treated as empty; the non-nil side passes through as a copy
+	assert.Empty(t, mergePlaceholderMaps(nil, nil))
+	assert.Equal(t, user, mergePlaceholderMaps(nil, user))
+	assert.Equal(t, global, mergePlaceholderMaps(global, nil))
 }
 
 func TestBuildVarsFromEvent(t *testing.T) {
@@ -132,27 +132,4 @@ func TestExtractPlaceholders(t *testing.T) {
 	assert.True(t, used["actor"], "a literal percent must not cannibalize an adjacent placeholder")
 	assert.False(t, used["escaped"], "escaped placeholder is literal, not a placeholder")
 	assert.False(t, used[" then "], "whitespace is excluded, so a literal percent cannot match across it")
-}
-
-func TestParseBindings(t *testing.T) {
-	bindings, problems := parseBindings([]byte("actor: webapp.audit.actor\ntarget: webapp.audit.target\n"))
-	assert.Empty(t, problems)
-	assert.Equal(t, "webapp.audit.actor", bindings["actor"])
-	assert.Equal(t, "webapp.audit.target", bindings["target"])
-
-	// empty file is an error
-	_, problems = parseBindings([]byte("{}"))
-	assert.NotEmpty(t, problems)
-
-	// malformed YAML (a sequence, not a map) is an error
-	_, problems = parseBindings([]byte("- not\n- a\n- map"))
-	assert.NotEmpty(t, problems)
-
-	// blank token/field entries are skipped; valid ones survive
-	bindings, problems = parseBindings([]byte("good: a.b\nblank_field: \"\"\nalso_good: c.d\n"))
-	assert.Empty(t, problems)
-	assert.Equal(t, "a.b", bindings["good"])
-	assert.Equal(t, "c.d", bindings["also_good"])
-	_, hasBlank := bindings["blank_field"]
-	assert.False(t, hasBlank, "an entry with a blank field is skipped")
 }

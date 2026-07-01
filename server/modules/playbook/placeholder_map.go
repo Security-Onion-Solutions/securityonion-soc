@@ -57,19 +57,17 @@ func lookupEventValue(event *model.EventRecord, key string) (interface{}, bool) 
 	return nil, false
 }
 
-// effectiveBindings returns the binding set a playbook resolves against: the global map
-// overlaid with the playbook's own repo config-file bindings (config file wins on conflict).
-func (pdm *PlaybookDiskManager) effectiveBindings(playbookID string) map[string]string {
-	out := make(map[string]string, len(pdm.placeholderMap)+8)
-	for k, v := range pdm.placeholderMap {
-		out[k] = v
+// mergePlaceholderMaps overlays the user map on top of the global (shipped) map, returning a
+// new combined map.
+func mergePlaceholderMaps(global, user map[string]string) map[string]string {
+	merged := make(map[string]string, len(global)+len(user))
+	for token, field := range global {
+		merged[token] = field
 	}
-	pdm.pbUpdateMutex.RLock()
-	for k, v := range pdm.playbookBindings[playbookID] {
-		out[k] = v
+	for token, field := range user {
+		merged[token] = field
 	}
-	pdm.pbUpdateMutex.RUnlock()
-	return out
+	return merged
 }
 
 // missingValueFallback fills a mapped placeholder whose value is absent from
@@ -77,24 +75,21 @@ func (pdm *PlaybookDiskManager) effectiveBindings(playbookID string) map[string]
 // Unmapped placeholders get no var and still fail.
 const missingValueFallback = "NODATA"
 
-// loadPlaceholderMap reads the placeholder map YAML (Sigma placeholder name ->
-// event.Payload key). A missing/malformed/empty file is non-fatal
+// loadPlaceholderMap reads one placeholder map YAML file (Sigma placeholder name -> event field
+// path) into a map. Each file is an optional layer of the combined map (see mergePlaceholderMaps),
+// so a missing, malformed, or empty file is non-fatal and simply contributes no tokens.
 func (pdm *PlaybookDiskManager) loadPlaceholderMap(path string) map[string]string {
 	m := map[string]string{}
 
 	raw, err := pdm.ReadFile(path)
 	if err != nil {
-		log.WithError(err).WithField("path", path).Warn("unable to read playbook placeholder map; continuing with an empty map (playbook %placeholder% resolution disabled until present)")
+		log.WithError(err).WithField("path", path).Debug("no playbook placeholder map at path; treating as an empty layer")
 		return m
 	}
 
 	if err := yaml.Unmarshal(raw, &m); err != nil {
-		log.WithError(err).WithField("path", path).Warn("unable to parse playbook placeholder map; continuing with an empty map (playbook %placeholder% resolution disabled until fixed)")
+		log.WithError(err).WithField("path", path).Warn("unable to parse playbook placeholder map; treating as an empty layer")
 		return map[string]string{}
-	}
-
-	if len(m) == 0 {
-		log.WithField("path", path).Warn("playbook placeholder map is empty; playbook %placeholder% resolution disabled until populated")
 	}
 
 	return m
@@ -106,7 +101,7 @@ const socIdPayloadKey = "soc_id"
 
 // buildVarsFromEvent builds the `vars:` block for `sigma convert` from the alert event.
 //
-//	(1) Every declared token (effective bindings = global map + repo config file) resolves to
+//	(1) Every declared token (the combined placeholder map = global map + user map) resolves to
 //	    its event value via lookupEventValue, else the NODATA fallback
 //	(2) A token USED in a query but undeclared is tried as a direct field name; a hit
 //	    covers "named the placeholder after a flat field", a miss is left ABSENT so
