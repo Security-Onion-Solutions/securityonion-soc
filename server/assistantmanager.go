@@ -7,10 +7,16 @@ package server
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 )
+
+// ErrToolTurnBusy is returned when a tool request can't acquire its session's turn
+// lock because another tool turn for that session is already running. The handler
+// maps it to 409 Conflict so the client can retry, rather than blocking the request.
+var ErrToolTurnBusy = errors.New("ERROR_TOOL_TURN_BUSY")
 
 type AssistantManager interface {
 	Send(ctx context.Context, aiModel string, messages []*model.Message, opts ...model.ChatOpt) ([]*model.Message, error)

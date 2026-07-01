@@ -80,7 +80,6 @@ func (a *OpenAIResponsesAdapter) SendMessage(ctx context.Context, req *model.Cha
 		Input:        history,
 		Instructions: openai.String(prompt),
 		Tools:        tools,
-		MaxToolCalls: openai.Int(1),
 		Reasoning: shared.ReasoningParam{
 			Summary: "auto",
 		},
@@ -180,7 +179,6 @@ func (a *OpenAIResponsesAdapter) SendMessageStream(ctx context.Context, req *mod
 		Input:        history,
 		Instructions: openai.String(prompt),
 		Tools:        tools,
-		MaxToolCalls: openai.Int(1),
 		Reasoning: shared.ReasoningParam{
 			Summary: "auto",
 		},

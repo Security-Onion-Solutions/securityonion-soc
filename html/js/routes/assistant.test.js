@@ -6938,3 +6938,46 @@ test('tool-use-card and delegation-child recurse through each other to any depth
   expect(childTmpl).toContain('<tool-use-card');
   expect(childTmpl).toContain('nested');
 });
+
+test('postToolRequest returns the response on success without retrying', async () => {
+  comp.$root.papi.post = jest.fn().mockResolvedValue({ data: 'stream' });
+
+  const res = await comp.postToolRequest({ name: 'query_events' }, { sessionId: 's1' });
+
+  expect(res).toEqual({ data: 'stream' });
+  expect(comp.$root.papi.post).toHaveBeenCalledTimes(1);
+  expect(comp.$root.papi.post.mock.calls[0][0]).toBe('/assistant/tool/query_events');
+});
+
+test('postToolRequest retries on 409 then succeeds', async () => {
+  comp.toolBusyRetryDelayMs = 0;
+  const conflict = { response: { status: 409 } };
+  comp.$root.papi.post = jest.fn()
+    .mockRejectedValueOnce(conflict)
+    .mockRejectedValueOnce(conflict)
+    .mockResolvedValue({ data: 'stream' });
+
+  const res = await comp.postToolRequest({ name: 'query_events' }, {});
+
+  expect(res).toEqual({ data: 'stream' });
+  expect(comp.$root.papi.post).toHaveBeenCalledTimes(3);
+});
+
+test('postToolRequest re-throws a non-409 error without retrying', async () => {
+  const serverErr = { response: { status: 500 } };
+  comp.$root.papi.post = jest.fn().mockRejectedValue(serverErr);
+
+  await expect(comp.postToolRequest({ name: 'query_events' }, {})).rejects.toBe(serverErr);
+  expect(comp.$root.papi.post).toHaveBeenCalledTimes(1);
+});
+
+test('postToolRequest gives up after the retry bound on persistent 409s', async () => {
+  comp.toolBusyRetryDelayMs = 0;
+  comp.toolBusyMaxRetries = 3;
+  const conflict = { response: { status: 409 } };
+  comp.$root.papi.post = jest.fn().mockRejectedValue(conflict);
+
+  await expect(comp.postToolRequest({ name: 'query_events' }, {})).rejects.toBe(conflict);
+  // Initial attempt plus toolBusyMaxRetries retries.
+  expect(comp.$root.papi.post).toHaveBeenCalledTimes(4);
+});

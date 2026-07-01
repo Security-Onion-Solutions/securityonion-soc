@@ -40,6 +40,11 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     increaseContextLimit: false, // Toggle for max context threshold
     restoreLastActive: false, // Toggle to restore last active chat
     alwaysApproveReadRequests: false,
+    // A tool POST gets a 409 when another tool turn is already running for the session
+    // (the backend fails fast rather than blocking). Retry a bounded number of times
+    // with a short delay before surfacing an error.
+    toolBusyMaxRetries: 30,
+    toolBusyRetryDelayMs: 1000,
     assistantEnabled: false,
     isStreaming: false,
     showChatHistory: true,
@@ -1290,6 +1295,27 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     formatCount(count) {
       return this.$root.formatCount(count);
     },
+    // postToolRequest POSTs a tool result and streams the assistant's continuation.
+    // On a 409 (another tool turn is already running for this session; the backend
+    // fails fast instead of blocking) it waits and retries, up to a bounded number of
+    // attempts, then re-throws so the caller surfaces the error.
+    async postToolRequest(toolUse, toolRequest) {
+      for (let attempt = 0; ; attempt++) {
+        try {
+          return await this.$root.papi.post(`/assistant/tool/${toolUse.name}`, toolRequest, {
+            headers: { 'Accept': 'text/event-stream' },
+            responseType: 'stream',
+            adapter: 'fetch',
+          });
+        } catch (error) {
+          if (error.response && error.response.status === 409 && attempt < this.toolBusyMaxRetries) {
+            await new Promise(resolve => setTimeout(resolve, this.toolBusyRetryDelayMs));
+            continue;
+          }
+          throw error;
+        }
+      }
+    },
     async executeTool(toolUse) {
       // Use the tool's session ID if available, otherwise use current session
       let toolStreamingSessionId = toolUse.sessionId || this.currentChatId;
@@ -1311,14 +1337,11 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
 
         if (!rejected) this.applyToolSpecificChanges(toolUse, toolRequest);
 
-        // Use streaming for tool results
-        const response = await this.$root.papi.post(`/assistant/tool/${toolUse.name}`, toolRequest, {
-          headers: {
-            'Accept': 'text/event-stream'
-          },
-          responseType: 'stream',
-          adapter: 'fetch',
-        });
+        // Use streaming for tool results. A 409 means another tool turn is already
+        // running for this session (the backend fails fast instead of blocking, so a
+        // long tool response can't hold this request open or leave a saved result
+        // orphaned by a cancelled request). Wait briefly and retry rather than erroring.
+        const response = await this.postToolRequest(toolUse, toolRequest);
 
         // Update tool status to executing only if visible in the current session. A
         // rejected tool was never executing; keep its 'rejected' status.

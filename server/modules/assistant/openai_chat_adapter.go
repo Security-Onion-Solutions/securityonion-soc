@@ -70,9 +70,8 @@ func (a *OpenAIChatAdapter) SendMessage(ctx context.Context, req *model.ChatRequ
 	tools := convertToolConfigToChatCompletions(req)
 
 	params := openai.ChatCompletionNewParams{
-		Model:             req.Model,
-		Messages:          messages,
-		ParallelToolCalls: openai.Bool(false),
+		Model:    req.Model,
+		Messages: messages,
 	}
 
 	// MaxTokens (when set, e.g. by a per-sub-session budget) caps output tokens.
@@ -149,9 +148,8 @@ func (a *OpenAIChatAdapter) SendMessageStream(ctx context.Context, req *model.Ch
 	tools := convertToolConfigToChatCompletions(req)
 
 	params := openai.ChatCompletionNewParams{
-		Model:             req.Model,
-		Messages:          messages,
-		ParallelToolCalls: openai.Bool(false),
+		Model:    req.Model,
+		Messages: messages,
 		StreamOptions: openai.ChatCompletionStreamOptionsParam{
 			IncludeUsage: openai.Bool(true),
 		},

@@ -8,6 +8,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -220,13 +221,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 	if !streaming {
 		response, err := h.server.AssistantManager.ToolInSession(ctx, toolReq, toolName)
 		if err != nil {
-			logger.WithError(err).Error("unable to chat with assistant after tool execution")
-			if isClientError(err) {
-				web.Respond(w, r, http.StatusBadRequest, err.Error())
-			} else {
-				web.Respond(w, r, http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR")
-			}
-
+			h.respondToolTurnError(w, r, logger, err, "unable to chat with assistant after tool execution")
 			return
 		}
 
@@ -242,13 +237,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 	// turn after the client disconnects.
 	turn, err := h.server.AssistantManager.ToolStreamInSession(ctx, toolReq, toolName)
 	if err != nil {
-		logger.WithError(err).Error("unable to chat (stream) with assistant after tool execution")
-		if isClientError(err) {
-			web.Respond(w, r, http.StatusBadRequest, err.Error())
-		} else {
-			web.Respond(w, r, http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR")
-		}
-
+		h.respondToolTurnError(w, r, logger, err, "unable to chat (stream) with assistant after tool execution")
 		return
 	}
 
@@ -1135,6 +1124,24 @@ func writeSSEDone(w http.ResponseWriter) {
 
 // messageHasToolUse reports whether the assistant turn requested any tools (and
 // therefore must be handed back to the client for approval rather than chained).
+// respondToolTurnError writes the appropriate HTTP status for an error from a tool
+// turn: 409 Conflict when the session is busy (so the client retries), 400 for a
+// client error, or 500 otherwise. logMsg describes the failing path for the error
+// log. Shared by PostTool's non-streaming and streaming branches.
+func (h *AssistantHandler) respondToolTurnError(w http.ResponseWriter, r *http.Request, logger log.Interface, err error, logMsg string) {
+	if errors.Is(err, ErrToolTurnBusy) {
+		logger.WithError(err).Debug("tool turn busy; another tool is running for this session")
+		web.Respond(w, r, http.StatusConflict, err.Error())
+		return
+	}
+	logger.WithError(err).Error(logMsg)
+	if isClientError(err) {
+		web.Respond(w, r, http.StatusBadRequest, err.Error())
+	} else {
+		web.Respond(w, r, http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR")
+	}
+}
+
 // isClientError reports whether an assistant error is caused by the request
 // itself (and so should be surfaced as HTTP 400) rather than an internal/upstream
 // failure. The assistant module is matched by error string to avoid an import

@@ -2325,7 +2325,7 @@ func TestAssistantCoordinator_ContinueWithToolResult_ErrorPaths(t *testing.T) {
 		ac := newChatInSessionCoordinator(t, ctrl, mockAssistantstore, mockIO, "https://api.example.com")
 		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
-		_, err := ac.continueWithToolResult(ctx, sess(), sessionId, "test-model@MyAdapter", toolMsg())
+		_, err := ac.continueWithToolResult(ctx, sess(), sessionId, "test-model@MyAdapter", toolMsg(), waitForLock)
 		assert.Error(t, err)
 	})
 
@@ -2341,7 +2341,7 @@ func TestAssistantCoordinator_ContinueWithToolResult_ErrorPaths(t *testing.T) {
 		ac := newChatInSessionCoordinator(t, ctrl, mockAssistantstore, mockIO, "https://api.example.com")
 		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
-		_, err := ac.continueWithToolResult(ctx, sess(), sessionId, "test-model@MyAdapter", toolMsg())
+		_, err := ac.continueWithToolResult(ctx, sess(), sessionId, "test-model@MyAdapter", toolMsg(), waitForLock)
 		assert.Error(t, err)
 	})
 
@@ -2361,7 +2361,7 @@ func TestAssistantCoordinator_ContinueWithToolResult_ErrorPaths(t *testing.T) {
 		ac := newChatInSessionCoordinator(t, ctrl, mockAssistantstore, mockIO, "https://api.example.com")
 		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
-		_, err := ac.continueWithToolResult(ctx, sess(), sessionId, "test-model@MyAdapter", toolMsg())
+		_, err := ac.continueWithToolResult(ctx, sess(), sessionId, "test-model@MyAdapter", toolMsg(), waitForLock)
 		assert.Error(t, err)
 	})
 }
@@ -3752,7 +3752,7 @@ func TestAssistantCoordinator_continueWithToolResultSync_HardStop(t *testing.T) 
 
 	// The sub-session has already spent its budget (1000 > 500).
 	sess := &model.AssistantSession{SessionId: "child", ParentSessionId: "parent", Usage: &model.SessionUsage{TotalOutputTokens: 1000}}
-	resp, err := ac.continueWithToolResultSync(ctx, sess, "child", "model@Adapter", toolMsg)
+	resp, err := ac.continueWithToolResultSync(ctx, sess, "child", "model@Adapter", toolMsg, waitForLock)
 
 	assert.NoError(t, err)
 	assert.Len(t, resp, 1)
@@ -3888,7 +3888,7 @@ func TestAssistantCoordinator_ContinueWithToolResult_CoalescesParallelTools(t *t
 		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
 		toolMsg := buildToolResultMessage("tool-a", &model.ToolResponse{ToolName: "query_events", Result: "ok"}, nil)
-		turn, err := ac.continueWithToolResult(ctx, &model.AssistantSession{SessionId: sessionId}, sessionId, "test-model@MyAdapter", toolMsg)
+		turn, err := ac.continueWithToolResult(ctx, &model.AssistantSession{SessionId: sessionId}, sessionId, "test-model@MyAdapter", toolMsg, waitForLock)
 		assert.NoError(t, err)
 		if assert.NotNil(t, turn) {
 			assert.Nil(t, turn.Response) // persist-only: no continuation
@@ -3923,7 +3923,7 @@ func TestAssistantCoordinator_ContinueWithToolResult_CoalescesParallelTools(t *t
 		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
 		toolMsg := buildToolResultMessage("tool-b", &model.ToolResponse{ToolName: "get_playbooks", Result: "ok"}, nil)
-		turn, err := ac.continueWithToolResult(ctx, &model.AssistantSession{SessionId: sessionId}, sessionId, "test-model@MyAdapter", toolMsg)
+		turn, err := ac.continueWithToolResult(ctx, &model.AssistantSession{SessionId: sessionId}, sessionId, "test-model@MyAdapter", toolMsg, waitForLock)
 		assert.NoError(t, err)
 		if assert.NotNil(t, turn) {
 			assert.NotNil(t, turn.Response) // continued: model turn dispatched
@@ -3978,7 +3978,7 @@ func TestAssistantCoordinator_ContinueWithToolResult_AwaitsToolUseTurn(t *testin
 		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
 		toolMsg := buildToolResultMessage("tool-x", &model.ToolResponse{ToolName: "query_events", Result: "ok"}, nil)
-		turn, err := ac.continueWithToolResult(ctx, &model.AssistantSession{SessionId: sessionId}, sessionId, "test-model@MyAdapter", toolMsg)
+		turn, err := ac.continueWithToolResult(ctx, &model.AssistantSession{SessionId: sessionId}, sessionId, "test-model@MyAdapter", toolMsg, waitForLock)
 		assert.NoError(t, err)
 		if assert.NotNil(t, turn) {
 			assert.Nil(t, turn.Response) // persist-only: no orphaned continuation
@@ -4014,7 +4014,7 @@ func TestAssistantCoordinator_ContinueWithToolResult_AwaitsToolUseTurn(t *testin
 		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
 		toolMsg := buildToolResultMessage("tool-x", &model.ToolResponse{ToolName: "query_events", Result: "ok"}, nil)
-		turn, err := ac.continueWithToolResult(ctx, &model.AssistantSession{SessionId: sessionId}, sessionId, "test-model@MyAdapter", toolMsg)
+		turn, err := ac.continueWithToolResult(ctx, &model.AssistantSession{SessionId: sessionId}, sessionId, "test-model@MyAdapter", toolMsg, waitForLock)
 		assert.NoError(t, err)
 		if assert.NotNil(t, turn) {
 			assert.NotNil(t, turn.Response) // continued after the turn landed

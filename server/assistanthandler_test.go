@@ -26,6 +26,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
+	"github.com/apex/log"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
@@ -3249,4 +3250,39 @@ func TestWriteSSEHeaders_OmitsConnectionHeader(t *testing.T) {
 	assert.Equal(t, "text/event-stream", w.Header().Get("Content-Type"))
 	assert.Equal(t, "no-cache", w.Header().Get("Cache-Control"))
 	assert.Empty(t, w.Header().Get("Connection"))
+}
+
+// respondToolTurnError maps a tool-turn error to the right HTTP status: 409 for a
+// busy session (so the client retries), 400 for a client error, 500 otherwise.
+func TestRespondToolTurnError(t *testing.T) {
+	srv := &Server{Authorizer: &rbac.FakeAuthorizer{Authorized: true}}
+	handler := NewAssistantHandler(srv)
+
+	newReqRec := func() (*http.Request, *httptest.ResponseRecorder) {
+		req := httptest.NewRequest("POST", "/assistant/tool/query_events", nil)
+		ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "test-user")
+		ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+		ctx = context.WithValue(ctx, web.ContextKeyRequestId, "test-request")
+		return req.WithContext(ctx), httptest.NewRecorder()
+	}
+
+	tests := []struct {
+		name     string
+		err      error
+		wantCode int
+	}{
+		{"busy session", ErrToolTurnBusy, http.StatusConflict},
+		{"client error (request too large)", errors.New("ERROR_ASSISTANT_REQUEST_TOO_LARGE"), http.StatusBadRequest},
+		{"client error (invalid model)", errors.New("ERROR_ASSISTANT_INVALID_MODEL"), http.StatusBadRequest},
+		{"upstream/internal error", errors.New("boom"), http.StatusInternalServerError},
+		{"wrapped busy error", fmt.Errorf("continuation failed: %w", ErrToolTurnBusy), http.StatusConflict},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req, w := newReqRec()
+			handler.respondToolTurnError(w, req, log.FromContext(req.Context()), tc.err, "unable to chat with assistant after tool execution")
+			assert.Equal(t, tc.wantCode, w.Code)
+		})
+	}
 }
