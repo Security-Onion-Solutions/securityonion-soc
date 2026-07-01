@@ -15,20 +15,20 @@ import (
 	"github.com/apex/log"
 )
 
-//go:embed so-agent-hunter.txt
-var hunterPrompt string
+//go:embed SOAgentHunterPrompt.bin
+var hunterPrompt []byte
 
-//go:embed so-agent-orchestrator.txt
-var agentPrompt string
+//go:embed SOAgentOrchestratorPrompt.bin
+var agentPrompt []byte
 
-//go:embed so-skill-cases.txt
-var casesPrompt string
+//go:embed SOSkillCasesPrompt.bin
+var casesPrompt []byte
 
-//go:embed so-skill-detections.txt
-var detectionsPrompt string
+//go:embed SOSkillDetectionsPrompt.bin
+var detectionsPrompt []byte
 
-//go:embed so-skill-hunt.txt
-var huntPrompt string
+//go:embed SOSkillHuntPrompt.bin
+var huntPrompt []byte
 
 // setupAgentic defines the fixed set of agents the coordinator exposes when
 // agentic mode is enabled. The agent set is hardcoded for now; only the
@@ -43,13 +43,13 @@ func (ac *AssistantCoordinator) setupAgentic() {
 			IsOrchestrator: true,
 			AllowedSkills:  []string{},
 			CanDelegateTo:  []string{"Hunter"},
-			Prompt:         agentPrompt,
+			Prompt:         ac.decompressPrompt(agentPrompt),
 		},
 		"Hunter": {
 			Name:          "Hunter",
 			AllowedSkills: []string{"Hunt"},
 			CanDelegateTo: []string{},
-			Prompt:        hunterPrompt,
+			Prompt:        ac.decompressPrompt(hunterPrompt),
 			Description:   "An agent specialized in querying and analyzing security event data to uncover insights, patterns, and potential threats. Hunter is adept at formulating complex queries, interpreting results, and providing actionable intelligence based on security event logs.",
 		},
 	}
@@ -58,17 +58,17 @@ func (ac *AssistantCoordinator) setupAgentic() {
 		"Cases": {
 			Name:             "Cases",
 			Tools:            []string{"query_cases", "escalate_alerts"},
-			AdditionalPrompt: casesPrompt,
+			AdditionalPrompt: ac.decompressPrompt(casesPrompt),
 		},
 		"Detections": {
 			Name:             "Detections",
 			Tools:            []string{"add_overrides", "create_detection", "query_detections", "toggle_detections", "update_detection_content", "update_overrides"},
-			AdditionalPrompt: detectionsPrompt,
+			AdditionalPrompt: ac.decompressPrompt(detectionsPrompt),
 		},
 		"Hunt": {
 			Name:             "Hunt",
 			Tools:            []string{"query_events"},
-			AdditionalPrompt: huntPrompt,
+			AdditionalPrompt: ac.decompressPrompt(huntPrompt),
 		},
 	}
 }

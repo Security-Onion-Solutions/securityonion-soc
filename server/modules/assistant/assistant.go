@@ -320,28 +320,39 @@ func buildToolConfig(functions map[string]Tool, delegates map[string]Tool, toolF
 	return result, nil
 }
 
-func (ac *AssistantCoordinator) getPrompt() {
-	if len(embeddedSystemPrompt) > 0 {
+func (ac *AssistantCoordinator) decompressPrompt(compressed []byte) string {
+	logger := log.FromContext(ac.srv.Context)
+
+	if len(compressed) > 0 {
 		// Gunzip the prompt bytes
-		reader, err := gzip.NewReader(bytes.NewReader(embeddedSystemPrompt))
+		reader, err := gzip.NewReader(bytes.NewReader(compressed))
 		if err != nil {
-			log.FromContext(ac.srv.Context).WithError(err).Error("unable to gunzip system prompt, no prompt loaded")
-			return
+			logger.WithError(err).Error("unable to gunzip prompt, no prompt loaded")
+			return ""
 		}
 		defer reader.Close()
 
 		raw, err := io.ReadAll(reader)
 		if err != nil {
-			log.FromContext(ac.srv.Context).WithError(err).Error("unable to read gunzipped system prompt, no prompt loaded")
-			return
+			logger.WithError(err).Error("unable to read gunzipped prompt, no prompt loaded")
+			return ""
 		}
 
 		if !utf8.Valid(raw) {
-			log.FromContext(ac.srv.Context).Error("gunzipped system prompt must be in UTF-8 encoding, no prompt loaded")
-			return
+			logger.Error("gunzipped prompt must be in UTF-8 encoding, no prompt loaded")
+			return ""
 		}
 
-		ac.systemPrompt = string(raw)
+		return string(raw)
+	}
+
+	return ""
+}
+
+func (ac *AssistantCoordinator) getPrompt() {
+	systemPrompt := ac.decompressPrompt(embeddedSystemPrompt)
+	if systemPrompt != "" {
+		ac.systemPrompt = systemPrompt
 		return
 	}
 
