@@ -613,7 +613,6 @@ func (store *ElasticAssistantstore) fetchDescendantSessions(ctx context.Context,
 		query := map[string]any{
 			"query": map[string]any{"bool": boolQuery},
 			"sort":  []map[string]any{{"@timestamp": map[string]any{"order": "asc"}}},
-			"size":  10000,
 		}
 
 		children, err := store.searchSessions(ctx, query)
