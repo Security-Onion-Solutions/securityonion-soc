@@ -8,6 +8,11 @@ const { TextEncoder, TextDecoder } = require('util');
 Object.assign(global, { TextDecoder, TextEncoder });
 
 require('../test_common.js');
+// Method packs must load before assistant.js, which merges them into the component.
+require('./assistant.sessions.js');
+require('./assistant.streaming.js');
+require('./assistant.tools.js');
+require('./assistant.utils.js');
 require('./assistant.js');
 require('../components/tool-use-card.js');
 require('../components/delegation-child.js');
