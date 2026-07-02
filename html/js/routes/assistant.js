@@ -154,6 +154,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
       this.thresholdColorRatioLow = params["thresholdColorRatioLow"];
       this.thresholdColorRatioMed = params["thresholdColorRatioMed"];
       this.thresholdColorRatioMax = params["thresholdColorRatioMax"];
+      this.toolBusyMaxRetries = params["toolBusyMaxRetries"];
+      this.toolBusyRetryDelayMs = params["toolBusyRetryDelayMs"];
       this.agentic = params["agentic"] || false;
       this.availableAdapters = params["availableAdapters"];
       if (this.agentic) {

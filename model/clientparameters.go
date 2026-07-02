@@ -186,6 +186,8 @@ type AssistantParameters struct {
 	ThresholdColorRatioLow float64             `json:"thresholdColorRatioLow"`
 	ThresholdColorRatioMed float64             `json:"thresholdColorRatioMed"`
 	ThresholdColorRatioMax float64             `json:"thresholdColorRatioMax"`
+	ToolBusyMaxRetries     int                 `json:"toolBusyMaxRetries"`
+	ToolBusyRetryDelayMs   int                 `json:"toolBusyRetryDelayMs"`
 	AvailableModels        []ModelParameters   `json:"availableModels"`
 	AvailableAdapters      []AdapterParameters `json:"availableAdapters"`
 	Agentic                bool                `json:"agentic"`
