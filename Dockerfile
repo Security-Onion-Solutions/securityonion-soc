@@ -35,11 +35,11 @@ RUN if [ "$VERSION" != "0.0.0" ]; then mkdir gitdocs && cd gitdocs && \
 RUN npm install jest jest-environment-jsdom --global
 
 RUN if [ -f "src2/prompt_system.md" ]; then echo "compressing system prompt"; gzip -c src2/prompt_system.md > server/modules/assistant/SOSystemPrompt.bin; fi
-RUN if [ -f "src2/prompt_agent_orchestrator.md" ]; then echo "compressing agent orchestrator prompt"; gzip -c src2/prompt_agent_orchestrator.md > server/modules/assistant/SOAgentOrchestratorPrompt.bin; fi
-RUN if [ -f "src2/prompt_agent_hunter.md" ]; then echo "compressing agent hunter prompt"; gzip -c src2/prompt_agent_hunter.md > server/modules/assistant/SOAgentHunterPrompt.bin; fi
-RUN if [ -f "src2/prompt_skill_cases.md" ]; then echo "compressing skill cases prompt"; gzip -c src2/prompt_skill_cases.md > server/modules/assistant/SOSkillCasesPrompt.bin; fi
-RUN if [ -f "src2/prompt_skill_detections.md" ]; then echo "compressing skill detections prompt"; gzip -c src2/prompt_skill_detections.md > server/modules/assistant/SOSkillDetectionsPrompt.bin; fi
-RUN if [ -f "src2/prompt_skill_hunt.md" ]; then echo "compressing skill hunt prompt"; gzip -c src2/prompt_skill_hunt.md > server/modules/assistant/SOSkillHuntPrompt.bin; fi
+RUN if [ -f "src2/agentic/prompt_agent_orchestrator.md" ]; then echo "compressing agent orchestrator prompt"; gzip -c src2/agentic/prompt_agent_orchestrator.md > server/modules/assistant/SOAgentOrchestratorPrompt.bin; fi
+RUN if [ -f "src2/agentic/prompt_agent_hunter.md" ]; then echo "compressing agent hunter prompt"; gzip -c src2/agentic/prompt_agent_hunter.md > server/modules/assistant/SOAgentHunterPrompt.bin; fi
+RUN if [ -f "src2/agentic/prompt_skill_cases.md" ]; then echo "compressing skill cases prompt"; gzip -c src2/agentic/prompt_skill_cases.md > server/modules/assistant/SOSkillCasesPrompt.bin; fi
+RUN if [ -f "src2/agentic/prompt_skill_detections.md" ]; then echo "compressing skill detections prompt"; gzip -c src2/agentic/prompt_skill_detections.md > server/modules/assistant/SOSkillDetectionsPrompt.bin; fi
+RUN if [ -f "src2/agentic/prompt_skill_hunt.md" ]; then echo "compressing skill hunt prompt"; gzip -c src2/agentic/prompt_skill_hunt.md > server/modules/assistant/SOSkillHuntPrompt.bin; fi
 RUN ./build.sh "$VERSION"
 
 
