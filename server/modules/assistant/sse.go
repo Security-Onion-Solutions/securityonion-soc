@@ -216,11 +216,7 @@ func (p *streamProcessor) writeError(err error) {
 	p.writer.writeDone()
 }
 
-// finalizeGemini closes any open blocks and writes final events
-func (p *streamProcessor) finalizeGemini(finishReason string, usage *genai.GenerateContentResponseUsageMetadata) {
-	// An empty stream reaches finalize without any content event; emit the
-	// message_start (which also releases the blocked caller) so the SSE stream
-	// stays well-formed for UnstreamResponse.
+func (p *streamProcessor) finalize(finishReason string) {
 	p.ensureFirstSend()
 
 	if p.hasOpenBlock {
@@ -232,6 +228,15 @@ func (p *streamProcessor) finalizeGemini(finishReason string, usage *genai.Gener
 	}
 
 	p.writer.writeStopReason(finishReason)
+}
+
+// finalizeGemini closes any open blocks and writes final events
+func (p *streamProcessor) finalizeGemini(finishReason string, usage *genai.GenerateContentResponseUsageMetadata) {
+	// An empty stream reaches finalize without any content event; emit the
+	// message_start (which also releases the blocked caller) so the SSE stream
+	// stays well-formed for UnstreamResponse.
+	p.finalize(finishReason)
+
 	if usage != nil {
 		p.writer.writeUsage(int64(usage.PromptTokenCount), int64(usage.CandidatesTokenCount))
 	}
@@ -243,17 +248,8 @@ func (p *streamProcessor) finalizeGemini(finishReason string, usage *genai.Gener
 func (p *streamProcessor) finalizeOpenAI(finishReason string, usage responses.ResponseUsage) {
 	// See finalizeGemini: empty streams must still release the caller and emit
 	// a well-formed message_start.
-	p.ensureFirstSend()
+	p.finalize(finishReason)
 
-	if p.hasOpenBlock {
-		p.closeOpenBlock()
-	}
-
-	if finishReason == "" {
-		finishReason = "end_turn"
-	}
-
-	p.writer.writeStopReason(finishReason)
 	p.writer.writeUsage(int64(usage.InputTokens), int64(usage.OutputTokens))
 
 	p.writer.writeMessageStop()

@@ -1594,7 +1594,7 @@ func (ac *AssistantCoordinator) haltSubSessionStream(ctx context.Context, sess *
 		defer bodyWriter.Close()
 		processor.ensureFirstSend()
 		processor.writeText(notice)
-		processor.finalizeGemini("end_turn", nil)
+		processor.finalize("end_turn")
 	}()
 	wg.Wait()
 
