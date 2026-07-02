@@ -42,6 +42,7 @@ func TestGetRepos(t *testing.T) {
 						"repo":      "repo2",
 						"license":   "GPL2",
 						"folder":    "sigma/stable",
+						"branch":    "published",
 						"community": 0,
 					},
 					map[string]interface{}{
@@ -66,6 +67,7 @@ func TestGetRepos(t *testing.T) {
 					RepoUrl: "repo2",
 					License: "GPL2",
 					Folder:  util.Ptr("sigma/stable"),
+					Branch:  util.Ptr("published"),
 				},
 				{
 					RepoUrl:   "repo3",
