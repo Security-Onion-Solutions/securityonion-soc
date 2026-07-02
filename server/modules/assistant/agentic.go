@@ -7,6 +7,7 @@ package assistant
 
 import (
 	_ "embed"
+	"encoding/json"
 	"sort"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -15,20 +16,8 @@ import (
 	"github.com/apex/log"
 )
 
-//go:embed SOAgentHunterPrompt.bin
-var hunterPrompt []byte
-
-//go:embed SOAgentOrchestratorPrompt.bin
-var agentPrompt []byte
-
-//go:embed SOSkillCasesPrompt.bin
-var casesPrompt []byte
-
-//go:embed SOSkillDetectionsPrompt.bin
-var detectionsPrompt []byte
-
-//go:embed SOSkillHuntPrompt.bin
-var huntPrompt []byte
+//go:embed SOAgenticPrompts.bin
+var allPrompts []byte
 
 // setupAgentic defines the fixed set of agents the coordinator exposes when
 // agentic mode is enabled. The agent set is hardcoded for now; only the
@@ -37,19 +26,21 @@ var huntPrompt []byte
 // prompt and tool/delegation scope, but no model/adapter/context details: the
 // executing model is resolved through ac.agentMapping at request time.
 func (ac *AssistantCoordinator) setupAgentic() {
+	prompts := ac.unzipAndUnmarshal(allPrompts)
+
 	ac.agents = map[string]model.AgentParameters{
 		"Orchestrator": {
 			Name:           "Orchestrator",
 			IsOrchestrator: true,
 			AllowedSkills:  []string{},
 			CanDelegateTo:  []string{"Hunter"},
-			Prompt:         ac.decompressPrompt(agentPrompt),
+			Prompt:         prompts["prompt_agent_orchestrator"],
 		},
 		"Hunter": {
 			Name:          "Hunter",
 			AllowedSkills: []string{"Hunt"},
 			CanDelegateTo: []string{},
-			Prompt:        ac.decompressPrompt(hunterPrompt),
+			Prompt:        prompts["prompt_agent_hunter"],
 			Description:   "An agent specialized in querying and analyzing security event data to uncover insights, patterns, and potential threats. Hunter is adept at formulating complex queries, interpreting results, and providing actionable intelligence based on security event logs.",
 		},
 	}
@@ -58,19 +49,44 @@ func (ac *AssistantCoordinator) setupAgentic() {
 		"Cases": {
 			Name:             "Cases",
 			Tools:            []string{"query_cases", "escalate_alerts"},
-			AdditionalPrompt: ac.decompressPrompt(casesPrompt),
+			AdditionalPrompt: prompts["prompt_skill_cases"],
 		},
 		"Detections": {
 			Name:             "Detections",
 			Tools:            []string{"add_overrides", "create_detection", "query_detections", "toggle_detections", "update_detection_content", "update_overrides"},
-			AdditionalPrompt: ac.decompressPrompt(detectionsPrompt),
+			AdditionalPrompt: prompts["prompt_skill_detections"],
 		},
 		"Hunt": {
 			Name:             "Hunt",
 			Tools:            []string{"query_events"},
-			AdditionalPrompt: ac.decompressPrompt(huntPrompt),
+			AdditionalPrompt: prompts["prompt_skill_hunt"],
 		},
 	}
+}
+
+func (ac *AssistantCoordinator) unzipAndUnmarshal(data []byte) map[string]string {
+	logger := log.FromContext(ac.srv.Context)
+	prompts := map[string]string{}
+
+	if len(data) != 0 {
+		jsn := ac.decompressPrompt(data)
+
+		err := json.Unmarshal([]byte(jsn), &prompts)
+		if err != nil {
+			logger.WithError(err).Warn("unzipped prompts are not valid JSON")
+		} else {
+			keys := make([]string, 0, len(prompts))
+			for k := range prompts {
+				keys = append(keys, k)
+			}
+
+			logger.WithField("loadedPrompts", keys).Info("loaded embedded prompts")
+		}
+	} else {
+		logger.Warn("no embedded agentic prompts detected")
+	}
+
+	return prompts
 }
 
 // loadAgentMapping reads the admin-supplied agentName->model-DisplayName map

@@ -6,6 +6,8 @@
 package assistant
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"testing"
 
@@ -133,4 +135,72 @@ func TestAssistantCoordinator_InitAgenticToggle(t *testing.T) {
 		// The exposed mapping only includes the surviving agent.
 		assert.Equal(t, map[string]string{"Hunter": "Classic"}, srv.Config.ClientParams.AssistantParams.AgentMapping)
 	})
+}
+
+func gzipString(t *testing.T, s string) []byte {
+	t.Helper()
+
+	var buf bytes.Buffer
+	writer := gzip.NewWriter(&buf)
+
+	_, err := writer.Write([]byte(s))
+	assert.NoError(t, err)
+	assert.NoError(t, writer.Close())
+
+	return buf.Bytes()
+}
+
+func TestAssistantCoordinator_UnzipAndUnmarshal(t *testing.T) {
+	ac := NewAssistantCoordinator(&server.Server{
+		Context: context.Background(),
+		Config:  &config.ServerConfig{},
+	})
+
+	testCases := []struct {
+		name     string
+		data     []byte
+		expected map[string]string
+	}{
+		{
+			name: "valid gzipped JSON decodes to a map",
+			data: gzipString(t, `{"prompt_agent_hunter": "You are a hunter.", "prompt_skill_hunt": "Query events."}`),
+			expected: map[string]string{
+				"prompt_agent_hunter": "You are a hunter.",
+				"prompt_skill_hunt":   "Query events.",
+			},
+		},
+		{
+			name:     "nil input yields an empty map",
+			data:     nil,
+			expected: map[string]string{},
+		},
+		{
+			name:     "empty input yields an empty map",
+			data:     []byte{},
+			expected: map[string]string{},
+		},
+		{
+			name:     "non-gzip bytes yield an empty map",
+			data:     []byte(`{"prompt_agent_hunter": "not compressed"}`),
+			expected: map[string]string{},
+		},
+		{
+			name:     "gzipped non-JSON yields an empty map",
+			data:     gzipString(t, "not json"),
+			expected: map[string]string{},
+		},
+		{
+			name:     "gzipped JSON of the wrong shape yields an empty map",
+			data:     gzipString(t, `["not", "an", "object"]`),
+			expected: map[string]string{},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			prompts := ac.unzipAndUnmarshal(tc.data)
+			assert.NotNil(t, prompts)
+			assert.Equal(t, tc.expected, prompts)
+		})
+	}
 }
