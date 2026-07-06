@@ -91,7 +91,10 @@ type queryEventsArgs struct {
 }
 
 func (t *QueryEventsTool) Execute(ctx context.Context, server *server.Server, req *model.ToolRequest) (result *model.ToolResponse, err error) {
-	logger := log.FromContext(ctx)
+	logger := log.FromContext(ctx).WithFields(log.Fields{
+		"sessionId": req.SessionId,
+		"toolUseId": req.ToolUseId,
+	})
 
 	logger.WithField("toolParameters", req.Params).Info("running tool for assistant")
 

@@ -84,7 +84,10 @@ type queryCasesArgs struct {
 }
 
 func (t *QueryCasesTool) Execute(ctx context.Context, server *server.Server, req *model.ToolRequest) (result *model.ToolResponse, err error) {
-	logger := log.FromContext(ctx)
+	logger := log.FromContext(ctx).WithFields(log.Fields{
+		"sessionId": req.SessionId,
+		"toolUseId": req.ToolUseId,
+	})
 
 	logger.WithField("toolParameters", req.Params).Info("running tool for assistant")
 
@@ -146,6 +149,7 @@ func (t *QueryCasesTool) Execute(ctx context.Context, server *server.Server, req
 		strconv.Itoa(metricLimit),
 		strconv.Itoa(caseLimit))
 	if err != nil {
+		logger.WithError(err).Error("unable to populate search criteria")
 		return nil, err
 	}
 
@@ -158,6 +162,7 @@ func (t *QueryCasesTool) Execute(ctx context.Context, server *server.Server, req
 
 	searchResults, err := server.Eventstore.Search(ctx, criteria)
 	if err != nil {
+		logger.WithError(err).Error("unable to perform event search")
 		return nil, err
 	}
 

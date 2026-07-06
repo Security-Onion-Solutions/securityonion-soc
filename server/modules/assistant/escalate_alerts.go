@@ -78,7 +78,10 @@ type escalateAlertArgs struct {
 }
 
 func (t *EscalateAlertsTool) Execute(ctx context.Context, server *server.Server, req *model.ToolRequest) (result *model.ToolResponse, err error) {
-	logger := log.FromContext(ctx)
+	logger := log.FromContext(ctx).WithFields(log.Fields{
+		"sessionId": req.SessionId,
+		"toolUseId": req.ToolUseId,
+	})
 
 	logger.WithField("toolParameters", req.Params).Info("running tool for assistant")
 
@@ -123,6 +126,7 @@ func (t *EscalateAlertsTool) Execute(ctx context.Context, server *server.Server,
 		"10000",
 	)
 	if err != nil {
+		logger.WithError(err).Error("unable to populate search criteria")
 		return nil, err
 	}
 
@@ -138,7 +142,6 @@ func (t *EscalateAlertsTool) Execute(ctx context.Context, server *server.Server,
 	searchResults, err := server.Eventstore.Search(ctx, searchCrit)
 	if err != nil {
 		logger.WithError(err).Error("error searching for alerts to escalate")
-
 		return nil, err
 	}
 
@@ -170,14 +173,12 @@ func (t *EscalateAlertsTool) Execute(ctx context.Context, server *server.Server,
 		modelCase, err = server.Casestore.Create(ctx, newCase)
 		if err != nil {
 			logger.WithError(err).Error("error creating case for escalated alert")
-
 			return nil, err
 		}
 	} else {
 		modelCase, err = server.Casestore.GetCase(ctx, args.CaseId)
 		if err != nil {
 			logger.WithField("caseId", args.CaseId).WithError(err).Error("error fetching case for escalated alert")
-
 			return nil, err
 		}
 	}
@@ -190,7 +191,6 @@ func (t *EscalateAlertsTool) Execute(ctx context.Context, server *server.Server,
 	created, errMap, err := server.Casestore.CreateRelatedEvents(ctx, relatedEvents)
 	if err != nil {
 		logger.WithError(err).Error("error linking alerts to new case")
-
 		return nil, err
 	}
 
@@ -215,7 +215,6 @@ func (t *EscalateAlertsTool) Execute(ctx context.Context, server *server.Server,
 	ackResults, err := server.Eventstore.Acknowledge(ctx, ackCrit)
 	if err != nil {
 		logger.WithError(err).Error("error escalating alert")
-
 		return nil, err
 	}
 

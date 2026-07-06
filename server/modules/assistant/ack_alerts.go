@@ -74,7 +74,10 @@ type ackAlertArgs struct {
 }
 
 func (t *AckAlertsTool) Execute(ctx context.Context, server *server.Server, req *model.ToolRequest) (result *model.ToolResponse, err error) {
-	logger := log.FromContext(ctx)
+	logger := log.FromContext(ctx).WithFields(log.Fields{
+		"sessionId": req.SessionId,
+		"toolUseId": req.ToolUseId,
+	})
 
 	logger.WithField("toolParameters", req.Params).Info("running tool for assistant")
 
@@ -124,7 +127,6 @@ func (t *AckAlertsTool) Execute(ctx context.Context, server *server.Server, req 
 	results, err := server.Eventstore.Acknowledge(ctx, crit)
 	if err != nil {
 		logger.WithError(err).Error("error acknowledging alert")
-
 		return nil, err
 	}
 

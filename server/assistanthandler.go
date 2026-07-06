@@ -71,10 +71,12 @@ type EventstoreUpdater interface {
 // decodeIncomingMessage decodes a chat message body, generating a session id
 // when the client didn't supply one.
 func decodeIncomingMessage(r *http.Request) (*model.IncomingMessage, error) {
+	logger := log.FromContext(r.Context())
 	incMsg := &model.IncomingMessage{}
 
 	err := json.NewDecoder(r.Body).Decode(incMsg)
 	if err != nil {
+		logger.WithError(err).Error("unable to parse body")
 		return nil, err
 	}
 
@@ -123,9 +125,7 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 
 	incMsg, err := decodeIncomingMessage(r)
 	if err != nil {
-		logger.WithError(err).Error("unable to decode request body")
 		web.Respond(w, r, http.StatusBadRequest, err)
-
 		return
 	}
 
@@ -721,7 +721,7 @@ func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request)
 			logger.WithFields(log.Fields{
 				"assistantSessionId": sessionId,
 				"tag":                updateReq.Tag,
-			}).Error("unable to remove tag")
+			}).WithError(err).Error("unable to remove tag")
 			web.Respond(w, r, http.StatusConflict, err)
 
 			return
@@ -1429,10 +1429,12 @@ func (h *AssistantHandler) markAlertAsInvestigated(ctx context.Context, socId st
 	// Execute the update
 	results, err := h.server.Eventstore.Update(ctx, updateCriteria)
 	if err != nil {
+		logger.WithError(err).Error("unable to mark alert as investigated")
 		return err
 	}
 
 	if results.UpdatedCount == 0 && results.UnchangedCount == 0 {
+		logger.WithField("socId", socId).Error("update made no changes")
 		return fmt.Errorf("no alert found with soc_id: %s", socId)
 	}
 

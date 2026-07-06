@@ -69,7 +69,10 @@ type updateDetectionContentArgs struct {
 }
 
 func (t *UpdateDetectionContentTool) Execute(ctx context.Context, srv *server.Server, req *model.ToolRequest) (result *model.ToolResponse, err error) {
-	logger := log.FromContext(ctx)
+	logger := log.FromContext(ctx).WithFields(log.Fields{
+		"sessionId": req.SessionId,
+		"toolUseId": req.ToolUseId,
+	})
 
 	logger.WithField("toolParameters", req.Params).Info("running tool for assistant")
 
@@ -107,11 +110,13 @@ func (t *UpdateDetectionContentTool) Execute(ctx context.Context, srv *server.Se
 	if args.PublicId != "" {
 		detect, err = srv.Detectionstore.GetDetectionByPublicId(ctx, args.PublicId)
 		if err != nil {
+			logger.WithError(err).WithField("detectionPublicId", args.PublicId).Error("unable to retrieve detection by public Id")
 			return nil, err
 		}
 	} else {
 		detect, err = srv.Detectionstore.GetDetection(ctx, args.SocId)
 		if err != nil {
+			logger.WithError(err).WithField("socId", args.SocId).Error("unable to retrieve detection by Id")
 			return nil, err
 		}
 	}
@@ -179,6 +184,7 @@ func (t *UpdateDetectionContentTool) Execute(ctx context.Context, srv *server.Se
 			"detectionPublicId": detect.PublicID,
 			"errMap":            errMap,
 		}).Error("unable to sync detection")
+		
 		return nil, errors.New("ERROR_DETECTION_SYNC_FAILED")
 	}
 

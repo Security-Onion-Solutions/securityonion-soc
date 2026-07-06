@@ -581,6 +581,7 @@ func (ac *AssistantCoordinator) prepareChatRequest(ctx context.Context, aiModel 
 		// Every HTTP caller is authenticated before reaching here; a missing
 		// requestor means a programming error on a new call path. Fail rather
 		// than panic.
+		logger.Error("missing requestor id in context")
 		return nil, nil, errors.New("missing requestor id in context")
 	}
 
@@ -630,6 +631,10 @@ func (ac *AssistantCoordinator) prepareChatRequest(ctx context.Context, aiModel 
 
 	if agentParams != nil {
 		if err := ac.setupAgent(ctx, req, agentParams); err != nil {
+			logger.WithFields(log.Fields{
+				"agentName": agentParams.Name,
+			}).WithError(err).Error("unable to setup agent")
+
 			return nil, nil, err
 		}
 	} else {
@@ -647,12 +652,20 @@ func (ac *AssistantCoordinator) Send(ctx context.Context, aiModel string, messag
 
 	req, adapter, err := ac.prepareChatRequest(ctx, aiModel, messages, false, config)
 	if err != nil {
+		logger.WithError(err).WithFields(log.Fields{
+			"model": aiModel,
+		}).Error("problem while preparing chat request")
+
 		return nil, err
 	}
 
 	response, err := adapter.SendMessage(ctx, req)
 	if err != nil {
-		logger.WithError(err).Error("unable to send message to assistant")
+		logger.WithError(err).WithFields(log.Fields{
+			"model":           aiModel,
+			"adapterProtocol": adapter.Protocol(),
+			"streaming":       false,
+		}).Error("unable to send message to assistant")
 		return nil, err
 	}
 
@@ -725,15 +738,26 @@ func (ac *AssistantCoordinator) Send(ctx context.Context, aiModel string, messag
 }
 
 func (ac *AssistantCoordinator) SendStream(ctx context.Context, aiModel string, messages []*model.Message, opts ...model.ChatOpt) (*http.Response, *model.AuxMessageData, error) {
+	logger := log.FromContext(ctx)
 	config := model.ApplyChatOpts(opts...)
 
 	req, adapter, err := ac.prepareChatRequest(ctx, aiModel, messages, true, config)
 	if err != nil {
+		logger.WithError(err).WithFields(log.Fields{
+			"model": aiModel,
+		}).Error("problem while preparing chat request")
+
 		return nil, nil, err
 	}
 
 	res, aux, err := adapter.SendMessageStream(ctx, req)
 	if err != nil {
+		logger.WithError(err).WithFields(log.Fields{
+			"model":           aiModel,
+			"adapterProtocol": adapter.Protocol(),
+			"streaming":       true,
+		}).Error("unable to send message to assistant")
+
 		return nil, nil, err
 	}
 
@@ -778,18 +802,23 @@ func (ac *AssistantCoordinator) ExecuteTool(ctx context.Context, toolName string
 }
 
 func (ac *AssistantCoordinator) Balance(ctx context.Context, aiModel string) (*model.BalanceResponse, error) {
+	logger := log.FromContext(ctx)
 	adapterName := ac.resolveAdapterName(aiModel)
 
 	adapter, ok := ac.adapters[adapterName]
 	if !ok {
-		logger := log.FromContext(ctx)
 		logger.WithField("adapterName", adapterName).Error("assistant adapter not found")
-
 		return nil, fmt.Errorf("assistant adapter not found: %s", adapterName)
 	}
 
 	response, err := adapter.GetBalance(ctx)
 	if err != nil {
+		logger.WithError(err).WithFields(log.Fields{
+			"model":           aiModel,
+			"adapterName":     adapterName,
+			"adapterProtocol": adapter.Protocol(),
+		})
+
 		return nil, err
 	}
 
@@ -891,6 +920,11 @@ func (ac *AssistantCoordinator) ToolInSession(ctx context.Context, toolReq *mode
 		response, err = ac.continueWithToolResultSync(ctx, sess, toolReq.SessionId, aiModel, toolMsg, lockHeld)
 	}
 	if err != nil {
+		logger.WithError(err).WithFields(log.Fields{
+			"sessionId": toolReq.SessionId,
+			"toolUseId": toolReq.ToolUseId,
+		}).Error("unable to continue with tool result")
+
 		return nil, err
 	}
 
@@ -926,6 +960,10 @@ func (ac *AssistantCoordinator) ToolInSession(ctx context.Context, toolReq *mode
 		// parent and continue with the parent's turn.
 		response, sess, err = ac.resolveDelegationSync(ctx, sess, messageText(last))
 		if err != nil {
+			logger.WithError(err).WithFields(log.Fields{
+				"sessionId": toolReq.SessionId,
+				"toolUseId": toolReq.ToolUseId,
+			}).Error("unable to resolve delegation")
 			return nil, err
 		}
 	}
@@ -1086,6 +1124,7 @@ func (ac *AssistantCoordinator) continueWithToolResultSync(ctx context.Context, 
 	// check-dispatch-persist decision is atomic; release on return.
 	release, err := ac.acquireTurnLock(sessionId, mode)
 	if err != nil {
+		logger.WithError(err).WithField("sessionId", sessionId).Error("unable to acquire lock")
 		return nil, err
 	}
 	defer release()
@@ -1102,6 +1141,7 @@ func (ac *AssistantCoordinator) continueWithToolResultSync(ctx context.Context, 
 
 	messages, err := ac.loadSessionHistory(noTimeOutCtx, sess)
 	if err != nil {
+		logger.WithError(err).WithField("sessionId", sess.Id).Error("unable to load history")
 		return nil, err
 	}
 
@@ -1130,10 +1170,20 @@ func (ac *AssistantCoordinator) continueWithToolResultSync(ctx context.Context, 
 
 	response, err := ac.Send(noTimeOutCtx, aiModel, messages, sendOpts...)
 	if err != nil {
+		logger.WithError(err).WithFields(log.Fields{
+			"model":     aiModel,
+			"sessionId": sess.Id,
+		}).Error("unable to send message")
+
 		return nil, err
 	}
 
 	if err := saveResult(); err != nil {
+		logger.WithError(err).WithFields(log.Fields{
+			"model":     aiModel,
+			"sessionId": sess.Id,
+		})
+
 		return nil, err
 	}
 
@@ -1362,8 +1412,11 @@ func (ac *AssistantCoordinator) prepareToolResultPersist(ctx context.Context, me
 // waits, so it never drops the result it must fold in; a caller that already holds the
 // lock (having gated tool execution behind it) passes lockHeld.
 func (ac *AssistantCoordinator) continueWithToolResult(ctx context.Context, sess *model.AssistantSession, sessionId, aiModel string, toolMsg *model.Message, mode lockMode) (turn *model.StreamedTurn, err error) {
+	logger := log.FromContext(ctx)
+
 	release, err := ac.acquireTurnLock(sessionId, mode)
 	if err != nil {
+		logger.WithError(err).WithField("sessionId", sessionId).Error("unable to acquire lock")
 		return nil, err
 	}
 	// Hold the lock across the whole check-dispatch-persist window. On a dispatched
@@ -1390,6 +1443,7 @@ func (ac *AssistantCoordinator) continueWithToolResult(ctx context.Context, sess
 
 	messages, err := ac.loadSessionHistory(noTimeOutCtx, sess)
 	if err != nil {
+		logger.WithError(err).WithField("sessionId", sess.Id).Error("unable to load history")
 		return nil, err
 	}
 
@@ -1404,6 +1458,11 @@ func (ac *AssistantCoordinator) continueWithToolResult(ctx context.Context, sess
 	messages, saveResult := ac.prepareToolResultPersist(noTimeOutCtx, messages, toolMsg, sessionId, aiModel)
 	persistOnly := func() (*model.StreamedTurn, error) {
 		if err := saveResult(); err != nil {
+			logger.WithError(err).WithFields(log.Fields{
+				"model":     aiModel,
+				"sessionId": sess.Id,
+			})
+
 			return nil, err
 		}
 		// A nil Response signals a persist-only turn: the handler emits the result so
@@ -1432,16 +1491,27 @@ func (ac *AssistantCoordinator) continueWithToolResult(ctx context.Context, sess
 
 	response, aux, err := ac.SendStream(noTimeOutCtx, aiModel, messages, sendOpts...)
 	if err != nil {
+		logger.WithError(err).WithFields(log.Fields{
+			"model":     aiModel,
+			"streaming": true,
+		}).Error("unable to send message to assistant")
+
 		return nil, err
 	}
 
 	if err := saveResult(); err != nil {
+		logger.WithError(err).WithFields(log.Fields{
+			"model":     aiModel,
+			"sessionId": sess.Id,
+		})
+
 		return nil, err
 	}
 
 	finalize := func(rawResponse []byte) error {
 		msg, err := server.UnstreamResponse(noTimeOutCtx, string(rawResponse), aux)
 		if err != nil {
+			logger.WithError(err).Error("error while piecing stream together")
 			return err
 		}
 		if msg == nil {
@@ -1601,6 +1671,7 @@ func (ac *AssistantCoordinator) haltSubSessionStream(ctx context.Context, sess *
 	finalize := func(rawResponse []byte) error {
 		msg, err := server.UnstreamResponse(noTimeOutCtx, string(rawResponse), aux)
 		if err != nil {
+			logger.WithError(err).Error("error while piecing stream together")
 			return err
 		}
 		if msg == nil {
@@ -1694,6 +1765,7 @@ func (ac *AssistantCoordinator) startDelegation(ctx context.Context, toolReq *mo
 	finalize := func(rawResponse []byte) error {
 		msg, err := server.UnstreamResponse(noTimeOutCtx, string(rawResponse), aux)
 		if err != nil {
+			logger.WithError(err).Error("error while piecing stream together")
 			return err
 		}
 		if msg == nil {
@@ -1748,6 +1820,7 @@ func (ac *AssistantCoordinator) resolveFailedDelegation(ctx context.Context, too
 func (ac *AssistantCoordinator) ResolveDelegationStream(ctx context.Context, childSession *model.AssistantSession, childFinalText string) (*model.StreamedTurn, error) {
 	// Detach before loading the parent
 	ctx = buildNoTimeoutCtx(ctx)
+	logger := log.FromContext(ctx)
 
 	toolMsg := buildDelegationResultMessage(childSession.ParentToolUseId, childFinalText)
 
@@ -1760,6 +1833,11 @@ func (ac *AssistantCoordinator) ResolveDelegationStream(ctx context.Context, chi
 	// Wait for the lock: an internal resolution must fold the child's result in.
 	turn, err := ac.continueWithToolResult(ctx, parentSess, childSession.ParentSessionId, parentModel, toolMsg, waitForLock)
 	if err != nil {
+		logger.WithError(err).WithFields(log.Fields{
+			"childSessionId":  childSession.Id,
+			"parentSessionId": childSession.ParentSessionId,
+		}).Error("unable to continue with tool result")
+
 		return nil, err
 	}
 
@@ -1863,6 +1941,11 @@ func (ac *AssistantCoordinator) startDelegationSync(ctx context.Context, toolReq
 	// per-sub-session limit (a no-op when the budget is disabled).
 	response, err := ac.Send(noTimeOutCtx, kickoff.ChildModel, []*model.Message{userMsg}, ac.subSessionStartOpts()...)
 	if err != nil {
+		logger.WithError(err).WithFields(log.Fields{
+			"sessionId": toolReq.SessionId,
+			"toolUseId": toolReq.ToolUseId,
+		}).Error("unable to send message to assistant")
+
 		return nil, nil, err
 	}
 
@@ -2076,6 +2159,9 @@ func (ac *AssistantCoordinator) setupAgent(ctx context.Context, req *model.ChatR
 
 	req.ToolConfig, err = buildToolConfig(ac.FunctionLibrary, ac.DelegationLibrary, tools, agent.CanDelegateTo) // build tools for this agent
 	if err != nil {
+		logger.WithError(err).WithFields(log.Fields{
+			"agentName": agent.Name,
+		})
 		return err
 	}
 

@@ -26,6 +26,7 @@ func (ac *AssistantCoordinator) ChatInSession(ctx context.Context, incMsg *model
 
 	messages, isNewSession, err := ac.loadHistory(ctx, incMsg.SessionId)
 	if err != nil {
+		logger.WithField("sessionId", incMsg.SessionId).WithError(err).Error("unable to load history")
 		return nil, err
 	}
 
@@ -34,6 +35,12 @@ func (ac *AssistantCoordinator) ChatInSession(ctx context.Context, incMsg *model
 
 	response, err := ac.Send(ctx, incMsg.Model, messages)
 	if err != nil {
+		logger.WithFields(log.Fields{
+			"sessionId": incMsg.SessionId,
+			"model":     incMsg.Model,
+			"streaming": false,
+		}).WithError(err).Error("unable to send message")
+
 		return nil, err
 	}
 
@@ -72,6 +79,7 @@ func (ac *AssistantCoordinator) ChatStreamInSession(ctx context.Context, incMsg 
 
 	messages, isNewSession, err := ac.loadHistory(noTimeOutCtx, incMsg.SessionId)
 	if err != nil {
+		logger.WithField("sessionId", incMsg.SessionId).WithError(err).Error("unable to load history")
 		return nil, nil, nil, err
 	}
 
@@ -80,6 +88,12 @@ func (ac *AssistantCoordinator) ChatStreamInSession(ctx context.Context, incMsg 
 
 	response, aux, err := ac.SendStream(noTimeOutCtx, incMsg.Model, messages)
 	if err != nil {
+		logger.WithFields(log.Fields{
+			"sessionId": incMsg.SessionId,
+			"model":     incMsg.Model,
+			"streaming": true,
+		}).WithError(err).Error("unable to send message")
+
 		return nil, nil, nil, err
 	}
 
@@ -98,6 +112,7 @@ func (ac *AssistantCoordinator) ChatStreamInSession(ctx context.Context, incMsg 
 	finalize := func(rawResponse []byte) error {
 		msg, err := server.UnstreamResponse(noTimeOutCtx, string(rawResponse), aux)
 		if err != nil {
+			logger.WithError(err).Error("error while piecing stream together")
 			return err
 		}
 		if msg == nil {

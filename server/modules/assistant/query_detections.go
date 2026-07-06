@@ -75,7 +75,10 @@ type queryDetectionsArgs struct {
 }
 
 func (t *QueryDetectionsTool) Execute(ctx context.Context, server *server.Server, req *model.ToolRequest) (result *model.ToolResponse, err error) {
-	logger := log.FromContext(ctx)
+	logger := log.FromContext(ctx).WithFields(log.Fields{
+		"sessionId": req.SessionId,
+		"toolUseId": req.ToolUseId,
+	})
 
 	logger.WithField("toolParameters", req.Params).Info("running tool for assistant")
 
@@ -129,6 +132,8 @@ func (t *QueryDetectionsTool) Execute(ctx context.Context, server *server.Server
 
 	searchResults, err := server.Detectionstore.QueryWithRange(ctx, query, args.RangeStart, args.RangeEnd, args.RangeFormat, detectLimit)
 	if err != nil {
+		logger.WithError(err).Error("unable to query for detections")
+
 		return nil, err
 	}
 

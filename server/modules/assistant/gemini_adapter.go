@@ -150,6 +150,7 @@ func (a *GeminiAdapter) SendMessage(ctx context.Context, req *model.ChatRequest)
 		CandidateCount:  1,
 	}, history)
 	if err != nil {
+		logger.WithError(err).Error("unable to create session")
 		return nil, err
 	}
 
@@ -261,6 +262,7 @@ func (a *GeminiAdapter) SendMessageStream(ctx context.Context, req *model.ChatRe
 		CandidateCount:  1,
 	}, history)
 	if err != nil {
+		logger.WithError(err).Error("unable to create session")
 		return nil, nil, err
 	}
 

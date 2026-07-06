@@ -64,7 +64,10 @@ type createDetectionArgs struct {
 }
 
 func (t *CreateDetectionTool) Execute(ctx context.Context, srv *server.Server, req *model.ToolRequest) (result *model.ToolResponse, err error) {
-	logger := log.FromContext(ctx)
+	logger := log.FromContext(ctx).WithFields(log.Fields{
+		"sessionId": req.SessionId,
+		"toolUseId": req.ToolUseId,
+	})
 
 	logger.WithField("toolParameters", req.Params).Info("running tool for assistant")
 
@@ -133,11 +136,13 @@ func (t *CreateDetectionTool) Execute(ctx context.Context, srv *server.Server, r
 			"detectionEngine":   detect.Engine,
 			"detectionPublicId": detect.PublicID,
 		}).Error("unable to extract details from detection")
+
 		return nil, err
 	}
 
 	user, err := srv.TryGetUser(ctx)
 	if err != nil {
+		logger.WithError(err).Error("unable to retrieve user from context")
 		return nil, err
 	}
 
@@ -170,6 +175,7 @@ func (t *CreateDetectionTool) Execute(ctx context.Context, srv *server.Server, r
 			"detectionPublicId": detect.PublicID,
 			"errMap":            errMap,
 		}).Error("unable to sync detection")
+
 		return nil, errors.New("ERROR_DETECTION_SYNC_FAILED")
 	}
 
