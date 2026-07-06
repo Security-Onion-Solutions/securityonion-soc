@@ -19,7 +19,7 @@ import (
 )
 
 const TMP_SALTSTACK_PATH = "/tmp/gotest-soc-onionconfig"
-const TEST_SETTINGS_COUNT = 29
+const TEST_SETTINGS_COUNT = 30
 
 func Cleanup() {
 	exec.Command("rm", "-fr", TMP_SALTSTACK_PATH).Run()
@@ -72,6 +72,21 @@ func TestLoadLocalSettings(tester *testing.T) {
 
 	assert.Equal(tester, "myapp.advanced", settings[count].Id)
 	assert.Equal(tester, "myapp:\n  global: advanced\n", settings[count].Value)
+	assert.Equal(tester, "", settings[count].NodeId)
+	count++
+
+	// DB-stored, UI-managed list of objects (the Agent Studio "assistant.agents" shape).
+	assert.Equal(tester, "myapp.agent_list", settings[count].Id)
+	assert.Equal(tester, "db", settings[count].Storage)
+	assert.Equal(tester, model.SettingOriginDB, settings[count].Origin)
+	assert.Equal(tester, true, settings[count].ReadonlyUi)
+	assert.Equal(tester, "[]{}", settings[count].ForcedType)
+	assert.Equal(tester, "json", settings[count].Syntax)
+	assert.Equal(tester, 7, len(settings[count].UiElements))
+	assert.Equal(tester, "name", settings[count].UiElements[0].Field)
+	assert.Equal(tester, true, settings[count].UiElements[0].Required)
+	assert.Equal(tester, "prompt", settings[count].UiElements[6].Field)
+	assert.Equal(tester, true, settings[count].UiElements[6].Multiline)
 	assert.Equal(tester, "", settings[count].NodeId)
 	count++
 

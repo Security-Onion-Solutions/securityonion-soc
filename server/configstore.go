@@ -28,6 +28,30 @@ type Configstore interface {
 	GetRevertCount(ctx context.Context, timestamp time.Time) (int, error)
 }
 
+// ConfigSettingCallbackHandler is implemented by components that want to be
+// notified when a specific configuration setting has been successfully updated.
+// The handler is invoked after the change has been persisted. Implementations
+// must be safe to call from a goroutine other than the one serving the config
+// request, and must not block for long (the notifier recovers from panics but
+// invokes handlers inline with the update).
+type ConfigSettingCallbackHandler interface {
+	// OnConfigSettingUpdated is called after the setting identified by
+	// setting.Id has been persisted. removed is true when the setting was
+	// deleted/reverted rather than assigned a new value.
+	OnConfigSettingUpdated(ctx context.Context, setting *model.Setting, removed bool)
+}
+
+// ConfigSettingCallbackRegistrar is implemented by a Configstore that supports
+// registering callbacks for setting changes. Callers should type-assert their
+// Configstore to this interface, since not every store implementation supports
+// notifications.
+type ConfigSettingCallbackRegistrar interface {
+	// RegisterConfigSettingCallback registers handler to be notified whenever
+	// the setting with the given settingID is updated. Multiple handlers may be
+	// registered for the same settingID.
+	RegisterConfigSettingCallback(settingID string, handler ConfigSettingCallbackHandler)
+}
+
 type AdminConfigstore interface {
 	SyncSettings(ctx context.Context) error
 	SyncModule(ctx context.Context, module string, force bool) error

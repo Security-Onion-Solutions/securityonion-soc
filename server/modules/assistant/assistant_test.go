@@ -3745,9 +3745,9 @@ func TestAssistantCoordinator_loadTurnSession(t *testing.T) {
 				}).Times(1)
 
 			ac := &AssistantCoordinator{
-				srv:                 &server.Server{Assistantstore: mockAssistantstore},
-				maxSubSessionTokens: tc.maxSubSession,
+				srv: &server.Server{Assistantstore: mockAssistantstore},
 			}
+			ac.maxSubSessionTokens.Store(int64(tc.maxSubSession))
 
 			sess := ac.loadTurnSession(context.Background(), "sess-1")
 			assert.NotNil(t, sess)
@@ -3816,7 +3816,8 @@ func TestAssistantCoordinator_subSessionOutputBudget(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			ac := &AssistantCoordinator{maxSubSessionTokens: tc.maxSubSession}
+			ac := &AssistantCoordinator{}
+			ac.maxSubSessionTokens.Store(int64(tc.maxSubSession))
 
 			isSub, remaining := ac.subSessionOutputBudget(tc.sess)
 
@@ -3842,9 +3843,9 @@ func TestAssistantCoordinator_continueWithToolResultSync_HardStop(t *testing.T) 
 	mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil).Times(2)
 
 	ac := &AssistantCoordinator{
-		srv:                 &server.Server{Assistantstore: mockAssistantstore},
-		maxSubSessionTokens: 500,
+		srv: &server.Server{Assistantstore: mockAssistantstore},
 	}
+	ac.maxSubSessionTokens.Store(500)
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 	toolMsg := buildToolResultMessage("tu_1", &model.ToolResponse{ToolName: "x", Result: "r"}, nil)
@@ -3910,9 +3911,9 @@ func TestAssistantCoordinator_delegationDepthRefusal(t *testing.T) {
 			}
 
 			ac := &AssistantCoordinator{
-				srv:                &server.Server{Assistantstore: mockAssistantstore},
-				maxDelegationDepth: tc.maxDepth,
+				srv: &server.Server{Assistantstore: mockAssistantstore},
 			}
+			ac.maxDelegationDepth.Store(int64(tc.maxDepth))
 
 			refusal := ac.delegationDepthRefusal(context.Background(), &model.ToolRequest{SessionId: "s", ToolUseId: "tu"})
 

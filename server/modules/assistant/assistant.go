@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -74,12 +75,17 @@ type AssistantCoordinator struct {
 	srv       *server.Server
 	isRunning bool
 
-	FunctionLibrary   map[string]Tool
+	FunctionLibrary map[string]Tool
+	SkillLibrary    map[string]model.Skill
+	toolConfig      json.RawMessage
+	adapters        map[string]server.AssistantAdapter
+	isAgentic       bool
+
+	// agentMu guards the agentic configuration that can be hot-reloaded from a
+	// config setting change: agents, agentMapping, and DelegationLibrary. Readers
+	// (request handlers) take RLock; a reload rebuilds the whole set under Lock.
+	agentMu           sync.RWMutex
 	DelegationLibrary map[string]Tool
-	SkillLibrary      map[string]model.Skill
-	toolConfig        json.RawMessage
-	adapters          map[string]server.AssistantAdapter
-	isAgentic         bool
 	agents            map[string]model.AgentParameters
 	agentMapping      map[string]string // map[agentName]modelSelector ("id@adapter" or bare id)
 
@@ -87,10 +93,12 @@ type AssistantCoordinator struct {
 	systemPromptAddendum string
 
 	// maxSubSessionTokens is the per-sub-session output-token budget. 0 disables it.
-	maxSubSessionTokens int
+	// Atomic so it can be hot-reloaded without racing per-request readers.
+	maxSubSessionTokens atomic.Int64
 
 	// maxDelegationDepth is the maximum delegation nesting depth. 0 disables it.
-	maxDelegationDepth int
+	// Atomic so it can be hot-reloaded without racing per-request readers.
+	maxDelegationDepth atomic.Int64
 
 	// toolUseTurnAttempts and toolUseTurnDelay bound awaitToolUseTurn's polling for
 	// the asynchronously-persisted assistant turn that requested a tool: up to
@@ -103,6 +111,31 @@ type AssistantCoordinator struct {
 	sessionLocks sessionLocks
 
 	detections.IOManager
+}
+
+// Configuration setting IDs the coordinator subscribes to for live reloads. These
+// must match the setting IDs defined in the config annotations (salt).
+const (
+	// ConfigSettingAgents holds the full agent definition set (name, role, model,
+	// skills, delegation, persona) as a structured, DB-stored config value. It also
+	// drives the agent->model mapping (each agent carries its model). These IDs sit
+	// under the assistant module's config namespace, alongside the other assistant
+	// module settings (adapters, systemPromptAddendum, ...).
+	ConfigSettingAgents = "soc.config.server.modules.assistant.agents"
+	// ConfigSettingMaxDelegationDepth / ConfigSettingMaxSubSessionTokens are scalar
+	// limits that can be hot-reloaded.
+	ConfigSettingMaxDelegationDepth  = "soc.config.server.modules.assistant.maxDelegationDepth"
+	ConfigSettingMaxSubSessionTokens = "soc.config.server.modules.assistant.maxSubSessionTokens"
+)
+
+// getMaxSubSessionTokens returns the current per-sub-session output-token budget.
+func (ac *AssistantCoordinator) getMaxSubSessionTokens() int {
+	return int(ac.maxSubSessionTokens.Load())
+}
+
+// getMaxDelegationDepth returns the current maximum delegation nesting depth.
+func (ac *AssistantCoordinator) getMaxDelegationDepth() int {
+	return int(ac.maxDelegationDepth.Load())
 }
 
 func NewAssistantCoordinator(srv *server.Server) *AssistantCoordinator {
@@ -132,8 +165,8 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 	}
 
 	ac.systemPromptAddendum = systemPromptAddendum
-	ac.maxSubSessionTokens = module.GetIntDefault(config, "maxSubSessionTokens", DEFAULT_MAX_SUBSESSION_TOKENS)
-	ac.maxDelegationDepth = module.GetIntDefault(config, "maxDelegationDepth", DEFAULT_MAX_DELEGATION_DEPTH)
+	ac.maxSubSessionTokens.Store(int64(module.GetIntDefault(config, "maxSubSessionTokens", DEFAULT_MAX_SUBSESSION_TOKENS)))
+	ac.maxDelegationDepth.Store(int64(module.GetIntDefault(config, "maxDelegationDepth", DEFAULT_MAX_DELEGATION_DEPTH)))
 	ac.toolUseTurnAttempts = max(module.GetIntDefault(config, "toolUseTurnAttempts", DEFAULT_TOOL_USE_TURN_ATTEMPTS), 1)
 	ac.toolUseTurnDelay = time.Duration(module.GetIntDefault(config, "toolUseTurnDelayMs", DEFAULT_TOOL_USE_TURN_DELAY_MS)) * time.Millisecond
 
@@ -396,7 +429,52 @@ func (ac *AssistantCoordinator) getPrompt() {
 func (ac *AssistantCoordinator) Start() error {
 	ac.isRunning = true
 
+	// Agent definitions and limits can be managed as config settings (some
+	// DB-stored, e.g. "assistant.agents") that do not arrive through the module's
+	// Init config. Start runs after every module's Init, so the Configstore is
+	// available now. Subscribe to the relevant settings and pull their current
+	// values on top of the Init defaults.
+	if ac.isAgentic {
+		ac.registerConfigCallbacks()
+		ac.reloadAgentConfiguration(ac.srv.Context)
+	}
+
 	return nil
+}
+
+// registerConfigCallbacks subscribes the coordinator to changes of the config
+// settings that drive agentic behavior. It is a no-op when the configured
+// Configstore does not support callbacks (e.g. in-memory store used by tests).
+func (ac *AssistantCoordinator) registerConfigCallbacks() {
+	registrar, ok := ac.srv.Configstore.(server.ConfigSettingCallbackRegistrar)
+	if !ok {
+		log.FromContext(ac.srv.Context).Debug("configstore does not support setting callbacks; agent config will not hot-reload")
+		return
+	}
+
+	for _, id := range []string{
+		ConfigSettingAgents,
+		ConfigSettingMaxDelegationDepth,
+		ConfigSettingMaxSubSessionTokens,
+	} {
+		registrar.RegisterConfigSettingCallback(id, ac)
+	}
+}
+
+// OnConfigSettingUpdated implements server.ConfigSettingCallbackHandler. When one
+// of the subscribed settings changes, the coordinator re-reads the full agentic
+// configuration so its in-memory state and the client-facing parameters stay
+// consistent.
+func (ac *AssistantCoordinator) OnConfigSettingUpdated(ctx context.Context, setting *model.Setting, removed bool) {
+	if !ac.isAgentic || setting == nil {
+		return
+	}
+
+	switch setting.Id {
+	case ConfigSettingAgents, ConfigSettingMaxDelegationDepth, ConfigSettingMaxSubSessionTokens:
+		log.FromContext(ctx).WithField("setting", setting.Id).Info("reloading agentic configuration after config change")
+		ac.reloadAgentConfiguration(ctx)
+	}
 }
 
 func (ac *AssistantCoordinator) Stop() error {
@@ -506,13 +584,12 @@ func (ac *AssistantCoordinator) resolveModel(selector string) *model.ModelParame
 // mapped model is missing; callers surface this as a client error. Only
 // meaningful in agentic mode.
 func (ac *AssistantCoordinator) resolveAgent(name string) (*model.AgentParameters, *model.ModelParameters, error) {
+	ac.agentMu.RLock()
 	agent, ok := ac.agents[name]
-	if !ok {
-		return nil, nil, ErrInvalidAgent
-	}
-
 	modelSelector, mapped := ac.agentMapping[name]
-	if !mapped {
+	ac.agentMu.RUnlock()
+
+	if !ok || !mapped {
 		return nil, nil, ErrInvalidAgent
 	}
 
@@ -765,7 +842,9 @@ func (ac *AssistantCoordinator) ExecuteTool(ctx context.Context, toolName string
 
 	tool, ok := ac.FunctionLibrary[toolName]
 	if !ok {
+		ac.agentMu.RLock()
 		tool, ok = ac.DelegationLibrary[toolName]
+		ac.agentMu.RUnlock()
 		if !ok {
 			logger.Error("tool not found")
 			return nil, ErrToolNotFound
@@ -1641,7 +1720,7 @@ func (ac *AssistantCoordinator) loadTurnSession(ctx context.Context, sessionId s
 		model.GetSessionsWithIncludeDeleted(true),
 		model.GetSessionsWithMessageMeta(false),
 	}
-	if ac.maxSubSessionTokens > 0 {
+	if ac.getMaxSubSessionTokens() > 0 {
 		opts = append(opts, model.GetSessionsWithUsage(true))
 	}
 
@@ -1688,7 +1767,7 @@ func (ac *AssistantCoordinator) loadSessionHistory(ctx context.Context, sess *mo
 // sessions, when no budget is configured, or when the session (and therefore its
 // usage) couldn't be loaded, isSub is false and remaining is 0 (no cap).
 func (ac *AssistantCoordinator) subSessionOutputBudget(sess *model.AssistantSession) (isSub bool, remaining int) {
-	if ac.maxSubSessionTokens <= 0 || sess == nil {
+	if ac.getMaxSubSessionTokens() <= 0 || sess == nil {
 		return false, 0
 	}
 
@@ -1701,17 +1780,17 @@ func (ac *AssistantCoordinator) subSessionOutputBudget(sess *model.AssistantSess
 		used = sess.Usage.TotalOutputTokens
 	}
 
-	return true, ac.maxSubSessionTokens - used
+	return true, ac.getMaxSubSessionTokens() - used
 }
 
 // subSessionStartOpts returns the chat options that cap a sub-agent's first turn
 // at the full per-sub-session budget (none has been spent yet). It returns no
 // options when the budget is disabled.
 func (ac *AssistantCoordinator) subSessionStartOpts() []model.ChatOpt {
-	if ac.maxSubSessionTokens <= 0 {
+	if ac.getMaxSubSessionTokens() <= 0 {
 		return nil
 	}
-	return []model.ChatOpt{model.WithMaxTokens(ac.maxSubSessionTokens)}
+	return []model.ChatOpt{model.WithMaxTokens(ac.getMaxSubSessionTokens())}
 }
 
 // subSessionBudgetNotice is the text returned to the parent when a sub-agent is
@@ -1734,7 +1813,7 @@ func (ac *AssistantCoordinator) haltSubSessionStream(ctx context.Context, sess *
 
 	logger.WithFields(log.Fields{
 		"sessionId": sessionId,
-		"budget":    ac.maxSubSessionTokens,
+		"budget":    ac.getMaxSubSessionTokens(),
 	}).Info("sub-session output-token budget exhausted; halting")
 
 	if toolMsg != nil {
@@ -1745,7 +1824,7 @@ func (ac *AssistantCoordinator) haltSubSessionStream(ctx context.Context, sess *
 		}
 	}
 
-	notice := subSessionBudgetNotice(ac.maxSubSessionTokens)
+	notice := subSessionBudgetNotice(ac.getMaxSubSessionTokens())
 
 	response, bodyWriter := fabricateResponse(http.StatusOK)
 	aux := &model.AuxMessageData{ThoughtSignatures: map[string][]byte{}}
@@ -1793,7 +1872,7 @@ func (ac *AssistantCoordinator) haltSubSessionSync(ctx context.Context, sessionI
 
 	logger.WithFields(log.Fields{
 		"sessionId": sessionId,
-		"budget":    ac.maxSubSessionTokens,
+		"budget":    ac.getMaxSubSessionTokens(),
 	}).Info("sub-session output-token budget exhausted; halting")
 
 	if toolMsg != nil {
@@ -1809,7 +1888,7 @@ func (ac *AssistantCoordinator) haltSubSessionSync(ctx context.Context, sessionI
 		Id:   uuid.NewString(),
 		Role: "assistant",
 		ContentBlocks: []model.ContentBlock{
-			{Type: "text", Text: subSessionBudgetNotice(ac.maxSubSessionTokens)},
+			{Type: "text", Text: subSessionBudgetNotice(ac.getMaxSubSessionTokens())},
 		},
 		StopReason: &stopReason,
 	}
@@ -1955,7 +2034,7 @@ func delegationDepthNotice(limit int) string {
 // resolves the delegating session's delegate tool_use so it resumes instead of
 // nesting another sub-agent. A limit of 0 disables the check.
 func (ac *AssistantCoordinator) delegationDepthRefusal(ctx context.Context, toolReq *model.ToolRequest) *model.Message {
-	if ac.maxDelegationDepth <= 0 {
+	if ac.getMaxDelegationDepth() <= 0 {
 		return nil
 	}
 
@@ -1965,19 +2044,19 @@ func (ac *AssistantCoordinator) delegationDepthRefusal(ctx context.Context, tool
 	}
 
 	// The child would be one level deeper than the delegating session.
-	if parentDepth+1 <= ac.maxDelegationDepth {
+	if parentDepth+1 <= ac.getMaxDelegationDepth() {
 		return nil
 	}
 
 	log.FromContext(ctx).WithFields(log.Fields{
 		"sessionId":          toolReq.SessionId,
 		"delegatingDepth":    parentDepth,
-		"maxDelegationDepth": ac.maxDelegationDepth,
+		"maxDelegationDepth": ac.getMaxDelegationDepth(),
 	}).Info("delegation refused; would exceed maximum delegation depth")
 
 	return buildToolResultMessage(toolReq.ToolUseId, &model.ToolResponse{
 		ToolName: "delegation",
-		Result:   delegationDepthNotice(ac.maxDelegationDepth),
+		Result:   delegationDepthNotice(ac.getMaxDelegationDepth()),
 	}, nil)
 }
 
@@ -2251,7 +2330,11 @@ func (ac *AssistantCoordinator) setupAgent(ctx context.Context, req *model.ChatR
 		tools = append(tools, tool)
 	}
 
-	req.ToolConfig, err = buildToolConfig(ac.FunctionLibrary, ac.DelegationLibrary, tools, agent.CanDelegateTo) // build tools for this agent
+	ac.agentMu.RLock()
+	delegationLibrary := ac.DelegationLibrary
+	ac.agentMu.RUnlock()
+
+	req.ToolConfig, err = buildToolConfig(ac.FunctionLibrary, delegationLibrary, tools, agent.CanDelegateTo) // build tools for this agent
 	if err != nil {
 		logger.WithError(err).WithFields(log.Fields{
 			"agentName": agent.Name,
