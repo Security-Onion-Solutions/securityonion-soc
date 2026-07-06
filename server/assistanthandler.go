@@ -68,6 +68,30 @@ type EventstoreUpdater interface {
 	AddInvestigationUpdateScripts(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, userId string, isDelete bool, sessionId ...string)
 }
 
+// decodeIncomingMessage decodes a chat message body, generating a session id
+// when the client didn't supply one.
+func decodeIncomingMessage(r *http.Request) (*model.IncomingMessage, error) {
+	incMsg := &model.IncomingMessage{}
+
+	err := json.NewDecoder(r.Body).Decode(incMsg)
+	if err != nil {
+		return nil, err
+	}
+
+	if incMsg.SessionId == "" {
+		incMsg.SessionId = uuid.NewString()
+	}
+
+	return incMsg, nil
+}
+
+// streamingAccepted reports whether the client asked for SSE via the Accept
+// header, returning the trimmed header value for the downgrade warn log.
+func streamingAccepted(r *http.Request) (bool, string) {
+	accept := strings.TrimSpace(r.Header.Get("Accept"))
+	return strings.EqualFold(accept, "text/event-stream"), accept
+}
+
 // @Summary      Send Chat Message
 // @Description  Send a message to the AI assistant and receive a response. Supports both streaming (SSE) and non-streaming responses.
 // @Tags         Assistant
@@ -97,20 +121,12 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accept := strings.TrimSpace(r.Header.Get("Accept"))
-	streaming := strings.EqualFold(accept, "text/event-stream")
-
-	incMsg := &model.IncomingMessage{}
-	err = json.NewDecoder(r.Body).Decode(incMsg)
+	incMsg, err := decodeIncomingMessage(r)
 	if err != nil {
 		logger.WithError(err).Error("unable to decode request body")
 		web.Respond(w, r, http.StatusBadRequest, err)
 
 		return
-	}
-
-	if incMsg.SessionId == "" {
-		incMsg.SessionId = uuid.NewString()
 	}
 
 	entityType := r.URL.Query().Get("entityType")
@@ -121,38 +137,42 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		_ = h.handleEntityAssociation(ctx, entityType, entityId, incMsg.SessionId)
 	}
 
+	streaming, accept := streamingAccepted(r)
 	if _, ok := w.(http.Flusher); streaming && !ok {
 		logger.WithField("acceptHeader", accept).Warn("incoming request accepts streaming but is not flushable, issuing non-streaming response")
 		streaming = false
 	}
 
-	if !streaming {
-		response, err := h.server.AssistantManager.ChatInSession(ctx, incMsg, entityType, entityId)
-		if err != nil {
-			logger.WithError(err).Error("unable to chat with assistant")
-			if isClientError(err) {
-				web.Respond(w, r, http.StatusBadRequest, err.Error())
-			} else {
-				web.Respond(w, r, http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR")
-			}
-
-			return
-		}
-
-		web.Respond(w, r, http.StatusOK, response)
-
+	if streaming {
+		h.handleStreamingChat(ctx, w, r, incMsg, entityType, entityId)
 		return
 	}
 
+	h.handleNonStreamingChat(ctx, w, r, incMsg, entityType, entityId)
+}
+
+// handleNonStreamingChat runs a buffered chat turn and writes the full
+// assistant response as JSON.
+func (h *AssistantHandler) handleNonStreamingChat(ctx context.Context, w http.ResponseWriter, r *http.Request, incMsg *model.IncomingMessage, entityType, entityId string) {
+	logger := log.FromContext(ctx)
+
+	response, err := h.server.AssistantManager.ChatInSession(ctx, incMsg, entityType, entityId)
+	if err != nil {
+		h.respondChatError(w, r, logger, err, "unable to chat with assistant")
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, response)
+}
+
+// handleStreamingChat runs a chat turn as SSE, proxying the upstream stream to
+// the client and finalizing the buffered response in the background once the stream completes.
+func (h *AssistantHandler) handleStreamingChat(ctx context.Context, w http.ResponseWriter, r *http.Request, incMsg *model.IncomingMessage, entityType, entityId string) {
+	logger := log.FromContext(ctx)
+
 	response, _, finalize, err := h.server.AssistantManager.ChatStreamInSession(ctx, incMsg, entityType, entityId)
 	if err != nil {
-		logger.WithError(err).Error("unable to chat (stream) with assistant")
-		if isClientError(err) {
-			web.Respond(w, r, http.StatusBadRequest, err.Error())
-		} else {
-			web.Respond(w, r, http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR")
-		}
-
+		h.respondChatError(w, r, logger, err, "unable to stream chat with assistant")
 		return
 	}
 
@@ -183,6 +203,7 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 // @Failure      400           "The provided input object or parameters are malformed or invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
+// @Failure      409           "A tool for the indicated session is already running"
 // @Failure      500           "Internal SOC error; review SOC logs"
 // @Router       /connect/assistant/tool/{name} [post]
 func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
@@ -1130,11 +1151,22 @@ func writeSSEDone(w http.ResponseWriter) {
 // log. Shared by PostTool's non-streaming and streaming branches.
 func (h *AssistantHandler) respondToolTurnError(w http.ResponseWriter, r *http.Request, logger log.Interface, err error, logMsg string) {
 	if errors.Is(err, ErrToolTurnBusy) {
-		logger.WithError(err).Debug("tool turn busy; another tool is running for this session")
+		logger.WithError(err).Warn("tool turn busy; another tool is running for this session")
 		web.Respond(w, r, http.StatusConflict, err.Error())
+
 		return
 	}
+
+	h.respondChatError(w, r, logger, err, logMsg)
+}
+
+// respondChatError writes the appropriate HTTP status for an error from a chat
+// turn: 400 for a client error, or 500 otherwise. logMsg describes the failing
+// path for the error log. Shared by PostChat's non-streaming and streaming
+// branches.
+func (h *AssistantHandler) respondChatError(w http.ResponseWriter, r *http.Request, logger log.Interface, err error, logMsg string) {
 	logger.WithError(err).Error(logMsg)
+
 	if isClientError(err) {
 		web.Respond(w, r, http.StatusBadRequest, err.Error())
 	} else {
@@ -1161,18 +1193,21 @@ func messageHasToolUse(msg *model.Message) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
 // messageText concatenates the text content of an assistant turn, used as the
 // delegated sub-agent's final answer when resolving a delegation.
 func messageText(msg *model.Message) string {
-	var b strings.Builder
+	b := strings.Builder{}
+
 	for _, cb := range msg.ContentBlocks {
 		if cb.Text != "" {
 			b.WriteString(cb.Text)
 		}
 	}
+
 	return b.String()
 }
 

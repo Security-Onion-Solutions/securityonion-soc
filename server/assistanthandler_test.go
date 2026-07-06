@@ -2770,6 +2770,182 @@ func TestPostChat_StreamingUpstreamError(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
 
+func TestDecodeIncomingMessage(t *testing.T) {
+	testCases := []struct {
+		name          string
+		body          string
+		wantErr       bool
+		wantSessionId string
+	}{
+		{
+			name:          "valid body preserves session id",
+			body:          `{"msg":"hi","sessionId":"s1","model":"m"}`,
+			wantSessionId: "s1",
+		},
+		{
+			name: "missing session id gets generated",
+			body: `{"msg":"hi"}`,
+		},
+		{
+			name:    "malformed body returns an error",
+			body:    "{not valid json",
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest("POST", "/assistant/chat", bytes.NewBufferString(tc.body))
+
+			incMsg, err := decodeIncomingMessage(req)
+
+			if tc.wantErr {
+				assert.Error(t, err)
+				assert.Nil(t, incMsg)
+				return
+			}
+
+			assert.NoError(t, err)
+			if tc.wantSessionId != "" {
+				assert.Equal(t, tc.wantSessionId, incMsg.SessionId)
+			} else {
+				assert.NotEmpty(t, incMsg.SessionId)
+			}
+		})
+	}
+}
+
+func TestStreamingAccepted(t *testing.T) {
+	testCases := []struct {
+		name          string
+		accept        string
+		wantStreaming bool
+		wantAccept    string
+	}{
+		{name: "text/event-stream enables streaming", accept: "text/event-stream", wantStreaming: true, wantAccept: "text/event-stream"},
+		{name: "accept header is case-insensitive", accept: "Text/Event-Stream", wantStreaming: true, wantAccept: "Text/Event-Stream"},
+		{name: "accept header is trimmed", accept: "  text/event-stream  ", wantStreaming: true, wantAccept: "text/event-stream"},
+		{name: "application/json is non-streaming", accept: "application/json", wantAccept: "application/json"},
+		{name: "missing accept header is non-streaming", accept: "", wantAccept: ""},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest("POST", "/assistant/chat", nil)
+			if tc.accept != "" {
+				req.Header.Set("Accept", tc.accept)
+			}
+
+			streaming, accept := streamingAccepted(req)
+
+			assert.Equal(t, tc.wantStreaming, streaming)
+			assert.Equal(t, tc.wantAccept, accept)
+		})
+	}
+}
+
+func TestRespondChatError(t *testing.T) {
+	testCases := []struct {
+		name     string
+		err      error
+		wantCode int
+		wantBody string
+	}{
+		{name: "invalid model surfaces as 400", err: errors.New("ERROR_ASSISTANT_INVALID_MODEL"), wantCode: http.StatusBadRequest, wantBody: "ERROR_ASSISTANT_INVALID_MODEL"},
+		{name: "request too large surfaces as 400", err: errors.New("ERROR_ASSISTANT_REQUEST_TOO_LARGE"), wantCode: http.StatusBadRequest, wantBody: "ERROR_ASSISTANT_REQUEST_TOO_LARGE"},
+		{name: "internal error surfaces as 500", err: errors.New("boom"), wantCode: http.StatusInternalServerError, wantBody: "ERROR_UPSTREAM_SERVICE_ERROR"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv, _, _ := newAssistantTestServer(t, true)
+			handler := NewAssistantHandler(srv)
+
+			req := withAssistantContext(httptest.NewRequest("POST", "/assistant/chat", nil))
+			w := httptest.NewRecorder()
+
+			handler.respondChatError(w, req, log.FromContext(req.Context()), tc.err, "test chat error")
+
+			assert.Equal(t, tc.wantCode, w.Code)
+			assert.Contains(t, w.Body.String(), tc.wantBody)
+		})
+	}
+}
+
+func TestPostChat_DefaultsSessionId(t *testing.T) {
+	srv, mockManager, _ := newAssistantTestServer(t, true)
+	handler := NewAssistantHandler(srv)
+
+	var capturedIncMsg *model.IncomingMessage
+	mockManager.EXPECT().ChatInSession(gomock.Any(), gomock.Any(), "", "").DoAndReturn(
+		func(_ context.Context, incMsg *model.IncomingMessage, _, _ string) ([]*model.Message, error) {
+			capturedIncMsg = incMsg
+			return []*model.Message{}, nil
+		})
+
+	body, _ := json.Marshal(map[string]any{"msg": "hi", "model": "m"})
+	req := withAssistantContext(httptest.NewRequest("POST", "/assistant/chat", bytes.NewBuffer(body)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	handler.PostChat(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.NotNil(t, capturedIncMsg)
+	assert.NotEmpty(t, capturedIncMsg.SessionId)
+}
+
+func TestPostChat_StreamingDowngradeToNonStreaming(t *testing.T) {
+	srv, mockManager, _ := newAssistantTestServer(t, true)
+	handler := NewAssistantHandler(srv)
+
+	// The writer is not an http.Flusher, so despite the SSE Accept header the
+	// handler must fall back to the buffered ChatInSession path.
+	mockManager.EXPECT().ChatInSession(gomock.Any(), gomock.Any(), "", "").Return([]*model.Message{}, nil)
+
+	body, _ := json.Marshal(map[string]any{"msg": "hi", "sessionId": "s1", "model": "m"})
+	req := withAssistantContext(httptest.NewRequest("POST", "/assistant/chat", bytes.NewBuffer(body)))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "text/event-stream")
+	w := &nonFlushResponseWriter{}
+
+	handler.PostChat(w, req)
+
+	assert.Equal(t, http.StatusOK, w.code)
+}
+
+func TestPostChat_StreamingFinalizeCalled(t *testing.T) {
+	srv, mockManager, _ := newAssistantTestServer(t, true)
+	handler := NewAssistantHandler(srv)
+
+	finalized := make(chan []byte, 1)
+	finalize := func(rawResponse []byte) error {
+		finalized <- rawResponse
+		return nil
+	}
+	mockManager.EXPECT().ChatStreamInSession(gomock.Any(), gomock.Any(), "", "").Return(
+		sseTextResponse("hello"), &model.AuxMessageData{}, finalize, nil)
+
+	body, _ := json.Marshal(map[string]any{"msg": "hi", "sessionId": "s1", "model": "m"})
+	req := withAssistantContext(httptest.NewRequest("POST", "/assistant/chat", bytes.NewBuffer(body)))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "text/event-stream")
+	w := httptest.NewRecorder()
+
+	handler.PostChat(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// finalize runs in a goroutine after the stream completes, so wait for it.
+	select {
+	case raw := <-finalized:
+		assert.Equal(t, w.Body.String(), string(raw))
+		assert.Contains(t, string(raw), "hello")
+	case <-time.After(5 * time.Second):
+		t.Fatal("finalize was not called within timeout")
+	}
+}
+
 func TestPostTool_DecodeError(t *testing.T) {
 	srv, _, _ := newAssistantTestServer(t, true)
 	handler := NewAssistantHandler(srv)
