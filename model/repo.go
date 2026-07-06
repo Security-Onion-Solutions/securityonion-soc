@@ -79,6 +79,11 @@ func GetReposDefault(cfg map[string]interface{}, field string, licenseRequired b
 			r.Folder = &folder
 		}
 
+		branch, ok := obj["branch"].(string)
+		if ok {
+			r.Branch = &branch
+		}
+
 		repos = append(repos, r)
 	}
 

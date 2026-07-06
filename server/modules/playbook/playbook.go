@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -35,6 +36,8 @@ const (
 	DEFAULT_PLAYBOOK_IMPORT_FREQUENCY_SECONDS = 24 * 60 * 60
 	DEFAULT_PLAYBOOK_IMPORT_ERROR_SECONDS     = 10 * 60
 	DEFAULT_PLAYBOOK_REPO_PATH                = "/opt/sensoroni/playbooks"
+	DEFAULT_PLACEHOLDER_MAP_PATH              = "/opt/sensoroni/playbook_placeholder_map.yaml"
+	DEFAULT_USER_PLACEHOLDER_MAP_PATH         = "/opt/sensoroni/playbook_placeholder_map_custom.yaml"
 )
 
 var ( // treat as constant
@@ -60,6 +63,13 @@ type PlaybookDiskManager struct {
 	interruptChan                  chan bool
 	playbookImportFrequencySeconds int
 	playbookImportErrorSeconds     int
+
+	// placeholderMap maps a Sigma placeholder name (%name%) to the event field its value
+	// resolves from (via lookupEventValue). It is the shipped global map overlaid with the
+	// editable user map
+	placeholderMap         map[string]string
+	placeholderMapPath     string // shipped defaults, overwritten on upgrade
+	userPlaceholderMapPath string // grid-editable overrides, preserved across upgrades
 
 	PlaybooksByDetectionId map[string][]string
 	PlaybooksByCategory    map[string][]string
@@ -92,6 +102,28 @@ func (pdm *PlaybookDiskManager) Init(config module.ModuleConfig) (err error) {
 	pdm.playbookRepos, err = model.GetReposDefault(config, "playbookRepos", false, DEFAULT_PLAYBOOK_REPOS)
 	if err != nil {
 		return fmt.Errorf("unable to parse Playbooks playbookRepos: %w", err)
+	}
+
+	pdm.placeholderMapPath = module.GetStringDefault(config, "placeholderMapPath", DEFAULT_PLACEHOLDER_MAP_PATH)
+	pdm.userPlaceholderMapPath = module.GetStringDefault(config, "userPlaceholderMapPath", DEFAULT_USER_PLACEHOLDER_MAP_PATH)
+
+	// The combined map is the shipped global map overlaid with the editable user map
+	// (user entries win). Both are optional; a missing file just contributes nothing.
+	globalMap := pdm.loadPlaceholderMap(pdm.placeholderMapPath)
+	userMap := pdm.loadPlaceholderMap(pdm.userPlaceholderMapPath)
+	pdm.placeholderMap = mergePlaceholderMaps(globalMap, userMap)
+
+	if len(pdm.placeholderMap) == 0 {
+		log.WithFields(log.Fields{
+			"globalMapPath": pdm.placeholderMapPath,
+			"userMapPath":   pdm.userPlaceholderMapPath,
+		}).Warn("no playbook placeholder tokens declared")
+	} else {
+		log.WithFields(log.Fields{
+			"globalTokens": len(globalMap),
+			"userTokens":   len(userMap),
+			"totalTokens":  len(pdm.placeholderMap),
+		}).Info("loaded playbook placeholder maps")
 	}
 
 	return nil
@@ -617,7 +649,10 @@ func (pdm *PlaybookDiskManager) GetEventSpecificPlaybook(ctx context.Context, id
 	return playbooks, nil
 }
 
-func (pdm *PlaybookDiskManager) ConvertQuestions(ctx context.Context, queries []string) ([]*model.ConvertedQuery, error) {
+// ruleTitleRegex matches a top-level `title:` key in a Sigma rule document.
+var ruleTitleRegex = regexp.MustCompile(`(?m)^title:`)
+
+func (pdm *PlaybookDiskManager) ConvertQuestions(ctx context.Context, queries []string, event *model.EventRecord) ([]*model.ConvertedQuery, error) {
 	logger := log.FromContext(ctx)
 
 	err := pdm.srv.CheckAuthorized(ctx, "read", "playbooks")
@@ -625,10 +660,40 @@ func (pdm *PlaybookDiskManager) ConvertQuestions(ctx context.Context, queries []
 		return nil, err
 	}
 
-	args := []string{"convert", "-t", "security_onion", "-p", "/opt/sensoroni/sigma_final_pipeline.yaml", "-p", "/opt/sensoroni/sigma_so_pipeline.yaml", "-p", "windows-logsources", "-p", "ecs_windows", "--disable-pipeline-check", "/dev/stdin"}
+	// Resolve %placeholder% values from this alert's event via a per-call `vars:` pipeline.
+	// SecurityOnion_playbook_placeholders reads pipeline.vars; pySigma merges the -p pipelines.
+	// The combined placeholder map declares the known tokens; any token used in a query but
+	// undeclared is resolved by name against the event (see buildVarsFromEvent).
+	used := extractPlaceholders(queries...)
+	varsYaml, err := yaml.Marshal(map[string]interface{}{"vars": pdm.buildVarsFromEvent(event, pdm.placeholderMap, used)})
+	if err != nil {
+		return nil, fmt.Errorf("unable to marshal placeholder vars: %w", err)
+	}
+
+	varsPath := filepath.Join(os.TempDir(), "playbook-vars-"+uuid.New().String()+".yaml")
+	if err := pdm.WriteFile(varsPath, varsYaml, 0600); err != nil {
+		return nil, fmt.Errorf("unable to write placeholder vars file: %w", err)
+	}
+	defer func() {
+		if rmErr := pdm.DeleteFile(varsPath); rmErr != nil {
+			logger.WithError(rmErr).WithField("varsPath", varsPath).Warn("unable to remove placeholder vars file")
+		}
+	}()
+
+	args := []string{"convert", "-t", "security_onion", "-p", "SecurityOnion_playbook_placeholders", "-p", varsPath, "-p", "/opt/sensoroni/sigma_final_pipeline.yaml", "-p", "/opt/sensoroni/sigma_so_pipeline.yaml", "-p", "/opt/sensoroni/sigma_playbook_pipeline.yaml", "-p", "windows-logsources", "-p", "ecs_windows", "--disable-pipeline-check", "/dev/stdin"}
+
+	// pySigma rejects a title-less rule, so prepend a throwaway title to any query
+	// that lacks one. It is stripped from the OQL output and need not be unique.
+	titled := make([]string, len(queries))
+	for i, q := range queries {
+		if !ruleTitleRegex.MatchString(q) {
+			q = "title: Playbook Question\n" + q
+		}
+		titled[i] = q
+	}
 
 	cmd := exec.CommandContext(pdm.srv.Context, "sigma", args...)
-	cmd.Stdin = strings.NewReader(strings.Join(queries, "\n---\n"))
+	cmd.Stdin = strings.NewReader(strings.Join(titled, "\n---\n"))
 
 	raw, code, runtime, err := pdm.ExecCommand(cmd)
 
@@ -684,6 +749,8 @@ func (pdm *PlaybookDiskManager) ExecutePlaybookSearches(ctx context.Context, eve
 		return err
 	}
 
+	// LEGACY {field} substitution (normalized playbooks); a no-op for %placeholder%
+	// playbooks, whose values are resolved below at convert time via buildVarsFromEvent.
 	queryVariableSubstitution(event, pbs)
 
 	for _, pb := range pbs {
@@ -691,7 +758,7 @@ func (pdm *PlaybookDiskManager) ExecutePlaybookSearches(ctx context.Context, eve
 			return q.FilledQuery
 		})
 
-		converted, err := pdm.ConvertQuestions(ctx, filled)
+		converted, err := pdm.ConvertQuestions(ctx, filled, event)
 		if err != nil {
 			logger.WithError(err).WithFields(log.Fields{"playbookId": pb.Id, "eventId": event.Id}).Warn("unable to convert questions")
 			return err
@@ -763,7 +830,14 @@ func (pdm *PlaybookDiskManager) ExecutePlaybookSearches(ctx context.Context, eve
 	return nil
 }
 
-// queryVariableSubstitution substitutes variables in playbook queries with values from the provided event data
+// queryVariableSubstitution substitutes {field} variables in playbook queries with values
+// from the alert event, writing the result to each question's FilledQuery.
+//
+// LEGACY: this is the original "normalized" playbook mechanism —  string replacement
+// of {payload.key} tokens BEFORE conversion. It is superseded by the %placeholder% pipeline
+// (SecurityOnion_playbook_placeholders + buildVarsFromEvent), which resolves values at `sigma convert` time
+// Un-normalized playbooks use %placeholder% and contain no {} tokens, so for them this is a
+// no-op (FilledQuery == Query). Retained only for any remaining normalized playbooks.
 func queryVariableSubstitution(event *model.EventRecord, playbooks []*model.Playbook) {
 	// Fields that require special array handling
 	arrayFields := []string{"network.private_ip", "network.public_ip", "related.ip"}

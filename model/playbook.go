@@ -40,7 +40,7 @@ type Question struct {
 	AnswerSources []string `yaml:"answer_sources" json:"answer_sources"`
 	// A raw YAML Sigma query that can be used to find the answer to this question. May contain variables that will be replaced with values from the alert.
 	Query string `json:"query"`
-	// The query after variable substitution has been performed.
+	// The query after LEGACY {field} variable substitution (queryVariableSubstitution) has been performed.
 	FilledQuery string `json:"filledQuery,omitempty" yaml:"filledQuery,omitempty"`
 	// The results after the queries have been substituted, converted, and executed.
 	QueryResults []*EventRecord `json:"queryResults" yaml:"-"`
