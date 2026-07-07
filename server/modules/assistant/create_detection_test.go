@@ -7,6 +7,7 @@ package assistant
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -332,7 +333,7 @@ func TestCreateDetectionTool_Execute(t *testing.T) {
 
 			// Create tool and execute
 			tool := &CreateDetectionTool{}
-			result, err := tool.Execute(ctx, mockServer, tc.params, "")
+			result, err := tool.Execute(ctx, mockServer, &model.ToolRequest{Params: json.RawMessage(tc.params)})
 
 			// Assert error expectations
 			if tc.expectedError {
@@ -399,7 +400,7 @@ func TestCreateDetectionTool_Execute_VerifyContextPropagation(t *testing.T) {
 	mockDetectionEngine.EXPECT().SyncLocalDetections(ctx, gomock.Any()).Return(map[string]string{}, nil)
 
 	tool := &CreateDetectionTool{}
-	_, err := tool.Execute(ctx, mockServer, `{"language": "sigma", "license": "DRL", "content": "title: Test Rule"}`, "")
+	_, err := tool.Execute(ctx, mockServer, &model.ToolRequest{Params: json.RawMessage(`{"language": "sigma", "license": "DRL", "content": "title: Test Rule"}`)})
 
 	assert.NoError(t, err)
 }
@@ -462,7 +463,7 @@ func TestCreateDetectionTool_Execute_OverrideTimestamps(t *testing.T) {
 	mockDetectionEngine.EXPECT().SyncLocalDetections(ctx, gomock.Any()).Return(map[string]string{}, nil)
 
 	tool := &CreateDetectionTool{}
-	result, err := tool.Execute(ctx, mockServer, `{"language": "sigma", "license": "DRL", "content": "title: Test Rule"}`, "")
+	result, err := tool.Execute(ctx, mockServer, &model.ToolRequest{Params: json.RawMessage(`{"language": "sigma", "license": "DRL", "content": "title: Test Rule"}`)})
 
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
@@ -514,7 +515,7 @@ func TestCreateDetectionTool_Execute_AuthorAssignment(t *testing.T) {
 	mockDetectionEngine.EXPECT().SyncLocalDetections(ctx, gomock.Any()).Return(map[string]string{}, nil)
 
 	tool := &CreateDetectionTool{}
-	result, err := tool.Execute(ctx, mockServer, `{"language": "sigma", "license": "DRL", "content": "title: Test Rule"}`, "")
+	result, err := tool.Execute(ctx, mockServer, &model.ToolRequest{Params: json.RawMessage(`{"language": "sigma", "license": "DRL", "content": "title: Test Rule"}`)})
 
 	assert.NoError(t, err)
 	assert.NotNil(t, result)

@@ -7,6 +7,7 @@ package assistant
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"testing"
@@ -281,7 +282,7 @@ func TestUpdateOverridesTool_Execute(t *testing.T) {
 			}
 
 			tool := &UpdateOverridesTool{}
-			result, err := tool.Execute(ctx, mockServer, tc.params, "")
+			result, err := tool.Execute(ctx, mockServer, &model.ToolRequest{Params: json.RawMessage(tc.params)})
 
 			if tc.expectedError {
 				assert.Error(t, err)
@@ -383,7 +384,7 @@ func TestUpdateOverridesTool_Execute_TimestampHandling(t *testing.T) {
 	tool := &UpdateOverridesTool{}
 	params := fmt.Sprintf(`{"soc_id": "test-id", "overrides": [{"isEnabled":true,"type":"threshold","thresholdType":"both","track":"by_dst","count":10,"seconds":60,"createdAt":"%s","updatedAt":"%s"}]}`,
 		existingTime.Format(time.RFC3339), existingTime.Format(time.RFC3339))
-	result, err := tool.Execute(ctx, mockServer, params, "")
+	result, err := tool.Execute(ctx, mockServer, &model.ToolRequest{Params: json.RawMessage(params)})
 
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
@@ -446,7 +447,7 @@ func TestUpdateOverridesTool_Execute_EmptyOverrides(t *testing.T) {
 	mockDetectionEngine.EXPECT().MergeAuxiliaryData(gomock.Any()).Return(nil)
 
 	tool := &UpdateOverridesTool{}
-	result, err := tool.Execute(ctx, mockServer, `{"soc_id": "test-id", "overrides": []}`, "")
+	result, err := tool.Execute(ctx, mockServer, &model.ToolRequest{Params: json.RawMessage(`{"soc_id": "test-id", "overrides": []}`)})
 
 	assert.NoError(t, err)
 	assert.NotNil(t, result)

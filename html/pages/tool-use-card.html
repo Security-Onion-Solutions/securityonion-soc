@@ -1,0 +1,67 @@
+<div class="tool-use-card mb-2">
+  <v-card variant="outlined" class="pa-3">
+    <div class="d-flex align-center mb-2">
+      <v-icon :color="ctx.getToolStatusColor(displayStatus)" class="mr-2" size="small">{{ ctx.getToolStatusIcon(displayStatus) }}</v-icon>
+      <span class="font-weight-medium text-body-2">{{ toolUse.name }}</span>
+      <v-spacer></v-spacer>
+      <v-chip :color="ctx.getToolStatusColor(displayStatus)" size="x-small" variant="flat">{{ ctx.getToolStatusTitle(displayStatus) }}</v-chip>
+    </div>
+
+    <!-- Tool Parameters -->
+    <div v-if="Object.keys(toolUse.input).length > 0" class="mb-2">
+      <div :id="'tool-params-label-' + toolUse.id" class="text-body-small text-medium-emphasis mb-1">{{ ctx.i18n.parameters }}:</div>
+      <v-code class="text-body-small" :aria-labelledby="'tool-params-label-' + toolUse.id">{{ JSON.stringify(toolUse.input, null, 2) }}</v-code>
+    </div>
+
+    <!-- Tool Approval Buttons -->
+    <div v-if="toolUse.status === 'pending_approval'" class="mb-2">
+      <div :id="'tool-use-question-' + toolUse.id" class="text-body-small text-medium-emphasis mb-1">{{ ctx.i18n.toolExecuteQuestion }}</div>
+      <div :aria-labelledby="'tool-use-question-' + toolUse.id" role="group" class="d-flex align-center tool-approval-buttons">
+        <v-btn color="success" size="small" variant="flat" @click="ctx.approveTool(toolUse)" data-aid="assistant_tool_use_approve" :disabled="!ctx.canChat">
+          <v-icon size="small" class="mr-1">fa-check</v-icon>{{ ctx.i18n.approve }}
+        </v-btn>
+        <v-btn color="error" size="small" variant="flat" @click="ctx.rejectTool(toolUse)" data-aid="assistant_tool_use_reject" :disabled="!ctx.canChat">
+          <v-icon size="small" class="mr-1">fa-times</v-icon>{{ ctx.i18n.reject }}
+        </v-btn>
+        <v-btn v-if="!nested" icon variant="text" size="x-small" @click="ctx.showOptionsDialog = true" data-aid="assistant_tool_use_options" style="min-width: auto; margin-left: -5px" :aria-label="ctx.i18n.ariaAssistantOptions">
+          <v-icon size="small">fa-cog</v-icon>
+        </v-btn>
+      </div>
+    </div>
+
+    <!-- Tool Executing Spinner (hidden when really awaiting a nested approval) -->
+    <div v-if="displayStatus === 'executing'" class="mb-2">
+      <div class="d-flex align-center">
+        <v-progress-circular indeterminate color="warning" size="16" width="2" class="mr-2"></v-progress-circular>
+        <span class="text-body-small text-medium-emphasis">{{ ctx.i18n.toolExecuting }}</span>
+      </div>
+    </div>
+
+    <!-- Delegated sub-agent (nested). Rendered by the recursive delegation-child
+         component so delegations that themselves delegate nest to any depth. -->
+    <delegation-child v-if="toolUse.childSession" :tool-use="toolUse"></delegation-child>
+
+    <!-- Raw Tool Result Dropdown (delegations show their transcript above instead) -->
+    <div v-if="toolUse.rawResult && toolUse.status === 'completed' && !toolUse.childSession" class="mb-2">
+      <v-expansion-panels variant="accordion" class="tool-result-expansion">
+        <v-expansion-panel>
+          <v-expansion-panel-title class="text-body-small" expand-icon="fa-angle-down" collapse-icon="fa-angle-up">{{ ctx.i18n.rawToolResult }}</v-expansion-panel-title>
+          <v-expansion-panel-text>
+            <v-code class="text-body-small d-block delegation-child-raw-result" tabindex="0" role="region" :aria-label="ctx.i18n.rawToolResult">{{ toolUse.rawResult }}</v-code>
+          </v-expansion-panel-text>
+        </v-expansion-panel>
+      </v-expansion-panels>
+    </div>
+
+    <!-- Tool Error -->
+    <div v-if="(toolUse.status === 'error' || toolUse.status === 'rejected') && toolUse.error" class="mb-2">
+      <div :id="'tool-problem-label-' + toolUse.id" class="text-body-small text-medium-emphasis mb-1">{{ (toolUse.status === 'rejected' ? ctx.i18n.rejected : ctx.i18n.error) }}:</div>
+      <div class="text-error text-body-2" :aria-labelledby="'tool-problem-label-' + toolUse.id">{{ toolUse.error }}</div>
+    </div>
+
+    <!-- Execution Time (top-level cards only) -->
+    <div v-if="!nested && toolUse.completedAt" class="text-body-small text-medium-emphasis">
+      {{ ctx.i18n.completed }}: {{ ctx.formatTimestamp(toolUse.completedAt) }}
+    </div>
+  </v-card>
+</div>

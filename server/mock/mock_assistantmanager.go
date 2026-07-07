@@ -57,55 +57,51 @@ func (mr *MockAssistantManagerMockRecorder) Balance(ctx, aiModel any) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Balance", reflect.TypeOf((*MockAssistantManager)(nil).Balance), ctx, aiModel)
 }
 
-// Chat mocks base method.
-func (m *MockAssistantManager) Chat(ctx context.Context, aiModel string, messages []*model.Message, opts ...model.ChatOpt) ([]*model.Message, error) {
+// ChatInSession mocks base method.
+func (m *MockAssistantManager) ChatInSession(ctx context.Context, incMsg *model.IncomingMessage, entityType, entityId string) ([]*model.Message, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{ctx, aiModel, messages}
-	for _, a := range opts {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "Chat", varargs...)
+	ret := m.ctrl.Call(m, "ChatInSession", ctx, incMsg, entityType, entityId)
 	ret0, _ := ret[0].([]*model.Message)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// Chat indicates an expected call of Chat.
-func (mr *MockAssistantManagerMockRecorder) Chat(ctx, aiModel, messages any, opts ...any) *gomock.Call {
+// ChatInSession indicates an expected call of ChatInSession.
+func (mr *MockAssistantManagerMockRecorder) ChatInSession(ctx, incMsg, entityType, entityId any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{ctx, aiModel, messages}, opts...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Chat", reflect.TypeOf((*MockAssistantManager)(nil).Chat), varargs...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChatInSession", reflect.TypeOf((*MockAssistantManager)(nil).ChatInSession), ctx, incMsg, entityType, entityId)
 }
 
-// ChatStream mocks base method.
-func (m *MockAssistantManager) ChatStream(ctx context.Context, aiModel string, messages []*model.Message) (*http.Response, *model.AuxMessageData, error) {
+// ChatStreamInSession mocks base method.
+func (m *MockAssistantManager) ChatStreamInSession(ctx context.Context, incMsg *model.IncomingMessage, entityType, entityId string) (*http.Response, *model.AuxMessageData, func([]byte) error, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ChatStream", ctx, aiModel, messages)
+	ret := m.ctrl.Call(m, "ChatStreamInSession", ctx, incMsg, entityType, entityId)
 	ret0, _ := ret[0].(*http.Response)
 	ret1, _ := ret[1].(*model.AuxMessageData)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
+	ret2, _ := ret[2].(func([]byte) error)
+	ret3, _ := ret[3].(error)
+	return ret0, ret1, ret2, ret3
 }
 
-// ChatStream indicates an expected call of ChatStream.
-func (mr *MockAssistantManagerMockRecorder) ChatStream(ctx, aiModel, messages any) *gomock.Call {
+// ChatStreamInSession indicates an expected call of ChatStreamInSession.
+func (mr *MockAssistantManagerMockRecorder) ChatStreamInSession(ctx, incMsg, entityType, entityId any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChatStream", reflect.TypeOf((*MockAssistantManager)(nil).ChatStream), ctx, aiModel, messages)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChatStreamInSession", reflect.TypeOf((*MockAssistantManager)(nil).ChatStreamInSession), ctx, incMsg, entityType, entityId)
 }
 
 // ExecuteTool mocks base method.
-func (m *MockAssistantManager) ExecuteTool(ctx context.Context, toolName, params, auxData string) (*model.ToolResponse, error) {
+func (m *MockAssistantManager) ExecuteTool(ctx context.Context, toolName string, toolReq *model.ToolRequest) (*model.ToolResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ExecuteTool", ctx, toolName, params, auxData)
+	ret := m.ctrl.Call(m, "ExecuteTool", ctx, toolName, toolReq)
 	ret0, _ := ret[0].(*model.ToolResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ExecuteTool indicates an expected call of ExecuteTool.
-func (mr *MockAssistantManagerMockRecorder) ExecuteTool(ctx, toolName, params, auxData any) *gomock.Call {
+func (mr *MockAssistantManagerMockRecorder) ExecuteTool(ctx, toolName, toolReq any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecuteTool", reflect.TypeOf((*MockAssistantManager)(nil).ExecuteTool), ctx, toolName, params, auxData)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecuteTool", reflect.TypeOf((*MockAssistantManager)(nil).ExecuteTool), ctx, toolName, toolReq)
 }
 
 // Health mocks base method.
@@ -121,4 +117,90 @@ func (m *MockAssistantManager) Health(ctx context.Context, aiModel string) (*mod
 func (mr *MockAssistantManagerMockRecorder) Health(ctx, aiModel any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Health", reflect.TypeOf((*MockAssistantManager)(nil).Health), ctx, aiModel)
+}
+
+// ResolveDelegationStream mocks base method.
+func (m *MockAssistantManager) ResolveDelegationStream(ctx context.Context, childSession *model.AssistantSession, childFinalText string) (*model.StreamedTurn, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ResolveDelegationStream", ctx, childSession, childFinalText)
+	ret0, _ := ret[0].(*model.StreamedTurn)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ResolveDelegationStream indicates an expected call of ResolveDelegationStream.
+func (mr *MockAssistantManagerMockRecorder) ResolveDelegationStream(ctx, childSession, childFinalText any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResolveDelegationStream", reflect.TypeOf((*MockAssistantManager)(nil).ResolveDelegationStream), ctx, childSession, childFinalText)
+}
+
+// Send mocks base method.
+func (m *MockAssistantManager) Send(ctx context.Context, aiModel string, messages []*model.Message, opts ...model.ChatOpt) ([]*model.Message, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, aiModel, messages}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Send", varargs...)
+	ret0, _ := ret[0].([]*model.Message)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Send indicates an expected call of Send.
+func (mr *MockAssistantManagerMockRecorder) Send(ctx, aiModel, messages any, opts ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, aiModel, messages}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Send", reflect.TypeOf((*MockAssistantManager)(nil).Send), varargs...)
+}
+
+// SendStream mocks base method.
+func (m *MockAssistantManager) SendStream(ctx context.Context, aiModel string, messages []*model.Message, opts ...model.ChatOpt) (*http.Response, *model.AuxMessageData, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, aiModel, messages}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "SendStream", varargs...)
+	ret0, _ := ret[0].(*http.Response)
+	ret1, _ := ret[1].(*model.AuxMessageData)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// SendStream indicates an expected call of SendStream.
+func (mr *MockAssistantManagerMockRecorder) SendStream(ctx, aiModel, messages any, opts ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, aiModel, messages}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendStream", reflect.TypeOf((*MockAssistantManager)(nil).SendStream), varargs...)
+}
+
+// ToolInSession mocks base method.
+func (m *MockAssistantManager) ToolInSession(ctx context.Context, toolReq *model.ToolRequest, toolName string) ([]*model.Message, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ToolInSession", ctx, toolReq, toolName)
+	ret0, _ := ret[0].([]*model.Message)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ToolInSession indicates an expected call of ToolInSession.
+func (mr *MockAssistantManagerMockRecorder) ToolInSession(ctx, toolReq, toolName any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ToolInSession", reflect.TypeOf((*MockAssistantManager)(nil).ToolInSession), ctx, toolReq, toolName)
+}
+
+// ToolStreamInSession mocks base method.
+func (m *MockAssistantManager) ToolStreamInSession(ctx context.Context, toolReq *model.ToolRequest, toolName string) (*model.StreamedTurn, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ToolStreamInSession", ctx, toolReq, toolName)
+	ret0, _ := ret[0].(*model.StreamedTurn)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ToolStreamInSession indicates an expected call of ToolStreamInSession.
+func (mr *MockAssistantManagerMockRecorder) ToolStreamInSession(ctx, toolReq, toolName any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ToolStreamInSession", reflect.TypeOf((*MockAssistantManager)(nil).ToolStreamInSession), ctx, toolReq, toolName)
 }

@@ -68,10 +68,13 @@ type updateDetectionContentArgs struct {
 	Content  string `json:"content" example:"title: CobaltStrike Named Pipe\nid: ...\n logsource:\n ...\ncondition: selection\nfalsepositives:\n..."`
 }
 
-func (t *UpdateDetectionContentTool) Execute(ctx context.Context, srv *server.Server, params string, auxData string) (result *model.ToolResponse, err error) {
-	logger := log.FromContext(ctx)
+func (t *UpdateDetectionContentTool) Execute(ctx context.Context, srv *server.Server, req *model.ToolRequest) (result *model.ToolResponse, err error) {
+	logger := log.FromContext(ctx).WithFields(log.Fields{
+		"sessionId": req.SessionId,
+		"toolUseId": req.ToolUseId,
+	})
 
-	logger.WithField("toolParameters", params).Info("running tool for assistant")
+	logger.WithField("toolParameters", req.Params).Info("running tool for assistant")
 
 	err = srv.CheckAuthorized(ctx, "write", "detections")
 	if err != nil {
@@ -94,9 +97,9 @@ func (t *UpdateDetectionContentTool) Execute(ctx context.Context, srv *server.Se
 		}
 	}()
 
-	err = json.Unmarshal([]byte(params), args)
+	err = json.Unmarshal([]byte(req.Params), args)
 	if err != nil {
-		logger.WithError(err).WithField("toolParams", params).Error("failed to unmarshal tool params")
+		logger.WithError(err).WithField("toolParams", req.Params).Error("failed to unmarshal tool params")
 		return nil, errors.New("ERROR_ASSISTANT_UNMARSHAL_PARAMS")
 	}
 
@@ -107,11 +110,13 @@ func (t *UpdateDetectionContentTool) Execute(ctx context.Context, srv *server.Se
 	if args.PublicId != "" {
 		detect, err = srv.Detectionstore.GetDetectionByPublicId(ctx, args.PublicId)
 		if err != nil {
+			logger.WithError(err).WithField("detectionPublicId", args.PublicId).Error("unable to retrieve detection by public Id")
 			return nil, err
 		}
 	} else {
 		detect, err = srv.Detectionstore.GetDetection(ctx, args.SocId)
 		if err != nil {
+			logger.WithError(err).WithField("socId", args.SocId).Error("unable to retrieve detection by Id")
 			return nil, err
 		}
 	}
@@ -179,6 +184,7 @@ func (t *UpdateDetectionContentTool) Execute(ctx context.Context, srv *server.Se
 			"detectionPublicId": detect.PublicID,
 			"errMap":            errMap,
 		}).Error("unable to sync detection")
+		
 		return nil, errors.New("ERROR_DETECTION_SYNC_FAILED")
 	}
 

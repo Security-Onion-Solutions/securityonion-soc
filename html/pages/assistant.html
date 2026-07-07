@@ -105,7 +105,7 @@
 			<div class="so-stat-pill" data-aid="assistant_current_model">
 				<div class="so-stat-text">
 					<div id="stat-label-current-model" class="so-stat-label">{{ i18n.currentModel }}</div>
-					<div class="so-stat-value" aria-labelledby="stat-label-current-model">{{ modelsMap.get(currentModel)?.displayName }}</div>
+					<div class="so-stat-value" aria-labelledby="stat-label-current-model">{{ currentModelLabel() }}</div>
 				</div>
 				<v-icon class="so-stat-icon">fa-microchip</v-icon>
 			</div>
@@ -184,6 +184,8 @@
 				</v-card-title>
 				<v-divider></v-divider>
 				<v-card-text id="chat-messages" class="chat-messages pa-0" @scroll="onChatScroll" @click="onChatClick">
+					<!-- Polite live region: announces newly-surfaced sub-agent approval prompts to screen readers -->
+					<div class="d-sr-only" role="status" aria-live="polite" aria-atomic="true">{{ subAgentApprovalAnnouncement }}</div>
 					<div class="pa-4">
 						<div v-for="(message, index) in messages" :key="index" :id="'message-' + index" :class="['message-item', 'mb-3'].concat(messageClassesFromTags(message.tags || []))">
 							<div v-if="index === contextStartMessageIndex" class="context-divider py-4">
@@ -227,108 +229,7 @@
 									
 									<!-- Tool Use Display -->
 									<div v-if="message.toolUses && message.toolUses.length > 0" class="mt-3">
-										<div v-for="toolUse in message.toolUses" :key="toolUse.id" class="tool-use-card mb-2">
-											<v-card id="tool-use-card" variant="outlined" class="pa-3">
-												<div class="d-flex align-center mb-2">
-													<v-icon :color="getToolStatusColor(toolUse.status)" class="mr-2" size="small">
-														{{ getToolStatusIcon(toolUse.status) }}
-													</v-icon>
-													<span class="font-weight-medium text-body-2">{{ toolUse.name }}</span>
-													<v-spacer></v-spacer>
-													<v-chip :color="getToolStatusColor(toolUse.status)" size="x-small" variant="flat">
-														{{ getToolStatusTitle(toolUse.status) }}
-													</v-chip>
-												</div>
-												
-												<!-- Tool Parameters -->
-												<div v-if="Object.keys(toolUse.input).length > 0" class="mb-2">
-													<div :id="`tool-params-label-${toolUse.id}`" class="text-body-small text-medium-emphasis mb-1">{{ i18n.parameters }}:</div>
-													<v-code class="text-body-small" :aria-labelledby="`tool-params-label-${toolUse.id}`">{{ JSON.stringify(toolUse.input, null, 2) }}</v-code>
-												</div>
-												
-												<!-- Tool Approval Buttons -->
-												<div v-if="toolUse.status === 'pending_approval'" class="mb-2">
-													<div :id="'tool-use-question-' + toolUse.id" class="text-body-small text-medium-emphasis mb-1">{{ i18n.toolExecuteQuestion }}</div>
-													<div id="tool-approval-buttons" :aria-labelledby="'tool-use-question-' + toolUse.id" role="group" class="d-flex align-center tool-approval-buttons">
-														<v-btn
-															id="approve-tool-button"
-															color="success"
-															size="small"
-															variant="flat"
-															@click="approveTool(toolUse)"
-															data-aid="assistant_tool_use_approve"
-															:disabled="!canChat"
-														>
-															<v-icon size="small" class="mr-1">fa-check</v-icon>
-															{{ i18n.approve }}
-														</v-btn>
-														<v-btn
-															id="reject-tool-button"
-															color="error"
-															size="small"
-															variant="flat"
-															@click="rejectTool(toolUse)"
-															data-aid="assistant_tool_use_reject"
-															:disabled="!canChat"
-														>
-															<v-icon size="small" class="mr-1">fa-times</v-icon>
-															{{ i18n.reject }}
-														</v-btn>
-														<v-btn
-															id="options-tool-button"
-															icon
-															variant="text"
-															size="x-small"
-															@click="showOptionsDialog = true"
-															data-aid="assistant_tool_use_options"
-															style="min-width: auto; margin-left: -5px"
-															:aria-label="i18n.ariaAssistantOptions"
-														>
-															<v-icon size="small">fa-cog</v-icon>
-														</v-btn>
-													</div>
-												</div>
-												
-												<!-- Tool Executing Spinner -->
-												<div v-if="toolUse.status === 'executing'" class="mb-2">
-													<div class="d-flex align-center">
-														<v-progress-circular
-															indeterminate
-															color="warning"
-															size="16"
-															width="2"
-															class="mr-2"
-														></v-progress-circular>
-														<span class="text-body-small text-medium-emphasis">{{ i18n.toolExecuting }}</span>
-													</div>
-												</div>
-												
-												<!-- Raw Tool Result Dropdown -->
-												<div v-if="toolUse.rawResult && toolUse.status === 'completed'" class="mb-2">
-													<v-expansion-panels id="tool-result-expansion" variant="accordion" class="tool-result-expansion">
-														<v-expansion-panel id="tool-result-panel">
-															<v-expansion-panel-title id="tool-result-header" class="text-body-small" expand-icon="fa-angle-down" collapse-icon="fa-angle-up">
-																{{ i18n.rawToolResult }}
-															</v-expansion-panel-title>
-															<v-expansion-panel-text id="tool-result-content">
-																<v-code id="tool-result-code" class="text-body-small d-block" style="white-space: pre-wrap; max-height: 300px; overflow-y: auto; width: 100%; max-width: 100%; overflow-x: auto;">{{ toolUse.rawResult }}</v-code>
-															</v-expansion-panel-text>
-														</v-expansion-panel>
-													</v-expansion-panels>
-												</div>
-												
-												<!-- Tool Error -->
-												<div v-if="(toolUse.status === 'error' || toolUse.status === 'rejected') && toolUse.error" class="mb-2">
-													<div :id="`tool-problem-label-${toolUse.id}`" class="text-body-small text-medium-emphasis mb-1">{{ toolUse.status === 'rejected' ? 'Rejected:' : 'Error:' }}</div>
-													<div class="text-error text-body-2" :aria-labelledby="`tool-problem-label-${toolUse.id}`">{{ toolUse.error }}</div>
-												</div>
-												
-												<!-- Execution Time -->
-												<div v-if="toolUse.completedAt" class="text-body-small text-medium-emphasis">
-													{{ i18n.completed }}: {{ formatTimestamp(toolUse.completedAt) }}
-												</div>
-											</v-card>
-										</div>
+										<tool-use-card v-for="toolUse in message.toolUses" :key="toolUse.id" :tool-use="toolUse"></tool-use-card>
 									</div>
 								</div>
 							</div>

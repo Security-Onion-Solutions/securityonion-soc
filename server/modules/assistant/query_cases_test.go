@@ -7,6 +7,7 @@ package assistant
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -352,7 +353,7 @@ func TestQueryCasesTool_Execute(t *testing.T) {
 
 			// Create tool and execute
 			tool := &QueryCasesTool{}
-			result, err := tool.Execute(ctx, mockServer, tc.params, tc.auxData)
+			result, err := tool.Execute(ctx, mockServer, &model.ToolRequest{Params: json.RawMessage(tc.params), AuxData: json.RawMessage(tc.auxData)})
 
 			// Assert error expectations
 			if tc.expectedError {

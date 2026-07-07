@@ -8,6 +8,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -67,6 +68,32 @@ type EventstoreUpdater interface {
 	AddInvestigationUpdateScripts(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, userId string, isDelete bool, sessionId ...string)
 }
 
+// decodeIncomingMessage decodes a chat message body, generating a session id
+// when the client didn't supply one.
+func decodeIncomingMessage(r *http.Request) (*model.IncomingMessage, error) {
+	logger := log.FromContext(r.Context())
+	incMsg := &model.IncomingMessage{}
+
+	err := json.NewDecoder(r.Body).Decode(incMsg)
+	if err != nil {
+		logger.WithError(err).Error("unable to parse body")
+		return nil, err
+	}
+
+	if incMsg.SessionId == "" {
+		incMsg.SessionId = uuid.NewString()
+	}
+
+	return incMsg, nil
+}
+
+// streamingAccepted reports whether the client asked for SSE via the Accept
+// header, returning the trimmed header value for the downgrade warn log.
+func streamingAccepted(r *http.Request) (bool, string) {
+	accept := strings.TrimSpace(r.Header.Get("Accept"))
+	return strings.EqualFold(accept, "text/event-stream"), accept
+}
+
 // @Summary      Send Chat Message
 // @Description  Send a message to the AI assistant and receive a response. Supports both streaming (SSE) and non-streaming responses.
 // @Tags         Assistant
@@ -96,156 +123,56 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accept := strings.TrimSpace(r.Header.Get("Accept"))
-	streaming := strings.EqualFold(accept, "text/event-stream")
-
-	incMsg := &model.IncomingMessage{}
-	err = json.NewDecoder(r.Body).Decode(incMsg)
+	incMsg, err := decodeIncomingMessage(r)
 	if err != nil {
-		logger.WithError(err).Error("unable to decode request body")
 		web.Respond(w, r, http.StatusBadRequest, err)
-
 		return
 	}
 
-	if incMsg.SessionId == "" {
-		incMsg.SessionId = uuid.NewString()
-	}
-
-	// Check for entityType and entityId query parameters
 	entityType := r.URL.Query().Get("entityType")
 	entityId := r.URL.Query().Get("entityId")
 
-	// Handle entity-specific association logic
 	if entityType != "" && entityId != "" {
-		err = h.handleEntityAssociation(ctx, entityType, entityId, incMsg.SessionId)
-		if err != nil {
-			// Don't fail the request, just log the warning (already logged in helper)
-		}
+		// Don't fail the request on association errors (already logged in helper)
+		_ = h.handleEntityAssociation(ctx, entityType, entityId, incMsg.SessionId)
 	}
 
-	newMsg := &model.Message{
-		Role: "user",
-		ContentBlocks: []model.ContentBlock{
-			{
-				Type: "text",
-				Text: incMsg.Msg,
-			},
-		},
-	}
-
-	history, err := h.server.Assistantstore.GetChatHistory(ctx, incMsg.SessionId)
-	if err != nil && !strings.Contains(err.Error(), "not found") {
-		logger.WithError(err).Error("unable to get chat history")
-		web.Respond(w, r, http.StatusInternalServerError, err)
-
-		return
-	}
-
-	isNewSession := len(history) == 0
-
-	messages := historyToContext(history)
-	messages = append(messages, newMsg)
-
-	_, ok := w.(http.Flusher)
-	if streaming && !ok {
+	streaming, accept := streamingAccepted(r)
+	if _, ok := w.(http.Flusher); streaming && !ok {
 		logger.WithField("acceptHeader", accept).Warn("incoming request accepts streaming but is not flushable, issuing non-streaming response")
+		streaming = false
 	}
 
-	if !streaming || !ok {
-		response, err := h.server.AssistantManager.Chat(ctx, incMsg.Model, messages)
-		if err != nil {
-			logger.WithError(err).Error("unable to chat with assistant")
-			if err.Error() == "ERROR_ASSISTANT_REQUEST_TOO_LARGE" {
-				web.Respond(w, r, http.StatusBadRequest, err.Error())
-			} else {
-				web.Respond(w, r, http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR")
-			}
-
-			return
-		}
-
-		if isNewSession {
-			session := &model.AssistantSession{
-				SessionId: incMsg.SessionId,
-				Title:     incMsg.Msg,
-			}
-			if entityType != "" && entityId != "" {
-				session.Type = entityType
-				session.EntityId = entityId
-			}
-			err = h.server.Assistantstore.CreateSession(ctx, session)
-			if err != nil {
-				logger.WithError(err).Error("unable to create session for non-streaming chat")
-				web.Respond(w, r, http.StatusInternalServerError, err)
-				return
-			}
-		}
-
-		err = h.server.Assistantstore.SaveChat(ctx, newMsg.PrepareForStorage(incMsg.SessionId, incMsg.Tags, incMsg.Model))
-		if err != nil {
-			logger.WithError(err).Error("unable to save user message for non-streaming chat")
-			web.Respond(w, r, http.StatusInternalServerError, err)
-
-			return
-		}
-
-		for _, msg := range response {
-			err = h.server.Assistantstore.SaveChat(ctx, msg.PrepareForStorage(incMsg.SessionId, nil, incMsg.Model))
-			if err != nil {
-				logger.WithError(err).Error("unable to save assistant response (non-streaming)")
-				return
-			}
-		}
-
-		web.Respond(w, r, http.StatusOK, response)
-
+	if streaming {
+		h.handleStreamingChat(ctx, w, r, incMsg, entityType, entityId)
 		return
 	}
 
-	noTimeOutCtx := context.Background()
-	val := ctx.Value(web.ContextKeyRunAsUsername)
-	if val != nil {
-		if username, ok := val.(string); ok {
-			noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRunAsUsername, username)
-		}
-	}
-	noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRequestorId, ctx.Value(web.ContextKeyRequestorId).(string))
+	h.handleNonStreamingChat(ctx, w, r, incMsg, entityType, entityId)
+}
 
-	response, aux, err := h.server.AssistantManager.ChatStream(noTimeOutCtx, incMsg.Model, messages)
+// handleNonStreamingChat runs a buffered chat turn and writes the full
+// assistant response as JSON.
+func (h *AssistantHandler) handleNonStreamingChat(ctx context.Context, w http.ResponseWriter, r *http.Request, incMsg *model.IncomingMessage, entityType, entityId string) {
+	logger := log.FromContext(ctx)
+
+	response, err := h.server.AssistantManager.ChatInSession(ctx, incMsg, entityType, entityId)
 	if err != nil {
-		logger.WithError(err).Error("unable to chat (stream) with assistant")
-		if err.Error() == "ERROR_ASSISTANT_REQUEST_TOO_LARGE" {
-			web.Respond(w, r, http.StatusBadRequest, err.Error())
-		} else {
-			web.Respond(w, r, http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR")
-		}
-
+		h.respondChatError(w, r, logger, err, "unable to chat with assistant")
 		return
 	}
 
-	if isNewSession {
-		session := &model.AssistantSession{
-			SessionId: incMsg.SessionId,
-			Title:     incMsg.Msg,
-		}
-		if entityType != "" && entityId != "" {
-			session.Type = entityType
-			session.EntityId = entityId
-		}
-		err = h.server.Assistantstore.CreateSession(noTimeOutCtx, session)
-		if err != nil {
-			logger.WithError(err).Error("unable to create session for streaming chat")
-			web.Respond(w, r, http.StatusInternalServerError, err)
-			return
-		}
-	}
+	web.Respond(w, r, http.StatusOK, response)
+}
 
-	err = h.server.Assistantstore.SaveChat(noTimeOutCtx, newMsg.PrepareForStorage(incMsg.SessionId, incMsg.Tags, incMsg.Model))
+// handleStreamingChat runs a chat turn as SSE, proxying the upstream stream to
+// the client and finalizing the buffered response in the background once the stream completes.
+func (h *AssistantHandler) handleStreamingChat(ctx context.Context, w http.ResponseWriter, r *http.Request, incMsg *model.IncomingMessage, entityType, entityId string) {
+	logger := log.FromContext(ctx)
+
+	response, _, finalize, err := h.server.AssistantManager.ChatStreamInSession(ctx, incMsg, entityType, entityId)
 	if err != nil {
-		logger.WithError(err).Error("unable to save user message before streaming response")
-		web.Respond(w, r, http.StatusInternalServerError, err)
-
+		h.respondChatError(w, r, logger, err, "unable to stream chat with assistant")
 		return
 	}
 
@@ -258,18 +185,8 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	go func() {
-		msg, err := unstreamResponse(noTimeOutCtx, string(entireResponse), aux)
-		if err != nil {
-			logger.WithError(err).Error("error unstreaming response")
-			return
-		}
-
-		if msg != nil {
-			err = h.server.Assistantstore.SaveChat(noTimeOutCtx, msg.PrepareForStorage(incMsg.SessionId, nil, incMsg.Model))
-			if err != nil {
-				logger.WithError(err).Error("unable to save chat message")
-				return
-			}
+		if err := finalize(entireResponse); err != nil {
+			logger.WithError(err).Error("error finalizing streamed response")
 		}
 	}()
 }
@@ -286,6 +203,8 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 // @Failure      400           "The provided input object or parameters are malformed or invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
+// @Failure      404           "No pending tool request with this ID exists in the session"
+// @Failure      409           "A tool for the indicated session is already running"
 // @Failure      500           "Internal SOC error; review SOC logs"
 // @Router       /connect/assistant/tool/{name} [post]
 func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
@@ -316,148 +235,175 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, toolErr := h.server.AssistantManager.ExecuteTool(ctx, toolName, string(toolReq.Params), string(toolReq.AuxData))
-	if toolErr != nil {
-		logger.WithError(toolErr).Error("unable to execute tool")
+	if _, ok := w.(http.Flusher); streaming && !ok {
+		logger.WithField("acceptHeader", accept).Warn("incoming request accepts streaming but is not flushable, issuing non-streaming response")
+		streaming = false
 	}
-
-	var toolResult *model.ToolResult
-	if toolErr != nil {
-		toolResult = &model.ToolResult{
-			ToolUseId: toolReq.ToolUseId,
-			Status:    "error",
-			IsError:   true,
-			Content: []model.ToolResultContent{
-				{
-					Text: toolErr.Error(),
-				},
-			},
-		}
-	} else {
-		var res any
-		if result != nil {
-			res = map[string]any{
-				"result": result.Result,
-			}
-		}
-		toolResult = &model.ToolResult{
-			Name:      result.ToolName,
-			ToolUseId: toolReq.ToolUseId,
-			Content: []model.ToolResultContent{
-				{
-					Json: res,
-				},
-			},
-		}
-	}
-
-	toolMsg := &model.Message{
-		Id:   uuid.NewString(),
-		Role: "user",
-		ContentBlocks: []model.ContentBlock{
-			{
-				ToolResult: toolResult,
-			},
-		},
-	}
-
-	history, err := h.server.Assistantstore.GetChatHistory(ctx, toolReq.SessionId)
-	if err != nil {
-		logger.WithError(err).Error("unable to get chat history")
-		web.Respond(w, r, http.StatusInternalServerError, err)
-
-		return
-	}
-
-	messages := historyToContext(history)
-	messages = append(messages, toolMsg)
 
 	if !streaming {
-		response, err := h.server.AssistantManager.Chat(ctx, toolReq.Model, messages)
+		response, err := h.server.AssistantManager.ToolInSession(ctx, toolReq, toolName)
 		if err != nil {
-			logger.WithError(err).Error("unable to chat with assistant after tool execution")
-			if err.Error() == "ERROR_ASSISTANT_REQUEST_TOO_LARGE" {
-				web.Respond(w, r, http.StatusBadRequest, err.Error())
-			} else {
-				web.Respond(w, r, http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR")
-			}
-
-			return
-		}
-
-		err = h.server.Assistantstore.SaveChat(ctx, toolMsg.PrepareForStorage(toolReq.SessionId, []string{"tool_result"}, toolReq.Model))
-		if err != nil {
-			logger.WithError(err).Error("unable to save tool result message for non-streaming chat")
-			web.Respond(w, r, http.StatusInternalServerError, err)
-
+			h.respondToolTurnError(w, r, logger, err, "unable to chat with assistant after tool execution")
 			return
 		}
 
 		web.Respond(w, r, http.StatusOK, response)
 
-		for _, msg := range response {
-			err = h.server.Assistantstore.SaveChat(ctx, msg.PrepareForStorage(toolReq.SessionId, nil, toolReq.Model))
-			if err != nil {
-				logger.WithError(err).Error("unable to save tool result response message (non-streaming)")
-				return
-			}
-		}
-
 		return
 	}
 
-	response, aux, err := h.server.AssistantManager.ChatStream(ctx, toolReq.Model, messages)
+	// Detachment is owned by the assistant module (ToolStreamInSession and the
+	// resolution it drives run on a no-timeout context; each finalize persists on it),
+	// so the handler keeps the request context — it must not re-detach here (it can't,
+	// without an import cycle). streamBody keeps draining the upstream to persist the
+	// turn after the client disconnects.
+	turn, err := h.server.AssistantManager.ToolStreamInSession(ctx, toolReq, toolName)
 	if err != nil {
-		logger.WithError(err).Error("unable to chat (stream) with assistant after tool execution")
-		if err.Error() == "ERROR_ASSISTANT_REQUEST_TOO_LARGE" {
-			web.Respond(w, r, http.StatusBadRequest, err.Error())
+		h.respondToolTurnError(w, r, logger, err, "unable to chat (stream) with assistant after tool execution")
+		return
+	}
+
+	if _, ok := w.(http.Flusher); !ok {
+		logger.Error("response writer does not support flushing, cannot stream response")
+		web.Respond(w, r, http.StatusInternalServerError, "streaming not supported")
+		return
+	}
+
+	// A persist-only turn (no Response) means the tool's result was saved but the
+	// model turn is not continued yet -- sibling tool_use blocks from the same model
+	// turn are still unresolved (parallel tool calls). Emit the result so the UI marks
+	// this tool done, then close; the last sibling's request drives the continuation.
+	if turn.Response == nil {
+		writeSSEHeaders(w)
+		if turn.ToolResult != nil {
+			if err := writeToolResultEvent(w, turn.ToolResult); err != nil {
+				logger.WithError(err).Warn("unable to write tool result event for persist-only turn")
+			}
+		}
+		writeSSEDone(w)
+		return
+	}
+
+	// Stream the tool's turn, then keep chaining turns on this same response while a
+	// delegated sub-agent finishes (a text-only turn) and the backend folds its
+	// result back into the parent. We stop and hand control back to the client as
+	// soon as a turn requests a tool (needs approval) or a top-level turn completes.
+	writeStreamHeaders(w, turn.Response)
+
+	// Emit the executed tool's result up front so the UI can attach it to the tool
+	// card inline (no session re-fetch). Set only for direct tool execution; a
+	// delegation kickoff leaves it nil and resolves through the marker path instead.
+	// A failed write (client gone) must not abort the chain — the turn below still
+	// needs draining and finalizing to persist.
+	if turn.ToolResult != nil {
+		if err := writeToolResultEvent(w, turn.ToolResult); err != nil {
+			logger.WithError(err).Warn("unable to write tool result event (client likely disconnected); continuing to persist the turn")
+		}
+	}
+
+	// Keep chaining turns on this response while delegated sub-agents resolve. The
+	// chain terminates on a tool_use, a top-level session, a stream/parse error, or
+	// when a sub-session exhausts its token budget.
+	for {
+		if turn.Marker != nil {
+			// The marker is only a UI hint; a failed write (client gone) must not abort
+			// the chain — the turn below still needs draining and finalizing to persist.
+			if err := writeDelegationMarker(w, turn.Marker); err != nil {
+				logger.WithError(err).Warn("unable to write delegation marker (client likely disconnected); continuing to persist the turn")
+			}
+		}
+
+		// A persist-only resolution (no Response) means the parent could not be
+		// continued yet: it still has unresolved sibling tool_uses (parallel tool
+		// calls), or its tool_use turn has not landed. The resolved marker above already
+		// closed the delegate card; surface the parent's tool_result and stop chaining,
+		// letting the parent resume when its remaining tools resolve. Streaming or
+		// finalizing a nil Response here would panic and reset the client's HTTP/2
+		// stream (surfacing as ERR_HTTP2_PROTOCOL_ERROR / an opaque client error).
+		if turn.Response == nil {
+			if turn.ToolResult != nil {
+				if err := writeToolResultEvent(w, turn.ToolResult); err != nil {
+					logger.WithError(err).Warn("unable to write tool result event for persist-only resolution")
+				}
+			}
+			break
+		}
+
+		entireResponse, streamErr := streamBody(ctx, w, turn.Response)
+
+		// Persist this turn's assistant message regardless of what we decide next.
+		finalize, raw := turn.Finalize, entireResponse
+		go func() {
+			if err := finalize(raw); err != nil {
+				logger.WithError(err).Error("error finalizing streamed turn after tool execution")
+			}
+		}()
+
+		// Parse the turn (best-effort). A stream or parse failure leaves msg nil and
+		// falls through to the resolution/termination logic below, so a delegated
+		// sub-agent is never abandoned with its boundary left open.
+		var msg *model.Message
+		if streamErr != nil {
+			logger.WithError(streamErr).Error("error streaming turn to client after tool execution")
+		} else if parsed, parseErr := UnstreamResponse(ctx, string(entireResponse), turn.Aux); parseErr != nil {
+			logger.WithError(parseErr).Error("unable to parse streamed turn")
 		} else {
-			web.Respond(w, r, http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR")
+			msg = parsed
 		}
 
-		return
-	}
-
-	err = h.server.Assistantstore.SaveChat(ctx, toolMsg.PrepareForStorage(toolReq.SessionId, []string{"tool_result"}, toolReq.Model))
-	if err != nil {
-		logger.WithError(err).Error("unable to save tool result message before streaming response")
-		web.Respond(w, r, http.StatusInternalServerError, err)
-
-		return
-	}
-
-	entireResponse, err := streamResponse(ctx, w, r, response)
-	if err != nil {
-		logger.WithError(err).Error("error streaming response after tool execution")
-		web.Respond(w, r, http.StatusInternalServerError, err)
-
-		return
-	}
-
-	noTimeOutCtx := context.Background()
-	val := ctx.Value(web.ContextKeyRunAsUsername)
-	if val != nil {
-		if username, ok := val.(string); ok {
-			noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRunAsUsername, username)
-		}
-	}
-	noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRequestorId, ctx.Value(web.ContextKeyRequestorId).(string))
-
-	go func() {
-		msg, err := unstreamResponse(noTimeOutCtx, string(entireResponse), aux)
-		if err != nil {
-			logger.WithError(err).Error("error unstreaming response")
-			return
+		// A tool request hands control back to the client (approve and POST again).
+		// This legitimately parks a sub-agent mid-task, so do not resolve here.
+		if msg != nil && messageHasToolUse(msg) {
+			break
 		}
 
+		// The turn carries its session record (loaded once at turn start; the
+		// parent-link fields are immutable), so no re-fetch is needed here.
+		sess := turn.Session
+		if sess == nil {
+			// We can't tell whether this finished turn was a delegated sub-agent, so
+			// we can't close its boundary. Log it so a stuck delegate card is
+			// diagnosable, then stop chaining.
+			logger.WithField("sessionId", turn.SessionId).Warn("no session loaded for streamed turn; cannot resolve possible delegation")
+			break
+		}
+		if sess.ParentSessionId == "" {
+			break // top-level conversation completed
+		}
+
+		// The session that just finished is a delegated sub-agent. Resolve it into its
+		// parent and stream the parent's turn — even when it ended abnormally (empty,
+		// nil, or a parse/stream error), so the delegation boundary always closes and
+		// the parent resumes instead of being parked forever.
+		childText := ""
 		if msg != nil {
-			err = h.server.Assistantstore.SaveChat(noTimeOutCtx, msg.PrepareForStorage(toolReq.SessionId, nil, toolReq.Model))
-			if err != nil {
-				logger.WithError(err).Error("unable to save chat message")
-				return
-			}
+			childText = messageText(msg)
 		}
-	}()
+		next, resolveErr := h.server.AssistantManager.ResolveDelegationStream(ctx, sess, childText)
+		if resolveErr != nil {
+			logger.WithError(resolveErr).Error("unable to resolve delegation")
+			// Resolution failed, but the sub-agent's boundary is still open on the
+			// client. Emit a resolved marker so the UI un-nests and closes the
+			// delegate card instead of leaving it spinning forever.
+			if err := writeResolvedMarker(w, sess.ParentSessionId, sess.ParentToolUseId); err != nil {
+				logger.WithError(err).Error("unable to write delegation resolved marker after resolve failure")
+			}
+			break
+		}
+		turn = next
+	}
+}
+
+// writeResolvedMarker writes a delegation_resolved SSE event so the client
+// un-nests a delegated sub-agent and closes its delegate tool card. Used both on
+// the normal resolution path and to guarantee the boundary closes when backend
+// resolution fails.
+func writeResolvedMarker(w http.ResponseWriter, parentSessionId, parentToolUseId string) error {
+	return writeDelegationMarker(w, &model.DelegationMarker{
+		Type:            model.DelegationMarkerResolved,
+		ParentSessionId: parentSessionId,
+		ParentToolUseId: parentToolUseId,
+	})
 }
 
 // @Summary      Get Assistant Balance
@@ -465,7 +411,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 // @Tags         Assistant
 // @Security     bearer[assistant/read_authored]
 // @Security     bearer[assistant/read_all]
-// @Param        modelAndAdapter  path  string  true  "Model Id (including slashes) and Adapter Name to get balance for" example(qwen/qwen2.5-small@MyOpenAIChatAdapter)
+// @Param        modelAndAdapter  path  string  true  "Model selector to get balance for: the model's display name, or the legacy id@adapter form (including slashes)" example(Agent Gemini)
 // @Produce      json
 // @Success      200  {object}  model.Usage "Current assistant balance and usage information"
 // @Failure      401           "Request was not properly authenticated"
@@ -544,7 +490,16 @@ func (h *AssistantHandler) GetSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	web.Respond(w, r, http.StatusOK, sessions)
+	// Delegated sub-agent sessions are rendered nested inside their parent
+	// conversation, so keep them out of the top-level session list.
+	topLevel := make([]*model.AssistantSession, 0, len(sessions))
+	for _, s := range sessions {
+		if s.ParentSessionId == "" {
+			topLevel = append(topLevel, s)
+		}
+	}
+
+	web.Respond(w, r, http.StatusOK, topLevel)
 }
 
 // @Summary      Get Session Details
@@ -578,7 +533,9 @@ func (h *AssistantHandler) GetSessionDetails(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	session, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithIncludeDeleted(true), model.GetSessionsWithUsage(true))
+	// Fetch the session plus every delegated sub-session descending from it, so the
+	// UI can reconstruct nested sub-agent activity when the conversation is reopened.
+	sessions, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithIncludeDeleted(true), model.GetSessionsWithUsage(true), model.GetSessionsWithDescendants(true))
 	if err != nil {
 		logger.WithError(err).Error("unable to get session")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -586,7 +543,17 @@ func (h *AssistantHandler) GetSessionDetails(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if len(session) == 0 {
+	var root *model.AssistantSession
+	var subSessions []*model.AssistantSession
+	for _, s := range sessions {
+		if s.SessionId == sessionId {
+			root = s
+		} else {
+			subSessions = append(subSessions, s)
+		}
+	}
+
+	if root == nil {
 		web.Respond(w, r, http.StatusOK, &model.AssistantSessionDetails{})
 
 		return
@@ -602,10 +569,82 @@ func (h *AssistantHandler) GetSessionDetails(w http.ResponseWriter, r *http.Requ
 
 	removeAuxData(history)
 
-	web.Respond(w, r, http.StatusOK, &model.AssistantSessionDetails{
-		Session: session[0],
+	// A tool_use that spawned a sub-session is a delegation in progress ("running"),
+	// not a pending approval. Collect those ids so the derivation below excludes them.
+	delegatedToolUseIds := make(map[string]struct{}, len(subSessions))
+	for _, sub := range subSessions {
+		if sub.ParentToolUseId != "" {
+			delegatedToolUseIds[sub.ParentToolUseId] = struct{}{}
+		}
+	}
+
+	// PendingApproval is derived server-side only for sub-sessions (the client can't
+	// easily re-derive which nested tool_use is pending); the root's is re-derived
+	// client-side from its trailing message.
+	details := &model.AssistantSessionDetails{
+		Session: root,
 		History: history,
-	})
+	}
+
+	for _, sub := range subSessions {
+		subHistory, err := h.server.Assistantstore.GetChatHistory(ctx, sub.SessionId)
+		if err != nil {
+			logger.WithError(err).WithField("subSessionId", sub.SessionId).Error("unable to get chat history for sub-session")
+			continue
+		}
+		removeAuxData(subHistory)
+		details.SubSessions = append(details.SubSessions, &model.AssistantSessionDetails{
+			Session:         sub,
+			History:         subHistory,
+			PendingApproval: pendingToolApproval(sub.SessionId, subHistory, delegatedToolUseIds),
+		})
+	}
+
+	web.Respond(w, r, http.StatusOK, details)
+}
+
+// pendingToolApproval returns the tool_use in a session's history that is awaiting the
+// user's approval: the last assistant tool_use with no matching tool_result that did
+// not itself spawn a sub-session (a delegate tool_use is "running", not pending). It
+// returns the exact values the client must POST to resume the turn, or nil if none.
+func pendingToolApproval(sessionId string, history []*model.StoredMessage, delegatedToolUseIds map[string]struct{}) *model.PendingToolApproval {
+	resolved := make(map[string]struct{})
+	for _, sm := range history {
+		if sm.Message == nil {
+			continue
+		}
+		for _, cb := range sm.Message.ContentBlocks {
+			if cb.ToolResult != nil {
+				resolved[cb.ToolResult.ToolUseId] = struct{}{}
+			}
+		}
+	}
+
+	var pending *model.PendingToolApproval
+	for _, sm := range history {
+		if sm.Message == nil || sm.Message.Role != "assistant" {
+			continue
+		}
+		for _, cb := range sm.Message.ContentBlocks {
+			if cb.Type != "tool_use" {
+				continue
+			}
+			if _, ok := resolved[cb.Id]; ok {
+				continue
+			}
+			if _, ok := delegatedToolUseIds[cb.Id]; ok {
+				continue
+			}
+			pending = &model.PendingToolApproval{
+				SessionId: sessionId,
+				ToolUseId: cb.Id,
+				ToolName:  cb.Name,
+				Input:     cb.Input,
+			}
+		}
+	}
+
+	return pending
 }
 
 // @Summary      Update metadata for a Session
@@ -683,7 +722,7 @@ func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request)
 			logger.WithFields(log.Fields{
 				"assistantSessionId": sessionId,
 				"tag":                updateReq.Tag,
-			}).Error("unable to remove tag")
+			}).WithError(err).Error("unable to remove tag")
 			web.Respond(w, r, http.StatusConflict, err)
 
 			return
@@ -946,26 +985,69 @@ func (h *AssistantHandler) ManageSessionHistory(w http.ResponseWriter, r *http.R
 
 func streamResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, response *http.Response) (entireResponse []byte, err error) {
 	logger := log.FromContext(ctx)
-	flusher, ok := w.(http.Flusher)
-	if !ok {
+	if _, ok := w.(http.Flusher); !ok {
 		logger.Error("response writer does not support flushing, cannot stream response")
 		web.Respond(w, r, http.StatusInternalServerError, "streaming not supported")
 
 		return
 	}
+
+	writeStreamHeaders(w, response)
+
+	return streamBody(ctx, w, response)
+}
+
+// writeStreamHeaders copies the upstream response headers and writes the status
+// code. It must be called exactly once per HTTP response; when chaining multiple
+// streamed turns onto a single response, only the first turn's headers are written.
+// hopByHopHeaders are connection-specific headers that must not be forwarded onto
+// our response. They are illegal in HTTP/2 (a client receiving them resets the
+// stream with PROTOCOL_ERROR). Content-Length is also dropped: one client response
+// chains several upstream turns, so any single turn's length would be violated as
+// soon as the next turn streams.
+var hopByHopHeaders = map[string]struct{}{
+	"connection":          {},
+	"keep-alive":          {},
+	"proxy-authenticate":  {},
+	"proxy-authorization": {},
+	"te":                  {},
+	"trailer":             {},
+	"transfer-encoding":   {},
+	"upgrade":             {},
+	"content-length":      {},
+}
+
+func writeStreamHeaders(w http.ResponseWriter, response *http.Response) {
 	for k, v := range response.Header {
+		if _, skip := hopByHopHeaders[strings.ToLower(k)]; skip {
+			continue
+		}
 		for _, val := range v {
 			w.Header().Add(k, val)
 		}
 	}
 
 	w.WriteHeader(response.StatusCode)
+}
+
+// streamBody streams an upstream response body to the client as fast as it
+// arrives, returning the full buffered response. It does not write headers, so it
+// is safe to call repeatedly for successive turns on the same HTTP response. A
+// client disconnect does not abort the read: it keeps draining response.Body so the
+// caller still gets the full turn to persist and parse.
+func streamBody(ctx context.Context, w http.ResponseWriter, response *http.Response) (entireResponse []byte, err error) {
+	logger := log.FromContext(ctx)
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		return nil, fmt.Errorf("streaming not supported")
+	}
 
 	// Stream response back to client as quickly as it comes in
 	var n, total int
 	buf := make([]byte, 1024)
 	last := time.Now()
 	entireResponse = []byte{}
+	clientGone := false
 
 	for {
 		n, err = response.Body.Read(buf)
@@ -973,22 +1055,24 @@ func streamResponse(ctx context.Context, w http.ResponseWriter, r *http.Request,
 			total += n
 			entireResponse = append(entireResponse, buf[:n]...)
 
-			_, writeErr := w.Write(buf[:n])
-			if writeErr != nil {
-				logger.WithError(writeErr).Error("client appears to have closed the connection")
-				break
+			// Client gone: stop writing/flushing but keep reading so the turn is buffered.
+			if !clientGone {
+				if _, writeErr := w.Write(buf[:n]); writeErr != nil {
+					logger.WithError(writeErr).Warn("client closed the connection; draining upstream to persist the turn")
+					clientGone = true
+				} else {
+					flusher.Flush()
+
+					since := time.Since(last)
+					last = time.Now()
+
+					logger.WithFields(log.Fields{
+						"mostRecentBufferSize": n,
+						"totalTransferred":     total,
+						"timeSinceLastChunk":   since.String(),
+					}).Debug("streaming AI response")
+				}
 			}
-
-			flusher.Flush()
-
-			since := time.Since(last)
-			last = time.Now()
-
-			logger.WithFields(log.Fields{
-				"mostRecentBufferSize": n,
-				"totalTransferred":     total,
-				"timeSinceLastChunk":   since.String(),
-			}).Debug("streaming AI response")
 		}
 		if err != nil {
 			break // EOF or error, exit loop
@@ -1002,7 +1086,152 @@ func streamResponse(ctx context.Context, w http.ResponseWriter, r *http.Request,
 	return entireResponse, err
 }
 
-func unstreamResponse(ctx context.Context, rawResponse string, aux *model.AuxMessageData) (*model.Message, error) {
+// writeDelegationMarker writes a synthetic SSE event into the stream so the UI can
+// nest (delegation_start) or un-nest (delegation_resolved) a delegated sub-agent's
+// output. Markers are written directly to the client and are never part of the
+// buffered response parsed by UnstreamResponse.
+func writeDelegationMarker(w http.ResponseWriter, marker *model.DelegationMarker) error {
+	data, err := json.Marshal(marker)
+	if err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "data: %s\n\n", data); err != nil {
+		return err
+	}
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
+	}
+	return nil
+}
+
+// writeToolResultEvent writes a synthetic tool_result SSE event into the stream so
+// the UI can attach a tool's result to its tool card inline, without re-fetching the
+// session to recover it. Like delegation markers, it is written directly to the
+// client and is never part of the buffered response parsed by UnstreamResponse.
+func writeToolResultEvent(w http.ResponseWriter, result *model.ToolResult) error {
+	payload := struct {
+		Type       string            `json:"type"`
+		ToolResult *model.ToolResult `json:"toolResult"`
+	}{Type: "tool_result", ToolResult: result}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "data: %s\n\n", data); err != nil {
+		return err
+	}
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
+	}
+	return nil
+}
+
+// writeSSEHeaders writes the headers for a server-sent event stream when there is
+// no upstream response to copy them from (a persist-only tool turn).
+func writeSSEHeaders(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	// No "Connection" header: it is a hop-by-hop header forbidden in HTTP/2, where
+	// setting it makes the client reset the stream with PROTOCOL_ERROR.
+	w.WriteHeader(http.StatusOK)
+}
+
+// writeSSEDone writes the terminal [DONE] event and flushes.
+func writeSSEDone(w http.ResponseWriter) {
+	_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+// messageHasToolUse reports whether the assistant turn requested any tools (and
+// therefore must be handed back to the client for approval rather than chained).
+// respondToolTurnError writes the appropriate HTTP status for an error from a tool
+// turn: 409 Conflict when the session is busy (so the client retries), 404 when the
+// request targets a tool_use the session never asked for, 400 when it targets one
+// that is already resolved or with a mismatched name/params, 400 for other client
+// errors, or 500 otherwise. logMsg describes the failing path for the error log.
+// Shared by PostTool's non-streaming and streaming branches.
+func (h *AssistantHandler) respondToolTurnError(w http.ResponseWriter, r *http.Request, logger log.Interface, err error, logMsg string) {
+	if errors.Is(err, ErrToolTurnBusy) {
+		logger.WithError(err).Warn("tool turn busy; another tool is running for this session")
+		web.Respond(w, r, http.StatusConflict, err.Error())
+
+		return
+	}
+
+	if errors.Is(err, ErrToolUseNotFound) {
+		logger.WithError(err).Warn("tool request targets an unknown tool_use")
+		web.Respond(w, r, http.StatusNotFound, err.Error())
+
+		return
+	}
+
+	if errors.Is(err, ErrToolAlreadyResolved) || errors.Is(err, ErrToolRequestMismatch) {
+		logger.WithError(err).Warn("tool request rejected by validation")
+		web.Respond(w, r, http.StatusBadRequest, err.Error())
+
+		return
+	}
+
+	h.respondChatError(w, r, logger, err, logMsg)
+}
+
+// respondChatError writes the appropriate HTTP status for an error from a chat
+// turn: 400 for a client error, or 500 otherwise. logMsg describes the failing
+// path for the error log. Shared by PostChat's non-streaming and streaming
+// branches.
+func (h *AssistantHandler) respondChatError(w http.ResponseWriter, r *http.Request, logger log.Interface, err error, logMsg string) {
+	logger.WithError(err).Error(logMsg)
+
+	if isClientError(err) {
+		web.Respond(w, r, http.StatusBadRequest, err.Error())
+	} else {
+		web.Respond(w, r, http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR")
+	}
+}
+
+// isClientError reports whether an assistant error is caused by the request
+// itself (and so should be surfaced as HTTP 400) rather than an internal/upstream
+// failure. The assistant module is matched by error string to avoid an import
+// cycle between the server package and the module.
+func isClientError(err error) bool {
+	switch err.Error() {
+	case "ERROR_ASSISTANT_REQUEST_TOO_LARGE", "ERROR_ASSISTANT_INVALID_MODEL":
+		return true
+	default:
+		return false
+	}
+}
+
+func messageHasToolUse(msg *model.Message) bool {
+	for _, cb := range msg.ContentBlocks {
+		if cb.Type == "tool_use" {
+			return true
+		}
+	}
+
+	return false
+}
+
+// messageText concatenates the text content of an assistant turn, used as the
+// delegated sub-agent's final answer when resolving a delegation.
+func messageText(msg *model.Message) string {
+	b := strings.Builder{}
+
+	for _, cb := range msg.ContentBlocks {
+		if cb.Text != "" {
+			b.WriteString(cb.Text)
+		}
+	}
+
+	return b.String()
+}
+
+// UnstreamResponse parses a buffered SSE response stream from the assistant
+// into a single assembled model.Message. It is exported so the assistant
+// module's streaming finalize path can reuse it.
+func UnstreamResponse(ctx context.Context, rawResponse string, aux *model.AuxMessageData) (*model.Message, error) {
 	type Delta struct {
 		Type        string  `json:"type"`
 		Text        string  `json:"text,omitempty"`
@@ -1062,6 +1291,9 @@ func unstreamResponse(ctx context.Context, rawResponse string, aux *model.AuxMes
 				}
 			}
 		case "content_block_start":
+			if message == nil {
+				continue // no message_start yet
+			}
 			for sm.Index >= len(message.ContentBlocks) {
 				message.ContentBlocks = append(message.ContentBlocks, model.ContentBlock{})
 			}
@@ -1073,6 +1305,9 @@ func unstreamResponse(ctx context.Context, rawResponse string, aux *model.AuxMes
 				message.ContentBlocks[sm.Index] = *sm.ContentBlock
 			}
 		case "content_block_delta":
+			if message == nil {
+				continue // no message_start yet
+			}
 			if sm.Delta != nil {
 				switch sm.Delta.Type {
 				case "text_delta":
@@ -1094,6 +1329,9 @@ func unstreamResponse(ctx context.Context, rawResponse string, aux *model.AuxMes
 				}
 			}
 		case "content_block_stop":
+			if message == nil {
+				continue // no message_start yet
+			}
 			for sm.Index >= len(message.ContentBlocks) {
 				message.ContentBlocks = append(message.ContentBlocks, model.ContentBlock{})
 			}
@@ -1107,6 +1345,9 @@ func unstreamResponse(ctx context.Context, rawResponse string, aux *model.AuxMes
 				message.ContentBlocks[sm.Index].Content = nil
 			}
 		case "message_delta":
+			if message == nil {
+				continue // no message_start yet
+			}
 			if sm.Usage != nil {
 				message.Usage = sm.Usage
 			}
@@ -1115,6 +1356,14 @@ func unstreamResponse(ctx context.Context, rawResponse string, aux *model.AuxMes
 				*message.StopReason = *sm.Delta.StopReason
 			}
 		}
+	}
+
+	// A stream with no message_start leaves message nil; return nil rather than
+	// dereference it. The PostTool loop and finalize closures treat a nil turn as
+	// abnormal (a first-chunk error arrives as an SSE "error" event, handled above).
+	if message == nil {
+		log.FromContext(ctx).Warn("streamed response contained no message_start; returning nil message")
+		return nil, nil
 	}
 
 	if aux != nil {
@@ -1130,21 +1379,6 @@ func unstreamResponse(ctx context.Context, rawResponse string, aux *model.AuxMes
 	}
 
 	return message, nil
-}
-
-// Converts stored message history to only the messages that'll get sent as context.
-func historyToContext(history []*model.StoredMessage) []*model.Message {
-	messages := make([]*model.Message, 0, len(history))
-	for _, msg := range history {
-		if slices.Contains(msg.Tags, model.MessageTagContextCompression) {
-			// drop older messages, keep capacity
-			messages = messages[:0]
-		}
-
-		messages = append(messages, msg.Message)
-	}
-
-	return messages
 }
 
 func removeAuxData(messages []*model.StoredMessage) {
@@ -1212,10 +1446,12 @@ func (h *AssistantHandler) markAlertAsInvestigated(ctx context.Context, socId st
 	// Execute the update
 	results, err := h.server.Eventstore.Update(ctx, updateCriteria)
 	if err != nil {
+		logger.WithError(err).Error("unable to mark alert as investigated")
 		return err
 	}
 
 	if results.UpdatedCount == 0 && results.UnchangedCount == 0 {
+		logger.WithField("socId", socId).Error("update made no changes")
 		return fmt.Errorf("no alert found with soc_id: %s", socId)
 	}
 

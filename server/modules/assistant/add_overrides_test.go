@@ -7,6 +7,7 @@ package assistant
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"sync"
 	"testing"
@@ -391,7 +392,7 @@ func TestAddOverridesTool_Execute(t *testing.T) {
 
 			// Create tool and execute
 			tool := &AddOverridesTool{}
-			result, err := tool.Execute(ctx, mockServer, tc.params, "")
+			result, err := tool.Execute(ctx, mockServer, &model.ToolRequest{Params: json.RawMessage(tc.params)})
 
 			// Assert error expectations
 			if tc.expectedError {

@@ -171,9 +171,6 @@ func (a *SOAiCloudAdapter) SendMessageStream(ctx context.Context, req *model.Cha
 
 	var buf bytes.Buffer
 
-	// The AI Gateway determines the prompt, do not send.
-	req.System = ""
-
 	err = json.NewEncoder(&buf).Encode(req)
 	if err != nil {
 		logger.WithError(err).WithField("chatrequest", req).Error("unable to encode ChatRequest")
