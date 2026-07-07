@@ -35,7 +35,7 @@ func TestLoadHistory(t *testing.T) {
 			{Message: &model.Message{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "hi"}}}},
 		}, nil)
 
-		ac := newChatInSessionCoordinator(t, ctrl, mockAssistantstore, mockIO, "https://api.example.com")
+		ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
 
 		messages, isNew, err := ac.loadHistory(context.Background(), sessionId)
 		assert.NoError(t, err)
@@ -51,7 +51,7 @@ func TestLoadHistory(t *testing.T) {
 		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 		mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return([]*model.StoredMessage{}, nil)
 
-		ac := newChatInSessionCoordinator(t, ctrl, mockAssistantstore, mockIO, "https://api.example.com")
+		ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
 
 		messages, isNew, err := ac.loadHistory(context.Background(), sessionId)
 		assert.NoError(t, err)
@@ -67,7 +67,7 @@ func TestLoadHistory(t *testing.T) {
 		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 		mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return(nil, errors.New("session not found"))
 
-		ac := newChatInSessionCoordinator(t, ctrl, mockAssistantstore, mockIO, "https://api.example.com")
+		ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
 
 		messages, isNew, err := ac.loadHistory(context.Background(), sessionId)
 		assert.NoError(t, err)
@@ -83,7 +83,7 @@ func TestLoadHistory(t *testing.T) {
 		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 		mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return(nil, errors.New("network error"))
 
-		ac := newChatInSessionCoordinator(t, ctrl, mockAssistantstore, mockIO, "https://api.example.com")
+		ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
 
 		_, _, err := ac.loadHistory(context.Background(), sessionId)
 		assert.Error(t, err)
@@ -153,7 +153,7 @@ func TestAssistantCoordinator_ChatInSession_ErrorPaths(t *testing.T) {
 				return errors.New("create failed")
 			})
 
-		ac := newChatInSessionCoordinator(t, ctrl, mockAssistantstore, mockIO, "https://api.example.com")
+		ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
 		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
 		_, err := ac.ChatInSession(ctx, incMsg(), "", "")
@@ -174,7 +174,7 @@ func TestAssistantCoordinator_ChatInSession_ErrorPaths(t *testing.T) {
 		mockIO.EXPECT().MakeRequest(gomock.Any(), false).Return(okResponse())
 		mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(errors.New("save user failed"))
 
-		ac := newChatInSessionCoordinator(t, ctrl, mockAssistantstore, mockIO, "https://api.example.com")
+		ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
 		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
 		_, err := ac.ChatInSession(ctx, incMsg(), "", "")
@@ -198,7 +198,7 @@ func TestAssistantCoordinator_ChatInSession_ErrorPaths(t *testing.T) {
 			mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(errors.New("save response failed")),
 		)
 
-		ac := newChatInSessionCoordinator(t, ctrl, mockAssistantstore, mockIO, "https://api.example.com")
+		ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
 		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
 		_, err := ac.ChatInSession(ctx, incMsg(), "", "")
@@ -221,7 +221,7 @@ func TestAssistantCoordinator_ChatStreamInSession_ErrorPaths(t *testing.T) {
 		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 		mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return(nil, errors.New("network error"))
 
-		ac := newChatInSessionCoordinator(t, ctrl, mockAssistantstore, mockIO, "https://api.example.com")
+		ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
 		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
 		stream, _, finalize, err := ac.ChatStreamInSession(ctx, incMsg(), "", "")
@@ -239,7 +239,7 @@ func TestAssistantCoordinator_ChatStreamInSession_ErrorPaths(t *testing.T) {
 		mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return([]*model.StoredMessage{}, nil)
 		mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(nil, errors.New("network error"))
 
-		ac := newChatInSessionCoordinator(t, ctrl, mockAssistantstore, mockIO, "https://api.example.com")
+		ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
 		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
 		_, _, _, err := ac.ChatStreamInSession(ctx, incMsg(), "", "")
@@ -262,7 +262,7 @@ func TestAssistantCoordinator_ChatStreamInSession_ErrorPaths(t *testing.T) {
 		}, nil)
 		mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(errors.New("save user failed"))
 
-		ac := newChatInSessionCoordinator(t, ctrl, mockAssistantstore, mockIO, "https://api.example.com")
+		ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
 		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
 		_, _, _, err := ac.ChatStreamInSession(ctx, incMsg(), "", "")
@@ -285,7 +285,7 @@ func TestAssistantCoordinator_ChatStreamInSession_ErrorPaths(t *testing.T) {
 		// Only the user message is saved; the [DONE]-only finalize yields no assistant message.
 		mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil)
 
-		ac := newChatInSessionCoordinator(t, ctrl, mockAssistantstore, mockIO, "https://api.example.com")
+		ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
 		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
 		stream, _, finalize, err := ac.ChatStreamInSession(ctx, incMsg(), "", "")

@@ -203,6 +203,7 @@ func (h *AssistantHandler) handleStreamingChat(ctx context.Context, w http.Respo
 // @Failure      400           "The provided input object or parameters are malformed or invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
+// @Failure      404           "No pending tool request with this ID exists in the session"
 // @Failure      409           "A tool for the indicated session is already running"
 // @Failure      500           "Internal SOC error; review SOC logs"
 // @Router       /connect/assistant/tool/{name} [post]
@@ -1146,13 +1147,29 @@ func writeSSEDone(w http.ResponseWriter) {
 // messageHasToolUse reports whether the assistant turn requested any tools (and
 // therefore must be handed back to the client for approval rather than chained).
 // respondToolTurnError writes the appropriate HTTP status for an error from a tool
-// turn: 409 Conflict when the session is busy (so the client retries), 400 for a
-// client error, or 500 otherwise. logMsg describes the failing path for the error
-// log. Shared by PostTool's non-streaming and streaming branches.
+// turn: 409 Conflict when the session is busy (so the client retries), 404 when the
+// request targets a tool_use the session never asked for, 400 when it targets one
+// that is already resolved or with a mismatched name/params, 400 for other client
+// errors, or 500 otherwise. logMsg describes the failing path for the error log.
+// Shared by PostTool's non-streaming and streaming branches.
 func (h *AssistantHandler) respondToolTurnError(w http.ResponseWriter, r *http.Request, logger log.Interface, err error, logMsg string) {
 	if errors.Is(err, ErrToolTurnBusy) {
 		logger.WithError(err).Warn("tool turn busy; another tool is running for this session")
 		web.Respond(w, r, http.StatusConflict, err.Error())
+
+		return
+	}
+
+	if errors.Is(err, ErrToolUseNotFound) {
+		logger.WithError(err).Warn("tool request targets an unknown tool_use")
+		web.Respond(w, r, http.StatusNotFound, err.Error())
+
+		return
+	}
+
+	if errors.Is(err, ErrToolAlreadyResolved) || errors.Is(err, ErrToolRequestMismatch) {
+		logger.WithError(err).Warn("tool request rejected by validation")
+		web.Respond(w, r, http.StatusBadRequest, err.Error())
 
 		return
 	}

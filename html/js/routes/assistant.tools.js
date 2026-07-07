@@ -29,6 +29,27 @@ globalThis.AssistantTools = (function() {
         }
       }
     },
+    // isToolAlreadyResolvedError reports whether an executeTool failure is the
+    // backend's ERROR_TOOL_ALREADY_RESOLVED rejection (400): the targeted tool_use
+    // already has a persisted result, so a duplicate/retried request changed
+    // nothing and must not be surfaced as a tool failure. The response body is a
+    // ReadableStream under the fetch adapter, so it may need an async read.
+    async isToolAlreadyResolvedError(error) {
+      if (!error || !error.response || error.response.status !== 400) return false;
+
+      let body = error.response.data;
+      if (body && typeof body.pipeThrough === 'function') {
+        try {
+          const reader = body.pipeThrough(new TextDecoderStream()).getReader();
+          const { value } = await reader.read();
+          body = value;
+        } catch {
+          return false;
+        }
+      }
+
+      return typeof body === 'string' && body.includes('ERROR_TOOL_ALREADY_RESOLVED');
+    },
     async executeTool(toolUse) {
       // Use the tool's session ID if available, otherwise use current session
       let toolStreamingSessionId = toolUse.sessionId || this.currentChatId;
@@ -256,6 +277,25 @@ globalThis.AssistantTools = (function() {
           await this.loadCredits();
         }
       } catch (error) {
+        // A duplicate/retried request for a tool_use whose result is already
+        // persisted is not a failure: the tool ran (or was rejected) and its result
+        // is in the session. The local view is known to be out of sync with the
+        // backend, so re-fetch the session and render persisted truth rather than
+        // guessing at the card's state. A session not in view (and not a delegation
+        // child rendered in it) reloads from the backend on the next switch instead.
+        if (await this.isToolAlreadyResolvedError(error)) {
+          const toolSessionId = toolUse.sessionId || this.currentChatId;
+          const visible = this.currentChatId === toolSessionId || this.delegationChildren.has(toolSessionId);
+          if (visible) {
+            try {
+              await this.loadChatFromBackend(this.currentChatId);
+            } catch {
+              // Leave the card as-is; the next session switch reloads from the backend.
+            }
+          }
+          return;
+        }
+
         // Always update tool status with error, but only update UI if current session
         toolUse.status = 'error';
         toolUse.error = error.message;

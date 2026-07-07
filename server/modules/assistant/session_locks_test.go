@@ -7,6 +7,7 @@ package assistant
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
@@ -269,6 +270,9 @@ func newCoordinatorWithStore(t *testing.T, ctrl *gomock.Controller, store server
 			"MyAdapter": &SOAiCloudAdapter{apiUrl: "https://api.example.com", srv: srv, IOManager: mockIO},
 		},
 		toolConfig: []byte(`{"tools": [], "tool_choice": {"auto": {}}}`),
+		// Real polling attempts, but zero delay: tests supply complete history, so
+		// the few persist-only cases (no tool_use turn present) mustn't sleep.
+		toolUseTurnAttempts: DEFAULT_TOOL_USE_TURN_ATTEMPTS,
 	}
 }
 
@@ -304,7 +308,7 @@ func TestContinueWithToolResult_ExactlyOnceUnderConcurrency(t *testing.T) {
 			toolMsg := buildToolResultMessage(id, &model.ToolResponse{ToolName: "query_events", Result: "ok"}, nil)
 			// waitForLock: exercise the coalescing/serialization path (the fail-fast path
 			// is covered by TestContinueWithToolResult_BusyReturnsError).
-			turns[i], errs[i] = ac.continueWithToolResult(userCtx(), sess, sessionId, "test-model@MyAdapter", toolMsg, waitForLock)
+			turns[i], errs[i] = ac.continueWithToolResult(userCtx(), sess, sessionId, "test-model@MyAdapter", toolMsg, nil, waitForLock)
 		}(i, id)
 	}
 	wg.Wait()
@@ -346,7 +350,7 @@ func TestContinueWithToolResult_RetryDoesNotDoubleSend(t *testing.T) {
 	}
 
 	// First request continues the turn (the sole tool_use is now answered).
-	turn, err := ac.continueWithToolResult(userCtx(), sess, sessionId, "test-model@MyAdapter", result(), failFast)
+	turn, err := ac.continueWithToolResult(userCtx(), sess, sessionId, "test-model@MyAdapter", result(), nil, failFast)
 	require.NoError(t, err)
 	require.NotNil(t, turn.Response)
 	turn.Response.Body.Close()
@@ -359,7 +363,7 @@ func TestContinueWithToolResult_RetryDoesNotDoubleSend(t *testing.T) {
 	store.seed(sessionId, &model.Message{Role: "assistant", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "all clear"}}})
 
 	// Retry after completion: rejected by the durable "already continued" check.
-	retry, err := ac.continueWithToolResult(userCtx(), sess, sessionId, "test-model@MyAdapter", result(), failFast)
+	retry, err := ac.continueWithToolResult(userCtx(), sess, sessionId, "test-model@MyAdapter", result(), nil, failFast)
 	require.NoError(t, err)
 	assert.Nil(t, retry.Response, "a retry after the continuation landed must be persist-only")
 	assert.Equal(t, int32(1), atomic.LoadInt32(&sends), "no second model continuation on retry")
@@ -386,7 +390,7 @@ func TestContinueWithToolResult_BusyReturnsError(t *testing.T) {
 	sess := &model.AssistantSession{SessionId: sessionId}
 	toolMsg := buildToolResultMessage("tu1", &model.ToolResponse{ToolName: "query_events", Result: "ok"}, nil)
 
-	turn, err := ac.continueWithToolResult(userCtx(), sess, sessionId, "test-model@MyAdapter", toolMsg, failFast)
+	turn, err := ac.continueWithToolResult(userCtx(), sess, sessionId, "test-model@MyAdapter", toolMsg, nil, failFast)
 	assert.ErrorIs(t, err, server.ErrToolTurnBusy)
 	assert.Nil(t, turn)
 	assert.Equal(t, int32(0), atomic.LoadInt32(&sends), "a busy request must not dispatch or persist anything")
@@ -394,7 +398,7 @@ func TestContinueWithToolResult_BusyReturnsError(t *testing.T) {
 
 	// Once the lock frees, the same request succeeds.
 	ac.sessionLocks.unlock(sessionId)
-	turn, err = ac.continueWithToolResult(userCtx(), sess, sessionId, "test-model@MyAdapter", toolMsg, failFast)
+	turn, err = ac.continueWithToolResult(userCtx(), sess, sessionId, "test-model@MyAdapter", toolMsg, nil, failFast)
 	require.NoError(t, err)
 	require.NotNil(t, turn.Response)
 	turn.Response.Body.Close()
@@ -450,11 +454,11 @@ func TestToolInSession_BusyRejectsBeforeExecutingTool(t *testing.T) {
 }
 
 // A retried tool request (the UI resends a POST whose long-running tool timed out)
-// that lands on the non-streaming path AFTER the continuation was persisted must not
-// panic: the turn is already continued, so ToolInSession returns an empty result
-// rather than indexing an empty slice, and neither dispatches nor duplicates.
-func TestToolInSession_RetryAfterContinuationDoesNotPanic(t *testing.T) {
-	const sessionId = "retry-panic-session"
+// that lands AFTER the tool's result was persisted is turned away with
+// ErrToolAlreadyResolved (400) without re-executing the tool, dispatching a second
+// model turn, or duplicating the stored result.
+func TestToolInSession_RetryAfterContinuationAlreadyResolved(t *testing.T) {
+	const sessionId = "retry-resolved-session"
 
 	store := newFakeAssistantstore()
 	store.seed(sessionId, storedToolUseTurn("tu1").Message)
@@ -465,22 +469,28 @@ func TestToolInSession_RetryAfterContinuationDoesNotPanic(t *testing.T) {
 	defer ctrl.Finish()
 	var sends int32
 	ac := newCoordinatorWithStore(t, ctrl, store, &sends)
+
+	var executed int32
 	ac.FunctionLibrary = map[string]Tool{
 		"query_events": &mockTool{
 			name: "query_events",
 			executeFunc: func(context.Context, *server.Server, *model.ToolRequest) (*model.ToolResponse, error) {
+				atomic.AddInt32(&executed, 1)
 				return &model.ToolResponse{ToolName: "query_events", Result: "ok"}, nil
 			},
 		},
 	}
 
 	req := &model.ToolRequest{SessionId: sessionId, ToolUseId: "tu1", Model: "test-model@MyAdapter"}
-	resp, err := ac.ToolInSession(userCtx(), req, "query_events")
+	_, err := ac.ToolInSession(userCtx(), req, "query_events")
 
-	require.NoError(t, err)
-	assert.Empty(t, resp, "an already-continued retry has nothing to chain")
+	assert.ErrorIs(t, err, server.ErrToolAlreadyResolved)
+	assert.Equal(t, int32(0), atomic.LoadInt32(&executed), "a resolved tool_use must not re-execute the tool")
 	assert.Equal(t, int32(0), atomic.LoadInt32(&sends), "no second model dispatch on a retry")
 	assert.Equal(t, 1, store.countToolResults(sessionId, "tu1"), "a retried tool_result must not be duplicated")
+
+	require.True(t, ac.sessionLocks.tryLock(sessionId), "validation failure must release the lock")
+	ac.sessionLocks.unlock(sessionId)
 }
 
 // --- acquireTurnLock -------------------------------------------------------
@@ -615,4 +625,275 @@ func TestToolStreamInSession_PersistOnlyReleasesLock(t *testing.T) {
 
 	require.True(t, ac.sessionLocks.tryLock(sessionId), "persist-only must release the lock on return")
 	ac.sessionLocks.unlock(sessionId)
+}
+
+// --- validateToolRequest (ToolInSession / ToolStreamInSession) ---------------
+
+// newValidationCoordinator builds a coordinator on the fake store whose
+// query_events tool counts executions, for asserting that a rejected request
+// never runs the tool.
+func newValidationCoordinator(t *testing.T, ctrl *gomock.Controller, store server.Assistantstore, sends *int32, executed *int32) *AssistantCoordinator {
+	t.Helper()
+	ac := newCoordinatorWithStore(t, ctrl, store, sends)
+	ac.FunctionLibrary = map[string]Tool{
+		"query_events": &mockTool{
+			name: "query_events",
+			executeFunc: func(context.Context, *server.Server, *model.ToolRequest) (*model.ToolResponse, error) {
+				atomic.AddInt32(executed, 1)
+				return &model.ToolResponse{ToolName: "query_events", Result: "ok"}, nil
+			},
+		},
+	}
+	return ac
+}
+
+// A tool request whose toolUseId matches no tool_use in the session must be turned
+// away (404) before the tool executes, and must release the lock.
+func TestToolInSession_UnknownToolUseIs404(t *testing.T) {
+	const sessionId = "validate-unknown-tooluse"
+
+	store := newFakeAssistantstore()
+	store.seed(sessionId, storedToolUseTurn("tu1").Message)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	var sends, executed int32
+	ac := newValidationCoordinator(t, ctrl, store, &sends, &executed)
+
+	req := &model.ToolRequest{SessionId: sessionId, ToolUseId: "tu-missing", Model: "test-model@MyAdapter"}
+	_, err := ac.ToolInSession(userCtx(), req, "query_events")
+
+	assert.ErrorIs(t, err, server.ErrToolUseNotFound)
+	assert.Equal(t, int32(0), atomic.LoadInt32(&executed), "an unknown tool_use must not execute the tool")
+	assert.Equal(t, int32(0), atomic.LoadInt32(&sends))
+	assert.Equal(t, 0, store.countToolResults(sessionId, "tu-missing"))
+
+	require.True(t, ac.sessionLocks.tryLock(sessionId), "validation failure must release the lock")
+	ac.sessionLocks.unlock(sessionId)
+}
+
+// A tool request against a session that doesn't exist is a 404: with no session
+// there is no pending tool request to approve.
+func TestToolInSession_UnknownSessionIs404(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	var sends, executed int32
+	ac := newValidationCoordinator(t, ctrl, newFakeAssistantstore(), &sends, &executed)
+
+	req := &model.ToolRequest{SessionId: "no-such-session", ToolUseId: "tu1", Model: "test-model@MyAdapter"}
+	_, err := ac.ToolInSession(userCtx(), req, "query_events")
+
+	assert.ErrorIs(t, err, server.ErrToolUseNotFound)
+	assert.Equal(t, int32(0), atomic.LoadInt32(&executed))
+	assert.Equal(t, int32(0), atomic.LoadInt32(&sends))
+}
+
+// Approving a real tool_use under a different tool name must not run anything: the
+// request is not describing the tool the assistant asked for.
+func TestToolInSession_NameMismatchRejected(t *testing.T) {
+	const sessionId = "validate-name-mismatch"
+
+	store := newFakeAssistantstore()
+	store.seed(sessionId, storedToolUseTurn("tu1").Message) // Name: query_events
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	var sends, executed int32
+	ac := newValidationCoordinator(t, ctrl, store, &sends, &executed)
+
+	req := &model.ToolRequest{SessionId: sessionId, ToolUseId: "tu1", Model: "test-model@MyAdapter"}
+	_, err := ac.ToolInSession(userCtx(), req, "ack_alerts")
+
+	assert.ErrorIs(t, err, server.ErrToolRequestMismatch)
+	assert.Equal(t, int32(0), atomic.LoadInt32(&executed))
+	assert.Equal(t, int32(0), atomic.LoadInt32(&sends))
+}
+
+// Approving a real tool_use with different params must not run anything either.
+func TestToolInSession_ParamsMismatchRejected(t *testing.T) {
+	const sessionId = "validate-params-mismatch"
+
+	store := newFakeAssistantstore()
+	store.seed(sessionId, storedNamedToolUseTurn("query_events", json.RawMessage(`{"q":"x"}`), "tu1").Message)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	var sends, executed int32
+	ac := newValidationCoordinator(t, ctrl, store, &sends, &executed)
+
+	req := &model.ToolRequest{
+		SessionId: sessionId,
+		ToolUseId: "tu1",
+		Params:    json.RawMessage(`{"q":"y"}`),
+		Model:     "test-model@MyAdapter",
+	}
+	_, err := ac.ToolInSession(userCtx(), req, "query_events")
+
+	assert.ErrorIs(t, err, server.ErrToolRequestMismatch)
+	assert.Equal(t, int32(0), atomic.LoadInt32(&executed))
+	assert.Equal(t, int32(0), atomic.LoadInt32(&sends))
+}
+
+// Params comparison is semantic: the UI re-serializes the tool input with
+// JSON.stringify, so key order and whitespace differences must still approve.
+func TestToolStreamInSession_ParamsCompareSemantically(t *testing.T) {
+	const sessionId = "validate-params-semantic"
+
+	store := newFakeAssistantstore()
+	store.seed(sessionId, storedNamedToolUseTurn("query_events", json.RawMessage(`{"a":1,"b":[1,2]}`), "tu1").Message)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	var sends int32
+	ac := newStreamLockCoordinator(t, ctrl, store, &sends)
+
+	req := &model.ToolRequest{
+		SessionId: sessionId,
+		ToolUseId: "tu1",
+		Params:    json.RawMessage(` { "b": [1, 2], "a": 1 } `),
+		Model:     "test-model@MyAdapter",
+	}
+	turn, err := ac.ToolStreamInSession(userCtx(), req, "query_events")
+	require.NoError(t, err, "reordered/whitespaced params must still match")
+	require.NotNil(t, turn.Response, "the turn must dispatch")
+	turn.Response.Body.Close()
+	assert.Equal(t, int32(1), atomic.LoadInt32(&sends))
+
+	require.NoError(t, turn.Finalize([]byte("data: [DONE]\n\n")))
+}
+
+// Streaming twin of the unknown-tool_use 404: rejected before execution, lock freed.
+func TestToolStreamInSession_UnknownToolUseIs404(t *testing.T) {
+	const sessionId = "stream-validate-unknown"
+
+	store := newFakeAssistantstore()
+	store.seed(sessionId, storedToolUseTurn("tu1").Message)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	var sends int32
+	ac := newStreamLockCoordinator(t, ctrl, store, &sends)
+
+	req := &model.ToolRequest{SessionId: sessionId, ToolUseId: "tu-missing", Model: "test-model@MyAdapter"}
+	turn, err := ac.ToolStreamInSession(userCtx(), req, "query_events")
+
+	assert.ErrorIs(t, err, server.ErrToolUseNotFound)
+	assert.Nil(t, turn)
+	assert.Equal(t, int32(0), atomic.LoadInt32(&sends))
+
+	require.True(t, ac.sessionLocks.tryLock(sessionId), "validation failure must release the lock")
+	ac.sessionLocks.unlock(sessionId)
+}
+
+// Streaming twin of the already-resolved 400: a tool_use with a persisted result
+// must not re-execute, re-dispatch, or duplicate the stored result.
+func TestToolStreamInSession_AlreadyResolvedIs400(t *testing.T) {
+	const sessionId = "stream-validate-resolved"
+
+	store := newFakeAssistantstore()
+	store.seed(sessionId, storedToolUseTurn("tu1").Message)
+	store.seed(sessionId, buildToolResultMessage("tu1", &model.ToolResponse{ToolName: "query_events", Result: "ok"}, nil))
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	var sends int32
+	ac := newStreamLockCoordinator(t, ctrl, store, &sends)
+
+	req := &model.ToolRequest{SessionId: sessionId, ToolUseId: "tu1", Model: "test-model@MyAdapter"}
+	turn, err := ac.ToolStreamInSession(userCtx(), req, "query_events")
+
+	assert.ErrorIs(t, err, server.ErrToolAlreadyResolved)
+	assert.Nil(t, turn)
+	assert.Equal(t, int32(0), atomic.LoadInt32(&sends))
+	assert.Equal(t, 1, store.countToolResults(sessionId, "tu1"), "the stored result must not be duplicated")
+
+	require.True(t, ac.sessionLocks.tryLock(sessionId), "validation failure must release the lock")
+	ac.sessionLocks.unlock(sessionId)
+}
+
+// Validation covers the Rejected branch too: rejecting a tool_use the session never
+// asked for is a 404 and records nothing.
+func TestToolStreamInSession_Rejected_ValidationApplies(t *testing.T) {
+	const sessionId = "stream-validate-rejected"
+
+	store := newFakeAssistantstore()
+	store.seed(sessionId, storedToolUseTurn("tu1").Message)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	var sends int32
+	ac := newStreamLockCoordinator(t, ctrl, store, &sends)
+
+	req := &model.ToolRequest{SessionId: sessionId, ToolUseId: "tu-missing", Model: "test-model@MyAdapter", Rejected: true}
+	turn, err := ac.ToolStreamInSession(userCtx(), req, "query_events")
+
+	assert.ErrorIs(t, err, server.ErrToolUseNotFound)
+	assert.Nil(t, turn)
+	assert.Equal(t, int32(0), atomic.LoadInt32(&sends))
+	assert.Equal(t, 0, store.countToolResults(sessionId, "tu-missing"), "a 404'd rejection must not record a result")
+
+	require.True(t, ac.sessionLocks.tryLock(sessionId), "validation failure must release the lock")
+	ac.sessionLocks.unlock(sessionId)
+}
+
+// A dispatched rejection turn must keep the session lock until finalize, exactly
+// like an approved tool's turn (guards the failFast -> lockHeld+handOff refactor).
+func TestToolStreamInSession_Rejected_HoldsLockUntilFinalize(t *testing.T) {
+	const sessionId = "stream-reject-lock"
+
+	store := newFakeAssistantstore()
+	store.seed(sessionId, storedToolUseTurn("tu1").Message) // sole tool_use -> dispatches
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	var sends int32
+	ac := newStreamLockCoordinator(t, ctrl, store, &sends)
+
+	req := &model.ToolRequest{SessionId: sessionId, ToolUseId: "tu1", Model: "test-model@MyAdapter", Rejected: true}
+	turn, err := ac.ToolStreamInSession(userCtx(), req, "query_events")
+	require.NoError(t, err)
+	require.NotNil(t, turn.Response, "the rejection turn must dispatch")
+	turn.Response.Body.Close()
+	assert.Equal(t, int32(1), atomic.LoadInt32(&sends))
+	assert.Equal(t, 1, store.countToolResults(sessionId, "tu1"), "the rejection tool_result must be persisted")
+
+	assert.False(t, ac.sessionLocks.tryLock(sessionId), "lock must stay held until finalize runs")
+
+	require.NoError(t, turn.Finalize([]byte("data: [DONE]\n\n")))
+	require.True(t, ac.sessionLocks.tryLock(sessionId), "finalize must release the lock")
+	ac.sessionLocks.unlock(sessionId)
+}
+
+// Validation must tolerate the known persist race: the assistant turn carrying the
+// tool_use is saved asynchronously after it streams, so a fast approval can arrive
+// first. awaitToolUseTurn's bounded polling inside validation must see the turn
+// land and let the request through instead of 404ing.
+func TestToolStreamInSession_ValidationAwaitsLateToolUseTurn(t *testing.T) {
+	const sessionId = "stream-validate-late-turn"
+
+	store := newFakeAssistantstore()
+	// The session exists (a user message is stored) but the tool_use turn hasn't
+	// been persisted yet.
+	store.seed(sessionId, &model.Message{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "hi"}}})
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	var sends int32
+	ac := newStreamLockCoordinator(t, ctrl, store, &sends)
+	// A real (small) backoff so the goroutine below can land the turn mid-poll.
+	ac.toolUseTurnDelay = 5 * time.Millisecond
+
+	// Simulate the streaming finalize persisting the tool_use turn a few polls in.
+	go func() {
+		time.Sleep(12 * time.Millisecond)
+		store.seed(sessionId, storedToolUseTurn("tu1").Message)
+	}()
+
+	req := &model.ToolRequest{SessionId: sessionId, ToolUseId: "tu1", Model: "test-model@MyAdapter"}
+	turn, err := ac.ToolStreamInSession(userCtx(), req, "query_events")
+	require.NoError(t, err, "a late-persisted tool_use turn must still validate")
+	require.NotNil(t, turn.Response, "the turn must dispatch once the tool_use lands")
+	turn.Response.Body.Close()
+
+	require.NoError(t, turn.Finalize([]byte("data: [DONE]\n\n")))
 }

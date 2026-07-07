@@ -1294,15 +1294,134 @@ test('executeTool handles non-ok response', async () => {
   const toolUse = { ...fakeToolUse };
   comp.currentChatId = fakeSessionId;
   comp.scrollToBottom = jest.fn();
-  
+
   mockPapi('post', null, new Error('Tool execution failed: Internal Server Error'));
-  
+
   await comp.executeTool(toolUse);
-  
+
   expect(toolUse.status).toBe('error');
   expect(toolUse.error).toBe('Tool execution failed: Internal Server Error');
   expect(comp.messages).toHaveLength(1);
   expect(comp.messages[0].content).toContain('Error executing tool "query_events": Tool execution failed: Internal Server Error');
+});
+
+// alreadyResolvedError builds the rejection the backend sends for a
+// duplicate/retried request whose tool_use already has a persisted result.
+const alreadyResolvedError = (data = 'ERROR_TOOL_ALREADY_RESOLVED') => {
+  const error = new Error('Request failed with status code 400');
+  error.response = { status: 400, data };
+  return error;
+};
+
+// A duplicate approval whose tool already resolved server-side is benign: the
+// session is out of sync, so the view reloads from the backend and renders the
+// persisted result instead of guessing at the card's state or surfacing an error.
+test('executeTool reloads the session on an already-resolved duplicate', async () => {
+  const toolUse = { ...fakeToolUse, status: 'executing' };
+  comp.currentChatId = fakeSessionId;
+  comp.scrollToBottom = jest.fn();
+  comp.loadChatFromBackend = jest.fn().mockResolvedValue();
+
+  mockPapi('post', null, alreadyResolvedError());
+
+  await comp.executeTool(toolUse);
+
+  expect(comp.loadChatFromBackend).toHaveBeenCalledWith(fakeSessionId);
+  expect(toolUse.status).toBe('executing');
+  expect(toolUse.error).toBeNull();
+  expect(comp.messages).toHaveLength(0);
+});
+
+// The response body is a ReadableStream under the fetch adapter, so the benign
+// check must read the error code out of the stream.
+test('executeTool reloads the session on an already-resolved duplicate (streamed body)', async () => {
+  const toolUse = { ...fakeToolUse, status: 'executing' };
+  comp.currentChatId = fakeSessionId;
+  comp.scrollToBottom = jest.fn();
+  comp.loadChatFromBackend = jest.fn().mockResolvedValue();
+
+  const streamBody = {
+    pipeThrough: () => ({
+      getReader: () => ({
+        read: async () => ({ done: false, value: 'ERROR_TOOL_ALREADY_RESOLVED' })
+      })
+    })
+  };
+  mockPapi('post', null, alreadyResolvedError(streamBody));
+
+  await comp.executeTool(toolUse);
+
+  expect(comp.loadChatFromBackend).toHaveBeenCalledWith(fakeSessionId);
+  expect(toolUse.status).toBe('executing');
+  expect(comp.messages).toHaveLength(0);
+});
+
+// A duplicate rejection is the same sync problem: reload from the backend and
+// let the persisted rejection result drive the card, with no error message.
+test('executeTool reloads the session when a duplicate rejection was already resolved', async () => {
+  const toolUse = { ...fakeToolUse, status: 'rejected', approved: false };
+  comp.currentChatId = fakeSessionId;
+  comp.scrollToBottom = jest.fn();
+  comp.loadChatFromBackend = jest.fn().mockResolvedValue();
+
+  mockPapi('post', null, alreadyResolvedError());
+
+  await comp.executeTool(toolUse);
+
+  expect(comp.loadChatFromBackend).toHaveBeenCalledWith(fakeSessionId);
+  expect(toolUse.status).toBe('rejected');
+  expect(comp.messages).toHaveLength(0);
+});
+
+// A background session's tool (not in view, not a delegation child) must not
+// yank the user's current view: no reload, no error — the backend state is
+// picked up when that session is next opened.
+test('executeTool does not reload for an already-resolved tool in a background session', async () => {
+  const toolUse = { ...fakeToolUse, sessionId: 'other-session', status: 'executing' };
+  comp.currentChatId = fakeSessionId;
+  comp.scrollToBottom = jest.fn();
+  comp.loadChatFromBackend = jest.fn().mockResolvedValue();
+
+  mockPapi('post', null, alreadyResolvedError());
+
+  await comp.executeTool(toolUse);
+
+  expect(comp.loadChatFromBackend).not.toHaveBeenCalled();
+  expect(toolUse.status).toBe('executing');
+  expect(comp.messages).toHaveLength(0);
+});
+
+// A failed refresh after a benign duplicate stays benign: no error surfaced,
+// card untouched (the next session switch reloads from the backend).
+test('executeTool stays quiet when the already-resolved reload itself fails', async () => {
+  const toolUse = { ...fakeToolUse, status: 'executing' };
+  comp.currentChatId = fakeSessionId;
+  comp.scrollToBottom = jest.fn();
+  comp.loadChatFromBackend = jest.fn().mockRejectedValue(new Error('reload failed'));
+
+  mockPapi('post', null, alreadyResolvedError());
+
+  await comp.executeTool(toolUse);
+
+  expect(toolUse.status).toBe('executing');
+  expect(toolUse.error).toBeNull();
+  expect(comp.messages).toHaveLength(0);
+});
+
+// Other 400s are real failures and must keep surfacing the error.
+test('executeTool still surfaces a 400 that is not already-resolved', async () => {
+  const toolUse = { ...fakeToolUse };
+  comp.currentChatId = fakeSessionId;
+  comp.scrollToBottom = jest.fn();
+
+  const error = new Error('Request failed with status code 400');
+  error.response = { status: 400, data: 'ERROR_TOOL_REQUEST_MISMATCH' };
+  mockPapi('post', null, error);
+
+  await comp.executeTool(toolUse);
+
+  expect(toolUse.status).toBe('error');
+  expect(comp.messages).toHaveLength(1);
 });
 
 test('executeTool processes streaming response with message_start', async () => {

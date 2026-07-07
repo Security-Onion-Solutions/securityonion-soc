@@ -18,6 +18,21 @@ import (
 // maps it to 409 Conflict so the client can retry, rather than blocking the request.
 var ErrToolTurnBusy = errors.New("ERROR_TOOL_TURN_BUSY")
 
+// ErrToolUseNotFound is returned when a tool request names a toolUseId with no
+// matching assistant tool_use in the session (or the session itself can't be
+// found). The handler maps it to 404 Not Found.
+var ErrToolUseNotFound = errors.New("ERROR_TOOL_USE_NOT_FOUND")
+
+// ErrToolAlreadyResolved is returned when the targeted tool_use already has a
+// tool_result in the session's history, so approving or rejecting it again must
+// not re-execute the tool or duplicate the result. The handler maps it to 400.
+var ErrToolAlreadyResolved = errors.New("ERROR_TOOL_ALREADY_RESOLVED")
+
+// ErrToolRequestMismatch is returned when the targeted tool_use exists but the
+// request does not describe it: the tool name or params differ from what the
+// assistant asked to run. The handler maps it to 400.
+var ErrToolRequestMismatch = errors.New("ERROR_TOOL_REQUEST_MISMATCH")
+
 type AssistantManager interface {
 	Send(ctx context.Context, aiModel string, messages []*model.Message, opts ...model.ChatOpt) ([]*model.Message, error)
 	SendStream(ctx context.Context, aiModel string, messages []*model.Message, opts ...model.ChatOpt) (*http.Response, *model.AuxMessageData, error)

@@ -16,6 +16,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"reflect"
 	"slices"
 	"sort"
 	"strings"
@@ -58,6 +59,12 @@ const (
 	// for sub-sessions. 0 disables the limit (delegation depth is unbounded) unless
 	// an operator configures "maxDelegationDepth".
 	DEFAULT_MAX_DELEGATION_DEPTH = 0
+
+	// DEFAULT_TOOL_USE_TURN_ATTEMPTS and DEFAULT_TOOL_USE_TURN_DELAY_MS bound
+	// awaitToolUseTurn's polling for an asynchronously-persisted tool_use turn,
+	// unless an operator configures "toolUseTurnAttempts" / "toolUseTurnDelayMs".
+	DEFAULT_TOOL_USE_TURN_ATTEMPTS = 10
+	DEFAULT_TOOL_USE_TURN_DELAY_MS = 150
 )
 
 //go:embed SOSystemPrompt.bin
@@ -84,6 +91,12 @@ type AssistantCoordinator struct {
 
 	// maxDelegationDepth is the maximum delegation nesting depth. 0 disables it.
 	maxDelegationDepth int
+
+	// toolUseTurnAttempts and toolUseTurnDelay bound awaitToolUseTurn's polling for
+	// the asynchronously-persisted assistant turn that requested a tool: up to
+	// toolUseTurnAttempts reloads, with toolUseTurnDelay backoff between them.
+	toolUseTurnAttempts int
+	toolUseTurnDelay    time.Duration
 
 	// sessionLocks serializes a session's tool-turn continuation so that exactly one
 	// request continues the LLM's turn when several parallel tool results land.
@@ -121,6 +134,8 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 	ac.systemPromptAddendum = systemPromptAddendum
 	ac.maxSubSessionTokens = module.GetIntDefault(config, "maxSubSessionTokens", DEFAULT_MAX_SUBSESSION_TOKENS)
 	ac.maxDelegationDepth = module.GetIntDefault(config, "maxDelegationDepth", DEFAULT_MAX_DELEGATION_DEPTH)
+	ac.toolUseTurnAttempts = max(module.GetIntDefault(config, "toolUseTurnAttempts", DEFAULT_TOOL_USE_TURN_ATTEMPTS), 1)
+	ac.toolUseTurnDelay = time.Duration(module.GetIntDefault(config, "toolUseTurnDelayMs", DEFAULT_TOOL_USE_TURN_DELAY_MS)) * time.Millisecond
 
 	ac.loadAdapters(config)
 
@@ -860,21 +875,14 @@ func (ac *AssistantCoordinator) ToolInSession(ctx context.Context, toolReq *mode
 	// Detach for the whole turn
 	ctx = buildNoTimeoutCtx(ctx)
 
-	// Gate tool execution behind the session's turn lock: a fresh client tool request
-	// for a session already running a tool turn is turned away (409) BEFORE the tool
-	// runs, so a retry of a busy request never re-executes a (possibly non-idempotent)
-	// tool. The lock is held across execution and the direct continuation, then
-	// released before the delegation-resolution loop below (which re-acquires this or
-	// an ancestor session's lock via resolveDelegationSync's waitForLock continuation).
-	if !ac.sessionLocks.tryLock(toolReq.SessionId) {
-		return nil, server.ErrToolTurnBusy
-	}
-	unlocked := false
-	releaseLock := func() {
-		if !unlocked {
-			ac.sessionLocks.unlock(toolReq.SessionId)
-			unlocked = true
-		}
+	// Gate the turn behind the session lock and validate the request under it (see
+	// beginClientToolTurn). The lock is held across execution and the direct
+	// continuation, then released before the delegation-resolution loop below (which
+	// re-acquires this or an ancestor session's lock via resolveDelegationSync's
+	// waitForLock continuation).
+	sess, history, releaseLock, err := ac.beginClientToolTurn(ctx, toolReq, toolName)
+	if err != nil {
+		return nil, err
 	}
 	defer releaseLock()
 
@@ -893,16 +901,13 @@ func (ac *AssistantCoordinator) ToolInSession(ctx context.Context, toolReq *mode
 	// session and the assistant's continuation is run. Each helper returns the
 	// session record its turn ran on so the chain below never re-fetches it.
 	var response []*model.Message
-	var sess *model.AssistantSession
-	var err error
 
 	if kickoff, ok := delegationKickoff(result); ok {
 		// Refuse the delegation if it would exceed the depth limit: resolve the
 		// delegating session's delegate tool_use with a notice and resume it
 		// instead of nesting another sub-agent (under the lock we already hold).
 		if refusal := ac.delegationDepthRefusal(ctx, toolReq); refusal != nil {
-			sess = ac.loadTurnSession(ctx, toolReq.SessionId)
-			response, err = ac.continueWithToolResultSync(ctx, sess, toolReq.SessionId, modelForSession(sess, toolReq.Model), refusal, lockHeld)
+			response, err = ac.continueWithToolResultSync(ctx, sess, toolReq.SessionId, modelForSession(sess, toolReq.Model), refusal, history, lockHeld)
 		} else {
 			// Release before startDelegationSync: the chaining loop below folds the
 			// child's result back into this session via a waitForLock continuation,
@@ -915,9 +920,8 @@ func (ac *AssistantCoordinator) ToolInSession(ctx context.Context, toolReq *mode
 		// so the conversation can continue.
 		toolMsg := buildToolResultMessage(toolReq.ToolUseId, result, toolErr)
 		// Continue on the session's own model rather than the client-supplied model.
-		sess = ac.loadTurnSession(ctx, toolReq.SessionId)
 		aiModel := modelForSession(sess, toolReq.Model)
-		response, err = ac.continueWithToolResultSync(ctx, sess, toolReq.SessionId, aiModel, toolMsg, lockHeld)
+		response, err = ac.continueWithToolResultSync(ctx, sess, toolReq.SessionId, aiModel, toolMsg, history, lockHeld)
 	}
 	if err != nil {
 		logger.WithError(err).WithFields(log.Fields{
@@ -1050,25 +1054,131 @@ func turnAlreadyContinued(messages []*model.Message) bool {
 // tool_use with the given id -- i.e. the turn that requested this tool has been
 // persisted.
 func toolUseInHistory(messages []*model.Message, toolUseId string) bool {
+	return findToolUse(messages, toolUseId) != nil
+}
+
+// findToolUse returns the tool_use content block with the given id from the
+// history's assistant turns, or nil when no assistant turn requested it.
+func findToolUse(messages []*model.Message, toolUseId string) *model.ContentBlock {
 	if toolUseId == "" {
-		return false
+		return nil
 	}
 	for _, m := range messages {
 		if m == nil || m.Role != "assistant" {
 			continue
 		}
-		for _, cb := range m.ContentBlocks {
+		for i, cb := range m.ContentBlocks {
 			if cb.Type == "tool_use" && cb.Id == toolUseId {
-				return true
+				return &m.ContentBlocks[i]
 			}
 		}
 	}
-	return false
+	return nil
 }
 
-// toolUseTurnDelay is the backoff between reloads while awaiting the assistant
-// tool_use turn to become visible (var so tests can shrink it).
-var toolUseTurnDelay = 150 * time.Millisecond
+// jsonEqual reports whether two raw JSON documents are semantically equal.
+func jsonEqual(a, b json.RawMessage) bool {
+	av, aok := normalizeJSON(a)
+	bv, bok := normalizeJSON(b)
+	if !aok || !bok {
+		return false
+	}
+
+	return reflect.DeepEqual(av, bv)
+}
+
+// normalizeJSON decodes a raw document for semantic comparison, mapping the empty
+// spellings (nil, whitespace, "null", "{}") to nil. ok is false when the document
+// is present but not valid JSON.
+func normalizeJSON(raw json.RawMessage) (v any, ok bool) {
+	if len(bytes.TrimSpace(raw)) == 0 {
+		return nil, true
+	}
+
+	err := json.Unmarshal(raw, &v)
+	if err != nil {
+		return nil, false
+	}
+
+	m, isMap := v.(map[string]any)
+	if isMap && len(m) == 0 {
+		return nil, true
+	}
+
+	return v, true
+}
+
+// validateToolRequest ensures a client tool request (approval or rejection) targets
+// a real, still-unresolved tool_use before anything executes: the session must
+// exist, an assistant turn in it must carry a tool_use with the request's id, that
+// tool_use must not already have a tool_result, and the request must describe
+// exactly the tool the assistant asked to run (same name, same params). The caller
+// holds the session turn lock, so the decision can't race a concurrent resolution.
+// On success it returns the validated history -- which contains the request's
+// tool_use -- so the turn's continuation doesn't have to load it again.
+func (ac *AssistantCoordinator) validateToolRequest(ctx context.Context, sess *model.AssistantSession, toolReq *model.ToolRequest, toolName string) ([]*model.Message, error) {
+	if sess == nil {
+		return nil, server.ErrToolUseNotFound
+	}
+
+	messages, err := ac.loadSessionHistory(ctx, sess)
+	if err != nil {
+		return nil, err
+	}
+
+	// The assistant turn carrying the tool_use is persisted asynchronously after it
+	// streams, so a fast approval (routine for sub-agent tools) can arrive before it
+	// lands. Poll with the same bounded backoff the continuation path uses before
+	// concluding the tool_use doesn't exist.
+	messages, found := ac.awaitToolUseTurn(ctx, sess, toolReq.ToolUseId, messages)
+	if !found {
+		return nil, server.ErrToolUseNotFound
+	}
+
+	// Already-resolved is checked before name/params so a genuine retry of a
+	// completed request (identical payload) gets the more accurate error.
+	if toolResultInHistory(messages, toolReq.ToolUseId) {
+		return nil, server.ErrToolAlreadyResolved
+	}
+
+	toolUse := findToolUse(messages, toolReq.ToolUseId)
+	if toolUse.Name != toolName || !jsonEqual(toolReq.Params, toolUse.Input) {
+		return nil, server.ErrToolRequestMismatch
+	}
+
+	return messages, nil
+}
+
+// beginClientToolTurn is the shared prologue for a fresh client tool request
+// (ToolInSession and ToolStreamInSession): it gates the turn behind the session's
+// turn lock -- a session already running a tool turn is turned away with
+// ErrToolTurnBusy (409) BEFORE the tool runs, so a retry of a busy request never
+// re-executes a (possibly non-idempotent) tool -- then loads the session record
+// and validates the request under the held lock. On success the caller owns the
+// idempotent release func and receives the session together with the validated
+// history. On error the lock has already been released.
+func (ac *AssistantCoordinator) beginClientToolTurn(ctx context.Context, toolReq *model.ToolRequest, toolName string) (*model.AssistantSession, []*model.Message, func(), error) {
+	if !ac.sessionLocks.tryLock(toolReq.SessionId) {
+		return nil, nil, nil, server.ErrToolTurnBusy
+	}
+
+	released := false
+	release := func() {
+		if !released {
+			ac.sessionLocks.unlock(toolReq.SessionId)
+			released = true
+		}
+	}
+
+	sess := ac.loadTurnSession(ctx, toolReq.SessionId)
+	messages, err := ac.validateToolRequest(ctx, sess, toolReq, toolName)
+	if err != nil {
+		release()
+		return nil, nil, nil, err
+	}
+
+	return sess, messages, release, nil
+}
 
 // awaitToolUseTurn ensures the assistant turn that requested toolUseId is present
 // in the loaded history before a tool_result continuation acts on it. The turn that
@@ -1088,11 +1198,11 @@ func (ac *AssistantCoordinator) awaitToolUseTurn(ctx context.Context, sess *mode
 	if sess == nil {
 		return messages, false
 	}
-	for attempt := 0; attempt < 10; attempt++ {
+	for attempt := 0; attempt < ac.toolUseTurnAttempts; attempt++ {
 		select {
 		case <-ctx.Done():
 			return messages, toolUseInHistory(messages, toolUseId)
-		case <-time.After(toolUseTurnDelay):
+		case <-time.After(ac.toolUseTurnDelay):
 		}
 		reloaded, err := ac.loadSessionHistory(ctx, sess)
 		if err != nil {
@@ -1114,10 +1224,11 @@ func (ac *AssistantCoordinator) awaitToolUseTurn(ctx context.Context, sess *mode
 // identifies the session for persistence).
 //
 // Like continueWithToolResult, it holds the per-session lock so exactly one request
-// dispatches the continuation when parallel tool results land; mode has the same
-// meaning (fail fast for a client request, wait for an internal continuation, or run
-// under a lock the caller already holds).
-func (ac *AssistantCoordinator) continueWithToolResultSync(ctx context.Context, sess *model.AssistantSession, sessionId, aiModel string, toolMsg *model.Message, mode lockMode) ([]*model.Message, error) {
+// dispatches the continuation when parallel tool results land; preloaded and mode
+// have the same meaning (validated history to reuse or nil to load fresh; fail fast
+// for a client request, wait for an internal continuation, or run under a lock the
+// caller already holds).
+func (ac *AssistantCoordinator) continueWithToolResultSync(ctx context.Context, sess *model.AssistantSession, sessionId, aiModel string, toolMsg *model.Message, preloaded []*model.Message, mode lockMode) ([]*model.Message, error) {
 	logger := log.FromContext(ctx)
 
 	// The synchronous Send runs entirely under the held lock, so the whole
@@ -1139,10 +1250,13 @@ func (ac *AssistantCoordinator) continueWithToolResultSync(ctx context.Context, 
 		return ac.haltSubSessionSync(noTimeOutCtx, sessionId, aiModel, toolMsg)
 	}
 
-	messages, err := ac.loadSessionHistory(noTimeOutCtx, sess)
-	if err != nil {
-		logger.WithError(err).WithField("sessionId", sess.Id).Error("unable to load history")
-		return nil, err
+	messages := preloaded
+	if messages == nil {
+		messages, err = ac.loadSessionHistory(noTimeOutCtx, sess)
+		if err != nil {
+			logger.WithError(err).WithField("sessionId", sess.Id).Error("unable to load history")
+			return nil, err
+		}
 	}
 
 	// Wait for this result's own tool_use turn to be persisted (see
@@ -1209,36 +1323,16 @@ func (ac *AssistantCoordinator) ToolStreamInSession(ctx context.Context, toolReq
 	// Detach for the whole turn
 	ctx = buildNoTimeoutCtx(ctx)
 
-	// A rejected tool is not executed: fold an error tool_result in so the turn
-	// resolves (letting a parallel turn's other tools continue) with this tool
-	// declined, then resume the assistant exactly as a normal tool result would.
-	if toolReq.Rejected {
-		toolMsg := buildRejectionResultMessage(toolReq.ToolUseId)
-		sess := ac.loadTurnSession(ctx, toolReq.SessionId)
-		aiModel := modelForSession(sess, toolReq.Model)
-		turn, err := ac.continueWithToolResult(ctx, sess, toolReq.SessionId, aiModel, toolMsg, failFast)
-		if err == nil && turn != nil && len(toolMsg.ContentBlocks) > 0 {
-			turn.ToolResult = toolMsg.ContentBlocks[0].ToolResult
-		}
-		return turn, err
+	// Gate the whole tool turn (approval or rejection) behind the session lock and
+	// validate the request under it (see beginClientToolTurn). The lock is held
+	// across execution and the continuation; on a dispatched turn it is handed to
+	// the turn's finalize so it stays held until the handler persists the assistant
+	// turn, then released.
+	sess, history, releaseLock, err := ac.beginClientToolTurn(ctx, toolReq, toolName)
+	if err != nil {
+		return nil, err
 	}
 
-	// Gate tool execution behind the session's turn lock: a fresh client tool request
-	// for a session already running a tool turn is turned away (409) BEFORE the tool
-	// runs, so a retry of a busy request never re-executes a (possibly non-idempotent)
-	// tool. The lock is held across execution and the continuation; on a dispatched
-	// turn it is handed to the turn's finalize so it stays held until the handler
-	// persists the assistant turn, then released.
-	if !ac.sessionLocks.tryLock(toolReq.SessionId) {
-		return nil, server.ErrToolTurnBusy
-	}
-	released := false
-	releaseLock := func() {
-		if !released {
-			ac.sessionLocks.unlock(toolReq.SessionId)
-			released = true
-		}
-	}
 	lockTransferred := false
 	defer func() {
 		if !lockTransferred {
@@ -1255,7 +1349,23 @@ func (ac *AssistantCoordinator) ToolStreamInSession(ctx context.Context, toolReq
 			turn.Finalize = withLockRelease(turn.Finalize, releaseLock)
 			lockTransferred = true
 		}
+
 		return turn, err
+	}
+
+	// A rejected tool is not executed: fold an error tool_result in so the turn
+	// resolves (letting a parallel turn's other tools continue) with this tool
+	// declined, then resume the assistant exactly as a normal tool result would.
+	if toolReq.Rejected {
+		toolMsg := buildRejectionResultMessage(toolReq.ToolUseId)
+		aiModel := modelForSession(sess, toolReq.Model)
+
+		turn, err := ac.continueWithToolResult(ctx, sess, toolReq.SessionId, aiModel, toolMsg, history, lockHeld)
+		if err == nil && turn != nil && len(toolMsg.ContentBlocks) > 0 {
+			turn.ToolResult = toolMsg.ContentBlocks[0].ToolResult
+		}
+
+		return handOff(turn, err)
 	}
 
 	result, toolErr := ac.ExecuteTool(ctx, toolName, toolReq)
@@ -1272,8 +1382,7 @@ func (ac *AssistantCoordinator) ToolStreamInSession(ctx context.Context, toolReq
 			// delegating session's delegate tool_use with a notice and resume it
 			// instead of nesting another sub-agent (under the lock we already hold).
 			if refusal := ac.delegationDepthRefusal(ctx, toolReq); refusal != nil {
-				sess := ac.loadTurnSession(ctx, toolReq.SessionId)
-				return handOff(ac.continueWithToolResult(ctx, sess, toolReq.SessionId, modelForSession(sess, toolReq.Model), refusal, lockHeld))
+				return handOff(ac.continueWithToolResult(ctx, sess, toolReq.SessionId, modelForSession(sess, toolReq.Model), refusal, history, lockHeld))
 			}
 			// Release before startDelegation: it operates on the child session and its
 			// failure path folds an error back into THIS session via a waitForLock
@@ -1286,12 +1395,11 @@ func (ac *AssistantCoordinator) ToolStreamInSession(ctx context.Context, toolReq
 
 	toolMsg := buildToolResultMessage(toolReq.ToolUseId, result, toolErr)
 
-	// Load the session once for the whole turn, then resume on its own model, not
-	// the client-supplied model, so the right agent/prompt continues the turn.
-	sess := ac.loadTurnSession(ctx, toolReq.SessionId)
+	// Resume on the session's own model, not the client-supplied model, so the
+	// right agent/prompt continues the turn.
 	aiModel := modelForSession(sess, toolReq.Model)
 
-	turn, err := ac.continueWithToolResult(ctx, sess, toolReq.SessionId, aiModel, toolMsg, lockHeld)
+	turn, err := ac.continueWithToolResult(ctx, sess, toolReq.SessionId, aiModel, toolMsg, history, lockHeld)
 	if err == nil && turn != nil && len(toolMsg.ContentBlocks) > 0 {
 		// Surface the tool result so the handler can stream it to the UI inline,
 		// sparing the client a session re-fetch to recover the result. Only the
@@ -1406,12 +1514,19 @@ func (ac *AssistantCoordinator) prepareToolResultPersist(ctx context.Context, me
 // several parallel tool results land for one model turn exactly one request
 // dispatches the continuation (the rest persist and wait for the last sibling).
 //
+// preloaded is the session history a validated client tool turn already loaded
+// under the held lock (see beginClientToolTurn); passing it spares a second load.
+// Internal continuations (delegation resolution) pass nil to load fresh history.
+// Reuse is safe because the held session lock excludes every writer that affects
+// the continuation decision (sibling tool results are turned away with 409 and
+// delegation resolution blocks on the lock).
+//
 // mode controls lock acquisition: a fresh client tool request passes failFast so a
 // session already running a tool turn returns server.ErrToolTurnBusy (409) instead of
 // waiting; an internal continuation (delegation resolution) passes waitForLock and
 // waits, so it never drops the result it must fold in; a caller that already holds the
 // lock (having gated tool execution behind it) passes lockHeld.
-func (ac *AssistantCoordinator) continueWithToolResult(ctx context.Context, sess *model.AssistantSession, sessionId, aiModel string, toolMsg *model.Message, mode lockMode) (turn *model.StreamedTurn, err error) {
+func (ac *AssistantCoordinator) continueWithToolResult(ctx context.Context, sess *model.AssistantSession, sessionId, aiModel string, toolMsg *model.Message, preloaded []*model.Message, mode lockMode) (turn *model.StreamedTurn, err error) {
 	logger := log.FromContext(ctx)
 
 	release, err := ac.acquireTurnLock(sessionId, mode)
@@ -1441,15 +1556,19 @@ func (ac *AssistantCoordinator) continueWithToolResult(ctx context.Context, sess
 		return ac.haltSubSessionStream(noTimeOutCtx, sess, aiModel, toolMsg)
 	}
 
-	messages, err := ac.loadSessionHistory(noTimeOutCtx, sess)
-	if err != nil {
-		logger.WithError(err).WithField("sessionId", sess.Id).Error("unable to load history")
-		return nil, err
+	messages := preloaded
+	if messages == nil {
+		messages, err = ac.loadSessionHistory(noTimeOutCtx, sess)
+		if err != nil {
+			logger.WithError(err).WithField("sessionId", sess.Id).Error("unable to load history")
+			return nil, err
+		}
 	}
 
 	// Wait for this result's own tool_use turn to be persisted before deciding. The
 	// turn is saved asynchronously after it streams, so a fast continuation can load
-	// history that lacks its tool_use; sending then would orphan the result.
+	// history that lacks its tool_use; sending then would orphan the result. (A
+	// preloaded history already contains the tool_use, so this is a no-op check.)
 	turnPresent := true
 	if tr := firstToolResult(toolMsg); tr != nil {
 		messages, turnPresent = ac.awaitToolUseTurn(noTimeOutCtx, sess, tr.ToolUseId, messages)
@@ -1805,7 +1924,7 @@ func (ac *AssistantCoordinator) resolveFailedDelegation(ctx context.Context, too
 
 	// Wait for the lock: this must fold the failure result in so the parent isn't left
 	// parked on a sub-agent that will never produce a result.
-	turn, err := ac.continueWithToolResult(ctx, parentSess, toolReq.SessionId, parentModel, toolMsg, waitForLock)
+	turn, err := ac.continueWithToolResult(ctx, parentSess, toolReq.SessionId, parentModel, toolMsg, nil, waitForLock)
 	if err == nil && turn != nil && len(toolMsg.ContentBlocks) > 0 {
 		turn.ToolResult = toolMsg.ContentBlocks[0].ToolResult
 	}
@@ -1831,7 +1950,7 @@ func (ac *AssistantCoordinator) ResolveDelegationStream(ctx context.Context, chi
 	parentModel := modelForSession(parentSess, childSession.ParentModel)
 
 	// Wait for the lock: an internal resolution must fold the child's result in.
-	turn, err := ac.continueWithToolResult(ctx, parentSess, childSession.ParentSessionId, parentModel, toolMsg, waitForLock)
+	turn, err := ac.continueWithToolResult(ctx, parentSess, childSession.ParentSessionId, parentModel, toolMsg, nil, waitForLock)
 	if err != nil {
 		logger.WithError(err).WithFields(log.Fields{
 			"childSessionId":  childSession.Id,
@@ -1978,7 +2097,7 @@ func (ac *AssistantCoordinator) resolveDelegationSync(ctx context.Context, child
 	parentModel := modelForSession(parentSess, childSession.ParentModel)
 
 	// Wait for the lock: an internal resolution must fold the child's result in.
-	response, err := ac.continueWithToolResultSync(ctx, parentSess, childSession.ParentSessionId, parentModel, toolMsg, waitForLock)
+	response, err := ac.continueWithToolResultSync(ctx, parentSess, childSession.ParentSessionId, parentModel, toolMsg, nil, waitForLock)
 	if err != nil {
 		return nil, nil, err
 	}

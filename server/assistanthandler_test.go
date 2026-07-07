@@ -2971,6 +2971,9 @@ func TestPostTool_NonStreamingUpstreamErrors(t *testing.T) {
 	}{
 		{name: "client error surfaces as 400", err: errors.New("ERROR_ASSISTANT_REQUEST_TOO_LARGE"), wantCode: http.StatusBadRequest},
 		{name: "internal error surfaces as 500", err: errors.New("boom"), wantCode: http.StatusInternalServerError},
+		{name: "unknown tool_use surfaces as 404", err: ErrToolUseNotFound, wantCode: http.StatusNotFound},
+		{name: "already resolved tool_use surfaces as 400", err: ErrToolAlreadyResolved, wantCode: http.StatusBadRequest},
+		{name: "mismatched tool request surfaces as 400", err: ErrToolRequestMismatch, wantCode: http.StatusBadRequest},
 	}
 
 	for _, tc := range testCases {
@@ -3130,6 +3133,9 @@ func TestPostTool_StreamingUpstreamErrors(t *testing.T) {
 	}{
 		{name: "client error surfaces as 400", err: errors.New("ERROR_ASSISTANT_INVALID_MODEL"), wantCode: http.StatusBadRequest},
 		{name: "internal error surfaces as 500", err: errors.New("boom"), wantCode: http.StatusInternalServerError},
+		{name: "unknown tool_use surfaces as 404", err: ErrToolUseNotFound, wantCode: http.StatusNotFound},
+		{name: "already resolved tool_use surfaces as 400", err: ErrToolAlreadyResolved, wantCode: http.StatusBadRequest},
+		{name: "mismatched tool request surfaces as 400", err: ErrToolRequestMismatch, wantCode: http.StatusBadRequest},
 	}
 
 	for _, tc := range testCases {
@@ -3448,10 +3454,14 @@ func TestRespondToolTurnError(t *testing.T) {
 		wantCode int
 	}{
 		{"busy session", ErrToolTurnBusy, http.StatusConflict},
+		{"unknown tool_use", ErrToolUseNotFound, http.StatusNotFound},
+		{"already resolved tool_use", ErrToolAlreadyResolved, http.StatusBadRequest},
+		{"mismatched tool request", ErrToolRequestMismatch, http.StatusBadRequest},
 		{"client error (request too large)", errors.New("ERROR_ASSISTANT_REQUEST_TOO_LARGE"), http.StatusBadRequest},
 		{"client error (invalid model)", errors.New("ERROR_ASSISTANT_INVALID_MODEL"), http.StatusBadRequest},
 		{"upstream/internal error", errors.New("boom"), http.StatusInternalServerError},
 		{"wrapped busy error", fmt.Errorf("continuation failed: %w", ErrToolTurnBusy), http.StatusConflict},
+		{"wrapped unknown tool_use", fmt.Errorf("validation failed: %w", ErrToolUseNotFound), http.StatusNotFound},
 	}
 
 	for _, tc := range tests {
