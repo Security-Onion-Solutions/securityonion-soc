@@ -134,6 +134,7 @@ type ElastAlertEngine struct {
 	customAlerters                     *map[string]interface{}
 	autoUpdateEnabled                  bool
 	useEsql                            bool
+	sigmaNameIndex                     map[string]*model.Detection
 	detections.SyncSchedulerParams
 	detections.IntegrityCheckerData
 	detections.IOManager
@@ -556,6 +557,8 @@ func (e *ElastAlertEngine) SyncLocalDetections(ctx context.Context, detections [
 		}
 	}()
 
+	e.sigmaNameIndex = nil
+
 	index, err := e.IndexExistingRules()
 	if err != nil {
 		return nil, fmt.Errorf("unable to index existing rules: %w", err)
@@ -577,6 +580,7 @@ func (e *ElastAlertEngine) SyncLocalDetections(ctx context.Context, detections [
 
 			wrapped, err := e.wrapRule(det, eaRule)
 			if err != nil {
+				errMap[det.PublicID] = fmt.Sprintf("unable to wrap elastalert rule: %s", err)
 				continue
 			}
 
@@ -1620,6 +1624,110 @@ func (e *ElastAlertEngine) IndexExistingRules() (index map[string]string, err er
 }
 
 func (e *ElastAlertEngine) sigmaToElastAlert(ctx context.Context, det *model.Detection) (string, error) {
+	sigmaRule, err := ParseElastAlertRule([]byte(det.Content))
+	if err != nil {
+		return "", fmt.Errorf("unable to parse sigma rule: %w", err)
+	}
+
+	if sigmaRule.IsCorrelationRule() {
+		return e.convertCorrelationRule(ctx, det, sigmaRule)
+	}
+
+	return e.convertStandardRule(ctx, det)
+}
+
+func (e *ElastAlertEngine) convertCorrelationRule(ctx context.Context, det *model.Detection, sigmaRule *SigmaRule) (string, error) {
+	switch sigmaRule.Correlation.Type {
+	case SigmaCorrelationTemporal, SigmaCorrelationTemporalOrdered:
+		return "", fmt.Errorf("correlation type %q is valid Sigma but has no ElastAlert equivalent, use event_count or value_count", sigmaRule.Correlation.Type)
+	}
+
+	names := sigmaRule.Correlation.Rules.Values
+	if len(names) == 0 && sigmaRule.Correlation.Rules.Value != "" {
+		names = []string{sigmaRule.Correlation.Rules.Value}
+	}
+
+	if len(names) == 0 {
+		return "", fmt.Errorf("correlation rule references no base rules")
+	}
+
+	var eqlParts []string
+
+	for _, name := range names {
+		baseDet, err := e.findDetectionBySigmaName(ctx, name)
+		if err != nil {
+			return "", fmt.Errorf("unable to resolve base rule %q: %w", name, err)
+		}
+
+		eql, err := e.convertStandardRule(ctx, baseDet)
+		if err != nil {
+			return "", fmt.Errorf("unable to convert base rule %q: %w", name, err)
+		}
+
+		eqlParts = append(eqlParts, eql)
+	}
+
+	if len(eqlParts) == 1 {
+		return eqlParts[0], nil
+	}
+
+	// Multi-rule: strip "any where " prefix from each, OR them together
+	var conditions []string
+	for _, eql := range eqlParts {
+		trimmed := strings.TrimPrefix(eql, "any where ")
+		conditions = append(conditions, "("+trimmed+")")
+	}
+
+	return "any where " + strings.Join(conditions, " or "), nil
+}
+
+func (e *ElastAlertEngine) buildSigmaNameIndex(ctx context.Context) error {
+	allDetections, err := e.srv.Detectionstore.GetAllDetections(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to list detections: %w", err)
+	}
+
+	index := make(map[string]*model.Detection)
+
+	for _, det := range allDetections {
+		if det.Engine != model.EngineNameElastAlert {
+			continue
+		}
+
+		parsed, err := ParseElastAlertRule([]byte(det.Content))
+		if err != nil {
+			continue
+		}
+
+		if parsed.Name != "" {
+			index[parsed.Name] = det
+		}
+	}
+
+	e.sigmaNameIndex = index
+
+	return nil
+}
+
+func (e *ElastAlertEngine) findDetectionBySigmaName(ctx context.Context, name string) (*model.Detection, error) {
+	if e.sigmaNameIndex != nil {
+		if det, ok := e.sigmaNameIndex[name]; ok {
+			return det, nil
+		}
+	}
+
+	if err := e.buildSigmaNameIndex(ctx); err != nil {
+		return nil, err
+	}
+
+	if det, ok := e.sigmaNameIndex[name]; ok {
+		return det, nil
+	}
+
+	return nil, fmt.Errorf("no detection found with sigma name %q", name)
+}
+
+func (e *ElastAlertEngine) convertStandardRule(ctx context.Context, det *model.Detection) (string, error) {
 	rule := det.Content
 
 	filters := lo.Filter(det.Overrides, func(item *model.Override, _ int) bool {
@@ -1893,6 +2001,14 @@ type CustomWrapper struct {
 	Type           string                   `yaml:"type"`
 	Filter         []map[string]interface{} `yaml:"filter"`
 	TimestampField string                   `yaml:"timestamp_field,omitempty"`
+
+	// Correlation fields (frequency/cardinality rules)
+	NumEvents        *int       `yaml:"num_events,omitempty"`
+	Timeframe        *TimeFrame `yaml:"timeframe,omitempty"`
+	QueryKey         []string   `yaml:"query_key,omitempty"`
+	CardinalityField *string    `yaml:"cardinality_field,omitempty"`
+	MaxCardinality   *int       `yaml:"max_cardinality,omitempty"`
+	MinCardinality   *int       `yaml:"min_cardinality,omitempty"`
 }
 
 type TimeFrame struct {
@@ -2063,6 +2179,10 @@ func (e *ElastAlertEngine) wrapRule(det *model.Detection, rule string) (string, 
 		TimestampField:    timestampField,
 	}
 
+	if sigmaRule != nil && sigmaRule.IsCorrelationRule() {
+		applyCorrelation(wrapper, sigmaRule.Correlation)
+	}
+
 	if slices.Contains(sigmaTags, "so.notification") {
 		// This is a detection for sending notifications only, do not add a new alert to Security Onion.
 		wrapper.Alert = nil
@@ -2103,6 +2223,45 @@ func (e *ElastAlertEngine) wrapRule(det *model.Detection, rule string) (string, 
 	}
 
 	return strYaml, nil
+}
+
+func applyCorrelation(w *CustomWrapper, c *SigmaCorrelation) {
+	if c.Timespan == nil {
+		return
+	}
+
+	tf, err := ParseTimespan(*c.Timespan)
+	if err != nil {
+		return
+	}
+
+	w.Timeframe = tf
+	w.QueryKey = c.GroupBy
+
+	switch c.Type {
+	case SigmaCorrelationEventCount:
+		w.Type = "frequency"
+		if gte, ok := c.Condition["gte"]; ok {
+			w.NumEvents = &gte
+		} else if gt, ok := c.Condition["gt"]; ok {
+			adjusted := gt + 1
+			w.NumEvents = &adjusted
+		}
+	case SigmaCorrelationValueCount:
+		w.Type = "cardinality"
+		w.CardinalityField = c.Field
+		if gte, ok := c.Condition["gte"]; ok {
+			w.MaxCardinality = &gte
+		} else if gt, ok := c.Condition["gt"]; ok {
+			adjusted := gt + 1
+			w.MaxCardinality = &adjusted
+		} else if lt, ok := c.Condition["lt"]; ok {
+			w.MinCardinality = &lt
+		} else if lte, ok := c.Condition["lte"]; ok {
+			adjusted := lte + 1
+			w.MinCardinality = &adjusted
+		}
+	}
 }
 
 func (e *ElastAlertEngine) IntegrityCheck(canInterrupt bool, logger *log.Entry) (deployedButNotEnabled []string, enabledButNotDeployed []string, err error) {

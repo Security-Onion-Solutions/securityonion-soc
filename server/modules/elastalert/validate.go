@@ -7,6 +7,7 @@ package elastalert
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -45,9 +46,34 @@ const (
 	RelatedRuleTypeSimilar   RelatedRuleType = "similar"
 )
 
+type SigmaCorrelationType string
+
+const (
+	SigmaCorrelationEventCount      SigmaCorrelationType = "event_count"
+	SigmaCorrelationValueCount      SigmaCorrelationType = "value_count"
+	SigmaCorrelationTemporal        SigmaCorrelationType = "temporal"
+	SigmaCorrelationTemporalOrdered SigmaCorrelationType = "temporal_ordered"
+)
+
+type SigmaCorrelation struct {
+	Type      SigmaCorrelationType   `yaml:"type"`
+	Rules     OneOrMore[string]      `yaml:"rules,omitempty"`
+	GroupBy   []string               `yaml:"group-by,omitempty"`
+	Timespan  *string                `yaml:"timespan,omitempty"`
+	Condition map[string]int         `yaml:"condition,omitempty"`
+	Field     *string                `yaml:"field,omitempty"`
+	Rest      map[string]interface{} `yaml:",inline"`
+}
+
+func (c *SigmaCorrelation) HasRequiredFields() bool {
+	return c.Type != "" && c.Rules.HasValue() && c.Timespan != nil
+}
+
 type SigmaRule struct {
 	Title          string                 `yaml:"title"`
+	Name           string                 `yaml:"name,omitempty"`
 	ID             *string                `yaml:"id"`
+	RuleType       string                 `yaml:"type,omitempty"`
 	Related        []*RelatedRule         `yaml:"related,omitempty"`
 	Status         *SigmaStatus           `yaml:"status"`
 	Description    *string                `yaml:"description,omitempty"`
@@ -118,19 +144,6 @@ type RelatedRule struct {
 	Type RelatedRuleType `yaml:"type"`
 }
 
-type SigmaCorrelation struct {
-	Type     string        `yaml:"type"`
-	Rules    []string      `yaml:"rules,omitempty"`
-	GroupBy  []string      `yaml:"group-by,omitempty"`
-	Timespan *string       `yaml:"timespan,omitempty"`
-	Condition map[string]int `yaml:"condition,omitempty"`
-	Rest     map[string]interface{} `yaml:",inline"`
-}
-
-func (c *SigmaCorrelation) HasRequiredFields() bool {
-	return c.Type != "" && c.Rules != nil && c.Timespan != nil
-}
-
 func ParseElastAlertRule(data []byte) (*SigmaRule, error) {
 	rule := &SigmaRule{}
 
@@ -149,8 +162,11 @@ func ParseElastAlertRule(data []byte) (*SigmaRule, error) {
 	return rule, nil
 }
 
+func (e *SigmaRule) IsCorrelationRule() bool {
+	return e.RuleType == "correlation" && e.Correlation != nil
+}
+
 func (e *SigmaRule) Validate() error {
-	// check required fields
 	requiredFields := []string{}
 
 	if e.ID == nil || len(*e.ID) == 0 {
@@ -161,18 +177,18 @@ func (e *SigmaRule) Validate() error {
 		requiredFields = append(requiredFields, "title")
 	}
 
-	hasCorrelation := e.Correlation != nil && e.Correlation.HasRequiredFields()
-
-	if hasCorrelation {
-		return checkNoError(requiredFields)
-	}
-
-	if e.Correlation != nil {
+	if e.IsCorrelationRule() {
+		if e.Correlation.HasRequiredFields() {
+			if err := e.validateCorrelation(); err != nil {
+				return err
+			}
+			return checkNoError(requiredFields)
+		}
 		correlation := e.Correlation
 		if correlation.Type == "" {
 			requiredFields = append(requiredFields, "correlation.type")
 		}
-		if correlation.Rules == nil {
+		if !correlation.Rules.HasValue() {
 			requiredFields = append(requiredFields, "correlation.rules")
 		}
 		if correlation.Timespan == nil || *correlation.Timespan == "" {
@@ -199,6 +215,60 @@ func checkNoError(requiredFields []string) error {
 		return fmt.Errorf("missing required fields: %s", strings.Join(requiredFields, ", "))
 	}
 	return nil
+}
+
+func (e *SigmaRule) validateCorrelation() error {
+	c := e.Correlation
+
+	switch c.Type {
+	case SigmaCorrelationEventCount, SigmaCorrelationValueCount,
+		SigmaCorrelationTemporal, SigmaCorrelationTemporalOrdered:
+	default:
+		return fmt.Errorf("unsupported correlation type: %q", c.Type)
+	}
+
+	if c.Timespan != nil {
+		if _, err := ParseTimespan(*c.Timespan); err != nil {
+			return fmt.Errorf("invalid correlation timespan %q: %w", *c.Timespan, err)
+		}
+	}
+
+	if c.Type == SigmaCorrelationValueCount && c.Field == nil {
+		return fmt.Errorf("value_count correlation must specify a 'field'")
+	}
+
+	return nil
+}
+
+func ParseTimespan(s string) (*TimeFrame, error) {
+	if len(s) < 2 {
+		return nil, fmt.Errorf("timespan too short")
+	}
+
+	unit := s[len(s)-1]
+	numStr := s[:len(s)-1]
+
+	num, err := strconv.Atoi(numStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid number in timespan: %w", err)
+	}
+
+	tf := &TimeFrame{}
+
+	switch unit {
+	case 's':
+		tf.SetSeconds(num)
+	case 'm':
+		tf.SetMinutes(num)
+	case 'h':
+		tf.SetHours(num)
+	case 'd':
+		tf.SetDays(num)
+	default:
+		return nil, fmt.Errorf("unknown timespan unit: %c", unit)
+	}
+
+	return tf, nil
 }
 
 func (r *SigmaRule) ToDetection(ruleset string, license string, isCommunity bool) *model.Detection {
