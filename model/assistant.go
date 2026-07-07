@@ -452,7 +452,7 @@ type PendingToolApproval struct {
 	SessionId string          `json:"sessionId"`
 	ToolUseId string          `json:"toolUseId"`
 	ToolName  string          `json:"toolName"`
-	Input     json.RawMessage `json:"input,omitempty"`
+	Input     json.RawMessage `json:"input,omitempty" swaggertype:"object"`
 }
 
 type ModelUsageStats struct {
