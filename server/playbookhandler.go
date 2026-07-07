@@ -214,6 +214,7 @@ func parseAlertTimestamp(raw string) (time.Time, error) {
 // @Success      200  {object}  model.Question  "The question was executed"
 // @Failure      400                            "Malformed request"
 // @Failure      401                            "Request was not properly authenticated"
+// @Failure      403                            "Insufficient permissions for this request"
 // @Failure      500                            "Internal SOC error; review SOC logs"
 // @Accept       application/json
 // @Produce      application/json
