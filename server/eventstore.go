@@ -8,9 +8,49 @@ package server
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 )
+
+// FindEventBySocId finds the event matching the given SOC id (log.id.uid,
+// event.id, or _id), or nil if none matched. A non-zero ts bounds the search
+// to +/-24h around it before falling back to an unbounded search.
+func FindEventBySocId(ctx context.Context, store Eventstore, id string, ts time.Time) (*model.EventRecord, error) {
+	if !ts.IsZero() {
+		dateRange := ts.Add(-24*time.Hour).Format(time.RFC3339) + " - " + ts.Add(24*time.Hour).Format(time.RFC3339)
+
+		event, err := findEventBySocId(ctx, store, id, dateRange)
+		if err != nil || event != nil {
+			return event, err
+		}
+	}
+
+	dateRange := "1970-01-01T00:00:00Z - " + time.Now().Format(time.RFC3339)
+
+	return findEventBySocId(ctx, store, id, dateRange)
+}
+
+func findEventBySocId(ctx context.Context, store Eventstore, id string, dateRange string) (*model.EventRecord, error) {
+	query := fmt.Sprintf(`log.id.uid:"%[1]s" OR event.id:"%[1]s" OR _id:"%[1]s"`, id)
+	criteria := model.NewEventSearchCriteria()
+
+	err := criteria.Populate(query, dateRange, time.RFC3339, "", "0", "1")
+	if err != nil {
+		return nil, err
+	}
+
+	events, err := store.Search(ctx, criteria)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search for alert: %w", err)
+	}
+	if events.TotalEvents == 0 || len(events.Events) == 0 {
+		return nil, nil
+	}
+
+	return events.Events[0], nil
+}
 
 type Eventstore interface {
 	Search(context context.Context, criteria *model.EventSearchCriteria) (*model.EventSearchResults, error)

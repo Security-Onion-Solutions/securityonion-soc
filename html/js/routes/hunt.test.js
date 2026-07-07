@@ -1907,6 +1907,13 @@ test('buildQuestionRange', () => {
   range = comp.buildQuestionRange(event, '+/-60s');
   expect(range).toBe('2023/10/01 05:59:00 AM - 2023/10/01 06:01:00 AM');
 
+  range = comp.buildQuestionRange(event, '-1w');
+  expect(range).toBe('2023/09/24 06:00:00 AM - 2023/10/01 06:00:00 AM');
+
+  // y is a fixed 365 days to mirror the server, so a leap day shifts the edge
+  range = comp.buildQuestionRange(event, '+/-1y');
+  expect(range).toBe('2022/10/01 06:00:00 AM - 2024/09/30 06:00:00 AM');
+
   range = comp.buildQuestionRange(event, '');
   expect(range).toBe('');
 
@@ -2099,14 +2106,20 @@ test('loadPlaybook', async () => {
 
   const playbooks = [{ id: '1', questions: [] }, { id: '2', questions: [] }];
 
-  let papiMock = mockPapi('get', { data: playbooks });
+  let papiMock = mockPapi('get', Promise.resolve({ data: playbooks })); // convert stage (fired first)
+  mockPapi('get', { data: playbooks }); // skeleton
+  comp.expandedPlaybookQuestions = {};
 
   await comp.loadPlaybook(event, 0);
 
-  expect(papiMock).toHaveBeenCalledWith('playbook/event/123');
+  expect(papiMock).toHaveBeenCalledWith('playbook/event/123?stage=skeleton&ts=');
+  expect(papiMock).toHaveBeenCalledWith('playbook/event/123?stage=convert&ts=', expect.anything());
   expect(event.playbooks).toStrictEqual(playbooks);
   expect(event.playbookLoading).toBe(undefined);
   expect(event.playbookErr).toBe(false);
+  expect(event.playbookNone).toBe(false);
+  expect(event.questions).toHaveLength(0);
+  expect(comp.expandedPlaybookQuestions[0]).toEqual([]);
 
   resetPapi();
   papiMock = mockPapi('get', null, 'error');
@@ -2117,7 +2130,7 @@ test('loadPlaybook', async () => {
 
   comp.loadPlaybook(event, 0);
 
-  expect(papiMock).toHaveBeenCalledWith('playbook/event/456');
+  expect(papiMock).toHaveBeenCalledWith('playbook/event/456?stage=convert&ts=', expect.anything());
   expect(papiMock).toHaveBeenCalledTimes(1);
   expect(event.playbookErr).toBe(true);
   expect(event.playbooks).toBe(null);
@@ -2152,81 +2165,305 @@ test('loadPlaybook', async () => {
   expect(papiMock).toHaveBeenCalledTimes(0);
 
   resetPapi();
+});
 
-  // Test aggregate and non-aggregate question handling
-  event = {
-    'soc_id': '789',
+test('loadPlaybook fetches the skeleton by detection when rule.uuid is present', async () => {
+  const event = {
+    'soc_id': '123',
+    'rule.uuid': 'abc-123',
+    'soc_timestamp': '2023-10-01T12:00:00Z',
   };
 
-  const playbooksWithQuestions = [
+  const playbooks = [{ id: '1', questions: [] }];
+
+  const papiMock = mockPapi('get', Promise.resolve({ data: playbooks })); // convert stage (fired first)
+  mockPapi('get', { data: playbooks }); // skeleton via detection route
+  comp.expandedPlaybookQuestions = {};
+
+  await comp.loadPlaybook(event, 0);
+
+  expect(papiMock).toHaveBeenCalledWith('playbook/event/123?stage=convert&ts=2023-10-01T12%3A00%3A00Z', expect.anything());
+  expect(papiMock).toHaveBeenCalledWith('playbook/detection/abc-123');
+  expect(event.playbooks).toStrictEqual(playbooks);
+  expect(event.playbookErr).toBe(false);
+  expect(event.playbookNone).toBe(false);
+
+  resetPapi();
+});
+
+test('loadPlaybook reports an empty playbook list as a distinct no-playbooks state', async () => {
+  const event = {
+    'soc_id': '123',
+    'rule.uuid': 'abc-123',
+  };
+
+  const papiMock = mockPapi('get', Promise.resolve({ data: [] })); // convert stage (fired first)
+  mockPapi('get', { data: [] }); // skeleton via detection route
+  comp.expandedPlaybookQuestions = {};
+
+  await comp.loadPlaybook(event, 0);
+
+  expect(event.playbooks).toBe(null);
+  expect(event.playbookErr).toBe(false);
+  expect(event.playbookNone).toBe(true);
+
+  // the convert request is aborted when there are no playbooks
+  const convertConfig = papiMock.mock.calls[0][1];
+  expect(convertConfig.signal.aborted).toBe(true);
+
+  resetPapi();
+});
+
+test('loadPlaybook answers questions progressively', async () => {
+  const event = {
+    'soc_id': '789',
+    'soc_timestamp': '2023-10-01T12:00:00Z',
+  };
+
+  const skeleton = [
     {
       id: '1',
       questions: [
-        {
-          id: 'q1',
-          query: 'aggregation: true\nquery: test',
-          queryResults: [{ payload: { field1: 'value1' } }],
-          fields: ['field1']
-        },
-        {
-          id: 'q2',
-          query: 'aggregation: false\nquery: test',
-          queryResults: [],
-          fields: ['field2']
-        }
-      ]
-    }
+        { id: 'q1', question: 'Agg?', query: 'aggregation: true\nquery: test', range: '-1h' },
+        { id: 'q2', question: 'NonAgg?', query: 'aggregation: false\nquery: test', range: '-1h' },
+        { id: 'q3', question: 'Self?', query: 'aggregation: false\nquery: test', range: null },
+      ],
+    },
   ];
 
-  papiMock = mockPapi('get', { data: playbooksWithQuestions });
-  comp.i18n = { count: 'Count' };
+  const converted = [
+    {
+      id: '1',
+      questions: [
+        { id: 'q1', oqlQuery: 'agg-oql', fields: ['source.ip'], isAggregate: true },
+        { id: 'q2', oqlQuery: 'nonagg-oql', fields: ['field2'], isAggregate: false },
+        { id: 'q3', oqlQuery: 'self-oql', fields: [], isAggregate: false },
+      ],
+    },
+  ];
+
+  const papiMock = mockPapi('get', Promise.resolve({ data: converted })); // convert stage (fired first)
+  mockPapi('get', { data: skeleton });
+  const papiPostMock = mockPapi('post', { data: { queryResults: [{ payload: { 'Count': 3, 'source.ip': '1.2.3.4' } }] } }); // q1
+  mockPapi('post', { data: { queryResults: [] } }); // q2
+
   comp.$root.batchLookup = jest.fn();
   comp.expandedPlaybookQuestions = {};
 
   await comp.loadPlaybook(event, 0);
 
-  expect(papiMock).toHaveBeenCalledWith('playbook/event/789');
+  expect(papiMock).toHaveBeenCalledWith('playbook/event/789?stage=skeleton&ts=2023-10-01T12%3A00%3A00Z');
+  expect(papiMock).toHaveBeenCalledWith('playbook/event/789?stage=convert&ts=2023-10-01T12%3A00%3A00Z', expect.anything());
 
-  // Check that questions are sorted: good (with results) before bad (without)
+  // questions remain in playbook order
+  expect(event.questions).toHaveLength(3);
+  expect(event.questions[0].id).toBe('q1');
+  expect(event.questions[1].id).toBe('q2');
+  expect(event.questions[2].id).toBe('q3');
+
+  // aggregate question: Count column prepended, server-executed results attached
+  expect(event.questions[0].isAggregate).toBe(true);
+  expect(event.questions[0].oqlQuery).toBe('agg-oql');
+  expect(event.questions[0].fields).toStrictEqual(['Count', 'source.ip']);
+  expect(event.questions[0].queryResults).toStrictEqual([{ payload: { 'Count': 3, 'source.ip': '1.2.3.4' } }]);
+  expect(event.questions[0].status).toBe('done');
+
+  // non-aggregate question: @timestamp prepended, no results
+  expect(event.questions[1].isAggregate).toBe(false);
+  expect(event.questions[1].fields).toStrictEqual(['@timestamp', 'field2']);
+  expect(event.questions[1].queryResults).toStrictEqual([]);
+  expect(event.questions[1].status).toBe('done');
+
+  // rangeless question: answered by the alert itself
+  expect(event.questions[2].queryResults).toHaveLength(1);
+  expect(event.questions[2].queryResults[0].payload).toMatchObject({ 'soc_id': '789' });
+  expect(event.questions[2].queryResults[0].payload.questions).toBe(undefined); // no self-reference
+  expect(event.questions[2].status).toBe('done');
+
+  // ranged questions are executed server-side, anchored to the alert timestamp
+  expect(papiPostMock).toHaveBeenCalledTimes(2);
+  expect(papiPostMock).toHaveBeenCalledWith('playbook/question?ts=2023-10-01T12%3A00%3A00Z', {
+    range: '-1h',
+    oqlQuery: 'agg-oql',
+    fields: ['source.ip'],
+    isAggregate: true,
+  });
+  expect(papiPostMock).toHaveBeenCalledWith('playbook/question?ts=2023-10-01T12%3A00%3A00Z', {
+    range: '-1h',
+    oqlQuery: 'nonagg-oql',
+    fields: ['field2'],
+    isAggregate: false,
+  });
+
+  // question 1 always expanded; questions with data expand as results arrive
+  expect(comp.expandedPlaybookQuestions[0]).toEqual([0, 2]);
+
+  expect(comp.$root.batchLookup).toHaveBeenCalledWith(['1.2.3.4'], comp);
+
+  resetPapi();
+});
+
+test('loadPlaybook expands first question before answers arrive', async () => {
+  const event = {
+    'soc_id': '789',
+  };
+
+  const skeleton = [
+    {
+      id: '1',
+      questions: [
+        { id: 'q1', question: 'One?', query: 'aggregation: false\nquery: test', range: '-1h' },
+        { id: 'q2', question: 'Two?', query: 'aggregation: false\nquery: test', range: '-1h' },
+      ],
+    },
+  ];
+
+  mockPapi('get', Promise.resolve({ data: skeleton })); // convert stage (fired first, ignored here)
+  mockPapi('get', { data: skeleton });
+  comp.expandedPlaybookQuestions = {};
+  comp.answerPlaybookQuestions = jest.fn(); // halt before conversion
+
+  await comp.loadPlaybook(event, 0);
+
   expect(event.questions).toHaveLength(2);
-  expect(event.questions[0].id).toBe('q1'); // Has results, should be first
-  expect(event.questions[1].id).toBe('q2'); // No results, should be second
+  expect(event.questions[0].status).toBe('running');
+  expect(event.questions[1].status).toBe('running');
+  expect(comp.expandedPlaybookQuestions[0]).toEqual([0]);
+  expect(comp.answerPlaybookQuestions).toHaveBeenCalledWith(event, 0, expect.anything());
 
-  // Check that aggregate question has count field prepended
-  expect(event.playbooks[0].questions[0].isAggregate).toBe(true);
-  expect(event.playbooks[0].questions[0].fields).toHaveLength(2);
-  expect(event.playbooks[0].questions[0].fields[0]).toBe('Count');
-  expect(event.playbooks[0].questions[0].fields[1]).toBe('field1');
+  resetPapi();
+});
 
-  // Check that non-aggregate question has @timestamp prepended
-  expect(event.playbooks[0].questions[1].isAggregate).toBe(false);
-  expect(event.playbooks[0].questions[1].fields).toHaveLength(2);
-  expect(event.playbooks[0].questions[1].fields[0]).toBe('@timestamp');
-  expect(event.playbooks[0].questions[1].fields[1]).toBe('field2');
+test('answerPlaybookQuestions fails ranged questions but self-answers rangeless ones when conversion fails', async () => {
+  const q1 = { status: 'running', range: '-1h' };
+  const q2 = { status: 'running', range: null };
+  const event = {
+    'soc_id': '789',
+    playbooks: [{ id: '1', questions: [q1, q2] }],
+    questions: [q1, q2],
+  };
 
-  // Check that expandedPlaybookQuestions only includes questions with results
-  expect(comp.expandedPlaybookQuestions[0]).toEqual([0]); // Only first question has results
+  comp.expandedPlaybookQuestions = { 0: [] };
+  comp.$root.batchLookup = jest.fn();
 
-  // Verify batchLookup was called with extracted IPs
-  expect(comp.$root.batchLookup).toHaveBeenCalledWith(['value1'], comp);
+  await comp.answerPlaybookQuestions(event, 0, Promise.reject(new Error('convert failed')));
+
+  expect(q1.status).toBe('error');
+  expect(q1.queryResults).toStrictEqual([]);
+
+  // the rangeless question is still answered by the alert, with a fallback column
+  expect(q2.status).toBe('done');
+  expect(q2.queryResults).toHaveLength(1);
+  expect(q2.queryResults[0].payload).toMatchObject({ 'soc_id': '789' });
+  expect(q2.queryResults[0].payload.questions).toBe(undefined); // no self-reference
+  expect(q2.fields).toStrictEqual(['soc_timestamp']);
+
+  resetPapi();
+});
+
+test('answerPlaybookQuestions marks ranged questions without a converted query failed', async () => {
+  const q1 = { status: 'running', range: '-1h' };
+  const q2 = { status: 'running', range: '-1h' };
+  const q3 = { status: 'running', range: null };
+  const event = {
+    playbooks: [{ id: '1', questions: [q1, q2, q3] }],
+    questions: [q1, q2, q3],
+  };
+
+  const converted = [
+    {
+      id: '1',
+      questions: [{ oqlQuery: 'oql-1', fields: ['f1'], isAggregate: false }, { oqlQuery: '' }, { oqlQuery: '' }],
+    },
+  ];
+
+  comp.runPlaybookQuery = jest.fn();
+
+  await comp.answerPlaybookQuestions(event, 0, Promise.resolve({ data: converted }));
+
+  expect(q1.oqlQuery).toBe('oql-1');
+  expect(q1.queryFields).toStrictEqual(['f1']);
+  expect(q1.isAggregate).toBe(false);
+  expect(q1.fields).toStrictEqual(['@timestamp', 'f1']);
+  expect(q1.status).toBe('running');
+
+  // a ranged question with no converted query cannot run
+  expect(q2.status).toBe('error');
+  expect(q2.queryResults).toStrictEqual([]);
+
+  // a rangeless question is unaffected by its missing conversion
+  expect(q3.status).toBe('running');
+
+  expect(comp.runPlaybookQuery).toHaveBeenCalledTimes(3);
+});
+
+test('answerPlaybookQuestions matches converted playbooks strictly by id', async () => {
+  const q1 = { status: 'running', range: '-1h' };
+  const event = {
+    playbooks: [{ id: '1', questions: [q1] }],
+    questions: [q1],
+  };
+
+  // a converted playbook with a different id must not be matched by position
+  const converted = [{ id: 'other', questions: [{ oqlQuery: 'wrong-oql' }] }];
+
+  comp.runPlaybookQuery = jest.fn();
+
+  await comp.answerPlaybookQuestions(event, 0, Promise.resolve({ data: converted }));
+
+  expect(q1.oqlQuery).toBe(undefined);
+  expect(q1.status).toBe('error');
+  expect(q1.queryResults).toStrictEqual([]);
+});
+
+test('runPlaybookQuery marks question failed when search fails', async () => {
+  const question = { status: 'running', range: '-1h', oqlQuery: 'oql', isAggregate: false };
+  const event = { 'soc_id': '789' };
+
+  mockPapi('post', null, 'error');
+  comp.expandedPlaybookQuestions = { 0: [0] };
+  comp.$root.batchLookup = jest.fn();
+
+  await comp.runPlaybookQuery(event, 0, question, 1);
+
+  expect(question.status).toBe('error');
+  expect(question.queryResults).toStrictEqual([]);
+  expect(comp.expandedPlaybookQuestions[0]).toEqual([0]);
+
+  resetPapi();
+});
+
+test('runPlaybookQuery tolerates a response without queryResults', async () => {
+  const question = { status: 'running', range: '-1h', oqlQuery: 'oql', isAggregate: false };
+  const event = { 'soc_id': '789' };
+
+  mockPapi('post', { data: {} });
+  comp.expandedPlaybookQuestions = { 0: [] };
+  comp.$root.batchLookup = jest.fn();
+
+  await comp.runPlaybookQuery(event, 0, question, 0);
+
+  expect(question.status).toBe('done');
+  expect(question.queryResults).toStrictEqual([]);
 
   resetPapi();
 });
 
 test('pickQuestionColor', () => {
-  question = {
-    error: false,
-  };
-
-  c = comp.pickQuestionColor(question);
-  expect(c).toBe('no-data');
-
   question = {}
 
   c = comp.pickQuestionColor(question);
   expect(c).toBe('no-data');
 
   question = {
+    queryResults: [],
+  };
+
+  c = comp.pickQuestionColor(question);
+  expect(c).toBe('no-data');
+
+  question = {
+    status: 'done',
     queryResults: [],
   };
 
@@ -2241,12 +2478,50 @@ test('pickQuestionColor', () => {
   expect(c).toBe('has-answers');
 
   question = {
+    status: 'done',
     queryResults: [{}],
-    error: false,
   };
 
   c = comp.pickQuestionColor(question);
   expect(c).toBe('has-answers');
+
+  // in-flight questions are neutral until their query completes
+  question = {
+    status: 'running',
+  };
+
+  c = comp.pickQuestionColor(question);
+  expect(c).toBe('query-running');
+
+  question = {
+    status: 'running',
+    queryResults: [{}],
+  };
+
+  c = comp.pickQuestionColor(question);
+  expect(c).toBe('query-running');
+
+  question = {
+    status: 'error',
+    queryResults: [],
+  };
+
+  c = comp.pickQuestionColor(question);
+  expect(c).toBe('has-error');
+});
+
+test('isQuestionRunning', () => {
+  expect(comp.isQuestionRunning({ status: 'running' })).toBe(true);
+  expect(comp.isQuestionRunning({ status: 'done' })).toBe(false);
+  expect(comp.isQuestionRunning({ status: 'error' })).toBe(false);
+  expect(comp.isQuestionRunning({})).toBe(false);
+});
+
+test('isQuestionError', () => {
+  expect(comp.isQuestionError({ status: 'error' })).toBe(true);
+  expect(comp.isQuestionError({ status: 'done' })).toBe(false);
+  expect(comp.isQuestionError({ status: 'running' })).toBe(false);
+  expect(comp.isQuestionError({})).toBe(false);
 });
 
 test('getExpandedData', () => {
@@ -2535,77 +2810,6 @@ test('populateEventTable - applies AI investigated filter', () => {
   expect(comp.eventData).toHaveLength(2);
   expect(comp.eventData[0].soc_id).toBe('alert123');
   expect(comp.eventData[1].soc_id).toBe('alert456');
-});
-
-test('isQuestionAggregate', () => {
-  // contains valid yaml, is processed correctly
-  let q = {
-    query: `aggregation: true
-logsource:
-  category: network
-  service: connection
-detection:
-  selection:
-    dst_ip: '{destination.ip}'
-  condition: selection
-fields:
-  - dst_ip`
-  };
-  
-  let result = comp.isQuestionAggregate(q);
-
-  expect(result).toBe(true);
-  expect(q.isAggregate).toBe(true);
-
-  // contains "invalid" yaml (duplicate field http.uri|contains)
-  // falls back to regex approach
-  q = {
-    query: `aggregation: true
-logsource:
-  category: network
-  service: http
-detection:
-  selection:
-    src_ip: '{source.ip}'
-    http.uri|contains: '.php'
-    http.uri|contains: '?'
-  malware_params:
-    http.uri|contains:
-      - 'adv='
-      - 'id='
-      - 'ver='
-      - 'bot='
-  condition: selection and malware_params
-fields:
-  - dst_ip
-  - http.virtual_host
-  - http.uri
-  - http.user_agent
-  - http.method`
-  };
-  
-  result = comp.isQuestionAggregate(q);
-
-  expect(result).toBe(true);
-  expect(q.isAggregate).toBe(true);
-
-  // garbage in, false out
-  q = {
-    query: `This is not valid YAML at all!!! ### $$$ ???`
-  };
-
-  result = comp.isQuestionAggregate(q);
-
-  expect(result).toBe(false);
-  expect(q.isAggregate).toBe(false);
-
-  // undefined in, false out
-  q = {};
-
-  result = comp.isQuestionAggregate(q);
-
-  expect(result).toBe(false);
-  expect(q.isAggregate).toBe(false);
 });
 
 // checkAllFieldTruncation tests

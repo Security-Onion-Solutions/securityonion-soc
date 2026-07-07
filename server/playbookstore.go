@@ -7,6 +7,7 @@ package server
 
 import (
 	"context"
+	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 )
@@ -17,7 +18,8 @@ type Playbookstore interface {
 	GetPlaybookById(ctx context.Context, id string) (*model.Playbook, error)
 	ConvertQuestions(ctx context.Context, queries []string, event *model.EventRecord) ([]*model.ConvertedQuery, error)
 	ExecutePlaybookSearches(ctx context.Context, event *model.EventRecord, pbs []*model.Playbook) error
-	GetEventSpecificPlaybook(ctx context.Context, id string) ([]*model.Playbook, error)
+	ExecuteQuestionSearch(ctx context.Context, eventTime time.Time, question *model.Question) error
+	GetEventSpecificPlaybook(ctx context.Context, id string, stage model.PlaybookStage, ts time.Time) ([]*model.Playbook, error)
 }
 
 //go:generate mockgen -destination mock/mock_playbookstore.go -package mock . Playbookstore

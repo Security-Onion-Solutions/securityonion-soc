@@ -1077,6 +1077,10 @@ ul ul ul {
   border-left: 3px solid rgb(var(--v-theme-info));
 }
 
+.query-running {
+  border-left: 3px solid rgba(var(--v-theme-text), 0.3);
+}
+
 .no-data {
   border-left: 3px solid rgb(var(--v-theme-warning));
 }

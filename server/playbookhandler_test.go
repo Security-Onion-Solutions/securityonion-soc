@@ -11,8 +11,11 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	neturl "net/url"
+	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/security-onion-solutions/securityonion-soc/config"
@@ -452,6 +455,8 @@ func TestGetEventSpecificPlaybook(t *testing.T) {
 	tests := []struct {
 		name             string
 		socId            string
+		stage            string
+		ts               string
 		initMock         func(*Server, *gomock.Controller)
 		expectedStatus   int
 		validateResponse func(*testing.T, *httptest.ResponseRecorder)
@@ -472,7 +477,7 @@ func TestGetEventSpecificPlaybook(t *testing.T) {
 				}
 
 				mockPlaybookStore.EXPECT().
-					GetEventSpecificPlaybook(gomock.Any(), "test-soc-id").
+					GetEventSpecificPlaybook(gomock.Any(), "test-soc-id", model.PlaybookStageFull, time.Time{}).
 					Return(testPlaybooks, nil)
 			},
 			expectedStatus: http.StatusOK,
@@ -494,7 +499,7 @@ func TestGetEventSpecificPlaybook(t *testing.T) {
 				srv.Authorizer.(*rbac.FakeAuthorizer).Authorized = true
 
 				mockPlaybookStore.EXPECT().
-					GetEventSpecificPlaybook(gomock.Any(), "test-soc-id").
+					GetEventSpecificPlaybook(gomock.Any(), "test-soc-id", model.PlaybookStageFull, time.Time{}).
 					Return([]*model.Playbook{}, nil)
 			},
 			expectedStatus: http.StatusOK,
@@ -504,6 +509,83 @@ func TestGetEventSpecificPlaybook(t *testing.T) {
 				require.NoError(t, err)
 				assert.Empty(t, playbooks)
 			},
+		},
+		{
+			name:  "Success - skeleton stage is passed through",
+			socId: "test-soc-id",
+			stage: "skeleton",
+			initMock: func(srv *Server, ctrl *gomock.Controller) {
+				mockPlaybookStore := mock.NewMockPlaybookstore(ctrl)
+				srv.Playbookstore = mockPlaybookStore
+				srv.Authorizer.(*rbac.FakeAuthorizer).Authorized = true
+
+				mockPlaybookStore.EXPECT().
+					GetEventSpecificPlaybook(gomock.Any(), "test-soc-id", model.PlaybookStageSkeleton, time.Time{}).
+					Return([]*model.Playbook{}, nil)
+			},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:  "Success - convert stage is passed through",
+			socId: "test-soc-id",
+			stage: "convert",
+			initMock: func(srv *Server, ctrl *gomock.Controller) {
+				mockPlaybookStore := mock.NewMockPlaybookstore(ctrl)
+				srv.Playbookstore = mockPlaybookStore
+				srv.Authorizer.(*rbac.FakeAuthorizer).Authorized = true
+
+				mockPlaybookStore.EXPECT().
+					GetEventSpecificPlaybook(gomock.Any(), "test-soc-id", model.PlaybookStageConvert, time.Time{}).
+					Return([]*model.Playbook{}, nil)
+			},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:  "Success - unknown stage falls back to full",
+			socId: "test-soc-id",
+			stage: "bogus",
+			initMock: func(srv *Server, ctrl *gomock.Controller) {
+				mockPlaybookStore := mock.NewMockPlaybookstore(ctrl)
+				srv.Playbookstore = mockPlaybookStore
+				srv.Authorizer.(*rbac.FakeAuthorizer).Authorized = true
+
+				mockPlaybookStore.EXPECT().
+					GetEventSpecificPlaybook(gomock.Any(), "test-soc-id", model.PlaybookStageFull, time.Time{}).
+					Return([]*model.Playbook{}, nil)
+			},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:  "Success - ts is parsed and passed through",
+			socId: "test-soc-id",
+			ts:    "2026-07-02T20:33:57Z",
+			initMock: func(srv *Server, ctrl *gomock.Controller) {
+				mockPlaybookStore := mock.NewMockPlaybookstore(ctrl)
+				srv.Playbookstore = mockPlaybookStore
+				srv.Authorizer.(*rbac.FakeAuthorizer).Authorized = true
+
+				expectedTs := time.Date(2026, 7, 2, 20, 33, 57, 0, time.UTC)
+
+				mockPlaybookStore.EXPECT().
+					GetEventSpecificPlaybook(gomock.Any(), "test-soc-id", model.PlaybookStageFull, expectedTs).
+					Return([]*model.Playbook{}, nil)
+			},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:  "Success - unparseable ts falls back to zero time",
+			socId: "test-soc-id",
+			ts:    "not-a-timestamp",
+			initMock: func(srv *Server, ctrl *gomock.Controller) {
+				mockPlaybookStore := mock.NewMockPlaybookstore(ctrl)
+				srv.Playbookstore = mockPlaybookStore
+				srv.Authorizer.(*rbac.FakeAuthorizer).Authorized = true
+
+				mockPlaybookStore.EXPECT().
+					GetEventSpecificPlaybook(gomock.Any(), "test-soc-id", model.PlaybookStageFull, time.Time{}).
+					Return([]*model.Playbook{}, nil)
+			},
+			expectedStatus: http.StatusOK,
 		},
 		{
 			name:  "Missing SOC ID",
@@ -534,7 +616,7 @@ func TestGetEventSpecificPlaybook(t *testing.T) {
 				srv.Authorizer.(*rbac.FakeAuthorizer).Authorized = true
 
 				mockPlaybookStore.EXPECT().
-					GetEventSpecificPlaybook(gomock.Any(), "non-existent-soc-id").
+					GetEventSpecificPlaybook(gomock.Any(), "non-existent-soc-id", model.PlaybookStageFull, time.Time{}).
 					Return(nil, errors.New("no alert found for soc_id"))
 			},
 			expectedStatus: http.StatusNotFound,
@@ -548,7 +630,7 @@ func TestGetEventSpecificPlaybook(t *testing.T) {
 				srv.Authorizer.(*rbac.FakeAuthorizer).Authorized = true
 
 				mockPlaybookStore.EXPECT().
-					GetEventSpecificPlaybook(gomock.Any(), "error-id").
+					GetEventSpecificPlaybook(gomock.Any(), "error-id", model.PlaybookStageFull, time.Time{}).
 					Return(nil, errors.New("database error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -565,9 +647,174 @@ func TestGetEventSpecificPlaybook(t *testing.T) {
 
 			ctx := createTestContext(map[string]string{"id": tt.socId})
 			w := httptest.NewRecorder()
-			r := createTestRequest(ctx, "GET", "/playbook/event/"+tt.socId)
+			url := "/playbook/event/" + tt.socId + "?stage=" + tt.stage
+			if tt.ts != "" {
+				url += "&ts=" + neturl.QueryEscape(tt.ts)
+			}
+			r := createTestRequest(ctx, "GET", url)
 
 			h.GetEventSpecificPlaybook(w, r)
+
+			assert.Equal(t, tt.expectedStatus, w.Code)
+
+			if tt.validateResponse != nil {
+				tt.validateResponse(t, w)
+			}
+		})
+	}
+}
+
+func TestExecutePlaybookQuestion(t *testing.T) {
+	validBody := `{"query":"aggregation: true\nquery: test","range":"-1h","oqlQuery":"hostname: test-host","fields":["source.ip"]}`
+	validTs := "2026-07-02T20:33:57Z"
+
+	tests := []struct {
+		name             string
+		ts               string
+		body             string
+		initMock         func(*Server, *gomock.Controller)
+		expectedStatus   int
+		validateResponse func(*testing.T, *httptest.ResponseRecorder)
+	}{
+		{
+			name: "Success - question is executed and returned with results",
+			ts:   validTs,
+			body: validBody,
+			initMock: func(srv *Server, ctrl *gomock.Controller) {
+				mockPlaybookStore := mock.NewMockPlaybookstore(ctrl)
+				srv.Playbookstore = mockPlaybookStore
+				srv.Authorizer.(*rbac.FakeAuthorizer).Authorized = true
+
+				expectedTs := time.Date(2026, 7, 2, 20, 33, 57, 0, time.UTC)
+
+				mockPlaybookStore.EXPECT().
+					ExecuteQuestionSearch(gomock.Any(), expectedTs, gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ time.Time, question *model.Question) error {
+						assert.Equal(t, "hostname: test-host", question.OqlQuery)
+						assert.Equal(t, []string{"source.ip"}, question.QueryFields)
+						require.NotNil(t, question.Range)
+						assert.Equal(t, "-1h", *question.Range)
+
+						question.QueryResults = []*model.EventRecord{
+							{Payload: map[string]interface{}{"Count": float64(3), "source.ip": "1.2.3.4"}},
+						}
+						return nil
+					})
+			},
+			expectedStatus: http.StatusOK,
+			validateResponse: func(t *testing.T, w *httptest.ResponseRecorder) {
+				var question model.Question
+				err := json.Unmarshal(w.Body.Bytes(), &question)
+				require.NoError(t, err)
+				require.Len(t, question.QueryResults, 1)
+				assert.Equal(t, "1.2.3.4", question.QueryResults[0].Payload["source.ip"])
+			},
+		},
+		{
+			name: "Missing ts",
+			ts:   "",
+			body: validBody,
+			initMock: func(srv *Server, ctrl *gomock.Controller) {
+				srv.Authorizer.(*rbac.FakeAuthorizer).Authorized = true
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Unparseable ts",
+			ts:   "not-a-timestamp",
+			body: validBody,
+			initMock: func(srv *Server, ctrl *gomock.Controller) {
+				srv.Authorizer.(*rbac.FakeAuthorizer).Authorized = true
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Success - ts without a timezone is accepted",
+			ts:   "2026-07-02 20:33:57",
+			body: validBody,
+			initMock: func(srv *Server, ctrl *gomock.Controller) {
+				mockPlaybookStore := mock.NewMockPlaybookstore(ctrl)
+				srv.Playbookstore = mockPlaybookStore
+				srv.Authorizer.(*rbac.FakeAuthorizer).Authorized = true
+
+				expectedTs := time.Date(2026, 7, 2, 20, 33, 57, 0, time.UTC)
+
+				mockPlaybookStore.EXPECT().
+					ExecuteQuestionSearch(gomock.Any(), expectedTs, gomock.Any()).
+					Return(nil)
+			},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "Malformed body",
+			ts:   validTs,
+			body: "{not json",
+			initMock: func(srv *Server, ctrl *gomock.Controller) {
+				srv.Authorizer.(*rbac.FakeAuthorizer).Authorized = true
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Missing range",
+			ts:   validTs,
+			body: `{"query":"query: test","oqlQuery":"hostname: test-host"}`,
+			initMock: func(srv *Server, ctrl *gomock.Controller) {
+				srv.Authorizer.(*rbac.FakeAuthorizer).Authorized = true
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Missing oqlQuery",
+			ts:   validTs,
+			body: `{"query":"query: test","range":"-1h"}`,
+			initMock: func(srv *Server, ctrl *gomock.Controller) {
+				srv.Authorizer.(*rbac.FakeAuthorizer).Authorized = true
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "Unauthorized",
+			ts:   validTs,
+			body: validBody,
+			initMock: func(srv *Server, ctrl *gomock.Controller) {
+				srv.Authorizer.(*rbac.FakeAuthorizer).Authorized = false
+			},
+			expectedStatus: http.StatusForbidden,
+		},
+		{
+			name: "Store error",
+			ts:   validTs,
+			body: validBody,
+			initMock: func(srv *Server, ctrl *gomock.Controller) {
+				mockPlaybookStore := mock.NewMockPlaybookstore(ctrl)
+				srv.Playbookstore = mockPlaybookStore
+				srv.Authorizer.(*rbac.FakeAuthorizer).Authorized = true
+
+				mockPlaybookStore.EXPECT().
+					ExecuteQuestionSearch(gomock.Any(), gomock.Any(), gomock.Any()).
+					Return(errors.New("search failed"))
+			},
+			expectedStatus: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			srv, h := setupPlaybookTest(t, ctrl)
+			tt.initMock(srv, ctrl)
+
+			ctx := createTestContext(nil)
+			w := httptest.NewRecorder()
+			url := "/playbook/question"
+			if tt.ts != "" {
+				url += "?ts=" + neturl.QueryEscape(tt.ts)
+			}
+			r := httptest.NewRequestWithContext(ctx, "POST", url, strings.NewReader(tt.body))
+
+			h.ExecutePlaybookQuestion(w, r)
 
 			assert.Equal(t, tt.expectedStatus, w.Code)
 

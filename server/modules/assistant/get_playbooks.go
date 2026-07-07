@@ -90,26 +90,14 @@ func (t *GetPlaybooksTool) Execute(ctx context.Context, srv *server.Server, para
 	result.Parameters = args
 
 	// go get playbooks
-	query := fmt.Sprintf(`log.id.uid:"%[1]s" OR event.id:"%[1]s" OR _id:"%[1]s"`, args.AlertID)
-	criteria := model.NewEventSearchCriteria()
-
-	dateRange := "1970-01-01T00:00:00Z - " + time.Now().Format(time.RFC3339)
-
-	err = criteria.Populate(query, dateRange, time.RFC3339, "", "0", "1")
+	event, err := server.FindEventBySocId(ctx, srv.Eventstore, args.AlertID, time.Time{})
 	if err != nil {
 		return nil, err
 	}
-
-	events, err := srv.Eventstore.Search(ctx, criteria)
-	if err != nil {
-		return nil, err
-	}
-	if events.TotalEvents == 0 || len(events.Events) == 0 {
+	if event == nil {
 		logger.WithField("alertId", args.AlertID).Error("no alert found with corresponding ID")
 		return nil, errors.New("ERROR_ASSISTANT_NO_ALERT_FOUND")
 	}
-
-	event := events.Events[0]
 
 	detId, ok := event.Payload["rule.uuid"].(string)
 	if !ok {

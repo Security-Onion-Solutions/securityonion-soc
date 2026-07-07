@@ -12,6 +12,7 @@ package mock
 import (
 	context "context"
 	reflect "reflect"
+	time "time"
 
 	model "github.com/security-onion-solutions/securityonion-soc/model"
 	gomock "go.uber.org/mock/gomock"
@@ -70,19 +71,33 @@ func (mr *MockPlaybookstoreMockRecorder) ExecutePlaybookSearches(ctx, event, pbs
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecutePlaybookSearches", reflect.TypeOf((*MockPlaybookstore)(nil).ExecutePlaybookSearches), ctx, event, pbs)
 }
 
-// GetEventSpecificPlaybook mocks base method.
-func (m *MockPlaybookstore) GetEventSpecificPlaybook(ctx context.Context, id string) ([]*model.Playbook, error) {
+// ExecuteQuestionSearch mocks base method.
+func (m *MockPlaybookstore) ExecuteQuestionSearch(ctx context.Context, eventTime time.Time, question *model.Question) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetEventSpecificPlaybook", ctx, id)
+	ret := m.ctrl.Call(m, "ExecuteQuestionSearch", ctx, eventTime, question)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ExecuteQuestionSearch indicates an expected call of ExecuteQuestionSearch.
+func (mr *MockPlaybookstoreMockRecorder) ExecuteQuestionSearch(ctx, eventTime, question any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecuteQuestionSearch", reflect.TypeOf((*MockPlaybookstore)(nil).ExecuteQuestionSearch), ctx, eventTime, question)
+}
+
+// GetEventSpecificPlaybook mocks base method.
+func (m *MockPlaybookstore) GetEventSpecificPlaybook(ctx context.Context, id string, stage model.PlaybookStage, ts time.Time) ([]*model.Playbook, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetEventSpecificPlaybook", ctx, id, stage, ts)
 	ret0, _ := ret[0].([]*model.Playbook)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetEventSpecificPlaybook indicates an expected call of GetEventSpecificPlaybook.
-func (mr *MockPlaybookstoreMockRecorder) GetEventSpecificPlaybook(ctx, id any) *gomock.Call {
+func (mr *MockPlaybookstoreMockRecorder) GetEventSpecificPlaybook(ctx, id, stage, ts any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEventSpecificPlaybook", reflect.TypeOf((*MockPlaybookstore)(nil).GetEventSpecificPlaybook), ctx, id)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEventSpecificPlaybook", reflect.TypeOf((*MockPlaybookstore)(nil).GetEventSpecificPlaybook), ctx, id, stage, ts)
 }
 
 // GetPlaybookById mocks base method.
