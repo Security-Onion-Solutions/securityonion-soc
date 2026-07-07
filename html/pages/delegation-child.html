@@ -1,7 +1,7 @@
 <div class="delegation-child mb-2">
   <v-expansion-panels v-if="ctx.delegationHasCollapsedContent(toolUse)" variant="accordion" density="compact" class="delegation-child-panel">
     <v-expansion-panel>
-      <v-expansion-panel-title>
+      <v-expansion-panel-title data-aid="assistant_delegation_header">
         <v-icon size="small" class="mr-2">fa-user-secret</v-icon>
         <span class="font-weight-medium text-body-2">{{ toolUse.childSession.agentName || ctx.i18n.assistantDelegateAgent }}</span>
       </v-expansion-panel-title>
@@ -10,7 +10,7 @@
           <div v-if="ctx.showModelThinking && childM.thoughts" class="thought-display mb-2">
             <v-expansion-panels variant="accordion" density="compact">
               <v-expansion-panel>
-                <v-expansion-panel-title>
+                <v-expansion-panel-title data-aid="assistant_delegation_thoughts">
                   <v-icon size="small" class="mr-2">fa-lightbulb</v-icon>
                   <span class="font-weight-medium text-body-2">{{ ctx.i18n.thoughts }}</span>
                 </v-expansion-panel-title>
