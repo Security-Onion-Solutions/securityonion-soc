@@ -890,6 +890,25 @@ html, body, * {
   background-color: rgb(var(--v-theme-drawer_background)) !important;
 }
 
+/* Metric Tab Styles */
+.v-theme--dark .metric-tab-header,
+.v-theme--dark .metric-tab-body,
+.v-theme--dark .metric-tab-card {
+  background-color: rgb(var(--v-theme-table_background)) !important;
+}
+
+.v-theme--light .metric-tab-header,
+.v-theme--light .metric-tab-body,
+.v-theme--light .metric-tab-card {
+  background-color: rgb(var(--v-theme-table_background)) !important;
+}
+
+.metric-tab-card {
+  border: none !important;
+  border-radius: 0 !important;
+  overflow: hidden;
+}
+
 /* ============================================================
    Buttons — rounded when they contain text
    ============================================================ */

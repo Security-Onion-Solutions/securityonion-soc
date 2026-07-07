@@ -26,6 +26,7 @@ func TestBuildModuleMap(t *testing.T) {
 	findModule(t, mm, "influxdb")
 	findModule(t, mm, "onionconfig")
 	findModule(t, mm, "postgres")
+	findModule(t, mm, "postgresmetrics")
 	findModule(t, mm, "sostatus")
 	findModule(t, mm, "statickeyauth")
 	findModule(t, mm, "thehive")

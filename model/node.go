@@ -70,6 +70,8 @@ type Node struct {
 	OsUptimeSeconds int `json:"osUptimeSeconds" example:"1384801"`
 	// Indicates whether the metric subsytem is available
 	MetricsEnabled bool `json:"metricsEnabled" example:"true"`
+	// Indicates whether historical time-series metrics are supported/enabled
+	HistoricalMetricsEnabled bool `json:"historicalMetricsEnabled" example:"true"`
 	// Indicates whether this node is a non-critical node of the overall grid. An examples of a non-critical nodes is a desktop node
 	NonCriticalNode bool `json:"nonCriticalNode" example:"false"`
 	// Total size, in gigabytes, of the root operating system disk/partition

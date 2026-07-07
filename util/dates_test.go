@@ -399,6 +399,13 @@ func TestParseDateRange(t *testing.T) {
 			ExpectedStart: "2023-07-15 14:30:00 +0100 BST",
 			ExpectedEnd:   "2023-07-15 22:30:00 +0100 BST",
 		},
+		{
+			Name:          "Relative date range 1h",
+			DateRange:     "now-1h:now",
+			Format:        format,
+			Zone:          "UTC",
+			UseDefaultTime: false,
+		},
 	}
 
 	for _, test := range tests {
@@ -416,8 +423,12 @@ func TestParseDateRange(t *testing.T) {
 				assert.Equal(t, 24*time.Hour, end.Sub(start), "Range should be 24 hours")
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, test.ExpectedStart, start.String())
-				assert.Equal(t, test.ExpectedEnd, end.String())
+				if test.DateRange == "now-1h:now" {
+					assert.Equal(t, time.Hour, end.Sub(start))
+				} else {
+					assert.Equal(t, test.ExpectedStart, start.String())
+					assert.Equal(t, test.ExpectedEnd, end.String())
+				}
 			}
 		})
 	}
