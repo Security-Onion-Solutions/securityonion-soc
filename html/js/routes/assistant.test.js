@@ -1176,6 +1176,71 @@ test('displayStatus surfaces action_needed for an executing delegate with a pend
   expect(comp.displayStatus({ status: 'pending_approval' })).toBe('pending_approval');
 });
 
+test('hasPendingDescendantApproval finds a pending tool at any depth', () => {
+  // No childSession, or none of the nested tools pending: false.
+  expect(comp.hasPendingDescendantApproval(null)).toBe(false);
+  expect(comp.hasPendingDescendantApproval({})).toBe(false);
+  expect(comp.hasPendingDescendantApproval({ childSession: {} })).toBe(false);
+  expect(comp.hasPendingDescendantApproval({
+    childSession: { messages: [{ toolUses: [{ status: 'completed' }, { status: 'executing' }] }, { content: 'prose only' }] },
+  })).toBe(false);
+
+  // Immediate child pending.
+  expect(comp.hasPendingDescendantApproval({
+    childSession: { messages: [{ toolUses: [{ status: 'pending_approval' }] }] },
+  })).toBe(true);
+
+  // Grandchild pending under an executing intermediate delegate.
+  expect(comp.hasPendingDescendantApproval({
+    childSession: { messages: [{ toolUses: [
+      { status: 'executing', childSession: { messages: [{ toolUses: [{ status: 'pending_approval' }] }] } },
+    ] }] },
+  })).toBe(true);
+});
+
+test('isTopLevelTool is true only for tools of the viewed conversation', () => {
+  comp.currentChatId = 'sess-1';
+  expect(comp.isTopLevelTool({ id: 't1' })).toBe(true); // no sessionId = current conversation
+  expect(comp.isTopLevelTool({ id: 't2', sessionId: 'sess-1' })).toBe(true);
+  expect(comp.isTopLevelTool({ id: 't3', sessionId: 'child-1' })).toBe(false);
+});
+
+test('sessionTools lazily creates one state record per session and reuses it', () => {
+  expect(comp.sessionToolState.has('sess-1')).toBe(false);
+
+  const s = comp.sessionTools('sess-1');
+  expect(s.toolsById).toBeInstanceOf(Map);
+  expect(s.indexToId).toBeInstanceOf(Map);
+  expect(s.queue).toEqual([]);
+  expect(s.busy).toBe(false);
+  expect(s.floatingTool).toBeNull();
+
+  // Same session returns the same record; other sessions get their own.
+  expect(comp.sessionTools('sess-1')).toBe(s);
+  expect(comp.sessionTools('sess-2')).not.toBe(s);
+
+  // getSessionToolMap and getIndexMap read through the same record.
+  expect(comp.getSessionToolMap('sess-1')).toBe(s.toolsById);
+  expect(comp.getIndexMap('sess-1')).toBe(s.indexToId);
+});
+
+test('clearFloatingTool drops only the floating tool, leaving other session state intact', () => {
+  const s = comp.sessionTools('sess-1');
+  s.floatingTool = { id: 't1' };
+  s.queue.push('t1');
+  s.toolsById.set('t1', { id: 't1' });
+
+  comp.clearFloatingTool('sess-1');
+
+  expect(s.floatingTool).toBeNull();
+  expect(s.queue).toEqual(['t1']);
+  expect(s.toolsById.has('t1')).toBe(true);
+
+  // Unknown session: no throw, and no state record lazily created.
+  expect(() => comp.clearFloatingTool('missing')).not.toThrow();
+  expect(comp.sessionToolState.has('missing')).toBe(false);
+});
+
 test('approveTool queues tool for execution', async () => {
   const toolUse = { ...fakeToolUse };
   comp.queueTool = jest.fn();
@@ -5344,6 +5409,235 @@ test('handleDelegationContentBlockStop handles JSON parsing error', () => {
   expect(comp.queueTool).not.toHaveBeenCalled();
 });
 
+// --- applyBlock* (the shared implementation behind the handle*ContentBlock* adapters) ---
+
+test('applyBlockStart ignores blocks that are not tool_use', () => {
+  const message = { toolUses: [] };
+  comp.applyBlockStart({ index: 0, content_block: { type: 'text' } }, { message, sessionId: 's1', visible: true });
+  comp.applyBlockStart({ index: 0 }, { message, sessionId: 's1', visible: true });
+
+  expect(message.toolUses).toHaveLength(0);
+  expect(comp.getSessionToolMap('s1').size).toBe(0);
+});
+
+test('applyBlockStart pushes the tool into the message and registers the reactive instance', () => {
+  comp.scrollIfPinned = jest.fn();
+  const message = { toolUses: [] };
+  const c = { index: 2, content_block: { type: 'tool_use', id: 'tu-9', name: 'query_events', input: { q: 'dns' } } };
+
+  comp.applyBlockStart(c, { message, sessionId: 's1', visible: true });
+
+  expect(message.toolUses).toHaveLength(1);
+  const tracked = comp.getSessionToolMap('s1').get('tu-9');
+  // The session map must hold the instance living in the message, not a detached copy.
+  expect(tracked).toBe(message.toolUses[0]);
+  expect(tracked.status).toBe('preparing');
+  expect(tracked.approved).toBeNull();
+  expect(tracked.input).toEqual({ q: 'dns' });
+  expect(tracked.sessionId).toBe('s1');
+  expect(tracked.blockIndex).toBe(2);
+  expect(comp.getIndexMap('s1').get(2)).toBe('tu-9');
+  expect(comp.scrollIfPinned).toHaveBeenCalled();
+});
+
+test('applyBlockStart with no target message still registers the tool and does not scroll', () => {
+  comp.scrollIfPinned = jest.fn();
+  const c = { index: 0, content_block: { type: 'tool_use', id: 'tu-1', name: 'query_events' } };
+
+  comp.applyBlockStart(c, { sessionId: 's2', visible: false });
+
+  expect(comp.getSessionToolMap('s2').get('tu-1')).toBeTruthy();
+  expect(comp.getIndexMap('s2').get(0)).toBe('tu-1');
+  expect(comp.scrollIfPinned).not.toHaveBeenCalled();
+});
+
+test('applyBlockDelta routes text, input_json, and thought deltas to their targets', () => {
+  comp.scrollIfPinned = jest.fn();
+  const message = { content: 'Hello', thoughts: 'hmm', toolUses: [] };
+  const toolUse = { id: 'tu-1', inputJson: '{"a"', status: 'preparing' };
+  comp.getSessionToolMap('s1').set('tu-1', toolUse);
+  comp.getIndexMap('s1').set(3, 'tu-1');
+  const target = { message, sessionId: 's1', visible: true };
+
+  comp.applyBlockDelta({ index: 0, delta: { type: 'text_delta', text: ' world' } }, target);
+  expect(message.content).toBe('Hello world');
+
+  comp.applyBlockDelta({ index: 3, delta: { type: 'input_json_delta', partial_json: ': 1}' } }, target);
+  expect(toolUse.inputJson).toBe('{"a": 1}');
+  expect(toolUse.status).toBe('preparing');
+
+  comp.applyBlockDelta({ index: 0, delta: { type: 'thought_delta', text: '... ok' } }, target);
+  expect(message.thoughts).toBe('hmm... ok');
+
+  // A delta for an unmapped block index is ignored, and a message-less target
+  // ignores text/thought deltas without throwing.
+  expect(() => {
+    comp.applyBlockDelta({ index: 9, delta: { type: 'input_json_delta', partial_json: 'x' } }, target);
+    comp.applyBlockDelta({ index: 0, delta: { type: 'text_delta', text: 'x' } }, { sessionId: 's1', visible: false });
+  }).not.toThrow();
+});
+
+test('applyBlockStop auto-approves and queues a read-only tool', () => {
+  comp.scrollIfPinned = jest.fn();
+  comp.shouldAutoApproveTool = jest.fn().mockReturnValue(true);
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
+  comp.queueTool = jest.fn();
+  const toolUse = { id: 'tu-1', name: 'query_events', inputJson: '{"q": "dns"}', input: {}, status: 'preparing', approved: null };
+  comp.getSessionToolMap('s1').set('tu-1', toolUse);
+  comp.getIndexMap('s1').set(0, 'tu-1');
+
+  const usage = comp.applyBlockStop({ index: 0 }, { sessionId: 's1', visible: true });
+
+  expect(toolUse.input).toEqual({ q: 'dns' });
+  expect(toolUse.approved).toBe(true);
+  expect(comp.queueTool).toHaveBeenCalledWith('s1', 'tu-1');
+  expect(comp.sessionTools('s1').floatingTool).toBeFalsy();
+  expect(usage).toBeNull();
+});
+
+test('applyBlockStop leaves an auto-approvable tool unqueued when the context limit is reached', () => {
+  comp.shouldAutoApproveTool = jest.fn().mockReturnValue(true);
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(true);
+  comp.queueTool = jest.fn();
+  const toolUse = { id: 'tu-1', name: 'query_events', inputJson: '{}', input: {}, status: 'preparing', approved: null };
+  comp.getSessionToolMap('s1').set('tu-1', toolUse);
+  comp.getIndexMap('s1').set(0, 'tu-1');
+
+  comp.applyBlockStop({ index: 0 }, { sessionId: 's1', visible: false });
+
+  expect(comp.queueTool).not.toHaveBeenCalled();
+  expect(toolUse.approved).toBeNull();
+  expect(toolUse.status).toBe('preparing');
+});
+
+test('applyBlockStop surfaces a non-auto-approved tool as the session floating tool', () => {
+  comp.scrollIfPinned = jest.fn();
+  comp.shouldAutoApproveTool = jest.fn().mockReturnValue(false);
+  comp.queueTool = jest.fn();
+  const toolUse = { id: 'tu-2', name: 'dangerous_tool', inputJson: '{"action": "delete"}', input: {}, status: 'preparing', approved: null };
+  comp.getSessionToolMap('s1').set('tu-2', toolUse);
+  comp.getIndexMap('s1').set(1, 'tu-2');
+
+  comp.applyBlockStop({ index: 1 }, { sessionId: 's1', visible: true });
+
+  expect(toolUse.status).toBe('pending_approval');
+  expect(toolUse.approved).toBeNull();
+  expect(comp.sessionTools('s1').floatingTool).toBe(toolUse);
+  expect(comp.queueTool).not.toHaveBeenCalled();
+});
+
+test('applyBlockStop marks the tool errored on malformed input JSON', () => {
+  comp.scrollIfPinned = jest.fn();
+  comp.shouldAutoApproveTool = jest.fn().mockReturnValue(true);
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
+  comp.queueTool = jest.fn();
+  const toolUse = { id: 'tu-3', name: 'query_events', inputJson: '{"invalid": json}', input: {}, status: 'preparing', error: null };
+  comp.getSessionToolMap('s1').set('tu-3', toolUse);
+  comp.getIndexMap('s1').set(0, 'tu-3');
+
+  comp.applyBlockStop({ index: 0 }, { sessionId: 's1', visible: true });
+
+  expect(toolUse.status).toBe('error');
+  expect(toolUse.error).toContain(comp.i18n.assistantToolParseInputError);
+  expect(comp.queueTool).not.toHaveBeenCalled();
+});
+
+test('applyBlockStop returns usage riding the content_block_stop event', () => {
+  const usage = { input_tokens: 10, output_tokens: 5 };
+  // No tool is mapped at this index; the usage must still be surfaced.
+  expect(comp.applyBlockStop({ index: 7, usage }, { sessionId: 's1', visible: false })).toBe(usage);
+});
+
+// --- delegation streaming helpers ---
+
+test('ensureChildSession creates, reuses, and renames the nested session', () => {
+  const delegate = { id: 'd1' };
+
+  const cs = comp.ensureChildSession(delegate, 'Hunter');
+  expect(delegate.childSession).toBe(cs);
+  expect(cs.agentName).toBe('Hunter');
+  expect(cs.messages).toEqual([]);
+
+  // Reuse: existing messages survive, and an omitted agentName is not cleared.
+  cs.messages.push({ role: 'assistant', content: 'hi' });
+  expect(comp.ensureChildSession(delegate)).toBe(cs);
+  expect(cs.messages).toHaveLength(1);
+  expect(cs.agentName).toBe('Hunter');
+
+  // A provided agentName updates the existing session.
+  comp.ensureChildSession(delegate, 'Analyst');
+  expect(cs.agentName).toBe('Analyst');
+
+  // No agentName at creation defaults to empty string.
+  const bare = {};
+  expect(comp.ensureChildSession(bare).agentName).toBe('');
+});
+
+test('pendingChildTools returns only tools awaiting approval, across all child messages', () => {
+  const delegate = { childSession: { messages: [
+    { toolUses: [{ id: 'a', status: 'pending_approval' }, { id: 'b', status: 'completed' }] },
+    { content: 'prose only' },
+    { toolUses: [{ id: 'c', status: 'executing' }, { id: 'd', status: 'pending_approval' }] },
+  ] } };
+
+  expect(comp.pendingChildTools(delegate).map(t => t.id)).toEqual(['a', 'd']);
+
+  expect(comp.pendingChildTools(null)).toEqual([]);
+  expect(comp.pendingChildTools({})).toEqual([]);
+  expect(comp.pendingChildTools({ childSession: {} })).toEqual([]);
+});
+
+test('delegationHasCollapsedContent is true only when something already renders inside the fold', () => {
+  expect(comp.delegationHasCollapsedContent(null)).toBe(false);
+  expect(comp.delegationHasCollapsedContent({})).toBe(false);
+  expect(comp.delegationHasCollapsedContent({ childSession: { messages: [] } })).toBe(false);
+
+  // A still-pending tool is shown OUTSIDE the fold, so it does not count.
+  expect(comp.delegationHasCollapsedContent({
+    childSession: { messages: [{ toolUses: [{ status: 'pending_approval' }] }] },
+  })).toBe(false);
+
+  expect(comp.delegationHasCollapsedContent({
+    childSession: { messages: [{ content: 'found it' }] },
+  })).toBe(true);
+  expect(comp.delegationHasCollapsedContent({
+    childSession: { messages: [{ thoughts: 'thinking...' }] },
+  })).toBe(true);
+  expect(comp.delegationHasCollapsedContent({
+    childSession: { messages: [{ toolUses: [{ status: 'completed' }, { status: 'pending_approval' }] }] },
+  })).toBe(true);
+});
+
+test('handleDelegationMessageStart appends a nested message and returns the tracked instance', () => {
+  comp.scrollIfPinned = jest.fn();
+  const delegate = { childSession: { agentName: 'Hunter', messages: [{ role: 'assistant', content: 'earlier' }] } };
+
+  const msg = comp.handleDelegationMessageStart(delegate);
+
+  expect(delegate.childSession.messages).toHaveLength(2);
+  // Streaming mutates the returned object; it must be the one stored in childSession.
+  expect(msg).toBe(delegate.childSession.messages[1]);
+  expect(msg.role).toBe('assistant');
+  expect(msg.content).toBe('');
+  expect(msg.thoughts).toBe('');
+  expect(msg.toolUses).toEqual([]);
+  expect(comp.scrollIfPinned).toHaveBeenCalled();
+});
+
+test('handleDelegationContentBlockStart/Delta adapt into applyBlock* with the child target', () => {
+  comp.applyBlockStart = jest.fn();
+  comp.applyBlockDelta = jest.fn();
+  const childMsg = { content: '', thoughts: '', toolUses: [] };
+  const start = { index: 0, content_block: { type: 'tool_use', id: 'tu-1' } };
+  const delta = { index: 0, delta: { type: 'text_delta', text: 'x' } };
+
+  comp.handleDelegationContentBlockStart(start, 'child-1', childMsg);
+  expect(comp.applyBlockStart).toHaveBeenCalledWith(start, { message: childMsg, sessionId: 'child-1', visible: true });
+
+  comp.handleDelegationContentBlockDelta(delta, 'child-1', childMsg);
+  expect(comp.applyBlockDelta).toHaveBeenCalledWith(delta, { message: childMsg, sessionId: 'child-1', visible: true });
+});
+
 test('handleToolExecutionContentBlockStop processes chained tool with auto-approval', () => {
   const sessionId = 'execution-session';
   const mockToolMap = new Map();
@@ -6669,6 +6963,257 @@ test('executeTool reports a top-level error when the stream dies after resolutio
 // pending tool as actionable, register it, and repopulate delegationChildren so the
 // subsequent approval streams nested and resolves.
 
+// --- reload reconstruction helpers (direct tests; the reload tests below cover them end-to-end) ---
+
+test('collectResolvedToolUseIds gathers ids from structured and legacy tool_result messages', () => {
+  const ids = comp.collectResolvedToolUseIds([
+    { tags: ['tool_result'], message: { contentBlocks: [{ toolResult: { toolUseId: 'tu-1' } }] } },
+    // Legacy text-encoded result.
+    { tags: ['tool_result'], message: { contentBlocks: [{ type: 'text', text: 'ToolUseId: tu-legacy, Result: {"ok":true}' }] } },
+    // Not tagged tool_result: ignored even though it carries a toolResult block.
+    { tags: ['chat'], message: { contentBlocks: [{ toolResult: { toolUseId: 'tu-ignored' } }] } },
+    // Malformed entries are skipped, not fatal.
+    { tags: ['tool_result'], message: {} },
+    { tags: ['tool_result'], message: { contentBlocks: [{ type: 'text', text: 'no marker here' }] } },
+    null,
+  ]);
+
+  expect(ids).toEqual(new Set(['tu-1', 'tu-legacy']));
+});
+
+test('isActiveToolTurn is true only while everything after the turn is a tool_result', () => {
+  const toolResult = { tags: ['tool_result'] };
+  const chat = { tags: ['chat'] };
+
+  expect(comp.isActiveToolTurn([chat, toolResult, toolResult], 0)).toBe(true);
+  // The model (or user) continued past the turn: no longer active.
+  expect(comp.isActiveToolTurn([chat, toolResult, chat], 0)).toBe(false);
+  // Nothing after the turn at all: still active.
+  expect(comp.isActiveToolTurn([chat], 0)).toBe(true);
+  // An untagged/null trailing message ends the turn.
+  expect(comp.isActiveToolTurn([chat, null], 0)).toBe(false);
+});
+
+test('indexSubSessions keys sub-sessions by parent tool_use id and by session id', () => {
+  const subA = { session: { sessionId: 'child-1', parentToolUseId: 'd1' } };
+  const subB = { session: { sessionId: 'child-2' } }; // no parent linkage
+
+  const index = comp.indexSubSessions([subA, null, {}, subB]);
+
+  expect(index.bySessionId.get('child-1')).toBe(subA);
+  expect(index.bySessionId.get('child-2')).toBe(subB);
+  expect(index.byParentToolUseId.get('d1')).toBe(subA);
+  expect(index.byParentToolUseId.size).toBe(1);
+
+  const empty = comp.indexSubSessions(null);
+  expect(empty.bySessionId.size).toBe(0);
+  expect(empty.byParentToolUseId.size).toBe(0);
+});
+
+test('reconstructDelegateChildSessions rebuilds only matched delegate tools', () => {
+  comp.reconstructChildSession = jest.fn();
+  comp.currentChatId = 'parent-1';
+  const sub = { session: { sessionId: 'child-1', parentToolUseId: 'd1' } };
+  comp._loadSubSessions = comp.indexSubSessions([sub]);
+
+  const delegate = { id: 'd1', name: 'delegate_to_Hunter' };
+  const plainTool = { id: 't2', name: 'query_events' };
+  const unmatchedDelegate = { id: 'd9', name: 'delegate_to_Analyst' };
+  const nameless = { id: 't3' };
+  comp.reconstructDelegateChildSessions([delegate, plainTool, unmatchedDelegate, nameless]);
+
+  expect(comp.reconstructChildSession).toHaveBeenCalledTimes(1);
+  expect(comp.reconstructChildSession).toHaveBeenCalledWith(delegate, sub, comp._loadSubSessions, 'parent-1');
+
+  // Without a loaded sub-session index (live streaming, old sessions): no-op.
+  comp.reconstructChildSession.mockClear();
+  comp._loadSubSessions = null;
+  comp.reconstructDelegateChildSessions([delegate]);
+  expect(comp.reconstructChildSession).not.toHaveBeenCalled();
+});
+
+test('reconstructChildSession renders the sub-agent turn and attaches each tool_result by outcome', () => {
+  const sub = {
+    session: { sessionId: 'child-1', delegateAgent: 'Hunter' },
+    history: [
+      // The objective/user message must not render as a nested message.
+      { message: { role: 'user', contentBlocks: [{ type: 'text', text: 'find beacons' }] } },
+      { createTime: '2025-01-01T12:00:01.000Z', message: { role: 'assistant', thoughts: 'thinking', contentBlocks: [
+        { type: 'text', text: 'running three tools' },
+        { type: 'tool_use', id: 'c1', name: 'query_events', input: { q: 1 } },
+        { type: 'tool_use', id: 'c2', name: 'query_events', input: { q: 2 } },
+        { type: 'tool_use', id: 'c3', name: 'query_events', input: { q: 3 } },
+      ] } },
+      { createTime: '2025-01-01T12:00:02.000Z', tags: ['tool_result'], message: { contentBlocks: [
+        { toolResult: { toolUseId: 'c1', content: [{ json: { hits: 2 } }] } },
+      ] } },
+      { createTime: '2025-01-01T12:00:03.000Z', tags: ['tool_result'], message: { contentBlocks: [
+        { toolResult: { toolUseId: 'c2', isError: true, content: [{ text: 'query exploded' }] } },
+      ] } },
+      { createTime: '2025-01-01T12:00:04.000Z', tags: ['tool_result'], message: { contentBlocks: [
+        { toolResult: { toolUseId: 'c3', status: 'rejected', content: [] } },
+      ] } },
+    ],
+  };
+  const delegate = { id: 'd1', name: 'delegate_to_Hunter', status: 'completed' };
+
+  comp.reconstructChildSession(delegate, sub, comp.indexSubSessions([sub]), 'parent-1');
+
+  const cs = delegate.childSession;
+  expect(cs.agentName).toBe('Hunter');
+  expect(cs.messages).toHaveLength(1);
+  // Prose stays content and reasoning stays thoughts, matching the live view.
+  expect(cs.messages[0].content).toBe('running three tools');
+  expect(cs.messages[0].thoughts).toBe('thinking');
+
+  const [c1, c2, c3] = cs.messages[0].toolUses;
+  expect(c1.status).toBe('completed');
+  expect(c1.rawResult).toEqual({ hits: 2 });
+  expect(c1.completedAt).toBe('2025-01-01T12:00:02.000Z');
+  expect(c2.status).toBe('error');
+  expect(c2.error).toBe('query exploded');
+  expect(c3.status).toBe('rejected');
+  expect(c3.error).toBe(comp.i18n.assistantToolUseReject);
+
+  // Settled delegate: no live delegation linkage is registered.
+  expect(comp.delegationChildren.has('child-1')).toBe(false);
+});
+
+test('reconstructChildSession marks the flagged turn pending and abandons earlier unresolved tools', () => {
+  const sub = {
+    session: { sessionId: 'child-2', delegateAgent: 'Analyst' },
+    pendingApproval: { sessionId: 'child-2', toolUseId: 'p1' },
+    history: [
+      // An earlier turn whose tool never got a result: abandoned, not pending.
+      { createTime: '2025-01-01T12:00:01.000Z', message: { role: 'assistant', contentBlocks: [
+        { type: 'tool_use', id: 'old1', name: 'query_events', input: {} },
+      ] } },
+      // The active turn: the flagged tool AND its unresolved sibling await approval.
+      { createTime: '2025-01-01T12:00:02.000Z', message: { role: 'assistant', contentBlocks: [
+        { type: 'tool_use', id: 'p1', name: 'query_events', input: {} },
+        { type: 'tool_use', id: 'p2', name: 'query_events', input: {} },
+      ] } },
+    ],
+  };
+  const delegate = { id: 'd2', name: 'delegate_to_Analyst', status: 'executing' };
+
+  comp.reconstructChildSession(delegate, sub, comp.indexSubSessions([sub]), 'parent-1');
+
+  const [oldTurn, activeTurn] = delegate.childSession.messages;
+  expect(oldTurn.toolUses[0].status).toBe('skipped');
+  for (const t of activeTurn.toolUses) {
+    expect(t.status).toBe('pending_approval');
+    expect(t.approved).toBeNull();
+    // Registered so the queue runner can resolve and fire it after approval.
+    expect(comp.getSessionToolMap('child-2').get(t.id)).toBe(t);
+  }
+
+  // A running delegation is re-registered as a live delegation child.
+  const entry = comp.delegationChildren.get('child-2');
+  expect(entry).toBeTruthy();
+  expect(entry.parentToolUse).toBe(delegate);
+  expect(entry.parentToolUseId).toBe('d2');
+  expect(entry.parentSessionId).toBe('parent-1');
+  expect(entry.agentName).toBe('Analyst');
+});
+
+test('reconstructChildSession recurses into grandchild delegations', () => {
+  const grandSub = {
+    session: { sessionId: 'gchild-1', parentToolUseId: 'gd1', delegateAgent: 'Deep' },
+    history: [
+      { createTime: '2025-01-01T12:00:03.000Z', message: { role: 'assistant', contentBlocks: [{ type: 'text', text: 'deep work' }] } },
+    ],
+  };
+  const sub = {
+    session: { sessionId: 'child-3', delegateAgent: 'Hunter' },
+    history: [
+      { createTime: '2025-01-01T12:00:01.000Z', message: { role: 'assistant', contentBlocks: [
+        { type: 'tool_use', id: 'gd1', name: 'delegate_to_Deep', input: { objective: 'go deeper' } },
+      ] } },
+    ],
+  };
+  const delegate = { id: 'd3', name: 'delegate_to_Hunter', status: 'executing' };
+
+  comp.reconstructChildSession(delegate, sub, comp.indexSubSessions([sub, grandSub]), 'parent-1');
+
+  // A delegate tool that spawned a sub-session and has no result yet is running.
+  const grandDelegate = delegate.childSession.messages[0].toolUses[0];
+  expect(grandDelegate.status).toBe('executing');
+  expect(grandDelegate.approved).toBe(true);
+  expect(grandDelegate.childSession.agentName).toBe('Deep');
+  expect(grandDelegate.childSession.messages[0].content).toBe('deep work');
+
+  // The grandchild's live linkage points at its own parent delegate and session.
+  const entry = comp.delegationChildren.get('gchild-1');
+  expect(entry.parentToolUseId).toBe('gd1');
+  expect(entry.parentSessionId).toBe('child-3');
+});
+
+test('finalizeResolvedDelegations settles leftover live tools under a resolved delegate', () => {
+  const pendingChild = { id: 'c1', status: 'pending_approval', approved: null, sessionId: 'child-1' };
+  const executingChild = { id: 'c2', status: 'executing', approved: true, sessionId: 'child-1' };
+  const doneChild = { id: 'c3', status: 'completed', approved: true, sessionId: 'child-1', rawResult: { ok: 1 } };
+  comp.getSessionToolMap('child-1').set('c1', pendingChild);
+  comp.getSessionToolMap('child-1').set('c2', executingChild);
+  comp.delegationChildren.set('child-1', { parentToolUseId: 'd1' });
+  const delegate = { id: 'd1', status: 'completed', rawResult: { summary: 'done' },
+    childSession: { messages: [{ toolUses: [pendingChild, executingChild, doneChild] }] } };
+
+  comp.finalizeResolvedDelegations([{ toolUses: [delegate] }]);
+
+  expect(pendingChild.status).toBe('skipped');
+  expect(pendingChild.approved).toBe(false);
+  expect(executingChild.status).toBe('skipped');
+  expect(doneChild.status).toBe('completed');
+  // Unregistered so nothing can fire or resume against the dead sub-session.
+  expect(comp.getSessionToolMap('child-1').has('c1')).toBe(false);
+  expect(comp.getSessionToolMap('child-1').has('c2')).toBe(false);
+  expect(comp.delegationChildren.has('child-1')).toBe(false);
+});
+
+test('finalizeResolvedDelegations settles a live-rejected delegate but leaves a running one alone', () => {
+  // Rejected live: carries no rawResult, so the status check must catch it.
+  const rejectedKid = { id: 'r1', status: 'executing', approved: true, sessionId: 'child-rej' };
+  comp.getSessionToolMap('child-rej').set('r1', rejectedKid);
+  const rejectedDelegate = { id: 'dr', status: 'rejected', rawResult: null,
+    childSession: { messages: [{ toolUses: [rejectedKid] }] } };
+
+  // Still running: its pending child stays actionable.
+  const liveKid = { id: 'l1', status: 'pending_approval', approved: null, sessionId: 'child-live' };
+  comp.getSessionToolMap('child-live').set('l1', liveKid);
+  comp.delegationChildren.set('child-live', { parentToolUseId: 'dl' });
+  const liveDelegate = { id: 'dl', status: 'executing', rawResult: null,
+    childSession: { messages: [{ toolUses: [liveKid] }] } };
+
+  comp.finalizeResolvedDelegations([{ toolUses: [rejectedDelegate, liveDelegate] }]);
+
+  expect(rejectedKid.status).toBe('skipped');
+  expect(comp.getSessionToolMap('child-rej').has('r1')).toBe(false);
+
+  expect(liveKid.status).toBe('pending_approval');
+  expect(comp.getSessionToolMap('child-live').has('l1')).toBe(true);
+  expect(comp.delegationChildren.has('child-live')).toBe(true);
+});
+
+test('finalizeResolvedDelegations cascades settlement from a settled ancestor to all descendants', () => {
+  const grandTool = { id: 'g1', status: 'executing', approved: true, sessionId: 'gchild' };
+  comp.getSessionToolMap('gchild').set('g1', grandTool);
+  comp.delegationChildren.set('gchild', { parentToolUseId: 'm1' });
+  // The intermediate delegate looks live on its own (executing, no result)...
+  const midDelegate = { id: 'm1', status: 'executing', rawResult: null, sessionId: 'child',
+    childSession: { messages: [{ toolUses: [grandTool] }] } };
+  // ...but its ancestor errored, which settles the whole subtree.
+  const top = { id: 't1', status: 'error', rawResult: null,
+    childSession: { messages: [{ toolUses: [midDelegate] }] } };
+
+  comp.finalizeResolvedDelegations([{ toolUses: [top] }]);
+
+  expect(midDelegate.status).toBe('skipped');
+  expect(grandTool.status).toBe('skipped');
+  expect(comp.getSessionToolMap('gchild').has('g1')).toBe(false);
+  expect(comp.delegationChildren.has('gchild')).toBe(false);
+});
+
 test('reload renders a paused delegation: delegate running, sub-agent tool actionable, wired to fire', () => {
   comp.resetContextLength = jest.fn();
   comp.currentChatId = 'parent-session';
@@ -7104,4 +7649,35 @@ test('postToolRequest gives up after the retry bound on persistent 409s', async 
   await expect(comp.postToolRequest({ name: 'query_events' }, {})).rejects.toBe(conflict);
   // Initial attempt plus toolBusyMaxRetries retries.
   expect(comp.$root.papi.post).toHaveBeenCalledTimes(4);
+});
+
+test('isToolAlreadyResolvedError is false for missing or non-400 errors', async () => {
+  expect(await comp.isToolAlreadyResolvedError(null)).toBe(false);
+  expect(await comp.isToolAlreadyResolvedError({})).toBe(false);
+  expect(await comp.isToolAlreadyResolvedError({ response: { status: 500, data: 'ERROR_TOOL_ALREADY_RESOLVED' } })).toBe(false);
+});
+
+test('isToolAlreadyResolvedError detects the marker in a string body', async () => {
+  expect(await comp.isToolAlreadyResolvedError({ response: { status: 400, data: 'bad request: ERROR_TOOL_ALREADY_RESOLVED' } })).toBe(true);
+  expect(await comp.isToolAlreadyResolvedError({ response: { status: 400, data: 'some other 400' } })).toBe(false);
+  expect(await comp.isToolAlreadyResolvedError({ response: { status: 400, data: { code: 400 } } })).toBe(false);
+});
+
+test('isToolAlreadyResolvedError decodes a streamed 400 body', async () => {
+  const streamBody = {
+    pipeThrough: () => ({
+      getReader: () => ({ read: async () => ({ value: 'oops: ERROR_TOOL_ALREADY_RESOLVED', done: false }) }),
+    }),
+  };
+  expect(await comp.isToolAlreadyResolvedError({ response: { status: 400, data: streamBody } })).toBe(true);
+});
+
+test('isToolAlreadyResolvedError is false when the streamed body cannot be read', async () => {
+  const lockedStream = { pipeThrough: () => { throw new Error('stream locked'); } };
+  expect(await comp.isToolAlreadyResolvedError({ response: { status: 400, data: lockedStream } })).toBe(false);
+
+  const failingReader = {
+    pipeThrough: () => ({ getReader: () => ({ read: async () => { throw new Error('read failed'); } }) }),
+  };
+  expect(await comp.isToolAlreadyResolvedError({ response: { status: 400, data: failingReader } })).toBe(false);
 });
