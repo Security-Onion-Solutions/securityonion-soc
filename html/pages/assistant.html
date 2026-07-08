@@ -69,7 +69,7 @@
 						:items="groupedModels"
 						item-title="displayName"
 						item-value="key"
-						:label="i18n.selectModel"
+						:label="agentic ? i18n.selectAgent : i18n.selectModel"
 						prepend-icon="fa-microchip">
 						<template v-slot:item="{ props, item }">
 							<v-list-subheader v-if="item?.header" class="text-body-small">
@@ -104,7 +104,7 @@
 		<v-col>
 			<div class="so-stat-pill" data-aid="assistant_current_model">
 				<div class="so-stat-text">
-					<div id="stat-label-current-model" class="so-stat-label">{{ i18n.currentModel }}</div>
+					<div id="stat-label-current-model" class="so-stat-label">{{ agentic ? i18n.currentAgentAndModel : i18n.currentModel }}</div>
 					<div class="so-stat-value" aria-labelledby="stat-label-current-model">{{ currentModelLabel() }}</div>
 				</div>
 				<v-icon class="so-stat-icon">fa-microchip</v-icon>
