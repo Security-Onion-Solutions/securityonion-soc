@@ -111,14 +111,14 @@ func TestSSEEventWriter(t *testing.T) {
 			writeOp: func(w *sseEventWriter) error {
 				return w.writeError("Something went wrong")
 			},
-			expected: `data: {"type":"error","message":"Something went wrong"}` + "\n\n",
+			expected: `data: {"type":"error","error":{"type":"error","message":"Something went wrong"}}` + "\n\n",
 		},
 		{
 			name: "writeError with special characters",
 			writeOp: func(w *sseEventWriter) error {
 				return w.writeError(`Error: "API" failed\nLine 2`)
 			},
-			expected: `data: {"type":"error","message":"Error: \"API\" failed\\nLine 2"}` + "\n\n",
+			expected: `data: {"type":"error","error":{"type":"error","message":"Error: \"API\" failed\\nLine 2"}}` + "\n\n",
 		},
 	}
 
@@ -556,6 +556,68 @@ func TestStreamProcessorFunctionCallWithNoID(t *testing.T) {
 	assert.True(t, foundGeneratedID)
 }
 
+// Regression: an empty-id Gemini function call must record its thought signature
+// under the SAME id emitted on the SSE content block. UnstreamResponse re-attaches
+// signatures by content-block id, so if these two diverge the signature is dropped
+// and Gemini rejects the next request ("missing a thought_signature").
+func TestStreamProcessorFunctionCallNoIDSignatureKeyMatchesBlockID(t *testing.T) {
+	var buf strings.Builder
+	writer := newSSEEventWriter(log.Log, &buf)
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	processor := newStreamProcessor(writer, "test-model", wg)
+
+	resp := &genai.GenerateContentResponse{
+		Candidates: []*genai.Candidate{
+			{
+				Content: &genai.Content{
+					Parts: []*genai.Part{
+						{
+							FunctionCall: &genai.FunctionCall{
+								ID:   "",
+								Name: "query_events",
+								Args: map[string]any{},
+							},
+							ThoughtSignature: []byte("sig"),
+						},
+					},
+				},
+			},
+		},
+	}
+
+	thoughtSigs, _, err := processor.processGeminiChunk(resp)
+	assert.NoError(t, err)
+	assert.Len(t, thoughtSigs, 1)
+
+	// Pull the id the block was actually emitted with from the SSE output.
+	var blockID string
+	for _, line := range strings.Split(buf.String(), "\n") {
+		data, ok := strings.CutPrefix(line, "data: ")
+		if !ok {
+			continue
+		}
+		var ev struct {
+			Type         string `json:"type"`
+			ContentBlock struct {
+				Type string `json:"type"`
+				Id   string `json:"id"`
+			} `json:"content_block"`
+		}
+		if err := json.Unmarshal([]byte(data), &ev); err != nil {
+			continue
+		}
+		if ev.Type == "content_block_start" && ev.ContentBlock.Type == "tool_use" {
+			blockID = ev.ContentBlock.Id
+			break
+		}
+	}
+
+	assert.NotEmpty(t, blockID, "expected a tool_use content_block_start in SSE output")
+	_, ok := thoughtSigs[blockID]
+	assert.True(t, ok, "thought signature must be keyed by the emitted block id %q; keys=%v", blockID, thoughtSigs)
+}
+
 func TestStreamProcessorMultipleFunctionCalls(t *testing.T) {
 	var buf strings.Builder
 	writer := newSSEEventWriter(log.Log, &buf)
@@ -596,6 +658,66 @@ func TestStreamProcessorMultipleFunctionCalls(t *testing.T) {
 	assert.Equal(t, 2, count)
 	assert.Contains(t, output, `"name":"search"`)
 	assert.Contains(t, output, `"name":"calculate"`)
+}
+
+// Additional candidates are alternative completions of the same turn, not parts of
+// this response: only the first candidate's function calls, signature, and finish
+// reason may be emitted.
+func TestStreamProcessorIgnoresSecondaryCandidates(t *testing.T) {
+	var buf strings.Builder
+	writer := newSSEEventWriter(log.Log, &buf)
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	processor := newStreamProcessor(writer, "test-model", wg)
+
+	resp := &genai.GenerateContentResponse{
+		Candidates: []*genai.Candidate{
+			{
+				Content: &genai.Content{
+					Parts: []*genai.Part{
+						{
+							FunctionCall: &genai.FunctionCall{
+								ID:   "call_primary",
+								Name: "search",
+								Args: map[string]any{"query": "foo"},
+							},
+							ThoughtSignature: []byte("sig-primary"),
+						},
+					},
+				},
+				FinishReason: "end_turn",
+			},
+			{
+				Content: &genai.Content{
+					Parts: []*genai.Part{
+						{
+							FunctionCall: &genai.FunctionCall{
+								ID:   "call_secondary",
+								Name: "calculate",
+								Args: map[string]any{"expr": "2+2"},
+							},
+							ThoughtSignature: []byte("sig-secondary"),
+						},
+					},
+				},
+				FinishReason: "max_tokens",
+			},
+		},
+	}
+
+	thoughtSigs, reason, err := processor.processGeminiChunk(resp)
+	assert.NoError(t, err)
+	wg.Wait()
+
+	output := buf.String()
+	assert.Equal(t, 1, strings.Count(output, `"type":"tool_use"`))
+	assert.Contains(t, output, `"id":"call_primary"`)
+	assert.NotContains(t, output, `"id":"call_secondary"`)
+
+	assert.Len(t, thoughtSigs, 1)
+	assert.Equal(t, []byte("sig-primary"), thoughtSigs["call_primary"])
+
+	assert.Equal(t, "end_turn", reason)
 }
 
 func TestStreamProcessorMidStreamError(t *testing.T) {
@@ -696,13 +818,11 @@ func TestStreamProcessorFinalize(t *testing.T) {
 			processor := newStreamProcessor(writer, "test-model", wg)
 
 			tt.setupProcessor(processor)
-			if processor.firstSend {
-				wg.Done()
-			} else {
-				wg.Wait()
-			}
 
+			// finalizeGemini releases the caller itself (via ensureFirstSend)
+			// when no content event has done so yet.
 			processor.finalizeGemini(tt.finishReason, tt.usage)
+			wg.Wait()
 
 			output := buf.String()
 			for _, expected := range tt.expectedInOutput {
@@ -791,14 +911,20 @@ func TestHandleStreamErrorFirstSend(t *testing.T) {
 
 	assert.True(t, shouldReturn)
 	assert.NotNil(t, response)
-	assert.Equal(t, http.StatusInternalServerError, response.StatusCode)
+	// 200 so the client reads the stream; the error rides in an SSE "error" event so
+	// UnstreamResponse parses it (instead of nil-panicking on a message-less body).
+	assert.Equal(t, http.StatusOK, response.StatusCode)
 
-	// Verify body content
+	// Verify body carries the real error as a parseable SSE error event.
 	bodyBytes, err := io.ReadAll(response.Body)
 	assert.NoError(t, err)
-	assert.Equal(t, "ERROR_FIRST_RESPONSE", string(bodyBytes))
+	body := string(bodyBytes)
+	assert.Contains(t, body, `"type":"error"`)
+	assert.Contains(t, body, `"message":"connection failed"`)
+	assert.Contains(t, body, `data: [DONE]`)
 
-	// Buffer should be empty since error response replaced the fabricated one
+	// Buffer should be empty since the error was written to the fabricated response,
+	// not the passed-in writer.
 	assert.Empty(t, buf.String())
 }
 
@@ -1125,7 +1251,7 @@ func TestProcessOpenAIChunk_FunctionCalls(t *testing.T) {
 				newFunctionCallStart("", "unnamed_func"),
 			},
 			expectedInOutput: []string{
-				`"id":"toolu_0"`, // Generated ID
+				`"id":"toolu_`, // Generated unique ID (uuid suffix)
 				`"name":"unnamed_func"`,
 			},
 			expectedState: map[string]interface{}{
@@ -1431,8 +1557,44 @@ func TestOpenAIHelperFunctions(t *testing.T) {
 		processor.writeOpenAIFunctionHeader("", "unnamed")
 
 		output := buf.String()
-		assert.Contains(t, output, `"id":"toolu_0"`) // Generated ID
+		assert.Contains(t, output, `"id":"toolu_`) // Generated unique ID (uuid suffix)
 		assert.Contains(t, output, `"name":"unnamed"`)
+	})
+
+	t.Run("empty-ID fallback ids are unique across responses", func(t *testing.T) {
+		// Each generated fallback id must be globally unique, not reset per turn:
+		// the frontend keys lookups by tool_use id, so two delegations across turns
+		// must not collide (regression test for repeat-delegation rendering bug).
+		idFor := func() string {
+			var buf strings.Builder
+			writer := newSSEEventWriter(log.Log, &buf)
+			wg := &sync.WaitGroup{}
+			wg.Add(1)
+			processor := newStreamProcessor(writer, "gpt-4", wg)
+			processor.writeOpenAIFunctionHeader("", "unnamed")
+
+			var ev struct {
+				ContentBlock struct {
+					Id string `json:"id"`
+				} `json:"content_block"`
+			}
+			for _, line := range strings.Split(buf.String(), "\n") {
+				data, ok := strings.CutPrefix(line, "data: ")
+				if !ok {
+					continue
+				}
+				if err := json.Unmarshal([]byte(data), &ev); err == nil && ev.ContentBlock.Id != "" {
+					return ev.ContentBlock.Id
+				}
+			}
+			return ""
+		}
+
+		first := idFor()
+		second := idFor()
+		assert.True(t, strings.HasPrefix(first, "toolu_"))
+		assert.True(t, strings.HasPrefix(second, "toolu_"))
+		assert.NotEqual(t, first, second, "fallback tool_use ids must be unique across responses")
 	})
 
 	t.Run("writeOpenAIFunctionInput", func(t *testing.T) {
@@ -1685,6 +1847,66 @@ func TestExtractReasoning(t *testing.T) {
 			reasoning, found := extractReasoning(delta)
 			assert.Equal(t, tt.expectedFound, found)
 			assert.Equal(t, tt.expectedReasoning, reasoning)
+		})
+	}
+}
+
+func TestFabricateResponse(t *testing.T) {
+	tests := []struct {
+		name           string
+		statusCode     int
+		expectedStatus int
+	}{
+		{
+			name:           "HTTP 200 status code",
+			statusCode:     200,
+			expectedStatus: 200,
+		},
+		{
+			name:           "HTTP 500 status code",
+			statusCode:     500,
+			expectedStatus: 500,
+		},
+		{
+			name:           "HTTP 404 status code",
+			statusCode:     404,
+			expectedStatus: 404,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp, writer := fabricateResponse(tt.statusCode)
+
+			// Verify status code
+			assert.Equal(t, tt.expectedStatus, resp.StatusCode)
+
+			// Verify Content-Type header
+			assert.Equal(t, "text/event-stream", resp.Header.Get("Content-Type"))
+
+			// Verify Body is not nil
+			assert.NotNil(t, resp.Body)
+
+			// Verify writer is not nil
+			assert.NotNil(t, writer)
+
+			// Test write and read interaction
+			testData := "test data"
+			go func() {
+				writer.Write([]byte(testData))
+				writer.Close()
+			}()
+
+			buf := make([]byte, len(testData))
+			n, err := resp.Body.Read(buf)
+
+			assert.NoError(t, err)
+			assert.Equal(t, len(testData), n)
+			assert.Equal(t, testData, string(buf))
+
+			// Verify EOF after close
+			_, err = resp.Body.Read(buf)
+			assert.Equal(t, io.EOF, err)
 		})
 	}
 }

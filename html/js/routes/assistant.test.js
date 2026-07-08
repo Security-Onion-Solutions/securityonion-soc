@@ -8,7 +8,14 @@ const { TextEncoder, TextDecoder } = require('util');
 Object.assign(global, { TextDecoder, TextEncoder });
 
 require('../test_common.js');
+// Method packs must load before assistant.js, which merges them into the component.
+require('./assistant.sessions.js');
+require('./assistant.streaming.js');
+require('./assistant.tools.js');
+require('./assistant.utils.js');
 require('./assistant.js');
+require('../components/tool-use-card.js');
+require('../components/delegation-child.js');
 
 const MSGTAG_CONTEXTCOMPRESSION = "context_compression";
 
@@ -196,11 +203,7 @@ test('component data initialization', () => {
   expect(comp.chatHistory).toEqual([]);
   expect(comp.currentChatId).toBe(null);
   expect(comp.creditsRemaining).toBe(0);
-  expect(comp.executingToolsBySession).toBeInstanceOf(Map);
-  expect(comp.toolIndexToIdBySession).toBeInstanceOf(Map);
-  expect(comp.toolQueues).toBeInstanceOf(Map);
-  expect(comp.toolRunnerBusy).toBeInstanceOf(Set);
-  expect(comp.mostRecentFloatingTool).toBeInstanceOf(Map);
+  expect(comp.sessionToolState).toBeInstanceOf(Map);
   expect(comp.contextLength).toBe(0);
   expect(comp.increaseContextLimit).toBe(false);
   expect(comp.restoreLastActive).toBe(false);
@@ -422,27 +425,127 @@ test('initAssistant corrects contextLimitLarge when smaller than contextLimitSma
   
   await comp.initAssistant(mockParams);
   
-  // Check that the modelsMap was created correctly
+  // Check that the modelsMap was created correctly, keyed by displayName
   expect(comp.modelsMap.size).toBe(3);
-  expect(comp.modelsMap.has('model-1@SOAI')).toBe(true);
-  expect(comp.modelsMap.has('model-2@SOAI')).toBe(true);
-  expect(comp.modelsMap.has('model-3@SOAI')).toBe(true);
+  expect(comp.modelsMap.has('Model 1')).toBe(true);
+  expect(comp.modelsMap.has('Model 2')).toBe(true);
+  expect(comp.modelsMap.has('Model 3')).toBe(true);
   expect(comp.modelsMap.has('model-4@SOAI')).toBe(false); // Disabled model should not be included
-  
+
   // Check that contextLimitLarge was corrected for model-1
-  const model1 = comp.modelsMap.get('model-1@SOAI');
+  const model1 = comp.modelsMap.get('Model 1');
   expect(model1.contextLimitSmall).toBe(200000);
   expect(model1.contextLimitLarge).toBe(200000); // Should be corrected to match contextLimitSmall
-  
+
   // Check that contextLimitLarge was not changed for model-2 (already larger)
-  const model2 = comp.modelsMap.get('model-2@SOAI');
+  const model2 = comp.modelsMap.get('Model 2');
   expect(model2.contextLimitSmall).toBe(100000);
   expect(model2.contextLimitLarge).toBe(300000); // Should remain unchanged
-  
+
   // Check that contextLimitLarge was not changed for model-3 (equal)
-  const model3 = comp.modelsMap.get('model-3@SOAI');
+  const model3 = comp.modelsMap.get('Model 3');
   expect(model3.contextLimitSmall).toBe(250000);
   expect(model3.contextLimitLarge).toBe(250000); // Should remain unchanged
+});
+
+test('initAssistant migrates a legacy id@adapter currentModel to the displayName key', async () => {
+  const mockParams = {
+    enabled: true,
+    availableModels: [
+      { id: 'model-1', displayName: 'Model 1', enabled: true, adapter: 'SOAI' },
+      { id: 'model-2', displayName: 'Model 2', enabled: true, adapter: 'SOAI' },
+    ],
+    availableAdapters: [{ name: 'SOAI', protocol: 'securityonion_ai_cloud' }],
+  };
+
+  comp.$root.isLicensed = jest.fn().mockReturnValue(true);
+  comp.$root.showDisclaimer = jest.fn();
+  comp.loadStoredChats = jest.fn().mockResolvedValue();
+  comp.handleRouteSessionId = jest.fn().mockResolvedValue();
+  comp.loadCredits = jest.fn().mockResolvedValue();
+  comp.updateModelParams = jest.fn();
+  comp.$root.disclaimer = false;
+
+  // As restored from localStorage by a browser that saved the old format.
+  comp.currentModel = 'model-2@SOAI';
+
+  await comp.initAssistant(mockParams);
+
+  expect(comp.currentModel).toBe('Model 2');
+});
+
+test('initAssistant does not migrate a legacy selector for a disabled model', async () => {
+  const mockParams = {
+    enabled: true,
+    availableModels: [
+      { id: 'model-1', displayName: 'Model 1', enabled: true, adapter: 'SOAI' },
+      { id: 'model-2', displayName: 'Model 2', enabled: false, adapter: 'SOAI' },
+    ],
+    availableAdapters: [{ name: 'SOAI', protocol: 'securityonion_ai_cloud' }],
+  };
+
+  comp.$root.isLicensed = jest.fn().mockReturnValue(true);
+  comp.$root.showDisclaimer = jest.fn();
+  comp.loadStoredChats = jest.fn().mockResolvedValue();
+  comp.handleRouteSessionId = jest.fn().mockResolvedValue();
+  comp.loadCredits = jest.fn().mockResolvedValue();
+  comp.updateModelParams = jest.fn();
+  comp.$root.disclaimer = false;
+
+  // Legacy saved selector pointing at a model that is now disabled: disabled
+  // models are not migrated, so selection falls back to the first model.
+  comp.currentModel = 'model-2@SOAI';
+
+  await comp.initAssistant(mockParams);
+
+  expect(comp.currentModel).toBe('Model 1');
+});
+
+test('initAssistant falls back to id@adapter key when displayName is absent', async () => {
+  const mockParams = {
+    enabled: true,
+    availableModels: [
+      { id: 'model-1', enabled: true, adapter: 'SOAI' },
+    ],
+    availableAdapters: [{ name: 'SOAI', protocol: 'securityonion_ai_cloud' }],
+  };
+
+  comp.$root.isLicensed = jest.fn().mockReturnValue(true);
+  comp.$root.showDisclaimer = jest.fn();
+  comp.loadStoredChats = jest.fn().mockResolvedValue();
+  comp.handleRouteSessionId = jest.fn().mockResolvedValue();
+  comp.loadCredits = jest.fn().mockResolvedValue();
+  comp.updateModelParams = jest.fn();
+  comp.$root.disclaimer = false;
+
+  await comp.initAssistant(mockParams);
+
+  expect(comp.modelsMap.has('model-1@SOAI')).toBe(true);
+  expect(comp.currentModel).toBe('model-1@SOAI');
+});
+
+test('initAssistant defaults an unknown currentModel to the first model', async () => {
+  const mockParams = {
+    enabled: true,
+    availableModels: [
+      { id: 'model-1', displayName: 'Model 1', enabled: true, adapter: 'SOAI' },
+    ],
+    availableAdapters: [{ name: 'SOAI', protocol: 'securityonion_ai_cloud' }],
+  };
+
+  comp.$root.isLicensed = jest.fn().mockReturnValue(true);
+  comp.$root.showDisclaimer = jest.fn();
+  comp.loadStoredChats = jest.fn().mockResolvedValue();
+  comp.handleRouteSessionId = jest.fn().mockResolvedValue();
+  comp.loadCredits = jest.fn().mockResolvedValue();
+  comp.updateModelParams = jest.fn();
+  comp.$root.disclaimer = false;
+
+  comp.currentModel = 'gone-model@Nowhere';
+
+  await comp.initAssistant(mockParams);
+
+  expect(comp.currentModel).toBe('Model 1');
 });
 
 test('initAssistant handles empty availableModels and availableAdapters array', async () => {
@@ -467,6 +570,102 @@ test('initAssistant handles empty availableModels and availableAdapters array', 
   expect(comp.adaptersMap.size).toBe(0);
   expect(comp.currentModel).toBe(''); // Should remain empty
   expect(comp.updateModelParams).toHaveBeenCalled();
+});
+
+// Shared agentic params: two agents mapped onto two real models with distinct
+// context limits, so context enrichment and the model label can be asserted.
+const agenticParams = () => ({
+  enabled: true,
+  agentic: true,
+  availableAgents: [
+    { name: 'Hunter', agentDescription: 'hunts events' },
+    { name: 'Orchestrator', isOrchestrator: true, agentDescription: 'coordinates' },
+  ],
+  agentMapping: { Orchestrator: 'Claude Sonnet', Hunter: 'Claude Haiku' },
+  availableModels: [
+    { id: 'sonnet', displayName: 'Claude Sonnet', contextLimitSmall: 200000, contextLimitLarge: 1000000, charsPerTokenEstimate: 4, lowBalanceColorAlert: 500, enabled: true, adapter: 'SOAI' },
+    { id: 'haiku', displayName: 'Claude Haiku', contextLimitSmall: 100000, contextLimitLarge: 100000, charsPerTokenEstimate: 3, lowBalanceColorAlert: 100, enabled: true, adapter: 'SOAI' },
+  ],
+  availableAdapters: [{ name: 'SOAI', protocol: 'securityonion_ai_cloud' }],
+});
+
+const stubInitDeps = () => {
+  comp.$root.isLicensed = jest.fn().mockReturnValue(true);
+  comp.$root.showDisclaimer = jest.fn();
+  comp.loadStoredChats = jest.fn().mockResolvedValue();
+  comp.handleRouteSessionId = jest.fn().mockResolvedValue();
+  comp.loadCredits = jest.fn().mockResolvedValue();
+  comp.focusChatInput = jest.fn();
+  comp.$root.disclaimer = false;
+};
+
+test('initAssistant builds the picker from availableAgents in agentic mode', async () => {
+  stubInitDeps();
+
+  await comp.initAssistant(agenticParams());
+
+  expect(comp.agentic).toBe(true);
+  // The picker lists agents keyed by name; the raw models are not picker entries.
+  expect(comp.modelsMap.size).toBe(2);
+  expect(comp.modelsMap.has('Orchestrator')).toBe(true);
+  expect(comp.modelsMap.has('Hunter')).toBe(true);
+  expect(comp.modelsMap.has('Claude Sonnet')).toBe(false);
+  // No stored selector: default to the orchestrator even though it isn't first.
+  expect(comp.currentModel).toBe('Orchestrator');
+});
+
+test('initAssistant defaults a stale stored selector to the orchestrator agent', async () => {
+  stubInitDeps();
+  comp.currentModel = 'Some Old Model'; // not a known agent
+
+  await comp.initAssistant(agenticParams());
+
+  expect(comp.currentModel).toBe('Orchestrator');
+});
+
+test('initAssistant keeps a valid stored agent selector', async () => {
+  stubInitDeps();
+  comp.currentModel = 'Hunter';
+
+  await comp.initAssistant(agenticParams());
+
+  expect(comp.currentModel).toBe('Hunter');
+});
+
+test('initAssistant enriches agents with their mapped model context limits', async () => {
+  stubInitDeps();
+
+  await comp.initAssistant(agenticParams());
+  comp.updateModelParams();
+
+  // Orchestrator -> Claude Sonnet limits.
+  expect(comp.contextLimitSmall).toBe(200000);
+  expect(comp.contextLimitLarge).toBe(1000000);
+  expect(comp.charsPerTokenEstimate).toBe(4);
+  expect(comp.lowBalanceColorAlert).toBe(500);
+});
+
+test('currentModelLabel shows agent and its mapped model in agentic mode', async () => {
+  stubInitDeps();
+
+  await comp.initAssistant(agenticParams());
+
+  expect(comp.currentModelLabel()).toBe('Orchestrator - Claude Sonnet');
+});
+
+test('currentModelLabel is the plain model displayName in non-agentic mode', async () => {
+  stubInitDeps();
+
+  await comp.initAssistant({
+    enabled: true,
+    availableModels: [
+      { id: 'test-model', displayName: 'Test Model', enabled: true, adapter: 'SOAI' }
+    ],
+    availableAdapters: [{ name: 'SOAI', protocol: 'securityonion_ai_cloud' }],
+  });
+
+  expect(comp.agentic).toBe(false);
+  expect(comp.currentModelLabel()).toBe('Test Model');
 });
 
 test('handleRouteSessionId returns early when assistantEnabled is false', async () => {
@@ -942,21 +1141,121 @@ test('getToolStatusTitle returns correct titles', () => {
   expect(comp.getToolStatusTitle('unknown')).toBe(comp.i18n.statusUnknown);
 });
 
+test('action_needed maps to its own icon/color/title (distinct from executing)', () => {
+  expect(comp.getToolStatusIcon('action_needed')).toBe('fa-user-clock');
+  expect(comp.getToolStatusColor('action_needed')).toBe('warning');
+  expect(comp.getToolStatusTitle('action_needed')).toBe(comp.i18n.actionNeeded);
+});
+
+test('displayStatus surfaces action_needed for an executing delegate with a pending descendant', () => {
+  // A delegate whose sub-agent is parked on a tool awaiting approval is not really working.
+  const pendingDelegate = {
+    status: 'executing',
+    childSession: { messages: [{ toolUses: [{ id: 'c1', status: 'pending_approval' }] }] },
+  };
+  expect(comp.displayStatus(pendingDelegate)).toBe('action_needed');
+
+  // Nested (grandchild) pending approval bubbles up to an ancestor delegate too.
+  const nestedPending = {
+    status: 'executing',
+    childSession: { messages: [{ toolUses: [
+      { id: 'c1', status: 'executing', childSession: { messages: [{ toolUses: [{ id: 'g1', status: 'pending_approval' }] }] } },
+    ] }] },
+  };
+  expect(comp.displayStatus(nestedPending)).toBe('action_needed');
+
+  // A working delegate with no pending descendant stays executing.
+  const workingDelegate = {
+    status: 'executing',
+    childSession: { messages: [{ toolUses: [{ id: 'c1', status: 'executing' }] }] },
+  };
+  expect(comp.displayStatus(workingDelegate)).toBe('executing');
+
+  // Non-executing statuses and non-delegate tools are returned unchanged.
+  expect(comp.displayStatus({ status: 'completed' })).toBe('completed');
+  expect(comp.displayStatus({ status: 'pending_approval' })).toBe('pending_approval');
+});
+
+test('hasPendingDescendantApproval finds a pending tool at any depth', () => {
+  // No childSession, or none of the nested tools pending: false.
+  expect(comp.hasPendingDescendantApproval(null)).toBe(false);
+  expect(comp.hasPendingDescendantApproval({})).toBe(false);
+  expect(comp.hasPendingDescendantApproval({ childSession: {} })).toBe(false);
+  expect(comp.hasPendingDescendantApproval({
+    childSession: { messages: [{ toolUses: [{ status: 'completed' }, { status: 'executing' }] }, { content: 'prose only' }] },
+  })).toBe(false);
+
+  // Immediate child pending.
+  expect(comp.hasPendingDescendantApproval({
+    childSession: { messages: [{ toolUses: [{ status: 'pending_approval' }] }] },
+  })).toBe(true);
+
+  // Grandchild pending under an executing intermediate delegate.
+  expect(comp.hasPendingDescendantApproval({
+    childSession: { messages: [{ toolUses: [
+      { status: 'executing', childSession: { messages: [{ toolUses: [{ status: 'pending_approval' }] }] } },
+    ] }] },
+  })).toBe(true);
+});
+
+test('isTopLevelTool is true only for tools of the viewed conversation', () => {
+  comp.currentChatId = 'sess-1';
+  expect(comp.isTopLevelTool({ id: 't1' })).toBe(true); // no sessionId = current conversation
+  expect(comp.isTopLevelTool({ id: 't2', sessionId: 'sess-1' })).toBe(true);
+  expect(comp.isTopLevelTool({ id: 't3', sessionId: 'child-1' })).toBe(false);
+});
+
+test('sessionTools lazily creates one state record per session and reuses it', () => {
+  expect(comp.sessionToolState.has('sess-1')).toBe(false);
+
+  const s = comp.sessionTools('sess-1');
+  expect(s.toolsById).toBeInstanceOf(Map);
+  expect(s.indexToId).toBeInstanceOf(Map);
+  expect(s.queue).toEqual([]);
+  expect(s.busy).toBe(false);
+  expect(s.floatingTool).toBeNull();
+
+  // Same session returns the same record; other sessions get their own.
+  expect(comp.sessionTools('sess-1')).toBe(s);
+  expect(comp.sessionTools('sess-2')).not.toBe(s);
+
+  // getSessionToolMap and getIndexMap read through the same record.
+  expect(comp.getSessionToolMap('sess-1')).toBe(s.toolsById);
+  expect(comp.getIndexMap('sess-1')).toBe(s.indexToId);
+});
+
+test('clearFloatingTool drops only the floating tool, leaving other session state intact', () => {
+  const s = comp.sessionTools('sess-1');
+  s.floatingTool = { id: 't1' };
+  s.queue.push('t1');
+  s.toolsById.set('t1', { id: 't1' });
+
+  comp.clearFloatingTool('sess-1');
+
+  expect(s.floatingTool).toBeNull();
+  expect(s.queue).toEqual(['t1']);
+  expect(s.toolsById.has('t1')).toBe(true);
+
+  // Unknown session: no throw, and no state record lazily created.
+  expect(() => comp.clearFloatingTool('missing')).not.toThrow();
+  expect(comp.sessionToolState.has('missing')).toBe(false);
+});
+
 test('approveTool queues tool for execution', async () => {
   const toolUse = { ...fakeToolUse };
   comp.queueTool = jest.fn();
   comp.scrollToBottom = jest.fn();
   comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
-  comp.mostRecentFloatingTool = new Map();
-  comp.mostRecentFloatingTool.set(comp.currentChatId, toolUse);
+  comp.sessionToolState = new Map();
+  comp.sessionTools(comp.currentChatId).floatingTool = toolUse;
   
   await comp.approveTool(toolUse);
   
   expect(toolUse.approved).toBe(true);
   expect(toolUse.status).toBe('preparing');
   expect(comp.queueTool).toHaveBeenCalledWith(comp.currentChatId, toolUse.id);
-  expect(comp.mostRecentFloatingTool.has(comp.currentChatId)).toBe(false);
+  expect(comp.sessionTools(comp.currentChatId).floatingTool).toBeFalsy();
   expect(comp.scrollToBottom).toHaveBeenCalled();
 });
 
@@ -968,7 +1267,7 @@ test('approveTool handles execution error', async () => {
   comp.scrollToBottom = jest.fn();
   comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
-  comp.mostRecentFloatingTool = new Map();
+  comp.sessionToolState = new Map();
   
   await comp.approveTool(toolUse);
   
@@ -976,19 +1275,23 @@ test('approveTool handles execution error', async () => {
   expect(toolUse.error).toBe('Failed to execute approved tool: Execution failed');
 });
 
-test('rejectTool marks as rejected', async () => {
-  const toolUse = { ...fakeToolUse };
+test('rejectTool marks as rejected and submits the declination through the queue', async () => {
+  const toolUse = { ...fakeToolUse, sessionId: fakeSessionId };
+  comp.currentChatId = fakeSessionId; // top-level tool: belongs to the viewed conversation
   comp.scrollToBottom = jest.fn();
   comp.callAIAPI = jest.fn().mockResolvedValue();
+  comp.queueTool = jest.fn();
   comp.isMessageTooLong = false;
   comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
-  
+
   await comp.rejectTool(toolUse);
-  
+
   expect(toolUse.approved).toBe(false);
   expect(toolUse.status).toBe('rejected');
-  expect(toolUse.error).toBe('Tool execution rejected by user');
-  expect(comp.callAIAPI).toHaveBeenCalledWith('Tool execution for "query_events" was rejected by the user.');
+  expect(toolUse.error).toBe('Tool execution was rejected by the user.');
+  // The rejection is submitted as a tool_result via the queue, not as a chat message.
+  expect(comp.queueTool).toHaveBeenCalledWith(fakeSessionId, toolUse.id);
+  expect(comp.callAIAPI).not.toHaveBeenCalled();
   expect(comp.scrollToBottom).toHaveBeenCalled();
 });
 
@@ -1021,6 +1324,7 @@ test('executeTool makes correct API request', async () => {
     toolUseId: toolUse.id,
     params: toolUse.input,
     model: 'test-model',
+    rejected: false,
   },
   {
     adapter: 'fetch',
@@ -1055,15 +1359,134 @@ test('executeTool handles non-ok response', async () => {
   const toolUse = { ...fakeToolUse };
   comp.currentChatId = fakeSessionId;
   comp.scrollToBottom = jest.fn();
-  
+
   mockPapi('post', null, new Error('Tool execution failed: Internal Server Error'));
-  
+
   await comp.executeTool(toolUse);
-  
+
   expect(toolUse.status).toBe('error');
   expect(toolUse.error).toBe('Tool execution failed: Internal Server Error');
   expect(comp.messages).toHaveLength(1);
   expect(comp.messages[0].content).toContain('Error executing tool "query_events": Tool execution failed: Internal Server Error');
+});
+
+// alreadyResolvedError builds the rejection the backend sends for a
+// duplicate/retried request whose tool_use already has a persisted result.
+const alreadyResolvedError = (data = 'ERROR_TOOL_ALREADY_RESOLVED') => {
+  const error = new Error('Request failed with status code 400');
+  error.response = { status: 400, data };
+  return error;
+};
+
+// A duplicate approval whose tool already resolved server-side is benign: the
+// session is out of sync, so the view reloads from the backend and renders the
+// persisted result instead of guessing at the card's state or surfacing an error.
+test('executeTool reloads the session on an already-resolved duplicate', async () => {
+  const toolUse = { ...fakeToolUse, status: 'executing' };
+  comp.currentChatId = fakeSessionId;
+  comp.scrollToBottom = jest.fn();
+  comp.loadChatFromBackend = jest.fn().mockResolvedValue();
+
+  mockPapi('post', null, alreadyResolvedError());
+
+  await comp.executeTool(toolUse);
+
+  expect(comp.loadChatFromBackend).toHaveBeenCalledWith(fakeSessionId);
+  expect(toolUse.status).toBe('executing');
+  expect(toolUse.error).toBeNull();
+  expect(comp.messages).toHaveLength(0);
+});
+
+// The response body is a ReadableStream under the fetch adapter, so the benign
+// check must read the error code out of the stream.
+test('executeTool reloads the session on an already-resolved duplicate (streamed body)', async () => {
+  const toolUse = { ...fakeToolUse, status: 'executing' };
+  comp.currentChatId = fakeSessionId;
+  comp.scrollToBottom = jest.fn();
+  comp.loadChatFromBackend = jest.fn().mockResolvedValue();
+
+  const streamBody = {
+    pipeThrough: () => ({
+      getReader: () => ({
+        read: async () => ({ done: false, value: 'ERROR_TOOL_ALREADY_RESOLVED' })
+      })
+    })
+  };
+  mockPapi('post', null, alreadyResolvedError(streamBody));
+
+  await comp.executeTool(toolUse);
+
+  expect(comp.loadChatFromBackend).toHaveBeenCalledWith(fakeSessionId);
+  expect(toolUse.status).toBe('executing');
+  expect(comp.messages).toHaveLength(0);
+});
+
+// A duplicate rejection is the same sync problem: reload from the backend and
+// let the persisted rejection result drive the card, with no error message.
+test('executeTool reloads the session when a duplicate rejection was already resolved', async () => {
+  const toolUse = { ...fakeToolUse, status: 'rejected', approved: false };
+  comp.currentChatId = fakeSessionId;
+  comp.scrollToBottom = jest.fn();
+  comp.loadChatFromBackend = jest.fn().mockResolvedValue();
+
+  mockPapi('post', null, alreadyResolvedError());
+
+  await comp.executeTool(toolUse);
+
+  expect(comp.loadChatFromBackend).toHaveBeenCalledWith(fakeSessionId);
+  expect(toolUse.status).toBe('rejected');
+  expect(comp.messages).toHaveLength(0);
+});
+
+// A background session's tool (not in view, not a delegation child) must not
+// yank the user's current view: no reload, no error — the backend state is
+// picked up when that session is next opened.
+test('executeTool does not reload for an already-resolved tool in a background session', async () => {
+  const toolUse = { ...fakeToolUse, sessionId: 'other-session', status: 'executing' };
+  comp.currentChatId = fakeSessionId;
+  comp.scrollToBottom = jest.fn();
+  comp.loadChatFromBackend = jest.fn().mockResolvedValue();
+
+  mockPapi('post', null, alreadyResolvedError());
+
+  await comp.executeTool(toolUse);
+
+  expect(comp.loadChatFromBackend).not.toHaveBeenCalled();
+  expect(toolUse.status).toBe('executing');
+  expect(comp.messages).toHaveLength(0);
+});
+
+// A failed refresh after a benign duplicate stays benign: no error surfaced,
+// card untouched (the next session switch reloads from the backend).
+test('executeTool stays quiet when the already-resolved reload itself fails', async () => {
+  const toolUse = { ...fakeToolUse, status: 'executing' };
+  comp.currentChatId = fakeSessionId;
+  comp.scrollToBottom = jest.fn();
+  comp.loadChatFromBackend = jest.fn().mockRejectedValue(new Error('reload failed'));
+
+  mockPapi('post', null, alreadyResolvedError());
+
+  await comp.executeTool(toolUse);
+
+  expect(toolUse.status).toBe('executing');
+  expect(toolUse.error).toBeNull();
+  expect(comp.messages).toHaveLength(0);
+});
+
+// Other 400s are real failures and must keep surfacing the error.
+test('executeTool still surfaces a 400 that is not already-resolved', async () => {
+  const toolUse = { ...fakeToolUse };
+  comp.currentChatId = fakeSessionId;
+  comp.scrollToBottom = jest.fn();
+
+  const error = new Error('Request failed with status code 400');
+  error.response = { status: 400, data: 'ERROR_TOOL_REQUEST_MISMATCH' };
+  mockPapi('post', null, error);
+
+  await comp.executeTool(toolUse);
+
+  expect(toolUse.status).toBe('error');
+  expect(comp.messages).toHaveLength(1);
 });
 
 test('executeTool processes streaming response with message_start', async () => {
@@ -1134,7 +1557,7 @@ test('executeTool processes content_block_delta with text', async () => {
   await comp.executeTool(toolUse);
   
   expect(comp.messages).toHaveLength(1);
-  expect(comp.messages[0].content.value).toBe('Tool result: Success');
+  expect(comp.messages[0].content).toBe('Tool result: Success');
   expect(comp.scrollToBottom).toHaveBeenCalledTimes(2); // Once for message_start, once for text delta
 });
 
@@ -1175,7 +1598,7 @@ test('executeTool processes message_stop with usage', async () => {
   await comp.executeTool(toolUse);
   
   expect(comp.messages).toHaveLength(1);
-  expect(comp.messages[0].usage.value).toEqual({ input_tokens: 15, output_tokens: 25 });
+  expect(comp.messages[0].usage).toEqual({ input_tokens: 15, output_tokens: 25 });
   expect(comp.updateContextLength).toHaveBeenCalledWith({ input_tokens: 15, output_tokens: 25 });
   expect(comp.$forceUpdate).toHaveBeenCalled();
 });
@@ -1220,10 +1643,10 @@ test('executeTool handles chained tool use in response', async () => {
   await comp.executeTool(toolUse);
   
   expect(comp.messages).toHaveLength(1);
-  expect(comp.messages[0].toolUses.value).toHaveLength(1);
-  expect(comp.messages[0].toolUses.value[0].id).toBe('chained_tool_456');
-  expect(comp.messages[0].toolUses.value[0].name).toBe('analyze_data');
-  expect(comp.messages[0].toolUses.value[0].status).toBe('preparing');
+  expect(comp.messages[0].toolUses).toHaveLength(1);
+  expect(comp.messages[0].toolUses[0].id).toBe('chained_tool_456');
+  expect(comp.messages[0].toolUses[0].name).toBe('analyze_data');
+  expect(comp.messages[0].toolUses[0].status).toBe('preparing');
   expect(comp.getSessionToolMap).toHaveBeenCalledWith(fakeSessionId);
   expect(comp.getIndexMap).toHaveBeenCalledWith(fakeSessionId);
 });
@@ -1264,66 +1687,49 @@ test('handleToolExecutionContentBlockDelta processes input_json_delta for chaine
 test('handleToolExecutionContentBlockDelta processes thought_delta', () => {
   const sessionId = 'tool-session';
   const assistantMessage = {
-    thoughts: { value: '**Starting Analysis**\n\n' }
+    thoughts: '**Starting Analysis**\n\n'
   };
-  
+
   comp.scrollIfPinned = jest.fn();
   comp.currentChatId = sessionId;
   comp.nbspRegexOp = jest.fn((text) => text); // Pass through for testing
-  
+
   const deltaEvent = {
     delta: {
       type: 'thought_delta',
       text: 'Examining the data...'
     }
   };
-  
+
   comp.handleToolExecutionContentBlockDelta(deltaEvent, assistantMessage, sessionId);
   
-  expect(assistantMessage.thoughts.value).toBe('**Starting Analysis**\n\nExamining the data...');
+  expect(assistantMessage.thoughts).toBe('**Starting Analysis**\n\nExamining the data...');
   expect(comp.scrollIfPinned).toHaveBeenCalled();
 });
 
-test('executeTool captures raw tool result from backend', async () => {
-  // wait out any setTimeouts from previous tests
-  await new Promise(resolve => setTimeout(resolve, 1100));
-
+test('executeTool captures raw tool result from the inline tool_result event', async () => {
   resetPapi();
 
   let toolUse = { ...fakeToolUse };
   comp.currentChatId = fakeSessionId;
   comp.scrollToBottom = jest.fn();
   comp.loadCredits = jest.fn().mockResolvedValue();
-  
-  // Mock backend response with tool result
-  const backendResponse = [
-      {
-        createTime: '2025-01-01T12:00:00.000Z',
-        tags: ['tool_result'],
-        message: {
-          contentBlocks: [
-            {
-              type: 'tool_result',
-              toolResult: {
-                toolUseId: 'tool_123',
-                content: [{ json: { "events": 5, "alerts": 2 } }]
-              }
-            }
-          ]
-        }
-      }
-    ];
-  mockPapi('get', { data: { session: {}, history: backendResponse } });
-  
-  // Include message_start event to trigger captureRawToolResult
+
+  // The backend streams the result inline as a synthetic tool_result event; no
+  // session re-fetch is involved anymore.
+  const toolResultData = JSON.stringify({
+    type: 'tool_result',
+    toolResult: { toolUseId: 'tool_123', content: [{ json: { "events": 5, "alerts": 2 } }] },
+  });
   const messageStartData = JSON.stringify({ type: 'message_start' });
-  
+
   const mockResponse = {
     ok: true,
     data: {
       pipeThrough: jest.fn().mockReturnValue({
         getReader: jest.fn().mockReturnValue({
           read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: `data: ${toolResultData}\n\n` })
             .mockResolvedValueOnce({ done: false, value: `data: ${messageStartData}\n\n` })
             .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
             .mockResolvedValueOnce({ done: true })
@@ -1332,58 +1738,76 @@ test('executeTool captures raw tool result from backend', async () => {
     }
   };
   mockPapi('post', mockResponse);
-  
+
   await comp.executeTool(toolUse);
-  
-  // Wait for the setTimeout to complete
-  await new Promise(resolve => setTimeout(resolve, 1100));
-  
+
   expect(toolUse.rawResult).toEqual({ "events": 5, "alerts": 2 });
   expect(toolUse.status).toBe('completed');
-  expect(toolUse.completedAt).toBe('2025-01-01T12:00:00.000Z');
+  expect(typeof toolUse.completedAt).toBe('string');
 });
 
-test('executeTool handles tool result with error', async () => {
+// When a model turn emits parallel tool calls, the backend coalesces: executing one
+// tool persists its result but does NOT continue the turn (a "persist-only" stream =
+// just the tool_result event + [DONE], no model turn). The tool must still complete,
+// and no assistant message should be appended.
+test('executeTool handles a persist-only stream (parallel tool coalescing)', async () => {
   resetPapi();
 
   const toolUse = { ...fakeToolUse };
   comp.currentChatId = fakeSessionId;
   comp.scrollToBottom = jest.fn();
   comp.loadCredits = jest.fn().mockResolvedValue();
-  
-  // Mock backend response with tool error
-  const backendResponse = [
-    {
-      createTime: '2025-01-01T12:00:00.000Z',
-      tags: ['tool_result'],
-      message: {
-        contentBlocks: [
-          {
-            toolResult: {
-              isError: true,
-              status: 'error',
-              content: [
-                {
-                  text: 'something went wrong'
-                }
-              ]
-            }
-          }
-        ]
-      }
-    }
-  ];
-  mockPapi('get', { data: { session: {}, history: backendResponse } });
-  
-  // Include message_start event to trigger captureRawToolResult
-  const messageStartData = JSON.stringify({ type: 'message_start' });
-  
+  comp.messages = [];
+
+  const toolResultData = JSON.stringify({
+    type: 'tool_result',
+    toolResult: { toolUseId: 'tool_123', content: [{ json: { ok: true } }] },
+  });
+
   const mockResponse = {
     ok: true,
     data: {
       pipeThrough: jest.fn().mockReturnValue({
         getReader: jest.fn().mockReturnValue({
           read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: `data: ${toolResultData}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
+            .mockResolvedValueOnce({ done: true })
+        })
+      })
+    }
+  };
+  mockPapi('post', mockResponse);
+
+  await comp.executeTool(toolUse);
+
+  expect(toolUse.status).toBe('completed');
+  expect(toolUse.rawResult).toEqual({ ok: true });
+  // No model turn streamed -> no assistant message appended for this tool.
+  expect(comp.messages).toHaveLength(0);
+});
+
+test('executeTool handles a tool_result event carrying an error', async () => {
+  resetPapi();
+
+  const toolUse = { ...fakeToolUse };
+  comp.currentChatId = fakeSessionId;
+  comp.scrollToBottom = jest.fn();
+  comp.loadCredits = jest.fn().mockResolvedValue();
+
+  const toolResultData = JSON.stringify({
+    type: 'tool_result',
+    toolResult: { toolUseId: 'tool_123', isError: true, status: 'error', content: [{ text: 'something went wrong' }] },
+  });
+  const messageStartData = JSON.stringify({ type: 'message_start' });
+
+  const mockResponse = {
+    ok: true,
+    data: {
+      pipeThrough: jest.fn().mockReturnValue({
+        getReader: jest.fn().mockReturnValue({
+          read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: `data: ${toolResultData}\n\n` })
             .mockResolvedValueOnce({ done: false, value: `data: ${messageStartData}\n\n` })
             .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
             .mockResolvedValueOnce({ done: true })
@@ -1394,13 +1818,48 @@ test('executeTool handles tool result with error', async () => {
   mockPapi('post', mockResponse);
 
   await comp.executeTool(toolUse);
-  
-  // Wait for the setTimeout to complete
-  await new Promise(resolve => setTimeout(resolve, 1100));
-  
+
   expect(toolUse.error).toBe('something went wrong');
   expect(toolUse.status).toBe('error');
-}, 30000);
+});
+
+test('executeTool completes a tool whose result has empty content (no stuck spinner)', async () => {
+  resetPapi();
+
+  const toolUse = { ...fakeToolUse };
+  comp.currentChatId = fakeSessionId;
+  comp.scrollToBottom = jest.fn();
+  comp.loadCredits = jest.fn().mockResolvedValue();
+
+  // A non-error tool_result with an empty content array must still advance status,
+  // otherwise the tool card spins forever.
+  const toolResultData = JSON.stringify({
+    type: 'tool_result',
+    toolResult: { toolUseId: 'tool_123', content: [] },
+  });
+  const messageStartData = JSON.stringify({ type: 'message_start' });
+
+  const mockResponse = {
+    ok: true,
+    data: {
+      pipeThrough: jest.fn().mockReturnValue({
+        getReader: jest.fn().mockReturnValue({
+          read: jest.fn()
+            .mockResolvedValueOnce({ done: false, value: `data: ${toolResultData}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: `data: ${messageStartData}\n\n` })
+            .mockResolvedValueOnce({ done: false, value: 'data: [DONE]\n\n' })
+            .mockResolvedValueOnce({ done: true })
+        })
+      })
+    }
+  };
+  mockPapi('post', mockResponse);
+
+  await comp.executeTool(toolUse);
+
+  expect(toolUse.status).toBe('completed');
+  expect(toolUse.rawResult).toBeNull();
+});
 
 test('executeTool handles partial JSON chunks', async () => {
   const toolUse = { ...fakeToolUse };
@@ -1543,9 +2002,9 @@ test('callAIAPI processes message_start event', async () => {
   expect(comp.isTyping).toBe(false);
   expect(comp.messages).toHaveLength(1);
   expect(comp.messages[0].role).toBe('assistant');
-  expect(comp.messages[0].content.value).toBe('');
-  expect(comp.messages[0].usage.value).toBe(null); // Usage set later in message_stop
-  expect(comp.messages[0].toolUses.value).toEqual([]);
+  expect(comp.messages[0].content).toBe('');
+  expect(comp.messages[0].usage).toBe(null); // Usage set later in message_stop
+  expect(comp.messages[0].toolUses).toEqual([]);
   expect(comp.scrollToBottom).toHaveBeenCalled();
 });
 
@@ -1587,11 +2046,11 @@ test('callAIAPI processes content_block_start with tool_use', async () => {
   await comp.callAIAPI('Test message');
   
   expect(comp.messages).toHaveLength(1);
-  expect(comp.messages[0].toolUses.value).toHaveLength(1);
-  expect(comp.messages[0].toolUses.value[0].id).toBe('tool_456');
-  expect(comp.messages[0].toolUses.value[0].name).toBe('search_data');
-  expect(comp.messages[0].toolUses.value[0].input).toEqual({ query: 'test query' });
-  expect(comp.messages[0].toolUses.value[0].status).toBe('preparing');
+  expect(comp.messages[0].toolUses).toHaveLength(1);
+  expect(comp.messages[0].toolUses[0].id).toBe('tool_456');
+  expect(comp.messages[0].toolUses[0].name).toBe('search_data');
+  expect(comp.messages[0].toolUses[0].input).toEqual({ query: 'test query' });
+  expect(comp.messages[0].toolUses[0].status).toBe('preparing');
   expect(comp.getSessionToolMap).toHaveBeenCalledWith(fakeSessionId);
   expect(comp.getIndexMap).toHaveBeenCalledWith(fakeSessionId);
 });
@@ -1631,7 +2090,7 @@ test('callAIAPI processes content_block_delta with text_delta', async () => {
   await comp.callAIAPI('Test message');
   
   expect(comp.messages).toHaveLength(1);
-  expect(comp.messages[0].content.value).toBe('Hello world!');
+  expect(comp.messages[0].content).toBe('Hello world!');
   expect(comp.scrollToBottom).toHaveBeenCalledTimes(3); // Once for message_start, twice for text deltas
 });
 
@@ -1670,7 +2129,7 @@ test('callAIAPI processes content_block_delta with thought_delta', async () => {
   await comp.callAIAPI('Test message');
   
   expect(comp.messages).toHaveLength(1);
-  expect(comp.messages[0].thoughts.value).toBe('**Analyzing Request**\n\nProcessing the query...');
+  expect(comp.messages[0].thoughts).toBe('**Analyzing Request**\n\nProcessing the query...');
   expect(comp.scrollToBottom).toHaveBeenCalledTimes(3); // Once for message_start, twice for thought deltas
 });
 
@@ -1750,7 +2209,7 @@ test('callAIAPI processes content_block_stop event', async () => {
   comp.scrollToBottom = jest.fn();
   comp.loadCredits = jest.fn().mockResolvedValue();
   comp.shouldAutoApproveTool = jest.fn().mockReturnValue(false);
-  comp.mostRecentFloatingTool = new Map();
+  comp.sessionToolState = new Map();
   
   const mockToolMap = new Map();
   const mockIndexMap = new Map();
@@ -1951,7 +2410,7 @@ test('callAIAPI processes message_stop with usage', async () => {
   await comp.callAIAPI('Test message');
   
   expect(comp.messages).toHaveLength(1);
-  expect(comp.messages[0].usage.value).toEqual({ input_tokens: 20, output_tokens: 30 });
+  expect(comp.messages[0].usage).toEqual({ input_tokens: 20, output_tokens: 30 });
   expect(comp.updateContextLength).toHaveBeenCalledWith({ input_tokens: 20, output_tokens: 30 });
   expect(comp.$forceUpdate).toHaveBeenCalled();
 });
@@ -1990,7 +2449,7 @@ test('callAIAPI processes message_delta with usage', async () => {
   await comp.callAIAPI('Test message');
   
   expect(comp.messages).toHaveLength(1);
-  expect(comp.messages[0].usage.value).toEqual({ input_tokens: 25, output_tokens: 35 });
+  expect(comp.messages[0].usage).toEqual({ input_tokens: 25, output_tokens: 35 });
   expect(comp.updateContextLength).toHaveBeenCalledWith({ input_tokens: 25, output_tokens: 35 });
 });
 
@@ -2051,7 +2510,7 @@ test('callAIAPI handles concatenated JSON objects', async () => {
   
   expect(comp.messages).toHaveLength(1);
   expect(comp.messages[0].role).toBe('assistant');
-  expect(comp.messages[0].content.value).toBe('Hello');
+  expect(comp.messages[0].content).toBe('Hello');
 });
 
 test('callAIAPI handles unhandled event types with usage', async () => {
@@ -2088,7 +2547,7 @@ test('callAIAPI handles unhandled event types with usage', async () => {
   await comp.callAIAPI('Test message');
   
   expect(comp.messages).toHaveLength(1);
-  expect(comp.messages[0].usage.value).toEqual({ input_tokens: 12, output_tokens: 18 });
+  expect(comp.messages[0].usage).toEqual({ input_tokens: 12, output_tokens: 18 });
   expect(comp.updateContextLength).toHaveBeenCalledWith({ input_tokens: 12, output_tokens: 18 });
 });
 
@@ -2611,7 +3070,7 @@ test('convertBackendMessagesToFrontend converts assistant message with text bloc
   expect(result[0].role).toBe('assistant');
   expect(result[0].content).toBe('I can help you with security analysis.');
   expect(result[0].timestamp).toBe('2025-01-01T12:00:00.000Z');
-  expect(result[0].usage.value).toEqual({ input_tokens: 10, output_tokens: 20 });
+  expect(result[0].usage).toEqual({ input_tokens: 10, output_tokens: 20 });
   expect(comp.updateContextLength).toHaveBeenCalledWith({ input_tokens: 10, output_tokens: 20 }, false);
 });
 
@@ -2638,9 +3097,9 @@ test('convertBackendMessagesToFrontend converts assistant message with thoughts'
   expect(result).toHaveLength(1);
   expect(result[0].role).toBe('assistant');
   expect(result[0].content).toBe('I can help you with security analysis.');
-  expect(result[0].thoughts.value).toBe('**Analyzing Request**\n\nProcessing the user query...');
+  expect(result[0].thoughts).toBe('**Analyzing Request**\n\nProcessing the user query...');
   expect(result[0].timestamp).toBe('2025-01-01T12:00:00.000Z');
-  expect(result[0].usage.value).toEqual({ input_tokens: 10, output_tokens: 20 });
+  expect(result[0].usage).toEqual({ input_tokens: 10, output_tokens: 20 });
   expect(comp.updateContextLength).toHaveBeenCalledWith({ input_tokens: 10, output_tokens: 20 }, false);
 });
 
@@ -2749,19 +3208,23 @@ test('convertBackendMessagesToFrontend handles tool_use blocks with completed st
   expect(result[0].content).toBe('');
   // Tool uses should be created since there's a next message and no rejection
   expect(result[0]).toHaveProperty('toolUses');
-  expect(result[0].toolUses.value).toHaveLength(1);
-  expect(result[0].toolUses.value[0].id).toBe('tool_123');
-  expect(result[0].toolUses.value[0].name).toBe('query_events');
-  expect(result[0].toolUses.value[0].input).toEqual({ query: 'test' });
-  expect(result[0].toolUses.value[0].status).toBe('completed');
-  expect(result[0].toolUses.value[0].approved).toBe(true);
-  expect(result[0].toolUses.value[0].rawResult).toEqual({ result: 'success' });
+  expect(result[0].toolUses).toHaveLength(1);
+  expect(result[0].toolUses[0].id).toBe('tool_123');
+  expect(result[0].toolUses[0].name).toBe('query_events');
+  expect(result[0].toolUses[0].input).toEqual({ query: 'test' });
+  expect(result[0].toolUses[0].status).toBe('completed');
+  expect(result[0].toolUses[0].approved).toBe(true);
+  expect(result[0].toolUses[0].rawResult).toEqual({ result: 'success' });
 });
 
-test('convertBackendMessagesToFrontend handles tool_use blocks with rejected status', () => {
+// Rejections are now stored as tool_results (status 'rejected'); the old chat-message
+// format ("...rejected by the user" after the tool_use) is no longer special-cased.
+// On reload such a legacy turn renders the tool as skipped (the conversation moved on)
+// and the message itself is kept rather than consumed.
+test('convertBackendMessagesToFrontend no longer special-cases the legacy chat-message rejection', () => {
   comp.resetContextLength = jest.fn();
   global.Vue = { ref: jest.fn((value) => ({ value })) };
-  
+
   const backendMessages = [
     {
       createTime: '2025-01-01T12:00:00.000Z',
@@ -2782,20 +3245,19 @@ test('convertBackendMessagesToFrontend handles tool_use blocks with rejected sta
       message: {
         role: 'user',
         contentBlocks: [
-          { type: 'text', text: 'Tool execution was rejected by the user' }
+          { type: 'text', text: 'Tool execution was rejected by the user.' }
         ]
       }
     }
   ];
-  
+
   const result = comp.convertBackendMessagesToFrontend(backendMessages);
-  
-  expect(result).toHaveLength(1); // Second message should be skipped
-  expect(result[0].toolUses.value).toHaveLength(1);
-  expect(result[0].toolUses.value[0].id).toBe('tool_456');
-  expect(result[0].toolUses.value[0].status).toBe('rejected');
-  expect(result[0].toolUses.value[0].approved).toBe(false);
-  expect(result[0].toolUses.value[0].error).toBe('Tool execution rejected by user');
+
+  expect(result).toHaveLength(2); // The legacy message is no longer skipped
+  expect(result[0].toolUses).toHaveLength(1);
+  expect(result[0].toolUses[0].id).toBe('tool_456');
+  expect(result[0].toolUses[0].status).toBe('skipped');
+  expect(result[0].toolUses[0].approved).toBe(false);
 });
 
 test('convertBackendMessagesToFrontend handles tool_use blocks with null/undefined input', () => {
@@ -2840,7 +3302,7 @@ test('convertBackendMessagesToFrontend handles tool_use blocks with null/undefin
   
   expect(result).toHaveLength(1);
   expect(result[0]).toHaveProperty('toolUses');
-  expect(result[0].toolUses.value[0].input).toEqual({}); // Should default to empty object
+  expect(result[0].toolUses[0].input).toEqual({}); // Should default to empty object
 });
 
 test('convertBackendMessagesToFrontend handles tool_use blocks at end of session with pending_approval status', () => {
@@ -2871,9 +3333,9 @@ test('convertBackendMessagesToFrontend handles tool_use blocks at end of session
   
   expect(result).toHaveLength(1);
   expect(result[0]).toHaveProperty('toolUses');
-  expect(result[0].toolUses.value).toHaveLength(1);
+  expect(result[0].toolUses).toHaveLength(1);
   
-  const toolUse = result[0].toolUses.value[0];
+  const toolUse = result[0].toolUses[0];
   expect(toolUse.id).toBe('tool_end_session');
   expect(toolUse.name).toBe('query_events');
   expect(toolUse.input).toEqual({ query: 'test query at end' });
@@ -2886,11 +3348,81 @@ test('convertBackendMessagesToFrontend handles tool_use blocks at end of session
   expect(toolUse.sessionId).toBe('test_session_123'); // Should include sessionId
 });
 
+// A top-level turn can request tools in parallel whose results land as separate
+// tool_result messages. Reload must status each tool independently: resolved siblings
+// complete, the unresolved one stays actionable (not collapsed to one turn-wide status).
+test('reload statuses a partially-resolved parallel top-level turn per tool', () => {
+  comp.resetContextLength = jest.fn();
+  comp.currentChatId = 'parallel_session';
+  global.Vue = { ref: jest.fn((value) => ({ value })) };
+
+  const toolUse = (id) => ({ type: 'tool_use', id, name: 'query_events', input: { q: id } });
+  const toolResult = (id) => ({
+    tags: ['tool_result'],
+    createTime: '2025-01-01T12:01:00.000Z',
+    message: { role: 'user', contentBlocks: [{ toolResult: { toolUseId: id, content: [{ json: { ok: id } }] } }] },
+  });
+  const backendMessages = [
+    { createTime: '2025-01-01T12:00:00.000Z', message: { role: 'assistant', contentBlocks: [toolUse('a'), toolUse('b'), toolUse('c')] } },
+    toolResult('a'),
+    toolResult('b'),
+  ];
+
+  const tools = comp.convertBackendMessagesToFrontend(backendMessages)[0].toolUses;
+  expect(tools.map(t => t.id)).toEqual(['a', 'b', 'c']);
+  expect(tools[0].status).toBe('completed');
+  expect(tools[0].rawResult).toEqual({ ok: 'a' });
+  expect(tools[1].status).toBe('completed');
+  // The unresolved sibling must stay actionable, not falsely completed (old behavior).
+  expect(tools[2].status).toBe('pending_approval');
+  expect(tools[2].approved).toBe(null);
+  expect(comp.getSessionToolMap('parallel_session').get('c')).toBe(tools[2]);
+});
+
+// Once the conversation moves past a parallel turn, its unanswered tools are skipped.
+test('reload marks unresolved parallel top-level tools skipped once the conversation moved on', () => {
+  comp.resetContextLength = jest.fn();
+  comp.currentChatId = 'parallel_skip_session';
+  global.Vue = { ref: jest.fn((value) => ({ value })) };
+
+  const toolUse = (id) => ({ type: 'tool_use', id, name: 'query_events', input: { q: id } });
+  const backendMessages = [
+    { createTime: '2025-01-01T12:00:00.000Z', message: { role: 'assistant', contentBlocks: [toolUse('a'), toolUse('b'), toolUse('c')] } },
+    { createTime: '2025-01-01T12:01:00.000Z', message: { role: 'user', contentBlocks: [{ type: 'text', text: 'never mind, do something else' }] } },
+    { createTime: '2025-01-01T12:02:00.000Z', message: { role: 'assistant', contentBlocks: [{ type: 'text', text: 'sure' }] } },
+  ];
+
+  const tools = comp.convertBackendMessagesToFrontend(backendMessages).find(m => m.toolUses).toolUses;
+  expect(tools).toHaveLength(3);
+  tools.forEach(t => expect(t.status).toBe('skipped'));
+});
+
+// A stored rejection (status 'rejected') reloads as a rejected card, not error/completed.
+test('reload renders a declined tool as rejected', () => {
+  comp.resetContextLength = jest.fn();
+  comp.currentChatId = 'reject_reload_session';
+  global.Vue = { ref: jest.fn((value) => ({ value })) };
+
+  const backendMessages = [
+    { createTime: '2025-01-01T12:00:00.000Z', message: { role: 'assistant', contentBlocks: [
+      { type: 'tool_use', id: 'tool_x', name: 'query_events', input: { q: 'x' } },
+    ] } },
+    { createTime: '2025-01-01T12:00:01.000Z', tags: ['tool_result'], message: { role: 'user', contentBlocks: [
+      { toolResult: { toolUseId: 'tool_x', status: 'rejected', isError: true, content: [{ text: 'declined' }] } },
+    ] } },
+  ];
+
+  const tools = comp.convertBackendMessagesToFrontend(backendMessages)[0].toolUses;
+  expect(tools).toHaveLength(1);
+  expect(tools[0].status).toBe('rejected');
+  expect(tools[0].error).toBe('declined');
+});
+
 test('convertBackendMessagesToFrontend handles multiple tool_use blocks at end of session', () => {
   comp.resetContextLength = jest.fn();
   comp.currentChatId = 'multi_tool_session';
   global.Vue = { ref: jest.fn((value) => ({ value })) };
-  
+
   // Message with multiple tool uses at the end of session
   const backendMessages = [
     {
@@ -2920,10 +3452,10 @@ test('convertBackendMessagesToFrontend handles multiple tool_use blocks at end o
   
   expect(result).toHaveLength(1);
   expect(result[0]).toHaveProperty('toolUses');
-  expect(result[0].toolUses.value).toHaveLength(2);
+  expect(result[0].toolUses).toHaveLength(2);
   
   // Both tools should have pending_approval status
-  result[0].toolUses.value.forEach((toolUse, index) => {
+  result[0].toolUses.forEach((toolUse, index) => {
     expect(toolUse.status).toBe('pending_approval');
     expect(toolUse.approved).toBe(null);
     expect(toolUse.sessionId).toBe('multi_tool_session');
@@ -2958,9 +3490,9 @@ test('convertBackendMessagesToFrontend handles tool_use blocks at end with missi
   
   expect(result).toHaveLength(1);
   expect(result[0]).toHaveProperty('toolUses');
-  expect(result[0].toolUses.value).toHaveLength(1);
+  expect(result[0].toolUses).toHaveLength(1);
   
-  const toolUse = result[0].toolUses.value[0];
+  const toolUse = result[0].toolUses[0];
   expect(toolUse.status).toBe('pending_approval');
   expect(toolUse.input).toEqual({}); // Should default to empty object
   expect(toolUse.approved).toBe(null);
@@ -2992,9 +3524,9 @@ test('convertBackendMessagesToFrontend handles tool_use blocks at end with missi
   
   expect(result).toHaveLength(1);
   expect(result[0]).toHaveProperty('toolUses');
-  expect(result[0].toolUses.value).toHaveLength(1);
+  expect(result[0].toolUses).toHaveLength(1);
   
-  const toolUse = result[0].toolUses.value[0];
+  const toolUse = result[0].toolUses[0];
   expect(toolUse.status).toBe('pending_approval');
   expect(toolUse.id).toBe('unknown'); // Should default to 'unknown'
   expect(toolUse.name).toBe('unknown'); // Should default to 'unknown'
@@ -3039,9 +3571,9 @@ test('convertBackendMessagesToFrontend filters out legacy format tool result mes
   const result = comp.convertBackendMessagesToFrontend(backendMessages);
   
   expect(result).toHaveLength(1); // Tool result message should be filtered out
-  expect(result[0].toolUses.value[0].rawResult).toBe('{"events": 5}, Error: <nil>');
-  expect(result[0].toolUses.value[0].completedAt).toBe('2025-01-01T12:01:00.000Z');
-  expect(result[0].toolUses.value[0].status).toBe('completed'); // No error since Error is <nil>
+  expect(result[0].toolUses[0].rawResult).toBe('{"events": 5}, Error: <nil>');
+  expect(result[0].toolUses[0].completedAt).toBe('2025-01-01T12:01:00.000Z');
+  expect(result[0].toolUses[0].status).toBe('completed'); // No error since Error is <nil>
 });
 
 test('convertBackendMessagesToFrontend handles legacy format tool result with error', () => {
@@ -3080,9 +3612,9 @@ test('convertBackendMessagesToFrontend handles legacy format tool result with er
   const result = comp.convertBackendMessagesToFrontend(backendMessages);
   
   expect(result).toHaveLength(1);
-  expect(result[0].toolUses.value[0].rawResult).toBe('null, Error: Connection timeout');
-  expect(result[0].toolUses.value[0].error).toBe('Connection timeout');
-  expect(result[0].toolUses.value[0].status).toBe('error');
+  expect(result[0].toolUses[0].rawResult).toBe('null, Error: Connection timeout');
+  expect(result[0].toolUses[0].error).toBe('Connection timeout');
+  expect(result[0].toolUses[0].status).toBe('error');
 });
 
 test('convertBackendMessagesToFrontend filters out old format tool result messages', () => {
@@ -3130,7 +3662,7 @@ test('convertBackendMessagesToFrontend filters out old format tool result messag
   
   expect(result).toHaveLength(1); // Tool result message should be filtered out
   expect(result[0]).toHaveProperty('toolUses');
-  expect(result[0].toolUses.value[0].rawResult).toBe('Raw tool result data');
+  expect(result[0].toolUses[0].rawResult).toBe('Raw tool result data');
 });
 
 test('convertBackendMessagesToFrontend handles malformed tool result parsing', () => {
@@ -3170,7 +3702,7 @@ test('convertBackendMessagesToFrontend handles malformed tool result parsing', (
   
   expect(result).toHaveLength(1);
   // Should not crash, tool use should remain without rawResult
-  expect(result[0].toolUses.value[0].rawResult).toBeNull();
+  expect(result[0].toolUses[0].rawResult).toBeNull();
 });
 
 test('convertBackendMessagesToFrontend handles missing createTime', () => {
@@ -3193,52 +3725,6 @@ test('convertBackendMessagesToFrontend handles missing createTime', () => {
   
   expect(result).toHaveLength(1);
   expect(result[0].timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/); // Should be ISO string
-});
-
-test('convertBackendMessagesToFrontend handles complex message flow with skip_next', () => {
-  comp.resetContextLength = jest.fn();
-  global.Vue = { ref: jest.fn((value) => ({ value })) };
-  
-  const backendMessages = [
-    {
-      createTime: '2025-01-01T12:00:00.000Z',
-      message: {
-        role: 'assistant',
-        contentBlocks: [
-          { type: 'text', text: 'I will use a tool now.' },
-          {
-            type: 'tool_use',
-            id: 'tool_skip_test',
-            name: 'test_tool',
-            input: { param: 'value' }
-          }
-        ]
-      }
-    },
-    {
-      createTime: '2025-01-01T12:01:00.000Z',
-      message: {
-        role: 'assistant',
-        contentBlocks: [
-          { type: 'text', text: 'Tool execution was rejected by the user' }
-        ]
-      }
-    },
-    {
-      createTime: '2025-01-01T12:02:00.000Z',
-      message: {
-        role: 'user',
-        contentStr: 'I understand, let me try a different approach.'
-      }
-    }
-  ];
-  
-  const result = comp.convertBackendMessagesToFrontend(backendMessages);
-  
-  expect(result).toHaveLength(1); // Middle message should be skipped due to rejection, and user message becomes rawResult
-  expect(result[0].content).toBe('I will use a tool now.');
-  expect(result[0].toolUses.value[0].status).toBe('rejected');
-  expect(result[0].toolUses.value[0].rawResult).toBe('I understand, let me try a different approach.');
 });
 
 test('convertBackendMessagesToFrontend handles tool use followed by user message (skipped status)', () => {
@@ -3275,7 +3761,7 @@ test('convertBackendMessagesToFrontend handles tool use followed by user message
   const result = comp.convertBackendMessagesToFrontend(backendMessages);
   
   expect(result).toHaveLength(2);
-  const toolUse = result[0].toolUses.value[0];
+  const toolUse = result[0].toolUses[0];
   expect(toolUse.status).toBe('skipped');
   expect(toolUse.approved).toBe(false);
 });
@@ -4786,7 +5272,7 @@ test('handleContentBlockStop processes tool completion without auto-approval', (
   comp.getSessionToolMap = jest.fn().mockReturnValue(mockToolMap);
   comp.getIndexMap = jest.fn().mockReturnValue(mockIndexMap);
   comp.shouldAutoApproveTool = jest.fn().mockReturnValue(false);
-  comp.mostRecentFloatingTool = new Map();
+  comp.sessionToolState = new Map();
   
   mockToolMap.set('tool_456', mockToolUse);
   mockIndexMap.set(0, 'tool_456');
@@ -4796,7 +5282,7 @@ test('handleContentBlockStop processes tool completion without auto-approval', (
   expect(mockToolUse.input).toEqual({ action: "delete" });
   expect(mockToolUse.status).toBe('pending_approval');
   expect(mockToolUse.approved).toBe(null);
-  expect(comp.mostRecentFloatingTool.get(sessionId)).toBe(mockToolUse);
+  expect(comp.sessionTools(sessionId).floatingTool).toBe(mockToolUse);
   expect(result).toBe(null);
 });
 
@@ -4820,9 +5306,336 @@ test('handleContentBlockStop handles JSON parsing error', () => {
   mockIndexMap.set(0, 'tool_789');
   
   comp.handleContentBlockStop({ index: 0 }, sessionId);
-  
+
   expect(mockToolUse.status).toBe('error');
   expect(mockToolUse.error).toContain('Failed to parse tool input');
+});
+
+test('handleDelegationContentBlockStop auto-approves read-only sub-agent tool', () => {
+  const childSessionId = 'child-session';
+  const mockToolMap = new Map();
+  const mockIndexMap = new Map();
+  const mockToolUse = {
+    id: 'tool_123',
+    name: 'query_events',
+    inputJson: '{"oql_query": "event.module: suricata"}',
+    status: 'preparing',
+    input: {},
+    approved: null,
+    sessionId: childSessionId
+  };
+
+  comp.getSessionToolMap = jest.fn().mockReturnValue(mockToolMap);
+  comp.getIndexMap = jest.fn().mockReturnValue(mockIndexMap);
+  comp.shouldAutoApproveTool = jest.fn().mockReturnValue(true);
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
+  comp.queueTool = jest.fn();
+  comp.sessionToolState = new Map();
+  comp.scrollIfPinned = jest.fn();
+
+  mockToolMap.set('tool_123', mockToolUse);
+  mockIndexMap.set(0, 'tool_123');
+
+  comp.handleDelegationContentBlockStop({ index: 0 }, childSessionId);
+
+  expect(mockToolUse.input).toEqual({ oql_query: "event.module: suricata" });
+  expect(mockToolUse.approved).toBe(true);
+  expect(mockToolUse.status).not.toBe('pending_approval');
+  expect(comp.queueTool).toHaveBeenCalledWith(childSessionId, 'tool_123');
+  expect(comp.sessionTools(childSessionId).floatingTool).toBeFalsy();
+});
+
+test('handleDelegationContentBlockStop prompts for non-auto-approved sub-agent tool', () => {
+  const childSessionId = 'child-session';
+  const mockToolMap = new Map();
+  const mockIndexMap = new Map();
+  const mockToolUse = {
+    id: 'tool_456',
+    name: 'dangerous_tool',
+    inputJson: '{"action": "delete"}',
+    status: 'preparing',
+    input: {},
+    approved: null,
+    sessionId: childSessionId
+  };
+
+  comp.getSessionToolMap = jest.fn().mockReturnValue(mockToolMap);
+  comp.getIndexMap = jest.fn().mockReturnValue(mockIndexMap);
+  comp.shouldAutoApproveTool = jest.fn().mockReturnValue(false);
+  comp.queueTool = jest.fn();
+  comp.sessionToolState = new Map();
+  comp.scrollIfPinned = jest.fn();
+
+  mockToolMap.set('tool_456', mockToolUse);
+  mockIndexMap.set(0, 'tool_456');
+
+  comp.handleDelegationContentBlockStop({ index: 0 }, childSessionId);
+
+  expect(mockToolUse.input).toEqual({ action: "delete" });
+  expect(mockToolUse.status).toBe('pending_approval');
+  expect(mockToolUse.approved).toBe(null);
+  expect(comp.sessionTools(childSessionId).floatingTool).toBe(mockToolUse);
+  expect(comp.queueTool).not.toHaveBeenCalled();
+});
+
+test('handleDelegationContentBlockStop handles JSON parsing error', () => {
+  const childSessionId = 'child-session';
+  const mockToolMap = new Map();
+  const mockIndexMap = new Map();
+  const mockToolUse = {
+    id: 'tool_789',
+    name: 'query_events',
+    inputJson: '{"invalid": json}',
+    status: 'preparing',
+    input: {},
+    error: null,
+    sessionId: childSessionId
+  };
+
+  comp.getSessionToolMap = jest.fn().mockReturnValue(mockToolMap);
+  comp.getIndexMap = jest.fn().mockReturnValue(mockIndexMap);
+  comp.shouldAutoApproveTool = jest.fn().mockReturnValue(true);
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
+  comp.queueTool = jest.fn();
+  comp.scrollIfPinned = jest.fn();
+
+  mockToolMap.set('tool_789', mockToolUse);
+  mockIndexMap.set(0, 'tool_789');
+
+  comp.handleDelegationContentBlockStop({ index: 0 }, childSessionId);
+
+  expect(mockToolUse.status).toBe('error');
+  expect(mockToolUse.error).toContain('Failed to parse tool input');
+  expect(comp.queueTool).not.toHaveBeenCalled();
+});
+
+// --- applyBlock* (the shared implementation behind the handle*ContentBlock* adapters) ---
+
+test('applyBlockStart ignores blocks that are not tool_use', () => {
+  const message = { toolUses: [] };
+  comp.applyBlockStart({ index: 0, content_block: { type: 'text' } }, { message, sessionId: 's1', visible: true });
+  comp.applyBlockStart({ index: 0 }, { message, sessionId: 's1', visible: true });
+
+  expect(message.toolUses).toHaveLength(0);
+  expect(comp.getSessionToolMap('s1').size).toBe(0);
+});
+
+test('applyBlockStart pushes the tool into the message and registers the reactive instance', () => {
+  comp.scrollIfPinned = jest.fn();
+  const message = { toolUses: [] };
+  const c = { index: 2, content_block: { type: 'tool_use', id: 'tu-9', name: 'query_events', input: { q: 'dns' } } };
+
+  comp.applyBlockStart(c, { message, sessionId: 's1', visible: true });
+
+  expect(message.toolUses).toHaveLength(1);
+  const tracked = comp.getSessionToolMap('s1').get('tu-9');
+  // The session map must hold the instance living in the message, not a detached copy.
+  expect(tracked).toBe(message.toolUses[0]);
+  expect(tracked.status).toBe('preparing');
+  expect(tracked.approved).toBeNull();
+  expect(tracked.input).toEqual({ q: 'dns' });
+  expect(tracked.sessionId).toBe('s1');
+  expect(tracked.blockIndex).toBe(2);
+  expect(comp.getIndexMap('s1').get(2)).toBe('tu-9');
+  expect(comp.scrollIfPinned).toHaveBeenCalled();
+});
+
+test('applyBlockStart with no target message still registers the tool and does not scroll', () => {
+  comp.scrollIfPinned = jest.fn();
+  const c = { index: 0, content_block: { type: 'tool_use', id: 'tu-1', name: 'query_events' } };
+
+  comp.applyBlockStart(c, { sessionId: 's2', visible: false });
+
+  expect(comp.getSessionToolMap('s2').get('tu-1')).toBeTruthy();
+  expect(comp.getIndexMap('s2').get(0)).toBe('tu-1');
+  expect(comp.scrollIfPinned).not.toHaveBeenCalled();
+});
+
+test('applyBlockDelta routes text, input_json, and thought deltas to their targets', () => {
+  comp.scrollIfPinned = jest.fn();
+  const message = { content: 'Hello', thoughts: 'hmm', toolUses: [] };
+  const toolUse = { id: 'tu-1', inputJson: '{"a"', status: 'preparing' };
+  comp.getSessionToolMap('s1').set('tu-1', toolUse);
+  comp.getIndexMap('s1').set(3, 'tu-1');
+  const target = { message, sessionId: 's1', visible: true };
+
+  comp.applyBlockDelta({ index: 0, delta: { type: 'text_delta', text: ' world' } }, target);
+  expect(message.content).toBe('Hello world');
+
+  comp.applyBlockDelta({ index: 3, delta: { type: 'input_json_delta', partial_json: ': 1}' } }, target);
+  expect(toolUse.inputJson).toBe('{"a": 1}');
+  expect(toolUse.status).toBe('preparing');
+
+  comp.applyBlockDelta({ index: 0, delta: { type: 'thought_delta', text: '... ok' } }, target);
+  expect(message.thoughts).toBe('hmm... ok');
+
+  // A delta for an unmapped block index is ignored, and a message-less target
+  // ignores text/thought deltas without throwing.
+  expect(() => {
+    comp.applyBlockDelta({ index: 9, delta: { type: 'input_json_delta', partial_json: 'x' } }, target);
+    comp.applyBlockDelta({ index: 0, delta: { type: 'text_delta', text: 'x' } }, { sessionId: 's1', visible: false });
+  }).not.toThrow();
+});
+
+test('applyBlockStop auto-approves and queues a read-only tool', () => {
+  comp.scrollIfPinned = jest.fn();
+  comp.shouldAutoApproveTool = jest.fn().mockReturnValue(true);
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
+  comp.queueTool = jest.fn();
+  const toolUse = { id: 'tu-1', name: 'query_events', inputJson: '{"q": "dns"}', input: {}, status: 'preparing', approved: null };
+  comp.getSessionToolMap('s1').set('tu-1', toolUse);
+  comp.getIndexMap('s1').set(0, 'tu-1');
+
+  const usage = comp.applyBlockStop({ index: 0 }, { sessionId: 's1', visible: true });
+
+  expect(toolUse.input).toEqual({ q: 'dns' });
+  expect(toolUse.approved).toBe(true);
+  expect(comp.queueTool).toHaveBeenCalledWith('s1', 'tu-1');
+  expect(comp.sessionTools('s1').floatingTool).toBeFalsy();
+  expect(usage).toBeNull();
+});
+
+test('applyBlockStop leaves an auto-approvable tool unqueued when the context limit is reached', () => {
+  comp.shouldAutoApproveTool = jest.fn().mockReturnValue(true);
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(true);
+  comp.queueTool = jest.fn();
+  const toolUse = { id: 'tu-1', name: 'query_events', inputJson: '{}', input: {}, status: 'preparing', approved: null };
+  comp.getSessionToolMap('s1').set('tu-1', toolUse);
+  comp.getIndexMap('s1').set(0, 'tu-1');
+
+  comp.applyBlockStop({ index: 0 }, { sessionId: 's1', visible: false });
+
+  expect(comp.queueTool).not.toHaveBeenCalled();
+  expect(toolUse.approved).toBeNull();
+  expect(toolUse.status).toBe('preparing');
+});
+
+test('applyBlockStop surfaces a non-auto-approved tool as the session floating tool', () => {
+  comp.scrollIfPinned = jest.fn();
+  comp.shouldAutoApproveTool = jest.fn().mockReturnValue(false);
+  comp.queueTool = jest.fn();
+  const toolUse = { id: 'tu-2', name: 'dangerous_tool', inputJson: '{"action": "delete"}', input: {}, status: 'preparing', approved: null };
+  comp.getSessionToolMap('s1').set('tu-2', toolUse);
+  comp.getIndexMap('s1').set(1, 'tu-2');
+
+  comp.applyBlockStop({ index: 1 }, { sessionId: 's1', visible: true });
+
+  expect(toolUse.status).toBe('pending_approval');
+  expect(toolUse.approved).toBeNull();
+  expect(comp.sessionTools('s1').floatingTool).toBe(toolUse);
+  expect(comp.queueTool).not.toHaveBeenCalled();
+});
+
+test('applyBlockStop marks the tool errored on malformed input JSON', () => {
+  comp.scrollIfPinned = jest.fn();
+  comp.shouldAutoApproveTool = jest.fn().mockReturnValue(true);
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
+  comp.queueTool = jest.fn();
+  const toolUse = { id: 'tu-3', name: 'query_events', inputJson: '{"invalid": json}', input: {}, status: 'preparing', error: null };
+  comp.getSessionToolMap('s1').set('tu-3', toolUse);
+  comp.getIndexMap('s1').set(0, 'tu-3');
+
+  comp.applyBlockStop({ index: 0 }, { sessionId: 's1', visible: true });
+
+  expect(toolUse.status).toBe('error');
+  expect(toolUse.error).toContain(comp.i18n.assistantToolParseInputError);
+  expect(comp.queueTool).not.toHaveBeenCalled();
+});
+
+test('applyBlockStop returns usage riding the content_block_stop event', () => {
+  const usage = { input_tokens: 10, output_tokens: 5 };
+  // No tool is mapped at this index; the usage must still be surfaced.
+  expect(comp.applyBlockStop({ index: 7, usage }, { sessionId: 's1', visible: false })).toBe(usage);
+});
+
+// --- delegation streaming helpers ---
+
+test('ensureChildSession creates, reuses, and renames the nested session', () => {
+  const delegate = { id: 'd1' };
+
+  const cs = comp.ensureChildSession(delegate, 'Hunter');
+  expect(delegate.childSession).toBe(cs);
+  expect(cs.agentName).toBe('Hunter');
+  expect(cs.messages).toEqual([]);
+
+  // Reuse: existing messages survive, and an omitted agentName is not cleared.
+  cs.messages.push({ role: 'assistant', content: 'hi' });
+  expect(comp.ensureChildSession(delegate)).toBe(cs);
+  expect(cs.messages).toHaveLength(1);
+  expect(cs.agentName).toBe('Hunter');
+
+  // A provided agentName updates the existing session.
+  comp.ensureChildSession(delegate, 'Analyst');
+  expect(cs.agentName).toBe('Analyst');
+
+  // No agentName at creation defaults to empty string.
+  const bare = {};
+  expect(comp.ensureChildSession(bare).agentName).toBe('');
+});
+
+test('pendingChildTools returns only tools awaiting approval, across all child messages', () => {
+  const delegate = { childSession: { messages: [
+    { toolUses: [{ id: 'a', status: 'pending_approval' }, { id: 'b', status: 'completed' }] },
+    { content: 'prose only' },
+    { toolUses: [{ id: 'c', status: 'executing' }, { id: 'd', status: 'pending_approval' }] },
+  ] } };
+
+  expect(comp.pendingChildTools(delegate).map(t => t.id)).toEqual(['a', 'd']);
+
+  expect(comp.pendingChildTools(null)).toEqual([]);
+  expect(comp.pendingChildTools({})).toEqual([]);
+  expect(comp.pendingChildTools({ childSession: {} })).toEqual([]);
+});
+
+test('delegationHasCollapsedContent is true only when something already renders inside the fold', () => {
+  expect(comp.delegationHasCollapsedContent(null)).toBe(false);
+  expect(comp.delegationHasCollapsedContent({})).toBe(false);
+  expect(comp.delegationHasCollapsedContent({ childSession: { messages: [] } })).toBe(false);
+
+  // A still-pending tool is shown OUTSIDE the fold, so it does not count.
+  expect(comp.delegationHasCollapsedContent({
+    childSession: { messages: [{ toolUses: [{ status: 'pending_approval' }] }] },
+  })).toBe(false);
+
+  expect(comp.delegationHasCollapsedContent({
+    childSession: { messages: [{ content: 'found it' }] },
+  })).toBe(true);
+  expect(comp.delegationHasCollapsedContent({
+    childSession: { messages: [{ thoughts: 'thinking...' }] },
+  })).toBe(true);
+  expect(comp.delegationHasCollapsedContent({
+    childSession: { messages: [{ toolUses: [{ status: 'completed' }, { status: 'pending_approval' }] }] },
+  })).toBe(true);
+});
+
+test('handleDelegationMessageStart appends a nested message and returns the tracked instance', () => {
+  comp.scrollIfPinned = jest.fn();
+  const delegate = { childSession: { agentName: 'Hunter', messages: [{ role: 'assistant', content: 'earlier' }] } };
+
+  const msg = comp.handleDelegationMessageStart(delegate);
+
+  expect(delegate.childSession.messages).toHaveLength(2);
+  // Streaming mutates the returned object; it must be the one stored in childSession.
+  expect(msg).toBe(delegate.childSession.messages[1]);
+  expect(msg.role).toBe('assistant');
+  expect(msg.content).toBe('');
+  expect(msg.thoughts).toBe('');
+  expect(msg.toolUses).toEqual([]);
+  expect(comp.scrollIfPinned).toHaveBeenCalled();
+});
+
+test('handleDelegationContentBlockStart/Delta adapt into applyBlock* with the child target', () => {
+  comp.applyBlockStart = jest.fn();
+  comp.applyBlockDelta = jest.fn();
+  const childMsg = { content: '', thoughts: '', toolUses: [] };
+  const start = { index: 0, content_block: { type: 'tool_use', id: 'tu-1' } };
+  const delta = { index: 0, delta: { type: 'text_delta', text: 'x' } };
+
+  comp.handleDelegationContentBlockStart(start, 'child-1', childMsg);
+  expect(comp.applyBlockStart).toHaveBeenCalledWith(start, { message: childMsg, sessionId: 'child-1', visible: true });
+
+  comp.handleDelegationContentBlockDelta(delta, 'child-1', childMsg);
+  expect(comp.applyBlockDelta).toHaveBeenCalledWith(delta, { message: childMsg, sessionId: 'child-1', visible: true });
 });
 
 test('handleToolExecutionContentBlockStop processes chained tool with auto-approval', () => {
@@ -4872,7 +5685,7 @@ test('handleToolExecutionContentBlockStop processes chained tool without auto-ap
   comp.getSessionToolMap = jest.fn().mockReturnValue(mockToolMap);
   comp.getIndexMap = jest.fn().mockReturnValue(mockIndexMap);
   comp.shouldAutoApproveTool = jest.fn().mockReturnValue(false);
-  comp.mostRecentFloatingTool = new Map();
+  comp.sessionToolState = new Map();
   
   mockToolMap.set('chained_tool_456', mockChainedTool);
   mockIndexMap.set(2, 'chained_tool_456');
@@ -4882,7 +5695,7 @@ test('handleToolExecutionContentBlockStop processes chained tool without auto-ap
   expect(mockChainedTool.input).toEqual({ command: "rm -rf /" });
   expect(mockChainedTool.status).toBe('pending_approval');
   expect(mockChainedTool.approved).toBe(null);
-  expect(comp.mostRecentFloatingTool.get(sessionId)).toBe(mockChainedTool);
+  expect(comp.sessionTools(sessionId).floatingTool).toBe(mockChainedTool);
   expect(result).toBe(null);
 });
 
@@ -4912,61 +5725,77 @@ test('handleToolExecutionContentBlockStop handles JSON parsing error', () => {
 });
 
 // Last 4 methods tests
-test('getSessionToolMap creates new map when none exists', () => {
+test('getSessionToolMap creates a per-session tool map when none exists', () => {
   const sessionId = 'new-session';
-  comp.executingToolsBySession = new Map();
-  
+  comp.sessionToolState = new Map();
+
   const result = comp.getSessionToolMap(sessionId);
-  
+
   expect(result).toBeInstanceOf(Map);
-  expect(comp.executingToolsBySession.get(sessionId)).toBe(result);
+  expect(comp.sessionToolState.get(sessionId).toolsById).toBe(result);
 });
 
-test('getSessionToolMap returns existing map', () => {
+test('getSessionToolMap returns the existing per-session tool map', () => {
   const sessionId = 'existing-session';
-  const existingMap = new Map();
-  existingMap.set('tool1', { id: 'tool1', name: 'test' });
-  comp.executingToolsBySession = new Map();
-  comp.executingToolsBySession.set(sessionId, existingMap);
-  
+  comp.sessionToolState = new Map();
+  comp.sessionTools(sessionId).toolsById.set('tool1', { id: 'tool1', name: 'test' });
+
   const result = comp.getSessionToolMap(sessionId);
-  
-  expect(result).toBe(existingMap);
+
   expect(result.get('tool1')).toEqual({ id: 'tool1', name: 'test' });
 });
 
-test('getIndexMap creates new map when none exists', () => {
+test('getIndexMap creates a per-session index map when none exists', () => {
   const sessionId = 'new-session';
-  comp.toolIndexToIdBySession = new Map();
-  
+  comp.sessionToolState = new Map();
+
   const result = comp.getIndexMap(sessionId);
-  
+
   expect(result).toBeInstanceOf(Map);
-  expect(comp.toolIndexToIdBySession.get(sessionId)).toBe(result);
+  expect(comp.sessionToolState.get(sessionId).indexToId).toBe(result);
 });
 
-test('getIndexMap returns existing map', () => {
+test('getIndexMap returns the existing per-session index map', () => {
   const sessionId = 'existing-session';
-  const existingMap = new Map();
-  existingMap.set(0, 'tool_id_123');
-  comp.toolIndexToIdBySession = new Map();
-  comp.toolIndexToIdBySession.set(sessionId, existingMap);
-  
+  comp.sessionToolState = new Map();
+  comp.sessionTools(sessionId).indexToId.set(0, 'tool_id_123');
+
   const result = comp.getIndexMap(sessionId);
-  
-  expect(result).toBe(existingMap);
+
   expect(result.get(0)).toBe('tool_id_123');
+});
+
+// The three content-block handler sets (orchestrator / chained tool / delegation)
+// funnel through one shared applyBlock* implementation. This locks the subtle
+// invariant they all rely on: a tool_use block for an off-screen session (no message
+// to render into) is still registered in that session's tool + index maps, so it can
+// be found and resolved later. Driven via handleContentBlockStart with message=null.
+test('content-block start tracks an off-screen tool without rendering it', () => {
+  const sessionId = 'background-session';
+  comp.sessionToolState = new Map();
+  comp.scrollIfPinned = jest.fn();
+
+  comp.handleContentBlockStart(
+    { index: 0, content_block: { type: 'tool_use', id: 'bg_tool', name: 'query_events' } },
+    null,            // not the current session -> nothing to render into
+    sessionId,
+  );
+
+  const s = comp.sessionToolState.get(sessionId);
+  expect(s.toolsById.get('bg_tool')).toMatchObject({ id: 'bg_tool', name: 'query_events', sessionId });
+  expect(s.indexToId.get(0)).toBe('bg_tool');
+  expect(comp.scrollIfPinned).not.toHaveBeenCalled(); // off-screen: no scroll
 });
 
 test('queueTool adds tool to queue and runs queue', () => {
   const sessionId = 'test-session';
   const toolUseId = 'tool_123';
-  comp.toolQueues = new Map();
+  comp.sessionToolState = new Map();
   comp.runToolQueue = jest.fn();
-  
+
   comp.queueTool(sessionId, toolUseId);
-  
-  expect(comp.toolQueues.get(sessionId)).toEqual([toolUseId]);
+
+  expect(comp.sessionTools(sessionId).queue).toEqual([toolUseId]);
   expect(comp.runToolQueue).toHaveBeenCalledWith(sessionId);
 });
 
@@ -4974,13 +5803,13 @@ test('queueTool adds to existing queue', () => {
   const sessionId = 'test-session';
   const toolUseId1 = 'tool_123';
   const toolUseId2 = 'tool_456';
-  comp.toolQueues = new Map();
-  comp.toolQueues.set(sessionId, [toolUseId1]);
+  comp.sessionToolState = new Map();
+  comp.sessionTools(sessionId).queue.push(toolUseId1);
   comp.runToolQueue = jest.fn();
-  
+
   comp.queueTool(sessionId, toolUseId2);
-  
-  expect(comp.toolQueues.get(sessionId)).toEqual([toolUseId1, toolUseId2]);
+
+  expect(comp.sessionTools(sessionId).queue).toEqual([toolUseId1, toolUseId2]);
   expect(comp.runToolQueue).toHaveBeenCalledWith(sessionId);
 });
 
@@ -4988,34 +5817,32 @@ test('runToolQueue processes tools in queue', async () => {
   const sessionId = 'test-session';
   const toolUse1 = { id: 'tool_123', status: 'preparing' };
   const toolUse2 = { id: 'tool_456', status: 'preparing' };
-  
-  comp.toolRunnerBusy = new Set();
-  comp.toolQueues = new Map();
-  comp.toolQueues.set(sessionId, ['tool_123', 'tool_456']);
-  
-  const mockToolMap = new Map();
-  mockToolMap.set('tool_123', toolUse1);
-  mockToolMap.set('tool_456', toolUse2);
-  
-  comp.getSessionToolMap = jest.fn().mockReturnValue(mockToolMap);
+
+  comp.sessionToolState = new Map();
+  const s = comp.sessionTools(sessionId);
+  s.queue.push('tool_123', 'tool_456');
+  s.toolsById.set('tool_123', toolUse1);
+  s.toolsById.set('tool_456', toolUse2);
+
   comp.executeTool = jest.fn().mockResolvedValue();
-  
+
   await comp.runToolQueue(sessionId);
-  
+
   expect(comp.executeTool).toHaveBeenCalledWith(toolUse1);
   expect(comp.executeTool).toHaveBeenCalledWith(toolUse2);
   expect(toolUse1.status).toBe('executing');
   expect(toolUse2.status).toBe('executing');
-  expect(comp.toolRunnerBusy.has(sessionId)).toBe(false);
+  expect(comp.sessionTools(sessionId).busy).toBe(false);
 });
 
 test('runToolQueue skips if already busy', async () => {
   const sessionId = 'test-session';
-  comp.toolRunnerBusy = new Set([sessionId]);
+  comp.sessionToolState = new Map();
+  comp.sessionTools(sessionId).busy = true;
   comp.executeTool = jest.fn();
-  
+
   await comp.runToolQueue(sessionId);
-  
+
   expect(comp.executeTool).not.toHaveBeenCalled();
 });
 
@@ -5025,22 +5852,19 @@ test('runToolQueue skips completed/error/rejected tools', async () => {
   const errorTool = { id: 'tool_error', status: 'error' };
   const rejectedTool = { id: 'tool_rejected', status: 'rejected' };
   const preparingTool = { id: 'tool_preparing', status: 'preparing' };
-  
-  comp.toolRunnerBusy = new Set();
-  comp.toolQueues = new Map();
-  comp.toolQueues.set(sessionId, ['tool_completed', 'tool_error', 'tool_rejected', 'tool_preparing']);
-  
-  const mockToolMap = new Map();
-  mockToolMap.set('tool_completed', completedTool);
-  mockToolMap.set('tool_error', errorTool);
-  mockToolMap.set('tool_rejected', rejectedTool);
-  mockToolMap.set('tool_preparing', preparingTool);
-  
-  comp.getSessionToolMap = jest.fn().mockReturnValue(mockToolMap);
+
+  comp.sessionToolState = new Map();
+  const s = comp.sessionTools(sessionId);
+  s.queue.push('tool_completed', 'tool_error', 'tool_rejected', 'tool_preparing');
+  s.toolsById.set('tool_completed', completedTool);
+  s.toolsById.set('tool_error', errorTool);
+  s.toolsById.set('tool_rejected', rejectedTool);
+  s.toolsById.set('tool_preparing', preparingTool);
+
   comp.executeTool = jest.fn().mockResolvedValue();
-  
+
   await comp.runToolQueue(sessionId);
-  
+
   expect(comp.executeTool).toHaveBeenCalledTimes(1);
   expect(comp.executeTool).toHaveBeenCalledWith(preparingTool);
   expect(preparingTool.status).toBe('executing');
@@ -5049,58 +5873,77 @@ test('runToolQueue skips completed/error/rejected tools', async () => {
 test('checkForActivity returns true when streaming', () => {
   comp.isStreaming = true;
   comp.isTyping = false;
-  comp.toolQueues = new Map();
+  comp.sessionToolState = new Map();
   comp.currentChatId = 'test-session';
-  
-  const result = comp.checkForActivity();
-  
-  expect(result).toBe(true);
+
+  expect(comp.checkForActivity()).toBe(true);
 });
 
 test('checkForActivity returns true when typing', () => {
   comp.isStreaming = false;
   comp.isTyping = true;
-  comp.toolQueues = new Map();
+  comp.sessionToolState = new Map();
   comp.currentChatId = 'test-session';
-  
-  const result = comp.checkForActivity();
-  
-  expect(result).toBe(true);
+
+  expect(comp.checkForActivity()).toBe(true);
 });
 
 test('checkForActivity returns true when tools are queued', () => {
   comp.isStreaming = false;
   comp.isTyping = false;
-  comp.toolQueues = new Map();
-  comp.toolQueues.set('test-session', ['tool_123']);
+  comp.sessionToolState = new Map();
+  comp.sessionTools('test-session').queue.push('tool_123');
   comp.currentChatId = 'test-session';
-  
-  const result = comp.checkForActivity();
-  
-  expect(result).toBe(true);
+
+  expect(comp.checkForActivity()).toBe(true);
 });
 
 test('checkForActivity returns false when no activity', () => {
   comp.isStreaming = false;
   comp.isTyping = false;
-  comp.toolQueues = new Map();
+  comp.sessionToolState = new Map();
   comp.currentChatId = 'test-session';
-  
-  const result = comp.checkForActivity();
-  
-  expect(result).toBe(false);
+
+  expect(comp.checkForActivity()).toBe(false);
 });
 
 test('checkForActivity returns false when tool queue is empty', () => {
   comp.isStreaming = false;
   comp.isTyping = false;
-  comp.toolQueues = new Map();
-  comp.toolQueues.set('test-session', []);
+  comp.sessionToolState = new Map();
+  comp.sessionTools('test-session');
   comp.currentChatId = 'test-session';
-  
-  const result = comp.checkForActivity();
-  
-  expect(result).toBe(false);
+  comp.delegationChildren = new Map();
+
+  expect(comp.checkForActivity()).toBe(false);
+});
+
+test('checkForActivity counts a live delegation child\'s queued tools as activity', () => {
+  comp.isStreaming = false;
+  comp.isTyping = false;
+  comp.currentChatId = 'parent-session';
+  comp.sessionToolState = new Map();
+  comp.delegationChildren = new Map([['child-1', { parentSessionId: 'parent-session' }]]);
+
+  // Current session is idle, but the sub-agent (child session) has a queued tool.
+  comp.sessionTools('parent-session');
+  comp.sessionTools('child-1').queue.push('child-tool-1');
+
+  expect(comp.checkForActivity()).toBe(true);
+});
+
+test('checkForActivity ignores a queued session that is not the current conversation or its delegation child', () => {
+  comp.isStreaming = false;
+  comp.isTyping = false;
+  comp.currentChatId = 'parent-session';
+  comp.sessionToolState = new Map();
+  comp.delegationChildren = new Map();
+
+  // A different conversation's session has queued work; it must not block this one.
+  comp.sessionTools('parent-session');
+  comp.sessionTools('other-conversation').queue.push('tool_x');
+
+  expect(comp.checkForActivity()).toBe(false);
 });
 
 test('applyToolSpecificChanges does nothing for non-query_cases tools', () => {
@@ -5255,8 +6098,8 @@ test('sendMessage marks floating tool as skipped when sending new message', asyn
   
   comp.messages = [fakeAssistantMessage, fakeMessage];
   comp.currentChatId = 'test-session';
-  comp.mostRecentFloatingTool = new Map();
-  comp.mostRecentFloatingTool.set('test-session', floatingTool);
+  comp.sessionToolState = new Map();
+  comp.sessionTools('test-session').floatingTool = floatingTool;
   comp.newMessage = 'New message';
   comp.canChat = true;
   comp.assistantEnabled = true;
@@ -5271,7 +6114,7 @@ test('sendMessage marks floating tool as skipped when sending new message', asyn
   await comp.sendMessage();
 
   expect(floatingTool.status).toBe('skipped');
-  expect(comp.mostRecentFloatingTool.has('test-session')).toBe(false);
+  expect(comp.sessionTools('test-session').floatingTool).toBeFalsy();
 });
 
 test('sendMessage does not mark floating tool as skipped when only welcome message', async () => {
@@ -5284,8 +6127,8 @@ test('sendMessage does not mark floating tool as skipped when only welcome messa
   
   comp.messages = [fakeAssistantMessage];
   comp.currentChatId = 'test-session';
-  comp.mostRecentFloatingTool = new Map();
-  comp.mostRecentFloatingTool.set('test-session', floatingTool);
+  comp.sessionToolState = new Map();
+  comp.sessionTools('test-session').floatingTool = floatingTool;
   comp.newMessage = 'First message';
   comp.canChat = true;
   comp.assistantEnabled = true;
@@ -5925,4 +6768,916 @@ test('buildGroupedModels - handles models with no adapter', () => {
   expect(result[1].displayName).toBe('Model 2');
   expect(result[2]).toEqual({ header: 'Unknown' });
   expect(result[3].displayName).toBe('Model 1');
+});
+
+// --- applyStreamedToolResult (inline tool_result event capture) ---
+
+test('applyStreamedToolResult marks the tool completed and stores its result', () => {
+  const toolUse = { id: 'tu-1', status: 'executing' };
+  comp.applyStreamedToolResult(toolUse, { toolUseId: 'tu-1', content: [{ json: { hits: 3 } }] });
+  expect(toolUse.status).toBe('completed');
+  expect(toolUse.rawResult).toEqual({ hits: 3 });
+  expect(typeof toolUse.completedAt).toBe('string');
+});
+
+test('applyStreamedToolResult surfaces an error tool_result as tool error status', () => {
+  const toolUse = { id: 'tu-1', status: 'executing' };
+  comp.applyStreamedToolResult(toolUse, { toolUseId: 'tu-1', isError: true, content: [{ text: 'query exploded' }] });
+  expect(toolUse.status).toBe('error');
+  expect(toolUse.error).toBe('query exploded');
+  expect(toolUse.rawResult).toBe(null);
+});
+
+test('applyStreamedToolResult completes a result with empty content (no stuck spinner)', () => {
+  const toolUse = { id: 'tu-1', status: 'executing' };
+  comp.applyStreamedToolResult(toolUse, { toolUseId: 'tu-1', content: [] });
+  expect(toolUse.status).toBe('completed');
+  expect(toolUse.rawResult).toBe(null);
+});
+
+test('applyStreamedToolResult keeps a declined tool rejected (not error)', () => {
+  const toolUse = { id: 'tu-1', status: 'rejected', approved: false };
+  comp.applyStreamedToolResult(toolUse, { toolUseId: 'tu-1', status: 'rejected', isError: true, content: [{ text: 'declined' }] });
+  expect(toolUse.status).toBe('rejected');
+  expect(toolUse.error).toBe('declined');
+  expect(toolUse.rawResult).toBeFalsy();
+});
+
+// --- pendingSubAgentApprovals / subAgentApprovalAnnouncement ---
+
+test('pendingSubAgentApprovals lists child tools awaiting approval on active delegations only', () => {
+  comp.messages = [
+    {
+      role: 'assistant',
+      toolUses: [
+        {
+          // Active delegation with a pending child tool: announced.
+          name: 'delegate_to_Hunter',
+          status: 'running',
+          childSession: {
+            agentName: 'Hunter',
+            messages: [
+              { toolUses: [{ name: 'query_events', status: 'pending_approval' }] },
+              { toolUses: [{ name: 'ack_alerts', status: 'completed' }] },
+            ],
+          },
+        },
+        {
+          // Closed delegation: its children can no longer be awaiting approval.
+          name: 'delegate_to_Scout',
+          status: 'completed',
+          childSession: {
+            agentName: 'Scout',
+            messages: [
+              { toolUses: [{ name: 'query_cases', status: 'pending_approval' }] },
+            ],
+          },
+        },
+        // Plain (non-delegate) tool: ignored.
+        { name: 'query_events', status: 'pending_approval' },
+      ],
+    },
+  ];
+
+  expect(comp.pendingSubAgentApprovals()).toEqual([
+    { agentName: 'Hunter', toolName: 'query_events' },
+  ]);
+});
+
+test('subAgentApprovalAnnouncement formats one message per pending approval', () => {
+  // The harness flattens computeds into functions; provide the dependent
+  // computed's value directly, as Vue would.
+  comp.pendingSubAgentApprovals = [
+    { agentName: 'Hunter', toolName: 'query_events' },
+    { agentName: 'Scout', toolName: 'query_cases' },
+  ];
+
+  expect(comp.subAgentApprovalAnnouncement()).toBe(
+    'Sub-agent Hunter requests approval to run query_events. Sub-agent Scout requests approval to run query_cases.'
+  );
+});
+
+// --- executeTool delegation flow (ownership derived from delegationChildren) ---
+
+function sseChunk(obj) {
+  return `data: ${JSON.stringify(obj)}\n\n`;
+}
+
+function mockToolStream(chunks, { failWith = null } = {}) {
+  const read = jest.fn();
+  chunks.forEach((c) => read.mockResolvedValueOnce({ done: false, value: c }));
+  if (failWith) {
+    read.mockRejectedValueOnce(failWith);
+  } else {
+    read.mockResolvedValueOnce({ done: true });
+  }
+  return {
+    data: {
+      pipeThrough: jest.fn().mockReturnValue({
+        getReader: jest.fn().mockReturnValue({ read, cancel: jest.fn().mockResolvedValue() }),
+      }),
+    },
+  };
+}
+
+test('executeTool nests delegation output and completes the delegate on resolution', async () => {
+  const toolUse = { ...fakeToolUse, name: 'delegate_to_Hunter' };
+  comp.currentChatId = fakeSessionId;
+  comp.currentModel = 'test-model';
+  comp.loadCredits = jest.fn().mockResolvedValue();
+
+  mockPapi('post', mockToolStream([
+    sseChunk({ type: 'delegation_start', childSessionId: 'child-1', parentToolUseId: toolUse.id, agentName: 'Hunter' }),
+    sseChunk({ type: 'message_start', message: { role: 'assistant' } }),
+    sseChunk({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'childtext' } }),
+    sseChunk({ type: 'delegation_resolved', parentSessionId: fakeSessionId, parentToolUseId: toolUse.id }),
+    sseChunk({ type: 'message_start', message: { role: 'assistant' } }),
+    sseChunk({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'parentwrap' } }),
+    'data: [DONE]\n\n',
+  ]));
+
+  await comp.executeTool(toolUse);
+
+  // Sub-agent output rendered nested under the delegate tool.
+  expect(toolUse.childSession).toBeTruthy();
+  expect(toolUse.childSession.agentName).toBe('Hunter');
+  expect(toolUse.childSession.messages[0].content).toBe('childtext');
+
+  // Resolution completed the delegate card and removed the live child entry.
+  expect(toolUse.status).toBe('completed');
+  expect(toolUse.completedAt).toBeTruthy();
+  expect(comp.delegationChildren.size).toBe(0);
+
+  // The resumed parent turn rendered top-level, not nested.
+  const parentMsg = comp.messages[comp.messages.length - 1];
+  expect(parentMsg.content).toBe('parentwrap');
+});
+
+test('executeTool errors the active delegate card when the stream dies mid-delegation', async () => {
+  const toolUse = { ...fakeToolUse, name: 'delegate_to_Hunter' };
+  comp.currentChatId = fakeSessionId;
+  comp.currentModel = 'test-model';
+  comp.messages = [];
+
+  mockPapi('post', mockToolStream([
+    sseChunk({ type: 'delegation_start', childSessionId: 'child-1', parentToolUseId: toolUse.id, agentName: 'Hunter' }),
+    sseChunk({ type: 'message_start', message: { role: 'assistant' } }),
+  ], { failWith: new Error('stream died') }));
+
+  await comp.executeTool(toolUse);
+
+  // The delegate card closed with the error instead of spinning forever, and the
+  // live child entry was cleaned up.
+  expect(toolUse.status).toBe('error');
+  expect(toolUse.error).toBe('stream died');
+  expect(toolUse.completedAt).toBeTruthy();
+  expect(comp.delegationChildren.size).toBe(0);
+
+  // The failure belongs to the delegate card; no top-level error message is pushed.
+  expect(comp.messages).toEqual([]);
+});
+
+test('executeTool reports a top-level error when the stream dies after resolution', async () => {
+  const toolUse = { ...fakeToolUse, name: 'delegate_to_Hunter' };
+  comp.currentChatId = fakeSessionId;
+  comp.currentModel = 'test-model';
+  comp.messages = [];
+
+  mockPapi('post', mockToolStream([
+    sseChunk({ type: 'delegation_start', childSessionId: 'child-1', parentToolUseId: toolUse.id, agentName: 'Hunter' }),
+    sseChunk({ type: 'delegation_resolved', parentSessionId: fakeSessionId, parentToolUseId: toolUse.id }),
+  ], { failWith: new Error('late failure') }));
+
+  await comp.executeTool(toolUse);
+
+  // The delegation boundary was already closed, so no delegate card owns this
+  // failure: the error surfaces as a top-level chat message instead.
+  expect(comp.delegationChildren.size).toBe(0);
+  const lastMsg = comp.messages[comp.messages.length - 1];
+  expect(lastMsg.content).toContain('late failure');
+});
+
+// --- Reload reconstruction of an in-flight delegation (backend-driven) ---
+// On refresh, GET /sessions/{id} returns sub-sessions each with a backend-derived
+// `pendingApproval`. The reload must render the delegate as running, the sub-agent's
+// pending tool as actionable, register it, and repopulate delegationChildren so the
+// subsequent approval streams nested and resolves.
+
+// --- reload reconstruction helpers (direct tests; the reload tests below cover them end-to-end) ---
+
+test('collectResolvedToolUseIds gathers ids from structured and legacy tool_result messages', () => {
+  const ids = comp.collectResolvedToolUseIds([
+    { tags: ['tool_result'], message: { contentBlocks: [{ toolResult: { toolUseId: 'tu-1' } }] } },
+    // Legacy text-encoded result.
+    { tags: ['tool_result'], message: { contentBlocks: [{ type: 'text', text: 'ToolUseId: tu-legacy, Result: {"ok":true}' }] } },
+    // Not tagged tool_result: ignored even though it carries a toolResult block.
+    { tags: ['chat'], message: { contentBlocks: [{ toolResult: { toolUseId: 'tu-ignored' } }] } },
+    // Malformed entries are skipped, not fatal.
+    { tags: ['tool_result'], message: {} },
+    { tags: ['tool_result'], message: { contentBlocks: [{ type: 'text', text: 'no marker here' }] } },
+    null,
+  ]);
+
+  expect(ids).toEqual(new Set(['tu-1', 'tu-legacy']));
+});
+
+test('isActiveToolTurn is true only while everything after the turn is a tool_result', () => {
+  const toolResult = { tags: ['tool_result'] };
+  const chat = { tags: ['chat'] };
+
+  expect(comp.isActiveToolTurn([chat, toolResult, toolResult], 0)).toBe(true);
+  // The model (or user) continued past the turn: no longer active.
+  expect(comp.isActiveToolTurn([chat, toolResult, chat], 0)).toBe(false);
+  // Nothing after the turn at all: still active.
+  expect(comp.isActiveToolTurn([chat], 0)).toBe(true);
+  // An untagged/null trailing message ends the turn.
+  expect(comp.isActiveToolTurn([chat, null], 0)).toBe(false);
+});
+
+test('indexSubSessions keys sub-sessions by parent tool_use id and by session id', () => {
+  const subA = { session: { sessionId: 'child-1', parentToolUseId: 'd1' } };
+  const subB = { session: { sessionId: 'child-2' } }; // no parent linkage
+
+  const index = comp.indexSubSessions([subA, null, {}, subB]);
+
+  expect(index.bySessionId.get('child-1')).toBe(subA);
+  expect(index.bySessionId.get('child-2')).toBe(subB);
+  expect(index.byParentToolUseId.get('d1')).toBe(subA);
+  expect(index.byParentToolUseId.size).toBe(1);
+
+  const empty = comp.indexSubSessions(null);
+  expect(empty.bySessionId.size).toBe(0);
+  expect(empty.byParentToolUseId.size).toBe(0);
+});
+
+test('reconstructDelegateChildSessions rebuilds only matched delegate tools', () => {
+  comp.reconstructChildSession = jest.fn();
+  comp.currentChatId = 'parent-1';
+  const sub = { session: { sessionId: 'child-1', parentToolUseId: 'd1' } };
+  comp._loadSubSessions = comp.indexSubSessions([sub]);
+
+  const delegate = { id: 'd1', name: 'delegate_to_Hunter' };
+  const plainTool = { id: 't2', name: 'query_events' };
+  const unmatchedDelegate = { id: 'd9', name: 'delegate_to_Analyst' };
+  const nameless = { id: 't3' };
+  comp.reconstructDelegateChildSessions([delegate, plainTool, unmatchedDelegate, nameless]);
+
+  expect(comp.reconstructChildSession).toHaveBeenCalledTimes(1);
+  expect(comp.reconstructChildSession).toHaveBeenCalledWith(delegate, sub, comp._loadSubSessions, 'parent-1');
+
+  // Without a loaded sub-session index (live streaming, old sessions): no-op.
+  comp.reconstructChildSession.mockClear();
+  comp._loadSubSessions = null;
+  comp.reconstructDelegateChildSessions([delegate]);
+  expect(comp.reconstructChildSession).not.toHaveBeenCalled();
+});
+
+test('reconstructChildSession renders the sub-agent turn and attaches each tool_result by outcome', () => {
+  const sub = {
+    session: { sessionId: 'child-1', delegateAgent: 'Hunter' },
+    history: [
+      // The objective/user message must not render as a nested message.
+      { message: { role: 'user', contentBlocks: [{ type: 'text', text: 'find beacons' }] } },
+      { createTime: '2025-01-01T12:00:01.000Z', message: { role: 'assistant', thoughts: 'thinking', contentBlocks: [
+        { type: 'text', text: 'running three tools' },
+        { type: 'tool_use', id: 'c1', name: 'query_events', input: { q: 1 } },
+        { type: 'tool_use', id: 'c2', name: 'query_events', input: { q: 2 } },
+        { type: 'tool_use', id: 'c3', name: 'query_events', input: { q: 3 } },
+      ] } },
+      { createTime: '2025-01-01T12:00:02.000Z', tags: ['tool_result'], message: { contentBlocks: [
+        { toolResult: { toolUseId: 'c1', content: [{ json: { hits: 2 } }] } },
+      ] } },
+      { createTime: '2025-01-01T12:00:03.000Z', tags: ['tool_result'], message: { contentBlocks: [
+        { toolResult: { toolUseId: 'c2', isError: true, content: [{ text: 'query exploded' }] } },
+      ] } },
+      { createTime: '2025-01-01T12:00:04.000Z', tags: ['tool_result'], message: { contentBlocks: [
+        { toolResult: { toolUseId: 'c3', status: 'rejected', content: [] } },
+      ] } },
+    ],
+  };
+  const delegate = { id: 'd1', name: 'delegate_to_Hunter', status: 'completed' };
+
+  comp.reconstructChildSession(delegate, sub, comp.indexSubSessions([sub]), 'parent-1');
+
+  const cs = delegate.childSession;
+  expect(cs.agentName).toBe('Hunter');
+  expect(cs.messages).toHaveLength(1);
+  // Prose stays content and reasoning stays thoughts, matching the live view.
+  expect(cs.messages[0].content).toBe('running three tools');
+  expect(cs.messages[0].thoughts).toBe('thinking');
+
+  const [c1, c2, c3] = cs.messages[0].toolUses;
+  expect(c1.status).toBe('completed');
+  expect(c1.rawResult).toEqual({ hits: 2 });
+  expect(c1.completedAt).toBe('2025-01-01T12:00:02.000Z');
+  expect(c2.status).toBe('error');
+  expect(c2.error).toBe('query exploded');
+  expect(c3.status).toBe('rejected');
+  expect(c3.error).toBe(comp.i18n.assistantToolUseReject);
+
+  // Settled delegate: no live delegation linkage is registered.
+  expect(comp.delegationChildren.has('child-1')).toBe(false);
+});
+
+test('reconstructChildSession marks the flagged turn pending and abandons earlier unresolved tools', () => {
+  const sub = {
+    session: { sessionId: 'child-2', delegateAgent: 'Analyst' },
+    pendingApproval: { sessionId: 'child-2', toolUseId: 'p1' },
+    history: [
+      // An earlier turn whose tool never got a result: abandoned, not pending.
+      { createTime: '2025-01-01T12:00:01.000Z', message: { role: 'assistant', contentBlocks: [
+        { type: 'tool_use', id: 'old1', name: 'query_events', input: {} },
+      ] } },
+      // The active turn: the flagged tool AND its unresolved sibling await approval.
+      { createTime: '2025-01-01T12:00:02.000Z', message: { role: 'assistant', contentBlocks: [
+        { type: 'tool_use', id: 'p1', name: 'query_events', input: {} },
+        { type: 'tool_use', id: 'p2', name: 'query_events', input: {} },
+      ] } },
+    ],
+  };
+  const delegate = { id: 'd2', name: 'delegate_to_Analyst', status: 'executing' };
+
+  comp.reconstructChildSession(delegate, sub, comp.indexSubSessions([sub]), 'parent-1');
+
+  const [oldTurn, activeTurn] = delegate.childSession.messages;
+  expect(oldTurn.toolUses[0].status).toBe('skipped');
+  for (const t of activeTurn.toolUses) {
+    expect(t.status).toBe('pending_approval');
+    expect(t.approved).toBeNull();
+    // Registered so the queue runner can resolve and fire it after approval.
+    expect(comp.getSessionToolMap('child-2').get(t.id)).toBe(t);
+  }
+
+  // A running delegation is re-registered as a live delegation child.
+  const entry = comp.delegationChildren.get('child-2');
+  expect(entry).toBeTruthy();
+  expect(entry.parentToolUse).toBe(delegate);
+  expect(entry.parentToolUseId).toBe('d2');
+  expect(entry.parentSessionId).toBe('parent-1');
+  expect(entry.agentName).toBe('Analyst');
+});
+
+test('reconstructChildSession recurses into grandchild delegations', () => {
+  const grandSub = {
+    session: { sessionId: 'gchild-1', parentToolUseId: 'gd1', delegateAgent: 'Deep' },
+    history: [
+      { createTime: '2025-01-01T12:00:03.000Z', message: { role: 'assistant', contentBlocks: [{ type: 'text', text: 'deep work' }] } },
+    ],
+  };
+  const sub = {
+    session: { sessionId: 'child-3', delegateAgent: 'Hunter' },
+    history: [
+      { createTime: '2025-01-01T12:00:01.000Z', message: { role: 'assistant', contentBlocks: [
+        { type: 'tool_use', id: 'gd1', name: 'delegate_to_Deep', input: { objective: 'go deeper' } },
+      ] } },
+    ],
+  };
+  const delegate = { id: 'd3', name: 'delegate_to_Hunter', status: 'executing' };
+
+  comp.reconstructChildSession(delegate, sub, comp.indexSubSessions([sub, grandSub]), 'parent-1');
+
+  // A delegate tool that spawned a sub-session and has no result yet is running.
+  const grandDelegate = delegate.childSession.messages[0].toolUses[0];
+  expect(grandDelegate.status).toBe('executing');
+  expect(grandDelegate.approved).toBe(true);
+  expect(grandDelegate.childSession.agentName).toBe('Deep');
+  expect(grandDelegate.childSession.messages[0].content).toBe('deep work');
+
+  // The grandchild's live linkage points at its own parent delegate and session.
+  const entry = comp.delegationChildren.get('gchild-1');
+  expect(entry.parentToolUseId).toBe('gd1');
+  expect(entry.parentSessionId).toBe('child-3');
+});
+
+test('finalizeResolvedDelegations settles leftover live tools under a resolved delegate', () => {
+  const pendingChild = { id: 'c1', status: 'pending_approval', approved: null, sessionId: 'child-1' };
+  const executingChild = { id: 'c2', status: 'executing', approved: true, sessionId: 'child-1' };
+  const doneChild = { id: 'c3', status: 'completed', approved: true, sessionId: 'child-1', rawResult: { ok: 1 } };
+  comp.getSessionToolMap('child-1').set('c1', pendingChild);
+  comp.getSessionToolMap('child-1').set('c2', executingChild);
+  comp.delegationChildren.set('child-1', { parentToolUseId: 'd1' });
+  const delegate = { id: 'd1', status: 'completed', rawResult: { summary: 'done' },
+    childSession: { messages: [{ toolUses: [pendingChild, executingChild, doneChild] }] } };
+
+  comp.finalizeResolvedDelegations([{ toolUses: [delegate] }]);
+
+  expect(pendingChild.status).toBe('skipped');
+  expect(pendingChild.approved).toBe(false);
+  expect(executingChild.status).toBe('skipped');
+  expect(doneChild.status).toBe('completed');
+  // Unregistered so nothing can fire or resume against the dead sub-session.
+  expect(comp.getSessionToolMap('child-1').has('c1')).toBe(false);
+  expect(comp.getSessionToolMap('child-1').has('c2')).toBe(false);
+  expect(comp.delegationChildren.has('child-1')).toBe(false);
+});
+
+test('finalizeResolvedDelegations settles a live-rejected delegate but leaves a running one alone', () => {
+  // Rejected live: carries no rawResult, so the status check must catch it.
+  const rejectedKid = { id: 'r1', status: 'executing', approved: true, sessionId: 'child-rej' };
+  comp.getSessionToolMap('child-rej').set('r1', rejectedKid);
+  const rejectedDelegate = { id: 'dr', status: 'rejected', rawResult: null,
+    childSession: { messages: [{ toolUses: [rejectedKid] }] } };
+
+  // Still running: its pending child stays actionable.
+  const liveKid = { id: 'l1', status: 'pending_approval', approved: null, sessionId: 'child-live' };
+  comp.getSessionToolMap('child-live').set('l1', liveKid);
+  comp.delegationChildren.set('child-live', { parentToolUseId: 'dl' });
+  const liveDelegate = { id: 'dl', status: 'executing', rawResult: null,
+    childSession: { messages: [{ toolUses: [liveKid] }] } };
+
+  comp.finalizeResolvedDelegations([{ toolUses: [rejectedDelegate, liveDelegate] }]);
+
+  expect(rejectedKid.status).toBe('skipped');
+  expect(comp.getSessionToolMap('child-rej').has('r1')).toBe(false);
+
+  expect(liveKid.status).toBe('pending_approval');
+  expect(comp.getSessionToolMap('child-live').has('l1')).toBe(true);
+  expect(comp.delegationChildren.has('child-live')).toBe(true);
+});
+
+test('finalizeResolvedDelegations cascades settlement from a settled ancestor to all descendants', () => {
+  const grandTool = { id: 'g1', status: 'executing', approved: true, sessionId: 'gchild' };
+  comp.getSessionToolMap('gchild').set('g1', grandTool);
+  comp.delegationChildren.set('gchild', { parentToolUseId: 'm1' });
+  // The intermediate delegate looks live on its own (executing, no result)...
+  const midDelegate = { id: 'm1', status: 'executing', rawResult: null, sessionId: 'child',
+    childSession: { messages: [{ toolUses: [grandTool] }] } };
+  // ...but its ancestor errored, which settles the whole subtree.
+  const top = { id: 't1', status: 'error', rawResult: null,
+    childSession: { messages: [{ toolUses: [midDelegate] }] } };
+
+  comp.finalizeResolvedDelegations([{ toolUses: [top] }]);
+
+  expect(midDelegate.status).toBe('skipped');
+  expect(grandTool.status).toBe('skipped');
+  expect(comp.getSessionToolMap('gchild').has('g1')).toBe(false);
+  expect(comp.delegationChildren.has('gchild')).toBe(false);
+});
+
+test('reload renders a paused delegation: delegate running, sub-agent tool actionable, wired to fire', () => {
+  comp.resetContextLength = jest.fn();
+  comp.currentChatId = 'parent-session';
+  comp.delegationChildren = new Map();
+  global.Vue = { ref: jest.fn((value) => ({ value })) };
+
+  const parentHistory = [
+    { createTime: '2025-01-01T12:00:00.000Z', message: { role: 'user', contentBlocks: [{ type: 'text', text: 'investigate' }] } },
+    { createTime: '2025-01-01T12:00:01.000Z', message: { role: 'assistant', contentBlocks: [
+      { type: 'tool_use', id: 'delegate-1', name: 'delegate_to_Hunter', input: { objective: 'find beacons' } },
+    ] } },
+  ];
+  const subSessions = [
+    {
+      session: { sessionId: 'child-1', parentToolUseId: 'delegate-1', delegateAgent: 'Hunter' },
+      pendingApproval: { sessionId: 'child-1', toolUseId: 'child-tool-1', toolName: 'query_events', input: { q: 'dns' } },
+      history: [
+        { message: { role: 'user', contentBlocks: [{ type: 'text', text: 'find beacons' }] } },
+        { createTime: '2025-01-01T12:00:02.000Z', message: { role: 'assistant', contentBlocks: [
+          { type: 'tool_use', id: 'child-tool-1', name: 'query_events', input: { q: 'dns' } },
+        ] } },
+      ],
+    },
+  ];
+
+  comp._loadSubSessions = comp.indexSubSessions(subSessions);
+  const result = comp.convertBackendMessagesToFrontend(parentHistory);
+  comp._loadSubSessions = null;
+
+  const delegateTool = result[result.length - 1].toolUses[0];
+  expect(delegateTool.id).toBe('delegate-1');
+  // Running, not pending approval (no re-prompt → no duplicate sub-session).
+  expect(delegateTool.status).toBe('executing');
+  expect(comp.sessionTools('parent-session').floatingTool).toBeFalsy();
+  expect(delegateTool.childSession).toBeTruthy();
+
+  // The sub-agent's pending tool is actionable.
+  const pending = comp.pendingChildTools(delegateTool);
+  expect(pending).toHaveLength(1);
+  expect(pending[0].id).toBe('child-tool-1');
+  expect(pending[0].status).toBe('pending_approval');
+  expect(pending[0].sessionId).toBe('child-1');
+
+  // Registered so the queue runner can resolve + fire it, and delegationChildren is
+  // repopulated so the approval response nests under the delegate.
+  expect(comp.getSessionToolMap('child-1').get('child-tool-1')).toBe(pending[0]);
+  expect(comp.delegationChildren.has('child-1')).toBe(true);
+  const entry = comp.delegationChildren.get('child-1');
+  expect(entry.parentToolUseId).toBe('delegate-1');
+  expect(entry.parentSessionId).toBe('parent-session');
+  expect(entry.parentToolUse).toBe(delegateTool);
+});
+
+// A sub-agent turn can request several tools in parallel. The backend flags only one
+// as the pending approval, but every unresolved tool in that same turn is equally
+// awaiting approval -- none should reload as skipped.
+test('reload keeps all parallel pending sub-agent tools actionable, not just the flagged one', () => {
+  comp.resetContextLength = jest.fn();
+  comp.currentChatId = 'parent-session';
+  comp.delegationChildren = new Map();
+  global.Vue = { ref: jest.fn((value) => ({ value })) };
+
+  const parentHistory = [
+    { createTime: '2025-01-01T12:00:01.000Z', message: { role: 'assistant', contentBlocks: [
+      { type: 'tool_use', id: 'delegate-1', name: 'delegate_to_Hunter', input: { objective: 'recent alerts' } },
+    ] } },
+  ];
+  const subSessions = [
+    {
+      session: { sessionId: 'child-1', parentToolUseId: 'delegate-1', delegateAgent: 'Hunter' },
+      // The backend flags the last unresolved tool_use; its parallel siblings must
+      // still reload as pending, not skipped.
+      pendingApproval: { sessionId: 'child-1', toolUseId: 'child-tool-3', toolName: 'query_events', input: {} },
+      history: [
+        { message: { role: 'user', contentBlocks: [{ type: 'text', text: 'recent alerts' }] } },
+        { createTime: '2025-01-01T12:00:02.000Z', message: { role: 'assistant', contentBlocks: [
+          { type: 'tool_use', id: 'child-tool-1', name: 'query_events', input: { sev: 'critical' } },
+          { type: 'tool_use', id: 'child-tool-2', name: 'query_events', input: { sev: 'high' } },
+          { type: 'tool_use', id: 'child-tool-3', name: 'query_events', input: { sev: 'medium' } },
+        ] } },
+      ],
+    },
+  ];
+
+  comp._loadSubSessions = comp.indexSubSessions(subSessions);
+  const result = comp.convertBackendMessagesToFrontend(parentHistory);
+  comp._loadSubSessions = null;
+
+  const delegateTool = result[result.length - 1].toolUses[0];
+  const childTools = delegateTool.childSession.messages.flatMap(m => m.toolUses);
+  expect(childTools.map(t => t.id)).toEqual(['child-tool-1', 'child-tool-2', 'child-tool-3']);
+  // All three unresolved siblings remain actionable.
+  childTools.forEach(t => {
+    expect(t.status).toBe('pending_approval');
+    expect(t.approved).toBe(null);
+    expect(comp.getSessionToolMap('child-1').get(t.id)).toBe(t);
+  });
+  expect(comp.pendingChildTools(delegateTool)).toHaveLength(3);
+});
+
+test('reload of a resolved delegation is unchanged (no pendingApproval): delegate + child completed', () => {
+  comp.resetContextLength = jest.fn();
+  comp.currentChatId = 'parent-session';
+  comp.delegationChildren = new Map();
+  global.Vue = { ref: jest.fn((value) => ({ value })) };
+
+  const parentHistory = [
+    { createTime: '2025-01-01T12:00:01.000Z', message: { role: 'assistant', contentBlocks: [
+      { type: 'tool_use', id: 'delegate-1', name: 'delegate_to_Hunter', input: {} },
+    ] } },
+    { createTime: '2025-01-01T12:00:03.000Z', tags: ['tool_result'], message: { role: 'user', contentBlocks: [
+      { toolResult: { toolUseId: 'delegate-1', content: [{ json: { result: 'done' } }] } },
+    ] } },
+    { createTime: '2025-01-01T12:00:04.000Z', message: { role: 'assistant', contentBlocks: [{ type: 'text', text: 'final answer' }] } },
+  ];
+  const subSessions = [
+    {
+      session: { sessionId: 'child-1', parentToolUseId: 'delegate-1', delegateAgent: 'Hunter' },
+      // resolved → backend returns no pendingApproval
+      history: [
+        { message: { role: 'user', contentBlocks: [{ type: 'text', text: 'obj' }] } },
+        { message: { role: 'assistant', contentBlocks: [{ type: 'tool_use', id: 'child-tool-1', name: 'query_events', input: {} }] } },
+        { tags: ['tool_result'], message: { role: 'user', contentBlocks: [{ toolResult: { toolUseId: 'child-tool-1', content: [{ json: { r: 1 } }] } }] } },
+        { message: { role: 'assistant', contentBlocks: [{ type: 'text', text: 'child done' }] } },
+      ],
+    },
+  ];
+
+  comp._loadSubSessions = comp.indexSubSessions(subSessions);
+  const result = comp.convertBackendMessagesToFrontend(parentHistory);
+  comp._loadSubSessions = null;
+
+  const delegateTool = result[0].toolUses[0];
+  expect(delegateTool.status).toBe('completed');
+  const childTool = delegateTool.childSession.messages.flatMap(m => m.toolUses)[0];
+  expect(childTool.status).toBe('completed');
+  expect(childTool.rawResult).toEqual({ r: 1 });
+  expect(comp.pendingChildTools(delegateTool)).toHaveLength(0);
+  expect(comp.delegationChildren.has('child-1')).toBe(false);
+});
+
+// A reloaded sub-agent's response prose must render as content (always visible),
+// matching the live stream and the top-level reload -- not folded into thoughts
+// (hidden unless "show thinking" is on). Guards reconstructChildSession.
+test('reload renders a sub-agent reply as content, with reasoning kept in thoughts', () => {
+  comp.resetContextLength = jest.fn();
+  comp.currentChatId = 'parent-session';
+  comp.delegationChildren = new Map();
+  global.Vue = { ref: jest.fn((value) => ({ value })) };
+
+  const parentHistory = [
+    { createTime: '2025-01-01T12:00:01.000Z', message: { role: 'assistant', contentBlocks: [
+      { type: 'tool_use', id: 'delegate-1', name: 'delegate_to_Hunter', input: {} },
+    ] } },
+    { createTime: '2025-01-01T12:00:03.000Z', tags: ['tool_result'], message: { role: 'user', contentBlocks: [
+      { toolResult: { toolUseId: 'delegate-1', content: [{ json: { result: 'done' } }] } },
+    ] } },
+  ];
+  const subSessions = [
+    {
+      session: { sessionId: 'child-1', parentToolUseId: 'delegate-1', delegateAgent: 'Hunter' },
+      history: [
+        { message: { role: 'user', contentBlocks: [{ type: 'text', text: 'obj' }] } },
+        { createTime: '2025-01-01T12:00:02.000Z', message: { role: 'assistant', thoughts: 'considering the data',
+          contentBlocks: [{ type: 'text', text: 'I found 3 beacons.' }] } },
+      ],
+    },
+  ];
+
+  comp._loadSubSessions = comp.indexSubSessions(subSessions);
+  const result = comp.convertBackendMessagesToFrontend(parentHistory);
+  comp._loadSubSessions = null;
+
+  const childMsg = result[0].toolUses[0].childSession.messages.find(m => m.content || m.thoughts);
+  expect(childMsg.content).toBe('I found 3 beacons.'); // visible prose, not folded away
+  expect(childMsg.thoughts).toBe('considering the data'); // reasoning stays in thoughts
+  expect(childMsg.role).toBe('assistant');
+});
+
+// A reconstructed sub-agent tool_use with no tool_result must NOT show a false
+// "completed" checkmark -- it was requested but never produced a result. Only the
+// backend-flagged pending tool stays actionable; other unresolved tools settle to
+// skipped. Guards reconstructChildSession's default status (#3).
+test('reload does not mark resultless sub-agent tools as completed', () => {
+  comp.resetContextLength = jest.fn();
+  comp.currentChatId = 'parent-session';
+  comp.delegationChildren = new Map();
+  global.Vue = { ref: jest.fn((value) => ({ value })) };
+
+  const parentHistory = [
+    { createTime: '2025-01-01T12:00:01.000Z', message: { role: 'assistant', contentBlocks: [
+      { type: 'tool_use', id: 'delegate-1', name: 'delegate_to_Hunter', input: {} },
+    ] } },
+  ];
+  // Delegation still running (no parent tool_result). Sub-agent requested two tools
+  // with no results; the backend flags only the last as pending.
+  const subSessions = [
+    {
+      session: { sessionId: 'child-1', parentToolUseId: 'delegate-1', delegateAgent: 'Hunter' },
+      pendingApproval: { sessionId: 'child-1', toolUseId: 'child-tool-2', toolName: 'query_events', input: {} },
+      history: [
+        { message: { role: 'user', contentBlocks: [{ type: 'text', text: 'obj' }] } },
+        { createTime: '2025-01-01T12:00:02.000Z', message: { role: 'assistant', contentBlocks: [
+          { type: 'tool_use', id: 'child-tool-1', name: 'query_events', input: {} },
+        ] } },
+        { createTime: '2025-01-01T12:00:03.000Z', message: { role: 'assistant', contentBlocks: [
+          { type: 'tool_use', id: 'child-tool-2', name: 'query_events', input: {} },
+        ] } },
+      ],
+    },
+  ];
+
+  comp._loadSubSessions = comp.indexSubSessions(subSessions);
+  const result = comp.convertBackendMessagesToFrontend(parentHistory);
+  comp._loadSubSessions = null;
+
+  const childTools = result[0].toolUses[0].childSession.messages.flatMap(m => m.toolUses || []);
+  const t1 = childTools.find(t => t.id === 'child-tool-1');
+  const t2 = childTools.find(t => t.id === 'child-tool-2');
+  expect(t1.status).toBe('skipped');          // resultless, not the pending one -> not a false checkmark
+  expect(t2.status).toBe('pending_approval');  // backend-flagged pending stays actionable
+});
+
+// A delegation that terminally resolved (its delegate errored) must leave no
+// actionable sub-agent tool behind, even if the backend still reports one pending --
+// the delegation is over. Guards finalizeResolvedDelegations (#2).
+test('reload makes a resolved (errored) delegation inert: no actionable child tool', () => {
+  comp.resetContextLength = jest.fn();
+  comp.currentChatId = 'parent-session';
+  comp.delegationChildren = new Map();
+  global.Vue = { ref: jest.fn((value) => ({ value })) };
+
+  const parentHistory = [
+    { createTime: '2025-01-01T12:00:01.000Z', message: { role: 'assistant', contentBlocks: [
+      { type: 'tool_use', id: 'delegate-1', name: 'delegate_to_Hunter', input: {} },
+    ] } },
+    // The delegation resolved as an error (e.g. halted/aborted) -> parent gets an error result.
+    { createTime: '2025-01-01T12:00:05.000Z', tags: ['tool_result'], message: { role: 'user', contentBlocks: [
+      { toolResult: { toolUseId: 'delegate-1', isError: true, content: [{ text: 'sub-agent failed' }] } },
+    ] } },
+  ];
+  // ...yet the sub-session still has a trailing unresolved tool the backend flags pending.
+  const subSessions = [
+    {
+      session: { sessionId: 'child-1', parentToolUseId: 'delegate-1', delegateAgent: 'Hunter' },
+      pendingApproval: { sessionId: 'child-1', toolUseId: 'child-tool-1', toolName: 'query_events', input: {} },
+      history: [
+        { message: { role: 'user', contentBlocks: [{ type: 'text', text: 'obj' }] } },
+        { createTime: '2025-01-01T12:00:02.000Z', message: { role: 'assistant', contentBlocks: [
+          { type: 'tool_use', id: 'child-tool-1', name: 'query_events', input: {} },
+        ] } },
+      ],
+    },
+  ];
+
+  comp._loadSubSessions = comp.indexSubSessions(subSessions);
+  const result = comp.convertBackendMessagesToFrontend(parentHistory);
+  comp._loadSubSessions = null;
+
+  const delegateTool = result[0].toolUses[0];
+  expect(delegateTool.status).toBe('error'); // the delegation itself failed
+
+  // The sub-agent tool is NOT actionable: settled to skipped, unregistered, no linkage.
+  const childTool = delegateTool.childSession.messages.flatMap(m => m.toolUses || [])[0];
+  expect(childTool.status).toBe('skipped');
+  expect(comp.pendingChildTools(delegateTool)).toHaveLength(0);
+  expect(comp.sessionToolState.get('child-1') && comp.sessionToolState.get('child-1').toolsById.has('child-tool-1')).toBeFalsy();
+  expect(comp.delegationChildren.has('child-1')).toBe(false);
+});
+
+// A skipped delegate (unresolved, but the conversation moved on) is terminal too: its
+// sub-agent tools must settle to skipped, not stay actionable. Guards the broadened
+// settled check in finalizeResolvedDelegations.
+test('reload makes a skipped delegation inert: child tools settle to skipped', () => {
+  comp.resetContextLength = jest.fn();
+  comp.currentChatId = 'parent-session';
+  comp.delegationChildren = new Map();
+  global.Vue = { ref: jest.fn((value) => ({ value })) };
+
+  const parentHistory = [
+    { createTime: '2025-01-01T12:00:01.000Z', message: { role: 'assistant', contentBlocks: [
+      { type: 'tool_use', id: 'delegate-1', name: 'delegate_to_Hunter', input: {} },
+    ] } },
+    // No tool_result for delegate-1; the conversation moved on with a later turn, so the
+    // delegate reloads as 'skipped'.
+    { createTime: '2025-01-01T12:00:06.000Z', message: { role: 'assistant', contentBlocks: [
+      { type: 'text', text: 'moving on without the delegation' },
+    ] } },
+  ];
+  const subSessions = [
+    {
+      session: { sessionId: 'child-1', parentToolUseId: 'delegate-1', delegateAgent: 'Hunter' },
+      pendingApproval: { sessionId: 'child-1', toolUseId: 'child-tool-1', toolName: 'query_events', input: {} },
+      history: [
+        { message: { role: 'user', contentBlocks: [{ type: 'text', text: 'obj' }] } },
+        { createTime: '2025-01-01T12:00:02.000Z', message: { role: 'assistant', contentBlocks: [
+          { type: 'tool_use', id: 'child-tool-1', name: 'query_events', input: {} },
+        ] } },
+      ],
+    },
+  ];
+
+  comp._loadSubSessions = comp.indexSubSessions(subSessions);
+  const result = comp.convertBackendMessagesToFrontend(parentHistory);
+  comp._loadSubSessions = null;
+
+  const delegateTool = result[0].toolUses[0];
+  expect(delegateTool.status).toBe('skipped'); // the delegation was abandoned
+
+  const childTool = delegateTool.childSession.messages.flatMap(m => m.toolUses || [])[0];
+  expect(childTool.status).toBe('skipped');
+  expect(comp.pendingChildTools(delegateTool)).toHaveLength(0);
+  expect(comp.sessionToolState.get('child-1') && comp.sessionToolState.get('child-1').toolsById.has('child-tool-1')).toBeFalsy();
+  expect(comp.delegationChildren.has('child-1')).toBe(false);
+});
+
+test('approving a reconstructed sub-agent tool resolves it from the session map and executes it', async () => {
+  comp.resetContextLength = jest.fn();
+  comp.currentChatId = 'parent-session';
+  comp.delegationChildren = new Map();
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
+  global.Vue = { ref: jest.fn((value) => ({ value })) };
+
+  const parentHistory = [
+    { createTime: '2025-01-01T12:00:01.000Z', message: { role: 'assistant', contentBlocks: [
+      { type: 'tool_use', id: 'delegate-1', name: 'delegate_to_Hunter', input: {} },
+    ] } },
+  ];
+  const subSessions = [
+    {
+      session: { sessionId: 'child-1', parentToolUseId: 'delegate-1', delegateAgent: 'Hunter' },
+      pendingApproval: { sessionId: 'child-1', toolUseId: 'child-tool-1', toolName: 'query_events', input: { q: 'dns' } },
+      history: [
+        { message: { role: 'user', contentBlocks: [{ type: 'text', text: 'find beacons' }] } },
+        { createTime: '2025-01-01T12:00:02.000Z', message: { role: 'assistant', contentBlocks: [
+          { type: 'tool_use', id: 'child-tool-1', name: 'query_events', input: { q: 'dns' } },
+        ] } },
+      ],
+    },
+  ];
+
+  comp._loadSubSessions = comp.indexSubSessions(subSessions);
+  const result = comp.convertBackendMessagesToFrontend(parentHistory);
+  comp._loadSubSessions = null;
+
+  const delegateTool = result[result.length - 1].toolUses[0];
+  const pending = comp.pendingChildTools(delegateTool)[0];
+
+  // Before the wiring, the queue runner couldn't resolve the reconstructed tool, so
+  // executeTool (which fires the POST) was never called. Spy to prove it now is.
+  comp.executeTool = jest.fn().mockResolvedValue();
+
+  await comp.approveTool(pending);
+  await new Promise((r) => setTimeout(r, 0)); // let the fire-and-forget queue drain
+
+  expect(comp.executeTool).toHaveBeenCalledTimes(1);
+  expect(comp.executeTool.mock.calls[0][0].id).toBe('child-tool-1');
+  expect(comp.executeTool.mock.calls[0][0].sessionId).toBe('child-1');
+});
+
+// Guards the recursive delegation renderer: a delegation that itself delegates must
+// nest to any depth. The bug this prevents was a hand-coded template that stopped at
+// one level, so a grandchild sub-agent's tool calls never rendered. Rendering is split
+// into two globally-registered components that recurse through each other --
+// tool-use-card renders a delegation's transcript via delegation-child, which renders
+// each sub-agent tool call back through tool-use-card. (The harness can't mount Vuetify
+// DOM, so we assert registration, the provided context, and the recursion in the
+// template files.)
+test('tool-use-card and delegation-child recurse through each other to any depth', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const pagesDir = path.join(__dirname, '../../pages');
+
+  const card = global.components.find(c => c.name === 'tool-use-card');
+  const child = global.components.find(c => c.name === 'delegation-child');
+  expect(card).toBeTruthy();
+  expect(child).toBeTruthy();
+
+  // Both reach page helpers via the context the page provides as `delegationCtx`.
+  expect(card.component.inject.ctx.from).toBe('delegationCtx');
+  expect(child.component.inject.ctx.from).toBe('delegationCtx');
+  expect(comp.provide.call(comp).delegationCtx).toBe(comp);
+
+  // tool-use-card -> delegation-child, gated on the tool having its own childSession.
+  const cardTmpl = fs.readFileSync(path.join(pagesDir, 'tool-use-card.html'), 'utf8');
+  expect(cardTmpl).toContain('<delegation-child');
+  expect(cardTmpl).toContain('toolUse.childSession');
+
+  // delegation-child -> tool-use-card (nested), closing the recursion cycle.
+  const childTmpl = fs.readFileSync(path.join(pagesDir, 'delegation-child.html'), 'utf8');
+  expect(childTmpl).toContain('<tool-use-card');
+  expect(childTmpl).toContain('nested');
+});
+
+test('postToolRequest returns the response on success without retrying', async () => {
+  comp.$root.papi.post = jest.fn().mockResolvedValue({ data: 'stream' });
+
+  const res = await comp.postToolRequest({ name: 'query_events' }, { sessionId: 's1' });
+
+  expect(res).toEqual({ data: 'stream' });
+  expect(comp.$root.papi.post).toHaveBeenCalledTimes(1);
+  expect(comp.$root.papi.post.mock.calls[0][0]).toBe('/assistant/tool/query_events');
+});
+
+test('postToolRequest retries on 409 then succeeds', async () => {
+  comp.toolBusyRetryDelayMs = 0;
+  const conflict = { response: { status: 409 } };
+  comp.$root.papi.post = jest.fn()
+    .mockRejectedValueOnce(conflict)
+    .mockRejectedValueOnce(conflict)
+    .mockResolvedValue({ data: 'stream' });
+
+  const res = await comp.postToolRequest({ name: 'query_events' }, {});
+
+  expect(res).toEqual({ data: 'stream' });
+  expect(comp.$root.papi.post).toHaveBeenCalledTimes(3);
+});
+
+test('postToolRequest re-throws a non-409 error without retrying', async () => {
+  const serverErr = { response: { status: 500 } };
+  comp.$root.papi.post = jest.fn().mockRejectedValue(serverErr);
+
+  await expect(comp.postToolRequest({ name: 'query_events' }, {})).rejects.toBe(serverErr);
+  expect(comp.$root.papi.post).toHaveBeenCalledTimes(1);
+});
+
+test('postToolRequest gives up after the retry bound on persistent 409s', async () => {
+  comp.toolBusyRetryDelayMs = 0;
+  comp.toolBusyMaxRetries = 3;
+  const conflict = { response: { status: 409 } };
+  comp.$root.papi.post = jest.fn().mockRejectedValue(conflict);
+
+  await expect(comp.postToolRequest({ name: 'query_events' }, {})).rejects.toBe(conflict);
+  // Initial attempt plus toolBusyMaxRetries retries.
+  expect(comp.$root.papi.post).toHaveBeenCalledTimes(4);
+});
+
+test('isToolAlreadyResolvedError is false for missing or non-400 errors', async () => {
+  expect(await comp.isToolAlreadyResolvedError(null)).toBe(false);
+  expect(await comp.isToolAlreadyResolvedError({})).toBe(false);
+  expect(await comp.isToolAlreadyResolvedError({ response: { status: 500, data: 'ERROR_TOOL_ALREADY_RESOLVED' } })).toBe(false);
+});
+
+test('isToolAlreadyResolvedError detects the marker in a string body', async () => {
+  expect(await comp.isToolAlreadyResolvedError({ response: { status: 400, data: 'bad request: ERROR_TOOL_ALREADY_RESOLVED' } })).toBe(true);
+  expect(await comp.isToolAlreadyResolvedError({ response: { status: 400, data: 'some other 400' } })).toBe(false);
+  expect(await comp.isToolAlreadyResolvedError({ response: { status: 400, data: { code: 400 } } })).toBe(false);
+});
+
+test('isToolAlreadyResolvedError decodes a streamed 400 body', async () => {
+  const streamBody = {
+    pipeThrough: () => ({
+      getReader: () => ({ read: async () => ({ value: 'oops: ERROR_TOOL_ALREADY_RESOLVED', done: false }) }),
+    }),
+  };
+  expect(await comp.isToolAlreadyResolvedError({ response: { status: 400, data: streamBody } })).toBe(true);
+});
+
+test('isToolAlreadyResolvedError is false when the streamed body cannot be read', async () => {
+  const lockedStream = { pipeThrough: () => { throw new Error('stream locked'); } };
+  expect(await comp.isToolAlreadyResolvedError({ response: { status: 400, data: lockedStream } })).toBe(false);
+
+  const failingReader = {
+    pipeThrough: () => ({ getReader: () => ({ read: async () => { throw new Error('read failed'); } }) }),
+  };
+  expect(await comp.isToolAlreadyResolvedError({ response: { status: 400, data: failingReader } })).toBe(false);
 });

@@ -70,9 +70,13 @@ func (a *OpenAIChatAdapter) SendMessage(ctx context.Context, req *model.ChatRequ
 	tools := convertToolConfigToChatCompletions(req)
 
 	params := openai.ChatCompletionNewParams{
-		Model:             req.Model,
-		Messages:          messages,
-		ParallelToolCalls: openai.Bool(false),
+		Model:    req.Model,
+		Messages: messages,
+	}
+
+	// MaxTokens (when set, e.g. by a per-sub-session budget) caps output tokens.
+	if req.MaxTokens > 0 {
+		params.MaxCompletionTokens = openai.Int(int64(req.MaxTokens))
 	}
 
 	if tools != nil {
@@ -144,12 +148,16 @@ func (a *OpenAIChatAdapter) SendMessageStream(ctx context.Context, req *model.Ch
 	tools := convertToolConfigToChatCompletions(req)
 
 	params := openai.ChatCompletionNewParams{
-		Model:             req.Model,
-		Messages:          messages,
-		ParallelToolCalls: openai.Bool(false),
+		Model:    req.Model,
+		Messages: messages,
 		StreamOptions: openai.ChatCompletionStreamOptionsParam{
 			IncludeUsage: openai.Bool(true),
 		},
+	}
+
+	// MaxTokens (when set, e.g. by a per-sub-session budget) caps output tokens.
+	if req.MaxTokens > 0 {
+		params.MaxCompletionTokens = openai.Int(int64(req.MaxTokens))
 	}
 
 	if tools != nil {
@@ -185,6 +193,7 @@ func (a *OpenAIChatAdapter) SendMessageStream(ctx context.Context, req *model.Ch
 
 	go func() {
 		defer bodyWriter.Close()
+		defer processor.releaseCaller()
 
 		var finishReason string
 		var usage openai.CompletionUsage

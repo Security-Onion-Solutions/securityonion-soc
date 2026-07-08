@@ -481,7 +481,7 @@ func TestEscalateAlertsTool_Execute(t *testing.T) {
 
 			// Create tool and execute
 			tool := &EscalateAlertsTool{}
-			result, err := tool.Execute(ctx, mockServer, tc.params, "")
+			result, err := tool.Execute(ctx, mockServer, &model.ToolRequest{Params: json.RawMessage(tc.params)})
 
 			// Assert error expectations
 			if tc.expectedError {
@@ -582,7 +582,7 @@ func TestEscalateAlertsTool_Execute_VerifyContextPropagation(t *testing.T) {
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user-123")
 
 	tool := &EscalateAlertsTool{}
-	_, err := tool.Execute(ctx, mockServer, `{"search_filter": "soc_id:test-alert", "case_title": "Test Case"}`, "")
+	_, err := tool.Execute(ctx, mockServer, &model.ToolRequest{Params: json.RawMessage(`{"search_filter": "soc_id:test-alert", "case_title": "Test Case"}`)})
 
 	assert.NoError(t, err)
 	assert.Len(t, mockEventstore.InputContexts, 2) // Once for Search, once for Acknowledge
@@ -615,7 +615,7 @@ func TestEscalateAlertsTool_Execute_EmptySearchFilter(t *testing.T) {
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
 	tool := &EscalateAlertsTool{}
-	result, err := tool.Execute(ctx, mockServer, `{"search_filter": "", "case_title": "Empty Filter Case"}`, "")
+	result, err := tool.Execute(ctx, mockServer, &model.ToolRequest{Params: json.RawMessage(`{"search_filter": "", "case_title": "Empty Filter Case"}`)})
 
 	// Empty search filter results in an error during query parsing
 	assert.Error(t, err)
@@ -678,7 +678,7 @@ func TestEscalateAlertsTool_Execute_ComplexQuery(t *testing.T) {
 		"range_end": "2024/12/07 12:00:00 PM",
 		"range_format": "2006/01/02 3:04:05 PM"
 	}`
-	result, err := tool.Execute(ctx, mockServer, params, "")
+	result, err := tool.Execute(ctx, mockServer, &model.ToolRequest{Params: json.RawMessage(params)})
 
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
@@ -743,7 +743,7 @@ func TestEscalateAlertsTool_Execute_NoAlertsEscalated(t *testing.T) {
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
 	tool := &EscalateAlertsTool{}
-	result, err := tool.Execute(ctx, mockServer, `{"search_filter": "soc_id:alert-123", "case_title": "Test Case"}`, "")
+	result, err := tool.Execute(ctx, mockServer, &model.ToolRequest{Params: json.RawMessage(`{"search_filter": "soc_id:alert-123", "case_title": "Test Case"}`)})
 
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
@@ -789,7 +789,7 @@ func TestEscalateAlertsTool_Execute_AcknowledgeError(t *testing.T) {
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
 	tool := &EscalateAlertsTool{}
-	result, err := tool.Execute(ctx, mockServer, `{"search_filter": "soc_id:alert-123", "case_title": "Test Case"}`, "")
+	result, err := tool.Execute(ctx, mockServer, &model.ToolRequest{Params: json.RawMessage(`{"search_filter": "soc_id:alert-123", "case_title": "Test Case"}`)})
 
 	assert.Error(t, err)
 	assert.Nil(t, result)

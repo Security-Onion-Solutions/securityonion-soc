@@ -16,6 +16,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
+	"github.com/google/uuid"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
@@ -74,17 +75,23 @@ func (a *OpenAIResponsesAdapter) SendMessage(ctx context.Context, req *model.Cha
 		prompt += "\n" + req.SystemAppend
 	}
 
-	// Call non-streaming API
-	resp, err := a.client.ResponsesNew(ctx, responses.ResponseNewParams{
+	params := responses.ResponseNewParams{
 		Model:        req.Model,
 		Input:        history,
 		Instructions: openai.String(prompt),
 		Tools:        tools,
-		MaxToolCalls: openai.Int(1),
 		Reasoning: shared.ReasoningParam{
 			Summary: "auto",
 		},
-	})
+	}
+
+	// MaxTokens (when set, e.g. by a per-sub-session budget) caps output tokens.
+	if req.MaxTokens > 0 {
+		params.MaxOutputTokens = openai.Int(int64(req.MaxTokens))
+	}
+
+	// Call non-streaming API
+	resp, err := a.client.ResponsesNew(ctx, params)
 	if err != nil {
 		logger.WithFields(log.Fields{
 			"model": req.Model,
@@ -117,7 +124,8 @@ func (a *OpenAIResponsesAdapter) SendMessage(ctx context.Context, req *model.Cha
 			// Handle function calls (tool use)
 			toolUseId := item.CallID
 			if toolUseId == "" {
-				toolUseId = fmt.Sprintf("toolu_%d", len(message.ContentBlocks))
+				// Fallback id must be unique across the conversation (frontend keys by id).
+				toolUseId = "toolu_" + uuid.NewString()
 			}
 
 			message.ContentBlocks = append(message.ContentBlocks, model.ContentBlock{
@@ -166,16 +174,22 @@ func (a *OpenAIResponsesAdapter) SendMessageStream(ctx context.Context, req *mod
 	noTimeoutContext := context.WithValue(context.Background(), web.ContextKeyRequestId, ctx.Value(web.ContextKeyRequestId))
 	noTimeoutContext = context.WithValue(noTimeoutContext, web.ContextKeyRequestorId, ctx.Value(web.ContextKeyRequestorId))
 
-	stream := a.client.ResponsesNewStreaming(noTimeoutContext, responses.ResponseNewParams{
+	params := responses.ResponseNewParams{
 		Model:        req.Model,
 		Input:        history,
 		Instructions: openai.String(prompt),
 		Tools:        tools,
-		MaxToolCalls: openai.Int(1),
 		Reasoning: shared.ReasoningParam{
 			Summary: "auto",
 		},
-	})
+	}
+
+	// MaxTokens (when set, e.g. by a per-sub-session budget) caps output tokens.
+	if req.MaxTokens > 0 {
+		params.MaxOutputTokens = openai.Int(int64(req.MaxTokens))
+	}
+
+	stream := a.client.ResponsesNewStreaming(noTimeoutContext, params)
 
 	response, bodyWriter := fabricateResponse(http.StatusOK)
 
@@ -205,6 +219,7 @@ func (a *OpenAIResponsesAdapter) SendMessageStream(ctx context.Context, req *mod
 
 	go func() {
 		defer bodyWriter.Close()
+		defer processor.releaseCaller()
 
 		finishReason := "end_turn"
 

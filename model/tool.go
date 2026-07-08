@@ -21,6 +21,9 @@ type ToolRequest struct {
 	Model string `json:"model,omitempty" example:"claude-sonnet-4.5"`
 	// Auxiliary data for certain tools.
 	AuxData json.RawMessage `json:"auxData,omitempty" example:"{toolSpecificData: 'example'}"`
+	// Rejected indicates the user declined this tool: it is not executed; an error
+	// tool_result is recorded instead so the turn (and any parallel siblings) resolves.
+	Rejected bool `json:"rejected,omitempty"`
 }
 
 type ToolResponse struct {

@@ -853,6 +853,7 @@ func TestCreateSession(t *testing.T) {
 	session := &model.AssistantSession{
 		SessionId: "chat_123456",
 		Title:     "My Chat Session",
+		Model:     "AgentTest@MyAdapter",
 	}
 
 	// Mock index response
@@ -880,6 +881,14 @@ func TestCreateSession(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, session.CreateTime)
 	assert.Equal(t, "test-user", session.UserId)
+
+	// The session's own model must be persisted so it can be resumed server-side
+	// without trusting the client-supplied model.
+	reqs := transport.GetRequests()
+	assert.Len(t, reqs, 1)
+	body, err := io.ReadAll(reqs[0].Body)
+	assert.NoError(t, err)
+	assert.Contains(t, string(body), "AgentTest@MyAdapter")
 }
 
 func TestDeleteSession(t *testing.T) {
@@ -1940,6 +1949,85 @@ func TestGetSessions_SessionIdFilter(t *testing.T) {
 		}
 	}
 	assert.True(t, foundSessionId, "sessionId filter should be in query")
+}
+
+func TestGetSessions_WithDescendants(t *testing.T) {
+	mockEsClient, transport := modmock.NewMockClient(t)
+
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store.Init("chat-index", "session-index", "so_")
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+	sessionHit := func(id, parent, parentTool string) string {
+		return `{"hits":{"hits":[{"_id":"` + id + `","_source":{"so_kind":"session","so_session":{"sessionId":"` + id + `","title":"` + id + `","userId":"test-user","parentSessionId":"` + parent + `","parentToolUseId":"` + parentTool + `"}}}]}}`
+	}
+	add := func(body string) {
+		transport.AddResponse(&http.Response{
+			StatusCode: 200,
+			Header:     http.Header{"X-Elastic-Product": []string{"Elasticsearch"}},
+			Body:       io.NopCloser(strings.NewReader(body)),
+		}, nil)
+	}
+
+	// 1) root A, 2) children of A -> B, 3) children of B -> C, 4) children of C -> none
+	add(sessionHit("A", "", ""))
+	add(sessionHit("B", "A", "tu-A"))
+	add(sessionHit("C", "B", "tu-B"))
+	add(`{"hits":{"hits":[]}}`)
+	// addMetaFromMessages msearch: one response per session (A, B, C)
+	add(`{"responses":[{"aggregations":{"update_time":{"value":1234567890000}}},{"aggregations":{"update_time":{"value":1234567890000}}},{"aggregations":{"update_time":{"value":1234567890000}}}]}`)
+
+	sessions, err := store.GetSessions(ctx, model.GetSessionsWithSessionId("A"), model.GetSessionsWithDescendants(true))
+	assert.NoError(t, err)
+	assert.Len(t, sessions, 3)
+
+	ids := map[string]bool{}
+	for _, s := range sessions {
+		ids[s.SessionId] = true
+	}
+	assert.True(t, ids["A"] && ids["B"] && ids["C"], "should return the session and all descendants, any depth")
+
+	// A descendant query must filter by parentSessionId via a terms clause.
+	reqs := transport.GetRequests()
+	var descendantQuery map[string]any
+	assert.NoError(t, json.NewDecoder(reqs[1].Body).Decode(&descendantQuery))
+	boolQuery := descendantQuery["query"].(map[string]any)["bool"].(map[string]any)
+	foundTerms := false
+	for _, clause := range boolQuery["must"].([]any) {
+		if terms, ok := clause.(map[string]any)["terms"].(map[string]any); ok {
+			if _, exists := terms["so_session.parentSessionId"]; exists {
+				foundTerms = true
+			}
+		}
+	}
+	assert.True(t, foundTerms, "descendant query should filter by parentSessionId terms")
+}
+
+func TestGetSessions_WithDescendants_NoChildren(t *testing.T) {
+	mockEsClient, transport := modmock.NewMockClient(t)
+
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store.Init("chat-index", "session-index", "so_")
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+	add := func(body string) {
+		transport.AddResponse(&http.Response{
+			StatusCode: 200,
+			Header:     http.Header{"X-Elastic-Product": []string{"Elasticsearch"}},
+			Body:       io.NopCloser(strings.NewReader(body)),
+		}, nil)
+	}
+
+	add(`{"hits":{"hits":[{"_id":"solo","_source":{"so_kind":"session","so_session":{"sessionId":"solo","title":"Solo","userId":"test-user"}}}]}}`)
+	add(`{"hits":{"hits":[]}}`) // no descendants
+	add(`{"responses":[{"aggregations":{"update_time":{"value":1234567890000}}}]}`)
+
+	sessions, err := store.GetSessions(ctx, model.GetSessionsWithSessionId("solo"), model.GetSessionsWithDescendants(true))
+	assert.NoError(t, err)
+	assert.Len(t, sessions, 1)
+	assert.Equal(t, "solo", sessions[0].SessionId)
 }
 
 func TestGetSessions_MultipleSessionsWithUsage(t *testing.T) {
