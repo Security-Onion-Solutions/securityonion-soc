@@ -92,6 +92,7 @@ func (t *GetPlaybooksTool) Execute(ctx context.Context, srv *server.Server, para
 	// go get playbooks
 	event, err := server.FindEventBySocId(ctx, srv.Eventstore, args.AlertID, time.Time{})
 	if err != nil {
+		logger.WithError(err).Error("unable to find event by soc id")
 		return nil, err
 	}
 	if event == nil {

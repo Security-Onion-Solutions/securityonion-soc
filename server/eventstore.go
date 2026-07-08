@@ -38,7 +38,7 @@ func findEventBySocId(ctx context.Context, store Eventstore, id string, dateRang
 
 	err := criteria.Populate(query, dateRange, time.RFC3339, "", "0", "1")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to populate event search criteria: %w", err)
 	}
 
 	events, err := store.Search(ctx, criteria)
