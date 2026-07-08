@@ -1196,3 +1196,11 @@ dfn {
 .agentstudio-editor .v-card-text {
   padding-top: 20px;
 }
+
+.agentstudio-notice {
+  min-height: 50vh;
+}
+
+.agentstudio-toolbar {
+  width: fit-content;
+}

@@ -13,7 +13,7 @@
           </v-tab>
         </v-tabs>
         <v-spacer></v-spacer>
-        <v-toolbar class="so-toolbar elevation-0 flex-grow-0" variant="flat" density="comfortable" style="width: fit-content;">
+        <v-toolbar class="so-toolbar elevation-0 flex-grow-0 agentstudio-toolbar" variant="flat" density="comfortable">
           <v-btn icon variant="flat" class="circle-button mx-2" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'onion-ai'" :title="i18n.contextualDocsBtn" data-aid="agentstudio_docs" :aria-label="i18n.contextualDocsBtn">
             <v-icon>fa-circle-question</v-icon>
           </v-btn>
@@ -214,32 +214,17 @@
   </v-row>
 </v-container>
 <v-container v-else-if="$root.isLicensed('oai')" fluid data-aid="agentstudio_disabled">
-  <div style="
-    align-items: center;
-    margin: 0;
-    display: flex;
-    min-height: 50vh;
-    justify-content: center;
-    gap: 8px;
-    flex-direction: column;
-  ">
-    <div class="my-8" style="display: flex; gap: 8px; align-items: center;">
+  <div class="d-flex flex-column align-center justify-center ga-2 agentstudio-notice">
+    <div class="my-8 d-flex align-center ga-2">
       <div>{{ i18n.assistantDisabled }}</div>
-      <router-link v-if="$root.isUserAdmin()" :to="{name: 'config', query: {s: 'soc.config.server.client.assistant.enabled'}}" class="no-print" style="text-decoration: none; cursor: 'pointer'" data-aid="agentstudio_config_entry_enabled" :aria-label="i18n.ariaVisitConfigEntry">
+      <router-link v-if="$root.isUserAdmin()" :to="{name: 'config', query: {s: 'soc.config.server.client.assistant.enabled'}}" class="no-print text-decoration-none" data-aid="agentstudio_config_entry_enabled" :aria-label="i18n.ariaVisitConfigEntry">
         <v-icon class="mr-2 theme-icon" :title="i18n.visitConfigEntry">fa-gear</v-icon>
       </router-link>
     </div>
   </div>
 </v-container>
 <v-container v-else>
-  <div style="
-    align-items: center;
-    display: flex;
-    min-height: 50vh;
-    justify-content: center;
-    gap: 8px;
-    flex-direction: column;
-  ">
+  <div class="d-flex flex-column align-center justify-center ga-2 agentstudio-notice">
     <div class="my-8" v-html="i18n.assistantUnavailable"></div>
   </div>
 </v-container>
