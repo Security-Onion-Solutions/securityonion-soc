@@ -445,6 +445,16 @@
                   <v-list-item-title v-text="i18n.aiMetrics"></v-list-item-title>
                 </router-link>
               </v-list-item>
+              <v-list-item data-aid="nav_admin_agentstudio" v-if="$root.isUserAdmin() && isLicensed('oai') && $root.parameters.assistant?.agentic">
+                <template #prepend>
+                  <router-link to="/agentstudio" class="text-decoration-none" aria-hidden="true" tabindex="-1">
+                    <v-icon>fa-robot</v-icon>
+                  </router-link>
+                </template>
+                <router-link to="/agentstudio" class="text-decoration-none d-block">
+                  <v-list-item-title v-text="i18n.agentstudio"></v-list-item-title>
+                </router-link>
+              </v-list-item>
             </v-list-item-group>
           </v-list>
           <v-divider></v-divider>
@@ -519,6 +529,7 @@
     <script src="js/routes/detection.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/queries.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/aimetrics.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/agentstudio.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/custom.js?v=VERSION_PLACEHOLDER"></script>
   </body>
 </html>

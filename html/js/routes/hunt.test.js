@@ -1463,8 +1463,8 @@ test('ackTaskReport - success shows count and removes task', () => {
 
   comp.ackTaskReport({ taskIds: ['task-a'], success: true, updated: 1234, errors: [] });
 
-  expect(comp.$root.info).toBe(true);
-  expect(comp.$root.infoMessage).toBe('Successfully acknowledged 1,234 alerts.');
+  expect(comp.$root.tip).toBe(true);
+  expect(comp.$root.tipMessage).toBe('Successfully acknowledged 1,234 alerts.');
   expect(comp.runningAckTasks).toEqual(['task-b']);
 });
 
@@ -1483,8 +1483,8 @@ test('ackTaskReport - multi-host clears every tracked id with one banner', () =>
 
   comp.ackTaskReport({ taskIds: ['nodeA:1', 'nodeB:7'], success: true, updated: 1200, errors: [] });
 
-  expect(comp.$root.info).toBe(true);
-  expect(comp.$root.infoMessage).toBe('Successfully acknowledged 1,200 alerts.');
+  expect(comp.$root.tip).toBe(true);
+  expect(comp.$root.tipMessage).toBe('Successfully acknowledged 1,200 alerts.');
   expect(comp.runningAckTasks).toEqual(['other']);
 });
 

@@ -167,4 +167,28 @@ func (ac *AssistantCoordinator) exposeAgents() {
 
 	ac.srv.Config.ClientParams.AssistantParams.AvailableAgents = agents
 	ac.srv.Config.ClientParams.AssistantParams.AgentMapping = mapping
+	ac.srv.Config.ClientParams.AssistantParams.AvailableSkills = ac.exposeSkills()
+}
+
+// exposeSkills returns the client-facing skill catalog (name and tools) built
+// from the coordinator's SkillLibrary, sorted by name for a stable order. It
+// backs the read-only Skills view in the Agent Studio. The skill's prompt
+// guidance is intentionally not exposed (see model.SkillParameters).
+func (ac *AssistantCoordinator) exposeSkills() []model.SkillParameters {
+	names := make([]string, 0, len(ac.SkillLibrary))
+	for name := range ac.SkillLibrary {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	skills := make([]model.SkillParameters, 0, len(names))
+	for _, name := range names {
+		skill := ac.SkillLibrary[name]
+		skills = append(skills, model.SkillParameters{
+			Name:  skill.Name,
+			Tools: skill.Tools,
+		})
+	}
+
+	return skills
 }
