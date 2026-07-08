@@ -488,6 +488,7 @@
 																					<template v-else>fa-angle-right</template>
 																				</v-icon>
 																				{{question.question}}
+																				<v-progress-circular v-if="isQuestionRunning(question)" indeterminate size="16" width="2" class="ml-3" data-aid="playbook_grouped_question_running"></v-progress-circular>
 																			</v-expansion-panel-title>
 																			<v-expansion-panel-text class="ws-normal" style="padding-left: 52px;">
 																				<div :id="`playbook_grouped_question_context_label_${index}`" class="font-weight-bold font-italic" data-aid="playbook_grouped_question_context_label">{{i18n.context}}</div>
@@ -495,12 +496,13 @@
 																				<div class="italic my-4" data-aid="playbook_grouped_question_daterange">{{i18n.dateRange}}: {{question.range || i18n.event}}</div>
 																				<v-row no-gutters class="mb-5">
 																					<v-col cols="auto">
-																						<v-btn id="hunt-question" icon size="small" variant="text" :href="$router.resolve(buildHuntQuestionParams(question, item.newest)).href" target="_blank" class="cursor-pointer" data-aid="playbook_grouped_hunt_question" :aria-label="i18n.ariaHuntQuestion">
+																						<v-btn id="hunt-question" icon size="small" variant="text" :disabled="!question.oqlQuery" :href="$router.resolve(buildHuntQuestionParams(question, item.newest)).href" target="_blank" class="cursor-pointer" data-aid="playbook_grouped_hunt_question" :aria-label="i18n.ariaHuntQuestion">
 																							<v-icon>fa-crosshairs</v-icon>
 																						</v-btn>
 																					</v-col>
 																					<v-col style="align-content: center;" data-aid="playbook_grouped_question_query">
-																						{{ question.oqlQuery }}
+																						<template v-if="question.oqlQuery">{{ question.oqlQuery }}</template>
+																						<span v-else class="italic" data-aid="playbook_grouped_question_query_building">{{ isQuestionError(question) ? i18n.error : i18n.queryBuilding }}</span>
 																					</v-col>
 																				</v-row>
 																				<template v-if="question.queryResults">
@@ -527,15 +529,28 @@
 																							</tr>
 																							<tr v-if="question.queryResults && question.queryResults.length === 0">
 																								<td colspan="100%" class="text-center" data-aid="playbook_grouped_instantinsights_nodata">
-																									{{ question.error ? i18n.error : i18n.noData }}
+																									{{ isQuestionError(question) ? i18n.error : i18n.noData }}
 																								</td>
 																							</tr>
 																						</tbody>
 																					</table>
 																				</template>
+																				<template v-else-if="isQuestionRunning(question)">
+																					<span class="font-weight-bold font-italic" role="heading" aria-level="4">
+																						{{ i18n.instantInsight }}
+																					</span>
+																					<br/>
+																					<v-progress-circular indeterminate size="20" width="2" class="my-3" data-aid="playbook_grouped_instantinsights_running"></v-progress-circular>
+																					<span class="italic ml-3">{{i18n.queryRunning}}</span>
+																				</template>
 																			</v-expansion-panel-text>
 																		</v-expansion-panel>
 																	</v-expansion-panels>
+																</template>
+																<template v-else-if="item.newest && item.newest.playbookNone">
+																	<span class="my-6 inline" :style="{ 'margin-left': (this.eventColumnWidth / 2 - 75) + 'px' }" data-aid="playbook_grouped_none">
+																		{{i18n.playbookNone}}
+																	</span>
 																</template>
 																<template v-else-if="item.newest && item.newest.playbookErr">
 																	<span class="my-6 inline" :style="{ 'margin-left': (this.eventColumnWidth / 2 - 75) + 'px' }">
@@ -767,6 +782,7 @@
 																			<template v-else>fa-angle-right</template>
 																		</v-icon>
 																		{{question.question}}
+																		<v-progress-circular v-if="isQuestionRunning(question)" indeterminate size="16" width="2" class="ml-3" data-aid="playbook_question_running"></v-progress-circular>
 																	</v-expansion-panel-title>
 																	<v-expansion-panel-text class="ws-normal" style="padding-left: 52px;">
 																		<div :id="`playbook_question_context_label_${index}`" class="font-weight-bold font-italic" data-aid="playbook_question_context_label">{{i18n.context}}</div>
@@ -774,12 +790,13 @@
 																		<div class="italic my-4" data-aid="playbook_question_daterange">{{i18n.dateRange}}: {{question.range || i18n.event}}</div>
 																		<v-row no-gutters class="mb-5">
 																			<v-col cols="auto">
-																				<v-btn id="hunt-question" icon size="small" variant="text" :href="$router.resolve(buildHuntQuestionParams(question, item)).href" target="_blank" class="cursor-pointer" data-aid="playbook_hunt_question" :aria-label="i18n.ariaHuntQuestion">
+																				<v-btn id="hunt-question" icon size="small" variant="text" :disabled="!question.oqlQuery" :href="$router.resolve(buildHuntQuestionParams(question, item)).href" target="_blank" class="cursor-pointer" data-aid="playbook_hunt_question" :aria-label="i18n.ariaHuntQuestion">
 																					<v-icon>fa-crosshairs</v-icon>
 																				</v-btn>
 																			</v-col>
 																			<v-col style="align-content: center;" data-aid="playbook_question_query">
-																				{{question.oqlQuery}}
+																				<template v-if="question.oqlQuery">{{question.oqlQuery}}</template>
+																				<span v-else class="italic" data-aid="playbook_question_query_building">{{ isQuestionError(question) ? i18n.error : i18n.queryBuilding }}</span>
 																			</v-col>
 																		</v-row>
 																		<template v-if="question.queryResults">
@@ -806,15 +823,28 @@
 																					</tr>
 																					<tr v-if="question.queryResults && question.queryResults.length === 0">
 																						<td colspan="100%" class="text-center" data-aid="playbook_instantinsights_nodata">
-																							{{ question.error ? i18n.error : i18n.noData }}
+																							{{ isQuestionError(question) ? i18n.error : i18n.noData }}
 																						</td>
 																					</tr>
 																				</tbody>
 																			</table>
 																		</template>
+																		<template v-else-if="isQuestionRunning(question)">
+																			<span class="font-weight-bold font-italic" role="heading" aria-level="4">
+																				{{i18n.instantInsight}}
+																			</span>
+																			<br/>
+																			<v-progress-circular indeterminate size="20" width="2" class="my-3" data-aid="playbook_instantinsights_running"></v-progress-circular>
+																			<span class="italic ml-3">{{i18n.queryRunning}}</span>
+																		</template>
 																	</v-expansion-panel-text>
 																</v-expansion-panel>
 															</v-expansion-panels>
+														</template>
+														<template v-else-if="item.playbookNone">
+															<span class="my-6 inline" :style="{ 'margin-left': (this.eventColumnWidth / 2 - 75) + 'px' }" data-aid="playbook_none">
+																{{i18n.playbookNone}}
+															</span>
 														</template>
 														<template v-else-if="item.playbookErr">
 															<span class="my-6 inline" :style="{ 'margin-left': (this.eventColumnWidth / 2 - 75) + 'px' }">
