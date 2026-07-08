@@ -2822,7 +2822,7 @@ const huntComponent = {
 
       if (status.success) {
         const msg = this.$root.replaceActionVar(this.i18n.ackTaskSuccess, 'count', (status.updated || 0).toLocaleString())
-        this.$root.showInfo(msg, true);
+        this.$root.showTip(msg);
       } else {
         let errors = (status.errors || []).join('; ');
         const msg = this.$root.replaceActionVar(this.i18n.ackTaskError, 'errors', errors);
