@@ -31,11 +31,11 @@ RUN sed -i '/WithField("login_flow", f\.ToLoggerField())/a\\n\t// Extract identi
 RUN grep -q "Extract identifier if available" selfservice/flow/login/error.go || \
 (echo "ERROR: Identifier logging injection failed - pattern not found!" && exit 1)
 
-ENV GO111MODULE on
-ENV CGO_ENABLED 1
-ENV CGO_CPPFLAGS -DSQLITE_DEFAULT_FILE_PERMISSIONS=0600
+ENV GO111MODULE=on
+ENV CGO_ENABLED=1
+ENV CGO_CPPFLAGS=-DSQLITE_DEFAULT_FILE_PERMISSIONS=0600
 
-RUN go mod download
+RUN go get -u ./...
 RUN go build -tags sqlite -ldflags="-X 'github.com/ory/kratos/driver/config.Version=${VERSION}' -X 'github.com/ory/kratos/driver/config.Date=$(date -I)' -X 'github.com/ory/kratos/driver/config.Commit=$(git rev-parse --short HEAD)'"
 
 
