@@ -22,6 +22,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/onionconfig"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/playbook"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/postgres"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/postgresmetrics"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/salt"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/sostatus"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/statickeyauth"
@@ -41,6 +42,7 @@ func BuildModuleMap(srv *server.Server) map[string]module.Module {
 	moduleMap["elastic"] = elastic.NewElastic(srv)
 	moduleMap["elasticcases"] = elasticcases.NewElasticCases(srv)
 	moduleMap["postgres"] = postgres.NewPostgresModule(srv)
+	moduleMap["postgresmetrics"] = postgresmetrics.NewPostgresMetricsModule(srv)
 	moduleMap["onionconfig"] = onionconfig.NewOnionConfigModule(srv)
 	moduleMap["salt"] = salt.NewSalt(srv)
 	moduleMap["sostatus"] = sostatus.NewSoStatus(srv)
