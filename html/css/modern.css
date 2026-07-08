@@ -1168,3 +1168,31 @@ dfn {
   overflow-x: auto;
   overflow-y: auto;
 }
+
+/* Agent Studio inline editor card (inside an expanded data-table row). */
+.agentstudio-editor {
+  border: 1px solid rgba(var(--v-theme-text), 0.08);
+  border-radius: var(--so-radius-panel);
+  background-color: rgba(var(--v-theme-background-lighten-1));
+  overflow: hidden;
+}
+
+/* The .section-panel tab styling bleeds into these nested editor tabs; reset it
+   so the tabs/window use the editor card surface instead of a boxed background. */
+.agentstudio-editor .v-tabs,
+.agentstudio-editor .v-tabs-window,
+.agentstudio-editor .v-tab {
+  background-color: transparent !important;
+}
+
+/* v-window clips overflow by default, which cuts off the outlined fields'
+   floating labels that sit on the top border. Let them show, with a little
+   top room so the first row's labels clear the tab divider. */
+.agentstudio-editor .v-window,
+.agentstudio-editor .v-window__container {
+  overflow: visible;
+}
+
+.agentstudio-editor .v-card-text {
+  padding-top: 20px;
+}

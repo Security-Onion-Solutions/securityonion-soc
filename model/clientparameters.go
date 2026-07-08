@@ -192,7 +192,16 @@ type AssistantParameters struct {
 	AvailableAdapters      []AdapterParameters `json:"availableAdapters"`
 	Agentic                bool                `json:"agentic"`
 	AvailableAgents        []AgentParameters   `json:"availableAgents"`
+	AvailableSkills        []SkillParameters   `json:"availableSkills"`
 	AgentMapping           map[string]string   `json:"agentMapping"`
+}
+
+// SkillParameters is the client-facing view of an agent skill: its name and the
+// tools it unlocks. The skill's prompt guidance (AdditionalPrompt) is
+// intentionally not exposed to the browser, matching the agent persona.
+type SkillParameters struct {
+	Name  string   `json:"name"`
+	Tools []string `json:"tools"`
 }
 
 type ModelParameters struct {
