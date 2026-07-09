@@ -106,6 +106,16 @@ html, body, * {
   border-radius: var(--so-radius-pill) !important;
 }
 
+.toolbar-container {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.toolbar-col {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .circle-button {
   background-color: rgba(var(--v-theme-primary));
   color: rgba(var(--v-theme-button_icon_color)) !important;
