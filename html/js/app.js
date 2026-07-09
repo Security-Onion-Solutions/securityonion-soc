@@ -170,6 +170,7 @@ $(document).ready(function () {
               lightinfo: '#2597F4',
               error: '#EB0000',
               lighterror: '#FF5757',
+              warning: '#FFD500',
               nav_background: '#000000',
               nav: '#ffffff',
               table_background: '#222a3f',
