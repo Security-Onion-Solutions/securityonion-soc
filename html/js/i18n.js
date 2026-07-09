@@ -128,6 +128,8 @@ const i18n = {
       ariaPickerStartMinute: 'Start time minute',
       ariaPickerStartSecond: 'Start time second',
       ariaPieChartFor: 'Pie chart for {title}',
+      ariaPlaybookLoading: 'Playbook loading',
+      ariaPlaybookQuestionLoading: 'Playbook question loading',
       ariaProVideoDescription: 'A brief video showing off Onion AI analyzing alerts, tuning detection overrides, acknowledging alerts, and creating detections.',
       ariaQueryDropdown: 'Query dropdown',
       ariaRelativeTime: 'Relative time',
