@@ -145,6 +145,7 @@ $(document).ready(function () {
               lightinfo: '#0B78D0',
               error: '#EB0000',
               lighterror: '#EB0000',
+              warning: '#FFD500',
               nav_background: '#000000',
               nav: '#ffffff',
               table_background: '#fafafa',
