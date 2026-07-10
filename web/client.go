@@ -112,8 +112,8 @@ func (client *Client) SendRequest(method string, path string, contentType string
 		var req *http.Request
 		formattedUrl := client.FormatUrl(client.hostUrl, path)
 		req, err = http.NewRequest(method, formattedUrl, reader)
-		req.Header.Add("Content-Type", contentType)
 		if err == nil {
+			req.Header.Add("Content-Type", contentType)
 			if auth {
 				err = client.Auth.Authorize(req)
 				if err == nil {
