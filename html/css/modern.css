@@ -126,6 +126,10 @@ html, body, * {
   color: rgba(var(--v-theme-button_icon_color)) !important;
 }
 
+.bg-warning {
+  color: black;
+}
+
 /* Stat pills — small label above, large value below, icon on right */
 .so-stat-pill {
   border-radius: var(--so-radius-panel);
