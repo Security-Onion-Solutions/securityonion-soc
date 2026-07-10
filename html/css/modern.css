@@ -62,6 +62,10 @@ html, body, * {
   color: rgb(var(--v-theme-lightprimary)) !important;
 }
 
+.v-theme--light .text-warning {
+  color: #C25400 !important;
+}
+
 .text-error {
   color: rgb(var(--v-theme-lighterror)) !important;
 }
