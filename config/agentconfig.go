@@ -10,8 +10,8 @@ import (
 	"errors"
 	"os"
 
-	"github.com/kennygrant/sanitize"
 	"github.com/security-onion-solutions/securityonion-soc/module"
+	"github.com/security-onion-solutions/securityonion-soc/util"
 )
 
 const DEFAULT_POLL_INTERVAL_MS = 1000
@@ -46,7 +46,7 @@ func (config *AgentConfig) Verify() error {
 	if err == nil && config.ServerUrl == "" {
 		err = errors.New("Agent.ServerUrl configuration value is required")
 	}
-	if err == nil && sanitize.BaseName(config.MgmtNic) != config.MgmtNic {
+	if err == nil && util.SanitizeNic(config.MgmtNic) != config.MgmtNic {
 		err = errors.New("Agent.MgmtNic contains invalid characters")
 	}
 	return err
