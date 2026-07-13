@@ -824,7 +824,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         color = color.split('+')[0];
       }
 
-      if (!this.$root.$vuetify.theme.dark) {
+      if (!this.$root.$vuetify.theme.current.dark) {
         // light mode
         switch (color) {
           case 'white':
