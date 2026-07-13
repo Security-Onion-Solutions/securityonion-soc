@@ -11,20 +11,35 @@ let comp;
 
 beforeEach(() => {
 	comp = getComponent("grid");
+	if (comp.$root) {
+		delete comp.$root.parameters;
+	}
 });
 
-test('initMetricsCharts', () => {
-	comp.setupMetricsChart = jest.fn();
+test('initMetricsCharts with default dashboard', () => {
 	comp.$root.getColor = jest.fn().mockReturnValue('#123456');
 	comp.initMetricsCharts();
-	expect(comp.setupMetricsChart).toHaveBeenCalledTimes(6);
+	expect(comp.metricPanels).toBeDefined();
+	expect(comp.metricPanels.length).toBe(6);
+	expect(comp.metricPanels[0].id).toBe('cpu');
 });
 
-test('setupMetricsChart', () => {
+test('initMetricsCharts with custom dashboard', () => {
+	comp.$root.parameters = {
+		grid: {
+			metricsDashboard: JSON.stringify({
+				panels: [
+					{ id: 'custom_stat', title: 'Custom Stat', type: 'single_stat', metric: 'cpu', key: 'cpu_used' }
+				]
+			})
+		}
+	};
 	comp.$root.getColor = jest.fn().mockReturnValue('#123456');
-	comp.setupMetricsChart('cpu', 'CPU', ['cpu'], ['#123456']);
-	expect(comp.chartCpuOptions).toBeDefined();
-	expect(comp.chartCpuData).toBeDefined();
+	comp.initMetricsCharts();
+	expect(comp.metricPanels).toBeDefined();
+	expect(comp.metricPanels.length).toBe(1);
+	expect(comp.metricPanels[0].id).toBe('custom_stat');
+	expect(comp.metricPanels[0].type).toBe('single_stat');
 });
 
 test('setupMetricsAutoRefresh', () => {
@@ -50,13 +65,14 @@ test('loadHistoricalMetrics', async () => {
 	comp.metricsTimeRange = '1h';
 	comp.metricsNodeId = 'host1';
 	comp.zone = 'UTC';
-	comp.populateMetricsChart = jest.fn();
+
+	comp.$root.getColor = jest.fn().mockReturnValue('#123456');
+	comp.initMetricsCharts();
 
 	comp.$root.papi.get = jest.fn().mockResolvedValue({ data: { cpu_used: [] } });
 
 	await comp.loadHistoricalMetrics();
 
 	expect(comp.$root.papi.get).toHaveBeenCalledTimes(6);
-	expect(comp.populateMetricsChart).toHaveBeenCalledTimes(6);
 	expect(comp.metricsLoading).toBe(false);
 });

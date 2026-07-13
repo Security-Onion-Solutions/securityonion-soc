@@ -515,34 +515,18 @@
 						<v-progress-circular indeterminate color="primary" data-aid="grid_metrics_loader"></v-progress-circular>
 					</v-row>
 					<v-row v-else>
-						<v-col cols="12" md="6" class="py-2">
-							<v-card class="pa-2" variant="outlined" style="min-height: 280px;">
-								<line-chart id="chartCpu" height="250" :key="chartCpuData.key" :data="chartCpuData" :options="chartCpuOptions" :aria-label="i18n.metricsCpuUsage"></line-chart>
-							</v-card>
-						</v-col>
-						<v-col cols="12" md="6" class="py-2">
-							<v-card class="pa-2" variant="outlined" style="min-height: 280px;">
-								<line-chart id="chartMemory" height="250" :key="chartMemoryData.key" :data="chartMemoryData" :options="chartMemoryOptions" :aria-label="i18n.metricsMemUsage"></line-chart>
-							</v-card>
-						</v-col>
-						<v-col cols="12" md="6" class="py-2">
-							<v-card class="pa-2" variant="outlined" style="min-height: 280px;">
-								<line-chart id="chartLoad" height="250" :key="chartLoadData.key" :data="chartLoadData" :options="chartLoadOptions" :aria-label="i18n.loadAverage"></line-chart>
-							</v-card>
-						</v-col>
-						<v-col cols="12" md="6" class="py-2">
-							<v-card class="pa-2" variant="outlined" style="min-height: 280px;">
-								<line-chart id="chartDisk" height="250" :key="chartDiskData.key" :data="chartDiskData" :options="chartDiskOptions" :aria-label="i18n.metricsDiskUsage"></line-chart>
-							</v-card>
-						</v-col>
-						<v-col cols="12" md="6" class="py-2">
-							<v-card class="pa-2" variant="outlined" style="min-height: 280px;">
-								<line-chart id="chartNet" height="250" :key="chartNetData.key" :data="chartNetData" :options="chartNetOptions" :aria-label="i18n.metricsNetTraffic"></line-chart>
-							</v-card>
-						</v-col>
-						<v-col cols="12" md="6" class="py-2">
-							<v-card class="pa-2" variant="outlined" style="min-height: 280px;">
-								<line-chart id="chartEps" height="250" :key="chartEpsData.key" :data="chartEpsData" :options="chartEpsOptions" :aria-label="i18n.eps"></line-chart>
+						<v-col v-for="panel in metricPanels" :key="panel.id" cols="12" :md="panel.width || 6" class="py-2">
+							<v-card class="pa-2 metric-panel-card" variant="outlined" :style="{ height: (panel.height ? (panel.height + 35) : 285) + 'px' }">
+								<div class="d-flex align-center justify-space-between mb-2">
+									<span class="text-subtitle-1 font-weight-medium">{{ panel.title }}</span>
+								</div>
+								<div v-if="panel.type === 'single_stat'" class="d-flex align-center justify-center fill-height metric-single-stat py-4" style="min-height: 200px;">
+									<div class="text-center">
+										<div class="text-h3 font-weight-bold text-primary">{{ panel.singleStatValue }}</div>
+										<div v-if="panel.suffix" class="text-caption text-grey mt-1">{{ panel.suffix }}</div>
+									</div>
+								</div>
+								<line-chart v-else-if="panel.type === 'line_chart'" :id="'chart-' + panel.id" :height="panel.height || 250" :key="panel.chartData.key" :data="panel.chartData" :options="panel.chartOptions" :aria-label="panel.title"></line-chart>
 							</v-card>
 						</v-col>
 					</v-row>

@@ -92,18 +92,8 @@ routes.push({ path: '/grid', name: 'grid', component: {
       { title: this.$root.i18n.interval1m, value: 60 },
       { title: this.$root.i18n.interval5m, value: 300 }
     ],
-    chartCpuData: { key: 0, datasets: [] },
-    chartCpuOptions: {},
-    chartMemoryData: { key: 0, datasets: [] },
-    chartMemoryOptions: {},
-    chartLoadData: { key: 0, datasets: [] },
-    chartLoadOptions: {},
-    chartDiskData: { key: 0, datasets: [] },
-    chartDiskOptions: {},
-    chartNetData: { key: 0, datasets: [] },
-    chartNetOptions: {},
-    chartEpsData: { key: 0, datasets: [] },
-    chartEpsOptions: {},
+    metricPanels: [],
+    chartResizeTracker: {},
   }},
   created() {
     this.$root.initializeCharts();

@@ -45,6 +45,21 @@ func (s *Store) GetTimeSeriesMetrics(ctx context.Context, nodeId string, metricT
 		res["traffic_man_in"] = make([]model.MetricSample, 0)
 		res["traffic_man_out"] = make([]model.MetricSample, 0)
 		res["traffic_mon_in"] = make([]model.MetricSample, 0)
+	} else if metricType == "swap" {
+		res["swap_used"] = make([]model.MetricSample, 0)
+	} else if metricType == "io_wait" {
+		res["io_wait"] = make([]model.MetricSample, 0)
+	} else if metricType == "elasticsearch_size" {
+		res["elasticsearch_size"] = make([]model.MetricSample, 0)
+	} else if metricType == "influx_size" {
+		res["influx_size"] = make([]model.MetricSample, 0)
+	} else if metricType == "redis_queue" {
+		res["redis_queue"] = make([]model.MetricSample, 0)
+	} else if metricType == "pcap_retention" {
+		res["pcap_retention"] = make([]model.MetricSample, 0)
+	} else if metricType == "loss" {
+		res["suricata_loss"] = make([]model.MetricSample, 0)
+		res["zeek_loss"] = make([]model.MetricSample, 0)
 	}
 
 	var hostFilter string
@@ -297,6 +312,141 @@ func (s *Store) GetTimeSeriesMetrics(ctx context.Context, nodeId string, metricT
 		res["traffic_man_in"] = mapToSamples(trafficManIn)
 		res["traffic_man_out"] = mapToSamples(trafficManOut)
 		res["traffic_mon_in"] = mapToSamples(trafficMonIn)
+
+	case "swap":
+		q := fmt.Sprintf(`
+			SELECT 
+				to_timestamp(floor(extract(epoch from m.time) / $1) * $1) AS bucket,
+				AVG((m.fields->>'used_percent')::double precision) AS val
+			FROM telegraf.swap m
+			JOIN telegraf.swap_tag tag ON m.tag_id = tag.tag_id
+			WHERE %s AND m.time >= %s AND m.time <= %s AND m.fields->>'used_percent' IS NOT NULL
+			GROUP BY bucket
+			ORDER BY bucket ASC`, hostFilter, startPlaceholder, endPlaceholder)
+
+		samples, err := s.runMetricQuery(ctx, q, args...)
+		if err != nil {
+			return nil, err
+		}
+		res["swap_used"] = samples
+
+	case "io_wait":
+		q := fmt.Sprintf(`
+			SELECT 
+				to_timestamp(floor(extract(epoch from m.time) / $1) * $1) AS bucket,
+				AVG((m.fields->>'usage_iowait')::double precision) AS val
+			FROM telegraf.cpu m
+			JOIN telegraf.cpu_tag tag ON m.tag_id = tag.tag_id
+			WHERE %s AND tag.tags->>'cpu' = 'cpu-total' AND m.time >= %s AND m.time <= %s AND m.fields->>'usage_iowait' IS NOT NULL
+			GROUP BY bucket
+			ORDER BY bucket ASC`, hostFilter, startPlaceholder, endPlaceholder)
+
+		samples, err := s.runMetricQuery(ctx, q, args...)
+		if err != nil {
+			return nil, err
+		}
+		res["io_wait"] = samples
+
+	case "elasticsearch_size":
+		q := fmt.Sprintf(`
+			SELECT 
+				to_timestamp(floor(extract(epoch from m.time) / $1) * $1) AS bucket,
+				AVG((m.fields->>'store_size_in_bytes')::double precision) AS val
+			FROM telegraf.elasticsearch_indices m
+			JOIN telegraf.elasticsearch_indices_tag tag ON m.tag_id = tag.tag_id
+			WHERE %s AND m.time >= %s AND m.time <= %s AND m.fields->>'store_size_in_bytes' IS NOT NULL
+			GROUP BY bucket
+			ORDER BY bucket ASC`, hostFilter, startPlaceholder, endPlaceholder)
+
+		samples, err := s.runMetricQuery(ctx, q, args...)
+		if err != nil {
+			return nil, err
+		}
+		res["elasticsearch_size"] = samples
+
+	case "influx_size":
+		q := fmt.Sprintf(`
+			SELECT 
+				to_timestamp(floor(extract(epoch from m.time) / $1) * $1) AS bucket,
+				AVG((m.fields->>'kbytes')::double precision * 1024.0) AS val
+			FROM telegraf.influxsize m
+			JOIN telegraf.influxsize_tag tag ON m.tag_id = tag.tag_id
+			WHERE %s AND m.time >= %s AND m.time <= %s AND m.fields->>'kbytes' IS NOT NULL
+			GROUP BY bucket
+			ORDER BY bucket ASC`, hostFilter, startPlaceholder, endPlaceholder)
+
+		samples, err := s.runMetricQuery(ctx, q, args...)
+		if err != nil {
+			return nil, err
+		}
+		res["influx_size"] = samples
+
+	case "redis_queue":
+		q := fmt.Sprintf(`
+			SELECT 
+				to_timestamp(floor(extract(epoch from m.time) / $1) * $1) AS bucket,
+				AVG((m.fields->>'redis_queue_size')::double precision) AS val
+			FROM telegraf.redisqueue m
+			JOIN telegraf.redisqueue_tag tag ON m.tag_id = tag.tag_id
+			WHERE %s AND m.time >= %s AND m.time <= %s AND m.fields->>'redis_queue_size' IS NOT NULL
+			GROUP BY bucket
+			ORDER BY bucket ASC`, hostFilter, startPlaceholder, endPlaceholder)
+
+		samples, err := s.runMetricQuery(ctx, q, args...)
+		if err != nil {
+			return nil, err
+		}
+		res["redis_queue"] = samples
+
+	case "pcap_retention":
+		q := fmt.Sprintf(`
+			SELECT 
+				to_timestamp(floor(extract(epoch from m.time) / $1) * $1) AS bucket,
+				AVG((m.fields->>'pcap_days')::double precision) AS val
+			FROM telegraf.pcapage m
+			JOIN telegraf.pcapage_tag tag ON m.tag_id = tag.tag_id
+			WHERE %s AND m.time >= %s AND m.time <= %s AND m.fields->>'pcap_days' IS NOT NULL
+			GROUP BY bucket
+			ORDER BY bucket ASC`, hostFilter, startPlaceholder, endPlaceholder)
+
+		samples, err := s.runMetricQuery(ctx, q, args...)
+		if err != nil {
+			return nil, err
+		}
+		res["pcap_retention"] = samples
+
+	case "loss":
+		qSuri := fmt.Sprintf(`
+			SELECT 
+				to_timestamp(floor(extract(epoch from m.time) / $1) * $1) AS bucket,
+				AVG((m.fields->>'drop_rate')::double precision) AS val
+			FROM telegraf.suridrop m
+			JOIN telegraf.suridrop_tag tag ON m.tag_id = tag.tag_id
+			WHERE %s AND m.time >= %s AND m.time <= %s AND m.fields->>'drop_rate' IS NOT NULL
+			GROUP BY bucket
+			ORDER BY bucket ASC`, hostFilter, startPlaceholder, endPlaceholder)
+
+		samplesSuri, err := s.runMetricQuery(ctx, qSuri, args...)
+		if err != nil {
+			return nil, err
+		}
+		res["suricata_loss"] = samplesSuri
+
+		qZeek := fmt.Sprintf(`
+			SELECT 
+				to_timestamp(floor(extract(epoch from m.time) / $1) * $1) AS bucket,
+				AVG((m.fields->>'drop_rate')::double precision) AS val
+			FROM telegraf.zeekdrop m
+			JOIN telegraf.zeekdrop_tag tag ON m.tag_id = tag.tag_id
+			WHERE %s AND m.time >= %s AND m.time <= %s AND m.fields->>'drop_rate' IS NOT NULL
+			GROUP BY bucket
+			ORDER BY bucket ASC`, hostFilter, startPlaceholder, endPlaceholder)
+
+		samplesZeek, err := s.runMetricQuery(ctx, qZeek, args...)
+		if err != nil {
+			return nil, err
+		}
+		res["zeek_loss"] = samplesZeek
 	}
 
 	return res, nil
