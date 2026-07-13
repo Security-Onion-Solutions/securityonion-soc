@@ -51,32 +51,32 @@ html, body, * {
 }
 
 .v-application a {
-  color: rgb(var(--v-theme-lightprimary));
+  color: rgb(var(--v-theme-altprimary));
 }
 
 .text-success {
-  color: rgb(var(--v-theme-lightsuccess)) !important;
+  color: rgb(var(--v-theme-altsuccess)) !important;
 }
 
 .text-primary {
-  color: rgb(var(--v-theme-lightprimary)) !important;
+  color: rgb(var(--v-theme-altprimary)) !important;
 }
 
-.v-theme--light .text-warning {
-  color: #C25400 !important;
+.text-warning {
+  color: rgb(var(--v-theme-altwarning)) !important;
 }
 
 .text-error {
-  color: rgb(var(--v-theme-lighterror)) !important;
+  color: rgb(var(--v-theme-alterror)) !important;
 }
 
 .text-info {
-  color: rgb(var(--v-theme-lightinfo)) !important;
+  color: rgb(var(--v-theme-altinfo)) !important;
 }
 
 .v-input--error, .v-field--error, .v-field--error .v-field__append-inner > .v-icon{
-  --v-theme-error: var(--v-theme-lighterror) !important;
-  --v-field-color: var(--v-theme-lighterror) !important;
+  --v-theme-error: var(--v-theme-alterror) !important;
+  --v-field-color: var(--v-theme-alterror) !important;
 }
 
 .v-expansion-panels,
@@ -130,7 +130,7 @@ html, body, * {
   color: rgba(var(--v-theme-button_icon_color)) !important;
 }
 
-.bg-warning {
+.bg-warning, .v-theme--dark .bg-altwarning {
   color: black;
 }
 

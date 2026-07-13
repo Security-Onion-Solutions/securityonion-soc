@@ -177,20 +177,27 @@ test('selectList merges array values when customEnabled', () => {
 });
 
 test('colorizeChip strips suffix after +', () => {
+  comp.$root.$vuetify.theme.current.dark = true;
   expect(comp.colorizeChip('red+lighten-2')).toBe('red');
+  comp.$root.$vuetify.theme.current.dark = false;
+  expect(comp.colorizeChip('red+lighten-2')).toBe('error');
 });
 
-test('colorizeChip remaps white and amber when theme is light', () => {
-  comp.$root.$vuetify.theme.dark = false;
-  expect(comp.colorizeChip('white')).toBe('grey');
-  expect(comp.colorizeChip('amber')).toBe('orange');
-});
-
-test('colorizeChip leaves white and amber alone when theme is dark', () => {
-  comp.$root.$vuetify.theme.dark = true;
-  expect(comp.colorizeChip('white')).toBe('white');
+test('colorizeChip remaps white, red, and green when theme is light', () => {
+  comp.$root.$vuetify.theme.current.dark = false;
+  expect(comp.colorizeChip('white')).toBe('secondary');
+  expect(comp.colorizeChip('red')).toBe('error');
+  expect(comp.colorizeChip('green')).toBe('success');
   expect(comp.colorizeChip('amber')).toBe('amber');
-  comp.$root.$vuetify.theme.dark = false;
+});
+
+test('colorizeChip leaves colors alone when theme is dark', () => {
+  comp.$root.$vuetify.theme.current.dark = true;
+  expect(comp.colorizeChip('white')).toBe('white');
+  expect(comp.colorizeChip('red')).toBe('red');
+  expect(comp.colorizeChip('green')).toBe('green');
+  expect(comp.colorizeChip('amber')).toBe('amber');
+  comp.$root.$vuetify.theme.current.dark = false;
 });
 
 test('colorizeChip returns non-string colors unchanged', () => {
