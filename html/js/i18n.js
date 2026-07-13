@@ -492,6 +492,7 @@ const i18n = {
       collapse: 'Collapse',
       collapseAll: 'Collapse All',
       collapseHelp: 'Collapse all packet data',
+      colors: 'Colors',
       comment: 'Comments',
       comments: 'Comments',
       commentAdd: 'Add Comment',

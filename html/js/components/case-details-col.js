@@ -118,11 +118,22 @@ components.push({
 				if (typeof color === 'string') {
 					color = color.split('+')[0];
 				}
-				if (color == "white" && !this.$root.$vuetify.theme.dark) {
-					color = "grey";
-				} else if (color == "amber" && !this.$root.$vuetify.theme.dark) {
-					color = "orange";
+
+				if (!this.$root.$vuetify.theme.dark) {
+					// light mode
+					switch (color) {
+						case 'white':
+							color = 'secondary';
+							break;
+						case 'red':
+							color = 'error';
+							break;
+						case 'green':
+							color = 'success';
+							break;
+					}
 				}
+
 				return color;
 			},
 		},

@@ -78,7 +78,7 @@
 
 .v-footer a {
   text-decoration: none;
-  color: rgb(var(--v-theme-primary-lighten-1)) !important;
+  color: rgb(var(--v-theme-nav_background_link)) !important;
 }
 
 .v-icon {

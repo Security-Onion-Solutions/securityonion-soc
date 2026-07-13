@@ -62,8 +62,8 @@ html, body, * {
   color: rgb(var(--v-theme-lightprimary)) !important;
 }
 
-.v-theme--light .text-warning {
-  color: #C25400 !important;
+.text-warning {
+  color: rgb(var(--v-theme-lightwarning)) !important;
 }
 
 .text-error {
@@ -130,7 +130,7 @@ html, body, * {
   color: rgba(var(--v-theme-button_icon_color)) !important;
 }
 
-.bg-warning {
+.bg-warning, .v-theme--dark .bg-lightwarning {
   color: black;
 }
 
