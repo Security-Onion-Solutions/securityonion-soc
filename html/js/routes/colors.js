@@ -15,8 +15,8 @@ routes.push({ path: '/colors', name: 'colors', component: {
     // Colors that production only applies to icons belong in iconGroups instead — WCAG's
     // 4.5:1 text rule doesn't apply to icon glyphs.
     textGroups: {
-      // Status/semantic text; modern.css remaps success/primary/error/info to the light*
-      // variants and hardcodes light-theme .text-warning.
+      // Status/semantic text; modern.css remaps success/primary/error/info/warning to
+      // the alt* variants.
       semantic: ['text', 'success', 'primary', 'error', 'info', 'warning'],
       // getContextColor() — context-length stop-light text in the assistant drawer.
       context: ['success', 'amber', 'warning', 'error'],
@@ -195,7 +195,7 @@ routes.push({ path: '/colors', name: 'colors', component: {
     // lighten/darken keys Vuetify derives from the configured colors, plus theme keys
     // that are only ever used as foregrounds in the app, never as backgrounds.
     themeColorNames(themeName) {
-      const foregroundOnly = ['lightprimary', 'lightsuccess', 'lightinfo', 'lighterror',
+      const foregroundOnly = ['altprimary', 'altsuccess', 'altinfo', 'alterror',
                               'text', 'icon', 'nav', 'nav_background_link', 'text_button',
                               'button_icon_color'];
       const theme = this.$root.theme || {};
