@@ -1090,10 +1090,10 @@ test('getContextColor returns correct color classes', () => {
   comp.thresholdColorRatioMed = 0.75;
   comp.thresholdColorRatioMax = 1.0;
   
-  expect(comp.getContextColor(25000)).toBe('text-green'); // Under low threshold
-  expect(comp.getContextColor(60000)).toBe('text-yellow'); // Between low and med
-  expect(comp.getContextColor(85000)).toBe('text-amber darken-1'); // Between med and max
-  expect(comp.getContextColor(100000)).toBe('text-red darken-1'); // At max threshold
+  expect(comp.getContextColor(25000)).toBe('text-success'); // Under low threshold
+  expect(comp.getContextColor(60000)).toBe('text-amber'); // Between low and med
+  expect(comp.getContextColor(85000)).toBe('text-warning'); // Between med and max
+  expect(comp.getContextColor(100000)).toBe('text-error'); // At max threshold
 });
 
 test('getContextColor uses large limit when threshold increased', () => {
@@ -1104,10 +1104,10 @@ test('getContextColor uses large limit when threshold increased', () => {
   comp.thresholdColorRatioMed = 0.75;
   comp.thresholdColorRatioMax = 1.0;
   
-  expect(comp.getContextColor(50000)).toBe('text-green'); // Under low threshold of large limit (50k < 200k * 0.5)
-  expect(comp.getContextColor(120000)).toBe('text-yellow'); // Between low and med of large limit
-  expect(comp.getContextColor(170000)).toBe('text-amber darken-1'); // Between med and max of large limit
-  expect(comp.getContextColor(200000)).toBe('text-red darken-1'); // At max of large limit
+  expect(comp.getContextColor(50000)).toBe('text-success'); // Under low threshold of large limit (50k < 200k * 0.5)
+  expect(comp.getContextColor(120000)).toBe('text-amber'); // Between low and med of large limit
+  expect(comp.getContextColor(170000)).toBe('text-warning'); // Between med and max of large limit
+  expect(comp.getContextColor(200000)).toBe('text-error'); // At max of large limit
 });
 
 // Tool execution tests

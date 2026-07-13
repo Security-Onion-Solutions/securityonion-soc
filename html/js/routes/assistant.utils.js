@@ -214,10 +214,10 @@ globalThis.AssistantUtils = (function() {
       const threshold2 = maxContextLength * this.thresholdColorRatioMed;
       const threshold3 = maxContextLength * this.thresholdColorRatioMax;
       
-      if (value < threshold1) return "text-green";
-      if (value < threshold2) return "text-yellow";
-      if (value < threshold3) return "text-amber darken-1";
-      return "text-red darken-1";
+      if (value < threshold1) return "text-success";
+      if (value < threshold2) return "text-amber";
+      if (value < threshold3) return "text-warning";
+      return "text-error";
     },
 
     getCompressColor() {

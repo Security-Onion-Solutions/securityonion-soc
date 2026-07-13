@@ -62,6 +62,10 @@ html, body, * {
   color: rgb(var(--v-theme-lightprimary)) !important;
 }
 
+.v-theme--light .text-warning {
+  color: #C25400 !important;
+}
+
 .text-error {
   color: rgb(var(--v-theme-lighterror)) !important;
 }
@@ -124,6 +128,10 @@ html, body, * {
 .v-theme--light .v-btn.bg-primary,
 .v-theme--light .v-btn.bg-error {
   color: rgba(var(--v-theme-button_icon_color)) !important;
+}
+
+.bg-warning {
+  color: black;
 }
 
 /* Stat pills — small label above, large value below, icon on right */
