@@ -145,6 +145,8 @@ $(document).ready(function () {
               altinfo: '#0A6FC2',
               warning: '#fb8c00',
               altwarning: '#B34D00',
+              'on-warning': '#000000',
+              'on-altwarning': '#ffffff',
               error: '#EB0000',
               alterror: '#D60000',
               amber: '#707000',
@@ -174,6 +176,8 @@ $(document).ready(function () {
               altinfo: '#2597F4',
               warning: '#fb8c00',
               altwarning: '#fb8c00',
+              'on-warning': '#000000',
+              'on-altwarning': '#000000',
               error: '#EB0000',
               alterror: '#FF5757',
               amber: '#ffc107',
@@ -989,6 +993,28 @@ $(document).ready(function () {
           if (value == "high_false") return "red-lighten-1";
           if (value == "critical_false") return "red-darken-4";
           return "icon";
+        },
+        colorizeChip(color) {
+          if (typeof color === 'string') {
+            color = color.split('+')[0];
+          }
+
+          if (!this.$vuetify.theme.current.dark) {
+            // light mode
+            switch (color) {
+              case 'white':
+                color = 'secondary';
+                break;
+              case 'red':
+                color = 'error';
+                break;
+              case 'green':
+                color = 'success';
+                break;
+            }
+          }
+
+          return color;
         },
         isNodeInSubgrid(node) {
           return node.gridId != null && node.gridId.trim().length > 0;
@@ -1886,6 +1912,7 @@ $(document).ready(function () {
           formatMarkdown: this.formatMarkdown,
           formatTimestamp: this.formatTimestamp,
           colorSeverity: this.colorSeverity,
+          colorizeChip: this.colorizeChip,
           dateToRange: this.dateToRange,
         };
 

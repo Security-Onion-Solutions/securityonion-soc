@@ -819,32 +819,6 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       // this.loadAssociations();
     },
 
-    colorizeChip(color) {
-      if (typeof color === 'string') {
-        color = color.split('+')[0];
-      }
-
-      if (!this.$root.$vuetify.theme.current.dark) {
-        // light mode
-        switch (color) {
-          case 'white':
-            color = 'secondary';
-            break;
-          // case 'amber':
-          //   color = 'orange';
-          //   break;
-          case 'red':
-            color = 'error';
-            break;
-          case 'green':
-            color = 'success';
-            break;
-        }
-      }
-
-      return color;
-    },
-
     escapeQueryValue(value) {
       if (value) {
         return this.$root.escape(value.toString());
