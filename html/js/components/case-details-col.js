@@ -114,28 +114,6 @@ components.push({
 				}
 				return presets;
 			},
-			colorizeChip(color) {
-				if (typeof color === 'string') {
-					color = color.split('+')[0];
-				}
-
-				if (!this.$root.$vuetify.theme.current.dark) {
-					// light mode
-					switch (color) {
-						case 'white':
-							color = 'secondary';
-							break;
-						case 'red':
-							color = 'error';
-							break;
-						case 'green':
-							color = 'success';
-							break;
-					}
-				}
-
-				return color;
-			},
 		},
 	}
 });
