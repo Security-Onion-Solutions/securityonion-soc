@@ -847,6 +847,9 @@ func (pdm *PlaybookDiskManager) ExecuteQuestionSearch(ctx context.Context, event
 		return fmt.Errorf("unable to populate search criteria: %w", err)
 	}
 
+	criteria.Timeout = time.Second * 30
+	criteria.AllowTimeout = true
+
 	searchResults, err := pdm.srv.Eventstore.Search(ctx, criteria)
 	if err != nil {
 		return fmt.Errorf("unable to execute search: %w", err)
@@ -882,6 +885,7 @@ func (pdm *PlaybookDiskManager) ExecuteQuestionSearch(ctx context.Context, event
 		question.QueryResults = events
 	} else {
 		question.QueryResults = searchResults.Events
+		question.QueryTimedOut = searchResults.TimedOut
 	}
 
 	return nil

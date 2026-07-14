@@ -9,6 +9,7 @@ package elastic
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -198,6 +199,10 @@ func convertToElasticRequest(fieldDefs map[string]*FieldDefinition, intervals in
 	esMap := make(map[string]interface{})
 	esMap["size"] = criteria.EventLimit
 	esMap["query"] = makeQuery(fieldDefs, criteria.ParsedQuery, criteria.BeginTime, criteria.EndTime)
+
+	if criteria.Timeout != 0 {
+		esMap["timeout"] = formatDuration(criteria.Timeout)
+	}
 
 	if len(criteria.SearchAfter) != 0 {
 		esMap["search_after"] = criteria.SearchAfter
@@ -394,7 +399,7 @@ func flatten(fieldDefs map[string]*FieldDefinition, data map[string]interface{})
 	return fieldMap
 }
 
-func convertFromElasticResults(fieldDefs map[string]*FieldDefinition, esJson string, results *model.EventSearchResults) error {
+func convertFromElasticResults(fieldDefs map[string]*FieldDefinition, esJson string, results *model.EventSearchResults, allowTimeout bool) error {
 	esResults := make(map[string]interface{})
 	err := json.LoadJson([]byte(esJson), &esResults)
 	if esResults["took"] == nil || esResults["timed_out"] == nil || esResults["hits"] == nil {
@@ -402,20 +407,23 @@ func convertFromElasticResults(fieldDefs map[string]*FieldDefinition, esJson str
 	}
 	results.ElapsedMs = int(esResults["took"].(float64))
 	timedOut := esResults["timed_out"].(bool)
-	if timedOut {
+	if timedOut && !allowTimeout {
 		return errors.New("Timeout while fetching results from Elasticsearch")
 	}
 
+	results.TimedOut = timedOut
+
+	// A timed out response may only contain partial results, don't assume
+	// any part of the structure beyond the top-level keys is present
 	hits := esResults["hits"].(map[string]interface{})
-	switch hits["total"].(type) {
+	switch total := hits["total"].(type) {
 	case float64:
-		results.TotalEvents = int(hits["total"].(float64))
-	default:
-		total := hits["total"].(map[string]interface{})
+		results.TotalEvents = int(total)
+	case map[string]interface{}:
 		results.TotalEvents = int(total["value"].(float64))
 	}
 
-	records := hits["hits"].([]interface{})
+	records, _ := hits["hits"].([]interface{})
 	for _, record := range records {
 		event := &model.EventRecord{}
 		esRecord := record.(map[string]interface{})
@@ -449,8 +457,8 @@ func convertFromElasticResults(fieldDefs map[string]*FieldDefinition, esJson str
 		}
 	}
 
-	shards := esResults["_shards"].(map[string]interface{})
-	failed := shards["failed"].(float64)
+	shards, _ := esResults["_shards"].(map[string]interface{})
+	failed, _ := shards["failed"].(float64)
 	if failed > 0 {
 		failures := shards["failures"].([]interface{})
 		for _, failureGeneric := range failures {
@@ -568,7 +576,7 @@ func convertFromElasticMSearchResults(fieldDefs map[string]*FieldDefinition, esJ
 			return errors.New(msg)
 		}
 
-		err = convertFromElasticResults(fieldDefs, response.String(), res)
+		err = convertFromElasticResults(fieldDefs, response.String(), res, false)
 		if err != nil {
 			return err
 		}
@@ -1102,4 +1110,13 @@ func convertFromElasticIndexResults(esJson string, results *model.EventIndexResu
 	results.Success = result == "created" || result == "updated"
 
 	return err
+}
+
+// formatDuration converts duration to a string in the format
+// accepted by Elasticsearch.
+func formatDuration(d time.Duration) string {
+	if d < time.Millisecond {
+		return strconv.FormatInt(int64(d), 10) + "nanos"
+	}
+	return strconv.FormatInt(int64(d)/int64(time.Millisecond), 10) + "ms"
 }

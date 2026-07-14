@@ -217,7 +217,7 @@ func (store *ElasticEventstore) Search(ctx context.Context, criteria *model.Even
 		var response string
 		response, err = store.luceneSearch(ctx, query)
 		if err == nil {
-			err = convertFromElasticResults(store.fieldDefs, response, results)
+			err = convertFromElasticResults(store.fieldDefs, response, results, criteria.AllowTimeout)
 			results.Criteria = criteria
 		}
 	}
