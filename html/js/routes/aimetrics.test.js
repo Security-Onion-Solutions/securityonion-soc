@@ -1597,6 +1597,7 @@ test('setupBarChart configures bar chart options and data', () => {
   
   expect(options.responsive).toBe(true);
   expect(options.maintainAspectRatio).toBe(false);
+  expect(options.layout.padding.bottom).toBe(15);
   expect(options.plugins.legend.display).toBe(false);
   expect(options.plugins.title.display).toBe(true);
   expect(options.plugins.title.text).toBe('Test Chart');

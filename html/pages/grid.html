@@ -516,7 +516,7 @@
 					</v-row>
 					<v-row v-else>
 						<v-col v-for="panel in metricPanels" :key="panel.id" cols="12" :md="panel.width || 6" class="py-2">
-							<v-card class="pa-2 metric-panel-card" variant="outlined" :style="{ height: (panel.height ? (panel.height + 35) : 285) + 'px' }">
+							<v-card class="pa-2 metric-panel-card" variant="outlined" :style="{ height: getMetricPanelCardHeight(panel) }">
 								<div class="d-flex align-center justify-space-between mb-2">
 									<span class="text-subtitle-1 font-weight-medium">{{ panel.title }}</span>
 								</div>

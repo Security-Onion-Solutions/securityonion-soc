@@ -81,6 +81,11 @@ window.socGraphing = {
   setupBarChart(options, data, title, fontColor, gridColor, dataColor) {
     options.responsive = true;
     options.maintainAspectRatio = false;
+    options.layout = {
+      padding: {
+        bottom: 15
+      }
+    };
     options.plugins = {
       legend: {
         display: false,

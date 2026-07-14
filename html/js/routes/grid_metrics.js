@@ -4,80 +4,11 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
-const DEFAULT_DASHBOARD = {
-  panels: [
-    {
-      id: "cpu",
-      title: "CPU Usage",
-      type: "line_chart",
-      metric: "cpu",
-      keys: ["cpu_used"],
-      labels: ["CPU Usage"],
-      width: 6,
-      height: 250
-    },
-    {
-      id: "memory",
-      title: "Memory Usage",
-      type: "line_chart",
-      metric: "memory",
-      keys: ["memory_used"],
-      labels: ["Memory Usage"],
-      width: 6,
-      height: 250
-    },
-    {
-      id: "load",
-      title: "Load Average",
-      type: "line_chart",
-      metric: "load",
-      keys: ["load1", "load5", "load15"],
-      labels: ["Load 1m", "Load 5m", "Load 15m"],
-      colors: ["#4dc9f6", "#f67019", "#f53794"],
-      width: 6,
-      height: 250
-    },
-    {
-      id: "disk",
-      title: "Disk Usage",
-      type: "line_chart",
-      metric: "disk",
-      keys: ["disk_used_root", "disk_used_nsm"],
-      labels: ["Root", "NSM"],
-      colors: ["#4dc9f6", "#acc236"],
-      width: 6,
-      height: 250
-    },
-    {
-      id: "net",
-      title: "Network Traffic",
-      type: "line_chart",
-      metric: "net",
-      keys: ["traffic_man_in", "traffic_man_out", "traffic_mon_in"],
-      labels: ["Man In", "Man Out", "Mon In"],
-      colors: ["#4dc9f6", "#f67019", "#00a950"],
-      width: 6,
-      height: 250
-    },
-    {
-      id: "eps",
-      title: "EPS",
-      type: "line_chart",
-      metric: "eps",
-      keys: ["consumption_eps", "production_eps"],
-      labels: ["Consumption EPS", "Production EPS"],
-      colors: ["#4dc9f6", "#f67019"],
-      width: 6,
-      height: 250
-    }
-  ]
-};
-
 const gridRouteForMetrics = routes.find(r => r.name === 'grid');
 if (gridRouteForMetrics && gridRouteForMetrics.component) {
   Object.assign(gridRouteForMetrics.component.methods, {
     initMetricsCharts() {
-      var dashboard = DEFAULT_DASHBOARD;
+      var dashboard = { panels: [] };
       if (this.$root.parameters && this.$root.parameters.grid && this.$root.parameters.grid.metricsDashboard) {
         try {
           dashboard = typeof this.$root.parameters.grid.metricsDashboard === 'string' ?
@@ -96,12 +27,16 @@ if (gridRouteForMetrics && gridRouteForMetrics.component) {
         const chartData = { key: 0, labels: [], datasets: [] };
         const chartOptions = {};
 
+        const i18n = this.$root.i18n || {};
+        const title = panel.titleKey ? (i18n[panel.titleKey] || panel.title) : (panel.title || panel.id);
+        const labels = panel.labelKeys ? panel.labelKeys.map(k => i18n[k] || k) : (panel.labels || panel.keys);
+
         if (panel.type === 'line_chart') {
-          window.socGraphing.setupTimelineChart(chartOptions, chartData, panel.title, fontColor, gridColor, primaryColor);
+          window.socGraphing.setupTimelineChart(chartOptions, chartData, title, fontColor, gridColor, primaryColor);
           chartOptions.onResize = this.debounceChartResize;
           if (panel.keys && panel.keys.length > 0) {
             chartData.datasets = panel.keys.map((k, idx) => ({
-              label: panel.labels ? panel.labels[idx] : k,
+              label: labels ? labels[idx] : k,
               borderColor: panel.colors && panel.colors[idx] ? panel.colors[idx] : primaryColor,
               backgroundColor: panel.colors && panel.colors[idx] ? panel.colors[idx] : primaryColor,
               pointRadius: 2,
@@ -197,6 +132,10 @@ if (gridRouteForMetrics && gridRouteForMetrics.component) {
     },
     debounceChartResize(chart, size) {
       window.socGraphing.debounceChartResize(chart, size, this.chartResizeTracker);
+    },
+    getMetricPanelCardHeight(panel) {
+      const panelHeight = panel && panel.height;
+      return (panelHeight ? (panelHeight + 60) : 310) + 'px';
     },
     setupMetricsAutoRefresh() {
       if (this.metricsRefreshInterval) {
