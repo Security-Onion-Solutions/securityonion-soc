@@ -61,8 +61,8 @@ routes.push({ path: '/colors', name: 'colors', component: {
     alertTypes: ['info', 'warning', 'error'],
 
     // Surfaces (theme color names, rendered as "bg-<name>") and which foreground groups
-    // realistically appear on each. Per-surface progress lists mirror formatLinearColor()
-    // on grid.html tables and the secondary-lighten-1 bar in the assistant drawer.
+    // realistically appear on each. Per-surface progress lists mirror grid.html metric
+    // strips from formatLinearColor() and the secondary-lighten-1 bar in the assistant drawer.
     // linkColor mirrors .v-footer a (app.css), which forces the link color on
     // nav_background with !important; the page applies it as an inline style since
     // there is no v-footer here and utility classes lose to the global link rule.
@@ -190,12 +190,15 @@ routes.push({ path: '/colors', name: 'colors', component: {
     progressFor(surface) {
       return (surface.progress || []).filter((color) => !this.excluded(surface, 'progress', color));
     },
+    isGridMetricProgress(color) {
+      return ['success', 'info', 'warning', 'error'].includes(color);
+    },
     // Enumerates the configured theme color names so colors added to the theme in app.js
     // show up in the swatch section without editing this page. Skips the on-* and
     // lighten/darken keys Vuetify derives from the configured colors, plus theme keys
     // that are only ever used as foregrounds in the app, never as backgrounds.
     themeColorNames(themeName) {
-      const foregroundOnly = ['altprimary', 'altsuccess', 'altinfo', 'alterror',
+      const foregroundOnly = ['altprimary', 'altsuccess', 'altinfo', 'altwarning', 'alterror',
                               'text', 'icon', 'nav', 'nav_background_link', 'text_button',
                               'button_icon_color'];
       const theme = this.$root.theme || {};

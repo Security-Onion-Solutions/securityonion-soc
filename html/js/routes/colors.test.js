@@ -88,6 +88,7 @@ test('themeColorNames filters on-, variation, and foreground-only keys', () => {
         'primary-lighten-1': '#333',
         'primary-darken-2': '#111',
         altprimary: '#4FC3F7',
+        altwarning: '#FB8C00',
         nav_background_link: '#039FDD',
         text: '#EEE',
         icon: '#CCC',

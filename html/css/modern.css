@@ -74,6 +74,82 @@ html, body, * {
   color: rgb(var(--v-theme-altinfo)) !important;
 }
 
+.grid-metrics-field {
+  background-color: rgba(var(--v-theme-info), 0.08);
+  border-radius: var(--so-radius-nested);
+  margin: 8px 0 10px;
+  padding: 8px 0;
+}
+
+.v-theme--dark .grid-metrics-field {
+  background-color: transparent;
+}
+
+.grid-metric-row {
+  display: grid;
+  grid-template-columns: 40% 55%;
+  align-items: center;
+  column-gap: 4px;
+  row-gap: 4px;
+}
+
+.grid-metric-row + .grid-metric-row {
+  margin-top: 7px;
+}
+
+.grid-metric-label {
+  font-size: var(--so-font-size-label);
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.grid-metric-value {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: 3px;
+  margin: 0;
+  min-width: 0;
+}
+
+.grid-metric-value-text {
+  font-size: var(--so-font-size-label);
+  font-weight: 750;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.grid-metric-progress {
+  overflow: hidden;
+}
+
+.grid-metric-progress .v-progress-linear__background {
+  background-color: transparent !important;
+  opacity: 1 !important;
+}
+
+.v-theme--dark.grid-metric-progress .v-progress-linear__background,
+.v-theme--dark .grid-metric-progress .v-progress-linear__background {
+  background-color: rgba(var(--v-theme-success), 0.12) !important;
+  opacity: 1 !important;
+}
+
+@media (max-width: 600px) {
+  .grid-metric-row {
+    grid-template-columns: 1fr;
+  }
+
+  .grid-metric-value-text {
+    white-space: normal;
+  }
+
+  .grid-metric-label {
+    text-align: left;
+  }
+}
+
 .v-input--error, .v-field--error, .v-field--error .v-field__append-inner > .v-icon{
   --v-theme-error: var(--v-theme-alterror) !important;
   --v-field-color: var(--v-theme-alterror) !important;

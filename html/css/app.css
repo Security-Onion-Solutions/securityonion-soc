@@ -837,11 +837,12 @@ code {
 }
 
 .warning-message a {
-  color: white;
+  color: inherit;
+  text-decoration: underline;
 }
 
 .warning-message a:visited {
-  color: white;
+  color: inherit;
 }
 
 .unset-vertical-align {
@@ -1532,5 +1533,4 @@ ul ul ul {
 .history-entry-card {
   border-left: 4px solid rgb(var(--v-theme-primary)) !important;
 }
-
 
