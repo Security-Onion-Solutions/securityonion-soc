@@ -819,19 +819,6 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       // this.loadAssociations();
     },
 
-    colorizeChip(color) {
-      if (typeof color === 'string') {
-        color = color.split('+')[0];
-      }
-      if (color == "white" && !this.$root.$vuetify.theme.dark) {
-        color = "grey";
-      } else if (color == "amber" && !this.$root.$vuetify.theme.dark) {
-        color = "orange";
-      }
-
-      return color;
-    },
-
     escapeQueryValue(value) {
       if (value) {
         return this.$root.escape(value.toString());

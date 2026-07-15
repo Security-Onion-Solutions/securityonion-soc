@@ -35,6 +35,7 @@ RUN if [ "$VERSION" != "0.0.0" ]; then mkdir gitdocs && cd gitdocs && \
 RUN npm install jest jest-environment-jsdom --global
 
 RUN if [ -f "src2/prompt_system.md" ]; then echo "compressing system prompt"; gzip -c src2/prompt_system.md > server/modules/assistant/SOSystemPrompt.bin; fi
+RUN if [ -d "src2/agentic" ]; then for f in src2/agentic/*.md; do jq -Rs --arg key "$(basename "$f" .md)" '{($key): .}' "$f"; done | jq -s 'add' | gzip -nc > server/modules/assistant/SOAgenticPrompts.bin; fi
 RUN ./build.sh "$VERSION"
 
 

@@ -6,8 +6,15 @@
 
 require('../test_common.js');
 require('./grid.js');
+require('./grid_metrics.js');
 
 const comp = getComponent("grid");
+
+test('created', () => {
+	comp.$root.initializeCharts = jest.fn();
+	comp.created();
+	expect(comp.$root.initializeCharts).toHaveBeenCalled();
+});
 
 test('updateStatus', () => {
 	const status = { gridId: 'abc', grid: { eps: 12 }};
@@ -25,23 +32,24 @@ test('updateStatus', () => {
 });
 
 test('updateMetricsEnabled', () => {
-	testUpdateMetricsEnabled(true, false, true);
-	testUpdateMetricsEnabled(false, false, false);
-	testUpdateMetricsEnabled(true, true, true);
-	testUpdateMetricsEnabled(true, false, true, true);
-	testUpdateMetricsEnabled(false, false, false, false);
-	testUpdateMetricsEnabled(true, true, true, true);
+	testUpdateMetricsEnabled(true, false, true, false, true, false, true);
+	testUpdateMetricsEnabled(false, false, false, false, false, false, false);
+	testUpdateMetricsEnabled(true, true, true, false, true, true, true);
+	testUpdateMetricsEnabled(true, false, true, true, true, false, true);
+	testUpdateMetricsEnabled(false, false, false, false, false, false, false);
+	testUpdateMetricsEnabled(true, true, true, true, true, true, true);
 });
 
-function testUpdateMetricsEnabled(node1MetricsEnabled, node2MetricsEnabled, expectedMetricsEnabled, moreColumnsEnabled) {
-	const node1 = { metricsEnabled: node1MetricsEnabled };
-	const node2 = { metricsEnabled: node2MetricsEnabled };
+function testUpdateMetricsEnabled(node1MetricsEnabled, node2MetricsEnabled, expectedMetricsEnabled, moreColumnsEnabled, node1HistoricalEnabled, node2HistoricalEnabled, expectedHistoricalEnabled) {
+	const node1 = { metricsEnabled: node1MetricsEnabled, historicalMetricsEnabled: node1HistoricalEnabled };
+	const node2 = { metricsEnabled: node2MetricsEnabled, historicalMetricsEnabled: node2HistoricalEnabled };
 	comp.nodes = [node1, node2];
 	comp.moreColumns = moreColumnsEnabled;
 
 	comp.updateMetricsEnabled();
 
 	expect(comp.metricsEnabled).toBe(expectedMetricsEnabled);
+	expect(comp.historicalMetricsEnabled).toBe(expectedHistoricalEnabled);
 
 	const validateColumn = (label, size, moreCols) => {
 		const trans = comp.i18n[label];
@@ -775,4 +783,14 @@ test('copyEsHealthReport', () => {
   comp.copyEsHealthReport();
   expect(comp.$root.copyToClipboard).toHaveBeenCalledWith(comp.buildEsHealthReport());
   expect(comp.$root.showTip).toHaveBeenCalledWith(comp.i18n.esHealthCopied);
+});
+
+test('showNodeMetrics', () => {
+	comp.$root.papi.get = jest.fn().mockResolvedValue({ data: {} });
+	comp.$root.getColor = jest.fn().mockReturnValue('#123456');
+
+	expect(comp.activeTab).toBe('nodes');
+	comp.showNodeMetrics('host123');
+	expect(comp.activeTab).toBe('metrics');
+	expect(comp.metricsNodeId).toBe('host123');
 });

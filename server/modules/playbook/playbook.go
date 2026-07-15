@@ -8,6 +8,7 @@ package playbook
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -584,28 +585,16 @@ func (pdm *PlaybookDiskManager) GetPlaybookById(ctx context.Context, id string) 
 	return pb, nil
 }
 
-func (pdm *PlaybookDiskManager) GetEventSpecificPlaybook(ctx context.Context, id string) ([]*model.Playbook, error) {
+func (pdm *PlaybookDiskManager) GetEventSpecificPlaybook(ctx context.Context, id string, stage model.PlaybookStage, ts time.Time) ([]*model.Playbook, error) {
 	logger := log.FromContext(ctx)
 
-	query := fmt.Sprintf(`log.id.uid:"%[1]s" OR event.id:"%[1]s" OR _id:"%[1]s"`, id)
-	criteria := model.NewEventSearchCriteria()
-
-	dateRange := "1970-01-01T00:00:00Z - " + time.Now().Format(time.RFC3339)
-
-	err := criteria.Populate(query, dateRange, time.RFC3339, "", "0", "1")
+	event, err := server.FindEventBySocId(ctx, pdm.srv.Eventstore, id, ts)
 	if err != nil {
 		return nil, err
 	}
-
-	events, err := pdm.srv.Eventstore.Search(ctx, criteria)
-	if err != nil {
-		return nil, fmt.Errorf("failed to search for alert: %w", err)
-	}
-	if events.TotalEvents == 0 || len(events.Events) == 0 {
+	if event == nil {
 		return nil, fmt.Errorf("no alert found with ID %s", id)
 	}
-
-	event := events.Events[0]
 
 	detId, ok := event.Payload["rule.uuid"].(string)
 	if !ok {
@@ -636,14 +625,28 @@ func (pdm *PlaybookDiskManager) GetEventSpecificPlaybook(ctx context.Context, id
 		}).Error("retrieved detection with unsupported engine")
 	}
 
+	// no playbooks for this detection is a valid state, not an error
 	playbooks, err := pdm.srv.Playbookstore.GetPlaybooksForDetection(ctx, detection.PublicID, detection.Category, detection.Engine)
-	if err != nil || len(playbooks) == 0 {
+	if err != nil {
 		return nil, fmt.Errorf("failed to get playbooks for detection %s: %w", detection.PublicID, err)
 	}
+	if len(playbooks) == 0 {
+		return playbooks, nil
+	}
 
-	err = pdm.srv.Playbookstore.ExecutePlaybookSearches(ctx, event, playbooks)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute playbook searches: %w", err)
+	switch stage {
+	case model.PlaybookStageSkeleton:
+		// questions only
+	case model.PlaybookStageConvert:
+		err = pdm.ConvertPlaybookQueries(ctx, event, playbooks)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert playbook queries: %w", err)
+		}
+	default:
+		err = pdm.srv.Playbookstore.ExecutePlaybookSearches(ctx, event, playbooks)
+		if err != nil {
+			return nil, fmt.Errorf("failed to execute playbook searches: %w", err)
+		}
 	}
 
 	return playbooks, nil
@@ -692,7 +695,8 @@ func (pdm *PlaybookDiskManager) ConvertQuestions(ctx context.Context, queries []
 		titled[i] = q
 	}
 
-	cmd := exec.CommandContext(pdm.srv.Context, "sigma", args...)
+	// the request context, so an abandoned request stops its conversion
+	cmd := exec.CommandContext(ctx, "sigma", args...)
 	cmd.Stdin = strings.NewReader(strings.Join(titled, "\n---\n"))
 
 	raw, code, runtime, err := pdm.ExecCommand(cmd)
@@ -741,6 +745,148 @@ func (pdm *PlaybookDiskManager) ConvertQuestions(ctx context.Context, queries []
 	return output, nil
 }
 
+// ConvertPlaybookQueries fills each question's query from the alert event and
+// converts it to OQL in one batched sigma exec; on failure each query is retried
+// alone, so one bad query only leaves its own question unconverted.
+func (pdm *PlaybookDiskManager) ConvertPlaybookQueries(ctx context.Context, event *model.EventRecord, pbs []*model.Playbook) error {
+	logger := log.FromContext(ctx)
+
+	// LEGACY {field} substitution; a no-op for %placeholder% playbooks, whose
+	// values are resolved at convert time via buildVarsFromEvent.
+	queryVariableSubstitution(event, pbs)
+
+	questions := make([]*model.Question, 0)
+	filled := make([]string, 0)
+	for _, pb := range pbs {
+		for _, question := range pb.Questions {
+			questions = append(questions, question)
+			filled = append(filled, question.FilledQuery)
+		}
+	}
+
+	if len(questions) == 0 {
+		return nil
+	}
+
+	converted, err := pdm.ConvertQuestions(ctx, filled, event)
+	if err != nil || len(converted) != len(filled) {
+		// conversion is positional, so a count mismatch cannot be mapped back safely
+		logger.WithError(err).WithFields(log.Fields{
+			"eventId":        event.Id,
+			"convertedCount": len(converted),
+			"questionCount":  len(filled),
+		}).Warn("batch conversion failed; converting questions individually")
+
+		converted = pdm.convertQuestionsIndividually(ctx, event, filled)
+	}
+
+	for i, question := range questions {
+		if converted[i] == nil {
+			continue
+		}
+
+		question.OqlQuery = converted[i].Query
+		question.QueryFields = converted[i].Fields
+		question.IsAggregate = isQuestionAggregate(question.Query)
+	}
+
+	return nil
+}
+
+// convertQuestionsIndividually converts each query in its own sigma exec,
+// returning a nil entry for any query that fails.
+func (pdm *PlaybookDiskManager) convertQuestionsIndividually(ctx context.Context, event *model.EventRecord, filled []string) []*model.ConvertedQuery {
+	logger := log.FromContext(ctx)
+
+	converted := make([]*model.ConvertedQuery, len(filled))
+	for i, query := range filled {
+		result, err := pdm.ConvertQuestions(ctx, []string{query}, event)
+		if err != nil || len(result) != 1 {
+			logger.WithError(err).WithField("eventId", event.Id).Warn("unable to convert question")
+			continue
+		}
+
+		converted[i] = result[0]
+	}
+
+	return converted
+}
+
+// ExecuteQuestionSearch runs one converted question's query against the event
+// store, windowed around eventTime by the question's Range, and fills its
+// QueryResults. Rangeless questions are the caller's responsibility.
+func (pdm *PlaybookDiskManager) ExecuteQuestionSearch(ctx context.Context, eventTime time.Time, question *model.Question) error {
+	err := pdm.srv.CheckAuthorized(ctx, "read", "playbooks")
+	if err != nil {
+		return err
+	}
+
+	if question.Range == nil {
+		return errors.New("question has no range; it is answered by the alert itself")
+	}
+
+	if question.OqlQuery == "" {
+		return errors.New("question has no converted query")
+	}
+
+	dateRange := buildQuestionRange(eventTime, *question.Range, "UTC")
+	if dateRange == "" {
+		return fmt.Errorf("unable to build a date range from %q", *question.Range)
+	}
+
+	query := question.OqlQuery
+
+	if !question.IsAggregate {
+		query += " | sortby @timestamp"
+	}
+
+	criteria := model.NewEventSearchCriteria()
+
+	err = criteria.Populate(query, dateRange, time.RFC3339, "", "5", "5")
+	if err != nil {
+		return fmt.Errorf("unable to populate search criteria: %w", err)
+	}
+
+	searchResults, err := pdm.srv.Eventstore.Search(ctx, criteria)
+	if err != nil {
+		return fmt.Errorf("unable to execute search: %w", err)
+	}
+
+	if question.IsAggregate {
+		// the longest key holds the metrics grouped by the full set of fields
+		longest := ""
+		for key := range searchResults.Metrics {
+			if len(key) > len(longest) {
+				longest = key
+			}
+		}
+
+		events := make([]*model.EventRecord, 0, len(searchResults.Metrics[longest]))
+
+		for _, metric := range searchResults.Metrics[longest] {
+			m := map[string]any{}
+
+			m["Count"] = metric.Value
+			// QueryFields can come from the request body, so don't trust it to
+			// line up with the metric keys
+			for k, v := range question.QueryFields {
+				if k >= len(metric.Keys) {
+					break
+				}
+				m[v] = metric.Keys[k]
+			}
+
+			events = append(events, &model.EventRecord{Payload: m})
+		}
+
+		question.QueryResults = events
+	} else {
+		question.QueryResults = searchResults.Events
+	}
+
+	return nil
+}
+
 func (pdm *PlaybookDiskManager) ExecutePlaybookSearches(ctx context.Context, event *model.EventRecord, pbs []*model.Playbook) error {
 	logger := log.FromContext(ctx)
 
@@ -749,81 +895,28 @@ func (pdm *PlaybookDiskManager) ExecutePlaybookSearches(ctx context.Context, eve
 		return err
 	}
 
-	// LEGACY {field} substitution (normalized playbooks); a no-op for %placeholder%
-	// playbooks, whose values are resolved below at convert time via buildVarsFromEvent.
-	queryVariableSubstitution(event, pbs)
+	err = pdm.ConvertPlaybookQueries(ctx, event, pbs)
+	if err != nil {
+		return err
+	}
 
 	for _, pb := range pbs {
-		filled := lo.Map(pb.Questions, func(q *model.Question, _ int) string {
-			return q.FilledQuery
-		})
-
-		converted, err := pdm.ConvertQuestions(ctx, filled, event)
-		if err != nil {
-			logger.WithError(err).WithFields(log.Fields{"playbookId": pb.Id, "eventId": event.Id}).Warn("unable to convert questions")
-			return err
-		}
-
-		for i := 0; i < len(pb.Questions); i++ {
-			if pb.Questions[i].Range == nil {
-				pb.Questions[i].QueryResults = []*model.EventRecord{event}
-			} else {
-				dateRange := buildQuestionRange(event, *pb.Questions[i].Range, "UTC")
-
-				criteria := model.NewEventSearchCriteria()
-
-				query := converted[i].Query
-				isAgg := isQuestionAggregate(pb.Questions[i].Query)
-
-				if !isAgg {
-					query += " | sortby @timestamp"
-				}
-
-				err = criteria.Populate(query, dateRange, time.RFC3339, "", "5", "5")
-				if err != nil {
-					logger.WithError(err).WithFields(log.Fields{"playbookId": pb.Id, "eventId": event.Id}).Warn("unable to populate search criteria")
-					return err
-				}
-
-				searchResults, err := pdm.srv.Eventstore.Search(ctx, criteria)
-				if err != nil {
-					logger.WithError(err).WithFields(log.Fields{"playbookId": pb.Id, "eventId": event.Id}).Warn("unable to execute search")
-					return err
-				}
-
-				if isAgg {
-					longest := ""
-					for key := range searchResults.Metrics {
-						if len(key) > len(longest) {
-							longest = key
-						}
-					}
-
-					events := make([]*model.EventRecord, 0, len(searchResults.Metrics[longest]))
-
-					for _, metric := range searchResults.Metrics[longest] {
-						m := map[string]any{}
-
-						m["Count"] = metric.Value
-						for k, v := range converted[i].Fields {
-							m[v] = metric.Keys[k]
-						}
-
-						e := model.EventRecord{
-							Payload: m,
-						}
-
-						events = append(events, &e)
-					}
-
-					pb.Questions[i].QueryResults = events
-				} else {
-					pb.Questions[i].QueryResults = searchResults.Events
-				}
+		for _, question := range pb.Questions {
+			if question.Range == nil {
+				question.QueryResults = []*model.EventRecord{event}
+				continue
 			}
 
-			pb.Questions[i].OqlQuery = converted[i].Query
-			pb.Questions[i].QueryFields = converted[i].Fields
+			// unconverted questions stay unanswered without failing the rest
+			if question.OqlQuery == "" {
+				continue
+			}
+
+			err = pdm.ExecuteQuestionSearch(ctx, getEventTimestamp(event), question)
+			if err != nil {
+				logger.WithError(err).WithFields(log.Fields{"playbookId": pb.Id, "eventId": event.Id}).Warn("unable to execute question search")
+				return err
+			}
 		}
 	}
 
@@ -938,16 +1031,14 @@ func queryVariableSubstitution(event *model.EventRecord, playbooks []*model.Play
 	}
 }
 
-// BuildQuestionRange builds a date range string for a question based on event timestamp and range specification
+// buildQuestionRange builds a date range string for a question based on the event timestamp and range specification
 // Range format examples: "+/-3d", "-1h", "30m", "2s"
 // Returns a formatted date range string like "2024/01/01 12:00:00 PM - 2024/01/01 01:00:00 PM"
-func buildQuestionRange(event *model.EventRecord, rangeStr string, timezone string) string {
+func buildQuestionRange(eventTime time.Time, rangeStr string, timezone string) string {
 	if rangeStr == "" {
 		return ""
 	}
 
-	// Get event timestamp
-	eventTime := getEventTimestamp(event)
 	if eventTime.IsZero() {
 		return ""
 	}

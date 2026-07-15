@@ -92,6 +92,22 @@ func ParseDateRange(dateRange string, format string, zone string) (time.Time, ti
 		loc, _ = time.LoadLocation("UTC")
 	}
 
+	// Handle relative range like "now-1h:now", "now-24h:now", "now-7d:now"
+	if strings.HasPrefix(dateRange, "now-") && strings.HasSuffix(dateRange, ":now") {
+		relativePart := strings.TrimSuffix(strings.TrimPrefix(dateRange, "now-"), ":now")
+		re := regexp.MustCompile(`^(\d+)([mhd])$`)
+		matches := re.FindStringSubmatch(relativePart)
+		if len(matches) == 3 {
+			amount, _ := strconv.Atoi(matches[1])
+			unit := matches[2]
+			duration := UnitToDuration(unit) * time.Duration(amount)
+
+			end := time.Now().In(loc)
+			begin := end.Add(-duration)
+			return begin, end, nil
+		}
+	}
+
 	rangeParts := strings.Split(dateRange, " - ")
 	if len(rangeParts) != 2 {
 		end := time.Now()

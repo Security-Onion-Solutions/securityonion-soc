@@ -445,6 +445,16 @@
                   <v-list-item-title v-text="i18n.aiMetrics"></v-list-item-title>
                 </router-link>
               </v-list-item>
+              <v-list-item data-aid="nav_admin_agentstudio" v-if="$root.isUserAdmin() && isLicensed('oai') && $root.parameters.assistant?.agentic">
+                <template #prepend>
+                  <router-link to="/agentstudio" class="text-decoration-none" aria-hidden="true" tabindex="-1">
+                    <v-icon>fa-robot</v-icon>
+                  </router-link>
+                </template>
+                <router-link to="/agentstudio" class="text-decoration-none d-block">
+                  <v-list-item-title v-text="i18n.agentstudio"></v-list-item-title>
+                </router-link>
+              </v-list-item>
             </v-list-item-group>
           </v-list>
           <v-divider></v-divider>
@@ -496,23 +506,32 @@
     <script src="js/components/detection-panel.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/components/case-details-col.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/components/detection-details-col.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/components/tool-use-card.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/components/delegation-child.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/case.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/clients.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/colors.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/config.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/downloads.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/home.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/assistant.sessions.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/assistant.streaming.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/assistant.tools.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/assistant.utils.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/assistant.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/hunt.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/jobs.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/job.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/settings.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/grid.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/grid_metrics.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/gridmembers.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/terms.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/users.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/detection.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/queries.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/aimetrics.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/agentstudio.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/custom.js?v=VERSION_PLACEHOLDER"></script>
   </body>
 </html>

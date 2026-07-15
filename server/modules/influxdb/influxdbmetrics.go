@@ -515,6 +515,7 @@ func (metrics *InfluxDBMetrics) UpdateNodeMetrics(ctx context.Context, node *mod
 		node.FpsEnabled = metrics.fpsEnabled[node.Id]
 		node.LksEnabled = metrics.lksEnabled[node.Id]
 
+		node.HistoricalMetricsEnabled = false
 		enhancedStatusEnabled := (metrics.client != nil)
 		status = node.UpdateOverallStatus(enhancedStatusEnabled)
 
@@ -523,4 +524,11 @@ func (metrics *InfluxDBMetrics) UpdateNodeMetrics(ctx context.Context, node *mod
 		licensing.ValidateFeature(licensing.FEAT_LKS, node.LksEnabled == 1)
 	}
 	return status
+}
+
+func (metrics *InfluxDBMetrics) GetTimeSeriesMetrics(ctx context.Context, nodeId string, metricType string, startTime, endTime time.Time) (map[string][]model.MetricSample, error) {
+	if err := metrics.server.CheckAuthorized(ctx, "read", "nodes"); err != nil {
+		return nil, err
+	}
+	return nil, nil
 }

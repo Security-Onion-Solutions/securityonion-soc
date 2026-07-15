@@ -65,7 +65,7 @@ func (store *HttpCasestore) Create(ctx context.Context, socCase *model.Case) (*m
 		bodyReader, err = convertCaseToReader(store.createParams.Body, socCase)
 		if err == nil {
 			response, err = store.client.SendAuthorizedRequest(store.createParams.Method, store.createParams.Path, store.createParams.ContentType, bodyReader)
-			if response.StatusCode != store.createParams.SuccessStatusCode {
+			if err == nil && response.StatusCode != store.createParams.SuccessStatusCode {
 				err = errors.New("Unexpected response for HTTP case creation: " + response.Status + " (" + strconv.Itoa(response.StatusCode) + ")")
 			}
 		}

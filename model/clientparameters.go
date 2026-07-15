@@ -186,8 +186,22 @@ type AssistantParameters struct {
 	ThresholdColorRatioLow float64             `json:"thresholdColorRatioLow"`
 	ThresholdColorRatioMed float64             `json:"thresholdColorRatioMed"`
 	ThresholdColorRatioMax float64             `json:"thresholdColorRatioMax"`
+	ToolBusyMaxRetries     int                 `json:"toolBusyMaxRetries"`
+	ToolBusyRetryDelayMs   int                 `json:"toolBusyRetryDelayMs"`
 	AvailableModels        []ModelParameters   `json:"availableModels"`
 	AvailableAdapters      []AdapterParameters `json:"availableAdapters"`
+	Agentic                bool                `json:"agentic"`
+	AvailableAgents        []AgentParameters   `json:"availableAgents"`
+	AvailableSkills        []SkillParameters   `json:"availableSkills"`
+	AgentMapping           map[string]string   `json:"agentMapping"`
+}
+
+// SkillParameters is the client-facing view of an agent skill: its name and the
+// tools it unlocks. The skill's prompt guidance (AdditionalPrompt) is
+// intentionally not exposed to the browser, matching the agent persona.
+type SkillParameters struct {
+	Name  string   `json:"name"`
+	Tools []string `json:"tools"`
 }
 
 type ModelParameters struct {
@@ -200,6 +214,31 @@ type ModelParameters struct {
 	Origin                string  `json:"origin"`
 	Adapter               string  `json:"adapter"`
 	Enabled               bool    `json:"enabled"`
+}
+
+// Selector returns the canonical client-facing selector for this model: its
+// DisplayName, which is required configuration. There is deliberately no
+// fallback — a model without a DisplayName is misconfigured and gets disabled
+// at startup (see validateModelSelectors).
+func (m *ModelParameters) Selector() string {
+	return m.DisplayName
+}
+
+// LegacySelector returns the historical "id@adapter" selector form. It exists
+// only so old stored sessions and browser-side settings still resolve
+// (resolveModel pass 2); it is never a model's canonical selector.
+func (m *ModelParameters) LegacySelector() string {
+	return m.ID + "@" + m.Adapter
+}
+
+type AgentParameters struct {
+	Name           string   `json:"name"`
+	IsOrchestrator bool     `json:"isOrchestrator"`
+	CanDelegateTo  []string `json:"canDelegateTo"`
+	AllowedSkills  []string `json:"allowedSkills"`
+	// Prompt is the agent's system prompt; never serialized to the browser.
+	Prompt      string `json:"-"`
+	Description string `json:"agentDescription"`
 }
 
 type AdapterParameters struct {

@@ -51,28 +51,32 @@ html, body, * {
 }
 
 .v-application a {
-  color: rgb(var(--v-theme-lightprimary));
+  color: rgb(var(--v-theme-altprimary));
 }
 
 .text-success {
-  color: rgb(var(--v-theme-lightsuccess)) !important;
+  color: rgb(var(--v-theme-altsuccess)) !important;
 }
 
 .text-primary {
-  color: rgb(var(--v-theme-lightprimary)) !important;
+  color: rgb(var(--v-theme-altprimary)) !important;
+}
+
+.text-warning {
+  color: rgb(var(--v-theme-altwarning)) !important;
 }
 
 .text-error {
-  color: rgb(var(--v-theme-lighterror)) !important;
+  color: rgb(var(--v-theme-alterror)) !important;
 }
 
 .text-info {
-  color: rgb(var(--v-theme-lightinfo)) !important;
+  color: rgb(var(--v-theme-altinfo)) !important;
 }
 
 .v-input--error, .v-field--error, .v-field--error .v-field__append-inner > .v-icon{
-  --v-theme-error: var(--v-theme-lighterror) !important;
-  --v-field-color: var(--v-theme-lighterror) !important;
+  --v-theme-error: var(--v-theme-alterror) !important;
+  --v-field-color: var(--v-theme-alterror) !important;
 }
 
 .v-expansion-panels,
@@ -104,6 +108,16 @@ html, body, * {
 
 .so-toolbar .v-toolbar__content > .v-btn {
   border-radius: var(--so-radius-pill) !important;
+}
+
+.toolbar-container {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.toolbar-col {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .circle-button {
@@ -895,6 +909,25 @@ html, body, * {
   background-color: rgb(var(--v-theme-drawer_background)) !important;
 }
 
+/* Metric Tab Styles */
+.v-theme--dark .metric-tab-header,
+.v-theme--dark .metric-tab-body,
+.v-theme--dark .metric-tab-card {
+  background-color: rgb(var(--v-theme-table_background)) !important;
+}
+
+.v-theme--light .metric-tab-header,
+.v-theme--light .metric-tab-body,
+.v-theme--light .metric-tab-card {
+  background-color: rgb(var(--v-theme-table_background)) !important;
+}
+
+.metric-tab-card {
+  border: none !important;
+  border-radius: 0 !important;
+  overflow: hidden;
+}
+
 /* ============================================================
    Buttons — rounded when they contain text
    ============================================================ */
@@ -1139,4 +1172,68 @@ dfn {
 
 .v-data-table-footer__items-per-page > .v-select {
   width: 7rem;
+}
+/* ============================================================
+   Assistant — delegated sub-agent (nested) rendering
+   ============================================================ */
+
+.delegation-child {
+  border-left: 2px solid rgba(var(--v-theme-primary), 0.5);
+  padding-left: 0.75rem;
+  margin-left: 0.25rem;
+}
+
+.delegation-child-header {
+  display: flex;
+  align-items: center;
+  font-weight: 500;
+}
+
+.delegation-child-thoughts {
+  white-space: pre-wrap;
+}
+
+.delegation-child-raw-result {
+  white-space: pre-wrap;
+  max-height: 300px;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: auto;
+}
+
+/* Agent Studio inline editor card (inside an expanded data-table row). */
+.agentstudio-editor {
+  border: 1px solid rgba(var(--v-theme-text), 0.08);
+  border-radius: var(--so-radius-panel);
+  background-color: rgba(var(--v-theme-background-lighten-1));
+  overflow: hidden;
+}
+
+/* The .section-panel tab styling bleeds into these nested editor tabs; reset it
+   so the tabs/window use the editor card surface instead of a boxed background. */
+.agentstudio-editor .v-tabs,
+.agentstudio-editor .v-tabs-window,
+.agentstudio-editor .v-tab {
+  background-color: transparent !important;
+}
+
+/* v-window clips overflow by default, which cuts off the outlined fields'
+   floating labels that sit on the top border. Let them show, with a little
+   top room so the first row's labels clear the tab divider. */
+.agentstudio-editor .v-window,
+.agentstudio-editor .v-window__container {
+  overflow: visible;
+}
+
+.agentstudio-editor .v-card-text {
+  padding-top: 20px;
+}
+
+.agentstudio-notice {
+  min-height: 50vh;
+}
+
+.agentstudio-toolbar {
+  width: fit-content;
 }

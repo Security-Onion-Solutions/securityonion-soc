@@ -1,0 +1,79 @@
+<v-container fluid data-aid="colors_screen">
+  <h1 class="my-2">Theme Color Combinations</h1>
+  <p class="text-body-2">
+    Accessibility test page: every realistic foreground/background color combination used in SOC,
+    rendered in both themes for automated contrast scanning.
+  </p>
+
+  <div class="d-flex ga-4 align-start">
+    <v-theme-provider v-for="themeName in themeNames" :key="themeName" :theme="themeName" with-background class="w-50">
+      <div class="pa-4" :data-aid="'colors_theme_' + themeName">
+        <h2 class="mb-3">{{ themeName }} theme</h2>
+
+        <!-- Each surface is framed in the opposite theme's background color so the section
+             container always has strong contrast against its parent. -->
+        <div v-for="surface in surfaces" :key="surface.name" :style="{ backgroundColor: oppositeBackground(themeName) }" class="pa-2 mb-4 rounded">
+          <section :class="'bg-' + surface.name" class="pa-3 rounded"
+              :data-aid="'colors_surface_' + themeName + '_' + surface.name">
+            <h3 class="text-body-2 mb-2">Surface: {{ surface.name }}</h3>
+
+          <p v-for="token in textTokensFor(surface)" :key="token" :class="'text-' + token" class="text-body-2 ma-0">
+            {{ token }} text on {{ surface.name }}
+          </p>
+
+          <p v-if="surface.links" class="text-body-2 ma-0">
+            <a href="#/colors" :style="surface.linkColor ? { color: 'rgb(var(--v-theme-' + surface.linkColor + '))' } : null">Sample link on {{ surface.name }}</a>
+          </p>
+
+          <!-- Colors production only applies to icon glyphs, not text -->
+          <div v-if="surface.icons" class="mt-1">
+            <v-icon v-for="token in iconTokensFor(surface)" :key="token" :color="token" :alt="token" size="small" class="ma-1">fa-circle</v-icon>
+          </div>
+
+          <div v-if="surface.chips" class="mt-2">
+            <v-chip v-for="c in chipsFor(surface, themeName)" :key="c.color + '-' + c.variant" :color="c.color" :variant="c.variant" size="small" class="ma-1">{{ c.color }} ({{ c.variant }})</v-chip>
+          </div>
+
+          <div v-if="surface.buttons" class="mt-2">
+            <v-btn v-for="b in buttonsFor(surface)" :key="b" :color="b" size="small" class="ma-1">{{ b }}</v-btn>
+          </div>
+
+          <!-- config.html status label: flat grey-darken-3 chip with white text -->
+          <div v-if="surface.labelChip" class="mt-2">
+            <v-chip variant="flat" color="grey-darken-3" size="small" class="text-white ma-1">white on grey-darken-3</v-chip>
+          </div>
+
+          <!-- hunt.html toolbar buttons: button_icon_color icons on primary flat buttons -->
+          <div v-if="surface.primaryButtonIcon" class="mt-2">
+            <v-btn color="primary" size="small" class="ma-1"><span class="text-button_icon_color">button_icon_color on primary</span></v-btn>
+          </div>
+
+          <!-- index.html grid selector: white text on blue-darken-4 in the app bar -->
+          <div v-if="surface.gridSelector" class="bg-blue-darken-4 text-white pa-2 mt-2 rounded d-inline-block text-body-2">
+            white text on blue-darken-4
+          </div>
+
+          <div v-if="surface.alerts" class="mt-2">
+            <v-alert v-for="a in alertsFor(surface)" :key="a" :type="a" density="compact" class="mb-2">{{ a }} alert text</v-alert>
+          </div>
+
+          <div v-if="surface.progress" class="mt-2">
+            <v-progress-linear v-for="p in progressFor(surface)" :key="p" :color="p" :model-value="65" height="15" class="mb-1" aria-label="progress">
+              <span class="text-caption">65% ({{ p }})</span>
+            </v-progress-linear>
+          </div>
+          </section>
+        </div>
+
+        <section :data-aid="'colors_swatches_' + themeName">
+          <h3 class="text-body-2 mb-2">All theme colors (bg-X with on-X text)</h3>
+          <div :style="{ backgroundColor: oppositeBackground(themeName) }" class="d-flex flex-wrap pa-2 rounded">
+            <div v-for="name in themeColorNames(themeName)" :key="name" :class="'bg-' + name" class="pa-2 ma-1 rounded">
+              <span class="text-body-2">{{ name }}</span>
+            </div>
+          </div>
+        </section>
+      </div>
+    </v-theme-provider>
+  </div>
+</v-container>

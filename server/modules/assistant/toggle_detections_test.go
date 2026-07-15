@@ -7,6 +7,7 @@ package assistant
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"sync"
 	"testing"
@@ -346,7 +347,7 @@ func TestToggleDetectionsTool_Execute(t *testing.T) {
 
 			// Create tool and execute
 			tool := &ToggleDetectionsTool{}
-			result, err := tool.Execute(ctx, mockServer, tc.params, "")
+			result, err := tool.Execute(ctx, mockServer, &model.ToolRequest{Params: json.RawMessage(tc.params)})
 
 			// Assert error expectations
 			if tc.expectedError {
@@ -480,7 +481,7 @@ func TestToggleDetectionsTool_QueryFiltering(t *testing.T) {
 
 			// Create tool and execute
 			tool := &ToggleDetectionsTool{}
-			result, err := tool.Execute(ctx, mockServer, params, "")
+			result, err := tool.Execute(ctx, mockServer, &model.ToolRequest{Params: json.RawMessage(params)})
 
 			assert.NoError(t, err)
 			assert.NotNil(t, result)
@@ -574,7 +575,7 @@ func TestToggleDetectionsTool_Authorization(t *testing.T) {
 
 			// Create tool and execute
 			tool := &ToggleDetectionsTool{}
-			result, err := tool.Execute(ctx, mockServer, params, "")
+			result, err := tool.Execute(ctx, mockServer, &model.ToolRequest{Params: json.RawMessage(params)})
 
 			if tc.expectError {
 				assert.Error(t, err)

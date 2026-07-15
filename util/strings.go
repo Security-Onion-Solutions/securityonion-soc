@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -87,4 +88,12 @@ func EscapePainless(value string) string {
 	value = strings.ReplaceAll(value, "\\", "\\\\")
 	value = strings.ReplaceAll(value, "'", "\\'")
 	return value
+}
+
+func SanitizeNic(nic string) string {
+	disallowed := regexp.MustCompile(`[^[:alnum:]_.-]`)
+	nic = strings.TrimSpace(nic)
+	nic = disallowed.ReplaceAllString(nic, "-")
+	nic = strings.ReplaceAll(nic, "..", "-")
+	return nic
 }

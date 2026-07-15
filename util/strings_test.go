@@ -235,3 +235,49 @@ func TestEscapePainless(t *testing.T) {
 		})
 	}
 }
+
+func TestSanitizeNic(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"Empty", "", ""},
+		{"Simple", "eth0", "eth0"},
+		{"Space", "eth 0", "eth-0"},
+		{"Ampersand", "eth&0", "eth-0"},
+		{"Underscore", "eth_0", "eth_0"},
+		{"Equal", "eth=0", "eth-0"},
+		{"Plus", "eth+0", "eth-0"},
+		{"Colon", "eth:0", "eth-0"},
+		{"Slash", "eth/0", "eth-0"},
+		{"Double Dot", "eth..0", "eth-0"},
+		{"Trim Leading Space", "  eth0", "eth0"},
+		{"Trim Trailing Space", "eth0  ", "eth0"},
+		{"Trim Both", "  eth0  ", "eth0"},
+		{"Multiple separators", "eth_0/1:2", "eth_0-1-2"},
+		{"Path traversal - Relative linux", "../../etc/passwd", "----etc-passwd"},
+		{"Path traversal - Absolute linux", "/etc/passwd", "-etc-passwd"},
+		{"Path traversal - Windows", `..\..\windows\win.ini`, `----windows-win.ini`},
+		{"Path traversal - Relative dots", "...", "-."},
+		{"Path traversal - Dot", ".", "."},
+		{"Path traversal - Double Dot", "..", "-"},
+		{"Path traversal - Quad Dot", "....", "--"},
+		{"Path traversal - Windows drive", `C:\boot.ini`, `C--boot.ini`},
+		{"Device files", "/dev/urandom", "-dev-urandom"},
+		{"Path traversal - Spaced dots", ".. /.. /etc/passwd", "------etc-passwd"},
+		{"Path traversal - Combined", `eth0\..\..\..\etc\passwd`, `eth0-------etc-passwd`},
+		{"Unicode standard - Japanese", "eth0日本語", "eth0---"},
+		{"Unicode emoji", "eth0😀", "eth0-"},
+		{"Unicode spaces - Ideographic space", "\u3000eth0\u3000", "eth0"},
+		{"Unicode fullwidth separators", "eth0／1：2＝3", "eth0-1-2-3"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := SanitizeNic(test.input)
+			assert.Equal(t, test.expected, got)
+		})
+	}
+}
+

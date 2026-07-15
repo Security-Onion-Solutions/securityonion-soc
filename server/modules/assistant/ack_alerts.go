@@ -73,10 +73,13 @@ type ackAlertArgs struct {
 	RangeFormat  string         `json:"range_format,omitempty"`
 }
 
-func (t *AckAlertsTool) Execute(ctx context.Context, server *server.Server, params string, auxData string) (result *model.ToolResponse, err error) {
-	logger := log.FromContext(ctx)
+func (t *AckAlertsTool) Execute(ctx context.Context, server *server.Server, req *model.ToolRequest) (result *model.ToolResponse, err error) {
+	logger := log.FromContext(ctx).WithFields(log.Fields{
+		"sessionId": req.SessionId,
+		"toolUseId": req.ToolUseId,
+	})
 
-	logger.WithField("toolParameters", params).Info("running tool for assistant")
+	logger.WithField("toolParameters", req.Params).Info("running tool for assistant")
 
 	userId := ctx.Value(web.ContextKeyRequestorId).(string)
 
@@ -93,9 +96,9 @@ func (t *AckAlertsTool) Execute(ctx context.Context, server *server.Server, para
 		}
 	}()
 
-	err = json.Unmarshal([]byte(params), args)
+	err = json.Unmarshal([]byte(req.Params), args)
 	if err != nil {
-		logger.WithError(err).WithField("toolParams", params).Error("failed to unmarshal tool params")
+		logger.WithError(err).WithField("toolParams", req.Params).Error("failed to unmarshal tool params")
 		return nil, errors.New("ERROR_ASSISTANT_UNMARSHAL_PARAMS")
 	}
 
@@ -124,7 +127,6 @@ func (t *AckAlertsTool) Execute(ctx context.Context, server *server.Server, para
 	results, err := server.Eventstore.Acknowledge(ctx, crit)
 	if err != nil {
 		logger.WithError(err).Error("error acknowledging alert")
-
 		return nil, err
 	}
 

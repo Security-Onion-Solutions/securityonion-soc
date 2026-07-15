@@ -7,6 +7,7 @@ package model
 
 import (
 	"encoding/json"
+	"net/http"
 	"time"
 )
 
@@ -301,11 +302,22 @@ type ChatOpt func(*ChatConfig)
 
 type ChatConfig struct {
 	AutoExecuteTools bool
+	// MaxTokens, when > 0, caps the number of output tokens the model may generate
+	// for this request. Used to enforce a per-sub-session output-token budget.
+	MaxTokens int
 }
 
 func WithAutoExecuteTools(autoExecute bool) ChatOpt {
 	return func(config *ChatConfig) {
 		config.AutoExecuteTools = autoExecute
+	}
+}
+
+// WithMaxTokens caps the output tokens for a single chat request. A value <= 0
+// leaves the request uncapped.
+func WithMaxTokens(maxTokens int) ChatOpt {
+	return func(config *ChatConfig) {
+		config.MaxTokens = maxTokens
 	}
 }
 
@@ -336,6 +348,83 @@ type AssistantSession struct {
 	Tags []string `json:"tags" example:"investigation"`
 	// Usage statistics for the session.
 	Usage *SessionUsage `json:"usage,omitempty"`
+	// The model/adapter this session itself runs on (the agent id for delegated
+	// sessions). Used to resume the session server-side without trusting the
+	// client-supplied model. Empty for legacy sessions created before this field
+	// existed, in which case the caller falls back to the request/parent model.
+	Model string `json:"model,omitempty" example:"AgentClaude@SOAI"`
+	// The delegation nesting depth of this session: 0 for a top-level conversation,
+	// parent depth + 1 for a delegated sub-agent. Used to enforce a delegation depth
+	// limit. Absent (0) for legacy sessions created before this field existed.
+	Depth int `json:"depth,omitempty" example:"1"`
+	// For delegated sub-agent sessions, the session that delegated to this one.
+	ParentSessionId string `json:"parentSessionId,omitempty" example:"chat_1757086398900_ykhmndscn"`
+	// For delegated sub-agent sessions, the tool_use id in the parent session that
+	// this delegation resolves when the sub-agent finishes.
+	ParentToolUseId string `json:"parentToolUseId,omitempty" example:"tooluse_mT45or7ISwSEUivo63nqow"`
+	// For delegated sub-agent sessions, the model the parent session uses, so the
+	// parent can be resumed once the sub-agent's result is ready.
+	ParentModel string `json:"parentModel,omitempty" example:"AgentClaude@SOAI"`
+	// For delegated sub-agent sessions, the display name of the delegated agent.
+	DelegateAgent string `json:"delegateAgent,omitempty" example:"Hunter"`
+}
+
+const (
+	// DelegationMarkerStart is the SSE event type emitted at the start of a
+	// delegated sub-agent's stream so the UI can nest the sub-agent's activity
+	// under the parent's delegate tool block.
+	DelegationMarkerStart = "delegation_start"
+	// DelegationMarkerResolved is the SSE event type emitted when a sub-agent
+	// finishes and its result is folded back into the parent session, so the UI
+	// can un-nest and render the parent's resumed turn.
+	DelegationMarkerResolved = "delegation_resolved"
+)
+
+// DelegationKickoff is returned by DelegateTool.Execute (as ToolResponse.Result)
+// to signal that a delegation should begin. The coordinator recognizes this
+// marker, creates the linked child session, seeds the objective as the child's
+// first user message, and streams the sub-agent's first turn rather than
+// resolving the parent's delegate tool_use.
+type DelegationKickoff struct {
+	ChildSessionId string `json:"childSessionId"`
+	ChildModel     string `json:"childModel"`
+	Objective      string `json:"objective"`
+	AgentName      string `json:"agentName"`
+}
+
+// DelegationMarker is a synthetic SSE event injected into a tool stream to tell
+// the UI to nest (start) or un-nest (resolved) a delegated sub-agent's output.
+type DelegationMarker struct {
+	Type            string `json:"type"`
+	ChildSessionId  string `json:"childSessionId,omitempty"`
+	ParentSessionId string `json:"parentSessionId,omitempty"`
+	ParentToolUseId string `json:"parentToolUseId,omitempty"`
+	AgentName       string `json:"agentName,omitempty"`
+}
+
+// StreamedTurn is a single streamed model turn produced by the assistant. The
+// handler streams Response to the client, then uses SessionId/Model to decide
+// whether to chain another turn (e.g. resolving a delegated sub-agent back into
+// its parent). Marker, when set, is a synthetic SSE event written to the client
+// before the turn so the UI can nest/un-nest delegated sub-agent output.
+type StreamedTurn struct {
+	Response  *http.Response
+	Aux       *AuxMessageData
+	Finalize  func(rawResponse []byte) error
+	SessionId string
+	Model     string
+	Marker    *DelegationMarker
+	// Session is the record for SessionId, loaded once at the start of the turn.
+	// The handler's chaining decision reads ParentSessionId/ParentToolUseId from
+	// it (immutable after creation) instead of re-fetching. May be nil when the
+	// session could not be loaded.
+	Session *AssistantSession
+	// ToolResult, when set, is the result of the tool that produced this turn. The
+	// handler emits it as a synthetic tool_result SSE event before the turn so the
+	// UI can attach the result to its tool card inline, without re-fetching the
+	// session. Only set for direct tool execution (ToolStreamInSession); a
+	// delegation kickoff leaves it nil because it has no immediate result.
+	ToolResult *ToolResult
 }
 
 // @Description Detailed information about an Assistant session, including its messages.
@@ -344,6 +433,26 @@ type AssistantSessionDetails struct {
 	Session *AssistantSession `json:"session"`
 	// The messages in the session.
 	History []*StoredMessage `json:"history"`
+	// Delegated sub-sessions descending from this session (any depth), each with
+	// their own messages. Used to reconstruct nested sub-agent activity on reload.
+	SubSessions []*AssistantSessionDetails `json:"subSessions,omitempty"`
+	// The tool_use in this sub-session awaiting the user's approval, if any (a
+	// trailing tool_use with no tool_result that did not itself spawn a sub-session).
+	// Derived server-side so the client resumes by POSTing these exact values rather
+	// than re-deriving which nested tool is pending. Only populated for sub-sessions
+	// (see GetSessionDetails); the root session's pending tool is re-derived
+	// client-side from its trailing message.
+	PendingApproval *PendingToolApproval `json:"pendingApproval,omitempty"`
+}
+
+// PendingToolApproval identifies a tool_use awaiting the user's approval in a
+// (sub-)session: the exact values the client must POST to /assistant/tool/{toolName}
+// to resume that turn.
+type PendingToolApproval struct {
+	SessionId string          `json:"sessionId"`
+	ToolUseId string          `json:"toolUseId"`
+	ToolName  string          `json:"toolName"`
+	Input     json.RawMessage `json:"input,omitempty" swaggertype:"object"`
 }
 
 type ModelUsageStats struct {
@@ -390,4 +499,10 @@ type UserUsage struct {
 type UpdateSessionRequest struct {
 	Action string `json:"action" example:"add" enum:"add,remove"`
 	Tag    string `json:"tag" example:"shared"`
+}
+
+type Skill struct {
+	Name             string
+	Tools            []string
+	AdditionalPrompt string
 }

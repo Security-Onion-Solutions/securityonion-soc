@@ -14,6 +14,9 @@ const FILTER_INCLUDE = 'INCLUDE';
 const FILTER_EXCLUDE = 'EXCLUDE';
 const FILTER_EXACT = 'EXACT';
 const FILTER_DRILLDOWN = 'DRILLDOWN';
+const QUESTION_STATUS_RUNNING = 'running';
+const QUESTION_STATUS_DONE = 'done';
+const QUESTION_STATUS_ERROR = 'error';
 
 loadPageTemplate('page-hunt', 'pages/hunt.html');
 
@@ -707,7 +710,7 @@ const huntComponent = {
           // this should only happen when the user is opening a
           // playbook for a specific alert from another page
           for (let item of this.eventData) {
-            this.loadPlaybook(item);
+            this.loadPlaybook(item, item._row_idx_);
           }
         }
 
@@ -2044,7 +2047,7 @@ const huntComponent = {
       return this.isCategory('detections');
     },
     getExpandedData(data) {
-      const ignored = ['_isSelected', 'playbooks', '_row_idx_', 'playbookErr', 'questions'];
+      const ignored = ['_isSelected', 'playbooks', '_row_idx_', 'playbookErr', 'playbookNone', 'playbookLoading', 'questions'];
       var records = [];
       for (let key in data) {
         if (ignored.includes(key)) {
@@ -2822,7 +2825,7 @@ const huntComponent = {
 
       if (status.success) {
         const msg = this.$root.replaceActionVar(this.i18n.ackTaskSuccess, 'count', (status.updated || 0).toLocaleString())
-        this.$root.showInfo(msg, true);
+        this.$root.showTip(msg);
       } else {
         let errors = (status.errors || []).join('; ');
         const msg = this.$root.replaceActionVar(this.i18n.ackTaskError, 'errors', errors);
@@ -2945,63 +2948,179 @@ const huntComponent = {
 
       event.playbookLoading = true;
 
-      let playbooks;
+      let playbooks = null;
       let pbErr = false;
+      let convertPromise;
+      const convertAbort = new AbortController();
 
       try {
-        const response = await this.$root.papi.get(`playbook/event/${socId}`);
+        // the alert doc's own time, which the server's alert lookup windows on
+        const ts = encodeURIComponent(event?.['soc_timestamp'] || this.getEventTimestamp(event));
+
+        // start the slow conversion request immediately; the skeleton renders meanwhile
+        convertPromise = this.$root.papi.get(`playbook/event/${socId}?stage=convert&ts=${ts}`, { signal: convertAbort.signal });
+        convertPromise.catch(() => {}); // handled in answerPlaybookQuestions
+
+        // rule.uuid allows the skeleton to come from the cheaper detection route
+        const ruleUuid = event?.['rule.uuid'];
+        const response = ruleUuid
+          ? await this.$root.papi.get(`playbook/detection/${encodeURIComponent(ruleUuid)}`)
+          : await this.$root.papi.get(`playbook/event/${socId}?stage=skeleton&ts=${ts}`);
 
         playbooks = response.data;
       } catch (e) {
         pbErr = true;
         playbooks = null;
       }
+
+      // no playbooks for this detection is a valid state, not an error
+      const pbNone = !pbErr && (!playbooks || playbooks.length === 0);
+      if (pbNone) {
+        playbooks = null;
+      }
+
+      if (!playbooks) {
+        convertAbort.abort(); // nothing to convert for
+      }
+
       event.playbooks = playbooks;
       event.playbookErr = pbErr;
+      event.playbookNone = pbNone;
       delete event.playbookLoading;
 
       if (playbooks) {
-        // answer the questions and
-        // stable sort them by results
-        let ips = [];
-        let good = []; // has answers
-        let bad = [];  // no answers
-        for (let pb of event.playbooks) {
+        let questions = [];
+        for (let pb of playbooks) {
           for (let q of pb.questions) {
-            if (q.queryResults.length > 0) {
-              good.push(q);
-            } else {
-              bad.push(q);
-            }
-            
-            for (let answer of q.queryResults) {
-              if (answer.payload) {
-                for (let v of Object.values(answer.payload)) {
-                  if (v && typeof v === 'string') {
-                    ips.push(v);
-                  }
-                }
-              }
-            }
-            
-            q.isAggregate = this.isQuestionAggregate(q);
+            q.status = QUESTION_STATUS_RUNNING;
+            questions.push(q);
+          }
+        }
+
+        event.questions = questions;
+
+        // expand the first question while queries run
+        this.expandedPlaybookQuestions[index] = questions.length > 0 ? [0] : [];
+
+        await this.answerPlaybookQuestions(event, index, convertPromise);
+      }
+    },
+    async answerPlaybookQuestions(event, index, convertPromise) {
+      let converted = null;
+
+      try {
+        const response = await convertPromise;
+
+        converted = response.data || [];
+      } catch (e) {
+        converted = null;
+      }
+
+      if (converted) {
+        // match strictly by id; a positional guess could attach another playbook's queries
+        const convertedById = {};
+        for (const pb of converted) {
+          if (pb.id) {
+            convertedById[pb.id] = pb;
+          }
+        }
+
+        for (const pb of event.playbooks) {
+          const conv = convertedById[pb.id];
+
+          for (let i = 0; i < pb.questions.length; i++) {
+            const q = pb.questions[i];
+            const cq = conv?.questions?.[i];
+
+            if (!cq || !cq.oqlQuery) continue;
+
+            q.oqlQuery = cq.oqlQuery;
+            q.queryFields = cq.fields || [];
+            q.isAggregate = !!cq.isAggregate;
 
             if (q.isAggregate) {
-              q.fields = [this.i18n.count, ...q.fields];
+              q.fields = [this.i18n.count, ...q.queryFields];
             } else {
-              q.fields = ['@timestamp', ...q.fields];
+              q.fields = ['@timestamp', ...q.queryFields];
             }
           }
         }
-        this.$root.batchLookup(ips, this);
+      }
 
-        event.questions = [...good, ...bad];
-
-        this.expandedPlaybookQuestions[index] = [];
-        for (let i = 0; i < good.length; i++) {
-          this.expandedPlaybookQuestions[index].push(i);
+      // ranged questions need a converted query; rangeless ones are answered by the alert
+      for (const q of event.questions) {
+        if (q.range && !q.oqlQuery) {
+          q.queryResults = [];
+          q.status = QUESTION_STATUS_ERROR;
+        } else if (!q.range && !q.fields) {
+          // conversion missed this rangeless question; still render the alert row
+          q.fields = ['soc_timestamp'];
         }
       }
+
+      // cap concurrent searches
+      const queue = event.questions.map((q, qi) => [q, qi]);
+      const workers = Array.from({ length: Math.min(4, queue.length) }, async () => {
+        while (queue.length > 0) {
+          const [q, qi] = queue.shift();
+          await this.runPlaybookQuery(event, index, q, qi);
+        }
+      });
+      await Promise.all(workers);
+    },
+    async runPlaybookQuery(event, index, question, qi) {
+      if (question.status === QUESTION_STATUS_ERROR) return;
+
+      // a question without a range is answered by the alert itself; copy the row
+      // without the playbook bookkeeping so the answer doesn't reference itself
+      if (!question.range) {
+        const { playbooks, questions, playbookErr, playbookNone, playbookLoading, _isSelected, ...payload } = event;
+        question.queryResults = [{ payload: payload, timestamp: this.getEventTimestamp(event) }];
+        question.status = QUESTION_STATUS_DONE;
+        this.finishPlaybookQuestion(event, index, question, qi);
+        return;
+      }
+
+      question.status = QUESTION_STATUS_RUNNING;
+
+      try {
+        // ranges anchor to the source event's time, not the alert doc's time
+        const ts = encodeURIComponent(this.getEventTimestamp(event));
+        const response = await this.$root.papi.post(`playbook/question?ts=${ts}`, {
+          range: question.range,
+          oqlQuery: question.oqlQuery,
+          fields: question.queryFields,
+          isAggregate: question.isAggregate,
+        });
+
+        question.queryResults = response.data.queryResults || [];
+        question.status = QUESTION_STATUS_DONE;
+      } catch (e) {
+        question.queryResults = [];
+        question.status = QUESTION_STATUS_ERROR;
+      }
+
+      this.finishPlaybookQuestion(event, index, question, qi);
+    },
+    finishPlaybookQuestion(event, index, question, qi) {
+      if (!question.queryResults || question.queryResults.length === 0) return;
+
+      const expanded = this.expandedPlaybookQuestions[index];
+      if (Array.isArray(expanded) && !expanded.includes(qi)) {
+        expanded.push(qi);
+      }
+
+      let ips = [];
+      for (let answer of question.queryResults) {
+        if (answer.payload) {
+          for (let v of Object.values(answer.payload)) {
+            if (v && typeof v === 'string') {
+              ips.push(v);
+            }
+          }
+        }
+      }
+      this.$root.batchLookup(ips, this);
     },
     buildQuestionRange(event, range) {
       if (!range) {
@@ -3029,10 +3148,13 @@ const huntComponent = {
         return '';
       }
 
-      unit = { d: 'days', h: 'hours', m: 'minutes', s: 'seconds' }[unit];
-      if (!unit) {
+      // y/w use fixed 365/7-day durations to mirror the server (util.UnitToDuration)
+      const units = { y: ['days', 365], w: ['days', 7], d: ['days', 1], h: ['hours', 1], m: ['minutes', 1], s: ['seconds', 1] };
+      if (!units[unit]) {
         return '';
       }
+      value *= units[unit][1];
+      unit = units[unit][0];
 
       let t1, t2;
 
@@ -3067,23 +3189,6 @@ const huntComponent = {
       }
 
       return payload;
-    },
-    isQuestionAggregate(question) {
-      if ('isAggregate' in question) return question.isAggregate;
-
-      try {
-        const yaml = jsyaml.load(question.query, { schema: jsyaml.FAILSAFE_SCHEMA });
-        question.isAggregate = typeof yaml.aggregation === 'string' && yaml.aggregation.toLowerCase() === 'true';
-      } catch {
-        const match = question.query.match(/^\s*aggregation\s*:\s*(true|false)\s*$/im)
-        if (match) {
-          question.isAggregate = match[1].toLowerCase() === 'true';
-        } else { 
-          question.isAggregate = false;
-        }
-      }
-
-      return question.isAggregate;
     },
     translateValue(value) {
       if (typeof value === 'string' && value.startsWith('__')) {
@@ -3211,11 +3316,25 @@ const huntComponent = {
       }
     },
     pickQuestionColor(question) {
+      if (this.isQuestionRunning(question)) {
+        return 'query-running';
+      }
+
+      if (this.isQuestionError(question)) {
+        return 'has-error';
+      }
+
       if (question.queryResults && question.queryResults.length > 0) {
         return 'has-answers';
       }
 
       return 'no-data';
+    },
+    isQuestionRunning(question) {
+      return question.status === QUESTION_STATUS_RUNNING;
+    },
+    isQuestionError(question) {
+      return question.status === QUESTION_STATUS_ERROR;
     },
     // AI Investigation methods
     async startAIInvestigation(item, event = null) {

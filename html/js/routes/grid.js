@@ -85,17 +85,55 @@ routes.push({ path: '/grid', name: 'grid', component: {
     NodeStatusRestart: NodeStatusRestart,
     UNREALISTIC_AGE: UNREALISTIC_AGE,
     stalenessInterval: null,
+    metricsLoading: false,
+    metricsNodeId: '',
+    metricsNodeItems: [],
+    activeTab: 'nodes',
+    metricsEnabled: false,
+    historicalMetricsEnabled: false,
+    selectedMetricsTitle: '',
+    metricsTimeRange: '1h',
+    metricsAutoRefresh: 0,
+    metricsRefreshInterval: null,
+    timeRangeItems: [
+      { title: this.$root.i18n.metricsLastHour, value: '1h' },
+      { title: this.$root.i18n.metricsLast24Hours, value: '24h' },
+      { title: this.$root.i18n.metricsLast7Days, value: '7d' }
+    ],
+    autoRefreshItems: [
+      { title: this.$root.i18n.interval0s, value: 0 },
+      { title: this.$root.i18n.interval30s, value: 30 },
+      { title: this.$root.i18n.interval1m, value: 60 },
+      { title: this.$root.i18n.interval5m, value: 300 }
+    ],
+    chartCpuData: { key: 0, datasets: [] },
+    chartCpuOptions: {},
+    chartMemoryData: { key: 0, datasets: [] },
+    chartMemoryOptions: {},
+    chartLoadData: { key: 0, datasets: [] },
+    chartLoadOptions: {},
+    chartDiskData: { key: 0, datasets: [] },
+    chartDiskOptions: {},
+    chartNetData: { key: 0, datasets: [] },
+    chartNetOptions: {},
+    chartEpsData: { key: 0, datasets: [] },
+    chartEpsOptions: {},
   }},
   created() {
+    this.$root.initializeCharts();
   },
   unmounted() {
     this.$root.unsubscribe("node", this.updateNode);
     this.$root.unsubscribe("status", this.updateStatus);
     clearInterval(this.stalenessInterval);
     this.abortEsHealth();
+    if (this.metricsRefreshInterval) {
+      clearInterval(this.metricsRefreshInterval);
+    }
   },
   mounted() {
     this.$root.loadParameters("grid", this.initGrid);
+    this.initMetricsCharts();
   },
   watch: {
     '$route': 'loadData',
@@ -103,6 +141,21 @@ routes.push({ path: '/grid', name: 'grid', component: {
     'itemsPerPage': 'saveLocalSettings',
     'moreColumns': 'saveLocalSettings',
     'esHealthDialog': 'onEsHealthDialogChanged',
+    'activeTab'(val) {
+      if (val === 'metrics') {
+        if (this.metricsNodeId === undefined || this.metricsNodeId === null) {
+          this.metricsNodeId = '';
+        }
+        this.initMetricsCharts();
+        this.loadHistoricalMetrics();
+        this.setupMetricsAutoRefresh();
+      } else {
+        if (this.metricsRefreshInterval) {
+          clearInterval(this.metricsRefreshInterval);
+          this.metricsRefreshInterval = null;
+        }
+      }
+    }
   },
   methods: {
     initGrid(params) {
@@ -160,6 +213,10 @@ routes.push({ path: '/grid', name: 'grid', component: {
     updateMetricsEnabled() {
       this.$root.adjustSubgridColVisibility(this.headers);
       this.metricsEnabled = !this.nodes.every(function(node) { return !node.metricsEnabled; });
+      this.historicalMetricsEnabled = !this.nodes.every(function(node) { return !node.historicalMetricsEnabled; });
+      this.metricsNodeItems = [
+        { title: this.i18n.metricsGridDashboard, value: '' }
+      ].concat(this.nodes.map(n => ({ title: n.id, value: n.id })));
 
       this.$root.updateColumnClass(this.headers, this.i18n.eps, this.metricsEnabled, 'd-lg-table-cell');
       this.$root.updateColumnClass(this.headers, this.i18n.memUsageAbbr, this.metricsEnabled, 'd-xl-table-cell');
@@ -773,6 +830,10 @@ routes.push({ path: '/grid', name: 'grid', component: {
       // expecting date in format YYYY-MM-DDTHH:mm:ss.SSSSSSSSS-HH:mm
       const zoned = moment.utc(data, 'YYYY-MM-DDTHH:mm:ss.SSSSSSSSSZ').tz(this.zone);
       return zoned.format(this.i18n.timestampFormat);
-    }
+    },
+    showNodeMetrics(nodeId) {
+      this.metricsNodeId = nodeId;
+      this.activeTab = 'metrics';
+    },
   }
 }});
