@@ -200,7 +200,7 @@ func TestConvertFromElasticResultsTimedOut(t *testing.T) {
 	assert.Error(t, err)
 
 	assert.Equal(t, 123, results.ElapsedMs, "ElapsedMs should exist even on timeout.")
-	assert.False(t, results.TimedOut, "TimedOut is not populated when the timeout is an error.")
+	assert.True(t, results.TimedOut, "TimedOut is populated when a timeout is observed.")
 }
 
 func TestConvertFromElasticResultsTimedOutAllowed(t *testing.T) {
