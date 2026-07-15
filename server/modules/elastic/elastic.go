@@ -151,6 +151,8 @@ func (elastic *Elastic) Init(cfg module.ModuleConfig) error {
 
 	RegisterJobLookupRoutes(elastic.server, elastic.store, elastic.server.ApiRouter, "/api/joblookup")
 
+	RegisterEsHealthRoutes(elastic.server, elastic.store, elastic.server.ApiRouter, "/api/eshealth")
+
 	return err
 }
 

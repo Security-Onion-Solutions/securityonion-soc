@@ -83,7 +83,7 @@ func TestElasticStart(tester *testing.T) {
 	cfg := make(module.ModuleConfig)
 	assert.Len(tester, srv.ApiRouter.Routes(), 0)
 	elastic.Init(cfg)
-	assert.Len(tester, srv.ApiRouter.Routes(), 1)
+	assert.Len(tester, srv.ApiRouter.Routes(), 2)
 	elastic.Start()
-	assert.Len(tester, srv.ApiRouter.Routes(), 1)
+	assert.Len(tester, srv.ApiRouter.Routes(), 2)
 }

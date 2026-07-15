@@ -192,8 +192,11 @@
 
 														<template v-if="item.metricsEnabled && hasEventstoreHealth(item)">
 															<dt class="filter label">{{ i18n.eventstoreStatus }}:</dt>
-															<dd id="node_eventstoreStatus" :class="areMetricsCurrent(item) ? 'filter value text-' + colorNodeStatus(item.eventstoreStatus) : 'filter value stale'">
+															<dd id="node_eventstoreStatus" style="overflow: visible;" :class="areMetricsCurrent(item) ? 'filter value text-' + colorNodeStatus(item.eventstoreStatus) : 'filter value stale'">
 																{{ $root.localizeMessage(item.eventstoreStatus) }}
+																<a v-if="canShowEsHealth(item)" href="#" @click.prevent="showEsHealth(item)" class="no-underline" :title="i18n.esHealthShow" :aria-label="i18n.esHealthShow" data-aid="grid_node_eshealth">
+																	<v-icon size="small" class="ml-1 theme-icon">fa-stethoscope</v-icon>
+																</a>
 															</dd>
 														</template>
 														
@@ -519,6 +522,71 @@
 				<v-spacer></v-spacer>
 				<v-btn text id="grid-upload-proceed-button" :disabled="!uploadForm.valid" @click="gridMemberUpload" v-text="i18n.upload" data-aid="grid_import_confirm"></v-btn>
 				<v-btn text id="grid-upload-cancel-button" @click="hideUploadConfirm" v-text="i18n.cancel" data-aid="grid_import_cancel"></v-btn>
+			</v-card-actions>
+		</v-card>
+	</v-dialog>
+	<v-dialog v-model="esHealthDialog" scrollable max-width="700" data-aid="grid_eshealth_dialog">
+		<v-card>
+			<v-card-title class="text-headline-small" v-text="i18n.esHealthTitle"></v-card-title>
+			<v-card-text>
+				<div v-if="esHealthLoading" class="d-flex align-center justify-center py-4">
+					<v-progress-circular indeterminate size="24" width="3" color="primary" :aria-label="i18n.ariaLoading"></v-progress-circular>
+				</div>
+				<template v-else-if="esHealth">
+					<template v-if="esHealthIssues.length">
+						<div class="text-overline">{{ i18n.esHealthIssues }} ({{ esHealthIssues.length }})</div>
+						<v-card v-for="indicator in esHealthIssues" :key="indicator.id" variant="outlined" class="mb-2" data-aid="grid_eshealth_issue">
+							<v-card-text>
+								<div>
+									<v-icon size="small" :color="colorEsHealthStatus(indicator.status)" :title="indicator.status">{{ iconEsHealthStatus(indicator.status) }}</v-icon>
+									<span class="font-weight-bold ml-2">{{ indicator.name }}</span>
+								</div>
+								<div v-if="indicator.symptom" class="mt-1">{{ indicator.symptom }}</div>
+								<template v-if="hasEsHealthDetails(indicator)">
+									<v-btn variant="text" size="small" class="mt-1 ml-n2" :append-icon="esHealthExpanded[indicator.id] ? 'fa-chevron-up' : 'fa-chevron-down'" @click="toggleEsHealthDetails(indicator.id)" :aria-expanded="!!esHealthExpanded[indicator.id]" data-aid="grid_eshealth_details_toggle">{{ esHealthExpanded[indicator.id] ? i18n.esHealthLessDetails : i18n.esHealthMoreDetails }}</v-btn>
+									<template v-if="esHealthExpanded[indicator.id]">
+										<template v-if="indicator.id == 'disk'">
+											<div v-for="(finding, idx) in esDiskFindings" :key="'disk' + idx" class="mt-1" data-aid="grid_eshealth_disk_finding">&#8226; {{ finding }}</div>
+										</template>
+										<div v-for="(cause, idx) in indicator.causes" :key="idx" class="text-medium-emphasis mt-1" data-aid="grid_eshealth_cause">
+											<div>&#8226; {{ cause.cause }}</div>
+											<div v-if="cause.nodes.length" class="text-caption ml-3">{{ formatEsReportList(i18n.esHealthAffectedNodes, cause.nodes) }}</div>
+											<div v-if="cause.indices.length" class="text-caption ml-3">{{ formatEsReportList(i18n.esHealthAffectedIndices, cause.indices) }}</div>
+										</div>
+										<template v-if="indicator.id == 'shards_availability' && esShardVerdicts.length">
+											<div class="font-weight-bold mt-3">{{ i18n.esHealthBlockingReasons }}</div>
+											<div class="text-caption text-medium-emphasis">{{ i18n.esHealthBlockingReasonsHelp }}</div>
+											<div v-for="(verdict, idx) in esShardVerdicts" :key="idx" class="mt-1" data-aid="grid_eshealth_verdict">
+												<div>
+													<v-icon size="small" :color="verdict.color">{{ verdict.icon }}</v-icon>
+													<span class="font-weight-bold ml-1">{{ verdict.scope }}</span> &mdash; {{ verdict.summary }}
+												</div>
+												<div v-if="verdict.detail" class="text-caption text-medium-emphasis ml-6">{{ verdict.decider }}: {{ verdict.detail }}</div>
+												<div v-if="verdict.nodes.length" class="text-caption text-medium-emphasis ml-6">{{ i18n.esHealthAffectedNodes }}: {{ verdict.nodes.join(', ') }}</div>
+											</div>
+										</template>
+									</template>
+								</template>
+							</v-card-text>
+						</v-card>
+					</template>
+					<div v-else data-aid="grid_eshealth_noissues">
+						<v-icon size="small" color="success">fa-circle-check</v-icon>
+						<span class="ml-2">{{ i18n.esHealthNoIssues }}</span>
+					</div>
+					<template v-if="esHealthHealthy.length">
+						<div class="text-overline mt-2">{{ i18n.esHealthHealthy }} ({{ esHealthHealthy.length }})</div>
+						<div data-aid="grid_eshealth_healthy">
+							<v-chip v-for="indicator in esHealthHealthy" :key="indicator.id" density="compact" color="success" class="mr-1 mb-1" prepend-icon="fa-circle-check">{{ indicator.name }}</v-chip>
+						</div>
+					</template>
+				</template>
+				<div v-else>{{ i18n.esHealthUnavailable }}</div>
+			</v-card-text>
+			<v-card-actions>
+				<v-spacer></v-spacer>
+				<v-btn variant="text" id="eshealth-copy-button" :disabled="!esHealth" @click="copyEsHealthReport" v-text="i18n.esHealthCopyReport" data-aid="grid_eshealth_copy"></v-btn>
+				<v-btn variant="text" id="eshealth-close-button" @click="hideEsHealth" v-text="i18n.close" data-aid="grid_eshealth_close"></v-btn>
 			</v-card-actions>
 		</v-card>
 	</v-dialog>
