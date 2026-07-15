@@ -75,14 +75,9 @@ html, body, * {
 }
 
 .grid-metrics-field {
-  background-color: rgba(var(--v-theme-info), 0.08);
   border-radius: var(--so-radius-nested);
   margin: 8px 0 10px;
   padding: 8px 0;
-}
-
-.v-theme--dark .grid-metrics-field {
-  background-color: transparent;
 }
 
 .grid-metric-row {
