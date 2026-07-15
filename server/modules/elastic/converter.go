@@ -278,21 +278,6 @@ func convertToElasticRequest(fieldDefs map[string]*FieldDefinition, intervals in
 	return esJson, err
 }
 
-func convertToElasticMSearchRequest(fieldDefs map[string]*FieldDefinition, criteria *model.EventMSearchCriteria) (string, error) {
-	var err error
-	var esJson string
-
-	esMap := make(map[string]interface{})
-	esMap["query"] = makeQuery(fieldDefs, criteria.ParsedQuery, time.Time{}, time.Time{})
-
-	bytes, err := json.WriteJson(esMap)
-	if err == nil {
-		esJson = string(bytes)
-	}
-
-	return esJson, err
-}
-
 func convertToElasticScrollRequest(fieldDefs map[string]*FieldDefinition, criteria *model.EventScrollCriteria, maxScrollSize int) (string, error) {
 	var err error
 	var esJson string
@@ -405,13 +390,14 @@ func convertFromElasticResults(fieldDefs map[string]*FieldDefinition, esJson str
 	if esResults["took"] == nil || esResults["timed_out"] == nil || esResults["hits"] == nil {
 		return errors.New("Elasticsearch response is not a valid JSON search result")
 	}
+
 	results.ElapsedMs = int(esResults["took"].(float64))
 	timedOut := esResults["timed_out"].(bool)
+	results.TimedOut = timedOut
+
 	if timedOut && !allowTimeout {
 		return errors.New("Timeout while fetching results from Elasticsearch")
 	}
-
-	results.TimedOut = timedOut
 
 	// A timed out response may only contain partial results, don't assume
 	// any part of the structure beyond the top-level keys is present
@@ -420,7 +406,10 @@ func convertFromElasticResults(fieldDefs map[string]*FieldDefinition, esJson str
 	case float64:
 		results.TotalEvents = int(total)
 	case map[string]interface{}:
-		results.TotalEvents = int(total["value"].(float64))
+		value, ok := total["value"]
+		if ok && value != nil {
+			results.TotalEvents = int(value.(float64))
+		}
 	}
 
 	records, _ := hits["hits"].([]interface{})
@@ -556,35 +545,45 @@ func convertFromElasticScrollResults(fieldDefs map[string]*FieldDefinition, esJs
 	return err
 }
 
-func convertFromElasticMSearchResults(fieldDefs map[string]*FieldDefinition, esJson string, results *model.EventMSearchResults) (err error) {
+func convertFromElasticMSearchResults(fieldDefs map[string]*FieldDefinition, esJson string, criteria []*model.EventMSearchCriteria, results *model.EventMSearchResults) error {
 	responseCount := int(gjson.Get(esJson, "responses.#").Num)
 
 	results.ElapsedMs = int(gjson.Get(esJson, "took").Num)
 	results.Responses = make([]*model.EventSearchResults, 0, responseCount)
 
+	var errs []error
+
 	for i := range responseCount {
 		response := gjson.Get(esJson, fmt.Sprintf("responses.%d", i))
 		res := model.NewEventSearchResults()
 
+		allowTimeout := false
+		if i < len(criteria) {
+			allowTimeout = criteria[i].AllowTimeout
+		}
+
+		msg := ""
 		errField := response.Get("error")
 		if errField.String() != "" {
-			msg := response.Get("error.reason").String()
+			msg = response.Get("error.reason").String()
 			if msg == "" {
 				msg = errField.String()
 			}
-
-			return errors.New(msg)
+		} else if err := convertFromElasticResults(fieldDefs, response.String(), res, allowTimeout); err != nil {
+			msg = err.Error()
 		}
 
-		err = convertFromElasticResults(fieldDefs, response.String(), res, false)
-		if err != nil {
-			return err
+		// a failed response doesn't fail the batch; record the error in its
+		// slot so responses stay aligned with the requests
+		if msg != "" {
+			res.Errors = append(res.Errors, msg)
+			errs = append(errs, errors.New(msg))
 		}
 
 		results.Responses = append(results.Responses, res)
 	}
 
-	return nil
+	return errors.Join(errs...)
 }
 
 func parseTime(fieldmap map[string]interface{}, key string) *time.Time {

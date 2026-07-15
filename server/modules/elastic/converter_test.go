@@ -691,8 +691,10 @@ func TestConvertFromElasticMSearchResults(t *testing.T) {
 	buf.Write(esData)
 	buf.WriteString(`]}`)
 
+	criteria := []*model.EventMSearchCriteria{model.NewEventMSearchCriteria()}
+
 	results := model.NewEventMSearchResults()
-	err = convertFromElasticMSearchResults(NewTestStore().fieldDefs, buf.String(), results)
+	err = convertFromElasticMSearchResults(NewTestStore().fieldDefs, buf.String(), criteria, results)
 	if assert.Nil(t, err) {
 		assert.Equal(t, 10, results.ElapsedMs)
 		assert.Equal(t, 1, len(results.Responses))
@@ -709,4 +711,58 @@ func TestConvertFromElasticMSearchResults(t *testing.T) {
 		assert.NotNil(t, response.Metrics["groupby_0|source_ip|destination_ip|protocol"])
 		assert.NotNil(t, response.Metrics["groupby_0|source_ip|destination_ip|protocol|destination_port"])
 	}
+}
+
+func TestConvertFromElasticMSearchResultsPartialFailure(t *testing.T) {
+	esJson := `{ "took": 10, "responses": [
+		{ "error": { "type": "parsing_exception", "reason": "bad query" } },
+		{ "took": 5, "timed_out": false, "_shards": { "failed": 0 }, "hits": { "total": { "value": 1 }, "hits": [ { "_index": "test-index", "_id": "event-1", "_source": {} } ] } }
+	]}`
+
+	criteria := []*model.EventMSearchCriteria{
+		model.NewEventMSearchCriteria(),
+		model.NewEventMSearchCriteria(),
+	}
+
+	results := model.NewEventMSearchResults()
+	err := convertFromElasticMSearchResults(NewTestStore().fieldDefs, esJson, criteria, results)
+	assert.ErrorContains(t, err, "bad query")
+
+	// responses stay aligned with the requests, with the failure recorded in its slot
+	if assert.Len(t, results.Responses, 2) {
+		assert.Equal(t, []string{"bad query"}, results.Responses[0].Errors)
+		assert.Empty(t, results.Responses[0].Events)
+
+		assert.Empty(t, results.Responses[1].Errors)
+		assert.Len(t, results.Responses[1].Events, 1)
+		assert.Equal(t, "event-1", results.Responses[1].Events[0].Id)
+	}
+}
+
+func TestConvertFromElasticMSearchResultsTimedOut(t *testing.T) {
+	esJson := `{ "took": 10, "responses": [ { "took": 123, "timed_out": true, "hits": {} } ] }`
+
+	t.Run("timeout allowed", func(t *testing.T) {
+		criteria := model.NewEventMSearchCriteria()
+		criteria.AllowTimeout = true
+
+		results := model.NewEventMSearchResults()
+		err := convertFromElasticMSearchResults(NewTestStore().fieldDefs, esJson, []*model.EventMSearchCriteria{criteria}, results)
+		assert.NoError(t, err)
+
+		if assert.Len(t, results.Responses, 1) {
+			assert.True(t, results.Responses[0].TimedOut)
+			assert.Empty(t, results.Responses[0].Errors)
+		}
+	})
+
+	t.Run("timeout not allowed", func(t *testing.T) {
+		results := model.NewEventMSearchResults()
+		err := convertFromElasticMSearchResults(NewTestStore().fieldDefs, esJson, []*model.EventMSearchCriteria{model.NewEventMSearchCriteria()}, results)
+		assert.ErrorContains(t, err, "Timeout")
+
+		if assert.Len(t, results.Responses, 1) {
+			assert.Len(t, results.Responses[0].Errors, 1)
+		}
+	})
 }

@@ -306,20 +306,23 @@ func (criteria *EventScrollCriteria) Populate(query string, dateRange string, da
 }
 
 type EventMSearchCriteria struct {
-	Index       string
-	RawQuery    string
-	ParsedQuery *Query
+	EventSearchCriteria
+	// The indexes to search, comma-separated; empty means the event store's default indexes
+	Index string
 }
 
 func NewEventMSearchCriteria() *EventMSearchCriteria {
 	criteria := &EventMSearchCriteria{}
-	criteria.ParsedQuery = NewQuery()
+	criteria.initSearchCriteria()
 
 	return criteria
 }
 
 func (criteria *EventMSearchCriteria) Populate(index string, query string) error {
 	criteria.Index = index
+
+	criteria.MetricLimit = 0
+	criteria.EventLimit = 10
 
 	criteria.RawQuery = strings.TrimSpace(query)
 	err := criteria.ParsedQuery.Parse(query)

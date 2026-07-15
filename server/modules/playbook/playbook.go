@@ -812,26 +812,21 @@ func (pdm *PlaybookDiskManager) convertQuestionsIndividually(ctx context.Context
 	return converted
 }
 
-// ExecuteQuestionSearch runs one converted question's query against the event
-// store, windowed around eventTime by the question's Range, and fills its
-// QueryResults. Rangeless questions are the caller's responsibility.
-func (pdm *PlaybookDiskManager) ExecuteQuestionSearch(ctx context.Context, eventTime time.Time, question *model.Question) error {
-	err := pdm.srv.CheckAuthorized(ctx, "read", "playbooks")
-	if err != nil {
-		return err
-	}
-
+// buildQuestionCriteria converts one converted question into event store
+// search criteria, windowed around eventTime by the question's Range.
+// Rangeless questions are the caller's responsibility.
+func buildQuestionCriteria(eventTime time.Time, question *model.Question) (*model.EventSearchCriteria, error) {
 	if question.Range == nil {
-		return errors.New("question has no range; it is answered by the alert itself")
+		return nil, errors.New("question has no range; it is answered by the alert itself")
 	}
 
 	if question.OqlQuery == "" {
-		return errors.New("question has no converted query")
+		return nil, errors.New("question has no converted query")
 	}
 
 	dateRange := buildQuestionRange(eventTime, *question.Range, "UTC")
 	if dateRange == "" {
-		return fmt.Errorf("unable to build a date range from %q", *question.Range)
+		return nil, fmt.Errorf("unable to build a date range from %q", *question.Range)
 	}
 
 	query := question.OqlQuery
@@ -842,19 +837,43 @@ func (pdm *PlaybookDiskManager) ExecuteQuestionSearch(ctx context.Context, event
 
 	criteria := model.NewEventSearchCriteria()
 
-	err = criteria.Populate(query, dateRange, time.RFC3339, "", "5", "5")
+	err := criteria.Populate(query, dateRange, time.RFC3339, "", "5", "5")
 	if err != nil {
-		return fmt.Errorf("unable to populate search criteria: %w", err)
+		return nil, fmt.Errorf("unable to populate search criteria: %w", err)
 	}
 
 	criteria.Timeout = time.Second * 30
 	criteria.AllowTimeout = true
+
+	return criteria, nil
+}
+
+// ExecuteQuestionSearch runs one converted question's query against the event
+// store, windowed around eventTime by the question's Range, and fills its
+// QueryResults. Rangeless questions are the caller's responsibility.
+func (pdm *PlaybookDiskManager) ExecuteQuestionSearch(ctx context.Context, eventTime time.Time, question *model.Question) error {
+	err := pdm.srv.CheckAuthorized(ctx, "read", "playbooks")
+	if err != nil {
+		return err
+	}
+
+	criteria, err := buildQuestionCriteria(eventTime, question)
+	if err != nil {
+		return err
+	}
 
 	searchResults, err := pdm.srv.Eventstore.Search(ctx, criteria)
 	if err != nil {
 		return fmt.Errorf("unable to execute search: %w", err)
 	}
 
+	applyQuestionResults(question, searchResults)
+
+	return nil
+}
+
+// applyQuestionResults fills a question's QueryResults from its search results.
+func applyQuestionResults(question *model.Question, searchResults *model.EventSearchResults) {
 	if question.IsAggregate {
 		// the longest key holds the metrics grouped by the full set of fields
 		longest := ""
@@ -885,10 +904,9 @@ func (pdm *PlaybookDiskManager) ExecuteQuestionSearch(ctx context.Context, event
 		question.QueryResults = events
 	} else {
 		question.QueryResults = searchResults.Events
-		question.QueryTimedOut = searchResults.TimedOut
 	}
 
-	return nil
+	question.QueryTimedOut = searchResults.TimedOut
 }
 
 func (pdm *PlaybookDiskManager) ExecutePlaybookSearches(ctx context.Context, event *model.EventRecord, pbs []*model.Playbook) error {
@@ -904,6 +922,12 @@ func (pdm *PlaybookDiskManager) ExecutePlaybookSearches(ctx context.Context, eve
 		return err
 	}
 
+	// the question queries are independent and read-only, so batch them all
+	// into a single msearch instead of executing them one at a time
+	batch := make([]*model.EventMSearchCriteria, 0)
+	questions := make([]*model.Question, 0)
+	playbookIds := make([]string, 0)
+
 	for _, pb := range pbs {
 		for _, question := range pb.Questions {
 			if question.Range == nil {
@@ -916,12 +940,54 @@ func (pdm *PlaybookDiskManager) ExecutePlaybookSearches(ctx context.Context, eve
 				continue
 			}
 
-			err = pdm.ExecuteQuestionSearch(ctx, getEventTimestamp(event), question)
+			criteria, err := buildQuestionCriteria(getEventTimestamp(event), question)
 			if err != nil {
-				logger.WithError(err).WithFields(log.Fields{"playbookId": pb.Id, "eventId": event.Id}).Warn("unable to execute question search")
-				return err
+				logger.WithError(err).WithFields(log.Fields{"playbookId": pb.Id, "eventId": event.Id}).Warn("unable to build question search criteria")
+				continue
+			}
+
+			batch = append(batch, &model.EventMSearchCriteria{EventSearchCriteria: *criteria})
+			questions = append(questions, question)
+			playbookIds = append(playbookIds, pb.Id)
+		}
+	}
+
+	if len(batch) == 0 {
+		return nil
+	}
+
+	searchResults, err := pdm.srv.Eventstore.MSearch(ctx, batch)
+	if searchResults == nil || len(searchResults.Responses) != len(batch) {
+		responseCount := 0
+		if searchResults != nil {
+			responseCount = len(searchResults.Responses)
+		}
+
+		if err == nil {
+			err = fmt.Errorf("expected %d question search responses, got %d", len(batch), responseCount)
+		}
+
+		logger.WithError(err).WithFields(log.Fields{"eventId": event.Id}).Warn("unable to execute question searches")
+
+		return err
+	}
+
+	// responses come back in request order; a failed sub-query leaves its
+	// question unanswered without failing the rest
+	for i, res := range searchResults.Responses {
+		if len(res.Errors) != 0 {
+			logger.WithFields(log.Fields{
+				"playbookId":   playbookIds[i],
+				"eventId":      event.Id,
+				"searchErrors": res.Errors,
+			}).Warn("unable to execute question search")
+
+			if len(res.Events) == 0 {
+				continue
 			}
 		}
+
+		applyQuestionResults(questions[i], res)
 	}
 
 	return nil
