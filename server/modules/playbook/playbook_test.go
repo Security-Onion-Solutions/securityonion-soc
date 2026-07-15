@@ -1136,15 +1136,16 @@ func TestExecutePlaybookSearches(t *testing.T) {
 	ctx := context.Background()
 
 	tests := []struct {
-		name            string
-		event           *model.EventRecord
-		playbooks       []*model.Playbook
-		convertResults  []*model.ConvertedQuery
-		convertError    error
-		searchResults   *model.EventSearchResults
-		searchError     error
-		expectedError   string
-		verifyQuestions func(t *testing.T, playbooks []*model.Playbook)
+		name             string
+		event            *model.EventRecord
+		playbooks        []*model.Playbook
+		convertResults   []*model.ConvertedQuery
+		convertError     error
+		searchResults    *model.EventSearchResults
+		msearchResponses []*model.EventSearchResults
+		searchError      error
+		expectedError    string
+		verifyQuestions  func(t *testing.T, playbooks []*model.Playbook)
 	}{
 		{
 			name: "successful execution with range question",
@@ -1356,6 +1357,58 @@ func TestExecutePlaybookSearches(t *testing.T) {
 				assert.Equal(t, "historical-2", question2.QueryResults[1].Id)
 			},
 		},
+		{
+			name: "failed sub-query leaves its question unanswered without failing the rest",
+			event: &model.EventRecord{
+				Id: "test-event-8",
+				Payload: map[string]interface{}{
+					"@timestamp": "2024-01-01T12:00:00Z",
+					"hostname":   "partial-host",
+				},
+			},
+			playbooks: []*model.Playbook{
+				{
+					Auditable: model.Auditable{Id: "partial-failure-playbook"},
+					Questions: []*model.Question{
+						{
+							Question: "Bad query",
+							Range:    util.Ptr("-1h"),
+							Query:    "hostname: {hostname}",
+						},
+						{
+							Question: "Good query",
+							Range:    util.Ptr("-1h"),
+							Query:    "hostname: {hostname}",
+						},
+					},
+				},
+			},
+			convertResults: []*model.ConvertedQuery{
+				{Query: "hostname: partial-host", Fields: []string{"field1"}},
+				{Query: "hostname: partial-host", Fields: []string{"field2"}},
+			},
+			msearchResponses: []*model.EventSearchResults{
+				{
+					EventResults: model.EventResults{Errors: []string{"parsing_exception"}},
+				},
+				{
+					Events:   []*model.EventRecord{{Id: "good-result"}},
+					TimedOut: true,
+				},
+			},
+			verifyQuestions: func(t *testing.T, playbooks []*model.Playbook) {
+				assert.Len(t, playbooks[0].Questions, 2)
+
+				question1 := playbooks[0].Questions[0]
+				assert.Nil(t, question1.QueryResults)
+				assert.False(t, question1.QueryTimedOut)
+
+				question2 := playbooks[0].Questions[1]
+				assert.Len(t, question2.QueryResults, 1)
+				assert.Equal(t, "good-result", question2.QueryResults[0].Id)
+				assert.True(t, question2.QueryTimedOut)
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -1372,11 +1425,16 @@ func TestExecutePlaybookSearches(t *testing.T) {
 				srv = server.NewFakeAuthorizedServer(nil)
 
 				// Set up fake eventstore if we need search functionality
-				if tc.searchResults != nil || tc.searchError != nil {
+				if tc.searchResults != nil || tc.msearchResponses != nil || tc.searchError != nil {
 					fakeEventstore := server.NewFakeEventstore()
+
+					// question searches run as a single msearch batch
+					responses := tc.msearchResponses
 					if tc.searchResults != nil {
-						fakeEventstore.SearchResults = []*model.EventSearchResults{tc.searchResults}
+						responses = []*model.EventSearchResults{tc.searchResults}
 					}
+					fakeEventstore.MSearchResults = []*model.EventMSearchResults{{Responses: responses}}
+
 					if tc.searchError != nil {
 						fakeEventstore.Err = tc.searchError
 					}

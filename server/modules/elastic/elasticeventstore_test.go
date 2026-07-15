@@ -1504,10 +1504,10 @@ func TestMSearch_Index_Injection(t *testing.T) {
 	attackIndex := `my-index" OR { "injected": "header" }`
 	criteria := []*model.EventMSearchCriteria{
 		{
-			Index:    attackIndex,
-			RawQuery: "*",
+			Index: attackIndex,
 		},
 	}
+	criteria[0].RawQuery = "*"
 	criteria[0].ParsedQuery = model.NewQuery()
 	criteria[0].ParsedQuery.Parse(criteria[0].RawQuery)
 
@@ -1531,7 +1531,7 @@ func TestMSearch_Index_Injection(t *testing.T) {
 	}
 	assert.NotNil(t, foundReq)
 	body, _ := io.ReadAll(foundReq.Body)
-	assert.Contains(t, string(body), `{"index":"my-index\" OR { \"injected\": \"header\" }"}`)
+	assert.Contains(t, string(body), `{"index":["my-index\" OR { \"injected\": \"header\" }"]}`)
 }
 
 func TestScroll_InjectionAttacks(t *testing.T) {

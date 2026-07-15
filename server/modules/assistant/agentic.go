@@ -58,7 +58,7 @@ func (ac *AssistantCoordinator) setupAgentic() {
 		},
 		"Hunt": {
 			Name:             "Hunt",
-			Tools:            []string{"query_events"},
+			Tools:            []string{"query_events", "get_playbooks"},
 			AdditionalPrompt: prompts["prompt_skill_hunt"],
 		},
 	}

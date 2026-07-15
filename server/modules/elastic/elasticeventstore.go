@@ -217,7 +217,7 @@ func (store *ElasticEventstore) Search(ctx context.Context, criteria *model.Even
 		var response string
 		response, err = store.luceneSearch(ctx, query)
 		if err == nil {
-			err = convertFromElasticResults(store.fieldDefs, response, results)
+			err = convertFromElasticResults(store.fieldDefs, response, results, criteria.AllowTimeout)
 			results.Criteria = criteria
 		}
 	}
@@ -236,13 +236,18 @@ func (store *ElasticEventstore) MSearch(ctx context.Context, criteria []*model.E
 	results = model.NewEventMSearchResults()
 
 	buf := bytes.Buffer{}
-	for _, criteria := range criteria {
-		header := map[string]string{"index": criteria.Index}
+	for _, c := range criteria {
+		indexes := c.Index
+		if indexes == "" {
+			indexes = store.index
+		}
+
+		header := map[string][]string{"index": strings.Split(indexes, ",")}
 		headerJSON, _ := json.Marshal(header)
 		buf.Write(headerJSON)
 		buf.WriteString("\r\n")
 
-		query, err := convertToElasticMSearchRequest(store.fieldDefs, criteria)
+		query, err := convertToElasticRequest(store.fieldDefs, store.intervals, &c.EventSearchCriteria)
 		if err != nil {
 			return results, err
 		}
@@ -265,7 +270,7 @@ func (store *ElasticEventstore) MSearch(ctx context.Context, criteria []*model.E
 		return results, err
 	}
 
-	err = convertFromElasticMSearchResults(store.fieldDefs, string(body), results)
+	err = convertFromElasticMSearchResults(store.fieldDefs, string(body), criteria, results)
 
 	return results, err
 }
