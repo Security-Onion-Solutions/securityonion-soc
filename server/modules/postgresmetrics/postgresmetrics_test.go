@@ -294,6 +294,21 @@ func TestGenerateDefaultMetricsDashboard(t *testing.T) {
 	assert.Len(t, dash.Panels, 26)
 	assert.Equal(t, "cpu", dash.Panels[0].ID)
 	assert.Equal(t, "metricsCpuUsage", dash.Panels[0].TitleKey)
+	assert.Equal(t, "percent", dash.Panels[0].Units)
+
+	var foundSize, foundNet bool
+	for _, p := range dash.Panels {
+		if p.ID == "elasticsearch_size" {
+			assert.Equal(t, "byte", p.Units)
+			foundSize = true
+		}
+		if p.ID == "net" {
+			assert.Equal(t, "bits", p.Units)
+			foundNet = true
+		}
+	}
+	assert.True(t, foundSize)
+	assert.True(t, foundNet)
 }
 
 func TestPostgresMetricsModule_Init_DefaultDashboard(t *testing.T) {

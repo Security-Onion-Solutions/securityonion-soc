@@ -87,7 +87,7 @@ func (s *Store) queryGenericMetric(ctx context.Context, table, field, hostFilter
 		agg = aggregate
 	}
 
-	whereClause := fmt.Sprintf("%s AND m.time >= %s AND m.time <= %s AND m.fields->>'%s' IS NOT NULL", hostFilter, startPlaceholder, endPlaceholder, field)
+	whereClause := fmt.Sprintf("%s AND m.time >= %s AT TIME ZONE 'UTC' AND m.time <= %s AT TIME ZONE 'UTC' AND m.fields->>'%s' IS NOT NULL", hostFilter, startPlaceholder, endPlaceholder, field)
 	if filter != "" {
 		whereClause = fmt.Sprintf("%s AND %s", whereClause, filter)
 	}
@@ -99,7 +99,7 @@ func (s *Store) queryGenericMetric(ctx context.Context, table, field, hostFilter
 
 	q := fmt.Sprintf(`
 		SELECT 
-			to_timestamp(floor(extract(epoch from m.time) / $1) * $1) AS bucket,
+			to_timestamp(floor(extract(epoch from m.time AT TIME ZONE 'UTC') / $1) * $1) AS bucket,
 			%s(%s) AS val
 		FROM telegraf.%s m
 		JOIN telegraf.%s_tag tag ON m.tag_id = tag.tag_id
@@ -171,7 +171,7 @@ func queryNetMetric(ctx context.Context, s *Store, nodeId string, hostFilter, st
 				LAG(m.time) OVER (PARTITION BY tag.tags->>'host', tag.tags->>'interface' ORDER BY m.time) as prev_time
 			FROM telegraf.net m
 			JOIN telegraf.net_tag tag ON m.tag_id = tag.tag_id
-			WHERE %s AND m.time >= (%s)::timestamp - INTERVAL '%s' AND m.time <= (%s)::timestamp AND m.fields->>'bytes_recv' IS NOT NULL AND m.fields->>'bytes_sent' IS NOT NULL
+			WHERE %s AND m.time >= (%s AT TIME ZONE 'UTC') - INTERVAL '%s' AND m.time <= (%s AT TIME ZONE 'UTC') AND m.fields->>'bytes_recv' IS NOT NULL AND m.fields->>'bytes_sent' IS NOT NULL
 		),
 		rates AS (
 			SELECT 
@@ -189,10 +189,10 @@ func queryNetMetric(ctx context.Context, s *Store, nodeId string, hostFilter, st
 					ELSE 0.0
 				END as sent_rate_mbps
 			FROM traffic_diff
-			WHERE time >= (%s)::timestamp
+			WHERE time >= (%s AT TIME ZONE 'UTC')
 		)
 		SELECT 
-			to_timestamp(floor(extract(epoch from time) / $1) * $1) AS bucket,
+			to_timestamp(floor(extract(epoch from time AT TIME ZONE 'UTC') / $1) * $1) AS bucket,
 			interface,
 			SUM(recv_rate_mbps) as recv_avg,
 			SUM(sent_rate_mbps) as sent_avg
@@ -300,7 +300,7 @@ func queryNetDropsMetric(ctx context.Context, s *Store, nodeId string, hostFilte
 				LAG(m.time) OVER (PARTITION BY tag.tags->>'host', tag.tags->>'interface' ORDER BY m.time) as prev_time
 			FROM telegraf.net m
 			JOIN telegraf.net_tag tag ON m.tag_id = tag.tag_id
-			WHERE %s AND m.time >= (%s)::timestamp - INTERVAL '%s' AND m.time <= (%s)::timestamp AND m.fields->>'drop_in' IS NOT NULL
+			WHERE %s AND m.time >= (%s AT TIME ZONE 'UTC') - INTERVAL '%s' AND m.time <= (%s AT TIME ZONE 'UTC') AND m.fields->>'drop_in' IS NOT NULL
 		),
 		rates AS (
 			SELECT 
@@ -313,10 +313,10 @@ func queryNetDropsMetric(ctx context.Context, s *Store, nodeId string, hostFilte
 					ELSE 0.0
 				END as drop_rate
 			FROM traffic_diff
-			WHERE time >= (%s)::timestamp
+			WHERE time >= (%s AT TIME ZONE 'UTC')
 		)
 		SELECT 
-			to_timestamp(floor(extract(epoch from time) / $1) * $1) AS bucket,
+			to_timestamp(floor(extract(epoch from time AT TIME ZONE 'UTC') / $1) * $1) AS bucket,
 			interface,
 			SUM(drop_rate) as drop_avg
 		FROM rates
@@ -399,7 +399,7 @@ func queryContainerNetInMetric(ctx context.Context, s *Store, nodeId string, hos
 				LAG(m.time) OVER (PARTITION BY tag.tags->>'host', tag.tags->>'container_name' ORDER BY m.time) as prev_time
 			FROM telegraf.docker_container_net m
 			JOIN telegraf.docker_container_net_tag tag ON m.tag_id = tag.tag_id
-			WHERE %s AND m.time >= (%s)::timestamp - INTERVAL '%s' AND m.time <= (%s)::timestamp AND m.fields->>'rx_bytes' IS NOT NULL
+			WHERE %s AND m.time >= (%s AT TIME ZONE 'UTC') - INTERVAL '%s' AND m.time <= (%s AT TIME ZONE 'UTC') AND m.fields->>'rx_bytes' IS NOT NULL
 		),
 		rates AS (
 			SELECT 
@@ -411,10 +411,10 @@ func queryContainerNetInMetric(ctx context.Context, s *Store, nodeId string, hos
 					ELSE 0.0
 				END as recv_rate_mbps
 			FROM traffic_diff
-			WHERE time >= (%s)::timestamp
+			WHERE time >= (%s AT TIME ZONE 'UTC')
 		)
 		SELECT 
-			to_timestamp(floor(extract(epoch from time) / $1) * $1) AS bucket,
+			to_timestamp(floor(extract(epoch from time AT TIME ZONE 'UTC') / $1) * $1) AS bucket,
 			SUM(recv_rate_mbps) as recv_avg
 		FROM rates
 		GROUP BY bucket

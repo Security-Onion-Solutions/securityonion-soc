@@ -627,6 +627,11 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       var gridColor = this.$root.getColor("#888888", 65);
       options.responsive = true;
       options.maintainAspectRatio = false;
+      options.layout = {
+        padding: {
+          bottom: 15
+        }
+      };
       options.plugins = {
         legend: {
           display: false,
@@ -646,6 +651,9 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
             beginAtZero: true,
             color: fontColor,
             precision: 0,
+            callback: function (value, index, ticks) {
+              return window.socGraphing.formatAxisValue(value);
+            }
           }
         },
         x: {

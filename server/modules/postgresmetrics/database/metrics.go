@@ -24,6 +24,7 @@ type MetricPanel struct {
 	Colors    []string `json:"colors"`
 	Width     int      `json:"width"`
 	Height    int      `json:"height"`
+	Units     string   `json:"units,omitempty"`
 }
 
 type MetricsDashboard struct {
@@ -40,6 +41,7 @@ type MetricConfig struct {
 	CustomHandler func(ctx context.Context, s *Store, nodeId string, hostFilter, startPlaceholder, endPlaceholder string, args []interface{}) (map[string][]model.MetricSample, error)
 	TitleKey      string
 	LabelKeys     []string
+	Units         string
 }
 
 var defaultColors = []string{
@@ -58,8 +60,8 @@ var defaultColors = []string{
 var DashboardMetricOrder = []string{
 	"cpu", "memory", "load", "swap", "io_wait", "system_uptime", "disk", "net", "net_drops", "pcap_retention",
 	"eps", "elasticsearch_size", "elasticsearch_docs", "elastic_ingest_time", "loss", "capture_loss",
-	"kafka_eps", "kafka_controllers", "kafka_brokers", "kafka_under_replicated",
 	"container_uptime", "container_cpu", "container_mem", "container_net_in", "redis_queue", "logstash_eps",
+	"kafka_eps", "kafka_controllers", "kafka_brokers", "kafka_under_replicated",
 }
 
 var MetricConfigs = map[string]MetricConfig{
@@ -72,6 +74,7 @@ var MetricConfigs = map[string]MetricConfig{
 		Aggregate: "AVG",
 		TitleKey:  "metricsCpuUsage",
 		LabelKeys: []string{"cpuUsageAbbr"},
+		Units:     "percent",
 	},
 	"memory": {
 		Tables:    []string{"mem"},
@@ -81,6 +84,7 @@ var MetricConfigs = map[string]MetricConfig{
 		Aggregate: "AVG",
 		TitleKey:  "metricsMemUsage",
 		LabelKeys: []string{"memUsageAbbr"},
+		Units:     "percent",
 	},
 	"load": {
 		Tables:    []string{"system"},
@@ -99,6 +103,7 @@ var MetricConfigs = map[string]MetricConfig{
 		Aggregate: "AVG",
 		TitleKey:  "swapUsage",
 		LabelKeys: []string{"swapUsage"},
+		Units:     "percent",
 	},
 	"io_wait": {
 		Tables:    []string{"cpu"},
@@ -109,6 +114,7 @@ var MetricConfigs = map[string]MetricConfig{
 		Aggregate: "AVG",
 		TitleKey:  "metricsIoWait",
 		LabelKeys: []string{"metricsIoWait"},
+		Units:     "percent",
 	},
 	"elasticsearch_size": {
 		Tables:    []string{"elasticsearch_indices"},
@@ -118,6 +124,7 @@ var MetricConfigs = map[string]MetricConfig{
 		Aggregate: "AVG",
 		TitleKey:  "metricsElasticsearchSize",
 		LabelKeys: []string{"metricsStorageSize"},
+		Units:     "byte",
 	},
 	"elasticsearch_docs": {
 		Tables:    []string{"elasticsearch_indices"},
@@ -130,7 +137,7 @@ var MetricConfigs = map[string]MetricConfig{
 	},
 	"redis_queue": {
 		Tables:    []string{"redisqueue"},
-		Fields:    []string{"redis_queue_size"},
+		Fields:    []string{"unparsed"},
 		Keys:      []string{"redis_queue"},
 		Factor:    1.0,
 		Aggregate: "AVG",
@@ -139,21 +146,23 @@ var MetricConfigs = map[string]MetricConfig{
 	},
 	"pcap_retention": {
 		Tables:    []string{"pcapage"},
-		Fields:    []string{"pcap_days"},
+		Fields:    []string{"seconds"},
 		Keys:      []string{"pcap_retention"},
 		Factor:    1.0,
 		Aggregate: "AVG",
 		TitleKey:  "metricsPcapRetention",
 		LabelKeys: []string{"metricsRetentionDays"},
+		Units:     "second",
 	},
 	"system_uptime": {
 		Tables:    []string{"system"},
 		Fields:    []string{"uptime"},
 		Keys:      []string{"system_uptime"},
-		Factor:    1.0 / 86400.0,
+		Factor:    1.0,
 		Aggregate: "AVG",
 		TitleKey:  "metricsSystemUptime",
 		LabelKeys: []string{"metricsUptimeDays"},
+		Units:     "second",
 	},
 	"kafka_eps": {
 		Tables:    []string{"kafka_topic"},
@@ -199,6 +208,7 @@ var MetricConfigs = map[string]MetricConfig{
 		Aggregate: "AVG",
 		TitleKey:  "metricsContainerCpu",
 		LabelKeys: []string{"metricsCpuPct"},
+		Units:     "percent",
 	},
 	"container_mem": {
 		Tables:    []string{"docker_container_mem"},
@@ -208,15 +218,17 @@ var MetricConfigs = map[string]MetricConfig{
 		Aggregate: "AVG",
 		TitleKey:  "metricsContainerMem",
 		LabelKeys: []string{"metricsMemPct"},
+		Units:     "percent",
 	},
 	"elastic_ingest_time": {
 		Tables:    []string{"elasticsearch_clusterstats_nodes"},
 		Fields:    []string{"ingest_processor_stats_grok_time_in_millis"},
 		Keys:      []string{"elastic_ingest_time"},
-		Factor:    1.0,
+		Factor:    1.0 / 1000.0,
 		Aggregate: "AVG",
 		TitleKey:  "metricsElasticIngestTime",
 		LabelKeys: []string{"metricsTimeMs"},
+		Units:     "seconds",
 	},
 	"logstash_eps": {
 		Tables:    []string{"logstash_events"},
@@ -244,6 +256,7 @@ var MetricConfigs = map[string]MetricConfig{
 		Aggregate: "AVG",
 		TitleKey:  "metricsCaptureLoss",
 		LabelKeys: []string{"metricsLoss"},
+		Units:     "percent",
 	},
 	"disk": {
 		Tables:    []string{"disk", "disk"},
@@ -254,6 +267,7 @@ var MetricConfigs = map[string]MetricConfig{
 		Aggregate: "AVG",
 		TitleKey:  "metricsDiskUsage",
 		LabelKeys: []string{"diskUsageRootAbbr", "diskUsageNsmAbbr"},
+		Units:     "percent",
 	},
 	"eps": {
 		Tables:    []string{"consumptioneps", "fbstats"},
@@ -266,18 +280,20 @@ var MetricConfigs = map[string]MetricConfig{
 	},
 	"loss": {
 		Tables:    []string{"suridrop", "zeekdrop"},
-		Fields:    []string{"drop_rate", "drop_rate"},
+		Fields:    []string{"drop", "drop"},
 		Keys:      []string{"suricata_loss", "zeek_loss"},
 		Factor:    1.0,
 		Aggregate: "AVG",
 		TitleKey:  "metricsLoss",
 		LabelKeys: []string{"suricataLoss", "zeekLoss"},
+		Units:     "percent",
 	},
 	"net": {
 		Keys:          []string{"traffic_man_in", "traffic_man_out", "traffic_mon_in"},
 		CustomHandler: queryNetMetric,
 		TitleKey:      "metricsNetTraffic",
 		LabelKeys:     []string{"metricsTrafficManIn", "metricsTrafficManOut", "metricsTrafficMonIn"},
+		Units:         "bits",
 	},
 	"net_drops": {
 		Keys:          []string{"traffic_mon_drops"},
@@ -290,6 +306,7 @@ var MetricConfigs = map[string]MetricConfig{
 		CustomHandler: queryContainerNetInMetric,
 		TitleKey:      "metricsContainerNetIn",
 		LabelKeys:     []string{"metricsTrafficMonIn"},
+		Units:         "bits",
 	},
 }
 
@@ -311,6 +328,7 @@ func GenerateDefaultMetricsDashboard() ([]byte, error) {
 				Colors:    colors,
 				Width:     6,
 				Height:    250,
+				Units:     cfg.Units,
 			})
 		}
 	}

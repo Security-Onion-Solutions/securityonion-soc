@@ -82,12 +82,20 @@ routes.push({ path: '/grid', name: 'grid', component: {
     metricsAutoRefresh: 0,
     metricsRefreshInterval: null,
     timeRangeItems: [
+      { title: this.$root.i18n.metricsLastMinute, value: '1m' },
+      { title: this.$root.i18n.metricsLast5Minutes, value: '5m' },
+      { title: this.$root.i18n.metricsLast15Minutes, value: '15m' },
       { title: this.$root.i18n.metricsLastHour, value: '1h' },
+      { title: this.$root.i18n.metricsLast3Hours, value: '3h' },
+      { title: this.$root.i18n.metricsLast6Hours, value: '6h' },
+      { title: this.$root.i18n.metricsLast12Hours, value: '12h' },
       { title: this.$root.i18n.metricsLast24Hours, value: '24h' },
-      { title: this.$root.i18n.metricsLast7Days, value: '7d' }
+      { title: this.$root.i18n.metricsLast2Days, value: '2d' },
+      { title: this.$root.i18n.metricsLast7Days, value: '7d' },
+      { title: this.$root.i18n.metricsLast30Days, value: '30d' }
     ],
     autoRefreshItems: [
-      { title: this.$root.i18n.interval0s, value: 0 },
+      { title: this.$root.i18n.noRefresh, value: 0 },
       { title: this.$root.i18n.interval30s, value: 30 },
       { title: this.$root.i18n.interval1m, value: 60 },
       { title: this.$root.i18n.interval5m, value: 300 }

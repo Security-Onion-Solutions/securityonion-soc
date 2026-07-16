@@ -32,7 +32,7 @@ if (gridRouteForMetrics && gridRouteForMetrics.component) {
         const labels = panel.labelKeys ? panel.labelKeys.map(k => i18n[k] || k) : (panel.labels || panel.keys);
 
         if (panel.type === 'line_chart') {
-          window.socGraphing.setupTimelineChart(chartOptions, chartData, title, fontColor, gridColor, primaryColor);
+          window.socGraphing.setupTimelineChart(chartOptions, chartData, title, fontColor, gridColor, primaryColor, panel.units);
           chartOptions.onResize = this.debounceChartResize;
           if (panel.keys && panel.keys.length > 0) {
             chartData.datasets = panel.keys.map((k, idx) => ({
@@ -60,20 +60,14 @@ if (gridRouteForMetrics && gridRouteForMetrics.component) {
         this.metricsLoading = true;
       }
       try {
-        let rangeParam = '';
-        if (this.metricsTimeRange === '1h') {
-          rangeParam = 'now-1h:now';
-        } else if (this.metricsTimeRange === '24h') {
-          rangeParam = 'now-24h:now';
-        } else if (this.metricsTimeRange === '7d') {
-          rangeParam = 'now-7d:now';
-        }
+        const range = this.metricsTimeRange || '1h';
+        const rangeParam = `now-${range}:now`;
         
         const params = {
           nodeId: this.metricsNodeId,
           range: rangeParam,
           format: 'local',
-          zone: this.zone
+          zone: 'UTC'
         };
 
         const fetchMetric = async (metricName) => {
@@ -120,11 +114,12 @@ if (gridRouteForMetrics && gridRouteForMetrics.component) {
     },
     populateMetricsChart(chart, responseData, keys) {
       chart.key++;
+      const zone = this.zone || 'UTC';
       keys.forEach((k, idx) => {
         const dataset = chart.datasets[idx];
         if (dataset) {
           dataset.data = (responseData && responseData[k]) ? responseData[k].map(item => ({
-            x: new Date(item.timestamp),
+            x: new Date(moment.utc(item.timestamp).tz(zone).format('YYYY-MM-DDTHH:mm:ss')),
             y: item.value
           })) : [];
         }

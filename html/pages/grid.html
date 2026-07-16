@@ -502,6 +502,9 @@
 					<!-- Time Range Selector -->
 					<v-select v-model="metricsTimeRange" :items="timeRangeItems" density="compact" hide-details class="mx-2" style="max-width: 180px;" @update:model-value="loadHistoricalMetrics(true)" id="gridMetricsTimeRange" data-aid="grid_metrics_time_range" :aria-label="i18n.metricsTimeRange"></v-select>
 					
+					<!-- Timezone Selector -->
+					<v-select v-model="zone" :items="$root.timezones" @update:model-value="saveTimezone(); loadHistoricalMetrics(true)" density="compact" hide-details class="mx-2" style="max-width: 180px;" id="gridMetricsTimezone" data-aid="grid_metrics_timezone_select" :aria-label="i18n.ariaGridTimezone"></v-select>
+					
 					<!-- Auto Refresh Selector -->
 					<v-select v-model="metricsAutoRefresh" :items="autoRefreshItems" density="compact" hide-details class="mx-2" style="max-width: 120px;" @update:model-value="setupMetricsAutoRefresh" id="gridMetricsAutoRefresh" data-aid="grid_metrics_auto_refresh" :aria-label="i18n.metricsRefreshInterval"></v-select>
 					

@@ -117,3 +117,52 @@ test('loadHistoricalMetrics', async () => {
 	expect(comp.$root.papi.get).toHaveBeenCalledTimes(26);
 	expect(comp.metricsLoading).toBe(false);
 });
+
+test('socGraphing.formatAxisValue handles default auto-sizing and custom units', () => {
+	const graphing = window.socGraphing;
+	expect(graphing).toBeDefined();
+
+	// Non-numbers should return unmodified
+	expect(graphing.formatAxisValue('hello')).toBe('hello');
+	expect(graphing.formatAxisValue(null)).toBeNull();
+
+	// Default auto-sizing (K, M, B, T)
+	expect(graphing.formatAxisValue(500)).toBe(500);
+	expect(graphing.formatAxisValue(1500)).toBe('1.5k');
+	expect(graphing.formatAxisValue(2500000)).toBe('2.5m');
+	expect(graphing.formatAxisValue(45656234524)).toBe('45.7B');
+	expect(graphing.formatAxisValue(1200000000000)).toBe('1.2T');
+
+	// Custom 'byte' units auto-sizing
+	expect(graphing.formatAxisValue(0, 'byte')).toBe('0 B');
+	expect(graphing.formatAxisValue(512, 'byte')).toBe('512 B');
+	expect(graphing.formatAxisValue(1024, 'byte')).toBe('1 KB');
+	expect(graphing.formatAxisValue(1536, 'byte')).toBe('1.5 KB');
+	expect(graphing.formatAxisValue(1048576, 'byte')).toBe('1 MB');
+	expect(graphing.formatAxisValue(45656234524, 'byte')).toBe('42.5 GB');
+
+	// Custom 'percent' units
+	expect(graphing.formatAxisValue(45.6, 'percent')).toBe('45.6%');
+	expect(graphing.formatAxisValue(100, 'percent')).toBe('100%');
+
+	// Custom 'second'/'seconds' units
+	expect(graphing.formatAxisValue(0, 'second')).toBe('0s');
+	expect(graphing.formatAxisValue(10, 'seconds')).toBe('10s');
+	expect(graphing.formatAxisValue(90, 'seconds')).toBe('1.5m');
+	expect(graphing.formatAxisValue(12240, 'second')).toBe('3.4h');
+	expect(graphing.formatAxisValue(388800, 'seconds')).toBe('4.5d');
+
+	// Custom 'bits'/'bit' units
+	expect(graphing.formatAxisValue(0, 'bits')).toBe('0 b/s');
+	expect(graphing.formatAxisValue(0.005, 'bits')).toBe('5 Kb/s');
+	expect(graphing.formatAxisValue(1.5, 'bits')).toBe('1.5 Mb/s');
+	expect(graphing.formatAxisValue(12.5, 'bit')).toBe('12.5 Mb/s');
+	expect(graphing.formatAxisValue(1500, 'bits')).toBe('1.5 Gb/s');
+
+	// Split methods direct calls
+	expect(graphing.formatPercent(99.4)).toBe('99.4%');
+	expect(graphing.formatSeconds(10)).toBe('10s');
+	expect(graphing.formatBytes(1024)).toBe('1 KB');
+	expect(graphing.formatBits(1000000)).toBe('1 Mb/s');
+	expect(graphing.formatDefaultNumber(1500)).toBe('1.5k');
+});

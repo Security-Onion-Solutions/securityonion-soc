@@ -78,7 +78,111 @@ window.socGraphing = {
     }
   },
 
-  setupBarChart(options, data, title, fontColor, gridColor, dataColor) {
+  getTranslation(key, defaultVal) {
+    if (window.i18n && typeof window.i18n.getLocalizedTranslations === 'function') {
+      const lang = (typeof navigator !== 'undefined' && navigator.language) ? navigator.language : 'en-US';
+      const trans = window.i18n.getLocalizedTranslations(lang);
+      if (trans && trans[key] !== undefined) {
+        return trans[key];
+      }
+    }
+    return defaultVal;
+  },
+
+  formatBytes(value) {
+    const k = 1024;
+    const sizes = [
+      this.getTranslation('byteB', 'B'),
+      this.getTranslation('byteKB', 'KB'),
+      this.getTranslation('byteMB', 'MB'),
+      this.getTranslation('byteGB', 'GB'),
+      this.getTranslation('byteTB', 'TB'),
+      this.getTranslation('bytePB', 'PB'),
+      this.getTranslation('byteEB', 'EB'),
+      this.getTranslation('byteZB', 'ZB'),
+      this.getTranslation('byteYB', 'YB')
+    ];
+    if (value === 0) return '0 ' + sizes[0];
+    const i = Math.floor(Math.log(Math.abs(value)) / Math.log(k));
+    const formatted = parseFloat((value / Math.pow(k, i)).toFixed(1));
+    return formatted + ' ' + (sizes[i] || '');
+  },
+
+  formatBits(value) {
+    const k = 1000;
+    const sizes = [
+      this.getTranslation('bps', 'b/s'),
+      this.getTranslation('kbps', 'Kb/s'),
+      this.getTranslation('mbps', 'Mb/s'),
+      this.getTranslation('gbps', 'Gb/s'),
+      this.getTranslation('tbps', 'Tb/s'),
+      this.getTranslation('pbps', 'Pb/s'),
+      this.getTranslation('ebps', 'Eb/s'),
+      this.getTranslation('zbps', 'Zb/s'),
+      this.getTranslation('ybps', 'Yb/s')
+    ];
+    if (value === 0) return '0 ' + sizes[0];
+    const i = Math.floor(Math.log(Math.abs(value)) / Math.log(k));
+    const formatted = parseFloat((value / Math.pow(k, i)).toFixed(1));
+    return formatted + ' ' + (sizes[i] || '');
+  },
+
+  formatPercent(value) {
+    return parseFloat(value.toFixed(1)) + '%';
+  },
+
+  formatSeconds(value) {
+    const absVal = Math.abs(value);
+    if (absVal < 60) {
+      return parseFloat(value.toFixed(1)) + this.getTranslation('sSeconds', 's');
+    }
+    if (absVal < 3600) {
+      return parseFloat((value / 60).toFixed(1)) + this.getTranslation('mMinutes', 'm');
+    }
+    if (absVal < 86400) {
+      return parseFloat((value / 3600).toFixed(1)) + this.getTranslation('hHours', 'h');
+    }
+    return parseFloat((value / 86400).toFixed(1)) + this.getTranslation('dDays', 'd');
+  },
+
+  formatDefaultNumber(value) {
+    const absVal = Math.abs(value);
+    if (absVal >= 1e12) {
+      return parseFloat((value / 1e12).toFixed(1)) + this.getTranslation('tTrillion', 'T');
+    }
+    if (absVal >= 1e9) {
+      return parseFloat((value / 1e9).toFixed(1)) + this.getTranslation('bBillion', 'B');
+    }
+    if (absVal >= 1e6) {
+      return parseFloat((value / 1e6).toFixed(1)) + this.getTranslation('mMillion', 'M');
+    }
+    if (absVal >= 1e3) {
+      return parseFloat((value / 1e3).toFixed(1)) + this.getTranslation('kThousand', 'K');
+    }
+    return value;
+  },
+
+  formatAxisValue(value, units) {
+    if (typeof value !== 'number') return value;
+
+    const self = window.socGraphing;
+    if (units === 'byte' || units === 'bytes') {
+      return self.formatBytes(value);
+    }
+    if (units === 'bit' || units === 'bits') {
+      return self.formatBits(value * 1000000);
+    }
+    if (units === 'percent') {
+      return self.formatPercent(value);
+    }
+    if (units === 'second' || units === 'seconds') {
+      return self.formatSeconds(value);
+    }
+
+    return self.formatDefaultNumber(value);
+  },
+
+  setupBarChart(options, data, title, fontColor, gridColor, dataColor, units) {
     options.responsive = true;
     options.maintainAspectRatio = false;
     options.layout = {
@@ -105,6 +209,9 @@ window.socGraphing = {
           beginAtZero: true,
           color: fontColor,
           precision: 0,
+          callback: function (value, index, ticks) {
+            return window.socGraphing.formatAxisValue(value, units);
+          }
         }
       },
       x: {
@@ -128,9 +235,22 @@ window.socGraphing = {
     }];
   },
 
-  setupTimelineChart(options, data, title, fontColor, gridColor, dataColor) {
-    this.setupBarChart(options, data, title, fontColor, gridColor, dataColor);
+  setupTimelineChart(options, data, title, fontColor, gridColor, dataColor, units) {
+    this.setupBarChart(options, data, title, fontColor, gridColor, dataColor, units);
     options.scales.x.type = 'timeseries';
+    options.scales.x.time = {
+      displayFormats: {
+        millisecond: 'YYYY-MM-DD HH:mm:ss',
+        second: 'YYYY-MM-DD HH:mm:ss',
+        minute: 'YYYY-MM-DD HH:mm',
+        hour: 'YYYY-MM-DD HH:mm',
+        day: 'YYYY-MM-DD HH:mm',
+        week: 'YYYY-MM-DD HH:mm',
+        month: 'YYYY-MM-DD HH:mm',
+        quarter: 'YYYY-MM-DD HH:mm',
+        year: 'YYYY-MM-DD HH:mm'
+      }
+    };
   },
 
   setupPieChart(options, data, title, fontColor) {
