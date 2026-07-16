@@ -94,9 +94,19 @@ test('setupMetricsAutoRefresh', () => {
 test('populateMetricsChart', () => {
 	const chart = { key: 0, datasets: [{ data: [] }] };
 	const data = { cpu_used: [{ timestamp: '2026-06-30T00:00:00Z', value: 45.6 }] };
-	comp.populateMetricsChart(chart, data, ['cpu_used']);
+	comp.populateMetricsChart(chart, data, ['cpu_used'], ['#123456']);
 	expect(chart.key).toBe(1);
 	expect(chart.datasets[0].data[0].y).toBe(45.6);
+});
+
+test('populateMetricsChart with container metrics', () => {
+	const chart = { key: 0, datasets: [] };
+	const data = { "so-kafka": [{ timestamp: '2026-06-30T00:00:00Z', value: 12.3 }] };
+	comp.populateMetricsChart(chart, data, ['container_cpu'], ['#4dc9f6']);
+	expect(chart.key).toBe(1);
+	expect(chart.datasets.length).toBe(1);
+	expect(chart.datasets[0].label).toBe("so-kafka");
+	expect(chart.datasets[0].data[0].y).toBe(12.3);
 });
 
 test('loadHistoricalMetrics', async () => {

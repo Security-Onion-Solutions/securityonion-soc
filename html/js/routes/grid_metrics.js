@@ -92,7 +92,7 @@ if (gridRouteForMetrics && gridRouteForMetrics.component) {
         (this.metricPanels || []).forEach(panel => {
           const mData = results[panel.metric];
           if (panel.type === 'line_chart') {
-            this.populateMetricsChart(panel.chartData, mData, panel.keys);
+            this.populateMetricsChart(panel.chartData, mData, panel.keys, panel.colors);
           } else if (panel.type === 'single_stat') {
             const series = mData ? mData[panel.key] : null;
             if (series && series.length > 0) {
@@ -112,18 +112,42 @@ if (gridRouteForMetrics && gridRouteForMetrics.component) {
         }
       }
     },
-    populateMetricsChart(chart, responseData, keys) {
+    populateMetricsChart(chart, responseData, keys, colors) {
       chart.key++;
       const zone = this.zone || 'UTC';
-      keys.forEach((k, idx) => {
-        const dataset = chart.datasets[idx];
-        if (dataset) {
-          dataset.data = (responseData && responseData[k]) ? responseData[k].map(item => ({
-            x: new Date(moment.utc(item.timestamp).tz(zone).format('YYYY-MM-DDTHH:mm:ss')),
-            y: item.value
-          })) : [];
-        }
-      });
+      const primaryColor = this.$root.getColor ? this.$root.getColor("primary") : "#123456";
+      const lineColors = (colors && colors.length > 0) ? colors : [primaryColor];
+
+      const responseKeys = Object.keys(responseData || {}).sort();
+      const hasMismatch = responseKeys.length > 0 && !responseKeys.every(k => keys.includes(k));
+
+      if (hasMismatch) {
+        chart.datasets = responseKeys.map((k, idx) => {
+          const color = lineColors[idx % lineColors.length];
+          return {
+            label: k,
+            borderColor: color,
+            backgroundColor: color,
+            pointRadius: 2,
+            fill: false,
+            tension: 0.1,
+            data: responseData[k].map(item => ({
+              x: new Date(moment.utc(item.timestamp).tz(zone).format('YYYY-MM-DDTHH:mm:ss')),
+              y: item.value
+            }))
+          };
+        });
+      } else {
+        keys.forEach((k, idx) => {
+          const dataset = chart.datasets[idx];
+          if (dataset) {
+            dataset.data = (responseData && responseData[k]) ? responseData[k].map(item => ({
+              x: new Date(moment.utc(item.timestamp).tz(zone).format('YYYY-MM-DDTHH:mm:ss')),
+              y: item.value
+            })) : [];
+          }
+        });
+      }
     },
     debounceChartResize(chart, size) {
       window.socGraphing.debounceChartResize(chart, size, this.chartResizeTracker);

@@ -174,13 +174,11 @@ var MetricConfigs = map[string]MetricConfig{
 		LabelKeys: []string{"metricsKafkaEps"},
 	},
 	"container_uptime": {
-		Tables:    []string{"docker_container_status"},
-		Fields:    []string{"uptime_ns"},
-		Keys:      []string{"container_uptime"},
-		Factor:    1.0 / 86400000000000.0,
-		Aggregate: "AVG",
-		TitleKey:  "metricsContainerUptime",
-		LabelKeys: []string{"metricsUptime"},
+		Keys:          []string{"container_uptime"},
+		CustomHandler: queryContainerUptimeMetric,
+		TitleKey:      "metricsContainerUptime",
+		LabelKeys:     []string{"metricsUptime"},
+		Units:         "second",
 	},
 	"kafka_controllers": {
 		Tables:    []string{"kafka_controller"},
@@ -201,24 +199,18 @@ var MetricConfigs = map[string]MetricConfig{
 		LabelKeys: []string{"metricsBrokers"},
 	},
 	"container_cpu": {
-		Tables:    []string{"docker_container_cpu"},
-		Fields:    []string{"usage_percent"},
-		Keys:      []string{"container_cpu"},
-		Factor:    1.0,
-		Aggregate: "AVG",
-		TitleKey:  "metricsContainerCpu",
-		LabelKeys: []string{"metricsCpuPct"},
-		Units:     "percent",
+		Keys:          []string{"container_cpu"},
+		CustomHandler: queryContainerCpuMetric,
+		TitleKey:      "metricsContainerCpu",
+		LabelKeys:     []string{"metricsCpuPct"},
+		Units:         "percent",
 	},
 	"container_mem": {
-		Tables:    []string{"docker_container_mem"},
-		Fields:    []string{"usage_percent"},
-		Keys:      []string{"container_mem"},
-		Factor:    1.0,
-		Aggregate: "AVG",
-		TitleKey:  "metricsContainerMem",
-		LabelKeys: []string{"metricsMemPct"},
-		Units:     "percent",
+		Keys:          []string{"container_mem"},
+		CustomHandler: queryContainerMemMetric,
+		TitleKey:      "metricsContainerMem",
+		LabelKeys:     []string{"metricsMemPct"},
+		Units:         "percent",
 	},
 	"elastic_ingest_time": {
 		Tables:    []string{"elasticsearch_clusterstats_nodes"},
@@ -314,10 +306,6 @@ func GenerateDefaultMetricsDashboard() ([]byte, error) {
 	panels := make([]MetricPanel, 0, len(DashboardMetricOrder))
 	for _, mType := range DashboardMetricOrder {
 		if cfg, ok := MetricConfigs[mType]; ok {
-			colors := make([]string, len(cfg.Keys))
-			for idx := range cfg.Keys {
-				colors[idx] = defaultColors[idx%len(defaultColors)]
-			}
 			panels = append(panels, MetricPanel{
 				ID:        mType,
 				TitleKey:  cfg.TitleKey,
@@ -325,7 +313,7 @@ func GenerateDefaultMetricsDashboard() ([]byte, error) {
 				Metric:    mType,
 				Keys:      cfg.Keys,
 				LabelKeys: cfg.LabelKeys,
-				Colors:    colors,
+				Colors:    defaultColors,
 				Width:     6,
 				Height:    250,
 				Units:     cfg.Units,
