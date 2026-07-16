@@ -80,32 +80,25 @@ html, body, * {
   padding: 8px 0;
 }
 
-.grid-metric-row {
-  display: grid;
-  grid-template-columns: 40% 55%;
-  align-items: center;
-  column-gap: 4px;
-  row-gap: 4px;
-}
-
-.grid-metric-row + .grid-metric-row {
-  margin-top: 7px;
-}
-
 .grid-metric-label {
+  display: inline-block;
   font-size: var(--so-font-size-label);
   overflow: hidden;
   text-align: right;
   text-overflow: ellipsis;
+  vertical-align: top;
   white-space: nowrap;
+  width: 40%;
 }
 
 .grid-metric-value {
-  display: grid;
+  display: inline-grid;
   grid-template-columns: minmax(0, 1fr);
   row-gap: 3px;
-  margin: 0;
+  margin: 0 0 7px 4px;
   min-width: 0;
+  vertical-align: top;
+  width: 55%;
 }
 
 .grid-metric-value-text {
@@ -132,16 +125,20 @@ html, body, * {
 }
 
 @media (max-width: 600px) {
-  .grid-metric-row {
-    grid-template-columns: 1fr;
-  }
-
   .grid-metric-value-text {
     white-space: normal;
   }
 
   .grid-metric-label {
+    display: block;
     text-align: left;
+    width: auto;
+  }
+
+  .grid-metric-value {
+    display: grid;
+    margin-left: 0;
+    width: auto;
   }
 }
 

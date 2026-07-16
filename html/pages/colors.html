@@ -58,17 +58,17 @@
           </div>
 
           <div v-if="surface.progress" class="mt-2">
-            <template v-for="p in progressFor(surface)" :key="p">
-              <div v-if="isGridMetricProgress(p)" class="grid-metrics-field">
-                <div class="grid-metric-row">
-                  <div class="grid-metric-label">{{ p }} metric:</div>
-                  <div class="grid-metric-value">
-                    <span class="grid-metric-value-text">65% ({{ p }})</span>
-                    <v-progress-linear :color="p" :model-value="65" height="7" class="grid-metric-progress" :aria-label="p + ' progress'"></v-progress-linear>
-                  </div>
-                </div>
-              </div>
-              <v-progress-linear v-else :color="p" :model-value="65" height="2" class="mb-1" aria-label="progress"></v-progress-linear>
+            <dl v-if="gridMetricProgressFor(surface).length" class="grid-metrics-field">
+              <template v-for="p in gridMetricProgressFor(surface)" :key="p">
+                <dt class="grid-metric-label">{{ p }} metric:</dt>
+                <dd class="grid-metric-value">
+                  <span class="grid-metric-value-text">65% ({{ p }})</span>
+                  <v-progress-linear :color="p" :model-value="65" height="7" class="grid-metric-progress" :aria-label="p + ' progress'"></v-progress-linear>
+                </dd>
+              </template>
+            </dl>
+            <template v-for="p in otherProgressFor(surface)" :key="p">
+              <v-progress-linear :color="p" :model-value="65" height="2" class="mb-1" aria-label="progress"></v-progress-linear>
             </template>
           </div>
           </section>

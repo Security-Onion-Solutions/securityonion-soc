@@ -193,6 +193,12 @@ routes.push({ path: '/colors', name: 'colors', component: {
     isGridMetricProgress(color) {
       return ['success', 'info', 'warning', 'error'].includes(color);
     },
+    gridMetricProgressFor(surface) {
+      return this.progressFor(surface).filter((color) => this.isGridMetricProgress(color));
+    },
+    otherProgressFor(surface) {
+      return this.progressFor(surface).filter((color) => !this.isGridMetricProgress(color));
+    },
     // Enumerates the configured theme color names so colors added to the theme in app.js
     // show up in the swatch section without editing this page. Skips the on-* and
     // lighten/darken keys Vuetify derives from the configured colors, plus theme keys
