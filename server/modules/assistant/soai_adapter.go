@@ -95,6 +95,67 @@ func buildApiKey() string {
 	return fmt.Sprintf("sk-%s", hex.EncodeToString(hash[:]))
 }
 
+func (a *SOAiCloudAdapter) Embed(ctx context.Context, req *model.EmbeddingRequest) (*model.EmbeddingResponse, error) {
+	logger := log.FromContext(ctx)
+
+	u, err := url.Parse(a.apiUrl)
+	if err != nil {
+		logger.WithError(err).WithField("apiUrl", a.apiUrl).Error("unable to parse apiUrl")
+
+		return nil, err
+	}
+
+	u.Path = path.Join(u.Path, "/api/embed")
+	endpoint := u.String()
+
+	var buf bytes.Buffer
+
+	err = json.NewEncoder(&buf).Encode(req)
+	if err != nil {
+		logger.WithError(err).WithField("embeddingrequest", req).Error("unable to encode EmbeddingRequest")
+		return nil, err
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, &buf)
+	if err != nil {
+		logger.WithError(err).WithField("apiEndpoint", endpoint).Error("unable to make request object")
+
+		return nil, err
+	}
+
+	httpReq.Header.Add("Content-Type", "application/json")
+	a.prepareRequestHeaders(httpReq)
+
+	res, err := a.MakeRequest(httpReq, false)
+	if res != nil && res.Body != nil {
+		defer res.Body.Close()
+	}
+	if err != nil {
+		logger.WithError(err).Error("unable to execute request")
+
+		return nil, err
+	}
+
+	resBody, err := io.ReadAll(res.Body)
+	if err != nil {
+		logger.WithError(err).Error("unable to read response body")
+
+		return nil, err
+	}
+
+	logger.WithField("rawEmbedResponseBody", string(resBody)).Debug("embed response received")
+
+	response := &model.EmbeddingResponse{}
+
+	err = json.Unmarshal(resBody, response)
+	if err != nil {
+		logger.WithError(err).WithField("rawEmbedResponseBody", string(resBody)).Error("unable to unmarshal JSON response")
+		return nil, err
+	}
+
+	return response, nil
+}
+
 func (a *SOAiCloudAdapter) SendMessage(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
 	logger := log.FromContext(ctx)
 

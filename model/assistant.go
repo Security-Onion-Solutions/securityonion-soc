@@ -56,6 +56,26 @@ type ChatRequest struct {
 	Model string `json:"model,omitempty" example:"claude-sonnet-4.5"`
 }
 
+// @Description A request to generate vector embeddings for one or more inputs.
+type EmbeddingRequest struct {
+	// The model to use for this embedding transaction.
+	Model string `json:"model" example:"text-embedding-3-small"`
+	// The input texts to embed. One vector is returned per input, index-aligned.
+	Input []string `json:"input"`
+	// Optionally request a specific output dimensionality (text-embedding-3 and later only).
+	Dimensions int `json:"dimensions,omitempty" example:"1536"`
+}
+
+// @Description The vector embeddings generated for an EmbeddingRequest.
+type EmbeddingResponse struct {
+	// The model used to generate the embeddings.
+	Model string `json:"model" example:"text-embedding-3-small"`
+	// One embedding vector per input, in the same order as the request inputs.
+	Embeddings [][]float64 `json:"embeddings"`
+	// Token usage for the request.
+	Usage *Usage `json:"usage,omitempty"`
+}
+
 // @Description A stored message in the chat session. This contains metadata about the message and its context not necessary for the conversation with the Assistant.
 type StoredMessage struct {
 	Auditable
@@ -368,6 +388,10 @@ type AssistantSession struct {
 	ParentModel string `json:"parentModel,omitempty" example:"AgentClaude@SOAI"`
 	// For delegated sub-agent sessions, the display name of the delegated agent.
 	DelegateAgent string `json:"delegateAgent,omitempty" example:"Hunter"`
+	// When Memory is enabled, the scanner will use this field to denote how many
+	// messages in the session have been scanned for memory extraction. Extraction
+	// always begins with the oldest messages in a session.
+	LastMemoryScannedIndex int `json:"lastMemoryScannedIndex,omitempty" example:"4"`
 }
 
 const (
@@ -595,4 +619,12 @@ func (s *Skill) EffectiveGuidance() string {
 	default:
 		return guidance + "\n\n" + addendum
 	}
+}
+
+type ExtractedFact struct {
+	Fact       string  `json:"fact"`
+	Scope      string  `json:"scope"`
+	Category   string  `json:"category"`
+	Durability string  `json:"durability"`
+	Confidence float64 `json:"confidence"`
 }

@@ -38,6 +38,10 @@ func (s *stubOpenAIClient) ChatCompletionsNewStreaming(ctx context.Context, para
 	return nil
 }
 
+func (s *stubOpenAIClient) EmbeddingsNew(ctx context.Context, params openai.EmbeddingNewParams) (*openai.CreateEmbeddingResponse, error) {
+	return nil, nil
+}
+
 func TestBuildOpenAIClientOptions(t *testing.T) {
 	tests := []struct {
 		name      string

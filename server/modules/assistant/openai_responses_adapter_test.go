@@ -34,6 +34,7 @@ type mockOpenAIClient struct {
 	responsesNewStreamingFunc       func(ctx context.Context, params responses.ResponseNewParams) ResponseStream
 	chatCompletionsNewFunc          func(ctx context.Context, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error)
 	chatCompletionsNewStreamingFunc func(ctx context.Context, params openai.ChatCompletionNewParams) ChatCompletionStream
+	embeddingsNewFunc               func(ctx context.Context, params openai.EmbeddingNewParams) (*openai.CreateEmbeddingResponse, error)
 }
 
 func (m *mockOpenAIClient) ModelsList(ctx context.Context) (*pagination.Page[openai.Model], error) {
@@ -69,6 +70,13 @@ func (m *mockOpenAIClient) ChatCompletionsNewStreaming(ctx context.Context, para
 		return m.chatCompletionsNewStreamingFunc(ctx, params)
 	}
 	return nil
+}
+
+func (m *mockOpenAIClient) EmbeddingsNew(ctx context.Context, params openai.EmbeddingNewParams) (*openai.CreateEmbeddingResponse, error) {
+	if m.embeddingsNewFunc != nil {
+		return m.embeddingsNewFunc(ctx, params)
+	}
+	return nil, errors.New("not implemented")
 }
 
 // mockResponseStream is a simple implementation of ResponseStream for testing

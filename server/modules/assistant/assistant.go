@@ -120,6 +120,10 @@ type AssistantCoordinator struct {
 	// request continues the LLM's turn when several parallel tool results land.
 	sessionLocks sessionLocks
 
+	useMemory          bool
+	terminateMemory    context.CancelCauseFunc
+	memoryScanInterval time.Duration
+
 	detections.IOManager
 }
 
@@ -190,6 +194,7 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 	ac.srv.Config.ClientParams.AssistantParams.Agentic = ac.isAgentic
 
 	if ac.isAgentic {
+		ac.useMemory = module.GetBoolDefault(config, "useMemory", false)
 		ac.setupAgentic()
 		ac.agentMapping = ac.loadAgentMapping(config)
 
@@ -379,6 +384,10 @@ func buildToolConfig(functions map[string]Tool, delegates map[string]Tool, toolF
 		}
 	}
 
+	if len(toolSpecs) == 0 {
+		return nil, nil
+	}
+
 	tc := &model.ToolConfig{
 		Tools: toolSpecs,
 		ToolChoice: map[string]model.JSONSchema{
@@ -465,6 +474,13 @@ func (ac *AssistantCoordinator) Start() error {
 		ac.reloadAgentConfiguration(ac.srv.Context)
 	}
 
+	if ac.useMemory {
+		var memCtx context.Context
+		memCtx, ac.terminateMemory = context.WithCancelCause(ac.srv.Context)
+
+		go ac.memoryWorker(memCtx)
+	}
+
 	return nil
 }
 
@@ -506,6 +522,10 @@ func (ac *AssistantCoordinator) OnConfigSettingUpdated(ctx context.Context, sett
 
 func (ac *AssistantCoordinator) Stop() error {
 	ac.isRunning = false
+
+	if ac.terminateMemory != nil {
+		ac.terminateMemory(nil)
+	}
 
 	return nil
 }
@@ -939,6 +959,30 @@ func (ac *AssistantCoordinator) Health(ctx context.Context, aiModel string) (*mo
 	}
 
 	return response, nil
+}
+
+// Embed resolves the given model selector to its adapter and generates a vector
+// embedding for each input. It mirrors the model->adapter resolution used by
+// Balance/Health but also needs the model id to pass to the provider.
+func (ac *AssistantCoordinator) Embed(ctx context.Context, aiModel string, input []string) (*model.EmbeddingResponse, error) {
+	logger := log.FromContext(ctx)
+
+	modelParams := ac.resolveModel(aiModel)
+	if modelParams == nil {
+		logger.WithField("model", aiModel).Error("requested embedding model is not configured")
+		return nil, ErrInvalidModel
+	}
+
+	adapter, ok := ac.adapters[modelParams.Adapter]
+	if !ok {
+		logger.WithField("adapterName", modelParams.Adapter).Error("assistant adapter not found")
+		return nil, fmt.Errorf("assistant adapter not found: %s", modelParams.Adapter)
+	}
+
+	return adapter.Embed(ctx, &model.EmbeddingRequest{
+		Model: modelParams.ID,
+		Input: input,
+	})
 }
 
 // ToolInSession is the non-streaming counterpart to ToolStreamInSession. It runs

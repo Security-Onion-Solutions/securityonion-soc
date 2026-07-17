@@ -360,6 +360,103 @@ func TestAssistantCoordinator_Balance(t *testing.T) {
 	}
 }
 
+func TestSOAiCloudAdapter_Embed(t *testing.T) {
+	testCases := []struct {
+		name           string
+		apiUrl         string
+		setupMocks     func(*testing.T, *detectionsmock.MockIOManager)
+		expectedResult *model.EmbeddingResponse
+		expectedError  bool
+	}{
+		{
+			name:   "successful embed request",
+			apiUrl: "https://api.example.com",
+			setupMocks: func(t *testing.T, mockIO *detectionsmock.MockIOManager) {
+				mockIO.EXPECT().MakeRequest(gomock.Any(), false).DoAndReturn(func(req *http.Request, _ bool) (*http.Response, error) {
+					assert.Equal(t, "/api/embed", req.URL.Path)
+					assert.Equal(t, http.MethodPost, req.Method)
+
+					body, err := io.ReadAll(req.Body)
+					assert.NoError(t, err)
+					er := &model.EmbeddingRequest{}
+					assert.NoError(t, json.Unmarshal(body, er))
+					assert.Equal(t, "embed-model", er.Model)
+					assert.Equal(t, []string{"first input", "second input"}, er.Input)
+
+					return &http.Response{
+						StatusCode: 200,
+						Body: io.NopCloser(strings.NewReader(
+							`{"model":"embed-model","embeddings":[[0.1,0.2],[0.3,0.4]],"usage":{"input_tokens":7}}`)),
+					}, nil
+				})
+			},
+			expectedResult: &model.EmbeddingResponse{
+				Model:      "embed-model",
+				Embeddings: [][]float64{{0.1, 0.2}, {0.3, 0.4}},
+				Usage:      &model.Usage{InputTokens: 7},
+			},
+			expectedError: false,
+		},
+		{
+			name:   "HTTP request error",
+			apiUrl: "https://api.example.com",
+			setupMocks: func(t *testing.T, mockIO *detectionsmock.MockIOManager) {
+				mockIO.EXPECT().MakeRequest(gomock.Any(), false).Return(nil, errors.New("network error"))
+			},
+			expectedResult: nil,
+			expectedError:  true,
+		},
+		{
+			name:           "invalid URL",
+			apiUrl:         "://invalid-url",
+			setupMocks:     func(t *testing.T, mockIO *detectionsmock.MockIOManager) {},
+			expectedResult: nil,
+			expectedError:  true,
+		},
+		{
+			name:   "invalid JSON response",
+			apiUrl: "https://api.example.com",
+			setupMocks: func(t *testing.T, mockIO *detectionsmock.MockIOManager) {
+				mockIO.EXPECT().MakeRequest(gomock.Any(), false).Return(&http.Response{
+					StatusCode: 200,
+					Body:       io.NopCloser(strings.NewReader(`invalid json`)),
+				}, nil)
+			},
+			expectedResult: nil,
+			expectedError:  true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockIO := detectionsmock.NewMockIOManager(ctrl)
+			tc.setupMocks(t, mockIO)
+
+			adapter := &SOAiCloudAdapter{
+				apiUrl:    tc.apiUrl,
+				srv:       &server.Server{Host: &web.Host{Version: "1.0.0"}},
+				IOManager: mockIO,
+			}
+
+			result, err := adapter.Embed(context.Background(), &model.EmbeddingRequest{
+				Model: "embed-model",
+				Input: []string{"first input", "second input"},
+			})
+
+			if tc.expectedError {
+				assert.Error(t, err)
+				assert.Nil(t, result)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedResult, result)
+			}
+		})
+	}
+}
+
 func TestAssistantCoordinator_Send(t *testing.T) {
 	testCases := []struct {
 		name                  string
@@ -3049,6 +3146,9 @@ func (m *mockAdapter) SendMessageStream(context.Context, *model.ChatRequest) (*h
 }
 func (m *mockAdapter) GetBalance(context.Context) (*model.BalanceResponse, error) { return nil, nil }
 func (m *mockAdapter) GetHealth(context.Context) (*model.HealthResponse, error)   { return nil, nil }
+func (m *mockAdapter) Embed(context.Context, *model.EmbeddingRequest) (*model.EmbeddingResponse, error) {
+	return nil, nil
+}
 
 type mockTool struct {
 	name        string
@@ -3378,6 +3478,10 @@ func (a *captureAdapter) GetBalance(ctx context.Context) (*model.BalanceResponse
 
 func (a *captureAdapter) GetHealth(ctx context.Context) (*model.HealthResponse, error) {
 	return &model.HealthResponse{Status: "ok"}, nil
+}
+
+func (a *captureAdapter) Embed(ctx context.Context, req *model.EmbeddingRequest) (*model.EmbeddingResponse, error) {
+	return nil, ErrEmbeddingsUnsupported
 }
 
 // Selecting a model by id@adapter (or bare id) must send the bare model id

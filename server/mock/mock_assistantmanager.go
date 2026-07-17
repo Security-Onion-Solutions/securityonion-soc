@@ -57,6 +57,21 @@ func (mr *MockAssistantManagerMockRecorder) Balance(ctx, aiModel any) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Balance", reflect.TypeOf((*MockAssistantManager)(nil).Balance), ctx, aiModel)
 }
 
+// Embed mocks base method.
+func (m *MockAssistantManager) Embed(ctx context.Context, aiModel string, input []string) (*model.EmbeddingResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Embed", ctx, aiModel, input)
+	ret0, _ := ret[0].(*model.EmbeddingResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Embed indicates an expected call of Embed.
+func (mr *MockAssistantManagerMockRecorder) Embed(ctx, aiModel, input any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Embed", reflect.TypeOf((*MockAssistantManager)(nil).Embed), ctx, aiModel, input)
+}
+
 // ChatInSession mocks base method.
 func (m *MockAssistantManager) ChatInSession(ctx context.Context, incMsg *model.IncomingMessage, entityType, entityId string) ([]*model.Message, error) {
 	m.ctrl.T.Helper()

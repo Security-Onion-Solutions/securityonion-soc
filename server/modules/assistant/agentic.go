@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
@@ -361,6 +362,18 @@ func (ac *AssistantCoordinator) setupAgentic() {
 				"coverage questions about which detections exist for a technique or behavior. " +
 				"Objectives should include the detection public ID or rule UUID when known.",
 		},
+		"Memory": {
+			Name:          "Memory",
+			AllowedSkills: []string{},
+			CanDelegateTo: []string{},
+			Prompt:        prompts["prompt_agent_memory"],
+		},
+		"Embed": {
+			Name:          "Embed",
+			AllowedSkills: []string{},
+			CanDelegateTo: []string{},
+			Prompt:        prompts["prompt_agent_embed"],
+		},
 	}
 
 	ac.SkillLibrary = map[string]model.Skill{
@@ -413,6 +426,8 @@ func (ac *AssistantCoordinator) setupAgentic() {
 	for name, skill := range ac.SkillLibrary {
 		ac.builtinSkills[name] = skill
 	}
+
+	ac.memoryScanInterval = time.Second * 3
 }
 
 func (ac *AssistantCoordinator) unzipAndUnmarshal(data []byte) map[string]string {
