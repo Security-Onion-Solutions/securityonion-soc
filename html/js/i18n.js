@@ -988,6 +988,8 @@ const i18n = {
       metricsDiskNsm: 'Disk /nsm',
       metricsDiskRoot: 'Disk /',
       metricsDiskUsage: 'Disk Usage',
+      metricsAllHosts: 'All Hosts',
+      metricsAllContainers: 'All Containers',
       metricsGridDashboard: 'Grid Dashboard',
       metricsHistory: 'Historical Metrics',
       metricsLast12Hours: 'Last 12 Hours',

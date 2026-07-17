@@ -143,6 +143,8 @@ describe('graphing.js', () => {
       expect(options.maintainAspectRatio).toBe(false);
       expect(options.plugins.title.text).toBe('My Chart');
       expect(options.plugins.title.color).toBe('#fff');
+      expect(options.plugins.tooltip.mode).toBe('index');
+      expect(options.plugins.tooltip.intersect).toBe(false);
       expect(options.scales.y.grid.color).toBe('#000');
       expect(options.scales.y.ticks.color).toBe('#fff');
 
@@ -154,6 +156,41 @@ describe('graphing.js', () => {
       const callback = options.scales.y.ticks.callback;
       expect(typeof callback).toBe('function');
       expect(callback(1024)).toBe('1 KB');
+
+      // Test the tooltip label callback
+      const labelCallback = options.plugins.tooltip.callbacks.label;
+      expect(typeof labelCallback).toBe('function');
+
+      // Test with parsed y
+      const contextWithParsed = {
+        dataset: { label: 'My Dataset' },
+        parsed: { y: 2048 },
+        raw: null
+      };
+      expect(labelCallback(contextWithParsed)).toBe('My Dataset: 2 KB');
+
+      // Test with raw number
+      const contextWithRawNum = {
+        dataset: { label: 'My Dataset' },
+        parsed: null,
+        raw: 4096
+      };
+      expect(labelCallback(contextWithRawNum)).toBe('My Dataset: 4 KB');
+
+      // Test with raw object
+      const contextWithRawObj = {
+        dataset: { label: 'My Dataset' },
+        parsed: null,
+        raw: { y: 1024 }
+      };
+      expect(labelCallback(contextWithRawObj)).toBe('My Dataset: 1 KB');
+
+      // Test with no dataset label
+      const contextNoLabel = {
+        dataset: {},
+        parsed: { y: 2048 }
+      };
+      expect(labelCallback(contextNoLabel)).toBe('2 KB');
     });
   });
 

@@ -38,7 +38,7 @@ type MetricConfig struct {
 	Filters       []string
 	Factor        float64
 	Aggregate     string
-	CustomHandler func(ctx context.Context, s *Store, nodeId string, hostFilter, startPlaceholder, endPlaceholder string, args []interface{}) (map[string][]model.MetricSample, error)
+	CustomHandler func(ctx context.Context, s *Store, nodeId, container string, hostFilter, startPlaceholder, endPlaceholder string, args []interface{}) (map[string][]model.MetricSample, error)
 	TitleKey      string
 	LabelKeys     []string
 	Units         string

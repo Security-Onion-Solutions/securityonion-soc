@@ -625,56 +625,10 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       var fontColor = this.$root.getColor("#888888", -40);
       var dataColor = this.$root.getColor("primary");
       var gridColor = this.$root.getColor("#888888", 65);
-      options.responsive = true;
-      options.maintainAspectRatio = false;
-      options.layout = {
-        padding: {
-          bottom: 15
-        }
-      };
-      options.plugins = {
-        legend: {
-          display: false,
-        },
-        title: {
-          display: true,
-          text: title,
-          color: fontColor,
-        }
-      };
-      options.scales = {
-        y: {
-          grid: {
-            color: gridColor,
-          },
-          ticks: {
-            beginAtZero: true,
-            color: fontColor,
-            precision: 0,
-            callback: function (value, index, ticks) {
-              return window.socGraphing.formatAxisValue(value);
-            }
-          }
-        },
-        x: {
-          grid: {
-            color: gridColor,
-          },
-          ticks: {
-            color: fontColor,
-          }
-        },
-      };
-
-      data.labels = [];
-      data.datasets = [{
-        backgroundColor: dataColor,
-        borderColor: dataColor,
-        pointRadius: 3,
-        fill: false,
-        data: [],
-        label: this.i18n.field_count,
-      }];
+      window.socGraphing.setupBarChart(options, data, title, fontColor, gridColor, dataColor);
+      if (data.datasets && data.datasets[0]) {
+        data.datasets[0].label = this.i18n.field_count;
+      }
     },
     setupTimelineChart(options, data, title) {
       this.setupBarChart(options, data, title);
@@ -683,41 +637,10 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
     },
     setupPieChart(options, data, title) {
       var fontColor = this.$root.getColor("#888888", -40);
-      options.responsive = true;
-      options.maintainAspectRatio = false;
-      options.plugins = {
-        legend: {
-          display: true,
-          position: 'left',
-          labels: {
-            color: fontColor,
-          },
-        },
-        title: {
-          display: true,
-          text: title,
-          color: fontColor,
-        }
-      };
-      data.labels = [];
-      data.datasets = [{
-        backgroundColor: [
-          'rgba(77, 201, 246, 1)',
-          'rgba(246, 112, 25, 1)',
-          'rgba(245, 55, 148, 1)',
-          'rgba(83, 123, 196, 1)',
-          'rgba(172, 194, 54, 1)',
-          'rgba(22, 106, 143, 1)',
-          'rgba(0, 169, 80, 1)',
-          'rgba(88, 89, 91, 1)',
-          'rgba(133, 73, 186, 1)',
-          'rgba(235, 204, 52, 1)',
-          'rgba(127, 127, 127, 1)',
-        ],
-        borderColor: 'rgba(255, 255, 255, 0.5)',
-        data: [],
-        label: this.i18n.field_count,
-      }];
+      window.socGraphing.setupPieChart(options, data, title, fontColor);
+      if (data.datasets && data.datasets[0]) {
+        data.datasets[0].label = this.i18n.field_count;
+      }
     },
     buildModelIdentifier(model) {
       if (!model) return '';

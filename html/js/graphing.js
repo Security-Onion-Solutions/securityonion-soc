@@ -198,6 +198,26 @@ window.socGraphing = {
         display: true,
         text: title,
         color: fontColor,
+      },
+      tooltip: {
+        mode: 'index',
+        intersect: false,
+        callbacks: {
+          label: function (context) {
+            let label = context.dataset.label || '';
+            if (label) {
+              label += ': ';
+            }
+            let val = context.raw;
+            if (context.parsed && context.parsed.y !== undefined && context.parsed.y !== null) {
+              val = context.parsed.y;
+            } else if (val !== null && val !== undefined && typeof val === 'object' && val.y !== undefined) {
+              val = val.y;
+            }
+            label += window.socGraphing.formatAxisValue(val, units);
+            return label;
+          }
+        }
       }
     };
     options.scales = {

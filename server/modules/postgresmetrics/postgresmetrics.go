@@ -400,7 +400,7 @@ func (pm *PostgresMetrics) getEventstoreStatus(host string) string {
 	return status
 }
 
-func (pm *PostgresMetrics) GetTimeSeriesMetrics(ctx context.Context, nodeId string, metricType string, startTime, endTime time.Time) (map[string][]model.MetricSample, error) {
+func (pm *PostgresMetrics) GetTimeSeriesMetrics(ctx context.Context, nodeId, container string, metricType string, startTime, endTime time.Time) (map[string][]model.MetricSample, error) {
 	if err := pm.server.CheckAuthorized(ctx, "read", "nodes"); err != nil {
 		return nil, err
 	}
@@ -412,5 +412,5 @@ func (pm *PostgresMetrics) GetTimeSeriesMetrics(ctx context.Context, nodeId stri
 		pm.dbStore = database.New(pm.server.DB)
 	}
 
-	return pm.dbStore.GetTimeSeriesMetrics(ctx, nodeId, metricType, startTime, endTime)
+	return pm.dbStore.GetTimeSeriesMetrics(ctx, nodeId, container, metricType, startTime, endTime)
 }

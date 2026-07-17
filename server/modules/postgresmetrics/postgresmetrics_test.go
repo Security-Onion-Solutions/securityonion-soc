@@ -128,21 +128,21 @@ func TestPostgresMetrics_GetTimeSeriesMetrics(t *testing.T) {
 	startTime := time.Now().Add(-1 * time.Hour)
 	endTime := time.Now()
 
-	res, err := pm.GetTimeSeriesMetrics(ctx, "host1", "cpu", startTime, endTime)
+	res, err := pm.GetTimeSeriesMetrics(ctx, "host1", "", "cpu", startTime, endTime)
 	assert.NoError(t, err)
 	assert.Contains(t, res, "cpu_used")
 	assert.Len(t, res["cpu_used"], 1)
 	assert.Equal(t, 25.5, res["cpu_used"][0].Value)
 
-	res, err = pm.GetTimeSeriesMetrics(ctx, "host1", "memory", startTime, endTime)
+	res, err = pm.GetTimeSeriesMetrics(ctx, "host1", "", "memory", startTime, endTime)
 	assert.NoError(t, err)
 	assert.Contains(t, res, "memory_used")
 
-	res, err = pm.GetTimeSeriesMetrics(ctx, "host1", "load", startTime, endTime)
+	res, err = pm.GetTimeSeriesMetrics(ctx, "host1", "", "load", startTime, endTime)
 	assert.NoError(t, err)
 	assert.Contains(t, res, "load1")
 
-	res, err = pm.GetTimeSeriesMetrics(ctx, "host1", "disk", startTime, endTime)
+	res, err = pm.GetTimeSeriesMetrics(ctx, "host1", "", "disk", startTime, endTime)
 	assert.NoError(t, err)
 	assert.Contains(t, res, "disk_used_root")
 }

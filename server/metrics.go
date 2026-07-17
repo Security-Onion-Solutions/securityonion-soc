@@ -16,5 +16,5 @@ import (
 type Metrics interface {
 	GetGridEps(ctx context.Context) int
 	UpdateNodeMetrics(ctx context.Context, node *model.Node) bool
-	GetTimeSeriesMetrics(ctx context.Context, nodeId string, metricType string, startTime, endTime time.Time) (map[string][]model.MetricSample, error)
+	GetTimeSeriesMetrics(ctx context.Context, nodeId, container string, metricType string, startTime, endTime time.Time) (map[string][]model.MetricSample, error)
 }

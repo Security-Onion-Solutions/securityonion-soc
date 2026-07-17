@@ -57,6 +57,8 @@ test('initMetricsCharts with default dashboard', () => {
 	expect(comp.metricPanels).toBeDefined();
 	expect(comp.metricPanels.length).toBe(26);
 	expect(comp.metricPanels[0].id).toBe('cpu');
+	expect(comp.metricPanels[0].chartData.datasets[0].borderWidth).toBe(1);
+	expect(comp.metricPanels[0].chartData.datasets[0].pointRadius).toBe(0);
 });
 
 test('initMetricsCharts with custom dashboard', () => {
@@ -107,6 +109,8 @@ test('populateMetricsChart with container metrics', () => {
 	expect(chart.datasets.length).toBe(1);
 	expect(chart.datasets[0].label).toBe("so-kafka");
 	expect(chart.datasets[0].data[0].y).toBe(12.3);
+	expect(chart.datasets[0].borderWidth).toBe(1);
+	expect(chart.datasets[0].pointRadius).toBe(0);
 });
 
 test('loadHistoricalMetrics', async () => {
@@ -125,7 +129,113 @@ test('loadHistoricalMetrics', async () => {
 	await comp.loadHistoricalMetrics();
 
 	expect(comp.$root.papi.get).toHaveBeenCalledTimes(26);
+	expect(comp.$root.papi.get).toHaveBeenCalledWith('grid/metrics', {
+		params: {
+			nodeId: 'host1',
+			container: 'all',
+			range: 'now-1h:now',
+			format: 'local',
+			zone: 'UTC',
+			metric: 'cpu'
+		}
+	});
 	expect(comp.metricsLoading).toBe(false);
+});
+
+test('loadHistoricalMetrics with custom timezone', async () => {
+	resetPapi();
+	comp.$root.showError = console.error;
+	comp.metricsLoading = false;
+	comp.metricsTimeRange = '1h';
+	comp.metricsNodeId = 'host1';
+	comp.zone = 'America/New_York';
+
+	comp.$root.getColor = jest.fn().mockReturnValue('#123456');
+	comp.initMetricsCharts();
+
+	comp.$root.papi.get = jest.fn().mockResolvedValue({ data: { cpu_used: [] } });
+
+	await comp.loadHistoricalMetrics();
+
+	expect(comp.$root.papi.get).toHaveBeenCalledTimes(26);
+	expect(comp.$root.papi.get).toHaveBeenCalledWith('grid/metrics', {
+		params: {
+			nodeId: 'host1',
+			container: 'all',
+			range: 'now-1h:now',
+			format: 'local',
+			zone: 'America/New_York',
+			metric: 'cpu'
+		}
+	});
+	expect(comp.metricsLoading).toBe(false);
+});
+
+test('loadHistoricalMetrics populates panels as individual metric API calls return', async () => {
+	resetPapi();
+	comp.$root.showError = console.error;
+	comp.metricsLoading = false;
+	comp.metricsTimeRange = '1h';
+	comp.metricsNodeId = 'host1';
+	comp.zone = 'UTC';
+
+	comp.$root.getColor = jest.fn().mockReturnValue('#123456');
+	comp.initMetricsCharts();
+
+	// Ensure there are at least CPU and Memory panels
+	expect(comp.metricPanels[0].id).toBe('cpu');
+	expect(comp.metricPanels[1].id).toBe('memory');
+
+	let resolveCpu;
+	const cpuPromise = new Promise(resolve => { resolveCpu = resolve; });
+	let resolveMem;
+	const memPromise = new Promise(resolve => { resolveMem = resolve; });
+
+	comp.$root.papi.get = jest.fn().mockImplementation((url, config) => {
+		const m = config.params.metric;
+		if (m === 'cpu') {
+			return cpuPromise;
+		} else if (m === 'memory') {
+			return memPromise;
+		}
+		return Promise.resolve({ data: {} });
+	});
+
+	const loadPromise = comp.loadHistoricalMetrics();
+
+	// Verify CPU and Memory charts are initially empty and loading state is true
+	expect(comp.metricPanels[0].chartData.datasets[0].data).toEqual([]);
+	expect(comp.metricPanels[1].chartData.datasets[0].data).toEqual([]);
+	expect(comp.metricPanels[0].loading).toBe(true);
+	expect(comp.metricPanels[1].loading).toBe(true);
+
+	// Resolve CPU metric
+	resolveCpu({ data: { cpu_used: [{ timestamp: '2026-06-30T00:00:00Z', value: 50 }] } });
+	await Promise.resolve(); // Allow CPU promise handler to run
+	await Promise.resolve();
+
+
+	// CPU should now have data and loading is false, but Memory should still be empty and loading is true
+	expect(comp.metricPanels[0].chartData.datasets[0].data.length).toBe(1);
+	expect(comp.metricPanels[0].chartData.datasets[0].data[0].y).toBe(50);
+	expect(comp.metricPanels[0].loading).toBe(false);
+	expect(comp.metricPanels[1].chartData.datasets[0].data).toEqual([]);
+	expect(comp.metricPanels[1].loading).toBe(true);
+
+	// Resolve Memory metric
+	resolveMem({ data: { memory_used: [{ timestamp: '2026-06-30T00:00:00Z', value: 80 }] } });
+	await Promise.resolve(); // Allow Memory promise handler to run
+	await Promise.resolve();
+
+
+	await loadPromise; // Wait for loadHistoricalMetrics to fully finish
+
+	// Both should now have data and loading should be false
+	expect(comp.metricPanels[0].chartData.datasets[0].data.length).toBe(1);
+	expect(comp.metricPanels[1].chartData.datasets[0].data.length).toBe(1);
+	expect(comp.metricPanels[1].chartData.datasets[0].data[0].y).toBe(80);
+	expect(comp.metricPanels[0].loading).toBe(false);
+	expect(comp.metricPanels[1].loading).toBe(false);
 });
 
 test('socGraphing.formatAxisValue handles default auto-sizing and custom units', () => {
@@ -176,3 +286,169 @@ test('socGraphing.formatAxisValue handles default auto-sizing and custom units',
 	expect(graphing.formatBits(1000000)).toBe('1 Mb/s');
 	expect(graphing.formatDefaultNumber(1500)).toBe('1.5k');
 });
+
+test('loadUrlParameters parses tab and metrics parameters correctly', () => {
+	comp.$route.query = {
+		tab: 'metrics',
+		host: 'host123',
+		container: 'so-suricata',
+		timeRange: '3h',
+		autoRefresh: '30'
+	};
+	comp.loadUrlParameters();
+	expect(comp.activeTab).toBe('metrics');
+	expect(comp.metricsNodeId).toBe('host123');
+	expect(comp.metricsContainerId).toBe('so-suricata');
+	expect(comp.metricsTimeRange).toBe('3h');
+	expect(comp.metricsAutoRefresh).toBe(30);
+});
+
+test('updateRoute calls replace only when route parameters differ', () => {
+	comp.$router.replace = jest.fn().mockResolvedValue({});
+	comp.$route.query = {
+		tab: 'metrics',
+		host: 'host123',
+		container: 'so-suricata',
+		timeRange: '3h',
+		autoRefresh: '30'
+	};
+	comp.activeTab = 'metrics';
+	comp.metricsNodeId = 'host123';
+	comp.metricsContainerId = 'so-suricata';
+	comp.metricsTimeRange = '3h';
+	comp.metricsAutoRefresh = 30;
+
+	// Call updateRoute where parameters are identical
+	comp.updateRoute();
+	expect(comp.$router.replace).not.toHaveBeenCalled();
+
+	// Change container and check replace call
+	comp.metricsContainerId = 'so-zeek';
+	comp.updateRoute();
+	expect(comp.$router.replace).toHaveBeenCalledWith({
+		name: 'grid',
+		query: {
+			tab: 'metrics',
+			host: 'host123',
+			container: 'so-zeek',
+			timeRange: '3h',
+			autoRefresh: 30
+		}
+	});
+});
+
+test('watchers trigger updateRoute', () => {
+	comp.updateRoute = jest.fn();
+	
+	comp.watch.metricsNodeId.call(comp);
+	expect(comp.updateRoute).toHaveBeenCalledTimes(1);
+
+	comp.watch.metricsContainerId.call(comp);
+	expect(comp.updateRoute).toHaveBeenCalledTimes(2);
+
+	comp.watch.metricsTimeRange.call(comp);
+	expect(comp.updateRoute).toHaveBeenCalledTimes(3);
+
+	comp.watch.metricsAutoRefresh.call(comp);
+	expect(comp.updateRoute).toHaveBeenCalledTimes(4);
+
+	comp.watch.activeTab.call(comp, 'metrics');
+	expect(comp.updateRoute).toHaveBeenCalledTimes(5);
+});
+
+test('$route watcher behavior', () => {
+	comp.loadData = jest.fn();
+	comp.loadUrlParameters = jest.fn();
+
+	// Same path, different query should call loadUrlParameters
+	comp.watch['$route'].call(comp, { path: '/grid', query: { tab: 'metrics' } }, { path: '/grid', query: {} });
+	expect(comp.loadUrlParameters).toHaveBeenCalled();
+	expect(comp.loadData).not.toHaveBeenCalled();
+
+	// Different path should call loadData
+	comp.loadUrlParameters.mockClear();
+	comp.watch['$route'].call(comp, { path: '/grid' }, { path: '/other' });
+	expect(comp.loadData).toHaveBeenCalled();
+	expect(comp.loadUrlParameters).not.toHaveBeenCalled();
+});
+
+test('initGrid initializes metrics when activeTab is metrics', () => {
+	comp.activeTab = 'metrics';
+	comp.initMetricsCharts = jest.fn();
+	comp.loadHistoricalMetrics = jest.fn();
+	comp.setupMetricsAutoRefresh = jest.fn();
+	comp.loadData = jest.fn();
+
+	comp.initGrid({});
+
+	expect(comp.initMetricsCharts).toHaveBeenCalled();
+	expect(comp.loadHistoricalMetrics).toHaveBeenCalled();
+	expect(comp.setupMetricsAutoRefresh).toHaveBeenCalled();
+});
+
+test('activeTab watcher defers metrics initialization when parameters are not loaded', () => {
+	comp.$root.parametersLoaded = false;
+	comp.initMetricsCharts = jest.fn();
+	comp.loadHistoricalMetrics = jest.fn();
+	comp.setupMetricsAutoRefresh = jest.fn();
+	comp.updateRoute = jest.fn();
+
+	comp.watch.activeTab.call(comp, 'metrics');
+
+	expect(comp.initMetricsCharts).not.toHaveBeenCalled();
+	expect(comp.loadHistoricalMetrics).not.toHaveBeenCalled();
+	expect(comp.setupMetricsAutoRefresh).not.toHaveBeenCalled();
+
+	// Now set parametersLoaded = true and check that it triggers
+	comp.$root.parametersLoaded = true;
+	comp.watch.activeTab.call(comp, 'metrics');
+
+	expect(comp.initMetricsCharts).toHaveBeenCalled();
+	expect(comp.loadHistoricalMetrics).toHaveBeenCalled();
+	expect(comp.setupMetricsAutoRefresh).toHaveBeenCalled();
+});
+
+test('activeTab watcher does not reload metrics if already initialized and params are unchanged', () => {
+	comp.$root.parametersLoaded = true;
+	comp.initMetricsCharts = jest.fn();
+	comp.loadHistoricalMetrics = jest.fn();
+	comp.setupMetricsAutoRefresh = jest.fn();
+	comp.updateRoute = jest.fn();
+
+	comp.metricPanels = [{ id: 'cpu' }];
+	comp.metricsNodeId = 'host123';
+	comp.metricsContainerId = 'all';
+	comp.metricsTimeRange = '1h';
+	comp.zone = 'UTC';
+	comp.lastLoadedMetricsParams = { nodeId: 'host123', container: 'all', timeRange: '1h', zone: 'UTC' };
+
+	comp.watch.activeTab.call(comp, 'metrics');
+
+	expect(comp.initMetricsCharts).not.toHaveBeenCalled();
+	expect(comp.loadHistoricalMetrics).not.toHaveBeenCalled();
+	expect(comp.setupMetricsAutoRefresh).toHaveBeenCalled();
+});
+
+test('activeTab watcher reloads metrics if already initialized but params have changed', () => {
+	comp.$root.parametersLoaded = true;
+	comp.initMetricsCharts = jest.fn();
+	comp.loadHistoricalMetrics = jest.fn();
+	comp.setupMetricsAutoRefresh = jest.fn();
+	comp.updateRoute = jest.fn();
+
+	comp.metricPanels = [{ id: 'cpu' }];
+	comp.metricsNodeId = 'host456'; // Node ID changed
+	comp.metricsContainerId = 'all';
+	comp.metricsTimeRange = '1h';
+	comp.zone = 'UTC';
+	comp.lastLoadedMetricsParams = { nodeId: 'host123', container: 'all', timeRange: '1h', zone: 'UTC' };
+
+	comp.watch.activeTab.call(comp, 'metrics');
+
+	expect(comp.initMetricsCharts).toHaveBeenCalled();
+	expect(comp.loadHistoricalMetrics).toHaveBeenCalled();
+	expect(comp.setupMetricsAutoRefresh).toHaveBeenCalled();
+});
+
+
+

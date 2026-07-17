@@ -39,7 +39,8 @@ if (gridRouteForMetrics && gridRouteForMetrics.component) {
               label: labels ? labels[idx] : k,
               borderColor: panel.colors && panel.colors[idx] ? panel.colors[idx] : primaryColor,
               backgroundColor: panel.colors && panel.colors[idx] ? panel.colors[idx] : primaryColor,
-              pointRadius: 2,
+              borderWidth: 1,
+              pointRadius: 0,
               fill: false,
               tension: 0.1,
               data: []
@@ -51,7 +52,8 @@ if (gridRouteForMetrics && gridRouteForMetrics.component) {
           ...panel,
           chartData,
           chartOptions,
-          singleStatValue: 'N/A'
+          singleStatValue: 'N/A',
+          loading: false
         };
       });
     },
@@ -65,9 +67,17 @@ if (gridRouteForMetrics && gridRouteForMetrics.component) {
         
         const params = {
           nodeId: this.metricsNodeId,
+          container: this.metricsContainerId,
           range: rangeParam,
           format: 'local',
-          zone: 'UTC'
+          zone: this.zone || 'UTC'
+        };
+
+        this.lastLoadedMetricsParams = {
+          nodeId: this.metricsNodeId,
+          container: this.metricsContainerId,
+          timeRange: this.metricsTimeRange,
+          zone: this.zone || 'UTC'
         };
 
         const fetchMetric = async (metricName) => {
@@ -77,32 +87,39 @@ if (gridRouteForMetrics && gridRouteForMetrics.component) {
 
         // Gather all unique metric types from our active panel list
         const uniqueMetricTypes = [...new Set((this.metricPanels || []).map(p => p.metric))];
+
+        // Mark all panels that will be loaded as loading
+        (this.metricPanels || []).forEach(panel => {
+          if (uniqueMetricTypes.includes(panel.metric)) {
+            panel.loading = true;
+          }
+        });
         
-        // Fetch all of them in parallel
-        const results = {};
+        // Fetch and populate metrics in parallel as they return
         await Promise.all(uniqueMetricTypes.map(async (mType) => {
+          let mData;
           try {
-            results[mType] = await fetchMetric(mType);
+            mData = await fetchMetric(mType);
           } catch (e) {
             console.error("Failed to fetch metric:", mType, e);
           }
-        }));
-
-        // Populate the panels dynamically!
-        (this.metricPanels || []).forEach(panel => {
-          const mData = results[panel.metric];
-          if (panel.type === 'line_chart') {
-            this.populateMetricsChart(panel.chartData, mData, panel.keys, panel.colors);
-          } else if (panel.type === 'single_stat') {
-            const series = mData ? mData[panel.key] : null;
-            if (series && series.length > 0) {
-              const latestVal = series[series.length - 1].value;
-              panel.singleStatValue = typeof latestVal === 'number' ? Number(latestVal.toFixed(1)) : latestVal;
-            } else {
-              panel.singleStatValue = 'N/A';
+          (this.metricPanels || []).forEach(panel => {
+            if (panel.metric === mType) {
+              if (panel.type === 'line_chart') {
+                this.populateMetricsChart(panel.chartData, mData, panel.keys, panel.colors);
+              } else if (panel.type === 'single_stat') {
+                const series = mData ? mData[panel.key] : null;
+                if (series && series.length > 0) {
+                  const latestVal = series[series.length - 1].value;
+                  panel.singleStatValue = typeof latestVal === 'number' ? Number(latestVal.toFixed(1)) : latestVal;
+                } else {
+                  panel.singleStatValue = 'N/A';
+                }
+              }
+              panel.loading = false;
             }
-          }
-        });
+          });
+        }));
         
       } catch (error) {
         this.$root.showError(error);
@@ -110,6 +127,9 @@ if (gridRouteForMetrics && gridRouteForMetrics.component) {
         if (!isRefresh) {
           this.metricsLoading = false;
         }
+        (this.metricPanels || []).forEach(panel => {
+          panel.loading = false;
+        });
       }
     },
     populateMetricsChart(chart, responseData, keys, colors) {
@@ -128,7 +148,8 @@ if (gridRouteForMetrics && gridRouteForMetrics.component) {
             label: k,
             borderColor: color,
             backgroundColor: color,
-            pointRadius: 2,
+            borderWidth: 1,
+            pointRadius: 0,
             fill: false,
             tension: 0.1,
             data: responseData[k].map(item => ({
