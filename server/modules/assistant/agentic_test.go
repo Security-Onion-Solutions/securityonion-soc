@@ -80,12 +80,13 @@ func TestAssistantCoordinator_InitAgenticToggle(t *testing.T) {
 	t.Run("agentic enabled maps agents onto configured models", func(t *testing.T) {
 		ac, srv := newCoordinator()
 
-		// Map both hardcoded agents onto the deployment's configured model.
+		// Map all hardcoded agents onto the deployment's configured model.
 		err := ac.Init(module.ModuleConfig{
 			"agentic": true,
 			"agentMapping": map[string]any{
-				"Orchestrator": "Classic",
-				"Hunter":       "Classic",
+				"Orchestrator":       "Classic",
+				"Investigator":       "Classic",
+				"Detection Engineer": "Classic",
 			},
 		})
 		assert.NoError(t, err)
@@ -96,30 +97,51 @@ func TestAssistantCoordinator_InitAgenticToggle(t *testing.T) {
 		assert.Equal(t, configuredModels(), srv.Config.ClientParams.AssistantParams.AvailableModels)
 
 		// The hardcoded agents are defined and their mapping loaded.
-		assert.Len(t, ac.agents, 2)
+		assert.Len(t, ac.agents, 3)
 		assert.Equal(t, "Classic", ac.agentMapping["Orchestrator"])
-		assert.Equal(t, "Classic", ac.agentMapping["Hunter"])
+		assert.Equal(t, "Classic", ac.agentMapping["Investigator"])
+		assert.Equal(t, "Classic", ac.agentMapping["Detection Engineer"])
 
 		// The agentic flag, agent list, and mapping are exposed to clients.
 		assert.True(t, srv.Config.ClientParams.AssistantParams.Agentic)
-		assert.Len(t, srv.Config.ClientParams.AssistantParams.AvailableAgents, 2)
+		assert.Len(t, srv.Config.ClientParams.AssistantParams.AvailableAgents, 3)
 		assert.Equal(t, map[string]string{
-			"Orchestrator": "Classic",
-			"Hunter":       "Classic",
+			"Orchestrator":       "Classic",
+			"Investigator":       "Classic",
+			"Detection Engineer": "Classic",
 		}, srv.Config.ClientParams.AssistantParams.AgentMapping)
 
-		// Delegate tools are created for the agents.
-		assert.NotEmpty(t, ac.DelegationLibrary)
+		// Delegation topology: hub-and-spoke plus the Investigator -> Engineer
+		// handoff edge; the Engineer is terminal.
+		assert.ElementsMatch(t, []string{"Investigator", "Detection Engineer"}, ac.agents["Orchestrator"].CanDelegateTo)
+		assert.Equal(t, []string{"Detection Engineer"}, ac.agents["Investigator"].CanDelegateTo)
+		assert.Empty(t, ac.agents["Detection Engineer"].CanDelegateTo)
+
+		// Skill wiring is a permission boundary: Tuning (the write skill) is
+		// Engineer-only, and the Orchestrator holds no skills.
+		assert.ElementsMatch(t, []string{"Hunt", "Playbooks", "Respond"}, ac.agents["Investigator"].AllowedSkills)
+		assert.ElementsMatch(t, []string{"Detections", "Tuning", "Hunt"}, ac.agents["Detection Engineer"].AllowedSkills)
+		assert.Empty(t, ac.agents["Orchestrator"].AllowedSkills)
+
+		// Delegate tools are registered under both the agent name and the
+		// sanitized tool name.
+		for _, key := range []string{
+			"Investigator", "delegate_to_Investigator",
+			"Detection Engineer", "delegate_to_Detection_Engineer",
+		} {
+			_, ok := ac.DelegationLibrary[key]
+			assert.True(t, ok, "missing delegate registration for %s", key)
+		}
 	})
 
 	t.Run("agentic enabled drops agents with no valid mapping", func(t *testing.T) {
 		ac, srv := newCoordinator()
 
-		// Only Hunter is mapped; Orchestrator and a bogus model mapping are dropped.
+		// Only the Investigator is mapped; the unmapped agents are dropped.
 		err := ac.Init(module.ModuleConfig{
 			"agentic": true,
 			"agentMapping": map[string]any{
-				"Hunter": "Classic",
+				"Investigator": "Classic",
 			},
 		})
 		assert.NoError(t, err)
@@ -128,12 +150,22 @@ func TestAssistantCoordinator_InitAgenticToggle(t *testing.T) {
 
 		// Only the validly-mapped agent survives.
 		assert.Len(t, ac.agents, 1)
-		_, hasHunter := ac.agents["Hunter"]
-		assert.True(t, hasHunter)
+		_, hasInvestigator := ac.agents["Investigator"]
+		assert.True(t, hasInvestigator)
 		assert.Len(t, srv.Config.ClientParams.AssistantParams.AvailableAgents, 1)
 
 		// The exposed mapping only includes the surviving agent.
-		assert.Equal(t, map[string]string{"Hunter": "Classic"}, srv.Config.ClientParams.AssistantParams.AgentMapping)
+		assert.Equal(t, map[string]string{"Investigator": "Classic"}, srv.Config.ClientParams.AssistantParams.AgentMapping)
+
+		// No delegate tool is registered for the dropped Detection Engineer, so
+		// the Investigator's CanDelegateTo edge degrades to no tool rather than
+		// a delegate targeting an agent that cannot run.
+		_, ok := ac.DelegationLibrary["Detection Engineer"]
+		assert.False(t, ok)
+		_, ok = ac.DelegationLibrary["delegate_to_Detection_Engineer"]
+		assert.False(t, ok)
+		_, ok = ac.DelegationLibrary["Investigator"]
+		assert.True(t, ok)
 	})
 }
 
@@ -163,10 +195,10 @@ func TestAssistantCoordinator_UnzipAndUnmarshal(t *testing.T) {
 	}{
 		{
 			name: "valid gzipped JSON decodes to a map",
-			data: gzipString(t, `{"prompt_agent_hunter": "You are a hunter.", "prompt_skill_hunt": "Query events."}`),
+			data: gzipString(t, `{"prompt_agent_investigator": "You are an investigator.", "prompt_skill_hunt": "Query events."}`),
 			expected: map[string]string{
-				"prompt_agent_hunter": "You are a hunter.",
-				"prompt_skill_hunt":   "Query events.",
+				"prompt_agent_investigator": "You are an investigator.",
+				"prompt_skill_hunt":         "Query events.",
 			},
 		},
 		{
@@ -181,7 +213,7 @@ func TestAssistantCoordinator_UnzipAndUnmarshal(t *testing.T) {
 		},
 		{
 			name:     "non-gzip bytes yield an empty map",
-			data:     []byte(`{"prompt_agent_hunter": "not compressed"}`),
+			data:     []byte(`{"prompt_agent_investigator": "not compressed"}`),
 			expected: map[string]string{},
 		},
 		{

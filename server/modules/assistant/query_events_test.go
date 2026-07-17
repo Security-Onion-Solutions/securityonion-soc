@@ -184,6 +184,56 @@ func TestQueryEventsTool_Execute(t *testing.T) {
 	}
 }
 
+// TestQueryEventsTool_GroupByNullSentinel verifies that junk sentinel values for
+// the optional groupby_field (the literal "null", "none", "nil", or blank/whitespace)
+// are treated as "not grouping" instead of being appended to the query as
+// `| groupby <value>`, which turns a lookup into an aggregation and silently
+// returns empty results. Regression test for models emitting `"groupby_field":
+// "null"` on _id lookups.
+func TestQueryEventsTool_GroupByNullSentinel(t *testing.T) {
+	sentinels := []string{"null", "NULL", "Null", "none", "nil", "", "  "}
+
+	for _, sentinel := range sentinels {
+		t.Run("sentinel="+sentinel, func(t *testing.T) {
+			mockEventstore := server.NewFakeEventstore()
+			mockEventstore.SearchResults = []*model.EventSearchResults{
+				{
+					Events: []*model.EventRecord{
+						{Source: "test-index", Id: "alert-1", Payload: map[string]any{"@timestamp": "2024-01-01T00:00:00Z", "tags": []string{"alert"}}},
+					},
+					TotalEvents: 1,
+					Metrics:     make(map[string][]*model.EventMetric),
+				},
+			}
+
+			mockServer := &server.Server{Eventstore: mockEventstore}
+			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user-id")
+
+			params, err := json.Marshal(map[string]any{
+				"oql_query":     `_id:"abc123"`,
+				"groupby_field": sentinel,
+				"limit":         1,
+			})
+			assert.NoError(t, err)
+
+			tool := &QueryEventsTool{}
+			result, err := tool.Execute(ctx, mockServer, &model.ToolRequest{Params: json.RawMessage(params)})
+
+			assert.NoError(t, err)
+			assert.NotNil(t, result)
+
+			// The query must not be turned into a groupby aggregation.
+			assert.Len(t, mockEventstore.InputSearchCriterias, 1)
+			assert.NotContains(t, mockEventstore.InputSearchCriterias[0].RawQuery, "groupby")
+
+			// It must take the raw-events path and return the event, not metrics.
+			assert.Equal(t, []map[string]any{
+				{"payload": map[string]any{"_id": "alert-1", "@timestamp": "2024-01-01T00:00:00Z", "tags": []string{"alert"}}},
+			}, result.Result)
+		})
+	}
+}
+
 func TestFilterEvents(t *testing.T) {
 	testCases := []struct {
 		name         string
