@@ -135,6 +135,15 @@ func (t *QueryEventsTool) Execute(ctx context.Context, server *server.Server, re
 		query = `NOT metadata.raw_index:"logs-soc-so"`
 	}
 
+	// Treat junk sentinels as "not grouping"; models send these instead of
+	// omitting groupby_field, and grouping on one returns empty results.
+	if args.GroupByField != nil {
+		switch strings.ToLower(strings.TrimSpace(*args.GroupByField)) {
+		case "", "null", "none", "nil":
+			args.GroupByField = nil
+		}
+	}
+
 	if args.GroupByField != nil && *args.GroupByField != "" {
 		eventLimit = 10000
 		if args.Limit > 0 {
