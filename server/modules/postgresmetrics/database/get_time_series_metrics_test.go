@@ -32,7 +32,7 @@ func TestStore_GetTimeSeriesMetrics(t *testing.T) {
 			},
 		}
 		s := New(mockDb)
-		res, err := s.GetTimeSeriesMetrics(ctx, "host1", "cpu", startTime, endTime)
+		res, err := s.GetTimeSeriesMetrics(ctx, "host1", "", "cpu", startTime, endTime)
 		assert.NoError(t, err)
 		assert.Contains(t, res, "cpu_used")
 		assert.Len(t, res["cpu_used"], 1)
@@ -50,7 +50,7 @@ func TestStore_GetTimeSeriesMetrics(t *testing.T) {
 			},
 		}
 		s := New(mockDb)
-		res, err := s.GetTimeSeriesMetrics(ctx, "", "eps", startTime, endTime)
+		res, err := s.GetTimeSeriesMetrics(ctx, "host1", "", "eps", startTime, endTime)
 		assert.NoError(t, err)
 		assert.Contains(t, res, "consumption_eps")
 		assert.Len(t, res["consumption_eps"], 0)
@@ -69,10 +69,50 @@ func TestStore_GetTimeSeriesMetrics(t *testing.T) {
 			},
 		}
 		s := New(mockDb)
-		_, err := s.GetTimeSeriesMetrics(ctx, "", "cpu", startTime, endTime)
+		_, err := s.GetTimeSeriesMetrics(ctx, "host1", "", "cpu", startTime, endTime)
 		assert.Error(t, err)
 		var pgErr *pgconn.PgError
 		assert.True(t, errors.As(err, &pgErr))
 		assert.Equal(t, "42P02", pgErr.Code)
+	})
+
+	t.Run("All Hosts query groups by host and formats keys", func(t *testing.T) {
+		mockDb := &MockDB{
+			QueryFunc: func(ctx context.Context, sql string, args ...any) (db.Rows, error) {
+				return &MockRows{
+					rows: [][]interface{}{
+						{time.Now(), "host-a", 33.3},
+						{time.Now(), "host-b", 44.4},
+					},
+				}, nil
+			},
+		}
+		s := New(mockDb)
+		res, err := s.GetTimeSeriesMetrics(ctx, "", "", "cpu", startTime, endTime)
+		assert.NoError(t, err)
+		assert.Contains(t, res, "host-a")
+		assert.Contains(t, res, "host-b")
+		assert.Len(t, res["host-a"], 1)
+		assert.Equal(t, 33.3, res["host-a"][0].Value)
+	})
+
+	t.Run("Container query filters by container", func(t *testing.T) {
+		mockDb := &MockDB{
+			QueryFunc: func(ctx context.Context, sql string, args ...any) (db.Rows, error) {
+				// Assert that the container name was passed in the query args
+				assert.Contains(t, args, "so-redis")
+				return &MockRows{
+					rows: [][]interface{}{
+						{time.Now(), "host-a", "so-redis", 12.3},
+					},
+				}, nil
+			},
+		}
+		s := New(mockDb)
+		res, err := s.GetTimeSeriesMetrics(ctx, "", "so-redis", "container_cpu", startTime, endTime)
+		assert.NoError(t, err)
+		assert.Contains(t, res, "host-a::so-redis")
+		assert.Len(t, res["host-a::so-redis"], 1)
+		assert.Equal(t, 12.3, res["host-a::so-redis"][0].Value)
 	})
 }

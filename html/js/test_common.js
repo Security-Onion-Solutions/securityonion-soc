@@ -285,6 +285,7 @@ global.mockShowError = function(logError = false) {
 // Import SO app modules
 ////////////////////////////////////
 require('./i18n.js');
+require('./graphing.js');
 
 // stub Promise.all so it's synchronous
 const orig = Promise.all;

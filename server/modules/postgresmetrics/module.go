@@ -44,6 +44,18 @@ func (mod *PostgresMetricsModule) Init(cfg module.ModuleConfig) error {
 	cacheExpirationMs := module.GetIntDefault(cfg, "cacheExpirationMs", DEFAULT_CACHE_EXPIRATION_MS)
 	maxMetricAgeSeconds := module.GetIntDefault(cfg, "maxMetricAgeSeconds", DEFAULT_MAX_METRIC_AGE_SECONDS)
 
+	if mod.server != nil {
+		if len(mod.server.Config.ClientParams.GridParams.MetricsDashboard) == 0 || string(mod.server.Config.ClientParams.GridParams.MetricsDashboard) == "null" {
+			dashBytes, err := database.GenerateDefaultMetricsDashboard()
+			if err != nil {
+				log.WithError(err).Error("postgresmetrics module: failed to generate default metrics dashboard")
+			} else {
+				mod.server.Config.ClientParams.GridParams.MetricsDashboard = dashBytes
+				log.Info("postgresmetrics module: generated default metrics dashboard on the server")
+			}
+		}
+	}
+
 	host := module.GetStringDefault(cfg, "host", "")
 	if host == "" {
 		log.Info("No host configured for postgresmetrics module; skipping database initialization")

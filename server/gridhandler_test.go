@@ -93,7 +93,7 @@ func TestGetNodes(t *testing.T) {
 type MockMetrics struct {
 	GetGridEpsFunc           func(ctx context.Context) int
 	UpdateNodeMetricsFunc    func(ctx context.Context, node *model.Node) bool
-	GetTimeSeriesMetricsFunc func(ctx context.Context, nodeId string, metricType string, startTime, endTime time.Time) (map[string][]model.MetricSample, error)
+	GetTimeSeriesMetricsFunc func(ctx context.Context, nodeId, container string, metricType string, startTime, endTime time.Time) (map[string][]model.MetricSample, error)
 }
 
 func (m *MockMetrics) GetGridEps(ctx context.Context) int {
@@ -110,9 +110,9 @@ func (m *MockMetrics) UpdateNodeMetrics(ctx context.Context, node *model.Node) b
 	return false
 }
 
-func (m *MockMetrics) GetTimeSeriesMetrics(ctx context.Context, nodeId string, metricType string, startTime, endTime time.Time) (map[string][]model.MetricSample, error) {
+func (m *MockMetrics) GetTimeSeriesMetrics(ctx context.Context, nodeId, container string, metricType string, startTime, endTime time.Time) (map[string][]model.MetricSample, error) {
 	if m.GetTimeSeriesMetricsFunc != nil {
-		return m.GetTimeSeriesMetricsFunc(ctx, nodeId, metricType, startTime, endTime)
+		return m.GetTimeSeriesMetricsFunc(ctx, nodeId, container, metricType, startTime, endTime)
 	}
 	return nil, nil
 }
@@ -176,7 +176,7 @@ func TestGetMetricsHistory(t *testing.T) {
 		}
 
 		mockMetrics := &MockMetrics{
-			GetTimeSeriesMetricsFunc: func(ctx context.Context, nodeId string, metricType string, startTime, endTime time.Time) (map[string][]model.MetricSample, error) {
+			GetTimeSeriesMetricsFunc: func(ctx context.Context, nodeId, container string, metricType string, startTime, endTime time.Time) (map[string][]model.MetricSample, error) {
 				assert.Equal(t, "node1", nodeId)
 				assert.Equal(t, "cpu", metricType)
 				return expectedData, nil
@@ -204,7 +204,7 @@ func TestGetMetricsHistory(t *testing.T) {
 
 	t.Run("unauthorized error", func(t *testing.T) {
 		mockMetrics := &MockMetrics{
-			GetTimeSeriesMetricsFunc: func(ctx context.Context, nodeId string, metricType string, startTime, endTime time.Time) (map[string][]model.MetricSample, error) {
+			GetTimeSeriesMetricsFunc: func(ctx context.Context, nodeId, container string, metricType string, startTime, endTime time.Time) (map[string][]model.MetricSample, error) {
 				return nil, model.NewUnauthorized("user", "read", "nodes")
 			},
 		}
@@ -223,7 +223,7 @@ func TestGetMetricsHistory(t *testing.T) {
 
 	t.Run("internal error", func(t *testing.T) {
 		mockMetrics := &MockMetrics{
-			GetTimeSeriesMetricsFunc: func(ctx context.Context, nodeId string, metricType string, startTime, endTime time.Time) (map[string][]model.MetricSample, error) {
+			GetTimeSeriesMetricsFunc: func(ctx context.Context, nodeId, container string, metricType string, startTime, endTime time.Time) (map[string][]model.MetricSample, error) {
 				return nil, customTestError{}
 			},
 		}

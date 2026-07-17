@@ -8,96 +8,76 @@ const gridRouteForMetrics = routes.find(r => r.name === 'grid');
 if (gridRouteForMetrics && gridRouteForMetrics.component) {
   Object.assign(gridRouteForMetrics.component.methods, {
     initMetricsCharts() {
-      this.setupMetricsChart('cpu', this.i18n.metricsCpuUsage, [this.i18n.cpuUsageAbbr], [this.$root.getColor("primary")]);
-      this.setupMetricsChart('memory', this.i18n.metricsMemUsage, [this.i18n.memUsageAbbr], [this.$root.getColor("primary")]);
-      this.setupMetricsChart('load', this.i18n.loadAverage, [this.i18n.metricsLoad1, this.i18n.metricsLoad5, this.i18n.metricsLoad15], ["#4dc9f6", "#f67019", "#f53794"]);
-      this.setupMetricsChart('disk', this.i18n.metricsDiskUsage, [this.i18n.metricsDiskRoot, this.i18n.metricsDiskNsm], ["#4dc9f6", "#acc236"]);
-      this.setupMetricsChart('net', this.i18n.metricsNetTraffic, [this.i18n.metricsTrafficManIn, this.i18n.metricsTrafficManOut, this.i18n.metricsTrafficMonIn], ["#4dc9f6", "#f67019", "#00a950"]);
-      this.setupMetricsChart('eps', this.i18n.eps, [this.i18n.metricsConsumptionEps, this.i18n.metricsProductionEps], ["#4dc9f6", "#f67019"]);
-    },
-    setupMetricsChart(chartKey, title, datasetLabels, colors) {
+      var dashboard = { panels: [] };
+      if (this.$root.parameters && this.$root.parameters.grid && this.$root.parameters.grid.metricsDashboard) {
+        try {
+          dashboard = typeof this.$root.parameters.grid.metricsDashboard === 'string' ?
+                      JSON.parse(this.$root.parameters.grid.metricsDashboard) :
+                      this.$root.parameters.grid.metricsDashboard;
+        } catch (e) {
+          console.error("Failed to parse metricsDashboard template:", e);
+        }
+      }
+
       const fontColor = this.$root.getColor("#888888", -40);
       const gridColor = this.$root.getColor("#888888", 65);
-      const newOptions = {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: {
-            display: datasetLabels.length > 1,
-            labels: { color: fontColor }
-          },
-          title: {
-            display: true,
-            text: title,
-            color: fontColor,
-          }
-        },
-        scales: {
-          y: {
-            grid: { color: gridColor },
-            ticks: { color: fontColor }
-          },
-          x: {
-            type: 'timeseries',
-            grid: { color: gridColor },
-            ticks: { color: fontColor }
+      const primaryColor = this.$root.getColor("primary");
+
+      this.metricPanels = (dashboard.panels || []).map(panel => {
+        const chartData = { key: 0, labels: [], datasets: [] };
+        const chartOptions = {};
+
+        const i18n = this.$root.i18n || {};
+        const title = panel.titleKey ? (i18n[panel.titleKey] || panel.title) : (panel.title || panel.id);
+        const labels = panel.labelKeys ? panel.labelKeys.map(k => i18n[k] || k) : (panel.labels || panel.keys);
+
+        if (panel.type === 'line_chart') {
+          window.socGraphing.setupTimelineChart(chartOptions, chartData, title, fontColor, gridColor, primaryColor, panel.units);
+          chartOptions.onResize = this.debounceChartResize;
+          if (panel.keys && panel.keys.length > 0) {
+            chartData.datasets = panel.keys.map((k, idx) => ({
+              label: labels ? labels[idx] : k,
+              borderColor: panel.colors && panel.colors[idx] ? panel.colors[idx] : primaryColor,
+              backgroundColor: panel.colors && panel.colors[idx] ? panel.colors[idx] : primaryColor,
+              borderWidth: 1,
+              pointRadius: 0,
+              fill: false,
+              tension: 0.1,
+              data: []
+            }));
           }
         }
-      };
 
-      const newData = {
-        key: 0,
-        labels: [],
-        datasets: datasetLabels.map((lbl, idx) => ({
-          label: lbl,
-          data: [],
-          borderColor: colors[idx] || this.$root.getColor("primary"),
-          backgroundColor: colors[idx] || this.$root.getColor("primary"),
-          pointRadius: 2,
-          fill: false,
-          tension: 0.1
-        }))
-      };
-
-      if (chartKey === 'cpu') {
-        this.chartCpuOptions = newOptions;
-        this.chartCpuData = newData;
-      } else if (chartKey === 'memory') {
-        this.chartMemoryOptions = newOptions;
-        this.chartMemoryData = newData;
-      } else if (chartKey === 'load') {
-        this.chartLoadOptions = newOptions;
-        this.chartLoadData = newData;
-      } else if (chartKey === 'disk') {
-        this.chartDiskOptions = newOptions;
-        this.chartDiskData = newData;
-      } else if (chartKey === 'net') {
-        this.chartNetOptions = newOptions;
-        this.chartNetData = newData;
-      } else if (chartKey === 'eps') {
-        this.chartEpsOptions = newOptions;
-        this.chartEpsData = newData;
-      }
+        return {
+          ...panel,
+          chartData,
+          chartOptions,
+          singleStatValue: 'N/A',
+          loading: false
+        };
+      });
     },
     async loadHistoricalMetrics(isRefresh = false) {
       if (!isRefresh) {
         this.metricsLoading = true;
       }
       try {
-        let rangeParam = '';
-        if (this.metricsTimeRange === '1h') {
-          rangeParam = 'now-1h:now';
-        } else if (this.metricsTimeRange === '24h') {
-          rangeParam = 'now-24h:now';
-        } else if (this.metricsTimeRange === '7d') {
-          rangeParam = 'now-7d:now';
-        }
+        const range = this.metricsTimeRange || '1h';
+        const rangeParam = `now-${range}:now`;
         
         const params = {
           nodeId: this.metricsNodeId,
+          container: this.metricsContainerId,
           range: rangeParam,
           format: 'local',
-          zone: this.zone
+          zone: this.zone || 'UTC'
+        };
+
+        this.lastLoadedMetricsParams = {
+          nodeId: this.metricsNodeId,
+          container: this.metricsContainerId,
+          timeRange: this.metricsTimeRange,
+          zone: this.zone || 'UTC'
         };
 
         const fetchMetric = async (metricName) => {
@@ -105,21 +85,41 @@ if (gridRouteForMetrics && gridRouteForMetrics.component) {
           return res.data;
         };
 
-        const [cpuData, memData, loadData, diskData, netData, epsData] = await Promise.all([
-          fetchMetric('cpu'),
-          fetchMetric('memory'),
-          fetchMetric('load'),
-          fetchMetric('disk'),
-          fetchMetric('net'),
-          fetchMetric('eps')
-        ]);
+        // Gather all unique metric types from our active panel list
+        const uniqueMetricTypes = [...new Set((this.metricPanels || []).map(p => p.metric))];
 
-        this.populateMetricsChart(this.chartCpuData, cpuData, ['cpu_used']);
-        this.populateMetricsChart(this.chartMemoryData, memData, ['memory_used']);
-        this.populateMetricsChart(this.chartLoadData, loadData, ['load1', 'load5', 'load15']);
-        this.populateMetricsChart(this.chartDiskData, diskData, ['disk_used_root', 'disk_used_nsm']);
-        this.populateMetricsChart(this.chartNetData, netData, ['traffic_man_in', 'traffic_man_out', 'traffic_mon_in']);
-        this.populateMetricsChart(this.chartEpsData, epsData, ['consumption_eps', 'production_eps']);
+        // Mark all panels that will be loaded as loading
+        (this.metricPanels || []).forEach(panel => {
+          if (uniqueMetricTypes.includes(panel.metric)) {
+            panel.loading = true;
+          }
+        });
+        
+        // Fetch and populate metrics in parallel as they return
+        await Promise.all(uniqueMetricTypes.map(async (mType) => {
+          let mData;
+          try {
+            mData = await fetchMetric(mType);
+          } catch (e) {
+            console.error("Failed to fetch metric:", mType, e);
+          }
+          (this.metricPanels || []).forEach(panel => {
+            if (panel.metric === mType) {
+              if (panel.type === 'line_chart') {
+                this.populateMetricsChart(panel.chartData, mData, panel.keys, panel.colors);
+              } else if (panel.type === 'single_stat') {
+                const series = mData ? mData[panel.key] : null;
+                if (series && series.length > 0) {
+                  const latestVal = series[series.length - 1].value;
+                  panel.singleStatValue = typeof latestVal === 'number' ? Number(latestVal.toFixed(1)) : latestVal;
+                } else {
+                  panel.singleStatValue = 'N/A';
+                }
+              }
+              panel.loading = false;
+            }
+          });
+        }));
         
       } catch (error) {
         this.$root.showError(error);
@@ -127,19 +127,55 @@ if (gridRouteForMetrics && gridRouteForMetrics.component) {
         if (!isRefresh) {
           this.metricsLoading = false;
         }
+        (this.metricPanels || []).forEach(panel => {
+          panel.loading = false;
+        });
       }
     },
-    populateMetricsChart(chart, responseData, keys) {
+    populateMetricsChart(chart, responseData, keys, colors) {
       chart.key++;
-      keys.forEach((k, idx) => {
-        const dataset = chart.datasets[idx];
-        if (dataset) {
-          dataset.data = (responseData && responseData[k]) ? responseData[k].map(item => ({
-            x: new Date(item.timestamp),
-            y: item.value
-          })) : [];
-        }
-      });
+      const zone = this.zone || 'UTC';
+      const primaryColor = this.$root.getColor ? this.$root.getColor("primary") : "#123456";
+      const lineColors = (colors && colors.length > 0) ? colors : [primaryColor];
+
+      const responseKeys = Object.keys(responseData || {}).sort();
+      const hasMismatch = responseKeys.length > 0 && !responseKeys.every(k => keys.includes(k));
+
+      if (hasMismatch) {
+        chart.datasets = responseKeys.map((k, idx) => {
+          const color = lineColors[idx % lineColors.length];
+          return {
+            label: k,
+            borderColor: color,
+            backgroundColor: color,
+            borderWidth: 1,
+            pointRadius: 0,
+            fill: false,
+            tension: 0.1,
+            data: responseData[k].map(item => ({
+              x: new Date(moment.utc(item.timestamp).tz(zone).format('YYYY-MM-DDTHH:mm:ss')),
+              y: item.value
+            }))
+          };
+        });
+      } else {
+        keys.forEach((k, idx) => {
+          const dataset = chart.datasets[idx];
+          if (dataset) {
+            dataset.data = (responseData && responseData[k]) ? responseData[k].map(item => ({
+              x: new Date(moment.utc(item.timestamp).tz(zone).format('YYYY-MM-DDTHH:mm:ss')),
+              y: item.value
+            })) : [];
+          }
+        });
+      }
+    },
+    debounceChartResize(chart, size) {
+      window.socGraphing.debounceChartResize(chart, size, this.chartResizeTracker);
+    },
+    getMetricPanelCardHeight(panel) {
+      const panelHeight = panel && panel.height;
+      return (panelHeight ? (panelHeight + 60) : 310) + 'px';
     },
     setupMetricsAutoRefresh() {
       if (this.metricsRefreshInterval) {

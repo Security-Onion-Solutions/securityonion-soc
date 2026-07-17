@@ -9,10 +9,12 @@ package postgresmetrics
 import (
 	"context"
 	"embed"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/postgresmetrics/database"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/db"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -126,21 +128,21 @@ func TestPostgresMetrics_GetTimeSeriesMetrics(t *testing.T) {
 	startTime := time.Now().Add(-1 * time.Hour)
 	endTime := time.Now()
 
-	res, err := pm.GetTimeSeriesMetrics(ctx, "host1", "cpu", startTime, endTime)
+	res, err := pm.GetTimeSeriesMetrics(ctx, "host1", "", "cpu", startTime, endTime)
 	assert.NoError(t, err)
 	assert.Contains(t, res, "cpu_used")
 	assert.Len(t, res["cpu_used"], 1)
 	assert.Equal(t, 25.5, res["cpu_used"][0].Value)
 
-	res, err = pm.GetTimeSeriesMetrics(ctx, "host1", "memory", startTime, endTime)
+	res, err = pm.GetTimeSeriesMetrics(ctx, "host1", "", "memory", startTime, endTime)
 	assert.NoError(t, err)
 	assert.Contains(t, res, "memory_used")
 
-	res, err = pm.GetTimeSeriesMetrics(ctx, "host1", "load", startTime, endTime)
+	res, err = pm.GetTimeSeriesMetrics(ctx, "host1", "", "load", startTime, endTime)
 	assert.NoError(t, err)
 	assert.Contains(t, res, "load1")
 
-	res, err = pm.GetTimeSeriesMetrics(ctx, "host1", "disk", startTime, endTime)
+	res, err = pm.GetTimeSeriesMetrics(ctx, "host1", "", "disk", startTime, endTime)
 	assert.NoError(t, err)
 	assert.Contains(t, res, "disk_used_root")
 }
@@ -280,3 +282,50 @@ func TestPostgresMetrics_UpdateNodeMetrics_And_GetGridEps(t *testing.T) {
 	assert.Equal(t, `{"foo":"bar"}`, node.ProcessJson)
 	assert.Equal(t, model.NodeStatusOk, node.EventstoreStatus)
 }
+
+func TestGenerateDefaultMetricsDashboard(t *testing.T) {
+	bytes, err := database.GenerateDefaultMetricsDashboard()
+	assert.NoError(t, err)
+	assert.NotEmpty(t, bytes)
+
+	var dash database.MetricsDashboard
+	err = json.Unmarshal(bytes, &dash)
+	assert.NoError(t, err)
+	assert.Len(t, dash.Panels, 26)
+	assert.Equal(t, "cpu", dash.Panels[0].ID)
+	assert.Equal(t, "metricsCpuUsage", dash.Panels[0].TitleKey)
+	assert.Equal(t, "percent", dash.Panels[0].Units)
+
+	var foundSize, foundNet bool
+	for _, p := range dash.Panels {
+		if p.ID == "elasticsearch_size" {
+			assert.Equal(t, "byte", p.Units)
+			foundSize = true
+		}
+		if p.ID == "net" {
+			assert.Equal(t, "bits", p.Units)
+			foundNet = true
+		}
+	}
+	assert.True(t, foundSize)
+	assert.True(t, foundNet)
+}
+
+func TestPostgresMetricsModule_Init_DefaultDashboard(t *testing.T) {
+	srv := server.NewFakeAuthorizedServer(make(map[string][]string))
+	mod := NewPostgresMetricsModule(srv)
+
+	cfg := make(map[string]interface{})
+	err := mod.Init(cfg)
+	assert.NoError(t, err)
+
+	// Since MetricsDashboard was empty, Init should have populated it with default dashboard
+	dashBytes := srv.Config.ClientParams.GridParams.MetricsDashboard
+	assert.NotEmpty(t, dashBytes)
+
+	var dash database.MetricsDashboard
+	err = json.Unmarshal(dashBytes, &dash)
+	assert.NoError(t, err)
+	assert.Len(t, dash.Panels, 26)
+}
+
