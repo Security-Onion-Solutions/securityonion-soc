@@ -184,12 +184,9 @@ func TestQueryEventsTool_Execute(t *testing.T) {
 	}
 }
 
-// TestQueryEventsTool_GroupByNullSentinel verifies that junk sentinel values for
-// the optional groupby_field (the literal "null", "none", "nil", or blank/whitespace)
-// are treated as "not grouping" instead of being appended to the query as
-// `| groupby <value>`, which turns a lookup into an aggregation and silently
-// returns empty results. Regression test for models emitting `"groupby_field":
-// "null"` on _id lookups.
+// TestQueryEventsTool_GroupByNullSentinel checks that junk groupby_field sentinels
+// ("null", "none", "nil", blank/whitespace) fall back to the non-grouping path
+// rather than becoming `| groupby <value>` and returning empty results.
 func TestQueryEventsTool_GroupByNullSentinel(t *testing.T) {
 	sentinels := []string{"null", "NULL", "Null", "none", "nil", "", "  "}
 
@@ -222,11 +219,11 @@ func TestQueryEventsTool_GroupByNullSentinel(t *testing.T) {
 			assert.NoError(t, err)
 			assert.NotNil(t, result)
 
-			// The query must not be turned into a groupby aggregation.
+			// No groupby appended to the query.
 			assert.Len(t, mockEventstore.InputSearchCriterias, 1)
 			assert.NotContains(t, mockEventstore.InputSearchCriterias[0].RawQuery, "groupby")
 
-			// It must take the raw-events path and return the event, not metrics.
+			// Raw-events path: returns the event, not metrics.
 			assert.Equal(t, []map[string]any{
 				{"payload": map[string]any{"_id": "alert-1", "@timestamp": "2024-01-01T00:00:00Z", "tags": []string{"alert"}}},
 			}, result.Result)

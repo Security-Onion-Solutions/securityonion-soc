@@ -135,8 +135,8 @@ func (t *QueryEventsTool) Execute(ctx context.Context, server *server.Server, re
 		query = `NOT metadata.raw_index:"logs-soc-so"`
 	}
 
-	// Models regularly send junk sentinels instead of omitting the optional
-	// groupby_field; grouping on such a value silently returns empty results.
+	// Treat junk sentinels as "not grouping"; models send these instead of
+	// omitting groupby_field, and grouping on one returns empty results.
 	if args.GroupByField != nil {
 		switch strings.ToLower(strings.TrimSpace(*args.GroupByField)) {
 		case "", "null", "none", "nil":
