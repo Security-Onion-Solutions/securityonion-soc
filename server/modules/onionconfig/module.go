@@ -47,18 +47,19 @@ func (mod *OnionConfigModule) Init(cfg module.ModuleConfig) error {
 }
 
 func (mod *OnionConfigModule) Start() error {
-	go func() {
-		if mod.server.DB != nil {
-			var err error
-			mod.store, err = database.New(context.Background(), mod.server.DB)
-			if err != nil {
-				log.WithError(err).Error("onionconfig: database init failed")
-				return
-			}
-		} else {
-			log.Info("No database available for onionconfig; running without database")
+	if mod.server.DB != nil {
+		var err error
+		mod.store, err = database.New(context.Background(), mod.server.DB)
+		if err != nil {
+			log.WithError(err).Error("onionconfig: database init failed")
+			return err
 		}
-		mod.impl.Start(mod.store)
+	}
+	go func() {
+		err := mod.impl.Start(mod.store)
+		if err != nil {
+			log.WithError(err).Error("onionconfig: failed to start")
+		}
 	}()
 	return nil
 }
