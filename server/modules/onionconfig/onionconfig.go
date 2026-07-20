@@ -61,8 +61,13 @@ func (c *OnionConfig) Start(store *database.Store) error {
 	return err
 }
 
-func (c *OnionConfig) waitReady() {
-	<-c.ready
+func (c *OnionConfig) waitReady(ctx context.Context) error {
+	select {
+	case <-c.ready:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (c *OnionConfig) PreloadConfiguration() error {
@@ -91,7 +96,9 @@ func (c *OnionConfig) PreloadConfiguration() error {
 }
 
 func (c *OnionConfig) GetSettings(ctx context.Context, advanced bool) ([]*model.Setting, error) {
-	c.waitReady()
+	if err := c.waitReady(ctx); err != nil {
+		return nil, err
+	}
 	if err := c.server.CheckAuthorized(ctx, "read", "config"); err != nil {
 		return nil, err
 	}
@@ -105,7 +112,9 @@ func (c *OnionConfig) GetSettings(ctx context.Context, advanced bool) ([]*model.
 }
 
 func (c *OnionConfig) UpdateSetting(ctx context.Context, setting *model.Setting, remove bool) (err error) {
-	c.waitReady()
+	if err = c.waitReady(ctx); err != nil {
+		return err
+	}
 	logger := log.FromContext(ctx)
 
 	if err = c.server.CheckAuthorized(ctx, "write", "config"); err != nil {
@@ -178,7 +187,9 @@ func (c *OnionConfig) routeUpdate(ctx context.Context, setting *model.Setting, o
 }
 
 func (c *OnionConfig) GetAuditHistory(ctx context.Context, settingID, nodeID string, limit, offset int, sort, order string) (*server.ConfigHistory, error) {
-	c.waitReady()
+	if err := c.waitReady(ctx); err != nil {
+		return nil, err
+	}
 	if err := c.server.CheckAuthorized(ctx, "read", "config"); err != nil {
 		return nil, err
 	}
@@ -212,7 +223,9 @@ func (c *OnionConfig) GetAuditHistory(ctx context.Context, settingID, nodeID str
 }
 
 func (c *OnionConfig) GetAllAuditHistory(ctx context.Context, limit, offset int, sort, order string) (*server.ConfigHistory, error) {
-	c.waitReady()
+	if err := c.waitReady(ctx); err != nil {
+		return nil, err
+	}
 	if err := c.server.CheckAuthorized(ctx, "read", "config"); err != nil {
 		return nil, err
 	}
@@ -244,7 +257,9 @@ func (c *OnionConfig) GetAllAuditHistory(ctx context.Context, limit, offset int,
 }
 
 func (c *OnionConfig) RevertSetting(ctx context.Context, settingID, nodeID string, ts time.Time, note string) error {
-	c.waitReady()
+	if err := c.waitReady(ctx); err != nil {
+		return err
+	}
 	if err := c.server.CheckAuthorized(ctx, "write", "config"); err != nil {
 		return err
 	}
@@ -279,7 +294,9 @@ func (c *OnionConfig) RevertSetting(ctx context.Context, settingID, nodeID strin
 }
 
 func (c *OnionConfig) RevertAllSettings(ctx context.Context, ts time.Time, note string) (int, error) {
-	c.waitReady()
+	if err := c.waitReady(ctx); err != nil {
+		return 0, err
+	}
 	if err := c.server.CheckAuthorized(ctx, "write", "config"); err != nil {
 		return 0, err
 	}
@@ -315,7 +332,9 @@ func (c *OnionConfig) RevertAllSettings(ctx context.Context, ts time.Time, note 
 }
 
 func (c *OnionConfig) GetRevertCount(ctx context.Context, ts time.Time) (int, error) {
-	c.waitReady()
+	if err := c.waitReady(ctx); err != nil {
+		return 0, err
+	}
 	if err := c.server.CheckAuthorized(ctx, "read", "config"); err != nil {
 		return 0, err
 	}

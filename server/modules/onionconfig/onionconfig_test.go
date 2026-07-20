@@ -559,3 +559,37 @@ func TestValidateAllowedNodeTypes(t *testing.T) {
 		assert.NoError(t, err)
 	})
 }
+
+func TestWaitReady(t *testing.T) {
+	t.Run("ReadyChannelClosed_ReturnsNil", func(t *testing.T) {
+		ready := make(chan struct{})
+		close(ready)
+		oc := &OnionConfig{
+			ready: ready,
+		}
+		err := oc.waitReady(context.Background())
+		assert.NoError(t, err)
+	})
+
+	t.Run("ContextCancelled_ReturnsCanceled", func(t *testing.T) {
+		ready := make(chan struct{})
+		oc := &OnionConfig{
+			ready: ready,
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		err := oc.waitReady(ctx)
+		assert.Equal(t, context.Canceled, err)
+	})
+
+	t.Run("ContextTimeout_ReturnsDeadlineExceeded", func(t *testing.T) {
+		ready := make(chan struct{})
+		oc := &OnionConfig{
+			ready: ready,
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		defer cancel()
+		err := oc.waitReady(ctx)
+		assert.Equal(t, context.DeadlineExceeded, err)
+	})
+}
