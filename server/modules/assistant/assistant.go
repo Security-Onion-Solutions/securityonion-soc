@@ -409,13 +409,12 @@ func (ac *AssistantCoordinator) IsRunning() bool {
 	return ac.isRunning
 }
 
-func splitModelAdapter(aiModel string) (string, string) {
-	parts := strings.SplitN(aiModel, "@", 2)
-	if len(parts) == 1 {
-		parts = append(parts, "SOAI")
-	}
-
-	return parts[0], parts[1]
+// splitModelAdapter splits a legacy "id@adapter" selector; hasAdapter reports
+// whether an explicit "@adapter" was present. Callers must not assume a default
+// adapter when it is false (a bare id uses the configured model's own adapter).
+func splitModelAdapter(aiModel string) (id string, adapter string, hasAdapter bool) {
+	id, adapter, hasAdapter = strings.Cut(aiModel, "@")
+	return id, adapter, hasAdapter
 }
 
 func estimateRequestChars(req *model.ChatRequest) int {
@@ -444,6 +443,7 @@ func (ac *AssistantCoordinator) validateModelSelectors() {
 	models := ac.srv.Config.ClientParams.AssistantParams.AvailableModels
 
 	seen := map[string]string{}
+	seenID := map[string]string{}
 	for i := range models {
 		m := &models[i]
 		if !m.Enabled {
@@ -460,6 +460,17 @@ func (ac *AssistantCoordinator) validateModelSelectors() {
 			}).Error("model is missing required displayName; disabling it")
 			m.Enabled = false
 			continue
+		}
+
+		// Two enabled models sharing an id make bare-id resolution ambiguous.
+		if owner, dup := seenID[m.ID]; dup {
+			logger.WithFields(log.Fields{
+				"modelId":    m.ID,
+				"firstModel": owner,
+				"alsoModel":  m.LegacySelector(),
+			}).Warn("multiple enabled models share an id; bare-id selectors (e.g. agent mappings) resolve to the first configured one")
+		} else {
+			seenID[m.ID] = m.LegacySelector()
 		}
 
 		if strings.Contains(m.DisplayName, "@") {
@@ -508,15 +519,26 @@ func (ac *AssistantCoordinator) resolveModel(selector string) *model.ModelParame
 		}
 	}
 
-	// Pass 2: legacy id@adapter.
-	modelId, adapterName := splitModelAdapter(selector)
+	// Pass 2: legacy "id@adapter" (matches both), or a bare id (matches id alone
+	// and uses that model's own adapter). Prefer an enabled model, else first match.
+	modelId, adapterName, hasAdapter := splitModelAdapter(selector)
+	var fallback *model.ModelParameters
 	for i := range models {
-		if models[i].ID == modelId && models[i].Adapter == adapterName {
+		if models[i].ID != modelId {
+			continue
+		}
+		if hasAdapter && models[i].Adapter != adapterName {
+			continue
+		}
+		if models[i].Enabled {
 			return &models[i]
+		}
+		if fallback == nil {
+			fallback = &models[i]
 		}
 	}
 
-	return nil
+	return fallback
 }
 
 // resolveAgent resolves an agent name to its definition and the model that
@@ -559,9 +581,14 @@ func (ac *AssistantCoordinator) resolveAdapterName(selector string) string {
 		return params.Adapter
 	}
 
-	_, adapterName := splitModelAdapter(selector)
+	// No model matched: honor an explicit "@adapter" (a registered adapter with
+	// no AvailableModels entry); otherwise return the selector verbatim so the
+	// caller reports it rather than falling back to a phantom default adapter.
+	if _, adapterName, hasAdapter := splitModelAdapter(selector); hasAdapter {
+		return adapterName
+	}
 
-	return adapterName
+	return selector
 }
 
 func (ac *AssistantCoordinator) checkRequestSize(req *model.ChatRequest, params *model.ModelParameters) error {
