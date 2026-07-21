@@ -268,6 +268,7 @@ const i18n = {
       alerts: 'Alerts',
       all: 'All',
       admin: 'Administration',
+      agenticDisabled: 'Agentic is not enabled on this grid. Contact your Security Onion administrator.',
       agentstudio: 'Agent Studio',
       agentStudioAgents: 'Agents',
       agentStudioSkills: 'Skills',
