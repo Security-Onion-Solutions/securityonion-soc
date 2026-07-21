@@ -3271,8 +3271,21 @@ func TestResolveAdapterName(t *testing.T) {
 	// Unconfigured model falls back to the legacy split so a registered adapter
 	// without an AvailableModels entry can still answer.
 	assert.Equal(t, "MyAdapter", ac.resolveAdapterName("other@MyAdapter"))
-	// Bare selector with no match keeps the historical SOAI default.
-	assert.Equal(t, "SOAI", ac.resolveAdapterName("unknown"))
+	// A bare, unresolved selector is returned verbatim, not a phantom default.
+	assert.Equal(t, "unknown", ac.resolveAdapterName("unknown"))
+}
+
+// Regression guard: an agent mapped by bare model id to a non-SOAI adapter must
+// route to that model's real adapter, as the non-agentic DisplayName path does.
+func TestResolveAdapterNameAgenticHonorsModelAdapter(t *testing.T) {
+	ac := newResolveTestCoordinator([]model.ModelParameters{
+		{ID: "sonnet", DisplayName: "Claude Sonnet", Adapter: "SOAIDEV", Enabled: true},
+	})
+	ac.isAgentic = true
+	ac.agents = map[string]model.AgentParameters{"Orchestrator": {Name: "Orchestrator"}}
+	ac.agentMapping = map[string]string{"Orchestrator": "sonnet"}
+
+	assert.Equal(t, "SOAIDEV", ac.resolveAdapterName("Orchestrator"))
 }
 
 // captureAdapter records the ChatRequest handed to it so tests can assert what
