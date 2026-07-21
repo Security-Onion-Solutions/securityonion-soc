@@ -213,11 +213,21 @@
     </v-col>
   </v-row>
 </v-container>
-<v-container v-else-if="$root.isLicensed('oai')" fluid data-aid="agentstudio_disabled">
+<v-container v-else-if="$root.isLicensed('oai') && !assistantEnabled" fluid data-aid="agentstudio_assistant_disabled">
   <div class="d-flex flex-column align-center justify-center ga-2 agentstudio-notice">
     <div class="my-8 d-flex align-center ga-2">
       <div>{{ i18n.assistantDisabled }}</div>
       <router-link v-if="$root.isUserAdmin()" :to="{name: 'config', query: {s: 'soc.config.server.client.assistant.enabled'}}" class="no-print text-decoration-none" data-aid="agentstudio_config_entry_enabled" :aria-label="i18n.ariaVisitConfigEntry">
+        <v-icon class="mr-2 theme-icon" :title="i18n.visitConfigEntry">fa-gear</v-icon>
+      </router-link>
+    </div>
+  </div>
+</v-container>
+<v-container v-else-if="$root.isLicensed('oai')" fluid data-aid="agentstudio_agentic_disabled">
+  <div class="d-flex flex-column align-center justify-center ga-2 agentstudio-notice">
+    <div class="my-8 d-flex align-center ga-2">
+      <div>{{ i18n.agenticDisabled }}</div>
+      <router-link v-if="$root.isUserAdmin()" :to="{name: 'config', query: {s: 'soc.config.server.modules.assistant.agentic'}}" class="no-print text-decoration-none" data-aid="agentstudio_config_entry_agentic" :aria-label="i18n.ariaVisitConfigEntry">
         <v-icon class="mr-2 theme-icon" :title="i18n.visitConfigEntry">fa-gear</v-icon>
       </router-link>
     </div>

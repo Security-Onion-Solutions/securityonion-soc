@@ -9,6 +9,7 @@ require('./agentstudio.js');
 
 let comp;
 let originalConsole;
+let mockLocalStorage;
 
 // Assistant client parameters for an enabled, licensed, agentic deployment.
 const agenticParams = () => ({
@@ -44,6 +45,34 @@ beforeEach(() => {
   comp.$root.startLoading = jest.fn();
   comp.$root.stopLoading = jest.fn();
   comp.$root.loadParameters = jest.fn();
+
+  // Mock localStorage backed by a plain object, honoring both property access
+  // and removeItem, so save/load settings tests can assert against it.
+  const storageData = {};
+  const localStorageMock = {
+    removeItem: jest.fn((key) => { delete storageData[key]; }),
+  };
+  global.localStorage = new Proxy(localStorageMock, {
+    get(target, prop) {
+      if (typeof prop === 'string' && prop.startsWith('settings.')) {
+        return storageData[prop];
+      }
+      return target[prop];
+    },
+    set(target, prop, value) {
+      if (typeof prop === 'string' && prop.startsWith('settings.')) {
+        storageData[prop] = String(value);
+        return true;
+      }
+      target[prop] = value;
+      return true;
+    },
+    deleteProperty(target, prop) {
+      delete storageData[prop];
+      return true;
+    }
+  });
+  mockLocalStorage = global.localStorage;
 });
 
 afterEach(() => {
@@ -188,4 +217,79 @@ test('agentNames returns the names of the loaded agents', () => {
 
   // The test harness flattens computed properties into plain functions.
   expect(comp.agentNames()).toEqual(['Coordinator', 'Hunter']);
+});
+
+test('saveSetting stores value in localStorage with correct key', () => {
+  comp.saveSetting('testSetting', 'testValue');
+
+  expect(mockLocalStorage['settings.agentstudio.testSetting']).toBe('testValue');
+});
+
+test('saveSetting removes item when value equals default', () => {
+  mockLocalStorage['settings.agentstudio.testSetting'] = 'someValue';
+
+  comp.saveSetting('testSetting', 'defaultValue', 'defaultValue');
+
+  expect(mockLocalStorage['settings.agentstudio.testSetting']).toBeUndefined();
+});
+
+test('saveSetting stores value when different from default', () => {
+  comp.saveSetting('testSetting', 'customValue', 'defaultValue');
+
+  expect(mockLocalStorage['settings.agentstudio.testSetting']).toBe('customValue');
+});
+
+test('saveLocalSettings saves all settings', () => {
+  comp.saveSetting = jest.fn();
+  comp.sortByAgents = [{ key: 'role', order: 'desc' }];
+  comp.sortBySkills = [{ key: 'name', order: 'asc' }];
+  comp.itemsPerPage = 50;
+
+  comp.saveLocalSettings();
+
+  expect(comp.saveSetting).toHaveBeenCalledWith('sortByAgents', 'role', 'name');
+  expect(comp.saveSetting).toHaveBeenCalledWith('sortDescAgents', 'desc', 'asc');
+  expect(comp.saveSetting).toHaveBeenCalledWith('sortBySkills', 'name', 'name');
+  expect(comp.saveSetting).toHaveBeenCalledWith('sortDescSkills', 'asc', 'asc');
+  expect(comp.saveSetting).toHaveBeenCalledWith('itemsPerPage', 50, 10);
+});
+
+test('loadLocalSettings loads all settings from localStorage', () => {
+  mockLocalStorage['settings.agentstudio.sortByAgents'] = 'role';
+  mockLocalStorage['settings.agentstudio.sortDescAgents'] = 'desc';
+  mockLocalStorage['settings.agentstudio.sortBySkills'] = 'usedBy';
+  mockLocalStorage['settings.agentstudio.sortDescSkills'] = 'desc';
+  mockLocalStorage['settings.agentstudio.itemsPerPage'] = '250';
+
+  comp.loadLocalSettings();
+
+  expect(comp.sortByAgents).toEqual([{ key: 'role', order: 'desc' }]);
+  expect(comp.sortBySkills).toEqual([{ key: 'usedBy', order: 'desc' }]);
+  expect(comp.itemsPerPage).toBe(250);
+});
+
+test('loadLocalSettings leaves values unchanged when localStorage is empty', () => {
+  comp.sortByAgents = [{ key: 'model', order: 'desc' }];
+  comp.sortBySkills = [{ key: 'name', order: 'asc' }];
+  comp.itemsPerPage = 1000;
+
+  delete mockLocalStorage['settings.agentstudio.sortByAgents'];
+  delete mockLocalStorage['settings.agentstudio.sortDescAgents'];
+  delete mockLocalStorage['settings.agentstudio.sortBySkills'];
+  delete mockLocalStorage['settings.agentstudio.sortDescSkills'];
+  delete mockLocalStorage['settings.agentstudio.itemsPerPage'];
+
+  comp.loadLocalSettings();
+
+  expect(comp.sortByAgents).toEqual([{ key: 'model', order: 'desc' }]);
+  expect(comp.sortBySkills).toEqual([{ key: 'name', order: 'asc' }]);
+  expect(comp.itemsPerPage).toBe(1000);
+});
+
+test('initAssistant loads local settings when enabled, licensed, and agentic', () => {
+  mockLocalStorage['settings.agentstudio.itemsPerPage'] = '50';
+
+  comp.initAssistant(agenticParams());
+
+  expect(comp.itemsPerPage).toBe(50);
 });
