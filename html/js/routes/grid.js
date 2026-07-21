@@ -122,10 +122,13 @@ routes.push({ path: '/grid', name: 'grid', component: {
   },
   watch: {
     '$route'(to, from) {
-      if (to.path !== from.path) {
+      this.loadUrlParameters();
+      const gridIdChanged = (to.query && to.query.gridId) !== (from.query && from.query.gridId);
+      if (to.path !== from.path || gridIdChanged) {
         this.loadData();
-      } else {
-        this.loadUrlParameters();
+        if (this.activeTab === 'metrics') {
+          this.loadHistoricalMetrics(true);
+        }
       }
     },
     'sortBy': 'saveLocalSettings',

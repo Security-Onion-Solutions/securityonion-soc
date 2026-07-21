@@ -359,17 +359,27 @@ test('watchers trigger updateRoute', () => {
 test('$route watcher behavior', () => {
 	comp.loadData = jest.fn();
 	comp.loadUrlParameters = jest.fn();
+	comp.loadHistoricalMetrics = jest.fn();
+	comp.activeTab = 'nodes';
 
-	// Same path, different query should call loadUrlParameters
-	comp.watch['$route'].call(comp, { path: '/grid', query: { tab: 'metrics' } }, { path: '/grid', query: {} });
+	// Same path, same gridId, different metric parameter query should call loadUrlParameters but not loadData
+	comp.watch['$route'].call(comp, { path: '/grid', query: { tab: 'metrics', gridId: 'grid1' } }, { path: '/grid', query: { gridId: 'grid1' } });
 	expect(comp.loadUrlParameters).toHaveBeenCalled();
 	expect(comp.loadData).not.toHaveBeenCalled();
 
-	// Different path should call loadData
+	// Same path, different gridId should call loadUrlParameters AND loadData
 	comp.loadUrlParameters.mockClear();
-	comp.watch['$route'].call(comp, { path: '/grid' }, { path: '/other' });
+	comp.loadData.mockClear();
+	comp.watch['$route'].call(comp, { path: '/grid', query: { gridId: 'grid2' } }, { path: '/grid', query: { gridId: 'grid1' } });
+	expect(comp.loadUrlParameters).toHaveBeenCalled();
 	expect(comp.loadData).toHaveBeenCalled();
-	expect(comp.loadUrlParameters).not.toHaveBeenCalled();
+
+	// Different path should call loadUrlParameters AND loadData
+	comp.loadUrlParameters.mockClear();
+	comp.loadData.mockClear();
+	comp.watch['$route'].call(comp, { path: '/grid', query: {} }, { path: '/other', query: {} });
+	expect(comp.loadUrlParameters).toHaveBeenCalled();
+	expect(comp.loadData).toHaveBeenCalled();
 });
 
 test('initGrid initializes metrics when activeTab is metrics', () => {
