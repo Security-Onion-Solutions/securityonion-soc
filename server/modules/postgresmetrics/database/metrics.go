@@ -7,29 +7,9 @@ package database
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 )
-
-type MetricPanel struct {
-	ID        string   `json:"id"`
-	Title     string   `json:"title,omitempty"`
-	TitleKey  string   `json:"titleKey,omitempty"`
-	Type      string   `json:"type"`
-	Metric    string   `json:"metric"`
-	Keys      []string `json:"keys"`
-	Labels    []string `json:"labels,omitempty"`
-	LabelKeys []string `json:"labelKeys,omitempty"`
-	Colors    []string `json:"colors"`
-	Width     int      `json:"width"`
-	Height    int      `json:"height"`
-	Units     string   `json:"units,omitempty"`
-}
-
-type MetricsDashboard struct {
-	Panels []MetricPanel `json:"panels"`
-}
 
 type MetricConfig struct {
 	Tables        []string
@@ -302,11 +282,11 @@ var MetricConfigs = map[string]MetricConfig{
 	},
 }
 
-func GenerateDefaultMetricsDashboard() ([]byte, error) {
-	panels := make([]MetricPanel, 0, len(DashboardMetricOrder))
+func GenerateDefaultMetricsDashboard() (*model.MetricsDashboard, error) {
+	panels := make([]model.MetricPanel, 0, len(DashboardMetricOrder))
 	for _, mType := range DashboardMetricOrder {
 		if cfg, ok := MetricConfigs[mType]; ok {
-			panels = append(panels, MetricPanel{
+			panels = append(panels, model.MetricPanel{
 				ID:        mType,
 				TitleKey:  cfg.TitleKey,
 				Type:      "line_chart",
@@ -320,6 +300,5 @@ func GenerateDefaultMetricsDashboard() ([]byte, error) {
 			})
 		}
 	}
-	db := MetricsDashboard{Panels: panels}
-	return json.Marshal(db)
+	return &model.MetricsDashboard{Panels: panels}, nil
 }

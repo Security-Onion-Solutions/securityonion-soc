@@ -45,12 +45,12 @@ func (mod *PostgresMetricsModule) Init(cfg module.ModuleConfig) error {
 	maxMetricAgeSeconds := module.GetIntDefault(cfg, "maxMetricAgeSeconds", DEFAULT_MAX_METRIC_AGE_SECONDS)
 
 	if mod.server != nil {
-		if len(mod.server.Config.ClientParams.GridParams.MetricsDashboard) == 0 || string(mod.server.Config.ClientParams.GridParams.MetricsDashboard) == "null" {
-			dashBytes, err := database.GenerateDefaultMetricsDashboard()
+		if mod.server.Config.ClientParams.GridParams.MetricsDashboard == nil || len(mod.server.Config.ClientParams.GridParams.MetricsDashboard.Panels) == 0 {
+			dash, err := database.GenerateDefaultMetricsDashboard()
 			if err != nil {
 				log.WithError(err).Error("postgresmetrics module: failed to generate default metrics dashboard")
 			} else {
-				mod.server.Config.ClientParams.GridParams.MetricsDashboard = dashBytes
+				mod.server.Config.ClientParams.GridParams.MetricsDashboard = dash
 				log.Info("postgresmetrics module: generated default metrics dashboard on the server")
 			}
 		}

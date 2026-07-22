@@ -9,7 +9,6 @@ package postgresmetrics
 import (
 	"context"
 	"embed"
-	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -284,13 +283,9 @@ func TestPostgresMetrics_UpdateNodeMetrics_And_GetGridEps(t *testing.T) {
 }
 
 func TestGenerateDefaultMetricsDashboard(t *testing.T) {
-	bytes, err := database.GenerateDefaultMetricsDashboard()
+	dash, err := database.GenerateDefaultMetricsDashboard()
 	assert.NoError(t, err)
-	assert.NotEmpty(t, bytes)
-
-	var dash database.MetricsDashboard
-	err = json.Unmarshal(bytes, &dash)
-	assert.NoError(t, err)
+	assert.NotNil(t, dash)
 	assert.Len(t, dash.Panels, 26)
 	assert.Equal(t, "cpu", dash.Panels[0].ID)
 	assert.Equal(t, "metricsCpuUsage", dash.Panels[0].TitleKey)
@@ -320,12 +315,8 @@ func TestPostgresMetricsModule_Init_DefaultDashboard(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Since MetricsDashboard was empty, Init should have populated it with default dashboard
-	dashBytes := srv.Config.ClientParams.GridParams.MetricsDashboard
-	assert.NotEmpty(t, dashBytes)
-
-	var dash database.MetricsDashboard
-	err = json.Unmarshal(dashBytes, &dash)
-	assert.NoError(t, err)
+	dash := srv.Config.ClientParams.GridParams.MetricsDashboard
+	assert.NotNil(t, dash)
 	assert.Len(t, dash.Panels, 26)
 }
 
