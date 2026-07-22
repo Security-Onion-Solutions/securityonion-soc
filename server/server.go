@@ -107,6 +107,7 @@ func (server *Server) Start() {
 
 		RegisterCaseRoutes(server, server.ApiRouter, "/api/case")
 		RegisterEventRoutes(server, server.ApiRouter, "/api/events")
+		RegisterEventstoreRoutes(server, server.ApiRouter, "/api/eventstore")
 		RegisterInfoRoutes(server, server.ApiRouter, "/api/info")
 		RegisterJobRoutes(server, server.ApiRouter, "/api/job")
 		RegisterJobsRoutes(server, server.ApiRouter, "/api/jobs")

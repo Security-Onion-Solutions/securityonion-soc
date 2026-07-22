@@ -987,7 +987,7 @@ func (store *ElasticEventstore) clusterState(ctx context.Context) (string, error
 	return jsonStr, err
 }
 
-func (store *ElasticEventstore) clusterHealthReport(ctx context.Context) (string, error) {
+func (store *ElasticEventstore) ClusterHealthReport(ctx context.Context) (string, error) {
 	var jsonStr string
 	res, err := store.esClient.HealthReport(
 		store.esClient.HealthReport.WithContext(ctx),
@@ -1000,7 +1000,7 @@ func (store *ElasticEventstore) clusterHealthReport(ctx context.Context) (string
 	return jsonStr, err
 }
 
-func (store *ElasticEventstore) clusterSettings(ctx context.Context) (string, error) {
+func (store *ElasticEventstore) ClusterSettings(ctx context.Context) (string, error) {
 	var jsonStr string
 	res, err := store.esClient.Cluster.GetSettings(
 		store.esClient.Cluster.GetSettings.WithContext(ctx),
@@ -1013,7 +1013,7 @@ func (store *ElasticEventstore) clusterSettings(ctx context.Context) (string, er
 	return jsonStr, err
 }
 
-func (store *ElasticEventstore) catNodes(ctx context.Context) (string, error) {
+func (store *ElasticEventstore) ListNodes(ctx context.Context) (string, error) {
 	var jsonStr string
 	res, err := store.esClient.Cat.Nodes(
 		store.esClient.Cat.Nodes.WithContext(ctx),
@@ -1028,7 +1028,7 @@ func (store *ElasticEventstore) catNodes(ctx context.Context) (string, error) {
 	return jsonStr, err
 }
 
-func (store *ElasticEventstore) catShards(ctx context.Context) (string, error) {
+func (store *ElasticEventstore) ListShards(ctx context.Context) (string, error) {
 	var jsonStr string
 	res, err := store.esClient.Cat.Shards(
 		store.esClient.Cat.Shards.WithContext(ctx),
@@ -1042,7 +1042,9 @@ func (store *ElasticEventstore) catShards(ctx context.Context) (string, error) {
 	return jsonStr, err
 }
 
-func (store *ElasticEventstore) allocationExplain(ctx context.Context, body string) (string, error) {
+func (store *ElasticEventstore) ExplainAllocation(ctx context.Context, index string, shard int64, primary bool) (string, error) {
+	body := fmt.Sprintf(`{"index":%q,"shard":%d,"primary":%t}`, index, shard, primary)
+
 	var jsonStr string
 	res, err := store.esClient.Cluster.AllocationExplain(
 		store.esClient.Cluster.AllocationExplain.WithContext(ctx),

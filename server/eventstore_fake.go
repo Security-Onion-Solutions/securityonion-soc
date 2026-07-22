@@ -25,7 +25,19 @@ type FakeEventstore struct {
 	InputAckCriterias     []*model.EventAckCriteria
 	InputScrollCriterias  []*model.EventScrollCriteria
 	InputScrollIndexes    [][]string
+	InputExplainIndexes   []string
+	InputExplainShards    []int64
+	InputExplainPrimaries []bool
 	Err                   error
+	HealthReportJson      string
+	HealthReportErr       error
+	ClusterSettingsJson   string
+	ClusterSettingsErr    error
+	NodesJson             string
+	NodesErr              error
+	ShardsJson            string
+	ShardsErr             error
+	ExplainResults        []FakeExplainResult
 	SearchResults         []*model.EventSearchResults
 	MSearchResults        []*model.EventMSearchResults
 	IndexResults          []*model.EventIndexResults
@@ -36,6 +48,14 @@ type FakeEventstore struct {
 	indexCount            int
 	updateCount           int
 	scrollCount           int
+	explainCount          int
+}
+
+// One ExplainAllocation outcome; calls beyond the configured results return
+// the zero value.
+type FakeExplainResult struct {
+	Json string
+	Err  error
 }
 
 func NewFakeEventstore() *FakeEventstore {
@@ -171,4 +191,37 @@ func (store *FakeEventstore) GetActiveQueries(context context.Context, filter bo
 
 func (store *FakeEventstore) CancelQuery(context context.Context, queryId string) error {
 	return errors.New("query not found")
+}
+
+func (store *FakeEventstore) ClusterHealthReport(ctx context.Context) (string, error) {
+	store.InputContexts = append(store.InputContexts, ctx)
+	return store.HealthReportJson, store.HealthReportErr
+}
+
+func (store *FakeEventstore) ClusterSettings(ctx context.Context) (string, error) {
+	store.InputContexts = append(store.InputContexts, ctx)
+	return store.ClusterSettingsJson, store.ClusterSettingsErr
+}
+
+func (store *FakeEventstore) ListNodes(ctx context.Context) (string, error) {
+	store.InputContexts = append(store.InputContexts, ctx)
+	return store.NodesJson, store.NodesErr
+}
+
+func (store *FakeEventstore) ListShards(ctx context.Context) (string, error) {
+	store.InputContexts = append(store.InputContexts, ctx)
+	return store.ShardsJson, store.ShardsErr
+}
+
+func (store *FakeEventstore) ExplainAllocation(ctx context.Context, index string, shard int64, primary bool) (string, error) {
+	store.InputContexts = append(store.InputContexts, ctx)
+	store.InputExplainIndexes = append(store.InputExplainIndexes, index)
+	store.InputExplainShards = append(store.InputExplainShards, shard)
+	store.InputExplainPrimaries = append(store.InputExplainPrimaries, primary)
+	var result FakeExplainResult
+	if store.explainCount < len(store.ExplainResults) {
+		result = store.ExplainResults[store.explainCount]
+	}
+	store.explainCount += 1
+	return result.Json, result.Err
 }

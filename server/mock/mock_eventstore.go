@@ -70,6 +70,36 @@ func (mr *MockEventstoreMockRecorder) CancelQuery(arg0, queryId any) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CancelQuery", reflect.TypeOf((*MockEventstore)(nil).CancelQuery), arg0, queryId)
 }
 
+// ClusterHealthReport mocks base method.
+func (m *MockEventstore) ClusterHealthReport(ctx context.Context) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ClusterHealthReport", ctx)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ClusterHealthReport indicates an expected call of ClusterHealthReport.
+func (mr *MockEventstoreMockRecorder) ClusterHealthReport(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClusterHealthReport", reflect.TypeOf((*MockEventstore)(nil).ClusterHealthReport), ctx)
+}
+
+// ClusterSettings mocks base method.
+func (m *MockEventstore) ClusterSettings(ctx context.Context) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ClusterSettings", ctx)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ClusterSettings indicates an expected call of ClusterSettings.
+func (mr *MockEventstoreMockRecorder) ClusterSettings(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClusterSettings", reflect.TypeOf((*MockEventstore)(nil).ClusterSettings), ctx)
+}
+
 // Delete mocks base method.
 func (m *MockEventstore) Delete(arg0 context.Context, index, id string) error {
 	m.ctrl.T.Helper()
@@ -82,6 +112,21 @@ func (m *MockEventstore) Delete(arg0 context.Context, index, id string) error {
 func (mr *MockEventstoreMockRecorder) Delete(arg0, index, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockEventstore)(nil).Delete), arg0, index, id)
+}
+
+// ExplainAllocation mocks base method.
+func (m *MockEventstore) ExplainAllocation(ctx context.Context, index string, shard int64, primary bool) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ExplainAllocation", ctx, index, shard, primary)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ExplainAllocation indicates an expected call of ExplainAllocation.
+func (mr *MockEventstoreMockRecorder) ExplainAllocation(ctx, index, shard, primary any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExplainAllocation", reflect.TypeOf((*MockEventstore)(nil).ExplainAllocation), ctx, index, shard, primary)
 }
 
 // GetActiveQueries mocks base method.
@@ -112,6 +157,36 @@ func (m *MockEventstore) Index(ctx context.Context, index string, document map[s
 func (mr *MockEventstoreMockRecorder) Index(ctx, index, document, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Index", reflect.TypeOf((*MockEventstore)(nil).Index), ctx, index, document, id)
+}
+
+// ListNodes mocks base method.
+func (m *MockEventstore) ListNodes(ctx context.Context) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListNodes", ctx)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListNodes indicates an expected call of ListNodes.
+func (mr *MockEventstoreMockRecorder) ListNodes(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListNodes", reflect.TypeOf((*MockEventstore)(nil).ListNodes), ctx)
+}
+
+// ListShards mocks base method.
+func (m *MockEventstore) ListShards(ctx context.Context) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListShards", ctx)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListShards indicates an expected call of ListShards.
+func (mr *MockEventstoreMockRecorder) ListShards(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListShards", reflect.TypeOf((*MockEventstore)(nil).ListShards), ctx)
 }
 
 // MSearch mocks base method.
