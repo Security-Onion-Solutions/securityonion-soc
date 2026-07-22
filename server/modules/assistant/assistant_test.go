@@ -1387,10 +1387,10 @@ func TestAssistantCoordinator_ToolStreamInSession_DelegationKickoff(t *testing.T
 	turn.Response.Body.Close()
 }
 
-// Same kickoff flow, but the delegated agent is addressed by its canonical
-// DisplayName selector: the child session stores the DisplayName as its model
-// and the child's first turn resolves it back to the real model/adapter pair.
-func TestAssistantCoordinator_ToolStreamInSession_DelegationKickoffDisplayName(t *testing.T) {
+// Same kickoff flow in agentic mode: the child session stores the agent name
+// as its model and the child's first turn resolves it through the agent's
+// model mapping back to the real model/adapter pair.
+func TestAssistantCoordinator_ToolStreamInSession_DelegationKickoffAgentName(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -1404,8 +1404,8 @@ func TestAssistantCoordinator_ToolStreamInSession_DelegationKickoffDisplayName(t
 
 	mockAssistantstore.EXPECT().CreateSession(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, s *model.AssistantSession) error {
-			// The child session records the DisplayName selector as its model so it
-			// resumes as the right agent even when agents share an id@adapter pair.
+			// The child session records the agent name as its model so it resumes
+			// as the right agent even when agents share an id@adapter pair.
 			assert.Equal(t, "Test Hunter", s.Model)
 			assert.Equal(t, "Test Hunter", s.DelegateAgent)
 			assert.Equal(t, "delegation", s.Type)
@@ -1414,14 +1414,16 @@ func TestAssistantCoordinator_ToolStreamInSession_DelegationKickoffDisplayName(t
 
 	mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil)
 
-	// The child's first turn reaches the adapter with the real model id, proving
-	// the DisplayName stored on the child session resolved through SendStream.
+	// The child's first turn reaches the adapter with the real model id and the
+	// agent's prompt, proving the agent name stored on the child session
+	// resolved through the agent mapping in SendStream.
 	mockIO.EXPECT().MakeRequest(gomock.Any(), true).DoAndReturn(func(req *http.Request, _ bool) (*http.Response, error) {
 		body, err := io.ReadAll(req.Body)
 		assert.NoError(t, err)
 		cr := &model.ChatRequest{}
 		assert.NoError(t, json.Unmarshal(body, cr))
 		assert.Equal(t, "test-model", cr.Model)
+		assert.Equal(t, "hunt things", cr.System)
 		return &http.Response{
 			StatusCode: 200,
 			Body:       io.NopCloser(strings.NewReader("data: stream")),
@@ -1430,8 +1432,13 @@ func TestAssistantCoordinator_ToolStreamInSession_DelegationKickoffDisplayName(t
 
 	ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
 	ac.srv.Config.ClientParams.AssistantParams.AvailableModels = []model.ModelParameters{
-		{ID: "test-model", DisplayName: "Test Hunter", Adapter: "MyAdapter"},
+		{ID: "test-model", Adapter: "MyAdapter", Enabled: true},
 	}
+	ac.isAgentic = true
+	ac.agents = map[string]model.AgentParameters{
+		"Test Hunter": {Name: "Test Hunter", Prompt: "hunt things", AllowedSkills: []string{}},
+	}
+	ac.agentMapping = map[string]string{"Test Hunter": "test-model@MyAdapter"}
 
 	delegate := NewDelegateTool("Test Hunter", "Test Hunter", "an event hunting agent")
 	assert.Equal(t, "delegate_to_Test_Hunter", delegate.GetName())
@@ -1777,7 +1784,7 @@ func TestAssistantCoordinator_SendStream_Agentic(t *testing.T) {
 		agents: map[string]model.AgentParameters{
 			"Hunter": {Name: "Hunter", Prompt: "You are a hunting agent.", AllowedSkills: []string{"Hunt"}},
 		},
-		agentMapping: map[string]string{"Hunter": "TestModel"},
+		agentMapping: map[string]string{"Hunter": "test-model@whatever"},
 		adapters: map[string]server.AssistantAdapter{
 			"whatever": &SOAiCloudAdapter{apiUrl: "https://api.example.com", srv: srv, IOManager: mockIO},
 		},
@@ -3140,12 +3147,12 @@ func TestCheckRequestSize(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name: "exceeds limit, resolved by display name",
+			name: "exceeds limit, resolved by bare id",
 			req:  &model.ChatRequest{System: strings.Repeat("a", 5000)},
 			models: []model.ModelParameters{
 				{ID: "model1", DisplayName: "Model One", Adapter: "SOAI", ContextLimitLarge: 1000, CharsPerTokenEstimate: 4.0},
 			},
-			selector: "Model One",
+			selector: "model1",
 			// maxChars = 1000 * 4.0 * 1.1 = 4400, usedChars = 5000
 			expectError: true,
 		},
@@ -3210,73 +3217,69 @@ func newResolveTestCoordinator(models []model.ModelParameters) *AssistantCoordin
 
 func TestResolveModel(t *testing.T) {
 	models := []model.ModelParameters{
-		{ID: "gemini-3.5-flash", DisplayName: "Agent Gemini", Adapter: "Gemini"},
-		{ID: "gemini-3.5-flash", DisplayName: "Hunter", Adapter: "Gemini"},
-		{ID: "legacy-model", Adapter: "SOAI"},
-		{ID: "at-model", DisplayName: "weird@name", Adapter: "SOAI"},
+		{ID: "gemini-3.5-flash", DisplayName: "Agent Gemini", Adapter: "Gemini", Enabled: true},
+		{ID: "plain-model", Adapter: "SOAI", Enabled: true},
+		{ID: "dual", Adapter: "A", Enabled: false},
+		{ID: "dual", Adapter: "B", Enabled: true},
 	}
 	ac := newResolveTestCoordinator(models)
 
-	t.Run("display name resolves to its own agent", func(t *testing.T) {
-		params := ac.resolveModel("Hunter")
-		assert.NotNil(t, params)
-		assert.Equal(t, "Hunter", params.DisplayName)
-	})
-
-	t.Run("two agents sharing id@adapter resolve independently", func(t *testing.T) {
-		a := ac.resolveModel("Agent Gemini")
-		b := ac.resolveModel("Hunter")
-		assert.NotNil(t, a)
-		assert.NotNil(t, b)
-		assert.NotEqual(t, a.DisplayName, b.DisplayName)
-		assert.Equal(t, a.ID, b.ID)
-	})
-
-	t.Run("legacy id@adapter still resolves, first match wins", func(t *testing.T) {
+	t.Run("id@adapter resolves to the matching model", func(t *testing.T) {
 		params := ac.resolveModel("gemini-3.5-flash@Gemini")
 		assert.NotNil(t, params)
-		assert.Equal(t, "Agent Gemini", params.DisplayName)
+		assert.Equal(t, "gemini-3.5-flash", params.ID)
+		assert.Equal(t, "Gemini", params.Adapter)
 	})
 
-	t.Run("model without display name resolves only via the legacy form", func(t *testing.T) {
-		params := ac.resolveModel("legacy-model@SOAI")
+	t.Run("bare id resolves and uses the model's own adapter", func(t *testing.T) {
+		params := ac.resolveModel("plain-model")
 		assert.NotNil(t, params)
-		assert.Equal(t, "legacy-model", params.ID)
-
-		// An empty request selector must never match its empty canonical selector.
-		assert.Nil(t, ac.resolveModel(""))
+		assert.Equal(t, "SOAI", params.Adapter)
 	})
 
-	t.Run("display name containing @ resolves before legacy splitting", func(t *testing.T) {
-		params := ac.resolveModel("weird@name")
+	t.Run("bare id prefers an enabled model over an earlier disabled one", func(t *testing.T) {
+		params := ac.resolveModel("dual")
 		assert.NotNil(t, params)
-		assert.Equal(t, "at-model", params.ID)
+		assert.Equal(t, "B", params.Adapter)
+		assert.True(t, params.Enabled)
 	})
 
-	t.Run("unknown selector resolves to nil", func(t *testing.T) {
+	t.Run("disabled model is returned only when no enabled model matches id and adapter", func(t *testing.T) {
+		params := ac.resolveModel("dual@A")
+		assert.NotNil(t, params)
+		assert.Equal(t, "A", params.Adapter)
+		assert.False(t, params.Enabled)
+	})
+
+	t.Run("display name never resolves", func(t *testing.T) {
+		assert.Nil(t, ac.resolveModel("Agent Gemini"))
+	})
+
+	t.Run("unknown or empty selector resolves to nil", func(t *testing.T) {
 		assert.Nil(t, ac.resolveModel("nope@Nowhere"))
 		assert.Nil(t, ac.resolveModel("Nope"))
+		assert.Nil(t, ac.resolveModel(""))
 	})
 }
 
 func TestResolveAdapterName(t *testing.T) {
 	ac := newResolveTestCoordinator([]model.ModelParameters{
-		{ID: "gemini-3.5-flash", DisplayName: "Agent Gemini", Adapter: "Gemini"},
+		{ID: "gemini-3.5-flash", DisplayName: "Agent Gemini", Adapter: "Gemini", Enabled: true},
 	})
 
-	// Canonical selector routes through the configured model.
-	assert.Equal(t, "Gemini", ac.resolveAdapterName("Agent Gemini"))
-	// Legacy selector for the same model.
+	// Canonical id@adapter selector routes through the configured model.
 	assert.Equal(t, "Gemini", ac.resolveAdapterName("gemini-3.5-flash@Gemini"))
-	// Unconfigured model falls back to the legacy split so a registered adapter
-	// without an AvailableModels entry can still answer.
+	// A bare id routes through the configured model's own adapter.
+	assert.Equal(t, "Gemini", ac.resolveAdapterName("gemini-3.5-flash"))
+	// Unconfigured model falls back to the "@adapter" split so a registered
+	// adapter without an AvailableModels entry can still answer.
 	assert.Equal(t, "MyAdapter", ac.resolveAdapterName("other@MyAdapter"))
 	// A bare, unresolved selector is returned verbatim, not a phantom default.
 	assert.Equal(t, "unknown", ac.resolveAdapterName("unknown"))
 }
 
 // Regression guard: an agent mapped by bare model id to a non-SOAI adapter must
-// route to that model's real adapter, as the non-agentic DisplayName path does.
+// route to that model's real adapter, as the non-agentic selector path does.
 func TestResolveAdapterNameAgenticHonorsModelAdapter(t *testing.T) {
 	ac := newResolveTestCoordinator([]model.ModelParameters{
 		{ID: "sonnet", DisplayName: "Claude Sonnet", Adapter: "SOAIDEV", Enabled: true},
@@ -3317,9 +3320,9 @@ func (a *captureAdapter) GetHealth(ctx context.Context) (*model.HealthResponse, 
 	return &model.HealthResponse{Status: "ok"}, nil
 }
 
-// Selecting an agent by DisplayName must send the real model id upstream, never
-// the display name.
-func TestAssistantCoordinator_Send_DisplayNameSelector(t *testing.T) {
+// Selecting a model by id@adapter (or bare id) must send the bare model id
+// upstream, never the full selector.
+func TestAssistantCoordinator_Send_ModelSelector(t *testing.T) {
 	adapter := &captureAdapter{}
 
 	ac := newResolveTestCoordinator([]model.ModelParameters{
@@ -3330,14 +3333,55 @@ func TestAssistantCoordinator_Send_DisplayNameSelector(t *testing.T) {
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
-	result, err := ac.Send(ctx, "Agent Test", []*model.Message{
-		{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "hi"}}},
-	})
+	for _, selector := range []string{"test-model@MyAdapter", "test-model"} {
+		adapter.lastReq = nil
 
+		result, err := ac.Send(ctx, selector, []*model.Message{
+			{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "hi"}}},
+		})
+
+		assert.NoError(t, err, selector)
+		assert.Len(t, result, 1, selector)
+		assert.NotNil(t, adapter.lastReq, selector)
+		assert.Equal(t, "test-model", adapter.lastReq.Model, selector)
+	}
+}
+
+// In agentic mode a selector that is not an agent name falls through to model
+// resolution (e.g. a session saved before agentic mode was enabled), taking the
+// plain prompt/tool setup rather than setupAgent. A selector matching neither
+// an agent nor a model is a client error.
+func TestAssistantCoordinator_Send_AgenticFallsThroughToModelSelector(t *testing.T) {
+	adapter := &captureAdapter{}
+
+	ac := newResolveTestCoordinator([]model.ModelParameters{
+		{ID: "test-model", Adapter: "MyAdapter", Enabled: true},
+	})
+	ac.adapters = map[string]server.AssistantAdapter{"MyAdapter": adapter}
+	ac.toolConfig = []byte(`{"tools": [], "tool_choice": {"auto": {}}}`)
+	ac.systemPrompt = "default prompt"
+	ac.isAgentic = true
+	ac.agents = map[string]model.AgentParameters{
+		"Hunter": {Name: "Hunter", Prompt: "agent prompt", AllowedSkills: []string{}},
+	}
+	ac.agentMapping = map[string]string{"Hunter": "test-model@MyAdapter"}
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+	msgs := []*model.Message{
+		{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "hi"}}},
+	}
+
+	result, err := ac.Send(ctx, "test-model@MyAdapter", msgs)
 	assert.NoError(t, err)
 	assert.Len(t, result, 1)
 	assert.NotNil(t, adapter.lastReq)
 	assert.Equal(t, "test-model", adapter.lastReq.Model)
+	assert.Equal(t, "default prompt", adapter.lastReq.System)
+	assert.Equal(t, ac.toolConfig, adapter.lastReq.ToolConfig)
+
+	result, err = ac.Send(ctx, "Nope", msgs)
+	assert.ErrorIs(t, err, ErrInvalidModel)
+	assert.Nil(t, result)
 }
 
 // A delegate registered under multiple keys (selector + tool name) must appear
@@ -3411,7 +3455,7 @@ func TestValidateModelSelectors(t *testing.T) {
 		assert.Empty(t, h.Entries)
 	})
 
-	t.Run("missing displayName logs an error and disables the model", func(t *testing.T) {
+	t.Run("missing displayName is fine: it is optional, cosmetic-only", func(t *testing.T) {
 		models := []model.ModelParameters{
 			{ID: "model-a", DisplayName: "Agent A", Adapter: "SOAI", Enabled: true},
 			{ID: "model-c", Adapter: "SOAI", Enabled: true},
@@ -3420,20 +3464,18 @@ func TestValidateModelSelectors(t *testing.T) {
 
 		ac.validateModelSelectors()
 
-		errors := logMessagesAt(h, log.ErrorLevel)
-		assert.Len(t, errors, 1)
-		assert.Contains(t, errors[0], "missing required displayName")
+		assert.Empty(t, h.Entries)
 
-		// The disable must land in the config slice the frontend is served from.
+		// The model stays enabled in the config slice the frontend is served from.
 		stored := ac.srv.Config.ClientParams.AssistantParams.AvailableModels
 		assert.True(t, stored[0].Enabled)
-		assert.False(t, stored[1].Enabled)
+		assert.True(t, stored[1].Enabled)
 	})
 
-	t.Run("duplicate enabled selectors log an error, first wins", func(t *testing.T) {
+	t.Run("duplicate enabled id@adapter pairs log an error, first wins", func(t *testing.T) {
 		ac, h := newSelectorLogCoordinator([]model.ModelParameters{
 			{ID: "model-a", DisplayName: "Hunter", Adapter: "A", Enabled: true},
-			{ID: "model-b", DisplayName: "Hunter", Adapter: "B", Enabled: true},
+			{ID: "model-a", DisplayName: "Hunter Two", Adapter: "A", Enabled: true},
 		})
 
 		ac.validateModelSelectors()
@@ -3441,68 +3483,34 @@ func TestValidateModelSelectors(t *testing.T) {
 		errors := logMessagesAt(h, log.ErrorLevel)
 		assert.Len(t, errors, 1)
 		assert.Contains(t, errors[0], "duplicate model selector")
+
+		// An exact duplicate must not also fire the bare-id ambiguity warning.
+		assert.Empty(t, logMessagesAt(h, log.WarnLevel))
+	})
+
+	t.Run("two enabled models sharing an id on different adapters warn about bare-id ambiguity", func(t *testing.T) {
+		ac, h := newSelectorLogCoordinator([]model.ModelParameters{
+			{ID: "model-a", Adapter: "A", Enabled: true},
+			{ID: "model-a", Adapter: "B", Enabled: true},
+		})
+
+		ac.validateModelSelectors()
+
+		assert.Empty(t, logMessagesAt(h, log.ErrorLevel))
+		warns := logMessagesAt(h, log.WarnLevel)
+		assert.Len(t, warns, 1)
+		assert.Contains(t, warns[0], "share an id")
 	})
 
 	t.Run("duplicate involving a disabled model logs nothing", func(t *testing.T) {
 		ac, h := newSelectorLogCoordinator([]model.ModelParameters{
-			{ID: "model-a", DisplayName: "Hunter", Adapter: "A", Enabled: true},
-			{ID: "model-b", DisplayName: "Hunter", Adapter: "B", Enabled: false},
+			{ID: "model-a", Adapter: "A", Enabled: true},
+			{ID: "model-a", Adapter: "A", Enabled: false},
 		})
 
 		ac.validateModelSelectors()
 
 		assert.Empty(t, h.Entries)
-	})
-
-	t.Run("displayName containing @ warns", func(t *testing.T) {
-		ac, h := newSelectorLogCoordinator([]model.ModelParameters{
-			{ID: "model-a", DisplayName: "weird@name", Adapter: "SOAI", Enabled: true},
-		})
-
-		ac.validateModelSelectors()
-
-		warns := logMessagesAt(h, log.WarnLevel)
-		assert.Len(t, warns, 1)
-		assert.Contains(t, warns[0], "contains '@'")
-	})
-
-	t.Run("displayName shadowing another model's legacy selector warns", func(t *testing.T) {
-		ac, h := newSelectorLogCoordinator([]model.ModelParameters{
-			{ID: "real-model", DisplayName: "Agent Real", Adapter: "SOAI", Enabled: true},
-			{ID: "other-model", DisplayName: "real-model@SOAI", Adapter: "SOAI", Enabled: true},
-		})
-
-		ac.validateModelSelectors()
-
-		warns := logMessagesAt(h, log.WarnLevel)
-		// The shadowing displayName also contains "@", so both warnings fire.
-		shadowWarns := 0
-		for _, w := range warns {
-			if strings.Contains(w, "will shadow it") {
-				shadowWarns++
-			}
-		}
-		assert.Equal(t, 1, shadowWarns)
-	})
-
-	t.Run("shadowing a model that was disabled for a missing displayName logs no shadow warning", func(t *testing.T) {
-		// The no-displayName model is disabled by validation before the shadow
-		// check runs, so only the missing-displayName error (and the "@" warning
-		// for the other model's name) surfaces.
-		ac, h := newSelectorLogCoordinator([]model.ModelParameters{
-			{ID: "real-model", Adapter: "SOAI", Enabled: true},
-			{ID: "other-model", DisplayName: "real-model@SOAI", Adapter: "SOAI", Enabled: true},
-		})
-
-		ac.validateModelSelectors()
-
-		errors := logMessagesAt(h, log.ErrorLevel)
-		assert.Len(t, errors, 1)
-		assert.Contains(t, errors[0], "missing required displayName")
-
-		for _, w := range logMessagesAt(h, log.WarnLevel) {
-			assert.NotContains(t, w, "will shadow it")
-		}
 	})
 }
 
@@ -3552,9 +3560,9 @@ func TestRegisterDelegateTools(t *testing.T) {
 	})
 }
 
-// Streaming twin of TestAssistantCoordinator_Send_DisplayNameSelector: the
-// DisplayName selector resolves and the adapter receives the real model id.
-func TestAssistantCoordinator_SendStream_DisplayNameSelector(t *testing.T) {
+// Streaming twin of TestAssistantCoordinator_Send_ModelSelector: the
+// id@adapter selector resolves and the adapter receives the bare model id.
+func TestAssistantCoordinator_SendStream_ModelSelector(t *testing.T) {
 	adapter := &captureAdapter{}
 
 	ac := newResolveTestCoordinator([]model.ModelParameters{
@@ -3565,7 +3573,7 @@ func TestAssistantCoordinator_SendStream_DisplayNameSelector(t *testing.T) {
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
-	res, _, err := ac.SendStream(ctx, "Agent Test", []*model.Message{
+	res, _, err := ac.SendStream(ctx, "test-model@MyAdapter", []*model.Message{
 		{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "hi"}}},
 	})
 
@@ -3577,8 +3585,8 @@ func TestAssistantCoordinator_SendStream_DisplayNameSelector(t *testing.T) {
 	assert.True(t, adapter.lastReq.Stream)
 }
 
-// Balance and Health accept any selector form: the canonical DisplayName, the
-// legacy id@adapter, and (leniently) an id@adapter with no configured model.
+// Balance and Health accept any selector form: id@adapter, a bare id, and
+// (leniently) an id@adapter with no configured model.
 func TestAssistantCoordinator_BalanceAndHealth_SelectorResolution(t *testing.T) {
 	newAC := func() *AssistantCoordinator {
 		ac := newResolveTestCoordinator([]model.ModelParameters{
@@ -3590,9 +3598,9 @@ func TestAssistantCoordinator_BalanceAndHealth_SelectorResolution(t *testing.T) 
 
 	ctx := context.Background()
 
-	t.Run("balance resolves display name and legacy selectors", func(t *testing.T) {
+	t.Run("balance resolves id@adapter and bare-id selectors", func(t *testing.T) {
 		ac := newAC()
-		for _, selector := range []string{"Agent Gemini", "gemini-x@Gemini"} {
+		for _, selector := range []string{"gemini-x@Gemini", "gemini-x"} {
 			res, err := ac.Balance(ctx, selector)
 			assert.NoError(t, err, selector)
 			assert.NotNil(t, res, selector)
@@ -3606,9 +3614,9 @@ func TestAssistantCoordinator_BalanceAndHealth_SelectorResolution(t *testing.T) 
 		assert.Nil(t, res)
 	})
 
-	t.Run("health resolves display name and legacy selectors", func(t *testing.T) {
+	t.Run("health resolves id@adapter and bare-id selectors", func(t *testing.T) {
 		ac := newAC()
-		for _, selector := range []string{"Agent Gemini", "gemini-x@Gemini"} {
+		for _, selector := range []string{"gemini-x@Gemini", "gemini-x"} {
 			res, err := ac.Health(ctx, selector)
 			assert.NoError(t, err, selector)
 			assert.NotNil(t, res, selector)
@@ -3638,11 +3646,11 @@ func TestAssistantCoordinator_SendAndSendStream_AdapterNotFound(t *testing.T) {
 		{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "hi"}}},
 	}
 
-	result, err := ac.Send(ctx, "Ghost Agent", msgs)
+	result, err := ac.Send(ctx, "test-model@Ghost", msgs)
 	assert.ErrorContains(t, err, "assistant adapter not found")
 	assert.Nil(t, result)
 
-	res, _, err := ac.SendStream(ctx, "Ghost Agent", msgs)
+	res, _, err := ac.SendStream(ctx, "test-model@Ghost", msgs)
 	assert.ErrorContains(t, err, "assistant adapter not found")
 	assert.Nil(t, res)
 }
@@ -3659,11 +3667,11 @@ func TestAssistantCoordinator_SendAndSendStream_MissingRequestorId(t *testing.T)
 		{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "hi"}}},
 	}
 
-	result, err := ac.Send(context.Background(), "Agent Test", msgs)
+	result, err := ac.Send(context.Background(), "test-model@MyAdapter", msgs)
 	assert.ErrorContains(t, err, "missing requestor id")
 	assert.Nil(t, result)
 
-	res, _, err := ac.SendStream(context.Background(), "Agent Test", msgs)
+	res, _, err := ac.SendStream(context.Background(), "test-model@MyAdapter", msgs)
 	assert.ErrorContains(t, err, "missing requestor id")
 	assert.Nil(t, res)
 }

@@ -87,8 +87,11 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
       this.paramsLoaded = true;
       if (this.assistantEnabled && this.agentic) {
         this.models = (params.availableModels || []).map(m => ({
-          displayName: m.displayName,
+          id: m.id,
           adapter: m.adapter,
+          selector: `${m.id || ''}@${m.adapter || ''}`,
+          displayName: m.displayName || `${m.id || ''}@${m.adapter || ''}`,
+          enabled: !!m.enabled,
           contextWindow: m.contextLimitLarge || m.contextLimitSmall || 0,
         }));
         this.skills = (params.availableSkills || []).map(s => ({
@@ -125,6 +128,20 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
       if (localStorage['settings.agentstudio.sortDescSkills']) this.sortBySkills[0].order = localStorage['settings.agentstudio.sortDescSkills'];
 
       if (localStorage['settings.agentstudio.itemsPerPage']) this.itemsPerPage = parseInt(localStorage['settings.agentstudio.itemsPerPage']);
+    },
+    // mappedModelLabel resolves an agent's mapped model selector (id@adapter or
+    // bare id, mirroring the backend's resolveModel: prefer an enabled model,
+    // else first match) to its display name; an unresolvable selector is shown
+    // as-is.
+    mappedModelLabel(selector) {
+      if (!selector) return '';
+      let fallback = null;
+      for (const m of this.models) {
+        if (m.selector !== selector && m.id !== selector) continue;
+        if (m.enabled) return m.displayName;
+        if (!fallback) fallback = m;
+      }
+      return fallback ? fallback.displayName : selector;
     },
     // agentsFromParams builds the read-only rows from the server's current agent
     // set (availableAgents + agentMapping). Personas are not exposed via params

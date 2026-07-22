@@ -81,7 +81,7 @@ type AssistantCoordinator struct {
 	adapters          map[string]server.AssistantAdapter
 	isAgentic         bool
 	agents            map[string]model.AgentParameters
-	agentMapping      map[string]string // map[agentName]modelDisplayName
+	agentMapping      map[string]string // map[agentName]modelSelector ("id@adapter" or bare id)
 
 	systemPrompt         string
 	systemPromptAddendum string
@@ -409,9 +409,8 @@ func (ac *AssistantCoordinator) IsRunning() bool {
 	return ac.isRunning
 }
 
-// splitModelAdapter splits a legacy "id@adapter" selector; hasAdapter reports
-// whether an explicit "@adapter" was present. Callers must not assume a default
-// adapter when it is false (a bare id uses the configured model's own adapter).
+// splitModelAdapter splits an "id@adapter" selector; hasAdapter reports
+// whether an explicit "@adapter" was present.
 func splitModelAdapter(aiModel string) (id string, adapter string, hasAdapter bool) {
 	id, adapter, hasAdapter = strings.Cut(aiModel, "@")
 	return id, adapter, hasAdapter
@@ -433,11 +432,10 @@ func estimateRequestChars(req *model.ChatRequest) int {
 	return total
 }
 
-// validateModelSelectors logs configuration problems with model selectors at
-// startup. Policy is log-and-continue, matching how bad adapter config is
-// handled above: the first model to claim a selector wins (resolveModel is
-// first-match) and its duplicates are skipped during delegate registration;
-// nothing here prevents the module from loading.
+// validateModelSelectors logs configuration problems with model selectors
+// ("id@adapter") at startup. Policy is log-and-continue, matching how bad
+// adapter config is handled above: the first model to claim a selector wins
+// (resolveModel is first-match); nothing here prevents the module from loading.
 func (ac *AssistantCoordinator) validateModelSelectors() {
 	logger := log.FromContext(ac.srv.Context)
 	models := ac.srv.Config.ClientParams.AssistantParams.AvailableModels
@@ -450,77 +448,40 @@ func (ac *AssistantCoordinator) validateModelSelectors() {
 			continue
 		}
 
-		// DisplayName is required: it is the model's only canonical selector.
-		// Disable the model in the in-memory config so the frontend (which
-		// filters on enabled) can't offer it and delegate registration skips it.
-		if m.DisplayName == "" {
+		// Two enabled models with the same id@adapter pair are indistinguishable;
+		// checked before the bare-id warning so an exact duplicate logs only this.
+		selector := m.Selector()
+		if owner, dup := seen[selector]; dup {
 			logger.WithFields(log.Fields{
-				"modelId": m.ID,
-				"adapter": m.Adapter,
-			}).Error("model is missing required displayName; disabling it")
-			m.Enabled = false
+				"selector":   selector,
+				"firstModel": owner,
+			}).Error("duplicate model selector; the first configured model will be used")
 			continue
 		}
+		seen[selector] = selector
 
 		// Two enabled models sharing an id make bare-id resolution ambiguous.
 		if owner, dup := seenID[m.ID]; dup {
 			logger.WithFields(log.Fields{
 				"modelId":    m.ID,
 				"firstModel": owner,
-				"alsoModel":  m.LegacySelector(),
+				"alsoModel":  selector,
 			}).Warn("multiple enabled models share an id; bare-id selectors (e.g. agent mappings) resolve to the first configured one")
 		} else {
-			seenID[m.ID] = m.LegacySelector()
-		}
-
-		if strings.Contains(m.DisplayName, "@") {
-			logger.WithField("displayName", m.DisplayName).Warn("model displayName contains '@', which is ambiguous with the legacy id@adapter selector format")
-		}
-
-		selector := m.Selector()
-		if owner, dup := seen[selector]; dup {
-			logger.WithFields(log.Fields{
-				"selector":      selector,
-				"firstModel":    owner,
-				"shadowedModel": m.LegacySelector(),
-			}).Error("duplicate model selector; the first configured model wins and this one is unreachable")
-			continue
-		}
-		seen[selector] = m.LegacySelector()
-
-		// A DisplayName matching another model's legacy id@adapter selector
-		// shadows that model's stored sessions (canonical resolution wins).
-		for j := range models {
-			if i != j && models[j].Enabled && m.DisplayName == models[j].LegacySelector() {
-				logger.WithFields(log.Fields{
-					"displayName":   m.DisplayName,
-					"shadowedModel": models[j].LegacySelector(),
-				}).Warn("model displayName matches another model's legacy id@adapter selector and will shadow it")
-			}
+			seenID[m.ID] = selector
 		}
 	}
 }
 
 // resolveModel resolves a client-supplied model selector to its configured
-// parameters. The canonical selector is the model's DisplayName; the legacy
-// "id@adapter" form (stored in old sessions and browser settings) is resolved
-// as a fallback so existing conversations keep working. Returns nil when
-// nothing matches; callers must handle the nil case (a model may have a
-// registered adapter without an AvailableModels entry).
+// parameters. The canonical selector is "id@adapter" (matches both fields); a
+// bare id matches on ID alone and uses that model's own adapter. Prefers an
+// enabled model; a not-enabled match is returned only when no enabled model
+// matches, so stored sessions on a since-disabled model still resolve. Returns
+// nil when nothing matches.
 func (ac *AssistantCoordinator) resolveModel(selector string) *model.ModelParameters {
 	models := ac.srv.Config.ClientParams.AssistantParams.AvailableModels
 
-	// Pass 1: canonical selector (the required DisplayName). Runs before any
-	// splitting so a DisplayName containing "@" resolves. Empty selectors are
-	// skipped so a misconfigured model can never match an empty request.
-	for i := range models {
-		if models[i].Selector() != "" && models[i].Selector() == selector {
-			return &models[i]
-		}
-	}
-
-	// Pass 2: legacy "id@adapter" (matches both), or a bare id (matches id alone
-	// and uses that model's own adapter). Prefer an enabled model, else first match.
 	modelId, adapterName, hasAdapter := splitModelAdapter(selector)
 	var fallback *model.ModelParameters
 	for i := range models {
@@ -543,21 +504,22 @@ func (ac *AssistantCoordinator) resolveModel(selector string) *model.ModelParame
 
 // resolveAgent resolves an agent name to its definition and the model that
 // executes it. The model is found by mapping the agent name through
-// ac.agentMapping to a model DisplayName and then resolveModel. Returns
-// ErrInvalidAgent when the agent is unknown or its mapped model is missing;
-// callers surface this as a client error. Only meaningful in agentic mode.
+// ac.agentMapping to a model selector ("id@adapter" or bare id) and then
+// resolveModel. Returns ErrInvalidAgent when the agent is unknown or its
+// mapped model is missing; callers surface this as a client error. Only
+// meaningful in agentic mode.
 func (ac *AssistantCoordinator) resolveAgent(name string) (*model.AgentParameters, *model.ModelParameters, error) {
 	agent, ok := ac.agents[name]
 	if !ok {
 		return nil, nil, ErrInvalidAgent
 	}
 
-	displayName, mapped := ac.agentMapping[name]
+	modelSelector, mapped := ac.agentMapping[name]
 	if !mapped {
 		return nil, nil, ErrInvalidAgent
 	}
 
-	modelParams := ac.resolveModel(displayName)
+	modelParams := ac.resolveModel(modelSelector)
 	if modelParams == nil {
 		return nil, nil, ErrInvalidAgent
 	}
@@ -565,19 +527,24 @@ func (ac *AssistantCoordinator) resolveAgent(name string) (*model.AgentParameter
 	return &agent, modelParams, nil
 }
 
-// resolveAdapterName returns the adapter a selector routes to. Selectors that
-// resolve to no configured model fall back to the legacy split so a registered
-// adapter without an AvailableModels entry can still answer (Balance/Health).
-func (ac *AssistantCoordinator) resolveAdapterName(selector string) string {
-	// In agentic mode the selector is an agent name; route to its mapped model's
-	// adapter so balance/health checks hit the right backend.
+// resolveSelector resolves a client-supplied selector string. In agentic mode
+// the string is first tried as an agent name; a string that is not an agent
+// (or any string in non-agentic mode) is tried as a model selector
+// ("id@adapter" or bare id). agentParams is non-nil only when an agent
+// matched; modelParams is nil when nothing matched.
+func (ac *AssistantCoordinator) resolveSelector(selector string) (*model.AgentParameters, *model.ModelParameters) {
 	if ac.isAgentic {
-		if _, modelParams, err := ac.resolveAgent(selector); err == nil {
-			return modelParams.Adapter
+		if agentParams, modelParams, err := ac.resolveAgent(selector); err == nil {
+			return agentParams, modelParams
 		}
 	}
 
-	if params := ac.resolveModel(selector); params != nil {
+	return nil, ac.resolveModel(selector)
+}
+
+// resolveAdapterName returns the adapter a selector routes to.
+func (ac *AssistantCoordinator) resolveAdapterName(selector string) string {
+	if _, params := ac.resolveSelector(selector); params != nil {
 		return params.Adapter
 	}
 
@@ -627,29 +594,16 @@ func (ac *AssistantCoordinator) prepareChatRequest(ctx context.Context, aiModel 
 		return nil, nil, errors.New("missing requestor id in context")
 	}
 
-	// In agentic mode the selector is an agent name, resolved through the
-	// agent->model mapping. Otherwise it is a model selector (DisplayName or
-	// legacy id@adapter). agentParams is non-nil only in the agentic path.
-	var (
-		agentParams *model.AgentParameters
-		modelParams *model.ModelParameters
-		err         error
-	)
-
-	if ac.isAgentic {
-		agentParams, modelParams, err = ac.resolveAgent(aiModel)
-		if err != nil {
-			logger.WithField("agent", aiModel).Error("requested agent is not configured")
-			return nil, nil, err
-		}
-	} else {
-		modelParams = ac.resolveModel(aiModel)
-		if modelParams == nil {
-			// The requested model is not configured; there is no sensible fallback, so
-			// surface it as a client error (mapped to HTTP 400 by the handler).
-			logger.WithField("model", aiModel).Error("requested model is not configured")
-			return nil, nil, ErrInvalidModel
-		}
+	// The selector is an agent name (agentic mode only, checked first) or a
+	// model selector ("id@adapter" or bare id). agentParams is non-nil only
+	// when an agent matched.
+	agentParams, modelParams := ac.resolveSelector(aiModel)
+	if modelParams == nil {
+		// The requested selector matches no configured agent or model; there is
+		// no sensible fallback, so surface it as a client error (mapped to HTTP
+		// 400 by the handler).
+		logger.WithField("model", aiModel).Error("requested selector matches no configured agent or model")
+		return nil, nil, ErrInvalidModel
 	}
 
 	req := &model.ChatRequest{

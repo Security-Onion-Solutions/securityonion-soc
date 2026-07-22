@@ -28,15 +28,27 @@ globalThis.AssistantSessions = (function() {
         // in agentic mode, use agent names rather than model names
         this.availableAgents = params["availableAgents"] || [];
         this.agentMapping = params["agentMapping"] || {};
-        const modelsByName = new Map((params["availableModels"] || []).map(m => [m.displayName, m]));
+        const allModels = params["availableModels"] || [];
+        // Mirrors the backend's resolveModel: an agent's mapped model selector
+        // is id@adapter or a bare id; prefer an enabled model, else first match.
+        const resolveMappedModel = (selector) => {
+          if (!selector) return null;
+          let fallback = null;
+          for (const m of allModels) {
+            if (this.buildModelIdentifier(m) !== selector && m.id !== selector) continue;
+            if (m.enabled) return m;
+            if (!fallback) fallback = m;
+          }
+          return fallback;
+        };
         this.availableModels = this.availableAgents.map(a => {
-          const mapped = modelsByName.get(this.agentMapping[a.name]);
+          const mapped = resolveMappedModel(this.agentMapping[a.name]);
           return {
             ...a,
             key: a.name,
             displayName: a.name,
             adapter: 'Agents',
-            mappedModelName: mapped?.displayName || '',
+            mappedModelName: mapped ? (mapped.displayName || this.buildModelIdentifier(mapped)) : '',
             mappedAdapter: mapped?.adapter || '',
             contextLimitSmall: mapped?.contextLimitSmall || 0,
             contextLimitLarge: mapped?.contextLimitLarge || 0,
@@ -56,20 +68,16 @@ globalThis.AssistantSessions = (function() {
       } else {
         this.availableModels = params["availableModels"];
         if (this.availableModels && this.availableModels.length > 0) {
-          this.availableModels.forEach(m => m.key = m.displayName || this.buildModelIdentifier(m));
+          this.availableModels.forEach(m => {
+            m.key = this.buildModelIdentifier(m);
+            // displayName is optional, cosmetic-only; fall back to the selector
+            if (!m.displayName) m.displayName = m.key;
+          });
           this.modelsMap = new Map(
             this.availableModels.filter(m => m.enabled).map(m => [m.key, m])
           );
           for (let val of this.modelsMap.values()) {
             if (val.contextLimitLarge < val.contextLimitSmall) val.contextLimitLarge = val.contextLimitSmall;
-          }
-          // Selectors restored from localStorage may still be in the legacy
-          // id@adapter form; silently migrate them to the model's current key.
-          let legacyModelKeys = new Map(
-            this.availableModels.filter(m => m.enabled).map(m => [this.buildModelIdentifier(m), m.key])
-          );
-          if (this.currentModel && !this.modelsMap.has(this.currentModel) && legacyModelKeys.has(this.currentModel)) {
-            this.currentModel = legacyModelKeys.get(this.currentModel);
           }
           if (!this.currentModel || !this.modelsMap.has(this.currentModel)) this.currentModel = this.availableModels[0].key;
           this.groupedModels = this.buildGroupedModels();
