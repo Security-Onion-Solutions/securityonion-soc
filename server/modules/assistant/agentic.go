@@ -33,20 +33,20 @@ func (ac *AssistantCoordinator) setupAgentic() {
 			Name:           "Orchestrator",
 			IsOrchestrator: true,
 			AllowedSkills:  []string{},
-			CanDelegateTo:  []string{"Investigator", "Detection Engineer"},
+			CanDelegateTo:  []string{"Investigator", "DetectionEngineer"},
 			Prompt:         prompts["prompt_agent_orchestrator"],
 		},
 		"Investigator": {
 			Name:          "Investigator",
 			AllowedSkills: []string{"Hunt", "Playbooks", "Respond"},
-			CanDelegateTo: []string{"Detection Engineer"},
+			CanDelegateTo: []string{"DetectionEngineer"},
 			Prompt:        prompts["prompt_agent_investigator"],
 			Description: "Investigates alerts, explains events and records, and answers open questions about activity in event data. " +
 				"Also acknowledges alerts, escalates to cases, and looks up cases. " +
 				"Objectives must include all identifiers verbatim.",
 		},
-		"Detection Engineer": {
-			Name:          "Detection Engineer",
+		"DetectionEngineer": {
+			Name:          "DetectionEngineer",
 			AllowedSkills: []string{"Detections", "Tuning", "Hunt"},
 			CanDelegateTo: []string{},
 			Prompt:        prompts["prompt_agent_engineer"],
