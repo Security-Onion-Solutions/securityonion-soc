@@ -16,11 +16,11 @@ type ToolRequest struct {
 	// The unique identifier for this tool use.
 	ToolUseId string `json:"toolUseId" example:"tooluse_mT45or7ISwSEUivo63nqow"`
 	// The parameters for this tool use.
-	Params json.RawMessage `json:"params" example:"{\"key\":\"value\"}"`
+	Params json.RawMessage `json:"params" swaggertype:"object"`
 	// The model to use for this tool execution.
 	Model string `json:"model,omitempty" example:"claude-sonnet-4.5"`
 	// Auxiliary data for certain tools.
-	AuxData json.RawMessage `json:"auxData,omitempty" example:"{toolSpecificData: 'example'}"`
+	AuxData json.RawMessage `json:"auxData,omitempty" swaggertype:"object"`
 	// Rejected indicates the user declined this tool: it is not executed; an error
 	// tool_result is recorded instead so the turn (and any parallel siblings) resolves.
 	Rejected bool `json:"rejected,omitempty"`
