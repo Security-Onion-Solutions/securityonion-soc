@@ -850,6 +850,18 @@ test('query string filterToggles', () => {
   expect(comp.filterToggles[1].enabled).toBe(false);
 });
 
+test('buildCurrentRoute with filterToggles', () => {
+  comp.category = "hunt";
+  comp.query = "*";
+  comp.filterToggles = [
+    { name: "caseExcludeToggle", enabled: true },
+    { name: "socExcludeToggle", enabled: false }
+  ];
+  const route = comp.buildCurrentRoute();
+  expect(route.query.caseExcludeToggle).toBe(true);
+  expect(route.query.socExcludeToggle).toBe(false);
+});
+
 test('buildGroupByRoute', () => {
   comp.query = "*"; // no groupBy clause results in hard coded response of 1
   let r = comp.buildGroupByRoute('x');

@@ -391,3 +391,48 @@ test('showNodeMetrics', () => {
 	expect(comp.activeTab).toBe('metrics');
 	expect(comp.metricsNodeId).toBe('host123');
 });
+
+test('refresh on nodes tab', () => {
+	comp.loadData = jest.fn();
+	comp.loadHistoricalMetrics = jest.fn();
+	comp.activeTab = 'nodes';
+
+	comp.refresh();
+
+	expect(comp.loadData).toHaveBeenCalled();
+	expect(comp.loadHistoricalMetrics).not.toHaveBeenCalled();
+});
+
+test('refresh on metrics tab', () => {
+	comp.loadData = jest.fn();
+	comp.loadHistoricalMetrics = jest.fn();
+	comp.activeTab = 'metrics';
+
+	comp.refresh();
+
+	expect(comp.loadData).toHaveBeenCalled();
+	expect(comp.loadHistoricalMetrics).toHaveBeenCalledWith(true);
+});
+
+test('zone watcher on nodes tab', () => {
+	comp.saveTimezone = jest.fn();
+	comp.loadHistoricalMetrics = jest.fn();
+	comp.activeTab = 'nodes';
+
+	comp.watch.zone.call(comp, 'America/New_York');
+
+	expect(comp.saveTimezone).toHaveBeenCalled();
+	expect(comp.loadHistoricalMetrics).not.toHaveBeenCalled();
+});
+
+test('zone watcher on metrics tab', () => {
+	comp.saveTimezone = jest.fn();
+	comp.loadHistoricalMetrics = jest.fn();
+	comp.activeTab = 'metrics';
+
+	comp.watch.zone.call(comp, 'America/New_York');
+
+	expect(comp.saveTimezone).toHaveBeenCalled();
+	expect(comp.loadHistoricalMetrics).toHaveBeenCalledWith(true);
+});
+

@@ -33,33 +33,56 @@ func (ac *AssistantCoordinator) setupAgentic() {
 			Name:           "Orchestrator",
 			IsOrchestrator: true,
 			AllowedSkills:  []string{},
-			CanDelegateTo:  []string{"Hunter"},
+			CanDelegateTo:  []string{"Investigator", "Detection Engineer"},
 			Prompt:         prompts["prompt_agent_orchestrator"],
 		},
-		"Hunter": {
-			Name:          "Hunter",
-			AllowedSkills: []string{"Hunt"},
+		"Investigator": {
+			Name:          "Investigator",
+			AllowedSkills: []string{"Hunt", "Playbooks", "Respond"},
+			CanDelegateTo: []string{"Detection Engineer"},
+			Prompt:        prompts["prompt_agent_investigator"],
+			Description: "Investigates alerts, explains events and records, and answers open questions about activity in event data. " +
+				"Also acknowledges alerts, escalates to cases, and looks up cases. " +
+				"Objectives must include all identifiers verbatim.",
+		},
+		"Detection Engineer": {
+			Name:          "Detection Engineer",
+			AllowedSkills: []string{"Detections", "Tuning", "Hunt"},
 			CanDelegateTo: []string{},
-			Prompt:        prompts["prompt_agent_hunter"],
-			Description:   "An agent specialized in querying and analyzing security event data to uncover insights, patterns, and potential threats. Hunter is adept at formulating complex queries, interpreting results, and providing actionable intelligence based on security event logs.",
+			Prompt:        prompts["prompt_agent_engineer"],
+			Description: "Manages detections and their overrides. " +
+				"Handles: tuning noisy rules with overrides (suppressions, thresholds, custom filters); " +
+				"creating detections or editing rule content; " +
+				"coverage questions about which detections exist for a technique or behavior. " +
+				"Objectives should include the detection public ID or rule UUID when known.",
 		},
 	}
 
 	ac.SkillLibrary = map[string]model.Skill{
-		"Cases": {
-			Name:             "Cases",
-			Tools:            []string{"query_cases", "escalate_alerts"},
-			AdditionalPrompt: prompts["prompt_skill_cases"],
+		"Hunt": {
+			Name:             "Hunt",
+			Tools:            []string{"query_events", "get_playbooks"},
+			AdditionalPrompt: prompts["prompt_skill_hunt"],
+		},
+		"Playbooks": {
+			Name:             "Playbooks",
+			Tools:            []string{"get_playbooks"},
+			AdditionalPrompt: prompts["prompt_skill_playbooks"],
+		},
+		"Respond": {
+			Name:             "Respond",
+			Tools:            []string{"ack_alerts", "escalate_alerts", "query_cases"},
+			AdditionalPrompt: prompts["prompt_skill_respond"],
 		},
 		"Detections": {
 			Name:             "Detections",
-			Tools:            []string{"add_overrides", "create_detection", "query_detections", "toggle_detections", "update_detection_content", "update_overrides"},
+			Tools:            []string{"query_detections"},
 			AdditionalPrompt: prompts["prompt_skill_detections"],
 		},
-		"Hunt": {
-			Name:             "Hunt",
-			Tools:            []string{"query_events"},
-			AdditionalPrompt: prompts["prompt_skill_hunt"],
+		"Tuning": {
+			Name:             "Tuning",
+			Tools:            []string{"add_overrides", "create_detection", "toggle_detections", "update_detection_content", "update_overrides"},
+			AdditionalPrompt: prompts["prompt_skill_tuning"],
 		},
 	}
 }

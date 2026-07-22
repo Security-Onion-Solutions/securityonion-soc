@@ -100,8 +100,9 @@ func (h *GridHandler) getNodes(w http.ResponseWriter, r *http.Request) {
 // @Tags         Grid
 // @Security     bearer[nodes/read]
 // @Produce      json
-// @Param        nodeId  query  string  false  "The optional node ID to retrieve metrics for"
-// @Param        metric  query  string  true   "The name of the metric to retrieve (e.g., cpu, memory, load, disk, net)"
+// @Param        nodeId     query  string  false  "The optional node ID to retrieve metrics for"
+// @Param        container  query  string  false  "The optional container name to retrieve metrics for"
+// @Param        metric     query  string  true   "The name of the metric to retrieve (e.g., cpu, memory, load, disk, net)"
 // @Param        range   query  string  true   "Date range, in the specified timezone" example(2024/12/03 03:09:31 PM - 2024/12/04 03:09:31 PM)
 // @Param        zone    query  string  true   "Timezone of the date range" example(America/New_York)
 // @Param        format  query  string  true   "Date range date format" example(2006/01/02 3:04:05 PM)
@@ -123,6 +124,7 @@ func (h *GridHandler) getMetricsHistory(w http.ResponseWriter, r *http.Request) 
 	}
 
 	nodeId := r.Form.Get("nodeId")
+	container := r.Form.Get("container")
 	metricType := r.Form.Get("metric")
 	rangeVal := r.Form.Get("range")
 	format := r.Form.Get("format")
@@ -145,7 +147,7 @@ func (h *GridHandler) getMetricsHistory(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	data, err := h.server.Metrics.GetTimeSeriesMetrics(ctx, nodeId, metricType, start, end)
+	data, err := h.server.Metrics.GetTimeSeriesMetrics(ctx, nodeId, container, metricType, start, end)
 	if err != nil {
 		logger.WithError(err).Error("unable to get time series metrics")
 		var unauthErr *model.Unauthorized

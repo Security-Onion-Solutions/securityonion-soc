@@ -316,8 +316,9 @@ func (params *CaseParameters) Verify() error {
 }
 
 type GridParameters struct {
-	MaxUploadSize  uint64 `json:"maxUploadSize,omitempty"`
-	StaleMetricsMs uint64 `json:"staleMetricsMs,omitempty"`
+	MaxUploadSize    uint64          `json:"maxUploadSize,omitempty"`
+	StaleMetricsMs   uint64          `json:"staleMetricsMs,omitempty"`
+	MetricsDashboard json.RawMessage `json:"metricsDashboard,omitempty" swaggertype:"object"`
 }
 
 type DetectionsParameters struct {

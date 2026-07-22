@@ -285,6 +285,7 @@ global.mockShowError = function(logError = false) {
 // Import SO app modules
 ////////////////////////////////////
 require('./i18n.js');
+require('./graphing.js');
 
 // stub Promise.all so it's synchronous
 const orig = Promise.all;
@@ -318,7 +319,7 @@ global.moment = require('./external/moment-timezone-with-data-0.6.2.min.js');
 moment.tz.setDefault('UTC');
 
 global.marked = require('./external/marked-18.0.2.min.js');
-global.DOMPurify = require('./external/dompurify-3.4.11.min.js');
-global.jsyaml = require('./external/js-yaml.4.2.0.min.js');
+global.DOMPurify = require('./external/dompurify-3.4.12.min.js');
+global.jsyaml = require('./external/js-yaml.4.3.0.min.js');
 global.LZString = require('./external/lz-string.1.5.0.min.js');
 global.loadPageTemplate = jest.fn();

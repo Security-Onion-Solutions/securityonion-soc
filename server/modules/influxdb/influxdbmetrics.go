@@ -526,7 +526,7 @@ func (metrics *InfluxDBMetrics) UpdateNodeMetrics(ctx context.Context, node *mod
 	return status
 }
 
-func (metrics *InfluxDBMetrics) GetTimeSeriesMetrics(ctx context.Context, nodeId string, metricType string, startTime, endTime time.Time) (map[string][]model.MetricSample, error) {
+func (metrics *InfluxDBMetrics) GetTimeSeriesMetrics(ctx context.Context, nodeId, container string, metricType string, startTime, endTime time.Time) (map[string][]model.MetricSample, error) {
 	if err := metrics.server.CheckAuthorized(ctx, "read", "nodes"); err != nil {
 		return nil, err
 	}

@@ -187,7 +187,7 @@ func (impl *FakeMetrics) UpdateNodeMetrics(ctx context.Context, node *model.Node
 	return false
 }
 
-func (impl *FakeMetrics) GetTimeSeriesMetrics(ctx context.Context, nodeId string, metricType string, startTime, endTime time.Time) (map[string][]model.MetricSample, error) {
+func (impl *FakeMetrics) GetTimeSeriesMetrics(ctx context.Context, nodeId, container string, metricType string, startTime, endTime time.Time) (map[string][]model.MetricSample, error) {
 	return nil, nil
 }
 

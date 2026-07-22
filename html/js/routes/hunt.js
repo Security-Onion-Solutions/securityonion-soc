@@ -1258,6 +1258,14 @@ const huntComponent = {
         queryObj.gridId = this.gridId;
       }
 
+      if (Array.isArray(this.filterToggles)) {
+        this.filterToggles.forEach(toggle => {
+          if (toggle.name) {
+            queryObj[toggle.name] = toggle.enabled;
+          }
+        });
+      }
+
       return { path: this.category, query: queryObj };
     },
     buildFilterRoute(filterField, filterValue, filterMode, scalar) {
@@ -1677,80 +1685,7 @@ const huntComponent = {
       return false;
     },
     debounceChartResize(chart, size) {
-      const MAX_RESIZE_METRIC_COUNT = 20;
-      const MAX_RESIZE_METRIC_AGE = 1000; // milliseconds
-      const MAX_RESIZE_METRIC_FLAPS = 1;
-
-      if (!chart.options.responsive) return;
-
-      const now = Date.now();
-
-      // Get this chart's resize metric history, or create a new history
-      var data = this.chartResizeTracker[chart];
-      if (!data) {
-        data = [];
-        this.chartResizeTracker[chart] = data;
-      }
-
-      // Determine how many metrics are expired
-      var pruneCount = 0;
-      for (var idx = 0; idx < data.length; idx++) {
-        var metric = data[idx];
-        if (metric.time < now - MAX_RESIZE_METRIC_AGE) {
-          pruneCount = idx + 1;
-        } else {
-          break
-        }
-      }
-
-      // Remove expired metrics
-      for (var idx = 0; idx < pruneCount; idx++) {
-        data.shift();
-      }
-
-      var newResizeMetric = {
-        size: size,
-        time: now,
-      }
-
-      data.push(newResizeMetric);
-
-      // Limit the number of metrics in history
-      if (data.length > MAX_RESIZE_METRIC_COUNT) {
-        data.shift();
-      }
-
-      // Review the metric history and determine if the chart size is flapping
-      var flapCount = 0;
-      var prevDirection = 0;
-      for (var idx = 0; idx < data.length; idx++) {
-        var prev = data[idx];
-        if (idx < data.length - 1) {
-          var next = data[idx + 1];
-          var nextDirection = 0;
-          if (next.size.width > prev.size.width) {
-            nextDirection = 1;
-          } else if (next.size.width < prev.size.width) {
-            nextDirection = -1;
-          }
-
-          if (prevDirection != 0 && nextDirection != 0) {
-            if (nextDirection != prevDirection) {
-              flapCount++;
-            }
-          }
-          if (nextDirection != 0) {
-            prevDirection = nextDirection;
-          }
-        }
-      }
-      if (flapCount > MAX_RESIZE_METRIC_FLAPS) {
-        chart.options.responsive = false;
-        // for (var idx = 0; idx < data.length; idx++) {
-        //   console.log(idx + " -> " + data[idx].size.width)
-        // }
-        // console.log("Excessive chart flapping detected; disabled chart resizing")
-      }
+      window.socGraphing.debounceChartResize(chart, size, this.chartResizeTracker);
     },
     updateGroupBySort(i) {
       if (this.groupBys.length > 0 && i === 0 && this.groupBys[0].sortBy[0]) {
@@ -2033,15 +1968,15 @@ const huntComponent = {
       }
     },
     populateChart(chart, data) {
-      chart.key++;
-      chart.labels = [];
-      chart.datasets[0].data = [];
-      if (!data) return;
       const route = this;
-      data.forEach(function (item, index) {
-        chart.labels.push(route.$root.truncate(route.localizeValue(route.lookupSocId(item.keys[0])), route.chartLabelMaxLength));
-        chart.datasets[0].data.push(item.value);
-      });
+      window.socGraphing.populateChart(
+        chart,
+        data,
+        this.chartLabelMaxLength,
+        val => route.$root.truncate(val, route.chartLabelMaxLength),
+        val => route.localizeValue(val),
+        val => route.lookupSocId(val)
+      );
     },
     isMultiSelect() {
       return this.isCategory('detections');
@@ -2162,124 +2097,52 @@ const huntComponent = {
       this.bottomChartData.key = 0;
     },
     setupBarChart(options, data, title, groupIdx) {
-      var fontColor = this.$root.getColor("#888888", -40);
-      var dataColor = this.$root.getColor("primary");
-      var gridColor = this.$root.getColor("#888888", 65);
+      const fontColor = this.$root.getColor("#888888", -40);
+      const dataColor = this.$root.getColor("primary");
+      const gridColor = this.$root.getColor("#888888", 65);
+      window.socGraphing.setupBarChart(options, data, title, fontColor, gridColor, dataColor);
       options.onClick = this.handleChartClick(groupIdx);
       options.onResize = this.debounceChartResize;
-      options.responsive = true;
-      options.maintainAspectRatio = false;
-      options.plugins = {
-        legend: {
-          display: false,
-        },
-        title: {
-          display: true,
-          text: title,
-          color: fontColor,
-        }
-      };
-      options.scales = {
-        y: {
-          grid: {
-            color: gridColor,
-          },
-          ticks: {
-            beginAtZero: true,
-            color: fontColor,
-            precision: 0,
-          }
-        },
-        x: {
-          grid: {
-            color: gridColor,
-          },
-          ticks: {
-            color: fontColor,
-          }
-        },
-      };
-
-      data.labels = [];
-      data.datasets = [{
-        backgroundColor: dataColor,
-        borderColor: dataColor,
-        pointRadius: 3,
-        fill: false,
-        data: [],
-        label: this.i18n.field_count,
-      }];
+      if (data.datasets && data.datasets[0]) {
+        data.datasets[0].label = this.i18n.field_count;
+      }
     },
     setupTimelineChart(options, data, title) {
-      this.setupBarChart(options, data, title);
+      const fontColor = this.$root.getColor("#888888", -40);
+      const dataColor = this.$root.getColor("primary");
+      const gridColor = this.$root.getColor("#888888", 65);
+      window.socGraphing.setupTimelineChart(options, data, title, fontColor, gridColor, dataColor);
       options.onClick = null;
-      options.scales.x.type = 'timeseries';
+      options.onResize = this.debounceChartResize;
+      if (data.datasets && data.datasets[0]) {
+        data.datasets[0].label = this.i18n.field_count;
+      }
     },
     setupPieChart(options, data, title) {
-      var fontColor = this.$root.getColor("#888888", -40);
+      const fontColor = this.$root.getColor("#888888", -40);
+      window.socGraphing.setupPieChart(options, data, title, fontColor);
       options.onResize = this.debounceChartResize;
-      options.responsive = true;
-      options.maintainAspectRatio = false;
-      options.plugins = {
-        legend: {
-          display: true,
-          position: 'left',
-          labels: {
-            color: fontColor,
-          },
-        },
-        title: {
-          display: true,
-          text: title,
-          color: fontColor,
-        }
-      };
-      data.labels = [];
-      data.datasets = [{
-        backgroundColor: [
-          'rgba(77, 201, 246, 1)',
-          'rgba(246, 112, 25, 1)',
-          'rgba(245, 55, 148, 1)',
-          'rgba(83, 123, 196, 1)',
-          'rgba(172, 194, 54, 1)',
-          'rgba(22, 106, 143, 1)',
-          'rgba(0, 169, 80, 1)',
-          'rgba(88, 89, 91, 1)',
-          'rgba(133, 73, 186, 1)',
-          'rgba(235, 204, 52, 1)',
-          'rgba(127, 127, 127, 1)',
-        ],
-        borderColor: 'rgba(255, 255, 255, 0.5)',
-        data: [],
-        label: this.i18n.field_count,
-      }];
+      if (data.datasets && data.datasets[0]) {
+        data.datasets[0].label = this.i18n.field_count;
+      }
     },
     setupSankeyChart(options, data, title) {
-      var fontColor = this.$root.getColor("#888888", -40);
+      const fontColor = this.$root.getColor("#888888", -40);
+      const isDark = this.$root.$vuetify && this.$root.$vuetify.theme.current.dark;
       const route = this;
+      window.socGraphing.setupSankeyChart(
+        options,
+        data,
+        title,
+        fontColor,
+        isDark,
+        c => route.getSankeyColor('from', 'out', c, data.flowMax),
+        c => route.getSankeyColor('to', 'in', c, data.flowMax)
+      );
       options.onResize = this.debounceChartResize;
-      options.responsive = true;
-      options.maintainAspectRatio = false;
-      options.plugins = {
-        legend: {
-          display: false,
-        },
-        title: {
-          display: true,
-          text: title,
-          color: fontColor,
-        }
-      };
-      data.flowMax = 0; // This is a custom attribute used for color selection
-      data.labels = [];
-      data.datasets = [{
-        data: [],
-        label: this.i18n.field_count,
-        color: this.$root.$vuetify && this.$root.$vuetify.theme.current.dark ? 'white' : 'black',
-        colorFrom: c => route.getSankeyColor('from', 'out', c, data.flowMax),
-        colorTo: c => route.getSankeyColor('to', 'in', c, data.flowMax),
-        size: 'max',
-      }];
+      if (data.datasets && data.datasets[0]) {
+        data.datasets[0].label = this.i18n.field_count;
+      }
     },
     getSankeyColor(tag, dir, source, max) {
       var color = 'steelblue';

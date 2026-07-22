@@ -184,6 +184,7 @@ type SimpleQuestion struct {
 	Context      string  `json:"context"`
 	Range        *string `json:"range,omitempty"`
 	QueryResults any     `json:"queryResults"`
+	TimedOut     bool    `json:"timedOut"`
 }
 
 func simplifyPlaybooks(playbooks []*model.Playbook) []*SimplePlaybook {
@@ -192,12 +193,13 @@ func simplifyPlaybooks(playbooks []*model.Playbook) []*SimplePlaybook {
 		simpleQuestions := make([]*SimpleQuestion, 0, len(pb.Questions))
 
 		for _, q := range pb.Questions {
-			if len(q.QueryResults) != 0 {
+			if len(q.QueryResults) != 0 || q.QueryTimedOut {
 				simpleQuestions = append(simpleQuestions, &SimpleQuestion{
 					Question:     q.Question,
 					Context:      q.Context,
 					Range:        q.Range,
 					QueryResults: filterEvents(q.QueryResults, q.QueryFields...),
+					TimedOut:     q.QueryTimedOut,
 				})
 			}
 		}

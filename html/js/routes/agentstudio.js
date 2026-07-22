@@ -66,6 +66,9 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
   },
   watch: {
     '$route': 'reload',
+    'sortByAgents': 'saveLocalSettings',
+    'sortBySkills': 'saveLocalSettings',
+    'itemsPerPage': 'saveLocalSettings',
   },
   mounted() {
     this.reload();
@@ -95,8 +98,33 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
         }));
         this.skills.forEach(s => { this.skillTabs[s.id] = 'tools'; });
         this.setAgents(this.agentsFromParams(params));
+        this.loadLocalSettings();
       }
       this.$root.stopLoading();
+    },
+    saveSetting(name, value, defaultValue = null) {
+      var item = 'settings.agentstudio.' + name;
+      if (defaultValue == null || value != defaultValue) {
+        localStorage[item] = value;
+      } else {
+        localStorage.removeItem(item);
+      }
+    },
+    saveLocalSettings() {
+      this.saveSetting('sortByAgents', this.sortByAgents[0].key, 'name');
+      this.saveSetting('sortDescAgents', this.sortByAgents[0].order, 'asc');
+      this.saveSetting('sortBySkills', this.sortBySkills[0].key, 'name');
+      this.saveSetting('sortDescSkills', this.sortBySkills[0].order, 'asc');
+      this.saveSetting('itemsPerPage', this.itemsPerPage, 10);
+    },
+    loadLocalSettings() {
+      if (localStorage['settings.agentstudio.sortByAgents']) this.sortByAgents[0].key = localStorage['settings.agentstudio.sortByAgents'];
+      if (localStorage['settings.agentstudio.sortDescAgents']) this.sortByAgents[0].order = localStorage['settings.agentstudio.sortDescAgents'];
+
+      if (localStorage['settings.agentstudio.sortBySkills']) this.sortBySkills[0].key = localStorage['settings.agentstudio.sortBySkills'];
+      if (localStorage['settings.agentstudio.sortDescSkills']) this.sortBySkills[0].order = localStorage['settings.agentstudio.sortDescSkills'];
+
+      if (localStorage['settings.agentstudio.itemsPerPage']) this.itemsPerPage = parseInt(localStorage['settings.agentstudio.itemsPerPage']);
     },
     // agentsFromParams builds the read-only rows from the server's current agent
     // set (availableAgents + agentMapping). Personas are not exposed via params

@@ -44,6 +44,8 @@ type Question struct {
 	FilledQuery string `json:"filledQuery,omitempty" yaml:"filledQuery,omitempty"`
 	// The results after the queries have been substituted, converted, and executed.
 	QueryResults []*EventRecord `json:"queryResults" yaml:"-"`
+	// Indicates if the QueryResults were cut short by a timeout.
+	QueryTimedOut bool `json:"queryTimedOut" yaml:"-"`
 
 	// The fields below are populated at conversion time; the UI echoes them back
 	// when executing a single question (POST /playbook/question).

@@ -17,7 +17,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 )
 
-func (s *Store) GetTimeSeriesMetrics(ctx context.Context, nodeId string, metricType string, startTime, endTime time.Time) (map[string][]model.MetricSample, error) {
+func (s *Store) GetTimeSeriesMetrics(ctx context.Context, nodeId, container, metricType string, startTime, endTime time.Time) (map[string][]model.MetricSample, error) {
 	duration := endTime.Sub(startTime)
 	intervalSeconds := 60
 	if duration > 24*time.Hour {
@@ -27,24 +27,20 @@ func (s *Store) GetTimeSeriesMetrics(ctx context.Context, nodeId string, metricT
 	}
 
 	res := make(map[string][]model.MetricSample)
-	if metricType == "cpu" {
-		res["cpu_used"] = make([]model.MetricSample, 0)
-	} else if metricType == "memory" {
-		res["memory_used"] = make([]model.MetricSample, 0)
-	} else if metricType == "load" {
-		res["load1"] = make([]model.MetricSample, 0)
-		res["load5"] = make([]model.MetricSample, 0)
-		res["load15"] = make([]model.MetricSample, 0)
-	} else if metricType == "disk" {
-		res["disk_used_root"] = make([]model.MetricSample, 0)
-		res["disk_used_nsm"] = make([]model.MetricSample, 0)
-	} else if metricType == "eps" {
-		res["consumption_eps"] = make([]model.MetricSample, 0)
-		res["production_eps"] = make([]model.MetricSample, 0)
-	} else if metricType == "net" {
-		res["traffic_man_in"] = make([]model.MetricSample, 0)
-		res["traffic_man_out"] = make([]model.MetricSample, 0)
-		res["traffic_mon_in"] = make([]model.MetricSample, 0)
+
+	// Pre-populate empty samples dynamically for requested metricType keys to avoid nil map responses
+	// Only do this when nodeId is not empty (single host), since for "All Hosts" the keys are dynamic.
+	if nodeId != "" {
+		keysMap := make(map[string][]string)
+		for mType, cfg := range MetricConfigs {
+			keysMap[mType] = cfg.Keys
+		}
+
+		if keys, ok := keysMap[metricType]; ok {
+			for _, k := range keys {
+				res[k] = make([]model.MetricSample, 0)
+			}
+		}
 	}
 
 	var hostFilter string
@@ -61,244 +57,149 @@ func (s *Store) GetTimeSeriesMetrics(ctx context.Context, nodeId string, metricT
 	startPlaceholder := "$2"
 	endPlaceholder := "$3"
 
-	switch metricType {
-	case "cpu":
-		q := fmt.Sprintf(`
-			SELECT 
-				to_timestamp(floor(extract(epoch from m.time) / $1) * $1) AS bucket,
-				AVG(100.0 - (m.fields->>'usage_idle')::double precision) AS val
-			FROM telegraf.cpu m
-			JOIN telegraf.cpu_tag tag ON m.tag_id = tag.tag_id
-			WHERE %s AND tag.tags->>'cpu' = 'cpu-total' AND m.time >= %s AND m.time <= %s AND m.fields->>'usage_idle' IS NOT NULL
-			GROUP BY bucket
-			ORDER BY bucket ASC`, hostFilter, startPlaceholder, endPlaceholder)
-
-		samples, err := s.runMetricQuery(ctx, q, args...)
-		if err != nil {
-			return nil, err
+	// Match and execute based on our unified lookup config map
+	if cfg, ok := MetricConfigs[metricType]; ok {
+		if cfg.CustomHandler != nil {
+			return cfg.CustomHandler(ctx, s, nodeId, container, hostFilter, startPlaceholder, endPlaceholder, args)
 		}
-		res["cpu_used"] = samples
 
-	case "memory":
-		q := fmt.Sprintf(`
-			SELECT 
-				to_timestamp(floor(extract(epoch from m.time) / $1) * $1) AS bucket,
-				AVG((m.fields->>'used_percent')::double precision) AS val
-			FROM telegraf.mem m
-			JOIN telegraf.mem_tag tag ON m.tag_id = tag.tag_id
-			WHERE %s AND m.time >= %s AND m.time <= %s AND m.fields->>'used_percent' IS NOT NULL
-			GROUP BY bucket
-			ORDER BY bucket ASC`, hostFilter, startPlaceholder, endPlaceholder)
-
-		samples, err := s.runMetricQuery(ctx, q, args...)
-		if err != nil {
-			return nil, err
-		}
-		res["memory_used"] = samples
-
-	case "load":
-		for _, loadFld := range []string{"load1", "load5", "load15"} {
-			q := fmt.Sprintf(`
-				SELECT 
-					to_timestamp(floor(extract(epoch from m.time) / $1) * $1) AS bucket,
-					AVG((m.fields->>'%s')::double precision) AS val
-				FROM telegraf.system m
-				JOIN telegraf.system_tag tag ON m.tag_id = tag.tag_id
-				WHERE %s AND m.time >= %s AND m.time <= %s AND m.fields->>'%s' IS NOT NULL
-				GROUP BY bucket
-				ORDER BY bucket ASC`, loadFld, hostFilter, startPlaceholder, endPlaceholder, loadFld)
-
-			samples, err := s.runMetricQuery(ctx, q, args...)
-			if err != nil {
-				return nil, err
+		for i, fld := range cfg.Fields {
+			table := cfg.Tables[0]
+			if i < len(cfg.Tables) {
+				table = cfg.Tables[i]
 			}
-			res[loadFld] = samples
-		}
-
-	case "disk":
-		paths := []string{"/", "/nsm"}
-		for _, p := range paths {
-			pathFilter := fmt.Sprintf("tag.tags->>'path' = '%s'", p)
-			q := fmt.Sprintf(`
-				SELECT 
-					to_timestamp(floor(extract(epoch from m.time) / $1) * $1) AS bucket,
-					AVG((m.fields->>'used_percent')::double precision) AS val
-				FROM telegraf.disk m
-				JOIN telegraf.disk_tag tag ON m.tag_id = tag.tag_id
-				WHERE %s AND %s AND m.time >= %s AND m.time <= %s AND m.fields->>'used_percent' IS NOT NULL
-				GROUP BY bucket
-				ORDER BY bucket ASC`, hostFilter, pathFilter, startPlaceholder, endPlaceholder)
-
-			samples, err := s.runMetricQuery(ctx, q, args...)
-			if err != nil {
-				return nil, err
+			filter := ""
+			if i < len(cfg.Filters) {
+				filter = cfg.Filters[i]
 			}
-			key := "disk_used_root"
-			if p == "/nsm" {
-				key = "disk_used_nsm"
-			}
-			res[key] = samples
-		}
 
-	case "eps":
-		qCons := fmt.Sprintf(`
-			SELECT 
-				to_timestamp(floor(extract(epoch from m.time) / $1) * $1) AS bucket,
-				SUM((m.fields->>'eps')::double precision) AS val
-			FROM telegraf.consumptioneps m
-			JOIN telegraf.consumptioneps_tag tag ON m.tag_id = tag.tag_id
-			WHERE %s AND m.time >= %s AND m.time <= %s AND m.fields->>'eps' IS NOT NULL
-			GROUP BY bucket
-			ORDER BY bucket ASC`, hostFilter, startPlaceholder, endPlaceholder)
-
-		samplesCons, err := s.runMetricQuery(ctx, qCons, args...)
-		if err != nil {
-			return nil, err
-		}
-		res["consumption_eps"] = samplesCons
-
-		qProd := fmt.Sprintf(`
-			SELECT 
-				to_timestamp(floor(extract(epoch from m.time) / $1) * $1) AS bucket,
-				SUM((m.fields->>'eps')::double precision) AS val
-			FROM telegraf.fbstats m
-			JOIN telegraf.fbstats_tag tag ON m.tag_id = tag.tag_id
-			WHERE %s AND m.time >= %s AND m.time <= %s AND m.fields->>'eps' IS NOT NULL
-			GROUP BY bucket
-			ORDER BY bucket ASC`, hostFilter, startPlaceholder, endPlaceholder)
-
-		samplesProd, err := s.runMetricQuery(ctx, qProd, args...)
-		if err != nil {
-			return nil, err
-		}
-		res["production_eps"] = samplesProd
-
-	case "net":
-		timeWindow := "2 minutes"
-		qNet := fmt.Sprintf(`
-			WITH traffic_diff AS (
-				SELECT 
-					tag.tags->>'host' as host,
-					tag.tags->>'interface' as interface,
-					m.time,
-					(m.fields->>'bytes_recv')::bigint as bytes_recv,
-					(m.fields->>'bytes_sent')::bigint as bytes_sent,
-					LAG((m.fields->>'bytes_recv')::bigint) OVER (PARTITION BY tag.tags->>'host', tag.tags->>'interface' ORDER BY m.time) as prev_recv,
-					LAG((m.fields->>'bytes_sent')::bigint) OVER (PARTITION BY tag.tags->>'host', tag.tags->>'interface' ORDER BY m.time) as prev_sent,
-					LAG(m.time) OVER (PARTITION BY tag.tags->>'host', tag.tags->>'interface' ORDER BY m.time) as prev_time
-				FROM telegraf.net m
-				JOIN telegraf.net_tag tag ON m.tag_id = tag.tag_id
-				WHERE %s AND m.time >= (%s)::timestamp - INTERVAL '%s' AND m.time <= (%s)::timestamp AND m.fields->>'bytes_recv' IS NOT NULL AND m.fields->>'bytes_sent' IS NOT NULL
-			),
-			rates AS (
-				SELECT 
-					host,
-					interface,
-					time,
-					CASE 
-						WHEN prev_time IS NOT NULL AND time > prev_time AND bytes_recv >= prev_recv 
-						THEN ((bytes_recv - prev_recv) * 8.0 / (1000.0 * 1000.0)) / EXTRACT(EPOCH FROM (time - prev_time))
-						ELSE 0.0
-					END as recv_rate_mbps,
-					CASE 
-						WHEN prev_time IS NOT NULL AND time > prev_time AND bytes_sent >= prev_sent 
-						THEN ((bytes_sent - prev_sent) * 8.0 / (1000.0 * 1000.0)) / EXTRACT(EPOCH FROM (time - prev_time))
-						ELSE 0.0
-					END as sent_rate_mbps
-				FROM traffic_diff
-				WHERE time >= (%s)::timestamp
-			)
-			SELECT 
-				to_timestamp(floor(extract(epoch from time) / $1) * $1) AS bucket,
-				interface,
-				SUM(recv_rate_mbps) as recv_avg,
-				SUM(sent_rate_mbps) as sent_avg
-			FROM rates
-			GROUP BY bucket, interface
-			ORDER BY bucket ASC`, hostFilter, startPlaceholder, timeWindow, endPlaceholder, startPlaceholder)
-
-		log.WithFields(log.Fields{
-			"query": qNet,
-			"args":  args,
-		}).Debug("GetTimeSeriesMetrics qNet")
-		rows, err := s.db.Query(ctx, qNet, args...)
-		if err != nil {
-			s.handleQueryError(err, "GetTimeSeriesMetrics net")
-			if s.isMissingRelationError(err) {
-				return res, nil
-			}
-			return nil, err
-		}
-		defer rows.Close()
-
-		manint := make(map[string]string)
-		monint := make(map[string]string)
-		qConf := `
-			SELECT DISTINCT ON (tag.tags->>'host') tag.tags->>'host', m.fields->>'manint', m.fields->>'monint' 
-			FROM telegraf.node_config m 
-			JOIN telegraf.node_config_tag tag ON m.tag_id = tag.tag_id 
-			WHERE m.fields->>'manint' IS NOT NULL AND m.fields->>'monint' IS NOT NULL
-			ORDER BY tag.tags->>'host', m.time DESC`
-		if rowsConf, errConf := s.db.Query(ctx, qConf); errConf == nil {
-			for rowsConf.Next() {
-				var host, man, mon string
-				if err := rowsConf.Scan(&host, &man, &mon); err == nil {
-					manint[host] = man
-					monint[host] = mon
+			if nodeId == "" {
+				// All hosts! Query grouped by host.
+				hostSamplesMap, err := s.queryGenericMetricGrouped(ctx, table, fld, hostFilter, startPlaceholder, endPlaceholder, filter, cfg.Factor, cfg.Aggregate, args)
+				if err != nil {
+					return nil, err
 				}
-			}
-			rowsConf.Close()
-		}
-
-		trafficManIn := make(map[time.Time]float64)
-		trafficManOut := make(map[time.Time]float64)
-		trafficMonIn := make(map[time.Time]float64)
-
-		for rows.Next() {
-			var bucket time.Time
-			var iface string
-			var recv, sent float64
-			if err := rows.Scan(&bucket, &iface, &recv, &sent); err == nil {
-				isMan := false
-				isMon := false
-				if nodeId != "" {
-					man := manint[nodeId]
-					if man == "" {
-						man = "eth0"
+				for host, samples := range hostSamplesMap {
+					var key string
+					if len(cfg.Keys) > 1 {
+						key = host + "::" + cfg.Keys[i]
+					} else {
+						key = host
 					}
-					mon := monint[nodeId]
-					if mon == "" {
-						mon = "eth1"
-					}
-					if iface == man {
-						isMan = true
-					}
-					if iface == mon {
-						isMon = true
-					}
-				} else {
-					if iface == "eth0" || strings.Contains(iface, "man") {
-						isMan = true
-					} else if iface == "eth1" || strings.Contains(iface, "mon") {
-						isMon = true
-					}
+					res[key] = samples
 				}
-
-				if isMan {
-					trafficManIn[bucket] += recv
-					trafficManOut[bucket] += sent
+			} else {
+				// Single host.
+				samples, err := s.queryGenericMetric(ctx, table, fld, hostFilter, startPlaceholder, endPlaceholder, filter, cfg.Factor, cfg.Aggregate, args)
+				if err != nil {
+					return nil, err
 				}
-				if isMon {
-					trafficMonIn[bucket] += recv
-				}
+				res[cfg.Keys[i]] = samples
 			}
 		}
-
-		res["traffic_man_in"] = mapToSamples(trafficManIn)
-		res["traffic_man_out"] = mapToSamples(trafficManOut)
-		res["traffic_mon_in"] = mapToSamples(trafficMonIn)
+		return res, nil
 	}
 
+	return res, nil
+}
+
+func (s *Store) queryGenericMetric(ctx context.Context, table, field, hostFilter, startPlaceholder, endPlaceholder string, filter string, factor float64, aggregate string, args []interface{}) ([]model.MetricSample, error) {
+	agg := "AVG"
+	if aggregate != "" {
+		agg = aggregate
+	}
+
+	whereClause := fmt.Sprintf("%s AND m.time >= %s AT TIME ZONE 'UTC' AND m.time <= %s AT TIME ZONE 'UTC' AND m.fields->>'%s' IS NOT NULL", hostFilter, startPlaceholder, endPlaceholder, field)
+	if filter != "" {
+		whereClause = fmt.Sprintf("%s AND %s", whereClause, filter)
+	}
+
+	valExpr := fmt.Sprintf("(m.fields->>'%s')::double precision", field)
+	if table == "cpu" && field == "usage_idle" {
+		valExpr = "((m.fields->>'usage_idle')::double precision * -1.0 + 100.0)"
+	}
+
+	q := fmt.Sprintf(`
+		SELECT 
+			to_timestamp(floor(extract(epoch from m.time AT TIME ZONE 'UTC') / $1) * $1) AS bucket,
+			%s(%s) AS val
+		FROM telegraf.%s m
+		JOIN telegraf.%s_tag tag ON m.tag_id = tag.tag_id
+		WHERE %s
+		GROUP BY bucket
+		ORDER BY bucket ASC`, agg, valExpr, table, table, whereClause)
+
+	samples, err := s.runMetricQuery(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	if factor != 0.0 && factor != 1.0 {
+		for i := range samples {
+			samples[i].Value = samples[i].Value * factor
+		}
+	}
+
+	return samples, nil
+}
+
+func (s *Store) queryGenericMetricGrouped(ctx context.Context, table, field, hostFilter, startPlaceholder, endPlaceholder string, filter string, factor float64, aggregate string, args []interface{}) (map[string][]model.MetricSample, error) {
+	agg := "AVG"
+	if aggregate != "" {
+		agg = aggregate
+	}
+
+	whereClause := fmt.Sprintf("%s AND m.time >= %s AT TIME ZONE 'UTC' AND m.time <= %s AT TIME ZONE 'UTC' AND m.fields->>'%s' IS NOT NULL", hostFilter, startPlaceholder, endPlaceholder, field)
+	if filter != "" {
+		whereClause = fmt.Sprintf("%s AND %s", whereClause, filter)
+	}
+
+	valExpr := fmt.Sprintf("(m.fields->>'%s')::double precision", field)
+	if table == "cpu" && field == "usage_idle" {
+		valExpr = "((m.fields->>'usage_idle')::double precision * -1.0 + 100.0)"
+	}
+
+	q := fmt.Sprintf(`
+		SELECT 
+			to_timestamp(floor(extract(epoch from m.time AT TIME ZONE 'UTC') / $1) * $1) AS bucket,
+			COALESCE(tag.tags->>'host', '') AS host,
+			%s(%s) AS val
+		FROM telegraf.%s m
+		JOIN telegraf.%s_tag tag ON m.tag_id = tag.tag_id
+		WHERE %s
+		GROUP BY bucket, host
+		ORDER BY bucket ASC`, agg, valExpr, table, table, whereClause)
+
+	log.WithFields(log.Fields{
+		"query": q,
+		"args":  args,
+	}).Debug("GetTimeSeriesMetrics queryGenericMetricGrouped")
+
+	rows, err := s.db.Query(ctx, q, args...)
+	if err != nil {
+		s.handleQueryError(err, "GetTimeSeriesMetrics metric grouped")
+		if s.isMissingRelationError(err) {
+			return make(map[string][]model.MetricSample), nil
+		}
+		return nil, err
+	}
+	defer rows.Close()
+
+	res := make(map[string][]model.MetricSample)
+	for rows.Next() {
+		var bucket time.Time
+		var host string
+		var val float64
+		if err := rows.Scan(&bucket, &host, &val); err == nil {
+			if factor != 0.0 && factor != 1.0 {
+				val = val * factor
+			}
+			res[host] = append(res[host], model.MetricSample{
+				Timestamp: bucket,
+				Value:     val,
+			})
+		}
+	}
 	return res, nil
 }
 
@@ -329,6 +230,473 @@ func (s *Store) runMetricQuery(ctx context.Context, sqlQuery string, args ...int
 		}
 	}
 	return samples, nil
+}
+
+func queryNetMetric(ctx context.Context, s *Store, nodeId, container string, hostFilter, startPlaceholder, endPlaceholder string, args []interface{}) (map[string][]model.MetricSample, error) {
+	res := make(map[string][]model.MetricSample)
+	if nodeId != "" {
+		res["traffic_man_in"] = make([]model.MetricSample, 0)
+		res["traffic_man_out"] = make([]model.MetricSample, 0)
+		res["traffic_mon_in"] = make([]model.MetricSample, 0)
+	}
+
+	timeWindow := "2 minutes"
+	qNet := fmt.Sprintf(`
+		WITH traffic_diff AS (
+			SELECT 
+				tag.tags->>'host' as host,
+				tag.tags->>'interface' as interface,
+				m.time,
+				(m.fields->>'bytes_recv')::bigint as bytes_recv,
+				(m.fields->>'bytes_sent')::bigint as bytes_sent,
+				LAG((m.fields->>'bytes_recv')::bigint) OVER (PARTITION BY tag.tags->>'host', tag.tags->>'interface' ORDER BY m.time) as prev_recv,
+				LAG((m.fields->>'bytes_sent')::bigint) OVER (PARTITION BY tag.tags->>'host', tag.tags->>'interface' ORDER BY m.time) as prev_sent,
+				LAG(m.time) OVER (PARTITION BY tag.tags->>'host', tag.tags->>'interface' ORDER BY m.time) as prev_time
+			FROM telegraf.net m
+			JOIN telegraf.net_tag tag ON m.tag_id = tag.tag_id
+			WHERE %s AND m.time >= (%s AT TIME ZONE 'UTC') - INTERVAL '%s' AND m.time <= (%s AT TIME ZONE 'UTC') AND m.fields->>'bytes_recv' IS NOT NULL AND m.fields->>'bytes_sent' IS NOT NULL
+		),
+		rates AS (
+			SELECT 
+				host,
+				interface,
+				time,
+				CASE 
+					WHEN prev_time IS NOT NULL AND time > prev_time AND bytes_recv >= prev_recv 
+					THEN ((bytes_recv - prev_recv) * 8.0 / (1000.0 * 1000.0)) / EXTRACT(EPOCH FROM (time - prev_time))
+					ELSE 0.0
+				END as recv_rate_mbps,
+				CASE 
+					WHEN prev_time IS NOT NULL AND time > prev_time AND bytes_sent >= prev_sent 
+					THEN ((bytes_sent - prev_sent) * 8.0 / (1000.0 * 1000.0)) / EXTRACT(EPOCH FROM (time - prev_time))
+					ELSE 0.0
+				END as sent_rate_mbps
+			FROM traffic_diff
+			WHERE time >= (%s AT TIME ZONE 'UTC')
+		)
+		SELECT 
+			to_timestamp(floor(extract(epoch from time AT TIME ZONE 'UTC') / $1) * $1) AS bucket,
+			host,
+			interface,
+			SUM(recv_rate_mbps) as recv_avg,
+			SUM(sent_rate_mbps) as sent_avg
+		FROM rates
+		GROUP BY bucket, host, interface
+		ORDER BY bucket ASC`, hostFilter, startPlaceholder, timeWindow, endPlaceholder, startPlaceholder)
+
+	manint := make(map[string]string)
+	monint := make(map[string]string)
+	qConf := `
+		SELECT DISTINCT ON (tag.tags->>'host') tag.tags->>'host', m.fields->>'manint', m.fields->>'monint' 
+		FROM telegraf.node_config m 
+		JOIN telegraf.node_config_tag tag ON m.tag_id = tag.tag_id 
+		WHERE m.fields->>'manint' IS NOT NULL AND m.fields->>'monint' IS NOT NULL
+		ORDER BY tag.tags->>'host', m.time DESC`
+	if rowsConf, errConf := s.db.Query(ctx, qConf); errConf == nil {
+		for rowsConf.Next() {
+			var host, man, mon string
+			if err := rowsConf.Scan(&host, &man, &mon); err == nil {
+				manint[host] = man
+				monint[host] = mon
+			}
+		}
+		rowsConf.Close()
+	}
+
+	log.WithFields(log.Fields{
+		"query": qNet,
+		"args":  args,
+	}).Debug("GetTimeSeriesMetrics qNet")
+	rows, err := s.db.Query(ctx, qNet, args...)
+	if err != nil {
+		s.handleQueryError(err, "GetTimeSeriesMetrics net")
+		if s.isMissingRelationError(err) {
+			return res, nil
+		}
+		return nil, err
+	}
+	defer rows.Close()
+
+	if nodeId != "" {
+		trafficManIn := make(map[time.Time]float64)
+		trafficManOut := make(map[time.Time]float64)
+		trafficMonIn := make(map[time.Time]float64)
+
+		for rows.Next() {
+			var bucket time.Time
+			var host string
+			var iface string
+			var recv, sent float64
+			if err := rows.Scan(&bucket, &host, &iface, &recv, &sent); err == nil {
+				man := manint[nodeId]
+				if man == "" {
+					man = "eth0"
+				}
+				mon := monint[nodeId]
+				if mon == "" {
+					mon = "eth1"
+				}
+
+				isMan := (iface == man)
+				isMon := (iface == mon)
+
+				if isMan {
+					trafficManIn[bucket] += recv
+					trafficManOut[bucket] += sent
+				}
+				if isMon {
+					trafficMonIn[bucket] += recv
+				}
+			}
+		}
+		res["traffic_man_in"] = mapToSamples(trafficManIn)
+		res["traffic_man_out"] = mapToSamples(trafficManOut)
+		res["traffic_mon_in"] = mapToSamples(trafficMonIn)
+	} else {
+		// All Hosts
+		trafficManIn := make(map[string]map[time.Time]float64)
+		trafficManOut := make(map[string]map[time.Time]float64)
+		trafficMonIn := make(map[string]map[time.Time]float64)
+
+		for rows.Next() {
+			var bucket time.Time
+			var host string
+			var iface string
+			var recv, sent float64
+			if err := rows.Scan(&bucket, &host, &iface, &recv, &sent); err == nil {
+				man := manint[host]
+				mon := monint[host]
+
+				isMan := false
+				isMon := false
+				if man != "" {
+					if iface == man {
+						isMan = true
+					}
+				} else {
+					if iface == "eth0" || strings.Contains(iface, "man") {
+						isMan = true
+					}
+				}
+				if mon != "" {
+					if iface == mon {
+						isMon = true
+					}
+				} else {
+					if iface == "eth1" || strings.Contains(iface, "mon") {
+						isMon = true
+					}
+				}
+
+				if isMan {
+					if _, ok := trafficManIn[host]; !ok {
+						trafficManIn[host] = make(map[time.Time]float64)
+						trafficManOut[host] = make(map[time.Time]float64)
+					}
+					trafficManIn[host][bucket] += recv
+					trafficManOut[host][bucket] += sent
+				}
+				if isMon {
+					if _, ok := trafficMonIn[host]; !ok {
+						trafficMonIn[host] = make(map[time.Time]float64)
+					}
+					trafficMonIn[host][bucket] += recv
+				}
+			}
+		}
+
+		for host, buckets := range trafficManIn {
+			res[host+"::traffic_man_in"] = mapToSamples(buckets)
+		}
+		for host, buckets := range trafficManOut {
+			res[host+"::traffic_man_out"] = mapToSamples(buckets)
+		}
+		for host, buckets := range trafficMonIn {
+			res[host+"::traffic_mon_in"] = mapToSamples(buckets)
+		}
+	}
+
+	return res, nil
+}
+
+func queryNetDropsMetric(ctx context.Context, s *Store, nodeId, container string, hostFilter, startPlaceholder, endPlaceholder string, args []interface{}) (map[string][]model.MetricSample, error) {
+	res := make(map[string][]model.MetricSample)
+	if nodeId != "" {
+		res["traffic_mon_drops"] = make([]model.MetricSample, 0)
+	}
+
+	timeWindow := "2 minutes"
+	qNet := fmt.Sprintf(`
+		WITH traffic_diff AS (
+			SELECT 
+				tag.tags->>'host' as host,
+				tag.tags->>'interface' as interface,
+				m.time,
+				(m.fields->>'drop_in')::bigint as drop_in,
+				LAG((m.fields->>'drop_in')::bigint) OVER (PARTITION BY tag.tags->>'host', tag.tags->>'interface' ORDER BY m.time) as prev_drop,
+				LAG(m.time) OVER (PARTITION BY tag.tags->>'host', tag.tags->>'interface' ORDER BY m.time) as prev_time
+			FROM telegraf.net m
+			JOIN telegraf.net_tag tag ON m.tag_id = tag.tag_id
+			WHERE %s AND m.time >= (%s AT TIME ZONE 'UTC') - INTERVAL '%s' AND m.time <= (%s AT TIME ZONE 'UTC') AND m.fields->>'drop_in' IS NOT NULL
+		),
+		rates AS (
+			SELECT 
+				host,
+				interface,
+				time,
+				CASE 
+					WHEN prev_time IS NOT NULL AND time > prev_time AND drop_in >= prev_drop 
+					THEN (drop_in - prev_drop)::float / EXTRACT(EPOCH FROM (time - prev_time))
+					ELSE 0.0
+				END as drop_rate
+			FROM traffic_diff
+			WHERE time >= (%s AT TIME ZONE 'UTC')
+		)
+		SELECT 
+			to_timestamp(floor(extract(epoch from time AT TIME ZONE 'UTC') / $1) * $1) AS bucket,
+			host,
+			interface,
+			SUM(drop_rate) as drop_avg
+		FROM rates
+		GROUP BY bucket, host, interface
+		ORDER BY bucket ASC`, hostFilter, startPlaceholder, timeWindow, endPlaceholder, startPlaceholder)
+
+	monint := make(map[string]string)
+	qConf := `
+		SELECT DISTINCT ON (tag.tags->>'host') tag.tags->>'host', m.fields->>'monint' 
+		FROM telegraf.node_config m 
+		JOIN telegraf.node_config_tag tag ON m.tag_id = tag.tag_id 
+		WHERE m.fields->>'monint' IS NOT NULL
+		ORDER BY tag.tags->>'host', m.time DESC`
+	if rowsConf, errConf := s.db.Query(ctx, qConf); errConf == nil {
+		for rowsConf.Next() {
+			var host, mon string
+			if err := rowsConf.Scan(&host, &mon); err == nil {
+				monint[host] = mon
+			}
+		}
+		rowsConf.Close()
+	}
+
+	rows, err := s.db.Query(ctx, qNet, args...)
+	if err != nil {
+		s.handleQueryError(err, "GetTimeSeriesMetrics net_drops")
+		if s.isMissingRelationError(err) {
+			return res, nil
+		}
+		return nil, err
+	}
+	defer rows.Close()
+
+	if nodeId != "" {
+		trafficMonDrops := make(map[time.Time]float64)
+
+		for rows.Next() {
+			var bucket time.Time
+			var host string
+			var iface string
+			var drop float64
+			if err := rows.Scan(&bucket, &host, &iface, &drop); err == nil {
+				mon := monint[nodeId]
+				if mon == "" {
+					mon = "eth1"
+				}
+
+				isMon := (iface == mon)
+
+				if isMon {
+					trafficMonDrops[bucket] += drop
+				}
+			}
+		}
+		res["traffic_mon_drops"] = mapToSamples(trafficMonDrops)
+	} else {
+		trafficMonDrops := make(map[string]map[time.Time]float64)
+
+		for rows.Next() {
+			var bucket time.Time
+			var host string
+			var iface string
+			var drop float64
+			if err := rows.Scan(&bucket, &host, &iface, &drop); err == nil {
+				mon := monint[host]
+
+				isMon := false
+				if mon != "" {
+					if iface == mon {
+						isMon = true
+					}
+				} else {
+					if iface == "eth1" || strings.Contains(iface, "mon") {
+						isMon = true
+					}
+				}
+
+				if isMon {
+					if _, ok := trafficMonDrops[host]; !ok {
+						trafficMonDrops[host] = make(map[time.Time]float64)
+					}
+					trafficMonDrops[host][bucket] += drop
+				}
+			}
+		}
+
+		for host, buckets := range trafficMonDrops {
+			res[host+"::traffic_mon_drops"] = mapToSamples(buckets)
+		}
+	}
+
+	return res, nil
+}
+
+func queryContainerNetInMetric(ctx context.Context, s *Store, nodeId, container string, hostFilter, startPlaceholder, endPlaceholder string, args []interface{}) (map[string][]model.MetricSample, error) {
+	timeWindow := "2 minutes"
+	whereClause := fmt.Sprintf("%s AND m.time >= (%s AT TIME ZONE 'UTC') - INTERVAL '%s' AND m.time <= (%s AT TIME ZONE 'UTC') AND m.fields->>'rx_bytes' IS NOT NULL", hostFilter, startPlaceholder, timeWindow, endPlaceholder)
+	if container != "" && container != "all" {
+		placeholderIdx := len(args) + 1
+		whereClause = fmt.Sprintf("%s AND tag.tags->>'container_name' = $%d", whereClause, placeholderIdx)
+		args = append(args, container)
+	}
+
+	qNet := fmt.Sprintf(`
+		WITH traffic_diff AS (
+			SELECT 
+				tag.tags->>'host' as host,
+				tag.tags->>'container_name' as container,
+				m.time,
+				(m.fields->>'rx_bytes')::bigint as rx_bytes,
+				LAG((m.fields->>'rx_bytes')::bigint) OVER (PARTITION BY tag.tags->>'host', tag.tags->>'container_name' ORDER BY m.time) as prev_recv,
+				LAG(m.time) OVER (PARTITION BY tag.tags->>'host', tag.tags->>'container_name' ORDER BY m.time) as prev_time
+			FROM telegraf.docker_container_net m
+			JOIN telegraf.docker_container_net_tag tag ON m.tag_id = tag.tag_id
+			WHERE %s
+		),
+		rates AS (
+			SELECT 
+				host,
+				container,
+				time,
+				CASE 
+					WHEN prev_time IS NOT NULL AND time > prev_time AND rx_bytes >= prev_recv 
+					THEN ((rx_bytes - prev_recv) * 8.0 / (1000.0 * 1000.0)) / EXTRACT(EPOCH FROM (time - prev_time))
+					ELSE 0.0
+				END as recv_rate_mbps
+			FROM traffic_diff
+			WHERE time >= (%s AT TIME ZONE 'UTC')
+		)
+		SELECT 
+			to_timestamp(floor(extract(epoch from time AT TIME ZONE 'UTC') / $1) * $1) AS bucket,
+			COALESCE(host, '') as host,
+			container,
+			SUM(recv_rate_mbps) as recv_avg
+		FROM rates
+		GROUP BY bucket, host, container
+		ORDER BY bucket ASC`, whereClause, startPlaceholder)
+
+	rows, err := s.db.Query(ctx, qNet, args...)
+	if err != nil {
+		s.handleQueryError(err, "GetTimeSeriesMetrics container_net_in")
+		if s.isMissingRelationError(err) {
+			return make(map[string][]model.MetricSample), nil
+		}
+		return nil, err
+	}
+	defer rows.Close()
+
+	res := make(map[string][]model.MetricSample)
+	for rows.Next() {
+		var bucket time.Time
+		var host string
+		var containerName string
+		var val float64
+		if err := rows.Scan(&bucket, &host, &containerName, &val); err == nil {
+			var key string
+			if nodeId == "" {
+				key = host + "::" + containerName
+			} else {
+				key = containerName
+			}
+			res[key] = append(res[key], model.MetricSample{
+				Timestamp: bucket,
+				Value:     val,
+			})
+		}
+	}
+	return res, nil
+}
+
+func (s *Store) queryContainerMetric(ctx context.Context, table, field, nodeId, container, hostFilter, startPlaceholder, endPlaceholder string, factor float64, aggregate string, args []interface{}) (map[string][]model.MetricSample, error) {
+	agg := "AVG"
+	if aggregate != "" {
+		agg = aggregate
+	}
+
+	whereClause := fmt.Sprintf("%s AND m.time >= %s AT TIME ZONE 'UTC' AND m.time <= %s AT TIME ZONE 'UTC' AND m.fields->>'%s' IS NOT NULL AND tag.tags->>'container_name' IS NOT NULL", hostFilter, startPlaceholder, endPlaceholder, field)
+	if container != "" && container != "all" {
+		placeholderIdx := len(args) + 1
+		whereClause = fmt.Sprintf("%s AND tag.tags->>'container_name' = $%d", whereClause, placeholderIdx)
+		args = append(args, container)
+	}
+
+	valExpr := fmt.Sprintf("(m.fields->>'%s')::double precision", field)
+
+	q := fmt.Sprintf(`
+		SELECT 
+			to_timestamp(floor(extract(epoch from m.time AT TIME ZONE 'UTC') / $1) * $1) AS bucket,
+			COALESCE(tag.tags->>'host', '') AS host,
+			tag.tags->>'container_name' AS container,
+			%s(%s) AS val
+		FROM telegraf.%s m
+		JOIN telegraf.%s_tag tag ON m.tag_id = tag.tag_id
+		WHERE %s
+		GROUP BY bucket, host, container
+		ORDER BY bucket ASC`, agg, valExpr, table, table, whereClause)
+
+	rows, err := s.db.Query(ctx, q, args...)
+	if err != nil {
+		s.handleQueryError(err, "GetTimeSeriesMetrics container metric")
+		if s.isMissingRelationError(err) {
+			return make(map[string][]model.MetricSample), nil
+		}
+		return nil, err
+	}
+	defer rows.Close()
+
+	res := make(map[string][]model.MetricSample)
+	for rows.Next() {
+		var bucket time.Time
+		var host string
+		var containerName string
+		var val float64
+		if err := rows.Scan(&bucket, &host, &containerName, &val); err == nil {
+			if factor != 0.0 && factor != 1.0 {
+				val = val * factor
+			}
+			var key string
+			if nodeId == "" {
+				key = host + "::" + containerName
+			} else {
+				key = containerName
+			}
+			res[key] = append(res[key], model.MetricSample{
+				Timestamp: bucket,
+				Value:     val,
+			})
+		}
+	}
+	return res, nil
+}
+
+func queryContainerCpuMetric(ctx context.Context, s *Store, nodeId, container string, hostFilter, startPlaceholder, endPlaceholder string, args []interface{}) (map[string][]model.MetricSample, error) {
+	return s.queryContainerMetric(ctx, "docker_container_cpu", "usage_percent", nodeId, container, hostFilter, startPlaceholder, endPlaceholder, 1.0, "AVG", args)
+}
+
+func queryContainerMemMetric(ctx context.Context, s *Store, nodeId, container string, hostFilter, startPlaceholder, endPlaceholder string, args []interface{}) (map[string][]model.MetricSample, error) {
+	return s.queryContainerMetric(ctx, "docker_container_mem", "usage_percent", nodeId, container, hostFilter, startPlaceholder, endPlaceholder, 1.0, "AVG", args)
+}
+
+func queryContainerUptimeMetric(ctx context.Context, s *Store, nodeId, container string, hostFilter, startPlaceholder, endPlaceholder string, args []interface{}) (map[string][]model.MetricSample, error) {
+	return s.queryContainerMetric(ctx, "docker_container_status", "uptime_ns", nodeId, container, hostFilter, startPlaceholder, endPlaceholder, 1.0/1000000000.0, "AVG", args)
 }
 
 func mapToSamples(m map[time.Time]float64) []model.MetricSample {

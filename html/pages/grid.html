@@ -4,7 +4,7 @@
 			<v-card-title>{{i18n.options}}</v-card-title>
 			<v-card-text data-aid="grid_options">
 				<span data-aid="grid_options_timezone_select">
-					<v-select id="gridTimezone" @update:model-value="zone = $event; saveTimezone()" v-model="zone" :items="$root.timezones" :hint="i18n.timezoneHelp" persistent-hint prepend-icon="fa-user-clock" data-aid="grid_options_timezone_select" :aria-label="i18n.ariaGridTimezone"></v-select>
+					<v-select id="gridTimezone" v-model="zone" :items="$root.timezones" :hint="i18n.timezoneHelp" persistent-hint prepend-icon="fa-user-clock" data-aid="grid_options_timezone_select" :aria-label="i18n.ariaGridTimezone"></v-select>
 				</span>
 				<span data-aid="grid_options_more_columns_toggle">
 					<v-checkbox id="moreColumns" v-model="moreColumns" :hint="i18n.moreColumnsHelp" persistent-hint :label="i18n.moreColumns" data-aid="grid_more_columns_toggle"></v-checkbox>
@@ -22,8 +22,8 @@
 				<v-toolbar class="so-toolbar elevation-0">
 					<h4 v-if="metricsEnabled" class="ml-2 my-0" data-aid="grid_summary">{{ i18n.gridEps }} {{ formatCount(gridEps) }}</h4>
 					<v-spacer></v-spacer>
-					<v-text-field v-model="gridFilter" clearable prepend-inner-icon="fa-filter" :label="i18n.filterResults" hide-details class="toolbar-field no-print mx-2" style="max-width: 250px;" data-aid="grid_filter"></v-text-field>
-					<v-btn icon variant="flat" @click.stop="loadData()" id="grid-refresh-button" class="circle-button mx-2" data-aid="grid_refresh_button" :aria-label="i18n.ariaGridRefresh">
+					<v-text-field v-show="activeTab !== 'metrics'" v-model="gridFilter" clearable prepend-inner-icon="fa-filter" :label="i18n.filterResults" hide-details class="toolbar-field no-print mx-2" style="max-width: 250px;" data-aid="grid_filter"></v-text-field>
+					<v-btn icon variant="flat" @click.stop="refresh()" id="grid-refresh-button" class="circle-button mx-2" data-aid="grid_refresh_button" :aria-label="i18n.ariaGridRefresh">
 						<v-icon>fa-sync</v-icon>
 					</v-btn>
 					<v-btn icon variant="flat" class="circle-button mx-2" :title="i18n.options" @click="showOptionsDialog = true" id="gridOptionsHeader" data-aid="grid_options_button" :aria-label="i18n.options">
@@ -500,6 +500,9 @@
 					<!-- Node Dropdown Selector -->
 					<v-select v-model="metricsNodeId" :items="metricsNodeItems" item-title="title" item-value="value" density="compact" hide-details class="mx-2" style="max-width: 250px;" @update:model-value="loadHistoricalMetrics(true)" id="gridMetricsNodeSelector" data-aid="grid_metrics_node_select" :aria-label="i18n.metricsNode"></v-select>
 
+					<!-- Container Dropdown Selector -->
+					<v-select v-model="metricsContainerId" :items="getMetricsContainerItems()" item-title="title" item-value="value" density="compact" hide-details class="mx-2" style="max-width: 250px;" @update:model-value="loadHistoricalMetrics(true)" id="gridMetricsContainerSelector" data-aid="grid_metrics_container_select" :aria-label="i18n.container"></v-select>
+
 					<v-spacer></v-spacer>
 					
 					<!-- Time Range Selector -->
@@ -507,45 +510,25 @@
 					
 					<!-- Auto Refresh Selector -->
 					<v-select v-model="metricsAutoRefresh" :items="autoRefreshItems" density="compact" hide-details class="mx-2" style="max-width: 120px;" @update:model-value="setupMetricsAutoRefresh" id="gridMetricsAutoRefresh" data-aid="grid_metrics_auto_refresh" :aria-label="i18n.metricsRefreshInterval"></v-select>
-					
-					<!-- Manual Refresh Button -->
-					<v-btn icon variant="flat" size="small" class="mx-1" @click="loadHistoricalMetrics(true)" id="gridMetricsManualRefresh" data-aid="grid_metrics_refresh_btn" :aria-label="i18n.ariaGridRefresh">
-						<v-icon>fa-sync</v-icon>
-					</v-btn>
 				</v-card-title>
 				<v-card-text class="pa-4 metric-tab-body">
-					<v-row v-if="metricsLoading" class="fill-height ma-0" align="center" justify="center" style="min-height: 300px;">
-						<v-progress-circular indeterminate color="primary" data-aid="grid_metrics_loader"></v-progress-circular>
-					</v-row>
-					<v-row v-else>
-						<v-col cols="12" md="6" class="py-2">
-							<v-card class="pa-2" variant="outlined" style="min-height: 280px;">
-								<line-chart id="chartCpu" height="250" :key="chartCpuData.key" :data="chartCpuData" :options="chartCpuOptions" :aria-label="i18n.metricsCpuUsage"></line-chart>
-							</v-card>
-						</v-col>
-						<v-col cols="12" md="6" class="py-2">
-							<v-card class="pa-2" variant="outlined" style="min-height: 280px;">
-								<line-chart id="chartMemory" height="250" :key="chartMemoryData.key" :data="chartMemoryData" :options="chartMemoryOptions" :aria-label="i18n.metricsMemUsage"></line-chart>
-							</v-card>
-						</v-col>
-						<v-col cols="12" md="6" class="py-2">
-							<v-card class="pa-2" variant="outlined" style="min-height: 280px;">
-								<line-chart id="chartLoad" height="250" :key="chartLoadData.key" :data="chartLoadData" :options="chartLoadOptions" :aria-label="i18n.loadAverage"></line-chart>
-							</v-card>
-						</v-col>
-						<v-col cols="12" md="6" class="py-2">
-							<v-card class="pa-2" variant="outlined" style="min-height: 280px;">
-								<line-chart id="chartDisk" height="250" :key="chartDiskData.key" :data="chartDiskData" :options="chartDiskOptions" :aria-label="i18n.metricsDiskUsage"></line-chart>
-							</v-card>
-						</v-col>
-						<v-col cols="12" md="6" class="py-2">
-							<v-card class="pa-2" variant="outlined" style="min-height: 280px;">
-								<line-chart id="chartNet" height="250" :key="chartNetData.key" :data="chartNetData" :options="chartNetOptions" :aria-label="i18n.metricsNetTraffic"></line-chart>
-							</v-card>
-						</v-col>
-						<v-col cols="12" md="6" class="py-2">
-							<v-card class="pa-2" variant="outlined" style="min-height: 280px;">
-								<line-chart id="chartEps" height="250" :key="chartEpsData.key" :data="chartEpsData" :options="chartEpsOptions" :aria-label="i18n.eps"></line-chart>
+					<v-row>
+						<v-col v-for="panel in metricPanels" :key="panel.id" cols="12" :md="panel.width || 6" class="py-2">
+							<v-card class="pa-2 metric-panel-card" variant="outlined" :style="{ height: getMetricPanelCardHeight(panel), position: 'relative' }">
+								<!-- Loading Overlay -->
+								<div v-if="panel.loading" class="d-flex align-center justify-center position-absolute" style="top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.15); backdrop-filter: blur(2px); z-index: 2; border-radius: inherit;">
+									<v-progress-circular indeterminate color="primary" data-aid="grid_metrics_loader"></v-progress-circular>
+								</div>
+								<div class="d-flex align-center justify-space-between mb-2">
+									<span class="text-subtitle-1 font-weight-medium">{{ panel.title }}</span>
+								</div>
+								<div v-if="panel.type === 'single_stat'" class="d-flex align-center justify-center fill-height metric-single-stat py-4" style="min-height: 200px;">
+									<div class="text-center">
+										<div class="text-h3 font-weight-bold text-primary">{{ panel.singleStatValue }}</div>
+										<div v-if="panel.suffix" class="text-caption text-grey mt-1">{{ panel.suffix }}</div>
+									</div>
+								</div>
+								<line-chart v-else-if="panel.type === 'line_chart'" :id="'chart-' + panel.id" :height="panel.height || 250" :key="panel.chartData.key" :data="panel.chartData" :options="panel.chartOptions" :aria-label="panel.title"></line-chart>
 							</v-card>
 						</v-col>
 					</v-row>

@@ -197,7 +197,7 @@ func TestInfluxDBMetrics_GetTimeSeriesMetrics(t *testing.T) {
 	t.Run("authorized", func(t *testing.T) {
 		srv := server.NewFakeAuthorizedServer(nil)
 		metrics := NewInfluxDBMetrics(srv)
-		res, err := metrics.GetTimeSeriesMetrics(context.Background(), "node1", "cpu", time.Now().Add(-time.Hour), time.Now())
+		res, err := metrics.GetTimeSeriesMetrics(context.Background(), "node1", "", "cpu", time.Now().Add(-time.Hour), time.Now())
 		assert.NoError(t, err)
 		assert.Nil(t, res)
 	})
@@ -205,7 +205,7 @@ func TestInfluxDBMetrics_GetTimeSeriesMetrics(t *testing.T) {
 	t.Run("unauthorized", func(t *testing.T) {
 		srv := server.NewFakeUnauthorizedServer()
 		metrics := NewInfluxDBMetrics(srv)
-		res, err := metrics.GetTimeSeriesMetrics(context.Background(), "node1", "cpu", time.Now().Add(-time.Hour), time.Now())
+		res, err := metrics.GetTimeSeriesMetrics(context.Background(), "node1", "", "cpu", time.Now().Add(-time.Hour), time.Now())
 		assert.Error(t, err)
 		assert.Nil(t, res)
 	})
