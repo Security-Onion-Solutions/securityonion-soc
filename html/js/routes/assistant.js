@@ -36,6 +36,12 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     delegationChildren: new Map(), // Map<childSessionId, {parentToolUse, parentSessionId, parentToolUseId, agentName}>
     contextLength: 0, // Track total context length
     creditsUsed: 0, // Track total accumulated credits used for a session
+    // Session credits attributed to the agent that produced each turn, keyed by the
+    // stored per-message agent name (msg.model). In agentic mode the model selector
+    // IS the agent name, so this is a real agent -> credits map. The buckets sum to
+    // creditsUsed. On reload it is rebuilt authoritatively from stored history
+    // (recomputeCreditsFromHistory); during live streaming it is accrued per turn.
+    creditsByAgent: {}, // { "<agentName>": credits }
     increaseContextLimit: false, // Toggle for max context threshold
     restoreLastActive: false, // Toggle to restore last active chat
     alwaysApproveReadRequests: false,
@@ -142,6 +148,16 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         let msg = this.$root.replaceActionVar(this.i18n.assistantSubAgentApprovalRequest, 'name', agentName);
         return this.$root.replaceActionVar(msg, 'tool', toolName);
       }).join(' ');
+    },
+    // Per-agent credit breakdown for the "Total Credits" tooltip: one row per agent
+    // that produced turns this session (the orchestrator and any delegated agents),
+    // each labeled by its own name, ordered by credits descending. The buckets are a
+    // partition of creditsUsed (see creditsByAgent), so the rows sum to the headline.
+    creditBreakdown() {
+      return Object.entries(this.creditsByAgent)
+        .filter(([, credits]) => credits > 0)
+        .map(([label, credits]) => ({ label, credits }))
+        .sort((a, b) => b.credits - a.credits);
     },
   },
   methods: Object.assign({},

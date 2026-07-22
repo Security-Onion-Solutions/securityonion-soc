@@ -94,6 +94,7 @@ globalThis.AssistantTools = (function() {
         let chunks = [];
         let partial = false;
         let messageUsage = null;
+        let childUsage = null; // usage for the in-flight delegated sub-agent turn
 
         while (true) {
           const { done, value } = await reader.read();
@@ -200,6 +201,7 @@ globalThis.AssistantTools = (function() {
                   break;
                 case 'message_start':
                   childMsg = this.handleDelegationMessageStart(owner);
+                  childUsage = null;
                   break;
                 case 'content_block_start':
                   this.handleDelegationContentBlockStart(c, toolStreamingSessionId, childMsg);
@@ -210,7 +212,21 @@ globalThis.AssistantTools = (function() {
                 case 'content_block_stop':
                   this.handleDelegationContentBlockStop(c, toolStreamingSessionId);
                   break;
+                case 'message_delta':
+                  if (c.usage) childUsage = c.usage;
+                  break;
+                case 'message_stop':
+                  // Attribute this sub-agent turn's credits to the delegate's agent
+                  // (activeChild.agentName == the child's stored msg.model), and stamp
+                  // usage on the child message so the delegate card can show its cost.
+                  if (childUsage) {
+                    if (childMsg) childMsg.usage = childUsage;
+                    this.accrueCredits(childUsage, activeChild.agentName);
+                  }
+                  childUsage = null;
+                  break;
                 default:
+                  if (c.usage) childUsage = c.usage;
                   break;
               }
               continue;

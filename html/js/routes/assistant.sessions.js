@@ -114,10 +114,42 @@ globalThis.AssistantSessions = (function() {
       }
     },
 
-    updateCreditsUsed(usage) {
-      if (usage) {
-        const messageCredits = usage.credits || 0;
-        this.creditsUsed += messageCredits;
+    // Accrue a message's credits into the running total and the per-agent bucket for
+    // the agent that produced the turn. agentName is the stored msg.model (which is the
+    // agent name in agentic mode) for reload, or the live agent producing the turn
+    // (the orchestrator selection for a root turn, the delegate's name for a sub-agent
+    // turn) while streaming. The two sources agree because the frontend sends
+    // model: currentModel and the backend persists it verbatim as msg.model.
+    accrueCredits(usage, agentName) {
+      const credits = (usage && usage.credits) || 0;
+      if (!credits) return;
+      this.creditsUsed += credits;
+      const key = agentName || this.i18n.assistantDelegateAgent;
+      this.creditsByAgent[key] = (this.creditsByAgent[key] || 0) + credits;
+    },
+
+    // Rebuild creditsUsed and the per-agent buckets from stored history — the source
+    // of truth. Each stored message carries msg.model (the agent that produced it), so
+    // attribution can't drift when the model picker changes. Runs on every load
+    // (fresh open and the tool-already-resolved reload), independent of the render
+    // reconstruction. `data` is the /assistant/sessions/{id} payload.
+    recomputeCreditsFromHistory(data) {
+      this.creditsUsed = 0;
+      this.creditsByAgent = {};
+      const addHistory = (history, fallbackAgent) => {
+        for (const sm of (history || [])) {
+          const usage = sm && sm.message && sm.message.usage;
+          if (!usage || !usage.credits) continue;
+          this.accrueCredits(usage, sm.model || fallbackAgent);
+        }
+      };
+      // Top-level turns: fall back to the session's own agent for legacy messages
+      // saved before per-message model existed.
+      addHistory(data && data.history, (data && data.session && data.session.model) || '');
+      // Delegated sub-agent turns: fall back to the sub-session's delegate agent name.
+      for (const sub of ((data && data.subSessions) || [])) {
+        const subAgent = (sub && sub.session && (sub.session.delegateAgent || sub.session.model)) || '';
+        addHistory(sub && sub.history, subAgent);
       }
     },
 
@@ -144,6 +176,7 @@ globalThis.AssistantSessions = (function() {
         // Reset context length for new chat
         this.contextLength = 0;
         this.creditsUsed = 0;
+        this.creditsByAgent = {};
       } catch (error) {
         this.$root.showError(error);
       }
@@ -418,6 +451,9 @@ globalThis.AssistantSessions = (function() {
           } finally {
             this._loadSubSessions = null;
           }
+          // Credit accounting is derived from stored history (root + sub-sessions),
+          // not from the render tree, so it stays correct regardless of reconstruction.
+          this.recomputeCreditsFromHistory(response.data);
           this.saveCurrentChatId();
 
           await this.scrollToBottomSettled({ maxWait: 6000, settleDelay: 200 });
@@ -747,6 +783,9 @@ globalThis.AssistantSessions = (function() {
         }
         childMsg.thoughts = thoughtText;
         childMsg.content = contentText;
+        // Stamp usage so the delegate card can show this sub-agent's own credit cost.
+        // (Session credit totals are derived from stored history, not this tree.)
+        if (m.usage) childMsg.usage = m.usage;
         childMessages.push(childMsg);
       }
 
@@ -838,8 +877,8 @@ globalThis.AssistantSessions = (function() {
     // Helper method to convert backend message format to frontend format
     convertBackendMessagesToFrontend(backendMessages) {
       const processedMessages = [];
-      // Reset context length when loading from backend
-      this.creditsUsed = 0;
+      // Reset context length when loading from backend. Credit totals are rebuilt
+      // separately from stored history (see recomputeCreditsFromHistory).
       this.contextLength = 0;
       this.contextStartMessageIndex = -1;
       let justResetContext = false;
@@ -883,9 +922,8 @@ globalThis.AssistantSessions = (function() {
         // Handle usage information if present
         if (msg.message.usage) {
           frontendMsg.usage = msg.message.usage;
-          // Update context length for loaded messages
+          // Update context length for loaded messages (credits handled separately).
           this.updateContextLength(msg.message.usage, justResetContext);
-          this.updateCreditsUsed(msg.message.usage);
         }
 
         processedMessages.push(frontendMsg);

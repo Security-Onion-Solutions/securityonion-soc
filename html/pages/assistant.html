@@ -178,7 +178,20 @@
 						</v-menu>
 					</template>
 					<v-spacer></v-spacer>
-					<div class="text-wrap mr-4" style="font-size: 14px;">{{ i18n.totalCredits }}: <span class="text-primary">{{ formatCount(creditsUsed) }}</span></div>
+					<div class="text-wrap mr-4" style="font-size: 14px;">
+						<v-tooltip v-if="agentic && creditBreakdown.length > 1" location="top">
+							<template #activator="{ props }">
+								<v-icon size="x-small" class="mr-1" v-bind="props" data-aid="assistant_total_credits_info" role="button" tabindex="0" :aria-label="i18n.totalCredits">fa-circle-info</v-icon>
+							</template>
+							<div class="assistant-credit-breakdown">
+								<div v-for="row in creditBreakdown" :key="row.label" class="d-flex justify-space-between">
+									<span class="mr-6">{{ row.label }}</span>
+									<span>{{ formatCount(row.credits) }}</span>
+								</div>
+							</div>
+						</v-tooltip>
+						{{ i18n.totalCredits }}: <span class="text-primary" data-aid="assistant_total_credits">{{ formatCount(creditsUsed) }}</span>
+					</div>
 					<div class="text-wrap" style="font-size: 14px;">{{ i18n.contextLength }}: <span :class="getContextColor(contextLength)">{{ $root.formatCountMK(contextLength) }}</span> / <span class="font-weight-thin">{{ increaseContextLimit ? $root.formatCountMK(contextLimitLarge) : $root.formatCountMK(contextLimitSmall) }}</span></div>
 					<v-icon :color="getCompressColor()"
 						class="ml-4"

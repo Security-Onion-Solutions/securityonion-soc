@@ -300,7 +300,11 @@ globalThis.AssistantStreaming = (function() {
         assistantMessage.usage = messageUsage;
         // Update context length
         this.updateContextLength(messageUsage);
-        this.updateCreditsUsed(messageUsage);
+        // handleMessageStop only runs for the current (top/orchestrator) session, so
+        // this turn was produced by the currently selected agent. currentModel is the
+        // agent name in agentic mode and equals what the backend persists as msg.model,
+        // so live and reload attribution agree.
+        this.accrueCredits(messageUsage, this.currentModel);
         this.$forceUpdate();
       }
       
@@ -597,6 +601,16 @@ globalThis.AssistantStreaming = (function() {
         }
       }
       return pending;
+    },
+
+    // Credits this delegate's own session spent: the sum of its direct child messages'
+    // credits. Grandchild delegations render in their own nested cards with their own
+    // messages, so they're excluded here — this is the delegate's own cost, not its
+    // whole subtree.
+    delegateOwnCredits(delegateToolUse) {
+      const cs = delegateToolUse && delegateToolUse.childSession;
+      if (!cs || !Array.isArray(cs.messages)) return 0;
+      return cs.messages.reduce((sum, m) => sum + ((m.usage && m.usage.credits) || 0), 0);
     },
 
     // Whether the collapsed sub-agent region has anything worth showing (a thought or

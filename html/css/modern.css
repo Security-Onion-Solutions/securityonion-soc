@@ -1234,6 +1234,16 @@ dfn {
   overflow-y: auto;
 }
 
+/* Per-invocation credit cost shown beside a delegate's agent name. */
+.delegation-child-credits {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Rows inside the per-agent credit breakdown tooltip. */
+.assistant-credit-breakdown {
+  font-variant-numeric: tabular-nums;
+}
+
 /* Agent Studio inline editor card (inside an expanded data-table row). */
 .agentstudio-editor {
   border: 1px solid rgba(var(--v-theme-text), 0.08);
