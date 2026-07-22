@@ -8,6 +8,7 @@ package database
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -114,5 +115,121 @@ func TestStore_GetTimeSeriesMetrics(t *testing.T) {
 		assert.Contains(t, res, "host-a::so-redis")
 		assert.Len(t, res["host-a::so-redis"], 1)
 		assert.Equal(t, 12.3, res["host-a::so-redis"][0].Value)
+	})
+
+	t.Run("elasticsearch_docs handles host tag fallback and query execution", func(t *testing.T) {
+		mockDb := &MockDB{
+			QueryFunc: func(ctx context.Context, sql string, args ...any) (db.Rows, error) {
+				assert.Contains(t, sql, "COALESCE(NULLIF(tag.tags->>'node_name', ''), NULLIF(tag.tags->>'node_host', ''), NULLIF(tag.tags->>'host', ''), NULLIF(tag.tags->>'es_host', ''), '')")
+				return &MockRows{
+					rows: [][]interface{}{
+						{time.Now(), "host-a", 1119559.0},
+						{time.Now(), "host-b", 396741.0},
+					},
+				}, nil
+			},
+		}
+		s := New(mockDb)
+		res, err := s.GetTimeSeriesMetrics(ctx, "", "", "elasticsearch_docs", startTime, endTime)
+		assert.NoError(t, err)
+		assert.Contains(t, res, "host-a")
+		assert.Contains(t, res, "host-b")
+		assert.Equal(t, 1119559.0, res["host-a"][0].Value)
+		assert.Equal(t, 396741.0, res["host-b"][0].Value)
+	})
+
+	t.Run("net metric loads nodes with manint only", func(t *testing.T) {
+		mockDb := &MockDB{
+			QueryFunc: func(ctx context.Context, sql string, args ...any) (db.Rows, error) {
+				if strings.Contains(sql, "FROM telegraf.node_config m") {
+					return &MockRows{
+						rows: [][]interface{}{
+							{"manager", "ens18", nil},
+							{"search", "ens18", nil},
+						},
+					}, nil
+				}
+				return &MockRows{
+					rows: [][]interface{}{
+						{time.Now(), "manager", "ens18", 100.0, 50.0},
+						{time.Now(), "search", "ens18", 200.0, 80.0},
+					},
+				}, nil
+			},
+		}
+		s := New(mockDb)
+		res, err := s.GetTimeSeriesMetrics(ctx, "", "", "net", startTime, endTime)
+		assert.NoError(t, err)
+		assert.Contains(t, res, "manager::traffic_man_in")
+		assert.Contains(t, res, "search::traffic_man_in")
+	})
+
+	t.Run("kafka_eps metric calculates rate derivative", func(t *testing.T) {
+		mockDb := &MockDB{
+			QueryFunc: func(ctx context.Context, sql string, args ...any) (db.Rows, error) {
+				assert.Contains(t, sql, "telegraf.kafka_topic")
+				return &MockRows{
+					rows: [][]interface{}{
+						{time.Now(), "node1", 500.0},
+					},
+				}, nil
+			},
+		}
+		s := New(mockDb)
+		res, err := s.GetTimeSeriesMetrics(ctx, "node1", "", "kafka_eps", startTime, endTime)
+		assert.NoError(t, err)
+		assert.Contains(t, res, "kafka_eps")
+		assert.Len(t, res["kafka_eps"], 1)
+		assert.Equal(t, 500.0, res["kafka_eps"][0].Value)
+	})
+
+	t.Run("net_drops metric calculates average drops rate", func(t *testing.T) {
+		mockDb := &MockDB{
+			QueryFunc: func(ctx context.Context, sql string, args ...any) (db.Rows, error) {
+				if strings.Contains(sql, "FROM telegraf.node_config m") {
+					return &MockRows{
+						rows: [][]interface{}{
+							{"node1", "ens19"},
+						},
+					}, nil
+				}
+				assert.Contains(t, sql, "AVG(drop_rate)")
+				return &MockRows{
+					rows: [][]interface{}{
+						{time.Now(), "node1", "ens19", 2.5},
+					},
+				}, nil
+			},
+		}
+		s := New(mockDb)
+		res, err := s.GetTimeSeriesMetrics(ctx, "node1", "", "net_drops", startTime, endTime)
+		assert.NoError(t, err)
+		assert.Contains(t, res, "traffic_mon_drops")
+		assert.Len(t, res["traffic_mon_drops"], 1)
+		assert.Equal(t, 2.5, res["traffic_mon_drops"][0].Value)
+	})
+
+	t.Run("elastic_ingest_time breaks down ingest rate by processor function", func(t *testing.T) {
+		mockDb := &MockDB{
+			QueryFunc: func(ctx context.Context, sql string, args ...any) (db.Rows, error) {
+				assert.Contains(t, sql, "ingest_processor_stats_")
+				return &MockRows{
+					rows: [][]interface{}{
+						{time.Now(), "node1", "grok", 454.4},
+						{time.Now(), "node1", "set", 240.3},
+						{time.Now(), "node1", "script", 92.8},
+					},
+				}, nil
+			},
+		}
+		s := New(mockDb)
+		res, err := s.GetTimeSeriesMetrics(ctx, "node1", "", "elastic_ingest_time", startTime, endTime)
+		assert.NoError(t, err)
+		assert.Contains(t, res, "grok")
+		assert.Contains(t, res, "set")
+		assert.Contains(t, res, "script")
+		assert.Equal(t, 454.4, res["grok"][0].Value)
+		assert.Equal(t, 240.3, res["set"][0].Value)
+		assert.Equal(t, 92.8, res["script"][0].Value)
 	})
 }

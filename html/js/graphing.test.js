@@ -143,7 +143,7 @@ describe('graphing.js', () => {
       expect(options.maintainAspectRatio).toBe(false);
       expect(options.plugins.title.text).toBe('My Chart');
       expect(options.plugins.title.color).toBe('#fff');
-      expect(options.plugins.tooltip.mode).toBe('index');
+      expect(options.plugins.tooltip.mode).toBe('nearest');
       expect(options.plugins.tooltip.intersect).toBe(false);
       expect(options.scales.y.grid.color).toBe('#000');
       expect(options.scales.y.ticks.color).toBe('#fff');

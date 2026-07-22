@@ -200,7 +200,7 @@ window.socGraphing = {
         color: fontColor,
       },
       tooltip: {
-        mode: 'index',
+        mode: 'nearest',
         intersect: false,
         callbacks: {
           label: function (context) {

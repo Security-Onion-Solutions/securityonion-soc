@@ -36,7 +36,7 @@ const DEFAULT_MOCK_DASHBOARD = {
 		{ id: "container_mem", titleKey: "metricsContainerMem", type: "line_chart", metric: "container_mem", keys: ["container_mem"], labelKeys: ["metricsMemPct"], colors: ["#4dc9f6"], width: 6, height: 250 },
 		{ id: "container_net_in", titleKey: "metricsContainerNetIn", type: "line_chart", metric: "container_net_in", keys: ["container_net_in"], labelKeys: ["metricsTrafficMonIn"], colors: ["#4dc9f6"], width: 6, height: 250 },
 		{ id: "redis_queue", titleKey: "metricsRedisQueue", type: "line_chart", metric: "redis_queue", keys: ["redis_queue"], labelKeys: ["metricsQueueSize"], colors: ["#4dc9f6"], width: 6, height: 250 },
-		{ id: "logstash_eps", titleKey: "metricsLogstashEps", type: "line_chart", metric: "logstash_eps", keys: ["logstash_eps"], labelKeys: ["metricsEps"], colors: ["#4dc9f6"], width: 6, height: 250 }
+		{ id: "logstash_eps", titleKey: "metricsLogstashEps", type: "line_chart", metric: "logstash_eps", keys: ["logstash_eps"], labelKeys: ["metricsEventsReceived"], colors: ["#4dc9f6"], width: 6, height: 250 }
 	]
 };
 
@@ -111,6 +111,24 @@ test('populateMetricsChart with container metrics', () => {
 	expect(chart.datasets[0].data[0].y).toBe(12.3);
 	expect(chart.datasets[0].borderWidth).toBe(1);
 	expect(chart.datasets[0].pointRadius).toBe(0);
+});
+
+test('populateMetricsChart with elastic ingest time function breakdown', () => {
+	const chart = { key: 0, datasets: [] };
+	const data = {
+		"grok": [{ timestamp: '2026-06-30T00:00:00Z', value: 454.4 }],
+		"set": [{ timestamp: '2026-06-30T00:00:00Z', value: 240.3 }],
+		"script": [{ timestamp: '2026-06-30T00:00:00Z', value: 92.8 }]
+	};
+	comp.populateMetricsChart(chart, data, ['elastic_ingest_time'], ['#4dc9f6', '#f67019', '#f53794']);
+	expect(chart.key).toBe(1);
+	expect(chart.datasets.length).toBe(3);
+	expect(chart.datasets[0].label).toBe("grok");
+	expect(chart.datasets[0].data[0].y).toBe(454.4);
+	expect(chart.datasets[1].label).toBe("script");
+	expect(chart.datasets[1].data[0].y).toBe(92.8);
+	expect(chart.datasets[2].label).toBe("set");
+	expect(chart.datasets[2].data[0].y).toBe(240.3);
 });
 
 test('loadHistoricalMetrics', async () => {
@@ -458,6 +476,16 @@ test('activeTab watcher reloads metrics if already initialized but params have c
 	expect(comp.initMetricsCharts).toHaveBeenCalled();
 	expect(comp.loadHistoricalMetrics).toHaveBeenCalled();
 	expect(comp.setupMetricsAutoRefresh).toHaveBeenCalled();
+});
+
+test('logstash_eps panel resolves title to Events Received and labelKeys to metricsEventsReceived', () => {
+	comp.$root.getColor = jest.fn().mockReturnValue('#123456');
+	comp.initMetricsCharts();
+	const logstashPanel = comp.metricPanels.find(p => p.id === 'logstash_eps');
+	expect(logstashPanel).toBeDefined();
+	expect(logstashPanel.titleKey).toBe('metricsLogstashEps');
+	expect(comp.$root.i18n.metricsLogstashEps).toBe('Events Received');
+	expect(logstashPanel.labelKeys).toEqual(['metricsEventsReceived']);
 });
 
 

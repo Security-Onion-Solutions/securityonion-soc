@@ -39,8 +39,8 @@ var defaultColors = []string{
 
 var DashboardMetricOrder = []string{
 	"cpu", "memory", "load", "swap", "io_wait", "system_uptime", "disk", "net", "net_drops", "pcap_retention",
-	"eps", "elasticsearch_size", "elasticsearch_docs", "elastic_ingest_time", "loss", "capture_loss",
-	"container_uptime", "container_cpu", "container_mem", "container_net_in", "redis_queue", "logstash_eps",
+	"eps", "logstash_eps", "elasticsearch_size", "elasticsearch_docs", "elastic_ingest_time", "loss", "capture_loss",
+	"container_uptime", "container_cpu", "container_mem", "container_net_in", "redis_queue",
 	"kafka_eps", "kafka_controllers", "kafka_brokers", "kafka_under_replicated",
 }
 
@@ -145,13 +145,10 @@ var MetricConfigs = map[string]MetricConfig{
 		Units:     "second",
 	},
 	"kafka_eps": {
-		Tables:    []string{"kafka_topic"},
-		Fields:    []string{"MessagesInPerSec.Count"},
-		Keys:      []string{"kafka_eps"},
-		Factor:    1.0,
-		Aggregate: "AVG",
-		TitleKey:  "metricsKafkaEps",
-		LabelKeys: []string{"metricsKafkaEps"},
+		Keys:          []string{"kafka_eps"},
+		CustomHandler: queryKafkaEpsMetric,
+		TitleKey:      "metricsKafkaEps",
+		LabelKeys:     []string{"metricsKafkaEps"},
 	},
 	"container_uptime": {
 		Keys:          []string{"container_uptime"},
@@ -193,14 +190,11 @@ var MetricConfigs = map[string]MetricConfig{
 		Units:         "percent",
 	},
 	"elastic_ingest_time": {
-		Tables:    []string{"elasticsearch_clusterstats_nodes"},
-		Fields:    []string{"ingest_processor_stats_grok_time_in_millis"},
-		Keys:      []string{"elastic_ingest_time"},
-		Factor:    1.0 / 1000.0,
-		Aggregate: "AVG",
-		TitleKey:  "metricsElasticIngestTime",
-		LabelKeys: []string{"metricsTimeMs"},
-		Units:     "seconds",
+		Keys:          []string{"elastic_ingest_time"},
+		CustomHandler: queryElasticIngestTimeMetric,
+		TitleKey:      "metricsElasticIngestTime",
+		LabelKeys:     []string{"metricsTimeMs"},
+		Units:         "ms",
 	},
 	"logstash_eps": {
 		Tables:    []string{"logstash_events"},
@@ -209,7 +203,7 @@ var MetricConfigs = map[string]MetricConfig{
 		Factor:    1.0,
 		Aggregate: "AVG",
 		TitleKey:  "metricsLogstashEps",
-		LabelKeys: []string{"metricsEps"},
+		LabelKeys: []string{"metricsEventsReceived"},
 	},
 	"kafka_under_replicated": {
 		Tables:    []string{"kafka_partition"},
