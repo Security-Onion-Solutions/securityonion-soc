@@ -668,6 +668,117 @@ test('currentModelLabel is the plain model displayName in non-agentic mode', asy
   expect(comp.currentModelLabel()).toBe('Test Model');
 });
 
+test('isCreditBasedModel resolves through the mapped model adapter in agentic mode', async () => {
+  stubInitDeps();
+
+  await comp.initAssistant(agenticParams());
+
+  // Orchestrator -> Claude Sonnet -> SOAI adapter (securityonion_ai_cloud).
+  expect(comp.currentModel).toBe('Orchestrator');
+  expect(comp.isCreditBasedModel()).toBe(true);
+});
+
+test('isCreditBasedModel is false in agentic mode when the mapped adapter is not credit-based', async () => {
+  stubInitDeps();
+
+  const params = agenticParams();
+  params.availableAdapters = [{ name: 'SOAI', protocol: 'ollama' }];
+
+  await comp.initAssistant(params);
+
+  expect(comp.isCreditBasedModel()).toBe(false);
+});
+
+test('isCreditBasedModel reflects the model adapter in non-agentic mode', async () => {
+  stubInitDeps();
+
+  await comp.initAssistant({
+    enabled: true,
+    availableModels: [
+      { id: 'test-model', displayName: 'Test Model', enabled: true, adapter: 'SOAI' }
+    ],
+    availableAdapters: [{ name: 'SOAI', protocol: 'securityonion_ai_cloud' }],
+  });
+
+  expect(comp.agentic).toBe(false);
+  expect(comp.isCreditBasedModel()).toBe(true);
+});
+
+test('isCreditBasedModel is false when the model adapter is not credit-based', async () => {
+  stubInitDeps();
+
+  await comp.initAssistant({
+    enabled: true,
+    availableModels: [
+      { id: 'test-model', displayName: 'Test Model', enabled: true, adapter: 'Local' }
+    ],
+    availableAdapters: [{ name: 'Local', protocol: 'ollama' }],
+  });
+
+  expect(comp.isCreditBasedModel()).toBe(false);
+});
+
+test('selectModel switches the current agent and refreshes params and credits', async () => {
+  stubInitDeps();
+  await comp.initAssistant(agenticParams());
+  expect(comp.currentModel).toBe('Orchestrator');
+
+  comp.updateModelParams = jest.fn();
+  comp.reloadCredits = jest.fn();
+
+  comp.selectModel('Hunter');
+
+  expect(comp.currentModel).toBe('Hunter');
+  expect(comp.updateModelParams).toHaveBeenCalledTimes(1);
+  expect(comp.reloadCredits).toHaveBeenCalledTimes(1);
+});
+
+test('canSwitchModel is false while loading or a turn is active', () => {
+  comp.$root.loading = false;
+  comp.isStreaming = false;
+  comp.isTyping = false;
+  expect(comp.canSwitchModel()).toBe(true);
+
+  comp.$root.loading = true;
+  expect(comp.canSwitchModel()).toBe(false);
+
+  comp.$root.loading = false;
+  comp.isStreaming = true;
+  expect(comp.canSwitchModel()).toBe(false);
+});
+
+test('selectModel is blocked while a turn is active', async () => {
+  stubInitDeps();
+  await comp.initAssistant(agenticParams());
+  expect(comp.currentModel).toBe('Orchestrator');
+
+  comp.updateModelParams = jest.fn();
+  comp.reloadCredits = jest.fn();
+  comp.isStreaming = true; // checkForActivity() -> true
+
+  comp.selectModel('Hunter');
+
+  expect(comp.currentModel).toBe('Orchestrator');
+  expect(comp.updateModelParams).not.toHaveBeenCalled();
+  expect(comp.reloadCredits).not.toHaveBeenCalled();
+});
+
+test('selectModel is a no-op for the already-current or an empty selection', async () => {
+  stubInitDeps();
+  await comp.initAssistant(agenticParams());
+  expect(comp.currentModel).toBe('Orchestrator');
+
+  comp.updateModelParams = jest.fn();
+  comp.reloadCredits = jest.fn();
+
+  comp.selectModel('Orchestrator');
+  comp.selectModel('');
+
+  expect(comp.currentModel).toBe('Orchestrator');
+  expect(comp.updateModelParams).not.toHaveBeenCalled();
+  expect(comp.reloadCredits).not.toHaveBeenCalled();
+});
+
 test('handleRouteSessionId returns early when assistantEnabled is false', async () => {
   comp.assistantEnabled = false;
   comp.$route.params.sessionId = fakeSessionId;

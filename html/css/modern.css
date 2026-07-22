@@ -141,6 +141,34 @@ html, body, * {
   justify-content: space-between;
 }
 
+.so-stat-pill-clickable {
+  cursor: pointer;
+  position: relative;
+}
+
+.so-stat-pill-clickable::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-color: currentColor;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.so-stat-pill-clickable:hover::before {
+  opacity: var(--v-hover-opacity, 0.04);
+}
+
+.so-stat-pill-clickable:focus-visible {
+  outline: none;
+}
+
+.so-stat-pill-clickable:focus-visible::before {
+  opacity: var(--v-focus-opacity, 0.12);
+}
+
 .so-stat-text {
   flex: 1;
   min-width: 0;
@@ -163,6 +191,10 @@ html, body, * {
   opacity: 0.4;
   font-size: 1.6rem !important;
   margin-left: 12px;
+}
+
+.so-stat-caret {
+  opacity: 0.6;
 }
 
 .no-wrap-err-icon {

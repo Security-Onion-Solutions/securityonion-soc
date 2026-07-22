@@ -37,6 +37,7 @@ globalThis.AssistantSessions = (function() {
             displayName: a.name,
             adapter: 'Agents',
             mappedModelName: mapped?.displayName || '',
+            mappedAdapter: mapped?.adapter || '',
             contextLimitSmall: mapped?.contextLimitSmall || 0,
             contextLimitLarge: mapped?.contextLimitLarge || 0,
             charsPerTokenEstimate: mapped?.charsPerTokenEstimate || 0,

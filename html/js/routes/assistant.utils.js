@@ -310,6 +310,30 @@ globalThis.AssistantUtils = (function() {
       return entry.displayName;
     },
 
+    // Whether the current selection ultimately runs on a credit-based cloud
+    // model (protocol 'securityonion_ai_cloud'), which gates the credits pill.
+    // In agentic mode the selector is an agent whose synthetic 'Agents' adapter
+    // isn't a real backend adapter, so resolve through the mapped model's adapter.
+    isCreditBasedModel() {
+      const entry = this.modelsMap.get(this.currentModel);
+      if (!entry) return false;
+      const adapterName = this.agentic ? entry.mappedAdapter : entry.adapter;
+      return this.adaptersMap.get(adapterName)?.protocol === 'securityonion_ai_cloud';
+    },
+
+    canSwitchModel() {
+      return !this.$root.loading && !this.checkForActivity();
+    },
+
+    selectModel(key) {
+      if (!key || key === this.currentModel) return;
+      // Don't switch mid-turn.
+      if (this.checkForActivity()) return;
+      this.currentModel = key;
+      this.updateModelParams();
+      this.reloadCredits();
+    },
+
     updateModelParams() {
       if (!this.currentModel || this.modelsMap.size == 0) return;
       const m = this.modelsMap.get(this.currentModel);
